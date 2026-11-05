@@ -4,6 +4,16 @@ Status: **registered 2026-10-30**, before any code of this job and before any co
 the populations, the limits, the predictions, the reading rules and the not-run list are fixed here. Amendments follow this
 text, each written before what it covers; results go in an addendum. Not yet accepted by the maintainer.
 
+This job tests whether the mechanism of [ADR 0171](0171-job49h-the-naca0012-trailing-edge-divergence-at-fine-wall-spacing.md)
+(unlimited `linear_upwind` extrapolating over the long side of thin, strongly non-orthogonal wall cells) is what stalls the
+FAN-01 rotor passage, to decide whether the next large fan job belongs on the mesh side or on the scheme side. It computes the
+SV302 wall-cell metric on the six FAN-01 meshes and runs no solver iteration. The addendum (2026-10-30) holds the results. By
+K2 and K3, FALSIFIED as predicted, the Barth-Jespersen stall is not the ADR 0171 mechanism. K1 is FALSIFIED, a known miss with a
+split result: unlimited `linear_upwind` fails first in the largest-metric cell of E3, but that cell's metric is 750 and no
+FAN-01 cell reaches the registered 3 000. D1 is also a known miss: SV302 is a false negative on FAN-01, and by the maintainer's
+decision its level stays at 3 000. K4 is DOES NOT TRACK by its rule, but the verdict is not robust, and part L stays open. No
+registered rule decides the next job (deviation 1); question 2 recommends the scheme side, with the locus still open.
+
 Job 49K, on local main edb4839 (worktree branch `job49k-fan01-wall-metric`). Number: 0172 is the highest on main; 0173 is
 taken on the branch `studio-case-lineage` (uncommitted there), so 0174. Job ids 49A to 49J are taken.
 
@@ -19,11 +29,12 @@ Clean-room: our own code and our own ADRs only.
 ## The request
 
 The maintainer chose (2026-10-30), from four candidates for the next fan job, "Link 49H to FAN-01": test whether the
-mechanism of [ADR 0171](0171-job49h-the-naca0012-trailing-edge-divergence-at-fine-wall-spacing.md) (unlimited
-`linear_upwind` extrapolating far outside the neighbour range over the long side of thin, strongly non-orthogonal wall
-cells, measured by `aspect x tan(non-orthogonality)`, the SV302 metric of [ADR 0172](0172-job49j-set-up-warnings-sv301-at-the-settled-step-one-warning-path-linear-upwind-wall-risk-sv302-guard-hint-and-correctors-in-the-plots.md))
-is what stalls the FAN-01 rotor passage, and whether it can say anything about the growth of the spurious outlet angular
-momentum with refinement (ADR 0110 part L). The purpose is to decide whether the next large fan job belongs on the mesh
+mechanism of [ADR 0171](0171-job49h-the-naca0012-trailing-edge-divergence-at-fine-wall-spacing.md) is what stalls the FAN-01
+rotor passage, and whether it can say anything about the growth of the spurious outlet angular momentum with refinement
+(ADR 0110 part L). That mechanism is unlimited `linear_upwind` extrapolating far outside the neighbour range over the long
+side of thin, strongly non-orthogonal wall cells, measured by `aspect x tan(non-orthogonality)`, the SV302 metric of
+[ADR 0172](0172-job49j-set-up-warnings-sv301-at-the-settled-step-one-warning-path-linear-upwind-wall-risk-sv302-guard-hint-and-correctors-in-the-plots.md).
+The purpose is to decide whether the next large fan job belongs on the mesh
 side (cell shape) or on the scheme side.
 
 Correction to the option as offered: it proposed full-length FAN-01 runs with `barth_jespersen`. Those exist (ADR 0086,
@@ -144,7 +155,7 @@ V1 met (B3 4 920, B2 13 627, B1 38 184, E3 5 040; E2 13 882 and E1 38 688 printe
 | D2 | `wall_cell_risk` on E3 names c4971 | met |
 
 Reported: the largest m on every mesh is a shroud tip-layer cell at the leading-edge plane (r 0.2477-0.2491, z 0.093-0.104, 77
-deg on F3): B3 / E3 750, B2 / E2 708, B1 / E1 1 497; the 99th percentile over all cells is 196-286 and the median 5.6-12.5. No
+deg on F3): B3 / E3 750, B2 / E2 708, B1 / E1 1 497. The 99th percentile over all cells is 196-286 and the median 5.6-12.5. No
 FAN-01 cell reaches 3 000, nor the 1 600 of ADR 0171's clean M1w15.
 
 ### Reading (by the registered rules)

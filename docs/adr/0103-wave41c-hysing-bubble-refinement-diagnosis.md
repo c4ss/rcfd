@@ -1,16 +1,32 @@
 # ADR 0103: Wave 41C, diagnosis of the Hysing rising-bubble refinement miss (F-055)
 
-Status: registered before the diagnostic runs. The decision rules below are fixed; results go into the addendum, misses and
-deviations included. Clean-room: first principles and the Hysing et al. (2009) case-1 values already read in ADR 0096
-(V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Written at HEAD e325ab4 (scratch copy `<scratch dir>`, target
-`<target dir>`). Test file: `crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs`.
+Status: registered before the diagnostic runs.
+
+Under refinement the Hysing case-1 bubble of ADR 0100 part B converges to a bubble about 10 % too slow, the refinement miss of
+F-055. This ADR registers experiments on the candidate causes C1 to C7 (C7 added by amendment C), and all the code it adds is
+opt-in with defaults bit-identical. The addendum records the result, measured after the runs: primary cause found (C7), with a
+residual drift left. With the component-averaged diagonal of the VOF corrector, a `Symmetry` plane acts mostly like a no-slip
+wall (experiment C1: the wall column of an exact uniform flow runs 84 % slow). The opt-in `component_diagonal` correction removes
+about 80 % of the gap on 80 x 160, but the remaining errors still grow from 40 to 80, so the registered confirm rule is not met
+and C7 is "contributing" by the letter. For that drift the ranked findings name a remaining suspect: the CSF curvature with a
+fixed number of smoothing passes, which is non-convergent (D1b). A2 does not confirm and is a "reject" by the letter, but it
+shows that a constant physical smoothing width removes most of the default series' y_c drift; this was not tested together with
+the correction. No 160 x 320 run was made, all b1 variants stay ignored known misses, and F-055 stays partial.
+
+Rules and parents:
+
+* The decision rules below are fixed; results go into the addendum, misses and deviations included.
+* Clean-room: first principles and the Hysing et al. (2009) case-1 values already read in ADR 0096 (V_c,max 0.2417 at t 0.9213,
+  y_c(3) 1.0813).
+* Written at HEAD e325ab4 (scratch copy `<scratch dir>`, target `<target dir>`).
+* Test file: `crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs`.
 
 ## Problem
 
 ADR 0100 part B: the case-1 bubble (40 x 80, 80 x 160, 160 x 320, dt = 0.1/n, AMG pressure) gives y_c(3) 1.0282 / 1.0178 /
 1.0124 and V_c,max 0.2204 / 0.2187 / 0.2180, peak at t 0.850 / 0.829 / 0.820. The sequence converges (order about 1) to a bubble
 about 10 % too slow. An error that converges to a wrong limit is an inconsistency of the discrete model (it does not vanish as
-h -> 0); errors of interpolation, upwinding, time step or interface width vanish in the limit and can only explain why the coarse
+h -> 0). Errors of interpolation, upwinding, time step or interface width vanish in the limit and can only explain why the coarse
 grid lands closer.
 
 Gaps used below (ADR 0100): e_v(40) = 0.0213, e_v(80) = 0.0230, e_y(40) = 0.0531, e_y(80) = 0.0635.
@@ -77,8 +93,8 @@ All rising-bubble runs: the w40d set-up, t = 3, dt = 0.1/n, AMG, one change each
     grow from 40 to 80 (e(80) <= e(40) for both metrics).
   * Reject if on 80 x 160 |V_c,max - 0.2187| < 0.0046 and |y_c(3) - 1.0178| < 0.0127.
   * Otherwise "contributing", with the share of the gap it removes.
-* D2c control (viscosity ratio 1, mu_2 = mu_1 = 10, 40 x 80, option off and on): the option must act at the jump only:
-  |dV_c,max (on - off)| at ratio 1 <= 0.1 |dV_c,max (on - off)| at ratio 10 (D2 40 x 80 minus D0). If not, the D2 shift is not
+* D2c control (viscosity ratio 1, mu_2 = mu_1 = 10, 40 x 80, option off and on): the option must act at the jump only: |dV_c,max
+  (on - off)| at ratio 1 <= 0.1 |dV_c,max (on - off)| at ratio 10 (D2 40 x 80 minus D0). If not, the D2 shift is not
   attributable to the jump and a D2 "confirm" is void.
 * D3 (C1) sigma x 0.9 and x 1.1 on 40 x 80: gives S for D1. Significant-shift reading as above.
 * D4 (C4, C5) on 40 x 80: dt / 2; PIMPLE with 3 outer iterations; transient Rhie-Chow off. Each rejected as primary cause if not
@@ -98,22 +114,31 @@ All rising-bubble runs: the w40d set-up, t = 3, dt = 0.1/n, AMG, one change each
 If D2 is "confirm" or "contributing", the one 160 x 320 run is the ADR 0100 B1-B4 series (40, 80, 160; limits unchanged) with
 `full_viscous_stress = true`, as a new test `b1f_hysing_bubble_error_decreases_under_refinement_full_viscous_stress` in
 `vof_bubble_refinement_w40d.rs`. The existing defaults test stays the ignored known miss (defaults are unchanged, so it still
-misses). If b1f passes all of B1-B4, it is kept non-ignored (it adds about 30 min to the release gate) and `solver.viscous_stress
-= "full"` is wired to the VOF host of the case tree (the refusal lifted, schema text updated); F-055 then meets the rising-bubble
-clause with the option on only, and the note says so; whether `full` becomes the VOF default is the user's decision (it would move
-every VOF result, so it is not done here). If b1f misses, it stays as an ignored known miss with the limits intact. The option is kept
-in every outcome (registered now under wave-35 rule b): it is the physically complete viscous stress, it is off by default, and the
-D2 / D2c diagnostics need it to stay reproducible. If D2 is "reject", no 160 x 320 run is made.
+misses).
+
+* If b1f passes all of B1-B4, it is kept non-ignored (it adds about 30 min to the release gate) and
+  `solver.viscous_stress = "full"` is wired to the VOF host of the case tree (the refusal lifted, schema text updated). F-055
+  then meets the rising-bubble clause with the option on only, and the note says so. Whether `full` becomes the VOF default is the
+  user's decision (it would move every VOF result, so it is not done here).
+* If b1f misses, it stays as an ignored known miss with the limits intact.
+
+The option is kept in every outcome (registered now under wave-35 rule b): it is the physically complete viscous stress, it is
+off by default, and the D2 / D2c diagnostics need it to stay reproducible. If D2 is "reject", no 160 x 320 run is made.
 
 ## Amendment A (written after the D runs, before any A run)
 
-What I knew when writing this: every D result (they are in the addendum below, unchanged since). In short: the transposed stress
-makes the bubble slower (40 x 80: V_c,max 0.2111 against 0.2204; 80 x 160: 0.2095), with zero effect at viscosity ratio 1; sigma
-x 0.9 / x 1.1 move V_c,max by -0.0006 / +0.0007; dt / 2, PIMPLE 3 and the transient Rhie-Chow term change nothing significant on
-40 x 80; c_alpha 0.5 nothing; n_smooth 0 moves y_c(3) by -0.0086 and V_c,max by -0.0038, n_smooth 4 by +0.0055 and +0.0006; the
-initial-circle curvature error grows under refinement with fixed n_smooth = 2 (rms 0.13 on 40 x 80, 0.24, 0.39, 0.77 on 320 x
-640); the translation is exact to 4e-5; linear-upwind momentum moves V_c,max by +0.0020 (40) and +0.0010 (80); viscosity ratio 1
-gives V_c,max 0.1977.
+What I knew when writing this: every D result (they are in the addendum below, unchanged since). In short:
+
+* the transposed stress makes the bubble slower (40 x 80: V_c,max 0.2111 against 0.2204; 80 x 160: 0.2095), with zero effect at
+  viscosity ratio 1;
+* sigma x 0.9 / x 1.1 move V_c,max by -0.0006 / +0.0007;
+* dt / 2, PIMPLE 3 and the transient Rhie-Chow term change nothing significant on 40 x 80; c_alpha 0.5 nothing;
+* n_smooth 0 moves y_c(3) by -0.0086 and V_c,max by -0.0038, n_smooth 4 by +0.0055 and +0.0006;
+* the initial-circle curvature error grows under refinement with fixed n_smooth = 2 (rms 0.13 on 40 x 80, 0.24, 0.39, 0.77 on
+  320 x 640);
+* the translation is exact to 4e-5;
+* linear-upwind momentum moves V_c,max by +0.0020 (40) and +0.0010 (80);
+* viscosity ratio 1 gives V_c,max 0.1977.
 
 Deviation from the registered plan (b1f): D2 is "contributing" by the letter of its rule (|dV_c,max| on 80 x 160 = 0.0092 >=
 0.0046) but in the wrong direction (it widens the gap). The registered b1f series would run the same code path and set-up as D2
@@ -201,9 +226,9 @@ every outcome (it would move every VOF result with a symmetry or component-speci
 
 ## Addendum: measured values (after the runs)
 
-All runs once, in the scratch tree (archive of e325ab4 plus this wave's files), release build. Rising-bubble metrics are
-y_c(3) / V_c,max / time of V_c,max; errors are to 1.0813 / 0.2417. Defaults on 40 x 80: 1.0282 / 0.2204 / 0.850; on 80 x 160:
-1.0178 / 0.2187 / 0.829 (ADR 0100). `vof_bubble_diagnosis_w41c.rs` prints exactly the quantities below.
+Every run was made once, in the scratch tree (archive of e325ab4 plus this wave's files), with a release build. Rising-bubble
+metrics are y_c(3) / V_c,max / time of V_c,max; errors are to 1.0813 / 0.2417. Defaults on 40 x 80: 1.0282 / 0.2204 / 0.850; on
+80 x 160: 1.0178 / 0.2187 / 0.829 (ADR 0100). `vof_bubble_diagnosis_w41c.rs` prints exactly the quantities below.
 
 ### Result: primary cause found (C7), with a residual drift left
 

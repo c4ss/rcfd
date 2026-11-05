@@ -2,6 +2,18 @@
 
 Status: diagnosis and acceptance limits registered before any change of solver code; results in the addendum.
 
+Constant-density SIMPLE/SIMPLEC duct flow showed two symptoms: an empty duct between symmetry side walls deviates from plug flow
+by 0.159 in SIMPLEC, and the registered X4 pressure-pressure duct of wave 23A diverges to NaN in SIMPLEC for every variant tried.
+Symptom 1 is the known price of the default `component_diagonal = "averaged"`. The opt-in `corrected` holds the plug flow to
+round-off, but as the default it changes the registered `packed_bed` hash, so the default stays and the flip is a user decision.
+A lossless pressure-pressure duct with `dp != 0` is ill-posed and must not be asked to converge. X4 is well-posed and diverges
+numerically: at the fixed-pressure inlet the convective terms cancel and leave a first-cell diagonal that is only viscous. The
+committed fix F2 (`convection.rs::lag_boundary_inflow`) lags that inflow in the steady constant-density kernel, and all 12
+registered hash checks stay identical under it. Against the registered limits, B is met, A is met only with the opt-in
+`corrected`, D misses (4.96e-6 against 1e-6, its slow tail not explained), and C is not claimed met through the old test, which
+still fails its stationarity helper, while a new test of the same two quantity limits passes. The addendum corrects two
+earlier statements: that Z3 has the symptom-1 root cause, and that "the fixed point is unchanged" under F2.
+
 ## Scope
 
 Two symptoms that earlier waves met in constant-density SIMPLE/SIMPLEC duct flow:
@@ -78,21 +90,29 @@ committed; they are diagnostics, not acceptance results.
 The fixes are candidates; each is committed only if every item holds, the baseline items included. Limits are not changed after a run.
 
 A. Plug flow between symmetry walls (`channel_2d` 60 x 10, `lx` 2, `ly` 0.2, depth 0.05, `nu` 1e-3, uniform initial and inlet
-   `(1,0,0)`, 300 iterations; SIMPLE and SIMPLEC):
-   * A1 max `|ux - 1| <= 1e-10`, A2 max `|uy|, |uz| <= 1e-10`, A3 max `|p| <= 1e-10` (kinematic), A4 relative mass imbalance
-     `|sum phi| / sum |phi_inlet| <= 1e-12`.
-   * A5 (current default, averaged): the 0.159 deviation stays a known-miss test (ignored) until the default is changed.
+`(1,0,0)`, 300 iterations; SIMPLE and SIMPLEC):
+
+* A1 max `|ux - 1| <= 1e-10`
+* A2 max `|uy|, |uz| <= 1e-10`
+* A3 max `|p| <= 1e-10` (kinematic)
+* A4 relative mass imbalance `|sum phi| / sum |phi_inlet| <= 1e-12`
+* A5 (current default, averaged): the 0.159 deviation stays a known-miss test (ignored) until the default is changed.
+
 B. Well-posed pressure-pressure duct (closed form): `box_2d` 100 x 4, `lx` 2, `ly` 1, periodic in y, `rho` 1.2, `mu` 1.8e-5,
-   fixed pressure 100 (kinematic) at the inlet, 0 at the outlet, zero-gradient velocity, Darcy bed `K = 1e-6` over the whole
-   duct, 3000 iterations, SIMPLEC: outlet flux / area equals `dp K rho / (mu L)` = 3.3333 m/s to 1e-2 relative; the flux is
-   the same at inlet and outlet to 1e-12 relative. (A value of 3.346, relative 3.8e-3, had been seen in an exploratory run of
-   the same set-up before the limit was written; the limit 1e-2 was set with that knowledge.)
+fixed pressure 100 (kinematic) at the inlet, 0 at the outlet, zero-gradient velocity, Darcy bed `K = 1e-6` over the whole
+duct, 3000 iterations, SIMPLEC: outlet flux / area equals `dp K rho / (mu L)` = 3.3333 m/s to 1e-2 relative; the flux is
+the same at inlet and outlet to 1e-12 relative. (A value of 3.346, relative 3.8e-3, had been seen in an exploratory run of
+the same set-up before the limit was written; the limit 1e-2 was set with that knowledge.)
+
 C. X4 as registered (ADR 0039: fan boundary + jump, no bed): the registered limits of `x4_run` (5e-3 on `Q`, 2e-3 on the patch
-   pressure) stay as they are; they are only claimed met if `x4_registered_lossless_setup_known_miss` passes unchanged.
+pressure) stay as they are; they are only claimed met if `x4_registered_lossless_setup_known_miss` passes unchanged.
+
 D. Pressure-pressure duct with the jump only and `p_in = p_out = 0`, `u0 = 1` (decaying flow, SIMPLEC, `nu = 1.5e-5`): finite
-   after 1500 iterations and `max|ux| <= 1e-6`.
+after 1500 iterations and `max|ux| <= 1e-6`.
+
 E. Baselines: `baseline_hashes.rs` and every existing regression test pass unchanged; a fix that changes any registered hash
-   is not committed (measurements and the list of changed hashes are reported instead).
+is not committed (measurements and the list of changed hashes are reported instead).
+
 F. Z3 (`z3_network_pressure_known_miss`) is not edited; whether it passes under a candidate is only reported.
 
 Candidate fixes (symptom 2 only if A to E allow it):
@@ -112,8 +132,8 @@ No new setting is introduced. If a candidate would need one to keep old behaviou
 
 * Committed (F2): `convection.rs::lag_boundary_inflow`, called from the steady constant-density SIMPLE/SIMPLEC kernel
   (`simple.rs`) right after `convection(...)`. For every boundary face with inflow (`phi < 0`), a nonzero implicit link to the
-  owner (`a_b != 0`) and no periodic coupling, the term `phi a_b` is removed from the owner diagonal and put on the right-hand
-  side with the owner value of the previous iterate. The transient kernels (PISO/PIMPLE), the coupled solver and the
+  owner (`a_b != 0`) and no periodic coupling, it removes the term `phi a_b` from the owner diagonal and puts it on the
+  right-hand side with the owner value of the previous iterate. The transient kernels (PISO/PIMPLE), the coupled solver and the
   variable-density kernel call `convection` as before and are unchanged. No setting was added.
 * Not changed (F1, symptom 1): the default `component_diagonal = "averaged"`. Making `corrected` the default changes the
   registered baseline `packed_bed` from `(60, 19e53df373637262)` to `(16, fb46cdfee5d0d781)` (it converges after 16 iterations);
@@ -122,15 +142,19 @@ No new setting is introduced. If a candidate would need one to keep old behaviou
 
 ### Correction of the diagnosis text above (Z3)
 
-The diagnosis section attributed Z3 (ADR 0012) to the symptom-1 root cause. That was wrong or at least incomplete. With the F2
-lag and the default (averaged) diagonal, the registered Z3 limits are met (Q rel 2.5e-6 against 5e-3; patch pressure rel 3.6e-12
-against the registered 1e-4; the ignored `lumped.rs::z3_network_pressure_known_miss` also passes when run with `--ignored`, it was
-not edited). With `corrected` and without F2 they are met too (2.4e-10). So Z3 is sensitive to the momentum predictor of the
-fixed-pressure inlet cell, which both changes alter; its two-cycle was localised in that cell (x = 0.01). The mechanism of the
-interplay of the two options in that cell was not worked out further. The pointer comment added to `lumped.rs` says "vanishes
-with corrected", which is correct but not the whole story.
+The diagnosis section attributed Z3 (ADR 0012) to the symptom-1 root cause. That was wrong or at least incomplete. The registered
+Z3 limits are met in two configurations:
 
-Also from the text above, "the fixed point is unchanged" for F2 is false in the strict sense: the converged discrete solution of
+* With the F2 lag and the default (averaged) diagonal: Q rel 2.5e-6 against 5e-3; patch pressure rel 3.6e-12 against the
+  registered 1e-4. The ignored `lumped.rs::z3_network_pressure_known_miss` also passes when run with `--ignored`; it was not
+  edited.
+* With `corrected` and without F2: 2.4e-10.
+
+So Z3 is sensitive to the momentum predictor of the fixed-pressure inlet cell, which both changes alter; its two-cycle was
+localised in that cell (x = 0.01). The mechanism of the interplay of the two options in that cell was not worked out further.
+The pointer comment added to `lumped.rs` says "vanishes with corrected", which is correct but not the whole story.
+
+Also from the text above, "the fixed point is unchanged" for F2 is false in the strict sense. The converged discrete solution of
 case B moved from `u = 3.346232` to `3.346468` m/s because the Rhie-Chow face coefficient uses `rAU`, which depends on the
 diagonal. Converged results change wherever a face with a nonzero implicit link has inflow (pressure inlets, but also outlet
 backflow faces). For pure Dirichlet faces, outflow, symmetry, walls and periodic faces nothing changes.
@@ -154,24 +178,34 @@ Full workspace test run with F2 (scratch copy of HEAD, `cargo test --workspace -
 passed except the two diagnostic tests of this ADR that describe the pre-fix behaviour (their copies at that point; they are now
 ignored records, see deviation 2).
 
-Known-miss tests re-run with `--ignored` under F2 and not affected: all ADR 0022 `*_as_registered_known_miss` tests of
-`bc_catalogue.rs` (C2, C3, D1, D2, E2: "iteration limit 6000 reached without meeting the residual targets", identical outcome with and
-without F2; these are residual-floor misses of frictionless uniform flow, not the inlet-cell effect), the actuator-disk A4 and A4c
-misses, X1 stationarity (a round-off pressure against a floor of 1e-12; criterion defect, ADR 0039 deviation 10). Z4 nominal-formula
-miss unchanged. Not run and not claimed: the odd-even modes of ADR 0029 (coupled/segregated Rhie-Chow; not touched), the
-variable-density nozzle residual (`varden.rs` has its own convection assembly and was not changed; the same inlet-cell effect might
-exist there, unverified) and the piston cell velocity (dynamic mesh; `g5c` records a scalar `a_p` x Symmetry anisotropy, which is
-symptom 1's mechanism, unverified for the 2.9e-4 cell velocity).
+Known-miss tests re-run with `--ignored` under F2 and not affected:
+
+* All ADR 0022 `*_as_registered_known_miss` tests of `bc_catalogue.rs` (C2, C3, D1, D2, E2:
+  "iteration limit 6000 reached without meeting the residual targets", identical outcome with and without F2; these are
+  residual-floor misses of frictionless uniform flow, not the inlet-cell effect).
+* The actuator-disk A4 and A4c misses.
+* X1 stationarity (a round-off pressure against a floor of 1e-12; criterion defect, ADR 0039 deviation 10).
+
+Z4 nominal-formula miss unchanged.
+
+Not run and not claimed:
+
+* The odd-even modes of ADR 0029 (coupled/segregated Rhie-Chow; not touched).
+* The variable-density nozzle residual (`varden.rs` has its own convection assembly and was not changed; the same inlet-cell
+  effect might exist there, unverified).
+* The piston cell velocity (dynamic mesh; `g5c` records a scalar `a_p` x Symmetry anisotropy, which is symptom 1's mechanism,
+  unverified for the 2.9e-4 cell velocity).
 
 ### Deviations
 
 1. The limit of B (1e-2) was written after an exploratory run had shown 3.8e-3 (disclosed above in the registered text). The
    remaining 0.4 percent difference to the closed form of a uniform Darcy duct is not explained and was not chased.
 2. The tests `b1_` and `b2_` (committed at 9b3d7c2 as records of the pre-fix mechanism) fail once F2 is in, so they are ignored
-   records with a reason; post-fix counterparts `b1f_` (first-iteration velocity bounded independently of viscosity: 30.0 and
-   25.5 m/s for nu 1.5e-5 and 1.5e-3, ratio 1.2; before F2: 1.3e6 and 1.2e4) and `b2f_` (closed form `v = 2` m/s from
-   `12 v^2 + 36 v - 120 = 0`; measured 2.000156, limit 1e-3 set after a first run showed 7.8e-5 and that a limit of 1e-6 on the
-   change between iterations 600 and 1200 was too tight for the still decaying tail) were added.
+   records with a reason. Two post-fix counterparts were added. The first, `b1f_`, checks that the first-iteration velocity is
+   bounded independently of viscosity: 30.0 and 25.5 m/s for nu 1.5e-5 and 1.5e-3, ratio 1.2; before F2: 1.3e6 and 1.2e4. The
+   second, `b2f_`, checks the closed form `v = 2` m/s from `12 v^2 + 36 v - 120 = 0`: measured 2.000156. Its limit 1e-3 was set
+   after a first run showed 7.8e-5 and that a limit of 1e-6 on the change between iterations 600 and 1200 was too tight for the
+   still decaying tail.
 3. The B0 assertions (the lossless duct with `dp != 0` keeps growing; with `dp = 0` it keeps uniform flow) were adjusted after
    their first run (growth factor 1.2 per doubling of the iteration count instead of 10; 1e-6 instead of 1e-10 for the round-off
    drift 1.2e-9). They are diagnostics, not registered limits.

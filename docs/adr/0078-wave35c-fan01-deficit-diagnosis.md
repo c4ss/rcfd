@@ -1,17 +1,43 @@
 # ADR 0078: Wave 35C, diagnosis of the FAN-01 deficit (controlled experiments, energy balance, blade-element estimate)
 
-Status: accepted. Everything under "Registered" was written and committed before any code of this wave was written and before any solver run of
-this wave. Limits and decision rules are not changed after a run; a miss of a check becomes an ignored `*_known_miss` test with the limit intact,
-a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles and
-published literature only; anything recalled from memory is marked UNVERIFIED. Parent: ADR 0075 (FAN-01, F-126 attempt 3 MISSED), ADR 0072 (the
-projected casing wall), ADR 0022 (`radial_equilibrium_outlet`), `docs/milestone-fan.md`.
+Status: accepted. Everything under "Registered" was written and committed before any code of this wave was written and
+before any solver run of this wave.
+
+ADR 0075 attempt 3 left FAN-01 with a deficit at the design point: Delta p_ts -3.8 Pa (measured 126.46) and torque
+1.320 N m (measured 2.142). Wave 35C diagnoses it with controlled experiments, an energy balance and a blade-element
+estimate, and keeps two opt-in code changes: S2 (`k_omega_sst` accepts a `moving_wall`) and F-RE
+(`boundaries.<p>.radial_frame_rate`). The outlet energy ADR 0075 left "unexplained" is outlet swirl, and the
+angular-momentum balance of the base run E0 does not close: 2.061 N m (168 % of the wall torque) has no wall source. The
+spurious angular momentum and swirl energy come from convecting a large swirl (the solid-body part of the relative
+velocity) on this H-slit mesh; by the registered rule it is discretisation error, and convergence with h on the empty
+passage and the cell-level location of the error are not shown. The resolved part of the 0.822 N m torque gap is
+numerical: minmod and in-plane refinement together (run KN) move the torque by +0.696 N m (85 %) and leave it 5.9 % below
+the measured torque. KN's Delta p_ts is 76.2 Pa against 126.5 measured; the remaining 50 Pa contains the installation, the
+residual numerics and whatever else a rotor-only model misses, and this wave does not separate them. By the registered
+rules of question 2, the Delta p_ts and eta_ts limits cannot be met in principle without modelling the installation or
+redefining the compared quantity (caveat: the C3 effect that fires the rule was computed on a swirl field about 2.5 times
+too large), and the torque limit is not excluded in principle, although it is not shown that any mesh or scheme available
+today converges the torque. F-126 remains MISSED, no arm is an F-126 attempt and no fan performance claim is made; N1 as
+registered and X2e were NOT RUNNABLE, X2c was NOT CONVERGED, and the registered E1 prediction was falsified by 3e-4 N m.
+
+Rules and parents:
+
+* Limits and decision rules are not changed after a run; a miss of a check becomes an ignored `*_known_miss` test with the
+  limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded.
+* Clean-room: first principles and published literature only; anything recalled from memory is marked UNVERIFIED.
+* Parent: ADR 0075 (FAN-01, F-126 attempt 3 MISSED), ADR 0072 (the projected casing wall), ADR 0022
+  (`radial_equilibrium_outlet`), `docs/milestone-fan.md`.
 
 ## Context
 
-ADR 0075 attempt 3 (H-slit sector, 13 332 cells, `upwind`, k-omega SST, `rotating_frame`, uniform fixed axial inflow 0.1 m ahead of the hub leading
-edge, fixed static pressure 0 at the outlet 0.4 m from the inlet, casing as `velocity = "fixed"` with face-centre expressions) converged by the
-monitor criterion at the design point Q = 1.4032 m^3/s with Delta p_ts = -3.8 Pa (measured 126.46), Delta p_tt = 112.5 Pa, torque 1.320 N m
-(measured 2.142, -38 %); off-design torque -46 %. About 52 Pa (design) of the outlet energy was not explained by the uniform-outflow estimate.
+ADR 0075 attempt 3 converged by the monitor criterion at the design point Q = 1.4032 m^3/s with Delta p_ts = -3.8 Pa
+(measured 126.46), Delta p_tt = 112.5 Pa, torque 1.320 N m (measured 2.142, -38 %); off-design torque -46 %. The
+uniform-outflow estimate did not explain about 52 Pa (design) of the outlet energy.
+
+Attempt 3's set-up: H-slit sector, 13 332 cells, `upwind`, k-omega SST, `rotating_frame`, uniform fixed axial inflow 0.1 m ahead
+of the hub leading edge, fixed static pressure 0 at the outlet 0.4 m from the inlet, casing as `velocity = "fixed"` with
+face-centre expressions.
 
 Already known when this ADR was written (stated so that nothing below is chosen with hidden knowledge):
 * The shaft work per unit mass of the measured fan at the design point is `P/(rho Q)` = 333.30/(1.2 x 1.4032) = 197.9 J/kg; the CFD Euler work from
@@ -31,11 +57,17 @@ Already known when this ADR was written (stated so that nothing below is chosen 
 ### Common set-up, quantities and stop rules
 
 Base set-up B0 = the ADR 0075 attempt-3 design-point case exactly (`fan01_validation.rs`, `fan01_case(1.4032)`), plus report-only additions that do
-not change the solution (a `moment` report on `shroud`). All experiments are at the design point only. Each run: at most 8000 iterations, the ADR 0075
-convergence criterion (tolerances 1e-5, or at the cap: torque and Delta p_ts change below 0.5 % over the last 1000 iterations and mass balance 1e-3),
-the ADR 0075 amendment-3 divergence stop (continuity non-finite or above 1e6), and a wall-clock stop at 60 min (outcome NOT CONVERGED (time)). A run
-that does not converge is reported with its last values and is not used for attribution. One run per registered set-up; nothing is re-run to pick a
-result.
+not change the solution (a `moment` report on `shroud`). All experiments are at the design point only.
+
+Each run:
+* at most 8000 iterations,
+* the ADR 0075 convergence criterion (tolerances 1e-5, or at the cap: torque and Delta p_ts change below 0.5 % over the
+  last 1000 iterations and mass balance 1e-3),
+* the ADR 0075 amendment-3 divergence stop (continuity non-finite or above 1e6),
+* and a wall-clock stop at 60 min (outcome NOT CONVERGED (time)).
+
+A run that does not converge is reported with its last values and is not used for attribution. One run per registered
+set-up; nothing is re-run to pick a result.
 
 Quantities computed from every converged run (absolute frame `c = w + Omega x r`; exact boundary face values from the velocity and pressure
 boundary values and the face flux `phi`; `rho` = 1.2):
@@ -65,12 +97,15 @@ Reproduction rule (run E0 first): E0 = B0 on the HEAD of this wave. It must repr
 (ADR 0075 harness definitions). If it does not, all other arms are stopped until the difference is explained (an amendment states it before any
 further run).
 
-Attribution rules (fixed now). For a quantity X (Delta p_ts, Delta p_tt, M, W_L, loss, outlet kinetic terms) and an arm i: `delta_i = X_i - X_E0`;
-`nu_i` = the absolute change of X over the last 1000 iterations of run i (for quantities without a monitor history: the larger of the torque and
-Delta p_ts relative changes of that run times |X|). The effect is RESOLVED if `|delta_i| > 5 max(nu_i, nu_E0)`; it is SIGNIFICANT FOR THE GAP if
-also `|delta_i| >= 0.05 G_X`, with `G_X = X_measured - X_E0` (Delta p_ts: 126.46 - E0; torque: 2.1422 - E0). Its share of the gap is
-`delta_i / G_X`. Additivity of the combined run K: `|delta_K - sum delta_i| <= 0.2 max(|delta_K|, |sum delta_i|) + 5 nu_K`, otherwise the effects
-interact and only the combined effect is quoted.
+Attribution rules (fixed now). For a quantity X (Delta p_ts, Delta p_tt, M, W_L, loss, outlet kinetic terms) and an arm i:
+* `delta_i = X_i - X_E0`;
+* `nu_i` = the absolute change of X over the last 1000 iterations of run i (for quantities without a monitor history: the
+  larger of the torque and Delta p_ts relative changes of that run times |X|).
+* The effect is RESOLVED if `|delta_i| > 5 max(nu_i, nu_E0)`; it is SIGNIFICANT FOR THE GAP if also
+  `|delta_i| >= 0.05 G_X`, with `G_X = X_measured - X_E0` (Delta p_ts: 126.46 - E0; torque: 2.1422 - E0).
+* Its share of the gap is `delta_i / G_X`.
+* Additivity of the combined run K: `|delta_K - sum delta_i| <= 0.2 max(|delta_K|, |sum delta_i|) + 5 nu_K`, otherwise the
+  effects interact and only the combined effect is quoted.
 
 No arm is an F-126 attempt. If an arm happens to meet the ADR 0075 limits, that is reported and not claimed: F-126 stays MISSED (rule: no picking of
 a favourable set-up). No fan performance claim is made.
@@ -78,12 +113,20 @@ a favourable set-up). No fan performance claim is made.
 ### Arm A: the casing with the 34A treatment (task a)
 
 E1 = E0 with the shroud as `velocity = "moving_wall"`, `wall_rotation_rate = -Omega`, `wall_velocity_projection = "tangential"`, `turbulence = "wall"`.
+
 Needed code (opt-in): `turb.rs` refuses every `moving_wall` with a turbulence wall treatment. Change S2: for `k_omega_sst` only, a `moving_wall`
 (not `shear`, `partial_slip`, `marangoni`) is accepted, because it builds the same boundary object as a `fixed` moving wall, which ADR 0075 S1 already
-accepts. Checks: S2a an API SST channel (the ADR 0075 G1 channel set-up at API level, y+ 30 mesh, walls moving at `-10` m/s along x) with the walls
-given as `fixed` + `velocity_value` and as `moving_wall` + `velocity_value`: after 200 iterations all cell fields (u, p, k, omega) bit-identical.
-S2b the same case with `k_epsilon` is still refused at `boundaries.<wall>.velocity` or `.turbulence`. If S2a is not bit-identical, S2 is removed and E1
-is reported NOT RUNNABLE. Prediction registered now (from the 1.7e-3 leak): E1 equals E0 within the resolution rule (no resolved effect on M); a
+accepts.
+
+Checks:
+* S2a an API SST channel (the ADR 0075 G1 channel set-up at API level, y+ 30 mesh, walls moving at `-10` m/s along x) with
+  the walls given as `fixed` + `velocity_value` and as `moving_wall` + `velocity_value`: after 200 iterations all cell
+  fields (u, p, k, omega) bit-identical.
+* S2b the same case with `k_epsilon` is still refused at `boundaries.<wall>.velocity` or `.turbulence`.
+
+If S2a is not bit-identical, S2 is removed and E1 is reported NOT RUNNABLE.
+
+Prediction registered now (from the 1.7e-3 leak): E1 equals E0 within the resolution rule (no resolved effect on M); a
 resolved effect is reported as a falsified prediction.
 
 ### Arm B: energy balance (task b)
@@ -103,7 +146,8 @@ The quantities above, on E0 and on every other arm. No new run.
   centrifugal on; inlet `swirl_rate = 2 - Omega_f`, walls `wall_rotation_rate = 2 - Omega_f`), `Omega_f` = 2 and 1. The exact static pressure is frame
   independent. E2's registered limits apply (outlet pressure error and mid-length pressure error `<= 3 %` of the range 1.5, outlet absolute swirl
   `c_theta` error `<= 3 %` of 2). Prediction with the current code: outlet pressure error about 50 % (`Omega_f = 2`) and 37.5 % (`Omega_f = 1`) of the
-  range. If X1 passes with the current code, RE-H is falsified and no fix is made. Fix F-RE (opt-in): key `boundaries.<p>.radial_frame_rate` [rad/s]
+  range. If X1 passes with the current code, RE-H is falsified and no fix is made.
+* Fix F-RE (opt-in): key `boundaries.<p>.radial_frame_rate` [rad/s]
   (default 0, `radial_equilibrium_outlet` only): the balance uses `w_theta + radial_frame_rate r`. Acceptance: X1 with `radial_frame_rate = Omega_f`
   meets the E2 limits at both `Omega_f`; the existing E2 test and `baseline_hashes.rs` pass unchanged (default bit-identical). If F-RE fails, it is
   removed (rule (b) of wave 35) and C3 is reported NOT RUNNABLE. C3 uses `radial_frame_rate = Omega`.
@@ -131,9 +175,14 @@ not additions), numerics as E0.
 
 ### Arm E: blade-element / Euler estimate from the CAD sections (task e), derived from first principles
 
-Assumptions: steady incompressible flow; strip theory (each radius independent, no radial velocity, no radial equilibrium coupling); uniform axial
-speed `c_x = Q / (pi (r_s^2 - r_h^2))` (9.478 m/s at the design point) everywhere; no inlet swirl; no work in the tip gap; the 16 CAD sections of
-`w34d_fan01_cad_sections.csv` (r <= 247.5 mm) with NACA 4-digit camber lines of the tabulated m and p; `rho` = 1.2, `Omega` = 155.614 rad/s.
+Assumptions:
+* steady incompressible flow;
+* strip theory (each radius independent, no radial velocity, no radial equilibrium coupling);
+* uniform axial speed `c_x = Q / (pi (r_s^2 - r_h^2))` (9.478 m/s at the design point) everywhere;
+* no inlet swirl;
+* no work in the tip gap;
+* the 16 CAD sections of `w34d_fan01_cad_sections.csv` (r <= 247.5 mm) with NACA 4-digit camber lines of the tabulated m and p;
+* `rho` = 1.2, `Omega` = 155.614 rad/s.
 
 1. Cascade momentum (exact for a 2-D cascade): a control volume of one pitch `s = 2 pi r / N` whose periodic sides cancel gives the blade
    circulation `Gamma = s (c_theta2 - c_theta1) = s Delta c_theta` and the tangential force per unit span `F_theta = rho s c_x Delta c_theta`.
@@ -149,8 +198,10 @@ speed `c_x = Q / (pi (r_s^2 - r_h^2))` (9.478 m/s at the design point) everywher
    `4 m x (1 - x)` with `alpha_L0 = -2 m` exactly; the quadrature must give it to 1e-8.
 5. Steps 1-4 give one implicit equation for `Delta c_theta` per radius, solved by fixed-point iteration to 1e-12.
 Variants: EA inviscid linear (C_D = 0, no cap); EB `C_L` capped at 1.1 and `C_D = 0.02` (ASSUMED values typical of 11 % thick cambered sections at
-Re 1.3e5-1.6e5, UNVERIFIED, not from a source read in this wave). Stated limits of the method: isolated-airfoil lift overestimates at solidity near
-1 (hub, `sigma = c/s` = 1.14) where cascade guidance reduces deviation-free turning differently; no cascade correlation (Carter's rule, Weinig) is
+Re 1.3e5-1.6e5, UNVERIFIED, not from a source read in this wave).
+
+Stated limits of the method: isolated-airfoil lift overestimates at solidity near 1 (hub, `sigma = c/s` = 1.14) where
+cascade guidance reduces deviation-free turning differently; no cascade correlation (Carter's rule, Weinig) is
 used because none was read (they are UNVERIFIED recollections); no 3-D effects (tip leakage, secondary flow, hub boundary layer). The estimate is a
 bracket of the achievable work, not a prediction to a tolerance; it is compared with `W_M`, `W_L` of the CFD and with 197.9 J/kg (measured shaft).
 Both operating points are evaluated (no CFD run at the off-design point in this wave).
@@ -186,14 +237,20 @@ largest difference of u, p, k, omega after 200 iterations 0 (bit-identical). S2b
 `boundaries.ymax.velocity`. S2 is kept.
 
 RE-H and F-RE. X1 with the code as it was: outlet pressure error 47.2 % (`Omega_f = 2`, predicted about 50 %) and 36.8 % (`Omega_f = 1`, predicted
-37.5 %) of the range: RE-H holds (ignored test `x1_..._without_the_frame_rate_known_miss`). With `radial_frame_rate = Omega_f`: outlet pressure
+37.5 %) of the range: RE-H holds (ignored test `x1_..._without_the_frame_rate_known_miss`).
+
+With `radial_frame_rate = Omega_f`: outlet pressure
 0.376 % / 0.397 %, outlet absolute swirl 0.001 % / 0.020 %, mid-length pressure 0.390 % / 1.650 % (limits 3 %), settled in 180 / 184 iterations;
 the discrete balance of the applied pressures with the absolute swirl 3.0e-15 / 2.5e-15 of the range. The existing E2 test passes (0.408 %, 0.032 %,
-2.669 %, 2.3e-15). F-RE is accepted and kept. Restriction (documented): it assumes `p` is the static pressure, i.e. `rotating_frame` with
-`centrifugal = true`; only that case is checked.
+2.669 %, 2.3e-15). F-RE is accepted and kept.
+
+Restriction (documented): it assumes `p` is the static pressure, i.e. `rotating_frame` with `centrifugal = true`; only
+that case is checked.
 
 Construction (13 332 cells E0, E1, C2, C3; C1 21 060; D1 21 543; D2 15 684; N2 33 076; K 34 395; all `check_mesh` ok, max non-orthogonality
-79.0-79.1 deg). Count-rule DEFECT found at construction: the registered C1/D1 rule (largest axial cell at most E0's) does not keep the spacing near the
+79.0-79.1 deg).
+
+Count-rule DEFECT found at construction: the registered C1/D1 rule (largest axial cell at most E0's) does not keep the spacing near the
 trailing / leading edge, because the generator fills the region by geometric growth from the boundary-layer cells: E0 grows downstream with ratio 3.56
 (largest cell 0.165 m) and upstream with ratio 2.97 (0.067 m); C1 (n_down 24) has ratio 1.35, D1 (n_up 25) 1.28. C1 - E0 and D1 - E0 therefore mix
 the location with the axial grading. Correction, two new arms (C1 and D1 run as registered):
@@ -220,19 +277,25 @@ up to about 0.05 m; spanwise and incidence numbers are compared only between arm
 D1).
 
 Smoke results (30 iterations, continuity at iteration 30, all finite): E0 1.22e-4, E1 1.23e-4, C1 1.16e-4, C2 1.22e-4, C3 1.15e-4, D1 1.70e-4,
-D2 1.37e-4, N2 (registered counts) 2.91e-5, K 1.28e-4, C0 5.51e-5, D0 1.33e-4. An observation from the smoke diagnostics (30 iterations, not
+D2 1.37e-4, N2 (registered counts) 2.91e-5, K 1.28e-4, C0 5.51e-5, D0 1.33e-4.
+
+An observation from the smoke diagnostics (30 iterations, not
 converged, no conclusion drawn): the absolute angular-momentum flux at the outlet (3.29 N m in E0) is about 2.6 times the reported torque on blade,
 hub and shroud (1.27 N m), and cut U (ahead of the rotor) already carries 0.66 N m; with N2 the ratio is smaller (2.41 against 1.79). Whether this
 persists at convergence is part of arm B; if it does, it is a candidate defect or a discretisation error of the relative-velocity formulation, and a
 check is registered in an amendment before it is run.
 
-Blade-element estimate (arm E, analytic, computed now): design point EA 242.2 J/kg (torque 2.621 N m, psi 0.163), EB 222.2 J/kg (2.405 N m,
-psi 0.150); off-design EA 172.8 J/kg (2.404 N m), EB 179.4 J/kg (2.496 N m; above EA because the drag term adds tangential force and the cap is not
-active). Measured shaft: 197.9 J/kg (2.142 N m) and 135.3 J/kg (1.882 N m). Both variants exceed the measured shaft torque by 12-22 % (design) and
-28-33 % (off-design): the estimate overshoots the measurement on its own (isolated-airfoil lift at solidity up to 1.14, C_L up to 1.5 in EA, no
-3-D losses), so the yardstick for the CFD deficit is the measured shaft work, not EA or EB; EA/EB are "the two variants", not an ordered bracket.
-The torque decision rule's first condition ("the bracket contains or exceeds the measured shaft torque") is met at both points; the conclusion still
-needs a resolved numerics effect.
+Blade-element estimate (arm E, analytic, computed now):
+* design point: EA 242.2 J/kg (torque 2.621 N m, psi 0.163), EB 222.2 J/kg (2.405 N m, psi 0.150);
+* off-design: EA 172.8 J/kg (2.404 N m), EB 179.4 J/kg (2.496 N m; above EA because the drag term adds tangential force and
+  the cap is not active);
+* measured shaft: 197.9 J/kg (2.142 N m) and 135.3 J/kg (1.882 N m).
+
+Both variants exceed the measured shaft torque by 12-22 % (design) and 28-33 % (off-design). The estimate overshoots the
+measurement on its own (isolated-airfoil lift at solidity up to 1.14, C_L up to 1.5 in EA, no 3-D losses), so the yardstick
+for the CFD deficit is the measured shaft work, not EA or EB; EA/EB are "the two variants", not an ordered bracket. The
+torque decision rule's first condition ("the bracket contains or exceeds the measured shaft torque") is met at both points;
+the conclusion still needs a resolved numerics effect.
 
 Run order: E0 alone first (reproduction rule); then pairs, never two of N2 / K / C1 / D1 together.
 
@@ -240,17 +303,27 @@ Run order: E0 alone first (reproduction rule); then pairs, never two of N2 / K /
 
 What I knew when writing this: the full E0 run (below) and the 30-iteration smoke of the X2 arms (below). No other arm has run beyond 30 iterations.
 
-E0 (registered run, 12.8 min): converged by the monitor criterion at 8000 iterations; Delta p_ts -3.813 Pa, Delta p_tt 112.520 Pa (ADR 0075
-definitions), torque 1.32007 N m: reproduction rule MET (attempt 3: -3.8 Pa, 1.320 N m). Blade 1.29630 N m (pressure part 1.22821), hub 0.02377,
-shroud -0.09303 N m on the fluid. Outlet: no backflow (0 by area and mass), axial non-uniformity term 0.95 Pa, `rho <c_theta^2/2>_m` = 58.82 Pa,
-`rho <c_z^2/2>_m` = 54.85 Pa; `Delta p_tt - Delta p_ts` = 113.94 Pa closes to 1e-14 with these terms.
+E0 (registered run, 12.8 min) converged by the monitor criterion at 8000 iterations:
+* Delta p_ts -3.813 Pa, Delta p_tt 112.520 Pa (ADR 0075 definitions), torque 1.32007 N m: reproduction rule MET (attempt 3:
+  -3.8 Pa, 1.320 N m).
+* Blade 1.29630 N m (pressure part 1.22821), hub 0.02377, shroud -0.09303 N m on the fluid.
+* Outlet: no backflow (0 by area and mass), axial non-uniformity term 0.95 Pa, `rho <c_theta^2/2>_m` = 58.82 Pa,
+  `rho <c_z^2/2>_m` = 54.85 Pa; `Delta p_tt - Delta p_ts` = 113.94 Pa closes to 1e-14 with these terms.
 
-Harness correction (definition defect, found in E0's output): the registered cut check compares the cut flux with Q; the code used Q = 1.4032
-(the operating point) while the flow through the faceted mesh is 1.400024 m^3/s (the inscribed polygon has 0.23 % less annulus area than the circle,
-uniform inflow speed from the circle area), so both cuts failed by 2.26e-3 and the segment split was not printed. Corrected: the cuts are checked
-against the inlet-patch flow of the same run (E0: U and D agree with it to 1e-5) and the segment work uses that flow. `W_M`, `W_L` keep Q = 1.4032
-as registered (0.23 % effect). E0's segments recomputed from its printed values with Q = 1.400024: inlet->U work 74.1 Pa, Delta p_t -0.47 Pa;
-U->D work 243.2 Pa, Delta p_t 103.3 Pa; D->outlet work 48.2 Pa, Delta p_t +7.3 Pa.
+Harness correction (definition defect, found in E0's output): the registered cut check compares the cut flux with Q. The
+code used Q = 1.4032 (the operating point) while the flow through the faceted mesh is 1.400024 m^3/s (the inscribed polygon
+has 0.23 % less annulus area than the circle, uniform inflow speed from the circle area), so both cuts failed by 2.26e-3
+and the segment split was not printed.
+
+Corrected: the cuts are checked against the inlet-patch flow of the same run (E0: U and D agree with it to 1e-5) and the
+segment work uses that flow. `W_M`, `W_L` keep Q = 1.4032 as registered (0.23 % effect). E0's segments recomputed from its
+printed values with Q = 1.400024:
+
+| Segment | Work Pa | Delta p_t Pa |
+|---|---|---|
+| inlet->U | 74.1 | -0.47 |
+| U->D | 243.2 | 103.3 |
+| D->outlet | 48.2 | +7.3 |
 
 Finding in E0 that changes the diagnosis: the angular-momentum balance does not close. The absolute angular-momentum flux at the outlet is 3.288 N m
 (inlet 0), the torque on the fluid from blade, hub and shroud is 1.227 N m: 2.061 N m (168 % of the wall torque) has no wall source. Cut U, ahead of
@@ -276,11 +349,13 @@ the projection, otherwise E0:
   (X2c 27 324).
 * N1b's relevance rises with X2d: the registered N1b run is unchanged.
 
-How the attribution reads after X2 (fixed now): blade work is measured by the blade moment (its pressure part is computed from the face pressures
-used by the momentum balance); `W_L` and the outlet swirl contain the spurious source and are not rotor work; the share of the Delta p_ts gap
-attributed to the spurious swirl is `rho <c_theta^2/2>_m(outlet)` of the arm minus that of a swirl distribution carrying only the wall torque, which
-cannot be computed without a profile; the addendum quotes the outlet swirl energy and the angular-momentum excess side by side instead of a single
-share.
+How the attribution reads after X2 (fixed now):
+* blade work is measured by the blade moment (its pressure part is computed from the face pressures used by the momentum
+  balance);
+* `W_L` and the outlet swirl contain the spurious source and are not rotor work;
+* the share of the Delta p_ts gap attributed to the spurious swirl is `rho <c_theta^2/2>_m(outlet)` of the arm minus that of
+  a swirl distribution carrying only the wall torque, which cannot be computed without a profile; the addendum quotes the
+  outlet swirl energy and the angular-momentum excess side by side instead of a single share.
 
 Run order from here (two at a time): X2a + N1b, X2b + X2d, E1 + C2, N2 + C3, X2c + D2, C0 + C1, D0 + D1, K alone. The machine is shared: the
 60-minute wall-clock stop stays as registered.
@@ -296,8 +371,10 @@ not an F-126 attempt; the attribution rules apply unchanged (KN - E0 is the comb
 
 All runs: release builds of 211d3e3 plus the wave-35C files (S2 and F-RE as in ce4185f; the harness as in 9dbef66, whose changes after ce4185f add
 arms and print-outs only, the E0 path unchanged), single thread, two runs at a time on a shared machine, one run per set-up, design point
-Q = 1.4032 m^3/s only. "Resolved" and "significant" are the registered rules (5 x the larger last-1000-iteration change; 5 % of the E0 gap). E0 gaps:
-Delta p_ts 130.27 Pa (126.46 measured against -3.81), torque 0.8218 N m (2.1419 measured against 1.3201).
+Q = 1.4032 m^3/s only.
+
+"Resolved" and "significant" are the registered rules (5 x the larger last-1000-iteration change; 5 % of the E0 gap). E0
+gaps: Delta p_ts 130.27 Pa (126.46 measured against -3.81), torque 0.8218 N m (2.1419 measured against 1.3201).
 
 ### Checks with limits
 
@@ -345,23 +422,34 @@ lose total pressure: X2a and X2d create 23 and 17 Pa that no wall supplies.
 
 `Delta p_tt - Delta p_ts` = 113.94 Pa = 0 (uniform outlet pressure) + `rho<c_z^2/2>` 54.85 (non-uniformity 0.95 of it) + `rho<c_theta^2/2>` 58.82
 + `rho<c_r^2/2>` 0.27; identity residual 1e-14. No backflow at the outlet (0 by area and by mass). The ADR 0075 "unexplained 52 Pa" is outlet SWIRL,
-not axial non-uniformity or backflow. Euler work: `W_M` 122.0 J/kg from the torque, `W_L` 303.9 J/kg from the outlet angular-momentum flux: the
-torque balance is open by 2.061 N m (168 % of the 1.227 N m wall torque). Segments (mesh flow 1.400024): inlet->U work 74.1 Pa (pre-swirl no wall can
-produce), U->D 243.2 Pa against a total-pressure rise of 103.3 Pa, D->outlet 48.2 Pa with a total-pressure RISE of 7.3 Pa in a duct. With angular
-momentum and energy not conserved, `W_L` and the "loss" `rho W_L - Delta p_tt` (254.6 Pa) are not physical; the blade moment is the rotor-work
-measure used below. In KN the balance closes to 0.117 N m (6 % of its wall torque) and `W_M` = 186.3 J/kg, `W_L` = 193.2 J/kg.
+not axial non-uniformity or backflow.
+
+Euler work: `W_M` 122.0 J/kg from the torque, `W_L` 303.9 J/kg from the outlet angular-momentum flux. The torque balance is
+open by 2.061 N m (168 % of the 1.227 N m wall torque).
+
+Segments (mesh flow 1.400024):
+* inlet->U work 74.1 Pa (pre-swirl no wall can produce);
+* U->D 243.2 Pa against a total-pressure rise of 103.3 Pa;
+* D->outlet 48.2 Pa with a total-pressure RISE of 7.3 Pa in a duct.
+
+With angular momentum and energy not conserved, `W_L` and the "loss" `rho W_L - Delta p_tt` (254.6 Pa) are not physical;
+the blade moment is the rotor-work measure used below. In KN the balance closes to 0.117 N m (6 % of its wall torque) and
+`W_M` = 186.3 J/kg, `W_L` = 193.2 J/kg.
 
 ### Check X2 and the mechanism
 
 X2a (empty passage, exact `c_theta = 0`): outlet angular-momentum flux 2.254 N m and cut U 0.661 N m, the same as E0's 0.666 N m with the blade;
 X2b (the same in the inertial frame) 1.6e-4 N m. The source is the `rotating_frame` relative-velocity discretisation on this mesh and does not need
 the blade (H-AM confirmed). X2d (minmod) brings the outlet flux to 0.0026 N m, so by the registered rule this is a discretisation error, not a code
-defect; X2c (refinement leg) did not converge. Open item, not explained by the rule: X2d still carries spurious swirl of both signs (-3.4 to +1.4 m/s
-in the bins of cut D, `rho<c_theta^2/2>` 20 Pa) and creates 16.8 Pa of total pressure in a duct with walls at rest: minmod removes the net
-angular-momentum source but not the spurious swirl energy. Where the error is generated was not located (candidate, untested: the H-slit cells of
-the chord band are sheared along the camber line even without a blade). No fix is made (task item 3 covers defects); the remedy that removes the
-large solid-body part from the convected quantity, an absolute-velocity formulation on the bladed sector, is refused today (`mrf` on this mesh,
-ADR 0065 S4).
+defect; X2c (refinement leg) did not converge.
+
+Open item, not explained by the rule: X2d still carries spurious swirl of both signs (-3.4 to +1.4 m/s in the bins of cut
+D, `rho<c_theta^2/2>` 20 Pa) and creates 16.8 Pa of total pressure in a duct with walls at rest. Minmod removes the net
+angular-momentum source but not the spurious swirl energy. Where the error is generated was not located (candidate,
+untested: the H-slit cells of the chord band are sheared along the camber line even without a blade).
+
+No fix is made (task item 3 covers defects). The remedy that removes the large solid-body part from the convected
+quantity, an absolute-velocity formulation on the bladed sector, is refused today (`mrf` on this mesh, ADR 0065 S4).
 
 ### Attribution (registered rules; share of the E0 gap, positive closes it)
 
@@ -405,16 +493,24 @@ shaft work by 12-33 % (isolated-airfoil lift at solidity up to 1.14, no 3-D loss
 
 ### Which factors account for the gap (task 2)
 
-Torque gap 0.822 N m: the resolved part is numerical. Minmod +0.360 N m (44 %), in-plane refinement +0.494 N m (60 %), both +0.696 N m (85 %),
-leaving KN 5.9 % below the measured torque (the measured shaft power may contain bearing loss; ADR 0075). The mechanism identified is spurious
-absolute angular momentum from the upwind relative-velocity discretisation: 0.67 N m of pre-swirl ahead of the rotor unloads the blade, with a dose
-response (D1 - D0: 1.26 N m more pre-swirl, 0.45 N m less blade torque). The casing treatment, the outlet condition (location, type, backflow option),
-the inlet location as a physical change, the axial grading and the tip-gap resolution each account for less than 2 % of the torque gap.
-Delta p_ts gap 130.3 Pa: numerics +31 (minmod), +46 (refinement), +80 Pa (both; KN 76.2 Pa against 126.5 measured, eta_ts 0.341 against 0.532);
-E0's outlet swirl energy (58.8 Pa) is mostly spurious (KN 27.1 Pa at 53 % more torque); radial equilibrium -8.2 Pa; everything else within -3 to
-+6.4 Pa. The remaining 50 Pa after KN contains the installation (bellmouth, finite blunt hub, struts, motor, diffuser, exit to ambient: not
-modelled), the residual numerics (X2d), and whatever else a rotor-only model misses; these are not separated by this wave. KN is not an F-126
-attempt and its torque (-5.9 %) does not meet the 5 % limit anyway; nothing is claimed from it.
+Torque gap 0.822 N m: the resolved part is numerical. Minmod gives +0.360 N m (44 %), in-plane refinement +0.494 N m
+(60 %) and both +0.696 N m (85 %), leaving KN 5.9 % below the measured torque (the measured shaft power may contain bearing
+loss; ADR 0075). The mechanism identified is spurious absolute angular momentum from the upwind relative-velocity
+discretisation: 0.67 N m of pre-swirl ahead of the rotor unloads the blade, with a dose response (D1 - D0: 1.26 N m more
+pre-swirl, 0.45 N m less blade torque). The casing treatment, the outlet condition (location, type, backflow option), the
+inlet location as a physical change, the axial grading and the tip-gap resolution each account for less than 2 % of the
+torque gap.
+
+Delta p_ts gap 130.3 Pa:
+* numerics +31 (minmod), +46 (refinement), +80 Pa (both; KN 76.2 Pa against 126.5 measured, eta_ts 0.341 against 0.532);
+* E0's outlet swirl energy (58.8 Pa) is mostly spurious (KN 27.1 Pa at 53 % more torque);
+* radial equilibrium -8.2 Pa;
+* everything else within -3 to +6.4 Pa.
+
+The remaining 50 Pa after KN contains the installation (bellmouth, finite blunt hub, struts, motor, diffuser, exit to
+ambient: not modelled), the residual numerics (X2d), and whatever else a rotor-only model misses; these are not separated
+by this wave. KN is not an F-126 attempt and its torque (-5.9 %) does not meet the 5 % limit anyway; nothing is claimed
+from it.
 
 ### Question 2, by the registered rules
 
@@ -450,10 +546,14 @@ F-126 remains MISSED; no arm is an F-126 attempt; no fan performance claim is ma
 
 ## Amendment 4 (2026-10-20): can the X2 source be a code defect? Registered after the addendum above, before these runs
 
-What I knew: every result of the addendum. Reason (review): X2b's flow has no swirl, so it cannot reveal an error that needs a large tangential
+What I knew: every result of the addendum.
+
+Reason (review): X2b's flow has no swirl, so it cannot reveal an error that needs a large tangential
 velocity (the vector rotation at the cyclic seams, convection of swirl through the camber-sheared cells, the seam gradient); the registered rule
 classified X2 as "discretisation error" through X2d, which still creates 16.8 Pa of total pressure in a duct, and the refinement leg X2c did not
-converge. So "not a code defect" is not yet shown. Three runs, on a fresh archive of the HEAD at hand-back (which contains wave 35A/B/D code, among it
+converge. So "not a code defect" is not yet shown.
+
+Three runs, on a fresh archive of the HEAD at hand-back (which contains wave 35A/B/D code, among it
 the ADR 0077 opt-in `solver.periodic_gradient = "partner_cell"`, F-H0):
 * X2a-HEAD: X2a unchanged. Reproduction rule: outlet L 2.25440 N m and Delta p_ts -59.984 Pa to every printed digit; if it reproduces, the
   measurements of this ADR carry over to that HEAD; if not, the code-state statement is corrected and the difference reported.
@@ -483,10 +583,13 @@ Conclusion of the defect question: the spurious angular momentum and swirl energ
 relative velocity) on this H-slit mesh; they appear without any frame term (X2f) and do not involve the seam gradient (X2h, X2i). By the registered
 rule it is discretisation error, and the bladed runs show it falls with in-plane refinement (L excess 2.06 -> 1.20 N m, N2) and with minmod (0.19,
 N1b; 0.12 with both, KN). Not shown: convergence with h on the empty passage (X2c did not converge), and the cell-level location of the error.
-Note: X2a, X2b, X2f, X2h converged by residual tolerance in under 1000 iterations, so their printed last-1000-iteration change is "inf"; their
-comparisons rest on tolerance convergence (1e-5), not on the 1000-iteration rule. The incidence shift quoted in the attribution section compares
-bladed E0 with the unbladed X2b 40 mm upstream, where the blade's potential field still acts; the E0 against N1b comparison (both bladed, same
-grading, pre-swirl 0.67 against 0.03 N m) gives +9.8 / +10.8 deg at the hub bin and -1.9 / -1.1 deg at the tip bin, i.e. 0.8-1.0 deg.
+
+Note: X2a, X2b, X2f, X2h converged by residual tolerance in under 1000 iterations, so their printed last-1000-iteration
+change is "inf"; their comparisons rest on tolerance convergence (1e-5), not on the 1000-iteration rule.
+
+The incidence shift quoted in the attribution section compares bladed E0 with the unbladed X2b 40 mm upstream, where the
+blade's potential field still acts. The E0 against N1b comparison (both bladed, same grading, pre-swirl 0.67 against
+0.03 N m) gives +9.8 / +10.8 deg at the hub bin and -1.9 / -1.1 deg at the tip bin, i.e. 0.8-1.0 deg.
 
 ### Final gate
 

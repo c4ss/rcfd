@@ -1,26 +1,41 @@
 # ADR 0039: Wave 23A, Lorentz-force MHD coupling (F-214) and heat-exchanger macro models (F-217)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (exact numbers, file names, deviations) may be appended at the end
-without touching a registered limit.
 
-Scope. F-214 (size S) and F-217 (size M) are `todo`. Each gets a vertical slice and stops at `partial` unless every acceptance point
-is met; the gaps are named at the end. Clean-room: published literature and first principles only; no vendor code, text, data or
-names; nothing from vendor material. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and
-are not re-recorded (3 passed, 1 ignored on HEAD 19ca1e4 before any change of this wave, run with `CARGO_TARGET_DIR=<target dir>`).
-Schema additions are additive with explicit unset sentinels. Parallel waves 23B and 23C work in the same tree: shared files
-(`schema.rs`, `sim.rs`, `lib.rs`, `case.rs`) get small targeted edits and are committed through a temporary index with only this
-wave's hunks.
+Wave 23A adds a Lorentz-force momentum source for MHD (F-214) and effectiveness-NTU heat-exchanger macro models with a
+loss closure, a dual cell and a fan boundary (F-217). Both reuse existing mechanisms with no new solver hook and no new
+algorithm support, and both run steady SIMPLE/SIMPLEC only. Both items stop at `partial`. In the addendum, written after
+the runs, F-214 meets the Hartmann acceptance (profile within 2 percent, flow-rate reduction within 1 percent) at three
+Hartmann numbers in a 1-D set-up, and F-217 meets the counterflow acceptance (within 2 percent of eps-NTU). Against
+that, the both-unmixed crossflow relation misses its registered H2 and H3 limits and ships with a known 3.3 percent
+maximum deviation. The registered X4 set-up without the bed goes to NaN and the registered X1 stationarity helper
+misses; both are kept as ignored known-miss tests, and the corrected set-up and helper pass. The shell-and-tube relation
+is unverified against a published table, and no published experiment is delivered.
+
+Rules and scope:
+
+* Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
+  moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
+  test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, file names,
+  deviations) may be appended at the end without touching a registered limit.
+* Scope: F-214 (size S) and F-217 (size M) are `todo`. Each gets a vertical slice and stops at `partial` unless every
+  acceptance point is met; the gaps are named at the end.
+* Clean-room: published literature and first principles only; no vendor code, text, data or names; nothing from vendor
+  material.
+* Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded (3 passed, 1
+  ignored on HEAD 19ca1e4 before any change of this wave, run with `CARGO_TARGET_DIR=<target dir>`).
+* Schema additions are additive with explicit unset sentinels.
+* Parallel waves 23B and 23C work in the same tree: shared files (`schema.rs`, `sim.rs`, `lib.rs`, `case.rs`) get small
+  targeted edits and are committed through a temporary index with only this wave's hunks.
 
 ## Audit of what exists
 
-* Momentum path. `sources.<n>` (ADR 0019, 0036) is evaluated by `Sources::evaluate(geom, u)` once per SIMPLE/SIMPLEC iteration and
-  returns an explicit `BodyForce` (kinematic acceleration per cell) and an implicit isotropic sink [1/s]; `sim.rs` adds the force to
-  `base_body` / buoyancy / user-function force and hands the sink to `SimpleSolver::sink`. `sources::check` rejects every algorithm
-  except `simple` and `simplec`; the coupled solver refuses `sources` (sim.rs); PISO/PIMPLE have no sink and no source hook (the
-  21A finding is confirmed). So every momentum-type physics of this wave is steady SIMPLE/SIMPLEC only; transient MHD is a named gap.
+* Momentum path. `Sources::evaluate(geom, u)` evaluates `sources.<n>` (ADR 0019, 0036) once per SIMPLE/SIMPLEC iteration
+  and returns an explicit `BodyForce` (kinematic acceleration per cell) and an implicit isotropic sink [1/s]. `sim.rs`
+  adds the force to `base_body` / buoyancy / user-function force and hands the sink to `SimpleSolver::sink`.
+  `sources::check` rejects every algorithm except `simple` and `simplec`, the coupled solver refuses `sources` (sim.rs),
+  and PISO/PIMPLE have no sink and no source hook (the 21A finding is confirmed). So every momentum-type physics of this
+  wave is steady SIMPLE/SIMPLEC only; transient MHD is a named gap.
 * Pressure jumps. Fan and porous jump (ADR 0012) are a `FaceJump` (explicit rise plus resistance per internal face) on the
   downstream plane of a zone, built in `rcfd-api/src/lumped.rs`; `network_outlet` is a lagged fixed patch pressure.
   `bc_kind = "vent"` (ADR 0022 D3, check C3) is a vent boundary with a loss coefficient and already exists.
@@ -72,12 +87,20 @@ acceleration and actuator-disk sources, because the force can have a wall-normal
 parallel to the walls, where the construction has no effect.
 
 Settings (additive; `sources.<n>.type = "lorentz"`; `zone` keys as for the other sources):
-`magnetic_field` [T] (3-vector, required, non-zero), `conductivity` [S/m] (`-1` = unset, required, > 0), `applied_electric_field`
-[V/m] (3-vector, empty = 0), `potential` = `none | solve`. Output fields `lorentz_force_x/y/z` [N/m^3] and `current_density_x/y/z`
-[A/m^2] (cell values of the last evaluation). Located errors: missing / zero / wrong length field, conductivity unset or <= 0, a
-non-finite electric field, `potential = "solve"` with a `current` patch missing its value, `electric.enabled` together with a
-Lorentz source, unsupported algorithm (existing source check), empty zone (existing). The `boundaries.<p>.electric*` keys, today
-"only used with `electric.enabled`", are also accepted when a Lorentz source with `potential = "solve"` exists.
+
+* `magnetic_field` [T] (3-vector, required, non-zero);
+* `conductivity` [S/m] (`-1` = unset, required, > 0);
+* `applied_electric_field` [V/m] (3-vector, empty = 0);
+* `potential` = `none | solve`.
+
+Output fields `lorentz_force_x/y/z` [N/m^3] and `current_density_x/y/z` [A/m^2] (cell values of the last evaluation).
+
+Located errors: missing / zero / wrong length field, conductivity unset or <= 0, a non-finite electric field,
+`potential = "solve"` with a `current` patch missing its value, `electric.enabled` together with a Lorentz source,
+unsupported algorithm (existing source check), empty zone (existing).
+
+The `boundaries.<p>.electric*` keys, today "only used with `electric.enabled`", are also accepted when a Lorentz source
+with `potential = "solve"` exists.
 
 ### D2 F-217 library (`rcfd-fv/src/hx.rs`, new)
 
@@ -149,12 +172,17 @@ algebra; `sigma`, `mu` constant). `u x B = u B0 e_z`; with `E_z` the electric fi
 `J x B = J_z e_z x B0 e_y = -J_z B0 e_x`. Steady fully developed momentum: `0 = G + mu u'' - sigma B0 (E_z + u B0)`, `G = -dp/dx`
 (body force per volume). `Ha = B0 a sqrt(sigma/mu)`.
 (a) Short circuit `E_z = 0`: `mu u'' - sigma B0^2 u = -G`, `u = (G/(sigma B0^2)) (1 - cosh(Ha y/a)/cosh Ha)`, mean
-`U = (G/(sigma B0^2))(1 - tanh Ha/Ha)`; Poiseuille at the same `G`: `U_P = G a^2/(3 mu)`; ratio `U/U_P = 3 (Ha - tanh Ha)/Ha^3`
-(tends to 1 as `Ha -> 0`; checked). (b) Insulating walls: zero net current `int J_z dy = 0` gives `E_z = -U B0`; then
-`mu u'' - sigma B0^2 (u - U) = -G`; with `u(+-a)=0` and mean `U`: `u/U = (1 - cosh(Ha y/a)/cosh Ha)/(1 - tanh Ha/Ha)`,
-`G = sigma B0^2 U (tanh Ha/Ha)/(1 - tanh Ha/Ha)`. Both reduce to the Poiseuille parabola for `Ha -> 0`.
-Profile error metric: `max_c |u_c - u_exact(y_c)| / max_y u_exact` over the cell centres (a pointwise relative error would diverge at
-the wall). Flow-rate error: `|U_cfd/U_exact - 1|` with `U_cfd` the cell-volume mean.
+`U = (G/(sigma B0^2))(1 - tanh Ha/Ha)`; Poiseuille at the same `G`: `U_P = G a^2/(3 mu)`; ratio
+`U/U_P = 3 (Ha - tanh Ha)/Ha^3` (tends to 1 as `Ha -> 0`; checked).
+
+(b) Insulating walls: zero net current `int J_z dy = 0` gives `E_z = -U B0`; then `mu u'' - sigma B0^2 (u - U) = -G`;
+with `u(+-a)=0` and mean `U`: `u/U = (1 - cosh(Ha y/a)/cosh Ha)/(1 - tanh Ha/Ha)`,
+`G = sigma B0^2 U (tanh Ha/Ha)/(1 - tanh Ha/Ha)`.
+
+Both reduce to the Poiseuille parabola for `Ha -> 0`.
+
+Profile error metric: `max_c |u_c - u_exact(y_c)| / max_y u_exact` over the cell centres (a pointwise relative error
+would diverge at the wall). Flow-rate error: `|U_cfd/U_exact - 1|` with `U_cfd` the cell-volume mean.
 
 Common A set-up: `box_2d`, `lx = 1`, `nx = 4`, `periodic_x = true`, `ly = 2a = 1`, uniform `ny`, depth default, `ymin`/`ymax` true no-slip
 walls (`velocity = "fixed"`, zero), `rho = 1`, `nu = 1`, `sigma = 1`, `simplec`, `convection = "upwind"`, `h_operator = "from_solution"`,
@@ -226,101 +254,169 @@ in ADR 0012 (change over 300 iterations below `1e-8`). Measured stream temperatu
 
 ## Named gaps registered in advance (reasons for `partial`)
 
-F-214: transient / PISO / PIMPLE and coupled-solver MHD (no momentum source hook); Joule heating `J^2/sigma` into the energy equation;
-spatially varying (case-given field or register) `B`; induced field / magnetic Reynolds number effects; the published Hartmann
-experiments and a 3-D duct with side-wall layers (only the 1-D analytic profile and the electrode current are checked); non-uniform or
-temperature-dependent `sigma` in the Lorentz source.
-F-217: distributed (segmented) exchanger with a resolved secondary flow path; both-unmixed crossflow series solution and the shell-and-tube
-closed form against a published table; two-phase and condensing exchangers; fouling; separate fluid properties on the secondary side of
-a dual cell; multi-branch network boundary (the single-branch `network_outlet` exists); transient operation; the fan curve as a total
-pressure with dynamic head.
+F-214:
+
+* transient / PISO / PIMPLE and coupled-solver MHD (no momentum source hook);
+* Joule heating `J^2/sigma` into the energy equation;
+* spatially varying (case-given field or register) `B`;
+* induced field / magnetic Reynolds number effects;
+* the published Hartmann experiments and a 3-D duct with side-wall layers (only the 1-D analytic profile and the
+  electrode current are checked);
+* non-uniform or temperature-dependent `sigma` in the Lorentz source.
+
+F-217:
+
+* distributed (segmented) exchanger with a resolved secondary flow path;
+* both-unmixed crossflow series solution and the shell-and-tube closed form against a published table;
+* two-phase and condensing exchangers;
+* fouling;
+* separate fluid properties on the secondary side of a dual cell;
+* multi-branch network boundary (the single-branch `network_outlet` exists);
+* transient operation;
+* the fan curve as a total pressure with dynamic head.
 
 ## Addendum: results and deviations (end of wave 23A)
 
-Written after the runs. Limits are those registered above; none was widened, replaced or deleted. Release builds, `cargo test --release`.
+Written after the runs. Limits are those registered above; none was widened, replaced or deleted. Release builds,
+`cargo test --release`.
 
 ### F-214 results (limit in brackets)
 
 * M1 (`rcfd-fv/tests/lorentz.rs`): hand values and zone split 0 to 1.3e-16 [1e-13]; work identity 3e-16 [1e-12]. Pass.
-* M2: electrode current of the short circuit `j = -3.993844` against `-4.000000` (relative 1.54e-3 [5e-3]), spread over the section 7.2e-15 [1e-9],
-  Lorentz force integral 4e-15 [1e-9]; open circuit `|j|/(sigma B Ubar)` 1.54e-3 [5e-3] (the residual is the half-cell wall resolution
-  of the 2-D profile). Pass. The closed-form consistency test (Hartmann profile substituted into the momentum equation) passes.
-* A1 (`rcfd-api/tests/mhd.rs`, short circuit, `potential = none`): profile error as a fraction of `u_max` [2 %] and flow-rate error [1 %]:
-  Ha = 2 (ny 40) 1.590e-3 / 1.218e-3; Ha = 10 (ny 80) 6.532e-3 / 8.580e-4; Ha = 20 (ny 160) 6.532e-3 / 4.064e-4 (mean velocity over the
-  Poiseuille value 0.38896 against 0.38849 at Ha = 2, 0.02702 against 0.02700 at Ha = 10, 0.00713 against 0.00713 at Ha = 20). Pass
-  (roadmap acceptance "within 2 percent": met for this 1-D set-up at three Hartmann numbers).
+* M2: electrode current of the short circuit `j = -3.993844` against `-4.000000` (relative 1.54e-3 [5e-3]), spread over
+  the section 7.2e-15 [1e-9], Lorentz force integral 4e-15 [1e-9]; open circuit `|j|/(sigma B Ubar)` 1.54e-3 [5e-3] (the
+  residual is the half-cell wall resolution of the 2-D profile). Pass.
+* The closed-form consistency test (Hartmann profile substituted into the momentum equation) passes.
+
+A1 (`rcfd-api/tests/mhd.rs`, short circuit, `potential = none`): pass. The roadmap acceptance "within 2 percent" is met
+for this 1-D set-up at three Hartmann numbers.
+
+| Ha (ny) | Profile error as a fraction of `u_max` [2 %] | Flow-rate error [1 %] | Mean velocity over the Poiseuille value, `U/U_P` | Against `3(Ha - tanh Ha)/Ha^3` |
+| --- | --- | --- | --- | --- |
+| Ha = 2 (ny 40) | 1.590e-3 | 1.218e-3 | 0.38896 | 0.38849 |
+| Ha = 10 (ny 80) | 6.532e-3 | 8.580e-4 | 0.02702 | 0.02700 |
+| Ha = 20 (ny 160) | 6.532e-3 | 4.064e-4 | 0.00713 | 0.00713 |
+
 * A2 insulated walls, Ha = 10: profile 6.532e-3 [2 %], flow 8.580e-4 [1 %], `G = 44.4444`. Pass.
-* A3 Ha = 10: Lorentz integral 8.9e-16 [1e-9], work identity 3.3e-16, global momentum balance 1.8e-15 [1e-6], `sum F u V = -85.04 < 0`
-  (the field removes kinetic energy). Pass.
-* A4 located diagnostics pass. The check rejects `solver.algorithm = "coupled"` at parse time (path `sources.<n>.type`), so the test
-  asserts the path from the parse diagnostics (the first version of the test unwrapped a parse that is registered to fail; corrected, not a solver issue).
-* A5 solved potential (`potential = solve`) against the same channel: `max|J|/(sigma B u_max)` 8.15e-12 [1e-6], `max|u - u_plain|/u_max` 1.13e-10 [1e-6]; the
-  `potential = none` flow rate matches the closed form at 8.58e-4 [1e-2]. Pass. (The solved potential is exercised only in the case where it must
-  vanish by symmetry; a case with a non-trivial potential field, for example a duct with side walls, is not checked: named gap.)
-* Runtime of `tests/mhd.rs` is about 340 s in release (A5's plain-Poiseuille reference run is the slow part).
+* A3 Ha = 10: Lorentz integral 8.9e-16 [1e-9], work identity 3.3e-16, global momentum balance 1.8e-15 [1e-6],
+  `sum F u V = -85.04 < 0` (the field removes kinetic energy). Pass.
+* A4 located diagnostics pass. The check rejects `solver.algorithm = "coupled"` at parse time (path `sources.<n>.type`),
+  so the test asserts the path from the parse diagnostics. The first version of the test unwrapped a parse that is
+  registered to fail; it was corrected, and this is not a solver issue.
+* A5 solved potential (`potential = solve`) against the same channel: `max|J|/(sigma B u_max)` 8.15e-12 [1e-6],
+  `max|u - u_plain|/u_max` 1.13e-10 [1e-6]; the `potential = none` flow rate matches the closed form at 8.58e-4 [1e-2].
+  Pass. The solved potential is exercised only in the case where it must vanish by symmetry; a case with a non-trivial
+  potential field, for example a duct with side walls, is not checked (named gap).
+* `tests/mhd.rs` runs for about 340 s in release; A5's plain-Poiseuille reference run is the slow part.
 
 ### F-217 results
 
-* H1 (`rcfd-fv/tests/heat_exchanger.rs`) counterflow and parallel against the independent marched integration: worst relative error 4.99e-13 [1e-5]. Pass.
+* H1 (`rcfd-fv/tests/heat_exchanger.rs`) counterflow and parallel against the independent marched integration: worst
+  relative error 4.99e-13 [1e-5]. Pass.
 * H4 energy balance 1.4e-15 [1e-12], NTU round trip, `core_dp`/`vent_dp` hand values: pass.
-* H3 crossflow `C_max` mixed and `C_min` mixed against the cell-exact recursions: worst 4.4e-9 [1e-3]. Pass. (Reference: the Richardson extrapolation of the 4000-row and 8000-row
-  recursions, `2 f(8000) - f(4000)`, not the single 4000-row value registered; the extrapolation is at least as accurate as the registered reference, see deviation 9.)
-* **H3 both-unmixed approximation: MISS.** Against the registered 800 x 800 cell-exact recursion the relative error is 8.10e-3, 1.64e-2, 3.33e-2
-  at N = 0.5, Cr = 0.25, 0.5, 1; 1.38e-3, 4.98e-3, 1.61e-2 at N = 1; 8.94e-3, 1.06e-2, 4.28e-3 at N = 3 [limit 2e-2]. The Cr = 1, N = 0.5 case is outside the limit.
-  The 800 x 800 value agrees with the Richardson extrapolation of the 150 and 300 cell recursions to at most 1.4e-5 relative, so the reference is not the cause of the miss.
-  Recorded as `h3_cross_unmixed_known_miss` (ignored, limit unchanged, 800 x 800 reference).
-* **H2 both-unmixed: MISS** (small-N slope `eps/N` = 0.99836 at N = 1e-3 [within 1e-3]; 177 violations of `parallel <= cross` at small N and small Cr
-  on the 200 x 19 grid, e.g. N = 0.05, Cr = 0.05, where the fit 0.04866 lies below the parallel-flow 0.04871). Recorded as `h2_cross_unmixed_slope_known_miss` and
-  `h2_limits_and_ordering_known_miss` (ignored, limits unchanged).
-  Root cause (diagnosed, not tuned): the both-unmixed relation is the empirical curve fit `1 - exp[N^0.22/Cr (exp(-Cr N^0.78) - 1)]`, not the exact
-  series solution; its small-N behaviour `eps = N - (Cr/2) N^1.34 + ...` differs from the exact `N - N^2 (1+Cr)/2`, and its error is largest at small N and `Cr = 1`.
-  The series solution is not implemented. The corrected, non-ignored test `h2_limits_and_ordering_exact_arrangements` applies the same registered limits to every
-  exactly derived arrangement and replaces the both-unmixed fit by the `C_max`-mixed crossflow in the ordering `parallel <= cross <= counter`: 0 violations. The both-unmixed
-  option therefore ships with a known 3.3 percent maximum deviation and must not be used where better than that is needed.
-* X1 (`rcfd-api/tests/heat_exchanger.rs`; `box_2d`, `periodic_y`, `lx = 2`, `ly = 0.2`, `nx = 100`, `ny = 4`, depth 0.02 so `Q = 8.0e-3 m^3/s`, `NTU = 4.146`):
-  counterflow `C_sec = 20`: duty 451.450431 W, stream enthalpy rise relative 2.57e-12 [1e-6], against the library eps-NTU 0 [1e-9], against the marched solution 9.8e-15
-  [1e-4 and 2e-2]; counterflow `C_sec = 0`: 474.764283 W, 2.46e-12, 0, 1.0e-14; parallel `C_sec = 20`: 324.721140 W, 3.43e-12, 0, 1.7e-14. Pass.
-  Reading: the macro cell is the algebraic eps-NTU relation, so agreement with it and with the marched solution is expected by construction; the check
-  verifies that the flow, the inlet temperature and the energy source are wired correctly (stream enthalpy equals the duty), not the physics of a resolved exchanger.
-* X2 loss closure at `u = 2 m/s`: `K = 5` gives 12.000000 Pa against 12 (relative 2.7e-14), `r1 = 2` gives 4.000000 against 4 (6.2e-15) [1e-3]; the no-loss reference drop is 6e-15 Pa. Pass.
-* X3 dual cell (lower hot half 350 K, upper 300 K, `UA = 60`, `Q = 4.0e-3` per half): duty -223.250588 W; stream enthalpy changes -223.250585 and +223.250585
-  (relative 1.34e-8 [1e-6]); sum over duty 9.05e-13 [1e-6]; against the marched solution 8.5e-13 [1e-4 and 2e-2]. Pass.
-* X4 fan boundary with the Z2 curve and the Z1 jump: operating flow 3.051516e-2 m^3/s against the analytic intersection 3.049596e-2 (relative 6.30e-4 [5e-3]);
-  patch pressure 137.5959 Pa against the curve value at the measured flow (relative 1.7e-14 [2e-3]); jump drop 82.86 Pa. Pass. The 2e-3 limit was registered because
-  Z3 missed 1e-4; with the first-evaluation rule below the lag is invisible at convergence (the patch pressure equals the curve to round-off).
-* X5 located diagnostics, X6 (`baseline_hashes` 3 passed 1 ignored as before; `tests/lumped.rs` 6 passed 2 ignored as before): pass.
+* H3 crossflow `C_max` mixed and `C_min` mixed against the cell-exact recursions: worst 4.4e-9 [1e-3]. Pass. The
+  reference is the Richardson extrapolation of the 4000-row and 8000-row recursions, `2 f(8000) - f(4000)`, not the
+  single 4000-row value registered; the extrapolation is at least as accurate as the registered reference, see deviation
+  9.
+
+**H3 both-unmixed approximation: MISS.** Relative error against the registered 800 x 800 cell-exact recursion [limit
+2e-2]:
+
+| N | Cr = 0.25 | Cr = 0.5 | Cr = 1 |
+| --- | --- | --- | --- |
+| N = 0.5 | 8.10e-3 | 1.64e-2 | 3.33e-2 |
+| N = 1 | 1.38e-3 | 4.98e-3 | 1.61e-2 |
+| N = 3 | 8.94e-3 | 1.06e-2 | 4.28e-3 |
+
+The Cr = 1, N = 0.5 case is outside the limit. The 800 x 800 value agrees with the Richardson extrapolation of the 150
+and 300 cell recursions to at most 1.4e-5 relative, so the reference is not the cause of the miss. Recorded as
+`h3_cross_unmixed_known_miss` (ignored, limit unchanged, 800 x 800 reference).
+
+**H2 both-unmixed: MISS** (small-N slope `eps/N` = 0.99836 at N = 1e-3 [within 1e-3]; 177 violations of
+`parallel <= cross` at small N and small Cr on the 200 x 19 grid, e.g. N = 0.05, Cr = 0.05, where the fit 0.04866 lies
+below the parallel-flow 0.04871). Recorded as `h2_cross_unmixed_slope_known_miss` and
+`h2_limits_and_ordering_known_miss` (ignored, limits unchanged).
+
+Root cause (diagnosed, not tuned): the both-unmixed relation is the empirical curve fit
+`1 - exp[N^0.22/Cr (exp(-Cr N^0.78) - 1)]`, not the exact series solution. Its small-N behaviour
+`eps = N - (Cr/2) N^1.34 + ...` differs from the exact `N - N^2 (1+Cr)/2`, and its error is largest at small N and
+`Cr = 1`. The series solution is not implemented.
+
+The corrected, non-ignored test `h2_limits_and_ordering_exact_arrangements` applies the same registered limits to every
+exactly derived arrangement and replaces the both-unmixed fit by the `C_max`-mixed crossflow in the ordering
+`parallel <= cross <= counter`: 0 violations. The both-unmixed option therefore ships with a known 3.3 percent maximum
+deviation and must not be used where better than that is needed.
+
+X1 (`rcfd-api/tests/heat_exchanger.rs`; `box_2d`, `periodic_y`, `lx = 2`, `ly = 0.2`, `nx = 100`, `ny = 4`, depth 0.02
+so `Q = 8.0e-3 m^3/s`, `NTU = 4.146`): pass. Duty and errors, limits in brackets:
+
+| Run | Duty | Stream enthalpy rise, relative [1e-6] | Against the library eps-NTU [1e-9] | Against the marched solution [1e-4 and 2e-2] |
+| --- | --- | --- | --- | --- |
+| counterflow `C_sec = 20` | 451.450431 W | 2.57e-12 | 0 | 9.8e-15 |
+| counterflow `C_sec = 0` | 474.764283 W | 2.46e-12 | 0 | 1.0e-14 |
+| parallel `C_sec = 20` | 324.721140 W | 3.43e-12 | 0 | 1.7e-14 |
+
+Reading: the macro cell is the algebraic eps-NTU relation, so agreement with it and with the marched solution is
+expected by construction. The check verifies that the flow, the inlet temperature and the energy source are wired
+correctly (stream enthalpy equals the duty), not the physics of a resolved exchanger.
+
+* X2 loss closure at `u = 2 m/s`: `K = 5` gives 12.000000 Pa against 12 (relative 2.7e-14), `r1 = 2` gives 4.000000
+  against 4 (6.2e-15) [1e-3]; the no-loss reference drop is 6e-15 Pa. Pass.
+* X3 dual cell (lower hot half 350 K, upper 300 K, `UA = 60`, `Q = 4.0e-3` per half): duty -223.250588 W; stream
+  enthalpy changes -223.250585 and +223.250585 (relative 1.34e-8 [1e-6]); sum over duty 9.05e-13 [1e-6]; against the
+  marched solution 8.5e-13 [1e-4 and 2e-2]. Pass.
+* X4 fan boundary with the Z2 curve and the Z1 jump: operating flow 3.051516e-2 m^3/s against the analytic intersection
+  3.049596e-2 (relative 6.30e-4 [5e-3]); patch pressure 137.5959 Pa against the curve value at the measured flow
+  (relative 1.7e-14 [2e-3]); jump drop 82.86 Pa. Pass. The 2e-3 limit was registered because Z3 missed 1e-4; with the
+  first-evaluation rule below the lag is invisible at convergence (the patch pressure equals the curve to round-off).
+* X5 located diagnostics, X6 (`baseline_hashes` 3 passed 1 ignored as before; `tests/lumped.rs` 6 passed 2 ignored as
+  before): pass.
 
 ### Deviations from the registered set-up (disclosed)
 
-1. X4 area: `box_2d` has the depth `lx/nx = 0.02` and no `depth` key, so the registered `A = 0.02 m^2` is obtained with `ly = 1.0` (4 cells of 0.25 m) instead of `ly = 0.2`, `depth = 0.1`. The
-   same curve and jump are used.
-2. X4 distributed bed: a lossless duct between a pressure inlet and a pressure outlet diverged within two SIMPLEC iterations (also without the fan boundary: fixed
-   inlet pressure plus the porous jump alone), for every variant tried (`ly` 0.2 and 1.0, `ny` 2 and 4, initial speeds 0.5 to 2). A linear Darcy bed `sources.bed`
-   (`K = 1e-6 m^2`, `zone = all`, `dp = mu/K v L`, `L = 2 m`) over the whole duct restores stability and is part of the analytic operating point
-   (`fan(Q) = jump(Q/A) + mu/K (Q/A) L`). The fan boundary and the jump are unchanged. This is a limitation of the segregated algorithm for lossless pressure-pressure ducts, not
-   of the fan boundary; not isolated further. `docs/case-schema.md` states it.
-3. `fan_boundary` first evaluation: the registered text said "same lagged, relaxed update as `network_outlet`", which relaxes from the reference pressure. The first
-   evaluation now takes the curve value at the initial flow (no relaxation from the reference pressure); later evaluations relax with `relax = 0.02` as registered.
-4. Stationarity helper: the pressure field of a lossless periodic duct is zero to round-off, so the relative change of `p` is noise (0.3 to 0.4 on first run). The helper
-   scales the pressure change by `max(max|p|, 1)` (kinematic units, about the dynamic head); `ux` and `T` keep the registered relative test.
-5. X1 to X3 use `conductivity = 1e-6` and depth 0.02 as listed in the registered common set-up; the X4 relaxation 0.02 is as registered. The exchanger inlet temperature used in the
-   comparisons is the one the component reports (`hx_t_in`), the same convention as the supplementary check of Z4.
+1. X4 area: `box_2d` has the depth `lx/nx = 0.02` and no `depth` key, so the registered `A = 0.02 m^2` is obtained with
+   `ly = 1.0` (4 cells of 0.25 m) instead of `ly = 0.2`, `depth = 0.1`. The same curve and jump are used.
+2. X4 distributed bed: a lossless duct between a pressure inlet and a pressure outlet diverged within two SIMPLEC
+   iterations (also without the fan boundary: fixed inlet pressure plus the porous jump alone), for every variant tried
+   (`ly` 0.2 and 1.0, `ny` 2 and 4, initial speeds 0.5 to 2). A linear Darcy bed `sources.bed` (`K = 1e-6 m^2`,
+   `zone = all`, `dp = mu/K v L`, `L = 2 m`) over the whole duct restores stability and is part of the analytic
+   operating point (`fan(Q) = jump(Q/A) + mu/K (Q/A) L`). The fan boundary and the jump are unchanged. This is a
+   limitation of the segregated algorithm for lossless pressure-pressure ducts, not of the fan boundary; not isolated
+   further. `docs/case-schema.md` states it.
+3. `fan_boundary` first evaluation: the registered text said "same lagged, relaxed update as `network_outlet`", which
+   relaxes from the reference pressure. The first evaluation now takes the curve value at the initial flow (no
+   relaxation from the reference pressure); later evaluations relax with `relax = 0.02` as registered.
+4. Stationarity helper: the pressure field of a lossless periodic duct is zero to round-off, so the relative change of
+   `p` is noise (0.3 to 0.4 on first run). The helper scales the pressure change by `max(max|p|, 1)` (kinematic units,
+   about the dynamic head); `ux` and `T` keep the registered relative test.
+5. X1 to X3 use `conductivity = 1e-6` and depth 0.02 as listed in the registered common set-up; the X4 relaxation 0.02
+   is as registered. The exchanger inlet temperature used in the comparisons is the one the component reports
+   (`hx_t_in`), the same convention as the supplementary check of Z4.
 6. The H2 slope and ordering assertions were split as described above; no registered number changed.
-7. Process slip: files written by a Windows Python script briefly carried CRLF line ends (`lib.rs`, `electric.rs`, `lorentz.rs`); they were normalised to LF before any commit.
-   `docs/case-schema.md` is stored with CRLF in the working tree and was edited preserving that.
+7. Process slip: files written by a Windows Python script briefly carried CRLF line ends (`lib.rs`, `electric.rs`,
+   `lorentz.rs`); they were normalised to LF before any commit. `docs/case-schema.md` is stored with CRLF in the working
+   tree and was edited preserving that.
 8. Z3 (ADR 0012) remains an open miss from before; not touched.
-9. H3 references: the mixed variants use the Richardson extrapolation of 4000 and 8000 rows (registered: 4000 rows); the both-unmixed known-miss test uses the registered
-   800 x 800 recursion (the first version of the test used a Richardson extrapolation of 150 and 300 cells; replaced after the review, results above and agreeing to 1.4e-5).
-10. Rewritten registered tests are kept as ignored known-miss tests, as the process requires: `x4_registered_lossless_setup_known_miss` (registered X4 set-up without the bed, ly = 1.0,
-    initial speed 2 m/s, 8000 iterations; measured: flow becomes NaN, within about 8 iterations in the diagnostic runs, patch pressure stays at 200 Pa, limits 5e-3 and 2e-3 unchanged and not met) and
-    `x1_registered_stationarity_known_miss` (the originally registered stationarity helper with pressure-scale floor 1e-12, counterflow `C_sec = 20`: pressure change 0.423 against 1e-8; the same
-    helper gave 0.299 for X2 and 0.132 for X3 in the first runs). The corrected set-up and helper (`run`, floor 1) pass in the non-ignored tests.
+9. H3 references: the mixed variants use the Richardson extrapolation of 4000 and 8000 rows (registered: 4000 rows); the
+   both-unmixed known-miss test uses the registered 800 x 800 recursion. The first version of the test used a Richardson
+   extrapolation of 150 and 300 cells; it was replaced after the review, results above and agreeing to 1.4e-5.
+10. Rewritten registered tests are kept as ignored known-miss tests, as the process requires.
+    `x4_registered_lossless_setup_known_miss` runs the registered X4 set-up without the bed (ly = 1.0, initial speed 2
+    m/s, 8000 iterations); measured: flow becomes NaN, within about 8 iterations in the diagnostic runs, patch pressure
+    stays at 200 Pa, limits 5e-3 and 2e-3 unchanged and not met. `x1_registered_stationarity_known_miss` runs the
+    originally registered stationarity helper with pressure-scale floor 1e-12, counterflow `C_sec = 20`: pressure change
+    0.423 against 1e-8; the same helper gave 0.299 for X2 and 0.132 for X3 in the first runs. The corrected set-up and
+    helper (`run`, floor 1) pass in the non-ignored tests.
 
 ### Status
 
-F-214 `partial`: the Hartmann acceptance (profile within 2 percent, flow-rate reduction within 1 percent) is met at three Hartmann numbers in a 1-D set-up and the integral
-and located-error checks pass, but transient / PISO / PIMPLE / coupled MHD, Joule heating, case-given varying `B`, the induced field, a case with a non-trivial solved potential
+F-214 `partial`: the Hartmann acceptance (profile within 2 percent, flow-rate reduction within 1 percent) is met at
+three Hartmann numbers in a 1-D set-up and the integral and located-error checks pass, but transient / PISO / PIMPLE /
+coupled MHD, Joule heating, case-given varying `B`, the induced field, a case with a non-trivial solved potential
 (side-wall layers) and any published experiment are not delivered.
-F-217 `partial`: the counterflow acceptance (within 2 percent of eps-NTU) is met and fan and vent boundaries are checked against their prescribed curves (fan boundary X4; vent by the prior
-C3 and the closed-form `vent_dp`), but the both-unmixed crossflow relation misses its registered limits (known misses above), the shell-and-tube relation is unverified against a published
-table, and a resolved/segmented exchanger, a multi-branch network, two-phase exchangers and a vent boundary exercised in a new CFD test are not delivered.
+
+F-217 `partial`: the counterflow acceptance (within 2 percent of eps-NTU) is met and fan and vent boundaries are checked
+against their prescribed curves (fan boundary X4; vent by the prior C3 and the closed-form `vent_dp`), but the
+both-unmixed crossflow relation misses its registered limits (known misses above), the shell-and-tube relation is
+unverified against a published table, and a resolved/segmented exchanger, a multi-branch network, two-phase exchangers
+and a vent boundary exercised in a new CFD test are not delivered.

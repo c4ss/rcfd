@@ -2,6 +2,19 @@
 
 Status: accepted. The checks, decision rule and numeric limits below were written before anything was run. They are
 not changed after a run; a miss is reported as measured.
+
+The component-diagonal correction is an option, not the default: `solver.component_diagonal = "corrected"` selects it
+and `averaged` stays the default. Enabling it for every case fails
+`baseline_hashes::shipped_cases_match_registered_hashes`, because `packed_bed` (symmetry side walls) changes: it now
+converges instead of stalling at the 1700-iteration cap. Under the registered decision rule the hashes were not
+re-recorded. With the correction on, `t3c_order_bdf2` passes at order 2.08 (registered [1.80, 2.20]; 1.34 before) and the
+T5 mass flow versus steady passes (9.3e-4 / 9.2e-4 against 1e-3). Misses remain with the correction on: T5 in/out equality
+(1.56e-5 against 1e-6), the M3(a) spurious speed (1.41e-3 V_i against 1e-3) and the M3(a) torque -3.41 %
+(report-consistent target, unchanged miss of the registered full-stress target). MRF-based known misses are unchanged
+because MRF zones already used the correction. The whole workspace test suite passes with the new defaults, except
+`rcfd-cli run_control::journal_runs_the_recorded_case`, which comes from the concurrent mesh-generator change of the
+other agent, not from this work.
+
 Roadmap: F-031 (MRF, ADR 0008 follow-up), F-050 (transient variable density, ADR 0009), F-029-class accuracy items.
 
 ## Problem
@@ -48,29 +61,38 @@ MRF cases so far.
 
 ## Results
 
-Decision: option, not default. With the correction enabled for every case `baseline_hashes::shipped_cases_match_registered_hashes`
-fails: `packed_bed` (symmetry side walls) changes from (60 iterations, 19e53df373637262) to (16, fb46cdfee5d0d781), i.e. it
-now converges instead of stalling at the 1700-iteration cap. Compared at convergence (200 allowed iterations, `solver.component_diagonal`
-averaged / corrected): iterations 1700 / 16, max |ux - 0.15| 6.41e-2 / 6.41e-2 (identical), max |uy| (exact 0) 9.56e-7 / 4.71e-7, pressure
-range 145.6168 / 145.6158. `wedge`, `kepsilon_channel`, `rotating_channel` (60 and up to 2000 iterations) are bit-identical with the
-option on (no component-specific condition). Hashes were not re-recorded; the default is `averaged`, `solver.component_diagonal = "corrected"`
-selects the correction (also in the variable-density kernel via `VdSettings.component_diag_correction`).
+Decision: option, not default. With the correction enabled for every case,
+`baseline_hashes::shipped_cases_match_registered_hashes` fails: `packed_bed` (symmetry side walls) changes from
+(60 iterations, 19e53df373637262) to (16, fb46cdfee5d0d781), i.e. it now converges instead of stalling at the
+1700-iteration cap. Compared at convergence (200 allowed iterations, `solver.component_diagonal` averaged / corrected):
+
+* iterations 1700 / 16
+* max |ux - 0.15| 6.41e-2 / 6.41e-2 (identical)
+* max |uy| (exact 0) 9.56e-7 / 4.71e-7
+* pressure range 145.6168 / 145.6158
+
+`wedge`, `kepsilon_channel`, `rotating_channel` (60 and up to 2000 iterations) are bit-identical with the option on (no
+component-specific condition). Hashes were not re-recorded. The default is `averaged`;
+`solver.component_diagonal = "corrected"` selects the correction (also in the variable-density kernel via
+`VdSettings.component_diag_correction`).
 
 * V0: pass. `baseline_hashes` 3 passed / 1 ignored, `varden_ideal_hash` and all `varden_*` and rcfd-fv tests pass with the
   option off (nothing changes when it is off: the new work sits in `if component_diag_correction` branches).
-* V1: the cases whose result changes are listed above (only `packed_bed` among the shipped ones). The whole workspace test suite passes
-  with the new defaults, except `rcfd-cli run_control::journal_runs_the_recorded_case` (cells 108 against 81), which comes from
-  the concurrent mesh-generator change of the other agent (`cavity_2d` now honours `ny`), not from this work.
-* V2: `t3c_order_bdf2` with the correction on: order 2.08 (errors 1.053e-2, 2.372e-3, 5.60e-4; the first pair gives 2.15), registered
-  [1.80, 2.20]: PASS. The `known_miss` suffix and the ignore are dropped from the test (it now runs with the option on); the averaged
-  diagonal run (1.34) is kept as the ignored `t3c_order_bdf2_averaged_diagonal_known_miss`. Euler order 0.929 with the correction (0.85-1.15: pass).
-* V3: T5 (nozzle strip with symmetry planes, correction in the steady reference and in the transient run, 400 steps): Mach 3.0e-4 (2e-3) pass,
-  p 1.1e-4 (5e-4) pass, mass flow in/out versus steady 9.3e-4 / 9.2e-4 (1e-3) PASS (1.64e-3 / 1.62e-3 before), in/out equality 1.56e-5
-  (1e-6) still MISS. Kept as ignored tests `t5_transient_steady_limit_corrected_diagonal_*`.
-* V4: with the option on, M3(a) without source: velocity 6.76e-3 V_i (1.5e-2) pass (3.06e-2 before), pairwise 4.3e-4 / 8.8e-4 / 1.7e-3 V_i (1e-2)
-  pass (2.57e-2 before), torque -3.41 % (report-consistent target, unchanged miss of the registered full-stress target), spurious
-  1.41e-3 V_i (1e-3) MISS (1.39e-3 before). MRF-based known misses are unchanged because MRF zones already used the correction: M3
-  spurious 1.41e-3 (frame Omega 0 with an empty zone), M3b spurious 8.6e-3, M5b net flux 3.15e-5 V_i A and sum |flux| 1.0003e-3.
+* V1: the cases whose result changes are listed above (only `packed_bed` among the shipped ones). The whole workspace test
+  suite passes with the new defaults, except `rcfd-cli run_control::journal_runs_the_recorded_case` (cells 108 against 81),
+  which comes from the concurrent mesh-generator change of the other agent (`cavity_2d` now honours `ny`), not from this work.
+* V2: `t3c_order_bdf2` with the correction on: order 2.08 (errors 1.053e-2, 2.372e-3, 5.60e-4; the first pair gives 2.15),
+  registered [1.80, 2.20]: PASS. The `known_miss` suffix and the ignore are dropped from the test (it now runs with the
+  option on). The averaged diagonal run (1.34) is kept as the ignored `t3c_order_bdf2_averaged_diagonal_known_miss`. Euler
+  order 0.929 with the correction (0.85-1.15: pass).
+* V3: T5 (nozzle strip with symmetry planes, correction in the steady reference and in the transient run, 400 steps):
+  Mach 3.0e-4 (2e-3) pass, p 1.1e-4 (5e-4) pass, mass flow in/out versus steady 9.3e-4 / 9.2e-4 (1e-3) PASS (1.64e-3 / 1.62e-3
+  before), in/out equality 1.56e-5 (1e-6) still MISS. Kept as ignored tests `t5_transient_steady_limit_corrected_diagonal_*`.
+* V4: with the option on, M3(a) without source: velocity 6.76e-3 V_i (1.5e-2) pass (3.06e-2 before), pairwise 4.3e-4 / 8.8e-4 /
+  1.7e-3 V_i (1e-2) pass (2.57e-2 before), torque -3.41 % (report-consistent target, unchanged miss of the registered
+  full-stress target), spurious 1.41e-3 V_i (1e-3) MISS (1.39e-3 before). MRF-based known misses are unchanged because MRF
+  zones already used the correction: M3 spurious 1.41e-3 (frame Omega 0 with an empty zone), M3b spurious 8.6e-3, M5b net
+  flux 3.15e-5 V_i A and sum |flux| 1.0003e-3.
 * V5: Packed bed (exact solution uniform flow): see above, not less accurate. Poiseuille/Couette/cavity cases have no
   component-specific conditions and are bit-identical.
 

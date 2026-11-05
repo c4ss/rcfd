@@ -1,8 +1,8 @@
 # Roadmap overview
 
-This page is the short, plain-language version of the plan. The full list of 190 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below.
+rcfd is an early-stage CFD solver that has not been validated for engineering decisions. Of its 190 roadmap items, 95 are done, 63 are partly done and 32 have not started. FAN-01, the reference fan case, stalls, and there is no structural solver. One workspace layer for Claude Code and the Studio comes first.
 
-It is for anyone who wants to know what rcfd can do today and what comes next. To learn how to use rcfd, start at [the documentation home](index.md) instead.
+This page is the short, plain-language version of the plan, for anyone who wants to know what rcfd can do today and what comes next. The full list of 190 items, with acceptance criteria, is in [the detailed roadmap](ROADMAP.md). That file is generated from `roadmap.json`, which is the source of truth for every status below. To learn how to use rcfd, start at [the documentation home](index.md) instead.
 
 ## What rcfd is
 
@@ -31,7 +31,7 @@ Of the 190 roadmap items, 95 are done, 63 are partly done and 32 have not starte
 
 - Incompressible and compressible flow on unstructured meshes, with a range of turbulence models, heat transfer, species transport and particles.
 - Mesh import and export in common formats, VTK output, a command-line tool, a scripting API and an MCP server that lets an AI assistant drive the solver.
-- A test suite of about 2,200 tests, run as a gate before each merge. Numeric limits are written down before a run, and a miss is recorded as a known miss, never tuned away.
+- A test suite of about 2,200 tests, run as a [gate](glossary.md) before each merge. Numeric limits are written down before a run, and a miss is recorded as a known miss, never tuned away.
 
 ## What does not work yet
 

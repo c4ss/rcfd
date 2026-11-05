@@ -2,14 +2,36 @@
 
 Status: **registered** 2026-10-28, before any registered run (the code and the tests below were written and compiled
 first; what was run before is listed under "What I already knew"); amendment 1 after the G1 miss; results in the addendum;
-not yet accepted by the maintainer. The maintainer's request of 2026-10-28 ("48G, first run
-to first picture", item 4 of 4; items 1-3, mesh preview from a case, case starter menu and the store-fields default, are
-done by other agents in parallel and are not part of this ADR). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
-limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
-intact; a defective set-up gets an amendment written before the corrected run; defaults of existing code stay
-bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parent: [plan](../ui-restart-plan.md)
-section 2, ADRs [0131](0131-wave48b-studio-application-shell.md), [0132](0132-wave48c-viewport-integration.md) and
-[0133](0133-wave48d-run-control-and-live-monitoring.md). Roadmap: F-266.
+not yet accepted by the maintainer.
+
+The maintainer reports that nothing in the Studio window can be done end to end: there is no one-click path from a case to a
+picture. This ADR adds a Run button and F5 (decisions 1-4): each finds `rcfd-runner` and `rcfd`, queues the selected case with
+the dialog's default plan, selects the new run and shows the Viewport. It also adds a "follow latest" box (decision 5), a strip
+with Pause, Resume, Cancel and the selected run's line (decision 6), viewport text that says why a run has no snapshot
+(decision 7) and build-and-start scripts (decision 8). In its registered run G1 missed limit (h): the Viewport was open and in
+front, but Plots was not in front, so G1 is now the ignored `g1_one_click_from_case_to_picture_known_miss` with its limits
+intact. Amendment 1 changed how a closed Viewport reopens and registered G1b before it ran; G1b and G2-G9 passed. After ADR 0138
+and ADR 0140 were merged, ADR 0144's baseline run on main e11c656 failed the G1 control, G1b and the G4 control; amendment 3
+(the maintainer's decision, superseding amendment 2's items 2 and 3) amends all three, with every limit as strict as registered
+and none turned into a known miss. Reported, not limited: the first Run of a session waited about 5.3 s from the click to the
+running run, and question 11 records the decision of 2026-10-28 to remove the PowerShell route. Not run: the "Not in CI" items,
+Linux (none of the new process tests has run there), a debug build of the new tests, the workspace gate and workspace-wide
+clippy, `cargo deny` and the CI scripts job with the new script test.
+
+This ADR answers the maintainer's request of 2026-10-28 ("48G, first run to first picture", item 4 of 4). Items 1-3 (mesh
+preview from a case, case starter menu and the store-fields default) are done by other agents in parallel and are not part of
+this ADR.
+
+House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
+
+* Limits are fixed here before the registered runs.
+* A missed limit becomes an ignored `*_known_miss` test with the limit intact.
+* A defective set-up gets an amendment written before the corrected run.
+* Defaults of existing code stay bit-identical.
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+
+Parent: [plan](../ui-restart-plan.md) section 2, ADRs [0131](0131-wave48b-studio-application-shell.md),
+[0132](0132-wave48c-viewport-integration.md) and [0133](0133-wave48d-run-control-and-live-monitoring.md). Roadmap: F-266.
 
 ## Context (read at main f3bf005)
 
@@ -67,8 +89,9 @@ section 2, ADRs [0131](0131-wave48b-studio-application-shell.md), [0132](0132-wa
    the Start run dialog and "Start runner" use that one until the project is opened again (question 3).
 4. **After the start.** When the id arrives the run is selected (the run worker reads its series, events and log; the
    viewport follows it) and the Viewport panel is shown (it is opened again when it was closed; above the Plots since
-   amendment 1) and put in front of its place; Plots is put in front of its place when it does not share the Viewport's. A run started by Run that fails before
-   its first shown snapshot puts the Log panel in front the same way, once, and says why in the status bar.
+   amendment 1) and put in front of its place; Plots is put in front of its place when it does not share the Viewport's.
+   A run started by Run that fails before its first shown snapshot puts the Log panel in front the same way, once, and
+   says why in the status bar.
 5. **Follow latest (`Viewport::follow`).** On for a newly shown run. Each new snapshot of a live run is shown while it is on.
    A scrub to an older snapshot (slider, `|<`, `<`, play from the start) turns it off: the slider still extends and the view
    stays. A scrub to the newest snapshot (`>|`, the slider's right end, play reaching the end) or the "follow latest" box
@@ -81,10 +104,11 @@ section 2, ADRs [0131](0131-wave48b-studio-application-shell.md), [0132](0132-wa
 7. **A run without a snapshot.** While the selected run is queued, running or paused and its store file does not exist
    yet, the viewport's "no stored fields" text is replaced by its state and step and, for a run started by Run, the store
    spacing of its plan (or that the plan stores no fields); once the solver has created the store file, 48C's "The store
-   has no snapshots yet." stays, and the strip says "no stored snapshot yet". Once it has ended without one (checked on a control thread: the store file is missing or has no
-   snapshot), the viewport says that it failed (or was cancelled, or finished without stored fields) before writing its
-   first stored snapshot, with the reason from `status.json`, the last line of its log, and for a finished run a
-   field-store warning from its events when there is one. The 48C texts stay for runs this does not apply to.
+   has no snapshots yet." stays, and the strip says "no stored snapshot yet". Once it has ended without one (checked on a
+   control thread: the store file is missing or has no snapshot), the viewport says that it failed (or was cancelled, or
+   finished without stored fields) before writing its first stored snapshot, with the reason from `status.json`, the last
+   line of its log, and for a finished run a field-store warning from its events when there is one. The 48C texts stay
+   for runs this does not apply to.
 8. **Scripts.** `scripts/studio.ps1 [-NoBuild] [-DryRun] [PROJECT_DIR]` and `scripts/studio.sh [--no-build] [--dry-run]
    [PROJECT_DIR]`: build the four programs with `cargo build --manifest-path <root>/Cargo.toml --release -p rcfd-studio
    -p rcfd-runner -p rcfd-cli -p rcfd-mcp` (`CARGO` and `CARGO_TARGET_DIR` honoured), then run
@@ -108,11 +132,13 @@ files, kept small for the merge of the parallel 48G items:
 | `src/viewport_ui.rs` | the "follow latest" box in the time row |
 | `README.md` | the two script one-liners |
 
-Merge notes for the parallel 48G items: G1 and G5 rely on the dialog's default store proposal (item 3 may change it). G1
-needs stored snapshots while the 3000-step run runs; G5 needs none before its kill (about step 1000 of 1 000 000), and
-asserts that before killing, so a changed proposal fails G5 loudly at that precondition, not as a regression. The
-viewport texts of decision 7 and the Log focus apply only when the viewport shows the selected run
-(`viewport.run == selected_run`); a case preview (item 1) must keep a selected run taking precedence over the preview.
+Merge notes for the parallel 48G items:
+
+* G1 and G5 rely on the dialog's default store proposal (item 3 may change it). G1 needs stored snapshots while the
+  3000-step run runs; G5 needs none before its kill (about step 1000 of 1 000 000), and asserts that before killing, so a
+  changed proposal fails G5 loudly at that precondition, not as a regression.
+* The viewport texts of decision 7 and the Log focus apply only when the viewport shows the selected run
+  (`viewport.run == selected_run`); a case preview (item 1) must keep a selected run taking precedence over the preview.
 
 ## Registered checks
 
@@ -189,14 +215,21 @@ the store proposal). Debug builds run a quarter of the steps (G1, G6, G1 control
 
 **G1 missed limit (h)** in its registered run (commit ae3e85f, release, output to a file, NVIDIA RTX 5080 Vulkan): right
 after the run was listed the Viewport was open and in front, but Plots was not in front ((true, true, false) against
-(true, true, true)). Every other G1 limit was met in that run: (a) listed 0.314 s after the click; (b) running 5.339 s;
-(c) first snapshot committed at 5.333 s, shown at 5.361 s (0.028 s); (d) slider lengths 0, 2, 17, 35, 55, 70, 71, 90, 100
-(8 while running), shown snapshots 2, 17, 35, 55, 71, 90, 100, the newest shown in the frame that first held the final
-length; (e) no marker difference, final marker 3000; (f) `status.json` finished, step 3000, time 0, equal in the model, the
-strip "... finished  step 3000 ... snapshot 100/100 (following the latest)", shown step 3000; (g) one upload, one render at
-the first shown snapshot, nine at the end, no error. The test becomes the ignored
-`g1_one_click_from_case_to_picture_known_miss` with its limits intact; the reopening it measured stays reachable through the
-test switch `QuickRun::switches.reopen_in_focused_leaf`, so the known-miss test measures what missed.
+(true, true, true)). Every other G1 limit was met in that run:
+
+* (a) listed 0.314 s after the click;
+* (b) running 5.339 s;
+* (c) first snapshot committed at 5.333 s, shown at 5.361 s (0.028 s);
+* (d) slider lengths 0, 2, 17, 35, 55, 70, 71, 90, 100 (8 while running), shown snapshots 2, 17, 35, 55, 71, 90, 100, the
+  newest shown in the frame that first held the final length;
+* (e) no marker difference, final marker 3000;
+* (f) `status.json` finished, step 3000, time 0, equal in the model, the strip
+  "... finished  step 3000 ... snapshot 100/100 (following the latest)", shown step 3000;
+* (g) one upload, one render at the first shown snapshot, nine at the end, no error.
+
+The test becomes the ignored `g1_one_click_from_case_to_picture_known_miss` with its limits intact; the reopening it
+measured stays reachable through the test switch `QuickRun::switches.reopen_in_focused_leaf`, so the known-miss test
+measures what missed.
 
 Diagnosis (read from egui_dock 0.21.1, `dock_state/tree/mod.rs`; not a separate run): `Tree::split` makes the new node the
 focused one, so in the default layout the focused leaf is the last one split off, the leaf of Plots, Log and Outputs;
@@ -238,12 +271,18 @@ building at the same time). G2-G8 and the G1 control ran on ae3e85f (registratio
 | G9 | earlier tests unchanged | 98 passed, 0 failed, 3 ignored (below) | pass |
 
 G9 ran on 6b94b98: `cargo test --release -p rcfd-studio --no-fail-fast -- --test-threads 1`, output to a file, 3 min 41 s.
-Every test binary of the crate passes: B1-B9 (`project_b1_b3`, `frames_b4`, `editor_b5`, `watch_b6`, `frame_cost_b7`,
-`prefs_b8`, `parity`), R1-R12 (`run_control_r1_r3`, `ingest_r4_r7`, `monitors_plot`, `tick_cost_r6`, `monitors_r8`,
-`runner_start_r9`, `start_plan_r10`, `browser_refresh_r12`), V2-V11 (`viewport_v2`, `viewport_model`, `viewport_store`),
-`viewport_live`, the chat tests E1-E11 (`chat_e`) and the four new files (G1b-G7 again). That run captured no output, so
-it shows pass or fail only, not the measured values. The three ignored tests are the known misses that were ignored
-before or by amendment 1: ADR 0133's R6, ADR 0131's tutorials item, and G1.
+That run captured no output, so it shows pass or fail only, not the measured values. Every test binary of the crate passes:
+
+* B1-B9 (`project_b1_b3`, `frames_b4`, `editor_b5`, `watch_b6`, `frame_cost_b7`, `prefs_b8`, `parity`);
+* R1-R12 (`run_control_r1_r3`, `ingest_r4_r7`, `monitors_plot`, `tick_cost_r6`, `monitors_r8`, `runner_start_r9`,
+  `start_plan_r10`, `browser_refresh_r12`);
+* V2-V11 (`viewport_v2`, `viewport_model`, `viewport_store`);
+* `viewport_live`;
+* the chat tests E1-E11 (`chat_e`);
+* the four new files (G1b-G7 again).
+
+The three ignored tests are the known misses that were ignored before or by amendment 1: ADR 0133's R6, ADR 0131's
+tutorials item, and G1.
 
 After the addendum's runs (dcea11d):
 * G1's known-miss test, run once with `--ignored` (output to a file): it fails at (h) with (true, true, false), as
@@ -254,11 +293,13 @@ After the addendum's runs (dcea11d):
   the literal command the request names, on purpose (a changed constant fails); `oneclick_g4.rs:311` (class i,
   sleep/elapsed) is G7's limit, whose time starts after the control's 20 frames with their sleeps.
 * Changed after the registered runs (UI only, found in review): during a start nothing woke the UI, so the strip's age
-  counter stood still while the runner started; the strip now asks for a repaint every 250 ms while a start is in flight.
-  Re-run on that code (output to a file): G1b pass ((a) 0.089 s, (b) 5.464 s, (c) 0.159 s, (h) (true, true, true)), G4-G7
-  and the G1 control pass (G4 0.509 s, G5 0.077 s, G6 paused 0.266 s and cancelled 0.265 s, G7 0.002 s), B4 pass, B7
-  median 0.392 ms (min 0.333, p90 0.564; 48D measured 0.339 ms without the toolbar and the strip; limit 8 ms), its control
-  13.5 ms.
+  counter stood still while the runner started. The strip now asks for a repaint every 250 ms while a start is in flight.
+  Re-run on that code (output to a file):
+  * G1b pass ((a) 0.089 s, (b) 5.464 s, (c) 0.159 s, (h) (true, true, true));
+  * G4-G7 and the G1 control pass (G4 0.509 s, G5 0.077 s, G6 paused 0.266 s and cancelled 0.265 s, G7 0.002 s);
+  * B4 pass;
+  * B7 median 0.392 ms (min 0.333, p90 0.564; 48D measured 0.339 ms without the toolbar and the strip; limit 8 ms), its
+    control 13.5 ms.
 
 Reported, not limited:
 * The first Run of a session waited about 5.3 s from the click to the running run (G1 5.339 s, G1b 5.353 s), as ADR 0133 R9
@@ -277,9 +318,14 @@ Deviations and notes:
 * For a finished run without a store, the explanation (decision 7) replaces 48C's text, which named the store path; the
   new text names why there is no store but not the path.
 
-Not run: the "Not in CI" items (a person at the window); Linux (none of the new process tests has run there); a debug
-build of the new tests; the workspace gate and workspace-wide clippy (the maintainer runs them); `cargo deny` (not
-installed; no dependency changed); the CI scripts job with the new script test (not added, question 9).
+Not run:
+
+* the "Not in CI" items (a person at the window);
+* Linux (none of the new process tests has run there);
+* a debug build of the new tests;
+* the workspace gate and workspace-wide clippy (the maintainer runs them);
+* `cargo deny` (not installed; no dependency changed);
+* the CI scripts job with the new script test (not added, question 9).
 
 ## Amendment 2 (2026-10-28, with ADR 0144's registration, before the corrected run)
 

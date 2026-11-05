@@ -1,16 +1,22 @@
-# Interchange formats, registers and GLB validation (F-119, F-124, F-117, F-280; ADR 0011, ADR 0184)
+# Interchange formats, registers and GLB validation
 
-This page lists the interchange formats rcfd converts, reads and writes, the library entry points for them, what is not done or
-not verified for each, and related library features: registers (named cell sets), the GLB checker, the format registry and a
-structural load-deck writer. It is for people who
-move meshes and results between rcfd and other tools, or call the readers and writers from Rust. Some formats are only partly
-delivered; the section "What is NOT done or not verified" comes right after the conversion table. For importing a mesh into a case,
-see [mesh import](mesh-import.md); for the case keys that use registers, see the [case schema](case-schema.md).
+This page lists the interchange formats rcfd converts, reads and writes, the library entry points for them, and what is not
+done or not verified for each. It also covers related library features: registers (named cell sets), the GLB checker, the
+format registry and a structural load-deck writer. Roadmap items and decisions: F-119, F-124, F-117, F-280; ADR 0011, ADR 0184.
 
-All parsers share the hostile-input rules of ADR 0011 section 1: no panic on any byte sequence (tested with every
-prefix of a valid file plus 3000 deterministic mutations), no allocation sized from an untrusted header count (counts
-are checked against the bytes that remain before anything is reserved), hard caps (file 1 GiB, 50 million items,
-4096 blocks) and located errors (`line N` for text, `byte offset N` / `record N` for binary, JSON pointers for GLB).
+It is for people who move meshes and results between rcfd and other tools, or call the readers and writers from Rust. Some
+formats are only partly delivered; the section "What is NOT done or not verified" comes right after the conversion table. For
+importing a mesh into a case, see [mesh import](mesh-import.md); for the case keys that use registers, see the
+[case schema](case-schema.md).
+
+All parsers share the hostile-input rules of ADR 0011 section 1:
+
+* no panic on any byte sequence (tested with every prefix of a valid file plus 3000 deterministic mutations);
+* no allocation sized from an untrusted header count (counts are checked against the bytes that remain before anything is
+  reserved);
+* hard caps (file 1 GiB, 50 million items, 4096 blocks);
+* located errors (`line N` for text, `byte offset N` / `record N` for binary, JSON pointers for GLB).
+
 `crates/rcfd-io/src/guard.rs` holds the caps and the fuzz helper.
 
 ## `rcfd convert <in> <out>`
@@ -23,10 +29,13 @@ are checked against the bytes that remain before anything is reserved), hard cap
 | mesh -> XDMF | `.xmf` | XML plus raw little-endian `Float64` / `Int64` `.bin` files next to it; mixed topology (triangle, quad, tet, pyramid, wedge, hex); polyhedra refused with the cell number |
 | Plot3D grid -> mesh | `.x` `.xyz` `.p3d` `.grd` | `--block n` (1-based, default 1); the block becomes a hexahedral mesh with patches `imin ... kmax` |
 
-Library entry points: `rcfd_io::stl`, `rcfd_io::tecplot` (also a reader for FE and ordered zones, BLOCK and POINT
-packing, `VARLOCATION`), `rcfd_io::plot3d` (multi-block, ASCII and Fortran-unformatted binary, single / double
-precision, either byte order, iblank, function files, headerless C-binary single-grid files via `read_grid_raw`),
-`rcfd_io::xdmf` (writer).
+Library entry points:
+
+* `rcfd_io::stl`;
+* `rcfd_io::tecplot` (also a reader for FE and ordered zones, BLOCK and POINT packing, `VARLOCATION`);
+* `rcfd_io::plot3d` (multi-block, ASCII and Fortran-unformatted binary, single / double precision, either byte order, iblank,
+  function files, headerless C-binary single-grid files via `read_grid_raw`);
+* `rcfd_io::xdmf` (writer).
 
 ## Surface readers: OBJ and glTF (F-280, ADR 0184)
 
@@ -74,9 +83,9 @@ map that `TetMesh::to_mesh` takes. No case key or CLI command uses them yet (M-F
   is claimed to be CGNS or HDF5 valid.
 * Tecplot polyhedral zones and binary `.plt` are not supported.
 * Verification against third-party readers was done with VTK 9.6.2 (`vtkSTLReader`, `vtkTecplotReader`,
-  `vtkXdmfReader`, `vtkMultiBlockPLOT3DReader`) through `scripts/check_interchange.py` (meshio is installed but not used by the checks); no commercial
-  viewer was available. VTK's Tecplot reader stores float32 coordinates, so a hand-built mixed mesh reads back with a
-  volume 3.2e-9 relative off (script tolerance 1e-7).
+  `vtkXdmfReader`, `vtkMultiBlockPLOT3DReader`) through `scripts/check_interchange.py` (meshio is installed but not used
+  by the checks); no commercial viewer was available. VTK's Tecplot reader stores float32 coordinates, so a hand-built
+  mixed mesh reads back with a volume 3.2e-9 relative off (script tolerance 1e-7).
 * Plot3D function files and ASCII Plot3D were only checked against rcfd's own writer and VTK on small generated files.
 * The public sample `bluntfinxyz.bin` (NASA blunt fin, hosted in the pyvista vtk-data repository; see
   `validation-data/manifest.json` and `docs/reference-data.md`) is read by `read_grid_raw` with the same block size
@@ -111,12 +120,16 @@ Use in the settings tree:
 * every register is built against the mesh when the simulation is created, so a bad register is reported even when
   nothing uses it.
 
-Post-processing in the library (not yet exposed as case reports): `stats` / `stats_component` / `stats_magnitude` give
-count, volume, min, max, volume-weighted mean and integral of a cell field over a register (`None` for an empty
-register, never NaN); `Register::interface_area` is the area of internal faces between the register and the rest;
-`face_jump_indicator` is the largest absolute face jump of a field per cell and `mark_by_jump(values, tau, within)` marks
-cells with indicator `>= tau` (optionally only inside a register) and reports the count and the marked volume
-fraction. These marks are adaption-style flags only: there is no mesh adaption (refinement) in rcfd yet.
+Post-processing in the library (not yet exposed as case reports):
+
+* `stats` / `stats_component` / `stats_magnitude` give count, volume, min, max, volume-weighted mean and integral of a cell
+  field over a register (`None` for an empty register, never NaN);
+* `Register::interface_area` is the area of internal faces between the register and the rest;
+* `face_jump_indicator` is the largest absolute face jump of a field per cell;
+* `mark_by_jump(values, tau, within)` marks cells with indicator `>= tau` (optionally only inside a register) and reports the
+  count and the marked volume fraction.
+
+These marks are adaption-style flags only: there is no mesh adaption (refinement) in rcfd yet.
 
 ## GLB validation (F-117)
 
@@ -140,6 +153,7 @@ black box against the public `elbow.msh` sample (OpenFOAM tutorial, GPL, fetched
 `rcfd_io::nastran::Deck` writes and parses a free-field (comma separated) Nastran-style load deck in full double
 precision (`{:?}` formatting, so the round trip is bit-exact): `GRID`, `CTRIA3`, `CQUAD4`, `CHEXA` (second line `,G7,G8`),
 `PLOAD4,SID,EID,P1..P4` (blank P2..P4 = uniform), `TEMP,SID,G1,T1,G2,T2,G3,T3`. Parse errors carry `line N`.
+
 Verified (pyNastran documentation pages, read): the PLOAD4 and TEMP field layouts. Unverified (recalled): GRID field order,
 element node orders, CHEXA continuation form, free-field syntax in a given solver, and the PLOAD4 sign convention (here a
 positive value is fluid pressure pressing on the structure). No third-party solver has read these decks; acceptance by

@@ -1,10 +1,18 @@
 # rcfd parity matrix: Ansys Fluent / CFX class capabilities versus the rcfd roadmap
 
 This page compares the capability lists of the two commercial CFD products named in the title with the rcfd roadmap, one row per
-capability, and ranks the largest gaps. It is for people who plan roadmap work or want to check whether rcfd covers a given
-capability. It is a first-pass inventory: the rcfd statuses are read from the roadmap, not guessed, and the sources section says
-exactly what was read. For a short summary of what rcfd does today,
-read the [roadmap overview](roadmap-overview.md); for the acceptance text of each item, see the [detailed roadmap](ROADMAP.md).
+capability, and ranks the largest gaps. In this inventory, dated 2026-10-17, the roadmap has 158 items: 49 done (31%), 92 partial
+(58%) and 17 todo (11%). The three top-ranked gaps are distributed-memory parallelism (MPI, F-100 todo); Eulerian-Eulerian and
+mixture multiphase, cavitation (F-127 todo); and mixing-plane and frozen-rotor interfaces (F-126 todo). For each of the 25 ranked
+gaps, the list gives what can start with no user decision and any choice the user must make first.
+
+The page is for people who plan roadmap work or want to check whether rcfd covers a given capability. It is a first-pass inventory:
+the rcfd statuses are read from the roadmap, not guessed, and the sources section says exactly what was read. A status is per
+roadmap item, not a measurement of how much of the vendor capability is covered, and "partial" does not mean half built. All
+descriptions, priorities and gap judgements are the author's.
+
+For a short summary of what rcfd does today, read the [roadmap overview](roadmap-overview.md); for the acceptance text of each item,
+see the [detailed roadmap](ROADMAP.md). The [glossary](glossary.md) defines wave and F-xxx.
 
 Trademarks and independence: all product and company names in this document are trademarks or registered trademarks of their respective owners and are used only to identify the products compared. rcfd is an independent open-source project, not affiliated with, endorsed by or sponsored by any of them.
 
@@ -69,11 +77,11 @@ Counts are of roadmap items (not matrix rows), assigned to the area where they f
 | Post-processing/reporting/acoustics | 14 | 4 (28%) | 9 (64%) | 1 (7%) |
 | Validation/infrastructure | 7 | 2 (28%) | 5 (71%) | 0 (0%) |
 
-Whole roadmap: 158 items, 49 done (31%), 92 partial (58%), 17 todo (11%). Note "partial" is wide: several items were marked partial by the 2026-10-14 audit for reasons such as no hosted CI run, so partial does not mean half built.
+Whole roadmap: 158 items, 49 done (31%), 92 partial (58%), 17 todo (11%). The word "partial" is wide: the 2026-10-14 audit marked several items partial for reasons such as no hosted CI run, so partial does not mean half built.
 
 ## Ranked gap list: the 25 highest-priority gaps (none or partial rcfd coverage)
 
-Ranking = priority (P1 first) weighted by how many downstream capabilities a gap blocks, then by how little exists. "No decision" scope can start from the roadmap text as written; "Needs decision" lists what the user must choose first.
+Gaps are ranked by priority (P1 first) weighted by how many downstream capabilities a gap blocks, then by how little exists. "No decision" scope can start from the roadmap text as written; "Needs decision" lists what the user must choose first.
 
 | Rank | Gap | rcfd ids and status | Next-wave scope needing no user decision | Needs user decision |
 |---|---|---|---|---|
@@ -107,7 +115,7 @@ Considered but ranked lower: wet steam (F-221), acoustics options (F-243), trans
 
 ## Candidate new roadmap items (no matching item today)
 
-Proposed ids only; docs/roadmap.json is not edited. "Decision" = needs a user choice before scheduling.
+These ids are proposals only; docs/roadmap.json is not edited. A "Yes" in the "Decision?" column means the item needs a user choice before scheduling.
 
 | Proposed id | Title | Acceptance text | Priority | Decision? |
 |---|---|---|---|---|

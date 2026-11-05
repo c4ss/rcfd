@@ -1,23 +1,30 @@
 # Reference-data verification report (2026-10-15)
 
+This report records one pass that re-checked reference values against their sources. No fetched authoritative source
+contradicts a benchmark number or a registered tolerance, and two code constants differ from the sources. The highest-ranked
+discrepancy is Realizable A0, 4.04 in the code against 4.0 in the source (section 2.1): the measured 6.402 of the F-042
+Realizable BFS known miss could flip to a pass or stay a miss, and this was NOT run. Of the 57 table rows in section 1, 44 were
+confirmed at the time of the pass (most secondary; 3 of these carry an explicit unverified sub-part) and 40 after four rows were
+relabelled unverified on 2026-10-27, leaving 11 unverified or partly verified; 4 differ, 2 were not re-checked, and section 3
+lists the items still unverified. This is a record of the pass on the date in the title; later re-checks are in
+[reference data](reference-data.md).
+
 Scope: every constant or reference value in `docs/reference-data.md`, `docs/validation-data.md` and ADRs 0005 to 0015
 that was marked unverified, from memory, or "retrieved, not independently re-read". No code, test, tolerance or ADR
-criterion was changed. Method: web search and page fetch; where a source was a PDF it was downloaded and read as raw text
-(`pdftotext`), and the NIST WebBook tables were pulled as raw HTML, not through a page summariser. Where only a
-search-engine snippet or a secondary page supported a value this is stated; rows whose only support was vendor documentation
-are marked unverified (see [provenance](provenance.md)). "Confirmed" means the number in the code or
-docs agrees with the cited source; it does not mean the original printed paper was read unless the source column says so.
-"Unverified" means no source reached stated the value.
+criterion was changed.
+
+Verdict key: confirmed / differs / unverified. "Confirmed" means the number in the code or docs agrees with the cited source;
+it does not mean the original printed paper was read unless the source column says so. "Unverified" means no source reached
+stated the value. `secondary` = a reputable page or paper reproducing the primary value.
+
+Method: web search and page fetch. Where a source was a PDF it was downloaded and read as raw text (`pdftotext`), and the NIST
+WebBook tables were pulled as raw HTML, not through a page summariser. Where only a search-engine snippet or a secondary page
+supported a value this is stated; rows whose only support was vendor documentation are marked unverified (see
+[provenance](provenance.md)).
 
 Provenance of URLs: all URLs below were seen in this pass either as fetched pages or as search-result links; for the
 ones marked "via search" only the search summary/snippet was read, not the page. Raw reads (pdftotext or raw HTML via
 curl): NASA NTRS PDFs, arXiv PDFs, Bari ROBER report, NIST WebBook tables. Others were read through a page summariser.
-
-Verdict key: confirmed / differs / unverified. `secondary` = a reputable page or paper reproducing the primary value.
-
-Outcome in brief: no fetched authoritative source contradicts a benchmark number or a registered tolerance, and two code constants
-differ from the sources. This is a record of the pass on the date in the title; later re-checks are in
-[reference data](reference-data.md).
 
 ## 1. Results table
 
@@ -100,19 +107,41 @@ differ from the sources. This is a record of the pass on the date in the title; 
 
 ### 1.5 Bibliographic details (Crossref, 2026-10-15)
 
-Confirmed against Crossref records (journal, volume, pages, year): Thompson JCP 68(1) 1-24 (1987); Poinsot and Lele JCP 101(1) 104-129
-(1992); Spalding J. Appl. Mech. 28(3) 455-458 (1961); Chen and Patel AIAA J. 26(6) 641-648 (1988); Kader IJHMT 24(9) 1541-1544 (1981);
-Launder and Spalding CMAME 3(2) 269-289 (1974); Cross J. Colloid Sci. 20(5) 417-437 (1965); Papanastasiou J. Rheol. 31(5) 385-404
-(1987); Williams, Landel, Ferry JACS 77(14) 3701-3707 (1955); Wilke JCP 18(4) 517-519 (1950); Patterson and Imberger JFM 100(1)
-65-86 (1980); Roe JCP 43(2) 357-372 (1981); Harten JCP 49(3) 357-393 (1983); Liou JCP 129(2) 364-382 (1996); Shu and Osher JCP
-77(2) 439-471 (1988); Issa JCP 62(1) 40-65 (1986); Armaly et al. JFM 127 473-496 (1983); Gartling IJNMF 11(7) 953-967 (1990);
-Erturk C&F 37(6) 633-655 (2008); Di Francescantonio JSV 202(4) 491-509 (1997); Brentner and Farassat AIAA J. 36(8) 1379-1386
-(1998) and Prog. Aerosp. Sci. 39(2-3) 83-120 (2003); Williamson ARFM 28 477-539 (1996); Driver and Seegmiller AIAA J. 23(2)
-163-171 (1985); Carreau Trans. Soc. Rheol. 16(1) 99-127 (1972); Herschel and Bulkley Kolloid-Z. 39(4) 291-300 (1926).
-Not confirmed by this search: Choi 1999 (Numer. Heat Transfer A 36; the top Crossref hit was a different paper), Vassberg and
-Jameson J. Aircraft 47(4) 1152-1166 (2010) (Crossref returned the 2009 AIAA conference version only), Menter, Kuntz and Langtry 2003
-(Crossref returned a different title), Cebeci and Bradshaw 1977 book (only a 1979 review), Spalart and Allmaras (Crossref
-returned the AIAA 92-0439 version; the La Recherche Aerospatiale 1994 version was not looked up).
+Not confirmed by this search:
+
+- Choi 1999 (Numer. Heat Transfer A 36; the top Crossref hit was a different paper)
+- Vassberg and Jameson J. Aircraft 47(4) 1152-1166 (2010) (Crossref returned the 2009 AIAA conference version only)
+- Menter, Kuntz and Langtry 2003 (Crossref returned a different title)
+- Cebeci and Bradshaw 1977 book (only a 1979 review)
+- Spalart and Allmaras (Crossref returned the AIAA 92-0439 version; the La Recherche Aerospatiale 1994 version was not looked up)
+
+Confirmed against Crossref records (journal, volume, pages, year):
+
+- Thompson JCP 68(1) 1-24 (1987)
+- Poinsot and Lele JCP 101(1) 104-129 (1992)
+- Spalding J. Appl. Mech. 28(3) 455-458 (1961)
+- Chen and Patel AIAA J. 26(6) 641-648 (1988)
+- Kader IJHMT 24(9) 1541-1544 (1981)
+- Launder and Spalding CMAME 3(2) 269-289 (1974)
+- Cross J. Colloid Sci. 20(5) 417-437 (1965)
+- Papanastasiou J. Rheol. 31(5) 385-404 (1987)
+- Williams, Landel, Ferry JACS 77(14) 3701-3707 (1955)
+- Wilke JCP 18(4) 517-519 (1950)
+- Patterson and Imberger JFM 100(1) 65-86 (1980)
+- Roe JCP 43(2) 357-372 (1981)
+- Harten JCP 49(3) 357-393 (1983)
+- Liou JCP 129(2) 364-382 (1996)
+- Shu and Osher JCP 77(2) 439-471 (1988)
+- Issa JCP 62(1) 40-65 (1986)
+- Armaly et al. JFM 127 473-496 (1983)
+- Gartling IJNMF 11(7) 953-967 (1990)
+- Erturk C&F 37(6) 633-655 (2008)
+- Di Francescantonio JSV 202(4) 491-509 (1997)
+- Brentner and Farassat AIAA J. 36(8) 1379-1386 (1998) and Prog. Aerosp. Sci. 39(2-3) 83-120 (2003)
+- Williamson ARFM 28 477-539 (1996)
+- Driver and Seegmiller AIAA J. 23(2) 163-171 (1985)
+- Carreau Trans. Soc. Rheol. 16(1) 99-127 (1972)
+- Herschel and Bulkley Kolloid-Z. 39(4) 291-300 (1926)
 
 ### 1.6 Licence observation (not a numeric value)
 
@@ -133,9 +162,10 @@ sources, and several minor differences are listed for completeness.
 - Where: `crates/rcfd-turb/src/kepsilon.rs:448` (`1.0 / (4.04 + a_s * u_star * k / eps)`), comment at `:23`; also the note in
   `docs/reference-data.md` line 85 and ADR 0015.
 - Code 4.04, source 4.0: Shih, Liou, Shabbir, Yang and Zhu, NASA TM-106721 (the report version of Comput. Fluids 24(3) 227-238,
-  1995), text "This leads to A0 = 4.0 which corresponds to C_mu = 0.09 in the inertial sublayer" and Table 2. 4.04 is
-  UNVERIFIED against a published source (see [provenance](provenance.md)), replace before relying on it. The change is 1 percent of the A0 term (C_mu = 1/(A0 + A_s U* k/eps)), so C_mu moves by well under 1 percent
-  where U* k/eps is of order one or more.
+  1995), text "This leads to A0 = 4.0 which corresponds to C_mu = 0.09 in the inertial sublayer" and Table 2. The value 4.04
+  is UNVERIFIED against a published source (see [provenance](provenance.md)), replace before relying on it. The change is 1
+  percent of the A0 term (C_mu = 1/(A0 + A_s U* k/eps)), so C_mu moves by well under 1 percent where U* k/eps is of order one or
+  more.
 - Tests touched: F-042 Realizable BFS known misses (`step_reattachment_realizable_known_miss`, measured 6.402 against the
   6.26 +- 0.10 window; BFS-C Realizable 6.413); the ordinary Realizable channel and flat-plate tests. A sub-1-percent change of
   C_mu in the recirculation zone cannot be predicted to move x_r by more than a few hundredths, so the 6.402 (0.042 outside)
@@ -147,10 +177,11 @@ sources, and several minor differences are listed for completeness.
 - Where: `wall.rs:45-50` (`y_plus_lam` from the rcfd rounded log-law constants kappa 0.41, E 9.8, giving 11.53) used by
   `nu_eff_wall_scalable` (`wall.rs:249-262`).
 - Sources: first principles. The limit is the root of y* = ln(E y*)/kappa: 11.06 for kappa 0.41, B 5.2 (E = e^(kappa B); Pope,
-  Turbulent Flows (2000), sec. 7.1, not re-read), 11.2247 for kappa 0.4187, E 9.793 (the pair in reference-data.md, itself unverified). 11.53 is the correct linear/log intersection for rcfd's own disclosed kappa 0.41, E 9.8, so this is consistent with the
-  definition, not a wrong constant; it is listed because the scalable behaviour
-  depends on it by about 3 to 4 percent in the limited y*. Tests touched: `c2_kepsilon_scalable_y30`, `..._y1` (currently
-  passing within 5 percent) and the Standard-versus-Scalable comparison in the C2 known miss.
+  Turbulent Flows (2000), sec. 7.1, not re-read), 11.2247 for kappa 0.4187, E 9.793 (the pair in reference-data.md, itself
+  unverified). The value 11.53 is the correct linear/log intersection for rcfd's own disclosed kappa 0.41, E 9.8, so this is
+  consistent with the definition, not a wrong constant; it is listed because the scalable behaviour depends on it by about 3 to
+  4 percent in the limited y*. Tests touched: `c2_kepsilon_scalable_y30`, `..._y1` (currently passing within 5 percent) and the
+  Standard-versus-Scalable comparison in the C2 known miss.
 - The exact Grotjans-Menter epsilon boundary treatment (`y_eff`) in ADR 0015 could not be checked, so the scalable results
   rest on an unverified reconstruction.
 
@@ -188,9 +219,13 @@ sources, and several minor differences are listed for completeness.
 
 ## 4. Counts
 
-Table rows in section 1 (57 data rows; a row may bundle several constants): 44 confirmed at the time of the pass (most secondary; 3
-of these carry an explicit unverified sub-part), 4 differs (Realizable A0; Ar acentric factor; N2 test constants; dry-air
-composition), 7 unverified or partly verified, 2 not re-checked. On 2026-10-27 the four two-layer rows, whose only support was
-vendor documentation, were relabelled unverified (see [provenance](provenance.md)): 40 confirmed and 11 unverified or partly
-verified since then. The scalable intersection limit is not counted as a difference (see 2.2). Bibliographic
-confirmations in 1.5 are not counted.
+Table rows in section 1 (57 data rows; a row may bundle several constants), at the time of the pass:
+
+- 44 confirmed (most secondary; 3 of these carry an explicit unverified sub-part)
+- 4 differs (Realizable A0; Ar acentric factor; N2 test constants; dry-air composition)
+- 7 unverified or partly verified
+- 2 not re-checked
+
+On 2026-10-27 the four two-layer rows, whose only support was vendor documentation, were relabelled unverified (see
+[provenance](provenance.md)): 40 confirmed and 11 unverified or partly verified since then. The scalable intersection limit is
+not counted as a difference (see 2.2). Bibliographic confirmations in 1.5 are not counted.

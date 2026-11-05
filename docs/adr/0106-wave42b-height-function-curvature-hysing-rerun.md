@@ -1,12 +1,29 @@
 # ADR 0106: Wave 42B, height-function curvature for the VOF solver and the Hysing refinement re-run (F-055)
 
-Status: registered before any code and any run. Limits are fixed here; a miss becomes an ignored `*_known_miss` test with the
-limit intact; a defective set-up gets an amendment written before the corrected run. Results go into the addendum. Written at
-HEAD 6a11732 (scratch copy `<scratch dir>`, target `<target dir>`). Clean-room: first principles and
-the Hysing et al. (2009) case-1 values already read in ADR 0096 (V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Context: ADR 0100
-(refinement miss), ADR 0103 (diagnosis: the averaged-diagonal defect at `Symmetry` walls, fixed by the opt-in
-`VofSettings::component_diagonal`; residual drift with errors growing from 40 x 80 to 80 x 160; suspect #1 the CSF curvature,
-whose initial-circle rms error grows 0.13 -> 0.77 from 40 x 80 to 320 x 640).
+Status: registered before any code and any run.
+
+ADR 0103 left a residual drift in the Hysing bubble errors, with the CSF curvature as suspect #1. This wave adds an opt-in
+height-function curvature estimator for the VOF solver on Cartesian grids (`VofSettings::height_function`). The verdict test H4
+re-runs the ADR 0100 B1-B4 series with it and `component_diagonal` on. The addendum, written after the runs, records that the
+estimator itself converges: H1, H2 and H3 meet all their limits (H3 stays ignored as heavy, 215 s), although the 3-D maximum
+error, not a registered limit, does not converge. H4 misses B1, B2 and B3 (B4 is met) and becomes an ignored known miss with
+limits unchanged, so F-055 stays partial. With a convergent curvature the bubble is now about 3 % too fast on every grid, and
+y_c(3) moves down by about 0.004 per refinement without a sign of settling. The variant with the transposed viscous stress as
+well (H5) has both errors falling from 40 to 80, but by the registered plan it had no 160 x 320 run, so it is not a verdict. No
+option becomes a default, and the defaults cannot be switched as they stand without breaking an existing test (the
+height-function lattice check refuses the warped mesh of rcfd-fv cavitating_venturi).
+
+Rules and parents:
+
+* Limits are fixed here; a miss becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run.
+* Results go into the addendum.
+* Written at HEAD 6a11732 (scratch copy `<scratch dir>`, target `<target dir>`).
+* Clean-room: first principles and the Hysing et al. (2009) case-1 values already read in ADR 0096 (V_c,max 0.2417 at t 0.9213,
+  y_c(3) 1.0813).
+* Context: ADR 0100 (refinement miss), ADR 0103 (diagnosis: the averaged-diagonal defect at `Symmetry` walls, fixed by the opt-in
+  `VofSettings::component_diagonal`; residual drift with errors growing from 40 x 80 to 80 x 160; suspect #1 the CSF curvature,
+  whose initial-circle rms error grows 0.13 -> 0.77 from 40 x 80 to 320 x 640).
 
 ## Choice of estimator
 
@@ -143,9 +160,11 @@ is a property of the CSF estimator, not of the indicator fractions.
 | 32 | 7.64e-3 | 3.26e-2 | [386, 0] |
 | 64 | 2.75e-3 | 2.51e-2 | [347, 0] |
 
-H2a decreasing: met. H2b rms(64) = 2.75e-3 <= rms(16)/4 = 7.08e-3: met. H2c no CSF fallback on 32 and 64: met. Not registered,
-reported: the 3-D maximum error does not converge (0.029, 0.033, 0.025), and a few hundred cells per grid need the neighbour
-fallback; the rms converges at about order 1.5 to 1.9. Not investigated (the benchmark is 2-D); a 3-D user should know it.
+H2a decreasing: met. H2b rms(64) = 2.75e-3 <= rms(16)/4 = 7.08e-3: met. H2c no CSF fallback on 32 and 64: met.
+
+Not registered, reported: the 3-D maximum error does not converge (0.029, 0.033, 0.025), and a few hundred cells per grid need
+the neighbour fallback; the rms converges at about order 1.5 to 1.9. Not investigated (the benchmark is 2-D); a 3-D user should
+know it.
 
 ### H3 static bubble Laplace jump (exact initial fractions, t = 1), ignored (215 s > 120 s)
 
@@ -185,11 +204,14 @@ Both errors fall from 40 to 80. By the registered plan H5 gets no 160 x 320 run,
 | B4 | drift <= 1.6e-13, bound <= 1.7e-13 | 1e-12, 1e-9 | met (printed) |
 
 H4 misses and becomes `b1h_hysing_bubble_error_decreases_under_refinement_height_function_known_miss`, ignored, limits unchanged.
-F-055 stays partial. Reading: with a convergent curvature the bubble is now about 3 % too fast on every grid (V_c,max 0.249 against
-0.2417, the peak 0.08 early), and y_c(3) moves down by about 0.004 per refinement without a sign of settling (differences
-0.0037, 0.0041). The height-function curvature itself converges (H1 to H3), so the curvature is no longer a suspect for the
-drift. The physically complete viscous stress (H5) lowers V_c,max to 0.2409 and moves the peak to 0.9225 on 80 x 160 with both
-errors falling from 40 to 80, but by the plan registered before the runs it had no 160 x 320 run, so it is not a verdict.
+F-055 stays partial.
+
+Reading: with a convergent curvature the bubble is now about 3 % too fast on every grid (V_c,max 0.249 against 0.2417, the peak
+0.08 early), and y_c(3) moves down by about 0.004 per refinement without a sign of settling (differences 0.0037, 0.0041). The
+height-function curvature itself converges (H1 to H3), so the curvature is no longer a suspect for the drift. The physically
+complete viscous stress (H5) lowers V_c,max to 0.2409 and moves the peak to 0.9225 on 80 x 160 with both errors falling from 40
+to 80, but by the plan registered before the runs it had no 160 x 320 run, so it is not a verdict.
+
 Suggested next step (not done): the ADR 0100 series with all three options (component diagonal, height function, transposed
 stress) on 40, 80 and 160, registered as its own test.
 

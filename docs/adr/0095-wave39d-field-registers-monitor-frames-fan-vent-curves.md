@@ -1,14 +1,29 @@
-# ADR 0095: Wave 39D, partials close-out: field-threshold registers (F-124), monitor plots during a run (F-144), fan and vent curves (F-217)
+# ADR 0095: Wave 39D, partials close-out for F-124, F-144 and F-217
 
-Status: registered before any F-124 code was written and before the F-144 and F-217 tests were added to the repository. Limits are not changed
-after a run; a miss becomes an ignored `*_known_miss` test with the limit intact. Baseline hashes are not re-recorded; the new register type is
-opt-in, so a case without it builds and runs exactly as before. Clean-room: first principles only. Written at HEAD 93107ba (scratch copy
-`<scratch dir>`, target `<target dir>`).
+Status: registered before any F-124 code was written and before the F-144 and F-217 tests were added to the repository. Written
+at HEAD 93107ba (scratch copy `<scratch dir>`, target `<target dir>`).
 
-The residual gaps come from the partials audit: `docs/audit/partials-group-4.md` (F-124) and `docs/audit/partials-group-7.md` (F-144, F-217).
-I re-checked each claim against the code before writing this ADR: `crates/rcfd-api/src/registers.rs` has no register type that reads a field;
-`crates/rcfd-gui/tests/monitors_plot.rs` m5 never compares two polls; `crates/rcfd-api/tests/heat_exchanger.rs` X4 runs one operating point and
-no test in that file runs a vent.
+Wave 39D is a partials close-out with three parts: field-threshold registers (F-124), monitor plots during a run (F-144), and fan
+and vent curves (F-217). The addendum, written after the runs, records the outcome: all three meet their acceptance text as
+written and are set to `done`. One registered check missed. X7 at the fixed pseudo_dt 0.02 passed at u = 0.5 and u = 1, gave NaN
+at u = 2 and did not reach the reversed flows, so it stays as the ignored `x7_vent_at_fixed_pseudo_dt_known_miss` with its limit
+unchanged. Amendment 1, written after that run and before the corrected run, sets the Courant number to 1 for all six flows, and
+the corrected X7 passes at all six. Two findings are reported and not fixed. Plain SIMPLEC with a velocity inlet and a forward
+vent outlet diverges from the first iteration when K > 0. The `run` helper in `heat_exchanger.rs` skips NaN, so a NaN field
+passes its stationarity check.
+
+Rules:
+
+* Limits are not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact.
+* Baseline hashes are not re-recorded; the new register type is opt-in, so a case without it builds and runs exactly as before.
+* Clean-room: first principles only.
+
+The residual gaps come from the partials audit: `docs/audit/partials-group-4.md` (F-124) and `docs/audit/partials-group-7.md`
+(F-144, F-217). I re-checked each claim against the code before writing this ADR:
+
+* `crates/rcfd-api/src/registers.rs` has no register type that reads a field.
+* `crates/rcfd-gui/tests/monitors_plot.rs` m5 never compares two polls.
+* `crates/rcfd-api/tests/heat_exchanger.rs` X4 runs one operating point and no test in that file runs a vent.
 
 ## What I knew when I wrote the limits
 

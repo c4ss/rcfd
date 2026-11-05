@@ -1,10 +1,24 @@
 # ADR 0102: Wave 41B, SIMPLEC with a velocity inlet and a forward vent (F-248): diagnosis and the boundary compensation
 
-Status: registered before any diagnostic switch run and before any run of the fix. Limits are not changed after a run; a miss becomes an
-ignored `*_known_miss` test with the limit intact. Defaults stay bit-identical: any fix is opt-in, and `crates/rcfd-api/tests/baseline_hashes.rs`
-is not re-recorded. Clean-room: first principles only (the SIMPLEC velocity correction of Van Doormaal and Raithby, 1984, Numer. Heat Transfer
-7, 147-163, UNVERIFIED as a citation; everything used here is re-derived below). Written at HEAD e325ab4 (scratch copy
-`<scratch dir>`, target `<target dir>`).
+Status: registered before any diagnostic switch run and before any run of the fix.
+
+With plain SIMPLEC, a fixed inlet velocity and a vent outlet with K > 0 diverge from the first iteration (F-248, found by wave 39D,
+ADR 0095). The addendum gives the root cause: SIMPLEC compensates `(rAtU - rAU) grad(p_old)` on internal faces only, and the vent law
+feeds the resulting kick of the vent-cell velocity back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|. The run diverges when G > 1,
+whatever the Courant number. The fix is the opt-in key `solver.simplec_boundary_compensation`. The choice rule as registered gave no
+fix, because D1 missed its threshold at plain u = 1 (1.553e-4 against 1e-4) and D2b is falsified; amendment 1, written after the
+diagnostic runs, added D1v and changed the rule, and D1v then stood as predicted. A1 to A4 pass and F-248 is set to done with the key;
+the default-code X7 at pseudo-time 0.02 remains a known miss. With the key, plain SIMPLEC does not settle in the two K = 10 cases run:
+the F-200 C3 forward vent is non-finite at iteration 2767, and the X7 duct shows a second, transverse mode (not registered, not
+diagnosed further). H-R3 is falsified: the FAN-01 stall is not caused by the missing boundary compensation, and its cause stays undiagnosed.
+
+Rules:
+
+* Limits are not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact.
+* Defaults stay bit-identical: any fix is opt-in, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles only (the SIMPLEC velocity correction of Van Doormaal and Raithby, 1984, Numer. Heat Transfer
+  7, 147-163, UNVERIFIED as a citation; everything used here is re-derived below).
+* Written at HEAD e325ab4 (scratch copy `<scratch dir>`, target `<target dir>`).
 
 ## The defect
 
@@ -205,14 +219,16 @@ Release builds of the scratch copy at e325ab4 plus this wave's files. Each regis
 | D1v nu 1.5e-4 | kick 1.534e-3 (x 1.97), last 2.1e-4 | 5e-4 to 5e-3, settles | stands |
 
 The kick left by the compensation is exactly proportional to the viscosity (1.59e-8, 1.553e-4, 1.534e-3 for nu 1.5e-9, 1.5e-5, 1.5e-4): it is
-the viscous coupling of the momentum predictor, not the boundary defect. By the amended choice rule the fix is **B**, the opt-in key
-`solver.simplec_boundary_compensation` (`crates/rcfd-fv/src/simple.rs` `simplec_boundary_flux_correction`; schema and located error in
-`crates/rcfd-api/src/schema.rs` and `sim.rs`; documented in `docs/case-schema.md`).
+the viscous coupling of the momentum predictor, not the boundary defect.
 
-Root cause: SIMPLEC compensates `(rAtU - rAU) grad(p_old)` on internal faces only, so when the vent pressure changes the
-vent-cell velocity takes the uncompensated `(rAtU - rAU)` times the jump (5.06 m/s in the first plain iteration at u = 1), and the vent law,
-which reads that velocity, feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|; the run diverges when G > 1 (10.1 plain at u = 1,
-1.125 with pseudo-time 0.02 at u = 2), whatever the Courant number (G1, G2).
+By the amended choice rule the fix is **B**, the opt-in key `solver.simplec_boundary_compensation` (`crates/rcfd-fv/src/simple.rs`
+`simplec_boundary_flux_correction`; schema and located error in `crates/rcfd-api/src/schema.rs` and `sim.rs`; documented in
+`docs/case-schema.md`).
+
+Root cause: SIMPLEC compensates `(rAtU - rAU) grad(p_old)` on internal faces only. When the vent pressure changes, the vent-cell
+velocity therefore takes the uncompensated `(rAtU - rAU)` times the jump (5.06 m/s in the first plain iteration at u = 1). The vent
+law reads that velocity and feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|. The run diverges when G > 1 (10.1 plain at
+u = 1, 1.125 with pseudo-time 0.02 at u = 2), whatever the Courant number (G1, G2).
 
 ### Acceptance
 
@@ -233,12 +249,13 @@ which reads that velocity, feeds it back with the gain G = 0.5 (rAtU - rAU) (A/V
   code. Scratch-harness measurement, not a committed test.
 * R2 F-200 C3 forward vent as registered (plain SIMPLEC from rest, mass-flow inlet) with the key and the C3 settled-field criterion:
   K = 2.5 settles after 310 iterations, outlet-column error 4.38e-12 (C3 limit 1.25e-6), imbalance 4.7e-13; **K = 10 is non-finite at
-  iteration 2767**. Scratch test added to a scratch copy of `bc_catalogue.rs`, not committed. Run twice (the second run only to print the panic message cut off by my output filter; deterministic, same failure).
-  F-200's entry is not touched.
+  iteration 2767**. Scratch test added to a scratch copy of `bc_catalogue.rs`, not committed. Run twice (the second run only to print
+  the panic message cut off by my output filter; deterministic, same failure). F-200's entry is not touched.
 * Observation (not registered, X7 duct, plain SIMPLEC with the key, K = 10, u = 1, 3000 iterations): the vent-column rows separate from the
   first iteration (largest difference within a column 8.8e-4, 2.6e-3, 1.3e-2, 6.7e-2 at iterations 1, 4, 7, 10) and the run does not settle
   (max |ux - u| between 0.9 and 230 over iterations 150-2850). This is a second, transverse mode of the vent faces, seen also with the
-  face-velocity law in D2b. Scratch-harness measurement, not a committed test. Not diagnosed further; with pseudo-time 0.02 the F-200 C3 K = 10 case settles on the default code (existing test).
+  face-velocity law in D2b. Scratch-harness measurement, not a committed test. Not diagnosed further; with pseudo-time 0.02 the F-200 C3
+  K = 10 case settles on the default code (existing test).
 * R3 (amendment 2, FAN-01 stall, one run of `w41b_fan01_with_boundary_compensation`, 209 s): `res_u` / `res_p` 8.4e-2 / 4.5e-2
   (iteration 10), 7.1e-3 / 1.2e-3 (100), 4.4e-3 / 1.6e-3 (300), 5.5e-3 / 1.6e-3 (1000), 4.7e-3 / 1.0e-3 (1500); never both below 1e-4.
   c10 6.94e-4, L 2.50e-4, L / c10 0.360 (ADR 0084 without the key: 0.330; residuals 3.5e-3 / 7.9e-4 at 1500). **H-R3 is falsified**: the

@@ -1,8 +1,24 @@
 # ADR 0131: Wave 48B, the Studio application shell (`rcfd-studio`, layer L5)
 
-Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). Depends on ADR 0130 (48A). House rules as in ADR 0130.
-Parent: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 1, 2, 3 (L5), 5, 6 and 8. Roadmap: F-266. Clean-room: egui,
-eframe and wgpu public API documentation and crates.io dependency data only; no product is imitated.
+Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision
+W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run).
+
+This ADR covers the Studio's application shell: a new crate, `rcfd-studio`, that creates and opens project folders, lists
+cases, meshes, designs and runs, edits case files and watches for external changes. The accepted options are W48-1 (b), only
+`rcfd-studio` needs Rust 1.95; W48-2 (a), eframe with egui panels, at 0.36.2 (amendment 1); W48-3 (a), a new crate with
+`rcfd-gui` frozen; and W48-9 (a), copies of the frozen GUI's logic modules. The addendum of 2026-10-28 records the results: B1
+to B9 pass with no known miss, and M5 and M7 are not ported. Four of B9's six parity items are ignored `*_known_miss` tests, as
+B9 allows: live monitors, the 2D field view, assistant access and the tutorials. A save writes the whole settings tree, so the
+23-line cavity case (419 bytes) becomes 15,898 bytes and loses its comments and order. A relative data file in an edited case
+resolves against the working folder, not the case's folder. Not run: a real window, the native `rfd` dialogs, the by-hand
+checklist, `cargo deny`, the CI `min-toolchain` job, a Linux build, the full gate and the `rcfd-render` GPU tests. The addendum
+ends with four questions for the maintainer.
+
+Rules and parents:
+
+* Depends on [ADR 0130](0130-wave48a-overview-and-run-record-contract.md) (48A). House rules as in ADR 0130.
+* Parent: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 1, 2, 3 (L5), 5, 6 and 8. Roadmap: F-266.
+* Clean-room: egui, eframe and wgpu public API documentation and crates.io dependency data only; no product is imitated.
 
 ## Context (read at main 1248a76)
 
@@ -11,12 +27,12 @@ eframe and wgpu public API documentation and crates.io dependency data only; no 
   (`crates/rcfd-gui/Cargo.toml`). It drives the solver in process through `rcfd_api::service::Service` sessions
   (`src/controller.rs` line 142), not through project folders or the runner. Its non-UI logic is unit-tested: schema-driven editor
   model (`src/schema_model.rs`), monitor store with log mapping and decimation (`src/monitors.rs`, tests M1-M7 in
-  `tests/monitors_plot.rs`), dock layout (`src/layout.rs`), file dialogs behind a `FileChooser` trait (`src/files.rs`). Headless frames
-  are drawn with `egui::Context::run` in `tests/smoke.rs`.
+  `tests/monitors_plot.rs`), dock layout (`src/layout.rs`), file dialogs behind a `FileChooser` trait (`src/files.rs`).
+  `tests/smoke.rs` draws headless frames with `egui::Context::run`.
 * eframe 0.27 pins wgpu 0.19 and cannot share types with wgpu 30 (ADR 0125, "Pairing with eframe"). The pairing is wgpu 30.0.x with
   eframe 0.36.2 (published 2026-09-08) or 0.37.0 (2026-10-15, passes the two-week rule of ADR 0125 on 2026-10-29). Both need rustc
   1.95.
-* Toolchain: `README.md` lines 50-52 promise Rust 1.90 for the whole workspace; `.github/workflows/ci.yml` job `min-toolchain` runs
+* Toolchain: `README.md` lines 53-55 promise Rust 1.90 for the whole workspace; `.github/workflows/ci.yml` job `min-toolchain` runs
   `cargo check --workspace --all-targets --locked` on 1.90.0; the gate uses 1.99.0. `rcfd-render` declares 1.90. A workspace member
   that needs 1.95 breaks the `min-toolchain` job.
 * `rcfd-project` gives everything the browser needs: `Project::create`, `open`, `cases`, `meshes`, `designs`, `runs` (with
@@ -34,10 +50,14 @@ eframe and wgpu public API documentation and crates.io dependency data only; no 
   solver and libraries need 1.90 and the Studio 1.95.
 * (c) The Studio lives in its own Cargo workspace (for example `apps/studio/`) with its own lock file.
 
-Trade-offs: (a) is simplest but drops users of 1.90-1.94 for the solver, which does not need the newer compiler; (c) isolates the
-dependency tree but splits the lock file, the gate and `deny` into two, and the layer test no longer sees the Studio. **Recommendation:
-(b)**: one workspace, one gate, the solver's promise kept; the precedent is per-crate `rust-version` (`rcfd-render` 1.90, `rcfd-gui`
-1.89).
+Trade-offs:
+
+* (a) is simplest but drops users of 1.90-1.94 for the solver, which does not need the newer compiler.
+* (c) isolates the dependency tree but splits the lock file, the gate and `deny` into two, and the layer test no longer sees the
+  Studio.
+
+**Recommendation: (b)**: one workspace, one gate, the solver's promise kept; the precedent is per-crate `rust-version`
+(`rcfd-render` 1.90, `rcfd-gui` 1.89).
 
 ### W48-2: window and UI toolkit
 
@@ -50,6 +70,7 @@ dependency tree but splits the lock file, the gate and `deny` into two, and the 
 
 Trade-offs: (a) reuses the team's egui knowledge and the frozen GUI's tested logic, and egui-wgpu exposes the device so the render core
 can share it (ADR 0132); its cost is the 1.95 toolchain and egui's immediate-mode redraw (cheap for panels, the 3D view is a texture).
+
 **Recommendation: (a)**, eframe **0.37.0** if the gate starts on or after 2026-10-29 (two-week rule met), else 0.36.2; both resolve to
 wgpu 30. Step 0 of the implementation reads the crates.io dependency data (as ADR 0125 did) for the `egui_dock`, `egui_plot` and `rfd`
 releases that pair with the chosen egui; those versions are not known here (UNVERIFIED) and are recorded with their licences before
@@ -60,8 +81,13 @@ the build.
 * (a) New crate `rcfd-studio` (plan section 1 decision 2, "default chosen by the lead; the user can change it"); `rcfd-gui` frozen.
 * (b) Port `rcfd-gui` to eframe 0.36 and grow it into the Studio.
 
-Trade-offs: (b) changes a frozen crate, moves its 0.27 lock entries and its registered tests at once, and keeps the in-process session
-model that the plan replaces with project folders; (a) duplicates some logic until `rcfd-gui` is removed. **Recommendation: (a)**.
+Trade-offs:
+
+* (b) changes a frozen crate, moves its 0.27 lock entries and its registered tests at once, and keeps the in-process session model
+  that the plan replaces with project folders.
+* (a) duplicates some logic until `rcfd-gui` is removed.
+
+**Recommendation: (a)**.
 
 ### W48-9: reuse of the frozen GUI's logic modules
 
@@ -70,8 +96,13 @@ model that the plan replaces with project folders; (a) duplicates some logic unt
 * (b) Move them into a small shared crate used by both apps (edits the frozen crate's imports; its tests must still pass).
 * (c) Write new modules.
 
-Trade-offs: (a) is duplication until `rcfd-gui` is removed (then it disappears); (b) touches a frozen crate for no user-visible gain;
-(c) throws away tested code. **Recommendation: (a)**.
+Trade-offs:
+
+* (a) is duplication until `rcfd-gui` is removed (then it disappears).
+* (b) touches a frozen crate for no user-visible gain.
+* (c) throws away tested code.
+
+**Recommendation: (a)**.
 
 ## Design (proposed, assuming the recommendations)
 
@@ -97,14 +128,19 @@ Trade-offs: (a) is duplication until `rcfd-gui` is removed (then it disappears);
 `rcfd-studio -> rcfd-project, rcfd-runner, rcfd-tsstore, rcfd-render, rcfd-claude, rcfd-api, rcfd-mesh, rcfd-core`, plus eframe and
 friends. Layer: a new top layer 9 above `rcfd-gui` (8) in `crates/rcfd-cli/tests/workspace_graph.rs` and
 [`docs/architecture.md`](../architecture.md) (`rcfd-studio -> project, runner, tsstore, render, claude, api`). No crate depends on
-`rcfd-studio`. `rcfd-runner` (layer 2) and `rcfd-claude` (layer 0, or 2 after ADR 0134) are in the table after ADR 0130 D6. `rcfd-studio` does not depend on
-`rcfd-gui`, `rcfd-assistant` or `rcfd-mcp`.
+`rcfd-studio`. `rcfd-runner` (layer 2) and `rcfd-claude` (layer 0, or 2 after ADR 0134) are in the table after ADR 0130 D6.
+`rcfd-studio` does not depend on `rcfd-gui`, `rcfd-assistant` or `rcfd-mcp`.
 
-New third-party dependencies, licences to be confirmed from `cargo metadata` at step 0: eframe, egui, egui-wgpu, egui-winit, winit
-(MIT OR Apache-2.0 for the egui family at 0.27.2 per `THIRD_PARTY_LICENSES.md`; for 0.36/0.37 UNVERIFIED), `egui_dock` (MIT at
-0.12.0; newer UNVERIFIED), `egui_plot`, `rfd`, `epaint` fonts (OFL-1.1, UFL-1.0, already an exception in `deny.toml`; its notice duty in
-`THIRD_PARTY_LICENSES.md` applies to the Studio binary too). `cargo deny check licenses bans sources` must pass; `git diff Cargo.lock`
-must remove no existing version line (as ADR 0125).
+New third-party dependencies, licences to be confirmed from `cargo metadata` at step 0:
+
+* eframe, egui, egui-wgpu, egui-winit, winit (MIT OR Apache-2.0 for the egui family at 0.27.2 per `THIRD_PARTY_LICENSES.md`; for
+  0.36/0.37 UNVERIFIED);
+* `egui_dock` (MIT at 0.12.0; newer UNVERIFIED);
+* `egui_plot`, `rfd`;
+* `epaint` fonts (OFL-1.1, UFL-1.0, already an exception in `deny.toml`; its notice duty in `THIRD_PARTY_LICENSES.md` applies to
+  the Studio binary too).
+
+`cargo deny check licenses bans sources` must pass; `git diff Cargo.lock` must remove no existing version line (as ADR 0125).
 
 ## Registered checks (proposal; fixed here before any run)
 
@@ -232,11 +268,15 @@ manifest (no compile). Limits are unchanged.
 ## Addendum: 48B results (2026-10-28, branch `worktree-agent-a3d28c7c2cfa896cd`, release build on the gate host)
 
 Decisions applied as accepted: W48-1 (b), W48-2 (a) with eframe 0.36.2 (amendment 1), W48-3 (a), W48-9 (a). Commits 5cbebb0
-(step 0, amendment 1) to 945e143 on main 15b00ef. Two set-up details were changed in code after amendment 1 and before any test ran,
-both in 61690d0: `layout::to_json` writes positions that are not laid out (NaN, written as `null`) as 0, as `from_json` reads them, so
-a saved layout reads back to the same text (B8 compares the text); `Studio::save_case` refuses a clean editor ("nothing to save"),
-which is how B5's control leaves the file untouched (a save of an unedited case would rewrite it as canonical TOML, see below). All
-tests ran once, in release, `--test-threads 1`; B6 was run three times in all. The workspace gate was not run (the maintainer runs it).
+(step 0, amendment 1) to 945e143 on main 15b00ef. All tests ran once, in release, `--test-threads 1`; B6 was run three times in
+all. The workspace gate was not run (the maintainer runs it).
+
+Two set-up details were changed in code after amendment 1 and before any test ran, both in 61690d0:
+
+* `layout::to_json` writes positions that are not laid out (NaN, written as `null`) as 0, as `from_json` reads them, so a saved
+  layout reads back to the same text (B8 compares the text).
+* `Studio::save_case` refuses a clean editor ("nothing to save"), which is how B5's control leaves the file untouched. A save of
+  an unedited case would rewrite it as canonical TOML (see below).
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -258,26 +298,33 @@ tests ran once, in release, `--test-threads 1`; B6 was run three times in all. T
 | B8 controls | corrupt file: default layout and a message, no panic | garbage: ".../studio-prefs.json: invalid type: integer `12`, expected a string at line 1 column 30; default preferences used"; duplicated panel: "...: layout: layout lists a panel twice; default layout used", theme and recent list kept | as required |
 | B9 | one named test per item, passing or an ignored `*_known_miss` | `parity_open_and_save_a_case` and `parity_settings_editor_with_schema_validation` pass; live monitors (48D), 2D field view (48C), assistant access (48E) and the tutorials (the user's call) are ignored `*_known_miss` with their reason | pass |
 
-Also run: the ported tests M1 (worst inverse relative error 4.219e-15), M2, M3, M4, M6, `monitors_merge_is_idempotent_and_incremental`,
-`layout_keeps_exactly_one_instance_per_panel` (Plots and Chat stand in for the frozen GUI's Monitors and Assistant), and B6's extra
-case "a save over a changed file is a conflict and writes nothing": pass. `workspace_graph` 3 passed with `rcfd-studio` at layer 9; a
-throwaway layer 5 for it fails `layering_matches_architecture_doc` ("rcfd-studio must not depend on rcfd-api"), restored.
-`cargo clippy --workspace --all-targets --locked -- -D warnings` (Rust 1.99) is clean, `rcfd-gui` included; `cargo fmt --check` of
-`rcfd-studio` and `rcfd-cli` is clean; `scripts/third_party_licenses.py --check` up to date.
+Also run:
 
-No known miss. Reported, not limited (ADR 0130 asks for the first Studio build with `--timings`): release build of the Studio and its
-tests in an empty target folder, `-j 6` on 16 threads, nothing else building: 2 min 00 s wall clock, 256 units, 658 s summed unit
-time; longest units wgpu-core 40.2 s, naga 39.9 s, egui 36.7 s, rcfd-mesh 31.1 s, vello_cpu 29.8 s, rcfd-fv 25.3 s, rcfd-api 22.6 s,
-read-fonts 21.1 s, image 20.4 s, wgpu-hal 19.4 s; release target folder 1.2 GB.
+* The ported tests M1 (worst inverse relative error 4.219e-15), M2, M3, M4, M6, `monitors_merge_is_idempotent_and_incremental` and
+  `layout_keeps_exactly_one_instance_per_panel` (Plots and Chat stand in for the frozen GUI's Monitors and Assistant) pass.
+* B6's extra case "a save over a changed file is a conflict and writes nothing" passes.
+* `workspace_graph`: 3 passed with `rcfd-studio` at layer 9. A throwaway layer 5 for it fails
+  `layering_matches_architecture_doc` ("rcfd-studio must not depend on rcfd-api"), restored.
+* `cargo clippy --workspace --all-targets --locked -- -D warnings` (Rust 1.99) is clean, `rcfd-gui` included.
+* `cargo fmt --check` of `rcfd-studio` and `rcfd-cli` is clean.
+* `scripts/third_party_licenses.py --check` is up to date.
+
+No known miss.
+
+Reported, not limited (ADR 0130 asks for the first Studio build with `--timings`): a release build of the Studio and its tests in
+an empty target folder, `-j 6` on 16 threads, nothing else building, took 2 min 00 s wall clock, 256 units and 658 s summed unit
+time. The longest units are wgpu-core 40.2 s, naga 39.9 s, egui 36.7 s, rcfd-mesh 31.1 s, vello_cpu 29.8 s, rcfd-fv 25.3 s,
+rcfd-api 22.6 s, read-fonts 21.1 s, image 20.4 s and wgpu-hal 19.4 s. The release target folder is 1.2 GB.
 
 Deviations and notes:
-* `deny.toml` gets an exception for `epaint_default_fonts` (amendment 1); `font-types` is held at 0.12.6 (two-week rule);
-  `rcfd-studio` lists `wgpu =30.0.1` itself only to pin the back ends (amendment 1). `egui_plot` is in the build although only the
-  Plots panel uses it (drawing a monitor store, as M6 needs); 48D fills the store (ADR 0133 Placement expects it here).
-* A save writes `Case::to_toml` of the whole settings tree, as the frozen GUI did: the 23-line cavity case (419 bytes) is saved as 15,898 bytes
-  with every default written out, and comments and order are lost.
+* `deny.toml` gets an exception for `epaint_default_fonts` (amendment 1). `font-types` is held at 0.12.6 (two-week rule).
+  `rcfd-studio` lists `wgpu =30.0.1` itself only to pin the back ends (amendment 1).
+* `egui_plot` is in the build although only the Plots panel uses it (drawing a monitor store, as M6 needs). 48D fills the store
+  (ADR 0133 Placement expects it here).
+* A save writes `Case::to_toml` of the whole settings tree, as the frozen GUI did: the 23-line cavity case (419 bytes) is saved as
+  15,898 bytes with every default written out, and comments and order are lost.
 * The editor's in-process service has no sandbox root, and the case text is parsed with base folder `.` (the service's rule for
-  text); a case that names a relative data file (a lookup table) resolves it against the working folder, not the case's folder.
+  text). A case that names a relative data file (a lookup table) resolves it against the working folder, not the case's folder.
   Opening by path would fix this but makes the service read the file on the UI thread.
 * Docs touched beyond the Files list: `docs/glossary.md` (the Studio entry said "It has no window yet") and `docs/releasing.md` (what
   the 1.90 job proves).
@@ -287,20 +334,27 @@ Deviations and notes:
   (`Studio::save_prefs_now`, one small write at exit; the only file I/O of the UI thread). Unregistered test
   `closing_the_window_saves_the_layout_synchronously` (a frame carrying the close event) passes; B8 re-run: 4 of 4 pass.
 * `scripts/gate_test.py --jobs 5 -- -p rcfd-studio`: 34 test processes, all pass, wall 9.9 s, peak summed working set 54 MB, max
-  time/limit 0.002. `scripts/limit_audit.py` hits in the new tests, read: B7's two `return`s are the debug-build skip with a
-  `SKIP` line (the limit is for release; the gate is release); `child_entry`'s `return` is the child-process pattern of
-  `rcfd-project`; B6's `dt <= LIMIT` is flagged because the test sleeps, but `dt` is measured from the child's exit, after the
-  sleep; the four `*_control*` tests (B1, B4, B8 twice) assert the failure they show as positive facts (`count` 2, 9 ids, a
-  message and the default layout), which the heuristic does not recognise.
+  time/limit 0.002.
+* `scripts/limit_audit.py` hits in the new tests, read. B7's two `return`s are the debug-build skip with a `SKIP` line (the limit
+  is for release; the gate is release). `child_entry`'s `return` is the child-process pattern of `rcfd-project`. B6's
+  `dt <= LIMIT` is flagged because the test sleeps, but `dt` is measured from the child's exit, after the sleep. The four
+  `*_control*` tests (B1, B4, B8 twice) assert the failure they show as positive facts (`count` 2, 9 ids, a message and the
+  default layout), which the heuristic does not recognise.
 * Known limits: closing or switching a project joins the worker thread on the UI thread, so a watcher scan of a large project in
-  progress delays it by that scan; every change seen by the watcher re-reads all run summaries (`Browser::load`), a worker-side
+  progress delays it by that scan. Every change seen by the watcher re-reads all run summaries (`Browser::load`), a worker-side
   cost for 48D to revisit when runs stream.
 
-Not run: a real window (DX12, Vulkan, WARP; resizing, high-DPI, keyboard focus), the native `rfd` dialogs and the by-hand
-view-and-report checklist; `cargo deny` (not installed; licences checked from `cargo metadata`); the CI `min-toolchain` job
-(`cargo check --workspace --all-targets --locked --exclude rcfd-studio` on 1.90.0; 1.90 is not installed here); a Linux build
-(the `x11` and `wayland` features of eframe and `rfd` 0.15.4 on Linux, as `rcfd-gui` already uses them, not checked); the full gate;
-the `rcfd-render` GPU tests (unchanged code, and `cargo tree` shows the same wgpu features).
+Not run:
+
+* a real window (DX12, Vulkan, WARP; resizing, high-DPI, keyboard focus), the native `rfd` dialogs and the by-hand view-and-report
+  checklist;
+* `cargo deny` (not installed; licences checked from `cargo metadata`);
+* the CI `min-toolchain` job (`cargo check --workspace --all-targets --locked --exclude rcfd-studio` on 1.90.0; 1.90 is not
+  installed here);
+* a Linux build (the `x11` and `wayland` features of eframe and `rfd` 0.15.4 on Linux, as `rcfd-gui` already uses them, not
+  checked);
+* the full gate;
+* the `rcfd-render` GPU tests (unchanged code, and `cargo tree` shows the same wgpu features).
 
 Questions for the maintainer:
 1. Is the `deny.toml` exception for `epaint_default_fonts` (OFL-1.1, Ubuntu-font-1.0) accepted?

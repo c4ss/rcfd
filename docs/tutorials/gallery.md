@@ -1,16 +1,18 @@
 # Example gallery
 
-This page is a catalogue of the ready-made cases in `cases/`: each directory is listed below with what it shows and how far it
-has been checked. Use it to pick a case to start from or to see what a case file for a given kind of flow looks like. If this is
-your first run, start with the [quick start](quick-start-cli.md); for the meaning of every setting, see
-[the case schema](../case-schema.md).
+This page lists the ready-made cases in `cases/`: what each directory shows and how far it has been checked. Use it to pick a case
+to start from or to see what a case file for a given kind of flow looks like. The packed bed run and the 200-iteration axial fan
+passage runs are expected not to converge; the other full runs are expected to succeed. If this is your first run, start with the
+[quick start](quick-start-cli.md); for the meaning of every setting, see [the case schema](../case-schema.md).
 
 ## How far the cases are checked
 
-In the default test suite every case file is checked (`rcfd check`: validation, mesh build, mesh quality and the set-up rules);
-the full runs are in `run-slow` blocks executed only by the slow (ignored) test. A check does not solve the case: it shows that
-the case sets up, not that its result is right. Each entry below says which slow runs are expected to succeed and which are
-known not to converge. All commands are run from the repository root.
+The default test suite checks every case file with `rcfd check` (validation, mesh build, mesh quality and the set-up rules). The
+full runs are in `run-slow` blocks, which only the slow (ignored) test executes. A check does not solve the case: it shows that the
+case sets up, not that its result is right. Each entry below says which slow runs are expected to succeed and which are known not
+to converge.
+
+All commands are run from the repository root.
 
 ## Two kinds of files
 
@@ -29,7 +31,7 @@ naca0012
 
 ## Benchmark descriptors
 
-Open benchmark data for validating rcfd, with sources and licences, is described in [validation data](../validation-data.md).
+[Validation data](../validation-data.md) describes open benchmark data for validating rcfd, with sources and licences.
 
 | Directory | Benchmark | Reference data |
 |---|---|---|
@@ -121,9 +123,10 @@ end time 3 reached
 
 ### Axial fan passages (`axial_fan_sector`, `axial_fan_cgrid`)
 
-Single periodic blade passages of a five-bladed axial fan built by the parametric fan generator ([meshing](../meshing.md)). Both are
-laminar smoke cases for the geometry, the mesh and the rotating-frame plumbing, **not** predictions of fan performance; the state of
-the fan work, including the missed validation against measured fan data, is in [the fan milestone](../milestone-fan.md).
+These are single periodic blade passages of a five-bladed axial fan built by the parametric fan generator
+([meshing](../meshing.md)). Both are laminar smoke cases for the geometry, the mesh and the rotating-frame plumbing, **not**
+predictions of fan performance. [The fan milestone](../milestone-fan.md) gives the state of the fan work, including the missed
+validation against measured fan data.
 
 * `axial_fan_sector.toml`: H-type sector mesh with blunt blade edges.
 * `axial_fan_cgrid.toml`: body-fitted C-grid around the blade; `rcfd check` warns (rule SV101) that the maximum

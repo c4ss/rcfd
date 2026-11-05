@@ -1,5 +1,10 @@
 # Job 49D: NACA 0012 angle-of-attack sweep with the SA drag fixes, 500-chord far field
 
+With both fixes, the lift slope over 0-8 degrees is 0.986 x 2 pi (Ladson 0.985) and SA's cl_max is 1.542 at 16 degrees (Ladson
+1.612 at 17.13 degrees). Two limits are known misses; the others are met. LT15: cd at 15 degrees is +26.0 % against TMR
+(band 25 %). LD: the drift is over 0.5 % at 12, 13, 16, 17 and 24 degrees. At 17 degrees and above, steady SA no longer
+converges, so the values shown there are iteration means, not flow values.
+
 The set-up, limits and reading rules are in [ADR 0167](../../adr/0167-job49d-naca0012-aoa-sweep-with-the-sa-drag-fixes-at-500-chords.md).
 
 This job repeats the sweep of [ADR 0159](../../adr/0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md) with

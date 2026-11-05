@@ -1,10 +1,21 @@
-# ADR 0179: Job 49P, an automatic first-order fallback for the cells that sustain the FAN-01 stall (with F-R), tested on B3 and B2
+# ADR 0179: Job 49P, an automatic first-order fallback for the FAN-01 stall cells
 
 Status: **registered 2026-10-31**, before any code of this job and before any solver run. The selector, its parameters, the
 threshold rule, the acceptance limits, the refinement condition, the time budgets, the predictions, the reading rules
 and the not-run list are fixed here. **None of the candidate properties has been evaluated on any FAN-01 cell or run
 for this job.** Amendments follow this text, each written before what it covers; results go in an addendum. Not yet
 accepted by the maintainer.
+
+ADR 0178 made B3 converge by removing C, the convection deferred correction, in a hand-picked hub ring, H3, with F-R(0.25)
+on. This job tests an automatic first-order fallback for the cells that sustain the FAN-01 stall, with F-R, on B3 and on
+held-out B2. From the switch at iteration 1000, every 50 iterations the selector removes C in more cells: those that
+reach an oscillation threshold, grown by one face ring, up to a cap of 10 % of the cells. The addendum of 2026-10-31
+reports not accepted: no theta in {0.3, 0.1, 0.03} meets C1, C2, C3 and S on B3, so the selector is failed on B3 and rule
+4 applies (the oscillation amplitude is not a usable selector at these parameters). S-B3(0.3) meets C1 and C3 but misses
+C2 and S, a partial convergence the reading rules did not cover. On held-out B2 the mask makes the run worse than its
+stall (`res_u` rises from 1.0e-3 to 7.8e-3), and R1, the maintainer's refinement condition, is missed (Delta_B3 0.0043,
+Delta_B2 0.0288). Every arm hit the cap, Q1-Q4 are missed, and at theta 0.1 H is the only limit met. On B3 the automatic
+mask overlaps H3 by about 60 % and gives H's functionals within 1 %.
 
 Job 49P, on branch `job49p-fan01-auto-fallback` from `job49o-fan01-hub-locus` at 14c9639 (worktree
 `.claude/worktrees/job49p`). The number 0179 and the job id 49P were given by the coordinator.

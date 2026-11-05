@@ -1,25 +1,44 @@
-# ADR 0027: Wave 18B combustion: finite-rate and turbulent-chemistry closures (F-054), with reactor-network, pollutant and thermo-format slices (F-225, F-222, F-224)
+# ADR 0027: Wave 18B combustion: finite-rate and turbulent-chemistry closures (F-054)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new code or tests was
-compiled or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
-assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
-test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes that were not
-fixed here, measured results) may be appended at the end without touching registered limits.
+compiled or run.
 
-Roadmap: F-054 (priority), then F-224, F-222, F-225 as time allows. F-053 (species transport) and F-112 (0D reactors) are the
-foundations; this ADR advances F-054 and does not close it. F-223 (stiff-chemistry acceleration) is not started.
-Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals. No vendor
-names in the repository. CHEMKIN is a format name. GRI-Mech data are never committed (licence unverified); they stay in the
-git-ignored F-125 fetch and tests that would use them skip when absent. Every test mechanism is hand-written here.
+Wave 18B adds chemistry closures to the species transport of the constant-density incompressible flow solver (F-053):
+`finite_rate`, `eddy_dissipation`, `finite_rate_eddy_dissipation` and `edc`. It also delivers reactor-network, pollutant and
+thermo-format slices (F-225, F-222, F-224). Transient algorithms use Lie operator splitting, first order in the step; steady
+algorithms use a source-term form. The results record two misses against registered limits, both kept as ignored tests: K8
+(`line` is the TOML line of the key, not the line inside the mechanism) and K10 (ii) (3.8e-3 and 2.9e-3 against 1e-3). The
+corrected K8 form and the corrected K10 (ii) set-up are met, as is every other row of the results table. The F-054 acceptance
+is NOT met: constant-density flow only, no compressible or variable-density species, no published reference verified. No
+agreement with a published flame is claimed anywhere in this wave. F-054 and F-224 stay `partial`.
+
+Rules and parents:
+
+* House rules: the limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+  assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
+  test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes that were not
+  fixed here, measured results) may be appended at the end without touching registered limits.
+* Roadmap: F-054 (priority), then F-224, F-222, F-225 as time allows. F-053 (species transport) and F-112 (0D reactors) are the
+  foundations; this ADR advances F-054 and does not close it. F-223 (stiff-chemistry acceleration) is not started.
+* Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals. No vendor
+  names in the repository. CHEMKIN is a format name. GRI-Mech data are never committed (licence unverified); they stay in the
+  git-ignored F-125 fetch and tests that would use them skip when absent. Every test mechanism is hand-written here.
 
 ## Scope and what F-054 cannot be after this wave
 
-The flow solver the species live in is the constant-density incompressible one (F-053): density does not depend on temperature
-or composition. A flame therefore changes temperature and composition but does not accelerate the gas, so a methane jet flame
+The species live in the constant-density incompressible flow solver (F-053), where density does not depend on temperature or
+composition. A flame therefore changes temperature and composition but does not accelerate the gas, so a methane jet flame
 cannot be represented and the F-054 acceptance ("methane one-step jet flame temperature within published band") cannot be met
-here. F-054 stays `partial`, with named gaps: variable density (needs the variable-density kernel of ADR 0005 to carry
-species), a published flame comparison, thickened-flame model, Strang splitting, steady EDC with the integrated fine-structure
-reactor in the Jacobian, parallel/tabulated chemistry (F-223).
+here.
+
+F-054 stays `partial`, with these named gaps:
+
+* variable density (needs the variable-density kernel of ADR 0005 to carry species);
+* a published flame comparison;
+* thickened-flame model;
+* Strang splitting;
+* steady EDC with the integrated fine-structure reactor in the Jacobian;
+* parallel/tabulated chemistry (F-223).
 
 ## Decisions
 
@@ -32,7 +51,7 @@ Mixture state of a cell: temperature `T`, mass fractions `Y_1..Y_n` of all mecha
   `dT/dt = -(sum_k h_k(T) omega_k) / (rho cp)` with `h_k = R T h_rt(T)` the molar absolute enthalpy of the NASA-7 thermo of the
   mechanism and `omega_k` the net molar production rate. This is the enthalpy balance of an incompressible, constant-`cp` flow:
   the chemical enthalpy released by the reaction heats the fluid at its constant heat capacity. It is NOT the constant-volume
-  energy equation of the 0D toolkit (which uses `u_k = h_k - R T` and the mixture `cv`); the two coincide when the reaction does
+  energy equation of the 0D toolkit (which uses `u_k = h_k - R T` and the mixture `cv`). The two coincide when the reaction does
   not change the mole number (`sum_k nu_k = 0`) and `cp` equals the mixture `cv` (isomerisation toy of K2), and differ
   otherwise. The check that compares with the 0D toolkit uses exactly that case.
 * Without heat release (isothermal chemistry) `dT/dt = 0` and `T` is the cell temperature.
@@ -41,7 +60,7 @@ Mixture state of a cell: temperature `T`, mass fractions `Y_1..Y_n` of all mecha
   `chemistry.*` key otherwise). Reason: `physics.rho` defaults to 1 and `physics.cp` to 1005, and silently using them would hide
   a mismatch between the density the flow sees and the one the kinetics see.
 * Negative mass fractions are clipped to zero inside the right-hand side (as `batch_rhs`), so conservation of the sum of the
-  mass fractions and of the element masses holds only to the integrator tolerance when a mass fraction is driven to zero; the
+  mass fractions and of the element masses holds only to the integrator tolerance when a mass fraction is driven to zero. The
   conservation checks below measure it on the full state, not on the closed-by-difference species.
 * Integrator tolerances: `chemistry.rtol` 1e-8, `chemistry.atol_species` 1e-14, `chemistry.atol_temperature` 1e-8 (the
   `Tol::default()` of the toolkit; set before any run).
@@ -126,10 +145,12 @@ New top-level settings section `chemistry` (documented in `docs/case-schema.md`)
 
 ### D4 F-225 slice (reactor crate, `network.rs`)
 
-(a) brute-force logarithmic sensitivity of an ignition delay (or any scalar outcome) to the pre-exponential factor of each
-reaction, central difference in `ln A` with a relative step 1e-3, ranked by magnitude; (b) a network composition of a
-perfectly stirred reactor followed by a plug flow reactor, passing the PSR outlet state to the plug flow. Shock tube and a
-premixed flame-speed library are not delivered (named gaps).
+* (a) brute-force logarithmic sensitivity of an ignition delay (or any scalar outcome) to the pre-exponential factor of each
+  reaction, central difference in `ln A` with a relative step 1e-3, ranked by magnitude;
+* (b) a network composition of a perfectly stirred reactor followed by a plug flow reactor, passing the PSR outlet state to the
+  plug flow.
+
+Shock tube and a premixed flame-speed library are not delivered (named gaps).
 
 ### D5 F-222 slice (reactor crate, `pollutants.rs`)
 
@@ -141,12 +162,13 @@ fields; no CFD coupling, no prompt/fuel/N2O paths, no soot (named gaps).
 
 ### D6 F-224 slice (reactor crate)
 
-(a) NASA nine-coefficient polynomials (`Species` gets an optional nine-coefficient form; `cp_r`, `h_rt`, `s_r` evaluate it),
-derived by integration of `cp/R = a1 T^-2 + a2 T^-1 + a3 + a4 T + a5 T^2 + a6 T^3 + a7 T^4`; (b) a JSON mechanism interchange
-(own schema, documented) with a writer and a reader, so that a mechanism read from CHEMKIN text and the same mechanism read
-from JSON have the same species and reaction counts and the same equilibrium. Reading the nine-coefficient text files of the
-public thermodynamic database, YAML import, transport and surface decks are NOT delivered (the record layout could not be
-verified from an accessible source in this wave). F-224 stays `partial`.
+* (a) NASA nine-coefficient polynomials (`Species` gets an optional nine-coefficient form; `cp_r`, `h_rt`, `s_r` evaluate it),
+  derived by integration of `cp/R = a1 T^-2 + a2 T^-1 + a3 + a4 T + a5 T^2 + a6 T^3 + a7 T^4`;
+* (b) a JSON mechanism interchange (own schema, documented) with a writer and a reader, so that a mechanism read from CHEMKIN
+  text and the same mechanism read from JSON have the same species and reaction counts and the same equilibrium.
+
+Reading the nine-coefficient text files of the public thermodynamic database, YAML import, transport and surface decks are NOT
+delivered (the record layout could not be verified from an accessible source in this wave). F-224 stays `partial`.
 
 ## Registered checks (limits fixed before any run)
 
@@ -256,14 +278,20 @@ to full precision).
 ### K8 Located validation errors (paths and lines)
 
 Each of these produces a diagnostic whose `path` equals the stated one (and `line` where stated); the test asserts both:
-unreadable mechanism file (`chemistry.mechanism`); CHEMKIN syntax error (`chemistry.mechanism_text`, `line` = the line of the
-error); mechanism species missing from `species` (`chemistry.mechanism`, message names the species); `species.<x>` not in the
-mechanism (`species.<x>`); `chemistry.temperature` unset with energy off (`chemistry.temperature`); `heat_release` without
-energy (`chemistry.heat_release`); `chemistry.density` unset (`chemistry.density`) and different from `physics.rho`
-(`chemistry.density`); `chemistry.heat_capacity` unset or different from `physics.cp` with heat release
-(`chemistry.heat_capacity`); turbulent closure with a laminar run (`chemistry.model`); reversible reaction with
-`eddy_dissipation` (`chemistry.mechanism_text`, `line` = the reaction line); non-positive `eddy_dissipation_a`; a steady run
-with `piso`-only options is not applicable; compressible engine with chemistry (`chemistry.model`).
+
+* unreadable mechanism file (`chemistry.mechanism`);
+* CHEMKIN syntax error (`chemistry.mechanism_text`, `line` = the line of the error);
+* mechanism species missing from `species` (`chemistry.mechanism`, message names the species);
+* `species.<x>` not in the mechanism (`species.<x>`);
+* `chemistry.temperature` unset with energy off (`chemistry.temperature`);
+* `heat_release` without energy (`chemistry.heat_release`);
+* `chemistry.density` unset (`chemistry.density`) and different from `physics.rho` (`chemistry.density`);
+* `chemistry.heat_capacity` unset or different from `physics.cp` with heat release (`chemistry.heat_capacity`);
+* turbulent closure with a laminar run (`chemistry.model`);
+* reversible reaction with `eddy_dissipation` (`chemistry.mechanism_text`, `line` = the reaction line);
+* non-positive `eddy_dissipation_a`;
+* a steady run with `piso`-only options is not applicable;
+* compressible engine with chemistry (`chemistry.model`).
 
 ### K9 Splitting consistency (measured, gate on the order only)
 
@@ -348,17 +376,19 @@ All numbers are from `cargo test --release --nocapture` on the final tree of thi
 
 ### Addendum A1: deviations, a miss and caveats found while testing
 
-* K10 (ii): the registered parameters were not stated; the first choice (k1f = 1e2, [NO]_0 = 1e-3) has an N relaxation time
+* K10 (ii): the registered parameters were not stated. The first choice (k1f = 1e2, [NO]_0 = 1e-3) has an N relaxation time
   (1e-4 s) comparable to the NO growth time (1.4e-4 s), so the quasi-steady premise does not hold and the closed form deviates by
-  3.8e-3. Diagnosis, not tuning: the model is correct under its premise. The registered test is kept ignored as a known miss; a
+  3.8e-3. Diagnosis, not tuning: the model is correct under its premise. The registered test is kept ignored as a known miss. A
   corrected set-up (k1f = 1e-1, [NO]_0 = 1e-1, relaxation 1e-5 s against NO times of seconds) is a new test and meets the limit.
-  The rate constants in the test are invented, not literature values; no literature set is bundled (no published confirmation was
+  The rate constants in the test are invented, not literature values. No literature set is bundled (no published confirmation was
   found; the primary evaluation was not accessed): UNVERIFIED, named gap.
-* K4 stop rule: the ADR does not register a stop rule for K4; my first test used `res_A < 1e-12`, at which the residual stalled at
-  5e-12 on one mesh, and the test stops at `res_A < 1e-11` (the convention of `tests/scalars.rs`). Not a registered criterion. The checks compare discrete/analytic solutions, so a residual floor of 1e-11 is far below
-  the tolerances used.
-* K8 (registered form missed): the case parser replaces a diagnostic's `line` by the line of the key in the TOML text, so the registered `line` check fails; the line inside a mechanism text is
-  reported in the message (corrected test, original kept ignored) ("mechanism line N: ...") and `line` points to the `mechanism_text` key.
+* K4 stop rule: the ADR does not register a stop rule for K4. My first test used `res_A < 1e-12`, at which the residual stalled
+  at 5e-12 on one mesh, and the test stops at `res_A < 1e-11` (the convention of `tests/scalars.rs`). This is not a registered
+  criterion. The checks compare discrete/analytic solutions, so a residual floor of 1e-11 is far below the tolerances
+  used.
+* K8 (registered form missed): the case parser replaces a diagnostic's `line` by the line of the key in the TOML text, so the
+  registered `line` check fails. The message reports the line inside a mechanism text ("mechanism line N: ...") and `line` points
+  to the `mechanism_text` key (corrected test, original kept ignored).
 * D3 steady source form, added stabilisation: besides the finite-difference sink `max(0, -dS/dY)`, a negative source is given the
   Patankar coefficient `-S/Y` (when `Y > 1e-30`). Without it the explicit consumption of a species with a product-limited
   eddy-dissipation rate drained the species to large negative values (observed, FU of order -1e13 in the first iteration). The

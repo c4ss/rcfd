@@ -1,14 +1,32 @@
 # ADR 0117: Wave 45C, the ADR 0113 seam-coefficient fix F1 (`coupled_offdiag_in_h1`) on the `rotating_frame` FAN-01 path
 
 Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs; the user accepted the wave-45 draft decisions: a bool key,
-known-miss FAN-01 tests kept compiling through a test-only route, no default-flip draft before the combined wave-45 result). Written at
-main e65b4ea on branch `w45c`, target `<target dir>`. House rules of ADRs 0110-0113: limits fixed before runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected
-run; defaults are bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+known-miss FAN-01 tests kept compiling through a test-only route, no default-flip draft before the combined wave-45 result).
+
+ADR 0113 found that the default SIMPLEC kernel builds `rAtU = 1 / (a_p - h1)` of a cyclic cell without the lagged partner
+coefficients (F1 is its fix); the FAN-01 effect had never been measured. On the `rotating_frame` FAN-01 path, `sim.rs` line 2667
+overwrites an externally set flag at the next step, so F1 cannot reach that path without an API change. This wave registers
+an opt-in case key `solver.cyclic_partner_in_h1` (default false) and tests F1 at library level (R1) and on the FAN-01
+empty-passage family (F). The addendum records the outcome: F1 itself is right on the `rotating_frame` path with the pair mean
+on, where a true sector reproduces the full annulus to 6.6e-11 U, against 3.0e-2 U without it. On FAN-01, F-a misses on E3 and
+E2 (abs(L) rises by 6 % and 2 %), so by the status decision rule the key is removed; the doc-hidden
+`SimpleSolver::cyclic_partner_in_h1_test_only` (default false, no case key) remains as a test-only route. F-b reads
+CONTRIBUTES, not EXPLAINS THE GROWTH, so ADR 0110 part L stays open. On B3, F1 does not touch the limiter stall (`rho_du`
+1.000, FALSIFIED by the ADR 0110 wording). F-126 stays partial, no default changed, and the final gate gave 2025 passed, 0
+failed, 639 ignored.
+
+Rules and parents:
+
+* House rules of ADRs 0110-0113: limits fixed before runs; a missed limit becomes an ignored `*_known_miss` test with the limit
+  intact; a defective set-up is corrected by an amendment before the corrected run; defaults are bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles and our own ADRs.
+* Parents: ADRs 0008, 0086, 0110, 0113.
+
+Written at main e65b4ea on branch `w45c`, target `<target dir>`.
 
 **The default stays off whatever the result.** Making F1 the default for periodic SIMPLEC would move baselines; that is a separate user
 decision with an ADR 0114-style scan, and by the user's decision it is not drafted before the combined wave-45 result is known.
-Clean-room: first principles and our own ADRs. Parents: ADRs 0008, 0086, 0110, 0113.
 
 ## Context
 
@@ -136,9 +154,10 @@ Run on the uncommitted D1 code (release, `target-w45c`), before this ADR was com
 
 * `smoke_w45c_rotating_sector_arms` (rcfd-fv): the annulus arm (no cyclic faces, so the same with and without F1) converges by the R
   criterion at iteration 82 (res_u 9.1e-11, continuity 4.7e-13), well inside the 4000 cap, so the centrifugal force against the uniform
-  p = 0 outlet is not a feasibility problem. Sector arms, 30 iterations each: F1 off / pair mean on: finite, res_u 4.8e-5, continuity
-  6.1e-9; F1 on / pair mean on: finite, 5.5e-5, 1.1e-8; F1 on / pair mean off: finite, 5.5e-5, 1.1e-8. No sector-annulus difference
-  was computed.
+  p = 0 outlet is not a feasibility problem. No sector-annulus difference was computed. Sector arms, 30 iterations each:
+  * F1 off / pair mean on: finite, res_u 4.8e-5, continuity 6.1e-9;
+  * F1 on / pair mean on: finite, 5.5e-5, 1.1e-8;
+  * F1 on / pair mean off: finite, 5.5e-5, 1.1e-8.
 * `w45c_smoke_key_on_the_fan_path` (rcfd-api): the solver flag after step 2 on E3 is true with the key and false without (the key
   reaches the kernel through `step()` on a mesh with cyclic faces; the first case-tree run of F1 on cyclic faces). E3 with the key, 40
   iterations: finite, no guard trip (res_u 1.2e-2). B3 with the key, 40 iterations: finite, no guard trip (res_u 9.5e-3).
@@ -146,8 +165,13 @@ Run on the uncommitted D1 code (release, `target-w45c`), before this ADR was com
 
 ## Out of scope
 
-Making F1 the default; the `rotating_frame` relative-velocity discretisation error (ADRs 0078, 0082); the limiter stall (0115); MRF on
-the fan passage (0116); finer meshes than F1; agreement with FAN-01 data; pseudo-time or PIMPLE paths.
+* Making F1 the default.
+* The `rotating_frame` relative-velocity discretisation error (ADRs 0078, 0082).
+* The limiter stall (0115).
+* MRF on the fan passage (0116).
+* Finer meshes than F1.
+* Agreement with FAN-01 data.
+* Pseudo-time or PIMPLE paths.
 
 ## Files
 
@@ -218,11 +242,16 @@ values are in the addendum), so by the status decision rule the key is to be rem
 | Route check (amendment 2): F family rerun through the route | every printed value equal to the key run | reproduces | pass |
 
 Verdict by the status decision rule: R1, N1, the harness and D pass, **F-a misses on E3 and E2**, so **the key is removed** (rule b).
-What remains in the code: the `sim.rs` line 2667 ORs `SimpleSolver::cyclic_partner_in_h1_test_only` (doc-hidden, default false, no case
-key) into the flag, as registered for this outcome (amendment 2 moved it from `Simulation` to `SimpleSolver`); `schema.rs` and
-`docs/case-schema.md` are back to their main state, so the key named in D1 does not exist. Defaults are bit-identical
-(`x || false == x`; `baseline_hashes.rs` passes). The F-family test is an ignored `*_known_miss` with its limits; the B3 and smoke tests run
-through the route; D-a, D-b and D-d' now check the route and the refusal of the removed key (amendment 1).
+
+What remains in the code:
+
+* The `sim.rs` line 2667 ORs `SimpleSolver::cyclic_partner_in_h1_test_only` (doc-hidden, default false, no case key) into the flag,
+  as registered for this outcome (amendment 2 moved it from `Simulation` to `SimpleSolver`).
+* `schema.rs` and `docs/case-schema.md` are back to their main state, so the key named in D1 does not exist.
+* Defaults are bit-identical (`x || false == x`; `baseline_hashes.rs` passes).
+* The F-family test is an ignored `*_known_miss` with its limits.
+* The B3 and smoke tests run through the route.
+* D-a, D-b and D-d' now check the route and the refusal of the removed key (amendment 1).
 
 What this means:
 * F1 itself is right on the `rotating_frame` path with the pair mean on: a true sector reproduces the full annulus to 6.6e-11 U, against
@@ -239,14 +268,21 @@ What this means:
 * B3: F1 does not touch the limiter stall (`rho_du` 1.000, FALSIFIED by the ADR 0110 wording); torque -0.13 %, Delta p_ts -0.9 %.
 * No F1 default-flip draft follows (user decision: not before the combined wave-45 result; and F-a speaks against it on FAN-01).
 
-Deviations (all in the amendments): D-d's set-up was defective (no boundary conditions) and was corrected by D-d'; the test-only route sits
-on `SimpleSolver` instead of `Simulation`, which adds one field to `simple.rs` (D2 had said no `simple.rs` change); the F family ran a
-second time, through the route, only to check the route. The D-a / D-b / D-d' tests in the tree are the post-removal versions; their
-registered versions ran on the key code (the "ADR 0117 amendment 1" commit holds them).
+Deviations (all in the amendments):
 
-Follow-ups for the lead (not done here): a tree-level R1 on the ADR 0116 `annulus_3d_sector`, which would put a case-tree sector against
-a case-tree annulus through the `sim.rs` wiring (on main no case-tree mesh allows it); and, if 0115 converges the E family, repeating the F
-family on converged states.
+* D-d's set-up was defective (no boundary conditions) and was corrected by D-d'.
+* The test-only route sits on `SimpleSolver` instead of `Simulation`, which adds one field to `simple.rs` (D2 had said no
+  `simple.rs` change).
+* The F family ran a second time, through the route, only to check the route.
+
+The D-a / D-b / D-d' tests in the tree are the post-removal versions; their registered versions ran on the key code
+(the "ADR 0117 amendment 1" commit holds them).
+
+Follow-ups for the lead (not done here):
+
+* a tree-level R1 on the ADR 0116 `annulus_3d_sector`, which would put a case-tree sector against a case-tree annulus through the
+  `sim.rs` wiring (on main no case-tree mesh allows it);
+* if 0115 converges the E family, repeating the F family on converged states.
 
 Unverified references: the ADR 0086 observed-order formula (Celik et al. 2008, recalled there). Every other reference value is from ADRs
 0008, 0086, 0110 and 0113.

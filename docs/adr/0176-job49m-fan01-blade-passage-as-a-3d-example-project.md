@@ -4,29 +4,44 @@ Status: **registered 2026-10-30**, before any registered run (the inputs, the sc
 written and the tests compiled first; the runs that will be stored have not run). Amendments follow this text, each
 written before the runs it covers; results go in an addendum. Not yet accepted by the maintainer.
 
-Job 49M, on main edb4839 (worktree branch `job49m-fan01-studio-example`). Number: 0172 is the highest on main; 0173 and
-0174 are job 49K's branch, 0175 is job 49L's (running in parallel); 0176 was assigned to this job.
+Before this job, every case of the shipped example projects was one cell thick, so a user who opened the examples never
+saw the Studio's 3D view. This job adds a third example project, `axial-fan`, in both trees (`example-projects` and
+`example-projects-linux`): one periodic FAN-01 blade passage, with one case, `cases/fan01-passage-upwind.toml`, and one
+stored run per tree. The case is B3 of ADR 0110 with first-order upwind, because the second-order run does not end (limit
+cycle) and a stored example must finish in bounded time with a steady field to look at. It is for viewing the 3D geometry
+and flow pattern only, and no agreement with measured data is claimed: the notes give the run's torque as 1.40 N m, 35 %
+below the measured 2.142 N m. The addendum of 2026-10-30 reports one miss, the 5 % part of P5: torque 1.4023 N m on both
+trees, +5.04 % against the 1.335 N m of ADR 0110 S10, kept as an ignored known miss. Every other registered check passed
+or came out as required, including P1 (`finished`, solver state `not_converged` at iteration 1500, exit code 5). The full
+suites of any crate, the other `rcfd-studio` tests on either platform, CI and a person at the Studio window were not run.
+The addendum of 2026-11-04 takes recommendation (a) on questions 1 and 3 under the 2026-11-04 loop instruction and leaves
+question 2, the 6 MB per-tree cap of `axial-fan`, open for the maintainer.
 
-House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
-runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
-before the corrected run; defaults of existing code stay bit-identical (no crate source changes in this job: only an
-example project, the example script's project table, tests and docs); `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded; no new crate, no unsafe code, the crate graph unchanged; no commit trailers; nothing merged or pushed.
-Parents: [ADR 0142](0142-wave48h-example-projects.md) (the example projects, their checks and caps),
-[ADR 0150](0150-job48p-linux-example-stores.md) (the Linux tree), [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md)
-and [ADR 0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md) (`--add-missing` per tree, DV5/DV6),
-[ADR 0169](0169-job49f-sst-and-k-epsilon-far-field-default-and-the-naca-example-runs.md) (regenerated example runs),
-[ADR 0110](0110-wave43c-fan01-rotor-passage-non-convergence-diagnosis.md) (FAN-01 B3 and its limit cycle),
-[ADR 0086](0086-wave37c-fan01-solution-verification.md) (the C-grid family F1-F3).
+Rules and parents:
+
+* Job 49M, on main edb4839 (worktree branch `job49m-fan01-studio-example`). Number: 0172 is the highest on main; 0173 and
+  0174 are job 49K's branch, 0175 is job 49L's (running in parallel); 0176 was assigned to this job.
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  before the corrected run; defaults of existing code stay bit-identical (no crate source changes in this job: only an
+  example project, the example script's project table, tests and docs); `crates/rcfd-api/tests/baseline_hashes.rs` is not
+  re-recorded; no new crate, no unsafe code, the crate graph unchanged; no commit trailers; nothing merged or pushed.
+* Parents: [ADR 0142](0142-wave48h-example-projects.md) (the example projects, their checks and caps),
+  [ADR 0150](0150-job48p-linux-example-stores.md) (the Linux tree),
+  [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md)
+  and [ADR 0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md) (`--add-missing` per tree, DV5/DV6),
+  [ADR 0169](0169-job49f-sst-and-k-epsilon-far-field-default-and-the-naca-example-runs.md) (regenerated example runs),
+  [ADR 0110](0110-wave43c-fan01-rotor-passage-non-convergence-diagnosis.md) (FAN-01 B3 and its limit cycle),
+  [ADR 0086](0086-wave37c-fan01-solution-verification.md) (the C-grid family F1-F3).
 
 ## Problem
 
 The user: "everything on the studio is in 2d". The Studio already draws a mesh that is not flat in an orbitable 3D view
 (`crates/rcfd-studio/src/preview.rs` and `viewport.rs`, the `two_d` flag from `surface_of`; the caption says "3D" or "2D,
-front view"), but every case of the shipped example projects (`example-projects/quick-start`, `wind-tunnel` and their
+front view"). But every case of the shipped example projects (`example-projects/quick-start`, `wind-tunnel` and their
 Linux mirror) is one cell thick, so a user who opens the examples never sees the 3D view. The repository has a 3D case
 with published geometry: FAN-01, one periodic blade passage of the FAU / EAA low-pressure axial fan (CC BY 4.0 CAD and
-data), whose case text exists only inside a test (`crates/rcfd-api/tests/fan01_stall_w43c.rs`, `case_toml`); the
+data). Its case text exists only inside a test (`crates/rcfd-api/tests/fan01_stall_w43c.rs`, `case_toml`); the
 `cases/axial_fan_*` files are five-bladed laminar smoke cases, not FAN-01.
 
 Constraint: the registered FAN-01 set-up (SST, Barth-Jespersen-limited `linear_upwind`) does not converge on
@@ -73,18 +88,32 @@ these meshes (ADR 0110: a limit cycle, residuals stall near 1e-3), and no FAN-01
 
 ## Placement
 
-New: `example-projects/axial-fan/` (the case, `meshes/README.md`, `notes/README.md`; the rest written by the script),
-`example-projects-linux/axial-fan/` (written by the script), `crates/rcfd-studio/tests/example_fan_w49m.rs`, this ADR.
-Changed: `scripts/make_example_projects.py`, the four test files of D5, `crates/rcfd-studio/tests/dv/mod.rs` (a doc
-comment), `example-projects/README.md`, `example-projects-linux/README.md` (by hand: the trees' READMEs are not written
-by the script), `README.md`, both `manifest.json` (by the script).
+New:
+
+* `example-projects/axial-fan/` (the case, `meshes/README.md`, `notes/README.md`; the rest written by the script);
+* `example-projects-linux/axial-fan/` (written by the script);
+* `crates/rcfd-studio/tests/example_fan_w49m.rs`;
+* this ADR.
+
+Changed:
+
+* `scripts/make_example_projects.py`;
+* the four test files of D5;
+* `crates/rcfd-studio/tests/dv/mod.rs` (a doc comment);
+* `example-projects/README.md`, `example-projects-linux/README.md` (by hand: the trees' READMEs are not written by the
+  script);
+* `README.md`;
+* both `manifest.json` (by the script).
 
 ## Registered checks (limits fixed here, before any of them ran)
 
-Set-up: Windows, this host, release, target folder `E:/projects/cfd/rcfd/target-w49m`, `--test-threads 1 --nocapture`,
-output to files in the session scratchpad. Linux: ADR 0150's image `rcfd-linux:ubuntu24.04-rust1.99.0` (`sha256:485f28a2036497ed`...),
-the script's own container for L1; for L4 one container on a `git archive` of the regeneration commit, extracted with
-`tar -m`, release, `--test-threads 1 --nocapture`.
+Set-up:
+
+* Windows, this host, release, target folder `E:/projects/cfd/rcfd/target-w49m`, `--test-threads 1 --nocapture`, output
+  to files in the session scratchpad.
+* Linux: ADR 0150's image `rcfd-linux:ubuntu24.04-rust1.99.0` (`sha256:485f28a2036497ed`...), the script's own container
+  for L1; for L4 one container on a `git archive` of the regeneration commit, extracted with `tar -m`, release,
+  `--test-threads 1 --nocapture`.
 
 | Id | Check | Limit | Control |
 |---|---|---|---|
@@ -126,9 +155,13 @@ Q1; L4.
 
 ## Not run (planned)
 
-The full suites of any crate (the brief asks for targeted test binaries only; the whole `rcfd-studio` suite takes about
-12 minutes and the gate over an hour); the `rcfd-studio` tests other than W2's on Linux; CI; the "Not in CI" checklist (a
-person at the window). A screenshot of the Studio window is attempted only if time allows and is not a registered check.
+* The full suites of any crate (the brief asks for targeted test binaries only; the whole `rcfd-studio` suite takes about
+  12 minutes and the gate over an hour).
+* The `rcfd-studio` tests other than W2's on Linux.
+* CI.
+* The "Not in CI" checklist (a person at the window).
+
+A screenshot of the Studio window is attempted only if time allows and is not a registered check.
 
 ## Questions for the maintainer (not decided here)
 
@@ -162,10 +195,13 @@ addendum. Logs in the session scratchpad (not kept).
 | P6 | `--check` 0; self-test passes | 0 problems; 15 tests OK | pass |
 | Q1 | clippy, fmt, baselines, no `src` change | clippy `-D warnings` clean; fmt clean; `git diff edb4839 -- crates/rcfd-api/tests/baseline_hashes.rs 'crates/*/src'` empty | pass |
 
-**Deviations.** 1. L4's first container attempt failed before compiling (Git Bash rewrote `CARGO_TARGET_DIR=/target` to a
-Windows path); rerun with `MSYS_NO_PATHCONV=1`, otherwise the same command. 2. After the runs, one sentence on the run's
-outcome (residuals, `not_converged`, torque 1.40 N m, 35 % below the measured 2.142 N m) was added to both trees'
-`notes/README.md`, outside the run table; `--check` and `example_projects_w48h` (22 passed) re-ran on Windows after it.
+**Deviations.**
+
+1. L4's first container attempt failed before compiling (Git Bash rewrote `CARGO_TARGET_DIR=/target` to a Windows path).
+   It was rerun with `MSYS_NO_PATHCONV=1`, otherwise the same command.
+2. After the runs, one sentence on the run's outcome (residuals, `not_converged`, torque 1.40 N m, 35 % below the measured
+   2.142 N m) was added to both trees' `notes/README.md`, outside the run table. `--check` and `example_projects_w48h`
+   (22 passed) re-ran on Windows after it.
 
 **Not run.** The full suites of any crate; the other `rcfd-studio` tests on either platform; CI; a person at the
 Studio window (no screenshot was taken).

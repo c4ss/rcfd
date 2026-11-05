@@ -1,16 +1,34 @@
 # ADR 0057: Wave 29C, Lagrangian extensions: two-way exchange, discrete random walk dispersion, injection distributions (F-128, F-056)
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and
+before any run of this wave.
 
-Clean-room: first principles and published literature only. No vendor code, text or installs, nothing from
-vendor material. Waves 29A (rotor interfaces), 29B (mixture multiphase) and 29D (parallel) work in the same tree. This
-wave touches `crates/rcfd-particles` (new modules, additive changes to `tracker.rs`, `inject.rs`, `rng.rs`), `rcfd-api/src/particles.rs`
-and `particle_run.rs` (additive keys) and docs; it does not touch `sim.rs`, `schema.rs` or `lib.rs` of other crates, so the baseline
-hashes and all existing tests are unchanged by construction (struct literals of `Particle`, `Flow`, `InjectorSpec` in existing tests
-stay valid: new state lives in parallel vectors and optional extension structs).
+Wave 29C extends `crates/rcfd-particles` with a conservative two-way exchange library that produces per-cell sources, a
+discrete random walk dispersion model, and new injection options (`uniform` sizes, equal-mass parcels through
+`mass_flow`, a cone). The sources do not reach the flow solver: the carrier equations of `Simulation::step` do not
+receive them and there is no particle-laden jet case, so the roadmap acceptance of F-128 is not met. Two-way coupling
+and heat transfer have no case keys (library only). Dispersion uses constants in the case tree and per-cell arrays in
+the library; the turbulence-model k and epsilon are not read. All registered checks were met on the first run, except
+the set-up defect of L1 (walls). The corrected `l1b_momentum_balance_with_walls` meets the same limit 1e-12 with
+6.3e-17, and the old test stays as the ignored `l1_walls_full_time_setup_defect`. Addendum 1 discloses that L5 measures
+the particle velocity, not the relative velocity of the quoted closed form, and that L15 and the unchanged suites check
+the exactness claim of L9; no limit was changed. A published comparison, breakup and wall film are not delivered.
+
+Rules and parents:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (exact numbers, deviations) may be appended at the end.
+* Clean-room: first principles and published literature only. No vendor code, text or installs, nothing from vendor
+  material.
+* Waves 29A (rotor interfaces), 29B (mixture multiphase) and 29D (parallel) work in the same tree.
+* This wave touches `crates/rcfd-particles` (new modules, additive changes to `tracker.rs`, `inject.rs`, `rng.rs`),
+  `rcfd-api/src/particles.rs` and `particle_run.rs` (additive keys) and docs; it does not touch `sim.rs`, `schema.rs` or
+  `lib.rs` of other crates, so the baseline hashes and all existing tests are unchanged by construction (struct literals
+  of `Particle`, `Flow`, `InjectorSpec` in existing tests stay valid: new state lives in parallel vectors and optional
+  extension structs).
 
 ## Audit (HEAD b4e78fd)
 
@@ -27,46 +45,63 @@ stay valid: new state lives in parallel vectors and optional extension structs).
 
 ## Decisions
 
-D1 Exchange (two-way). A particle (parcel weight `n`, mass `m = n rho_p pi d^3/6`) moves under drag from the carrier and external
-gravity with buoyancy `g_eff = (1 - rho_f/rho_p) g`. Per integration sub-step of length `h` from `(x0, v0)` to `(x1, v1)` (before any
-wall reflection) the DRAG IMPULSE on the particle is `J = m (v1 - v0) - m g_eff h` [N s]. The carrier receives `-J`. Wall reflection
-changes the particle momentum without the carrier; its impulse `m (v_after - v_before)` is booked in `wall_impulse`. Distribution:
-the whole sub-step impulse goes to the cell that contains the START of the sub-step (sub-steps are limited to `courant` (0.5) of a
-cell length, so the point is within one cell length of the true path); a cell receives the sum, the source is
-`S_c = -sum J / (V_c dt)`. This is conservative to round-off by construction: `sum_p J_p = -sum_c S_c V_c dt` up to floating-point summation only.
+D1 Exchange (two-way). A particle (parcel weight `n`, mass `m = n rho_p pi d^3/6`) moves under drag from the carrier and
+external gravity with buoyancy `g_eff = (1 - rho_f/rho_p) g`. Per integration sub-step of length `h` from `(x0, v0)` to
+`(x1, v1)` (before any wall reflection) the DRAG IMPULSE on the particle is `J = m (v1 - v0) - m g_eff h` [N s]. The
+carrier receives `-J`. Wall reflection changes the particle momentum without the carrier; its impulse
+`m (v_after - v_before)` is booked in `wall_impulse`. Distribution: the whole sub-step impulse goes to the cell that
+contains the START of the sub-step (sub-steps are limited to `courant` (0.5) of a cell length, so the point is within
+one cell length of the true path); a cell receives the sum, the source is `S_c = -sum J / (V_c dt)`. This is
+conservative to round-off by construction: `sum_p J_p = -sum_c S_c V_c dt` up to floating-point summation only.
+
 Energy: particle total energy is `E_p = 1/2 m |v|^2 + m c_p T_p`. The carrier TOTAL ENERGY receives
-`-(Delta KE - W_g + m c_p Delta T_p)` with `W_g = m g_eff . (x1 - x0)`, i.e. exactly what the particle gained from the carrier (drag work,
-including the dissipated part `F.(u - v) dt` that heats the carrier, plus heat). Heat transfer (optional, needs a carrier temperature
-field and constants `k_f, c_pf, c_p`): `Nu = 2 + 0.6 Re^(1/2) Pr^(1/3)` (Ranz-Marshall, secondary source), lumped sphere
-`dT_p/dt = (T_f - T_p)/tau_T`, `tau_T = rho_p c_p d^2/(6 k_f Nu)`, exponential update with `T_f` and `Nu` frozen over the sub-step
-(exact for frozen data). The mechanical and the heat parts are stored separately (`energy_mech`, `energy_heat`) and summed in the
-total-energy source `S_E` [W/m^3]. Coupling is observation-only for the particles: the tracker never reads the sources, so the
-trajectories with coupling on are bit-identical to coupling off; the CALLER feeds the sources into its carrier equations.
-The carrier loop used in the checks is an explicit cell momentum update `u_c += S_c dt / rho_f`.
+`-(Delta KE - W_g + m c_p Delta T_p)` with `W_g = m g_eff . (x1 - x0)`, i.e. exactly what the particle gained from the
+carrier (drag work, including the dissipated part `F.(u - v) dt` that heats the carrier, plus heat).
 
-D2 Discrete random walk (Gosman and Ioannides 1983 type, from first principles). Homogeneous isotropic Gaussian turbulence of
-kinetic energy `k` and dissipation `eps`: `sigma = sqrt(2k/3)` per component, integral time `T_L = C_L k/eps` (`C_L = 0.15` default,
-case key `dispersion_cl`), eddy length `L_e = C_mu^(3/4) k^(3/2)/eps` (`C_mu = 0.09`). A particle sees `u + u'` with `u'_i = zeta_i sigma`
-(`zeta_i` standard normal, SplitMix64 + Box-Muller) held for the interaction time `t_int = min(t_e, t_cross)`, `t_e = -T_L ln r`
-(`r` uniform in (0, 1], exponential distribution with mean `T_L`), `t_cross = -tau ln(1 - L_e/(tau |u + u' - v|))` when the argument
-of the log is positive (else infinite), `tau = tau_p/f(Re)` the effective relaxation time (Stokes: relative speed decays as
-`exp(-t/tau)`, relative distance `tau |w| (1 - exp(-t/tau))`, set equal to `L_e`). The sub-step is truncated at the end of the
-interaction time, then a new `u'` and `t_int` are drawn. A single serial generator (seed `dispersion_seed` offset from `particles.seed`),
-particles processed in id order, so a run is reproducible bit for bit. `crossing = false` gives the pure-lifetime model.
-Closed form (Tchen/Hinze-type, derived): with pure lifetime `t_e ~ Exp(T_L)` and independent Gaussian redraw, the fluid velocity
-seen is a renewal process whose autocorrelation is `R(s) = sigma^2 exp(-s/T_L)` exactly (the probability that no redraw happened in
-lag `s`). A Stokes particle `dv/dt = (u' - v)/tau` has the stationary variance
-`<v^2> = (1/tau^2) int_0^inf int_0^inf exp(-(a+b)/tau) R(|a-b|) da db = sigma^2 T_L/(T_L + tau)` per component (the double integral equals `tau^2 T_L/(T_L+tau)`; Hinze 1975, Tchen 1947: the ratio of particle to fluid variance is `1/(1 + tau/T_L)`); it tends to `sigma^2` for `tau -> 0`.
+Heat transfer (optional, needs a carrier temperature field and constants `k_f, c_pf, c_p`):
+`Nu = 2 + 0.6 Re^(1/2) Pr^(1/3)` (Ranz-Marshall, secondary source), lumped sphere `dT_p/dt = (T_f - T_p)/tau_T`,
+`tau_T = rho_p c_p d^2/(6 k_f Nu)`, exponential update with `T_f` and `Nu` frozen over the sub-step (exact for frozen
+data). The mechanical and the heat parts are stored separately (`energy_mech`, `energy_heat`) and summed in the
+total-energy source `S_E` [W/m^3].
 
-D3 Injection. (a) Size distributions: constant, Rosin-Rammler (existing), and `uniform` in `[d_min, d_max]`. (b) Parcel weighting by
-mass flow: when `mass_flow` [kg/s] is set the weight of a parcel is `n = (mass_flow/rate) / (rho_p pi d^3/6)`, so every parcel carries
-the same mass `mass_flow/rate` (EQUAL-MASS parcels). Sampled parcel diameters then follow the mass distribution, and the mass fraction
-of parcels below `d` is an unbiased estimate of the distribution's CDF (Rosin-Rammler mass CDF `1 - exp(-(d/d_bar)^n)`, truncated:
-renormalised on `[d_min, d_max]`). The total mass injected by `N` parcels is `N mass_flow/rate`, round-off exact. Without `mass_flow` the
-behaviour is unchanged (equal counts). (c) Cone: parcel direction uniform in solid angle within the hollow/solid cone about `axis`:
-`cos(phi)` uniform in `[cos(theta), cos(theta_in)]`, azimuth uniform in `[0, 2 pi)`, speed `cone_speed`; any position kind (point or surface)
-may emit the cone. Surface positions (existing) are uniform by area, offset `1e-9` cell lengths inward.
-Extensions are stored in `InjectorExt` (set with `Tracker::set_injector_ext`) so existing `InjectorSpec` literals stay valid.
+Coupling is observation-only for the particles: the tracker never reads the sources, so the trajectories with coupling
+on are bit-identical to coupling off; the CALLER feeds the sources into its carrier equations. The carrier loop used in
+the checks is an explicit cell momentum update `u_c += S_c dt / rho_f`.
+
+D2 Discrete random walk (Gosman and Ioannides 1983 type, from first principles). Homogeneous isotropic Gaussian
+turbulence of kinetic energy `k` and dissipation `eps`: `sigma = sqrt(2k/3)` per component, integral time
+`T_L = C_L k/eps` (`C_L = 0.15` default, case key `dispersion_cl`), eddy length `L_e = C_mu^(3/4) k^(3/2)/eps`
+(`C_mu = 0.09`). A particle sees `u + u'` with `u'_i = zeta_i sigma` (`zeta_i` standard normal, SplitMix64 + Box-Muller)
+held for the interaction time `t_int = min(t_e, t_cross)`, `t_e = -T_L ln r` (`r` uniform in (0, 1], exponential
+distribution with mean `T_L`), `t_cross = -tau ln(1 - L_e/(tau |u + u' - v|))` when the argument of the log is positive
+(else infinite), `tau = tau_p/f(Re)` the effective relaxation time (Stokes: relative speed decays as `exp(-t/tau)`,
+relative distance `tau |w| (1 - exp(-t/tau))`, set equal to `L_e`). The sub-step is truncated at the end of the
+interaction time, then a new `u'` and `t_int` are drawn. A single serial generator (seed `dispersion_seed` offset from
+`particles.seed`), particles processed in id order, so a run is reproducible bit for bit. `crossing = false` gives the
+pure-lifetime model.
+
+Closed form (Tchen/Hinze-type, derived): with pure lifetime `t_e ~ Exp(T_L)` and independent Gaussian redraw, the fluid
+velocity seen is a renewal process whose autocorrelation is `R(s) = sigma^2 exp(-s/T_L)` exactly (the probability that
+no redraw happened in lag `s`). A Stokes particle `dv/dt = (u' - v)/tau` has the stationary variance
+`<v^2> = (1/tau^2) int_0^inf int_0^inf exp(-(a+b)/tau) R(|a-b|) da db = sigma^2 T_L/(T_L + tau)` per component (the
+double integral equals `tau^2 T_L/(T_L+tau)`; Hinze 1975, Tchen 1947: the ratio of particle to fluid variance is
+`1/(1 + tau/T_L)`); it tends to `sigma^2` for `tau -> 0`.
+
+D3 Injection.
+
+* (a) Size distributions: constant, Rosin-Rammler (existing), and `uniform` in `[d_min, d_max]`.
+* (b) Parcel weighting by mass flow: when `mass_flow` [kg/s] is set the weight of a parcel is
+  `n = (mass_flow/rate) / (rho_p pi d^3/6)`, so every parcel carries the same mass `mass_flow/rate` (EQUAL-MASS
+  parcels). Sampled parcel diameters then follow the mass distribution, and the mass fraction of parcels below `d` is an
+  unbiased estimate of the distribution's CDF (Rosin-Rammler mass CDF `1 - exp(-(d/d_bar)^n)`, truncated: renormalised
+  on `[d_min, d_max]`). The total mass injected by `N` parcels is `N mass_flow/rate`, round-off exact. Without
+  `mass_flow` the behaviour is unchanged (equal counts).
+* (c) Cone: parcel direction uniform in solid angle within the hollow/solid cone about `axis`: `cos(phi)` uniform in
+  `[cos(theta), cos(theta_in)]`, azimuth uniform in `[0, 2 pi)`, speed `cone_speed`; any position kind (point or
+  surface) may emit the cone. Surface positions (existing) are uniform by area, offset `1e-9` cell lengths inward.
+
+Extensions are stored in `InjectorExt` (set with `Tracker::set_injector_ext`) so existing `InjectorSpec` literals stay
+valid.
 
 D4 Case tree (additive keys, unset sentinels `-1`, defaults inert): `particles.dispersion = none|drw`, `dispersion_k`,
 `dispersion_epsilon` [homogeneous values, required when `drw`], `dispersion_cl` (0.15), `dispersion_crossing` (true),

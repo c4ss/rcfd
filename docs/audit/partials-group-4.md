@@ -1,11 +1,33 @@
 # Partials audit, group 4
 
-Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at 272eb89). Grades follow the acceptance text as
-written, from tests re-run by the auditor (release build, own target directory, Windows, two test threads) unless marked "read
-only". The earlier notes were not trusted; where a note and a measurement disagree, the measurement is recorded.
+This read-only audit grades ten roadmap items with status `partial` (docs/roadmap.json at 272eb89). Grades follow the
+acceptance text as written, from tests re-run by the auditor (release build, own target directory, Windows, two test
+threads) unless marked "read only". The earlier notes were not trusted; where a note and a measurement disagree, the
+measurement is recorded.
 
-Grades: DONE = acceptance met by a passing, non-ignored test with numeric limits; PARTIAL = a tested slice exists, a named clause
-is unmet; TODO = nothing usable; OVERSTATED = the note claims more than the tests show.
+Counts: DONE 4 (F-050, F-204, F-214, F-236), PARTIAL 6 (F-014, F-083, F-108, F-124, F-135, F-226), TODO 0. Two DONE
+grades are qualified: F-204's 1 percent Taylor-Couette pass comes from a run that reports `converged false`, and F-236
+is held partial by user decision.
+
+OVERSTATED sub-claim:
+F-108 (y+ "within 10 percent" has no assertion). Stale notes (claiming less than is tested): F-014 ("no third-party
+sample files": the public Fluent elbow mesh is read and checked) and F-050 (the cavity reference values are flagged "transcribed
+from memory", but the constants in `natural_convection.rs` equal `devahldavis1983_tableV.csv`, which wave 30C
+transcribed from a
+page scan of the 1983 paper, see docs/reference-data.md).
+
+Not re-run: `validation_natural_convection` (all of it), the variable-density and Le Quere tests behind F-050's title
+scope, every ignored or known-miss test except `sst_flat_plate_cf`, the F-204 convergence diagnostic and the F-214
+transient known misses.
+
+The [glossary](../glossary.md) defines F-xxx, wave and known miss.
+
+Grades:
+
+- DONE: acceptance met by a passing, non-ignored test with numeric limits.
+- PARTIAL: a tested slice exists, a named clause is unmet.
+- TODO: nothing usable.
+- OVERSTATED: the note claims more than the tests show.
 
 | id | title (short) | grade | evidence run or read | residual gap against the acceptance | size | blockers | one wave | user decision |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -20,87 +42,114 @@ is unmet; TODO = nothing usable; OVERSTATED = the note claims more than the test
 | F-226 | interfacial mass transfer | PARTIAL | `rcfd-fv --test masstransfer` (9 pass), `--test vof_masstransfer` (5 pass) | both acceptance clauses unmet: no 1D Stefan evaporation run, no CFD film condensation compared to Nusselt (library closed form only) | L | energy equation in the VOF host | no | no |
 | F-236 | partitioning and reordering | DONE (held partial by user decision) | `rcfd-mesh --test partition_strategies` (9 pass), `rcfd-fv --test reorder` (3 pass), `rcfd-linalg --test reorder`, `rcfd-api --test decomposition` (all pass) | none against the acceptance text; the user's reason (the solver does not use partitions) is not in the acceptance | depends on decision (L if partitions must drive a parallel solve) | user decision; parallel solver (rcfd-dist) | no | yes (reword the acceptance) |
 
-Counts: DONE 4 (F-050, F-204, F-214, F-236), PARTIAL 6 (F-014, F-083, F-108, F-124, F-135, F-226), TODO 0. OVERSTATED
-sub-claim: F-108 (y+ "within 10 percent" has no assertion). Stale notes (claiming less than is tested): F-014 ("no third-party
-sample files": the public Fluent elbow mesh is read and checked) and F-050 (the cavity reference values are flagged "transcribed
-from memory", but the constants in `natural_convection.rs` equal `devahldavis1983_tableV.csv`, which wave 30C transcribed from a
-page scan of the 1983 paper, see docs/reference-data.md).
-
-Not re-run: `validation_natural_convection` (all of it), the variable-density and Le Quere tests behind F-050's title scope,
-every ignored or known-miss test except `sst_flat_plate_cf`, the F-204 convergence diagnostic and the F-214 transient known misses.
-
 ## F-014 mesh readers
 
+Unmet: the CGNS reader (registry status NotSupported, ADR 0048 D7) and any polyMesh written by OpenFOAM itself (the
+fetched `dambreak-openfoam` set contains only dictionaries, no polyMesh). CGNS needs either an HDF5 dependency or a
+hand-written HDF5 subset reader; that is a user decision and a large job.
+
 Measured: the public `elbow.msh` (fetched data set `fluent-elbow-openfoam`, SHA-256 checked) reads as 918 cells, passes
-`check_mesh` (F-011), and its extruded volume equals thickness times the shoelace area of the file's boundary edges to 5.4e-16.
-OpenFOAM polyMesh write/read round trip is exact on hand-built meshes (lib tests `round_trip_is_exact`, `cyclic_patches_round_trip`,
-`reads_hand_written_sample_with_comments`). Unmet: the CGNS reader (registry status NotSupported, ADR 0048 D7) and any polyMesh written
-by OpenFOAM itself (the fetched `dambreak-openfoam` set contains only dictionaries, no polyMesh). CGNS needs either an HDF5
-dependency or a hand-written HDF5 subset reader; that is a user decision and a large job. Acceptance rewording proposal: "round
-trip" is undefined for the read-only Fluent reader; say "each reader loads a public sample mesh, passes F-011 and the counts and
-volume match the file; read-write formats round trip exactly".
+`check_mesh` (F-011), and its extruded volume equals thickness times the shoelace area of the file's boundary edges to
+5.4e-16. OpenFOAM polyMesh write/read round trip is exact on hand-built meshes (lib tests `round_trip_is_exact`,
+`cyclic_patches_round_trip`, `reads_hand_written_sample_with_comments`).
+
+Acceptance rewording proposal: "round trip" is undefined for the read-only Fluent reader; say "each reader loads a
+public sample mesh, passes F-011 and the counts and volume match the file; read-write formats round trip exactly".
 
 ## F-083 Python bindings
 
-The pure-Python package (subprocess to the `rcfd` binary) works and its 11 tests run from cargo. Three gaps against the text: (1)
-no `pyproject.toml`, so nothing is pip-installable; a pure-Python wheel built with `pip wheel` and installed into a temporary
-venv in a test is size S. (2) numpy arrays are never exercised: the harness uses `python -I`, which hides the user-site numpy
-2.0.2 on this machine, and the two field reads pass `as_numpy=False`. (3) "reproduces cavity" is shown only as byte equality
-with the CLI, not against Ghia et al. The PyO3 extension named in the title is blocked by the workspace `forbid(unsafe_code)` rule
-and the offline crate cache. User decision: accept the subprocess package plus a pure-Python wheel as meeting F-083, or keep PyO3.
+The pure-Python package (subprocess to the `rcfd` binary) works and its 11 tests run from cargo. Three gaps against the
+text:
+
+1. No `pyproject.toml`, so nothing is pip-installable. A pure-Python wheel built with `pip wheel` and installed into a
+   temporary venv in a test is size S.
+2. numpy arrays are never exercised: the harness uses `python -I`, which hides the user-site numpy 2.0.2 on this
+   machine, and the two field reads pass `as_numpy=False`.
+3. "reproduces cavity" is shown only as byte equality with the CLI, not against Ghia et al.
+
+The PyO3 extension named in the title is blocked by the workspace `forbid(unsafe_code)` rule and the offline crate
+cache.
+
+User decision: accept the subprocess package plus a pure-Python wheel as meeting F-083, or keep PyO3.
 
 ## F-108 boundary-layer inflation
 
-Re-run of the ignored `sst_flat_plate_cf` (131 s, so it is cheap enough to un-ignore or move to a gated test): target y+ 0.5 at
-x = 2; solved first-cell y+ 0.54, 0.53, 0.51, 0.50, 0.48 at x = 0.4, 0.6, 1.0, 1.4, 1.99, all within 10 percent, but the test
-asserts only Cf, so the clause has no numeric limit in a test (closable in under a day: add the assertion). Layer metrics are
-reported (`rcfd inflate --json`, `mesh.inflate`, `inflate_report` tests). The "unstructured wall patches" clause is not met as a
-solved case: `inflate_patch` builds an outward shell that is not merged into a fluid domain, which waits on F-234.
+The y+ clause has no numeric limit in a test, and the "unstructured wall patches" clause is not met as a solved case.
+
+The ignored `sst_flat_plate_cf` was re-run (131 s, so it is cheap enough to un-ignore or move to a gated test). For
+target y+ 0.5 at x = 2, solved first-cell y+ is 0.54, 0.53, 0.51, 0.50, 0.48 at x = 0.4, 0.6, 1.0, 1.4, 1.99, all within
+10 percent, but the test asserts only Cf (closable in under a day: add the assertion).
+
+For the unstructured clause, `inflate_patch` builds an outward shell that is not merged into a fluid domain, which waits
+on F-234.
+
+Layer metrics are reported (`rcfd inflate --json`, `mesh.inflate`, `inflate_report` tests).
 
 ## F-124 cell registers
 
-Library: a value threshold on a cell field (R2), patching (R6) and statistics pass. Settings tree: registers are named objects
-and a box register restricts a porous sink to exactly 100 cells and initial patches change exactly those cells. Unmet: the tree's
-only threshold form is an expression of the cell centre, so "a region defined by a field threshold" cannot be written in a case;
-a `field` register type (threshold on an initial or restarted field, or re-evaluated each outer iteration) and one test that
-patches it and restricts a source would close the acceptance. The R5 face-grow known miss is a wording issue in ADR 0011, not a
-defect. Adaption in the title is marks only.
+Unmet: the tree's only threshold form is an expression of the cell centre, so "a region defined by a field threshold"
+cannot be written in a case. A `field` register type (threshold on an initial or restarted field, or re-evaluated each
+outer iteration) and one test that patches it and restricts a source would close the acceptance.
+
+- Library: a value threshold on a cell field (R2), patching (R6) and statistics pass.
+- Settings tree: registers are named objects and a box register restricts a porous sink to exactly 100 cells and initial
+  patches change exactly those cells.
+
+The R5 face-grow known miss is a wording issue in ADR 0011, not a defect. Adaption in the title is marks only.
 
 ## F-135 viscoelastic models
 
-The Poiseuille start-up clause is met (conformation and log-conformation errors 6.57e-3 against 2e-2 at ny 40, modal-series
-check 1.0e-4), plus steady Oldroyd-B equals Newtonian total viscosity to 6.5e-3. The planar contraction was not attempted and has
-no case wiring. The acceptance is unmeasurable as written: there is no analytic Oldroyd-B solution for a planar contraction.
-Proposed wording: "Poiseuille start-up matches the analytic Oldroyd-B series; a 4:1 planar contraction or confined cylinder matches
-a published benchmark quantity (corner-vortex length or drag coefficient) within a registered band". The benchmark values would
-have to be read from the papers (for example the Alves et al. contraction and cylinder studies; citation from memory, UNVERIFIED).
+The Poiseuille start-up clause is met (conformation and log-conformation errors 6.57e-3 against 2e-2 at ny 40,
+modal-series check 1.0e-4), plus steady Oldroyd-B equals Newtonian total viscosity to 6.5e-3. The planar contraction was
+not attempted and has no case wiring.
+
+The acceptance is unmeasurable as written: there is no analytic Oldroyd-B solution for a planar contraction. Proposed
+wording: "Poiseuille start-up matches the analytic Oldroyd-B series; a 4:1 planar contraction or confined cylinder
+matches a published benchmark quantity (corner-vortex length or drag coefficient) within a registered band". The
+benchmark values would have to be read from the papers (for example the Alves et al. contraction and cylinder studies;
+citation from memory, UNVERIFIED).
+
 FENE-P normalisation is marked unverified in the note and stays so.
 
 ## F-204 wall motion and shear
 
-Acceptance met. Caveat: the 1 percent Taylor-Couette pass is taken at n_r = 128 where the run stops at the iteration cap (`converged false`); the errors -1.60, -0.82, -0.43 percent at n_r 32, 64, 128 fall at order 0.93, so the cap does not look
-decisive, but the test does not assert convergence. The specified-shear run (D2) also reports `converged false` while meeting its
-profile limit. Closing it means moving turbulence and MRF combinations to their own items.
+Acceptance met. Caveat: the 1 percent Taylor-Couette pass is taken at n_r = 128 where the run stops at the iteration cap
+(`converged false`). The errors -1.60, -0.82, -0.43 percent at n_r 32, 64, 128 fall at order 0.93, so the cap does not
+look decisive, but the test does not assert convergence. The specified-shear run (D2) also reports `converged false`
+while meeting its profile limit.
+
+Closing it means moving turbulence and MRF combinations to their own items.
 
 ## F-214 MHD
 
-Acceptance met. The Ha 10 and Ha 20 profile errors are identical (6.532e-3) because the meshes keep the same cells per Hartmann
-length (ny/Ha = 8); the flow-rate errors differ. Out-of-title scope (coupled solver, Joule heating, varying B, 3-D duct) belongs in
+Acceptance met. The Ha 10 and Ha 20 profile errors are identical (6.532e-3) because the meshes keep the same cells per
+Hartmann
+length (ny/Ha = 8); the flow-rate errors differ. Out-of-title scope (coupled solver, Joule heating, varying B, 3-D duct)
+belongs in
 new items.
 
 ## F-226 interfacial mass transfer
 
-Only library closed forms and the VOF wiring are tested (M1-M9 and the VOF M1-M5 checks pass). Neither acceptance case exists:
-the 1D Stefan evaporation problem needs an energy equation with latent-heat feedback in the VOF host, and the film-condensation
-clause needs a wall-condensation CFD run compared to Nusselt within 10 percent. Note that the enthalpy-method Stefan melting of
-F-212 (`rcfd-api --test phase_change_case`) is a different problem (solid-liquid) and does not count. The Lee, ZGB and Schrage
-factors remain UNVERIFIED (docs/reference-data.md).
+Neither acceptance case exists. Only library closed forms and the VOF wiring are tested (M1-M9 and the VOF M1-M5 checks
+pass).
+
+The 1D Stefan evaporation problem needs an energy equation with latent-heat feedback in the VOF host, and the
+film-condensation clause needs a wall-condensation CFD run compared to Nusselt within 10 percent. Note that the
+enthalpy-method Stefan melting of F-212 (`rcfd-api --test phase_change_case`) is a different problem (solid-liquid) and
+does not count.
+
+The Lee, ZGB and Schrage factors remain UNVERIFIED (docs/reference-data.md).
 
 ## F-236 partitioning and reordering
 
-Measured: worst unit-weight imbalance 0.030 and weighted 0.0296 (limit 0.05), graph cut never above the RCB cut, RCM bandwidth 72
-against 320 (40x8x8) and 7 against 40 (40x6x1). Every acceptance clause is met by non-ignored tests. Wording nit: the "stretched
-mesh" of the RCM test is an elongated index space with uniform cells; bandwidth depends only on connectivity, so this is
-equivalent. The item is partial only because the user downgraded it (2026-10-16: the solver does not use partitions). Proposed
-acceptance: add "a decomposed parallel run (rcfd-dist) uses the partition and reproduces the serial result to a registered
-tolerance", or close the item at library level and move solver use to the distributed-solver item.
+Every acceptance clause is met by non-ignored tests. The item is partial only because the user downgraded it
+(2026-10-16: the solver does not use partitions).
+
+Measured: worst unit-weight imbalance 0.030 and weighted 0.0296 (limit 0.05), graph cut never above the RCB cut, RCM
+bandwidth 72 against 320 (40x8x8) and 7 against 40 (40x6x1).
+
+Wording nit: the "stretched mesh" of the RCM test is an elongated index space with uniform cells; bandwidth depends only
+on connectivity, so this is equivalent.
+
+Proposed acceptance: add "a decomposed parallel run (rcfd-dist) uses the partition and reproduces the serial result to a
+registered tolerance", or close the item at library level and move solver use to the distributed-solver item.

@@ -1,5 +1,9 @@
 # Flow past a cylinder: vortex shedding at Re 100 and Re 200
 
+Two cases of the wind-tunnel example project show vortex shedding behind a cylinder in the rcfd Studio. Their results are
+not a validation: one coarse mesh, one time step, no uncertainty estimate. `notes/README.md` says how to open the project
+and holds the run table. ADR numbers refer to the architecture decision records in the repository's `docs/adr/`.
+
 ## What it is
 
 A circular cylinder of diameter D = 1 m in a uniform stream U = 1 m/s, two-dimensional and laminar. Above a Reynolds number
@@ -18,8 +22,9 @@ street); the lift force then oscillates at the shedding frequency f, given as th
 
 1. Select the run of `cases/cylinder-re100.toml` in the Runs panel; the Viewport shows `p` at the last snapshot.
 2. Choose `vorticity_z` in the "field" box and "whole run" as the range, so the colours stay fixed while you scrub.
-3. Press first, then play: the push behind the cylinder, the wake starting to swing, and from about t = 40 the regular
-   street. One shedding period is about 6.6 D / U, so about 6 to 7 stored frames per period: the animation is coarse in time.
+3. Press first, then play. You see the push behind the cylinder, the wake starting to swing, and from about t = 40 the
+   regular street. One shedding period is about 6.6 D / U, so each period has about 6 to 7 stored frames and the animation
+   is coarse in time.
 4. In the Plots panel, `cl` swings around zero and `cd` oscillates at twice that frequency; the line marks the shown step.
 5. Select the run of `cases/cylinder-re200.toml` and compare: shorter period, stronger lift swing.
 
@@ -27,9 +32,13 @@ street); the lift force then oscillates at the shedding frequency f, given as th
 
 The repository's validation runs of this flow (ADR 0062, ADR 0069, `crates/rcfd-api/tests/validation_cylinder_re100*.rs`,
 128 x 100 cells, far field at 20 D, 160 D / U) measured St 0.159 to 0.165 and a mean drag coefficient 1.31 to 1.34 at
-Re 100. This example uses about a quarter of those cells and half the time; its Strouhal number and mean drag are in the
-run table of `notes/README.md` and in `designs/variants.ledger.jsonl` (computed by `scripts/make_example_projects.py` from
-the `cl` and `cd` series over the whole shedding periods of the second half of the run, ADR 0142 amendment 1; only about
-six periods fit, so the Strouhal number is known to a few percent at best). They are not a validation: one coarse mesh, one time step, no
-uncertainty estimate. A real cylinder wake becomes three-dimensional near Re 190, which a two-dimensional run cannot show,
-so the Re 200 run is a two-dimensional model of that flow.
+Re 100. This example uses about a quarter of those cells and half the time.
+
+The example's Strouhal number and mean drag are in the run table of `notes/README.md` and in
+`designs/variants.ledger.jsonl`. `scripts/make_example_projects.py` computes them from the `cl` and `cd` series over the
+whole shedding periods of the second half of the run (ADR 0142 amendment 1). Only about six periods fit, so the Strouhal
+number is known to a few percent at best. These values are not a validation: one coarse mesh, one time step, no uncertainty
+estimate.
+
+A real cylinder wake becomes three-dimensional near Re 190, which a two-dimensional run cannot show, so the Re 200 run is a
+two-dimensional model of that flow.

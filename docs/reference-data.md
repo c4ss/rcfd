@@ -1,27 +1,31 @@
 # Reference data audit (wave 6a)
 
-Every benchmark value or published constant that earlier waves typed from memory, checked against a
-citable public source. "Verified" means the value in the repo agrees with the source; "secondary" means
-the source is a reputable paper or repository that reproduces the primary table, not the
-original printed table (the original journal papers were not accessible online). Nothing was loosened:
-no tolerance was changed, and no benchmark number in a data file or assertion turned out to be wrong.
+This page is a lookup record for anyone who needs to know where a benchmark value or constant in a test, case or data
+file comes from and how well it was checked. For the downloadable datasets, their checksums and licences, read
+[validation data](validation-data.md) instead. The [glossary](glossary.md) explains project terms such as wave, ADR,
+F-xxx and known miss.
 
-Summary (counted by table row): about 34 verified, 3 mismatched, about 8 unverifiable or not re-checked (wave 6a counts; see the wave 13 note below and `docs/verification-report.md` for the later re-check).
-The mismatches are one sign error in a test helper (Taylor-Green initial pressure) and two citation or
-label errors (Darwish-Moukalled journal; flat-plate "Prandtl-Schlichting" label); all were corrected in
-comments, notes or the test helper, and every affected test still passes.
+Wave 6a checked every benchmark value or published constant that earlier waves typed from memory against a citable
+public source. Counted by table row, the result is about 34 verified, 3 mismatched, about 8 unverifiable or not
+re-checked (wave 6a counts; see the wave 13 note below and `docs/verification-report.md` for the later re-check). Nothing
+was loosened: no tolerance was changed, and no benchmark number in a data file or assertion turned out to be wrong. The
+mismatches are one sign error in a test helper (Taylor-Green initial pressure) and two citation or label errors
+(Darwish-Moukalled journal; flat-plate "Prandtl-Schlichting" label); all were corrected in comments, notes or the test
+helper, and every affected test still passes.
 
-Wave 13 follow-up (the unverified/from-memory markers below are updated in place where re-checked): items that were marked unverified or from memory (turbulence-model and wall constants,
-EOS critical data, Peng-Robinson/Redlich-Kwong constants, NIST isotherm values, Sutherland, atomic weights,
-backward-facing-step and laminar-step values, Milne, Robertson, flame temperature, Formulation 1A, rheology
-constants) were re-checked against web sources; per-item values, URLs and verdicts are in
-`docs/verification-report.md`. One code constant differs from the original (Realizable A0 4.04 vs 4.0).
+"Verified" means the value in the repo agrees with the source; "secondary" means the source is a reputable paper or
+repository that reproduces the primary table, not the original printed table (the original journal papers were not
+accessible online).
 
-This page is a lookup record for anyone who needs to know where a benchmark value or constant in a test, case or data file comes from
-and how well it was checked. Later waves added their own sections at
-the end, in the order the work was done. Sources that could not be reached online, and what still rests on secondary copies, are
-in "Not verifiable online"; registered criteria the code does not meet, with their ignored known-miss tests, are in "Known misses". For the downloadable datasets, their checksums and licences, read
-[validation data](validation-data.md) instead.
+Wave 13 re-checked against web sources items that were marked unverified or from memory: turbulence-model and wall
+constants, EOS critical data, Peng-Robinson/Redlich-Kwong constants, NIST isotherm values, Sutherland, atomic weights,
+backward-facing-step and laminar-step values, Milne, Robertson, flame temperature, Formulation 1A, rheology constants.
+The per-item values, URLs and verdicts are in `docs/verification-report.md`. One code constant differs from the original
+(Realizable A0 4.04 vs 4.0). The unverified/from-memory markers below are updated in place where re-checked.
+
+Later waves added their own sections at the end, in the order the work was done. Sources that could not be reached
+online, and what still rests on secondary copies, are in "Not verifiable online"; registered criteria the code does not
+meet, with their ignored known-miss tests, are in "Known misses".
 
 On this page:
 
@@ -47,8 +51,8 @@ Used in `cases/cavity/reference/*.csv`, `crates/rcfd-fv/tests/cavity.rs`, `rcfd-
 | v centreline Re 100, 17 rows | course repository `ghia_Re100_v_centerline.csv`; thesis (b) v-table (same shifted-label extraction; values in order -0.05906 ... 0.09233 match, including 0.05454, 0.17527, -0.24533) | verified, two secondary copies, exact match |
 | Only Re 100 v is stored; Re 400/1000 v are not stored | n/a | not applicable. Wave 31C: the Re 400 and 1000 v tables (and u for all three Re, including y = 0.9766) were read from three secondary copies and stored in `validation-data/reference/w31c_ghia1982_{u,v}_centerline_read.csv`; see the wave 31C section and its discrepancy list |
 
-Side note: both secondary copies carry the known printed misprint of the Re=400 v table at x = 0.9063
-(-0.23827; the thesis marks it in red). rcfd does not use Re 400 v.
+Both secondary copies carry the known printed misprint of the Re=400 v table at x = 0.9063 (-0.23827; the thesis marks
+it in red). rcfd does not use Re 400 v.
 
 ## Differentially heated cavity (de Vahl Davis, Int. J. Numer. Meth. Fluids 3 (1983) 249-264)
 
@@ -65,18 +69,29 @@ Used in `cases/heated_cavity/reference/devahldavis1983.csv`, `crates/rcfd-fv/tes
 
 Locations of the maxima (not used by tests) were not copied.
 
-Wave 19A re-check (`crates/rcfd-fv/tests/coupled_open.rs` B3, Ra = 1e3 and 1e4 values 1.118 / 3.649 / 3.697 and 2.243 / 16.178 / 19.617): the
-two arXiv papers were downloaded and read as text; arXiv:1412.2866 Table 2 prints Nu 1.118 and 2.243, u_max 3.649 and 16.178, v_max 3.697
-and 19.617 for the benchmark row, and arXiv:physics/0305049 attributes Nu 2.243, 4.519 and 8.800 to de Vahl Davis. The Cardinal V&V page
-answered with HTTP 403 in this wave and was not re-read. The 1983 printed tables remain unreachable, so the values stay *verified through
-secondary sources* only. The coupled-solver tests claim agreement with these numbers within 2 percent (measured 0.02 to 0.74 percent),
-nothing more.
+Wave 19A re-check (`crates/rcfd-fv/tests/coupled_open.rs` B3, Ra = 1e3 and 1e4 values 1.118 / 3.649 / 3.697 and
+2.243 / 16.178 / 19.617): the two arXiv papers were downloaded and read as text. arXiv:1412.2866 Table 2 prints Nu 1.118
+and 2.243, u_max 3.649 and 16.178, v_max 3.697 and 19.617 for the benchmark row. arXiv:physics/0305049 attributes
+Nu 2.243, 4.519 and 8.800 to de Vahl Davis. The Cardinal V&V page answered with HTTP 403 in this wave and was not
+re-read. The 1983 printed tables remain unreachable, so the values stay *verified through secondary sources* only. The
+coupled-solver tests claim agreement with these numbers within 2 percent (measured 0.02 to 0.74 percent), nothing more.
 
-Wave 30C (ADR 0061) re-check of the cavity table against the primary source: the 1983 paper itself was read as a page scan (https://elearning.univ-bejaia.dz/mod/resource/view.php?id=71697, Table V on page 256) and
-all eleven quantities at the four Rayleigh numbers were transcribed (`cases/heated_cavity/reference/devahldavis1983_tableV.csv`): Nu_avg 1.118, 2.243, 4.519, 8.800; Nu_max 1.505, 3.528, 7.717, 17.925 at z = 0.092, 0.143, 0.081, 0.0378;
-u_max 3.649, 16.178, 34.73, 64.63 at z = 0.813, 0.823, 0.855, 0.850; v_max 3.697, 19.617, 68.59, 219.36 at x = 0.178, 0.119, 0.066, 0.0379. Every value matches the secondary sources above, so Nu_avg, u_max, v_max and Nu_max
-are now *verified, primary* and the locations of the maxima are read for the first time. The paper states the accuracy as better than 1 percent at the highest Rayleigh number and down to one tenth of that at the lowest. Tables I to IV
-(the other Prandtl numbers and the reference-mesh listings) were not used. The transcription from the scan is by eye; the agreement with the independently published copies is the check on it.
+Wave 30C (ADR 0061) re-checked the cavity table against the primary source. The 1983 paper itself was read as a page
+scan (https://elearning.univ-bejaia.dz/mod/resource/view.php?id=71697, Table V on page 256), and all eleven quantities
+at the four Rayleigh numbers were transcribed (`cases/heated_cavity/reference/devahldavis1983_tableV.csv`):
+
+| Quantity | Values at the four Rayleigh numbers |
+|---|---|
+| Nu_avg | 1.118, 2.243, 4.519, 8.800 |
+| Nu_max | 1.505, 3.528, 7.717, 17.925 at z = 0.092, 0.143, 0.081, 0.0378 |
+| u_max | 3.649, 16.178, 34.73, 64.63 at z = 0.813, 0.823, 0.855, 0.850 |
+| v_max | 3.697, 19.617, 68.59, 219.36 at x = 0.178, 0.119, 0.066, 0.0379 |
+
+Every value matches the secondary sources above, so Nu_avg, u_max, v_max and Nu_max are now *verified, primary* and the
+locations of the maxima are read for the first time. The paper states the accuracy as better than 1 percent at the
+highest Rayleigh number and down to one tenth of that at the lowest. Tables I to IV (the other Prandtl numbers and the
+reference-mesh listings) were not used. The transcription from the scan is by eye; the agreement with the independently
+published copies is the check on it.
 
 Other values read in wave 30C (all numeric tables of public pages, used by the ADR 0061 tests):
 
@@ -131,11 +146,19 @@ Both are far inside the 1 percent gate. The F-029 roadmap note quotes 0.38 perce
 |---|---|---|
 | Standard: Cmu 0.09, C1 1.44, C2 1.92, sigma_k 1.0, sigma_eps 1.3 (Launder and Spalding, Comput. Methods Appl. Mech. Eng. 3 (1974) 269-289) | Wikipedia "K-epsilon turbulence model" | verified |
 | RNG: Cmu 0.0845, C1 1.42, C2 1.68, eta0 4.38, beta 0.012, C2* = C2 + Cmu eta^3 (1 - eta/eta0)/(1 + beta eta^3); sigma = 0.7194 (= 1/1.3929) | arXiv:2501.00037; Yakhot, Orszag, Thangam, Gatski and Speziale, Phys. Fluids A 4(7) (1992) 1510-1520 (not read). | verified (arXiv) |
-| Realizable: C2 1.9, sigma_k 1.0, sigma_eps 1.2, C1 = max(0.43, eta/(eta+5)), Cmu = 1/(A0 + As U* k/eps), As = sqrt(6) cos(phi) | Shih et al. NASA TM-106721 (see below); OpenFOAM `realizableKE` class docs (default A0 4.0, C2 1.9, sigma 1.0/1.2) | verified. Note A0 = 4.04 (used by rcfd, `kepsilon.rs`): UNVERIFIED against a published source (see [provenance](provenance.md)), replace before relying on it; but 4.0 in OpenFOAM and, per one forum post, in Shih et al.; the original paper's printed value could not be fetched. Flagged in the source comment. **Wave 13 verification: Shih et al., NASA TM-106721 (https://ntrs.nasa.gov/api/citations/19950005029/downloads/19950005029.pdf) prints A0 = 4.0 and Table 2 C2 1.9, sigma 1.0/1.2, C1 = max(0.43, eta/(5+eta)); rcfd's 4.04 differs from the original (see `docs/verification-report.md`).** ADR 0017: `KEpsilon::a0` / `turbulence.realizable_a0` selects 4.0 (original report) or 4.04 (a commercial-code variant, still the default); BFS-C medium x_r/h 6.349 with 4.0 against 6.413 with 4.04. |
+| Realizable: C2 1.9, sigma_k 1.0, sigma_eps 1.2, C1 = max(0.43, eta/(eta+5)), Cmu = 1/(A0 + As U* k/eps), As = sqrt(6) cos(phi) | Shih et al. NASA TM-106721 (see below); OpenFOAM `realizableKE` class docs (default A0 4.0, C2 1.9, sigma 1.0/1.2) | verified. Note A0 = 4.04: UNVERIFIED against a published source, replace before relying on it; see the note under this table |
 | Wall function kappa = 0.4187, E = 9.793; rounded to 0.41 / 9.8 by rcfd | Launder and Spalding, Comput. Methods Appl. Mech. Eng. 3 (1974) 269-289 (not read; attribution not checked) | UNVERIFIED against a published source, replace before relying on it (no published source for the pair was reached, see [provenance](provenance.md); rounding disclosed in code) |
 | Log law kappa = 0.41, B = 5.2 (Pope 2000) | problem set based on Pope (perso.ens-lyon.fr), Abe et al. 2001; Wikipedia gives kappa 0.41, C+ 5.0 | verified, within the usual 5 percent spread |
 | Reichardt (1951): u+ = ln(1 + 0.41 y+)/0.41 + 7.8[1 - e^{-y+/11} - (y+/11) e^{-y+/3}] | CFD-Online wiki "Reichardt profile" (via search result); numerical cross-check against MKM DNS | verified, and within 0.7, 0.8, 2.3, 2.3, 1.4 percent of DNS at y+ = 20, 30, 50, 100, 150 |
 | Inlet relations k = 1.5 (I U)^2, eps = Cmu^0.75 k^1.5 / l, l = 0.07 L (`rcfd-api/src/turb.rs`) | CFD-Online/CFX forum guidance; l factor 0.07 for mixing-length codes | verified (k and l); eps = Cmu k^2/(nu * ratio) is the definition nu_t = Cmu k^2/eps, no external source needed |
+
+Realizable A0 = 4.04 (used by rcfd, `kepsilon.rs`): UNVERIFIED against a published source (see
+[provenance](provenance.md)), replace before relying on it; but 4.0 in OpenFOAM and, per one forum post, in Shih et al.;
+the original paper's printed value could not be fetched. Flagged in the source comment. **Wave 13 verification: Shih et
+al., NASA TM-106721 (https://ntrs.nasa.gov/api/citations/19950005029/downloads/19950005029.pdf) prints A0 = 4.0 and
+Table 2 C2 1.9, sigma 1.0/1.2, C1 = max(0.43, eta/(5+eta)); rcfd's 4.04 differs from the original (see
+`docs/verification-report.md`).** ADR 0017: `KEpsilon::a0` / `turbulence.realizable_a0` selects 4.0 (original report) or
+4.04 (a commercial-code variant, still the default); BFS-C medium x_r/h 6.349 with 4.0 against 6.413 with 4.04.
 
 ## k-omega SST and wall treatment (`crates/rcfd-turb/src/sst.rs`, `wall.rs`)
 
@@ -160,7 +183,19 @@ Source: the published statistics file `https://turbulence.oden.utexas.edu/data/M
 | U_b+ = 17.4, Re_b = 2 h U_b/nu = 13750 | U_b+ = 17.545 (relative to the true u_tau, Re_tau = 392.24), Re_b = 13764 | verified. 17.4 equals Re_b/(2 x 395), which is the consistent value for the nominal Re_tau = 395 imposed in the test (nu = 1/395); 17.54 applies at 392.24. Left unchanged. |
 | "Re_tau = 395" | actual 392.24 (nominal 395) | note added to the test and the case citation |
 
-Profile samples (y+: U+): 5: 4.82, 10: 8.44, 15: 10.657 (interpolated from the same chan395.means file for the SST test, verified from the file), 20: 12.007, 30: 13.493, 50: 14.856, 100: 16.534, 150: 17.646, 300: 19.745.
+Profile samples:
+
+| y+ | U+ |
+|---|---|
+| 5 | 4.82 |
+| 10 | 8.44 |
+| 15 | 10.657 (interpolated from the same chan395.means file for the SST test, verified from the file) |
+| 20 | 12.007 |
+| 30 | 13.493 |
+| 50 | 14.856 |
+| 100 | 16.534 |
+| 150 | 17.646 |
+| 300 | 19.745 |
 
 ## Cylinder wake (`crates/rcfd-fv/tests/cylinder.rs`)
 
@@ -232,7 +267,8 @@ Files are listed with checksums and licences in `validation-data/manifest.json` 
 
 - Flat plate Cf at x = 0.97: the pinned TMR file `FlatPlate/SST/cf_plate_sstv.dat` (CFL3D, SST) gives about 2.691e-3
   (2.6949e-3 at x = 0.9601, 2.6909e-3 at x = 0.9701). `crates/rcfd-turb/tests/flat_plate_sst.rs` uses 0.00268299
-  (273 x 193 grid value from the TMR page). rcfd measures 0.002663: -0.7 % vs the page value, -1.0 % vs the file. Test tolerance (5 %) unchanged.
+  (273 x 193 grid value from the TMR page). rcfd measures 0.002663: -0.7 % vs the page value, -1.0 % vs the file. Test
+  tolerance (5 %) unchanged.
 - Rotor 37 values from NASA TP-1337: only the report is stored; no numbers are transcribed yet. Unverified until they are.
 - GRI-Mech 3.0 (Berkeley copy): licence status unverified (no licence text on the page). Cantera BSD copy preferred.
 - OpenFOAM damBreak set-up files: GPL-3.0-only, fetched only, never vendored.
@@ -255,65 +291,90 @@ where a real file confirmed them. Treat as unverified.
 The law forms in `crates/rcfd-api/src/rheology.rs` are textbook expressions written from memory of the literature
 (Bird, Armstrong and Hassager 1987; Carreau 1972; Yasuda 1981; Cross 1965; Herschel and Bulkley 1926; Papanastasiou
 1987; Williams, Landel and Ferry 1955) and were not checked against the papers in this session. Unverified:
-(wave 13: the Carreau-Yasuda `(n-1)/a` convention and the WLF constants 17.44 and 51.6 K are now confirmed, secondary: arXiv:1810.02292, IUPAC Gold Book goldbook.iupac.org/terms/view/12821; Cross and Papanastasiou remain unverified) the Carreau-Yasuda exponent convention `(n-1)/a`, the Cross form `1/(1+(lambda g)^m)`, the regularised yield term
-`tau0 (1 - exp(-m g))/g`, and the WLF constants 17.44 and 51.6 K (the "universal" values, relative to the glass
-transition temperature, offered only as defaults). The checks that do not depend on those forms are analytic:
-the power-law plane channel profile and pressure gradient (`u = U (2n+1)/(n+1) [1 - |1-2y/H|^((n+1)/n)]`, derived by
-integrating the momentum balance), and the Buckingham-Reiner plane solution of a Bingham fluid
-(`U = G h^2/(3 mu) (1 - 1.5 xi + 0.5 xi^3)`, `xi = tau0/(G h)`, mean speed verified to 1e-6 by quadrature of the
-profile in the test).
+
+- the Carreau-Yasuda exponent convention `(n-1)/a`;
+- the Cross form `1/(1+(lambda g)^m)`;
+- the regularised yield term `tau0 (1 - exp(-m g))/g`;
+- the WLF constants 17.44 and 51.6 K (the "universal" values, relative to the glass transition temperature, offered only
+  as defaults).
+
+Wave 13: the Carreau-Yasuda `(n-1)/a` convention and the WLF constants 17.44 and 51.6 K are now confirmed, secondary:
+arXiv:1810.02292, IUPAC Gold Book goldbook.iupac.org/terms/view/12821; Cross and Papanastasiou remain unverified.
+
+The checks that do not depend on those forms are analytic:
+
+- the power-law plane channel profile and pressure gradient (`u = U (2n+1)/(n+1) [1 - |1-2y/H|^((n+1)/n)]`, derived by
+  integrating the momentum balance);
+- the Buckingham-Reiner plane solution of a Bingham fluid (`U = G h^2/(3 mu) (1 - 1.5 xi + 0.5 xi^3)`, `xi = tau0/(G h)`,
+  mean speed verified to 1e-6 by quadrature of the profile in the test).
 
 ## Material property library (F-111)
 
 Verified against primary sources in this session (fetched 2026-10-13):
 
 - IAPWS-IF97 (IAPWS R7-97(2012), `iapws.org`): region 1 and region 2 coefficient tables, the B23 and saturation-pressure
-  equations, and the property relations were read from the release itself; the program-verification values of Tables 5, 15 and 35
-  (all three state points each) are reproduced to 1e-8 relative in `crates/rcfd-core/src/iapws.rs`, which also validates the
-  transcription of the coefficients. IAPWS R12-08 (viscosity, Tables 1, 2, verification Table 4) and R15-11 (thermal conductivity,
-  Tables 1, 2, verification Table 4) likewise; their tables carry 7-9 digits, so the test tolerance there is 1e-7 relative
-  (set at 1e-8 first, widened to 1e-7 after the 433.15 K, 1 kg/m^3 viscosity point missed it by 3.4e-8, which is the rounding of its
-  last printed digit: a post-hoc change, disclosed). The viscosity assert for Sutherland air is a regression guard of 1.5 % set after
-  the measurement; the 1 % criterion itself is recorded as missed. The 1 % assert on the cubic fits is in-sample.
+  equations, and the property relations were read from the release itself. The program-verification values of Tables 5,
+  15 and 35 (all three state points each) are reproduced to 1e-8 relative in `crates/rcfd-core/src/iapws.rs`, which also
+  validates the transcription of the coefficients. IAPWS R12-08 (viscosity, Tables 1, 2, verification Table 4) and R15-11
+  (thermal conductivity, Tables 1, 2, verification Table 4) likewise; their tables carry 7-9 digits, so the test
+  tolerance there is 1e-7 relative (set at 1e-8 first, widened to 1e-7 after the 433.15 K, 1 kg/m^3 viscosity point
+  missed it by 3.4e-8, which is the rounding of its last printed digit: a post-hoc change, disclosed).
   Not implemented: region 3, region 5, backward equations, critical enhancements.
 - NASA polynomials (NASA TM-4513, McBride, Gordon and Reno 1993): coefficients for N2, O2, Ar, H2O, CO2, CH4, H2 copied from
   Cantera's `data/nasa_gas.yaml` (BSD-3-Clause, the file cites TM-4513); the Cantera licence requires keeping its notice,
   which is in the source header comment of `fluids.rs`. Consistency check: the two temperature ranges agree at 1000 K.
-- Air viscosity: M. L. Huber, "Viscosity of Gases", CRC Handbook of Chemistry and Physics (NIST publication page, pub_id 926439), air at
-  100 kPa: 13.3, 18.5, 23.1, 27.1, 30.8 uPa s at 200-600 K (read from the rendered table; 3 digits). Air conductivity: Huber, "Thermal
-  Conductivity of Gases" (pub_id 926438): 18.5, 26.4, 33.5, 39.9, 46.0 mW/(m K). Air specific heat: NASA TN D-5452 Table I
-  (Poferl, Svehla, Lewandowski 1969), 1.005, 1.013, 1.030, 1.051 J/(g K) at 300-600 K (OCR of the scanned table, values
-  consistent with the NASA polynomials to 0.12 %).
+- Air viscosity: M. L. Huber, "Viscosity of Gases", CRC Handbook of Chemistry and Physics (NIST publication page, pub_id
+  926439), air at 100 kPa: 13.3, 18.5, 23.1, 27.1, 30.8 uPa s at 200-600 K (read from the rendered table; 3 digits).
+- Air conductivity: Huber, "Thermal Conductivity of Gases" (pub_id 926438): 18.5, 26.4, 33.5, 39.9, 46.0 mW/(m K).
+- Air specific heat: NASA TN D-5452 Table I (Poferl, Svehla, Lewandowski 1969), 1.005, 1.013, 1.030, 1.051 J/(g K) at
+  300-600 K (OCR of the scanned table, values consistent with the NASA polynomials to 0.12 %).
 - Sutherland constants for air: 1.716e-5 Pa s at 273.15 K with S = 110.4 K, and 0.0241 W/(m K) with S = 194 K, are the
   usual textbook values written from memory (the viscosity pair also is the US Standard Atmosphere 1976 pair); only their
   agreement with the Huber tables is checked. Wave 13: confirmed (secondary) against CFD-Online "Sutherland's law" and the
-  1976 standard-atmosphere constants (C1 = 1.458e-6, S = 110.4 K gives 1.7161e-5 at 273.15 K), and arXiv:2210.01621 for the
-  conductivity pair (2.41e-2 W/(m K), T0 273 K, S 194 K). Result, pre-registered at 1 % for 300-500 K: viscosity -0.22 % (300 K),
-  **-1.08 % (400 K), -1.46 % (500 K)** (also -0.11 % at 200 K, -2.07 % at 600 K): the 1 % criterion is NOT met by
-  Sutherland's law for the viscosity above about 350 K; conductivity -0.64, +0.26, +0.69 % (also -3.23 % at 200 K, +0.35 % at
-  600 K) is met. The cubic fits `air_viscosity_fit_law`/`air_conductivity_fit_law` were fitted to the same five table rows
-  (in-sample residual at most 0.11 % and 0.08 %; leave-one-out prediction of the 400 K row -0.22 % and -0.15 %).
+  1976 standard-atmosphere constants (C1 = 1.458e-6, S = 110.4 K gives 1.7161e-5 at 273.15 K), and arXiv:2210.01621 for
+  the conductivity pair (2.41e-2 W/(m K), T0 273 K, S 194 K).
 
-Unverified (from memory, not checked against a primary source in this session; the wave 13 outcome is appended to each item):
+Sutherland's law result, pre-registered at 1 % for 300-500 K:
 
-- Standard atomic weights used for the molar masses (N 14.007, O 15.999, Ar 39.948, H 1.008, C 12.011). Wave 13: all inside the CIAAW intervals (ciaaw.org), confirmed.
-- Dry-air mole fractions 0.78084 / 0.20946 / 0.00934 (N2/O2/Ar). Wave 13: NIST CIPM-2007 gives 0.780848 / 0.209390 / 0.009332; code differed by up to 0.09 % (immaterial).
-  Post-verification fix: `GasMixture::dry_air` now uses the CIPM-2007 values 0.780848 / 0.209390 / 0.009332 (renormalised over the three species); its only user is the air cp/transport unit test, whose cp values moved by about 0.01 J/kg/K, all assertions unchanged and passing.
+| Property | 300 K | 400 K | 500 K | Also 200 K | Also 600 K |
+|---|---|---|---|---|---|
+| Viscosity | -0.22 % | **-1.08 %** | **-1.46 %** | -0.11 % | -2.07 % |
+| Conductivity | -0.64 % | +0.26 % | +0.69 % | -3.23 % | +0.35 % |
+
+The 1 % criterion is NOT met by Sutherland's law for the viscosity above about 350 K; for the conductivity it is met. The
+viscosity assert for Sutherland air is a regression guard of 1.5 % set after the measurement; the 1 % criterion itself
+is recorded as missed.
+
+The cubic fits `air_viscosity_fit_law`/`air_conductivity_fit_law` were fitted to the same five table rows (in-sample
+residual at most 0.11 % and 0.08 %; leave-one-out prediction of the 400 K row -0.22 % and -0.15 %). The 1 % assert on the
+cubic fits is in-sample.
+
+Unverified (from memory, not checked against a primary source in this session; the wave 13 outcome is appended to each
+item):
+
+- Standard atomic weights used for the molar masses (N 14.007, O 15.999, Ar 39.948, H 1.008, C 12.011). Wave 13: all
+  inside the CIAAW intervals (ciaaw.org), confirmed.
+- Dry-air mole fractions 0.78084 / 0.20946 / 0.00934 (N2/O2/Ar). Wave 13: NIST CIPM-2007 gives 0.780848 / 0.209390 /
+  0.009332; code differed by up to 0.09 % (immaterial). Post-verification fix: `GasMixture::dry_air` now uses the
+  CIPM-2007 values 0.780848 / 0.209390 / 0.009332 (renormalised over the three species); its only user is the air
+  cp/transport unit test, whose cp values moved by about 0.01 J/kg/K, all assertions unchanged and passing.
 - Peng-Robinson constants 0.45724, 0.07780, kappa = 0.37464 + 1.54226 omega - 0.26992 omega^2 and Redlich-Kwong constants
-  0.42748, 0.08664, and the Wilke pair weight, as published by Peng and Robinson (Ind. Eng. Chem. Fundam. 15, 1976), Redlich and Kwong
-  (Chem. Rev. 44, 1949) and Wilke (J. Chem. Phys. 18, 1950); the tests use only properties that follow from the forms
-  themselves (critical-point conditions, ideal limit, root consistency, thermodynamic consistency of fugacity and residual enthalpy,
-  the acentric-factor definition of the vapour pressure at reduced temperature 0.7 within 5 %: measured +0.38, -0.35, -0.23 %). The
-  critical constants of N2 used in the tests were illustrative (126.2 K, 3.39 MPa); they are now the NIST values 126.192 K, 3.3958 MPa (omega 0.0372), tests unchanged and passing.
-  Wave 13: PR 0.45724/0.07780/kappa polynomial confirmed (Wikipedia citing Peng and Robinson 1976; exact 0.457236, 0.077796
-  computed), RK 0.42748/0.08664 confirmed (Wikipedia and closed form); the Wilke weight remains unverified. The N2 test constants
+  0.42748, 0.08664, and the Wilke pair weight, as published by Peng and Robinson (Ind. Eng. Chem. Fundam. 15, 1976),
+  Redlich and Kwong (Chem. Rev. 44, 1949) and Wilke (J. Chem. Phys. 18, 1950). The tests use only properties that follow
+  from the forms themselves (critical-point conditions, ideal limit, root consistency, thermodynamic consistency of
+  fugacity and residual enthalpy, the acentric-factor definition of the vapour pressure at reduced temperature 0.7 within
+  5 %: measured +0.38, -0.35, -0.23 %). The critical constants of N2 used in the tests were illustrative (126.2 K,
+  3.39 MPa); they are now the NIST values 126.192 K, 3.3958 MPa (omega 0.0372), tests unchanged and passing. Wave 13: PR
+  0.45724/0.07780/kappa polynomial confirmed (Wikipedia citing Peng and Robinson 1976; exact 0.457236, 0.077796 computed),
+  RK 0.42748/0.08664 confirmed (Wikipedia and closed form); the Wilke weight remains unverified. The N2 test constants
   differed from NIST (126.192 K, 3.3958 MPa) as stated; fixed afterwards, see above.
 - NIST WebBook data was deliberately not used (its terms were not reviewed); no REFPROP or other licensed file is read or shipped.
   (See the F-061 section below: later waves did embed WebBook values; wave 13 notes that NIST SRD 69 is copyrighted, see
   `docs/verification-report.md` section 1.6.)
-- Critical constants and acentric factors in `rcfd-core/src/eos_data.rs` (the header comment now points at `docs/verification-report.md`): wave 13
-  confirmed all seven fluids against the NIST WebBook fluid pages; only the Ar acentric factor differed (code -0.002, NIST -0.00219); fixed to -0.00219 afterwards (no test uses Ar PR against NIST; workspace tests unchanged).
-
+- Critical constants and acentric factors in `rcfd-core/src/eos_data.rs` (the header comment now points at
+  `docs/verification-report.md`): wave 13 confirmed all seven fluids against the NIST WebBook fluid pages; only the Ar
+  acentric factor differed (code -0.002, NIST -0.00219); fixed to -0.00219 afterwards (no test uses Ar PR against NIST;
+  workspace tests unchanged).
 
 ## Variable-density validation (wave 10, ADR 0005)
 
@@ -322,17 +383,26 @@ Verified against the primary source:
 - Le Quere, Weisman, Paillere, Vierendeels, Dick, Becker, Braack and Locke, "Modelling of natural convection flows with
   large temperature differences: a benchmark problem for low Mach number solvers. Part 1. Reference solutions", ESAIM: M2AN
   39(3) 609-616 (2005), DOI 10.1051/m2an:2005027; full text read from the author's postprint
-  https://wrap.warwick.ac.uk/id/eprint/3824/1/WRAP_Locke_modelling_natural_convection.pdf. Table 1 (square cavity, adiabatic
-  horizontal walls, no slip, P0 = 101325 Pa, T0 = 600 K, R = 287, Pr = 0.71, gamma = 1.4, g = 9.81, epsilon = (Th-Tc)/(Th+Tc) = 0.6,
-  Ra = Pr g rho0^2 (Th-Tc) L^3 / (T0 mu0^2) with a single g): T1 (Ra 1e6, constant properties) Nu 8.85978, P/P0 0.856338;
-  T2 (Ra 1e6, Sutherland) Nu 8.6866, P/P0 0.924487; T3 (Ra 1e7, Sutherland) Nu 16.2410, P/P0 0.92263 (T3 not used).
-  Sutherland: mu = mu* (T/T*)^1.5 (T*+S)/(T+S), T* = 273 K, S = 110.5 K, mu* = 1.68e-5 Pa s, k = mu gamma R / ((gamma-1) Pr).
-  Thermodynamic pressure P(t) = P0 integral(1/T0 dv) / integral(1/T dv).
+  https://wrap.warwick.ac.uk/id/eprint/3824/1/WRAP_Locke_modelling_natural_convection.pdf. Its Table 1, Sutherland law and
+  thermodynamic pressure follow this list.
 - Quasi-1-D isentropic relations and the area-Mach relation (A/A*)(M) = (1/M) [2/(gamma+1) (1 + (gamma-1)/2 M^2)]^((gamma+1)/(2(gamma-1))),
   choked mass flow A* p0 sqrt(gamma/(R T0)) (2/(gamma+1))^((gamma+1)/(2(gamma-1))): standard textbook formulae (for example
   Anderson, Modern Compressible Flow), not looked up in this session; the code of the checks uses them as written here.
 - Hydrostatic ideal-gas columns: analytic atmospheres dp/dy = -rho g with p = rho R T (isothermal exponential; linear T
   polytropic with exponent g/(R a)), derived in the test headers.
+
+Le Quere et al. Table 1 (square cavity, adiabatic horizontal walls, no slip, P0 = 101325 Pa, T0 = 600 K, R = 287,
+Pr = 0.71, gamma = 1.4, g = 9.81, epsilon = (Th-Tc)/(Th+Tc) = 0.6, Ra = Pr g rho0^2 (Th-Tc) L^3 / (T0 mu0^2) with a
+single g):
+
+| Case | Ra | Properties | Nu | P/P0 |
+|---|---|---|---|---|
+| T1 | 1e6 | constant properties | 8.85978 | 0.856338 |
+| T2 | 1e6 | Sutherland | 8.6866 | 0.924487 |
+| T3 (not used) | 1e7 | Sutherland | 16.2410 | 0.92263 |
+
+Their Sutherland law: mu = mu* (T/T*)^1.5 (T*+S)/(T+S), T* = 273 K, S = 110.5 K, mu* = 1.68e-5 Pa s,
+k = mu gamma R / ((gamma-1) Pr). Thermodynamic pressure P(t) = P0 integral(1/T0 dv) / integral(1/T dv).
 
 ## Transient variable density (ADR 0009)
 
@@ -358,10 +428,10 @@ Reference values used by `crates/rcfd-fv/tests/varden_transient*.rs` and `crates
 
 ## Known misses (assertions added after the 2026-10-14 audit)
 
-Each row is a registered criterion that the code does not meet. The threshold in the test is the registered one, not
-widened; the test is `#[ignore]`d and its name ends in `known_miss`, so it fails by design when run with `--ignored`
-and will start passing if the solver improves. Measured in release with `CARGO_TARGET_DIR=target-fix2`, no solver
-parameter changed.
+Each row is a registered criterion that the code does not meet. The threshold in each test is the registered one, not
+widened. Each test is `#[ignore]`d and its name ends in `known_miss`, so it fails by design when run with `--ignored` and
+will start passing if the solver improves. The values were measured in release with `CARGO_TARGET_DIR=target-fix2`; no
+solver parameter changed.
 
 | Item | Registered criterion | Measured | Test |
 |------|----------------------|----------|------|
@@ -372,10 +442,12 @@ parameter changed.
 | F-043 SST flat plate vs White | Cf(0.97) within 5 % of 0.455/ln^2(0.06 Re_x) | 0.002663 vs 0.002875, -7.36 % (-6.6 to -8.5 % along the plate) | `rcfd-turb/tests/flat_plate_sst.rs::sst_flat_plate_cf_within_5pct_of_white_known_miss` |
 | F-111 Sutherland air viscosity | within 1 % of Huber table, 300-500 K | -0.22, -1.08, -1.46 % | `rcfd-core/src/fluids.rs::sutherland_air_viscosity_within_1pct_300_to_500_k_known_miss` |
 
-Met and now asserted: F-043 Cf(0.97) within 5 % of the TMR page value 0.00268299 (-0.7 %) and of the TMR file value
-0.0026909 (-1.0 %), in `sst_flat_plate_cf` (ignored, heavy, about 6 minutes). The air test that asserted 1.5 % for
-Sutherland viscosity was renamed `air_cp_conductivity_fit_laws_within_1pct_and_sutherland_viscosity_within_1p5pct_300_to_500_k`
-(the 1.5 % is a regression guard, the 1 % fit-law check is in-sample).
+Met and now asserted, in `sst_flat_plate_cf` (ignored, heavy, about 6 minutes): F-043 Cf(0.97) within 5 % of the TMR page
+value 0.00268299 (-0.7 %) and of the TMR file value 0.0026909 (-1.0 %).
+
+The air test that asserted 1.5 % for Sutherland viscosity was renamed
+`air_cp_conductivity_fit_laws_within_1pct_and_sutherland_viscosity_within_1p5pct_300_to_500_k`. The 1.5 % is a regression
+guard; the 1 % fit-law check is in-sample.
 
 
 ## Compressible boundary conditions (F-062, ADR 0006)
@@ -392,26 +464,27 @@ Sutherland viscosity was renamed `air_cp_conductivity_fit_laws_within_1pct_and_s
 
 ## Real-gas equation of state (F-061, ADR 0007)
 
-NIST Chemistry WebBook, fluid properties, isothermal tables (webbook.nist.gov/cgi/fluid.cgi, CO2 ID C124389, N2 ID C7727379,
-default reference state), retrieved 2026-10-14 through a page fetcher whose output passes through a language-model
-summariser. The numbers (density, enthalpy, entropy, cp, sound speed at the listed T and p) are copied into
-`crates/rcfd-fv/tests/realgas_nist.rs` as returned; they were NOT re-read from the raw page, so they are marked
-"retrieved, not independently re-read" (sanity: CO2 350 K 0.1 MPa 1.5167 kg/m^3 and N2 300 K 0.1 MPa 1.1233 kg/m^3 agree with
-the ideal gas to 0.3 percent and 0.0 percent). The tables list some rows (8.1 MPa, 5.1 MPa, 6.1 MPa) three times with
-different phase labels and identical values.
+The isotherm values come from the NIST Chemistry WebBook, fluid properties, isothermal tables
+(webbook.nist.gov/cgi/fluid.cgi, CO2 ID C124389, N2 ID C7727379, default reference state), retrieved 2026-10-14 through a
+page fetcher whose output passes through a language-model summariser. The numbers (density, enthalpy, entropy, cp, sound
+speed at the listed T and p) are copied into `crates/rcfd-fv/tests/realgas_nist.rs` as returned. They were NOT re-read from
+the raw page, so they are marked "retrieved, not independently re-read". As a sanity check, CO2 350 K 0.1 MPa 1.5167 kg/m^3
+and N2 300 K 0.1 MPa 1.1233 kg/m^3 agree with the ideal gas to 0.3 percent and 0.0 percent. The tables list some rows
+(8.1 MPa, 5.1 MPa, 6.1 MPa) three times with different phase labels and identical values.
 
-Wave 13 update: the isotherm values were re-read from the raw WebBook HTML (no summariser) and all match; the critical
-constants below were confirmed against the NIST fluid pages (only Ar omega differs); see `docs/verification-report.md`.
+Wave 13 update: the isotherm values were re-read from the raw WebBook HTML (no summariser) and all match. The critical
+constants below were confirmed against the NIST fluid pages (only Ar omega differs). See `docs/verification-report.md`.
 
 Originally UNVERIFIED (written from memory of the literature, not looked up): critical constants and acentric factors in
 `rcfd-core/src/eos_data.rs` (CO2 304.1282 K, 7.3773 MPa, 0.22394; N2 126.192 K, 3.3958 MPa, 0.0372; O2, Ar, CH4, H2, H2O
-likewise); the Peng-Robinson (1976) and Redlich-Kwong (1949) constants were already listed as unverified under F-111. The
-thermodynamic consistency of the departure functions was checked numerically instead (Maxwell relations
-`dh/dp|T = v - T dv/dT|p` and `ds/dp|T = -dv/dT|p`, `rcfd-fv/src/realgas.rs` tests).
+likewise). The Peng-Robinson (1976) and Redlich-Kwong (1949) constants were already listed as unverified under F-111. The
+`rcfd-fv/src/realgas.rs` tests checked the thermodynamic consistency of the departure functions numerically instead
+(Maxwell relations `dh/dp|T = v - T dv/dT|p` and `ds/dp|T = -dv/dT|p`).
 
-The real-gas isentropic reference of the nozzle tests is computed in the test from the same EOS (an ODE in p with
-`dT/dp|s = T (dv/dT)_p / cp`); it checks the solver against the thermodynamics, not the EOS against nature. EOS accuracy
-against NIST is the (R1)-(R3) tests: density within 1 percent for |Z-1| <= 0.05 etc. Misses are in the table below.
+The nozzle tests compute their real-gas isentropic reference inside the test from the same EOS (an ODE in p with
+`dT/dp|s = T (dv/dT)_p / cp`). This reference checks the solver against the thermodynamics, not the EOS against nature.
+The (R1)-(R3) tests cover EOS accuracy against NIST: density within 1 percent for |Z-1| <= 0.05 etc. The table below lists
+the misses.
 
 | Item | Registered criterion | Measured | Test |
 |------|----------------------|----------|------|
@@ -423,9 +496,9 @@ against NIST is the (R1)-(R3) tests: density within 1 percent for |Z-1| <= 0.05 
 ## MRF zones (F-031, F-114, ADR 0008, `crates/rcfd-api/tests/mrf.rs`)
 
 All reference values are analytic (solid-body rotation, Taylor-Couette flow `u_theta = A r + B/r`, torque
-`4 pi rho nu W_i r_i^2 r_o^2/(r_o^2 - r_i^2)` per unit height) and derived in the ADR; no literature data and no pump or
-turbine benchmark are used or claimed. Set-up r_i 0.5, r_o 1, nu 0.1, 48 cells around. Limits were registered before the
-runs; misses are ignored `*_known_miss` tests.
+`4 pi rho nu W_i r_i^2 r_o^2/(r_o^2 - r_i^2)` per unit height) and derived in the ADR. No literature data and no pump or
+turbine benchmark are used or claimed. The set-up is r_i 0.5, r_o 1, nu 0.1, 48 cells around. Limits were registered
+before the runs; misses are ignored `*_known_miss` tests.
 
 | Check | Measured | Limit | Result |
 |---|---|---|---|
@@ -497,8 +570,8 @@ independent oracle. No commercial viewer was available.
 | Rosseland diffusion `k_r = 16 sigma n^2 T^3 / (3 beta)` | Modest (diffusion approximation) | standard formula; book not accessed. Wave 13: form confirmed (secondary) against the COMSOL Rosseland model description |
 | WSGG coefficients | none | not implemented: no coefficient table could be verified from an accessible published source |
 
-Measured against these in ADR 0012 (addendum). Registered misses: Z3 network pressure 8.5e-4 vs 1e-4
-(`z3_network_pressure_known_miss`), Z4 effectiveness duty vs nominal formula 1.45e-6 vs 1e-6
+ADR 0012 (addendum) records the measurements against these references. Registered misses: Z3 network pressure 8.5e-4 vs
+1e-4 (`z3_network_pressure_known_miss`), Z4 effectiveness duty vs nominal formula 1.45e-6 vs 1e-6
 (`z4_effectiveness_nominal_formula_known_miss`).
 
 ## 0D reactors and FW-H acoustics (F-112, F-136, ADR 0013, `crates/rcfd-reactor/tests/reactor.rs`, `crates/rcfd-post/tests/fwh.rs`)
@@ -514,7 +587,7 @@ Measured against these in ADR 0012 (addendum). Registered misses: Z3 network pre
 | Formulation 1A (Brentner and Farassat 1998) and permeable terms (Di Francescantonio 1997; Brentner and Farassat 2003) | published papers | formulas from memory (wave 13: structure and the M_r - M^2 combination confirmed against Farassat NASA/TM-2007-214853, permeable L_i and B terms against AIAA 2004-2805 eq. 2; equation images not machine-readable); validated only through the analytic monopole, dipole, rotating monopole and rotating monopole-pair checks (errors 4e-6 to 1e-5) |
 | Rotating-source references | exact Lienard-Wiechert potential of a moving monopole, velocity by 8th-order central differences | derived here from the wave equation |
 
-Rotating dipole is realised as a pair of opposite monopoles on a circular orbit; a rotating point force with an exact
+The rotating dipole is realised as a pair of opposite monopoles on a circular orbit. A rotating point force with an exact
 non-compact velocity field is not tested. Registered misses: R3 NASA continuity (above).
 
 ## Spalart-Allmaras (F-041, ADR 0014)
@@ -608,11 +681,11 @@ them: every expected value is a closed form or invariant derived in the ADR.
 
 ## Wave 16W wiring (F-236, F-072, F-108, ADR 0021)
 
-No new literature value is introduced. The expected values of the registered checks are closed forms or equalities with the library
-call the wiring surfaces: the linear velocity field `u = x + 2y`, `v = 3x - y` (vorticity 1, Q = -7), the Couette wall shear `mu U/h`
-with `U = 3`, `h = 0.5`, and the y+ definition `y+ = y u_tau / nu` with `u_tau = sqrt(tau/rho)`. The references already marked
-unverified under the wave 15B heading (partitioning, reverse Cuthill-McKee, isentropic total pressure) are unchanged and still
-unverified (memory).
+Wave 16W introduces no new literature value. The expected values of the registered checks are closed forms or equalities
+with the library call the wiring surfaces: the linear velocity field `u = x + 2y`, `v = 3x - y` (vorticity 1, Q = -7), the
+Couette wall shear `mu U/h` with `U = 3`, `h = 0.5`, and the y+ definition `y+ = y u_tau / nu` with
+`u_tau = sqrt(tau/rho)`. The references already marked unverified under the wave 15B heading (partitioning, reverse
+Cuthill-McKee, isentropic total pressure) are unchanged and still unverified (memory).
 
 ## Wave 16B boundary-condition catalogue (F-200, ADR 0022)
 
@@ -631,15 +704,23 @@ re-derived in the ADR or checked numerically as stated. No vendor data is used.
 
 ## Wave 17C GUI, assistant and renderer (F-143, F-144, F-149, F-150, F-073, ADR 0025)
 
-No physical reference value is introduced. Conventions used by the checks, all from memory and unverified as citations: Rec. 709 luma
-weights (0.2126, 0.7152, 0.0722) for the colour-map luminance test; the "1-2-5" family (with 2.5) of tick steps; min/max bucket
-decimation for plot data. The OpenAI-compatible wire format (`POST /v1/chat/completions`, `GET /v1/models`, SSE `data:` events with
-`[DONE]`, `Authorization: Bearer`) and the default local ports (Ollama 11434, LM Studio 1234, llama.cpp 8080, vLLM 8000) are
-recalled from memory and unverified against current documentation; they were checked only against the loopback mock server written
-for the tests, which shares the author's understanding of the format, so agreement is not independent evidence about any real server.
+Wave 17C introduces no physical reference value. The checks use these conventions, all from memory and unverified as
+citations:
+
+- Rec. 709 luma weights (0.2126, 0.7152, 0.0722) for the colour-map luminance test.
+- The "1-2-5" family (with 2.5) of tick steps.
+- Min/max bucket decimation for plot data.
+
+The OpenAI-compatible wire format (`POST /v1/chat/completions`, `GET /v1/models`, SSE `data:` events with `[DONE]`,
+`Authorization: Bearer`) and the default local ports (Ollama 11434, LM Studio 1234, llama.cpp 8080, vLLM 8000) are recalled
+from memory and unverified against current documentation. They were checked only against the loopback mock server written
+for the tests. That server shares the author's understanding of the format, so agreement is not independent evidence about
+any real server.
+
 The lid-driven cavity logic check (top-row mean ux, return flow) is a sanity bound, not a benchmark comparison.
 
-Wave 17A (ADR 0023): convergence floor diagnosis and pseudo-transient control. Known misses added (limits as registered, never widened; ignored tests):
+Wave 17A (ADR 0023): convergence floor diagnosis and pseudo-transient control. Known misses added (limits as registered,
+never widened; ignored tests):
 
 | Item | Limit | Measured | Test |
 | --- | --- | --- | --- |
@@ -648,13 +729,18 @@ Wave 17A (ADR 0023): convergence floor diagnosis and pseudo-transient control. K
 | F-106 controller on C2/D1/D2 (local cfl 1, physical 0.2) | converge, registered accuracy | residual 0.21 or NaN | `rcfd-api/tests/convergence_wave17a.rs::f?_*_known_miss`, `f?b_*_known_miss` |
 | F-209 error-controlled stepping, linear decay (relative and absolute scale) | steps <= 0.8 x uniform | 81 vs 76; 46 vs 36 | `rcfd-fv/src/ddt.rs::e1*_known_miss` |
 
-Findings: the F-200 C2/D1/D2/E2 residual targets are met with `solver.residual_norm = scaled` (new passing tests F1c, F2c, F3c, F4), the reference
-normalisation stalled by construction; the F-061 nozzle 1e-8 residual floor (2.619e-5) stays undiagnosed; wave-13 D5b n_r = 128 is slow convergence. No external reference data
-were used in wave 17A; the Taylor-Green and flat-plate acceptance items of F-209 were not run.
+Findings:
+
+- The F-200 C2/D1/D2/E2 residual targets are met with `solver.residual_norm = scaled` (new passing tests F1c, F2c, F3c,
+  F4); the reference normalisation stalled by construction.
+- The F-061 nozzle 1e-8 residual floor (2.619e-5) stays undiagnosed.
+- Wave-13 D5b n_r = 128 is slow convergence.
+
+No external reference data were used in wave 17A. The Taylor-Green and flat-plate acceptance items of F-209 were not run.
 
 ## Wave 17B conjugate heat transfer (F-051, ADR 0024)
 
-Every reference value used by the registered checks is derived in the ADR or is closed-form arithmetic, and every source
+Every reference value used by the registered checks is derived in the ADR or is closed-form arithmetic. Every source
 attribution below is from memory and unverified as a citation:
 
 | Quantity | Source | Status |
@@ -667,8 +753,11 @@ attribution below is from memory and unverified as a citation:
 | Fully developed laminar flow between parallel plates with uniform wall heat flux, `Nu = 140/17 = 8.2353` (`D_h = 4H`, half channel `H`) | derived in ADR 0024 section D from the energy equation with Poiseuille velocity | derived; the textbook value 8.235 (uniform flux, plates) was recalled from memory and is verified since wave 30C (NPTEL ME-662 lecture 19, limit 8.2353); the derivation, not the recollection, is the reference |
 | Contact resistance `R''` in series, `1/k_eff = 1/k + R''/Delta` | standard | derived; unverified (memory) |
 
-Known deviations of the checks from the ADR text (details in the ADR addendum): the duct tests use central convection, since upwind is not
-exact for the linear axial profile at the Dirichlet inlet face; the steady stop criterion of the library tests is 1e-11, not 1e-13.
+Known deviations of the checks from the ADR text (details in the ADR addendum):
+
+- The duct tests use central convection, since upwind is not exact for the linear axial profile at the Dirichlet
+  inlet face.
+- The steady stop criterion of the library tests is 1e-11, not 1e-13.
 
 ## Wave 18C particle tracking (F-056, ADR 0028)
 
@@ -716,8 +805,8 @@ implementation against the formulas as written here, not against published flame
 
 ## Wave 19B meshing references (ADR 0030)
 
-No published source for the following was accessed in this environment; the algorithms were written from memory and are tested
-against closed-form or exact-arithmetic checks only.
+No published source for the following was accessed in this environment. The algorithms were written from memory and are
+tested against closed-form or exact-arithmetic checks only.
 
 | Quantity | Source | Status |
 | --- | --- | --- |
@@ -805,9 +894,9 @@ the papers.
 
 ## Wave 21A thermal extras references (F-215, F-213, F-212, ADR 0035)
 
-Closed forms below are derived in ADR 0035 from conservation and Fourier/Ohm laws, and each is checked by a registered test; none
-is a data claim. Web search was attempted for the Stefan solution and the enthalpy-porosity paper; primary texts were not
-retrievable.
+ADR 0035 derives the closed forms below from conservation and Fourier/Ohm laws, and each is checked by a registered test.
+None is a data claim. Web search was attempted for the Stefan solution and the enthalpy-porosity paper; primary texts were
+not retrievable.
 
 | Quantity | Source | Status |
 | --- | --- | --- |
@@ -839,7 +928,9 @@ the moment equations (and checked by the registered tests), or an identity of th
 
 ## Wave 23B interfacial mass transfer and wave references (F-226, F-227, ADR 0040)
 
-No web page and no paper was consulted in this wave. Every formula below is reproduced from knowledge and is checked in the tests only against closed forms, invariants and internal consistency, NOT against the original publication. Entries are therefore UNVERIFIED as citations unless marked "derived".
+No web page and no paper was consulted in this wave. Every formula below is reproduced from knowledge and is checked in
+the tests only against closed forms, invariants and internal consistency, NOT against the original publication. Entries
+are therefore UNVERIFIED as citations unless marked "derived".
 
 | Quantity | Source | Status |
 | --- | --- | --- |
@@ -875,7 +966,20 @@ experiment. Entries are UNVERIFIED as citations unless marked "derived".
 
 ## Wave 25B reference verification (ADR 0044 D5)
 
-Protocol: only pages that were actually fetched or returned as search results in wave 25B are credited. "Record" means authors, title, journal, volume, pages and year were found in a bibliographic record (Crossref API, https://api.crossref.org/works, or a publisher or archive page). "Formula" means the formula itself was read in a source or re-derived from a source. No vendor documentation was used as authority. Page content was treated as data. Anything not listed here keeps the status in the wave sections above (UNVERIFIED).
+This verification changed no registered limit, and no formula disagreement required a code change. It found these
+discrepancies:
+
+- Scott author initials
+- Lee year and title
+- Jacobsen blend attribution (doubtful)
+- Zwart bubble radius (1e-6 vs 2e-6 m in sources)
+- Neumann equation is a special case
+
+Protocol: this section credits only pages that were actually fetched or returned as search results in wave 25B.
+"Record" means authors, title, journal, volume, pages and year were found in a bibliographic record (Crossref API, https://api.crossref.org/works, or a publisher or archive page). "Formula"
+means the formula itself was read in a source or re-derived from a source. No vendor documentation was used as
+authority. Page content was treated as data. Anything not listed here keeps the status in the wave sections above
+(UNVERIFIED).
 
 | Item | Status | Evidence |
 |---|---|---|
@@ -902,51 +1006,58 @@ Protocol: only pages that were actually fetched or returned as search results in
 | Neumann two-phase Stefan solution (wave 21A / ADR 0035) | CORRECTED-note: the equation in ADR 0035 (single exponent `e^-l^2`, one diffusivity) is the equal-diffusivity special case of the general classical Neumann condition (Roscani and Tarzia, https://ar5iv.labs.arxiv.org/html/1405.5928, eq. 3.31, which carries the diffusivity ratio through `lambda = lambda1/lambda2`); it reduces to ADR 0035 at lambda = 1. ADR 0035 states equal properties, so no code change. One-phase limit `beta lambda = e^-lambda^2/(sqrt(pi) erf lambda)` VERIFIED (secondary) at https://en.wikipedia.org/wiki/Stefan_problem | Carslaw and Jaeger, Alexiades and Solomon, Crank not fetched |
 | Nusselt (1916), Schrage (1953), Rohsenow correction, Dean and Dalrymple second-order Stokes, Andrade-form name, Wheeler algorithm, Kumar-Ramkrishna formulas, Brownian and laminar-shear kernels, Smoluchowski constant-kernel solution (as cited) | STILL UNVERIFIED: not fetched in wave 25B | the numerical checks in the respective tests remain closed-form or derived, as before |
 
-No registered limit was changed by this verification, and no formula disagreement required a code change. Discrepancies found: Scott author initials, Lee year and title, Jacobsen blend attribution (doubtful), Zwart bubble radius (1e-6 vs 2e-6 m in sources), Neumann equation is a special case.
-
 ## Wave 25C transient momentum sources (F-214, F-217, F-218, ADR 0045)
 
-No literature source was consulted in wave 25C; every reference value below is derived from first principles in this section or
-reused from the earlier waves named in ADR 0045. Nothing is credited to a book or paper.
+No literature source was consulted in wave 25C. Every reference value below is derived from first principles in this
+section or reused from the earlier waves named in ADR 0045. Nothing is credited to a book or paper.
 
-**Impulsively accelerated plane Poiseuille flow (check T2).** A fluid at rest between no-slip plates at `y = 0` and `y = h` is
-accelerated by a uniform body acceleration `G` along `x` from `t = 0`: `u_t = G + nu u_yy`, `u(0,t) = u(h,t) = 0`, `u(y,0) = 0`.
-The steady solution is `u_s = G y (h - y) / (2 nu)`. The difference `v = u - u_s` satisfies the homogeneous heat equation with
-`v(y,0) = -u_s(y)`, so `v = sum_n b_n sin(n pi y / h) exp(-n^2 pi^2 nu t / h^2)` with
-`b_n = -(2/h) integral_0^h u_s sin(n pi y / h) dy = -(G / (nu h)) integral_0^h y (h - y) sin(n pi y / h) dy`. Two integrations by parts
-give `integral_0^h y (h - y) sin(n pi y / h) dy = 2 h^3 (1 - cos n pi) / (n pi)^3`, which is `4 h^3 / (n pi)^3` for odd `n` and zero for
-even `n`. Hence
+**Impulsively accelerated plane Poiseuille flow (check T2).** A uniform body acceleration `G` along `x` acts from `t = 0`
+on a fluid at rest between no-slip plates at `y = 0` and `y = h`: `u_t = G + nu u_yy`, `u(0,t) = u(h,t) = 0`,
+`u(y,0) = 0`. The steady solution is `u_s = G y (h - y) / (2 nu)`. The difference `v = u - u_s` satisfies the homogeneous
+heat equation with `v(y,0) = -u_s(y)`, so `v = sum_n b_n sin(n pi y / h) exp(-n^2 pi^2 nu t / h^2)` with
+`b_n = -(2/h) integral_0^h u_s sin(n pi y / h) dy = -(G / (nu h)) integral_0^h y (h - y) sin(n pi y / h) dy`. Two
+integrations by parts give `integral_0^h y (h - y) sin(n pi y / h) dy = 2 h^3 (1 - cos n pi) / (n pi)^3`, which is
+`4 h^3 / (n pi)^3` for odd `n` and zero for even `n`. Hence
 
 `u(y,t) = G y (h - y) / (2 nu) - (4 G h^2 / (nu pi^3)) sum_{n odd} sin(n pi y / h) exp(-n^2 pi^2 nu t / h^2) / n^3`.
 
-The derivation was checked by substitution (each term solves the heat equation and vanishes at both plates) and numerically for
-`G = 8`, `nu = h = 1` with the 100 odd terms used by the test: `max |u(y_c, 0)| = 5.0e-7` over the 40 cell centres of the T2 mesh
-(the truncation of the series at `t = 0`) and `u(h/2, 5) = 1.000000 = G h^2 / (8 nu)`.
+The derivation was checked by substitution (each term solves the heat equation and vanishes at both plates) and
+numerically. For `G = 8`, `nu = h = 1` with the 100 odd terms used by the test, the numerical check gave
+`max |u(y_c, 0)| = 5.0e-7` over the 40 cell centres of the T2 mesh (the truncation of the series at `t = 0`) and
+`u(h/2, 5) = 1.000000 = G h^2 / (8 nu)`.
 
-**Uniform acceleration with a linear sink (check T1b).** `du/dt = a - s u` has the solution `u = a/s + (u_0 - a/s) exp(-s t)`; the implicit
-Euler recursion is `u_{n+1} = (u_n + a dt) / (1 + s dt)`. Both are exact algebra, no data.
+**Uniform acceleration with a linear sink (check T1b).** The equation `du/dt = a - s u` has the solution
+`u = a/s + (u_0 - a/s) exp(-s t)`, and the implicit Euler recursion is `u_{n+1} = (u_n + a dt) / (1 + s dt)`. Both are
+exact algebra, no data.
 
-**Hartmann limits (T3).** Reused from wave 23A (docs/reference-data.md, F-214 section): the short-circuit profile and flow rate of `rcfd_fv::lorentz::hartmann`.
+**Hartmann limits (T3).** The short-circuit profile and flow rate of `rcfd_fv::lorentz::hartmann` are reused from
+wave 23A (docs/reference-data.md, F-214 section).
 
 ## Wave 26C post-object catalogue and EnSight export (F-238, F-103, ADR 0048)
 
-No literature value is used; every expected number is a definition or a closed form derived here.
+No literature value is used. Every expected number is a definition or a closed form derived here.
 
-**Verified by derivation (first principles).** Sphere of radius `r`: area `4 pi r^2`, outward flux of `F = x - c` is `r * 4 pi r^2 = 4 pi r^3`
-(divergence theorem, `3 V`), a linear field `z - c_z` on the sphere has mean 0 and variance `r^2 / 3` (equal-area slices, `z - c_z`
-is uniform on `[-r, r]` by Archimedes' hat-box theorem). Ellipsoid flux of `x - c` is `3 V = 4 pi a b c`. Unit cube: surface area 6,
-outward flux of `(x,y,z)` is `3`, area-weighted mean of `x` over the six faces is `(0 + 1 + 4 * 1/2)/6 = 1/2`, mean of `x^2` is
-`(0 + 1 + 4/3)/6 = 7/18`, so the variance is `7/18 - 1/4 = 5/36` and the standard deviation `sqrt(5)/6`. Plane sections of the unit cube:
-`x = const` area 1, `x + y = 1` area `sqrt 2`, `x + y + z = 3/2` the regular hexagon of side `sqrt 2 / 2`, area `3 sqrt 3 / 4`.
-Cylinder lateral area `2 pi r h`; circular cone lateral area `pi R l` with `R = h tan a`, `l = h / cos a`. Weighted variance of
-`1e9 + {0..6}` is 4 (variance of the integers 0..6 is `(49 - 1)/12`). Momentum flux of a uniform velocity `u` through a patch of
-area vector `S` is `(u . S) u`.
+**Verified by derivation (first principles).**
 
-**Unverified / not read.** Layouts of the EnSight Gold files were taken from the vendor's public user-manual page (case file
-sections, geometry and variable file layouts, `nfaced`, 80-character binary records, wildcard expansion); the page text read did not
-state the `hexa8` node numbering (figure), the `nfaced` face orientation or the binary integer / float widths. The hexahedron
-convention (bottom face counter-clockwise seen from the top), outward `nfaced` faces and 4-byte little-endian integers and floats are
-from memory. HDF5 and CGNS layouts were not read or used.
+- Sphere of radius `r`: area `4 pi r^2`; outward flux of `F = x - c` is `r * 4 pi r^2 = 4 pi r^3` (divergence theorem,
+  `3 V`); a linear field `z - c_z` on the sphere has mean 0 and variance `r^2 / 3` (equal-area slices, `z - c_z` is
+  uniform on `[-r, r]` by Archimedes' hat-box theorem).
+- Ellipsoid: flux of `x - c` is `3 V = 4 pi a b c`.
+- Unit cube: surface area 6; outward flux of `(x,y,z)` is `3`; area-weighted mean of `x` over the six faces is
+  `(0 + 1 + 4 * 1/2)/6 = 1/2`; mean of `x^2` is `(0 + 1 + 4/3)/6 = 7/18`, so the variance is `7/18 - 1/4 = 5/36` and the
+  standard deviation `sqrt(5)/6`.
+- Plane sections of the unit cube: `x = const` area 1; `x + y = 1` area `sqrt 2`; `x + y + z = 3/2` the regular hexagon
+  of side `sqrt 2 / 2`, area `3 sqrt 3 / 4`.
+- Cylinder: lateral area `2 pi r h`.
+- Circular cone: lateral area `pi R l` with `R = h tan a`, `l = h / cos a`.
+- Weighted variance of `1e9 + {0..6}` is 4 (variance of the integers 0..6 is `(49 - 1)/12`).
+- Momentum flux of a uniform velocity `u` through a patch of area vector `S` is `(u . S) u`.
+
+**Unverified / not read.** Layouts of the EnSight Gold files were taken from the vendor's public user-manual page (case
+file sections, geometry and variable file layouts, `nfaced`, 80-character binary records, wildcard expansion). The page
+text read did not state the `hexa8` node numbering (figure), the `nfaced` face orientation or the binary integer / float
+widths. The hexahedron convention (bottom face counter-clockwise seen from the top), outward `nfaced` faces and 4-byte
+little-endian integers and floats are from memory. HDF5 and CGNS layouts were not read or used.
 
 ## Wave 26B sweep and Cartesian-core meshing (F-235, F-234, ADR 0047)
 
@@ -1001,7 +1112,7 @@ from memory. HDF5 and CGNS layouts were not read or used.
 
 ## Wave 28C adaptation and turbomachinery post-processing (F-102, F-123, ADR 0054)
 
-No source was read in this wave; everything is first-principles or recalled.
+No source was read in this wave. Everything is first-principles or recalled.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1020,8 +1131,8 @@ No source was read in this wave; everything is first-principles or recalled.
 
 ## Wave 28A VOF wiring: AMG, mass transfer, wave inlet and beach (F-055, F-226, F-227, ADR 0052)
 
-No source was read in this wave. Everything below is first-principles or recalled; the earlier entries for the same references
-(waves 23B, 25B) keep their status.
+No source was read in this wave. Everything below is first-principles or recalled. The earlier entries for the same
+references (waves 23B, 25B) keep their status.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1038,7 +1149,7 @@ No source was read in this wave. Everything below is first-principles or recalle
 
 ## Wave 28B chemistry acceleration and combustion extensions (F-223, F-129, ADR 0053)
 
-No source was read in this wave; every reference below is recalled from memory and is unverified.
+No source was read in this wave. Every reference below is recalled from memory and is unverified.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1056,8 +1167,8 @@ No source was read in this wave; every reference below is recalled from memory a
 
 ## Wave 29D distributed-memory layer (F-100, F-016, ADR 0058)
 
-No source was read in this wave; every reference below is recalled from memory and is unverified. No MPI library, no vendor code or
-binary was used or installed.
+No source was read in this wave. Every reference below is recalled from memory and is unverified. No MPI library, no
+vendor code or binary was used or installed.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1070,8 +1181,8 @@ binary was used or installed.
 
 ## Wave 29C Lagrangian extensions (F-128, F-056, ADR 0057)
 
-No source was read in this wave; every reference below is recalled from memory and is unverified unless marked derived. No vendor
-binary, install or text was used.
+No source was read in this wave. Every reference below is recalled from memory and is unverified unless marked derived.
+No vendor binary, install or text was used.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1088,8 +1199,9 @@ binary, install or text was used.
 
 ## Wave 29A rotor interfaces and guarded secant (F-126, F-200, ADR 0055)
 
-No source was read in this wave; every reference below is recalled from memory and is unverified. No vendor code, binary or install was used.
-No published turbomachine (NASA Rotor 37, Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
+No source was read in this wave. Every reference below is recalled from memory and is unverified. No vendor code, binary
+or install was used. No published turbomachine (NASA Rotor 37, Hannover compressor, any pump or fan) was run or compared:
+NOT ATTEMPTED.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1105,9 +1217,10 @@ No published turbomachine (NASA Rotor 37, Hannover compressor, any pump or fan) 
 
 ## Wave 29B mixture and cavitation (F-127, ADR 0056)
 
-No source was read in this wave; every reference below is recalled from memory and is UNVERIFIED. No vendor code, binary or install was used.
-No published cavitation data (cavitating venturi, hydrofoil sheet length, nozzle) and no bubble-column void-fraction profile was compared:
-NOT ATTEMPTED. Full multi-fluid Euler-Euler (per-phase momentum, lift, virtual mass, turbulent dispersion) is NOT delivered.
+No source was read in this wave. Every reference below is recalled from memory and is UNVERIFIED. No vendor code, binary
+or install was used. No published cavitation data (cavitating venturi, hydrofoil sheet length, nozzle) and no
+bubble-column void-fraction profile was compared: NOT ATTEMPTED. Full multi-fluid Euler-Euler (per-phase momentum, lift,
+virtual mass, turbulent dispersion) is NOT delivered.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1125,9 +1238,9 @@ NOT ATTEMPTED. Full multi-fluid Euler-Euler (per-phase momentum, lift, virtual m
 
 ## Wave 30A two-way particle coupling and mixing plane in the solver loops (F-128, F-126, ADR 0059)
 
-No source was read in this wave and no web page was fetched; every reference below is derived from first principles or recalled from memory
-(unverified). No vendor code, binary or install was used. No published particle-laden jet, no spray, no published turbomachine (Rotor 37,
-Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
+No source was read in this wave and no web page was fetched. Every reference below is derived from first principles or
+recalled from memory (unverified). No vendor code, binary or install was used. No published particle-laden jet, no
+spray, no published turbomachine (Rotor 37, Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
 
 | Item | Status | Note |
 |------|--------|------|
@@ -1141,8 +1254,11 @@ Hannover compressor, any pump or fan) was run or compared: NOT ATTEMPTED.
 
 ## Wave 30B: incompressible validation data actually read (ADR 0060, retrieved 2026-10-17)
 
-Every row below was read as raw text (`curl` plus `pdftotext -layout`, or the raw data file) in wave 30B; the numbers are stored in
-`validation-data/reference/` and registered in `validation-data/manifest.json`. Nothing here is typed from memory.
+Wave 30B read every row below as raw text (`curl` plus `pdftotext -layout`, or the raw data file). The numbers are stored
+in `validation-data/reference/` and registered in `validation-data/manifest.json`. Nothing here is typed from memory.
+
+The measured results of wave 30B against the registered limits are in the addendum of ADR 0060. Known misses are the
+ignored `*_known_miss` tests in `crates/rcfd-api/tests/validation_*.rs`.
 
 | Value | Source and what was read | Result |
 |---|---|---|
@@ -1154,11 +1270,14 @@ Every row below was read as raw text (`curl` plus `pdftotext -layout`, or the ra
 | Cylinder Re 100: C_D 1.314 to 1.370, St 0.164 to 0.167, experiment St 0.165 | arXiv:2303.09262 Table 1 (Newtonian rows) and arXiv:1401.6513 Table 3 | verified as quotations; the original papers were NOT read |
 | Moody, Colebrook, Dean friction correlations; Gartling and Ghia originals; Armaly | not obtained | still unverified or data not obtained; no wave 30B check uses them |
 
-Wave 30B measured results against the registered limits are in the addendum of ADR 0060 (known misses are the ignored `*_known_miss` tests in `crates/rcfd-api/tests/validation_*.rs`).
-
 ## Wave 31C: reference reading (ADR 0064, retrieved 2026-10-18)
 
-Method: public pages and PDFs were downloaded as raw bytes (`curl`) and converted with `pdftotext -layout`, or read through the page fetcher (LLM-condensed, so potentially lossy; the numbers used below were checked against raw text wherever the raw file was available). Nothing was filled from memory. Small tables are stored as `validation-data/reference/w31c_*.csv` with manifest entries; the checks are in `crates/rcfd-api/tests/validation_refs_w31c.rs`.
+The discrepancies between a repo or source value and the text read are listed after the table; nothing was silently
+changed. Wave 31C downloaded public pages and PDFs as raw bytes (`curl`) and converted them with `pdftotext -layout`,
+or read them through the page fetcher. The fetcher's output is LLM-condensed, so potentially lossy; the numbers used below
+were checked against raw text wherever the raw file was available. Nothing was filled from memory. Small tables are stored
+as `validation-data/reference/w31c_*.csv` with manifest entries. The checks are in
+`crates/rcfd-api/tests/validation_refs_w31c.rs`.
 
 | Item | What was read (source) | Result |
 |---|---|---|
@@ -1177,13 +1296,21 @@ Method: public pages and PDFs were downloaded as raw bytes (`curl`) and converte
 
 ### Discrepancies between a repo or source value and the text read (wave 31C; nothing was silently changed)
 
-1. Ghia v, Re 400, x = 0.5: 0.05186 (gist, student repository) against 0.05188 (Uppsala thesis Table 1). Stored 0.05186 (two of three). No rcfd test uses it.
-2. Ghia v, Re 1000, x = 0.9063: -0.5155 (student repository; thesis -0.51550) against -0.51500 (gist). Stored -0.5155. No rcfd test uses it.
-3. Ghia v, Re 400, x = 0.9063 = -0.23827 is a misprint of the original table (noted by the gist and the thesis), kept as printed; no rcfd test uses the Re 400 v table.
-4. Gartling (1990) Re 800: 12.20 / 9.70 / 20.96 step heights (MFIX-Exa quoting Gartling; arXiv:2507.16509 for 12.20) against 11.9 / 9.5 / 20.6 (AMCA 2013 row labelled Gartling). The in-repo 12.20 agrees with two of three secondary sources; the original was not read.
-5. St at Re 100: the in-repo CSV row "Williamson (experiment) 0.165" (1996 review via arXiv:2303.09262) against the 1989 fit 0.164335 (0.4 % apart); both lie inside the 1 % window of the cylinder test.
+1. Ghia v, Re 400, x = 0.5: 0.05186 (gist, student repository) against 0.05188 (Uppsala thesis Table 1). Stored 0.05186
+   (two of three). No rcfd test uses it.
+2. Ghia v, Re 1000, x = 0.9063: -0.5155 (student repository; thesis -0.51550) against -0.51500 (gist). Stored -0.5155. No
+   rcfd test uses it.
+3. Ghia v, Re 400, x = 0.9063 = -0.23827 is a misprint of the original table (noted by the gist and the thesis), kept as
+   printed. No rcfd test uses the Re 400 v table.
+4. Gartling (1990) Re 800: 12.20 / 9.70 / 20.96 step heights (MFIX-Exa quoting Gartling; arXiv:2507.16509 for 12.20)
+   against 11.9 / 9.5 / 20.6 (AMCA 2013 row labelled Gartling). The in-repo 12.20 agrees with two of three secondary
+   sources. The original was not read.
+5. St at Re 100: the in-repo CSV row "Williamson (experiment) 0.165" (1996 review via arXiv:2303.09262) against the 1989
+   fit 0.164335 (0.4 % apart). Both lie inside the 1 % window of the cylinder test.
 6. Dean table row Re_tau 100 prints U_b/u_tau 14.4 against 14.13 from the paper's own Eq. (A1).
-7. `validation_channel_re180.rs` takes the DNS Cf = 0.008136 (U_b+ 15.6787 at Re_tau 178.12); Dean's relation with Re_b = 15.6787 x 178.12 = 2792.7 gives 0.008446, 3.8 % higher. The source itself states the correlation is inaccurate at low Re_tau, so the repo's choice to use the DNS value instead is consistent with it.
+7. `validation_channel_re180.rs` takes the DNS Cf = 0.008136 (U_b+ 15.6787 at Re_tau 178.12). Dean's relation with
+   Re_b = 15.6787 x 178.12 = 2792.7 gives 0.008446, 3.8 % higher. The source itself states the correlation is inaccurate
+   at low Re_tau, so the repo's choice to use the DNS value instead is consistent with it.
 
 ## Wave 31B: turbulence wall diagnosis (ADR 0063)
 
@@ -1196,12 +1323,25 @@ Method: public pages and PDFs were downloaded as raw bytes (`curl`) and converte
 
 ## Wave 31A: solver defects found by the wave 30 validation (ADR 0062)
 
-No new external source was read in this wave. The reference values used are the ones already in the repository from waves 30B and 30C (de Vahl Davis 1983 Table V from the page scan; the cylinder literature rows
-of `validation-data/reference/cylinder_re100_literature.csv`, St 0.164 to 0.167 and C_D 1.314 to 1.370; the Sod exact values of Marzouk). All limits were taken unchanged from ADR 0060 and ADR 0061.
-Computed-by-rcfd results of this wave (not literature, not validation data): the Ra 1e6 cavity diagnosis (converged 32 x 32 value v_max 220.48, Nu 8.873 at alpha_u 0.5), and the cylinder time-step and mesh study
-(St extrapolated to zero time step and mesh 0.1669, C_D 1.357 by a fitted model with first-order time and second-order space terms, versus the unchanged literature windows).
+No new external source was read in this wave. All limits were taken unchanged from ADR 0060 and ADR 0061. The reference
+values used are the ones already in the repository from waves 30B and 30C:
+
+- de Vahl Davis 1983 Table V, from the page scan.
+- The cylinder literature rows of `validation-data/reference/cylinder_re100_literature.csv`, St 0.164 to 0.167 and
+  C_D 1.314 to 1.370.
+- The Sod exact values of Marzouk.
+
+Results of this wave computed by rcfd (not literature, not validation data):
+
+- The Ra 1e6 cavity diagnosis: converged 32 x 32 value v_max 220.48, Nu 8.873 at alpha_u 0.5.
+- The cylinder time-step and mesh study: St extrapolated to zero time step and mesh 0.1669, C_D 1.357 by a fitted model
+  with first-order time and second-order space terms, versus the unchanged literature windows.
 
 ## Wave 32B: aeroacoustics for fan noise (ADR 0066, docs/acoustics.md)
+
+No measured fan or airfoil noise data were read or used. The broadband proxies (Proudman, Curle, trailing edge) are
+NOT validated. Validation would need measured or scale-resolving wall-pressure and far-field data for a known operating
+point, calibration of the constants on one data set and a held-out comparison on another.
 
 | Item | What was read (source) | Result |
 |---|---|---|
@@ -1214,9 +1354,9 @@ Computed-by-rcfd results of this wave (not literature, not validation data): the
 | 1/3-octave band definition | IEC 61260-1 NOT read | base-10 bands (ratio 10^(1/10)), as commonly stated; nominal labels from the usual rounded list |
 | Reference pressure 20 uPa | common standard value | used as the SPL reference |
 
-No measured fan or airfoil noise data were read or used. The broadband proxies (Proudman, Curle, trailing edge) are NOT validated; validation would need measured or scale-resolving wall-pressure and far-field data for a known operating point, calibration of the constants on one data set and a held-out comparison on another.
-
 ## Wave 32C: design-loop infrastructure (ADR 0067, docs/design-loop.md)
+
+No measured data and no vendor material were read or used in this wave.
 
 | Item | What was read (source) | Result |
 |---|---|---|
@@ -1229,9 +1369,9 @@ No measured fan or airfoil noise data were read or used. The broadband proxies (
 | xoshiro256** and SplitMix64 | Blackman and Vigna generators recalled from memory | used for seeded reproducibility only; no statistical quality claim beyond the stratification and determinism tests |
 | Contraction channel (E1) | no reference data; the 40 % claim of the ADR is an estimate from a lubrication argument | computed by rcfd: pressure drop 9.94 to 5.07 (49 %) with the outlet velocity ratio at the constraint 1.3 |
 
-No measured data and no vendor material were read or used in this wave.
-
 ## Wave 32A: fan geometry and sector mesh (ADR 0065)
+
+Nothing in this wave is a validation against measured data.
 
 | Item | What was read (source) | Result |
 |---|---|---|
@@ -1239,5 +1379,3 @@ No measured data and no vendor material were read or used in this wave.
 | Double circular arc section | constructed here from elementary geometry; no source | formulas stated in docs/meshing.md and checked by quadrature |
 | Flat-plate friction `Cf = 0.0576 Re^(-1/5)` for the first-cell estimate | the power-law form used earlier in this repository (wave 7); not re-read | used only to size the first cell; the y+ of a converged solution was not measured |
 | Published fan or blade data | none read | no comparison with a real fan was made; geometry and mesh are checked only against analytic formulas and conservation identities |
-
-Nothing in this wave is a validation against measured data.

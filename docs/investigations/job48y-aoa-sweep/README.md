@@ -1,5 +1,10 @@
 # NACA 0012 angle-of-attack sweep through stall (job 48Y, ADR 0159)
 
+At the measured Reynolds number, the two RANS models on mesh M1w bracket the measured stall angle: SST stalls about 3 degrees
+early and SA about 3 degrees late. All four limits (L1 to L4) are met, and L3 finds stall only after the registered extension.
+SA's drag is far too high: from 4 degrees up the SA arm is 1.4 to 4.6 times Ladson's drag. The finer grid M2w at 14 degrees is
+not steady by D4. A 2D DDES of a stalled aerofoil is not a validated stall model, so the SA-DDES mean is reported, not adopted.
+
 The set-up, the limits, the two amendments and the evaluation are in
 [ADR 0159](../../adr/0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md). This folder holds the results only.
 No run, mesh or field store is kept in git. To build the runs again, use `scripts/w48y_aoa_sweep.py` in an empty work folder

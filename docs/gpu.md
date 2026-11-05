@@ -1,9 +1,16 @@
 # GPU linear solvers (F-101, ADR 0038)
 
-This page explains the optional GPU path for the pressure solve: what runs on the device, how a run decides between device
-and CPU, what was measured, and what is missing. It is for users with a supported graphics card who want to know whether the
-GPU pays off for their case, and for anyone building with GPU support. For the exact case key see [case-schema.md](case-schema.md); for the
-full decision record read the ADR named in the title.
+The optional GPU path runs the linear solvers of the pressure solve on the device. Small systems do not pay. In the benchmark on this
+page, measured on a single machine, the one-shot GPU solve (which counts the matrix upload) is slower than one CPU thread at 4096
+unknowns (0.22x) and about equal at 32768 unknowns (1.15x). This is why `auto` has a 100000-unknown threshold. At 5M unknowns the
+one-shot speedup is roughly 10x to 15x against one CPU thread and 6.1x against 16 CPU threads. At 32768 and 4096 unknowns the 16-thread
+CPU is faster than the one-shot GPU. The one-shot figure is the relevant one in the pressure solve of a case, because the matrix
+changes every outer iteration. F-101 is `partial`: the gaps are listed below.
+
+This page is for users with a supported graphics card who want to know whether the GPU pays off for their case, and for anyone building
+with GPU support. It covers what runs on the device, how a run decides between device and CPU, what was measured, and what is missing.
+For the exact case key see [case-schema.md](case-schema.md); for the full decision record read the ADR named in the title. Project terms
+such as wave and F-xxx are in the [glossary](glossary.md).
 
 Wave 22 adds an optional CUDA backend for the linear solvers: CSR matrix-vector product, dot / axpy / norm, Jacobi and
 Chebyshev preconditioning, and Conjugate Gradient and BiCGStab running entirely on the device (f64 throughout). It is used by the
@@ -24,9 +31,11 @@ setting and benchmarks on one device. Not delivered:
 
 ## Behaviour without a device
 
-`device = "cpu"` never touches the GPU code. `device = "auto"` uses the device for systems of 100000 unknowns or more (fixed
-threshold) when one is usable; otherwise it runs the CPU path and records why (`rcfd_gpu::fallbacks()`). `device = "cuda"` without a
-usable device (or in a build without the feature) is a located error at `linear_solver.device` naming the reason.
+* `device = "cpu"` never touches the GPU code.
+* `device = "auto"` uses the device for systems of 100000 unknowns or more (fixed threshold) when one is usable; otherwise it runs the
+  CPU path and records why (`rcfd_gpu::fallbacks()`).
+* `device = "cuda"` without a usable device (or in a build without the feature) is a located error at `linear_solver.device` naming the
+  reason.
 
 ## Build and run
 
@@ -35,7 +44,7 @@ cargo build --release -p rcfd-cli --features cuda
 ```
 
 The `cuda` feature (off by default) compiles the `rcfd-gpu` backend. The CUDA libraries are loaded at run time (`cudarc` with
-dynamic loading) and the kernels are compiled at run time with NVRTC, so building needs no toolkit and no C++ compiler; running on a
+dynamic loading) and the kernels are compiled at run time with NVRTC, so building needs no toolkit and no C++ compiler. Running on a
 device needs the NVIDIA driver and the toolkit's NVRTC library. All `unsafe` code of the project is confined to
 `crates/rcfd-gpu/src/cuda/launch.rs` (the rest of the workspace keeps `unsafe_code = "forbid"`).
 
@@ -77,9 +86,11 @@ cargo run -p rcfd-gpu --features cuda --release --example gpu_bench -- --sizes 1
 ```
 
 Problem: 3-D 7-point Poisson on an n^3 grid, CG, Jacobi, `tol_rel = 1e-6`, `x0 = 0`. Every number is the median of 5 runs after one
-warm-up run. CPU runs use a rayon pool of 1 thread or 16 threads (all logical cores of the test machine). "GPU resident" has the matrix already
-on the device and counts upload of b and x, the iterations and the download of x; "GPU one-shot" additionally counts building the
-device system (matrix upload). AMG-CG is the existing CPU AMG preconditioner, 1 thread, setup plus solve.
+warm-up run. CPU runs use a rayon pool of 1 thread or 16 threads (all logical cores of the test machine). The table columns mean:
+
+* "GPU resident" has the matrix already on the device and counts upload of b and x, the iterations and the download of x.
+* "GPU one-shot" additionally counts building the device system (matrix upload).
+* AMG-CG is the existing CPU AMG preconditioner, 1 thread, setup plus solve.
 
 Machine: RTX 5080 (16 GiB), 16 logical CPU threads, Windows 11, driver 617.42, toolkit 13.4. First-call cost of the device (toolkit
 location, context, NVRTC compile, module load): 0.29 s in the benchmark process (0.9 s in a cold test process), paid once per process.

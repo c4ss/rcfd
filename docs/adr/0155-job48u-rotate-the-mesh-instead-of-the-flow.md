@@ -1,29 +1,57 @@
-# ADR 0155: Job 48U, rotate the mesh instead of the flow: `[mesh.transform]` (rotation about z), the NACA 0012 example at an angle of attack with the flow along +x
+# ADR 0155: Job 48U, rotate the mesh instead of the flow
 
 Status: **registered 2026-10-28**, part 1 (design, set-up and every limit except the tolerance of E2), before any
 registered run and before any code change; the tolerance of E2 is registered by amendment 1 after a disclosed smoke run
 and before the counted runs; amendment 2 (MT101's key list was defective) before the corrected check; results in the
 addendum: every registered limit met (H2 after re-running two pre-existing tests under their own assumptions, a fresh
 `TEMP` and one thread: deviation 9), every control failed as required, no known miss; not yet accepted by the
-maintainer. Job 48U (the letter after 48T; ADRs 0150-0154 are taken by jobs 48P-48T on other branches),
-on local main 6867e40 (waves 48A-48O merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
-limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
-intact; a defective set-up gets an amendment written before the corrected run; defaults of existing code stay
-bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate
-graph stays acyclic; no commit trailers; nothing is pushed. Clean-room: our own code.
+maintainer.
+
+The maintainer asked for a way to rotate the mesh instead of the air flow. This job adds `[mesh.transform]` (rotation
+about z), an optional table in the case schema that applies at mesh build time to every mesh source, and two rotated cases
+of the NACA 0012 example at an angle of attack with the flow along +x. No other setting of the case is rotated, and
+settings that place something relative to the geometry get the warning MT101 when the rotation is not 0. A case without
+the table keeps its data, text, hash and mesh (H1: 0 of 41 sources differ). In the addendum, at iteration 2000 the
+rotated-mesh and flow-rotated runs differ by at most 9.5e-8 relative (E2's limit is 1e-6); near iteration 20 `cl` differs
+by up to 6.5e-4, and the likely cause, the per-component inner solves, was not investigated. A note of 2026-10-29
+(ADR 0169, job 49F) records that the regenerated aerofoil runs converge at 409 / 230 iterations, so E2 is the ignored
+known miss `e2_rotated_mesh_matches_rotated_flow_known_miss`, limit intact, and that the two forms agree within 5.3e-9 at
+the final iteration. The addendum did not run the "Not in CI" checklist, Linux, the workspace gate or `cargo deny`, and it
+decides none of its nine questions for the maintainer.
+
+Job and rules:
+
+* Job 48U (the letter after 48T; ADRs 0150-0154 are taken by jobs 48P-48T on other branches), on local main 6867e40 (waves
+  48A-48O merged).
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
+  acyclic; no commit trailers; nothing is pushed.
+* Clean-room: our own code.
 
 ## The request (the maintainer, 2026-10-28, relayed)
 
 "We should make it possible to rotate the mesh instead of the air flow." The NACA 0012 example
 (`example-projects/wind-tunnel/cases/naca0012-aoa4.toml`) sets the angle of attack by turning the flow, in four places:
 `[initial] velocity`, `boundaries.farfield.velocity_value`, `reports.cl.direction = (-sin a, cos a, 0)` and
-`reports.cd.direction = (cos a, sin a, 0)`. The brief: a mesh transform in the case schema for every mesh source
-(generator and file), applied at mesh build time in the one function the runner, the Studio preview, the service's
-`render.png` and `rcfd run` use; vertices only; a rotation of exactly 0 is a no-op bit for bit; everything else in the
-case stays in world coordinates (flow along +x, lift +y, drag +x), with a warning for mesh-relative features; periodic
-patches refused unless consistent; validation, the Studio's case editor and preview; two rotated example cases with runs
-made by the real solver through `scripts/make_example_projects.py`; the physics check rotated mesh against rotated flow,
-with a registered tolerance, measured and reported honestly; docs; tests; the case hash of every existing case unchanged.
+`reports.cd.direction = (cos a, sin a, 0)`.
+
+The brief:
+
+* a mesh transform in the case schema for every mesh source (generator and file), applied at mesh build time in the one
+  function the runner, the Studio preview, the service's `render.png` and `rcfd run` use;
+* vertices only;
+* a rotation of exactly 0 is a no-op bit for bit;
+* everything else in the case stays in world coordinates (flow along +x, lift +y, drag +x), with a warning for
+  mesh-relative features;
+* periodic patches refused unless consistent;
+* validation, the Studio's case editor and preview;
+* two rotated example cases with runs made by the real solver through `scripts/make_example_projects.py`;
+* the physics check rotated mesh against rotated flow, with a registered tolerance, measured and reported honestly;
+* docs;
+* tests;
+* the case hash of every existing case unchanged.
 
 ## Context (read at 6867e40)
 
@@ -280,14 +308,23 @@ control: the same case without the table gets none.
 
 ## Addendum: results (2026-10-28, branch `worktree-agent-a19b8077ee9b9bd5a`)
 
-Commits: 6f19884 (registration), c2a8d72 (R0), 9d50287 (code, case-level tests, the two cases, the script's
-`--add-missing`), c2d30c2 (amendment 1), c436d3d (the counted runs, the example tests), ffb859a (the Studio checks, U2 on
-the aerofoil mesh), 6cd65d2 (amendment 2), ec4330e (the amendment-2 code, W1b), faff240 (H1 and S2 compare Windows-made
-mesh hashes on Windows only), c0e3b31 (the unregistered checks X1, X2, S1b), and this addendum (7f9cd91, 9cb3c90 and the
-commit that adds the suite totals). The branch started at 1248a76 and was fast-forwarded to local main 6867e40 before
-any work. Release builds on this
-host (shared with other agents' builds), `--test-threads 1` for the registered tests, output to files. The counted runs
-used the binaries built at c2d30c2, copied out of the target folder before the runs.
+Release builds on this host (shared with other agents' builds), `--test-threads 1` for the registered tests, output to
+files. The counted runs used the binaries built at c2d30c2, copied out of the target folder before the runs. The branch
+started at 1248a76 and was fast-forwarded to local main 6867e40 before any work.
+
+Commits:
+
+* 6f19884: registration
+* c2a8d72: R0
+* 9d50287: code, case-level tests, the two cases, the script's `--add-missing`
+* c2d30c2: amendment 1
+* c436d3d: the counted runs, the example tests
+* ffb859a: the Studio checks, U2 on the aerofoil mesh
+* 6cd65d2: amendment 2
+* ec4330e: the amendment-2 code, W1b
+* faff240: H1 and S2 compare Windows-made mesh hashes on Windows only
+* c0e3b31: the unregistered checks X1, X2, S1b
+* 7f9cd91, 9cb3c90 and the commit that adds the suite totals: this addendum
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -347,11 +384,14 @@ instead of four.
    (`tmp("s5")`, the same process id), so the default parallel runner lets one remove the other's checkpoint ("cannot find
    the file specified"); with `--test-threads 1` the file passes (7 passed, 1 ignored known miss).
 
-**Not run.** The "Not in CI" checklist (a person at the window); Linux: the rotated mesh's coordinates come from the
-platform's `sin_cos`, so on Linux the two new runs' store mesh hashes (S5), their reproducible bytes (E4) and the solver
-fields may differ in the last bits: their Linux-built stores need regenerating with job 48P's set (ADR 0137 rule; only
-the Windows set is added here); the workspace gate (only the changed crates' suites and clippy); `cargo deny` (no new
-dependency).
+**Not run.**
+
+* The "Not in CI" checklist (a person at the window).
+* Linux. The rotated mesh's coordinates come from the platform's `sin_cos`, so on Linux the two new runs' store mesh
+  hashes (S5), their reproducible bytes (E4) and the solver fields may differ in the last bits. Their Linux-built stores
+  need regenerating with job 48P's set (ADR 0137 rule; only the Windows set is added here).
+* The workspace gate (only the changed crates' suites and clippy).
+* `cargo deny` (no new dependency).
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
 
@@ -409,4 +449,6 @@ dependency).
 Merged into main with job 48P's Linux tree and job 48R's DV5/DV6 by job 48W: the two rotated cases and their Linux-built
 runs are in `example-projects-linux/` too (`--docker --add-missing`), DV6 takes the cases its record names. Results there.
 
-2026-10-29 (ADR 0169, job 49F): the regenerated aerofoil runs converge at 409 / 230 iterations, so E2 (iteration 2000, 1001-2000) is the ignored known miss `e2_rotated_mesh_matches_rotated_flow_known_miss`, limit intact; at the final iteration the two forms agree within 5.3e-9 (ADR 0169).
+2026-10-29 (ADR 0169, job 49F): the regenerated aerofoil runs converge at 409 / 230 iterations, so E2 (iteration 2000,
+1001-2000) is the ignored known miss `e2_rotated_mesh_matches_rotated_flow_known_miss`, limit intact; at the final iteration
+the two forms agree within 5.3e-9 (ADR 0169).

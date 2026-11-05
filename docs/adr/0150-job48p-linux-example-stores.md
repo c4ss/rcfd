@@ -4,45 +4,73 @@ Status: **registered 2026-10-28**, before any registered run (the code, the test
 built and compiled first; what ran before is listed under "What I already knew"); amendment 1 (a set-up defect of P1's
 new self-test) before its corrected run; results in the addendum: every registered limit met and every control as
 required (P1 after amendment 1); the Linux Re 100 cylinder run misses G3's crossing count as the Windows one does (the
-same ignored known miss, limit intact); not yet accepted by the maintainer. Job 48P, on local main 6867e40 (waves
-48A-48O merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here
-before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective
-set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical;
-`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
-acyclic. Parents: [ADR 0142](0142-wave48h-example-projects.md) (the example projects and their checks), [ADR
-0137](0137-linux-gate-platform-values.md) (per-platform values).
+same ignored known miss, limit intact); not yet accepted by the maintainer.
+
+The full gate on `ubuntu-latest` failed one test: the committed example runs were built on Windows, and the cylinder's
+generator places its points with values whose last bits differ per platform, so the mesh Linux builds is not the mesh the
+store holds. The maintainer's decision: ship Linux-built stores too, not a tolerance and not a known miss. A second tree,
+`example-projects-linux/`, holds the same two projects with runs that the same script builds in Docker;
+`example-projects/` stays byte for byte as it is. The addendum reports every registered limit met and every control as
+required (P1 after amendment 1). The Linux Re 100 cylinder run misses G3's crossing count (6, limit 7) as the Windows one
+does: the same ignored known miss, limit intact. Both trees together take about 63 MB of files in a checkout, and the
+whole job adds 11 343 206 bytes packed to the repository. The CI `Full gate` on `ubuntu-latest`, the real check, was not
+run on this job's commits (no push): only the cylinder mesh hash was compared with a value CI itself printed, and that
+CI agrees for the other eight runs is inferred from their meshes. A note of 2026-10-29 (ADR 0157) records two more
+aerofoil cases in both trees; no limit of this ADR changed.
+
+Rules and parents:
+
+* Job 48P, on local main 6867e40 (waves 48A-48O merged).
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the
+  registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an
+  amendment written before the corrected run; defaults of existing code stay bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
+  acyclic.
+* Parents: [ADR 0142](0142-wave48h-example-projects.md) (the example projects and their checks),
+  [ADR 0137](0137-linux-gate-platform-values.md) (per-platform values).
 
 ## Problem
 
 The full gate on `ubuntu-latest` (run 40745280871, as relayed) failed one test: `crates/rcfd-mcp/tests/
 example_projects_w48h.rs` `s5_run_stores_residuals_and_metrics_match_their_case`, `wind-tunnel/r-20261028T152128-d5cb:
-store mesh hash` left 2159359318246829613, right 10791892230985098653. The committed example runs were built on Windows
-(ADR 0142); the cylinder's `cylinder_ogrid` generator places its points with `sin`, `cos` and a graded spacing, whose
-last bits differ per platform (`f64::powi` and libm, up to 5 ulp, ADR 0137), so the mesh Linux builds from the run's case
-is not the mesh the store holds. Left is the store (its `index.json` says `1df795dbf2882e2d`, which is
-2159359318246829613), right the mesh built on Linux.
+store mesh hash` left 2159359318246829613, right 10791892230985098653. Left is the store
+(its `index.json` says `1df795dbf2882e2d`, which is 2159359318246829613), right the mesh built on Linux.
+
+The committed example runs were built on Windows (ADR 0142). The cylinder's `cylinder_ogrid` generator places its points
+with `sin`, `cos` and a graded spacing, whose last bits differ per platform (`f64::powi` and libm, up to 5 ulp, ADR 0137).
+So the mesh Linux builds from the run's case is not the mesh the store holds.
 
 ## The maintainer's decision (relayed)
 
-Ship Linux-built stores too: not a tolerance, not a known miss. The cleanest layout for per-platform stores such that
-(1) on Windows everything stays exactly as today, (2) on Linux the same checks pass exactly against Linux-built runs,
-(3) the Studio on either platform opens the example and shows the runs built on its own platform, with no
-duplicate-looking run lists. Register the options considered and the pick with reasons; the size cap of 40 MB per tree
-(ADR 0142 S8) and how it applies now; keep the repository's growth small; the Linux runs made by the real rcfd through
-the script, none by hand; the script builds the Linux set in Docker (the command documented); `--check`,
-`--rerun-check` and the tests extended; ADR 0142 G3's sanity limits evaluated again on the Linux runs (ADR 0137's
-rule), a miss reported, never loosened.
+Ship Linux-built stores too: not a tolerance, not a known miss. The cleanest layout for per-platform stores such that:
+
+1. on Windows everything stays exactly as today;
+2. on Linux the same checks pass exactly against Linux-built runs;
+3. the Studio on either platform opens the example and shows the runs built on its own platform, with no
+   duplicate-looking run lists.
+
+Also in the decision:
+
+* Register the options considered and the pick with reasons; the size cap of 40 MB per tree (ADR 0142 S8) and how it
+  applies now.
+* Keep the repository's growth small.
+* The Linux runs made by the real rcfd through the script, none by hand.
+* The script builds the Linux set in Docker (the command documented).
+* `--check`, `--rerun-check` and the tests extended.
+* ADR 0142 G3's sanity limits evaluated again on the Linux runs (ADR 0137's rule), a miss reported, never loosened.
 
 ## Context (read at 6867e40)
 
-* What reads the committed examples: `crates/rcfd-mcp/tests/example_projects_w48h.rs` (ADR 0142 S1-S9, E1, E2, G1-G3;
-  the only comparison with something computed on the test's platform is S5's store mesh hash against
-  `build_mesh(case.snapshot).content_hash()`; everything else compares committed files with each other),
-  `crates/rcfd-studio/tests/example_projects_h.rs` (H1: the Studio model lists 6 and 4 runs, `listed == runs.len()`),
-  `scripts/make_example_projects.py --check` and `scripts/test_make_example_projects.py` (in CI's `scripts` job on
-  `ubuntu-latest`; no mesh is built), `crates/rcfd-studio/tests/scale_n.rs` (a copy of the wind-tunnel project: captions,
-  scale, "Refine x2"; no store is compared with a mesh) and `crates/rcfd-api/tests/end_time_landing_w48k.rs` (one case
-  file). In the Linux gate only S5 failed.
+* What reads the committed examples (in the Linux gate only S5 failed):
+  * `crates/rcfd-mcp/tests/example_projects_w48h.rs` (ADR 0142 S1-S9, E1, E2, G1-G3; the only comparison with something
+    computed on the test's platform is S5's store mesh hash against `build_mesh(case.snapshot).content_hash()`; everything
+    else compares committed files with each other);
+  * `crates/rcfd-studio/tests/example_projects_h.rs` (H1: the Studio model lists 6 and 4 runs, `listed == runs.len()`);
+  * `scripts/make_example_projects.py --check` and `scripts/test_make_example_projects.py` (in CI's `scripts` job on
+    `ubuntu-latest`; no mesh is built);
+  * `crates/rcfd-studio/tests/scale_n.rs` (a copy of the wind-tunnel project: captions, scale, "Refine x2"; no store is
+    compared with a mesh);
+  * `crates/rcfd-api/tests/end_time_landing_w48k.rs` (one case file).
 * The Studio lists every folder under a project's `runs/` (`rcfd-project` `Project::runs`); a run record names no
   platform (ADR 0130); nothing in the Studio compares a store's mesh with its case's (`preview` hashes its own mesh).
 * Which meshes depend on the platform: the cylinders' `cylinder_ogrid` (graded spacing); the step and the cavities are
@@ -69,11 +97,16 @@ rule), a miss reported, never loosened.
 | E. A second project per platform inside `example-projects/` (`wind-tunnel-linux/`, ...) | one tree, four projects | rejected: the Windows tree's manifest and checks change (requirement 1); the tree's 40 MB cap would be exceeded |
 | **F. A second tree `example-projects-linux/` holding the same two projects, built by the same script in Docker** | two trees, each with one platform's runs | **chosen** |
 
-Reasons for F: `example-projects/` stays byte for byte as it is (requirement 1; T4); the Linux tree is a full set of the
-same projects with runs made on Linux, so the Studio opened on it lists each case's run once (requirement 3; L5); every
-check of ADR 0142 applies to it unchanged and S5 exactly (requirement 2; L4); no production code, run-record contract
-or default changes; each tree keeps ADR 0142's caps on its own; git stores a file that is byte-identical in both trees
-once, so the repository grows by the files that differ (T5 measures it).
+Reasons for F:
+
+* `example-projects/` stays byte for byte as it is (requirement 1; T4).
+* The Linux tree is a full set of the same projects with runs made on Linux, so the Studio opened on it lists each case's
+  run once (requirement 3; L5).
+* Every check of ADR 0142 applies to it unchanged and S5 exactly (requirement 2; L4).
+* No production code, run-record contract or default changes.
+* Each tree keeps ADR 0142's caps on its own.
+* Git stores a file that is byte-identical in both trees once, so the repository grows by the files that differ (T5
+  measures it).
 
 ## Decisions (as implemented)
 
@@ -101,11 +134,12 @@ once, so the repository grows by the files that differ (T5 measures it).
 
    It builds the image when missing; writes a tar of the checkout's files as they are in the working tree (`git ls-files
    --cached --others --exclude-standard`); runs one container (`docker run --rm --init --cpuset-cpus 0-3 --memory 16g`,
-   named volumes `rcfd-examples-target` for the cargo target folder and `rcfd-examples-cargo-registry` for the crates)
-   that extracts the tar into its own file system at `/src` (`tar -m`, so every source is newer than a cached build),
-   builds `rcfd` and `rcfd-runner` (`cargo build --release --locked`) and runs `python3 scripts/make_example_projects.py
-   --tree linux --bin-dir /target/release` there (the run service's lock and status files never sit on a Windows bind
-   mount); the finished tree comes back as a tar and replaces `example-projects-linux/`; then `--check` of both trees.
+   named volumes `rcfd-examples-target` for the cargo target folder and `rcfd-examples-cargo-registry` for the crates).
+   The container extracts the tar into its own file system at `/src` (`tar -m`, so every source is newer than a cached
+   build), builds `rcfd` and `rcfd-runner` (`cargo build --release --locked`) and runs
+   `python3 scripts/make_example_projects.py --tree linux --bin-dir /target/release` there (the run service's lock and
+   status files never sit on a Windows bind mount). The finished tree comes back as a tar and replaces
+   `example-projects-linux/`; then `--check` of both trees.
    `--docker --rerun-check` runs the script's `--rerun-check` of the Linux tree in a container and copies nothing back.
    `--docker-image`, `--docker-cpus` and `--docker-memory` change the image and the container's limits.
 5. **D5 Checks of the script.** `--check` without `--root` checks both trees: ADR 0142's checks of each tree, the
@@ -131,11 +165,14 @@ once, so the repository grows by the files that differ (T5 measures it).
 ## Placement
 
 No crate's source changes; no dependency, no workspace edge (`Cargo.toml`, `Cargo.lock`, `workspace_graph.rs`,
-`docs/architecture.md` unchanged). Changed: `scripts/make_example_projects.py`, `scripts/test_make_example_projects.py`,
-`crates/rcfd-mcp/tests/example_projects_w48h.rs`, `crates/rcfd-studio/tests/example_projects_h.rs`, `README.md` (one
-paragraph). New: `scripts/docker/ubuntu-24.04-rust.Dockerfile`, `example-projects-linux/` (all of it written by the
-counted build except its `README.md` and `.gitattributes`), this ADR. `ci.yml` (its `scripts` job runs the self-test,
-which now covers both trees) and `gate.yml` unchanged.
+`docs/architecture.md` unchanged).
+
+* Changed: `scripts/make_example_projects.py`, `scripts/test_make_example_projects.py`,
+  `crates/rcfd-mcp/tests/example_projects_w48h.rs`, `crates/rcfd-studio/tests/example_projects_h.rs`, `README.md` (one
+  paragraph).
+* New: `scripts/docker/ubuntu-24.04-rust.Dockerfile`, `example-projects-linux/` (all of it written by the counted build
+  except its `README.md` and `.gitattributes`), this ADR.
+* Unchanged: `ci.yml` (its `scripts` job runs the self-test, which now covers both trees) and `gate.yml`.
 
 ## Registered checks (limits fixed here, before any of them ran)
 
@@ -160,9 +197,15 @@ folder, output to files. Free memory is checked before each heavy run.
 | T5 | Sizes and growth | each tree under D7's caps (S8, in L4 and W1); reported: both trees' bytes, the bytes of the blobs this job's commits add to the repository (unique, uncompressed, and packed), and which Linux run files are byte-identical to the Windows tree's | (reported) |
 | Q1 | Lint | `cargo clippy --release -p rcfd-mcp -p rcfd-studio --tests -- -D warnings` clean on Windows and in the container; `cargo fmt -p rcfd-mcp -p rcfd-studio -- --check` clean | |
 
-Order of the runs: C0; L1 (L2 and L3 are read from its output and from L4); the Linux tree committed; L4, L5 and P1
-(Linux) in one container on an archive of that commit; R1L; W1, W2 and P1 (Windows) on this host; T4, T5 and Q1 on the
-final commit.
+Order of the runs:
+
+1. C0.
+2. L1 (L2 and L3 are read from its output and from L4).
+3. The Linux tree committed.
+4. L4, L5 and P1 (Linux) in one container on an archive of that commit.
+5. R1L.
+6. W1, W2 and P1 (Windows) on this host.
+7. T4, T5 and Q1 on the final commit.
 
 ## What I already knew (rule d)
 
@@ -199,12 +242,20 @@ and nothing else). The self-test runs again on both platforms on the commit of t
 
 ## Addendum: results against the registered limits (2026-10-28)
 
-Branch `worktree-agent-a33a297ef7d8884e0`. Commits: registration 963c871 (on main 6867e40); b5428fc, the Linux tree as
-L1 wrote it (159 files, nothing edited); amendment 1 112a755; f25803f (one comment line in the known-miss test, after
-L3); then this addendum. Linux: the image of D4 (image `sha256:485f28a2036497ed`..., base `ubuntu:24.04`
-`sha256:24737cef17f4`...; glibc 2.39-0ubuntu8.9, rustc 1.99.0, Python 3.12.3), `--init --cpuset-cpus 0-3 --memory 16g`,
-archives extracted into `/src`. Windows: this host (Windows 11, 16 threads, 93.6 GB; 22.7 to 27.3 GB free during the
-runs, other agents' builds running), release, Python 3.9.13.
+Branch `worktree-agent-a33a297ef7d8884e0`. Commits, in order:
+
+* 963c871: registration (on main 6867e40).
+* b5428fc: the Linux tree as L1 wrote it (159 files, nothing edited).
+* 112a755: amendment 1.
+* f25803f: one comment line in the known-miss test, after L3.
+* Then this addendum.
+
+Where the runs ran:
+
+* Linux: the image of D4 (image `sha256:485f28a2036497ed`..., base `ubuntu:24.04` `sha256:24737cef17f4`...; glibc
+  2.39-0ubuntu8.9, rustc 1.99.0, Python 3.12.3), `--init --cpuset-cpus 0-3 --memory 16g`, archives extracted into `/src`.
+* Windows: this host (Windows 11, 16 threads, 93.6 GB; 22.7 to 27.3 GB free during the runs, other agents' builds
+  running), release, Python 3.9.13.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -224,35 +275,49 @@ runs, other agents' builds running), release, Python 3.9.13.
 | T5 | caps per tree; growth reported | below | pass (caps); reported |
 | Q1 | clippy and fmt clean on both | Windows: before registration and on the archive of f25803f; Linux: on b5428fc and on the archive of f25803f: clean | pass |
 
-**Final runs on archives of f25803f** (whose code every later commit has). Linux, one container: `example_projects_w48h`
-21 passed, 1 ignored; the known-miss test with `--ignored` printed 6, 7 (Windows tree) and 6, 7 (Linux tree) and failed
-on the Windows tree's Re 100 run, as registered in ADR 0142; H1 1 passed; `--check` 0 problems; the self-test 14 of 14;
-clippy and fmt clean. Windows, an extracted archive with its own target folder: `example_projects_w48h` 21 passed, 1
-ignored; H1 1 passed; `--check` 0 problems; the self-test 14 of 14; clippy and fmt clean; `docs_site` (this ADR's
-links) 2 passed.
+**Final runs on archives of f25803f** (whose code every later commit has):
+
+* Linux, one container: `example_projects_w48h` 21 passed, 1 ignored; the known-miss test with `--ignored` printed 6, 7
+  (Windows tree) and 6, 7 (Linux tree) and failed on the Windows tree's Re 100 run, as registered in ADR 0142; H1 1 passed;
+  `--check` 0 problems; the self-test 14 of 14; clippy and fmt clean.
+* Windows, an extracted archive with its own target folder: `example_projects_w48h` 21 passed, 1 ignored; H1 1 passed;
+  `--check` 0 problems; the self-test 14 of 14; clippy and fmt clean; `docs_site` (this ADR's links) 2 passed.
 
 **Sizes and growth (T5).** Bytes of every file: `example-projects/` 31 658 565, `example-projects-linux/` 31 655 580, each
-under its 40 000 000 cap (projects under 35 000 000 and 6 000 000), about 63 MB together in a checkout. In git, the Linux
-tree commit b5428fc adds 78 blobs the repository did not hold: 18 877 244 bytes uncompressed, 11 270 905 bytes as one
-pack. The 81 Linux files that are byte-identical to a file of the Windows tree (11 983 271 bytes) are the same blobs and
-add nothing. The whole job (6867e40..f25803f): 89 new blobs, 19 131 980 bytes uncompressed, 11 343 206 bytes packed.
-For scale: the Windows tree's 161 blobs pack to 17 310 395 bytes. A transfer may be larger than what is stored: `git
+under its 40 000 000 cap (projects under 35 000 000 and 6 000 000), about 63 MB together in a checkout. In git:
+
+| What | Blobs | Bytes uncompressed | Bytes packed |
+|---|---|---|---|
+| The Linux tree commit b5428fc | 78 the repository did not hold | 18 877 244 | 11 270 905 as one pack |
+| The whole job (6867e40..f25803f) | 89 new | 19 131 980 | 11 343 206 |
+| For scale: the Windows tree | 161 | | 17 310 395 |
+
+The 81 Linux files that are byte-identical to a file of the Windows tree (11 983 271 bytes) are the same blobs and add
+nothing. A transfer may be larger than what is stored: `git
 pack-objects --revs b5428fc ^963c871` packs 17 312 577 bytes with git's default sparse walk (`pack.useSparse`), which does
 not find the parent's identical blobs at other paths, and 11 270 905 with `pack.useSparse=false`.
 
-Byte-identical across the platforms (matched by case): for the step, cavity and heated-cavity runs the store,
-`index.json`, `residuals.jsonl`, `output/monitors.json`, `monitors.csv`, `report.html` and `check.json` (their meshes are
-uniform boxes and their runs are bit-identical); for the cylinders and the aerofoils only `case.snapshot` (and the
-cylinders' `report.html`). The aerofoil polyMesh's `boundary`, `faces`, `owner` and `neighbour` are identical, its
-`points` differ (built by `rcfd convert` and Python's `math` on glibc). `run.json`, `status.json`, `events.jsonl`,
-`log.txt` and `metrics.json` differ by ids, times and paths, as ADR 0142 D10 says.
+Byte-identical across the platforms (matched by case):
 
-**What the Linux runs give** against the Windows runs (orientation, not a check): the step, the cavities and the heated
-cavities bit-identical; the cylinders equal to about 13 digits (St 0.1516691046868687 against ...878, mean C_D
-1.3232575505167183 against ...181); the aerofoils to about 7 digits (C_L 0.34819494914633836 against 0.34819495674563833 at
-4 degrees, 0.19883331320623607 against 0.19883327814014404 at 2; C_D 0.0253602676 against 0.0253602671). S9: the Linux
-polyMesh lies 2.5e-17 off the aerofoil surface and 3.6e-15 off the far-field circle (the Windows file: 4.4e-15 and
-7.1e-15 read on Windows).
+* for the step, cavity and heated-cavity runs: the store, `index.json`, `residuals.jsonl`, `output/monitors.json`,
+  `monitors.csv`, `report.html` and `check.json` (their meshes are uniform boxes and their runs are bit-identical);
+* for the cylinders and the aerofoils: only `case.snapshot` (and the cylinders' `report.html`);
+* for the aerofoil polyMesh: `boundary`, `faces`, `owner` and `neighbour`; its `points` differ (built by `rcfd convert`
+  and Python's `math` on glibc).
+
+`run.json`, `status.json`, `events.jsonl`, `log.txt` and `metrics.json` differ by ids, times and paths, as ADR 0142 D10
+says.
+
+**What the Linux runs give** against the Windows runs (orientation, not a check):
+
+* the step, the cavities and the heated cavities: bit-identical;
+* the cylinders: equal to about 13 digits (St 0.1516691046868687 against ...878, mean C_D 1.3232575505167183 against
+  ...181);
+* the aerofoils: to about 7 digits (C_L 0.34819494914633836 against 0.34819495674563833 at 4 degrees,
+  0.19883331320623607 against 0.19883327814014404 at 2; C_D 0.0253602676 against 0.0253602671).
+
+S9: the Linux polyMesh lies 2.5e-17 off the aerofoil surface and 3.6e-15 off the far-field circle (the Windows file:
+4.4e-15 and 7.1e-15 read on Windows).
 
 **Deviations and notes.**
 1. Amendment 1: the new self-test's comparison of unchanged copies failed on the `../../` paths of copies outside the
@@ -272,16 +337,23 @@ polyMesh lies 2.5e-17 off the aerofoil surface and 3.6e-15 off the far-field cir
 7. `README.md` of the repository gained the pointer of D8; `example-projects/README.md` is unchanged (question 1).
 8. Leftover processes: none (every container ran with `--rm`; no runner was started on Windows).
 
-**Not run.** The CI `Full gate` on `ubuntu-latest` (no push): the real check. C0 showed that the image builds the cylinder
-mesh as CI did; the other eight Linux stores hold meshes that do not depend on the platform (uniform boxes, and the
-aerofoil's file), so S5 should hold there. The workspace gate and workspace-wide clippy (only two test files, two scripts
-and docs changed); `scale_n.rs` and `end_time_landing_w48k.rs` (unchanged, they read the Windows tree); the Studio at a
-real window on either platform (the checklist); macOS and Linux on ARM; `--docker` from a Linux host (its `chown` of the
-bind mount is untested); `cargo deny` (no dependency changed); CI's `min-toolchain` job (Rust 1.90 type-checks the
-changed `rcfd-mcp` test; nothing in it is newer than 1.90 as far as read, not compiled with 1.90); CI's `scripts` job on
-setup-python's current `3.x` (the self-test ran with 3.9.13 and 3.12.3). Only the cylinder mesh hash was compared with a
-value CI itself printed; that CI agrees for the other eight runs is inferred from their meshes, and CI's glibc patch level
-is not known here.
+**Not run.**
+
+* The CI `Full gate` on `ubuntu-latest` (no push): the real check. C0 showed that the image builds the cylinder mesh as CI
+  did; the other eight Linux stores hold meshes that do not depend on the platform (uniform boxes, and the aerofoil's
+  file), so S5 should hold there.
+* The workspace gate and workspace-wide clippy (only two test files, two scripts and docs changed).
+* `scale_n.rs` and `end_time_landing_w48k.rs` (unchanged, they read the Windows tree).
+* The Studio at a real window on either platform (the checklist).
+* macOS and Linux on ARM.
+* `--docker` from a Linux host (its `chown` of the bind mount is untested).
+* `cargo deny` (no dependency changed).
+* CI's `min-toolchain` job (Rust 1.90 type-checks the changed `rcfd-mcp` test; nothing in it is newer than 1.90 as far as
+  read, not compiled with 1.90).
+* CI's `scripts` job on setup-python's current `3.x` (the self-test ran with 3.9.13 and 3.12.3).
+
+Only the cylinder mesh hash was compared with a value CI itself printed; that CI agrees for the other eight runs is
+inferred from their meshes, and CI's glibc patch level is not known here.
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no workspace edge). New tool: the Docker image of D4, built
 from the repository's Dockerfile.

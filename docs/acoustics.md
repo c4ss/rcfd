@@ -1,71 +1,91 @@
 # Aeroacoustics for fan noise (wave 32B, ADR 0066)
 
-This page is for users who want a fan-noise estimate from a CFD run and for anyone judging such an estimate: it explains what
-each part of the chain assumes and how far its numbers can be trusted. For the older permeable-surface command and its input file read [reactor-and-acoustics.md](reactor-and-acoustics.md); for every check
-with its limit and measured value read the ADR named in the title.
+This page explains the library chain that produces a fan-noise estimate from a CFD run: what each part assumes and how
+far its numbers can be trusted. It is for users who want such an estimate and for anyone judging one.
 
-The library chain added for fan noise consists of a time-domain Ffowcs Williams-Hawkings (FW-H) solver
-for moving impermeable surfaces, a closed-form rotor tonal estimate (Gutin type) as an independent check, three
-steady-RANS broadband proxies, noise metrics, and file readers and writers. It extends the permeable-surface solver
-of ADR 0013 (`docs/reactor-and-acoustics.md`, `rcfd acoustics`). Plan item: F-243 stays partial; the acceptance
-text of F-243 (impedance tube, quiet boundary) is not addressed by this wave.
+The Ffowcs Williams-Hawkings (FW-H) solver and the metrics are verified against closed-form fields. The registered
+impermeable-sphere-in-flow checks W5a/W5b were MISSED (section "FW-H solver"). The RANS-based broadband proxies are
+NOT validated against any measured noise and must not be read as predictions (section "Broadband proxies"). No
+comparison with a measured fan was made.
 
-Status of the numbers. The FW-H solver and the metrics are verified against closed-form fields (ADR 0066 lists each
-check with its limit and the measured value). The RANS-based broadband proxies are NOT validated against any measured
-noise and must not be read as predictions (section "Broadband proxies"). No comparison with a measured fan was made.
+The chain was added for fan noise in wave 32B (a wave is a numbered batch of work; see the [glossary](glossary.md)). It
+consists of a time-domain FW-H solver for moving impermeable surfaces, a closed-form rotor tonal estimate (Gutin type)
+as an independent check, three steady-RANS broadband proxies, noise metrics, and file readers and writers. It extends
+the permeable-surface solver of ADR 0013 (`docs/reactor-and-acoustics.md`, `rcfd acoustics`). Roadmap item F-243 stays
+partial: this wave does not address the acceptance text of F-243 (impedance tube, quiet boundary).
+
+For the older permeable-surface command and its input file read [reactor-and-acoustics.md](reactor-and-acoustics.md).
+For every check with its limit and measured value read [ADR 0066](adr/0066-wave32b-aeroacoustics.md).
 
 ## Limits of the whole chain
 
-Subsonic surfaces only; no quadrupole; no refraction or scattering by the body or casing (free field); the uniform flow
-is the only mean flow; no installation effects, ducted propagation, or modal content; pressure data sampled by the CFD
-run must resolve the blade-passing frequency and its harmonics (the FW-H result is only as good as the sampled surface
-pressure); a steady RANS run gives no tonal pressure history. F-243 remains partial: an acoustic impedance boundary,
-quiet boundary and acoustic wave solver are not part of this wave.
+* Subsonic surfaces only.
+* No quadrupole.
+* No refraction or scattering by the body or casing (free field).
+* The uniform flow is the only mean flow.
+* No installation effects, ducted propagation, or modal content.
+* Pressure data sampled by the CFD run must resolve the blade-passing frequency and its harmonics (the FW-H result is
+  only as good as the sampled surface pressure).
+* A steady RANS run gives no tonal pressure history.
+
+F-243 remains partial: an acoustic impedance boundary, quiet boundary and acoustic wave solver are not part of this wave.
 
 ## FW-H solver
 
-Formulation 1A (Brentner and Farassat) for a surface f = 0 with unit normal n, surface velocity v and fluid state
-(p', rho', u) on it. With the permeable terms
-U_i = (1 - rho/rho0) v_i + rho u_i / rho0 and L_i = p' n_i + rho u_i (u_n - v_n), p' is the sum of the thickness and
-loading integrals evaluated at the retarded time. The impermeable case used for fans sets u = v and rho' = 0 on the
-blade: U_i = v_i, L_i = p' n_i. The `loading` mode additionally sets U = 0 (loading noise only). No volume
-(quadrupole) term is computed; this is an assumption of the whole chain (quadrupoles are small for subsonic tip
-Mach numbers, not zero).
+The solver uses Formulation 1A (Brentner and Farassat), which gives p' as the sum of the thickness and loading integrals
+evaluated at the retarded time. The surface is f = 0, with unit normal n, surface velocity v and fluid state
+(p', rho', u) on it. The permeable terms are U_i = (1 - rho/rho0) v_i + rho u_i / rho0 and
+L_i = p' n_i + rho u_i (u_n - v_n).
 
-Numerics: retarded time by Newton iteration per element and observer time; 4-point Lagrange interpolation of the
-source data; fifth-point derivatives (fourth order) for the time derivatives of the source terms. The valid window
-guard refuses observer times for which the retarded time falls outside the sampled record, and refuses surfaces whose
-speed is not subsonic with respect to the medium (error text contains "subsonic").
+The impermeable case used for fans sets u = v and rho' = 0 on the blade: U_i = v_i, L_i = p' n_i. The `loading` mode
+additionally sets U = 0 (loading noise only). The solver computes no volume (quadrupole) term. This is an assumption of
+the whole chain (quadrupoles are small for subsonic tip Mach numbers, not zero).
 
-Uniform flow. A body in a uniform stream U (body frame) is evaluated in the frame of the medium, where the medium is
-at rest: x_m = x_b - U t, v_m = v_b - U, u_m = u_b - U, and the observer, fixed in the body frame, moves on
-x_o(t) = x_ob - U t. The formula is evaluated at the moving observer position, which is exact for 1A in a medium at rest;
-the observer time axis is the same in both frames. Assumptions: uniform U with |U| below c0; the sampled pressure is the
-perturbation relative to the reference (the mean is not removed, because steady blade loading rotating in the medium
-frame is a source). Steady-flow loading terms that a given CFD data surface carries (u != v) are only represented in
-the permeable path; the impermeable path assumes u = v.
+The numerics are:
 
-Limits (all measured, see ADR 0066): fourth-order convergence in the observer-time step; non-compact pulsating sphere
-thickness-only closed form; compact dipole; moving observer in uniform flow of a permeable monopole sphere (W5d, 4.5e-6).
-The registered impermeable-sphere-in-flow checks W5a/W5b were MISSED (7.7e-2 and 6.7e-2 against 1e-2 and 1e-3): the test
+* retarded time by Newton iteration per element and observer time;
+* 4-point Lagrange interpolation of the source data;
+* fifth-point derivatives (fourth order) for the time derivatives of the source terms.
+
+The valid window guard refuses observer times for which the retarded time falls outside the sampled record. It also
+refuses surfaces whose speed is not subsonic with respect to the medium (error text contains "subsonic").
+
+The solver evaluates a body in a uniform stream U (body frame) in the frame of the medium, where the medium is at rest:
+x_m = x_b - U t, v_m = v_b - U, u_m = u_b - U, and the observer, fixed in the body frame, moves on
+x_o(t) = x_ob - U t. The solver evaluates the formula at the moving observer position, which is exact for 1A in a medium
+at rest. The observer time axis is the same in both frames.
+
+This evaluation assumes uniform U with |U| below c0, and that the sampled pressure is the perturbation relative to the
+reference. The mean is not removed, because steady blade loading rotating in the medium frame is a source. Only the
+permeable path represents steady-flow loading terms that a given CFD data surface carries (u != v); the impermeable path
+assumes u = v.
+
+Limits (all measured, see ADR 0066):
+
+* fourth-order convergence in the observer-time step;
+* non-compact pulsating sphere thickness-only closed form;
+* compact dipole;
+* moving observer in uniform flow of a permeable monopole sphere (W5d, 4.5e-6).
+
+The registered impermeable-sphere-in-flow checks W5a/W5b were MISSED (7.7e-2 and 6.7e-2 against 1e-2 and 1e-3). The test
 construction used constant face areas and omitted the steady-flow loading the exact field implies, so the error is
 proportional to U (M = 0.01 gives 2.4e-3). They are kept as ignored `*_known_miss` tests; W5d is a separate new check.
 
 ## Rotor tonal harmonics (Gutin type)
 
-A rotor of B equally spaced blades, angular velocity Omega, loading represented by a compact force at the radius R_t
-(thrust T along the axis on the fluid, torque Q, i.e. a tangential force Q/R_t), radiating to a far observer at distance
-r and polar angle theta from the axis (measured towards the direction of the thrust force on the fluid). Fourier
-decomposition of the rotating force in the far field of the compact dipole gives, only for the harmonics m B
-(m = 1, 2, ...) of the blade passing frequency,
+The estimate treats a rotor of B equally spaced blades with angular velocity Omega. A compact force at the radius R_t
+represents the loading (thrust T along the axis on the fluid, torque Q, i.e. a tangential force Q/R_t). The rotor
+radiates to a far observer at distance r and polar angle theta from the axis (measured towards the direction of the
+thrust force on the fluid). Fourier decomposition of the rotating force in the far field of the compact dipole gives,
+only for the harmonics m B (m = 1, 2, ...) of the blade passing frequency,
 
   |p_m| = (m B Omega / (2 pi c r)) |J_{mB}(m B M_t sin theta)| |T cos theta + Q c / (Omega R_t^2)|,   M_t = Omega R_t / c.
 
-(Pressure amplitude; rms is amplitude/sqrt 2.) It is derived here from the dipole far field and checked against the
-FW-H solver on a point-force rotor (errors <= 4e-5). Assumptions: compact chordwise loading at a single radius, far
-field, free field, no thickness noise (the monopole term of the blades is not included), no forward flight. The sign
-convention of the torque term (a torque on the rotor means a force on the fluid along +e_phi) is stated in the
-`Rotor` documentation. The original Gutin (1936) formula was not read; this is a derivation, not a transcription.
+This is the pressure amplitude; rms is amplitude/sqrt 2. The formula is derived here from the dipole far field and
+checked against the FW-H solver on a point-force rotor (errors <= 4e-5). It assumes compact chordwise loading at a single
+radius, far field, free field, no thickness noise (the monopole term of the blades is not included) and no forward
+flight. The `Rotor` documentation states the sign convention of the torque term (a torque on the rotor means a force on
+the fluid along +e_phi). The original Gutin (1936) formula was not read; this is a derivation, not a transcription.
 
 ## Broadband proxies (NOT validated)
 
@@ -74,8 +94,8 @@ this repository and whose literature sources were read only second-hand. The lev
 indicators at best, and only the dependence on speed, k, epsilon and c0 is a result.
 
 * Proudman (isotropic turbulence quadrupole): acoustic power per volume P = alpha rho0 eps M_t^5, M_t = sqrt(2k)/c0,
-  default alpha = 0.1 (secondary source). Level in dB re 1e-12 W/m^3. This is a volume density to be integrated over
-  the cells (`proudman_total_power`). Ignores mean-flow refraction and the actual finite size of the eddies; for
+  default alpha = 0.1 (secondary source). The level is in dB re 1e-12 W/m^3. This is a volume density to be integrated
+  over the cells (`proudman_total_power`). It ignores mean-flow refraction and the actual finite size of the eddies; for
   wall-bounded flow near surfaces it is not the dominant source.
 * Curle (surface dipole): W = sum <p_dot^2> A_c S / (12 pi rho0 c0^3) for independent patches of area S with correlation
   area A_c, and far-field mean square sum <p_dot^2> A_c S (n . rhat)^2 / (16 pi^2 c0^2 r^2). The wall pressure rate
@@ -85,7 +105,7 @@ indicators at best, and only the dependence on speed, k, epsilon and c0 is a res
 * Trailing edge: W = K_TE rho0 u_t^5 L_e l_t / c0^2 (Ffowcs Williams and Hall type fifth-power law; only the U^5
   exponent is sourced, K_TE has no calibrated value here and defaults are placeholders that must be supplied).
 
-What validation would require. A fan or airfoil case with a measured operating point, wall-pressure data (or a
+Validation would require a fan or airfoil case with a measured operating point, wall-pressure data (or a
 scale-resolving simulation) and far-field spectra; calibration of alpha, A_c, f_c and K_TE on one data set; and a
 comparison on a held-out second data set, with a reported error band. Until then these numbers are not predictions.
 
@@ -148,7 +168,7 @@ rcfd fwh series.json --observer x,y,z [--observer ...] [--flow ux,uy,uz] [--time
 Output CSV: `observer,t,p_thickness,p_loading,p_total`. Exit codes: 0 success, 1 I/O, 2 usage, 3 invalid input.
 The default time grid is the full valid window at the file sampling step. A `.json` spectrum target writes an
 `rcfd-spectra` v1 document (one `rcfd-spectrum` report per observer), anything else writes the 1/3-octave band CSV.
-The OASPL and dB(A) per observer are printed to stderr.
+The command prints the OASPL and dB(A) per observer to stderr.
 
 ## Where to go next
 

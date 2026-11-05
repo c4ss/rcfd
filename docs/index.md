@@ -3,15 +3,17 @@
 rcfd is a clean-room, open source (AGPL-3.0) finite-volume CFD suite in Rust: a command-line solver, a solver service, an
 MCP server for AI assistants and a desktop app with an assistant sidebar.
 
-This page is the map of the documentation, grouped by what you want to do. rcfd is early-stage software and has not been validated
-for engineering decisions: read the [roadmap overview](roadmap-overview.md) first to see what works today and what does not. If you
-are new, then work through the first tutorial. To build from source or to contribute, see the README and the contribution guide in
+rcfd is early-stage software and has not been validated for engineering decisions: read the
+[roadmap overview](roadmap-overview.md) first to see what works today and what does not. If you are new, then work through the
+[first tutorial](tutorials/quick-start-cli.md). To build from source or to contribute, see the README and the contribution guide in
 the repository root.
+
+This page is the map of the documentation, grouped by what you want to do.
 
 ## Learn by doing: tutorials
 
-The tutorials are executed by the test suite (`cargo test -p rcfd-cli --test tutorials` and
-`cargo test -p rcfd-mcp --test tutorials`); steps that cannot run headlessly are marked as not executed on each page.
+The test suite executes the tutorials (`cargo test -p rcfd-cli --test tutorials` and
+`cargo test -p rcfd-mcp --test tutorials`). Each page marks the steps that cannot run headlessly as not executed.
 
 1. [Quick start: the command line](tutorials/quick-start-cli.md)
 2. [Run a lid-driven cavity and compare it with published data](tutorials/cavity.md)
@@ -74,5 +76,5 @@ Most task steps live in the reference pages below for now.
 
 ## About these pages
 
-The HTML version of these pages is built by `cargo test -p rcfd-cli --test docs_site -- --nocapture` (it prints where the site was
-written).
+To build the HTML version of these pages, run `cargo test -p rcfd-cli --test docs_site -- --nocapture`. It prints where it wrote the
+site.

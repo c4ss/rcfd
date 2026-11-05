@@ -1,22 +1,19 @@
 # Run a lid-driven cavity and compare it with published data
 
-The lid-driven square cavity is the first benchmark of most incompressible solvers. This tutorial runs it at Re = U L / nu = 100,
-samples the vertical centreline, sweeps the Reynolds number with an operating map and points at the published reference values
-kept in the repository. It is for readers who have finished the quick start and want to see how a run is compared with
-published data. If you only want the published reference values and where they come from, read
-[the reference-data notes](../reference-data.md) instead.
+This tutorial runs the lid-driven square cavity, the first benchmark of most incompressible solvers, at Re = U L / nu = 100
+and shows how a run is compared with published data. You write the case file, run it and sample the vertical centreline,
+compare the sample with the published reference values kept in the repository, sweep the Reynolds number with an operating map
+and (optionally, slow) refine the mesh. The comparison on this page is by eye: the tutorial test runs the commands but does
+not check the velocities against the reference values.
 
-What you need: any plotting tool or spreadsheet for the comparison step. Start with the [quick start](quick-start-cli.md) if you
-have not built `rcfd` yet.
-
-The steps: write the case file, run it and sample the centreline, compare the sample with the published values, sweep the
-Reynolds number, and (optionally, slow) refine the mesh. The comparison on this page is by eye: the tutorial test runs the
-commands but does not check the velocities against the reference values.
+It is for readers who have finished the quick start; start with the [quick start](quick-start-cli.md) if you have not built
+`rcfd` yet. You also need any plotting tool or spreadsheet for the comparison step. If you only want the published reference
+values and where they come from, read [the reference-data notes](../reference-data.md) instead.
 
 ## Write the case file
 
-A unit square, lid speed 1 in +x, nu = 0.01 (Re = 100), 32 x 32 cells, SIMPLEC with the second-order `linear_upwind` convection
-scheme. The settings are explained in [the case schema](../case-schema.md). Save it as `cavity_re100.toml`.
+Save this case as `cavity_re100.toml`: a unit square, lid speed 1 in +x, nu = 0.01 (Re = 100), 32 x 32 cells, SIMPLEC with the
+second-order `linear_upwind` convection scheme. [The case schema](../case-schema.md) explains the settings.
 
 ```toml file=cavity_re100.toml
 title = "lid-driven cavity, Re 100"
@@ -52,6 +49,8 @@ component = "viscous"
 
 ## Run it and sample the centreline
 
+Run the case. On this page, the block after each command shows the lines to look for in its output.
+
 ```console run
 $ rcfd run cavity_re100.toml --out re100 --quiet
 ```
@@ -61,7 +60,7 @@ $ rcfd run cavity_re100.toml --out re100 --quiet
 converged: residual targets met
 ```
 
-`sample` runs the case again and writes the solution along a line: here the vertical centreline x = 0.5 with 33 points.
+Sample the vertical centreline x = 0.5 with 33 points. `sample` runs the case again and writes the solution along a line.
 
 ```console run
 $ rcfd sample cavity_re100.toml --line 0.5,0,0:0.5,1,0 --points 33 --fields ux,uy --out centreline.csv
@@ -75,13 +74,13 @@ wrote centreline.csv
 
 ## Compare with Ghia, Ghia and Shin (1982)
 
-The repository keeps the published centreline values in `cases/cavity/reference/ghia1982_u_centerline.csv` (columns `y`,
-`u_Re100`, `u_Re400`, `u_Re1000`); the citation and the 2 % tolerance are in `cases/cavity/case.json` and
-[the reference-data notes](../reference-data.md).
+Plot `ux` against `y` from `centreline.csv` over the reference points. The repository keeps the published centreline values in
+`cases/cavity/reference/ghia1982_u_centerline.csv` (columns `y`, `u_Re100`, `u_Re400`, `u_Re1000`); the citation and the 2 %
+tolerance are in `cases/cavity/case.json` and [the reference-data notes](../reference-data.md).
 
-Plot `ux` against `y` from `centreline.csv` over the reference points. When this tutorial was written the 32 x 32 run gave
-ux = -0.207 at y = 0.5 against the reference -0.20581. That number is not checked by the tutorial test (it is a rounded
-observation); the quantitative comparison is done by the validation tests (`crates/rcfd-api/tests/validation_cavity_ghia.rs`).
+When this tutorial was written the 32 x 32 run gave ux = -0.207 at y = 0.5 against the reference -0.20581. The tutorial test
+does not check that number (it is a rounded observation); the validation tests
+(`crates/rcfd-api/tests/validation_cavity_ghia.rs`) do the quantitative comparison.
 
 ```text not-executed
 y,u_Re100,u_Re400,u_Re1000
@@ -91,7 +90,7 @@ y,u_Re100,u_Re400,u_Re1000
 ## Sweep the Reynolds number
 
 An operating map runs the case over a list of settings; each point restarts from the previous converged solution
-(see [the design loop](../design-loop.md)). Re = 100, 200 and 400:
+(see [the design loop](../design-loop.md)). Sweep Re = 100, 200 and 400:
 
 ```console run
 $ rcfd map cavity_re100.toml --axis physics.nu=0.01,0.005,0.0025 --out re_sweep
@@ -107,7 +106,7 @@ map complete: 3 of 3 points converged
 
 ## Refine the mesh
 
-A finer mesh by overriding two settings (this block runs only in the slow test):
+Override two settings for a finer mesh (this block runs only in the slow test):
 
 ```console run-slow
 $ rcfd run cavity_re100.toml --out re100_64 --quiet --set mesh.nx=64 --set mesh.ny=64

@@ -3,10 +3,21 @@
 Status: **registered 2026-10-29**, before any code and before any solver run of this job. The enumeration, the design,
 the limits, the reading rules and the not-run list are fixed here. **Results in the addendum (2026-10-30):** every
 registered limit was met; the F-126 known miss stands (torque -37 % / -45 %); B-M and B-P stay VALID (torque p 1.39); no
-`baseline_hashes.rs`, example or case change. Not yet accepted by the maintainer. Job 49G, on local
-main 1a04d46 (the merge of job 49C; the worktree branch was reset to it before any work). Number: 0167 (49D), 0168 (49E)
-and 0169 (49F) are committed on other branches; 0170 was free in every worktree and in `git log --all` when this was
-written.
+`baseline_hashes.rs`, example or case change. Not yet accepted by the maintainer.
+
+The maintainer's answer to ADR 0166 question 2 is read as option (a), as its own job: under a turbulence model the default
+`moment` report now uses the effective wall shear, like force reports. That switch in `eval_report` is the only code
+change. Laminar cases stay bit-identical, and `component = "total_molecular"` still gives the pre-change moment. In every
+run here each field, flux, iteration count and residual stop is unchanged, bit for bit; only the moment monitors move, and
+with them any harness verdict computed from them. F-126 attempt 3 stays a known miss: the effective moment adds 0.027 N m
+at the design point and 0.032 N m off design, which leaves the torque at -37.1 % and -44.6 %. ADR 0086's bladed studies B-M
+and B-P stay VALID, and the torque p falls from 1.51 to 1.39. ADR 0086's "balance closes to 0.04 % on F1" holds for the
+molecular moment only. The report still differs from the kernel's own wall torque, and question 4 asks the maintainer
+whether to diagnose that in its own job.
+
+Job 49G, on local main 1a04d46 (the merge of job 49C; the worktree branch was reset to it before any work). Number: 0167
+(49D), 0168 (49E) and 0169 (49F) are committed on other branches; 0170 was free in every worktree and in `git log --all`
+when this was written.
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit

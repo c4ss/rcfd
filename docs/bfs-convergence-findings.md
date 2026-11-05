@@ -13,24 +13,23 @@ marginally stable; the flow itself was not unsteady. The default now evaluates H
 form is kept while a bulk-velocity driver is active), and the side effects on the cavity and the step were measured (sections
 "Root cause" and "Fix").
 
-Status: fixed in this wave. Still open and recorded below: at the highest step Reynolds number tested a limiter scheme remains
-sensitive to the coupling and relaxation choice, the laminar reattachment length is not yet mesh independent there, and the
-literature values it is compared with are from memory and unverified.
+Status: fixed in this [wave](glossary.md). Still open and recorded below: at the highest step Reynolds number tested a
+limiter scheme remains sensitive to the coupling and relaxation choice, the laminar reattachment length is not yet mesh
+independent there, and the literature values it is compared with are from memory and unverified.
 
 Scope: rcfd-fv `SimpleSolver` (SIMPLE/SIMPLEC, collocated, Rhie-Chow), backward-facing step (BFS),
 Re_h >= 200 with second-order convection (linearUpwind, vanLeer), cavity Re = 1000.
 
 ## Root cause
 
-`SimpleSettings.h_from_solution` defaulted to `false`: the H operator (neighbour part of the
-momentum matrix, used for `HbyA` and the Rhie-Chow face flux) was evaluated from the *previous
-iterate* instead of from the solved momentum predictor. That makes the pressure-velocity step a
-Jacobi-like lagged iteration that is only marginally stable. With first-order upwind the extra
-numerical diffusion hides it; with deferred-correction second-order schemes on a mesh with cell
-Peclet number ~50 (Re_h = 200, dx = 0.25 h) it is unstable.
+`SimpleSettings.h_from_solution` defaulted to `false`: the solver evaluated the H operator (the neighbour part of the
+momentum matrix, used for `HbyA` and the Rhie-Chow face flux) from the *previous iterate* instead of from the solved
+momentum predictor. That makes the pressure-velocity step a Jacobi-like lagged iteration that is only marginally stable.
+With first-order upwind the extra numerical diffusion hides it. With deferred-correction second-order schemes on a mesh
+with cell Peclet number ~50 (Re_h = 200, dx = 0.25 h), it is unstable.
 
-Evidence (uniform inlet, expansion ratio 2, l_in 4, l_out 20, 16+80 x 8+8 cells, Re_h = 200,
-linearUpwind, SIMPLE 0.7/0.3, residual = max(res_u, res_p)):
+Evidence (uniform inlet, expansion ratio 2, l_in 4, l_out 20, 16+80 x 8+8 cells, Re_h = 200, linearUpwind, SIMPLE 0.7/0.3,
+residual = max(res_u, res_p)):
 
 | variant | outcome |
 |---|---|
@@ -43,35 +42,41 @@ linearUpwind, SIMPLE 0.7/0.3, residual = max(res_u, res_p)):
 | pseudo-transient local cfl 1 | converges (slow) |
 | **H from solved predictor** | converges: 646 its (l_out 20), 628 (l_out 14); Re_h = 400 vanLeer 1004 its |
 
-The velocity field is therefore not physically unsteady: the failure is a numerical iteration
-instability seeded near the outlet and amplified downstream.
+The velocity field is therefore not physically unsteady: the failure is a numerical iteration instability seeded near the
+outlet and amplified downstream.
 
-Things checked and found *not* to be the cause: outlet treatment (zero-gradient velocity, fixed
-pressure; outlet at a distance changes nothing once H is consistent), inlet profile (uniform and
-parabolic both fine), pressure reference (fixed-value outlet pressure, no reference cell used),
-non-orthogonality (orthogonal block mesh), residual normalisation (the same stalls are visible
-in max velocity update and in max |v|), and the deferred-correction limiter for the main failure.
+Things checked and found *not* to be the cause:
+
+* outlet treatment (zero-gradient velocity, fixed pressure; outlet at a distance changes nothing once H is consistent)
+* inlet profile (uniform and parabolic both fine)
+* pressure reference (fixed-value outlet pressure, no reference cell used)
+* non-orthogonality (orthogonal block mesh)
+* residual normalisation (the same stalls are visible in max velocity update and in max |v|)
+* the deferred-correction limiter for the main failure
 
 ## Fix
 
-* `h_from_solution` now defaults to **true** (classic SIMPLE / simpleFoam behaviour). The old
-  behaviour is still available with `h_from_solution = false`.
-* While a `MeanVelocityDriver` is active the lagged H is still used: the driver's `1/rAU` gain
-  assumes the lagged response and goes unstable (NaN) with the solved-predictor H. This keeps
-  the periodic bulk-velocity test (F-107) unchanged.
+* `h_from_solution` now defaults to true (classic SIMPLE / simpleFoam behaviour). The old behaviour is still available
+  with `h_from_solution = false`.
+* While a `MeanVelocityDriver` is active the lagged H is still used: the driver's `1/rAU` gain assumes the lagged response
+  and goes unstable (NaN) with the solved-predictor H. This keeps the periodic bulk-velocity test (F-107) unchanged.
 
-Side effects measured (release, tests/pseudo.rs): lid-driven cavity Re = 1000, 32x32, linearUpwind,
-plain SIMPLEC alpha_u = 0.95 and no pseudo-transient now converges in 442 iterations (before:
-did not converge in 4154); SIMPLE 0.7/0.3 converges in 660 (before 1900). BFS Re_h = 100: SIMPLE
-240 its (before 646), pseudo cfl 5 135 (before 571). So the wave-5 premise "plain SIMPLE needs
-lower relaxation than pseudo-transient on the cavity at Re 1000" came from this defect; the test
-now records the legacy failure explicitly (`h_from_solution = false` still fails) next to the new
+Side effects measured (release, tests/pseudo.rs):
+
+| case | settings | now | before |
+|---|---|---|---|
+| lid-driven cavity Re = 1000, 32x32, linearUpwind | plain SIMPLEC alpha_u = 0.95 and no pseudo-transient | converges in 442 iterations | did not converge in 4154 |
+| same cavity | SIMPLE 0.7/0.3 | converges in 660 | 1900 |
+| BFS Re_h = 100 | SIMPLE | 240 its | 646 |
+| BFS Re_h = 100 | pseudo cfl 5 | 135 | 571 |
+
+So the wave-5 premise "plain SIMPLE needs lower relaxation than pseudo-transient on the cavity at Re 1000" came from this
+defect. The test now records the legacy failure explicitly (`h_from_solution = false` still fails) next to the new
 behaviour.
 
 ## Remaining robustness limits (not fixed, recorded)
 
-Laminar step, ER 2, parabolic inlet (mean 1), Re_h = 400 (Armaly/Gartling Re = 800), 120 x 16
-cells, l_out 30:
+Laminar step, ER 2, parabolic inlet (mean 1), Re_h = 400 (Armaly/Gartling Re = 800), 120 x 16 cells, l_out 30:
 
 | scheme / coupling | result |
 |---|---|
@@ -83,31 +88,37 @@ cells, l_out 30:
 | vanLeer, SIMPLEC alpha_u = 1 + local pseudo cfl 5 | no convergence in 4000 its (residual 4.9e-2) |
 | first-order upwind, SIMPLE 0.7/0.3 | slow (4e-3 after 3000 its) |
 
-Re_h = 400 with a TVD limiter is therefore sensitive to the coupling/relaxation choice
-(non-smooth limiter chatter; SIMPLEC with a smooth scheme is marginal). Re_h <= 200 is robust
-(SIMPLE and SIMPLEC, linearUpwind and vanLeer, all converge). No automatic setting was added
-beyond the H default; the working recipe is vanLeer + SIMPLEC alpha_u 0.9.
+At Re_h = 400 a TVD limiter is therefore sensitive to the coupling/relaxation choice (non-smooth limiter chatter; SIMPLEC
+with a smooth scheme is marginal). Runs at Re_h <= 200 are robust (SIMPLE and SIMPLEC, linearUpwind and vanLeer, all
+converge). No automatic setting was added beyond the H default; the working recipe is vanLeer + SIMPLEC alpha_u 0.9.
 
 ## Wall-function oscillation in the k-epsilon runs (fixed)
 
-Also found in rcfd-turb, now fixed (F-042): in the Driver and Seegmiller k-epsilon runs the
-nu_t of some cells kept oscillating by O(1) (relative) between iterations. A top-N listing of the
-changing cells showed all of them wall-adjacent (step face x = 5.04 and floor), i.e. the hard
-viscous/log switch of the wall function at y* = 11.225 (epsilon jumps about 4x, production 0 to
-log-law). `WallTreatment::Smooth` (default; compound epsilon and blended production) and
-`WallTreatment::Hysteresis` (+-10 percent dead band) remove it: with the unchanged criterion
-(max velocity update < 1e-7 and nu_t change < 1e-6) all three variants now converge in 800 to 920
-iterations on the medium mesh (`Switch`: du 2e-4 to 2e-3, nu_t change 0.4 to 1.1, never).
-Reattachment x_r/H is unchanged by the treatment (< 0.003): Standard 5.359, RNG 6.373,
-Realizable 6.402 (medium mesh, smooth); fine mesh 5.460, 6.380, 6.506. `Switch` and `Hysteresis`
-give 5.358/6.373/6.404 and 5.358/6.372/6.404.
+Also found in rcfd-turb, now fixed (F-042): in the Driver and Seegmiller k-epsilon runs the nu_t of some cells kept
+oscillating by O(1) (relative) between iterations. A top-N listing of the changing cells showed all of them wall-adjacent
+(step face x = 5.04 and floor), that is, the hard viscous/log switch of the wall function at y* = 11.225 (epsilon jumps
+about 4x, production 0 to log-law).
+
+`WallTreatment::Smooth` (default; compound epsilon and blended production) and `WallTreatment::Hysteresis` (+-10 percent
+dead band) remove it. With the unchanged criterion (max velocity update < 1e-7 and nu_t change < 1e-6), all three variants
+now converge in 800 to 920 iterations on the medium mesh. `Switch` never converges (du 2e-4 to 2e-3, nu_t change 0.4 to
+1.1).
+
+Reattachment x_r/H is unchanged by the treatment (< 0.003):
+
+| run | Standard | RNG | Realizable |
+|---|---|---|---|
+| medium mesh, smooth | 5.359 | 6.373 | 6.402 |
+| fine mesh | 5.460 | 6.380 | 6.506 |
+| `Switch` | 5.358 | 6.373 | 6.404 |
+| `Hysteresis` | 5.358 | 6.372 | 6.404 |
 
 ## Laminar reattachment length (tests/step_laminar.rs, release)
 
-Expansion ratio 2 (inlet channel height = step height h = 1), l_in 2, parabolic inlet with mean
-velocity 1, Re_h = U_mean h / nu, so Armaly's Re = U_mean 2 h_in / nu = 2 Re_h. Reattachment = last
-negative-to-positive sign change of u in the first cell row above the floor, linear interpolation,
-in step heights. vanLeer convection.
+Set-up: expansion ratio 2 (inlet channel height = step height h = 1), l_in 2, parabolic inlet with mean velocity 1,
+Re_h = U_mean h / nu, so Armaly's Re = U_mean 2 h_in / nu = 2 Re_h. Convection uses vanLeer. Reattachment is the last
+negative-to-positive sign change of u in the first cell row above the floor, found by linear interpolation and given in
+step heights.
 
 | Re_h (Re_Armaly) | mesh (cells downstream x per channel height) | x_r/h |
 |---|---|---|
@@ -116,14 +127,17 @@ in step heights. vanLeer convection.
 | 389 (778) | 320x32 | 11.54 |
 | 400 (800) | 120x16 / 320x32 / 320x32 graded (x ratio 4, y ratio 3) / 480x48 | 11.24 / 11.67 / 11.70 / 11.75 |
 
-Re_h = 400 is not yet mesh independent (each refinement adds 0.05-0.4 and the sequence is
-flattening toward about 11.8-11.9).
+At Re_h = 400 the result is not yet mesh independent (each refinement adds 0.05-0.4 and the sequence is flattening toward
+about 11.8-11.9).
 
-Literature (NOT verified in this wave, flagged as from memory; the web search did not return the
-tables): Gartling (1990, Int. J. Numer. Methods Fluids 11, 953, the benchmark with the parabolic inlet,
-expansion ratio 2, Re = 800) primary reattachment about 12.2 step heights; Armaly, Durst, Pereira
-and Schonung (1983, J. Fluid Mech. 127, 473) measured about 12 at Re = 800 with three-dimensional
-effects and ER 1.94. For Re_Armaly = 200 and 400 I recall roughly 5 and 8.5-9 respectively (2D
-computations), but I cannot cite a table, so no pass/fail is claimed there. At Re_Armaly = 800 the
-finest mesh is 3.7 percent below the remembered 12.2 and still rising. The Re_Armaly = 800
-outlet was 40-60 h downstream; the 30 h outlet used on the coarse mesh shortens x_r slightly.
+Literature (NOT verified in this wave, flagged as from memory; the web search did not return the tables):
+
+* Gartling (1990, Int. J. Numer. Methods Fluids 11, 953, the benchmark with the parabolic inlet, expansion ratio 2,
+  Re = 800): primary reattachment about 12.2 step heights.
+* Armaly, Durst, Pereira and Schonung (1983, J. Fluid Mech. 127, 473) measured about 12 at Re = 800 with three-dimensional
+  effects and ER 1.94.
+* For Re_Armaly = 200 and 400 I recall roughly 5 and 8.5-9 respectively (2D computations), but I cannot cite a table, so
+  no pass/fail is claimed there.
+
+At Re_Armaly = 800 the finest mesh is 3.7 percent below the remembered 12.2 and still rising. The Re_Armaly = 800 outlet
+was 40-60 h downstream; the 30 h outlet used on the coarse mesh shortens x_r slightly.

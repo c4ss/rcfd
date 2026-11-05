@@ -1,13 +1,29 @@
 # ADR 0138: Wave 48G1, the mesh preview of a case (first run to first picture, item 1 of 4)
 
 Status: **PROPOSED 2026-10-28** (implemented on branch `worktree-agent-a1e32b5483f27b132`, based on main f3bf005; checks
-registered below before any of them ran). Part of 48G "first run to first picture"; items 2 (case starter menu), 3 (store
-fields by default) and 4 (one-click start and follow) are separate branches. House rules of ADR 0130 apply: limits are fixed
-before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up
-is corrected by an amendment written before the corrected run; defaults of existing code stay bit-identical;
-`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parent: [`docs/ui-restart-plan.md`](../ui-restart-plan.md)
-sections 2 and 5; ADR 0132 (the viewport). Clean-room: our own `rcfd-api`, `rcfd-mesh`, `rcfd-render` and Studio code, the
-egui public API.
+registered below before any of them ran).
+
+The maintainer reported that nothing can be seen in the Studio unless a run has stored fields, so a case or a mesh cannot be
+inspected before running. This ADR adds a mesh preview: while no run is selected, the viewport shows the case asked for last,
+built off the UI thread from the case file on disk and parsed exactly as `rcfd run <file> --case-dir <its folder>` parses it.
+Size limits apply to the cell estimate of the listed generators (2,000,000 cells), a mesh file (256 MiB) and the surface (250,000
+triangles); over a limit the panel offers "Build anyway" or "Show anyway", and the cell and file limits are proposals, not
+measured. Every G check passed on 1e7e691, the reruns on the final code 19ecf08 pass, and the addendum records no known miss.
+G1c's first registered run failed on a set-up defect: a 2-iteration steady run exits with 5, not the registered 0, and amendment 1
+corrected the set-up before the corrected run. Amendment 2 corrected two more test set-ups, found in review, with limits unchanged.
+Amendment 3 records the maintainer's answer to question 8, which shrinks G3 and G5 to a 500 x 500 box; ADR 0144 implements the
+answers to questions 1-7 and reports the 500 x 500 reruns (check J13). Not run: a real window, Linux and the CI skip branch of the
+new GPU tests, debug builds of the new tests, the workspace gate, workspace-wide clippy and `cargo deny`.
+
+Rules and parents:
+
+* Part of 48G "first run to first picture"; items 2 (case starter menu), 3 (store fields by default) and 4 (one-click start and
+  follow) are separate branches.
+* House rules of ADR 0130 apply: limits are fixed before the registered runs; a missed limit becomes an ignored `*_known_miss`
+  test with the limit intact; a defective set-up is corrected by an amendment written before the corrected run; defaults of
+  existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Parent: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 2 and 5; ADR 0132 (the viewport).
+* Clean-room: our own `rcfd-api`, `rcfd-mesh`, `rcfd-render` and Studio code, the egui public API.
 
 ## Context (read at main f3bf005)
 
@@ -159,17 +175,22 @@ addendum reports these reruns (check J13) with their time and memory.
 
 ## Addendum: results against the registered limits (2026-10-28)
 
-Branch `worktree-agent-a1e32b5483f27b132` on main f3bf005. Registered runs: release, `--test-threads 1`, output to files,
-this machine while other agents built in parallel (timings include that load), the five adapters of ADR 0125 step 0
-(NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); no GPU test took the SKIP branch.
-`tests/preview_g1.rs` ran on ce0e7b5 (G1c failed on its set-up: amendment 1) and G1c again on b010776;
-`tests/preview_cost_g1.rs` and `tests/preview_gpu_g1.rs` ran on b010776. Then 1e7e691 changed code after the registered
-runs (below), and the whole `rcfd-studio` suite, these tests included, ran again on 1e7e691: 93 passed, 0 failed, 2
-ignored (the two known misses that were ignored before: the tutorials parity item and R6). Every G check passed there
-with the same results; its timings: G3 1,891 frames during an 11.31 s build, median 0.624 ms, max 7.1 ms (control one
-frame of 10,622.7 ms); G5 B shown after 0.007 s, A's thread 12.22 s, A never shown (control: shown in 2 drains); G8
-median 1.752 ms (control 73.030 ms); G10 NVIDIA 36.3 / 43.3 ms (Vulkan / DX12), AMD 40.6 / 53.5 ms, WARP 35.3 ms
-(control 218.9 / 241.6, 185.1 / 193.5, 176.1 ms). The table gives the registered runs.
+The table gives the registered runs. They ran on branch `worktree-agent-a1e32b5483f27b132` on main f3bf005, in release with
+`--test-threads 1` and output to files, on this machine while other agents built in parallel (timings include that load). They
+used the five adapters of ADR 0125 step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); no GPU
+test took the SKIP branch.
+
+* `tests/preview_g1.rs` ran on ce0e7b5 (G1c failed on its set-up: amendment 1) and G1c again on b010776.
+* `tests/preview_cost_g1.rs` and `tests/preview_gpu_g1.rs` ran on b010776.
+
+Then 1e7e691 changed code after the registered runs (below), and the whole `rcfd-studio` suite, these tests included, ran again on
+1e7e691: 93 passed, 0 failed, 2 ignored (the two known misses that were ignored before: the tutorials parity item and R6). Every G
+check passed there with the same results. Its timings:
+
+* G3: 1,891 frames during an 11.31 s build, median 0.624 ms, max 7.1 ms (control one frame of 10,622.7 ms).
+* G5: B shown after 0.007 s, A's thread 12.22 s, A never shown (control: shown in 2 drains).
+* G8: median 1.752 ms (control 73.030 ms).
+* G10: NVIDIA 36.3 / 43.3 ms (Vulkan / DX12), AMD 40.6 / 53.5 ms, WARP 35.3 ms (control 218.9 / 241.6, 185.1 / 193.5, 176.1 ms).
 
 | Id | Measured | Limit | Status |
 |---|---|---|---|
@@ -201,28 +222,36 @@ median 1.752 ms (control 73.030 ms); G10 NVIDIA 36.3 / 43.3 ms (Vulkan / DX12), 
 | G10 control | 1,000,000 triangles: NVIDIA Vulkan 231.9 ms, DX12 264.4 ms; AMD 196.6 / 221.2 ms, WARP 200.3 ms | > 100 ms on `DiscreteGpu` | fails as required |
 | G11 | on 1e7e691: the ADR 0131-0134 checks of the suite pass with their earlier values (B7 median 0.366 ms, control 14.678 ms; V2 max difference 1, control 2048 of 2048; V9 drawn in 20 of 20 frames; V10 531 x 379 byte-identical, uploads 1, scalar updates 3, renders 4; the B9 parity hover `value 1.1092974268256817  (face 0, cell 0)`; every other B, V, R and E test and the parity tests pass, R6 and the tutorials item stay ignored); `workspace_graph` 3 passed; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean; `scripts/third_party_licenses.py --check`: up to date; `git diff f3bf005` touches no `Cargo.toml`, `Cargo.lock`, `workspace_graph.rs` or `docs/architecture.md` | pass unchanged | pass |
 
-**Reruns after amendment 2 (on 19ecf08, the final code).** `tests/preview_g1.rs` with `--test-threads 1`: 9 of 9 pass
-with the results above (G1/G7 set-up: the 10 TOML cases and 6 descriptors of f3bf005 present, none more; G4 (c) and
-(d) on the per-`Preview` count; G5 B shown after 0.007 s, A's thread 9.80 s, control 2 drains). The three `preview_*`
-binaries with the default test threads: 14 of 14 pass (G3 2,125 frames during a 12.89 s build, median 0.669 ms, max
-12.5 ms while G8 ran beside it; G8 1.636 ms, control 86.871 ms; G10 NVIDIA 34.9 / 38.7 ms, control 175.7 / 174.8 ms).
-`scripts/gate_test.py --jobs 5 -- -p rcfd-studio` (one process per test, five at once): 93 test processes in 25 binaries
-pass, wall 84.0 s, peak summed working set 3,935 MB, max time/limit 0.020; the longest new tests G10 71.3 s (1.9 GB),
-G3 32.0 s (2.7 GB), G5 26.9 s (2.7 GB), G8 8.5 s (1.4 GB). `scripts/limit_audit.py` hits in the new tests, read: the
-`return`s of G3, G5, G8 and G10 are their debug-build skips with a `SKIP` line (the limits are for release; the gate is
-release), and G3's `t0.elapsed() < WAIT` is the loop's hang guard, not its limit. No timing limit was missed under the
-parallel load.
+**Reruns after amendment 2 (on 19ecf08, the final code).**
 
-No known miss. Unregistered: `estimate_equals_the_built_cells` (the estimate equals the built cells for the 10 listed
-generators; a missing mesh file is `Unknown`) passed; `rebuilds_after_a_save_and_an_external_change` (1e7e691, watcher
-on) passed: an unsaved edit of `mesh.nx` left the preview at 256 cells with no request, the save rebuilt it (320 cells),
-an external replacement of the file rebuilt it again (384 cells), 3 requests in all.
+* `tests/preview_g1.rs` with `--test-threads 1`: 9 of 9 pass with the results above (G1/G7 set-up: the 10 TOML cases and 6
+  descriptors of f3bf005 present, none more; G4 (c) and (d) on the per-`Preview` count; G5 B shown after 0.007 s, A's thread
+  9.80 s, control 2 drains).
+* The three `preview_*` binaries with the default test threads: 14 of 14 pass (G3 2,125 frames during a 12.89 s build, median
+  0.669 ms, max 12.5 ms while G8 ran beside it; G8 1.636 ms, control 86.871 ms; G10 NVIDIA 34.9 / 38.7 ms, control 175.7 /
+  174.8 ms).
+* `scripts/gate_test.py --jobs 5 -- -p rcfd-studio` (one process per test, five at once): 93 test processes in 25 binaries pass,
+  wall 84.0 s, peak summed working set 3,935 MB, max time/limit 0.020; the longest new tests G10 71.3 s (1.9 GB), G3 32.0 s
+  (2.7 GB), G5 26.9 s (2.7 GB), G8 8.5 s (1.4 GB).
+* `scripts/limit_audit.py` hits in the new tests, read: the `return`s of G3, G5, G8 and G10 are their debug-build skips with a
+  `SKIP` line (the limits are for release; the gate is release), and G3's `t0.elapsed() < WAIT` is the loop's hang guard, not
+  its limit.
+
+No timing limit was missed under the parallel load.
+
+No known miss. Two unregistered tests passed:
+
+* `estimate_equals_the_built_cells`: the estimate equals the built cells for the 10 listed generators; a missing mesh file is
+  `Unknown`.
+* `rebuilds_after_a_save_and_an_external_change` (1e7e691, watcher on): an unsaved edit of `mesh.nx` left the preview at 256
+  cells with no request, the save rebuilt it (320 cells), an external replacement of the file rebuilt it again (384 cells), 3
+  requests in all.
 
 **Deviations and notes.**
-* Amendment 1 (G1c set-up). After the registered runs, in 1e7e691 (found in review, not by a test): watcher changes seen
-  while no case is asked for no longer count when a case is asked for later (they could cause one superfluous rebuild),
-  a "Rebuild" button (a mesh file outside the project is not watched), and the unregistered rebuild test. The whole
-  suite ran again on 1e7e691 (above).
+* Amendment 1 (G1c set-up). Found in review, not by a test, and changed after the registered runs in 1e7e691: watcher changes
+  seen while no case is asked for no longer count when a case is asked for later (they could cause one superfluous rebuild), a
+  "Rebuild" button (a mesh file outside the project is not watched), and the unregistered rebuild test. The whole suite ran
+  again on 1e7e691 (above).
 * Building 1,000,000 cells took 9.8-12.2 s up to the end of `build_mesh` (G5) and 11.3-18.2 s in all (G3) on this
   machine while other builds ran, so the registered 2,000,000-cell limit admits builds of tens of seconds (the window
   stays responsive, G3); see question 6. G3 and G5 each hold about 2.7 GB at their peak (the 1,000,000-cell box built

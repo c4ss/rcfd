@@ -4,6 +4,16 @@ Status: **registered 2026-10-30**, before any code of this job and before any so
 validity checks, the limits, the predictions, the reading rules and the not-run list are fixed here. Amendments follow
 this text, each written before what it covers; results go in an addendum. Not yet accepted by the maintainer.
 
+When F-R(0.25) removes the leading-edge cycle on B3, a hub cycle takes over (ADR 0177). This job diagnoses that hub cycle
+with necessity and complement arms: C, the convection deferred correction, is removed in, or kept only in, the hub rings
+H3 and H4, with distant controls and F-R(0.25) on throughout. Amendment 1 corrected a failed V4 before any arm ran: D3
+shared 4 cells with H4. The addendum of 2026-10-30 reports that rule 1 applies: the hub is necessary and sufficient, and
+with the leading edge held off it is the second autonomous driver. Removing C in H3 (322 cells, 6.5 % of the mesh) stops
+the stall, with `is_converged()` true, torque 1.9144 N m and Delta p_ts 45.75 Pa. This is not a fix: the 322 cells are
+hand-picked from this mesh's own cycle records. P1, the prediction that N-H3 does not CALM, is missed (known miss
+`n_h3_known_miss`), and P2-P6 are met. K-D3, with C relaxed only in the distant region D3', also converges fully, while
+C-C does not, and why is not explained here.
+
 Job 49O, on branch `job49o-fan01-hub-locus` from `job49n-fan01-fr-b3` at 145ee57 (worktree `.claude/worktrees/job49o`).
 The number 0178 and the job id 49O were given by the coordinator.
 

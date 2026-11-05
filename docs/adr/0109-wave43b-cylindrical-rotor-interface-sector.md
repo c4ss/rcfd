@@ -1,9 +1,23 @@
 # ADR 0109: Wave 43B, a cylindrical non-conformal rotor/stator interface and sector periodicity through it (F-126, F-114)
 
-Status: registered before any code of this wave was written. Limits and decision rules below are not changed after a run; a
-missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test
-registered here as an amendment before it runs. Written at HEAD 83d2c1b, target `<target dir>`. Clean-room:
-first principles only (exact solutions of the Navier-Stokes equations and polygon geometry); no literature value enters a limit.
+Status: registered before any code of this wave was written. Written at HEAD 83d2c1b, target `<target dir>`.
+
+In an axial fan the natural rotor/stator boundary around the rotor is a cylinder, but F-114 joins two meshes only across planar,
+coplanar, opposed patches. This wave adds an opt-in non-conformal join on a cylinder about the rotation axis, used as a
+frozen-rotor (MRF) interface, and checks rotational sector periodicity through it. The addendum records the results, measured
+after the registration: the mesh-level checks G0-G3 pass. On the registered mesh M every full-annulus solver run diverged, so C1-C5
+miss; the cause recorded in amendment 1 is overlap faces 70-80 deg non-orthogonal. Under amendment 1, written after that first pass,
+a convergence-only rule selected K2 (interface cells closer to isotropic). K2 passes C1, C2, C4 and C5, and C3 except the limit
+on the sum of absolute interface fluxes (1.168e-3 V_i A against 1e-3). The periodic sector passes S1 and S2 except the same limit
+(5.79e-3 and 2.06e-2 V_i A against 1e-3). F-126 stays partial (its acceptance, a published compressor/rotor case, was not
+attempted), F-114 stays done, and a periodic rotor passage with an MRF zone and a cylindrical interface is not yet possible.
+
+Rules:
+
+* Limits and decision rules below are not changed after a run; a missed limit becomes an ignored `*_known_miss` test with the
+  limit intact; a defective set-up gets a new corrected test registered here as an amendment before it runs.
+* Clean-room: first principles only (exact solutions of the Navier-Stokes equations and polygon geometry); no literature value
+  enters a limit.
 
 ## Context
 
@@ -15,9 +29,11 @@ the rotor and stator meshes have different counts around (different blade counts
 
 ## Which slice, and why
 
-Attempted: (a) a non-conformal interface on a cylinder about the rotation axis, used as a frozen-rotor interface between an
-MRF zone and a stationary zone with different cell counts around and axially, and (b) rotational sector periodicity through
-that interface (the sides of a periodic sector cross the interface).
+Attempted:
+
+* (a) a non-conformal interface on a cylinder about the rotation axis, used as a frozen-rotor interface between an MRF zone and a
+  stationary zone with different cell counts around and axially;
+* (b) rotational sector periodicity through that interface (the sides of a periodic sector cross the interface).
 
 Not attempted, with the reason:
 
@@ -40,16 +56,18 @@ Not attempted, with the reason:
 ## Decision (method)
 
 New function `rcfd_mesh::non_conformal::join_non_conformal_cylindrical(a, patch_a, b, patch_b, origin, axis, tol)`. It reuses
-the planar join's algorithm with a different chart: interface points map to `(s, z) = (R theta, axial coordinate)` on the
-cylinder of radius `R` (mean radius of patch A's points) about the given axis, clipping (Sutherland-Hodgman), point
-registry, hanging-node insertion and assembly are unchanged, and new points map back to `(R cos theta, R sin theta, z)`.
+the planar join's algorithm with a different chart. Interface points map to `(s, z) = (R theta, axial coordinate)` on the
+cylinder of radius `R` (mean radius of patch A's points) about the given axis. Clipping (Sutherland-Hodgman), point
+registry, hanging-node insertion and assembly are unchanged. New points map back to `(R cos theta, R sin theta, z)`.
+
 Each overlap of an A face with a B face spans one interval of the merged set of angles and one interval of the merged axial
 breakpoints, so it is a planar chord rectangle whose centroid lies on the bisecting radial plane: its normal is radial and its
 frame flux is zero to round-off. The interface becomes the polygon through the merged angles on the true circle, so the cells
 next to it on the inner side gain a sliver and those on the outer side lose one (their axial faces become slightly
-non-convex); the total volume is the closed-form volume between the inner wall polygon and the outer wall polygon. The seam of
-the chart (theta = +-pi) is handled by a period `2 pi R` in the registry and by unwrapping each face loop about its centre;
-the planar path keeps its arithmetic unchanged (no period), so planar joins stay bit-identical.
+non-convex). The total volume is the closed-form volume between the inner wall polygon and the outer wall polygon.
+
+A period `2 pi R` in the registry and the unwrapping of each face loop about its centre handle the seam of the chart
+(theta = +-pi). The planar path keeps its arithmetic unchanged (no period), so planar joins stay bit-identical.
 
 Opt-in only: no generator, schema key or default changes. Solver checks write the joined mesh with
 `rcfd_io::openfoam::write_dir` to a test-unique temporary directory and read it through `mesh.source = "file"`. The MRF zone is
@@ -140,29 +158,39 @@ No set-up was found defective; no limit changes. The registered runs follow.
 
 ## Registered runs, first pass (as registered, before any amendment)
 
-* Sector, rcfd-fv: S1 converged in 285 iterations, error 1.272e-2 V_i (bound 1.5 x max(6.763e-3, 1.108e-2) = 1.661e-2) PASS, net
-  interface flux 3.1e-17 V_i A PASS, seam balance 0 PASS, `sum |interface flux|` 5.79e-3 V_i A against 1e-3 MISS. S2 converged in
-  295 iterations, error 1.278e-2 V_i PASS (same bound), net 4.7e-11 PASS, seam 3.5e-10 PASS, `sum |flux|` 2.06e-2 MISS. The
-  absolute interface flux is not a spurious net flow: the owner and neighbour of an overlap face sit at different angles, so the
-  interpolated face velocity of a purely azimuthal flow has a radial component of order `u_theta dtheta`, which the pressure
-  correction turns into a circulation in and out through neighbouring overlap faces (net zero to round-off).
-* Full annulus, rcfd-api: every run on mesh M DIVERGED (C1, C2, C4 at Omega 0 / 1 / 2, C5: continuity 1e33 to 1e81 at iteration
-  4000), so C1-C5 all MISS; the conformal controls converged (48 around: error 6.760e-3 V_i in 1187 iterations; 35 around: 1.164e-2
-  in 1357). The 50-iteration smoke had already shown continuity 1e-3 to 1e-4 on mesh M against about 1e-9 on the controls; 50
-  iterations were too short to expose the divergence and the smoke did not flag it.
+Sector, rcfd-fv:
+
+* S1 converged in 285 iterations, error 1.272e-2 V_i (bound 1.5 x max(6.763e-3, 1.108e-2) = 1.661e-2) PASS, net interface flux
+  3.1e-17 V_i A PASS, seam balance 0 PASS, `sum |interface flux|` 5.79e-3 V_i A against 1e-3 MISS.
+* S2 converged in 295 iterations, error 1.278e-2 V_i PASS (same bound), net 4.7e-11 PASS, seam 3.5e-10 PASS, `sum |flux|` 2.06e-2
+  MISS.
+
+The absolute interface flux is not a spurious net flow: the owner and neighbour of an overlap face sit at different angles, so the
+interpolated face velocity of a purely azimuthal flow has a radial component of order `u_theta dtheta`, which the pressure
+correction turns into a circulation in and out through neighbouring overlap faces (net zero to round-off).
+
+Full annulus, rcfd-api: every run on mesh M DIVERGED (C1, C2, C4 at Omega 0 / 1 / 2, C5: continuity 1e33 to 1e81 at iteration
+4000), so C1-C5 all MISS. The conformal controls converged (48 around: error 6.760e-3 V_i in 1187 iterations; 35 around: 1.164e-2
+in 1357). The 50-iteration smoke had already shown continuity 1e-3 to 1e-4 on mesh M against about 1e-9 on the controls; 50
+iterations were too short to expose the divergence and the smoke did not flag it.
 
 All misses become ignored `*_known_miss` tests with the limits unchanged.
 
 ## Amendment 1 (written after the first pass and five residual-only diagnostics, before any run it governs)
 
 What I knew when writing this: five diagnostic runs of the C2 set-up (Taylor-Couette, MRF on `rotor`), full 4000 iterations,
-looking only at residuals and continuity, not at accuracy, and `check_mesh` on each mesh. Mesh M: max non-orthogonality 79.2 deg,
-diverged; mesh M without any source: diverged (so MRF is not the cause); axial counts matched (B nz = 2): 75.7 deg, diverged;
-counts around matched (B 48 around, nz 3): 72.7 deg, diverged; both matched (the cylindrical join of identical blocks, conformal):
-0.0 deg, converged in 741 iterations. Cause: an overlap face joins cell centres that are offset by up to half a cell around and
-axially (0.05 to 0.1) but only `dr = 1/32` apart radially, so the overlap faces are 70-80 deg non-orthogonal, and the default
-SIMPLEC with one non-orthogonal corrector diverges on them. This is a limitation of the delivered join on high-aspect cells at the
-interface, not a construction error (G1 closure, tiling and volume are at round-off).
+looking only at residuals and continuity, not at accuracy, and `check_mesh` on each mesh:
+
+* mesh M: max non-orthogonality 79.2 deg, diverged;
+* mesh M without any source: diverged (so MRF is not the cause);
+* axial counts matched (B nz = 2): 75.7 deg, diverged;
+* counts around matched (B 48 around, nz 3): 72.7 deg, diverged;
+* both matched (the cylindrical join of identical blocks, conformal): 0.0 deg, converged in 741 iterations.
+
+Cause: an overlap face joins cell centres that are offset by up to half a cell around and axially (0.05 to 0.1) but only
+`dr = 1/32` apart radially, so the overlap faces are 70-80 deg non-orthogonal, and the default SIMPLEC with one non-orthogonal
+corrector diverges on them. This is a limitation of the delivered join on high-aspect cells at the interface, not a construction
+error (G1 closure, tiling and volume are at round-off).
 
 Corrected set-up, chosen by a convergence-only rule: candidates in this order; the first for which the C2 set-up reaches the
 residual targets (`is_converged`) within 4000 iterations, judged from a residual-only probe, is selected; accuracy is not looked at
@@ -219,23 +247,32 @@ Diagnostic, not a criterion: the absolute interface flux of S1 halves when the s
 per block: 2.89e-3 V_i A against 5.79e-3; error 5.04e-3 V_i against 1.27e-2), so this spurious in-and-out flux is first order in the
 cell size. It comes from interpolating an azimuthal velocity between cell centres at different angles.
 
-Deviations from the registered plan, all stated above or here: (1) the 50-iteration smoke did not expose the divergence on mesh M;
-(2) amendment 1 (corrected set-up by a convergence-only rule) was written after the first pass; (3) per variant, C1 velocity and
-pressure are one test function with both limits; (4) the K2 C2/C3 test first ran with the absolute-flux limit inside it and failed
-on it only; the limit was then moved unchanged into its own ignored known-miss test and the run repeated (the code is
-deterministic; the repeat gave identical values); (5) for K2 the conformal controls are cylindrical joins of identical blocks (the
-`annulus_3d` generator cannot grade towards the middle).
+Deviations from the registered plan, all stated above or here:
+
+1. The 50-iteration smoke did not expose the divergence on mesh M.
+2. Amendment 1 (corrected set-up by a convergence-only rule) was written after the first pass.
+3. Per variant, C1 velocity and pressure are one test function with both limits.
+4. The K2 C2/C3 test first ran with the absolute-flux limit inside it and failed on it only. The limit was then moved unchanged
+   into its own ignored known-miss test and the run repeated (the code is deterministic; the repeat gave identical values).
+5. For K2 the conformal controls are cylindrical joins of identical blocks (the `annulus_3d` generator cannot grade towards the
+   middle).
 
 Unverified references: none; every reference value is an exact solution or polygon geometry.
 
 Status: F-126 stays partial (its acceptance, a published compressor/rotor case, was not attempted). F-114 stays done; its note
-records the cylindrical join. What blocks the next slice: (a) the overlap faces of a cylindrical join between cells with large
-tangential/axial size against the radial size are 70-80 deg non-orthogonal and the steady solver diverges on them (none of the
-registered remedies fixed mesh M; K2 works by making the interface cells closer to isotropic), so the fan mesher must size the
-interface layer accordingly; (b) MRF zones cannot have cyclic seams (frame flux on the seam planes), so a periodic rotor passage
-with an MRF zone and a cylindrical interface is not yet possible; (c) the first-order absolute interface flux; (d) no case-tree
-generator or key yet (library function plus mesh file); (e) conical surfaces, partial cover, transient sliding, the mixing plane on a
-cylinder; (f) the FAN-01 numerics of docs/milestone-fan.md for the acceptance case.
+records the cylindrical join.
+
+What blocks the next slice:
+
+* (a) the overlap faces of a cylindrical join between cells with large tangential/axial size against the radial size are 70-80 deg
+  non-orthogonal and the steady solver diverges on them (none of the registered remedies fixed mesh M; K2 works by making the
+  interface cells closer to isotropic), so the fan mesher must size the interface layer accordingly;
+* (b) MRF zones cannot have cyclic seams (frame flux on the seam planes), so a periodic rotor passage with an MRF zone and a
+  cylindrical interface is not yet possible;
+* (c) the first-order absolute interface flux;
+* (d) no case-tree generator or key yet (library function plus mesh file);
+* (e) conical surfaces, partial cover, transient sliding, the mixing plane on a cylinder;
+* (f) the FAN-01 numerics of docs/milestone-fan.md for the acceptance case.
 
 ## Final gate
 

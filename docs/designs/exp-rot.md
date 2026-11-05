@@ -24,7 +24,9 @@ costs, and how each result maps to the build of A1.
 
 The parent design says the laminar runs of arm 1 need no new code. That turns out to be wrong, and this design departs
 from it. Three small prerequisites are needed (P-A, P-B, P-C), and arm 2 needs a rebuild of about 1 000 to 1 800 lines.
-The code ADR 0085 wrote for arm C was removed, was never committed, and has not been found on disk.
+The code ADR 0085 wrote for arm C was removed, was never committed, and has not been found on disk. The runs are estimated
+at about 10.5 machine-hours, plus the build and gate time of the prerequisites. Seven open questions remain at the end of
+this document, each with a recommendation.
 
 ## The problem
 
@@ -163,12 +165,12 @@ passage every cell of the rotating mesh keeps its value (`c_x = c_y = 0`, `c_z(r
 that is measured. The bladed state rotates in Cartesian components, so its seam lag and its Euler time error do not
 vanish. That is one reason Y1b is report only.
 
-**Time step and length.** `Omega dt = 1 deg` (dt = 1.12156e-4 s, 360 steps per revolution). The relative speed reaches
-about 40 m/s at the shroud. Core cells are 5 to 15 mm, so the Courant number there is of order 1. It is higher in the
-thin wall cells, which PISO's implicit momentum step tolerates for a settled target. A revolution takes 40.4 ms and a
-flow-through 42.2 ms. A run stops when two consecutive revolution means of L agree within the ADR 0086 cap rule, and
-after 15 revolutions at most. One fallback to 0.5 deg is registered for a smoke that diverges. A dt/2 repeat on E2 tests
-the time-step floor, using ADR 0085's 10 % / 50 % rule applied to dt.
+**Time step and length.** The time step is `Omega dt = 1 deg` (dt = 1.12156e-4 s, 360 steps per revolution). The
+relative speed reaches about 40 m/s at the shroud. Core cells are 5 to 15 mm, so the Courant number there is of order 1.
+It is higher in the thin wall cells, which PISO's implicit momentum step tolerates for a settled target. A revolution
+takes 40.4 ms and a flow-through 42.2 ms. A run stops when two consecutive revolution means of L agree within the
+ADR 0086 cap rule, and after 15 revolutions at most. One fallback to 0.5 deg is registered for a smoke that diverges.
+A dt/2 repeat on E2 tests the time-step floor, using ADR 0085's 10 % / 50 % rule applied to dt.
 
 **Reading.** The rules are ADR 0085's, inherited:
 - A1-R: Y1 is two orders below R1 on E1.

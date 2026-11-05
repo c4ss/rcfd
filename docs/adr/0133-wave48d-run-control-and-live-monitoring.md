@@ -1,9 +1,28 @@
-# ADR 0133: Wave 48D, run control and live monitoring in the Studio (several background runs through `rcfd-runner`)
+# ADR 0133: Wave 48D, run control and live monitoring in the Studio
 
-Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). Needs ADR 0130 (48A: runner on `rcfd-project`, tolerant
-readers, and per-step monitors if W48-6 (a) is chosen) and ADR 0131 (48B). House rules as in ADR 0130. Parent: plan section 2 (start
-several runs, close the app and they continue), section 3 (L2, L5), section 6 (run with live residual and report monitors and run
-control). Roadmap: F-266, F-262.
+Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision
+W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run).
+
+This ADR scopes run control and live monitoring in the Studio for several background runs through `rcfd-runner`; the plan
+asks to start several runs, close the app and have them continue. The Studio never runs the solver in process; a worker
+thread per open project reads the run files, and the UI thread reads nothing from disk. Amendment 1 adds the opt-in case
+key `output.store_precision` and registers checks R10-R12. The addendum reports a pass for R1-R5, R7-R12 and R6b, with R10
+passing after amendment 3 corrected a test-code defect and R2's evidence coarser than registered. R6 missed its limit in the
+registered run (median 45.7 ms against 5 ms) and became an ignored known miss with the limit intact. Amendment 4 then changed
+the reader and registered R6b, with the same limit, before it ran: median 0.710 ms on R6's fixture, and 6.700 ms (reported,
+not limited) with every run's `status.json` replaced before each tick. Not run: the "Not in CI" items, the Studio tests in a
+debug build, Linux, the workspace gate, workspace-wide clippy and `cargo deny`. The addendum asks the maintainer five
+questions, the first whether the R6 handling is accepted; later notes record that a store key at its schema default is not
+the case's own (ADR 0152) and that question 5 stays open for keys added to an existing table (ADR 0155).
+
+Rules and parents:
+
+* Needs ADR 0130 (48A: runner on `rcfd-project`, tolerant readers, and per-step monitors if W48-6 (a) is chosen) and ADR 0131
+  (48B).
+* House rules as in ADR 0130.
+* Parent: plan section 2 (start several runs, close the app and they continue), section 3 (L2, L5), section 6 (run with live
+  residual and report monitors and run control).
+* Roadmap: F-266, F-262.
 
 ## Context (read at main 1248a76)
 
@@ -22,22 +41,24 @@ control). Roadmap: F-266, F-262.
 
 ## Decisions (proposed; no open user decision in this sub-wave beyond W48-6 of ADR 0130)
 
-1. **D1 runs only through the runner.** The Studio never runs the solver in process. Start = `Client::start(case, settings)` with the
-   case from `cases/` and settings from the start dialog (priority, threads, memory, `set` overrides including the store keys of ADR
-   0130 D4). The run list, pause, resume and cancel map one to one onto the client.
+1. **D1 runs only through the runner.** The Studio never runs the solver in process. A start calls
+   `Client::start(case, settings)` with the case from `cases/` and settings from the start dialog (priority, threads, memory,
+   `set` overrides including the store keys of ADR 0130 D4). The run list, pause, resume and cancel map one to one onto the
+   client.
 2. **D2 polling model.** One worker thread per open project reads, every 250 ms, `status.json` of every non-terminal run and the
-   new bytes of `residuals.jsonl` and `events.jsonl` of the runs shown (incremental, from a kept offset; a torn tail is held back until
-   completed). Terminal runs are read once. The UI thread only reads the worker's snapshot.
-3. **D3 plots.** The copied monitor store (ADR 0131 W48-9) per run: residuals on a log axis, monitors on linear axes, decimated for
-   drawing (M3 rule). Non-finite values (NaN from 48A D2) show as gaps and a warning, not as a dropped run. A marker shows the viewport's
-   current step (ADR 0132).
-4. **D4 runner state shown.** "Runner not running" (lock probe false) with the queue still listed; a start button calls
-   `ensure_runner`. When `ensure_runner` fails, its located error is shown; the Studio does not retry in a loop.
+   new bytes of `residuals.jsonl` and `events.jsonl` of the runs shown. It reads those bytes incrementally, from a kept offset,
+   and holds a torn tail back until completed. Terminal runs are read once. The UI thread only reads the worker's snapshot.
+3. **D3 plots.** Each run has the copied monitor store (ADR 0131 W48-9): residuals on a log axis, monitors on linear axes,
+   decimated for drawing (M3 rule). Non-finite values (NaN from 48A D2) show as gaps and a warning, not as a dropped run. A marker
+   shows the viewport's current step (ADR 0132).
+4. **D4 runner state shown.** When the lock probe is false, the Studio shows "Runner not running" with the queue still listed;
+   a start button calls `ensure_runner`. When `ensure_runner` fails, its located error is shown; the Studio does not retry in
+   a loop.
 5. **D5 several runs.** The list shows queued, running, paused and finished runs with step, time, last residuals and, for queued
    runs, the queue position by the runner's order (priority, created, id; ADR 0123 decision 7). Budgets are shown from the runner
    config; editing them writes `.rcfd/runner-config.json` atomically (the runner reads it at start; a restart notice is shown).
-6. **D6 logs and outputs.** `log.txt` tail (last 200 lines, read from the end), events as a table, `metrics.json` and the solver's
-   `output/report.html` path.
+6. **D6 logs and outputs.** The Studio shows the `log.txt` tail (last 200 lines, read from the end), events as a table,
+   `metrics.json` and the solver's `output/report.html` path.
 
 ## Placement
 
@@ -260,11 +281,11 @@ appended lines also change every run's `status.json` (as a moving run does), to 
 
 ## Addendum: 48D results (2026-10-28, branch `worktree-agent-a5ba74d44afbc1aaf`, release builds on the gate host)
 
-Decisions applied as accepted: W48-4 (b), W48-5 (a), W48-6 (a); the maintainer's `output.store_precision` decision. Commits
-e704a79 (amendment 1) to the commit of this addendum, on main 64732bb. All Studio tests ran in release with
-`--test-threads 1`, `rcfd` and `rcfd-runner` of the same build; the whole `rcfd-studio` suite ran once more at the end with its
-output going to a file (R9's rule), and the numbers below are from that final run unless a first run is named. Leftover
-processes after the runs: none (`rcfd`, `rcfd-runner`). The workspace gate was not run (the maintainer runs it).
+Decisions applied as accepted: W48-4 (b), W48-5 (a), W48-6 (a); the maintainer's `output.store_precision` decision. The commits
+run from e704a79 (amendment 1) to the commit of this addendum, on main 64732bb. All Studio tests ran in release with
+`--test-threads 1`, using `rcfd` and `rcfd-runner` of the same build. The whole `rcfd-studio` suite ran once more at the end
+with its output going to a file (R9's rule), and the numbers below are from that final run unless a first run is named.
+Leftover processes after the runs: none (`rcfd`, `rcfd-runner`). The workspace gate was not run (the maintainer runs it).
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -293,19 +314,24 @@ processes after the runs: none (`rcfd`, `rcfd-runner`). The workspace gate was n
 | R12 | 1 run re-summarised; the browser equals `Browser::load` | 1; equal | pass |
 | R12 control | the full reload reads 500 | 500 (open and `Browser::load`) | discriminates |
 
-Before amendment 4 (the kept read handles) R1-R4, R7, R8, R10 (after amendment 3), R12 and the live parity test had run once
+Before amendment 4 (the kept read handles), R1-R4, R7, R8, R10 (after amendment 3), R12 and the live parity test had run once
 and passed with the same results in kind (R1 14 snapshots, R3 paused after 0.264 s, R4 42 lost in the control, R8 the same
-bits); every one was run again on the final code (the table).
+bits). Every one was run again on the final code (the table).
 
-ADR 0131 checks re-run on the final code, limits unchanged: B1 (8 runs, 1 skipped), B2, B3, B4 (200 frames), B5 (569 leaves,
-one more than 48B: `output.store_precision`; 477 defaults parsed), B6 (clean 0.296 s, dirty 0.302 s, control no report in 5 s),
-B7 (median 0.339 ms, control 14.5 ms), B8, B9: all pass. B9's live-monitor item is now
+ADR 0131's checks, re-run on the final code with limits unchanged, all pass: B1 (8 runs, 1 skipped), B2, B3, B4 (200 frames),
+B5 (569 leaves, one more than 48B: `output.store_precision`; 477 defaults parsed), B6 (clean 0.296 s, dirty 0.302 s, control no
+report in 5 s), B7 (median 0.339 ms, control 14.5 ms), B8, B9. B9's live-monitor item is now
 `parity_run_with_live_residual_and_report_monitors` (3000 steps through the drawn app; residuals and `lid_drag` plotted while
-running; last `lid_drag` bit-equal to `monitors.json`): pass; the other three items stay ignored as in 48B.
+running; last `lid_drag` bit-equal to `monitors.json`) and passes; the other three items stay ignored as in 48B.
 
-Also run: `rcfd-cli` `workspace_graph` (3), `run_flags_w48a` (A6, A7), `cli` (8), `w19c_run_control` (7); `rcfd-api` lib
-(104 passed, 2 ignored as before), `physics_schema` (11), `rules_w19c` (5, 1 ignored as before), `runctl` (6); `rcfd-mcp`
-`default_f1` (2), `project_w48f` (8); `rcfd-gui` `logic` (10; the frozen GUI reads the schema with the new key). `cargo clippy
+Also run:
+
+* `rcfd-cli`: `workspace_graph` (3), `run_flags_w48a` (A6, A7), `cli` (8), `w19c_run_control` (7).
+* `rcfd-api`: lib (104 passed, 2 ignored as before), `physics_schema` (11), `rules_w19c` (5, 1 ignored as before), `runctl` (6).
+* `rcfd-mcp`: `default_f1` (2), `project_w48f` (8).
+* `rcfd-gui`: `logic` (10; the frozen GUI reads the schema with the new key).
+
+Other checks: `cargo clippy
 -p rcfd-studio -p rcfd-api --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -p rcfd-api -- --check` clean;
 `scripts/third_party_licenses.py --check` up to date.
 
@@ -331,11 +357,15 @@ Deviations and notes:
   "cell count unknown". Algorithms other than `piso` and `pimple` (for example `compressible`, transient or not) get the
   step rule from `max_iterations`.
 
-Not run: the "Not in CI" items (a real window: smooth plots with two streaming runs, responsiveness with 4 runs; closing the
-Studio by hand and checking Task Manager); the Studio tests in a debug build, the profile of a plain `cargo test
---workspace` (R6 skips there; R1-R3 use a quarter of the steps; the B9 live parity test and R8, R9 do not scale their 3000,
-400 and 2000 steps); Linux (the new process tests R1-R3, R8, R9 and the live parity test have never run there: a CI risk);
-the workspace gate and workspace-wide clippy; `cargo deny` (not installed).
+Not run:
+
+* The "Not in CI" items (a real window: smooth plots with two streaming runs, responsiveness with 4 runs; closing the Studio by
+  hand and checking Task Manager).
+* The Studio tests in a debug build, the profile of a plain `cargo test --workspace` (R6 skips there; R1-R3 use a quarter of the
+  steps; the B9 live parity test and R8, R9 do not scale their 3000, 400 and 2000 steps).
+* Linux (the new process tests R1-R3, R8, R9 and the live parity test have never run there: a CI risk).
+* The workspace gate and workspace-wide clippy.
+* `cargo deny` (not installed).
 
 Questions for the maintainer:
 1. Is the R6 handling accepted: the registered R6 stays an ignored known miss, and R6b (kept read handles, registered in

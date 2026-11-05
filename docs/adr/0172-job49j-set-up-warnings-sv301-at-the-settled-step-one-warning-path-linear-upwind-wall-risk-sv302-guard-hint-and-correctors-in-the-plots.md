@@ -1,7 +1,15 @@
-# ADR 0172: Job 49J, set-up warnings (queue items A2 and A3): SV301 at the settled step, one warning path for every run entry, a new static warning SV302 for unlimited linear-upwind on thin skewed wall cells, a guard hint that names the limiter, and the adaptive corrector count in the Studio plot and the MCP `read_residuals`
+# ADR 0172: Job 49J, set-up warnings (queue items A2 and A3)
 
 Status: **registered 2026-10-30**, before any implementation result of this job and before any run. Amendments follow
 this text, each written before the runs it covers; results go in an addendum. Not yet accepted by the maintainer.
+
+The job adds SV301 at the settled step, one warning path for every run entry, a new static warning SV302 for unlimited
+linear-upwind on thin skewed wall cells, a guard hint that names the limiter, and the adaptive corrector count in the
+Studio plot and the MCP `read_residuals`. The defaults stay bit-identical and the limiter stays opt-in. The addendum lists
+one miss: LW4, on two of three meshes, where the measured `W_max` is +38 % on M1 and +50 % on M1w15 against ADR 0171's
+values (limit 30 %). The probable cause, that ADR 0171 aggregated the metric differently, is not verified. The firing
+decisions LW1 to LW3 hold, but M1w15 (2406) sits close under the level 3000. SV302 is a risk notice with a registered false
+positive: it fires on M1 at 0 degrees, which ran clean in ADR 0171. All 12 shipped examples exit 0 and none carries SV302.
 
 Job 49J, on local main aef580d (worktree branch `job49j-warnings`). Number: 0171 is the highest on main; checked just
 before writing (job 49I took none).
@@ -18,12 +26,16 @@ Clean-room: our own code and our own ADRs only.
 
 ## The request (the maintainer, queue of 2026-10-30, relayed)
 
-A2, set-up warnings: (1) SV301 at the step the run will actually use, not only at the initial step; (2) the static
-set-up warnings and SV301 in `run.headless` and in the chain driver, with one code path; (3) a new static warning for
-unlimited `solver.linear_upwind_limiter` on wall cells with high aspect times tan(non-orthogonality) (ADR 0171 findings
-and question 2); (4) the divergence-guard hint names the limiter when the failing cell is a wall cell under unlimited
-`linear_upwind` (ADR 0171 question 3). A3: the adaptive corrector count and cap (`correctors`, `corrector_cap`, ADR 0160
-D4) in the Studio's residual plot and in the MCP `read_residuals`.
+A2, set-up warnings:
+1. SV301 at the step the run will actually use, not only at the initial step;
+2. the static set-up warnings and SV301 in `run.headless` and in the chain driver, with one code path;
+3. a new static warning for unlimited `solver.linear_upwind_limiter` on wall cells with high aspect times
+   tan(non-orthogonality) (ADR 0171 findings and question 2);
+4. the divergence-guard hint names the limiter when the failing cell is a wall cell under unlimited `linear_upwind`
+   (ADR 0171 question 3).
+
+A3: the adaptive corrector count and cap (`correctors`, `corrector_cap`, ADR 0160 D4) in the Studio's residual plot and in
+the MCP `read_residuals`.
 
 ## What I read (rule d), nothing run
 
@@ -66,43 +78,57 @@ proposed next step) clamped to the controller's `min_dt` / `max_dt` (the legacy 
 the present flux gives no Courant number (rest start, `Co` = 0) or the controller is not Courant-driven, the next
 proposed step; for a fixed step `solver.dt`, bit-identical to today. `pressure_lag_preflight()` uses it; a new
 `pressure_lag_preflight_at(dt)` takes the step as an argument (the old `pressure_lag_preflight()` on a fixed step is
-`..._at(self.dt)` exactly). The pre-run estimate cannot see a flow that has not developed, so a **run-time watch** backs
-it: `runctl::drive` keeps a `LagWatch` for runs where the preflight applies (the same conditions as
-`pressure_lag_preflight`: incompressible transient, `corrector_control` fixed, `n_correctors >= 2`, no dynamic mesh,
-`pressure_lag_check != "off"`) and, when the step has changed by a factor of 1.5 up or down since the last evaluation, or
-has stayed within 2 % for 10 consecutive steps after changing by more than 5 % since the last evaluation (the controller
-has settled), evaluates `Simulation::lag_estimate_next_step(LAG_PREFLIGHT_ITERATIONS)` (a copy of the solver, ADR 0162 D5;
-no change of the run) and emits a `warning` event, rule `SV301`, at most once per run, when the estimate is at least
-`SV301_LEVEL`; the message names the step, the time step and the estimate, and repeats the remedy. If the pre-run SV301
-already fired (`info.warnings` holds it) the watch is silent. Steps that landed on a write or end time (the fixed step's
-short last step) are not evaluated.
+`..._at(self.dt)` exactly).
+
+The pre-run estimate cannot see a flow that has not developed, so a **run-time watch** backs it. `runctl::drive` keeps a
+`LagWatch` for runs where the preflight applies (the same conditions as `pressure_lag_preflight`: incompressible
+transient, `corrector_control` fixed, `n_correctors >= 2`, no dynamic mesh, `pressure_lag_check != "off"`). The watch
+evaluates `Simulation::lag_estimate_next_step(LAG_PREFLIGHT_ITERATIONS)` (a copy of the solver, ADR 0162 D5; no change of
+the run) when the step:
+- has changed by a factor of 1.5 up or down since the last evaluation, or
+- has stayed within 2 % for 10 consecutive steps after changing by more than 5 % since the last evaluation (the controller
+  has settled).
+
+The watch emits a `warning` event, rule `SV301`, at most once per run, when the estimate is at least `SV301_LEVEL`; the
+message names the step, the time step and the estimate, and repeats the remedy. If the pre-run SV301 already fired
+(`info.warnings` holds it) the watch is silent. Steps that landed on a write or end time (the fixed step's short last
+step) are not evaluated.
 
 **D2. One warning path.** `rules::setup_diagnostics(case, sim, mesh, q)` is `check_case` (static rules, MT101) followed by
 `rules::dynamic_setup_diagnostics(sim, mesh)`: SV301 (`lag_preflight_rule`) and SV302 (D3). The caller picks the moment:
-`rcfd run` calls `check_case` first for its error gate (exit 3, as before) and the dynamic part after the restart is applied
-(as SV301 is today, so a continued run estimates its restarted state); `check_only` calls `setup_diagnostics` (the SV301
-order after the static rules is unchanged); the chain driver calls it per stage after the stage's restart; `run.headless`
-calls it at the start of a run (`iteration() == 0`) and puts the **warning-severity** diagnostics in `start.info.warnings`
-and as `warning` events, as SV301 is today. `run.headless` does not refuse a case with a rule *error* (it never did; a
-refusal would change what a call returns); the errors are not shown there (question 1). Output of `rcfd run`, `run.check`
-and the chain driver is unchanged except for the added diagnostics.
+- `rcfd run` calls `check_case` first for its error gate (exit 3, as before) and the dynamic part after the restart is
+  applied (as SV301 is today, so a continued run estimates its restarted state);
+- `check_only` calls `setup_diagnostics` (the SV301 order after the static rules is unchanged);
+- the chain driver calls it per stage after the stage's restart;
+- `run.headless` calls it at the start of a run (`iteration() == 0`) and puts the **warning-severity** diagnostics in
+  `start.info.warnings` and as `warning` events, as SV301 is today.
+
+`run.headless` does not refuse a case with a rule *error* (it never did; a refusal would change what a call returns); the
+errors are not shown there (question 1). Output of `rcfd run`, `run.check` and the chain driver is unchanged except for
+the added diagnostics.
 
 **D3. SV302, the static warning.** Rule `SV302`, severity warning, category `solver`, path `solver.linear_upwind_limiter`,
-no `fix` object (the limiter has a cost and is an accuracy decision, question 2). Metric: for every wall cell (a cell
-with a face on a `PatchKind::Wall` patch) `W = aspect_ratio(c) * tan(theta_c)`, `aspect_ratio` and the face
-non-orthogonality as `rcfd_mesh::quality::compute_metrics` defines them (aspect: longest over shortest edge of the cell,
-the span edge included), `theta_c` the largest non-orthogonality over all faces of the cell, clamped to 89.9 degrees;
-`W_max` is the maximum over wall cells. The rule fires when the engine is the steady incompressible `simple` / `simplec`
-solver, `solver.convection = "linear_upwind"`, `solver.linear_upwind_limiter = "none"` and `W_max >= SV302_LEVEL = 3000`.
-The level lies between the ADR 0171 values of M1w15 (1 600, clean) and M1w05 (6 900, diverged at 6 degrees) and is a
-judgement, not a fit. The message is a risk notice: it gives `W_max`, the cell and its position and the two factors; says
-that this combination (unlimited linear-upwind on thin, strongly skewed wall cells) diverged in ADR 0171's NACA 0012 runs at
-y+ about 2 once the flow was off-axis, that it is a risk, not a prediction (the same metric value did not diverge on M1 at
-0 degrees); names `solver.linear_upwind_limiter = "barth_jespersen"` and its cost (+3 % of `cd_eff` at 0 degrees in ADR
-0171, all in the pressure drag); and says that lowering the relaxation factors did not help there. **False
-positives:** the rule fires on M1 at 0 degrees, which ran clean for 8000 iterations, and on any thin-celled skewed wall mesh
-that would have converged; it does not fire on a stable run whose sliver cells are not wall cells, nor on a diverging run
-whose wall cells stay under the level. The default is unchanged (the limiter stays opt-in).
+no `fix` object (the limiter has a cost and is an accuracy decision, question 2).
+
+Metric: for every wall cell (a cell with a face on a `PatchKind::Wall` patch) `W = aspect_ratio(c) * tan(theta_c)`,
+`aspect_ratio` and the face non-orthogonality as `rcfd_mesh::quality::compute_metrics` defines them (aspect: longest over
+shortest edge of the cell, the span edge included), `theta_c` the largest non-orthogonality over all faces of the cell,
+clamped to 89.9 degrees; `W_max` is the maximum over wall cells.
+
+The rule fires when the engine is the steady incompressible `simple` / `simplec` solver,
+`solver.convection = "linear_upwind"`, `solver.linear_upwind_limiter = "none"` and `W_max >= SV302_LEVEL = 3000`. The level
+lies between the ADR 0171 values of M1w15 (1 600, clean) and M1w05 (6 900, diverged at 6 degrees) and is a judgement, not a
+fit.
+
+The message is a risk notice: it gives `W_max`, the cell and its position and the two factors; says that this combination
+(unlimited linear-upwind on thin, strongly skewed wall cells) diverged in ADR 0171's NACA 0012 runs at y+ about 2 once the
+flow was off-axis, that it is a risk, not a prediction (the same metric value did not diverge on M1 at 0 degrees); names
+`solver.linear_upwind_limiter = "barth_jespersen"` and its cost (+3 % of `cd_eff` at 0 degrees in ADR 0171, all in the
+pressure drag); and says that lowering the relaxation factors did not help there.
+
+**False positives:** the rule fires on M1 at 0 degrees, which ran clean for 8000 iterations, and on any thin-celled skewed
+wall mesh that would have converged; it does not fire on a stable run whose sliver cells are not wall cells, nor on a
+diverging run whose wall cells stay under the level. The default is unchanged (the limiter stays opt-in).
 
 **D4. The guard hint.** `SteadyDivergence::message_with_hint(centres, hint)` replaces the tail "lower the relaxation factors
 (solver.alpha_u, solver.alpha_p) or use a more dissipative convection scheme" by `hint` when it is `Some`;
@@ -228,22 +254,27 @@ Four points where the implementation differs from the registration above. No lim
 
 All tests in release, on the branch `job49j-warnings` (from local main aef580d).
 
-**Met:** LS1 to LS7 (K1 rho 4.358667 bit-identical at the fixed step; C-small settled dt 2.6e-5, rho 0.0009, no SV301; C-grow
-settled dt 1/64, pre-run SV301 at rho 4.3587 equal to K1; the watch emits exactly one SV301 (rho 1.97, step 10) with 3
-evaluations in 60 steps and fields bit-identical to a manual loop; silent after a pre-run SV301). LP1 to LP3 (headless, chain,
-CLI `check`/`run`/chain give the same text; SV105 and SV302 appear in `run.headless` and the chain). LW1 to LW3, LW5 to LW9
-(RB and RD fire, RF silent, RA fires: the registered false positive, QA/upwind/piso silent; `rcfd check` exit 0; all 12 shipped
-examples exit 0 and none carries SV302). LH1 to LH4 (RB stops at iteration 15, cell 0, as in ADR 0171; the message names
-`barth_jespersen` and no longer says "lower the relaxation factors"). LC1 to LC3. LD1/LD2: the existing suites pass.
+**Met:**
+- LS1 to LS7: K1 rho 4.358667 bit-identical at the fixed step; C-small settled dt 2.6e-5, rho 0.0009, no SV301; C-grow
+  settled dt 1/64, pre-run SV301 at rho 4.3587 equal to K1; the watch emits exactly one SV301 (rho 1.97, step 10) with 3
+  evaluations in 60 steps and fields bit-identical to a manual loop; silent after a pre-run SV301.
+- LP1 to LP3: headless, chain, CLI `check`/`run`/chain give the same text; SV105 and SV302 appear in `run.headless` and the
+  chain.
+- LW1 to LW3, LW5 to LW9: RB and RD fire, RF silent, RA fires: the registered false positive, QA/upwind/piso silent;
+  `rcfd check` exit 0; all 12 shipped examples exit 0 and none carries SV302.
+- LH1 to LH4: RB stops at iteration 15, cell 0, as in ADR 0171; the message names `barth_jespersen` and no longer says
+  "lower the relaxation factors".
+- LC1 to LC3.
+- LD1/LD2: the existing suites pass.
 
 **Missed:** LW4 on two of three meshes. Measured W_max: M1 29043 (ADR 0171: 21000, +38 %), M1w05 6944 (inside), M1w15 2406
 (1600, +50 %). The 30 % limit is unchanged; the two misses are ignored tests
 `lw4_m1_value_is_within_30_percent_of_adr_0171_known_miss` and `lw4_m1w15_value_is_within_30_percent_of_adr_0171_known_miss`.
-Probable cause (not verified): ADR 0171 aggregated the metric differently (this one takes the largest face non-orthogonality per
-cell and counts the span edge in the aspect ratio). The firing decisions LW1 to LW3 hold, but M1w15 (2406) sits close under the
-level 3000.
+Probable cause (not verified): ADR 0171 aggregated the metric differently (this one takes the largest face non-orthogonality
+per cell and counts the span edge in the aspect ratio). The firing decisions LW1 to LW3 hold, but M1w15 (2406) sits close
+under the level 3000.
 
-**Expected firing (registered):** fires on M1 at any angle (RA false positive, RB true positive) and M1w05 (RD); silent on M1w15
-(RF) and whenever a limiter is set or the solver is not the steady one.
+**Expected firing (registered):** fires on M1 at any angle (RA false positive, RB true positive) and M1w05 (RD); silent on
+M1w15 (RF) and whenever a limiter is set or the solver is not the steady one.
 
 **Unrelated defect fixed:** ADR 0171 linked a misnamed file for ADR 0159, which failed `docs_site_builds_with_no_broken_links`.

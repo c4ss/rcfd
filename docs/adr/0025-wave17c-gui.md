@@ -1,14 +1,28 @@
-# ADR 0025: Wave 17C GUI and assistant: headless verification of viewport, monitors, key storage and local endpoints (F-143, F-144, F-149, F-150, F-073)
+# ADR 0025: Wave 17C GUI and assistant: headless verification
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any new test was written,
-compiled or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and
-the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
-away. A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, sizes not
-fixed here, results) may be appended at the end without touching registered limits.
+compiled or run.
 
-Roadmap: F-143, F-144, F-149, F-150, F-073 (F-094 only read, see "Audit"; F-092/F-093 are demoted extras and untouched).
-Clean-room: published conventions only (Rec. 709 luma weights, "1-2-5" tick steps, min/max decimation); nothing from
-vendor material, vendor installs or manuals; no vendor names in the repository.
+Wave 17C adds headless verification of the GUI and assistant: viewport, monitors, key storage and local endpoints (F-143,
+F-144, F-149, F-150, F-073). Every check runs headlessly at logic or data-to-pixel level, nobody looks at a screen, and the items
+stay `partial`. The wave adds a raster module of pure functions that the UI also uses, so that what is tested is what is drawn,
+and min/max decimation of monitor plot series. Key and endpoint handling gets tests only, unless a check misses. One registered
+check missed: V1 luminance over 1001 samples at tolerance 0, with a largest decrease of 0.2126 luma, diagnosed as 8-bit
+quantisation and kept as an ignored known-miss test. Every other row of the results table passes; V3, the V4 random ranges and
+L1 pass on corrected tests after set-up defects, with the old tests kept ignored. R2 rendered 1 M cells in 1.033 s (limit 2 s) on
+a machine possibly shared with other builds, and that number is not generalised to other hardware. Visual correctness,
+human-perceived update latency, the real OS keychain, native file dialogs, unix 0600 permissions and any real hosted provider or
+local model server remain unverified.
+
+Rules and parents:
+
+* House rules: the limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and
+  the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
+  away. A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, sizes not
+  fixed here, results) may be appended at the end without touching registered limits.
+* Roadmap: F-143, F-144, F-149, F-150, F-073 (F-094 only read, see "Audit"; F-092/F-093 are demoted extras and untouched).
+* Clean-room: published conventions only (Rec. 709 luma weights, "1-2-5" tick steps, min/max decimation); nothing from
+  vendor material, vendor installs or manuals; no vendor names in the repository.
 
 ## Scope and honesty statement
 
@@ -246,23 +260,23 @@ change was reverted.
 ### Misses and diagnosis
 
 * V1 luminance, 1001 samples, tolerance 0: missed. The control-point ramp is linear in each channel, but the colours are rounded to
-  8 bits per channel; the luma `0.2126 R + 0.7152 G + 0.0722 B` of neighbouring samples (step 0.001) can therefore fall by up to one
+  8 bits per channel. The luma `0.2126 R + 0.7152 G + 0.0722 B` of neighbouring samples (step 0.001) can therefore fall by up to one
   red quantum, 0.2126. This is quantisation, not a non-monotone ramp: at 101 samples the luma is strictly non-decreasing and the
-  largest decrease at 1001 samples is 0.2126 (< 1.0). Registered assertion kept in the ignored test
-  `v1_luminance_non_decreasing_1001_samples_known_miss`; the post-hoc test `v1_posthoc_luminance_monotone_up_to_quantisation` is NOT
-  a registered check (its limits were chosen after the diagnosis).
+  largest decrease at 1001 samples is 0.2126 (< 1.0). The ignored test `v1_luminance_non_decreasing_1001_samples_known_miss` keeps
+  the registered assertion; the post-hoc test `v1_posthoc_luminance_monotone_up_to_quantisation` is NOT a registered check (its
+  limits were chosen after the diagnosis).
 
 ### Set-up defects (old tests kept ignored, corrected tests added)
 
 * V3: the test grid left cell index 152 (the corner (16, 8)) undefined, so "corners clamp to the corner cells" could not hold for it.
-  Old `v3_hover_mapping` kept ignored; `v3b_hover_mapping_corrected_setup` uses a different undefined set. Limits unchanged.
-* V4: the random-range generator produced ranges with span below 1e-7 of |lo| (for example (-1166.5694769, -1166.5693925)), where
-  f64 tick positions carry about 2e-13 absolute error, making the registered 1e-9 relative spacing check unattainable for any f64
-  implementation. Old test kept ignored (`v4_legend_ticks_random_ranges_unguarded`); `v4b_...` requires span >= 1e-4 |lo|. The fixed
-  12 ranges (a separate passing test) were unaffected. Ticks are produced by repeated addition; not changed.
-* L1: registered text said the body has `stream: false`; the adapter omits the key when not streaming (the documented default).
-  Old test kept ignored; `l1b` accepts absent-or-false and checks the streaming test sends `stream: true`.
-* K2 harness: "credential header" means `Authorization` and the Anthropic `x-api-key`; the first run excluded only `Authorization`
+  The old `v3_hover_mapping` stays ignored; `v3b_hover_mapping_corrected_setup` uses a different undefined set. Limits unchanged.
+* V4: the random-range generator produced ranges with span below 1e-7 of |lo| (for example (-1166.5694769, -1166.5693925)). There
+  f64 tick positions carry about 2e-13 absolute error, which makes the registered 1e-9 relative spacing check unattainable for any
+  f64 implementation. The old test stays ignored (`v4_legend_ticks_random_ranges_unguarded`); `v4b_...` requires span >= 1e-4 |lo|.
+  The fixed 12 ranges (a separate passing test) were unaffected. Ticks are produced by repeated addition; not changed.
+* L1: the registered text said the body has `stream: false`; the adapter omits the key when not streaming (the documented default).
+  The old test stays ignored; `l1b` accepts absent-or-false and checks the streaming test sends `stream: true`.
+* K2 harness: "credential header" means `Authorization` and the Anthropic `x-api-key`. The first run excluded only `Authorization`
   and flagged `x-api-key`, which is the credential header of that protocol. The helper now excludes both; no assertion text changed.
 
 ### Other deviations

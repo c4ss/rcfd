@@ -2,7 +2,13 @@
 
 This page says where rcfd's knowledge comes from and lists, in one place, every recorded case in which vendor
 documentation was consulted while rcfd was built. It is for users and contributors who need to judge the clean-room claim
-for themselves. The rules for new contributions are in `CONTRIBUTING.md` at the repository root.
+for themselves.
+
+The cases on record include a few model constants in the code that were found only in vendor documentation and are marked
+UNVERIFIED (item 3). They also include one experiment that took wall-function forms from an unofficial web copy of an older
+vendor theory guide, missed its registered limits and had its code removed (item 4), and early roadmap notes whose names,
+according to the project's own audit, came from file listings of a commercial product installed on the author's machine
+(item 5). The rules for new contributions are in `CONTRIBUTING.md` at the repository root.
 
 ## The rule
 

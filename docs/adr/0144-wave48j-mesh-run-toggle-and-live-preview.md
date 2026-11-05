@@ -2,13 +2,31 @@
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendments 1-5 before their runs; results in the
-addendum (one known miss, J3b, with its change checked by J3c); not yet accepted by the maintainer. Job 48J, the maintainer's answers to the questions
-of [ADR 0138](0138-wave48g1-mesh-preview-from-case.md) (the mesh preview of a case), on main e11c656 (the four 48G jobs,
-ADRs 0138-0141, merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed
-here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
-defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical
-outside the Studio; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; the crate graph stays acyclic; no new
-crate. Clean-room: our own Studio code and the egui public API.
+addendum (one known miss, J3b, with its change checked by J3c); not yet accepted by the maintainer.
+
+Job 48J carries out the maintainer's answers to ADR 0138's questions: the Studio's Viewport gets an explicit Mesh / Run
+toggle, and the mesh preview follows unsaved edits in the case editor as they are typed. Before it, once a run was
+selected the mesh could not be reached again, and the preview built the file on disk only. The preview now asks for a
+build of the editor's text 500 ms after the last change; a build that fails or is over a limit leaves the last good mesh
+on screen, marked stale. Amendment 3 adds the maintainer's decision that the case editor resolves relative paths against
+the case's own folder, with an opt-in `base_dir` on `rcfd-api`'s `session.create`. The addendum records one known miss,
+J3b (44 frames drawn back to back before the debounced build, limit at most 3), with its change checked by J3c, which
+passed. The other checks passed, among them the final `rcfd-studio` suite on f5a3cf3 (174 passed, 0 failed, 4 ignored:
+J3b and three earlier known misses); J2 also failed a whole-suite run and one of two reruns, from a set-up defect that
+amendment 5 corrected. Not run: a person at the real window, Linux, debug builds of the new tests, the workspace gate and
+workspace-wide clippy, the rest of `rcfd-api`'s and `rcfd-mcp`'s tests, and `cargo deny`. Later, ADR 0147 implements the
+maintainer's answers to this ADR's questions, ADR 0149 links case and run selection (the toggle itself is unchanged), and
+ADR 0161 changes J2's set-up (its limits unchanged).
+
+Rules and parents:
+
+* Job 48J, the maintainer's answers to the questions of [ADR 0138](0138-wave48g1-mesh-preview-from-case.md) (the mesh
+  preview of a case), on main e11c656 (the four 48G jobs, ADRs 0138-0141, merged).
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the
+  registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets
+  an amendment written before the corrected run; defaults of existing code stay bit-identical outside the Studio;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; the crate graph stays acyclic; no new crate.
+* Clean-room: our own Studio code and the egui public API.
 
 ## The maintainer's decisions (2026-10-28, answers to ADR 0138's questions)
 
@@ -16,17 +34,17 @@ crate. Clean-room: our own Studio code and the egui public API.
   selected run's fields. Selecting a run or starting one (ADR 0141's auto-select) switches to Run; clicking or opening
   a case switches to Mesh. A side with nothing to show (no case open, no run selected) is disabled with a tooltip. The
   user can always switch back.
-* **Q2** The preview follows unsaved editor edits as they are typed: debounced (400-800 ms after the last keystroke;
-  the value registered here), the generation counter drops stale builds, the UI thread never blocks, at most two
-  builds at once, the size limits (2,000,000 cells, 256 MiB, 250,000 triangles) hold for unsaved text, and half-typed
-  or invalid text shows the located error while the last good mesh stays on screen, marked stale. The preview is built
-  from the editor's text parsed as the runner parses a snapshot, with the same case folder for relative paths. Run still
-  refuses unsaved edits (greyed out, "save it first"), unchanged.
+* **Q2** The preview follows unsaved editor edits as they are typed. The build is debounced (400-800 ms after the last
+  keystroke; the value registered here), the generation counter drops stale builds, the UI thread never blocks, and at
+  most two builds run at once. The size limits (2,000,000 cells, 256 MiB, 250,000 triangles) hold for unsaved text.
+  Half-typed or invalid text shows the located error while the last good mesh stays on screen, marked stale. The preview
+  is built from the editor's text parsed as the runner parses a snapshot, with the same case folder for relative paths.
+  Run still refuses unsaved edits (greyed out, "save it first"), unchanged.
 * **Q3, Q4, Q5, Q7, Q8** ADR 0138's recommended defaults: no GPU wireframe now (Q4); no preview of bare files under
   `meshes/` (Q5); a short "not a case file" message for the benchmark descriptors `cases/*/case.json` (Q7); G3 and G5
   shrunk to a 500 x 500 box (Q8); Q3 (the start dialog's `--set` overrides in the preview) as ADR 0138 recommends.
-  ADR 0138 states no recommendation for Q3 (it is only asked); it is read here as its default, the overrides are not
-  shown in the preview (the same reading as Q4 and Q5), and asked again below (question 1).
+  ADR 0138 states no recommendation for Q3 (it is only asked). This ADR reads it as its default: the overrides are not
+  shown in the preview (the same reading as Q4 and Q5). Question 1 below asks it again.
 * **Q6** The limits stay as they are.
 * Also: check that a case made by the case starter (ADR 0139) is opened through `Studio::open_case`, so the preview
   shows it; fix it if not.
@@ -38,8 +56,8 @@ crate. Clean-room: our own Studio code and the egui public API.
 * The case editor is a form over the settings schema, not a text buffer. A field's text is committed on focus loss
   (`ui.rs` `leaf_ui`: `lost_focus` then `CaseEditor::edit_text`, parsed with `schema_model::parse_input`, then
   `settings.set` through the in-process service); while typing, the text lives only in the UI's buffers. The editor's
-  settings are a JSON tree (`CaseEditor::settings`); a save writes `Case::from_json(settings)` as TOML (JSON for a
-  `.json` case), `CaseEditor::to_bytes`, which resolves data files against `.` (ADR 0131 question 3) and reads lookup
+  settings are a JSON tree (`CaseEditor::settings`). A save writes `Case::from_json(settings)` as TOML (JSON for a
+  `.json` case) with `CaseEditor::to_bytes`, which resolves data files against `.` (ADR 0131 question 3) and reads lookup
   tables (file I/O).
 * The preview (ADR 0138) builds the file on disk only and, on a failed or over-limit build, takes the shown mesh away.
 * The case starter (ADR 0139 D5) does not go through `Studio::open_case`: its worker command writes the file, sends
@@ -50,44 +68,44 @@ crate. Clean-room: our own Studio code and the egui public API.
   the viewport could still hold the preview's zero frame.
 * A run that ends before its first snapshot gets ADR 0141's explanation once (`quick_run::explain_end`, the run
   remembered in `QuickRun::probed`); reopening the run's store (which the toggle does) brings back ADR 0140's text.
-* `mesh.nx` and `mesh.ny` are limited to [1, 100000] by the settings schema, so a typed `nx = 10000000` is refused by
-  `parse_input` before any size check; `nx = 100000` with `ny = 1000` passes it and is over the cell limit.
+* The settings schema limits `mesh.nx` and `mesh.ny` to [1, 100000], so `parse_input` refuses a typed `nx = 10000000`
+  before any size check; `nx = 100000` with `ny = 1000` passes it and is over the cell limit.
 
 ## Decisions (as implemented)
 
 1. **The toggle** (`src/view_toggle.rs`, new). `Studio::view: Toggle` holds the side (`Side::Mesh`, the default, or
-   `Side::Run`). The viewport shows the selected run only on the Run side (`Toggle::run_shown`); the selection is
-   never cleared by the toggle, so the run worker, the plots, the log and the run strip keep following the selected run
-   on the Mesh side. Switches: `Studio::open_case` and a case the starter opens go to Mesh
-   (`Studio::show_case_mesh`); `Studio::select_run` (the Runs panel, also the run already selected, and ADR 0141's
-   auto-select) goes to Run; a selection written to `selected_run` directly (as earlier tests do) is seen at the next
-   drain and goes to Run, unless a case was opened after it; `Studio::set_view` (the toggle) goes to the side asked for,
-   refused with the reason when that side has nothing to show (`NO_CASE` "No case is open: click a case in the Project
-   panel to see its mesh.", `NO_RUN` "No run is selected: select a run in the Runs panel, or press Run (F5) to start
-   one."); closing the project goes back to Mesh. Every switch synchronises the viewport at once (no frame shows one
-   side's picture under the other's selection). The toggle is the first row of the Viewport panel, on both sides:
-   two selectable buttons `Mesh` and `Run`, disabled with the reason as hover text, and on the Run side the caption
-   `stored fields of run <id>`. Switching back to Run opens the run's store again: the newest snapshot, the start
-   camera and the `p` field, as when the run was first shown (question 3).
+   `Side::Run`). The viewport shows the selected run only on the Run side (`Toggle::run_shown`). The toggle never clears
+   the selection, so the run worker, the plots, the log and the run strip keep following the selected run on the Mesh
+   side. Switches: `Studio::open_case` and a case the starter opens go to Mesh (`Studio::show_case_mesh`);
+   `Studio::select_run` (the Runs panel, also the run already selected, and ADR 0141's auto-select) goes to Run; a
+   selection written to `selected_run` directly (as earlier tests do) is seen at the next drain and goes to Run, unless
+   a case was opened after it; `Studio::set_view` (the toggle) goes to the side asked for, refused with the reason when
+   that side has nothing to show (`NO_CASE` "No case is open: click a case in the Project panel to see its mesh.",
+   `NO_RUN` "No run is selected: select a run in the Runs panel, or press Run (F5) to start one."); closing the project
+   goes back to Mesh. Every switch synchronises the viewport at once (no frame shows one side's picture under the
+   other's selection). The toggle is the first row of the Viewport panel, on both sides: two selectable buttons `Mesh`
+   and `Run`, disabled with the reason as hover text, and on the Run side the caption `stored fields of run <id>`.
+   Switching back to Run opens the run's store again: the newest snapshot, the start camera and the `p` field, as when
+   the run was first shown (question 3).
 2. **ADR 0141's explanation after a round trip.** When the selected run was explained once (it ended before its first
    snapshot) and its store is opened again, the explanation is applied again (`quick_run::follow_selected`; test switch
    `QuickRun::switches.no_reexplain` restores the earlier route).
 3. **The preview follows the case editor** (`src/preview.rs`, `src/case_edit.rs`, `src/ui.rs`).
    * Keystrokes reach the model: every change of a field's text calls `CaseEditor::type_text(path, text)` (the field's
-     whole text, kept as `CaseEditor::draft`); a commit of that field clears the draft, a refused commit keeps it (the
-     field keeps showing the refused text); a focus loss with the stored value's text ends it (`end_draft`). The
-     settings are not changed by typing. `CaseEditor::revision()` changes with every change of the settings or the
-     draft.
+     whole text, kept as `CaseEditor::draft`). A commit of that field clears the draft, a refused commit keeps it (the
+     field keeps showing the refused text), and a focus loss with the stored value's text ends it (`end_draft`). Typing
+     does not change the settings. `CaseEditor::revision()` changes with every change of the settings or the draft.
    * Source: the case file on disk while the editor holds no unsaved edit and no draft of the previewed case (ADR 0138's
-     path, unchanged); otherwise the editor's text: the settings with the draft's text put in place (parsed with
+     path, unchanged). Otherwise it is the editor's text: the settings with the draft's text put in place (parsed with
      `parse_input`, the editor's own parse), checked and resolved by `Case::from_json_in(settings, <the case's folder>)`,
      written as `CaseEditor::to_bytes` writes it (TOML, JSON for a `.json` case), then parsed with
      `preview::parse_case(text, <the case's folder>)` (the runner's `rcfd run <snapshot> --case-dir <folder>` rule) and
      built as a file is. All of it runs on the build thread (`preview::build_source`); the UI thread only clones the
-     settings tree when a build is asked for. Not `to_bytes()` itself: it resolves against `.` and reads tables.
+     settings tree when a build is asked for. The build does not call `to_bytes()` itself: `to_bytes()` resolves against
+     `.` and reads tables.
    * Debounce: a change of the editor's revision asks for a build `DEBOUNCE` = **500 ms** after the last change
-     (`Preview::debounce`); opening a case, a change on disk, Rebuild and "anyway" ask at once (the pending edit is
-     built by that request too). `StudioApp::ui` asks egui for a frame when the debounce ends
+     (`Preview::debounce`). Opening a case, a change on disk, Rebuild and "anyway" ask at once (that request builds the
+     pending edit too). `StudioApp::ui` asks egui for a frame when the debounce ends
      (`ctx.request_repaint_after(Preview::due_in())`), so the build starts without further input.
    * Stale builds and the cap: ADR 0138's generation counter and `MAX_BUILDS` = 2 unchanged; a request that waits for
      a thread keeps its source (the text as it was asked for), not the file.
@@ -134,13 +152,15 @@ wrote before.
 
 ## Registered checks (limits fixed here, before any of them ran)
 
-Release builds, `--test-threads 1`, output to files, this host; GPU checks on every adapter of
-`rcfd_render::adapters()` with ADR 0125's SKIP rule; process checks with `rcfd-runner` and `rcfd` of the same build next
-to the test's `rcfd-studio` (`common::binaries`). "Typing" in model checks is `CaseEditor::type_text` (the call the
-field makes on every change); J10 types through egui events into the drawn field. "Settled": no debounce pending and
-the preview not building. Fixtures: ADR 0138's project (`pv::project`: the 16 x 16 cavity, the 4 x 4 x 4 hex box through
-`mesh.file = "../meshes/hex.msh"`), ADR 0131's B1 project (cases `a` (16 x 16), `b` (12 x 16), `sub/c`, eight runs: two
-each queued, running, finished, failed with reason `test failure`, no stores), `box_2d` cases written by the tests.
+* Release builds, `--test-threads 1`, output to files, this host; GPU checks on every adapter of
+  `rcfd_render::adapters()` with ADR 0125's SKIP rule; process checks with `rcfd-runner` and `rcfd` of the same build
+  next to the test's `rcfd-studio` (`common::binaries`).
+* "Typing" in model checks is `CaseEditor::type_text` (the call the field makes on every change); J10 types through egui
+  events into the drawn field.
+* "Settled": no debounce pending and the preview not building.
+* Fixtures: ADR 0138's project (`pv::project`: the 16 x 16 cavity, the 4 x 4 x 4 hex box through
+  `mesh.file = "../meshes/hex.msh"`), ADR 0131's B1 project (cases `a` (16 x 16), `b` (12 x 16), `sub/c`, eight runs: two
+  each queued, running, finished, failed with reason `test failure`, no stores), `box_2d` cases written by the tests.
 
 | Id | Check | Limit | Negative control (must fail) |
 |---|---|---|---|
@@ -160,12 +180,18 @@ each queued, running, finished, failed with reason `test failure`, no stores), `
 | J13 | ADR 0138's G3 and G5 at 500 x 500 (ADR 0138 amendment 3) | their registered limits, unchanged | their own controls |
 | J14 | The rest: the whole `rcfd-studio` suite (ADR 0131-0141 checks), `workspace_graph`, `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings`, `cargo fmt -p rcfd-studio -- --check`, `scripts/third_party_licenses.py --check` | pass, with ADR 0141's G1 control corrected by its amendment 2 (item 1) and G1b unchanged; the three known misses ignored as before. Excepted: ADR 0141's G4 control, which fails on e11c656 before this change for a reason outside this job (ADR 0141 amendment 2 item 3, question 8): reported, not counted | (their own) |
 
-Derivations. 500 ms is in the maintainer's range; the cavity builds in milliseconds, so its picture follows about
-0.5 s after the last keystroke. J3's window: never earlier than the debounce (the property); at most one viewport poll
-period (250 ms, ADR 0141 G1 (c)) later, for the 5 ms drain loop and scheduling under load. J4's 2.0 s is ADR 0138 G5's
-(the small build plus slack); J6's 5 s ADR 0138 G4 (c)'s; J10's 8 ms and 250 ms ADR 0138 G3's (B7's half frame; far
-below a 0.5 s build on the UI thread); J2's 5.0 s ADR 0141 G1 (a)'s; J9's 30 s ADR 0139 CS8's; J1 (j)'s 5 s ADR 0141's
-R3-based 5.0 s.
+Derivations:
+
+* 500 ms is in the maintainer's range; the cavity builds in milliseconds, so its picture follows about 0.5 s after the
+  last keystroke.
+* J3's window: never earlier than the debounce (the property); at most one viewport poll period (250 ms, ADR 0141 G1
+  (c)) later, for the 5 ms drain loop and scheduling under load.
+* J4's 2.0 s is ADR 0138 G5's (the small build plus slack).
+* J6's 5 s is ADR 0138 G4 (c)'s.
+* J10's 8 ms and 250 ms are ADR 0138 G3's (B7's half frame; far below a 0.5 s build on the UI thread).
+* J2's 5.0 s is ADR 0141 G1 (a)'s.
+* J9's 30 s is ADR 0139 CS8's.
+* J1 (j)'s 5 s is ADR 0141's R3-based 5.0 s.
 
 How the registered runs are made: `cargo test --release -p rcfd-studio --test <file> -- --test-threads 1 --nocapture`
 for each new test file (`live_preview_j`, `live_preview_cost_j`, `live_preview_gpu_j`, `live_preview_run_j`) and for the
@@ -318,17 +344,22 @@ the request's source, `Preview::drain` spawns it when a thread is free); J19 had
 
 Branch `worktree-agent-a5dd4bf5202a803c8`. Commits: registration 0922e73 (on main e11c656); amendment 1 7b1d532;
 amendment 2 b030117; main with 48H merged e38ef9c; amendment 3 ddd96d4; main with 48I merged 0d547c2; amendment 4
-392d9d7; amendment 5 f5a3cf3; this addendum. Every run: release, `--test-threads 1`, `--nocapture`, output to files,
-this host (Windows 11,
-16 threads, about 30-40 GB free; other agents built at the same time), target folder of this job; `rcfd`, `rcfd-runner`
-and `fake-claude` built from the same commit as the tests. GPU checks on the five adapters of ADR 0125 step 0 (NVIDIA RTX
-5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); none took the SKIP branch.
+392d9d7; amendment 5 f5a3cf3; this addendum.
 
-Registered runs: the eight files of the registration on 0922e73 (J3b failed there: amendment 1); J3b again on 7b1d532
-(missed: amendment 2); then everything once more on the final code f5a3cf3 (after amendment 5): the whole `rcfd-studio` suite (J14, which
-holds J1-J13, J15, J18 and ADR 0141's amended tests), J3b's known miss with `--ignored`, `rcfd-api`'s J16 and J14 tests,
-`rcfd-mcp`'s `example_projects_w48h` (J17), `workspace_graph` and the licence check. The table gives the first registered
-run of each check; the final run's numbers follow it where they differ in kind.
+Every run used a release build, `--test-threads 1` and `--nocapture`, with output to files, on this host (Windows 11, 16
+threads, about 30-40 GB free; other agents built at the same time), in this job's target folder, with `rcfd`,
+`rcfd-runner` and `fake-claude` built from the same commit as the tests. GPU checks ran on the five adapters of ADR 0125
+step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); none took the SKIP branch.
+
+Registered runs:
+
+* The eight files of the registration on 0922e73. J3b failed there (amendment 1).
+* J3b again on 7b1d532. It missed (amendment 2).
+* Everything once more on the final code f5a3cf3 (after amendment 5): the whole `rcfd-studio` suite (J14, which holds
+  J1-J13, J15, J18 and ADR 0141's amended tests), J3b's known miss with `--ignored`, `rcfd-api`'s J16 and J14 tests,
+  `rcfd-mcp`'s `example_projects_w48h` (J17), `workspace_graph` and the licence check.
+
+The table gives the first registered run of each check; the final run's numbers follow it where they differ in kind.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -366,42 +397,45 @@ run of each check; the final run's numbers follow it where they differ in kind.
 | J17 | E1 with the case's folder; the rest of the file | `example_projects_w48h`: 16 passed, 1 ignored (ADR 0142's G3 crossing-count known miss); E1: the 2 aerofoil and the 8 generator cases open and validate through the editor's calls; E2: by path valid, by text without a base folder not valid at `mesh.file` | pass |
 | J18 | H1, aerofoil branch positive | H1 passes: the projects, runs and snapshots as registered; the 2 aerofoil cases validate in the Studio's editor with no diagnostic, like the 8 others | pass |
 
-**J19 (amendment 6)**, on fad60e5 with the rest of `live_preview_j.rs` (15 passed, J3b ignored): two build threads
-alive when `503` was asked for; the final build 251,500 cells (503 x 500) of the editor's text; 3 builds of the text, 2
-results discarded, at most 2 threads: **pass**. Control (`disk_only`): no build of the text, the file's 250,000 cells:
-fails as required.
+**J19 (amendment 6)** ran on fad60e5 with the rest of `live_preview_j.rs` (15 passed, J3b ignored). Two build threads
+were alive when `503` was asked for. The final build had 251,500 cells (503 x 500), from the editor's text, with 3 builds
+of the text, 2 results discarded and at most 2 threads: **pass**. Control (`disk_only`): no build of the text, the file's
+250,000 cells; it fails as required.
 
 **Leftover processes** after all runs: none running from this job's target folder (`rcfd.exe`, `rcfd-runner.exe`,
 `fake-claude.exe` or any other).
 
 **J2 after amendment 5.** The whole-suite run on 392d9d7 and one of two diagnostic reruns failed J2 at its second click
-(amendment 5: the newest run taken in name order). Corrected J2, three runs on f5a3cf3: runs selected and shown on the
-Run side 0.059 / 0.062 s, 0.058 / 0.057 s and 0.050 / 0.049 s after the clicks (the first of them had the order that
-failed before: `...-1fde` sorted before `...-624b`), the control 5.004 s without a switch; and once more in the final
+(amendment 5: the newest run taken in name order). Corrected J2 ran three times on f5a3cf3: runs selected and shown on
+the Run side 0.059 / 0.062 s, 0.058 / 0.057 s and 0.050 / 0.049 s after the clicks (the first of them had the order that
+failed before: `...-1fde` sorted before `...-624b`), the control 5.004 s without a switch. It ran once more in the final
 suite (0.158 / 0.044 s).
 
 **J13, time and memory.** Under `gate_test.py --jobs 5` (one process per test, five at once) G3 took 5.3 s at a peak of
 699 MB and G5 5.4 s at 695 MB, against 32.0 s and 26.9 s at about 2.7 GB each with the 1000 x 1000 box (ADR 0138's
-addendum); the heaviest test of the run is now G10 (58.4 s, 1,911 MB), then J10 (27.6 s, 1,308 MB) and J4 (12.9 s,
+addendum). The heaviest test of the run is now G10 (58.4 s, 1,911 MB), then J10 (27.6 s, 1,308 MB) and J4 (12.9 s,
 700 MB).
 
 **Baseline and the merged tests.** Before any change of this job, ADR 0141's G1b, G1 control and G4 control failed on
 main e11c656 (What I already knew). With ADR 0141 amendments 2 and 3 (the maintainer's decision, limits unchanged) and
-this job's change they pass: G1b on 0922e73 already passed without its amendment (1 upload, renders 1 at the first frame and 9 at the end), and again with it
-(on f5a3cf3, since the listing: 1 upload, 8 renders; at the listing 0 uploads); the G1 control found no frame of a run within 5.005 s; the G4 control found no reason in the viewport without ADR 0140's text and no strip line within 5.0 s.
+this job's change they pass. G1b on 0922e73 already passed without its amendment (1 upload, renders 1 at the first frame
+and 9 at the end), and again with it (on f5a3cf3, since the listing: 1 upload, 8 renders; at the listing 0 uploads). The
+G1 control found no frame of a run within 5.005 s. The G4 control found no reason in the viewport without ADR 0140's text
+and no strip line within 5.0 s.
 
 **Deviations and notes.**
 1. Amendment 1 read J3b's first failure as a set-up defect (egui shortens a requested repaint delay by its predicted
-   frame time, `context.rs` lines 149-152); its corrected run then missed the frame limit (frames back to back for the
-   last 1/60 s before the debounce ended): amendment 2 keeps that as the ignored known miss with its limits, changes the
+   frame time, `context.rs` lines 149-152). Its corrected run then missed the frame limit (frames back to back for the
+   last 1/60 s before the debounce ended). Amendment 2 keeps that as the ignored known miss with its limits, changes the
    code (the repaint is asked for egui's frame time later) and registers J3c, which passed.
 2. Earlier tests changed, each registered before its run: ADR 0138's unregistered rebuild test (decision Q2), G3 and
    G5 at 500 x 500 (ADR 0138 amendment 3, decision Q8), ADR 0141's G1 control, G1b and G4 control (ADR 0141 amendments 2
    and 3, the maintainer's decision); ADR 0142's E1 known miss un-ignored and renamed, its helper and E2's wording, and
    H1's aerofoil branch (amendment 3, the maintainer's decision).
 3. Amendment 5: J2 (passing in its registered run) failed in the whole-suite run and once in two reruns, at the second
-   click; the two runs of each failing project were the two clicks' (no double start: a throwaway diagnostic, deleted,
-   made one run per click 26 times). The test's set-up took the newest run in name order; corrected before its rerun.
+   click. The two runs of each failing project were the two clicks' (no double start: a throwaway diagnostic, deleted,
+   made one run per click 26 times). The test's set-up took the newest run in name order; it was corrected before its
+   rerun.
 4. Amendment 3 changes `rcfd-api` (an opt-in `session.create` parameter) beyond the Studio; without the parameter the
    service behaves as before (J16's controls; the J14 `rcfd-api` tests and `baseline_hashes` unchanged).
 5. `case_starter::EXCLUDED`'s reason for `channel/profile_inlet.toml` was corrected (its cause, the working folder, is
@@ -411,10 +445,15 @@ this job's change they pass: G1b on 0922e73 already passed without its amendment
    limits; `j6_control_adr0138_rule_builds_the_file_not_the_text`, a control asserting the pre-change behaviour as a
    positive fact (the form the heuristic does not recognise, as ADR 0139's controls).
 
-**Not run.** A person at the real window (the checklist); Linux (none of the new tests, J2's and J7's processes among
-them, has run there); debug builds of the new tests (J4 and J10 print `SKIP` there); the workspace gate and
-workspace-wide clippy (run: `rcfd-studio` all targets, `rcfd-api` lib and J16's file, `rcfd-mcp`'s
-`example_projects_w48h`); the rest of `rcfd-api`'s and `rcfd-mcp`'s tests; `cargo deny` (no dependency changed).
+**Not run.**
+
+* A person at the real window (the checklist).
+* Linux (none of the new tests, J2's and J7's processes among them, has run there).
+* Debug builds of the new tests (J4 and J10 print `SKIP` there).
+* The workspace gate and workspace-wide clippy (run: `rcfd-studio` all targets, `rcfd-api` lib and J16's file,
+  `rcfd-mcp`'s `example_projects_w48h`).
+* The rest of `rcfd-api`'s and `rcfd-mcp`'s tests.
+* `cargo deny` (no dependency changed).
 
 ## Not in CI (by hand)
 

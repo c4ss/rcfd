@@ -1,8 +1,22 @@
 # Computer-fan project: breakdown into parts
 
-Status: plan (2026-10-26), written at the user's request. This is a plan, not a claim of capability. It extends `docs/milestone-fan.md` (assistant-driven fan design iteration) from "a fan the solver can run" to "a fan model that predicts real-world behaviour and that Claude optimises over time for the computer-fan use case".
+Status: plan (2026-10-26), written at the user's request. This is a plan, not a claim of capability.
 
-This page is for the user and for contributors choosing which part to pick up next. It gives the target, then the limits, every part with its status, the order of work, and last what the user could decide or supply that changes the plan most (the open questions). The state of the large reference fan and the solver work behind it are in the [fan milestone](milestone-fan.md); how to measure a fan for this plan is in the [fan measurement protocol](fan-measurement-protocol.md).
+This plan splits the computer-fan goal into parts A to H, each with a status, for the user and for contributors choosing which
+part to pick up next. It extends `docs/milestone-fan.md` (assistant-driven fan design iteration) from "a fan the solver can run" to
+"a fan model that predicts real-world behaviour and that Claude optimises over time for the computer-fan use case".
+
+Two of the limits in section 2 set the start of the work. Nothing in this plan predicts a physical fan better than the data it is
+checked against, so the first task is to find or produce measured data for small fans. The CFD route is not yet reliable: the FAN-01
+stall is open after waves 43 to 45, so parts that do not need a converged CFD fan are built first.
+
+As of the plan's date (2026-10-26), the tables in section 3 mark B2, C6 and D2 (as post-processing) done and G3 as existing. Every
+other part is partial or missing. Section 4 gives the order of work, and section 5 lists what the user could decide or supply that
+changes the plan most (the open questions).
+
+The state of the large reference fan and the solver work behind it are in the [fan milestone](milestone-fan.md). How to measure a fan
+for this plan is in the [fan measurement protocol](fan-measurement-protocol.md). The [glossary](glossary.md) defines wave, FAN-01 and
+F-xxx.
 
 ## 1. The target, stated plainly
 
@@ -16,7 +30,10 @@ A parametric fan (a mesh that spins, modified by Claude through the assistant to
 
 and a loop in which Claude proposes the next variant, reads the metrics, and keeps a durable record so that the design improves over weeks, not over one session.
 
-Computer fan = axial or centrifugal, about 40 to 140 mm, 1 000 to 5 000 rpm, tip speed about 5 to 25 m/s (Mach below 0.1), chord Reynolds number about 2e4 to 2e5 (transitional, laminar separation and tip-leakage dominated), working against a high-impedance system (heat sink, filter, grille). This is not FAN-01 (a large low-pressure fan); the physics that matters differs, and the validation source must differ.
+Computer fan here means axial or centrifugal, about 40 to 140 mm, 1 000 to 5 000 rpm, tip speed about 5 to 25 m/s (Mach below 0.1),
+chord Reynolds number about 2e4 to 2e5 (transitional, laminar separation and tip-leakage dominated), working against a high-impedance
+system (heat sink, filter, grille). This is not FAN-01 (a large low-pressure fan); the physics that matters differs, and the validation
+source must differ.
 
 ## 2. Limits that shape the plan (stated first, not buried)
 

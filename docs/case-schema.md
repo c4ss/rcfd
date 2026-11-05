@@ -4,7 +4,8 @@ This page is the reference for the case file: every section and key, with its de
 are refused and what is not delivered. It is for people who write or edit a case and need to know what a key does or why it was
 rejected. Sections follow the order of the list below; to find one key, search the page for its dotted path. For a first case
 step by step, follow the [command-line quick start](tutorials/quick-start-cli.md); to start from a ready-made case, pick one in the
-[example gallery](tutorials/gallery.md); for running, restarting and exit codes, see [run control](run-control.md).
+[example gallery](tutorials/gallery.md); for running, restarting and exit codes, see [run control](run-control.md). The
+[glossary](glossary.md) explains the project terms ADR, F-xxx, wave and bit-identical.
 
 On this page:
 
@@ -55,8 +56,8 @@ read the same tree, so every key below is available everywhere. Validation error
 
     case.toml: compressible.rk_order (line 22): forward Euler (rk_order 1) is unstable with a limited reconstruction ...
 
-Diagnostics found only while the simulation is built (for example a pinned pressure cell outside
-the mesh) are located in the file text afterwards by `rcfd validate`.
+For diagnostics found only while the simulation is built (for example a pinned pressure cell outside the mesh),
+`rcfd validate` finds the location in the file text afterwards.
 
 Example cases (all run in seconds to a minute in a debug build):
 
@@ -95,27 +96,39 @@ rest (moving walls are rejected). The momentum equation uses the solved-H operat
 
 Menter's 2003 k-omega SST ("Ten years of industrial experience with the SST turbulence model",
 Menter, Kuntz and Langtry, Turbulence, Heat and Mass Transfer 4, 2003), in the form of the NASA
-Turbulence Modeling Resource page (constants and blending functions checked against it, see
-docs/reference-data.md). Same restrictions as `k_epsilon` (steady algorithms, a wall patch, no
-energy), except that a fixed wall may move: the wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the
-stationary casing of a rotor solved in the rotating frame is allowed (`turbulence = "wall"` must then be set on that patch, because the
-automatic role calls a moving fixed-velocity patch an inlet). Wall treatment: automatic. A Spalding (1961) law of the wall gives the wall shear for
-any first-cell y+, `omega` on the wall faces is `10 * 6 nu / (beta1 y^2)` (y = first cell-centre
-distance, the TMR recommendation), and for y+ > 5 the cell omega follows the blend of the viscous
-and the log-layer value. Wall-resolved meshes (y+ about 1) and wall-function-like meshes (y+ 30
-to 300) both work; y+ between about 3 and 20 is the least accurate range and
-`validate_case` of the assistant warns with a y+ estimate. Convection of k and omega uses
-`turbulence.convection` (`upwind` is the safe choice; `linearUpwind` diverged in tests). `kappa`
-and `e_wall` define the Spalding law. Boundary values: `turbulence_spec = values` takes
-`k_value` and `omega_value`; the other inlet specifications derive `omega = epsilon/(beta* k)`.
+Turbulence Modeling Resource (TMR) page. The constants and blending functions were checked against it, see
+docs/reference-data.md.
+
+Restrictions: the same as `k_epsilon` (steady algorithms, a wall patch, no energy), except that a fixed wall may move. The
+wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the stationary casing of a rotor solved in the
+rotating frame is allowed. `turbulence = "wall"` must then be set on that patch, because the automatic role calls a moving
+fixed-velocity patch an inlet.
+
+Wall treatment: automatic.
+
+- A Spalding (1961) law of the wall gives the wall shear for any first-cell y+. `kappa` and `e_wall` define this law.
+- `omega` on the wall faces is `10 * 6 nu / (beta1 y^2)` (y = first cell-centre distance, the TMR recommendation).
+- For y+ > 5, the cell omega follows the blend of the viscous and the log-layer value.
+
+Wall-resolved meshes (y+ about 1) and wall-function-like meshes (y+ 30 to 300) both work. The least accurate range is y+
+between about 3 and 20, and `validate_case` of the assistant warns with a y+ estimate.
+
+Convection of k and omega uses `turbulence.convection` (`upwind` is the safe choice; `linearUpwind` diverged in tests).
+
+Boundary values: `turbulence_spec = values` takes `k_value` and `omega_value`; the other inlet specifications derive
+`omega = epsilon/(beta* k)`.
+
 Outputs add the field `omega`.
 
 ### `spalart_allmaras`
 
 Spalart-Allmaras one-equation model, SA-noft2 form of the NASA Turbulence Modeling Resource page
-(https://tmbwg.github.io/turbmodels/spalart.html, ADR 0014): working variable `nuTilda`, `nut = nuTilda fv1`,
-coefficients sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 (`cw1` derived). Same restrictions as
-the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
+(https://tmbwg.github.io/turbmodels/spalart.html, ADR 0014). The working variable is `nuTilda`, with `nut = nuTilda fv1`.
+Coefficients: sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 (`cw1` derived).
+
+Restrictions: the same as the other RANS models (steady algorithms, a wall patch, no energy).
+
+Extra keys:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -127,6 +140,26 @@ the other RANS models (steady algorithms, a wall patch, no energy). Extra keys:
 | `sa.des` | `off` | `off`: RANS length scale `d` (wall distance). `des`: detached-eddy simulation, `d~ = min(d, C_DES Delta)`. `ddes`: delayed DES, `d~ = d - f_d max(0, d - C_DES Delta)`, `f_d = 1 - tanh((8 r_d)^3)`, `r_d = (nu + nut)/(max(sqrt(U_ij U_ij), 1e-10) kappa^2 d^2)`. `des` and `ddes` run with the transient algorithms (`piso`, `pimple`) only and add an implicit-Euler time derivative on `nuTilda` (ADR 0032) |
 | `sa.des_delta` | `max_extent` | Grid scale `Delta`: `max_extent` (largest distance between two face centres of the cell, empty directions excluded: `max(dx, dy, dz)` on boxes) or `cbrt_volume` (`V^(1/3)`) |
 | `sa.c_des` | 0.65 | `C_DES`, range 0.1 to 2 (value from secondary literature, see `docs/reference-data.md`) |
+
+`convection`, `relax` and `relax_nut` apply as for the other models. The fields `nuTilda`, `nut`, `y_plus` and
+`wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are
+rejected for this model with a located diagnostic.
+
+Validation (ADR 0014): flat plate Cf(x = 0.97) +3.0 percent from the TMR CFL3D SA value (y+ 0.5 and y+ 30 meshes: +3.0
+and +5.8 percent).
+
+DES rules:
+
+- The `sa.des*` keys are errors (located at the key) with any other model.
+- `sa.des != "off"` with a steady algorithm is a located error at `turbulence.sa.des`.
+- Plain SA (`sa.des = "off"`) stays steady-only.
+
+With the DES length scale, the model is a hybrid RANS-LES closure on the Spalart-Allmaras equation only. The SA-based DES
+and DDES of ADR 0032 are not validated on a separated flow (no case in this version). IDDES, SAS, the Strelets variants
+and the DES-SST models are not available.
+
+In a live session, `turbulence.model` cannot be switched while `turbulence.sa.*` differ from their defaults.
+`turbulence.sa.des` itself can be switched (`des` to `ddes`) and keeps the flow field.
 
 Far fields (ADR 0164, ADR 0166): with Spalart-Allmaras, a patch with `velocity = "freestream"` and a non-zero
 `velocity_value` has the turbulence role `freestream` by default (`boundaries.<patch>.turbulence = "auto"`). `nuTilda` is
@@ -140,7 +173,7 @@ body, grew far above `nutilde_ratio * nu` (ADR 0159's NACA 0012 at 10 degrees: a
 With k-epsilon and k-omega SST the far field is `freestream` by default too (ADR 0169): k and epsilon / omega are fixed on
 the inflow faces, from the patch's inlet specification if it has one, else from `turbulence.initial_intensity` and
 `initial_viscosity_ratio` (see `turbulence_spec` below). Before ADR 0169 their default was `zero_gradient`; the explicit
-`turbulence = "zero_gradient"` still gives it (the NACA 0012 example runs before ADR 0169 also need
+`turbulence = "zero_gradient"` still gives it (the NACA 0012 example runs made before ADR 0169 also need
 `component = "total_molecular"` on `cl` and `cd`, ADR 0166). The Reynolds stress model keeps `zero_gradient`: it has no
 inlet condition.
 
@@ -166,23 +199,10 @@ mode changes four things:
 It assumes the equilibrium inner layer over the first two cells, also where the wall cell resolves the viscous sublayer
 and where u_tau tends to zero (stagnation, separation). Its validation is in ADR 0168.
 
-
-`convection`, `relax` and `relax_nut` apply as for the other models; the fields `nuTilda`, `nut`, `y_plus` and
-`wall_distance` are available. `k_initial`, `epsilon_initial`, `omega_initial`, `variant` and `wall_treatment` are
-rejected for this model with a located diagnostic. Validation (ADR 0014): flat plate Cf(x = 0.97) +3.0 percent from the
-TMR CFL3D SA value (y+ 0.5 and y+ 30 meshes: +3.0 and +5.8 percent).
-
-The `sa.des*` keys are errors (located at the key) with any other model, and `sa.des != "off"` with a steady algorithm is a
-located error at `turbulence.sa.des`. Plain SA (`sa.des = "off"`) stays steady-only. With the DES length scale the
-model is a hybrid RANS-LES closure on the Spalart-Allmaras equation only: the SA-based DES and DDES of ADR 0032 are not
-validated on a separated flow (no case in this version), IDDES, SAS, the Strelets variants and the DES-SST models are not
-available. In a live session `turbulence.model` cannot be switched while `turbulence.sa.*` differ from their defaults;
-`turbulence.sa.des` itself can be switched (`des` to `ddes`) and keeps the flow field.
-
 ### `smagorinsky`, `wale` and `mixing_length` (F-045, F-206, ADR 0026)
 
-Algebraic eddy-viscosity models: no transported scalar, `nut` is computed from the velocity gradient (Green-Gauss) of the
-current field. Fields: `nut` (and `wall_distance`, `y_plus` where a wall exists).
+These are algebraic eddy-viscosity models: they transport no scalar and compute `nut` from the velocity gradient
+(Green-Gauss) of the current field. Fields: `nut` (and `wall_distance`, `y_plus` where a wall exists).
 
 | Model | Algorithms | `nut` |
 | --- | --- | --- |
@@ -190,76 +210,122 @@ current field. Fields: `nut` (and `wall_distance`, `y_plus` where a wall exists)
 | `wale` | `piso`, `pimple` only | Nicoud-Ducros wall-adapting local eddy viscosity `(Cw Delta)^2 (Sd:Sd)^(3/2) / ((S:S)^(5/2) + (Sd:Sd)^(5/4))`; 0 where the denominator is 0; no damping option (it scales as `y^3` at a wall by construction) |
 | `mixing_length` | `simple`, `simplec`, `piso`, `pimple` | `l^2 sqrt(2 S_ij S_ij)`; steady runs relax `nut` with `turbulence.relax_nut` (Picard), transient runs evaluate it explicitly each step |
 
-Keys: `turbulence.wall_damping` (`none` | `van_driest`; Smagorinsky and mixing length only; needs a wall patch;
-`f = 1 - exp(-y+/A+)`, y+ from the nearest wall face, wall shear from the first cell); `turbulence.length_scale` (m;
-required and positive for `mixing_length`, the half height of a channel or the radius of a pipe; a located error at
-`turbulence.length_scale` for any other model); `turbulence.mixing_profile` (`linear`: `l = min(kappa d f, l_max_ratio R)`
-| `nikuradse`: `l = R (0.14 - 0.08 (1 - d/R)^2 - 0.06 (1 - d/R)^4) f`, the pipe formula; used for a channel it is an analogy).
-Coefficients in `turbulence.coefficients.smagorinsky` (`cs` 0.17 in [0, 0.5], `a_plus` 25), `.wale` (`cw` 0.325 in [0, 1])
-and `.mixing_length` (`kappa` 0.41, `l_max_ratio` 0.09, `a_plus` 26). The wall faces carry `nut = 0` (wall resolved; no wall
-function). Subgrid models need no wall patch unless `wall_damping = van_driest`. They switch live like the other models
-(`settings.set turbulence.model`; the flow is kept). Restrictions: no energy equation, no compressible or variable-density
-engine; `k_initial`, `epsilon_initial` and the other transported-model keys are rejected. **Known limitations:** the
-subgrid-stress divergence is discretised in Laplacian form `div(nu_eff grad u)` as for the RANS models (the transposed part
-`div(nu_t (grad u)^T)` is missing by default, which changes the dissipation of a variable `nu_t`, ADR 0026 addendum A1; the
-option `solver.viscous_stress = "full"` adds it, see below); no SGS heat or
-scalar flux; DES-class hybrid models other than the SA-based DES / DDES below, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, Pr_t/Sc_t are not available.
+Keys:
+
+- `turbulence.wall_damping`: `none` or `van_driest`. Smagorinsky and mixing length only; needs a wall patch.
+  `f = 1 - exp(-y+/A+)`, y+ from the nearest wall face, wall shear from the first cell.
+- `turbulence.length_scale` (m): required and positive for `mixing_length`, the half height of a channel or the radius of
+  a pipe. A located error at `turbulence.length_scale` for any other model.
+- `turbulence.mixing_profile`: `linear`: `l = min(kappa d f, l_max_ratio R)`, or `nikuradse`:
+  `l = R (0.14 - 0.08 (1 - d/R)^2 - 0.06 (1 - d/R)^4) f`, the pipe formula; used for a channel it is an analogy.
+- Coefficients in `turbulence.coefficients.smagorinsky` (`cs` 0.17 in [0, 0.5], `a_plus` 25), `.wale` (`cw` 0.325 in
+  [0, 1]) and `.mixing_length` (`kappa` 0.41, `l_max_ratio` 0.09, `a_plus` 26).
+
+The wall faces carry `nut = 0` (wall resolved; no wall function). Subgrid models need no wall patch unless
+`wall_damping = van_driest`. They switch live like the other models (`settings.set turbulence.model`; the flow is kept).
+
+Restrictions: no energy equation, no compressible or variable-density engine; `k_initial`, `epsilon_initial` and the other
+transported-model keys are rejected.
+
+**Known limitations:**
+
+- The subgrid-stress divergence is discretised in Laplacian form `div(nu_eff grad u)` as for the RANS models. The
+  transposed part `div(nu_t (grad u)^T)` is missing by default, which changes the dissipation of a variable `nu_t` (ADR 0026
+  addendum A1). The option `solver.viscous_stress = "full"` adds it, see below.
+- No SGS heat or scalar flux.
+- DES-class hybrid models other than the SA-based DES / DDES below, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES
+  and Pr_t/Sc_t are not available.
+
 Validation: closed-form checks and a Taylor-Green vortex (ADR 0026); mixing length on the periodic Re_tau 395 channel
 within 4 percent of the DNS mean velocity (linear, van Driest) and 3 percent (Nikuradse analogy). Decaying isotropic
 turbulence and pipe data were not run.
 
 ### `solver.viscous_stress`, SA-based DES, `rsm` (F-045, F-207, F-046, ADR 0032)
 
-`solver.viscous_stress` (`laplacian` default | `full`): `laplacian` is the momentum diffusion `div(nu_eff grad u)` of every
-earlier version (results bit-identical). `full` adds the transposed part of the viscous stress, `div(nu_eff (grad u)^T)`, as an
-explicit source from the previous iterate (the part that is zero for a constant viscosity and divergence-free velocity, so the
-laminar results change by the discretisation error only: 6e-6 in the tree test). It exists for the variable-viscosity closures
-(`smagorinsky`, `wale`, `mixing_length`, `rsm`'s eddy viscosity, rheology laws). `full` is available with `piso` and `pimple`,
-constant density; a steady algorithm or variable density is a located error at `solver.viscous_stress`. Translationally periodic
-patches are included; non-periodic boundary faces and rotationally periodic faces contribute nothing to the explicit term (the
-boundary value of `grad u` is not reconstructed), so near a wall the term is incomplete.
+`solver.viscous_stress` takes `laplacian` (the default) or `full`:
 
-`turbulence.model = "rsm"` is a Reynolds stress transport model: six stress equations and the dissipation rate. Keys:
-`turbulence.rsm.pressure_strain` (`ssg` default, Speziale-Sarkar-Gatski quadratic with `Ce2` 1.83 | `lrr_ip`, Launder-Reece-Rodi
-isotropisation of production with `Ce2` 1.92); coefficients in `turbulence.coefficients.rsm` (`c1`, `c1s`, `c2`, `c3`, `c3s`, `c4`,
-`c5`, `c1_lrr`, `c2_lrr`, `ce1`, `ce2_ssg`, `ce2_lrr`, `c_s`, `c_eps`, `c_mu`, with ranges); `turbulence.k_initial` and
-`turbulence.epsilon_initial` (or `initial_intensity` and `initial_viscosity_ratio`) set the isotropic start `R_ij = 2/3 k delta_ij`.
-Fields `Rxx`, `Ryy`, `Rzz`, `Rxy`, `Rxz`, `Ryz`, `epsilon`, `k` (= trace R / 2) and `nut` (= `c_mu k^2/eps`, added to the molecular
-viscosity in the momentum equation). The divergence of the Reynolds stress enters the momentum equation as an explicit body
-acceleration `-div R` minus the implicit eddy-viscosity Laplacian already in `nu_eff`, so the net effect is the stress itself.
-Stress diffusion is generalised-gradient with the normal-stress part only (`nu + c_s (k/eps) n.R.n` through each face; the
-off-diagonal `R_kl` terms are not implemented). Restrictions (located errors): transient algorithms (`piso`, `pimple`) only;
-**no wall patch** (no wall treatment, no low-Reynolds terms, no wall reflection: error at `boundaries.<patch>.turbulence`) and no
-`inlet` turbulence role (no stress inlet condition); no energy equation; `turbulence.rsm.*` with another model is an error. Valid
-configurations are therefore fully periodic boxes (the only configuration tested); other wall-free boundaries are not validated. Validation (ADR 0032): term invariants, the
-homogeneous-shear and isotropic-decay ODEs, the semi-implicit update and the momentum source to 1e-8 or better; the wall-bounded
-channel check (C7) was **not delivered**. The decay exponent `1/(Ce2 - 1)` is a model statement, no comparison with
-experiment was made. `plugin` with `turbulence.plugin = "rsm"` selects the same model.
+- `laplacian` is the momentum diffusion `div(nu_eff grad u)` of every earlier version (results bit-identical).
+- `full` adds the transposed part of the viscous stress, `div(nu_eff (grad u)^T)`, as an explicit source from the previous
+  iterate. This part is zero for a constant viscosity and divergence-free velocity, so the laminar results change by the
+  discretisation error only: 6e-6 in the tree test. The option exists for the variable-viscosity closures (`smagorinsky`,
+  `wale`, `mixing_length`, `rsm`'s eddy viscosity, rheology laws).
+
+Limits of `full`:
+
+- It is available with `piso` and `pimple`, constant density. A steady algorithm or variable density is a located error
+  at `solver.viscous_stress`.
+- Translationally periodic patches are included. Non-periodic boundary faces and rotationally periodic faces contribute
+  nothing to the explicit term (the boundary value of `grad u` is not reconstructed), so near a wall the term is incomplete.
+
+`turbulence.model = "rsm"` is a Reynolds stress transport model: six stress equations and the dissipation rate. `plugin`
+with `turbulence.plugin = "rsm"` selects the same model.
+
+Keys:
+
+- `turbulence.rsm.pressure_strain`: `ssg` (default, Speziale-Sarkar-Gatski quadratic with `Ce2` 1.83) or `lrr_ip`
+  (Launder-Reece-Rodi isotropisation of production with `Ce2` 1.92).
+- Coefficients in `turbulence.coefficients.rsm`: `c1`, `c1s`, `c2`, `c3`, `c3s`, `c4`, `c5`, `c1_lrr`, `c2_lrr`, `ce1`,
+  `ce2_ssg`, `ce2_lrr`, `c_s`, `c_eps`, `c_mu`, with ranges.
+- `turbulence.k_initial` and `turbulence.epsilon_initial` (or `initial_intensity` and `initial_viscosity_ratio`) set the
+  isotropic start `R_ij = 2/3 k delta_ij`.
+
+Fields: `Rxx`, `Ryy`, `Rzz`, `Rxy`, `Rxz`, `Ryz`, `epsilon`, `k` (= trace R / 2) and `nut` (= `c_mu k^2/eps`, added to the
+molecular viscosity in the momentum equation).
+
+The divergence of the Reynolds stress enters the momentum equation as an explicit body acceleration `-div R` minus the
+implicit eddy-viscosity Laplacian already in `nu_eff`, so the net effect is the stress itself. Stress diffusion is
+generalised-gradient with the normal-stress part only (`nu + c_s (k/eps) n.R.n` through each face; the off-diagonal `R_kl`
+terms are not implemented).
+
+Restrictions (located errors):
+
+- Transient algorithms (`piso`, `pimple`) only.
+- **No wall patch** (no wall treatment, no low-Reynolds terms, no wall reflection: error at
+  `boundaries.<patch>.turbulence`).
+- No `inlet` turbulence role (no stress inlet condition).
+- No energy equation.
+- `turbulence.rsm.*` with another model is an error.
+
+Valid configurations are therefore fully periodic boxes (the only configuration tested); other wall-free boundaries are
+not validated.
+
+Validation (ADR 0032): term invariants, the homogeneous-shear and isotropic-decay ODEs, the semi-implicit update and the
+momentum source to 1e-8 or better; the wall-bounded channel check (C7) was **not delivered**. The decay exponent
+`1/(Ce2 - 1)` is a model statement; no comparison with experiment was made.
 
 ### Model coefficients, plugin models and live switching (F-044)
 
 `turbulence.coefficients.<model>.<name>` lists the coefficients of every model with their documentation and ranges in the
-exported JSON schema: `k_epsilon` (`c_mu`, `c1`, `c2`, `sigma_k`, `sigma_e`; 0 keeps the value of the selected `variant`),
-`k_omega_sst` (the eleven Menter 2003 values; **shown, not editable**: a non-default value is rejected because the
-constants are compiled into the model), `sa` (`sigma`, `cb1`, `cb2`, `kappa`, `cw2`, `cw3`, `cv1`, `cn1`, `c2`, `c3`),
-`smagorinsky`, `wale`, `mixing_length` and `rsm` (above). A
-value outside its range is rejected when it is set; a non-default value in the group of a model that is not selected, or
-`k_epsilon.c1` with `variant = "realizable"`, is a validation error at the coefficient's path. Not available: overriding
-a coefficient by an expression or a user function.
+exported JSON schema:
 
-`turbulence.realizable_a0` (float, default 0): the constant A0 of the Realizable variable `C_mu = 1/(A0 + A_s U* k/eps)`. 0 keeps the default 4.04, a commonly cited commercial-code variant; the original report (Shih et al., NASA TM-106721, checked against the report text) prints 4.0. Allowed 3 to 5; `turbulence.model = "k_epsilon"` with `variant = "realizable"` only, otherwise a located error at `turbulence.realizable_a0`. It is a separate key because the `k_epsilon` coefficient table is fixed at five entries (ADR 0014 K4). The default is unchanged and bit-identical; ADR 0017 records the effect of 4.0 on the step reattachment.
+- `k_epsilon`: `c_mu`, `c1`, `c2`, `sigma_k`, `sigma_e`; 0 keeps the value of the selected `variant`.
+- `k_omega_sst`: the eleven Menter 2003 values; **shown, not editable**. A non-default value is rejected because the
+  constants are compiled into the model.
+- `sa`: `sigma`, `cb1`, `cb2`, `kappa`, `cw2`, `cw3`, `cv1`, `cn1`, `c2`, `c3`.
+- `smagorinsky`, `wale`, `mixing_length` and `rsm`: above.
+
+A value outside its range is rejected when it is set. A non-default value in the group of a model that is not selected,
+or `k_epsilon.c1` with `variant = "realizable"`, is a validation error at the coefficient's path. Not available:
+overriding a coefficient by an expression or a user function.
+
+`turbulence.realizable_a0` (float, default 0): the constant A0 of the Realizable variable `C_mu = 1/(A0 + A_s U* k/eps)`.
+The value 0 keeps the default 4.04, a commonly cited commercial-code variant; the original report (Shih et al., NASA
+TM-106721, checked against the report text) prints 4.0. Allowed 3 to 5; `turbulence.model = "k_epsilon"` with
+`variant = "realizable"` only, otherwise a located error at `turbulence.realizable_a0`. It is a separate key because the
+`k_epsilon` coefficient table is fixed at five entries (ADR 0014 K4). The default is unchanged and bit-identical; ADR 0017
+records the effect of 4.0 on the step reattachment.
 
 `turbulence.model = "plugin"` with `turbulence.plugin = "<key>"` selects a model registered by the embedding program with
 `rcfd_turb::register_model` (trait `rcfd_turb::TurbulenceModel`); an unregistered key is a located error at
 `turbulence.plugin`. The plugin's coefficients are set in `turbulence.plugin_coefficients.<name>.value`.
 
-**Live switching.** In a service session that holds a built simulation in the `ready` or `paused` state, `settings.set`
-on any `turbulence.*` path (for example `turbulence.model` from `k_epsilon` to `k_omega_sst` or `spalart_allmaras`, or a
-coefficient) rebuilds only the turbulence state: velocity, pressure, flux, iteration counter and monitors are kept, the
+Live switching: in a service session that holds a built simulation in the `ready` or `paused` state, `settings.set` on
+any `turbulence.*` path (for example `turbulence.model` from `k_epsilon` to `k_omega_sst` or `spalart_allmaras`, or a
+coefficient) rebuilds only the turbulence state. Velocity, pressure, flux, iteration counter and monitors are kept, the
 new model starts from the current eddy viscosity, and the next iteration uses it. Errors (unregistered plugin, invalid or
 non-editable coefficient, a case the model cannot run) are returned with their path and leave the run unchanged. Switching
-from or to `laminar` needs a rebuild (other settings still reset the simulation as before). The session's
-`run.status` reports `simulation.turbulence.key`.
+from or to `laminar` needs a rebuild (other settings still reset the simulation as before). The session's `run.status`
+reports `simulation.turbulence.key`.
 
 ### Turbulence boundary keys, outputs and reports
 
@@ -282,32 +348,39 @@ Per-boundary keys (`boundaries.<patch>.`):
   * `intensity_length` (default): `k = 3/2 (I U)^2`, `epsilon = Cmu^(3/4) k^(3/2) / l`, with
     `turbulence_intensity` (0.05) and `turbulence_length` (required, m). `U` is the local inlet
     speed per face, so expression profiles work.
-  * A k-omega SST or k-epsilon `freestream` far field (explicit or by default) with this default spec and no
-    `turbulence_length` takes the free-stream values from the initial-field keys instead (ADR 0169):
-    `k = 3/2 (I U)^2` with `I = turbulence.initial_intensity` and `U = |velocity_value|`,
-    `epsilon = Cmu k^2 / (ratio nu)` with `ratio = turbulence.initial_viscosity_ratio` (SST: `omega = epsilon / (beta* k)`).
-    With `|velocity_value| = |initial.velocity|` these are the initial values (the far field holds the initial state, the
-    TMR practice). `k_initial` / `omega_initial` / `epsilon_initial` are not read for the far field, and neither is the
-    patch's own `turbulence_intensity` under this default spec: to set the far-field intensity on the patch, give it
-    `turbulence_spec = "intensity_viscosity_ratio"` (or a `turbulence_length`). Any explicit spec on the patch is used
-    as given. An `inlet` role (or a fixed-velocity inlet) still needs `turbulence_length`.
   * `intensity_viscosity_ratio`: same `k`, `epsilon = Cmu k^2 / (ratio nu)` with
     `turbulence_viscosity_ratio` (10).
   * `values`: `k_value`, `epsilon_value`.
-  `Cmu` is the constant of the chosen variant (0.09; 0.0845 for `rng`).
 
-Outputs: fields `k`, `epsilon`, `nut`, `wall_distance`, `y_plus` (cell field, non-zero in the
-wall-adjacent cells; boundary value `y_plus` on wall faces for reports), VTU arrays with the same
-names, a `Turbulence` row in the HTML report, a `turbulence` object in the service status
-(model, variant, wall patches, y+ range, eddy-viscosity change) and the monitor `res_nut`
-(maximum relative change of the eddy viscosity per iteration, also required to fall below
-`solver.tolerance_u` for the run to count as converged).
+The constant `Cmu` is that of the chosen variant (0.09; 0.0845 for `rng`).
 
-`y_plus` report: `type = "y_plus"`, `patch` = a wall patch, `statistic` = `average` (area
-weighted, default), `min` or `max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` of the wall-adjacent
-cells, the quantity the wall functions use.
+Far field under the default spec (ADR 0169): a k-omega SST or k-epsilon `freestream` far field (explicit or by default)
+with the default spec `intensity_length` and no `turbulence_length` takes the free-stream values from the initial-field
+keys instead:
 
-For `k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell centres (the quantity the mesh targets in `mesh.target_y_plus`).
+- `k = 3/2 (I U)^2` with `I = turbulence.initial_intensity` and `U = |velocity_value|`.
+- `epsilon = Cmu k^2 / (ratio nu)` with `ratio = turbulence.initial_viscosity_ratio` (SST: `omega = epsilon / (beta* k)`).
+
+With `|velocity_value| = |initial.velocity|` these are the initial values (the far field holds the initial state, the TMR
+practice). `k_initial` / `omega_initial` / `epsilon_initial` are not read for the far field, and neither is the patch's
+own `turbulence_intensity` under this default spec. To set the far-field intensity on the patch, give it
+`turbulence_spec = "intensity_viscosity_ratio"` (or a `turbulence_length`). Any explicit spec on the patch is used as
+given. An `inlet` role (or a fixed-velocity inlet) still needs `turbulence_length`.
+
+Outputs:
+
+- Fields `k`, `epsilon`, `nut`, `wall_distance`, `y_plus` (cell field, non-zero in the wall-adjacent cells; boundary value
+  `y_plus` on wall faces for reports).
+- VTU arrays with the same names.
+- A `Turbulence` row in the HTML report.
+- A `turbulence` object in the service status (model, variant, wall patches, y+ range, eddy-viscosity change).
+- The monitor `res_nut` (maximum relative change of the eddy viscosity per iteration, also required to fall below
+  `solver.tolerance_u` for the run to count as converged).
+
+`y_plus` report: `type = "y_plus"`, `patch` = a wall patch, `statistic` = `average` (area weighted, default), `min` or
+`max`. It reports `y* = Cmu^(1/4) sqrt(k) y / nu` of the wall-adjacent cells, the quantity the wall functions use. For
+`k_omega_sst` the report gives the y+ from the Spalding-law friction velocity, `u_tau y / nu`, of the wall-adjacent cell
+centres (the quantity the mesh targets in `mesh.target_y_plus`).
 
 Force parts of `force` and `force_coefficient` reports (ADR 0164, ADR 0166), `reports.<n>.component`:
 * `total` (default) and `viscous`:
@@ -335,47 +408,58 @@ To reproduce numbers made before ADR 0166 (forces) or ADR 0170 (moments) with a 
 `component = "total_molecular"` (or `viscous_molecular`). The FAN-01 torques of ADRs 0075 to 0136 are such molecular
 moments.
 
-Wave 26C report types (ADR 0048, F-238; `field` is any field the existing averages accept, `patch` a boundary patch,
-unknown patches are located errors at build time): `volume_std` is the volume-weighted standard deviation of a cell field
-(population form `sqrt(sum w (x - mean)^2 / sum w)`, two-pass with a mean-correction term so a large offset does not cancel);
-`area_std`, `area_min` and `area_max` are the area-weighted standard deviation and the smallest / largest face value of a boundary
-field over `patch`; `mass_weighted_average` is `sum phi q / sum phi` over `patch` (the signed face flux is the weight, so the
-value is the same on an inflow and an outflow patch; a patch whose net flux cancels is an error); `vector_flux` is the net
-momentum flux `sum phi (u . d)` through `patch` along the unit vector of `direction` (unit N; incompressible fluxes are scaled by
-`physics.rho`, the compressible flux is already a mass flux; not available with the variable-density solver). Surfaces (plane,
-sphere, cylinder, cone and general quadric cuts, iso-clip, offset, rotational / translated instances), rakes, point clouds and
-case difference fields are library objects (`rcfd_post::surfaces`, `rcfd_post::compare`) without case-tree keys.
+Wave 26C report types (ADR 0048, F-238). Here `field` is any field the existing averages accept and `patch` a boundary
+patch; unknown patches are located errors at build time.
+
+- `volume_std`: the volume-weighted standard deviation of a cell field (population form
+  `sqrt(sum w (x - mean)^2 / sum w)`, two-pass with a mean-correction term so a large offset does not cancel).
+- `area_std`, `area_min` and `area_max`: the area-weighted standard deviation and the smallest / largest face value of a
+  boundary field over `patch`.
+- `mass_weighted_average`: `sum phi q / sum phi` over `patch`. The signed face flux is the weight, so the value is the same
+  on an inflow and an outflow patch. A patch whose net flux cancels is an error.
+- `vector_flux`: the net momentum flux `sum phi (u . d)` through `patch` along the unit vector of `direction` (unit N).
+  Incompressible fluxes are scaled by `physics.rho`; the compressible flux is already a mass flux. Not available with the
+  variable-density solver.
+
+Surfaces (plane, sphere, cylinder, cone and general quadric cuts, iso-clip, offset, rotational / translated instances),
+rakes, point clouds and case difference fields are library objects (`rcfd_post::surfaces`, `rcfd_post::compare`) without
+case-tree keys.
 
 ## Mesh generators and boundary-layer inflation
 
 ### Mesh generator parameters
 
-`cavity_2d` is an `nx` x `ny` uniform grid on `lx` x `ly` (patches `lid` = ymax, `walls`, `frontAndBack`); it is
-square only when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` cavity of side `lx`.
-Options a generator does not apply are rejected with a located diagnostic instead of being ignored:
-`mesh.wall_layers` (`box_2d` and `channel_2d` only), `mesh.periodic_x` / `periodic_y` (`box_2d` only) and
-`mesh.grading != 1` (not for `cavity_2d`, `wedge_2d`, `nozzle_2d`).
+`cavity_2d` is an `nx` x `ny` uniform grid on `lx` x `ly` (patches `lid` = ymax, `walls`, `frontAndBack`). It is square only
+when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` cavity of side `lx`.
 
-The mesh quality report returned by `rcfd check-mesh`, `mesh.check` and `run --check-only` has an extended-measure summary and a
-poor-mesh list since wave 14 (F-233); see `docs/mesh-quality.md`.
+Options a generator does not apply are rejected with a located diagnostic instead of being ignored:
+
+- `mesh.wall_layers` (`box_2d` and `channel_2d` only)
+- `mesh.periodic_x` / `periodic_y` (`box_2d` only)
+- `mesh.grading != 1` (not for `cavity_2d`, `wedge_2d`, `nozzle_2d`)
+
+Since wave 14 (F-233), the mesh quality report returned by `rcfd check-mesh`, `mesh.check` and `run --check-only` has an
+extended-measure summary and a poor-mesh list; see `docs/mesh-quality.md`.
 
 ### Non-conformal interface (`mesh.generator = "channel_2d_interface"`, F-114)
 
-A `channel_2d` made of two blocks that meet at `x = lx/2`: the first has `nx` x `ny` cells, the second
-`nx_right` x `ny_right` cells (0 = same as the first). When the counts across the channel differ the
-interface is non-conformal; it is joined at mesh level (`rcfd_mesh::non_conformal::join_non_conformal`)
-into an ordinary mesh with one internal face per overlap of an interface face of one block with one of
-the other, so every solver, boundary condition and report works unchanged and flux through the
-interface is conserved to round-off by construction. Patches: `inlet`, `outlet`, `walls`, `sides`.
-The Rust function also joins general planar interfaces in 3-D (convex faces; the patches must cover
-each other, otherwise the join is rejected). Use `solver.non_orthogonal_correctors` for accuracy on the
-skewed interface faces.
+A `channel_2d` made of two blocks that meet at `x = lx/2`. The first block has `nx` x `ny` cells, the second `nx_right` x
+`ny_right` cells (0 = same as the first). Patches: `inlet`, `outlet`, `walls`, `sides`.
+
+When the counts across the channel differ, the interface is non-conformal. It is joined at mesh level
+(`rcfd_mesh::non_conformal::join_non_conformal`) into an ordinary mesh with one internal face per overlap of an interface
+face of one block with one of the other. Every solver, boundary condition and report therefore works unchanged, and flux
+through the interface is conserved to round-off by construction.
+
+The Rust function also joins general planar interfaces in 3-D (convex faces; the patches must cover each other, otherwise
+the join is rejected). Use `solver.non_orthogonal_correctors` for accuracy on the skewed interface faces.
 
 ### Annulus blocks for rotating-frame zones (`mesh.generator = "annulus_3d"`, `"annulus_3d_interface"`, `"annulus_3d_stage"`, `"annulus_3d_cylindrical_interface"`, `"annulus_3d_sector"`, F-031)
 
 `annulus_3d`: a full cylindrical annulus `r_in <= r <= r_out` about the z axis, height `lz`, `nx` cells around, `ny`
 radial, `nz` axial; patches `inner`, `outer`, `zmin`, `zmax` (walls unless the case sets other conditions).
-`annulus_3d_interface`: two such blocks of height `lz/2` joined at `z = lz/2` through a non-conformal interface; the
+
+`annulus_3d_interface`: two such blocks of height `lz/2` joined at `z = lz/2` through a non-conformal interface. The
 upper block has `ny_right` x `nz_right` cells (0 = same as the lower block). Both blocks have `nx` cells around, so the
 rim polygons coincide and the radial rings differ.
 
@@ -385,40 +469,57 @@ point. Patches `inner`, `outer` (both blocks), `zmin` (inlet of the lower block)
 `nx`, `ny`, `nz`), so the numbers of cells around may differ. The plane is a pair of boundary patches coupled by the
 `mixing_plane` section (below), not by the F-114 join.
 
-`annulus_3d_cylindrical_interface` (F-126, ADR 0109 / 0112): a rotor block `r_in <= r <= r_interface` (`nx` around, `ny` radial,
-`nz` axial; cell zone `rotor`, for an `mrf` source with `zone = "cell_zone"`, `cell_zone = "rotor"`) and a stator block
-`r_interface <= r <= r_out` (`nx_right`, `ny_right`, `nz_right`; 0 = same as the rotor block), both of height `lz` from z = 0,
+`annulus_3d_cylindrical_interface` (F-126, ADR 0109 / 0112): a rotor block and a stator block, both of height `lz` from z = 0,
 joined on the cylinder `r = r_interface` by the cylindrical non-conformal join (frozen-rotor interface; the counts around and
-axially may differ). Patches `inner`, `outer`, `zmin`, `zmax`. `mesh.r_interface` must lie strictly between `r_in` and `r_out`.
-`mesh.grading` is the size of the interface-adjacent cell over the wall-adjacent cell in both blocks (1 = uniform).
-Pre-flight: after the join the worst non-orthogonality of the interface faces is measured; above 70 deg the case is rejected
-before the run with a diagnostic at `mesh.r_interface` that names the angle, the centre offsets and the factor by which the radial
-spacing of the interface cells must grow (ADR 0109 runs diverged at 72.7 deg and above; the largest angle with a converged run is
-48.75 deg). `mesh.isotropic_interface = true` (default false; conflicts with `mesh.grading`) grades both blocks so that the cells
-next to the interface have the radial size at which the geometric bound of that angle is 45 deg (near-isotropic interface cells);
-with few cells around this can need a strong radial grading, and a block too thin for that size is a located error. Known limits:
-full annulus only (no sector form of the interface; `annulus_3d_sector` below has no interface), and the sum of absolute interface
-fluxes of a swirling flow is first order in the cell size around (ADR 0109).
+axially may differ). Patches `inner`, `outer`, `zmin`, `zmax`.
+
+- Rotor block: `r_in <= r <= r_interface` (`nx` around, `ny` radial, `nz` axial; cell zone `rotor`, for an `mrf` source with
+  `zone = "cell_zone"`, `cell_zone = "rotor"`).
+- Stator block: `r_interface <= r <= r_out` (`nx_right`, `ny_right`, `nz_right`; 0 = same as the rotor block).
+
+`mesh.r_interface` must lie strictly between `r_in` and `r_out`. `mesh.grading` is the size of the interface-adjacent cell
+over the wall-adjacent cell in both blocks (1 = uniform).
+
+Pre-flight: after the join the worst non-orthogonality of the interface faces is measured. Above 70 deg the case is rejected
+before the run with a diagnostic at `mesh.r_interface` that names the angle, the centre offsets and the factor by which the
+radial spacing of the interface cells must grow (ADR 0109 runs diverged at 72.7 deg and above; the largest angle with a
+converged run is 48.75 deg).
+
+`mesh.isotropic_interface = true` (default false; conflicts with `mesh.grading`) grades both blocks so that the cells next to
+the interface have the radial size at which the geometric bound of that angle is 45 deg (near-isotropic interface cells).
+With few cells around this can need a strong radial grading, and a block too thin for that size is a located error.
+
+Known limits: full annulus only (no sector form of the interface; `annulus_3d_sector` below has no interface), and the sum of
+absolute interface fluxes of a swirling flow is first order in the cell size around (ADR 0109).
+
 `mesh.r_interface` and `mesh.isotropic_interface` on any other generator are rejected with a located error.
 
 `annulus_3d_sector` (ADR 0116): `annulus_3d` cut to a sector `0 <= theta <= sector_angle` (degrees, strictly between 0 and
 360, required), `nx` chords around, `ny` radial (`grading` as `annulus_3d`), `nz` axial, height `lz` from z = 0. Patches
 `inner`, `outer`, `zmin`, `zmax` and the rotationally cyclic pair `theta_min` / `theta_max` (rotation `sector_angle` about
-z; no boundary entry is needed for the pair). Every face is planar (chord rectangles on the walls), so an `mrf` zone with
-`cyclic_seams = true` is accepted and its frame flux closes per cell to round-off. It is an empty sector (no blade): an
-MRF zone on the bladed `axial_fan_sector` passage stays refused at the blade wall. `r_out <= r_in` is a located error at
-`mesh.r_out`, a missing or out-of-range angle at `mesh.sector_angle`; `mesh.sector_angle` on any other generator is rejected.
+z; no boundary entry is needed for the pair).
+
+Every face is planar (chord rectangles on the walls), so an `mrf` zone with `cyclic_seams = true` is accepted and its frame
+flux closes per cell to round-off. `annulus_3d_sector` is an empty sector (no blade): an MRF zone on the bladed
+`axial_fan_sector` passage stays refused at the blade wall.
+
+Errors: `r_out <= r_in` is a located error at `mesh.r_out`, a missing or out-of-range angle at `mesh.sector_angle`.
+`mesh.sector_angle` on any other generator is rejected.
 
 ### Swept pipe (`mesh.generator = "pipe_sweep"`, F-235)
 
 An all-hex circular pipe of radius `r_out` and length `lz` along z: an `nx` x `nx` Cartesian core (half-width
 `core_fraction * r_out`, default 0.5, range 0.2-0.8) inside an O-grid of `ny` rings, swept in `nz` axial layers
-(`nx` odd is typical; `nx` = core cells per side). `mesh.grading != 1` grades the rings toward the wall. Patches: `inlet`
-(z = 0), `outlet` (z = lz), `wall`; with `mesh.periodic_z = true` the end patches become a cyclic pair for fully developed flow
-(use `physics.body_force`). The cross-section is an inscribed polygon of polygon, see `docs/meshing.md`
-for the discrete volume and area deficit. Use `solver.non_orthogonal_correctors = 2`: the core-to-ring corners reach
-about 35 degrees of non-orthogonality. With the default SIMPLEC the corrector diverges on this mesh for nz >= 4 (axial
-mode); set `solver.simplec_non_orthogonal_compensation = true` (below) to converge it (ADR 0050).
+(`nx` odd is typical; `nx` = core cells per side). `mesh.grading != 1` grades the rings toward the wall.
+
+Patches: `inlet` (z = 0), `outlet` (z = lz), `wall`. With `mesh.periodic_z = true` the end patches become a cyclic pair for
+fully developed flow (use `physics.body_force`).
+
+The cross-section is an inscribed polygon of polygon, see `docs/meshing.md` for the discrete volume and area deficit.
+
+Use `solver.non_orthogonal_correctors = 2`: the core-to-ring corners reach about 35 degrees of non-orthogonality. With the
+default SIMPLEC the corrector diverges on this mesh for nz >= 4 (axial mode); set
+`solver.simplec_non_orthogonal_compensation = true` (below) to converge it (ADR 0050).
 
 ```toml
 [mesh]
@@ -436,46 +537,74 @@ periodic_z = true
 
 ### Axial-fan periodic sector (`mesh.generator = "axial_fan_sector"`, F-133 partial, ADR 0065)
 
-One blade passage of an axial fan as an all-hex periodic sector of angle `2 pi / n_blades`, settings in the nested section
+One blade passage of an axial fan as an all-hex periodic sector of angle `2 pi / n_blades`. Settings are in the nested section
 `mesh.fan` (hub and tip station with linear variation; angles in degrees; every key has a default, the defaults describe the
-five-bladed test fan of the ADR). Geometry keys: `n_blades`, `r_hub`, `r_tip`, `tip_clearance`, `axial_extent`, `z_le_root`,
-`family` (`naca4` | `circular_arc`), `hub_` and `tip_` `chord`, `stagger`, `camber`, `thickness`, `sweep`, `lean`, and `camber_pos`.
-Optional station lists (ADR 0075): `station_radius` (first value `r_hub`, last `r_tip`, strictly increasing) with `station_chord`,
-`station_stagger` (deg), `station_camber`, `station_thickness` of the same length and the optional `station_camber_pos`, `station_sweep`,
-`station_lean` (empty = `camber_pos`, 0, 0); when `station_radius` is not empty they replace the `hub_`/`tip_` values and the blade varies
-linearly between neighbouring stations. Unequal lengths are located errors on `mesh.fan.station_<name>`, station errors of the library on
-`mesh.fan.station_<name>[i]`.
-Mesh keys: `n_up`, `n_chord`, `n_down` (axial cells), `n_side` (pitchwise cells from the seam to the blade), `n_mid` (across the blunt
-edge faces), `n_span`, `n_gap` (radial cells in the blade span and the tip gap), `n_bl` and `growth` (boundary-layer cells of exact
-geometric growth on every wall), `first_cell_height` (or, when 0, `y_plus`, `ref_speed`, `nu` for a flat-plate estimate),
-`trunc_le`, `trunc_te` (chord fractions cut off by the flat blunt edge faces), `include_blade` (false = empty passage).
-Patches: `inlet` (z = 0), `outlet`, `hub`, `shroud`, `blade`, and the cyclic rotational pair `seam_lo` / `seam_hi` (no boundary
-entry is needed for the pair); cell zone `rotor` (all cells). Errors in the geometry or the mesh controls carry the path
-`mesh.fan.<name>` (for example `mesh.fan.stations[1].chord`). The absolute-formulation `mrf` source is refused on this mesh (blade
-and seam faces are not surfaces of revolution; with `cyclic_seams = true` the seams are accepted but the hub and shroud faces are not, ADR 0113); use `rotating_frame`. Lower-fidelity mesh with blunt blade edges that misses the
-registered quality gates; NOT validated for fan performance prediction (docs/meshing.md). Example:
-`cases/axial_fan_sector/axial_fan_sector.toml`.
+five-bladed test fan of the ADR).
 
-`mesh.fan.topology` (`h_slit`, the default, or `c_grid`, ADR 0068) selects the passage mesh. `c_grid` is a body-fitted C-grid that keeps the true
-blade edges (rounded leading edge, closed trailing edge) and has exact boundary-layer stacks along the blade normal; it uses the keys above
-except `n_mid`, `trunc_le` and `trunc_te` (ignored), and adds `n_nose` (cells from the leading edge to each seam corner; `n_nose + 2 <= n_chord`), `n_core` (cells across the blade thickness in the tip gap) and `front_gap` (distance of the front edge of the leading-edge fan
-ahead of the leading edge, in local chords). Unfittable controls give located errors on `mesh.fan.<name>` (a folded leading-edge fan reports
-`mesh.fan.front_gap`; a tangled cell family that the fold check does not see reports `mesh.fan.mesh` with the block, indices and layer).
-The generator is not robust against arbitrary control changes: most neighbouring combinations of `n_nose`, `n_side` and `n_chord` fold
+Geometry keys: `n_blades`, `r_hub`, `r_tip`, `tip_clearance`, `axial_extent`, `z_le_root`, `family` (`naca4` | `circular_arc`),
+`hub_` and `tip_` `chord`, `stagger`, `camber`, `thickness`, `sweep`, `lean`, and `camber_pos`.
+
+Optional station lists (ADR 0075): `station_radius` (first value `r_hub`, last `r_tip`, strictly increasing) with
+`station_chord`, `station_stagger` (deg), `station_camber`, `station_thickness` of the same length and the optional
+`station_camber_pos`, `station_sweep`, `station_lean` (empty = `camber_pos`, 0, 0). When `station_radius` is not empty they
+replace the `hub_`/`tip_` values and the blade varies linearly between neighbouring stations. Unequal lengths are located
+errors on `mesh.fan.station_<name>`, station errors of the library on `mesh.fan.station_<name>[i]`.
+
+Mesh keys:
+
+- `n_up`, `n_chord`, `n_down`: axial cells
+- `n_side`: pitchwise cells from the seam to the blade
+- `n_mid`: across the blunt edge faces
+- `n_span`, `n_gap`: radial cells in the blade span and the tip gap
+- `n_bl` and `growth`: boundary-layer cells of exact geometric growth on every wall
+- `first_cell_height` (or, when 0, `y_plus`, `ref_speed`, `nu` for a flat-plate estimate)
+- `trunc_le`, `trunc_te`: chord fractions cut off by the flat blunt edge faces
+- `include_blade`: false = empty passage
+
+Patches: `inlet` (z = 0), `outlet`, `hub`, `shroud`, `blade`, and the cyclic rotational pair `seam_lo` / `seam_hi` (no boundary
+entry is needed for the pair). Cell zone: `rotor` (all cells).
+
+Errors in the geometry or the mesh controls carry the path `mesh.fan.<name>` (for example `mesh.fan.stations[1].chord`).
+
+The absolute-formulation `mrf` source is refused on this mesh (blade and seam faces are not surfaces of revolution; with
+`cyclic_seams = true` the seams are accepted but the hub and shroud faces are not, ADR 0113); use `rotating_frame`.
+
+This is a lower-fidelity mesh with blunt blade edges that misses the registered quality gates; it is NOT validated for fan
+performance prediction (docs/meshing.md). Example: `cases/axial_fan_sector/axial_fan_sector.toml`.
+
+`mesh.fan.topology` (`h_slit`, the default, or `c_grid`, ADR 0068) selects the passage mesh. `c_grid` is a body-fitted C-grid
+that keeps the true blade edges (rounded leading edge, closed trailing edge) and has exact boundary-layer stacks along the
+blade normal. It uses the keys above except `n_mid`, `trunc_le` and `trunc_te` (ignored), and adds:
+
+- `n_nose`: cells from the leading edge to each seam corner; `n_nose + 2 <= n_chord`
+- `n_core`: cells across the blade thickness in the tip gap
+- `front_gap`: distance of the front edge of the leading-edge fan ahead of the leading edge, in local chords
+
+Unfittable controls give located errors on `mesh.fan.<name>` (a folded leading-edge fan reports `mesh.fan.front_gap`; a tangled
+cell family that the fold check does not see reports `mesh.fan.mesh` with the block, indices and layer). The generator is not
+robust against arbitrary control changes: most neighbouring combinations of `n_nose`, `n_side` and `n_chord` fold
 (docs/meshing.md). Example: `cases/axial_fan_cgrid/axial_fan_cgrid.toml`.
-`mesh.fan.c_grid_construction` (`pursuit`, the default, the construction above, `smoothed`, ADR 0072, `camber_seam`, ADR 0079, or
-`camber_seam_h`, ADR 0083) selects how
-the `c_grid` lines are placed: `smoothed` relaxes every layer with an elliptic (Winslow) smoother whose seams are periodic interior lines, takes the far
-grid of the thin end-wall layers from a remapped radius so it does not rotate between them, and falls back through a fixed chain of
-weaker settings when a layer would fold; the blade stacks stay exact. `camber_seam` is `smoothed` with seams that follow the camber line
-inside the chord and the wake downstream (for high-solidity hubs whose wake leaves straight seams, as FAN-01), a tip-gap first height fitted
-to the gap, a radial filter of the far grid between layers and two Laplace-start fallback steps; it refuses controls outside its documented
-range with a located error (`0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`).
-`camber_seam_h` is `camber_seam` with a second local untangling after the in-plane smoothing and blade wall stacks whose wall-normal (not in-plane)
-thickness is `h1 g^q` on a leaning blade; it checks the same range as `camber_seam`.
-`mesh.fan.c_grid_grading` (experimental, ADR 0181, not accepted): `capped` (the default, as above), `radial_geometric` (span layers
-`h1 rho^min(k, n_span - 1 - k)` with one solved ratio, no stack-to-middle jump), `wake_geometric` (wake axial cells with one solved ratio
-from the trailing-edge spacing, no cap) or `radial_wake_geometric` (both).
+
+`mesh.fan.c_grid_construction` selects how the `c_grid` lines are placed:
+
+- `pursuit` (the default): the construction above.
+- `smoothed` (ADR 0072): relaxes every layer with an elliptic (Winslow) smoother whose seams are periodic interior lines, takes
+  the far grid of the thin end-wall layers from a remapped radius so it does not rotate between them, and falls back through a
+  fixed chain of weaker settings when a layer would fold. The blade stacks stay exact.
+- `camber_seam` (ADR 0079): `smoothed` with seams that follow the camber line inside the chord and the wake downstream (for
+  high-solidity hubs whose wake leaves straight seams, as FAN-01), a tip-gap first height fitted to the gap, a radial filter of
+  the far grid between layers and two Laplace-start fallback steps. It refuses controls outside its documented range with a
+  located error (`0.15 <= n_nose / n_chord <= 0.375`, `max(8, n_bl + 6) <= n_side <= 2 n_chord`, `0.15 <= front_gap <= 1.0`).
+- `camber_seam_h` (ADR 0083): `camber_seam` with a second local untangling after the in-plane smoothing and blade wall stacks
+  whose wall-normal (not in-plane) thickness is `h1 g^q` on a leaning blade. It checks the same range as `camber_seam`.
+
+`mesh.fan.c_grid_grading` (experimental, ADR 0181, not accepted):
+
+- `capped` (the default): as above
+- `radial_geometric`: span layers `h1 rho^min(k, n_span - 1 - k)` with one solved ratio, no stack-to-middle jump
+- `wake_geometric`: wake axial cells with one solved ratio from the trailing-edge spacing, no cap
+- `radial_wake_geometric`: both
+
 Measured quality and robustness are in docs/meshing.md.
 
 ### Boundary-layer inflation (`mesh.wall_layers`, F-108)
@@ -508,16 +637,27 @@ An optional table that rotates the mesh of every source (generator or file) afte
 
 Only the points move: the cells, faces, patches, zones and their order stay as they are, and every derived quantity
 (face areas and normals, cell volumes and centres, wall distance, non-orthogonality) is computed from the rotated points
-as for any mesh. z is copied unchanged, so a 2D mesh stays 2D. Nothing else in the case turns: velocities, force and
-report directions, gravity and body forces stay in world coordinates by intent. Settings that place something relative
-to the geometry stay in world coordinates too, and `rcfd check`, `rcfd validate`, `rcfd run` and `--check-only` warn
-about each of them with the rule id `MT101` (warning, category mesh) while the rotation is not 0: a point, origin,
-position, centre, box, normal or axis given in the settings (outside `mesh`: sample lines and planes, VOF regions,
-actuator disks, particle injections, dynamic-mesh bodies, ...), probe and moment reports, post-processing samples,
-`rotating_frame` and `mrf` sources, a rotating wall (`wall_rotation_rate`), expressions and profile tables in x, y or z,
-`dynamic_mesh`, the mixing plane and a geometric `decomposition` (the Studio's Case > Validate shows errors only, so not
-these warnings).
-Periodic pairs: a translational pair stays matched (its shift is taken from the rotated patches); a rotationally
+as for any mesh. The z coordinate is copied unchanged, so a 2D mesh stays 2D.
+
+Nothing else in the case turns: velocities, force and report directions, gravity and body forces stay in world coordinates
+by intent. Settings that place something relative to the geometry stay in world coordinates too. `rcfd check`,
+`rcfd validate`, `rcfd run` and `--check-only` warn about each of them with the rule id `MT101` (warning, category mesh)
+while the rotation is not 0:
+
+- a point, origin, position, centre, box, normal or axis given in the settings (outside `mesh`: sample lines and planes, VOF
+  regions, actuator disks, particle injections, dynamic-mesh bodies, ...)
+- probe and moment reports
+- post-processing samples
+- `rotating_frame` and `mrf` sources
+- a rotating wall (`wall_rotation_rate`)
+- expressions and profile tables in x, y or z
+- `dynamic_mesh`
+- the mixing plane
+- a geometric `decomposition`
+
+The Studio's Case > Validate shows errors only, so not these warnings.
+
+Periodic pairs: a translational pair stays matched (its shift is taken from the rotated patches). A rotationally
 periodic pair (`annulus_3d_sector`, `axial_fan_sector`, imported cyclic patches with a rotation) only allows a rotation
 about its own axis, else the mesh is refused with a located error at `mesh.transform.rotate_origin`.
 
@@ -549,21 +689,26 @@ about its own axis, else the mesh is refused with a located error at `mesh.trans
 
 ## `compressible` and `solver.algorithm = "compressible"`
 
-Selecting the algorithm switches to the explicit density-based Euler solver (no viscosity, no
-heat conduction). Settings: `flux` (`rusanov`, `roe`, `hllc`, `ausm_plus`), `reconstruction`
-(`first_order` or a TVD limiter name), `rk_order` (1 to 3), `cfl` (0.01 to 1, default 0.4),
-`gamma`, `gas_constant`, `mode` (`transient` to `solver.end_time`, or `steady` marching until the
-largest relative density change per step is below `steady_tolerance`).
+Selecting the algorithm switches to the explicit density-based Euler solver (no viscosity, no heat conduction). Settings:
+
+- `flux`: `rusanov`, `roe`, `hllc`, `ausm_plus`
+- `reconstruction`: `first_order` or a TVD limiter name
+- `rk_order`: 1 to 3
+- `cfl`: 0.01 to 1, default 0.4
+- `gamma`, `gas_constant`
+- `mode`: `transient` to `solver.end_time`, or `steady` marching until the largest relative density change per step is below
+  `steady_tolerance`
 
 Initial condition `compressible.initial`: `mode = uniform` uses `left` everywhere;
 `mode = riemann` uses `left` for coordinates below `split_position` along `split_axis` (x, y or
 z) and `right` above. Each state has `density`, `velocity` (vector) and `pressure`.
 
 Boundaries: `compressible_bc` = `auto` | `slip` | `extrapolate` | `fixed` | `total_inlet` | `pressure_outlet` |
-`farfield` | `nonreflecting` (the last four are the characteristic conditions of ADR 0006, below). `fixed` needs
-`density_value`, `pressure_value` (positive) and optionally `velocity_value` (`temperature_value`
-may replace `density_value`). `auto` keeps the solver default by mesh patch kind: outlet patches extrapolate, all others are slip walls. The mesh generator `wedge_2d` (`ramp_start`, `ramp_angle`, plus `lx`, `ly`, `nx`,
-`ny`) builds the compression-ramp domain.
+`farfield` | `nonreflecting` (the last four are the characteristic conditions of ADR 0006, below). `auto` keeps the solver
+default by mesh patch kind: outlet patches extrapolate, all others are slip walls. `fixed` needs `density_value`,
+`pressure_value` (positive) and optionally `velocity_value` (`temperature_value` may replace `density_value`).
+
+The mesh generator `wedge_2d` (`ramp_start`, `ramp_angle`, plus `lx`, `ly`, `nx`, `ny`) builds the compression-ramp domain.
 
 Characteristic conditions (`docs/adr/0006-compressible-boundary-conditions.md`; one-dimensional
 characteristics normal to the face, a boundary face state whose physical flux is used):
@@ -579,29 +724,43 @@ characteristics normal to the face, a boundary face state whose physical flux is
 `flow_direction` that is not 3 components, a `reflection_value` outside [0, 1], a negative
 `mach_value`.
 
-Unsupported combinations that `validate` rejects, each with the key and line: forward Euler
-(`rk_order = 1`) with a limited reconstruction, a transient run with `end_time <= 0`,
-non-positive initial density or pressure, a `fixed` state without positive pressure and
-density/temperature, turbulence, `energy.enabled`, `solver.pseudo_mode`, periodic meshes,
-`compressible_bc` without the compressible algorithm, turbulence keys on a boundary, velocity
-expressions, and force, moment, force-coefficient, heat-flow and y+ reports.
+Unsupported combinations that `validate` rejects, each with the key and line:
 
-Output and monitor semantics for this solver: fields `rho`, `p`, `T`, `mach`, `ux`, `uy`, `uz`,
-`speed`; `res_u` is the largest relative density change per step, `res_p` the largest relative
-pressure change per step, `continuity` the relative mass drift of the whole domain per step (which
-is non-zero when fixed or extrapolating boundaries let mass through), and the monitors `dt`,
-`courant` and `res_rho`. In a transient run these are per-step changes and do not tend to zero.
-`mass_flow` reports use the adjacent-cell density and velocity of the boundary face; `p` and `rho`
-reports carry pressure and density dimensions (the pressure is the absolute pressure, not kinematic).
+- forward Euler (`rk_order = 1`) with a limited reconstruction
+- a transient run with `end_time <= 0`
+- non-positive initial density or pressure
+- a `fixed` state without positive pressure and density/temperature
+- turbulence
+- `energy.enabled`
+- `solver.pseudo_mode`
+- periodic meshes
+- `compressible_bc` without the compressible algorithm
+- turbulence keys on a boundary
+- velocity expressions
+- force, moment, force-coefficient, heat-flow and y+ reports
+
+Output and monitor semantics for this solver:
+
+- Fields: `rho`, `p`, `T`, `mach`, `ux`, `uy`, `uz`, `speed`.
+- `res_u` is the largest relative density change per step.
+- `res_p` is the largest relative pressure change per step.
+- `continuity` is the relative mass drift of the whole domain per step, which is non-zero when fixed or extrapolating
+  boundaries let mass through.
+- Monitors: `dt`, `courant` and `res_rho`.
+
+In a transient run these are per-step changes and do not tend to zero.
+
+Reports: `mass_flow` reports use the adjacent-cell density and velocity of the boundary face; `p` and `rho` reports carry
+pressure and density dimensions (the pressure is the absolute pressure, not kinematic).
 
 ## `fluid` variable-density solver: ideal gas and real gas (F-050, F-061, ADR 0005, ADR 0007)
 
 `fluid.density = "constant"` (default) keeps the incompressible solvers. `fluid.density = "ideal_gas"` selects the
 steady pressure-based variable-density SIMPLE/SIMPLEC solver (`rcfd_fv::varden`): density rho = p/(R T), momentum
 with the density-weighted mass flux, a total-enthalpy energy equation, laminar. It requires
-`solver.algorithm = "simple"` or `"simplec"` (steady) or `"pimple"` (transient, below) and `energy.enabled = true` (the temperature carries the thermal
-boundary conditions; `energy.relax` is the enthalpy relaxation, `energy.buoyancy` and the Boussinesq `physics`
-settings are ignored: buoyancy follows from the density with `physics.gravity`).
+`solver.algorithm = "simple"` or `"simplec"` (steady) or `"pimple"` (transient, below) and `energy.enabled = true`.
+The temperature carries the thermal boundary conditions and `energy.relax` is the enthalpy relaxation. `energy.buoyancy`
+and the Boussinesq `physics` settings are ignored: buoyancy follows from the density with `physics.gravity`.
 
 * `fluid.mode`: `compressible` (default; `p` is the absolute pressure, full equation of state, subsonic to
   transonic nozzles, stagnation inlets) or `low_mach` (`p` is the dynamic pressure; the density follows a thermodynamic
@@ -613,11 +772,11 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
   is `initial.pressure` when positive, else this value), `fluid.density_scheme` (`upwind` | `central` |
   `linear_upwind`), `fluid.relax_density`, `fluid.hydrostatic_init` (start from the hydrostatic state of
   `physics.gravity`).
-* Real gas (`fluid.density = "real_gas"`, ADR 0007): the same solver with a cubic equation of state. `fluid.eos`
-  (`peng_robinson` default | `redlich_kwong`), `fluid.species` (`N2`, `O2`, `AR`, `CO2`, `CH4`, `H2`, `H2O`; the
-  critical temperature, pressure, acentric factor and molar mass come from a built-in table), or leave `species` empty and give
-  `fluid.critical_temperature` [K], `fluid.critical_pressure` [Pa], `fluid.molar_mass` [kg/mol] and
-  `fluid.acentric_factor` (Peng-Robinson); an explicit non-zero value overrides the table. The gas constant is
+* Real gas (`fluid.density = "real_gas"`, ADR 0007): the same solver with a cubic equation of state. Keys: `fluid.eos`
+  (`peng_robinson` default | `redlich_kwong`) and `fluid.species` (`N2`, `O2`, `AR`, `CO2`, `CH4`, `H2`, `H2O`; the
+  critical temperature, pressure, acentric factor and molar mass come from a built-in table). Or leave `species` empty and
+  give `fluid.critical_temperature` [K], `fluid.critical_pressure` [Pa], `fluid.molar_mass` [kg/mol] and
+  `fluid.acentric_factor` (Peng-Robinson). An explicit non-zero value overrides the table. The gas constant is
   `R_u / molar_mass` (setting `fluid.gas_constant` is an error). `fluid.specific_heat` is the constant ideal-gas
   (zero-pressure) `cp0` [J/kg/K]; 0 uses `gamma R/(gamma-1)` from `fluid.gamma` (set it: the default gamma 1.4 is
   wrong for CO2). Density is the vapour-like root of the cubic, enthalpy is `cp0 T` plus the EOS departure, the
@@ -662,7 +821,10 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
   `energy.enabled = false`, heat-flux temperature boundaries, stagnation inlets in low_mach mode, `solver.max_courant`
   with pimple, `fluid.inner_*` with a steady algorithm, `energy.viscous_heating` / `energy.heat_source` and any
   `fluid.*` or stagnation setting with `fluid.density = "constant"`.
-* Convergence: the momentum residual `res_u` typically floors near 1e-5..1e-6, so the default `tolerance_u` may never be met and the run then stops at `max_iterations`; stop on `convergence.*` conditions (a window on `res_p`, `res_T` or a report) or set `tolerance_u` near the floor. `fluid.*` keys are flagged with `density = "constant"` only when they differ from their defaults.
+* Convergence: the momentum residual `res_u` typically floors near 1e-5..1e-6, so the default `tolerance_u` may never be
+  met and the run then stops at `max_iterations`. Stop on `convergence.*` conditions (a window on `res_p`, `res_T` or a
+  report) or set `tolerance_u` near the floor. `fluid.*` keys are flagged with `density = "constant"` only when they
+  differ from their defaults.
 * Limits: laminar, no non-orthogonal pressure correctors; choked or shock-containing flows need smaller relaxation
   factors and a back-pressure start-up (see ADR 0005 and the heavy nozzle test); no shock-tube or choked transient
   benchmark is claimed (ADR 0009).
@@ -672,7 +834,14 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
 * `physics.body_force` (m/s^2); steady incompressible algorithms only (rejected with piso, pimple and compressible).
 * `solver.bulk_velocity` and `solver.bulk_direction`: mean-velocity driver for periodic channels (steady algorithms only).
 * `solver.h_operator` = `default` | `from_solution` | `previous_iterate`.
-* `solver.component_diagonal` = `averaged` (default) | `corrected` (ADR 0010): `corrected` makes the H operator consistent with the component-averaged diagonal where a symmetry plane (or any component-specific condition) gives the velocity components different diagonals; applies to the segregated steady/transient constant-density kernels (the transient `piso`/`pimple` kernel only since ADR 0074: before, the key was silently ignored there) and to the variable-density kernel; MRF zones always use it. Wall-resolved cells next to a symmetry plane (half channels, symmetry run-ups) need it: with `averaged` such a plane acts like a no-slip wall (ADR 0074 part A); `docs/component-diagonal-default.md` lists what a `corrected` default would change. It changes results of cases with symmetry planes (e.g. `cases/packed_bed` converges in 16 instead of stalling at 1700 iterations), so it is opt-in.
+* `solver.component_diagonal` = `averaged` (default) | `corrected` (ADR 0010): `corrected` makes the H operator consistent
+  with the component-averaged diagonal where a symmetry plane (or any component-specific condition) gives the velocity
+  components different diagonals. It applies to the segregated steady/transient constant-density kernels (the transient
+  `piso`/`pimple` kernel only since ADR 0074: before, the key was silently ignored there) and to the variable-density
+  kernel; MRF zones always use it. Wall-resolved cells next to a symmetry plane (half channels, symmetry run-ups) need it:
+  with `averaged` such a plane acts like a no-slip wall (ADR 0074 part A). `docs/component-diagonal-default.md` lists what
+  a `corrected` default would change. It changes results of cases with symmetry planes (e.g. `cases/packed_bed` converges
+  in 16 instead of stalling at 1700 iterations), so it is opt-in.
 * `solver.p_ref_cell`, `solver.p_ref_value`: reference pressure cell for closed domains.
 * `solver.momentum_rel_tol`, `momentum_max_iter`, `pressure_rel_tol`, `pressure_max_iter` (0 keeps
   the algorithm default).
@@ -712,27 +881,43 @@ settings are ignored: buoyancy follows from the density with `physics.gravity`).
 Energy (`energy.*`) and pseudo-transient (`solver.pseudo_*`) settings were already in the schema
 and are unchanged.
 
-`heat_flow` reports (constant-density energy equation): `reports.<n>.conductivity` is optional and has no effective default (0 = unset). Unset, the report uses `physics.conductivity`; a positive value overrides it for that report; a temperature-dependent `properties.conductivity` law takes precedence over both and is evaluated at the wall temperature. Before this fix the key defaulted to 1.0 and silently replaced `physics.conductivity` (wave 15A set-up defect E1/E5, ADR 0019); cases that relied on that now need an explicit report value to get the old number. The variable-density solver (`fluid.density = "ideal_gas"` or `"real_gas"`) does not use this key (its heat flux is built from `fluid.conductivity` or the Prandtl number); a positive `reports.<n>.conductivity` on a `heat_flow` report there is a located error at `reports.<n>.conductivity` instead of being ignored silently (ADR 0021 item W). `0` or absent is accepted.
+`heat_flow` reports (constant-density energy equation): `reports.<n>.conductivity` is optional and has no effective default
+(0 = unset). Unset, the report uses `physics.conductivity`; a positive value overrides it for that report; a
+temperature-dependent `properties.conductivity` law takes precedence over both and is evaluated at the wall temperature.
+Before this fix the key defaulted to 1.0 and silently replaced `physics.conductivity` (wave 15A set-up defect E1/E5,
+ADR 0019). Cases that relied on that now need an explicit report value to get the old number.
 
-`energy.enabled` also works with the transient `piso` and `pimple` algorithms (F-050): the temperature equation is advanced
-with the flow's time scheme (implicit Euler or BDF2, one linear solve per step, `energy.relax` unused) on the flux of the previous step,
-then the flow step sees the Boussinesq buoyancy of the new temperature (first-order coupling in time; a steady state is independent of it).
-Temperature-dependent `properties`, scalars and species stay steady-only.
+The variable-density solver (`fluid.density = "ideal_gas"` or `"real_gas"`) does not use this key (its heat flux is built
+from `fluid.conductivity` or the Prandtl number). A positive `reports.<n>.conductivity` on a `heat_flow` report there is a
+located error at `reports.<n>.conductivity` instead of being ignored silently (ADR 0021 item W). `0` or absent is accepted.
+
+`energy.enabled` also works with the transient `piso` and `pimple` algorithms (F-050). The temperature equation is advanced
+with the flow's time scheme (implicit Euler or BDF2, one linear solve per step, `energy.relax` unused) on the flux of the
+previous step. The flow step then sees the Boussinesq buoyancy of the new temperature (first-order coupling in time; a
+steady state is independent of it). Temperature-dependent `properties`, scalars and species stay steady-only.
 
 ## Wave 13: schemes, wall motion, solution limits (F-211, F-204, F-208, ADR 0016)
 
-**Convection schemes** (`solver.convection`): `blended`
-(`solver.blend_factor` in 0..1, default 0.75: face value `upwind + f (central - upwind)`; 0 is `upwind`, 1 is `central`),
-`high_resolution` (Gamma scheme, `solver.high_resolution_beta` in 0.1..0.5, default 0.2), `compressive`
-(`solver.compressive_k` in 0..2, default 1.5; k = 0 is upwind, k = 1 minmod-like, k = 2 the sharpest member) and
-`bounded_central` (normalised-variable form of central differencing; identical to the `tvd_minmod` limiter). The limited schemes
-are deferred-correction schemes: a steady run converges only if the corrections settle, and the compressive members can stall in a limit
-cycle of the limiter switching (ADR 0016 results). **Time scheme** `solver.time_scheme = "bdf2_bounded"`: per cell, BDF2 blended
-towards implicit Euler by the ratio of the last two backward difference quotients, so a temporal extremum or an accelerating front falls back to the monotone Euler (project-defined, no verified source, ADR 0016 D1).
+**Convection schemes** (`solver.convection`):
 
-**Velocity kinds** of `boundaries.<patch>.velocity` (all impermeable, all `turbulence` role `wall`; the turbulence wall treatments
-themselves assume a wall at rest, so a turbulence model together with one of these kinds is a located error; exception: `moving_wall`
-with `k_omega_sst`, whose wall law uses the velocity relative to the wall (ADR 0075 S1, ADR 0078 S2; give the wall `turbulence = "wall"`)):
+- `blended`: `solver.blend_factor` in 0..1, default 0.75; face value `upwind + f (central - upwind)`; 0 is `upwind`, 1 is
+  `central`
+- `high_resolution`: Gamma scheme, `solver.high_resolution_beta` in 0.1..0.5, default 0.2
+- `compressive`: `solver.compressive_k` in 0..2, default 1.5; k = 0 is upwind, k = 1 minmod-like, k = 2 the sharpest member
+- `bounded_central`: normalised-variable form of central differencing; identical to the `tvd_minmod` limiter
+
+The limited schemes are deferred-correction schemes: a steady run converges only if the corrections settle, and the
+compressive members can stall in a limit cycle of the limiter switching (ADR 0016 results).
+
+**Time scheme** `solver.time_scheme = "bdf2_bounded"`: per cell, BDF2 blended towards implicit Euler by the ratio of the
+last two backward difference quotients, so a temporal extremum or an accelerating front falls back to the monotone Euler
+(project-defined, no verified source, ADR 0016 D1).
+
+**Velocity kinds** of `boundaries.<patch>.velocity` are all impermeable and all have `turbulence` role `wall`. The turbulence
+wall treatments themselves assume a wall at rest, so a turbulence model together with one of these kinds is a located error.
+The exception is `moving_wall` with `k_omega_sst`, whose wall law uses the velocity relative to the wall (ADR 0075 S1,
+ADR 0078 S2; give the wall `turbulence = "wall"`). Kinds:
+
 * `moving_wall`: wall velocity `velocity_value` (must be tangential on every face, located error otherwise) plus an optional rotation
   `wall_rotation_rate` [rad/s] about `wall_rotation_axis` (default z) through `wall_rotation_origin`; `u_w = u_t + Omega x (x - x0)`.
   `wall_velocity_projection = "tangential"` (default `"none"`) replaces the velocity of each face by its tangential part instead of
@@ -762,8 +947,8 @@ Not in the settings tree: the gradient options of F-208 (face-gradient correctio
 ## `tables` and profile inputs (F-105)
 
 `tables.<name>` reads a lookup table or profile from CSV (`file`, relative to the case file, or inline
-`data`). The first line names the columns, a unit may follow in brackets (`T [degC], nu [m^2/s]`; values are
-converted to SI), the delimiter is a comma, semicolon or tab, `#` lines are comments.
+`data`). The first line names the columns, and a unit may follow in brackets (`T [degC], nu [m^2/s]`; values are
+converted to SI). The delimiter is a comma, semicolon or tab. Lines that start with `#` are comments.
 
 | Key | Meaning |
 | --- | --- |
@@ -779,13 +964,19 @@ points) inside their bounding box. Duplicate inputs, non-numeric or non-finite c
 units, an unreadable file, and (with `extrapolation = "error"`) boundary faces outside the data range are
 reported as diagnostics naming the table.
 
-Tables are callable from every expression as `<name>(args)` (first output) or `<name>_<column>(args)`; each
-argument must have the dimension of its input column (so inputs need a unit), the result has the dimension of
-the output column. `boundaries.<patch>.profile = "<table>"` feeds the table's `ux/uy/uz`, `T` and `heat_flux`
-columns into the matching fixed-velocity, fixed-temperature and heat-flux conditions (explicit `*_expression`
-settings win); its inputs must be among `x, y, z, t`. Under the service sandbox (`--root`) table files must lie
-inside the root. Not implemented: Fluent profile-file syntax, cubic/monotone interpolation, table values that
-fall outside the range during a transient run (they evaluate to NaN; only the t = 0 state is checked at build).
+Tables are callable from every expression as `<name>(args)` (first output) or `<name>_<column>(args)`. Each
+argument must have the dimension of its input column (so inputs need a unit), and the result has the dimension of
+the output column.
+
+`boundaries.<patch>.profile = "<table>"` feeds the table's `ux/uy/uz`, `T` and `heat_flux` columns into the matching
+fixed-velocity, fixed-temperature and heat-flux conditions (explicit `*_expression` settings win); its inputs must be among
+`x, y, z, t`.
+
+Under the service sandbox (`--root`) table files must lie inside the root.
+
+Not implemented: Fluent profile-file syntax, cubic/monotone interpolation, table values that fall outside the range during
+a transient run (they evaluate to NaN; only the t = 0 state is checked at build).
+
 Example: `cases/channel/profile_inlet.toml`.
 
 ## `statistics` and `output` policy (F-116)
@@ -803,57 +994,75 @@ retention and the variables written. Details and limits: `docs/run-control.md` (
 `solver.simplec_non_orthogonal_compensation` (bool, default `false`): with `solver.algorithm = "simplec"` and
 `solver.non_orthogonal_correctors > 0` the SIMPLEC flux compensation `(rAtU - rAU)_f snGrad(p_old)` also carries the deferred
 non-orthogonal secondary-gradient part of the pressure flux. Without it the corrector feeds back with a gain close to
-`alpha_u` and an axial mode of a swept mesh grows (diverged at `alpha_u = 0.9`, converged at 0.8 and below). `false`
-keeps every existing result bit for bit; the switch is inert without correctors and changes nothing beyond round-off on an
-orthogonal mesh. Not available for the variable-density SIMPLEC (it has no non-orthogonal correctors).
+`alpha_u` and an axial mode of a swept mesh grows (diverged at `alpha_u = 0.9`, converged at 0.8 and below).
+
+`false` keeps every existing result bit for bit. The switch is inert without correctors and changes nothing beyond round-off
+on an orthogonal mesh. It is not available for the variable-density SIMPLEC, which has no non-orthogonal correctors.
 
 ### SIMPLEC on uniformly sheared meshes (ADR 0081 part X, ADR 0084) and `solver.velocity_correction`
 
-On a channel whose cells are uniformly sheared by an angle theta (every face non-orthogonal by theta), SIMPLEC with `alpha_u = 0.9`, `alpha_p = 1.0` and no
-non-orthogonal correctors overshoots from 50 degrees and blows up from the impulsive start from 55 degrees; a doubly periodic box without walls or open
-boundaries is unstable from 60 degrees. Measured thresholds on that channel: `alpha_p` 0.7: 60 degrees, 0.5: 70, 0.3: stable up to 79; SIMPLEC 0.7/0.3: 75;
-two correctors with `solver.simplec_non_orthogonal_compensation = true`: 70 (two correctors without it: unstable from 15 degrees).
+On a channel whose cells are uniformly sheared by an angle theta (every face non-orthogonal by theta), SIMPLEC with
+`alpha_u = 0.9`, `alpha_p = 1.0` and no non-orthogonal correctors overshoots from 50 degrees and blows up from the impulsive
+start from 55 degrees; a doubly periodic box without walls or open boundaries is unstable from 60 degrees. Measured thresholds
+on that channel:
 
-Mechanism (ADR 0084, by linearising one outer iteration): the iteration has a period-two pressure mode whose eigenvalue passes -1 between 57.5 and 60
-degrees at `alpha_p = 1.0` (between 65 and 70 at 0.7). It lives in the Stokes part of the iteration (no convection, wall or open boundary needed): the cell
-velocity is corrected with the full Green-Gauss gradient of the pressure change while the face flux is corrected with its orthogonal part only. On the
-doubly periodic box it is a linear instability of the converged state; on the channel the converged state is stable and the instability is that of the
+| Setting | Threshold |
+| --- | --- |
+| `alpha_p` 0.7 | 60 degrees |
+| `alpha_p` 0.5 | 70 degrees |
+| `alpha_p` 0.3 | stable up to 79 degrees |
+| SIMPLEC 0.7/0.3 | 75 degrees |
+| two correctors with `solver.simplec_non_orthogonal_compensation = true` | 70 degrees |
+| two correctors without it | unstable from 15 degrees |
+
+Mechanism (ADR 0084, by linearising one outer iteration): the iteration has a period-two pressure mode whose eigenvalue
+passes -1 between 57.5 and 60 degrees at `alpha_p = 1.0` (between 65 and 70 at 0.7). The mode lives in the Stokes part of the
+iteration (no convection, wall or open boundary needed): the cell velocity is corrected with the full Green-Gauss gradient of
+the pressure change while the face flux is corrected with its orthogonal part only. On the doubly periodic box the mode is a
+linear instability of the converged state. On the channel the converged state is stable and the instability is that of the
 start-up states.
 
-`solver.velocity_correction` (`gradient` default, `face_flux`; steady `simple` / `simplec` only, a located error otherwise): `face_flux` corrects the cell
-velocity with the reconstruction of the face flux correction, `(1/V) sum_f dphi_f (x_f - x_c)`, so the cell carries only the pressure change the faces carry.
-The converged solution is the same (measured to 2e-9 in velocity on the ADR 0084 cases); with it SIMPLEC at `alpha_p` 0.7, 0.5 and 1.0 is stable up to 79
-degrees on the sheared channel and box (ADR 0084 A1-A4). Not tested with turbulence models, moving meshes or face jumps.
+`solver.velocity_correction` (`gradient` default, `face_flux`; steady `simple` / `simplec` only, a located error otherwise):
+`face_flux` corrects the cell velocity with the reconstruction of the face flux correction,
+`(1/V) sum_f dphi_f (x_f - x_c)`, so the cell carries only the pressure change the faces carry. The converged solution is the
+same (measured to 2e-9 in velocity on the ADR 0084 cases). With `face_flux`, SIMPLEC at `alpha_p` 0.7, 0.5 and 1.0 is stable
+up to 79 degrees on the sheared channel and box (ADR 0084 A1-A4). Not tested with turbulence models, moving meshes or face
+jumps.
 
 ### SIMPLEC boundary compensation (ADR 0102) and `solver.simplec_boundary_compensation`
 
-`solver.simplec_boundary_compensation` (bool, default `false`; steady incompressible solver only, a located error with any non-steady algorithm,
-no effect with `simple`): SIMPLEC adds the flux compensation `(rAtU - rAU)_f snGrad(p_old) |S|` on internal faces only. With the key it is also
-added on every boundary face whose flux the pressure sets (fixed-pressure faces, lagged-pressure catalogue conditions such as `vent`, and
-periodic seam faces), with the same boundary forms the corrected flux uses. Effects:
+`solver.simplec_boundary_compensation` (bool, default `false`; steady incompressible solver only, a located error with any
+non-steady algorithm, no effect with `simple`): SIMPLEC adds the flux compensation `(rAtU - rAU)_f snGrad(p_old) |S|` on
+internal faces only. With the key it is also added on every boundary face whose flux the pressure sets (fixed-pressure faces,
+lagged-pressure catalogue conditions such as `vent`, and periodic seam faces), with the same boundary forms the corrected flux
+uses. Effects:
 
-* At a fixed point every face carries `rAU`, so the converged SIMPLEC solution equals the SIMPLE solution with the same `alpha_u` (measured
-  to 3.5e-12 with a pressure outlet and 4.7e-13 with periodic seams; without the key the default SIMPLEC differs from it by 2.6e-3 to 4.8e-3
-  of the velocity on those ducts, ADR 0102 B1/B2).
-* A change of a boundary pressure no longer kicks the cell velocity next to it by `(rAtU - rAU) grad(p_old)`. Without the key, a velocity
-  inlet with a forward `vent` (K > 0) diverges unless the loop gain `0.5 (rAtU - rAU) (A/V) K |u|` of the vent cell is below 1 (A the vent
-  face area, V the cell volume): plain SIMPLEC diverges from the first iteration, pseudo-time 0.02 diverges at u = 2 m/s on the X7 duct.
-  With the key that duct settles at every flow, with and without pseudo-time.
+* At a fixed point every face carries `rAU`, so the converged SIMPLEC solution equals the SIMPLE solution with the same
+  `alpha_u` (measured to 3.5e-12 with a pressure outlet and 4.7e-13 with periodic seams; without the key the default SIMPLEC
+  differs from it by 2.6e-3 to 4.8e-3 of the velocity on those ducts, ADR 0102 B1/B2).
+* A change of a boundary pressure no longer kicks the cell velocity next to it by `(rAtU - rAU) grad(p_old)`. Without the key,
+  a velocity inlet with a forward `vent` (K > 0) diverges unless the loop gain `0.5 (rAtU - rAU) (A/V) K |u|` of the vent cell
+  is below 1 (A the vent face area, V the cell volume): plain SIMPLEC diverges from the first iteration, pseudo-time 0.02
+  diverges at u = 2 m/s on the X7 duct. With the key that duct settles at every flow, with and without pseudo-time.
 
-Remaining limit (ADR 0102): with the key, plain SIMPLEC with a strong vent (K = 10) still fails through a transverse mode of the vent faces
-that grows from the first iteration (the X7 duct does not settle in 3000 iterations, the F-200 C3 channel is non-finite at iteration 2767);
-use pseudo-time there. `false` keeps every earlier result bit for bit.
+Remaining limit (ADR 0102): with the key, plain SIMPLEC with a strong vent (K = 10) still fails through a transverse mode of
+the vent faces that grows from the first iteration (the X7 duct does not settle in 3000 iterations, the F-200 C3 channel is
+non-finite at iteration 2767); use pseudo-time there. `false` keeps every earlier result bit for bit.
 
 ## Landing on `solver.end_time` (ADR 0145)
 
 A fixed-step transient run (`solver.dt`, or the `solver.max_courant` controller without the keys below; incompressible,
 prescribed flow, variable density and VOF) adds its steps up to `solver.end_time`, and the added steps carry rounding
-errors: 2000 steps of 0.05 reach 99.99999999999646, not 100. When a step would stop short of the end time by less than
-1e-6 of itself, it is lengthened to end exactly on the end time, instead of adding a step of a few picoseconds whose
-pressure is meaningless. A larger remainder is still taken as a separate, shorter last step; when it is shorter than 5 %
-of the step, the run reports the warning `short_last_step` (`rcfd run` on stderr, the run's events), because the
-pressure of a much shorter step can be inaccurate: choose `solver.end_time` as a whole number of steps of `solver.dt`.
+errors: 2000 steps of 0.05 reach 99.99999999999646, not 100. The last step depends on the remainder:
+
+* When a step would stop short of the end time by less than 1e-6 of itself, it is lengthened to end exactly on the end
+  time, instead of adding a step of a few picoseconds whose pressure is meaningless.
+* A larger remainder is still taken as a separate, shorter last step. When that remainder is shorter than 5 % of the step,
+  the run reports the warning `short_last_step` (`rcfd run` on stderr, the run's events), because the pressure of a much
+  shorter step can be inaccurate: choose `solver.end_time` as a whole number of steps of `solver.dt`.
+
 The adaptive controller below lands on the end time and on write times by its own rule.
+
 A run whose summed steps end within the end tolerance (1e-12) of `solver.end_time` without a separate step (job 48S: 2,567
 steps of 3/2567 reach 2.999999999999983) reports `solver.end_time` exactly as its final time: the last `iteration` event, the
 `finish` event, the last stored snapshot, the monitors' last abscissa (ADR 0160). Only the time stamp changes: the solver's own
@@ -861,10 +1070,11 @@ time, every field, the restart file and so a continued run are as before.
 
 ## Adaptive time stepping (F-209, ADR 0050 Part 2)
 
-Transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key is optional; with all keys unset
-(sentinel `0` / `false` / empty) the run is the fixed-`solver.dt` run (or the earlier `solver.max_courant` controller) bit for bit.
-Setting any of them switches to the controller of ADR 0050, where `solver.dt` is the first step and, unless `solver.max_dt` is
-given, the largest step.
+Adaptive time stepping applies to transient incompressible `piso` / `pimple` runs only (a located error otherwise). Every key
+is optional.
+With all keys unset (sentinel `0` / `false` / empty) the run is the fixed-`solver.dt` run (or the earlier
+`solver.max_courant` controller) bit for bit. Setting any of them switches to the controller of ADR 0050, where `solver.dt`
+is the first step and, unless `solver.max_dt` is given, the largest step.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -880,114 +1090,177 @@ given, the largest step.
 | `output.write_times` | empty | list of times on which a step lands (relative 1e-12); a numbered snapshot `snapshot_t<time>` is written when the run has an output directory |
 | `output.write_time_interval` | 0 | land on every multiple of this interval |
 
-Located errors: negative or inconsistent values (`min_dt > max_dt`, `dt_growth < 1`), a write time beyond `solver.end_time`,
-`steps_per_period` without `period`, error control with energy, scalars, turbulence, rheology, sources, lumped components, dynamic
-mesh, statistics, expression boundary conditions or `time_scheme` other than `euler`, and any of the keys on a steady run.
-Restart files of such runs carry the controller state. Not wired: Aitken relaxation (library `stepctl::Aitken` only), local
-timescale factors, residual smoothing, the compressible solver.
+Located errors:
+
+* negative or inconsistent values (`min_dt > max_dt`, `dt_growth < 1`)
+* a write time beyond `solver.end_time`
+* `steps_per_period` without `period`
+* error control with energy, scalars, turbulence, rheology, sources, lumped components, dynamic mesh, statistics,
+  expression boundary conditions or `time_scheme` other than `euler`
+* any of the keys on a steady run
+
+Restart files of such runs carry the controller state.
+
+Not wired: Aitken relaxation (library `stepctl::Aitken` only), local timescale factors, residual smoothing, the compressible
+solver.
 
 ## `rheology` viscosity laws (F-110)
 
 `rheology.model` selects `power_law`, `carreau`, `carreau_yasuda`, `cross`, `herschel_bulkley` or `bingham` (default
-`newtonian`, which keeps `physics.nu`). The settings carry SI units: dynamic viscosities in Pa s
-(`zero_shear_viscosity`, `infinite_shear_viscosity`, `min_viscosity`, `max_viscosity`), `time_constant` and
-`regularisation_time` in s, `yield_stress` in Pa, `consistency_index` in Pa s^n (the plastic viscosity for Bingham),
-plus the dimensionless `power_index`, `yasuda_exponent`, `cross_exponent`. `rheology.shift = "arrhenius"`, `"wlf"` or `"table"` (`a_T(T)` from `tables.<shift_table>`: input column `T`, output column `a_T`; a temperature outside the table stops the run with a message unless the table clamps)
-adds a temperature dependence by time-temperature superposition `mu(g, T) = a_T mu_ref(a_T g)` (needs
-`energy.enabled`; with `model = "newtonian"` the reference viscosity is `physics.nu * physics.rho`;
-`reference_temperature`, `activation_temperature`, `wlf_c1`, `wlf_c2`). The apparent viscosity follows the shear
-rate `sqrt(2 S:S)` of the current velocity, is clamped to `[min_viscosity, max_viscosity]`, divided by `physics.rho`
-and used on the faces of the momentum diffusion term (cell values interpolated, relaxed with `rheology.relax`).
-Works in steady SIMPLE/SIMPLEC (also with the energy equation) and in transient PISO/PIMPLE runs. Not combined
-with turbulence models, the compressible solver or a user-function viscosity (diagnostics). Not implemented: the
-transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift, checkpoints that carry the viscosity history.
+`newtonian`, which keeps `physics.nu`). The settings carry SI units:
+
+| Setting | Unit |
+| --- | --- |
+| `zero_shear_viscosity`, `infinite_shear_viscosity`, `min_viscosity`, `max_viscosity` | Pa s (dynamic viscosities) |
+| `time_constant`, `regularisation_time` | s |
+| `yield_stress` | Pa |
+| `consistency_index` | Pa s^n (the plastic viscosity for Bingham) |
+| `power_index`, `yasuda_exponent`, `cross_exponent` | dimensionless |
+
+`rheology.shift = "arrhenius"`, `"wlf"` or `"table"` adds a temperature dependence by time-temperature superposition
+`mu(g, T) = a_T mu_ref(a_T g)`. The shift needs `energy.enabled`; with `model = "newtonian"` the reference viscosity is
+`physics.nu * physics.rho`. Its keys are `reference_temperature`, `activation_temperature`, `wlf_c1` and `wlf_c2`. With
+`"table"`, `a_T(T)` comes from `tables.<shift_table>` (input column `T`, output column `a_T`); a temperature outside the table
+stops the run with a message unless the table clamps.
+
+The apparent viscosity follows the shear rate `sqrt(2 S:S)` of the current velocity, is clamped to
+`[min_viscosity, max_viscosity]`, divided by `physics.rho` and used on the faces of the momentum diffusion term (cell values
+interpolated, relaxed with `rheology.relax`).
+
+`rheology` works in steady SIMPLE/SIMPLEC (also with the energy equation) and in transient PISO/PIMPLE runs. It is not
+combined with turbulence models, the compressible solver or a user-function viscosity (diagnostics).
+
+Not implemented: the transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift,
+checkpoints that carry the viscosity history.
 
 ## `solver.algorithm = "coupled"` block-coupled solver (F-032)
 
-The steady block-coupled solver solves `(u, v[, w], p)` in one linear system per outer (Picard) iteration
-instead of the segregated predictor/corrector of SIMPLE: implicit Green-Gauss pressure gradient in the
-momentum rows, continuity rows with an implicit Rhie-Chow face flux, right-preconditioned GMRES with ILU(0) on
-the momentum blocks and one AMG V-cycle (aggregation AMG) on the approximate pressure Schur complement.
-`solver.alpha_u` is the implicit momentum relaxation (0.95 to 0.98 work on the cavity, where SIMPLEC is
-limited to about 0.95); there is no pressure relaxation. `solver.pressure_rel_tol` and
-`solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400) and `solver.pressure_abs_tol` the absolute residual floor.
+The steady block-coupled solver solves `(u, v[, w], p)` in one linear system per outer (Picard) iteration instead of the
+segregated predictor/corrector of SIMPLE. The system has an implicit Green-Gauss pressure gradient in the momentum rows, and
+continuity rows with an implicit Rhie-Chow face flux. It is solved by right-preconditioned GMRES with ILU(0) on the momentum
+blocks and one AMG V-cycle (aggregation AMG) on the approximate pressure Schur complement.
 
-Wave 19A (ADR 0029) added open boundaries, body forces, the energy equation and solid zones. Open boundary: `velocity = "zero_gradient"` with
-`pressure = "fixed"` and `pressure_value` (outlets, and inlets with a prescribed pressure); the face flux there follows from the
-cell velocity, the pressure difference and the Rhie-Chow term inside the system. An open face with `pressure = "zero_gradient"` is a
-located error at `boundaries.<patch>.pressure`; with at least one open face the pressure level is set by the pressure condition and
-`solver.p_ref_cell` is not used. `physics.body_force`, `physics.gravity` with `energy.buoyancy` (Boussinesq) and `energy.enabled`
-are accepted (the energy equation is advanced after the flow in every iteration, as in the steady segregated algorithms; no
-chemistry heat, components or zone sources). The balanced-force treatment keeps a hydrostatic or stably stratified fluid at rest.
+Keys:
+
+* `solver.alpha_u` is the implicit momentum relaxation (0.95 to 0.98 work on the cavity, where SIMPLEC is limited to about
+  0.95). There is no pressure relaxation.
+* `solver.pressure_rel_tol` and `solver.pressure_max_iter` control the Krylov solve (defaults 1e-3, 400).
+* `solver.pressure_abs_tol` controls the absolute residual floor.
+
+Wave 19A (ADR 0029) added open boundaries, body forces, the energy equation and solid zones.
+
+An open boundary is `velocity = "zero_gradient"` with `pressure = "fixed"` and `pressure_value` (outlets, and inlets with a
+prescribed pressure). The face flux there follows from the cell velocity, the pressure difference and the Rhie-Chow term
+inside the system. An open face with `pressure = "zero_gradient"` is a located error at `boundaries.<patch>.pressure`. With at
+least one open face the pressure condition sets the pressure level and `solver.p_ref_cell` is not used.
+
+`physics.body_force`, `physics.gravity` with `energy.buoyancy` (Boussinesq) and `energy.enabled` are accepted. The energy
+equation is advanced after the flow in every iteration, as in the steady segregated algorithms (no chemistry heat, components
+or zone sources). The balanced-force treatment keeps a hydrostatic or stably stratified fluid at rest.
 
 Solid zones (`solids.<name>`, see the conjugate heat transfer section) may be combined with `coupled` without
 `solver.frozen_flow`: the flow is solved in the fluid cells only. Solid cells are removed from the pressure-velocity system
-(`u = 0`, `p = 0`), the faces between fluid and solid are no-slip walls with exactly zero flux (no Rhie-Chow bypass leak), and only the
-energy equation sees the solids. Located errors: `solver.frozen_flow` (solids with a segregated algorithm and no `frozen_flow`, or
-`coupled` together with `frozen_flow`), `solver.p_ref_cell` (reference cell inside a solid, closed domain; set a fluid cell
-explicitly because the default is cell 0), `solids.<name>.zone` (a closed fluid region split by solids, or a fluid region without an
-open boundary), `boundaries.<patch>.velocity` (non-zero prescribed flux through the boundary face of a solid cell).
+(`u = 0`, `p = 0`), the faces between fluid and solid are no-slip walls with exactly zero flux (no Rhie-Chow bypass leak), and
+only the energy equation sees the solids. Located errors:
 
-Still diagnosed with a located error: turbulence models, rheology, user functions, momentum sources, lumped components, radiation,
-property laws, `bc_kind` conditions, zone sources, `solver.bulk_velocity`, `solver.non_orthogonal_correctors`, periodic patches and
-scalars or species together with solids. Known limits: steady only (no transient coupled solver); with gradient-based convection
-schemes the least-squares gradient of a fluid cell next to a solid sees the solid cell value (use `central`/`upwind` for
-verification); next to a prescribed-flux inlet the pressure shows a decaying odd-even mode (ADR 0029 addendum, A3).
+* `solver.frozen_flow`: solids with a segregated algorithm and no `frozen_flow`, or `coupled` together with `frozen_flow`
+* `solver.p_ref_cell`: reference cell inside a solid, closed domain; set a fluid cell explicitly because the default is cell 0
+* `solids.<name>.zone`: a closed fluid region split by solids, or a fluid region without an open boundary
+* `boundaries.<patch>.velocity`: non-zero prescribed flux through the boundary face of a solid cell
+
+Still diagnosed with a located error: turbulence models, rheology, user functions, momentum sources, lumped components,
+radiation, property laws, `bc_kind` conditions, zone sources, `solver.bulk_velocity`, `solver.non_orthogonal_correctors`,
+periodic patches and scalars or species together with solids.
+
+Known limits:
+
+* steady only (no transient coupled solver)
+* with gradient-based convection schemes the least-squares gradient of a fluid cell next to a solid sees the solid cell value
+  (use `central`/`upwind` for verification)
+* next to a prescribed-flux inlet the pressure shows a decaying odd-even mode (ADR 0029 addendum, A3)
 
 ## `scalars`, `species` and `properties` (F-053)
 
-`scalars.<name>` and `species.<name>` transport extra variables on the flow flux of a steady run
-(`simple`, `simplec`, `coupled`) or a transient incompressible run (`piso`, `pimple`, wave 15A: one implicit step per
-time step with `solver.time_scheme`; other algorithms are rejected with a located diagnostic):
-`div(phi s) - div(D grad s) = S` with constant density, the momentum convection scheme (`solver.convection`) and the
-shared scalar routine that also solves the temperature (`rcfd_fv::scalar`). Per entry: `diffusivity` [m^2/s] or
-`schmidt` (D = nu/Sc, which follows a temperature-dependent or non-Newtonian face viscosity), `initial`, `source`
-(value per second, uniform), `relax` (default 1, the frozen-flux problem is linear), and
-`boundaries.<patch>` with `type` = `zero_gradient` (default) | `fixed` | `gradient`, `value` and, for `fixed`, a
-dimensionless `value_expression` of x, y, z (F-104). Fields appear as `sim.field("<name>")`, in VTU output
-and in `res_<name>` monitors (usable in `convergence`). Reports: `scalar_flux` (`scalar`, optional `patch`) is the net
-discrete outflow through a patch, or the conservation imbalance of all boundaries minus the integrated source when no
-patch is given; `scalar_average` is the volume average.
+`scalars.<name>` and `species.<name>` transport extra variables on the flow flux of a steady run (`simple`, `simplec`,
+`coupled`) or a transient incompressible run (`piso`, `pimple`, wave 15A: one implicit step per time step with
+`solver.time_scheme`). Other algorithms are rejected with a located diagnostic. The equation is
+`div(phi s) - div(D grad s) = S` with constant density, the momentum convection scheme (`solver.convection`) and the shared
+scalar routine that also solves the temperature (`rcfd_fv::scalar`).
 
-`species.<name>` are mass fractions of a mixture: all but one are transported and the balance species
-(`remainder = true`, else the last one by name) is closed by difference `Y_N = 1 - sum Y_i`, so the fractions sum to one
-to round-off. The balance species takes no transport data and no boundary conditions (it follows from the others). The
-initial fractions and the fixed values on a patch must sum to one (diagnosed). Every transported species is conserved
-separately: the net boundary outflow (convection plus diffusion, from the same boundary coefficients as the matrix)
-vanishes to round-off, and the balance species inherits the flow solver's mass imbalance, which
-`solver.pressure_abs_tol` (default tolerance-limited at about 1e-11 of the volume flow) can drive to 1e-16. Not covered: variable density, mixture-averaged or multicomponent
-diffusion (a constant diffusivity per species) and reactions (a first-order sink can be given as a zone source, see
-"Wave 15A" below).
+Per entry:
 
-`properties.viscosity` (dynamic, Pa s), `properties.conductivity` and `properties.specific_heat` each take
-`law` = `constant` (the `physics` value, default) | `polynomial` (`coefficients` c0, c1, ... of T in kelvin) | `sutherland`
-(`reference_value`, `reference_temperature`, `sutherland_constant`; value times (T/T_ref)^1.5 (T_ref+S)/(T+S)). They need
-`energy.enabled` and a steady SIMPLE/SIMPLEC run. The viscosity enters through the face viscosity `mu(T_f)/rho` (the path of
-`rheology`, with which and with a turbulence model or a user-function viscosity it is rejected); conductivity and
-specific heat give the energy-equation diffusivity `k(T_f)/(rho cp(T_f))`, and `heat_flow` reports use the law at the wall
-temperature. The density stays constant; no property data is shipped, the constants are inputs (the material library
-F-111 provides sourced data).
+* `diffusivity` [m^2/s] or `schmidt` (D = nu/Sc, which follows a temperature-dependent or non-Newtonian face viscosity)
+* `initial`
+* `source` (value per second, uniform)
+* `relax` (default 1, the frozen-flux problem is linear)
+* `boundaries.<patch>` with `type` = `zero_gradient` (default) | `fixed` | `gradient`, `value` and, for `fixed`, a
+  dimensionless `value_expression` of x, y, z (F-104)
 
-Wave 21B (F-220, ADR 0036) adds three more laws to the same three keys: `law = "piecewise_linear"` (`temperatures` strictly
-increasing, K, and `values` of the same length; linear interpolation, exact at the nodes), `law = "piecewise_polynomial"`
-(`breakpoints`: n + 1 strictly increasing range limits [K] of n pieces, `piece_order` m >= 1 and `piece_coefficients`, n x m
-coefficients piece by piece, lowest power first, in the absolute temperature T in kelvin; the pieces need not join), and
-`law = "vogel"` (meant for the viscosity, accepted on every key; `vogel_a` > 0, `vogel_b`, `vogel_c` in K: `mu = a exp(b / (T - c))`, T > c). `extrapolation` =
-`clamp` (default; holds the end value) | `linear` (continues the end segment) | `error` (NaN outside the range, which the finiteness checks of the solvers may report; it does not stop the run) outside the table.
-Malformed tables are located errors (`properties.<key>.temperatures[i]`, `.values`, `.piece_coefficients`, `.vogel_a`, ...).
-The default laws and all recorded baseline hashes are unchanged. The library in `rcfd_core::tabular` also has the Tait
-compressible-liquid density and a pressure-temperature table with saturation line and phase selection; these are NOT
-reachable from the case tree because the incompressible solvers keep a constant density.
+Fields appear as `sim.field("<name>")`, in VTU output and in `res_<name>` monitors (usable in `convergence`).
+
+Reports: `scalar_flux` (`scalar`, optional `patch`) is the net discrete outflow through a patch, or the conservation
+imbalance of all boundaries minus the integrated source when no patch is given. `scalar_average` is the volume average.
+
+`species.<name>` are mass fractions of a mixture. All but one are transported and the balance species (`remainder = true`,
+else the last one by name) is closed by difference `Y_N = 1 - sum Y_i`, so the fractions sum to one to round-off. The balance
+species takes no transport data and no boundary conditions (it follows from the others). The initial fractions and the fixed
+values on a patch must sum to one (diagnosed).
+
+Every transported species is conserved separately: the net boundary outflow (convection plus diffusion, from the same boundary
+coefficients as the matrix) vanishes to round-off. The balance species inherits the flow solver's mass imbalance, which
+`solver.pressure_abs_tol` (default tolerance-limited at about 1e-11 of the volume flow) can drive to 1e-16.
+
+Not covered: variable density, mixture-averaged or multicomponent diffusion (a constant diffusivity per species) and reactions
+(a first-order sink can be given as a zone source, see "Wave 15A" below).
+
+`properties.viscosity` (dynamic, Pa s), `properties.conductivity` and `properties.specific_heat` each take a `law`:
+
+* `constant` (default): the `physics` value
+* `polynomial`: `coefficients` c0, c1, ... of T in kelvin
+* `sutherland`: `reference_value`, `reference_temperature`, `sutherland_constant`; value times (T/T_ref)^1.5 (T_ref+S)/(T+S)
+
+The three keys need `energy.enabled` and a steady SIMPLE/SIMPLEC run. The viscosity enters through the face viscosity
+`mu(T_f)/rho` (the path of `rheology`, with which and with a turbulence model or a user-function viscosity it is rejected).
+Conductivity and specific heat give the energy-equation diffusivity `k(T_f)/(rho cp(T_f))`, and `heat_flow` reports use the
+law at the wall temperature. The density stays constant. No property data is shipped: the constants are inputs (the material
+library F-111 provides sourced data).
+
+Wave 21B (F-220, ADR 0036) adds three more laws to the same three keys:
+
+* `law = "piecewise_linear"`: `temperatures` strictly increasing, K, and `values` of the same length; linear interpolation,
+  exact at the nodes
+* `law = "piecewise_polynomial"`: `breakpoints` (n + 1 strictly increasing range limits [K] of n pieces), `piece_order` m >= 1
+  and `piece_coefficients` (n x m coefficients piece by piece, lowest power first, in the absolute temperature T in kelvin);
+  the pieces need not join
+* `law = "vogel"`: meant for the viscosity, accepted on every key; `vogel_a` > 0, `vogel_b`, `vogel_c` in K:
+  `mu = a exp(b / (T - c))`, T > c
+
+Outside the table, `extrapolation` is `clamp` (default; holds the end value), `linear` (continues the end segment) or `error`
+(NaN outside the range, which the finiteness checks of the solvers may report; it does not stop the run). Malformed tables are
+located errors (`properties.<key>.temperatures[i]`, `.values`, `.piece_coefficients`, `.vogel_a`, ...). The default laws and
+all recorded baseline hashes are unchanged.
+
+The library in `rcfd_core::tabular` also has the Tait compressible-liquid density and a pressure-temperature table with
+saturation line and phase selection; these are NOT reachable from the case tree because the incompressible solvers keep a
+constant density.
 
 ### Material library (F-111)
 
-`rcfd_core::fluids` and `rcfd_core::iapws` are Rust APIs (no case keys of their own; the `properties` laws above and the F-105 tables
-carry their data into a case): NASA-polynomial species (N2, O2, AR, H2O, CO2, CH4, H2), mass/mole-fraction conversion,
-mass-weighted and ideal-volume mixing, Wilke's gas-mixture rule, ideal-gas, Redlich-Kwong and Peng-Robinson equations of state
-(roots, density, fugacity, residual enthalpy, saturation pressure), and water and steam from IAPWS-IF97 regions 1 and 2 (273.15-1073.15 K,
-up to 100 MPa, outside region 3) with the IAPWS viscosity and conductivity correlations. Ready-to-paste `properties` laws for air at
-100 kPa, valid 200-600 K (cubic fits to the CRC/NIST gas tables, see `docs/reference-data.md`; Sutherland's law with the textbook air constants
-is within 1 % for the conductivity at 300-500 K but not for the viscosity, -0.2 % at 300 K, -1.1 % at 400 K, -1.5 % at 500 K):
+`rcfd_core::fluids` and `rcfd_core::iapws` are Rust APIs (no case keys of their own; the `properties` laws above and the F-105
+tables carry their data into a case). They provide:
+
+* NASA-polynomial species (N2, O2, AR, H2O, CO2, CH4, H2)
+* mass/mole-fraction conversion
+* mass-weighted and ideal-volume mixing
+* Wilke's gas-mixture rule
+* ideal-gas, Redlich-Kwong and Peng-Robinson equations of state (roots, density, fugacity, residual enthalpy, saturation
+  pressure)
+* water and steam from IAPWS-IF97 regions 1 and 2 (273.15-1073.15 K, up to 100 MPa, outside region 3) with the IAPWS viscosity
+  and conductivity correlations
+
+Ready-to-paste `properties` laws for air at 100 kPa, valid 200-600 K (cubic fits to the CRC/NIST gas tables, see
+`docs/reference-data.md`; Sutherland's law with the textbook air constants is within 1 % for the conductivity at 300-500 K but
+not for the viscosity, -0.2 % at 300 K, -1.1 % at 400 K, -1.5 % at 500 K):
 
 ```toml
 [properties.viscosity]
@@ -1005,9 +1278,12 @@ transient algorithms use the same mechanism, evaluated at the start of every out
 Lorentz force and porous sink follow the PIMPLE outer loop; with `piso` it is evaluated once per step from the old-time
 velocity). `rotating_frame` sources run with `pimple` on a static mesh (ADR 0183 P-C, below) and are rejected with `piso`;
 `mrf` sources, `solver.time_advance = fractional_step`, the `coupled` and compressible /
-variable-density algorithms are rejected with a located diagnostic at `sources.<name>.type`. `zone` is `all` (default), `box` (cells whose centres lie in
-`[box_min, box_max]`, metres) or `cell_zone` (a named zone of an imported mesh). A face belongs to the zone when both
-its cells do. `type` selects:
+variable-density algorithms are rejected with a located diagnostic at `sources.<name>.type`.
+
+`zone` is `all` (default), `box` (cells whose centres lie in `[box_min, box_max]`, metres) or `cell_zone` (a named zone of an
+imported mesh). A face belongs to the zone when both its cells do.
+
+`type` selects:
 
 | `type` | Keys | Meaning |
 | --- | --- | --- |
@@ -1018,28 +1294,45 @@ its cells do. `type` selects:
 | `actuator_disk` | `thrust` [N] (signed), `direction` (required, non-zero), `profile` = `uniform` (default) \| `linear_r` (force density proportional to the distance from the disk axis; needs `disk_centre`), `disk_centre` [m], `disk_axis` (default `direction`), `torque` [N m] about `disk_axis` (0 = no swirl; needs `disk_centre`), `density` [kg/m^3] (0 = `physics.rho`), `distribution` = `smooth` (default) \| `cell` | actuator disk (ADR 0036): the total force `thrust` is spread over the cells of the zone as a body force; the integral is exactly `thrust` (and `torque`) to round-off. `smooth` spreads the loading over one cell layer around the zone so that edge cells carry no unbalanced half force; `cell` is the raw top-hat (a jet of order sqrt(a dx) forms at the disk edge, see ADR 0036 A4c). Momentum-theory helpers are in `rcfd_fv::actuator`. |
 | `lorentz` | `magnetic_field` [T] (required, non-zero, uniform), `conductivity` sigma [S/m] (required > 0), `applied_electric_field` [V/m] (default 0), `potential` = `none` (default) \| `solve` | MHD Lorentz force `J x B / rho` of a liquid conductor at low magnetic Reynolds number (ADR 0039), `J = sigma (E_ext - grad phi + u x B)`. `potential = none`: `grad phi = 0`, explicit part `J_c x B / rho` with `J_c = sigma E_ext` plus the implicit sink `sigma B^2/rho` (components of `u` perpendicular to `B`); `solve`: the potential equation `-div(sigma grad phi) = -div(sigma (E_ext + u x B))` is solved each iteration with the `boundaries.<patch>.electric*` conditions of the `electric` section (insulated by default; one cell is pinned when no patch fixes the potential). Output fields `lorentz_force_x/y/z` [m/s^2] and `current_density_x/y/z` [A/m^2]. Steady SIMPLE/SIMPLEC only; Joule heating, varying `B` and the induced field are not modelled (ADR 0039). Closed-form check: Hartmann channel flow, `crates/rcfd-api/tests/mhd.rs` |
 
-MRF validation errors (path `sources.<name>...`): zero `rotation_axis`, non-finite `angular_velocity`,
-a zone without cells, a zone boundary (walls, symmetry planes, the interface) that is not a surface of revolution about
-the rotation axis (the frame flux `(Omega x r).S` must vanish there; planar interfaces perpendicular to the axis and
-cylindrical ones qualify), an MRF zone sharing cells with another MRF zone or a `rotating_frame` source, and
-transient algorithms (`piso`, `pimple`, `coupled`; the transient `mrf` combinations are not built, ADR 0045 D4). Pseudo-transient time steps use the absolute flux. Not validated: any pump or turbine
-benchmark, turbulence models or the energy equation with an MRF zone; the checks are in ADR 0008 and
-`crates/rcfd-api/tests/mrf.rs`.
+MRF validation errors (path `sources.<name>...`):
 
-Limits: `mrf` is steady-only, and `rotating_frame` is steady or `pimple` (the transported RANS models are steady-only, so a `pimple` run with it is laminar, LES or mixing length); the viscous porous term uses `physics.nu`; in transient runs the sources use the
-velocity of the previous outer iteration (one evaluation per step with `piso`: first-order lag of the solution-dependent
-parts, e.g. the explicit part of the Lorentz force; raise `solver.n_outer` to converge it), the stability of the transient
-algorithm at viscous numbers `nu dt/dy^2` above about 3 is a separate limit (ADR 0045 addendum); the non-conformal join of F-114 handles planar
-interfaces only, so an MRF zone with a non-conformal interface is limited to interfaces perpendicular to the axis.
+* zero `rotation_axis`
+* non-finite `angular_velocity`
+* a zone without cells
+* a zone boundary (walls, symmetry planes, the interface) that is not a surface of revolution about the rotation axis (the
+  frame flux `(Omega x r).S` must vanish there; planar interfaces perpendicular to the axis and cylindrical ones qualify)
+* an MRF zone sharing cells with another MRF zone or a `rotating_frame` source
+* transient algorithms (`piso`, `pimple`, `coupled`; the transient `mrf` combinations are not built, ADR 0045 D4)
+
+Pseudo-transient time steps use the absolute flux.
+
+Not validated: any pump or turbine benchmark, turbulence models or the energy equation with an MRF zone. The checks are in
+ADR 0008 and `crates/rcfd-api/tests/mrf.rs`.
+
+Limits:
+
+* `mrf` is steady-only, and `rotating_frame` is steady or `pimple` (the transported RANS models are steady-only, so a
+  `pimple` run with it is laminar, LES or mixing length).
+* The viscous porous term uses `physics.nu`.
+* In transient runs the sources use the velocity of the previous outer iteration (one evaluation per step with `piso`:
+  first-order lag of the solution-dependent parts, e.g. the explicit part of the Lorentz force; raise `solver.n_outer` to
+  converge it).
+* The stability of the transient algorithm at viscous numbers `nu dt/dy^2` above about 3 is a separate limit (ADR 0045
+  addendum).
+* The non-conformal join of F-114 handles planar interfaces only, so an MRF zone with a non-conformal interface is limited to
+  interfaces perpendicular to the axis.
+
 Examples: `cases/packed_bed/packed_bed.toml`, `cases/rotating_channel/rotating_channel.toml`.
 
 ## `chemistry` finite-rate and turbulent combustion chemistry (F-054, ADR 0027)
 
-Reactions between the `species.<name>` mass fractions of a constant-density incompressible case (steady or transient;
-compressible and variable-density engines are refused). The mechanism is a CHEMKIN-format file (`mechanism`, plus `thermo`)
-or inline text (`mechanism_text`, `thermo_text`); every mechanism species must be a `species` entry and vice versa
-(species not in the mechanism are refused), located by path, with the line inside the mechanism text in the message. Files are confined to the sandbox when
-there is one. No mechanism is shipped.
+`chemistry` adds reactions between the `species.<name>` mass fractions of a constant-density incompressible case (steady or
+transient). Compressible and variable-density engines are refused.
+
+The mechanism is a CHEMKIN-format file (`mechanism`, plus `thermo`) or inline text (`mechanism_text`, `thermo_text`). Every
+mechanism species must be a `species` entry and vice versa (species not in the mechanism are refused), located by path, with
+the line inside the mechanism text in the message. Files are confined to the sandbox when there is one. No mechanism is
+shipped.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1057,30 +1350,65 @@ there is one. No mechanism is shipped.
 | `accel_tolerance` | -1 (unset) | tolerance of the acceleration; an error when `acceleration` is not `off` and it is unset, an error when given with `off`; `isat` needs a value > 0 |
 | `write_rates` | false | also write the cell arrays `wdot_<species>` [mol/m3/s] (net production rate of the closure on the final fields; for `edc` the kinetic rate of the cell state) and, with `heat_release`, `heat_release_rate` [K/s] (the temperature source of the energy balance) to `solution.vtu` (ADR 0037 D2) |
 
-Outputs of the run path (`rcfd run`, service `run.headless`, `write_results`; ADR 0037): `chemistry.json` whenever `model` is not `off`:
-`model`, `mechanism {species, reactions, elements}`, per species `{min, max, volume_mean}`, `mass_fraction_sum {min, max}`,
-`temperature {min, max, source}`, `element_moles` (moles of element atoms in the domain, `sum V rho sum_k Y_k a_ke / W_k`),
-`density`, `cells`, and, only when `acceleration` is not `off`, an `acceleration` object (`cluster`: `steps`, `cells`, `integrations`; `isat`: `steps`, `queries`, `retrieved`, `grown`, `added`, `direct`, `records`). The species themselves are user scalars and are in `solution.vtu`. The chemistry was already advanced by
-`Simulation::step` (transient Lie splitting after the scalar sweeps, steady source form before the scalar solve); the binary and the
-service therefore give bit-identical fields to the in-process run (ADR 0037 C1, C2).
+Outputs of the run path (`rcfd run`, service `run.headless`, `write_results`; ADR 0037): `chemistry.json` whenever `model` is
+not `off`, with these entries:
 
-Transient runs (`piso`, `pimple`) use Lie operator splitting: after the flow step and the transport sweeps every cell is advanced
-by the stiff integrator over `dt` and the species and temperature are written back (first order in `dt`). Steady runs use a source
-form: the net rate is an explicit source with a diagonal implicit sink (finite-difference, plus Patankar's coefficient for
-negative sources), the heat release a lagged source of the energy equation. A chemistry failure stops the run with the cell
-index. Limits: constant density, sequential cell loop (tabulated or clustered chemistry only through `acceleration` on the transient `finite_rate` step; ISAT and DRG are also library tools in `rcfd-reactor`: `isat`, `drg`, `cluster`), no Strang splitting, no thickened-flame
-or flamelet models, no comparison with published flames (F-054 stays `partial`).
+* `model`
+* `mechanism {species, reactions, elements}`
+* per species `{min, max, volume_mean}`
+* `mass_fraction_sum {min, max}`
+* `temperature {min, max, source}`
+* `element_moles` (moles of element atoms in the domain, `sum V rho sum_k Y_k a_ke / W_k`)
+* `density`
+* `cells`
+* only when `acceleration` is not `off`, an `acceleration` object (`cluster`: `steps`, `cells`, `integrations`; `isat`:
+  `steps`, `queries`, `retrieved`, `grown`, `added`, `direct`, `records`)
 
-Library additions in `rcfd-reactor` (F-129, ADR 0053, no case keys; mixture fraction and flamelet quantities are not wired into the case tree): `mixfrac` (mixture fraction, HP equilibrium table, beta-PDF mean, Burke-Schumann), `flamelet` (steady laminar flamelet equations, chi_st continuation table), `progress` (premixed progress variable, phase-plane front speed). Further library additions (no case keys): `pollutants` (extended Zeldovich thermal NO rate, rate constants as inputs),
-`network` (pre-exponential sensitivities, PSR into plug flow), `json` (mechanism interchange, format `rcfd-mechanism` version 1)
-and optional NASA nine-coefficient thermodynamics in `Species::nasa9`.
+The species themselves are user scalars and are in `solution.vtu`. `Simulation::step` already advanced the chemistry (transient
+Lie splitting after the scalar sweeps, steady source form before the scalar solve); the binary and the service therefore give
+bit-identical fields to the in-process run (ADR 0037 C1, C2).
+
+Transient runs (`piso`, `pimple`) use Lie operator splitting: after the flow step and the transport sweeps every cell is
+advanced by the stiff integrator over `dt` and the species and temperature are written back (first order in `dt`).
+
+Steady runs use a source form: the net rate is an explicit source with a diagonal implicit sink (finite-difference, plus
+Patankar's coefficient for negative sources), the heat release a lagged source of the energy equation.
+
+A chemistry failure stops the run with the cell index.
+
+Limits:
+
+* constant density
+* sequential cell loop (tabulated or clustered chemistry only through `acceleration` on the transient `finite_rate` step; ISAT
+  and DRG are also library tools in `rcfd-reactor`: `isat`, `drg`, `cluster`)
+* no Strang splitting
+* no thickened-flame or flamelet models
+* no comparison with published flames (F-054 stays `partial`)
+
+Library additions in `rcfd-reactor` (F-129, ADR 0053, no case keys; mixture fraction and flamelet quantities are not wired
+into the case tree):
+
+* `mixfrac` (mixture fraction, HP equilibrium table, beta-PDF mean, Burke-Schumann)
+* `flamelet` (steady laminar flamelet equations, chi_st continuation table)
+* `progress` (premixed progress variable, phase-plane front speed)
+
+Further library additions (no case keys):
+
+* `pollutants` (extended Zeldovich thermal NO rate, rate constants as inputs)
+* `network` (pre-exponential sensitivities, PSR into plug flow)
+* `json` (mechanism interchange, format `rcfd-mechanism` version 1)
+* optional NASA nine-coefficient thermodynamics in `Species::nasa9`
 
 ## `components` lumped zone components (F-113, ADR 0012)
 
 `components.<name>` adds a lumped component to a constant-density run (`solver.algorithm` `simple`, `simplec`, `piso` or
-`pimple`; ADR 0045 evaluates the face jumps and network pressures every outer iteration of the transient algorithms and the
-heat-exchanger heat sources once per step from the flux and temperature of the previous step; the coupled solver, ideal-gas runs, `solver.time_advance = fractional_step` and `dynamic_mesh` are a located
-diagnostic at `components.<name>.type`). `type`:
+`pimple`). The coupled solver, ideal-gas runs, `solver.time_advance = fractional_step` and `dynamic_mesh` are a located
+diagnostic at `components.<name>.type`.
+
+ADR 0045 evaluates the face jumps and network pressures every outer iteration of the transient algorithms and the
+heat-exchanger heat sources once per step from the flux and temperature of the previous step.
+
+`type` selects:
 
 | `type` | Keys | Meaning |
 | --- | --- | --- |
@@ -1093,35 +1421,53 @@ diagnostic at `components.<name>.type`). `type`:
 | `network_outlet` | `patch` (fixed-pressure boundary), `reference_pressure` [Pa], `resistance_linear` R1 [Pa s/m^3], `resistance_quadratic` R2 [Pa s^2/m^6], `relax` | the patch pressure follows `p_ref + R1 Q + R2 Q abs(Q)` of the flow through the patch (lagged, relaxed) |
 
 Monitors: `<name>_flow` [m^3/s] and `<name>_dp` [Pa] (fan rise, analytic jump drop at the current flow, network patch
-pressure) or `<name>_duty` [W] and `<name>_t_in` [K]. Validation errors are located (`components.<name>.curve_flow`,
-`.direction`, `.patch`, `.effectiveness`, `.type`, `.zone`, `.thickness`, ...). A fan or jump zone needs an interior
-plane on its downstream side. Pressure-driven loops with little resistance are stiff: use a small `relax` (0.02 in
-the ADR 0012 network test). Not done: 1D network coupling beyond the lumped outlet relation, shell-and-tube or porous
-exchanger domains. Checks and measured results: ADR 0012, `crates/rcfd-api/tests/lumped.rs`. The NTU exchanger, loss closure, dual cell and `fan_boundary` (ADR 0039): `crates/rcfd-api/tests/heat_exchanger.rs`, library `rcfd_fv::hx` (`crates/rcfd-fv/tests/heat_exchanger.rs`).
+pressure) or `<name>_duty` [W] and `<name>_t_in` [K].
+
+Validation errors are located (`components.<name>.curve_flow`, `.direction`, `.patch`, `.effectiveness`, `.type`, `.zone`,
+`.thickness`, ...). A fan or jump zone needs an interior plane on its downstream side. Pressure-driven loops with little
+resistance are stiff: use a small `relax` (0.02 in the ADR 0012 network test).
+
+Not done: 1D network coupling beyond the lumped outlet relation, shell-and-tube or porous exchanger domains.
+
+Checks and measured results: ADR 0012, `crates/rcfd-api/tests/lumped.rs`. The NTU exchanger, loss closure, dual cell and
+`fan_boundary` (ADR 0039): `crates/rcfd-api/tests/heat_exchanger.rs`, library `rcfd_fv::hx`
+(`crates/rcfd-fv/tests/heat_exchanger.rs`).
 
 ## `radiation` grey radiation (F-130, F-052, ADR 0012)
 
-`radiation.model` is `none` (default), `rosseland` or `p1`; both need `energy.enabled = true` and a steady
-SIMPLE/SIMPLEC run. Keys: `absorption_coefficient` a, `scattering_coefficient` sigma_s [1/m] (extinction a + sigma_s
-must be positive), `refractive_index` n. `rosseland` adds the radiative conductivity `16 sigma n^2 T^3 / (3 beta)` to
-the energy diffusion (optically thick media). `p1` solves the incident radiation `G` with Marshak boundary conditions
-using the wall emissivity `boundaries.<patch>.emissivity` in (0, 1] (default 1; patches with `velocity = symmetry` are
-reflecting), couples `a (G - 4 sigma n^2 T^4)` linearised into the energy equation, and exposes the field `G`
-(`field("G")`) and `Simulation::radiative_heat_flow(patch)`. Conductive wall heat flow is still the `heat_flow` report
-(set its `conductivity`). Not done: non-grey band models, WSGG, discrete ordinates, surface-to-surface radiation,
-transient and ideal-gas runs.
+`radiation.model` is `none` (default), `rosseland` or `p1`. `rosseland` and `p1` need `energy.enabled = true` and a steady
+SIMPLE/SIMPLEC run. Keys: `absorption_coefficient` a, `scattering_coefficient` sigma_s [1/m] (extinction a + sigma_s must be
+positive), `refractive_index` n.
+
+* `rosseland` adds the radiative conductivity `16 sigma n^2 T^3 / (3 beta)` to the energy diffusion (optically thick media).
+* `p1` solves the incident radiation `G` with Marshak boundary conditions using the wall emissivity
+  `boundaries.<patch>.emissivity` in (0, 1] (default 1; patches with `velocity = symmetry` are reflecting), couples
+  `a (G - 4 sigma n^2 T^4)` linearised into the energy equation, and exposes the field `G` (`field("G")`) and
+  `Simulation::radiative_heat_flow(patch)`.
+
+Conductive wall heat flow is still the `heat_flow` report (set its `conductivity`).
+
+Not done: non-grey band models, WSGG, discrete ordinates, surface-to-surface radiation, transient and ideal-gas runs.
 
 ## `udf` user functions (F-122)
 
-`udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`) and `momentum_source`,
-`viscosity` and `monitor` select the roles it plays; `boundaries.<patch>.velocity_udf` names a module whose
-`velocity_profile` export supplies a fixed velocity. Hook catalogue v2 (F-239): `conductivity` (thermal conductivity
-per face), `energy_source` (W/m^3 per cell), `initialise` (initial velocity, pressure, temperature per cell) and
-`at_end` (an integrand evaluated once when the run ends, monitor `udf_end_<name>`) are further roles;
-`boundaries.<patch>.temperature_udf` (with `temperature = "fixed"`) and `boundaries.<patch>.heat_flux_udf` (with
-`temperature = "heat_flux"`) supply boundary temperatures and wall heat fluxes per face, and
-`scalars.<name>.source_udf` a passive-scalar source. Source and property roles act in steady SIMPLE/SIMPLEC runs
-only. The module may import nothing. The ABI, limits, scope and failure behaviour are in `docs/udf-abi.md`.
+`udf.<name>` loads a sandboxed WebAssembly module (`file`, `fuel_per_call`). The module may import nothing.
+`momentum_source`, `viscosity` and `monitor` select the roles it plays. `boundaries.<patch>.velocity_udf` names a module whose
+`velocity_profile` export supplies a fixed velocity.
+
+Hook catalogue v2 (F-239) adds further roles:
+
+* `conductivity`: thermal conductivity per face
+* `energy_source`: W/m^3 per cell
+* `initialise`: initial velocity, pressure, temperature per cell
+* `at_end`: an integrand evaluated once when the run ends, monitor `udf_end_<name>`
+
+Also in catalogue v2, `boundaries.<patch>.temperature_udf` (with `temperature = "fixed"`) and
+`boundaries.<patch>.heat_flux_udf` (with `temperature = "heat_flux"`) supply boundary temperatures and wall heat fluxes per
+face, and `scalars.<name>.source_udf` a passive-scalar source.
+
+Source and property roles act in steady SIMPLE/SIMPLEC runs only. The ABI, limits, scope and failure behaviour are in
+`docs/udf-abi.md`.
 
 ## Caveats
 
@@ -1149,10 +1495,14 @@ only. The module may import nothing. The ABI, limits, scope and failure behaviou
 | `operation`, `operands` | `union`, none | `combine`: union, intersection, difference or complement of the named registers |
 | `grow`, `shrink`, `neighbours` | 0, 0, `faces` | dilate / erode the result; adjacency by faces or by points |
 
-`sources.<n>.zone = "register"` with `register = "<name>"` restricts a source. `initial.patches.<n>` has `register`,
-`variable` (`velocity`, `pressure`, `temperature`, and the turbulence quantities `k`, `epsilon`, `omega`, `nutilde`) and
-`value` (3 numbers for velocity, 1 otherwise) and overwrites the initial field inside the register (a turbulence
-variable needs a turbulence model that has it, else a located error at `initial.patches.<n>.variable`). Errors name the setting, for example `sources.bed.register: unknown register 'x'
+`sources.<n>.zone = "register"` with `register = "<name>"` restricts a source.
+
+`initial.patches.<n>` has `register`, `variable` (`velocity`, `pressure`, `temperature`, and the turbulence quantities `k`,
+`epsilon`, `omega`, `nutilde`) and `value` (3 numbers for velocity, 1 otherwise) and overwrites the initial field inside the
+register. A turbulence variable needs a turbulence model that has it, else a located error at
+`initial.patches.<n>.variable`.
+
+Errors name the setting, for example `sources.bed.register: unknown register 'x'
 (registers: core)` or `registers.x.patches: the mesh has no patch 'nope' (patches: ...)`.
 
 ## Wave 15A: initialisation methods, zone sources, user transport equations (F-205, F-201, F-202, ADR 0019)
@@ -1165,20 +1515,27 @@ variable needs a turbulence model that has it, else a located error at `initial.
 | `initial.coarse_factor` | 2 | `coarse`: the cell counts of the generated mesh are divided by this factor (2 to 8) |
 | `initial.coarse_iterations` | 200 | `coarse`: iteration cap of the coarse pre-solve |
 
-`potential` solves a Laplace problem `div(grad psi) = 0` for a scalar potential with the normal velocity of the velocity
-boundary conditions as Neumann data (and `psi = 0` on patches with a fixed pressure) and starts from `u = grad psi` and the
-Bernoulli pressure `p = H - |u|^2 / 2`; it needs the velocity of every patch or a fixed pressure on it, balanced fluxes for a
-closed set of inlets and walls, and rejects periodic patches, all with located errors at `initial.method` or the patch.
-`coarse` runs the same case on a mesh with the cell counts divided by `coarse_factor` (generated meshes only: `box_2d`,
-`channel_2d`, `cavity_2d`, `wedge_2d`, `nozzle_2d`, `cylinder_ogrid`, `annulus_3d` and the two interface variants; the counts
-must divide) with `initial.method = "uniform"` and `solver.max_iterations = coarse_iterations`, and interpolates the result
-(non-conservative) to the fine mesh. Both methods apply to the steady `simple` / `simplec` algorithms. The start only
-changes the initial field; the converged answer is the one the case defines. Not verified: that a potential start reduces
-the iterations of a recirculating flow (it did not for the backward-facing step, ADR 0019 I2).
+`potential` and `coarse` both apply to the steady `simple` / `simplec` algorithms. The start only changes the initial
+field; the converged answer is the one the case defines.
+
+`potential` solves a Laplace problem `div(grad psi) = 0` for a scalar potential. The normal velocity of the velocity boundary
+conditions is the Neumann data, and patches with a fixed pressure take `psi = 0`. The run starts from `u = grad psi` and the
+Bernoulli pressure `p = H - |u|^2 / 2`. `potential` needs the velocity of every patch or a fixed pressure on it, and balanced
+fluxes for a closed set of inlets and walls. It rejects periodic patches. Each failure is a located error at `initial.method`
+or the patch.
+
+`coarse` runs the same case with `initial.method = "uniform"` and `solver.max_iterations = coarse_iterations` on a mesh with
+the cell counts divided by `coarse_factor`, and interpolates the result (non-conservative) to the fine mesh. It works on
+generated meshes only (`box_2d`, `channel_2d`, `cavity_2d`, `wedge_2d`, `nozzle_2d`, `cylinder_ogrid`, `annulus_3d` and the
+two interface variants), and the counts must divide.
+
+Not verified: that a potential start reduces the iterations of a recirculating flow (it did not for the backward-facing step,
+ADR 0019 I2).
 
 ### `zone_sources.<name>` (F-201)
 
-A volumetric source or a fixed value for the temperature or a `scalars` / transported `species` entry in a cell zone.
+`zone_sources.<name>` sets a volumetric source or a fixed value for the temperature or a `scalars` / transported `species`
+entry in a cell zone. Entries act in the steady `simple` / `simplec` and the transient `piso` / `pimple` runs.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1191,12 +1548,24 @@ A volumetric source or a fixed value for the temperature or a `scalars` / transp
 
 Sources on one target add. A fixed-value cell has its equation replaced by `phi = value`, its column moved to the neighbours'
 right-hand sides (a symmetric system stays symmetric) and the solved value overwritten, so it holds the value exactly.
-Located errors: unknown target, balance species, negative `linear_coefficient`, `fixed_value` with a linear part, overlapping
-fixed zones of one target, a zone without cells, an expression of the wrong dimension or not finite, `coupled`, variable
-density and compressible runs, and temperature sources together with the radiation model. They act in the steady `simple` /
-`simplec` and the transient `piso` / `pimple` runs. Not delivered: mass sources, momentum sources or fixed values by
-expression (the `sources` of F-031 remain), sources and fixed values for turbulence quantities, the variable-density and
-compressible engines.
+
+Located errors:
+
+* unknown target
+* balance species
+* negative `linear_coefficient`
+* `fixed_value` with a linear part
+* overlapping fixed zones of one target
+* a zone without cells
+* an expression of the wrong dimension or not finite
+* `coupled`, variable density and compressible runs
+* temperature sources together with the radiation model
+
+Not delivered:
+
+* mass sources, momentum sources or fixed values by expression (the `sources` of F-031 remain)
+* sources and fixed values for turbulence quantities
+* the variable-density and compressible engines
 
 ### User transport equations in `scalars.<name>` (F-202)
 
@@ -1208,10 +1577,11 @@ compressible engines.
 | `initial_expression` | none | dimensionless initial field of x, y, z; replaces `initial` |
 | `expression` | none | `algebraic` only: expression of x, y, z, t, `T` (with `energy.enabled`) and the names of the other scalars and species (their latest values); dimensionless result; the variable cannot refer to itself; no boundary conditions |
 
-The Poisson equation uses the sign `-div(D grad s) = S`, like the transport equation. Not delivered: the vector variant
-(three-component diffusive / Poisson / algebraic variables), feeding user variables into properties, turbulence or other
-equations, and species with user equations. Errors are located at the key (`scalars.s.diffusivity_expression`,
-`scalars.s.expression`, ...).
+The Poisson equation uses the sign `-div(D grad s) = S`, like the transport equation. Errors are located at the key
+(`scalars.s.diffusivity_expression`, `scalars.s.expression`, ...).
+
+Not delivered: the vector variant (three-component diffusive / Poisson / algebraic variables), feeding user variables into
+properties, turbulence or other equations, and species with user equations.
 
 ## Wave 16W: `decomposition` and `postprocessing`, `rcfd partition`, `rcfd sample`, `rcfd inflate` (F-236, F-072, F-108, ADR 0021)
 
@@ -1235,11 +1605,18 @@ reordering: they are reports and a VTK cell field.
 
 `rcfd partition <case|mesh> [--method m] [--parts n] [--rule r] [--sector-kind k] [--origin x,y,z] [--axis x,y,z]
 [--reference x,y,z] [--weights-box x0,y0,z0:x1,y1,z1:inside:outside] [--tolerance t] [--max-passes n] [--smooth]
-[--reorder] [--out parts.vtu] [--json] [--parts-vector]` takes the settings of the case section and lets the flags override
-them. `--json` prints `method`, `n_parts`, `n_cells`, `part_cells`, `part_weights`, `imbalance` (weighted, as the library
-function), `edge_cut` (internal faces between different parts), `ghost_cells` per part and, with `--reorder`, `bandwidth`
-(`natural`, `rcm`). Invalid settings are reported at their path (`decomposition.parts`, `decomposition.method`, ...) with exit
-code 3. The service method `mesh.partition` returns the same report (`with_parts` adds the part vector).
+[--reorder] [--out parts.vtu] [--json] [--parts-vector]` takes the settings of the case section and lets the flags override them.
+
+`--json` prints:
+
+* `method`, `n_parts`, `n_cells`, `part_cells`, `part_weights`
+* `imbalance` (weighted, as the library function)
+* `edge_cut` (internal faces between different parts)
+* `ghost_cells` per part
+* with `--reorder`, `bandwidth` (`natural`, `rcm`)
+
+Invalid settings are reported at their path (`decomposition.parts`, `decomposition.method`, ...) with exit code 3. The service
+method `mesh.partition` returns the same report (`with_parts` adds the part vector).
 
 ### `postprocessing` (F-072)
 
@@ -1249,14 +1626,22 @@ code 3. The service method `mesh.partition` returns the same report (`with_parts
 | `wall_patches` | wall patches for `wall_shear` and `wall_y_plus` (default: every wall patch) |
 | `samples.<name>` | `type = "line"` (`p0`, `p1`, `points`) or `"plane"` (`origin`, `e1`, `e2`, `extent1`, `extent2`, `n1`, `n2`); `fields` (default `speed`, `p`; also `ux`, `uy`, `uz`, and for variable density `T`, `rho`, `mach`, ...); `gradient` (default true: linear reconstruction from the cell gradient) |
 
-`vorticity`, `q_criterion`, `p_total` and `mach` are cell arrays in `solution.vtu`; wall quantities are written to
-`wall_<patch>.vtp` (arrays `wall_shear`, `wall_y_plus`); each sample to `sample_<name>.csv` (columns `s,x,y,z,<fields>,inside`
-for lines, `x,y,z,<fields>,inside` for planes; `inside` is 0 and the values are empty for points outside the mesh). Incompressible
-total pressure uses `rho` times the kinematic pressure; the variable-density case uses the isentropic relation with `fluid.gamma`.
+Outputs:
+
+* `vorticity`, `q_criterion`, `p_total` and `mach` are cell arrays in `solution.vtu`
+* wall quantities are written to `wall_<patch>.vtp` (arrays `wall_shear`, `wall_y_plus`)
+* each sample is written to `sample_<name>.csv` (columns `s,x,y,z,<fields>,inside` for lines, `x,y,z,<fields>,inside` for
+  planes; `inside` is 0 and the values are empty for points outside the mesh)
+
+Incompressible total pressure uses `rho` times the kinematic pressure; the variable-density case uses the isentropic relation
+with `fluid.gamma`.
+
 Located errors at `postprocessing.derived`: unknown names; `mach` without the compressible solver or `fluid.density =
 "ideal_gas"`; `total_pressure` with the compressible solver or `real_gas`; `wall_shear` and `wall_y_plus` with a turbulence
 model, the compressible or variable-density engines, a `rheology` law or a temperature-dependent viscosity (they use the constant
-laminar `physics.nu`); an unknown or non-wall patch at `postprocessing.wall_patches`; bad sample geometry at
+laminar `physics.nu`).
+
+Other located errors: an unknown or non-wall patch at `postprocessing.wall_patches`; bad sample geometry at
 `postprocessing.samples.<name>.points`, `.p1`, `.e2`, `.n1`, `.fields`.
 
 `rcfd sample <case> [--line x0,y0,z0:x1,y1,z1 [--points n]] [--plane o:e1:e2:ext1:ext2:n1:n2] [--fields a,b] [--no-gradient]
@@ -1268,20 +1653,24 @@ There is no solution-file reader yet, so `rcfd sample` always runs the case firs
 
 `rcfd inflate <case|mesh> --patch p --layers n (--first h | --y-plus y --u-tau u --nu nu | --uniform total | --aspect a |
 --last-ratio r --first h) [--growth g] [--out inflated.vtu] [--json]` adds prismatic layers to a boundary patch of any mesh
-(not only the `mesh.wall_layers` generator layers) and reports `patch`, `sizing`, `cells_before`, `cells_after` and the library
-report (first and last heights, thickness, growth, quality). Exit codes: 1 for a failure (unknown patch, invalid sizing value),
-2 for usage errors, 4 if the inflated mesh has quality errors. The service method is `mesh.inflate`. There is no case-tree key
-that inflates a mesh yet.
+(not only the `mesh.wall_layers` generator layers). It reports `patch`, `sizing`, `cells_before`, `cells_after` and the
+library report (first and last heights, thickness, growth, quality). The service method is `mesh.inflate`. There is no
+case-tree key that inflates a mesh yet.
+
+Exit codes: 1 for a failure (unknown patch, invalid sizing value), 2 for usage errors, 4 if the inflated mesh has quality
+errors.
 
 ## Wave 16B: boundary-condition catalogue `bc_kind` (F-200, ADR 0022)
 
-`boundaries.<patch>.bc_kind` (default `none`: the entry is read exactly as before) selects one of the kinds below for the
-constant-density segregated algorithms (`simple`, `simplec`, `piso`, `pimple`). With a kind the kind owns the velocity and
-pressure conditions: leave `velocity = "fixed"`, `pressure = "zero_gradient"` and `velocity_value` zero, and do not give
-`velocity_expression_*`, `velocity_udf` or `profile` (located errors). `temperature`, `turbulence` and scalar keys keep their
-meaning. A key that belongs to other kinds only, with a non-default value, is a located error that names the kinds. Compressible,
-variable-density and `coupled` runs reject every kind at `boundaries.<patch>.bc_kind`. Pressures of the new kinds are in Pa
-(`bc_pressure`, converted with `physics.rho`; the older `pressure_value` stays kinematic).
+`boundaries.<patch>.bc_kind` selects one of the kinds below for the constant-density segregated algorithms (`simple`,
+`simplec`, `piso`, `pimple`). The default `none` reads the entry exactly as before. Compressible, variable-density and
+`coupled` runs reject every kind at `boundaries.<patch>.bc_kind`.
+
+A kind owns the velocity and pressure conditions. With a kind set, leave `velocity = "fixed"`, `pressure = "zero_gradient"`
+and `velocity_value` zero, and do not give `velocity_expression_*`, `velocity_udf` or `profile` (located errors).
+`temperature`, `turbulence` and scalar keys keep their meaning. A key that belongs to other kinds only, with a non-default
+value, is a located error that names the kinds. Pressures of the new kinds are in Pa (`bc_pressure`, converted with
+`physics.rho`); the older `pressure_value` stays kinematic.
 
 | Kind | Meaning |
 |---|---|
@@ -1313,32 +1702,59 @@ variable-density and `coupled` runs reject every kind at `boundaries.<patch>.bc_
 | `target_mass_flow` [kg/s, positive OUT], `pressure_update` `bernoulli`, `secant` or `guarded_secant`, `pressure_relax` [0.01, 1] | 0, bernoulli, 0.5 | target_mass_flow_outlet |
 
 Signs: `mass_flow_value` is positive into the domain, `target_mass_flow` positive out of the domain, and the `mass_flow` report
-positive out. Located errors (see `bc_cat.rs`): a direction that does not enter (`flow_direction`), unknown, own, cyclic or doubly
-given source (`mass_flow_source_patch`), fraction outside (0, 1], `flow_rate_weight <= 0`, negative `loss_coefficient`, a shape
-expression with a compile error, negative values or zero total, negative `target_mass_flow`, a zero `swirl_axis`, a radial
-outlet face on the axis, `initial.method = "potential"` with any kind but `mass_flow`, and a turbulence model on a
-`total_pressure_inlet` or on a sourced `mass_flow` inlet unless `turbulence_spec = "values"` (their speed is a result).
+positive out.
+
+Located errors (see `bc_cat.rs`):
+
+* a direction that does not enter (`flow_direction`)
+* unknown, own, cyclic or doubly given source (`mass_flow_source_patch`)
+* fraction outside (0, 1]
+* `flow_rate_weight <= 0`
+* negative `loss_coefficient`
+* a shape expression with a compile error, negative values or zero total
+* negative `target_mass_flow`
+* a zero `swirl_axis`
+* a radial outlet face on the axis
+* `initial.method = "potential"` with any kind but `mass_flow`
+* a turbulence model on a `total_pressure_inlet` or on a sourced `mass_flow` inlet unless `turbulence_spec = "values"` (their
+  speed is a result)
+
 `turbulence = auto` gives the role Inlet to `mass_flow` with a positive value (or sourced) and `total_pressure_inlet`, and
-zero gradient to every other kind; the inlet speed for the turbulence helpers is `|m| / (rho A)` of the patch. A turbulence model
-whose only inlet speed is a result (total-pressure inlet, sourced or negative mass flow) needs `turbulence.k_initial` and the
-initial epsilon / omega.
+zero gradient to every other kind. The inlet speed for the turbulence helpers is `|m| / (rho A)` of the patch. A turbulence
+model whose only inlet speed is a result (total-pressure inlet, sourced or negative mass flow) needs `turbulence.k_initial`
+and the initial epsilon / omega.
 
-Practical notes. Dynamic-head conditions (total backflow, `total_pressure_inlet`, `vent`, `radial_equilibrium_outlet`) are
-lagged with a fixed relaxation weight 0.5. A frictionless duct driven by two pressure ends does not start from rest with plain
-under-relaxation (the first iterations diverge); use `solver.pseudo_mode = "physical"` with a small `pseudo_dt`. Walls that behave
-as symmetry planes need `solver.component_diagonal = "corrected"`. `pressure_update = "secant"` is a known miss (diverges on the
-registered case, ADR 0022 addendum); use `bernoulli` or `guarded_secant` (ADR 0055 D5: the secant slope is taken only when the last mass-flow change is
-at most half the present error and the slope lies within 0.1 to 10 times the dynamic-head slope, else the dynamic-head slope; the registered
-F1 case reaches 4e-16 relative error in 1880 iterations). Not delivered: solid circular-pipe mesh, compressible, variable-density
-and coupled support, temperature of a recirculated stream and per-boundary thermal conditions (F-051), time-varying mass flow,
-`pressure_average` on other kinds.
+Practical notes:
 
-Convergence controls (ADR 0023). `solver.residual_norm` = `reference` (default) | `backward` | `scaled` selects the normalisation of the
-monitored residuals; `scaled` divides by sum(|A||x| + |b|) (momentum) and by the larger of the pressure-equation scale and half the
-sum of the flux magnitudes (pressure), which stays meaningful for uniform or exactly zero components and does not amplify round-off. Use
-it when `reference` stalls at 1e-12 on a converged field. `solver.pseudo_control` = `off` (default) | `ser` | `ser2` scales the pseudo time
-step automatically (needs `solver.pseudo_mode` other than `off`, else a located error); `solver.pseudo_scale_max` (default 1000) caps the
-scale. The controllers are NOT validated (known misses, ADR 0023 addendum A8); fixed `pseudo_cfl` is the reliable setting.
+* Dynamic-head conditions (total backflow, `total_pressure_inlet`, `vent`, `radial_equilibrium_outlet`) are lagged with a
+  fixed relaxation weight 0.5.
+* A frictionless duct driven by two pressure ends does not start from rest with plain under-relaxation (the first iterations
+  diverge); use `solver.pseudo_mode = "physical"` with a small `pseudo_dt`.
+* Walls that behave as symmetry planes need `solver.component_diagonal = "corrected"`.
+* `pressure_update = "secant"` is a known miss (diverges on the registered case, ADR 0022 addendum); use `bernoulli` or
+  `guarded_secant` (ADR 0055 D5: the secant slope is taken only when the last mass-flow change is at most half the present
+  error and the slope lies within 0.1 to 10 times the dynamic-head slope, else the dynamic-head slope; the registered F1 case
+  reaches 4e-16 relative error in 1880 iterations).
+
+Not delivered:
+
+* solid circular-pipe mesh
+* compressible, variable-density and coupled support
+* temperature of a recirculated stream and per-boundary thermal conditions (F-051)
+* time-varying mass flow
+* `pressure_average` on other kinds
+
+Convergence controls (ADR 0023):
+
+* `solver.residual_norm` = `reference` (default) | `backward` | `scaled` selects the normalisation of the monitored
+  residuals. `scaled` divides by sum(|A||x| + |b|) (momentum) and by the larger of the pressure-equation scale and half the
+  sum of the flux magnitudes (pressure), which stays meaningful for uniform or exactly zero components and does not amplify
+  round-off. Use it when `reference` stalls at 1e-12 on a converged field.
+* `solver.pseudo_control` = `off` (default) | `ser` | `ser2` scales the pseudo time step automatically (needs
+  `solver.pseudo_mode` other than `off`, else a located error).
+* `solver.pseudo_scale_max` (default 1000) caps the scale.
+
+The controllers are NOT validated (known misses, ADR 0023 addendum A8); fixed `pseudo_cfl` is the reliable setting.
 
 ## Reactor cases and FW-H surface files (F-112, F-136)
 
@@ -1347,15 +1763,16 @@ examples in [reactor-and-acoustics.md](reactor-and-acoustics.md); they are not s
 
 ## Wave 17B: conjugate heat transfer (F-051, ADR 0024)
 
-Solid cell zones with their own conductivity, density and specific heat, thermal contact resistance between materials, and a
-convection / thin-wall / radiation-to-ambient wall condition. Every new key has an explicit unset sentinel (`-1`, `""` or an
-empty list) and a located error when it is needed and unset; none shadows another value. All of it is additive: a case without
-these keys behaves bit-identically to before.
+Wave 17B adds solid cell zones with their own conductivity, density and specific heat, thermal contact resistance between
+materials, and a convection / thin-wall / radiation-to-ambient wall condition. Every new key has an explicit unset sentinel
+(`-1`, `""` or an empty list) and a located error when it is needed and unset; none shadows another value. All of it is
+additive: a case without these keys behaves bit-identically to before.
 
-The temperature equation is kept in the conductive form normalised by the fluid `physics.rho * physics.cp`; a solid enters through
-per-cell conductivity and heat capacity (face conductivity is the distance-weighted harmonic mean, so the interface flux is exact
-for equal-sized cells). A conforming interface and a non-conformal one (`mesh.generator = "channel_2d_interface"`, joined faces
-are ordinary internal faces) are treated alike. Volumetric heat generation in a solid is a `zone_sources` entry on the temperature.
+The temperature equation is kept in the conductive form normalised by the fluid `physics.rho * physics.cp`. A solid enters
+through per-cell conductivity and heat capacity (face conductivity is the distance-weighted harmonic mean, so the interface
+flux is exact for equal-sized cells). A conforming interface and a non-conformal one
+(`mesh.generator = "channel_2d_interface"`, joined faces are ordinary internal faces) are treated alike. Volumetric heat
+generation in a solid is a `zone_sources` entry on the temperature.
 
 ### `solids.<name>`
 
@@ -1368,12 +1785,18 @@ are ordinary internal faces) are treated alike. Volumetric heat generation in a 
 | `initial_temperature` | `-1` = use `initial.temperature` | K |
 | `electrical_conductivity` | `-1` = use `electric.conductivity` | S/m; `0` = insulator; only with `electric.enabled` (ADR 0035) |
 
-Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `energy.enabled = true` and either `solver.frozen_flow = true` (prescribed flow) or `solver.algorithm = "coupled"` (solved flow with the solid cells excluded from the pressure-velocity system, ADR 0029).
+Solid zones must not overlap; "fluid" is every cell in no solid. Solids need `energy.enabled = true` and either
+`solver.frozen_flow = true` (prescribed flow) or `solver.algorithm = "coupled"` (solved flow with the solid cells excluded
+from the pressure-velocity system, ADR 0029).
 
 ### `thermal_interfaces.<name>`
 
-`solid_a`, `solid_b` (a `solids` name or `"fluid"`; empty is an error; the two must differ) and `resistance` (m^2 K/W, `-1` = unset
-is an error, `0` = perfect contact). The resistance is added in series on the internal faces between exactly these two materials.
+Keys:
+
+* `solid_a`, `solid_b`: a `solids` name or `"fluid"`; empty is an error; the two must differ
+* `resistance`: m^2 K/W, `-1` = unset is an error, `0` = perfect contact
+
+The resistance is added in series on the internal faces between exactly these two materials.
 
 Added in wave 21A (ADR 0035 D1, all optional):
 
@@ -1382,14 +1805,15 @@ Added in wave 21A (ADR 0035 D1, all optional):
 | `layer_thickness` [m], `layer_conductivity` [W/m/K] | empty = no layers | lists of equal length, every entry positive; the steady resistance `sum t_i/k_i` (no thermal capacity) is added to `resistance`. With layers, `resistance` may stay `-1` (counts as 0) |
 | `connection` | `closed` | `open` makes the faces adiabatic (a gap); `resistance` and the layer keys must then be absent. In a steady (simple/simplec) problem an open interface that leaves a group of cells with no fixed-temperature or convecting boundary is a located error at `connection` |
 
-Not delivered (F-215 stays partial): layer thermal capacity, in-plane shell conduction, solution-dependent open/closed switching, interfaces between separate meshes beyond the F-114 join.
+Not delivered (F-215 stays partial): layer thermal capacity, in-plane shell conduction, solution-dependent open/closed
+switching, interfaces between separate meshes beyond the F-114 join.
 
 ### `electric` (F-213, ADR 0035 D2)
 
-Quasi-static conduction `div(sigma grad phi) = 0` with the Joule heat `sigma |grad phi|^2` added to the energy equation. Available
-with `solver.frozen_flow = true` and `energy.enabled = true` (prescribed flow; transient and steady paths), not with the compressible or
-variable-density solvers. The coupling is lagged: the potential is solved with the conductivity of the temperature of the previous
-step (steady: previous sweep).
+`electric` solves quasi-static conduction `div(sigma grad phi) = 0` with the Joule heat `sigma |grad phi|^2` added to the
+energy equation. It is available with `solver.frozen_flow = true` and `energy.enabled = true` (prescribed flow; transient and
+steady paths), not with the compressible or variable-density solvers. The coupling is lagged: the potential is solved with
+the conductivity of the temperature of the previous step (steady: previous sweep).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1399,26 +1823,46 @@ step (steady: previous sweep).
 | `reference_temperature` | `-1` (an error when `temperature_coefficient != 0`) | T_ref, K |
 | `joule_heating` | `true` | `false` solves the potential only |
 
-Per patch (`boundaries.<patch>`): `electric = "insulated"` (default, zero current), `"potential"` (needs `electric_potential`, V) or
-`"current"` (needs `electric_current`, the TOTAL current in A flowing INTO the domain, spread as a uniform density over the patch
-area). `electric_potential` and `electric_current` default to the sentinel `-1e30` (unset; any real is a legal value); setting one
-that does not match `electric` is a located error. At least one patch must be `potential`; a case with only `current` patches is a
-located error at `electric`. Located errors also: `electric.conductivity`, `electric.reference_temperature`, `electric.enabled`
-(not `frozen_flow`, energy off), `solids.<n>.electrical_conductivity` (negative other than the `-1` sentinel), `boundaries.<p>.electric`
-(used without `electric.enabled`). Fields (`probe`, `area_integral`, output): `electric_potential`, `joule_heat` (W/m^3),
-`electric_conductivity` (S/m) in the cells; `electric_potential` and `electric_current_density` (A/m^2 INTO the domain, so the current
-through a patch is the existing `area_integral` of that boundary field) on the boundary faces. On orthogonal meshes the Joule power
-equals the electrical power input to round-off; on non-orthogonal meshes it holds only to truncation error (named gap).
+Per patch (`boundaries.<patch>`):
 
-Not delivered (F-213 stays partial): Joule heating with a solved flow, magnetic induction, higher-order or iterated coupling in time,
-the exact power identity on non-orthogonal meshes.
+* `electric = "insulated"` (default, zero current)
+* `"potential"` (needs `electric_potential`, V)
+* `"current"` (needs `electric_current`, the TOTAL current in A flowing INTO the domain, spread as a uniform density over the
+  patch area)
+
+`electric_potential` and `electric_current` default to the sentinel `-1e30` (unset; any real is a legal value); setting one
+that does not match `electric` is a located error. At least one patch must be `potential`; a case with only `current` patches
+is a located error at `electric`.
+
+Other located errors:
+
+* `electric.conductivity`
+* `electric.reference_temperature`
+* `electric.enabled` (not `frozen_flow`, energy off)
+* `solids.<n>.electrical_conductivity` (negative other than the `-1` sentinel)
+* `boundaries.<p>.electric` (used without `electric.enabled`)
+
+Fields (`probe`, `area_integral`, output):
+
+* in the cells: `electric_potential`, `joule_heat` (W/m^3), `electric_conductivity` (S/m)
+* on the boundary faces: `electric_potential` and `electric_current_density` (A/m^2 INTO the domain, so the current through a
+  patch is the existing `area_integral` of that boundary field)
+
+On orthogonal meshes the Joule power equals the electrical power input to round-off; on non-orthogonal meshes it holds only
+to truncation error (named gap).
+
+Not delivered (F-213 stays partial): Joule heating with a solved flow, magnetic induction, higher-order or iterated coupling
+in time, the exact power identity on non-orthogonal meshes.
 
 ### `phase_change` (F-212, ADR 0035 D3)
 
-Enthalpy-method melting and solidification of a single material with equal phase properties: `h(T) = T + (L/cp) f(T)` with the
-linear liquid fraction `f` between `solidus` and `liquidus`, implicit Euler, Newton on the apparent capacity with backtracking.
-Available with `solver.frozen_flow = true` and a ZERO prescribed flux (the melt does not flow), `solver.algorithm = "piso"` or
-`"pimple"`, `solver.time_scheme = "euler"`, `energy.enabled = true`; temperatures are Kelvin (> 0).
+`phase_change` models melting and solidification of a single material with equal phase properties by the enthalpy method:
+`h(T) = T + (L/cp) f(T)` with the linear liquid fraction `f` between `solidus` and `liquidus`, implicit Euler, Newton on the
+apparent capacity with backtracking.
+
+It is available with `solver.frozen_flow = true` and a ZERO prescribed flux (the melt does not flow),
+`solver.algorithm = "piso"` or `"pimple"`, `solver.time_scheme = "euler"`, `energy.enabled = true`.
+Temperatures are Kelvin (> 0).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1428,22 +1872,38 @@ Available with `solver.frozen_flow = true` and a ZERO prescribed flux (the melt 
 | `momentum_constant` | `-1` | reserved: the Carman-Kozeny damping exists in the library only; setting it is an error |
 | `newton_max` | `100` | Newton iteration cap per step; not converging stops the run with a message naming this key |
 
-Field `liquid_fraction` (cells, in [0, 1]). Located errors: `phase_change.solidus`, `.liquidus`, `.latent_heat`, `.momentum_constant`,
-`solver.time_scheme`, `solver.algorithm`, `zone_sources.<n>.kind` (`fixed_value`), `zone_sources.<n>.linear_coefficient` (non-zero), and at `phase_change.enabled`: no `frozen_flow`,
-energy off, non-zero prescribed flux, combined with `solids` or `electric`. Not delivered (F-212 stays partial): melt flow and natural
-convection, the damping in the tree, phase-dependent properties, convected latent term, steady solidification, BDF2.
+Field `liquid_fraction` (cells, in [0, 1]).
+
+Located errors:
+
+* `phase_change.solidus`, `.liquidus`, `.latent_heat`, `.momentum_constant`
+* `solver.time_scheme`, `solver.algorithm`
+* `zone_sources.<n>.kind` (`fixed_value`), `zone_sources.<n>.linear_coefficient` (non-zero)
+* at `phase_change.enabled`: no `frozen_flow`, energy off, non-zero prescribed flux, combined with `solids` or `electric`
+
+Not delivered (F-212 stays partial): melt flow and natural convection, the damping in the tree, phase-dependent properties,
+convected latent term, steady solidification, BDF2.
 
 ### `solver.frozen_flow`
 
 Default `false`. When `true`, momentum and pressure are not solved: the face flux is `u(x_f) . S_f` from `initial.velocity` and
 `initial.velocity_expression_x/y/z` evaluated at the FACE centres. Patches whose velocity condition is `symmetry`, a wall type
-(`moving_wall`, `shear`, `partial_slip`, `marangoni`) or a `fixed` zero velocity carry no flux. Located errors when the flux does not
-vanish on a face touching a solid (`initial.velocity_expression_x`), when the largest cell imbalance exceeds 1e-6 of the largest
-face flux (`initial.velocity`), and for solids or a prescribed flow combined with `properties` laws, radiation, a turbulence model,
-the compressible / variable-density solvers, `components`, `coupled` (with `frozen_flow`), buoyancy (thermal expansion with gravity), rheology, user
-functions or `fixed_value` zone sources. Available with `simple`, `simplec`, `piso`, `pimple`; steady runs iterate the energy
-equation (`solver.tolerance_u` is its residual target), transient runs advance it with `solver.dt`, `solver.time_scheme`. A solved
-(pressure or buoyancy driven) flow coupled to solids is available only with `solver.algorithm = "coupled"` and without `frozen_flow` (steady, laminar, constant properties; ADR 0029); the segregated and transient algorithms still need `frozen_flow` (named gap of F-051). `coupled` together with `frozen_flow` is a located error.
+(`moving_wall`, `shear`, `partial_slip`, `marangoni`) or a `fixed` zero velocity carry no flux.
+
+`frozen_flow` is available with `simple`, `simplec`, `piso`, `pimple`. Steady runs iterate the energy equation
+(`solver.tolerance_u` is its residual target); transient runs advance it with `solver.dt`, `solver.time_scheme`.
+
+A solved (pressure or buoyancy driven) flow coupled to solids is available only with `solver.algorithm = "coupled"` and without
+`frozen_flow` (steady, laminar, constant properties; ADR 0029). The segregated and transient algorithms still need
+`frozen_flow` (named gap of F-051). `coupled` together with `frozen_flow` is a located error.
+
+Located errors:
+
+* the flux does not vanish on a face touching a solid (`initial.velocity_expression_x`)
+* the largest cell imbalance exceeds 1e-6 of the largest face flux (`initial.velocity`)
+* solids or a prescribed flow combined with `properties` laws, radiation, a turbulence model, the compressible /
+  variable-density solvers, `components`, `coupled` (with `frozen_flow`), buoyancy (thermal expansion with gravity), rheology,
+  user functions or `fixed_value` zone sources
 
 ### `boundaries.<patch>.temperature = "convection"`
 
@@ -1455,17 +1915,21 @@ equation (`solver.tolerance_u` is its residual target), transient runs advance i
 | `wall_emissivity` | `0` = no radiation | emissivity of the external surface in [0, 1]; a separate key from `emissivity` (the P1 radiation wall) so that existing cases keep their meaning |
 | `radiation_temperature` | `-1`; required when `wall_emissivity > 0` | ambient K the surface radiates to |
 
-Heat leaves through the chain half cell `dn/k` (conductivity of the owner cell), wall layers, then `h (Ts - T_inf) + eps sigma (Ts^4 -
-Ta^4)` at the external surface; the nonlinear boundary equation is solved by Newton and linearised exactly, so steady runs iterate
-to its exact solution. These keys on a patch whose `temperature` is not `convection` are an error. Constants only (no expression forms).
+Heat leaves through the chain: half cell `dn/k` (conductivity of the owner cell), wall layers, then `h (Ts - T_inf) + eps sigma (Ts^4 -
+Ta^4)` at the external surface. The nonlinear boundary equation is solved by Newton and linearised exactly, so steady runs
+iterate to its exact solution.
+
+These keys on a patch whose `temperature` is not `convection` are an error. They take constants only (no expression forms).
+
 `heat_flux` and the `heat_flow` report use the conductivity of the owner cell of each face when solids exist (a report-level
 `conductivity` is then an error).
 
 ## `particles`
 
-One-way coupled Lagrangian particle tracking (F-056, ADR 0028, `docs/particles.md`). `particles.enabled = false` by default; every
-numeric key has the sentinel `-1` = unset with a located error when needed. The section is read by `rcfd_api::particles`
-(`track_frozen`, `track_transient`) and, since ADR 0037, by the run loop itself (see "Run path" below).
+`particles` sets up one-way coupled Lagrangian particle tracking (F-056, ADR 0028, `docs/particles.md`).
+`particles.enabled = false` by default; every numeric key has the sentinel `-1` = unset with a located error when needed. The
+section is read by `rcfd_api::particles` (`track_frozen`, `track_transient`) and, since ADR 0037, by the run loop itself (see
+"Run path" below).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1504,33 +1968,50 @@ Two-way coupling (F-128, ADR 0059), all keys additive and inert when unset:
 | `two_way_tolerance` | `1e-6` | steady: the run is converged only if the relative change of the source (monitor `res_particles`) is below this, with at least 2 updates |
 | `heat_transfer`, `particle_cp`, `injection.<n>.temperature` | `false`, `-1`, `-1` | Ranz-Marshall lumped heat transfer; with `two_way` the heat the parcels give the carrier enters the temperature equation (needs `energy.enabled`, `physics.cp`, `physics.conductivity`); dissipation is not fed in; `heat_transfer` without `two_way` is a located error |
 
-Steady source: window `W = N/R` (parcels injected per injection over the injection rate; all injections must have the same rate and window);
-the source is held fixed between updates. Transient: the tracker advances over each flow step on the old-level field, the source of that
-step is `impulse/(rho V h)`; the source is cleared when no force is set. Not delivered: sub-iteration of the transient exchange, the
-mechanical energy exchange, `heat_transfer` without `two_way`, `frozen_flow`, `dynamic_mesh` (located errors).
+Steady source: window `W = N/R` (parcels injected per injection over the injection rate; all injections must have the same
+rate and window). The source is held fixed between updates.
+
+Transient: the tracker advances over each flow step on the old-level field, and the source of that step is
+`impulse/(rho V h)`. The source is cleared when no force is set.
+
+Not delivered: sub-iteration of the transient exchange, the mechanical energy exchange, `heat_transfer` without `two_way`,
+`frozen_flow`, `dynamic_mesh` (located errors).
 
 Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
 patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
 --check-only` (exit 3) and `rcfd validate`. `particles` with `dynamic_mesh.enabled` is refused (located at `dynamic_mesh.enabled`
-by the dynamic-mesh check). Transient algorithms (`piso`, `pimple`): the tracker is advanced at the end of every `Simulation::step`
-over the flow step (`h = min(dt, end_time - tracker time)`), bit for bit as `track_transient` does, by every driver (`rcfd run`,
-service `run.headless`/`workflow`, `run.start`). Steady algorithms and `solver.frozen_flow`: the final field is tracked once from 0
-to `end_time` in steps of `particles.dt` (`solver.dt` when -1) when the results are written, as `track_frozen` does. Outputs next to
-`solution.vtu`: `particles.vtp` (final state), `particles_<n>.vtp` (every `output_every`-th tracking step, written during the run
-when the driver has an output directory), `particle_report.json` (`time`, `injected`, `counts {active, deposited, escaped, stuck}`,
-`mean_diameter`, `mass_by_state`, `steps`) and, with `tracks`, `particle_tracks.csv`. A transient run with particles is not
-restartable (the tracker state is not in the checkpoint; the run-control warning is emitted). Service method `particles.report`
-(`session`, optional `with_tracks`) returns the report of the live session (a steady session is tracked on demand). The flow is
-never modified: its fields are bit-identical with `particles.enabled` true or false (ADR 0037 W3).
+by the dynamic-mesh check).
+
+Transient algorithms (`piso`, `pimple`): the tracker is advanced at the end of every `Simulation::step` over the flow step
+(`h = min(dt, end_time - tracker time)`), bit for bit as `track_transient` does, by every driver (`rcfd run`, service
+`run.headless`/`workflow`, `run.start`).
+
+Steady algorithms and `solver.frozen_flow`: the final field is tracked once from 0 to `end_time` in steps of `particles.dt`
+(`solver.dt` when -1) when the results are written, as `track_frozen` does.
+
+Outputs next to `solution.vtu`:
+
+* `particles.vtp` (final state)
+* `particles_<n>.vtp` (every `output_every`-th tracking step, written during the run when the driver has an output directory)
+* `particle_report.json` (`time`, `injected`, `counts {active, deposited, escaped, stuck}`, `mean_diameter`, `mass_by_state`,
+  `steps`)
+* with `tracks`, `particle_tracks.csv`
+
+A transient run with particles is not restartable (the tracker state is not in the checkpoint; the run-control warning is
+emitted). Service method `particles.report` (`session`, optional `with_tracks`) returns the report of the live session (a
+steady session is tracked on demand). The flow is never modified: its fields are bit-identical with `particles.enabled` true
+or false (ADR 0037 W3).
 
 ## `mixing_plane`
 
-Stage (mixing-plane) interface between a frozen-rotor zone and a stationary zone in the steady loop (F-126, ADR 0055, ADR 0059).
-`mixing_plane.enabled = false` by default; with it off nothing changes (bit-identical). The two zones are joined only by two boundary
-patches, typically the mesh generator `annulus_3d_stage`. Before every `every`-th iteration the upstream outlet faces are circumferentially
-averaged in radial bands (mass, angular momentum and normal momentum flux conserved) and the state is passed to the downstream inlet
-faces as a per-face fixed absolute velocity; the band pressure of the downstream inlet is passed back to the upstream outlet faces as a
-per-face fixed pressure. Both are under-relaxed.
+`mixing_plane` sets up a stage (mixing-plane) interface between a frozen-rotor zone and a stationary zone in the steady loop
+(F-126, ADR 0055, ADR 0059). `mixing_plane.enabled = false` by default; with it off nothing changes (bit-identical). The two
+zones are joined only by two boundary patches, typically the mesh generator `annulus_3d_stage`.
+
+Before every `every`-th iteration the upstream outlet faces are circumferentially averaged in radial bands (mass, angular
+momentum and normal momentum flux conserved) and the state is passed to the downstream inlet faces as a per-face fixed
+absolute velocity. The band pressure of the downstream inlet is passed back to the upstream outlet faces as a per-face fixed
+pressure. Both are under-relaxed.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1544,19 +2025,39 @@ per-face fixed pressure. Both are under-relaxed.
 | `every` | `1` | exchange interval in iterations (>= 1) |
 | `tolerance` | `1e-6` | the run is converged only if the relative change of the exchange (monitor `res_mixing`) is below this, with at least 2 exchanges |
 
-Located errors: unknown or equal patches, patches without a `[boundaries]` section, a `bc_kind` on either patch, wrong velocity or pressure
-kinds, `bands` unset, `r_min >= r_max`, zero axis, `relax`, `every`, `tolerance` out of range, any algorithm other than `simple`/`simplec`,
-`solver.frozen_flow`; at run time a band whose flux cancels fails the run with a message starting `mixing_plane:`. Not delivered: transient
-and coupled solvers, compressible mixed-out state, rothalpy, area-fraction splitting across band edges, curved or non-aligned interfaces,
-sector periodicity, turbulence or scalar transfer through the plane. Unequal numbers of cells around are allowed (the passed axial
-velocity is scaled by the ratio of the two polygon areas).
+Unequal numbers of cells around are allowed (the passed axial velocity is scaled by the ratio of the two polygon areas).
+
+Located errors:
+
+* unknown or equal patches
+* patches without a `[boundaries]` section
+* a `bc_kind` on either patch
+* wrong velocity or pressure kinds
+* `bands` unset
+* `r_min >= r_max`
+* zero axis
+* `relax`, `every`, `tolerance` out of range
+* any algorithm other than `simple`/`simplec`
+* `solver.frozen_flow`
+
+At run time a band whose flux cancels fails the run with a message starting `mixing_plane:`.
+
+Not delivered:
+
+* transient and coupled solvers
+* compressible mixed-out state
+* rothalpy
+* area-fraction splitting across band edges
+* curved or non-aligned interfaces
+* sector periodicity
+* turbulence or scalar transfer through the plane
 
 ## Wave 19C: `restart`, `chain`, setup rules (F-115, F-241, F-240, ADR 0031)
 
 ### `restart` (F-115)
 
-Start the run from the solution in a restart file (the file `rcfd run` writes to `<out>/restart.rcfd`). All keys have an
-explicit unset sentinel, so a case without them behaves exactly as before.
+`restart` starts the run from the solution in a restart file (the file `rcfd run` writes to `<out>/restart.rcfd`). All
+keys have an explicit unset sentinel, so a case without them behaves exactly as before.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -1564,11 +2065,21 @@ explicit unset sentinel, so a case without them behaves exactly as before.
 | `source_case` | `""` | case that built the mesh of a restart file that does not embed its mesh (files written before ADR 0031); `""` = unset |
 | `method` | `gradient` | transfer method when the file is on another mesh: `gradient`, `nearest`, `inverse_distance`, `least_squares`, `conservative` (gradient plus a uniform shift matching the volume average), `conservative_overlap` (axis-aligned box cells only) |
 
-The same mesh restores the state of the writing engine exactly. A steady file starts a transient run on the same mesh (velocity,
-pressure and flux are taken over, time 0, fresh history). Another mesh transfers velocity and pressure with `method` and rebuilds
-the flux from the transferred velocity; the report gives `max_flux_imbalance`, which is not zero (a divergence-free projection is
-not implemented). Command line: `rcfd run --restart-from f [--source-case c] [--method m]`, `rcfd restart <case> --from f [--mesh m]`.
-`rcfd run` and the chain honour `restart.from`; the service method `run.headless` does not (use `continue_from` or `interpolate_*`).
+Behaviour of a restart:
+
+* A restart on the same mesh restores the state of the writing engine exactly.
+* A steady file starts a transient run on the same mesh (velocity, pressure and flux are taken over, time 0, fresh
+  history).
+* A restart on another mesh transfers velocity and pressure with `method` and rebuilds the flux from the transferred
+  velocity. The report gives `max_flux_imbalance`, which is not zero (a divergence-free projection is not implemented).
+
+Command line:
+
+* `rcfd run --restart-from f [--source-case c] [--method m]`
+* `rcfd restart <case> --from f [--mesh m]`
+
+`rcfd run` and the chain honour `restart.from`; the service method `run.headless` does not (use `continue_from` or
+`interpolate_*`).
 
 ### `chain` (F-241)
 
@@ -1592,9 +2103,13 @@ sequence = ["steady", "transient"]
 set = ["solver.algorithm=\"piso\"", "solver.dt=0.05", "solver.end_time=1.0"]
 ```
 
-Static errors are located: an unknown or repeated stage in `chain.sequence.<i>`, a malformed entry, an unknown setting path or a
-value of the wrong type in `chain.stages.<name>.set.<i>`. Results of a stage go to `<out>/<stage>/`. `rcfd run --no-chain` runs the
-base case alone. See `docs/run-control.md` for the events.
+Results of a stage go to `<out>/<stage>/`. `rcfd run --no-chain` runs the base case alone. See `docs/run-control.md` for
+the events.
+
+Located static errors:
+
+* an unknown or repeated stage in `chain.sequence.<i>`
+* a malformed entry, an unknown setting path or a value of the wrong type in `chain.stages.<name>.set.<i>`
 
 ### Setup rules (F-240)
 
@@ -1605,36 +2120,46 @@ and sometimes a suggested `fix` (never applied). Errors stop the run with exit 3
 with the rule id. The 21 rules (SV001-SV013 errors, SV101-SV105 warnings, SV201-SV203 infos) and the grammar are in ADR 0031.
 
 One computed rule needs a built simulation and is not in the rule file: **SV301** (warning, `solver`, path
-`solver.corrector_control`, fix `adaptive`; ADR 0156). For a transient `piso`/`pimple` case with `time_advance = "iterative"`,
-no dynamic mesh, `n_correctors >= 2`, `corrector_control = "fixed"` and `pressure_lag_check != "off"`, `rcfd check`,
-`--check-only` and `rcfd run` let a copy of the solver take its next step with the ADR 0073 pressure-lag estimate (60 power
-iterations, the case's correctors) and warn when a lagged pressure error is amplified by 1.3 or more per step: the coupling is
-then likely unstable (in ADR 0154's cylinder runs every clean set-up was at most 1.166, every spoky or diverged one at least
-2.418). The message names the cell of the estimate's largest entry and the remedy `solver.corrector_control = "adaptive"`. The
-estimate changes no result (the solver itself is not touched) and costs about 61 steps' worth of linear algebra once. The trial
-step uses the viscosity the first step would use (ADR 0160): a rheology law's on the current velocity, else a turbulence
-model's present eddy viscosity. The run service's `run.check` and `run.headless` (MCP `check_case_headless`, `run_headless`)
-give it too; `run.headless` only at a run's start (no step taken yet).
+`solver.corrector_control`, fix `adaptive`; ADR 0156).
 
-ADR 0172 (job 49J) changes three things here. (1) SV301 is evaluated at the *settled* step: when `solver.max_courant`, a
-`time_control` block or the legacy Courant controller will move the step, the estimate uses the step the controller is expected to
-settle on (its target over the initial flow's Courant number, clamped to the step limits; the next proposed step for a start from
-rest), and during the run a watch re-evaluates (at most about a dozen estimates) when the step has moved by a factor 1.5 or has
-settled after moving, and emits one `warning` event if the coupling has become unstable; it is silent after a pre-run SV301. A
-fixed step is evaluated exactly as before. (2) The static rules and the computed ones are one list: `rcfd check`, `rcfd run`,
-the chain driver, `run.check` and `run.headless` (the latter two never refuse because of rule errors) all show it. (3) **SV302**
-(warning, `solver`, path `solver.linear_upwind_limiter`, no `fix`): a steady `simple`/`simplec` case with
-`convection = "linear_upwind"` and `linear_upwind_limiter = "none"` on a mesh whose wall cells reach `aspect ratio x
-tan(non-orthogonality)` of 3000 or more (wall = a patch with the turbulence role wall that is not empty, symmetry or cyclic). It is
-a risk notice, not a prediction: ADR 0171 found this combination diverging at a NACA 0012 trailing edge at 6 degrees while the same
-mesh was clean at 0 degrees; `barth_jespersen` removes the divergence at about +3 % in `cd_eff`. The default is unchanged. The
-steady divergence guard's message names the limiter instead of "lower the relaxation factors" when the failing cell is such a wall
-cell.
+SV301 applies to a transient `piso`/`pimple` case with `time_advance = "iterative"`, no dynamic mesh, `n_correctors >= 2`,
+`corrector_control = "fixed"` and `pressure_lag_check != "off"`. For such a case, `rcfd check`, `--check-only` and
+`rcfd run` let a copy of the solver take its next step with the ADR 0073 pressure-lag estimate (60 power iterations, the
+case's correctors). They warn when a lagged pressure error is amplified by 1.3 or more per step: the coupling is then
+likely unstable (in ADR 0154's cylinder runs every clean set-up was at most 1.166, every spoky or diverged one at least
+2.418). The message names the cell of the estimate's largest entry and the remedy
+`solver.corrector_control = "adaptive"`.
+
+The estimate changes no result (the solver itself is not touched) and costs about 61 steps' worth of linear algebra once.
+The trial step uses the viscosity the first step would use (ADR 0160): a rheology law's on the current velocity, else a
+turbulence model's present eddy viscosity.
+
+The run service's `run.check` and `run.headless` (MCP `check_case_headless`, `run_headless`) give SV301 too; `run.headless`
+only at a run's start (no step taken yet).
+
+ADR 0172 (job 49J) changes three things here:
+
+1. SV301 is evaluated at the *settled* step. When `solver.max_courant`, a `time_control` block or the legacy Courant
+   controller will move the step, the estimate uses the step the controller is expected to settle on (its target over
+   the initial flow's Courant number, clamped to the step limits; the next proposed step for a start from rest). During
+   such a run a watch re-evaluates (at most about a dozen estimates) when the step has moved by a factor 1.5 or has
+   settled after moving, and emits one `warning` event if the coupling has become unstable; it is silent after a pre-run
+   SV301. A fixed step is evaluated exactly as before.
+2. The static rules and the computed ones are one list: `rcfd check`, `rcfd run`, the chain driver, `run.check` and
+   `run.headless` (the latter two never refuse because of rule errors) all show it.
+3. **SV302** (warning, `solver`, path `solver.linear_upwind_limiter`, no `fix`): a steady `simple`/`simplec` case with
+   `convection = "linear_upwind"` and `linear_upwind_limiter = "none"` on a mesh whose wall cells reach
+   `aspect ratio x tan(non-orthogonality)` of 3000 or more (wall = a patch with the turbulence role wall that is not
+   empty, symmetry or cyclic). It is a risk notice, not a prediction: ADR 0171 found this combination diverging at a
+   NACA 0012 trailing edge at 6 degrees while the same mesh was clean at 0 degrees; `barth_jespersen` removes the
+   divergence at about +3 % in `cd_eff`. The default is unchanged. The steady divergence guard's message names the
+   limiter instead of "lower the relaxation factors" when the failing cell is such a wall cell.
 
 ## Wave 20C: `study` (F-095, ADR 0034)
 
-A parametric study is part of the settings tree; an empty `study.parameters` means no study and every older case is unchanged.
-`rcfd study <case>` runs it (see `docs/studies.md`). All keys have explicit unset values.
+The `study` section holds a parametric study as part of the settings tree; `rcfd study <case>` runs it (see
+`docs/studies.md`). An empty `study.parameters` means no study and every older case is unchanged. All keys have explicit
+unset values.
 
 | key | type, default | meaning |
 | --- | --- | --- |
@@ -1649,16 +2174,23 @@ A parametric study is part of the settings tree; an empty `study.parameters` mea
 | `study.parameters.<name>.json` | list of strings, `[]` | `list`: values as JSON texts, for vectors and booleans |
 | `study.parameters.<name>.start`, `.stop`, `.count` | float, float, int; 0 | `linspace`, `logspace` (geometric between the two values, both > 0) |
 
-Static errors are located (exit 3, nothing runs): `study.parameters.<n>.path` (empty, unknown setting, the study's own section, a
-path swept twice), `.values.<i>` / `.strings.<i>` / `.json.<i>` (value rejected by the setting's type, enum or range), `.count`
-and `.start` (sweep definition), `study.combine` (zip lengths), `study.outputs.<i>` (no such report), `study.parallel`,
-`study.parameters` (no parameters for `rcfd study`). `Case::set` now also creates named entries nested deeper than one level
-(`--set study.parameters.k.path=...`).
+Static errors are located (exit 3, nothing runs):
+
+* `study.parameters.<n>.path`: empty, unknown setting, the study's own section, a path swept twice
+* `.values.<i>` / `.strings.<i>` / `.json.<i>`: value rejected by the setting's type, enum or range
+* `.count` and `.start`: sweep definition
+* `study.combine`: zip lengths
+* `study.outputs.<i>`: no such report
+* `study.parallel`
+* `study.parameters`: no parameters for `rcfd study`
+
+`Case::set` now also creates named entries nested deeper than one level (`--set study.parameters.k.path=...`).
 
 ## Wave 20B: `dynamic_mesh` (F-063, F-229, ADR 0033)
 
-Moving mesh for incompressible laminar `piso` / `pimple` runs with `solver.time_scheme = "euler"`; see `docs/dynamic-mesh.md`. Every key is inert while
-`dynamic_mesh.enabled = false` (the default) and older cases are unchanged. Unset values: empty strings and lists, 0.
+`dynamic_mesh` moves the mesh in incompressible laminar `piso` / `pimple` runs with `solver.time_scheme = "euler"`; see
+`docs/dynamic-mesh.md`. Every key is inert while `dynamic_mesh.enabled = false` (the default) and older cases are
+unchanged. Unset values: empty strings and lists, 0.
 
 | key | type, default | meaning |
 | --- | --- | --- |
@@ -1689,21 +2221,44 @@ Moving mesh for incompressible laminar `piso` / `pimple` runs with `solver.time_
 | `dynamic_mesh.six_dof.force_patches` | list of strings, `[]` | patches the flow force is integrated on (empty = moving patches) |
 | `dynamic_mesh.six_dof.integrator` | `rk4` (default), `newmark` | body integrator (`newmark` not for free rotation) |
 
-Static errors are located at the key (unknown patch names, expression syntax and dimension, zero rotation axis with a rotation expression, negative exponent,
-`six_dof` without positive mass and inertia, wrong list lengths); combinations that are not implemented (`solver.algorithm` other than `piso` / `pimple`, a
-`time_scheme` other than `euler`, turbulence, energy, scalars, particles, momentum sources, rheology, statistics, restart) are reported at `dynamic_mesh.enabled`.
+Static errors are located at the key:
+
+* unknown patch names
+* expression syntax and dimension
+* zero rotation axis with a rotation expression
+* negative exponent
+* `six_dof` without positive mass and inertia
+* wrong list lengths
+
+Combinations that are not implemented are reported at `dynamic_mesh.enabled`:
+
+* `solver.algorithm` other than `piso` / `pimple`
+* a `time_scheme` other than `euler`
+* turbulence, energy, scalars, particles, momentum sources, rheology, statistics, restart
+
 A mesh that becomes invalid stops the run: `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
 
 ## Wave 21B: `regions` (F-216, ADR 0036)
 
-`regions.<name>` assigns a model to a cell zone. Keys: `zone` = `all` (default) | `box` | `cell_zone` | `register` with
-`box_min`, `box_max`, `cell_zone`, `register` as for `zone_sources`; `turbulence` = `model` (default, the global
-`turbulence.model` acts) | `laminar`. A laminar region sets the momentum-equation face viscosity to the molecular value
-`physics.nu` on every face that touches a cell of the region (boundary faces by their owner cell); the turbulence transport
-equations are still solved there, and the energy, radiation and species models are not region-scoped. Located errors:
-`regions.<n>.turbulence` (unknown value, no turbulence model configured, Reynolds stress or plugin model, rheology or a
-temperature-dependent viscosity), `regions.<n>.zone` (no cells), `regions.<n>.cell_zone`, `regions.<n>.register`.
-Without any `regions` entry nothing changes (recorded baseline hashes are bit-identical).
+`regions.<name>` assigns a model to a cell zone. Without any `regions` entry nothing changes (recorded baseline hashes are
+bit-identical).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `zone` | `all` | `all`, `box`, `cell_zone` or `register`, with `box_min`, `box_max`, `cell_zone`, `register` as for `zone_sources` |
+| `turbulence` | `model` | `model` (the global `turbulence.model` acts) or `laminar` |
+
+A laminar region sets the momentum-equation face viscosity to the molecular value `physics.nu` on every face that touches
+a cell of the region (boundary faces by their owner cell). The turbulence transport equations are still solved there, and
+the energy, radiation and species models are not region-scoped.
+
+Located errors:
+
+* `regions.<n>.turbulence`: unknown value, no turbulence model configured, Reynolds stress or plugin model, rheology or a
+  temperature-dependent viscosity
+* `regions.<n>.zone`: no cells
+* `regions.<n>.cell_zone`
+* `regions.<n>.register`
 
 ## Wave 22: `linear_solver` (F-101, ADR 0038)
 
@@ -1729,11 +2284,18 @@ section is future work.
 
 ## Wave 27A: `multiphase` (F-055, ADR 0049)
 
-`multiphase.enabled = true` selects the volume-of-fluid free-surface solver (`rcfd_fv::vof`) in place of the single-phase transient
-kernel: two incompressible immiscible fluids, the phase fraction `alpha` (1 = phase 1) transported with interface compression and a
-flux-corrected explicit limiter, sub-cycled to a Courant number `alpha_courant`; mixture density and viscosity linear in `alpha`;
-CSF surface tension; well-balanced `p_rgh` gravity. Everything is inert and silent while `enabled = false`; setting any
-`multiphase.*` key then is a located error. A case without the section is unchanged (baseline hashes bit-identical).
+`multiphase.enabled = true` selects the volume-of-fluid free-surface solver (`rcfd_fv::vof`) in place of the single-phase
+transient kernel. Everything is inert and silent while `enabled = false`; setting any `multiphase.*` key then is a located
+error. A case without the section is unchanged (baseline hashes bit-identical).
+
+The model:
+
+* two incompressible immiscible fluids
+* the phase fraction `alpha` (1 = phase 1), transported with interface compression and a flux-corrected explicit limiter,
+  sub-cycled to a Courant number `alpha_courant`
+* mixture density and viscosity linear in `alpha`
+* CSF surface tension
+* well-balanced `p_rgh` gravity
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -1751,29 +2313,52 @@ CSF surface tension; well-balanced `p_rgh` gravity. Everything is inert and sile
 | `multiphase.initial.shape` | "unset" | `box` (`box_min`, `box_max`), `sphere` (`centre`, `radius`), `half_space` (`normal`, `point`: the side `n . (x - point) <= 0`); required |
 | `multiphase.initial.inside` | "phase_1" | which phase fills the shape; the other fills the rest |
 
-Cells are sub-sampled 10 per direction, so a face-aligned box is exact; in 2-D give the box a z range that covers the mesh thickness.
-Gravity is `physics.gravity`; the phase densities replace `physics.rho` and the viscosities `physics.nu`. The pressure is in Pa;
-`field("p")` is the pressure, `field("p_rgh")` the modified pressure `p - rho g . (x - x_ref)` (also what `pressure()` returns and what
-a `pressure = "fixed"` boundary value sets), `field("alpha")` and `field("rho")` are new; `alpha`, `p_rgh`, `p`, `rho` are written to
-`solution.vtu`. The time step is the fixed `solver.dt`; a time step above the capillary limit is flagged in the library
-(`capillary_dt`), not in the tree.
+Cells are sub-sampled 10 per direction, so a face-aligned box is exact; in 2-D give the box a z range that covers the mesh
+thickness. Gravity is `physics.gravity`; the phase densities replace `physics.rho` and the viscosities `physics.nu`. The
+time step is the fixed `solver.dt`; a time step above the capillary limit is flagged in the library (`capillary_dt`), not
+in the tree.
+
+The pressure is in Pa. Fields and output:
+
+* `field("p")` is the pressure.
+* `field("p_rgh")` is the modified pressure `p - rho g . (x - x_ref)`, also what `pressure()` returns and what a
+  `pressure = "fixed"` boundary value sets.
+* `field("alpha")` and `field("rho")` are new.
+* `alpha`, `p_rgh`, `p`, `rho` are written to `solution.vtu`.
 
 Defaults since wave 44D (ADR 0114, user decision 2026-10-24): `curvature = "height_function"`, `viscous_stress = "full"` and
 `component_diagonal = "corrected"`, the library defaults of `VofSettings::new`. Results of a case without these keys therefore differ
 from runs before ADR 0114; set `curvature = "csf"`, `viscous_stress = "laplacian"` and `component_diagonal = "averaged"` to get the
 earlier solver. The global `solver.viscous_stress` and `solver.component_diagonal` act on the single-phase kernels only.
 
-Located errors (path in the tree) when `multiphase.enabled = true`: `solver.algorithm` not `piso`/`pimple` (steady, coupled and
-compressible are refused); `fluid.density` not `constant`; `turbulence.model`, `energy.enabled`, `rheology.model`, `properties`,
-`scalars`, `sources`, `components`, `radiation.model`, `statistics.enabled`, `dynamic_mesh.enabled`, `particles.enabled`, `chemistry`,
-`electric.enabled`, `phase_change.enabled`, `solids`, `zone_sources`; `solver.time_advance = fractional_step`; `solver.max_courant > 0`;
-`solver.time_scheme` not `euler`; `solver.viscous_stress = full` (use `multiphase.viscous_stress`); `solver.bulk_velocity`; `solver.frozen_flow`; `physics.body_force`;
-`mesh.periodic_x/y`; non-default `physics.rho` / `physics.nu`; a boundary velocity other than `fixed` (no-slip: value 0) or
-`zero_gradient` (so no `symmetry`, `partial_slip`, `marangoni`, `freestream`, `moving_wall`, `shear`), a pressure other than `fixed` or
-`zero_gradient`, a catalogue boundary kind; unset required keys. Reports that assume one density (force, moment, y_plus, heat_flow,
-mass_flow, mass_weighted_average, vector_flux) are refused. The pressure solve is preconditioned CG, with smoothed-aggregation AMG
-as the preconditioner above 2000 cells (wave 28A: the earlier breakdown on the 1000:1 density jump was a zero filtered diagonal in the
-AMG setup, fixed in `rcfd-linalg`; ADR 0052 addendum 1).
+Located errors (path in the tree) when `multiphase.enabled = true`:
+
+* `solver.algorithm` not `piso`/`pimple` (steady, coupled and compressible are refused)
+* `fluid.density` not `constant`
+* `turbulence.model`, `energy.enabled`, `rheology.model`, `properties`, `scalars`, `sources`, `components`,
+  `radiation.model`, `statistics.enabled`, `dynamic_mesh.enabled`, `particles.enabled`, `chemistry`, `electric.enabled`,
+  `phase_change.enabled`, `solids`, `zone_sources`
+* `solver.time_advance = fractional_step`
+* `solver.max_courant > 0`
+* `solver.time_scheme` not `euler`
+* `solver.viscous_stress = full` (use `multiphase.viscous_stress`)
+* `solver.bulk_velocity`
+* `solver.frozen_flow`
+* `physics.body_force`
+* `mesh.periodic_x/y`
+* non-default `physics.rho` / `physics.nu`
+* a boundary velocity other than `fixed` (no-slip: value 0) or `zero_gradient` (so no `symmetry`, `partial_slip`,
+  `marangoni`, `freestream`, `moving_wall`, `shear`)
+* a pressure other than `fixed` or `zero_gradient`
+* a catalogue boundary kind
+* unset required keys
+
+Reports that assume one density (force, moment, y_plus, heat_flow, mass_flow, mass_weighted_average, vector_flux) are
+refused.
+
+The pressure solve is preconditioned CG, with smoothed-aggregation AMG as the preconditioner above 2000 cells (wave 28A:
+the earlier breakdown on the 1000:1 density jump was a zero filtered diagonal in the AMG setup, fixed in `rcfd-linalg`;
+ADR 0052 addendum 1).
 
 ## Wave 28A: `multiphase.mass_transfer`, `multiphase.waves`, `multiphase.reference_point` (F-226, F-227, ADR 0052)
 
@@ -1801,21 +2386,35 @@ wave section is switched on.
 | `multiphase.waves.beach_x_inner`, `beach_x_outer` | 0, 0 | `x` where the computed solution has weight 1 / the target has weight 1; must differ |
 | `multiphase.waves.beach_blend`, `beach_exponent` | "exponential", 3.5 | weight shape `1 - (exp(chi^p) - 1)/(e - 1)` or `(1 - chi)^n` |
 
-Mass transfer. The liquid fraction loses `mdot dt / rho_l` (Lee: the exponential integrator of the frozen-temperature relaxation
-`d alpha / dt = -c theta alpha`, `theta = (T - T_sat)/T_sat`, so `alpha` stays in [0, 1]; Hertz-Knudsen: the kinetic flux times
-`|grad alpha|`), and the pressure equation receives the volume source `mdot (1/rho_vapour - 1/rho_liquid)`. The volume has to leave,
-so at least one boundary needs `pressure = "fixed"` (located error otherwise). LIMITATIONS: there is NO energy equation in the
-multiphase path. The temperature is a prescribed field (uniform plus a constant gradient); the latent heat `h_fg` is used for the
-Clausius-Clapeyron `p_sat` and for a reported latent power only, there is no latent-heat feedback on the temperature, no Stefan problem
-or boiling curve is solved, and the momentum equation has no phase-change term in `rho phi`. The rate is limited by the liquid or
-vapour available in the cell (clipping, ADR 0052 addendum 2).
+Mass transfer. The liquid fraction loses `mdot dt / rho_l`. Lee uses the exponential integrator of the frozen-temperature
+relaxation `d alpha / dt = -c theta alpha`, `theta = (T - T_sat)/T_sat`, so `alpha` stays in [0, 1]. Hertz-Knudsen uses
+the kinetic flux times `|grad alpha|`. The pressure equation receives the volume source
+`mdot (1/rho_vapour - 1/rho_liquid)`. The volume has to leave, so at least one boundary needs `pressure = "fixed"`
+(located error otherwise).
 
-Waves. 2-D tank, propagation along +x, gravity along -y (any other gravity is a located error on `physics.gravity`), phase 1 the
-water. The inlet sets per-face velocity and `alpha` from the linear or second-order Stokes kinematics (`rcfd_fv::waves`) with the
-ramp; the relaxation zone is applied after the pressure correction as `w * computed + (1 - w) * target` with the weights of the
-wave library, and the volume it adds or removes is reported (`relax_volume`) so that the volume balance stays an identity. Use
-`multiphase.reference_point` on the open top. Not delivered: irregular and directional waves in the tree, a wave-making piston,
-three-dimensional tanks, a relaxation target other than still water in the tree, and a general-direction inlet.
+LIMITATIONS:
+
+* There is NO energy equation in the multiphase path.
+* The temperature is a prescribed field (uniform plus a constant gradient).
+* The latent heat `h_fg` is used for the Clausius-Clapeyron `p_sat` and for a reported latent power only.
+* There is no latent-heat feedback on the temperature.
+* No Stefan problem or boiling curve is solved.
+* The momentum equation has no phase-change term in `rho phi`.
+* The rate is limited by the liquid or vapour available in the cell (clipping, ADR 0052 addendum 2).
+
+Waves. 2-D tank, propagation along +x, gravity along -y (any other gravity is a located error on `physics.gravity`),
+phase 1 the water. The inlet sets per-face velocity and `alpha` from the linear or second-order Stokes kinematics
+(`rcfd_fv::waves`) with the ramp. The relaxation zone is applied after the pressure correction as
+`w * computed + (1 - w) * target` with the weights of the wave library. The volume it adds or removes is reported
+(`relax_volume`) so that the volume balance stays an identity. Use `multiphase.reference_point` on the open top.
+
+Not delivered:
+
+* irregular and directional waves in the tree
+* a wave-making piston
+* three-dimensional tanks
+* a relaxation target other than still water in the tree
+* a general-direction inlet
 
 ## Wave 29B: `multiphase.mixture` and `multiphase.cavitation` (F-127, ADR 0056)
 
@@ -1835,29 +2434,57 @@ is not `none`. A case without them is unchanged (baseline hashes bit-identical).
 | `multiphase.cavitation.nucleus_radius` | -1 (unset) | `R_0` [m], required > 0: smallest bubble radius and inception seed |
 | `multiphase.cavitation.vaporisation_factor`, `condensation_factor` | 1, 1 | multipliers of the evaporation and condensation rates (>= 0) |
 
-Mixture model. The phase fraction is transported with the extra slip flux `alpha (1 - alpha) v_12` (Godunov low-order flux, central
-high-order flux, the existing Zalesak limiter; the sub-step Courant number includes the slip signal speed) and the momentum equation gets
-the drift mass flux and the drift stress, `-div(j (x) J + T)`. The slip `v_12` is the gravity-driven single-particle speed with the
-mixture buoyancy `(rho_d - rho_m) = (1 - alpha_d)(rho_d - rho_c)` and Stokes or Schiller-Naumann drag (Newton iteration). LIMITATIONS:
-only gravity drives the slip (no centrifugal or inertial terms), the time derivative of the drift mass flux is dropped, no turbulent
-dispersion, lift, virtual mass or wall lubrication, and no particle-size distribution. Zero slip (equal densities) reduces to the
-plain VOF path bit for bit. Located errors: `multiphase.mixture.particle_diameter` (unset or not positive), `physics.gravity` (zero),
-`multiphase.mixture.model` (with thermal `mass_transfer` or with `cavitation`, both untested combinations). NOT a multi-fluid
-(per-phase momentum) Euler-Euler model.
+Mixture model. It is NOT a multi-fluid (per-phase momentum) Euler-Euler model. The phase fraction is transported with the
+extra slip flux `alpha (1 - alpha) v_12` (Godunov low-order flux, central high-order flux, the existing Zalesak limiter;
+the sub-step Courant number includes the slip signal speed). The momentum equation gets the drift mass flux and the drift
+stress, `-div(j (x) J + T)`. The slip `v_12` is the gravity-driven single-particle speed with the mixture buoyancy
+`(rho_d - rho_m) = (1 - alpha_d)(rho_d - rho_c)` and Stokes or Schiller-Naumann drag (Newton iteration). Zero slip (equal
+densities) reduces to the plain VOF path bit for bit.
 
-Cavitation. Schnerr-Sauer with a bubble-number density: `alpha_v = x/(1 + x)`, `x = n (4/3) pi R^3`, inertia-controlled growth
-`R' = sign(p_sat - p) sqrt(2 |p_sat - p|/(3 rho_l))`, vapour mass source `mdot = rho_v rho_l/rho_m alpha_v (1 - alpha_v) (3/R) R'`.
-The source is coupled IMPLICITLY to the pressure equation: it is linearised by the chord to the saturation point, the slope goes on the
-diagonal of the pressure matrix and the linearisation is repeated until the delivered source equals the exact one to 1e-10 of a vapour
-fraction per step (at most 60 repetitions per pressure correction), so the pressure in a cavity sits at `p_sat` and the sign of the
-source is that of `p_sat - p` at the solved pressure. The vapour fraction never leaves `[alpha_floor, 1]`, `alpha_floor = x_0/(1 + x_0)`
-(every cell starts with the nuclei). The phase fraction is transported in advective form (`alpha_t + div(alpha phi) - alpha div phi`) when
-cavitation is on. The pressure is the absolute `p = p_rgh + rho g . (x - x_ref)`. LIMITATIONS: isothermal (no thermal effect on `p_sat`),
-no vapour compressibility, no non-condensable gas, no turbulence correction of the pressure, no surface tension in the growth law
-(Rayleigh without Plesset terms), no bubble-number transport; the flow Courant number must stay below about 1 through a cavity collapse
-(the incompressible liquid slug accelerates to several times the inlet speed; the registered `dt` did not). Located errors:
-`multiphase.cavitation.saturation_pressure`, `bubble_number_density`, `nucleus_radius` (unset or not positive),
-`multiphase.cavitation.model` (no `pressure = "fixed"` boundary for the volume to leave through; combined with `mass_transfer`).
+LIMITATIONS:
+
+* Only gravity drives the slip (no centrifugal or inertial terms).
+* The time derivative of the drift mass flux is dropped.
+* No turbulent dispersion, lift, virtual mass or wall lubrication.
+* No particle-size distribution.
+
+Located errors:
+
+* `multiphase.mixture.particle_diameter`: unset or not positive
+* `physics.gravity`: zero
+* `multiphase.mixture.model`: with thermal `mass_transfer` or with `cavitation`, both untested combinations
+
+Cavitation. The model is Schnerr-Sauer with a bubble-number density:
+
+* `alpha_v = x/(1 + x)`, `x = n (4/3) pi R^3`
+* inertia-controlled growth `R' = sign(p_sat - p) sqrt(2 |p_sat - p|/(3 rho_l))`
+* vapour mass source `mdot = rho_v rho_l/rho_m alpha_v (1 - alpha_v) (3/R) R'`
+
+The source is coupled IMPLICITLY to the pressure equation. It is linearised by the chord to the saturation point, the
+slope goes on the diagonal of the pressure matrix, and the linearisation is repeated until the delivered source equals the
+exact one to 1e-10 of a vapour fraction per step (at most 60 repetitions per pressure correction). So the pressure in a
+cavity sits at `p_sat` and the sign of the source is that of `p_sat - p` at the solved pressure.
+
+The vapour fraction never leaves `[alpha_floor, 1]`, `alpha_floor = x_0/(1 + x_0)` (every cell starts with the nuclei).
+The phase fraction is transported in advective form (`alpha_t + div(alpha phi) - alpha div phi`) when cavitation is on.
+The pressure is the absolute `p = p_rgh + rho g . (x - x_ref)`.
+
+LIMITATIONS:
+
+* isothermal (no thermal effect on `p_sat`)
+* no vapour compressibility
+* no non-condensable gas
+* no turbulence correction of the pressure
+* no surface tension in the growth law (Rayleigh without Plesset terms)
+* no bubble-number transport
+* the flow Courant number must stay below about 1 through a cavity collapse (the incompressible liquid slug accelerates
+  to several times the inlet speed; the registered `dt` did not)
+
+Located errors:
+
+* `multiphase.cavitation.saturation_pressure`, `bubble_number_density`, `nucleus_radius`: unset or not positive
+* `multiphase.cavitation.model`: no `pressure = "fixed"` boundary for the volume to leave through; combined with
+  `mass_transfer`
 
 ## Divergence guard of the transient solvers (`solver.divergence_courant_limit`)
 
@@ -1870,62 +2497,96 @@ read the state, so results are bit-identical to runs without the key.
 
 ## Divergence guard of the steady solvers (`solver.steady_divergence_guard`)
 
-`solver.steady_divergence_guard` (`on` default, `off`) applies to `solver.algorithm = "simple"`, `"simplec"` and `"coupled"` (ADR 0077). After every iteration
-the guard checks: any non-finite residual, continuity, cell velocity, cell pressure or face flux (always, also with `off`); with `on`, from the second
-iteration, the continuity exceeding 1e6 times the larger of its smallest value over the previous 50 iterations and 1e-6 `U_ref`, the largest cell speed
-exceeding 1e6 `U_ref`, or the pressure range exceeding 1e12 `P_ref` (`U_ref` the largest cell or boundary-face speed after the first iteration,
-`P_ref = max(U_ref^2, pressure range after the first iteration)`; a zero reference switches its criteria off). The guard records the first trip (kind
-`non_finite`, `continuity_growth`, `velocity_runaway` or `pressure_runaway`, the quantity, the cell and its position, the value, the limit, and the last
-good iteration = the one with the smallest continuity before the trip). The run-control driver (`rcfd run`, the `run.headless` service and MCP tool, the
-design loop) ends the run after that iteration with state `diverged`, exit code 6, the located message as reason and the record in the `finish` event
-(`divergence`, see `docs/run-control.md`). A simulation stepped directly (GUI, library) keeps iterating and exposes the record
-(`Simulation::steady_divergence`). The checks only read the state, so results are bit-identical with `on` and `off`.
+`solver.steady_divergence_guard` (`on` default, `off`) applies to `solver.algorithm = "simple"`, `"simplec"` and
+`"coupled"` (ADR 0077). After every iteration the guard checks any non-finite residual, continuity, cell velocity, cell
+pressure or face flux (always, also with `off`). With `on`, from the second iteration, the guard also checks:
+
+* the continuity exceeding 1e6 times the larger of its smallest value over the previous 50 iterations and 1e-6 `U_ref`,
+* the largest cell speed exceeding 1e6 `U_ref`, or
+* the pressure range exceeding 1e12 `P_ref`.
+
+`U_ref` is the largest cell or boundary-face speed after the first iteration, and
+`P_ref = max(U_ref^2, pressure range after the first iteration)`. A zero reference switches its criteria off.
+
+The guard records the first trip: the kind (`non_finite`, `continuity_growth`, `velocity_runaway` or `pressure_runaway`),
+the quantity, the cell and its position, the value, the limit, and the last good iteration = the one with the smallest
+continuity before the trip.
+
+The run-control driver (`rcfd run`, the `run.headless` service and MCP tool, the design loop) ends the run after that
+iteration with state `diverged`, exit code 6, the located message as reason and the record in the `finish` event
+(`divergence`, see `docs/run-control.md`). A simulation stepped directly (GUI, library) keeps iterating and exposes the
+record (`Simulation::steady_divergence`). The checks only read the state, so results are bit-identical with `on` and
+`off`.
 
 ## Pressure-lag check of PIMPLE (`solver.pressure_lag_check`)
 
-`solver.pressure_lag_check` (`warn` default, `raise`, `off`) applies to `solver.algorithm = "piso"` and `"pimple"` (not the fractional step, not dynamic
-meshes; ADR 0073 B4, ADR 0077) with `solver.n_correctors = 1`, the regime of the ADR 0073 model (with more correctors no estimate is made: in two-corrector
-runs at large diffusion numbers, including a fluid at rest, the estimate exceeded 1 where nothing grew, ADR 0077 amendment 3). One estimate per run of the
-per-step amplification of the lagged pressure error (step 1; step 2 with `bdf2` and `bdf2_bounded`, whose first step is an implicit Euler step). `warn`: an
-amplification of at least 1 gives a `warning` event (`kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`, and a message with the remedy
-`solver.n_correctors >= 2` or a smaller `solver.dt`); the solution is unchanged. `raise`: the run stops (state `diverged`, exit 6). `off`: no estimate.
-The estimate costs about as much as 15 steps, once per run (measured on a 48 x 48 PISO cavity).
+`solver.pressure_lag_check` (`warn` default, `raise`, `off`) applies to `solver.algorithm = "piso"` and `"pimple"` (not
+the fractional step, not dynamic meshes; ADR 0073 B4, ADR 0077) with `solver.n_correctors = 1`, the regime of the ADR 0073
+model. With more correctors no estimate is made: in two-corrector runs at large diffusion numbers, including a fluid at
+rest, the estimate exceeded 1 where nothing grew (ADR 0077 amendment 3).
+
+The check makes one estimate per run of the per-step amplification of the lagged pressure error (step 1; step 2 with
+`bdf2` and `bdf2_bounded`, whose first step is an implicit Euler step). The estimate costs about as much as 15 steps, once
+per run (measured on a 48 x 48 PISO cavity).
+
+* `warn`: an amplification of at least 1 gives a `warning` event (`kind = "pressure_lag"`, `step`, `rho`, `cell`,
+  `position`, and a message with the remedy `solver.n_correctors >= 2` or a smaller `solver.dt`); the solution is
+  unchanged.
+* `raise`: the run stops (state `diverged`, exit 6).
+* `off`: no estimate.
 
 ## Least-squares velocity gradient on periodic faces (`solver.periodic_gradient`)
 
-`solver.periodic_gradient` (`face_value` default, `partner_cell`) applies to the steady `simple`/`simplec` momentum gradient (used by gradient-based
-convection schemes and non-orthogonal correctors; ADR 0077 F-H0). `face_value` takes the interpolated face value at the face centre; where the cells on
-the two sides of a periodic seam are not aligned (a skewed blade-passage sector), the gradient of a seam cell is then wrong by O(1) of the gradient even
-for a linear field (0.17 of it on the FAN-01 sector mesh). `partner_cell` uses the partner cell mapped into the owner's frame and is exact for linear
-fields. Opt-in; not used by the transient kernel, scalars or turbulence equations.
+`solver.periodic_gradient` (`face_value` default, `partner_cell`) applies to the steady `simple`/`simplec` momentum
+gradient (used by gradient-based convection schemes and non-orthogonal correctors; ADR 0077 F-H0).
+
+* `face_value` takes the interpolated face value at the face centre. Where the cells on the two sides of a periodic seam
+  are not aligned (a skewed blade-passage sector), the gradient of a seam cell is then wrong by O(1) of the gradient even
+  for a linear field (0.17 of it on the FAN-01 sector mesh).
+* `partner_cell` uses the partner cell mapped into the owner's frame and is exact for linear fields.
+
+Opt-in; not used by the transient kernel, scalars or turbulence equations.
 
 ### Momentum convection on high-aspect, strongly non-orthogonal wall cells (ADR 0077 part B)
 
-With the steady solvers, `linear_upwind` and `tvd_van_leer` diverged from the first iterations on the FAN-01 H-slit sector mesh (13 332 cells, wall cells of
-aspect ratio up to 944 with face non-orthogonality up to 79 degrees), laminar and with SST; `upwind` and `tvd_minmod` were stable. The divergence starts in the
-wall cells with the largest aspect ratio times the tangent of their non-orthogonality: the unlimited extrapolation `grad(u) . (x_f - x_U)` over the long side of
-such a cell turns the near-wall velocity jump into face values tens of times the largest boundary speed. Use `upwind` or `tvd_minmod` on such meshes, or
-`linear_upwind` with `solver.linear_upwind_limiter = "barth_jespersen"` (below; ADR 0081).
+With the steady solvers, `linear_upwind` and `tvd_van_leer` diverged from the first iterations on the FAN-01 H-slit
+sector mesh (13 332 cells, wall cells of aspect ratio up to 944 with face non-orthogonality up to 79 degrees), laminar and
+with SST; `upwind` and `tvd_minmod` were stable. The divergence starts in the wall cells with the largest aspect ratio
+times the tangent of their non-orthogonality: the unlimited extrapolation `grad(u) . (x_f - x_U)` over the long side of
+such a cell turns the near-wall velocity jump into face values tens of times the largest boundary speed. Use `upwind` or
+`tvd_minmod` on such meshes, or `linear_upwind` with `solver.linear_upwind_limiter = "barth_jespersen"` (below; ADR 0081).
 
-The same mechanism stops the NACA 0012 O-grid (256 x 128, first cell 1.6e-5 chord, y+ about 2) at 6 degrees in 15 iterations (SA; 16 with SST), at the
-trailing-edge tip cells 0 and 255 (aspect times tan of the non-orthogonality about 21 000); it needs the angle of attack, since the same mesh at 0 degrees
-runs clean (ADR 0171). Neither the pressure-velocity coupling (`face_flux`, `alpha_p`, `simple`) nor the relaxation factors nor the turbulence model
-changes it; `barth_jespersen` removes it in every run tried (300 iterations at 0, 6 and 16 degrees, SA and SST, two wall spacings; 8000 iterations at 0 and 6
-degrees). The limiter costs about 3 % of `cd_eff` at 0 degrees, all of it in the pressure drag (ADR 0171 LL4).
+The same mechanism stops the NACA 0012 O-grid (256 x 128, first cell 1.6e-5 chord, y+ about 2) at 6 degrees in 15
+iterations (SA; 16 with SST), at the trailing-edge tip cells 0 and 255 (aspect times tan of the non-orthogonality about
+21 000). It needs the angle of attack, since the same mesh at 0 degrees runs clean (ADR 0171). Neither the
+pressure-velocity coupling (`face_flux`, `alpha_p`, `simple`) nor the relaxation factors nor the turbulence model changes
+it. `barth_jespersen` removes it in every run tried (300 iterations at 0, 6 and 16 degrees, SA and SST, two wall spacings;
+8000 iterations at 0 and 6 degrees). The limiter costs about 3 % of `cd_eff` at 0 degrees, all of it in the pressure drag
+(ADR 0171 LL4).
 
 ## Limited linear-upwind extrapolation (`solver.linear_upwind_limiter`)
 
-`solver.linear_upwind_limiter` (`none` default, `barth_jespersen`) applies to `solver.convection = "linear_upwind"` with `solver.algorithm = "simple"` or
-`"simplec"` (ADR 0081 part L) and with `"piso"` or `"pimple"`, the moving-mesh step of `dynamic_mesh` included (ADR 0183 P-A), incompressible with constant
-density; with any other algorithm or scheme, and with `solver.time_advance = "fractional_step"`, a value other than `none` is a located error.
-`barth_jespersen` multiplies the least-squares gradient of each velocity component by its Barth-Jespersen factor before the face extrapolation
-`u_U + grad(u)_U . (x_f - x_U)`, so the face value stays within the range of the upwind cell's own and neighbour values (boundary values included); the
-explicit non-orthogonal correction of the momentum Laplacian keeps the unlimited gradient. Turbulence, scalar and energy equations are not limited.
-Measured (ADR 0081): stable on the FAN-01 sector mesh, laminar and with SST, where the unlimited scheme diverges at iteration 7; the converging cases
-checked (a lid cavity, the MRF Taylor-Couette annulus across a non-conformal interface, the shipped fan sector) converge or stay stable as without it,
-and with the limiter forced on in all 542 steady `linear_upwind` runs of the test suite no run tripped the divergence guard that does not trip without it;
-second order is kept on the Kovasznay flow (L2 order 2.17 on the finest pair, error within 1 % of the unlimited scheme). Not checked: smooth flows with
-interior extrema of a velocity component, where the limiter clips. Opt-in because it moves every `linear_upwind` result.
+`solver.linear_upwind_limiter` (`none` default, `barth_jespersen`) applies to `solver.convection = "linear_upwind"` with
+`solver.algorithm = "simple"` or `"simplec"` (ADR 0081 part L) and with `"piso"` or `"pimple"`, the moving-mesh step of
+`dynamic_mesh` included (ADR 0183 P-A), incompressible with constant density. With any other algorithm or scheme, and with
+`solver.time_advance = "fractional_step"`, a value other than `none` is a located error. The limiter is opt-in because it
+moves every `linear_upwind` result.
+
+`barth_jespersen` multiplies the least-squares gradient of each velocity component by its Barth-Jespersen factor before
+the face extrapolation `u_U + grad(u)_U . (x_f - x_U)`, so the face value stays within the range of the upwind cell's own
+and neighbour values (boundary values included). The explicit non-orthogonal correction of the momentum Laplacian keeps
+the unlimited gradient. Turbulence, scalar and energy equations are not limited.
+
+Measured (ADR 0081):
+
+* Stable on the FAN-01 sector mesh, laminar and with SST, where the unlimited scheme diverges at iteration 7.
+* The converging cases checked (a lid cavity, the MRF Taylor-Couette annulus across a non-conformal interface, the shipped
+  fan sector) converge or stay stable as without it.
+* With the limiter forced on in all 542 steady `linear_upwind` runs of the test suite, no run tripped the divergence guard
+  that does not trip without it.
+* Second order is kept on the Kovasznay flow (L2 order 2.17 on the finest pair, error within 1 % of the unlimited scheme).
+
+Not checked: smooth flows with interior extrema of a velocity component, where the limiter clips.
 
 ## Design-loop files (not part of the case schema)
 

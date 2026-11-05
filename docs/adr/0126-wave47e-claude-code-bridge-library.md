@@ -1,11 +1,26 @@
 # ADR 0126: Wave 47E, the Claude Code bridge library `rcfd-claude` (Studio layer L6)
 
 Status: **ACCEPTED 2026-10-26** (limits registered after the rule-d smoke and before the registered runs). Written at main 48b30bc on
-branch `w47e`, target `<target dir>`. House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected
-run; defaults of existing code are bit-identical (this wave adds a new crate and touches no existing crate). Parents: the Studio plan
-[`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 3 (layer L6), 7 (what the Claude Code documentation says) and 8 (user
-decisions of 2026-10-26).
+branch `w47e`, target `<target dir>`.
+
+Wave 47E adds `rcfd-claude`, a library that connects the Studio to Claude Code by spawning the CLI; no Rust SDK exists. The Studio
+sidebar may type into a session that is CLOSED, by resuming it with `claude -p --resume`, and only mirrors read-only a session that
+another process has open. Every chat process gets `--permission-mode dontAsk --permission-prompts none` plus the rules of a typed
+allow-list, and `check_args` refuses any argument containing `dangerously` or `bypassPermissions` before every spawn. The allow-list is
+a floor that the app controls, not the whole gate: user and project settings add rules, and the CLI approves some read-only commands
+itself. The transcript format is declared internal and the stream-json events have no published schema, so the library takes only
+fields observed on Claude Code 2.1.310; its readers return `Unrecognised { kind }` for any line of unknown or changed shape. Every registered
+check passed with no known misses, and the final gate on 8f04030 gave 2093 passed, 0 failed, 659 ignored. The one deviation: clippy ran
+after the registered run, not before it, and the final gate re-ran every test on the fixed code. The lead must test by hand what was
+not observed, including the non-Windows paths; a session opened by another process between the open check and the spawn is not detected.
+
+Rules and parents:
+
+* House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test with
+  the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults of existing code are
+  bit-identical (this wave adds a new crate and touches no existing crate).
+* Parents: the Studio plan [`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 3 (layer L6), 7 (what the Claude Code
+  documentation says) and 8 (user decisions of 2026-10-26).
 
 ## Context
 

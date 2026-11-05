@@ -2,41 +2,66 @@
 
 Status: **registered** 2026-10-28, before any solver run of this job and before any metric below has been computed on any
 stored field (set-ups, metrics, limits and reading rules are fixed here); results in the addendum; not yet accepted by the
-maintainer. House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered
-runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written
-before the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded; no unsafe code, no new crate, the crate graph stays acyclic. **This job changes no solver numerics**: it is an
-investigation; a fix is a recommendation to the maintainer and needs the maintainer's decision first. Clean-room: nothing of
-any vendor's software is decompiled or read. Parents: [ADR 0142](0142-wave48h-example-projects.md) (the example project),
-[ADR 0132](0132-wave48c-viewport-integration.md) (the viewport), [ADR 0069](0069-wave33b-transient-accuracy-coupling.md) and
-[ADR 0073](0073-wave34b-transient-floor-pimple-lag.md) (PISO/PIMPLE coupling analysis). Related: job 48R
-(ADR 0152 `0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md`, on its own branch: explicit store keys at their
-defaults; not re-investigated here).
+maintainer.
+
+After the user refined the cylinder example (`cases/cylinder-re100.toml`) to 256 x 256 in the Studio, the screenshots of p
+showed radial spokes of alternating sign at the wall. This job investigates the pattern and changes no solver numerics.
+The addendum's answer is (b), a numerical artefact of the solver: the case's default `solver.algorithm = "piso"` (n_outer
+1, `n_correctors` 2) does not converge the pressure-velocity coupling in the thin wall cells once the wall diffusion
+number nu dt / dr1^2 exceeds an onset between 6.5 and 11.4. The report's refinement raised that number from 3.35 to 22.7,
+because the grading put the added radial cells at the wall. D1 rejects a display artefact (H-disp), and F-a rejects the
+physical-transient reading (a). The registered workaround rule accepts W3, W4, W5 and W6 and recommends W3,
+`solver.time_advance = "fractional_step"`; PIMPLE (W1, W2) diverged, and every workaround ran to t = 10 only, short of the
+shedding phase. DG1's reading rule rejects, in the strict form, the ADR 0073 pressure-lag mechanism extended to two
+correctors on this mesh (G256s has rho 1.17 / 1.07 with a clean twin; rho separates the classes at a threshold
+between 1.17 and 1.68, not at 1), and K1 and K2 are known misses, ignored with their limits intact. The proposed fixes
+are recommendations: nothing of them is implemented, and each needs the maintainer's decision.
+
+Rules and parents:
+
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no unsafe code, no new crate, the crate graph stays
+  acyclic.
+* **This job changes no solver numerics**: it is an investigation; a fix is a recommendation to the maintainer and needs
+  the maintainer's decision first.
+* Clean-room: nothing of any vendor's software is decompiled or read.
+* Parents: [ADR 0142](0142-wave48h-example-projects.md) (the example project),
+  [ADR 0132](0132-wave48c-viewport-integration.md) (the viewport), [ADR 0069](0069-wave33b-transient-accuracy-coupling.md)
+  and [ADR 0073](0073-wave34b-transient-floor-pimple-lag.md) (PISO/PIMPLE coupling analysis).
+* Related: job 48R (ADR 0152 `0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md`, on its own branch: explicit
+  store keys at their defaults; not re-investigated here).
 
 ## The report
 
-The user, in the real Studio window on `example-projects/wind-tunnel`, case `cases/cylinder-re100.toml` (`cylinder_ogrid`,
-r_in 0.5, r_out 15, grading 100, laminar PISO, `linear_upwind`, nu 0.01, U = 1 m/s, impulsive start from uniform flow plus a
-sideways push): after raising `mesh.nx`, `mesh.ny` to 256 x 256 "it doesn't look correct at all"; after lowering `solver.dt` to
-0.0156 (Courant number fixed) "there are still incredibly weird artifacts around the cylinder". The screenshots show p at
-t about 3 (steps 193 to 205, 65,536 cells): bright and dark radial spokes of alternating sign from the wall into the near field,
-circumferential wavelength one to a few cells, the rest of the domain flat blue; residuals flat (u about 2e-1, p about 9e-1 at
-step 205); noisy cl and cd. An earlier run at dt 0.0625 on the same mesh looked similar but noisier. The committed 64 x 48 case
-does not show it (the 48H agent's checks).
+The user worked in the real Studio window on `example-projects/wind-tunnel`, case `cases/cylinder-re100.toml`
+(`cylinder_ogrid`, r_in 0.5, r_out 15, grading 100, laminar PISO, `linear_upwind`, nu 0.01, U = 1 m/s, impulsive start
+from uniform flow plus a sideways push). After raising `mesh.nx`, `mesh.ny` to 256 x 256 the user reported
+"it doesn't look correct at all". After lowering `solver.dt` to 0.0156 (Courant number fixed) the user reported
+"there are still incredibly weird artifacts around the cylinder".
+
+The screenshots show p at t about 3 (steps 193 to 205, 65,536 cells). Bright and dark radial spokes of alternating sign
+run from the wall into the near field, with a circumferential wavelength of one to a few cells, and the rest of the domain
+is flat blue. The residuals are flat (u about 2e-1, p about 9e-1 at step 205), and cl and cd are noisy. An earlier run at
+dt 0.0625 on the same mesh looked similar but noisier. The committed 64 x 48 case does not show it (the 48H agent's
+checks).
 
 ## Context (read at main 6867e40, orientation only)
 
 ### The case and the user's working copy
 
-* The user's working copy of the case (main checkout, uncommitted) was saved by the Studio editor and lists every schema
-  setting (`git diff --stat`: 886 insertions, 33 deletions). It contains for example `[fluid] mode = "compressible"`,
-  `viscosity = 0.000018`, `[mesh] first_layer_height = 0.0`, `wall_layers = 0`, `[solver] alpha_u = 0.9`, `ddt_correction = true`.
-* **P0 (orientation, a parse, no solver run).** Both files, copied to the work folder `E:\projects\cfd\w48t-work` (the user's
-  files are not touched), through `rcfd run <case> --print-settings` (the resolved settings tree, defaults filled; built from
-  this branch): 741 keys each; they differ in exactly three keys, `mesh.nx` 64 -> 256, `mesh.ny` 48 -> 256, `solver.dt`
-  0.0625 -> 0.0156, the user's intended edits. `fluid.mode = "compressible"` is the schema default (it is in both trees) and its
-  schema text says "ideal_gas only"; `fluid.density = "constant"` in both, so it selects nothing. `rcfd check --json` on both:
-  exit 0, no diagnostics, no rule. The behavioural check of this is S0 below.
+* The Studio editor saved the user's working copy of the case (main checkout, uncommitted), and the copy lists every
+  schema setting (`git diff --stat`: 886 insertions, 33 deletions). It contains for example
+  `[fluid] mode = "compressible"`, `viscosity = 0.000018`, `[mesh] first_layer_height = 0.0`, `wall_layers = 0`,
+  `[solver] alpha_u = 0.9`, `ddt_correction = true`.
+* **P0 (orientation, a parse, no solver run).** Both files, copied to the work folder `E:\projects\cfd\w48t-work` (the
+  user's files are not touched), went through `rcfd run <case> --print-settings` (the resolved settings tree, defaults
+  filled; built from this branch). Each has 741 keys. They differ in exactly three keys, the user's intended edits:
+  `mesh.nx` 64 -> 256, `mesh.ny` 48 -> 256, `solver.dt` 0.0625 -> 0.0156. `fluid.mode = "compressible"` is the schema
+  default (it is in both trees) and its schema text says "ideal_gas only"; `fluid.density = "constant"` in both, so it
+  selects nothing. `rcfd check --json` on both: exit 0, no diagnostics, no rule. The behavioural check of this is S0
+  below.
 * `mesh.first_layer_height` and `mesh.wall_layers` apply to `box_2d` and `channel_2d` only (`check_mesh_options` in
   `crates/rcfd-api/src/sim.rs`); for `cylinder_ogrid` the first radial cell is set by `mesh.grading` alone
   (`Grading::Expansion`, last cell / first cell, `crates/rcfd-mesh/src/gen.rs`).
@@ -276,21 +301,23 @@ Solver numerics, defaults, schema, the Studio and the render core (a display fix
 
 ## Addendum (2026-10-28): results against the registered limits
 
-Everything below was measured after the registration and the two amendments; no limit or rule was changed after a result was
-seen. Machine shared with other agents (CPU load 57 to 100 %); runs at `--threads 1` (R256, RU, W4: 2); wall times are therefore
-rough. Work folder `E:\projects\cfd\w48t-work` (runs, dumps, `metrics-all.json`, `report\`); the findings, tables and image paths
-for the user are in [the job's README](../investigations/job48t-cylinder-spokes/README.md).
+Everything below was measured after the registration and the two amendments; no limit or rule was changed after a result
+was seen. Other agents shared the machine (CPU load 57 to 100 %) and the runs used `--threads 1` (R256, RU, W4: 2), so
+wall times are rough. The work folder is `E:\projects\cfd\w48t-work` (runs, dumps, `metrics-all.json`, `report\`). The
+findings, tables and image paths for the user are in
+[the job's README](../investigations/job48t-cylinder-spokes/README.md).
 
 ### Answer: (b), a numerical artefact of the solver
 
-The default transient coupling of the case, `solver.algorithm = "piso"` (`PimpleSettings::piso`: n_outer 1, `n_correctors` 2),
-does not converge the pressure-velocity coupling in the thin wall cells once the wall diffusion number nu dt / dr1^2 exceeds an
-onset between 6.5 (R128, clean) and 11.4 (B4b, spoky). The left-over error is amplified from step to step (DG1: the ADR 0073
-pressure-lag map has rho = 2.42 on the user's set-up, 0.36 on the committed one; its leading mode sits in the wall cell layer),
-saturates at about 50 q as grid-scale circumferential pressure oscillations confined to r < 0.7 D (the spokes, wavelength 4.5 to 6
-cells at 256 cells around, 7.2 cells at both 256 and 512 at t = 1), and on several set-ups grows until the divergence guard stops
-the run. The Courant-matched refinement of the report raised nu dt / dr1^2 from 3.35 to 22.7 because the grading put the added
-radial cells at the wall (first cell 0.01366 -> 0.00262 D).
+The default transient coupling of the case, `solver.algorithm = "piso"` (`PimpleSettings::piso`: n_outer 1, `n_correctors`
+2), does not converge the pressure-velocity coupling in the thin wall cells once the wall diffusion number nu dt / dr1^2
+exceeds an onset between 6.5 (R128, clean) and 11.4 (B4b, spoky). The left-over error is amplified from step to step: in
+DG1 the ADR 0073 pressure-lag map has rho = 2.42 on the user's set-up and 0.36 on the committed one, and its leading mode
+sits in the wall cell layer. The error saturates at about 50 q as grid-scale circumferential pressure oscillations
+confined to r < 0.7 D. These are the spokes, with a wavelength of 4.5 to 6 cells at 256 cells around and 7.2 cells at both
+256 and 512 at t = 1. On several set-ups the error grows until the divergence guard stops the run. The Courant-matched
+refinement of the report raised nu dt / dr1^2 from 3.35 to 22.7 because the grading put the added radial cells at the wall
+(first cell 0.01366 -> 0.00262 D).
 
 ### Results
 
@@ -325,10 +352,10 @@ radial cells at the wall (first cell 0.01366 -> 0.00262 D).
 ### Proposed fix (a recommendation; nothing of it is implemented; each needs the maintainer's decision)
 
 1. **Warn (no numerics change).** Run the existing ADR 0073 pressure-lag estimate on the case path also for `n_correctors >= 2`
-   (`sim.rs` limits it to 1 corrector) in warn mode, at step 1; results stay bit-identical (the estimate works on copies). DG1 says
-   the warning level must be above 1.17 and below 1.68 for this case family (for example 1.3, to be registered); the message
-   names `n_correctors`, `time_advance = "fractional_step"`, a lower grading or a smaller dt. Cost at step 1: about 60 extra
-   step-equivalents of the linear algebra (1 to 2 s on 65,536 cells).
+   (`sim.rs` limits it to 1 corrector) in warn mode, at step 1. Results stay bit-identical, because the estimate works on copies.
+   DG1 says the warning level must be above 1.17 and below 1.68 for this case family (for example 1.3, to be registered). The
+   message names `n_correctors`, `time_advance = "fractional_step"`, a lower grading or a smaller dt. The cost at step 1 is about
+   60 extra step-equivalents of the linear algebra (1 to 2 s on 65,536 cells).
 2. **Numerics (opt-in first).** PISO correctors until converged: an opt-in key (for example a tolerance on the largest pressure
    change between two correctors, relative to the pressure range, with a cap), defaults bit-identical when off. Acceptance to
    register: K1 and K2 pass, R256 clean, the ADR 0069 / 0073 transient benchmarks unchanged within their limits. A fixed third
@@ -368,7 +395,7 @@ radial cells at the wall (first cell 0.01366 -> 0.00262 D).
 2. Add the opt-in converged-corrector PISO (fix 2)? Recommendation: yes, opt-in first, with K1 and K2 as its acceptance tests;
    decide a default only after a registered benchmark run.
 3. Should the example case or its note recommend `time_advance = "fractional_step"` or `n_correctors = 3` for refined meshes?
-   Recommendation: a note only (the committed 64 x 48 case is clean as it is); `fractional_step` is cheaper here, but ADR 0073
+   Recommendation: a note only (the committed 64 x 48 case is clean as it is). `fractional_step` is cheaper here, but ADR 0073
    (verdict 4) records a temporal-order floor of the fractional path (its total-pressure face term, an O(dt h^2) error), so PISO
    with enough correctors is the conservative choice for time accuracy.
 4. A setup rule on nu dt / dr1^2 instead of fix 1? Recommendation: no; DG1 shows rho is not a function of that number alone

@@ -1,17 +1,35 @@
-# ADR 0020: Wave 15B, partitioning and reordering (F-236), boundary-layer inflation on unstructured patches (F-108), derived fields and sampling (F-072)
+# ADR 0020: Wave 15B, partitioning, inflation and derived fields
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new tests was compiled
-or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test
-set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes that were not fixed
-here) may be appended at the end without touching registered limits.
+or run.
 
-Roadmap order: F-236 (first), F-108, F-072. F-103 and F-125 are NOT attempted, see "Not attempted". Clean-room: published
-methods and first principles only (recursive coordinate and inertial bisection, Kernighan-Lin / Fiduccia-Mattheyses style
-boundary refinement, Cuthill-McKee ordering, least-squares gradients); nothing from vendor material, vendor
-installs or vendor manuals; no vendor names in the repository. Every expected number below is derived here from definitions,
-closed forms or invariants; no registered check depends on a literature value. Statements attributed to the literature are
-marked "(from memory, unverified)" and are not used as limits.
+Wave 15B adds partitioning and reordering (F-236), boundary-layer inflation on unstructured patches (F-108), and derived
+fields and sampling (F-072). "Results" records that every registered check passed at its first run and that there are no
+`*_known_miss` tests. The F-236 acceptance is met; a multilevel graph partitioner, any use of the partitioners or the ordering
+from the case file, CLI, solvers or GUI, and renumbering of a `Mesh` are not done and not claimed. F-108 stays `partial`: the
+layers are added on the outward side of a boundary patch, not carved into a fluid domain, the report is not exposed through
+the CLI, case schema or GUI, and the solved y+ check was not repeated on an unstructured layered mesh. F-072 has status
+`partial`; its derived fields and sampling exist as library functions with CSV text output, not reachable from the CLI, case
+schema, service or GUI. Addendum 1 then records a specification and code defect in the layer order, found in review of the
+first F-108 implementation: the cell against the wall was the thickest, and the y+ 0.8 case would have given about 2.0. None
+of the registered checks I1, I3, I4 and I6 could see it. The code is corrected and the limits are unchanged, but the I1 and
+I3 result lines under "Results" were measured on the defective ordering; Addendum 1 quotes the corrected numbers.
+
+Roadmap order: F-236 (first), F-108, F-072. F-103 and F-125 are NOT attempted, see "Not attempted".
+
+Rules:
+
+* The limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (file names, mesh sizes that were not fixed here) may be appended at the end without touching registered limits.
+* Clean-room: published methods and first principles only (recursive coordinate and inertial bisection, Kernighan-Lin /
+  Fiduccia-Mattheyses style boundary refinement, Cuthill-McKee ordering, least-squares gradients); nothing from vendor
+  material, vendor installs or vendor manuals; no vendor names in the repository.
+* Every expected number below is derived here from definitions, closed forms or invariants; no registered check depends on a
+  literature value.
+* Statements attributed to the literature are marked "(from memory, unverified)" and are not used as limits.
 
 Shared notation: a mesh partition assigns each cell `c` a part `P(c)` in `0..n`. The edge cut is the number of internal faces
 whose two cells have different parts. Part weight `W_p` is the sum of the cell weights `w_c` over `P(c) = p` (unit weights
@@ -296,12 +314,12 @@ registered check passed at its first run; there are no `*_known_miss` tests.
   strategies are below that).
 * P3 node weighting (limit 0.05): worst weighted imbalance 0.0296; positive control: unweighted `Rcb` on the same weights
   reaches 0.613 (n = 2..=16, M1).
-* P4 edge cut: `GraphPartitioner` cut `<=` `Rcb` cut in all 45 cases (M1, M2, M3 x n = 2..=16); strictly lower in 31, equal in
-  14 (equal where the coordinate seed is already a local optimum of the move rule, for example n = 2, 4 on all three meshes). Examples
-  (rcb / graph): M1 n=3 167 / 117, M1 n=16 598 / 511, M2 n=5 388 / 316, M3 n=5 94 / 79. The cuts of the cycle and inertial
-  variants are printed by the test (cycle is much worse on the O-grid: M3 n=16 564, inertial 144, rcb 204, graph 196);
-  inertial beats the graph partitioner on several O-grid counts (M3 n=7: 100 against 114), so the registered criterion (graph
-  against `Rcb` only) says nothing about which strategy is best. M1 n=2: graph cut 50 (limit 50).
+* P4 edge cut: `GraphPartitioner` cut `<=` `Rcb` cut in all 45 cases (M1, M2, M3 x n = 2..=16). The cut is strictly lower in
+  31 cases and equal in 14. It is equal where the coordinate seed is already a local optimum of the move rule, for example
+  n = 2, 4 on all three meshes. Examples (rcb / graph): M1 n=3 167 / 117, M1 n=16 598 / 511, M2 n=5 388 / 316, M3 n=5 94 / 79.
+  M1 n=2: graph cut 50 (limit 50). The test prints the cuts of the cycle and inertial variants. Cycle is much worse on the
+  O-grid (M3 n=16: cycle 564, inertial 144, rcb 204, graph 196). Inertial beats the graph partitioner on several O-grid counts
+  (M3 n=7: 100 against 114), so the registered criterion (graph against `Rcb` only) says nothing about which strategy is best.
 * P5 smoothing: (a) the slab assignment is restored exactly, 10 moves, cut 50; (b) after smoothing the cut never increased and
   the imbalance stayed within `max(before, 0.05)` for all 360 partitions (unit weights; weighted smoothing is covered only
   through P3's graph partitioner, which shares the code).
@@ -314,8 +332,9 @@ registered check passed at its first run; there are no `*_known_miss` tests.
 * R4: `B (P x)` against `P (A x)` relative error 3.0e-16 (limit 1e-12); the bandwidths agree; permuting back with the inverse
   gives the original CSR matrix.
 * Acceptance (balance within 5 percent for 2 to 16 parts; graph cut not worse than coordinate bisection; RCM reduces bandwidth
-  on a stretched mesh): met. Not done and not claimed: a multilevel graph partitioner (the graph method is seed plus greedy
-  refinement), any use of the partitioners or the ordering from the case file, CLI, solvers or GUI, renumbering of a `Mesh`.
+  on a stretched mesh): met.
+* Not done and not claimed: a multilevel graph partitioner (the graph method is seed plus greedy refinement), any use of the
+  partitioners or the ordering from the case file, CLI, solvers or GUI, renumbering of a `Mesh`.
 
 ### F-108 (`rcfd-mesh/tests/inflate.rs`)
 
@@ -337,16 +356,17 @@ registered check passed at its first run; there are no `*_known_miss` tests.
 ### F-072 (`rcfd-post/tests/derived.rs`)
 
 * D1 linear field on the graded mesh: vorticity error 3.3e-15, Q error 2.9e-15 (limit 1e-10) in every cell including boundary cells.
-* D2 Taylor-Green: N = 16 vorticity error 4.91e-2 (limit h^2/3 = 5.14e-2), Q error 4.65e-2 (limit h^2 = 0.154); N = 32
+* D2 Taylor-Green: N = 16 vorticity error 4.91e-2 (limit h^2/3 = 5.14e-2), Q error 4.65e-2 (limit h^2 = 0.154). N = 32
   vorticity error 1.270e-2 (limit 1.285e-2, a margin of 1.2 percent: the derived bound is nearly tight), Q error 1.254e-2
-  (limit 3.86e-2); error ratio 3.86 (limit 3.5).
+  (limit 3.86e-2). Error ratio 3.86 (limit 3.5).
 * D3 Couette: wall shear and y+ worst relative error 7.5e-15 (limit 1e-12) on both walls.
 * D4 Poiseuille: estimate error 2.4e-16; relative difference to the exact wall shear 0.03125000000000026 against the limit
   0.03125 (1 + 1e-9).
 * D5: Mach and total pressure formulas match to 1e-12; low-Mach difference 1.094e-6 against the limit 1.1375e-6 (96 percent of
   the limit; the limit is the first neglected series term, so a small margin is expected).
 * S1: line values error 3.3e-16 (1e-10), arc length exact, CSV header and 41 rows, bit-exact parse back; a line leaving the
-  cube flags exactly the 5 outside points (empty field, `inside` 0). S2: plane integral 0.75 exactly (error 0), 400 of 400 inside.
+  cube flags exactly the 5 outside points (empty field, `inside` 0).
+* S2: plane integral 0.75 exactly (error 0), 400 of 400 inside.
 * Status `partial`: derived fields and sampling exist as library functions with CSV text output; they are not reachable from
   the CLI, case schema, service or GUI, there is no VTK writer for the derived fields, further vortex criteria (lambda2) are
   not provided, and wall shear uses the one-sided first-cell estimate (first order, error `dn/H` in D4), not a wall-function value.
@@ -375,22 +395,33 @@ checks depends on them.
 
 ## Addendum 1: layer order defect found in review (F-108), fixes and further disclosures
 
-Limits are unchanged. Review of the first F-108 implementation found a specification and code defect: `extrude_core` keeps the patch
-name and kind on the FAR cap (the new wall), but the first version stacked the layers with the first (thinnest) layer against the
-ORIGINAL surface, so the cell against the wall was the thickest, `first * g^(layers-1)`, and a y+ target would have been missed (the
-y+ 0.8 case would have given about 2.0). ADR B2 and the registered checks I1, I3, I4 measured distances from the original surface and
-therefore encoded the wrong orientation; I6 only passed the input value through the report, so none of them could see it. The code
-now orders the layers so that layer 1 (height `first`) lies against the cap (wall) and the last layer against the original surface;
-total thickness, added volume, side areas, report fields and all closed forms of B2 are unchanged. As with ADR 0018 Q2d, the old tests
-`i1_block_patch`, `i3_curved_patch`, `i4_sizing_types` are kept as ignored records (they fail on the corrected code, which confirms the
-defect) and new tests assert the same limits with the layer planes, radii and heights counted from the wall:
-`i1c_block_patch_thinnest_layer_at_wall` (planes `2 + T - cum_k`, error 0; every cap-cell height 0.01 to 1e-12; max aspect ratio 100),
-`i3c_curved_patch_radii_from_the_wall` (radii `1 - T + cum_k`, error 2.2e-16; volume closed form unchanged), `i4c_sizing_types_from_the_wall`,
-and the post-registration check `i6c_wall_adjacent_cell_meets_the_y_plus_target` (owner-cell height of every cap face equals 3.2e-4 and its
-y+ equals 0.8, both to relative 1e-9). The old `i6` is kept and passes but only checks the report value. The earlier result lines for I1, I3
-above were measured on the defective ordering; the corrected numbers are those quoted here.
+Limits are unchanged. Review of the first F-108 implementation found a specification and code defect. `extrude_core` keeps the
+patch name and kind on the FAR cap (the new wall), but the first version stacked the layers with the first (thinnest) layer
+against the ORIGINAL surface. The cell against the wall was therefore the thickest, `first * g^(layers-1)`, and a y+ target
+would have been missed (the y+ 0.8 case would have given about 2.0).
+
+ADR B2 and the registered checks I1, I3, I4 measured distances from the original surface and therefore encoded the wrong
+orientation. I6 only passed the input value through the report, so none of them could see it.
+
+The code now orders the layers so that layer 1 (height `first`) lies against the cap (wall) and the last layer against the
+original surface. Total thickness, added volume, side areas, report fields and all closed forms of B2 are unchanged.
+
+As with ADR 0018 Q2d, the old tests `i1_block_patch`, `i3_curved_patch`, `i4_sizing_types` are kept as ignored records (they
+fail on the corrected code, which confirms the defect). New tests assert the same limits with the layer planes, radii and
+heights counted from the wall:
+
+* `i1c_block_patch_thinnest_layer_at_wall`: planes `2 + T - cum_k`, error 0; every cap-cell height 0.01 to 1e-12; max aspect
+  ratio 100.
+* `i3c_curved_patch_radii_from_the_wall`: radii `1 - T + cum_k`, error 2.2e-16; volume closed form unchanged.
+* `i4c_sizing_types_from_the_wall`.
+* The post-registration check `i6c_wall_adjacent_cell_meets_the_y_plus_target`: owner-cell height of every cap face equals
+  3.2e-4 and its y+ equals 0.8, both to relative 1e-9.
+
+The old `i6` is kept and passes but only checks the report value. The earlier result lines for I1, I3 above were measured on
+the defective ordering; the corrected numbers are those quoted here.
 
 Further disclosures:
+
 * P4 (graph cut `<=` RCB cut) is guaranteed by construction (unit-weight seed is `Rcb`, every move lowers the cut), in every case, not only
   where no move helps; the evidence of the refinement is the 31 strict reductions out of 45.
 * R3 "stretched mesh": the meshes are elongated index spaces of cubic cells. Bandwidth depends only on connectivity, so a geometrically
@@ -398,7 +429,11 @@ Further disclosures:
 
 ## Addendum 2: hygiene results
 
-On a `git archive` of commit 099ed16 (HEAD at that time, which includes the wave 15A commits then committed): `cargo fmt --check` clean,
-`cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace --release --no-fail-fast`: 138 test binaries
-reported `ok`, no FAILED line, no panic. `baseline_hashes`: 3 passed, 1 ignored (the pre-existing ignored rotating-channel test), unmodified
-and not re-recorded. Later commits touch only this ADR.
+On a `git archive` of commit 099ed16 (HEAD at that time, which includes the wave 15A commits then committed):
+
+* `cargo fmt --check`: clean.
+* `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+* `cargo test --workspace --release --no-fail-fast`: 138 test binaries reported `ok`, no FAILED line, no panic.
+* `baseline_hashes`: 3 passed, 1 ignored (the pre-existing ignored rotating-channel test), unmodified and not re-recorded.
+
+Later commits touch only this ADR.

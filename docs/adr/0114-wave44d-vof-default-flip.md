@@ -1,10 +1,27 @@
-# ADR 0114: Wave 44D, the VOF defaults flip together: component diagonal, full viscous stress, height-function curvature with CSF fallback (F-055)
+# ADR 0114: Wave 44D, the VOF defaults flip together (F-055)
 
-Status: registered before any code of this wave was written. Limits and decision rules below are not changed after a run; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test registered here as an
-amendment before it runs. Written at HEAD c68516a, target `<target dir>`. Clean-room: the only literature values are
-the Hysing et al. (2009) case-1 values read in ADR 0096 and the code-to-code range of the reworded F-055 acceptance (user, 2026-10-24,
-Hysing et al. 2009 Table XII, read by the user).
+Status: registered before any code of this wave was written.
+
+The three VOF opt-ins of ADRs 0103, 0106 and 0108 become the library defaults together: component diagonal, full viscous
+stress, and height-function curvature with the ADR 0108 CSF fallback built in (F-055). The user lifted the
+bit-identical-default rule for this one change. New `multiphase` keys in the case tree give the opt-outs. A scan done before
+this ADR found that every non-ignored test of the VOF-related test files still passes under the new defaults, so nothing is
+re-pinned. The addendum records the registered runs: with default settings the Hysing series reproduces wave 43A bit for bit
+on every grid, and the final gate gave 2010 passed / 0 failed / 633 ignored with no hash re-recorded. The reworded F-055
+bubble clause is a known miss: on 160 x 320, y_c(3) 1.079454 is 0.0004 below [1.0799, 1.0817] and V_c,max 0.241615 is 0.0001
+below [0.2417, 0.2421], with phase volume met. F-055 stays partial, and its dam-break position clause still lacks data. The
+scan did not run ignored tests; by reading the code, those that construct `VofSettings::new` without setting all four flags
+now run under the new defaults and would not reproduce the numbers their ADRs recorded with the old defaults.
+
+Rules:
+
+* Limits and decision rules below are not changed after a run.
+* A missed limit becomes an ignored `*_known_miss` test with the limit intact.
+* A defective set-up gets a new corrected test registered here as an amendment before it runs.
+* Clean-room: the only literature values are the Hysing et al. (2009) case-1 values read in ADR 0096 and the code-to-code
+  range of the reworded F-055 acceptance (user, 2026-10-24, Hysing et al. 2009 Table XII, read by the user).
+
+Written at HEAD c68516a, target `<target dir>`.
 
 ## Decision (the user's, 2026-10-24)
 
@@ -33,11 +50,14 @@ ADR 0108 CSF fallback built in.
 ## (1) Existing tests whose printed or asserted value changes under the new defaults
 
 Method (done before this ADR): two fresh archives of c68516a; in the second the four `VofSettings::new` defaults were set to `true`
-(nothing else changed, never committed). In each, every VOF-related test file was run in release with `--nocapture`: rcfd-fv
-cavitating_venturi, mixture_drift, vof_advection, vof_bubble, vof_bubble_diagnosis_w41c, vof_bubble_refinement_w40d, vof_dambreak,
-vof_dambreak_amg, vof_droplet, vof_height_function_fallback_w43a, vof_height_function_w42b, vof_masstransfer, vof_static, vof_waves;
-rcfd-api vof_tree, vof_wiring_tree, mixture_cavitation_tree, baseline_hashes (the files with `VofSettings`, `VofSolver` or
-`multiphase` in `crates/*/tests`; no `src` unit test builds a VOF solver). The printed lines (timings removed) were compared.
+(nothing else changed, never committed). In each, every VOF-related test file was run in release with `--nocapture`, and the
+printed lines (timings removed) were compared. The files are those with `VofSettings`, `VofSolver` or `multiphase` in
+`crates/*/tests`; no `src` unit test builds a VOF solver:
+
+* rcfd-fv: cavitating_venturi, mixture_drift, vof_advection, vof_bubble, vof_bubble_diagnosis_w41c, vof_bubble_refinement_w40d,
+  vof_dambreak, vof_dambreak_amg, vof_droplet, vof_height_function_fallback_w43a, vof_height_function_w42b, vof_masstransfer,
+  vof_static, vof_waves;
+* rcfd-api: vof_tree, vof_wiring_tree, mixture_cavitation_tree, baseline_hashes.
 
 Result: with the new defaults every non-ignored test of these files passes (same pass / ignore counts as with the old defaults). No
 asserted limit fails, so rule (2) below re-pins nothing. Tests whose printed value changes (old -> new):
@@ -63,29 +83,48 @@ asserted limit fails, so rule (2) below re-pins nothing. Tests whose printed val
 | rcfd-api vof_wiring_tree `t2_...`, `t3_...` | tree vs library p 2.05e-11 -> 1.85e-11, 5.9e-15 -> 2.8e-15; max ux 5.832e-2 -> 5.831e-2 | 1e-9: met |
 | rcfd-api mixture_cavitation_tree W2, W3 rows | tree vs library alpha 2.2e-19 -> 3.3e-19, 6.6e-13 -> 9.9e-13 | met |
 
-Unchanged to every printed digit: vof_advection (no `VofSolver`), vof_bubble_diagnosis_w41c `c1` with `component_diagonal = true`,
-vof_height_function_fallback_w43a F1-F4 (equality tests, they set both height-function flags explicitly and compare solvers built
-from the same other defaults), vof_height_function_w42b H1 and H2 (curvature of the initial field, both flags explicit),
-mixture_drift D2-D6, M1-M3, vof_masstransfer M1, M3, M5, vof_waves W5 and the W2b control, the located-error rows of vof_tree, vof_wiring_tree and mixture_cavitation_tree, and rcfd-api baseline_hashes (3 passed, 1 ignored as before: no hash moved).
+Unchanged to every printed digit:
+
+* vof_advection (no `VofSolver`);
+* vof_bubble_diagnosis_w41c `c1` with `component_diagonal = true`;
+* vof_height_function_fallback_w43a F1-F4 (equality tests, they set both height-function flags explicitly and compare solvers
+  built from the same other defaults);
+* vof_height_function_w42b H1 and H2 (curvature of the initial field, both flags explicit);
+* mixture_drift D2-D6, M1-M3;
+* vof_masstransfer M1, M3, M5;
+* vof_waves W5 and the W2b control;
+* the located-error rows of vof_tree, vof_wiring_tree and mixture_cavitation_tree;
+* rcfd-api baseline_hashes (3 passed, 1 ignored as before: no hash moved).
 
 Ignored tests were not run (the heavy series cost hours). By reading the code, these ignored tests construct `VofSettings::new`
 without setting all four flags, so they now run under the new defaults and would not reproduce the numbers their ADRs recorded with
-the old defaults: cavitating_venturi `n2_to_n6_cavitating_venturi`, `n3_n4_n5_cavitating_venturi_known_miss`; mixture_drift `d1`,
-`d4`, `d5`, `d6` (the registered unstable set-ups); all 20 ignored diagnostics of vof_bubble_diagnosis_w41c (ADR 0103; their `edit`
-closures set single flags on top of the defaults, so "baseline" now means all options on); vof_height_function_w42b `h3`, `s1`
-(height function explicit; component diagonal and transposed stress now on); vof_waves `w2_..._known_miss`, `w4_..._known_miss`.
+the old defaults:
+
+* cavitating_venturi `n2_to_n6_cavitating_venturi`, `n3_n4_n5_cavitating_venturi_known_miss`;
+* mixture_drift `d1`, `d4`, `d5`, `d6` (the registered unstable set-ups);
+* all 20 ignored diagnostics of vof_bubble_diagnosis_w41c (ADR 0103; their `edit` closures set single flags on top of the
+  defaults, so "baseline" now means all options on);
+* vof_height_function_w42b `h3`, `s1` (height function explicit; component diagonal and transposed stress now on);
+* vof_waves `w2_..._known_miss`, `w4_..._known_miss`.
+
 They are not edited (rule (2) concerns asserted limits that fail in the gate; these are not run there). To reproduce their recorded
-numbers, set the four flags to `false`. vof_bubble_refinement_w40d sets `full_viscous_stress`, `component_diagonal` and
-`height_function` explicitly in every test; the fallback flag acts only with `height_function = true`, and on its uniform grid with
-`sigma > 0` it changes nothing (ADR 0108 F3), so all its tests are unaffected.
+numbers, set the four flags to `false`.
+
+vof_bubble_refinement_w40d sets `full_viscous_stress`, `component_diagonal` and `height_function` explicitly in every test; the
+fallback flag acts only with `height_function = true`, and on its uniform grid with `sigma > 0` it changes nothing (ADR 0108 F3),
+so all its tests are unaffected.
 
 ## (2) Rule for asserted limits
 
-Any ASSERTED limit of an existing test that fails under the new defaults is either (a) re-pinned by an explicit opt-out in that test
-(the set-up is otherwise unchanged, the limits stay as written, never loosened, and the reason is written in this ADR), when the
-test's purpose is a property of the old configuration; or (b) reported as a known miss (ignored `*_known_miss`, limit intact) when the
-test checks a property the default solver should have. Per (1) no test needs either; if the gate shows a failure that the scan did not,
-this rule applies and the case is written in the addendum.
+Any ASSERTED limit of an existing test that fails under the new defaults is either
+
+* (a) re-pinned by an explicit opt-out in that test (the set-up is otherwise unchanged, the limits stay as written, never
+  loosened, and the reason is written in this ADR), when the test's purpose is a property of the old configuration; or
+* (b) reported as a known miss (ignored `*_known_miss`, limit intact) when the test checks a property the default solver should
+  have.
+
+Per (1) no test needs either; if the gate shows a failure that the scan did not, this rule applies and the case is written in the
+addendum.
 
 ## (3) The Hysing series with DEFAULT settings reproduces wave 43A
 
@@ -93,8 +132,10 @@ Set-up: the ADR 0108 X set-up (`vof_bubble_refinement_w40d.rs`: n x 2n, n = 40, 
 sides, no-slip top and bottom, 3 PISO correctors, exact initial fractions) with NO option flag assigned (the library defaults).
 
 Reference: the full-precision errors printed by the ADR 0108 X run (`B errors` line of its log, `<scratch dir>\x.log`):
-y_c(3) errors to 1.0813: 0.002053058745789871, 0.0012840785484355965, 0.0018457966779672486 (y_c(3) = 1.0792, 1.0800, 1.0795);
-V_c,max errors to 0.2417: 0.0015273890756644926, 0.0007790117810689556, 8.49155348201236e-5 (V_c,max = 0.2402, 0.2409, 0.2416).
+
+* y_c(3) errors to 1.0813: 0.002053058745789871, 0.0012840785484355965, 0.0018457966779672486 (y_c(3) = 1.0792, 1.0800, 1.0795);
+* V_c,max errors to 0.2417: 0.0015273890756644926, 0.0007790117810689556, 8.49155348201236e-5 (V_c,max = 0.2402, 0.2409, 0.2416).
+
 Both lie below the reference on every grid. No VOF-path source changed since that run (`git log 132c0da..c68516a` touches no file of
 `rcfd-fv/src` used by the VOF solver; `simple.rs`, `sources.rs` and the mesh joins changed, which the VOF path does not call).
 
@@ -110,7 +151,9 @@ Tests (`vof_bubble_refinement_w40d.rs`):
 And `d_dam_break_front` (`vof_dambreak.rs`, not ignored, ADR 0049 D1-D3 limits unchanged) passes with the new defaults (scan: D1
 1.504, D2 0.161 / 0.110, as before).
 
-Smoke (rule d): the 40 x 80 point with no flag assigned, run in the scratch archive with the four defaults flipped, gives errors 0.002053058745789871 (y_c), 0.0015273890756644926 (V_c,max) and 0.016199999999991 (peak time), equal to the 43A values in every printed digit; 17 s.
+Smoke (rule d): the 40 x 80 point with no flag assigned, run in the scratch archive with the four defaults flipped, gives errors
+0.002053058745789871 (y_c), 0.0015273890756644926 (V_c,max) and 0.016199999999991 (peak time), equal to the 43A values in every
+printed digit; 17 s.
 
 ## (4) The reworded F-055 bubble clause, default settings, finest grid
 
@@ -118,12 +161,16 @@ Acceptance (user text, not edited): on the finest of three grids y_c(3) in [1.07
 volume conserved to round-off; time of V_c,max reported against [0.9213, 0.9313], not a limit.
 
 Test `f055_hysing_bubble_finest_grid_in_published_range_known_miss` (`vof_bubble_refinement_w40d.rs`): the (3) set-up (default
-settings, exact initial fractions) on 160 x 320 to t = 3. Asserted: 1.0799 <= y_c(3) <= 1.0817; 0.2417 <= V_c,max <= 0.2421; phase
-volume drift <= 1e-12 relative (the ADR 0100 B4 round-off limit) and bound violation <= 1e-9. Printed: time of V_c,max and whether it
-lies in [0.9213, 0.9313]. Expected from (3) (the same computation as the 160 point): y_c(3) 1.0795 and V_c,max 0.2416, both below
-the bands, so it is registered ignored with the `_known_miss` suffix from the start. It is run once in this wave (in parallel with
-the (3) series), limits intact, nothing tuned. F-055 stays partial unless this test passes; its acceptance text is not edited, only
-its note is extended.
+settings, exact initial fractions) on 160 x 320 to t = 3.
+
+* Asserted: 1.0799 <= y_c(3) <= 1.0817; 0.2417 <= V_c,max <= 0.2421; phase volume drift <= 1e-12 relative (the ADR 0100 B4
+  round-off limit) and bound violation <= 1e-9.
+* Printed: time of V_c,max and whether it lies in [0.9213, 0.9313].
+* Expected from (3) (the same computation as the 160 point): y_c(3) 1.0795 and V_c,max 0.2416, both below the bands, so it is
+  registered ignored with the `_known_miss` suffix from the start.
+
+It is run once in this wave (in parallel with the (3) series), limits intact, nothing tuned. F-055 stays partial unless this test
+passes; its acceptance text is not edited, only its note is extended.
 
 ## (5) Tree keys
 
@@ -147,7 +194,7 @@ docs/component-diagonal-default.md.
 
 ## Addendum: measured values (after the runs)
 
-All registered runs once, release, target `<target dir>`, working tree = 8487671 plus this wave's code.
+Each registered run was made once: release build, target `<target dir>`, working tree = 8487671 plus this wave's code.
 
 | Check | Measured | Limit | Result |
 |-------|----------|-------|--------|

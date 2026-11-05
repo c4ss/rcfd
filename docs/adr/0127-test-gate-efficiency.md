@@ -4,11 +4,18 @@ Status: **ACCEPTED 2026-10-26** (goals registered before the first run of the ne
 worktree `<scratch dir>`, target `<target dir>`. Measurements and the full option list are in
 [`docs/test-process.md`](../test-process.md).
 
+Running the test binaries takes 92 % to 95 % of the gate's test stage, and a binary with one long test keeps two of its three threads
+idle. The new script `scripts/gate_test.py` replaces the `cargo test` line and runs each non-ignored test as its own process, from one
+pool of `--jobs` processes. No test is skipped and no result is cached, and the original `cargo test` remains the reference. Against
+the registered goals, G1, G2 and G5 were met; G3 and G4 were missed, and the goals were not moved. G3: the test stage took 66.8 min
+against 103 min (-35 %); the goal was at most 51 min. G4: the sampled peak was 2184 MB against at most 1.5 GB; the limit was set too low
+and stays as registered.
+
 ## Context
 
 The gate is `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings` and
 `cargo test --workspace --release --no-fail-fast` on a `git archive` copy, with `CARGO_BUILD_JOBS=3` and `RUST_TEST_THREADS=3`.
-Measured from the logs of seven gates of waves 46 and 47 (no new run needed):
+The logs of seven gates of waves 46 and 47 give these times (no new run needed):
 
 | Phase | Time |
 |---|---|
@@ -18,15 +25,15 @@ Measured from the logs of seven gates of waves 46 and 47 (no new run needed):
 
 The run phase is 92 % to 95 % of the test stage. Cargo runs the 400 test binaries one after another; inside a binary three threads share
 the tests. A binary with one long test keeps the other two threads idle: `validation_blasius_plate` is one test (296 s), and
-`transient_sources` alone took 848 s. A running test binary of another agent's gate used about one core (151 CPU seconds in about
-150 s wall) and 30 MB to 135 MB of working set, so three tests from different binaries can overlap without new CPU or memory pressure
-beyond today's three test threads.
+`transient_sources` alone took 848 s.
+
+A running test binary of another agent's gate used about one core (151 CPU seconds in about 150 s wall) and 30 MB to 135 MB of working
+set, so three tests from different binaries can overlap without new CPU or memory pressure beyond today's three test threads.
 
 ## Decision
 
 1. **D1** New script `scripts/gate_test.py` (Python 3.9 or later, already installed, PSF licence; standard library only, no build
-   cost) replaces the
-   `cargo test` line of the gate's test stage. It
+   cost) replaces the `cargo test` line of the gate's test stage. It
    * builds with `cargo test <selection> --release --no-fail-fast --no-run` (the same command and profile as today, so the binaries
      are the ones `cargo test` would run);
    * lists every test binary (`--list`, `--list --ignored`) and runs each non-ignored test as its own process,
@@ -56,12 +63,13 @@ A missed goal is reported as missed in the addendum with the measured value; the
 
 ## Consequences
 
-* Process per test isolates more than today: environment changes (`set_var` in five rcfd-assistant tests) and global
-  state no longer leak between tests. Tests of different binaries now overlap. Audit before the first run: every fixed temp path
-  (`rcfd_particles_case_out`, `rcfd_timectl_restart`, `w44a_jac`, `w37a_jac`, `elsewhere.toml`, the `rcfd-gui-*` folders,
-  `rcfd_w26c_ensight_write`) and every file written under `CARGO_TARGET_TMPDIR` belongs to a single binary, so no two binaries share
-  one; within a binary they already ran concurrently on three threads. Pid-suffixed folders can meet a reused pid; that gives only the
-  sharing a single-process binary already had.
+* Process per test isolates more than today: environment changes (`set_var` in five rcfd-assistant tests) and global state no longer
+  leak between tests.
+* Tests of different binaries now overlap. Audit before the first run: every fixed temp path (`rcfd_particles_case_out`,
+  `rcfd_timectl_restart`, `w44a_jac`, `w37a_jac`, `elsewhere.toml`, the `rcfd-gui-*` folders, `rcfd_w26c_ensight_write`) and every
+  file written under `CARGO_TARGET_TMPDIR` belongs to a single binary, so no two binaries share one; within a binary they already ran
+  concurrently on three threads. Pid-suffixed folders can meet a reused pid; that gives only the sharing a single-process binary
+  already had.
 * Startup of about 2100 processes adds seconds, not minutes.
 * The original `cargo test` remains the reference; if the runner and it ever disagree, the runner is wrong.
 
@@ -79,10 +87,12 @@ other slot. Details and logs: [`docs/test-process.md`](../test-process.md) secti
 | G5 | rebased HEAD: executed and ignored set equals `--list` union; fmt, clippy clean | e7fbbb1: 2816 = 2816 pairs against `cargo test -- --list`, `diff` empty; fmt and clippy clean; 2153 / 0 / 663; test stage 64.2 min | **met** |
 
 Why G3 missed: the registered estimate assumed the original run kept about one test busy per binary. Measured, the tests add up to
-10 578 test-seconds (176 min); at 3 jobs the floor is 58.8 min and the run ended 0.6 min above it. Only more jobs (doc option 2) or
-faster tests can go further. Why G4 missed: the 1.5 GB limit came from the 30 MB to 135 MB processes seen before the run; two single
-tests need 2.7 GB on their own, in the original process as well (another gate's `rules_w19c` was sampled at 2460 MB). The test stage
-uses no more memory than before; the limit was set too low and stays as registered.
+10 578 test-seconds (176 min). At 3 jobs the floor is 58.8 min, and the run ended 0.6 min above it. Only more jobs (doc option 2) or
+faster tests can go further.
+
+Why G4 missed: the 1.5 GB limit came from the 30 MB to 135 MB processes seen before the run. Two single tests need 2.7 GB on their own,
+in the original process as well (another gate's `rules_w19c` was sampled at 2460 MB). The test stage uses no more memory than before;
+the limit was set too low and stays as registered.
 
 Same-load comparison: replaying the original per-binary scheduling with run 1's per-test times gives 109.6 min of tests against
 59.4 min measured (-46 %), so the -35 % is not an artefact of a quieter day.

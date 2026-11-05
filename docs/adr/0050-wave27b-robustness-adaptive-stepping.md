@@ -1,15 +1,29 @@
-# ADR 0050: Wave 27B, non-orthogonal-corrector divergence of the steady SIMPLEC path (robustness) and adaptive time stepping / convergence accelerators (F-209)
+# ADR 0050: Wave 27B, SIMPLEC non-orthogonal-corrector divergence and adaptive time stepping (F-209)
 
 Status: accepted. The decisions and registered checks below were written before any code of this wave was changed and before any
-run of the new checks. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
-assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
-set-up defect gets a NEW corrected test and the old one stays as a record. A test that was a known miss and now passes gets a NEW
-passing test with the same registered limit; the old record stays ignored with a note. Addenda (measured numbers, deviations) are
-appended at the end without touching a registered limit.
+run of the new checks.
 
-Clean-room: first principles and published literature only; nothing from vendor material or vendor installs. Other
-agents (27A VOF multiphase, 27C viscoelastic/structural export) work in the same tree; this wave touches new modules
-(`stepctl.rs`, tests) plus small additive hunks in `simple.rs`, `lib.rs`, `schema.rs`, `sim.rs`, `restart.rs`, docs.
+Part 1 (robustness) finds the cause of the non-orthogonal-corrector divergence of the steady SIMPLEC path: the SIMPLEC
+compensation used the orthogonal part only. It adds an opt-in switch, `solver.simplec_non_orthogonal_compensation`, whose default
+`false` leaves every existing result bit-identical. The old `s10` / `s10b` records stay ignored (the default settings still miss).
+Part 2 adds adaptive time stepping and convergence accelerators (F-209) in the new module `rcfd_fv::stepctl` and additive
+case-tree keys. The addendum, written after the runs, states "No registered check missed; no `*_known_miss` test was added." It
+also records that the first runs under the first landing rule of D3 missed (Co/target minimum 0.696 and 0.789 in S1 and S2, S7
+order 1.835), and that the rule was replaced before any limit was touched. `Aitken` relaxation is delivered as a library block
+only, and F-209 stays `partial`.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the
+  cause is diagnosed, not tuned away.
+* A set-up defect gets a NEW corrected test and the old one stays as a record.
+* A test that was a known miss and now passes gets a NEW passing test with the same registered limit; the old record stays ignored
+  with a note.
+* Addenda (measured numbers, deviations) are appended at the end without touching a registered limit.
+* Clean-room: first principles and published literature only; nothing from vendor material or vendor installs.
+* Other agents (27A VOF multiphase, 27C viscoelastic/structural export) work in the same tree; this wave touches new modules
+  (`stepctl.rs`, tests) plus small additive hunks in `simple.rs`, `lib.rs`, `schema.rs`, `sim.rs`, `restart.rs`, docs.
 
 ## Part 1. Divergence of the non-orthogonal pressure corrector (wave 26B S10b / S10 known misses)
 
@@ -24,9 +38,10 @@ about 450 iterations (about 12 s); 9 x 6 x 4 is stable; `nz = 2` and `nz = 3`: 2
      not the cause);
    * momentum correction ON, pressure corrector OFF (pressure solve and flux correction orthogonal): converges, u_c = 2.496658,
      z-spread 1e-13 (0.134 percent below the circle, the same number as s10c). So the 3.33 percent of S10 is the missing
-     momentum secondary-gradient diffusion term, the pressure corrector is what destabilises.
-2. Number of pressure correctors does not matter (1, 2, 4 all diverge at about the same iteration); `alpha_p = 0.5` only delays it.
-3. The z-asymmetry that seeds the growth exists from iteration 1 in every run (the pressure level pin `p_ref` is in one cell), it
+     momentum secondary-gradient diffusion term; the pressure corrector is what destabilises.
+2. The number of pressure correctors does not matter (1, 2, 4 all diverge at about the same iteration);
+   `alpha_p = 0.5` only delays it.
+3. The z-asymmetry that seeds the growth exists from iteration 1 in every run (the pressure level pin `p_ref` is in one cell). It
    decays without correctors and grows with them: a z-mode (`kz != 0`) of the outer iteration is unstable. For `kz = 0` the
    pressure is uniform over the cross-section and the corrector is never exercised, which is why 2-D/nz = 2 runs look fine.
 4. Source of the instability: `SimpleSolver::iterate` adds the SIMPLEC compensation `(rAtU - rAU)_f snGrad(p_old) |S|` to
@@ -40,7 +55,7 @@ about 450 iterations (about 12 s); 9 x 6 x 4 is stable; `nz = 2` and `nz = 3`: 2
 5. Test of the mechanism (not a tuning): adding the non-orthogonal part of the same compensation, `(rAtU - rAU)_f k . grad p_old`
    (same least-squares gradient and boundary values as the corrector), makes the 17 x 12 x 4 case converge to 2.496658 (same value as
    item 1b, z-spread 1e-13). Independent prediction of the mechanism: the feedback gain is `1 - rAU/rAtU = alpha_u`, so stability
-   must return when `alpha_u` is lowered without any code change; measured without the fix (nz = 4, 2 correctors):
+   must return when `alpha_u` is lowered without any code change. Measured without the fix (nz = 4, 2 correctors):
    alpha_u 0.3, 0.5, 0.7, 0.8 converge, 0.9 (the default) diverges.
 6. Not the cause (tested, not assumed): the number of correctors, `alpha_p` (only a delay), the momentum-side correction (item 1),
    the least-squares gradient at the O-grid cut (the converged solution with the fix is the same as with the correction switched
@@ -80,8 +95,10 @@ unaffected and is named as a gap. PISO/PIMPLE have no SIMPLEC compensation and a
 Audit. `ddt.rs` has `CflController` (max Courant, growth, bounds; wired to `solver.max_courant` of the transient case), the
 `ErrorController` scalar utility (ADR 0023, not wired) and `add_ddt` with the variable-step BDF2. The BDF2 coefficients with
 `r = dt / dt_old` are `c0 = (1 + 2 r)/(1 + r)`, `c1 = 1 + r`, `c2 = r^2/(1 + r)` in
-`(c0 u^{n+1} - c1 u^n + c2 u^{n-1}) / dt`; they satisfy the consistency conditions `c0 - c1 + c2 = 0` (constants) and `c1 - c2 (1 + r)/r = 1` (linear functions, with the old step `dt/r`), and the formula is exact for quadratics (second order, variable step), and `ddt_history_weights` in `pimple.rs` uses the same `r` (verified by
-reading, and by check S7). `PimpleSolver::snapshot/restore` exist.
+`(c0 u^{n+1} - c1 u^n + c2 u^{n-1}) / dt`. They satisfy the consistency conditions `c0 - c1 + c2 = 0` (constants) and
+`c1 - c2 (1 + r)/r = 1` (linear functions, with the old step `dt/r`), and the formula is exact for quadratics (second order,
+variable step), and `ddt_history_weights` in `pimple.rs` uses the same `r` (verified by reading, and by check S7).
+`PimpleSolver::snapshot/restore` exist.
 
 ### Decisions
 
@@ -149,10 +166,15 @@ Reference case TG: 2-D periodic Taylor-Green vortex on a 32 x 32 grid of side 2 
 
 ### Not in scope / expected gaps (named now)
 
-Aitken acceleration inside the PIMPLE outer loop; residual smoothing; local timescale factors; the stretched-mesh pseudo-time
-acceleration and the flat-plate acceptance of the roadmap; step control for energy/scalar/turbulence/dynamic-mesh runs; error control
-for the Bdf2 scheme with step doubling (Euler only; BDF2 is covered by the order check S7); the compressible solver. F-209 stays
-`partial`.
+* Aitken acceleration inside the PIMPLE outer loop
+* residual smoothing
+* local timescale factors
+* the stretched-mesh pseudo-time acceleration and the flat-plate acceptance of the roadmap
+* step control for energy/scalar/turbulence/dynamic-mesh runs
+* error control for the Bdf2 scheme with step doubling (Euler only; BDF2 is covered by the order check S7)
+* the compressible solver
+
+F-209 stays `partial`.
 
 ## Addendum (written after the runs): results, deviations and findings
 
@@ -170,9 +192,10 @@ Part 1 (`crates/rcfd-api/tests/pipe_sweep_compensation.rs`):
 | R7 alpha_u sweep without the switch | 0.3 to 0.8 converge, 0.9 diverges | none (diagnostic) | recorded |
 
 The old `s10` / `s10b` records stay ignored (the default settings still miss); `r1_s10d` passes the same limits with the switch on.
-Root cause (mechanism, with the bisect of the findings above): the SIMPLEC compensation used the orthogonal part only, so the
-deferred non-orthogonal flux carried the weight `rAtU` instead of `rAU` (ratio about `1/(1 - alpha_u)`), a feedback gain of about
-`alpha_u` on axial modes `kz != 0`; modes with `kz = 0` (nz = 2) never exercise the corrector.
+
+Root cause (mechanism, with the bisect of the findings above): the SIMPLEC compensation used the orthogonal part only. The deferred
+non-orthogonal flux therefore carried the weight `rAtU` instead of `rAU` (ratio about `1/(1 - alpha_u)`), a feedback gain of about
+`alpha_u` on axial modes `kz != 0`. Modes with `kz = 0` (nz = 2) never exercise the corrector.
 
 Part 2 (`crates/rcfd-fv/tests/adaptive_step.rs`, `crates/rcfd-api/tests/timectl_tree.rs`):
 
@@ -195,19 +218,27 @@ No registered check missed; no `*_known_miss` test was added.
 Deviations and disclosures:
 
 1. The first landing rule of D3 (splitting the remaining time evenly over several steps) held the step far below the target
-   (Co/target minimum 0.696 and 0.789 in S1 and S2, S7 order 1.835) and those first runs missed. The rule was replaced, before any limit
-   was touched, by shortening or stretching (at most `LAND_STRETCH = 1.05`) the landing step only. All limits are as registered.
-2. S7 uses a deterministic synthetic step-ratio sequence generated by the controller from a prescribed pseudo-Courant function
-   (ratios 0.194 to 1.2 occurred, registered band 0.3 to 3), a larger range at the shrink side than registered; the order of the
-   last pair is in the band, the first pair (1.530) is pre-asymptotic.
+   (Co/target minimum 0.696 and 0.789 in S1 and S2, S7 order 1.835), and those first runs missed. The rule was replaced, before any
+   limit was touched, by shortening or stretching (at most `LAND_STRETCH = 1.05`) the landing step only. All limits are as
+   registered.
+2. S7 uses a deterministic synthetic step-ratio sequence generated by the controller from a prescribed pseudo-Courant function.
+   Ratios 0.194 to 1.2 occurred against the registered band 0.3 to 3, a larger range at the shrink side than registered. The order
+   of the last pair is in the band; the first pair (1.530) is pre-asymptotic.
 3. BDF2 variable-step coefficients are verified by exactness on quadratics and by the observed order; no published table was read.
 4. `ddt` of `PimpleSolver` was not changed (the module is additive); `solver.dt` is the first step and the cap unless `max_dt` is set.
 5. Commits of this wave before the last carry no `Claude-Session` trailer (script defect); later commits do.
 
-Not delivered (named gaps): Aitken relaxation in the PIMPLE outer loop and the tree (library `Aitken` only, S10 on a linear
-iteration); local timescale factors; residual smoothing; stretched-mesh pseudo-time acceleration and the flat-plate acceptance; step
-control with energy, scalars, turbulence, dynamic mesh or the compressible solver; error control for BDF2; SIMPLEC compensation for the
-variable-density SIMPLEC (no correctors there). F-209 stays `partial`.
+Not delivered (named gaps):
+
+* Aitken relaxation in the PIMPLE outer loop and the tree (library `Aitken` only, S10 on a linear iteration)
+* local timescale factors
+* residual smoothing
+* stretched-mesh pseudo-time acceleration and the flat-plate acceptance
+* step control with energy, scalars, turbulence, dynamic mesh or the compressible solver
+* error control for BDF2
+* SIMPLEC compensation for the variable-density SIMPLEC (no correctors there)
+
+F-209 stays `partial`.
 
 Final gate (git archive of the commit before this note): `cargo fmt --check` clean, `cargo clippy --workspace --all-targets -- -D warnings`
 clean, `cargo test --workspace --release --no-fail-fast` 261 test-result lines, 0 failed. The baseline hash tests and the existing

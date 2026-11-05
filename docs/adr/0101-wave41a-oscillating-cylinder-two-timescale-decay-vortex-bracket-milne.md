@@ -1,17 +1,36 @@
-# ADR 0101: Wave 41A, partials close-out: oscillating cylinder and G6 continuity (F-063), two-timescale error control (F-209), primary-vortex bracket (F-143), thick Milne slab (F-052)
+# ADR 0101: Wave 41A, partials close-out for F-063, F-209, F-143 and F-052
 
-Status: registered before the registered tests were run. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test
-with the limit unchanged, a defective set-up gets a new corrected test and the old one stays ignored. Test code only: no
-library change, so defaults and `crates/rcfd-api/tests/baseline_hashes.rs` are untouched. Acceptance texts are not edited (the
-F-209, F-143 and F-052 texts were reworded by the user on 2026-10-21 and are the texts met here). Clean-room: reference values
-are closed forms derived below, rcfd's own exact semi-discrete solutions, the Ghia et al. (1982) Re 100 centreline (committed
-CSV, verified in ADR 0096) and the Hopf constant (docs/reference-data.md, verified in wave 13).
+Status: registered before the registered tests were run.
 
-Gaps re-checked in the code before writing this ADR: `g6_rigidly_rotating_mesh_with_the_fluid` (rcfd-fv tests/ale_flows.rs)
-prints the continuity of the last step only and asserts nothing about it; no test moves a cylinder (g1 translates a whole box);
-F-209 has no two-timescale test; `v11_..._known_miss` (rcfd-gui tests/viewport_raster.rs) demands exactly one minimum;
-rcfd-api tests/radiation.rs already holds `r2_p1_against_the_transport_asymptote` (tau = 20, non-ignored, 0.41 %), which the
-F-052 note did not count.
+Wave 41A is the partials close-out for four items: oscillating cylinder and G6 continuity (F-063), two-timescale error
+control (F-209), primary-vortex bracket (F-143) and thick Milne slab (F-052). The results, measured after registration: C1,
+G6, P1 and R7 met their limits, and F-063, F-143 and F-052 are set `done`. E1 missed, as predicted before the run: 1913
+controlled steps against a smallest uniform count of 64 at tol 1e-2, and 3149 against 240 at tol 2.5e-3. E1 is kept as an
+ignored known miss with the limit unchanged. F-209 stays `partial` (E1 missed as predicted; the flat-plate clause is open). The
+reworded F-209 clause asks local error control to beat uniform implicit Euler on the final error of a decaying linear system,
+which the derivation below shows it cannot do unless the slow mode has decayed by about e^-(rate ratio). Two other outcomes
+were known or fixed before the runs: P1's y = 0.7375 comes from ADR 0096 and lies inside the bracket only through the
+registered one-pixel widening, and R7's outcome is fixed analytically.
+
+Rules:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged, a defective set-up gets a new
+  corrected test and the old one stays ignored.
+* Test code only: no library change, so defaults and `crates/rcfd-api/tests/baseline_hashes.rs` are untouched.
+* Acceptance texts are not edited (the F-209, F-143 and F-052 texts were reworded by the user on 2026-10-21 and are the texts
+  met here).
+* Clean-room: reference values are closed forms derived below, rcfd's own exact semi-discrete solutions, the Ghia et al. (1982)
+  Re 100 centreline (committed CSV, verified in ADR 0096) and the Hopf constant (docs/reference-data.md, verified in wave 13).
+
+Gaps re-checked in the code before writing this ADR:
+
+* `g6_rigidly_rotating_mesh_with_the_fluid` (rcfd-fv tests/ale_flows.rs) prints the continuity of the last step only and
+  asserts nothing about it.
+* No test moves a cylinder (g1 translates a whole box).
+* F-209 has no two-timescale test.
+* `v11_..._known_miss` (rcfd-gui tests/viewport_raster.rs) demands exactly one minimum.
+* rcfd-api tests/radiation.rs already holds `r2_p1_against_the_transport_asymptote` (tau = 20, non-ignored, 0.41 %), which the
+  F-052 note did not count.
 
 ## What was run before this ADR was written (disclosed)
 
@@ -89,11 +108,15 @@ Why, from first principles. For `y' = -lambda y`, one implicit-Euler step of h a
 `h ~ 4 tol max|u| / (lambda_f^2 a_f(t))` while the fast mode dominates the estimate, that is until
 `lambda_f^2 a_f < lambda_s^2 a_s`, `t* ~ 2 ln(lambda_f/lambda_s)/lambda_f`. The number of steps spent there is
 `int dt/h ~ lambda_f/(4 tol)`, independent of T. The slow phase then needs about as many steps as uniform stepping at the same
-error. Uniform implicit Euler is L-stable: errors made in the fast mode are damped by the next steps and never need resolving,
+error.
+
+Uniform implicit Euler is L-stable: errors made in the fast mode are damped by the next steps and never need resolving,
 and the final error is the slow-mode error `lambda_s^2 T h/2` per unit amplitude, so `N_min ~ (lambda_s T)^2/(2E)`. With
 `E ~ tol lambda_s T` the controlled count exceeds the uniform one by about `lambda_f/(lambda_s T)` times the slow-phase count:
 paying back the transient needs `lambda_s T` of the order of the rate ratio (about 100 here), where the relative final error is
-meaningless. A step-doubling controller of the local error can only beat uniform steps on the FINAL error when the early
+meaningless.
+
+A step-doubling controller of the local error can only beat uniform steps on the FINAL error when the early
 fast-mode error is not damped away (oscillatory or forced fast modes, or an error measured over the whole run). The clause as
 reworded asks it of a decaying linear system, where it should not hold. This is reported to the user; no rewording is applied.
 
@@ -182,10 +205,17 @@ equals the predicted P1 gap 0.2624/154.
 
 Deviation: the first E1 run asserted inside the tolerance loop and stopped at tol 1e-2. I restructured the test to measure both
 tolerances before asserting and ran it a second time (ignored, as the known miss) to obtain the tol 2.5e-3 values; the tol 1e-2
-values were identical in both runs. No limit or set-up changed. The smoke tests `e1_shear_wave_setup_smoke` and
-`c1_oscillating_cylinder_setup_smoke` stay as cheap non-ignored set-up checks; `r7_thick_slab_setup_smoke` is ignored.
+values were identical in both runs. No limit or set-up changed.
 
-Statuses: F-063 `done` (C1 and G6 met; open scope beyond the acceptance stays in its note); F-143 `done` (all clauses met by
-non-ignored tests); F-052 `done` (R1, R6, R2 and R7); F-209 `partial` (E1 missed as predicted; the flat-plate clause is open). For
-the user: the reworded F-209 clause asks local error control to beat uniform implicit Euler on the final error of a decaying
+The smoke tests `e1_shear_wave_setup_smoke` and `c1_oscillating_cylinder_setup_smoke` stay as cheap non-ignored set-up checks;
+`r7_thick_slab_setup_smoke` is ignored.
+
+Statuses:
+
+* F-063 `done` (C1 and G6 met; open scope beyond the acceptance stays in its note).
+* F-143 `done` (all clauses met by non-ignored tests).
+* F-052 `done` (R1, R6, R2 and R7).
+* F-209 `partial` (E1 missed as predicted; the flat-plate clause is open).
+
+For the user: the reworded F-209 clause asks local error control to beat uniform implicit Euler on the final error of a decaying
 linear system, which the derivation above shows it cannot do unless the slow mode has decayed by about e^-(rate ratio).

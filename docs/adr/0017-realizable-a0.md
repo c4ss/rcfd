@@ -2,11 +2,22 @@
 
 Status: accepted. The checks, numeric limits and decision rules below were written before any run of the new tests and
 before any code change for this ADR (the code and the source were only read; the reading is recorded in "Provenance").
-They are not changed, widened, replaced or deleted after a run. A miss is reported as measured and moved to an ignored
-`*_known_miss` test with the registered limit intact. If a test-set-up defect is found, a NEW corrected test is added
-and the old one stays as a record. Addenda may be appended at the end without touching the registered limits.
-Roadmap: F-042. Owner: agent A0 (`kepsilon.rs` coefficient plumbing, one new test file, this ADR).
-Clean-room: published literature only.
+
+The library uses A0 = 4.04 in the Realizable variable-C_mu formula, whereas the original report prints A0 = 4.0. This ADR
+measures whether that sub-1-percent difference could change the registered step-flow misses of ADR 0015, without changing
+the default. A0 = 4.0 moves the medium-mesh value from a miss (6.413) to a pass (6.349), which refutes the registered P4
+hypothesis. The pass is marginal, not grid-converged (P3 misses at 0.105, and on the fine mesh x_r = 6.453 is outside the
+window) and not evidence that 4.0 makes the model correct. The default stays 4.04, the decision to change it is left to the
+user, and F-042 stays `partial`.
+
+Rules and parents:
+
+* The checks, numeric limits and decision rules are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and moved to an ignored `*_known_miss` test with the registered limit intact.
+* If a test-set-up defect is found, a NEW corrected test is added and the old one stays as a record.
+* Addenda may be appended at the end without touching the registered limits.
+* Roadmap: F-042. Owner: agent A0 (`kepsilon.rs` coefficient plumbing, one new test file, this ADR).
+* Clean-room: published literature only.
 
 ## Question
 
@@ -103,13 +114,13 @@ every mesh is lower by 0.060 / 0.064 / 0.067.
 Reading, with the caveats registered above:
 
 * A0 = 4.0 moves the Realizable medium-mesh value from a miss (6.413, 0.053 above the window) to a pass (6.349, 0.011
-  below the upper edge). The P4 hypothesis (that a 0.4 percent change of C_mu cannot flip the verdict) was wrong; the
+  below the upper edge). The P4 hypothesis (that a 0.4 percent change of C_mu cannot flip the verdict) was wrong. The
   response is larger than that estimate, about 0.064 for a 0.4 percent C_mu change, so the step flow is sensitive to the
   C_mu level.
 * The pass is marginal by the registered definition: it is within 0.14 h of a window edge (0.011), it is smaller than the
   0.14 shift that second-order k/epsilon convection causes (ADR 0015), and it fails the grid check P3 (|fine - medium| =
   0.105). On the fine mesh x_r = 6.453 is outside the window (0.093 above the edge), and x_r still increases with
-  refinement. The window verdict therefore depends on the mesh used; the pass is not a grid-converged result and it is
+  refinement. The window verdict therefore depends on the mesh used. The pass is not a grid-converged result and it is
   not evidence that 4.0 makes the model correct, only that the previous 0.05 excess was within the sensitivity to A0.
 * The default stays 4.04. The decision to change it is left to the user. The ignored test
   `step_c_realizable_a0_4_grid_study_known_miss` records the P3 miss; `step_c_realizable_a0_4_window` passes (ignored as

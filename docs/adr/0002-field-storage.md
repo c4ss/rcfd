@@ -2,8 +2,8 @@
 
 Status: accepted.
 
-Decision: fields are flat `Vec<f64>` (structure of arrays) indexed by cell id
-for cell values and by face id for face values; boundary faces are stored as the
+Decision: fields are flat `Vec<f64>` (structure of arrays), indexed by cell id
+for cell values and by face id for face values. Boundary faces are stored as the
 tail of the face range (faces `n_internal..n_faces`), grouped by patch, as in
 the owner/neighbour convention. Vector fields are `Vec<[f64; 3]>`. Scalar
 kernels that must support f32 are generic over `rcfd_core::Scalar`; solver

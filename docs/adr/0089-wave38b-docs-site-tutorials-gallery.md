@@ -1,9 +1,23 @@
 # ADR 0089: Wave 38B, F-096 documentation site, executed tutorials and example gallery
 
-Status: registered before any code of this wave was written. Limits and decision rules are fixed; a miss becomes an `#[ignore]`d
-`*_known_miss` test (or a reported miss) with the limit intact. Baseline hashes are never re-recorded and no solver default changes.
-Parents: F-094 (assistant workflows, partial), F-150 (offline/local-model path, partial), ADR 0067 (design loop and its MCP tools),
-`docs/milestone-fan.md`.
+Status: registered before any code of this wave was written.
+
+F-096 asks for a docs site that builds and for tutorials executed in CI. This wave delivers static HTML pages generated from every
+Markdown file under `docs/` by a test written in Rust, with no new dependency. It also delivers five tutorials whose `run` blocks
+execute under `cargo test --workspace`, including a gallery that runs `rcfd check` on every `cases/*/*.toml`. The registered
+acceptance is met in full (every check passes). F-096 is nevertheless set to `partial` as a conservative choice, and the lead may
+set it to `done` on the registered acceptance. The GitHub workflow has not run, because nothing is pushed; "executed in CI" is
+shown as "executed by `cargo test --workspace`" only, and the tests have run on Windows only. Every GUI and sidebar step of
+`desktop-assistant.md` is `not-executed`: the page is written from the code and the roadmap notes, never checked against the running
+app. The smoke runs found F1, a failure of design studies with a relative sandbox root or no root; this wave fixes it and R1 is the
+regression check.
+
+Rules and parents:
+
+* Limits and decision rules are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test (or a reported miss) with the limit intact.
+* Baseline hashes are never re-recorded and no solver default changes.
+* Parents: F-094 (assistant workflows, partial), F-150 (offline/local-model path, partial), ADR 0067 (design loop and its MCP
+  tools), `docs/milestone-fan.md`.
 
 ## Roadmap acceptance and what it is made into
 
@@ -87,10 +101,15 @@ unchanged), and publishing the site anywhere.
 
 ## Addendum: measured results (wave 38B)
 
-Delivered: `docs/index.md`; five tutorials in `docs/tutorials/` (`quick-start-cli`, `cavity`, `gallery`, `mcp-design-loop`,
-`desktop-assistant`); the site generator and link check `crates/rcfd-cli/tests/docs_site.rs`; the shared block parser and runner
-`crates/rcfd-cli/tests/tutorial/mod.rs`; the CLI runner `crates/rcfd-cli/tests/tutorials.rs`; the MCP runner
-`crates/rcfd-mcp/tests/tutorials.rs`; the F1 fix in `crates/rcfd-api/src/design/tools.rs` (three lines).
+Delivered:
+
+* `docs/index.md`;
+* five tutorials in `docs/tutorials/` (`quick-start-cli`, `cavity`, `gallery`, `mcp-design-loop`, `desktop-assistant`);
+* the site generator and link check `crates/rcfd-cli/tests/docs_site.rs`;
+* the shared block parser and runner `crates/rcfd-cli/tests/tutorial/mod.rs`;
+* the CLI runner `crates/rcfd-cli/tests/tutorials.rs`;
+* the MCP runner `crates/rcfd-mcp/tests/tutorials.rs`;
+* the F1 fix in `crates/rcfd-api/src/design/tools.rs` (three lines).
 
 | Id | Limit | Measured | Verdict |
 |---|---|---|---|
@@ -128,10 +147,13 @@ sidebar part of the feature title is documented but not executed (registered as 
 (registered as "CI = the cargo test gate"), and its dependencies F-094 and F-150 are partial. The lead may set it to `done` on the
 registered acceptance.
 
-Post-review corrections (same wave, no limit changed): the desktop page no longer states the keychain storage as verified (F-149: a
-real keychain round trip is unverified) and cites the mock-provider canary scan for key hygiene; the MCP page states that the E1
-numbers it quotes come from ADR 0067 and are not re-checked by the slow test; the failure messages of T5 and S2 say what to edit;
-the default and slow tutorial tests use separate working directories so that `--include-ignored` cannot make them collide.
+Post-review corrections (same wave, no limit changed):
+
+* The desktop page no longer states the keychain storage as verified (F-149: a real keychain round trip is unverified) and cites
+  the mock-provider canary scan for key hygiene.
+* The MCP page states that the E1 numbers it quotes come from ADR 0067 and are not re-checked by the slow test.
+* The failure messages of T5 and S2 say what to edit.
+* The default and slow tutorial tests use separate working directories so that `--include-ignored` cannot make them collide.
 
 Coupling to note: T5 fails when a new `cases/*/` directory or `cases/*/*.toml` is added without a gallery entry, and S2 fails on a
 broken relative `.md` link anywhere under `docs/`; both messages name the fix.

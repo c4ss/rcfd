@@ -1,12 +1,25 @@
 # Partials audit, group 9
 
-Read-only audit of ten roadmap items with status `partial` (docs/roadmap.json at 43c052d). Grades follow the acceptance text as
-written. Tests were re-run by the auditor (release build, own target directory, Windows, two test threads) unless marked "read
-only". The earlier notes were not trusted. Where a note and a measurement disagree, the measurement is recorded. Every failure seen
-under `--include-ignored` was checked to be an `#[ignore]`d known-miss or set-up-defect test. No non-ignored test failed.
+This read-only audit grades ten roadmap items with status `partial` (docs/roadmap.json at 43c052d). Counts: DONE 3 (F-220,
+F-231, F-241), PARTIAL 7 (F-042, F-056, F-096, F-117, F-129, F-150, F-209), TODO 0. OVERSTATED sub-claim: F-209
+(Taylor-Green "fewer steps to a target error"; the fixed-step error is never measured).
 
-Grades: DONE = acceptance met by a passing, non-ignored (or reproducibly run) test with numeric limits; PARTIAL = a tested slice
-exists and a named clause is unmet; TODO = nothing usable; OVERSTATED = the note claims more than the tests show.
+Stale notes: F-042 says scalable wall functions are not wired to the settings tree, but
+`turbulence.wall_function = "scalable"` exists and `wall_options` c5 passes. F-231 says the non-orthogonality invariance
+is an ignored known miss, but it now passes non-ignored (worst change 3.5e-13 degrees).
+
+Grades follow the acceptance text as written. The auditor re-ran tests (release build, own target directory, Windows, two
+test threads) unless marked "read only". The earlier notes were not trusted. Where a note and a measurement disagree, the
+measurement is recorded. The auditor checked that every failure seen under `--include-ignored` was an `#[ignore]`d
+known-miss or set-up-defect test. No non-ignored test failed. The [glossary](../glossary.md) defines F-xxx, wave and
+known miss.
+
+Grades:
+
+* DONE: acceptance met by a passing, non-ignored (or reproducibly run) test with numeric limits.
+* PARTIAL: a tested slice exists and a named clause is unmet.
+* TODO: nothing usable.
+* OVERSTATED: the note claims more than the tests show.
 
 | id | title (short) | grade | evidence run or read | residual gap against the acceptance | size | blockers | one wave | user decision |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -21,21 +34,24 @@ exists and a named clause is unmet; TODO = nothing usable; OVERSTATED = the note
 | F-231 | mesh editing and repair | DONE (note stale) | `rcfd-mesh --test edit` (8 pass, none ignored) | none against the acceptance: volumes 2.7e-15, area vectors 2.7e-15 (limit 1e-12); repaired meshes pass `check_mesh` and equal the originals. Title scope missing: slit/baffle, zone separation, CLI/tree entry | - | - | - | yes (close) |
 | F-241 | chained run configurations | DONE (caveat) | `rcfd-api --test chain_w19c` (5 pass), `rcfd-cli --test chain_w19c` (2 pass) | none against the acceptance: chain equals manual run then restart bit for bit. Speed 2.08e-3 and pressure 8.35e-3 relative L2 against the single steady run (limit 2e-2) | - | - | - | yes (close) |
 
-Counts: DONE 3 (F-220, F-231, F-241), PARTIAL 7 (F-042, F-056, F-096, F-117, F-129, F-150, F-209), TODO 0. OVERSTATED sub-claim:
-F-209 (Taylor-Green "fewer steps to a target error"; the fixed-step error is never measured). Stale notes: F-042 says scalable wall
-functions are not wired to the settings tree, but `turbulence.wall_function = "scalable"` exists and `wall_options` c5 passes. F-231
-says the non-orthogonality invariance is an ignored known miss, but it now passes non-ignored (worst change 3.5e-13 degrees).
-
 Not re-run: the BFS-C grid study and sensitivities (`step_c_grid_study`, `step_c_sensitivities`), `step_kepsilon.rs` (old set-up),
 `step_realizable_a0.rs` heavy tests, the Khronos glTF validator and the VTK load of F-117, and anything needing a real local model
 server (F-150).
 
 ## F-042 k-epsilon family
 
-Measured (non-ignored): centre-line / bulk U+ Standard 20.742 / 18.441, RNG 21.193 / 18.702, Realizable 21.630 / 18.973. The test
-divides by 20.1 / 17.4. The note's verified MKM values are 20.13 / 17.54, which would give Realizable bulk +8.2 instead of +9.0
-percent. "Mean profile within 10 percent of DNS" is shown only at these two points. Between y+ 20 and 150 the profile is compared
-with Reichardt's law, not DNS, and validation-data holds no Re_tau 395 profile (only `mkm_chan180_sampled.csv`).
+Measured (non-ignored):
+
+| variant | centre-line U+ | bulk U+ |
+| --- | --- | --- |
+| Standard | 20.742 | 18.441 |
+| RNG | 21.193 | 18.702 |
+| Realizable | 21.630 | 18.973 |
+
+The test divides by 20.1 / 17.4. The note's verified MKM values are 20.13 / 17.54, which would give Realizable bulk +8.2
+instead of +9.0 percent. "Mean profile within 10 percent of DNS" is shown only at these two points. Between y+ 20 and 150
+the profile is compared with Reichardt's law, not DNS, and validation-data holds no Re_tau 395 profile (only
+`mkm_chan180_sampled.csv`).
 
 Step (BFS-C medium mesh, re-run, all converged in 840-909 iterations): RNG 6.334 (window 6.16-6.36, pass by 0.026), Realizable 6.413
 and Standard 5.350 (both miss). Standard is also below the 5.5-7 "literature scatter" band. That band is in
@@ -49,8 +65,10 @@ DNS profile file and a primary source for the Standard band. Closing it means re
 
 ## F-056 particle tracking
 
-Settling is met: terminal velocity relative error 1.39e-11 (PT1), plus the exponential approach, bounce and deposition closed forms.
-The run path equals the library hooks bit for bit. No cyclone case exists in any form, so one acceptance clause is entirely unmet.
+No cyclone case exists in any form, so one acceptance clause is entirely unmet. Settling is met: terminal velocity
+relative error 1.39e-11 (PT1), plus the exponential approach, bounce and deposition closed forms. The run path equals the
+library hooks bit for bit.
+
 A one-wave closure: a frozen prescribed swirling flow (for example a Rankine vortex in a cylinder with axial outflow), particles
 injected over a size range, and the grade-efficiency cut size compared with a closed-form estimate (Barth or Lapple type, recalled
 from memory, UNVERIFIED). A real cyclone flow solve is a different, much larger job. The acceptance word "sanity" is unmeasurable.
@@ -59,20 +77,23 @@ monotonically with diameter and d50 is within a registered factor of the cited e
 
 ## F-096 docs and tutorials
 
-Every registered check of ADR 0089 re-passes: the site now has 129 pages (other audits added files) with 0 broken relative links,
-5 tutorials, and the slow blocks run. The unmet clause is "executed in CI". `ci.yml` runs `cargo test --workspace` on ubuntu and
-windows but has not run on these commits. `origin/main` is at e2d5e8c (wave 32), so the remote has an older state, and the
-tutorials (wave 38) were never on it. Whether any hosted run happened for e2d5e8c was not checked (no `gh` here). One push by the
-user would also settle F-001 and F-002. The GUI and sidebar steps stay `not-executed` by design. Linux execution of the tutorials is
-untested.
+The unmet clause is "executed in CI". Every registered check of ADR 0089 re-passes: the site now has 129 pages (other
+audits added files) with 0 broken relative links, 5 tutorials, and the slow blocks run.
+
+`ci.yml` runs `cargo test --workspace` on ubuntu and windows but has not run on these commits. `origin/main` is at e2d5e8c
+(wave 32), so the remote has an older state, and the tutorials (wave 38) were never on it. Whether any hosted run happened
+for e2d5e8c was not checked (no `gh` here). One push by the user would also settle F-001 and F-002. The GUI and sidebar
+steps stay `not-executed` by design. Linux execution of the tutorials is untested.
 
 ## F-117 glTF export
 
-The writer's structure and colours are checked internally: the vertex colours equal the colour map of the stored value, the 12-rule
-`glb_check` passes, and the size is linear. "Loads in a glTF validator" rests on the recorded Khronos run (0 errors, 0 warnings); it
-was not re-run because `gltf-validator` is not installed. "A viewer with correct colours" is not demonstrated. A scripted
-headless-browser render (three.js or model-viewer from a CDN) with pixel sampling at known faces would close it in under a day if
-network and a browser are allowed. Otherwise it needs a human.
+"A viewer with correct colours" is not demonstrated. A scripted headless-browser render (three.js or model-viewer from a
+CDN) with pixel sampling at known faces would close it in under a day if network and a browser are allowed. Otherwise it
+needs a human.
+
+"Loads in a glTF validator" rests on the recorded Khronos run (0 errors, 0 warnings); it was not re-run because
+`gltf-validator` is not installed. The writer's structure and colours are checked internally: the vertex colours equal the
+colour map of the stored value, the 12-rule `glb_check` passes, and the size is linear.
 
 ## F-129 combustion extensions
 
@@ -86,10 +107,12 @@ the TNF data". Size L. It needs network access for reference data and a reacting
 
 ## F-150 local-model path
 
-Measured: all four presets send the documented request to a loopback mock over real sockets, streaming and failures behave, and the
-quick actions run with no model and open 0 connections (`quick_actions_run_without_a_model`,
-`quick_actions_open_no_connection_even_when_a_local_endpoint_is_configured`). The remaining clause is human verification against a
-real server. No local model server is installed on this machine. This is a user task, not an agent task.
+The remaining clause is human verification against a real server. No local model server is installed on this machine. This
+is a user task, not an agent task.
+
+Measured: all four presets send the documented request to a loopback mock over real sockets, streaming and failures
+behave, and the quick actions run with no model and open 0 connections (`quick_actions_run_without_a_model`,
+`quick_actions_open_no_connection_even_when_a_local_endpoint_is_configured`).
 
 ## F-209 adaptive stepping
 

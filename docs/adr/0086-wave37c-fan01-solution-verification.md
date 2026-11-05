@@ -1,13 +1,31 @@
-# ADR 0086: Wave 37C, the first solution-verification study of FAN-01 (three-mesh family, Richardson extrapolation, observed order, GCI) and the same study for the empty passage
+# ADR 0086: Wave 37C, the first solution-verification study of FAN-01
 
-Status: accepted (registration, then addendum). The registration was committed before any registered solver run of this wave. Limits and decision rules are fixed now and are not changed after a run; a miss of a
-check becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
-Baseline hashes are never re-recorded; no solver, mesh or default code is changed by this wave (tests and documentation only). Clean-room: first
-principles and published literature only; references recalled from memory are marked UNVERIFIED. Parents: ADR 0075 (FAN-01 data, set-up, measured
-design point), ADR 0078 (deficit diagnosis, X2 empty-passage check), ADR 0079 / 0083 (C-grid `camber_seam` / `camber_seam_h`), ADR 0081 (the
-Barth-Jespersen-limited `linear_upwind`), ADR 0082 (location and first-order mesh dependence of the spurious angular momentum).
+Status: accepted (registration, then addendum). The registration was committed before any registered solver run of this
+wave.
 
 **2026-10-30, [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md):** the torques below are molecular moments. With the effective moment default (same fields bit for bit) the bladed torques are 2.098164 / 2.028692 / 1.918189 N m, p 1.39, f_ext 2.2114, band +-0.2119 N m, B-M still VALID (met); B-P unchanged.
+
+Wave 37C is the first solution-verification study of FAN-01: a three-mesh family, Richardson extrapolation, observed
+order and GCI at the design point, with the same study for the empty passage to test whether the error band is credible
+where the exact answer is known. The bladed studies of torque and Delta p_ts are VALID (p 1.51 and 1.74). The
+empty-passage check E-L, E-S is a MISS: E1 is NOT CONVERGED at the wall clock, and as a counterfactual with E1's
+settled values the swirl-energy study is still not monotone. So R-E is not met, and by the registered rule the bladed
+bands are "not shown credible on this family". With that label, the measured torque 2.1418 N m lies inside the band
+[1.822, 2.255] N m, and the measured Delta p_ts 126.46 Pa lies outside the band [44.2, 103.7] Pa. On the empty passage L
+grows with refinement (-0.010, 0.060, 0.106 N m) and the duct still creates 4.5-9.2 Pa of total pressure. Agreement with
+the FAN-01 measurement is not claimed, and the wall-normal near-wall error is NOT in the band. None of the six runs
+reached the residual tolerance 1e-5.
+
+Rules and parents:
+
+* Limits and decision rules are fixed now and are not changed after a run; a miss of a check becomes an ignored
+  `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded; no solver, mesh or default code is changed by this wave (tests and
+  documentation only).
+* Clean-room: first principles and published literature only; references recalled from memory are marked UNVERIFIED.
+* Parents: ADR 0075 (FAN-01 data, set-up, measured design point), ADR 0078 (deficit diagnosis, X2 empty-passage check),
+  ADR 0079 / 0083 (C-grid `camber_seam` / `camber_seam_h`), ADR 0081 (the Barth-Jespersen-limited `linear_upwind`),
+  ADR 0082 (location and first-order mesh dependence of the spurious angular momentum).
 
 ## Question
 
@@ -59,23 +77,42 @@ differs from `camber_seam` only in the blade wall stacks).
 | F2 | (8, 17, 8, 11, 4, 15, 7) | 13 627 / 13 882 |
 | F3 (coarse) | (6, 12, 6, 8, 3, 10, 5) | 4 920 / 5 040 |
 
-Refinement ratio: the registered ratio is the representative cell size `h = (V / N)^(1/3)` (V the passage volume, identical for the members of one
-geometry up to the blade facets), i.e. `r21 = (N1 / N2)^(1/3)`, `r32 = (N2 / N3)^(1/3)`: bladed 1.4098 and 1.4044, empty 1.4073 and 1.4017 (nominal
-sqrt 2 = 1.4142). Per-direction count ratios after rounding (F3 -> F2 -> F1): n_up and n_down 1.33, 1.5; n_chord 1.42, 1.41; n_side 1.38, 1.36;
-n_nose 1.33, 1.5; n_span 1.5, 1.4; n_gap 1.4, 1.43. Not refined (stated limits of the family): the first cell (y+ = 30 rule, 5.654e-4 m), `n_bl` 2,
-growth 1.2, `n_core` 1, `front_gap` 0.3. The study therefore measures the error that depends on the in-plane, spanwise, axial and tip-gap resolution
-at a fixed wall model and wall-normal first cell; the wall-normal near-wall error is NOT in the band. The C-grid smoother does not produce
-geometrically similar meshes (maximum non-orthogonality 78.4 / 79.5 / 83.4 deg, skewness 1.58 / 4.62 / 3.77): a known risk of non-asymptotic
-behaviour, not a discovery afterwards. The axial blocks where ADR 0082 located the spurious source have count ratios 1.33 and 1.5.
+Refinement ratio: the registered ratio is the representative cell size `h = (V / N)^(1/3)` (V the passage volume,
+identical for the members of one geometry up to the blade facets), i.e. `r21 = (N1 / N2)^(1/3)`,
+`r32 = (N2 / N3)^(1/3)`: bladed 1.4098 and 1.4044, empty 1.4073 and 1.4017 (nominal sqrt 2 = 1.4142).
+
+Per-direction count ratios after rounding (F3 -> F2 -> F1):
+
+| Direction | F3 -> F2 | F2 -> F1 |
+|---|---|---|
+| n_up and n_down | 1.33 | 1.5 |
+| n_chord | 1.42 | 1.41 |
+| n_side | 1.38 | 1.36 |
+| n_nose | 1.33 | 1.5 |
+| n_span | 1.5 | 1.4 |
+| n_gap | 1.4 | 1.43 |
+
+Not refined (stated limits of the family): the first cell (y+ = 30 rule, 5.654e-4 m), `n_bl` 2, growth 1.2, `n_core` 1,
+`front_gap` 0.3. The study therefore measures the error that depends on the in-plane, spanwise, axial and tip-gap
+resolution at a fixed wall model and wall-normal first cell; the wall-normal near-wall error is NOT in the band.
+
+The C-grid smoother does not produce geometrically similar meshes (maximum non-orthogonality 78.4 / 79.5 / 83.4 deg,
+skewness 1.58 / 4.62 / 3.77): a known risk of non-asymptotic behaviour, not a discovery afterwards. The axial blocks
+where ADR 0082 located the spurious source have count ratios 1.33 and 1.5.
 
 ### Set-up (part S)
 
-The ADR 0075 design point exactly (Q = 1.4032 m^3/s, inlet `(Omega y, -Omega x, 9.478)` with the SST inlet values, outlet fixed static pressure 0 and
-zero-gradient velocity, `rotating_frame` Omega = 155.614 rad/s with centrifugal terms, nu 1.5e-5, rho 1.2 ASSUMED, `k_omega_sst`), with three
-differences, all fixed now: the C-grid family above; `solver.convection = "linear_upwind"` with `linear_upwind_limiter = "barth_jespersen"`; the
-casing as `moving_wall` at `-Omega` with `wall_velocity_projection = "tangential"` (the ADR 0072 / ADR 0078 E1 treatment; on the C-grid the facet
-leak of the expression form is 1 %, ADR 0072). Hub and blade at rest in the rotating frame. Empty passage (part E): the same with
-`include_blade = false` and the hub also `moving_wall` at `-Omega` with the projection (ADR 0078 X2a). SIMPLEC, default relaxation, tolerances
+The ADR 0075 design point exactly (Q = 1.4032 m^3/s, inlet `(Omega y, -Omega x, 9.478)` with the SST inlet values,
+outlet fixed static pressure 0 and zero-gradient velocity, `rotating_frame` Omega = 155.614 rad/s with centrifugal
+terms, nu 1.5e-5, rho 1.2 ASSUMED, `k_omega_sst`), with three differences, all fixed now:
+
+* the C-grid family above;
+* `solver.convection = "linear_upwind"` with `linear_upwind_limiter = "barth_jespersen"`;
+* the casing as `moving_wall` at `-Omega` with `wall_velocity_projection = "tangential"` (the ADR 0072 / ADR 0078 E1
+  treatment; on the C-grid the facet leak of the expression form is 1 %, ADR 0072).
+
+Hub and blade at rest in the rotating frame. Empty passage (part E): the same with `include_blade = false` and the hub
+also `moving_wall` at `-Omega` with the projection (ADR 0078 X2a). SIMPLEC, default relaxation, tolerances
 `tolerance_u = tolerance_p = 1e-5`, cap 8000 iterations, test file `crates/rcfd-api/tests/fan01_gci_w37c.rs`.
 
 Stop and convergence rules (ADR 0075 / 0078, with a stated floor for the empty passage): a run stops on a steady-guard trip, on a non-finite
@@ -180,13 +217,28 @@ No run tripped the guard or diverged; mass balance 1e-8 or better. No run reache
 registered 60-minute wall clock 82 iterations before the cap, with its functionals constant to 2e-8 N m and 7e-8 Pa over the last 1000 iterations.
 
 Reported, no rule (full annulus; bladed / empty, F1 / F2 / F3):
-* Bladed: blade torque 2.0222 / 1.9519 / 1.8343, hub 0.0162 / 0.0155 / 0.0155, shroud on the fluid -0.0446 / -0.0298 / -0.0077 N m; Delta p_tt
-  (mass-averaged absolute) 157.25 / 147.02 / 131.78 Pa; outlet swirl energy 23.48 / 22.66 / 26.82 Pa; outlet L 1.9931 / 1.9448 / 1.9742 N m; the
-  angular-momentum excess (outlet L minus the wall torque on the fluid) **-0.0008 / 0.0072 / 0.1321 N m**, against 2.061 N m in the ADR 0078 E0
-  base (H-slit, `upwind`): with the limited scheme on the C-grid the balance closes to 0.04 % of the torque on F1.
-* Empty passage (exact: L 0, swirl 0, Delta p_tt <= 0): angular-momentum excess 0.0903 / 0.0371 / -0.0386 N m (hub and shroud torque 0.016 /
-  0.023 / 0.029 N m); Delta p_tt **+4.53 / +9.21 / +4.85 Pa** (a duct whose walls are at rest creates total pressure; spurious, as X2d's 16.8 Pa).
-  The outlet L of F1 (0.106 N m) is 5.2 % of the bladed F1 torque; X2a (H-slit, `upwind`) was 2.254 N m.
+
+| Bladed | F1 | F2 | F3 |
+|---|---|---|---|
+| Blade torque [N m] | 2.0222 | 1.9519 | 1.8343 |
+| Hub [N m] | 0.0162 | 0.0155 | 0.0155 |
+| Shroud on the fluid [N m] | -0.0446 | -0.0298 | -0.0077 |
+| Delta p_tt (mass-averaged absolute) [Pa] | 157.25 | 147.02 | 131.78 |
+| Outlet swirl energy [Pa] | 23.48 | 22.66 | 26.82 |
+| Outlet L [N m] | 1.9931 | 1.9448 | 1.9742 |
+| Angular-momentum excess (outlet L minus the wall torque on the fluid) [N m] | **-0.0008** | **0.0072** | **0.1321** |
+
+The bladed excess compares with 2.061 N m in the ADR 0078 E0 base (H-slit, `upwind`): with the limited scheme on the
+C-grid the balance closes to 0.04 % of the torque on F1.
+
+| Empty passage (exact: L 0, swirl 0, Delta p_tt <= 0) | F1 | F2 | F3 |
+|---|---|---|---|
+| Angular-momentum excess [N m] | 0.0903 | 0.0371 | -0.0386 |
+| Hub and shroud torque [N m] | 0.016 | 0.023 | 0.029 |
+| Delta p_tt [Pa] | **+4.53** | **+9.21** | **+4.85** |
+
+In the empty passage a duct whose walls are at rest creates total pressure: spurious, as X2d's 16.8 Pa. The outlet L of
+F1 (0.106 N m) is 5.2 % of the bladed F1 torque; X2a (H-slit, `upwind`) was 2.254 N m.
 
 ### Part G evaluation (registered rules; `evaluate`)
 
@@ -221,13 +273,15 @@ Each member carries a slightly different flow: the inlet speed is fixed, the ann
 | B-M torque study | VALID | VALID, p 1.51 | met |
 | B-P Delta p_ts study | VALID | VALID, p 1.74 | met (`b_m_b_p_bladed_studies_are_valid`, heavy, ignored) |
 
-**R-E: not met**, so by the registered rule the bladed bands below are "not shown credible on this family". The verdict does not hang on E1's
-82 missing iterations: with E1's settled values the swirl-energy study is still not monotone (eps32 = f3 - f2 = -2.96 Pa, so a monotone
-sequence would need f1 above f2 = 9.23 Pa; F1 is settled at 5.48 Pa, constant to 7e-8 Pa over its last 1000 iterations). As a counterfactual
-observation only, the L sequence moves away from the exact zero with refinement. On the empty passage the error of the limited relative-frame scheme on these C-grid meshes does NOT
-decrease with this refinement: L grows (-0.010, 0.060, 0.106 N m) and the duct still creates 4.5-9.2 Pa of total pressure. The likely reason is
-outside this study's reach. The family does not refine the wall-normal stacks, the C-grid smoother produces cells of different shape at each count,
-or the limiter clips a different set of cells. None of these was tested.
+**R-E: not met**, so by the registered rule the bladed bands below are "not shown credible on this family". The verdict
+does not hang on E1's 82 missing iterations: with E1's settled values the swirl-energy study is still not monotone
+(eps32 = f3 - f2 = -2.96 Pa, so a monotone sequence would need f1 above f2 = 9.23 Pa; F1 is settled at 5.48 Pa, constant
+to 7e-8 Pa over its last 1000 iterations). As a counterfactual observation only, the L sequence moves away from the
+exact zero with refinement. On the empty passage the error of the limited relative-frame scheme on these C-grid meshes
+does NOT decrease with this refinement: L grows (-0.010, 0.060, 0.106 N m) and the duct still creates 4.5-9.2 Pa of
+total pressure. The likely reason is outside this study's reach. The family does not refine the wall-normal stacks, the
+C-grid smoother produces cells of different shape at each count, or the limiter clips a different set of cells. None of
+these was tested.
 
 **R-B (contain in principle), bladed, with the "not shown credible" label:**
 * Torque: band [1.822, 2.255] N m; measured 2.1418 is **inside** (|meas - f1| = 0.103 N m = 4.8 %); the alternative band (+-0.130) also contains it.

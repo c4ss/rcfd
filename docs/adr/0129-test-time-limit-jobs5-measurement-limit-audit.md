@@ -1,8 +1,19 @@
 # ADR 0129: Per-test time limit, one measurement at five jobs, and an audit of tests that cannot fail
 
 Status: **ACCEPTED 2026-10-27** (acceptance registered before any code or run). Written at main af9c0fc on branch `wtp`, worktree
-`<scratch dir>`, target `<target dir>`. Follows [ADR 0127](0127-test-gate-efficiency.md); the process is
-described in [`docs/test-process.md`](../test-process.md). ADR 0128 is taken by branch `wfix`.
+`<scratch dir>`, target `<target dir>`.
+
+A hung test held a gate slot for about 3.5 h on 2026-10-26, and neither `cargo test` nor `scripts/gate_test.py` has a time limit.
+This ADR adds a per-test time limit and memory sampling to `scripts/gate_test.py`, registers one measurement of the test stage at
+`--jobs 5` against `--jobs 3`, and audits the tests for ones that cannot fail. The time limit met T1 to T4; the process-group branch
+for other systems was not exercised, and the cargo exclusion of the tree kill was not exercised by a test. `--jobs 5` met its pass
+condition, but its wall time was 13.2 % below the 3-job run, not the required 25 %, so the default stays 3. The audit classified all
+80 scanner hits, among them 2 real weaknesses: 0 were fixed, no assertion-only fix was possible, and both are listed. A4 is missed:
+the mutation spot-check detected 10 of 12, and the two misses (ADR 0123 S7 and ADR 0119 R3) are reported as findings with nothing
+changed. The final gate on 39984a5 recorded 2190 passed, 0 failed and 666 ignored.
+
+This ADR follows [ADR 0127](0127-test-gate-efficiency.md), and [`docs/test-process.md`](../test-process.md) describes the process.
+ADR 0128 is taken by branch `wfix`.
 
 ## Context
 
@@ -55,8 +66,7 @@ other slot's occupancy recorded.
 * **Prediction**: floor at 5 jobs = 9296 test-seconds / 5 = **31.0 min** (at 3 jobs: 51.6 min; gate47 measured 52.0 min). Contention
   (a solver test uses about two cores) will put the measured time above the floor.
 * **Pass condition** (all of): the sorted (binary, test, outcome) list at 5 jobs equals the one at 3 jobs (which T3 compares with
-  gate47); 0 failures at 5 jobs that
-  are not failures at 3 jobs; no TIMEOUT; peak summed working set (D2) **< 12 GB**.
+  gate47); 0 failures at 5 jobs that are not failures at 3 jobs; no TIMEOUT; peak summed working set (D2) **< 12 GB**.
 * **Decision rule**: `--jobs 5` becomes the default only if the pass condition holds **and** the test-phase wall
   time (the runner's `wall`) at 5 jobs is **at least 25 % below** the one at 3 jobs from the same pair. Otherwise the default stays 3
   and the addendum says why. Adopting means adding `--jobs 5` to the gate command in `docs/test-process.md` section 4 (the gate
@@ -79,8 +89,14 @@ A missed check is reported as missed with the measured value; no check is moved.
 ## Amendment 1 (2026-10-27, before the A4 draw): the A4 population
 
 Enumerated from the acceptance sections and amendments of ADRs 0115 to 0126 (each id with its enforcing `#[test]`, checked by a
-script for existence and ignore flag; nothing run). Known before writing this: the scanner hits (A2), not any mutation result. Population: 183 (ADR, id) pairs, sorted by (ADR, id) as strings; the enforcing test of each is in the enumeration
-table of the drawn ones goes to `docs/test-process.md` section 6.4. Excluded: 23 (0115 N1 no test, 0115 P4 ignored, 0115 P6 no test, 0115 Z1 ignored, 0115 Z2 ignored, 0117 B no test, 0117 D-c no test, 0117 D-d ignored, 0117 F-a ignored, 0117 F-b no test, 0117 F-harness ignored, 0117 route-check no test, 0118 D1 no test, 0118 D2 no test, 0119 V1 no test, 0119 Z1 ignored, 0120 J1 ignored, 0120 W no test, 0123 S5 ignored, 0125 P1 ignored, 0126 R1 ignored, 0126 R2 ignored, 0126 R3 ignored).
+script for existence and ignore flag; nothing run). Known before writing this: the scanner hits (A2), not any mutation result.
+Population: 183 (ADR, id) pairs, sorted by (ADR, id) as strings; the enforcing test of each is in the enumeration
+table of the drawn ones goes to `docs/test-process.md` section 6.4.
+
+Excluded: 23 (0115 N1 no test, 0115 P4 ignored, 0115 P6 no test, 0115 Z1 ignored, 0115 Z2 ignored, 0117 B no test, 0117 D-c no test,
+0117 D-d ignored, 0117 F-a ignored, 0117 F-b no test, 0117 F-harness ignored, 0117 route-check no test, 0118 D1 no test, 0118 D2 no
+test, 0119 V1 no test, 0119 Z1 ignored, 0120 J1 ignored, 0120 W no test, 0123 S5 ignored, 0125 P1 ignored, 0126 R1 ignored, 0126 R2
+ignored, 0126 R3 ignored).
 
 * 0115: P1, P2, P3, P5
 * 0116: G1, G2, G3, G4, G5, G6, G7, N1, N2
@@ -150,12 +166,15 @@ systems was not exercised. The cargo exclusion of the tree kill was not exercise
 | A5 | test list only grows | no test edited, list unchanged | **met** |
 | A6 | own target per scratch copy; `Compiling <crate>` in every counted run | `target-wtp-mut`; shown in all 12 counted runs | **met** |
 
-Deviations: the scanner's helper resolution and constant rules were tightened after its first run on the repo (871 hits, mostly
-`let mut worst = 0.0` taken as a constant and helper calls not followed); the self-test was written for the final rules. The scanner
-covers the registered paths only, not the 99 inline `#[cfg(test)]` modules of other `src/` files. Three mutation runs were
-repeated for set-up reasons (a compile error, a duplicated flag, a missing `rcfd.exe`), not to change a result. The first R3
-mutation (strip stall check off) failed the test at the R3b line, a separate id; on review it did not break R3's own path, so it
-was replaced by the slope-check mutation, which R3 does not detect. The replacement lowered the count from 11 to 10.
+Deviations:
+
+* The scanner's helper resolution and constant rules were tightened after its first run on the repo (871 hits, mostly
+  `let mut worst = 0.0` taken as a constant and helper calls not followed); the self-test was written for the final rules.
+* The scanner covers the registered paths only, not the 99 inline `#[cfg(test)]` modules of other `src/` files.
+* Three mutation runs were repeated for set-up reasons (a compile error, a duplicated flag, a missing `rcfd.exe`), not to change a
+  result.
+* The first R3 mutation (strip stall check off) failed the test at the R3b line, a separate id; on review it did not break R3's own
+  path, so it was replaced by the slope-check mutation, which R3 does not detect. The replacement lowered the count from 11 to 10.
 
 ### Final gate
 

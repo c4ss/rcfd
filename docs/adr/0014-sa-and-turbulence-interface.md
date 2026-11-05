@@ -1,8 +1,22 @@
 # ADR 0014: Spalart-Allmaras model (F-041) and the turbulence-model interface (F-044)
 
 Status: accepted. The checks, decision rules and numeric limits below were written before any SA or interface code
-was run. They are not changed, widened, replaced or deleted after a run; a miss is reported as measured and moved to an
-ignored `*_known_miss` test. Roadmap: F-041, F-044 (F-157 only if a criterion below advances it).
+was run.
+
+This ADR adds the Spalart-Allmaras model in its SA-noft2 form (F-041), a turbulence-model interface with a plugin registry
+and coefficients in the settings tree (F-044), and runtime model switching. F-041 is **partial**: its acceptance reading is
+met only if S1, S2 and S3 pass, and S2 misses at x = 1.0 (+5.29 % against 5 %, ignored
+`sa_flat_plate_cf_vs_power_law_known_miss`). S1, S3, S4, S5 and S6 pass; S1 is +2.97 % against the TMR reference 2.70565e-3.
+U1-U3, K1-K4 and R1-R4 pass. In H1, `baseline_hashes::shipped_cases_match_registered_hashes` fails on `kepsilon_channel`. A
+pristine `git archive HEAD` copy gives the identical failing hash, so the failure pre-dates this work, and hashes were not
+re-recorded. H2/H3 hygiene reports fmt of own files and clippy clean for own targets. Not delivered includes SST coefficient
+override, per-coefficient override by expression or user function, compressible SA and SA with energy.
+
+Rules and parents:
+
+- The checks, decision rules and numeric limits are not changed, widened, replaced or deleted after a run; a miss is
+  reported as measured and moved to an ignored `*_known_miss` test.
+- Roadmap: F-041, F-044 (F-157 only if a criterion below advances it).
 
 ## Sources (clean-room; published literature and NASA TMR only)
 
@@ -163,23 +177,24 @@ TMR grid); turbulence convection is first-order upwind; the TMR grid behind 2.70
 
 ### Units, coefficients, runtime switching, plugin
 
-- U1-U3 pass (sa.rs unit tests). H2/H3 hygiene: fmt of own files, clippy clean for own targets.
-- K1 pass: max nut 6.97758e-5 default vs 8.042632e-5 with cb1 +20 % (relative change 0.1526 > 0.01); explicit 0.1355
-  bit-identical; readback exact. K2 pass: k-eps c2 2.112 vs 1.92 changes max nut 6.065434e-2 -> 7.806509e-2 (0.287 > 1e-3);
-  explicit 1.92 bit-identical. K3 pass: SST a1 = 0.31 accepted, 0.4 rejected at `turbulence.coefficients.k_omega_sst.a1`.
-  K4 pass: 5 / 11 / 10 coefficients with documentation and ranges in the JSON schema; out-of-range and wrong-model values
-  are located errors.
-- R1 pass (quick): ux, uy, p bit-identical across each switch, iteration counter continues. R2 pass (ignored, release,
-  6000 iterations per phase, 390 s): k_epsilon -> k_omega_sst -> spalart_allmaras -> k_epsilon; bulk velocity vs a fresh
-  run differs by 0 / 1.9e-11 / 1.6e-11 / 1.9e-12 relative (bulk ux 18.44106 / 16.91965 / 17.14194). R3 pass (unregistered
-  plugin: located diagnostic at `turbulence.plugin`, old model keeps running). R4 pass (plugin `const_nut` equals the
-  laminar 10 nu run exactly, bulk 13.301175; unknown plugin coefficient located).
+| Check | Result | Measured |
+| --- | --- | --- |
+| U1-U3 | pass | sa.rs unit tests |
+| K1 | pass | max nut 6.97758e-5 default vs 8.042632e-5 with cb1 +20 % (relative change 0.1526 > 0.01); explicit 0.1355 bit-identical; readback exact |
+| K2 | pass | k-eps c2 2.112 vs 1.92 changes max nut 6.065434e-2 -> 7.806509e-2 (0.287 > 1e-3); explicit 1.92 bit-identical |
+| K3 | pass | SST a1 = 0.31 accepted, 0.4 rejected at `turbulence.coefficients.k_omega_sst.a1` |
+| K4 | pass | 5 / 11 / 10 coefficients with documentation and ranges in the JSON schema; out-of-range and wrong-model values are located errors |
+| R1 | pass (quick) | ux, uy, p bit-identical across each switch, iteration counter continues |
+| R2 | pass (ignored, release, 6000 iterations per phase, 390 s) | k_epsilon -> k_omega_sst -> spalart_allmaras -> k_epsilon; bulk velocity vs a fresh run differs by 0 / 1.9e-11 / 1.6e-11 / 1.9e-12 relative (bulk ux 18.44106 / 16.91965 / 17.14194) |
+| R3 | pass | unregistered plugin: located diagnostic at `turbulence.plugin`, old model keeps running |
+| R4 | pass | plugin `const_nut` equals the laminar 10 nu run exactly, bulk 13.301175; unknown plugin coefficient located |
 
 ### Regression and hygiene
 
 - H1: `baseline_hashes::shipped_cases_match_registered_hashes` fails on `kepsilon_channel` (60 iterations, got
   da0ee795fd177d8e, registered 6ddc55969af2a835). A pristine `git archive HEAD` copy gives the identical failing hash, so
   the failure pre-dates this work and the SA/interface changes are bit-identical for k-epsilon. Hashes were not re-recorded.
+- H2/H3 hygiene: fmt of own files, clippy clean for own targets.
 - Other suites pass (rcfd-api lib 52, physics_schema, sst_schema, physics_service, service_tcp, workflow, library_api,
   runctl; rcfd-turb channel_sst, channel_kepsilon).
 - A stray `cargo fmt --all` touched whitespace in other agents' in-progress files; no logic change.

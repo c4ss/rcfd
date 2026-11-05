@@ -1,11 +1,29 @@
 # ADR 0110: Wave 43C, why the FAN-01 rotor-passage steady run does not converge (diagnosis on the coarsest mesh, opt-in fixes)
 
-Status: registered before any registered run and before any solver code of this wave. Limits and decision rules are fixed here and are
-not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written
-before the corrected run. Defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first
-principles only; the one literature statement used is marked UNVERIFIED. Written at HEAD 5e28164 (scratch clone
-`<scratch dir>`, target `<target dir>`). Parents: ADR 0075, 0077-0087, 0101-0104, `docs/milestone-fan.md`.
-No agreement with measured fan data is a question of this ADR or is claimed.
+Status: registered before any registered run and before any solver code of this wave. Written at HEAD 5e28164 (scratch clone
+`<scratch dir>`, target `<target dir>`).
+
+This wave tests mechanisms for two of the three symptoms: why the ADR 0086 FAN-01 runs never reach the residual tolerance 1e-5 (on the
+coarsest mesh, F3) and why, on the empty passage (E3, E2, E1), the spurious outlet angular-momentum flux L grows with
+refinement; opt-in fixes are registered, each only if its mechanism stands. The addendum records the results, measured after the
+registration; amendments 2, 4 and 5 added mechanisms and fix candidates after earlier runs had failed, each written before the
+runs it governs. Freezing the Barth-Jespersen limiter converges on the empty passage E3 (S1 STANDS), but on the bladed passage
+B3 it is FALSIFIED: the oscillation at the blade-root leading edge grows. On B3 only first-order `upwind` (S10) STANDS, and its
+first-order solution (torque 1.335 N m, Delta p_ts -4.0 Pa) is not the second-order one. Supported mechanism: the high-order
+(deferred, explicit) part of the limited `linear_upwind` makes the outer iteration locally unstable at a few hub-region cells,
+and the Barth-Jespersen switching bounds that instability into a cycle; the eigenvalue at or beyond -1 at those cells is
+inferred and was NOT measured. The ADR 0086 functionals are values taken on a cycle. No fix is eligible by the registered rules
+and none was added; the one solver change kept is the diagnostic hook `SimpleSolver::frozen_limiter` (default `None`). The
+growth of L with refinement remains undiagnosed, and symptom 2 (the 60-minute guard) is unresolved.
+
+Rules and parents:
+
+* Limits and decision rules are fixed here and are not changed after a run; a miss becomes an ignored `*_known_miss` test with the
+  limit intact; a defective set-up gets an amendment written before the corrected run.
+* Defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles only; the one literature statement used is marked UNVERIFIED.
+* Parents: ADR 0075, 0077-0087, 0101-0104, `docs/milestone-fan.md`.
+* No agreement with measured fan data is a question of this ADR or is claimed.
 
 ## The defect (three symptoms)
 
@@ -157,14 +175,18 @@ set-up arm, as registered). The E3 test stays non-ignored (750 iterations, about
 
 ## Amendment 2 (written after S1-S7, S1v and L1-L3 had run, before any run it governs)
 
-What I knew when writing it (all registered runs so far, one each; numbers go to the addendum): S1 on E3 STANDS (the frozen psi converges
-to `res_u` 1.9e-12 in 250 iterations; tolerance at iteration 510). S1 on B3 is FALSIFIED: with psi frozen the oscillation at the blade-root
-leading edge GROWS (`max_du` 2.2 -> 17.8 m/s in cell c17, which touches the hub and the blade; period ratio 0.24-0.72) and the five largest
-cells each flip the flux sign on two faces every iteration, so S2 stands by its record rule on B3. S3 (face_flux), S4 (laminar), S5
-(partner_cell), S6 (tight solves) and S7 (outlet) are FALSIFIED on B3 (`rho_med` 0.90, 3.84, 1.09, 1.09, 1.02). S1v (Venkatakrishnan(5))
-gives `rho_med` 0.94. L1 is FALSIFIED (`C_psi` 0.114, 0.046, 0.028 N m on E3, E2, E1 while L rises), L2 FALSIFIED (partner_cell |L| 0.0104,
-0.0595, 0.1069 N m), L3 NOT EVALUABLE (the laminar empty passage does not settle: `|du|_2` 22-33 m/s). By the registered fix rule F-Z is not
-eligible (S1 did not stand on B3) and F-A is not eligible (L1 falsified).
+What I knew when writing it (all registered runs so far, one each; numbers go to the addendum):
+
+* S1 on E3 STANDS (the frozen psi converges to `res_u` 1.9e-12 in 250 iterations; tolerance at iteration 510).
+* S1 on B3 is FALSIFIED: with psi frozen the oscillation at the blade-root leading edge GROWS (`max_du` 2.2 -> 17.8 m/s in cell c17,
+  which touches the hub and the blade; period ratio 0.24-0.72) and the five largest cells each flip the flux sign on two faces every
+  iteration, so S2 stands by its record rule on B3.
+* S3 (face_flux), S4 (laminar), S5 (partner_cell), S6 (tight solves) and S7 (outlet) are FALSIFIED on B3 (`rho_med` 0.90, 3.84, 1.09,
+  1.09, 1.02).
+* S1v (Venkatakrishnan(5)) gives `rho_med` 0.94.
+* L1 is FALSIFIED (`C_psi` 0.114, 0.046, 0.028 N m on E3, E2, E1 while L rises), L2 FALSIFIED (partner_cell |L| 0.0104, 0.0595,
+  0.1069 N m), L3 NOT EVALUABLE (the laminar empty passage does not settle: `|du|_2` 22-33 m/s).
+* By the registered fix rule F-Z is not eligible (S1 did not stand on B3) and F-A is not eligible (L1 falsified).
 
 New candidate for the bladed passage (not in the registration; found from the S1 B3 location): S8, the explicit rotating-frame source in
 cells with a small momentum diagonal. The `rotating_frame` acceleration (Coriolis `-2 Omega x w`) enters SIMPLEC from the previous iterate.

@@ -1,19 +1,37 @@
-# ADR 0054: Wave 28C, mesh adaptation criteria, hanging-node refinement, polyhedral dual conversion, turbomachinery post-processing (F-102, F-123)
+# ADR 0054: Wave 28C, mesh adaptation and turbomachinery post-processing (F-102, F-123)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end.
+of this wave.
+
+Wave 28C adds mesh adaptation criteria, hanging-node refinement and polyhedral dual conversion (F-102), and turbomachinery
+post-processing (F-123). Nothing is added to the case-tree schema, and no turbomachinery flow solution is produced or compared with
+published pump or compressor data; the F-123 checks are geometric and algebraic. The first A4 run MISSED the registered limit
+`E_a <= 3 E64` with `E_a/E64 = 3.71`, and that assertion moves unchanged into the ignored test `a4_adapted_vs_fine_known_miss`. The
+diagnosis names the criterion's set-up (threshold fraction), not the refinement operator, as the cause. Addendum 2 registers a
+corrected set-up A4b before it is run; A4b is NOT an independent confirmation of the registered A4 factor. The registered T2 plane
+check also MISSED its `1e-11` limit, with a relative difference of 2.85e-3: the polygon formula was the wrong expectation, not a
+code defect, and the check is kept unchanged and ignored as `t2_plane_area_polygon_known_miss`. All other T1 to T5 limits were
+met unchanged.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the
+  cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (exact numbers, deviations) may be appended at the end.
 
 Clean-room: first principles and published literature only. No vendor code, text or installs, nothing from
-vendor material. Waves 28A (VOF wiring) and 28B (chemistry) work in the same tree: this wave adds new files
+vendor material.
+
+Waves 28A (VOF wiring) and 28B (chemistry) work in the same tree: this wave adds new files
 (`rcfd-mesh/src/adapt.rs`, `rcfd-mesh/src/polydual.rs`, `rcfd-post/src/turbo.rs`, tests) and only one-line hunks in shared
 `lib.rs` files, `reference-data.md`, `meshing.md`, `roadmap.json`, committed through a temporary index. No existing solver or
 mesh path is edited, so the baseline hashes and all existing tests are unchanged by construction (re-verified at the end).
 
 ## Audit (HEAD 9cd9149)
 
-* `rcfd_mesh::octree::fill` (wave 26B) builds a 2:1 balanced octree around a surface with a private `Tree`; the lattice, balance
+* `rcfd_mesh::octree::fill` (wave 26B) builds a 2:1 balanced octree around a surface with a private `Tree`. The lattice, balance
   and hanging-node face-loop code is private to that module and tied to surface classification, so it is NOT reused: adaptation
   needs refinement and coarsening of an existing leaf set, which `fill` does not offer. The same ideas (integer lattice, face
   split into four, hanging nodes inserted into every face loop) are re-implemented in a smaller form in `adapt.rs`.
@@ -119,63 +137,79 @@ case tree, a real MRF rotor run, 360-degree reconstruction of fields (only surfa
 
 ## Registered checks (limits fixed before any run)
 
-A1 Topology after refinement, on (i) a graded 6 x 5 x 4 box and (ii) a 10 x 10 x 1 slab (quadtree), after three rounds of
-pseudo-random marks (fixed LCG; ~30 percent refine) with balance on and one round without balance: `Mesh::validate` is Ok; each
-internal face occurs in exactly two cells' face lists, each boundary face in exactly one (independent count from the cell-face
-lists); every cell volume > 0; `|sum V - Lx Ly Lz| <= 1e-13 Lx Ly Lz`; per cell `|sum +-S_f| <= 1e-13 sum |S_f|`; with balance on,
-the maximum level difference across any internal face <= 1; refining one interior level-0 cell of an `n`-cell uniform mesh gives
-exactly `n + 7` cells in 3-D (`n + 3` in the slab) and the neighbours become polyhedra with more than 6 faces.
-A2 Transfer: after refine + coarsen cycles `|sum V q_new - sum V q_old| <= 1e-13 sum V |q|` (random field, both injection and
-linear); a linear field `q = a + b . x` is reproduced by `Linear` refinement with `max |q_new - q(x_c)| <= 1e-12 (max q - min q)`,
-and by restriction on coarsening to the same limit; refine then coarsen back of a field returns it to `1e-13` relative (linear);
-coarsening is refused (no change) unless all siblings are marked.
-A3 Criteria on a 40 x 40 x 1 slab (h = 0.025): (a) gradient, `phi = tanh((x - 0.5)/0.06)`, threshold `T = 2.0` on `|grad|`: every
-cell whose analytic centre gradient is >= 1.3 T is marked, none whose analytic centre gradient is <= 0.7 T; (b) gradient of the
-ramp (0 for x < 0.4, slope 5 on [0.4, 0.6], 1 beyond), threshold 2.5: no cell whose centre is farther than 1.01 h from the interval
-[0.4, 0.6] is marked (gradient exactly 0), every cell with centre in [0.4 + h, 0.6 - h] is marked (gradient 5 to 1e-10); (c)
-curvature, quadratic `phi = 0.5 a x^2 + b y^2 + c x y` (a = 3, b = 2, c = 1) on a uniform 12 x 12 slab: for cells at least two
-cells from every wall `| |H|_F - exact | <= 1e-9 exact`; Gaussian `exp(-r^2 / (2 sigma^2))`, sigma = 0.1, 32 x 32: every cell whose
-analytic `|H|_F` is >= 1.3 T is marked and none with <= 0.7 T (T = half of the peak analytic value); (d) ZZ: for a linear field
-`eta <= 1e-12` in every cell (also boundary cells); for the tanh front the maximum of `eta` lies within 2 h of x = 0.5, the
-maximum is >= 100 x the maximum over cells with |x - 0.5| > 6 w (w = 0.06), and all cells with `eta >= 0.5 eta_max` satisfy
-|x - 0.5| <= 3 w; (e) region: box, sphere and slab marks equal the brute-force centre-inside set exactly; the `TriSurface` distance
-indicator (unit cube surface, mesh inside the cube) marks exactly the cells with `min(x, 1-x, y, 1-y, z, 1-z) <= d` at d = 0.2;
-(f) limiter: no cell at `max_level` is marked `Refine`, none at `min_level` marked `Coarsen`; (g) hysteresis: indicator
-1.05 T refine, then 0.95 T and 0.6 T (dead band, coarsen_below = 0.5 T) give `Keep`, 0.4 T gives `Coarsen`; `coarsen_below >=
-refine_above` and negative / non-finite thresholds are rejected with an error naming the argument; (h) combine: refine wins.
-A4 Solve (rcfd-fv, steady diffusion with manufactured solution `phi = tanh((x - 0.5)/0.06) + 0.3 y`, `Gamma = 1`, Dirichlet on all four
-sides, source `-Gamma lap phi` at the cell centres, deferred non-orthogonal correction iterations until the change <= 1e-12):
-uniform 16 x 16 error E16, 32 x 32 E32, 64 x 64 E64 (volume-weighted L2); order `log2(E32/E64) >= 1.6`. Adapted mesh: 16 x 16 base,
-two rounds of gradient-criterion refinement (balance on, level limit 2, the field being the coarse / interim solution); with
-`E_a` its error: `E_a <= 0.35 E16`, `E_a <= 3 E64`, and `n_cells(adapted) <= 0.5 n_cells(64 x 64) = 2048`. (The criterion "adapted
-cavity matches a fine uniform solution with fewer cells" is tested on this diffusion problem, not on the lid-driven cavity.)
-A5 Polyhedral dual of (i) a Kuhn six-tet split of a 4 x 3 x 3 graded box and (ii) `tetrahedralize(icosphere(1, 2))`: `Mesh::validate`
-Ok; number of cells = number of vertices; `|sum V_poly - sum V_tet| <= 1e-13 sum V_tet`; per cell closure `<= 1e-13 sum|S|`; every
-internal face in exactly two cells' lists; per boundary tag the patch area equals the surface triangle area `<= 1e-13` relative;
-bad inputs (a vertex used by no tet, a tet face shared by three tets) give an error naming the problem.
-A6 Located errors for every public function: negative / non-finite thresholds, field length mismatch, `min_level > max_level`, marks
-length mismatch, zero-size base grids, non-monotone coordinates.
+* A1 Topology after refinement, on (i) a graded 6 x 5 x 4 box and (ii) a 10 x 10 x 1 slab (quadtree), after three rounds
+  of pseudo-random marks (fixed LCG; ~30 percent refine) with balance on and one round without balance: `Mesh::validate`
+  is Ok; each internal face occurs in exactly two cells' face lists, each boundary face in exactly one (independent count
+  from the cell-face lists); every cell volume > 0; `|sum V - Lx Ly Lz| <= 1e-13 Lx Ly Lz`; per cell
+  `|sum +-S_f| <= 1e-13 sum |S_f|`; with balance on, the maximum level difference across any internal face <= 1; refining
+  one interior level-0 cell of an `n`-cell uniform mesh gives exactly `n + 7` cells in 3-D (`n + 3` in the slab) and the
+  neighbours become polyhedra with more than 6 faces.
+* A2 Transfer: after refine + coarsen cycles `|sum V q_new - sum V q_old| <= 1e-13 sum V |q|` (random field, both
+  injection and linear); a linear field `q = a + b . x` is reproduced by `Linear` refinement with
+  `max |q_new - q(x_c)| <= 1e-12 (max q - min q)`, and by restriction on coarsening to the same limit; refine then coarsen
+  back of a field returns it to `1e-13` relative (linear); coarsening is refused (no change) unless all siblings are
+  marked.
+* A3 Criteria on a 40 x 40 x 1 slab (h = 0.025):
+* A3(a) gradient, `phi = tanh((x - 0.5)/0.06)`, threshold `T = 2.0` on `|grad|`: every cell whose analytic centre gradient
+  is >= 1.3 T is marked, none whose analytic centre gradient is <= 0.7 T.
+* A3(b) gradient of the ramp (0 for x < 0.4, slope 5 on [0.4, 0.6], 1 beyond), threshold 2.5: no cell whose centre is
+  farther than 1.01 h from the interval [0.4, 0.6] is marked (gradient exactly 0), every cell with centre in [0.4 + h,
+  0.6 - h] is marked (gradient 5 to 1e-10).
+* A3(c) curvature, quadratic `phi = 0.5 a x^2 + b y^2 + c x y` (a = 3, b = 2, c = 1) on a uniform 12 x 12 slab: for cells
+  at least two cells from every wall `| |H|_F - exact | <= 1e-9 exact`; Gaussian `exp(-r^2 / (2 sigma^2))`, sigma = 0.1,
+  32 x 32: every cell whose analytic `|H|_F` is >= 1.3 T is marked and none with <= 0.7 T (T = half of the peak analytic
+  value).
+* A3(d) ZZ: for a linear field `eta <= 1e-12` in every cell (also boundary cells); for the tanh front the maximum of `eta`
+  lies within 2 h of x = 0.5, the maximum is >= 100 x the maximum over cells with |x - 0.5| > 6 w (w = 0.06), and all
+  cells with `eta >= 0.5 eta_max` satisfy |x - 0.5| <= 3 w.
+* A3(e) region: box, sphere and slab marks equal the brute-force centre-inside set exactly; the `TriSurface` distance
+  indicator (unit cube surface, mesh inside the cube) marks exactly the cells with `min(x, 1-x, y, 1-y, z, 1-z) <= d` at
+  d = 0.2.
+* A3(f) limiter: no cell at `max_level` is marked `Refine`, none at `min_level` marked `Coarsen`.
+* A3(g) hysteresis: indicator 1.05 T refine, then 0.95 T and 0.6 T (dead band, coarsen_below = 0.5 T) give `Keep`, 0.4 T
+  gives `Coarsen`; `coarsen_below >= refine_above` and negative / non-finite thresholds are rejected with an error naming
+  the argument.
+* A3(h) combine: refine wins.
+* A4 Solve (rcfd-fv, steady diffusion with manufactured solution `phi = tanh((x - 0.5)/0.06) + 0.3 y`, `Gamma = 1`,
+  Dirichlet on all four sides, source `-Gamma lap phi` at the cell centres, deferred non-orthogonal correction iterations
+  until the change <= 1e-12): uniform 16 x 16 error E16, 32 x 32 E32, 64 x 64 E64 (volume-weighted L2); order
+  `log2(E32/E64) >= 1.6`. Adapted mesh: 16 x 16 base, two rounds of gradient-criterion refinement (balance on, level limit
+  2, the field being the coarse / interim solution); with `E_a` its error: `E_a <= 0.35 E16`, `E_a <= 3 E64`, and
+  `n_cells(adapted) <= 0.5 n_cells(64 x 64) = 2048`. (The criterion "adapted cavity matches a fine uniform solution with
+  fewer cells" is tested on this diffusion problem, not on the lid-driven cavity.)
+* A5 Polyhedral dual of (i) a Kuhn six-tet split of a 4 x 3 x 3 graded box and (ii) `tetrahedralize(icosphere(1, 2))`:
+  `Mesh::validate` Ok; number of cells = number of vertices; `|sum V_poly - sum V_tet| <= 1e-13 sum V_tet`; per cell
+  closure `<= 1e-13 sum|S|`; every internal face in exactly two cells' lists; per boundary tag the patch area equals the
+  surface triangle area `<= 1e-13` relative; bad inputs (a vertex used by no tet, a tet face shared by three tets) give an
+  error naming the problem.
+* A6 Located errors for every public function: negative / non-finite thresholds, field length mismatch,
+  `min_level > max_level`, marks length mismatch, zero-size base grids, non-monotone coordinates.
 
-T1 Span surfaces on `annulus_3d(n_theta, 6, 5, 0.3, 1.1, 2.0, 0, Uniform)`: cylinder `R = 0.75`: after snapping `max |r - R| <= 1e-12 R`,
-area relative to `2 pi R L` (L = 2) `<= 0.005` for `n_theta = 48` and the error at 48 is `>= 3 x` the error at 96; curves
-`R_h(z) = 0.4 + 0.1 z`, `R_t(z) = 1.0` at span 0.5 (`R = 0.7 + 0.05 z`): `max |r - R(z)| <= 1e-12`, area vs the cone frustum
-`pi (R(0) + R(2)) sqrt(L^2 + (R(2) - R(0))^2)` relative `<= 0.005` at `n_theta = 48`.
-T2 Streamwise surfaces: plane (hub and shroud points at the same z = 1): vertices `|z - 1| <= 1e-12` and area `(N/2) sin(2 pi/N) (Ro^2 - Ri^2)`
-within `1e-11` relative with `Ri, Ro` the hub and shroud radii of the segment (clipped), N = 48; conical station from `H = (0.2, 0.5)` to
-`S = (1.8, 1.0)` in `(z, r)`: vertices on the cone to `1e-12`, area `pi (r1 + r2) slant` within 0.005 relative.
-T3 Pitch average (sampler path): `f(r, z) = 1 + 2 r + 3 z^2 r` returns `f` to `1e-14` relative for `n_theta` = 7; `A + B cos(N theta)` (A = 2, B = 0.7,
-N = 12) returns `A` to `1e-14` absolute for (i) full circle with `n_theta` = 36, (ii) one pitch with 9 samples, (iii) full circle
-`n_theta` = 5; the aliased case `n_theta` = 12 returns `A + B` to `1e-14` (documents the limitation). Mesh path (annulus 192 x 4 x 4):
-`f = 1 + 2 z` gives `1 + 2 z` to `1e-10` and `A + B cos(12 theta)` with `n_theta` = 36 returns A to within `0.02 B`.
-T4 Mass-flow weighting: uniform axial velocity `W = 3`, `rho = 2`, `f = 1 + 4 s` on `r_h = 0.5 .. r_t = 1.0`: `<f>_m` equals the closed form
-`1 + 4 <s>`, `<s> = (r_h/2 + (r_t - r_h)/3)/(r_h + (r_t - r_h)/2)`, to `1e-13` relative; mass flow `rho W pi (r_t^2 - r_h^2)` to `1e-13`
-(Simpson, 8 intervals); non-uniform `W = W0 (1 + s)` against the exact polynomial integrals `1e-13`; zero net mass flow is an error.
-T5 Performance, pump `rho = 998.2`, `g = 9.81`, `Q = 0.05`, `dp0 = 2.5e5`, `omega = 300`, torque set from `eta = 0.8`: head, efficiency, power
-recovered to `1e-14` relative; compressor `gamma = 1.4`, `PR = 2`, `eta_is = 0.85` and `eta_p = 0.88` closed forms round-trip to `1e-14`;
-`eta_is > eta_p` relation is not asserted (it is `eta_is < eta_p` for a compressor; asserted instead); torque from
-`wall_force_and_moment` on a box patch with uniform pressure matches `rho p A (y_c, -x_c, 0)` to `1e-12` relative; CSV round-trips
-every value to `1e-15` relative; HTML escapes `<` and `&`; non-positive `Q`, `omega`, pressure ratio, non-finite inputs and
-`tau <= 1` for compressor efficiency are located errors.
+* T1 Span surfaces on `annulus_3d(n_theta, 6, 5, 0.3, 1.1, 2.0, 0, Uniform)`: cylinder `R = 0.75`: after snapping
+  `max |r - R| <= 1e-12 R`, area relative to `2 pi R L` (L = 2) `<= 0.005` for `n_theta = 48` and the error at 48 is
+  `>= 3 x` the error at 96; curves `R_h(z) = 0.4 + 0.1 z`, `R_t(z) = 1.0` at span 0.5 (`R = 0.7 + 0.05 z`):
+  `max |r - R(z)| <= 1e-12`, area vs the cone frustum `pi (R(0) + R(2)) sqrt(L^2 + (R(2) - R(0))^2)` relative `<= 0.005`
+  at `n_theta = 48`.
+* T2 Streamwise surfaces: plane (hub and shroud points at the same z = 1): vertices `|z - 1| <= 1e-12` and area
+  `(N/2) sin(2 pi/N) (Ro^2 - Ri^2)` within `1e-11` relative with `Ri, Ro` the hub and shroud radii of the segment
+  (clipped), N = 48; conical station from `H = (0.2, 0.5)` to `S = (1.8, 1.0)` in `(z, r)`: vertices on the cone to
+  `1e-12`, area `pi (r1 + r2) slant` within 0.005 relative.
+* T3 Pitch average (sampler path): `f(r, z) = 1 + 2 r + 3 z^2 r` returns `f` to `1e-14` relative for `n_theta` = 7;
+  `A + B cos(N theta)` (A = 2, B = 0.7, N = 12) returns `A` to `1e-14` absolute for (i) full circle with `n_theta` = 36,
+  (ii) one pitch with 9 samples, (iii) full circle `n_theta` = 5; the aliased case `n_theta` = 12 returns `A + B` to
+  `1e-14` (documents the limitation). Mesh path (annulus 192 x 4 x 4): `f = 1 + 2 z` gives `1 + 2 z` to `1e-10` and
+  `A + B cos(12 theta)` with `n_theta` = 36 returns A to within `0.02 B`.
+* T4 Mass-flow weighting: uniform axial velocity `W = 3`, `rho = 2`, `f = 1 + 4 s` on `r_h = 0.5 .. r_t = 1.0`: `<f>_m`
+  equals the closed form `1 + 4 <s>`, `<s> = (r_h/2 + (r_t - r_h)/3)/(r_h + (r_t - r_h)/2)`, to `1e-13` relative; mass
+  flow `rho W pi (r_t^2 - r_h^2)` to `1e-13` (Simpson, 8 intervals); non-uniform `W = W0 (1 + s)` against the exact
+  polynomial integrals `1e-13`; zero net mass flow is an error.
+* T5 Performance, pump `rho = 998.2`, `g = 9.81`, `Q = 0.05`, `dp0 = 2.5e5`, `omega = 300`, torque set from `eta = 0.8`:
+  head, efficiency, power recovered to `1e-14` relative; compressor `gamma = 1.4`, `PR = 2`, `eta_is = 0.85` and
+  `eta_p = 0.88` closed forms round-trip to `1e-14`; `eta_is > eta_p` relation is not asserted (it is `eta_is < eta_p` for
+  a compressor; asserted instead); torque from `wall_force_and_moment` on a box patch with uniform pressure matches
+  `rho p A (y_c, -x_c, 0)` to `1e-12` relative; CSV round-trips every value to `1e-15` relative; HTML escapes `<` and `&`;
+  non-positive `Q`, `omega`, pressure ratio, non-finite inputs and `tau <= 1` for compressor efficiency are located
+  errors.
 
 ## Order of work
 
@@ -194,13 +228,16 @@ roadmap; the final gate on a `git archive` copy.
 
 ## Addendum 2 (written after the first A4 run, before the A4b run): A4 miss and the corrected set-up A4b
 
-First A4 run (threshold 0.25 of the peak gradient, two rounds, balance on): uniform L2 errors E16 = 3.774e-2, E32 = 5.508e-3,
-E64 = 1.329e-3 (order 32 to 64: 2.05); adapted mesh 1024 cells, E_a = 4.932e-3: `E_a/E16 = 0.131` (limit 0.35, met), cells 1024 (limit
-2048, met), `E_a/E64 = 3.71` (limit 3, MISSED). The order check passed. The missed assertion moves unchanged into the ignored test
-`a4_adapted_vs_fine_known_miss`.
+First A4 run (threshold 0.25 of the peak gradient, two rounds, balance on):
+
+* Uniform L2 errors E16 = 3.774e-2, E32 = 5.508e-3, E64 = 1.329e-3 (order 32 to 64: 2.05). The order check passed.
+* Adapted mesh 1024 cells, E_a = 4.932e-3.
+* `E_a/E16 = 0.131` (limit 0.35, met).
+* Cells 1024 (limit 2048, met).
+* `E_a/E64 = 3.71` (limit 3, MISSED). The missed assertion moves unchanged into the ignored test `a4_adapted_vs_fine_known_miss`.
 
 Diagnosis (ignored test `a4_diag_error_by_level` in `rcfd-fv/tests/amr_diag.rs`): 72 percent of the squared error sits in the 192
-unrefined level-0 cells, the largest cell errors (1.0e-2) are at |x - 0.5| = 0.086 where level 2 meets level 1. The gradient
+unrefined level-0 cells, and the largest cell errors (1.0e-2) are at |x - 0.5| = 0.086 where level 2 meets level 1. The gradient
 criterion with a 0.25 relative threshold stops at |x - 0.5| of about 0.1, but the tanh shoulders still carry a large second
 derivative (h/w = 1 on the base mesh), so the truncation error `h^2 phi''/12` of the coarse cells beside the band dominates. The
 criterion's set-up (threshold fraction), not the refinement operator, is the cause: error per cell does not follow the gradient
@@ -220,8 +257,15 @@ circular annulus `pi (Ro^2 - Ri^2) = 2.356194` (relative difference 1.2e-5), whi
 exact radii); the polygon formula was the wrong expectation, not a code defect. Per the rules the registered check is kept unchanged
 and ignored as `t2_plane_area_polygon_known_miss` (limit 1e-11 intact, fails with 2.85e-3), and the corrected test
 `t2_constant_streamwise_plane_and_cone` asserts the circular-annulus area within 0.005 (measured 1.2e-5) plus the radius range.
-All other T1 to T5 limits were met unchanged. Measured: T1 cylinder radius error 1.1e-16 (unsnapped cut 2.7e-3), area error 8.8e-5 at
-48 and 2.1e-5 at 96 (ratio 4.1), frustum radius 2.2e-16 and area 1.3e-4; T2 cone vertices 2.2e-16, area 2.1e-4; T3 sampler path to
-round-off, mesh path linear 0 and harmonic 3.1e-3 (limit 1.4e-2); T4 mass mean 3.2222222222222223 vs 3.222222222222222, mass flow
-equal; T5 pump efficiency 0.8 exactly, wall torque 9.899494936611664 vs 9.899494936611665. T2/T3/T5 test code was written against the
-final API before its first run; one edit to the cone test (building the station from the contour start points) was made before any run.
+
+All other T1 to T5 limits were met unchanged. Measured:
+
+* T1 cylinder radius error 1.1e-16 (unsnapped cut 2.7e-3), area error 8.8e-5 at 48 and 2.1e-5 at 96 (ratio 4.1), frustum radius
+  2.2e-16 and area 1.3e-4.
+* T2 cone vertices 2.2e-16, area 2.1e-4.
+* T3 sampler path to round-off, mesh path linear 0 and harmonic 3.1e-3 (limit 1.4e-2).
+* T4 mass mean 3.2222222222222223 vs 3.222222222222222, mass flow equal.
+* T5 pump efficiency 0.8 exactly, wall torque 9.899494936611664 vs 9.899494936611665.
+
+T2/T3/T5 test code was written against the final API before its first run; one edit to the cone test (building the station from the
+contour start points) was made before any run.

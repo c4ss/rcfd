@@ -1,13 +1,28 @@
-# ADR 0076: Wave 35A, closing the transient misses of wave 34B: the periodic-seam convection lag (F-S), the consistent momentum interpolation (F-G) re-evaluated with it, the PIMPLE-C relaxation anchor (F-R, conditional) and rotationally periodic seams
+# ADR 0076: Wave 35A, closing the transient misses of wave 34B
 
-Status: accepted (registration). Everything under "Registered" was written BEFORE any solver code of this wave was changed and BEFORE any acceptance or
-diagnostic run of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; a defective set-up gets a NEW corrected test and the old one stays. Every fix is opt-in; the
-default stays bit-identical (`w33b_default_bits` fingerprints) and `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded. Clean-room: first
-principles and published literature only.
+Status: accepted (registration). Everything under "Registered" was written BEFORE any solver code of this wave was changed
+and BEFORE any acceptance or diagnostic run of this wave.
 
-Parent: ADR 0073 (wave 34B: F-G `PimpleSettings::rhie_chow_consistent` kept opt-in although not accepted; misses C-O2 1.237, C-S1 0.995, N1 one comparison
-at 1.0504; diagnostic Y3 identified H-SEAM-CONV; rotationally periodic faces outside F-G).
+Wave 35A covers the periodic-seam convection lag (F-S), the consistent momentum interpolation (F-G) re-evaluated with it, the
+PIMPLE-C relaxation anchor (F-R, conditional) and rotationally periodic seams. The candidate K = F-G + F-S + F-R is not
+accepted: C-O2, N1, R2, R2b, R3 and R4 missed. By the registered per-fix rule all three fixes were removed; commit fbcc05c
+keeps the code of K as measured. In the code at hand-back none of the 34B misses is met: the default solver is unchanged and
+keeps the 34B floors, now also measured on rotational seams. Measured with K, C-S1 was met (0.995 -> 2.232) and C-O2 was
+still missed (1.237 -> 1.332). The 34B N1 miss (TG-S velocity 1.0504) was met (1.0077), but N1 as a whole is missed again on
+two TG-S pressure comparisons (1.0952, 1.0521) that 34B met. The cylinder was not run. On SECT-M the remaining floor is the
+seam body-force coefficient (Y5), an open item for the fan milestone that this wave does not fix (no fourth fix).
+
+Rules and parents:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  a defective set-up gets a NEW corrected test and the old one stays.
+* Every fix is opt-in; the default stays bit-identical (`w33b_default_bits` fingerprints) and
+  `crates/rcfd-api/tests/baseline_hashes.rs` is never re-recorded.
+* Clean-room: first principles and published literature only.
+* Parent: ADR 0073 (wave 34B: F-G `PimpleSettings::rhie_chow_consistent` kept opt-in although not accepted; misses C-O2
+  1.237, C-S1 0.995, N1 one comparison at 1.0504; diagnostic Y3 identified H-SEAM-CONV; rotationally periodic faces outside
+  F-G).
 
 ## What was known before this registration (and how)
 
@@ -78,10 +93,14 @@ Set-ups, tolerances, error measures, pairs (fine 0.025/0.0125 binding, coarse 0.
 
 ### Part D: falsifier of H-RELAX (run FIRST, after F-S and the rotational F-G are written, before F-R code and before any acceptance run; prints)
 
-**Y4** TG, N = 32, fine pair, PIMPLE (n_outer 2, two correctors) with F-G + F-S on: Y4a `alpha_u = alpha_p = 1`; Y4b `alpha_u = 0.9, alpha_p = 1`;
-Y4c `alpha_u = 1, alpha_p = 0.9`. Reading rule: H-RELAX **stands** if Y4a is in [1.9, 2.3], otherwise it is falsified. F-R is written if and only if H-RELAX
-stands AND Y4b is outside [1.9, 2.3] (the velocity anchor alone reproduces the floor). Otherwise no F-R: C-O2 stays a miss with Y4 reported, K = F-G + F-S.
-**No fourth fix** is tried in this wave, whatever the results.
+**Y4** TG, N = 32, fine pair, PIMPLE (n_outer 2, two correctors) with F-G + F-S on:
+* Y4a `alpha_u = alpha_p = 1`;
+* Y4b `alpha_u = 0.9, alpha_p = 1`;
+* Y4c `alpha_u = 1, alpha_p = 0.9`.
+
+Reading rule: H-RELAX **stands** if Y4a is in [1.9, 2.3], otherwise it is falsified. F-R is written if and only if H-RELAX
+stands AND Y4b is outside [1.9, 2.3] (the velocity anchor alone reproduces the floor). Otherwise no F-R: C-O2 stays a miss
+with Y4 reported, K = F-G + F-S. **No fourth fix** is tried in this wave, whatever the results.
 
 ### Part A: the ADR 0073 set with K (limits unchanged)
 
@@ -173,10 +192,14 @@ exact solution is 0.7 % / 0.4 % SMALLER than without relaxation (the O(dt) term 
 
 ## Amendment 2 (after the Part A, N5 and Part R runs; BEFORE the diagnostic Y5 below is written or run; nothing above was changed)
 
-Measured with K = F-G + F-S + F-R (numbers in the final addendum): C-O1, C-O3, C-O7, C-S1, C-S2, C-O9, N2, N5, R1, R1b met; **C-O2 1.332** (F-R moved it from
-1.237 only), **N1** (TG-S pressure ratio 1.0952 and 1.0521 at dt 0.05 and 0.025), **R2 1.717**, **R2b 0.593**, **R3** (SWIRL 1.912 / 1.856, SECT-M 1.773 / 1.773)
-and **R4** (SECT-M velocity ratio 1.0651 at dt 0.05) missed. K is therefore not accepted and, by the registered per-fix rule, F-G (N1, R2b, R4), F-S (R2, R3,
-N1 TG-S, R4) and F-R (C-O2) all have missed rows. The cylinder is not run.
+Measured with K = F-G + F-S + F-R (numbers in the final addendum):
+* met: C-O1, C-O3, C-O7, C-S1, C-S2, C-O9, N2, N5, R1, R1b;
+* missed: **C-O2 1.332** (F-R moved it from 1.237 only), **N1** (TG-S pressure ratio 1.0952 and 1.0521 at dt 0.05 and 0.025),
+  **R2 1.717**, **R2b 0.593**, **R3** (SWIRL 1.912 / 1.856, SECT-M 1.773 / 1.773) and **R4** (SECT-M velocity ratio 1.0651 at
+  dt 0.05).
+
+K is therefore not accepted and, by the registered per-fix rule, F-G (N1, R2b, R4), F-S (R2, R3, N1 TG-S, R4) and F-R (C-O2)
+all have missed rows. The cylinder is not run.
 
 The SECT-M PIMPLE-4 floor (R2b 0.593 with K, default 0.538) survives F-G on the rotational seams. A reading of the code made after these runs: the
 balanced-force term of the body force is added as `gamma_p[f] * bf.face[f]` on every face, and on a coupled face `gamma_p[f]` is the OWNER's `rAU`
@@ -243,12 +266,16 @@ and the difference is `(1 - alpha_u)` times the face defect, which is O(dt). A f
 | R4 SECT-M | velocity **1.0651** / 1.0266 / 1.0121, pressure 1.0041 / 1.0155 / 1.0082 | - | MISS (dt 0.05) |
 | Y5 (amendment 2): seam body-force term with the coupled mean rAU | R2 7.7563e-4 / 1.8884e-4, **2.038**; R2b 2.4919e-5 / 6.1413e-6, **2.021** | - | H-SEAM-BF stands |
 
-On SWIRL, K turns the first-order PISO seam lag into second order and cuts the exact-solution error 2 to 5 times; the R3 SWIRL miss is the temporal part under
-joint refinement (at (64, 0.0125) the K error 4.78e-4 is 1.9 times the spatial error 2.57e-4 of the smoke study), which the registered limit, backed only by the
-spatial study, did not allow for. On SECT-M the remaining floor is the seam body-force coefficient (Y5): the PIMPLE kernel adds `gamma_p[f] * bf.face[f]` with the
-OWNER's rAU on a coupled face while the pressure term uses the coupled mean, an O(dt) mismatch where rAU varies. The steady SIMPLE kernel has the opt-in
-`coupled_body_pair_mean` for exactly this (ADR 0071; the API switches it on with the rotating-frame wall treatment); the transient kernel has no equivalent.
-Open item for the fan milestone (any transient run of a rotationally periodic sector with a body force, e.g. rotating-frame forces). Not fixed here (no fourth fix).
+On SWIRL, K turns the first-order PISO seam lag into second order and cuts the exact-solution error 2 to 5 times. The R3
+SWIRL miss is the temporal part under joint refinement (at (64, 0.0125) the K error 4.78e-4 is 1.9 times the spatial error
+2.57e-4 of the smoke study), which the registered limit, backed only by the spatial study, did not allow for.
+
+On SECT-M the remaining floor is the seam body-force coefficient (Y5): the PIMPLE kernel adds `gamma_p[f] * bf.face[f]` with
+the OWNER's rAU on a coupled face while the pressure term uses the coupled mean, an O(dt) mismatch where rAU varies. The
+steady SIMPLE kernel has the opt-in `coupled_body_pair_mean` for exactly this (ADR 0071; the API switches it on with the
+rotating-frame wall treatment); the transient kernel has no equivalent. This is an open item for the fan milestone (any
+transient run of a rotationally periodic sector with a body force, e.g. rotating-frame forces). It is not fixed here (no
+fourth fix).
 
 ### Verdicts and what was done
 

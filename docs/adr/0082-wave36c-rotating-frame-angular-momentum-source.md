@@ -1,31 +1,67 @@
 # ADR 0082: Wave 36C, where the spurious swirl of the rotating-frame sector comes from, and an opt-in absolute-velocity rotor passage
 
-Status: registered before any code of this wave was written and before any solver run of this wave. Limits and decision rules are fixed; a miss of a
-check becomes an `#[ignore]`d `*_known_miss` test (or a reported miss where the code it needs is removed) with the limit intact, a defective set-up gets
-a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles only; nothing from vendor
-documentation or other CFD codes. Parents: ADR 0078 (X2: the empty passage leaves with 2.254 N m; inertial control 1.6e-4 N m; minmod 0.0026 N m net
-but 20 Pa swirl energy; X2f: the same error with the frame source removed; X2c did not converge), ADR 0008 (`mrf`, absolute-velocity formulation),
-ADR 0065 S4 (`mrf` refused on the sector), ADR 0077 (steady guard, partner seam gradient), `docs/milestone-fan.md`. No fan performance claim is made.
+Status: registered before any code of this wave was written and before any solver run of this wave.
+
+Wave 36C locates the term that generates the spurious swirl of the rotating-frame sector and registers an opt-in fix, F-RP, an
+absolute-velocity rotor passage (`sources.<name>.rotor_passage`). Three amendments and the addendum record the results and the
+changes to the plan. The term is the momentum convection: first-order upwind on the Cartesian components of the relative velocity
+acts as a numerical viscosity in Laplacian form on its rigid part, and on X2a (upwind) the convection term is
+2.442 N m of the 2.302 N m solver-consistent excess (106 %). H1 was falsified through its location clause (iii), and the fix was
+written anyway (amendment 1). The attribution to convection holds for M1 and M2, not for M0, and the X2d (minmod) attribution is
+NOT CLOSED. F-RP misses A2, A3 and A4 and is REMOVED; it was never committed and the code is not in the repository. On mesh M1 it
+removes the source (outlet angular-momentum flux -1.42e-5 N m against 2.254 N m in the relative formulation), but it does not
+converge on M0 and did not converge on M2 within the 60-minute cap. F1 (FAN-01 E0 with F-RP) was NOT RUN.
+
+Rules:
+
+* Limits and decision rules are fixed.
+* A miss of a check becomes an `#[ignore]`d `*_known_miss` test (or a reported miss where the code it needs is removed) with the
+  limit intact.
+* A defective set-up gets a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded.
+* Clean-room: first principles only; nothing from vendor documentation or other CFD codes.
+* No fan performance claim is made.
+
+Parents:
+
+* ADR 0078 (X2: the empty passage leaves with 2.254 N m; inertial control 1.6e-4 N m; minmod 0.0026 N m net but 20 Pa swirl
+  energy; X2f: the same error with the frame source removed; X2c did not converge).
+* ADR 0008 (`mrf`, absolute-velocity formulation).
+* ADR 0065 S4 (`mrf` refused on the sector).
+* ADR 0077 (steady guard, partner seam gradient).
+* `docs/milestone-fan.md`.
 
 ## What was known when this was written
 
-* Every number of ADR 0078 and its amendment 4. Code read (read-only) on HEAD 6c3ddc9: `rcfd_fv::convection` (upwind matrix; TVD by deferred
-  correction; periodic faces upwind between the owner and the lagged rotated partner value, minmod adds the full central value there),
-  `rcfd_fv::diffusion::laplacian` (two-point flux `Gamma_f |S|/|d| (u_N - u_O)`, the secondary gradient only when a gradient is passed), the
-  SIMPLE/SIMPLEC kernel (`simple.rs`: no transposed stress term; Green-Gauss pressure gradient with linearly interpolated face values and the trapezoid
-  wall values of the rotating frame), `RotatingFrame::add_force` (Coriolis lagged, centrifugal analytic at cell and face centres), `MrfZone`
-  (frame flux `(Omega x r).S` only on internal faces with both cells in the zone; the zone's boundary faces must be surfaces of revolution,
-  `worst_non_axisymmetry`, limit 1e-6), `sim.rs` (the turbulence model is updated with the absolute flux `phi` also inside an MRF zone).
-* No run of any kind has been made in this wave.
-* Arithmetic only (no run): a first-order upwind face value equals the central value plus `(|phi_f|/2)(u_O - u_N)` per Cartesian component. For the
-  rigid part of the relative velocity, `w_rig = -Omega x r` (Omega along +z), `u_O - u_N = Omega z x d` with `d = r_N - r_O`, and this dissipative flux
-  applied at the two cell centres has the angular-momentum defect `z . (d x (|phi|/2) Omega z x d) = (Omega/2) |phi_f| |d_perp|^2 >= 0` per face
-  (`d_perp` the part of `d` normal to the axis). It is sign-definite: upwind acts as a numerical viscosity `|w_n| |d| / 2` in Laplacian form on a
-  rigid rotation, whose antisymmetric gradient has zero physical (symmetric) stress but a non-zero Laplacian-form stress, i.e. a torque. A rough
-  estimate (tangential cell width about `r Delta theta` with `Delta theta` = 40 deg / 10 cells, `|w_theta| = Omega r`) gives
-  `rho Omega^2 (Delta theta / 2) integral r^2 dV` = about 2.2 N m for the full annulus, the size of X2a's 2.254 N m. The same argument applied to the
-  physical Laplacian-form viscous term `div(nu_eff grad w)` gives about `2 rho Omega integral nu_eff dV`, about 0.025 N m with the inlet eddy viscosity
-  (`k/omega` = 1.1e-3 m^2/s) over the 0.059 m^3 annulus; more where the eddy viscosity is larger.
+Every number of ADR 0078 and its amendment 4.
+
+Code read (read-only) on HEAD 6c3ddc9:
+
+* `rcfd_fv::convection` (upwind matrix; TVD by deferred correction; periodic faces upwind between the owner and the lagged
+  rotated partner value, minmod adds the full central value there).
+* `rcfd_fv::diffusion::laplacian` (two-point flux `Gamma_f |S|/|d| (u_N - u_O)`, the secondary gradient only when a gradient is
+  passed).
+* The SIMPLE/SIMPLEC kernel (`simple.rs`: no transposed stress term; Green-Gauss pressure gradient with linearly interpolated
+  face values and the trapezoid wall values of the rotating frame).
+* `RotatingFrame::add_force` (Coriolis lagged, centrifugal analytic at cell and face centres).
+* `MrfZone` (frame flux `(Omega x r).S` only on internal faces with both cells in the zone; the zone's boundary faces must be
+  surfaces of revolution, `worst_non_axisymmetry`, limit 1e-6).
+* `sim.rs` (the turbulence model is updated with the absolute flux `phi` also inside an MRF zone).
+
+No run of any kind has been made in this wave.
+
+Arithmetic only (no run): a first-order upwind face value equals the central value plus `(|phi_f|/2)(u_O - u_N)` per Cartesian
+component. For the rigid part of the relative velocity, `w_rig = -Omega x r` (Omega along +z), `u_O - u_N = Omega z x d` with
+`d = r_N - r_O`, and this dissipative flux applied at the two cell centres has the angular-momentum defect
+`z . (d x (|phi|/2) Omega z x d) = (Omega/2) |phi_f| |d_perp|^2 >= 0` per face (`d_perp` the part of `d` normal to the axis). It
+is sign-definite: upwind acts as a numerical viscosity `|w_n| |d| / 2` in Laplacian form on a rigid rotation, whose antisymmetric
+gradient has zero physical (symmetric) stress but a non-zero Laplacian-form stress, i.e. a torque.
+
+A rough estimate (tangential cell width about `r Delta theta` with `Delta theta` = 40 deg / 10 cells, `|w_theta| = Omega r`) gives
+`rho Omega^2 (Delta theta / 2) integral r^2 dV` = about 2.2 N m for the full annulus, the size of X2a's 2.254 N m. The same
+argument applied to the physical Laplacian-form viscous term `div(nu_eff grad w)` gives about `2 rho Omega integral nu_eff dV`,
+about 0.025 N m with the inlet eddy viscosity (`k/omega` = 1.1e-3 m^2/s) over the 0.059 m^3 annulus; more where the eddy viscosity
+is larger.
 
 ## Hypotheses and their falsifiers (registered; the diagnostics run before any fix code is run)
 
@@ -155,17 +191,34 @@ closed form, added after I had seen the first output; it is disclosed and not sc
 existed and no other run of this wave had been made, apart from the not-ignored short bookkeeping test (5 iterations: reconstruction worst 1.8e-14,
 the per-cell terms add up to `E_s + S_seam` to round-off).
 
-X2a-36 (13 524 cells, 374 iterations, converged by tolerance, 0.7 min): outlet L 2.25440 N m, Delta p_ts -59.984 Pa: the reproduction rule is MET (every
-printed digit). Budget (N m, full annulus): `E_s` 2.30241 (the ADR 0078 report-based excess of the same run 2.31265), `S_seam` 2.2e-6; `G_conv`
-2.44178 (1.061 `E_s`), `G_p` 0.01106 (0.005), `G_visc` 0.00371 (0.0016), `G_frame` -0.15414 (-0.067; its Rhie-Chow part +0.13080 and the remainder
--0.28494, which alone is 0.124 `E_s`, partly cancel), `G_res` -2.4e-8; the terms add up to `E_s + S_seam` = 2.30241; reconstruction worst 2.4e-14.
-Closed forms: `C_up` 2.62771 (`C_up / G_conv` = 1.076), `C_visc` 0.00387 (interior faces).
+X2a-36 (13 524 cells, 374 iterations, converged by tolerance, 0.7 min): outlet L 2.25440 N m, Delta p_ts -59.984 Pa: the
+reproduction rule is MET (every printed digit).
 
-Location (`G_conv`, its closed form `C_up` per region in brackets, from the re-run): upstream 0.731 (0.736), chord band 0.378 (0.405), downstream
-1.333 (1.487); wall-adjacent cells 0.034 (0.012; 0.3 % of the volume); seam-adjacent cells 1.566 (1.536; 1 288 cells holding 44 % of the volume,
-because the upstream and downstream blocks have few pitchwise cells); radial bins: the mesh has no cell centres between r = 0.171 and 0.203 m
-(mid-span radial cells several cm tall), and the bin 0.203-0.219 carries 1.028. The generation sits where `|phi| |d_perp|^2` is large: the large
-cells of the upstream / downstream blocks and of mid-span.
+Budget (N m, full annulus):
+
+| Term | N m | Share of `E_s` |
+|---|---|---|
+| `E_s` | 2.30241 (the ADR 0078 report-based excess of the same run 2.31265) | - |
+| `S_seam` | 2.2e-6 | - |
+| `G_conv` | 2.44178 | 1.061 |
+| `G_p` | 0.01106 | 0.005 |
+| `G_visc` | 0.00371 | 0.0016 |
+| `G_frame` | -0.15414 | -0.067 (its Rhie-Chow part +0.13080 and the remainder -0.28494, which alone is 0.124 `E_s`, partly cancel) |
+| `G_res` | -2.4e-8 | - |
+
+The terms add up to `E_s + S_seam` = 2.30241; reconstruction worst 2.4e-14. Closed forms: `C_up` 2.62771
+(`C_up / G_conv` = 1.076), `C_visc` 0.00387 (interior faces).
+
+Location (`G_conv`, its closed form `C_up` per region in brackets, from the re-run):
+
+* upstream 0.731 (0.736), chord band 0.378 (0.405), downstream 1.333 (1.487);
+* wall-adjacent cells 0.034 (0.012; 0.3 % of the volume);
+* seam-adjacent cells 1.566 (1.536; 1 288 cells holding 44 % of the volume, because the upstream and downstream blocks have few
+  pitchwise cells);
+* radial bins: the mesh has no cell centres between r = 0.171 and 0.203 m (mid-span radial cells several cm tall), and the bin
+  0.203-0.219 carries 1.028.
+
+The generation sits where `|phi| |d_perp|^2` is large: the large cells of the upstream / downstream blocks and of mid-span.
 
 Verdicts by the registered rules:
 * H1 (i) `G_conv >= 0.7 E_s`: 1.061, passes. (ii) `C_up` in [0.7, 1.3] `G_conv`: 1.076, passes. (iii) wall-adjacent plus seam-adjacent cells carry
@@ -193,29 +246,43 @@ is reported next to the measured largest-cell ratios.
 What I knew when writing this: everything of amendment 1, the X2d-36 run and budget, and the construction-only measurements below (geometry only, no
 solver run of F-RP; no F-RP code existed).
 
-X2d-36 (minmod, 8000 iterations, 14.9 min, not converged by tolerance, res_u 5.3e-4 at the cap; ADR 0078 accepted X2d by its 1000-iteration rule):
-outlet L 0.00258 N m and outlet `rho<c_theta^2/2>` 19.970 Pa reproduce ADR 0078 (0.0026, 19.97). Budget: `E_s` -0.00327, `S_seam` -3.3e-6, `G_conv`
-+0.86140, `G_frame` -0.88300 (Rhie-Chow part +0.09790, remainder -0.98090), `G_p` 0.01226, `G_visc` 0.00671, `G_res` -6.5e-4; reconstruction worst
-2.8e-14 (the minmod face values, the least-squares gradient and the non-orthogonal Laplacian term are rebuilt exactly). Closure by the registered rule
-(`|G_res|` <= 0.05 `|E_s|`) is NOT met (0.198) because `E_s` is near zero; `|G_res|` is 7.5e-4 of `G_conv`. By the rule the X2d attribution is NOT
-CLOSED and no term is called responsible for it. Reported as observations: the near-zero net is a cancellation of convection (+0.86) and the frame
-term (-0.88, its quadrature part: the cell Coriolis torque against the flux of `Omega r^2`), both concentrated in the large downstream cells
-(downstream: conv +0.834, frame -0.888; `sum |.|` 1.87 and 3.60) and of opposite sign in neighbouring radial bins (r 0.156-0.171: conv -0.425, frame
-+1.155; r 0.203-0.219: conv +1.251, frame -2.090): a radial dipole of angular-momentum generation with zero net, which leaves swirl of both signs. The
-budget locates generation of angular momentum, not of swirl energy; the 20 Pa are the energy of that two-signed swirl, not attributed by a rule.
+X2d-36 (minmod, 8000 iterations, 14.9 min, not converged by tolerance, res_u 5.3e-4 at the cap; ADR 0078 accepted X2d by its
+1000-iteration rule): outlet L 0.00258 N m and outlet `rho<c_theta^2/2>` 19.970 Pa reproduce ADR 0078 (0.0026, 19.97). Budget:
+`E_s` -0.00327, `S_seam` -3.3e-6, `G_conv` +0.86140, `G_frame` -0.88300 (Rhie-Chow part +0.09790, remainder -0.98090), `G_p`
+0.01226, `G_visc` 0.00671, `G_res` -6.5e-4; reconstruction worst 2.8e-14 (the minmod face values, the least-squares gradient and
+the non-orthogonal Laplacian term are rebuilt exactly).
 
-Construction (amendment 1 test `w36c_construction_closure_and_extents`): the registered per-cell closure of the face-centre frame flux
-`|sum_f (Omega x r_f).S_f| / (|Omega| sum_f r_perp,f |S_f|)` is far above the registered 1e-10: worst 5.3e-4 (M1), 2.1e-4 (M2), 1.7e-4 (M3), 3.6e-4
-(E0 mesh); median 4.7e-9 / 1.5e-9 / 4.2e-10 / 4.3e-9; 77 % of the cells exceed 1e-10 (the faces of the camber-sheared cells are warped). **F-RP as
-registered is NOT RUNNABLE on every registered mesh.** Measured with the same test: the frame flux integrated exactly over the mesh's own triangle fan of
-each face (`F_tri = sum_t (Omega x c_t).S_t`, the decomposition of `polygon_geometry`, exact for the linear field `Omega x r` on each planar
-triangle) closes to 1.2e-15 / 1.4e-15 / 2.2e-15 / 1.2e-15 (an identity: the cells' closed triangulated surfaces). The largest face difference
-`|F_tri - (Omega x r_f).S_f| / (|Omega| r |S|)` is 5.0e-3 (M1, E0), 3.2e-3 (M2, M3).
+Closure by the registered rule (`|G_res|` <= 0.05 `|E_s|`) is NOT met (0.198) because `E_s` is near zero; `|G_res|` is 7.5e-4 of
+`G_conv`. By the rule the X2d attribution is NOT CLOSED and no term is called responsible for it.
 
-Cell extents, largest / median (axial, radial, pitchwise r dtheta, m): M1 0.188/2.11e-3, 0.0386/7.66e-4, 0.0445/4.87e-3; M2 0.146/1.26e-3,
-0.0287/3.59e-4, 0.0323/3.09e-3; M3 0.111/8.89e-4, 0.0213/2.22e-4, 0.0227/2.00e-3. Largest-cell ratios M1/M2 and M2/M3: axial 1.29, 1.31; radial
-1.35, 1.35; pitchwise 1.38, 1.42 (nominal 1.5): the generator's core cells (where H1 generation lives) refine by about 1.3-1.4 per step, not 1.5. A4
-keeps the nominal ratio as registered; the order with the measured largest-cell ratio is reported next to it.
+Reported as observations: the near-zero net is a cancellation of convection (+0.86) and the frame term (-0.88, its quadrature
+part: the cell Coriolis torque against the flux of `Omega r^2`). Both are concentrated in the large downstream cells (downstream:
+conv +0.834, frame -0.888; `sum |.|` 1.87 and 3.60) and of opposite sign in neighbouring radial bins (r 0.156-0.171: conv -0.425,
+frame +1.155; r 0.203-0.219: conv +1.251, frame -2.090). This is a radial dipole of angular-momentum generation with zero net,
+which leaves swirl of both signs. The budget locates generation of angular momentum, not of swirl energy; the 20 Pa are the
+energy of that two-signed swirl, not attributed by a rule.
+
+Construction (amendment 1 test `w36c_construction_closure_and_extents`): the registered per-cell closure of the face-centre frame
+flux `|sum_f (Omega x r_f).S_f| / (|Omega| sum_f r_perp,f |S_f|)` is far above the registered 1e-10: worst 5.3e-4 (M1), 2.1e-4
+(M2), 1.7e-4 (M3), 3.6e-4 (E0 mesh); median 4.7e-9 / 1.5e-9 / 4.2e-10 / 4.3e-9; 77 % of the cells exceed 1e-10 (the faces of the
+camber-sheared cells are warped). **F-RP as registered is NOT RUNNABLE on every registered mesh.**
+
+Measured with the same test: the frame flux integrated exactly over the mesh's own triangle fan of each face
+(`F_tri = sum_t (Omega x c_t).S_t`, the decomposition of `polygon_geometry`, exact for the linear field `Omega x r` on each planar
+triangle) closes to 1.2e-15 / 1.4e-15 / 2.2e-15 / 1.2e-15 (an identity: the cells' closed triangulated surfaces). The largest face
+difference `|F_tri - (Omega x r_f).S_f| / (|Omega| r |S|)` is 5.0e-3 (M1, E0), 3.2e-3 (M2, M3).
+
+Cell extents, largest / median (m):
+
+| Mesh | axial | radial | pitchwise r dtheta |
+|---|---|---|---|
+| M1 | 0.188/2.11e-3 | 0.0386/7.66e-4 | 0.0445/4.87e-3 |
+| M2 | 0.146/1.26e-3 | 0.0287/3.59e-4 | 0.0323/3.09e-3 |
+| M3 | 0.111/8.89e-4 | 0.0213/2.22e-4 | 0.0227/2.00e-3 |
+
+Largest-cell ratios M1/M2 and M2/M3: axial 1.29, 1.31; radial 1.35, 1.35; pitchwise 1.38, 1.42 (nominal 1.5): the generator's core
+cells (where H1 generation lives) refine by about 1.3-1.4 per step, not 1.5. A4 keeps the nominal ratio as registered; the order
+with the measured largest-cell ratio is reported next to it.
 
 Remedy (changes F-RP before any of its code or runs; acceptance otherwise unchanged): with `rotor_passage = true` the frame flux of EVERY face of the zone
 (internal, interface, boundary) is `F_tri`, not `(Omega x r_f).S_f` (the default `mrf` path keeps the face-centre form). Item 2 becomes: the per-cell
@@ -238,16 +305,27 @@ A1 (registered checks, iteration 1): seam pairs `|phi_rel,f + phi_rel,g|` / (Ome
 (limit 1e-12: pass); F1 rotor walls (`blade`, `hub`) `|phi_rel + warp|` 2.6e-16 (limit 1e-12: pass), largest `|phi_rel|` 5.0e-3 of Omega r |S| (the
 largest face warp term, as predicted). The closure check of `Simulation::new` passed on every F-RP set-up (it builds).
 
-Smokes (continuity at iterations 1 / 10 / 20 / 30): Y(M1) 1.7e-6 / 2.7e-6 / 1.2e-7 / 1.3e-7; Y(M2) 1.6e-6 / 5.6e-7 / 3.9e-7 / 2.6e-7; Y(M3) 1.2e-6 /
-7.9e-6 / 6.3e-4 / 6.6e-2 (growing); R(M2) 5.5e-4 / 3.7e-5 / 3.6e-5 / 2.7e-5; R(M3) 2.0e-4 / 7.2e-4 / 1.1e-2 / 2.8e-1 (growing); B(M2) 4.2e-6 / 1.1e-6
-/ 5.4e-7 / 9.3e-6; **B(M3) 1.2e-6 / 1.9e-5 / 1.3e-2 / 1.2e-1 (growing; Delta p_tt 22.7 kPa and outlet L 8.2 N m at iteration 30 in the inertial empty
-duct)**; F1 0.49 / 0.38 / 0.40 / 0.38 (and 0.30 at iteration 300, res_u 0.47, torque 1.79 N m; the pressure equation is solved in 5 iterations each
-time, so the imbalance is the 1e-3 relative linear tolerance applied to a large initial imbalance next to the rotating hub and blade, not a failed
-solve; E0's continuity at iteration 1 is 1.6e-4).
+Smokes (continuity at iterations 1 / 10 / 20 / 30):
 
-Set-up defect: M3 diverges within 30 iterations in all three formulations, including the inertial control B, so the registered finest mesh is a
-defective set-up (the cause, the M3 counts with 5 boundary-layer cells of growth 1.084 or the 157 248-cell H-slit at 79 deg with SIMPLEC, was not
-diagnosed). It stays recorded here; no run of it is used. Replacement, registered now, before any run: **M0**, one step coarser than M1 by 1.5
+| Set-up | 1 | 10 | 20 | 30 | Note |
+|---|---|---|---|---|---|
+| Y(M1) | 1.7e-6 | 2.7e-6 | 1.2e-7 | 1.3e-7 | - |
+| Y(M2) | 1.6e-6 | 5.6e-7 | 3.9e-7 | 2.6e-7 | - |
+| Y(M3) | 1.2e-6 | 7.9e-6 | 6.3e-4 | 6.6e-2 | growing |
+| R(M2) | 5.5e-4 | 3.7e-5 | 3.6e-5 | 2.7e-5 | - |
+| R(M3) | 2.0e-4 | 7.2e-4 | 1.1e-2 | 2.8e-1 | growing |
+| B(M2) | 4.2e-6 | 1.1e-6 | 5.4e-7 | 9.3e-6 | - |
+| **B(M3)** | **1.2e-6** | **1.9e-5** | **1.3e-2** | **1.2e-1** | **growing; Delta p_tt 22.7 kPa and outlet L 8.2 N m at iteration 30 in the inertial empty duct** |
+| F1 | 0.49 | 0.38 | 0.40 | 0.38 | and 0.30 at iteration 300, res_u 0.47, torque 1.79 N m |
+
+On F1 the pressure equation is solved in 5 iterations each time, so the imbalance is the 1e-3 relative linear tolerance applied to
+a large initial imbalance next to the rotating hub and blade, not a failed solve; E0's continuity at iteration 1 is 1.6e-4.
+
+Set-up defect: M3 diverges within 30 iterations in all three formulations, including the inertial control B, so the registered
+finest mesh is a defective set-up (the cause, the M3 counts with 5 boundary-layer cells of growth 1.084 or the 157 248-cell H-slit
+at 79 deg with SIMPLEC, was not diagnosed). It stays recorded here; no run of it is used.
+
+Replacement, registered now, before any run: **M0**, one step coarser than M1 by 1.5
 (`n_up` 5, `n_chord` 8, `n_down` 5, `n_side` 7, `n_span` 11, `n_gap` 5, `n_mid` 1, `n_bl` 1, `first_cell_height` 3e-4 m, `growth` 1.2^1.5; 4 320
 cells; smokes finite: B(M0) 2.0e-6 / 7.4e-6 / 2.7e-6 / 7.3e-7, Y(M0) 1.8e-6 / 2.2e-6 / 2.4e-6 / 2.9e-6, R(M0) 6.0e-4 / 2.3e-4 / 2.2e-4 / 2.0e-4;
 frame-flux closure of `F_tri` 9.5e-16; extents largest / median axial 0.228 / 3.15e-3, radial 0.0707 / 1.14e-3, pitchwise 0.0543 / 7.06e-3 m:
@@ -262,17 +340,21 @@ set-up. Full annulus values, `rho` = 1.2.
 
 ### Where the spurious swirl comes from (answer to the diagnosis)
 
-The term is the momentum convection. First-order upwind on the Cartesian components of the relative velocity acts as a numerical viscosity in
-Laplacian form on its rigid part `-Omega x r`. A Laplacian-form stress on a rigid rotation (zero physical strain) is a torque that drives the relative
-swirl toward zero, i.e. creates positive absolute swirl: per face `(Omega/2) |phi_f| |d_perp|^2`, sign-definite. On X2a the convection term is
-2.442 N m of the 2.302 N m solver-consistent excess (106 %), and the closed form is 2.628 N m (1.076 of it). The other terms: pressure lever arms
-0.011, the physical viscous term 0.004, seam pairs 2e-6, frame term -0.154 (Rhie-Chow part +0.131, quadrature remainder -0.285), residual 2e-8. It
-is generated where `|phi| |d_perp|^2` is large: the large cells of the upstream (0.73) and downstream (1.33) blocks and of mid-span (one radial bin
-1.03), much less in the fine chord band (0.38) and almost none in the wall layers (0.03). With minmod (X2d) the net vanishes by cancellation, not by
-absence: convection +0.86 against the frame term -0.88 (its quadrature part -0.98, Rhie-Chow +0.10), both in the large downstream cells and as a
-radial dipole (r 0.156-0.171: convection -0.42, frame +1.15; r 0.203-0.219: +1.25, -2.09). That leaves swirl of both signs and the 20 Pa. The X2d
-budget is not closed by the registered rule (`E_s` is near zero), so this is an observation, and the budget locates generation of angular momentum,
-not of swirl energy.
+The term is the momentum convection. First-order upwind on the Cartesian components of the relative velocity acts as a numerical
+viscosity in Laplacian form on its rigid part `-Omega x r`. A Laplacian-form stress on a rigid rotation (zero physical strain) is a
+torque that drives the relative swirl toward zero, i.e. creates positive absolute swirl: per face
+`(Omega/2) |phi_f| |d_perp|^2`, sign-definite.
+
+On X2a the convection term is 2.442 N m of the 2.302 N m solver-consistent excess (106 %), and the closed form is 2.628 N m (1.076
+times the convection term). The other terms: pressure lever arms 0.011, the physical viscous term 0.004, seam pairs 2e-6, frame
+term -0.154 (Rhie-Chow part +0.131, quadrature remainder -0.285), residual 2e-8. The generation sits where `|phi| |d_perp|^2` is
+large: the large cells of the upstream (0.73) and downstream (1.33) blocks and of mid-span (one radial bin 1.03), much less in the
+fine chord band (0.38) and almost none in the wall layers (0.03).
+
+With minmod (X2d) the net vanishes by cancellation, not by absence: convection +0.86 against the frame term -0.88 (its quadrature
+part -0.98, Rhie-Chow +0.10), both in the large downstream cells and as a radial dipole (r 0.156-0.171: convection -0.42, frame
++1.15; r 0.203-0.219: +1.25, -2.09). That leaves swirl of both signs and the 20 Pa. The X2d budget is not closed by the registered
+rule (`E_s` is near zero), so this is an observation, and the budget locates generation of angular momentum, not of swirl energy.
 
 ### Checks with limits
 
@@ -311,26 +393,31 @@ registered removal). It was never committed; the code is not in the repository. 
 if A0-A4 pass. No torque or Delta p_ts change with the fix is reported. The only bladed F-RP numbers are a disclosed 300-iteration scratch look
 (torque 1.79 N m, continuity 0.30, res_u 0.47, not converged), which is not a result.
 
-The runs show that a fix is possible in principle. On M1, where Y converged (567 iterations), removing the rigid part from the convected quantity
-removes the source: outlet angular-momentum flux -1.42e-5 N m against 2.254 N m in the relative formulation and 1.63e-4 N m in the inertial control,
-swirl energy 0.0000 Pa, duct Delta p_tt -1.54 Pa (inertial -1.53). This passes the mechanism falsifier registered in amendment 1 (A2 on Y(M1)), so
-the mechanism stands by that test. The fix was not delivered because this implementation does not converge on the coarser mesh M0 (the inertial
-control converges there in 124 iterations and the relative formulation in 247, so M0 is not a defective set-up) and did not converge on M2 within the
-60-minute cap (nor did the inertial control B(M2): 7 063 iterations, against 169 on M1; two runs shared the machine). The bladed F1 smoke had a
-continuity of about 0.4 for 300 iterations. Robustness of the lagged `-Omega x c` source with SIMPLEC on these meshes is the open item; it was not
-diagnosed.
+The runs show that a fix is possible in principle. On M1, where Y converged (567 iterations), removing the rigid part from the
+convected quantity removes the source: outlet angular-momentum flux -1.42e-5 N m against 2.254 N m in the relative formulation and
+1.63e-4 N m in the inertial control, swirl energy 0.0000 Pa, duct Delta p_tt -1.54 Pa (inertial -1.53). This passes the mechanism
+falsifier registered in amendment 1 (A2 on Y(M1)), so the mechanism stands by that test.
+
+The fix was not delivered because this implementation does not converge on the coarser mesh M0 and did not converge on M2 within
+the 60-minute cap. On M0 the inertial control converges in 124 iterations and the relative formulation in 247, so M0 is not a
+defective set-up. On M2 the inertial control did not converge within the cap either (B(M2): 7 063 iterations, against 169 on M1;
+two runs shared the machine). The bladed F1 smoke had a continuity of about 0.4 for 300 iterations. Robustness of the lagged
+`-Omega x c` source with SIMPLEC on these meshes is the open item; it was not diagnosed.
 
 ### Mesh dependence of the attribution (stated against the registered reading)
 
-R(M0) (4 320 cells): `E_s` 3.495, `G_conv` 2.075 (0.594 `E_s`), `G_frame` 1.353 (0.387; Rhie-Chow part 0.292), `C_up / G_conv` 1.475 (outside
-the [0.7, 1.3] window used for X2a). R(M2) (47 040 cells): `E_s` 1.710, `G_conv` 1.777 (1.039), `G_frame` -0.074, `C_up / G_conv` 1.065. The
-attribution to convection is clean on M1 and M2; on the coarsest mesh the frame-term quadrature carries a large share. The criteria were registered
-on X2a, so no verdict changes; "convection is the term" holds for M1 and M2, not for M0.
+The attribution to convection is clean on M1 and M2; on the coarsest mesh the frame-term quadrature carries a large share. The
+criteria were registered on X2a, so no verdict changes; "convection is the term" holds for M1 and M2, not for M0.
 
-Order of the relative-frame error: nominal ratio 2.25 over M0-M2 gives `p_R` = 0.88 (pairwise 1.04 and 0.73). With the measured cell-size ratios
-M0/M2 (largest: axial 1.56, radial 2.46, pitchwise 1.68; median: 2.49, 3.18, 2.28) the same two errors give 1.61 (largest axial), 1.38 (largest
-pitchwise), 0.87 (median pitchwise). `C_up` falls with the error: 3.060, 2.628, 1.893 N m. The error is a first-order discretisation error that
-falls with refinement, as ADR 0078 concluded, now shown on a converged three-mesh family.
+| Run | Cells | `E_s` | `G_conv` (share of `E_s`) | `G_frame` (share of `E_s`) | `C_up / G_conv` |
+|---|---|---|---|---|---|
+| R(M0) | 4 320 | 3.495 | 2.075 (0.594) | 1.353 (0.387; Rhie-Chow part 0.292) | 1.475 (outside the [0.7, 1.3] window used for X2a) |
+| R(M2) | 47 040 | 1.710 | 1.777 (1.039) | -0.074 | 1.065 |
+
+Order of the relative-frame error: nominal ratio 2.25 over M0-M2 gives `p_R` = 0.88 (pairwise 1.04 and 0.73). With the measured
+cell-size ratios M0/M2 (largest: axial 1.56, radial 2.46, pitchwise 1.68; median: 2.49, 3.18, 2.28) the same two errors give 1.61
+(largest axial), 1.38 (largest pitchwise), 0.87 (median pitchwise). `C_up` falls with the error: 3.060, 2.628, 1.893 N m. The error
+is a first-order discretisation error that falls with refinement, as ADR 0078 concluded, now shown on a converged three-mesh family.
 
 ### Deviations from the registered plan (candid)
 

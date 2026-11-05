@@ -1,9 +1,10 @@
 # MCP and API tools
 
-This page lists every tool of the MCP server: its access class, the service method it calls and what it does, and the
-rules all tools share (access classes, policy, errors, sandbox and limits). It is for people who connect a client or an assistant
-to the server, or who add a tool. For a guided first session, follow the [MCP design-loop tutorial](tutorials/mcp-design-loop.md);
-for the parameters and results of the methods behind the tools, see the [service protocol](service-protocol.md).
+This page lists every tool of the MCP (Model Context Protocol) server: its access class, the service method it calls and
+what it does, and the rules all tools share (access classes, policy, errors, sandbox and limits). It is for people who connect
+a client or an assistant to the server, or who add a tool. For a guided first session, follow the
+[MCP design-loop tutorial](tutorials/mcp-design-loop.md); for the parameters and results of the methods behind the tools, see
+the [service protocol](service-protocol.md).
 
 ## Conventions for every tool
 
@@ -11,16 +12,16 @@ The MCP server (`rcfd-mcp`, crate `rcfd-mcp`) exposes the solver service (`docs/
 lists the same tools, so a tool added to the server is available to the assistant without further wiring. Conventions (F-090, F-091,
 F-147, F-148):
 
-* Every tool has an access class. `read` tools never change state. `mutate` changes the session, `execute` starts computation,
-  `write_files` writes files inside the sandbox. `tools/list` marks every tool with `annotations.readOnlyHint` and
+* Every tool has an access class. `read` tools never change state, `mutate` tools change the session, `execute` tools start
+  computation and `write_files` tools write files inside the sandbox. `tools/list` marks every tool with `annotations.readOnlyHint` and
   `_meta."rcfd/access"`; `_meta."rcfd/needsApproval"` is true for every class except `read`.
-* The server enforces a policy on top: read-only mode refuses every tool that is not `read` (error 1100, `permission denied`), an approval
-  hook is asked before every other call, and an allow list restricts the callable tools.
+* The server enforces a policy on top: read-only mode refuses every tool that is not `read` (error 1100, `permission denied`),
+  an approval hook is asked before every call to a tool that is not `read`, and an allow list restricts the callable tools.
 * Arguments that do not match a tool's `inputSchema` are JSON-RPC errors (-32602). Failures while executing a valid call (validation,
   wrong run state, limits, a path outside the sandbox (1004), a denied permission (1100)) are tool results with `isError: true` and the
   text `{"error": {"code", "message", "data"?}}`. Messages are located: they name the parameter, setting path or file.
-* File paths are resolved by the service against its sandbox root (`rcfd-mcp --root`): `..` and absolute paths outside the root are
-  refused with code 1004 and create nothing. The limits `--max-cells`, `--max-steps`, `--max-run-seconds` and
+* The service resolves file paths against its sandbox root (`rcfd-mcp --root`). It refuses `..` and absolute paths outside the
+  root with code 1004 and creates nothing. The limits `--max-cells`, `--max-steps`, `--max-run-seconds` and
   `--max-design-evaluations` apply to every tool that starts runs.
 
 ## Tool list
@@ -73,42 +74,56 @@ The design tools (ADR 0067, `docs/design-loop.md`) keep their state in a study d
 4. `design_list_study`, `design_get_metrics` and `design_compare_variants` report the best feasible candidate, the Pareto front and
    exact metric differences; `design_run_operating_map` runs a performance map of a case or of a chosen candidate.
 
-Repeating a call is safe: `design_evaluate` returns a stored candidate without running (`cached: true`, `evaluations_run: 0`),
-`design_run_operating_map` returns the stored table when the case, the points and the options are unchanged, and `design_record` refuses a
-candidate that already has a record. Metric values must be finite numbers; an unknown or missing parameter, a value outside its bounds, a
-name with separators or a leading dot, and a base case that changed since the study was created are located errors (-32602).
+Repeating a call is safe:
+
+- `design_evaluate` returns a stored candidate without running (`cached: true`, `evaluations_run: 0`).
+- `design_run_operating_map` returns the stored table when the case, the points and the options are unchanged.
+- `design_record` refuses a candidate that already has a record.
+
+Metric values must be finite numbers. An unknown or missing parameter, a value outside its bounds, a name with separators or a
+leading dot, and a base case that changed since the study was created are located errors (-32602).
 
 ## Design ledger tools
 
 The design ledger (ADR 0121, `docs/design-loop.md`) is one JSON-lines file (for example `fan/ledger.jsonl`) that keeps every evaluated
-variant across studies, evaluators and sessions. `design_ledger_append` takes the parameters and metrics as lists of
-`{name, value, unit}`, the evaluator id and version, the verdict (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`; a located
-`reason` is required unless `ok`) and the tier (`analytic`, `reduced_order`, `cfd`), and stamps the server's rcfd version and the time.
-`design_ledger_query` filters and pages the entries and, on request, returns the Pareto set, the best entry with its running best and
-the history of one parameter; Pareto and best refuse a set that mixes evaluators, tiers or units of a metric, so filter by `evaluator`
-and `fidelity` first. `design_ledger_export` writes CSV or JSON, and `design_ledger_rerun_check` compares the metrics of a re-run with an
-entry (tolerances default to 0, bit-identical). A line torn by a killed writer is reported in `skipped_lines` and never joins the next
-entry.
+variant across studies, evaluators and sessions. A line torn by a killed writer is reported in `skipped_lines` and never joins the
+next entry.
+
+- `design_ledger_append` takes the parameters and metrics as lists of `{name, value, unit}`, the evaluator id and version, the
+  verdict (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`; a located `reason` is required unless `ok`) and the tier
+  (`analytic`, `reduced_order`, `cfd`), and stamps the server's rcfd version and the time.
+- `design_ledger_query` filters and pages the entries and, on request, returns the Pareto set, the best entry with its running
+  best and the history of one parameter. Pareto and best refuse a set that mixes evaluators, tiers or units of a metric, so filter
+  by `evaluator` and `fidelity` first.
+- `design_ledger_export` writes CSV or JSON.
+- `design_ledger_rerun_check` compares the metrics of a re-run with an entry (tolerances default to 0, bit-identical).
 
 ## Project tools (`--project`)
 
 `rcfd-mcp --project <dir>` adds 18 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
 folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8). Without `--project` the tool list is unchanged. The server
 refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rcfd-project.json`. The Claude Code plugin in
-`clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only; without `--root`, `--project` also confines the existing tools' file access to the project); the run tools
-also need `rcfd-runner` and `rcfd` in the same folder as `rcfd-mcp` (as `cargo install` or a build directory gives).
+`clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only).
+Without `--root`, `--project` also confines the existing tools' file access to the project. The run tools also need `rcfd-runner`
+and `rcfd` in the same folder as `rcfd-mcp` (as `cargo install` or a build directory gives).
 
 The tools are the commands and queries of the project workspace, the crate `crates/rcfd-workspace` that the Studio uses too
 ([ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md),
 [ADR 0185](adr/0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md),
-[ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md)); `rcfd-mcp` keeps their descriptors.
+[ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md)).
+`rcfd-mcp` keeps their descriptors.
 
 Paths are project-relative (`cases/cavity.toml`) and checked like every project path (no `..`, no absolute paths, no links; refused
-with 1004 before anything is created). Run arguments are run ids (`r-<yyyymmddThhmmss>-<4 hex>`). Errors added by these tools:
-1200 the file changed since its hash was read (`data.current_hash`, null when the file is absent), 1201 another cooperating writer
-held the file's edit lock for 2 s, 1202 no such run, file, field or snapshot. Every result's text stays under 36 000 bytes: lists
-are paged, series decimated, files read in pages; a residual set or image over that is written under `runs/<id>/mcp/` or
-`runs/<id>/renders/` and the result gives its `path`.
+with 1004 before anything is created). Run arguments are run ids (`r-<yyyymmddThhmmss>-<4 hex>`).
+
+Every result's text stays under 36 000 bytes: lists are paged, series decimated and files read in pages. A residual set or image
+over that is written under `runs/<id>/mcp/` or `runs/<id>/renders/`, and the result gives its `path`.
+
+Errors added by these tools:
+
+- 1200: the file changed since its hash was read (`data.current_hash`, null when the file is absent).
+- 1201: another cooperating writer held the file's edit lock for 2 s.
+- 1202: no such run, file, field or snapshot.
 
 | Tool | Access | Result |
 |---|---|---|
@@ -135,8 +150,8 @@ server has exited, its standard output reaches EOF only when that runner exits (
 C2). What this does to Claude Code when it closes or restarts the server has not been checked. On Linux the pipe closes with the
 server.
 
-Edits (`edit_case`, `write_note`) are compare-and-replace under a cooperative lock (`rcfd_project::atomic::replace_if_hash`): the
-file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of the path>.lock` is held; each accepted edit appends
+Edits (`edit_case`, `write_note`) are compare-and-replace under a cooperative lock (`rcfd_project::atomic::replace_if_hash`). The
+file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of the path>.lock` is held. Each accepted edit appends
 `{t, kind: "edit", who, path, old_hash, new_hash}` to `.rcfd/edits.jsonl`, so the Studio can say who changed a file. Writers that do
 not take the lock (Claude Code's own Edit and Write tools, an editor) are not stopped; the Studio's watcher sees their edits afterwards.
 

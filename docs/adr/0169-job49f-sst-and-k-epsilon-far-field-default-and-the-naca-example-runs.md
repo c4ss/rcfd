@@ -5,9 +5,24 @@ the limits, the reading rules and the not-run list are fixed here. **Results in 
 and the records (G1: no `baseline_hashes.rs` case changes) met; the 8 regenerated NACA runs **converge** (409 / 230
 iterations, exit 0) and so miss the aerofoil parts of ADR 0142 G1, ADR 0155 E2 and ADR 0148 N9, now ignored known misses
 with their limits intact; sizes and wall times within their limits. Amendment 1 (base commit) and amendment 2 (R2, a
-reported drag-attribution run) before their runs. Not yet accepted by the maintainer. Job 49F, on local main 1248a76 (the worktree branch was fast-forwarded to it before any work; it holds
-job 49C, ADR 0166). Number: 0168 is the highest in `git log --all` and in every worktree when this was written (0167 job
-49D, 0168 job 49E); job 49G runs at the same time and may also be writing an ADR.
+reported drag-attribution run) before their runs. Not yet accepted by the maintainer.
+
+On the maintainer's relayed instruction of 2026-10-29, `freestream` becomes the default turbulence role of
+`velocity = "freestream"` far fields for k-omega SST and k-epsilon too (ADR 0166 question 1 (b)), and the 8 stored NACA
+0012 example runs are regenerated (ADR 0166 question 3 (b)). When the patch gives no inlet specification, the far-field
+values come from `turbulence.initial_intensity` and `turbulence.initial_viscosity_ratio`. RSM stays `zero_gradient` under
+`auto`, and `turbulence = "zero_gradient"` keeps the old behaviour spellable. The code limits F1-F7, R1 and the records
+(G1: no `baseline_hashes.rs` case changes) are met. The 8 regenerated runs converge (409 / 230 iterations, exit 0), so
+they miss the aerofoil parts of ADR 0142 G1, ADR 0155 E2 and ADR 0148 N9; these are now ignored known misses with their
+limits intact. Nothing was tuned: the runs are kept as made, and `max_iterations` and the case files are untouched. At 4
+degrees `cd` moves from the stored 0.02536 to 0.02820: ADR 0166's effective wall shear moves it by +0.00278 (+11 %) and
+this far field by +0.00006 (+0.2 %), and the far field changes the convergence. The full workspace test suite, the gate
+and a k-epsilon or SST far-field validation against reference data were not run, and the case comment on `max_iterations`
+in the 4 aerofoil cases is now false (question 3 in the addendum).
+
+Job 49F, on local main 1248a76 (the worktree branch was fast-forwarded to it before any work; it holds job 49C, ADR 0166).
+Number: 0168 is the highest in `git log --all` and in every worktree when this was written (0167 job 49D, 0168 job 49E);
+job 49G runs at the same time and may also be writing an ADR.
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -37,9 +52,12 @@ Parents:
 - (2) (moments follow the force default, ADR 0166 question 2) is job 49G, a separate job. This job does not touch
   moments.
 
-The brief adds: no existing valid case may become a validation error; RSM has no inlet condition, leave it and document
-it; keep the old behaviour spellable (`turbulence = "zero_gradient"`); do not raise a cap or loosen a limit; if a
-regenerated run fails its own acceptance, report it with numbers and do not tune.
+The brief adds:
+- no existing valid case may become a validation error;
+- RSM has no inlet condition, leave it and document it;
+- keep the old behaviour spellable (`turbulence = "zero_gradient"`);
+- do not raise a cap or loosen a limit;
+- if a regenerated run fails its own acceptance, report it with numbers and do not tune.
 
 ## What I read before writing this (code, stored runs, no solver run)
 
@@ -276,13 +294,17 @@ changes. No registered run had been made.
 ## Interim note (2026-10-29, after W1, before any test edit and before L1): the regenerated aerofoil runs converge
 
 R1 (old spellings, new binary) met: `residuals.jsonl` byte-equal over 2000 lines and 40 of 40 stored fields bit-equal
-with `r-20261028T152128-cb3a` at 1a04d46; `finished`, `not_converged`, 2000 iterations. W1 (`--add-missing`, Windows)
-added exactly the 4 NACA runs, but **each meets the residual targets**: solver state `converged`, exit 0, at iteration
-409 (4 degrees, both forms) and 230 (2 degrees, both forms). So W1 misses ADR 0142 G1's aerofoil expectation
-(`not_converged` at 2000, exit 5), and E2 (`example_rotated_w48u`, which asserts 2000 steps) misses as well. The rest of
-W1 holds: wall times 7.9-16.3 s (the solver's `wall_s`; the ledger's `wall_s`, launch to final state, which G2 limits, is 8.1-16.5 s), closing check 0 problems, `wind-tunnel` 28 095 017 bytes (was 34 826 293). Per the
-registered reading rule the runs are kept as made (nothing tuned, `max_iterations` untouched), the missed limits move to
-ignored `*_known_miss` tests with the limits intact, and L1 runs with the same limits (the same miss is expected there).
+with `r-20261028T152128-cb3a` at 1a04d46; `finished`, `not_converged`, 2000 iterations.
+
+W1 (`--add-missing`, Windows) added exactly the 4 NACA runs, but **each meets the residual targets**: solver state
+`converged`, exit 0, at iteration 409 (4 degrees, both forms) and 230 (2 degrees, both forms). So W1 misses ADR 0142 G1's
+aerofoil expectation (`not_converged` at 2000, exit 5), and E2 (`example_rotated_w48u`, which asserts 2000 steps) misses
+as well. The rest of W1 holds: wall times 7.9-16.3 s (the solver's `wall_s`; the ledger's `wall_s`, launch to final
+state, which G2 limits, is 8.1-16.5 s), closing check 0 problems, `wind-tunnel` 28 095 017 bytes (was 34 826 293).
+
+Per the registered reading rule the runs are kept as made (nothing tuned, `max_iterations` untouched), the missed limits
+move to ignored `*_known_miss` tests with the limits intact, and L1 runs with the same limits (the same miss is expected
+there).
 
 ## Amendment 2 (2026-10-29, after W1 and L1, before its run): R2, which change moves the drag
 
@@ -388,7 +410,8 @@ Known misses (reading rule; each limit kept exactly as registered, the passing p
 
 - The full workspace test suite, the gate, the whole `rcfd-studio` suite (only the tests that read the example runs,
   E3, and `correctors_x`), Linux tests (only L1's runs and its `--check` in the container).
-- `--rerun-check` of either tree (the 4 new runs are expected to be byte-reproducible by ADR 0142 D10's procedure; not checked).
+- `--rerun-check` of either tree (the 4 new runs are expected to be byte-reproducible by ADR 0142 D10's procedure; not
+  checked).
 - The ignored heavy FAN-01 runs (no free-stream patch, D1 cannot reach them) and ADR 0159's / 0164's sweeps.
 - A k-epsilon or SST far-field validation against reference data (the plate tests are set-up checks).
 

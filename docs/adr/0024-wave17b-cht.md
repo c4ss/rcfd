@@ -1,18 +1,31 @@
 # ADR 0024: Wave 17B conjugate heat transfer: solid cell zones, coupled interfaces, thermal wall conditions (F-051)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new code was
-compiled or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
-assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away.
-A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes that were not
-fixed here, results) may be appended at the end without touching registered limits.
+compiled or run.
 
-Roadmap: F-051 (primary). F-215 (contact resistance, layered thin wall) is touched only through the checks E1 and E2 below;
-F-215 is NOT claimed done on the strength of them. F-216 (per-region model sets), F-212 (solidification) and F-213 (Joule
-heating) are not attempted in this wave. F-050 (energy equation), F-111 (properties), F-114 (non-conformal join) are used, not
-changed in scope.
-Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals. No vendor
-names in the repository. Closed forms below are derived here and need no reference; two textbook facts used only as a sanity
-cross-check are marked "(from memory, unverified)".
+Before this wave every cell was fluid, and no temperature boundary condition offered convection, thin-wall resistance or
+radiation to ambient. This wave adds solid cell zones, coupled interfaces and thermal wall conditions. It divides the energy
+equation by one constant, the fluid capacity, which gives the form the existing machinery already solves; existing cases take
+the existing code path unchanged and stay bit-identical. Solids require a prescribed flow (`solver.frozen_flow = true`): a
+SOLVED flow coupled to solid zones is not delivered and is the principal gap behind `partial`. The results table records every
+check within its registered limit. Two groups pass only on corrected tests: the first A3/A3b tests asserted the heat flow with
+the sign of an inflow, and the registered upwind convection failed D2 and the D3 interface flux, so the corrected D tests use
+central convection. The registered steady stop criterion is unattainable, so the library harness stops at 1e-11; the accuracy
+limits are unchanged. F-215 is NOT marked done: only the contact-resistance and thin-wall evidence (E1, E2) exists.
+
+Rules and parents:
+
+* House rules: the limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+  assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away.
+  A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes that were
+  not fixed here, results) may be appended at the end without touching registered limits.
+* Roadmap: F-051 (primary). F-215 (contact resistance, layered thin wall) is touched only through the checks E1 and E2 below;
+  F-215 is NOT claimed done on the strength of them. F-216 (per-region model sets), F-212 (solidification) and F-213 (Joule
+  heating) are not attempted in this wave. F-050 (energy equation), F-111 (properties), F-114 (non-conformal join) are used,
+  not changed in scope.
+* Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals. No vendor
+  names in the repository. Closed forms below are derived here and need no reference; two textbook facts used only as a sanity
+  cross-check are marked "(from memory, unverified)".
 
 ## Audit of what exists before this wave
 
@@ -78,12 +91,17 @@ is `h = 0`; a pure thin-wall resistance to a fixed external temperature is `h` v
 (not provided; use convection with the real `h`).
 
 Settings (additive; every new key has an explicit UNSET sentinel and a located error when it is needed and unset; none shadows
-another value): `boundaries.<patch>.temperature = "convection"` with `heat_transfer_coefficient` [W/m^2/K, default `-1` =
-unset, `0` allowed], `free_stream_temperature` [K, default `-1` = unset, required when `h > 0`], `wall_thickness` [m, list,
-default empty = no thin wall], `wall_conductivity` [W/m/K, list of the same length], `emissivity` [default 0 = none],
-`radiation_temperature` [K, default `-1` = unset, required when `emissivity > 0`]. Constants only (no expression forms for
-these keys: a named gap). `fixed` and `heat_flux` keep working; `heat_flux` on a patch next to a solid uses the conductivity of
-the owner cell of each face.
+another value): `boundaries.<patch>.temperature = "convection"` with
+
+* `heat_transfer_coefficient` [W/m^2/K, default `-1` = unset, `0` allowed],
+* `free_stream_temperature` [K, default `-1` = unset, required when `h > 0`],
+* `wall_thickness` [m, list, default empty = no thin wall],
+* `wall_conductivity` [W/m/K, list of the same length],
+* `emissivity` [default 0 = none],
+* `radiation_temperature` [K, default `-1` = unset, required when `emissivity > 0`].
+
+Constants only (no expression forms for these keys: a named gap). `fixed` and `heat_flux` keep working; `heat_flux` on a patch
+next to a solid uses the conductivity of the owner cell of each face.
 
 ### D4 Solid regions in the settings tree
 
@@ -103,18 +121,25 @@ Heat generation, `heat_flow` reports and `heat_flux`/`convection` boundary condi
 ### D5 Flow with solid zones: prescribed (frozen) velocity only
 
 Zeroing the flux through the solid cells belongs to the pressure-velocity core (another agent's files this wave) and is NOT
-done here; a penalty (porous sink) was examined and rejected: the Rhie-Chow face interpolation of the inverse diagonal across a
+done here. A penalty (porous sink) was examined and rejected: the Rhie-Chow face interpolation of the inverse diagonal across a
 fluid/solid face does not vanish, so the solid pressure equalises and a bypass leak of the order of the local through-flow
-remains. Instead `solids` require `solver.frozen_flow = true`: momentum and pressure are not solved; the face flux is
+remains.
+
+Instead `solids` require `solver.frozen_flow = true`: momentum and pressure are not solved; the face flux is
 `phi_f = u(x_f) . S_f` from `initial.velocity` and `initial.velocity_expression_x/y/z` evaluated at the FACE centres (boundary
 faces of `wall` patches get zero flux; all other boundary faces take the expression), then the energy equation is advanced (steady
-iteration or time steps, any of piso/pimple/simple/simplec as the nominal algorithm). It is a located error when the flux does
-not vanish (relative to the largest face flux) on any face touching a solid cell (`initial.velocity_expression_x`), when the
-largest cell imbalance exceeds `1e-6` of the largest face flux (`initial.velocity`), and for solids combined with: `properties.*`
-laws, radiation, turbulence, variable density / compressible, `components`, `coupled`, buoyancy (`energy.buoyancy`),
-`zone_sources` of kind `fixed_value`, rheology and user functions (each located). `frozen_flow = true` without solids is allowed
-(energy transport on a prescribed field) and documented. NAMED GAP behind `partial`: a SOLVED flow coupled to the solid
-(buoyancy-driven or pressure-driven) is not delivered.
+iteration or time steps, any of piso/pimple/simple/simplec as the nominal algorithm).
+
+It is a located error:
+
+* when the flux does not vanish (relative to the largest face flux) on any face touching a solid cell
+  (`initial.velocity_expression_x`),
+* when the largest cell imbalance exceeds `1e-6` of the largest face flux (`initial.velocity`),
+* and for solids combined with: `properties.*` laws, radiation, turbulence, variable density / compressible, `components`,
+  `coupled`, buoyancy (`energy.buoyancy`), `zone_sources` of kind `fixed_value`, rheology and user functions (each located).
+
+`frozen_flow = true` without solids is allowed (energy transport on a prescribed field) and documented. NAMED GAP behind
+`partial`: a SOLVED flow coupled to the solid (buoyancy-driven or pressure-driven) is not delivered.
 
 ### D6 Reports
 
@@ -195,7 +220,9 @@ absolute and divided by dT unless stated.
 ### D. Fluid-solid duct with a closed-form Nusselt number (fully developed, prescribed Poiseuille flux)
 
 Half channel, fluid `0 <= y <= H`, symmetry at `y = 0`, conducting solid `H <= y <= H + t`, uniform heat flux `q` into the domain at
-`y = H + t`, axial coordinate `x`. Poiseuille velocity `u = (3/2) U (1 - eta^2)`, `eta = y/H`, mean `U`. Fully developed
+`y = H + t`, axial coordinate `x`.
+
+Poiseuille velocity `u = (3/2) U (1 - eta^2)`, `eta = y/H`, mean `U`. Fully developed
 thermal field `T = A x + theta(y)` solves the FULL 2-D equation (so Peclet number does not matter, axial conduction is exactly zero
 since `d^2T/dx^2 = 0`): fluid `rho cp u A = k_f theta''`; solid `theta_s'' = 0`. Energy balance of the half channel: `q = rho cp U H A`,
 so `A = q/(rho cp U H)` and `theta'' = beta (1 - y^2/H^2)`, `beta = 3 q/(2 k_f H)`. With `theta'(0) = 0`:
@@ -206,6 +233,7 @@ Bulk temperature `theta_b = theta_0 + beta H^2 * (3/2) int_0^1 (1 - eta^2)(eta^2
 beta H^2 (34/105) = (17/35) q H/k_f`. Therefore `h = q/(theta(H) - theta_b) = 35 k_f/(17 H)` and, with hydraulic diameter `D_h = 4H`,
 `Nu = h D_h/k_f = 140/17 = 8.2353` (this reproduces the textbook parallel-plate value, from memory, unverified; it is derived here).
 Outer surface minus bulk: `Delta T_tot = q (17 H/(35 k_f) + t/k_s)`.
+
 Numerical set-up: `H = 1`, `t = 0.5`, `k_f = 1`, `k_s = 10`, `U = 1`, `rho cp` fluid 1 (solid 4), `q = 1`, `L_x = 2`, 8 cells in x, `n_f` = 16, 32, 64 cells across the
 fluid and `n_f/2` across the solid (interface on a face), upwind convection (exact for a linear profile in x with `u(y)`), inlet and outlet Dirichlet
 profiles equal to the exact `T` (per-face), flux `phi_f = int u dy * depth` over each face EXACT in the library test (so the discrete
@@ -303,11 +331,11 @@ Registered limits were not changed. Library checks are in `crates/rcfd-fv/tests/
 7. Additional unregistered checks (supplementary evidence, same limits as the library counterparts): `convection_wall_through_the_tree`
    (A1 and A3b through the settings tree) and the ignored upwind records.
 
-8. Silent-drop guards added after review (test `f4b_combinations_that_would_drop_a_setting_are_rejected`): user `scalars`/`species`
-   with solids or a prescribed flow (they would never be advanced), and `temperature = "convection"` with a temperature-dependent
-   conductivity law or with the variable-density / compressible solvers (the condition would silently use the constant
-   `physics.conductivity` or become adiabatic) are located errors. `initial.patches` velocity values are not read by the prescribed
-   flux (only `initial.velocity` and its expressions).
+8. Silent-drop guards added after review (test `f4b_combinations_that_would_drop_a_setting_are_rejected`). These combinations are
+   located errors: user `scalars`/`species` with solids or a prescribed flow (they would never be advanced), and
+   `temperature = "convection"` with a temperature-dependent conductivity law or with the variable-density / compressible solvers
+   (the condition would silently use the constant `physics.conductivity` or become adiabatic). The prescribed flux does not read
+   `initial.patches` velocity values (only `initial.velocity` and its expressions).
 
 ### Not delivered (final)
 

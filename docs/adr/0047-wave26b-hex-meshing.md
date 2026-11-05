@@ -1,17 +1,32 @@
-# ADR 0047: Wave 26B, sweep / thin-volume / multizone hexahedral meshing (F-235) and a Cartesian-core fill with prism layers (F-234, vertical slice)
+# ADR 0047: Wave 26B, hexahedral meshing (F-235) and a Cartesian-core fill (F-234)
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave was written and
-before any mesh of this wave was generated or any solver run. Limits are not changed, widened, replaced or deleted after a run.
-A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause
-is diagnosed, not tuned away. A set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (measured
-numbers, deviations) are appended at the end without touching a registered limit.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave was written
+and before any mesh of this wave was generated or any solver run. Addenda (measured numbers, deviations) are appended at the
+end without touching a registered limit.
 
-Scope. F-235 first (library sweep, thin volume, O-grid + core multizone, one case-tree generator `pipe_sweep`), then F-234 as a
-time-boxed vertical slice (2:1 balanced octree fill, snapped hex-dominant layer shell, offset rules, cavity on a generated mesh).
-Both items stay `partial` unless every roadmap acceptance point is genuinely met; F-234 is expected to stay `partial` (no sphere
-drag run, no flat-plate y+/Cf run). Clean-room: first principles and published literature only; nothing from
-vendor material. Other waves (26A transient solver, 26C post/export) work in the same tree; this wave touches only new
-modules (`sweep.rs`, `octree.rs`) plus small additive hunks in `lib.rs`, `schema.rs`, `sim.rs`, docs.
+Wave 26B builds sweep, thin-volume and multizone hexahedral meshing (F-235) and, as a vertical slice, a Cartesian-core fill
+with prism layers (F-234). The addendum records these misses, each kept as an ignored `*_known_miss` test with its limit
+intact. S8 annulus skewness is 2.1e-2 against the registered 1e-6, from a derivation error in the ADR. The S10 centreline
+error is 3.33 percent (limit 1), because the default `non_orthogonal_correctors = 0` leaves the error of the 35 degree
+non-orthogonal O-grid/core junction faces uncorrected. S10b (`non_orthogonal_correctors = 2`, registered 8-layer mesh) did
+NOT pass: an axial mode grows without bound, and the cause is not isolated. O5 non-orthogonality is 77.4 degrees against 70.
+The new corrected test S10c passes, so the Poiseuille point is reached on the nz = 2 mesh, NOT on the registered nz = 8
+mesh; the all-hex pipe/annulus point is reached. F-234 has status `partial`: sphere drag at Re 100 was not run and
+flat-plate y+/Cf was not attempted.
+
+Rules and parents:
+
+* House rules: limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+  assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
+  away. A set-up defect gets a NEW corrected test and the old one stays as a record.
+* Clean-room: first principles and published literature only; nothing from vendor material.
+* Other waves (26A transient solver, 26C post/export) work in the same tree; this wave touches only new modules (`sweep.rs`,
+  `octree.rs`) plus small additive hunks in `lib.rs`, `schema.rs`, `sim.rs`, docs.
+
+Scope. F-235 first (library sweep, thin volume, O-grid + core multizone, one case-tree generator `pipe_sweep`), then F-234
+as a time-boxed vertical slice (2:1 balanced octree fill, snapped hex-dominant layer shell, offset rules, cavity on a
+generated mesh). Both items stay `partial` unless every roadmap acceptance point is genuinely met; F-234 is expected to stay
+`partial` (no sphere drag run, no flat-plate y+/Cf run).
 
 ## Audit of what exists (HEAD 4a5caa0)
 
@@ -68,21 +83,34 @@ degrees. `n` odd puts a core cell centre exactly on the axis.
 
 ### D4 Case tree (minimal, additive)
 
-New `mesh.generator = "pipe_sweep"`: circular pipe of radius `mesh.r_out`, length `mesh.lz`, along z; `mesh.nx` = core cells per
-side (the pipe has `4 nx` cells around), `mesh.ny` = radial ring cells, `mesh.nz` axial layers, `mesh.grading` = last/first radial
-ring cell ratio (1 = uniform; `Expansion`, first cell at the core interface), new `mesh.core_fraction` (float, default 0.5, range
-[0.2, 0.8]) and new `mesh.periodic_z` (bool, default false; when true `zmin`/`zmax` are a cyclic pair like `box_2d`'s). Patches
-`wall` (Wall), `zmin`, `zmax`. Unset sentinels equal the schema defaults. Located errors: `core_fraction` != 0.5 or `periodic_z`
-with another generator (in `check_mesh_options`, path `mesh.core_fraction` / `mesh.periodic_z`); `nx`, `ny`, `nz` below 1 for
-`pipe_sweep` (path `mesh.nx` etc.); `initial.method = "coarse"` with `pipe_sweep` already gives the existing located error.
+New `mesh.generator = "pipe_sweep"`: circular pipe of radius `mesh.r_out`, length `mesh.lz`, along z.
+
+* `mesh.nx` = core cells per side (the pipe has `4 nx` cells around)
+* `mesh.ny` = radial ring cells
+* `mesh.nz` axial layers
+* `mesh.grading` = last/first radial ring cell ratio (1 = uniform; `Expansion`, first cell at the core interface)
+* new `mesh.core_fraction` (float, default 0.5, range [0.2, 0.8])
+* new `mesh.periodic_z` (bool, default false; when true `zmin`/`zmax` are a cyclic pair like `box_2d`'s)
+
+Patches `wall` (Wall), `zmin`, `zmax`. Unset sentinels equal the schema defaults.
+
+Located errors:
+
+* `core_fraction` != 0.5 or `periodic_z` with another generator (in `check_mesh_options`, path `mesh.core_fraction` /
+  `mesh.periodic_z`)
+* `nx`, `ny`, `nz` below 1 for `pipe_sweep` (path `mesh.nx` etc.)
+* `initial.method = "coarse"` with `pipe_sweep` already gives the existing located error
 
 ## Registered checks, F-235 (all registered before any run)
 
-Test meshes. PIPE: `R = 1`, `L = 1`, `n = 17` (odd), `n_ring = 12` uniform, `core_fraction = 0.5`, `nz = 8`; so `N = 68`, cells
-`(289 + 816) * 8 = 8840`; polygon deficit `(2 pi)^2/(6 * 68^2) = 1.42e-3`. ANNULUS: `R1 = 0.5`, `R2 = 1`, `n_theta = 64`,
-`n_r = 8`, `L = 2`, axial layers 5 with `Expansion(2)`; 2560 cells. REVOLVE: rectangle `r in [1,2]`, `z in [0,1]`, 4 x 2 quads.
-PLATE: `20 x 10` quads of `0.1 x 0.1`, thickness `0.01`, one layer. SHELL: cylinder shell `R = 1`, 64 around, 8 axial of 0.125,
-thickness 0.02, one layer.
+Test meshes:
+
+* PIPE: `R = 1`, `L = 1`, `n = 17` (odd), `n_ring = 12` uniform, `core_fraction = 0.5`, `nz = 8`; so `N = 68`, cells
+  `(289 + 816) * 8 = 8840`; polygon deficit `(2 pi)^2/(6 * 68^2) = 1.42e-3`.
+* ANNULUS: `R1 = 0.5`, `R2 = 1`, `n_theta = 64`, `n_r = 8`, `L = 2`, axial layers 5 with `Expansion(2)`; 2560 cells.
+* REVOLVE: rectangle `r in [1,2]`, `z in [0,1]`, 4 x 2 quads.
+* PLATE: `20 x 10` quads of `0.1 x 0.1`, thickness `0.01`, one layer.
+* SHELL: cylinder shell `R = 1`, 64 around, 8 axial of 0.125, thickness 0.02, one layer.
 
 * S1 all hex: every cell has six faces, each with four points, eight distinct points; cell counts exactly as above (pipe 8840,
   annulus 2560, plate 200, shell 512, revolve `4*2*48` for 48 steps).
@@ -143,15 +171,15 @@ thickness 0.02, one layer.
 
 ### D6 Snapped layer shell (conforming interface)
 
-With layers requested, each interface polygon (normally a quad: the band is refined to the finest level so interface cells all have
-the finest size; any polygon with extra hanging nodes simply gives a prism over that polygon) is extruded to the true surface:
-every interface node `P` has the closest surface point `S(P)` (`SurfaceQuery::closest`, so the true triangulated body), thickness
-`T(P) = |S(P) - P|`, and layer node `P_k = P + (sum_{i<=k} h_i / T)(S(P) - P)` where the heights `h_i` of the column follow a rule.
-The shell shares its inner nodes with the core, so the interface is conforming without the non-conformal machinery (which is
-planar only). The outer cap is the patch `body`. `margin >= d_min = 0.75 h_f` guarantees `T >= 0.75 h_f` at every column, so no
-column degenerates. Nodes of adjacent columns are shared, the cap-to-cap side faces pair by point set. For a convex body the
-closest-point map is non-expansive, so columns do not cross; for non-convex bodies this is not guaranteed and a negative volume is
-reported by `validate` as an error (limitation).
+With layers requested, each interface polygon is extruded to the true surface. The polygon is normally a quad: the band is
+refined to the finest level so interface cells all have the finest size; any polygon with extra hanging nodes simply gives a
+prism over that polygon. Every interface node `P` has the closest surface point `S(P)` (`SurfaceQuery::closest`, so the true
+triangulated body), thickness `T(P) = |S(P) - P|`, and layer node `P_k = P + (sum_{i<=k} h_i / T)(S(P) - P)` where the
+heights `h_i` of the column follow a rule. The shell shares its inner nodes with the core, so the interface is conforming
+without the non-conformal machinery (which is planar only). The outer cap is the patch `body`. `margin >= d_min = 0.75 h_f`
+guarantees `T >= 0.75 h_f` at every column, so no column degenerates. Nodes of adjacent columns are shared, the cap-to-cap
+side faces pair by point set. For a convex body the closest-point map is non-expansive, so columns do not cross; for
+non-convex bodies this is not guaranteed and a negative volume is reported by `validate` as an error (limitation).
 
 Rules for the heights of a column of thickness `T`, `N` layers and local lateral size `s` (= the interface quad's mean edge length):
 
@@ -211,10 +239,13 @@ last ratio `r = 0.5` (main), plus uniform and aspect `a = 2` variants for validi
 
 ## References (status)
 
-Poiseuille `u_c = G R^2/(4 nu)` and `U_b = G R^2/(8 nu)`: derived. Pappus' centroid theorem: standard result, unverified source.
-Ghia et al. 1982 data: existing CSV files, "verified, two secondary copies" in `docs/reference-data.md`. Octree 2:1 balancing and
-hanging-node face splitting, ray-casting parity: standard computational-geometry / mesh-generation practice, cited from memory and
-unverified. No source was read for this ADR beyond the repository.
+* Poiseuille `u_c = G R^2/(4 nu)` and `U_b = G R^2/(8 nu)`: derived.
+* Pappus' centroid theorem: standard result, unverified source.
+* Ghia et al. 1982 data: existing CSV files, "verified, two secondary copies" in `docs/reference-data.md`.
+* Octree 2:1 balancing and hanging-node face splitting, ray-casting parity: standard computational-geometry /
+  mesh-generation practice, cited from memory and unverified.
+
+No source was read for this ADR beyond the repository.
 
 ## Addendum (written after the runs): measured results, misses, deviations
 
@@ -222,18 +253,19 @@ The registered limits above are unchanged. Misses are ignored `*_known_miss` tes
 
 ### F-235 measured (limit in brackets)
 
-* Sweep checks S1-S7, S9 and S11 pass (`crates/rcfd-mesh/tests/sweep.rs`, `crates/rcfd-api/tests/pipe_sweep.rs`): Pappus
-  volume order 1.996 / 1.999 (revolve), annulus volume order 1.992 / 1.998; all-hex, valid, positive volumes; case-tree mesh content
-  hash equals the library mesh (8840 cells); located errors for `periodic_z`, `core_fraction` and `nx` below 1.
+* Sweep checks S1-S7, S9 and S11 pass (`crates/rcfd-mesh/tests/sweep.rs`, `crates/rcfd-api/tests/pipe_sweep.rs`). Pappus
+  volume order is 1.996 / 1.999 (revolve) and annulus volume order 1.992 / 1.998. The meshes are all-hex and valid, with
+  positive volumes. The case-tree mesh content hash equals the library mesh (8840 cells). Located errors cover `periodic_z`,
+  `core_fraction` and `nx` below 1.
 * Pipe quality: non-orthogonality 35.4 degrees, skewness 0.454, aspect 5.12, face angles 50.0-135.0 degrees. Annulus: non-orthogonality
   1.2e-12, skewness 2.1e-2, aspect 11.19.
 * S8 MISS (`s8_annulus_skewness_known_miss`, ignored): annulus skewness 2.1e-2 against the registered 1e-6. Root cause: a
   derivation error in the ADR. On a polar block the cell-centre line and the face centre differ by the chord-to-arc offset of a
   curved cell, which is not zero for 64 azimuthal cells; the limit assumed a straight-sided cell. A diagnosis test records the value.
-* S10 MISS (`s10_..._known_miss`, ignored): registered settings give a centreline error of 3.33 percent (limit 1). Root cause:
-  the O-grid/core junction faces are 35 degrees non-orthogonal independently of refinement and the default
-  `non_orthogonal_correctors = 0` leaves that error uncorrected; the error does not shrink with refinement (3.93, 3.46, 3.33, 3.30
-  percent for nx = 5, 9, 17, 33; `pipe_sweep_diag.rs`).
+* S10 MISS (`s10_..._known_miss`, ignored): registered settings give a centreline error of 3.33 percent (limit 1). Root
+  cause: the O-grid/core junction faces are 35 degrees non-orthogonal independently of refinement and the default
+  `non_orthogonal_correctors = 0` leaves that error uncorrected. The error does not shrink with refinement (3.93, 3.46,
+  3.33, 3.30 percent for nx = 5, 9, 17, 33; `pipe_sweep_diag.rs`).
 * S10b (`non_orthogonal_correctors = 2`, registered 8-layer mesh) did NOT pass: the iteration is stable for about 400
   iterations, then an axial mode grows without bound (nz = 4 and nz = 8 diverge, nz = 2 is stable). The first two runs failed
   because the helper's convergence test read NaN as zero change; the helper now asserts finiteness. The cause of the growth is not
@@ -246,10 +278,12 @@ The registered limits above are unchanged. Misses are ignored `*_known_miss` tes
 
 ### F-234 measured (status partial)
 
-* O1-O4, O6-O9 pass: balanced tree, tiling exact; 12656 cells at Lmax 3 (hex fraction 0.889, layer shell 100 percent hex, 1400
-  polyhedral transition cells); void-volume error 4.24e-3 (Lmax 3, limit 3 percent) and 1.18e-3 (Lmax 4, limit 1 percent), order
-  1.843 (limit 1.5); offset rules exact to 1e-12, mesh columns thickness error 0 and last-layer error 7e-15; vessel 1.95e-3
-  (limit 3 percent); cavity on the generated mesh max |u - Ghia| 0.00456, |v - Ghia| 0.00797 (limit 0.03).
+* O1-O4, O6-O9 pass. The tree is balanced and tiling is exact.
+* Mesh at Lmax 3: 12656 cells (hex fraction 0.889, layer shell 100 percent hex, 1400 polyhedral transition cells).
+* Void-volume error: 4.24e-3 (Lmax 3, limit 3 percent) and 1.18e-3 (Lmax 4, limit 1 percent), order 1.843 (limit 1.5).
+* Offset rules are exact to 1e-12; mesh columns have thickness error 0 and last-layer error 7e-15.
+* Vessel: 1.95e-3 (limit 3 percent).
+* Cavity on the generated mesh: max |u - Ghia| 0.00456, |v - Ghia| 0.00797 (limit 0.03).
 * O5 MISS (`o5_non_orthogonality_known_miss`, ignored): non-orthogonality 77.4 degrees against 70 (skewness 0.61, aspect 11.4 and
   volume ratio 10.2 meet their limits). Root cause (diagnosis test): all 240 faces above 70 degrees are layer-to-layer faces of
   the snapped shell, where the extrusion direction (towards the closest surface point) varies between neighbouring columns;

@@ -1,10 +1,30 @@
 # ADR 0072: Wave 34A, the moving-shroud wall leak and the C-grid passage mesh quality
 
-Status: registered before any code of this wave was written or run. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the
-limit unchanged, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded; anything that could
-move a baseline is opt-in. Clean-room: first principles and published literature only; no vendor binary, no other code's source. Parents: ADR 0068 (C-grid
-generator and its addendum: misses Q1, Q4, Q5, S3'), ADR 0071 (rotating-frame foundation, `coupled_body_pair_mean`), ADR 0016 (`moving_wall`),
-`docs/milestone-fan.md`. Nothing here is a fan performance claim.
+Status: registered before any code of this wave was written or run.
+
+Wave 34A takes up two problems from ADR 0068: the moving-shroud wall leak and the C-grid passage mesh quality. As
+recorded after the runs, F1 confirms bit for bit that the shroud mass flow is the geometric face-centre wall flux
+(L-H1), and the opt-in `wall_velocity_projection = "tangential"` removes it exactly. On T1 neither the projection nor
+the decoupled treatment is more accurate than the leaking wall, so the projection is a mass bookkeeping fix, not a
+demonstrated accuracy fix. The registered S3' itself still misses; S3'' is a new set-up that meets the S3' limit only
+with the opt-in. The corrected T1 has a second set-up defect (its positive control fails on the finest mesh), and no
+further corrected test was added. The opt-in construction E (`mesh.fan.c_grid_construction = "smoothed"`) meets the A'
+non-orthogonality and skewness limits (61.38 deg, 0.863), but A' misses aspect (395.1 against 300). B' misses all three
+limits (78.17 deg, 7.08, 8532 against 70, 2.0, 3000), and its skewness and aspect are worse than with the 33A
+construction. The Q2-E to Q7-E and R1-E checks are met, and the R-E robustness scan is a MISS: 107 of 117 combinations
+build (33A: 38).
+
+Rules and parents:
+
+- Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged, a defective set-up gets
+  a NEW corrected test and the old one stays ignored.
+- Baseline hashes are never re-recorded; anything that could move a baseline is opt-in.
+- Clean-room: first principles and published literature only; no vendor binary, no other code's source.
+- Parents: [ADR 0068](0068-wave33a-mesh-quality-foundation.md) (C-grid generator and its addendum: misses Q1, Q4, Q5,
+  S3'), [ADR 0071](0071-wave33d-rotating-frame-foundation.md) (rotating-frame foundation, `coupled_body_pair_mean`),
+  [ADR 0016](0016-wave13-numerics.md) (`moving_wall`), `docs/milestone-fan.md`.
+
+Nothing here is a fan performance claim.
 
 ## Part 1: the wall flux of a moving wall that is a surface of revolution
 
@@ -15,7 +35,9 @@ The rigid rotation `u = Omega e_z x x` is divergence-free and is the curl of `A 
 For a straight edge between two nodes on the cylinder r = R, `r^2` along the edge is `R^2 - t (1 - t) c^2` (c the chord length of the edge in the xy-plane),
 so `int r^2 dz = dz (R^2 - c^2/6)`, and the exact flux through a facet bounded by straight edges is `(Omega/12) sum_e dz_e c_e^2` (edges in the
 circulation order). It vanishes when every edge is axial (c = 0) or circumferential (dz = 0), and when opposite edges are congruent (a uniformly twisted
-mesh); for the generic quads of a sheared C-grid it does not vanish. Summed over a periodic ring of facets the exact fluxes cancel (interior edges
+mesh); for the generic quads of a sheared C-grid it does not vanish.
+
+Summed over a periodic ring of facets the exact fluxes cancel (interior edges
 twice with opposite sign, seam edges by the rotation, inlet/outlet edges have dz = 0), so a faceted wall that rotates in itself exchanges fluid with
 the outside through each facet while the net is zero; the true wall (a surface of revolution moving in itself) has zero normal velocity everywhere.
 
@@ -147,12 +169,16 @@ addendum and its numbers are reported separately as unregistered.
   floor); the per-face facet flux is not small: the sum of magnitudes is 0.45 % of the throughflow, the largest `|u_w . n| / |u_w|` is 1.0e-2 and the centre
   rule differs from the exact facet flux by up to 1.7e-3 `|u_w||S|`. The H-slit example mesh: G = -1.668e-8 (the 0065 value 1.7e-8 reproduced), largest
   tilt 1.7e-3.
-* G1/G3/G4/G5 (33A construction): S 79.65 deg (G3 in-plane 79.71), A' 81.57 (81.65), B' 83.73 (78.82); faces above 70 deg in the `nose` region: S
-  256 of 288, A' 2662 of 2887 (92 %), B' 8771 of 10215; `pressure` A' 145 of 2887. B' maximum: a `hub` boundary face of the first layer in the wake
-  (k = 0, j = 18), owner-to-face-centre angle 83.7 deg. B' skewness 4.85 on the wake cut (all layers); faces above skewness 2 in B': wake-stack j-faces
-  6477, cut faces 768, k-faces (F, wake/outer, pressure/outer, nose) 1258. G4 (untwisted blade): S 78.34, A' 79.44 deg (in-plane 78.40, 79.46). G5:
-  front_gap 0.2 gives 82.12, 0.4 gives 86.67 deg on S (both worse). G2a (B' counts, A' first cell) folds in the leading-edge fan (located error),
-  so it is inconclusive. G2b (A' counts, B' first cell): 87.67 deg (F-block hub boundary faces at k = 0), skewness 12.68 (k-faces), aspect 5299.
+* G1/G3/G4/G5 (33A construction): S 79.65 deg (G3 in-plane 79.71), A' 81.57 (81.65), B' 83.73 (78.82); faces above 70
+  deg in the `nose` region: S 256 of 288, A' 2662 of 2887 (92 %), B' 8771 of 10215; `pressure` A' 145 of 2887.
+* B' maximum: a `hub` boundary face of the first layer in the wake (k = 0, j = 18), owner-to-face-centre angle 83.7 deg.
+* B' skewness 4.85 on the wake cut (all layers); faces above skewness 2 in B': wake-stack j-faces 6477, cut faces 768,
+  k-faces (F, wake/outer, pressure/outer, nose) 1258.
+* G4 (untwisted blade): S 78.34, A' 79.44 deg (in-plane 78.40, 79.46).
+* G5: front_gap 0.2 gives 82.12, 0.4 gives 86.67 deg on S (both worse).
+* G2a (B' counts, A' first cell) folds in the leading-edge fan (located error), so it is inconclusive.
+* G2b (A' counts, B' first cell): 87.67 deg (F-block hub boundary faces at k = 0), skewness 12.68 (k-faces),
+  aspect 5299.
 * **Verdicts**: N1 holds for S, A' and B' (B' just: 4.9 deg); N2 holds for S and A', falsified for B' (its maximum is not in the nose region); N3 falsified
   (5 % in `pressure`); K1 as registered falsified (the worst skew face of B' is the wake cut, in every layer, not an end-wall layer). The strong h1
   dependence of G2b is a new finding, treated below as W1, not as a rescue of K1.
@@ -189,21 +215,34 @@ iterations), its continuity reported; the projected arm keeps the registered cri
 
 ## Amendment 3 (written after T2, S3'', T3 and the two coarser T1 meshes ran, before the finest T1 mesh finished; no limit changed)
 
-Measured so far: S3'' converged in 406 iterations, `|m_in + m_out| / |m_in| = 1.5e-14`, `|m_shroud| / |m_in| = 5.6e-17`, pair 6.0e-16 (pass); T2 both
-arms converged, error 0.27329 (unprojected) and 0.27328 (projected) of `W2 R2` (the coarse empty sector with upwind is far from the profile in both),
-projected leak 1.8e-16 (pass); T3 pass. T1 corrected, meshes 1 and 2: the projected error is ABOVE the unprojected one (3.6187e-2 vs 3.6000e-2,
-1.0171e-2 vs 1.0154e-2 V_i), so the registered T1 criterion `e_projected <= e_unprojected` is expected to miss; by the registered rule the projection is then
-a bookkeeping change of the wall flux (it removes the leak exactly, it does not make the solution more accurate on T1).
+Measured so far:
 
-Reading of this (pencil): the projection changes two things at once, the mass flux (now zero) and the no-slip velocity (now tangential to the facet
-instead of equal to the true wall velocity at the face centre, an `O(tilt)` change of the momentum condition). A wall that is impermeable AND moves with
-the true wall velocity is the decoupled treatment: zero mass flux through the facet, the face-centre wall velocity kept in the momentum condition.
-Registered now as a further opt-in (`SimpleSolver::impermeable`, a per-boundary-face mask, default `None`, every earlier path bit-identical): the boundary
-values that carry the mass flux (`boundary_hby_a`, `corrected_flux`) use the tangential part on masked faces, the momentum matrix keeps the prescribed
-value. T1d (new test, same meshes, set-up and solver as T1): unprojected arm (corrected criterion) against the decoupled arm (registered criterion
-`res_u < 1e-10`, continuity `< 1e-9`); gates: converged, decoupled wall leak `<= 1e-13`, finest decoupled error `<= 1.5e-2 V_i`, orders `>= 1.0`, decoupled
-error `<=` unprojected on every mesh. If that last gate misses as well, neither treatment improves T1 accuracy and the decoupled treatment is recorded
-as a bookkeeping change too. Its API exposure is decided only after T1d (it needs a hunk in `sim.rs`, a shared file).
+- S3'' converged in 406 iterations, `|m_in + m_out| / |m_in| = 1.5e-14`, `|m_shroud| / |m_in| = 5.6e-17`, pair 6.0e-16
+  (pass)
+- T2 both arms converged, error 0.27329 (unprojected) and 0.27328 (projected) of `W2 R2` (the coarse empty sector with
+  upwind is far from the profile in both), projected leak 1.8e-16 (pass)
+- T3 pass
+- T1 corrected, meshes 1 and 2: the projected error is ABOVE the unprojected one (3.6187e-2 vs 3.6000e-2, 1.0171e-2 vs
+  1.0154e-2 V_i), so the registered T1 criterion `e_projected <= e_unprojected` is expected to miss; by the registered
+  rule the projection is then a bookkeeping change of the wall flux (it removes the leak exactly, it does not make the
+  solution more accurate on T1).
+
+Reading of this (pencil): the projection changes two things at once, the mass flux (now zero) and the no-slip velocity
+(now tangential to the facet instead of equal to the true wall velocity at the face centre, an `O(tilt)` change of the
+momentum condition). A wall that is impermeable AND moves with the true wall velocity is the decoupled treatment: zero
+mass flux through the facet, the face-centre wall velocity kept in the momentum condition.
+
+Registered now as a further opt-in (`SimpleSolver::impermeable`, a per-boundary-face mask, default `None`, every earlier
+path bit-identical): the boundary values that carry the mass flux (`boundary_hby_a`, `corrected_flux`) use the
+tangential part on masked faces, the momentum matrix keeps the prescribed value.
+
+T1d (new test, same meshes, set-up and solver as T1): unprojected arm (corrected criterion) against the decoupled arm
+(registered criterion `res_u < 1e-10`, continuity `< 1e-9`); gates: converged, decoupled wall leak `<= 1e-13`, finest
+decoupled error `<= 1.5e-2 V_i`, orders `>= 1.0`, decoupled error `<=` unprojected on every mesh. If that last gate
+misses as well, neither treatment improves T1 accuracy and the decoupled treatment is recorded as a bookkeeping change
+too.
+
+Its API exposure is decided only after T1d (it needs a hunk in `sim.rs`, a shared file).
 
 ## Amendment 4 (construction frozen; written after the development runs on S, DS, DA and unregistered combinations, before any
 ## registered Q1-E to R1-E check ran; no limit changed)
@@ -262,10 +301,16 @@ re-read); no external reference value is used by any gate. No fan performance cl
 | S3'' (projected shroud, S3' limit) | `abs(m_in + m_out)` <= 1e-6 m_in; shroud <= 1e-14; pair <= 1e-12 | 1.5e-14; 5.6e-17; 6.0e-16; converged in 406 iterations | met (the 0068 S3' miss is closed by the opt-in) |
 | T3 default unchanged | rejection | the 33A message; projection on `partial_slip` rejected with a located error | met |
 
-Verdict: the leak is a real per-face defect of prescribing `u_w(c_f) . S_f` on a faceted wall of revolution (L-H1 confirmed bit for bit), and the
-opt-in `wall_velocity_projection = "tangential"` removes it exactly. On the analytic faceted Couette (T1) neither the projection nor the decoupled
-treatment (zero flux, face-centre velocity) is more accurate than the leaking wall (differences 0.05 % to 0.7 %); so the projection is a mass
-bookkeeping fix, not a demonstrated accuracy fix; the verdict rests on meshes 1 and 2, where the positive control passed, and T1d and T2 agree with it. The registered S3' itself still misses; S3'' is a new set-up that meets the S3' limit only with the opt-in. The decoupled flag is an fv-level opt-in only (no case key).
+Verdict: the leak is a real per-face defect of prescribing `u_w(c_f) . S_f` on a faceted wall of revolution (L-H1
+confirmed bit for bit), and the opt-in `wall_velocity_projection = "tangential"` removes it exactly.
+
+On the analytic faceted Couette (T1) neither the projection nor the decoupled treatment (zero flux, face-centre
+velocity) is more accurate than the leaking wall (differences 0.05 % to 0.7 %). The projection is therefore a mass
+bookkeeping fix, not a demonstrated accuracy fix. This verdict rests on meshes 1 and 2, where the positive control
+passed, and T1d and T2 agree with it.
+
+The registered S3' itself still misses; S3'' is a new set-up that meets the S3' limit only with the opt-in. The
+decoupled flag is an fv-level opt-in only (no case key).
 
 ### Part 2: C-grid quality
 

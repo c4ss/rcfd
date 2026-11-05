@@ -5,8 +5,20 @@ the acceptance limits, the refinement check, the choice rule, the time budgets, 
 stop rule and the not-run list are fixed here. **No arm of this job has been run on any mesh.** Amendments follow this
 text, each written before what it covers; results go in an addendum. Not yet accepted by the maintainer.
 
+The maintainer dropped first-order patching after ADR 0179 and asked for a convection scheme change that keeps second
+order everywhere and lets the bladed passage converge on B3 and B2. After 1000 default iterations (the stalled
+reference), each arm switches the running solver to one of three TVD schemes it already has. T-MM (minmod) is
+face-bounded (`kappa <= lambda`), T-VA (van Albada) is almost bounded, and T-VL (van Leer), the hypothesis control, is
+not bounded. The addendum of 2026-10-31 records the outcome, measured after the registration: no arm is accepted, and
+reading rule 6 stopped the job. No run converged: all three arms miss C1, C2 and C3 on B3 and on B2. T-MM and T-VA also
+miss RN and RS; T-VL meets both, but they compare cycle samples and the addendum reads nothing into that. On B2 all
+three schemes cycle at the same five hub cells, and four of them are among the five largest-`|du|` cells of the
+Barth-Jespersen stall. Under the 2026-11-04 loop instruction to take the documented recommendation, a limited scheme of
+the baseline's class is acceptable, and torque and Delta p_ts stay the ADR 0086 cycle means with a band until a
+converged second-order state exists; the maintainer took the hub-site question, and job 49R ran it.
+
 Job 49Q, on branch `job49q-fan01-second-order` from `job49p-fan01-auto-fallback` at 2678c49 (worktree
-`.claude/worktrees/job49q`). The job id 49Q was given by the coordinator; 0180 was free when this was written
+`.claude/worktrees/job49q`). The coordinator gave the job id 49Q; 0180 was free when this was written
 (`git log --all -- docs/adr/018*` empty).
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
@@ -152,10 +164,11 @@ The floors are under half the half-width of the B3 stalled band of ADR 0177 (tor
 [46.263, 47.130], each widened by 0.5 %): differences below them are inside the cycle's own scatter. 0.002 is ADR 0179's
 R1 floor.
 
-`D` compares two discretisations of the same class on the same mesh (the arm's converged state against the stalled
-Barth-Jespersen cycle mean). If both are consistent, `D` must fall with refinement. With r32 = 1.40 (ADR 0086) the
-expected ratio `D_B2 / D_B3` is about 0.51 for a second-order difference and 0.71 for a first-order one; **both are
-below 1, and two meshes cannot establish an order.** The ratio and the implied order are reported without a limit.
+The difference `D` compares two discretisations of the same class on the same mesh (the arm's converged state against
+the stalled Barth-Jespersen cycle mean). If both are consistent, `D` must fall with refinement. With r32 = 1.40
+(ADR 0086) the expected ratio `D_B2 / D_B3` is about 0.51 for a second-order difference and 0.71 for a first-order one;
+**both are below 1, and two meshes cannot establish an order.** The ratio and the implied order are reported without a
+limit.
 
 **An arm is accepted** iff C1, C2, C3 hold on B3 and on B2 and RN holds. It is **accepted and second-order-consistent**
 iff RS also holds for both functionals.
@@ -248,9 +261,9 @@ Nothing here changes a default, a limit of another ADR, or a known miss.
 ## Addendum: results (2026-10-31)
 
 Data: `docs/investigations/job49q-fan01-second-order/` (one JSON per run, `*-refinement.json`, `results.csv`, `logs/`).
-Release, on d17b2ca (no solver change). Each run was made once: T-MM-B3 and T-VA-B3 side by side, then T-VL-B3 alone; the
-three B3 records were committed (206fc97, 98426a5) before any B2 run; then T-MM-B2 and T-VA-B2 side by side, T-VL-B2
-alone. No run reached its budget (B3 about 2 min, B2 about 5 min); no run tripped the divergence guard.
+Release, on d17b2ca (no solver change). Each run was made once. T-MM-B3 and T-VA-B3 ran side by side, then T-VL-B3 alone.
+The three B3 records were committed (206fc97, 98426a5) before any B2 run. T-MM-B2 and T-VA-B2 then ran side by side, and
+T-VL-B2 alone. No run reached its budget (B3 about 2 min, B2 about 5 min), and no run tripped the divergence guard.
 
 ### Validity
 
@@ -275,8 +288,14 @@ Every run switches at iteration 1000 and runs to 3000. `|du|_2` at the switch: 5
 
 None of these runs converged, so every end value is one sample of a cycle, not a solution.
 
-Gap to the measured values (2.142 N m, 126.5 Pa; a report, not a limit; cycle samples): torque -11.1 / -10.8 / -11.7 % on
-B3 and -3.9 / -4.1 / -4.7 % on B2 (T-MM / T-VA / T-VL); Delta p_ts -69 / -67 / -68 % on B3 and -53 / -52 / -52 % on B2.
+Gap to the measured values (2.142 N m, 126.5 Pa; a report, not a limit; cycle samples):
+
+| Gap | T-MM | T-VA | T-VL |
+|---|---|---|---|
+| Torque, B3 | -11.1 % | -10.8 % | -11.7 % |
+| Torque, B2 | -3.9 % | -4.1 % | -4.7 % |
+| Delta p_ts, B3 | -69 % | -67 % | -68 % |
+| Delta p_ts, B2 | -53 % | -52 % | -52 % |
 
 Record K (the Barth-Jespersen `linear_upwind` face blend at iteration 1000 on B3; 41 340 face-components with
 `|phi_D - phi_U| > 1e-3` m/s, 258 of them at the faces of the 20 largest-`|du|` cells):
@@ -298,10 +317,18 @@ Record K (the Barth-Jespersen `linear_upwind` face blend at iteration 1000 on B3
 RN and RS are computed as registered, from the end samples. With no run converged they compare cycle samples, so T-VL's
 "met" says nothing about consistency and I read nothing into it.
 
-**No arm is accepted.** Predictions: Q1, Q2 and Q3 are missed; Q4 holds (T-VL misses C3 on B3); Q5 is not evaluable (no
-accepted arm); QK holds as worded (13.2 % against 10.0 %), but see reading 3. Known misses: `t_mm_b3_known_miss`,
-`t_va_b3_known_miss`, `t_vl_b3_known_miss`, `t_mm_b2_known_miss`, `t_va_b2_known_miss`, `t_vl_b2_known_miss`. The
-report-only run from the start (`from_start_b3`) was not run: reading rule 1 does not apply.
+**No arm is accepted.**
+
+Predictions:
+- Q1, Q2 and Q3 are missed.
+- Q4 holds (T-VL misses C3 on B3).
+- Q5 is not evaluable (no accepted arm).
+- QK holds as worded (13.2 % against 10.0 %), but see reading 3.
+
+Known misses: `t_mm_b3_known_miss`, `t_va_b3_known_miss`, `t_vl_b3_known_miss`, `t_mm_b2_known_miss`,
+`t_va_b2_known_miss`, `t_vl_b2_known_miss`.
+
+The report-only run from the start (`from_start_b3`) was not run: reading rule 1 does not apply.
 
 ### Reading (by the registered rules)
 
@@ -356,15 +383,15 @@ ADR changes.
    the solution is smooth, limited at extrema, no cell forced to first order by a rule)? Recommendation: yes. Unlimited
    `linear_upwind`, the only unlimited second-order scheme tried, trips the guard within 7-27 iterations on these meshes
    (ADR 0110), so the stricter reading has no candidate known to run.
-2. **Next job: the z 0.17 hub site itself, not another limiter?** Recommendation: yes. On B2 all three limiter families cycle
-   at the same hub cells, and on B3 the Barth-Jespersen run with F-R cycled at the same axial height (ADR 0177). Register a diagnosis of that site's mesh and
-   coupling: the cells' geometry against the C-grid construction (seam, hub wall layer, the junction at mid-chord), and
-   a localised Jacobian of the TVD map there (the ADR 0084 harness). The aim is to find whether a mesh change at that
-   site, which would keep the scheme second order everywhere, removes the cycle.
+2. **Next job: the z 0.17 hub site itself, not another limiter?** Recommendation: yes. On B2 all three limiter families
+   cycle at the same hub cells, and on B3 the Barth-Jespersen run with F-R cycled at the same axial height (ADR 0177).
+   Register a diagnosis of that site's mesh and coupling: the cells' geometry against the C-grid construction (seam, hub
+   wall layer, the junction at mid-chord), and a localised Jacobian of the TVD map there (the ADR 0084 harness). The aim
+   is to find whether a mesh change at that site, which would keep the scheme second order everywhere, removes the cycle.
 3. **Meanwhile, keep the cycle-mean functionals with a band for the milestone?** ADR 0086 reports torque and Delta
    p_ts as means over a cycle with a band. Recommendation: yes, keep them as the reported values until a converged
-   second-order state exists, and mark them as cycle values. None of the three TVD schemes here moves the B2 torque by more
-   than 1.4 % from the Barth-Jespersen cycle mean. ADR 0179's first-order mask moved it by 2.9 %.
+   second-order state exists, and mark them as cycle values. None of the three TVD schemes here moves the B2 torque by
+   more than 1.4 % from the Barth-Jespersen cycle mean. ADR 0179's first-order mask moved it by 2.9 %.
 
 ## Addendum: the open questions (2026-11-04)
 

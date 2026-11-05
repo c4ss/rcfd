@@ -5,6 +5,18 @@ validity checks, the limits, the predictions, the reading rules and the not-run 
 registered here too; its term set is chosen by a rule fixed now from phase 1. Amendments follow this text, each written
 before what it covers; results go in an addendum. Not yet accepted by the maintainer.
 
+This job sets out to locate the drive of the FAN-01 Barth-Jespersen stall on B3 (bladed F3, 4 920 cells) in the nonlinear
+iteration, at the blade-root leading edge or at the hub mid-chord, so that a later job can choose a scheme fix. It adds a
+test-only hook and no fix. Phase 1 (addendum, 2026-10-30) shows that the S10 stabilisation (ADR 0110, `upwind` from
+iteration 1000) comes from the convection deferred correction, not from the Laplacian. Phase 2 falls under rule 6: nothing
+calms, the drive is not inside ring 2 of either site, nor of both together, and the registered rules do not decide the
+locus; P3 and P6 are known misses. Amendment 2, written before its runs, tests sufficiency, and its rule 1 applies: the
+leading edge sustains a cycle and the hub does not; Q2 and Q5 are known misses. Combined, as an observation and not a rule,
+the leading-edge root is sufficient to drive a cycle but not necessary: without it, a non-local cycle takes over at the
+hub. V3 was registered with a torque that ADR 0170 had already moved, and amendment 1 corrected it before any other arm
+ran. Amendment 2's rule 1 names a global treatment, F-R on B3, as the next job; the maintainer approved it and job 49N ran
+it (ADR 0177).
+
 Job 49L, on branch `job49k-fan01-wall-metric` at d5d6301 (worktree branch `job49l-fan01-stall-locus`). Number 0175 and
 job id 49L were reserved for this job; 0176 is reserved for another job running in parallel.
 
@@ -259,12 +271,11 @@ the 0.04 m/s outlet-hub cycle of S10, as in ADR 0111 G1.
 
 ### Reading (by the registered rules)
 
-1. **Phase 1: the S10 stabilisation comes from the convection deferred correction, not from the Laplacian.**
-   - Removing C everywhere reproduces S10 to within 8 % in every number (C-C against C-CL).
-   - Removing L everywhere leaves the cycle at the leading edge: NO EFFECT, although the residual medians halve.
-   - So ADR 0110's reading of S10 holds once the confound found here is separated out.
-   - ADR 0111 branch 5's remaining candidate, the Laplacian non-orthogonal correction, is not what S10 removed in order to
-     converge.
+1. **Phase 1: the S10 stabilisation comes from the convection deferred correction, not from the Laplacian.** Removing C
+   everywhere reproduces S10 to within 8 % in every number (C-C against C-CL). Removing L everywhere leaves the cycle at the
+   leading edge: NO EFFECT, although the residual medians halve. So ADR 0110's reading of S10 holds once the confound found
+   here is separated out. ADR 0111 branch 5's remaining candidate, the Laplacian non-orthogonal correction, is not what S10
+   removed in order to converge.
 2. **Phase 2: rule 6, nothing calms. The drive is not inside ring 2 of either site, nor of both together. The locus is
    not decided by the registered rules.** No local mask up to 129 cells (2.6 % of the mesh) brings `rho_med` below
    0.4. Rule 1 does not apply, because D2 does not calm.
@@ -297,10 +308,9 @@ of another ADR changes.
 
 ### Deviations
 
-1. **V3.** I registered it with the ADR 0110 torque (1.8493 N m), which ADR 0170 had already moved.
-   - C0 and C-CL failed V3 on their first run.
-   - Amendment 1 corrected V3 to the residual medians before any other arm ran.
-   - Both arms were then run again and gave identical records. The first records are kept in `first_run/`.
+1. **V3.** I registered it with the ADR 0110 torque (1.8493 N m), which ADR 0170 had already moved. C0 and C-CL failed V3 on
+   their first run. Amendment 1 corrected V3 to the residual medians before any other arm ran. Both arms were then run again
+   and gave identical records. The first records are kept in `first_run/`.
 2. **P6's site rule** counts LE2 and HUB2 only. The A-LE2 cycle sits on hub cells, most of them just outside HUB2, so it
    is classed "other". The miss stands as registered. The hub location is reported in reading 3 and is not used for a
    verdict.
@@ -310,14 +320,11 @@ of another ADR changes.
 ### Questions for the maintainer
 
 1. **Next stall job.** Recommendation: one cheap registered follow-up with this hook before any scheme change, then F-R
-   on B3.
-   - The follow-up (about 15 min of runs): complement arms that remove C everywhere *except* LE2, everywhere except
-     HUB2, and everywhere except the mid-span set.
-   - Each complement arm tests whether that site alone can sustain a cycle. This is the sufficiency half, which this
-     job's necessity arms cannot give.
-   - If more than one site can sustain a cycle alone, the fix must be global.
-   - Then try ADR 0111's under-relaxed deferred correction (F-R, beta 0.25) on B3. It acts on exactly the term phase 1
-     isolated, it converged E3 and E1, and it was never run on the bladed passage.
+   on B3. The follow-up (about 15 min of runs): complement arms that remove C everywhere *except* LE2, everywhere except
+   HUB2, and everywhere except the mid-span set. Each complement arm tests whether that site alone can sustain a cycle.
+   This is the sufficiency half, which this job's necessity arms cannot give. If more than one site can sustain a cycle
+   alone, the fix must be global. Then try ADR 0111's under-relaxed deferred correction (F-R, beta 0.25) on B3. It acts on
+   exactly the term phase 1 isolated, it converged E3 and E1, and it was never run on the bladed passage.
 2. **The hook.** Keep `high_order_mask_test_only`? It is doc-hidden, defaults to `None`, and is shown bit-identical by
    V2 and the default test. Recommendation: yes. The registered tests need it, and question 1's follow-up would reuse
    it.
@@ -440,23 +447,20 @@ digit. V3 held in every arm.
 Rule 0 does not apply, because K-D2 calms. **Rule 1 applies: the leading edge sustains a cycle and the hub does not.**
 
 1. **The blade-root leading edge is an autonomous driver.** With the convection deferred correction live only inside
-   LE2 (46 cells), the passage keeps a cycle of a third of the reference amplitude, and the whole of it sits in LE2.
-   - The cycle is an exact period-two cycle (period ratio 0.00), whereas the reference cycle has a period of about
-     three. It involves c665, c341 and c17, and also c989 and c988 (r 0.140, z 0.105).
-   - The site needs ring 2. With LE1 alone (20 cells, so only the faces between two LE1 cells keep the correction), the
-     passage calms.
+   LE2 (46 cells), the passage keeps a cycle of a third of the reference amplitude, and the whole of it sits in LE2. The
+   cycle is an exact period-two cycle (period ratio 0.00), whereas the reference cycle has a period of about three. It
+   involves c665, c341 and c17, and also c989 and c988 (r 0.140, z 0.105). The site needs ring 2. With LE1 alone (20 cells,
+   so only the faces between two LE1 cells keep the correction), the passage calms.
 2. **The hub mid-chord cells are not an autonomous driver at ring 2.** With the correction live only in HUB2 (83 cells),
-   B3 converges like C-C. Adding HUB2 to LE2 (K-U2) changes nothing to three digits.
-   - So the hub cycle that phase 2 saw once the leading edge was masked needs high order over a wider region than HUB2.
-     It is non-local.
-   - Neither ring of the hub reproduces the ADR 0111 hub mode as a nonlinear driver.
+   B3 converges like C-C. Adding HUB2 to LE2 (K-U2) changes nothing to three digits. So the hub cycle that phase 2 saw once
+   the leading edge was masked needs high order over a wider region than HUB2. It is non-local. Neither ring of the hub
+   reproduces the ADR 0111 hub mode as a nonlinear driver.
 3. **For the next job (rule 1):** a global treatment of the deferred correction, F-R on B3, with the leading-edge root
    (LE2) as the cell set to watch. A treatment at the leading edge alone is already ruled out by phase 2 (A-LE1, A-LE2:
    the cycle relocates).
-4. **Combined with phase 2 (observation, not a rule):**
-   - The leading-edge root is sufficient to drive a cycle, but not necessary: without it, a non-local cycle takes over
-     at the hub.
-   - The hub site is neither necessary (A-HUB) nor sufficient (K-HUB) within ring 2.
+4. **Combined with phase 2 (observation, not a rule):** the leading-edge root is sufficient to drive a cycle, but not
+   necessary: without it, a non-local cycle takes over at the hub. The hub site is neither necessary (A-HUB) nor sufficient
+   (K-HUB) within ring 2.
 
 Nothing here is a statement about torque, Delta p_ts or accuracy. No default, limit or known miss of another ADR changes.
 `docs/milestone-fan.md` was not edited in this phase.

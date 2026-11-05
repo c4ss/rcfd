@@ -1,9 +1,25 @@
 # ADR 0132: Wave 48C, the viewport: render core in the window, camera interaction, scalar display and time scrubbing
 
-Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). Library part (`rcfd-render` additions) can start at once;
-integration needs ADR 0131 (48B) and, for scrubbing runner-made runs, ADR 0130 (48A, store location). House rules as in ADR 0130.
-Parent: plan section 3 (L4, L5), section 5 limits 2, 3 and 6. Roadmap: F-266, F-264. Clean-room: WebGPU and wgpu public API
-documentation, the egui-wgpu public API, textbook rasterisation; our own `rcfd-render` and `rcfd-post` code.
+Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision
+W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). Library part (`rcfd-render` additions) can start at
+once; integration needs ADR 0131 (48B) and, for scrubbing runner-made runs, ADR 0130 (48A, store location).
+
+This ADR puts the render core into the Studio's window: a viewport with camera interaction, scalar display and time scrubbing.
+The accepted options are W48-7 (a), a shared device and rendering into a texture that egui shows, and W48-8 (a), a scalar-only
+update while scrubbing. The two addenda of 2026-10-28 record the results: the library part passes V1, V6 and V7, and the
+integration part passes V2 to V5 and V8 to V11 and reports no known miss. V7's 100 ms limit is registered for `DiscreteGpu`
+adapters only; WARP's median step is 179.3 ms on the 100^3 box and 1414.4 ms on the 1 000 000-triangle surface. Amendment 1 replaced the
+negative controls of V2 and V5 before any run, and V10's first run failed on a test-code defect that amendment 2 corrected.
+Since ADR 0148 the middle drag orbits and only the secondary drag pans. Not run: the "Not in CI" items, Linux and the CI skip
+branch of the new GPU tests, a debug build of the new tests, the workspace gate, workspace-wide clippy and `cargo deny`. The
+integration addendum ends with a view-and-report checklist and four questions for the maintainer.
+
+Rules and parents:
+
+* House rules as in [ADR 0130](0130-wave48a-overview-and-run-record-contract.md).
+* Parent: [plan](../ui-restart-plan.md) section 3 (L4, L5), section 5 limits 2, 3 and 6. Roadmap: F-266, F-264.
+* Clean-room: WebGPU and wgpu public API documentation, the egui-wgpu public API, textbook rasterisation; our own `rcfd-render`
+  and `rcfd-post` code.
 
 ## Context (read at main 1248a76)
 
@@ -36,10 +52,14 @@ documentation, the egui-wgpu public API, textbook rasterisation; our own `rcfd-r
 * (c) Paint callback. Draw inside egui's render pass with egui-wgpu's callback; the pipeline must then target the swap chain's
   format (possibly sRGB, possibly `Bgra8Unorm`) and egui's depth state.
 
-Trade-offs: (b) has no new API but costs tens of milliseconds per frame at full size and two devices on one GPU; (c) avoids a texture
-copy but ties the pipeline to egui's pass and format, which is where the colour-shift risk of ADR 0125 sits, and the window-path pixels
-can no longer be compared directly with the offscreen references. **Recommendation: (a)**: one extra texture, the same pipeline and
-format as the registered offscreen checks, so the window path is tested against G1/G2 by reading the texture back in a test.
+Trade-offs:
+
+* (b) has no new API but costs tens of milliseconds per frame at full size and two devices on one GPU.
+* (c) avoids a texture copy but ties the pipeline to egui's pass and format, which is where the colour-shift risk of ADR 0125 sits,
+  and the window-path pixels can no longer be compared directly with the offscreen references.
+
+**Recommendation: (a)**: one extra texture, the same pipeline and format as the registered offscreen checks, so the window path is
+tested against G1/G2 by reading the texture back in a test.
 
 ### W48-8: field update while scrubbing
 
@@ -48,9 +68,12 @@ format as the registered offscreen checks, so the window path is tested against 
   (layout change inside `rcfd-render`, the 52-byte layout stays for existing callers).
 * (b) Keep v0: re-upload per time step, and register the scrub budget only for meshes small enough to meet it.
 
-Trade-offs: (a) is a layout change in a crate with registered pixel checks (G1-G3, D1 must pass unchanged); (b) makes scrubbing slow on
-large meshes (about 150-200 ms per step at 1M triangles, from T1 upload times). **Recommendation: (a)**, with every ADR 0125 check run
-unchanged as the guard.
+Trade-offs:
+
+* (a) is a layout change in a crate with registered pixel checks (G1-G3, D1 must pass unchanged).
+* (b) makes scrubbing slow on large meshes (about 150-200 ms per step at 1M triangles, from T1 upload times).
+
+**Recommendation: (a)**, with every ADR 0125 check run unchanged as the guard.
 
 ## Design (proposed, assuming (a) and (a))
 
@@ -181,10 +204,10 @@ an unregistered smoke test (`render_into_and_update_scalar_reject_bad_input`) pa
 
 ## Addendum: library part, results against the registered limits (2026-10-28)
 
-Registered run: commit 83d9296, `cargo test --release -p rcfd-render -- --test-threads=1` (`CARGO_BUILD_JOBS=2`), this machine, the
-five adapters of ADR 0125 step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP). No test took the
-SKIP branch. Result: 5 unit + 11 `render.rs` (2 ignored known misses of ADR 0125, unchanged) + 2 `upload_limit_wfix.rs` + 4
-`viewport.rs` passed, 0 failed. No amendment was needed.
+Result: 5 unit + 11 `render.rs` (2 ignored known misses of ADR 0125, unchanged) + 2 `upload_limit_wfix.rs` + 4 `viewport.rs`
+passed, 0 failed. No test took the SKIP branch. No amendment was needed. Registered run: commit 83d9296,
+`cargo test --release -p rcfd-render -- --test-threads=1` (`CARGO_BUILD_JOBS=2`), this machine, the five adapters of ADR 0125 step
+0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP).
 
 | Id | Measured | Limit | Status |
 |---|---|---|---|
@@ -200,9 +223,11 @@ T1 in the same run (reported, limit 250 ms on discrete GPUs): median frame 2.5 /
 `viewport.rs` binary took 163 s, most of it WARP's 1M-triangle arm.
 
 **Run with default test threads** (the command of the task, `cargo test --release -p rcfd-render`, same commit; the registered run
-above was single-threaded): all tests pass. V7 medians: box 12.2 / 11.0 ms (NVIDIA Vulkan / DX12), 13.1 / 13.6 ms (AMD), 178.4 ms
-(WARP); T1 surface 18.1 / 13.8 ms (NVIDIA), 21.1 / 22.2 ms (AMD), 1381.6 ms (WARP); re-upload control 174.2 / 159.3 ms (NVIDIA),
-190.4 / 199.4 ms (AMD), 17 606.9 ms (WARP).
+above was single-threaded): all tests pass. V7 medians:
+
+* box 12.2 / 11.0 ms (NVIDIA Vulkan / DX12), 13.1 / 13.6 ms (AMD), 178.4 ms (WARP);
+* T1 surface 18.1 / 13.8 ms (NVIDIA), 21.1 / 22.2 ms (AMD), 1381.6 ms (WARP);
+* re-upload control 174.2 / 159.3 ms (NVIDIA), 190.4 / 199.4 ms (AMD), 17 606.9 ms (WARP).
 
 **Not run in the library part:** V2 (egui-wgpu composite), V3, V4, V5, V8, V9 (viewport model), the step-0 check that eframe's wgpu
 resolves to the same 30.0.1 in `Cargo.lock`, and the "Not in CI" items. They belong to the integration part on the 48B shell.
@@ -378,11 +403,12 @@ and V9 had passed in their own run.
 
 Branch `worktree-agent-a90090d61490b5d71` on main 7486ecb. Registered runs: release, `--test-threads 1`, output to files, this
 machine, the five adapters of ADR 0125 step 0 (NVIDIA RTX 5080 Vulkan and DX12, AMD Radeon integrated Vulkan and DX12, WARP); no
-test took the SKIP branch. V3, V9 and V4, V5, V8, V11 ran on the working tree committed as 87b8552, V10 and V2 on 801a378 (after
-amendment 2). After the later commits (39cc8e8: a live-store fix and "Save PNG", below; e9d3e8e: the smoke hook prints once;
-formatting) the whole `rcfd-studio` suite was run again on a28007b (the tree of this addendum, before this provenance edit):
-every test passes with the same values (B7 median 0.324 ms; V10 byte-identical on all five adapters). The workspace gate was not
-run (the maintainer runs it).
+test took the SKIP branch. The workspace gate was not run (the maintainer runs it).
+
+V3, V9 and V4, V5, V8, V11 ran on the working tree committed as 87b8552, V10 and V2 on 801a378 (after amendment 2). After the later
+commits (39cc8e8: a live-store fix and "Save PNG", below; e9d3e8e: the smoke hook prints once; formatting) the whole `rcfd-studio`
+suite was run again on a28007b (the tree of this addendum, before this provenance edit): every test passes with the same values
+(B7 median 0.324 ms; V10 byte-identical on all five adapters).
 
 | Id | Measured | Limit | Status |
 |---|---|---|---|
@@ -405,8 +431,11 @@ run (the maintainer runs it).
 | V11 control | marker != snapshot index | differ | fails as required |
 | B9 parity | `parity_2d_field_view_with_colour_map_legend_and_hover` on NVIDIA Vulkan: rendered, legend end labels drawn, hover `value 1.1092974268256817  (face 0, cell 0)` drawn (the stored value) | as registered | pass |
 
-No known miss. ADR 0131 and 0133 checks re-run unchanged in the same suite (801a378, and again on a28007b): B1-B9 (B7 median 0.329 ms, control 14.7 ms),
-R1-R5, R6b, R7-R12 and the live-monitor parity test pass, R6 stays the ignored known miss. `workspace_graph` 3 passed; `cargo clippy
+No known miss.
+
+ADR 0131 and 0133 checks re-run unchanged in the same suite (801a378, and again on a28007b): B1-B9 (B7 median 0.329 ms,
+control 14.7 ms), R1-R5, R6b, R7-R12 and the live-monitor parity test pass, R6 stays the ignored known miss.
+`workspace_graph` 3 passed; `cargo clippy
 --release -p rcfd-studio --all-targets -- -D warnings` and `cargo fmt -p rcfd-studio -- --check` clean;
 `scripts/third_party_licenses.py --check` up to date.
 
@@ -426,7 +455,8 @@ R1-R5, R6b, R7-R12 and the live-monitor parity test pass, R6 stays the ignored k
   (amendment 2).
 * Fixed after the registered runs (found in review, not by a registered test; covered by the unregistered live test): a live run
   whose store had no snapshot yet when opened never requested its first frame, and stepping with no snapshot could panic in a
-  `clamp`. Added after the registered runs: "Save PNG..." in the viewport (the shown image through `Renderer::render`, written on a
+  `clamp`.
+* Added after the registered runs: "Save PNG..." in the viewport (the shown image through `Renderer::render`, written on a
   background thread after an `rfd` save dialog), so the "Not in CI" colour comparison has a PNG of the exact view.
 * The ADR's Files list names `crates/rcfd-render/tests/` for V2; per the maintainer's answer V2 is `crates/rcfd-studio/tests/
   viewport_v2.rs`. Other touched files: `crates/rcfd-studio/{Cargo.toml, src/{lib,main,studio,ui,viewport,viewport_ui}.rs}`, tests

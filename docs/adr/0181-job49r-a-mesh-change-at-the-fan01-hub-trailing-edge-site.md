@@ -6,8 +6,23 @@ check, the sanity band, the choice rule, the budgets, the predictions, the readi
 Amendments follow this text, each written before what it covers; results go in an addendum. Not yet accepted by the
 maintainer.
 
+The maintainer took ADR 0180's question 2: diagnose the z 0.17 hub site on B3 and B2 against the C-grid construction,
+then test whether a mesh change there removes the limit cycle while the convection scheme stays second order
+everywhere. The step-1 diagnosis finds that the site is the hub trailing edge, not mid-chord, and that it is not a
+geometric outlier; what singles it out is the flow, a near-stagnant corner pocket. Of the three registered opt-in mesh
+arms, amendment 1 withdrew M-W and M-RW before any arm run because the registered wake rule failed V3, so only M-R ran.
+The addendum of 2026-10-31 records the outcome, measured after the registration: no arm is accepted, and reading rule 6
+stopped the job. Neither M-R run converged: M-R misses C1, C2, C3 and SB on both meshes and meets RN from cycle samples,
+and the B2 cycle stays at the hub trailing-edge cells. The evidence points at the flow at the site rather than at a mesh
+defect, but this is a reading, not a proof: G2 and local refinement were not tested. Under the 2026-11-04 loop
+instruction to take the documented recommendation, the next FAN-01 stall job is a report-only check of whether a steady
+state exists at the pocket, and the opt-in key `mesh.fan.c_grid_grading` stays, marked experimental, until that is
+answered and is then removed unless it is used. The addenda of 2026-11-05 make that key's default hash-neutral, because
+the key had changed the settings content hash of every case: A1 to A4 are met, and the result of A5 (the workspace
+gate) is reported with the job, not written here.
+
 Job 49R, on branch `job49r-fan01-hub-mesh` from `job49q-fan01-second-order` at 294e618 (worktree
-`.claude/worktrees/job49r`). The job id was given by the coordinator; 0181 was free when this was written
+`.claude/worktrees/job49r`). The coordinator gave the job id; 0181 was free when this was written
 (`git log --all -- docs/adr/0181*` empty).
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
@@ -45,13 +60,18 @@ extrema, no cell forced to first order). The pressure-rise gap is out of scope.
 
 Harness: `crates/rcfd-api/tests/fan01_hub_mesh_w49r.rs` (`diagnose_b3`, `diagnose_b2`). The generator mesh is rebuilt
 with `build_cgrid_mesh_with` and asserted equal (content hash) to the simulation's mesh, so every cell has its generator
-tag (block, i, j, k). Definitions (per cell): non-orthogonality and skewness, the largest over its faces, and aspect, from
-`rcfd_mesh::quality::compute_metrics`; volume ratio, the largest over its internal faces; area jump, the largest area
-ratio of a pair of opposite faces; growth, the largest ratio of the centre distances across a pair of opposite faces;
-`lambda_max`, the largest linear-interpolation weight `max(w, 1 - w)` over its internal faces; Peclet, the largest face
-`|F_f| / ((nu + nu_t)_f |S|^2 / (S . d))` with the convecting flux at iteration 1000. **The steady SIMPLEC iteration has
-no time step, so no Courant number is defined**; the residence time `V / sum(outflow)` over the median cell's is reported
-in its place.
+tag (block, i, j, k).
+
+Definitions (per cell):
+- non-orthogonality and skewness, the largest over its faces, and aspect, from `rcfd_mesh::quality::compute_metrics`;
+- volume ratio, the largest over its internal faces;
+- area jump, the largest area ratio of a pair of opposite faces;
+- growth, the largest ratio of the centre distances across a pair of opposite faces;
+- `lambda_max`, the largest linear-interpolation weight `max(w, 1 - w)` over its internal faces;
+- Peclet, the largest face `|F_f| / ((nu + nu_t)_f |S|^2 / (S . d))` with the convecting flux at iteration 1000.
+
+**The steady SIMPLEC iteration has no time step, so no Courant number is defined**; the residence time `V / sum(outflow)`
+over the median cell's is reported in its place.
 
 ### Where the site is
 
@@ -140,11 +160,12 @@ step somewhere). Cell counts, the first cell `h1` and every other rule of `cambe
 | M-W | `"wake_geometric"` | wake axial cells `dz_te rho^m`, `rho` solved per layer (no cap) | G2 |
 | M-RW | `"radial_wake_geometric"` | both | G1 and G2 |
 
-Expected values (computed from the formulas, not from a mesh): M-R `rho` 2.914 (B3) and 1.810 (B2), so the largest
-radial step falls from 36.2 to 2.91 and from 4.28 to 1.81; the mid-span layers grow from 30.3 to 40.8 mm (B3) and from
-16.5 to 36.0 mm (B2), and the hub layers 1-2 from 0.68 / 0.81 mm to 1.65 / 4.80 mm (B3) and 1.02 / 1.85 mm (B2). M-W at
-the hub: `rho` 2.143 (B3) and 1.810 (B2), so the first wake step falls from 3.85 to 2.14 and from 2.83 to 1.81; the last
-wake cell grows to about 0.12 m (B3) and 0.10 m (B2).
+Expected values (computed from the formulas, not from a mesh):
+- M-R: `rho` 2.914 (B3) and 1.810 (B2), so the largest radial step falls from 36.2 to 2.91 and from 4.28 to 1.81; the
+  mid-span layers grow from 30.3 to 40.8 mm (B3) and from 16.5 to 36.0 mm (B2), and the hub layers 1-2 from 0.68 / 0.81 mm
+  to 1.65 / 4.80 mm (B3) and 1.02 / 1.85 mm (B2).
+- M-W at the hub: `rho` 2.143 (B3) and 1.810 (B2), so the first wake step falls from 3.85 to 2.14 and from 2.83 to 1.81;
+  the last wake cell grows to about 0.12 m (B3) and 0.10 m (B2).
 
 The default (key absent or `"capped"`) is the unchanged construction. The key is read only by `axial_fan_sector` with
 `topology = "c_grid"`; no other default changes.
@@ -188,8 +209,8 @@ unchanged mesh's default run of step 1:
 | RN (refinement, not grow) | with `D_f,m = abs(f_end,m - f_ref,m) / abs(f_ref,m)`: `D_T,B2 <= max(D_T,B3, 0.002)` **and** `D_P,B2 <= max(D_P,B3, 0.005)` |
 | SB (sanity band) | on B3 and on B2: `D_T,m <= 0.02` and `D_P,m <= 0.08` |
 
-- `D` is the effect of the mesh change on the functional against the unchanged mesh's cycle mean. A mesh change that is a
-  consistent modification must move the answer less on the finer mesh (RN, the floors of ADR 0180).
+- The difference `D` is the effect of the mesh change on the functional against the unchanged mesh's cycle mean. A mesh
+  change that is a consistent modification must move the answer less on the finer mesh (RN, the floors of ADR 0180).
 - SB: a mesh fix should not move the answer much. The bands are about a third (torque, 6.3 %) and a fifth (Delta p_ts,
   37 %) of the B3-to-B2 change of ADR 0086, and above the largest B2 effect of a second-order scheme change in ADR 0180
   (1.4 % torque, 6.0 % Delta p_ts), which is the scale of a change of discretisation that the cycle-mean comparison
@@ -333,8 +354,15 @@ Gap to the measured values (a report, not a limit; cycle samples): torque -6.0 %
 | M-W | withdrawn (amendment 1) | | | | | | | | |
 | M-RW | withdrawn (amendment 1) | | | | | | | | |
 
-**No arm is accepted.** Predictions: P1 holds; P2 is missed (`rho_du` 0.76, not below 0.5); P3, P4 and PS are not
-evaluable (arms withdrawn); P5 holds. Known misses: `m_r_b3_known_miss`, `m_r_b2_known_miss`.
+**No arm is accepted.**
+
+Predictions:
+- P1 holds.
+- P2 is missed (`rho_du` 0.76, not below 0.5).
+- P3, P4 and PS are not evaluable (arms withdrawn).
+- P5 holds.
+
+Known misses: `m_r_b3_known_miss`, `m_r_b2_known_miss`.
 
 ### Reading (by the registered rules)
 
@@ -386,8 +414,7 @@ No default, limit or known miss of another ADR changes.
    the right report.
 2. **Test G2?** There are two options: a capped wake variant at the same `n_down`, which reduces the junction step less
    and is picked for buildability; or more wake cells, which changes the family. Recommendation: neither before
-   question 1. The B2 cycle stayed at the site when the strongest
-   neighbouring mesh feature was removed.
+   question 1. The B2 cycle stayed at the site when the strongest neighbouring mesh feature was removed.
 3. **Keep the opt-in `mesh.fan.c_grid_grading` key?** Recommendation: keep it, marked experimental, until question 1 is
    answered, then remove it unless it is used. M-R moves torque toward the measured value (-3.0 % on B2), but outside
    the registered band and from cycle samples. That is a resolution effect, not a convergence fix, and no default

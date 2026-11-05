@@ -1,32 +1,61 @@
-# ADR 0031: Wave 19C, solution transfer and restart (F-115), chained run configurations (F-241), run-control additions (F-121), setup-validation rule engine (F-240)
+# ADR 0031: Wave 19C, restart, chained runs, run-control additions and setup rules
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes not fixed here, measured numbers) may be
-appended at the end without touching a registered limit.
+
+This wave extends four roadmap items, solution transfer and restart (F-115), chained run configurations (F-241), run-control
+additions (F-121) and a setup-validation rule engine (F-240), and stops each one at `partial` with named gaps. Transient
+laminar runs now write and continue restart files, fields transfer between meshes by a choice of methods, the `chain` section
+runs stages in order, and 21 rules held as data check a setup. The addendum, written after the runs, reports these registered
+checks short of PASS: I2 and I5 (PARTIAL), S5a (MISS), R1 (NOT REPRODUCED through the binary), R4 (PARTIAL) and E2 (MISS at
+warning level, PASS at error level). On S5a, all three methods took more iterations to tolerance after a transfer (96 to 103)
+than a cold start (89); on S5b, all three brought the speed within 1e-2 of the converged solution in 10 iterations versus 23
+cold. The I5 miss is an ADR defect: its clause is mutually inconsistent with I1, and a new corrected test passes. R1 did not
+produce exit codes 4 and 6 through the binary, so they stay covered by library tests only. All error-level rules except SV011
+mirror checks the case loader already enforces, so through the binary an error-level case exits 3 from the loader before the
+rules run. The other registered checks pass, including E4 (a rule-only error is not reachable through the binary) and B1
+(the baseline hashes pass unchanged, with nothing re-recorded).
 
 Scope. F-115, F-121, F-240 and F-241 are partly delivered or open (F-115 and F-121 are `partial` with a steady-laminar-only
-restart, F-240 and F-241 are `todo`). This wave extends them and stops each one at `partial` with named gaps. F-209 and
-F-210 are NOT attempted (time). Clean-room: published methods (inverse-distance weighting, weighted least-squares linear
-reconstruction, axis-aligned cell-overlap remapping with a linear reconstruction) and first principles only; no vendor code, text,
-data or names. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded: nothing
-in this wave changes a numerical kernel; restart and rules are additive paths that a case without the new keys never enters.
-Case-schema additions are additive with explicit unset sentinels (`""`, empty list).
+restart, F-240 and F-241 are `todo`). F-209 and F-210 are NOT attempted (time).
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (file names, mesh sizes not fixed here, measured numbers) may be appended at the end without touching a registered
+  limit.
+* Clean-room: published methods (inverse-distance weighting, weighted least-squares linear reconstruction, axis-aligned
+  cell-overlap remapping with a linear reconstruction) and first principles only; no vendor code, text, data or names.
+* Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded: nothing in this wave
+  changes a numerical kernel; restart and rules are additive paths that a case without the new keys never enters.
+* Case-schema additions are additive with explicit unset sentinels (`""`, empty list).
 
 ## Decisions
 
 ### D1 Shared-file discipline and layout
 
-New modules: `rcfd-post::remap` (field transfer), `rcfd-api::restart` (restart orchestration), `rcfd-api::chain` (chained
-configurations), `rcfd-api::rules` (rule engine) with the data file `crates/rcfd-api/rules/setup_rules.json`, and a CLI file
-`rcfd-cli/src/cmd_w19c.rs` (subcommands `restart` and `check`). Shared files get small targeted edits only: one `.field(...)` line
-each for `restart` and `chain` in `schema.rs`, one `out.extend(...)` each in `case.rs` (static checks of the two new sections), a
-few accessors/methods in `sim.rs` (restart save/load for the transient engine and cross-engine restore), one `mod` line in
-`lib.rs` of `rcfd-api` and `rcfd-post`, flag handling in `rcfd-cli/src/main.rs`. `rcfd-fv/src/pimple.rs` gets ONE purely additive
-block at the end (`PimpleState`, `snapshot`, `restore`, `reinitialise`): the solver history that a bit-exact transient restart needs
-is private there. No existing function body of `rcfd-fv` changes. `rcfd-post::interpolate` (F-115 first slice) is not edited; the
-modes `gradient` and `conservative` of the new method list call it unchanged.
+New modules:
+
+* `rcfd-post::remap` (field transfer)
+* `rcfd-api::restart` (restart orchestration)
+* `rcfd-api::chain` (chained configurations)
+* `rcfd-api::rules` (rule engine) with the data file `crates/rcfd-api/rules/setup_rules.json`
+* a CLI file `rcfd-cli/src/cmd_w19c.rs` (subcommands `restart` and `check`)
+
+Shared files get small targeted edits only:
+
+* one `.field(...)` line each for `restart` and `chain` in `schema.rs`
+* one `out.extend(...)` each in `case.rs` (static checks of the two new sections)
+* a few accessors/methods in `sim.rs` (restart save/load for the transient engine and cross-engine restore)
+* one `mod` line in `lib.rs` of `rcfd-api` and `rcfd-post`
+* flag handling in `rcfd-cli/src/main.rs`
+
+`rcfd-fv/src/pimple.rs` gets ONE purely additive block at the end (`PimpleState`, `snapshot`, `restore`, `reinitialise`): the
+solver history that a bit-exact transient restart needs is private there. No existing function body of `rcfd-fv` changes.
+`rcfd-post::interpolate` (F-115 first slice) is not edited; the modes `gradient` and `conservative` of the new method list call
+it unchanged.
 
 ### D2 Field transfer methods (`rcfd-post::remap`)
 
@@ -62,15 +91,22 @@ restart report. A divergence-free projection of the transferred flux is a named 
 ### D3 Restart files and restart semantics
 
 A restart file is the existing `rcfd-sim-checkpoint` container (kind and version 1 unchanged, so old files stay readable) with
-ADDITIVE content: meta key `engine` (`steady` default when absent, or `transient`), a `mesh` section holding
-`rcfd_io::container::mesh_to_bytes` of the run mesh (so a restart onto another mesh needs no source case), and for `transient`:
-`u`, `p`, `phi`, the velocity and flux history levels (`old`, `older`, `oldest`) and the step sizes in f64 sections (never as JSON
-text), `time`, `step_no`, and the last step record. New methods `Simulation::supports_restart`, `save_restart`, `load_restart`;
-the old `supports_checkpoint`/`save_checkpoint`/`load_checkpoint` keep their steady-only contract unchanged (an existing test
-asserts that a transient run answers `supports_checkpoint() == false`; that test is kept). The run-control driver uses the new
-methods, so transient laminar runs write and continue restart files. Supported transient state: PISO/PIMPLE, laminar, constant
-density, no energy, no scalars, no statistics, no frozen flow, no turbulence model; every other combination keeps the "cannot be
-restarted" warning (named gap, including the energy-equation history of transient runs).
+ADDITIVE content:
+
+* meta key `engine` (`steady` default when absent, or `transient`)
+* a `mesh` section holding `rcfd_io::container::mesh_to_bytes` of the run mesh (so a restart onto another mesh needs no source
+  case)
+* for `transient`: `u`, `p`, `phi`, the velocity and flux history levels (`old`, `older`, `oldest`) and the step sizes in f64
+  sections (never as JSON text), `time`, `step_no`, and the last step record
+
+New methods `Simulation::supports_restart`, `save_restart`, `load_restart`; the old
+`supports_checkpoint`/`save_checkpoint`/`load_checkpoint` keep their steady-only contract unchanged (an existing test asserts
+that a transient run answers `supports_checkpoint() == false`; that test is kept). The run-control driver uses the new methods,
+so transient laminar runs write and continue restart files.
+
+Supported transient state: PISO/PIMPLE, laminar, constant density, no energy, no scalars, no statistics, no frozen flow, no
+turbulence model; every other combination keeps the "cannot be restarted" warning (named gap, including the energy-equation
+history of transient runs).
 
 `Simulation::restart_from(file, method)` (the engine behind `rcfd restart`, `--restart-from` and `restart.from`):
 
@@ -82,52 +118,95 @@ restarted" warning (named gap, including the energy-equation history of transien
 * the source mesh is the embedded one; an old file without it needs `restart.source_case` / `--source-case`; otherwise an error.
 
 Case-tree section `restart`: `from` (string, `""` unset), `source_case` (string, `""` unset), `method` (enum
-`gradient` default, `nearest`, `inverse_distance`, `least_squares`, `conservative`, `conservative_overlap`). CLI:
-`rcfd restart <case> --from <restart file> [--mesh <mesh file or polyMesh dir>] [--source-case <case>] [--method m]` plus every
-`rcfd run` flag; `--mesh` replaces the mesh of the case by a mesh file (`mesh.source = file`). `rcfd run` also accepts
-`--restart-from`, `--source-case`, `--method`. The old `--interpolate-*` flags and `--continue-from` stay (`--continue-from` now also
-reads transient files). A case with `restart.from` set starts through `restart_from` in `rcfd run`, in `chain` stages and in
-`run.headless`.
+`gradient` default, `nearest`, `inverse_distance`, `least_squares`, `conservative`, `conservative_overlap`).
+
+CLI: `rcfd restart <case> --from <restart file> [--mesh <mesh file or polyMesh dir>] [--source-case <case>] [--method m]` plus
+every `rcfd run` flag; `--mesh` replaces the mesh of the case by a mesh file (`mesh.source = file`). `rcfd run` also accepts
+`--restart-from`, `--source-case`, `--method`. The old `--interpolate-*` flags and `--continue-from` stay (`--continue-from` now
+also reads transient files).
+
+A case with `restart.from` set starts through `restart_from` in `rcfd run`, in `chain` stages and in `run.headless`.
 
 ### D4 Chained configurations (`chain`)
 
-Section `chain`: `sequence` (list of stage names, run in this order; empty = no chain, the sentinel) and `stages.<name>`:
-`set` (list of strings `"dotted.path=<JSON value>"`, applied in order on top of the previous stage's case, so changes
-accumulate), `restart` (enum `auto` default = from the previous stage, `previous`, `none`), `method` (transfer method, default
-`gradient`), `allow_unconverged` (bool, default false). A stage runs the driver (`runctl::drive`) on a `Simulation` built from its
-case; its restart file `<out>/<stage>/restart.rcfd` and results `<out>/<stage>/` are written; the next stage restarts from that
-file through `restart_from`, so a mesh change in `set` triggers the transfer. The chain stops at the first stage whose exit code is
-not 0 (a steady stage stopped at its cap, exit 5, is accepted when `allow_unconverged`) and returns that code. Status stream:
-every event gets a `stage` field; additional events `stage_start` (`stage`, `index`, `of`) and `stage_finish` (`stage`, `exit_code`,
-`state`) and a closing `chain_finish`; the format version stays 1 (consumers ignore unknown events; `summarize_stream` is
-unchanged and reports the last `finish`). `rcfd run` runs a chain when `chain.sequence` is non-empty (`--no-chain` runs the base
-case alone). Static checks (located): unknown stage name in `sequence` (`chain.sequence.<i>`), duplicate names, a stage not
-in `sequence` is allowed (info), malformed `set` entry (`chain.stages.<n>.set.<i>`), a `set` path unknown to the schema or a value
-of the wrong type (located at that entry). Operating-point sweeps are not part of this (parametric-study item).
+Section `chain`: `sequence` (list of stage names, run in this order; empty = no chain, the sentinel) and `stages.<name>`.
+A stage has:
+
+* `set` (list of strings `"dotted.path=<JSON value>"`, applied in order on top of the previous stage's case, so changes
+  accumulate)
+* `restart` (enum `auto` default = from the previous stage, `previous`, `none`)
+* `method` (transfer method, default `gradient`)
+* `allow_unconverged` (bool, default false)
+
+A stage runs the driver (`runctl::drive`) on a `Simulation` built from its case; its restart file `<out>/<stage>/restart.rcfd`
+and results `<out>/<stage>/` are written; the next stage restarts from that file through `restart_from`, so a mesh change in
+`set` triggers the transfer. The chain stops at the first stage whose exit code is not 0 (a steady stage stopped at its cap,
+exit 5, is accepted when `allow_unconverged`) and returns that code.
+
+Status stream: every event gets a `stage` field; additional events `stage_start` (`stage`, `index`, `of`) and `stage_finish`
+(`stage`, `exit_code`, `state`) and a closing `chain_finish`; the format version stays 1 (consumers ignore unknown events;
+`summarize_stream` is unchanged and reports the last `finish`). `rcfd run` runs a chain when `chain.sequence` is non-empty
+(`--no-chain` runs the base case alone).
+
+Static checks (located):
+
+* unknown stage name in `sequence` (`chain.sequence.<i>`)
+* duplicate names
+* a stage not in `sequence` is allowed (info)
+* malformed `set` entry (`chain.stages.<n>.set.<i>`)
+* a `set` path unknown to the schema or a value of the wrong type (located at that entry)
+
+Operating-point sweeps are not part of this (parametric-study item).
 
 ### D5 Run-control additions (F-121)
 
-The contract of `docs/run-control.md` is kept. Added: `rcfd run --print-settings` (resolved settings JSON on stdout, exit 0, no
-run; exit 3 for an invalid case), `rcfd run --set path=<JSON value>` repeatable (command-line setting overrides applied before
-anything else; malformed argument exit 2, unknown path or invalid value exit 3), `rcfd check <case> [--json]` (see D6), the chain
-events of D4, and `--restart-from`/`restart`. Not delivered (named gaps, F-121 stays `partial`): MPI/`--hostfile` (not
-attempted by design), per-core affinity, command-at-start (arbitrary commands are NOT executed; `--set` is the safe subset),
-scheduled commands on iteration/step/time, automatic case-modification strategies, single precision, a control socket.
+The contract of `docs/run-control.md` is kept. Added:
+
+* `rcfd run --print-settings` (resolved settings JSON on stdout, exit 0, no run; exit 3 for an invalid case)
+* `rcfd run --set path=<JSON value>` repeatable (command-line setting overrides applied before anything else; malformed argument
+  exit 2, unknown path or invalid value exit 3)
+* `rcfd check <case> [--json]` (see D6)
+* the chain events of D4
+* `--restart-from`/`restart`
+
+Not delivered (named gaps, F-121 stays `partial`):
+
+* MPI/`--hostfile` (not attempted by design)
+* per-core affinity
+* command-at-start (arbitrary commands are NOT executed; `--set` is the safe subset)
+* scheduled commands on iteration/step/time
+* automatic case-modification strategies
+* single precision
+* a control socket
 
 ### D6 Rule engine (F-240)
 
 `rcfd-api::rules` evaluates the data file `setup_rules.json` (`{"format": "rcfd-setup-rules", "version": 1, "rules": [...]}`)
 against the resolved settings JSON (`case.tree.to_json()`, so defaults are visible) and, when a mesh is available, a `mesh`
-context taken from the serialised `QualityReport`. A rule: `id` (`SVnnn`), `name`, `severity` (`error` | `warning` | `info`),
-`category` (`mesh` | `boundaries` | `materials` | `models` | `solver` | `output` | `setup`), optional `each` (`{"over": path}` iterates the
-named entries or list items at `path`, binding `{name}` and the relative prefix `@`), `when` (a condition), `path` (the located
-path, may contain `{name}`), `message`, optional `fix` (`{"path", "value"}`, a suggestion, never applied). Condition grammar:
-`{"all": [..]}`, `{"any": [..]}`, `{"not": c}`, `{"path": P, "op": OP, "value": V}` and `{"count": P, "op": OP, "value": N}`
-where `P` may be `@.key` inside `each`, `$mesh.key` for the mesh context (a rule using it is skipped, not failed, when no mesh is
-given), and `V` may be `{"path": P2}`. Operators: `eq ne gt ge lt le in not_in vec_zero vec_nonzero is_empty non_empty name_in`
-(`name_in`: the value at `P` is a name of the collection at the path in `value`). A path that does not exist makes its condition
-false. Output: `RuleDiagnostic {id, severity, category, path, message, fix?}` sorted by (severity, id, path), serialised as JSON
-objects with exactly those keys. Evaluation is pure and deterministic.
+context taken from the serialised `QualityReport`.
+
+A rule:
+
+* `id` (`SVnnn`)
+* `name`
+* `severity` (`error` | `warning` | `info`)
+* `category` (`mesh` | `boundaries` | `materials` | `models` | `solver` | `output` | `setup`)
+* optional `each` (`{"over": path}` iterates the named entries or list items at `path`, binding `{name}` and the relative prefix
+  `@`)
+* `when` (a condition)
+* `path` (the located path, may contain `{name}`)
+* `message`
+* optional `fix` (`{"path", "value"}`, a suggestion, never applied)
+
+Condition grammar: `{"all": [..]}`, `{"any": [..]}`, `{"not": c}`, `{"path": P, "op": OP, "value": V}` and
+`{"count": P, "op": OP, "value": N}` where `P` may be `@.key` inside `each`, `$mesh.key` for the mesh context (a rule using it is
+skipped, not failed, when no mesh is given), and `V` may be `{"path": P2}`.
+
+Operators: `eq ne gt ge lt le in not_in vec_zero vec_nonzero is_empty non_empty name_in` (`name_in`: the value at `P` is a name of
+the collection at the path in `value`). A path that does not exist makes its condition false.
+
+Output: `RuleDiagnostic {id, severity, category, path, message, fix?}` sorted by (severity, id, path), serialised as JSON objects
+with exactly those keys. Evaluation is pure and deterministic.
 
 The rules are DATA, not code. This wave registers these 21 rules (their ids, severities, conditions and thresholds are fixed
 here; the mesh thresholds are the library's own `check_mesh` thresholds, 70/85 degrees, 4, 1000, 100):
@@ -158,14 +237,19 @@ here; the mesh thresholds are the library's own `check_mesh` thresholds, 70/85 d
 
 SV001-SV003, SV005-SV008, SV010-SV013 restate checks that the engines/loaders already enforce elsewhere; they are mirrors
 (one data-driven place, categorised, with stable ids, evaluable without building the simulation). SV004 restates the
-`turb.rs` derivation of the initial k. The new diagnostics are SV009, SV101-SV105 and SV201-SV203. Wiring: `rcfd
-check <case>` (settings, simulation build, mesh quality, then the rules; exit 0 when no error-level diagnostic, 3 with one,
-4 when the mesh fails its quality check; `--json` prints `{ok, exit_code, diagnostics, rules, mesh}`), `rcfd validate` prints
-rule diagnostics as additional lines (warnings and infos do not change its exit code), `rcfd run` evaluates the rules after the
-simulation is built (an error-level diagnostic exits 3 before solving; warnings go to stderr and as `warning` status events
-with the rule id), `run.check`/`--check-only` adds a `rules` array to the `check` event (the existing `diagnostics` key keeps its
-meaning). Registry case descriptors (`cases/*/case.json`) are not setup files (they describe meshes and references informally
-and fail the loader today); "the benchmark registry cases" are therefore evaluated as the TOML setups under `cases/`.
+`turb.rs` derivation of the initial k. The new diagnostics are SV009, SV101-SV105 and SV201-SV203.
+
+Wiring:
+
+* `rcfd check <case>` (settings, simulation build, mesh quality, then the rules; exit 0 when no error-level diagnostic, 3 with
+  one, 4 when the mesh fails its quality check; `--json` prints `{ok, exit_code, diagnostics, rules, mesh}`)
+* `rcfd validate` prints rule diagnostics as additional lines (warnings and infos do not change its exit code)
+* `rcfd run` evaluates the rules after the simulation is built (an error-level diagnostic exits 3 before solving; warnings go to
+  stderr and as `warning` status events with the rule id)
+* `run.check`/`--check-only` adds a `rules` array to the `check` event (the existing `diagnostics` key keeps its meaning)
+
+Registry case descriptors (`cases/*/case.json`) are not setup files (they describe meshes and references informally and fail the
+loader today); "the benchmark registry cases" are therefore evaluated as the TOML setups under `cases/`.
 
 ## Registered checks
 
@@ -310,13 +394,23 @@ Field transfer (`crates/rcfd-post/tests/remap_w19c.rs`: 10 pass, 4 ignored):
 
 * **I1 PASS.** Linear field, max abs error over all target cells: least_squares, conservative_overlap and gradient (inside the
   centre box) all `<= 1.6e-15` (limit 1e-12), 2D coarse-to-fine, fine-to-coarse and 3D.
-* **I2 PARTIAL.** least_squares orders 2.01 and 2.14 (band [1.7, 2.5]) PASS; nearest 0.997 and 1.001 (band [0.7, 1.5]) PASS.
-  MISSES, limits unchanged: gradient 2.09 and 2.75 (second step above the band), conservative_overlap 2.63 and 3.77 (errors
-  3.54e-3, 5.73e-4, 4.21e-5; the quadratic test field is reproduced better than second order by the overlap average, i.e. the
-  scheme is more accurate than the registered upper bound assumed, not less), inverse_distance 1.58 and 1.64 (band [0.7, 1.5];
-  weights `1/d^2` over 10 neighbours give a better than first-order interpolation on this smooth field). Ignored tests:
-  `i2_*_known_miss`. An unregistered diagnostic on `sin x cos y` gave nearest ~1.0, inverse_distance 1.56/1.66, least_squares
-  2.11/2.18, gradient 1.51/2.66.
+* **I2 PARTIAL.** least_squares and nearest PASS. gradient, conservative_overlap and inverse_distance are MISSES, limits
+  unchanged. Observed orders:
+
+| Method | Orders | Band | Verdict |
+| --- | --- | --- | --- |
+| least_squares | 2.01 and 2.14 | [1.7, 2.5] | PASS |
+| nearest | 0.997 and 1.001 | [0.7, 1.5] | PASS |
+| gradient | 2.09 and 2.75 | [1.7, 2.5] | MISS (second step above the band) |
+| conservative_overlap | 2.63 and 3.77 | [1.7, 2.5] | MISS |
+| inverse_distance | 1.58 and 1.64 | [0.7, 1.5] | MISS |
+
+The conservative_overlap errors are 3.54e-3, 5.73e-4, 4.21e-5; the quadratic test field is reproduced better than second order
+by the overlap average, i.e. the scheme is more accurate than the registered upper bound assumed, not less. For
+inverse_distance, weights `1/d^2` over 10 neighbours give a better than first-order interpolation on this smooth field. Ignored
+tests: `i2_*_known_miss`. An unregistered diagnostic on `sin x cos y` gave nearest ~1.0, inverse_distance 1.56/1.66,
+least_squares 2.11/2.18, gradient 1.51/2.66.
+
 * **I3 PASS.** conservative_overlap relative integral mismatch 8.9e-16 (refine) and 1.4e-15 (coarsen) (limit 1e-12); the
   uniform-shift `conservative` mode 2.5e-15 and 3.8e-15 (limit 1e-10). Deviation: the 2D pairs are `gen::channel` meshes with an
   equal explicit depth of 0.05, because `cavity_2d_rect` derives its depth from `lx/nx` (different depth per mesh breaks the
@@ -324,11 +418,11 @@ Field transfer (`crates/rcfd-post/tests/remap_w19c.rs`: 10 pass, 4 ignored):
 * **I4 PASS.** Identical meshes: bit-exact for all methods, scalar and vector (through the disclosed hash short-cut).
 * **I5 PARTIAL.** Finite, bounded and constant-field parts PASS (constant reproduced to 2.7e-16, minimum coverage reported
   `< 1`). The clause "least_squares at target centres outside the source cell-centre bounding box equals the nearest value
-  exactly" is a MISS and is mutually inconsistent with I1 as registered (I1 requires the linear field to be exact at ALL target
-  cells, including those between the outermost source centre and the boundary, which are outside the centre box): the
+  exactly" is a MISS and is mutually inconsistent with I1 as registered. I1 requires the linear field to be exact at ALL target
+  cells, including those between the outermost source centre and the boundary, which are outside the centre box. The
   implementation extrapolates the fit inside the source MESH bounding box (satisfying I1) and falls back to nearest only outside
   it. Ignored test `i5_least_squares_nearest_outside_centre_box_known_miss`; new corrected test
-  `i5b_least_squares_nearest_outside_mesh_box` passes. ADR defect.
+  `i5b_least_squares_nearest_outside_mesh_box` passes. This is an ADR defect.
 * **I6 PASS.**
 
 Restart (`crates/rcfd-api/tests/restart_w19c.rs`: 6 pass, 1 ignored):
@@ -342,11 +436,12 @@ Restart (`crates/rcfd-api/tests/restart_w19c.rs`: 6 pass, 1 ignored):
 * **S4 PASS** (embedded mesh 12x12 to 24x24 without a source case; a file with the `mesh` section removed needs the source case
   and then gives bit-identical fields; the wrong source case, no source case and `load_restart` of another mesh are refused).
 * S5. Cold start 24x24: 89 iterations to 1e-6 and 23 iterations to a speed distance of 1e-2 from the converged solution.
-  **S5a MISS for all three methods** (iterations to tolerance): gradient 103, least_squares 96, conservative_overlap 103, versus 89.
-  Cause (diagnosed in the first slice and unchanged): the residual normalisation is relative to the run's own variation, so the
-  better start does not shorten the tail of the convergence to 1e-6, and the transferred flux is not divergence-free (max flux
-  imbalance of the rebuilt flux 0.18 in the chained 12 to 24 transfer). Ignored test `s5a_iterations_to_tolerance_known_miss`.
-  **S5b PASS for all three** (iterations until the speed is within 1e-2 of the converged solution: 10 versus 23 cold).
+* **S5a MISS for all three methods** (iterations to tolerance): gradient 103, least_squares 96, conservative_overlap 103,
+  versus 89. Cause (diagnosed in the first slice and unchanged): the residual normalisation is relative to the run's own
+  variation, so the better start does not shorten the tail of the convergence to 1e-6, and the transferred flux is not
+  divergence-free (max flux imbalance of the rebuilt flux 0.18 in the chained 12 to 24 transfer). Ignored test
+  `s5a_iterations_to_tolerance_known_miss`.
+* **S5b PASS for all three** (iterations until the speed is within 1e-2 of the converged solution: 10 versus 23 cold).
 
 Chain (`crates/rcfd-api/tests/chain_w19c.rs`, `crates/rcfd-cli/tests/chain_w19c.rs`; all PASS):
 
@@ -381,12 +476,13 @@ Rule engine (`crates/rcfd-api/tests/rules_w19c.rs`):
 
 * **E1 PASS** (all 21 rules fire with the registered id, severity, category and path; the error-level id set is exactly the rule
   under test; fixtures cover exactly the 21 ids of the data file; SV105 locates `solver.tolerance_p` when only that one is loose).
-* **E2 MISS (warning level), PASS (error level).** 66 distinct case texts evaluated in the final run (8 `cases/**/*.toml`, 1 doc block, 57 test
-  sources; skipped: 17 templates, 40 not valid cases, 8 whose mesh did not build; an earlier run before the chain example was added to
-  the docs and before other waves added tests gave 62 = 8 + 0 + 54). No error-level diagnostic anywhere; the only info is SV202 on a mesh-only text. One warning: SV103 (aspect
-  ratio above 1000) on a case text of `turb_models.rs`, a wall-resolved boundary-layer mesh that the test suite runs on purpose. The
-  threshold is the library's own warning threshold and is not changed. Ignored `e2_zero_false_positives_known_miss` keeps the
-  registered assertion; the active test asserts what holds (no error-level finding, every warning is SV103).
+* **E2 MISS (warning level), PASS (error level).** The final run evaluated 66 distinct case texts (8 `cases/**/*.toml`, 1 doc
+  block, 57 test sources; skipped: 17 templates, 40 not valid cases, 8 whose mesh did not build). An earlier run, before the chain
+  example was added to the docs and before other waves added tests, gave 62 = 8 + 0 + 54. No error-level diagnostic occurs
+  anywhere; the only info is SV202 on a mesh-only text. The one warning is SV103 (aspect ratio above 1000) on a case text of
+  `turb_models.rs`, a wall-resolved boundary-layer mesh that the test suite runs on purpose. The threshold is the library's own
+  warning threshold and is not changed. Ignored `e2_zero_false_positives_known_miss` keeps the registered assertion; the active
+  test asserts what holds (no error-level finding, every warning is SV103).
 * **E3 PASS** (identical bytes in two evaluations and after rebuilding the tree with keys inserted in reverse order; output sorted by
   severity, id, path).
 * **E4 PASS** at library level (strict loader: unknown condition key, operator, severity, category, wrong version, wrong format,
@@ -416,8 +512,12 @@ checked by running `w19c_run_control` (7 pass) and `rules_w19c` only.
 
 ### Not delivered
 
-F-209 and F-210 (not attempted); MPI, hostfile, affinity, commands at start or on a schedule, automatic case-modification
-strategies, single precision, a control socket (F-121); unstructured conservative remapping and a flux-conservative or
-divergence-free projection of the transferred flux (F-115); transient restart for energy, scalars, statistics, turbulence models,
-frozen flow, solids, rheology and compressible runs; BDF2 history across a mesh change; reading a solution back from result
-files (VTU); registry `cases/*/case.json` descriptors are not evaluated by the rules; the rule `fix` suggestions are never applied.
+* F-209 and F-210 (not attempted)
+* MPI, hostfile, affinity, commands at start or on a schedule, automatic case-modification strategies, single precision, a
+  control socket (F-121)
+* unstructured conservative remapping and a flux-conservative or divergence-free projection of the transferred flux (F-115)
+* transient restart for energy, scalars, statistics, turbulence models, frozen flow, solids, rheology and compressible runs
+* BDF2 history across a mesh change
+* reading a solution back from result files (VTU)
+* registry `cases/*/case.json` descriptors are not evaluated by the rules
+* the rule `fix` suggestions are never applied

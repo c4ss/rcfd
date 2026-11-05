@@ -1,34 +1,56 @@
-# ADR 0033: Wave 20B, dynamic mesh (F-063), six-DOF rigid-body dynamics (F-229), layering/remeshing (F-230, not attempted)
+# ADR 0033: Wave 20B, dynamic mesh and six-DOF rigid-body dynamics
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (exact mesh generator arguments that are not fixed here, measured
-numbers, file names) may be appended at the end without touching a registered limit.
 
-Scope. F-063 and F-229 are `todo`. This wave delivers vertical slices of both and stops each at `partial` with named gaps
-(listed at the end). F-230 (layering, remeshing) is NOT attempted unless time remains, and then only as a documented gap.
-F-114 (non-conformal interface, done) is used only for the sliding-interface question (D9). Clean-room: published methods and
-first principles only; no vendor code, text, data or names. Every expected number below is derived from definitions, closed forms
-or invariants; no registered check depends on a literature value. Where a formula is quoted from memory the reference is marked
-"(from memory, unverified)".
+Wave 20B adds a dynamic mesh (F-063) and six-DOF rigid-body dynamics (F-229) as vertical slices and stops each at `partial`
+with named gaps. Layering and remeshing (F-230) were not attempted. The design is an ALE finite-volume step with a discrete
+geometric conservation law, mesh smoothing by displacement diffusion, and a loose, explicit coupling of the body to the flow.
+Every kernel change stays inert unless the new `dynamic_mesh` section enables it, and the baseline hashes are unchanged. The
+addendum, written after the work, records the results: every row of its table passes, several only after a correction (G4, G5,
+C1, S3, the R4 (ii) sign), with the registered versions kept as ignored tests. The exception is the streamwise cell velocity
+next to the accelerating piston: its 2.9e-4 lag misses the limits of G5 (iii) (1e-6 a0 t_end) and T2 (1e-5 a0 t_end), and
+the cause is not proven. The library-equality parts of T2-T4 were replaced by physical limits. Three baseline-solver limitations
+were found and not fixed, and the flow-coupled spring-mounted-body frequency check named in the F-229 acceptance (2 percent) is
+not delivered.
 
-Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded. Every kernel change is
-behind an `Option` that is `None` unless the new `dynamic_mesh` section enables it; schema additions are additive with explicit
-unset sentinels (`enabled = false`, empty lists, `""`).
+Rules and scope:
+
+- Limits are not changed, widened, replaced or deleted after a run.
+- A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+- A test set-up defect gets a NEW corrected test and the old one stays as a record.
+- Addenda (exact mesh generator arguments that are not fixed here, measured numbers, file names) may be appended at the end
+  without touching a registered limit.
+- Scope: F-063 and F-229 are `todo`. This wave delivers vertical slices of both and stops each at `partial` with named gaps
+  (listed at the end). F-230 (layering, remeshing) is NOT attempted unless time remains, and then only as a documented gap.
+  F-114 (non-conformal interface, done) is used only for the sliding-interface question (D9).
+- Clean-room: published methods and first principles only; no vendor code, text, data or names.
+- Every expected number below is derived from definitions, closed forms or invariants; no registered check depends on a
+  literature value. Where a formula is quoted from memory the reference is marked "(from memory, unverified)".
+- Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded.
+- Every kernel change is behind an `Option` that is `None` unless the new `dynamic_mesh` section enables it; schema additions
+  are additive with explicit unset sentinels (`enabled = false`, empty lists, `""`).
 
 ## Decisions
 
 ### D1 File layout and shared files
 
-New files: `rcfd-mesh/src/motion.rs` (point-position rebuild, swept volumes, rigid poses, mesh quality check),
-`rcfd-fv/src/pimple/moving.rs` (a child module of `pimple`, so it may touch the private history of `PimpleSolver`; ALE step),
-`rcfd-fv/src/smoothing.rs` (displacement-diffusion mesh motion), `rcfd-fv/src/sixdof.rs` (rigid-body dynamics, patch
-force/moment), `rcfd-api/src/dynmesh.rs` (section `dynamic_mesh`: schema, static checks, driver). Shared files get small
-targeted edits, re-read immediately before editing: `lib.rs` of each crate (`pub mod`), `pimple.rs` (one field and a few small
-hunks, all inert when the field is `None`; the parallel wave 20A also edits this file), `rcfd-api` `schema.rs` (one `.field`),
-`case.rs` (one `out.extend`), `sim.rs` (field `dynmesh`, a hook before `PimpleSolver::step`, construction and checks),
-`docs/case-schema.md`.
+New files:
+
+- `rcfd-mesh/src/motion.rs` (point-position rebuild, swept volumes, rigid poses, mesh quality check)
+- `rcfd-fv/src/pimple/moving.rs` (a child module of `pimple`, so it may touch the private history of `PimpleSolver`; ALE step)
+- `rcfd-fv/src/smoothing.rs` (displacement-diffusion mesh motion)
+- `rcfd-fv/src/sixdof.rs` (rigid-body dynamics, patch force/moment)
+- `rcfd-api/src/dynmesh.rs` (section `dynamic_mesh`: schema, static checks, driver)
+
+Shared files get small targeted edits, re-read immediately before editing:
+
+- `lib.rs` of each crate (`pub mod`)
+- `pimple.rs` (one field and a few small hunks, all inert when the field is `None`; the parallel wave 20A also edits this file)
+- `rcfd-api` `schema.rs` (one `.field`)
+- `case.rs` (one `out.extend`)
+- `sim.rs` (field `dynmesh`, a hook before `PimpleSolver::step`, construction and checks)
+- `docs/case-schema.md`
 
 ### D2 ALE finite-volume discretisation (Euler time level, transient incompressible)
 
@@ -45,10 +67,11 @@ passed to it. The diagonal of the transient term uses `V^{n+1}`; the right-hand 
 velocity times the OLD volume). The PISO/PIMPLE correctors are unchanged: `rAU = V^{n+1}/a_P`, `phiHbyA` carries the absolute
 flux, the pressure equation enforces `sum phi = 0`. The transient Rhie-Chow defect `phi^n - (u^n)_f . S` is evaluated with the
 face area vectors of the OLD geometry (stored when the old level was created) and scaled by the face-averaged `V^n / V^{n+1}`,
-because the old-level contribution of the H operator is `(V^n/dt) u^n / a_P`. Only `ImplicitEuler` is supported on a moving mesh:
-BDF2 and CN need a space-conservation law consistent with the multi-level formula (published, e.g. Demirdzic and Peric 1988;
-Farhat, Geuzaine and Grandmont 2001, both from memory, unverified) and are a located error. Restart/checkpoint of a moving-mesh
-run is not supported (located error).
+because the old-level contribution of the H operator is `(V^n/dt) u^n / a_P`.
+
+Only `ImplicitEuler` is supported on a moving mesh: BDF2 and CN need a space-conservation law consistent with the multi-level
+formula (published, e.g. Demirdzic and Peric 1988; Farhat, Geuzaine and Grandmont 2001, both from memory, unverified) and are a
+located error. Restart/checkpoint of a moving-mesh run is not supported (located error).
 
 **Geometric conservation law (GCL).** Step `n -> n+1` with the point positions `x^n`, `x^{n+1}` (same topology). The mesh computes
 `V_c = (1/3) sum_f sigma_f S_f . fc_f` (the pyramid sum with the cell estimate as apex, whose apex term vanishes because the face
@@ -62,10 +85,15 @@ where for the face loop edge `a -> b` (counter-clockwise about the outward norma
 and centroid-weight of the side quad `a^n, b^n, b^{n+1}, a^{n+1}` split into the two triangles `(lo^n, hi^n, hi^{n+1})` and
 `(lo^n, hi^{n+1}, lo^{n+1})` with `lo < hi` the two global point indices of the edge (so both faces that share the edge use the same
 triangulation; the sign flips with the traversal direction), `sum_t A_t . (c_t - O)` over the two triangles. `O` is the old face
-centre. Then (i) `W_f` does not depend on `O` (the side quads close the surface, `S^{n+1} - S^n + sum A_e = 0`), (ii) the side-quad terms
-of the two faces of a cell edge cancel exactly within a cell, so `sum_f sigma_f W_f = V^{n+1} - V^n` for EVERY cell up to
-round-off (the discrete GCL), also for warped faces, (iii) for a rigid translation by `d`, `W_f = d . S_f`. The owner receives
-`+W_f`, the neighbour `-W_f`. The split of the side quads is a project definition; for planar faces `W_f` is the exact volume swept.
+centre. Then:
+
+* (i) `W_f` does not depend on `O` (the side quads close the surface, `S^{n+1} - S^n + sum A_e = 0`);
+* (ii) the side-quad terms of the two faces of a cell edge cancel exactly within a cell, so
+  `sum_f sigma_f W_f = V^{n+1} - V^n` for EVERY cell up to round-off (the discrete GCL), also for warped faces;
+* (iii) for a rigid translation by `d`, `W_f = d . S_f`.
+
+The owner receives `+W_f`, the neighbour `-W_f`. The split of the side quads is a project definition; for planar faces `W_f` is
+the exact volume swept.
 
 ### D3 Boundary treatment on a moving mesh
 
@@ -112,19 +140,34 @@ deferred non-orthogonal correction), `div(gamma grad d) = 0`:
 ### D6 Six-DOF rigid body, `rcfd-fv/src/sixdof.rs`
 
 State: centre of mass `x`, velocity `v` (world), orientation quaternion `q` (body to world), angular velocity `w_b` (body frame).
+
 Equations: `m v' = F`, `q' = (1/2) q (0, w_b)`, `I w_b' = M_b - w_b x (I w_b)` (`I` a symmetric 3x3 body-frame tensor, inverted
-once). Forces `F` (world) and moments `M` (about the centre of mass, world) are the sum of: weight (`gravity`), hydrodynamic
-force and moment (frozen over the step: explicit loose coupling), linear spring-damper per world axis (`k_i`, `c_i`, rest
-position `x0_i`), a linear drag `-c_drag v` (the test hook), a torsional spring-damper for single-axis rotation, and a user hook
-`Fn(&BodyState, t) -> (F, M)` (the "user-property hook" of the acceptance text). Constraints: `translation_locked[3]` (a locked axis
-has zero velocity and zero force component, reaction implied); rotation `Free`, `Locked`, `AboutAxis { axis }` (rotation about a
-world-fixed axis through the centre of mass; the axis must be a principal axis of the body at the initial orientation, checked
-to 1e-9) and `Hinge { point, axis }` (rotation about a fixed axis through a pivot point: the compound pendulum; the effective
-inertia is `I_axis + m d^2` with `d` the perpendicular distance of the centre of mass from the axis). Integrators: `Rk4`
-(classical, all of the above, quaternion renormalised after each step) and `Newmark` (average acceleration, `beta = 1/4`,
-`gamma = 1/2`, for the translational axes and the single-axis rotations, forces at the new state by fixed-point iteration to 1e-14
-relative, at most 100 iterations else a located error). `Newmark` with free three-dimensional rotation is NOT provided
-(located error; use `Rk4`).
+once).
+
+Forces `F` (world) and moments `M` (about the centre of mass, world) are the sum of:
+
+* weight (`gravity`);
+* hydrodynamic force and moment (frozen over the step: explicit loose coupling);
+* linear spring-damper per world axis (`k_i`, `c_i`, rest position `x0_i`);
+* a linear drag `-c_drag v` (the test hook);
+* a torsional spring-damper for single-axis rotation;
+* a user hook `Fn(&BodyState, t) -> (F, M)` (the "user-property hook" of the acceptance text).
+
+Constraints:
+
+* `translation_locked[3]` (a locked axis has zero velocity and zero force component, reaction implied);
+* rotation `Free`, `Locked`, `AboutAxis { axis }` (rotation about a world-fixed axis through the centre of mass; the axis must
+  be a principal axis of the body at the initial orientation, checked to 1e-9) and `Hinge { point, axis }` (rotation about a
+  fixed axis through a pivot point: the compound pendulum; the effective inertia is `I_axis + m d^2` with `d` the perpendicular
+  distance of the centre of mass from the axis).
+
+Integrators:
+
+* `Rk4` (classical, all of the above, quaternion renormalised after each step);
+* `Newmark` (average acceleration, `beta = 1/4`, `gamma = 1/2`, for the translational axes and the single-axis rotations,
+  forces at the new state by fixed-point iteration to 1e-14 relative, at most 100 iterations else a located error).
+
+`Newmark` with free three-dimensional rotation is NOT provided (located error; use `Rk4`).
 
 Patch force and moment (`sixdof::patch_force_moment`): force of the fluid on the body for a patch with outward (from the fluid)
 area vectors `S_f`: `F = rho sum_f [ p_f S_f - nu ((grad u)_f + (grad u)_f^T) . S_f ]` with kinematic `p`, the boundary gradient
@@ -133,13 +176,19 @@ The face pressure is the cell value plus the linear extrapolation `grad p_c . (f
 
 ### D7 Coupling (loose, explicit)
 
-Per step at time `t_n`: (1) hydrodynamic force and moment from the flow state of `t_n`; (2) advance the body to `t_{n+1}`; (3) set the
-pose of the moving patches from the body (`x = x_cm + R(q)(x_0 - x_cm0)`), smooth, rebuild the mesh; (4) flow step on the new
-mesh with the mesh flux of D2. A body-only variant (`mesh_motion = "none"`) leaves the mesh alone and sets the velocity of the
-body patches to `v + w x r`; it is valid only when the body displacement is tangential to a planar periodic wall (checked: the
-displacement of the patch along its face normals must stay below 1e-9 of the patch size, else a run-time error). The explicit
-coupling is conditionally stable (added-mass effect, Causin, Gerbeau and Nobile 2005, from memory, unverified): the registered
-cases keep fluid-to-body mass ratio at or below 0.2, and the limits do not apply beyond that.
+Per step at time `t_n`:
+
+1. hydrodynamic force and moment from the flow state of `t_n`;
+2. advance the body to `t_{n+1}`;
+3. set the pose of the moving patches from the body (`x = x_cm + R(q)(x_0 - x_cm0)`), smooth, rebuild the mesh;
+4. flow step on the new mesh with the mesh flux of D2.
+
+A body-only variant (`mesh_motion = "none"`) leaves the mesh alone and sets the velocity of the body patches to `v + w x r`; it
+is valid only when the body displacement is tangential to a planar periodic wall (checked: the displacement of the patch along
+its face normals must stay below 1e-9 of the patch size, else a run-time error).
+
+The explicit coupling is conditionally stable (added-mass effect, Causin, Gerbeau and Nobile 2005, from memory, unverified): the
+registered cases keep fluid-to-body mass ratio at or below 0.2, and the limits do not apply beyond that.
 
 ### D8 Case tree, section `dynamic_mesh` (all keys inert while `enabled = false`)
 
@@ -166,13 +215,23 @@ six_dof.force_patches = []       # default: the moving patches
 six_dof.integrator = "rk4"       # rk4 | newmark
 ```
 
-Unset sentinels: empty strings/lists, zero stiffness, `enabled = false`. Static checks are located (`Diagnostic` path = the key):
-unknown patch names, bad expressions or dimensions, zero rotation axis with a rotation expression, `motion = six_dof` without positive
-mass and inertia, `smoothing.exponent < 0`, `substeps < 1`, a `follow` patch whose `boundaries.<p>.velocity` is not at its default,
-and the combinations of D2/D3 that are not implemented: algorithm other than `piso`/`pimple`, time scheme other than Euler,
-turbulence, energy, scalars, particles, sources, zone sources, rheology, user functions, statistics, restart, catalogue boundary
-kinds and decomposition output (path `dynamic_mesh.enabled`, the message names the conflicting section). A run-time mesh failure
-stops the run with a message beginning `dynamic_mesh:` (step, time, cell index). The moved mesh is what the VTK export writes.
+Unset sentinels: empty strings/lists, zero stiffness, `enabled = false`.
+
+Static checks are located (`Diagnostic` path = the key):
+
+* unknown patch names;
+* bad expressions or dimensions;
+* zero rotation axis with a rotation expression;
+* `motion = six_dof` without positive mass and inertia;
+* `smoothing.exponent < 0`;
+* `substeps < 1`;
+* a `follow` patch whose `boundaries.<p>.velocity` is not at its default;
+* the combinations of D2/D3 that are not implemented: algorithm other than `piso`/`pimple`, time scheme other than Euler,
+  turbulence, energy, scalars, particles, sources, zone sources, rheology, user functions, statistics, restart, catalogue
+  boundary kinds and decomposition output (path `dynamic_mesh.enabled`, the message names the conflicting section).
+
+A run-time mesh failure stops the run with a message beginning `dynamic_mesh:` (step, time, cell index). The moved mesh is what
+the VTK export writes.
 
 ### D9 Sliding interfaces
 
@@ -191,11 +250,20 @@ All "tests" are Rust tests; library tests live in `crates/rcfd-fv/tests/{ale_gcl
 
 **G1 swept volumes.** Meshes: (a) `box_mesh` 5x4x3 on `[0,1]x[0,0.8]x[0,0.6]` with `Grading::Expansion(2)` in x and `Symmetric(2)` in
 y; (b) the same with every interior point displaced by `0.15 h_min (sin(7i+1), cos(5i+2), sin(3i+4))` (`i` the point index), which
-warps the faces. One step of each motion: translation `d = (0.3, -0.2, 0.1)`; rotation 0.4 rad about the axis `(1,2,3)/sqrt(14)`
-through `(0.2, 0.1, 0)`; oscillation `x_1 = 0.1 sin(2 pi t/T)` with `dt = T/8`, all 8 steps of one period; expansion by
-`diag(1.25, 1.1, 0.9)` about the box centre. (i) `max_c |sum_f sigma_f W_f - (V^{n+1} - V^n)| <= 1e-12 mean(V)` for every
-motion and both meshes; (ii) translation: `max_f |W_f - d . S_f| <= 1e-12 |d| max|S|`; (iii) `W_f` computed about two different
-origins differs by at most `1e-12 mean(V)`.
+warps the faces.
+
+One step of each motion:
+
+* translation `d = (0.3, -0.2, 0.1)`;
+* rotation 0.4 rad about the axis `(1,2,3)/sqrt(14)` through `(0.2, 0.1, 0)`;
+* oscillation `x_1 = 0.1 sin(2 pi t/T)` with `dt = T/8`, all 8 steps of one period;
+* expansion by `diag(1.25, 1.1, 0.9)` about the box centre.
+
+Limits:
+
+* (i) `max_c |sum_f sigma_f W_f - (V^{n+1} - V^n)| <= 1e-12 mean(V)` for every motion and both meshes;
+* (ii) translation: `max_f |W_f - d . S_f| <= 1e-12 |d| max|S|`;
+* (iii) `W_f` computed about two different origins differs by at most `1e-12 mean(V)`.
 
 **G2 uniform flow is preserved.** The same mesh (a), 10 PISO steps (Euler, central convection, `dt = 0.05`), all six patches fixed
 velocity `u0 = (1.0, 0.5, -0.25)`, initial `u = u0`, `p = 0`, for the translation (velocity `(0.4, -0.3, 0.2)`), rotation
@@ -213,22 +281,33 @@ at the top is `e^{-17.7} = 2e-8`), periodic in x (`box_2d`, `nx = 4`, `lx = 0.1`
 `(U0 cos(omega t), V, 0)`, `V = 0.5`. Bottom patch follows the mesh, top patch has the absolute velocity `(0, V, 0)`. Analytic:
 `u_x(y', t) = U0 exp(-y'/delta) cos(omega t - y'/delta)`, `y'` the height above the plate, derived from `u_t = nu u_yy` by
 substitution (the convective term `V u_y` is cancelled by the mesh flux). Initial field = analytic at `t = 0`, run `3 T`,
-Euler, central, `ny = 80`, `dt = T/800` (`dt` proportional to `h`). Limits: (i) `max |u_x - exact| / U0 <= 4e-2` (spatial error
-`(h/delta)^2/12` = 4e-3, Euler damping `omega dt` per period about 1e-2 over 3 periods; first order in time dominates);
-(ii) observed order: with `ny = 40`, `dt = T/400` the error ratio `e_40/e_80 >= 1.7` (first order expected, 2); (iii) `max |u_y - V| <= 1e-9`;
-(iv) the result differs from the fixed-mesh run (V = 0, no mesh motion, plate by velocity expression, otherwise identical) by at most
-`1e-9 U0`.
+Euler, central, `ny = 80`, `dt = T/800` (`dt` proportional to `h`).
+
+Limits:
+
+* (i) `max |u_x - exact| / U0 <= 4e-2` (spatial error `(h/delta)^2/12` = 4e-3, Euler damping `omega dt` per period about 1e-2
+  over 3 periods; first order in time dominates);
+* (ii) observed order: with `ny = 40`, `dt = T/400` the error ratio `e_40/e_80 >= 1.7` (first order expected, 2);
+* (iii) `max |u_y - V| <= 1e-9`;
+* (iv) the result differs from the fixed-mesh run (V = 0, no mesh motion, plate by velocity expression, otherwise identical) by
+  at most `1e-9 U0`.
 
 **G5 piston-driven 1-D channel (incompressible plug flow).** `box_mesh` 20x2x2 on `[0,1]x[0,0.2]x[0,0.2]` (lengths
 `L0 = 1, w = 0.2, dz = 0.2`), the `xmin` patch is the piston, moving with constant acceleration `a0 = 2`: `x_p(t) = a0 t^2/2`,
 following the mesh; `xmax` fixed pressure 0 with zero-gradient velocity; the four side patches symmetry (slip); deformation by
 Laplacian smoothing (prescribed piston, fixed outlet, slip sides); `dt = 0.005`, 100 steps to `t = 0.5` (the domain shortens from
-1 to 0.75), Euler, tight solvers. (i) `max_step continuity <= 1e-9`; (ii) per step the outlet volume flux equals the piston swept
-volume flux, `|Q_out - W_piston/dt| <= 1e-10 W_piston/dt`; (iii) cell velocity `u_x` equals the piston's step-mean velocity
-`a0 (t_n + dt/2)` to `1e-6 a0 t_end` and `|u_y|,|u_z| <= 1e-9`; (iv) the total domain volume change equals the piston swept volume to
-`1e-12 V0`; (v) pressure: `max_c |p_c - a0 (L(t) - x_c)| <= 2e-2 a0 L0`; the Euler discretisation gives the gradient
-`a0 V^n/V^{n+1}`, i.e. a first-order relative error of at most `v_p dt/L = 0.5 * 0.005 / 0.75 = 0.7 %` plus the extrapolation of
-the pressure to the cell centre, which is within 2 % of `a0 L0`.
+1 to 0.75), Euler, tight solvers.
+
+Limits:
+
+* (i) `max_step continuity <= 1e-9`;
+* (ii) per step the outlet volume flux equals the piston swept volume flux, `|Q_out - W_piston/dt| <= 1e-10 W_piston/dt`;
+* (iii) cell velocity `u_x` equals the piston's step-mean velocity `a0 (t_n + dt/2)` to `1e-6 a0 t_end` and
+  `|u_y|,|u_z| <= 1e-9`;
+* (iv) the total domain volume change equals the piston swept volume to `1e-12 V0`;
+* (v) pressure: `max_c |p_c - a0 (L(t) - x_c)| <= 2e-2 a0 L0`; the Euler discretisation gives the gradient `a0 V^n/V^{n+1}`,
+  i.e. a first-order relative error of at most `v_p dt/L = 0.5 * 0.005 / 0.75 = 0.7 %` plus the extrapolation of the pressure
+  to the cell centre, which is within 2 % of `a0 L0`.
 
 **G6 rotating mesh, comparison with the frame formulation.** `annulus_3d(48, 8, 2, 0.5, 1.0, 0.2, 0, Uniform)`, the whole mesh
 rotating rigidly about z at `W = 1` rad/s, all four patches follow the mesh, initial `u = W x r`, `p = W^2 r^2/2` (gauge), `nu = 0.01`,
@@ -304,13 +383,22 @@ mesh stays valid and the G5 continuity limits (i)-(iv) hold.
 
 ### Case tree
 
-**T1 located errors.** Each of the following produces a `Diagnostic` with the stated path (static checks via `Case::validate`/`semantic_errors`
-unless "run"): `dynamic_mesh.moving_patches` (unknown patch), `dynamic_mesh.follow_patches` (unknown patch), `dynamic_mesh.displacement_expression_x`
-(syntax error; wrong dimension), `dynamic_mesh.rotation_axis` (zero axis with a rotation expression), `dynamic_mesh.smoothing.exponent` (negative),
-`dynamic_mesh.six_dof.mass` (`motion = six_dof`, mass 0), `dynamic_mesh.enabled` with `solver.algorithm = simple`, with `solver.time_scheme = bdf2`,
-with `turbulence.model != laminar`, with `energy.enabled`, with a `sources.*` entry; `boundaries.<follow patch>.velocity` set to a non-default
-kind. Run: a displacement of the piston through the opposite wall stops with a message starting `dynamic_mesh:` and a cell index. A case with
-`enabled = false` and every other `dynamic_mesh` key set loads and runs exactly as without the section.
+**T1 located errors.** Each of the following produces a `Diagnostic` with the stated path (static checks via
+`Case::validate`/`semantic_errors` unless "run"):
+
+* `dynamic_mesh.moving_patches` (unknown patch);
+* `dynamic_mesh.follow_patches` (unknown patch);
+* `dynamic_mesh.displacement_expression_x` (syntax error; wrong dimension);
+* `dynamic_mesh.rotation_axis` (zero axis with a rotation expression);
+* `dynamic_mesh.smoothing.exponent` (negative);
+* `dynamic_mesh.six_dof.mass` (`motion = six_dof`, mass 0);
+* `dynamic_mesh.enabled` with `solver.algorithm = simple`, with `solver.time_scheme = bdf2`, with
+  `turbulence.model != laminar`, with `energy.enabled`, with a `sources.*` entry;
+* `boundaries.<follow patch>.velocity` set to a non-default kind.
+
+Run: a displacement of the piston through the opposite wall stops with a message starting `dynamic_mesh:` and a cell index.
+
+A case with `enabled = false` and every other `dynamic_mesh` key set loads and runs exactly as without the section.
 
 **T2 piston through the tree.** The G5 set-up expressed as a case (`dynamic_mesh.moving_patches = ["xmin"]`, `displacement_expression_x = "1 [m/s^2] * t^2"` as `a0 t^2/2`,
 `deformation = "smoothing"`), default solver tolerances: velocity `|u_x - a0 (t_n + dt/2)| <= 1e-5 a0 t_end`; `|Q_out - W_piston/dt| <= 1e-6 W_piston/dt`; step
@@ -329,22 +417,35 @@ documented `*_known_miss` tests (ignored).
 
 ## Not delivered / named gaps (registered before the work)
 
-BDF2, CN and Courant-adaptive stepping on moving meshes; sliding interfaces/AMI (D9); layering and remeshing (F-230); elastic-analogy and
-stiffness-variant smoothing beyond Laplacian/inverse-distance; displacement-based wall distance for `inverse_distance` other than the brute-force
-face-centre search; turbulence, energy, scalars, particles, sources, rheology, UDFs, statistics, catalogue boundary kinds, restart with a moving
-mesh; implicit (strongly coupled) fluid-structure iteration and any added-mass stabilisation; contact and multi-body assemblies; free three-dimensional
-rotation with Newmark; periodic and surface-of-revolution motion specifications; a flow-coupled spring-mounted body (damped-oscillator frequency in a
-fluid), a falling sphere/cylinder in a real flow (the Stokes-drag falls are validated with the registered drag hook, not with a resolved flow);
-compressible or variable-density solvers on moving meshes.
+* BDF2, CN and Courant-adaptive stepping on moving meshes;
+* sliding interfaces/AMI (D9);
+* layering and remeshing (F-230);
+* elastic-analogy and stiffness-variant smoothing beyond Laplacian/inverse-distance;
+* displacement-based wall distance for `inverse_distance` other than the brute-force face-centre search;
+* turbulence, energy, scalars, particles, sources, rheology, UDFs, statistics, catalogue boundary kinds, restart with a moving
+  mesh;
+* implicit (strongly coupled) fluid-structure iteration and any added-mass stabilisation;
+* contact and multi-body assemblies;
+* free three-dimensional rotation with Newmark;
+* periodic and surface-of-revolution motion specifications;
+* a flow-coupled spring-mounted body (damped-oscillator frequency in a fluid), a falling sphere/cylinder in a real flow (the
+  Stokes-drag falls are validated with the registered drag hook, not with a resolved flow);
+* compressible or variable-density solvers on moving meshes.
 
 ## References (all from memory, unverified)
 
-Thomas and Lombard (1979, AIAA J. 17:1030), geometric conservation law; Demirdzic and Peric (1988, Int. J. Numer. Meth. Fluids 8:1037), space conservation
-law in finite-volume calculations; Farhat, Geuzaine and Grandmont (2001, J. Comput. Phys. 174:669), GCL and time accuracy; Ferziger and Peric,
-Computational Methods for Fluid Dynamics (moving grids); Jasak and Tukovic (2006/2007), automatic mesh motion by variable-diffusivity Laplacian;
-Newmark (1959, J. Eng. Mech. Div. ASCE 85:67); Causin, Gerbeau and Nobile (2005, Comput. Methods Appl. Mech. Eng. 194:4506), added-mass effect in
-partitioned fluid-structure coupling; Schlichting, Boundary-Layer Theory (Stokes second problem). None of these was accessed; every registered closed form
-above is derived in the text or is a textbook identity checked by substitution in the tests.
+* Thomas and Lombard (1979, AIAA J. 17:1030), geometric conservation law;
+* Demirdzic and Peric (1988, Int. J. Numer. Meth. Fluids 8:1037), space conservation law in finite-volume calculations;
+* Farhat, Geuzaine and Grandmont (2001, J. Comput. Phys. 174:669), GCL and time accuracy;
+* Ferziger and Peric, Computational Methods for Fluid Dynamics (moving grids);
+* Jasak and Tukovic (2006/2007), automatic mesh motion by variable-diffusivity Laplacian;
+* Newmark (1959, J. Eng. Mech. Div. ASCE 85:67);
+* Causin, Gerbeau and Nobile (2005, Comput. Methods Appl. Mech. Eng. 194:4506), added-mass effect in partitioned
+  fluid-structure coupling;
+* Schlichting, Boundary-Layer Theory (Stokes second problem).
+
+None of these was accessed; every registered closed form above is derived in the text or is a textbook identity checked by
+substitution in the tests.
 
 ## Addendum: measured results, misses and deviations (written after the work)
 
@@ -380,39 +481,64 @@ corrected check is a new test, the registered one is kept and `#[ignore]`d (`*_k
 
 ### Misses and diagnoses
 
-1. **G5 (iii), T2 velocity.** The streamwise cell velocity next to the accelerating piston lags the plug flow by 2.9e-4 while the flux-level plug
-   flow is exact to 1e-14. It depends on the Rhie-Chow time term (1.25e-4 without), grows at low viscosity (1.5e-3 at nu=1e-9) and is independent of the number
-   of pressure correctors; the cause (a cell-versus-face inconsistency at an accelerating wall of the collocated scheme) is not proven. Not tuned.
-2. **G4 as registered** (inconsistent initial wall flux, one outer iteration). Set-up bug (the lower wall had normal velocity 0 while the fluid moves
-   with V) and a baseline limitation: with one outer iteration the lagged coupling of the cyclic faces leaves a spurious pressure and vertical velocity in the
-   seam column when the mesh translates along the periodic direction. Corrected `g4c` uses a consistent start and 10 outer iterations; the registered and the
-   intermediate variants stay as ignored tests.
-3. **G5 as registered** (Symmetry side planes, pressure measured at the lab position). Set-up bug in the exact pressure (it is `a0 (x_out - x)`) and a
-   pre-existing baseline limitation: the scalar `a_p` (mean of the component diagonals) with `Symmetry` boundaries turns wall friction of the normal component into a
-   force on the tangential ones (reproduced on a fixed mesh). The sides are `ZeroGradient` in the corrected checks.
-4. **C1 as registered** (periodic x, dt = 1). The baseline PISO is unstable with cyclic faces and a time-dependent wall velocity (reproduced without a body, on a
-   fixed mesh with a prescribed ramp; growth ~15 per step, independent of dt, scheme and corrector counts). C1b uses open x faces.
-5. **S3 / S3c as registered** (fixed side walls): fixed walls prevent a uniform compression and the tilted corner would move 0.148 down through fixed wall
-   points, folding corner cell 380. Corrected with slip side walls; registered variants kept ignored.
-6. **R4 (ii)** closed form: the registered sign of the exponent is wrong; Euler's equations give `e^{+i Omega t}`. Registered-sign test kept ignored.
+1. **G5 (iii), T2 velocity.** The streamwise cell velocity next to the accelerating piston lags the plug flow by 2.9e-4, while
+   the flux-level plug flow is exact to 1e-14. The lag depends on the Rhie-Chow time term (1.25e-4 without it), grows at low
+   viscosity (1.5e-3 at nu=1e-9) and is independent of the number of pressure correctors. The cause (a cell-versus-face
+   inconsistency at an accelerating wall of the collocated scheme) is not proven. Not tuned.
+2. **G4 as registered** (inconsistent initial wall flux, one outer iteration). Diagnosis: a set-up bug (the lower wall had normal
+   velocity 0 while the fluid moves with V) and a baseline limitation. With one outer iteration, the lagged coupling of the cyclic
+   faces leaves a spurious pressure and vertical velocity in the seam column when the mesh translates along the periodic
+   direction. The corrected `g4c` uses a consistent start and 10 outer iterations. The registered and the intermediate variants
+   stay as ignored tests.
+3. **G5 as registered** (Symmetry side planes, pressure measured at the lab position). Diagnosis: a set-up bug in the exact
+   pressure (it is `a0 (x_out - x)`) and a pre-existing baseline limitation. The scalar `a_p` (mean of the component diagonals)
+   with `Symmetry` boundaries turns wall friction of the normal component into a force on the tangential ones (reproduced on a
+   fixed mesh). The sides are `ZeroGradient` in the corrected checks.
+4. **C1 as registered** (periodic x, dt = 1). The baseline PISO is unstable with cyclic faces and a time-dependent wall velocity
+   (reproduced without a body, on a fixed mesh with a prescribed ramp; growth ~15 per step, independent of dt, scheme and
+   corrector counts). C1b uses open x faces.
+5. **S3 / S3c as registered** (fixed side walls). Fixed walls prevent a uniform compression, and the tilted corner would move
+   0.148 down through fixed wall points, folding corner cell 380. The corrected set-ups use slip side walls; the registered
+   variants are kept ignored.
+6. **R4 (ii)** closed form. The registered sign of the exponent is wrong; Euler's equations give `e^{+i Omega t}`. The
+   registered-sign test is kept ignored.
 
 ### Deviations from the decisions above
 
-- The displacement of the smoothed mesh is always solved from the initial mesh (absolute displacement), not incrementally; `smoothing.substeps` is reserved (only 1).
-- New moving-wall pressure condition (needed for G5/G6): `dp/dn = -n.a_wall` with the wall acceleration from the finite difference of the wall velocity, built into
-  `apply_wall_gradients` / `add_wall_flux`; viscous and convective contributions are neglected. It is active only on the ALE path; the non-ALE path is untouched.
-- The fixed-mesh comparator of G4 uses the step-mean plate velocity; the G6 pressure gauge is a mean shift; R5 measures the period with a cubic Hermite crossing
-  interpolation (R2 uses the registered linear one). Newmark is by fixed-point iteration as registered.
+- The displacement of the smoothed mesh is always solved from the initial mesh (absolute displacement), not incrementally;
+  `smoothing.substeps` is reserved (only 1).
+- New moving-wall pressure condition (needed for G5/G6): `dp/dn = -n.a_wall` with the wall acceleration from the finite
+  difference of the wall velocity, built into `apply_wall_gradients` / `add_wall_flux`. Viscous and convective contributions
+  are neglected. The condition is active only on the ALE path; the non-ALE path is untouched.
+- The fixed-mesh comparator of G4 uses the step-mean plate velocity.
+- The G6 pressure gauge is a mean shift.
+- R5 measures the period with a cubic Hermite crossing interpolation (R2 uses the registered linear one).
+- Newmark is by fixed-point iteration as registered.
 - `AboutAxis` checks the principal-axis condition, `Hinge` does not.
-- Case tree: added `dynamic_mesh.fixed_patches` (smoothing: patches whose points stay; unlisted non-moving patches slide in their plane); `mesh_motion = none`
-  (D7) is not exposed; the library-equality parts of T2-T4 were replaced by the physical limits of the library checks (the tree reproduces the library ny=40
-  Stokes error to all printed digits). T4 uses the C2 set-up (force by `six_dof.gravity` with `physics.gravity = [5,0,0]`, mass 0.2) because the C1 set-up needs `mesh_motion = none`.
-  A `follow_patches` entry must have `velocity = "fixed"`; its `velocity_value` sets the flux of the initial state (consistent start).
+- Case tree: added `dynamic_mesh.fixed_patches` (smoothing: patches whose points stay; unlisted non-moving patches slide in
+  their plane).
+- Case tree: `mesh_motion = none` (D7) is not exposed.
+- Case tree: the library-equality parts of T2-T4 were replaced by the physical limits of the library checks (the tree reproduces
+  the library ny=40 Stokes error to all printed digits).
+- Case tree: T4 uses the C2 set-up (force by `six_dof.gravity` with `physics.gravity = [5,0,0]`, mass 0.2) because the C1 set-up
+  needs `mesh_motion = none`.
+- Case tree: a `follow_patches` entry must have `velocity = "fixed"`; its `velocity_value` sets the flux of the initial state
+  (consistent start).
 - Restart, checkpoint, the decomposed run and turbulence/energy/scalar sections are rejected at `dynamic_mesh.enabled`.
 
 ### Still not delivered
 
-Everything in the list above, plus: sliding interfaces (D9), `mesh_motion = none` for six_dof, rotationally periodic smoothing, a resolved flow-coupled falling body and the
-flow-coupled spring-mounted-body frequency check named in the F-229 acceptance (2 percent) and free fall with drag in a flow (the drag validation uses the registered drag hook).
-Baseline-solver limitations found (not fixed, defaults untouched): Symmetry with the scalar `a_p`, the cyclic-face PISO instability with time-dependent walls, zero-gradient
-pressure on accelerating walls in the non-ALE path.
+Everything in the "Not delivered / named gaps" list above, plus:
+
+* sliding interfaces (D9);
+* `mesh_motion = none` for six_dof;
+* rotationally periodic smoothing;
+* a resolved flow-coupled falling body;
+* the flow-coupled spring-mounted-body frequency check named in the F-229 acceptance (2 percent);
+* free fall with drag in a flow (the drag validation uses the registered drag hook).
+
+Baseline-solver limitations found (not fixed, defaults untouched):
+
+* Symmetry with the scalar `a_p`;
+* the cyclic-face PISO instability with time-dependent walls;
+* zero-gradient pressure on accelerating walls in the non-ALE path.

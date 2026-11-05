@@ -1,22 +1,44 @@
-# ADR 0153: Job 48S, the time step is set when a run starts: "Simulate for N s" on the Run toolbar, an automatic step from the mesh and the case's speeds under the solver's Courant controller, a Courant estimate in the captions and a warning above Courant 2
+# ADR 0153: Job 48S, the time step is set when a run starts
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
-first; what had run before is listed under "What I already knew"); the registration was corrected in review before any
-run (724d735 to the next commit: check (f2) added for "Refine x2" and the Start run dialog, the (a) control shortened to
-1.25 s so that its results are surely written, the gravity scale and the ramped-lid case of D5 and (g), D3's wording, the
-order of runs, CRLF-proof test helpers); amendments 1 ((f)'s first frame), 2 ((f)'s fix button outside the window; f3) and
-3 (ADR 0152 DV6's `Debug` text; D2) before the corrected runs; results in the addendum: (a) (the maintainer's 256 x 256
-cylinder through Run, 40 s) and every other check met its limits and every control failed as required, but for two known
-misses: (f) (the registration's layout of the warning row; f3 meets (f)'s limits on the corrected layout) and D2 (F ended
-1.7e-14 s short of 3 s); the registered decision rule, read literally, then names neither step, and this job keeps A, the
-solver's adaptive Courant controller, as the automatic step (question 7); not yet accepted by the maintainer. Job 48S, on
-local main a64864e (waves 48A-48P and 48R merged; this branch was started at 6867e40 and merged main before this
-registration). House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
-corrected run; defaults of existing code stay bit-identical outside the Studio's run path; `rcfd run` of a case file and the
-command line behave exactly as before; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe
-code, the crate graph stays acyclic. Clean-room: our own Studio code and the egui public API.
+first; what had run before is listed under "What I already knew"). Since then:
+* The registration was corrected in review before any run (724d735 to the next commit: check (f2) added for "Refine x2"
+  and the Start run dialog, the (a) control shortened to 1.25 s so that its results are surely written, the gravity scale
+  and the ramped-lid case of D5 and (g), D3's wording, the order of runs, CRLF-proof test helpers).
+* Amendments 1 ((f)'s first frame), 2 ((f)'s fix button outside the window; f3) and 3 (ADR 0152 DV6's `Debug` text; D2)
+  before the corrected runs.
+* Results in the addendum: (a) (the maintainer's 256 x 256 cylinder through Run, 40 s) and every other check met its limits
+  and every control failed as required, but for two known misses: (f) (the registration's layout of the warning row; f3
+  meets (f)'s limits on the corrected layout) and D2 (F ended 1.7e-14 s short of 3 s).
+* The registered decision rule, read literally, then names neither step, and this job keeps A, the solver's adaptive
+  Courant controller, as the automatic step (question 7).
+* Not yet accepted by the maintainer.
+
+Job 48S, on local main a64864e (waves 48A-48P and 48R merged; this branch was started at 6867e40 and merged main before
+this registration).
+
+The maintainer refined `example-projects/wind-tunnel/cases/cylinder-re100.toml` from 64 x 48 to 256 x 256 cells and kept
+`solver.dt = 0.0625`; the Courant number rose to about 10 and the run was garbage, without a warning. This job sets the time
+step when a run starts, for incompressible transient runs and on the Studio side only: "Simulate for N s" on the Run toolbar,
+an automatic step from the mesh and the case's speeds under the solver's Courant controller, a Courant estimate in the
+captions and a warning above Courant 2. The settings are run overrides, recorded with the run and never written into the
+case or the editor. Check (a) ran the maintainer's 256 x 256 cylinder through Run for 40 s on the automatic step within every
+limit: 10,742 steps in 1.31 h, Courant at most 0.4501, St 0.1663. Every other check met its limits and every control failed
+as required, but for two known misses: (f) (the registration's layout of the warning row; f3 meets (f)'s limits on the
+corrected layout) and D2 (F, the fixed step, ended 1.7e-14 s short of 3 s). The registered decision rule, read literally,
+then names neither step; this job keeps A, the solver's adaptive Courant controller, and asks the maintainer to confirm
+(question 7). The Courant target 0.5 is not a claim of stability on every mesh: on the 256 x 256 O-grid (grading 100) the PISO
+solver with its default two correctors is unstable well below Courant 1 (P4), found here and not fixed (question 2). The
+addendum lists what did not run, among them a person at the real window, Linux and macOS.
+
+Rules:
+
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical outside the Studio's run path; `rcfd run`
+  of a case file and the command line behave exactly as before; `crates/rcfd-api/tests/baseline_hashes.rs` is not
+  re-recorded; no new crate, no unsafe code, the crate graph stays acyclic.
+* Clean-room: our own Studio code and the egui public API.
 
 ## The maintainer's request (2026-10-28, relayed)
 
@@ -27,17 +49,20 @@ cells and kept `solver.dt = 0.0625`; the Courant number rose to about 10 and the
 flat residuals, noisy `cl` and `cd`) without a warning. [ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md)
 question 4 had recommended no Courant estimate for "Refine x2" (decided so in ADR 0149); this ADR supersedes it.
 
-Asked, Studio-side and at run time only: (1) a "Simulate for [N] [unit]" control next to Run (the case's own end time by
-default) and an Advanced popover with the Courant target (and the step limits if needed); steady cases: an iteration limit
-or hidden, decided here; (2) the step computed at Run from the mesh the run builds and a speed scale of the case, preferably
-through the solver's own adaptive Courant controller if it is robust for PISO on the example cases, else a fixed step that
-lands on N in whole steps (ADR 0145); the trade-off measured and registered, and what happens without a speed scale; (3)
-run-time settings passed as run overrides and recorded with the run, never written into the case or the editor, the toolbar
-showing the effective values with a hover and an indicator when the case's own values are overridden; (4) the run ends at
-exactly N with a stored final state there, state finished; (5) a Courant estimate in the Mesh caption and the Run
-caption/hover, a warning before a run when explicit settings give a Courant number above a registered limit (for example
-2), and "Refine x2" consistent with it. Registered checks (a)-(h) with controls; compressible and explicit solvers' scope
-stated.
+Asked, Studio-side and at run time only:
+
+1. A "Simulate for [N] [unit]" control next to Run (the case's own end time by default) and an Advanced popover with the
+   Courant target (and the step limits if needed); steady cases: an iteration limit or hidden, decided here.
+2. The step computed at Run from the mesh the run builds and a speed scale of the case, preferably through the solver's own
+   adaptive Courant controller if it is robust for PISO on the example cases, else a fixed step that lands on N in whole
+   steps (ADR 0145); the trade-off measured and registered, and what happens without a speed scale.
+3. Run-time settings passed as run overrides and recorded with the run, never written into the case or the editor, the
+   toolbar showing the effective values with a hover and an indicator when the case's own values are overridden.
+4. The run ends at exactly N with a stored final state there, state finished.
+5. A Courant estimate in the Mesh caption and the Run caption/hover, a warning before a run when explicit settings give a
+   Courant number above a registered limit (for example 2), and "Refine x2" consistent with it.
+
+Registered checks (a)-(h) with controls; compressible and explicit solvers' scope stated.
 
 ## Context (read at 6867e40, the merge a64864e checked for the same facts)
 
@@ -108,9 +133,9 @@ P11 (default run-time settings: Courant target 0.5, simulated time the case's ow
 Read together: the estimate of D4 is on the high side for the cylinder by a factor of 2.5 (P1: 5.18 against 2.06 measured)
 to 3.4 (P9's first step: 0.148 at an estimate of 0.5), because the thinnest cells lie at the wall where the flow runs along
 them. On the 256 x 256 O-grid (grading 100) the PISO solver with its default two correctors is unstable well below Courant 1
-(P4: growing at 0.56-0.66 and above, decaying at 0.45-0.55), which neither the pressure tolerance changes nor a Courant
-target alone can be shown to cure (P5: a milder grading or a third corrector removes it at dt 0.005); 128 x 128 shows the
-start of it at 1.6-1.8 (P6) and 64 x 48 none up to 7.4 (P7). Found, not fixed (a solver matter, question 2).
+(P4: growing at 0.56-0.66 and above, decaying at 0.45-0.55). Neither the pressure tolerance changes nor a Courant target
+alone can be shown to cure it (P5: a milder grading or a third corrector removes it at dt 0.005). On 128 x 128 the start of
+it shows at 1.6-1.8 (P6), and 64 x 48 shows none up to 7.4 (P7). Found, not fixed (a solver matter, question 2).
 
 ## Options for the step (registered before the decision runs)
 
@@ -228,13 +253,15 @@ run`, the runner and the command line behave exactly as before.
 
 ## Registered checks (limits fixed here, before any of them ran)
 
-Release builds, `--test-threads 1 --nocapture`, output to files, this host; `rcfd` and `rcfd-runner` of the same build next
-to the test's `rcfd-studio` (`common::binaries`). Files: `crates/rcfd-studio/tests/time_step_s.rs` (D1-D4, S-E, S-G, S-H, S-K),
-`run_time_s.rs` ((a)-(h)), helpers `tests/ts/mod.rs`. "Through Run": a served project (`RunnerProject`), the Studio model with
-the watcher and the run worker on, the case selected and settled (its facts known), `run_selected_case` (F5's call), the run
-waited for. Shedding: ADR 0142 amendment 1's rule (`ts::shedding`: upward crossings of `cl` through its mean over the window,
-St = (k - 1) / (t_k - t_1), amplitude half the range). Every wait has an upper bound (60 s for the model, the run's own limit
-below), not a timing claim.
+* Release builds, `--test-threads 1 --nocapture`, output to files, this host; `rcfd` and `rcfd-runner` of the same build next
+  to the test's `rcfd-studio` (`common::binaries`).
+* Files: `crates/rcfd-studio/tests/time_step_s.rs` (D1-D4, S-E, S-G, S-H, S-K), `run_time_s.rs` ((a)-(h)), helpers
+  `tests/ts/mod.rs`.
+* "Through Run": a served project (`RunnerProject`), the Studio model with the watcher and the run worker on, the case
+  selected and settled (its facts known), `run_selected_case` (F5's call), the run waited for.
+* Shedding: ADR 0142 amendment 1's rule (`ts::shedding`: upward crossings of `cl` through its mean over the window,
+  St = (k - 1) / (t_k - t_1), amplitude half the range).
+* Every wait has an upper bound (60 s for the model, the run's own limit below), not a timing claim.
 
 | Id | Check | Limit | Negative control (must fail) |
 |---|---|---|---|
@@ -276,29 +303,35 @@ All on one build of this registration's commit (`rcfd`, `rcfd-runner`, `fake-cla
 
 The registered run of `run_time_s.rs` on bfc2600 (23:16-23:20) passed 12 of its 13 tests that are not ignored ((a)'s
 control, (b) and its control, (c)/(d) and its control, (f)'s control, (f2) and its control, (g1), (g2), (h) and its
-control); **(f) failed at its first assertion**, `(i) not drawn: Simulate for`. The texts of its frame (i), printed by the
-test, held `80.0` and `Advanced` of the time row but not its labels. A throwaway probe (`tests/zz_diag_f.rs`, run once,
-deleted, never committed) drew three frames of the same set-up: in the first frame of a fresh egui context the top panel
-is laid out at its height of the frame before (one row: clip rectangle y 23-46), so the labels of the second row (y 46-64)
-are not painted, while the field and the button are; from the second frame on the panel has its height (y 23-67) and every
-text of the row is drawn (`Simulate for`, `80.0`, `Advanced`, the step line, the indicator, and the Mesh line). In the
-window a second frame follows at once, so this is a defect of (f)'s procedure, which read the first frame of a new
-context. The same frames show the field drawn as `80.0` where (f) registered `80`.
+control). **(f) failed at its first assertion**, `(i) not drawn: Simulate for`. The texts of its frame (i), printed by the
+test, held `80.0` and `Advanced` of the time row but not its labels.
 
-Corrected, before the corrected run (the same test names; every limit and control unchanged): (f)'s procedure draws one
-frame before it reads (i); and the code formats the "Simulate for" and "Largest step" fields with the Studio's number
-format (`viewport::fmt_num`, ADR 0148 decision 6: `80`, `7.3`, no trailing zeros) instead of egui's, so that the field
-reads as every other time on the Run page; the registered `80` stays. The corrected (f) and its control run on a build of
-this amendment's commit in a target folder of their own (`target-48s-a1`), because (a) and D2 still run from the test
-binaries of the registration's build; (a) and D2 do not draw the field. What I knew when writing this: the output of the
-first run (the passing tests' values are in the addendum) and the probe; the corrected (f) had not run.
+A throwaway probe (`tests/zz_diag_f.rs`, run once, deleted, never committed) drew three frames of the same set-up. In the
+first frame of a fresh egui context the top panel is laid out at its height of the frame before (one row: clip rectangle
+y 23-46), so the labels of the second row (y 46-64) are not painted, while the field and the button are. From the second
+frame on the panel has its height (y 23-67) and every text of the row is drawn (`Simulate for`, `80.0`, `Advanced`, the step
+line, the indicator, and the Mesh line). In the window a second frame follows at once, so this is a defect of (f)'s
+procedure, which read the first frame of a new context. The same frames show the field drawn as `80.0` where (f) registered
+`80`.
+
+Corrected, before the corrected run (the same test names; every limit and control unchanged):
+
+* (f)'s procedure draws one frame before it reads (i).
+* The code formats the "Simulate for" and "Largest step" fields with the Studio's number format (`viewport::fmt_num`,
+  ADR 0148 decision 6: `80`, `7.3`, no trailing zeros) instead of egui's, so that the field reads as every other time on the
+  Run page; the registered `80` stays.
+
+The corrected (f) and its control run on a build of this amendment's commit in a target folder of their own
+(`target-48s-a1`), because (a) and D2 still run from the test binaries of the registration's build; (a) and D2 do not draw
+the field. What I knew when writing this: the output of the first run (the passing tests' values are in the addendum) and
+the probe; the corrected (f) had not run.
 
 ## Amendment 2 (2026-10-28, after the corrected run of (f), before the run of f3)
 
-The corrected run of (f) and its control on 3ae759b (amendment 1's build, `target-48s-a1`): the control passed; **(f)
-missed (iv)**: every limit of (i)-(iii) was met (the row's texts with `80`, the Mesh line, the hover, the indicator after
-7.3 s, the case file and the editor untouched), and in (iv) the popover's texts, `dt 0.0625 s, the case's own` and the
-warning's exact text were drawn, but not the fix button `Use the automatic time step`: the warning is one line of about
+The corrected run of (f) and its control ran on 3ae759b (amendment 1's build, `target-48s-a1`). The control passed.
+**(f) missed (iv)**. Every limit of (i)-(iii) was met (the row's texts with `80`, the Mesh line, the hover, the indicator
+after 7.3 s, the case file and the editor untouched). In (iv) the popover's texts, `dt 0.0625 s, the case's own` and the
+warning's exact text were drawn, but not the fix button `Use the automatic time step`. The warning is one line of about
 2,000 points and the button sat right of it, outside the 1280-point window, so egui did not paint it. This is a defect of
 the code (in the window the button cannot be clicked either), not of the procedure. By the house rule the test becomes the
 ignored `f_the_toolbar_time_row_drawn_known_miss` with its limits intact, running the registration's layout through the
@@ -341,17 +374,18 @@ which no new text holds).
 
 ## Addendum: results against the registered limits (2026-10-28/29)
 
-Branch `worktree-agent-a36702f9566b8d038`. Commits: 56c0161 (the code and tests), c4d3346 (main a64864e merged: 48P,
-48R), 724d735 (registration), bfc2600 (registration corrected in review, before any run), 3ae759b (amendment 1), 31ba296
-(amendment 2), 5895991 (amendment 3), then this addendum (e60c3d6, 440ea7c, 58dd7c8 and the last commit); e60c3d6 holds
-the final code: two doc comments of `time_step.rs` name the right decisions (D7, D12), no behaviour changed, so the tests did
-not run again on it, and `cargo fmt` and `cargo clippy` (W's) are clean on 58dd7c8. Every run:
-release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB, 14-37 GB free
-during the runs, shared with other agents' builds and runs). Builds: bfc2600 in `target/` (D1-D4, S-*, `run_time_s`' first
-run, (a)); 3ae759b, 31ba296 and 5895991 in `target-48s-a1/` (the corrected (f), f3, the (f) control again, the known-miss
-test, W twice), because (a) and D2 ran from `target/`'s binaries; the code of the amendments is display-only (the time
-fields' number format, the warning row's layout, the plan's `Debug` text, a doc comment), outside the run path (a), D2 and
-the other runs exercise.
+* Branch: `worktree-agent-a36702f9566b8d038`.
+* Commits: 56c0161 (the code and tests), c4d3346 (main a64864e merged: 48P, 48R), 724d735 (registration), bfc2600
+  (registration corrected in review, before any run), 3ae759b (amendment 1), 31ba296 (amendment 2), 5895991 (amendment 3),
+  then this addendum (e60c3d6, 440ea7c, 58dd7c8 and the last commit).
+* e60c3d6 holds the final code: two doc comments of `time_step.rs` name the right decisions (D7, D12), no behaviour changed,
+  so the tests did not run again on it, and `cargo fmt` and `cargo clippy` (W's) are clean on 58dd7c8.
+* Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB, 14-37 GB
+  free during the runs, shared with other agents' builds and runs).
+* Builds: bfc2600 in `target/` (D1-D4, S-*, `run_time_s`' first run, (a)); 3ae759b, 31ba296 and 5895991 in `target-48s-a1/`
+  (the corrected (f), f3, the (f) control again, the known-miss test, W twice), because (a) and D2 ran from `target/`'s
+  binaries. The code of the amendments is display-only (the time fields' number format, the warning row's layout, the
+  plan's `Debug` text, a doc comment), outside the run path (a), D2 and the other runs exercise.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -383,24 +417,31 @@ the other runs exercise.
 | (a) | as registered | finished at 40 bit for bit (`status.json` reason `finished: end time 40 reached`, exit 0), 10,742 steps in 4,721 s (1.31 h; the limit 3 h), 23:13-00:31; every monitor finite; `set` the four entries `solver.end_time=40`, `solver.dt=0.00116`, `solver.max_courant=0.5`, `solver.max_dt=0.4`; Courant 0.147 at step 1, at most 0.4501 after step 10 (0.4499-0.4501 from t = 1 on); dt 0.00116 at step 1, 0.0033 from step 68, 0.00371-0.00389 from t = 5 on (the largest 3.35 times dt0), the last step 52 % of the one before; over [10, 40] 5 upward crossings (14.54, 20.55, 26.57, 32.58, 38.59 s), St 0.16632, amplitude 0.3349; 40 snapshots, the last at (10,742, 40) exactly | pass |
 | W | the whole suite and the lints | first run on 31ba296 (23:29-23:41): 59 binaries, 268 passed, 1 failed (ADR 0152's DV6 (a), amendment 3), 11 ignored; corrected run on 5895991 (23:42-23:54): **269 passed, 0 failed, 11 ignored**: the known misses of ADR 0131 B9, ADR 0133 R6, ADR 0141 G1 and ADR 0144 J3b, ADR 0152's DV6 recorder, and this ADR's (a), D1, D3, D4 (heavy), `d2_cylinder_256x256_known_miss` and `f_the_toolbar_time_row_drawn_known_miss`; against main's 246 (ADR 0152), the 23 new tests that are not ignored; DV6's 22 cases equal to the record. `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 5895991 and on 58dd7c8; `cargo fmt -p rcfd-studio -- --check` clean on both; `workspace_graph` 3 passed (after W); `scripts/third_party_licenses.py --check`: up to date | pass |
 
-**Decision.** A, the solver's adaptive Courant controller from the conservative first step, met every limit of its own on
-D1-D4; F missed its own end-time limit on D2 (amendment 3), which the registered rule let gate A. As amendment 3 says, A
-stays the Studio's automatic step (`time_step::DEFAULT_MODE` is `StepMode::Adaptive`, unchanged since the registration) and
-the maintainer is asked to confirm (question 7); nothing ran again with F. Measured trade-off (F is the estimate's step
-throughout, so it runs at the estimate's caution): the cylinder 64 x 48 took 4,663 adaptive steps against 13,272 fixed
-(2.85 times fewer), 85.9 s against 193.9 s, at a realized Courant number of 0.45 against 0.20; the 256 x 256 cylinder 891
-against 2,567 steps (409 s against 1,151 s) to 3 s; the step 1,909 against 3,591; the cavity, whose uniform grid makes the
-estimate tight, 633 against 640. The results agree within 0.83 % (St), 0.20 % (`cd`), 0.03 % (`p_inlet`) and 5e-6 relative
-(`lid_drag`); A ends on N bit for bit on all four, F on three. With A, (a) then ran the maintainer's 256 x 256 cylinder
-through Run for 40 s within every limit: 10,742 steps (the registration's estimate about 11,000; F's step would take about
-34,200) in 1.31 h, Courant at most 0.4501, St 0.1663.
+**Decision.** A stays the Studio's automatic step, as amendment 3 says (`time_step::DEFAULT_MODE` is `StepMode::Adaptive`,
+unchanged since the registration), and the maintainer is asked to confirm (question 7). A, the solver's adaptive Courant
+controller from the conservative first step, met every limit of its own on D1-D4. F missed its own end-time limit on D2
+(amendment 3), which the registered rule let gate A. Nothing ran again with F.
+
+Measured trade-off (F is the estimate's step throughout, so it runs at the estimate's caution):
+
+| Case | Steps, A against F | Wall time, A against F | Results agree within |
+|---|---|---|---|
+| the cylinder 64 x 48 | 4,663 against 13,272 | 85.9 s against 193.9 s | 0.83 % (St) |
+| the 256 x 256 cylinder, to 3 s | 891 against 2,567 | 409 s against 1,151 s | 0.20 % (`cd`) |
+| the step | 1,909 against 3,591 | 90.5 s against 271.9 s | 0.03 % (`p_inlet`) |
+| the cavity | 633 against 640 | 2.2 s against 2.2 s | 5e-6 relative (`lid_drag`) |
+
+On the 64 x 48 cylinder A took 2.85 times fewer steps, at a realized Courant number of 0.45 against 0.20. The cavity's uniform
+grid makes the estimate tight. A ends on N bit for bit on all four, F on three. With A, (a) then ran the maintainer's
+256 x 256 cylinder through Run for 40 s within every limit: 10,742 steps (the registration's estimate about 11,000; F's step
+would take about 34,200) in 1.31 h, Courant at most 0.4501, St 0.1663.
 
 **Deviations and notes.**
 
 1. The registration was corrected in review before any run (bfc2600, the status line): check (f2), the (a) control at
    1.25 s, the gravity scale of D5 with the ramped-lid case (g2), D3's wording, the order of runs, CRLF-proof helpers.
-2. Amendment 1: (f)'s first run read the first frame of a new egui context, whose top panel clips the toolbar's second row;
-   and the field showed `80.0` where (f) registered `80`: the procedure reads the second frame and the fields use the
+2. Amendment 1: (f)'s first run read the first frame of a new egui context, whose top panel clips the toolbar's second row,
+   and the field showed `80.0` where (f) registered `80`. The procedure now reads the second frame and the fields use the
    Studio's number format. The limit `80` was kept.
 3. Amendment 2: the corrected (f) found a real defect, the warning's fix button out of the 1280-point window; (f) is the
    ignored `f_the_toolbar_time_row_drawn_known_miss` with its limits intact (the registration's layout through
@@ -412,9 +453,9 @@ through Run for 40 s within every limit: 10,742 steps (the registration's estima
    amendments were built in `target-48s-a1` (the corrected (f), f3, the (f) control again, the known-miss test, W twice),
    because (a) and D2 ran from `target/`'s programs. The amendments change only the drawing of the time fields and the
    warning row, the plan's `Debug` text and a doc comment, not the plan's entries, the facts or the run.
-6. An attempt to run `workspace_graph` in `target/` while (a) ran failed to replace `target/release/rcfd.exe` (in use by
-   (a)'s solver: Windows locks a running program, and building `rcfd-cli`'s tests rebuilds that program); nothing was
-   built or changed and (a) went on; `workspace_graph` ran in `target-48s-a1` after W.
+6. An attempt to run `workspace_graph` in `target/` while (a) ran failed to replace `target/release/rcfd.exe`, which (a)'s
+   solver was using: Windows locks a running program, and building `rcfd-cli`'s tests rebuilds that program. Nothing was
+   built or changed and (a) went on. `workspace_graph` ran in `target-48s-a1` after W.
 7. The facts are computed in the Studio process (`Simulation::new` of the case, on a control thread): 0.03 s for the
    64 x 48 cylinder, 0.95 s for 256 x 256 (P11); a large case costs its simulation's memory there once per shown text
    (question 6).
@@ -430,30 +471,50 @@ through Run for 40 s within every limit: 10,742 steps (the registration's estima
 
 **Reported without a limit.**
 
-* The estimate against the measured Courant number of the first step (the adaptive runs; the estimate at dt0 is about
-  0.5 by construction): the shipped cylinder 0.4994 against 0.218 (2.3 times high), 256 x 256 0.496 against 0.147 (3.4), the
-  cavity 0.499 against 0.103 (4.8: an impulsive start, the lid's cells only moving), the step 0.500 against 0.389 (1.3), the
-  heated cavity (gravity scale) 0.499 against 0.00058 (a flow at rest at its first step); the ramped lid none against
-  0.00047. The controller's largest step was 2.96 (D1), 3.05 (D2) and 3.35 ((a)) times the estimate's first step.
+The estimate against the measured Courant number of the first step (the adaptive runs; the estimate at dt0 is about 0.5 by
+construction):
+
+| Case | Estimate | Measured | Estimate high by, or note |
+|---|---|---|---|
+| the shipped cylinder | 0.4994 | 0.218 | 2.3 times |
+| 256 x 256 | 0.496 | 0.147 | 3.4 |
+| the cavity | 0.499 | 0.103 | 4.8: an impulsive start, the lid's cells only moving |
+| the step | 0.500 | 0.389 | 1.3 |
+| the heated cavity (gravity scale) | 0.499 | 0.00058 | a flow at rest at its first step |
+| the ramped lid | none | 0.00047 | |
+
+The controller's largest step was 2.96 (D1), 3.05 (D2) and 3.35 ((a)) times the estimate's first step.
+
 * The hover's step and wall-time estimates (the first step's count, "or fewer") against the runs: (b) about 13,290 steps
   and 3.2 min against 4,663 steps and 78 s; (c) 1,213 against 458; (g1) 13,514 and 1.7 min against 3,810 steps; D2's
   adaptive run 2,587 against 891.
 * The last step of the adaptive runs as a fraction of the step before it: D1 58 %, D2 32 %, D3 92 %, D4 74 %, (c) 6.3 %,
   (a) 52 %.
-* (a): the hover's text for this plan (computed with `time_step::hover`, not read from a drawn frame) `About 34,483 steps
+
+For (a):
+
+* The hover's text for this plan (computed with `time_step::hover`, not read from a drawn frame) `About 34,483 steps
   or fewer (the step grows to the Courant target), estimated wall time about 3 h or less (65,536 cells, at 4.7
   microseconds per cell and step)` against 10,742 steps (3.2 times fewer) and 1.31 h, at 6.7
-  microseconds per cell and step on the shared host; the registration's "about 11,000 steps (P10's dt)" against 10,742;
-  `res_p` medians 3.2e-4 (t 5-10), 6.7e-4 (10-20), 7.5e-4 (20-30) and 7.4e-4 (30-40), steady; `cd` over [30, 40] s 1.3563
-  (1.3460 to 1.3667); St 0.1663 against the 64 x 48 cylinder's 0.1573 ((b)); the last step (half the step before) has
-  `res_p` 3.0e-3 against 7.4e-4 before it, its `cd` 1.36205 and `cl` 0.33379 in line with the step before (1.36200,
-  0.33372).
+  microseconds per cell and step on the shared host.
+* The registration's "about 11,000 steps (P10's dt)" against 10,742.
+* `res_p` medians 3.2e-4 (t 5-10), 6.7e-4 (10-20), 7.5e-4 (20-30) and 7.4e-4 (30-40), steady.
+* `cd` over [30, 40] s 1.3563 (1.3460 to 1.3667).
+* St 0.1663 against the 64 x 48 cylinder's 0.1573 ((b)).
+* The last step (half the step before) has `res_p` 3.0e-3 against 7.4e-4 before it, its `cd` 1.36205 and `cl` 0.33379 in
+  line with the step before (1.36200, 0.33372).
 
-**Not run.** A person at the real window (the checklist); Linux and macOS; debug builds of the new tests; the workspace
-gate and the other crates' tests (unchanged: `rcfd run`, the runner and `rcfd-api` are not edited); `cargo deny` (no
-dependency change); the heavy tests outside this job (`--ignored` of earlier ADRs); the merge with today's main (aad08fe:
-waves 48Q and 48T, among them 48T's `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs`): `git merge-tree` finds no
-conflict, but the suite has not run on the merged tree.
+**Not run.**
+
+* A person at the real window (the checklist).
+* Linux and macOS.
+* Debug builds of the new tests.
+* The workspace gate and the other crates' tests (unchanged: `rcfd run`, the runner and `rcfd-api` are not edited).
+* `cargo deny` (no dependency change).
+* The heavy tests outside this job (`--ignored` of earlier ADRs).
+* The merge with today's main (aad08fe: waves 48Q and 48T, among them 48T's
+  `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs`): `git merge-tree` finds no conflict, but the suite has not run on the
+  merged tree.
 
 **Questions added by the addendum** (the registration's 1-5 stand; recommendations for them below).
 
@@ -482,21 +543,32 @@ conflict, but the suite has not run on the merged tree.
     reacts after each step, so a quickly accelerating flow can pass C for a few steps" (f3 and W run again). Recommendation:
     (b), with the next Studio change.
 
-Recommendations for questions 1-5 of the registration: 1 keep 0.5: with it the maintainer's 256 x 256 cylinder ran (a)'s
-40 s at Courant 0.45 with steady residuals and St 0.166, while P4 puts the onset of that mesh's instability at about 0.56,
-so a higher target has no margin there; and it costs 2.85 times fewer steps than the fixed alternative on the shipped
-cylinder; 2 a solver job after job 48T's findings, not a run-time corrector count from the Studio; 3 yes, as a small
-follow-up with SF4 (b) and SF9 (g) registered again; 4 keep the read-only line until it is missed; 5 calibrate from the
-project's finished runs (steps, cells and wall time are in their records) when the estimate is found wrong in use.
+Recommendations for questions 1-5 of the registration:
 
-Read with ADR 0154 (job 48T, merged into main after this registration; not on this branch), which puts the onset of the
-default PISO coupling's failure in the thin wall cells at a wall diffusion number `nu dt / dr1^2` between 6.5 (clean) and
-11.4 (spoky): with `nu` 0.01 and `dr1` this ADR's thinnest cell (0.002614 m), (a) ran at 5.4 to 5.7 (dt 0.00371 to
-0.00389 s), P4's slow growth at dt 0.0042 s is at 6.1 (below ADR 0154's clean 6.5 on another mesh, so that number does
-not fix the onset alone either), its decay at 0.0035 s at 5.1, and P5's growth at 0.005 s at 7.3. So on this mesh the
-target 0.5 kept (a) below the onset ADR 0154 found; at a fixed Courant number that number grows as 1/h with refinement, so
-a finer graded mesh can pass the onset at Courant 0.5 (decision 3 claims no stability on every mesh). This supports the
-recommendation of question 2 (a solver change after ADR 0154's findings) over a lower Studio target.
+1. Keep 0.5: with it the maintainer's 256 x 256 cylinder ran (a)'s 40 s at Courant 0.45 with steady residuals and St 0.166,
+   while P4 puts the onset of that mesh's instability at about 0.56, so a higher target has no margin there; and it costs
+   2.85 times fewer steps than the fixed alternative on the shipped cylinder.
+2. A solver job after job 48T's findings, not a run-time corrector count from the Studio.
+3. Yes, as a small follow-up with SF4 (b) and SF9 (g) registered again.
+4. Keep the read-only line until it is missed.
+5. Calibrate from the project's finished runs (steps, cells and wall time are in their records) when the estimate is found
+   wrong in use.
+
+Read this with ADR 0154 (job 48T, merged into main after this registration; not on this branch). ADR 0154 puts the onset of
+the default PISO coupling's failure in the thin wall cells at a wall diffusion number `nu dt / dr1^2` between 6.5 (clean) and
+11.4 (spoky). With `nu` 0.01 and `dr1` this ADR's thinnest cell (0.002614 m):
+
+| Run | dt (s) | Wall diffusion number |
+|---|---|---|
+| (a) | 0.00371 to 0.00389 | 5.4 to 5.7 |
+| P4's slow growth | 0.0042 | 6.1 (below ADR 0154's clean 6.5 on another mesh, so that number does not fix the onset alone either) |
+| P4's decay | 0.0035 | 5.1 |
+| P5's growth | 0.005 | 7.3 |
+
+So on this mesh the target 0.5 kept (a) below the onset ADR 0154 found. At a fixed Courant number the wall diffusion number
+grows as 1/h with refinement, so a finer graded mesh can pass the onset at Courant 0.5 (decision 3 claims no stability on
+every mesh). This supports the recommendation of question 2 (a solver change after ADR 0154's findings) over a lower Studio
+target.
 
 ## Not in CI (by hand)
 

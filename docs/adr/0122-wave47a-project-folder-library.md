@@ -1,10 +1,25 @@
 # ADR 0122: Wave 47A, `rcfd-project`, the project folder library (Studio layer L1)
 
-Status: **ACCEPTED 2026-10-26** (checks and limits registered before the registered runs). Written at main 48b30bc on branch
-`w47a`, target `<target dir>`. House rules of ADRs 0110-0117: limits fixed before runs; a missed limit becomes an
-ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults of
-existing code are bit-identical (this ADR adds a crate and touches no existing code); `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded. Parent: `docs/ui-restart-plan.md` sections 3, 4 and 8 (the project folder contract).
+Status: **ACCEPTED 2026-10-26** (checks and limits registered before the registered runs).
+
+This ADR adds `crates/rcfd-project`, the library for the Studio project folder (layer L1): typed records, atomic replace, JSONL
+with torn-tail handling, path safety, a poll-based watcher, a migration hook and a query API. Every later layer reads and writes
+that folder, so the crate is built first, headless, with no UI and no solver dependency. The registered release run met every
+limit, with no misses. Amendments 1 and 2 then corrected a defective A2 negative control that failed in debug; the old control
+stays as an ignored known miss. The final gate on 2026-10-26 had 2137 passed, 0 failed and 662 ignored, and workspace clippy
+exited 101 on two errors in files this branch does not touch. The gate section also records a defect, not fixed: a diverged
+run whose `residuals.jsonl` or `status.json` holds NaN would make the whole residual file unreadable and drop the run into
+`skipped`. The first full gate in CI failed A1's overlap minimum (15 writes, no partial read); amendment 3 (2026-10-28)
+corrected the set-up (its corrected runs are local runs, not a gate), and the fixed-2 s test stays as an ignored known miss.
+The kill checks test atomicity, not durability across power loss.
+
+Rules and parents:
+
+* Written at main 48b30bc on branch `w47a`, target `<target dir>`.
+* House rules of ADRs 0110-0117: limits fixed before runs; a missed limit becomes an ignored `*_known_miss` test with the limit
+  intact; a defective set-up is corrected by an amendment before the corrected run; defaults of existing code are bit-identical
+  (this ADR adds a crate and touches no existing code); `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Parent: `docs/ui-restart-plan.md` sections 3, 4 and 8 (the project folder contract).
 
 ## Context
 
@@ -33,7 +48,7 @@ by the plan section 8 contract; this crate codes against it.
    * Additive to the contract (reported to the lead): the `case` and `mesh` path fields of `run.json`, the event shapes, and the flat
      form of `metrics.json`. Nothing in the contract is changed.
 4. **Run id** `r-<UTC yyyymmddThhmmss>-<4 hex>`. Ownership comes from `create_dir`, which is atomic and fails if the directory exists,
-   across threads and processes; on a clash the suffix is probed linearly from a random start (std `RandomState`, OS-seeded, mixed with
+   across threads and processes. On a clash the suffix is probed linearly from a random start (std `RandomState`, OS-seeded, mixed with
    the clock), so a free suffix is always found while the second has one (65 536 per second). Ids sort by time to the second; the list
    orders by `created` (milliseconds), then id. UTC formatting uses the published civil-from-days algorithm of H. Hinnant
    ("chrono-Compatible Low-Level Date Algorithms").
@@ -97,12 +112,15 @@ without it, so it counts as one passing test per run).
 | L1 | Listing 500 runs (1/3 finished with metrics), release build, own test binary | slowest of 3 warm `runs()` <= 500 ms | the same listing path with 2 ms extra per run must exceed 500 ms | debug: 166 ms; control 1.31 s |
 | T1 | UTC formatting: known dates (1970-01-01, 2000-02-29, 2000-03-01, 2024-02-29, 1 700 000 000 s) and 100 000 consecutive days | exact | consecutive-day check fails on any skipped or repeated day | pass |
 
-Limit reasons: 0 partial reads, 0 bad observations and exact sets are correctness properties, not tolerances. The A1 overlap minimums
-(20 writes, 200 reads) are a fifth of the debug smoke so that the check cannot pass with readers that never ran. The A3 40 ms is the
-50 ms hold minus 10 ms of timer slack; 2 s bounds the about 0.63 s retry budget with margin for load. L1: 500 ms is half of the 1 s
-"flow of thought" response limit (J. Nielsen, *Usability Engineering*, 1993, chapter 5; recalled from memory, UNVERIFIED), leaving
-margin for a loaded machine; the 2 ms per run control is 1 s over 500 runs, twice the limit. The J2 control asserts a probability:
-with 8 of 10 in smoke, a false miss needs 10 kills without a torn tail.
+Limit reasons:
+
+* 0 partial reads, 0 bad observations and exact sets are correctness properties, not tolerances.
+* The A1 overlap minimums (20 writes, 200 reads) are a fifth of the debug smoke so that the check cannot pass with readers that
+  never ran.
+* The A3 40 ms is the 50 ms hold minus 10 ms of timer slack; 2 s bounds the about 0.63 s retry budget with margin for load.
+* L1: 500 ms is half of the 1 s "flow of thought" response limit (J. Nielsen, *Usability Engineering*, 1993, chapter 5; recalled
+  from memory, UNVERIFIED), leaving margin for a loaded machine; the 2 ms per run control is 1 s over 500 runs, twice the limit.
+* The J2 control asserts a probability: with 8 of 10 in smoke, a false miss needs 10 kills without a torn tail.
 
 What the kill checks do not test: process kill leaves the OS cache intact, so they test atomicity (old or new complete file, no torn
 line accepted), not durability across power loss.
@@ -138,11 +156,12 @@ torn-tail path is exercised by the split-writer control and the J1 fixtures, not
 
 What happened. The first workspace gate (archive of 95e1e3c) failed one test outside this crate:
 `crates/rcfd-cli/tests/workspace_graph.rs::layering_matches_architecture_doc` panics on any crate not in its layer table. Fixed by
-placing `rcfd-project` (depends on `rcfd-core` only) in layer 1 of that table and in `docs/architecture.md`. After the rebase onto
-8ca5c5b a debug run of `cargo test -p rcfd-project` failed the A2 negative control (0 bad observations); three debug reruns gave 1, 8
-and 4. The set-up is defective in debug builds: the child builds each 1 MiB payload inside its loop, which takes longer than the write,
-so the file is complete most of the time. The registered release run (99 bad) was not affected, but a control that fails in debug
-does not discriminate reliably.
+placing `rcfd-project` (depends on `rcfd-core` only) in layer 1 of that table and in `docs/architecture.md`.
+
+After the rebase onto 8ca5c5b a debug run of `cargo test -p rcfd-project` failed the A2 negative control (0 bad observations); three
+debug reruns gave 1, 8 and 4. The set-up is defective in debug builds: the child builds each 1 MiB payload inside its loop, which
+takes longer than the write, so the file is complete most of the time. The registered release run (99 bad) was not affected, but a
+control that fails in debug does not discriminate reliably.
 
 Diagnosis while correcting (smoke, debug, disclosed): with payloads precomputed, the child rewrote the file so fast that in 3 of 13
 runs the parent's concurrent reader blocked inside `File::open` for over 60 s after a kill (a file being truncated in place by a

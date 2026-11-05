@@ -1,12 +1,21 @@
 # Partials audit, group 1
 
-Read-only audit of ten roadmap items with status `partial` (HEAD 272eb89, 2026-10-21). Each item is graded against its
-`acceptance` field in docs/roadmap.json only. Wider scope from the title or a "SCOPE (merged review)" addition is listed
-separately as "scope beyond acceptance". It does not lower the grade, but the paragraph proposes how to record it.
+This read-only audit grades ten roadmap items with status `partial` (HEAD 272eb89, 2026-10-21). Three grade DONE (F-044, F-119,
+F-201), six PARTIAL (F-001, F-063, F-102, F-131, F-211, F-233) and one OVERSTATED (F-223): its "speed-up 118 for cell ISAT"
+claim is a speed-up on a wrong answer. None grades TODO. The [glossary](../glossary.md) defines F-xxx, wave, ADR, known
+miss and UNVERIFIED.
 
-Grades: DONE = the acceptance text, as written, is met by a passing non-ignored test (or a reproducible script) with numeric
-limits; PARTIAL = a real tested slice exists, with the unmet clause named; TODO = nothing usable; OVERSTATED = the roadmap
-note claims more than the tests show.
+Each item is graded against its `acceptance` field in docs/roadmap.json only. Wider scope from the title or a
+"SCOPE (merged review)" addition is listed separately as "scope beyond acceptance". It does not lower the grade, but the
+paragraph proposes how to record it.
+
+Grades:
+
+* DONE = the acceptance text, as written, is met by a passing non-ignored test (or a reproducible script) with numeric
+  limits;
+* PARTIAL = a real tested slice exists, with the unmet clause named;
+* TODO = nothing usable;
+* OVERSTATED = the roadmap note claims more than the tests show.
 
 How the runs were made: Windows 11, `cargo test --release -p <crate> --test <name> -- --include-ignored` with a private
 target directory, on a machine shared with other agents' cargo jobs (so wall times and speed-ups are noisy). "Ignored records
@@ -76,15 +85,18 @@ Closure:
 
 The torus volume known miss (4.18 vs 3 percent) still fails as recorded. Literature attributions are UNVERIFIED (note).
 
-**F-211 (PARTIAL, narrow).** Measured: B1 blend 0/1 differences exactly 0; O1c orders 2.0000 for central, blended(1),
-gamma(0.2) and bounded_central and 0.98-1.003 for the first-order members; W1b square wave: every limited scheme stays inside the
-bounds (largest signed excursion -3.1e-5 for gamma; negative means inside; limit 1e-3), while the central control overshoots
-0.147. T1 temporal orders and T2 bounded BDF2 (overshoot 1.2e-9 vs
-2.5e-2) also pass. Decision: I count only passing tests. compressive(1.5) and compressive(2) reach orders 1.98/1.99 only inside
-`o1c_known_miss_compressive_convergence`, which fails its convergence rule (limit cycle of the deferred correction). So their
-"nominal order" clause is unmet. Closure (S): a newly registered test that measures the order of those two schemes with a
-convergence rule suited to a limit cycle (or a direct non-linear solve), with the old record kept. Literature references are
-UNVERIFIED (docs/reference-data.md).
+**F-211 (PARTIAL, narrow).** Measured:
+- B1 blend 0/1 differences exactly 0;
+- O1c orders 2.0000 for central, blended(1), gamma(0.2) and bounded_central and 0.98-1.003 for the first-order members;
+- W1b square wave: every limited scheme stays inside the bounds (largest signed excursion -3.1e-5 for gamma; negative
+  means inside; limit 1e-3), while the central control overshoots 0.147;
+- T1 temporal orders and T2 bounded BDF2 (overshoot 1.2e-9 vs 2.5e-2) also pass.
+
+Decision: I count only passing tests. The schemes compressive(1.5) and compressive(2) reach orders 1.98/1.99 only inside
+`o1c_known_miss_compressive_convergence`, which fails its convergence rule (limit cycle of the deferred correction). So
+their "nominal order" clause is unmet. Closure (S): a newly registered test that measures the order of those two schemes
+with a convergence rule suited to a limit cycle (or a direct non-linear solve), with the old record kept. Literature
+references are UNVERIFIED (docs/reference-data.md).
 
 **F-223 (OVERSTATED).** Measured:
 - DRG: static DRG on GRI-Mech 3.0 H2/air keeps delays within 3.6e-6 of the direct run at about 9x wall speed-up (D2). Dynamic

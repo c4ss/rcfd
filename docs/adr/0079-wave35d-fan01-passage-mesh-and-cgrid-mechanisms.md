@@ -1,10 +1,29 @@
-# ADR 0079: Wave 35D, a C-grid mesh of the FAN-01 passage, the B' quality mechanisms, and the control range of the C-grid generator
+# ADR 0079: Wave 35D, FAN-01 C-grid mesh, B' mechanisms and C-grid control range
 
-Status: registered before any code of this wave was written. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit
-unchanged, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded; every change is opt-in.
-Clean-room: first principles and published literature only. Parents: ADR 0072 (construction E and its addendum: A' aspect 395 against 300, B' 78.17 deg /
-skewness 7.08 / aspect 8532, R-E scan 107 of 117, median 74.5 deg), ADR 0075 (FAN-01 geometry and the refusals of attempt 1), ADR 0065/0068 (gates).
-Nothing here is a fan performance claim.
+Status: registered before any code of this wave was written.
+
+Wave 35D covers a C-grid mesh of the FAN-01 passage, the B' quality mechanisms, and the control range of the C-grid
+generator. Part 1 produces the first C-grid mesh of FAN-01, built through the case with the opt-in value
+`mesh.fan.c_grid_construction = "camber_seam"`, but no FAN-01 mesh of this wave meets both P9 and P10: (a) did not build,
+(a2) met P10 and missed P9, and (a3) met P9 and missed P10. Both built meshes also miss the P2 quality target on
+non-orthogonality and skewness (87.22 deg / 4.126 on (a2), 83.26 deg / 3.978 on (a3), against 70 deg / 2.0). In Part 2 each
+of the four single-factor changes removed its own target, raised another Q1-E maximum by more than 1 % and lost R-E builds,
+so all four were rejected and removed. The B' gates stay missed with every construction of this wave, and construction G
+misses the A' aspect gate (394.4 against 300). In Part 3 the R-G scan missed gate (a) for both fans (blade B 35 of 38,
+FAN-01 20 of 39) and met gate (b) (31 of 31 for each); the FAN-01 C-grid is not robust. B1 is met and `baseline_hashes.rs`
+is untouched. `camber_seam` stays as an opt-in case value despite the P10 miss on (a3); the deviations list records keeping
+it as a departure from preamble rule (b) and a decision for the lead.
+
+Rules and parents:
+
+* Limits are fixed. A miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged. A defective set-up gets a
+  NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded; every change is opt-in.
+* Clean-room: first principles and published literature only.
+* Parents: ADR 0072 (construction E and its addendum: A' aspect 395 against 300, B' 78.17 deg / skewness 7.08 / aspect
+  8532, R-E scan 107 of 117, median 74.5 deg), ADR 0075 (FAN-01 geometry and the refusals of attempt 1), ADR 0065/0068
+  (gates).
+* Nothing here is a fan performance claim.
 
 ## What was run before this ADR was written (disclosed)
 
@@ -25,22 +44,25 @@ All on HEAD 211d3e3 unmodified, in a scratch copy, release builds:
 
 ### Diagnosis (from the refusal and the geometry)
 
-The C-grid centres two straight axial seams (`s = const`) on the mean of the leading- and trailing-edge `s`. At the FAN-01 hub (chord 98.9 mm, stagger
-43.6 deg, pitch 86.6 mm) the blade spans 68 mm of the pitch, the trailing edge is 9.3 mm from the lower seam and the wake line (leaving along the
-pressure-surface tangent, about 42 deg, turning axial over 0.2 chord) drifts 18 mm further: it crosses the seam. With straight seams no centring fits
-blade and wake (68 + 18 mm of 86.6 mm). The tip gap (2.5 mm) cannot hold two stacks of 2 cells of the y+ = 30 height plus a middle (above).
+The C-grid centres two straight axial seams (`s = const`) on the mean of the leading- and trailing-edge `s`. At the FAN-01
+hub (chord 98.9 mm, stagger 43.6 deg, pitch 86.6 mm) the blade spans 68 mm of the pitch and the trailing edge is 9.3 mm from
+the lower seam. The wake line (leaving along the pressure-surface tangent, about 42 deg, turning axial over 0.2 chord)
+drifts 18 mm further: it crosses the seam. With straight seams no centring fits blade and wake (68 + 18 mm of 86.6 mm). The
+tip gap (2.5 mm) cannot hold two stacks of 2 cells of the y+ = 30 height plus a middle (above).
 
 ### Changes (opt-in fields of `CGridOptions`, default `false`; every existing path bit-identical)
 
-* `camber_seam`: per layer a passage centre line `C(z)`: the camber line of the section for `z_le <= z <= z_te` (sampled at 256 cosine-spaced
-  chord points, linear in z; a camber line whose z is not strictly increasing is a located error `mesh.fan.stagger`); for `z > z_te` the wake curve of the
-  construction itself (so the wake lies mid-passage by construction); for `z < z_le` the C1 extension `s_le - sigma_le lambda (1 - exp(-(z_le - z)/lambda))`
-  with `sigma_le` the camber slope ds/dz at the leading edge and `lambda = 0.2 c`. Seams `s_lo(z) = C(z) - P/2`, `s_hi(z) = s_lo(z) + P` (so the upper seam is
-  the lower one translated by the pitch P, which is all the periodic machinery and the smoother assume). Every place that uses the straight seam uses the
-  z-dependent value: the blade-fit check (each surface node), the wake-fit check (each wake node), the wake-stack seam distance, the seam targets
-  `(z_out[h], s_lo(z_out[h]))` (the `z_out` rule unchanged), the corner points `(z_f, s_lo(z_f))`, the front-edge distribution (about `C(z_f)` instead of
-  `s_le`) and the F block (row `a` shifted by `C(z_a) - C(z_f)`). This is the seam of the H-slit generator (camber line inside the chord) extended C1 and
-  carried along the wake.
+* `camber_seam`: per layer a passage centre line `C(z)`. For `z_le <= z <= z_te` it is the camber line of the section
+  (sampled at 256 cosine-spaced chord points, linear in z; a camber line whose z is not strictly increasing is a located
+  error `mesh.fan.stagger`). For `z > z_te` it is the wake curve of the construction itself (so the wake lies mid-passage by
+  construction). For `z < z_le` it is the C1 extension `s_le - sigma_le lambda (1 - exp(-(z_le - z)/lambda))` with
+  `sigma_le` the camber slope ds/dz at the leading edge and `lambda = 0.2 c`. Seams `s_lo(z) = C(z) - P/2`,
+  `s_hi(z) = s_lo(z) + P` (so the upper seam is the lower one translated by the pitch P, which is all the periodic machinery
+  and the smoother assume). Every place that uses the straight seam uses the z-dependent value: the blade-fit check (each
+  surface node), the wake-fit check (each wake node), the wake-stack seam distance, the seam targets
+  `(z_out[h], s_lo(z_out[h]))` (the `z_out` rule unchanged), the corner points `(z_f, s_lo(z_f))`, the front-edge
+  distribution (about `C(z_f)` instead of `s_le`) and the F block (row `a` shifted by `C(z_a) - C(z_f)`). This is the seam
+  of the H-slit generator (camber line inside the chord) extended C1 and carried along the wake.
 * `gap_fit`: tip-gap first height `h_g = min(h1, L_g / (2 S + (n_gap - 2 n_bl) g^n_bl))`, `S = sum_{q < n_bl} g^q`: the largest height for which
   two exact stacks and a middle of cells `h_g g^n_bl` fill the gap with continuous growth. The gap radii are `graded_two_sided(L_g, n_gap, h_g, g, n_bl)`;
   the span keeps `h1`. Identity when `h_g = h1` (A', B', S, the example).
@@ -59,11 +81,16 @@ appears, the target rule may be changed in that amendment, before the registered
 
 ### Registered set-up FAN-01-C
 
-Geometry: `n_blades = 9`, `r_hub = 0.124`, `r_tip = 0.2475`, `tip_clearance = 0.0025`, `axial_extent = 0.4`, `z_le_root = 0.1`, NACA 4-digit, stations =
-the 16 sections registered in ADR 0075 amendment 1, read from `validation-data/reference/w34d_fan01_cad_sections.csv` (the row r = 247.0 mm is not one of
-them, as in the 34D test), sweep `x_LE(r) - x_LE(124)`, lean `r (theta_LE(r) - theta_LE(124))`. Counts: the ADR 0075 amendment 1 C-grid counts (n_up 8,
-n_chord 16, n_down 8, n_side 10, n_nose 4, n_core 1, front_gap 0.3, n_span 14, n_gap 7, n_bl 2, growth 1.2), first cell from the y+ = 30 rule at
-`ref_speed = hypot(1.4032 / A, Omega 0.186) = 30.46` m/s, `nu = 1.5e-5`. Built through the case (`c_grid_construction = "camber_seam"`).
+Geometry: `n_blades = 9`, `r_hub = 0.124`, `r_tip = 0.2475`, `tip_clearance = 0.0025`, `axial_extent = 0.4`,
+`z_le_root = 0.1`, NACA 4-digit, stations = the 16 sections registered in ADR 0075 amendment 1, read from
+`validation-data/reference/w34d_fan01_cad_sections.csv` (the row r = 247.0 mm is not one of them, as in the 34D test), sweep
+`x_LE(r) - x_LE(124)`, lean `r (theta_LE(r) - theta_LE(124))`.
+
+Counts: the ADR 0075 amendment 1 C-grid counts (n_up 8, n_chord 16, n_down 8, n_side 10, n_nose 4, n_core 1, front_gap 0.3,
+n_span 14, n_gap 7, n_bl 2, growth 1.2), first cell from the y+ = 30 rule at
+`ref_speed = hypot(1.4032 / A, Omega 0.186) = 30.46` m/s, `nu = 1.5e-5`.
+
+Built through the case (`c_grid_construction = "camber_seam"`).
 
 Measured twice: **(a)** with F, once it is frozen, and **(b)** with G after Part 2 (so (b) is not a re-run chosen for a better number; both are reported).
 
@@ -113,22 +140,35 @@ normal, over the face size and over the owner's thickness), and for wake lines t
 
 ### Candidate changes (families named now; the exact change of each is specified in Amendment 1, written after D1 and before any run of a change)
 
-C1 for M1: exactly radial node lines in the end-wall stack layers outside the blade wall stack (the far grid and the wake take the (z, theta) of the
-layer at the edge of the end-wall stack, blended into the true section near the blade as in W1). C2 for M2: a wake first height continuous with the
-blade's and thick against the face warp, or no thin stack in the wake (the wake is not a wall). C3 for M3: planar faces: the warped j-faces of the
-blade stack split into two planar triangles each (a polyhedral cell; `Mesh`, `FvGeometry` and the metrics are checked on such cells first); or a
-twist-following placement if D1 falsifies the warp prediction. C4 for M4: the seam-corner cells of the end-wall layers (e.g. the smoother's corner rule,
-the end-wall first height at the corner). Each change is a new opt-in field of `CGridOptions`.
+* C1 for M1: exactly radial node lines in the end-wall stack layers outside the blade wall stack (the far grid and the wake
+  take the (z, theta) of the layer at the edge of the end-wall stack, blended into the true section near the blade as in
+  W1).
+* C2 for M2: a wake first height continuous with the blade's and thick against the face warp, or no thin stack in the wake
+  (the wake is not a wall).
+* C3 for M3: planar faces: the warped j-faces of the blade stack split into two planar triangles each (a polyhedral cell;
+  `Mesh`, `FvGeometry` and the metrics are checked on such cells first); or a twist-following placement if D1 falsifies the
+  warp prediction.
+* C4 for M4: the seam-corner cells of the end-wall layers (e.g. the smoother's corner rule, the end-wall first height at the
+  corner).
+
+Each change is a new opt-in field of `CGridOptions`.
 
 ### Decision rule (registered; the 10 % and 1 % are decision thresholds of this protocol, not accuracy limits)
 
-Order M1, M2, M3, M4. Each change is applied on top of the current baseline (E plus the changes accepted so far) and measured once on A' and B'. It is
-**accepted** iff (i) its target measure (M1: the maximum non-orthogonality over end-wall boundary faces and k-faces of the first `n_bl` layers of B';
-M2: the maximum skewness over wake-cut and wake-stack faces of B'; M3: the maximum skewness over blade-stack faces of B'; M4: A' maximum aspect)
-improves by at least 10 % against the baseline; (ii) no Q1-E maximum (non-orthogonality, skewness, aspect) of A' or B' increases by more than 1 %;
-(iii) Q2-E closure (1e-13) and topology on S and A', Q6-E periodicity (1e-12) on S and A', Q7-E stacks (A' 1e-12, B' 4.9e-11) pass, and S, A', B' build;
-(iv) the R-E scan of 0072 builds at least 107 of 117. A rejected change is removed from the code (the ADR keeps its numbers). The Q1-E gates of A' and B'
-are reported for the final construction (G restricted to blade B, i.e. E plus the accepted changes, and G itself); a gate still missed stays a known miss.
+Order M1, M2, M3, M4. Each change is applied on top of the current baseline (E plus the changes accepted so far) and
+measured once on A' and B'. It is **accepted** iff
+
+* (i) its target measure (M1: the maximum non-orthogonality over end-wall boundary faces and k-faces of the first `n_bl`
+  layers of B'; M2: the maximum skewness over wake-cut and wake-stack faces of B'; M3: the maximum skewness over blade-stack
+  faces of B'; M4: A' maximum aspect) improves by at least 10 % against the baseline;
+* (ii) no Q1-E maximum (non-orthogonality, skewness, aspect) of A' or B' increases by more than 1 %;
+* (iii) Q2-E closure (1e-13) and topology on S and A', Q6-E periodicity (1e-12) on S and A', Q7-E stacks (A' 1e-12, B'
+  4.9e-11) pass, and S, A', B' build;
+* (iv) the R-E scan of 0072 builds at least 107 of 117.
+
+A rejected change is removed from the code (the ADR keeps its numbers). The Q1-E gates of A' and B' are reported for the
+final construction (G restricted to blade B, i.e. E plus the accepted changes, and G itself); a gate still missed stays a
+known miss.
 
 ## Part 3: the control range of construction G
 
@@ -158,33 +198,45 @@ Fan performance; any comparison with measured FAN-01 data; turbulence; accuracy 
 
 * A': 61.38 deg (seam_hi faces of the pressure/outer cells at mid-span, in-plane), skewness 0.863 (core), aspect 395.1; no face above 70 deg or 2.0.
   Aspect top 10: the seam-corner cells C (h_c - 1, n_side - 1) and F (n_up - 1, 0) in layers 47 (shroud), 30 and 29 (tip).
-* B': 78.17 deg, skewness 7.084, aspect 8531.6. Faces above 70 deg: 84 blade boundary faces of the suction/pressure stack next to the trailing edge
-  (i = 40-44 and 133-135, k = 17, r = 0.115) and 90 nose-stack j-faces (line i = 88, the leading edge, between the last stack row and the first outer row,
-  layers 52-63 around the tip). Faces above skewness 2: wake-stack j-faces 6477, wake-cut faces 768, nose/outer j-faces 270, suction/stack j-faces 4.
-  The skewness maximum (7.084) is a nose/outer j-face (line 88, rows 8/9, mid-span); the wake-cut maximum is 4.847 (k = 60), the blade-stack maximum
-  2.057 (the trailing-edge cells above). Largest non-orthogonality of an end-wall face (hub/shroud boundary or k-face in the first or last `n_bl` layers):
-  64.15 deg (the shroud face of the seam-corner cell). Aspect: the seam-corner cells of layers 89, 60, 59.
-* Decomposition of the worst faces: blade trailing-edge cells (78.17 deg): node-line tilt 34.5 deg, face warp 0.02-0.05 of the thickness, in-plane wedge
-  0.04, shear of the thin pair 0.65, corner-Jacobian variation 2.7 %. Wake-cut faces: in-plane Jacobian variation 21.6 %, no tilt, no warp. Nose/outer:
-  in-plane wedge 2.9 (the first outer row 6.6e-6 m thick against 3.1e-5 m in the algebraic grid), Jacobian variation 108 %.
+* B': 78.17 deg, skewness 7.084, aspect 8531.6.
+* B', faces above 70 deg: 84 blade boundary faces of the suction/pressure stack next to the trailing edge (i = 40-44 and
+  133-135, k = 17, r = 0.115) and 90 nose-stack j-faces (line i = 88, the leading edge, between the last stack row and the
+  first outer row, layers 52-63 around the tip).
+* B', faces above skewness 2: wake-stack j-faces 6477, wake-cut faces 768, nose/outer j-faces 270, suction/stack j-faces 4.
+* B', skewness maxima: the skewness maximum (7.084) is a nose/outer j-face (line 88, rows 8/9, mid-span); the wake-cut
+  maximum is 4.847 (k = 60), the blade-stack maximum 2.057 (the trailing-edge cells above).
+* B', end walls: largest non-orthogonality of an end-wall face (hub/shroud boundary or k-face in the first or last `n_bl`
+  layers): 64.15 deg (the shroud face of the seam-corner cell).
+* B', aspect: the seam-corner cells of layers 89, 60, 59.
+* Decomposition of the worst faces, blade trailing-edge cells (78.17 deg): node-line tilt 34.5 deg, face warp 0.02-0.05 of
+  the thickness, in-plane wedge 0.04, shear of the thin pair 0.65, corner-Jacobian variation 2.7 %.
+* Decomposition of the worst faces, wake-cut faces: in-plane Jacobian variation 21.6 %, no tilt, no warp.
+* Decomposition of the worst faces, nose/outer: in-plane wedge 2.9 (the first outer row 6.6e-6 m thick against 3.1e-5 m in
+  the algebraic grid), Jacobian variation 108 %.
 
-Probes (scratch, not committed): (1) the 78.17 deg cell integrated as a trilinear hex (8-point Gauss) gives 78.74 deg and the same volume (1.9844e-11):
-the flat-face centroid rule is NOT the cause (the 0072 Amendment 4 reading does not hold for construction E). The stack is built along the in-plane
-normal, but the trailing edge leans by lambda = 34 deg out of the layer (the surface normal has a radial component of 0.54), so the wall-normal thickness
-is `h1 cos(lambda(r))`; it changes by 2.5 % between the two layers of the cell (5.9-6.2 against 6.1-6.3 micrometres), and a 2.5 % thickness change over
-a radial length 1100 times the thickness moves the centroid along the face by `L epsilon / 12` = 1.4e-5 m, 4.7 half-thicknesses: 78 deg. (2) The
-algebraic grid of E (smoothing off) has A' aspect 177 and B' 2656 (both inside their limits) and B' skewness 4.847 (the wake cut): the smoother doubles
-the seam-corner edges (A' F-corner b-edge 39 to 87 mm, C-corner last cell 20 to 40 mm; B' 19 to 62 mm) and compresses the first outer row at the nose
-(B' 3.1e-5 to 9.2e-6 m), which makes the B' skewness maximum and the 90 nose-stack faces above 70 deg.
+Probes (scratch, not committed):
+
+Probe 1: the 78.17 deg cell integrated as a trilinear hex (8-point Gauss) gives 78.74 deg and the same volume (1.9844e-11):
+the flat-face centroid rule is NOT the cause (the 0072 Amendment 4 reading does not hold for construction E). The stack is
+built along the in-plane normal, but the trailing edge leans by lambda = 34 deg out of the layer (the surface normal has a
+radial component of 0.54), so the wall-normal thickness is `h1 cos(lambda(r))`. It changes by 2.5 % between the two layers
+of the cell (5.9-6.2 against 6.1-6.3 micrometres). A 2.5 % thickness change over a radial length 1100 times the thickness
+moves the centroid along the face by `L epsilon / 12` = 1.4e-5 m, 4.7 half-thicknesses: 78 deg.
+
+Probe 2: the algebraic grid of E (smoothing off) has A' aspect 177 and B' 2656 (both inside their limits) and B' skewness
+4.847 (the wake cut). The smoother doubles the seam-corner edges (A' F-corner b-edge 39 to 87 mm, C-corner last cell 20 to
+40 mm; B' 19 to 62 mm) and compresses the first outer row at the nose (B' 3.1e-5 to 9.2e-6 m), which makes the B' skewness
+maximum and the 90 nose-stack faces above 70 deg.
 
 ### Verdicts of the registered falsifiers
 
 * M1 (hub first-layer wedge): **falsified**; no end-wall face is above 70 deg (64.15 at most), so by the registered rule M1 is **dropped** (W1's
   remap of construction E already removed it).
-* M2 (wake): **falsified as the location of the maximum** (the B' maximum is a nose/outer face); the wake still holds 7245 faces above 2.0, and the
-  registered prediction holds: the wake skewness is set by the in-plane wedge between neighbouring wake lines (W2: `d1 = max(h1, dz/300)` grows with the
-  axial spacing, ratio epsilon = 0.2 per line), with `skew ~ (L / d1) epsilon / 12` (a trapezoid's centroid shift `L epsilon / 12` over the distance `d1`
-  between the mirror cells across the cut): 300 x 0.216 / 12 = 5.4 against 4.85 measured.
+* M2 (wake): **falsified as the location of the maximum** (the B' maximum is a nose/outer face). The wake still holds 7245
+  faces above 2.0, and the registered prediction holds: the wake skewness is set by the in-plane wedge between neighbouring
+  wake lines (W2: `d1 = max(h1, dz/300)` grows with the axial spacing, ratio epsilon = 0.2 per line), with
+  `skew ~ (L / d1) epsilon / 12` (a trapezoid's centroid shift `L epsilon / 12` over the distance `d1` between the mirror
+  cells across the cut): 300 x 0.216 / 12 = 5.4 against 4.85 measured.
 * M3 (warp): **falsified**; warp is 2-5 % of the thickness, the maximum is the lean-induced radial thickness variation (M5 below).
 * M4 (aspect at the seam corner): **confirmed** for A' and B'; the smoother is the cause (probe 2).
 * New, found by D1: **M5** lean of the trailing edge with a stack along the in-plane normal (probe 1); **M6** compression of the first outer row at the
@@ -215,10 +267,13 @@ Each is accepted or removed by the registered decision rule, applied in this ord
 
 ### Part 2: the registered sequence (test `part2_sequence`, run once; 38 min)
 
-The harness smoke on construction E (rule (d)) found a defect of its own Q7 measure before the registered run: it measured the wall stacks with
-3-D chords, whose sagitta against the cylinder is 8e-3 of the stack on A'. Corrected before the run to the unrolled-plane measure of ADR 0068/0072
-(E then reproduces the 0072 values exactly: A' 3.21e-13 / 1.35e-13, B' 1.66e-11 / 4.56e-12); under C5 the in-plane distance is multiplied by
-`cos(lambda)` (the component along the 3-D surface normal), as registered in Amendment 1. Baseline E: Q2 1.25e-15, Q6 3.3e-13, R-E 107 of 117.
+The harness smoke on construction E (rule (d)) found a defect of its own Q7 measure before the registered run: it measured
+the wall stacks with 3-D chords, whose sagitta against the cylinder is 8e-3 of the stack on A'. The measure was corrected
+before the run to the unrolled-plane measure of ADR 0068/0072 (E then reproduces the 0072 values exactly: A' 3.21e-13 /
+1.35e-13, B' 1.66e-11 / 4.56e-12). Under C5 the in-plane distance is multiplied by `cos(lambda)` (the component along the
+3-D surface normal), as registered in Amendment 1.
+
+Baseline E: Q2 1.25e-15, Q6 3.3e-13, R-E 107 of 117.
 
 | Change | Target measure (B' unless stated) | Other Q1-E maxima that moved by more than 1 % | Q2/Q6/Q7 | R-E | Decision |
 |---|---|---|---|---|---|
@@ -227,25 +282,29 @@ The harness smoke on construction E (rule (d)) found a defect of its own Q7 meas
 | C6 `nose_rows_algebraic` | nose/outer skewness 7.084 -> 1.311 (B' skewness maximum 7.08 -> 4.88, now the wake) | B' non-orthogonality 78.17 -> 81.69 | pass | 89 | REJECTED (ii, iv) |
 | C4 `front_edge_held` | A' aspect 395.1 -> 288.2 (below the 300 gate) | A' non-orthogonality 61.38 -> 71.16 | pass | 105 | REJECTED (ii, iv) |
 
-Each change removed the defect it was aimed at (the mechanisms of Amendment 1 are confirmed by their own target measures), and each one moved
-another maximum up by more than 1 % and lost builds in the R-E scan, so by the registered rule none is kept. The code of the four options is
-committed once as measured (a record commit) and removed in the next commit. Construction G is therefore construction F with the checked control range
-(no Part 2 change); on blade B the A'/B' numbers of G are measured once at the end (registered: "G itself").
+Each change removed the defect it was aimed at (the mechanisms of Amendment 1 are confirmed by their own target measures).
+Each one also moved another maximum up by more than 1 % and lost builds in the R-E scan, so by the registered rule none is
+kept. The code of the four options is committed once as measured (a record commit) and removed in the next commit.
+Construction G is therefore construction F with the checked control range (no Part 2 change). On blade B the A'/B' numbers
+of G are measured once at the end (registered: "G itself").
 
 ### Part 1: development on FD and S (what was tried, before freezing F)
 
-* The registered upstream extension (`lambda = 0.2 c`) folds FD at layer 7 (r = 0.208, stagger 64 deg): the seam leaves the leading edge at the camber
-  slope (about tan 70 deg) and runs nearly parallel to the front edge at the corner. Changed to `lambda_u = front_gap c / 3`, so the seam meets the front
-  edge within atan(sigma_le e^-3) of the axial direction. With it FD builds: 80.88 deg, skewness 3.57, aspect 1414, construction step 0.
-* The smallest angle between a C line and the seam where it meets it is 13.6 deg (FD). This is a property of the periodic pairing, not of the target
-  rule: the seam pair is a pure s-translation with index-matched nodes, so the suction line of station x and the pressure line of station x end at one
-  seam node; the wall-normal feet of the two lines on a camber-parallel seam lie `P sin(g)` apart along it (162 mm at the FAN-01 tip, three chords), so any
-  shared node leaves both lines about `90 - g` deg off the seam. A target-rule change cannot remove it and none was made.
-* A blended seam (`s_centre + alpha (C - s_centre)`, alpha the least departure from straight seams that keeps a margin from the seams) was tried so
-  that blade B would stay identical to E: FD then builds only at fallback step 1 with 87.35-88.0 deg (upper seam corner of the tip and gap layers, and a
-  jump of 11 layer thicknesses of a wake node between two tip layers); construction E itself on a tip-only FAN-01 (sections from r = 0.19 m) gives
-  87.4 deg. Dropped: the pure camber seam (alpha = 1, as registered) is the better one for FAN-01. The Part 2 candidates added to the blended F on FD
-  gave 84.4-87.4 deg (information only; they are rejected by the Part 2 rule anyway).
+* The registered upstream extension (`lambda = 0.2 c`) folds FD at layer 7 (r = 0.208, stagger 64 deg): the seam leaves the
+  leading edge at the camber slope (about tan 70 deg) and runs nearly parallel to the front edge at the corner. The extension
+  was changed to `lambda_u = front_gap c / 3`, so the seam meets the front edge within atan(sigma_le e^-3) of the axial
+  direction. With it FD builds: 80.88 deg, skewness 3.57, aspect 1414, construction step 0.
+* The smallest angle between a C line and the seam where it meets it is 13.6 deg (FD). This is a property of the periodic
+  pairing, not of the target rule. The seam pair is a pure s-translation with index-matched nodes, so the suction line of
+  station x and the pressure line of station x end at one seam node. The wall-normal feet of the two lines on a
+  camber-parallel seam lie `P sin(g)` apart along it (162 mm at the FAN-01 tip, three chords), so any shared node leaves both
+  lines about `90 - g` deg off the seam. A target-rule change cannot remove it and none was made.
+* A blended seam (`s_centre + alpha (C - s_centre)`, alpha the least departure from straight seams that keeps a margin from
+  the seams) was tried so that blade B would stay identical to E. FD then builds only at fallback step 1 with 87.35-88.0 deg
+  (upper seam corner of the tip and gap layers, and a jump of 11 layer thicknesses of a wake node between two tip layers);
+  construction E itself on a tip-only FAN-01 (sections from r = 0.19 m) gives 87.4 deg. The blended seam was dropped: the
+  pure camber seam (alpha = 1, as registered) is the better one for FAN-01. The Part 2 candidates added to the blended F on
+  FD gave 84.4-87.4 deg (information only; they are rejected by the Part 2 rule anyway).
 * DH (FD, frozen F): hub first-layer maximum 64.33 deg (the nose line, in-plane), k-faces 48.18 deg, first-layer skewness 0.65: **no hub change**.
 * Blade B, S counts, frozen F: 72.36 deg, skewness 1.063, aspect 128.8 (E: 53.82 / 0.596 / 129): the camber seam is worse than straight seams for
   blade B; F is meant for blades that straight seams cannot hold. B1 (hashes of `pursuit` and E) reproduced after every change.
@@ -266,11 +325,12 @@ Part 3 (stated here before either runs).
 fallback chain folds; the located error reported is `mesh.fan.front_gap`: "the line family is folded at layer 11 (r = 0.24544), C block around line
 23, row 2: the leading-edge fan cannot be built for this blade with the front_gap 0.3 and n_nose 4 given". P2-P10 are not measurable on (a).
 
-Diagnosis (pencil, from the message and the construction; no further build of the registered counts): line 23 is the suction-side nose line next
-to the leading-edge line 24, row 2 the edge of its stack. F splits the front edge at the centre line `C(z_f)`; upstream of the leading edge the
-centre line rises along the leading-edge camber slope (about -3.7 near the tip), so `C(z_f) = s_le + 3.7 lambda_u (1 - e^-3)`, about 19 mm above the
-leading edge at the tip. The suction-side nose lines start facing down and upstream and are sent to targets above the leading edge, across the
-leading-edge line: a fold. FD (n_nose 5, n_chord 20) happened to untangle; the registered n_nose 4 does not.
+Diagnosis (pencil, from the message and the construction; no further build of the registered counts): line 23 is the
+suction-side nose line next to the leading-edge line 24, row 2 the edge of its stack. F splits the front edge at the centre
+line `C(z_f)`. Upstream of the leading edge the centre line rises along the leading-edge camber slope (about -3.7 near the
+tip), so `C(z_f) = s_le + 3.7 lambda_u (1 - e^-3)`, about 19 mm above the leading edge at the tip. The suction-side nose
+lines start facing down and upstream and are sent to targets above the leading edge, across the leading-edge line: a fold.
+FD (n_nose 5, n_chord 20) happened to untangle; the registered n_nose 4 does not.
 
 **Change (F2)**: the front edge is split at `s_le` (straight ahead of the leading edge, as in E); the seams and the F block keep the centre line.
 Development only on FD and S: FD 78.36 deg (was 80.88), skewness 3.573, aspect 1482, step 0; the P1-P8 harness on FD passes (closure 1.3e-15,
@@ -281,20 +341,33 @@ construction of the case value `camber_seam`.
 
 ## Amendment 4 (written after the registered (a2) run and a diagnosis on the registered counts, before (a3) ran; no limit changed)
 
-**(a2) results** (F2, registered counts, run once): P1 built (11 536 cells, construction step 0, h1 5.654e-4 m, h_gap 2.867e-4 m). P2 non-orthogonality
-87.22 deg (MISS), skewness 4.126 (MISS), aspect 227.2 (met). P3 closure 9.0e-16, topology ok. P4 periodicity 1.1e-13. P5 stacks radial 5.6e-14, wall
-9.7e-14. P6 C nodes identical, volume identity 4.0e-16. P7 wall nodes on the exact surface to 0 m. P8 solid volume 2.5e-3 below the section-area
-quadrature. P9 `FvGeometry::new` accepts; `check_mesh` error "max non-orthogonality 87.2 deg exceeds 85.0"; rules SV011 (error) and SV102 (warning,
-skewness above 4): **MISS**. P10 bounded: continuity 7.47e-4 at iteration 10, at most 2.97e-4 over 200-300, no failure, largest relative speed 42.4 m/s,
-`|m_in + m_out|` 7.2e-5 of `m_in`: **met**.
+**(a2) results** (F2, registered counts, run once):
 
-**Diagnosis after the run (on the registered counts, disclosed):** the faces above 85 deg are seam faces and i-faces of the outer row next to the two
-seam corners in layer 10 (r = 0.240), whose node lines tilt by 74.5 deg between layers 10 and 11. Tracking the lower seam corner per layer: z = 0.1120,
-0.1014, 0.1113 m in layers 9, 10, 11 (layer 10 an outlier by 10 mm against 18 mm of radius). Every layer needs the local untangling of a folded
-algebraic grid; layers 10 (and its remapped far grid) need 8 passes, the tip layers 7. The control functions are computed after the untangling, so a
-different number of passes gives different controls and a different smoothed grid: the smoothed far grid is not continuous in the radius. Tried
-(development, disclosed): holding the corner at its algebraic position (FD 82.75 deg / skewness 5.55, worse); controls from the algebraic grid before
-the untangling (FD and the registered counts fold); a radial filter with a short ramp from the stack edge (folds next to the wake stack).
+* P1 built (11 536 cells, construction step 0, h1 5.654e-4 m, h_gap 2.867e-4 m).
+* P2 non-orthogonality 87.22 deg (MISS), skewness 4.126 (MISS), aspect 227.2 (met).
+* P3 closure 9.0e-16, topology ok.
+* P4 periodicity 1.1e-13.
+* P5 stacks radial 5.6e-14, wall 9.7e-14.
+* P6 C nodes identical, volume identity 4.0e-16.
+* P7 wall nodes on the exact surface to 0 m.
+* P8 solid volume 2.5e-3 below the section-area quadrature.
+* P9 `FvGeometry::new` accepts; `check_mesh` error "max non-orthogonality 87.2 deg exceeds 85.0"; rules SV011 (error) and
+  SV102 (warning, skewness above 4): **MISS**.
+* P10 bounded: continuity 7.47e-4 at iteration 10, at most 2.97e-4 over 200-300, no failure, largest relative speed
+  42.4 m/s, `|m_in + m_out|` 7.2e-5 of `m_in`: **met**.
+
+**Diagnosis after the run (on the registered counts, disclosed):** the faces above 85 deg are seam faces and i-faces of the
+outer row next to the two seam corners in layer 10 (r = 0.240), whose node lines tilt by 74.5 deg between layers 10 and 11.
+Tracking the lower seam corner per layer: z = 0.1120, 0.1014, 0.1113 m in layers 9, 10, 11 (layer 10 an outlier by 10 mm
+against 18 mm of radius). Every layer needs the local untangling of a folded algebraic grid; layers 10 (and its remapped far
+grid) need 8 passes, the tip layers 7. The control functions are computed after the untangling, so a different number of
+passes gives different controls and a different smoothed grid: the smoothed far grid is not continuous in the radius.
+
+Tried (development, disclosed):
+
+* holding the corner at its algebraic position (FD 82.75 deg / skewness 5.55, worse);
+* controls from the algebraic grid before the untangling (FD and the registered counts fold);
+* a radial filter with a short ramp from the stack edge (folds next to the wake stack).
 
 **Change (F3)**: F2 + `radial_filter`: after all layers are written, two Jacobi passes move every interior layer's far node `(z, theta)` half-way
 towards the linear interpolation in r of its two neighbouring layers; the weight rises from 0 at each stack edge to 1 on the seam or front edge (smooth
@@ -303,20 +376,34 @@ the pair stays an exact rotation image. G = F3 + `checked_range`.
 
 **What I already knew when writing this:** FD with F3: 78.36 deg, skewness 3.46, aspect 149, step 0, P1-P8 harness passes; S on blade B: 58.28 deg,
 0.756, 128.1; B1 holds; and the registered counts with F3 built once as a diagnosis: 83.26 deg, skewness 3.98, aspect 227, step 0 (so (a3) is not blind for
-P1 and P2; P3-P10 have not been run with F3). **(a3)**: P1-P10 on the registered counts with F3, run once; (a) and (a2) stay recorded as misses.
+P1 and P2; P3-P10 have not been run with F3).
+
+**(a3)**: P1-P10 on the registered counts with F3, run once; (a) and (a2) stay recorded as misses.
 
 ## Amendment 5 (written after (a3), the Part 3 development scan and a Part 3 development change, before the range is coded and before R-G runs)
 
-**(a3) results** (F3, registered counts, run once): P1 built (11 536 cells, step 0). P2 non-orthogonality 83.26 deg (MISS), skewness 3.978 (MISS), aspect
-227.2 (met). P3 closure 7.9e-16, topology ok. P4 periodicity 1.8e-13. P5 stacks 5.6e-14 / 9.7e-14. P6 C nodes identical, identity 4.0e-16. P7 0 m.
-P8 2.5e-3. P9 **met**: `FvGeometry::new` accepts, `check_mesh` ok, one rule finding SV101 (warning, above 70 deg), no error. P10 **MISS**: continuity
-7.92e-4 at iteration 10, 6.62e-3 at most over 200-300 (finite throughout, no solver failure, `|m_in + m_out|` 7.2e-5 of `m_in`, largest relative speed
-63.0 m/s in the seam-row cells next to the lower seam corner in the near-tip and gap layers, cells of non-orthogonality up to 71 deg). The (a2) mesh met
-P10 and missed P9, the (a3) mesh meets P9 and misses P10: no FAN-01 mesh of this wave meets both. No further attempt is made.
+**(a3) results** (F3, registered counts, run once):
+
+* P1 built (11 536 cells, step 0).
+* P2 non-orthogonality 83.26 deg (MISS), skewness 3.978 (MISS), aspect 227.2 (met).
+* P3 closure 7.9e-16, topology ok.
+* P4 periodicity 1.8e-13.
+* P5 stacks 5.6e-14 / 9.7e-14.
+* P6 C nodes identical, identity 4.0e-16.
+* P7 0 m.
+* P8 2.5e-3.
+* P9 **met**: `FvGeometry::new` accepts, `check_mesh` ok, one rule finding SV101 (warning, above 70 deg), no error.
+* P10 **MISS**: continuity 7.92e-4 at iteration 10, 6.62e-3 at most over 200-300 (finite throughout, no solver failure,
+  `|m_in + m_out|` 7.2e-5 of `m_in`, largest relative speed 63.0 m/s in the seam-row cells next to the lower seam corner in
+  the near-tip and gap layers, cells of non-orthogonality up to 71 deg).
+
+The (a2) mesh met P10 and missed P9, the (a3) mesh meets P9 and misses P10: no FAN-01 mesh of this wave meets both. No
+further attempt is made.
 
 **Part 3 development scan** (`part3_development_scan`, construction G = F3, combinations n_chord {12, 20, 28, 40} x n_nose {2, 3, 5, 7, 10} x n_side
 {5, 8, 12, 20, 28} with n_nose + 2 <= n_chord, and front_gap {0.15, 0.25, 0.4, 0.7, 1.2, 2.5}; blade B on the S counts, FAN-01 on the FD counts):
 blade B 87 of 106 build, 34 meet the A' gates; FAN-01 8 of 106 build, none meets them (folds in the leading-edge fan, located on `front_gap`).
+
 **Development change (G)**: for the camber-seam construction only, two last fallback steps start the smoothing from a Laplace-smoothed grid (400
 Jacobi passes, every free node at the mean of its four neighbours) instead of the algebraic grid, with the exact and with the one-dimensional controls.
 A mesh that builds at an earlier step is unchanged (the registered FAN-01-C builds at step 0, so (a3) stands; `pursuit` and E are untouched). FAN-01 dev
@@ -338,10 +425,10 @@ MISSED on FAN-01.**
 
 ## Addendum: measured values, misses and deviations
 
-Release builds; code state of the measurements: the scratch tree of this wave, committed as 5348934 (record commit, with the four Part 2 options)
-and 49213cf (the rejected options removed; B1, P1-P8, R-G (b) and the control-range test re-run on that code with identical numbers; P9 runs in the
-final gate, P10 (b) by hand on the gated tree, see "Measurement (b)" below). Limits are the
-registered ones, unchanged. No external reference value enters any gate. No fan performance claim.
+Release builds. The code state of the measurements is the scratch tree of this wave, committed as 5348934 (record commit,
+with the four Part 2 options) and 49213cf (the rejected options removed). B1, P1-P8, R-G (b) and the control-range test were
+re-run on 49213cf with identical numbers; P9 runs in the final gate, P10 (b) by hand on the gated tree, see "Measurement (b)"
+below. Limits are the registered ones, unchanged. No external reference value enters any gate. No fan performance claim.
 
 ### Part 1: FAN-01-C (registered counts of ADR 0075 amendment 1, y+ = 30 rule: h1 = 5.654e-4 m)
 
@@ -359,17 +446,20 @@ registered ones, unchanged. No external reference value enters any gate. No fan 
 | P10 laminar smoke, 300 iterations | ADR 0075 amendment 3 window | - | met (7.47e-4 at 10, 2.97e-4 over 200-300) | **MISS** (7.92e-4 at 10, 6.62e-3 over 200-300; finite, no failure, 63 m/s) |
 | DH hub | decides a hub change | no hub change (FD: first layer 37.98 deg, k-faces 46.41) | | FAN-01-C first layer 38.07 deg |
 
-Verdict: this is the first C-grid mesh of FAN-01 and the first FAN-01 mesh built with the registered y+ = 30 rule and a valid tip-gap block (the
-ADR 0075 attempt 2 H-slit mesh, 13 332 cells, 79.1 deg, needed a first cell of 2e-4 m instead); it is built through the case, closed, periodic to
-1.8e-13, with exact stacks and an exact blade surface, and accepted by `FvGeometry::new`, `check_mesh` and the rules; it misses the quality target and the
-registered laminar smoke criterion. The (a2) mesh met P10 and missed P9; no mesh of this wave meets both. The FAN-01 C-grid is not robust (Part 3).
+Verdict: this is the first C-grid mesh of FAN-01 and the first FAN-01 mesh built with the registered y+ = 30 rule and a
+valid tip-gap block (the ADR 0075 attempt 2 H-slit mesh, 13 332 cells, 79.1 deg, needed a first cell of 2e-4 m instead). It
+is built through the case, closed, periodic to 1.8e-13, with exact stacks and an exact blade surface, and accepted by
+`FvGeometry::new`, `check_mesh` and the rules. It misses the quality target and the registered laminar smoke criterion. The
+(a2) mesh met P10 and missed P9; no mesh of this wave meets both. The FAN-01 C-grid is not robust (Part 3).
 
 ### Part 2: the B' mechanisms (Amendment 1 and 2)
 
-D1 attribution and verdicts in Amendment 1 (M1 dropped by its rule, M2/M3 falsified as stated, M4 confirmed, M5 trailing-edge lean and M6 nose
-compression found). The four single-factor changes (Amendment 2 table): each removed its own target (wake skewness 4.85 -> 1.39, blade-stack
-skewness 2.06 -> 1.10, nose skewness 7.08 -> 1.31, A' aspect 395 -> 288) and each raised another Q1-E maximum by more than 1 % and lost R-E builds:
-**all four rejected and removed**. Construction G on blade B (registered "G itself", run once):
+Amendment 1 holds the D1 attribution and verdicts (M1 dropped by its rule, M2/M3 falsified as stated, M4 confirmed, M5
+trailing-edge lean and M6 nose compression found). Amendment 2's table holds the four single-factor changes. Each removed
+its own target (wake skewness 4.85 -> 1.39, blade-stack skewness 2.06 -> 1.10, nose skewness 7.08 -> 1.31, A' aspect
+395 -> 288), and each raised another Q1-E maximum by more than 1 % and lost R-E builds: **all four rejected and removed**.
+
+Construction G on blade B (registered "G itself", run once):
 
 | Set-up | Limit | E (ADR 0072) | G | Status |
 |---|---|---|---|---|
@@ -391,9 +481,11 @@ effects the registered rule did not allow.
 
 (a) is MISSED for both fans (`r_g_in_range_combinations_build_known_miss`; FAN-01 predicted in Amendment 5, blade B not), (b) is met
 (`r_g_out_of_range_combinations_are_located_errors`). For comparison, ADR 0072's R-E scan of `smoothed`: 107 of 117 built, 41 of 107 at or below
-70 deg (with no range). Aggregation defect of the first R-G run (disclosed): the two-thread scan returned its results in even/odd order and the
-summary paired them with the wrong combinations (it printed "built 14 of 39" for blade B); the per-combination lines were correct; the summary above is
-recomputed from them and the corrected test (results back in list order) reproduces them.
+70 deg (with no range).
+
+Aggregation defect of the first R-G run (disclosed): the two-thread scan returned its results in even/odd order and the
+summary paired them with the wrong combinations (it printed "built 14 of 39" for blade B). The per-combination lines were
+correct. The summary above is recomputed from them and the corrected test (results back in list order) reproduces them.
 
 ### Part 4: default behaviour
 

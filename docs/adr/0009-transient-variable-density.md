@@ -5,6 +5,16 @@ changed after a run; a miss becomes an `#[ignore]`d `*_known_miss` test and a nu
 Corrected before any transient code ran (second commit): T1r heat source made self-consistent, inner stopping rule
 normalised by the absolute pressure, relaxation factors registered, T4 end time lengthened to 20 s (filling-time
 estimate), `max_courant` rejected, section 5 (adiabatic-wall energy BC) added.
+
+Setting `solver.algorithm = "pimple"` with `fluid.density = ideal_gas | real_gas` runs the variable-density kernel
+transiently with Euler or variable-step BDF2, and `energy.viscous_heating` switches on viscous heating. Each time step
+repeats the existing SIMPLE-inner iteration, at about 10 to 30 inner iterations per step. Steady results are bit-identical
+(Q1, Q2 MET). T3c BDF2 misses its order limit (1.34 against [1.80, 2.20]). T5 at the registered 400 steps misses the
+mass-flow limit (1.64e-3 / 1.62e-3 against 1e-3) and the in/out equality limit (1.56e-5 against 1e-6). The other rows of
+the results table pass, but the T6 B top-wall flux check passes by construction, and T1, T1r and T6 assert a looser inner
+change than the registered `inner_tol`. Compressible transient from rest is not robust for impulsive velocity mismatches
+at large `dt`. No shock-tube, choked-transient or contact-discontinuity benchmark is attempted.
+
 Roadmap items F-050 (energy equation, ideal-gas density) and F-061 (pressure-based compressible extension). Builds on
 ADR 0005 (steady kernel) and ADR 0007 (real gas).
 
@@ -69,8 +79,9 @@ radiation, variable `cp`.
 `solver.end_time`, `solver.time_scheme` (euler | bdf2) are the existing keys; new `fluid.inner_iterations` (maximum
 SIMPLE-inner iterations per step) and `fluid.inner_tolerance`; `energy.viscous_heating` (bool); `energy.heat_source`
 (W/m^3, uniform). `piso` and `coupled`/`compressible` remain validation errors; `solver.max_courant > 0` is a located
-error for the variable-density solver (the Courant helper takes a volumetric flux; fixed `dt` only). Located validation errors for the combinations that do not exist (viscous heating without
-`fluid.density`, `dt` with steady SIMPLE is still ignored as before).
+error for the variable-density solver (the Courant helper takes a volumetric flux; fixed `dt` only). The combinations
+that do not exist give located validation errors (viscous heating without `fluid.density`; `dt` with steady SIMPLE is
+still ignored as before).
 
 ## Pre-registered checks and limits
 
@@ -83,6 +94,7 @@ the absolute pressure (`p` in compressible mode, `P_th + p` in low-Mach mode, wh
 `inner_tol` and `max_inner` are given per check and are part of the registration.
 
 **Q1 No regression, constant density.** `cargo test -p rcfd-api --test baseline_hashes` unchanged and passing.
+
 **Q2 No regression, ideal gas.** `varden_ideal_hash` (REGISTERED hash `0xbbedca02b6f39a6d`) unchanged and passing, and
 all existing `varden_*` tests pass unchanged.
 
@@ -92,20 +104,25 @@ to `t = 1 s`. Analytic: no motion, uniform `rho = rho0`, `rho cv dT/dt = q` so `
 (ideal-gas law at constant density). Source: first law for a closed fixed volume; ideal-gas law. Linear in time, hence
 exact for Euler and BDF2 up to the inner-iteration tolerance. Run for Euler and BDF2, compressible mode, and for
 low-Mach mode (`P_th` is then the pressure). `inner_tol = 1e-12`, `max_inner = 60`. Limits at every step end:
-`|p/p_analytic - 1| <= 1e-6` (compressible: cell pressure; low-Mach: `P_th`), `|T/T_analytic - 1| <= 1e-6`,
-`|M/M_0 - 1| <= 1e-11`, `max|u| <= 1e-8 m/s`, spatial uniformity of `T` and `p` to `1e-9` relative.
+
+* `|p/p_analytic - 1| <= 1e-6` (compressible: cell pressure; low-Mach: `P_th`);
+* `|T/T_analytic - 1| <= 1e-6`;
+* `|M/M_0 - 1| <= 1e-11`;
+* `max|u| <= 1e-8 m/s`;
+* spatial uniformity of `T` and `p` to `1e-9` relative.
+
 **T1r Same with the real gas** (CO2, Peng-Robinson, `p0 = 8 MPa`, `T0 = 330 K`, `heat_source = 7.0e6 W/m^3`, about a 40 K rise
-in 1 s with `rho` about 200 kg/m^3 and `cv` about 0.8 kJ/kg/K; 20 steps of `dt = 0.05 s`): at constant density `rho (u_end - u_0) = q t` with the internal energy
-`u = h(T,p) - p/rho` (first law); limits: relative energy balance error `<= 1e-6`, `|p/p_eos(rho0, T) - 1| <= 1e-6`,
-`|M/M_0 - 1| <= 1e-11`.
+in 1 s with `rho` about 200 kg/m^3 and `cv` about 0.8 kJ/kg/K; 20 steps of `dt = 0.05 s`): at constant density
+`rho (u_end - u_0) = q t` with the internal energy `u = h(T,p) - p/rho` (first law); limits: relative energy balance
+error `<= 1e-6`, `|p/p_eos(rho0, T) - 1| <= 1e-6`, `|M/M_0 - 1| <= 1e-11`.
 
 **T2 Temporal order of accuracy (manufactured heating).** The box of T1 (compressible mode, BDF2 and Euler) with
 `q(t) = q0 sin(2 pi t/t_end)`, `q0 = rho cv * 100 K/s`. Exact solution of `rho cv dT/dt = q(t)`:
 `T(t) = T0 + (q0 t_end/(2 pi rho cv)) (1 - cos(2 pi t/t_end))` (the source of a step is evaluated at the new time
 level). `t_end = 1 s`; steps `n = 10, 20, 40, 80`; error `e_n` = the maximum over the step ends of
-`|T - T_exact|` (the whole history, not only the end point, where the solution returns to `T0`). `inner_tol = 1e-12`, `max_inner = 60`. Observed order
-`log2(e_40/e_80)`: Euler in `[0.90, 1.10]`, BDF2 in `[1.85, 2.15]`. (The BDF2 first step is an Euler step; its local
-error is `O(dt^2)`, which keeps the global order two.)
+`|T - T_exact|` (the whole history, not only the end point, where the solution returns to `T0`). `inner_tol = 1e-12`,
+`max_inner = 60`. Observed order `log2(e_40/e_80)`: Euler in `[0.90, 1.10]`, BDF2 in `[1.85, 2.15]`. (The BDF2 first
+step is an Euler step; its local error is `O(dt^2)`, which keeps the global order two.)
 
 **T3 Standing acoustic wave in a closed tube (spatial coupling, temporal order, frequency).** Tube `L = 1 m`, 200 x 1
 cells (`box_2d`, unit depth 0.01 m), slip (symmetry) side walls, rigid end walls, adiabatic, `mu = 1.8e-5`, `k` from
@@ -141,8 +158,8 @@ ADR 0005), hot/cold heat flow equal to `2e-3` relative (transient, a stored-ener
 compressible mode, stagnation inlet, `linear_upwind`, SIMPLEC. Reference: the steady kernel, 3000 iterations
 (its own floor `res_u ~ 1e-5`, as recorded). Transient: BDF2, `dt = 1 ms` (acoustic transit time 6 ms, flow-through time
 0.04 s), from uniform initial state `u = 30 m/s`, `p = 0.985 p0`, 400 steps, `inner_tol = 1e-8`, `max_inner = 30`.
-Limits: `max |Mach_transient - Mach_steady| <= 2e-3`, `max |p_transient - p_steady|/p0 <= 5e-4`, `|mdot_transient
-- mdot_steady|/mdot_steady <= 1e-3` at inlet and outlet, in/out mass flow equality of the transient run `<= 1e-6`.
+Limits: `max |Mach_transient - Mach_steady| <= 2e-3`, `max |p_transient - p_steady|/p0 <= 5e-4`, `|mdot_transient -
+mdot_steady|/mdot_steady <= 1e-3` at inlet and outlet, in/out mass flow equality of the transient run `<= 1e-6`.
 
 **T6 Couette flow with viscous heating (analytic temperature profile).** Plane Couette flow between a stationary wall
 (`y = 0`) and a wall moving at `U = 100 m/s` (`y = H = 0.01 m`), constant `mu = 1.8e-5`, `k = 0.026`, `x`-invariant.
@@ -150,22 +167,30 @@ Velocity `u = U y/H` solves the momentum equation (`mu u'' = 0`, `p` uniform); t
 `k T'' + mu (du/dy)^2 = 0` (the viscous work `d/dy(tau_yx u) = mu u'^2` plus conduction; Bird, Stewart, Lightfoot,
 Transport Phenomena, 2nd ed., sec. 10.4 and 10.5, "Couette flow with viscous heating"; Schlichting and Gersten,
 Boundary-Layer Theory, 9th ed., sec. 13.3). Derivation: `T'' = -mu U^2/(k H^2)` constant, two integrations.
-Case A, both walls isothermal `T_w = 300 K`: `T - T_w = (mu U^2/(2k)) (y/H)(1 - y/H)`, maximum `mu U^2/(8k) = 0.865 K`.
-Case B, bottom wall isothermal `T_w`, top wall adiabatic (`T'(H) = 0`): `T - T_w = (mu U^2/(2k)) (y/H)(2 - y/H)`,
-maximum at the top `mu U^2/(2k) = 3.46 K`. Heat leaving through the walls: A each wall `mu U^2/(2H)` per unit area, B the
-bottom wall `mu U^2/H`, top wall zero; the total is the power `mu U^2/H` of the moving wall per unit area. Numerics:
-`box_2d` 4 x 40 (uniform), `u = U y/H` imposed on the `xmin`/`xmax` faces (per-face profile), `T` zero gradient there,
-no-slip walls with `u = 0`/`U`, start `u = U y/H`, `T = T_w`, BDF2, `dt = 0.5 s`, 40 steps (the slowest mode of case B has
-time constant `4 rho cp H^2/(pi^2 k) = 1.8 s`, `e^-11` at 20 s), `inner_tol = 1e-10`, `max_inner = 40`; compressible
-mode (total-enthalpy, viscous work) and low-Mach mode (dissipation). Limits at the end: maximum
-`|T - T_analytic|/(mu U^2/(2k)) <= 1 %` at the cell centres, wall heat flow (`heat_flow_out`) within 1 % of the analytic
-values above (B top wall: absolute value `<= 1e-3` of the bottom one), `viscous_heating = false` leaves
-`max |T - T_w| <= 1e-6 K` (switch check).
+
+* Case A, both walls isothermal `T_w = 300 K`: `T - T_w = (mu U^2/(2k)) (y/H)(1 - y/H)`, maximum `mu U^2/(8k) = 0.865 K`.
+* Case B, bottom wall isothermal `T_w`, top wall adiabatic (`T'(H) = 0`): `T - T_w = (mu U^2/(2k)) (y/H)(2 - y/H)`,
+  maximum at the top `mu U^2/(2k) = 3.46 K`.
+
+Heat leaving through the walls: A each wall `mu U^2/(2H)` per unit area, B the bottom wall `mu U^2/H`, top wall zero; the
+total is the power `mu U^2/H` of the moving wall per unit area.
+
+Numerics: `box_2d` 4 x 40 (uniform), `u = U y/H` imposed on the `xmin`/`xmax` faces (per-face profile), `T` zero gradient
+there, no-slip walls with `u = 0`/`U`, start `u = U y/H`, `T = T_w`, BDF2, `dt = 0.5 s`, 40 steps (the slowest mode of
+case B has time constant `4 rho cp H^2/(pi^2 k) = 1.8 s`, `e^-11` at 20 s), `inner_tol = 1e-10`, `max_inner = 40`;
+compressible mode (total-enthalpy, viscous work) and low-Mach mode (dissipation).
+
+Limits at the end:
+
+* maximum `|T - T_analytic|/(mu U^2/(2k)) <= 1 %` at the cell centres;
+* wall heat flow (`heat_flow_out`) within 1 % of the analytic values above (B top wall: absolute value `<= 1e-3` of the
+  bottom one);
+* `viscous_heating = false` leaves `max |T - T_w| <= 1e-6 K` (switch check).
 
 **T7 Case file.** A closed-box heating case and a Couette case (`velocity_expression_x = U y/H` on the `xmin`/`xmax`
 patches, evaluated once at start: the expression is time independent) through the case schema (`solver.algorithm = pimple`,
-`fluid.density = ideal_gas`) reproduce the T1 (`|p/p_analytic - 1| <= 1e-6`) and T6 A (`1 %`) limits. Validation: `solver.algorithm = piso`
-with `fluid.density`, `energy.viscous_heating` or `energy.heat_source` without `fluid.density`, and
+`fluid.density = ideal_gas`) reproduce the T1 (`|p/p_analytic - 1| <= 1e-6`) and T6 A (`1 %`) limits. Validation:
+`solver.algorithm = piso` with `fluid.density`, `energy.viscous_heating` or `energy.heat_source` without `fluid.density`, and
 `fluid.inner_iterations < 1` give located errors; every baseline case file still validates (`baseline_hashes`).
 
 ### 5. Energy boundary condition at an adiabatic wall (pre-existing steady-kernel limitation, found before any run)
@@ -252,11 +277,12 @@ unchanged (Q1, Q2 MET).
   both T6 modes pass at the registered `dt = 0.5 s`. (3) Section 5 (adiabatic-wall energy boundary condition) was
   needed for T6 B; the steady kernel keeps its pre-existing limitation unless viscous heating is on.
 * T7 Couette setup. The case schema had only a uniform initial velocity. A uniform start (50 m/s) or a start from
-  rest with the imposed end profile `u = U y/H` makes the transient solver diverge in the first steps (compressible at
-  every `dt` tried between 0.5 and 0.005 (only a few steps at 1e-4 ran); low-Mach with viscous heating at `dt` from 0.5 to 0.02; the impulsive wall layer
-  heats the first cells by tens of kelvin per 10 ms). A new key `initial.velocity_expression_x/_y/_z` (expressions of
-  x, y, z at the cell centres) provides the consistent start. This is a schema addition, not a change of a limit; the
-  divergence from an inconsistent start is a robustness limit of the transient solver and was not fixed.
+  rest with the imposed end profile `u = U y/H` makes the transient solver diverge in the first steps: compressible at
+  every `dt` tried between 0.5 and 0.005 (only a few steps at 1e-4 ran), low-Mach with viscous heating at `dt` from 0.5
+  to 0.02. The impulsive wall layer heats the first cells by tens of kelvin per 10 ms. A new key
+  `initial.velocity_expression_x/_y/_z` (expressions of x, y, z at the cell centres) provides the consistent start. This
+  is a schema addition, not a change of a limit; the divergence from an inconsistent start is a robustness limit of the
+  transient solver and was not fixed.
 * **Compressible transient from rest is not robust** for impulsive velocity mismatches at large `dt` (see above); no
   claim beyond the checks listed is made.
 * **T6 B top-wall flux is not independent evidence.** `heat_flow_out` reads the temperature boundary coefficients, so a

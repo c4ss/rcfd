@@ -20,6 +20,7 @@ surface file with units, with prism layers and a hash-keyed rebuild.*
 
 Items: F-279 (surface file as case geometry, hash-keyed rebuild), F-280 (OBJ and glTF readers), F-108 (prism layers),
 F-132 (tetrahedral volume mesh), F-232 (surface diagnostics and repair), F-234 (Cartesian-core fill with prism layers).
+The section "How the partly done items split against G9" records what each item has done on main and what G9 still needs.
 
 **What this document details.** The whole milestone at the level of problem, goals, user journey and architecture; the
 split of each partly done item into the part G9 needs and the part it does not; and a file-level plan for step 1 only

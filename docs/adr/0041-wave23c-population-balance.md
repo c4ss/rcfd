@@ -1,9 +1,20 @@
 # ADR 0041: Wave 23C, population balance and polydispersed phases (F-228)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" is written before any code of this wave exists.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (measured numbers, file names) are appended at the end only.
+
+Wave 23C delivers a library population-balance solver for F-228 in `rcfd-fv`: 0-D discrete bins (fixed pivot) and the
+moment method (QMOM) with coalescence and breakup kernels, plus a one-way transport helper. F-228 depends on F-127
+(Euler-Euler), which is `todo`, so the wave stops at `partial`, with no case-tree wiring, no interphase coupling and no
+turbulence-coupled run. The results addendum, written after the runs, reports that all registered limits were met and
+that there are no `*_known_miss` tests. One B10 assertion had a set-up defect: the first test is kept, ignored, and the
+corrected test passes. One registered B10 statement is vacuous for the continuous densities, so other checks stand in
+for it. The observed B3 order of 2 lies above the recorded expectation, which was a report and not a limit. Every
+literature citation is from memory and marked UNVERIFIED, and validation against a published experiment is a named gap.
+
+Rules. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
+away. A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (measured numbers, file
+names) are appended at the end only.
 
 ## Scope, stated up front
 
@@ -16,12 +27,18 @@ therefore delivers, and stops at `partial`:
    scalars by the existing `ScalarTransport` machinery on a single-phase carrier flux, with the 0-D kernels as cell sources by
    Lie operator splitting. It is ONE-WAY: the population does not feel or change the flow, there is no interphase momentum, mass
    or volume-fraction coupling, no slip.
-3. Not delivered (named gaps, also in the roadmap note): case-tree wiring (no new case keys, so no schema change and no edit of
-   `schema.rs`, `sim.rs`, `scalars.rs`: the transport helper is exercised through the library API only; a `popbal` case section is
-   the first follow-up), interphase coupling (needs F-127), breakup/coalescence driven by resolved turbulence in a k-epsilon run
-   (the Saffman-Turner kernel is provided as a function of `epsilon` and `nu`, but it is not connected to a k-epsilon field of a
-   run and is only checked as an identity, not against a turbulent case), DQMOM, method of classes, adaptive time stepping, moment
-   transport with quadrature-based spatial fluxes (the moment method is 0-D only), variable-density or compressible carriers.
+3. Not delivered (named gaps, also in the roadmap note):
+   * case-tree wiring (no new case keys, so no schema change and no edit of `schema.rs`, `sim.rs`, `scalars.rs`: the
+     transport helper is exercised through the library API only; a `popbal` case section is the first follow-up);
+   * interphase coupling (needs F-127);
+   * breakup/coalescence driven by resolved turbulence in a k-epsilon run (the Saffman-Turner kernel is provided as a
+     function of `epsilon` and `nu`, but it is not connected to a k-epsilon field of a run and is only checked as an
+     identity, not against a turbulent case);
+   * DQMOM;
+   * method of classes;
+   * adaptive time stepping;
+   * moment transport with quadrature-based spatial fluxes (the moment method is 0-D only);
+   * variable-density or compressible carriers.
 
 Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded: the only shared edit is
 one `pub mod popbal;` line in `crates/rcfd-fv/src/lib.rs`. Clean-room: published methods and first principles only; every
@@ -184,9 +201,15 @@ Mesh: `channel([nx, 1, 1], [1, 0.1, 0.01])`, uniform flux of speed `U = 1` (`fac
 
 ## Not delivered / named gaps (registered before the work)
 
-Case-tree wiring (`popbal` case section, output arrays), interphase momentum/mass coupling, volume-fraction-coupled kernels (a physical kernel that depends
-on a resolved dispersed-phase fraction), turbulence-driven kernels from a k-epsilon run, DQMOM, method of classes, adaptive pivots, moment transport with
-realizable fluxes in space, validation against a published experiment.
+* Case-tree wiring (`popbal` case section, output arrays).
+* Interphase momentum/mass coupling.
+* Volume-fraction-coupled kernels (a physical kernel that depends on a resolved dispersed-phase fraction).
+* Turbulence-driven kernels from a k-epsilon run.
+* DQMOM.
+* Method of classes.
+* Adaptive pivots.
+* Moment transport with realizable fluxes in space.
+* Validation against a published experiment.
 
 ## References
 
@@ -204,8 +227,9 @@ realizable fluxes in space, validation against a published experiment.
 
 ## Results addendum (written after the runs; no registered limit was changed)
 
-Release builds, tests in `crates/rcfd-fv/tests/popbal_bins.rs` (B), `popbal_qmom.rs` (Q), `popbal_transport.rs` (T); code in
-`crates/rcfd-fv/src/popbal.rs`. All registered limits were met; there are no `*_known_miss` tests.
+All registered limits were met; there are no `*_known_miss` tests. Release builds, tests in
+`crates/rcfd-fv/tests/popbal_bins.rs` (B), `popbal_qmom.rs` (Q), `popbal_transport.rs` (T); code in
+`crates/rcfd-fv/src/popbal.rs`.
 
 Measured against the registered limit:
 

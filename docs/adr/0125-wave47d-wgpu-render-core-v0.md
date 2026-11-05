@@ -1,14 +1,26 @@
 # ADR 0125: Wave 47D, the wgpu render core v0 (`rcfd-render`, layer L4 of the Studio plan)
 
 Status: **ACCEPTED 2026-10-26** (limits and decision rules registered before any registered check ran). Written at main 48b30bc on branch
-`w47d` (worktree `<scratch dir>`, target `<target dir>`). House rules of ADRs 0110-0121 apply:
-* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
-* a defective set-up gets a new corrected test, registered here as an amendment before it runs;
-* defaults of existing code stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+`w47d` (worktree `<scratch dir>`, target `<target dir>`).
 
-Parent plan: [ui-restart-plan.md](../ui-restart-plan.md), layer L4 and the wave-47 item "wgpu offscreen render core v0". Clean-room:
-the WebGPU and wgpu public API documentation, textbook rasterisation (edge functions, the top-left fill rule, perspective-correct
-interpolation) and our own code (`rcfd-post` `render.rs` and `gltf.rs`). No windowing, no egui.
+Wave 47D adds `rcfd-render`, an offscreen wgpu render core: surface meshes, colour maps, an orbit camera, a cut plane and picking, with
+no windowing and no egui. A spike run before any design showed that all five adapters of this machine work, including the WARP software
+fallback. The crate uses wgpu =30.0.1; `Cargo.lock` gains 37 new packages, and no existing locked version moved. The final gate
+passed on 33e9266 with 2153 passed / 0 failed / 664 ignored, and every GPU test ran on the five adapters. P1 as registered had a
+defective background probe: it is an ignored known miss, corrected by P1b (A1). P2's value check is a miss, also ignored: 1.47e-5 of the
+range (1.48e-5 on WARP) against the limit of 1e-5, and no new value limit is registered. After a later rebase onto main 891ec57 the full
+gate was not re-run; only post-rebase checks ran. The MSRV stays open: eframe 0.36 needs 1.95, so the Studio track will need 1.95 in
+wave 48, and that is for the lead or the user to decide.
+
+Rules and parents:
+
+* House rules of ADRs 0110-0121 apply:
+  * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
+  * defaults of existing code stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Parent plan: [ui-restart-plan.md](../ui-restart-plan.md), layer L4 and the wave-47 item "wgpu offscreen render core v0".
+* Clean-room: the WebGPU and wgpu public API documentation, textbook rasterisation (edge functions, the top-left fill rule,
+  perspective-correct interpolation) and our own code (`rcfd-post` `render.rs` and `gltf.rs`).
 
 ## Step 0: does wgpu work on this machine? (spike, run before any design)
 
@@ -214,8 +226,9 @@ image); volume-capped cut planes; Metal, GLES and WebGPU back ends.
 
 ## Addendum: measured values (gate machine = this machine, the five adapters of step 0)
 
-First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto main 624f228), all tests except T1. A1 and A2 then ran on 810fd54 (a1df12f after the rebase). T1 ran once, in a release build
-(see the T1 row). Every value below is the same on all five adapters unless the row says otherwise.
+First registered run: debug build, commit 599c517 (3bf2797 after the rebase onto main 624f228), all tests except T1. A1 and A2 then
+ran on 810fd54 (a1df12f after the rebase). T1 ran once, in a release build (see the T1 row). Every value below is the same on all five
+adapters unless the row says otherwise.
 
 | Id | Measured | Limit | Status |
 |---|---|---|---|

@@ -1,19 +1,50 @@
 # ADR 0056: Wave 29B, mixture model with algebraic slip (drift flux) and Schnerr-Sauer cavitation on the VOF host (F-127, partial)
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations, diagnosis findings) may be
-appended at the end without touching a registered limit. Clean-room: first principles and published literature only
-(verification status in `docs/reference-data.md`); no vendor code, text, names or data; nothing from vendor material.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and
+before any run of this wave.
 
-Scope (gap rank 2 of `docs/parity-matrix.md`, rows 93 and 96). Delivered: (1) a mixture model with an algebraic-slip (drift-flux)
-relative velocity on the existing VOF / variable-density host; (2) ONE cavitation mass-transfer model, Schnerr-Sauer form with a
-bubble-number density. NOT delivered and not claimed: full multi-fluid Euler-Euler (per-phase momentum, interphase force
-catalogue: lift, virtual mass, turbulent dispersion, wall lubrication; parity rows 94, 95), per-phase turbulence (row 51),
-polydisperse bubble sizes, bubble-size evolution (population balance coupling), thermal effects on cavitation (no energy equation in
-the multiphase path), vapour compressibility, non-condensable gas, the Zwart-Gerber-Belamri and Singhal models, turbulence
-cavitation pressure correction. Published cavitation or bubble-column data are NOT compared (see "Reference data").
+Wave 29B delivers two models on the existing VOF / variable-density host (F-127, partial): a mixture model with an
+algebraic-slip (drift-flux) relative velocity, and ONE cavitation mass-transfer model, Schnerr-Sauer form with a
+bubble-number density. Full multi-fluid Euler-Euler is NOT delivered and not claimed, and published cavitation or
+bubble-column data are NOT compared. The addendum records these misses, each an ignored `*_known_miss` test with the
+limit intact: N3 grown cells at the end of the run (0 cells against >= 1), N4 (31763 violations against 0), N4' (16
+violations against 0), N5 (1.958e-5 against 1e-6) and the W2 and W3 bitwise comparisons. The venturi runs a periodic
+cycle of cavity growth, collapse and re-inception, and inception itself (N1 pressure, N3 location, N2 bounds, N6) is
+met. The registered D1, D4, D5 and D6 column tests were unstable with the registered set-up; their corrected tests pass,
+and a lateral mode at nx >= 4 was NOT root-caused. The registered dt = 2.5e-4 blows up the venturi at t = 0.082 s, and
+the corrected test uses dt = 5e-5. M4 was replaced by M4b (per-cell discrete mass balance, 7.9e-15) and is not kept as a
+test. The cited literature and the vapour pressure of water at 20 C (2339 Pa) are unverified, used from memory.
+
+Scope (gap rank 2 of `docs/parity-matrix.md`, rows 93 and 96). Delivered:
+
+* a mixture model with an algebraic-slip (drift-flux) relative velocity on the existing VOF / variable-density host;
+* ONE cavitation mass-transfer model, Schnerr-Sauer form with a bubble-number density.
+
+NOT delivered and not claimed:
+
+* full multi-fluid Euler-Euler (per-phase momentum, interphase force catalogue: lift, virtual mass, turbulent
+  dispersion, wall lubrication; parity rows 94, 95);
+* per-phase turbulence (row 51);
+* polydisperse bubble sizes;
+* bubble-size evolution (population balance coupling);
+* thermal effects on cavitation (no energy equation in the multiphase path);
+* vapour compressibility;
+* non-condensable gas;
+* the Zwart-Gerber-Belamri and Singhal models;
+* turbulence cavitation pressure correction.
+
+Published cavitation or bubble-column data are NOT compared (see "Reference data").
+
+Rules and parents:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (exact numbers, deviations, diagnosis findings) may be appended at the end without touching a registered
+  limit.
+* Clean-room: first principles and published literature only (verification status in `docs/reference-data.md`); no
+  vendor code, text, names or data; nothing from vendor material.
 
 ## Audit (HEAD b4e78fd)
 
@@ -29,33 +60,39 @@ cavitation pressure correction. Published cavitation or bubble-column data are N
 
 ## Decisions
 
-**A. Mixture formulation (volume-averaged velocity).** `j = sum alpha_k u_k` is the solenoidal volume-averaged velocity that the host
-already solves for (phase 1 fraction `alpha`, phase 2 `1 - alpha`). With the relative velocity `v_12 = u_1 - u_2` the phase
-velocities are `u_1 = j + (1 - alpha) v_12`, `u_2 = j - alpha v_12`. Hence
-`alpha_t + div(alpha j + alpha(1-alpha) v_12) = 0` (phase 1), the mixture mass flux is `sum alpha_k rho_k u_k = rho_m j + J` with the
-drift mass flux `J = alpha(1-alpha)(rho_1 - rho_2) v_12` (this is exactly the host's `rho_phi` once the slip flux is part of
-`alpha_phi`), and the summed phase momentum equations give
-`d(rho_m j + J)/dt + div[ rho_m j j + j J + J j + T ] = -grad p + div(tau_m) + rho_m g`, with the drift (diffusion) stress
-`T = alpha(1-alpha)[(1-alpha) rho_1 + alpha rho_2] v_12 v_12`. The host convects with `rho_phi = rho_m j + J`, which covers
-`div(rho_m j j + J j)`; the added explicit source is `-div(j (x) J + T)`, with face flux `phi_f J_f + T_f . S_f` (linear face
-interpolation of cell values; boundary faces use the cell value, zero on walls because `phi = 0` there). The term `dJ/dt` is dropped
-(quasi-steady slip; stated limitation, it vanishes in the registered tests except at the fronts). The mixture viscosity stays the
-host's linear mixture; no slip-induced viscous stress.
+**A. Mixture formulation (volume-averaged velocity).** `j = sum alpha_k u_k` is the solenoidal volume-averaged velocity
+that the host already solves for (phase 1 fraction `alpha`, phase 2 `1 - alpha`). With the relative velocity
+`v_12 = u_1 - u_2` the phase velocities are `u_1 = j + (1 - alpha) v_12`, `u_2 = j - alpha v_12`. Hence
+`alpha_t + div(alpha j + alpha(1-alpha) v_12) = 0` (phase 1), the mixture mass flux is
+`sum alpha_k rho_k u_k = rho_m j + J` with the drift mass flux `J = alpha(1-alpha)(rho_1 - rho_2) v_12` (this is exactly
+the host's `rho_phi` once the slip flux is part of `alpha_phi`), and the summed phase momentum equations give
+`d(rho_m j + J)/dt + div[ rho_m j j + j J + J j + T ] = -grad p + div(tau_m) + rho_m g`, with the drift (diffusion)
+stress `T = alpha(1-alpha)[(1-alpha) rho_1 + alpha rho_2] v_12 v_12`.
 
-**B. Algebraic-slip closure (Manninen, Taivassalo and Kallio 1996 form; derived, not copied).** For a dispersed phase `d` of
-diameter `d_p` in the continuous phase `c` the steady force balance on one particle under the body acceleration `a = g` (only
-gravity; inertial/centrifugal `-(u.grad)u - du/dt` terms of the original are NOT included) is
+The host convects with `rho_phi = rho_m j + J`, which covers `div(rho_m j j + J j)`; the added explicit source is
+`-div(j (x) J + T)`, with face flux `phi_f J_f + T_f . S_f` (linear face interpolation of cell values; boundary faces
+use the cell value, zero on walls because `phi = 0` there). The term `dJ/dt` is dropped (quasi-steady slip; stated
+limitation, it vanishes in the registered tests except at the fronts). The mixture viscosity stays the host's linear
+mixture; no slip-induced viscous stress.
+
+**B. Algebraic-slip closure (Manninen, Taivassalo and Kallio 1996 form; derived, not copied).** For a dispersed phase
+`d` of diameter `d_p` in the continuous phase `c` the steady force balance on one particle under the body acceleration
+`a = g` (only gravity; inertial/centrifugal `-(u.grad)u - du/dt` terms of the original are NOT included) is
 `(pi d_p^3/6)(rho_d - rho_c) a = (1/2) rho_c C_D(Re) (pi d_p^2/4) |v|^2 sign`, `Re = rho_c |v| d_p/mu_c`,
 `C_D = (24/Re) f(Re)`. With Stokes `f = 1` or Schiller-Naumann `f = 1 + 0.15 Re^0.687` (Re < 1000) this is
-`|v| f(Re(|v|)) = V_St = d_p^2 |rho_d - rho_c| |a|/(18 mu_c)`. The mixture version replaces `rho_c` in the buoyancy by `rho_m`
-(the particle feels the mixture-average pressure gradient, as in the cited form): `v_dc = d_p^2 (rho_d - rho_m)/(18 mu_c f) a`, i.e.
-the single-particle speed times the hindrance factor `(1 - alpha_d)` (because `rho_d - rho_m = (1 - alpha_d)(rho_d - rho_c)`);
-`f` is solved with Newton iteration from the (decreasing) function `s f(Re(s)) - V_St(alpha)`. `v_12 = v_dc` if phase 1 is the dispersed
-phase, `-v_dc` otherwise. Consequences used as closed forms: with `j = 0` (closed column) the dispersed volume flux is
-`Q(alpha) = -V alpha(1-alpha)^2` (Stokes, `V` the single-particle speed), convex for `alpha < 2/3`; the clear-liquid front (the Kynch
-shock; Lax condition `lambda(lower) > s > lambda(upper)` is satisfied for `alpha_0 < 1/3`) moves at
-`s = Q(alpha_0)/alpha_0 = -V (1 - alpha_0)^2`; the packed-bed shock rises at `V alpha_0 (1 - alpha_0)` and cannot reach the front in
-the windows below.
+`|v| f(Re(|v|)) = V_St = d_p^2 |rho_d - rho_c| |a|/(18 mu_c)`.
+
+The mixture version replaces `rho_c` in the buoyancy by `rho_m` (the particle feels the mixture-average pressure
+gradient, as in the cited form): `v_dc = d_p^2 (rho_d - rho_m)/(18 mu_c f) a`, i.e. the single-particle speed times the
+hindrance factor `(1 - alpha_d)` (because `rho_d - rho_m = (1 - alpha_d)(rho_d - rho_c)`); `f` is solved with Newton
+iteration from the (decreasing) function `s f(Re(s)) - V_St(alpha)`. `v_12 = v_dc` if phase 1 is the dispersed phase,
+`-v_dc` otherwise.
+
+Consequences used as closed forms: with `j = 0` (closed column) the dispersed volume flux is
+`Q(alpha) = -V alpha(1-alpha)^2` (Stokes, `V` the single-particle speed), convex for `alpha < 2/3`; the clear-liquid
+front (the Kynch shock; Lax condition `lambda(lower) > s > lambda(upper)` is satisfied for `alpha_0 < 1/3`) moves at
+`s = Q(alpha_0)/alpha_0 = -V (1 - alpha_0)^2`; the packed-bed shock rises at `V alpha_0 (1 - alpha_0)` and cannot reach
+the front in the windows below.
 
 **C. Slip flux in the alpha transport.** Face slip flux `q_f = s(alpha_f) (a . S_f)/|a|` (sign included), with `alpha_f` the linear face
 interpolation, on internal faces only (boundary slip flux zero: a wall or an inlet/outlet carries no drift). Low-order flux: the
@@ -65,23 +102,28 @@ limiter retains boundedness); high-order flux: central `q alpha_f(1-alpha_f)`. T
 `|phi| + |q|` on both faces of a face (conservative). When the slip flux of a face is exactly zero nothing is added, so a run without
 slip (feature off, zero gravity or equal densities) is bit-identical to the plain VOF path.
 
-**D. Cavitation, Schnerr-Sauer from first principles.** Bubble-number density `n` per unit volume of LIQUID, uniform spherical
-bubbles of radius `R`; with `x = n (4/3) pi R^3` (vapour volume per liquid volume) `alpha_v = x/(1 + x)`, so
-`R = (3 alpha_v/(4 pi n (1 - alpha_v)))^(1/3)`. Inertia-controlled growth (Rayleigh-Plesset without surface tension and viscosity,
-`R R'' + (3/2) R'^2 = (p_v - p)/rho_l`, `p_v = p_sat`) has the first integral `R'^2 = (2 (p_v - p)/(3 rho_l))(1 - (R_0/R)^3)` for a
-constant pressure, whose asymptote is `R' = sign(p_v - p) sqrt(2|p_v - p|/(3 rho_l))`. Then `d alpha_v/dt = 3 alpha_v(1 - alpha_v) R'/R`
-(material), and with incompressible phases the volume source is the vapour mass source `mdot` of
+**D. Cavitation, Schnerr-Sauer from first principles.** Bubble-number density `n` per unit volume of LIQUID, uniform
+spherical bubbles of radius `R`; with `x = n (4/3) pi R^3` (vapour volume per liquid volume) `alpha_v = x/(1 + x)`, so
+`R = (3 alpha_v/(4 pi n (1 - alpha_v)))^(1/3)`. Inertia-controlled growth (Rayleigh-Plesset without surface tension and
+viscosity, `R R'' + (3/2) R'^2 = (p_v - p)/rho_l`, `p_v = p_sat`) has the first integral
+`R'^2 = (2 (p_v - p)/(3 rho_l))(1 - (R_0/R)^3)` for a constant pressure, whose asymptote is
+`R' = sign(p_v - p) sqrt(2|p_v - p|/(3 rho_l))`. Then `d alpha_v/dt = 3 alpha_v(1 - alpha_v) R'/R` (material), and with
+incompressible phases the volume source is the vapour mass source `mdot` of
 `d(alpha_v rho_v)/dt + div(alpha_v rho_v u) = mdot`: `D alpha_v/Dt = mdot rho_m/(rho_v rho_l)` with
 `rho_m = alpha_v rho_v + (1 - alpha_v) rho_l`, hence
-`mdot = (rho_v rho_l/rho_m) alpha_v (1 - alpha_v) (3/R) sign(p_v - p) sqrt(2|p_v - p|/(3 rho_l))` (positive = evaporation). Optional
-empirical factors `F_vap`, `F_cond` (default 1) multiply the two signs. In the host the cell update does not use `mdot` as an
-explicit rate: with the pressure of the start of the step frozen, the radius is advanced exactly, `R' = R + F R'_inf dt`, and
-`alpha_v' = x'/(1 + x')`; the delivered `mdot_eff = rho_l (alpha_l - alpha_l')/dt` then feeds the continuity source exactly as in ADR 0052
-B2 (so mass is conserved by construction and the update is bounded in `[alpha_floor, 1)` for any `dt`). Nuclei: the bubble radius never
-falls below the nucleus radius `R_0` (condensation stops at `alpha_floor = x_0/(1 + x_0)`, `x_0 = n (4/3) pi R_0^3`); the field is
-initialised at that floor, which is also the inception seed (without seeds `alpha_v = 0` never grows, `mdot = 0`). The liquid `p`
-is the host's absolute pressure `p = p_rgh + rho_m g.(x - x_ref)`. One pressure (Dirichlet) patch is required, as in ADR 0052 B3.
-Cavitation and `mass_transfer` (thermal) are mutually exclusive in the tree.
+`mdot = (rho_v rho_l/rho_m) alpha_v (1 - alpha_v) (3/R) sign(p_v - p) sqrt(2|p_v - p|/(3 rho_l))` (positive =
+evaporation). Optional empirical factors `F_vap`, `F_cond` (default 1) multiply the two signs.
+
+In the host the cell update does not use `mdot` as an explicit rate: with the pressure of the start of the step frozen,
+the radius is advanced exactly, `R' = R + F R'_inf dt`, and `alpha_v' = x'/(1 + x')`; the delivered
+`mdot_eff = rho_l (alpha_l - alpha_l')/dt` then feeds the continuity source exactly as in ADR 0052 B2 (so mass is
+conserved by construction and the update is bounded in `[alpha_floor, 1)` for any `dt`).
+
+Nuclei: the bubble radius never falls below the nucleus radius `R_0` (condensation stops at
+`alpha_floor = x_0/(1 + x_0)`, `x_0 = n (4/3) pi R_0^3`); the field is initialised at that floor, which is also the
+inception seed (without seeds `alpha_v = 0` never grows, `mdot = 0`). The liquid `p` is the host's absolute pressure
+`p = p_rgh + rho_m g.(x - x_ref)`. One pressure (Dirichlet) patch is required, as in ADR 0052 B3. Cavitation and
+`mass_transfer` (thermal) are mutually exclusive in the tree.
 
 **E. Wiring.** `VofSettings::mixture: Option<MixtureSettings>`, `VofSettings::cavitation: Option<Cavitation>`; both `None` leave
 the path bit-identical. Library: new modules `mixture.rs` (closures) and `cavitation.rs` (Schnerr-Sauer, 0-D radius integrator).

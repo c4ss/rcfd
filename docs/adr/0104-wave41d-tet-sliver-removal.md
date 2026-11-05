@@ -1,9 +1,24 @@
 # ADR 0104: Wave 41D, numbering dependence and an opt-in quality pass for the tetrahedral mesher (F-131, F-132)
 
-Status: registered before the diagnostics and the registered tests were run. Limits are not changed after a run; a miss becomes an
-ignored `*_known_miss` test with the limit intact. Library change: an opt-in stage in `rcfd_mesh::tetmesh`, off by default; the default
-output must stay bit-identical (W0 below). Clean-room: first principles only; any literature attribution is marked UNVERIFIED. Written
-at HEAD e325ab4, target `<target dir>`.
+Status: registered before the diagnostics and the registered tests were run.
+
+The closed STL of the cylinder in a box from wave 39B (ADR 0093) meshes watertight but misses the ADR 0030 T5 limits (1.84 deg
+against 3.0, fraction 0.936 against 0.99), and the in-code surface with the same coordinates gives 3.34 deg and 0.927. This ADR
+diagnoses that numbering dependence and registers an opt-in quality pass for the tetrahedral mesher. The diagnosis, run after the
+registration, finds that the remesher depends on the vertex numbering (H1 holds) and `tetrahedralize` does not on this input (H2
+is falsified), so the 1.84 vs 3.34 deg difference comes entirely from the two different remeshed surfaces. In the registered run
+every check passes: W0 (default bit-identity) and, with the frozen pass (`quality_sweeps` at 10), Q1 to Q7, with 17.66 deg and
+fraction 1.0000 on the STL path and 16.33 deg and 0.9974 on the in-code path. F-131 is done when the quality pass is on; the
+default options still miss and a user must set `quality_sweeps`. F-132 stays partial: no test covers boundary layers on a
+tetrahedral mesh of STL geometry. The pass has no termination or quality guarantee; it is a bounded heuristic (10 sweeps). It was
+developed on the target cases, and it does not re-measure both quality measures after every stage, as Part 2 said it would.
+
+Rules and parents:
+
+* Limits are not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact.
+* Library change: an opt-in stage in `rcfd_mesh::tetmesh`, off by default; the default output must stay bit-identical (W0 below).
+* Clean-room: first principles only; any literature attribution is marked UNVERIFIED.
+* Written at HEAD e325ab4, target `<target dir>`.
 
 ## Context
 
@@ -112,11 +127,11 @@ Each limit is reported separately; a partial result (for example Q1 met, Q2 miss
 * D3 (cells failing a T5 limit): in-code 77 of 1061, STL 71 of 1115. Every in-code failure and all but one STL failure is a
   radius-edge failure (ratio over 2 but dihedral at least 3 deg), not a sliver. They sit next to the surface: near box faces 18 / 28
   (the STL count includes the sliver), near the cylinder side 40 / 28, at the cylinder rim 17 / 9, cylinder cap 0 / 1, interior 2 / 5
-  (in-code / STL). Most have one surface face and one interior Steiner vertex (49 / 35) or two surface vertices and two interior Steiner vertices. The single STL sliver (1.84 deg, ratio
-  27.9) is a cell on a box-face triangle whose fourth vertex is an interior Steiner point 0.003 from that face. Every failing cell has
-  at least one interior (movable) vertex. The cause of the radius-edge failures: their circumcentres lie close to the surface, the
-  unconstrained Bowyer-Watson cavity of such a point crosses a surface face into outside tetrahedra, and the default refinement
-  (`split_boundary` off) then skips them.
+  (in-code / STL). Most have one surface face and one interior Steiner vertex (49 / 35) or two surface vertices and two interior
+  Steiner vertices. The single STL sliver (1.84 deg, ratio 27.9) is a cell on a box-face triangle whose fourth vertex is an
+  interior Steiner point 0.003 from that face. Every failing cell has at least one interior (movable) vertex. The cause of the
+  radius-edge failures: their circumcentres lie close to the surface, the unconstrained Bowyer-Watson cavity of such a point
+  crosses a surface face into outside tetrahedra, and the default refinement (`split_boundary` off) then skips them.
 
 ## Amendment 1 (written after the development runs, before the registered Q runs)
 
@@ -133,14 +148,19 @@ Development runs (an ignored `x_dev` print test on the target cases only, disclo
   cavity is star-shaped and contains the bad tetrahedron), 10 sweeps: in-code 1142 cells, 16.33 deg, fraction 0.9974; STL 1223
   cells, 17.66 deg, fraction 1.0000. 30 sweeps: the same fractions.
 
-Frozen pass (what the registered tests run): `TetOptions { quality_sweeps: 10, ..Default::default() }`. Each sweep: (i) constrained
-circumcentre insertion for every inside tetrahedron with circumradius over shortest edge above `max_radius_edge` (2.0); (ii) one
-smoothing sweep over interior vertices in id order, candidates the neighbour centroid and the volume-weighted circumcentre mean, steps
-1, 1/2, 1/4, 1/8, kept only if exact `orient3d` keeps every incident cell positive and the smallest incident objective grows by more
-than 1e-6 relative, where the objective of a cell is the smaller of its volume quality times `6 sqrt 2` and `(sqrt 6 / 4)` divided by
-its circumradius over shortest edge (both 1 on the regular tetrahedron); (iii) the existing 2-3 flips and edge removal for inside cells below volume quality 0.06. Stops early when a
-sweep changes nothing. Ingredients 2 (dihedral-objective flips) and 4 (flat-cell split at a dihedral threshold) were not needed and
-are not implemented. What I knew when writing this: the development numbers above; Q7 (held-out) has not been run with the pass.
+Frozen pass (what the registered tests run): `TetOptions { quality_sweeps: 10, ..Default::default() }`. Each sweep:
+
+* (i) constrained circumcentre insertion for every inside tetrahedron with circumradius over shortest edge above
+  `max_radius_edge` (2.0);
+* (ii) one smoothing sweep over interior vertices in id order, candidates the neighbour centroid and the volume-weighted
+  circumcentre mean, steps 1, 1/2, 1/4, 1/8, kept only if exact `orient3d` keeps every incident cell positive and the smallest
+  incident objective grows by more than 1e-6 relative, where the objective of a cell is the smaller of its volume quality times
+  `6 sqrt 2` and `(sqrt 6 / 4)` divided by its circumradius over shortest edge (both 1 on the regular tetrahedron);
+* (iii) the existing 2-3 flips and edge removal for inside cells below volume quality 0.06.
+
+The pass stops early when a sweep changes nothing. Ingredients 2 (dihedral-objective flips) and 4 (flat-cell split at a dihedral
+threshold) were not needed and are not implemented. What I knew when writing this: the development numbers above; Q7 (held-out)
+has not been run with the pass.
 
 ## Results (release build, registered run after amendment 1)
 
@@ -168,18 +188,24 @@ flips. Run time of each pipeline with the pass about 0.3 s (release).
 The ADR 0093 records `s2_known_miss_pipeline_watertight_and_quality` and `s3_known_miss_radius_edge_fraction` stay ignored: they run
 the default mesher, which is unchanged (W0), and still miss as recorded. Their doc comments now point to Q1 and Q2.
 
-Verdicts: F-131 is done: Q1, Q2 and Q5 on the STL path pass as non-ignored tests with the ADR 0030 T5 limits and W0 passes, which
-meets "a closed STL of a cylinder in a box meshes with curvature-based sizing; the result passes watertightness and quality checks"
-when the quality pass is on. The default options still miss; a user must set `quality_sweeps`. F-132 stays partial: no test covers
-boundary layers on a tetrahedral mesh of STL geometry.
+Verdicts:
 
-Deviations: the pass was developed on the target cases (disclosed in amendment 1); the held-out cases were run only in the
-registered run. Ingredients 1, 2 and 4 of Part 2 were not kept or not built. Ingredient 3 was replaced: the insertion uses the
-radius-edge criterion, not a dihedral one, and a constrained cavity instead of the encroachment rule of ingredient 1. Part 2 said
-both quality measures would be re-measured after every stage; the pass does not do that: the measures are taken once, on the final
-mesh (the development runs measured them per variant, not per stage). The pass has no termination or quality guarantee (no
-sliver exudation); it is a bounded heuristic (10 sweeps). No literature value enters a gate; the method names (Delaunay refinement,
-constrained cavities, optimisation-based smoothing, bistellar flips) are from memory and UNVERIFIED.
+* F-131 is done: Q1, Q2 and Q5 on the STL path pass as non-ignored tests with the ADR 0030 T5 limits and W0 passes, which meets
+  "a closed STL of a cylinder in a box meshes with curvature-based sizing; the result passes watertightness and quality checks"
+  when the quality pass is on. The default options still miss; a user must set `quality_sweeps`.
+* F-132 stays partial: no test covers boundary layers on a tetrahedral mesh of STL geometry.
+
+Deviations:
+
+* The pass was developed on the target cases (disclosed in amendment 1); the held-out cases were run only in the registered run.
+* Ingredients 1, 2 and 4 of Part 2 were not kept or not built.
+* Ingredient 3 was replaced: the insertion uses the radius-edge criterion, not a dihedral one, and a constrained cavity instead
+  of the encroachment rule of ingredient 1.
+* Part 2 said both quality measures would be re-measured after every stage; the pass does not do that: the measures are taken
+  once, on the final mesh (the development runs measured them per variant, not per stage).
+* The pass has no termination or quality guarantee (no sliver exudation); it is a bounded heuristic (10 sweeps).
+* No literature value enters a gate; the method names (Delaunay refinement, constrained cavities, optimisation-based smoothing,
+  bistellar flips) are from memory and UNVERIFIED.
 
 Gate on a fresh archive of d883539: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1949 passed / 0 failed / 551 ignored (wave 40: 1939 / 0 / 549; this ADR adds 10

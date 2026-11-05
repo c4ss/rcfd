@@ -1,16 +1,18 @@
 # rcfd product suites backlog: Ansys capabilities outside CFD
 
+This backlog logs the vendor catalogue's capabilities outside CFD, one entry per suite (S-numbered, grouped by category A to J), for whoever triages work beyond CFD. No ordering is proposed. The common prerequisites are FE element infrastructure with the mesh-container extension, the material schema and the co-simulation interface. The coverage statement at the end says how weak the evidence is for each area; read it before relying on any entry.
+
 Trademarks and independence: all product and company names in this document are trademarks or registered trademarks of their respective owners and are used only to identify the products compared. rcfd is an independent open-source project, not affiliated with, endorsed by or sponsored by any of them.
 
 Status: first-pass backlog, 2026-10-17. This is a log, not a plan. Nothing here is scheduled, nothing is added to `docs/roadmap.json`, and the priority classes are rough sizing hints for later triage. The CFD-class inventory lives in `docs/parity-matrix.md` (F-244..F-267); this file covers the rest of the vendor catalogue, grouped by product category.
 
 Clean-room: all capability names are short paraphrases of public product pages and of one documentation contents page from the vendor's online help (P21, which normally needs a login); the [provenance record](provenance.md) says what was consulted and for what. No vendor text or code was copied; no vendor binary or install was inspected. Candidate algorithms and standards named below are public textbook or published-paper methods, not vendor internals. See `CONTRIBUTING.md` for the clean-room policy that applies to any future implementation.
 
-This page is for whoever triages work beyond CFD. It lists the sources read, a legend, then one entry per suite (S-numbered, grouped by category A to J), each with the same fields: purpose, capabilities, sources read, CFD overlap and dependencies, size and priority, open route and first slice. The cross-suite section at the end gives the shared infrastructure, the dependency summary on CFD and the coverage statement, which says how weak the evidence is for each area; read that before relying on any entry.
+The page gives the sources read and a legend, then the suite entries, each with the same fields: purpose, capabilities, sources read, CFD overlap and dependencies, size and priority, open route and first slice. The cross-suite section at the end gives the shared infrastructure, the dependency summary on CFD and the coverage statement.
 
 ## Sources actually read
 
-All fetched with WebFetch, which returns a model-condensed extraction of the page, not raw HTML; the extraction can omit or reword items. Product pages were reached on `ansys.synopsys.com` (the vendor catalogue now redirects there). Release labels (2026 R1 etc.) are as stated by those pages and were not checked against release notes.
+All pages in the first table were fetched with WebFetch, which returns a model-condensed extraction of the page, not raw HTML; the extraction can omit or reword items. Product pages were reached on `ansys.synopsys.com` (the vendor catalogue now redirects there). Release labels (2026 R1 etc.) are as stated by those pages and were not checked against release notes.
 
 | Code | URL | Notes |
 |---|---|---|

@@ -1,8 +1,9 @@
 # Architecture and crate graph
 
 This page shows how the workspace crates depend on each other and which layering rules a new crate or a new dependency must
-follow. It is for contributors who add or move code between crates. For how to contribute see CONTRIBUTING.md at the
-repository root, and for the reasons behind a single crate read the ADR named next to it, where one is named.
+follow. Lower layers never depend on higher ones. The page is for contributors who add or move code between crates. For how
+to contribute see CONTRIBUTING.md at the repository root. For the reasons behind a single crate read the ADR named next to
+it, where one is named.
 
 ## Crate dependency graph
 
@@ -36,10 +37,10 @@ rcfd-studio -> project, runner, render, tsstore, mesh, claude, api, core   (Stud
 
 ## Layering rules
 
-Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` <
-`gpu`/`dist`/`runner`/`claude` < `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `workspace` < `mcp`/`cli` < `assistant` < `gui` < `studio`).
-No crate depends on `studio`, and `studio` does not depend on `gui`, `assistant` or `mcp`. The graph is checked for
-acyclicity and conformance by `crates/rcfd-cli/tests/workspace_graph.rs`.
+Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` < `gpu`/`dist`/`runner`/`claude` <
+`io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `workspace` < `mcp`/`cli` < `assistant` < `gui` <
+`studio`). No crate depends on `studio`, and `studio` does not depend on `gui`, `assistant` or `mcp`. The test
+`crates/rcfd-cli/tests/workspace_graph.rs` checks the graph for acyclicity and conformance.
 
 ## Where to go next
 

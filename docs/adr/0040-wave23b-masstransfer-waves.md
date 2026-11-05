@@ -1,23 +1,38 @@
 # ADR 0040: Wave 23B, interfacial mass-transfer closures (F-226) and free-surface wave generation and absorption (F-227), library only
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end without
-touching a registered limit.
+
+Wave 23B delivers interfacial mass-transfer closures (F-226) and free-surface wave generation and absorption closures
+(F-227) as a library only, tested standalone against closed forms and invariants. The multiphase and free-surface base
+does not exist in the tree (F-055 and F-127 are `todo`), so the wave makes no case-tree, schema or solver change, the
+CFD-level acceptance statements wait on F-055/F-127, and both items stop at `partial`. In the addendum, written after
+the runs, M1-M9 all pass and the exponential beach gives `R = 2.6e-4` at `L = 2 lambda` (limit 0.05). W7 (d) misses: the
+abrupt zone gives `R = 0.214` against the registered `>= 0.5`; the probable cause, not separately tested, is that the
+premise of the check was wrong. The W3 (ii)/(iii) scaling statement is a registered-text defect and cannot pass for any
+correct second-order solution. Both stay as ignored known-miss tests. The corrected test `w3b_residual_scaling_absolute`
+passes, and `w7e_abrupt_zone_vs_beach` carries post-hoc limits, labelled as such. There is no 2-D/3-D free-surface
+verification of any wave closure.
+
+Rules. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
+away. A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers,
+deviations) may be appended at the end without touching a registered limit.
 
 ## Scope and dependency fact (stated up front)
 
-The multiphase and free-surface base does NOT exist in the tree: F-055 (volume-of-fluid) and F-127 (Euler-Euler) are `todo`, and
-F-226 depends on both, F-227 on F-055. Therefore both items are delivered as LIBRARY-ONLY closures, tested standalone against
-closed forms and invariants. There is no case-tree wiring, no schema change and no solver change in this wave; the
-case-tree wiring and the CFD-level acceptance statements (1-D Stefan evaporation in a solver, film condensation within 10 percent
-of Nusselt in a CFD run, reflected-wave fraction in a free-surface CFD run) wait on F-055/F-127. Both items stop at `partial`.
-No VOF solver is built here. The natural home that exists today is a per-cell source-term evaluator that takes phase fractions,
-temperatures and pressures as inputs and returns phase sources; that is the shape of the F-226 API. Baseline hashes
-(`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical. Clean-room: published literature and first principles only;
-no vendor code, text, data or names. Parallel waves 23A and 23C share the tree: the only shared-file edit is two `pub mod` lines
-in `crates/rcfd-fv/src/lib.rs`.
+The multiphase and free-surface base does NOT exist in the tree: F-055 (volume-of-fluid) and F-127 (Euler-Euler) are
+`todo`, and F-226 depends on both, F-227 on F-055. Therefore both items are delivered as LIBRARY-ONLY closures, tested
+standalone against closed forms and invariants. There is no case-tree wiring, no schema change and no solver change in
+this wave. The case-tree wiring and the CFD-level acceptance statements (1-D Stefan evaporation in a solver, film
+condensation within 10 percent of Nusselt in a CFD run, reflected-wave fraction in a free-surface CFD run) wait on
+F-055/F-127. Both items stop at `partial`.
+
+No VOF solver is built here. The natural home that exists today is a per-cell source-term evaluator that takes phase
+fractions, temperatures and pressures as inputs and returns phase sources; that is the shape of the F-226 API.
+
+Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical. Clean-room: published literature and
+first principles only; no vendor code, text, data or names. Parallel waves 23A and 23C share the tree: the only
+shared-file edit is two `pub mod` lines in `crates/rcfd-fv/src/lib.rs`.
 
 ## Decisions
 
@@ -136,61 +151,140 @@ Coordinates: `x` along propagation, `z` vertical, `z = 0` the still-water level,
 Library tests: `crates/rcfd-fv/tests/masstransfer.rs` (M) and `crates/rcfd-fv/tests/waves.rs` (W). Limits are relative unless
 stated. "hand" means the expected value is written in the test as an independent literal expression, not by calling the function.
 
-**M1 Lee exact values.** `T = 380, T_sat = 373.15, alpha_l = 0.6, rho_l = 958, c_e = 0.1`: `mdot` equals `0.1*0.6*958*(380-373.15)/373.15`
-to 1e-14. Condensation `T = 360, alpha_v = 0.3, rho_v = 0.6, c_c = 0.2`: equals `-0.2*0.3*0.6*(373.15-360)/373.15` to 1e-14.
-`T = T_sat`: `mdot == 0` exactly. Sign: `mdot > 0` iff `T > T_sat` over a 200-point scan. `alpha_l = 0` gives no evaporation (`== 0`),
-`alpha_v = 0` no condensation (`== 0`). Linear in `T - T_sat` (doubling `theta` doubles `mdot` to 1e-14).
-**M2 conservation (all models).** For 2000 deterministic pseudo-random states per model (Lee, HKS, ZGB): `liquid + vapour == 0`
-exactly (`<= 0` ulp, i.e. `==`), `energy == -mdot h_fg` exactly, and all three change sign with the driving difference.
-**M3 Hertz-Knudsen-Schrage.** `M = 0.018015, T_l = T_v = 373.15, p_sat = 101325, p_v = 95000, a_i = 100`: for `sigma = 0.8`, Schrage
-and plain forms equal the hand expressions `(2*0.8/(2-0.8))*sqrt(0.018015/(2*pi*8.314462618))*(101325-95000)/sqrt(373.15)*100` and
-the `sigma` version to 1e-14. `p_v = p_sat`, `T_v = T_l` gives exactly 0; `p_v > p_sat` gives `mdot < 0`. With `sigma = 1`, plain form, `p_v = 0`:
-`j = p sqrt(M/(2 pi R_u T))` against the independent kinetic-theory expression `0.25 * (p M/(R_u T)) * sqrt(8 R_u T/(pi M))` to 1e-13.
-Temperature jump sign: `T_l > T_v` at `p_v = p_sat(T_v)` evaporates (using `rcfd_core::iapws::saturation_pressure` for `p_sat(T_l)`).
+**M1 Lee exact values.** `T = 380, T_sat = 373.15, alpha_l = 0.6, rho_l = 958, c_e = 0.1`: `mdot` equals
+`0.1*0.6*958*(380-373.15)/373.15` to 1e-14. Condensation `T = 360, alpha_v = 0.3, rho_v = 0.6, c_c = 0.2`: equals
+`-0.2*0.3*0.6*(373.15-360)/373.15` to 1e-14. `T = T_sat`: `mdot == 0` exactly. Sign: `mdot > 0` iff `T > T_sat` over a
+200-point scan. `alpha_l = 0` gives no evaporation (`== 0`), `alpha_v = 0` no condensation (`== 0`). Linear in
+`T - T_sat` (doubling `theta` doubles `mdot` to 1e-14).
+
+**M2 conservation (all models).** For 2000 deterministic pseudo-random states per model (Lee, HKS, ZGB):
+`liquid + vapour == 0` exactly (`<= 0` ulp, i.e. `==`), `energy == -mdot h_fg` exactly, and all three change sign with
+the driving difference.
+
+**M3 Hertz-Knudsen-Schrage.** `M = 0.018015, T_l = T_v = 373.15, p_sat = 101325, p_v = 95000, a_i = 100`: for
+`sigma = 0.8`, Schrage and plain forms equal the hand expressions
+`(2*0.8/(2-0.8))*sqrt(0.018015/(2*pi*8.314462618))*(101325-95000)/sqrt(373.15)*100` and the `sigma` version to 1e-14.
+`p_v = p_sat`, `T_v = T_l` gives exactly 0; `p_v > p_sat` gives `mdot < 0`. With `sigma = 1`, plain form, `p_v = 0`:
+`j = p sqrt(M/(2 pi R_u T))` against the independent kinetic-theory expression
+`0.25 * (p M/(R_u T)) * sqrt(8 R_u T/(pi M))` to 1e-13. Temperature jump sign: `T_l > T_v` at `p_v = p_sat(T_v)`
+evaporates (using `rcfd_core::iapws::saturation_pressure` for `p_sat(T_l)`).
+
 **M4 pressure driven (ZGB).** hand values for `p = 0.9 p_v` (vaporisation) and `p = 1.2 p_v` (condensation) with `rho_l = 998, rho_v = 0.023,
 p_v = 2339, R_B = 1e-6, alpha_nuc = 5e-4, F_vap = 50, F_cond = 0.01`, to 1e-14; zero at `p = p_v` (`== 0`); `mdot` for `4 |dp|` is twice that for `|dp|`
 (1e-14); the bubble-dynamics reading `rho_v N 4 pi R_B^2 dR/dt` with `N = 3 alpha/(4 pi R_B^3)` matches to 1e-13;
 `alpha_v = 1` gives no vaporisation, `alpha_v = 0` no condensation.
-**M5 Raoult.** Binary `x = (0.3, 0.7)`, `psat = (1.0e5, 4.0e4)`: `bubble_pressure = 5.8e4` to 1e-15 (hand), `y = (0.3*1e5/5.8e4, 0.7*4e4/5.8e4)`, `sum y = 1` to 1e-15 at the
-bubble pressure, `> 1` at `0.9 p_b`, `< 1` at `1.1 p_b`. Ternary at three compositions: `sum y = 1` to 1e-14 at the bubble pressure. Pure component: `y = psat/p`.
-Dew/bubble round trip: `x_i = y_i p_d/psat_i` sums to 1 to 1e-14. Located errors: negative fraction (`x[1]`), fractions not summing to 1 within 1e-9 (`sum`),
-`psat <= 0` (`psat[0]`), length mismatch (both lengths), `p <= 0`.
-**M6 Henry.** `H(T_0) == H_0` exactly; `d ln H/d(1/T) = -C` by central difference (step 1e-6 in `1/T`) to 1e-6 relative; `C > 0` gives `H` increasing in `T` over a 100-point scan;
-`C = 0` gives the same `H` at every `T` (`==`); `x_eq = y p/H` hand value to 1e-14; Henry with `H = p_sat` equals Raoult for the same `x` (`y` equal to 1e-15); mass-fraction round trip to 1e-14.
-Transfer rate: zero at `w = w_eq` (`== 0`), sign follows `w_eq - w`, donor source `= -` receiver source (`==`).
-**M7 Nusselt film.** Water at 1 atm values `rho_l = 958.4, rho_v = 0.5977, mu = 2.82e-4, k = 0.679, h_fg = 2.257e6, g = 9.81`, `T_sat - T_w = 10 K`: `delta(0.5)` equals the hand
-expression to 1e-14; scaling `delta ~ (dT x)^(1/4)` (16 times `dT` doubles `delta`, 1e-14); `m'' h_fg = k dT/delta` (1e-14); `Gamma(x) = rho_l (rho_l - rho_v) g delta^3/(3 mu)` equals
-`int_0^x m'' dx'` (exact Simpson in `u`, `x = u^4`, 1e-12); `h_L = (4/3) h(L)` (1e-14) and the coefficient `(4/3)(1/4)^(1/4)` is within 3e-4 of 0.943;
-`T_w >= T_sat` gives zero flux and `delta` an `Err`. Wall-cell source `= m'' A/V` (`==`) with opposite signs for the phases.
-**M8 relaxation cell.** Frozen mass, `T_0 = 400, T_sat = 373.15, c_e = 0.1, m_l = 500, C = 2e6, h_fg = 2.257e6`: RK4, 200 steps to `lambda t = 3`, `max |T - T_exact| <= 1e-9 (T_0 - T_sat)`.
-Depleting: `C T + h_fg m_v` and `m_l + m_v` conserved to 1e-12; `|T - T_sat|` non-increasing; `T` approaches `T_sat` from above and never undershoots for `lambda dt <= 0.1`; liquid mass stays positive. Condensing side (`T_0 < T_sat`, vapour supplied) symmetric (`T` rises to `T_sat`).
-**M9 located input errors.** `alpha_l` outside `[0,1]` (`alpha_l`), `rho <= 0`, `T_sat <= 0` (`t_sat`), negative coefficient, NaN, `sigma` outside `(0,1]` (`sigma`), `p <= 0`, `h_fg <= 0`: each `Err` containing the parameter name.
 
-**W1 dispersion.** For `h in {0.5, 2, 10, 50} m`, `T in {2, 5, 9, 15} s`, `g = 9.81`: `|omega^2 - g k tanh(kh)|/omega^2 <= 1e-12` (target of the solver 1e-14); deep (`h = INFINITY`) `k = omega^2/g` bit-exact; for `kh >= 6`
-`|k - omega^2/g|/k <= 2.1 e^{-2kh}`; shallow for `kh <= 0.2`: `1 - c/sqrt(g h)` lies in `[(kh)^2/6 - 0.06 (kh)^4, (kh)^2/6]`; `c_g = d omega/dk` by central difference to 1e-8;
-`c_g/c -> 1/2` deep (`|c_g/c - 1/2| <= 2e-4` at `kh = 6`) and `-> 1` shallow (`1 - c_g/c <= (kh)^2` at `kh <= 0.2`). Bad input (`omega <= 0`, `h <= 0`, `g <= 0`): located errors.
-**W2 Airy kinematics and invariants.** `a = 0.5, h = 3, T = 6`: periodic in `x` (by `lambda`) and `t` (by `T`) to 1e-13; `d eta/dt = w(z=0)` to 1e-12; `w(z = -h) == 0` (`<= 1e-15 a omega`);
-continuity `du/dx + dw/dz = 0` by central differences (step 1e-5) to 1e-8 relative to `a omega k`; Laplace via `u = d phi/dx, w = d phi/dz` central differences 1e-8;
-orbital amplitude ratio `u_amp(z)/u_amp(0) = cosh(k(z+h))/cosh(kh)` to 1e-14, and for `kh = 6`, `z in [-h/4, 0]`: relative difference from `e^{kz}` `<= 2 e^{-2k(z+h)}`;
-time-mean kinetic energy integrated over depth (Simpson 2000 intervals, 64 time samples) `= rho g a^2/4` to 1e-8; mean `eta u(0)` over a period `= E/(rho c)` to 1e-12; bed dynamic pressure `rho g a/cosh(kh)` to 1e-14.
-**W3 second-order Stokes.** (i) deep limit of the second harmonic `k a^2/2` to 1e-6 relative at `kh = 12`; shallow limit `3 a^2/(4 k^2 h^3)` to 2e-2 at `kh = 0.05`; crest height minus trough depth `= 2 eta_2 > 0`.
-(ii) kinematic free-surface residual `eta_t + u eta_x - w` at `z = eta`, Taylor-expanded about `z = 0` through second order, and (iii) the dynamic residual `g eta + phi_t + eta phi_tz + (u^2 + w^2)/2` at `z = 0` with the mean over a period removed:
-with `k a = 1e-3` the ratio of the maximum residual (over 720 phases) at `a` to that at `a/2` lies in `[7.5, 8.5]` (third-order scaling) for the kinematic residual (scaled by `a omega`) and for the dynamic residual (scaled by `g a`) at `kh in {0.5, 1.5, 4}`. No absolute residual bound is registered.
-First-order only is shown to FAIL the same dynamic residual test with ratio near 4 (diagnostic, asserted ratio in `[3.5, 4.5]`), which proves the test discriminates.
-**W4 inlet and fractions.** `ramp(0) == 0`, `ramp(T_r) == 1` bit-exact, monotone; `liquid_fraction` is 0 above the cell, 1 below, 0.5 when the surface is at the cell centre, linear between (hand), and the column sum of `liquid_fraction*dz` equals `eta + h` to 1e-14; `inlet_state` order 1 equals the Airy functions times the ramp.
-**W5 irregular waves.** Pierson-Moskowitz, `Hs = 2.5, Tp = 9`, `N = 200`, `[0.4 wp, 6 wp]`: recovered `Hs = 4 sqrt(sum a_i^2/2)` within 1e-3 relative of 2.5 (truncation estimate 5e-4); closed-form moments `m1 = (5/64) Hs^2 wp 1.25^(-3/4) Gamma(3/4)` (to 2e-3, wide-range quadrature `[0.3 wp, 40 wp]`, 20000 bins) and
-`m2 = (5/64) Hs^2 wp^2 1.25^(-1/2) sqrt(pi)` (to 2e-3); spectrum peak (argmax on a 1e-4 grid) at `wp` within 1e-3. JONSWAP `gamma = 3.3`, same `Hs`: recovered `Hs` within 2e-3 (normalisation), argmax of the spectrum in `[wp, 1.05 wp]`; JONSWAP with `gamma = 1` (normalised) equals the Pierson-Moskowitz spectrum to 1e-6 relative at 50 frequencies.
-Reproducibility: same seed gives bit-identical phases and `eta`; different seeds differ; phases in `[0, 2 pi)`; `|mean cos phi|, |mean sin phi| <= 0.15` for the registered seed 12345 (3 sigma of the sample mean). Record variance over one repetition period (exact trapezoid, enough samples) `= sum a_i^2/2` to 1e-10 relative; each `k_i` satisfies the dispersion to 1e-12; deep-water point velocity equals the sum of Airy velocities (`==` up to 1e-13).
-**W6 relaxation weights.** Exponential: `w(0) == 1`, `w(1) == 0`, `w(chi > 1) == 0`, `w(chi < 0) == 1`; strictly decreasing on a 10001-point grid; `w(0.5)` equals `1 - (exp(0.5^3.5) - 1)/(e - 1)` (hand) to 1e-14; flat start `1 - w(0.01) <= 1e-6`. Polynomial: `w = (1 - chi)^n` to 1e-14, exact endpoints, monotone. `zone_chi` orientation both ways. Sponge: `sigma` endpoints, `int sigma dx` by Simpson `= sigma_max L/(n+1)` to 1e-12.
-**W7 1-D reflection (registered with the acceptance limit).** `g = 9.81, h = 1, T = 8 s` (`c = sqrt(g h)`, `lambda = c T`), `dx = lambda/40`, `dt = T/80` (CFL 0.5), ramp `2T`, gauge `9 lambda`, zone start `12 lambda`, Fourier window as derived: start `(2 x_e - x_g)/c + 3T`, length `3T`, which ends before the left re-reflection `(2 x_s + x_g)/c` (asserted in the test).
-(a) rigid end wall (no zone): `R in [0.995, 1.005]`. (b) exponential beach, `L = 2 lambda`, `p = 3.5`: `R <= 0.05`. (c) the same with `L = 4 lambda`: `R_4 <= R_2`. (d) abrupt zone (`L = 0.05 lambda`): `R >= 0.5`. Sponge variant reported only (`sigma_max` chosen as `3 c/L` and printed), no limit.
-Energy accounting for the incident wave: the Fourier amplitude of the reference run equals `a` times the ramp-saturated value within 2 percent (pure scheme dispersion/impedance check, registered).
+**M5 Raoult.** Binary `x = (0.3, 0.7)`, `psat = (1.0e5, 4.0e4)`: `bubble_pressure = 5.8e4` to 1e-15 (hand),
+`y = (0.3*1e5/5.8e4, 0.7*4e4/5.8e4)`, `sum y = 1` to 1e-15 at the bubble pressure, `> 1` at `0.9 p_b`, `< 1` at
+`1.1 p_b`. Ternary at three compositions: `sum y = 1` to 1e-14 at the bubble pressure. Pure component: `y = psat/p`.
+Dew/bubble round trip: `x_i = y_i p_d/psat_i` sums to 1 to 1e-14. Located errors: negative fraction (`x[1]`), fractions
+not summing to 1 within 1e-9 (`sum`), `psat <= 0` (`psat[0]`), length mismatch (both lengths), `p <= 0`.
+
+**M6 Henry.** `H(T_0) == H_0` exactly; `d ln H/d(1/T) = -C` by central difference (step 1e-6 in `1/T`) to 1e-6 relative;
+`C > 0` gives `H` increasing in `T` over a 100-point scan; `C = 0` gives the same `H` at every `T` (`==`);
+`x_eq = y p/H` hand value to 1e-14; Henry with `H = p_sat` equals Raoult for the same `x` (`y` equal to 1e-15);
+mass-fraction round trip to 1e-14. Transfer rate: zero at `w = w_eq` (`== 0`), sign follows `w_eq - w`, donor source
+`= -` receiver source (`==`).
+
+**M7 Nusselt film.** Water at 1 atm values
+`rho_l = 958.4, rho_v = 0.5977, mu = 2.82e-4, k = 0.679, h_fg = 2.257e6, g = 9.81`, `T_sat - T_w = 10 K`: `delta(0.5)`
+equals the hand expression to 1e-14; scaling `delta ~ (dT x)^(1/4)` (16 times `dT` doubles `delta`, 1e-14);
+`m'' h_fg = k dT/delta` (1e-14); `Gamma(x) = rho_l (rho_l - rho_v) g delta^3/(3 mu)` equals `int_0^x m'' dx'` (exact
+Simpson in `u`, `x = u^4`, 1e-12); `h_L = (4/3) h(L)` (1e-14) and the coefficient `(4/3)(1/4)^(1/4)` is within 3e-4 of
+0.943; `T_w >= T_sat` gives zero flux and `delta` an `Err`. Wall-cell source `= m'' A/V` (`==`) with opposite signs for
+the phases.
+
+**M8 relaxation cell.** Frozen mass, `T_0 = 400, T_sat = 373.15, c_e = 0.1, m_l = 500, C = 2e6, h_fg = 2.257e6`: RK4,
+200 steps to `lambda t = 3`, `max |T - T_exact| <= 1e-9 (T_0 - T_sat)`. Depleting: `C T + h_fg m_v` and `m_l + m_v`
+conserved to 1e-12; `|T - T_sat|` non-increasing; `T` approaches `T_sat` from above and never undershoots for
+`lambda dt <= 0.1`; liquid mass stays positive. Condensing side (`T_0 < T_sat`, vapour supplied) symmetric (`T` rises to
+`T_sat`).
+
+**M9 located input errors.** `alpha_l` outside `[0,1]` (`alpha_l`), `rho <= 0`, `T_sat <= 0` (`t_sat`), negative
+coefficient, NaN, `sigma` outside `(0,1]` (`sigma`), `p <= 0`, `h_fg <= 0`: each `Err` containing the parameter name.
+
+**W1 dispersion.** For `h in {0.5, 2, 10, 50} m`, `T in {2, 5, 9, 15} s`, `g = 9.81`:
+`|omega^2 - g k tanh(kh)|/omega^2 <= 1e-12` (target of the solver 1e-14); deep (`h = INFINITY`) `k = omega^2/g`
+bit-exact; for `kh >= 6` `|k - omega^2/g|/k <= 2.1 e^{-2kh}`; shallow for `kh <= 0.2`: `1 - c/sqrt(g h)` lies in
+`[(kh)^2/6 - 0.06 (kh)^4, (kh)^2/6]`; `c_g = d omega/dk` by central difference to 1e-8; `c_g/c -> 1/2` deep
+(`|c_g/c - 1/2| <= 2e-4` at `kh = 6`) and `-> 1` shallow (`1 - c_g/c <= (kh)^2` at `kh <= 0.2`). Bad input
+(`omega <= 0`, `h <= 0`, `g <= 0`): located errors.
+
+**W2 Airy kinematics and invariants.** `a = 0.5, h = 3, T = 6`: periodic in `x` (by `lambda`) and `t` (by `T`) to 1e-13;
+`d eta/dt = w(z=0)` to 1e-12; `w(z = -h) == 0` (`<= 1e-15 a omega`); continuity `du/dx + dw/dz = 0` by central
+differences (step 1e-5) to 1e-8 relative to `a omega k`; Laplace via `u = d phi/dx, w = d phi/dz` central differences
+1e-8; orbital amplitude ratio `u_amp(z)/u_amp(0) = cosh(k(z+h))/cosh(kh)` to 1e-14, and for `kh = 6`, `z in [-h/4, 0]`:
+relative difference from `e^{kz}` `<= 2 e^{-2k(z+h)}`; time-mean kinetic energy integrated over depth (Simpson 2000
+intervals, 64 time samples) `= rho g a^2/4` to 1e-8; mean `eta u(0)` over a period `= E/(rho c)` to 1e-12; bed dynamic
+pressure `rho g a/cosh(kh)` to 1e-14.
+
+**W3 second-order Stokes.** (i) deep limit of the second harmonic `k a^2/2` to 1e-6 relative at `kh = 12`; shallow limit
+`3 a^2/(4 k^2 h^3)` to 2e-2 at `kh = 0.05`; crest height minus trough depth `= 2 eta_2 > 0`.
+
+(ii) kinematic free-surface residual `eta_t + u eta_x - w` at `z = eta`, Taylor-expanded about `z = 0` through second
+order, and (iii) the dynamic residual `g eta + phi_t + eta phi_tz + (u^2 + w^2)/2` at `z = 0` with the mean over a
+period removed: with `k a = 1e-3` the ratio of the maximum residual (over 720 phases) at `a` to that at `a/2` lies in
+`[7.5, 8.5]` (third-order scaling) for the kinematic residual (scaled by `a omega`) and for the dynamic residual (scaled
+by `g a`) at `kh in {0.5, 1.5, 4}`. No absolute residual bound is registered.
+
+First-order only is shown to FAIL the same dynamic residual test with ratio near 4 (diagnostic, asserted ratio in
+`[3.5, 4.5]`), which proves the test discriminates.
+
+**W4 inlet and fractions.** `ramp(0) == 0`, `ramp(T_r) == 1` bit-exact, monotone; `liquid_fraction` is 0 above the cell,
+1 below, 0.5 when the surface is at the cell centre, linear between (hand), and the column sum of `liquid_fraction*dz`
+equals `eta + h` to 1e-14; `inlet_state` order 1 equals the Airy functions times the ramp.
+
+**W5 irregular waves.** Pierson-Moskowitz, `Hs = 2.5, Tp = 9`, `N = 200`, `[0.4 wp, 6 wp]`: recovered
+`Hs = 4 sqrt(sum a_i^2/2)` within 1e-3 relative of 2.5 (truncation estimate 5e-4); closed-form moments
+`m1 = (5/64) Hs^2 wp 1.25^(-3/4) Gamma(3/4)` (to 2e-3, wide-range quadrature `[0.3 wp, 40 wp]`, 20000 bins) and
+`m2 = (5/64) Hs^2 wp^2 1.25^(-1/2) sqrt(pi)` (to 2e-3); spectrum peak (argmax on a 1e-4 grid) at `wp` within 1e-3.
+JONSWAP `gamma = 3.3`, same `Hs`: recovered `Hs` within 2e-3 (normalisation), argmax of the spectrum in `[wp, 1.05 wp]`;
+JONSWAP with `gamma = 1` (normalised) equals the Pierson-Moskowitz spectrum to 1e-6 relative at 50 frequencies.
+Reproducibility: same seed gives bit-identical phases and `eta`; different seeds differ; phases in `[0, 2 pi)`;
+`|mean cos phi|, |mean sin phi| <= 0.15` for the registered seed 12345 (3 sigma of the sample mean). Record variance
+over one repetition period (exact trapezoid, enough samples) `= sum a_i^2/2` to 1e-10 relative; each `k_i` satisfies the
+dispersion to 1e-12; deep-water point velocity equals the sum of Airy velocities (`==` up to 1e-13).
+
+**W6 relaxation weights.** Exponential: `w(0) == 1`, `w(1) == 0`, `w(chi > 1) == 0`, `w(chi < 0) == 1`; strictly
+decreasing on a 10001-point grid; `w(0.5)` equals `1 - (exp(0.5^3.5) - 1)/(e - 1)` (hand) to 1e-14; flat start
+`1 - w(0.01) <= 1e-6`. Polynomial: `w = (1 - chi)^n` to 1e-14, exact endpoints, monotone. `zone_chi` orientation both
+ways. Sponge: `sigma` endpoints, `int sigma dx` by Simpson `= sigma_max L/(n+1)` to 1e-12.
+
+**W7 1-D reflection (registered with the acceptance limit).** `g = 9.81, h = 1, T = 8 s` (`c = sqrt(g h)`,
+`lambda = c T`), `dx = lambda/40`, `dt = T/80` (CFL 0.5), ramp `2T`, gauge `9 lambda`, zone start `12 lambda`, Fourier
+window as derived: start `(2 x_e - x_g)/c + 3T`, length `3T`, which ends before the left re-reflection `(2 x_s + x_g)/c`
+(asserted in the test).
+
+* (a) rigid end wall (no zone): `R in [0.995, 1.005]`.
+* (b) exponential beach, `L = 2 lambda`, `p = 3.5`: `R <= 0.05`.
+* (c) the same with `L = 4 lambda`: `R_4 <= R_2`.
+* (d) abrupt zone (`L = 0.05 lambda`): `R >= 0.5`.
+
+Sponge variant reported only (`sigma_max` chosen as `3 c/L` and printed), no limit.
+
+Energy accounting for the incident wave: the Fourier amplitude of the reference run equals `a` times the ramp-saturated
+value within 2 percent (pure scheme dispersion/impedance check, registered).
 
 ## Not delivered (named gaps, written in advance)
 
-F-226: case-tree wiring and a VOF/Euler-Euler host (F-055/F-127); the 1-D Stefan evaporation acceptance (needs a solver with a moving interface; the closed Nusselt form and the 0-D relaxation are the library checks); the CFD-level film-condensation-within-10-percent
-acceptance; temperature-dependent property feeding from the case tree; multi-component (more than Raoult/Henry) equilibrium such as activity-coefficient models; mass transfer in Euler-Euler with interfacial-area transport (F-228).
-F-227: case wiring of wave inlets and relaxation zones into a free-surface solver (needs F-055), higher-order (third and above) Stokes and cnoidal/stream-function waves, directional spectra, wave-maker (piston) boundaries, 2-D/3-D reflection tests, nonlinear (non-shallow-water) beach tests.
+F-226:
+
+* case-tree wiring and a VOF/Euler-Euler host (F-055/F-127);
+* the 1-D Stefan evaporation acceptance (needs a solver with a moving interface; the closed Nusselt form and the 0-D
+  relaxation are the library checks);
+* the CFD-level film-condensation-within-10-percent acceptance;
+* temperature-dependent property feeding from the case tree;
+* multi-component (more than Raoult/Henry) equilibrium such as activity-coefficient models;
+* mass transfer in Euler-Euler with interfacial-area transport (F-228).
+
+F-227:
+
+* case wiring of wave inlets and relaxation zones into a free-surface solver (needs F-055);
+* higher-order (third and above) Stokes and cnoidal/stream-function waves;
+* directional spectra;
+* wave-maker (piston) boundaries;
+* 2-D/3-D reflection tests;
+* nonlinear (non-shallow-water) beach tests.
 
 ## Addendum (end of wave 23B): measured results and deviations
 
@@ -198,25 +292,87 @@ Registered limits above are unchanged. Measured on the committed code (`cargo te
 
 ### Measured against the registered checks
 
-- M1-M9 all pass. M3 kinetic one-way flux against the independent kinetic-theory expression, within 1e-13; M5 bubble pressure 5.8e4 to 1e-15 and `sum y = 1` to 1e-15; M7 water film at 1 atm, 10 K subcooling, `x = 0.5 m`: `delta = 1.1716e-4 m`, `h_L = 7727.3 W/(m^2 K)`, film Reynolds number 242.8 (reported; far above the laminar-wavy limit near 30, so at 0.5 m this is the closed form evaluated, not a claim that a laminar film is physical there; the 0.943 coefficient check and the energy and mass-flow identities hold to 1e-12 to 1e-14); M8 frozen-mass relaxation, RK4 200 steps to `lambda t = 3` (`lambda = 0.1512 1/s`): `max |T - T_exact| = 6.38e-11 (T_0 - T_sat)` (limit 1e-9); depleting and condensing runs conserve the invariants and relax monotonically.
-- W1: worst dispersion residual 1.83e-15 (limit 1e-12); 3 deep cases (`kh >= 6`) and 3 shallow cases (`kh <= 0.2`) in the grid, bounds hold; `c_g = d omega/dk` to 1e-8. W2 passes (kinetic energy `rho g a^2/4`, mean flux `E/(rho c)`, continuity, Laplace, bed). W4 passes.
-- W3 (i) limits and the naive-hyperbolic cross-check of the formulas pass. W3 (ii)/(iii): see deviation 1. Corrected test w3b: second-order kinematic and dynamic residuals scale with ratio 8.006 / 8.010 (`kh = 0.5`), 8.0004 / 8.000002 (`kh = 1.5`), 8.000003 / 8.0000008 (`kh = 4`); the first-order dynamic residual scales with ratio 4.000000 and is larger than the second-order one by more than 10x at all three depths (the factor 10 was added in the corrected test and not registered).
-- W5: Pierson-Moskowitz recovered `Hs` 2.4988 for 2.5 (relative 4.82e-4, limit 1e-3, truncation estimate 5e-4); `m1` relative 2.0e-5 and `m2` 7.88e-4 (limit 2e-3); JONSWAP recovered `Hs` relative 3.32e-4 (limit 2e-3); peak and `gamma = 1` equality pass; phase means cos -0.0242 and sin 0.0994 (limit 0.15); variance over one repetition period equals `sum a^2/2` to 1e-10 on a commensurate grid.
-- W6 passes. W7: incident amplitude ratio 1.00000 (limit 2 percent), rigid wall `R = 1.00000` (limit [0.995, 1.005]), exponential beach `L = 2 lambda`: `R = 2.6e-4` (limit 0.05), `L = 4 lambda`: `R < 5e-6` (`R_4 <= R_2` holds). Sponge variant (`sigma_max = 3c/(2 lambda) = 0.1875 1/s`, `n = 2`, `L = 2 lambda`), reported only: `R = 0.135`.
-- **W7 (d) MISSES** (known miss, ignored test `w7d_abrupt_zone_reflects_half_known_miss`): abrupt zone `L = 0.05 lambda` gives `R = 0.214`, registered limit `>= 0.5`. Probable cause (not separately tested): the premise of the check was wrong. The relaxation multiplies the field by `w < 1` at every time step in two cells, and a wave reflected at the wall inside that zone passes those cells repeatedly (80 steps per period), so even a two-cell zone dissipates much of the wave energy; a thin relaxation zone is not a rigid reflector. Not tuned.
+- M1-M9 all pass.
+- M3: kinetic one-way flux against the independent kinetic-theory expression, within 1e-13.
+- M5: bubble pressure 5.8e4 to 1e-15 and `sum y = 1` to 1e-15.
+- M7: water film at 1 atm, 10 K subcooling, `x = 0.5 m`: `delta = 1.1716e-4 m`, `h_L = 7727.3 W/(m^2 K)`, film Reynolds
+  number 242.8. The Reynolds number is reported; it is far above the laminar-wavy limit near 30, so at 0.5 m this is the
+  closed form evaluated, not a claim that a laminar film is physical there. The 0.943 coefficient check and the energy
+  and mass-flow identities hold to 1e-12 to 1e-14.
+- M8: frozen-mass relaxation, RK4 200 steps to `lambda t = 3` (`lambda = 0.1512 1/s`):
+  `max |T - T_exact| = 6.38e-11 (T_0 - T_sat)` (limit 1e-9). Depleting and condensing runs conserve the invariants and
+  relax monotonically.
+- W1: worst dispersion residual 1.83e-15 (limit 1e-12). The grid has 3 deep cases (`kh >= 6`) and 3 shallow cases
+  (`kh <= 0.2`); the bounds hold. `c_g = d omega/dk` to 1e-8.
+- W2 passes (kinetic energy `rho g a^2/4`, mean flux `E/(rho c)`, continuity, Laplace, bed).
+- W4 passes.
+- W3 (i) limits and the naive-hyperbolic cross-check of the formulas pass. W3 (ii)/(iii): see deviation 1. The corrected
+  test w3b measures these residual scaling ratios:
+
+| Depth | Second-order kinematic | Second-order dynamic |
+| --- | --- | --- |
+| `kh = 0.5` | 8.006 | 8.010 |
+| `kh = 1.5` | 8.0004 | 8.000002 |
+| `kh = 4` | 8.000003 | 8.0000008 |
+
+The first-order dynamic residual scales with ratio 4.000000 and is larger than the second-order one by more than 10x at
+all three depths (the factor 10 was added in the corrected test and not registered).
+
+- W5: Pierson-Moskowitz recovered `Hs` 2.4988 for 2.5 (relative 4.82e-4, limit 1e-3, truncation estimate 5e-4); `m1`
+  relative 2.0e-5 and `m2` 7.88e-4 (limit 2e-3); JONSWAP recovered `Hs` relative 3.32e-4 (limit 2e-3); peak and
+  `gamma = 1` equality pass; phase means cos -0.0242 and sin 0.0994 (limit 0.15); variance over one repetition period
+  equals `sum a^2/2` to 1e-10 on a commensurate grid.
+- W6 passes.
+
+W7 against its limits:
+
+| W7 arm | Measured | Limit |
+| --- | --- | --- |
+| Incident amplitude ratio | 1.00000 | 2 percent |
+| Rigid wall | `R = 1.00000` | [0.995, 1.005] |
+| Exponential beach, `L = 2 lambda` | `R = 2.6e-4` | 0.05 |
+| Exponential beach, `L = 4 lambda` | `R < 5e-6` | `R_4 <= R_2` holds |
+| Sponge variant (`sigma_max = 3c/(2 lambda) = 0.1875 1/s`, `n = 2`, `L = 2 lambda`) | `R = 0.135` | reported only |
+
+- **W7 (d) MISSES** (known miss, ignored test `w7d_abrupt_zone_reflects_half_known_miss`): abrupt zone `L = 0.05 lambda`
+  gives `R = 0.214`, registered limit `>= 0.5`. Probable cause (not separately tested): the premise of the check was
+  wrong. The relaxation multiplies the field by `w < 1` at every time step in two cells, and a wave reflected at the
+  wall inside that zone passes those cells repeatedly (80 steps per period), so even a two-cell zone dissipates much of
+  the wave energy; a thin relaxation zone is not a rigid reflector. Not tuned.
 
 ### Deviations from the registered text
 
-1. **W3 (ii)/(iii) scaling statement is a registered-text defect.** The registered text divided the residual by `a omega` and `g a` and then expected the amplitude-halving ratio 8 (and 4 for first order). With that division an `O(a^3)` residual scales like `a^2` (ratio 4), so the registered check cannot pass for any correct second-order solution. Kept as the ignored test `w3_residual_scaling_amplitude_scaled_known_miss` (measured ratio 4.003 kinematic, 4.005 dynamic at `kh = 0.5`). Corrected test `w3b_residual_scaling_absolute` divides by the amplitude-independent constants `omega/k` and `g/k`, with the same ratio limits [7.5, 8.5] and [3.5, 4.5]; it passes (numbers above). The formulas themselves are validated by it (the second-harmonic coefficient of `eta`, the second-order velocity and potential satisfy both free-surface conditions through second order).
-2. **W7 (d) corrected set-up written after seeing the numbers.** Because the registered discrimination check failed on a wrong premise, test `w7e_abrupt_zone_vs_beach` was added with the post-hoc limits `R_abrupt >= 0.1` and `R_abrupt >= 50 R_beach` (measured 0.2144 and 828x). This is an observation-based statement, not a pre-registered one, and is labelled so.
-3. The repetition period `4 pi/d_omega` returned by `IrregularWave::repetition_period` holds exactly only when `w_lo` is an integer multiple of `d_omega` (the ADR text was unconditional). The W5 variance check therefore uses a commensurate grid (`w_lo = 20 d_omega`); the Hs check uses the registered range `[0.4 wp, 6 wp]`.
-4. Saturation data enter as arguments (`t_sat`, `p_sat`); `rcfd_core::iapws::saturation_pressure` supplies `p_sat` in test M3. The F-220 `PtTable` is not called inside the library (a pure source-term evaluator needs no such dependency).
-5. `LeeCellParams` uses one frequency `c` for both evaporation and condensation of the cell (the ADR text described `c_e`); the condensation branch acts on the vapour mass.
-6. `Wave` carries both orders in one type (`order` 1 or 2) instead of separate Airy and Stokes types; `potential_t`, `potential_tz`, `dw_dz` and `eta_t/eta_x` are exposed for the boundary-condition checks.
-7. Shared-tree note: development tests were run on a `git archive` copy of HEAD plus my four files and two `pub mod` lines, because another wave's uncommitted `lorentz.rs` did not compile in the shared tree. The code commit adds only the two `pub mod` lines to `crates/rcfd-fv/src/lib.rs`, staged through a temporary index so that other waves' hunks are not swept in.
+1. **W3 (ii)/(iii) scaling statement is a registered-text defect.** The registered text divided the residual by
+   `a omega` and `g a` and then expected the amplitude-halving ratio 8 (and 4 for first order). With that division an
+   `O(a^3)` residual scales like `a^2` (ratio 4), so the registered check cannot pass for any correct second-order
+   solution. It is kept as the ignored test `w3_residual_scaling_amplitude_scaled_known_miss` (measured ratio 4.003
+   kinematic, 4.005 dynamic at `kh = 0.5`). Corrected test `w3b_residual_scaling_absolute` divides by the
+   amplitude-independent constants `omega/k` and `g/k`, with the same ratio limits [7.5, 8.5] and [3.5, 4.5]; it passes
+   (numbers above). The formulas themselves are validated by it (the second-harmonic coefficient of `eta`, the
+   second-order velocity and potential satisfy both free-surface conditions through second order).
+2. **W7 (d) corrected set-up written after seeing the numbers.** Because the registered discrimination check failed on a
+   wrong premise, test `w7e_abrupt_zone_vs_beach` was added with the post-hoc limits `R_abrupt >= 0.1` and
+   `R_abrupt >= 50 R_beach` (measured 0.2144 and 828x). This is an observation-based statement, not a pre-registered
+   one, and is labelled so.
+3. The repetition period `4 pi/d_omega` returned by `IrregularWave::repetition_period` holds exactly only when `w_lo` is
+   an integer multiple of `d_omega` (the ADR text was unconditional). The W5 variance check therefore uses a
+   commensurate grid (`w_lo = 20 d_omega`); the Hs check uses the registered range `[0.4 wp, 6 wp]`.
+4. Saturation data enter as arguments (`t_sat`, `p_sat`); `rcfd_core::iapws::saturation_pressure` supplies `p_sat` in
+   test M3. The F-220 `PtTable` is not called inside the library (a pure source-term evaluator needs no such
+   dependency).
+5. `LeeCellParams` uses one frequency `c` for both evaporation and condensation of the cell (the ADR text described
+   `c_e`); the condensation branch acts on the vapour mass.
+6. `Wave` carries both orders in one type (`order` 1 or 2) instead of separate Airy and Stokes types; `potential_t`,
+   `potential_tz`, `dw_dz` and `eta_t/eta_x` are exposed for the boundary-condition checks.
+7. Shared-tree note: development tests were run on a `git archive` copy of HEAD plus my four files and two `pub mod`
+   lines, because another wave's uncommitted `lorentz.rs` did not compile in the shared tree. The code commit adds only
+   the two `pub mod` lines to `crates/rcfd-fv/src/lib.rs`, staged through a temporary index so that other waves' hunks
+   are not swept in.
 
 ### Not delivered (in addition to the list above)
 
 Everything on the "Not delivered" list stands. Additionally: a Lee-versus-HKS coefficient relation (linearisation of the kinetic flux to a Lee frequency); the Rohsenow coefficient 0.68 is unverified; no 2-D/3-D free-surface verification of any wave closure.
 
-8. Post-gate wording fix (docs only): the roadmap note and reference-data row had said the Stokes formulas satisfy the free-surface conditions "to third order"; the correct statement is through second order (the residual is third order). Registered Decisions mention a toolbox name in D2; the reference-data entry cites authors and year only.
+8. Post-gate wording fix (docs only): the roadmap note and reference-data row had said the Stokes formulas satisfy the
+   free-surface conditions "to third order"; the correct statement is through second order (the residual is third
+   order). Registered Decisions mention a toolbox name in D2; the reference-data entry cites authors and year only.

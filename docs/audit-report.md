@@ -1,16 +1,33 @@
 # rcfd independent audit report
 
+This report records an independent model-run audit of the repository on 2026-10-14; no human has reviewed it. Git
+history cannot prove "no criterion was changed": the edits that did happen are known only from the repository's own
+self-disclosures (section 1). The test suite is all green (458 passed, 0 failed, 16 ignored). Several "done" items are
+not demonstrated by their own acceptance text (section 5). Section 7 proposes five status corrections (F-001, F-002, F-004,
+F-027, F-073), which would change the overall count from 53 done / 21 partial / 40 todo to 48 / 26 / 40. Hash-identity
+claims are not reproducible from the repo (section 6). `cargo clippy --workspace --all-targets -- -D warnings` fails in
+this checkout, but only because of an untracked, git-excluded local helper (section 4). ROADMAP.md has drifted from
+roadmap.json in the notes of 33 items (section 8). No vendor code, text or data is in the repository, but the roadmap
+notes of about 20 gap items used vendor-specific identifiers (section 9; later edit: reworded generically). Section 10
+lists what could not be checked, including hosted-CI behaviour, Linux builds and ParaView.
+
 Date: 2026-10-14. Repository state audited: branch `main`, HEAD `ff530c2` (31 commits, working tree clean apart from one
 locally excluded file, see section 6). Auditor: an independent model-run audit (Claude Sonnet 5.5). This report is model
 output; every number below was read from the repository or from a command run during the audit, but none of it has been
 reviewed by a human. Nothing in the repository other than this file was changed. This is a record of that date and commit;
-for the current status of each item, read the [roadmap](ROADMAP.md).
+for the current status of each item, read the [roadmap](ROADMAP.md). The [glossary](glossary.md) defines F-xxx, wave and
+ADR.
 
-Method: read `docs/roadmap.json`, `docs/ROADMAP.md`, `docs/reference-data.md`, `docs/adr/`, `docs/bfs-convergence-findings.md`;
-diffed `roadmap.json` and every test file across all 31 commits; compared the current roadmap against three pre-commit
-snapshots of the roadmap kept outside the repository; read the assertions of the tests that back each done/partial
-item; ran `cargo test --workspace --release`, `cargo fmt --check`, `cargo clippy`, and the ignored heavy tests, using
-`CARGO_TARGET_DIR=<target dir>`. No vendor software, install or vendor material was read.
+Method:
+
+* Read `docs/roadmap.json`, `docs/ROADMAP.md`, `docs/reference-data.md`, `docs/adr/`, `docs/bfs-convergence-findings.md`.
+* Diffed `roadmap.json` and every test file across all 31 commits.
+* Compared the current roadmap against three pre-commit snapshots of the roadmap kept outside the repository.
+* Read the assertions of the tests that back each done/partial item.
+* Ran `cargo test --workspace --release`, `cargo fmt --check`, `cargo clippy`, and the ignored heavy tests, using
+  `CARGO_TARGET_DIR=<target dir>`.
+
+No vendor software, install or vendor material was read.
 
 ## 1. Headline findings
 
@@ -208,7 +225,7 @@ pass verifies nothing. It reproduced the F-106 note values for Re_h 100/200/389 
 `baseline_hash.rs` is the only implementation of the "bit-identical baseline" check cited in F-031 (wave 10 note), in the
 F-050 update and as ADR 0005 check d1 ("hashes of the existing paths identical before/after (every commit)"). It is
 excluded from git and no expected hash values are stored anywhere in the repo, so a reviewer cannot repeat the check.
-Recommend either committing it with expected values as a test or removing the claim from the notes.
+I recommend either committing it with expected values as a test or removing the claim from the notes.
 
 ## 7. Recount and recommended status corrections (proposals only; roadmap not edited)
 
@@ -265,9 +282,9 @@ Grep of tracked files (253) for vendor and product names and for install-path pa
   (accepted mesh file formats). Acceptable.
 - Constants cited from a non-published source: `kepsilon.rs` header and `docs/reference-data.md` (RNG constants and
   the wall-function constants). These are textbook constants, but the citations were not of papers (see
-  [provenance](provenance.md)), and
-  the CONTRIBUTING rule is "textbooks/papers only". Low risk, worth a second source. (Later edit: the entries now name a
-  published source where one exists and are otherwise labelled unverified; see `docs/reference-data.md`.)
+  [provenance](provenance.md)), and the CONTRIBUTING rule is "textbooks/papers only". Low risk, worth a second source.
+  (Later edit: the entries now name a published source where one exists and are otherwise labelled unverified; see
+  `docs/reference-data.md`.)
 - Guard code: `rcfd-io/src/datapack.rs` rejects manifest URLs that point at a proprietary install or a local path; its test
   uses a fake URL. Fine.
 - **Needs a decision:** the roadmap notes of 23 items (F-014, 042, 104-109, 113, 118, 119, 124, 126, 128-132, 134, 136-139)

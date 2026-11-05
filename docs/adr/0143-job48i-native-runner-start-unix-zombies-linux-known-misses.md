@@ -1,12 +1,29 @@
 # ADR 0143: Job 48I, the runner started natively (no PowerShell), dead Unix runners read as dead, two Linux known misses
 
 Status: **registered** 2026-10-28, before any run of the checks below (set-ups and limits are fixed here; nothing of this job
-had run); results in the addendum; not yet accepted by the maintainer. House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered
-runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written
-before the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded. Parents: [ADR 0123](0123-wave47b-run-service.md) (decision 2, amendments 2 and 3), [ADR 0133](0133-wave48d-run-control-and-live-monitoring.md)
-R9, [ADR 0141](0141-wave48g4-one-click-run-and-follow.md) question 11, [ADR 0137](0137-linux-gate-platform-values.md) ("Reported,
-not changed": S4a and S4b, C3, P1).
+had run); results in the addendum; not yet accepted by the maintainer.
+
+On this host the first start of a session waited about 5.3 s, because the PowerShell route does not take the lock within 5 s.
+On Linux, by ADR 0137's diagnosis, a killed runner whose starter is still alive stays a zombie, so S4a and S4b fail. This job
+starts `rcfd-runner` directly from every client (the PowerShell launcher is removed), reaps the runners a process started,
+treats process state Z as dead, and makes C3 and P1 Linux known misses with their limits intact. In the addendum N1 measures
+0.389 s against the 1.5 s limit (5.341 s on the code before the change), Z1 on Linux measures 0.0025 s against 2.0 s (before
+the change, the killed runner still read as alive after 10.011 s), and S4L passes. RR passes except for three `rcfd-studio`
+failures (G1b, the G1 control and the G4 control of ADR 0141), which fail in the same way on the code before the change. The
+cost on Windows is stated, not fixed: every start hands the runner its starter's inheritable handles, so S5 stays an ignored
+known miss. Not run: a real window by hand, Linux CI, the `rcfd-studio` tests on Linux, macOS, debug builds of the new tests,
+the full gate and `cargo deny`. Later notes record that ADR 0146 implemented question 6 and investigated question 1, and that
+S4a's one failure in gate run 40924955386 was a test race.
+
+Rules and parents:
+
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a
+  missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written
+  before the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
+  re-recorded.
+* Parents: [ADR 0123](0123-wave47b-run-service.md) (decision 2, amendments 2 and 3),
+  [ADR 0133](0133-wave48d-run-control-and-live-monitoring.md) R9, [ADR 0141](0141-wave48g4-one-click-run-and-follow.md)
+  question 11, [ADR 0137](0137-linux-gate-platform-values.md) ("Reported, not changed": S4a and S4b, C3, P1).
 
 The maintainer's decisions of 2026-10-28 that this job implements:
 
@@ -195,10 +212,13 @@ the container before its build.
 
 ## Addendum: results against the registered limits (2026-10-28)
 
-Commits: registration 43f1f89; tests N1, N2 and Z1 48ef903 (no non-test code changed: the "before" runs); the change
-87605aa (code, the other tests, the notes). Windows: this host (16 threads, 93.6 GB, other agents building at the same
-time), release, `--test-threads 1`, output to files. Linux: Docker `rust:1.99-bookworm` (glibc 2.36, rustc 1.99.1),
-`--init --cpuset-cpus 0-3 --memory 16g`, `git archive` of 48ef903 (before) and 87605aa (after), extracted with `tar -m`.
+* Commits: registration 43f1f89; tests N1, N2 and Z1 48ef903 (no non-test code changed: the "before" runs); the change
+  87605aa (code, the other tests, the notes).
+* Windows: this host (16 threads, 93.6 GB, other agents building at the same time), release, `--test-threads 1`, output to
+  files.
+* Linux: Docker `rust:1.99-bookworm` (glibc 2.36, rustc 1.99.1), `--init --cpuset-cpus 0-3 --memory 16g`, `git archive` of
+  48ef903 (before) and 87605aa (after), extracted with `tar -m`.
+
 No new third-party crate, no new workspace edge, `Cargo.lock` unchanged, no numerics changed.
 
 | Id | Limit | Measured | Result |
@@ -260,7 +280,7 @@ RR in detail:
 4. After their "before" runs, N1, N2 and Z1 were reformatted by `cargo fmt` (line breaks only, `git diff -w` shows none
    else).
 5. The coordinator's correction during the job: memory is not short (36 GB free at the time), so jobs ran side by side
-   where they did not touch a timing check: N1's registered run ran with no other job of mine; the Linux "after" run
+   where they did not touch a timing check. N1's registered run ran with no other job of mine. The Linux "after" run
    overlapped the Windows `rcfd-runner` crate run and the `rcfd-studio` crate re-run; both have generous time limits
    (above).
 6. Not in the table, from N1's breakdown: of the 0.389 s, 0.15 s pass before the run folder exists (the program search,

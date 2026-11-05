@@ -1,20 +1,34 @@
 # ADR 0049: Wave 27A, volume-of-fluid free-surface multiphase with interface compression and surface tension (F-055)
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end
-without touching a registered limit.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before
+any run of this wave. Addenda (exact numbers, deviations) may be appended at the end without touching a registered limit.
+
+Wave 27A builds a vertical slice of volume-of-fluid free-surface flow for two incompressible immiscible fluids (F-055).
+F-055 stops at `partial` with named gaps. The addendum's table marks every registered check met except the A3 phase-volume
+drift, 2.3e-10 against 1e-12. That miss is a set-up defect: it stays as the ignored `a3_zalesak_slotted_disk_known_miss`,
+and the new test `a3b_zalesak_slotted_disk_corrected` passes. In check D1 the dam-break front velocity `v / sqrt(g H)` is
+1.504, 11 percent below the reference 1.69 and inside the limit of 1.44 to 1.94. In check E the rising bubble meets its
+limits, but its reference values are unverified. Failures in the hydrostatic checks B led to two changes from the registered
+design: a zero-gradient mirror in the curvature smoothing and a different Rhie-Chow coefficient. AMG-preconditioned CG broke
+down on the density jump at step 120 of the dam break, so the multiphase path always uses plain CG, which is slow on large
+meshes, and the AMG behaviour is an open gap.
+
+Rules and parents:
+
+* House rules: limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+  assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
+  away. A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Clean-room: first principles and published literature only (references listed with their verification status in
+  `docs/reference-data.md`); no vendor code, text, names or data; nothing from vendor material.
+* Other waves (27B solver robustness / adaptive stepping, 27C viscoelastic / structural export) work in the same tree: this
+  wave adds new files (`rcfd-fv/src/vof.rs`, `rcfd-api/src/vof.rs`, tests) and only small hunks in shared files (`lib.rs`,
+  `sim.rs`, `schema.rs`, `case-schema.md`, `reference-data.md`, `roadmap.json`), committed through a temporary index.
 
 Scope. F-055 is `todo` and is the base that blocks the case-tree wiring of F-226 (interfacial mass transfer, library only),
 F-227 (wave boundaries, library only), F-228 (population balance, library only) and melt flow in F-212. This wave delivers a
-vertical slice: two incompressible immiscible fluids, algebraic VOF with interface compression and a bounded explicit limiter,
-continuum-surface-force tension, well-balanced gravity, transient PISO/PIMPLE coupling, wiring into the case tree. The item stops
-at `partial` with named gaps (below). Clean-room: first principles and published literature only (references listed with their
-verification status in `docs/reference-data.md`); no vendor code, text, names or data; nothing from vendor material.
-Other waves (27B solver robustness / adaptive stepping, 27C viscoelastic / structural export) work in the same tree: this wave
-adds new files (`rcfd-fv/src/vof.rs`, `rcfd-api/src/vof.rs`, tests) and only small hunks in shared files (`lib.rs`, `sim.rs`,
-`schema.rs`, `case-schema.md`, `reference-data.md`, `roadmap.json`), committed through a temporary index.
+vertical slice: two incompressible immiscible fluids, algebraic VOF with interface compression and a bounded explicit
+limiter, continuum-surface-force tension, well-balanced gravity, transient PISO/PIMPLE coupling, wiring into the case tree.
+The item stops at `partial` with named gaps (below).
 
 ## Audit (HEAD 7c3cbe5)
 
@@ -105,19 +119,23 @@ same `snGrad` and `lap_coeff` as the pressure term, and the cell velocity is rec
     q_f = (phi_f - phiHbyA0_f) / rAU_f           (net face acceleration flux; phiHbyA0 = phiHbyA without the force term)
     U_c = HbyA_c + rAU_c reconstruct(q)_c,       reconstruct(q) = (sum_f S_f S_f / |S_f|)^-1 sum_f (S_f / |S_f|) q_f
 
-(restricted to the active dimensions of the mesh). The momentum predictor uses the reconstruction of the same face force flux
-minus the face `p_rgh` flux of the previous iterate, not a Green-Gauss pressure gradient. At walls and other fixed-velocity faces
-`snGrad(rho) = snGrad(alpha) = 0` (zero-gradient phase fraction), hence `d p_rgh / dn = 0`, and the boundary-face force in
-`phiHbyA` is zero, identical to the pressure condition. Consequence (checked in B1): in a still two-layer pool with the interface
-on a cell face, the discrete `p_rgh` solves every face flux to zero, `phi = 0` and `U = 0` hold to the linear-solver tolerance, and
-`p = p_rgh + rho (g . x)` reproduces the piecewise hydrostatic pressure: across the interface face
-`p_N - p_P = -(g . x_f)(rho_N - rho_P) + rho_N (g . x_N) - rho_P (g . x_P) = rho_N g . (x_N - x_f) + rho_P g . (x_f - x_P)`, the
-exact two-layer hydrostatic integral. With the interface inside a cell this equality is not exact by `rho g h` (O(dx) in the
-interface cell) and is therefore NOT claimed; only `U = 0` is claimed for that case. The hold-up of the algebra depends on the
-solver tolerance: the registered runs set `pressure_rel_tol = 1e-13`, `pressure_abs_tol = 1e-16`, `pressure_max_iter = 5000`.
+(restricted to the active dimensions of the mesh). The momentum predictor uses the reconstruction of the same face force
+flux minus the face `p_rgh` flux of the previous iterate, not a Green-Gauss pressure gradient. At walls and other
+fixed-velocity faces `snGrad(rho) = snGrad(alpha) = 0` (zero-gradient phase fraction), hence `d p_rgh / dn = 0`, and the
+boundary-face force in `phiHbyA` is zero, identical to the pressure condition.
+
+Consequence (checked in B1): in a still two-layer pool with the interface on a cell face, the discrete `p_rgh` solves every
+face flux to zero, `phi = 0` and `U = 0` hold to the linear-solver tolerance, and `p = p_rgh + rho (g . x)` reproduces the
+piecewise hydrostatic pressure: across the interface face
+`p_N - p_P = -(g . x_f)(rho_N - rho_P) + rho_N (g . x_N) - rho_P (g . x_P) = rho_N g . (x_N - x_f) + rho_P g . (x_f - x_P)`,
+the exact two-layer hydrostatic integral. With the interface inside a cell this equality is not exact by `rho g h` (O(dx) in
+the interface cell) and is therefore NOT claimed; only `U = 0` is claimed for that case. The hold-up of the algebra depends
+on the solver tolerance: the registered runs set `pressure_rel_tol = 1e-13`, `pressure_abs_tol = 1e-16`,
+`pressure_max_iter = 5000`.
+
 Rhie-Chow transient correction: `rAU_f (rho_old,f / dt) (phi_old - U_old,f . S)` added to `phiHbyA` (same structure as the
-single-phase kernel with the old density weight). The output pressure is `p = p_rgh + rho (g . x)` (Pa); the pressure level is
-fixed by `p_ref` on `p_rgh` (closed domains).
+single-phase kernel with the old density weight). The output pressure is `p = p_rgh + rho (g . x)` (Pa); the pressure level
+is fixed by `p_ref` on `p_rgh` (closed domains).
 
 ### D5 Time stepping and algorithm
 
@@ -133,15 +151,29 @@ interfaces, moving meshes, fractional step, `symmetry` walls and compressible mo
 New object `multiphase` (schema in `rcfd-api/src/vof.rs`): `enabled` (false), `model` ("vof"), `density_1`, `density_2`,
 `viscosity_1`, `viscosity_2` (all `-1` = unset, required positive when enabled), `surface_tension` (0), `compression` (1),
 `alpha_courant` (0.25), `curvature_smoothing` (2), and the initial fraction `initial.shape` ("unset" | "box" | "sphere" |
-"half_space"), `initial.box_min`/`box_max`, `initial.centre`, `initial.radius`, `initial.normal`, `initial.offset`, `initial.inside`
-("phase_1" | "phase_2" for the two sides, default "phase_1"). Cells are sub-sampled `10^dim` times so a face-aligned box is exact.
-Gravity is `physics.gravity`; wall conditions are the existing `boundaries.<patch>` conditions (`fixed` with value 0 = no-slip). New
-fields `alpha` (and `p_rgh`) in `Simulation::field`. Located errors (path in the tree) when `multiphase.enabled` is true and:
-`solver.algorithm` is not `piso`/`pimple` (path `solver.algorithm`); `fluid.density` is not `constant`; a turbulence model is
-selected; `energy.enabled`; `sources`/`components` non-empty; `dynamic_mesh.enabled`; `solver.time_advance = fractional_step`;
-`statistics.enabled`; a boundary uses `symmetry`, `periodic` or `partial_slip`/`marangoni`; `physics.rho` or `physics.nu` is set to a
-non-default value (it would be ignored; "none shadows another value"); `physics.body_force` non-zero; a required `multiphase.*` is
-unset. `multiphase.*` keys set while `enabled = false` are an error (no silent ignoring).
+"half_space"), `initial.box_min`/`box_max`, `initial.centre`, `initial.radius`, `initial.normal`, `initial.offset`,
+`initial.inside` ("phase_1" | "phase_2" for the two sides, default "phase_1"). Cells are sub-sampled `10^dim` times so a
+face-aligned box is exact.
+
+Gravity is `physics.gravity`; wall conditions are the existing `boundaries.<patch>` conditions (`fixed` with value 0 =
+no-slip). New fields `alpha` (and `p_rgh`) in `Simulation::field`.
+
+Located errors (path in the tree) when `multiphase.enabled` is true and:
+
+* `solver.algorithm` is not `piso`/`pimple` (path `solver.algorithm`)
+* `fluid.density` is not `constant`
+* a turbulence model is selected
+* `energy.enabled`
+* `sources`/`components` non-empty
+* `dynamic_mesh.enabled`
+* `solver.time_advance = fractional_step`
+* `statistics.enabled`
+* a boundary uses `symmetry`, `periodic` or `partial_slip`/`marangoni`
+* `physics.rho` or `physics.nu` is set to a non-default value (it would be ignored; "none shadows another value")
+* `physics.body_force` non-zero
+* a required `multiphase.*` is unset
+
+`multiphase.*` keys set while `enabled = false` are an error (no silent ignoring).
 
 ## Registered checks (limits fixed before any run of this wave)
 
@@ -243,13 +275,20 @@ existing tests unchanged and passing; `pimple.rs` is not edited.
 
 ## Named gaps (why F-055 stays `partial`)
 
-Geometric (PLIC) reconstruction and the explicit/implicit and sharp/dispersed taxonomy of the roadmap scope (only the explicit
-algebraic compressive scheme is delivered); wall and jump adhesion (contact angle) and the continuum-surface-stress form of the
-tension (only CSF); Marangoni stress; the transposed viscous stress at a viscosity jump; BDF2 and higher-order momentum
-convection tuned for two-phase flow; adaptive time stepping tied to the capillary and alpha Courant limits (fixed `dt`);
-periodic and moving-mesh variants; open boundaries with total-pressure conditions are available through the generic pressure
-conditions but are not validated here; energy/turbulence coupling; three-dimensional validation; the bubble benchmark unless E
-is reached; wiring of F-226 / F-227 / F-228 to the new host (not done in this wave).
+* Geometric (PLIC) reconstruction and the explicit/implicit and sharp/dispersed taxonomy of the roadmap scope (only the
+  explicit algebraic compressive scheme is delivered)
+* Wall and jump adhesion (contact angle) and the continuum-surface-stress form of the tension (only CSF)
+* Marangoni stress
+* The transposed viscous stress at a viscosity jump
+* BDF2 and higher-order momentum convection tuned for two-phase flow
+* Adaptive time stepping tied to the capillary and alpha Courant limits (fixed `dt`)
+* Periodic and moving-mesh variants
+* Open boundaries with total-pressure conditions are available through the generic pressure conditions but are not validated
+  here
+* Energy/turbulence coupling
+* Three-dimensional validation
+* The bubble benchmark unless E is reached
+* Wiring of F-226 / F-227 / F-228 to the new host (not done in this wave)
 
 ## Addendum (written after the runs): results, deviations and findings
 

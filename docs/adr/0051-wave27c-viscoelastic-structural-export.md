@@ -1,16 +1,33 @@
 # ADR 0051: Wave 27C, viscoelastic constitutive models with log-conformation, format registry and one-way structural load export (F-135, F-237)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end.
+of this wave.
 
-Clean-room: first principles and published literature only. Public pages read on the web for the bulk-data card layouts (page text
-treated as data). No vendor code, text or installs, nothing from vendor material. Waves 27A (VOF) and 27B (solver
-robustness) work in the same tree: this wave adds new files (`rcfd-fv/src/viscoelastic.rs`, `rcfd-io/src/{registry,nastran}.rs`,
-`rcfd-post/src/structural.rs`, tests) and only one-line hunks in shared `lib.rs` files, `reference-data.md`, `interchange-formats.md`,
-`case-schema.md`, `roadmap.json`, committed through a temporary index. No existing solver path is edited, so the baseline hashes and
-all existing tests are unchanged by construction (re-verified at the end).
+Wave 27C adds viscoelastic constitutive models with log-conformation (F-135) and a format registry with one-way structural load
+export (F-237). For F-135 it delivers an uncoupled library (Oldroyd-B, Giesekus, simplified linear PTT, FENE-P) and a coupled
+`viscoelastic::ViscoelasticSolver` wrapping `PimpleSolver`. For F-237 it delivers `rcfd-io::registry`, a Nastran-style bulk-data
+deck and the pressure and temperature transfer of `rcfd-post::structural`. Addendum A, written after the runs, keeps two misses as
+ignored known-miss tests with their limits: V1 as registered, conformation (8.359e-9 against 1e-9, a set-up defect in the
+registered metric) and the recalled Giesekus formula of V3 (5.1e-3 at Wi 0.1 against 1e-6, the formula is wrong). The P3 registered
+claim "centre velocity smaller than Newtonian" has the wrong sign; the old test is ignored and `p3_..._corrected` asserts
+u_c > Newtonian. Not delivered, among others: CGNS and HDF5 (the "public CGNS example round trip" acceptance is not met), case-tree
+keys for both items, heat-rate loads, the planar contraction / cylinder benchmark and third-party solver acceptance. The FENE-P
+normalisation and the GRID, element node orders, CHEXA continuation, free-field syntax and PLOAD4 sign references are unverified.
+Both roadmap items stay `partial`.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the
+  cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (exact numbers, deviations) may be appended at the end.
+* Clean-room: first principles and published literature only. Public pages read on the web for the bulk-data card layouts (page text
+  treated as data). No vendor code, text or installs, nothing from vendor material.
+* Waves 27A (VOF) and 27B (solver robustness) work in the same tree: this wave adds new files (`rcfd-fv/src/viscoelastic.rs`,
+  `rcfd-io/src/{registry,nastran}.rs`, `rcfd-post/src/structural.rs`, tests) and only one-line hunks in shared `lib.rs` files,
+  `reference-data.md`, `interchange-formats.md`, `case-schema.md`, `roadmap.json`, committed through a temporary index. No existing
+  solver path is edited, so the baseline hashes and all existing tests are unchanged by construction (re-verified at the end).
 
 ## Audit (HEAD 7c3cbe5)
 
@@ -57,20 +74,23 @@ D4 Uncoupled library `viscoelastic::{Model, Formulation, step_homogeneous}`: `Sy
 local ODE (conformation or log-conformation), models/parameters validated with located errors (`Result<_, String>` naming the
 argument), steady-shear/extension helpers (closed forms) used by the checks.
 
-D5 Coupled solver `viscoelastic::ViscoelasticSolver`, wrapping `PimpleSolver` on the cell-centred mesh. One step: (1) velocity
-gradient `L` per cell from the Green-Gauss gradient of the velocity components (boundary values of the velocity BCs); (2) the stress
-carrier (`C` or `Theta`, 6 components per cell) is advanced by first-order upwind transport on the step flux `phi` followed by the
-local ODE of D4 on `dt` (operator splitting, first order in time); boundary and periodic faces use the owner/partner value
-(zero-gradient at walls); (3) momentum: STABILISATION CHOICE (both-sides-diffusion type, explicit/implicit split): the solver
-`nu` is `nu_s + nu_p` (`nu_p = eta_p/rho`, rho = 1: kinematic units) implicit, and the explicit source is
-`S = div(tau_p) - nu_p lap(u)` evaluated from the lagged `(tau_p, u)`, `div(tau_p)` by Gauss with linear face interpolation of
-`tau_p` (boundary faces: owner value), `lap(u)` with the same compact operator as the implicit term (`lap_coeff`, no-slip wall
-values). The same viscous operator therefore appears on both sides, the elliptic part of the system is present in the implicit
-matrix at full polymer viscosity, and `S` vanishes in a Newtonian-like state; this is the standard remedy for the stress-velocity
-decoupling at high Weissenberg number. The force goes into `source_force` (cell and linearly interpolated face values: the
-face-consistent form of ADR 0045); (4) `PimpleSolver::step`. Coupling is lagged by one step (first order in time). Not claimed:
-unconditional stability, 4:1 contraction, inflow/outflow stress boundary conditions, wall stress BCs other than zero gradient,
-second-order transport.
+D5 Coupled solver `viscoelastic::ViscoelasticSolver`, wrapping `PimpleSolver` on the cell-centred mesh. One step:
+
+1. velocity gradient `L` per cell from the Green-Gauss gradient of the velocity components (boundary values of the velocity BCs);
+2. the stress carrier (`C` or `Theta`, 6 components per cell) is advanced by first-order upwind transport on the step flux `phi`
+   followed by the local ODE of D4 on `dt` (operator splitting, first order in time); boundary and periodic faces use the
+   owner/partner value (zero-gradient at walls);
+3. momentum: STABILISATION CHOICE (both-sides-diffusion type, explicit/implicit split): the solver `nu` is `nu_s + nu_p`
+   (`nu_p = eta_p/rho`, rho = 1: kinematic units) implicit, and the explicit source is `S = div(tau_p) - nu_p lap(u)` evaluated from
+   the lagged `(tau_p, u)`, `div(tau_p)` by Gauss with linear face interpolation of `tau_p` (boundary faces: owner value), `lap(u)`
+   with the same compact operator as the implicit term (`lap_coeff`, no-slip wall values). The same viscous operator therefore
+   appears on both sides, the elliptic part of the system is present in the implicit matrix at full polymer viscosity, and `S`
+   vanishes in a Newtonian-like state; this is the standard remedy for the stress-velocity decoupling at high Weissenberg number.
+   The force goes into `source_force` (cell and linearly interpolated face values: the face-consistent form of ADR 0045);
+4. `PimpleSolver::step`.
+
+Coupling is lagged by one step (first order in time). Not claimed: unconditional stability, 4:1 contraction, inflow/outflow stress
+boundary conditions, wall stress BCs other than zero gradient, second-order transport.
 With `eta_p = 0` no source is set and the run is the plain solver.
 
 D6 No case-tree key is added: wiring into `Simulation` needs the shared `sim.rs`/`schema.rs`, edited concurrently by other
@@ -218,16 +238,16 @@ advantage is shown by V6 only.
 
 ### Deviations and misses
 
-1. V1 metric defect (set-up defect in the registered metric): the relative error against the instantaneous value is
-   dominated by rounding in C_xx - C_yy at tiny t (10x smaller dt does not improve it). The registered test is kept as the
-   ignored `v1_..._known_miss`; a new `..._corrected` test uses the viscometric scale with the same dt and limits.
-2. Giesekus closed form recalled from the literature (chi form) is wrong (5.1e-3 relative eta error at Wi = 0.1). Kept as an
-   ignored known-miss test; the closed form derived in this wave (f = -A_yy) is used and agrees with the ODE to 2.6e-14.
-3. P3 registered claim "centre velocity smaller than Newtonian" has the wrong sign (shear thinning raises the centre
+1. V1 metric defect (set-up defect in the registered metric): rounding in C_xx - C_yy at tiny t dominates the relative error
+   against the instantaneous value (10x smaller dt does not improve it). The registered test is kept as the ignored
+   `v1_..._known_miss`; a new `..._corrected` test uses the viscometric scale with the same dt and limits.
+2. The Giesekus closed form recalled from the literature (chi form) is wrong (5.1e-3 relative eta error at Wi = 0.1). It is kept as
+   an ignored known-miss test; the closed form derived in this wave (f = -A_yy) is used and agrees with the ODE to 2.6e-14.
+3. The P3 registered claim "centre velocity smaller than Newtonian" has the wrong sign (shear thinning raises the centre
    velocity). The old test is ignored; `p3_..._corrected` asserts u_c > Newtonian and u(h/2)/u_c > 0.75, plus the closed-form
    profile error limit.
-4. First coupled runs used zero-gradient velocity walls (set-up defect, centre u ~ 96); fixed in place to no-slip before any
-   valid run.
+4. The first coupled runs used zero-gradient velocity walls (set-up defect, centre u ~ 96). They were fixed in place to no-slip
+   before any valid run.
 5. Coupling is first order in time and Green-Gauss gradients on the stress carrier are used; documented limits, not misses.
 6. FENE-P normalisation recalled and unverified.
 
@@ -247,16 +267,27 @@ advantage is shown by V6 only.
 | R6 located errors | all pass | per ADR |
 | R7 third-party solver acceptance | not testable, not claimed | - |
 
-Deviations: (a) the first R3 run gave 4.7e-15 against 4 eps (8.9e-16): the normalised overlap weights sum to 1 only up to
-rounding, so averaging p directly gives p (1 + O(n eps)). Root-cause fix in the mapping (shifted average about a reference
-value) before any recorded pass; the limit is unchanged and now met with 0. (b) The plane fluid mesh is `box_mesh([8,8,1])` with
-patch `zmax` (the ADR text wrote [8,1,8]; same geometry, axes named differently). (c) The tube moment is about the axis
-midpoint (0,0,0.5).
+Deviations:
+
+* (a) The first R3 run gave 4.7e-15 against 4 eps (8.9e-16): the normalised overlap weights sum to 1 only up to rounding, so
+  averaging p directly gives p (1 + O(n eps)). A root-cause fix in the mapping (shifted average about a reference value) came before
+  any recorded pass; the limit is unchanged and now met with 0.
+* (b) The plane fluid mesh is `box_mesh([8,8,1])` with patch `zmax` (the ADR text wrote [8,1,8]; same geometry, axes named
+  differently).
+* (c) The tube moment is about the axis midpoint (0,0,0.5).
 
 ### Not delivered
 
-CGNS and HDF5 (the "public CGNS example round trip" acceptance is not met), heat-rate loads and the heat-rate part of the
-F-237 acceptance, case-tree keys for both items (D6), planar contraction / cylinder benchmark, stress inflow/outflow BCs,
-second-order stress transport, 3-D viscoelastic flow, third-party solver acceptance. Both roadmap items stay `partial`.
+* CGNS and HDF5 (the "public CGNS example round trip" acceptance is not met)
+* heat-rate loads and the heat-rate part of the F-237 acceptance
+* case-tree keys for both items (D6)
+* planar contraction / cylinder benchmark
+* stress inflow/outflow BCs
+* second-order stress transport
+* 3-D viscoelastic flow
+* third-party solver acceptance
+
+Both roadmap items stay `partial`.
+
 Unverified references: FENE-P normalisation, recalled Giesekus formula (found wrong), GRID / element node orders / CHEXA
 continuation / free-field syntax / PLOAD4 sign (PLOAD4 and TEMP layouts were read from pyNastran documentation).

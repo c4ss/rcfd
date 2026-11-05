@@ -1,29 +1,54 @@
-# ADR 0183: EXP-ROT (F-276) registration: rigid rotation against the rotating frame on FAN-01, the coupled solver with the rotation implicit, and the hub trailing-edge pocket in time
+# ADR 0183: EXP-ROT (F-276) registration
 
 Status: **REGISTERED 2026-11-04** (design only). No code of this experiment has been written and no run of it has been
-made.
-The arms, prerequisites, construction checks, limits, predictions, reading rules, decision mapping, budgets and stop rules
-are fixed here. Amendments follow this text, each written before what it covers. Results go in an addendum. Not yet
+made. The arms, prerequisites, construction checks, limits, predictions, reading rules, decision mapping, budgets and stop
+rules are fixed here. Amendments follow this text, each written before what it covers. Results go in an addendum. Not yet
 accepted by the maintainer.
 
-Design: [`docs/designs/exp-rot.md`](../designs/exp-rot.md). Parent design and milestone (both on the unmerged branch
-`m0-gate-roadmap` when this was written): `docs/designs/unblock-roadmap-fan01-fea.md` goal G7 and Technical Plan Part 2,
-ADR 0182 (`docs/adr/0182-tiered-gate-and-nightly.md`), milestone EXP-ROT in `docs/milestones.json` (requires M-0, item
-F-276). Parents in this tree: [ADR 0082](0082-wave36c-rotating-frame-angular-momentum-source.md),
-[ADR 0085](0085-wave37b-rotor-passage-robustness.md), [ADR 0086](0086-wave37c-fan01-solution-verification.md),
-[ADR 0033](0033-wave20b-dynamic-mesh.md), [ADR 0076](0076-wave35a-transient-seams-and-relaxation.md),
-[ADR 0110](0110-wave43c-fan01-rotor-passage-non-convergence-diagnosis.md),
-[ADR 0113](0113-wave44c-mrf-cyclic-seams.md), [`docs/dynamic-mesh.md`](../dynamic-mesh.md),
-[`docs/milestone-fan.md`](../milestone-fan.md). FAN-01 jobs 49K to 49R (ADRs 0174, 0175, 0177 to 0181) are on the unmerged
-branch `job49r-fan01-hub-mesh` and are cited by number; none of them is accepted by the maintainer, so their
-recommendations are used here as recommendations.
+EXP-ROT tests rigid rotation against the rotating frame on FAN-01, the coupled solver with the rotation implicit, and the
+hub trailing-edge pocket in time. Arm 1 asks whether rigid rotation of the mesh in the absolute frame removes the spurious
+outlet angular momentum of the empty passage (Q-ROT). Arm 2 asks whether the limiter limit cycle of the bladed passage
+stays when the rotation term is treated differently (Q-LC). Check H asks whether the near-stagnant pocket behind the hub
+trailing edge of B2 is physically unsteady (Q-POCKET). The laminar runs of arm 1 need new code, which departs from the
+design (D2), and arm 2 needs a rebuild, none of it in the repository (D7). Amendment P-AB (2026-11-05) fixed the set-up
+of prerequisites P-A and P-B and of their checks before their code was written, and its addendum reports no missed limit.
+P-A and P-B are kept (opt-in, defaults bit-identical), and their job ran no part of the experiment: D3's first-user checks
+(V2, V3 of arm 1) belong to it and were not run. The addendum also finds that the amendment's reason for deviating from
+the literal V5 row did not apply on this mesh; the registered V5 stays the check of record. Amendment P-C (2026-11-05)
+fixed the set-up of prerequisite P-C and of its checks before its code, and its job ran no part of the experiment. Its
+addendum reports that no construction check was missed, so P-C is kept (opt-in by the source type, defaults
+bit-identical): laminar `rotating_frame` with `pimple` is runnable on a static mesh. The transient wall pressure was
+removed under the registered rule, and the addendum names a drafting conflict over PC-2N for the maintainer. Check H stays
+NOT RUNNABLE as registered, because D5 needs k-omega SST with `pimple`, which the case tree refuses; open question 8 is
+unchanged, and D3's first-user check of P-C (V3) could not be run.
 
-House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md), ADR 0181): limits are fixed before the
-registered runs; a missed limit or a falsified prediction becomes an ignored `*_known_miss` test with the limit intact; a
-defective set-up is corrected by an amendment written before the corrected run, with a new test, and the old one stays
-ignored; every new code path is opt-in and the defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is
-not re-recorded; each registered run is made once and nothing is re-run to pick a result; no commit trailers. Clean-room:
-first principles, our own ADRs, and the published FAN-01 data of ADR 0075. No vendor code or documentation.
+Rules and parents:
+
+- Design: [`docs/designs/exp-rot.md`](../designs/exp-rot.md).
+- Parent design and milestone (both on the unmerged branch `m0-gate-roadmap` when this was written):
+  `docs/designs/unblock-roadmap-fan01-fea.md` goal G7 and Technical Plan Part 2, ADR 0182
+  (`docs/adr/0182-tiered-gate-and-nightly.md`), milestone EXP-ROT in `docs/milestones.json` (requires M-0, item F-276).
+- Parents in this tree: [ADR 0082](0082-wave36c-rotating-frame-angular-momentum-source.md),
+  [ADR 0085](0085-wave37b-rotor-passage-robustness.md), [ADR 0086](0086-wave37c-fan01-solution-verification.md),
+  [ADR 0033](0033-wave20b-dynamic-mesh.md), [ADR 0076](0076-wave35a-transient-seams-and-relaxation.md),
+  [ADR 0110](0110-wave43c-fan01-rotor-passage-non-convergence-diagnosis.md),
+  [ADR 0113](0113-wave44c-mrf-cyclic-seams.md), [`docs/dynamic-mesh.md`](../dynamic-mesh.md),
+  [`docs/milestone-fan.md`](../milestone-fan.md).
+- FAN-01 jobs 49K to 49R (ADRs 0174, 0175, 0177 to 0181) are on the unmerged branch `job49r-fan01-hub-mesh` and are cited
+  by number. None of them is accepted by the maintainer, so their recommendations are used here as recommendations.
+
+House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md), ADR 0181):
+
+- limits are fixed before the registered runs;
+- a missed limit or a falsified prediction becomes an ignored `*_known_miss` test with the limit intact;
+- a defective set-up is corrected by an amendment written before the corrected run, with a new test, and the old one
+  stays ignored;
+- every new code path is opt-in and the defaults stay bit-identical;
+- `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
+- each registered run is made once and nothing is re-run to pick a result;
+- no commit trailers.
+
+Clean-room: first principles, our own ADRs, and the published FAN-01 data of ADR 0075. No vendor code or documentation.
 
 ## Context
 
@@ -42,15 +67,17 @@ G7 asks two questions, and ADR 0181 question 1 adds a third:
 
 Code read for this registration (read only, main at edb4839):
 
-- `crates/rcfd-mesh/src/motion.rs` gives rigid poses and GCL-exact swept volumes. `crates/rcfd-api/src/dynmesh.rs` runs a
-  prescribed rotation (`rotation_angle_expression`) for `piso` / `pimple`, Euler only, and refuses turbulence and
-  momentum sources. It requires at least one moving patch, and the following patches default to the moving ones.
-  `crates/rcfd-fv/src/ale.rs` gives a following wall the mesh's tangential velocity plus a normal part that carries the
+- `crates/rcfd-mesh/src/motion.rs` gives rigid poses and GCL-exact swept volumes.
+- `crates/rcfd-api/src/dynmesh.rs` runs a prescribed rotation (`rotation_angle_expression`) for `piso` / `pimple`, Euler
+  only, and refuses turbulence and momentum sources. It requires at least one moving patch, and the following patches
+  default to the moving ones.
+- `crates/rcfd-fv/src/ale.rs` gives a following wall the mesh's tangential velocity plus a normal part that carries the
   swept volume; any other wall keeps its own condition.
-- `solver.linear_upwind_limiter = "barth_jespersen"` is refused for every algorithm except `simple` / `simplec`
-  (`sim.rs`, the check after the engine is built). The `tvd_*` names map to `ConvScheme::Tvd` for every incompressible
-  algorithm (`conv_scheme` in `sim.rs`); their behaviour on the moving-mesh step was not checked.
-- `rotating_frame` and `mrf` sources are refused with `piso` / `pimple` (`crates/rcfd-api/src/sources.rs`).
+- `sim.rs` (the check after the engine is built) refuses `solver.linear_upwind_limiter = "barth_jespersen"` for every
+  algorithm except `simple` / `simplec`.
+- The `tvd_*` names map to `ConvScheme::Tvd` for every incompressible algorithm (`conv_scheme` in `sim.rs`); their
+  behaviour on the moving-mesh step was not checked.
+- `crates/rcfd-api/src/sources.rs` refuses `rotating_frame` and `mrf` sources with `piso` / `pimple`.
 - `CoupledSolver::with_solids` refuses periodic patches. With `algorithm = "coupled"`, `sim.rs` refuses turbulence and
   sources ("closed-domain laminar flow only"). `coupled.rs` has no limiter.
 - F-RP and the arm C code were never committed: `git log --all -S rotor_passage -- crates` is empty. The patches named in
@@ -59,10 +86,24 @@ Code read for this registration (read only, main at edb4839):
 - ADR 0113: the faceted hub and shroud of `axial_fan_sector` miss a surface of revolution by up to 1.84e-2 (hub) and
   4.5e-3 (shroud) of `Omega r |S|`. A rigidly rotating face of that patch therefore sweeps a volume of that relative size.
 
-Fixed values (ADR 0075 / 0086): Omega = 155.614 rad/s about +z through the origin, 9 blades, r_hub 0.124 m, r_tip
-0.2475 m, shroud 0.250 m, axial extent 0.4 m (inlet z = 0), U_in = 9.478 m/s (Q = 1.4032 m^3/s), nu = 1.5e-5 m^2/s,
-rho = 1.2 (assumed). One revolution takes 40.377 ms, one blade passage 4.486 ms and one flow-through 42.20 ms. Full-annulus
-values are 9 times the sector values.
+Fixed values (ADR 0075 / 0086):
+
+| Quantity | Value |
+|---|---|
+| Omega | 155.614 rad/s about +z through the origin |
+| Blades | 9 |
+| r_hub | 0.124 m |
+| r_tip | 0.2475 m |
+| Shroud | 0.250 m |
+| Axial extent | 0.4 m (inlet z = 0) |
+| U_in | 9.478 m/s (Q = 1.4032 m^3/s) |
+| nu | 1.5e-5 m^2/s |
+| rho | 1.2 (assumed) |
+| One revolution | 40.377 ms |
+| One blade passage | 4.486 ms |
+| One flow-through | 42.20 ms |
+
+Full-annulus values are 9 times the sector values.
 
 ## Decisions
 
@@ -102,10 +143,12 @@ convection `linear_upwind` with `barth_jespersen` in every run):
 
 Inlet `fixed` (0, 0, 9.478) in the absolute runs, outlet fixed static pressure 0 with zero-gradient velocity, initial
 velocity (0, 0, 9.478). R1 keeps the ADR 0086 inlet and initial state, which are the same flow in the relative frame.
-Every other key stays at the case-tree default. Exact solution in the empty passage: axial, axisymmetric, with zero
-absolute swirl, for any nu and in either frame. The PISO seam coupling is lagged within a step (ADR 0033), but the settled
-empty-passage state is steady at every cell of the moving mesh (`c_x = c_y = 0`, `c_z(r, z)`), so the lag vanishes
-there. The bladed state is not steady in Cartesian components, so Y1b is report only.
+Every other key stays at the case-tree default.
+
+Exact solution in the empty passage: axial, axisymmetric, with zero absolute swirl, for any nu and in either frame. The
+PISO seam coupling is lagged within a step (ADR 0033), but the settled empty-passage state is steady at every cell of the
+moving mesh (`c_x = c_y = 0`, `c_z(r, z)`), so the lag vanishes there. The bladed state is not steady in Cartesian
+components, so Y1b is report only.
 
 Time step `Omega dt = 1 deg` (dt = 1.12156e-4 s, 360 steps per revolution); I1 uses the same dt. Run length: until
 settled (below), at most 15 revolutions (5 400 steps). Fallback, used at most once: if the smoke (V3) of Y1(E3) or
@@ -116,9 +159,11 @@ again, arm 1 is NOT RUNNABLE at this cost.
 `rotating_frame`, Barth-Jespersen `linear_upwind`, ADR 0086 walls and inlet) with `algorithm = "pimple"`, `n_outer = 5`,
 `time_scheme = "bdf2"`, from the ADR 0086 initial state. Two runs: **H(dt)** with dt = T_c / 100 = 4.605e-5 s
 (T_c = hub chord 0.099 m / hub relative speed 21.50 m/s = 4.605 ms) and **H(dt/2)**. Each runs 0.2532 s (6 flow-through
-times). The first 0.1266 s is start-up and the last 0.1266 s is the window. It starts from the uniform initial state, not
-from the stalled SIMPLEC iterate, for three reasons. The iterate is a cycle, not a solution (ADR 0110). A hand-over
-across algorithms is untested code. A physical oscillation does not depend on the start.
+times). The first 0.1266 s is start-up and the last 0.1266 s is the window.
+
+Check H starts from the uniform initial state, not from the stalled SIMPLEC iterate, for three reasons. The iterate is a
+cycle, not a solution (ADR 0110). A hand-over across algorithms is untested code. A physical oscillation does not depend
+on the start.
 
 **D6. Functionals** (full annulus; ADR 0075 / 0086 definitions): outlet absolute angular-momentum flux
 `L = 9 rho sum_outlet (x c_y - y c_x)_f phi_f`; outlet swirl energy `rho <c_theta^2 / 2>_m`; Delta p_tt (mass-averaged
@@ -142,9 +187,12 @@ on M2 within 60 minutes. It has never run bladed, on the C-grid, or with a limit
 
 Runs (B3 and B2, ADR 0086 bladed set-up with F-RP absolute conditions as in ADR 0085 F1: hub and blade
 `velocity_expression_x/y = -Omega y, Omega x`, shroud `fixed` 0; SST; Barth-Jespersen `linear_upwind`; 3000 iterations
-from iteration 1, the ADR 0181 protocol): **Y2(h)** coupled with R-1 to R-6; **Y2S(h)** the same F-RP case on SIMPLEC
-(rotation explicit, as ADR 0082), the attribution control. References: the ADR 0181 step-1 unchanged-mesh SIMPLEC runs
-(rotating frame), reproduced in the same process (V1).
+from iteration 1, the ADR 0181 protocol):
+
+- **Y2(h)** coupled with R-1 to R-6;
+- **Y2S(h)** the same F-RP case on SIMPLEC (rotation explicit, as ADR 0082), the attribution control.
+
+References: the ADR 0181 step-1 unchanged-mesh SIMPLEC runs (rotating frame), reproduced in the same process (V1).
 
 **D8. Concurrency and order.** At most two registered runs at a time. Order: R1 and I1S families (records committed),
 then Y1 and I1 families, then Y1(E2) at dt/2 (A1-T), then Y1b; H(dt), then H(dt/2); arm 2 last, after its rebuild.
@@ -165,8 +213,7 @@ the design; they go to the maintainer as questions 3 and 6, and this ADR does no
 The design's "the limit cycle stays in both arms" cannot be read from Y1b: laminar flow at a chord Reynolds number of
 about 1.4e5 is expected to be unsteady behind a trailing edge, so a Y1b oscillation is not evidence of a limit cycle.
 This registration reads the clause from arm 2 (STAYS) and check H (STEADY or NUMERICAL; a NOT EVALUABLE H gives no
-reading). Open question 4 asks the maintainer to
-confirm this reading.
+reading). Open question 4 asks the maintainer to confirm this reading.
 
 ## Registered limits and checks (fixed now)
 
@@ -197,9 +244,9 @@ NOT CONVERGED.
 
 **Pathology (P)**, from R1 only, evaluated before any Y1 record is read: P is defined only when all three R1 runs
 converge; otherwise P is **NOT EVALUABLE**. **P-GROW** iff `abs(L_R1(E1)) > abs(L_R1(E3))` and
-`abs(L_R1(E1)) >= 1e-2 N m`; otherwise **P-ABSENT**. P-GROW means the ADR 0086 growth
-is reproduced laminar. The 1e-2 N m floor makes the A1-R limit (1 % of it) no smaller than the 1e-4 N m settle floor, so
-a removal by two orders can be measured. ADR 0086 E1 had 0.106 N m.
+`abs(L_R1(E1)) >= 1e-2 N m`; otherwise **P-ABSENT**. P-GROW means the ADR 0086 growth is reproduced laminar. The
+1e-2 N m floor makes the A1-R limit (1 % of it) no smaller than the 1e-4 N m settle floor, so a removal by two orders can
+be measured. ADR 0086 E1 had 0.106 N m.
 
 | Id | Limit | Source |
 |---|---|---|
@@ -364,10 +411,10 @@ runs; the decision under D9.
 
 ### Amendment P-AB (2026-11-05): the set-up of P-A and P-B and of their checks, written before their code
 
-Job EXP-ROT P-A/P-B, branch `exprot-pab` from main 7c960bb. Open question 2 is answered by the maintainer's loop
-instruction with its recommendation (a): build P-A and P-B. This amendment makes the D3 rows and V5 specific enough to
-code and test. It changes no limit of this ADR, and no part of the experiment (arms, runs, functionals, verdicts) is run
-by this job. P-C and arm 2 are separate jobs.
+Job EXP-ROT P-A/P-B, branch `exprot-pab` from main 7c960bb. The maintainer's loop instruction answers open question 2
+with its recommendation (a): build P-A and P-B. This amendment makes the D3 rows and V5 specific enough to code and test.
+It changes no limit of this ADR, and this job runs no part of the experiment (arms, runs, functionals, verdicts). P-C and
+arm 2 are separate jobs.
 
 **P-A as built.** `PimpleSettings` gets `linear_upwind_limiter: Option<gradient::Limiter>` (`None` in `piso()` and
 `pimple()`). With `Some(kind)` and `convection = LinearUpwind`, the momentum predictor of `PimpleSolver::step_with`
@@ -376,35 +423,48 @@ where `cells`, `bvals` and `grad` are the convected cell values, the boundary va
 convection already uses. The limited gradient goes to the convection term only; the Laplacian's non-orthogonal
 correction keeps the unlimited gradient (as `SimpleSolver`, ADR 0081 part L). The moving-mesh step (`step_ale*`) runs
 through the same code on the new geometry, so it is covered. The fractional step has its own convection and does not
-use the field. Case tree: `solver.linear_upwind_limiter = "barth_jespersen"` is accepted with `linear_upwind` for
-`piso` and `pimple` (constant density, with or without `dynamic_mesh` and turbulence). It stays a located error at the
-key with any other scheme, with `solver.time_advance = "fractional_step"`, and with every other engine (coupled,
-compressible, variable density, VOF). The line of ADR 0081 L0c that asserts the refusal for `pimple` is superseded by
-D3. That case of the test `l0c_the_key_outside_its_scope_is_a_located_error` becomes `piso` with the fractional step.
-The other lines stay. Turbulence, scalar and energy equations are not limited.
+use the field.
+
+Case tree: `solver.linear_upwind_limiter = "barth_jespersen"` is accepted with `linear_upwind` for `piso` and `pimple`
+(constant density, with or without `dynamic_mesh` and turbulence). It stays a located error at the key with any other
+scheme, with `solver.time_advance = "fractional_step"`, and with every other engine (coupled, compressible, variable
+density, VOF). The line of ADR 0081 L0c that asserts the refusal for `pimple` is superseded by D3. That case of the test
+`l0c_the_key_outside_its_scope_is_a_located_error` becomes `piso` with the fractional step. The other lines stay.
+Turbulence, scalar and energy equations are not limited.
 
 **P-B as built.** New key `dynamic_mesh.rest_patches` (list of patch names, default `[]`, with
 `Schema::hash_omit_default` as ADR 0156 D6 and the ADR 0181 addendum F1). Each face of a listed patch gets the velocity
 `u_b = (m_f / abs(S_f)) n_f` every step, with `m_f` the mesh flux and `S_f`, `n_f` the area vector and unit normal of
-the new mesh. So `u_b . S_f = m_f` (no relative flux) and the tangential part is zero. The pressure condition is the
-fixed-flux one of the following walls (ADR 0033 addendum, deviations): `dp/dn = -n . (u_b,new - u_b,old) / dt`.
-At step 1 the old value is the initial wall value 0, so a face that sweeps volume gets a one-step start-up term
-`-(m_f / abs(S_f)) / dt`. This is the impulsive start of the facets, as for a following wall whose initial value differs
-from the mesh velocity. The library function is new (`ale::set_rest_conditions`); `follow_velocity` and
-`set_follow_conditions` are not changed. Static checks, located: an unknown name, or a name that is also in
-`moving_patches` or `follow_patches`, at `dynamic_mesh.rest_patches`; a non-empty list with `deformation = "smoothing"`
-at `dynamic_mesh.rest_patches` (D3 registers a rigidly moving mesh only); a rest patch whose `velocity` is not `"fixed"`,
-whose `velocity_value` is not zero, or that has a velocity expression, at that boundary key. `moving_patches` may be
-empty when `motion = "prescribed"` and `deformation = "rigid"` (D3: "a rigid prescribed motion is allowed with no
-following patch"); with `six_dof` or `smoothing` it stays required. With `rest_patches` empty every code path is the
-one of today.
+the new mesh. So `u_b . S_f = m_f` (no relative flux) and the tangential part is zero.
+
+The pressure condition is the fixed-flux one of the following walls (ADR 0033 addendum, deviations):
+`dp/dn = -n . (u_b,new - u_b,old) / dt`. At step 1 the old value is the initial wall value 0, so a face that sweeps volume
+gets a one-step start-up term `-(m_f / abs(S_f)) / dt`. This is the impulsive start of the facets, as for a following wall
+whose initial value differs from the mesh velocity. The library function is new (`ale::set_rest_conditions`);
+`follow_velocity` and `set_follow_conditions` are not changed.
+
+Static checks, located:
+
+- an unknown name, or a name that is also in `moving_patches` or `follow_patches`, at `dynamic_mesh.rest_patches`;
+- a non-empty list with `deformation = "smoothing"` at `dynamic_mesh.rest_patches` (D3 registers a rigidly moving mesh
+  only);
+- a rest patch whose `velocity` is not `"fixed"`, whose `velocity_value` is not zero, or that has a velocity expression,
+  at that boundary key.
+
+`moving_patches` may be empty when `motion = "prescribed"` and `deformation = "rigid"` (D3: "a rigid prescribed motion is
+allowed with no following patch"); with `six_dof` or `smoothing` it stays required. With `rest_patches` empty every code
+path is the one of today.
 
 **Settings hash and written text.** The content hash of every existing case is unchanged by F1's flag. The text
 `Case::to_toml` / `Case::to_json_string` write gains `rest_patches = []`, so ADR 0155 H1 (`case_hashes_w48u.rs`) gets
-the ADR 0181 addendum F2 treatment: the normalisation also removes `dynamic_mesh.rest_patches` when (and only when) it
-is the empty list; `DEFAULT_KEYS` holds JSON defaults instead of strings; C2 also asserts that every recorded valid
-source holds `[]`; C4 also asserts that a copy with `rest_patches = ["inner"]` differs from R0. R0 and
-`baseline_hashes.rs` are not edited or re-recorded. No fenced TOML block of `docs/` is edited.
+the ADR 0181 addendum F2 treatment:
+
+- the normalisation also removes `dynamic_mesh.rest_patches` when (and only when) it is the empty list;
+- `DEFAULT_KEYS` holds JSON defaults instead of strings;
+- C2 also asserts that every recorded valid source holds `[]`;
+- C4 also asserts that a copy with `rest_patches = ["inner"]` differs from R0.
+
+R0 and `baseline_hashes.rs` are not edited or re-recorded. No fenced TOML block of `docs/` is edited.
 
 **V5 set-up (a deviation from the literal row, for the maintainer).** The row says "axial inflow". With a velocity
 inlet and walls with no slip the developing layers carry a radial velocity `c_r`. A radial vector's Cartesian
@@ -413,20 +473,27 @@ cancel that turn only to `O(Delta theta^2, (Omega dt)^2)`, which leaves a swirl 
 `Omega c_r (Delta theta^2 - (Omega dt)^2) / 6` per cell. That is a property of convecting Cartesian components on a
 rotating mesh, not of the wall condition, and it is far above `1e-9 U` for any `c_r` above round-off. On the static
 mesh C0 is round-off (mirror symmetry of each cell), so the limit is `1e-9 U`, and V5 would then fail for a reason that
-D3's effort bound would charge to P-B. So V5 is run where `c_r = 0` exactly: an axially periodic sector with an axial
-plug flow that decays through Stokes layers at the walls at rest (exact solution `c = c_z(r, t) e_z`). The literal
-inflow variant is kept as V5-U, report only. The same mechanism bears on D4's premise that the settled empty passage
-has `c_x = c_y = 0` at every cell: the laminar layers of the empty passage also carry `c_r`. This job does not change D4.
+D3's effort bound would charge to P-B.
+
+So V5 is run where `c_r = 0` exactly: an axially periodic sector with an axial plug flow that decays through Stokes
+layers at the walls at rest (exact solution `c = c_z(r, t) e_z`). The literal inflow variant is kept as V5-U, report only.
+
+The same mechanism bears on D4's premise that the settled empty passage has `c_x = c_y = 0` at every cell: the laminar
+layers of the empty passage also carry `c_r`. This job does not change D4.
 
 On `annulus_3d_sector` every wall face is a planar chord rectangle, symmetric under the half turn about its radial
 centre line, so its swept volume under rotation about z is zero to round-off. V5 therefore tests "at rest against
 following" and the run with no following patch, not the normal part. PB-1 tests the normal part on faces that sweep
 volume.
 
-**Checks (limits fixed now; gate tests unless marked).** Library constants: `Omega = 155.614` rad/s,
-`U = 9.478` m/s, `nu = 1.5e-5` m^2/s, `dt = (pi/180)/Omega = 1.12158e-4` s (`Omega dt = 1` deg, 360 steps a
-revolution), PISO (1 outer, 2 correctors), Euler, `linear_upwind` with Barth-Jespersen (P-A), momentum and pressure
-tolerances `tol_rel = 1e-13`, `tol_abs = 1e-16` (ADR 0033 strict tests).
+**Checks (limits fixed now; gate tests unless marked).** Library constants:
+
+- `Omega = 155.614` rad/s;
+- `U = 9.478` m/s;
+- `nu = 1.5e-5` m^2/s;
+- `dt = (pi/180)/Omega = 1.12158e-4` s (`Omega dt = 1` deg, 360 steps a revolution);
+- PISO (1 outer, 2 correctors), Euler, `linear_upwind` with Barth-Jespersen (P-A);
+- momentum and pressure tolerances `tol_rel = 1e-13`, `tol_abs = 1e-16` (ADR 0033 strict tests).
 
 | Id | Set-up | Limit |
 |---|---|---|
@@ -454,6 +521,9 @@ beside P-A. Results follow in the next addendum.
 
 ### Addendum: results of amendment P-AB (2026-11-05)
 
+No limit was missed, so no `*_known_miss` test was added. P-A and P-B are kept (opt-in, defaults bit-identical). D3's
+first-user checks (V2, V3 of arm 1) belong to the experiment and were not run.
+
 Code in 9c2a7e0 (amendment d35759b before it). Files: `crates/rcfd-fv/src/pimple.rs` (P-A), `crates/rcfd-fv/src/ale.rs`
 (P-B, `rest_velocity`, `set_rest_conditions`), `crates/rcfd-api/src/dynmesh.rs`, `sim.rs`, `schema.rs` (keys and
 checks), tests `crates/rcfd-fv/tests/exp_rot_pab.rs` and `crates/rcfd-api/tests/exp_rot_pab.rs`, the amended
@@ -476,26 +546,23 @@ checks), tests `crates/rcfd-fv/tests/exp_rot_pab.rs` and `crates/rcfd-api/tests/
 | PA-3 | `max abs(u_moving - V - u_fixed)` 9.16e-16; 37 of 128 (cell, component) pairs with a limiter factor below 1 | 1e-9; at least 1 | met |
 | H1 | 41 recorded sources, 0 differ after the extended normalisation; C3: 30 of 30 valid sources differ raw in the text columns only; C4: the copy with `rest_patches = ["inner"]` differs from R0 | as the ADR 0181 addendum F2 form | met |
 
-**V5-U and the premise of the V5 deviation.** The amendment expected C0 to be round-off for the inflow variant (mirror
-symmetry of each cell). It is not: the static sector with a velocity inlet has `max abs(c_theta)` 8.53e-5 m/s, about
-5 % of its `max abs(c_r)`. A likely cause, not proven here, is the seam coupling, which PISO lags within a step (D4):
-the lag turns a radial velocity at the rotational seams into a tangential error, and the maximum over the steps
-includes the start-up. The rotating run has 1.66 times C0, so the literal inflow variant would also have met the
-registered V5 limit (`10 C0` = 8.53e-4 m/s). The amendment's reason for the deviation therefore did not apply on this
-mesh. The registered V5 (axially periodic, `c_r = 0`) stays the check of record, and it is the stricter one
-(`1e-9 U` against `10 C0`). These two numbers do not separate the rotating-mesh swirl source that the amendment
-derived from the seam effect; the rotating run exceeds the static one by 5.6e-5 m/s (5.9e-6 U). If the seam lag is the
-cause, the static empty passage I1 (which has seams) carries an L floor of its own; A1-L compares Y1 against that
-floor.
+**V5-U and the premise of the V5 deviation.** The amendment's reason for the deviation did not apply on this mesh. The
+amendment expected C0 to be round-off for the inflow variant (mirror symmetry of each cell). It is not: the static sector
+with a velocity inlet has `max abs(c_theta)` 8.53e-5 m/s, about 5 % of its `max abs(c_r)`. The rotating run has 1.66 times
+C0, so the literal inflow variant would also have met the registered V5 limit (`10 C0` = 8.53e-4 m/s). The registered V5
+(axially periodic, `c_r = 0`) stays the check of record, and it is the stricter one (`1e-9 U` against `10 C0`).
+
+A likely cause of the static value, not proven here, is the seam coupling, which PISO lags within a step (D4): the lag
+turns a radial velocity at the rotational seams into a tangential error, and the maximum over the steps includes the
+start-up. The static and rotating values of `max abs(c_theta)` do not separate the rotating-mesh swirl source that the
+amendment derived from the seam effect; the rotating run exceeds the static one by 5.6e-5 m/s (5.9e-6 U). If the seam lag
+is the cause, the static empty passage I1 (which has seams) carries an L floor of its own; A1-L compares Y1 against that floor.
 
 V0: `baseline_hashes.rs` unchanged and passing (not re-recorded); the full release test suites of `rcfd-fv`,
 `rcfd-mesh` and `rcfd-api` were run on 9c2a7e0, including the non-ignored tests of `fan01_stall_w43c.rs`,
 `dynamic_mesh.rs`, `ale_flows.rs`, `ale_gcl.rs`, `w36b_limiter.rs` and `case_hashes_w48u.rs`: 1557 passed, 0 failed, 622 ignored
 (`cargo test -p rcfd-fv -p rcfd-mesh -p rcfd-api --release`).
 `cargo fmt --check` and `cargo clippy --all-targets -D warnings` are clean on the three crates.
-
-No limit was missed, so no `*_known_miss` test was added. P-A and P-B are kept (opt-in, defaults bit-identical). D3's
-first-user checks (V2, V3 of arm 1) belong to the experiment and were not run.
 
 ### Amendment P-C (2026-11-05): the set-up of P-C and of its checks, written before its code
 

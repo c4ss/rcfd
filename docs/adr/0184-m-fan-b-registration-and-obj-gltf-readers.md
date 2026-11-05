@@ -3,15 +3,29 @@
 Status: **registered 2026-11-04**, before any implementation result of this job and before any run. Amendments follow
 this text, each written before the runs it covers; results go in an addendum. Not yet accepted by the maintainer.
 
-Job J4, on local main edb4839 (worktree branch `j4-mfanb-readers`). Design:
-[`docs/designs/m-fan-b.md`](../designs/m-fan-b.md). Parent design: `docs/designs/unblock-roadmap-fan01-fea.md` (goal G9),
-which with ADR 0182, `docs/milestones.json` and roadmap items F-276 to F-283 is on branch `m0-gate-roadmap`, not yet on
-main. Number: 0182 is used on `m0-gate-roadmap`, 0183 is reserved for another job, 0173 to 0181 are on unmerged job
-branches; no branch has 0184 (checked over all local branches just before writing).
+The M-FAN-B pass condition (G9) is that a case meshes and runs the FAN-01 blade from a surface file with units, with
+prism layers and a hash-keyed rebuild. At registration the library parts existed, but no case reached them, binary STL
+lost patch names and no reader took a unit. This ADR fixes the acceptance limits A1 to A7 for step 5 and the checks R1 to
+R12 for step 1, job J4, the OBJ and glTF surface readers. Addendum 1 reports that all registered checks pass at their
+first run except R3, whose extra sub-case had a set-up error; no limit moved. No file written by a third-party exporter
+was read; the only independent writer is rcfd's own F-117 GLB exporter. After step 1, OBJ and glTF surfaces can be read
+in code with names and units, but no case or CLI command reads them yet. The acceptance (A1 to A7) cannot run until Q2
+(the FAN-01 surface) and Q3 (the domain) are answered.
+
+Rules and parents:
+
+- Job J4, on local main edb4839 (worktree branch `j4-mfanb-readers`).
+- Design: [`docs/designs/m-fan-b.md`](../designs/m-fan-b.md).
+- Parent design: `docs/designs/unblock-roadmap-fan01-fea.md` (goal G9), which with ADR 0182, `docs/milestones.json` and
+  roadmap items F-276 to F-283 is on branch `m0-gate-roadmap`, not yet on main.
+- Number: 0182 is used on `m0-gate-roadmap`, 0183 is reserved for another job, 0173 to 0181 are on unmerged job branches;
+  no branch has 0184 (checked over all local branches just before writing).
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
-- limits are fixed here before the registered tests and runs; a missed limit becomes an ignored `*_known_miss` test
-  with the limit intact; a defective set-up gets an amendment before the corrected run;
+
+- limits are fixed here before the registered tests and runs;
+- a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+- a defective set-up gets an amendment before the corrected run;
 - defaults of existing code stay bit-identical: this job adds modules and registry entries only; no existing reader,
   writer, case key or result changes; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
 - no new crate, no unsafe code, no new third-party crate (`Cargo.toml` and `Cargo.lock` unchanged), the crate graph stays
@@ -44,17 +58,31 @@ zero offset and a finite positive factor. No default, for glTF too. `"m"` leaves
 
 **D4. Boundary types.** The readers return names only and never call `common::guess_kind`.
 
-**D5. OBJ rules.** As in the design (step 1, OBJ): `o` objects are patches (`default` before the first `o`, repeated names
-merge); `g` is ignored unless `ObjPatches::Groups` is asked for; polygons are ear-clipped in the plane of their Newell
-normal, with a fan from the first vertex and a note when no ear exists; texture, normal, smoothing, material, line, point
-and curve statements are ignored with a note; `surf` is refused; negative indices are relative; line continuation, CRLF
-and a byte-order mark are accepted.
+**D5. OBJ rules.** As in the design (step 1, OBJ):
 
-**D6. glTF rules.** As in the design (step 1, glTF): `.gltf` with data-URI or sidecar buffers and `.glb`; version `2.x`;
-every `extensionsRequired` entry refused; sparse accessors refused; modes 4, 5, 6 read, 0 to 3 skipped with a note;
-`POSITION` must be `VEC3` float; indices unsigned 8, 16 or 32 bit; byte stride and bounds checked; one patch per node with
-a mesh (node name, else mesh name, else `mesh<i>`; equal names merge); node transforms applied, winding reversed under a
-negative determinant; node cycles refused; sidecar URIs resolved inside the file's folder only.
+- `o` objects are patches (`default` before the first `o`, repeated names merge);
+- `g` is ignored unless `ObjPatches::Groups` is asked for;
+- polygons are ear-clipped in the plane of their Newell normal, with a fan from the first vertex and a note when no ear
+  exists;
+- texture, normal, smoothing, material, line, point and curve statements are ignored with a note;
+- `surf` is refused;
+- negative indices are relative;
+- line continuation, CRLF and a byte-order mark are accepted.
+
+**D6. glTF rules.** As in the design (step 1, glTF):
+
+- `.gltf` with data-URI or sidecar buffers and `.glb`;
+- version `2.x`;
+- every `extensionsRequired` entry refused;
+- sparse accessors refused;
+- modes 4, 5, 6 read, 0 to 3 skipped with a note;
+- `POSITION` must be `VEC3` float;
+- indices unsigned 8, 16 or 32 bit;
+- byte stride and bounds checked;
+- one patch per node with a mesh (node name, else mesh name, else `mesh<i>`; equal names merge);
+- node transforms applied, winding reversed under a negative determinant;
+- node cycles refused;
+- sidecar URIs resolved inside the file's folder only.
 
 **D7. Welding.** Both readers merge bitwise-equal vertices after scaling (first occurrence in vertex order kept), drop
 unused vertices, and report both counts in the notes.
@@ -149,10 +177,14 @@ files that exist only on `m0-gate-roadmap` were turned into code paths. `Cargo.t
 expected `f -4 -2 -3` after four vertices to give `[0, 3, 1]`; by the relative rule it gives `[0, 2, 1]`. The fixture was
 corrected to `f -4 -1 -3` before the registered comparison was judged; the reader was not changed.
 
-**Beyond the registration.** (1) A non-convex OBJ polygon with more than 1024 vertices is refused (ear clipping is cubic
-in the worst case; a convex polygon of any size is fanned). (2) glTF indices equal to the primitive-restart value of their
-type are refused (the specification forbids them). (3) An OBJ `v` line with more than 7 values is refused. (4) `gltf::read_file`
-and `obj::read_file` were checked once on files in a temporary folder (sidecar in a subfolder, unit `cm`).
+**Beyond the registration.**
+
+1. A non-convex OBJ polygon with more than 1024 vertices is refused (ear clipping is cubic in the worst case; a convex
+   polygon of any size is fanned).
+2. glTF indices equal to the primitive-restart value of their type are refused (the specification forbids them).
+3. An OBJ `v` line with more than 7 values is refused.
+4. `gltf::read_file` and `obj::read_file` were checked once on files in a temporary folder (sidecar in a subfolder, unit
+   `cm`).
 
 **Not shown.** No file written by Blender, FreeCAD or another third-party exporter was read; the only independent writer is
 rcfd's own F-117 GLB exporter.

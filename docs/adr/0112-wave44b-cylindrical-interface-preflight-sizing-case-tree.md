@@ -1,20 +1,45 @@
 # ADR 0112: Wave 44B, cylindrical interface: non-orthogonality pre-flight, near-isotropic interface layer, case-tree wiring (F-126)
 
-Status: registered before any code of this wave was written. Limits and decision rules below are not changed after a run; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test registered here as an
-amendment before it runs. Written at HEAD fee6ecc (worktree `<scratch dir>`, branch `w44b`, target
-`<target dir>`). Parent: ADR 0109 (wave 43B). Clean-room: first principles (polygon geometry, exact solutions of the
-Navier-Stokes equations) and the measured values of ADR 0109; no literature value enters a limit.
+Status: registered before any code of this wave was written.
+
+ADR 0109 found that the rcfd-api steady solver diverged on every full-annulus mesh whose overlap faces were strongly non-orthogonal,
+and that the cylindrical join has no case-tree key. This wave adds three opt-in items that change the behaviour of no default, no
+existing generator and no existing key: a pre-flight non-orthogonality check with a registered limit of 70 deg, a helper that sizes
+a near-isotropic interface layer, and the case-tree generator `annulus_3d_cylindrical_interface`. Measured on the final code, every
+check passes except the H2 S2 convergence criterion: continuity floors at 1.18e-9 after 4000 iterations against the limit 1e-9, and
+`h2_s2_sized_sector_convergence_known_miss` stays ignored. The H2 smoke had already shown that miss; it went unnoticed, and no
+amendment was written before the registered run. Amendment 1 corrected the verified-angle constant from 48.7 to 48.75 after the
+first P2 run failed on K2. The sizing brings the interface angle to 37 deg on all three count sets, but the absolute interface flux
+of the inertial sector S1 stays above the ADR 0109 1e-3 limit (2.02e-3 V_i A), and the M counts need a rotor expansion ratio of
+1.26e5, which nothing limits. F-126 stays partial: its acceptance, a published compressor/rotor case, was not attempted. The final
+gate recorded 1992 passed, 0 failed, 622 ignored.
+
+Rules and parents:
+
+* Limits and decision rules below are not changed after a run; a missed limit becomes an ignored `*_known_miss` test with the limit
+  intact; a defective set-up gets a new corrected test registered here as an amendment before it runs.
+* Written at HEAD fee6ecc (worktree `<scratch dir>`, branch `w44b`, target `<target dir>`).
+* Parent: ADR 0109 (wave 43B).
+* Clean-room: first principles (polygon geometry, exact solutions of the Navier-Stokes equations) and the measured values of ADR
+  0109; no literature value enters a limit.
 
 ## Context
 
-ADR 0109 delivered `rcfd_mesh::non_conformal::join_non_conformal_cylindrical` and found:
+ADR 0109 delivered `rcfd_mesh::non_conformal::join_non_conformal_cylindrical`. The rcfd-api steady solver (SIMPLEC, `linear_upwind`,
+one non-orthogonal corrector) diverged on every full-annulus mesh whose overlap faces were strongly non-orthogonal and converged at
+0.0 and 48.7 deg:
 
-* The rcfd-api steady solver (SIMPLEC, `linear_upwind`, one non-orthogonal corrector) diverged on every full-annulus mesh whose overlap
-  faces were strongly non-orthogonal: 79.2 deg (registered mesh M, default options; also with `velocity_correction = "face_flux"`, and
-  with face_flux plus 3 correctors), 75.7 deg (axial counts matched), 72.7 deg (counts around matched). It converged at 0.0 deg (identical
-  blocks) and at 48.7 deg (mesh K2, radial cells growing towards the interface, with `face_flux`; the default correction was not tried on
-  K2). The 60-degree sector (rcfd-fv, central convection, alpha_u 0.8, one axial layer) converged on its uniform G2 mesh; its interface
+| Overlap-face angle | Mesh and options | Result |
+| --- | --- | --- |
+| 79.2 deg | registered mesh M, default options; also with `velocity_correction = "face_flux"`, and with face_flux plus 3 correctors | diverged |
+| 75.7 deg | axial counts matched | diverged |
+| 72.7 deg | counts around matched | diverged |
+| 0.0 deg | identical blocks | converged |
+| 48.7 deg | mesh K2, radial cells growing towards the interface, with `face_flux`; the default correction was not tried on K2 | converged |
+
+ADR 0109 also found:
+
+* The 60-degree sector (rcfd-fv, central convection, alpha_u 0.8, one axial layer) converged on its uniform G2 mesh; its interface
   angle was not measured in ADR 0109.
 * No case-tree key exists for the cylindrical join (library function plus a mesh file only).
 * The sum of absolute interface fluxes misses its 1e-3 limit and halves when the counts around are doubled (first order).
@@ -62,10 +87,16 @@ configuration and its convergence is not part of the derivation.
 ## Registered checks
 
 Common: ADR 0109 geometry (`r_i = 0.5`, `R = 0.75`, `r_o = 1.0`, z axis, `lz = 0.4` full annulus, sector 60 deg depth 0.1),
-`nu = 0.1`, `V_i = 0.5`. Meshes: M = `annulus_3d(48, 8, 2, 0.5, 0.75, 0.4)` + `annulus_3d(35, 8, 3, 0.75, 1.0, 0.4)`; M_z (axial counts
-matched) = 48x8x2 + 35x8x2; M_t (counts around matched) = 48x8x2 + 48x8x3; K2 = `annulus_3d(96, 6, 4, ..., Expansion(3))` +
-`annulus_3d(70, 6, 6, ..., Expansion(1/3))`; I = identical blocks 48x8x2 + 48x8x2; G2 = `annulus_sector(8, 8, 0.5, 0.75, pi/3)` +
-`annulus_sector(6, 8, 0.75, 1.0, pi/3)`.
+`nu = 0.1`, `V_i = 0.5`.
+
+Meshes:
+
+* M = `annulus_3d(48, 8, 2, 0.5, 0.75, 0.4)` + `annulus_3d(35, 8, 3, 0.75, 1.0, 0.4)`
+* M_z (axial counts matched) = 48x8x2 + 35x8x2
+* M_t (counts around matched) = 48x8x2 + 48x8x3
+* K2 = `annulus_3d(96, 6, 4, ..., Expansion(3))` + `annulus_3d(70, 6, 6, ..., Expansion(1/3))`
+* I = identical blocks 48x8x2 + 48x8x2
+* G2 = `annulus_sector(8, 8, 0.5, 0.75, pi/3)` + `annulus_sector(6, 8, 0.75, 1.0, pi/3)`
 
 ### P: pre-flight (rcfd-mesh unit tests, `non_conformal.rs`)
 
@@ -158,21 +189,28 @@ there. Not defective; no limit changes.
 | T4 case without the keys | hash 0x6eca7279950f43c3 = HEAD fee6ecc value; `baseline_hashes.rs` untouched (gate) | exact | PASS |
 | T5 isotropic option, full annulus K2 counts | converged in 238 it, error 6.239e-3 V_i | converged, 2e-2 | PASS |
 
-Interpretation: the pre-flight reproduces the angles behind every ADR 0109 divergence and the K2 success, so the case
-tree now refuses the meshes that diverged there before spending a run on them, and tells the user by how much the radial spacing of
-the interface cells must grow. The 70-deg limit is conservative for the rcfd-fv sector solver (the uniform G2 sector at 70.5 deg
-converges with central convection), which the case tree does not offer. The near-isotropic sizing brings the interface angle to
-37 deg on all three count sets; on the sector it lowers the absolute interface flux of S1 from 5.79e-3 to 2.02e-3 V_i A (still above
-the ADR 0109 1e-3 limit, which keeps its known-miss tests), while S2's absolute flux barely changes (2.06e-2 to 1.82e-2). The sizing
-can force strong radial grading when the cells around are few: for the M counts the rotor block needs an expansion ratio of 1.26e5
-(wall cell 1.6e-6); nothing limits that ratio, it is reported in this ADR only.
+Interpretation: the pre-flight reproduces the angles behind every ADR 0109 divergence and the K2 success. So the case tree now
+refuses the meshes that diverged there before spending a run on them, and tells the user by how much the radial spacing of the
+interface cells must grow. The 70-deg limit is conservative for the rcfd-fv sector solver (the uniform G2 sector at 70.5 deg
+converges with central convection), which the case tree does not offer.
 
-Deviations from the registered plan: (1) amendment 1 (the verified-angle constant, after the first P2 run); (2) the S2 convergence
-criterion was inside the H2 S2 test in the first run and failed on it only; it was moved unchanged into its own ignored known-miss
-test and the run repeated (deterministic, identical values); (3) the smoke of H2 reached the converged state within its 100 iterations,
-so its values were known before the registered run (recorded above). (4) that smoke already showed the S2 miss: the 8/6 rotating-frame run stopped at
-iteration 101 with continuity 1.18e-9, above the 1e-9 convergence criterion; I did not notice it, the smoke record says "not
-defective", and no amendment was written before the registered run.
+The near-isotropic sizing brings the interface angle to 37 deg on all three count sets. On the sector it lowers the absolute
+interface flux of S1 from 5.79e-3 to 2.02e-3 V_i A (still above the ADR 0109 1e-3 limit, which keeps its known-miss tests), while
+S2's absolute flux barely changes (2.06e-2 to 1.82e-2).
+
+The sizing can force strong radial grading when the cells around are few: for the M counts the rotor block needs an expansion
+ratio of 1.26e5 (wall cell 1.6e-6). Nothing limits that ratio; it is reported in this ADR only.
+
+Deviations from the registered plan:
+
+1. Amendment 1 (the verified-angle constant, after the first P2 run).
+2. The S2 convergence criterion was inside the H2 S2 test in the first run and failed on it only. It was moved unchanged into its
+   own ignored known-miss test and the run repeated (deterministic, identical values).
+3. The smoke of H2 reached the converged state within its 100 iterations, so its values were known before the registered run
+   (recorded above).
+4. That smoke already showed the S2 miss: the 8/6 rotating-frame run stopped at iteration 101 with continuity 1.18e-9, above the
+   1e-9 convergence criterion. I did not notice it, the smoke record says "not defective", and no amendment was written before the
+   registered run.
 
 Unverified references: none; every reference value is an exact solution, polygon geometry or an ADR 0109 measurement.
 

@@ -4,26 +4,53 @@ Status: **PROPOSED 2026-10-28** (set-up, limits and the order of runs registered
 amendments 1 and 2 before the corrected runs; results in the addendum: every registered limit met, the control
 reproduced the defect on the unfixed tree as predicted; 3 rcfd-studio tests fail on main's code in the scratch copy,
 pre-existing).
+
+Each `time += d` rounds, so n steps of dt can fall short of the end time by more than 1e-12, and the run then takes one
+more, tiny step. In ADR 0142's smoke that step was 3.5e-12 s long, with C_D -4e5 and C_L 9e5, and that state was the
+run's final result, its last stored snapshot and its final report values. Job 48K stretches a step that would leave a
+remainder below 1e-6 of itself so that it ends on `solver.end_time`, on the four fixed-step paths of Context 1 (D1, D2).
+A separate last step shorter than 5 % of the step proposed for it now queues a `short_last_step` warning on the paths
+that solve a pressure (D4). Every registered limit was met, and the control reproduced the defect on the unfixed tree as
+predicted: 2001 steps and a last `cd` of -4.052611e5, against 2000 steps and 1.327161 on the fixed tree. B4's set-up
+needed two amendments. B4 also found 3 rcfd-studio tests that fail on main's code in its scratch copy, at the same
+assertions as on the fixed tree: pre-existing, not investigated, and not run in the main checkout or a gate. The
+workspace gate over the crates outside B4's selection, Linux and the real Studio binary were not run.
+
 Written at main 0a69af4 (wave 48H merged, ADR 0142). Job 48K fixes the defect ADR 0142 found and did not fix (its
-addendum "Found, not fixed" and question 6). House rules of ADRs 0110-0142 apply: the set-up and the limits below are
-fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
-defective set-up is corrected by an amendment registered before the corrected run; defaults of existing code stay
-bit-identical for every existing case and test (bit-identity is per platform, ADR 0137);
-`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate; the crate graph stays acyclic.
-Parents: ADR 0142 (the smoke that found the defect), ADR 0050 (adaptive time stepping: `LAND_STRETCH`, snapped
-landings), ADR 0077 part C (run-time warnings of the solver), ADR 0124 (the field store's time rule), ADR 0137
-(per-platform values).
+addendum "Found, not fixed" and question 6).
+
+House rules of ADRs 0110-0142 apply:
+
+* The set-up and the limits below are fixed before the registered runs.
+* A missed limit becomes an ignored `*_known_miss` test with the limit intact.
+* A defective set-up is corrected by an amendment registered before the corrected run.
+* Defaults of existing code stay bit-identical for every existing case and test (bit-identity is per platform,
+  ADR 0137).
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* No new crate; the crate graph stays acyclic.
+
+Parents:
+
+* ADR 0142 (the smoke that found the defect).
+* ADR 0050 (adaptive time stepping: `LAND_STRETCH`, snapped landings).
+* ADR 0077 part C (run-time warnings of the solver).
+* ADR 0124 (the field store's time rule).
+* ADR 0137 (per-platform values).
 
 ## Problem (found in ADR 0142; the maintainer's decision)
 
 ADR 0142's smoke ran the cylinder at Re 100 (64 x 48 O-grid, PISO, kick 0.5 at (1.5, 0)) with `solver.dt = 0.05` to
-`solver.end_time = 100`. The last step was 3.5e-12 s long; C_D and C_L of that step were -4e5 and 9e5, and that state
-was the run's final result, its last stored snapshot and its final report values. The maintainer decided: fix it, with
-defaults bit-identical for every existing case and test, and evaluate before any run this approach: when the remainder
-is below a registered tiny fraction of dt, take no separate step (absorb it by stretching the previous step, or treat
-the end time as reached within a tolerance); for larger remainders keep today's behaviour. Reproduce the defect with a
-failing test first (the control), then fix, then show that the control passes. Add a Studio- or runner-visible warning
-only if it is cheap.
+`solver.end_time = 100`. The last step was 3.5e-12 s long, with C_D -4e5 and C_L 9e5, and that state was the run's final
+result, its last stored snapshot and its final report values.
+
+The maintainer decided:
+
+* Fix it, with defaults bit-identical for every existing case and test.
+* Evaluate this approach before any run: when the remainder is below a registered tiny fraction of dt, take no separate
+  step (absorb it by stretching the previous step, or treat the end time as reached within a tolerance); for larger
+  remainders keep today's behaviour.
+* Reproduce the defect with a failing test first (the control), then fix, then show that the control passes.
+* Add a Studio- or runner-visible warning only if it is cheap.
 
 ## Context (read at 0a69af4)
 
@@ -111,11 +138,12 @@ only if it is cheap.
    that is shorter than 5 % of the step proposed for it (`d < dt` and `d < 0.05 dt`; 0.05 is ADR 0050's
    `LAND_STRETCH - 1`, the remainder that controller already avoids by stretching), the paths that solve a pressure
    (incompressible, variable density, VOF; not prescribed flow) queue a warning that `take_runtime_warnings` hands out
-   with the pressure-lag warnings: `kind` `short_last_step`, `step`, `time`, `dt` (the step taken), `dt_proposed`,
-   `fraction` (`dt / dt_proposed`), `end_time`, and a message that names the step, its fraction, `solver.end_time` and
-   the remedy (choose `solver.end_time` as a whole number of steps of `solver.dt`). It reaches `rcfd run`'s stderr, the
-   run's `events.jsonl` and the Studio's event list. An absorbed remainder (D1) gives no warning. Not done: a
-   check-time warning (it needs a new rule operator and changes the rule output of existing cases; question 2).
+   with the pressure-lag warnings. The warning carries `kind` `short_last_step`, `step`, `time`, `dt` (the step taken),
+   `dt_proposed`, `fraction` (`dt / dt_proposed`), `end_time`, and a message that names the step, its fraction,
+   `solver.end_time` and the remedy (choose `solver.end_time` as a whole number of steps of `solver.dt`). It reaches
+   `rcfd run`'s stderr, the run's `events.jsonl` and the Studio's event list. An absorbed remainder (D1) gives no
+   warning. Not done: a check-time warning (it needs a new rule operator and changes the rule output of existing cases;
+   question 2).
 5. **D5 Placement.** `crates/rcfd-api/src/sim.rs`: two constants, one private helper (`fixed_step`), the four call
    sites, the warning queue; `crates/rcfd-api/tests/end_time_landing_w48k.rs` (new); `docs/case-schema.md` (one
    paragraph); this ADR. No other crate, no dependency, no workspace edge.
@@ -205,11 +233,18 @@ is about 1.3, the last stored snapshot is at t = 100. With `solver.end_time = 10
 
 ## Addendum: results (2026-10-28, branch `worktree-agent-a4bbf65b8948d69c9`, release builds)
 
-Commits: d2decfd (registration: this ADR and the test file), 52c5620 (R2: the pre-fix states recorded, no other change),
-1ab5a65 (the fix, D1-D4, and the `docs/case-schema.md` paragraph), 88936fe (amendment 1), f7d8804 (this addendum, B4
-pending), de636d3 (amendment 2), then the B4 results. R1-R3 and F1 ran in this worktree, `--test-threads 1`, output to
-files; B4 ran in a scratch copy `E:\projects\cfd\w48k-probe` (amendments 1 and 2). The machine was shared with other
-agents' builds.
+Commits:
+
+* d2decfd: registration (this ADR and the test file).
+* 52c5620: R2, the pre-fix states recorded, no other change.
+* 1ab5a65: the fix, D1-D4, and the `docs/case-schema.md` paragraph.
+* 88936fe: amendment 1.
+* f7d8804: this addendum, B4 pending.
+* de636d3: amendment 2.
+* After those: the B4 results.
+
+R1-R3 and F1 ran in this worktree, `--test-threads 1`, output to files. B4 ran in a scratch copy
+`E:\projects\cfd\w48k-probe` (amendments 1 and 2). The machine was shared with other agents' builds.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -230,22 +265,29 @@ agents' builds.
 | B4 (b) | 0 failed; a failure alone on the unfixed tree too is pre-existing | 16:31 to 17:20 (build included): 1116 passed, 18 failed, 267 ignored. 15 failed for want of `fake-claude` (amendment 2); their corrected run: 15 of 15 pass, no probe line. 3 rcfd-studio tests failed: `oneclick_g4` `g1_control_without_select_and_focus_no_frame_and_no_front` ("a frame without the auto-select": a frame 0.001 s after the first snapshot), `g4_control_without_the_explanation_the_reason_is_not_shown` (`!vp.contains(&reason)`: the viewport shows the pre-launch reason), `oneclick_e2e_g4` `g1b_one_click_from_case_to_picture` ("renders 10 uploads 2"); each alone on the unfixed tree (the copy with d2decfd's `sim.rs`, rebuilt with B4's selection: the same test binaries, `rcfd` and `rcfd-runner` rebuilt) fails at the same assertion ("renders 12 uploads 2" for the last) | pass: 0 failures from the fix; 3 pre-existing |
 | F1 | fmt and clippy clean; `limit_audit.py` 0 hits in the new file | `cargo fmt -p rcfd-api -- --check` clean; `cargo clippy -p rcfd-api --all-targets -- -D warnings` clean; `limit_audit.py` (exit 0): 118 hits in the repository ((i) 23, (ii) 2, (iii) 25, (iv) 68, (v) 0), none in the new file | pass |
 
-**Reported without a limit.** Remainder steps of the existing tests (B4, processes other than the new test file): 119;
-their fraction of the proposed step from 0.1304 to 1 (median 1; 115 within 1e-9 of 1, the ordinary last step a
-rounding hair under dt); 2 below 0.5, both in `w36b_lag_known::p_one_corrector_warning_iff_unstable` (Courant-controlled
-runs, 0.1304 and 0.3333); none below 0.05, so no existing test gets the D4 warning (that test, which reads the run-time
-warnings, sees none); none below 1e-6. Together with B4 (a) this shows that in every process of B4's selection the fixed
-code took the same steps, set the same done flags and handed out the same warnings as the unfixed code. C1: 21.1 s
-(unfixed), 20.6 s (fixed).
+**Reported without a limit.** Remainder steps of the existing tests (B4, processes other than the new test file):
+
+* Number: 119.
+* Fraction of the proposed step: from 0.1304 to 1 (median 1; 115 within 1e-9 of 1, the ordinary last step a rounding
+  hair under dt).
+* Below 0.5: 2, both in `w36b_lag_known::p_one_corrector_warning_iff_unstable` (Courant-controlled runs, 0.1304 and
+  0.3333).
+* Below 0.05: none, so no existing test gets the D4 warning (`w36b_lag_known::p_one_corrector_warning_iff_unstable`,
+  which reads the run-time warnings, sees none).
+* Below 1e-6: none.
+
+Together with B4 (a) this shows that in every process of B4's selection the fixed code took the same steps, set the same
+done flags and handed out the same warnings as the unfixed code. C1: 21.1 s (unfixed), 20.6 s (fixed).
 
 **Found, not fixed: three rcfd-studio tests fail on main's code in B4's scratch copy on this machine.**
 `oneclick_g4::g1_control_without_select_and_focus_no_frame_and_no_front`,
 `oneclick_g4::g4_control_without_the_explanation_the_reason_is_not_shown` and
 `oneclick_e2e_g4::g1b_one_click_from_case_to_picture` (ADR 0141) fail on the unfixed tree (main 0a69af4's code) as on
-the fixed one, alone and in B4, at the same assertions (B4 (b)). Where: the scratch copy `E:\projects\cfd\w48k-probe`
-(its own target folder, TEMP on E:, a GPU present, B4's package selection); not run in the main checkout or in a gate.
-Not investigated (not this job's code). An untested idea: the 48G merges interact (a frame and a second upload before
-the run is selected could come from the mesh preview of ADR 0138). Question 6.
+the fixed one, alone and in B4, at the same assertions (B4 (b)). They ran in the scratch copy
+`E:\projects\cfd\w48k-probe` (its own target folder, TEMP on E:, a GPU present, B4's package selection) and were not run
+in the main checkout or in a gate. They were not investigated (not this job's code). An untested idea: the 48G merges
+interact (a frame and a second upload before the run is selected could come from the mesh preview of ADR 0138). See
+question 6.
 
 **Observations.** The PISO and PISO Courant set-ups give identical states for every variant: with `max_courant = 1e6`
 the legacy controller proposes exactly `solver.dt`, so both paths do the same arithmetic. The largest abs `p` of the
@@ -256,10 +298,10 @@ remainder step did.
 **Deviations.**
 1. Amendment 1: B4's registered command line was rejected by the script's argument parser; corrected with `--` before
    any run of B4.
-2. B4's probe was registered as "one statement added in `fixed_step`"; it was added as a small helper (`w48k_probe`,
+2. B4's probe was registered as "one statement added in `fixed_step`". It was added as a small helper (`w48k_probe`,
    13 lines) and two calls of it, 17 added lines in all (`git diff --no-index --stat` of the scratch copy's `sim.rs`
-   against the fixed commit), written by a Python script because the editing tool works only inside this worktree. It
-   only appends a line to a file when `RCFD_W48K_PROBE` is set; behaviour-neutral, never committed.
+   against the fixed commit). A Python script wrote them, because the editing tool works only inside this worktree. The
+   probe only appends a line to a file when `RCFD_W48K_PROBE` is set; it is behaviour-neutral and was never committed.
 3. D4 says the warning reaches "the Studio's event list". Checked by reading the code, not in the Studio: the run
    service writes every solver event that is not an iteration into `events.jsonl` as a `solver` line
    (`{"solver_seq": n, "solver": <event>}`, `runner.rs`), the Studio parses it as `EventKind::Other` and shows its JSON
@@ -271,10 +313,15 @@ remainder step did.
    `short_last_step` nor the message is visible there. `rcfd run` prints the full message on stderr and the run's
    `events.jsonl` holds it in full (question 5).
 
-**Not run.** The workspace gate over the crates outside B4's selection (they do not link rcfd-api and do not start the
-`rcfd` binary; `rcfd-claude` only had its `fake-claude` built, amendment 2); doc-tests; workspace-wide clippy and fmt
-(`-p rcfd-api` only); Linux (B2 only prints there; the landing, warning and C1 limits do not depend on the platform's
-last bits); the real Studio binary and the "Not in CI" checklist; `cargo deny` (no new dependency).
+**Not run.**
+
+* The workspace gate over the crates outside B4's selection (they do not link rcfd-api and do not start the `rcfd`
+  binary; `rcfd-claude` only had its `fake-claude` built, amendment 2).
+* Doc-tests.
+* Workspace-wide clippy and fmt (`-p rcfd-api` only).
+* Linux (B2 only prints there; the landing, warning and C1 limits do not depend on the platform's last bits).
+* The real Studio binary and the "Not in CI" checklist.
+* `cargo deny` (no new dependency).
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
 
@@ -304,15 +351,20 @@ construction).
    (found by B4, "Found, not fixed"; not run in the main checkout or a gate). Confirm in the next gate, then who looks at
    them: the 48G owner, or a separate job?
 
-Recommendations (addendum): 1 keep 1e-6 (it covers every rounding remainder up to 1.3e5 steps in the worst case and
-changes no deliberate remainder); 2 no check-time rule for now (the run-time warning names the remedy; a new rule
-operator changes the rule output of existing cases, `rules_w19c` E2); 3 yes, use the fraction 1e-6 in place of 1e-9 in
-`store_plan.rs` `ceil_eps`, so the estimate counts the steps the solver takes (one constant, its tests decide); 4 leave
-the compressible engine (explicit steps, no projection to spoil); 5 yes: render a `solver` event whose `solver.event`
-is `warning` as `warning: <message>` in `ui.rs` `event_text` (one match arm), which also makes the field-store and
-pressure-lag warnings readable in the Studio, where today every solver warning shows as cut JSON (deviation 3); 6 a
-separate job with its own registration, starting from the three failing assertions (they fail alone, so they are not
-load effects), before the next Studio merge.
+Recommendations (addendum):
+
+1. Keep 1e-6 (it covers every rounding remainder up to 1.3e5 steps in the worst case and changes no deliberate
+   remainder).
+2. No check-time rule for now (the run-time warning names the remedy; a new rule operator changes the rule output of
+   existing cases, `rules_w19c` E2).
+3. Yes, use the fraction 1e-6 in place of 1e-9 in `store_plan.rs` `ceil_eps`, so the estimate counts the steps the solver
+   takes (one constant, its tests decide).
+4. Leave the compressible engine (explicit steps, no projection to spoil).
+5. Yes: render a `solver` event whose `solver.event` is `warning` as `warning: <message>` in `ui.rs` `event_text` (one
+   match arm), which also makes the field-store and pressure-lag warnings readable in the Studio, where today every
+   solver warning shows as cut JSON (deviation 3).
+6. A separate job with its own registration, starting from the three failing assertions (they fail alone, so they are
+   not load effects), before the next Studio merge.
 
 Decided 2026-10-28: 3 and 5 as recommended, done in
 [ADR 0147](0147-job48m-run-gate-camera-skip-starter-data-files-run-order.md) amendment 3 (checks M9 and M10).

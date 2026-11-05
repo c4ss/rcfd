@@ -3,35 +3,80 @@
 Status: registered before any rcfd run or code change of this wave (this file is committed first; results go into an addendum, limits are never widened).
 Branch main, written at HEAD e2d5e8c.
 
+Wave 33C takes up three items left open by [ADR 0061](0061-wave30c-thermal-turbulence-validation.md),
+[0063](0063-wave31b-turbulence-wall-diagnosis.md) and [0064](0064-wave31c-reference-reading.md): a wall-resolved SST
+log-law slope of 2.78, a Cf(x = 0.97) reported as +3 percent, and Cf below Karman-Schoenherr. It audits
+`crates/rcfd-turb/src/sst.rs` term by term against the NASA TMR SST page, then compares rcfd with TMR flat-plate and
+channel data under limits registered before the runs. Addendum 1, written after the runs, finds no defect in the SST
+implementation and changes no solver behaviour. The published model explains the slope and the Cf deficit, with TMR data
+as evidence. The "+3 percent" is only PARTLY explained: the finest rcfd value is -0.67 percent from the incompressible
+TMR mean, but rcfd's own Richardson value is still +2.3 percent above it. That residual comes from rcfd's low observed
+order (0.66 against about 1.1 to 1.2 for the TMR codes), which is UNRESOLVED. One registered check missed (P2f,
+expected) and two had defective set-ups (S1, P3 half channel). A separate finding in the flow solver is not fixed: a
+`Symmetry` top acts like a no-slip wall in a body-forced half channel.
+
 ## Open items from ADR 0061, 0063, 0064
 
-(1) The wall-resolved SST log-law slope over y+ 50 to 300 measures 2.78 (kappa_eff 0.36) where "1/kappa = 2.44" had been expected.
-(2) Cf(x = 0.97) of the finest rcfd mesh was reported as +3 percent (Richardson value) against the TMR CFL3D value 0.00268299.
-(3) Cf below Karman-Schoenherr (K-S) by 4 to 9 percent with the profile-based Re_theta of ADR 0061; ADR 0063 found the registered Re_theta biased low.
+- (1) The wall-resolved SST log-law slope over y+ 50 to 300 measures 2.78 (kappa_eff 0.36) where "1/kappa = 2.44" had
+  been expected.
+- (2) Cf(x = 0.97) of the finest rcfd mesh was reported as +3 percent (Richardson value) against the TMR CFL3D value
+  0.00268299.
+- (3) Cf below Karman-Schoenherr (K-S) by 4 to 9 percent with the profile-based Re_theta of ADR 0061; ADR 0063 found the
+  registered Re_theta biased low.
+
 ADR 0063 concluded "no defect isolated" but left (1) and (2) "unexplained" and "ambiguous".
 
 ## Sources actually read in full for this wave (curl of the raw HTML, tags stripped, equation images read through their alt text), 2026-10-18
 
-* https://tmbwg.github.io/turbmodels/sst.html (NASA TMR, SST, SST-2003 and variants): all equations, F1, F2, CD floor, limiter, nu_t, constants, BCs. READ IN FULL.
-* https://tmbwg.github.io/turbmodels/flatplate.html (2DZP intro) and flatplate_sst.html (SST-Vm results): READ IN FULL. New facts used here that ADR 0063 did not have:
-  (a) the TMR case is COMPRESSIBLE (M = 0.2): "if you run this case with an incompressible code, your results may be close - but not quite the same - as the grid is refined" (intro page);
-  (b) the page links incompressible SST results at x = 0.97008 (`cf_incomp_results_sstv.dat`) and the CFL3D SST u+(y+) data at x = 0.97008 and 1.90334, Cf(x) of the 545 x 385 grid, and the Cf convergence of CFL3D, FUN3D;
+* https://tmbwg.github.io/turbmodels/sst.html (NASA TMR, SST, SST-2003 and variants): all equations, F1, F2, CD floor,
+  limiter, nu_t, constants, BCs. READ IN FULL.
+* https://tmbwg.github.io/turbmodels/flatplate.html (2DZP intro) and flatplate_sst.html (SST-Vm results): READ IN FULL.
+  New facts used here that ADR 0063 did not have:
+  (a) the TMR case is COMPRESSIBLE (M = 0.2):
+  "if you run this case with an incompressible code, your results may be close - but not quite the same - as the grid is refined"
+  (intro page);
+  (b) the page links incompressible SST results at x = 0.97008 (`cf_incomp_results_sstv.dat`) and the CFL3D SST u+(y+)
+  data at x = 0.97008 and 1.90334, Cf(x) of the 545 x 385 grid, and the Cf convergence of CFL3D, FUN3D;
   (c) the page states that the SST and SST-V/SST-Vm results are nearly identical for this case.
-* https://tmbwg.github.io/turbmodels/channelflow_val.html and channelflow_val_sst.html (TMR 2DFDC, fully developed channel at Re 80 million, SSTm, CFL3D 161 x 513): READ IN FULL (text and links; plots only as alt text). The page states: "the value of kappa produced by this turbulence model is close to 0.410 over much of the log layer" (Karman measure KM). Data file `sst_u+y+KM_cfl3d.dat` downloaded.
-* Data files downloaded and used (public, CC0 repository TMBWG/turbmodels via the page links): `flatplate_u+y+_sstv.dat`, `cf_plate_sstv.dat`, `cf_convergence_sstv.dat`, `cf_incomp_results_sstv.dat`, `sst_u+y+KM_cfl3d.dat`.
-NOT read: Menter (1994) AIAA J. 32:1598, Menter, Kuntz, Langtry (2003), Wilcox (2006), Menter (1992) NASA TM 103975, Menter (1993) AIAA 93-2906. Everything attributed to them below is as transcribed on the TMR SST page (those papers are UNVERIFIED as primary text). The TMR plots (images) were not seen, only their data files.
+* https://tmbwg.github.io/turbmodels/channelflow_val.html and channelflow_val_sst.html (TMR 2DFDC, fully developed
+  channel at Re 80 million, SSTm, CFL3D 161 x 513): READ IN FULL (text and links; plots only as alt text). The page
+  states: "the value of kappa produced by this turbulence model is close to 0.410 over much of the log layer" (Karman
+  measure KM). Data file `sst_u+y+KM_cfl3d.dat` downloaded.
+* Data files downloaded and used (public, CC0 repository TMBWG/turbmodels via the page links):
+  `flatplate_u+y+_sstv.dat`, `cf_plate_sstv.dat`, `cf_convergence_sstv.dat`, `cf_incomp_results_sstv.dat`,
+  `sst_u+y+KM_cfl3d.dat`.
 
-Pre-registration disclosure: before this ADR was written I processed the downloaded reference tables (not rcfd output) and know the following reference-side facts, which motivate checks P2 and P3 below:
-* TMR SST data, log fit of u+ versus ln y+ over y+ 50 to 300: slope 2.7784 at x = 0.97008 and 2.7447 at x = 1.90334 (kappa_eff 0.360 and 0.364); local slope y+ du+/dy+ 2.79 at y+ 100, 2.71 at 200, 2.74 at 300 (x = 0.97008). rcfd (ADR 0063) measured 2.7766 on the same window.
-* TMR channel SST (CFL3D), Karman measure: 0.366 at y+ 100, 0.395 at 316, 0.406 at 994, a plateau of 0.409 to 0.410 for y+ about 3000 to 10000; log fit of u+ over 50 to 300 gives slope 2.693 (kappa_eff 0.371), over 300 to 3000 slope 2.469, over 1000 to 10000 slope 2.443.
-  So the expectation 1/kappa = 2.44 holds only for y+ > about 1000; the window 50 to 300 sits in the model's own approach to its log layer.
-* TMR incompressible SST Cf(x = 0.97008) on the 545 x 385 grid: FUN3D 2.71736e-3, SC/Tetra 2.72119e-3, GHOST 2.71085e-3 (mean 2.71647e-3), against compressible CFL3D 2.69085e-3: the compressible reference is 0.95 percent below the incompressible one.
-* TMR CFL3D Cf(x) with Re_theta = int_0^x Cf/2 dx (trapezoid, Re = 5e6 per unit length, nu = 2e-7) compared with K-S at the same Re_theta: -3.61, -2.76, -2.16, -1.69 percent at Re_theta 5000, 7500, 10000, 12500 (x = 0.582, 0.940, 1.320, 1.715).
-These are literature facts; no rcfd result of this wave was seen when the limits below were written. The earlier rcfd numbers from ADR 0063 are known to me (finest baseline Cf(0.97) 2.6984e-3, coarse/medium 2.5770/2.6514e-3, slope 2.7766, observed order 0.66) and the limits below were written knowing them; where a limit is expected to be missed because of them it is said so.
+NOT read: Menter (1994) AIAA J. 32:1598, Menter, Kuntz, Langtry (2003), Wilcox (2006), Menter (1992) NASA TM 103975,
+Menter (1993) AIAA 93-2906. Everything attributed to them below is as transcribed on the TMR SST page (those papers are
+UNVERIFIED as primary text). The TMR plots (images) were not seen, only their data files.
+
+Pre-registration disclosure: before this ADR was written I processed the downloaded reference tables (not rcfd output)
+and know the following reference-side facts, which motivate checks P2 and P3 below:
+* TMR SST data, log fit of u+ versus ln y+ over y+ 50 to 300: slope 2.7784 at x = 0.97008 and 2.7447 at x = 1.90334
+  (kappa_eff 0.360 and 0.364); local slope y+ du+/dy+ 2.79 at y+ 100, 2.71 at 200, 2.74 at 300 (x = 0.97008). rcfd
+  (ADR 0063) measured 2.7766 on the same window.
+* TMR channel SST (CFL3D), Karman measure: 0.366 at y+ 100, 0.395 at 316, 0.406 at 994, a plateau of 0.409 to 0.410 for
+  y+ about 3000 to 10000; log fit of u+ over 50 to 300 gives slope 2.693 (kappa_eff 0.371), over 300 to 3000 slope
+  2.469, over 1000 to 10000 slope 2.443.
+  So the expectation 1/kappa = 2.44 holds only for y+ > about 1000; the window 50 to 300 sits in the model's own
+  approach to its log layer.
+* TMR incompressible SST Cf(x = 0.97008) on the 545 x 385 grid: FUN3D 2.71736e-3, SC/Tetra 2.72119e-3, GHOST 2.71085e-3
+  (mean 2.71647e-3), against compressible CFL3D 2.69085e-3: the compressible reference is 0.95 percent below the
+  incompressible one.
+* TMR CFL3D Cf(x) with Re_theta = int_0^x Cf/2 dx (trapezoid, Re = 5e6 per unit length, nu = 2e-7) compared with K-S at
+  the same Re_theta: -3.61, -2.76, -2.16, -1.69 percent at Re_theta 5000, 7500, 10000, 12500 (x = 0.582, 0.940, 1.320,
+  1.715).
+
+These are literature facts; no rcfd result of this wave was seen when the limits below were written. The earlier rcfd
+numbers from ADR 0063 are known to me (finest baseline Cf(0.97) 2.6984e-3, coarse/medium 2.5770/2.6514e-3, slope 2.7766,
+observed order 0.66) and the limits below were written knowing them; where a limit is expected to be missed because of
+them it is said so.
 
 ## Part 1: term-by-term audit of `crates/rcfd-turb/src/sst.rs` against sst.html (SST-2003 branch), as unit tests
 
-The audit reading (before the tests) finds the following correspondences with the TMR text; each is then pinned by a test with hand-computed values (computed independently of the code with a separate script; relative tolerance 1e-12 unless stated):
+The audit reading (before the tests) finds the following correspondences with the TMR text; each is then pinned by a
+test with hand-computed values (computed independently of the code with a separate script; relative tolerance 1e-12
+unless stated):
 
 | term | TMR (sst.html) | rcfd | test (in `sst.rs` `mod tests`, names `w33c_*`) |
 |------|----------------|------|--------|
@@ -47,80 +92,266 @@ The audit reading (before the tests) finds the following correspondences with th
 | diffusivities | mu + sigma_k mu_t, mu + sigma_w mu_t with the blended sigmas | `gam_k`, `gam_w` | covered by the mix test |
 | wall BC for w | w_wall = 10 * 6 nu/(beta1 (Delta d1)^2), k_wall = 0 | omega face value from `dn` (centre-to-face distance = first-cell centre distance on a planar wall) | on a graded box: face value equals 60 nu/(0.075 dn^2) (hand value 1.6e6 for nu 2e-7, dn 1e-5); `LowRe` sets k = 0 on the wall face, `Automatic` zero gradient |
 
-rcfd-only additions (not in sst.html, documented, not defects): the Spalding-law wall shear, strain and production override and the omega fixing in the wall cell for y+ > 5 (`SstWallMode::Automatic`, default; ADR 0063 HA3: moves Cf by < 0.1 percent), k zero gradient at the wall in `Automatic`, the cap nu_t <= 1e5 nu, first-order upwind k and w convection (the TMR CFL3D and FUN3D runs also use first-order upwinding for the turbulence advection, flatplate_sst.html), and the stored nu_t under-relaxation.
+rcfd-only additions (not in sst.html, documented, not defects):
 
-Resolved-wall behaviour (y+ about 1), derived from the model equations, tested on the Re_tau = 395 channel mesh of `channel_sst.rs` (60 cells, first cell centre y+ = 1) in `LowRe` mode:
-* the sublayer solution of nu w'' = beta1 w^2 is w = 6 nu/(beta1 y^2); the sublayer solution of nu k'' = beta* w k with that w and P negligible is k ~ y^n with n(n-1) = 6 beta*/beta1 = 7.2, n = 3.2295 (derived here, not taken from a reference).
-  Limits: (S1) cell-centre w divided by 6 nu/(beta1 y^2) lies in [0.75, 1.5] for the first four cell centres; (S2) the least-squares slope of ln k over ln y between the cells with y+ in [1, 4] lies in [2.6, 3.9]. (The limits are wide because the discrete cells at y+ 1 to 4 are not asymptotic; HA1 of ADR 0063 had w/analytic 0.86 to 1.43 on a y+ = 0.25 plate mesh.)
+- the Spalding-law wall shear, strain and production override and the omega fixing in the wall cell for y+ > 5
+  (`SstWallMode::Automatic`, default; ADR 0063 HA3: moves Cf by < 0.1 percent)
+- k zero gradient at the wall in `Automatic`
+- the cap nu_t <= 1e5 nu
+- first-order upwind k and w convection (the TMR CFL3D and FUN3D runs also use first-order upwinding for the turbulence
+  advection, flatplate_sst.html)
+- the stored nu_t under-relaxation
 
-Decision rule P1: all term tests pass -> "no term-level defect against sst.html". A failing term test is a candidate defect; it is fixed only after the hand value is re-derived from sst.html, and the fix is opt-in if any baseline moves (baseline hashes are never re-recorded).
+Resolved-wall behaviour (y+ about 1), derived from the model equations, tested on the Re_tau = 395 channel mesh of
+`channel_sst.rs` (60 cells, first cell centre y+ = 1) in `LowRe` mode:
+* the sublayer solution of nu w'' = beta1 w^2 is w = 6 nu/(beta1 y^2); the sublayer solution of nu k'' = beta* w k with
+  that w and P negligible is k ~ y^n with n(n-1) = 6 beta*/beta1 = 7.2, n = 3.2295 (derived here, not taken from a
+  reference).
+* Limits: (S1) cell-centre w divided by 6 nu/(beta1 y^2) lies in [0.75, 1.5] for the first four cell centres; (S2) the
+  least-squares slope of ln k over ln y between the cells with y+ in [1, 4] lies in [2.6, 3.9]. (The limits are wide
+  because the discrete cells at y+ 1 to 4 are not asymptotic; HA1 of ADR 0063 had w/analytic 0.86 to 1.43 on a y+ = 0.25
+  plate mesh.)
+
+Decision rule P1: all term tests pass -> "no term-level defect against sst.html". A failing term test is a candidate
+defect; it is fixed only after the hand value is re-derived from sst.html, and the fix is opt-in if any baseline moves
+(baseline hashes are never re-recorded).
 
 ## Part 2: flat plate (TMR 2DZP), stated set-up, mesh sequence and limits (new file `crates/rcfd-turb/tests/validation_w33c_sst_plate.rs`, heavy, `#[ignore]`)
 
-Set-up: exactly the runner of `validation_flat_plate_wall_law.rs` (U = 1, nu = 2e-7, plate x in [0, 2], height 1, symmetry top, Dirichlet inlet k = 2.25e-7, omega = 125 (TMR: 1.125 U^2/Re_L and 125 U/L), SimpleC, linear upwind momentum, first-order upwind k and omega, `Automatic` wall mode, convergence du < 1e-9 and nu_t change < 1e-6, max 14000 iterations). A copy of the runner is made in the new test file; no shared test code is edited.
-Mesh sequence (refinement ratio 2 in both directions, y+ of the first cell 1, 0.5, 0.25 at x = 2): 70 x 55, 140 x 110, 280 x 220 (the meshes of ADR 0061). Each run once; no re-runs to select a set-up.
-Definitions (fixed now): Cf(x) = 2 tau_w/ue^2 from the wall cell columns as in the runner, interpolated linearly in x between column centres; x_ref = 0.970084; Re_theta^M(x) = U int_0^x (Cf/2) dx'/nu by the trapezoid over the column centres from x = 0, plus the rectangle from 0 to the first column centre (the same formula applied to the TMR CFL3D curve gives the deviations above); u+ = u/u_tau with u_tau = sqrt(tau_w), from the column nearest x_ref; log fit by least squares of u+ against ln y+ over the cell centres with y+ in [50, 300]; the TMR u+ is interpolated linearly in ln y+.
+Set-up: exactly the runner of `validation_flat_plate_wall_law.rs` (U = 1, nu = 2e-7, plate x in [0, 2], height 1,
+symmetry top, Dirichlet inlet k = 2.25e-7, omega = 125 (TMR: 1.125 U^2/Re_L and 125 U/L), SimpleC, linear upwind
+momentum, first-order upwind k and omega, `Automatic` wall mode, convergence du < 1e-9 and nu_t change < 1e-6, max 14000
+iterations). A copy of the runner is made in the new test file; no shared test code is edited.
 
-Registered checks on the FINEST mesh unless stated (references vendored in `validation-data/reference/w33c_*.csv`, manifest entries `w33c-*`):
-* P2a Cf(x_ref) within 2.0 percent of the mean of the three incompressible TMR codes on the 545 x 385 grid, 2.71647e-3 (range 2.7108 to 2.7212e-3). (Informative, no limit: against CFL3D compressible 2.69085e-3.)
-* P2b Cf(x) within 3.0 percent of the TMR CFL3D 545 x 385 curve (compressible) at x = 0.5, 1.0, 1.5, 1.8 (1 percent compressibility plus 2 percent).
-* P2c log-law slope (fit y+ 50 to 300, column nearest x_ref) within 3.0 percent of the same fit of the TMR CFL3D SST data at x = 0.97008, 2.7784 (i.e. [2.695, 2.862]).
-* P2d u+ at y+ = 30, 50, 100, 200, 300, 600 within 3.0 percent of the TMR SST data at x = 0.97008, and at y+ = 5, 10, 15 within 5.0 percent.
-* P2e Cf versus K-S at Re_theta^M = 5000, 7500, 10000, 12500: the deviation (percent) differs from the TMR CFL3D deviation (-3.61, -2.76, -2.16, -1.69) by at most 1.5 percentage points.
-* P2f Grid convergence of Cf(x_ref) over the three meshes: monotone convergence, observed order p from (Cf_m - Cf_c)/(Cf_f - Cf_m) with r = 2 in [0.8, 2.5], GCI_fine (safety factor 1.25) at most 3.0 percent, and |Cf_f - Cf_m|/Cf_f at most 1.5 percent. The TMR CFL3D sequence itself has p = 1.21 and GCI 0.28 percent at 4 to 16 times more cells; first-order upwind turbulence convection gives a formal order 1. EXPECTED MISS of p and of the 1.5 percent difference from the ADR 0063 numbers (p 0.66; (2.6984 - 2.6514)/2.6984 = 1.74 percent); registered anyway, to be reported as a known miss with the limit unchanged.
+Mesh sequence (refinement ratio 2 in both directions, y+ of the first cell 1, 0.5, 0.25 at x = 2): 70 x 55, 140 x 110,
+280 x 220 (the meshes of ADR 0061). Each run once; no re-runs to select a set-up.
+
+Definitions (fixed now):
+
+- Cf(x) = 2 tau_w/ue^2 from the wall cell columns as in the runner, interpolated linearly in x between column centres
+- x_ref = 0.970084
+- Re_theta^M(x) = U int_0^x (Cf/2) dx'/nu by the trapezoid over the column centres from x = 0, plus the rectangle from 0
+  to the first column centre (the same formula applied to the TMR CFL3D curve gives the deviations above)
+- u+ = u/u_tau with u_tau = sqrt(tau_w), from the column nearest x_ref
+- log fit by least squares of u+ against ln y+ over the cell centres with y+ in [50, 300]
+- the TMR u+ is interpolated linearly in ln y+
+
+Registered checks on the FINEST mesh unless stated (references vendored in `validation-data/reference/w33c_*.csv`,
+manifest entries `w33c-*`):
+* P2a Cf(x_ref) within 2.0 percent of the mean of the three incompressible TMR codes on the 545 x 385 grid, 2.71647e-3
+  (range 2.7108 to 2.7212e-3). (Informative, no limit: against CFL3D compressible 2.69085e-3.)
+* P2b Cf(x) within 3.0 percent of the TMR CFL3D 545 x 385 curve (compressible) at x = 0.5, 1.0, 1.5, 1.8 (1 percent
+  compressibility plus 2 percent).
+* P2c log-law slope (fit y+ 50 to 300, column nearest x_ref) within 3.0 percent of the same fit of the TMR CFL3D SST
+  data at x = 0.97008, 2.7784 (i.e. [2.695, 2.862]).
+* P2d u+ at y+ = 30, 50, 100, 200, 300, 600 within 3.0 percent of the TMR SST data at x = 0.97008, and at y+ = 5, 10, 15
+  within 5.0 percent.
+* P2e Cf versus K-S at Re_theta^M = 5000, 7500, 10000, 12500: the deviation (percent) differs from the TMR CFL3D
+  deviation (-3.61, -2.76, -2.16, -1.69) by at most 1.5 percentage points.
+* P2f Grid convergence of Cf(x_ref) over the three meshes: monotone convergence, observed order p from (Cf_m -
+  Cf_c)/(Cf_f - Cf_m) with r = 2 in [0.8, 2.5], GCI_fine (safety factor 1.25) at most 3.0 percent, and |Cf_f -
+  Cf_m|/Cf_f at most 1.5 percent. The TMR CFL3D sequence itself has p = 1.21 and GCI 0.28 percent at 4 to 16 times more
+  cells; first-order upwind turbulence convection gives a formal order 1. EXPECTED MISS of p and of the 1.5 percent
+  difference from the ADR 0063 numbers (p 0.66; (2.6984 - 2.6514)/2.6984 = 1.74 percent); registered anyway, to be
+  reported as a known miss with the limit unchanged.
 * P2g Log-law slope, Cf and u+ on the coarse and medium meshes are reported (no limits) next to the finest.
+
 Informational only (no limit): the slope and KM of the TMR plate profile versus rcfd at y+ 100, 200, 300.
 
-Decision rule P2: if P2a, P2c, P2d and P2e hold, the 2.78 slope and the Cf deficit against K-S are declared to be the behaviour of the published model, reproduced by an independent code (TMR CFL3D/FUN3D), and no defect is claimed. A miss of any of them leaves the item open and is reported as such (known-miss test, limit unchanged).
+Decision rule P2: if P2a, P2c, P2d and P2e hold, the 2.78 slope and the Cf deficit against K-S are declared to be the
+behaviour of the published model, reproduced by an independent code (TMR CFL3D/FUN3D), and no defect is claimed. A miss
+of any of them leaves the item open and is reported as such (known-miss test, limit unchanged).
 
 ## Part 3: log layer without convection or pressure gradient (TMR 2DFDC SST), new file `crates/rcfd-turb/tests/validation_w33c_sst_wall_layer.rs`
 
-Set-up: half channel of height 1 (symmetry plane at the top, wall at the bottom), 4 cells in x periodic, uniform body force 1 (u_tau = 1 exactly), Re_tau = 1e6 (nu = 1e-6), 150 cells in y with first cell centre at y+ = 1 (first cell height 2e-6) and growth 1.1 to the end of the layers, uniform beyond; `Automatic` wall mode; initial U = 20, k = 1, omega = k/(10 nu); converged to du < 1e-9 and nu_t change < 1e-8 (max 40000 iterations). If this mesh does not fit the generator (layers beyond the height), the layer count is reduced and the mesh printed; the check below is unchanged.
-Karman measure KM = 1/(y+ du+/dy+) from central differences of the cell data in ln y+ (the cell data are u+ at cell centres).
-* P3a KM within 0.02 (absolute) of the TMR CFL3D channel SST data (`w33c_tmr_sst_channel_km_cfl3d.csv`, interpolated linearly in log10 y+) at y+ = 100, 316, 1000, 3000, 10000. (The TMR run is compressible at Re 8e7 based on the height, Re_tau of order 1e6; with Re_tau = 1e6 the y/h correction at y+ 1e4 is 1 percent.)
-* P3b the log-law slope over y+ 50 to 300 within 4.0 percent of the TMR channel SST data fit over the same window, 2.693; and over 1000 to 10000 within 3.0 percent of 2.443.
-This part contains no convection of turbulence quantities and no streamwise pressure gradient. Decision rule P3: if P3a and P3b hold, rcfd reproduces the model's own approach to kappa = 0.41 as published, so 1/kappa = 2.44 is not the expectation for y+ 50 to 300 in any SST computation; the plate/channel slope difference (2.78 versus 2.69 in the TMR data, 3 percent) is a boundary-layer versus channel effect of the model.
+Set-up: half channel of height 1 (symmetry plane at the top, wall at the bottom), 4 cells in x periodic, uniform body
+force 1 (u_tau = 1 exactly), Re_tau = 1e6 (nu = 1e-6), 150 cells in y with first cell centre at y+ = 1 (first cell
+height 2e-6) and growth 1.1 to the end of the layers, uniform beyond; `Automatic` wall mode; initial U = 20, k = 1,
+omega = k/(10 nu); converged to du < 1e-9 and nu_t change < 1e-8 (max 40000 iterations). If this mesh does not fit the
+generator (layers beyond the height), the layer count is reduced and the mesh printed; the check below is unchanged.
+
+Karman measure KM = 1/(y+ du+/dy+) from central differences of the cell data in ln y+ (the cell data are u+ at cell
+centres).
+
+* P3a KM within 0.02 (absolute) of the TMR CFL3D channel SST data (`w33c_tmr_sst_channel_km_cfl3d.csv`, interpolated
+  linearly in log10 y+) at y+ = 100, 316, 1000, 3000, 10000. (The TMR run is compressible at Re 8e7 based on the height,
+  Re_tau of order 1e6; with Re_tau = 1e6 the y/h correction at y+ 1e4 is 1 percent.)
+* P3b the log-law slope over y+ 50 to 300 within 4.0 percent of the TMR channel SST data fit over the same window,
+  2.693; and over 1000 to 10000 within 3.0 percent of 2.443.
+
+This part contains no convection of turbulence quantities and no streamwise pressure gradient.
+
+Decision rule P3: if P3a and P3b hold, rcfd reproduces the model's own approach to kappa = 0.41 as published, so 1/kappa
+= 2.44 is not the expectation for y+ 50 to 300 in any SST computation; the plate/channel slope difference (2.78 versus
+2.69 in the TMR data, 3 percent) is a boundary-layer versus channel effect of the model.
 
 ## Part 4: process
 
-* Opt-in rule: any code change is a new default-off option; the pure-function extraction in `sst.rs` is bit-identical arithmetic (checked by the existing flat-plate/channel/api tests and `baseline_hashes` unchanged).
-* Heavy tests are `#[ignore]` with the limit in the doc comment; a miss becomes `*_known_miss`; the plate meshes are run once.
-* Files touched: `crates/rcfd-turb/src/sst.rs` (helpers and tests), two new test files, four `validation-data/reference/w33c_*.csv` and their manifest entries, this ADR, `docs/reference-data.md` only if a line is needed. No shared file (schema.rs, lib.rs, sim.rs, main.rs) is touched.
+* Opt-in rule: any code change is a new default-off option; the pure-function extraction in `sst.rs` is bit-identical
+  arithmetic (checked by the existing flat-plate/channel/api tests and `baseline_hashes` unchanged).
+* Heavy tests are `#[ignore]` with the limit in the doc comment; a miss becomes `*_known_miss`; the plate meshes are run
+  once.
+* Files touched: `crates/rcfd-turb/src/sst.rs` (helpers and tests), two new test files, four
+  `validation-data/reference/w33c_*.csv` and their manifest entries, this ADR, `docs/reference-data.md` only if a line
+  is needed. No shared file (schema.rs, lib.rs, sim.rs, main.rs) is touched.
 
 ## Addendum 1 (results; written after the runs, limits above untouched)
 
-Outcome: no defect was found in the SST implementation and no solver behaviour was changed (the only edit of `sst.rs` is a bit-identical extraction of six pure helpers plus tests; `baseline_hashes` untouched). Two of the three open items are explained by the published model with TMR data as evidence: the 2.78 log-law slope over y+ 50 to 300 is what the SST model produces in the TMR CFL3D results too (2.7784 on the plate, 2.693 in the high-Re channel; 1/0.41 holds only above y+ about 1000), and the Cf deficit against Karman-Schoenherr (-2.4 ... -1.8 percent at the finest, -3.6 ... -1.7 percent in the TMR CFL3D curve itself). The third, the "+3 percent" of Cf(x = 0.97), is only PARTLY explained: the finest rcfd value is -0.67 percent from the like-for-like incompressible TMR mean (compressibility of the TMR reference accounts for about 1 point of the earlier comparison), but the Richardson extrapolation of rcfd's own sequence is still +2.3 percent above it, and that residual comes from rcfd's low observed order (0.66 against about 1.1 to 1.2 for the TMR codes), which is UNRESOLVED and not shown to be the published model's behaviour. One registered check missed (P2f, expected), two had defective set-ups (S1, P3 half channel), and a separate finding in the flow solver was made (Symmetry top acts like a no-slip wall in a body-forced half channel, below).
+Outcome: the wave found no defect in the SST implementation and changed no solver behaviour. The only edit of `sst.rs`
+is a bit-identical extraction of six pure helpers plus tests, and `baseline_hashes` is untouched.
+
+The published model explains two of the three open items, with TMR data as evidence:
+
+- The 2.78 log-law slope over y+ 50 to 300 is what the SST model produces in the TMR CFL3D results too (2.7784 on the
+  plate, 2.693 in the high-Re channel; 1/0.41 holds only above y+ about 1000).
+- The Cf deficit against Karman-Schoenherr is -2.4 ... -1.8 percent at the finest and -3.6 ... -1.7 percent in the TMR
+  CFL3D curve itself.
+
+The third, the "+3 percent" of Cf(x = 0.97), is only PARTLY explained. The finest rcfd value is -0.67 percent from the
+like-for-like incompressible TMR mean, and compressibility of the TMR reference accounts for about 1 point of the
+earlier comparison. The Richardson extrapolation of rcfd's own sequence is still +2.3 percent above that mean. That
+residual comes from rcfd's low observed order (0.66 against about 1.1 to 1.2 for the TMR codes), which is UNRESOLVED and
+not shown to be the published model's behaviour.
+
+One registered check missed (P2f, expected) and two had defective set-ups (S1, P3 half channel). The wave also made a
+separate finding in the flow solver: a Symmetry top acts like a no-slip wall in a body-forced half channel (below).
 
 ### Part 1: term audit (unit tests in `sst.rs`, all pass)
 
-`cargo test --release -p rcfd-turb --lib sst`: 12 passed (2 pre-existing, 10 new `w33c_*`): constants equal the TMR table exactly; model kappa from the constants 0.408248290463863 (set 1) and 0.410151556214798 (set 2) reproduced; BSL gamma 0.5531666666666668 / 0.4403546666666667; constant blending at F1 = 0.3; F1 for all four registered states (first branch, 500 nu/(d^2 w) branch, CD branch, negative CD floored at 1e-10); F2 for three states; cross-diffusion 0.013696 and its explicit/implicit split (implicit coefficient never negative); strain magnitude S = g for shear, 2a for plane strain, 0 for solid-body rotation; nu_t on both branches of the a1 limiter; production limiter on both branches; w_wall = 1.6e6 for nu 2e-7, y 1e-5 both from the helper and from the field on a graded mesh; `LowRe` k = 0 and `Automatic` zero gradient on the wall face. All hand values matched to 1e-12 relative. Decision rule P1: no term-level defect against sst.html.
-Wording correction (disclosed): the table as first committed said "source + implicit coefficient times w equals the term"; the correct identity is source - coefficient * w = term (the coefficient is added to the diagonal and is a sink for a negative term). The test uses the correct identity; the code was not changed by this.
+`cargo test --release -p rcfd-turb --lib sst`: 12 passed (2 pre-existing, 10 new `w33c_*`). All hand values matched to
+1e-12 relative. Decision rule P1: no term-level defect against sst.html.
+
+The tests cover:
+
+- constants equal to the TMR table exactly
+- model kappa from the constants, 0.408248290463863 (set 1) and 0.410151556214798 (set 2), reproduced
+- BSL gamma 0.5531666666666668 / 0.4403546666666667
+- constant blending at F1 = 0.3
+- F1 for all four registered states (first branch, 500 nu/(d^2 w) branch, CD branch, negative CD floored at 1e-10)
+- F2 for three states
+- cross-diffusion 0.013696 and its explicit/implicit split (implicit coefficient never negative)
+- strain magnitude S = g for shear, 2a for plane strain, 0 for solid-body rotation
+- nu_t on both branches of the a1 limiter
+- production limiter on both branches
+- w_wall = 1.6e6 for nu 2e-7, y 1e-5 both from the helper and from the field on a graded mesh
+- `LowRe` k = 0 and `Automatic` zero gradient on the wall face
+
+Wording correction (disclosed): the table as first committed said
+"source + implicit coefficient times w equals the term"; the correct identity is source - coefficient * w = term (the
+coefficient is added to the diagonal and is a sink for a negative term). The test uses the correct identity; the code
+was not changed by this.
 
 ### Sublayer (S1, S2), `validation_w33c_sst_wall_layer.rs`, Re_tau 395, 60 cells, `LowRe`, 5953 iterations, converged to du 1e-9
 * omega / (6 nu/(beta1 y^2)): 0.857 (y+ 1.0), 1.467 (3.1), 1.626 (5.4), 1.927 (8.0), 2.30 (10.7), 2.69 (13.8).
-* S1 as registered (first four cell centres in [0.75, 1.5]): MISS at cells 2 and 3 (1.626, 1.927). Cause: DEFECTIVE SET-UP of mine, the analytic sublayer solution is only valid for y+ below about 4 while the registered cells reach y+ 8. The registered test is kept as `w33c_sst_sublayer_omega_first_four_cells_known_miss` (ignored, limit unchanged) and a NEW corrected test applies the same limits to the cells with y+ <= 4 (cells at y+ 1.0 and 3.1: 0.857 and 1.467, PASS, the second with only 2.2 percent margin). The correction was decided after seeing the values.
-* S2: exponent of k over the cells with y+ in [0.9, 4]: only two cells (y+ 1.0 and 3.1) fall in the range, slope 2.974 (derived 3.2295), inside [2.6, 3.9]: PASS (a two-point slope; weak evidence, reported as such).
+* S1 as registered (first four cell centres in [0.75, 1.5]): MISS at cells 2 and 3 (1.626, 1.927). Cause: DEFECTIVE
+  SET-UP of mine: the analytic sublayer solution is only valid for y+ below about 4, while the registered cells reach
+  y+ 8. The registered test is kept as `w33c_sst_sublayer_omega_first_four_cells_known_miss` (ignored, limit unchanged).
+  A NEW corrected test applies the same limits to the cells with y+ <= 4 (cells at y+ 1.0 and 3.1: 0.857 and 1.467,
+  PASS, the second with only 2.2 percent margin). The correction was decided after seeing the values.
+* S2: exponent of k over the cells with y+ in [0.9, 4]: only two cells (y+ 1.0 and 3.1) fall in the range, slope 2.974
+  (derived 3.2295), inside [2.6, 3.9]: PASS (a two-point slope; weak evidence, reported as such).
 
 ### Part 3: channel (P3a, P3b), Re_tau = 1e6, `Automatic`
-Registered run (half channel, symmetry top, 150 cells, 40000-iteration cap) executed once: 5606 iterations, du 1.0e-9, "converged", but wrong: KM 1.0716 / 1.3352 / 1.4560 / 1.5265 / 1.9113 at y+ 100 / 316 / 1000 / 3000 / 10000 (TMR 0.3664 ... 0.4094, limit 0.02: MISS at all five), slopes 0.9006 (50 to 300) and 0.6456 (1000 to 10000) against 2.693 and 2.443: MISS. Cause: DEFECTIVE SET-UP, see the Symmetry finding below; kept as `w33c_sst_channel_karman_measure_half_channel_known_miss` (ignored, limits unchanged). A NEW test with the proven full-channel configuration of `channel_sst.rs` replaces it (`w33c_sst_channel_karman_measure_full_channel`): height 2, walls at both sides, 300 cells (150 per half, 100 growth-1.1 layers, first cell centre y+ 1), iteration cap 250000. Converged at 58532 iterations (du 1.0e-9, change 4.3e-11); initial state as registered. Results (limits as registered):
-Karman measure (rcfd / TMR CFL3D / difference): y+ 100 0.3566 / 0.3664 / -0.0098; 316 0.3881 / 0.3948 / -0.0067; 1000 0.4003 / 0.4060 / -0.0057; 3000 0.4043 / 0.4097 / -0.0054; 10000 0.4040 / 0.4094 / -0.0054. P3a (within 0.02): PASS. Slopes of u+ against ln y+: 50 to 300 rcfd 2.7628 vs registered 2.693 (+2.6 percent, limit 4): PASS; 1000 to 10000 rcfd 2.4759 vs 2.443 (+1.3 percent, limit 3): PASS. rcfd KM is systematically 0.005 to 0.010 (1.3 to 2.7 percent) below the compressible TMR value; not attributed.
-Decision rule P3 satisfied: the slope 1/0.41 is only reached above y+ of about 1000, in rcfd and in the published results alike; the window 50 to 300 has slope 2.69 to 2.76 in a channel and 2.78 on the plate (TMR plate/channel ratio 1.032).
+The registered run (half channel, symmetry top, 150 cells, 40000-iteration cap) executed once: 5606 iterations, du
+1.0e-9, "converged", but wrong. KM was 1.0716 / 1.3352 / 1.4560 / 1.5265 / 1.9113 at y+ 100 / 316 / 1000 / 3000 / 10000
+(TMR 0.3664 ... 0.4094, limit 0.02: MISS at all five). Slopes were 0.9006 (50 to 300) and 0.6456 (1000 to 10000) against
+2.693 and 2.443: MISS. Cause: DEFECTIVE SET-UP, see the Symmetry finding below. The test is kept as
+`w33c_sst_channel_karman_measure_half_channel_known_miss` (ignored, limits unchanged).
+
+A NEW test with the proven full-channel configuration of `channel_sst.rs` replaces it
+(`w33c_sst_channel_karman_measure_full_channel`): height 2, walls at both sides, 300 cells (150 per half, 100 growth-1.1
+layers, first cell centre y+ 1), iteration cap 250000. It converged at 58532 iterations (du 1.0e-9, change 4.3e-11),
+with the initial state as registered. Results (limits as registered):
+
+| y+ | Karman measure, rcfd | Karman measure, TMR CFL3D | difference |
+|---|---|---|---|
+| 100 | 0.3566 | 0.3664 | -0.0098 |
+| 316 | 0.3881 | 0.3948 | -0.0067 |
+| 1000 | 0.4003 | 0.4060 | -0.0057 |
+| 3000 | 0.4043 | 0.4097 | -0.0054 |
+| 10000 | 0.4040 | 0.4094 | -0.0054 |
+
+P3a (within 0.02): PASS. Slopes of u+ against ln y+: 50 to 300 rcfd 2.7628 vs registered 2.693 (+2.6 percent, limit 4):
+PASS; 1000 to 10000 rcfd 2.4759 vs 2.443 (+1.3 percent, limit 3): PASS. rcfd KM is systematically 0.005 to 0.010 (1.3 to
+2.7 percent) below the compressible TMR value; not attributed.
+
+Decision rule P3 satisfied: the slope 1/0.41 is only reached above y+ of about 1000, in rcfd and in the published
+results alike; the window 50 to 300 has slope 2.69 to 2.76 in a channel and 2.78 on the plate (TMR plate/channel ratio
+1.032).
 
 ### Part 2: flat plate (one run of the three meshes, six tests in one process)
-Runs: coarse 1249 iterations (12 s), medium 1989 (109 s), finest 6805 (1724 s), all converged (du <= 1e-9, change <= 3.1e-8).
-* P2a Cf(0.970084) vs the mean of the incompressible codes 2.71647e-3: coarse 2.5770e-3 (-5.14 percent), medium 2.6514e-3 (-2.40), finest 2.6984e-3 (-0.67): PASS (limit 2 percent on the finest). Against the compressible CFL3D 2.69085e-3: -4.23, -1.47, +0.28 percent. So the "+3 percent" of ADR 0063 was the Richardson extrapolation of rcfd (2.779e-3) against the compressible reference; the finest rcfd value itself is within 0.7 percent of the like-for-like reference.
+Runs: coarse 1249 iterations (12 s), medium 1989 (109 s), finest 6805 (1724 s), all converged (du <= 1e-9, change <=
+3.1e-8).
+
+* P2a Cf(0.970084) vs the mean of the incompressible codes 2.71647e-3: coarse 2.5770e-3 (-5.14 percent), medium
+  2.6514e-3 (-2.40), finest 2.6984e-3 (-0.67): PASS (limit 2 percent on the finest). Against the compressible CFL3D
+  2.69085e-3: -4.23, -1.47, +0.28 percent. So the "+3 percent" of ADR 0063 was the Richardson extrapolation of rcfd
+  (2.779e-3) against the compressible reference; the finest rcfd value itself is within 0.7 percent of the like-for-like
+  reference.
 * P2b Cf(x) against CFL3D: finest +0.95 (x 0.5), +0.25 (1.0), -0.14 (1.5), -0.34 percent (1.8): PASS (limit 3).
-* P2c log-law slope y+ 50 to 300 (column x = 0.9698): coarse 2.8394, medium 2.8149, finest 2.8038 against 2.7784 (+0.91 percent, limit 3): PASS. kappa_eff 0.3567 vs 0.3599.
-* P2d u+ at the finest: +0.64 (y+ 5), +1.78 (10), +2.09 (15), +2.17 (30), +2.10 (50), +1.99 (100), +1.88 (200), +1.83 (300), +1.74 percent (600): PASS (limits 5 and 3). A near-uniform offset of about +2 percent remains, decreasing with refinement (medium +3.3 to +4.2, coarse +5.4 to +7.0 percent); not explained (the TMR column is at x = 0.97008, rcfd at 0.9698).
-* P2e deviation from K-S at the momentum-integral Re_theta 5000 / 7500 / 10000 / 12500: finest -2.40 / -2.15 / -1.95 / -1.79 percent against TMR CFL3D -3.59 / -2.75 / -2.17 / -1.69 (recomputed in the test from the vendored curve; the registered text had -3.61 / -2.76 / -2.16 / -1.69): differences +1.19 / +0.61 / +0.21 / -0.10 points: PASS (limit 1.5). Coarse and medium deviations are -8.10 ... -6.82 and -4.71 ... -3.73 percent.
-* P2f grid convergence of Cf(x_ref): 2.57698e-3, 2.65138e-3, 2.69840e-3, monotone, observed order 0.662 (limit 0.8: MISS), GCI_fine 3.74 percent (limit 3: MISS), |Cf_f - Cf_m|/Cf_f 1.742 percent (limit 1.5: MISS); Richardson value 2.7791e-3 (+2.3 percent above the incompressible reference). Registered as an expected miss; test kept as `w33c_p2f_grid_convergence_of_cf_known_miss` (ignored, limits unchanged). The TMR CFL3D compressible sequence (3264, 13056, 52224, 208896 cells) has local orders of about 1.1 and 1.2 (from the vendored values). The ADR 0063 numbers (2.5770, 2.6514, 2.6984e-3, order 0.66) are reproduced: the runs are deterministic.
-Decision rule P2: P2a, P2c, P2d, P2e hold, so the slope 2.78 and the Cf deficit against K-S (-3.6 to -1.7 percent in the published CFL3D results themselves at the momentum-integral Re_theta) are the behaviour of the published model, reproduced by an independent code. What remains open is the slow convergence of rcfd's own sequence (order 0.66 against about 1.1 to 1.2 for the TMR codes): the finest value is -0.67 percent below the reference but 2.9 percent below rcfd's own Richardson value; whether the sequence continues towards 2.78e-3 (+2.3 percent, outside P2a) or flattens near the reference was not tested (a 560 x 440 mesh would cost several hours and is outside the registered three-mesh plan). ADR 0063's attribution of the slow convergence to the wall-face omega factor stays the best explanation; it is not a defect against the published formulation.
+* P2c log-law slope y+ 50 to 300 (column x = 0.9698): coarse 2.8394, medium 2.8149, finest 2.8038 against 2.7784 (+0.91
+  percent, limit 3): PASS. kappa_eff 0.3567 vs 0.3599.
+* P2d u+ at the finest: +0.64 (y+ 5), +1.78 (10), +2.09 (15), +2.17 (30), +2.10 (50), +1.99 (100), +1.88 (200), +1.83
+  (300), +1.74 percent (600): PASS (limits 5 and 3). A near-uniform offset of about +2 percent remains, decreasing with
+  refinement (medium +3.3 to +4.2, coarse +5.4 to +7.0 percent); not explained (the TMR column is at x = 0.97008, rcfd
+  at 0.9698).
+* P2e deviation from K-S at the momentum-integral Re_theta 5000 / 7500 / 10000 / 12500: finest -2.40 / -2.15 / -1.95 /
+  -1.79 percent against TMR CFL3D -3.59 / -2.75 / -2.17 / -1.69 (recomputed in the test from the vendored curve; the
+  registered text had -3.61 / -2.76 / -2.16 / -1.69): differences +1.19 / +0.61 / +0.21 / -0.10 points: PASS (limit
+  1.5). Coarse and medium deviations are -8.10 ... -6.82 and -4.71 ... -3.73 percent.
+* P2f grid convergence of Cf(x_ref): 2.57698e-3, 2.65138e-3, 2.69840e-3, monotone, observed order 0.662 (limit 0.8:
+  MISS), GCI_fine 3.74 percent (limit 3: MISS), |Cf_f - Cf_m|/Cf_f 1.742 percent (limit 1.5: MISS); Richardson value
+  2.7791e-3 (+2.3 percent above the incompressible reference). Registered as an expected miss; test kept as
+  `w33c_p2f_grid_convergence_of_cf_known_miss` (ignored, limits unchanged). The TMR CFL3D compressible sequence (3264,
+  13056, 52224, 208896 cells) has local orders of about 1.1 and 1.2 (from the vendored values). The ADR 0063 numbers
+  (2.5770, 2.6514, 2.6984e-3, order 0.66) are reproduced: the runs are deterministic.
+
+Decision rule P2: P2a, P2c, P2d, P2e hold, so the slope 2.78 and the Cf deficit against K-S (-3.6 to -1.7 percent in the
+published CFL3D results themselves at the momentum-integral Re_theta) are the behaviour of the published model,
+reproduced by an independent code.
+
+What remains open is the slow convergence of rcfd's own sequence (order 0.66 against about 1.1 to 1.2 for the TMR
+codes). The finest value is -0.67 percent below the reference but 2.9 percent below rcfd's own Richardson value. Whether
+the sequence continues towards 2.78e-3 (+2.3 percent, outside P2a) or flattens near the reference was not tested (a 560
+x 440 mesh would cost several hours and is outside the registered three-mesh plan). ADR 0063's attribution of the slow
+convergence to the wall-face omega factor stays the best explanation; it is not a defect against the published
+formulation.
 
 ### Deviations from the registered plan (summary)
-1. S1 cell set (defective set-up, corrected test added, original kept ignored). 2. P3 set-up: the registered half channel missed (defective set-up), a new full-channel test with a 250000 iteration cap replaces it; both are kept. 3. The wording of the cross-diffusion split identity in the registered table (see Part 1). 4. TMR K-S deviations recomputed (-3.59/-2.75/-2.17/-1.69). 5. S2 has two cells. 6. Debug runs of the channel (Re_tau 1e6 half channel at 2000/20000/100000 iteration caps; Re_tau 395 and 1e4 half channels; Re_tau 1e4 full channel) and the laminar Symmetry discriminator below were made to find the cause of the failed P3 set-up and are not registered results. 7. P3 and the plate tests are `#[ignore]` (6 and 31 minutes); the sublayer tests run by default (13 s).
+1. S1 cell set (defective set-up, corrected test added, original kept ignored).
+2. P3 set-up: the registered half channel missed (defective set-up), a new full-channel test with a 250000 iteration cap
+   replaces it; both are kept.
+3. The wording of the cross-diffusion split identity in the registered table (see Part 1).
+4. TMR K-S deviations recomputed (-3.59/-2.75/-2.17/-1.69).
+5. S2 has two cells.
+6. Debug runs of the channel (Re_tau 1e6 half channel at 2000/20000/100000 iteration caps; Re_tau 395 and 1e4 half
+   channels; Re_tau 1e4 full channel) and the laminar Symmetry discriminator below were made to find the cause of the
+   failed P3 set-up and are not registered results.
+7. P3 and the plate tests are `#[ignore]` (6 and 31 minutes); the sublayer tests run by default (13 s).
 
 ### Unverified / not read
-Menter (1994), Menter, Kuntz and Langtry (2003), Wilcox (2006) and the original SST reports were not read; only the TMR transcription of the equations. The TMR plots (images) were not seen. The model-kappa relation is the TMR gamma_i = beta_i/beta* - sigma_wi kappa^2/sqrt(beta*) solved for kappa. The k ~ y^3.23 sublayer exponent is derived here, not taken from a source. All TMR flat-plate and channel data are compressible (M = 0.2); the effect is quantified only through the TMR's own incompressible Cf sequences at x = 0.97008.
+Menter (1994), Menter, Kuntz and Langtry (2003), Wilcox (2006) and the original SST reports were not read; only the TMR
+transcription of the equations. The TMR plots (images) were not seen. The model-kappa relation is the TMR gamma_i =
+beta_i/beta* - sigma_wi kappa^2/sqrt(beta*) solved for kappa. The k ~ y^3.23 sublayer exponent is derived here, not
+taken from a source. All TMR flat-plate and channel data are compressible (M = 0.2); the effect is quantified only
+through the TMR's own incompressible Cf sequences at x = 0.97008.
 
 ### Finding outside the SST scope: `Symmetry` top in a body-forced periodic half channel (solver, not SST; not fixed)
-Discriminator (laminar, nu = 0.01, body force 1, periodic in x, 4 x 40 cells, no turbulence model, height 1 with a `Symmetry` top against height 2 with two no-slip walls): the full channel reproduces Poiseuille (tau_w 0.9999, u_max 49.99 against f h^2/(2 nu) = 50), the half channel with the `Symmetry` top does not: tau_w 0.558 and u_max 15.6 with `h_from_solution` on, 0.505 and 12.75 with it off, the top cell u 1.11 (against about 12.7 in the middle), i.e. the top behaves like a no-slip wall (u_max of a 1-high no-slip channel is 12.5). The same with a constant added eddy viscosity (0.05): tau_w 0.63 / 0.505. So the laminar solver fails and the SST is not involved. Source of `Symmetry` (rcfd-fv `bc.rs`) reads as zero gradient for the tangential component, so the cause is elsewhere in the solver (not found). rcfd-fv/src/lib.rs is a shared dirty file; nothing was changed. Consequence for this ADR: the flat-plate top boundary is also `Symmetry`; at the plate the effect is bounded by the 0.2 percent edge-velocity oddity ADR 0063 had already measured and by the agreement of Cf(x) with the TMR curve to 0.3 percent, but a coarse-plate rerun that quantifies the top-row velocity was not made. Recommended for the next wave: a unit test in rcfd-fv for this laminar case and the investigation of the cause.
+Discriminator (laminar, nu = 0.01, body force 1, periodic in x, 4 x 40 cells, no turbulence model, height 1 with a
+`Symmetry` top against height 2 with two no-slip walls):
+
+- The full channel reproduces Poiseuille (tau_w 0.9999, u_max 49.99 against f h^2/(2 nu) = 50).
+- The half channel with the `Symmetry` top does not: tau_w 0.558 and u_max 15.6 with `h_from_solution` on, 0.505 and
+  12.75 with it off, the top cell u 1.11 (against about 12.7 in the middle). That is, the top behaves like a no-slip
+  wall (u_max of a 1-high no-slip channel is 12.5).
+- The same with a constant added eddy viscosity (0.05): tau_w 0.63 / 0.505.
+
+So the laminar solver fails and the SST is not involved. The source of `Symmetry` (rcfd-fv `bc.rs`) reads as zero
+gradient for the tangential component, so the cause is elsewhere in the solver (not found). rcfd-fv/src/lib.rs is a
+shared dirty file; nothing was changed.
+
+Consequence for this ADR: the flat-plate top boundary is also `Symmetry`. At the plate the effect is bounded by the 0.2
+percent edge-velocity oddity ADR 0063 had already measured and by the agreement of Cf(x) with the TMR curve to 0.3
+percent, but a coarse-plate rerun that quantifies the top-row velocity was not made.
+
+Recommended for the next wave: a unit test in rcfd-fv for this laminar case and the investigation of the cause.

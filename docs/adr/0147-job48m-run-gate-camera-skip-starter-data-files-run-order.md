@@ -1,17 +1,35 @@
-# ADR 0147: Job 48M, follow-ups of the live preview: Run waits for a typed field, the camera stays on a rebuild, an identical text is not built again, the starter copies a case's data file, runs ordered by creation, and the runner's log tail shown once
+# ADR 0147: Job 48M, follow-ups of the live preview
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (M1's hover set-up) before its corrected
 run, amendment 2 (M7 (b) a Windows fixture), amendment 3 (two more items after 48K: the step count and solver warnings in
 full, M9 and M10, registered before their runs); results in the addendum: every check met its limit, no known miss; not
-yet accepted by the maintainer. Job 48M: the maintainer's answers to the questions of
-[ADR 0144](0144-wave48j-mesh-run-toggle-and-live-preview.md) (the Mesh / Run toggle and the live preview), and the extra
-scope of [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) question 5. On main ec6a443 (48J,
-ADR 0144, and 48L, ADR 0146, merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are
-fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
-defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
-the Studio; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph
-stays acyclic. Clean-room: our own Studio code and the egui public API.
+yet accepted by the maintainer.
+
+Job 48M carries out the maintainer's answers to the questions of
+[ADR 0144](0144-wave48j-mesh-run-toggle-and-live-preview.md) (the Mesh / Run toggle and the live preview) and the extra
+scope of [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) question 5. In these follow-ups of
+the live preview, Run waits for a typed field, the camera stays on a rebuild, an identical text is not built again, the
+starter copies a case's data file, runs are ordered by creation, and the runner's log tail is shown once. Amendment 3 adds
+two more Studio items: the step count and solver warnings in full. The addendum records that every check met its limit,
+with no known miss. The whole `rcfd-studio` suite on bf33373 gave 189 passed, 0 failed and 4 ignored (the same four known
+misses: ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b). Two set-ups were amended: the M1 control's hover helper,
+whose defect failed the control's first run (amendment 1), and M7 (b)'s fixture, which ends the runner early only on
+Windows and is ignored elsewhere (amendment 2). Not run: a person at the real window, Linux, debug builds of the new
+tests, the workspace gate, workspace-wide clippy, `rcfd-project`'s, `rcfd-runner`'s, `rcfd-mcp`'s and `rcfd-api`'s own
+tests, and `cargo deny`. A later note records that the maintainer accepted (b) for questions 2, 3 and 4, which
+[ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md) does, and left questions 1 and 5 as they are;
+questions 6 and 7 were not answered in that message.
+
+Rules and parents:
+
+* On main ec6a443 (48J, ADR 0144, and 48L, ADR 0146, merged).
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical outside the Studio;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
+  acyclic.
+* Clean-room: our own Studio code and the egui public API.
 
 ## The maintainer's decisions (2026-10-28, relayed)
 
@@ -51,7 +69,7 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
 * Generator coordinates are `len * i / n` (`geometric`), so the end of an axis can differ from `len` by a rounding step
   for some `n`.
 * The debounce, a change on disk (the watcher or the editor's base hash: a save, a reload), "Rebuild", "anyway" and a newly
-  asked case all ask for a build the same way (`Preview::want`); every build of the editor's text builds the mesh, also
+  asked case all ask for a build the same way (`Preview::want`). Every build of the editor's text builds the mesh, also
   when the text equals the text of the mesh on screen.
 * The case starter excludes `channel/profile_inlet.toml` and `channel/profile_inlet.csv` (`case_starter::EXCLUDED`).
   The case reads `[tables.inlet_u] file = "profile_inlet.csv"`, relative to the case's folder, which the Studio's editor
@@ -76,11 +94,11 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
 
 1. **Run waits for a typed field** (`quick_run::blocked`, `FINISH_EDITING`). While the open case's editor holds a field
    being typed (`CaseEditor::draft`), Run is refused with `<case>: finish editing the field <path> (press Enter or click
-   elsewhere); the mesh shows the typed text, but a run uses the file on disk`; the button is greyed out with that hover
-   text (`quick_run_ui::toolbar`, unchanged: it shows `blocked`), F5 is refused with `Run: ` and that text in the status
-   bar. Checked after a conflict and before "save it first": a committed edit still gets ADR 0141's text. A refused
-   commit (`1e`) keeps the field being typed (ADR 0144), so Run stays greyed out until the text is corrected. Test switch
-   `QuickRun::switches.run_while_typing` (the route before). The Start run dialog (Options...) is not changed
+   elsewhere); the mesh shows the typed text, but a run uses the file on disk`. The button is greyed out with that hover
+   text (`quick_run_ui::toolbar`, unchanged: it shows `blocked`), and F5 is refused with `Run: ` and that text in the
+   status bar. The check comes after a conflict and before "save it first": a committed edit still gets ADR 0141's text.
+   A refused commit (`1e`) keeps the field being typed (ADR 0144), so Run stays greyed out until the text is corrected.
+   Test switch `QuickRun::switches.run_while_typing` (the route before). The Start run dialog (Options...) is not changed
    (question 4).
 2. **The camera on a rebuild** (`Viewport::replace_surface`, `viewport::same_bounds`, `preview::install`). A new surface of
    the case whose surface the viewport holds (`Preview::installed`, the case of the last install; the viewport still
@@ -97,10 +115,10 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
      starts again, as ADR 0144 question 3 (a) has it for the run).
    Counters `Stats::camera_kept`, `camera_refit`. Test switch `preview::Switches::restart_camera` (ADR 0138's rule).
 3. **An identical text is not built again** (`preview::build_source_unless`, `Refusal::Unchanged`, `mesh_input_unchanged`).
-   A build that the debounce alone asked for (no new case, change on disk, save or reload, "Rebuild" or "anyway" in the
-   same request) of the editor's text is compared, on the build thread, with the mesh on screen (`Preview::shown`): when
-   the bytes it would parse hash to the shown mesh's `case_hash` and the shown mesh's input is unchanged, nothing is parsed
-   or built (`Refusal::Unchanged`); the shown mesh is then the current one (ready, not stale) and `Stats::skipped_identical`
+   A build of the editor's text that the debounce alone asked for (no new case, change on disk, save or reload, "Rebuild"
+   or "anyway" in the same request) is compared, on the build thread, with the mesh on screen (`Preview::shown`). When the
+   bytes it would parse hash to the shown mesh's `case_hash` and the shown mesh's input is unchanged, nothing is parsed or
+   built (`Refusal::Unchanged`); the shown mesh is then the current one (ready, not stale) and `Stats::skipped_identical`
    counts it. "The mesh-relevant content is unchanged" is read as the part outside the text: a recipe mesh has none (the
    text is its whole input); a mesh file (`mesh.source = "file"`) must have the size and modification time read before
    the shown mesh was built (`Built::mesh_stamp`); a mesh folder (OpenFOAM) is never taken as unchanged. The comparison runs
@@ -140,7 +158,7 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
    instead of the editor's list of unknown settings. Test switch `preview::Switches::editor_lists_descriptor_keys`.
 7. **The runner's log tail once** (`quick_run::runner_error`, `reports_runner_output`; the extra scope). The last lines of
    `runner.log` are appended to an `ensure_runner` error only when the error does not already report the runner's output,
-   that is when it lacks ADR 0146's early-exit marker ` before it held the project's lock; `; the timeout, the exit 3
+   that is when it lacks ADR 0146's early-exit marker ` before it held the project's lock; `. The timeout, the exit 3
    race and a failed spawn keep the appended lines. The two stale comments (the module doc and the budgets check in
    `start_job`) now say that the budgets check refuses before a run is queued, while a runner that exits on a bad file is
    reported by `ensure_runner` with its output after the run was queued. Test switch `QuickRun::switches.tail_always` (the
@@ -218,15 +236,21 @@ the licence check on the final commit.
 ## Amendment 1 (2026-10-28, the M1 control's set-up; before the corrected run)
 
 The registered run of `followups_m.rs` on 0bc172f (release, `--test-threads 1 --nocapture`, output to a file) passed M1,
-M2, M3, M5, M6, M7 (a), (c) and the controls of M2, M3, M6 and M7, and failed the M1 control: with `run_while_typing`
+M2, M3, M5, M6, M7 (a), (c) and the controls of M2, M3, M6 and M7, and failed the M1 control. With `run_while_typing`,
 Run was enabled (`blocked` none) and the preview's next source was the editor's text, as the control requires, but the
-start text was not drawn within the hover helper's 5 frames. Cause, read from egui 0.36.2: a headless frame without a
-time advances egui's clock by `predicted_dt`, 1/60 s (`input_state/mod.rs` line 374); a first tooltip is shown only while
-the pointer is still (`show_tooltips_only_when_still`, `containers/tooltip.rs` lines 354-365), and the pointer counts as
-moving while its 0.1 s position history (`History::new(2..1000, 0.1)`, line 1079; every frame adds the position, line 1225)
-still holds the position of the click into the field, about 6 frames; within the 0.2 s grace time after another tooltip
-that wait is skipped (`tooltip_grace_time`). M1 (b) passed with 4 frames because its hover came 11 frames after (a)'s
-tooltip; the control has no earlier tooltip. A set-up defect of the helper, not of the change.
+start text was not drawn within the hover helper's 5 frames.
+
+Cause, read from egui 0.36.2:
+
+* A headless frame without a time advances egui's clock by `predicted_dt`, 1/60 s (`input_state/mod.rs` line 374).
+* A first tooltip is shown only while the pointer is still (`show_tooltips_only_when_still`,
+  `containers/tooltip.rs` lines 354-365).
+* The pointer counts as moving while its 0.1 s position history (`History::new(2..1000, 0.1)`, line 1079; every frame adds
+  the position, line 1225) still holds the position of the click into the field, about 6 frames.
+* Within the 0.2 s grace time after another tooltip, that wait is skipped (`tooltip_grace_time`).
+
+M1 (b) passed with 4 frames because its hover came 11 frames after (a)'s tooltip; the control has no earlier tooltip. A
+set-up defect of the helper, not of the change.
 
 Corrected set-up (the same test names; limits and controls unchanged): after the pointer moves onto Run, frames are drawn
 until the hover text is drawn or 30 frames (0.5 s of egui's clock) have passed, and every drawn text of those frames is
@@ -281,16 +305,29 @@ check had run.
 
 ## Addendum: results against the registered limits (2026-10-28)
 
-Branch `worktree-agent-a56f0d2c2be42e18d`. Commits: registration 0bc172f (on main ec6a443); amendment 1 7d115fc; 1976a47
-(M4 (e) reads its line in the first 3 frames, before M4's first run, deviation 2); 96b165f (this addendum's first part);
-amendment 2 f208b07; 16c8ac8 (this addendum through M8); 55e4531 (main with 48K merged); amendment 3 bf33373; then the
-results of amendment 3 below. Every run: release, `--test-threads 1 --nocapture`, output to files, this host
-(Windows 11, 16 threads, 93.6 GB; other agents' work held 50-55 GB in WSL during these runs, so free memory was 1-8 GB);
-target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built from the same commit as the tests. The table
-gives the registered run of each check: `followups_m.rs` on 0bc172f, its corrected run on 7d115fc (M1's control; every
-other check of the file passed again with the same values), `starter_run_m.rs` on 1976a47 (3.0 GB free at its start),
-`case_starter_g2.rs` on 1976a47 (1.6 GB free), the whole suite (M8) on f208b07 (5.0 GB free at its start, 4.6 GB at its
-end).
+Branch `worktree-agent-a56f0d2c2be42e18d`. Commits:
+
+* registration 0bc172f (on main ec6a443);
+* amendment 1 7d115fc;
+* 1976a47 (M4 (e) reads its line in the first 3 frames, before M4's first run, deviation 2);
+* 96b165f (this addendum's first part);
+* amendment 2 f208b07;
+* 16c8ac8 (this addendum through M8);
+* 55e4531 (main with 48K merged);
+* amendment 3 bf33373;
+* then the results of amendment 3 below.
+
+Every run used release, `--test-threads 1 --nocapture` and output to files on this host (Windows 11, 16 threads, 93.6 GB),
+with the target folder of this job and with `rcfd`, `rcfd-runner` and `fake-claude` built from the same commit as the
+tests. Other agents' work held 50-55 GB in WSL during these runs, so free memory was 1-8 GB.
+
+The table gives the registered run of each check:
+
+* `followups_m.rs` on 0bc172f;
+* its corrected run on 7d115fc (M1's control; every other check of the file passed again with the same values);
+* `starter_run_m.rs` on 1976a47 (3.0 GB free at its start);
+* `case_starter_g2.rs` on 1976a47 (1.6 GB free);
+* the whole suite (M8) on f208b07 (5.0 GB free at its start, 4.6 GB at its end).
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -328,14 +365,14 @@ and M7 (b) leave runs queued in their temporary projects, with no runner.
 
 **ADR 0145 question 6** (three rcfd-studio one-click tests of ADR 0141 failing on main 0a69af4's code in 48K's scratch
 copy): `oneclick_g4`'s G1 and G4 controls and `oneclick_e2e_g4`'s G1b passed in all three whole-suite runs of this job
-(the baseline on 84ee864, M8 on f208b07 and on bf33373); 48J's merge amended and fixed them (ADR 0141 amendment 3, ADR 0144
+(the baseline on 84ee864, M8 on f208b07 and on bf33373). 48J's merge amended and fixed them (ADR 0141 amendment 3, ADR 0144
 amendment 4).
 
 **Deviations and notes.**
 1. Amendment 1: the M1 control's hover helper drew 5 frames, fewer than egui needs before a first tooltip once the
-   pointer comes from the field (it waits until the pointer is still); corrected before the control's corrected run, which
-   failed as required. M1 itself had passed with the old helper only because its hover came within egui's 0.2 s tooltip
-   grace time after (a)'s.
+   pointer comes from the field (egui waits until the pointer is still). The helper was corrected before the control's
+   corrected run, which failed as required. M1 itself had passed with the old helper only because its hover came within
+   egui's 0.2 s tooltip grace time after (a)'s.
 2. 1976a47, before M4's first run: M4 (e) looks for the dialog's line in its first 3 frames, because egui 0.36.2 lays a new
    area out unseen in its first frame (`containers/area.rs` lines 444 and 626). The limit is unchanged.
 3. Amendment 2: M7 (b)'s fixture is a Windows fixture (ignored elsewhere, limits unchanged); M7 (a) covers the rule
@@ -368,10 +405,15 @@ amendment 4).
     by time interval on a run with a tiny remainder still says "at most" where the snapshots do not line up (ADR 0140 D3's
     `AtMost`), as before.
 
-**Not run.** A person at the real window (the checklist); Linux (none of the new tests; M7 (b) would be ignored there by
-amendment 2); debug builds of the new tests; the workspace gate and workspace-wide clippy (only `rcfd-studio` changed);
-`rcfd-project`'s, `rcfd-runner`'s, `rcfd-mcp`'s and `rcfd-api`'s own tests (not changed by this job; M5 (a) reads
-`rcfd-project`'s listing, M7 the runner client, M9 and M10 48K's solver); `cargo deny` (no dependency changed).
+**Not run.**
+
+* A person at the real window (the checklist).
+* Linux (none of the new tests; M7 (b) would be ignored there by amendment 2).
+* Debug builds of the new tests.
+* The workspace gate and workspace-wide clippy (only `rcfd-studio` changed).
+* `rcfd-project`'s, `rcfd-runner`'s, `rcfd-mcp`'s and `rcfd-api`'s own tests (not changed by this job; M5 (a) reads
+  `rcfd-project`'s listing, M7 the runner client, M9 and M10 48K's solver).
+* `cargo deny` (no dependency changed).
 
 ## Not in CI (by hand)
 

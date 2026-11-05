@@ -1,22 +1,41 @@
-# ADR 0037: Wave 21C, particle and chemistry wiring into `rcfd run` and the service (F-056, F-054), non-iterative fractional-step time advance (F-210), F-209 remainder
+# ADR 0037: Wave 21C, particle and chemistry wiring, fractional-step time advance
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes not fixed here, measured numbers) may be
-appended at the end without touching a registered limit.
 
-Scope. F-056 and F-054 are `partial`; F-210 is `todo`. This wave stops each of them at `partial` with named gaps (end of file).
-F-209 (adaptive stepping, accelerators) is picked up only if it is cheap; the decision is recorded at the end (D6). Clean-room:
-published methods and first principles only; no vendor code, text, data or names. Every registered expectation below is derived
-from definitions, closed forms or invariants, or is an equivalence between two code paths of this repository, or reuses a
-published-data acceptance band that already exists in the repository (Ghia et al. cavity data, band 0.02, F-028).
+Wave 21C covers particle and chemistry wiring into `rcfd run` and the service (F-056, F-054) and a non-iterative
+fractional-step time advance (F-210). Each of the three stops at `partial` with named gaps; the F-209 remainder was not
+attempted and its status stays `todo`. The particle (W) and chemistry (C) checks are met, W5 with deviation 1 and C4
+with the caveat that it checks the output plumbing and the units, not the rates. The exception is C2's printed 5e-6
+limit: it measures 5.248e-6, stays a known miss, and deviation 2 records it as a misquote of the K4a limit 1e-5. Three
+fractional-step checks are MISSED and stay ignored tests: F2 BDF2 temporal order 1.040 against [1.7, 2.3], F3 spatial
+ratio 2.479 against >= 3.0, and F8 Kim-Moin ratio 1.130 against <= 0.5. The other F checks are met, and F1 and F6 meet
+the roadmap acceptance (Taylor-Green decay within 2 percent, cavity against published data). The claimed benefit of the
+Kim-Moin condition (reduced boundary splitting error in transients) is NOT shown by any registered check. The F2
+diagnosis points at the lagged coupling of periodic faces in the shared momentum assembly, a hypothesis consistent with
+the runs, not proven by an isolating change.
 
-Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded. All additions are
-additive schema keys with explicit unset/off sentinels; every new kernel is behind an option that is off by default.
+Scope. F-056 and F-054 are `partial`; F-210 is `todo`. This wave stops each of them at `partial` with named gaps (end of
+file). F-209 (adaptive stepping, accelerators) is picked up only if it is cheap; the decision is recorded at the end
+(D6).
 
-Concurrency. Waves 21A (ADR 0035) and 21B (ADR 0036) edit the same shared files (`schema.rs`, `sim.rs`, `case.rs`, `lib.rs`,
-docs). Edits to shared files are small and targeted, re-read immediately before editing, committed path-limited.
+Rules and parallel waves:
+
+- Limits are not changed, widened, replaced or deleted after a run.
+- A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; the cause is diagnosed, not tuned away.
+- A test set-up defect gets a NEW corrected test and the old one stays as a record.
+- Addenda (file names, mesh sizes not fixed here, measured numbers) may be appended at the end without touching a
+  registered limit.
+- Clean-room: published methods and first principles only; no vendor code, text, data or names.
+- Every registered expectation below is derived from definitions, closed forms or invariants, or is an equivalence
+  between two code paths of this repository, or reuses a published-data acceptance band that already exists in the
+  repository (Ghia et al. cavity data, band 0.02, F-028).
+- Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded.
+- All additions are additive schema keys with explicit unset/off sentinels; every new kernel is behind an option that is
+  off by default.
+- Concurrency. Waves 21A ([ADR 0035](0035-wave21a-thermal-extras.md)) and 21B
+  ([ADR 0036](0036-wave21b-tables-actuator.md)) edit the same shared files (`schema.rs`, `sim.rs`, `case.rs`, `lib.rs`,
+  docs). Edits to shared files are small and targeted, re-read immediately before editing, committed path-limited.
 
 ## Decisions
 
@@ -262,9 +281,9 @@ Aitken acceleration, flat-plate acceleration, Taylor-Green step-count comparison
 
 ## Results addendum (written after the runs; no registered limit was changed)
 
-Measured values are from release builds on the final code; tests are in `crates/rcfd-fv/tests/fractional_step.rs` (F1-F10),
-`crates/rcfd-api/tests/fractional_tree.rs` (F11-F13), `crates/rcfd-api/tests/particle_run.rs`, `crates/rcfd-cli/tests/particle_run.rs`
-(W1-W8, F11 binary part) and `crates/rcfd-cli/tests/chemistry_run.rs` (C1-C5).
+Measured values are from release builds on the final code. Tests are in `crates/rcfd-fv/tests/fractional_step.rs`
+(F1-F10), `crates/rcfd-api/tests/fractional_tree.rs` (F11-F13), `crates/rcfd-api/tests/particle_run.rs`,
+`crates/rcfd-cli/tests/particle_run.rs` (W1-W8, F11 binary part) and `crates/rcfd-cli/tests/chemistry_run.rs` (C1-C5).
 
 ### Particles (W)
 
@@ -310,53 +329,63 @@ Measured values are from release builds on the final code; tests are in `crates/
 
 Diagnoses of the three F misses (none tuned):
 
-* F2 BDF2 (1.040 against [1.7, 2.3]). Not a defect of the projection. The baseline PISO solver with periodic faces and one
-  corrector shows the same first-order behaviour (orders 1.03 and 1.09 for BDF2 with `n_outer = 1`; 2.17 and 1.75 only with three
-  outer iterations), a pure periodic shear-diffusion problem gives about 1.08 for both solvers, and a wall-bounded decaying mode
-  gives BDF2 orders 2.074 / 2.045 with the fractional step identical to PISO. This points at the lagged coupling of periodic faces
-  in the shared momentum assembly (a hypothesis consistent with these runs, not proven by an isolating change). The collocated
-  pressure-smoothing term `dt (interp grad p - snGrad p)` adds an O(dt) steady/inviscid error (with the term removed at
-  `nu = 1e-6` the order is 1.98). A first implementation used `dt` instead of the effective step `dt/c0` for the pressure
-  (c0 = 3/2 for BDF2); that bug was found and fixed during the diagnosis (first run: F2 BDF2 1.052, F3 ratio 2.502, Euler results
-  unchanged); the numbers in the table are after the fix.
-* F3 (2.479 against 3.0). At `dt = 0.005` the temporal error from the periodic-face lag is comparable to the spatial error.
-* F8 (ratio 1.130 against 0.5). The Chorin form has an O(dt) steady-state error from the bulk (the momentum operator is applied to
-  `u* = u + dt grad p`), which the Kim-Moin boundary treatment does not remove; error to SIMPLEC at dt 0.1 / 0.05 / 0.025:
-  Kim-Moin 4.351e-2 / 2.741e-2 / 1.574e-2, plain 3.863e-2 / 2.452e-2 / 1.438e-2. The incremental form has 8.07e-4 / 4.73e-4 /
-  2.49e-4 and is identical with and without Kim-Moin, because the lagged increment tends to zero at steady state. So in this
-  implementation the Kim-Moin condition is a no-op where it is harmless and does not beat the plain condition where it matters;
-  the claimed benefit (reduced boundary splitting error in transients) is NOT shown by any registered check.
+* F2 BDF2 (1.040 against [1.7, 2.3]). Not a defect of the projection. The baseline PISO solver with periodic faces and
+  one corrector shows the same first-order behaviour: orders 1.03 and 1.09 for BDF2 with `n_outer = 1`, and 2.17 and
+  1.75 only with three outer iterations. A pure periodic shear-diffusion problem gives about 1.08 for both solvers. A
+  wall-bounded decaying mode gives BDF2 orders 2.074 / 2.045, with the fractional step identical to PISO. This points at
+  the lagged coupling of periodic faces in the shared momentum assembly (a hypothesis consistent with these runs, not
+  proven by an isolating change). The collocated pressure-smoothing term `dt (interp grad p - snGrad p)` adds an O(dt)
+  steady/inviscid error; with the term removed at `nu = 1e-6` the order is 1.98. A first implementation used `dt`
+  instead of the effective step `dt/c0` for the pressure (c0 = 3/2 for BDF2). That bug was found and fixed during the
+  diagnosis (first run: F2 BDF2 1.052, F3 ratio 2.502, Euler results unchanged). The numbers in the table are after the
+  fix.
+* F3 (2.479 against 3.0). At `dt = 0.005` the temporal error from the periodic-face lag is comparable to the spatial
+  error.
+* F8 (ratio 1.130 against 0.5). The Chorin form has an O(dt) steady-state error from the bulk (the momentum operator is
+  applied to `u* = u + dt grad p`), which the Kim-Moin boundary treatment does not remove. Error to SIMPLEC at dt 0.1 /
+  0.05 / 0.025: Kim-Moin 4.351e-2 / 2.741e-2 / 1.574e-2, plain 3.863e-2 / 2.452e-2 / 1.438e-2. The incremental form has
+  8.07e-4 / 4.73e-4 / 2.49e-4 and is identical with and without Kim-Moin, because the lagged increment tends to zero at
+  steady state. So in this implementation the Kim-Moin condition is a no-op where it is harmless and does not beat the
+  plain condition where it matters; the claimed benefit (reduced boundary splitting error in transients) is NOT shown by
+  any registered check.
 
-Post-hoc tests (NOT registered; limits chosen after seeing the diagnostics above; they do not replace the misses): `f2c`
-wall-bounded decaying mode BDF2 order 2.074 in [1.7, 2.3] (errors 4.451e-3 and 1.057e-3); `f3c` the F3 ratio at `dt = 0.00125`
-equals 3.539 against the registered 3.0; `f8b` the Chorin finer-pair step-halving order lies in [0.7, 1.3] (measured 0.800 Kim-Moin /
-0.770 plain) and the incremental form is at least 10 times closer to the steady state. The diagnostic code is not in the
-repository.
+Post-hoc tests (NOT registered; limits chosen after seeing the diagnostics above; they do not replace the misses):
+
+* `f2c`: wall-bounded decaying mode BDF2 order 2.074 in [1.7, 2.3] (errors 4.451e-3 and 1.057e-3).
+* `f3c`: the F3 ratio at `dt = 0.00125` equals 3.539 against the registered 3.0.
+* `f8b`: the Chorin finer-pair step-halving order lies in [0.7, 1.3] (measured 0.800 Kim-Moin / 0.770 plain) and the
+  incremental form is at least 10 times closer to the steady state.
+
+The diagnostic code is not in the repository.
 
 ### Deviations from the registered text
 
-1. W5, dynamic mesh: the conflict of particles with `dynamic_mesh.enabled` was already a located error at `dynamic_mesh.enabled`
-   (ADR 0033 check, raised by `semantic_errors`), so the test asserts that path; the guard added at `particles.enabled` in
-   `Simulation::new` is unreachable through the tree and untested.
-2. C2: the "K4 registered 5e-6" in the C2 text is a misquote of the K4a limit of ADR 0027, which is 1e-5 (5.2e-6 was the measured
-   value there). The measured 5.248e-6 reproduces the in-process K4 result exactly. The 5e-6 criterion is kept as the ignored test
-   `c2_known_miss_discrete_solution_5e_6`; the corrected test `c2_binary_k4_plug_flow_matches_in_process_and_the_k4a_limit`
-   asserts the K4a limit 1e-5. The K4 case also needed a convergence condition (`convergence.a`: `res_A` below 1e-11, 40 minimum
-   iterations): the normalised momentum residual of the uniform plug flow does not fall below `tolerance_u` (0.79 after 800
-   iterations, continuity 1e-16), a property of the case unrelated to the chemistry.
-3. D1 said `supports_restart()` is false "while particles are enabled"; implemented for transient algorithms only. Steady runs are
-   tracked once from the final field, so a steady restart stays valid.
-4. D5 named `chem_output.rs`; the chemistry report and rate arrays live in `chemistry.rs` (`ChemState::report`, `rate_fields`)
-   with thin accessors in `sim.rs`. `particles.output_file` keeps its library meaning (as registered).
-5. The old test `pt14_mesh_dependent_errors_are_located` (ADR 0028) built its simulation with particles enabled and expected
-   `Simulation::new` to succeed; since D1 reports those errors in `Simulation::new`, its set-up now builds the simulation from the
-   same case with the section switched off. Its assertions are unchanged; the new behaviour is checked by W5.
-6. A particle-tracking failure during a run (tracker error) stops the simulation with `failure` set (like a user-function error).
-7. The first commit of the fractional-step schema keys (65f1860) contained the three keys twice (a mistake of my commit tooling);
-   it was corrected in the next commit.
-8. F-210 stops at `partial`: the registered BDF2 temporal-order, spatial-order and Kim-Moin checks are misses (above). The roadmap
-   acceptance (Taylor-Green decay within 2 percent, cavity against published data) is met by F1 and F6.
-9. Fractional-step runs are not restartable (`supports_restart()` false); a restart would drop the lagged pressure increment.
+1. W5, dynamic mesh: the conflict of particles with `dynamic_mesh.enabled` was already a located error at
+   `dynamic_mesh.enabled` (ADR 0033 check, raised by `semantic_errors`), so the test asserts that path. The guard added
+   at `particles.enabled` in `Simulation::new` is unreachable through the tree and untested.
+2. C2: the "K4 registered 5e-6" in the C2 text is a misquote of the K4a limit of ADR 0027, which is 1e-5 (5.2e-6 was the
+   measured value there). The measured 5.248e-6 reproduces the in-process K4 result exactly. The 5e-6 criterion is kept
+   as the ignored test `c2_known_miss_discrete_solution_5e_6`; the corrected test
+   `c2_binary_k4_plug_flow_matches_in_process_and_the_k4a_limit` asserts the K4a limit 1e-5. The K4 case also needed a
+   convergence condition (`convergence.a`: `res_A` below 1e-11, 40 minimum iterations): the normalised momentum residual
+   of the uniform plug flow does not fall below `tolerance_u` (0.79 after 800 iterations, continuity 1e-16), a property
+   of the case unrelated to the chemistry.
+3. D1 said `supports_restart()` is false "while particles are enabled"; implemented for transient algorithms only.
+   Steady runs are tracked once from the final field, so a steady restart stays valid.
+4. D5 named `chem_output.rs`; the chemistry report and rate arrays live in `chemistry.rs` (`ChemState::report`,
+   `rate_fields`) with thin accessors in `sim.rs`. `particles.output_file` keeps its library meaning (as registered).
+5. The old test `pt14_mesh_dependent_errors_are_located` (ADR 0028) built its simulation with particles enabled and
+   expected `Simulation::new` to succeed; since D1 reports those errors in `Simulation::new`, its set-up now builds the
+   simulation from the same case with the section switched off. Its assertions are unchanged; the new behaviour is
+   checked by W5.
+6. A particle-tracking failure during a run (tracker error) stops the simulation with `failure` set (like a
+   user-function error).
+7. The first commit of the fractional-step schema keys (65f1860) contained the three keys twice (a mistake of my commit
+   tooling); it was corrected in the next commit.
+8. F-210 stops at `partial`: the registered BDF2 temporal-order, spatial-order and Kim-Moin checks are misses (above).
+   The roadmap acceptance (Taylor-Green decay within 2 percent, cavity against published data) is met by F1 and F6.
+9. Fractional-step runs are not restartable (`supports_restart()` false); a restart would drop the lagged pressure
+   increment.
 
 ### Decision D6 (F-209)
 

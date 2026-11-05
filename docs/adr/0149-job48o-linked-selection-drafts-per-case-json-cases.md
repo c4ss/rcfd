@@ -1,36 +1,54 @@
-# ADR 0149: Job 48O, the case and its runs are one selection, unsaved edits are kept per case, Run reads a JSON case as `rcfd run` does, and the case starter says "simulated time"
+# ADR 0149: Job 48O, one selection for a case and its runs, unsaved edits per case, JSON cases
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (the case editor's fields per case, O9b)
 before any registered run; amendment 2 (the set-ups of O1 and O8's control) and amendment 3 (O1's control) before their
 corrected runs; results in the addendum: every check met its limit and every control failed as required (O1, its control
 and O8's control after amendments 2 and 3), no known miss; one finding outside this job's decisions (deviation 4,
-question 9); not yet accepted by the maintainer. Job 48O, on local
-main 9e857d8 (waves 48A-48N merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
-are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
-defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
-the Studio; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph
-stays acyclic. Clean-room: our own Studio code and the egui public API.
+question 9); not yet accepted by the maintainer.
+
+Job 48O, on local main 9e857d8 (waves 48A-48N merged), implements in the Studio the maintainer's answers to the questions
+of [ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md). Before it, the selected case and the selected
+run were separate, a click on another case dropped the unsaved edits, closing asked nothing, and the start plan refused a
+`.json` case. Now the case and its runs are one selection: a click on a run selects its case, and a click on a case
+selects its newest run, or none. Unsaved edits are kept per case, in at most 32 kept editors (`MAX_PARKED`), and closing
+while any case holds unsaved state asks first. Run reads a JSON case as `rcfd run` does, a benchmark descriptor is refused
+with ADR 0147's one line, and the case starter says "simulated time". The addendum reports that every check met its limit
+and every control failed as required (O1, its control and O8's control after amendments 2 and 3, which corrected set-ups
+and left every limit and control unchanged), with no known miss; the four known misses of earlier ADRs stay ignored as
+before. One finding lies outside this job's decisions: a case saved by the Studio stores no fields when Run starts it
+(deviation 4), which a dated note after the questions says no longer holds for runs the Studio starts
+([ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md)). Not run: a person at the real window, Linux,
+debug builds of the new tests, the workspace gate, workspace-wide clippy, the other crates' own tests and `cargo deny`.
+
+Rules:
+
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical outside the Studio;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
+  acyclic.
+* Clean-room: our own Studio code and the egui public API.
 
 ## The maintainer's decisions (2026-10-28, answers to the questions of [ADR 0148](0148-job48n-selected-case-middle-drag-units-scale-refine.md), relayed)
 
 1. **Question 1 (R5): link both ways.** A click on a run in the Runs panel selects its case (`Studio::selected_case`,
    found from the run's `run.json`; when the case file no longer exists, nothing new is selected and the run's caption
-   says so) and switches to the Run side; a click on a case shows that case's newest run on the Run side (newest by
+   says so) and switches to the Run side. A click on a case shows that case's newest run on the Run side (newest by
    `created`, ADR 0147's order) when it has one, else the Run side stays disabled with its reason. ADR 0144's toggle
-   stays: opening a case switches to Mesh; how a case click interacts is mine to decide and register, the tabs, the Run
+   stays: opening a case switches to Mesh. How a case click interacts is mine to decide and register, the tabs, the Run
    button and the Cases list always agreeing on the case (suggested: Mesh as today, the Run side showing the case's
-   newest run when toggled). The state machine registered and every transition tested, a run whose case was deleted or
-   renamed, two runs of one case and runs started while another case is selected included; ADR 0148's R4 stays.
+   newest run when toggled). The state machine is registered and every transition tested, including a run whose case was
+   deleted or renamed, two runs of one case and runs started while another case is selected. ADR 0148's R4 stays.
 2. **Question 2: drafts per case.** Switching cases keeps each case's unsaved editor state (unsaved edits, the field
-   being typed, a conflict) in memory until it is saved, or closed or discarded explicitly; returning to the case
-   restores it; the Cases list marks the cases with unsaved state; Run and Start stay blocked per case ("save it first");
-   the preview of a case with a draft shows the draft (ADR 0144) when it is selected; closing the project with drafts
-   asks save, discard or cancel (or keeps the close as it is if it asks already: checked and reported); a file changed on
-   disk while its draft is kept: ADR 0131's conflict logic on return, with a test; the memory bounded; ADR 0148's "the
-   edits are dropped at the click" removed.
-3. **Question 6: a JSON case as `rcfd run` reads it**, reusing the function the command line uses, no second parser;
-   the start plan, Run and the Start run dialog accept `.json` cases; a benchmark descriptor (`cases/<id>/case.json`,
+   being typed, a conflict) in memory until it is saved, or closed or discarded explicitly. Returning to the case
+   restores it. The Cases list marks the cases with unsaved state. Run and Start stay blocked per case ("save it first").
+   The preview of a case with a draft shows the draft (ADR 0144) when it is selected. Closing the project with drafts
+   asks save, discard or cancel (or keeps the close as it is if it asks already: checked and reported). A file changed on
+   disk while its draft is kept gets ADR 0131's conflict logic on return, with a test. The memory is bounded. ADR 0148's
+   "the edits are dropped at the click" is removed.
+3. **Question 6: a JSON case as `rcfd run` reads it**, reusing the function the command line uses, no second parser.
+   The start plan, Run and the Start run dialog accept `.json` cases. A benchmark descriptor (`cases/<id>/case.json`,
    not a case file) gets ADR 0147's one line in Run's refusal and hover text and in the Start dialog and is not
    startable. Registered: a JSON case written from a TOML case by the existing writer runs from the Studio model and its
    run snapshot matches; each descriptor under the repository's `cases/` is refused with the one line.
@@ -45,15 +63,15 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
 
 * The selection (ADR 0148): `Studio::selected_case` (the click in the Project panel, a case the starter opened) and
   `Studio::selected_run` (the plots, the log, the strip, the Runs panel's highlight, and on the Run side the Viewport)
-  are separate. `Studio::open_case` does not touch the run; the Runs panel's click calls `Studio::select_run`, which
+  are separate. `Studio::open_case` does not touch the run. The Runs panel's click calls `Studio::select_run`, which
   switches to the Run side and does not touch the case (ADR 0144). A run that Run queued after another case was
   selected is selected without switching the Viewport (`select_run_keep_view`, ADR 0148 decision 1 (d)).
 * The editor (ADR 0148 decision 1 (a)): `open_case` drops the case editor at once, its unsaved edits with it. A field's
   text lives in `UiState::buffers`, keyed by the settings path for every case alike, and is committed when the field
   loses the focus (`ui.rs` `leaf_ui`); while typed it is the editor's `draft` (ADR 0144).
 * Closing (checked, as the maintainer asked): nothing asks. Project > Close project calls `Studio::close_project`
-  (documented "unsaved edits are dropped"); Project > Open project..., Open typed path..., Recent and New project... call
-  `open_project` / `create_project`, whose `start` calls `close_project` first; the window's close saves the
+  (documented "unsaved edits are dropped"). Project > Open project..., Open typed path..., Recent and New project... call
+  `open_project` / `create_project`, whose `start` calls `close_project` first. The window's close saves the
   preferences and stops a Claude turn only (`StudioApp::ui`).
 * A failed save comes back as `watch::Event::Failed(message)` without the file it was for.
 * `rcfd run` reads a case text in `load_case_in` (`crates/rcfd-cli/src/main.rs`, private to that program; the runner
@@ -71,13 +89,15 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
 
 1. **One selection: the case and its runs** (`Studio::open_case`, `Studio::open_run` (new), `newest_run_of`,
    `run_case`, `case_listed`, `view_refusal`, `studio::no_run_of`, `view_toggle::gone_case_text`; `quick_run::apply`).
-   * A click on a case (`open_case`, also a case the starter opens) makes it the selected case as ADR 0148 does, and
-     makes its newest run (by `created`, then id, among the runs listed and those the run worker knows; the run Run
-     queued last counts as the newest of its case until it is listed) the selected run, or none; the Viewport goes to
-     the Mesh side (ADR 0144). The plots, the log and the strip follow the new selected run (none: they empty).
+   * A click on a case (`open_case`, also a case the starter opens) makes it the selected case as ADR 0148 does. It also
+     makes the case's newest run the selected run, or none. Newest goes by `created`, then id, among the runs listed
+     and those the run worker knows; the run Run queued last counts as the newest of its case until it is listed. The
+     Viewport goes to the Mesh side (ADR 0144). The plots, the log and the strip follow the new selected run (none: they
+     empty).
    * A click on a run's row in the Runs panel (`open_run`) selects its case (its `run.json`'s `case`) as a case click
-     does, without the Mesh side and without choosing its newest run: the run clicked is the selected run and the Viewport
-     goes to the Run side; the Mesh side shows the case's mesh when toggled. The same case: nothing is read again.
+     does, without the Mesh side and without choosing its newest run. The run clicked is the selected run and the
+     Viewport goes to the Run side; the Mesh side shows the case's mesh when toggled. For the same case, nothing is read
+     again.
    * A run whose case is not among the project's case files as last listed (removed or renamed; ADR 0148's `.toml` and
      `.json` rule): the selected case does not change, the status bar says `run <id>: its case <case> is not in the
      project any more (deleted or renamed), so the selected case is unchanged`, and the Run side's readout names it as
@@ -103,12 +123,11 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
      another case is selected (a click on a case, a click on a run of another case, the starter opening a new case), an
      editor with unsaved state is kept (`Studio::parked`) and no longer watched; a clean one is dropped as before. Back
      on the case (any of those selections), the kept editor is the case editor again at once (the same edits, typed text,
-     conflict; the same case clicked again keeps it too), and the file is read again: its bytes are compared by ADR
-     0131's rule with the field being typed counted as an edit (`CaseEditor::returned`): the same bytes change nothing;
-     other bytes, or no file, while the editor holds an edit, a typed field or a conflict put it in ADR 0131's conflict
-     state with everything kept (the disk version offered; "Keep my edits" or "Take the disk version"); a clean editor
-     reloads. A typed field counts as an edit here so that it is never dropped by the reload of a clean editor (question
-     5).
+     conflict; the same case clicked again keeps it too), and the file is read again. Its bytes are compared by ADR 0131's
+     rule with the field being typed counted as an edit (`CaseEditor::returned`). The same bytes change nothing. Other
+     bytes, or no file, while the editor holds an edit, a typed field or a conflict put it in ADR 0131's conflict state
+     with everything kept (the disk version offered; "Keep my edits" or "Take the disk version"). A clean editor reloads.
+     A typed field counts as an edit here so that it is never dropped by the reload of a clean editor (question 5).
    * A field typed in a case left and taken back shows the typed text (the editor's `draft`) until it is finished; the
      field buffers are shared by all cases (`UiState::buffers`), so without this the field would show the stored value
      while Run says "finish editing" (`ui.rs` `leaf_ui`, `Field`).
@@ -131,14 +150,14 @@ stays acyclic. Clean-room: our own Studio code and the egui public API.
      rel, message }` (a failed write; before: `Failed(message)`, the status bar text unchanged); a kept editor that a save
      left clean is let go (its mark goes).
    * **Closing asks** (it did not ask before; Context): Project > Close project, Project > Open project..., Open typed
-     path..., Recent, New project... and the window's close call `Studio::request_close(<what follows>)`; while any case
+     path..., Recent, New project... and the window's close call `Studio::request_close(<what follows>)`. While any case
      holds unsaved state the question `Unsaved edits` (an egui `Modal`) names the cases and offers `Save all and close`,
-     `Discard and close`, `Cancel` (Escape: Cancel); the window's close is cancelled (`ViewportCommand::CancelClose`)
+     `Discard and close`, `Cancel` (Escape: Cancel). The window's close is cancelled (`ViewportCommand::CancelClose`)
      while it asks. Save all: in every case with unsaved state a field being typed is committed first (a refused commit
-     stops the close with `<case>: <path>: <reason>: correct the field, or close with Discard`); a case in conflict stops
+     stops the close with `<case>: <path>: <reason>: correct the field, or close with Discard`). A case in conflict stops
      it (`<case>: resolve the conflict in the case editor first (Keep my edits or Take the disk version), or close with
-     Discard`); the others are saved with the base-hash rule, and when every save is written the project closes and the
-     action asked for follows (the other project opens, the window closes); a save that meets a conflict or fails stops it
+     Discard`). The others are saved with the base-hash rule, and when every save is written the project closes and the
+     action asked for follows (the other project opens, the window closes). A save that meets a conflict or fails stops it
      with `<case>: not saved, the file changed on disk; resolve the conflict` (or `<case>: not saved: <message>`), the
      question staying with the reason. Discard: the project closes, the edits are dropped, the action follows. Cancel:
      nothing changes. `Studio::close_project` itself (tests, the inner path) does not ask.
@@ -187,17 +206,25 @@ store_plan,preview,poll,watch,ui}.rs`. No new crate, no new dependency, no new w
 
 ## Registered checks (limits fixed here, before any of them ran)
 
-Release builds, `--test-threads 1 --nocapture`, output to files, this host; `rcfd-runner` and `rcfd` of the same build
-next to the test's `rcfd-studio` (`common::binaries`). "Settled": nothing being read (`pending_case` none) and the preview
-neither building nor waiting for its debounce (`lj::settled`). Drawn frames are 1280 x 800 at scale 1, the default
-layout; hover checks with egui's tooltip delay 0 (ADR 0148 amendment 1). Every wait has a 30 s limit (60 s for a run to
-finish), an upper bound, not a timing claim. "Agree" (O1, O3): `quick_run::selected_case`, the Mesh side's case and the
-case editor's case are S, and R's case is S unless R's case is not listed (then the Run side's readout starts with
-`gone_case_text(<case>)`), and on the Run side the Viewport shows R. The fixture of O1 and O2: ADR 0138's project
-(`cases/cavity.toml` 16 x 16, `cases/hex.toml`) with `cases/b.toml` (the cavity at 10 x 10), `cases/gone.toml` and
-`cases/old.toml`, and five finished runs without stores made by `Project::create_run` 10 ms apart: r1, r2 of the cavity,
-r3 of b, r4 of gone, r5 of old; watcher off, run worker on. The fixture of O4-O9: ADR 0138's project with `cases/b.toml`
-(10 x 10) and `cases/c.toml` (12 x 12), watcher and run worker off unless said. Files: `crates/rcfd-studio/tests/
+Conditions, terms and fixtures of the table below:
+
+* Release builds, `--test-threads 1 --nocapture`, output to files, this host; `rcfd-runner` and `rcfd` of the same build
+  next to the test's `rcfd-studio` (`common::binaries`).
+* "Settled": nothing being read (`pending_case` none) and the preview neither building nor waiting for its debounce
+  (`lj::settled`).
+* Drawn frames are 1280 x 800 at scale 1, the default layout; hover checks with egui's tooltip delay 0 (ADR 0148
+  amendment 1).
+* Every wait has a 30 s limit (60 s for a run to finish), an upper bound, not a timing claim.
+* "Agree" (O1, O3): `quick_run::selected_case`, the Mesh side's case and the case editor's case are S, and R's case is S
+  unless R's case is not listed (then the Run side's readout starts with `gone_case_text(<case>)`), and on the Run side
+  the Viewport shows R.
+* The fixture of O1 and O2: ADR 0138's project (`cases/cavity.toml` 16 x 16, `cases/hex.toml`) with `cases/b.toml` (the
+  cavity at 10 x 10), `cases/gone.toml` and `cases/old.toml`, and five finished runs without stores made by
+  `Project::create_run` 10 ms apart: r1, r2 of the cavity, r3 of b, r4 of gone, r5 of old; watcher off, run worker on.
+* The fixture of O4-O9: ADR 0138's project with `cases/b.toml` (10 x 10) and `cases/c.toml` (12 x 12), watcher and run
+  worker off unless said.
+
+Files: `crates/rcfd-studio/tests/
 linked_o.rs` (O1-O3), `drafts_o.rs` (O4-O9), `json_o.rs` (O10, O11); O12 in `case_starter_g2.rs`.
 
 | Id | Check | Limit | Negative control (must fail) |
@@ -326,13 +353,14 @@ registered files and the whole suite run again on the commit of this amendment.
 
 ## Addendum: results against the registered limits (2026-10-28)
 
-Branch `worktree-agent-a0ebc694d469da352`. Commits: registration c057aee (on main 9e857d8); amendment 1 894b659;
-amendment 2 3198a8e; amendment 3 39df6a5 (the final code); then this addendum. Every run: release, `--test-threads 1
---nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB; 16.8 to 27.7 GB free during the runs); the
-target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built at the baseline from the same sources (no file
-of theirs changed). Registered runs: the four files on 894b659 (first), on 3198a8e (after amendment 2) and on 39df6a5
-(after amendment 3), then the whole suite on 39df6a5 (O13); an earlier whole-suite run on 3198a8e is reported under O13.
-The table gives the final runs' values (39df6a5); where an earlier run differed, it says so.
+* Branch `worktree-agent-a0ebc694d469da352`. Commits: registration c057aee (on main 9e857d8); amendment 1 894b659;
+  amendment 2 3198a8e; amendment 3 39df6a5 (the final code); then this addendum.
+* Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB; 16.8
+  to 27.7 GB free during the runs); the target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built at the
+  baseline from the same sources (no file of theirs changed).
+* Registered runs: the four files on 894b659 (first), on 3198a8e (after amendment 2) and on 39df6a5 (after amendment 3),
+  then the whole suite on 39df6a5 (O13); an earlier whole-suite run on 3198a8e is reported under O13.
+* The table gives the final runs' values (39df6a5); where an earlier run differed, it says so.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -374,14 +402,14 @@ The table gives the final runs' values (39df6a5); where an earlier run differed,
 2. Amendments 2 and 3: three defects of the new tests' procedures (O1's settle with nothing selected, O8's control's
    save, O1's control's toggle), none of a limit; each corrected before its rerun, every registered file then run again on
    the final commit.
-3. ADR 0148 decision 1 (d) changes (decision 1: a run Run queued after another case was selected is not selected), with
-   N4's first limit (registered). The maintainer asked that R4 stay: its fix (the Viewport stays on the selected case's
-   mesh) stays; the selection of the run does not, so that the selection is one case (question 1).
+3. This job changes ADR 0148 decision 1 (d) (decision 1: a run Run queued after another case was selected is not
+   selected), and with it N4's first limit (registered). The maintainer asked that R4 stay. R4's fix (the Viewport stays
+   on the selected case's mesh) stays; the selection of the run does not, so that the selection is one case (question 1).
 4. **Found, not changed: a case saved by the Studio stores no fields when Run starts it.** The case editor's save writes
    every setting (canonical TOML, ADR 0131), `output.store_interval = 0`, `output.store_time_interval = 0.0` and
    `output.store_precision = "f64"` among them (read in O7 (d)'s saved `cases/b.toml`), and so does `rcfd-api`'s writer
-   (O10's JSON case). ADR 0140 reads a store key in the text, 0 included, as the case's own choice, so the plan proposes
-   no store (`sets its store true; --set []` in O10 (b)) and the run stores no fields: after Run's own "save it first",
+   (O10's JSON case). ADR 0140 reads a store key in the text, 0 included, as the case's own choice. So the plan proposes
+   no store (`sets its store true; --set []` in O10 (b)) and the run stores no fields. After Run's own "save it first",
    Run of the saved case has nothing to show on the Run side (O10's JSON run stored none; its TOML twin, with the
    proposal, did). Not part of this job's decisions; question 9.
 5. "Reuse the same function": `rcfd run`'s reader (`load_case_in`) is private to the `rcfd` program; the Studio's
@@ -440,8 +468,8 @@ descriptor.
 7. Make a JSON case: `cmd /c "target\release\rcfd.exe run <project>\cases\<case>.toml --print-settings >
    <project>\cases\<name>.json"` (the resolved settings as JSON, a valid case; `cmd` because a PowerShell `>` writes
    UTF-16 or a byte-order mark, which no case reader takes), click it and Run: it runs; its Run side shows no stored
-   fields for the reason of item 5 (every setting spelled out). Click a repository descriptor copied in as `cases/<id>/case.json`: Run is
-   greyed out with the one line "not a case file"; Runs > Start run... shows the same line.
+   fields for the reason of item 5 (every setting spelled out). Click a repository descriptor copied in as
+   `cases/<id>/case.json`: Run is greyed out with the one line "not a case file"; Runs > Start run... shows the same line.
 8. Case > New case from example...: a transient example says "to simulated time ... s".
 9. Report anything slow, confusing or wrong, with the case and what was done.
 

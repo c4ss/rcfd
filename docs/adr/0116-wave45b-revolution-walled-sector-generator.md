@@ -1,13 +1,26 @@
-# ADR 0116: Wave 45B, a sector generator whose walls are exact surfaces of revolution (MRF with cyclic seams through the case tree)
+# ADR 0116: Wave 45B, a sector generator whose walls are exact surfaces of revolution
 
-Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran. The
-house rules of ADRs 0110-0113 apply:
-* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
-* a defective set-up gets a new corrected test, registered here as an amendment before it runs;
-* defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran.
 
-Written at main e65b4ea (worktree `<scratch dir>`, branch `w45b`, target `<target dir>`). Clean-room: first
-principles and our own ADRs only. Parents: ADRs 0065 (S4), 0109, 0113.
+The wave-45 proposal asked for a fan-passage generator whose hub and shroud are surfaces of revolution, so that the MRF zone
+could open on the fan passage. The code shows that the blade blocks MRF whatever the hub and shroud are, and no generator
+removes this blocker. This wave delivers scope B0: `annulus_3d_sector`, an empty sector whose walls are exact surfaces of
+revolution, which takes MRF with cyclic seams through the case tree. The addendum records the measured values: G1-G7 pass and
+N1, N2 discriminate, so by the decision rule the generator and its case-tree name are kept. The exact empty passage holds to
+5.6e-13 U, and the solid-body sector reproduces the full annulus to 1.4e-11 W r_out. The generator does not open MRF on the
+bladed FAN-01 passage, where `MrfZone::worst_non_axisymmetry` still refuses the blade wall. F-126 stays partial, and by user
+decision no third F-RP (blade-wall frame flux) attempt is drafted. The final gate gave 2020 passed, 0 failed, 634 ignored.
+
+Rules and parents:
+
+* The house rules of ADRs 0110-0113 apply:
+  * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
+  * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles and our own ADRs only.
+* Parents: ADRs 0065 (S4), 0109, 0113.
+
+Written at main e65b4ea (worktree `<scratch dir>`, branch `w45b`, target `<target dir>`).
 
 ## User decisions (taken before this wave started)
 

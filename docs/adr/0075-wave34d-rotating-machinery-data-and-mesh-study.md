@@ -1,24 +1,47 @@
-# ADR 0075: Wave 34D, published rotating-machinery data, the F-126 acceptance attempt, and a registered mesh study of the rotating-frame checks
+# ADR 0075: Wave 34D, rotating-machinery data, the F-126 attempt and a mesh study
 
-Status: accepted. Everything under "Registered" was written and committed before any of the new test code was written or run and before any
-solver run on a published rotating-machinery case. Limits are not changed, widened or deleted after a run; a miss becomes an ignored
-`*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never
-re-recorded. Clean-room: first principles and published literature only; every reference value is cited, anything recalled from memory is marked
-UNVERIFIED. Parent: ADR 0071 (wave 33D, addendum: F-126 not attempted, C2/C3 finest-mesh limits registered without a mesh study and missed,
-C4 spurious radial/axial speed missed), ADR 0055/0059 (F-126 frozen rotor / mixing plane), ADR 0065/0068 (fan sector meshes), `docs/milestone-fan.md`.
+Status: accepted. Everything under "Registered" was written and committed before any of the new test code was written or run
+and before any solver run on a published rotating-machinery case.
 
 **2026-10-30, [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md):** the torques below are molecular moments. With the effective moment default (same fields bit for bit) attempt 3 gives 1.3471 / 1.0420 N m (-37.1 % / -44.6 %); F-126 still misses every limit.
+
+Wave 34D read published rotating-machinery data, made the F-126 acceptance attempt on the best-fitting case, and ran a
+registered mesh study of the rotating-frame checks that replaces the ADR 0071 finest-mesh limits. In the mesh study R1, R2
+and R3 passed, and the ADR 0071 finest-mesh limits 5e-3 (Taylor-Couette) and 2e-3 (Ekman) are met one refinement further, on
+h/8. R4 missed on three of its five runs: (b) and (e) on the earliest order pair, and (d) because (96, 32, 2) did not
+converge. The F-126 case is the FAN-01 rotor. Its registered attempt was NOT RUNNABLE, attempt 2 NOT CONVERGED, and attempt 3
+converged and MISSED every limit by a wide margin. F-126 acceptance is NOT MET, the causes of the miss were not diagnosed,
+and no fan performance claim is made. Code changes beyond "tests only" were registered in amendments 1 and 2: the
+`mesh.fan.station_*` lists, the SST relative wall velocity and the relaxed API check for SST; no default changed. The
+attempts also found that the steady solver has no divergence stop.
+
+Rules and parents:
+
+* Limits are not changed, widened or deleted after a run; a miss becomes an ignored `*_known_miss` test with the limit
+  intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded.
+* Clean-room: first principles and published literature only; every reference value is cited, anything recalled from memory
+  is marked UNVERIFIED.
+* Parent: ADR 0071 (wave 33D, addendum: F-126 not attempted, C2/C3 finest-mesh limits registered without a mesh study and
+  missed, C4 spurious radial/axial speed missed), ADR 0055/0059 (F-126 frozen rotor / mixing plane), ADR 0065/0068 (fan
+  sector meshes), `docs/milestone-fan.md`.
 
 ## Registered
 
 ### Part A: reading published rotating-machinery data
 
-For each source found the record (in `docs/validation-data.md` and, where it is a dataset, `validation-data/manifest.json`) states: full citation;
-URL; what was ACTUALLY READ (the document or page opened and the relevant content read) versus only SEEN CITED (a reference in another paper, a
-search snippet; never upgraded to "read"); geometry completeness (which geometric data are public, where); operating-condition data and measured
-performance numbers actually read (table or figure; a value read off a plot is marked as such with its reading uncertainty); licence or terms of
-use; whether the existing solver (incompressible SIMPLE/SIMPLEC with `rotating_frame` / `mrf`, mixing plane, rotational-periodic sector, SST) and
-the `rcfd_mesh::fan` generators could in principle run it, and if not, why.
+For each source found the record (in `docs/validation-data.md` and, where it is a dataset, `validation-data/manifest.json`)
+states:
+* full citation;
+* URL;
+* what was ACTUALLY READ (the document or page opened and the relevant content read) versus only SEEN CITED (a reference in
+  another paper, a search snippet; never upgraded to "read");
+* geometry completeness (which geometric data are public, where);
+* operating-condition data and measured performance numbers actually read (table or figure; a value read off a plot is marked
+  as such with its reading uncertainty);
+* licence or terms of use;
+* whether the existing solver (incompressible SIMPLE/SIMPLEC with `rotating_frame` / `mrf`, mixing plane, rotational-periodic
+  sector, SST) and the `rcfd_mesh::fan` generators could in principle run it, and if not, why.
 
 Vendoring rule: a file is added to the manifest with an upstream URL and checksum only when its licence explicitly permits redistribution or it is a
 US-government work marked for public use; otherwise the dataset is listed with no files and status `unresolved` (as `hannover-compressor`).
@@ -44,20 +67,28 @@ and efficiency within published scatter. Outcome classes, fixed now, exactly one
 * NOT CONVERGED: the run reaches its iteration cap without the registered convergence criterion, or diverges / stops on the divergence guard.
 * MISSED: converged, at least one registered limit exceeded.
 * MET: converged and every registered limit met.
-Rules fixed now: the case is chosen by the ranking above after reading the sources; the numeric limits, the operating point(s), the compared
-quantities, the turbulence treatment and the mesh are registered in a dated amendment of this ADR BEFORE any solver run on that case. The mesh is the
-coarsest meaningful one by a rule fixed in that amendment (not by trying meshes). The run is done once per registered set-up. A published fan rebuilt
-with the generator and compared with measurement is a validation result of that one comparison; no fan performance claim is made beyond it, and none
-from any generator-only fan.
+
+Rules fixed now:
+* the case is chosen by the ranking above after reading the sources;
+* the numeric limits, the operating point(s), the compared quantities, the turbulence treatment and the mesh are registered
+  in a dated amendment of this ADR BEFORE any solver run on that case;
+* the mesh is the coarsest meaningful one by a rule fixed in that amendment (not by trying meshes);
+* the run is done once per registered set-up;
+* a published fan rebuilt with the generator and compared with measurement is a validation result of that one comparison; no
+  fan performance claim is made beyond it, and none from any generator-only fan.
 
 ### Part C: registered mesh study of the rotating-frame checks (replaces the ADR 0071 finest-mesh limits)
 
-Disclosure, fixed now: the ADR 0071 max-norm errors on the three meshes h, h/2, h/4 are KNOWN (Taylor-Couette 9.76e-2, 2.61e-2, 6.76e-3 V_i, orders
-1.90, 1.95; Ekman against the infinite-depth spiral 4.04e-2, 1.30e-2, 3.58e-3 U_g, orders 1.64, 1.86; the `rotating_frame` spurious speed of the
-C2a runs 7.9e-2, 2.4e-2, 6.4e-3 V_i). An order window on that triple passes by construction and is not counted as evidence. The blind part of this
-study is therefore a FOURTH mesh h/8 that has never been run, and the Richardson analysis is made on the triple (h/2, h/4, h/8). Spacing halves in
-every direction in which the solution varies (the azimuthal and radial directions of the annulus, the wall-normal direction of the Ekman box); the
-direction(s) of invariance keep their cells (annulus z: 2 cells between symmetry planes; Ekman x and z: 2 cells, periodic).
+Disclosure, fixed now: the ADR 0071 max-norm errors on the three meshes h, h/2, h/4 are KNOWN:
+* Taylor-Couette 9.76e-2, 2.61e-2, 6.76e-3 V_i, orders 1.90, 1.95;
+* Ekman against the infinite-depth spiral 4.04e-2, 1.30e-2, 3.58e-3 U_g, orders 1.64, 1.86;
+* the `rotating_frame` spurious speed of the C2a runs 7.9e-2, 2.4e-2, 6.4e-3 V_i.
+
+An order window on that triple passes by construction and is not counted as evidence. The blind part of this study is
+therefore a FOURTH mesh h/8 that has never been run, and the Richardson analysis is made on the triple (h/2, h/4, h/8).
+Spacing halves in every direction in which the solution varies (the azimuthal and radial directions of the annulus, the
+wall-normal direction of the Ekman box); the direction(s) of invariance keep their cells (annulus z: 2 cells between symmetry
+planes; Ekman x and z: 2 cells, periodic).
 
 Reference solutions (exact for the solved problem):
 * Taylor-Couette (unchanged from ADR 0071, exact for the finite annulus): `u_theta = A r + B/r`, `A = -W_i r_i^2/(r_o^2 - r_i^2)`,
@@ -78,11 +109,18 @@ Functionals (for Richardson extrapolation; max norms cannot be extrapolated):
 * R3 (Ekman box, fv level, the C3b set-up): the two transports per unit width `T_u = sum_c (u_c - U_g) dy`, `T_w = sum_c w_c dy` (averaged over the
   2 x 2 columns), exact `int_0^H V dy = -U_g (cosh(lambda H) - 1) / (lambda sinh(lambda H))`, `T_u = Re`, `T_w = Im` of it.
 
-Meshes: R1 (nx, ny, nz) = (12, 4, 2), (24, 8, 2), (48, 16, 2), (96, 32, 2); R2 (n_theta, n_r) = (2, 4), (4, 8), (8, 16), (16, 32); R3 N = 16, 32, 64, 128.
-Convergence (required on every mesh; a run that is not converged is a miss of the check): R1 `tolerance_u = tolerance_p = 1e-10`, cap 20000 iterations;
-R2 `res_u < 1e-10` and continuity `< 1e-9`, cap 20000; R3 `max_du < 1e-11` and continuity `< 1e-9` (the C3b criterion), cap 400000.
-Iteration-error check I1: after convergence on the two finest meshes, 500 further iterations change each functional by at most `1e-2 |f_{h/4} - f_{h/8}|`
-and the max-norm error by at most `1e-2 e_{h/8}`.
+Meshes:
+* R1 (nx, ny, nz) = (12, 4, 2), (24, 8, 2), (48, 16, 2), (96, 32, 2);
+* R2 (n_theta, n_r) = (2, 4), (4, 8), (8, 16), (16, 32);
+* R3 N = 16, 32, 64, 128.
+
+Convergence (required on every mesh; a run that is not converged is a miss of the check):
+* R1 `tolerance_u = tolerance_p = 1e-10`, cap 20000 iterations;
+* R2 `res_u < 1e-10` and continuity `< 1e-9`, cap 20000;
+* R3 `max_du < 1e-11` and continuity `< 1e-9` (the C3b criterion), cap 400000.
+
+Iteration-error check I1: after convergence on the two finest meshes, 500 further iterations change each functional by at
+most `1e-2 |f_{h/4} - f_{h/8}|` and the max-norm error by at most `1e-2 e_{h/8}`.
 
 Limits, the same for R1, R2 and R3 (for R3 for each of `T_u`, `T_w`), with `f1, f2, f3` the functional on h/2, h/4, h/8 and `f_ex` the exact value:
 * L1 monotone convergence: `rho = (f2 - f3)/(f1 - f2)` lies in (0, 1); otherwise the functional is outside the asymptotic range and the check is a MISS (not
@@ -99,12 +137,17 @@ Max norm `e_k = max over cells` of the ADR 0071 error measure (R3 now against th
 The ADR 0071 tests `c2a_corrected_finest_error_known_miss`, `c2b_finest_error_known_miss`, `c3b_ekman_finest_error_known_miss` stay ignored and unchanged.
 R3 also keeps the ADR 0071 spiral-amplitude criterion on h/8 (max |w| within 5 % of the analytic maximum, now of the finite-height solution).
 
-R4, the spurious radial/axial speed of the C4 frame-invariance runs (the C4 corrected set-up: (a) inertial, (b) `mrf` `Omega = W_i`, (c) `rotating_frame`
-`Omega = W_i`, (d) `rotating_frame` `0.5 W_i`, (e) `mrf` `0.5 W_i`) on the four R1 meshes. The exact value is zero, so the measured speed is itself the
-error against the exact solution. Only the (48, 16, 2) values and the C2a `rotating_frame` sequence are known; the (a), (b), (d), (e) sequences have never
-been run. Limits per run: L6 as above (finest pair in [1.7, 2.3], earlier pairs `>= 1.4`; a finest-mesh value below `1e-7 V_i` counts as an order pass).
-Reported, no limit: the location (r, z) of the maximum on each mesh, and the mesh on which the ADR 0071 limit `1e-3 V_i` would be met if the
-observed order holds. Convergence as R1. The ADR 0071 test `c4_corrected_spurious_speed_known_miss` stays ignored and unchanged.
+R4, the spurious radial/axial speed of the C4 frame-invariance runs (the C4 corrected set-up: (a) inertial, (b) `mrf`
+`Omega = W_i`, (c) `rotating_frame` `Omega = W_i`, (d) `rotating_frame` `0.5 W_i`, (e) `mrf` `0.5 W_i`) on the four R1
+meshes. The exact value is zero, so the measured speed is itself the error against the exact solution. Only the (48, 16, 2)
+values and the C2a `rotating_frame` sequence are known; the (a), (b), (d), (e) sequences have never been run.
+
+* Limits per run: L6 as above (finest pair in [1.7, 2.3], earlier pairs `>= 1.4`; a finest-mesh value below `1e-7 V_i` counts
+  as an order pass).
+* Reported, no limit: the location (r, z) of the maximum on each mesh, and the mesh on which the ADR 0071 limit `1e-3 V_i`
+  would be met if the observed order holds.
+* Convergence as R1.
+* The ADR 0071 test `c4_corrected_spurious_speed_known_miss` stays ignored and unchanged.
 
 Code policy: tests only. New files `crates/rcfd-api/tests/rotating_mesh_study.rs` (R1, R4) and `crates/rcfd-fv/tests/rotating_mesh_study.rs` (R2, R3);
 the ADR 0071 test files are not edited. A miss stays as an ignored `*_known_miss` test with the limit unchanged.
@@ -126,20 +169,31 @@ Written after the sources were read and after the Part C runs, BEFORE any mesh o
 
 ### Part B registration: FAN-01 rotor in a straight annular duct, F-126 acceptance attempt
 
-Geometry (generator terms): `n_blades = 9`, `r_hub = 0.124`, `r_tip = 0.2475`, `tip_clearance = 0.0025` (shroud r = 0.250), NACA 4-digit family, stations from the
-cylindrical sections of the CC BY 4.0 CAD (extraction by a pure-Python IGES/NURBS evaluator written for this wave; the sections are close to, not exactly, NACA
-4-digit: camber line within 0.0016 c of the NACA parabola with m = 0.0365-0.0376 at p = 0.515-0.53, maximum thickness 0.109-0.111 c at 23 % chord, which a NACA
-4-digit thickness form puts at 30 %; mean-line metal angles checked: the leading edge is more tangential than the trailing edge (58 vs 42 deg from the axis at r = 140 mm),
-i.e. positive camber in the generator convention for rotation about +z). Stations at r = 124 (linear extrapolation of 127/130), 127, 130, 140, ..., 240, 245, 247.5 mm
-(extrapolated from 245/247): chord, stagger from the axis, camber, camber position and thickness as tabulated in `docs/validation-data.md`; sweep = x_LE(r) - x_LE(124),
-lean = r (theta_LE(r) - theta_LE(124)). The published nominal design (NACA 4510, chord 103 / 58 mm) is NOT used: the as-built CAD is 4-5 % shorter in chord. Domain: inlet
-plane 100 mm ahead of the hub leading edge (`z_le_root = 0.1`), `axial_extent = 0.4`; the hub is a cylinder over the whole domain.
+Geometry (generator terms): `n_blades = 9`, `r_hub = 0.124`, `r_tip = 0.2475`, `tip_clearance = 0.0025` (shroud r = 0.250),
+NACA 4-digit family, stations from the cylindrical sections of the CC BY 4.0 CAD (extraction by a pure-Python IGES/NURBS
+evaluator written for this wave; the sections are close to, not exactly, NACA 4-digit: camber line within 0.0016 c of the
+NACA parabola with m = 0.0365-0.0376 at p = 0.515-0.53, maximum thickness 0.109-0.111 c at 23 % chord, which a NACA 4-digit
+thickness form puts at 30 %; mean-line metal angles checked: the leading edge is more tangential than the trailing edge (58
+vs 42 deg from the axis at r = 140 mm), i.e. positive camber in the generator convention for rotation about +z).
+
+Stations at r = 124 (linear extrapolation of 127/130), 127, 130, 140, ..., 240, 245, 247.5 mm (extrapolated from 245/247):
+chord, stagger from the axis, camber, camber position and thickness as tabulated in `docs/validation-data.md`; sweep =
+x_LE(r) - x_LE(124), lean = r (theta_LE(r) - theta_LE(124)).
+
+The published nominal design (NACA 4510, chord 103 / 58 mm) is NOT used: the as-built CAD is 4-5 % shorter in chord.
+
+Domain: inlet plane 100 mm ahead of the hub leading edge (`z_le_root = 0.1`), `axial_extent = 0.4`; the hub is a cylinder
+over the whole domain.
 
 New input needed (code, opt-in): the case hook only has a hub and a tip station with linear variation; the stagger of FAN-01 varies from 43.6 to 69.6 deg and the chord
 from 99 to 55 mm non-linearly (a two-station fit is about 4 deg / 11 mm off at mid-span). Optional lists `mesh.fan.station_radius`, `station_chord`, `station_stagger`,
 `station_camber`, `station_camber_pos`, `station_thickness`, `station_sweep`, `station_lean` are added; when `station_radius` is non-empty they replace the hub/tip values.
-Registered checks: H1 a two-station list equal to the hub/tip values gives a mesh identical (node coordinates bit-for-bit, same cells) to the hub/tip form; H2 lists of
-unequal length, or a first/last radius not at r_hub / r_tip, give a located error `mesh.fan.station_*`; H3 the existing fan examples are unchanged (no default changes).
+
+Registered checks:
+* H1 a two-station list equal to the hub/tip values gives a mesh identical (node coordinates bit-for-bit, same cells) to the
+  hub/tip form;
+* H2 lists of unequal length, or a first/last radius not at r_hub / r_tip, give a located error `mesh.fan.station_*`;
+* H3 the existing fan examples are unchanged (no default changes).
 
 Mesh, the coarsest meaningful one by a rule fixed now: `topology = "c_grid"` with the counts of the example `cases/axial_fan_cgrid` (n_up 8, n_chord 16, n_down 8,
 n_side 10, n_nose 4, n_core 1, front_gap 0.3, n_span 14, n_gap 7, n_bl 2, growth 1.2), first cell from the generator's y+ estimate with `y_plus = 30`,
@@ -147,29 +201,53 @@ n_side 10, n_nose 4, n_core 1, front_gap 0.3, n_span 14, n_gap 7, n_bl 2, growth
 counts of `cases/axial_fan_sector` (n_up 8, n_chord 12, n_down 8, n_side 10, n_mid 1, n_span 16, n_gap 7, n_bl 2, growth 1.2, same first-cell rule, default truncation) is
 used instead; if both fail the outcome is NOT RUNNABLE. No other mesh is tried.
 
-Physics and solver: air `nu = 1.5e-5 m^2/s`, `rho = 1.2 kg/m^3` (ASSUMED: the data set gives no density or ambient state; UNVERIFIED), rotational speed 1486 rpm
-(`Omega = 155.62 rad/s`, from the papers; the data files carry no speed), `rotating_frame` source about +z with centrifugal terms (the `mrf` source is refused on this mesh,
-ADR 0065 S4), `k_omega_sst` with the automatic wall treatment, fully turbulent. Boundaries (velocities in the rotating frame): inlet fixed `u = (Omega y, -Omega x, U_in)`
-(uniform axial absolute inflow, no swirl), turbulence `values` with k = 1.5 (0.01 U_in)^2 and omega = sqrt(k)/(Cmu^0.25 l), l = 0.07 D_h = 0.0176 m; outlet fixed static
-pressure 0, zero-gradient velocity; hub and blade no-slip (rotating with the rotor); shroud at rest in the absolute frame, `u = (Omega y, -Omega x, 0)`,
-`turbulence = "wall"` (the automatic role would call a moving wall an inlet). SIMPLEC, `linear_upwind`, up to 8000 iterations. Converged = `tolerance_u = tolerance_p = 1e-5`
-reached, OR at the cap: torque and Delta p_ts change by less than 0.5 % over the last 1000 iterations and `|m_in + m_out| <= 1e-3 |m_in|`. Otherwise the outcome is NOT CONVERGED.
+Physics and solver:
+* air `nu = 1.5e-5 m^2/s`, `rho = 1.2 kg/m^3` (ASSUMED: the data set gives no density or ambient state; UNVERIFIED);
+* rotational speed 1486 rpm (`Omega = 155.62 rad/s`, from the papers; the data files carry no speed);
+* `rotating_frame` source about +z with centrifugal terms (the `mrf` source is refused on this mesh, ADR 0065 S4);
+* `k_omega_sst` with the automatic wall treatment, fully turbulent.
 
-Operating points (measured values read from `characteristic_n1ug.mat` of the Zenodo record; torque derived here as P/Omega): design Q = 1.4032 m^3/s (Delta p_ts 126.46 Pa,
-shaft power 333.30 W, M = 2.142 N m, eta_ts 0.532); off-design Q = 1.8039 m^3/s (63.9 Pa, 292.9 W, 1.882 N m, 0.394). U_in = Q / (pi (0.250^2 - 0.124^2)) = 9.478 and
-12.185 m/s. The stall region (Q below about 1.2 m^3/s) is excluded.
+Boundaries (velocities in the rotating frame):
+* inlet fixed `u = (Omega y, -Omega x, U_in)` (uniform axial absolute inflow, no swirl), turbulence `values` with k = 1.5
+  (0.01 U_in)^2 and omega = sqrt(k)/(Cmu^0.25 l), l = 0.07 D_h = 0.0176 m;
+* outlet fixed static pressure 0, zero-gradient velocity;
+* hub and blade no-slip (rotating with the rotor);
+* shroud at rest in the absolute frame, `u = (Omega y, -Omega x, 0)`, `turbulence = "wall"` (the automatic role would call a
+  moving wall an inlet).
 
-Computed quantities: M = minus the moment about +z of the fluid on the `blade` and `hub` patches (pressure and viscous), times 9 (the shroud is stationary in the rig, its
-moment is not shaft torque); Delta p_ts = (area-averaged static pressure on the outlet) - (area-averaged static pressure on the inlet + rho U_in^2 / 2) (the measured quantity
-is the inlet-chamber total pressure to the ambient static pressure); eta_ts = Q Delta p_ts / (M Omega) (the definition of Schoder et al. 2020). Delta p_tt (outlet mass-averaged
-absolute total pressure minus inlet total) is reported, no limit.
+SIMPLEC, `linear_upwind`, up to 8000 iterations. Converged = `tolerance_u = tolerance_p = 1e-5` reached, OR at the cap:
+torque and Delta p_ts change by less than 0.5 % over the last 1000 iterations and `|m_in + m_out| <= 1e-3 |m_in|`. Otherwise
+the outcome is NOT CONVERGED.
 
-Limits (F-126 acceptance, "within published scatter"; the FAU uncertainty is not in anything read, the scatter used is the round robin of Vourakis and Karlsson 2022: +-3 Pa,
-inter-laboratory agreement about 3 %): at each operating point `|Delta p_ts - measured| <= 3 Pa + 0.03 measured`, `|M/M_measured - 1| <= 0.05`, `|eta_ts - measured| <= 0.03`.
-MET only if both points meet all three. Modelling differences that are part of the measured deviation, stated now: no bellmouth, no finite blunt hub, no root fillet,
-no struts/motor/diffuser and no exit loss to ambient (the measured Delta p_ts is an installation value); uniform outlet pressure (no radial equilibrium); fully turbulent RANS
-at chord Reynolds numbers 1.25e5-1.5e5; NACA 4-digit thickness form instead of the CAD thickness; assumed density; bearing friction in the measured torque (not stated
-whether subtracted). Whatever the outcome, no fan performance claim is made beyond this comparison.
+Operating points (measured values read from `characteristic_n1ug.mat` of the Zenodo record; torque derived here as P/Omega):
+* design Q = 1.4032 m^3/s (Delta p_ts 126.46 Pa, shaft power 333.30 W, M = 2.142 N m, eta_ts 0.532);
+* off-design Q = 1.8039 m^3/s (63.9 Pa, 292.9 W, 1.882 N m, 0.394).
+
+U_in = Q / (pi (0.250^2 - 0.124^2)) = 9.478 and 12.185 m/s. The stall region (Q below about 1.2 m^3/s) is excluded.
+
+Computed quantities:
+* M = minus the moment about +z of the fluid on the `blade` and `hub` patches (pressure and viscous), times 9 (the shroud is
+  stationary in the rig, its moment is not shaft torque);
+* Delta p_ts = (area-averaged static pressure on the outlet) - (area-averaged static pressure on the inlet + rho U_in^2 / 2)
+  (the measured quantity is the inlet-chamber total pressure to the ambient static pressure);
+* eta_ts = Q Delta p_ts / (M Omega) (the definition of Schoder et al. 2020);
+* Delta p_tt (outlet mass-averaged absolute total pressure minus inlet total) is reported, no limit.
+
+Limits (F-126 acceptance, "within published scatter"; the FAU uncertainty is not in anything read, the scatter used is the
+round robin of Vourakis and Karlsson 2022: +-3 Pa, inter-laboratory agreement about 3 %): at each operating point
+`|Delta p_ts - measured| <= 3 Pa + 0.03 measured`, `|M/M_measured - 1| <= 0.05`, `|eta_ts - measured| <= 0.03`. MET only if
+both points meet all three.
+
+Modelling differences that are part of the measured deviation, stated now:
+* no bellmouth, no finite blunt hub, no root fillet, no struts/motor/diffuser and no exit loss to ambient (the measured Delta
+  p_ts is an installation value);
+* uniform outlet pressure (no radial equilibrium);
+* fully turbulent RANS at chord Reynolds numbers 1.25e5-1.5e5;
+* NACA 4-digit thickness form instead of the CAD thickness;
+* assumed density;
+* bearing friction in the measured torque (not stated whether subtracted).
+
+Whatever the outcome, no fan performance claim is made beyond this comparison.
 
 ## Amendment 2 (2026-10-19): outcome of the registered attempt, and a second attempt registered before any code or solver run
 
@@ -205,13 +283,19 @@ Second attempt (attempt 2), registered now; the amendment 1 physics, operating p
 
 ## Amendment 3 (2026-10-19): outcome of attempt 2, and one bounded diagnostic round registered before it runs
 
-Attempt 2 (amendment 2) results before this amendment: G1 passed (old wall speed 2.9e-1 / 2.0e-2 of U_cl at y+ 30 / 1, as predicted; with the fix 3.7e-10 /
-7.3e-11); the attempt-2 H-slit mesh builds (13 332 cells, non-orthogonality 79.1 deg, skewness 2.02, aspect 944); S1b passed. The registered FAN-01 run of the
-design point was started once; after about 2 h it had printed nothing. A 30-iteration probe of the same deterministic set-up (timing only, run in a scratch
-test that is not committed) showed the run diverging from the start: continuity 2.4 (iteration 5), 7.3e4 (10), 2.1e10 (15), 7.5e15 (20), 1.3e27 (30), while
-res_u and res_p stayed at 0.75-0.98. I stopped the registered run (my own process). Outcome of attempt 2: NOT CONVERGED (diverged). Second finding: a steady
-SIMPLE/SIMPLEC run whose continuity explodes is not stopped (`Simulation::failure` stays empty; the divergence guard of ADR 0067 covers PIMPLE/PISO only),
-so an automated design loop on the steady path can spend hours on a diverged run.
+Attempt 2 (amendment 2) results before this amendment:
+* G1 passed (old wall speed 2.9e-1 / 2.0e-2 of U_cl at y+ 30 / 1, as predicted; with the fix 3.7e-10 / 7.3e-11);
+* the attempt-2 H-slit mesh builds (13 332 cells, non-orthogonality 79.1 deg, skewness 2.02, aspect 944);
+* S1b passed.
+
+The registered FAN-01 run of the design point was started once; after about 2 h it had printed nothing. A 30-iteration probe
+of the same deterministic set-up (timing only, run in a scratch test that is not committed) showed the run diverging from the
+start: continuity 2.4 (iteration 5), 7.3e4 (10), 2.1e10 (15), 7.5e15 (20), 1.3e27 (30), while res_u and res_p stayed at
+0.75-0.98. I stopped the registered run (my own process). Outcome of attempt 2: NOT CONVERGED (diverged).
+
+Second finding: a steady SIMPLE/SIMPLEC run whose continuity explodes is not stopped (`Simulation::failure` stays empty; the
+divergence guard of ADR 0067 covers PIMPLE/PISO only), so an automated design loop on the steady path can spend hours on a
+diverged run.
 
 Diagnostic round (stability indicators only; Delta p and torque are not computed or printed in these runs):
 * M1 (mandatory, it tests the committed S1 claim): `cases/axial_fan_sector` (laminar smoke case, Omega = 20, upwind) switched to `k_omega_sst` with
@@ -258,29 +342,38 @@ Every run converged by its registered criterion except R4 (d) on (96, 32, 2). It
 | R4 (d) rotating_frame, 0.5 W_i | 1.774e-2, 5.732e-3, 1.576e-3, 4.102e-4; orders 1.630, 1.863, 1.942 | converged + L6 | MISS: (96, 32, 2) not converged (res_u stalls at 3.2e-3 in 20000 iterations while 500 more iterations change the speed by 1e-14; ignored `r4d_..._known_miss`) |
 | R4 (e) mrf, 0.5 W_i | 8.670e-3, 3.463e-3, 9.726e-4, 2.491e-4; orders 1.324, 1.832, 1.965 | L6 | MISS (earliest pair 1.32 < 1.4; ignored `r4e_..._known_miss`); finest pair passes |
 
-Replacement of the ADR 0071 finest-mesh limits: the three-mesh study (h/2, h/4, h/8) shows all three rotating-frame checks in the asymptotic range
-(observed orders of the functionals 1.97-2.03, Richardson extrapolation removes 97.5-99.2 % of the finest error, GCI brackets the exact error) and the
-blind h/8 predictions within 2-6 %. The ADR 0071 limits 5e-3 (Taylor-Couette) and 2e-3 (Ekman) are met one refinement further, on h/8 (1.72e-3, 9.4e-4);
-on h/4 they were simply too tight for that mesh (6.76e-3, 3.58e-3). The ADR 0071 known-miss tests stay ignored and unchanged.
+Replacement of the ADR 0071 finest-mesh limits: the three-mesh study (h/2, h/4, h/8) shows all three rotating-frame checks in
+the asymptotic range (observed orders of the functionals 1.97-2.03, Richardson extrapolation removes 97.5-99.2 % of the
+finest error, GCI brackets the exact error) and the blind h/8 predictions within 2-6 %. The ADR 0071 limits 5e-3
+(Taylor-Couette) and 2e-3 (Ekman) are met one refinement further, on h/8 (1.72e-3, 9.4e-4); on h/4 they were simply too tight
+for that mesh (6.76e-3, 3.58e-3). The ADR 0071 known-miss tests stay ignored and unchanged.
 
-Spurious radial/axial speed (the ADR 0071 C4 miss, 1.4e-3 against 1e-3 at h/4): the exact value is zero, so the measured speed is the error. Its maximum sits
-in the wall cell next to an end plane: on the inner wall (r = r_i + dr/2: 0.5456, 0.5273, 0.5147, 0.5076; z = 0.1, the first cell layer) for the inertial
-and MRF runs, on the outer wall (r = r_o - dr/2, z = 0.1 or 0.3) for the `rotating_frame` runs, where the relative wall speed is largest. The finest-pair
-order is 1.94-1.97 in all five formulations: the floor is second-order discretisation error of the cells at the polygonal cylinder walls, not a defect.
-At h/8 it is 3.6e-4 (inertial), 1.4e-4 (MRF), 1.7e-3 (`rotating_frame` at W_i, which meets 1e-3 on h/16 if the order holds), 4.1e-4 and 2.5e-4. Two MRF runs
-are pre-asymptotic on the coarsest pair (0.55, 1.32), which the registered "every earlier pair >= 1.4" rule counts as misses.
+Spurious radial/axial speed (the ADR 0071 C4 miss, 1.4e-3 against 1e-3 at h/4): the exact value is zero, so the measured
+speed is the error. Its maximum sits in the wall cell next to an end plane:
+* on the inner wall (r = r_i + dr/2: 0.5456, 0.5273, 0.5147, 0.5076; z = 0.1, the first cell layer) for the inertial and MRF
+  runs;
+* on the outer wall (r = r_o - dr/2, z = 0.1 or 0.3) for the `rotating_frame` runs, where the relative wall speed is largest.
+
+The finest-pair order is 1.94-1.97 in all five formulations: the floor is second-order discretisation error of the cells at
+the polygonal cylinder walls, not a defect. At h/8 it is 3.6e-4 (inertial), 1.4e-4 (MRF), 1.7e-3 (`rotating_frame` at W_i,
+which meets 1e-3 on h/16 if the order holds), 4.1e-4 and 2.5e-4. Two MRF runs are pre-asymptotic on the coarsest pair (0.55,
+1.32), which the registered "every earlier pair >= 1.4" rule counts as misses.
 
 Deviation: the API R4 tests were run a second time after they were split into the registered full-criterion tests and the finest-pair tests (same
 deterministic set-ups, identical numbers); no set-up was changed.
 
 ### Part A, published data read
 
-Recorded in `docs/validation-data.md` ("Rotating machinery sources") with what was read and what was only seen, geometry completeness, operating data,
-licence and the runnable verdict; ranking in amendment 1. Vendored (in-repo, CC BY 4.0, with attribution; manifest dataset `w34d-fan01-fau-eaa-axial-fan`):
-`validation-data/reference/w34d_fan01_characteristic_n1ug.csv` (the 20 measured points, full precision, read twice by independent parses) and
-`validation-data/reference/w34d_fan01_cad_sections.csv` (blade sections derived here from the CAD). Nothing else was vendored: the Zenodo zip files,
-NASA TM-4635, TP-2879 and the papers stay outside the repository (no fetch entry: zenodo.org is not on the fetch host list). NASA TP-1337 (already in the
-manifest) was read for Rotor 37.
+Recorded in `docs/validation-data.md` ("Rotating machinery sources") with what was read and what was only seen, geometry
+completeness, operating data, licence and the runnable verdict; ranking in amendment 1.
+
+Vendored (in-repo, CC BY 4.0, with attribution; manifest dataset `w34d-fan01-fau-eaa-axial-fan`):
+* `validation-data/reference/w34d_fan01_characteristic_n1ug.csv` (the 20 measured points, full precision, read twice by
+  independent parses);
+* `validation-data/reference/w34d_fan01_cad_sections.csv` (blade sections derived here from the CAD).
+
+Nothing else was vendored: the Zenodo zip files, NASA TM-4635, TP-2879 and the papers stay outside the repository (no fetch
+entry: zenodo.org is not on the fetch host list). NASA TP-1337 (already in the manifest) was read for Rotor 37.
 
 ### Part B, F-126 acceptance on FAN-01 (test `crates/rcfd-api/tests/fan01_validation.rs`)
 
@@ -302,31 +395,59 @@ manifest) was read for Rotor 37.
 | Attempt 3, design Q = 1.4032 m^3/s | converged by the monitor criterion at 8000 iterations (torque change 3.5e-5, Delta p_ts change 9.4e-4 over 1000 iterations, mass balance 9.3e-6; res_u 6.7e-4 not at 1e-5); Delta p_ts -3.8 Pa, Delta p_tt 112.5 Pa, torque 1.320 N m (pressure part 1.229), eta_ts -0.03 | 126.5 +- 6.8 Pa; 2.142 N m +- 5 %; 0.532 +- 0.03 | MISS (torque -38 %) |
 | Attempt 3, off-design Q = 1.8039 m^3/s | converged likewise (1.3e-4, 6.9e-5, 7.2e-6); Delta p_ts -84.4 Pa, Delta p_tt 43.5 Pa, torque 1.010 N m (pressure part 0.906), eta_ts -0.97 | 63.9 +- 4.9 Pa; 1.882 N m +- 5 %; 0.394 +- 0.03 | MISS (torque -46 %) |
 
-F-126 outcome: the registered attempt was NOT RUNNABLE; attempt 2 NOT CONVERGED; attempt 3 converged and MISSED every limit by a wide margin. F-126 acceptance
-is NOT MET. The modelled rotor absorbs 38-46 % less shaft power than measured, and its static pressure at the outlet is below the inlet total pressure
-(negative total-to-static rise) while the total-to-total rise is positive (112.5 Pa at the design point). The gap Delta p_tt - Delta p_ts is 116.3 Pa (design)
-and 127.9 Pa (off-design); uniform axial outflow accounts for rho c_x^2/2 = 53.9 and 89.1 Pa and the swirl implied by the computed torque (Euler work
-M Omega/(rho Q) = 122.0 and 72.6 J/kg, c_theta about 4.1 and 2.5 m/s at r = 0.19 m) for about 10 and 4 Pa, leaving about 52 and 35 Pa unexplained: an
-undiagnosed lead to a strongly non-uniform outlet profile (recirculation or backflow at the uniform fixed-pressure outlet is possible; note also that
-Delta p_tt is mass-averaged and Delta p_ts area-averaged). The causes of the miss were not diagnosed (bounded round); candidates, none tested: the coarse 13 k-cell H-slit mesh with blunt,
-axially truncated edges and 79 deg non-orthogonality, first-order upwind momentum convection, the first cell in the y+ 3-20 range that the SST
-documentation calls the least accurate, a hub cylinder through the whole domain instead of the finite blunt hub and bellmouth, the uniform outlet
-pressure, the NACA 4-digit thickness instead of the CAD thickness, the assumed density, fully turbulent RANS at chord Reynolds numbers about 1.5e5.
-The viscous part of the reported torque uses the molecular viscosity with the owner-cell gradient (the `moment` report), which underestimates the wall
-shear at y+ about 10; the pressure part alone is 1.229 / 0.906 N m, so the torque deficit is not a viscous-reporting artefact. No fan performance
-claim is made.
+F-126 outcome: the registered attempt was NOT RUNNABLE; attempt 2 NOT CONVERGED; attempt 3 converged and MISSED every limit
+by a wide margin. F-126 acceptance is NOT MET. No fan performance claim is made.
 
-Findings for the fan milestone: (1) no turbulent rotor-in-casing case could be set up before S1 (now fixed for k-omega SST only); (2) the C-grid generator
-cannot mesh a high-solidity hub whose wake leaves a straight-seam sector; the registered y+ rule of the H-slit generator did not check the tip gap; (3) the
-steady solver has no divergence stop (a diverged SIMPLEC run continued for hours; the ADR 0067 guard covers PIMPLE/PISO only); (4) `linear_upwind` momentum
-convection diverges on this mesh both laminar and with SST, `upwind` is stable; (5) the measured FAN-01 pressure rise is an installation value, a rotor-only
-model needs either the inlet nozzle, hub and diffuser or a rig-independent quantity (torque) to compare with.
+The modelled rotor absorbs 38-46 % less shaft power than measured. Its static pressure at the outlet is below the inlet total
+pressure (negative total-to-static rise) while the total-to-total rise is positive (112.5 Pa at the design point).
 
-Code state of the measurements: Part C was measured on fbc409b plus the wave 34D test files; G1, the attempt 2 probe and the bit-identity checks on fbc409b
-plus the wave 34D code; the diagnostic round and attempt 3 on 492e52b (which contains all wave 34D code). Between those trees and the gated HEAD other agents
-changed only opt-in paths (34A wall-velocity projection and C-grid construction, 34B consistent momentum interpolation, 34C component diagonal for PISO/PIMPLE);
-the non-ignored Part C and Part B tests are re-run by the final gate on the gated HEAD. The attempt 1 C-grid refusal is no longer asserted by the test (34A is
-changing the C-grid construction); it is recorded here.
+The gap Delta p_tt - Delta p_ts splits as follows:
+
+| Term | Design | Off-design |
+|---|---|---|
+| Gap Delta p_tt - Delta p_ts | 116.3 Pa | 127.9 Pa |
+| Accounted for by uniform axial outflow, rho c_x^2/2 | 53.9 Pa | 89.1 Pa |
+| Euler work M Omega/(rho Q) from the computed torque | 122.0 J/kg | 72.6 J/kg |
+| c_theta at r = 0.19 m | about 4.1 m/s | about 2.5 m/s |
+| Accounted for by the swirl implied by the computed torque | about 10 Pa | about 4 Pa |
+| Left unexplained | about 52 Pa | about 35 Pa |
+
+The unexplained part is an undiagnosed lead to a strongly non-uniform outlet profile (recirculation or backflow at the
+uniform fixed-pressure outlet is possible; note also that Delta p_tt is mass-averaged and Delta p_ts area-averaged).
+
+The causes of the miss were not diagnosed (bounded round). Candidates, none tested:
+* the coarse 13 k-cell H-slit mesh with blunt, axially truncated edges and 79 deg non-orthogonality;
+* first-order upwind momentum convection;
+* the first cell in the y+ 3-20 range that the SST documentation calls the least accurate;
+* a hub cylinder through the whole domain instead of the finite blunt hub and bellmouth;
+* the uniform outlet pressure;
+* the NACA 4-digit thickness instead of the CAD thickness;
+* the assumed density;
+* fully turbulent RANS at chord Reynolds numbers about 1.5e5.
+
+The viscous part of the reported torque uses the molecular viscosity with the owner-cell gradient (the `moment` report),
+which underestimates the wall shear at y+ about 10. The pressure part alone is 1.229 / 0.906 N m, so the torque deficit is
+not a viscous-reporting artefact.
+
+Findings for the fan milestone:
+1. No turbulent rotor-in-casing case could be set up before S1 (now fixed for k-omega SST only).
+2. The C-grid generator cannot mesh a high-solidity hub whose wake leaves a straight-seam sector; the registered y+ rule of
+   the H-slit generator did not check the tip gap.
+3. The steady solver has no divergence stop (a diverged SIMPLEC run continued for hours; the ADR 0067 guard covers
+   PIMPLE/PISO only).
+4. `linear_upwind` momentum convection diverges on this mesh both laminar and with SST, `upwind` is stable.
+5. The measured FAN-01 pressure rise is an installation value, a rotor-only model needs either the inlet nozzle, hub and
+   diffuser or a rig-independent quantity (torque) to compare with.
+
+Code state of the measurements:
+* Part C was measured on fbc409b plus the wave 34D test files;
+* G1, the attempt 2 probe and the bit-identity checks on fbc409b plus the wave 34D code;
+* the diagnostic round and attempt 3 on 492e52b (which contains all wave 34D code).
+
+Between those trees and the gated HEAD other agents changed only opt-in paths (34A wall-velocity projection and C-grid
+construction, 34B consistent momentum interpolation, 34C component diagonal for PISO/PIMPLE); the non-ignored Part C and Part
+B tests are re-run by the final gate on the gated HEAD. The attempt 1 C-grid refusal is no longer asserted by the test (34A
+is changing the C-grid construction); it is recorded here.
 
 ### Deviations from the registered plan (all parts)
 

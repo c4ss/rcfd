@@ -1,11 +1,11 @@
 # Parametric studies (F-095, ADR 0034)
 
+`rcfd study <case>` runs one simulation per design point of the `study` section (`docs/case-schema.md`) and writes a result table.
+
 This page is the reference for the study command: how sweeps are defined and ordered, the command-line flags, the result table
 and its columns, failure isolation, resume and exit codes. It is for people who run one case over a range of settings and collect
 the reports in a table. Some study features are not delivered yet; they are listed at the end. For the keys of the study section
 see the [case schema](case-schema.md); for operating maps, design studies and optimisation, see the [design loop](design-loop.md).
-
-`rcfd study <case>` runs one simulation per design point of the `study` section (`docs/case-schema.md`) and writes a result table.
 
 ```toml
 [reports.q]
@@ -52,9 +52,13 @@ Measured checks and the deviations from the registered set-up are in the addendu
 
 ## Not delivered (F-095 stays `partial`)
 
-Service and MCP/assistant tools for studies, sweep parameters given as named expressions (F-104), studies of chained runs (the
-chain is ignored), adaptive or optimising design exploration, resuming a point that was interrupted half way, a distributed or
-queueing runner, report columns that are not report definitions (monitors, field statistics).
+- service and MCP/assistant tools for studies
+- sweep parameters given as named expressions (F-104)
+- studies of chained runs (the chain is ignored)
+- adaptive or optimising design exploration
+- resuming a point that was interrupted half way
+- a distributed or queueing runner
+- report columns that are not report definitions (monitors, field statistics)
 
 ## Where to go next
 

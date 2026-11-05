@@ -1,6 +1,19 @@
 # ADR 0185: ADR 0173 amendment 1, F-270 registration: the rcfd-workspace crate, with the MCP server and the Studio moved onto it
 
 Status: **REGISTERED 2026-11-05**, written before any code of F-270. Not yet accepted by the maintainer.
+
+F-270 moves the commands, queries and write rule of a project folder into one new crate, `rcfd-workspace`, and both the
+MCP project tools and the Studio use it. This text fixes the choices (E1 to E9) and the acceptance limits (A1 to A7 and
+Defaults) before any code; Q1 to Q3 are the questions ADR 0173 does not answer. Addendum 1 reports E1 to E8 built as
+written on branch `f270-workspace`, not merged. The gate at 6c9c15d gave 2791 passed, 0 failed, 799 ignored. In both
+orders, the second of a Studio save and an `edit_case` on the same file gets a conflict naming the first one's hash (A4).
+The line-level save that keeps a comment line is built and checked in the workspace (A5) but not switched on in the
+Studio, which keeps the whole-file form until Q1 is answered; A5's control shows that form loses the comment. A
+one-package `cargo test --release -p rcfd-studio` gave 15 failed, all 15 because such a run does not build the
+`fake-claude` test binary. Two differences found while building are covered by no test: a Studio save now recreates a
+deleted case folder instead of failing, and the Studio's project worker now waits up to 2 s for a held edit lock, with
+saves failing on a crashed writer's lock until it is 30 s old.
+
 Parent: [ADR 0173](0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) (proposed, not accepted),
 work items W1, W2 and W5, checks C1, C2 and C6, roadmap item F-270. ADR 0173 says that every limit of its checks is fixed by an
 amendment before any test or run; this is that amendment for F-270. Amendments of this text follow it, each written before what it
@@ -13,21 +26,30 @@ ADR 0173 is not accepted. Where it gives a recommendation, this text uses it and
 maintainer decision. Where the code read below raises a question ADR 0173 does not answer, the options and a recommendation are
 listed (Q1 to Q3), and work proceeds only on a choice that is reversible.
 
-House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md)): defaults stay bit-identical; no solver result, case
-hash or byte of a case file a client writes changes (a Studio save now also takes the edit lock under `.rcfd/locks/` and adds a
-`.rcfd/edits.jsonl` line, which C2 asks for); `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new third-party
-crate; no commit trailers.
+House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md)):
+
+* defaults stay bit-identical;
+* no solver result, case hash or byte of a case file a client writes changes (a Studio save now also takes the edit lock
+  under `.rcfd/locks/` and adds a `.rcfd/edits.jsonl` line, which C2 asks for);
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
+* no new third-party crate;
+* no commit trailers.
 
 ## What F-270 asks
 
 The roadmap entry: one crate holds the commands, queries and write rule for a project folder, and both the MCP project tools and
-the Studio use it. The existing project-tool and Studio tests pass unchanged; a Studio save and an `edit_case` on the same file
-give one write and one conflict naming the current hash; a comment line in a case survives a Studio save; the crate graph stays
-acyclic with `rcfd-studio` not depending on `rcfd-mcp`.
+the Studio use it. It also says:
 
-ADR 0173's work items: W1 extract `rcfd-workspace` from `rcfd-mcp/src/project.rs` with no behaviour change; W2 `rcfd-mcp` calls
-the workspace; W5 the Studio creates, saves and starts through the workspace, and `save_if_base` and the Studio's whole-file
-write go.
+* the existing project-tool and Studio tests pass unchanged;
+* a Studio save and an `edit_case` on the same file give one write and one conflict naming the current hash;
+* a comment line in a case survives a Studio save;
+* the crate graph stays acyclic with `rcfd-studio` not depending on `rcfd-mcp`.
+
+ADR 0173's work items:
+
+* W1: extract `rcfd-workspace` from `rcfd-mcp/src/project.rs` with no behaviour change;
+* W2: `rcfd-mcp` calls the workspace;
+* W5: the Studio creates, saves and starts through the workspace, and `save_if_base` and the Studio's whole-file write go.
 
 ## What the code read shows (main 7c960bb, nothing run)
 
@@ -124,17 +146,25 @@ order alone allows it). This is the one existing test file F-270 edits. The arch
 
 ## Open questions
 
-**Q1. D6 against the preview's save rule (item 4).** (a) The Studio writes the line-level form: `CaseEditor::to_bytes` and
-`preview::editor_bytes` both make it (the editor keeps its base bytes), so J7 and N7 hold, but the CS2 control's premise turns
-(an unedited editor would write the file's own bytes) and tests that read the editor's text may change; the maintainer accepts
-those test changes. (b) The Studio keeps the whole-file text; "a comment line survives a Studio save" leaves F-270. (c) The Studio
-saves the line-level form and the preview builds again after every save; N7 and J7 fail. Recommendation: (a), as its own change
-after the maintainer's answer, since it changes the bytes the Studio writes. Proceeding now on neither: the Studio writes what it
-writes today (E4), and the line-level save exists and is checked in the workspace (E5). Reversible: one constant.
+**Q1. D6 against the preview's save rule (item 4).**
+
+* (a) The Studio writes the line-level form: `CaseEditor::to_bytes` and `preview::editor_bytes` both make it (the editor
+  keeps its base bytes), so J7 and N7 hold, but the CS2 control's premise turns (an unedited editor would write the file's
+  own bytes) and tests that read the editor's text may change; the maintainer accepts those test changes.
+* (b) The Studio keeps the whole-file text; "a comment line survives a Studio save" leaves F-270.
+* (c) The Studio saves the line-level form and the preview builds again after every save; N7 and J7 fail.
+
+Recommendation: (a), as its own change after the maintainer's answer, since it changes the bytes the Studio writes.
+Proceeding now on neither: the Studio writes what it writes today (E4), and the line-level save exists and is checked in
+the workspace (E5). Reversible: one constant.
 
 **Q2. A change the line rule cannot place** (a removed patch or report, a value over several lines), in the `Lines` form.
-(a) Write the whole saved text under the same lock and journal line, reported as `form: "whole"`. (b) Refuse it, as `edit_case`
-does. (c) Teach the line rule removals. Recommendation: (a), so no Studio edit becomes unsaveable; built that way, reversible.
+
+* (a) Write the whole saved text under the same lock and journal line, reported as `form: "whole"`.
+* (b) Refuse it, as `edit_case` does.
+* (c) Teach the line rule removals.
+
+Recommendation: (a), so no Studio edit becomes unsaveable; built that way, reversible.
 
 **Q3. `who` of a Studio save in `edits.jsonl`.** `"save_case"`, the workspace command's name, as `"edit_case"` and `"write_note"`
 name theirs, until D4's actor (F-273) says which client. Reversible.
@@ -167,9 +197,13 @@ name theirs, until D4's actor (F-273) says which client. Reversible.
 
 ## Not in F-270
 
-W3 (new cases from the MCP server, the shared start plan, D7), W4 (mesh commands), W6 (journal fields, feed, the Studio's
-reactions), W7 (design evaluations on the runner), W8 (the project-mode tool list and the plugin hook). The Studio's watcher and
-run poller stay as they are.
+* W3 (new cases from the MCP server, the shared start plan, D7)
+* W4 (mesh commands)
+* W6 (journal fields, feed, the Studio's reactions)
+* W7 (design evaluations on the runner)
+* W8 (the project-mode tool list and the plugin hook)
+
+The Studio's watcher and run poller stay as they are.
 
 ## Where to go next
 
@@ -179,28 +213,37 @@ run poller stay as they are.
 
 ## Addendum 1: what was built, and the results (2026-11-05)
 
-Branch `f270-workspace`, four commits after this text, as E9 planned: the crate and `rcfd-mcp` on it (W1, W2); Studio saves
-and creates; Studio starts. Not merged; the Studio files are being changed in another worktree.
+The work is on branch `f270-workspace`, four commits after this text, as E9 planned: the crate and `rcfd-mcp` on it (W1,
+W2); Studio saves and creates; Studio starts. The branch is not merged; the Studio files are being changed in another
+worktree.
 
-**Built as registered.** E1 to E8 as written. `rcfd-mcp/src/project.rs` keeps the 17 descriptors byte-for-byte and is now an
-adapter around them (272 lines, from 1,286); `case_edit.rs` moved whole to `rcfd_workspace::case_text` (its 4 unit tests with it), the
-setting loop of `edit_case` became `case_text::apply_sets` (the same calls in the same order). The Studio changes are: the
-worker's `Save` arm (`watch.rs`), the removal of `save_if_base` and `SaveOutcome` (`case_edit.rs`), the name rule and
-`create_with` re-exported or wrapped (`case_starter.rs`), one dependency line, and one import line in each of `poll.rs`,
-`quick_run.rs`, `store_plan.rs` and `stop.rs` (`rcfd_workspace::runs::RunService as Client`).
+**Built as registered.** E1 to E8 were built as written. `rcfd-mcp/src/project.rs` keeps the 17 descriptors byte-for-byte
+and is now an adapter around them (272 lines, from 1,286). `case_edit.rs` moved whole to `rcfd_workspace::case_text`, with
+its 4 unit tests. The setting loop of `edit_case` became `case_text::apply_sets` (the same calls in the same order).
 
-**Two differences found while building.** (1) `replace_if_hash` creates a missing parent folder; `save_if_base` did not. A
-Studio save of a case whose folder was deleted meanwhile now recreates the folder instead of failing. No test covers that case
-before or after. (2) The Studio's project worker now waits for a held edit lock, up to `EDIT_LOCK_WAIT` (2 s), before it saves;
-in that time it neither polls the watcher nor answers the browser. A lock left by a writer that crashed (an `rcfd-mcp` killed
-mid-edit) makes Studio saves fail with "edit lock ... is held by another writer" until the lock is 30 s old
-(`EDIT_LOCK_STALE`) and is broken. Both are visible in the Studio; neither is covered by a test.
+The Studio changes are:
+
+* the worker's `Save` arm (`watch.rs`);
+* the removal of `save_if_base` and `SaveOutcome` (`case_edit.rs`);
+* the name rule and `create_with` re-exported or wrapped (`case_starter.rs`);
+* one dependency line;
+* one import line in each of `poll.rs`, `quick_run.rs`, `store_plan.rs` and `stop.rs`
+  (`rcfd_workspace::runs::RunService as Client`).
+
+**Two differences found while building.** Both are visible in the Studio; neither is covered by a test.
+
+1. `replace_if_hash` creates a missing parent folder; `save_if_base` did not. A Studio save of a case whose folder was
+   deleted meanwhile now recreates the folder instead of failing. No test covers that case before or after.
+2. The Studio's project worker now waits for a held edit lock, up to `EDIT_LOCK_WAIT` (2 s), before it saves. In that time
+   it neither polls the watcher nor answers the browser. A lock left by a writer that crashed (an `rcfd-mcp` killed
+   mid-edit) makes Studio saves fail with "edit lock ... is held by another writer" until the lock is 30 s old
+   (`EDIT_LOCK_STALE`) and is broken.
 
 **Results.**
 
 | Check | Result |
 |---|---|
-| A1 parity | the five MCP files and the four Studio files pass unedited; every test of `rcfd-mcp` passes (debug, with `rcfd` and `rcfd-runner` built); `cargo test --release -p rcfd-studio`: 280 passed, 21 ignored, 15 failed, all 15 because the `fake-claude` test binary of `rcfd-claude` is not built by a one-package run (the workspace gate builds it). A debug run of `case_starter_g2.rs` stopped at a `debug_assert!` inside epaint (a dropped `TexturesDelta` in headless frames), which release builds do not compile (not checked on main); the gate runs release |
+| A1 parity | the five MCP files and the four Studio files pass unedited; every test of `rcfd-mcp` passes (debug, with `rcfd` and `rcfd-runner` built); `cargo test --release -p rcfd-studio`: 280 passed, 21 ignored, 15 failed, all 15 because a one-package run does not build the `fake-claude` test binary of `rcfd-claude` (the workspace gate builds it). A debug run of `case_starter_g2.rs` stopped at a `debug_assert!` inside epaint (a dropped `TexturesDelta` in headless frames), which release builds do not compile (not checked on main); the gate runs release |
 | A2 tool list | `project_list_f270.rs`: 50 tools, 38 978 bytes, byte-identical to the golden of main 7c960bb; `default_f1.rs` passes |
 | A3 race | the Studio's save waited for the held lock and ended 6 ms after its release, in the conflict state with the other writer's bytes; no journal line. Control: the route before wrote under the held lock, and its bytes were then lost |
 | A4 both orders | workspace and Studio: the second writer gets a conflict naming the first one's hash (1200 with `data.current_hash`, or the editor's conflict state); one journal line, `who` `edit_case` or `save_case` |

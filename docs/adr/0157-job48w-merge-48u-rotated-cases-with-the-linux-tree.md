@@ -1,41 +1,64 @@
-# ADR 0157: Job 48W, merging job 48U (rotated aerofoil cases) with job 48P's per-platform trees; Linux-built runs of the two rotated cases
+# ADR 0157: Job 48W, merging job 48U with job 48P's per-platform trees
 
 Status: **registered 2026-10-29**, before any registered run (the merge was resolved and the changed tests compiled
 first; nothing was run); amendments 1 and 2 (two set-up defects, Q1's package name and S1's binaries) before their
 corrected runs; results in the addendum: every registered limit met except S1, whose one failure is a pre-existing
 timing test of ADR 0133 (R1) in code this job does not touch, which passed three times on its own (question 2). Not yet
-accepted by the maintainer. House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
-the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded; no new crate, no unsafe code, the crate graph stays acyclic. Parents: [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md)
-(job 48U: `[mesh.transform]`, two rotated aerofoil cases and their Windows-built runs, `--add-missing`),
-[ADR 0150](0150-job48p-linux-example-stores.md) (job 48P: the Linux tree `example-projects-linux/`, per-tree checks,
-`--docker`), [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md) (job 48R: DV5, DV6),
-[ADR 0142](0142-wave48h-example-projects.md) (the example projects, their checks and caps).
+accepted by the maintainer.
+
+Job 48W merges job 48U (rotated aerofoil cases) with job 48P's per-platform trees and adds Linux-built runs of the two
+rotated cases. The merge has textual conflicts in two files and semantic conflicts with ADR 0150's cross-tree checks and
+ADR 0152's DV5 and DV6; see D1 to D4. The Linux tree gets the two new runs from `--docker --add-missing` (D3
+option (a)), not the plain `--docker` the job's brief named, and R1L shows the plain rebuild gives the same reproducible
+bytes. The addendum records every registered limit met except check S1, the whole `rcfd-studio` suite on Windows: one
+failure in a pre-existing timing test of ADR 0133 (R1), in code this job does not touch. Amendment 3, written after the
+addendum, adds H1m, Q2 and S1r: H1m and Q2 pass, and S1r, the whole suite again, gives 250 passed, 0 failed, 7 ignored,
+while S1's counted miss stays recorded. The full gate did not run on this merge on either platform, and the
+`rcfd-studio` suite did not run on Linux. The Linux wind-tunnel is 176 667 bytes under its cap and the Windows one
+173 707; the next aerofoil run in either tree does not fit. The ADR leaves three questions to the maintainer: the
+regeneration command, S1's miss and the size margin.
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
+  acyclic.
+- Parents: [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) (job 48U: `[mesh.transform]`, two rotated
+  aerofoil cases and their Windows-built runs, `--add-missing`), [ADR 0150](0150-job48p-linux-example-stores.md) (job 48P:
+  the Linux tree `example-projects-linux/`, per-tree checks, `--docker`),
+  [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md) (job 48R: DV5, DV6),
+  [ADR 0142](0142-wave48h-example-projects.md) (the example projects, their checks and caps).
 
 ## Problem
 
 Job 48U's branch (`worktree-agent-a19b8077ee9b9bd5a`, based on 6867e40) is merged into local main aad08fe, which holds
-job 48P (the Linux tree) and job 48R (DV5, DV6). Textual conflicts: `crates/rcfd-mcp/tests/example_projects_w48h.rs`
-(three hunks) and `scripts/make_example_projects.py` (two hunks). Semantic conflicts without a textual one: the Linux
-tree has neither the two rotated cases nor their runs, so ADR 0150's cross-tree checks (T1 inputs byte for byte, S3's
-per-tree count, S4, S5's exact mesh hash on Linux) fail; ADR 0152's DV5 and DV6 enumerate `example-projects/*/cases/`
-and assert counts and labels made on 6867e40 (17 texts; 22 cases), and with the two new cases there are 19 and 24.
+job 48P (the Linux tree) and job 48R (DV5, DV6).
+
+Textual conflicts: `crates/rcfd-mcp/tests/example_projects_w48h.rs` (three hunks) and `scripts/make_example_projects.py`
+(two hunks).
+
+Semantic conflicts without a textual one:
+
+- The Linux tree has neither the two rotated cases nor their runs, so ADR 0150's cross-tree checks (T1 inputs byte for
+  byte, S3's per-tree count, S4, S5's exact mesh hash on Linux) fail.
+- ADR 0152's DV5 and DV6 enumerate `example-projects/*/cases/` and assert counts and labels made on 6867e40 (17 texts;
+  22 cases), and with the two new cases there are 19 and 24.
 
 ## Decisions
 
-1. **D1 The test file keeps both sides.** `example_projects_w48h.rs`: 48P's `TREES` and run-table markers with 48U's four
-   `MESH_FILE_CASES`; S3 counts 12 case files per tree (10 of ADR 0142, 2 of ADR 0155); S4 runs per tree (48P) with
+1. **D1 The test file keeps both sides.** `example_projects_w48h.rs` takes 48P's `TREES` and run-table markers with 48U's
+   four `MESH_FILE_CASES`. S3 counts 12 case files per tree (10 of ADR 0142, 2 of ADR 0155). S4 runs per tree (48P) with
    48U's branch for a rotated case (flow along +x, angle `-rotate_z_deg` about the quarter chord). Every other per-tree
    count holds unchanged with the two cases: 8 generator cases (E1), 2 projects (S1), 2 cylinder runs in the other tree
    (T3), the G2 limits (each run <= 180 s, the sum per tree <= 20 min). `crates/rcfd-studio/tests/example_projects_h.rs`
    merged without a conflict: H1 opens the tree of this platform with 8 wind-tunnel cases and runs (4 quick-start), so on
    x86_64 Linux it needs the Linux tree's two new runs.
-2. **D2 `--add-missing` works per platform tree.** `scripts/make_example_projects.py`: `--add-missing` (48U) runs only the
-   spec's cases without a run in the tree of this platform (48P's `resolve_tree`); for the Linux tree the Windows tree's
-   inputs are copied first (48P's `sync_inputs`), so the new case files and notes arrive before the missing runs are
-   looked for. `--docker --add-missing` passes `--add-missing` to the script in the container (`docker_inner`).
+2. **D2 `--add-missing` works per platform tree.** In `scripts/make_example_projects.py`, `--add-missing` (48U) runs only
+   the spec's cases without a run in the tree of this platform (48P's `resolve_tree`). For the Linux tree the Windows
+   tree's inputs are copied first (48P's `sync_inputs`), so the new case files and notes arrive before the missing runs
+   are looked for. `--docker --add-missing` passes `--add-missing` to the script in the container (`docker_inner`).
    `--add-missing` with `--rerun-check` or `--summarise-only` is refused. The self-test gains one test for the forwarding
    and the refusals. Nothing else in the script changes.
 3. **D3 The Linux tree's regeneration command.** Options: (a) `python scripts/make_example_projects.py --docker
@@ -47,8 +70,8 @@ and assert counts and labels made on 6867e40 (17 texts; 22 cases), and with the 
    of them replacing ADR 0150's (new ids, time stamps, absolute paths; the byte-reproducible files equal, per ADR 0150
    R1L), so the Linux tree would then differ from the Windows tree in how its runs came about, and the repository gains
    a second copy of every non-reproducible file of the ten runs. **Pick (a)**: the smallest change that gives the Linux
-   tree the two runs, made by the real solver through the same script and container. That a full rebuild (b) gives the
-   same bytes is checked anyway: R1L below runs `--docker --rerun-check`, which rebuilds all twelve Linux runs in a
+   tree the two runs, made by the real solver through the same script and container. R1L below checks anyway that a full
+   rebuild (b) gives the same bytes: it runs `--docker --rerun-check`, which rebuilds all twelve Linux runs in a
    temporary copy and compares. (This is the one place where this job departs from the wording of its brief, which
    named `--docker`; question 1.)
 4. **D4 DV5 and DV6 (ADR 0152).** DV6 takes the cases its record (`crates/rcfd-studio/tests/fixtures/plans_6867e40.txt`)
@@ -78,13 +101,16 @@ merged.
 
 ## Registered checks (limits fixed here, before any of them ran)
 
-Set-up. Windows: this host, release, `--test-threads 1 --nocapture`, this worktree's target folder, `TMP`/`TEMP`
-`E:\tmp\w48w` (outside any checkout), output to files, free memory checked before each heavy run (about 24 GB free of
-94 GB at registration; other agents share the machine). Linux: ADR 0150 D4's image `rcfd-linux:ubuntu24.04-rust1.99.0`
-(`sha256:485f28a2036497ed`..., built by job 48P from `scripts/docker/ubuntu-24.04-rust.Dockerfile`), `docker run --rm
---init --cpuset-cpus 0-3 --memory 16g`, the named volumes of D4; for L1 and R1L the script's own container; for L4, L5
-and P1 (Linux) one container on a `git archive` of the named commit extracted into `/src` with `tar -m`, release,
-`--test-threads 1 --nocapture`. The Windows tree is not rebuilt.
+Set-up:
+
+- Windows: this host, release, `--test-threads 1 --nocapture`, this worktree's target folder, `TMP`/`TEMP`
+  `E:\tmp\w48w` (outside any checkout), output to files, free memory checked before each heavy run (about 24 GB free of
+  94 GB at registration; other agents share the machine). The Windows tree is not rebuilt.
+- Linux: ADR 0150 D4's image `rcfd-linux:ubuntu24.04-rust1.99.0`
+  (`sha256:485f28a2036497ed`..., built by job 48P from `scripts/docker/ubuntu-24.04-rust.Dockerfile`),
+  `docker run --rm --init --cpuset-cpus 0-3 --memory 16g`, the named volumes of D4; for L1 and R1L the script's own
+  container; for L4, L5 and P1 (Linux) one container on a `git archive` of the named commit extracted into `/src` with
+  `tar -m`, release, `--test-threads 1 --nocapture`.
 
 | Id | Check | Limit | Negative control |
 |---|---|---|---|
@@ -135,9 +161,14 @@ common/mod.rs` `binaries()`). The first run stopped after 14 s in `bins_g4` `g3_
 
 ## Addendum: results against the registered limits (2026-10-29)
 
-Commits: the merge 5f4b07e (parents aad08fe, 48U's d91c2d7; the conflict resolution, D2's script change, DV5/DV6, the
-notes, this ADR's registration); the regeneration 1226977 (`example-projects-linux/` only, written by L1); then this
-addendum and the two amendments (docs only). Logs: `E:\tmp\w48w\` (outside the checkout).
+Commits:
+
+- the merge 5f4b07e (parents aad08fe, 48U's d91c2d7; the conflict resolution, D2's script change, DV5/DV6, the notes, this
+  ADR's registration);
+- the regeneration 1226977 (`example-projects-linux/` only, written by L1);
+- then this addendum and the two amendments (docs only).
+
+Logs: `E:\tmp\w48w\` (outside the checkout).
 
 | Id | Limit | Result | Verdict |
 |---|---|---|---|
@@ -167,10 +198,15 @@ addendum and the two amendments (docs only). Logs: `E:\tmp\w48w\` (outside the c
 5. `example-projects-linux/README.md` got one command line by hand in the merge commit (the tree's README is not
    written by the script), noted in Placement before the run.
 
-**Not run.** The full gate (`rcfd-api`, `rcfd-core`, `rcfd-mesh` suites and the rest) on this merge, on either platform:
-only `rcfd-studio`'s suite, the example tests and `workspace_graph` ran (48U's ADR 0155 H2 ran its suites on its own
-branch). The `rcfd-studio` suite on Linux. `--add-missing` on Windows after the merge (the Windows tree needed nothing;
-its code path is the Linux one minus the copy). The "Not in CI" checklist (a person at the window). CI.
+**Not run.**
+
+- The full gate (`rcfd-api`, `rcfd-core`, `rcfd-mesh` suites and the rest) on this merge, on either platform: only
+  `rcfd-studio`'s suite, the example tests and `workspace_graph` ran (48U's ADR 0155 H2 ran its suites on its own branch).
+- The `rcfd-studio` suite on Linux.
+- `--add-missing` on Windows after the merge (the Windows tree needed nothing; its code path is the Linux one minus the
+  copy).
+- The "Not in CI" checklist (a person at the window).
+- CI.
 
 ## Questions for the maintainer (continued)
 

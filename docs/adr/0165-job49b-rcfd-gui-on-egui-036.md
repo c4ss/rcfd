@@ -1,26 +1,45 @@
-# ADR 0165: Job 49B, the legacy desktop app `rcfd-gui` moves to eframe/egui 0.36.2, egui_dock 0.21.1 and egui_plot 0.37.0 (Dependabot 7, 8, 10), one egui version set in the workspace
+# ADR 0165: Job 49B, the legacy desktop app `rcfd-gui` moves to egui 0.36
 
 Status: **registered** 2026-10-29, before any code of this job was written and before any build or run of this job (set-up,
 limits and the not-run list are fixed here); **results in the addendum** (2026-10-29: L1 to L9 met; one registration text
-error, D-1; three questions, Q1 to Q3). House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; a missed limit is reported, not
-hidden, and becomes an ignored `*_known_miss` test where it is a test; defaults stay bit-identical (only the GUI crate, its
-manifest, CI configuration, the lock file and documentation are touched; no solver or library code);
-`crates/rcfd-api/tests/baseline_hashes.rs` is not edited or re-recorded; no unsafe code; no new crate in the lock file
-(expected, limit L5). Parents: [ADR 0004](0004-gui-assistant-msrv.md) and [ADR 0095](0095-wave39d-field-registers-monitor-frames-fan-vent-curves.md) (rcfd-gui), [ADR 0131](0131-wave48b-studio-application-shell.md)
-(W48-1 (b): the Studio states `rust-version = "1.95"` and is excluded from the `min-toolchain` job; W48-2 (a) with amendment 1:
-eframe 0.36.2, the two-week rule of ADR 0125), [docs/ui-restart-plan.md](../ui-restart-plan.md) (rcfd-gui is frozen: kept
-building and tested until the Studio reaches parity, then removed in a separate, explicitly requested step). Number: ADR 0164 is
-taken by job 49A (commit 590fe32 on another branch); no file or commit for 0165 exists in the main checkout or any worktree on
-disk (checked 2026-10-29 just before writing). Base: local main 35cc6a1 (the worktree branch was reset to it before any work).
+error, D-1; three questions, Q1 to Q3).
+
+`rcfd-gui` moves to eframe/egui 0.36.2, egui_dock 0.21.1 and egui_plot 0.37.0 (Dependabot 7, 8, 10), which leaves one egui
+version set in the workspace. Those three pull requests are red on their own, because the crates are coupled to one egui
+version and egui changed the API rcfd-gui uses. The port rewrites UI code only where the API forces it, and the app stays on
+glow (OpenGL), as before, now chosen explicitly. The addendum records L1 to L9 met, one registration text error (D-1) and
+`Cargo.lock` down from 577 to 469 packages with none added. No real window was run, so how the app looks, OpenGL context
+creation, the native file dialog and real input are unchecked. Reading a 0.27-era `gui-prefs.json`, `cargo deny check`, the
+Rust 1.90 type-check, the Studio's integration tests, the full gate and Linux/macOS builds were not run either. Three
+questions close the addendum: retiring rcfd-gui (Q1), the CI job's name (Q2) and Dependabot 7, 8 and 10 (Q3).
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; a missed limit
+  is reported, not hidden, and becomes an ignored `*_known_miss` test where it is a test; defaults stay bit-identical (only
+  the GUI crate, its manifest, CI configuration, the lock file and documentation are touched; no solver or library code);
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not edited or re-recorded; no unsafe code; no new crate in the lock file
+  (expected, limit L5).
+- Parents: [ADR 0004](0004-gui-assistant-msrv.md) and
+  [ADR 0095](0095-wave39d-field-registers-monitor-frames-fan-vent-curves.md) (rcfd-gui);
+  [ADR 0131](0131-wave48b-studio-application-shell.md) (W48-1 (b): the Studio states `rust-version = "1.95"` and is excluded
+  from the `min-toolchain` job; W48-2 (a) with amendment 1: eframe 0.36.2, the two-week rule of ADR 0125);
+  [docs/ui-restart-plan.md](../ui-restart-plan.md) (rcfd-gui is frozen: kept building and tested until the Studio reaches
+  parity, then removed in a separate, explicitly requested step).
+- Number: ADR 0164 is taken by job 49A (commit 590fe32 on another branch); no file or commit for 0165 exists in the main
+  checkout or any worktree on disk (checked 2026-10-29 just before writing).
+- Base: local main 35cc6a1 (the worktree branch was reset to it before any work).
 
 ## The problem
 
 Dependabot pull requests 7 (eframe 0.27.2 -> 0.36.2), 8 (egui_dock 0.12.0 -> 0.21.1) and 10 (egui_plot 0.27.2 -> 0.37.0) bump
 `crates/rcfd-gui/Cargo.toml` one crate at a time. Each is red: the three crates are coupled to one egui version, so none of them
-compiles alone, and egui 0.27 -> 0.36 changed the API rcfd-gui uses (panels and the eframe `App` are driven from a root `Ui`
-instead of a `Context`; `Context::run` is gone in favour of `run_ui`; menus, `id_source` and plot constructors changed). The
-workspace meanwhile carries two complete egui stacks in `Cargo.lock` (0.27.2 for rcfd-gui, 0.36.2 for the Studio).
+compiles alone, and egui 0.27 -> 0.36 changed the API rcfd-gui uses:
+* panels and the eframe `App` are driven from a root `Ui` instead of a `Context`;
+* `Context::run` is gone in favour of `run_ui`;
+* menus, `id_source` and plot constructors changed.
+
+The workspace meanwhile carries two complete egui stacks in `Cargo.lock` (0.27.2 for rcfd-gui, 0.36.2 for the Studio).
 
 ## Decision (set-up)
 
@@ -32,15 +51,18 @@ stack falls out. Dependabot 11 and 9 (wat 1.262.0, miniz_oxide 0.9.1, already on
 
 S2. **Back end: glow (OpenGL), as before, chosen explicitly.** eframe 0.36 still has the `glow` feature (egui_glow 0.36.2,
 glow 0.17, glutin 0.32); all of those packages are already in `Cargo.lock` (eframe 0.36.2's entry lists them), so glow adds no
-package. Reasons: it keeps the legacy app's renderer unchanged (OpenGL, the 2D raster viewport needs nothing from wgpu), and the
-frozen app keeps working on machines where only OpenGL is available, while the Studio needs DX12 or Vulkan (its `wgpu` entry).
-Features: `default-features = false, features = ["glow", "default_fonts", "x11", "wayland"]`, the old set. Trap handled:
-cargo unifies eframe's features across the packages of one build, so `cargo build --workspace` compiles one eframe with both
-`glow` (rcfd-gui) and `wgpu_no_default_features` (Studio), and eframe 0.36's `Renderer::default()` then picks wgpu. rcfd-gui
-therefore sets `renderer: eframe::Renderer::Glow` in its `NativeOptions`, so it renders with OpenGL whatever else is in the
-build; the Studio's default stays wgpu in such a build (that `Default` returns wgpu when both are present), so the Studio is not
-affected. Rejected: following the Studio onto wgpu (it would need rcfd-gui to pin `wgpu =30.0.1` with the Studio's back ends
-to get any back end when built alone, and would change the legacy app's renderer).
+package.
+
+* Reasons: it keeps the legacy app's renderer unchanged (OpenGL, the 2D raster viewport needs nothing from wgpu), and the
+  frozen app keeps working on machines where only OpenGL is available, while the Studio needs DX12 or Vulkan (its `wgpu` entry).
+* Features: `default-features = false, features = ["glow", "default_fonts", "x11", "wayland"]`, the old set.
+* Trap handled: cargo unifies eframe's features across the packages of one build, so `cargo build --workspace` compiles one
+  eframe with both `glow` (rcfd-gui) and `wgpu_no_default_features` (Studio), and eframe 0.36's `Renderer::default()` then
+  picks wgpu. rcfd-gui therefore sets `renderer: eframe::Renderer::Glow` in its `NativeOptions`, so it renders with OpenGL
+  whatever else is in the build. The Studio's default stays wgpu in such a build (that `Default` returns wgpu when both are
+  present), so the Studio is not affected.
+* Rejected: following the Studio onto wgpu (it would need rcfd-gui to pin `wgpu =30.0.1` with the Studio's back ends to get
+  any back end when built alone, and would change the legacy app's renderer).
 
 S3. **Port, behaviour unchanged.** The UI code is rewritten only where the API forces it, following the Studio's use of the
 same versions (`crates/rcfd-studio/src/ui.rs`):
@@ -57,7 +79,7 @@ same versions (`crates/rcfd-studio/src/ui.rs`):
 
 S4. **Toolchain.** rcfd-gui states `rust-version = "1.95"` (eframe 0.36 needs it). The CI job `min-toolchain` keeps its name
 (`type-checks with Rust 1.90 (README minimum; the Studio needs 1.95)`, so a required-check name does not change) and adds
-`--exclude rcfd-gui` next to `--exclude rcfd-studio`, with the comment saying why; README, `docs/releasing.md` and
+`--exclude rcfd-gui` next to `--exclude rcfd-studio`, with the comment saying why. README, `docs/releasing.md` and
 `docs/architecture.md` say that both desktop apps need 1.95. `gate.yml` has no Studio special case (it runs on 1.99) and is not
 changed.
 
@@ -84,12 +106,14 @@ compiler reports in test code (for example in `epaint::Shape` matching); each is
 | L8 | the min-toolchain command with `--exclude rcfd-studio --exclude rcfd-gui` selects no package whose `rust-version` is above 1.90 (`cargo metadata`, a script reading each selected workspace member's `rust-version`) | holds |
 | L9 | behaviour: the renderer rcfd-gui asks for is glow in a build with both eframe back ends (a unit test in rcfd-gui asserting `native_options().renderer == Renderer::Glow`, run inside L3 and in a `--workspace`-style build by L2's type-check plus one `cargo test -p rcfd-gui -p rcfd-studio --release --locked --lib`) | passes |
 
-How behaviour is checked (no window): the existing headless tests run the real UI code frame by frame: `smoke.rs` (frames,
-light/dark theme switch, every panel hidden/shown/floated while drawing, a solver run drawn in monitors and viewport, an
-assistant turn with the mock provider approving and denying tool cards), `viewport_raster.rs` (v9: the painted raster colours
-and the 48-step legend match the colormap of the run's grid; frames at 7 window sizes give finite geometry; v10/v11 cavity
-checks on the raster), `monitors_plot.rs` (M7: a long run driven by headless frames with the Monitors panel and its plots),
-`key_security.rs` (frames with the key field), `logic.rs` and `files.rs` (non-UI logic, layout JSON round trip).
+How behaviour is checked (no window): the existing headless tests run the real UI code frame by frame:
+* `smoke.rs` (frames, light/dark theme switch, every panel hidden/shown/floated while drawing, a solver run drawn in monitors
+  and viewport, an assistant turn with the mock provider approving and denying tool cards);
+* `viewport_raster.rs` (v9: the painted raster colours and the 48-step legend match the colormap of the run's grid; frames at
+  7 window sizes give finite geometry; v10/v11 cavity checks on the raster);
+* `monitors_plot.rs` (M7: a long run driven by headless frames with the Monitors panel and its plots);
+* `key_security.rs` (frames with the key field);
+* `logic.rs` and `files.rs` (non-UI logic, layout JSON round trip).
 
 ## Not run (by design)
 
@@ -143,10 +167,16 @@ What changed in the app's code (all API-forced, behaviour kept):
   `key_security.rs`, `monitors_plot.rs` (2), `smoke.rs`, `viewport_raster.rs`; `ctx.style()` -> `ctx.global_style()` in
   `smoke.rs` (2; `Context::style` no longer exists). No assertion changed. One new unit test (L9).
 
-Other files: `crates/rcfd-gui/Cargo.toml` (versions as the three PRs, `rust-version = "1.95"`), `Cargo.lock`, `.github/workflows/ci.yml`
-(`--exclude rcfd-gui`, comments; job name kept), `README.md`, `docs/releasing.md`, `docs/architecture.md`,
-`scripts/third_party_licenses.py` (font notice), `THIRD_PARTY_LICENSES.md`, `deny.toml` (the `epaint` exception removed).
-`gate.yml` unchanged (it has no Studio special case). No solver or library code, no `baseline_hashes.rs`, no unsafe.
+Other files:
+* `crates/rcfd-gui/Cargo.toml` (versions as the three PRs, `rust-version = "1.95"`);
+* `Cargo.lock`;
+* `.github/workflows/ci.yml` (`--exclude rcfd-gui`, comments; job name kept);
+* `README.md`, `docs/releasing.md`, `docs/architecture.md`;
+* `scripts/third_party_licenses.py` (font notice), `THIRD_PARTY_LICENSES.md`;
+* `deny.toml` (the `epaint` exception removed).
+
+`gate.yml` is unchanged (it has no Studio special case). The job touches no solver or library code and no
+`baseline_hashes.rs`, and uses no unsafe.
 
 What differs from the 0.27 build although the code keeps its behaviour (UNVERIFIED visually):
 * egui's own look between 0.27 and 0.36 (default visuals, spacing, fonts now from `epaint_default_fonts`, menu and popup
@@ -165,33 +195,45 @@ only". Main has four ignored rcfd-gui tests (`v1_luminance_non_decreasing_1001_s
 `viewport_raster.rs`). The limit is "equals the one before the port"; it was checked against main's `#[ignore]` lines, not
 against the wrong parenthesis.
 
-D-2. S3 named "any other rename the compiler reports"; the compiler reported only the missing `TabViewer::id`; the menu close
+D-2. S3 named "any other rename the compiler reports". The compiler reported only the missing `TabViewer::id`. The menu close
 behaviour, the theme and the dock frame were found by reading the egui/egui_dock 0.36/0.21 sources, not by the compiler.
 
 ### Not run
 
-As registered: a real window (look, OpenGL context creation, native file dialog, real input); reading a 0.27-era
-`gui-prefs.json`; `cargo deny check` (not installed; L6 instead, the CI deny job runs it); the Rust 1.90 type-check (no 1.90
-toolchain; L8 instead); the Studio's integration tests; the full gate; Linux/macOS builds. For the Studio's integration tests in
-a workspace test build (the gate): `cargo tree -e features -i <pkg>` gives the same feature set for egui, epaint, egui_dock and
-egui_plot with `-p rcfd-studio` alone and with `--workspace`, so only eframe gains `glow` there; the Studio's tests use
-`eframe::egui_wgpu` and rcfd-render's `Renderer` only (grep of `crates/rcfd-studio/tests`), which the glow feature does not
-change. Not run.
+As registered:
+* a real window (look, OpenGL context creation, native file dialog, real input);
+* reading a 0.27-era `gui-prefs.json`;
+* `cargo deny check` (not installed; L6 instead, the CI deny job runs it);
+* the Rust 1.90 type-check (no 1.90 toolchain; L8 instead);
+* the Studio's integration tests;
+* the full gate;
+* Linux/macOS builds.
+
+The Studio's integration tests in a workspace test build (the gate) were not run. `cargo tree -e features -i <pkg>` gives the
+same feature set for egui, epaint, egui_dock and egui_plot with `-p rcfd-studio` alone and with `--workspace`, so only eframe
+gains `glow` there. The Studio's tests use `eframe::egui_wgpu` and rcfd-render's `Renderer` only (grep of
+`crates/rcfd-studio/tests`), which the glow feature does not change.
 
 ### Questions
 
 Q1. **Retire rcfd-gui?** The port shows that the legacy app is a second, frozen copy of what the Studio does (settings editor,
 monitors and plots, log, run control, docked panels; the Studio has its own versions of all of these and a 3D viewport), and
-every egui bump now has to be ported twice. Options: (a) keep it until the parity checks of `docs/ui-restart-plan.md` section 6
-pass, then remove it in a separate, requested step (the plan's rule); (b) remove it now; (c) keep it indefinitely as the OpenGL
-fallback app. **Recommendation: (a)**; the cost of keeping it until then is this kind of port (about 60 changed lines here).
-The assistant sidebar with API providers (rcfd-assistant) exists only in rcfd-gui; whether the Studio's Claude Code sidebar
-replaces it is part of that parity decision.
+every egui bump now has to be ported twice. Options:
+* (a) keep it until the parity checks of `docs/ui-restart-plan.md` section 6 pass, then remove it in a separate, requested
+  step (the plan's rule);
+* (b) remove it now;
+* (c) keep it indefinitely as the OpenGL fallback app.
+
+**Recommendation: (a)**; the cost of keeping it until then is this kind of port (about 60 changed lines here). The assistant
+sidebar with API providers (rcfd-assistant) exists only in rcfd-gui; whether the Studio's Claude Code sidebar replaces it is
+part of that parity decision.
 
 Q2. **CI job name.** The `min-toolchain` job is still called "type-checks with Rust 1.90 (README minimum; the Studio needs
-1.95)", although rcfd-gui is now excluded too. Options: (a) keep the name (a required status check of that name keeps
-matching); (b) rename it to "... (README minimum; the desktop apps need 1.95)" and update the branch protection rule in the
-same step. **Recommendation: (b)** when the maintainer next edits branch protection, otherwise (a).
+1.95)", although rcfd-gui is now excluded too. Options:
+* (a) keep the name (a required status check of that name keeps matching);
+* (b) rename it to "... (README minimum; the desktop apps need 1.95)" and update the branch protection rule in the same step.
+
+**Recommendation: (b)** when the maintainer next edits branch protection, otherwise (a).
 
 Q3. **Dependabot 7, 8, 10.** This branch contains the three bumps together (they cannot land separately). Once it is on main,
 Dependabot should close the three pull requests itself as their versions are already met; if not, close them by hand.

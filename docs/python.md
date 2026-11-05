@@ -1,9 +1,10 @@
 # Python access (F-083, ADR 0034)
 
-This page describes the Python package: how it finds the solver, the calls it offers, how results and errors come back, and
-what is not delivered. It is for people who want to script cases, runs and studies from Python. The package wraps the command
-line rather than linking the solver in-process; the in-process extension is listed under "Not delivered". For the command-line
-behaviour it relies on, see [run control](run-control.md); for the settings paths it sets, see the [case schema](case-schema.md).
+The `python/rcfd` package lets you script cases, runs and studies from Python. It wraps the command line rather than linking
+the solver in-process; the in-process extension is listed under "Not delivered", and roadmap item F-083 stays `partial`. This
+page covers how the package finds the solver, the calls it offers, how results and errors come back, and what is not delivered.
+For the command-line behaviour it relies on, see [run control](run-control.md); for the settings paths it sets, see the
+[case schema](case-schema.md).
 
 `python/rcfd` is a pure-Python package (standard library only; numpy is used for field arrays when installed). It drives the `rcfd`
 command line with argument lists (no shell). The Rust binary does all validation and all computation, so the Python object, `rcfd run
@@ -26,22 +27,33 @@ rcfd.study(case, {"k": rcfd.List("physics.conductivity", [1, 2]),
 rcfd.schema()                                        # the JSON schema of the case
 ```
 
-Non-zero run-control codes of a run (5 not converged, 6 diverged, ...) are outcomes in `RunResult.exit_code`, not exceptions; a case
-that cannot start raises `RcfdError` (`exit_code`, `stderr`, `diagnostics` as `(path, message)`). Invalid sweeps raise `StudyError`.
-Fields are read from the ASCII `solution.vtu` (cell data first). Settings are sent as `--set path=<JSON>`; Python floats round-trip exactly.
-The package reads no environment variable except `RCFD_BIN` and writes no file except the temporary case of `from_text`/`from_dict`.
+A run's non-zero run-control codes (5 not converged, 6 diverged, ...) are outcomes in `RunResult.exit_code`, not exceptions. A
+case that cannot start raises `RcfdError` (`exit_code`, `stderr`, `diagnostics` as `(path, message)`). Invalid sweeps raise
+`StudyError`.
+
+The package reads fields from the ASCII `solution.vtu` (cell data first) and sends settings as `--set path=<JSON>`; Python floats
+round-trip exactly. It reads no environment variable except `RCFD_BIN` and writes no file except the temporary case of
+`from_text`/`from_dict`.
 
 Tests: `python -I python/tests/run_tests.py` (needs the built binary), run by the workspace test `crates/rcfd-cli/tests/python_w20c.rs`;
 without a Python interpreter that test prints `SKIPPED: ...` and returns.
 
 ## Not delivered (F-083 stays `partial`)
 
-The PyO3 route: an in-process extension crate and a pip-installable wheel (the acceptance text of F-083), numpy zero-copy field
-access without a VTU round trip, and a cavity reproduction through the extension. Reasons recorded in ADR 0034 D5: the workspace
-forbids `unsafe_code` and PyO3's macros expand to unsafe code, PyO3/maturin are not in the offline cargo cache, and the only Python
-here is a Microsoft Store 3.9 install. Also not delivered: access through the JSON-RPC service (`rcfd serve`), live access to a
-running solver's fields, commands other than run/check/study, and a typed class per settings section (the tree is addressed by
-dotted path and validated by the schema of the binary).
+The PyO3 route is not delivered: an in-process extension crate and a pip-installable wheel (the acceptance text of F-083), numpy
+zero-copy field access without a VTU round trip, and a cavity reproduction through the extension. ADR 0034 D5 records the
+reasons:
+
+* the workspace forbids `unsafe_code` and PyO3's macros expand to unsafe code;
+* PyO3/maturin are not in the offline cargo cache;
+* the only Python here is a Microsoft Store 3.9 install.
+
+Also not delivered:
+
+* access through the JSON-RPC service (`rcfd serve`);
+* live access to a running solver's fields;
+* commands other than run/check/study;
+* a typed class per settings section (the tree is addressed by dotted path and validated by the schema of the binary).
 
 ## Where to go next
 

@@ -1,24 +1,44 @@
 # ADR 0087: Wave 37D, a front edge inclined with the stagger at the FAN-01 C-grid seam corner (opt-in construction `camber_seam_i`)
 
-Status: registered before any construction code of this wave was written. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test
-with the limit unchanged, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded; every
-change is opt-in. Clean-room: first principles only (no reference value enters a gate). Parent: ADR 0083 (wave 36D) and its addendum: construction H
-(case value `camber_seam_h`) on FAN-01-C 83.26 deg / 3.978 / 227.2; the maximum non-orthogonality is the lower seam corner of the tip layers, where the
-corner line arrives 7.6 deg from the front edge; the one corner rule tried (H2, the corner line's last node on the bisector) folded the tip layers;
-P10 missed; FAN-01 R-G builds 22 of 39. Its suggested fix, not tried: a topology change at the tip, e.g. a front edge inclined with the stagger.
-Solver physics files are not touched by this wave. Nothing here is a fan performance claim.
+Status: registered before any construction code of this wave was written.
+
+Wave 37D tests whether a front edge inclined with the stagger removes the FAN-01-C corner-region faces above 70 deg
+(maximum 83.26), through the opt-in construction I (case value `camber_seam_i`). The keep clause failed (C1-Q (i) and
+(ii), C1-B, C4 blade B), so construction I is removed. In 3-D the corner region fell from 83.26 to 78.07 deg against the
+limit 70, while the global skewness (3.978 -> 4.577) and aspect ratio (227.2 -> 261.0) rose; on blade B the change is
+harmful (B' skewness 8.9 -> 153.8, not located). HT is falsified for the construction as frozen. The prescribed
+inclination did not survive the smoothing, so no mesh with an actually inclined front edge was produced and the intended
+mechanism itself remains untested. The topology change proper (I-b) was not tried. Part D is met on the final code: the
+existing construction hashes are reproduced. These results are in the addendum, after the registration and its two
+amendments.
+
+Rules and parents:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged, a defective set-up gets
+  a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded; every change is opt-in.
+* Clean-room: first principles only (no reference value enters a gate).
+* Solver physics files are not touched by this wave. Nothing here is a fan performance claim.
+* Parent: ADR 0083 (wave 36D) and its addendum: construction H (case value `camber_seam_h`) on FAN-01-C 83.26 deg /
+  3.978 / 227.2; the maximum non-orthogonality is the lower seam corner of the tip layers, where the corner line arrives
+  7.6 deg from the front edge; the one corner rule tried (H2, the corner line's last node on the bisector) folded the
+  tip layers; P10 missed; FAN-01 R-G builds 22 of 39. Its suggested fix, not tried: a topology change at the tip, e.g. a
+  front edge inclined with the stagger.
 
 ## What was run before this ADR was written (disclosed)
 
 All on HEAD feb015f in a scratch copy, release builds, construction only (no solve). A development hook (`dev_layer`: the algebraic and the smoothed
 in-plane layer of one radius, step-0 setting) was added to the scratch copy only; it moves no node and will not be committed.
 
-* Corner angles of H per layer (direction from the lower corner node to its neighbours, degrees from `+z` in the unrolled plane `(z, s)`; the upper
-  corner is the same periodic node): hub (k 0, stagger 43.6 deg) seam 6.2, corner line 70.9, front edge 111.3, F row upstream 162.3, upper corner line
-  -46.5, upper front edge -112.5: lower C side 105.1 deg, upper C side 118.7 deg; mid (k 7, 61.2 deg) seam -26.5, front edge 108.3 / -103.0: 134.8 / 76.5;
-  tip (k 14-21, 69.6 deg) seam -49.9, corner line 94.2, front edge 101.5, F row upstream 143.8, upper corner line -67.5, upper front edge -97.0: lower C
-  side 151.4 (cells 144.1 and 7.3), upper C side 47.1 (29.5 and 17.6), lower F cell 42.3, upper F cell 119.2. So the corner is balanced at the hub and
-  degenerates with the stagger.
+* Corner angles of H per layer (direction from the lower corner node to its neighbours, degrees from `+z` in the
+  unrolled plane `(z, s)`; the upper corner is the same periodic node):
+* hub (k 0, stagger 43.6 deg) seam 6.2, corner line 70.9, front edge 111.3, F row upstream 162.3, upper corner line
+  -46.5, upper front edge -112.5: lower C side 105.1 deg, upper C side 118.7 deg;
+* mid (k 7, 61.2 deg) seam -26.5, front edge 108.3 / -103.0: 134.8 / 76.5;
+* tip (k 14-21, 69.6 deg) seam -49.9, corner line 94.2, front edge 101.5, F row upstream 143.8, upper corner line -67.5,
+  upper front edge -97.0: lower C side 151.4 (cells 144.1 and 7.3), upper C side 47.1 (29.5 and 17.6), lower F cell
+  42.3, upper F cell 119.2.
+* So the corner is balanced at the hub and degenerates with the stagger.
 * The tip layer (r 0.2475, pitch 0.1728 m, chord 0.0549 m) algebraic and smoothed: algebraically the front edge is the line z = 0.1038 (pitchwise),
   the seam leaves the lower corner at -13.5 deg (the camber seam turns axial upstream of the leading edge) and the corner line arrives at 88.7 deg, 1.3
   deg from the front edge (the sliver is already in the algebraic grid: lines 20 and 21 run down along the front edge 0.5 mm apart). Smoothing moves the
@@ -57,11 +77,16 @@ Hence a straight inclined front edge over the whole span is not possible in this
 **HT**: the FAN-01-C corner-region faces above 70 deg (maximum 83.26) are caused by the corner geometry, the front edge meeting the seam at about 150
 deg on one side and 47 deg on the other at high stagger; a front edge inclined with the stagger where it meets the seams removes them.
 
-**Falsifier FT (run first, before any 3-D construction of a candidate)**: the 2-D proxy above on the smoothed layer (step-0 setting of the construction,
-FAN-01-C counts) at the far-grid radii of the 3-D mesh (the remapped radii of layers `k = 0 .. n_span`; `k = n_span` is the tip and the gap layers).
-A candidate passes FT iff (a) the largest corner-region proxy non-orthogonality over these radii falls by at least 10 % against H on the same radii
-(H measured in the same run); (b) the largest proxy non-orthogonality outside the corner region does not rise by more than 1 % against H; (c) every
-smoothed proxy layer is unfolded (all cell areas positive). HT is **falsified** if no candidate passes FT.
+**Falsifier FT (run first, before any 3-D construction of a candidate)**: the 2-D proxy above on the smoothed layer
+(step-0 setting of the construction, FAN-01-C counts) at the far-grid radii of the 3-D mesh (the remapped radii of
+layers `k = 0 .. n_span`; `k = n_span` is the tip and the gap layers). A candidate passes FT iff
+
+* (a) the largest corner-region proxy non-orthogonality over these radii falls by at least 10 % against H on the same
+  radii (H measured in the same run);
+* (b) the largest proxy non-orthogonality outside the corner region does not rise by more than 1 % against H;
+* (c) every smoothed proxy layer is unfolded (all cell areas positive).
+
+HT is **falsified** if no candidate passes FT.
 
 Development protocol: I-a first; I-b only if no I-a variant passes FT. At most 12 development variants in total (each listed with its proxy numbers in
 Amendment 1). The variant frozen in Amendment 1 is the one with the lowest (a) value among those that pass FT. If HT is falsified, no 3-D construction
@@ -118,9 +143,11 @@ Fan performance; any comparison with measured FAN-01 data; turbulence; accuracy 
 
 ### FT development (test `ft` of a development file, not committed; each variant run once, all listed)
 
-Proxy on the smoothed layers at the 15 far-grid radii, FAN-01-C counts. H (baseline, same run): corner region 86.890438 deg (layer k 7, the upper
-corner line's j-face C (28, 9) / (28, 8)), outside the corner region 82.347818 deg (k 9, wake line 5, C (5, 2) / (5, 1)), smallest cell area 5.216e-7
-m^2. Threshold of FT (a): 0.9 x 86.890438 = 78.201394 deg. The variants of I-a (grading: the front-edge cells grow from the nose cell to a corner cell
+Proxy on the smoothed layers at the 15 far-grid radii, FAN-01-C counts. H (baseline, same run): corner region 86.890438
+deg (layer k 7, the upper corner line's j-face C (28, 9) / (28, 8)), outside the corner region 82.347818 deg (k 9, wake
+line 5, C (5, 2) / (5, 1)), smallest cell area 5.216e-7 m^2. Threshold of FT (a): 0.9 x 86.890438 = 78.201394 deg.
+
+The variants of I-a (grading: the front-edge cells grow from the nose cell to a corner cell
 of `cf` times the algebraic seam cell next to the corner, two-sided, capped as `capped_cells`; inclination: the front edge `z = z_f + dz(s)` with `dz =
 u cot(phi) fade(u / ell) - v cot(phi) fade(v / ell)`, `u`, `v` the pitchwise distances from the lower and upper corner, so it leaves the lower corner
 and reaches the upper corner along `phi` from `+z`, `ell` = 0.1 pitch; the F rows follow with weight `(z_a / z_f)^4`; `kappa`: `phi = 90 deg + kappa
@@ -156,12 +183,18 @@ wave.
 
 ### Construction I, frozen
 
-H + one new opt-in field `CGridOptions::inclined_front` (default `false`), set only by `CGridOptions::camber_seam_i_construction()`, case value
-`c_grid_construction = "camber_seam_i"`. With the field, in every layer: (1) the front-edge cells are graded two-sided from the nose cell (as now,
-`3 |sp1 - sp0|`) to a corner cell equal to the algebraic seam cell next to the corner; (2) the front edge is `z = z_f + dz(s)` as above with `phi` =
-40 deg at both ends and `ell` = 0.1 pitch, the C lines of the front edge aim at its nodes, and the F rows are displaced by `(z_a / z_f)^4 dz`; (3) the
-first front-edge node next to each corner is not moved by the in-plane smoothing (every step of the fallback chain); the corner node keeps its
-mean-of-six rule. Constants in the code, no environment input. Without the field every expression is the existing one (part D decides).
+H + one new opt-in field `CGridOptions::inclined_front` (default `false`), set only by
+`CGridOptions::camber_seam_i_construction()`, case value `c_grid_construction = "camber_seam_i"`. With the field, in
+every layer:
+
+1. the front-edge cells are graded two-sided from the nose cell (as now, `3 |sp1 - sp0|`) to a corner cell equal to the
+  algebraic seam cell next to the corner;
+2. the front edge is `z = z_f + dz(s)` as above with `phi` = 40 deg at both ends and `ell` = 0.1 pitch, the C lines of
+  the front edge aim at its nodes, and the F rows are displaced by `(z_a / z_f)^4 dz`;
+3. the first front-edge node next to each corner is not moved by the in-plane smoothing (every step of the fallback
+  chain); the corner node keeps its mean-of-six rule.
+
+Constants in the code, no environment input. Without the field every expression is the existing one (part D decides).
 
 ### Predictions (registered now, before the first 3-D build)
 
@@ -189,10 +222,10 @@ builds and runs 3 iterations with finite residuals. No set-up is defective.
 
 ## Addendum: measured values, misses and deviations
 
-Release builds, scratch tree of this wave; code state of the measurements: record commit 40c7f5e (construction I and its tests). By the keep clause
-I was then removed in the next commit; that removal moves no node of any other construction (part D re-run on the final code). Each registered run
-once. Limits are the registered ones, unchanged. No external reference value enters any gate. No fan performance claim. Solver physics files were not
-touched.
+Release builds, scratch tree of this wave; code state of the measurements: record commit 40c7f5e (construction I and its
+tests). By the keep clause construction I was then removed in the next commit; that removal moves no node of any other
+construction (part D re-run on the final code). Each registered run once. Limits are the registered ones, unchanged. No
+external reference value enters any gate. No fan performance claim. Solver physics files were not touched.
 
 ### Part C: acceptance on construction I (case value `camber_seam_i`)
 
@@ -217,24 +250,30 @@ touched.
 | C4 R-I blade B: builds with I >= with H | 21 (H) | **18** (three tangles at n_nose 4, n_side 21) | **MISS** |
 | C4 R-I FAN-01: builds with I >= with H | 16 (H) | 16 | met |
 
-Reported with C3: the largest relative speed is 242.45 m/s, in a poor cell at the upper corner line in the tip gap (C (27, 9), layer 20; H: 62.1
-m/s); 89 % of the late argmax cells lie in the poor region (G in ADR 0083 A0: 42 %). The criterion is met partly because the continuity at iteration 10 is 2.6 times
-H's; this is not a healthier solve than H's. Reported with C4 (no gate): blade B meeting 70 / 2.0 / 300: H 18, I 10 of 21, median non-orthogonality
-63.17 -> 69.97 deg; FAN-01: none meets the target with either, median 85.26 -> 82.50 deg, built meshes below the 85 deg `check_mesh` threshold H 8 of
-16, I 15 of 16 (different combinations fail: I builds two that H folds and folds or tangles two that H builds); the corner-region maximum of the 16
-FAN-01 meshes built with I lies between 77.5 and 84.2 deg (none at or below 70).
+Reported with C3: the largest relative speed is 242.45 m/s, in a poor cell at the upper corner line in the tip gap (C
+(27, 9), layer 20; H: 62.1 m/s); 89 % of the late argmax cells lie in the poor region (G in ADR 0083 A0: 42 %). The
+criterion is met partly because the continuity at iteration 10 is 2.6 times H's; this is not a healthier solve than H's.
+
+Reported with C4 (no gate):
+
+* Blade B meeting 70 / 2.0 / 300: H 18, I 10 of 21; median non-orthogonality 63.17 -> 69.97 deg.
+* FAN-01: none meets the target with either; median 85.26 -> 82.50 deg; built meshes below the 85 deg `check_mesh`
+  threshold H 8 of 16, I 15 of 16 (different combinations fail: I builds two that H folds and folds or tangles two that
+  H builds).
+* The corner-region maximum of the 16 FAN-01 meshes built with I lies between 77.5 and 84.2 deg (none at or below 70).
 
 ### Verdicts
 
 * **Keep clause failed** (C1-Q (i) and (ii), C1-B, C4 blade B). Construction I is **removed**: the `inclined_front` field, its constructor and
   constants, the two-sided corner grading, the smoothing hold, the case value `camber_seam_i` and its tests (C1, C1-P2, C1-Q, C1-B, C4, C2, C3, the
   smokes). Kept: `b1_construction_h_is_bit_identical` (part D, independent of I). `docs/case-schema.md` and `docs/meshing.md` were never changed.
-* **HT** (an inclined front edge removes the corner faces above 70 deg): **falsified for the construction as frozen** (C1-Q (i): 78.07 deg against
-  70). Because the prescribed inclination did not survive the smoothing, no mesh with an actually inclined front edge was produced, so the intended
-  mechanism itself remains untested. FT was passed by one variant by 0.195 deg; as stated in Amendment 1 before any 3-D build, most of that gain was
-  the corner grading. In 3-D the
-  corner region fell from 83.26 to 78.07 deg and the global non-orthogonality from 83.26 to 81.00 deg (now the wake-line-5 face), while the skewness
-  (3.978 -> 4.577) and the aspect ratio (227.2 -> 261.0) rose, and on blade B the change is harmful (B' skewness 8.9 -> 153.8, not located).
+* **HT** (an inclined front edge removes the corner faces above 70 deg): **falsified for the construction as frozen**
+  (C1-Q (i): 78.07 deg against 70). Because the prescribed inclination did not survive the smoothing, no mesh with an
+  actually inclined front edge was produced, so the intended mechanism itself remains untested. FT was passed by one
+  variant by 0.195 deg; as stated in Amendment 1 before any 3-D build, most of that gain was the corner grading. In 3-D
+  the corner region fell from 83.26 to 78.07 deg and the global non-orthogonality from 83.26 to 81.00 deg (now the
+  wake-line-5 face), while the skewness (3.978 -> 4.577) and the aspect ratio (227.2 -> 261.0) rose, and on blade B the
+  change is harmful (B' skewness 8.9 -> 153.8, not located).
 * **The topology change proper (I-b, an index offset between the two corners with a collapsed F row) was not tried.** The registered protocol
   developed I-a first and allowed I-b only if no I-a variant passed FT; one did. So this wave measured an inclined front edge, not the offset
   topology.

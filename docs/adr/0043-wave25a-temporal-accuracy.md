@@ -1,16 +1,35 @@
 # ADR 0043: Wave 25A, temporal and nonlinear accuracy misses (F-210 BDF2, F-212 solidification, F-215 G5)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" is written before any change of solver code in the
-repository. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and stays an
-ignored `*_known_miss` test with the registered limit intact; a set-up defect gets a NEW corrected test and the old one stays. A
-newly passing known-miss criterion gets a NEW passing test with the same registered limit; the old record stays ignored with a
-note. Addenda (measured numbers, deviations) are appended at the end only.
+repository.
+
+Wave 25A diagnoses three recorded misses and fixes them only where the cause is a genuine defect; the addendum holds the results.
+F-210 had one: the periodic boundary condition took the partner value from the old level, and extrapolating it in `fractional.rs`
+gives 4 to 6 times lower errors and meets A2 (F3 ratio 3.954, limit >= 3.0). A3 still misses (F2 BDF2 order 1.513, limit
+[1.7, 2.3]): exploratory runs show that the collocated pressure-smoothing face term floors the error at first order in dt at fixed
+h, and that term is not a defect and is not changed. F8 stays a miss (ratio 1.130, limit <= 0.5) and is not a defect. For F-212, a
+safeguarded Newton branch meets the N = 480 invariants P4 to P6 for P2/P8, but the successive-order criteria still miss: the
+original P2/P8 tests fail only on them, and on the corrected set-up S7 P1 misses (-1.03, -0.06, 0.45) and P2/P8 miss on the first
+pair (0.49), limit >= 0.9. K2 ny = 20 is a pure truncation error, so no code changes. The F-215 G5 drift is the double-precision
+representation of a stiff conservative matrix and of its iterative solve; the matrix defect predicts side 0 (G1 met) but does not
+alone explain side 1, no code changes, and G5 stays the ignored miss with its limit intact. Exploratory diagnostics ran before this
+ADR was written and shaped its decisions, so the registered checks are not blind predictions.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and stays an ignored `*_known_miss` test with the registered limit intact; a set-up defect gets a
+  NEW corrected test and the old one stays.
+* A newly passing known-miss criterion gets a NEW passing test with the same registered limit; the old record stays ignored with a
+  note.
+* Addenda (measured numbers, deviations) are appended at the end only.
 
 ## Scope and ordering disclosure
 
 Three recorded misses are diagnosed, and fixed only where the cause is a genuine defect:
 
-1. F-210 fractional-step BDF2 (ADR 0037 addendum): F2 BDF2 order 1.040 (limit [1.7, 2.3]), F3 ratio 2.479 (>= 3.0), F8 ratio 1.130 (<= 0.5).
+1. F-210 fractional-step BDF2 (ADR 0037 addendum): F2 BDF2 order 1.040 (limit [1.7, 2.3]), F3 ratio 2.479 (>= 3.0), F8 ratio
+   1.130 (<= 0.5).
 2. F-212 enthalpy method (ADR 0035 addendum): Newton limit cycle at N = 480 (P2/P8), P1 successive orders, K2 ny = 20 at 1.0040e-2.
 3. F-215 G5 (ADR 0035 addendum): per-side enthalpy drift 2.0e-12 / 1.8e-11 against 1e-12 at dt = 0.01.
 
@@ -148,10 +167,11 @@ All limits below are fixed now. "Bit" checks compare `f64` bit patterns and have
 ## Shared files, baselines, process
 
 Edited: `crates/rcfd-fv/src/pimple/fractional.rs`, `crates/rcfd-fv/src/solidification.rs`, the two test files, this ADR,
-`docs/reference-data.md` and `docs/roadmap.json` (only where status genuinely changes). Not edited: segregated SIMPLE/SIMPLEC, the PIMPLE
-momentum-source plumbing, `bc.rs`, `field.rs`, `scalar.rs`, `energy.rs`, `docs/ROADMAP.md`. Clean-room: first principles and
-published literature only. Cited and NOT read in this session (attribution from memory, unverified): Timmermans, Minev and van
-de Vosse 1996 (rotational pressure correction); Kim and Moin 1985; Zang, Street and Koseff 1994; Voller and Swaminathan 1991.
+`docs/reference-data.md` and `docs/roadmap.json` (only where status genuinely changes). Not edited: segregated
+SIMPLE/SIMPLEC, the PIMPLE momentum-source plumbing, `bc.rs`, `field.rs`, `scalar.rs`, `energy.rs`, `docs/ROADMAP.md`.
+Clean-room: first principles and published literature only. Cited and NOT read in this session (attribution from memory,
+unverified): Timmermans, Minev and van de Vosse 1996 (rotational pressure correction); Kim and Moin 1985; Zang, Street and
+Koseff 1994; Voller and Swaminathan 1991.
 
 ## Amendment 1 (written after the runs of S1 to S5 and before any run of S7; nothing above was changed)
 
@@ -237,42 +257,60 @@ the same scheme, 32 x 32, nu = 0.1, t = 1, BDF2, incremental, partner lag remove
 | S7 P2/P8 corrected set-up, invariants and position | errors 7.21e-3, 5.12e-3, 1.42e-3, 7.26e-4 | invariants, <= 3e-2 | met |
 | S7 P2/P8 successive orders | 0.49, 1.85, 0.97 | >= 0.9 | MISSED on the first pair, `p2_v2_known_miss_...`, `p8_v2_known_miss_...` (ignored) |
 
-* The registered N = 480 invariants P4 to P6 for P2/P8 are now met. The ORIGINAL `p2_/p8_two_phase_*_known_miss` tests stay
-  ignored and now fail only on the successive-order criterion (the N = 240 error 6.3e-5 is an accidental near-cancellation).
-* P1 order, explanation (exploratory runs in a scratch copy, code not in the repository, corrected initial state): the relative
-  position error against the registered sharp-front reference sits on a floor set by the mush half-width and the step size, not
-  by the spatial resolution. Errors for N = 60, 120, 240, 480:
-  eps = 2e-3, dt = h/2 (registered): 6.3e-4, 1.28e-3, 1.33e-3, 9.8e-4;
-  eps = 2e-3, dt = h/8: -1.1e-3, 6.8e-4, 8.4e-4, 7.9e-4;
-  eps = 5e-4, dt = h/2: 4.0e-5, 8.0e-4, 5.8e-4, 3.5e-4;
-  eps = 5e-4, dt = h/8: -1.7e-3, 1.9e-4, 1.6e-4, 1.7e-4;
-  eps = 5e-5, dt = h/8: -1.8e-3, 4.3e-5, -4.1e-5, -1.6e-5.
-  The floor drops with eps and with dt, and the registered metric cannot show a monotone order once it is reached. The original
-  set-up also had a 2 percent first-order sampling error of the initial liquid content (a persistent offset by the exact enthalpy
-  balance); S7 removed that part (initial errors 6.0e-3, 1.4e-3, 2.9e-4, 5e-6) but not the floor. No fix is claimed for the P1
-  order criterion; the registered ignored test stays.
-* K2 ny = 20: the SIMPLEC solution equals the exact discrete solution to 1e-11, whose error at ny = 20 is 1.004021e-2: a pure
-  truncation error. Not a solver defect; no code change; the ignored record stays.
+The registered N = 480 invariants P4 to P6 for P2/P8 are now met. The ORIGINAL `p2_/p8_two_phase_*_known_miss` tests stay ignored
+and now fail only on the successive-order criterion (the N = 240 error 6.3e-5 is an accidental near-cancellation).
+
+P1 order, explanation (exploratory runs in a scratch copy, code not in the repository, corrected initial state): the relative
+position error against the registered sharp-front reference sits on a floor set by the mush half-width and the step size, not by
+the spatial resolution.
+
+| eps | dt | Error, N = 60 | N = 120 | N = 240 | N = 480 |
+| --- | --- | --- | --- | --- | --- |
+| 2e-3 | h/2 (registered) | 6.3e-4 | 1.28e-3 | 1.33e-3 | 9.8e-4 |
+| 2e-3 | h/8 | -1.1e-3 | 6.8e-4 | 8.4e-4 | 7.9e-4 |
+| 5e-4 | h/2 | 4.0e-5 | 8.0e-4 | 5.8e-4 | 3.5e-4 |
+| 5e-4 | h/8 | -1.7e-3 | 1.9e-4 | 1.6e-4 | 1.7e-4 |
+| 5e-5 | h/8 | -1.8e-3 | 4.3e-5 | -4.1e-5 | -1.6e-5 |
+
+The floor drops with eps and with dt, and the registered metric cannot show a monotone order once it is reached. The original
+set-up also had a 2 percent first-order sampling error of the initial liquid content (a persistent offset by the exact enthalpy
+balance); S7 removed that part (initial errors 6.0e-3, 1.4e-3, 2.9e-4, 5e-6) but not the floor. No fix is claimed for the P1 order
+criterion; the registered ignored test stays.
+
+K2 ny = 20: the SIMPLEC solution equals the exact discrete solution to 1e-11, whose error at ny = 20 is 1.004021e-2: a pure
+truncation error. Not a solver defect; no code change; the ignored record stays.
 
 ### F-215 (D3)
 
-* The interface face conductance is exactly zero (asserted), which excludes inexact interface flux use. Exploratory diagnostic
-  (scratch copy, not in the repository): the column sums of the assembled transient matrix, evaluated with compensated summation,
-  against the capacities `V w/dt`. The stored matrix is not column-conservative: its diagonal `cap + sum k` is one rounding of a
-  number about 1.6e4 times larger than `cap` (Fourier number 8e3 per cell), i.e. about one ulp(diag). Total absolute defect over the
-  40 columns 4.9e-15 (cap 6.25e-4 per column) at dt = 0.01. The systematic drift this predicts for side 0 per step,
-  `sum_j defect_j x_j`, is 1.56e-13, 2.22e-13, 1.84e-13 (dt = 0.01, 1e-3, 1e-4, units of `V w T/dt`); converted to the enthalpy
-  drift over 50 steps with `dt`, `rho cp` and `h0` (hand computation, about 10 percent uncertain through `h0`) it is 1.8e-12,
-  2.5e-13, 2.0e-14 against the measured 2.0e-12, 2.5e-13, 1.8e-14. G1 for side 0: met (within a factor 1.5 at all three).
-* Side 1 (k = 10, ten times stiffer) is NOT explained by this defect alone: the per-step defect prediction (9.9e-13 at dt = 0.01)
-  has the order of, but differs in sign from, the sampled per-step actual drift, which scatters from step to step, so the
-  linear-solver residual (recursive residual of CG/BiCGStab against the true residual of a matrix with condition number about the
-  Fourier number) contributes at least as much. Both are floating-point effects proportional to eps times the Fourier number.
-* Conclusion: not a defect of the interface (zero conductance exactly), and not an accumulation order that a reordering would
-  remove: the drift is the double-precision representation of a stiff conservative matrix and of its iterative solve. A remedy
-  would need an extended-precision (compensated) matrix assembly and a flux-form residual with iterative refinement in the shared
-  energy sweep; it would change the bits of every transient scalar solve unless opt-in, and is not worth that for a check that was
-  registered at an arbitrary dt. No code change; G5 stays the ignored miss with its limit intact; `g5_v2` (dt = 1e-3) stays.
+The interface face conductance is exactly zero (asserted), which excludes inexact interface flux use.
+
+An exploratory diagnostic (scratch copy, not in the repository) evaluated the column sums of the assembled transient matrix with
+compensated summation and compared them with the capacities `V w/dt`. The stored matrix is not column-conservative: its diagonal
+`cap + sum k` is one rounding of a number about 1.6e4 times larger than `cap` (Fourier number 8e3 per cell), i.e. about one
+ulp(diag). The total absolute defect over the 40 columns is 4.9e-15 (cap 6.25e-4 per column) at dt = 0.01.
+
+This defect predicts a systematic drift for side 0 per step, `sum_j defect_j x_j`. The table converts that drift to the enthalpy
+drift over 50 steps with `dt`, `rho cp` and `h0` (hand computation, about 10 percent uncertain through `h0`) and compares it with
+the measured drift.
+
+| dt | Predicted per step (units of `V w T/dt`) | Predicted enthalpy drift over 50 steps | Measured |
+| --- | --- | --- | --- |
+| 0.01 | 1.56e-13 | 1.8e-12 | 2.0e-12 |
+| 1e-3 | 2.22e-13 | 2.5e-13 | 2.5e-13 |
+| 1e-4 | 1.84e-13 | 2.0e-14 | 1.8e-14 |
+
+G1 for side 0: met (within a factor 1.5 at all three).
+
+Side 1 (k = 10, ten times stiffer) is NOT explained by this defect alone. The per-step defect prediction (9.9e-13 at dt = 0.01) has
+the order of, but differs in sign from, the sampled per-step actual drift, which scatters from step to step. So the linear-solver
+residual (recursive residual of CG/BiCGStab against the true residual of a matrix with condition number about the Fourier number)
+contributes at least as much. Both are floating-point effects proportional to eps times the Fourier number.
+
+Conclusion: not a defect of the interface (zero conductance exactly), and not an accumulation order that a reordering would remove.
+The drift is the double-precision representation of a stiff conservative matrix and of its iterative solve. A remedy would need an
+extended-precision (compensated) matrix assembly and a flux-form residual with iterative refinement in the shared energy sweep. It
+would change the bits of every transient scalar solve unless opt-in, and is not worth that for a check that was registered at an
+arbitrary dt. No code change; G5 stays the ignored miss with its limit intact; `g5_v2` (dt = 1e-3) stays.
 
 ### Deviations from the registered text
 
@@ -289,5 +327,11 @@ the same scheme, 32 x 32, nu = 0.1, t = 1, BDF2, incremental, partner lag remove
 
 ### Not resolved
 
-F2 BDF2 order (1.51, collocated pressure-smoothing term), F8, P1 successive orders, original P2/P8 order criterion, K2 ny = 20
-(truncation), G5 (floating point), rotational pressure correction, the PISO periodic-lag follow-up.
+* F2 BDF2 order (1.51, collocated pressure-smoothing term)
+* F8
+* P1 successive orders
+* Original P2/P8 order criterion
+* K2 ny = 20 (truncation)
+* G5 (floating point)
+* Rotational pressure correction
+* The PISO periodic-lag follow-up

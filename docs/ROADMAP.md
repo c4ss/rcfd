@@ -1,30 +1,45 @@
 # rcfd roadmap
 
-Clean-room open source Rust CFD suite. Algorithms come from public literature only. Machine-readable twin: `roadmap.json` (same ids; `status` there is the source of truth for automation).
+Clean-room open source Rust CFD suite. Algorithms come from public literature only. This page lists the roadmap items
+by phase, each with its prerequisites, acceptance criterion, status and any note. Machine-readable twin: `roadmap.json`
+(same ids; `status` there is the source of truth for automation).
 
-Conventions: `- [ ] F-xxx` checkbox, `depends on` lists prerequisite ids (build leaves first). Ids are grouped by phase, not strictly by time: Phases 7 and 8 can start once their dependencies exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel with 3 and 4.
+Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-273 > F-274 > F-275, the workspace layer
+of [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), ahead of the FAN-01
+diagnosis.
 
-Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F-028 > F-030 > F-074 > F-085 > F-090 > F-091 > F-146 > F-147 > F-148 > F-145 > F-094. The Claude Code mod panel (F-092/F-093) is an optional extra off this path.
+Critical path to the in-app assistant: F-001 > F-003 > F-005 > F-010 > F-020 > F-028 > F-030 > F-074 > F-085 > F-090 >
+F-091 > F-146 > F-147 > F-148 > F-145 > F-094. The Claude Code mod panel (F-092/F-093) is an optional extra off this path.
 
-Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-273 > F-274 > F-275, the workspace layer of [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), ahead of the FAN-01 diagnosis.
+Conventions: `- [ ] F-xxx` checkbox (`[x]` done, `[~]` PARTIAL, `[ ]` not started), `depends on` lists prerequisite ids
+(build leaves first). Ids are grouped by phase, not strictly by time: Phases 7 and 8 can start once their dependencies
+exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel with 3 and 4. The
+[glossary](glossary.md) defines F-xxx, wave, PARTIAL, registered limit, known miss and FAN-01.
 
 ## Phase 0 - Workspace and architecture
 
 - [~] **F-001** Cargo workspace layout (crates: rcfd-core, -mesh, -linalg, -fv, -turb, -io, -post, -cli, -api, -mcp)
   - depends on: none
   - acceptance: cargo build --workspace and cargo test --workspace pass in CI on Windows+Linux; crate dependency graph documented and acyclic
-  - note: PARTIAL (audit 2026-10-14): the criterion requires cargo build/test to pass in CI on Windows and Linux; the CI workflow has never run on a hosted CI, so only local Windows and WSL Linux runs back it. Missing: a hosted CI run on both OSes. cargo build/test --workspace verified on Windows 11 (rustc 1.99) and Linux (WSL Ubuntu 20.04, rustc 1.96); GitHub CI workflow written but not run on a hosted CI. Acyclic graph enforced by rcfd-cli/tests/workspace_graph.rs.
+  - note: PARTIAL (audit 2026-10-14). Missing: a hosted CI run on both OSes. The criterion requires cargo build/test to
+    pass in CI on Windows and Linux. The GitHub CI workflow is written but has never run on a hosted CI, so only local
+    Windows and WSL Linux runs back it: cargo build/test --workspace verified on Windows 11 (rustc 1.99) and Linux (WSL
+    Ubuntu 20.04, rustc 1.96). rcfd-cli/tests/workspace_graph.rs enforces the acyclic graph.
 - [~] **F-002** CI, lint, formatting, license (AGPL-3.0) and clean-room policy doc
   - depends on: F-001
   - acceptance: CI runs fmt, clippy -D warnings, tests; CONTRIBUTING states no proprietary code/text and sourcing rule (textbooks/papers only)
-  - note: PARTIAL (audit 2026-10-14): the criterion says CI runs fmt, clippy -D warnings and tests; ci.yml has never been executed on a CI host (the commands pass locally on tracked files). Missing: a hosted CI run. CI workflow, LICENSE, CONTRIBUTING with clean-room policy written; the same fmt/clippy/test commands pass locally; workflow itself not yet run on a CI host.
+  - note: PARTIAL (audit 2026-10-14). Missing: a hosted CI run. The criterion says CI runs fmt, clippy -D warnings and
+    tests; ci.yml has never been executed on a CI host. The same fmt/clippy/test commands pass locally on tracked files.
+    The CI workflow, LICENSE and CONTRIBUTING with clean-room policy are written.
 - [x] **F-003** Core types: scalar precision (f64 default, generic f32), units/quantities, error type, logging
   - depends on: F-001
   - acceptance: Unit conversion tests; SI base with dimension checking for BC/material inputs
 - [~] **F-004** Architecture decision records: state-tree model, field storage, parallel strategy (rayon now, MPI later)
   - depends on: F-001
   - acceptance: ADRs merged under docs/adr and reviewed
-  - note: PARTIAL (audit 2026-10-14): the criterion requires ADRs merged and reviewed; human review is still pending. Missing: the review. Note: ADRs 0004 and 0005 also exist under docs/adr (the text below lists only 0001-0003). ADRs 0001-0003 written under rcfd/docs/adr; human review/merge still pending.
+  - note: PARTIAL (audit 2026-10-14). Missing: the review. The criterion requires ADRs merged and reviewed; human review
+    is still pending. ADRs 0004 and 0005 also exist under docs/adr (the text below lists only 0001-0003). ADRs 0001-0003
+    written under rcfd/docs/adr; human review/merge still pending.
 - [x] **F-005** Settings state tree (typed objects, named objects, commands, enum allowed-values, JSON schema export)
   - depends on: F-003
   - acceptance: Round-trip serialize/deserialize of a tree; schema export validates a sample; get/set by dotted path works
@@ -32,7 +47,43 @@ Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-
 - [x] **F-006** Benchmark and validation case registry (cavity, backward step, channel, flat plate, NACA0012, heated cavity)
   - depends on: F-001
   - acceptance: cases/ folder with case definitions plus reference data from public literature; runner lists them
-  - note: Reference tables (Ghia 1982, de Vahl Davis 1983) were first typed from memory and have since been cross-checked against independent published copies (wave 6a, docs/reference-data.md): every tabulated value matches; the Ghia v-centreline is checked at Re=100 only and the 0.9766 u rows of Re=100/400 only via one source. NACA0012 case has no mesh generator yet. WAVE 30C: the de Vahl Davis reference values are now checked against the primary source (Table V of the 1983 paper read from a page scan, all eleven quantities at Ra 1e3 to 1e6 plus the locations of the maxima, cases/heated_cavity/reference/devahldavis1983_tableV.csv); every earlier value matched. NACA0012 still has no mesh generator (not attempted). WAVE 30B (ADR 0060): incompressible benchmarks re-validated against data actually read, limits registered before running (docs/reference-data.md, wave 30B section). Passing: cavity Re 100/400/1000 vs Ghia and Botella (max u error 4.5e-3, 1.8e-3, 4.4e-3/5.4e-3), backward step Re_D 800 x_r/h 11.80 (published 11.48 to 12.20, GCI 0.5 percent), Blasius with an upstream shear-free belt (Cf error 0.2 to 0.7 percent, profile 2.3e-3, delta* +0.01 percent, GCI 0.16 percent), wall-resolved SST channel Re_tau 178 vs MKM DNS (U_b+ +1.7 percent), k-epsilon wall functions on two of three meshes, cylinder Re 100 C_D within 2.4 percent. Known misses (ignored known-miss tests, limits intact): cavity Re 1000 GCI, Blasius plate abutting the inlet (set-up defect), SST channel observed order 0.63, k-epsilon y+ sensitivity, cylinder St -3.8 percent and GCI; see the ADR addendum. Armaly, Gartling and Ghia originals, Moody/Colebrook not obtained. Status unchanged (done). WAVE 31C (ADR 0064): Ghia u (Re 100/400/1000, incl. y 0.9766) and v (Re 100) now checked against three secondary copies cell by cell (the in-repo tables equal them); v Re 400/1000 read with two cell disagreements between copies (not used by any test); Gartling Re 800 step lengths 12.20/9.70/20.96 h seen in two secondary sources (one conflicting row 11.9/9.5/20.6); Armaly paper read but its reattachment lengths exist only in figures (data not obtained); Williamson 1989 St-Re fit read in the primary paper (St(100) 0.1643). Discrepancies are listed in docs/reference-data.md (wave 31C), nothing silently changed. WAVE 31A (ADR 0062): the Ra 1e6 cavity miss of wave 30C is an unstable iteration, not a discretisation or limiter effect: the SIMPLEC iteration at alpha_u 0.8 with energy relax 0.9 stalls (residual 1.3e-2) on the 32 x 32 mesh with every convection scheme, a steady state exists (PISO march reaches it, rate 5e-10; alpha_u 0.5, 0.3, energy relax 0.7 or classic SIMPLE converge to Nu 8.8727 to 8.8732), and the steady iteration started from it leaves it. Corrected ignored test a_ra_1e6_alpha05 (alpha_u 0.5, all limits unchanged) passes: Nu +0.33 percent, GCI 0.05 percent. The Sod Van Albada miss is fixed (the limiter overflowed to NaN above 1.34e154). Cylinder Re 100 St miss of wave 30B: a time-discretisation error (first-order PISO step, order 0.85 in dt, second order in h); with the common dt 0.025 the registered K1 to K4 pass (St 0.16175, -1.97 percent; GCI 1.6 percent), extrapolated St 0.1669, C_D 1.357. The 181 x 141 mesh at dt 0.05 diverges.
+  - note: Reference tables (Ghia 1982, de Vahl Davis 1983) were first typed from memory and have since been cross-checked
+    against independent published copies (wave 6a, docs/reference-data.md): every tabulated value matches. The Ghia
+    v-centreline is checked at Re=100 only and the 0.9766 u rows of Re=100/400 only via one source. NACA0012 case has no
+    mesh generator yet.
+    - WAVE 30C: the de Vahl Davis reference values are now checked against the primary source (Table V of the 1983 paper
+      read from a page scan, all eleven quantities at Ra 1e3 to 1e6 plus the locations of the maxima,
+      cases/heated_cavity/reference/devahldavis1983_tableV.csv); every earlier value matched. NACA0012 still has no mesh
+      generator (not attempted).
+    - WAVE 30B (ADR 0060): incompressible benchmarks re-validated against data actually read, limits registered before
+      running (docs/reference-data.md, wave 30B section). Status unchanged (done).
+      - Passing: cavity Re 100/400/1000 vs Ghia and Botella (max u error 4.5e-3, 1.8e-3, 4.4e-3/5.4e-3); backward step
+        Re_D 800 x_r/h 11.80 (published 11.48 to 12.20, GCI 0.5 percent); Blasius with an upstream shear-free belt (Cf
+        error 0.2 to 0.7 percent, profile 2.3e-3, delta* +0.01 percent, GCI 0.16 percent); wall-resolved SST channel
+        Re_tau 178 vs MKM DNS (U_b+ +1.7 percent); k-epsilon wall functions on two of three meshes; cylinder Re 100 C_D
+        within 2.4 percent.
+      - Known misses (ignored known-miss tests, limits intact): cavity Re 1000 GCI; Blasius plate abutting the inlet
+        (set-up defect); SST channel observed order 0.63; k-epsilon y+ sensitivity; cylinder St -3.8 percent and GCI. See
+        the ADR addendum.
+      - Not obtained: Armaly, Gartling and Ghia originals, Moody/Colebrook.
+    - WAVE 31C (ADR 0064): discrepancies are listed in docs/reference-data.md (wave 31C), nothing silently changed.
+      - Ghia u (Re 100/400/1000, incl. y 0.9766) and v (Re 100) now checked against three secondary copies cell by cell
+        (the in-repo tables equal them).
+      - Ghia v Re 400/1000 read with two cell disagreements between copies (not used by any test).
+      - Gartling Re 800 step lengths 12.20/9.70/20.96 h seen in two secondary sources (one conflicting row
+        11.9/9.5/20.6).
+      - Armaly paper read but its reattachment lengths exist only in figures (data not obtained).
+      - Williamson 1989 St-Re fit read in the primary paper (St(100) 0.1643).
+    - WAVE 31A (ADR 0062):
+      - The Ra 1e6 cavity miss of wave 30C is an unstable iteration, not a discretisation or limiter effect. The SIMPLEC
+        iteration at alpha_u 0.8 with energy relax 0.9 stalls (residual 1.3e-2) on the 32 x 32 mesh with every convection
+        scheme. A steady state exists (PISO march reaches it, rate 5e-10; alpha_u 0.5, 0.3, energy relax 0.7 or classic
+        SIMPLE converge to Nu 8.8727 to 8.8732), and the steady iteration started from it leaves it. The corrected
+        ignored test a_ra_1e6_alpha05 (alpha_u 0.5, all limits unchanged) passes: Nu +0.33 percent, GCI 0.05 percent.
+      - The Sod Van Albada miss is fixed (the limiter overflowed to NaN above 1.34e154).
+      - Cylinder Re 100 St miss of wave 30B: a time-discretisation error (first-order PISO step, order 0.85 in dt, second
+        order in h). With the common dt 0.025 the registered K1 to K4 pass (St 0.16175, -1.97 percent; GCI 1.6 percent),
+        extrapolated St 0.1669, C_D 1.357. The 181 x 141 mesh at dt 0.05 diverges.
 
 ## Phase 1 - Mesh data structures and IO
 
@@ -53,7 +104,8 @@ Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-
 - [~] **F-014** Mesh readers: OpenFOAM polyMesh, CGNS (unstructured), Fluent .msh ASCII (publicly documented layout)
   - depends on: F-010
   - acceptance: Each reader loads a sample mesh and passes F-011; round trip to internal format
-  - note: OpenFOAM polyMesh (read+write, round trip) and Fluent ASCII .msh readers done and tested. CGNS unstructured reader NOT done (HDF5-based; needs an HDF5 reader). Tested only on hand-built sample meshes, no third-party sample files.
+  - note: CGNS unstructured reader NOT done (HDF5-based; needs an HDF5 reader). OpenFOAM polyMesh (read+write, round trip)
+    and Fluent ASCII .msh readers done and tested. Tested only on hand-built sample meshes, no third-party sample files.
 - [x] **F-015** Mesh writer and native rcfd case/data container (HDF5-like, versioned)
   - depends on: F-010, F-005
   - acceptance: Write then read yields identical mesh and settings-tree hash
@@ -71,11 +123,22 @@ Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-
 - [x] **F-021** Gradient schemes: Green-Gauss (cell, node), least squares; limiters (Barth-Jespersen, Venkatakrishnan)
   - depends on: F-020
   - acceptance: Exact for linear fields on distorted meshes; convergence order test
-  - note: Cell Green-Gauss (optional skewness corrections), node Green-Gauss (Holmes-Connell weights, triangle-fan face integrals), weighted least squares, Barth-Jespersen and Venkatakrishnan limiters. Least squares and node GG exact (<1e-10) for linear fields on a trapezoid+shear graded mesh; uncorrected cell GG is not exact there (test asserts that) and corrections remove the error. Global L2 gradient order measured ~1.5 (boundary cells are first order), not 2.
+  - note: Cell Green-Gauss (optional skewness corrections), node Green-Gauss (Holmes-Connell weights, triangle-fan face
+    integrals), weighted least squares, Barth-Jespersen and Venkatakrishnan limiters.
+    - Least squares and node GG exact (<1e-10) for linear fields on a trapezoid+shear graded mesh; uncorrected cell GG is
+      not exact there (test asserts that) and corrections remove the error.
+    - Global L2 gradient order measured ~1.5 (boundary cells are first order), not 2.
 - [x] **F-022** Convection schemes: upwind, central, linear-upwind, QUICK/MUSCL, TVD limiters, deferred correction
   - depends on: F-021
   - acceptance: 1D/2D advection of smooth and step profiles shows expected order and boundedness
-  - note: Upwind, central, linear-upwind, QUICK, TVD (minmod, van Leer, van Albada, superbee, MUSCL, Koren) via deferred correction on an upwind implicit matrix. Steady 1D conv-diff (Pe=4) observed orders: upwind 0.9, central 2.0, linearUpwind 2.07, QUICK 2.05, vanLeer 2.07. 2D oblique advection: upwind 0.87, linearUpwind/QUICK ~1.47 (limited by first-order outflow/inflow boundary treatment). Step advection (100 cells, CFL 0.4, 100 steps): upwind overshoot 1e-15 width 30 cells; central overshoots 1.6e-2; vanLeer/MUSCL/superbee/minmod overshoot <=2e-5, widths 18/16/14/20. Pointer only (no scope change): additional advection schemes are tracked in F-211.
+  - note: Upwind, central, linear-upwind, QUICK, TVD (minmod, van Leer, van Albada, superbee, MUSCL, Koren) via deferred
+    correction on an upwind implicit matrix.
+    - Steady 1D conv-diff (Pe=4) observed orders: upwind 0.9, central 2.0, linearUpwind 2.07, QUICK 2.05, vanLeer 2.07.
+    - 2D oblique advection: upwind 0.87, linearUpwind/QUICK ~1.47 (limited by first-order outflow/inflow boundary
+      treatment).
+    - Step advection (100 cells, CFL 0.4, 100 steps): upwind overshoot 1e-15 width 30 cells; central overshoots 1.6e-2;
+      vanLeer/MUSCL/superbee/minmod overshoot <=2e-5, widths 18/16/14/20.
+    - Pointer only (no scope change): additional advection schemes are tracked in F-211.
 - [x] **F-023** Diffusion with non-orthogonal correction; Laplacian operator
   - depends on: F-021
   - acceptance: Manufactured solution converges at order 2 on a skewed mesh
@@ -95,15 +158,52 @@ Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-
 - [~] **F-027** Algebraic multigrid (aggregation AMG) as preconditioner and solver
   - depends on: F-026
   - acceptance: Poisson on 1M cells converges with mesh-independent rate (under 15 V-cycles)
-  - note: PARTIAL (audit 2026-10-14): the criterion says 1M cells under 15 V-cycles. The 1M-cell evidence uses W-cycles (cycle_index 2), 14 of the limit 15 to a self-chosen tolerance of 1e-6, and lives in an ignored test; plain V-cycles were not shown to meet the criterion. Missing: a V-cycle result (or a changed criterion) and a gate in the default test run. Smoothed-aggregation AMG (strength-filtered greedy aggregation, damped-Jacobi smoothed prolongator, Galerkin RAP, forward/backward Gauss-Seidel, dense LU coarse solve; works as preconditioner for CG/BiCGStab and as stand-alone solver). 1M-cell 3D Poisson (ignored test, release): 5 levels, operator complexity 1.68, setup 1.0s, stand-alone W(1,1)-cycles to 1e-6: 14 (rate 0.37, limit is under 15, marginal), AMG-preconditioned CG to 1e-8: 11 iterations. Cycles to 1e-8 / CG its across 4k..1M unknowns: 10..11 (flat). Plain V-cycles degrade mildly with size (rate 0.19 at 4k to 0.45 at 1M), hence W-cycle default. Setup is not thread-parallel except the sparse products; Gauss-Seidel smoother is serial (deterministic).
+  - note: PARTIAL (audit 2026-10-14). Missing: a V-cycle result (or a changed criterion) and a gate in the default test
+    run. The criterion says 1M cells under 15 V-cycles. The 1M-cell evidence uses W-cycles (cycle_index 2), 14 of the
+    limit 15 to a self-chosen tolerance of 1e-6, and lives in an ignored test; plain V-cycles were not shown to meet the
+    criterion.
+    - Smoothed-aggregation AMG (strength-filtered greedy aggregation, damped-Jacobi smoothed prolongator, Galerkin RAP,
+      forward/backward Gauss-Seidel, dense LU coarse solve; works as preconditioner for CG/BiCGStab and as stand-alone
+      solver).
+    - 1M-cell 3D Poisson (ignored test, release): 5 levels, operator complexity 1.68, setup 1.0s; stand-alone
+      W(1,1)-cycles to 1e-6: 14 (rate 0.37, limit is under 15, marginal); AMG-preconditioned CG to 1e-8: 11 iterations.
+    - Cycles to 1e-8 / CG its across 4k..1M unknowns: 10..11 (flat).
+    - Plain V-cycles degrade mildly with size (rate 0.19 at 4k to 0.45 at 1M), hence W-cycle default.
+    - Setup is not thread-parallel except the sparse products; Gauss-Seidel smoother is serial (deterministic).
 - [x] **F-028** Incompressible steady laminar SIMPLE/SIMPLEC (collocated, Rhie-Chow)
   - depends on: F-022, F-023, F-026
   - acceptance: Lid-driven cavity Re=100/400/1000 matches Ghia et al. centerline profiles within 2 percent
-  - note: SIMPLE/SIMPLEC (rcfd-fv simple.rs, pressure.rs). Lid-driven cavity vs Ghia 1982, pass = max abs error <= 0.02*U_lid at Ghia points. Re100 n=40 SIMPLEC linearUpwind 1489 its: max|u-Ghia| 0.00275, |v| 0.0085 (SIMPLE 1866 its, 0.00273). Re400 n=80 SIMPLEC linearUpwind 4077 its: 0.00326. Re1000 n=128 SIMPLEC vanLeer 9941 its: 0.00444 (ignored heavy tests, ~15 min release). Ghia u (Re 100/400/1000) and v (Re 100) tables cross-checked against independent published copies in wave 6a (all match, see docs/reference-data.md). Audit 2026-10-14: the Re 400 and 1000 cases are ignored tests (they pass when run); u is checked only at Re 400/1000 and 'within 2 percent' is read as max absolute error <= 0.02 of the lid speed.
+  - note: SIMPLE/SIMPLEC (rcfd-fv simple.rs, pressure.rs). Lid-driven cavity vs Ghia 1982,
+    pass = max abs error <= 0.02*U_lid at Ghia points.
+    - Re100 n=40 SIMPLEC linearUpwind 1489 its: max|u-Ghia| 0.00275, |v| 0.0085 (SIMPLE 1866 its, 0.00273).
+    - Re400 n=80 SIMPLEC linearUpwind 4077 its: 0.00326. Re1000 n=128 SIMPLEC vanLeer 9941 its: 0.00444 (ignored heavy
+      tests, ~15 min release).
+    - Ghia u (Re 100/400/1000) and v (Re 100) tables cross-checked against independent published copies in wave 6a (all
+      match, see docs/reference-data.md).
+    - Audit 2026-10-14: the Re 400 and 1000 cases are ignored tests (they pass when run); u is checked only at
+      Re 400/1000 and 'within 2 percent' is read as max absolute error <= 0.02 of the lid speed.
 - [x] **F-029** Transient incompressible PISO/PIMPLE
   - depends on: F-024, F-028
   - acceptance: Taylor-Green vortex decay error under 1 percent; cylinder Strouhal within 5 percent at Re=100
-  - note: PISO/PIMPLE in rcfd-fv/src/pimple.rs (Euler/BDF2, transient Rhie-Chow ddt correction, outer iterations with relaxation, CFL-adaptive dt). Taylor-Green (periodic 64x64, nu=0.05, t=2, central, dt=0.02): KE error 0.38 percent when recorded (re-measured in wave 6a after correcting the test's initial-pressure sign: 0.30 percent), field L2 error under 1 percent (test taylor_green_decay_below_one_percent); second-order spatial convergence test; PIMPLE runs at Co>1. Cylinder Re=100 (O-grid 128x100, R=20D, linear-upwind, dt=0.05 Co~2.6, 160 time units, AMG pressure) gives St=0.1588 vs ~0.165 (-3.8 percent, passes the 5 percent gate; heavy test: cargo test --release -p rcfd-fv --test cylinder -- --ignored, ~5 min). Reference St=0.165 at Re=100 verified (Williamson Annu. Rev. Fluid Mech. 1996 as tabulated in arXiv:2303.09262; converged 2D computations 0.164); the earlier Williamson 1989 / Henderson 1995 attributions are unconfirmed. Also fixed periodic-patch HbyA flux (boundary_hby_a) which broke periodic flows. Caveat: central + deferred correction with a single outer iteration is unstable at high cell Peclet number. Audit 2026-10-14: the cylinder Strouhal gate (0.1588 vs 0.165, -3.8 percent) is an ignored test; only Taylor-Green runs in the default suite. WAVE 31A (ADR 0062): the St -3.8 percent of the 128 x 100 dt 0.05 run is mainly time-discretisation error of the first-order PISO step (observed order 0.82 to 0.87 in dt, 2.3 to 2.5 in h); at dt 0.025 St 0.16175 (-1.97 percent) and on 181 x 141 0.16255, extrapolation 0.1669; C_D 1.357 extrapolated. Probe position and far field are not causes. 181 x 141 at dt 0.05 diverges (Courant 10 to 30, NaN at t = 35) and PimpleSolver::step has no divergence guard (not changed).
+  - note: PISO/PIMPLE in rcfd-fv/src/pimple.rs (Euler/BDF2, transient Rhie-Chow ddt correction, outer iterations with
+    relaxation, CFL-adaptive dt).
+    - Taylor-Green (periodic 64x64, nu=0.05, t=2, central, dt=0.02): KE error 0.38 percent when recorded (re-measured in
+      wave 6a after correcting the test's initial-pressure sign: 0.30 percent), field L2 error under 1 percent (test
+      taylor_green_decay_below_one_percent); second-order spatial convergence test; PIMPLE runs at Co>1.
+    - Cylinder Re=100 (O-grid 128x100, R=20D, linear-upwind, dt=0.05 Co~2.6, 160 time units, AMG pressure) gives
+      St=0.1588 vs ~0.165 (-3.8 percent, passes the 5 percent gate;
+      heavy test: cargo test --release -p rcfd-fv --test cylinder -- --ignored, ~5 min).
+    - Reference St=0.165 at Re=100 verified (Williamson Annu. Rev. Fluid Mech. 1996 as tabulated in arXiv:2303.09262;
+      converged 2D computations 0.164); the earlier Williamson 1989 / Henderson 1995 attributions are unconfirmed.
+    - Also fixed the periodic-patch HbyA flux (boundary_hby_a), which broke periodic flows.
+    - Caveat: central + deferred correction with a single outer iteration is unstable at high cell Peclet number.
+    - Audit 2026-10-14: the cylinder Strouhal gate (0.1588 vs 0.165, -3.8 percent) is an ignored test; only Taylor-Green
+      runs in the default suite.
+    - WAVE 31A (ADR 0062): the St -3.8 percent of the 128 x 100 dt 0.05 run is mainly time-discretisation error of the
+      first-order PISO step (observed order 0.82 to 0.87 in dt, 2.3 to 2.5 in h); at dt 0.025 St 0.16175 (-1.97 percent)
+      and on 181 x 141 0.16255, extrapolation 0.1669; C_D 1.357 extrapolated. Probe position and far field are not
+      causes. 181 x 141 at dt 0.05 diverges (Courant 10 to 30, NaN at t = 35) and PimpleSolver::step has no divergence
+      guard (not changed).
 - [x] **F-030** Residual monitors, convergence criteria, under-relaxation controls, checkpoint/restart
   - depends on: F-028, F-015
   - acceptance: Restarted steady run continues bit-identically; residual history exported as CSV
@@ -111,205 +211,1467 @@ Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-
 - [x] **F-031** Porous media, momentum sources, MRF (rotating frame) source terms
   - depends on: F-028
   - acceptance: Packed-bed Ergun pressure drop and rotating channel tests pass
-  - note: Wave 9. Acceptance met, scope partial. Delivered: rcfd-fv sources.rs (Darcy-Forchheimer porous sink in the superficial-velocity form, Ergun coefficients 1/K = 150 (1-e)^2/(e^3 d^2), C2 = 3.5 (1-e)/(e^3 d); relative-velocity rotating frame with analytic centrifugal and lagged Coriolis accelerations as balanced-force BodyForce terms; constant acceleration), rcfd-api sources.rs and settings sources.<name> (type porous | rotating_frame | acceleration; zone all | box | cell_zone; steady simple/simplec only, other algorithms are a located diagnostic; docs/case-schema.md; cases/packed_bed, cases/rotating_channel). Ergun constants checked against a secondary source (neutrium.net, Manchester packed-bed page; Ergun 1952 itself not accessed). Checks fixed before running (rcfd-api tests/sources.rs, nu = 1.5e-5, bed e = 0.4, d = 5 mm, U = 0.15 m/s, 40x8 cells): packed-bed kinematic pressure gradient between 30 % and 70 % of the bed 149.7666 vs Ergun 149.7656 (+0.001 %, limit 1 %; the viscous and inertial terms are 51 %/49 % of it); direct Darcy-Forchheimer input gives the same field to 1e-9; a porous box zone over the middle half gives 149.7965 inside (+0.02 %) and -0.041 outside (0.03 % of Ergun, limit 1 %). Spanwise-rotating laminar channel (Omega = 2, nu = 0.1, g = 1, 4x40 cells, Coriolis only): profile error 0.062 % of the centre-line velocity (limit 1 %), transverse pressure difference -3.3371 vs -2 Omega times the integral of the parabola -3.3302 (+0.21 %, limit 1 %). NOT met: fluid at rest in a rotating frame (closed 1 m box, Coriolis + centrifugal, nu = 0.05, Omega = 3): the pre-fixed criterion was spurious speed < 1e-3 Omega R_max and pressure error < 1 % of the range; measured 5.2e-3 and 1.62 % on 24x24, 1.3e-3 and 0.80 % on 48x48 (speed falls with order 2.0, pressure with order 1.0); cause: next to walls the Green-Gauss cell gradient of a curved pressure field differs from the cell-centre force by O(h), the same wall effect as the rest state of F-050 (an attempt to change the wall pressure extrapolation did not help and was reverted). The cross-stream velocity of the rotating channel is 1.4e-5 of the centre-line speed for the same reason. The normalised momentum residual cannot be used as a stop criterion for these uniform or linear solutions (its normalisation vanishes); the tests check stationarity instead. Not done (reason for partial): MRF zone interface (frozen-rotor absolute/relative velocity conversion between a rotating and a stationary zone needs the non-conformal interface of F-114), transient PISO/PIMPLE support, porosity-weighted (physical-velocity) formulation, anisotropic/directional resistance, porous jump (F-113). Update (wave 10): the rest-state criterion is now MET on the original 24x24 mesh (criterion text unchanged: spurious speed < 1e-3 Omega R_max, pressure error < 1 % of the range): speed 5.3e-12 Omega R and pressure error 0.000 % (round-off; 48x48 2.5e-11 and 0.000 %), previously 5.2e-3 and 1.62 %. Cause and fix: the wall value that enters the Green-Gauss gradient of a wall cell was extrapolated with the face body force, but the gradient of a curved pressure with linearly interpolated opposite faces is O(h) off whatever the wall value of that kind (the earlier extrapolation attempts could not help); the wall value is now chosen so that the wall-normal gradient of the wall cell equals the cell-centre body force exactly, and with SIMPLEC the lagged (rAU - rAtU) correction is applied to the wall pressure gradient of the flux balance so that the wall gradient converges to the same value as the interior faces. Scope: SimpleSolver::wall_pressure_trapezoid, switched on only when a rotating-frame/acceleration source supplies a body force (rcfd-api); all other baseline runs are bit-identical (hash check), only the rotating_channel case changed numerically. Its pre-registered limits still hold: profile error 0.062 % (limit 1 %), transverse pressure difference +0.203 % (was +0.21 %, limit 1 %), cross-stream velocity 1.39e-5 of the centre line (was 1.4e-5). Caveat: for flows with other wall-normal momentum terms the construction imposes the body-force balance on the wall-normal gradient of wall cells (the usual fixed-flux wall treatment); only the cases above were checked. The stationarity check of the test helper uses a speed-scale floor of 1e-3 for the rest state only (a relative change of round-off speeds is meaningless). The remaining scope gaps for partial are unchanged. Update (MRF, ADR 0008, rcfd-api tests/mrf.rs; criteria registered in the ADR before the code ran, never changed): new source type mrf = absolute-velocity frozen-rotor zone (momentum convected with phi - (Omega x r).S on faces inside the zone, lagged -Omega x u through the balanced-force BodyForce path, interface/boundary faces get no offset so absolute momentum crosses the interface; zone boundary must be a surface of revolution, else a located error), mesh generators annulus_3d and annulus_3d_interface (planar non-conformal join of F-114 perpendicular to the axis). Measured against analytic flows only (no pump or turbine benchmark is claimed): M1 solid body across the interface velocity 7.84e-3 W r_o (limit 2e-2) pass, pressure 7.55e-2 of the range (limit 5e-2) MISS; M2 Taylor-Couette in one MRF zone velocity 6.76e-3 V_i (1.5e-2) pass; M3 frame invariance Omega 0/0.5/1/2 W_i velocity 6.76e-3 V_i and difference to the stationary frame <= 1.7e-3 V_i (1e-2) pass; M4 across the non-conformal interface velocity 7.92e-3 V_i (2e-2) pass; M5 continuity 5e-12, net interface flux 3e-14, sum |flux| 8.9e-4 (limits 1e-8, 1e-8, 1e-3) pass; M6 axial through-flow with a swirl-free MRF half (Omega 5): in/out and interface flux agree to 1e-10, max swirl 2.0e-4 (2e-2), max axial-velocity deviation 9.8e-3 (2e-2) pass. Registered misses (ignored *_known_miss tests): torque from the moment report: before the wave-11 fix it was 37.8 percent below the registered full-stress value in M2/M3/M4 (the report integrated nu du/dn without the transpose term); the report now integrates the full viscous stress nu (grad u + grad u^T) . n (rcfd-post wall_force_and_moment, analytic tests: rigid rotation gives zero force and moment, simple shear gives the transpose traction) and reads -3.41 percent (M2), -3.41 to -3.42 percent (M3), -4.12 percent (M4) against the registered 4 pi nu W_i r_i^2 r_o^2/(r_o^2 - r_i^2) lz, still outside the registered 3 percent, so the ignored m2_m3_m4_torque_known_miss test stays (criterion unchanged); the open-end variants M2b/M3b/M4b, whose report-consistent target (nu du/dn, 0.2618 lz) is obsolete, now compare with the registered target too and read -3.59, -3.59, -4.36 percent (ignored m2b_m3b_m4b_torque_known_miss; their velocity and pairwise limits still pass); the M3 stationary frame exactly as registered (no source, kernel without the H correction): velocity 3.06e-2 V_i, spurious 1.39e-3 V_i, difference to the MRF frames 2.57e-2 V_i, all missed (the passing M3 test uses an MRF source at Omega 0); spurious axial/radial speed in that Omega 0 frame 1.41e-3 V_i (limit 1e-3; the MRF frames 9.7e-4 to 3.2e-4 pass); open-end variants: spurious speed 8.5e-3 V_i and interface net flux 3.2e-5 V_i A (axial flow through the fixed-pressure ends); M1 pressure. Kernel change: the first runs missed badly (3.06 percent of V_i in the stationary frame) because the H operator uses the component-averaged diagonal while a symmetry plane adds its Dirichlet term to the normal component only, scaling tangential end-cell velocity by a_k/a_p; SimpleSolver::component_diag_correction repairs H per component, enabled only for MRF cases so shipped constant-density results stay bit-identical (baseline hashes unchanged); wall_pressure_trapezoid is not switched on by MRF-only sources. Still not done (status stays partial): transient/PISO/PIMPLE and sliding-mesh MRF, curved (cylindrical) and non-perpendicular interfaces, porosity-weighted formulation, anisotropic resistance, porous jump (F-113), turbulence/energy with MRF unvalidated. ADR 0010: the component-consistent diagonal is also available for non-MRF cases as the opt-in solver.component_diagonal = "corrected" (it changes the packed_bed baseline hash, so it is not the default); the registered stationary frame without any source (M3a) then meets its velocity (6.8e-3 against 1.5e-2 V_i) and pairwise (1.7e-3 against 1e-2 V_i) limits and still misses spurious speed (1.41e-3 against 1e-3 V_i). SCOPE (merged review): add directional (Cartesian, conical, curvilinear) resistances, a power-law porous model, porosity and relative-viscosity inputs, and a non-equilibrium thermal porous option; source terms for other equations are tracked in F-201. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Wave 9. Acceptance met, scope partial. Delivered: rcfd-fv sources.rs (Darcy-Forchheimer porous sink in the
+    superficial-velocity form, Ergun coefficients 1/K = 150 (1-e)^2/(e^3 d^2), C2 = 3.5 (1-e)/(e^3 d);
+    relative-velocity rotating frame with analytic centrifugal and lagged Coriolis accelerations as balanced-force
+    BodyForce terms; constant acceleration), rcfd-api sources.rs and settings sources.<name> (type porous |
+    rotating_frame | acceleration; zone all | box | cell_zone; steady simple/simplec only, other algorithms are a
+    located diagnostic; docs/case-schema.md; cases/packed_bed, cases/rotating_channel).
+    - Ergun constants checked against a secondary source (neutrium.net, Manchester packed-bed page; Ergun 1952 itself not
+      accessed).
+    - Checks fixed before running (rcfd-api tests/sources.rs, nu = 1.5e-5, bed e = 0.4, d = 5 mm, U = 0.15 m/s, 40x8
+      cells): packed-bed kinematic pressure gradient between 30 % and 70 % of the bed 149.7666 vs Ergun 149.7656
+      (+0.001 %, limit 1 %; the viscous and inertial terms are 51 %/49 % of it); direct Darcy-Forchheimer input gives the
+      same field to 1e-9; a porous box zone over the middle half gives 149.7965 inside (+0.02 %) and -0.041 outside
+      (0.03 % of Ergun, limit 1 %).
+    - Spanwise-rotating laminar channel (Omega = 2, nu = 0.1, g = 1, 4x40 cells, Coriolis only): profile error 0.062 % of
+      the centre-line velocity (limit 1 %), transverse pressure difference -3.3371 vs -2 Omega times the integral of the
+      parabola -3.3302 (+0.21 %, limit 1 %).
+    - NOT met: fluid at rest in a rotating frame (closed 1 m box, Coriolis + centrifugal, nu = 0.05, Omega = 3): the
+      pre-fixed criterion was spurious speed < 1e-3 Omega R_max and pressure error < 1 % of the range; measured 5.2e-3
+      and 1.62 % on 24x24, 1.3e-3 and 0.80 % on 48x48 (speed falls with order 2.0, pressure with order 1.0). Cause: next
+      to walls the Green-Gauss cell gradient of a curved pressure field differs from the cell-centre force by O(h), the
+      same wall effect as the rest state of F-050 (an attempt to change the wall pressure extrapolation did not help and
+      was reverted). The cross-stream velocity of the rotating channel is 1.4e-5 of the centre-line speed for the same
+      reason.
+    - The normalised momentum residual cannot be used as a stop criterion for these uniform or linear solutions (its
+      normalisation vanishes); the tests check stationarity instead.
+    - Not done (reason for partial): MRF zone interface (frozen-rotor absolute/relative velocity conversion between a
+      rotating and a stationary zone needs the non-conformal interface of F-114), transient PISO/PIMPLE support,
+      porosity-weighted (physical-velocity) formulation, anisotropic/directional resistance, porous jump (F-113).
+    - Update (wave 10): the rest-state criterion is now MET on the original 24x24 mesh (criterion text unchanged:
+      spurious speed < 1e-3 Omega R_max, pressure error < 1 % of the range): speed 5.3e-12 Omega R and pressure error
+      0.000 % (round-off; 48x48 2.5e-11 and 0.000 %), previously 5.2e-3 and 1.62 %.
+      - Cause and fix: the wall value that enters the Green-Gauss gradient of a wall cell was extrapolated with the face
+        body force, but the gradient of a curved pressure with linearly interpolated opposite faces is O(h) off whatever
+        the wall value of that kind (the earlier extrapolation attempts could not help). The wall value is now chosen so
+        that the wall-normal gradient of the wall cell equals the cell-centre body force exactly, and with SIMPLEC the
+        lagged (rAU - rAtU) correction is applied to the wall pressure gradient of the flux balance so that the wall
+        gradient converges to the same value as the interior faces.
+      - Scope: SimpleSolver::wall_pressure_trapezoid, switched on only when a rotating-frame/acceleration source supplies
+        a body force (rcfd-api); all other baseline runs are bit-identical (hash check), only the rotating_channel case
+        changed numerically. Its pre-registered limits still hold: profile error 0.062 % (limit 1 %), transverse pressure
+        difference +0.203 % (was +0.21 %, limit 1 %), cross-stream velocity 1.39e-5 of the centre line (was 1.4e-5).
+      - Caveat: for flows with other wall-normal momentum terms the construction imposes the body-force balance on the
+        wall-normal gradient of wall cells (the usual fixed-flux wall treatment); only the cases above were checked.
+      - The stationarity check of the test helper uses a speed-scale floor of 1e-3 for the rest state only (a relative
+        change of round-off speeds is meaningless).
+      - The remaining scope gaps for partial are unchanged.
+    - Update (MRF, ADR 0008, rcfd-api tests/mrf.rs; criteria registered in the ADR before the code ran, never changed):
+      new source type mrf = absolute-velocity frozen-rotor zone (momentum convected with phi - (Omega x r).S on faces
+      inside the zone, lagged -Omega x u through the balanced-force BodyForce path, interface/boundary faces get no
+      offset so absolute momentum crosses the interface; zone boundary must be a surface of revolution, else a located
+      error), mesh generators annulus_3d and annulus_3d_interface (planar non-conformal join of F-114 perpendicular to
+      the axis).
+      - Measured against analytic flows only (no pump or turbine benchmark is claimed):
+        - M1 solid body across the interface velocity 7.84e-3 W r_o (limit 2e-2) pass, pressure 7.55e-2 of the range
+          (limit 5e-2) MISS.
+        - M2 Taylor-Couette in one MRF zone velocity 6.76e-3 V_i (1.5e-2) pass.
+        - M3 frame invariance Omega 0/0.5/1/2 W_i velocity 6.76e-3 V_i and difference to the stationary frame
+          <= 1.7e-3 V_i (1e-2) pass.
+        - M4 across the non-conformal interface velocity 7.92e-3 V_i (2e-2) pass.
+        - M5 continuity 5e-12, net interface flux 3e-14, sum |flux| 8.9e-4 (limits 1e-8, 1e-8, 1e-3) pass.
+        - M6 axial through-flow with a swirl-free MRF half (Omega 5): in/out and interface flux agree to 1e-10, max swirl
+          2.0e-4 (2e-2), max axial-velocity deviation 9.8e-3 (2e-2) pass.
+      - Registered misses (ignored *_known_miss tests):
+        - Torque from the moment report: before the wave-11 fix it was 37.8 percent below the registered full-stress
+          value in M2/M3/M4 (the report integrated nu du/dn without the transpose term). The report now integrates the
+          full viscous stress nu (grad u + grad u^T) . n (rcfd-post wall_force_and_moment, analytic tests: rigid rotation
+          gives zero force and moment, simple shear gives the transpose traction) and reads -3.41 percent (M2), -3.41 to
+          -3.42 percent (M3), -4.12 percent (M4) against the registered 4 pi nu W_i r_i^2 r_o^2/(r_o^2 - r_i^2) lz, still
+          outside the registered 3 percent, so the ignored m2_m3_m4_torque_known_miss test stays (criterion unchanged).
+        - The open-end variants M2b/M3b/M4b, whose report-consistent target (nu du/dn, 0.2618 lz) is obsolete, now compare
+          with the registered target too and read -3.59, -3.59, -4.36 percent (ignored m2b_m3b_m4b_torque_known_miss;
+          their velocity and pairwise limits still pass).
+        - The M3 stationary frame exactly as registered (no source, kernel without the H correction): velocity
+          3.06e-2 V_i, spurious 1.39e-3 V_i, difference to the MRF frames 2.57e-2 V_i, all missed (the passing M3 test
+          uses an MRF source at Omega 0).
+        - Spurious axial/radial speed in that Omega 0 frame 1.41e-3 V_i (limit 1e-3; the MRF frames 9.7e-4 to 3.2e-4
+          pass).
+        - Open-end variants: spurious speed 8.5e-3 V_i and interface net flux 3.2e-5 V_i A (axial flow through the
+          fixed-pressure ends).
+        - M1 pressure.
+      - Kernel change: the first runs missed badly (3.06 percent of V_i in the stationary frame) because the H operator
+        uses the component-averaged diagonal while a symmetry plane adds its Dirichlet term to the normal component only,
+        scaling tangential end-cell velocity by a_k/a_p. SimpleSolver::component_diag_correction repairs H per component,
+        enabled only for MRF cases so shipped constant-density results stay bit-identical (baseline hashes unchanged);
+        wall_pressure_trapezoid is not switched on by MRF-only sources.
+    - Still not done (status stays partial): transient/PISO/PIMPLE and sliding-mesh MRF, curved (cylindrical) and
+      non-perpendicular interfaces, porosity-weighted formulation, anisotropic resistance, porous jump (F-113),
+      turbulence/energy with MRF unvalidated.
+    - ADR 0010: the component-consistent diagonal is also available for non-MRF cases as the opt-in
+      solver.component_diagonal = "corrected" (it changes the packed_bed baseline hash, so it is not the default). The
+      registered stationary frame without any source (M3a) then meets its velocity (6.8e-3 against 1.5e-2 V_i) and
+      pairwise (1.7e-3 against 1e-2 V_i) limits and still misses spurious speed (1.41e-3 against 1e-3 V_i).
+    - SCOPE (merged review): add directional (Cartesian, conical, curvilinear) resistances, a power-law porous model,
+      porosity and relative-viscosity inputs, and a non-equilibrium thermal porous option; source terms for other
+      equations are tracked in F-201.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests;
+      scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-032** Coupled pressure-velocity solver (block-coupled) with AMG
   - depends on: F-027, F-028
   - acceptance: Cavity converges in fewer outer iterations than SIMPLE; documented
-  - note: Block-coupled solver (rcfd-fv coupled.rs, solver.algorithm = "coupled"): (u,v[,w],p) in one system per Picard iteration, implicit Green-Gauss pressure gradient, implicit Rhie-Chow continuity rows, GMRES(40) with ILU(0) momentum blocks and one AMG V-cycle on the approximate pressure Schur complement (AMG is used on the pressure block only, not on the full interleaved system). Measured (checks fixed beforehand: F-028 cavity Re 100, 40x40, linearUpwind; shared measure = first outer iteration after which the velocity stays within 1e-5 U_lid of the solver's own converged state, same function for both solvers; coupled must pass the unchanged Ghia gate 0.02 U_lid for u and v): coupled alpha_u 0.9 settles at 165 outer iterations (270 total, 3060 GMRES iterations), SIMPLEC alpha_u 0.9 at 167 (273), classic SIMPLE alpha_u 0.7 at 610 (917); Ghia max error u 0.00277, v 0.00855 (SIMPLEC identical, limit 0.02). Acceptance (fewer outer iterations than SIMPLE) met against SIMPLE (165 vs 610), but at equal relaxation the coupled solver needs the same number of Picard iterations as SIMPLEC (the count is set by the momentum under-relaxation, not the coupling); its advantage is stability at stronger relaxation: alpha_u 0.95 settles at 83, 0.98 at 38 outer iterations versus SIMPLEC best 97 (0.95; 249 at 0.98). Wall time is worse: 1.9 s at 0.98 versus 0.6 s for SIMPLEC at 0.95 (ILU/AMG rebuilt each iteration, unoptimised); AMG-less Jacobi Schur block needs 2 to 5 times more GMRES iterations (e.g. 14181 vs 3060 at alpha_u 0.9). Wave 19A (ADR 0029, still partial): open boundaries (zero-gradient velocity with fixed pressure), uniform body force with a balanced-force term, Boussinesq buoyancy, the energy equation and solid cells excluded from the pressure-velocity system were added (settings tree; located errors). Measured (checks registered beforehand): Couette exact to 1.5e-11, pressure-driven channel equals the discrete closed form to 9e-10 U_max with observed order 2.000 (the segregated SIMPLEC misses the same limits: 1.3e-2, order 1.4, relaxation-dependent converged solution; kept as ignored known-miss tests), hydrostatic rest 4e-12, de Vahl Davis cavity Ra 1e3 and 1e4 within 0.74 percent of the secondary-source values (reference-data.md: printed 1983 tables not reachable). Misses: A3 velocity-inlet pressure drop 7.9 percent short of the 2 percent limit (odd-even pressure mode launched at the inlet, coupled and SIMPLEC) and coupled-vs-SIMPLEC at the inlet case 4.6e-3 against 1e-4. Outer iteration counts of the coupled solver are not lower than SIMPLEC on the new cases (reported). Still not done: transient coupled solve, turbulence, rheology, sources, components, radiation, property laws, non-orthogonal correction, periodic patches; F-027 V-cycle evidence and default gate unchanged. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Block-coupled solver (rcfd-fv coupled.rs, solver.algorithm = "coupled"): (u,v[,w],p) in one system per Picard
+    iteration, implicit Green-Gauss pressure gradient, implicit Rhie-Chow continuity rows, GMRES(40) with ILU(0)
+    momentum blocks and one AMG V-cycle on the approximate pressure Schur complement (AMG is used on the pressure block
+    only, not on the full interleaved system).
+    - Measured (checks fixed beforehand: F-028 cavity Re 100, 40x40, linearUpwind; shared measure = first outer iteration
+      after which the velocity stays within 1e-5 U_lid of the solver's own converged state, same function for both
+      solvers; coupled must pass the unchanged Ghia gate 0.02 U_lid for u and v): coupled alpha_u 0.9 settles at 165 outer
+      iterations (270 total, 3060 GMRES iterations), SIMPLEC alpha_u 0.9 at 167 (273), classic SIMPLE alpha_u 0.7 at 610
+      (917); Ghia max error u 0.00277, v 0.00855 (SIMPLEC identical, limit 0.02).
+    - Acceptance (fewer outer iterations than SIMPLE) met against SIMPLE (165 vs 610), but at equal relaxation the
+      coupled solver needs the same number of Picard iterations as SIMPLEC (the count is set by the momentum
+      under-relaxation, not the coupling). Its advantage is stability at stronger relaxation: alpha_u 0.95 settles at 83,
+      0.98 at 38 outer iterations versus SIMPLEC best 97 (0.95; 249 at 0.98).
+    - Wall time is worse: 1.9 s at 0.98 versus 0.6 s for SIMPLEC at 0.95 (ILU/AMG rebuilt each iteration, unoptimised).
+      The AMG-less Jacobi Schur block needs 2 to 5 times more GMRES iterations (e.g. 14181 vs 3060 at alpha_u 0.9).
+    - Wave 19A (ADR 0029, still partial): open boundaries (zero-gradient velocity with fixed pressure), uniform body
+      force with a balanced-force term, Boussinesq buoyancy, the energy equation and solid cells excluded from the
+      pressure-velocity system were added (settings tree; located errors).
+      - Measured (checks registered beforehand): Couette exact to 1.5e-11; pressure-driven channel equals the discrete
+        closed form to 9e-10 U_max with observed order 2.000 (the segregated SIMPLEC misses the same limits: 1.3e-2,
+        order 1.4, relaxation-dependent converged solution; kept as ignored known-miss tests); hydrostatic rest 4e-12;
+        de Vahl Davis cavity Ra 1e3 and 1e4 within 0.74 percent of the secondary-source values (reference-data.md: printed
+        1983 tables not reachable).
+      - Misses: A3 velocity-inlet pressure drop 7.9 percent short of the 2 percent limit (odd-even pressure mode launched
+        at the inlet, coupled and SIMPLEC) and coupled-vs-SIMPLEC at the inlet case 4.6e-3 against 1e-4.
+      - Outer iteration counts of the coupled solver are not lower than SIMPLEC on the new cases (reported).
+    - Still not done: transient coupled solve, turbulence, rheology, sources, components, radiation, property laws,
+      non-orthogonal correction, periodic patches; F-027 V-cycle evidence and default gate unchanged.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests;
+      scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
 
 ## Phase 3 - Turbulence
 
 - [x] **F-040** Wall distance calculation and standard wall functions
   - depends on: F-028, F-107
   - acceptance: y+ and wall distance verified on channel mesh; log law recovered in developed flow
-  - note: Wave 5. rcfd-turb: wall_distance (exact Euclidean distance from each cell centre to the nearest wall face, faces split into triangle fans, closest-point test per Ericson, bounding-box pruning; no Poisson/PDE method), WallConstants (kappa 0.41, E 9.8, Cmu 0.09; Launder and Spalding 1974 equilibrium log law with the viscous-sublayer switch at the y+ intersection, 11.5 for these constants), u_tau from the first-cell velocity by Newton iteration, wall eddy viscosity from velocity (nu_t,w = u_tau^2 y/u_P - nu) and from k (nu_t,w = nu (y* kappa / ln(E y*) - 1), y* = Cmu^1/4 sqrt(k) y / nu), wall_y_plus, effective_viscosity (face viscosity for SimpleSolver.nu_face with wall-function values on wall faces) and a Prandtl mixing-length closure (l = kappa d) with the log-law value kappa y u_tau in wall cells. Verification (rcfd-turb tests): wall distance equals min(y, 2h-y) to 1e-13 on uniform and graded channel meshes and equals x for a side wall; triangle distance covers face/edge/vertex regions. Periodic channel at Re_tau = 395 (h = 1, u_tau = 1 imposed through the body force, nu = 1/395), mixing-length interior plus wall functions, ny = 8/12/16 (first-cell y+ = 49.4/32.9/24.7): reported y+ equals y u_tau/nu within 0.5%; wall shear from the wall function equals the imposed 1 within 2e-3 (momentum balance); first-cell u+ on the log law; interior profile vs the exact solution of the mixing-length stress balance (nu + l^2 S) S = 1 - y/h: max deviation 2.1% / 2.3% / 2.4% (the offset is the second-order stencil error across the log layer between the first two cells of a uniform mesh, centre distances 1:3, and does not shrink with ny; test tolerance 3%). Caveats: the log-law is recovered with a mixing-length interior closure, not yet with k-epsilon (F-042); a comparison with DNS is left to F-042. Convergence of this stiff diffusion-dominated flow needed the new opt-in SimpleSettings.h_from_solution (H operator from the solved predictor as in classic SIMPLE; default off, ~6x faster here: the default Jacobi-like H needed >8000 iterations); the normalised momentum residual is meaningless for the identically zero v component (round-off noise), so the test converges on max velocity update < 1e-10. Wave 6b: the wall functions are reachable from the case schema through turbulence.model = k_epsilon (turbulence.wall_function = standard, kappa, e_wall), with the y_plus field/boundary value/report (type y_plus, statistic average|min|max) and the k, epsilon, nut, wall_distance fields in VTU output; the mixing-length closure is not selectable from the schema. Scalable wall functions and rough walls are not included.
+  - note: Wave 5 added wall distance, standard wall functions and a mixing-length closure to rcfd-turb. Caveats: the
+    log-law is recovered with a mixing-length interior closure, not yet with k-epsilon (F-042); a comparison with DNS is
+    left to F-042.
+    - wall_distance: exact Euclidean distance from each cell centre to the nearest wall face (faces split into triangle
+      fans, closest-point test per Ericson, bounding-box pruning; no Poisson/PDE method).
+    - WallConstants: kappa 0.41, E 9.8, Cmu 0.09; Launder and Spalding 1974 equilibrium log law with the
+      viscous-sublayer switch at the y+ intersection, 11.5 for these constants.
+    - u_tau comes from the first-cell velocity by Newton iteration.
+    - Wall eddy viscosity comes from velocity (nu_t,w = u_tau^2 y/u_P - nu) and from k (nu_t,w = nu (y* kappa / ln(E
+      y*) - 1), y* = Cmu^1/4 sqrt(k) y / nu).
+    - wall_y_plus and effective_viscosity (face viscosity for SimpleSolver.nu_face with wall-function values on wall
+      faces).
+    - Prandtl mixing-length closure (l = kappa d) with the log-law value kappa y u_tau in wall cells.
+    - Verification (rcfd-turb tests): wall distance equals min(y, 2h-y) to 1e-13 on uniform and graded channel meshes
+      and equals x for a side wall; triangle distance covers face/edge/vertex regions.
+    - Periodic channel at Re_tau = 395 (h = 1, u_tau = 1 imposed through the body force, nu = 1/395), mixing-length
+      interior plus wall functions, ny = 8/12/16 (first-cell y+ = 49.4/32.9/24.7):
+      - Reported y+ equals y u_tau/nu within 0.5%.
+      - Wall shear from the wall function equals the imposed 1 within 2e-3 (momentum balance).
+      - First-cell u+ is on the log law.
+      - Interior profile vs the exact solution of the mixing-length stress balance (nu + l^2 S) S = 1 - y/h: max
+        deviation 2.1% / 2.3% / 2.4%, test tolerance 3%. The offset is the second-order stencil error across the log
+        layer between the first two cells of a uniform mesh (centre distances 1:3) and does not shrink with ny.
+    - Convergence of this stiff diffusion-dominated flow needed the new opt-in SimpleSettings.h_from_solution (H
+      operator from the solved predictor as in classic SIMPLE; default off, ~6x faster here). The default Jacobi-like H
+      needed >8000 iterations.
+    - The normalised momentum residual is meaningless for the identically zero v component (round-off noise), so the
+      test converges on max velocity update < 1e-10.
+    - Wave 6b: the wall functions are reachable from the case schema through turbulence.model = k_epsilon
+      (turbulence.wall_function = standard, kappa, e_wall), with the y_plus field/boundary value/report (type y_plus,
+      statistic average|min|max) and the k, epsilon, nut, wall_distance fields in VTU output. The mixing-length closure
+      is not selectable from the schema. Scalable wall functions and rough walls are not included.
 - [~] **F-041** Spalart-Allmaras one-equation model
   - depends on: F-040
   - acceptance: Flat plate Cf within 5 percent of correlation
-  - note: Wave 8, PARTIAL: model and settings-tree wiring done, but the registered power-law check misses (ADR 0014). rcfd-turb sa.rs SpalartAllmaras: SA-noft2 of the NASA TMR page (constants sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 verified by web fetch; Allmaras 2012 S~ limiter, SA-neg), wall modes auto (Spalding law of the wall, wall-cell nuTilda matched for y+ > 5; works from y+ ~1 to the log layer) and resolved, first-order upwind convection; turbulence.model = spalart_allmaras with turbulence.sa.*, nutilde_ratio, boundaries.<patch>.nutilde_value, nuTilda field. FLAT PLATE (tests/flat_plate_sa.rs, ignored, release; TMR set-up Re 5e6/m, nuTilda_inf = 3 nu, 140x110 cells, 70 layers, y+ 0.5, converged 2204 iterations): Cf(0.97) = 0.002786: +2.97% vs TMR CFL3D SA 2.70565e-3 (PASS, limit 5%; the grid behind that file value is unverified); vs TMR theory curves +2.29/-3.36/-3.08% (PASS); vs White -4.1/-3.6/-3.1/-3.0% at x 0.4/0.6/0.97/1.0 (PASS); vs power law 0.0576 Re_x^-0.2 +0.8/+2.7/+5.29% at x 0.4/0.6/1.0 (MISS at x = 1.0, limit 5%; ignored test sa_flat_plate_cf_vs_power_law_known_miss; +7.2/+9.2% at x 1.4/1.99 reported only). Wall-function mesh (y+ 31.7): +5.81% vs TMR SA (PASS, 10%); resolved mode identical. No tuning. Deviations: plate turbulent from x = 0 (no upstream symmetry segment), upwind turbulence convection. NOT DONE: no mesh study, no other validation case (BFS, airfoil). Constants/limits registered before running in docs/adr/0014-sa-and-turbulence-interface.md.
+  - note: Wave 8, PARTIAL: model and settings-tree wiring done, but the registered power-law check misses (ADR 0014).
+    NOT DONE: no mesh study, no other validation case (BFS, airfoil). Constants/limits registered before running in
+    docs/adr/0014-sa-and-turbulence-interface.md.
+    - Model (rcfd-turb sa.rs, SpalartAllmaras): SA-noft2 of the NASA TMR page, with the Allmaras 2012 S~ limiter and
+      SA-neg. Constants sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 verified by web fetch.
+      Convection is first-order upwind.
+    - Wall modes: auto (Spalding law of the wall, wall-cell nuTilda matched for y+ > 5; works from y+ ~1 to the log
+      layer) and resolved.
+    - Settings: turbulence.model = spalart_allmaras with turbulence.sa.*, nutilde_ratio,
+      boundaries.<patch>.nutilde_value, nuTilda field.
+    - FLAT PLATE (tests/flat_plate_sa.rs, ignored, release; TMR set-up Re 5e6/m, nuTilda_inf = 3 nu, 140x110 cells, 70
+      layers, y+ 0.5, converged 2204 iterations): Cf(0.97) = 0.002786:
+      - +2.97% vs TMR CFL3D SA 2.70565e-3 (PASS, limit 5%; the grid behind that file value is unverified).
+      - vs TMR theory curves +2.29/-3.36/-3.08% (PASS).
+      - vs White -4.1/-3.6/-3.1/-3.0% at x 0.4/0.6/0.97/1.0 (PASS).
+      - vs power law 0.0576 Re_x^-0.2 +0.8/+2.7/+5.29% at x 0.4/0.6/1.0 (MISS at x = 1.0, limit 5%; ignored test
+        sa_flat_plate_cf_vs_power_law_known_miss; +7.2/+9.2% at x 1.4/1.99 reported only).
+    - Wall-function mesh (y+ 31.7): +5.81% vs TMR SA (PASS, 10%); resolved mode identical.
+    - No tuning. Deviations: plate turbulent from x = 0 (no upstream symmetry segment), upwind turbulence convection.
 - [~] **F-042** k-epsilon family (standard, realizable, RNG) with scalable wall functions
   - depends on: F-040, F-107
   - acceptance: Channel Re_tau=395 mean profile within 10 percent of DNS; backward-facing-step reattachment within literature scatter
-  - note: Wave 5, PARTIAL: channel criterion met, backward-facing-step criterion NOT attempted. rcfd-turb kepsilon.rs: KEpsilon with variants Standard (Launder-Spalding 1974), RNG (Yakhot-Orszag; C2* strain correction) and Realizable (Shih et al. 1995; variable Cmu, C1 = max(0.43, eta/(eta+5)), eps sink C2 eps^2/(k+sqrt(nu eps))), implicit-sink k and epsilon transport on the SIMPLE flux (rcfd-fv convection/laplacian), standard wall functions from F-040 (wall-cell epsilon fixed to Cmu^3/4 k^3/2/(kappa y), wall-shear production, wall-face nu_t from k), nu_t under-relaxed; library API only (nu_face() feeds SimpleSolver.nu_face; run with SimpleSettings.h_from_solution = true). Test tests/channel_kepsilon.rs: periodic channel Re_tau = 395 (h = 1, u_tau = 1 via body force, nu = 1/395), 4 x 14 uniform cells (first-cell y+ 28), converged (max update < 1e-9, nu_t change < 1e-8) in about 4500-4800 iterations. Centre-line U+ / bulk U+: Standard 20.69 (+2.9%) / 18.39 (+5.7%), RNG 21.14 (+5.2%) / 18.65 (+7.2%), Realizable 21.59 (+7.4%) / 18.93 (+8.8%) against DNS (Moser, Kim and Mansour 1999) 20.1 / 17.4, all within the 10% criterion; log-layer profile (20 < y+ < 150) within 10% of Reichardt's law (test asserts it; Standard 13.91 vs 13.37 at y+ 28, 16.63 vs 16.52 at y+ 85). CAVEATS: DNS numbers verified in wave 6a against the published MKM chan395.means (actual Re_tau 392.24: U_c+ = 20.13, U_b+ = 17.54, Re_b = 13764) and the RNG/realizable/standard constants cross-checked against published documentation (realizable A0 appears as 4.04 in some references and 4.0 in others); only the 14-cell mesh was run (no mesh study); the profile comparison beyond the log layer is only through the centre-line and bulk values; all three variants overpredict the velocity, Realizable the most. NOT DONE: backward-facing-step reattachment: the available step mesh generator has uniform spacing only and expansion ratio 2 does not match Driver and Seegmiller (1985, ER 1.125, xr/H about 6.26), the second-order BFS convergence problem found in F-106 at Re_h >= 200 is undiagnosed, and no reference-consistent case was set up, so no reattachment number is claimed. Wave 6b: wired into the case schema (rcfd-api turb.rs): turbulence.model = laminar | k_epsilon, turbulence.variant = standard | rng | realizable, wall_function, kappa, e_wall, convection, relax, relax_nut, k_initial/epsilon_initial or initial_intensity/initial_viscosity_ratio; inlet helpers per boundary (turbulence_spec = intensity_length | intensity_viscosity_ratio | values: k = 3/2 (I U)^2, epsilon = Cmu^3/4 k^3/2 / l or Cmu k^2/(ratio nu), checked in a test against the area average of the boundary k/epsilon); outputs k, epsilon, nut, y_plus, res_nut monitor. Validation errors with line numbers: transient algorithm, no wall patch, moving wall, energy equation, missing turbulence_length, inconsistent k/epsilon initial values, y_plus report on a non-wall patch. Tests (rcfd-api tests/physics_schema.rs): the periodic Re_tau 395 channel run through the settings tree equals the library run after 60 iterations to 1e-12 (u, k, nut; standard, RNG, realizable); converged run (4508 iterations in cases/channel/kepsilon_channel.toml, stopped by a y+ plateau because the relative momentum residual stalls near 5e-4) gives bulk U+ 18.389 (the library test value 18.39, +5.7% vs DNS 17.4), wall-cell y+ 27.733; cases/channel/kepsilon_inlet.toml runs through rcfd run and the service. Still no scalable wall functions, k-epsilon is steady-only, incompressible, without heat transfer, and the backward-facing step is still not attempted; multiple wall faces per cell use the nearest only. WAVE 6 UPDATE (supersedes the 'NOT DONE: backward-facing-step' item above; status stays PARTIAL because scalable wall functions and schema wiring are still missing). Step case: tests/step_kepsilon.rs (rcfd-turb, #[ignore], run in release), Driver and Seegmiller geometry via StepSpec::from_expansion_ratio(1.125) (inlet channel 8 h, step 1 h, l_in 5, l_out 40), graded mesh (backward_step_graded), standard wall functions, SIMPLEC alpha_u 0.8 linearUpwind momentum, upwind k/epsilon, Re_h = 37500. Measured reattachment x_r/h (last negative-to-positive sign change of u in the first cell row above the floor; 4000-5000 iterations), three meshes (5.1k / 10.6k / 23.8k cells; 3000 iterations on the coarse and fine meshes, 5000 on the medium one): Standard 5.20 / 5.36 / 5.46, RNG 6.32 / 6.37 / 6.38, Realizable (medium mesh) 6.40, against Driver and Seegmiller 6.26 +- 0.10 (value from cases/backward_step/case.json; secondary sources checked this wave (NASA NPARC validation archive and the OpenFOAM verification docs built on the NASA Turbulence Modeling Resource case) give 6.26 +- 0.10 for the zero-degree top wall, quoted there at Re_h = 36000, while case.json and the runs use 37500) and the 5.5-7 RANS scatter band in that file: RNG and Realizable are inside the scatter band, 0.06-0.14 above the nominal 6.26 (RNG 6.32 on the coarsest mesh is inside the +-0.10 window, the finer meshes are 0.01-0.04 above it); Standard is 13-17 percent LOW, below the band on the two coarser meshes and 0.04 below it on the finest. So the 'within literature scatter' criterion is met by RNG/Realizable only. CAVEATS: the inlet is an approximation (1/7 power-law boundary layer thickness 1.5 h on both inlet-channel walls, 1 percent free-stream intensity, k and eps from a mixing-length estimate), not the measured D&S profile; the top wall is straight, which matches the zero-degree reference configuration; fixed outlet pressure at x/h = 40; the nu_t of the wall-adjacent cells on the viscous/log switch oscillates O(1) between iterations (max velocity update stalls at 3e-4 - 4e-3, 'nut change < 1e-6' never reached) although x_r is constant to 1e-5 on the medium and fine meshes (fine RNG: 6.37817 from iteration 1500 to 3000); k-epsilon constants/RNG/realizable forms still from memory; no schema wiring. docs/bfs-convergence-findings.md. WAVE 7 UPDATE (status stays PARTIAL: scalable wall functions are still not implemented and only RNG/Realizable are inside the step scatter band). The wall-cell oscillation reported above is DIAGNOSED AND FIXED: a top-N listing of the changing nu_t cells showed all of them wall-adjacent (step face and floor), i.e. the hard viscous/log switch of the wall function (epsilon jumps about 4x, production 0 to log-law). rcfd-turb now has WallTreatment { Switch (old), Hysteresis{band} (+-10 percent dead band, band 0.1), Smooth (default: epsilon_w = sqrt(eps_vis^2 + eps_log^2), compound form after Popovac and Hanjalic 2007, and log-law production times r^6/(1+r^6), r = y*/y*_lam) }, selectable as turbulence.wall_treatment = smooth | hysteresis | switch in the case schema. With the UNCHANGED criterion (max velocity update < 1e-7 and nu_t change < 1e-6) tests/step_kepsilon.rs now asserts convergence (hysteresis and smooth): medium mesh (24+160 x 40+20 cells) converges in 800-920 iterations (du 1e-8, dnut 1e-6) for Standard, RNG and Realizable; Switch never does (du 2e-4 - 1.7e-3, dnut 0.4 - 1.1). Measured x_r/H (target 6.26 +- 0.10 and the tolerances are unchanged), medium mesh: Switch 5.3583 / 6.3726 / 6.4042 (Standard / RNG / Realizable), Hysteresis 5.3581 / 6.3724 / 6.4043, Smooth 5.3594 / 6.3729 / 6.4015; fine mesh (36+240 x 60+30, Smooth, converged at about 1540-1570 iterations) 5.4599 / 6.3797 / 6.5063. The treatment moves x_r by less than 0.003, so the earlier numbers stand: RNG and Realizable are inside the 5.5-7 scatter band (0.11-0.25 above the nominal 6.26; RNG medium/fine 6.37/6.38 are 0.01-0.02 outside the +-0.10 window, Realizable 6.40-6.51 is 0.04-0.15 outside), Standard (5.36-5.46) is outside the band. Channel (tests/channel_kepsilon.rs, 10 percent assertions unchanged, all pass) shifts slightly with the smooth default: centre-line / bulk U+ Standard 20.742 (+3.2%) / 18.441 (+6.0%), RNG 21.193 (+5.4%) / 18.702 (+7.5%), Realizable 21.630 (+7.6%) / 18.973 (+9.0%, close to the 10 percent limit); U+ at y+ 28.2 13.957 vs Reichardt 13.372. Details: docs/bfs-convergence-findings.md. AUDIT FOLLOW-UP (ca78589): the registered reattachment window 6.26±0.10 is now asserted in ignored *_known_miss tests; measured Realizable 6.402, RNG 6.373, Standard 5.359 (all converged); all three miss. SCOPE (merged review): add combination with the energy equation and moving walls as sub-criteria; low-Re and differential-viscosity variants stay here; wall treatments move to F-203. ADR 0015 (turbulence finishing), STILL PARTIAL: corrected step set-up BFS-C (Re_h 36000, inlet x/h = -4, measured Driver-Seegmiller profile) with three meshes. Medium-mesh x_r/h (window 6.16 to 6.36): Standard 5.350 (MISS, fine 5.452), RNG 6.334 (PASS, grid-converged: coarse 6.255, fine 6.348; marginal, 0.026 inside the upper edge on medium and 0.012 on fine, smaller than the 0.107 convection-scheme sensitivity, so not credited to any single factor), Realizable 6.413 (MISS, fine 6.520, not grid-converged). Inlet plane, free-stream k and Re_h each move x_r by < 0.01; the only factor >= 0.10 is the first-order k/epsilon convection for RNG and Realizable (second order: -0.11 to -0.16; the Standard second-order runs did not converge and decide nothing). No defect in the variants found; Standard under-prediction (-14.5 percent) and the Realizable excess are model/discretisation limits (ignored step_c_reattachment_*_known_miss tests; the old tests stay). component_diagonal corrected is a bitwise no-op on the step mesh. Scalable wall functions added (WallFunction::Scalable; flat plate average Cf within 4.6 percent of Prandtl-Schlichting at y+ 30 and y+ 1), so the title piece is in the library but not wired to the settings tree (turb.rs hook missing). Energy / moving-wall sub-criteria and low-Re variants not addressed. ADR 0017 (Realizable A0): the original report prints A0 = 4.0 (verified in the report text), the library default 4.04 is a commercial-code variant and stays the default; A0 is now selectable (KEpsilon::a0, turbulence.realizable_a0, default bit-identical, baseline hashes unchanged). With A0 = 4.0 the BFS-C Realizable medium-mesh x_r/h is 6.349 (window 6.16 to 6.36: PASS, marginal, 0.011 inside the edge) against 6.413 with 4.04; coarse/medium/fine 6.174/6.349/6.453, abs(fine - medium) = 0.105 > 0.10 so NOT grid-converged (ignored step_c_realizable_a0_4_grid_study_known_miss), and the fine value is outside the window. The pass is marginal and mesh-dependent, smaller than the 0.14 convection-scheme sensitivity, and is not proof of correctness; the default was not changed (user decision). Status stays partial. WAVE 31B (ADR 0063, diagnosis only): the mesh dependence of Standard k-epsilon with the standard wall function in the Re_tau 178 channel is the validity limit of the log-law function, not a coding defect. The bump at y+ ~ 15 is the wall cell entering the viscous branch (y* < 11.06): G -> 0, eps -> 2 nu k/y^2, the wall-cell k collapses from ~3.05 to ~0.8 u_tau^2 (positive feedback through y* = Cmu^1/4 sqrt(k) y/nu: y* 7.45 at y+ 14.8) and U_b+ then falls to -29 percent at y+ 5.6; Switch/Hysteresis show the same at y+ 17.8. WallFunction::Scalable is mesh independent to 2.8 percent (U_b+ +4.9 to +7.9 percent) over ny 4..32. A common standard wall-function formulation (no published source is cited for it here) uses equilibrium G and eps in every wall cell (rcfd drops to a viscous branch below y*_lam); an opt-in Equilibrium treatment with those forms was tried and removed the bump (+4.1 to +4.4 percent for y+ >= 12.7) but still falls for y* < 11 (-8.7 to -22 percent), so it missed its registered limits and was not kept. Probe: crates/rcfd-turb/tests/diag_w31b_channel_wf.rs.
+  - note: PARTIAL. Last recorded results: the channel criterion is met (the 10 percent assertions all pass; Realizable
+    bulk U+ +9.0%, close to the limit). On the step, the 'within literature scatter' criterion is met by RNG/Realizable
+    only, and all three variants miss the registered window 6.26±0.10. On the corrected set-up BFS-C (medium mesh,
+    window 6.16 to 6.36), Standard and Realizable MISS and RNG passes, marginally; Realizable with A0 = 4.0 passes,
+    marginally, but is NOT grid-converged (ADR 0017). Scalable wall functions are in the library but not wired to the
+    settings tree, and the energy / moving-wall sub-criteria and low-Re variants are not addressed (ADR 0015).
+    - Wave 5, PARTIAL: channel criterion met, backward-facing-step criterion NOT attempted.
+      - rcfd-turb kepsilon.rs: KEpsilon with variants Standard (Launder-Spalding 1974), RNG (Yakhot-Orszag; C2* strain
+        correction) and Realizable (Shih et al. 1995; variable Cmu, C1 = max(0.43, eta/(eta+5)), eps sink C2
+        eps^2/(k+sqrt(nu eps))).
+      - Implicit-sink k and epsilon transport on the SIMPLE flux (rcfd-fv convection/laplacian), nu_t under-relaxed.
+      - Standard wall functions from F-040 (wall-cell epsilon fixed to Cmu^3/4 k^3/2/(kappa y), wall-shear production,
+        wall-face nu_t from k).
+      - Library API only (nu_face() feeds SimpleSolver.nu_face; run with SimpleSettings.h_from_solution = true).
+      - Test tests/channel_kepsilon.rs: periodic channel Re_tau = 395 (h = 1, u_tau = 1 via body force, nu = 1/395), 4 x
+        14 uniform cells (first-cell y+ 28), converged (max update < 1e-9, nu_t change < 1e-8) in about 4500-4800
+        iterations.
+      - Centre-line U+ / bulk U+: Standard 20.69 (+2.9%) / 18.39 (+5.7%), RNG 21.14 (+5.2%) / 18.65 (+7.2%), Realizable
+        21.59 (+7.4%) / 18.93 (+8.8%) against DNS (Moser, Kim and Mansour 1999) 20.1 / 17.4, all within the 10%
+        criterion.
+      - Log-layer profile (20 < y+ < 150) within 10% of Reichardt's law (test asserts it; Standard 13.91 vs 13.37 at y+
+        28, 16.63 vs 16.52 at y+ 85).
+      - CAVEATS:
+        - DNS numbers verified in wave 6a against the published MKM chan395.means (actual Re_tau 392.24: U_c+ = 20.13,
+          U_b+ = 17.54, Re_b = 13764) and the RNG/realizable/standard constants cross-checked against published
+          documentation (realizable A0 appears as 4.04 in some references and 4.0 in others).
+        - Only the 14-cell mesh was run (no mesh study).
+        - The profile comparison beyond the log layer is only through the centre-line and bulk values.
+        - All three variants overpredict the velocity, Realizable the most.
+      - NOT DONE: backward-facing-step reattachment: the available step mesh generator has uniform spacing only and
+        expansion ratio 2 does not match Driver and Seegmiller (1985, ER 1.125, xr/H about 6.26), the second-order BFS
+        convergence problem found in F-106 at Re_h >= 200 is undiagnosed, and no reference-consistent case was set up,
+        so no reattachment number is claimed.
+    - Wave 6b: wired into the case schema (rcfd-api turb.rs).
+      - Keys: turbulence.model = laminar | k_epsilon, turbulence.variant = standard | rng | realizable, wall_function,
+        kappa, e_wall, convection, relax, relax_nut, k_initial/epsilon_initial or
+        initial_intensity/initial_viscosity_ratio.
+      - Inlet helpers per boundary (turbulence_spec = intensity_length | intensity_viscosity_ratio | values: k = 3/2 (I
+        U)^2, epsilon = Cmu^3/4 k^3/2 / l or Cmu k^2/(ratio nu), checked in a test against the area average of the
+        boundary k/epsilon).
+      - Outputs: k, epsilon, nut, y_plus, res_nut monitor.
+      - Validation errors with line numbers: transient algorithm, no wall patch, moving wall, energy equation, missing
+        turbulence_length, inconsistent k/epsilon initial values, y_plus report on a non-wall patch.
+      - Tests (rcfd-api tests/physics_schema.rs): the periodic Re_tau 395 channel run through the settings tree equals
+        the library run after 60 iterations to 1e-12 (u, k, nut; standard, RNG, realizable). The converged run (4508
+        iterations in cases/channel/kepsilon_channel.toml, stopped by a y+ plateau because the relative momentum
+        residual stalls near 5e-4) gives bulk U+ 18.389 (the library test value 18.39, +5.7% vs DNS 17.4), wall-cell y+
+        27.733. The case cases/channel/kepsilon_inlet.toml runs through rcfd run and the service.
+      - Still no scalable wall functions, k-epsilon is steady-only, incompressible, without heat transfer, and the
+        backward-facing step is still not attempted; multiple wall faces per cell use the nearest only.
+    - WAVE 6 UPDATE (supersedes the 'NOT DONE: backward-facing-step' item above; status stays PARTIAL because scalable
+      wall functions and schema wiring are still missing).
+      - Step case: tests/step_kepsilon.rs (rcfd-turb, #[ignore], run in release), Driver and Seegmiller geometry via
+        StepSpec::from_expansion_ratio(1.125) (inlet channel 8 h, step 1 h, l_in 5, l_out 40), graded mesh
+        (backward_step_graded), standard wall functions, SIMPLEC alpha_u 0.8 linearUpwind momentum, upwind k/epsilon,
+        Re_h = 37500.
+      - Measured reattachment x_r/h (last negative-to-positive sign change of u in the first cell row above the floor;
+        4000-5000 iterations), three meshes (5.1k / 10.6k / 23.8k cells; 3000 iterations on the coarse and fine meshes,
+        5000 on the medium one): Standard 5.20 / 5.36 / 5.46, RNG 6.32 / 6.37 / 6.38, Realizable (medium mesh) 6.40.
+      - Reference: Driver and Seegmiller 6.26 +- 0.10 (value from cases/backward_step/case.json) and the 5.5-7 RANS
+        scatter band in that file. Secondary sources checked this wave (NASA NPARC validation archive and the OpenFOAM
+        verification docs built on the NASA Turbulence Modeling Resource case) give 6.26 +- 0.10 for the zero-degree top
+        wall, quoted there at Re_h = 36000, while case.json and the runs use 37500.
+      - RNG and Realizable are inside the scatter band, 0.06-0.14 above the nominal 6.26 (RNG 6.32 on the coarsest mesh
+        is inside the +-0.10 window, the finer meshes are 0.01-0.04 above it).
+      - Standard is 13-17 percent LOW, below the band on the two coarser meshes and 0.04 below it on the finest.
+      - So the 'within literature scatter' criterion is met by RNG/Realizable only.
+      - CAVEATS:
+        - The inlet is an approximation (1/7 power-law boundary layer thickness 1.5 h on both inlet-channel walls, 1
+          percent free-stream intensity, k and eps from a mixing-length estimate), not the measured D&S profile.
+        - The top wall is straight, which matches the zero-degree reference configuration.
+        - Fixed outlet pressure at x/h = 40.
+        - The nu_t of the wall-adjacent cells on the viscous/log switch oscillates O(1) between iterations (max velocity
+          update stalls at 3e-4 - 4e-3, 'nut change < 1e-6' never reached) although x_r is constant to 1e-5 on the
+          medium and fine meshes (fine RNG: 6.37817 from iteration 1500 to 3000).
+        - k-epsilon constants/RNG/realizable forms still from memory.
+        - No schema wiring.
+      - Details: docs/bfs-convergence-findings.md.
+    - WAVE 7 UPDATE (status stays PARTIAL: scalable wall functions are still not implemented and only RNG/Realizable are
+      inside the step scatter band). The wall-cell oscillation reported above is DIAGNOSED AND FIXED.
+      - Diagnosis: a top-N listing of the changing nu_t cells showed all of them wall-adjacent (step face and floor),
+        i.e. the hard viscous/log switch of the wall function (epsilon jumps about 4x, production 0 to log-law).
+      - Fix: rcfd-turb now has WallTreatment { Switch (old), Hysteresis{band} (+-10 percent dead band, band 0.1), Smooth
+        (default: epsilon_w = sqrt(eps_vis^2 + eps_log^2), compound form after Popovac and Hanjalic 2007, and log-law
+        production times r^6/(1+r^6), r = y*/y*_lam) }, selectable as turbulence.wall_treatment = smooth | hysteresis |
+        switch in the case schema.
+      - Convergence with the UNCHANGED criterion (max velocity update < 1e-7 and nu_t change < 1e-6):
+        tests/step_kepsilon.rs now asserts convergence (hysteresis and smooth). The medium mesh (24+160 x 40+20 cells)
+        converges in 800-920 iterations (du 1e-8, dnut 1e-6) for Standard, RNG and Realizable; Switch never does (du
+        2e-4 - 1.7e-3, dnut 0.4 - 1.1).
+      - Measured x_r/H (target 6.26 +- 0.10 and the tolerances are unchanged), as Standard / RNG / Realizable:
+        - Medium mesh: Switch 5.3583 / 6.3726 / 6.4042, Hysteresis 5.3581 / 6.3724 / 6.4043, Smooth 5.3594 / 6.3729 /
+          6.4015.
+        - Fine mesh (36+240 x 60+30, Smooth, converged at about 1540-1570 iterations): 5.4599 / 6.3797 / 6.5063.
+      - The treatment moves x_r by less than 0.003, so the earlier numbers stand: RNG and Realizable are inside the
+        5.5-7 scatter band (0.11-0.25 above the nominal 6.26; RNG medium/fine 6.37/6.38 are 0.01-0.02 outside the +-0.10
+        window, Realizable 6.40-6.51 is 0.04-0.15 outside), Standard (5.36-5.46) is outside the band.
+      - Channel (tests/channel_kepsilon.rs, 10 percent assertions unchanged, all pass) shifts slightly with the smooth
+        default: centre-line / bulk U+ Standard 20.742 (+3.2%) / 18.441 (+6.0%), RNG 21.193 (+5.4%) / 18.702 (+7.5%),
+        Realizable 21.630 (+7.6%) / 18.973 (+9.0%, close to the 10 percent limit); U+ at y+ 28.2 13.957 vs Reichardt
+        13.372.
+      - Details: docs/bfs-convergence-findings.md.
+    - AUDIT FOLLOW-UP (ca78589): the registered reattachment window 6.26±0.10 is now asserted in ignored *_known_miss
+      tests; measured Realizable 6.402, RNG 6.373, Standard 5.359 (all converged); all three miss.
+    - SCOPE (merged review): add combination with the energy equation and moving walls as sub-criteria; low-Re and
+      differential-viscosity variants stay here; wall treatments move to F-203.
+    - ADR 0015 (turbulence finishing), STILL PARTIAL: corrected step set-up BFS-C (Re_h 36000, inlet x/h = -4, measured
+      Driver-Seegmiller profile) with three meshes.
+      - Medium-mesh x_r/h (window 6.16 to 6.36):
+        - Standard 5.350 (MISS, fine 5.452).
+        - RNG 6.334 (PASS, grid-converged: coarse 6.255, fine 6.348; marginal, 0.026 inside the upper edge on medium and
+          0.012 on fine, smaller than the 0.107 convection-scheme sensitivity, so not credited to any single factor).
+        - Realizable 6.413 (MISS, fine 6.520, not grid-converged).
+      - Inlet plane, free-stream k and Re_h each move x_r by < 0.01. The only factor >= 0.10 is the first-order
+        k/epsilon convection for RNG and Realizable (second order: -0.11 to -0.16; the Standard second-order runs did
+        not converge and decide nothing).
+      - No defect in the variants found; Standard under-prediction (-14.5 percent) and the Realizable excess are
+        model/discretisation limits (ignored step_c_reattachment_*_known_miss tests; the old tests stay).
+      - component_diagonal corrected is a bitwise no-op on the step mesh.
+      - Scalable wall functions added (WallFunction::Scalable; flat plate average Cf within 4.6 percent of
+        Prandtl-Schlichting at y+ 30 and y+ 1), so the title piece is in the library but not wired to the settings tree
+        (turb.rs hook missing).
+      - Energy / moving-wall sub-criteria and low-Re variants not addressed.
+    - ADR 0017 (Realizable A0): the original report prints A0 = 4.0 (verified in the report text). The library default
+      4.04 is a commercial-code variant and stays the default. A0 is now selectable (KEpsilon::a0,
+      turbulence.realizable_a0, default bit-identical, baseline hashes unchanged).
+      - With A0 = 4.0 the BFS-C Realizable medium-mesh x_r/h is 6.349 (window 6.16 to 6.36: PASS, marginal, 0.011 inside
+        the edge) against 6.413 with 4.04.
+      - Coarse/medium/fine 6.174/6.349/6.453, abs(fine - medium) = 0.105 > 0.10 so NOT grid-converged (ignored
+        step_c_realizable_a0_4_grid_study_known_miss), and the fine value is outside the window.
+      - The pass is marginal and mesh-dependent, smaller than the 0.14 convection-scheme sensitivity, and is not proof
+        of correctness. The default was not changed (user decision). Status stays partial.
+    - WAVE 31B (ADR 0063, diagnosis only): the mesh dependence of Standard k-epsilon with the standard wall function in
+      the Re_tau 178 channel is the validity limit of the log-law function, not a coding defect.
+      - The bump at y+ ~ 15 is the wall cell entering the viscous branch (y* < 11.06): G -> 0, eps -> 2 nu k/y^2, the
+        wall-cell k collapses from ~3.05 to ~0.8 u_tau^2 (positive feedback through y* = Cmu^1/4 sqrt(k) y/nu: y* 7.45
+        at y+ 14.8) and U_b+ then falls to -29 percent at y+ 5.6. Switch/Hysteresis show the same at y+ 17.8.
+      - WallFunction::Scalable is mesh independent to 2.8 percent (U_b+ +4.9 to +7.9 percent) over ny 4..32.
+      - A common standard wall-function formulation (no published source is cited for it here) uses equilibrium G and
+        eps in every wall cell (rcfd drops to a viscous branch below y*_lam). An opt-in Equilibrium treatment with those
+        forms was tried and removed the bump (+4.1 to +4.4 percent for y+ >= 12.7) but still falls for y* < 11 (-8.7 to
+        -22 percent), so it missed its registered limits and was not kept.
+      - Probe: crates/rcfd-turb/tests/diag_w31b_channel_wf.rs.
 - [~] **F-043** k-omega SST (and BSL) with low-Re wall treatment
   - depends on: F-040, F-108, F-106
   - acceptance: Flat plate / BFS / NACA0012 validation passes; y+~1 meshes stable
-  - note: Wall-resolved (y+~1) meshes come from boundary-layer inflation (F-108); pseudo-transient (F-106) is the robustness fallback. Wave 6: dependency F-106 is now diagnosed (second-order step convergence fixed, see F-106 note) and the BFS case is available as a k-epsilon validation geometry (F-042 note, x_r/h 6.3-6.4 with RNG/Realizable), but F-108 (wall-resolved boundary-layer meshes) is still todo, so SST stays todo. WAVE 7 UPDATE (supersedes the todo status above, F-108 is now partial): Wave 7, PARTIAL: model, wall treatment, channel and flat-plate validation done; the backward-facing-step and NACA0012 parts of the acceptance were NOT attempted; the flat plate misses the +-5 percent band against White's formula (met against the power law and the NASA TMR CFL3D value). rcfd-turb sst.rs KOmegaSst (Menter 2003 form of the NASA TMR page; constants and blending functions verified against https://tmbwg.github.io/turbmodels/sst.html by web fetch: beta* 0.09, a1 0.31, set 1 sigma_k 0.85 sigma_w 0.5 beta 0.075 gamma 5/9, set 2 1.0 / 0.856 / 0.0828 / 0.44, production limiter 10 beta* omega k, CDkw floor 1e-10, F1 tanh(arg1^4), F2 tanh(arg2^2), nu_t = a1 k / max(a1 omega, S F2), wall omega 10 * 6 nu/(beta1 d^2)). BSL is not a separate option. Wall treatment (automatic across y+): Spalding law of the wall (wall.rs SpaldingLaw, bisection for u_tau) gives the wall shear and the wall-cell strain and production; omega Dirichlet on wall faces = 10 * 6 nu / (beta1 y_c^2); for cells with y+ > 5 the cell omega is fixed to sqrt(w_vis^2 + w_log^2), w_log = u_tau / (sqrt(beta*) kappa y); k zero gradient. Convection of k and omega is first-order upwind (linearUpwind diverged). A first version that fixed the wall-cell omega itself had a strongly arbitrary Cf dependence on its factor and was replaced. CHANNEL Re_tau = 395 vs MKM DNS (tests/channel_sst.rs, default tests, about 10 s, converged to 1e-9/1e-8): wall-resolved (first-cell y+ 1.00, WallLayers first 2/395, growth 1.1, 16 layers, 60 cells): U_c+ 20.457 (+1.6% vs 20.13), U_b+ 18.167 (+4.4% vs 17.4), profile within 10 percent of DNS at y+ 5, 10, 20, 30, 50, 100, 150, 200, 300 (assertion; DNS samples interpolated from chan395.means); coarse 14 uniform cells (y+ 28.2): U_c+ 18.774 (-6.7%), U_b+ 16.920 (-2.8%), both inside 10 percent. Sensitivity to the first-cell y+ (caveat): channel U_b+ error +5.4 / +4.4 / +2.7 / +1.4 percent at y+ 2 / 1 / 0.5 / 0.25. FLAT PLATE (tests/flat_plate_sst.rs, ignored, about 100 s release, converged about 2000 iterations; TMR set-up Re_L 5e6, plate 0..2 with Re 5e6 per m, k_inf 2.25e-7 U^2, omega_inf 125 U/L, target y+ 0.5, growth 1.1, 70 layers, 140 x 110 cells): Cf(x = 0.97) = 0.002663 vs the TMR CFL3D SST value 0.00268299 (-0.7%; the TMR page does not print a grid-converged number, the 273 x 193 grid value is used). Against the power law 0.0576 Re_x^-0.2: -3.8 / -1.9 / +0.6 / +2.6 / +4.6 percent at Re_x 2e6 / 3e6 / 5e6 / 7e6 / 1e7 (asserted within 5 percent for x <= 1.0); against White 0.455/ln^2(0.06 Re_x): -8.5 / -7.9 / -7.3 / -6.9 / -6.6 percent (printed, NOT within 5 percent: White's formula is itself 8.7 percent above the power law at Re_x = 5e6 and SST lies between the two). Cf rises as the first-cell y+ falls (y+ 2 / 1 / 0.5 / 0.25 / 0.1: White deviation at x = 1 -10.5 / -9.2 / -7.3 / -5.9 / -4.8 percent); insensitive to the freestream k (1e-6 to 1e-4 of the TMR value), to NX (140 to 280) and to the growth ratio (1.1 to 1.06). NOT DONE: backward-facing step and NACA0012 validation, BSL variant, transition/low-Re damping beyond the wall treatment, linearUpwind convection of k/omega. Schema (rcfd-api): turbulence.model = k_omega_sst (steady algorithms, wall required, no energy), turbulence.omega_initial, boundaries.<patch>.omega_value (turbulence_spec = values), field omega, k-epsilon-only keys (variant, epsilon_initial, wall_treatment) and omega_initial on k_epsilon rejected with located diagnostics; the CLI example cases/channel/sst_channel.toml (wall layers with target_y_plus 1) runs in 4396 iterations (about 8 s) to U_b+ 18.167 and wall-cell y+ 1.0000, stopped by a y+ plateau criterion because the relative momentum residual of the periodic channel levels off near 5e-3. Tests: rcfd-api tests/sst_schema.rs (tree run equals the library run to 1e-9 after 150 iterations, validation errors, wall layer keys). Assistant (additive): validate_case adds a k-omega SST wall-resolution warning with the estimated first-cell y+ (flat-plate friction at lx) and notes y+ in 2-20; the k-epsilon 30-300 warning is skipped for SST; inlet helpers apply to SST. Documented in docs/case-schema.md and docs/reference-data.md (Spalding 1961 and Popovac-Hanjalic 2007 / Menter-Esch 2001 are cited from memory and not re-fetched). AUDIT FOLLOW-UP (ca78589): Cf vs NASA TMR value passes (-0.7%/-1.0%); the White-formula 5% band is recorded as sst_flat_plate_cf_within_5pct_of_white_known_miss (-7.36% at x=0.97). SCOPE (merged review): add generalised k-omega with calibratable coefficients, explicit algebraic stress variants and low-Re/shear-correction toggles (see F-206); wall-omega options move to F-203. ADR 0015 (turbulence finishing), STILL PARTIAL: BSL variant (SstVariant::Bsl) and low_re wall condition (SstWallMode::LowRe) added to the library. Flat plate at x = 0.5, 0.97, 1.5: SST within 1.2 percent of the TMR CFL3D SST-V values (PASS), BSL within 1.6 percent of CFL3D and 2.4 percent of SST (PASS); against the TMR theory curves 6-112a / 6-121 / 6-134 the worst deviations are -5.4 / -7.7 / -8.2 percent (MISS, the CFL3D reference is itself 6.4 percent below White; ignored b2_*_known_miss). y+ stability (Cf(0.97), y+ 2/1/0.5, all converged): spread 3.45 percent SST automatic, 3.45 BSL, 3.03 low_re against 3 percent (MISS, b4_*_known_miss). Backward-facing step with wall-resolved SST/BSL (B5, B5b): y+ 2 runs did not converge; y+ ~ 1 converged with x_r/h 6.554 (SST) and 5.956 (BSL) against the window 6.16 to 6.36 (MISS); first set-up with wrong first-cell heights diverged (kept as record). NACA0012, generalised k-omega / EARSM and the low-Re toggle in the schema are NOT done; wall_omega and sst_variant are in the schema but rejected until the build path applies them. WAVE 30C (ADR 0061 D, crates/rcfd-turb/tests/validation_flat_plate_wall_law.rs): against the Karman-Schoenherr law at equal Re_theta (TMR data) the wall-resolved SST on a 3-mesh sequence (y+ 1, 0.5, 0.25) is low by 8.7, 6.4, 5.2, 4.4 percent at Re_theta 5000, 7500, 10000, 12500 (finest): a registered 5 percent miss at three stations (d1 known miss), the mesh sequence converges slowly (order 0.55, 1.94 percent between the two finest, d3 known miss) and the log-law slope fit over y+ 50 to 300 misses (kappa_eff 0.36, d2 fit known miss); the pointwise u+ comparison with the Coles curve is within 3 percent. Streamwise resolution and the convection scheme of k and omega were excluded by a diagnostic; the dependence is wall-normal. Not changed in the solver. Status unchanged (partial). WAVE 31B (ADR 0063, diagnosis only, no solver change): the wall-resolved flat-plate deficit against Karman-Schoenherr is NOT a proven implementation defect. Term-by-term comparison with the NASA TMR SST page (https://tmbwg.github.io/turbmodels/sst.html, fetched 2026-10-18): equations, F1, F2, CD floor 1e-10, limiter 10 beta* k omega, nu_t with S, all constants and the wall condition omega_w = 10 * 6 nu/(beta1 d1^2), k_w = 0 agree; rcfd-only extras (Automatic Spalding overrides, k zero gradient, omega fixing for y+ > 5, nu_t cap 1e5 nu, first-order k/omega convection) change Cf by < 0.2 percent at y+ < 5. Findings: (1) the Re_theta of ADR 0061 addendum 4 is biased low (negative near the leading edge, 25 percent below int Cf/2 dx at x ~ 1); with the momentum integral or an nu_t-edge profile the finest-mesh deviation from K-S is -2.4/-2.2/-1.9/-1.8 percent (momentum integral) and -3.4/-3.0/-2.7/-2.5 percent (edge profile) at Re_theta 5000/7500/10000/12500, inside 5 percent (the registered D1 measurement and its known-miss test are unchanged); (2) the remaining y+ dependence is the slowly decaying (first order) sensitivity to the wall-face omega value: factor 1 instead of the published 10 changes Cf(Re_theta 10000) by 5.0 percent on the medium mesh, the channel U_b+ becomes mesh independent to 0.2 percent (ny 24..160) and the factor-10 sequence extrapolates to the same value; not a defect (10 is the published factor), no fix made; (3) not influential (< 0.2 percent): LowRe versus Automatic, plain wall strain, k = 0 at the wall, limiter off, least-squares strain, wall-distance accuracy (exact); cross-diffusion off moves Cf by 3.9 percent (a published term); (4) the log-law fit slope 2.78 (kappa_eff 0.36) is not explained (2.76 with factor 1). Probe: crates/rcfd-turb/tests/diag_w31b_sst_probe.rs.
+  - note: PARTIAL. Last recorded results: the flat plate passes against the TMR CFL3D values (ADR 0015) but misses
+    White's 5 percent band (audit follow-up known miss), the TMR theory curves (ADR 0015) and the registered 5 percent
+    against Karman-Schoenherr at three stations (wave 30C known miss; wave 31B: NOT a proven implementation defect). The
+    wall-resolved backward-facing step misses the window 6.16 to 6.36 (y+ 2 runs did not converge) and the y+ stability
+    spread misses 3 percent (ADR 0015). NACA0012 is NOT done.
+    - Wall-resolved (y+~1) meshes come from boundary-layer inflation (F-108); pseudo-transient (F-106) is the robustness
+      fallback.
+    - Wave 6: dependency F-106 is now diagnosed (second-order step convergence fixed, see F-106 note) and the BFS case
+      is available as a k-epsilon validation geometry (F-042 note, x_r/h 6.3-6.4 with RNG/Realizable), but F-108
+      (wall-resolved boundary-layer meshes) is still todo, so SST stays todo.
+    - WAVE 7 UPDATE (supersedes the todo status above, F-108 is now partial): Wave 7, PARTIAL: model, wall treatment,
+      channel and flat-plate validation done; the backward-facing-step and NACA0012 parts of the acceptance were NOT
+      attempted; the flat plate misses the +-5 percent band against White's formula (met against the power law and the
+      NASA TMR CFL3D value).
+      - Model: rcfd-turb sst.rs KOmegaSst (Menter 2003 form of the NASA TMR page). BSL is not a separate option.
+        Constants and blending functions verified against https://tmbwg.github.io/turbmodels/sst.html by web fetch:
+        beta* 0.09, a1 0.31, set 1 sigma_k 0.85 sigma_w 0.5 beta 0.075 gamma 5/9, set 2 1.0 / 0.856 / 0.0828 / 0.44,
+        production limiter 10 beta* omega k, CDkw floor 1e-10, F1 tanh(arg1^4), F2 tanh(arg2^2), nu_t = a1 k / max(a1
+        omega, S F2), wall omega 10 * 6 nu/(beta1 d^2).
+      - Wall treatment (automatic across y+): Spalding law of the wall (wall.rs SpaldingLaw, bisection for u_tau) gives
+        the wall shear and the wall-cell strain and production; omega Dirichlet on wall faces = 10 * 6 nu / (beta1
+        y_c^2); for cells with y+ > 5 the cell omega is fixed to sqrt(w_vis^2 + w_log^2), w_log = u_tau / (sqrt(beta*)
+        kappa y); k zero gradient.
+      - Convection of k and omega is first-order upwind (linearUpwind diverged).
+      - A first version that fixed the wall-cell omega itself had a strongly arbitrary Cf dependence on its factor and
+        was replaced.
+      - CHANNEL Re_tau = 395 vs MKM DNS (tests/channel_sst.rs, default tests, about 10 s, converged to 1e-9/1e-8):
+        - Wall-resolved (first-cell y+ 1.00, WallLayers first 2/395, growth 1.1, 16 layers, 60 cells): U_c+ 20.457
+          (+1.6% vs 20.13), U_b+ 18.167 (+4.4% vs 17.4), profile within 10 percent of DNS at y+ 5, 10, 20, 30, 50, 100,
+          150, 200, 300 (assertion; DNS samples interpolated from chan395.means).
+        - Coarse 14 uniform cells (y+ 28.2): U_c+ 18.774 (-6.7%), U_b+ 16.920 (-2.8%), both inside 10 percent.
+        - Sensitivity to the first-cell y+ (caveat): channel U_b+ error +5.4 / +4.4 / +2.7 / +1.4 percent at y+ 2 / 1 /
+          0.5 / 0.25.
+      - FLAT PLATE (tests/flat_plate_sst.rs, ignored, about 100 s release, converged about 2000 iterations; TMR set-up
+        Re_L 5e6, plate 0..2 with Re 5e6 per m, k_inf 2.25e-7 U^2, omega_inf 125 U/L, target y+ 0.5, growth 1.1, 70
+        layers, 140 x 110 cells):
+        - Cf(x = 0.97) = 0.002663 vs the TMR CFL3D SST value 0.00268299 (-0.7%; the TMR page does not print a
+          grid-converged number, the 273 x 193 grid value is used).
+        - Against the power law 0.0576 Re_x^-0.2: -3.8 / -1.9 / +0.6 / +2.6 / +4.6 percent at Re_x 2e6 / 3e6 / 5e6 / 7e6
+          / 1e7 (asserted within 5 percent for x <= 1.0).
+        - Against White 0.455/ln^2(0.06 Re_x): -8.5 / -7.9 / -7.3 / -6.9 / -6.6 percent (printed, NOT within 5 percent:
+          White's formula is itself 8.7 percent above the power law at Re_x = 5e6 and SST lies between the two).
+        - Cf rises as the first-cell y+ falls (y+ 2 / 1 / 0.5 / 0.25 / 0.1: White deviation at x = 1 -10.5 / -9.2 / -7.3
+          / -5.9 / -4.8 percent). It is insensitive to the freestream k (1e-6 to 1e-4 of the TMR value), to NX (140 to
+          280) and to the growth ratio (1.1 to 1.06).
+      - NOT DONE: backward-facing step and NACA0012 validation, BSL variant, transition/low-Re damping beyond the wall
+        treatment, linearUpwind convection of k/omega.
+      - Schema (rcfd-api): turbulence.model = k_omega_sst (steady algorithms, wall required, no energy),
+        turbulence.omega_initial, boundaries.<patch>.omega_value (turbulence_spec = values), field omega. The schema
+        rejects k-epsilon-only keys (variant, epsilon_initial, wall_treatment) and omega_initial on k_epsilon with
+        located diagnostics.
+      - The CLI example cases/channel/sst_channel.toml (wall layers with target_y_plus 1) runs in 4396 iterations (about
+        8 s) to U_b+ 18.167 and wall-cell y+ 1.0000, stopped by a y+ plateau criterion because the relative momentum
+        residual of the periodic channel levels off near 5e-3.
+      - Tests: rcfd-api tests/sst_schema.rs (tree run equals the library run to 1e-9 after 150 iterations, validation
+        errors, wall layer keys).
+      - Assistant (additive): validate_case adds a k-omega SST wall-resolution warning with the estimated first-cell y+
+        (flat-plate friction at lx) and notes y+ in 2-20; the k-epsilon 30-300 warning is skipped for SST; inlet helpers
+        apply to SST.
+      - Documented in docs/case-schema.md and docs/reference-data.md (Spalding 1961 and Popovac-Hanjalic 2007 /
+        Menter-Esch 2001 are cited from memory and not re-fetched).
+    - AUDIT FOLLOW-UP (ca78589): Cf vs NASA TMR value passes (-0.7%/-1.0%); the White-formula 5% band is recorded as
+      sst_flat_plate_cf_within_5pct_of_white_known_miss (-7.36% at x=0.97).
+    - SCOPE (merged review): add generalised k-omega with calibratable coefficients, explicit algebraic stress variants
+      and low-Re/shear-correction toggles (see F-206); wall-omega options move to F-203.
+    - ADR 0015 (turbulence finishing), STILL PARTIAL: BSL variant (SstVariant::Bsl) and low_re wall condition
+      (SstWallMode::LowRe) added to the library.
+      - Flat plate at x = 0.5, 0.97, 1.5: SST within 1.2 percent of the TMR CFL3D SST-V values (PASS), BSL within 1.6
+        percent of CFL3D and 2.4 percent of SST (PASS). Against the TMR theory curves 6-112a / 6-121 / 6-134 the worst
+        deviations are -5.4 / -7.7 / -8.2 percent (MISS, the CFL3D reference is itself 6.4 percent below White; ignored
+        b2_*_known_miss).
+      - y+ stability (Cf(0.97), y+ 2/1/0.5, all converged): spread 3.45 percent SST automatic, 3.45 BSL, 3.03 low_re
+        against 3 percent (MISS, b4_*_known_miss).
+      - Backward-facing step with wall-resolved SST/BSL (B5, B5b): y+ 2 runs did not converge; y+ ~ 1 converged with
+        x_r/h 6.554 (SST) and 5.956 (BSL) against the window 6.16 to 6.36 (MISS); first set-up with wrong first-cell
+        heights diverged (kept as record).
+      - NACA0012, generalised k-omega / EARSM and the low-Re toggle in the schema are NOT done; wall_omega and
+        sst_variant are in the schema but rejected until the build path applies them.
+    - WAVE 30C (ADR 0061 D, crates/rcfd-turb/tests/validation_flat_plate_wall_law.rs): against the Karman-Schoenherr law
+      at equal Re_theta (TMR data) the wall-resolved SST on a 3-mesh sequence (y+ 1, 0.5, 0.25) is low by 8.7, 6.4, 5.2,
+      4.4 percent at Re_theta 5000, 7500, 10000, 12500 (finest). Status unchanged (partial).
+      - A registered 5 percent miss at three stations (d1 known miss).
+      - The mesh sequence converges slowly (order 0.55, 1.94 percent between the two finest, d3 known miss).
+      - The log-law slope fit over y+ 50 to 300 misses (kappa_eff 0.36, d2 fit known miss).
+      - The pointwise u+ comparison with the Coles curve is within 3 percent.
+      - Streamwise resolution and the convection scheme of k and omega were excluded by a diagnostic; the dependence is
+        wall-normal. Not changed in the solver.
+    - WAVE 31B (ADR 0063, diagnosis only, no solver change): the wall-resolved flat-plate deficit against
+      Karman-Schoenherr is NOT a proven implementation defect.
+      - Term-by-term comparison with the NASA TMR SST page (https://tmbwg.github.io/turbmodels/sst.html, fetched
+        2026-10-18): equations, F1, F2, CD floor 1e-10, limiter 10 beta* k omega, nu_t with S, all constants and the
+        wall condition omega_w = 10 * 6 nu/(beta1 d1^2), k_w = 0 agree. The rcfd-only extras (Automatic Spalding
+        overrides, k zero gradient, omega fixing for y+ > 5, nu_t cap 1e5 nu, first-order k/omega convection) change Cf
+        by < 0.2 percent at y+ < 5.
+      - Findings:
+        - (1) The Re_theta of ADR 0061 addendum 4 is biased low (negative near the leading edge, 25 percent below int
+          Cf/2 dx at x ~ 1). With the momentum integral or an nu_t-edge profile the finest-mesh deviation from K-S is
+          -2.4/-2.2/-1.9/-1.8 percent (momentum integral) and -3.4/-3.0/-2.7/-2.5 percent (edge profile) at Re_theta
+          5000/7500/10000/12500, inside 5 percent (the registered D1 measurement and its known-miss test are unchanged).
+        - (2) The remaining y+ dependence is the slowly decaying (first order) sensitivity to the wall-face omega value.
+          Factor 1 instead of the published 10 changes Cf(Re_theta 10000) by 5.0 percent on the medium mesh, the channel
+          U_b+ becomes mesh independent to 0.2 percent (ny 24..160) and the factor-10 sequence extrapolates to the same
+          value. This is not a defect (10 is the published factor), no fix made.
+        - (3) Not influential (< 0.2 percent): LowRe versus Automatic, plain wall strain, k = 0 at the wall, limiter
+          off, least-squares strain, wall-distance accuracy (exact). Cross-diffusion off moves Cf by 3.9 percent (a
+          published term).
+        - (4) The log-law fit slope 2.78 (kappa_eff 0.36) is not explained (2.76 with factor 1).
+      - Probe: crates/rcfd-turb/tests/diag_w31b_sst_probe.rs.
 - [x] **F-044** Turbulence-model plugin interface; coefficients exposed in the settings tree
   - depends on: F-042, F-005
   - acceptance: Switch models at runtime via settings tree; coefficient override test
-  - note: Wave 8, PARTIAL (ADR 0014). rcfd-turb model.rs: trait TurbulenceModel + CoefficientInfo + ModelContext, adapters for k-epsilon, SST and SA, process-wide registry (register_model/create_model); rcfd-api turb.rs holds Box<dyn TurbulenceModel>. Settings tree: turbulence.coefficients.k_epsilon (5), k_omega_sst (11), sa (10) with docs and ranges in the JSON schema, turbulence.model = plugin with turbulence.plugin and plugin_coefficients; located validation errors. Runtime switching: settings.set on turbulence.* in a Ready/Paused session rebuilds only the model, keeping velocity, pressure, iteration counter and monitors; verified bit-identical flow across the switch (R1) and a 6000-iteration-per-phase k_epsilon -> SST -> SA -> k_epsilon run reproducing fresh runs to 2e-11 (R2, ignored). Coefficient override tests: SA cb1 +20% changes max nut by 15% and k-eps c2 by 29%, explicit defaults bit-identical. Plugin test: const_nut equals laminar 10 nu exactly. NOT DONE: SST coefficients are compile-time constants (shown, non-default values rejected); per-coefficient override by expression or user function; switching from/to laminar and finished sessions still restart; the other agent's new wall-function/roughness/BSL keys are not wired into ModelContext. SCOPE (merged review): require per-coefficient override by expression or user function for models with calibratable coefficients. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Wave 8, PARTIAL (ADR 0014).
+    - rcfd-turb model.rs: trait TurbulenceModel + CoefficientInfo + ModelContext, adapters for k-epsilon, SST and SA,
+      process-wide registry (register_model/create_model). rcfd-api turb.rs holds Box<dyn TurbulenceModel>.
+    - Settings tree: turbulence.coefficients.k_epsilon (5), k_omega_sst (11), sa (10) with docs and ranges in the JSON
+      schema; turbulence.model = plugin with turbulence.plugin and plugin_coefficients; located validation errors.
+    - Runtime switching: settings.set on turbulence.* in a Ready/Paused session rebuilds only the model, keeping
+      velocity, pressure, iteration counter and monitors. Verified: bit-identical flow across the switch (R1) and a
+      6000-iteration-per-phase k_epsilon -> SST -> SA -> k_epsilon run reproducing fresh runs to 2e-11 (R2, ignored).
+    - Coefficient override tests: SA cb1 +20% changes max nut by 15% and k-eps c2 by 29%, explicit defaults
+      bit-identical.
+    - Plugin test: const_nut equals laminar 10 nu exactly.
+    - NOT DONE: SST coefficients are compile-time constants (shown, non-default values rejected); per-coefficient
+      override by expression or user function; switching from/to laminar and finished sessions still restart; the
+      other agent's new wall-function/roughness/BSL keys are not wired into ModelContext.
+    - SCOPE (merged review): require per-coefficient override by expression or user function for models with
+      calibratable coefficients.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests;
+      scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-045** LES (Smagorinsky, WALE) and SAS/DES-class hybrids
   - depends on: F-029, F-043
   - acceptance: Decaying isotropic turbulence spectrum and channel LES sanity check
-  - note: PARTIAL (wave 18A, ADR 0026): delivered Smagorinsky and WALE as explicit algebraic eddy-viscosity models in the transient piso/pimple algorithms (filter width from the cell volume, optional van Driest wall damping for Smagorinsky, coefficients cs/cw/a_plus in the settings tree, live switching, located validation errors); closed forms, linear-field mesh checks and a Taylor-Green vortex met, except two registered Taylor-Green checks that missed (TG1 extra dissipation 0.59 of the closed form, WALE-less-dissipative-than-Smagorinsky ordering) because the solver discretises the viscous term in Laplacian form, so the transposed subgrid-stress term is missing (ignored known_miss tests, corrected checks in addendum A1). NOT delivered: decaying isotropic turbulence spectrum (no periodic 3D box, no verified reference; no claim made) and channel LES sanity check (the acceptance is NOT met), DES/SAS hybrids (the SA model has no time derivative), dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES, stress-blended hybrid, SGS in the compressible engines, SGS heat flux; F-207 not started. The constants Cs 0.17, Cw 0.325 and A+ 25 are from memory, unverified. SCOPE (merged review): enumerate dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES variants and stress-blended hybrid as sub-criteria; see F-207 for embedded zones and inflow generators. WAVE 20A (ADR 0032): the transposed viscous-stress term is now available as an option (solver.viscous_stress = full, piso/pimple, constant density; default laplacian unchanged and bit-identical); with it the ORIGINAL registered TG1 extra-dissipation assertion passes (0.916 of the closed form, limit 1 +- 0.15) and the TG3 ordering passes (K_W/K_S 1.059, K_S/K_L 0.933, K_W/K_L 0.988); the WALE closed-form check passes marginally (1.144). Still missing: boundary-face contributions of the term (non-periodic walls, rotational periodicity), the decaying-turbulence spectrum and channel LES sanity check (acceptance NOT met), dynamic Smagorinsky, Vreman, sigma, WMLES, SAS, stress-blended hybrid. SA-based DES/DDES: see F-207.
+  - note: PARTIAL; the acceptance is NOT met: the decaying-turbulence spectrum and channel LES sanity check are still
+    missing (wave 20A). Smagorinsky and WALE are delivered.
+    - PARTIAL (wave 18A, ADR 0026): delivered Smagorinsky and WALE as explicit algebraic eddy-viscosity models in the
+      transient piso/pimple algorithms (filter width from the cell volume, optional van Driest wall damping for
+      Smagorinsky, coefficients cs/cw/a_plus in the settings tree, live switching, located validation errors).
+      - Closed forms, linear-field mesh checks and a Taylor-Green vortex met, except two registered Taylor-Green checks
+        that missed (TG1 extra dissipation 0.59 of the closed form, WALE-less-dissipative-than-Smagorinsky ordering).
+        They missed because the solver discretises the viscous term in Laplacian form, so the transposed subgrid-stress
+        term is missing (ignored known_miss tests, corrected checks in addendum A1).
+      - NOT delivered: decaying isotropic turbulence spectrum (no periodic 3D box, no verified reference; no claim made)
+        and channel LES sanity check (the acceptance is NOT met), DES/SAS hybrids (the SA model has no time derivative),
+        dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES, stress-blended hybrid, SGS in the
+        compressible engines, SGS heat flux; F-207 not started.
+      - The constants Cs 0.17, Cw 0.325 and A+ 25 are from memory, unverified.
+    - SCOPE (merged review): enumerate dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed DES variants and
+      stress-blended hybrid as sub-criteria; see F-207 for embedded zones and inflow generators.
+    - WAVE 20A (ADR 0032): the transposed viscous-stress term is now available as an option (solver.viscous_stress =
+      full, piso/pimple, constant density; default laplacian unchanged and bit-identical).
+      - With it the ORIGINAL registered TG1 extra-dissipation assertion passes (0.916 of the closed form, limit 1 +-
+        0.15) and the TG3 ordering passes (K_W/K_S 1.059, K_S/K_L 0.933, K_W/K_L 0.988).
+      - The WALE closed-form check passes marginally (1.144).
+      - Still missing: boundary-face contributions of the term (non-periodic walls, rotational periodicity), the
+        decaying-turbulence spectrum and channel LES sanity check (acceptance NOT met), dynamic Smagorinsky, Vreman,
+        sigma, WMLES, SAS, stress-blended hybrid.
+      - SA-based DES/DDES: see F-207.
 - [~] **F-046** Reynolds stress model (LRR/SSG) and gamma-family transition model
   - depends on: F-043
   - acceptance: T3A flat-plate transition location within 15 percent; RSM swirl benchmark
-  - note: SCOPE (merged review): name the pressure-strain variants (linear, SSG, omega-based), wall-echo and solve-TKE toggles, and the transition variants (algebraic and transport intermittency, crossflow transition, roughness coupling). WAVE 20A (ADR 0032), PARTIAL: Reynolds stress transport model (turbulence.model = rsm) with SSG (default) or LRR-IP pressure-strain, six stress equations plus epsilon, normal-stress generalised-gradient diffusion, stress divergence coupled to momentum as an explicit body acceleration, plug-in interface, settings-tree keys turbulence.rsm.pressure_strain and turbulence.coefficients.rsm.*, located errors; transient (piso/pimple) only. Term invariants, homogeneous-shear and isotropic-decay ODEs, the semi-implicit update and the momentum source verified to 1e-8 or better; registered misses: k(t_end) < 1e3 k0 in homogeneous shear (k grows exponentially, ignored known_miss) and the tree-vs-closed-form decay at 1e-6 (first-order time stepping and lagged periodic coupling, ignored known_miss, corrected checks met). NOT delivered: any gamma-family transition model (T3A acceptance NOT met), RSM wall treatment and wall reflection (walls are refused; the channel stress budget C7 and the swirl benchmark were not run), steady and energy-coupled RSM, full GGDH cross terms, omega-based pressure-strain, stress inlets. LRR-IP C2, Ce1, Ce2 and C_eps are unverified (docs/reference-data.md).
+  - note: PARTIAL (wave 20A): a Reynolds stress transport model exists, transient (piso/pimple) only. No gamma-family
+    transition model is delivered (T3A acceptance NOT met) and the swirl benchmark was not run.
+    - SCOPE (merged review): name the pressure-strain variants (linear, SSG, omega-based), wall-echo and solve-TKE
+      toggles, and the transition variants (algebraic and transport intermittency, crossflow transition, roughness
+      coupling).
+    - WAVE 20A (ADR 0032), PARTIAL: Reynolds stress transport model (turbulence.model = rsm) with SSG (default) or
+      LRR-IP pressure-strain, six stress equations plus epsilon, normal-stress generalised-gradient diffusion, stress
+      divergence coupled to momentum as an explicit body acceleration, plug-in interface, settings-tree keys
+      turbulence.rsm.pressure_strain and turbulence.coefficients.rsm.*, located errors; transient (piso/pimple) only.
+      - Verified to 1e-8 or better: term invariants, homogeneous-shear and isotropic-decay ODEs, the semi-implicit
+        update and the momentum source.
+      - Registered misses: k(t_end) < 1e3 k0 in homogeneous shear (k grows exponentially, ignored known_miss) and the
+        tree-vs-closed-form decay at 1e-6 (first-order time stepping and lagged periodic coupling, ignored known_miss,
+        corrected checks met).
+      - NOT delivered: any gamma-family transition model (T3A acceptance NOT met), RSM wall treatment and wall
+        reflection (walls are refused; the channel stress budget C7 and the swirl benchmark were not run), steady and
+        energy-coupled RSM, full GGDH cross terms, omega-based pressure-strain, stress inlets.
+      - LRR-IP C2, Ce1, Ce2 and C_eps are unverified (docs/reference-data.md).
 
 ## Phase 4 - Heat transfer and species
 
 - [x] **F-050** Energy equation (T / enthalpy), Boussinesq buoyancy, ideal-gas density
   - depends on: F-028
   - acceptance: Differentially heated cavity Nu matches de Vahl Davis for Ra=1e4..1e6 within 2 percent
-  - note: Wave 5. Acceptance met, scope partial. Implemented: rcfd-fv energy.rs (EnergySolver: steady T transport with the momentum convection/diffusion operators, thermal diffusivity k/(rho cp), optional turbulent diffusivity and volumetric source; wall gradient and conductive heat flow per patch; BuoyantSimple: SIMPLE/SIMPLEC coupled with the Boussinesq body force -beta (T - T_ref) g, balanced-force on faces). To make buoyancy balance at walls the SIMPLE pressure condition on prescribed-velocity boundaries now extrapolates the wall pressure with the gradient that balances the body force (fixed-flux pressure); this only changes runs with a body force acting normal to a wall. Effect, measured on the de Vahl Davis cavity: Ra=1e4 n=40 Nu error +1.77% -> +0.02%, Ra=1e5 n=64 +2.98% -> +0.07%; stably stratified fluid at rest: spurious face flux 0.54 -> 8e-4 (forcing ~3e3). Case wiring (steady simple/simplec only; piso/pimple with energy is a validation error): energy.enabled/buoyancy/relax, initial.temperature, boundaries.<patch>.temperature = zero_gradient | fixed | heat_flux with temperature_value / heat_flux_value (W/m^2 into the domain) or the expression forms (F-104), physics cp/conductivity/reference_temperature/thermal_expansion/gravity, field T (probe/average/min/max reports, VTU output), heat_flow reports (conductive, out of the domain, W), res_T monitor and convergence, mesh.grading now applies to box_2d (symmetric clustering). Validation (tests/natural_convection.rs, nondimensional H=1, alpha=1, Pr=0.71, vanLeer momentum+energy, SIMPLEC, residual < 1e-9, hot/cold wall flux balance < 1e-12): vs de Vahl Davis 1983 [REFERENCE VALUES TRANSCRIBED FROM MEMORY, see cases/heated_cavity/reference; the very close agreement at all four Ra suggests they are right but they were not checked against the paper]: Ra=1e3 32x32 graded 4:1: Nu 1.1167 (-0.11%), u_max 3.622 (-0.73%), v_max 3.678 (-0.52%); Ra=1e4 40x40 graded 4:1: Nu 2.2434 (+0.02%), u_max 16.163 (-0.09%), v_max 19.517 (-0.51%); Ra=1e5 48x48 graded 6:1: Nu 4.5228 (+0.08%), u_max 34.834 (+0.30%), v_max 68.187 (-0.59%); Ra=1e6 64x64 graded 8:1: Nu 8.8383 (+0.44%), u_max 64.834 (+0.32%), v_max 220.365 (+0.46%). Mesh refinement at Ra=1e5 (48/64/96): Nu 4.5228/4.5224/4.5220. The same Ra=1e3 case runs through the settings tree (rcfd-api test): 1087 iterations, Nu 1.1167. Not done (reason for partial): ideal-gas density and a total-enthalpy formulation (constant-cp temperature formulation only, no compressible coupling), buoyancy in the transient PISO/PIMPLE algorithms, viscous heating, radiation, temperature-dependent properties. The reconstructed cell-centre velocity of a fluid at rest still shows an O(h) error next to non-wall boundaries (not measured further). Update: transient energy (implicit Euler/BDF2) and Boussinesq buoyancy with PISO/PIMPLE are done (BuoyantPimple; energy now accepted with piso/pimple in the case file; temperature advanced first on the previous flux, so the coupling is first order in dt). Checks fixed before running: slab conduction vs erfc (Euler error 1.78e-4 and 1.09e-4 for dt 2e-5 and 1e-5, ratio 1.63; BDF2 4.4e-5); Ra=1e4 cavity marched to steady state: Nu 2.2434 (de Vahl Davis 2.243), u_max 16.162 (16.178), v_max 19.516 (19.617), all within 2 percent, Nu equal to the steady SIMPLEC value; stratified fluid at rest max |phi| 7e-15; Ra=1e3 case-file run with piso Nu 1.1167, wall flows balanced to 1e-6. Still not done: ideal-gas density and total enthalpy (the SIMPLE/PISO kernel is kinematic with no density anywhere, so variable density is a core rewrite), viscous heating, radiation, temperature-dependent properties and scalars with transient runs. Update (wave 10, ADR 0005): ideal-gas density and the total-enthalpy energy equation are done in the steady pressure-based variable-density SIMPLE/SIMPLEC kernel (rcfd-fv varden.rs; case switch fluid.density = ideal_gas, fluid.mode compressible | low_mach, constant or Sutherland viscosity, conductivity from Pr, stagnation inlets, nozzle_2d generator, docs/case-schema.md, rcfd-api tests/variable_density.rs; unsupported combinations are located diagnostics). The constant-density code path is untouched (baseline hashes of the existing solver runs identical). Checks written into the ADR before any run, all met: differentially heated cavity with large dT against Le Quere et al. 2005 (ESAIM M2AN 39, DOI 10.1051/m2an:2005027, Table 1 verified from the author's postprint), 96x96 graded 8, Ra=1e6, eps=0.6: constant properties Nu 8.8678 vs 8.85978 (+0.09 %, limit 1 %), P/P0 0.856023 vs 0.856338 (-0.037 %, limit 0.3 %); Sutherland Nu 8.7034 vs 8.6866 (+0.19 %), P/P0 0.924353 vs 0.924487 (-0.014 %); hot/cold heat flow imbalance below 1e-8 (limit 1e-6). Hydrostatic ideal-gas column H=8000 m: density error 3.8e-5 (isothermal, limit 1e-3) and 2.1e-5 (linear T, limit 2e-3), speed 2e-14, mass drift 1e-16. Constant-density limit: lid cavity max |u-u_old|/U 5.6e-12 (low_mach, limit 1e-4) and 1.3e-6 (compressible, limit 1e-3); Boussinesq limit Nu +0.045 % (limit 1 %). Disclosed: the hydrostatic tests use mu = 10 Pa s and k = 100 W/m/K (air values leave the conduction-driven column below round-off of the balanced face terms); the ADR Rayleigh-number formula had a g^2 typo, corrected before any validation run. Still not done: viscous heating, radiation, transient variable density, turbulence, species with variable density, non-orthogonal pressure correctors in the variable-density kernel. Update (wave 12, ADR 0009, checks and limits registered in the ADR before any transient code; never changed): transient variable density (implicit Euler and variable-step BDF2, Euler first step, SIMPLE-inner iterations per step, density time derivative in continuity, momentum and energy, transient Rhie-Chow defect, exact discrete mass balance) in the pressure-based kernel for the ideal gas (compressible and low_mach) and the real gas; viscous heating (viscous work div(tau.u) in the total enthalpy, dissipation in low_mach, switch energy.viscous_heating) and a volumetric heat_source; case file solver.algorithm = pimple, fluid.inner_iterations / inner_tolerance, energy.viscous_heating / heat_source, initial.velocity_expression_x/y/z (docs/case-schema.md, located validation errors). Steady results bit-identical (ideal nozzle hash, varden_* and baseline_hashes unchanged). Measured (release): T1 closed-box heating p error 2.9e-10 / 1.7e-10 (compressible Euler / BDF2) and 3.3e-12 / 4.8e-12 (low-Mach), mass 2e-15, |u| 4e-10 (limits 1e-6, 1e-11, 1e-8) PASS; T1r CO2 Peng-Robinson energy balance 1.2e-10 / 2.1e-10 (1e-6) PASS; T2 temporal order Euler 1.019 [0.90, 1.10], BDF2 1.989 [1.85, 2.15] PASS; T3 standing acoustic wave frequency error -0.13 % (1 %) and BDF2 amplitude ratio 0.99157 [0.98, 1.001] PASS, Euler order 0.922 [0.85, 1.15] PASS, BDF2 order 1.34 [1.80, 2.20] MISS (ignored t3c_order_bdf2_known_miss; post-hoc cause: a_P is the mean of the component diagonals and the one-cell-high symmetric strip inflates it, order 2.07 on a taller strip; not a gate); T4 differentially heated cavity (Le Quere Ra 1e6, eps 0.6, BDF2 dt 0.02 s, 20 s) Nu 8.8676 / 8.8681 vs 8.85978 (+0.09 %, limit 1 %), P/P0 0.856036 vs 0.856338 (-0.035 %, 0.3 %), heat-flow imbalance 5.3e-5 (2e-3), stationarity 4.8e-5 (1e-3) PASS (heavy, 590 s); T5 steady limit of the transient ADR 0005 a1 duct vs the steady kernel max dMach 6.0e-4 (2e-3) and dp/p0 1.9e-4 (5e-4) PASS, mass flow vs steady 1.64e-3 / 1.62e-3 (1e-3) and in/out 1.6e-5 (1e-6) MISS at 400 steps (ignored t5_..._mass_flow_known_miss; post-hoc 1200 steps would pass, in/out 5e-10); T6 Couette flow with viscous heating, compressible and low-Mach, both-isothermal and one-adiabatic wall: profile error 1.6e-4 of mu U^2/(2k) (limit 1 %), wall heat flow 1.00000 of the analytic value (1 %), switch-off dT 1e-10 K (1e-6 K) PASS; T7 case-file closed box p error 1.3e-10 (1e-6) and Couette 1.6e-4 (1 %) PASS. Kernel faults found by the checks and fixed: real-gas closed-domain mass shift (Newton with the true EOS); lagged boundary density of prescribed-velocity faces diverged for flow Courant number > 1 (now implicit upwind, transient compressible runs only); adiabatic-wall energy BC (steady kernel keeps its limitation unless viscous heating is on). Disclosed: tightened linear-solver tolerances in the kernel tests, compressible inner change floors near 1e-11, T6 first steps stop at the inner cap, the transient solver diverges from a start that contradicts an imposed velocity profile (T7 uses initial.velocity_expression). No shock-tube or choked transient benchmark is claimed. Still not done: radiation, turbulence and species with variable density, time-varying boundary expressions in variable-density runs, non-orthogonal pressure correctors in the variable-density kernel, adaptive time step. ADR 0010: the component-consistent diagonal (opt-in solver.component_diagonal = "corrected") brings the T3c BDF2 order on the one-cell-high acoustic strip to 2.08 (registered [1.80, 2.20]; 1.34 with the averaged diagonal, which stays the default); the T5 mass-flow limits then pass (9.3e-4, 9.2e-4 against 1e-3) but the in/out equality at 400 steps still misses (1.56e-5 against 1e-6). SCOPE (merged review): make viscous dissipation, pressure work, kinetic-energy and inlet-diffusion switches explicit sub-criteria. WAVE 30C (ADR 0061 A, crates/rcfd-fv/tests/validation_natural_convection.rs): three-mesh sequences per Rayleigh number against Table V of the 1983 paper (primary): finest-mesh Nu_avg errors -0.04, +0.07, +0.07, +0.33 percent at Ra 1e3, 1e4, 1e5, 1e6; u_max and v_max within 0.6 percent; Nu_max within 2 percent; observed order about 1 to 3, GCI(Nu) at most 0.13 percent. Ra 1e3 to 1e5 meet every registered check; Ra 1e6 misses two convergence checks (a non-converged 32 x 32 coarse mesh and a 0.04 percent non-monotone v_max), recorded as a_ra_1e6_known_miss. The acceptance (Nu within 2 percent for Ra 1e4 to 1e6) stays met with the status still partial for scope reasons. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Wave 5. Acceptance met, scope partial. In WAVE 30C, Ra 1e6 misses two convergence checks
+    (a_ra_1e6_known_miss) and the acceptance stays met. The audit of 2026-10-21 marks the item DONE on the acceptance
+    text as written; scope beyond it, and the caveats in the audit file, are not claimed.
+    - Implemented in rcfd-fv energy.rs:
+      - EnergySolver: steady T transport with the momentum convection/diffusion operators, thermal diffusivity k/(rho
+        cp), optional turbulent diffusivity and volumetric source.
+      - Wall gradient and conductive heat flow per patch.
+      - BuoyantSimple: SIMPLE/SIMPLEC coupled with the Boussinesq body force -beta (T - T_ref) g, balanced-force on
+        faces.
+    - To make buoyancy balance at walls, the SIMPLE pressure condition on prescribed-velocity boundaries now
+      extrapolates the wall pressure with the gradient that balances the body force (fixed-flux pressure). This only
+      changes runs with a body force acting normal to a wall.
+      - Effect, measured on the de Vahl Davis cavity: Ra=1e4 n=40 Nu error +1.77% -> +0.02%, Ra=1e5 n=64 +2.98% ->
+        +0.07%; stably stratified fluid at rest: spurious face flux 0.54 -> 8e-4 (forcing ~3e3).
+    - Case wiring (steady simple/simplec only; piso/pimple with energy is a validation error):
+      - energy.enabled/buoyancy/relax, initial.temperature.
+      - boundaries.<patch>.temperature = zero_gradient | fixed | heat_flux with temperature_value / heat_flux_value
+        (W/m^2 into the domain) or the expression forms (F-104).
+      - physics cp/conductivity/reference_temperature/thermal_expansion/gravity.
+      - field T (probe/average/min/max reports, VTU output), heat_flow reports (conductive, out of the domain, W), res_T
+        monitor and convergence.
+      - mesh.grading now applies to box_2d (symmetric clustering).
+    - Validation (tests/natural_convection.rs, nondimensional H=1, alpha=1, Pr=0.71, vanLeer momentum+energy, SIMPLEC,
+      residual < 1e-9, hot/cold wall flux balance < 1e-12) vs de Vahl Davis 1983 [REFERENCE VALUES TRANSCRIBED FROM
+      MEMORY, see cases/heated_cavity/reference; the very close agreement at all four Ra suggests they are right but
+      they were not checked against the paper]:
+      - Ra=1e3 32x32 graded 4:1: Nu 1.1167 (-0.11%), u_max 3.622 (-0.73%), v_max 3.678 (-0.52%).
+      - Ra=1e4 40x40 graded 4:1: Nu 2.2434 (+0.02%), u_max 16.163 (-0.09%), v_max 19.517 (-0.51%).
+      - Ra=1e5 48x48 graded 6:1: Nu 4.5228 (+0.08%), u_max 34.834 (+0.30%), v_max 68.187 (-0.59%).
+      - Ra=1e6 64x64 graded 8:1: Nu 8.8383 (+0.44%), u_max 64.834 (+0.32%), v_max 220.365 (+0.46%).
+      - Mesh refinement at Ra=1e5 (48/64/96): Nu 4.5228/4.5224/4.5220.
+      - The same Ra=1e3 case runs through the settings tree (rcfd-api test): 1087 iterations, Nu 1.1167.
+    - Not done (reason for partial): ideal-gas density and a total-enthalpy formulation (constant-cp temperature
+      formulation only, no compressible coupling), buoyancy in the transient PISO/PIMPLE algorithms, viscous heating,
+      radiation, temperature-dependent properties.
+    - The reconstructed cell-centre velocity of a fluid at rest still shows an O(h) error next to non-wall boundaries
+      (not measured further).
+    - Update: transient energy (implicit Euler/BDF2) and Boussinesq buoyancy with PISO/PIMPLE are done (BuoyantPimple;
+      energy now accepted with piso/pimple in the case file; temperature advanced first on the previous flux, so the
+      coupling is first order in dt).
+      - Checks fixed before running:
+        - Slab conduction vs erfc (Euler error 1.78e-4 and 1.09e-4 for dt 2e-5 and 1e-5, ratio 1.63; BDF2 4.4e-5).
+        - Ra=1e4 cavity marched to steady state: Nu 2.2434 (de Vahl Davis 2.243), u_max 16.162 (16.178), v_max 19.516
+          (19.617), all within 2 percent, Nu equal to the steady SIMPLEC value.
+        - Stratified fluid at rest max |phi| 7e-15.
+        - Ra=1e3 case-file run with piso Nu 1.1167, wall flows balanced to 1e-6.
+      - Still not done: ideal-gas density and total enthalpy (the SIMPLE/PISO kernel is kinematic with no density
+        anywhere, so variable density is a core rewrite), viscous heating, radiation, temperature-dependent properties
+        and scalars with transient runs.
+    - Update (wave 10, ADR 0005): ideal-gas density and the total-enthalpy energy equation are done in the steady
+      pressure-based variable-density SIMPLE/SIMPLEC kernel (rcfd-fv varden.rs; case switch fluid.density = ideal_gas,
+      fluid.mode compressible | low_mach, constant or Sutherland viscosity, conductivity from Pr, stagnation inlets,
+      nozzle_2d generator, docs/case-schema.md, rcfd-api tests/variable_density.rs; unsupported combinations are located
+      diagnostics). The constant-density code path is untouched (baseline hashes of the existing solver runs identical).
+      - Checks written into the ADR before any run, all met:
+        - Differentially heated cavity with large dT against Le Quere et al. 2005 (ESAIM M2AN 39, DOI
+          10.1051/m2an:2005027, Table 1 verified from the author's postprint), 96x96 graded 8, Ra=1e6, eps=0.6: constant
+          properties Nu 8.8678 vs 8.85978 (+0.09 %, limit 1 %), P/P0 0.856023 vs 0.856338 (-0.037 %, limit 0.3 %);
+          Sutherland Nu 8.7034 vs 8.6866 (+0.19 %), P/P0 0.924353 vs 0.924487 (-0.014 %); hot/cold heat flow imbalance
+          below 1e-8 (limit 1e-6).
+        - Hydrostatic ideal-gas column H=8000 m: density error 3.8e-5 (isothermal, limit 1e-3) and 2.1e-5 (linear T,
+          limit 2e-3), speed 2e-14, mass drift 1e-16.
+        - Constant-density limit: lid cavity max |u-u_old|/U 5.6e-12 (low_mach, limit 1e-4) and 1.3e-6 (compressible,
+          limit 1e-3); Boussinesq limit Nu +0.045 % (limit 1 %).
+      - Disclosed: the hydrostatic tests use mu = 10 Pa s and k = 100 W/m/K (air values leave the conduction-driven
+        column below round-off of the balanced face terms); the ADR Rayleigh-number formula had a g^2 typo, corrected
+        before any validation run.
+      - Still not done: viscous heating, radiation, transient variable density, turbulence, species with variable
+        density, non-orthogonal pressure correctors in the variable-density kernel.
+    - Update (wave 12, ADR 0009, checks and limits registered in the ADR before any transient code; never changed):
+      - Transient variable density (implicit Euler and variable-step BDF2, Euler first step, SIMPLE-inner iterations per
+        step, density time derivative in continuity, momentum and energy, transient Rhie-Chow defect, exact discrete
+        mass balance) in the pressure-based kernel for the ideal gas (compressible and low_mach) and the real gas.
+      - Viscous heating (viscous work div(tau.u) in the total enthalpy, dissipation in low_mach, switch
+        energy.viscous_heating) and a volumetric heat_source.
+      - Case file solver.algorithm = pimple, fluid.inner_iterations / inner_tolerance, energy.viscous_heating /
+        heat_source, initial.velocity_expression_x/y/z (docs/case-schema.md, located validation errors).
+      - Steady results bit-identical (ideal nozzle hash, varden_* and baseline_hashes unchanged).
+      - Measured (release):
+        - T1 closed-box heating p error 2.9e-10 / 1.7e-10 (compressible Euler / BDF2) and 3.3e-12 / 4.8e-12 (low-Mach),
+          mass 2e-15, |u| 4e-10 (limits 1e-6, 1e-11, 1e-8) PASS.
+        - T1r CO2 Peng-Robinson energy balance 1.2e-10 / 2.1e-10 (1e-6) PASS.
+        - T2 temporal order Euler 1.019 [0.90, 1.10], BDF2 1.989 [1.85, 2.15] PASS.
+        - T3 standing acoustic wave frequency error -0.13 % (1 %) and BDF2 amplitude ratio 0.99157 [0.98, 1.001] PASS,
+          Euler order 0.922 [0.85, 1.15] PASS, BDF2 order 1.34 [1.80, 2.20] MISS (ignored t3c_order_bdf2_known_miss;
+          post-hoc cause: a_P is the mean of the component diagonals and the one-cell-high symmetric strip inflates it,
+          order 2.07 on a taller strip; not a gate).
+        - T4 differentially heated cavity (Le Quere Ra 1e6, eps 0.6, BDF2 dt 0.02 s, 20 s) Nu 8.8676 / 8.8681 vs 8.85978
+          (+0.09 %, limit 1 %), P/P0 0.856036 vs 0.856338 (-0.035 %, 0.3 %), heat-flow imbalance 5.3e-5 (2e-3),
+          stationarity 4.8e-5 (1e-3) PASS (heavy, 590 s).
+        - T5 steady limit of the transient ADR 0005 a1 duct vs the steady kernel max dMach 6.0e-4 (2e-3) and dp/p0
+          1.9e-4 (5e-4) PASS, mass flow vs steady 1.64e-3 / 1.62e-3 (1e-3) and in/out 1.6e-5 (1e-6) MISS at 400 steps
+          (ignored t5_..._mass_flow_known_miss; post-hoc 1200 steps would pass, in/out 5e-10).
+        - T6 Couette flow with viscous heating, compressible and low-Mach, both-isothermal and one-adiabatic wall:
+          profile error 1.6e-4 of mu U^2/(2k) (limit 1 %), wall heat flow 1.00000 of the analytic value (1 %),
+          switch-off dT 1e-10 K (1e-6 K) PASS.
+        - T7 case-file closed box p error 1.3e-10 (1e-6) and Couette 1.6e-4 (1 %) PASS.
+      - Kernel faults found by the checks and fixed: real-gas closed-domain mass shift (Newton with the true EOS);
+        lagged boundary density of prescribed-velocity faces diverged for flow Courant number > 1 (now implicit upwind,
+        transient compressible runs only); adiabatic-wall energy BC (steady kernel keeps its limitation unless viscous
+        heating is on).
+      - Disclosed: tightened linear-solver tolerances in the kernel tests, compressible inner change floors near 1e-11,
+        T6 first steps stop at the inner cap, the transient solver diverges from a start that contradicts an imposed
+        velocity profile (T7 uses initial.velocity_expression).
+      - No shock-tube or choked transient benchmark is claimed.
+      - Still not done: radiation, turbulence and species with variable density, time-varying boundary expressions in
+        variable-density runs, non-orthogonal pressure correctors in the variable-density kernel, adaptive time step.
+    - ADR 0010: the component-consistent diagonal (opt-in solver.component_diagonal = "corrected") brings the T3c BDF2
+      order on the one-cell-high acoustic strip to 2.08 (registered [1.80, 2.20]; 1.34 with the averaged diagonal, which
+      stays the default). The T5 mass-flow limits then pass (9.3e-4, 9.2e-4 against 1e-3) but the in/out equality at 400
+      steps still misses (1.56e-5 against 1e-6).
+    - SCOPE (merged review): make viscous dissipation, pressure work, kinetic-energy and inlet-diffusion switches
+      explicit sub-criteria.
+    - WAVE 30C (ADR 0061 A, crates/rcfd-fv/tests/validation_natural_convection.rs): three-mesh sequences per Rayleigh
+      number against Table V of the 1983 paper (primary).
+      - Finest-mesh Nu_avg errors -0.04, +0.07, +0.07, +0.33 percent at Ra 1e3, 1e4, 1e5, 1e6; u_max and v_max within
+        0.6 percent; Nu_max within 2 percent; observed order about 1 to 3, GCI(Nu) at most 0.13 percent.
+      - Ra 1e3 to 1e5 meet every registered check; Ra 1e6 misses two convergence checks (a non-converged 32 x 32 coarse
+        mesh and a 0.04 percent non-monotone v_max), recorded as a_ra_1e6_known_miss.
+      - The acceptance (Nu within 2 percent for Ra 1e4 to 1e6) stays met with the status still partial for scope
+        reasons.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-051** Conjugate heat transfer: solid zones, coupled interfaces, thermal BCs (T, flux, convection)
   - depends on: F-050
   - acceptance: 1D slab+fluid analytic CHT test within 1 percent
-  - note: PARTIAL (wave 17B, ADR 0024; acceptance text met with a PRESCRIBED flow). Delivered: solid cell zones (box, cell_zone, register, all) with own conductivity, density and specific heat (constant, isotropic), distance-weighted harmonic face conductivity and capacity-weighted time term in the conductive form of the temperature equation; conforming and non-conformal (channel_2d_interface) fluid-solid and solid-solid interfaces with optional contact resistance (thermal_interfaces); boundary conditions fixed T, heat flux (per-face owner conductivity) and the new temperature = convection (heat-transfer coefficient with free-stream temperature, steady thin-wall layer resistance, radiation to an ambient); steady and transient (euler, bdf2) energy solves; volumetric heat in a solid through zone_sources; heat_flow reports with per-face conductivity. Measured (limits as registered): 1-D slab/composite wall and convection BC to 1e-13 dT; interface flux continuity 1e-12; zone energy balance 1e-13 (warped mesh 7e-15); transient two-solid contact vs erfc 1.6e-4 at N=640 (order 2.0); non-conformal composite wall 3.2e-5 dT; fluid-solid duct with an analytic Nusselt number (Nu = 140/17 derived) 1.2e-5 at n_f=32 (acceptance: within 1 percent), observed order 2.0; fin 3.3e-4. Missing (why partial): (1) a solved flow coupled to the solid is delivered in wave 19A only for solver.algorithm = coupled (steady, laminar, constant properties; ADR 0029): solid cells are excluded from the pressure-velocity system, no Rhie-Chow leak (flux exactly 0.0 on solid faces), duct with a solved parabolic flow gives Nu 8.2367 vs 140/17 (1.7e-4), dT_tot error 1.5e-4, energy balances 3e-11 (the registered solid-zone form missed at 2.6e-5 because it omitted end conduction; kept as ignored known-miss test); cavity with k_s = 1e4 walls agrees with the no-solid cavity to 2.5e-5 (consistency check only, no finite-wall benchmark verified); the segregated and transient algorithms still require solver.frozen_flow = true; (2) temperature-dependent and orthotropic solid conductivity (F-220); (3) thermal capacity of thin or shell walls (steady resistance only); (4) expression forms of the convection keys; (5) surface-to-surface radiation. Solids are rejected (located errors) with property laws, radiation, turbulence, compressible, components, rheology, user functions; coupled and buoyancy only with a prescribed flow, buoyancy-driven solved flow is available with coupled. Evidence for F-215 (contact resistance E1 1.4e-14, thin wall = resolved layers E2 1.9e-14) is recorded in ADR 0024; F-215 itself is not marked done. Previous scope text: SCOPE (merged review): add shell and thin-wall conduction with layers, contact resistance, mapped non-matching coupled interfaces and mixed thermal boundary conditions (see F-215), with an analytic composite-wall test. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: PARTIAL (wave 17B, ADR 0024; acceptance text met with a PRESCRIBED flow). The audit of 2026-10-21 marks the
+    item DONE on the acceptance text as written; scope beyond it, and the caveats in the audit file, are not claimed.
+    - Delivered:
+      - Solid cell zones (box, cell_zone, register, all) with own conductivity, density and specific heat (constant,
+        isotropic), distance-weighted harmonic face conductivity and capacity-weighted time term in the conductive form
+        of the temperature equation.
+      - Conforming and non-conformal (channel_2d_interface) fluid-solid and solid-solid interfaces with optional contact
+        resistance (thermal_interfaces).
+      - Boundary conditions fixed T, heat flux (per-face owner conductivity) and the new temperature = convection
+        (heat-transfer coefficient with free-stream temperature, steady thin-wall layer resistance, radiation to an
+        ambient).
+      - Steady and transient (euler, bdf2) energy solves.
+      - Volumetric heat in a solid through zone_sources.
+      - heat_flow reports with per-face conductivity.
+    - Measured (limits as registered):
+      - 1-D slab/composite wall and convection BC to 1e-13 dT.
+      - Interface flux continuity 1e-12.
+      - Zone energy balance 1e-13 (warped mesh 7e-15).
+      - Transient two-solid contact vs erfc 1.6e-4 at N=640 (order 2.0).
+      - Non-conformal composite wall 3.2e-5 dT.
+      - Fluid-solid duct with an analytic Nusselt number (Nu = 140/17 derived) 1.2e-5 at n_f=32 (acceptance: within 1
+        percent), observed order 2.0.
+      - Fin 3.3e-4.
+    - Missing (why partial):
+      - (1) A solved flow coupled to the solid is delivered in wave 19A only for solver.algorithm = coupled (steady,
+        laminar, constant properties; ADR 0029):
+        - Solid cells are excluded from the pressure-velocity system, no Rhie-Chow leak (flux exactly 0.0 on solid
+          faces).
+        - Duct with a solved parabolic flow gives Nu 8.2367 vs 140/17 (1.7e-4), dT_tot error 1.5e-4, energy balances
+          3e-11 (the registered solid-zone form missed at 2.6e-5 because it omitted end conduction; kept as ignored
+          known-miss test).
+        - Cavity with k_s = 1e4 walls agrees with the no-solid cavity to 2.5e-5 (consistency check only, no finite-wall
+          benchmark verified).
+        - The segregated and transient algorithms still require solver.frozen_flow = true.
+      - (2) Temperature-dependent and orthotropic solid conductivity (F-220).
+      - (3) Thermal capacity of thin or shell walls (steady resistance only).
+      - (4) Expression forms of the convection keys.
+      - (5) Surface-to-surface radiation.
+    - Solids are rejected (located errors) with property laws, radiation, turbulence, compressible, components,
+      rheology, user functions; coupled and buoyancy only with a prescribed flow, buoyancy-driven solved flow is
+      available with coupled.
+    - Evidence for F-215 (contact resistance E1 1.4e-14, thin wall = resolved layers E2 1.9e-14) is recorded in
+      ADR 0024; F-215 itself is not marked done.
+    - Previous scope text: SCOPE (merged review): add shell and thin-wall conduction with layers, contact resistance,
+      mapped non-matching coupled interfaces and mixed thermal boundary conditions (see F-215), with an analytic
+      composite-wall test.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-052** Radiation: P1, surface-to-surface with view factors, discrete ordinates
   - depends on: F-050
   - acceptance: P1 grey slab matches the analytic P1 solution (1e-3) and the exact transport limits: optically thin two-plate exchange and the thick Milne asymptote (1 percent)
-  - note: Partial (wave 12, ADR 0012, rcfd-api tests/radiation.rs). Delivered: grey P1 incident-radiation model with Marshak boundary conditions coupled to the steady energy equation (rcfd-fv radiation.rs, radiation.model = p1, wall emissivity, field G, radiative wall heat flow). Gray plate benchmark vs the analytic P1 solution: worst 2.6e-9 (limit 1e-3) for tau 0.1 to 10, unequal emissivities and scattering; energy balance 2e-12; absorbed power balance 3e-13. Not done: surface-to-surface with view factors, discrete ordinates, a true gray-enclosure benchmark with view factors; transient and ideal-gas runs. SCOPE (merged review): this item delivers P1 only; remaining radiation models are tracked in F-130. WAVE 39E (ADR 0096, rcfd-api tests/radiation.rs r6): optically thin limit added; at tau = 1e-4 the P1 slab wall flux matches the exact two-plate grey exchange sigma (T1^4 - T2^4) / (1/eps1 + 1/eps2 - 1) of a non-participating medium within 7.5e-5 (black walls) and 3.3e-5 (eps 0.8/0.5), limit 1e-3 (the deviation is the P1 0.75 tau term). This verifies the Marshak and emissivity treatment against an exact transport limit, not P1 accuracy at intermediate tau. Still partial: no grey enclosure with view factors; S2S and discrete ordinates stay in F-130. Proposed rewording in ADR 0096 (not applied): P1 grey slab matches the analytic P1 solution (1e-3) and the exact transport limits, optically thin two-plate exchange and thick Milne asymptote (1 percent). USER DECISION 2026-10-21: acceptance reworded (ADR 0096 proposal). Optically thin limit measured (7.5e-5 / 3.3e-5 vs 1e-3). Still partial until the thick Milne asymptote is shown within 1 percent by a non-ignored test; S2S and discrete ordinates stay in F-130. WAVE 41A (ADR 0101, radiation.rs r7): DONE. Black-walled slab at tau = 50: Psi 0.025974 against the Milne asymptote 4/(3 tau + 6 q_inf) = 0.025930, 0.170 % (limit 1 %), equal to the predicted P1 gap (6 q_inf - 4)/(3 tau + 4). ADR 0101 derives the Milne and P1 slab forms. The 'still partial until shown' above was stale: R2 (tau = 20, 0.41 %, non-ignored) already met the clause. With R1 (2.6e-9 of 1e-3) and R6 (7.5e-5 / 3.3e-5 of 1e-3) the reworded acceptance is met by non-ignored tests. q_inf = 0.7104 is from docs/reference-data.md (verified in wave 13); the 1 % limit at tau = 50 holds for any q_inf below 0.923. S2S and discrete ordinates stay in F-130.
+  - note: WAVE 41A (ADR 0101) marks the item DONE: the reworded acceptance is met by non-ignored tests. The item
+    delivers P1 only; S2S and discrete ordinates stay in F-130.
+    - Partial (wave 12, ADR 0012, rcfd-api tests/radiation.rs).
+      - Delivered: grey P1 incident-radiation model with Marshak boundary conditions coupled to the steady energy
+        equation (rcfd-fv radiation.rs, radiation.model = p1, wall emissivity, field G, radiative wall heat flow).
+      - Grey plate benchmark vs the analytic P1 solution: worst 2.6e-9 (limit 1e-3) for tau 0.1 to 10, unequal
+        emissivities and scattering; energy balance 2e-12; absorbed power balance 3e-13.
+      - Not done: surface-to-surface with view factors, discrete ordinates, a true grey-enclosure benchmark with view
+        factors; transient and ideal-gas runs.
+    - SCOPE (merged review): this item delivers P1 only; remaining radiation models are tracked in F-130.
+    - WAVE 39E (ADR 0096, rcfd-api tests/radiation.rs r6): optically thin limit added. At tau = 1e-4 the P1 slab wall
+      flux matches the exact two-plate grey exchange sigma (T1^4 - T2^4) / (1/eps1 + 1/eps2 - 1) of a non-participating
+      medium within 7.5e-5 (black walls) and 3.3e-5 (eps 0.8/0.5), limit 1e-3 (the deviation is the P1 0.75 tau term).
+      - This verifies the Marshak and emissivity treatment against an exact transport limit, not P1 accuracy at
+        intermediate tau.
+      - Still partial: no grey enclosure with view factors; S2S and discrete ordinates stay in F-130.
+      - Proposed rewording in ADR 0096 (not applied): P1 grey slab matches the analytic P1 solution (1e-3) and the
+        exact transport limits, optically thin two-plate exchange and thick Milne asymptote (1 percent).
+    - USER DECISION 2026-10-21: acceptance reworded (ADR 0096 proposal). Optically thin limit measured (7.5e-5 / 3.3e-5
+      vs 1e-3). Still partial until the thick Milne asymptote is shown within 1 percent by a non-ignored test; S2S and
+      discrete ordinates stay in F-130.
+    - WAVE 41A (ADR 0101, radiation.rs r7): DONE.
+      - Black-walled slab at tau = 50: Psi 0.025974 against the Milne asymptote 4/(3 tau + 6 q_inf) = 0.025930, 0.170 %
+        (limit 1 %), equal to the predicted P1 gap (6 q_inf - 4)/(3 tau + 4). ADR 0101 derives the Milne and P1 slab
+        forms.
+      - The 'still partial until shown' above was stale: R2 (tau = 20, 0.41 %, non-ignored) already met the clause.
+      - With R1 (2.6e-9 of 1e-3) and R6 (7.5e-5 / 3.3e-5 of 1e-3) the reworded acceptance is met by non-ignored tests.
+      - q_inf = 0.7104 is from docs/reference-data.md (verified in wave 13); the 1 % limit at tau = 50 holds for any
+        q_inf below 0.923.
+      - S2S and discrete ordinates stay in F-130.
 - [x] **F-053** Passive scalar and multicomponent species transport; temperature-dependent properties (polynomial, Sutherland)
   - depends on: F-050
   - acceptance: Mixing layer species mass conserved to machine precision
-  - note: Done. rcfd-fv scalar.rs: one shared implicit scalar sweep (EnergySolver::iterate now calls it, no duplicated assembly), ScalarTransport, SpeciesSet (N-1 transported mass fractions, balance species by difference), exact discrete boundary_flux per patch; rcfd-core materials.rs PropertyLaw (constant, polynomial, Sutherland); api: scalars.<name>, species.<name> (diffusivity or Schmidt number, source, per-patch fixed/gradient with expression profiles), properties.viscosity/conductivity/specific_heat (T-dependent via the nu_face and alpha_face paths; conflicts with rheology, UDF viscosity, turbulence, missing energy, non-steady algorithms diagnosed), reports scalar_flux/scalar_average, res_<name> monitors, VTU fields, solver.pressure_abs_tol. Validation (checks fixed beforehand): mixing layer of two streams, 3 species with different diffusivities (one via Schmidt number), 100x50: net boundary outflow per species relative to summed boundary fluxes A -3.7e-16, B -3.5e-16, balance species C -8.7e-17 (limit 1e-12), mass fractions sum to 1 within 1.1e-16 (limit 1e-14), similarity-solution profile error 0.66 percent of the jump (limit 2); fv-level run on the frozen uniform flux 3e-15 and 0.11 percent. Couette flow with polynomial viscosity (b=2): max |u - ln(1+by)/ln(1+b)| 2.8e-4 U (limit 1 percent), Sc=1 scalar equals u to 1.9e-9 (limit 1e-6); conduction with k(T) vs Kirchhoff transform: T error 1.7e-4 of range (limit 0.2 percent), heat flow 0.374967 vs 0.375 (limit 0.5 percent). Finding and fix: the pressure BC test for prescribed normal velocity compared a = 1 - n^2 to exactly 0, so on some meshes symmetry planes leaked mass (0.17 percent of the through-flow on a 100x50 channel); now a tolerance 1e-12. Balance-species conservation equals the flow solver's continuity error, so it needs solver.pressure_abs_tol (default floor gave about 1e-11). Caveats: constant density (no ideal-gas density), constant per-species diffusivity (no multicomponent diffusion), no reactions, steady algorithms only; the Sutherland constants are user inputs, no data shipped (see F-111).
+  - note: Done. Caveats: constant density (no ideal-gas density), constant per-species diffusivity (no multicomponent
+    diffusion), no reactions, steady algorithms only; the Sutherland constants are user inputs, no data shipped (see
+    F-111).
+    - rcfd-fv scalar.rs: one shared implicit scalar sweep (EnergySolver::iterate now calls it, no duplicated assembly),
+      ScalarTransport, SpeciesSet (N-1 transported mass fractions, balance species by difference), exact discrete
+      boundary_flux per patch.
+    - rcfd-core materials.rs: PropertyLaw (constant, polynomial, Sutherland).
+    - api:
+      - scalars.<name>, species.<name> (diffusivity or Schmidt number, source, per-patch fixed/gradient with expression
+        profiles).
+      - properties.viscosity/conductivity/specific_heat (T-dependent via the nu_face and alpha_face paths; conflicts
+        with rheology, UDF viscosity, turbulence, missing energy, non-steady algorithms diagnosed).
+      - reports scalar_flux/scalar_average, res_<name> monitors, VTU fields, solver.pressure_abs_tol.
+    - Validation (checks fixed beforehand):
+      - Mixing layer of two streams, 3 species with different diffusivities (one via Schmidt number), 100x50: net
+        boundary outflow per species relative to summed boundary fluxes A -3.7e-16, B -3.5e-16, balance species C
+        -8.7e-17 (limit 1e-12), mass fractions sum to 1 within 1.1e-16 (limit 1e-14), similarity-solution profile error
+        0.66 percent of the jump (limit 2); fv-level run on the frozen uniform flux 3e-15 and 0.11 percent.
+      - Couette flow with polynomial viscosity (b=2): max |u - ln(1+by)/ln(1+b)| 2.8e-4 U (limit 1 percent), Sc=1 scalar
+        equals u to 1.9e-9 (limit 1e-6).
+      - Conduction with k(T) vs Kirchhoff transform: T error 1.7e-4 of range (limit 0.2 percent), heat flow 0.374967 vs
+        0.375 (limit 0.5 percent).
+    - Finding and fix: the pressure BC test for prescribed normal velocity compared a = 1 - n^2 to exactly 0, so on some
+      meshes symmetry planes leaked mass (0.17 percent of the through-flow on a 100x50 channel); now a tolerance 1e-12.
+    - Balance-species conservation equals the flow solver's continuity error, so it needs solver.pressure_abs_tol
+      (default floor gave about 1e-11).
 - [~] **F-054** Finite-rate and eddy-dissipation combustion with CHEMKIN-format reduced mechanism reader
   - depends on: F-053
   - acceptance: Methane one-step jet flame temperature within published band
-  - note: SCOPE (merged review): add eddy-dissipation-concept and thickened-flame models as sub-criteria; mechanism input formats in F-224, pollutants in F-222. PARTIAL (wave 18B, ADR 0027). Delivered: top-level `chemistry` case section (docs/case-schema.md) with finite-rate kinetics from a CHEMKIN mechanism through the stiff cell integrator of the 0D toolkit, eddy-dissipation (A=4, B=0.5 UNVERIFIED), finite-rate/eddy-dissipation minimum and EDC (C_xi 2.1377, C_tau 0.4082 secondary source) closures, heat release coupled to the energy equation with constant cp; transient Lie operator splitting and steady source-term form, incompressible constant-density flow only. Measured: cell steps equal the toolkit to 3e-9 DeltaT, closed-box case equals the cell integration to 7e-14 DeltaT_ad, adiabatic flame temperature 1149.43387854 K = hand value (case error 6e-12 K), element conservation 3e-14, plug-flow decay discrete solution to 5e-6 and upwind order 0.94/0.97, linear_upwind order 1.95, steady heat release enthalpy balance 3.8e-9 K, eddy-dissipation hand formula exact, EDC scales to 1e-12, splitting-vs-steady order 0.97/0.98. NOT met (reason for partial): the acceptance (methane one-step jet flame temperature within a published band) is not attempted: constant density only (no compressible or variable-density species), no published flame reference verified, constants unverified or secondary, no thickened-flame model, sequential cell loop, no tabulation, first-order splitting. Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1. WAVE 21C (ADR 0037): the chemistry was already advanced by Simulation::step; wave 21C proves it through the real rcfd binary and the service (fields bit-identical to the in-process run for the closed-box case and the K4 plug flow) and adds chemistry.json (species statistics, mass-fraction sum, temperature range, element moles) and the opt-in chemistry.write_rates cell arrays wdot_<species> and heat_release_rate. One number of the ADR text missed (a misquoted 5e-6 for the K4 discrete-solution deviation: measured 5.248e-6 against the K4a limit 1e-5; ignored known-miss test kept). The published flame acceptance is still not attempted and the constants are still unverified or secondary.
+  - note: PARTIAL. The published flame acceptance is still not attempted and the constants are still unverified or
+    secondary (WAVE 21C).
+    - SCOPE (merged review): add eddy-dissipation-concept and thickened-flame models as sub-criteria; mechanism input
+      formats in F-224, pollutants in F-222.
+    - PARTIAL (wave 18B, ADR 0027).
+      - Delivered: top-level `chemistry` case section (docs/case-schema.md) with finite-rate kinetics from a CHEMKIN
+        mechanism through the stiff cell integrator of the 0D toolkit, eddy-dissipation (A=4, B=0.5 UNVERIFIED),
+        finite-rate/eddy-dissipation minimum and EDC (C_xi 2.1377, C_tau 0.4082 secondary source) closures, heat release
+        coupled to the energy equation with constant cp; transient Lie operator splitting and steady source-term form,
+        incompressible constant-density flow only.
+      - Measured:
+        - Cell steps equal the toolkit to 3e-9 DeltaT.
+        - Closed-box case equals the cell integration to 7e-14 DeltaT_ad.
+        - Adiabatic flame temperature 1149.43387854 K = hand value (case error 6e-12 K).
+        - Element conservation 3e-14.
+        - Plug-flow decay discrete solution to 5e-6 and upwind order 0.94/0.97, linear_upwind order 1.95.
+        - Steady heat release enthalpy balance 3.8e-9 K.
+        - Eddy-dissipation hand formula exact, EDC scales to 1e-12, splitting-vs-steady order 0.97/0.98.
+      - NOT met (reason for partial): the acceptance (methane one-step jet flame temperature within a published band) is
+        not attempted: constant density only (no compressible or variable-density species), no published flame reference
+        verified, constants unverified or secondary, no thickened-flame model, sequential cell loop, no tabulation,
+        first-order splitting.
+      - Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results
+        section and addendum A1.
+    - WAVE 21C (ADR 0037): the chemistry was already advanced by Simulation::step. Wave 21C proves it through the
+      real rcfd binary and the service (fields bit-identical to the in-process run for the closed-box case and the K4
+      plug flow).
+      - It adds chemistry.json (species statistics, mass-fraction sum, temperature range, element moles) and the opt-in
+        chemistry.write_rates cell arrays wdot_<species> and heat_release_rate.
+      - One number of the ADR text missed (a misquoted 5e-6 for the K4 discrete-solution deviation: measured 5.248e-6
+        against the K4a limit 1e-5; ignored known-miss test kept).
+      - The published flame acceptance is still not attempted and the constants are still unverified or secondary.
 
 ## Phase 5 - Compressible flow
 
 - [x] **F-060** Density-based compressible solver (HLLC/Roe/AUSM, MUSCL, explicit RK plus implicit option)
   - depends on: F-022, F-024
   - acceptance: Sod shock tube L1 error vs exact; 2D oblique shock angle within 1 percent
-  - note: Explicit density-based Euler solver on polyhedral meshes (rcfd-fv compressible.rs, riemann.rs): Rusanov, Roe (Harten entropy fix), HLLC, AUSM+; MUSCL on primitives with TVD limiters (unstructured r-ratio form); Euler/SSP-RK2/SSP-RK3; slip, extrapolation and fixed-state BCs; exact Riemann solver (Toro ch. 4) and theta-beta-M relation for references. Sod (gamma 1.4, t=0.2, HLLC+vanLeer+RK3) density L1 vs exact: 5.30e-3, 2.82e-3, 1.57e-3 at n=100/200/400 (order 0.91, 0.84); n=200 density L1 for Rusanov 3.65e-3, Roe 2.64e-3, HLLC 2.82e-3, AUSM+ 2.44e-3, first-order HLLC 1.33e-2; mass/energy conserved to 1e-12. Oblique shock (M=2, 10 deg ramp, 100x35 cells, steady drift 8e-8): measured wave angle 39.324 deg vs theta-beta-M 39.314 deg (0.025 percent), post-shock pressure within 1e-4 of the theoretical ratio. Reference star-state values (p*=0.30313, u*=0.92745) verified in wave 6a against a published analytic Sod solution (arXiv:2108.01709) and beta=39.31 deg against an independent theta-beta-M solve (39.314 deg); the Toro Table 4.3 attribution is unconfirmed; the tests also check Rankine-Hugoniot consistency independently. NOT done: implicit time-integration option; Wave 6b: selectable from the case schema and service (solver.algorithm = compressible; compressible.flux, reconstruction, rk_order, cfl, gamma, gas_constant, mode transient|steady, steady_tolerance, initial uniform|riemann with left/right states; boundaries compressible_bc = slip|extrapolate|fixed with density_value/pressure_value/velocity_value; mesh generator wedge_2d with ramp_start/ramp_angle; fields rho, p, T, mach, ux..; examples cases/sod/sod.toml and cases/wedge/wedge.toml). Sod through the settings tree reproduces the library run to 1e-13 (172 steps at n=100) and gives density L1 5.302e-3 against the exact solution; the 60x20 wedge example peaks at p = 1.2496 (free stream 0.714) and conserves the inflow mass flux to 1e-9. Unsupported combinations are validate errors with line numbers (forward Euler with a limiter, turbulence, energy, pseudo-transient, periodic meshes, force/moment/heat-flow/y+ reports, bad fixed state). Residual semantics: res_u = max relative density change per step, res_p = relative pressure change, continuity = relative mass drift; transient runs do not converge to zero. AUSM+/Roe are only validated on Sod, not on the wedge. Heavy 200x70 wedge test is ignored by default. WAVE 31A (ADR 0062): TvdLimiter::VanAlbada overflowed to NaN for gradient ratios above 1.34e154 (HLLC + Van Albada + RK3 aborted at step 1); fixed (r > 1e150 uses the algebraically identical (r + 1)/(r + 1/r), bit-identical below); the Sod HLLC + Van Albada + RK3 record now passes its registered limits (n = 800 L1 rho 8.87e-4, u 1.34e-3, p 5.28e-4, observed orders 0.9 to 1.1).
+  - note: Explicit density-based Euler solver on polyhedral meshes, selectable from the case schema and service since
+    wave 6b. NOT done: implicit time-integration option. AUSM+/Roe are only validated on Sod, not on the wedge.
+    - Solver (rcfd-fv compressible.rs, riemann.rs): Rusanov, Roe (Harten entropy fix), HLLC, AUSM+; MUSCL on primitives
+      with TVD limiters (unstructured r-ratio form); Euler/SSP-RK2/SSP-RK3; slip, extrapolation and fixed-state BCs;
+      exact Riemann solver (Toro ch. 4) and theta-beta-M relation for references.
+    - Sod (gamma 1.4, t=0.2, HLLC+vanLeer+RK3) density L1 vs exact: 5.30e-3, 2.82e-3, 1.57e-3 at n=100/200/400 (order
+      0.91, 0.84); n=200 density L1 for Rusanov 3.65e-3, Roe 2.64e-3, HLLC 2.82e-3, AUSM+ 2.44e-3, first-order HLLC
+      1.33e-2; mass/energy conserved to 1e-12.
+    - Oblique shock (M=2, 10 deg ramp, 100x35 cells, steady drift 8e-8): measured wave angle 39.324 deg vs theta-beta-M
+      39.314 deg (0.025 percent), post-shock pressure within 1e-4 of the theoretical ratio.
+    - Reference star-state values (p*=0.30313, u*=0.92745) verified in wave 6a against a published analytic Sod
+      solution (arXiv:2108.01709) and beta=39.31 deg against an independent theta-beta-M solve (39.314 deg). The Toro
+      Table 4.3 attribution is unconfirmed. The tests also check Rankine-Hugoniot consistency independently.
+    - NOT done: implicit time-integration option.
+    - Wave 6b: selectable from the case schema and service:
+      - solver.algorithm = compressible; compressible.flux, reconstruction, rk_order, cfl, gamma, gas_constant, mode
+        transient|steady, steady_tolerance, initial uniform|riemann with left/right states.
+      - boundaries compressible_bc = slip|extrapolate|fixed with density_value/pressure_value/velocity_value.
+      - mesh generator wedge_2d with ramp_start/ramp_angle.
+      - fields rho, p, T, mach, ux..
+      - examples cases/sod/sod.toml and cases/wedge/wedge.toml.
+      - Sod through the settings tree reproduces the library run to 1e-13 (172 steps at n=100) and gives density L1
+        5.302e-3 against the exact solution.
+      - The 60x20 wedge example peaks at p = 1.2496 (free stream 0.714) and conserves the inflow mass flux to 1e-9.
+      - Unsupported combinations are validate errors with line numbers (forward Euler with a limiter, turbulence,
+        energy, pseudo-transient, periodic meshes, force/moment/heat-flow/y+ reports, bad fixed state).
+      - Residual semantics: res_u = max relative density change per step, res_p = relative pressure change, continuity =
+        relative mass drift; transient runs do not converge to zero.
+      - AUSM+/Roe are only validated on Sod, not on the wedge.
+      - Heavy 200x70 wedge test is ignored by default.
+    - WAVE 31A (ADR 0062): TvdLimiter::VanAlbada overflowed to NaN for gradient ratios above 1.34e154 (HLLC + Van
+      Albada + RK3 aborted at step 1); fixed (r > 1e150 uses the algebraically identical (r + 1)/(r + 1/r),
+      bit-identical below). The Sod HLLC + Van Albada + RK3 record now passes its registered limits (n = 800 L1 rho
+      8.87e-4, u 1.34e-3, p 5.28e-4, observed orders 0.9 to 1.1).
 - [x] **F-061** Pressure-based compressible extension and EOS interface (ideal gas, real gas)
   - depends on: F-050, F-028
   - acceptance: Nozzle flow matches isentropic relations; choked mass flow within 1 percent
-  - note: Wave 10 (ideal gas) and real-gas wave (ADR 0007). Acceptance met for the ideal gas and for the real gas (Peng-Robinson CO2). Pressure-based compressible extension: rcfd-fv varden.rs (ADR 0005), fluid.density = ideal_gas, fluid.mode = compressible with a stagnation inlet. Checks written into the ADR before any run: quasi-1-D converging-duct (subsonic, throat Mach 0.3, 200x10 cells, linear upwind, SIMPLEC): column Mach error 7.3e-4 (limit 1.5e-2), p/p0 5.1e-5 (5e-3), T/T0 2.2e-5 (3e-3), mass flow vs the isentropic value -7.6e-4 at inlet and outlet (limit 1e-2), inlet/outlet equality 4.8e-13. Choked converging-diverging nozzle (240x12, exit Mach 1.854, supersonic branch, p_e/p0 = 0.1602): Mach error 9.2e-4 (limit 3e-2), p/p0 1.3e-3 (2e-2), choked mass flow vs A* p0 sqrt(gamma/(R T0)) (2/(gamma+1))^((gamma+1)/(2(gamma-1))) -4.05e-4 at inlet and outlet (acceptance limit 1 percent), in/out 2e-14. Deviation: the choked case needs under-relaxation 0.7/0.5/0.7 (defaults 0.9/1.0/0.9 diverged when the supersonic region forms) and a back-pressure continuation start-up (0.98 p0 to p_e in 40 stages of 100 iterations, then 6000 iterations at p_e); starting at the mean pressure diverged. These start-up choices were not registered, the tolerances were not changed. Isentropic and area-Mach relations are standard textbook formulae. The choked test is heavy (about 80 s release, #[ignore]). Caveats: steady and laminar only, no shock capturing beyond what the first/second-order upwind density gives (not tested), residual res_u floors at about 1e-5..1e-6 for the cavity and nozzle cases. API wiring test (nozzle_2d case file): mass flow in/out within 1e-6 and throat Mach 0.2997 vs 0.3 met; the registered residual target 1e-8 was NOT met (res_u 2.6e-5, res_p 6e-13 at 3000 iterations), so such runs stop at max_iterations unless convergence conditions are used. AUDIT FOLLOW-UP (ca78589): the 1e-8 residual target of the API nozzle case is recorded as subsonic_nozzle_residual_target_1e8_known_miss (res_u 2.6e-5 after 3000 iterations, not converged). REAL GAS (ADR 0007, checks and limits written before any code): fluid.density = real_gas (fluid.eos peng_robinson|redlich_kwong, fluid.species from a built-in critical-data table N2/O2/Ar/CO2/CH4/H2/H2O or explicit critical_temperature/critical_pressure/acentric_factor/molar_mass, fluid.specific_heat = constant ideal-gas cp0) in the same varden kernel: rcfd-fv realgas.rs gives rho(p,T) (vapour root), psi = d rho/dp|T analytic for the transonic pressure equation, enthalpy and entropy departures (h = cp0 T + h_dep), cp, cv, real sound speed (Mach), T from h by Newton, and the stagnation inlet follows the real-gas isentrope; schema keys with precise located validation errors (unknown species, missing constants, low_mach, gas_constant, keys without real_gas), docs/case-schema.md, JSON schema from the same Rust schema, CLI/API/assistant validate through Case. The ideal-gas path is bit-identical (new fixed-iteration hash test recorded before the edits, baseline_hashes and all varden tests unchanged). Measured, CO2, p0 5 MPa, T0 400 K, cp0 940, against an independent real-gas isentropic reference integrated in the test (RK4 in p, dT/dp|s = T (dv/dT)_p/cp, energy balance to 3.5e-9, sonic state at the mass-flux maximum M = 1.0000): subsonic duct (R5, throat M 0.3, A_t/A* 2.0495 vs 2.0351 ideal) Mach 7.7e-4 (limit 1.5e-2), p 4.1e-5 (5e-3), T 8.4e-6 (3e-3), mass flow -2.7e-4 (limit 1e-2), in/out 3.2e-13; choked nozzle (R6, 240x12, exit M 1.78 branch, ACCEPTANCE) choked mass flow -2.8e-4 at inlet and outlet (limit 1 percent), Mach 9.2e-4 (3e-2), p 1.3e-3 (2e-2); the real-gas choked flux G* is 5.73 percent above the ideal-gas formula, so the EOS is active (the API case differs 5.5 percent from the ideal-gas case at 5 MPa). Ideal-gas limit through the solver (R3): CO2 at 2 kPa real vs ideal solver mass flow 2.1e-5 (limit 1e-3), Mach 2.3e-7, p 5.6e-8, T 5.8e-7; through the case file 1.2e-5. Solver tuning disclosed: the choked real-gas case used the same start-up as the ideal one (under-relaxation 0.7/0.5/0.7, back-pressure continuation 0.98 p0 to p_e in 40 stages of 100 iterations, then 6000 iterations); the subsonic cases used the defaults; nothing else was tuned. EOS-level KNOWN MISSES against NIST (limits registered beforehand, not changed; tests ignored, named *_known_miss): (R1) PR density within 1 percent where |Z-1| <= 0.05 missed for N2 at 300 K and 5.1/10.1/15.1 MPa (+1.03, +1.68, +2.24 percent); the other 20 of the 23 points with a tolerance pass (CO2 350 K errors +0.04 to +2.1 percent, 310 K up to +2.9 percent, N2 140 K 3.1 MPa +4.0 percent; the dense points with Z_NIST < 0.5 are reported only: CO2 310 K 9.1 MPa -11.4 percent, N2 140 K 6.1 and 9.1 MPa -1.3 and +1.8 percent, CO2 310 K 8.1 MPa +0.1 percent); (R2) enthalpy difference within 10 percent missed for N2 at 300 K (+18.8, +15.7, +12.3 percent at 5.1/10.1/20.1 MPa; CO2 passes at +9.3/+8.5/+7.8 percent at 350 K), entropy differences within 0.7 percent (limit 2), sound speeds within 0.23 percent for CO2 and 1.55 percent for N2 at 10.1 MPa (limits 0.5 to 5), dcp -7.5 percent (limit 20); (R3) the 1 Pa ideal-gas limit of the enthalpy and entropy departures (limit 1e-8) missed for CO2: 3.1e-8 / 2.1e-8 (PR), 2.6e-8 / 1.7e-8 (RK), the limit was mis-estimated because the departures scale with p, density, psi and sound speed pass at 5e-8 to 1e-7 (limit 1e-6). The NIST reference values were retrieved through a summarising page fetcher and critical constants are from memory: both marked unverified in docs/reference-data.md. Approximations: energy diffusivity k/cp0 and zero-gradient enthalpy for adiabatic walls (cp0 dT/dn), mu and k are user inputs, no liquid root or phase change (a state without a vapour root falls back to the ideal gas), compressible mode only, no van der Waals, mixtures or transient. Update (ADR 0009): the transient variable-density solver also runs with the real gas (Peng-Robinson CO2, 8 MPa, 330 K, closed box with a volumetric heat source, Euler and BDF2): energy balance rho0 (u(p,T) - u0) = q t to 1.2e-10 / 2.1e-10 (limit 1e-6), pressure equals the EOS at the fixed density to 1e-15 (1e-6), mass 1.7e-15 (1e-11), which also required the Newton mass shift with the true EOS. No transient real-gas nozzle or choked benchmark is claimed. The registered API residual target of the ideal-gas nozzle case (1e-8) remains the known miss recorded above.
+  - note: Wave 10 (ideal gas) and real-gas wave (ADR 0007). Acceptance met for the ideal gas and for the real gas
+    (Peng-Robinson CO2). Known misses on record: the API residual target of the ideal-gas nozzle case (1e-8) and the
+    EOS-level checks R1, R2 and R3 against NIST.
+    - Pressure-based compressible extension: rcfd-fv varden.rs (ADR 0005), fluid.density = ideal_gas, fluid.mode =
+      compressible with a stagnation inlet.
+    - Checks written into the ADR before any run:
+      - Quasi-1-D converging-duct (subsonic, throat Mach 0.3, 200x10 cells, linear upwind, SIMPLEC): column Mach error
+        7.3e-4 (limit 1.5e-2), p/p0 5.1e-5 (5e-3), T/T0 2.2e-5 (3e-3), mass flow vs the isentropic value -7.6e-4 at
+        inlet and outlet (limit 1e-2), inlet/outlet equality 4.8e-13.
+      - Choked converging-diverging nozzle (240x12, exit Mach 1.854, supersonic branch, p_e/p0 = 0.1602): Mach error
+        9.2e-4 (limit 3e-2), p/p0 1.3e-3 (2e-2), choked mass flow vs A* p0 sqrt(gamma/(R T0))
+        (2/(gamma+1))^((gamma+1)/(2(gamma-1))) -4.05e-4 at inlet and outlet (acceptance limit 1 percent), in/out 2e-14.
+    - Deviation: the choked case needs under-relaxation 0.7/0.5/0.7 (defaults 0.9/1.0/0.9 diverged when the supersonic
+      region forms) and a back-pressure continuation start-up (0.98 p0 to p_e in 40 stages of 100 iterations, then 6000
+      iterations at p_e); starting at the mean pressure diverged. These start-up choices were not registered; the
+      tolerances were not changed.
+    - Isentropic and area-Mach relations are standard textbook formulae.
+    - The choked test is heavy (about 80 s release, #[ignore]).
+    - Caveats: steady and laminar only, no shock capturing beyond what the first/second-order upwind density gives (not
+      tested), residual res_u floors at about 1e-5..1e-6 for the cavity and nozzle cases.
+    - API wiring test (nozzle_2d case file): mass flow in/out within 1e-6 and throat Mach 0.2997 vs 0.3 met; the
+      registered residual target 1e-8 was NOT met (res_u 2.6e-5, res_p 6e-13 at 3000 iterations), so such runs stop at
+      max_iterations unless convergence conditions are used.
+    - AUDIT FOLLOW-UP (ca78589): the 1e-8 residual target of the API nozzle case is recorded as
+      subsonic_nozzle_residual_target_1e8_known_miss (res_u 2.6e-5 after 3000 iterations, not converged).
+    - REAL GAS (ADR 0007, checks and limits written before any code):
+      - fluid.density = real_gas (fluid.eos peng_robinson|redlich_kwong, fluid.species from a built-in critical-data
+        table N2/O2/Ar/CO2/CH4/H2/H2O or explicit critical_temperature/critical_pressure/acentric_factor/molar_mass,
+        fluid.specific_heat = constant ideal-gas cp0) in the same varden kernel.
+      - rcfd-fv realgas.rs gives rho(p,T) (vapour root), psi = d rho/dp|T analytic for the transonic pressure equation,
+        enthalpy and entropy departures (h = cp0 T + h_dep), cp, cv, real sound speed (Mach), T from h by Newton, and
+        the stagnation inlet follows the real-gas isentrope.
+      - Schema keys with precise located validation errors (unknown species, missing constants, low_mach, gas_constant,
+        keys without real_gas), docs/case-schema.md, JSON schema from the same Rust schema, CLI/API/assistant validate
+        through Case.
+      - The ideal-gas path is bit-identical (new fixed-iteration hash test recorded before the edits, baseline_hashes
+        and all varden tests unchanged).
+      - Measured, CO2, p0 5 MPa, T0 400 K, cp0 940, against an independent real-gas isentropic reference integrated in
+        the test (RK4 in p, dT/dp|s = T (dv/dT)_p/cp, energy balance to 3.5e-9, sonic state at the mass-flux maximum M =
+        1.0000):
+        - Subsonic duct (R5, throat M 0.3, A_t/A* 2.0495 vs 2.0351 ideal) Mach 7.7e-4 (limit 1.5e-2), p 4.1e-5 (5e-3), T
+          8.4e-6 (3e-3), mass flow -2.7e-4 (limit 1e-2), in/out 3.2e-13.
+        - Choked nozzle (R6, 240x12, exit M 1.78 branch, ACCEPTANCE) choked mass flow -2.8e-4 at inlet and outlet (limit
+          1 percent), Mach 9.2e-4 (3e-2), p 1.3e-3 (2e-2). The real-gas choked flux G* is 5.73 percent above the
+          ideal-gas formula, so the EOS is active (the API case differs 5.5 percent from the ideal-gas case at 5 MPa).
+        - Ideal-gas limit through the solver (R3): CO2 at 2 kPa real vs ideal solver mass flow 2.1e-5 (limit 1e-3), Mach
+          2.3e-7, p 5.6e-8, T 5.8e-7; through the case file 1.2e-5.
+      - Solver tuning disclosed: the choked real-gas case used the same start-up as the ideal one (under-relaxation
+        0.7/0.5/0.7, back-pressure continuation 0.98 p0 to p_e in 40 stages of 100 iterations, then 6000 iterations);
+        the subsonic cases used the defaults; nothing else was tuned.
+      - EOS-level KNOWN MISSES against NIST (limits registered beforehand, not changed; tests ignored, named
+        *_known_miss):
+        - (R1) PR density within 1 percent where |Z-1| <= 0.05 missed for N2 at 300 K and 5.1/10.1/15.1 MPa (+1.03,
+          +1.68, +2.24 percent); the other 20 of the 23 points with a tolerance pass (CO2 350 K errors +0.04 to +2.1
+          percent, 310 K up to +2.9 percent, N2 140 K 3.1 MPa +4.0 percent; the dense points with Z_NIST < 0.5 are
+          reported only: CO2 310 K 9.1 MPa -11.4 percent, N2 140 K 6.1 and 9.1 MPa -1.3 and +1.8 percent, CO2 310 K 8.1
+          MPa +0.1 percent).
+        - (R2) Enthalpy difference within 10 percent missed for N2 at 300 K (+18.8, +15.7, +12.3 percent at
+          5.1/10.1/20.1 MPa; CO2 passes at +9.3/+8.5/+7.8 percent at 350 K), entropy differences within 0.7 percent
+          (limit 2), sound speeds within 0.23 percent for CO2 and 1.55 percent for N2 at 10.1 MPa (limits 0.5 to 5), dcp
+          -7.5 percent (limit 20).
+        - (R3) The 1 Pa ideal-gas limit of the enthalpy and entropy departures (limit 1e-8) missed for CO2: 3.1e-8 /
+          2.1e-8 (PR), 2.6e-8 / 1.7e-8 (RK), the limit was mis-estimated because the departures scale with p. Density,
+          psi and sound speed pass at 5e-8 to 1e-7 (limit 1e-6).
+      - The NIST reference values were retrieved through a summarising page fetcher and critical constants are from
+        memory: both marked unverified in docs/reference-data.md.
+      - Approximations: energy diffusivity k/cp0 and zero-gradient enthalpy for adiabatic walls (cp0 dT/dn), mu and k
+        are user inputs, no liquid root or phase change (a state without a vapour root falls back to the ideal gas),
+        compressible mode only, no van der Waals, mixtures or transient.
+    - Update (ADR 0009): the transient variable-density solver also runs with the real gas (Peng-Robinson CO2, 8 MPa,
+      330 K, closed box with a volumetric heat source, Euler and BDF2): energy balance rho0 (u(p,T) - u0) = q t to
+      1.2e-10 / 2.1e-10 (limit 1e-6), pressure equals the EOS at the fixed density to 1e-15 (1e-6), mass 1.7e-15
+      (1e-11), which also required the Newton mass shift with the true EOS.
+      - No transient real-gas nozzle or choked benchmark is claimed.
+      - The registered API residual target of the ideal-gas nozzle case (1e-8) remains the known miss recorded above.
 - [~] **F-062** Compressible BCs: total pressure/temperature, characteristic far-field, non-reflecting
   - depends on: F-060
   - acceptance: NACA0012 transonic Cp within published scatter; no spurious reflection test
-  - note: Wave 11, PARTIAL. Built: rcfd-fv compressible_bc.rs (ADR 0006) with CompBc::TotalInlet (p0, T0, direction; outgoing invariant from the interior), PressureOutlet (subsonic/supersonic switching), NonReflecting (relaxation weight sigma), FarField (Riemann invariants, free-stream Mach/angle); boundary face states use the physical flux. Case schema: compressible_bc = total_inlet | pressure_outlet | farfield | nonreflecting with total_pressure_value, temperature_value, flow_direction, pressure_value, mach_value, flow_angle, reflection_value; located validate errors, docs/case-schema.md, JSON schema (generated), assistant BC-suggestion note. Checks were registered in the ADR before any run. A algebraic face-state checks and A5 free-stream preservation (5.6e-16): PASS. B no spurious reflection (1-D Gaussian pulse, 400 cells, reflected/incident amplitude): fixed-pressure outlet 0.941 (registered 0.8..1.2) PASS; sigma = 0 outlet 0.0000 (limit 0.02) PASS; registered sigma = 0.02 limit R <= 0.05 MISSED: measured 0.461 (kept as ignored test b_non_reflecting_sigma_002_known_miss). Cause: the stateless relaxation reflects waves slower than dx/(sigma a); post-hoc, disclosed, not a gate: sigma 0.002 -> 0.078, 0.005 -> 0.172, 0.01 -> 0.293, 0.05 -> 0.709, 1 -> 0.941. Only normal incidence is treated; sigma = 0 imposes no pressure so it cannot hold a back pressure. C total-pressure inlet reproduces the F-061 isentropic nozzle (200x10, same geometry and limits, density-based HLLC/MUSCL/RK3, marched 136934 steps to a 1e-9 density change): Mach 5.4e-3 (1.5e-2), p/p0 5.7e-4 (5e-3), T/T0 1.8e-4 (3e-3), inlet mass flow -4.9e-3 vs A*-formula (1e-2), in/out 3.3e-7 (1e-3): PASS (heavy, ignored, 220 s release). D NACA 0012 transonic Cp within published scatter: NOT ATTEMPTED. The kernel could run an Euler airfoil (cylinder_ogrid + warp), but no quantitative published reference (AGARD AR-211 scatter, Vassberg-Jameson Euler values) was accessible, so no gate was invented; ignored placeholder naca0012_transonic_cp_known_miss. No solver parameter was tuned (defaults HLLC, van Leer, RK3, CFL 0.4). Not done: airfoil validation, oblique/multi-dimensional non-reflecting (Giles), vortex far-field correction, pressure-based (varden) kernel BCs. Status stays partial. SCOPE (merged review): outlet pressure-averaging options, mass-flow update strategies and flow-regime options move to F-200; impedance-type conditions to F-243.
+  - note: Wave 11, PARTIAL. Check D, NACA 0012 transonic Cp within published scatter, is NOT ATTEMPTED. One part of
+    check B MISSED: registered sigma = 0.02 limit R <= 0.05, measured 0.461.
+    - Built: rcfd-fv compressible_bc.rs (ADR 0006); boundary face states use the physical flux.
+      - CompBc::TotalInlet (p0, T0, direction; outgoing invariant from the interior).
+      - PressureOutlet (subsonic/supersonic switching).
+      - NonReflecting (relaxation weight sigma).
+      - FarField (Riemann invariants, free-stream Mach/angle).
+    - Case schema: compressible_bc = total_inlet | pressure_outlet | farfield | nonreflecting with total_pressure_value,
+      temperature_value, flow_direction, pressure_value, mach_value, flow_angle, reflection_value; located validate
+      errors, docs/case-schema.md, JSON schema (generated), assistant BC-suggestion note.
+    - Checks were registered in the ADR before any run.
+      - A: algebraic face-state checks and A5 free-stream preservation (5.6e-16): PASS.
+      - B: no spurious reflection (1-D Gaussian pulse, 400 cells, reflected/incident amplitude):
+        - Fixed-pressure outlet 0.941 (registered 0.8..1.2) PASS.
+        - Outlet with sigma = 0: 0.0000 (limit 0.02) PASS.
+        - Registered sigma = 0.02 limit R <= 0.05 MISSED: measured 0.461 (kept as ignored test
+          b_non_reflecting_sigma_002_known_miss).
+        - Cause: the stateless relaxation reflects waves slower than dx/(sigma a); post-hoc, disclosed, not a gate:
+          sigma 0.002 -> 0.078, 0.005 -> 0.172, 0.01 -> 0.293, 0.05 -> 0.709, 1 -> 0.941.
+        - Only normal incidence is treated; sigma = 0 imposes no pressure so it cannot hold a back pressure.
+      - C: total-pressure inlet reproduces the F-061 isentropic nozzle (200x10, same geometry and limits, density-based
+        HLLC/MUSCL/RK3, marched 136934 steps to a 1e-9 density change): Mach 5.4e-3 (1.5e-2), p/p0 5.7e-4 (5e-3), T/T0
+        1.8e-4 (3e-3), inlet mass flow -4.9e-3 vs A*-formula (1e-2), in/out 3.3e-7 (1e-3): PASS (heavy, ignored, 220 s
+        release).
+      - D: NACA 0012 transonic Cp within published scatter: NOT ATTEMPTED. The kernel could run an Euler airfoil
+        (cylinder_ogrid + warp), but no quantitative published reference (AGARD AR-211 scatter, Vassberg-Jameson Euler
+        values) was accessible, so no gate was invented; ignored placeholder naca0012_transonic_cp_known_miss.
+    - No solver parameter was tuned (defaults HLLC, van Leer, RK3, CFL 0.4).
+    - Not done: airfoil validation, oblique/multi-dimensional non-reflecting (Giles), vortex far-field correction,
+      pressure-based (varden) kernel BCs. Status stays partial.
+    - SCOPE (merged review): outlet pressure-averaging options, mass-flow update strategies and flow-regime options move
+      to F-200; impedance-type conditions to F-243.
 
 ## Phase 6 - Post-processing and VTK output
 
 - [x] **F-070** VTK writer (legacy and XML .vtu/.pvtu, time series .pvd) for fields and boundary patches
   - depends on: F-010
   - acceptance: Files open in ParaView; values match solver
-  - note: XML .vtu (polyhedral cells, so any topology), .vtp per boundary patch, .pvtu header, .pvd time series, legacy .vtk 4.2; ASCII with shortest round-trip floats (field values bit-identical on re-read in unit test). Verified by reading the written .vtu/.vtk/.vtp with the real VTK python library (vtk wheel): cell/point counts, polyhedron type 42, cell volumes positive and summing to the domain volume, p field equals analytic value to 7e-16. ParaView itself was not run. No binary/appended-data encoding yet (large files will be big).
+  - note: Verified by reading the written .vtu/.vtk/.vtp with the real VTK python library (vtk wheel). ParaView itself
+    was not run. No binary/appended-data encoding yet (large files will be big).
+    - Formats: XML .vtu (polyhedral cells, so any topology), .vtp per boundary patch, .pvtu header, .pvd time series,
+      legacy .vtk 4.2; ASCII with shortest round-trip floats (field values bit-identical on re-read in unit test).
+    - Library checks: cell/point counts, polyhedron type 42, cell volumes positive and summing to the domain volume, p
+      field equals analytic value to 7e-16.
 - [x] **F-071** Probes, surface/volume integrals, force/moment coefficients, mass/heat flux reports
   - depends on: F-028
   - acceptance: Integrals verified on analytic fields; report definitions live in the settings tree
-  - note: rcfd-post integrals.rs: volume/area integrals and averages, mass/scalar flux, conductive heat flow, wall force and moment (pressure+viscous) and coefficients, probes; analytic tests (polynomial integrals, hydrostatic force=-rho g V, Couette shear, channel mass flux, Fourier heat flow, probe gradient). Report definitions live in settings tree reports.* and are evaluated by Simulation::eval_report (test reports_defined_in_the_settings_tree_return_analytic_values). heat_flow report errors until the energy equation exists (F-050).
+  - note: rcfd-post integrals.rs: volume/area integrals and averages, mass/scalar flux, conductive heat flow, wall force
+    and moment (pressure+viscous) and coefficients, probes; analytic tests (polynomial integrals, hydrostatic force=-rho
+    g V, Couette shear, channel mass flux, Fourier heat flow, probe gradient). Report definitions live in settings tree
+    reports.* and are evaluated by Simulation::eval_report (test
+    reports_defined_in_the_settings_tree_return_analytic_values). heat_flow report errors until the energy equation
+    exists (F-050).
 - [x] **F-072** Derived fields (vorticity, Q-criterion, wall shear, y+, Mach, total pressure) and line/plane sampling
   - depends on: F-070
   - acceptance: Values match analytic fields; sampled CSV output
-  - note: SCOPE (merged review): iso-clip, offset surfaces, point clouds and user variables are tracked in F-238. WAVE 15B (ADR 0020), PARTIAL (library level). New rcfd-post derived module: velocity_gradient (least squares), vorticity, q_criterion, wall_shear (one-sided first-cell estimate, tangential), y_plus, speed_of_sound, mach, total_pressure_incompressible / isentropic, locate_cell, sample_line / sample_plane with gradient reconstruction, SampleSet::to_csv (shortest round-trip floats, inside flag). Checks (derived.rs, all at first run): linear velocity field gives vorticity (1.0, 1.2, 2.1) and Q = 1.6 to 3e-15 in every cell; Taylor-Green vorticity error 1.27e-2 at N = 32 against the derived bound h^2/3 = 1.285e-2 and error ratio 3.86 (second order); Couette wall shear 0.012 and y+ 0.625 to 7e-15; Poiseuille estimate within the derived dn/H of the exact wall shear; Mach / total pressure formulas to 1e-12 and the low-Mach limit; line and plane sampling of a linear field to 3e-16, plane integral 0.75 exact, CSV parses back bit-exact. Not done: no CLI, case-schema, service or GUI surface and no VTK output for derived fields (so a user cannot yet produce the CSV without Rust), no lambda2 or other vortex criteria, no wall-function wall shear. WAVE 16W (ADR 0021): vorticity, Q, total pressure, Mach, wall shear and y+ now reach VTK output through `postprocessing.derived` (cell arrays in solution.vtu, wall_<patch>.vtp), and line and plane sampling is available as `postprocessing.samples.<n>` (CSV written by `rcfd run`), `rcfd sample` and the service method `field.sample`, all with located errors. Still partial: wall shear and y+ are the laminar constant-viscosity estimate only (refused with turbulence, rheology, compressible and variable-density engines), `rcfd sample` re-runs the case (no solution-file reader), no lambda2, no MCP tool, F-238 items not done. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed.
+    - SCOPE (merged review): iso-clip, offset surfaces, point clouds and user variables are tracked in F-238.
+    - WAVE 15B (ADR 0020), PARTIAL (library level).
+      - New rcfd-post derived module: velocity_gradient (least squares), vorticity, q_criterion, wall_shear (one-sided
+        first-cell estimate, tangential), y_plus, speed_of_sound, mach, total_pressure_incompressible / isentropic,
+        locate_cell, sample_line / sample_plane with gradient reconstruction, SampleSet::to_csv (shortest round-trip
+        floats, inside flag).
+      - Checks (derived.rs, all at first run):
+        - Linear velocity field gives vorticity (1.0, 1.2, 2.1) and Q = 1.6 to 3e-15 in every cell.
+        - Taylor-Green vorticity error 1.27e-2 at N = 32 against the derived bound h^2/3 = 1.285e-2 and error ratio 3.86
+          (second order).
+        - Couette wall shear 0.012 and y+ 0.625 to 7e-15.
+        - Poiseuille estimate within the derived dn/H of the exact wall shear.
+        - Mach / total pressure formulas to 1e-12 and the low-Mach limit.
+        - Line and plane sampling of a linear field to 3e-16, plane integral 0.75 exact, CSV parses back bit-exact.
+      - Not done: no CLI, case-schema, service or GUI surface and no VTK output for derived fields (so a user cannot yet
+        produce the CSV without Rust), no lambda2 or other vortex criteria, no wall-function wall shear.
+    - WAVE 16W (ADR 0021): vorticity, Q, total pressure, Mach, wall shear and y+ now reach VTK output through
+      `postprocessing.derived` (cell arrays in solution.vtu, wall_<patch>.vtp), and line and plane sampling is available
+      as `postprocessing.samples.<n>` (CSV written by `rcfd run`), `rcfd sample` and the service method `field.sample`,
+      all with located errors.
+      - Still partial: wall shear and y+ are the laminar constant-viscosity estimate only (refused with turbulence,
+        rheology, compressible and variable-density engines), `rcfd sample` re-runs the case (no solution-file reader),
+        no lambda2, no MCP tool, F-238 items not done.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-073** Headless renderer (PNG contours/vectors) for previews
   - depends on: F-070
   - acceptance: CLI renders a contour image in under 2 s for a 1M-cell mesh
-  - note: PARTIAL (audit 2026-10-14): no render time is measured and no 1M-cell mesh is rendered anywhere in the repository; the 5 small tests cover correctness only. Missing: the 1M-cell, under 2 s timing in the criterion. rcfd-post render.rs: colormap, flat-shaded 2D/3D-slice scalar render, colorbar with digit labels, vector overlay, PNG encode via png crate; 5 tests (monotone colormap, gradient direction, PNG round trip, 3D slice, colorbar/vectors). Not tested against a GPU/interactive viewer; CPU rasteriser only. WAVE 17C (ADR 0025): pixel values at 20 random cell positions of a 64 x 64 mesh equal the colour map within 1/255 (20 of 20); PNG decodes to identical pixels; the criterion measured: a 1 000 000-cell 2D mesh renders in 1.033 s (limit 2 s, release build, mesh generation excluded, PNG encode 0.057 s additional, machine possibly shared with other builds), test ignored in debug builds. Not measured on other hardware or for 3D slices of large meshes; CPU rasteriser only, no look inspected. WAVE 39A (ADR 0092, done): the criterion is now timed through the CLI: crates/rcfd-cli/tests/render_cli_w39a.rs starts rcfd serve, creates and initialises a 1000 x 1000 cavity session (speed |sin(6x) y|) with rcfd call, then times one rcfd call render.png process (field speed, width 1024; process start, render, PNG encode, base64 and JSON transfer included; set-up excluded): 1.253 s and 1.555 s on two runs on a machine shared with other builds (limit 2 s, release builds only). The CLI has no dedicated render subcommand; the render path is the service call. Not measured on other hardware or for 3D slices of large meshes.
+  - note: WAVE 39A (ADR 0092, done) times the criterion through the CLI: 1.253 s and 1.555 s on two runs on a machine
+    shared with other builds (limit 2 s, release builds only). Not measured on other hardware or for 3D slices of large
+    meshes.
+    - PARTIAL (audit 2026-10-14): no render time is measured and no 1M-cell mesh is rendered anywhere in the repository;
+      the 5 small tests cover correctness only. Missing: the 1M-cell, under 2 s timing in the criterion.
+    - rcfd-post render.rs: colormap, flat-shaded 2D/3D-slice scalar render, colorbar with digit labels, vector overlay,
+      PNG encode via png crate; 5 tests (monotone colormap, gradient direction, PNG round trip, 3D slice,
+      colorbar/vectors). Not tested against a GPU/interactive viewer; CPU rasteriser only.
+    - WAVE 17C (ADR 0025):
+      - Pixel values at 20 random cell positions of a 64 x 64 mesh equal the colour map within 1/255 (20 of 20).
+      - PNG decodes to identical pixels.
+      - The criterion measured: a 1 000 000-cell 2D mesh renders in 1.033 s (limit 2 s, release build, mesh generation
+        excluded, PNG encode 0.057 s additional, machine possibly shared with other builds), test ignored in debug
+        builds.
+      - Not measured on other hardware or for 3D slices of large meshes; CPU rasteriser only, no look inspected.
+    - WAVE 39A (ADR 0092, done): the criterion is now timed through the CLI: crates/rcfd-cli/tests/render_cli_w39a.rs
+      starts rcfd serve, creates and initialises a 1000 x 1000 cavity session (speed |sin(6x) y|) with rcfd call, then
+      times one rcfd call render.png process (field speed, width 1024; process start, render, PNG encode, base64 and
+      JSON transfer included; set-up excluded): 1.253 s and 1.555 s on two runs on a machine shared with other builds
+      (limit 2 s, release builds only).
+      - The CLI has no dedicated render subcommand; the render path is the service call.
+      - Not measured on other hardware or for 3D slices of large meshes.
 - [x] **F-074** Monitor data API (residual/force time series JSON) and report export (HTML/CSV)
   - depends on: F-030, F-071
   - acceptance: JSON schema documented; HTML report includes residuals and integrals
-  - note: rcfd-post monitors.rs: MonitorStore JSON v1 (rcfd-monitors) with schema, incremental since() polling, CSV, SVG plots, self-contained HTML report; test from a real 60-iteration cavity run checks residual polylines, integrals, schema validation and CSV rows.
+  - note: rcfd-post monitors.rs: MonitorStore JSON v1 (rcfd-monitors) with schema, incremental since() polling, CSV, SVG
+    plots, self-contained HTML report; test from a real 60-iteration cavity run checks residual polylines, integrals,
+    schema validation and CSV rows.
 
 ## Phase 7 - Scripting API, CLI and settings tree
 
 - [x] **F-080** Case definition file (TOML/JSON) generated from the settings tree plus JSON schema
   - depends on: F-005, F-015
   - acceptance: rcfd validate case.toml reports precise errors; schema published
-  - note: rcfd-api schema.rs (case_schema) + case.rs (TOML/JSON load with line-numbered diagnostics, semantic checks, set/get with on-demand named entries). Published via 'rcfd schema' (JSON Schema) and validated via 'rcfd validate' (tests in rcfd-cli/tests/cli.rs).
+  - note: rcfd-api schema.rs (case_schema) + case.rs (TOML/JSON load with line-numbered diagnostics, semantic checks,
+    set/get with on-demand named entries). Published via 'rcfd schema' (JSON Schema) and validated via 'rcfd validate'
+    (tests in rcfd-cli/tests/cli.rs).
 - [x] **F-081** CLI: rcfd run / check-mesh / convert / post / schema / serve
   - depends on: F-080, F-030, F-070
   - acceptance: All subcommands documented in --help and integration-tested; exit codes defined
-  - note: rcfd CLI: validate, schema, run, check-mesh, convert, post, serve, cases; all in --help; exit codes 0 ok,1 runtime,2 usage,3 invalid case,4 bad mesh,5 not converged,6 diverged. 6 integration tests run the real binary (help, validate line numbers, schema, run+post, check-mesh+convert round trip via OpenFOAM, serve --stdio).
+  - note: rcfd CLI: validate, schema, run, check-mesh, convert, post, serve, cases; all in --help.
+    - Exit codes: 0 ok, 1 runtime, 2 usage, 3 invalid case, 4 bad mesh, 5 not converged, 6 diverged.
+    - 6 integration tests run the real binary (help, validate line numbers, schema, run+post, check-mesh+convert round
+      trip via OpenFOAM, serve --stdio).
 - [x] **F-082** Rust library API for building cases and stepping the solver programmatically
   - depends on: F-080
   - acceptance: Example crate builds the cavity and runs 10 iterations from code
-  - note: rcfd-api sim.rs Simulation::new(&Case): builds mesh/BCs/SIMPLE or PISO/PIMPLE, step/run, fields, reports, monitors, html report, vtu export; example examples/cavity.rs and tests/library_api.rs run 10 iterations from code.
+  - note: rcfd-api sim.rs Simulation::new(&Case): builds mesh/BCs/SIMPLE or PISO/PIMPLE, step/run, fields, reports,
+    monitors, html report, vtu export; example examples/cavity.rs and tests/library_api.rs run 10 iterations from code.
 - [~] **F-083** Python bindings (PyO3) mirroring the settings tree, commands and field access (numpy)
   - depends on: F-082
   - acceptance: pip-installable wheel; Python test reproduces cavity and reads fields as numpy arrays
-  - note:  WAVE 20C (ADR 0034, partial, NOT the PyO3 route): pure-Python package python/rcfd (standard library, numpy optional) driving the rcfd command line: Case.load/from_text/from_dict, set/get/update with immediate validation by the Rust schema (SettingsError with the same located paths as the CLI), settings, check, run -> RunResult (exit code, state, reports, monitors, fields read from solution.vtu), study helper (List/Linspace/Logspace), schema(). Measured (checks registered first): 10-setting round trip and resolved settings equal to `rcfd run --set --print-settings`; Python run and CLI run byte-identical (monitors.csv, monitors.json, solution.vtu) with reports equal to the last CSV row; study tables byte-identical to the CLI; no environment marker in any output; clean import under `python -I`; harness test runs the 11 Python tests (P2 also on a cavity-class case with flow) from cargo test (prints SKIPPED without Python). Not done, and the acceptance text is NOT met: an in-process PyO3 extension crate, a pip-installable wheel, numpy arrays without a VTU round trip, a cavity reproduction through the extension. PyO3 was not built: the workspace forbids unsafe code (PyO3 macros expand to it), pyo3 is not in the offline cargo cache and the only Python is a Microsoft Store 3.9 (docs/python.md). Also not done: access through the JSON-RPC service, typed classes per settings section.
+  - note: WAVE 20C (ADR 0034, partial, NOT the PyO3 route) delivered a pure-Python package; the acceptance text is
+    NOT met.
+    - Package: python/rcfd (standard library, numpy optional) driving the rcfd command line:
+      - Case.load/from_text/from_dict.
+      - set/get/update with immediate validation by the Rust schema (SettingsError with the same located paths as the
+        CLI).
+      - settings, check, run -> RunResult (exit code, state, reports, monitors, fields read from solution.vtu).
+      - study helper (List/Linspace/Logspace).
+      - schema().
+    - Measured (checks registered first):
+      - 10-setting round trip and resolved settings equal to `rcfd run --set --print-settings`.
+      - Python run and CLI run byte-identical (monitors.csv, monitors.json, solution.vtu) with reports equal to the
+        last CSV row.
+      - Study tables byte-identical to the CLI.
+      - No environment marker in any output.
+      - Clean import under `python -I`.
+      - Harness test runs the 11 Python tests (P2 also on a cavity-class case with flow) from cargo test (prints
+        SKIPPED without Python).
+    - Not done, and the acceptance text is NOT met: an in-process PyO3 extension crate, a pip-installable wheel, numpy
+      arrays without a VTU round trip, a cavity reproduction through the extension.
+    - PyO3 was not built: the workspace forbids unsafe code (PyO3 macros expand to it), pyo3 is not in the offline
+      cargo cache and the only Python is a Microsoft Store 3.9 (docs/python.md).
+    - Also not done: access through the JSON-RPC service, typed classes per settings section.
 - [x] **F-084** Journal/transcript recording of settings-tree commands with replay
   - depends on: F-080
   - acceptance: Recorded session replays to identical case-file hash
-  - note: Service journal: session.create source plus every accepted settings.set is recorded (rejected changes are not); journal.get returns rcfd-journal v1 with FNV case_hash of the settings tree; journal.replay rebuilds a session and reports matches=true (test recorded_journal_replays_to_the_same_case_hash incl. named-entry creation and a tampered journal giving matches=false). Journal is per-service session, not yet written to disk automatically by the CLI.
+  - note: Service journal: per-service session, not yet written to disk automatically by the CLI.
+    - session.create source plus every accepted settings.set is recorded (rejected changes are not).
+    - journal.get returns rcfd-journal v1 with FNV case_hash of the settings tree.
+    - journal.replay rebuilds a session and reports matches=true (test recorded_journal_replays_to_the_same_case_hash
+      incl. named-entry creation and a tampered journal giving matches=false).
 - [x] **F-085** Solver service (JSON-RPC/gRPC): run, pause, step, stop, status, monitors, field streaming, events
   - depends on: F-082, F-074
   - acceptance: Integration test: start run, receive residual events, fetch field slice, stop; versioned protocol doc
-  - note: rcfd-api service.rs: JSON-RPC 2.0 newline-delimited over TCP and stdio, sessions, worker thread with run/pause/resume/stop/step, event log with long-poll, settings/mesh/monitors/reports/field/render/export methods, sandbox root and cell/step/runtime limits; protocol doc rcfd/docs/service-protocol.md. Tests: 8 unit + 2 TCP integration (start run, receive residual events, fetch slice, stop; malformed input).
+  - note: rcfd-api service.rs: JSON-RPC 2.0 newline-delimited over TCP and stdio, sessions, worker thread with
+    run/pause/resume/stop/step, event log with long-poll, settings/mesh/monitors/reports/field/render/export methods,
+    sandbox root and cell/step/runtime limits; protocol doc rcfd/docs/service-protocol.md. Tests: 8 unit + 2 TCP
+    integration (start run, receive residual events, fetch slice, stop; malformed input).
 
 ## Phase 8 - AI assistant and desktop app integration
 
 - [x] **F-090** MCP server (external tool interface) with tools: list_cases, create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, render_image
   - depends on: F-085, F-073
   - acceptance: MCP test client drives a cavity case end-to-end; every tool has JSON schema and error semantics
-  - note: rcfd-mcp: stdio MCP server (std threads + serde_json), 12 tools each with inputSchema and annotations, echoes client protocolVersion, protocol errors -32601/-32602 vs tool errors isError with {error:{code,message,data}}; render_image returns image content. Test client drives cavity end-to-end (create, set, check_mesh, run, status, residuals, stats, image, export_vtk); 9 tests. Binary rcfd-mcp. Tested against own client only, not against a third-party MCP host. The same tool definitions and Access classes are reused in-process by the native assistant (F-147); the MCP server stays as an interface for external agents.
+  - note: Binary rcfd-mcp: stdio MCP server (std threads + serde_json). Tested against own client only, not against a
+    third-party MCP host.
+    - 12 tools each with inputSchema and annotations; render_image returns image content.
+    - Echoes client protocolVersion; protocol errors -32601/-32602 vs tool errors isError with
+      {error:{code,message,data}}.
+    - Test client drives cavity end-to-end (create, set, check_mesh, run, status, residuals, stats, image, export_vtk);
+      9 tests.
+    - The native assistant (F-147) reuses the same tool definitions and Access classes in-process; the MCP server stays
+      as an interface for external agents.
 - [x] **F-091** Safety and permission model for tools (read-only vs mutating, path sandbox, runtime/resource limits, confirmation hooks)
   - depends on: F-090
   - acceptance: Tests show path escape blocked, resource caps enforced, mutating tools flagged for approval
-  - note: rcfd-mcp policy.rs: Access classes (read/mutate/execute/write_files) exposed as readOnlyHint and _meta needsApproval, Approval::{Auto,ReadOnly,Hook}, tool allow-list; service-level sandbox root (path escape blocked for session/load_mesh/export/mesh.file), max_cells, max_steps_per_call, max_run_seconds enforced. Tests cover read-only denial, hook seeing only mutating calls, allow-list, escape (../, absolute), cell cap, step cap, runtime cap. The assistant tool layer (F-147) reuses this Access model and adds its own approval state machine on top.
+  - note: rcfd-mcp policy.rs: Access classes (read/mutate/execute/write_files) exposed as readOnlyHint and _meta
+    needsApproval, Approval::{Auto,ReadOnly,Hook}, tool allow-list.
+    - Service-level sandbox root (path escape blocked for session/load_mesh/export/mesh.file), max_cells,
+      max_steps_per_call, max_run_seconds enforced.
+    - Tests cover read-only denial, hook seeing only mutating calls, allow-list, escape (../, absolute), cell cap, step
+      cap, runtime cap.
+    - The assistant tool layer (F-147) reuses this Access model and adds its own approval state machine on top.
 - [~] **F-092** Optional extra: Claude Code mod panel shell (case tree, schema-driven settings editor, run controls)
   - depends on: F-090, F-005
   - acceptance: Panel renders tree from schema and edits round-trip to the service; works against local service
-  - note: DEMOTED to an optional extra: the primary AI helper is the provider-agnostic assistant sidebar inside the rcfd desktop app (F-140..F-150). This mod is not on the critical path, is no longer extended or tested, and nothing depends on it. Earlier state: Claude Code mod rcfd/clients/claude-panel (installed copy in the session dev-mods folder): Pane opened by /rcfd, schema-driven settings view (rows from settings.get + settings.schema with type/doc/range, section filter, edit via Input -> settings.set round trip, server-side validation errors shown), run controls (Run/Pause/Resume/Stop buttons with hotkeys), talks to a local 'rcfd serve' via 'rcfd call'. claude plugin validate passes; claude plugin test: 5 pass (helper unit tests + terminal Pane mount shows buttons, empty monitors, settings view). NOT verified inside a live host session (hot reload answer not seen), and requires rcfd on PATH.
+  - note: DEMOTED to an optional extra: the primary AI helper is the provider-agnostic assistant sidebar inside the
+    rcfd desktop app (F-140..F-150). This mod is not on the critical path, is no longer extended or tested, and nothing
+    depends on it.
+    - Earlier state: Claude Code mod rcfd/clients/claude-panel (installed copy in the session dev-mods folder):
+      - Pane opened by /rcfd.
+      - Schema-driven settings view (rows from settings.get + settings.schema with type/doc/range, section filter, edit
+        via Input -> settings.set round trip, server-side validation errors shown).
+      - Run controls (Run/Pause/Resume/Stop buttons with hotkeys).
+      - Talks to a local 'rcfd serve' via 'rcfd call'.
+      - claude plugin validate passes; claude plugin test: 5 pass (helper unit tests + terminal Pane mount shows
+        buttons, empty monitors, settings view).
+      - NOT verified inside a live host session (hot reload answer not seen), and requires rcfd on PATH.
 - [~] **F-093** Optional extra: Claude Code mod live monitors (residual/force sparklines, run status, log tail, field raster)
   - depends on: F-092, F-074, F-073
   - acceptance: Plots update within 1 s of each iteration of a running cavity case
-  - note: DEMOTED to an optional extra (see F-092); superseded by the native monitors panel (F-144) and viewport (F-143). Earlier state: Same mod, Monitors view: sparklines of res_u/res_p/continuity, report values, coloured Raster preview of speed (service field.grid), log tail; one panel.snapshot call per 500 ms poll. Measured on a 40x40 cavity run through the real CLI: snapshot call ~210-250 ms (debug build), so a sample is visible within ~0.75 s of its iteration; the 1 s criterion is by calculation plus that measurement, not observed in a host UI. Field preview is a text raster, not the PNG renderer.
+  - note: DEMOTED to an optional extra (see F-092); superseded by the native monitors panel (F-144) and viewport
+    (F-143).
+    - Earlier state: Same mod, Monitors view:
+      - Sparklines of res_u/res_p/continuity, report values, coloured Raster preview of speed (service field.grid), log
+        tail; one panel.snapshot call per 500 ms poll.
+      - Measured on a 40x40 cavity run through the real CLI: snapshot call ~210-250 ms (debug build), so a sample is
+        visible within ~0.75 s of its iteration; the 1 s criterion is by calculation plus that measurement, not
+        observed in a host UI.
+      - Field preview is a text raster, not the PNG renderer.
 - [x] **F-094** Assistant-guided workflows: setup from natural language, mesh-check triage, convergence diagnosis, sweeps, reports (provider-agnostic)
   - depends on: F-145, F-148, F-084
-  - acceptance: Scripted eval with the mock provider (CI) and, optionally, a user-supplied real or local model: 5 canned prompts produce valid cases that run; transcripts saved as journals REGISTERED PASS CRITERIA for the mock-provider eval (fixed 2026-10-14 before the harness was first run; not to be changed after results; the scripted model tests the tool layer, approvals and diagnostics, not the competence of any real model): C1 five scripted scenarios (cavity at Re 400; diverging-residual diagnosis and repair; k-epsilon channel boundary-condition selection; compressible nozzle with total-pressure inlet; mesh-check triage) each end with validate_case ok=true, zero mesh patches without a boundary entry, and a run that reaches its step limit or convergence with all final residuals finite. C2 for every scenario each executed non-read tool call was preceded by exactly one approval request for that call, and no approval is requested for a read tool. C3 in a deny-all variant of each scenario the settings tree and session list after the turn equal those before the first denied call, no run is started, and every denied call yields an error result with code 1100. C4 six malformed calls (unknown tool, invalid-JSON arguments, wrong argument type, missing required argument, unknown property, a write tool called with the gate closed) each yield an is_error tool result, none panics, none changes state, and the turn still completes. C5 with a canary API key configured through the key store and the environment variable, and a server error body that echoes it, the canary is absent from transcripts, saved journals, event text, ProviderError Display/Debug, Secret/config Debug and request bodies/URLs, and present only in the auth header. C6 each scenario writes a journal file (transcript plus event log) that parses back and in which every tool_use has exactly one tool_result. C7 running each scenario twice gives identical tool-call sequences and identical final settings trees. C8 the whole eval suite runs in under 60 s of test wall time in a debug build on the development machine.
-  - note: Mock-provider eval harness: crates/rcfd-assistant/tests/eval.rs (one test, prints a per-criterion report with --nocapture). Five scripted scenarios (cavity Re 400; diagnose and repair a diverging cavity; k-epsilon channel BC selection incl. a rejected first create_case; compressible nozzle with total_inlet/pressure_outlet; mesh-check triage) drive the real agent loop, approval gate and solver service; some mock replies are computed from earlier tool results (suggestions, residual verdicts). Registered criteria C1-C8 (acceptance text, fixed before the first run) all PASS: first full run 7 of 8 passed (C1 missed on the nozzle because the harness required done=true while the registered text says step limit or convergence; the harness check was corrected to the registered wording, no criterion text changed; the nozzle stopped at its 200-step limit with finite residuals), second run 8 of 8. Measured: suite 17.5-19.5 s on an idle machine, 37.8 s while other builds ran (limit 60 s). A mutation check (disabling Secret::scrub) makes C5 report 4 misses, so the secret check is not vacuous. Journals (transcript plus event log) are written to target/tmp/f094-journals/. NOT done: the optional real or local model run; the scripted model tests the tool layer, approvals and diagnostics, not model competence, so 'valid cases that run' is shown for scripted tool sequences only. Findings, not criteria: suggest_boundary_conditions recognises inlet/outlet by patch kind or name, so on nozzle_2d (patches xmin/xmax typed Wall) it proposed slip walls and the model had to set total_inlet itself (fixed in wave 11: with generator nozzle_2d the suggestions are total_inlet at xmin with placeholder p0 and T0 from compressible.initial.left and pressure_outlet at xmax, tests in crates/rcfd-assistant/tests/nozzle_bc_suggestions.rs; the registered scenario and criteria are unchanged); cavity_2d ignored mesh.ny (nx=200, ny=2 gave 40000 cells), so a stretched mesh could not be made with it and the triage scenario uses box_2d (fixed in wave 11: cavity_2d is an nx x ny grid on lx x ly, and wall_layers, periodic_x/y and grading are rejected with located diagnostics by generators that do not apply them; the triage scenario was not changed). DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - acceptance: Scripted eval with the mock provider (CI) and, optionally, a user-supplied real or local model: 5 canned
+    prompts produce valid cases that run; transcripts saved as journals
+    - REGISTERED PASS CRITERIA for the mock-provider eval (fixed 2026-10-14 before the harness was first run; not to be
+      changed after results; the scripted model tests the tool layer, approvals and diagnostics, not the competence of
+      any real model):
+      - C1 five scripted scenarios (cavity at Re 400; diverging-residual diagnosis and repair; k-epsilon channel
+        boundary-condition selection; compressible nozzle with total-pressure inlet; mesh-check triage) each end with
+        validate_case ok=true, zero mesh patches without a boundary entry, and a run that reaches its step limit or
+        convergence with all final residuals finite.
+      - C2 for every scenario each executed non-read tool call was preceded by exactly one approval request for that
+        call, and no approval is requested for a read tool.
+      - C3 in a deny-all variant of each scenario the settings tree and session list after the turn equal those before
+        the first denied call, no run is started, and every denied call yields an error result with code 1100.
+      - C4 six malformed calls (unknown tool, invalid-JSON arguments, wrong argument type, missing required argument,
+        unknown property, a write tool called with the gate closed) each yield an is_error tool result, none panics,
+        none changes state, and the turn still completes.
+      - C5 with a canary API key configured through the key store and the environment variable, and a server error
+        body that echoes it, the canary is absent from transcripts, saved journals, event text, ProviderError
+        Display/Debug, Secret/config Debug and request bodies/URLs, and present only in the auth header.
+      - C6 each scenario writes a journal file (transcript plus event log) that parses back and in which every tool_use
+        has exactly one tool_result.
+      - C7 running each scenario twice gives identical tool-call sequences and identical final settings trees.
+      - C8 the whole eval suite runs in under 60 s of test wall time in a debug build on the development machine.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. Registered criteria C1-C8 all PASS. NOT done: the optional real or
+    local model run; 'valid cases that run' is shown for scripted tool sequences only.
+    - Mock-provider eval harness: crates/rcfd-assistant/tests/eval.rs (one test, prints a per-criterion report with
+      --nocapture).
+    - Five scripted scenarios (cavity Re 400; diagnose and repair a diverging cavity; k-epsilon channel BC selection
+      incl. a rejected first create_case; compressible nozzle with total_inlet/pressure_outlet; mesh-check triage)
+      drive the real agent loop, approval gate and solver service; some mock replies are computed from earlier tool
+      results (suggestions, residual verdicts).
+    - Registered criteria C1-C8 (acceptance text, fixed before the first run) all PASS:
+      - First full run 7 of 8 passed. C1 missed on the nozzle because the harness required done=true while the
+        registered text says step limit or convergence. The harness check was corrected to the registered wording, no
+        criterion text changed. The nozzle stopped at its 200-step limit with finite residuals.
+      - Second run 8 of 8.
+    - Measured: suite 17.5-19.5 s on an idle machine, 37.8 s while other builds ran (limit 60 s).
+    - A mutation check (disabling Secret::scrub) makes C5 report 4 misses, so the secret check is not vacuous.
+    - Journals (transcript plus event log) are written to target/tmp/f094-journals/.
+    - NOT done: the optional real or local model run; the scripted model tests the tool layer, approvals and
+      diagnostics, not model competence, so 'valid cases that run' is shown for scripted tool sequences only.
+    - Findings, not criteria:
+      - suggest_boundary_conditions recognises inlet/outlet by patch kind or name, so on nozzle_2d (patches xmin/xmax
+        typed Wall) it proposed slip walls and the model had to set total_inlet itself.
+        - Fixed in wave 11: with generator nozzle_2d the suggestions are total_inlet at xmin with placeholder p0 and T0
+          from compressible.initial.left and pressure_outlet at xmax, tests in
+          crates/rcfd-assistant/tests/nozzle_bc_suggestions.rs; the registered scenario and criteria are unchanged.
+      - cavity_2d ignored mesh.ny (nx=200, ny=2 gave 40000 cells), so a stretched mesh could not be made with it and
+        the triage scenario uses box_2d.
+        - Fixed in wave 11: cavity_2d is an nx x ny grid on lx x ly, and wall_layers, periodic_x/y and grading are
+          rejected with located diagnostics by generators that do not apply them; the triage scenario was not changed.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests;
+      scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-095** Parametric studies / design-point runner with result tables exposed as assistant and MCP tools
   - depends on: F-081, F-090, F-109, F-104
   - acceptance: Sweep of 5 inlet velocities runs in parallel and returns a table; resumable
-  - note: Result-table columns come from report definitions (F-109); sweep parameters can be named expressions (F-104). SCOPE (merged review): add operating-point maps with the laminar Poiseuille pressure-drop curve as the verification case (within 1 percent). WAVE 20C (ADR 0034, partial): `study` settings section and `rcfd study` command (docs/studies.md): list, linspace, logspace sweeps, grid or zip, strings and JSON-valued (vector) parameters, each design point = base case + --set style overrides, sequential or `--parallel n` scoped threads, result table of chosen reports as table.csv and table.json (no wall-clock or thread data, byte-identical for 1 and 3 threads), failure isolation (failed row, other points run, study exit code = lowest-index failed point per docs/run-control.md, 3 for static sweep errors with located study.* paths), `--resume` (skips ok rows with equal fingerprint, result byte-identical to a fresh run), `--max-new-points`, `--list`. Measured (checks registered first): 18-point slab-conduction grid reproduces the closed form to 3.3e-10 relative (limit 1e-6) after a corrected-depth set-up (the registered unit-depth formula is an ignored known miss: box_2d depth is lx/nx); byte-identical tables for 1 vs 3 threads; resume runs 11 and skips 7 as registered on the 1e-9 set-up (MISS on the registered 1e-12 study, where all rows end at the cap with exit 5 and resume retries failed rows: run 18, skipped 0; ignored known-miss test). MISS, reported not tuned: S7 laminar plane-Poiseuille operating-point map (5 inlet velocities) is 1.86 to 1.91 percent below 12 rho nu U L/h^2 at 10 cells across the gap against the registered 1 percent (ignored known-miss test); 0.29 percent at 20 cells, so the cause looks like the first-order wall treatment, not the study runner. Not done: assistant/MCP/service exposure of studies (the acceptance text asks for it), named-expression sweep parameters (F-104), studies of chained runs, adaptive or optimising exploration, resuming a half-finished point, distributed runner. Python helper `rcfd.study` in python/rcfd (F-083). WAVE 32C (ADR 0067, partial; candidates F-254 operating-map automation and F-257 DOE/optimisation, which are not present as ids in this file, are recorded here): `rcfd map` and the library driver `rcfd-api::design::opmap` run chained operating-point maps (each point restarts from the previous converged solution for steady SIMPLE/SIMPLEC without energy or turbulence; warm chain 577 iterations against 746 cold on a laminar channel), with map.csv/map.json, failure handling and cold retry; `rcfd-api::design::{sampling,optim,pareto,store,study}` give full factorial, Latin hypercube, Sobol (dimensions <= 10, direction numbers unverified), Nelder-Mead, differential evolution (CMA-ES NOT delivered), robust scalarisation, Pareto extraction, concurrent evaluation with a worker limit and a resumable JSON-lines store; `design.*` service methods and ten `design_*` MCP tools (docs/design-loop.md, docs/mcp-tools.md); PIMPLE/PISO divergence guard `solver.divergence_courant_limit`. Known miss: T3 (Nelder-Mead reaches 3.1e-3, not 1e-3, after 120 candidates). Status stays partial: no multi-objective optimiser, no real-fan study, warm start only for steady SIMPLE/SIMPLEC. WAVE 40C (ADR 0099, done): non-ignored P1 runs the 5-inlet-velocity sweep (POIS channel, ny 10) with --parallel 2: exit 0, 5 rows all ok, table.csv and table.json byte-identical to the --parallel 1 run, and --resume runs 0 and skips 5 with the tables unchanged; this meets the acceptance as written. P2 re-registers the Poiseuille map at ny 20: 0.25 to 0.31 percent below 12 rho nu U L/h^2 for the five velocities (limit 1 percent, passes); S7 at ny 10 stays an ignored known miss (1.9 percent). Remaining scope (multi-objective optimiser, CMA-ES, real-fan study, warm start beyond steady SIMPLE/SIMPLEC, T3 Nelder-Mead miss) should be split into a new item, not created here. The older "Not done: assistant/MCP/service exposure (the acceptance text asks for it)" is a misquote (audit group 8): only the title asks for it, and it exists as the design_* MCP tools including design_run_study (T4 passes).
+  - note: Non-ignored P1 in WAVE 40C (ADR 0099, done) meets the acceptance as written. S7 at ny 10 stays an ignored
+    known miss (1.9 percent). Remaining scope (multi-objective optimiser, CMA-ES, real-fan study, warm start beyond
+    steady SIMPLE/SIMPLEC, T3 Nelder-Mead miss) should be split into a new item, not created here.
+    - Result-table columns come from report definitions (F-109); sweep parameters can be named expressions (F-104).
+    - SCOPE (merged review): add operating-point maps with the laminar Poiseuille pressure-drop curve as the
+      verification case (within 1 percent).
+    - WAVE 20C (ADR 0034, partial): `study` settings section and `rcfd study` command (docs/studies.md):
+      - List, linspace, logspace sweeps, grid or zip, strings and JSON-valued (vector) parameters.
+      - Each design point = base case + --set style overrides, sequential or `--parallel n` scoped threads.
+      - Result table of chosen reports as table.csv and table.json (no wall-clock or thread data, byte-identical for 1
+        and 3 threads).
+      - Failure isolation (failed row, other points run, study exit code = lowest-index failed point per
+        docs/run-control.md, 3 for static sweep errors with located study.* paths).
+      - `--resume` (skips ok rows with equal fingerprint, result byte-identical to a fresh run), `--max-new-points`,
+        `--list`.
+      - Measured (checks registered first):
+        - 18-point slab-conduction grid reproduces the closed form to 3.3e-10 relative (limit 1e-6) after a
+          corrected-depth set-up (the registered unit-depth formula is an ignored known miss: box_2d depth is lx/nx).
+        - Byte-identical tables for 1 vs 3 threads.
+        - Resume runs 11 and skips 7 as registered on the 1e-9 set-up (MISS on the registered 1e-12 study, where all
+          rows end at the cap with exit 5 and resume retries failed rows: run 18, skipped 0; ignored known-miss test).
+      - MISS, reported not tuned: S7 laminar plane-Poiseuille operating-point map (5 inlet velocities) is 1.86 to 1.91
+        percent below 12 rho nu U L/h^2 at 10 cells across the gap against the registered 1 percent (ignored
+        known-miss test); 0.29 percent at 20 cells, so the cause looks like the first-order wall treatment, not the
+        study runner.
+      - Not done: assistant/MCP/service exposure of studies (the acceptance text asks for it), named-expression sweep
+        parameters (F-104), studies of chained runs, adaptive or optimising exploration, resuming a half-finished
+        point, distributed runner.
+      - Python helper `rcfd.study` in python/rcfd (F-083).
+    - WAVE 32C (ADR 0067, partial; candidates F-254 operating-map automation and F-257 DOE/optimisation, which are not
+      present as ids in this file, are recorded here):
+      - `rcfd map` and the library driver `rcfd-api::design::opmap` run chained operating-point maps (each point
+        restarts from the previous converged solution for steady SIMPLE/SIMPLEC without energy or turbulence; warm
+        chain 577 iterations against 746 cold on a laminar channel), with map.csv/map.json, failure handling and cold
+        retry.
+      - `rcfd-api::design::{sampling,optim,pareto,store,study}` give full factorial, Latin hypercube, Sobol
+        (dimensions <= 10, direction numbers unverified), Nelder-Mead, differential evolution (CMA-ES NOT delivered),
+        robust scalarisation, Pareto extraction, concurrent evaluation with a worker limit and a resumable JSON-lines
+        store.
+      - `design.*` service methods and ten `design_*` MCP tools (docs/design-loop.md, docs/mcp-tools.md).
+      - PIMPLE/PISO divergence guard `solver.divergence_courant_limit`.
+      - Known miss: T3 (Nelder-Mead reaches 3.1e-3, not 1e-3, after 120 candidates).
+      - Status stays partial: no multi-objective optimiser, no real-fan study, warm start only for steady
+        SIMPLE/SIMPLEC.
+    - WAVE 40C (ADR 0099, done):
+      - Non-ignored P1 runs the 5-inlet-velocity sweep (POIS channel, ny 10) with --parallel 2: exit 0, 5 rows all ok,
+        table.csv and table.json byte-identical to the --parallel 1 run, and --resume runs 0 and skips 5 with the
+        tables unchanged; this meets the acceptance as written.
+      - P2 re-registers the Poiseuille map at ny 20: 0.25 to 0.31 percent below 12 rho nu U L/h^2 for the five
+        velocities (limit 1 percent, passes); S7 at ny 10 stays an ignored known miss (1.9 percent).
+      - Remaining scope (multi-objective optimiser, CMA-ES, real-fan study, warm start beyond steady SIMPLE/SIMPLEC,
+        T3 Nelder-Mead miss) should be split into a new item, not created here.
+      - The older "Not done: assistant/MCP/service exposure (the acceptance text asks for it)" is a misquote (audit
+        group 8): only the title asks for it, and it exists as the design_* MCP tools including design_run_study (T4
+        passes).
 - [~] **F-096** Documentation, tutorials and example gallery for the desktop app, the assistant sidebar and MCP usage
   - depends on: F-094, F-150
   - acceptance: Docs site builds; tutorials executed in CI
-  - note: WAVE 38B (ADR 0089): docs site = every Markdown file under docs/ rendered to static HTML by a small Rust generator inside crates/rcfd-cli/tests/docs_site.rs (no new dependency; output in the target dir; `cargo test -p rcfd-cli --test docs_site -- --nocapture`); 122 pages, 0 broken relative links of 185, docs/index.md links every tutorial and case-schema, meshing, milestone-fan, design-loop, mcp-tools. Five tutorials in docs/tutorials (quick-start-cli, cavity, gallery, mcp-design-loop, desktop-assistant); every fenced block is tagged (file=, run, run-slow, output, not-executed) and an untagged block fails the test; run blocks execute the real rcfd binary (crates/rcfd-cli/tests/tutorials.rs) or pipe JSON-RPC into the real rcfd-mcp binary started as `rcfd-mcp --root .` (crates/rcfd-mcp/tests/tutorials.rs); output lines and exit codes are checked; mutation fixtures (untagged block, wrong exit code, missing output, missing file, MCP error) are all detected. Default suite (debug): CLI tutorials 18.4 s, MCP tutorial 7.4 s; ignored slow tests (release): 53.9 s and 13.8 s, all pass. Gallery checks all 10 cases/*/*.toml and names all 12 case directories; full runs in the slow test (fan passages and packed_bed exit 5, not converged, stated on the page). The MCP tutorial runs the contraction-duct design loop (create_case, check_mesh, run, design_create_study, propose, evaluate, run_study, list, compare, create_variant, operating map) and builds/checks the fan sector mesh; it states that a fan design study is not shown because the fan solve is not validated (milestone-fan.md). Bug found and fixed: design_create_study stored a relative base-case path that later calls read against the study directory, so the design tools failed with `rcfd-mcp --root .` or no root (fix in rcfd-api design/tools.rs; the tutorial runs with --root . as the regression check). NOT done: the GitHub workflow has never run (nothing pushed), so 'executed in CI' means executed by cargo test on the development machine (Windows only); every GUI and assistant-sidebar step of desktop-assistant.md is marked not-executed and was not checked against the running app; no real or local model used; no search or navigation tree in the site. Every registered check of ADR 0089 passes; partial is a conservative choice (GUI/sidebar steps not executed, workflow not run, deps F-094/F-150 partial), not a miss.
+  - note: WAVE 38B (ADR 0089). Every registered check of ADR 0089 passes; partial is a conservative choice (GUI/sidebar
+    steps not executed, workflow not run, deps F-094/F-150 partial), not a miss.
+    - Docs site = every Markdown file under docs/ rendered to static HTML by a small Rust generator inside
+      crates/rcfd-cli/tests/docs_site.rs (no new dependency; output in the target dir;
+      `cargo test -p rcfd-cli --test docs_site -- --nocapture`); 122 pages, 0 broken relative links of 185,
+      docs/index.md links every tutorial and case-schema, meshing, milestone-fan, design-loop, mcp-tools.
+    - Five tutorials in docs/tutorials (quick-start-cli, cavity, gallery, mcp-design-loop, desktop-assistant):
+      - Every fenced block is tagged (file=, run, run-slow, output, not-executed) and an untagged block fails the test.
+      - Run blocks execute the real rcfd binary (crates/rcfd-cli/tests/tutorials.rs) or pipe JSON-RPC into the real
+        rcfd-mcp binary started as `rcfd-mcp --root .` (crates/rcfd-mcp/tests/tutorials.rs).
+      - Output lines and exit codes are checked.
+      - Mutation fixtures (untagged block, wrong exit code, missing output, missing file, MCP error) are all detected.
+    - Default suite (debug): CLI tutorials 18.4 s, MCP tutorial 7.4 s; ignored slow tests (release): 53.9 s and 13.8 s,
+      all pass.
+    - Gallery checks all 10 cases/*/*.toml and names all 12 case directories; full runs in the slow test (fan passages
+      and packed_bed exit 5, not converged, stated on the page).
+    - The MCP tutorial runs the contraction-duct design loop (create_case, check_mesh, run, design_create_study,
+      propose, evaluate, run_study, list, compare, create_variant, operating map) and builds/checks the fan sector
+      mesh; it states that a fan design study is not shown because the fan solve is not validated (milestone-fan.md).
+    - Bug found and fixed: design_create_study stored a relative base-case path that later calls read against the study
+      directory, so the design tools failed with `rcfd-mcp --root .` or no root (fix in rcfd-api design/tools.rs; the
+      tutorial runs with --root . as the regression check).
+    - NOT done:
+      - The GitHub workflow has never run (nothing pushed), so 'executed in CI' means executed by cargo test on the
+        development machine (Windows only).
+      - Every GUI and assistant-sidebar step of desktop-assistant.md is marked not-executed and was not checked against
+        the running app.
+      - No real or local model used.
+      - No search or navigation tree in the site.
 - [x] **F-140** Desktop app shell (rcfd-gui, eframe/egui): window, menu bar, light/dark theme, case open/save, in-process solver service
   - depends on: F-085, F-080
   - acceptance: Headless smoke test opens the cavity template, runs frames, saves and reloads the case with an identical settings hash; theme switch applies; state and logic live in non-UI modules with unit tests
-  - note: Crate rcfd-gui: eframe 0.27.2/egui_dock 0.12.0/egui_plot 0.27.2 (ADR 0004). File > Open and Save as use a native dialog (rfd =0.15.4, MIT; Win32 dialogs, NSOpenPanel, XDG portal) through a FileChooser trait with headless unit tests of start folder, suggested name, .toml extension, cancel and error handling (crates/rcfd-gui/tests/files.rs); the typed-path prompts remain as 'Open from typed path...' / 'Save as typed path...' fallback. The native dialog itself was never opened by this work (no display interaction) and the Linux and macOS builds of rfd were not built. Verified by headless tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+  - note: Crate rcfd-gui: eframe 0.27.2/egui_dock 0.12.0/egui_plot 0.27.2 (ADR 0004). Verified by headless tests only
+    (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+    - File > Open and Save as use a native dialog (rfd =0.15.4, MIT; Win32 dialogs, NSOpenPanel, XDG portal) through a
+      FileChooser trait with headless unit tests of start folder, suggested name, .toml extension, cancel and error
+      handling (crates/rcfd-gui/tests/files.rs).
+    - The typed-path prompts remain as 'Open from typed path...' / 'Save as typed path...' fallback.
+    - The native dialog itself was never opened by this work (no display interaction) and the Linux and macOS builds of
+      rfd were not built.
 - [x] **F-141** Dockable panel layout (egui_dock): dock, split, float and hide/show panels; reset layout; layout restored on restart
   - depends on: F-140
   - acceptance: Unit tests: hide/show/toggle/reset keep exactly one instance of each panel and never lose a panel; layout serializes and restores
-  - note: Layout unit-tested (hide/show/toggle/float/reset, JSON round trip incl. repair of unlaid-out NaN positions). Theme and layout saved to the per-user config dir; end-to-end restart restore not tested. Verified by headless tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+  - note: Layout unit-tested (hide/show/toggle/float/reset, JSON round trip incl. repair of unlaid-out NaN positions).
+    Theme and layout saved to the per-user config dir; end-to-end restart restore not tested. Verified by headless
+    tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually.
 - [x] **F-142** Settings-tree editor driven by the case JSON schema: typed widgets, enum combos, ranges, units, named-object add/remove, inline server validation errors
   - depends on: F-140, F-005
   - acceptance: Tree built from settings.schema covers every schema field; edits round-trip to the service via settings.set; out-of-range and wrong-type input is rejected locally and server errors are shown on the field
-  - note: Tree built from settings.schema; every leaf reachable and default parses (test). Added service method settings.remove for named entries. Verified by headless tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+  - note: Tree built from settings.schema; every leaf reachable and default parses (test). Added service method
+    settings.remove for named entries. Verified by headless tests only (frames run without a window; the binary starts
+    and stays up); the look was not inspected visually.
 - [x] **F-143** Mesh and field viewport: 2D slice field raster with colour map and legend, cell-centre view, field selector (3D is F-151)
   - depends on: F-140, F-073
   - acceptance: Cavity raster at Re 100 (40 x 40, linear upwind) matches the Ghia u centreline within 2 percent of lid speed and its primary-vortex speed minimum lies inside the Ghia u sign-change bracket (not the near-lid shear-layer minimum); colour map and range logic unit-tested; viewport renders headless without panic
-  - note: 2D raster (field.grid) and cell-centre (field.slice) views with colour map, legend, hover value and fixed/auto range; logic unit-tested. Cavity vortex not looked at by a human. 3D is F-151. Verified by headless tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually. WAVE 17C (ADR 0025, headless): colour map endpoints exact and luma rise 200; data-to-pixel raster function (new raster.rs, shared with the UI hover and legend arithmetic) checked on every pixel of a 17 x 9 grid with undefined cells (0 wrong), hover mapping on all cells, legend ticks on nice 1-2-2.5-5 steps (12 fixed ranges, 300 guarded random ranges), range logic, PNG round trip, headless egui frame whose painted fills contain the raster colours plus 48 legend swatches, 7 window sizes with finite geometry, cavity logic bounds (top-row mean ux 0.573, return flow min ux -0.182). One registered miss: luma non-decreasing over 1001 samples fails by 0.2126 from 8-bit quantisation (ignored known_miss test; ADR addendum). Two set-up defects (V3 corner cell, V4 degenerate random ranges) got corrected tests, old ones kept ignored. STILL UNVERIFIED: how any of it looks; stays partial. WAVE 39E (ADR 0096, viewport_raster.rs v11): the template cavity switched to the F-028 set-up (40 x 40, linear upwind, simplec) through the GUI controller; the 40 x 40 viewport raster (one cell per pixel) centreline ux matches Ghia Re 100 within 0.0028 (limit 0.02 of lid speed). Registered C2 missed (ignored v11_..._known_miss): the upper-half window holds two strict speed minima, the primary vortex at (0.6125, 0.7375), speed 0.0048, inside the Ghia u sign-change bracket, and a second one at (0.3375, 0.8375), speed 0.178, in the near-lid shear layer. The speed raster is written as a PNG for a human look; nobody has looked at it as acceptance. Stays partial: clause 1 is visual. Proposed rewording in ADR 0096 (not applied). USER DECISION 2026-10-21: acceptance reworded to measurable clauses (ADR 0096 proposal, with the vortex clause stated as the primary minimum inside the Ghia bracket, since the registered one-minimum check C2 was ill-posed). Still partial: a corrected primary-minimum test is needed; 0.0028 centreline match already measured. WAVE 41A (ADR 0101, viewport_raster.rs v11b): DONE. The primary-vortex minimum (the lowest-speed strict 3 x 3 speed minimum in the v11 window) is at (0.6125, 0.7375), speed 0.0048, inside the Ghia u sign-change bracket widened by one pixel, [0.5922, 0.7594] (the v11 C2 rule; the pixel centre is 0.0031 above the unwidened bracket); the near-lid shear-layer minimum at (0.3375, 0.8375), speed 0.178, is not selected. The outcome was known from ADR 0096 before registering. With the centreline match (0.0028 of 0.02), the colour-map and range unit tests (ADR 0025; its luma known miss is an 8-bit quantisation property) and the headless frames, every clause is met by non-ignored tests. Nobody has looked at the picture; the acceptance no longer asks for it. USER DECISION 2026-10-22: accepted done with the one-pixel-widened Ghia bracket [0.5922, 0.7594] (raster resolution); the primary minimum at y = 0.7375 is 0.0031 above the unwidened Ghia upper end 0.7344. Nobody has viewed the raster as acceptance.
+  - note: USER DECISION 2026-10-22: accepted done with the one-pixel-widened Ghia bracket [0.5922, 0.7594] (raster
+    resolution); the primary minimum at y = 0.7375 is 0.0031 above the unwidened Ghia upper end 0.7344. Nobody has
+    viewed the raster as acceptance.
+    - 2D raster (field.grid) and cell-centre (field.slice) views with colour map, legend, hover value and fixed/auto
+      range; logic unit-tested. Cavity vortex not looked at by a human. 3D is F-151. Verified by headless tests only
+      (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+    - WAVE 17C (ADR 0025, headless):
+      - Colour map endpoints exact and luma rise 200.
+      - Data-to-pixel raster function (new raster.rs, shared with the UI hover and legend arithmetic) checked on every
+        pixel of a 17 x 9 grid with undefined cells (0 wrong).
+      - Hover mapping on all cells.
+      - Legend ticks on nice 1-2-2.5-5 steps (12 fixed ranges, 300 guarded random ranges).
+      - Range logic.
+      - PNG round trip.
+      - Headless egui frame whose painted fills contain the raster colours plus 48 legend swatches.
+      - 7 window sizes with finite geometry.
+      - Cavity logic bounds (top-row mean ux 0.573, return flow min ux -0.182).
+      - One registered miss: luma non-decreasing over 1001 samples fails by 0.2126 from 8-bit quantisation (ignored
+        known_miss test; ADR addendum).
+      - Two set-up defects (V3 corner cell, V4 degenerate random ranges) got corrected tests, old ones kept ignored.
+      - STILL UNVERIFIED: how any of it looks; stays partial.
+    - WAVE 39E (ADR 0096, viewport_raster.rs v11):
+      - The template cavity switched to the F-028 set-up (40 x 40, linear upwind, simplec) through the GUI controller.
+      - The 40 x 40 viewport raster (one cell per pixel) centreline ux matches Ghia Re 100 within 0.0028 (limit 0.02 of
+        lid speed).
+      - Registered C2 missed (ignored v11_..._known_miss): the upper-half window holds two strict speed minima, the
+        primary vortex at (0.6125, 0.7375), speed 0.0048, inside the Ghia u sign-change bracket, and a second one at
+        (0.3375, 0.8375), speed 0.178, in the near-lid shear layer.
+      - The speed raster is written as a PNG for a human look; nobody has looked at it as acceptance.
+      - Stays partial: clause 1 is visual. Proposed rewording in ADR 0096 (not applied).
+    - USER DECISION 2026-10-21: acceptance reworded to measurable clauses (ADR 0096 proposal, with the vortex clause
+      stated as the primary minimum inside the Ghia bracket, since the registered one-minimum check C2 was ill-posed).
+      Still partial: a corrected primary-minimum test is needed; 0.0028 centreline match already measured.
+    - WAVE 41A (ADR 0101, viewport_raster.rs v11b): DONE.
+      - The primary-vortex minimum (the lowest-speed strict 3 x 3 speed minimum in the v11 window) is at
+        (0.6125, 0.7375), speed 0.0048, inside the Ghia u sign-change bracket widened by one pixel, [0.5922, 0.7594]
+        (the v11 C2 rule; the pixel centre is 0.0031 above the unwidened bracket).
+      - The near-lid shear-layer minimum at (0.3375, 0.8375), speed 0.178, is not selected.
+      - The outcome was known from ADR 0096 before registering.
+      - With the centreline match (0.0028 of 0.02), the colour-map and range unit tests (ADR 0025; its luma known miss
+        is an 8-bit quantisation property) and the headless frames, every clause is met by non-ignored tests.
+      - Nobody has looked at the picture; the acceptance no longer asks for it.
+    - USER DECISION 2026-10-22: accepted done with the one-pixel-widened Ghia bracket [0.5922, 0.7594] (raster
+      resolution); the primary minimum at y = 0.7375 is 0.0031 above the unwidened Ghia upper end 0.7344. Nobody has
+      viewed the raster as acceptance.
 - [x] **F-144** Monitors panel: residual and report plots (log scale), run/pause/stop controls, run status and log tail, polled without blocking the UI
   - depends on: F-140, F-074
   - acceptance: Plots update while a cavity run is in progress; the UI thread never blocks on the solver; incremental sample merge unit-tested
-  - note: Residual/report plots (egui_plot, log y), run/pause/resume/stop/step, status, log tail; solver runs asynchronously and the UI polls every 250 ms. Plot update latency and appearance not observed by a human. Verified by headless tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually. WAVE 17C (ADR 0025, headless): log mapping bit-identical to log10, inverse error 4.2e-15 (limit 1e-12); non-finite and non-positive points dropped with exact counts; new min/max decimation (4000 points per plot series) keeps first, last, global and per-bucket extrema for N up to 1e6; 3 x 100 000 points merged from overlapping chunks with 0 dropped; polling a running 60-iteration cavity case: worst poll 22 ms (limit 1 s), run seen mid-way, exactly 60 res_u samples; frame with 3 x 200 000 points draws. NOT verified: plot appearance and update latency as perceived by a person; stays partial. WAVE 39D (ADR 0095) M7 (rcfd-gui --test monitors_plot): a cavity run (cap 200000 iterations, tolerances 1e-14) driven only by headless egui frames of the app with the Monitors panel open, polled by the app's own 250 ms tick: res_u series lengths 186, 367, 540, 729 over four polls while running (limit at least 4, strictly increasing), 48 frames drawn in state running, worst frame 9.1 ms (limit 1 s), at least 569 shapes per frame; the run is stopped mid-way. With m4 (merge) and m5 (poll time) every acceptance clause is measured. Not part of the acceptance and not done: appearance and latency as a person perceives them.
+  - note: With WAVE 39D (ADR 0095) M7, plus m4 (merge) and m5 (poll time), every acceptance clause is measured. Not part
+    of the acceptance and not done: appearance and latency as a person perceives them.
+    - Residual/report plots (egui_plot, log y), run/pause/resume/stop/step, status, log tail; solver runs asynchronously
+      and the UI polls every 250 ms. Plot update latency and appearance not observed by a human. Verified by headless
+      tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+    - WAVE 17C (ADR 0025, headless):
+      - Log mapping bit-identical to log10, inverse error 4.2e-15 (limit 1e-12).
+      - Non-finite and non-positive points dropped with exact counts.
+      - New min/max decimation (4000 points per plot series) keeps first, last, global and per-bucket extrema for N up
+        to 1e6.
+      - 3 x 100 000 points merged from overlapping chunks with 0 dropped.
+      - Polling a running 60-iteration cavity case: worst poll 22 ms (limit 1 s), run seen mid-way, exactly 60 res_u
+        samples.
+      - Frame with 3 x 200 000 points draws.
+      - NOT verified: plot appearance and update latency as perceived by a person; stays partial.
+    - WAVE 39D (ADR 0095) M7 (rcfd-gui --test monitors_plot): a cavity run (cap 200000 iterations, tolerances 1e-14)
+      driven only by headless egui frames of the app with the Monitors panel open, polled by the app's own 250 ms tick:
+      - res_u series lengths 186, 367, 540, 729 over four polls while running (limit at least 4, strictly increasing).
+      - 48 frames drawn in state running.
+      - Worst frame 9.1 ms (limit 1 s).
+      - At least 569 shapes per frame.
+      - The run is stopped mid-way.
+    - With m4 (merge) and m5 (poll time) every acceptance clause is measured.
+    - Not part of the acceptance and not done: appearance and latency as a person perceives them.
 - [x] **F-145** Assistant sidebar in rcfd-gui: chat transcript, tool-call cards with approve/deny, provider/model selector, context chips (case, run state, selected setting), read-only vs approve-writes toggle
   - depends on: F-141, F-146, F-147
   - acceptance: Headless frames render a transcript with a pending approval card; approving/denying resumes the agent; model calls run on a worker thread so the UI stays responsive
-  - note: Sidebar in the dock: provider/model selector, base URL and key fields, mode toggle, context chips, transcript with approve/deny cards, no-model quick actions; agent on a worker thread. Smoke test drives mock-provider turn with approval via the app state. Verified by headless tests only (frames run without a window; the binary starts and stays up); the look was not inspected visually.
+  - note: Sidebar in the dock: provider/model selector, base URL and key fields, mode toggle, context chips, transcript
+    with approve/deny cards, no-model quick actions; agent on a worker thread. Smoke test drives mock-provider turn with
+    approval via the app state. Verified by headless tests only (frames run without a window; the binary starts and
+    stays up); the look was not inspected visually.
 - [x] **F-146** Provider abstraction and adapters: chat + tool calling + streaming trait; OpenAI-compatible (Ollama, LM Studio, vLLM, ...), Anthropic Messages API, mock provider; injectable HTTP transport
   - depends on: F-001
   - acceptance: Request bodies/headers and response/stream parsing match the documented formats for fixture transcripts (no live network in tests); malformed tool arguments become tool errors; errors never contain the key
-  - note: Trait with chat and streaming; OpenAI-compatible, Anthropic Messages and mock adapters; ureq 3 transport behind an injectable trait. Tested against fixtures only: Anthropic request shape checked against its published docs, OpenAI shapes written from the documented format (the docs fetch was blocked, 403). No live provider or local server was contacted.
+  - note: Trait with chat and streaming; OpenAI-compatible, Anthropic Messages and mock adapters; ureq 3 transport
+    behind an injectable trait. Tested against fixtures only: Anthropic request shape checked against its published
+    docs, OpenAI shapes written from the documented format (the docs fetch was blocked, 403). No live provider or local
+    server was contacted.
 - [x] **F-147** Assistant tool layer with approvals: reuse the MCP/API tool definitions and Access model in-process, non-blocking approval state machine, read-only and approve-writes modes
   - depends on: F-090, F-091, F-146
   - acceptance: Full loop with the mock provider: request -> tool calls -> approval -> case edit -> run -> summary; only mutating calls prompt; a denial leaves the case unchanged; read-only mode refuses all mutating tools; tool results are size-bounded for model context
-  - note: Toolbox reuses rcfd-mcp tools and Policy in-process; approval gate enforced below the UI; modes read-only and approve-writes; mock-provider full loop tests (8) incl. denial, read-only, bad arguments, cancel, retry.
+  - note: Toolbox reuses rcfd-mcp tools and Policy in-process; approval gate enforced below the UI; modes read-only and
+    approve-writes; mock-provider full loop tests (8) incl. denial, read-only, bad arguments, cancel, retry.
 - [x] **F-148** Setup-workflow tools for the assistant: mesh assessment, boundary-condition suggestion, case validation, residual divergence explainer
   - depends on: F-147, F-011, F-030
   - acceptance: Unit tests on synthetic meshes and residual series (growth, NaN, stagnation, oscillation); BC suggestion only proposes set_setting calls and never applies them; all tools are read-only and pass through the same argument validation
-  - note: Divergence explainer can use the stop reasons recorded by convergence conditions (F-109) once they exist; until then it reads residual histories only. assess_mesh, suggest_boundary_conditions, validate_case, explain_residuals; thresholds are rule-of-thumb values, not validated against real cases. Pointer only (no scope change): rule-based validation is tracked in F-240.
+  - note: assess_mesh, suggest_boundary_conditions, validate_case, explain_residuals; thresholds are rule-of-thumb
+    values, not validated against real cases. Divergence explainer can use the stop reasons recorded by convergence
+    conditions (F-109) once they exist; until then it reads residual histories only. Pointer only (no scope change):
+    rule-based validation is tracked in F-240.
 - [x] **F-149** Provider key and endpoint storage: user-supplied keys and base URLs kept locally (env var, per-user config file with owner-only permissions; OS keychain later), never logged
   - depends on: F-146
   - acceptance: Keys are redacted from Debug output and error strings; config round-trips without exposing the key to egui storage; file permissions are 0600 on unix
-  - note: Env var first, then the OS keychain (Windows Credential Manager, macOS Keychain via keyring =3.6.3, MIT OR Apache-2.0, MSRV 1.75), then keys.json in the per-user config dir as the fallback when no keychain exists or a write fails; a write is verified by reading it back, and a plaintext copy is removed once the keychain holds the key. Linux has no keychain backend here (Secret Service needs libdbus) and uses keys.json. Tested with an in-memory backend (tests/keychain.rs, 7 tests: keychain used and no file written, unavailable and forgetful backends fall back, plaintext migration on write, env var wins, key scrubbed from error text); the tests never touch the real keychain. NOT verified: a round trip against the real Windows Credential Manager or macOS Keychain (the code compiles on Windows only; macOS code was not built). Debug redaction and error scrubbing tested. Owner-only 0600 for keys.json is cfg(unix) code that has not been run; existing plaintext keys are not auto-migrated until the key is stored again. WAVE 17C (ADR 0025): ordered precedence test env > keychain > file > none (4 of 4); planted-canary scan over Debug/Display/error texts, providers.json, preferences file, GUI status lines, chat transcript and every request except the credential header finds 0 occurrences, for keychain-ok and keychain-failing-and-echoing flows, while the canary does reach the server in the credential header; disabling Secret::scrub makes the scan flag 18 strings (not vacuous). Real keychain, real unix 0600 permissions (cfg(unix) code, run on Windows only) and Windows ACLs remain unverified; stays partial. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. WAVE 17C (ADR 0025) recorded the real keychain, real unix 0600
+    permissions (cfg(unix) code, run on Windows only) and Windows ACLs as unverified.
+    - Env var first, then the OS keychain (Windows Credential Manager, macOS Keychain via keyring =3.6.3, MIT OR
+      Apache-2.0, MSRV 1.75), then keys.json in the per-user config dir as the fallback when no keychain exists or a
+      write fails.
+    - A write is verified by reading it back, and a plaintext copy is removed once the keychain holds the key.
+    - Linux has no keychain backend here (Secret Service needs libdbus) and uses keys.json.
+    - Tested with an in-memory backend (tests/keychain.rs, 7 tests: keychain used and no file written, unavailable and
+      forgetful backends fall back, plaintext migration on write, env var wins, key scrubbed from error text); the
+      tests never touch the real keychain.
+    - NOT verified: a round trip against the real Windows Credential Manager or macOS Keychain (the code compiles on
+      Windows only; macOS code was not built).
+    - Debug redaction and error scrubbing tested.
+    - Owner-only 0600 for keys.json is cfg(unix) code that has not been run; existing plaintext keys are not
+      auto-migrated until the key is stored again.
+    - WAVE 17C (ADR 0025):
+      - Ordered precedence test env > keychain > file > none (4 of 4).
+      - Planted-canary scan over Debug/Display/error texts, providers.json, preferences file, GUI status lines, chat
+        transcript and every request except the credential header finds 0 occurrences, for keychain-ok and
+        keychain-failing-and-echoing flows, while the canary does reach the server in the credential header.
+      - Disabling Secret::scrub makes the scan flag 18 strings (not vacuous).
+      - Real keychain, real unix 0600 permissions (cfg(unix) code, run on Windows only) and Windows ACLs remain
+        unverified; stays partial.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests;
+      scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-150** Offline and local-model path: local OpenAI-compatible endpoint presets (Ollama, LM Studio, llama.cpp server, vLLM), connectivity probe, and no-model quick actions that run the setup tools directly
   - depends on: F-146, F-148
   - acceptance: With no network and no model the sidebar quick actions (assess mesh, validate case, suggest BCs, explain residuals) work; preset endpoints build correct requests; verified against a real local server by a human
-  - note: Presets (Ollama, LM Studio, llama.cpp, vLLM) build correct requests against fixtures; list_models probe; quick actions work with no model (tested). Not verified against a real local server or small local models; tool-calling quality of such models is unknown. WAVE 17C (ADR 0025): the real ureq transport against a loopback mock server: all four presets send POST /v1/chat/completions with no auth header, documented default ports checked, tool-call replies parsed, GET /v1/models probe (incl. empty, bad JSON, 404, 500), chunked SSE streaming with 5-fragment tool arguments accumulates exactly and a cut stream is an error, keyed endpoint puts the key only in the Authorization header, refused connection / 1 s timeout (<3 s) / short body are errors, and the four no-model quick actions open 0 connections with a local endpoint configured. Still NOT verified against a real Ollama, LM Studio, llama.cpp or vLLM server, or any small local model; stays partial.
+  - note: Stays partial: still NOT verified against a real Ollama, LM Studio, llama.cpp or vLLM server, or any small
+    local model.
+    - Presets (Ollama, LM Studio, llama.cpp, vLLM) build correct requests against fixtures; list_models probe; quick
+      actions work with no model (tested).
+    - Not verified against a real local server or small local models; tool-calling quality of such models is unknown.
+    - WAVE 17C (ADR 0025): the real ureq transport against a loopback mock server:
+      - All four presets send POST /v1/chat/completions with no auth header.
+      - Documented default ports checked.
+      - Tool-call replies parsed.
+      - GET /v1/models probe (incl. empty, bad JSON, 404, 500).
+      - Chunked SSE streaming with 5-fragment tool arguments accumulates exactly and a cut stream is an error.
+      - Keyed endpoint puts the key only in the Authorization header.
+      - Refused connection / 1 s timeout (<3 s) / short body are errors.
+      - The four no-model quick actions open 0 connections with a local endpoint configured.
+    - Still NOT verified against a real Ollama, LM Studio, llama.cpp or vLLM server, or any small local model; stays
+      partial.
 - [ ] **F-151** 3D viewport (wgpu): surfaces, slices, iso-surfaces, vectors and picking; selection feeds assistant context
   - depends on: F-143, F-072
   - acceptance: Rotatable 3D view of a cylinder case with colour-mapped surface field and a slice plane; picked cell id appears as an assistant context chip
@@ -320,179 +1682,1637 @@ Current priority (set by the maintainer, 2026-11-04): F-270 > F-271 > F-272 > F-
 - [~] **F-055** Volume-of-fluid free-surface multiphase (interface compression) and surface tension
   - depends on: F-029, F-125
   - acceptance: Dam break front position vs experiment; rising bubble benchmark (Hysing et al. 2009, test case 1, Tables V, VIII, XI and XII): on the finest of three grids (40x80, 80x160, 160x320) y_c(t = 3) and V_c,max each lie within the range spanned by the three published codes' finest-grid values (y_c(3) in [1.0799, 1.0817], V_c,max in [0.2417, 0.2421]), and the phase volume is conserved to round-off; the time of V_c,max is reported against [0.9213, 0.9313] and is not a pass/fail limit
-  - note: PARTIAL (wave 27A, ADR 0049, crate rcfd-fv vof.rs, case-tree section multiphase in rcfd-api vof.rs, docs/case-schema.md). Delivered: two incompressible immiscible fluids; phase fraction alpha transported with an interface-compression flux and a Zalesak flux-corrected explicit limiter (bounded to 1e-12, phase volume conserved to round-off) sub-cycled to Courant 0.25; mixture rho and mu linear in alpha, rhoPhi consistent with the alpha flux; CSF surface tension; well-balanced p_rgh gravity (hydrostatic equilibrium exact to round-off); PISO / PIMPLE coupling on the existing kernels (pimple.rs untouched); Engine::Vof host in the case tree with located errors (steady, coupled, compressible, turbulence, energy, symmetry and slip walls, etc. refused), fields alpha / p_rgh / p / rho. Registered checks: boundedness and conservation met; pure advection (slug, disk, Zalesak, vortex) met; hydrostatic pool max|U| 1.7e-12 (limit 1e-10) with the interface on a face and inside a cell, also with tension; static droplet Laplace error 4.8 percent (limit 10), parasitic Ca 1.6e-3 (limit 1e-2); dam break against Martin-Moyce with no-slip walls v/sqrt(gH) = 1.504 (reference 1.69, limit 1.44 to 1.94 and below Ritter 2), tree equals library to 1e-12; Hysing rising bubble 40 x 80: y_c(3) 1.028 (ref 1.0813, limit +-0.12), v_max 0.220 (ref 0.2417, limit 25 percent), reference values UNVERIFIED. KNOWN MISS: A3 as registered (phase-volume drift 2.3e-10 > 1e-12, ignored test a3_zalesak_slotted_disk_known_miss) is a set-up defect (the open boundary carries alpha tails out); the corrected test a3b with the exact flux balance passes (1.6e-14). Deviations and the AMG finding are in the ADR addendum. NOT delivered (why partial): geometric PLIC reconstruction and the explicit/implicit and sharp/dispersed taxonomy of the scope; wall and jump adhesion (contact angle) and the continuum-surface-stress tension; Marangoni; transposed viscous stress at a viscosity jump; higher-order or BDF2 momentum for two-phase flow; adaptive time stepping tied to the capillary / alpha Courant limits; periodic, moving-mesh, energy and turbulence variants; three-dimensional validation; open total-pressure boundaries not validated; melt flow of F-212 on the new host and F-228 wiring (not done). WAVE 28A (ADR 0052): the AMG breakdown was a zero filtered diagonal in the AMG setup (rcfd-linalg amg.rs), not a property of the density jump; fixed, dam break with AMG 12.4 iterations per corrector against 157.9 for CG, front equal to CG within 4e-15 m, baseline hashes unchanged; AMG is on in the tree above 2000 cells. F-226 mass transfer and F-227 wave inlet / relaxation zone are wired into this host and the case tree (multiphase.mass_transfer, multiphase.waves, multiphase.reference_point; docs/case-schema.md). Martin-Moyce 1.48 / 1.69 are from a secondary source; Hysing, Zalesak, Brackbill and the capillary constant are unverified (docs/reference-data.md). Previous scope text:Dam-break reference data via the validation pack (F-125). SCOPE (merged review): add explicit and implicit formulations, sharp and dispersed interface treatment, wall and jump adhesion, and continuum-surface-stress tension as sub-criteria; wave boundaries in F-227. WAVE 39E (ADR 0096): Hysing et al. 2009 (Int. J. Numer. Meth. Fluids 60, 1259-1288, DOI 10.1002/fld.1934) read: Table V (TP2D, 1/h = 320) gives V_c,max 0.2417 at t 0.9213 and y_c(3) 1.0813, Table XI (MooNMD) 0.2417 and 1.0817; both asserted values are verified; the time 0.9317 written earlier is corrected to 0.9213 (not asserted). Test set-up matches Table I and the paper's walls; the test's rise velocity is the paper's U_c. Re-run at HEAD: bubble y_c(3) 1.0282 and v_max 0.2204 (limits +-0.12 and 25 percent), dam break v/sqrt(gH) 1.504 (band 1.44 to 1.94): acceptance met by non-ignored tests, status done. Martin-Moyce 1.69 remains secondary-source only. Scope beyond the acceptance (PLIC, contact angle, CSS tension, Marangoni, 3-D) is unchanged and not delivered. WAVE 40D (ADR 0100, refinement check asked by the user; status stays done): the case-1 bubble on 40 x 80, 80 x 160 and 160 x 320 (dt = 0.1/n, AMG pressure) gives y_c(3) 1.0282, 1.0178, 1.0124 and V_c,max 0.2204, 0.2187, 0.2180 (peak at t 0.850, 0.829, 0.820): the errors to Hysing (1.0813, 0.2417, 0.9213) grow under refinement, so the registered monotone-decrease check is a miss (ignored b1_hysing_bubble_error_decreases_under_refinement_known_miss in crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs). The solution converges (observed order about 1) to y_c(3) about 1.007 and V_c,max about 0.2175, a bubble about 10 percent too slow; the 40 x 80 agreement is the coarse-grid point of that error. Cause not investigated. USER DECISION 2026-10-21: set back to partial. Wave 40D (ADR 0100) refinement 40x80/80x160/160x320 converges away from Hysing: y_c(3) 1.0282/1.0178/1.0124 (ref 1.0813), V_c,max 0.2204/0.2187/0.2180 (ref 0.2417); extrapolation gives about 10 percent too slow a rise. The earlier 40x80 agreement was a coarse-grid coincidence. Cause not investigated (candidates in ADR 0100: surface tension and curvature, interface advection, density and viscosity jump). Queued: cause hunt, then re-run the ignored b1 known-miss test. WAVE 41C (ADR 0103, cause hunt; status stays partial): registered isolating experiments on 40 x 80 / 80 x 160 (crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs). Main cause found: the free-slip side walls were not free slip. The VOF corrector divides H by the component-averaged diagonal, so at a Symmetry plane the tangential velocity carries half the normal component's wall coefficient as extra friction (an exact uniform channel flow runs 84 percent slow in the wall column; the plane acts about 82 percent of the way to no slip in the bubble). New opt-in VofSettings::component_diagonal (default false, defaults bit-identical) makes the uniform flow exact (2.5e-16) and moves the bubble on 80 x 160 to y_c(3) 1.0712 and V_c,max 0.2469 (errors 0.0101 and 0.0052, from 0.0635 and 0.0230); but the errors still grow from 40 x 80 (0.0046, 0.0043), so the refinement check still fails and no 160 x 320 run was made (b1c known miss). Residual drift: the CSF curvature with a fixed number of smoothing passes is non-convergent (initial-circle rms error 0.13 to 0.77 from 40 x 80 to 320 x 640; a constant physical smoothing width cuts the default series' y_c drift from -0.0104 to -0.0029); a convergent curvature (e.g. height functions) is not attempted. Rejected by the registered rules: curvature magnitude (sigma +-10 percent moves V_c,max 0.0007), density-jump force balance (static Laplace error the same at density ratio 1 and 10, about -5 percent on every grid, itself non-convergent), added mass at an impulsive start (0.8047 vs potential flow 0.8018), interface translation (centroid exact to 4e-5), compression, time step, PIMPLE, transient Rhie-Chow, linear-upwind momentum, harmonic viscosity. Also added opt-in full_viscous_stress (transposed stress at the viscosity jump: physically required, lowers V_c,max by about 0.008; b1f known miss) and harmonic_viscosity. Library settings only: the case tree still refuses symmetry walls with multiphase. Making component_diagonal the VOF default is the user's decision. Next: component_diagonal plus a convergent curvature, then re-run b1. USER DECISION 2026-10-22: wave 42 queued: component_diagonal wall fix plus a convergent curvature estimator (height functions), then re-run b1. Making component_diagonal the VOF default waits for that re-run. WAVE 42B (ADR 0106; status stays partial): new opt-in VofSettings::height_function (default false, defaults bit-identical): height-function curvature on uniform Cartesian grids (2-D and 3-D; other meshes refused at VofSolver::new), CSF fallback near under-resolved interfaces, fallback counts exposed. Verified with exact fractions (crates/rcfd-fv/tests/vof_height_function_w42b.rs): circle rms curvature error 5.2e-3, 1.2e-3, 3.1e-4, 7.6e-5 on 40 to 320 (order 2; the CSF estimator grows 0.16 to 0.39 on the same fractions), ball rms 2.8e-2, 7.6e-3, 2.8e-3 on 16 to 64 (3-D max error does not converge, 0.025 to 0.033), static-bubble Laplace error +0.0051, +0.0013, +0.0003 on 40, 80, 160 (CSF -0.048, -0.051), parasitic currents 2.7e-5 to 1.2e-6. Hysing re-run with component_diagonal + height_function (registered verdict, ADR 0100 limits unchanged, 40 / 80 / 160): y_c(3) 1.0815, 1.0778, 1.0737 (errors 0.0002, 0.0035, 0.0076, growing), V_c,max 0.2486, 0.2492, 0.2486 (about 3 percent fast on every grid), peak at 0.898, 0.844, 0.838: B1-B3 miss, B4 met; ignored b1h_..._height_function_known_miss in vof_bubble_refinement_w40d.rs. Second registered variant with full_viscous_stress as well (40 and 80 only, no 160 run by plan): y_c(3) 1.0794, 1.0800, V_c,max 0.2402, 0.2409, peak 0.940, 0.923, both errors falling. Next: the series with all three options on 40, 80, 160. Defaults: with both options forced on, every existing VOF test passes except cavitating_venturi (warped mesh refused by the lattice check); baseline_hashes has no VOF case. No default changed (user decision). USER DECISION 2026-10-22: next run (wave 43A): all three opt-ins with exact-fraction initial field. Defaults component_diagonal, height_function and full_viscous_stress flip together only after that verdict, with a CSF fallback on non-Cartesian meshes and sigma = 0. WAVE 43A (ADR 0108; status stays partial): Hysing series with all three opt-ins (component_diagonal, height_function, full_viscous_stress), ADR 0100 B1-B4 limits unchanged, exact initial fractions (verdict) and the 10-point indicator field (control): y_c(3) 1.0792, 1.0800, 1.0795 on 40, 80, 160 (errors 0.0021, 0.0013, 0.0018, not monotone: B1 and B2 miss on y_c), V_c,max 0.2402, 0.2409, 0.2416 (errors 0.0015, 0.0008, 0.0001, converging: met), peak at 0.938, 0.923, 0.918 (B3 met), drift and bounds met. The control gives y_c(3) and V_c,max within 2e-4 of the verdict on every grid (peak time 0.0025 apart on 40 only), so the initial field has no measurable effect. Errors per metric: y_c(3) 0.19, 0.12, 0.17 percent; V_c,max 0.62, 0.32, 0.04 percent; peak time 1.8, 0.13, 0.41 percent. y_c(3) varies by at most 0.0008 across the grids and sits 0.0013 to 0.0021 below 1.0813 (3 to 5 times the 0.0004 TP2D-MooNMD difference); ignored b1x_..._exact_fraction_known_miss and b1xc_..._control_known_miss in crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs. Whether this is acceptable is a user decision. New opt-in VofSettings::height_function_csf_fallback (default false, defaults bit-identical): with height_function, keeps CSF on non-Cartesian meshes and skips the lattice when sigma = 0 (tests F1-F4 in crates/rcfd-fv/tests/vof_height_function_fallback_w43a.rs); with all four options forced on in a scratch copy every VOF test file passes, cavitating_venturi included. Dam-break clause: docs/reference-data.md holds only the Martin-Moyce average front velocity (secondary source), which d_dam_break_front already checks; a pointwise front-versus-time test is not feasible without new data. No default changed. USER DECISION 2026-10-24: bubble clause reworded after reading the paper (Table XII): the band is the code-to-code range of the three published finest-grid results, not derived from our result. The paper's own scatter (y_c(3) 1.081 +- 0.001, V_c,max 0.2419 +- 0.0002, peak t 0.921 to 0.932) is wider than the 0.0004 figure used in ADR 0108, and the published codes are not monotone: FreeLIFE y_c(3) 1.0715, 1.0817, 1.0799 (error grows 80 to 160) and TP2D peak time 0.9141, 0.9375, 0.9281, 0.9213, so the ADR 0100 requirement that the y_c(3) error falls on every refinement (B1, B2) is stricter than the reference codes. Wave 43A finest grid: y_c(3) 1.0795 (0.0004 below the band), V_c,max 0.2416 (0.0001 below), peak t 0.9175 (0.0038 below): still outside, so the item stays partial; the dam-break position clause also still needs data. The ADR 0100 known-miss tests keep their limits. Decided: VOF defaults flip together (wave 44D). WAVE 44D (ADR 0114; status stays partial): the VOF defaults flipped together (user decision 2026-10-24): VofSettings::new now has component_diagonal, full_viscous_stress, height_function and height_function_csf_fallback true (height function on uniform Cartesian grids with sigma > 0, CSF on other meshes and without tension); the case tree follows, with opt-out keys multiphase.component_diagonal = "averaged", multiphase.viscous_stress = "laplacian", multiphase.curvature = "csf" (docs/case-schema.md; tree equals library to 3.3e-12 with and without the opt-outs, test f5 in crates/rcfd-api/tests/vof_tree.rs). Scan before coding: every non-ignored VOF test passes under the new defaults, no test re-pinned; printed values moved (e.g. the 40 x 80 free-slip bubble y_c(3) 1.0282 to 1.0794, V_c,max 0.2204 to 0.2402; static droplet Laplace error 4.8 to 0.37 percent); dam break d_dam_break_front unchanged at the printed digits (1.504, 0.161, 0.110) and passing; baseline_hashes unchanged (no VOF case). The Hysing series with default settings and exact fractions equals the ADR 0108 X run bit for bit (difference 0, limit 1e-9) on 40, 80, 160 (x0_default_settings_reproduce_adr0108_x_40 not ignored; the series ignored, heavy). Reworded bubble clause with defaults on 160 x 320 (f055_hysing_bubble_finest_grid_in_published_range_known_miss, ignored, limits intact): y_c(3) 1.079454 (band [1.0799, 1.0817], 0.0004 below), V_c,max 0.241615 (band [0.2417, 0.2421], 0.0001 below), phase volume drift 1.6e-13 (met), peak t 0.9175 (reported, below [0.9213, 0.9313]): MISS, so F-055 stays partial; the dam-break position clause still needs data. Wave 44D flipped the VOF defaults in commit 127baf9 (opt-outs component_diagonal = averaged, viscous_stress = laplacian, curvature = csf); the ignored known miss f055_hysing_bubble_finest_grid_in_published_range_known_miss remains (y_c 1.079454, V_c,max 0.241615, volume drift 1.55e-13). Combined gate on 24facb9 (docs-only on top of 2264819): fmt and clippy clean, 2010 passed / 0 failed / 633 ignored.
+  - note: PARTIAL. With defaults on 160 x 320 (WAVE 44D, ADR 0114), the reworded bubble clause is a MISS:
+    y_c(3) 1.079454 is 0.0004 below the band [1.0799, 1.0817], and V_c,max 0.241615 is 0.0001 below the band
+    [0.2417, 0.2421]. Phase volume drift 1.6e-13 is met; peak t 0.9175 is reported, below [0.9213, 0.9313]. The
+    dam-break position clause still needs data; WAVE 43A (ADR 0108) recorded that a pointwise front-versus-time test is
+    not feasible without new data. WAVE 39E (ADR 0096) recorded scope beyond the acceptance (PLIC, contact angle, CSS
+    tension, Marangoni, 3-D) as not delivered.
+    - PARTIAL (wave 27A, ADR 0049, crate rcfd-fv vof.rs, case-tree section multiphase in rcfd-api vof.rs,
+      docs/case-schema.md).
+      - Delivered:
+        - Two incompressible immiscible fluids.
+        - Phase fraction alpha transported with an interface-compression flux and a Zalesak flux-corrected explicit
+          limiter (bounded to 1e-12, phase volume conserved to round-off) sub-cycled to Courant 0.25.
+        - Mixture rho and mu linear in alpha, rhoPhi consistent with the alpha flux.
+        - CSF surface tension.
+        - Well-balanced p_rgh gravity (hydrostatic equilibrium exact to round-off).
+        - PISO / PIMPLE coupling on the existing kernels (pimple.rs untouched).
+        - Engine::Vof host in the case tree with located errors (steady, coupled, compressible, turbulence, energy,
+          symmetry and slip walls, etc. refused), fields alpha / p_rgh / p / rho.
+      - Registered checks:
+        - Boundedness and conservation met.
+        - Pure advection (slug, disk, Zalesak, vortex) met.
+        - Hydrostatic pool max|U| 1.7e-12 (limit 1e-10) with the interface on a face and inside a cell, also with
+          tension.
+        - Static droplet Laplace error 4.8 percent (limit 10), parasitic Ca 1.6e-3 (limit 1e-2).
+        - Dam break against Martin-Moyce with no-slip walls v/sqrt(gH) = 1.504 (reference 1.69, limit 1.44 to 1.94 and
+          below Ritter 2), tree equals library to 1e-12.
+        - Hysing rising bubble 40 x 80: y_c(3) 1.028 (ref 1.0813, limit +-0.12), v_max 0.220 (ref 0.2417, limit 25
+          percent), reference values UNVERIFIED.
+      - KNOWN MISS: A3 as registered (phase-volume drift 2.3e-10 > 1e-12, ignored test
+        a3_zalesak_slotted_disk_known_miss) is a set-up defect (the open boundary carries alpha tails out); the
+        corrected test a3b with the exact flux balance passes (1.6e-14).
+      - Deviations and the AMG finding are in the ADR addendum.
+      - NOT delivered (why partial):
+        - Geometric PLIC reconstruction and the explicit/implicit and sharp/dispersed taxonomy of the scope.
+        - Wall and jump adhesion (contact angle) and the continuum-surface-stress tension.
+        - Marangoni.
+        - Transposed viscous stress at a viscosity jump.
+        - Higher-order or BDF2 momentum for two-phase flow.
+        - Adaptive time stepping tied to the capillary / alpha Courant limits.
+        - Periodic, moving-mesh, energy and turbulence variants.
+        - Three-dimensional validation.
+        - Open total-pressure boundaries not validated.
+        - Melt flow of F-212 on the new host and F-228 wiring (not done).
+    - WAVE 28A (ADR 0052):
+      - The AMG breakdown was a zero filtered diagonal in the AMG setup (rcfd-linalg amg.rs), not a property of the
+        density jump; fixed.
+      - Dam break with AMG 12.4 iterations per corrector against 157.9 for CG, front equal to CG within 4e-15 m,
+        baseline hashes unchanged.
+      - AMG is on in the tree above 2000 cells.
+    - F-226 mass transfer and F-227 wave inlet / relaxation zone are wired into this host and the case tree
+      (multiphase.mass_transfer, multiphase.waves, multiphase.reference_point; docs/case-schema.md).
+    - Martin-Moyce 1.48 / 1.69 are from a secondary source; Hysing, Zalesak, Brackbill and the capillary constant are
+      unverified (docs/reference-data.md).
+    - Previous scope text: Dam-break reference data via the validation pack (F-125).
+    - SCOPE (merged review): add explicit and implicit formulations, sharp and dispersed interface treatment, wall and
+      jump adhesion, and continuum-surface-stress tension as sub-criteria; wave boundaries in F-227.
+    - WAVE 39E (ADR 0096):
+      - Hysing et al. 2009 (Int. J. Numer. Meth. Fluids 60, 1259-1288, DOI 10.1002/fld.1934) read: Table V (TP2D,
+        1/h = 320) gives V_c,max 0.2417 at t 0.9213 and y_c(3) 1.0813, Table XI (MooNMD) 0.2417 and 1.0817; both
+        asserted values are verified; the time 0.9317 written earlier is corrected to 0.9213 (not asserted).
+      - Test set-up matches Table I and the paper's walls; the test's rise velocity is the paper's U_c.
+      - Re-run at HEAD: bubble y_c(3) 1.0282 and v_max 0.2204 (limits +-0.12 and 25 percent), dam break v/sqrt(gH) 1.504
+        (band 1.44 to 1.94): acceptance met by non-ignored tests, status done.
+      - Martin-Moyce 1.69 remains secondary-source only.
+      - Scope beyond the acceptance (PLIC, contact angle, CSS tension, Marangoni, 3-D) is unchanged and not delivered.
+    - WAVE 40D (ADR 0100, refinement check asked by the user; status stays done):
+      - The case-1 bubble on 40 x 80, 80 x 160 and 160 x 320 (dt = 0.1/n, AMG pressure) gives y_c(3) 1.0282, 1.0178,
+        1.0124 and V_c,max 0.2204, 0.2187, 0.2180 (peak at t 0.850, 0.829, 0.820).
+      - The errors to Hysing (1.0813, 0.2417, 0.9213) grow under refinement, so the registered monotone-decrease check
+        is a miss (ignored b1_hysing_bubble_error_decreases_under_refinement_known_miss in
+        crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs).
+      - The solution converges (observed order about 1) to y_c(3) about 1.007 and V_c,max about 0.2175, a bubble about
+        10 percent too slow; the 40 x 80 agreement is the coarse-grid point of that error.
+      - Cause not investigated.
+    - USER DECISION 2026-10-21: set back to partial.
+      - Wave 40D (ADR 0100) refinement 40x80/80x160/160x320 converges away from Hysing: y_c(3) 1.0282/1.0178/1.0124 (ref
+        1.0813), V_c,max 0.2204/0.2187/0.2180 (ref 0.2417); extrapolation gives about 10 percent too slow a rise.
+      - The earlier 40x80 agreement was a coarse-grid coincidence.
+      - Cause not investigated (candidates in ADR 0100: surface tension and curvature, interface advection, density and
+        viscosity jump).
+      - Queued: cause hunt, then re-run the ignored b1 known-miss test.
+    - WAVE 41C (ADR 0103, cause hunt; status stays partial): registered isolating experiments on 40 x 80 / 80 x 160
+      (crates/rcfd-fv/tests/vof_bubble_diagnosis_w41c.rs).
+      - Main cause found: the free-slip side walls were not free slip. The VOF corrector divides H by the
+        component-averaged diagonal, so at a Symmetry plane the tangential velocity carries half the normal component's
+        wall coefficient as extra friction (an exact uniform channel flow runs 84 percent slow in the wall column; the
+        plane acts about 82 percent of the way to no slip in the bubble).
+      - New opt-in VofSettings::component_diagonal (default false, defaults bit-identical) makes the uniform flow exact
+        (2.5e-16) and moves the bubble on 80 x 160 to y_c(3) 1.0712 and V_c,max 0.2469 (errors 0.0101 and 0.0052, from
+        0.0635 and 0.0230).
+      - The errors still grow from 40 x 80 (0.0046, 0.0043), so the refinement check still fails and no 160 x 320 run
+        was made (b1c known miss).
+      - Residual drift: the CSF curvature with a fixed number of smoothing passes is non-convergent (initial-circle rms
+        error 0.13 to 0.77 from 40 x 80 to 320 x 640; a constant physical smoothing width cuts the default series' y_c
+        drift from -0.0104 to -0.0029); a convergent curvature (e.g. height functions) is not attempted.
+      - Rejected by the registered rules:
+        - Curvature magnitude (sigma +-10 percent moves V_c,max 0.0007).
+        - Density-jump force balance (static Laplace error the same at density ratio 1 and 10, about -5 percent on every
+          grid, itself non-convergent).
+        - Added mass at an impulsive start (0.8047 vs potential flow 0.8018).
+        - Interface translation (centroid exact to 4e-5).
+        - Compression, time step, PIMPLE, transient Rhie-Chow, linear-upwind momentum, harmonic viscosity.
+      - Also added opt-in full_viscous_stress (transposed stress at the viscosity jump: physically required, lowers
+        V_c,max by about 0.008; b1f known miss) and harmonic_viscosity.
+      - Library settings only: the case tree still refuses symmetry walls with multiphase.
+      - Making component_diagonal the VOF default is the user's decision.
+      - Next: component_diagonal plus a convergent curvature, then re-run b1.
+    - USER DECISION 2026-10-22: wave 42 queued: component_diagonal wall fix plus a convergent curvature estimator
+      (height functions), then re-run b1. Making component_diagonal the VOF default waits for that re-run.
+    - WAVE 42B (ADR 0106; status stays partial):
+      - New opt-in VofSettings::height_function (default false, defaults bit-identical): height-function curvature on
+        uniform Cartesian grids (2-D and 3-D; other meshes refused at VofSolver::new), CSF fallback near under-resolved
+        interfaces, fallback counts exposed.
+      - Verified with exact fractions (crates/rcfd-fv/tests/vof_height_function_w42b.rs):
+        - Circle rms curvature error 5.2e-3, 1.2e-3, 3.1e-4, 7.6e-5 on 40 to 320 (order 2; the CSF estimator grows 0.16
+          to 0.39 on the same fractions).
+        - Ball rms 2.8e-2, 7.6e-3, 2.8e-3 on 16 to 64 (3-D max error does not converge, 0.025 to 0.033).
+        - Static-bubble Laplace error +0.0051, +0.0013, +0.0003 on 40, 80, 160 (CSF -0.048, -0.051).
+        - Parasitic currents 2.7e-5 to 1.2e-6.
+      - Hysing re-run with component_diagonal + height_function (registered verdict, ADR 0100 limits unchanged,
+        40 / 80 / 160):
+        - y_c(3) 1.0815, 1.0778, 1.0737 (errors 0.0002, 0.0035, 0.0076, growing).
+        - V_c,max 0.2486, 0.2492, 0.2486 (about 3 percent fast on every grid).
+        - Peak at 0.898, 0.844, 0.838.
+        - B1-B3 miss, B4 met; ignored b1h_..._height_function_known_miss in vof_bubble_refinement_w40d.rs.
+      - Second registered variant with full_viscous_stress as well (40 and 80 only, no 160 run by plan): y_c(3) 1.0794,
+        1.0800, V_c,max 0.2402, 0.2409, peak 0.940, 0.923, both errors falling.
+      - Next: the series with all three options on 40, 80, 160.
+      - Defaults: with both options forced on, every existing VOF test passes except cavitating_venturi (warped mesh
+        refused by the lattice check); baseline_hashes has no VOF case.
+      - No default changed (user decision).
+    - USER DECISION 2026-10-22: next run (wave 43A): all three opt-ins with exact-fraction initial field. Defaults
+      component_diagonal, height_function and full_viscous_stress flip together only after that verdict, with a CSF
+      fallback on non-Cartesian meshes and sigma = 0.
+    - WAVE 43A (ADR 0108; status stays partial): Hysing series with all three opt-ins (component_diagonal,
+      height_function, full_viscous_stress), ADR 0100 B1-B4 limits unchanged, exact initial fractions (verdict) and the
+      10-point indicator field (control):
+      - y_c(3) 1.0792, 1.0800, 1.0795 on 40, 80, 160 (errors 0.0021, 0.0013, 0.0018, not monotone: B1 and B2 miss on
+        y_c).
+      - V_c,max 0.2402, 0.2409, 0.2416 (errors 0.0015, 0.0008, 0.0001, converging: met).
+      - Peak at 0.938, 0.923, 0.918 (B3 met).
+      - Drift and bounds met.
+      - The control gives y_c(3) and V_c,max within 2e-4 of the verdict on every grid (peak time 0.0025 apart on 40
+        only), so the initial field has no measurable effect.
+      - Errors per metric: y_c(3) 0.19, 0.12, 0.17 percent; V_c,max 0.62, 0.32, 0.04 percent; peak time 1.8, 0.13,
+        0.41 percent.
+      - Across the grids, y_c(3) varies by at most 0.0008; it sits 0.0013 to 0.0021 below 1.0813 (3 to 5 times the
+        0.0004 TP2D-MooNMD difference).
+      - Ignored: b1x_..._exact_fraction_known_miss and b1xc_..._control_known_miss in
+        crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs.
+      - Whether this is acceptable is a user decision.
+      - New opt-in VofSettings::height_function_csf_fallback (default false, defaults bit-identical): with
+        height_function, keeps CSF on non-Cartesian meshes and skips the lattice when sigma = 0 (tests F1-F4 in
+        crates/rcfd-fv/tests/vof_height_function_fallback_w43a.rs); with all four options forced on in a scratch copy
+        every VOF test file passes, cavitating_venturi included.
+      - Dam-break clause: docs/reference-data.md holds only the Martin-Moyce average front velocity (secondary source),
+        which d_dam_break_front already checks; a pointwise front-versus-time test is not feasible without new data.
+      - No default changed.
+    - USER DECISION 2026-10-24: bubble clause reworded after reading the paper (Table XII): the band is the code-to-code
+      range of the three published finest-grid results, not derived from our result.
+      - The paper's own scatter (y_c(3) 1.081 +- 0.001, V_c,max 0.2419 +- 0.0002, peak t 0.921 to 0.932) is wider than
+        the 0.0004 figure used in ADR 0108.
+      - The published codes are not monotone: FreeLIFE y_c(3) 1.0715, 1.0817, 1.0799 (error grows 80 to 160) and TP2D
+        peak time 0.9141, 0.9375, 0.9281, 0.9213, so the ADR 0100 requirement that the y_c(3) error falls on every
+        refinement (B1, B2) is stricter than the reference codes.
+      - Wave 43A finest grid: y_c(3) 1.0795 (0.0004 below the band), V_c,max 0.2416 (0.0001 below), peak t 0.9175
+        (0.0038 below): still outside, so the item stays partial; the dam-break position clause also still needs data.
+      - The ADR 0100 known-miss tests keep their limits.
+      - Decided: VOF defaults flip together (wave 44D).
+    - WAVE 44D (ADR 0114; status stays partial): the VOF defaults flipped together (user decision 2026-10-24).
+      - VofSettings::new now has component_diagonal, full_viscous_stress, height_function and
+        height_function_csf_fallback true (height function on uniform Cartesian grids with sigma > 0, CSF on other
+        meshes and without tension).
+      - The case tree follows, with opt-out keys multiphase.component_diagonal =
+        "averaged", multiphase.viscous_stress = "laplacian", multiphase.curvature = "csf" (docs/case-schema.md; tree
+        equals library to 3.3e-12 with and without the opt-outs, test f5 in crates/rcfd-api/tests/vof_tree.rs).
+      - Scan before coding:
+        - Every non-ignored VOF test passes under the new defaults, no test re-pinned.
+        - Printed values moved (e.g. the 40 x 80 free-slip bubble y_c(3) 1.0282 to 1.0794, V_c,max 0.2204 to 0.2402;
+          static droplet Laplace error 4.8 to 0.37 percent).
+        - Dam break d_dam_break_front unchanged at the printed digits (1.504, 0.161, 0.110) and passing.
+        - baseline_hashes unchanged (no VOF case).
+      - The Hysing series with default settings and exact fractions equals the ADR 0108 X run bit for bit (difference 0,
+        limit 1e-9) on 40, 80, 160 (x0_default_settings_reproduce_adr0108_x_40 not ignored; the series ignored, heavy).
+      - Reworded bubble clause with defaults on 160 x 320 (f055_hysing_bubble_finest_grid_in_published_range_known_miss,
+        ignored, limits intact): y_c(3) 1.079454 (band [1.0799, 1.0817], 0.0004 below), V_c,max 0.241615 (band
+        [0.2417, 0.2421], 0.0001 below), phase volume drift 1.6e-13 (met), peak t 0.9175 (reported, below
+        [0.9213, 0.9313]): MISS, so F-055 stays partial; the dam-break position clause still needs data.
+    - Wave 44D flipped the VOF defaults in commit 127baf9 (opt-outs component_diagonal = averaged,
+      viscous_stress = laplacian, curvature = csf); the ignored known miss
+      f055_hysing_bubble_finest_grid_in_published_range_known_miss remains (y_c 1.079454, V_c,max 0.241615, volume drift
+      1.55e-13).
+    - Combined gate on 24facb9 (docs-only on top of 2264819): fmt and clippy clean, 2010 passed / 0 failed / 633
+      ignored.
 - [~] **F-056** Lagrangian particle tracking (one-way coupled, drag, gravity, wall reflect/trap)
   - depends on: F-029
   - acceptance: Particle settling and cyclone separation sanity cases
-  - note: PARTIAL (wave 18C, ADR 0028, crate rcfd-particles, docs/particles.md; wave 21C, ADR 0037). WAVE 21C: rcfd run and the service now drive the tracker (transient: hook at the end of Simulation::step; steady and frozen flow: tracked once on the final field when the results are written), with outputs particles.vtp, particles_<n>.vtp, particle_report.json and optional particle_tracks.csv (particles.tracks), the service method particles.report, and mesh-dependent located errors in Simulation::new and rcfd run --check-only (exit 3); the run path equals the library hooks track_transient and track_frozen bit for bit (W1, W2, also through the real rcfd binary and run.headless, W7), the flow is bit-identical with particles on or off (W3), baseline hashes unchanged; a transient run with particles is not restartable (no tracker checkpoint). Acceptance NOT fully met: the closed-form settling-type checks pass but there is no cyclone separation case. Delivered: one-way coupled point particles (Stokes and Schiller-Naumann drag, gravity with buoyancy), analytic exponential / Euler / RK2 / RK4 integration, cell-centre and gradient-corrected interpolation, robust face walk and point location on polyhedral meshes (brute-force fallback for non-convex domains), reflect (restitution) / stick / escape boundaries, point and surface injection with constant or Rosin-Rammler diameters, deterministic seeded RNG, VTK PolyData output, a particles section in the case tree with located errors, and library hooks track_frozen / track_transient. A review-found tracker bug (particles left slightly outside the box after a hit near an edge or corner) was fixed with a regression test (ADR 0028 A2); one registered sub-check, 'settings-tree hash unchanged when disabled', is ill-posed (the hash covers schema defaults) and is recorded as a known miss, the cavity solution being bit-identical instead. Particles pressed onto a reflecting wall by the flow end as stuck (no resting contact model). Registered checks: terminal velocity 1.4e-11 (limit 1e-6), exponential approach 5e-16 (1e-8), Euler/RK4 orders met, uniform-flow relaxation exact, Couette exact, bounce and landing 1e-14, injection count conservation exact, 1e5-point location on a graded mesh 0 mismatches, bit-for-bit reproducibility. MISSES kept as ignored known_miss tests: RK2 order on the first step pair (2.29 vs [1.9, 2.1]); solid-body rotation position error 3.7e-8 vs 1e-8 at t = 0.1 s (RK4 time error, order 4 confirmed) and a 2-cell precondition; strict pure-walk location on the warped non-convex mesh (1522 of 99510 points need the brute-force fallback). Schiller-Naumann coefficients and Rosin-Rammler form are verified only in secondary sources; the switch at Re = 1000 and the SplitMix64 constants are unverified. NOT delivered: cyclone case, droplet / combusting / multicomponent types, cone / group / file injections, parcel-count control, periodic patches, tracking through unjoined non-conformal interfaces, checkpointing of the tracker state. Two-way exchange record, dispersion and injection distributions were added in wave 29C (F-128, ADR 0057); breakup, film and erosion remain F-128. SCOPE (merged review): add inert, droplet, combusting and multicomponent particle types, single/group/cone/surface/file injections and parcel-count control as sub-criteria.
+  - note: PARTIAL (wave 18C, ADR 0028, crate rcfd-particles, docs/particles.md; wave 21C, ADR 0037). Acceptance NOT
+    fully met: the closed-form settling-type checks pass but there is no cyclone separation case.
+    - WAVE 21C:
+      - rcfd run and the service now drive the tracker (transient: hook at the end of Simulation::step; steady and
+        frozen flow: tracked once on the final field when the results are written), with:
+        - Outputs particles.vtp, particles_<n>.vtp, particle_report.json and optional particle_tracks.csv
+          (particles.tracks).
+        - The service method particles.report.
+        - Mesh-dependent located errors in Simulation::new and rcfd run --check-only (exit 3).
+      - The run path equals the library hooks track_transient and track_frozen bit for bit (W1, W2, also through the
+        real rcfd binary and run.headless, W7).
+      - The flow is bit-identical with particles on or off (W3), baseline hashes unchanged.
+      - A transient run with particles is not restartable (no tracker checkpoint).
+    - Delivered:
+      - One-way coupled point particles (Stokes and Schiller-Naumann drag, gravity with buoyancy).
+      - Analytic exponential / Euler / RK2 / RK4 integration.
+      - Cell-centre and gradient-corrected interpolation.
+      - Robust face walk and point location on polyhedral meshes (brute-force fallback for non-convex domains).
+      - Reflect (restitution) / stick / escape boundaries.
+      - Point and surface injection with constant or Rosin-Rammler diameters.
+      - Deterministic seeded RNG.
+      - VTK PolyData output.
+      - A particles section in the case tree with located errors.
+      - Library hooks track_frozen / track_transient.
+    - A review-found tracker bug (particles left slightly outside the box after a hit near an edge or corner) was fixed
+      with a regression test (ADR 0028 A2).
+    - One registered sub-check, 'settings-tree hash unchanged when disabled', is ill-posed (the hash covers schema
+      defaults) and is recorded as a known miss, the cavity solution being bit-identical instead.
+    - Particles pressed onto a reflecting wall by the flow end as stuck (no resting contact model).
+    - Registered checks:
+      - Terminal velocity 1.4e-11 (limit 1e-6).
+      - Exponential approach 5e-16 (1e-8).
+      - Euler/RK4 orders met.
+      - Uniform-flow relaxation exact.
+      - Couette exact.
+      - Bounce and landing 1e-14.
+      - Injection count conservation exact.
+      - 1e5-point location on a graded mesh 0 mismatches.
+      - Bit-for-bit reproducibility.
+    - MISSES kept as ignored known_miss tests:
+      - RK2 order on the first step pair (2.29 vs [1.9, 2.1]).
+      - Solid-body rotation position error 3.7e-8 vs 1e-8 at t = 0.1 s (RK4 time error, order 4 confirmed) and a 2-cell
+        precondition.
+      - Strict pure-walk location on the warped non-convex mesh (1522 of 99510 points need the brute-force fallback).
+    - Schiller-Naumann coefficients and Rosin-Rammler form are verified only in secondary sources; the switch at
+      Re = 1000 and the SplitMix64 constants are unverified.
+    - NOT delivered: cyclone case, droplet / combusting / multicomponent types, cone / group / file injections,
+      parcel-count control, periodic patches, tracking through unjoined non-conformal interfaces, checkpointing of the
+      tracker state.
+    - Two-way exchange record, dispersion and injection distributions were added in wave 29C (F-128, ADR 0057); breakup,
+      film and erosion remain F-128.
+    - SCOPE (merged review): add inert, droplet, combusting and multicomponent particle types,
+      single/group/cone/surface/file injections and parcel-count control as sub-criteria.
 - [x] **F-063** Dynamic mesh: rigid-body motion, smoothing deformation
   - depends on: F-029
   - acceptance: Oscillating cylinder and rotating toy case conserve mass; geometric conservation satisfied
-  - note: Delivered (ADR 0033, 0090, 0098): swept-volume ALE with the GCL to 1e-12, prescribed rigid translation and rotation, Laplacian, inverse-distance and inverse-volume smoothing (inverse-volume in the library only; the case tree maps only Laplacian and inverse-distance), incompressible PIMPLE and explicit compressible ALE steps, and mass asserted on smoothed meshes (g5b, c2 <= 1e-9). Six-DOF is done (F-229) and layering is done (F-230); their remaining scope is in F-244 and F-247. USER DECISION 2026-10-21 (audit of this item): sliding interfaces (AMI) split into F-250 and removed from the title. Remaining against the acceptance: (a) an oscillating-cylinder case on a smoothed mesh with a registered, asserted mass limit (the 'oscillation' in g1 is a translating whole mesh, not a cylinder); (b) a continuity assertion in G6 (prints 4.1e-14, never asserts), size S. Also not done: elastic analogy, periodic and surface-of-revolution motion specifications, BDF2 or adaptive stepping, turbulence, energy, scalars or restart on moving meshes. Known misses: piston-cell velocity 2.86e-4 (limit 1e-6) and the Symmetry anisotropy (g5c, pressure 0.989 vs 4e-2). The earlier cyclic-face lag no longer reproduces (g4b passes, 1.84e-14). Dependents F-134, F-139, F-244, F-247 are only nominally blocked by the remaining scope. WAVE 41A (ADR 0101, rcfd-fv tests/ale_flows.rs): DONE. c1_oscillating_cylinder_on_a_smoothed_mesh_conserves_mass_and_volume: cylinder of radius 0.5 in a fixed no-slip circle of radius 2 (O-grid 48 x 16), x_c = 0.1 sin(2 pi t), Laplacian-smoothed mesh, 80 steps: continuity 2.3e-14 (limit 1e-9), GCL residual 6.2e-16 mean(V) (limit 1e-12), total volume 7.9e-15 V0 (limit 1e-12). G6 now asserts the continuity over all 50 steps, 3.3e-13 (limit 1e-9), and the GCL, 6.6e-16 mean(V) (limit 1e-12). The acceptance is met by non-ignored tests. Outside the acceptance and still not done: elastic analogy, periodic and surface-of-revolution motion specifications, BDF2 or adaptive stepping, turbulence, energy, scalars or restart on moving meshes; the known misses above are unchanged.
+  - note: WAVE 41A (ADR 0101): DONE. The acceptance is met by non-ignored tests. Outside the acceptance and still not
+    done: elastic analogy, periodic and surface-of-revolution motion specifications, BDF2 or adaptive stepping,
+    turbulence, energy, scalars or restart on moving meshes. The known misses are unchanged: piston-cell velocity
+    2.86e-4 (limit 1e-6) and the Symmetry anisotropy (g5c, pressure 0.989 vs 4e-2).
+    - Delivered (ADR 0033, 0090, 0098):
+      - Swept-volume ALE with the GCL to 1e-12.
+      - Prescribed rigid translation and rotation.
+      - Laplacian, inverse-distance and inverse-volume smoothing (inverse-volume in the library only; the case tree maps
+        only Laplacian and inverse-distance).
+      - Incompressible PIMPLE and explicit compressible ALE steps.
+      - Mass asserted on smoothed meshes (g5b, c2 <= 1e-9).
+    - Six-DOF is done (F-229) and layering is done (F-230); their remaining scope is in F-244 and F-247.
+    - USER DECISION 2026-10-21 (audit of this item): sliding interfaces (AMI) split into F-250 and removed from the
+      title.
+    - Remaining against the acceptance:
+      - (a) an oscillating-cylinder case on a smoothed mesh with a registered, asserted mass limit (the 'oscillation' in
+        g1 is a translating whole mesh, not a cylinder);
+      - (b) a continuity assertion in G6 (prints 4.1e-14, never asserts), size S.
+    - Also not done: elastic analogy, periodic and surface-of-revolution motion specifications, BDF2 or adaptive
+      stepping, turbulence, energy, scalars or restart on moving meshes.
+    - Known misses: piston-cell velocity 2.86e-4 (limit 1e-6) and the Symmetry anisotropy (g5c, pressure 0.989 vs 4e-2).
+    - The earlier cyclic-face lag no longer reproduces (g4b passes, 1.84e-14).
+    - Dependents F-134, F-139, F-244, F-247 are only nominally blocked by the remaining scope.
+    - WAVE 41A (ADR 0101, rcfd-fv tests/ale_flows.rs): DONE.
+      - c1_oscillating_cylinder_on_a_smoothed_mesh_conserves_mass_and_volume: cylinder of radius 0.5 in a fixed no-slip
+        circle of radius 2 (O-grid 48 x 16), x_c = 0.1 sin(2 pi t), Laplacian-smoothed mesh, 80 steps: continuity
+        2.3e-14 (limit 1e-9), GCL residual 6.2e-16 mean(V) (limit 1e-12), total volume 7.9e-15 V0 (limit 1e-12).
+      - G6 now asserts the continuity over all 50 steps, 3.3e-13 (limit 1e-9), and the GCL, 6.6e-16 mean(V)
+        (limit 1e-12).
 - [ ] **F-100** Distributed-memory parallelism via MPI (halo exchange, parallel linear solvers)
   - depends on: F-016, F-027
   - acceptance: Strong scaling at least 70 percent efficiency to 16 ranks on 4M cells
-  - note: WAVE 22 (ADR 0038): device partition and multi-GPU work is not started; the GPU backend of F-101 is single-device. WAVE 29D (ADR 0058, status stays todo: no MPI/socket transport, acceptance not measurable): new crate rcfd-dist (layer 2) with a transport-agnostic Communicator trait (point-to-point primitives; halo exchange and deterministic rank-ordered global reductions built on them), SerialComm fallback and an in-process threads+channels transport (run_ranks), validate_decomposition (located errors), DistCsr/DistOperator (LinearOperator), distributed CG and BiCGStab, point-Jacobi and non-overlapping block-Jacobi(ILU0) preconditioners (Preconditioner), and distributed gradient/flux assembly with a steady scalar convection-diffusion solve on a partitioned cavity. Measured on a 48x48 cavity Poisson problem, P in {1,2,4,8}: matvec bit-identical to serial for every P; P=1 bit-identical to the serial solvers; CG solution within 8e-14 (none/Jacobi) to 5e-12 (block-Jacobi) relative L2 of serial at tol_rel 1e-10; block-Jacobi CG iterations 48 (serial ILU0), 64/58/77 at P=2/4/8; in-process strong scaling of a 192x192 solve reported only (about 1.6x at P=8 on one 16-thread host, not a cluster measurement). NOT delivered: MPI or socket transport and launcher/--hostfile (user decision), overlapping additive Schwarz, coarse space/distributed AMG, distributed SIMPLE/PISO, turbulence and BC catalogue, parallel mesh I/O, dynamic load balancing, tree reductions, non-blocking overlap, any cluster scaling claim.
+  - note: Status stays todo: no MPI/socket transport, acceptance not measurable (WAVE 29D, ADR 0058).
+    - WAVE 22 (ADR 0038): device partition and multi-GPU work is not started; the GPU backend of F-101 is single-device.
+    - WAVE 29D (ADR 0058, status stays todo: no MPI/socket transport, acceptance not measurable): new crate rcfd-dist
+      (layer 2) with:
+      - A transport-agnostic Communicator trait (point-to-point primitives; halo exchange and deterministic rank-ordered
+        global reductions built on them).
+      - SerialComm fallback and an in-process threads+channels transport (run_ranks).
+      - validate_decomposition (located errors).
+      - DistCsr/DistOperator (LinearOperator).
+      - Distributed CG and BiCGStab.
+      - Point-Jacobi and non-overlapping block-Jacobi(ILU0) preconditioners (Preconditioner).
+      - Distributed gradient/flux assembly with a steady scalar convection-diffusion solve on a partitioned cavity.
+    - Measured on a 48x48 cavity Poisson problem, P in {1,2,4,8}:
+      - Matvec bit-identical to serial for every P.
+      - P=1 bit-identical to the serial solvers.
+      - CG solution within 8e-14 (none/Jacobi) to 5e-12 (block-Jacobi) relative L2 of serial at tol_rel 1e-10.
+      - Block-Jacobi CG iterations 48 (serial ILU0), 64/58/77 at P=2/4/8.
+      - In-process strong scaling of a 192x192 solve reported only (about 1.6x at P=8 on one 16-thread host, not a
+        cluster measurement).
+    - NOT delivered: MPI or socket transport and launcher/--hostfile (user decision), overlapping additive Schwarz,
+      coarse space/distributed AMG, distributed SIMPLE/PISO, turbulence and BC catalogue, parallel mesh I/O, dynamic
+      load balancing, tree reductions, non-blocking overlap, any cluster scaling claim.
 - [x] **F-101** GPU acceleration (wgpu/CUDA) for linear solves and flux assembly
   - depends on: F-027
   - acceptance: At least 3x speedup on 5M-cell Poisson solve vs single-thread CPU
-  - note: SCOPE (merged review): define the initial GPU scope as flow, energy, free-surface, species, one- and two-equation turbulence and radiation. WAVE 22 (ADR 0038, docs/gpu.md): PARTIAL. Delivered: CUDA backend (rcfd-gpu, cargo feature cuda, off by default) with f64 NVRTC kernels, CG and BiCGStab on the device, Jacobi and Chebyshev preconditioning, linear_solver.device = cpu|cuda|auto for the segregated pressure solve, runtime discovery with CPU fallback. Measured on one machine (RTX 5080, 16 CPU threads), 3-D Poisson CG-Jacobi tol 1e-6, median of 5 after warm-up: the registered acceptance holds at 5.0M unknowns, GPU one-shot including matrix upload and download 0.201 s vs 1.945 s single-thread CPU (9.7x; 15x in a second run), resident-matrix 31x; vs 16 CPU threads 6.1x. The GPU is SLOWER than one CPU thread at 4096 unknowns (0.22x), about equal at 32768 (1.15x), 5.0x at 262144, 5.5x at 1M. Not delivered, so the item stays partial: flux assembly on the device (the matrix is assembled on the CPU and uploaded per solve), multi-GPU, AMG/ILU/GMRES on the device, other vendors (wgpu/ROCm/oneAPI), coupled/compressible/variable-density cases, and the scope list above (energy, free surface, species, turbulence, radiation) was not ported to the device; only the pressure Poisson solve of the segregated algorithms is. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. On one machine the registered acceptance holds at 5.0M unknowns (9.7x
+    against single-thread CPU), and the GPU is SLOWER than one CPU thread at 4096 unknowns (0.22x). WAVE 22 (ADR 0038)
+    ported only the pressure Poisson solve of the segregated algorithms to the device and did not deliver flux assembly
+    on the device.
+    - SCOPE (merged review): define the initial GPU scope as flow, energy, free-surface, species, one- and two-equation
+      turbulence and radiation.
+    - WAVE 22 (ADR 0038, docs/gpu.md): PARTIAL.
+      - Delivered:
+        - CUDA backend (rcfd-gpu, cargo feature cuda, off by default) with f64 NVRTC kernels.
+        - CG and BiCGStab on the device.
+        - Jacobi and Chebyshev preconditioning.
+        - linear_solver.device = cpu|cuda|auto for the segregated pressure solve.
+        - Runtime discovery with CPU fallback.
+      - Measured on one machine (RTX 5080, 16 CPU threads), 3-D Poisson CG-Jacobi tol 1e-6, median of 5 after warm-up:
+        - The registered acceptance holds at 5.0M unknowns, GPU one-shot including matrix upload and download 0.201 s vs
+          1.945 s single-thread CPU (9.7x; 15x in a second run), resident-matrix 31x; vs 16 CPU threads 6.1x.
+        - The GPU is SLOWER than one CPU thread at 4096 unknowns (0.22x), about equal at 32768 (1.15x), 5.0x at 262144,
+          5.5x at 1M.
+      - Not delivered, so the item stays partial:
+        - Flux assembly on the device (the matrix is assembled on the CPU and uploaded per solve).
+        - Multi-GPU.
+        - AMG/ILU/GMRES on the device.
+        - Other vendors (wgpu/ROCm/oneAPI).
+        - Coupled/compressible/variable-density cases.
+        - The scope list above (energy, free surface, species, turbulence, radiation) was not ported to the device; only
+          the pressure Poisson solve of the segregated algorithms is.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-102** Adaptive mesh refinement/adaption criteria and polyhedral conversion
   - depends on: F-010, F-028
   - acceptance: Adapted cavity matches fine uniform solution with fewer cells
-  - note: SCOPE (merged review): list solution-variation, target node count, edge-length weighting, hanging-node, polyhedral, anisotropic, register-based and geometry-based criteria, plus precoarsening for multigrid. WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL. Delivered (library only): rcfd_mesh::adapt with gradient, curvature, ZZ-type and region/geometry indicators, thresholds with dead-band hysteresis and level limits, a conforming hanging-node octree/quadtree refinement and coarsening operator with injection or linear transfer (linear fields exact to 6.7e-16, conservative, face level jump <= 1 with balance), and rcfd_mesh::polydual::tet_to_polydual (closed polyhedra, volume and patch areas exact to ~1e-15). A manufactured tanh-front diffusion solve on an adapted mesh beats the coarse mesh with fewer cells than the fine one, but the registered adapted-within-3x-of-fine check missed (3.71, ignored a4_adapted_vs_fine_known_miss, limit intact); a wider-band set-up registered afterwards passes. NOT delivered: the acceptance on a lid-driven cavity (not run), a case-file or solver-loop hook, target-node-count, edge-length-weighted, anisotropic and register-based criteria, merge-based polyhedral conversion, precoarsening for multigrid, parallel adaptation.
+  - note: PARTIAL (WAVE 28C, ADR 0054): delivered in the library only. The acceptance on a lid-driven cavity is not run,
+    and the registered adapted-within-3x-of-fine check missed (3.71, limit intact).
+    - SCOPE (merged review): list solution-variation, target node count, edge-length weighting, hanging-node,
+      polyhedral, anisotropic, register-based and geometry-based criteria, plus precoarsening for multigrid.
+    - WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL.
+      - Delivered (library only):
+        - rcfd_mesh::adapt with gradient, curvature, ZZ-type and region/geometry indicators, thresholds with dead-band
+          hysteresis and level limits, a conforming hanging-node octree/quadtree refinement and coarsening operator with
+          injection or linear transfer (linear fields exact to 6.7e-16, conservative, face level jump <= 1 with
+          balance).
+        - rcfd_mesh::polydual::tet_to_polydual (closed polyhedra, volume and patch areas exact to ~1e-15).
+      - A manufactured tanh-front diffusion solve on an adapted mesh beats the coarse mesh with fewer cells than the
+        fine one, but the registered adapted-within-3x-of-fine check missed (3.71, ignored
+        a4_adapted_vs_fine_known_miss, limit intact); a wider-band set-up registered afterwards passes.
+      - NOT delivered:
+        - The acceptance on a lid-driven cavity (not run).
+        - A case-file or solver-loop hook.
+        - Target-node-count, edge-length-weighted, anisotropic and register-based criteria.
+        - Merge-based polyhedral conversion.
+        - Precoarsening for multigrid.
+        - Parallel adaptation.
 - [~] **F-103** CGNS/EnSight export and read-only HDF5 interoperability using public specs
   - depends on: F-015
   - acceptance: Exports open in third-party viewers
-  - note: SCOPE (merged review): conformance cases per format are tracked in F-237. WAVE 15B: not attempted. WAVE 26C (ADR 0048): EnSight Gold export delivered in rcfd_io::ensight (case, geometry, per-node and per-element scalar and vector variables, ASCII and C Binary, hexa8 and nfaced elements, transient time set); verified by a hand-written reader in the tests and by an independent stdlib-Python reader of the files on disk (counts, hexahedron and polyhedron volumes, case file), NOT by a third-party viewer or library. The acceptance (exports open in third-party viewers) cannot be tested here; hexa8 node order, nfaced face orientation and the 4-byte binary widths are from memory and unverified. CGNS and any HDF5 reader or writer are NOT delivered (no HDF5 library or Python package is available locally to verify a layout; ADR 0048 D7).
+  - note: EnSight Gold export is delivered (WAVE 26C, ADR 0048). The acceptance (exports open in third-party viewers)
+    cannot be tested here, and CGNS and any HDF5 reader or writer are NOT delivered.
+    - SCOPE (merged review): conformance cases per format are tracked in F-237.
+    - WAVE 15B: not attempted.
+    - WAVE 26C (ADR 0048):
+      - EnSight Gold export delivered in rcfd_io::ensight (case, geometry, per-node and per-element scalar and vector
+        variables, ASCII and C Binary, hexa8 and nfaced elements, transient time set).
+      - Verified by a hand-written reader in the tests and by an independent stdlib-Python reader of the files on disk
+        (counts, hexahedron and polyhedron volumes, case file), NOT by a third-party viewer or library.
+      - The acceptance (exports open in third-party viewers) cannot be tested here; hexa8 node order, nfaced face
+        orientation and the 4-byte binary widths are from memory and unverified.
+      - CGNS and any HDF5 reader or writer are NOT delivered (no HDF5 library or Python package is available locally to
+        verify a layout; ADR 0048 D7).
 
 ## Gap-analysis additions (F-104 to F-139)
 
-Added after comparing this roadmap with a feature survey of a commercial CFD suite . Ids keep the phase field in `roadmap.json`; items are listed here by phase. Priority legend (also at the start of each note): P1 = do soon, unblocks validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4 = long-term/optional. All are `todo`.
+Added after comparing this roadmap with a feature survey of a commercial CFD suite. Ids keep the phase field in
+`roadmap.json`; items are listed here by phase. Priority legend (also at the start of each note): P1 = do soon, unblocks
+validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4 = long-term/optional. All are `todo`.
 
 ### Phase 1 additions
 
 - [x] **F-118** Fluent case/mesh import (.cas/.msh, ASCII and binary mesh sections; HDF5 .cas.h5 mesh only) from public file-structure documentation
   - depends on: F-014
   - acceptance: Imports a 2D and a 3D mesh with zone/BC-type mapping and passes mesh checks; unsupported section ids are reported, not silently dropped; only fixtures from public sources run in default CI
-  - note: Partial (acceptance met on the tested files; title scope not). Delivered in rcfd-io fluent: 2D and 3D, ASCII and binary face/node/cell sections, zone and boundary-type name mapping (type names first, numeric ids as fallback), 2D meshes extruded to one prism layer with a frontAndBack empty patch, a Report listing skipped sections (also printed by rcfd check-mesh / convert as a note), explicit errors for periodic zones and section 18, hanging-node parents, axis zones, gzip and HDF5; format sniffing (Fluent vs Gmsh) in case mesh.file, check-mesh and convert; docs/mesh-import.md. Measured (checks fixed up front) on the real Fluent TGrid-written 2D mesh elbow.msh (OpenFOAM-11 tutorial, GPL, fetched not vendored, skipped when absent): 537 nodes and 918 triangles as declared, 5 boundary zones with names plus frontAndBack, passes the rcfd mesh quality check, extruded volume equals thickness times the independent shoelace area from the file's boundary edges (relative difference 5.4e-16). A hand-written 2D Fluent channel (16x8) runs a laminar SIMPLEC case to convergence through rcfd run. Not done: HDF5 .cas.h5 (needs an HDF5 reader), gzip, periodic/hanging-node/axisymmetric/non-conformal meshes, reading the case setup from .cas; the 3D and the binary paths are tested only on files written by the tests (no public 3D or binary Fluent file was found), so binary layout and little-endian reading are unverified (docs/reference-data.md). Existing behaviour change: bc types 12 (periodic) and 31 no longer map silently to cyclic/outlet; they are errors. WAVE 39A (ADR 0092, done): crates/rcfd-io/tests/fluent_3d_w39a.rs writes a 3D mesh of 3840 curved, twisted and sheared hexahedra (annulus 48 x 8 x 10) as a Fluent file in ASCII (10/13), binary double (3010/3013) and binary single (2010/2013), with wall, symmetry, velocity-inlet and pressure-outlet zones, and imports it: counts, patch sizes and kinds as written, no ignored section, check_mesh passes on all three; volume, min volume, skewness and aspect ratio equal the source's to 1e-12 relative (measured 0) and non-orthogonality to 1e-10 deg (measured 0, 30.0994 deg) for ASCII and 3010/3013 (equal content hashes); float32 within 1e-5 relative / 1e-3 deg (measured at most 2.6e-6 relative, +9e-6 deg). Still a round trip: the writer encodes the reader's own reading of the format, so the binary layout is not verified against a Fluent-written file; HDF5, gzip, periodic, hanging-node and axisymmetric meshes remain title scope. USER DECISION 2026-10-21: accepted as done. Binary layout is verified only against our own writer; no public Fluent-written binary file has been found.
+  - note: USER DECISION 2026-10-21: accepted as done. Binary layout is verified only against our own writer; no public
+    Fluent-written binary file has been found. HDF5, gzip, periodic, hanging-node and axisymmetric meshes remain title
+    scope (WAVE 39A, ADR 0092).
+    - Partial (acceptance met on the tested files; title scope not).
+    - Delivered in rcfd-io fluent:
+      - 2D and 3D, ASCII and binary face/node/cell sections.
+      - Zone and boundary-type name mapping (type names first, numeric ids as fallback).
+      - 2D meshes extruded to one prism layer with a frontAndBack empty patch.
+      - A Report listing skipped sections (also printed by rcfd check-mesh / convert as a note).
+      - Explicit errors for periodic zones and section 18, hanging-node parents, axis zones, gzip and HDF5.
+      - Format sniffing (Fluent vs Gmsh) in case mesh.file, check-mesh and convert.
+      - docs/mesh-import.md.
+    - Measured (checks fixed up front) on the real Fluent TGrid-written 2D mesh elbow.msh (OpenFOAM-11 tutorial, GPL,
+      fetched not vendored, skipped when absent):
+      - 537 nodes and 918 triangles as declared.
+      - 5 boundary zones with names plus frontAndBack.
+      - Passes the rcfd mesh quality check.
+      - Extruded volume equals thickness times the independent shoelace area from the file's boundary edges (relative
+        difference 5.4e-16).
+    - A hand-written 2D Fluent channel (16x8) runs a laminar SIMPLEC case to convergence through rcfd run.
+    - Not done:
+      - HDF5 .cas.h5 (needs an HDF5 reader), gzip, periodic/hanging-node/axisymmetric/non-conformal meshes, reading the
+        case setup from .cas.
+      - The 3D and the binary paths are tested only on files written by the tests (no public 3D or binary Fluent file
+        was found), so binary layout and little-endian reading are unverified (docs/reference-data.md).
+    - Existing behaviour change: bc types 12 (periodic) and 31 no longer map silently to cyclic/outlet; they are errors.
+    - WAVE 39A (ADR 0092, done): crates/rcfd-io/tests/fluent_3d_w39a.rs writes a 3D mesh of 3840 curved, twisted and
+      sheared hexahedra (annulus 48 x 8 x 10) as a Fluent file in ASCII (10/13), binary double (3010/3013) and binary
+      single (2010/2013), with wall, symmetry, velocity-inlet and pressure-outlet zones, and imports it.
+      - Counts, patch sizes and kinds as written, no ignored section, check_mesh passes on all three.
+      - Volume, min volume, skewness and aspect ratio equal the source's to 1e-12 relative (measured 0) and
+        non-orthogonality to 1e-10 deg (measured 0, 30.0994 deg) for ASCII and 3010/3013 (equal content hashes).
+      - Float32 within 1e-5 relative / 1e-3 deg (measured at most 2.6e-6 relative, +9e-6 deg).
+      - Still a round trip: the writer encodes the reader's own reading of the format, so the binary layout is not
+        verified against a Fluent-written file.
+      - HDF5, gzip, periodic, hanging-node and axisymmetric meshes remain title scope.
+    - USER DECISION 2026-10-21: accepted as done. Binary layout is verified only against our own writer; no public
+      Fluent-written binary file has been found.
 
 ### Phase 2 additions
 
 - [x] **F-104** Expression language for setup and post (named expressions with units, arithmetic/functions, field and report references)
   - depends on: F-003, F-005
   - acceptance: Expressions parse and evaluate with dimension checking; an inlet velocity, a heat-flux BC and a report quantity can each be an expression; dimensionally inconsistent expressions are rejected with a located error; expressions serialize in the settings tree
-  - note: P1. Gap: named expressions with units are needed everywhere in setup and post-processing. Done (wave 4 + 5): rcfd-core::expr (parser, units, dimension checking, located errors, named expressions with cycle detection). Wired into the case: top-level expressions.<name>.definition (named, usable from other expressions, BCs and reports), boundaries.<patch>.velocity_expression_x/y/z (fixed velocity; functions of x, y, z, t; per-face profile, re-evaluated each step in transient runs), boundaries.<patch>.temperature_expression (temperature = fixed) and heat_flux_expression (temperature = heat_flux, W/m^2 into the domain; both per-face functions of x, y, z), reports of type expression (other reports/constants/named expressions, result dimension shown as unit), physics constants cp/conductivity/reference_temperature/thermal_expansion/gravity usable in expressions. Dimension errors, wrong result dimension, syntax errors, unknown identifiers and an expression whose boundary mode does not use it are rejected at case validation with the dotted path, TOML line and a caret-located message. Tests: parabolic inlet face values and area-average match the exact mid-point sum to 1e-12; expression report matches; time-dependent inlet equals the analytic value at every step; conduction case with heat_flux_expression 2(1+y) W/m^2 on the hot wall and temperature_expression on the cold wall: integrated heat flow in = -0.18750000 and out = +0.18750000 vs exact 3/16 (1e-9), mean hot-wall temperature 303 K within 0.01 K. Limitation: boundary expressions are evaluated at t = 0 for temperature/heat flux (the energy equation is steady-only); velocity expressions are re-evaluated every transient step.
+  - note: P1. Gap: named expressions with units are needed everywhere in setup and post-processing. Done (wave 4 + 5).
+    Limitation: boundary expressions are evaluated at t = 0 for temperature/heat flux (the energy equation is
+    steady-only); velocity expressions are re-evaluated every transient step.
+    - rcfd-core::expr (parser, units, dimension checking, located errors, named expressions with cycle detection).
+    - Wired into the case:
+      - Top-level expressions.<name>.definition (named, usable from other expressions, BCs and reports).
+      - boundaries.<patch>.velocity_expression_x/y/z (fixed velocity; functions of x, y, z, t; per-face profile,
+        re-evaluated each step in transient runs).
+      - boundaries.<patch>.temperature_expression (temperature = fixed) and heat_flux_expression
+        (temperature = heat_flux, W/m^2 into the domain; both per-face functions of x, y, z).
+      - Reports of type expression (other reports/constants/named expressions, result dimension shown as unit).
+      - Physics constants cp/conductivity/reference_temperature/thermal_expansion/gravity usable in expressions.
+    - Dimension errors, wrong result dimension, syntax errors, unknown identifiers and an expression whose boundary mode
+      does not use it are rejected at case validation with the dotted path, TOML line and a caret-located message.
+    - Tests:
+      - Parabolic inlet face values and area-average match the exact mid-point sum to 1e-12.
+      - Expression report matches.
+      - Time-dependent inlet equals the analytic value at every step.
+      - Conduction case with heat_flux_expression 2(1+y) W/m^2 on the hot wall and temperature_expression on the cold
+        wall: integrated heat flow in = -0.18750000 and out = +0.18750000 vs exact 3/16 (1e-9), mean hot-wall
+        temperature 303 K within 0.01 K.
 - [x] **F-105** Profile and table inputs: file/CSV profile boundary conditions and 1D/3D interpolated property tables
   - depends on: F-020, F-104
   - acceptance: Parabolic inlet read from a profile file reproduces the analytic Poiseuille solution; a temperature-dependent viscosity table is interpolated correctly (unit test); missing/out-of-range data raise errors
-  - note: Wave 8. Done. rcfd-core table.rs: Table (CSV with bracketed header units, 1-3 inputs, linear / multilinear grid / inverse-distance scattered interpolation, error or clamp outside the range) and table calls in expressions (Context::add_table; arguments dimension-checked against the input units, result carries the output unit). Settings: tables.<name> (file or inline data, inputs, outputs, units, extrapolation) and boundaries.<patch>.profile feeding ux/uy/uz/T/heat_flux; service sandbox confines table files; Case gained parse_toml_in/with, from_json_in/with and load_with so relative files resolve before validation. Validation (checks fixed before running, rcfd-api tests/tables.rs): parabolic inlet from a 101-row CSV on a 24x20 channel, Re=10: last-column velocity max deviation from u=6Uy(H-y)/H^2 0.66 percent of the centreline value (limit 2), inlet-outlet kinematic pressure drop 2.358 vs analytic 12 nu U L/H^2 = 2.400 (-1.7 percent, limit 3); a water nu(T) table in degC gives 0.801e-6 at 30 degC and 0.9025e-6 at 298.15 K (exact linear interpolation); missing file, uncovered patch, wrong dimension, unknown input column and sandbox escape are all errors. Caveats: no Fluent profile syntax; scattered interpolation is IDW only; out-of-range values during a transient run are not trapped (only t=0 at build).
+  - note: Wave 8. Done. Caveats: no Fluent profile syntax; scattered interpolation is IDW only; out-of-range values
+    during a transient run are not trapped (only t=0 at build).
+    - rcfd-core table.rs: Table (CSV with bracketed header units, 1-3 inputs, linear / multilinear grid /
+      inverse-distance scattered interpolation, error or clamp outside the range) and table calls in expressions
+      (Context::add_table; arguments dimension-checked against the input units, result carries the output unit).
+    - Settings: tables.<name> (file or inline data, inputs, outputs, units, extrapolation) and
+      boundaries.<patch>.profile feeding ux/uy/uz/T/heat_flux.
+    - Service sandbox confines table files.
+    - Case gained parse_toml_in/with, from_json_in/with and load_with so relative files resolve before validation.
+    - Validation (checks fixed before running, rcfd-api tests/tables.rs):
+      - Parabolic inlet from a 101-row CSV on a 24x20 channel, Re=10: last-column velocity max deviation from
+        u=6Uy(H-y)/H^2 0.66 percent of the centreline value (limit 2), inlet-outlet kinematic pressure drop 2.358 vs
+        analytic 12 nu U L/H^2 = 2.400 (-1.7 percent, limit 3).
+      - A water nu(T) table in degC gives 0.801e-6 at 30 degC and 0.9025e-6 at 298.15 K (exact linear interpolation).
+      - Missing file, uncovered patch, wrong dimension, unknown input column and sandbox escape are all errors.
 - [~] **F-106** Pseudo-transient (local time-stepping) steady solver option with automatic timescale selection
   - depends on: F-028, F-030
   - acceptance: Lid-driven cavity at Re 1000 and a backward-facing step converge with pseudo-transient where plain SIMPLE needs lower relaxation; timescale factor and auto/local/physical modes selectable in the settings tree
-  - note: P1. Gap: pseudo-transient convergence control (physical, local and automatic timescales) is standard practice; improves robustness for phases 3-5. Partial (wave 5). Done: the SIMPLE/SIMPLEC pseudo-transient term (V/dt added to the momentum diagonal with explicit old-iterate source, before relaxation) was already in rcfd-fv simple.rs but untested and not exposed; now selectable in the settings tree: solver.pseudo_mode = off | auto (one global step factor*L/U_max) | local (per-cell dt = cfl*V/sum(0.5|phi|+nu*lap)) | physical (fixed dt), with solver.pseudo_cfl, solver.pseudo_dt and the timescale factor solver.pseudo_factor. Tests: rcfd-api case test runs all modes from the tree; rcfd-fv factor test (factor 0.4 on cfl 5 equals cfl 2). Measured, lid-driven cavity Re=1000, 32x32, linearUpwind (tests/pseudo.rs, release): plain SIMPLEC alpha_u 0.9/0.95/1.0 diverge (no convergence in 5296/4154/3298 iterations, residual ~0.7, then non-finite); SIMPLE 0.7/0.3 converges in 1900 iterations; pseudo-transient with alpha_u = 1 (no momentum relaxation) converges to residual 1e-6 for local cfl 2 (1798), cfl 5 (1364), physical dt 0.05 (1918), 0.2 (1515) and auto (1532 iterations), all to the same steady state. Larger pseudo steps fail: local cfl >= 10 and physical dt 1 do not converge (residual ~0.6-0.7). 64x64 vanLeer: SIMPLEC 0.95 does not converge in 6000 its (residual 3.7e-2), pseudo local cfl 5 converges in 3996, SIMPLE 0.7/0.3 in 4552 (wave-5 exploration run, not a kept test). NOT met: the backward-facing step. With the project backward_step mesh (uniform inlet, expansion ratio 2, 16+80 x 8+8 cells; Re_h=400 vanLeer also 32+160 x 16+16) Re_h=100 converges with every variant (SIMPLE 646 its, pseudo cfl 5 571; kept as a light test) and Re_h=200/400 with second-order schemes (vanLeer, linearUpwind) does not converge with ANY variant, including plain SIMPLE 0.7/0.3, SIMPLEC 0.9 and all pseudo modes tried (residual stalls 0.05-0.5 or diverges); with first-order upwind Re_h=200 converges for all, Re_h=400 only for SIMPLE 0.7/0.3 (1395 its). So the step case shows no pseudo-transient advantage and points to an unresolved robustness issue of second-order schemes on the step (corner/outlet) that was not diagnosed. Note: an earlier exploration table with 'res 0.00e0' entries was invalid (NaN fields); the test harness now treats non-finite fields as failure. Next: diagnose the step (outlet backflow treatment, limiter chatter at the corner, deferred-correction under-relaxation), then re-run the BFS comparison. Wave 6b: remaining solver settings of the library are now in the schema: solver.h_operator (default | from_solution | previous_iterate), p_ref_cell/p_ref_value, bulk_velocity/bulk_direction (mean-velocity driver), physics.body_force, momentum/pressure linear-solver tolerances and iteration caps, ddt_correction, and res_T/res_nut/res_rho are accepted convergence monitors; the pseudo-transient and energy settings were already exposed (see above) and are unchanged. Documented in rcfd/docs/case-schema.md. WAVE 6 UPDATE: the step failure is DIAGNOSED AND FIXED. Root cause: SimpleSettings.h_from_solution defaulted to false, i.e. H (and the Rhie-Chow flux) used the previous iterate instead of the solved momentum predictor, a Jacobi-like lagged iteration that is marginally unstable with second-order deferred correction (wave of O(1) amplitude, wavelength ~10 cells, growing toward the outlet; l_out 10 converged, l_out 14-20 did not; dx 0.5 and 0.125 converged, 0.25 did not; alpha 0.5/0.2 converged). Now default true (still false while a MeanVelocityDriver is active, whose gain assumes the lagged response). Evidence and tables: docs/bfs-convergence-findings.md. Measured after the fix: step (uniform inlet, ER 2, 16+80 x 8+8) Re_h = 200 linearUpwind SIMPLE 0.7/0.3 646 its; cavity Re = 1000 32x32 linearUpwind plain SIMPLEC alpha_u 0.95 WITHOUT pseudo-transient now converges (442 its; SIMPLE 0.7/0.3 660 its), so the wave-5 premise that plain SIMPLE needs lower relaxation than pseudo-transient came from this defect (test now asserts both the legacy failure with h_from_solution = false and the new convergence). Laminar step, parabolic inlet (tests/step_laminar.rs): Re_h = 200 vanLeer SIMPLEC alpha_u 1 + local pseudo cfl 5 converges (607 its); plain SIMPLE/SIMPLEC, linearUpwind and vanLeer converge for Re_h <= 200. STILL NOT MET at Re_h = 400: vanLeer SIMPLE 0.7/0.3 (and 0.5/0.2, 0.3/0.1) limit-cycles (residual 0.02-0.2), linearUpwind SIMPLEC 0.95 does not converge (0.4), pseudo local cfl 5 (alpha_u 1) does not converge with vanLeer (4.9e-2) or linearUpwind (4.4e-2) in 3000-4000 its; converging recipes: vanLeer + SIMPLEC alpha_u 0.9 (696 its on 120x16, 1404-2359 its on 320x32 - 480x48) and linearUpwind + SIMPLE 0.7/0.3 (2795 its). So the acceptance (cavity and a step converge with pseudo-transient where plain SIMPLE needs lower relaxation) is only partly met: both converge with pseudo-transient, but plain SIMPLEC now also converges and the Re_h = 400 step still needs a specific scheme/coupling combination. No auto setting beyond the h_from_solution default was added. Laminar reattachment x_r/h (ER 2, parabolic inlet, vanLeer; Re_Armaly = 2 Re_h): Re_h 100: 4.95; 200: 8.19; 389: 11.54; 400: 11.24 / 11.67 / 11.75 on three meshes (not yet mesh independent); remembered literature (NOT verified, from memory): Gartling 1990 Re 800 about 12.2, Armaly 1983 about 12 (3D); lower Re values not citable. Graded step mesh: gen::backward_step_graded (StepGrading, StepSpec::from_expansion_ratio) agrees with the uniform mesh of the same size to 0.2 percent at Re_h 400 (11.70 vs 11.67). Convention warning: Re_h = 389 was run as asked (Re_Armaly 778); Armaly's own '389' would be Re_h about 195, for which Re_h 200 (8.19) is the nearer point. SCOPE (merged review): local timescale factor, automatic/physical timescale and nonlinear acceleration are tracked in F-209. WAVE 17A UPDATE (ADR 0023): automatic pseudo-step controllers solver.pseudo_control = ser | ser2 (cap solver.pseudo_scale_max) added and tested; they do NOT converge the registered cavity/step cases (known misses; fixed cfl 5-50 converges on the cavity, 100 fails), so they are not validated and the status stays partial. Also solver.residual_norm = reference | backward | scaled; the stalls of the F-200 C2/D1/D2/E2 residuals were diagnosed as a normalisation artefact and pass with scaled.
+  - note: P1. Gap: pseudo-transient convergence control (physical, local and automatic timescales) is standard practice;
+    improves robustness for phases 3-5. Partial. The acceptance (cavity and a step converge with pseudo-transient where
+    plain SIMPLE needs lower relaxation) is only partly met: both converge with pseudo-transient, but plain SIMPLEC now
+    also converges and the Re_h = 400 step still needs a specific scheme/coupling combination. The automatic pseudo-step
+    controllers of WAVE 17A (ADR 0023) do NOT converge the registered cavity/step cases (known misses), so they are not
+    validated and the status stays partial.
+    - Partial (wave 5). Done: the SIMPLE/SIMPLEC pseudo-transient term (V/dt added to the momentum diagonal with
+      explicit old-iterate source, before relaxation) was already in rcfd-fv simple.rs but untested and not exposed; now
+      selectable in the settings tree:
+      - solver.pseudo_mode = off | auto (one global step factor*L/U_max) | local (per-cell
+        dt = cfl*V/sum(0.5|phi|+nu*lap)) | physical (fixed dt).
+      - solver.pseudo_cfl, solver.pseudo_dt and the timescale factor solver.pseudo_factor.
+    - Tests: rcfd-api case test runs all modes from the tree; rcfd-fv factor test (factor 0.4 on cfl 5 equals cfl 2).
+    - Measured, lid-driven cavity Re=1000, 32x32, linearUpwind (tests/pseudo.rs, release):
+      - Plain SIMPLEC alpha_u 0.9/0.95/1.0 diverge (no convergence in 5296/4154/3298 iterations, residual ~0.7, then
+        non-finite).
+      - SIMPLE 0.7/0.3 converges in 1900 iterations.
+      - Pseudo-transient with alpha_u = 1 (no momentum relaxation) converges to residual 1e-6 for local cfl 2 (1798),
+        cfl 5 (1364), physical dt 0.05 (1918), 0.2 (1515) and auto (1532 iterations), all to the same steady state.
+      - Larger pseudo steps fail: local cfl >= 10 and physical dt 1 do not converge (residual ~0.6-0.7).
+    - 64x64 vanLeer: SIMPLEC 0.95 does not converge in 6000 its (residual 3.7e-2), pseudo local cfl 5 converges in 3996,
+      SIMPLE 0.7/0.3 in 4552 (wave-5 exploration run, not a kept test).
+    - NOT met: the backward-facing step. With the project backward_step mesh (uniform inlet, expansion ratio 2,
+      16+80 x 8+8 cells; Re_h=400 vanLeer also 32+160 x 16+16):
+      - Re_h=100 converges with every variant (SIMPLE 646 its, pseudo cfl 5 571; kept as a light test).
+      - Re_h=200/400 with second-order schemes (vanLeer, linearUpwind) does not converge with ANY variant, including
+        plain SIMPLE 0.7/0.3, SIMPLEC 0.9 and all pseudo modes tried (residual stalls 0.05-0.5 or diverges).
+      - With first-order upwind Re_h=200 converges for all, Re_h=400 only for SIMPLE 0.7/0.3 (1395 its).
+      - So the step case shows no pseudo-transient advantage and points to an unresolved robustness issue of
+        second-order schemes on the step (corner/outlet) that was not diagnosed.
+    - Note: an earlier exploration table with 'res 0.00e0' entries was invalid (NaN fields); the test harness now treats
+      non-finite fields as failure.
+    - Next: diagnose the step (outlet backflow treatment, limiter chatter at the corner, deferred-correction
+      under-relaxation), then re-run the BFS comparison.
+    - Wave 6b: remaining solver settings of the library are now in the schema:
+      - solver.h_operator (default | from_solution | previous_iterate), p_ref_cell/p_ref_value,
+        bulk_velocity/bulk_direction (mean-velocity driver), physics.body_force, momentum/pressure linear-solver
+        tolerances and iteration caps, ddt_correction, and res_T/res_nut/res_rho are accepted convergence monitors.
+      - The pseudo-transient and energy settings were already exposed (see above) and are unchanged.
+      - Documented in rcfd/docs/case-schema.md.
+    - WAVE 6 UPDATE: the step failure is DIAGNOSED AND FIXED.
+      - Root cause: SimpleSettings.h_from_solution defaulted to false, i.e. H (and the Rhie-Chow flux) used the previous
+        iterate instead of the solved momentum predictor, a Jacobi-like lagged iteration that is marginally unstable
+        with second-order deferred correction (wave of O(1) amplitude, wavelength ~10 cells, growing toward the outlet;
+        l_out 10 converged, l_out 14-20 did not; dx 0.5 and 0.125 converged, 0.25 did not; alpha 0.5/0.2 converged).
+      - Now default true (still false while a MeanVelocityDriver is active, whose gain assumes the lagged response).
+      - Evidence and tables: docs/bfs-convergence-findings.md.
+      - Measured after the fix:
+        - Step (uniform inlet, ER 2, 16+80 x 8+8) Re_h = 200 linearUpwind SIMPLE 0.7/0.3 646 its.
+        - Cavity Re = 1000 32x32 linearUpwind plain SIMPLEC alpha_u 0.95 WITHOUT pseudo-transient now converges (442
+          its; SIMPLE 0.7/0.3 660 its), so the wave-5 premise that plain SIMPLE needs lower relaxation than
+          pseudo-transient came from this defect (test now asserts both the legacy failure with h_from_solution = false
+          and the new convergence).
+        - Laminar step, parabolic inlet (tests/step_laminar.rs): Re_h = 200 vanLeer SIMPLEC alpha_u 1 + local pseudo
+          cfl 5 converges (607 its); plain SIMPLE/SIMPLEC, linearUpwind and vanLeer converge for Re_h <= 200.
+      - STILL NOT MET at Re_h = 400:
+        - vanLeer SIMPLE 0.7/0.3 (and 0.5/0.2, 0.3/0.1) limit-cycles (residual 0.02-0.2).
+        - linearUpwind SIMPLEC 0.95 does not converge (0.4).
+        - Pseudo local cfl 5 (alpha_u 1) does not converge with vanLeer (4.9e-2) or linearUpwind (4.4e-2) in 3000-4000
+          its.
+        - Converging recipes: vanLeer + SIMPLEC alpha_u 0.9 (696 its on 120x16, 1404-2359 its on 320x32 - 480x48) and
+          linearUpwind + SIMPLE 0.7/0.3 (2795 its).
+      - So the acceptance (cavity and a step converge with pseudo-transient where plain SIMPLE needs lower relaxation)
+        is only partly met: both converge with pseudo-transient, but plain SIMPLEC now also converges and the Re_h = 400
+        step still needs a specific scheme/coupling combination.
+      - No auto setting beyond the h_from_solution default was added.
+    - Laminar reattachment x_r/h (ER 2, parabolic inlet, vanLeer; Re_Armaly = 2 Re_h): Re_h 100: 4.95; 200: 8.19; 389:
+      11.54; 400: 11.24 / 11.67 / 11.75 on three meshes (not yet mesh independent).
+    - Remembered literature (NOT verified, from memory): Gartling 1990 Re 800 about 12.2, Armaly 1983 about 12 (3D);
+      lower Re values not citable.
+    - Graded step mesh: gen::backward_step_graded (StepGrading, StepSpec::from_expansion_ratio) agrees with the uniform
+      mesh of the same size to 0.2 percent at Re_h 400 (11.70 vs 11.67).
+    - Convention warning: Re_h = 389 was run as asked (Re_Armaly 778); Armaly's own '389' would be Re_h about 195, for
+      which Re_h 200 (8.19) is the nearer point.
+    - SCOPE (merged review): local timescale factor, automatic/physical timescale and nonlinear acceleration are tracked
+      in F-209.
+    - WAVE 17A UPDATE (ADR 0023): automatic pseudo-step controllers solver.pseudo_control = ser | ser2 (cap
+      solver.pseudo_scale_max) added and tested; they do NOT converge the registered cavity/step cases (known misses;
+      fixed cfl 5-50 converges on the cavity, 100 fails), so they are not validated and the status stays partial.
+    - Also solver.residual_norm = reference | backward | scaled; the stalls of the F-200 C2/D1/D2/E2 residuals were
+      diagnosed as a normalisation artefact and pass with scaled.
 - [x] **F-107** Periodic boundaries: translational and rotational periodicity (conformal) in mesh and solver
   - depends on: F-010, F-020, F-028
   - acceptance: Fully developed channel with a periodic streamwise pair matches the analytic mean-flow solution; a 60-degree rotational sector of a rotating cylinder matches the full-circle result
-  - note: P1. Gap: periodic boundaries and interfaces are a common setup feature; prerequisite for turbomachinery sectors. Done: implicit pressure coupling of periodic pairs, rotational periodic patches (Patch.rotation, annulus_sector mesh), bulk-velocity driver. Validation: periodic channel vs plane Poiseuille max error 1.7e-3 of u_max; 60-degree sector vs full annulus ring values differ by 1.1e-5 (both 6.8e-3 of omega*r1 from Taylor-Couette: first-order wall BC). Caveats: momentum periodic coupling is still lagged (deferred correction); OpenFOAM reader/writer does not store rotation.
+  - note: P1. Gap: periodic boundaries and interfaces are a common setup feature; prerequisite for turbomachinery
+    sectors. Done: implicit pressure coupling of periodic pairs, rotational periodic patches (Patch.rotation,
+    annulus_sector mesh), bulk-velocity driver.
+    - Validation: periodic channel vs plane Poiseuille max error 1.7e-3 of u_max; 60-degree sector vs full annulus ring
+      values differ by 1.1e-5 (both 6.8e-3 of omega*r1 from Taylor-Couette: first-order wall BC).
+    - Caveats: momentum periodic coupling is still lagged (deferred correction); OpenFOAM reader/writer does not store
+      rotation.
 
 ### Phase 3 additions
 
 - [~] **F-108** Boundary-layer inflation: prismatic wall layers from a first-layer height or y+ target with growth ratio
   - depends on: F-012, F-011, F-040
   - acceptance: Flat-plate mesh built from a target y+ meets it within 10 percent on the solved case; layer quality metrics reported; works on block meshes and on unstructured wall patches
-  - note: P1. Gap: boundary-layer (prism) mesh generation with growth and shell controls; needed for wall-resolved turbulence validation. Wave 6: not started. Related building block only: rcfd-mesh gen::backward_step_graded with StepGrading (geometric / symmetric clustering toward the step face, floor, shear-layer lip and top wall; StepSpec::from_expansion_ratio) plus optional x_ratio / y_ratio params of the backward_step case generator; this is hand-graded block meshing, not prismatic inflation from a first-layer height or y+ target. WAVE 7 UPDATE, status PARTIAL (block meshes done, unstructured wall patches NOT done). rcfd-mesh gen::Grading::WallLayers { first, growth, layers, both } (box_2d_graded / channel / any axis grading): `layers` cells of height first * growth^i from the wall (both walls mirrored when both = true, needs an even cell count), then the remaining cells grow geometrically from the last layer with a ratio solved so that the axis length is filled exactly. New module rcfd-mesh layers.rs: flat_plate_cf (White 0.455/ln^2(0.06 Re_x)), flat_plate_u_tau, first_cell_height_from_y_plus (h1 = 2 y+ nu / u_tau, cell centre at h1/2), y_plus_of_first_cell, wall_segment_sizes / wall_layer_axis_sizes, LayerReport/layer_report (first height, layer count and thickness, min/max growth, transition ratio to the first bulk cell, max neighbour ratio). Tests (rcfd-mesh, 4 new, 24 pass): layer heights and growth ratio equal the request to 1e-5/1e-6, mirror symmetry, impossible stacks rejected, y+ round trip (generated first cell centre has y+ 1.0 to 1e-5), volume conserved to 1e-12, check_mesh ok and max aspect ratio = dx/h1 with no warnings. Schema (box_2d and channel_2d y direction): mesh.wall_layers, first_layer_height, target_y_plus, layer_growth (1.2), layer_walls both | lower, layer_reference_velocity, layer_reference_length, layer_u_tau, located diagnostics (rcfd-api tests/sst_schema.rs); example cases/channel/sst_channel.toml. Solved check of the acceptance 'flat-plate mesh built from a target y+ meets it within 10 percent': TMR-like flat plate (Re 5e6 per m, 0..2 m) with target y+ 0.5 at x = 2 gives a solved first-cell y+ of 0.48-0.54 along the plate (within 10 percent of the target; tests/flat_plate_sst.rs, ignored). Channel mesh y+ = 1.00 +- 0.01 (asserted). NOT done: prism layers on unstructured wall patches (no extrusion of boundary faces), layer metrics are not exposed as a CLI/schema report yet. SCOPE (merged review): add uniform, aspect-ratio and last-ratio offset types; volume-fill integration in F-234. WAVE 15B (ADR 0020), still PARTIAL. New rcfd-mesh inflate::inflate_patch(mesh, patch, LayerSizing) (layer 1 of the sizing lies against the far cap, which is the new wall; a first version had this reversed and was corrected after review, see ADR 0020 addendum 1) adds prismatic/hex layers on the outward side of ANY boundary patch (triangles, quads, curved) with uniform, first-height + growth, aspect-ratio (first height = local surface size / aspect) and last-ratio sizing, and returns an InflateReport (first/last height, thickness, growth min/max, QualityReport). Checks (inflate.rs, all at first run): box patch volume, layer planes, side area to 1e-15 relative; 72-triangle prism patch volume error 1.5e-14; O-grid inner wall added volume matches the polygon closed form to 2.3e-15; sizing-type heights to 1e-12; wall-adjacent cell height 3.2e-4 and y+ 0.8 recovered to 1e-9 (i6c); max aspect ratio 100.0 as derived. Still NOT done: the layers are an outward shell, not carved into a fluid domain or merged with a bulk mesh (F-234 volume fill), no CLI/schema/GUI report surface, and the solved y+ check was not repeated on an unstructured layered mesh. WAVE 16W (ADR 0021): `rcfd inflate <case|mesh> --patch p --layers n <sizing> --json` and the service method `mesh.inflate` report the inflation (cells before and after, first and last heights, thickness, growth, quality) for any mesh patch, optionally writing the inflated VTU. Still partial: no case-tree key that inflates a loaded mesh, no volume fill (F-234), and the solved y+ check was not repeated on an unstructured layered mesh. WAVE 39C (ADR 0094), still PARTIAL: the solved y+ clause now has a numeric test, sst_flat_plate_first_cell_y_plus_meets_the_target (rcfd-turb tests/flat_plate_sst.rs): first-cell y+ 0.544, 0.528, 0.508, 0.496, 0.483 at x = 0.4, 0.6, 1.0, 1.4, 1.99 against the target 0.5, worst +8.8 percent against the 10 percent limit (converged run, 1989 iterations). It and sst_flat_plate_cf now run in release builds (cfg_attr(debug_assertions, ignore), about 140 s, one shared run) instead of being ignored. Remaining: the unstructured-wall-patch clause (inflate_patch builds an outward shell not merged into a fluid domain; waits on F-234).
+  - note: P1. Gap: boundary-layer (prism) mesh generation with growth and shell controls; needed for wall-resolved
+    turbulence validation. Still PARTIAL (WAVE 39C, ADR 0094). The solved y+ clause has a numeric test (worst
+    +8.8 percent against the 10 percent limit). Remaining: the unstructured-wall-patch clause (inflate_patch builds an
+    outward shell not merged into a fluid domain; waits on F-234).
+    - Wave 6: not started. Related building block only: rcfd-mesh gen::backward_step_graded with StepGrading (geometric
+      / symmetric clustering toward the step face, floor, shear-layer lip and top wall; StepSpec::from_expansion_ratio)
+      plus optional x_ratio / y_ratio params of the backward_step case generator; this is hand-graded block meshing, not
+      prismatic inflation from a first-layer height or y+ target.
+    - WAVE 7 UPDATE, status PARTIAL (block meshes done, unstructured wall patches NOT done).
+      - rcfd-mesh gen::Grading::WallLayers { first, growth, layers, both } (box_2d_graded / channel / any axis grading):
+        `layers` cells of height first * growth^i from the wall (both walls mirrored when both = true, needs an even
+        cell count), then the remaining cells grow geometrically from the last layer with a ratio solved so that the
+        axis length is filled exactly.
+      - New module rcfd-mesh layers.rs: flat_plate_cf (White 0.455/ln^2(0.06 Re_x)), flat_plate_u_tau,
+        first_cell_height_from_y_plus (h1 = 2 y+ nu / u_tau, cell centre at h1/2), y_plus_of_first_cell,
+        wall_segment_sizes / wall_layer_axis_sizes, LayerReport/layer_report (first height, layer count and thickness,
+        min/max growth, transition ratio to the first bulk cell, max neighbour ratio).
+      - Tests (rcfd-mesh, 4 new, 24 pass): layer heights and growth ratio equal the request to 1e-5/1e-6, mirror
+        symmetry, impossible stacks rejected, y+ round trip (generated first cell centre has y+ 1.0 to 1e-5), volume
+        conserved to 1e-12, check_mesh ok and max aspect ratio = dx/h1 with no warnings.
+      - Schema (box_2d and channel_2d y direction): mesh.wall_layers, first_layer_height, target_y_plus, layer_growth
+        (1.2), layer_walls both | lower, layer_reference_velocity, layer_reference_length, layer_u_tau, located
+        diagnostics (rcfd-api tests/sst_schema.rs); example cases/channel/sst_channel.toml.
+      - Solved check of the acceptance 'flat-plate mesh built from a target y+ meets it within 10 percent': TMR-like
+        flat plate (Re 5e6 per m, 0..2 m) with target y+ 0.5 at x = 2 gives a solved first-cell y+ of 0.48-0.54 along
+        the plate (within 10 percent of the target; tests/flat_plate_sst.rs, ignored).
+      - Channel mesh y+ = 1.00 +- 0.01 (asserted).
+      - NOT done: prism layers on unstructured wall patches (no extrusion of boundary faces), layer metrics are not
+        exposed as a CLI/schema report yet.
+    - SCOPE (merged review): add uniform, aspect-ratio and last-ratio offset types; volume-fill integration in F-234.
+    - WAVE 15B (ADR 0020), still PARTIAL.
+      - New rcfd-mesh inflate::inflate_patch(mesh, patch, LayerSizing) (layer 1 of the sizing lies against the far cap,
+        which is the new wall; a first version had this reversed and was corrected after review, see ADR 0020 addendum
+        1) adds prismatic/hex layers on the outward side of ANY boundary patch (triangles, quads, curved) with uniform,
+        first-height + growth, aspect-ratio (first height = local surface size / aspect) and last-ratio sizing, and
+        returns an InflateReport (first/last height, thickness, growth min/max, QualityReport).
+      - Checks (inflate.rs, all at first run): box patch volume, layer planes, side area to 1e-15 relative; 72-triangle
+        prism patch volume error 1.5e-14; O-grid inner wall added volume matches the polygon closed form to 2.3e-15;
+        sizing-type heights to 1e-12; wall-adjacent cell height 3.2e-4 and y+ 0.8 recovered to 1e-9 (i6c); max aspect
+        ratio 100.0 as derived.
+      - Still NOT done: the layers are an outward shell, not carved into a fluid domain or merged with a bulk mesh
+        (F-234 volume fill), no CLI/schema/GUI report surface, and the solved y+ check was not repeated on an
+        unstructured layered mesh.
+    - WAVE 16W (ADR 0021): `rcfd inflate <case|mesh> --patch p --layers n <sizing> --json` and the service method
+      `mesh.inflate` report the inflation (cells before and after, first and last heights, thickness, growth, quality)
+      for any mesh patch, optionally writing the inflated VTU. Still partial: no case-tree key that inflates a loaded
+      mesh, no volume fill (F-234), and the solved y+ check was not repeated on an unstructured layered mesh.
+    - WAVE 39C (ADR 0094), still PARTIAL:
+      - The solved y+ clause now has a numeric test, sst_flat_plate_first_cell_y_plus_meets_the_target (rcfd-turb
+        tests/flat_plate_sst.rs): first-cell y+ 0.544, 0.528, 0.508, 0.496, 0.483 at x = 0.4, 0.6, 1.0, 1.4, 1.99
+        against the target 0.5, worst +8.8 percent against the 10 percent limit (converged run, 1989 iterations).
+      - It and sst_flat_plate_cf now run in release builds (cfg_attr(debug_assertions, ignore), about 140 s, one shared
+        run) instead of being ignored.
+      - Remaining: the unstructured-wall-patch clause (inflate_patch builds an outward shell not merged into a fluid
+        domain; waits on F-234).
 
 ### Phase 4 additions
 
 - [x] **F-110** Non-Newtonian and temperature-dependent viscosity laws (power, Carreau, Carreau-Yasuda, Cross, Herschel-Bulkley, Bingham; Arrhenius/WLF shift)
   - depends on: F-028, F-050, F-105
   - acceptance: Power-law channel flow matches the analytic profile; Carreau recovers Newtonian limits at low and high shear; laws exposed in the settings tree with units
-  - note: Done. rcfd-api `rheology`: settings group `rheology` (docs/case-schema.md) with power_law, carreau, carreau_yasuda, cross, herschel_bulkley (Papanastasiou-regularised yield stress) and bingham, viscosity clamps, face-wise relaxation, and temperature dependence by time-temperature superposition mu(g,T) = a_T mu_ref(a_T g) with Arrhenius, WLF or a lookup table a_T(T) (F-105 tables; needs the energy equation). Dynamic viscosities in Pa s, times in s, stress in Pa, declared with units in the schema; the solver uses mu(shear rate sqrt(2 S:S))/rho on the momentum-diffusion faces in steady SIMPLE/SIMPLEC (with or without the energy equation) and transient PISO/PIMPLE runs (PimpleSolver gained nu_face). Measured (tests/rheology.rs, checks fixed first, 60x20 plane channel, H=1, U=1, K=0.1): power law n=0.6: profile error 0.77% of centreline (limit 2%), dp/dx +0.26% (limit 3%); n=1.4: 1.15%, -0.86%. Bingham (mu_p 0.1, tau0 0.2, regularisation 200 s) vs Buckingham-Reiner: profile 1.6% of the plug velocity 1.349 (limit 5%), dp/dx +1.04% (limit 5%), 1783 iterations. Carreau, Carreau-Yasuda, Cross and power law (n=1) in their Newtonian limits reproduce the plain run to below 1e-6 (steady and PISO); unit tests: Carreau within 1e-6 of mu_0 at lambda*g=2e-4 and within 3e-3 of mu_inf at 1e14, closed forms, Yasuda a=2 equals Carreau; Arrhenius and table shifts at uniform T equal a Newtonian run with scaled viscosity (1e-6); a temperature outside the shift table stops the run with a message; bad parameters are diagnostics. Law forms are from memory of the literature and marked unverified in docs/reference-data.md. Not done: the transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift (diagnostic), combination with turbulence models, the compressible solver or a UDF viscosity (diagnostics), restart checkpoints carrying the viscosity relaxation history.
+  - note: Done. Law forms are from memory of the literature and marked unverified in docs/reference-data.md.
+    - rcfd-api `rheology`: settings group `rheology` (docs/case-schema.md) with power_law, carreau, carreau_yasuda,
+      cross, herschel_bulkley (Papanastasiou-regularised yield stress) and bingham, viscosity clamps, face-wise
+      relaxation, and temperature dependence by time-temperature superposition mu(g,T) = a_T mu_ref(a_T g) with
+      Arrhenius, WLF or a lookup table a_T(T) (F-105 tables; needs the energy equation).
+    - Dynamic viscosities in Pa s, times in s, stress in Pa, declared with units in the schema.
+    - The solver uses mu(shear rate sqrt(2 S:S))/rho on the momentum-diffusion faces in steady SIMPLE/SIMPLEC (with or
+      without the energy equation) and transient PISO/PIMPLE runs (PimpleSolver gained nu_face).
+    - Measured (tests/rheology.rs, checks fixed first, 60x20 plane channel, H=1, U=1, K=0.1):
+      - Power law n=0.6: profile error 0.77% of centreline (limit 2%), dp/dx +0.26% (limit 3%); n=1.4: 1.15%, -0.86%.
+      - Bingham (mu_p 0.1, tau0 0.2, regularisation 200 s) vs Buckingham-Reiner: profile 1.6% of the plug velocity 1.349
+        (limit 5%), dp/dx +1.04% (limit 5%), 1783 iterations.
+      - Carreau, Carreau-Yasuda, Cross and power law (n=1) in their Newtonian limits reproduce the plain run to below
+        1e-6 (steady and PISO).
+      - Unit tests: Carreau within 1e-6 of mu_0 at lambda*g=2e-4 and within 3e-3 of mu_inf at 1e14, closed forms, Yasuda
+        a=2 equals Carreau.
+      - Arrhenius and table shifts at uniform T equal a Newtonian run with scaled viscosity (1e-6).
+      - A temperature outside the shift table stops the run with a message; bad parameters are diagnostics.
+    - Not done: the transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift
+      (diagnostic), combination with turbulence models, the compressible solver or a UDF viscosity (diagnostics),
+      restart checkpoints carrying the viscosity relaxation history.
 - [~] **F-111** Material property library: temperature-dependent polynomials, Sutherland, ideal-mixture rules and open real-gas EOS (ideal, Peng-Robinson, Redlich-Kwong, IAPWS-IF97 from public papers)
   - depends on: F-050, F-053, F-105
   - acceptance: Air/water properties within 1 percent of published tables; mixture rules unit-tested; no third-party licensed data (no REFPROP files) is shipped
-  - note: Partial. rcfd-core fluids.rs: NASA TM-4513 species polynomials (N2, O2, Ar, H2O, CO2, CH4, H2), mole/mass fractions, mass-weighted and ideal-volume mixing, Wilke gas-mixture rule, air mixture, Sutherland air laws and 200-600 K cubic fit laws, Redlich-Kwong and Peng-Robinson EOS (roots, density, fugacity, residual enthalpy, saturation pressure); iapws.rs: IAPWS-IF97 regions 1 and 2, B23, saturation pressure, IAPWS R12-08 viscosity and R15-11 conductivity (no critical enhancement). Water: all IF97 verification points (Tables 5, 15, 35) and the viscosity/conductivity verification tables reproduced to 1e-8 / 1e-7 relative. Air check pre-registered at 1 percent for 300-500 K against the CRC/NIST gas tables (Huber) and NASA TN D-5452: cp -0.01/+0.12/-0.01 percent and Sutherland conductivity -0.64/+0.26/+0.69 percent met; Sutherland VISCOSITY NOT met (-0.22 at 300 K, -1.08 at 400 K, -1.46 at 500 K; -2.07 at 600 K); cubic fit laws for 200-600 K are within 0.11 percent but are in-sample fits to the same 3-digit table (leave-one-out 400 K row -0.22 percent). Not done: IF97 region 3 and 5, backward equations, critical enhancements, species transport coefficients per species, case-schema keys for the library (laws are pasted through properties.*; no variable-density coupling, that is F-050). Mixture-rule formulas, PR/RK constants and atomic weights are from memory and listed as unverified in docs/reference-data.md. No NIST WebBook or REFPROP data used. Audit 2026-10-14: the 1 percent air-viscosity criterion is NOT met by the Sutherland law (asserted at 1.5 percent in fluids.rs); the 1 percent assertion passes only for the cubic fit laws, which are in-sample fits to the same 3-digit table, and the test name still says 'within_one_percent'. The IAPWS viscosity/conductivity tolerance was widened from 1e-8 to 1e-7 after a miss (disclosed in docs/reference-data.md). AUDIT FOLLOW-UP (ca78589): the 1% Sutherland viscosity criterion is recorded as sutherland_air_viscosity_within_1pct_300_to_500_k_known_miss (-1.08% at 400 K, -1.46% at 500 K). SCOPE (merged review): remaining forms (piecewise-linear and piecewise-polynomial tables, nine-coefficient heat capacity, compressible-liquid density, orthotropic conductivity) are tracked in F-220; database-file import of reference fluids is not planned.
+  - note: Partial. Audit 2026-10-14: the 1 percent air-viscosity criterion is NOT met by the Sutherland law. The
+    follow-up records it as sutherland_air_viscosity_within_1pct_300_to_500_k_known_miss (-1.08% at 400 K, -1.46% at
+    500 K).
+    - rcfd-core fluids.rs: NASA TM-4513 species polynomials (N2, O2, Ar, H2O, CO2, CH4, H2), mole/mass fractions,
+      mass-weighted and ideal-volume mixing, Wilke gas-mixture rule, air mixture, Sutherland air laws and 200-600 K
+      cubic fit laws, Redlich-Kwong and Peng-Robinson EOS (roots, density, fugacity, residual enthalpy, saturation
+      pressure).
+    - iapws.rs: IAPWS-IF97 regions 1 and 2, B23, saturation pressure, IAPWS R12-08 viscosity and R15-11 conductivity (no
+      critical enhancement).
+    - Water: all IF97 verification points (Tables 5, 15, 35) and the viscosity/conductivity verification tables
+      reproduced to 1e-8 / 1e-7 relative.
+    - Air check pre-registered at 1 percent for 300-500 K against the CRC/NIST gas tables (Huber) and NASA TN D-5452:
+      - cp -0.01/+0.12/-0.01 percent and Sutherland conductivity -0.64/+0.26/+0.69 percent met.
+      - Sutherland VISCOSITY NOT met (-0.22 at 300 K, -1.08 at 400 K, -1.46 at 500 K; -2.07 at 600 K).
+      - Cubic fit laws for 200-600 K are within 0.11 percent but are in-sample fits to the same 3-digit table
+        (leave-one-out 400 K row -0.22 percent).
+    - Not done: IF97 region 3 and 5, backward equations, critical enhancements, species transport coefficients per
+      species, case-schema keys for the library (laws are pasted through properties.*; no variable-density coupling,
+      that is F-050).
+    - Mixture-rule formulas, PR/RK constants and atomic weights are from memory and listed as unverified in
+      docs/reference-data.md.
+    - No NIST WebBook or REFPROP data used.
+    - Audit 2026-10-14:
+      - The 1 percent air-viscosity criterion is NOT met by the Sutherland law (asserted at 1.5 percent in fluids.rs);
+        the 1 percent assertion passes only for the cubic fit laws, which are in-sample fits to the same 3-digit table,
+        and the test name still says 'within_one_percent'.
+      - The IAPWS viscosity/conductivity tolerance was widened from 1e-8 to 1e-7 after a miss (disclosed in
+        docs/reference-data.md).
+    - AUDIT FOLLOW-UP (ca78589): the 1% Sutherland viscosity criterion is recorded as
+      sutherland_air_viscosity_within_1pct_300_to_500_k_known_miss (-1.08% at 400 K, -1.46% at 500 K).
+    - SCOPE (merged review): remaining forms (piecewise-linear and piecewise-polynomial tables, nine-coefficient heat
+      capacity, compressible-liquid density, orthotropic conductivity) are tracked in F-220; database-file import of
+      reference fluids is not planned.
 - [~] **F-112** 0D reactor toolkit: constant-volume/pressure ignition delay, PSR, equilibrium and 1D flame speed using the mechanism reader
   - depends on: F-054, F-125
   - acceptance: H2/air and CH4/air ignition delay agree with published GRI-Mech 3.0 based results within 5 percent; PSR blowout temperature trend matches literature
-  - note: Partial (ADR 0013, crates/rcfd-reactor, `rcfd reactor`, docs/reactor-and-acoustics.md; criteria registered before running and unchanged). Delivered: CHEMKIN-II mechanism reader with NASA-7 thermo (elementary, three-body, Lindemann/Troe falloff, REV, DUP; unsupported keywords diagnosed with line numbers), in-repo stiff adaptive implicit integrator (3-stage Radau IIA order 5, written here), constant-pressure and constant-volume batch reactors with ignition delay (max dT/dt and temperature-rise definitions), perfectly stirred reactor with continuation to blowout, constant-area plug flow, Gordon-McBride equilibrium at TP/HP/UV, JSON case file with located validation errors. No mechanism is committed; GRI-Mech 3.0 is read from the git-ignored F-125 fetch (53 species, 325 reactions, zero element imbalance). Measured: Prothero-Robinson lambda 1e6 error 1.2e-9 (limit 1e-6); Robertson t=40 relative 2.7e-11/6.1e-11/1.6e-10 (limit 1e-5/1e-4/1e-5; reference digits from memory, reproduced to 1e-10); toy equilibrium vs analytic 1.3e-15; adiabatic energy drift 1.5e-13/2.8e-12 (limit 1e-8); GRI H2/air phi=1 1 atm ignition delay CV 3.05e-4/8.62e-5/4.42e-5 s at 1000/1100/1200 K (CP 3.12e-4/8.86e-5/4.53e-5 s), strictly decreasing, element drift 2e-15; CH4/air HP T_ad 2225.5 K (reference 2225 K from memory); 1 s limits equal UV/HP equilibrium to 2e-11; PSR blowout tau bracket 2.6 percent, shorter with 600 K preheat (1.03e-5 vs 1.49e-5 s) and longer for phi 0.5 (4.3e-5 s) as expected. NOT met / not done (reason for partial): the acceptance comparison with PUBLISHED GRI-Mech 3.0 ignition delays within 5 percent could not be made because no published number could be verified from an accessible source (the ignition delays above are this code's own results); the PSR blowout check is a qualitative trend, no literature number; 1D flame speed (in the title) is not implemented; the GRI thermo polynomials miss the registered 1e-3 continuity limit at 1000 K (5.1e-3 in h, property of the data file, ignored r3_gri_nasa_continuity_known_miss); no CFD coupling (F-054 stays todo); falloff SRI, PLOG, FORD and Landau-Teller unsupported. Development note: the first integrator (extrapolated linearly implicit Euler) needed 4e4+ steps on GRI and was replaced by Radau5; a pivoting defect in the dense LU solver, found along the way, was fixed. SCOPE (merged review): plug-flow reactor, shock tube and network composition are tracked in F-225. Wave 18B: the cell chemistry of F-054 reuses this toolkit (mech.rs `rates_of_progress` split out without changing arithmetic; `cell.rs`, `toy.rs`); F-112 itself stays partial and the CFD coupling now exists in F-054 (partial).
+  - note: Partial (ADR 0013, crates/rcfd-reactor, `rcfd reactor`, docs/reactor-and-acoustics.md; criteria registered
+    before running and unchanged). The acceptance comparison with PUBLISHED GRI-Mech 3.0 ignition delays within
+    5 percent could not be made because no published number could be verified from an accessible source. 1D flame speed
+    (in the title) is not implemented.
+    - Delivered:
+      - CHEMKIN-II mechanism reader with NASA-7 thermo (elementary, three-body, Lindemann/Troe falloff, REV, DUP;
+        unsupported keywords diagnosed with line numbers).
+      - In-repo stiff adaptive implicit integrator (3-stage Radau IIA order 5, written here).
+      - Constant-pressure and constant-volume batch reactors with ignition delay (max dT/dt and temperature-rise
+        definitions).
+      - Perfectly stirred reactor with continuation to blowout.
+      - Constant-area plug flow.
+      - Gordon-McBride equilibrium at TP/HP/UV.
+      - JSON case file with located validation errors.
+    - No mechanism is committed; GRI-Mech 3.0 is read from the git-ignored F-125 fetch (53 species, 325 reactions, zero
+      element imbalance).
+    - Measured:
+      - Prothero-Robinson lambda 1e6 error 1.2e-9 (limit 1e-6).
+      - Robertson t=40 relative 2.7e-11/6.1e-11/1.6e-10 (limit 1e-5/1e-4/1e-5; reference digits from memory, reproduced
+        to 1e-10).
+      - Toy equilibrium vs analytic 1.3e-15.
+      - Adiabatic energy drift 1.5e-13/2.8e-12 (limit 1e-8).
+      - GRI H2/air phi=1 1 atm ignition delay CV 3.05e-4/8.62e-5/4.42e-5 s at 1000/1100/1200 K (CP
+        3.12e-4/8.86e-5/4.53e-5 s), strictly decreasing, element drift 2e-15.
+      - CH4/air HP T_ad 2225.5 K (reference 2225 K from memory).
+      - 1 s limits equal UV/HP equilibrium to 2e-11.
+      - PSR blowout tau bracket 2.6 percent, shorter with 600 K preheat (1.03e-5 vs 1.49e-5 s) and longer for phi 0.5
+        (4.3e-5 s) as expected.
+    - NOT met / not done (reason for partial):
+      - The acceptance comparison with PUBLISHED GRI-Mech 3.0 ignition delays within 5 percent could not be made because
+        no published number could be verified from an accessible source (the ignition delays above are this code's own
+        results).
+      - The PSR blowout check is a qualitative trend, no literature number.
+      - 1D flame speed (in the title) is not implemented.
+      - The GRI thermo polynomials miss the registered 1e-3 continuity limit at 1000 K (5.1e-3 in h, property of the
+        data file, ignored r3_gri_nasa_continuity_known_miss).
+      - No CFD coupling (F-054 stays todo).
+      - Falloff SRI, PLOG, FORD and Landau-Teller unsupported.
+    - Development note: the first integrator (extrapolated linearly implicit Euler) needed 4e4+ steps on GRI and was
+      replaced by Radau5; a pivoting defect in the dense LU solver, found along the way, was fixed.
+    - SCOPE (merged review): plug-flow reactor, shock tube and network composition are tracked in F-225.
+    - Wave 18B: the cell chemistry of F-054 reuses this toolkit (mech.rs `rates_of_progress` split out without changing
+      arithmetic; `cell.rs`, `toy.rs`); F-112 itself stays partial and the CFD coupling now exists in F-054 (partial).
 - [x] **F-113** Lumped zone components: fan curves, porous jump, radiator/heat-exchanger macro and 1D network boundaries
   - depends on: F-031, F-051
   - acceptance: Fan curve BC reproduces the specified operating point in a duct; porous-jump pressure drop matches a Darcy-Forchheimer sheet; radiator heat duty balance within 1 percent
-  - note: Acceptance met, scope partial (wave 12, ADR 0012, rcfd-api tests/lumped.rs, criteria registered in the ADR before running and unchanged). Delivered: components.<name> of type fan (piecewise-linear fan curve), porous_jump (Darcy-Forchheimer jump), heat_exchanger (fixed duty or effectiveness, K/s energy source over a zone) and network_outlet (lumped R1 Q + R2 Q|Q| outlet pressure); fan and jump are realised as pressure-jump planes in the SIMPLE kernel (rcfd-fv lumped.rs FaceJump, opt-in field, baseline hashes bit-identical), reusing the sources.rs zone selection. Measured: porous jump vs Darcy-Forchheimer sheet worst 1.0e-6 (limit 1e-3); fan plus jump operating point Q +0.061 percent (limit 0.5), fan rise +0.091 percent (limit 0.1), jump drop +0.030 percent (0.1); network Q -0.032 percent (0.5); heat-exchanger stream enthalpy balance 3e-12 and 1e-12 (limit 1e-6; acceptance 1 percent). Registered misses (ignored known_miss tests, criteria unchanged): network patch pressure vs R(Q) 8.5e-4 against 1e-4 (a small persistent flow two-cycle), effectiveness duty vs nominal-inlet formula 1.45e-6 against 1e-6 (axial conduction warms the inlet by 7e-5 K). First design (cell-based sink) missed Z1 by 17 percent and was replaced; fan and network relaxations are tuning (network test relax 0.02). Not done (reason for partial): general 1D network coupling beyond the lumped outlet relation, shell-and-tube and porous exchanger domains, exhaust-fan boundary types, transient and compressible runs. SCOPE (merged review): list fan, intake-fan, exhaust-fan, vent, porous-jump, radiator and network boundary types as sub-criteria; exchanger domain model in F-217. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. Registered misses (ignored known_miss tests): network patch pressure vs
+    R(Q) 8.5e-4 against 1e-4, and effectiveness duty vs nominal-inlet formula 1.45e-6 against 1e-6.
+    - Acceptance met, scope partial (wave 12, ADR 0012, rcfd-api tests/lumped.rs, criteria registered in the ADR before
+      running and unchanged).
+    - Delivered: components.<name> of type:
+      - fan (piecewise-linear fan curve).
+      - porous_jump (Darcy-Forchheimer jump).
+      - heat_exchanger (fixed duty or effectiveness, K/s energy source over a zone).
+      - network_outlet (lumped R1 Q + R2 Q|Q| outlet pressure).
+    - Fan and jump are realised as pressure-jump planes in the SIMPLE kernel (rcfd-fv lumped.rs FaceJump, opt-in field,
+      baseline hashes bit-identical), reusing the sources.rs zone selection.
+    - Measured:
+      - Porous jump vs Darcy-Forchheimer sheet worst 1.0e-6 (limit 1e-3).
+      - Fan plus jump operating point Q +0.061 percent (limit 0.5), fan rise +0.091 percent (limit 0.1), jump drop
+        +0.030 percent (0.1).
+      - Network Q -0.032 percent (0.5).
+      - Heat-exchanger stream enthalpy balance 3e-12 and 1e-12 (limit 1e-6; acceptance 1 percent).
+    - Registered misses (ignored known_miss tests, criteria unchanged):
+      - Network patch pressure vs R(Q) 8.5e-4 against 1e-4 (a small persistent flow two-cycle).
+      - Effectiveness duty vs nominal-inlet formula 1.45e-6 against 1e-6 (axial conduction warms the inlet by 7e-5 K).
+    - First design (cell-based sink) missed Z1 by 17 percent and was replaced; fan and network relaxations are tuning
+      (network test relax 0.02).
+    - Not done (reason for partial): general 1D network coupling beyond the lumped outlet relation, shell-and-tube and
+      porous exchanger domains, exhaust-fan boundary types, transient and compressible runs.
+    - SCOPE (merged review): list fan, intake-fan, exhaust-fan, vent, porous-jump, radiator and network boundary types
+      as sub-criteria; exchanger domain model in F-217.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-114** Non-conformal mesh interfaces (general grid interface / mortar) with flux conservation
   - depends on: F-107
   - acceptance: Two non-matching blocks give the same channel solution as one conformal block within discretization error; fluxes conserved to round-off across the interface
-  - note: Done (first version, mesh-level). New rcfd-mesh module non_conformal: join_non_conformal(A, patchA, B, patchB, tol) intersects two planar, coplanar, opposed interface patches (Sutherland-Hodgman clipping of convex faces in plane coordinates), emits one ordinary internal face per overlap (owner on the A cell, neighbour on the B cell, area vector = overlap area x normal, centre at the overlap centroid), deletes the original interface faces, merges coincident points and inserts hanging nodes into the in-plane edges of neighbouring faces so every cell stays closed under Mesh::validate. The solver is untouched; flux conservation holds by construction. Case file: mesh.generator = channel_2d_interface (nx/ny, nx_right/ny_right). Checks fixed before running: (1) face overlaps tile each original face and every cell's area vectors close: 20|27 interface 46 overlaps, tiling error 2.8e-15, worst closure 2.9e-17 relative; 3-D 3x4x5 vs 2x7x3 blocks 70 overlaps, tiling 1.0e-15, volume conserved; (2) Poiseuille channel (nu 0.1, interface perpendicular to flow, 20 vs 27 cells across, linear upwind, 2 non-orthogonal correctors): L2 error of u vs exact relative to 1.5: non-conformal 1.93e-3 against conformal 20 cells 2.28e-3 and 27 cells 1.76e-3 (criterion <= 1.5 x the larger, met), max error 6.18e-3 vs 8.08e-3 and 6.18e-3 (met); interface flux 0.100125000000 equals inlet and outlet flux to 2e-16 relative (limit 1e-12); dp/dx -1.2061 vs -1.2 (0.5 percent, limit 2); (3) linear temperature patch test across the interface: max error 7.8e-12 (limit 1e-8). Kernel fix found on the way (affects every case with non-orthogonal correctors): the pressure solve discarded the explicit non-orthogonal term in its first pass and the reported pressure residual excluded it, so res_p stalled at 2e-4 on non-orthogonal meshes; the first pass now uses the gradient of the current pressure and the residual includes the term (converges to 1e-10 in 223 iterations). Not done: non-planar/curved interfaces (rotating-frame sliding/AMI, F-063), partially overlapping interfaces (patches must cover each other), face zones are dropped by the join, transient motion. Update (MRF, ADR 0008): the planar join is now used by the mrf source (annulus_3d_interface, 48x16 and 48x11 radial blocks): Taylor-Couette across the interface velocity error 7.9e-3 V_i, solid-body rotation velocity 7.8e-3 W r_o, through-flow interface flux equals the inflow to 1e-10; the symmetry-end set-up keeps continuity 5e-12 and net interface flux 3e-14 V_i A. Status unchanged (curved and partially overlapping interfaces remain). Pointer only (no scope change): interface physics extensions are tracked in F-215. Wave 43B (ADR 0109): cylindrical interfaces added (join_non_conformal_cylindrical: patches on one cylinder about an axis, any counts around and axially, full annulus or sector, seam at theta = +-pi handled); tiling 3.1e-15, closure 1.2e-16, closed-form volume 1.4e-15; a sector stays rotationally periodic through it; the solver needs interface cells that are not much thinner radially than they are wide (79 deg overlap faces diverged, 49 deg converged). Partially overlapping and conical interfaces remain.
+  - note: Done (first version, mesh-level). Partially overlapping and conical interfaces remain (Wave 43B, ADR 0109).
+    - New rcfd-mesh module non_conformal: join_non_conformal(A, patchA, B, patchB, tol) intersects two planar, coplanar,
+      opposed interface patches (Sutherland-Hodgman clipping of convex faces in plane coordinates), emits one ordinary
+      internal face per overlap (owner on the A cell, neighbour on the B cell, area vector = overlap area x normal,
+      centre at the overlap centroid), deletes the original interface faces, merges coincident points and inserts
+      hanging nodes into the in-plane edges of neighbouring faces so every cell stays closed under Mesh::validate.
+    - The solver is untouched; flux conservation holds by construction.
+    - Case file: mesh.generator = channel_2d_interface (nx/ny, nx_right/ny_right).
+    - Checks fixed before running:
+      - (1) face overlaps tile each original face and every cell's area vectors close: 20|27 interface 46 overlaps,
+        tiling error 2.8e-15, worst closure 2.9e-17 relative; 3-D 3x4x5 vs 2x7x3 blocks 70 overlaps, tiling 1.0e-15,
+        volume conserved.
+      - (2) Poiseuille channel (nu 0.1, interface perpendicular to flow, 20 vs 27 cells across, linear upwind, 2
+        non-orthogonal correctors): L2 error of u vs exact relative to 1.5: non-conformal 1.93e-3 against conformal 20
+        cells 2.28e-3 and 27 cells 1.76e-3 (criterion <= 1.5 x the larger, met), max error 6.18e-3 vs 8.08e-3 and
+        6.18e-3 (met); interface flux 0.100125000000 equals inlet and outlet flux to 2e-16 relative (limit 1e-12); dp/dx
+        -1.2061 vs -1.2 (0.5 percent, limit 2).
+      - (3) linear temperature patch test across the interface: max error 7.8e-12 (limit 1e-8).
+    - Kernel fix found on the way (affects every case with non-orthogonal correctors): the pressure solve discarded the
+      explicit non-orthogonal term in its first pass and the reported pressure residual excluded it, so res_p stalled at
+      2e-4 on non-orthogonal meshes; the first pass now uses the gradient of the current pressure and the residual
+      includes the term (converges to 1e-10 in 223 iterations).
+    - Not done: non-planar/curved interfaces (rotating-frame sliding/AMI, F-063), partially overlapping interfaces
+      (patches must cover each other), face zones are dropped by the join, transient motion.
+    - Update (MRF, ADR 0008): the planar join is now used by the mrf source (annulus_3d_interface, 48x16 and 48x11
+      radial blocks): Taylor-Couette across the interface velocity error 7.9e-3 V_i, solid-body rotation velocity 7.8e-3
+      W r_o, through-flow interface flux equals the inflow to 1e-10; the symmetry-end set-up keeps continuity 5e-12 and
+      net interface flux 3e-14 V_i A. Status unchanged (curved and partially overlapping interfaces remain).
+    - Pointer only (no scope change): interface physics extensions are tracked in F-215.
+    - Wave 43B (ADR 0109):
+      - Cylindrical interfaces added (join_non_conformal_cylindrical: patches on one cylinder about an axis, any counts
+        around and axially, full annulus or sector, seam at theta = +-pi handled); tiling 3.1e-15, closure 1.2e-16,
+        closed-form volume 1.4e-15.
+      - A sector stays rotationally periodic through it.
+      - The solver needs interface cells that are not much thinner radially than they are wide (79 deg overlap faces
+        diverged, 49 deg converged).
+      - Partially overlapping and conical interfaces remain.
 
 ### Phase 6 additions
 
 - [x] **F-109** Report definitions, convergence conditions and automatic stopping criteria
   - depends on: F-030, F-071
   - acceptance: A report definition (e.g. drag coefficient) can drive a monitor and a stop condition (window range / change tolerance / residual); the run stops automatically and records why
-  - note: P1. Gap: report definitions, convergence conditions, monitors and interrupt conditions. Done (wave 5): rcfd-post::convergence (Condition kinds window_range / change / below / above on any monitor series, any/all combination). Settings tree: top-level convergence.<name> {monitor, type, tolerance, window, relative}; solver.stop_when (any|all), solver.min_iterations. Any monitor can be used: residuals (res_u, res_p, res_T, continuity, courant, dt) or any report (drag coefficient, heat flow, expression report). Reports already feed monitors each iteration/step (F-082); above conditions act as interrupt conditions (run ends with converged=false). The run records why it stopped (Simulation::stop_reason(), status JSON stop_reason, HTML summary row 'Stopped because', CLI prints 'stopped: ...'); built-in reasons: residual targets met, iteration limit, end time. Unknown monitor names are rejected at validation. Measured: lid-driven cavity 12x12 with a lid_drag report, window_range relative tolerance 1e-5 over 10 samples stops after 112 iterations ('range 9.352e-6 <= 1.000e-5'); the window one step earlier did not satisfy it. Tests: 3 unit tests in rcfd-post (window, change/below/above/non-finite, any/all) and 3 case-level tests in rcfd-api (report-driven stop with recorded reason, interrupt + built-in reasons, all-combination). Caveat: conditions are evaluated on recorded monitor samples (once per iteration/step), not on sub-iteration values.
+  - note: P1. Gap: report definitions, convergence conditions, monitors and interrupt conditions. Done (wave 5). Caveat:
+    conditions are evaluated on recorded monitor samples (once per iteration/step), not on sub-iteration values.
+    - rcfd-post::convergence (Condition kinds window_range / change / below / above on any monitor series, any/all
+      combination).
+    - Settings tree: top-level convergence.<name> {monitor, type, tolerance, window, relative}; solver.stop_when
+      (any|all), solver.min_iterations.
+    - Any monitor can be used: residuals (res_u, res_p, res_T, continuity, courant, dt) or any report (drag coefficient,
+      heat flow, expression report).
+    - Reports already feed monitors each iteration/step (F-082); above conditions act as interrupt conditions (run ends
+      with converged=false).
+    - The run records why it stopped (Simulation::stop_reason(), status JSON stop_reason, HTML summary row 'Stopped
+      because', CLI prints 'stopped: ...'); built-in reasons: residual targets met, iteration limit, end time.
+    - Unknown monitor names are rejected at validation.
+    - Measured: lid-driven cavity 12x12 with a lid_drag report, window_range relative tolerance 1e-5 over 10 samples
+      stops after 112 iterations ('range 9.352e-6 <= 1.000e-5'); the window one step earlier did not satisfy it.
+    - Tests: 3 unit tests in rcfd-post (window, change/below/above/non-finite, any/all) and 3 case-level tests in
+      rcfd-api (report-driven stop with recorded reason, interrupt + built-in reasons, all-combination).
 - [~] **F-115** Interpolate a previous solution onto a new mesh and restart from it
   - depends on: F-015, F-010, F-020
   - acceptance: Solution from a coarse cavity interpolated to a fine mesh starts at a lower initial residual than uniform init; conservative and non-conservative modes selectable
-  - note: Partial (acceptance met; scope limited). Delivered: rcfd-post interpolate module (nearest source cell by bucket search + least-squares gradient, clipped to the neighbour range; modes nonconservative and conservative), SimpleSolver::set_fields (rebuilds the face flux), Simulation::interpolate_from(source case, checkpoint, mode), rcfd run --interpolate-case/--interpolate-checkpoint/--interpolate-mode, run.headless interpolate_* parameters and matching MCP run_headless fields (docs/run-control.md, docs/service-protocol.md). Measured (checks fixed up front), 12x12 cavity solution onto 24x24: first-iteration normalised residual res_u 0.1656 and res_p 0.1091 versus 1.0 and 1.0 for the uniform start (conservative: 0.1656 and 0.1086); relative L2 distance of the start from the converged speed 0.171 versus 1.000. A linear field is reproduced to 1e-12 inside the source cell-centre hull; conservative mode matches the source volume average of p, ux, uy to 1e-10 (non-conservative differs: ux average 1.43e-3 vs 3.25e-3). Negative finding: the iteration count to tolerance 1e-6 did not drop (103 interpolated vs 89 uniform) because the normalised residual is relative to the solution's own variation; the hypothesis that it would drop is recorded, not an acceptance gate. Not done: conservative here means a uniform shift that matches the volume average, not a geometric cell-overlap remap (sub-regions are not conserved); the donor cell is the nearest centre, not a point-in-cell search; steady laminar SIMPLE/SIMPLEC only (transient, compressible and turbulence-model state are not interpolated); the source is a checkpoint plus its case, VTU/result files cannot be read back; no GUI control. Audit 2026-10-14: the asserted check (first-iteration normalised residual below the uniform start) is near-vacuous because the uniform start gives 1.0 by construction (residual normalised by the solution's own variation), and the practical benefit was measured negative (103 iterations vs 89 uniform). The acceptance text is unchanged; the evidence does not show a faster start. WAVE 19C (ADR 0031, still partial): new rcfd-post `remap` module with six methods (nearest, inverse_distance, least_squares, gradient, conservative, conservative_overlap = axis-aligned box cell-overlap remap with a linear reconstruction), selectable by `restart.method` and `--method`; restart files now embed the mesh and carry transient state (time, step counter, BDF2 history), so `rcfd restart <case> --from f [--mesh m]`, `rcfd run --restart-from`, the `restart` case section and chain stages restart on the same mesh exactly or transfer onto another one; a steady file starts a transient run. Measured (checks registered first in ADR 0031): linear field exact to 1.6e-15 for least_squares, conservative_overlap and gradient; conservative_overlap integral mismatch 8.9e-16 (refine) and 1.4e-15 (coarsen); identical meshes bit-exact; same-mesh steady and transient restarts (PISO Euler, PISO BDF2, PIMPLE BDF2) bit-identical to the uninterrupted run. MISSES, reported not tuned: convergence-order bands I2 (least_squares 2.01/2.14 and nearest 1.00 pass; gradient 2.09/2.75, conservative_overlap 2.63/3.77 and inverse_distance 1.58/1.64 exceed their registered upper bounds, i.e. are more accurate than assumed), one clause of I5 inconsistent with I1 (ADR defect), and S5a: iterations to tolerance on 24x24 are 103 (gradient), 96 (least_squares), 103 (overlap) versus 89 cold, still negative; S5b (iterations to within 1e-2 of the converged speed) passes, 10 versus 23. Not done: unstructured conservative remap, divergence-free/flux-conservative projection (rebuilt flux imbalance 0.18 after a 12 to 24 transfer), BDF2 history across a mesh change, transient restart with energy/scalars/statistics/turbulence/compressible, reading a solution back from VTU results, service run.headless support for restart.from. WAVE 40C (ADR 0099, still partial): F1 measures the first-iteration residual numerators of both starts against fixed denominators, the reference norms of the converged uniform 24x24 solution (D_ux 0.0765, D_uy 0.0371, D_p 0.0377). Momentum passes: R_u 0.155 interpolated (both modes) vs 0.261 uniform (ratio 0.59). Pressure MISSES: R_p 0.149 non-conservative and 0.148 conservative vs 0.126 uniform (ratio 1.18), so on a common scale the interpolated start does not have a lower pressure residual; ignored known-miss test f1_fixed_normalisation_initial_residual_known_miss in crates/rcfd-api/tests/interpolate.rs, limit unchanged. Likely cause (not tested): the rebuilt face flux is not divergence-free (imbalance 0.18). S5b and the negative iteration-count result (103 interpolated vs 89 uniform to 1e-6) stand as recorded above. USER DECISION 2026-10-21: accept the negative result, stays partial. Wave 40C (ADR 0099): fixed-normalisation first-iteration residual, momentum 0.155 interpolated vs 0.261 uniform (passes), pressure 0.149 vs 0.126 (misses, ignored known miss f1); likely cause an interpolated face flux that is not divergence-free (imbalance 0.18), untested. Not queued unless interpolated starts matter for the fan workflow.
+  - note: Partial. USER DECISION 2026-10-21: accept the negative result, stays partial. The iteration count to tolerance
+    1e-6 did not drop (103 interpolated vs 89 uniform), and on a common scale the interpolated start does not have a
+    lower pressure residual (0.149 vs 0.126, ignored known miss f1). Not queued unless interpolated starts matter for
+    the fan workflow.
+    - Partial (acceptance met; scope limited).
+    - Delivered:
+      - rcfd-post interpolate module (nearest source cell by bucket search + least-squares gradient, clipped to the
+        neighbour range; modes nonconservative and conservative).
+      - SimpleSolver::set_fields (rebuilds the face flux).
+      - Simulation::interpolate_from(source case, checkpoint, mode).
+      - rcfd run --interpolate-case/--interpolate-checkpoint/--interpolate-mode.
+      - run.headless interpolate_* parameters and matching MCP run_headless fields (docs/run-control.md,
+        docs/service-protocol.md).
+    - Measured (checks fixed up front), 12x12 cavity solution onto 24x24:
+      - First-iteration normalised residual res_u 0.1656 and res_p 0.1091 versus 1.0 and 1.0 for the uniform start
+        (conservative: 0.1656 and 0.1086).
+      - Relative L2 distance of the start from the converged speed 0.171 versus 1.000.
+    - A linear field is reproduced to 1e-12 inside the source cell-centre hull; conservative mode matches the source
+      volume average of p, ux, uy to 1e-10 (non-conservative differs: ux average 1.43e-3 vs 3.25e-3).
+    - Negative finding: the iteration count to tolerance 1e-6 did not drop (103 interpolated vs 89 uniform) because the
+      normalised residual is relative to the solution's own variation; the hypothesis that it would drop is recorded,
+      not an acceptance gate.
+    - Not done:
+      - Conservative here means a uniform shift that matches the volume average, not a geometric cell-overlap remap
+        (sub-regions are not conserved).
+      - The donor cell is the nearest centre, not a point-in-cell search.
+      - Steady laminar SIMPLE/SIMPLEC only (transient, compressible and turbulence-model state are not interpolated).
+      - The source is a checkpoint plus its case, VTU/result files cannot be read back.
+      - No GUI control.
+    - Audit 2026-10-14: the asserted check (first-iteration normalised residual below the uniform start) is near-vacuous
+      because the uniform start gives 1.0 by construction (residual normalised by the solution's own variation), and the
+      practical benefit was measured negative (103 iterations vs 89 uniform). The acceptance text is unchanged; the
+      evidence does not show a faster start.
+    - WAVE 19C (ADR 0031, still partial):
+      - New rcfd-post `remap` module with six methods (nearest, inverse_distance, least_squares, gradient, conservative,
+        conservative_overlap = axis-aligned box cell-overlap remap with a linear reconstruction), selectable by
+        `restart.method` and `--method`.
+      - Restart files now embed the mesh and carry transient state (time, step counter, BDF2 history), so
+        `rcfd restart <case> --from f [--mesh m]`, `rcfd run --restart-from`, the `restart` case section and chain
+        stages restart on the same mesh exactly or transfer onto another one; a steady file starts a transient run.
+      - Measured (checks registered first in ADR 0031):
+        - Linear field exact to 1.6e-15 for least_squares, conservative_overlap and gradient.
+        - conservative_overlap integral mismatch 8.9e-16 (refine) and 1.4e-15 (coarsen).
+        - Identical meshes bit-exact.
+        - Same-mesh steady and transient restarts (PISO Euler, PISO BDF2, PIMPLE BDF2) bit-identical to the
+          uninterrupted run.
+      - MISSES, reported not tuned:
+        - Convergence-order bands I2 (least_squares 2.01/2.14 and nearest 1.00 pass; gradient 2.09/2.75,
+          conservative_overlap 2.63/3.77 and inverse_distance 1.58/1.64 exceed their registered upper bounds, i.e. are
+          more accurate than assumed).
+        - One clause of I5 inconsistent with I1 (ADR defect).
+        - S5a: iterations to tolerance on 24x24 are 103 (gradient), 96 (least_squares), 103 (overlap) versus 89 cold,
+          still negative.
+      - S5b (iterations to within 1e-2 of the converged speed) passes, 10 versus 23.
+      - Not done: unstructured conservative remap, divergence-free/flux-conservative projection (rebuilt flux imbalance
+        0.18 after a 12 to 24 transfer), BDF2 history across a mesh change, transient restart with
+        energy/scalars/statistics/turbulence/compressible, reading a solution back from VTU results, service
+        run.headless support for restart.from.
+    - WAVE 40C (ADR 0099, still partial):
+      - F1 measures the first-iteration residual numerators of both starts against fixed denominators, the reference
+        norms of the converged uniform 24x24 solution (D_ux 0.0765, D_uy 0.0371, D_p 0.0377).
+      - Momentum passes: R_u 0.155 interpolated (both modes) vs 0.261 uniform (ratio 0.59).
+      - Pressure MISSES: R_p 0.149 non-conservative and 0.148 conservative vs 0.126 uniform (ratio 1.18), so on a common
+        scale the interpolated start does not have a lower pressure residual; ignored known-miss test
+        f1_fixed_normalisation_initial_residual_known_miss in crates/rcfd-api/tests/interpolate.rs, limit unchanged.
+      - Likely cause (not tested): the rebuilt face flux is not divergence-free (imbalance 0.18).
+      - S5b and the negative iteration-count result (103 interpolated vs 89 uniform to 1e-6) stand as recorded above.
+    - USER DECISION 2026-10-21: accept the negative result, stays partial. Wave 40C (ADR 0099): fixed-normalisation
+      first-iteration residual, momentum 0.155 interpolated vs 0.261 uniform (passes), pressure 0.149 vs 0.126 (misses,
+      ignored known miss f1); likely cause an interpolated face flux that is not divergence-free (imbalance 0.18),
+      untested. Not queued unless interpolated starts matter for the fan workflow.
 - [x] **F-116** Run-time statistics and output policy: transient mean/min/max/RMS/std fields, selected-variable result files, backup retention, elapsed-time and interrupt limits
   - depends on: F-030, F-070, F-109
   - acceptance: Time-averaged field over a vortex-shedding run matches the post-computed average; the run honors a max-elapsed-time and a stop-file; retained backups limited to the configured count
-  - note: Done. rcfd-api `stats` plus run-control changes: statistics.enabled/start_time/fields collect time-weighted mean, rms, std, min and max of ux, uy, uz, speed and p in transient piso/pimple runs (fields <name>_mean etc. in solution.vtu, snapshots, probes and reports; weighted Welford update, definition in the module header); output.write_interval now writes numbered snapshots (snapshots/snapshot_<step>.vtu, `snapshot` status event) with output.retain_snapshots keeping the newest N; output.retain_checkpoints keeps the newest N periodic restart files (<checkpoint>.<step>) while the end-of-run checkpoint stays at the requested path; output.fields selects the variables written. The wall-clock limit and stop file are the F-121 controls, verified here on a transient run (stop file -> interrupted/exit 7, --max-elapsed 0 -> time_limit/exit 8). Measured (tests/statistics.rs, checks fixed first): adaptive-step transient cavity, mean/rms/std/min/max of four fields equal the post-computed moments from stored per-step fields to a worst relative difference of 1.2e-15 (limit 1e-12); ignored long test, cylinder Re=100 128x100 mesh, 3200 PISO steps to t=160, statistics from t=100 (averaging time 60): mean ux and p fields equal the post-computed average to 4.9e-15 and 3.6e-15 relative, 12 sign changes of the wake probe velocity (shedding present, limit 4; an earlier 96x64 run to t=100 had only 2 sign changes because shedding had not set in yet, so the run was lengthened and the criterion kept); snapshot retention leaves exactly the newest 3 of the multiples of 10, checkpoint retention the newest 2 periodic files plus the final one. Not done: statistics for steady and compressible runs, statistics inside checkpoints (transient runs cannot be checkpointed), time-based write interval, retention for transient restart files (none exist). Audit 2026-10-14: the vortex-shedding part is an ignored test, and the averaging check compares incremental statistics against post-computation from the same run, so it verifies bookkeeping, not an independent average.
+  - note: Done. Audit 2026-10-14: the vortex-shedding part is an ignored test, and the averaging check verifies
+    bookkeeping, not an independent average.
+    - rcfd-api `stats` plus run-control changes:
+      - statistics.enabled/start_time/fields collect time-weighted mean, rms, std, min and max of ux, uy, uz, speed and
+        p in transient piso/pimple runs (fields <name>_mean etc. in solution.vtu, snapshots, probes and reports;
+        weighted Welford update, definition in the module header).
+      - output.write_interval now writes numbered snapshots (snapshots/snapshot_<step>.vtu, `snapshot` status event)
+        with output.retain_snapshots keeping the newest N.
+      - output.retain_checkpoints keeps the newest N periodic restart files (<checkpoint>.<step>) while the end-of-run
+        checkpoint stays at the requested path.
+      - output.fields selects the variables written.
+    - The wall-clock limit and stop file are the F-121 controls, verified here on a transient run (stop file ->
+      interrupted/exit 7, --max-elapsed 0 -> time_limit/exit 8).
+    - Measured (tests/statistics.rs, checks fixed first):
+      - Adaptive-step transient cavity, mean/rms/std/min/max of four fields equal the post-computed moments from stored
+        per-step fields to a worst relative difference of 1.2e-15 (limit 1e-12).
+      - Ignored long test, cylinder Re=100 128x100 mesh, 3200 PISO steps to t=160, statistics from t=100 (averaging time
+        60): mean ux and p fields equal the post-computed average to 4.9e-15 and 3.6e-15 relative, 12 sign changes of
+        the wake probe velocity (shedding present, limit 4; an earlier 96x64 run to t=100 had only 2 sign changes
+        because shedding had not set in yet, so the run was lengthened and the criterion kept).
+      - Snapshot retention leaves exactly the newest 3 of the multiples of 10, checkpoint retention the newest 2
+        periodic files plus the final one.
+    - Not done: statistics for steady and compressible runs, statistics inside checkpoints (transient runs cannot be
+      checkpointed), time-based write interval, retention for transient restart files (none exist).
+    - Audit 2026-10-14: the vortex-shedding part is an ignored test, and the averaging check compares incremental
+      statistics against post-computation from the same run, so it verifies bookkeeping, not an independent average.
 - [~] **F-117** glTF/GLB export of surfaces with scalar/vector field colouring for browser and sidebar preview
   - depends on: F-070
   - acceptance: Exported GLB for a contour on a boundary loads in a glTF validator and a viewer with correct colours; size scales linearly with face count
-  - note: Partial (container and content checks pass; Khronos validator run with 0 errors; viewer colours not demonstrated). Delivered: rcfd-post gltf module (glb_patches/write_glb, GLB 2.0 with one primitive per boundary patch, flat-shaded viridis COLOR_0 from a cell or face field, raw value in _SCALAR, outward normals, optional fixed colour range), a structural self-check (check_glb: header, chunk alignment, buffer/view/accessor bounds, min/max, index range) and service method render.glb (sandboxed path, optional inline base64). Measured with checks fixed up front: 4x4x4 box all patches gives 96 faces / 192 triangles / 384 vertices, 0 wrongly wound triangles, every vertex colour equals the colour map of its stored value; size grows by 152 bytes per quad face (4 x 32 + 6 x 4) with slopes agreeing within 1 percent from 96 to 6144 faces (linear). Not done: no run through the Khronos glTF validator or a real viewer (no network or viewer here), so the acceptance wording is not demonstrated; Y-up is not applied (z-up cases appear rotated); no vector glyphs, no point-interpolated colours, no texture/legend; no CLI or MCP tool yet (service only). Update (ADR 0011, gap A): the structural self-check is now rcfd_post::glb_check (rules G1-G8: header and chunk layout, accessor and bufferView bounds, alignment and stride, exact min/max, index range and restart values, normal length, attribute counts, reference ranges, extensionsRequired) with a JSON pointer in every error, one negative test per rule, a hand-built GLB, and fuzz tests (every prefix plus 3000 mutations, no panic). The Khronos gltf-validator 2.0.0-dev.3.10 (npm, run with node via scripts/validate_glb.js) reports 0 errors, 0 warnings, 0 infos, 0 hints on contour_zmax.glb, contour_all.glb and plain.glb (20^3 box); VTK's vtkGLTFReader loads contour_zmax.glb (1600 points, 800 triangles, NORMAL, COLOR_0, _SCALAR arrays). Still not demonstrated: a viewer showing the correct colours (none available); Y-up, vector glyphs, texture/legend, CLI/MCP tool unchanged.
+  - note: Partial (container and content checks pass; Khronos validator run with 0 errors; viewer colours not
+    demonstrated).
+    - Delivered:
+      - rcfd-post gltf module (glb_patches/write_glb, GLB 2.0 with one primitive per boundary patch, flat-shaded viridis
+        COLOR_0 from a cell or face field, raw value in _SCALAR, outward normals, optional fixed colour range).
+      - A structural self-check (check_glb: header, chunk alignment, buffer/view/accessor bounds, min/max, index range).
+      - Service method render.glb (sandboxed path, optional inline base64).
+    - Measured with checks fixed up front:
+      - 4x4x4 box all patches gives 96 faces / 192 triangles / 384 vertices, 0 wrongly wound triangles, every vertex
+        colour equals the colour map of its stored value.
+      - Size grows by 152 bytes per quad face (4 x 32 + 6 x 4) with slopes agreeing within 1 percent from 96 to 6144
+        faces (linear).
+    - Not done: no run through the Khronos glTF validator or a real viewer (no network or viewer here), so the
+      acceptance wording is not demonstrated; Y-up is not applied (z-up cases appear rotated); no vector glyphs, no
+      point-interpolated colours, no texture/legend; no CLI or MCP tool yet (service only).
+    - Update (ADR 0011, gap A):
+      - The structural self-check is now rcfd_post::glb_check (rules G1-G8: header and chunk layout, accessor and
+        bufferView bounds, alignment and stride, exact min/max, index range and restart values, normal length, attribute
+        counts, reference ranges, extensionsRequired) with a JSON pointer in every error, one negative test per rule, a
+        hand-built GLB, and fuzz tests (every prefix plus 3000 mutations, no panic).
+      - The Khronos gltf-validator 2.0.0-dev.3.10 (npm, run with node via scripts/validate_glb.js) reports 0 errors, 0
+        warnings, 0 infos, 0 hints on contour_zmax.glb, contour_all.glb and plain.glb (20^3 box).
+      - VTK's vtkGLTFReader loads contour_zmax.glb (1600 points, 800 triangles, NORMAL, COLOR_0, _SCALAR arrays).
+      - Still not demonstrated: a viewer showing the correct colours (none available); Y-up, vector glyphs,
+        texture/legend, CLI/MCP tool unchanged.
 - [x] **F-119** Interchange formats: STL (surface), Tecplot ASCII, Plot3D structured, XDMF/HDF5 writer
   - depends on: F-070, F-015
   - acceptance: Round trip of a boundary patch through STL and of a field through Tecplot ASCII and XDMF opens in third-party viewers; the Plot3D structured reader reads a public sample
-  - note: Partial (ADR 0011, gap A). Done and checked against VTK 9.6.2 readers: STL ASCII and binary read/write (ASCII vertices bit exact, binary relative error <= 6.0e-8, welded 20^3 box boundary 2402 vertices / 4800 triangles / Euler 2, VTK vtkSTLReader enclosed volume 2.0), Tecplot ASCII write and read (FE tri/quad/tet/brick zones, ordered zones, BLOCK and POINT, cell-centred variables; round trips bit exact, vtkTecplotReader cell counts and volumes equal, its float32 coordinate storage noted), Plot3D structured (multi-block, ASCII and Fortran-unformatted binary, single/double, both byte orders, iblank, function files; round trips bit exact; reads the public NASA blunt-fin sample bluntfinxyz.bin as one 40x32x32 block with bounds equal to vtkMultiBlockPLOT3DReader's), XDMF writer with raw binary heavy data (vtkXdmfReader reads counts, volumes and cell data; a wedge winding problem found by that reader was fixed). Wired into rcfd convert (.stl, .dat, .xmf out; Plot3D in with --block) with located errors; parsers have size caps, header-count checks and fuzz tests (all prefixes + 3000 mutations, no panic). Not done: HDF5 heavy data (the title's XDMF/HDF5 writer), EnSight, Tecplot polyhedra and binary .plt; no commercial viewer was available, so 'opens in third-party viewers' is shown for the VTK readers only; Plot3D function files and ASCII Plot3D were checked only against rcfd's own writer and generated files; block_to_mesh refuses the blunt-fin grid (collapsed edge). Details in docs/interchange-formats.md and docs/reference-data.md. SCOPE (merged review): add acceptance that public structured turbulence-modelling grids (flat plate, bump) are read with the published cell counts and extents and a flat-plate run on the imported grid matches the published skin friction; further formats in F-237. DONE (decision 2026-10-21): acceptance met with VTK readers (vtkSTLReader, vtkTecplotReader, vtkXdmfReader) as the third-party viewers, shown by scripts/check_interchange.py, a manual script that is not run in CI. NOT delivered and not claimed: HDF5 heavy data for XDMF, EnSight, Tecplot polyhedra/binary, the TMR flat-plate and bump grids of the SCOPE addition (further formats are in F-237).
+  - note: DONE (decision 2026-10-21): acceptance met with VTK readers as the third-party viewers, shown by a manual
+    script that is not run in CI. HDF5 heavy data for XDMF, EnSight, Tecplot polyhedra/binary and the TMR flat-plate and
+    bump grids of the SCOPE addition are NOT delivered and not claimed.
+    - Partial (ADR 0011, gap A). Done and checked against VTK 9.6.2 readers:
+      - STL ASCII and binary read/write (ASCII vertices bit exact, binary relative error <= 6.0e-8, welded 20^3 box
+        boundary 2402 vertices / 4800 triangles / Euler 2, VTK vtkSTLReader enclosed volume 2.0).
+      - Tecplot ASCII write and read (FE tri/quad/tet/brick zones, ordered zones, BLOCK and POINT, cell-centred
+        variables; round trips bit exact, vtkTecplotReader cell counts and volumes equal, its float32 coordinate storage
+        noted).
+      - Plot3D structured (multi-block, ASCII and Fortran-unformatted binary, single/double, both byte orders, iblank,
+        function files; round trips bit exact; reads the public NASA blunt-fin sample bluntfinxyz.bin as one 40x32x32
+        block with bounds equal to vtkMultiBlockPLOT3DReader's).
+      - XDMF writer with raw binary heavy data (vtkXdmfReader reads counts, volumes and cell data; a wedge winding
+        problem found by that reader was fixed).
+    - Wired into rcfd convert (.stl, .dat, .xmf out; Plot3D in with --block) with located errors.
+    - Parsers have size caps, header-count checks and fuzz tests (all prefixes + 3000 mutations, no panic).
+    - Not done:
+      - HDF5 heavy data (the title's XDMF/HDF5 writer), EnSight, Tecplot polyhedra and binary .plt.
+      - No commercial viewer was available, so 'opens in third-party viewers' is shown for the VTK readers only.
+      - Plot3D function files and ASCII Plot3D were checked only against rcfd's own writer and generated files.
+      - block_to_mesh refuses the blunt-fin grid (collapsed edge).
+    - Details in docs/interchange-formats.md and docs/reference-data.md.
+    - SCOPE (merged review): add acceptance that public structured turbulence-modelling grids (flat plate, bump) are
+      read with the published cell counts and extents and a flat-plate run on the imported grid matches the published
+      skin friction; further formats in F-237.
+    - DONE (decision 2026-10-21): acceptance met with VTK readers (vtkSTLReader, vtkTecplotReader, vtkXdmfReader) as the
+      third-party viewers, shown by scripts/check_interchange.py, a manual script that is not run in CI. NOT delivered
+      and not claimed: HDF5 heavy data for XDMF, EnSight, Tecplot polyhedra/binary, the TMR flat-plate and bump grids of
+      the SCOPE addition (further formats are in F-237).
 - [~] **F-123** Turbomachinery post-processing: turbo surfaces (constant span/streamwise), pitch-averaged profiles, performance (head/efficiency/pressure ratio) reports
   - depends on: F-071, F-072
   - acceptance: On a public pump or compressor case, constant-span surface averages and efficiency match an independent script; report exports to HTML/CSV
-  - note: P3. Gap: turbomachinery surface and line objects and turbomachinery report templates. SCOPE (merged review): add constant-span, streamwise, blade-aligned, theta and cone surfaces; inlet-outlet, hub-shroud and circumferential lines; machine-type report templates; isentropic and polytropic efficiency variables; 360-degree reconstruction. Acceptance addition: head coefficient, pressure ratio and efficiency on a published compressor or pump rotor match literature values within published uncertainty. WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL. Delivered (library only): rcfd_post::turbo with constant-span (cylinder or hub/shroud-curve family) and constant-streamwise (plane, cone) surfaces snapped to exact geometry, 360-degree reconstruction, circumferential and area/mass-flow-weighted station averages, pump head and hydraulic efficiency, compressor pressure ratio with isentropic and polytropic efficiency, head and flow coefficients, torque from the wall-moment integrals, and CSV/HTML performance reports. Checked only geometrically and algebraically (closed forms to 1e-13..1e-14; cylinder area error 8.8e-5 at 48 sectors). One registered check missed (plane area vs inscribed polygon, 2.85e-3, ignored t2_plane_area_polygon_known_miss; corrected test vs circular annulus passes). NO turbomachinery flow solution is validated and nothing was compared with a public pump or compressor case or published data, so the acceptance and its literature clause are NOT met. Not delivered: blade-aligned, theta and cone surface families beyond the above, inlet-outlet and hub-shroud lines, machine-type templates, radial (non-monotone z) machines, case-file or CLI hooks.
+  - note: P3. Gap: turbomachinery surface and line objects and turbomachinery report templates. PARTIAL (WAVE 28C,
+    ADR 0054). NO turbomachinery flow solution is validated and nothing was compared with a public pump or compressor
+    case or published data, so the acceptance and its literature clause are NOT met.
+    - SCOPE (merged review): add constant-span, streamwise, blade-aligned, theta and cone surfaces; inlet-outlet,
+      hub-shroud and circumferential lines; machine-type report templates; isentropic and polytropic efficiency
+      variables; 360-degree reconstruction. Acceptance addition: head coefficient, pressure ratio and efficiency on a
+      published compressor or pump rotor match literature values within published uncertainty.
+    - WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL.
+      - Delivered (library only): rcfd_post::turbo with:
+        - Constant-span (cylinder or hub/shroud-curve family) and constant-streamwise (plane, cone) surfaces snapped to
+          exact geometry.
+        - 360-degree reconstruction.
+        - Circumferential and area/mass-flow-weighted station averages.
+        - Pump head and hydraulic efficiency.
+        - Compressor pressure ratio with isentropic and polytropic efficiency.
+        - Head and flow coefficients.
+        - Torque from the wall-moment integrals.
+        - CSV/HTML performance reports.
+      - Checked only geometrically and algebraically (closed forms to 1e-13..1e-14; cylinder area error 8.8e-5 at 48
+        sectors).
+      - One registered check missed (plane area vs inscribed polygon, 2.85e-3, ignored t2_plane_area_polygon_known_miss;
+        corrected test vs circular annulus passes).
+      - NO turbomachinery flow solution is validated and nothing was compared with a public pump or compressor case or
+        published data, so the acceptance and its literature clause are NOT met.
+      - Not delivered: blade-aligned, theta and cone surface families beyond the above, inlet-outlet and hub-shroud
+        lines, machine-type templates, radial (non-monotone z) machines, case-file or CLI hooks.
 - [x] **F-124** Cell registers / regions (value-threshold, box, boundary-adjacent) for patching, source zones and adaption
   - depends on: F-072, F-020
   - acceptance: A region defined by a field threshold can be patched with a value and used to restrict a source term; registers are named objects in the settings tree
-  - note: Partial (ADR 0011, gap A). Delivered: rcfd_post::registers (box, value threshold on a cell field with inclusive limits, expression of the cell centre, boundary-adjacent with layers, mesh cell zone; union, intersection, difference, complement, grow and shrink by face or point neighbours; per-register statistics count/volume/min/max/volume mean/integral incl. vector components, None for empty; patch_field; interface area; face-jump indicator and tolerance marks restricted to a register with count and volume fraction) and the settings tree: registers.<name> (type box|expression|boundary_adjacent|cell_zone|combine, grow/shrink), sources.<n>.zone = "register" and initial.patches.<n> (velocity, pressure, temperature). Measured on the 20^3 cube: box 1000 cells volume 8.9e-16 rel err, x>=0.5 threshold 4000 cells with mean 0.75, integral 0.5, min/max 0.525/0.975 (1e-12), sphere r 0.3 on 40^3 4.2e-3 volume error (limit 3e-2), boundary layers 400/800/2168 and interface area 1.0, step-field marks 800 cells and linear-field marks 0; on a 20x20 case a porous sink is non-zero on exactly the 100 register cells and bit-exact zero elsewhere and initial patches change exactly those cells; every error names its setting path. Known miss (ADR 0011 R5 wording): face-neighbour grow of a 10^3 block gives 1600, not 1728 (ignored test r5_face_grow_known_miss; point-neighbour grow gives 1728 and shrink 1000). Not done: registers cannot yet be defined from a running solution field in the settings tree (library only; settings thresholds use an expression of x, y, z), no case reports for the statistics, no mesh adaption (marks only), so the title scope is not met. WAVE 39D (ADR 0095): new register type `field` (field = velocity_magnitude, ux, uy, uz, pressure or temperature, with above/below) thresholds the initial fields (after the uniform values, velocity expressions and the initialise hook, before initial patches; evaluated once, not during the run; needs initial.method = uniform; usable by sources.<n> and by initial patches of velocity, pressure and temperature, any other use gives a located error at registers.<n>.type). Measured (rcfd-api --test registers G1, G2) on the 20 x 20 box with initial ux = 4y(1-y): |u| >= 0.75 selects exactly 200 cells (analytic 200) and equals the library threshold; a pressure patch changes exactly those 200 cells; a porous sink is non-zero on exactly those cells and bit-zero elsewhere; 5 SIMPLEC iterations are bit-identical to a box register on the same cells (the source moves ux by up to 0.164); located errors pass. The acceptance is met. Outside the acceptance and not done: re-evaluation during a run, thresholds on restarted fields, mesh adaption (marks only), case reports of register statistics.
+  - note: The acceptance is met (WAVE 39D, ADR 0095). Outside the acceptance and not done: re-evaluation during a run,
+    thresholds on restarted fields, mesh adaption (marks only), case reports of register statistics.
+    - Partial (ADR 0011, gap A).
+    - Delivered:
+      - rcfd_post::registers:
+        - Box, value threshold on a cell field with inclusive limits, expression of the cell centre, boundary-adjacent
+          with layers, mesh cell zone.
+        - Union, intersection, difference, complement, grow and shrink by face or point neighbours.
+        - Per-register statistics count/volume/min/max/volume mean/integral incl. vector components, None for empty.
+        - patch_field; interface area; face-jump indicator and tolerance marks restricted to a register with count and
+          volume fraction.
+      - The settings tree: registers.<name> (type box|expression|boundary_adjacent|cell_zone|combine, grow/shrink),
+        sources.<n>.zone = "register" and initial.patches.<n> (velocity, pressure, temperature).
+    - Measured on the 20^3 cube:
+      - Box 1000 cells volume 8.9e-16 rel err.
+      - The x>=0.5 threshold 4000 cells with mean 0.75, integral 0.5, min/max 0.525/0.975 (1e-12).
+      - Sphere r 0.3 on 40^3 4.2e-3 volume error (limit 3e-2).
+      - Boundary layers 400/800/2168 and interface area 1.0.
+      - Step-field marks 800 cells and linear-field marks 0.
+    - On a 20x20 case a porous sink is non-zero on exactly the 100 register cells and bit-exact zero elsewhere and
+      initial patches change exactly those cells.
+    - Every error names its setting path.
+    - Known miss (ADR 0011 R5 wording): face-neighbour grow of a 10^3 block gives 1600, not 1728 (ignored test
+      r5_face_grow_known_miss; point-neighbour grow gives 1728 and shrink 1000).
+    - Not done: registers cannot yet be defined from a running solution field in the settings tree (library only;
+      settings thresholds use an expression of x, y, z), no case reports for the statistics, no mesh adaption (marks
+      only), so the title scope is not met.
+    - WAVE 39D (ADR 0095):
+      - New register type `field` (field = velocity_magnitude, ux, uy, uz, pressure or temperature, with above/below)
+        thresholds the initial fields (after the uniform values, velocity expressions and the initialise hook, before
+        initial patches; evaluated once, not during the run; needs initial.method = uniform; usable by sources.<n> and
+        by initial patches of velocity, pressure and temperature, any other use gives a located error at
+        registers.<n>.type).
+      - Measured (rcfd-api --test registers G1, G2) on the 20 x 20 box with initial ux = 4y(1-y):
+        - The threshold |u| >= 0.75 selects exactly 200 cells (analytic 200) and equals the library threshold.
+        - A pressure patch changes exactly those 200 cells.
+        - A porous sink is non-zero on exactly those cells and bit-zero elsewhere.
+        - 5 SIMPLEC iterations are bit-identical to a box register on the same cells (the source moves ux by up to
+          0.164).
+        - Located errors pass.
+      - The acceptance is met.
+      - Outside the acceptance and not done: re-evaluation during a run, thresholds on restarted fields, mesh adaption
+        (marks only), case reports of register statistics.
 - [~] **F-125** Public-data validation pack: fetch scripts and manifests for open benchmark data (cavity, step, flat plate, NACA 0012, damBreak, GRI-Mech, NASA Rotor 37, Hannover compressor)
   - depends on: F-006
   - acceptance: Each dataset has a fetch script, checksum and licence record; CI never reads from any proprietary install; validation reports list data provenance
-  - note: Partial (acceptance met for 7 of 8 datasets). Delivered: validation-data/manifest.json (rcfd-data-manifest v1) with upstream URLs pinned to commits/tags, SHA-256 and sizes of 31 files, licence records and citations; validation-data/fetch.py (list/fetch/verify/pin, stdlib, downloads to git-ignored data/); rcfd-io datapack module with independent SHA-256 (agrees with hashlib), rcfd data list|verify|provenance, data lines in rcfd cases list, docs/validation-data.md with provenance table. Datasets: Ghia and de Vahl Davis (in-repo tables), NASA TMR flat plate / backward step / NACA 0012 (CC0), OpenFOAM damBreak set-up (GPL, fetch only), GRI-Mech 3.0 (Berkeley licence unverified; Cantera BSD copy), NASA TP-1337 rotor 37 report. Not done: Hannover compressor unresolved (no open upstream found); Rotor 37 numbers not transcribed; the TMR flat-plate/step/airfoil data are not yet wired into automated comparisons. Finding: TMR CFL3D file gives Cf(0.97) about 2.691e-3 vs 2.683e-3 used in flat_plate_sst test (tolerance unchanged). CI and tests never use the network or proprietary files. WAVE 15B: not attempted. The remaining gaps (an open compressor dataset, rotor tables, wiring of downloaded benchmark data into comparisons) need network access or published numbers that cannot be checked in this environment (ADR 0020, Not attempted). WAVE 30C (ADR 0061): five more local datasets with licence records, checksums and tests that use them: de Vahl Davis Table V, Sod exact star state (Marzouk 2020), Graetz parallel-plate tables (NPTEL), laminar internal-flow Nusselt limits (BYU/NPTEL), TMR Coles u+(y+) at Re_theta 10000 (sampled) with the Karman-Schoenherr formula. The TMR flat-plate Karman-Schoenherr and Coles files are now wired into an automated comparison (crates/rcfd-turb/tests/validation_flat_plate_wall_law.rs). Status unchanged: NACA 0012 and compressor data are still not compared. WAVE 30B (ADR 0060): five more datasets in the manifest with source URL and retrieval date (Ghia/Botella Re 1000 u, backward step x_r literature values, Blasius Lal-Martin Taylor series, MKM Re_tau 178 sampled statistics, cylinder Re 100 literature table), used by new automated comparisons in crates/rcfd-api/tests/validation_*.rs. Originals of Ghia, Gartling, Armaly and Williamson were not obtained (secondary quotations only). Stays partial. WAVE 31C (ADR 0064): six new numeric-reference manifest entries w31c-* (Ghia centrelines, Gartling Re 800, Williamson fit, Dean table, tube Graetz eigenvalues, NACA 0012 Ladson Cl/Cd and Gregory Cp subsets from the pinned TMR files), verify passes; tests validation_refs_w31c.rs compare in-repo tables to the read data. Not obtained: tube local-Nu table, Moody table, AGARD NACA 0012, Armaly numbers.
+  - note: Partial (acceptance met for 7 of 8 datasets). Hannover compressor unresolved (no open upstream found); Rotor
+    37 numbers not transcribed. WAVE 30C (ADR 0061) recorded NACA 0012 and compressor data as still not compared.
+    - Delivered:
+      - validation-data/manifest.json (rcfd-data-manifest v1) with upstream URLs pinned to commits/tags, SHA-256 and
+        sizes of 31 files, licence records and citations.
+      - validation-data/fetch.py (list/fetch/verify/pin, stdlib, downloads to git-ignored data/).
+      - rcfd-io datapack module with independent SHA-256 (agrees with hashlib).
+      - rcfd data list|verify|provenance.
+      - Data lines in rcfd cases list.
+      - docs/validation-data.md with provenance table.
+    - Datasets: Ghia and de Vahl Davis (in-repo tables), NASA TMR flat plate / backward step / NACA 0012 (CC0), OpenFOAM
+      damBreak set-up (GPL, fetch only), GRI-Mech 3.0 (Berkeley licence unverified; Cantera BSD copy), NASA TP-1337
+      rotor 37 report.
+    - Not done: Hannover compressor unresolved (no open upstream found); Rotor 37 numbers not transcribed; the TMR
+      flat-plate/step/airfoil data are not yet wired into automated comparisons.
+    - Finding: TMR CFL3D file gives Cf(0.97) about 2.691e-3 vs 2.683e-3 used in flat_plate_sst test (tolerance
+      unchanged).
+    - CI and tests never use the network or proprietary files.
+    - WAVE 15B: not attempted. The remaining gaps (an open compressor dataset, rotor tables, wiring of downloaded
+      benchmark data into comparisons) need network access or published numbers that cannot be checked in this
+      environment (ADR 0020, Not attempted).
+    - WAVE 30C (ADR 0061):
+      - Five more local datasets with licence records, checksums and tests that use them: de Vahl Davis Table V, Sod
+        exact star state (Marzouk 2020), Graetz parallel-plate tables (NPTEL), laminar internal-flow Nusselt limits
+        (BYU/NPTEL), TMR Coles u+(y+) at Re_theta 10000 (sampled) with the Karman-Schoenherr formula.
+      - The TMR flat-plate Karman-Schoenherr and Coles files are now wired into an automated comparison
+        (crates/rcfd-turb/tests/validation_flat_plate_wall_law.rs).
+      - Status unchanged: NACA 0012 and compressor data are still not compared.
+    - WAVE 30B (ADR 0060):
+      - Five more datasets in the manifest with source URL and retrieval date (Ghia/Botella Re 1000 u, backward step x_r
+        literature values, Blasius Lal-Martin Taylor series, MKM Re_tau 178 sampled statistics, cylinder Re 100
+        literature table), used by new automated comparisons in crates/rcfd-api/tests/validation_*.rs.
+      - Originals of Ghia, Gartling, Armaly and Williamson were not obtained (secondary quotations only).
+      - Stays partial.
+    - WAVE 31C (ADR 0064):
+      - Six new numeric-reference manifest entries w31c-* (Ghia centrelines, Gartling Re 800, Williamson fit, Dean
+        table, tube Graetz eigenvalues, NACA 0012 Ladson Cl/Cd and Gregory Cp subsets from the pinned TMR files), verify
+        passes.
+      - Tests validation_refs_w31c.rs compare in-repo tables to the read data.
+      - Not obtained: tube local-Nu table, Moody table, AGARD NACA 0012, Armaly numbers.
 
 ### Phase 7 additions
 
 - [x] **F-120** Task-based workflow engine over the settings tree (guided mesh-to-results task graph with prerequisites, insert/delete/save/load)
   - depends on: F-005, F-084
   - acceptance: A 'channel flow' workflow runs mesh check, setup, solve and report tasks in order; tasks can be re-run; the task graph serializes to JSON; an MCP tool can list and run tasks
-  - note: Done. rcfd-api `workflow` (task model: check_mesh, validate, set, initialize, solve, report, export_vtk; templates mesh_to_results, channel_flow, empty; deps, plan with prerequisites, stale tracking, insert/delete with id/kind/dependency/cycle validation, rcfd-workflow v1 JSON documents) and service methods workflow.create/list/get/run/insert/delete/save/load; `rcfd workflow templates|show|run`; MCP/assistant tools list_workflow_tasks, create_workflow, edit_workflow, run_workflow_task (write-class, behind the existing approval gate). Tests: 6 model unit tests, 5 service tests (end-to-end channel/cavity template, stale after setting change, failing solve stops the run, sandboxed save/load, cycle rejected), 5 CLI tests, 2 MCP tests, and a scripted end-to-end mock-provider workflow in rcfd-assistant/tests/workflow_engine.rs (create case, create workflow, run solve with prerequisites, insert export, run all, settings change stales everything, headless run, read status stream; denied create_workflow leaves no workflow). Contract in docs/run-control.md. Limits: workflow runs synchronously (solve is capped by the service max_steps_per_call/max_run_seconds); task kinds are the fixed list above; no GUI tree view (additive-only rule for rcfd-gui).
+  - note: Done. Contract in docs/run-control.md.
+    - rcfd-api `workflow`:
+      - Task model: check_mesh, validate, set, initialize, solve, report, export_vtk.
+      - Templates mesh_to_results, channel_flow, empty.
+      - Deps, plan with prerequisites, stale tracking, insert/delete with id/kind/dependency/cycle validation,
+        rcfd-workflow v1 JSON documents.
+    - Service methods workflow.create/list/get/run/insert/delete/save/load.
+    - `rcfd workflow templates|show|run`.
+    - MCP/assistant tools list_workflow_tasks, create_workflow, edit_workflow, run_workflow_task (write-class, behind
+      the existing approval gate).
+    - Tests:
+      - 6 model unit tests.
+      - 5 service tests (end-to-end channel/cavity template, stale after setting change, failing solve stops the run,
+        sandboxed save/load, cycle rejected).
+      - 5 CLI tests.
+      - 2 MCP tests.
+      - A scripted end-to-end mock-provider workflow in rcfd-assistant/tests/workflow_engine.rs (create case, create
+        workflow, run solve with prerequisites, insert export, run all, settings change stales everything, headless run,
+        read status stream; denied create_workflow leaves no workflow).
+    - Limits: workflow runs synchronously (solve is capped by the service max_steps_per_call/max_run_seconds); task
+      kinds are the fixed list above; no GUI tree view (additive-only rule for rcfd-gui).
 - [x] **F-121** Headless launch/run-control contract: batch flags, threads/precision, hostfile, journal playback, check-only, continue/initial-file, state on stdout, control port
   - depends on: F-081, F-084, F-085
   - acceptance: rcfd run supports check-only, continue-from, interrupt and monitor-state streaming; documented exit codes; a scripted run produces a machine-readable status stream consumed by the MCP server
-  - note: Partial: acceptance met, title scope not. Delivered in rcfd-api `runctl` and `rcfd run`: --check-only, --continue-from/--checkpoint/--checkpoint-every, --stop-file (clean interrupt, exit 7), --max-elapsed (exit 8), --status-json/--status-file/--status-every (rcfd-status v1 JSON lines; stdout carries only events, human text on stderr), --threads, --precision double, --journal playback; documented exit codes 0-8 (docs/run-control.md); same driver behind service run.check/run.headless/status.read and MCP tools check_case_headless, run_headless, read_status_stream (consumes the stream). Measured on a 12x12 cavity (tol 1e-7): uninterrupted 111 iterations; stopped at 40 and continued from the checkpoint also 111 iterations with a byte-identical solution.vtu; 25 steps after a restore bit-identical to 25 uninterrupted steps; --threads 1 vs 4 byte-identical solution.vtu. Not done: --hostfile (rejected, exit 2; needs F-100), single precision (rejected), a control-port socket (remote control is the F-085 service), signal handlers (interrupt via stop file), checkpoints for transient, compressible and turbulence-model runs (steady laminar SIMPLE/SIMPLEC with optional energy only; others warn / fail with exit 1). `rcfd run` now also fails with exit 4 when the mesh quality check fails. SCOPE (merged review): add a command-at-start option, per-core affinity control, check-only and print-resolved-settings modes, scheduled execute-commands on iteration, step or flow time, and automatic case-modification strategies; chained configurations in F-241. WAVE 19C (ADR 0031, still partial): added `--set path=json` (repeatable; exit 2 malformed, 3 invalid), `--print-settings`, `rcfd check <case> [--json]` (exit 0/3/4, keys ok exit_code diagnostics rules mesh), `rcfd restart`, `--restart-from`/`--source-case`/`--method`/`--no-chain`, chain events (stage_start, restart, stage_finish, chain_finish; a `stage` field on every event), transient restart files so the driver now checkpoints and continues laminar constant-density PISO/PIMPLE runs bit-identically (S2), rule warnings as `warning` events with the rule id. Measured: threads 1 versus 3 byte-identical for a coarse-to-fine restart and a chain. NOT REPRODUCED through the binary (registered rule: reported, not retried): exit 4 (wedge ramp_angle 89 is refused by the schema bound, exit 3) and exit 6 (candidate i exit 5, candidate ii exit 0); both stay covered by library tests only. Still not done: MPI/hostfile, per-core affinity, commands at start or scheduled on iteration/step/time (`--set` is the safe subset), automatic case-modification strategies, single precision, a control socket, signal handlers, and chain/restart.from through the service run.headless. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. Exit 4 and exit 6 were NOT REPRODUCED through the binary in WAVE 19C;
+    both stay covered by library tests only.
+    - Partial: acceptance met, title scope not.
+    - Delivered in rcfd-api `runctl` and `rcfd run`:
+      - --check-only.
+      - --continue-from/--checkpoint/--checkpoint-every.
+      - --stop-file (clean interrupt, exit 7).
+      - --max-elapsed (exit 8).
+      - --status-json/--status-file/--status-every (rcfd-status v1 JSON lines; stdout carries only events, human text on
+        stderr).
+      - --threads, --precision double, --journal playback.
+      - Documented exit codes 0-8 (docs/run-control.md).
+      - Same driver behind service run.check/run.headless/status.read and MCP tools check_case_headless, run_headless,
+        read_status_stream (consumes the stream).
+    - Measured on a 12x12 cavity (tol 1e-7):
+      - Uninterrupted 111 iterations.
+      - Stopped at 40 and continued from the checkpoint also 111 iterations with a byte-identical solution.vtu.
+      - 25 steps after a restore bit-identical to 25 uninterrupted steps.
+      - --threads 1 vs 4 byte-identical solution.vtu.
+    - Not done: --hostfile (rejected, exit 2; needs F-100), single precision (rejected), a control-port socket (remote
+      control is the F-085 service), signal handlers (interrupt via stop file), checkpoints for transient, compressible
+      and turbulence-model runs (steady laminar SIMPLE/SIMPLEC with optional energy only; others warn / fail with exit
+      1).
+    - `rcfd run` now also fails with exit 4 when the mesh quality check fails.
+    - SCOPE (merged review): add a command-at-start option, per-core affinity control, check-only and
+      print-resolved-settings modes, scheduled execute-commands on iteration, step or flow time, and automatic
+      case-modification strategies; chained configurations in F-241.
+    - WAVE 19C (ADR 0031, still partial):
+      - Added:
+        - `--set path=json` (repeatable; exit 2 malformed, 3 invalid).
+        - `--print-settings`.
+        - `rcfd check <case> [--json]` (exit 0/3/4, keys ok exit_code diagnostics rules mesh).
+        - `rcfd restart`.
+        - `--restart-from`/`--source-case`/`--method`/`--no-chain`.
+        - Chain events (stage_start, restart, stage_finish, chain_finish; a `stage` field on every event).
+        - Transient restart files so the driver now checkpoints and continues laminar constant-density PISO/PIMPLE runs
+          bit-identically (S2).
+        - Rule warnings as `warning` events with the rule id.
+      - Measured: threads 1 versus 3 byte-identical for a coarse-to-fine restart and a chain.
+      - NOT REPRODUCED through the binary (registered rule: reported, not retried): exit 4 (wedge ramp_angle 89 is
+        refused by the schema bound, exit 3) and exit 6 (candidate i exit 5, candidate ii exit 0); both stay covered by
+        library tests only.
+      - Still not done: MPI/hostfile, per-core affinity, commands at start or scheduled on iteration/step/time (`--set`
+        is the safe subset), automatic case-modification strategies, single precision, a control socket, signal
+        handlers, and chain/restart.from through the service run.headless.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 
 ### Phase 8 additions
 
 - [x] **F-122** User-function plugin API with sandboxed (WASM) execution for sources, BCs, properties and monitors
   - depends on: F-082, F-091
   - acceptance: A user-defined momentum source loaded as a WASM module changes the solution as expected; the module cannot access the filesystem or network; the ABI is versioned
-  - note: Done. Sandboxed user functions in rcfd-api `udf` (wasmi 0.31, pure-Rust interpreter; ABI version 1, docs/udf-abi.md): a WebAssembly module must export rcfd_abi_version() and may export momentum_source, velocity_profile, kinematic_viscosity and monitor. Case settings udf.<name> (file, fuel_per_call, momentum_source/viscosity/monitor roles) and boundaries.<patch>.velocity_udf. Isolation: any import (so no WASI, file, network, clock) is refused at load, per-call fuel is renewed on every call and exhaustion traps, linear memory capped at 16 MiB, results must be finite, viscosity positive; failures stop the run with state failed (exit 1), never a panic; module files stay inside the service sandbox root. Measured (tests/udf.rs, checks fixed first): constant momentum_source module equals physics.body_force to below 1e-9 relative and differs from a run without it; kinematic_viscosity module and velocity_profile module reproduce the plain physics.nu / expression runs to below 1e-9; monitor equals the independent sum(ux*V) to 1e-12; infinite loop, memory growth past the cap, NaN, negative viscosity, wrong ABI, wrong signature, missing ABI export and imports (wasi fd_write) are all rejected; 20000 calls under a 1000-fuel budget succeed. Position-dependent source a=(3x,0,0) in a closed 10x10 box: first check (max|u|<1e-6) measured 4.4e-2 because the wall pressure extrapolation uses the owner-cell force (first order for non-uniform forces), so it was replaced, not loosened, by a convergence check written before the 20x20 run: spurious velocity 4.44e-2 -> 1.09e-2 (ratio 4.1), pressure error 3.86e-2 -> 1.94e-2 (ratio 2.0), both above the 1.7 floor. Not done: momentum source and viscosity in transient runs (refused), anything in the compressible solver (refused), viscosity together with a turbulence model (refused), scalar/energy sources, host functions, batch interface (every cell is one interpreted call), no MCP or assistant tool wrapper for udf settings (settings are available through the generic case tools and schema). Audit 2026-10-14: the original position-dependent source check (max|u| < 1e-6) was replaced by a weaker refinement-ratio check (floor 1.7; pressure ratio 2.0 clears it narrowly; remaining spurious velocity 1.1e-2 on 20x20). The acceptance text is unchanged and its other clauses (constant source, sandbox, ABI version) are covered by tests. Pointer only (no scope change): the wider hook catalogue is tracked in F-239.
+  - note: Done. Audit 2026-10-14: the original position-dependent source check (max|u| < 1e-6) was replaced by a weaker
+    refinement-ratio check. The acceptance text is unchanged and its other clauses (constant source, sandbox, ABI
+    version) are covered by tests.
+    - Sandboxed user functions in rcfd-api `udf` (wasmi 0.31, pure-Rust interpreter; ABI version 1, docs/udf-abi.md): a
+      WebAssembly module must export rcfd_abi_version() and may export momentum_source, velocity_profile,
+      kinematic_viscosity and monitor.
+    - Case settings udf.<name> (file, fuel_per_call, momentum_source/viscosity/monitor roles) and
+      boundaries.<patch>.velocity_udf.
+    - Isolation:
+      - Any import (so no WASI, file, network, clock) is refused at load.
+      - Per-call fuel is renewed on every call and exhaustion traps.
+      - Linear memory capped at 16 MiB.
+      - Results must be finite, viscosity positive.
+      - Failures stop the run with state failed (exit 1), never a panic.
+      - Module files stay inside the service sandbox root.
+    - Measured (tests/udf.rs, checks fixed first):
+      - Constant momentum_source module equals physics.body_force to below 1e-9 relative and differs from a run without
+        it.
+      - kinematic_viscosity module and velocity_profile module reproduce the plain physics.nu / expression runs to below
+        1e-9.
+      - Monitor equals the independent sum(ux*V) to 1e-12.
+      - Infinite loop, memory growth past the cap, NaN, negative viscosity, wrong ABI, wrong signature, missing ABI
+        export and imports (wasi fd_write) are all rejected.
+      - 20000 calls under a 1000-fuel budget succeed.
+    - Position-dependent source a=(3x,0,0) in a closed 10x10 box: first check (max|u|<1e-6) measured 4.4e-2 because
+      the wall pressure extrapolation uses the owner-cell force (first order for non-uniform forces), so it was
+      replaced, not loosened, by a convergence check written before the 20x20 run: spurious velocity 4.44e-2 ->
+      1.09e-2 (ratio 4.1), pressure error 3.86e-2 -> 1.94e-2 (ratio 2.0), both above the 1.7 floor.
+    - Not done: momentum source and viscosity in transient runs (refused), anything in the compressible solver
+      (refused), viscosity together with a turbulence model (refused), scalar/energy sources, host functions, batch
+      interface (every cell is one interpreted call), no MCP or assistant tool wrapper for udf settings (settings are
+      available through the generic case tools and schema).
+    - Audit 2026-10-14: the original position-dependent source check (max|u| < 1e-6) was replaced by a weaker
+      refinement-ratio check (floor 1.7; pressure ratio 2.0 clears it narrowly; remaining spurious velocity 1.1e-2 on
+      20x20). The acceptance text is unchanged and its other clauses (constant source, sandbox, ABI version) are covered
+      by tests.
+    - Pointer only (no scope change): the wider hook catalogue is tracked in F-239.
 
 ### Phase 9 additions
 
 - [~] **F-126** Turbomachinery rotating interfaces: frozen-rotor and stage (mixing-plane) interfaces with sector periodicity
   - depends on: F-031, F-114, F-043, F-125
   - acceptance: A public low-speed compressor/rotor case reproduces overall pressure ratio and efficiency within published scatter; mass conserved across the interface
-  - note: P3 (stretch). Gap: turbomachinery interfaces and stage-average constraints (including a downstream velocity constraint). Public rotor reference data via the validation pack (F-125). SCOPE (merged review): add circumferential averaging as a frame-change option, flow-regime options and a downstream-velocity constraint for stage interfaces; outlet averaging per F-200. WAVE 29A (ADR 0055), PARTIAL; acceptance (a public compressor case reproducing pressure ratio and efficiency within published scatter) NOT MET and NOT ATTEMPTED (no Rotor 37 or Hannover run, no comparison to any published turbomachine). Delivered: rcfd-fv rotor_interface.rs (RotorFrame: frame velocity, absolute/relative conversion and frame change, exact for rigid rotation to 1.7e-15 (limit 1e-14); FrozenRotorInterface: internal faces between two cell zones from the F-114 join with frame-flux jump, non-axisymmetry check and flux closure in absolute and relative form; located errors) and mixing_plane.rs (MixingPlane: radial bands, circumferential/band averages, flux-weighted band reduction and pass-back conserving mass (u_n = Q/A'_b on the receiver), angular momentum (u_theta = Gamma_b/r, exact for a free vortex), normal momentum with mixed-out pressure, and a flux-weighted scalar such as total enthalpy; mixing loss as the non-conserved mechanical energy flux, shown non-negative; constant density; cancelling-flux, empty-band, out-of-band and orientation errors are located). The solver's frozen rotor is the absolute-velocity MRF zone of ADR 0008 (identity frame change at the interface); new solver checks: plug flow through a stationary/rotating pair 1.5e-14 (1e-6), flux closure 4.7e-15 (1e-9), Taylor-Couette across the interface with lower-zone frame 0, 0.5, 1 W_i: analytic error 7.6e-3 V_i (2e-2), mutual difference <= 9.1e-4 V_i (1e-2). Library checks (limits registered in ADR 0055 before running): band average vs closed form 1.7e-15 (1e-13); mass across a mismatched receiver 4.3e-16 (1e-13); angular momentum flux 6.3e-16 per band (1e-12); two-jet mixed-out pressure rise and mixing loss to 2e-16 and 3.3e-15 (1e-13, 1e-12). MISSES (ignored known-miss tests, limits intact): X3 uniform flow through the mismatched mesh pair deviates by 3.7e-1 (limit 1e-13) because donor and receiver band areas differ by up to 27 % (sharp face-to-band assignment by face centre and different polygon areas; exact mass conservation then scales the velocity by the area ratio); corrected checks X3b (equal band areas, 4.8e-15) and X3c (identity) added; R5 interface-flux limits 1e-8/1e-3 registered for the open-end Taylor-Couette missed (3.2e-5 to 3.7e-5 and 1.0e-3) as already known for M4b in ADR 0008. Not delivered: solver-coupled mixing plane and any case-tree keys for it (needs a per-iteration boundary hook; no natural place in the case tree), area-fraction splitting of faces across band edges, compressible mixed-out state, rothalpy, curved/cylindrical interfaces, sector periodicity of a stage, downstream-velocity constraint, flow-regime options. WAVE 30A (ADR 0059): the mixing plane is now WIRED into the steady SIMPLE/SIMPLEC loop: case section mixing_plane (enabled, upstream_patch, downstream_patch, axis, origin, bands, r_min, r_max, relax, every, tolerance; all additive, inert when off, located errors), mesh generator annulus_3d_stage (two unjoined annulus blocks, patches plane_out and plane_in), monitor res_mixing. Per iteration the upstream outlet is circumferentially averaged in radial bands (MixingPlane) and installed as a relaxed per-face fixed velocity on the downstream inlet, the band pressure is returned as a relaxed per-face fixed pressure on the upstream outlet. Free-vortex plus uniform axial flow through the frozen-rotor/stationary plane (exact solution, no published data): exchange change 4.2e-14 after 189 iterations, mass and angular momentum per band conserved to 2.5e-14 and 2.4e-14, velocity error 6.0e-3 of V_ref (limit 2e-2), plane_in face velocity 2.9e-3, relaxation 0.3 vs 0.7 agree to 2.6e-13, circumferential distortion mixed out (polar spread 6.7e-16, mixing loss 11.8 percent of the energy flux, non-negative), 48 vs 36 cells around 6.1e-3. Known miss: pressure error 6.85e-2 P against 5e-2 P (near-hub-wall pressure discretisation, not the plane: the plane-free control gives 1.13e-1, 6.62e-2, 4.24e-2 for 4, 8, 16 radial layers). Baselines bit-identical when the section is off. Acceptance (published compressor case) still NOT MET and NOT ATTEMPTED. Still not delivered: transient and coupled solvers, compressible mixed-out state, rothalpy, curved or non-aligned interfaces, sector periodicity, turbulence transfer. WAVE 43B (ADR 0109): cylindrical frozen-rotor interface. New rcfd_mesh::non_conformal::join_non_conformal_cylindrical joins a rotor block and a stator block across a cylinder about the axis (chart (r theta, z), overlap faces are planar chord rectangles with radial normal, frame flux 1.8e-14 of |S|); planar joins bit-identical. Full annulus 48 vs 35 around: 328 overlaps, tiling 3.1e-15, closure 1.2e-16, closed-form volume 1.4e-15. Solver checks (mesh read as a file, MRF on cell zone rotor): on the registered mesh (uniform, dr = 1/32, overlap faces 79 deg non-orthogonal) every run DIVERGED (known misses); the face_flux correction alone or with 3 correctors did not converge; the amended mesh K2 (96 vs 70 around, radial cells growing towards the interface, 48.7 deg) converges: solid body 1.6e-3 W r_o and pressure 1.4 % of range, Taylor-Couette 3.8e-3 V_i (conformal controls 3.0e-3 and 3.9e-3), frame invariance 4.2e-4 V_i, radial source flow through the cylinder: interface flux equals inflow to 1.5e-14, velocity 4.8e-3. Sector periodicity through the cylinder (60-degree sector, inertial and rotating frame): error within 1.5 x the conformal controls, net interface flux 3e-17 / 5e-11, seam balance 0 / 4e-10. MISS (ignored, limits intact): the sum of absolute interface fluxes 5.8e-3 / 2.1e-2 / 1.2e-3 V_i A against 1e-3 (azimuthal velocity interpolated between cells at different angles; first order: halves with doubled counts). Acceptance (published compressor case) NOT attempted. Still not delivered: MRF zones with cyclic seams (needed for a rotor passage with this interface), a case-tree generator or keys, conical/partial/transient interfaces, the mixing plane on a cylinder, plus the items above. WAVE 44B (ADR 0112): case-tree generator mesh.generator = annulus_3d_cylindrical_interface (rotor block r_in..r_interface with cell zone rotor, stator block r_interface..r_out, counts around/axially may differ; keys r_interface, isotropic_interface; located errors) with a non-orthogonality pre-flight: rcfd_mesh::non_conformal::interface_non_orthogonality reports the worst overlap-face angle, the centre offsets and the factor by which the radial spacing must grow; the case is rejected above 70 deg (ADR 0109 runs diverged at 72.7 deg and above; largest converged 48.75 deg). It reproduces the ADR 0109 angles (M 79.19, 75.71, 72.68, K2 48.74, conformal 0.0 deg; equal to the quality-module angle to 1e-9). Opt-in near-isotropic interface layer (cylindrical_interface_layer_size at a 45 deg bound plus gen::expansion_for_end_cell): sized meshes 36.6-37.7 deg; the ADR 0109 60-degree sector tests on the sized sector pass (inertial: converged, error 1.353e-2 V_i within 1.5 x controls 1.960e-2, net interface flux 6e-18, seam 0; rotating frame: error 1.058e-2 within 1.917e-2, net 1.8e-10, seam 8.2e-10, but the continuity floor 1.18e-9 misses the 1e-9 convergence criterion: ignored known miss); the option in the full annulus (K2 counts) converges in 238 iterations, Taylor-Couette error 6.2e-3 V_i (2e-2). The tree mesh equals the library join (content hash) and the tree run equals the library run exactly (0 difference, 272 iterations); a case without the keys is bit-identical. Uniform 60-degree sector G2 measures 70.5 deg (above the limit, although its rcfd-fv runs converge). Not changed: the first-order sum of absolute interface fluxes (2.0e-3 / 1.8e-2 V_i A on the sized sector), MRF on cyclic seams, sector periodicity in the case tree. Acceptance (published compressor case) NOT attempted; stays partial. WAVE 44C (ADR 0113): MRF zones with rotationally cyclic seams, opt-in key sources.<name>.cyclic_seams (mrf only, default false, located error otherwise). A seam pair is an internal face cut in two: with the cyclic rotation about the MRF axis F_g = -F_f, so both faces get the frame flux (Omega x r).S when both owners are in the zone; the revolution check counts the pair mismatch instead (misaligned axis or one-sided zone refused). Found and fixed on the way (same opt-in): the SIMPLEC h1 of a cyclic cell lacked the lagged partner coefficients, so rAU/rAtU of seam cells differed from the unsplit mesh; this moved the fixed-velocity wall pressure gradient in seam-wall corner cells under a body force (K1 sector-annulus pressure 5.9e-4 of the range) and gives 4.6e-3 U spurious swirl in an inertial sector through-flow (2.2e-12 with the fix; the default path keeps the defect, bit-identical). Checks, sector = exact sixth of the annulus (library level, rcfd-fv tests/mrf_cyclic_seams_w44c.rs): seam pair mismatch 2.3e-15 (1e-12), per-cell frame-flux closure 4.4e-16 (1e-12); solid body sector-annulus 3.6e-9 W r_o / 6.6e-9 of the pressure range (4.3e-4, the smallest ADR 0008 M3 frame difference), analytic 7.9e-4 / 3.7e-3 (2e-2 / 5e-2); Taylor-Couette sector-annulus 1.2e-10 V_i (4.3e-4), analytic 6.76e-3 V_i (1.5e-2); axial through-flow with an Omega 5 rotor band: sector-annulus 1.8e-11 U, swirl 1.1e-10 U (2e-2), band effect sector against annulus 1.8e-11 U (4.3e-4); empty passage rotating as a whole stays at the exact state u = (0,0,U) to 1.1e-15 U (1e-8; without seam frame flux 2.6 U); ADR 0109 sector joined on the cylinder with the inner block as MRF zone: error 1.27e-2 V_i (2e-2, 0.76 of 1.5 x controls), net interface flux 2e-17, seam balance 8e-12. Positive path verified at library level only; case tree: key checked, refusals located (the message now names the patch), default bit-identical (key absent/false/true on the M2 annulus), baseline hashes untouched; the sim.rs wiring of F1 is unexercised because no case-tree mesh reaches it. NOT unblocked for the fan: the axial_fan_sector hub and shroud faces are not surfaces of revolution (frame flux 1.8e-2 / 4.5e-3 of Omega r |S|, 4.2e-3 even unsheared; limit 1e-6), so the fan passage is now refused at the hub instead of the seams; at library level the same empty passage leaves the exact state by 7.4e-4 U (limit 1e-8, ignored known miss, worst cell on hub/shroud, seam pair mismatch 5.4e-14); a sector read from a mesh file loses its cyclic rotation (OpenFOAM writer stores neighbourPatch only). Acceptance NOT attempted; stays partial. WAVE 45B (ADR 0116): the case-tree generator annulus_3d_sector (an empty annular sector with planar faces and the cyclic pair theta_min / theta_max) runs an mrf zone with cyclic_seams = true through the case tree (exact empty passage 5.6e-13 U, limit 1e-8; sector against the full annulus 1.4e-11 W r_out, limit 4.3e-4), which is verification infrastructure only: it does not open MRF on the bladed FAN-01 passage, whose blade wall is still refused by the revolution check.
+  - note: P3 (stretch). Gap: turbomachinery interfaces and stage-average constraints (including a downstream velocity
+    constraint). Public rotor reference data via the validation pack (F-125). PARTIAL: the acceptance (a public
+    compressor case reproducing pressure ratio and efficiency within published scatter) is NOT MET and NOT ATTEMPTED.
+    WAVE 45B (ADR 0116) does not open MRF on the bladed FAN-01 passage, whose blade wall is still refused by the
+    revolution check.
+    - SCOPE (merged review): add circumferential averaging as a frame-change option, flow-regime options and a
+      downstream-velocity constraint for stage interfaces; outlet averaging per F-200.
+    - WAVE 29A (ADR 0055), PARTIAL; acceptance (a public compressor case reproducing pressure ratio and efficiency
+      within published scatter) NOT MET and NOT ATTEMPTED (no Rotor 37 or Hannover run, no comparison to any published
+      turbomachine).
+      - Delivered:
+        - rcfd-fv rotor_interface.rs (RotorFrame: frame velocity, absolute/relative conversion and frame change, exact
+          for rigid rotation to 1.7e-15 (limit 1e-14); FrozenRotorInterface: internal faces between two cell zones from
+          the F-114 join with frame-flux jump, non-axisymmetry check and flux closure in absolute and relative form;
+          located errors).
+        - mixing_plane.rs (MixingPlane: radial bands, circumferential/band averages, flux-weighted band reduction and
+          pass-back conserving mass (u_n = Q/A'_b on the receiver), angular momentum (u_theta = Gamma_b/r, exact for a
+          free vortex), normal momentum with mixed-out pressure, and a flux-weighted scalar such as total enthalpy;
+          mixing loss as the non-conserved mechanical energy flux, shown non-negative; constant density;
+          cancelling-flux, empty-band, out-of-band and orientation errors are located).
+      - The solver's frozen rotor is the absolute-velocity MRF zone of ADR 0008 (identity frame change at the
+        interface).
+      - New solver checks:
+        - Plug flow through a stationary/rotating pair 1.5e-14 (1e-6).
+        - Flux closure 4.7e-15 (1e-9).
+        - Taylor-Couette across the interface with lower-zone frame 0, 0.5, 1 W_i: analytic error 7.6e-3 V_i (2e-2),
+          mutual difference <= 9.1e-4 V_i (1e-2).
+      - Library checks (limits registered in ADR 0055 before running):
+        - Band average vs closed form 1.7e-15 (1e-13).
+        - Mass across a mismatched receiver 4.3e-16 (1e-13).
+        - Angular momentum flux 6.3e-16 per band (1e-12).
+        - Two-jet mixed-out pressure rise and mixing loss to 2e-16 and 3.3e-15 (1e-13, 1e-12).
+      - MISSES (ignored known-miss tests, limits intact):
+        - X3 uniform flow through the mismatched mesh pair deviates by 3.7e-1 (limit 1e-13) because donor and receiver
+          band areas differ by up to 27 % (sharp face-to-band assignment by face centre and different polygon areas;
+          exact mass conservation then scales the velocity by the area ratio); corrected checks X3b (equal band areas,
+          4.8e-15) and X3c (identity) added.
+        - R5 interface-flux limits 1e-8/1e-3 registered for the open-end Taylor-Couette missed (3.2e-5 to 3.7e-5 and
+          1.0e-3) as already known for M4b in ADR 0008.
+      - Not delivered: solver-coupled mixing plane and any case-tree keys for it (needs a per-iteration boundary hook;
+        no natural place in the case tree), area-fraction splitting of faces across band edges, compressible mixed-out
+        state, rothalpy, curved/cylindrical interfaces, sector periodicity of a stage, downstream-velocity constraint,
+        flow-regime options.
+    - WAVE 30A (ADR 0059): the mixing plane is now WIRED into the steady SIMPLE/SIMPLEC loop:
+      - Case section mixing_plane (enabled, upstream_patch, downstream_patch, axis, origin, bands, r_min, r_max, relax,
+        every, tolerance; all additive, inert when off, located errors).
+      - Mesh generator annulus_3d_stage (two unjoined annulus blocks, patches plane_out and plane_in).
+      - Monitor res_mixing.
+      - Per iteration the upstream outlet is circumferentially averaged in radial bands (MixingPlane) and installed as a
+        relaxed per-face fixed velocity on the downstream inlet, the band pressure is returned as a relaxed per-face
+        fixed pressure on the upstream outlet.
+      - Free-vortex plus uniform axial flow through the frozen-rotor/stationary plane (exact solution, no published
+        data):
+        - Exchange change 4.2e-14 after 189 iterations.
+        - Mass and angular momentum per band conserved to 2.5e-14 and 2.4e-14.
+        - Velocity error 6.0e-3 of V_ref (limit 2e-2), plane_in face velocity 2.9e-3.
+        - Relaxation 0.3 vs 0.7 agree to 2.6e-13.
+        - Circumferential distortion mixed out (polar spread 6.7e-16, mixing loss 11.8 percent of the energy flux,
+          non-negative).
+        - 48 vs 36 cells around 6.1e-3.
+      - Known miss: pressure error 6.85e-2 P against 5e-2 P (near-hub-wall pressure discretisation, not the plane: the
+        plane-free control gives 1.13e-1, 6.62e-2, 4.24e-2 for 4, 8, 16 radial layers).
+      - Baselines bit-identical when the section is off.
+      - Acceptance (published compressor case) still NOT MET and NOT ATTEMPTED.
+      - Still not delivered: transient and coupled solvers, compressible mixed-out state, rothalpy, curved or
+        non-aligned interfaces, sector periodicity, turbulence transfer.
+    - WAVE 43B (ADR 0109): cylindrical frozen-rotor interface.
+      - New rcfd_mesh::non_conformal::join_non_conformal_cylindrical joins a rotor block and a stator block across a
+        cylinder about the axis (chart (r theta, z), overlap faces are planar chord rectangles with radial normal, frame
+        flux 1.8e-14 of |S|); planar joins bit-identical.
+      - Full annulus 48 vs 35 around: 328 overlaps, tiling 3.1e-15, closure 1.2e-16, closed-form volume 1.4e-15.
+      - Solver checks (mesh read as a file, MRF on cell zone rotor):
+        - On the registered mesh (uniform, dr = 1/32, overlap faces 79 deg non-orthogonal) every run DIVERGED (known
+          misses).
+        - The face_flux correction alone or with 3 correctors did not converge.
+        - The amended mesh K2 (96 vs 70 around, radial cells growing towards the interface, 48.7 deg) converges: solid
+          body 1.6e-3 W r_o and pressure 1.4 % of range, Taylor-Couette 3.8e-3 V_i (conformal controls 3.0e-3 and
+          3.9e-3), frame invariance 4.2e-4 V_i, radial source flow through the cylinder: interface flux equals inflow to
+          1.5e-14, velocity 4.8e-3.
+      - Sector periodicity through the cylinder (60-degree sector, inertial and rotating frame): error within 1.5 x the
+        conformal controls, net interface flux 3e-17 / 5e-11, seam balance 0 / 4e-10.
+      - MISS (ignored, limits intact): the sum of absolute interface fluxes 5.8e-3 / 2.1e-2 / 1.2e-3 V_i A against 1e-3
+        (azimuthal velocity interpolated between cells at different angles; first order: halves with doubled counts).
+      - Acceptance (published compressor case) NOT attempted.
+      - Still not delivered: MRF zones with cyclic seams (needed for a rotor passage with this interface), a case-tree
+        generator or keys, conical/partial/transient interfaces, the mixing plane on a cylinder, plus the items above.
+    - WAVE 44B (ADR 0112):
+      - Case-tree generator mesh.generator = annulus_3d_cylindrical_interface (rotor block r_in..r_interface with cell
+        zone rotor, stator block r_interface..r_out, counts around/axially may differ; keys r_interface,
+        isotropic_interface; located errors) with a non-orthogonality pre-flight.
+      - rcfd_mesh::non_conformal::interface_non_orthogonality reports the worst overlap-face angle, the centre offsets
+        and the factor by which the radial spacing must grow; the case is rejected above 70 deg (ADR 0109 runs diverged
+        at 72.7 deg and above; largest converged 48.75 deg).
+      - It reproduces the ADR 0109 angles (M 79.19, 75.71, 72.68, K2 48.74, conformal 0.0 deg; equal to the
+        quality-module angle to 1e-9).
+      - Opt-in near-isotropic interface layer (cylindrical_interface_layer_size at a 45 deg bound plus
+        gen::expansion_for_end_cell): sized meshes 36.6-37.7 deg.
+      - The ADR 0109 60-degree sector tests on the sized sector pass (inertial: converged, error 1.353e-2 V_i within 1.5
+        x controls 1.960e-2, net interface flux 6e-18, seam 0; rotating frame: error 1.058e-2 within 1.917e-2, net
+        1.8e-10, seam 8.2e-10, but the continuity floor 1.18e-9 misses the 1e-9 convergence criterion: ignored known
+        miss).
+      - The option in the full annulus (K2 counts) converges in 238 iterations, Taylor-Couette error 6.2e-3 V_i (2e-2).
+      - The tree mesh equals the library join (content hash) and the tree run equals the library run exactly (0
+        difference, 272 iterations); a case without the keys is bit-identical.
+      - Uniform 60-degree sector G2 measures 70.5 deg (above the limit, although its rcfd-fv runs converge).
+      - Not changed: the first-order sum of absolute interface fluxes (2.0e-3 / 1.8e-2 V_i A on the sized sector), MRF
+        on cyclic seams, sector periodicity in the case tree.
+      - Acceptance (published compressor case) NOT attempted; stays partial.
+    - WAVE 44C (ADR 0113): MRF zones with rotationally cyclic seams, opt-in key sources.<name>.cyclic_seams (mrf only,
+      default false, located error otherwise).
+      - A seam pair is an internal face cut in two: with the cyclic rotation about the MRF axis F_g = -F_f, so both
+        faces get the frame flux (Omega x r).S when both owners are in the zone; the revolution check counts the pair
+        mismatch instead (misaligned axis or one-sided zone refused).
+      - Found and fixed on the way (same opt-in): the SIMPLEC h1 of a cyclic cell lacked the lagged partner
+        coefficients, so rAU/rAtU of seam cells differed from the unsplit mesh; this moved the fixed-velocity wall
+        pressure gradient in seam-wall corner cells under a body force (K1 sector-annulus pressure 5.9e-4 of the range)
+        and gives 4.6e-3 U spurious swirl in an inertial sector through-flow (2.2e-12 with the fix; the default path
+        keeps the defect, bit-identical).
+      - Checks, sector = exact sixth of the annulus (library level, rcfd-fv tests/mrf_cyclic_seams_w44c.rs):
+        - Seam pair mismatch 2.3e-15 (1e-12), per-cell frame-flux closure 4.4e-16 (1e-12).
+        - Solid body sector-annulus 3.6e-9 W r_o / 6.6e-9 of the pressure range (4.3e-4, the smallest ADR 0008 M3 frame
+          difference), analytic 7.9e-4 / 3.7e-3 (2e-2 / 5e-2).
+        - Taylor-Couette sector-annulus 1.2e-10 V_i (4.3e-4), analytic 6.76e-3 V_i (1.5e-2).
+        - Axial through-flow with an Omega 5 rotor band: sector-annulus 1.8e-11 U, swirl 1.1e-10 U (2e-2), band effect
+          sector against annulus 1.8e-11 U (4.3e-4).
+        - Empty passage rotating as a whole stays at the exact state u = (0,0,U) to 1.1e-15 U (1e-8; without seam frame
+          flux 2.6 U).
+        - ADR 0109 sector joined on the cylinder with the inner block as MRF zone: error 1.27e-2 V_i (2e-2, 0.76 of 1.5
+          x controls), net interface flux 2e-17, seam balance 8e-12.
+      - Positive path verified at library level only.
+      - Case tree: key checked, refusals located (the message now names the patch), default bit-identical (key
+        absent/false/true on the M2 annulus), baseline hashes untouched; the sim.rs wiring of F1 is unexercised because
+        no case-tree mesh reaches it.
+      - NOT unblocked for the fan: the axial_fan_sector hub and shroud faces are not surfaces of revolution (frame flux
+        1.8e-2 / 4.5e-3 of Omega r |S|, 4.2e-3 even unsheared; limit 1e-6), so the fan passage is now refused at the hub
+        instead of the seams; at library level the same empty passage leaves the exact state by 7.4e-4 U (limit 1e-8,
+        ignored known miss, worst cell on hub/shroud, seam pair mismatch 5.4e-14); a sector read from a mesh file loses
+        its cyclic rotation (OpenFOAM writer stores neighbourPatch only).
+      - Acceptance NOT attempted; stays partial.
+    - WAVE 45B (ADR 0116): the case-tree generator annulus_3d_sector (an empty annular sector with planar faces and the
+      cyclic pair theta_min / theta_max) runs an mrf zone with cyclic_seams = true through the case tree (exact empty
+      passage 5.6e-13 U, limit 1e-8; sector against the full annulus 1.4e-11 W r_out, limit 4.3e-4), which is
+      verification infrastructure only: it does not open MRF on the bladed FAN-01 passage, whose blade wall is still
+      refused by the revolution check.
 - [~] **F-127** Eulerian-Eulerian and mixture multiphase with interphase forces, plus cavitation mass transfer
   - depends on: F-055, F-043
   - acceptance: Bubble-column void-fraction profile and a cavitating hydrofoil/venturi sheet-length trend match literature
-  - note: PARTIAL (wave 29B, ADR 0056). DELIVERED: (1) mixture model with drift-flux algebraic slip (Stokes and Schiller-Naumann closure) on the VOF host: slip flux in the alpha transport, drift mass flux and stress in the momentum (rcfd-fv mixture.rs, vof.rs; case keys multiphase.mixture.*); (2) ONE cavitation model, Schnerr-Sauer with bubble-number density, coupled IMPLICITLY to the pressure equation (chord linearisation on the pressure-matrix diagonal, advective alpha transport; rcfd-fv cavitation.rs, vof.rs; keys multiphase.cavitation.*); (3) a 2-D cavitating venturi test. Passing: C1-C4, D1-D6 (corrected set-ups), M1-M3, M4b, N1, N2, N6, W1-W3 (tree equals library to 1e-9). Misses (limits intact, ignored known_miss tests): N3 end-of-run, N4, N4-prime, N5 global balance 1.96e-5 vs 1e-6, bitwise tree equality; the registered dt for the venturi exceeds the flow Courant limit at cavity collapse (corrected dt 5e-5). NOT DELIVERED: full multi-fluid Euler-Euler with per-phase momentum, lift, wall lubrication, virtual mass, turbulent dispersion, granular kinetic theory, wall boiling, free-surface damping; no published cavitation data and no bubble-column profile were compared (NOT ATTEMPTED); the acceptance of this item is therefore not met. All references UNVERIFIED (docs/reference-data.md). Previous scope text: P3 (stretch). Gap: the roadmap has only VOF and one-way Lagrangian; typical multiphase solvers also offer drag/lift/virtual-mass/turbulent-dispersion closure sets and cavitation models. SCOPE (merged review): make the closure taxonomy the criteria set: drag, lift, wall lubrication, turbulent dispersion, virtual mass, granular kinetic theory, wall-boiling closures, algebraic slip and free-surface damping; population balance in F-228, interfacial transfer in F-226.
+  - note: PARTIAL (wave 29B, ADR 0056). No published cavitation data and no bubble-column profile were compared (NOT
+    ATTEMPTED); the acceptance of this item is therefore not met. All references UNVERIFIED (docs/reference-data.md).
+    - DELIVERED:
+      - (1) mixture model with drift-flux algebraic slip (Stokes and Schiller-Naumann closure) on the VOF host: slip
+        flux in the alpha transport, drift mass flux and stress in the momentum (rcfd-fv mixture.rs, vof.rs; case keys
+        multiphase.mixture.*).
+      - (2) ONE cavitation model, Schnerr-Sauer with bubble-number density, coupled IMPLICITLY to the pressure equation
+        (chord linearisation on the pressure-matrix diagonal, advective alpha transport; rcfd-fv cavitation.rs, vof.rs;
+        keys multiphase.cavitation.*).
+      - (3) a 2-D cavitating venturi test.
+    - Passing: C1-C4, D1-D6 (corrected set-ups), M1-M3, M4b, N1, N2, N6, W1-W3 (tree equals library to 1e-9).
+    - Misses (limits intact, ignored known_miss tests): N3 end-of-run, N4, N4-prime, N5 global balance 1.96e-5 vs 1e-6,
+      bitwise tree equality; the registered dt for the venturi exceeds the flow Courant limit at cavity collapse
+      (corrected dt 5e-5).
+    - NOT DELIVERED:
+      - Full multi-fluid Euler-Euler with per-phase momentum, lift, wall lubrication, virtual mass, turbulent
+        dispersion, granular kinetic theory, wall boiling, free-surface damping.
+      - No published cavitation data and no bubble-column profile were compared (NOT ATTEMPTED); the acceptance of this
+        item is therefore not met.
+    - All references UNVERIFIED (docs/reference-data.md).
+    - Previous scope text: P3 (stretch). Gap: the roadmap has only VOF and one-way Lagrangian; typical multiphase
+      solvers also offer drag/lift/virtual-mass/turbulent-dispersion closure sets and cavitation models.
+    - SCOPE (merged review): make the closure taxonomy the criteria set: drag, lift, wall lubrication, turbulent
+      dispersion, virtual mass, granular kinetic theory, wall-boiling closures, algebraic slip and free-surface damping;
+      population balance in F-228, interfacial transfer in F-226.
 - [x] **F-128** Lagrangian extensions: two-way coupling, turbulent dispersion, injection distributions, breakup, wall film, erosion
   - depends on: F-056
   - acceptance: A two-way coupled particle-laden jet conserves total momentum; a Rosin-Rammler injection distribution is reproduced statistically
-  - note: PARTIAL (wave 29C, ADR 0057). Delivered: two-way exchange record (drag impulse and total-energy gain per cell, optional Ranz-Marshall heat transfer; conservative to round-off: momentum residual 3.6e-16 and 6.3e-17 with wall hits, energy 2.7e-16 against a 1e-12 limit; observation-only for the particles), single-cell coupled closed form (relative velocity decay exp(-(1+phi) t/tau), explicit-coupling error 1.0 percent at dt = tau/100, first order), dilute limit (two-way minus one-way = 0.262 phi), discrete random walk dispersion (eddy lifetime and crossing time; particle variance within 0.31, 0.31, 0.15 percent of the derived closed form sigma^2 T_L/(T_L+tau) for tau/T_L = 0.1, 1, 5 with 40000 particles, tracker level 1.0 percent), uniform and Rosin-Rammler equal-mass parcels from a mass flow (Kolmogorov distance 0.0049 to 0.0053 against 0.0138; total mass to 3e-13), cone and hollow-cone injection, case keys particles.dispersion*, injection.*.mass_flow, cone_*, distribution = uniform. Acceptance NOT fully met: the two-way sources are NOT applied by Simulation::step (no particle-laden jet in the solver; momentum conservation is shown in a closed particle/carrier loop), no published comparison. NOT delivered: solver-loop feedback, dispersion from turbulence-model fields, evaporation, breakup, wall film, erosion, particle reactions, group and file injections. One set-up defect (gravity impulse over the full time for stuck parcels) kept as an ignored test with a corrected one. P3 (stretch). Gap: particle injection, breakup, wall-film and erosion options; discrete-phase models. SCOPE (merged review): split into injections with breakup, heat and mass transfer, and dense flow; add diameter distributions, first-stage and secondary breakup, rough-wall interaction and track-file output. Acceptance additions: constant-volume vaporising spray liquid and vapour penetration within 10 percent of public data; falling-film thickness within 5 percent of the Nusselt solution. Discrete-element coupling is not planned. WAVE 30A (ADR 0059): two-way coupling is now WIRED into the solver loops: the Coupling record is applied as a momentum source (and a temperature source with heat_transfer, which requires two_way) with the sign that conserves momentum, under-relaxed and lagged in the steady loop (re-tracking every two_way_every iterations, monitor res_particles, converged only when the change is below two_way_tolerance), per time step on the old-level field in piso/pimple. Keys: particles.two_way, two_way_relax, two_way_every, two_way_start, two_way_tolerance, heat_transfer, particle_cp, injection temperature; located errors; bit-identical when unset. First-principles checks (no published data read): closed-form plug with parcels in a uniform stream, force equals parcel momentum flux 9.7e-8 and 1.8e-5 (PLUG-B, corrected set-up; a miss of the registered 1e-6), pressure drop within 7.6e-4, transient piso/pimple record identity 4e-14; particle-laden jet momentum balance residual 3.9e-11 (limit 2e-2), momentum delivered equals exchanged 5.7e-16, cross-stream force 3.4e-13, force linear in loading with D(0.1)/D(0.01) = 9.57; heat: outlet rise 7.5e-4 off the closed form, delivered heat equals particle loss to 4.7e-10. Known misses (limits intact): PL2 1.64e-3, PL3 1.5e-2, PL4 144 updates, uniformity, PL1b. A published particle-laden jet is NOT ATTEMPTED; the acceptance wording (total momentum conserved) is met on the first-principles jet only. DONE (decision 2026-10-21): acceptance field met (two-way jet momentum residual 3.9e-11 vs 2e-2, cross-stream 2.1e-13, record vs particle sum 5.7e-16; Rosin-Rammler KS 0.0049 vs 0.0138, mass flow 3e-13), first-principles references only; no published particle-laden jet attempted. The unmet scope above (breakup, wall film, erosion, evaporation, track files, spray-penetration and falling-film additions) moved to F-245.
+  - note: DONE (decision 2026-10-21): acceptance field met, first-principles references only; no published
+    particle-laden jet attempted. The unmet scope (breakup, wall film, erosion, evaporation, track files,
+    spray-penetration and falling-film additions) moved to F-245.
+    - PARTIAL (wave 29C, ADR 0057). Delivered:
+      - Two-way exchange record (drag impulse and total-energy gain per cell, optional Ranz-Marshall heat transfer;
+        conservative to round-off: momentum residual 3.6e-16 and 6.3e-17 with wall hits, energy 2.7e-16 against a 1e-12
+        limit; observation-only for the particles).
+      - Single-cell coupled closed form (relative velocity decay exp(-(1+phi) t/tau), explicit-coupling error
+        1.0 percent at dt = tau/100, first order).
+      - Dilute limit (two-way minus one-way = 0.262 phi).
+      - Discrete random walk dispersion (eddy lifetime and crossing time; particle variance within 0.31, 0.31,
+        0.15 percent of the derived closed form sigma^2 T_L/(T_L+tau) for tau/T_L = 0.1, 1, 5 with 40000 particles,
+        tracker level 1.0 percent).
+      - Uniform and Rosin-Rammler equal-mass parcels from a mass flow (Kolmogorov distance 0.0049 to 0.0053 against
+        0.0138; total mass to 3e-13).
+      - Cone and hollow-cone injection.
+      - Case keys particles.dispersion*, injection.*.mass_flow, cone_*, distribution = uniform.
+    - Acceptance NOT fully met: the two-way sources are NOT applied by Simulation::step (no particle-laden jet in the
+      solver; momentum conservation is shown in a closed particle/carrier loop), no published comparison.
+    - NOT delivered: solver-loop feedback, dispersion from turbulence-model fields, evaporation, breakup, wall film,
+      erosion, particle reactions, group and file injections.
+    - One set-up defect (gravity impulse over the full time for stuck parcels) kept as an ignored test with a corrected
+      one.
+    - P3 (stretch). Gap: particle injection, breakup, wall-film and erosion options; discrete-phase models.
+    - SCOPE (merged review): split into injections with breakup, heat and mass transfer, and dense flow; add diameter
+      distributions, first-stage and secondary breakup, rough-wall interaction and track-file output. Acceptance
+      additions: constant-volume vaporising spray liquid and vapour penetration within 10 percent of public data;
+      falling-film thickness within 5 percent of the Nusselt solution. Discrete-element coupling is not planned.
+    - WAVE 30A (ADR 0059): two-way coupling is now WIRED into the solver loops:
+      - The Coupling record is applied as a momentum source (and a temperature source with heat_transfer, which requires
+        two_way) with the sign that conserves momentum, under-relaxed and lagged in the steady loop (re-tracking every
+        two_way_every iterations, monitor res_particles, converged only when the change is below two_way_tolerance), per
+        time step on the old-level field in piso/pimple.
+      - Keys: particles.two_way, two_way_relax, two_way_every, two_way_start, two_way_tolerance, heat_transfer,
+        particle_cp, injection temperature; located errors; bit-identical when unset.
+      - First-principles checks (no published data read):
+        - Closed-form plug with parcels in a uniform stream, force equals parcel momentum flux 9.7e-8 and 1.8e-5
+          (PLUG-B, corrected set-up; a miss of the registered 1e-6), pressure drop within 7.6e-4, transient piso/pimple
+          record identity 4e-14.
+        - Particle-laden jet momentum balance residual 3.9e-11 (limit 2e-2), momentum delivered equals exchanged
+          5.7e-16, cross-stream force 3.4e-13, force linear in loading with D(0.1)/D(0.01) = 9.57.
+        - Heat: outlet rise 7.5e-4 off the closed form, delivered heat equals particle loss to 4.7e-10.
+      - Known misses (limits intact): PL2 1.64e-3, PL3 1.5e-2, PL4 144 updates, uniformity, PL1b.
+      - A published particle-laden jet is NOT ATTEMPTED; the acceptance wording (total momentum conserved) is met on the
+        first-principles jet only.
+    - DONE (decision 2026-10-21): acceptance field met (two-way jet momentum residual 3.9e-11 vs 2e-2, cross-stream
+      2.1e-13, record vs particle sum 5.7e-16; Rosin-Rammler KS 0.0049 vs 0.0138, mass flow 3e-13), first-principles
+      references only; no published particle-laden jet attempted. The unmet scope above (breakup, wall film, erosion,
+      evaporation, track files, spray-penetration and falling-film additions) moved to F-245.
 - [~] **F-129** Combustion extensions: non-premixed flamelet/mixture-fraction PDF and premixed progress-variable models
   - depends on: F-054, F-042
   - acceptance: A methane jet flame temperature profile and lift-off trend compare with a public benchmark (e.g. Sandia flames); the flamelet library reader is documented
-  - note: PARTIAL (wave 28B, ADR 0053). Delivered as libraries (no case keys): mixture fraction with an HP equilibrium table and exact beta-PDF integration over the piecewise-linear table (mixfrac.rs), Burke-Schumann closed-form check (table within 2.6e-6 K of the closed form), steady laminar flamelet equations with chi_st continuation table and extinction trend (flamelet.rs), premixed progress variable with a phase-plane front speed (Zeldovich cubic within 3.0e-5 of the closed form) and a tabulated-source beta-PDF mean (progress.rs). NOT ATTEMPTED: any comparison with a published flame (Sandia etc.), a GRI flamelet table, G-equation, BML or thickened flame, coherent-flame, spark and ignition models, wiring of Z or the flamelet library into the case tree. Known miss: the temperature-based progress variable is not monotone for H2/air (induction period slightly endothermic); Y_H2O is used instead. P3 (stretch). Gap: flamelet-with-PDF, burning-velocity and extended coherent flame models; non-premixed and premixed combustion. SCOPE (merged review): add progress-variable and flamelet-generated manifold models, G-equation with reinitialisation, burning-velocity and coherent-flame models, spark kernels and ignition-delay models as sub-criteria; pollutants in F-222.
+  - note: PARTIAL (wave 28B, ADR 0053). Delivered as libraries (no case keys). NOT ATTEMPTED: any comparison with a
+    published flame (Sandia etc.).
+    - Delivered as libraries (no case keys):
+      - Mixture fraction with an HP equilibrium table and exact beta-PDF integration over the piecewise-linear table
+        (mixfrac.rs), Burke-Schumann closed-form check (table within 2.6e-6 K of the closed form).
+      - Steady laminar flamelet equations with chi_st continuation table and extinction trend (flamelet.rs).
+      - Premixed progress variable with a phase-plane front speed (Zeldovich cubic within 3.0e-5 of the closed form) and
+        a tabulated-source beta-PDF mean (progress.rs).
+    - NOT ATTEMPTED: any comparison with a published flame (Sandia etc.), a GRI flamelet table, G-equation, BML or
+      thickened flame, coherent-flame, spark and ignition models, wiring of Z or the flamelet library into the case
+      tree.
+    - Known miss: the temperature-based progress variable is not monotone for H2/air (induction period slightly
+      endothermic); Y_H2O is used instead.
+    - P3 (stretch). Gap: flamelet-with-PDF, burning-velocity and extended coherent flame models; non-premixed and
+      premixed combustion.
+    - SCOPE (merged review): add progress-variable and flamelet-generated manifold models, G-equation with
+      reinitialisation, burning-velocity and coherent-flame models, spark kernels and ignition-delay models as
+      sub-criteria; pollutants in F-222.
 - [~] **F-130** Radiation extensions: Monte Carlo, Rosseland, spectral bands/WSGG, scattering and solar load
   - depends on: F-052
   - acceptance: A participating-medium benchmark between plates matches the analytic result; the non-grey band model reproduces tabulated emissivity
-  - note: Partial (wave 12, ADR 0012). Delivered: Rosseland diffusion approximation (radiation.model = rosseland: Kirchhoff variable linear to 2.4e-5 and wall flux -0.003 percent against the closed form) and P1 with scattering; participating-medium plates benchmark: P1 matches the analytic P1 result to 2.6e-9 and the Milne transport asymptote to 0.41 percent at tau = 20 (the Milne constant 0.7104 and its equivalence to the plate problem are not verified against a primary source, see docs/reference-data.md). Not done (acceptance part 2 and scope): non-grey band model and tabulated emissivity, WSGG (no verifiable coefficient table), Monte Carlo, six-flux, solar load. SCOPE (merged review): add discrete transfer, six-flux, non-gray spectral models, radiometers and interphase radiation; solar acceptance: sun azimuth and elevation from the published open algorithm to 0.1 degree and flat-plate absorbed flux equals the cosine-law value.
+  - note: Partial (wave 12, ADR 0012). Not done (acceptance part 2 and scope): non-grey band model and tabulated
+    emissivity, WSGG (no verifiable coefficient table), Monte Carlo, six-flux, solar load.
+    - Delivered:
+      - Rosseland diffusion approximation (radiation.model = rosseland: Kirchhoff variable linear to 2.4e-5 and wall
+        flux -0.003 percent against the closed form) and P1 with scattering.
+      - Participating-medium plates benchmark: P1 matches the analytic P1 result to 2.6e-9 and the Milne transport
+        asymptote to 0.41 percent at tau = 20 (the Milne constant 0.7104 and its equivalence to the plate problem are
+        not verified against a primary source, see docs/reference-data.md).
+    - SCOPE (merged review): add discrete transfer, six-flux, non-gray spectral models, radiometers and interphase
+      radiation; solar acceptance: sun azimuth and elevation from the published open algorithm to 0.1 degree and
+      flat-plate absorbed flux equals the cosine-law value.
 - [x] **F-131** Surface sizing and surface-mesh generation from STL/faceted geometry (size fields, feature capture, connect/seal)
   - depends on: F-010, F-011, F-108
   - acceptance: A closed STL of a cylinder in a box meshes with curvature-based sizing; the result passes watertightness and quality checks
-  - note: Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::surface_remesh with uniform, curvature, proximity and box size fields (gradient-limited), feature-preserving split/collapse/flip/smooth remeshing projected on the input surface; checks on a sphere (Hausdorff 0.0147 vs limit 0.025, 99 percent edges within 0.7-1.4 of target, min angle 44.5 deg), cube (features and area exact), torus (chi 0, 98.8 percent edges in band) and a tagged cylinder in a box pass. One registered check missed and is an ignored known_miss test: torus volume change 4.18 percent vs 3 percent (limit under-derived: the inscribed-polygon angle allows about 5.9 percent; post-hoc bound test passes). Pipeline remesh then tetrahedralize of a cylinder in a box passes watertightness and check_mesh. NOT done: hard/soft controls, geodesic and volumetric fields, body-of-influence beyond a box, connect/seal and wrapping, anisotropic sizes, brute-force closest point (small surfaces only), CLI and case hooks. Literature attributions unverified. P3 (stretch). Gap: mesh size controls and fields, surface remeshing, connection and wrapping tools. Do not link AGPL/GPL meshers (TetGen, Gmsh) into rcfd; external-process use only. SCOPE (merged review): add curvature, proximity, hard/soft and body-of-influence size controls and geometric, volumetric and geodesic size fields; quality measures in F-233; diagnostics and wrapping in F-232. Wave 39B (ADR 0093, crates/rcfd-io/tests/stl_cylinder_in_box.rs): the cylinder in a box is now written as a two-solid ASCII STL file, read back and welded: S1 passes (closed manifold, Euler 4, 2 components, area and volume within 1e-12). The curvature-sized remesh and tetrahedralization of the STL surface are watertight (volume within 1e-10, 2 patches, positive volumes, check_mesh ok; s2b). Registered quality limits (ADR 0030 T5) MISSED, kept as ignored known-miss tests: minimum dihedral 1.84 deg vs 3.0 (the in-code surface, re-measured, gives 3.34 with the same coordinates; the difference is consistent with the remesh depending on the STL vertex numbering, cause not isolated) and radius-edge fraction 0.936 vs 0.99. Still partial on the quality clause: needs sliver removal and quality refinement in the tetrahedral mesher (F-132 scope). USER DECISION 2026-10-21: quality work queued: closing needs sliver removal and quality refinement in the tetrahedral mesher (F-132 scope), then re-run the ignored S2/S3 known misses. Wave 41D (ADR 0104, crates/rcfd-io/tests/w41d_tet_quality.rs): DONE with the opt-in tetrahedral quality pass (TetOptions::quality_sweeps = 10; constrained circumcentre insertion, interior-vertex smoothing, flips; default output bit-identical, 9 fingerprints checked). Same STL file, curvature remesh and ADR 0030 T5 limits: minimum dihedral 17.66 deg (limit 3.0), radius-edge fraction 1.0 (limit 0.99), watertight (volume 1e-10, 2 patches, check_mesh ok, patch areas 1e-10, boundary faces on same-tag input triangles, Euler 2), all non-ignored and passing; in-code surface 16.33 deg and 0.997. Numbering dependence isolated (D0-D2): the remesher depends on the vertex numbering (equal-length edges split in id order), the tetrahedral mesher does not. The ADR 0093 S2/S3 records stay ignored known misses because they run the default mesher, which still misses (1.84 deg, 0.936). USER DECISION 2026-10-22: accepted done with the opt-in quality_sweeps pass. Queued: evaluate making the pass the default, only if every existing baseline hash stays identical. Wave 42C (ADR 0107, crates/rcfd-io/tests/w42c_tet_default_eval.rs): pass evaluated as the DEFAULT and NOT switched (default stays quality_sweeps = 0). With the default at 10 in a scratch tree the whole workspace passes (1961 / 0 / 578) and the rcfd-api baseline hashes are unchanged (no API/CLI path reaches tetrahedralize), but the registered rule blocks: the ignored ADR 0030 record t5_torus_known_miss changes (0.634 -> 1.000) and the cost limits miss (tetrahedralize time factor 3.05 on this mesh, marginal, and 4.81 on a 10614-cell mesh, limit 3.0; added time per cell grows 2.79x, limit 2.0). 7 of the 9 W0 fingerprints would change (not re-recorded). Safety holds with the pass (no inverted cell, volume error 8e-16, check_mesh ok on 1k and 10k cells; the 10k mesh meets T5: 14.2 deg, 1.0). Switching needs a user decision on the t5 torus record and a cheaper (non-superlinear) pass or acceptance of about 3-5x cost. stl_cylinder_in_box.rs now writes one temp STL per call.
+  - note: USER DECISION 2026-10-22: accepted done with the opt-in quality_sweeps pass (Wave 41D, ADR 0104). The default
+    mesher still misses the ADR 0030 T5 limits (1.84 deg, 0.936), and Wave 42C (ADR 0107) evaluated the pass as the
+    DEFAULT and did NOT switch it (default stays quality_sweeps = 0).
+    - Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::surface_remesh with uniform, curvature,
+      proximity and box size fields (gradient-limited), feature-preserving split/collapse/flip/smooth remeshing
+      projected on the input surface.
+    - Checks pass on:
+      - A sphere (Hausdorff 0.0147 vs limit 0.025, 99 percent edges within 0.7-1.4 of target, min angle 44.5 deg).
+      - A cube (features and area exact).
+      - A torus (chi 0, 98.8 percent edges in band).
+      - A tagged cylinder in a box.
+    - One registered check missed and is an ignored known_miss test: torus volume change 4.18 percent vs 3 percent
+      (limit under-derived: the inscribed-polygon angle allows about 5.9 percent; post-hoc bound test passes).
+    - Pipeline remesh then tetrahedralize of a cylinder in a box passes watertightness and check_mesh.
+    - NOT done: hard/soft controls, geodesic and volumetric fields, body-of-influence beyond a box, connect/seal and
+      wrapping, anisotropic sizes, brute-force closest point (small surfaces only), CLI and case hooks.
+    - Literature attributions unverified.
+    - P3 (stretch). Gap: mesh size controls and fields, surface remeshing, connection and wrapping tools. Do not link
+      AGPL/GPL meshers (TetGen, Gmsh) into rcfd; external-process use only.
+    - SCOPE (merged review): add curvature, proximity, hard/soft and body-of-influence size controls and geometric,
+      volumetric and geodesic size fields; quality measures in F-233; diagnostics and wrapping in F-232.
+    - Wave 39B (ADR 0093, crates/rcfd-io/tests/stl_cylinder_in_box.rs):
+      - The cylinder in a box is now written as a two-solid ASCII STL file, read back and welded: S1 passes (closed
+        manifold, Euler 4, 2 components, area and volume within 1e-12).
+      - The curvature-sized remesh and tetrahedralization of the STL surface are watertight (volume within 1e-10, 2
+        patches, positive volumes, check_mesh ok; s2b).
+      - Registered quality limits (ADR 0030 T5) MISSED, kept as ignored known-miss tests: minimum dihedral 1.84 deg vs
+        3.0 (the in-code surface, re-measured, gives 3.34 with the same coordinates; the difference is consistent with
+        the remesh depending on the STL vertex numbering, cause not isolated) and radius-edge fraction 0.936 vs 0.99.
+      - Still partial on the quality clause: needs sliver removal and quality refinement in the tetrahedral mesher
+        (F-132 scope).
+    - USER DECISION 2026-10-21: quality work queued: closing needs sliver removal and quality refinement in the
+      tetrahedral mesher (F-132 scope), then re-run the ignored S2/S3 known misses.
+    - Wave 41D (ADR 0104, crates/rcfd-io/tests/w41d_tet_quality.rs): DONE with the opt-in tetrahedral quality pass
+      (TetOptions::quality_sweeps = 10; constrained circumcentre insertion, interior-vertex smoothing, flips; default
+      output bit-identical, 9 fingerprints checked).
+      - Same STL file, curvature remesh and ADR 0030 T5 limits: minimum dihedral 17.66 deg (limit 3.0), radius-edge
+        fraction 1.0 (limit 0.99), watertight (volume 1e-10, 2 patches, check_mesh ok, patch areas 1e-10, boundary faces
+        on same-tag input triangles, Euler 2), all non-ignored and passing; in-code surface 16.33 deg and 0.997.
+      - Numbering dependence isolated (D0-D2): the remesher depends on the vertex numbering (equal-length edges split in
+        id order), the tetrahedral mesher does not.
+      - The ADR 0093 S2/S3 records stay ignored known misses because they run the default mesher, which still misses
+        (1.84 deg, 0.936).
+    - USER DECISION 2026-10-22: accepted done with the opt-in quality_sweeps pass. Queued: evaluate making the pass the
+      default, only if every existing baseline hash stays identical.
+    - Wave 42C (ADR 0107, crates/rcfd-io/tests/w42c_tet_default_eval.rs): pass evaluated as the DEFAULT and NOT switched
+      (default stays quality_sweeps = 0).
+      - With the default at 10 in a scratch tree the whole workspace passes (1961 / 0 / 578) and the rcfd-api baseline
+        hashes are unchanged (no API/CLI path reaches tetrahedralize), but the registered rule blocks: the ignored
+        ADR 0030 record t5_torus_known_miss changes (0.634 -> 1.000) and the cost limits miss (tetrahedralize time
+        factor 3.05 on this mesh, marginal, and 4.81 on a 10614-cell mesh, limit 3.0; added time per cell grows 2.79x,
+        limit 2.0).
+      - 7 of the 9 W0 fingerprints would change (not re-recorded).
+      - Safety holds with the pass (no inverted cell, volume error 8e-16, check_mesh ok on 1k and 10k cells; the 10k
+        mesh meets T5: 14.2 deg, 1.0).
+      - Switching needs a user decision on the t5 torus record and a cheaper (non-superlinear) pass or acceptance of
+        about 3-5x cost.
+      - stl_cylinder_in_box.rs now writes one temp STL per call.
 - [~] **F-132** Tet/polyhedral volume mesh generation from a closed surface mesh, with polyhedral dual conversion
   - depends on: F-131, F-102
   - acceptance: Meshes closed STL geometry with boundary layers; cell quality within thresholds; polyhedral conversion preserves volume
-  - note: Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::tetmesh with exact predicates; Delaunay tetrahedralization of a closed surface with boundary recovery, radius-edge refinement, size control, bistellar sliver improvement, conversion to rcfd Mesh with tag patches. Cube, sphere (volume to 1e-10), torus and cylinder-in-box meshes pass euler/volume/check_mesh, determinism and located error messages; Laplace smoke test on the generated sphere mesh gives relative L2 error 1.1e-2 (limit 0.05). One registered check missed and is an ignored known_miss test: radius-edge fraction on the coarse anisotropic torus 0.634 vs 0.99 (boundary splitting off by default because it does not terminate on small-angle surfaces); after surface remeshing the fraction is 1.0. Slivers remain (cylinder in box: min dihedral 3.3 deg). NOT done: boundary layers, polyhedral dual conversion (F-102 stays todo), hexcore (F-234), sliver optimisation, CLI and case hooks. Literature attributions unverified. P4 (long-term). Gap: volume fill (tet, poly, hexcore). Implement from public algorithms; no GPL/AGPL linkage. SCOPE (merged review): Cartesian-core fill and prism integration are tracked in F-234. Wave 41D (ADR 0104): opt-in quality pass added to tetrahedralize (TetOptions::quality_sweeps, default 0 = unchanged output): constrained circumcentre insertion for radius-edge failures, interior-vertex smoothing checked with exact orient3d, flips. Cylinder in a box from the STL file: minimum dihedral 17.66 deg and radius-edge fraction 1.0 (default 1.84 deg, 0.936); held-out cube, sphere and remeshed torus meet the T5 limits with the pass (torus 16.73 deg, 1.0). The polydual remark above is stale: polyhedral dual conversion exists (rcfd_mesh::polydual, ADR 0054). Still partial: no boundary layers on a tetrahedral mesh of STL geometry are tested; the pass is a bounded heuristic without guarantees (no sliver exudation). Wave 42C (ADR 0107): the pass stays opt-in (cost 3.05x at 1k cells, 4.81x at 10k cells, superlinear; see F-131); with the pass a 10614-cell STL cylinder-in-box mesh meets T5 (14.2 deg, fraction 1.0) with no inverted cell. Boundary layers still untested. USER DECISION 2026-10-22: the tet quality pass (quality_sweeps) stays default 0 (wave 42C, ADR 0107: t5 torus record and cost limits block). Enable it explicitly where the case-level STL meshing step is wired; fixing the superlinear cost is a backlog item.
+  - note: Partial. No boundary layers on a tetrahedral mesh of STL geometry are tested; the pass is a bounded heuristic
+    without guarantees (no sliver exudation). USER DECISION 2026-10-22: the tet quality pass (quality_sweeps) stays
+    default 0.
+    - Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::tetmesh with exact predicates; Delaunay
+      tetrahedralization of a closed surface with boundary recovery, radius-edge refinement, size control, bistellar
+      sliver improvement, conversion to rcfd Mesh with tag patches.
+    - Cube, sphere (volume to 1e-10), torus and cylinder-in-box meshes pass euler/volume/check_mesh, determinism and
+      located error messages.
+    - Laplace smoke test on the generated sphere mesh gives relative L2 error 1.1e-2 (limit 0.05).
+    - One registered check missed and is an ignored known_miss test: radius-edge fraction on the coarse anisotropic
+      torus 0.634 vs 0.99 (boundary splitting off by default because it does not terminate on small-angle surfaces);
+      after surface remeshing the fraction is 1.0.
+    - Slivers remain (cylinder in box: min dihedral 3.3 deg).
+    - NOT done: boundary layers, polyhedral dual conversion (F-102 stays todo), hexcore (F-234), sliver optimisation,
+      CLI and case hooks.
+    - Literature attributions unverified.
+    - P4 (long-term). Gap: volume fill (tet, poly, hexcore). Implement from public algorithms; no GPL/AGPL linkage.
+    - SCOPE (merged review): Cartesian-core fill and prism integration are tracked in F-234.
+    - Wave 41D (ADR 0104):
+      - Opt-in quality pass added to tetrahedralize (TetOptions::quality_sweeps, default 0 = unchanged output):
+        constrained circumcentre insertion for radius-edge failures, interior-vertex smoothing checked with exact
+        orient3d, flips.
+      - Cylinder in a box from the STL file: minimum dihedral 17.66 deg and radius-edge fraction 1.0 (default 1.84 deg,
+        0.936); held-out cube, sphere and remeshed torus meet the T5 limits with the pass (torus 16.73 deg, 1.0).
+      - The polydual remark above is stale: polyhedral dual conversion exists (rcfd_mesh::polydual, ADR 0054).
+      - Still partial: no boundary layers on a tetrahedral mesh of STL geometry are tested; the pass is a bounded
+        heuristic without guarantees (no sliver exudation).
+    - Wave 42C (ADR 0107): the pass stays opt-in (cost 3.05x at 1k cells, 4.81x at 10k cells, superlinear; see F-131);
+      with the pass a 10614-cell STL cylinder-in-box mesh meets T5 (14.2 deg, fraction 1.0) with no inverted cell.
+      Boundary layers still untested.
+    - USER DECISION 2026-10-22: the tet quality pass (quality_sweeps) stays default 0 (wave 42C, ADR 0107: t5 torus
+      record and cost limits block). Enable it explicitly where the case-level STL meshing step is wired; fixing the
+      superlinear cost is a backlog item.
 - [~] **F-133** Blade-passage mesher for turbomachinery (template topologies from hub/shroud/profile curves)
   - depends on: F-108, F-012
   - acceptance: A public blade geometry (e.g. NASA Rotor 37) yields a structured passage mesh with acceptable angle/expansion ratios
-  - note: P4 (long-term). Gap: turbomachinery blade-passage topology templates and curve-file inputs. SCOPE (merged review): add partial and conformal tip-clearance modes, splitter and tandem blades, y+-based first offset, secondary passages, curve-file inputs and spanwise distribution control. WAVE 32A (ADR 0065, rcfd-mesh fan.rs and fan_mesh.rs, case generator axial_fan_sector, cases/axial_fan_sector): PARTIAL, a lower-fidelity route that is NOT the template-topology mesher and does NOT meet the acceptance (no public blade such as Rotor 37, no acceptable angle/expansion ratios). Delivered: parametric axial-fan geometry with located validation errors (hub/tip radius, tip clearance, blade count, axial extent, per-station chord, stagger, camber, thickness, sweep, lean; NACA 4-digit and circular-arc sections), a watertight blade surface triangulation (area and volume order 2.0), and a hex-only periodic single-passage mesh (H-grid with a slit, blunt axially truncated blade edges) with inlet/outlet/hub/shroud/blade/seam patches accepted by the rotational-periodic machinery (node rotation mismatch 1.1e-16 m), exact y+-based first-cell and growth stacks (4.5e-13 relative), cell zone rotor and volume conservation to 1.8e-16. Measured misses (ignored known_miss tests, limits unchanged): quality gates, set-up A non-orthogonality 73.4 deg (limit 70), skewness 7.57 (2.0), aspect 810 (300), set-up B 89.8 deg, 66, 19123 (3000); first-cell exactness at y+ 1 reads 9.9e-12 against 1e-12 (f64 coordinate resolution, the corrected test uses that bound); G1 400-point polygon area 1.03e-5 against 1e-5 (the corrected 1000-point test passes); S2 thin-blade L2 0.094 at nu 1e-3 against 0.08 (corrected nu 1e-4 gives 0.057, 0.053, 0.051, monotone, residuals not at tolerance after 1500 iterations); S3 m_in + m_out 4.4e-5 of m_in against 1e-6 because the mass flows of the two seam patches do not cancel exactly (the balance over all patches is 7e-16). Limits: the absolute-formulation mrf source is refused on the sector, the relative-frame rotating_frame source is used; no fan performance prediction and no comparison with published fan data. Not done: O-grid or C-grid topology that removes the sheared columns, rounded or sharp edges, splitter blades, partial tip clearance, curve-file input, y+ check of a converged solution.
+  - note: P4 (long-term). Gap: turbomachinery blade-passage topology templates and curve-file inputs. WAVE 32A
+    (ADR 0065): PARTIAL, a lower-fidelity route that is NOT the template-topology mesher and does NOT meet the
+    acceptance (no public blade such as Rotor 37, no acceptable angle/expansion ratios).
+    - SCOPE (merged review): add partial and conformal tip-clearance modes, splitter and tandem blades, y+-based first
+      offset, secondary passages, curve-file inputs and spanwise distribution control.
+    - WAVE 32A (ADR 0065, rcfd-mesh fan.rs and fan_mesh.rs, case generator axial_fan_sector, cases/axial_fan_sector):
+      PARTIAL, a lower-fidelity route that is NOT the template-topology mesher and does NOT meet the acceptance (no
+      public blade such as Rotor 37, no acceptable angle/expansion ratios).
+      - Delivered:
+        - Parametric axial-fan geometry with located validation errors (hub/tip radius, tip clearance, blade count,
+          axial extent, per-station chord, stagger, camber, thickness, sweep, lean; NACA 4-digit and circular-arc
+          sections).
+        - A watertight blade surface triangulation (area and volume order 2.0).
+        - A hex-only periodic single-passage mesh (H-grid with a slit, blunt axially truncated blade edges) with
+          inlet/outlet/hub/shroud/blade/seam patches accepted by the rotational-periodic machinery (node rotation
+          mismatch 1.1e-16 m), exact y+-based first-cell and growth stacks (4.5e-13 relative), cell zone rotor and
+          volume conservation to 1.8e-16.
+      - Measured misses (ignored known_miss tests, limits unchanged):
+        - Quality gates, set-up A non-orthogonality 73.4 deg (limit 70), skewness 7.57 (2.0), aspect 810 (300), set-up B
+          89.8 deg, 66, 19123 (3000).
+        - First-cell exactness at y+ 1 reads 9.9e-12 against 1e-12 (f64 coordinate resolution, the corrected test uses
+          that bound).
+        - G1 400-point polygon area 1.03e-5 against 1e-5 (the corrected 1000-point test passes).
+        - S2 thin-blade L2 0.094 at nu 1e-3 against 0.08 (corrected nu 1e-4 gives 0.057, 0.053, 0.051, monotone,
+          residuals not at tolerance after 1500 iterations).
+        - S3 m_in + m_out 4.4e-5 of m_in against 1e-6 because the mass flows of the two seam patches do not cancel
+          exactly (the balance over all patches is 7e-16).
+      - Limits: the absolute-formulation mrf source is refused on the sector, the relative-frame rotating_frame source
+        is used; no fan performance prediction and no comparison with published fan data.
+      - Not done: O-grid or C-grid topology that removes the sheared columns, rounded or sharp edges, splitter blades,
+        partial tip clearance, curve-file input, y+ check of a converged solution.
 - [ ] **F-134** Overset (chimera) mesh coupling
   - depends on: F-063
   - acceptance: A cylinder moving through a background mesh conserves mass and gives drag within 5 percent of a body-fitted run
@@ -500,23 +3320,110 @@ Added after comparing this roadmap with a feature survey of a commercial CFD sui
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
   - depends on: F-110, F-029
   - acceptance: Planar contraction and Poiseuille start-up compare with analytic Oldroyd-B solutions
-  - note: P4 (long-term). Gap: differential viscoelastic model set; models are in the public rheology literature. WAVE 27C (ADR 0051), PARTIAL at library level. rcfd-fv viscoelastic: Oldroyd-B, Giesekus, simplified linear PTT, FENE-P with conformation and log-conformation (divided-difference matrix-log chain rule, RK4 local advance), coupled 2-D channel solver (PimpleSolver with nu_s+nu_p implicit, div(tau_p)-nu_p lap u explicit source, first order in time). Measured (see ADR addendum A): homogeneous start-up/steady shear/extension at Wi_e 0.4, 0.5, 0.6 and positive definiteness pass; Poiseuille start-up vs modal series 6.6e-3 (limit 2e-2), steady Oldroyd-B vs Newtonian 6.5e-3, shear-thinning profiles 2.5e-3..6.9e-3. Misses kept as ignored known_miss tests: V1 instantaneous-value metric 8.4e-9 (limit 1e-9, corrected test uses viscometric scale), recalled Giesekus closed form wrong (5.1e-3), P3 centre-velocity sign. Not delivered: planar contraction / cylinder benchmark (the item acceptance names a contraction: NOT attempted), case-tree wiring, stress inflow/outflow BCs, second-order stress transport, 3-D, high-Wi stability claims. FENE-P normalisation unverified.
+  - note: P4 (long-term). Gap: differential viscoelastic model set; models are in the public rheology literature.
+    WAVE 27C (ADR 0051), PARTIAL at library level. The planar contraction the item acceptance names is NOT attempted.
+    - rcfd-fv viscoelastic: Oldroyd-B, Giesekus, simplified linear PTT, FENE-P with conformation and log-conformation
+      (divided-difference matrix-log chain rule, RK4 local advance), coupled 2-D channel solver (PimpleSolver with
+      nu_s+nu_p implicit, div(tau_p)-nu_p lap u explicit source, first order in time).
+    - Measured (see ADR addendum A):
+      - Homogeneous start-up/steady shear/extension at Wi_e 0.4, 0.5, 0.6 and positive definiteness pass.
+      - Poiseuille start-up vs modal series 6.6e-3 (limit 2e-2).
+      - Steady Oldroyd-B vs Newtonian 6.5e-3.
+      - Shear-thinning profiles 2.5e-3..6.9e-3.
+    - Misses kept as ignored known_miss tests: V1 instantaneous-value metric 8.4e-9 (limit 1e-9, corrected test uses
+      viscometric scale), recalled Giesekus closed form wrong (5.1e-3), P3 centre-velocity sign.
+    - Not delivered: planar contraction / cylinder benchmark (the item acceptance names a contraction: NOT attempted),
+      case-tree wiring, stress inflow/outflow BCs, second-order stress transport, 3-D, high-Wi stability claims.
+    - FENE-P normalisation unverified.
 - [x] **F-136** Aeroacoustic far-field via Ffowcs Williams-Hawkings integral post-processing
   - depends on: F-029, F-071
   - acceptance: Rotating-dipole and monopole analytic far-field pressure reproduced; works from sampled surface data files
-  - note: Partial (ADR 0013, crates/rcfd-post/src/fwh.rs, `rcfd acoustics`, docs/reactor-and-acoustics.md; criteria registered before running, all met on the first run). Delivered: Farassat/Brentner formulation 1A on a permeable (or impermeable) data surface in a uniform medium at rest, surfaces moving on a prescribed subsonic path, retarded time by Newton iteration, thickness and loading terms, valid-window and subsonic guards, sampled-surface JSON file format (rcfd-fwh-surface v1) with located errors, CLI observer time series to CSV. Measured against exact fields (rho0 1.2, c0 340, 64 samples per period, limit 1e-3 RMS-relative each): stationary non-compact monopole r=3/10/50 m 4.1e-6/4.4e-6/4.5e-6; 1/r decay spread 2.7e-8; retarded-time phase error 8.8e-9 rad; dipole directivity error 2.0e-9, series 4.9e-6; rotating monopole (tip Mach 0.3) 4.6e-6 in plane and out of plane; rotating dipole realised as a rotating pair of opposite monopoles 1.0e-5; CLI equals library on a sampled file to 0 relative difference (limit 1e-12). Not done (reason for partial): the rotating dipole is a monopole pair, not a rotating point force with an exact non-compact velocity field; no volume quadrupole term; no uniform-flow (convective) formulation; no sampling of a running CFD solution into surface files (the file format is the interface, the F-029/F-071 solver side is not wired); no measured comparison with a CFD case. The formulas are from memory of the published papers and are validated only by the analytic checks. SCOPE (merged review): add on-the-fly versus post-process evaluation, convective effects, moving receivers, source-surface pruning, band output; acoustic boundary options in F-243. Wave 40A (ADR 0097): the rotating dipole is now a rotating point force (W3, ADR 0066) checked against an independent first-principles reference, the direct retarded-time solution p' = -d/dx_i[F_i/(4 pi r (1 - M_r))]_ret with its own Newton retarded time and an 8th-order observer-space difference (no FW-H or rotor code): FW-H series error 1.9e-8 to 3.4e-8 for B = 1 and 3 at r = 2000 m (45/90/135 degrees) and r = 15 m (limit 1e-3), harmonics to 2.3e-7 (limit 1e-3); reference self-check 1.1e-13, step study <= 4.2e-10. The in-repo Gutin-type formula matches the same reference to 4.0e-5 (limit 1e-2); its attribution to Gutin/Lowson stays UNVERIFIED. Done against the acceptance (the 'monopole pair' wording above is superseded). Still not done: volume quadrupole, convective FW-H (F-243 known misses), solver-side surface sampling, a measured CFD case.
+  - note: Done against the acceptance (Wave 40A, ADR 0097). Still not done: volume quadrupole, convective FW-H (F-243
+    known misses), solver-side surface sampling, a measured CFD case.
+    - Partial (ADR 0013, crates/rcfd-post/src/fwh.rs, `rcfd acoustics`, docs/reactor-and-acoustics.md; criteria
+      registered before running, all met on the first run).
+    - Delivered:
+      - Farassat/Brentner formulation 1A on a permeable (or impermeable) data surface in a uniform medium at rest.
+      - Surfaces moving on a prescribed subsonic path.
+      - Retarded time by Newton iteration.
+      - Thickness and loading terms.
+      - Valid-window and subsonic guards.
+      - Sampled-surface JSON file format (rcfd-fwh-surface v1) with located errors.
+      - CLI observer time series to CSV.
+    - Measured against exact fields (rho0 1.2, c0 340, 64 samples per period, limit 1e-3 RMS-relative each):
+      - Stationary non-compact monopole r=3/10/50 m 4.1e-6/4.4e-6/4.5e-6.
+      - 1/r decay spread 2.7e-8.
+      - Retarded-time phase error 8.8e-9 rad.
+      - Dipole directivity error 2.0e-9, series 4.9e-6.
+      - Rotating monopole (tip Mach 0.3) 4.6e-6 in plane and out of plane.
+      - Rotating dipole realised as a rotating pair of opposite monopoles 1.0e-5.
+      - CLI equals library on a sampled file to 0 relative difference (limit 1e-12).
+    - Not done (reason for partial): the rotating dipole is a monopole pair, not a rotating point force with an exact
+      non-compact velocity field; no volume quadrupole term; no uniform-flow (convective) formulation; no sampling of a
+      running CFD solution into surface files (the file format is the interface, the F-029/F-071 solver side is not
+      wired); no measured comparison with a CFD case.
+    - The formulas are from memory of the published papers and are validated only by the analytic checks.
+    - SCOPE (merged review): add on-the-fly versus post-process evaluation, convective effects, moving receivers,
+      source-surface pruning, band output; acoustic boundary options in F-243.
+    - Wave 40A (ADR 0097):
+      - The rotating dipole is now a rotating point force (W3, ADR 0066) checked against an independent first-principles
+        reference, the direct retarded-time solution p' = -d/dx_i[F_i/(4 pi r (1 - M_r))]_ret with its own Newton
+        retarded time and an 8th-order observer-space difference (no FW-H or rotor code).
+      - FW-H series error 1.9e-8 to 3.4e-8 for B = 1 and 3 at r = 2000 m (45/90/135 degrees) and r = 15 m (limit 1e-3),
+        harmonics to 2.3e-7 (limit 1e-3); reference self-check 1.1e-13, step study <= 4.2e-10.
+      - The in-repo Gutin-type formula matches the same reference to 4.0e-5 (limit 1e-2); its attribution to
+        Gutin/Lowson stays UNVERIFIED.
+      - Done against the acceptance (the 'monopole pair' wording above is superseded).
+      - Still not done: volume quadrupole, convective FW-H (F-243 known misses), solver-side surface sampling, a
+        measured CFD case.
 - [~] **F-137** Adjoint-based sensitivities and shape morphing for gradient-based design
   - depends on: F-028, F-095
   - acceptance: Drag sensitivity of a 2D duct with respect to a few shape parameters matches finite differences within 5 percent
-  - note: P4 (long-term). Gap: gradient-based (adjoint) optimisation and geometry-parameter design tools. SCOPE (merged review): add observables (forces, moments, centre of pressure, cumulative), RBF morphing, and shape, topology and turbulence-coefficient optimiser types with multi-objective support. WAVE 38D (ADR 0091, done): `rcfd_api::design::adjoint` computes shape sensitivities of converged steady laminar SIMPLE/SIMPLEC solutions by a fixed-point discrete adjoint with a finite-difference-assembled dense Jacobian of one outer iteration ((I - G_X)^T lambda = J_X^T, dJ/da = J_a + lambda^T G_a; at a converged fixed point this is the sensitivity of the discrete residual root, independent of relaxation; chosen over a continuous adjoint (inconsistent with the discrete primal at O(h)) and a hand-transposed SIMPLE adjoint (too large) by a registered comparison), with free-form-deformation morphing (`Ffd`, Bernstein lattice, interior nodes follow) and `optim::projected_gradient` (bound-constrained steepest descent, Armijo) as the gradient option of the design loop. Measured on a 2D duct (40 x 10, Re 20, SIMPLEC upwind, three FFD bump parameters): adjoint derivatives of the pressure drop and the wall x-drag match central differences of converged solutions (h 1e-3; step study against 2e-3 agrees to 2.3e-6, noise floor 3.5e-10 relative) to 1.1e-6 relative at worst against the 5 percent limit; state-step sensitivity 2.4e-7; three projected-gradient iterations lower the pressure drop from 2.684 to 2.294. Accurate for the discrete objective on the given mesh and settings, not the mesh-converged quantity. Cost: one gradient (N = 2050) 6.1 s against 0.33 s per primal, so it pays off beyond about 9 parameters; dense, so small meshes only (max_state 4000). NOT delivered: RBF morphing, observables beyond pressure drop and wall force (moments, centre of pressure, cumulative), turbulent gradients (refused; no frozen-turbulence variant), body-force, driver, pseudo-controller and face-jump cases (refused), large meshes (sparse or matrix-free transposed solve), gradients through studies, case files, service or MCP tools, topology, turbulence-coefficient and multi-objective gradient optimisers; only one solver configuration verified. USER DECISION 2026-10-21: set to partial: the title promises shape morphing for gradient-based design and RBF morphing is not delivered, although the written acceptance (adjoint drag vs finite differences) is met.
+  - note: P4 (long-term). Gap: gradient-based (adjoint) optimisation and geometry-parameter design tools.
+    USER DECISION 2026-10-21: set to partial: the title promises shape morphing for gradient-based design and RBF
+    morphing is not delivered, although the written acceptance (adjoint drag vs finite differences) is met.
+    - SCOPE (merged review): add observables (forces, moments, centre of pressure, cumulative), RBF morphing, and shape,
+      topology and turbulence-coefficient optimiser types with multi-objective support.
+    - WAVE 38D (ADR 0091, done):
+      - `rcfd_api::design::adjoint` computes shape sensitivities of converged steady laminar SIMPLE/SIMPLEC solutions by
+        a fixed-point discrete adjoint with a finite-difference-assembled dense Jacobian of one outer iteration ((I -
+        G_X)^T lambda = J_X^T, dJ/da = J_a + lambda^T G_a).
+      - At a converged fixed point this is the sensitivity of the discrete residual root, independent of relaxation.
+      - A registered comparison chose it over a continuous adjoint (inconsistent with the discrete primal at O(h)) and a
+        hand-transposed SIMPLE adjoint (too large).
+      - It comes with free-form-deformation morphing (`Ffd`, Bernstein lattice, interior nodes follow) and
+        `optim::projected_gradient` (bound-constrained steepest descent, Armijo) as the gradient option of the design
+        loop.
+      - Measured on a 2D duct (40 x 10, Re 20, SIMPLEC upwind, three FFD bump parameters):
+        - Adjoint derivatives of the pressure drop and the wall x-drag match central differences of converged solutions
+          (h 1e-3; step study against 2e-3 agrees to 2.3e-6, noise floor 3.5e-10 relative) to 1.1e-6 relative at worst
+          against the 5 percent limit.
+        - State-step sensitivity 2.4e-7.
+        - Three projected-gradient iterations lower the pressure drop from 2.684 to 2.294.
+      - Accurate for the discrete objective on the given mesh and settings, not the mesh-converged quantity.
+      - Cost: one gradient (N = 2050) 6.1 s against 0.33 s per primal, so it pays off beyond about 9 parameters; dense,
+        so small meshes only (max_state 4000).
+      - NOT delivered: RBF morphing, observables beyond pressure drop and wall force (moments, centre of pressure,
+        cumulative), turbulent gradients (refused; no frozen-turbulence variant), body-force, driver, pseudo-controller
+        and face-jump cases (refused), large meshes (sparse or matrix-free transposed solve), gradients through studies,
+        case files, service or MCP tools, topology, turbulence-coefficient and multi-objective gradient optimisers; only
+        one solver configuration verified.
+    - USER DECISION 2026-10-21: set to partial: the title promises shape morphing for gradient-based design and RBF
+      morphing is not delivered, although the written acceptance (adjoint drag vs finite differences) is met.
 - [ ] **F-138** Harmonic balance and transient blade row (profile/time/Fourier transformation) for turbomachinery unsteady cases
   - depends on: F-126, F-060
   - acceptance: A single-stage unsteady case reproduces the full-annulus time-accurate result within tolerance at a fraction of the cost
-  - note: P4 (long-term). Gap: transient blade row models and a harmonic balance scheme. SCOPE (merged review): add aerodamping versus nodal diameter, generalised-force outputs, interblade phase angle and phase-shifted methods. Acceptance addition: an oscillating flat-plate cascade gives aerodynamic damping versus interblade phase angle within 10 percent of published curves.
+  - note: P4 (long-term). Gap: transient blade row models and a harmonic balance scheme. SCOPE (merged review): add
+    aerodamping versus nodal diameter, generalised-force outputs, interblade phase angle and phase-shifted methods.
+    Acceptance addition: an oscillating flat-plate cascade gives aerodynamic damping versus interblade phase angle
+    within 10 percent of published curves.
 - [ ] **F-139** Multiphysics co-simulation participant interface (data transfer, coupling time steps) for external structural solvers
   - depends on: F-085, F-063
   - acceptance: A mock structural participant exchanges wall displacement/force with rcfd and converges a coupled iteration; the protocol is documented
-  - note: P4 (long-term). Gap: multi-physics system coupling and intrinsic FSI options. SCOPE (merged review): add conservative and profile-preserving mapping, RBF mapping, unmapped-value policy, ramping, relaxation, quasi-Newton stabilisation, extrapolated step initialisation and simultaneous multi-participant update; functional-mock-up import in F-242.
+  - note: P4 (long-term). Gap: multi-physics system coupling and intrinsic FSI options. SCOPE (merged review): add
+    conservative and profile-preserving mapping, RBF mapping, unmapped-value policy, ramping, relaxation, quasi-Newton
+    stabilisation, extrapolated step initialisation and simultaneous multi-participant update; functional-mock-up import
+    in F-242.
 
 ## Revision additions (F-200 to F-243)
 
@@ -525,79 +3432,569 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [~] **F-200** Boundary-condition catalogue completion: mass-flow inlets/outlets, total-pressure inlet with direction and swirl, outflow with flow-rate weights, vents with loss coefficients, outlet-to-inlet recirculation pair, backflow direction and pressure options, target-mass-flow and radial-equilibrium pressure outlets, reverse-flow prevention, opening/entrainment-type boundaries, outlet pressure averaging and mass-flow update options
   - depends on: F-020, F-062, F-107
   - acceptance: Hagen-Poiseuille pipe and channel with prescribed mass flow reproduce the analytic pressure drop within 1 percent; a swirling pipe with a radial-equilibrium outlet matches the closed-form pressure profile dp/dr = rho w^2 / r; mass is conserved to solver tolerance for every boundary kind
-  - note: Wave 16B, PARTIAL (ADR 0022, commits fed2628 and 52bfe09). Built: boundaries.<patch>.bc_kind = mass_flow (exact flux, profile expression, direction, swirl, outlet or inlet, outlet-to-inlet recirculation pair) | outflow (flow-rate weights, reverse-flow prevention) | pressure_outlet (backflow direction and static/total pressure options, reverse-flow prevention, area pressure averaging) | opening (entrainment) | vent (loss coefficient, both directions) | total_pressure_inlet (direction, swirl) | radial_equilibrium_outlet (hub or area-mean reference) | target_mass_flow_outlet (bernoulli update); rcfd-fv Directed and Switched conditions and outlet helpers; located validation (V1-V14), turbulence role and inlet speed for the new kinds, docs/case-schema.md. Constant-density segregated kernels only (simple, simplec, piso, pimple). Checks were registered in the ADR before any run. PASS: L1-L6 library (<= 2.2e-16 except the 1.58e-5 free-vortex trapezoid, limit 1e-4); A1 flux exact 1.4e-16 (1e-12); A2/A2b plane Poiseuille dp/dx error 0.498 % (limit 1 %) and profile 2.5e-3 (1.5e-2); A3 annular Hagen-Poiseuille error 0.398 % (1 %); A4-A7 swirl, direction, recirculation pair (4e-13 against 1e-8) and turbulence inlet values; A8 located errors; B1-B4 outflow shares to 4.4e-16 (1e-10); C1, C4, C5 (C5 trivially at rest), D3; accuracy of C2, C3, D1, D2 (<= 1.4e-9 against 1e-5, pressure <= 7.3e-11) and E2 (outlet pressure 0.41 % of range (3 %), u_theta 0.03 % (3 %), mid-length pressure 2.67 % (3 %, tightest), discrete balance 2.3e-15 (1e-8)) under a POST-HOC settled-field criterion and, for C2, C3, D1, D2, pseudo-time stepping; F1 bernoulli m_out error 1.4e-15 (1e-3) and F2 slope 0.498 % (1 %); T1 pimple 5.6e-16 (1e-12); mass conservation <= 1.2e-12 (1e-9) for every listed case; baseline hashes unchanged. MISSES (three): (1) F1 secant (registered 1e-4 in 6000 iterations) diverges, ignored test f1_f2_target_mass_flow_outlet_secant_known_miss; cause: the secant slope is taken from iterates while the flow still spins up and the registered 1000x clip turns one spurious slope into an overshoot; (2) C3 reversed K = 0 does not settle within the registered 6000 iterations (settles after 23174, post-hoc observation), ignored test c3_vent_reversed_k0_known_miss; (3) registered residual convergence (plain simplec, residual targets 1e-12) is NOT MET for C2, C3, D1, D2 and E2, ignored tests *_as_registered_known_miss. No parameter tuned to hide any of them. Deviations disclosed in the ADR addendum: C2, C3, D1, D2 and E2 use a post-hoc settled-field criterion (change <= 1e-10, threshold loosened from 1e-12 once) instead of residual targets, and C2, C3, D1, D2 pseudo-time stepping because plain SIMPLEC from rest diverges (an existing-condition control shows the same residual floor for the uniform duct; the E2 stall is undiagnosed); C5 is trivially at rest; the Hagen-Poiseuille pipe is an annular duct (no solid-pipe mesh); R3 asserts roles, not the model wall set. Not delivered: solid circular-pipe mesh, compressible/variable-density/coupled support, recirculated-stream temperature and per-boundary thermal conditions (F-051), time-varying mass flow, pressure averaging on other kinds, a guarded secant update. Closed forms are textbook relations from memory (docs/reference-data.md wave 16B). Status stays partial. Priority P1. Size L. Area: fv,api. Extends the boundary vocabulary beyond the current field-level and compressible kinds; each new kind is a schema enum value with unit-tested closed-form cases. WAVE 29A (ADR 0055 D5, G1, G2): new pressure_update = guarded_secant for target_mass_flow_outlet (secant slope accepted only when |dm| <= 0.5 |e| and the slope lies within 0.1 to 10 times the dynamic-head slope, else the dynamic-head slope); the registered F1 case (secant limit 1e-4 in 6000 iterations) reaches m_out error 4.2e-16 in 1880 iterations, F2 slope error 0.498 % (1 %), imbalance 9.2e-13 (1e-9); the plain secant known miss is unchanged. Audit: mass-flow flux exactness, total-pressure inlet direction and backflow options already had closed-form checks in ADR 0022 (A1, A5, D2, C2, C5); no new BC kind was added in this wave. Status stays partial; the remaining not-delivered list is unchanged (compressible/coupled support, time-varying mass flow, lid-pipe mesh, recirculated-stream temperature).
+  - note: Status stays partial. Not delivered after WAVE 29A: compressible/coupled support, time-varying mass flow,
+    lid-pipe mesh, recirculated-stream temperature. Wave 16B recorded three MISSES as ignored tests: F1 secant, C3
+    reversed K = 0, and registered residual convergence for C2, C3, D1, D2 and E2.
+    - Wave 16B, PARTIAL (ADR 0022, commits fed2628 and 52bfe09).
+    - Built:
+      - boundaries.<patch>.bc_kind values:
+        - mass_flow (exact flux, profile expression, direction, swirl, outlet or inlet, outlet-to-inlet recirculation
+          pair).
+        - outflow (flow-rate weights, reverse-flow prevention).
+        - pressure_outlet (backflow direction and static/total pressure options, reverse-flow prevention, area pressure
+          averaging).
+        - opening (entrainment).
+        - vent (loss coefficient, both directions).
+        - total_pressure_inlet (direction, swirl).
+        - radial_equilibrium_outlet (hub or area-mean reference).
+        - target_mass_flow_outlet (bernoulli update).
+      - rcfd-fv Directed and Switched conditions and outlet helpers.
+      - Located validation (V1-V14), turbulence role and inlet speed for the new kinds.
+      - docs/case-schema.md.
+    - Constant-density segregated kernels only (simple, simplec, piso, pimple).
+    - Checks were registered in the ADR before any run.
+    - PASS:
+      - L1-L6 library (<= 2.2e-16 except the 1.58e-5 free-vortex trapezoid, limit 1e-4).
+      - A1 flux exact 1.4e-16 (1e-12).
+      - A2/A2b plane Poiseuille dp/dx error 0.498 % (limit 1 %) and profile 2.5e-3 (1.5e-2).
+      - A3 annular Hagen-Poiseuille error 0.398 % (1 %).
+      - A4-A7 swirl, direction, recirculation pair (4e-13 against 1e-8) and turbulence inlet values.
+      - A8 located errors.
+      - B1-B4 outflow shares to 4.4e-16 (1e-10).
+      - C1, C4, C5 (C5 trivially at rest), D3.
+      - Accuracy of C2, C3, D1, D2 (<= 1.4e-9 against 1e-5, pressure <= 7.3e-11) and E2 (outlet pressure 0.41 % of range
+        (3 %), u_theta 0.03 % (3 %), mid-length pressure 2.67 % (3 %, tightest), discrete balance 2.3e-15 (1e-8)) under
+        a POST-HOC settled-field criterion and, for C2, C3, D1, D2, pseudo-time stepping.
+      - F1 bernoulli m_out error 1.4e-15 (1e-3) and F2 slope 0.498 % (1 %).
+      - T1 pimple 5.6e-16 (1e-12).
+      - Mass conservation <= 1.2e-12 (1e-9) for every listed case.
+      - Baseline hashes unchanged.
+    - MISSES (three):
+      - (1) F1 secant (registered 1e-4 in 6000 iterations) diverges, ignored test
+        f1_f2_target_mass_flow_outlet_secant_known_miss; cause: the secant slope is taken from iterates while the flow
+        still spins up and the registered 1000x clip turns one spurious slope into an overshoot.
+      - (2) C3 reversed K = 0 does not settle within the registered 6000 iterations (settles after 23174, post-hoc
+        observation), ignored test c3_vent_reversed_k0_known_miss.
+      - (3) registered residual convergence (plain simplec, residual targets 1e-12) is NOT MET for C2, C3, D1, D2 and
+        E2, ignored tests *_as_registered_known_miss.
+    - No parameter tuned to hide any of them.
+    - Deviations disclosed in the ADR addendum:
+      - C2, C3, D1, D2 and E2 use a post-hoc settled-field criterion (change <= 1e-10, threshold loosened from 1e-12
+        once) instead of residual targets, and C2, C3, D1, D2 pseudo-time stepping because plain SIMPLEC from rest
+        diverges (an existing-condition control shows the same residual floor for the uniform duct; the E2 stall is
+        undiagnosed).
+      - C5 is trivially at rest.
+      - The Hagen-Poiseuille pipe is an annular duct (no solid-pipe mesh).
+      - R3 asserts roles, not the model wall set.
+    - Not delivered: solid circular-pipe mesh, compressible/variable-density/coupled support, recirculated-stream
+      temperature and per-boundary thermal conditions (F-051), time-varying mass flow, pressure averaging on other
+      kinds, a guarded secant update.
+    - Closed forms are textbook relations from memory (docs/reference-data.md wave 16B).
+    - Status stays partial.
+    - Priority P1. Size L. Area: fv,api. Extends the boundary vocabulary beyond the current field-level and compressible
+      kinds; each new kind is a schema enum value with unit-tested closed-form cases.
+    - WAVE 29A (ADR 0055 D5, G1, G2):
+      - New pressure_update = guarded_secant for target_mass_flow_outlet (secant slope accepted only
+        when |dm| <= 0.5 |e| and the slope lies within 0.1 to 10 times the dynamic-head slope, else the dynamic-head
+        slope).
+      - The registered F1 case (secant limit 1e-4 in 6000 iterations) reaches m_out error 4.2e-16 in 1880 iterations, F2
+        slope error 0.498 % (1 %), imbalance 9.2e-13 (1e-9).
+      - The plain secant known miss is unchanged.
+      - Audit: mass-flow flux exactness, total-pressure inlet direction and backflow options already had closed-form
+        checks in ADR 0022 (A1, A5, D2, C2, C5); no new BC kind was added in this wave.
+      - Status stays partial; the remaining not-delivered list is unchanged (compressible/coupled support, time-varying
+        mass flow, lid-pipe mesh, recirculated-stream temperature).
 - [x] **F-201** Zone source terms and fixed values for every transported quantity (mass, momentum, energy, species, scalars, turbulence quantities) and fixed-value cells
   - depends on: F-031, F-053
   - acceptance: 1D slab with a uniform volumetric heat source gives the analytic parabolic temperature profile; a species decay source matches exp(-k t); a fixed-value cell zone holds its value exactly
-  - note: Priority P1. Size M. Area: fv,api. Sources are attached to cell zones or registers; expressions allowed for magnitudes. Wave 15A (ADR 0019): zone_sources.<name> for the temperature and for scalars/species (sources by value or expression, implicit linear part, fixed-value cells, zone/box/cell zone/register) in steady simple/simplec and transient piso/pimple; slab parabola (error 2.4e-4, order 2.0), exp(-k t) decay (BDF2 order 2.07) and exact fixed-value cells all met. Not delivered: mass sources, momentum sources/fixed values by expression, sources and fixed values for turbulence quantities, variable-density and compressible engines. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P1. Size M. Area: fv,api. The audit of 2026-10-21 marks the item DONE on the acceptance text as
+    written; scope beyond it, and the caveats in the audit file, are not claimed.
+    - Sources are attached to cell zones or registers; expressions allowed for magnitudes.
+    - Wave 15A (ADR 0019): zone_sources.<name> for the temperature and for scalars/species (sources by value or
+      expression, implicit linear part, fixed-value cells, zone/box/cell zone/register) in steady simple/simplec and
+      transient piso/pimple.
+      - Slab parabola (error 2.4e-4, order 2.0), exp(-k t) decay (BDF2 order 2.07) and exact fixed-value cells all met.
+    - Not delivered: mass sources, momentum sources/fixed values by expression, sources and fixed values for turbulence
+      quantities, variable-density and compressible engines.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-202** User-defined transport equations: diffusive, Poisson, algebraic and vector variants with expression-defined coefficients
   - depends on: F-023, F-020, F-053
   - acceptance: Diffusive scalar with fixed-value walls reproduces the analytic 1D steady conduction profile with second-order grid convergence; the Poisson variant shows manufactured-solution convergence order 2
-  - note: Priority P2. Size M. Area: fv,api. Generalises the passive-scalar machinery; coefficients, sources and boundary values come from the expression language. Wave 15A (ADR 0019): scalars.<name>.equation transport|diffusive|poisson|algebraic with diffusivity/source/initial expressions, transient scalars and species in piso/pimple; diffusive profile order 2.00 (RMS 6.5e-6 at 128 cells) and Poisson manufactured solution order 2.00 met, transient eigenmode Euler/BDF2 and advection-diffusion-reaction orders as designed. Not delivered: the vector variant and coupling of user variables into properties, turbulence or other equations. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P2. Size M. Area: fv,api. The audit of 2026-10-21 marks the item DONE on the acceptance text as
+    written; scope beyond it, and the caveats in the audit file, are not claimed.
+    - Generalises the passive-scalar machinery; coefficients, sources and boundary values come from the expression
+      language.
+    - Wave 15A (ADR 0019): scalars.<name>.equation transport|diffusive|poisson|algebraic with diffusivity/source/initial
+      expressions, transient scalars and species in piso/pimple.
+      - Diffusive profile order 2.00 (RMS 6.5e-6 at 128 cells) and Poisson manufactured solution order 2.00 met,
+        transient eigenmode Euler/BDF2 and advection-diffusion-reaction orders as designed.
+    - Not delivered: the vector variant and coupling of user variables into properties, turbulence or other equations.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-203** Near-wall treatment catalogue: enhanced and blended wall treatments, scalable and non-equilibrium wall functions, wall-omega options, equivalent-sand-grain roughness with velocity-shift law
   - depends on: F-040, F-042, F-043
   - acceptance: Flat-plate skin friction matches the Prandtl-Schlichting correlation within 5 percent at y+ near 30 and near 1 for smooth walls; rough-wall Cf matches the fully-rough correlation within 10 percent
-  - note: Priority P1. Size M. Area: turb,api. The schema currently accepts a single wall-function value; this adds the other treatments and roughness as enum values. ADR 0015 (turbulence finishing), PARTIAL in the library: scalable wall functions (Grotjans-Menter form), equivalent-sand-grain roughness with the Cebeci-Bradshaw velocity shift (k-epsilon and SST automatic), SST low_re wall-omega option and BSL variant, and an Enhanced treatment (two-layer scales + Kader law; implemented but NOT converging on the flat plate, unvalidated). Non-equilibrium wall functions NOT attempted. Measured: smooth plate average Cf vs Prandtl-Schlichting (5 percent): SST automatic y+ 30 -0.5 / -0.7 percent PASS, y+ 1 -8.4 / -7.8 MISS; Scalable y+ 30 -4.0 / -3.1 and y+ 1 -4.6 / -3.1 PASS; Standard y+ 30 -6.2 MISS; rough plate (10 percent): k-epsilon Standard + roughness -1.0 / +0.3 / +6.3 PASS, SST + roughness -22 to -17 MISS (field stationary, deficit specific to the SST rough path, cause not established). Schema keys turbulence.wall_function {standard, scalable, enhanced}, roughness_height, roughness_constant, wall_omega, sst_variant exist with located validation (rcfd-api wall_opts.rs) but non-default values are rejected until turb.rs / model.rs apply them (hook described in ADR 0015); the tree-equals-library check is unmet. Wave 13 (ADR 0016): the build-path hook now applies wall options from the case tree (tree equals library run to 0, ADR 0015 C5); wall options are no longer rejected. Non-equilibrium wall functions still absent, so partial. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P1. Size M. Area: turb,api. The audit of 2026-10-21 marks the item DONE on the acceptance text as
+    written; scope beyond it, and the caveats in the audit file, are not claimed. Non-equilibrium wall functions are
+    still absent. The Enhanced treatment is implemented but NOT converging on the flat plate, unvalidated. Measured
+    misses: SST automatic at y+ 1 and Standard at y+ 30 on the smooth plate, SST + roughness on the rough plate (cause
+    not established).
+    - The schema currently accepts a single wall-function value; this adds the other treatments and roughness as enum
+      values.
+    - ADR 0015 (turbulence finishing), PARTIAL in the library:
+      - Scalable wall functions (Grotjans-Menter form).
+      - Equivalent-sand-grain roughness with the Cebeci-Bradshaw velocity shift (k-epsilon and SST automatic).
+      - SST low_re wall-omega option and BSL variant.
+      - An Enhanced treatment (two-layer scales + Kader law; implemented but NOT converging on the flat plate,
+        unvalidated).
+    - Non-equilibrium wall functions NOT attempted.
+    - Measured:
+      - Smooth plate average Cf vs Prandtl-Schlichting (5 percent):
+        - SST automatic y+ 30 -0.5 / -0.7 percent PASS, y+ 1 -8.4 / -7.8 MISS.
+        - Scalable y+ 30 -4.0 / -3.1 and y+ 1 -4.6 / -3.1 PASS.
+        - Standard y+ 30 -6.2 MISS.
+      - Rough plate (10 percent):
+        - k-epsilon Standard + roughness -1.0 / +0.3 / +6.3 PASS.
+        - SST + roughness -22 to -17 MISS (field stationary, deficit specific to the SST rough path, cause not
+          established).
+    - Schema keys turbulence.wall_function {standard, scalable, enhanced}, roughness_height, roughness_constant,
+      wall_omega, sst_variant exist with located validation (rcfd-api wall_opts.rs) but non-default values are rejected
+      until turb.rs / model.rs apply them (hook described in ADR 0015); the tree-equals-library check is unmet.
+    - Wave 13 (ADR 0016): the build-path hook now applies wall options from the case tree (tree equals library run to 0,
+      ADR 0015 C5); wall options are no longer rejected.
+    - Non-equilibrium wall functions still absent, so partial.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-204** Wall motion and shear conditions: translating and counter-rotating walls, specified shear, partial slip (specularity), Marangoni stress
   - depends on: F-020, F-028
   - acceptance: Plane Couette flow and a thermocapillary layer match closed-form profiles; Taylor-Couette torque agrees with the analytic value within 1 percent
-  - note: ADR 0016 wave 13. New velocity kinds moving_wall (translation and rotation), shear, partial_slip (slip length or Maxwell specularity with mean free path) and marangoni (thermocapillary stress from the temperature gradient). MET: plane Couette 1e-13 (limit 1e-8), specified-shear and slip layers to 1e-11 or better (with solver.component_diagonal = corrected; the averaged diagonal stalls on shear-driven layers, a known ADR 0010 issue), thermocapillary layer 3.25e-5 (limit 7.5e-4), Taylor-Couette torque -0.43 percent at 128 radial cells (limit 1 percent; first order), rigid-rotation torque 1.5e-5. MISS: rigid-rotation velocity error 1.4e-5 at 32 radial cells against the registered 1e-6 (9.9e-7 at 64), in an ignored known-miss test. Not delivered: turbulence combined with these kinds (located error), MRF Taylor-Couette. Statused partial because of those gaps, although the three acceptance checks are met. WAVE 40B (ADR 0098): D5d re-runs the n_r = 128 Taylor-Couette case with the iteration cap raised 6000 -> 20000 (registered set-up change, tolerances 1e-11 unchanged) and asserts convergence: converged after 6206 iterations (res_u 9.965e-12, res_p 9.971e-12), torque relative error -4.307e-3 (limit 1e-2). DONE: all three acceptance checks met by non-ignored tests (D1, D4, D5d). Outside the acceptance and still open: turbulence with the new kinds, MRF Taylor-Couette, the D5b velocity known miss, D2 still reporting converged false.
+  - note: DONE: all three acceptance checks met by non-ignored tests (D1, D4, D5d). Outside the acceptance and still
+    open: turbulence with the new kinds, MRF Taylor-Couette, the D5b velocity known miss, D2 still reporting converged
+    false.
+    - ADR 0016 wave 13. New velocity kinds:
+      - moving_wall (translation and rotation).
+      - shear.
+      - partial_slip (slip length or Maxwell specularity with mean free path).
+      - marangoni (thermocapillary stress from the temperature gradient).
+    - MET:
+      - Plane Couette 1e-13 (limit 1e-8).
+      - Specified-shear and slip layers to 1e-11 or better (with solver.component_diagonal = corrected; the averaged
+        diagonal stalls on shear-driven layers, a known ADR 0010 issue).
+      - Thermocapillary layer 3.25e-5 (limit 7.5e-4).
+      - Taylor-Couette torque -0.43 percent at 128 radial cells (limit 1 percent; first order).
+      - Rigid-rotation torque 1.5e-5.
+    - MISS: rigid-rotation velocity error 1.4e-5 at 32 radial cells against the registered 1e-6 (9.9e-7 at 64), in an
+      ignored known-miss test.
+    - Not delivered: turbulence combined with these kinds (located error), MRF Taylor-Couette.
+    - Statused partial because of those gaps, although the three acceptance checks are met.
+    - WAVE 40B (ADR 0098): D5d re-runs the n_r = 128 Taylor-Couette case with the iteration cap raised 6000 -> 20000
+      (registered set-up change, tolerances 1e-11 unchanged) and asserts convergence: converged after 6206 iterations
+      (res_u 9.965e-12, res_p 9.971e-12), torque relative error -4.307e-3 (limit 1e-2).
+    - DONE: all three acceptance checks met by non-ignored tests (D1, D4, D5d).
+    - Outside the acceptance and still open: turbulence with the new kinds, MRF Taylor-Couette, the D5b velocity known
+      miss, D2 still reporting converged false.
 - [x] **F-205** Initialisation methods: potential-flow initial solve, coarse-level pre-solve, region patching by registers, localised turbulence initialisation
   - depends on: F-124, F-028
   - acceptance: Potential-flow initialisation around a circular cylinder reproduces the analytic surface velocity distribution within 3 percent; an initialised backward-facing-step case converges in fewer iterations than uniform initial values
-  - note: Priority P2. Size M. Area: fv. Uses registers for patching; initial fields remain overridable by restart. Wave 15A (ADR 0019): initial.method uniform|potential|coarse and localised turbulence initialisation by registers delivered; cylinder potential flow within 3 percent (surface 9.7e-4 of 2A on the fine mesh, order 2.0) and the 40x40 cavity coarse start (112 against 165 iterations) met; the backward-facing-step check MISSED (potential 258 iterations against 253 uniform and 258 zero; kept as ignored known-miss test, diagnosis in the ADR), so the item stays partial. WAVE 39C (ADR 0094), done: the step clause is met by a coarse-level start (the acceptance asks for an initialised case, not a potential one). Same step set-up as I2; the case solved on the mesh with every cell count halved (137 SIMPLE iterations to 1e-6, cap 300), velocity and pressure interpolated with the transfer of initial.method = coarse: 220 fine iterations to 1e-6 against 253 (uniform (1,0,0)) and 258 (zero), all converged; equivalent work counting a coarse iteration at 1/4 is 254 against 253 (reported only, not limited). Test crates/rcfd-api/tests/w39c_coarse_step.rs. The potential start on the step stays an ignored known miss (I2). The tree has no backward-step generator, so the coarse step start is a library copy of the tree's transfer, not a case file.
+  - note: Priority P2. Size M. Area: fv. WAVE 39C (ADR 0094), done: the step clause is met by a coarse-level start (the
+    acceptance asks for an initialised case, not a potential one). Equivalent work counting a coarse iteration at 1/4 is
+    254 against 253 (reported only, not limited). The potential start on the step stays an ignored known miss (I2). The
+    coarse step start is a library copy of the tree's transfer, not a case file.
+    - Uses registers for patching; initial fields remain overridable by restart.
+    - Wave 15A (ADR 0019):
+      - initial.method uniform|potential|coarse and localised turbulence initialisation by registers delivered.
+      - Cylinder potential flow within 3 percent (surface 9.7e-4 of 2A on the fine mesh, order 2.0) and the 40x40 cavity
+        coarse start (112 against 165 iterations) met.
+      - The backward-facing-step check MISSED (potential 258 iterations against 253 uniform and 258 zero; kept as
+        ignored known-miss test, diagnosis in the ADR), so the item stays partial.
+    - WAVE 39C (ADR 0094), done: the step clause is met by a coarse-level start (the acceptance asks for an initialised
+      case, not a potential one).
+      - Same step set-up as I2; the case solved on the mesh with every cell count halved (137 SIMPLE iterations to 1e-6,
+        cap 300), velocity and pressure interpolated with the transfer of initial.method = coarse: 220 fine iterations
+        to 1e-6 against 253 (uniform (1,0,0)) and 258 (zero), all converged.
+      - Equivalent work counting a coarse iteration at 1/4 is 254 against 253 (reported only, not limited).
+      - Test crates/rcfd-api/tests/w39c_coarse_step.rs.
+      - The potential start on the step stays an ignored known miss (I2).
+      - The tree has no backward-step generator, so the coarse step start is a library copy of the tree's transfer, not
+        a case file.
 - [~] **F-206** Additional RANS closures and modifiers: algebraic zero-equation and mixing-length, v2-f, explicit algebraic Reynolds-stress variants, generalised two-equation model with tunable coefficients, curvature correction, production limiters, turbulent Prandtl and Schmidt options
   - depends on: F-044
   - acceptance: Mixing-length pipe profile agrees with the Nikuradse data; v2-f channel at Re_tau 395 within 10 percent of the published DNS profile; rotating-channel and U-duct cases show the published stabilising effect of curvature correction
-  - note: PARTIAL (wave 18A, ADR 0026): delivered the algebraic mixing-length closure (linear l = min(kappa d, 0.09 R) or Nikuradse pipe profile, optional van Driest damping, coefficients kappa/l_max_ratio/a_plus and turbulence.length_scale/mixing_profile in the settings tree, steady and transient, live switching, located errors). Checks met: closed forms, 1D reduction of the channel (0.2 percent), and the periodic Re_tau 395 channel against the DNS mean velocity (worst 4.0 percent linear, 3.1 percent Nikuradse analogy, limit 10 percent; DNS and Nikuradse constants quoted from memory, unverified). The acceptance as written (pipe profile against Nikuradse data) is NOT met: there is no pipe generator and no Nikuradse data in the tree. NOT delivered: Baldwin-Lomax style zero-equation models, v2-f, explicit algebraic Reynolds-stress variants, generalised two-equation model, curvature correction and its rotating-channel/U-duct cases, production limiters, turbulent Prandtl and Schmidt options, coefficient override by expression. Priority P2. Size L. Area: turb. Each model is registered through the model plugin interface with coefficients exposed in the settings tree.
+  - note: PARTIAL (wave 18A, ADR 0026). The acceptance as written (pipe profile against Nikuradse data) is NOT met:
+    there is no pipe generator and no Nikuradse data in the tree.
+    - Delivered: the algebraic mixing-length closure (linear l = min(kappa d, 0.09 R) or Nikuradse pipe profile,
+      optional van Driest damping, coefficients kappa/l_max_ratio/a_plus and turbulence.length_scale/mixing_profile in
+      the settings tree, steady and transient, live switching, located errors).
+    - Checks met:
+      - Closed forms.
+      - 1D reduction of the channel (0.2 percent).
+      - The periodic Re_tau 395 channel against the DNS mean velocity (worst 4.0 percent linear, 3.1 percent Nikuradse
+        analogy, limit 10 percent; DNS and Nikuradse constants quoted from memory, unverified).
+    - NOT delivered: Baldwin-Lomax style zero-equation models, v2-f, explicit algebraic Reynolds-stress variants,
+      generalised two-equation model, curvature correction and its rotating-channel/U-duct cases, production limiters,
+      turbulent Prandtl and Schmidt options, coefficient override by expression.
+    - Priority P2. Size L. Area: turb. Each model is registered through the model plugin interface with coefficients
+      exposed in the settings tree.
 - [~] **F-207** LES and hybrid RANS-LES catalogue: dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, delayed and improved-delayed DES, stress-blended hybrid, embedded LES zones, bounded central differencing, and synthetic turbulence inflow generators
   - depends on: F-045
   - acceptance: Synthetic inflow reproduces prescribed Reynolds-stress and spectrum targets in a statistical test; channel LES recovers the log law within 5 percent after a developing length; decaying isotropic turbulence follows the published spectrum decay
-  - note: Priority P3. Size L. Area: turb. Enumerates the subgrid and hybrid variants as sub-criteria of the LES work; zonal forcing and scheme switching included. WAVE 20A (ADR 0032), PARTIAL: SA-based DES and delayed DES (turbulence.sa.des = des | ddes, des_delta, c_des; transient piso/pimple, implicit-Euler time derivative on nuTilda): length-scale formulas, DDES shielding function, grid scales, the RANS limit (bit-identical to SA with a large C_DES), the LES-limit fixed point and the time derivative verified; the formulas are checked against secondary web sources only (docs/reference-data.md), C_DES 0.65 is secondary. NOT delivered: any separated-flow validation, IDDES, SAS, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES, stress-blended hybrid, embedded LES zones, bounded central differencing, synthetic inflow; the acceptance criteria are NOT met.
+  - note: Priority P3. Size L. Area: turb. PARTIAL: the acceptance criteria are NOT met; WAVE 20A (ADR 0032) covers
+    SA-based DES and delayed DES.
+    - Enumerates the subgrid and hybrid variants as sub-criteria of the LES work; zonal forcing and scheme switching
+      included.
+    - WAVE 20A (ADR 0032), PARTIAL: SA-based DES and delayed DES (turbulence.sa.des = des | ddes, des_delta, c_des;
+      transient piso/pimple, implicit-Euler time derivative on nuTilda).
+      - Verified: length-scale formulas, DDES shielding function, grid scales, the RANS limit (bit-identical to SA with
+        a large C_DES), the LES-limit fixed point and the time derivative.
+      - The formulas are checked against secondary web sources only (docs/reference-data.md), C_DES 0.65 is secondary.
+    - NOT delivered: any separated-flow validation, IDDES, SAS, dynamic Smagorinsky, Vreman, sigma, wall-modelled LES,
+      stress-blended hybrid, embedded LES zones, bounded central differencing, synthetic inflow; the acceptance criteria
+      are NOT met.
 - [x] **F-208** Numerics robustness options for poor meshes: warped-face gradient correction, secondary gradient limiting, boundary-gradient treatments, pressure-interpolation variants, solution limits
   - depends on: F-021, F-011
   - acceptance: Manufactured-solution order-of-accuracy test on skewed, warped and stretched meshes recovers the design order and the options do not degrade it on good meshes
-  - note: ADR 0016 wave 13. Library: GradientOptions (face-gradient correction, secondary limiter, boundary-gradient treatment) in rcfd-fv; case-level solution limits limits.temperature/scalar with clipped-cell count. MET: MMS order on skewed, warped and stretched meshes (>= 1.7 with the options off and with correction, >= 1.5 with the limiter; measured 1.76 to 2.04 except stretched 1.74 at n=32, all in limit), options cost <= 4.6 percent error on near-orthogonal meshes; limits clip to the band to 1e-14. On the affine skewed mesh the correction raises the error constant (2.1x) while keeping the order: no benefit is claimed. Registered mild mesh missed its non-orthogonality precondition (13.96 deg) and was replaced by a 0.015 amplitude mesh (disclosed). NOT delivered: pressure-interpolation variants, a warped-face correction separate from the face correction, case-tree wiring of the gradient options. WAVE 40B (ADR 0098): M5 adds n = 64 on the stretched mesh; all runs converge under the unchanged rule (change <= 1e-13 of the range, 600 sweeps) and the 32 -> 64 L2 order is 1.908 for C0, C1 and C2 (limit 1.7; the options are inert on this orthogonal mesh), so the asymptotic range is reached. DONE: acceptance met by non-ignored tests (m1_m4, m5). Outside the acceptance and still open: pressure-interpolation variants, a separate warped-face correction, case-tree wiring of GradientOptions.
+  - note: DONE: acceptance met by non-ignored tests (m1_m4, m5). Outside the acceptance and still open:
+    pressure-interpolation variants, a separate warped-face correction, case-tree wiring of GradientOptions.
+    - ADR 0016 wave 13. Library: GradientOptions (face-gradient correction, secondary limiter, boundary-gradient
+      treatment) in rcfd-fv; case-level solution limits limits.temperature/scalar with clipped-cell count.
+    - MET:
+      - MMS order on skewed, warped and stretched meshes (>= 1.7 with the options off and with correction, >= 1.5 with
+        the limiter; measured 1.76 to 2.04 except stretched 1.74 at n=32, all in limit).
+      - Options cost <= 4.6 percent error on near-orthogonal meshes.
+      - Limits clip to the band to 1e-14.
+    - On the affine skewed mesh the correction raises the error constant (2.1x) while keeping the order: no benefit is
+      claimed.
+    - Registered mild mesh missed its non-orthogonality precondition (13.96 deg) and was replaced by a 0.015 amplitude
+      mesh (disclosed).
+    - NOT delivered: pressure-interpolation variants, a warped-face correction separate from the face correction,
+      case-tree wiring of the gradient options.
+    - WAVE 40B (ADR 0098): M5 adds n = 64 on the stretched mesh; all runs converge under the unchanged rule
+      (change <= 1e-13 of the range, 600 sweeps) and the 32 -> 64 L2 order is 1.908 for C0, C1 and C2 (limit 1.7; the
+      options are inert on this orthogonal mesh), so the asymptotic range is reached.
+    - DONE: acceptance met by non-ignored tests (m1_m4, m5).
+    - Outside the acceptance and still open: pressure-interpolation variants, a separate warped-face correction,
+      case-tree wiring of GradientOptions.
 - [~] **F-209** Adaptive time stepping and convergence accelerators: error-estimator steps, period-based steps, RMS/MAX Courant criteria, local timescale factors, residual smoothing, extrapolated step initialisation, nonlinear (Aitken-type) acceleration, stretched-mesh pseudo-time acceleration
   - depends on: F-024, F-106, F-027
   - acceptance: Error-controlled stepping (step doubling, `solver.error_tolerance`) on a two-timescale linear decay (rates differing by at least 100, both modes of unit initial amplitude) reaches its requested error without a user-chosen step: the final error E satisfies E / (tol T) within [0.3, 3] for two tolerances a factor 4 apart; on the Taylor-Green vortex the error-controlled global error scales with the tolerance (E / (tol T) within [0.3, 3]); a high-aspect-ratio flat-plate boundary-layer mesh converges to Blasius and turbulent skin-friction values within the unaccelerated tolerance
-  - note: Priority P3. Size M. Area: fv,linalg. Depends on the pseudo-transient option being finished. WAVE 17A (ADR 0023): only a library building block, ddt::ErrorController, exists (not wired to the tree); linear-decay acceptance missed (81 vs 76 steps relative scale, 46 vs 36 absolute reference), recorded as ignored known-miss tests. Taylor-Green, flat-plate acceleration, residual smoothing and Aitken acceleration not delivered; status then todo. WAVE 27B (ADR 0050): rcfd_fv::stepctl and the case keys solver.max_courant_rms, dt_safety/growth/shrink, min_dt/max_dt, error_tolerance (step doubling, implicit Euler), period/steps_per_period, extrapolate_initial, output.write_times/write_time_interval (exact landing, restart-safe). Taylor-Green: Courant control needs 74 steps vs 113 fixed (limit 0.75x) at 1.7 percent L2 difference; error control E/(tol T) 0.87-0.90 with halving ratio 1.93-2.00; variable-step BDF2 order 1.95; extrapolated start halves the initial residual (median ratio 0.14). NAMED GAPS: Aitken relaxation is a library building block only (not in the PIMPLE outer loop or the tree); local timescale factors, residual smoothing, the stretched-mesh pseudo-time acceleration and the flat-plate acceptance are not delivered; step control excludes energy/scalar/turbulence/dynamic-mesh runs; error control is implicit Euler only; compressible solver not covered. WAVE 39C (ADR 0094), still PARTIAL: the fixed-step side of the Taylor-Green comparison is now measured. Uniform implicit-Euler step counts N = 1, 2, ... were run against the same BDF2 reference: the smallest N with L2 error <= 0.02 is 64 (error 1.97e-2), and the smallest with error <= the Courant-controlled run's 1.69e-2 is 72; the Courant-controlled run takes 74 steps. The registered limit (74 < 64) is MISSED, kept as the ignored test t1_..._known_miss in rcfd-fv tests/adaptive_step.rs. For a single decaying mode a Courant controller (itself fixed-CFL stepping) cannot beat the best uniform step; ADR 0094 proposes (not applied) rewording the first clause to a two-timescale linear decay under error control plus the already measured Taylor-Green tolerance scaling (S4). Linear-decay misses, the flat-plate clause, residual smoothing, local timescale factors and stretched-mesh acceleration remain open. USER DECISION 2026-10-21: acceptance reworded to the two-timescale form proposed in ADR 0094 (Courant control cannot beat the best uniform step on a single mode). Still partial: the two-timescale test does not exist yet; S4 covers the Taylor-Green scaling; flat-plate clause open. WAVE 41A (ADR 0101, rcfd-fv tests/adaptive_step.rs e1): the reworded two-timescale clause was tested and MISSED, as predicted in the ADR before the run. Shear wave u_x = sin y + sin 12y on a periodic 4 x 64 box (rates 0.999 and 128.1, ratio 128; one PISO step equals the implicit-Euler factors to 1.7e-15), T = 1, S4 controller settings: tol 1e-2 takes 1913 controlled steps (E 7.84e-3) against 64 uniform steps at equal error; tol 2.5e-3 takes 3149 against 240. Kept as the ignored e1_..._known_miss with the limit unchanged. Reason (derived in ADR 0101): an error-per-unit-time controller spends about lambda_fast/(4 tol) steps resolving the fast transient, which L-stable uniform implicit Euler damps without resolving; it can only win once the slow mode has decayed by about e^-(rate ratio). So the clause as reworded is not expected to be met by local error control on a decaying linear system; this is for the user to decide. The Taylor-Green clause is met by S4 (E/(tol T) 0.87-0.90). The flat-plate clause is still open. Stays partial. USER DECISION 2026-10-22: acceptance reworded a second time. Wave 41A (ADR 0101) showed error control cannot beat the best uniform step count on a linear decay (1913 steps vs 64 at tol 1e-2): per-unit-time control resolves the fast transient that implicit Euler merely damps. New first clause: error control hits the requested error with no hand-picked step. The step-count test e1 stays as an ignored known miss. Flat-plate clause still open. WAVE 42A (ADR 0105, rcfd-fv tests/adaptive_step.rs e2, non-ignored): the first clause as worded on 2026-10-22 is MET. Same shear wave as E1 (rates 0.999 and 128.1, unit amplitudes), T = 1, error = relative L2 time error against the exact semi-discrete solution. No step chosen by the user: library controller defaults (no min_dt / max_dt), only error_tol set, first proposal = T. tol 1e-2: 2502 steps (18 rejected), E 7.917e-3, E/(tol T) 0.792; tol 2.5e-3: 9989 steps (20 rejected), E 2.080e-3, 0.832 (limit [0.3, 3]). Limitation recorded: through the case keys the run still needs solver.dt (timectl takes the first proposal and max_dt from it and min_dt = 1e-3 solver.dt by default), so e2 shows the library controller, not the case path free of a chosen step; not changed (default change). e1 stays ignored. Still PARTIAL: the flat-plate clause is open (residual smoothing, local timescale factors, stretched-mesh acceleration, Aitken in the outer loop also not delivered).
+  - note: Priority P3. Size M. Area: fv,linalg. Still PARTIAL: the flat-plate clause is open (residual smoothing, local
+    timescale factors, stretched-mesh acceleration, Aitken in the outer loop also not delivered). WAVE 42A (ADR 0105)
+    meets the first clause as worded on 2026-10-22; e2 shows the library controller, not the case path free of a chosen
+    step. The Taylor-Green clause is met by S4 (E/(tol T) 0.87-0.90). The acceptance was reworded twice by USER DECISION
+    (2026-10-21 and 2026-10-22), each after a check MISSED; those misses are kept as the ignored tests
+    t1_..._known_miss and e1_..._known_miss.
+    - Depends on the pseudo-transient option being finished.
+    - WAVE 17A (ADR 0023):
+      - Only a library building block, ddt::ErrorController, exists (not wired to the tree).
+      - Linear-decay acceptance missed (81 vs 76 steps relative scale, 46 vs 36 absolute reference), recorded as ignored
+        known-miss tests.
+      - Taylor-Green, flat-plate acceleration, residual smoothing and Aitken acceleration not delivered; status then
+        todo.
+    - WAVE 27B (ADR 0050): rcfd_fv::stepctl and the case keys solver.max_courant_rms, dt_safety/growth/shrink,
+      min_dt/max_dt, error_tolerance (step doubling, implicit Euler), period/steps_per_period, extrapolate_initial,
+      output.write_times/write_time_interval (exact landing, restart-safe).
+      - Taylor-Green:
+        - Courant control needs 74 steps vs 113 fixed (limit 0.75x) at 1.7 percent L2 difference.
+        - Error control E/(tol T) 0.87-0.90 with halving ratio 1.93-2.00.
+        - Variable-step BDF2 order 1.95.
+        - Extrapolated start halves the initial residual (median ratio 0.14).
+      - NAMED GAPS:
+        - Aitken relaxation is a library building block only (not in the PIMPLE outer loop or the tree).
+        - Local timescale factors, residual smoothing, the stretched-mesh pseudo-time acceleration and the flat-plate
+          acceptance are not delivered.
+        - Step control excludes energy/scalar/turbulence/dynamic-mesh runs.
+        - Error control is implicit Euler only.
+        - Compressible solver not covered.
+    - WAVE 39C (ADR 0094), still PARTIAL: the fixed-step side of the Taylor-Green comparison is now measured.
+      - Uniform implicit-Euler step counts N = 1, 2, ... were run against the same BDF2 reference: the smallest N with
+        L2 error <= 0.02 is 64 (error 1.97e-2), and the smallest with error <= the Courant-controlled run's 1.69e-2 is
+        72; the Courant-controlled run takes 74 steps.
+      - The registered limit (74 < 64) is MISSED, kept as the ignored test t1_..._known_miss in rcfd-fv
+        tests/adaptive_step.rs.
+      - For a single decaying mode a Courant controller (itself fixed-CFL stepping) cannot beat the best uniform step;
+        ADR 0094 proposes (not applied) rewording the first clause to a two-timescale linear decay under error control
+        plus the already measured Taylor-Green tolerance scaling (S4).
+      - Linear-decay misses, the flat-plate clause, residual smoothing, local timescale factors and stretched-mesh
+        acceleration remain open.
+    - USER DECISION 2026-10-21: acceptance reworded to the two-timescale form proposed in ADR 0094 (Courant control
+      cannot beat the best uniform step on a single mode). Still partial: the two-timescale test does not exist yet; S4
+      covers the Taylor-Green scaling; flat-plate clause open.
+    - WAVE 41A (ADR 0101, rcfd-fv tests/adaptive_step.rs e1): the reworded two-timescale clause was tested and MISSED,
+      as predicted in the ADR before the run.
+      - Shear wave u_x = sin y + sin 12y on a periodic 4 x 64 box (rates 0.999 and 128.1, ratio 128; one PISO step
+        equals the implicit-Euler factors to 1.7e-15), T = 1, S4 controller settings: tol 1e-2 takes 1913 controlled
+        steps (E 7.84e-3) against 64 uniform steps at equal error; tol 2.5e-3 takes 3149 against 240.
+      - Kept as the ignored e1_..._known_miss with the limit unchanged.
+      - Reason (derived in ADR 0101): an error-per-unit-time controller spends about lambda_fast/(4 tol) steps resolving
+        the fast transient, which L-stable uniform implicit Euler damps without resolving; it can only win once the slow
+        mode has decayed by about e^-(rate ratio).
+      - So the clause as reworded is not expected to be met by local error control on a decaying linear system; this is
+        for the user to decide.
+      - The Taylor-Green clause is met by S4 (E/(tol T) 0.87-0.90).
+      - The flat-plate clause is still open.
+      - Stays partial.
+    - USER DECISION 2026-10-22: acceptance reworded a second time. Wave 41A (ADR 0101) showed error control cannot beat
+      the best uniform step count on a linear decay (1913 steps vs 64 at tol 1e-2): per-unit-time control resolves the
+      fast transient that implicit Euler merely damps. New first clause: error control hits the requested error with no
+      hand-picked step. The step-count test e1 stays as an ignored known miss. Flat-plate clause still open.
+    - WAVE 42A (ADR 0105, rcfd-fv tests/adaptive_step.rs e2, non-ignored): the first clause as worded on 2026-10-22 is
+      MET.
+      - Same shear wave as E1 (rates 0.999 and 128.1, unit amplitudes), T = 1, error = relative L2 time error against
+        the exact semi-discrete solution.
+      - No step chosen by the user: library controller defaults (no min_dt / max_dt), only error_tol set, first
+        proposal = T.
+      - tol 1e-2: 2502 steps (18 rejected), E 7.917e-3, E/(tol T) 0.792; tol 2.5e-3: 9989 steps (20 rejected),
+        E 2.080e-3, 0.832 (limit [0.3, 3]).
+      - Limitation recorded: through the case keys the run still needs solver.dt (timectl takes the first proposal and
+        max_dt from it and min_dt = 1e-3 solver.dt by default), so e2 shows the library controller, not the case path
+        free of a chosen step; not changed (default change).
+      - e1 stays ignored.
+      - Still PARTIAL: the flat-plate clause is open (residual smoothing, local timescale factors, stretched-mesh
+        acceleration, Aitken in the outer loop also not delivered).
 - [x] **F-210** Non-iterative time advancement (fractional-step) option for transient flow
   - depends on: F-029
   - acceptance: Taylor-Green vortex decay matches the analytic solution within 2 percent; transient lid-driven cavity agrees with published data
-  - note: Priority P3. Size M. Area: fv. Alternative to the iterated PISO/PIMPLE loop for large steps and low cost. PARTIAL (wave 21C, ADR 0037). Delivered: solver.time_advance = fractional_step for the transient piso algorithm (Euler and BDF2), solver.fractional_form incremental or chorin, solver.fractional_boundary kim_moin or plain; one momentum predictor and ONE pressure Poisson solve per step (library PimpleSettings.fractional, module rcfd-fv pimple/fractional.rs) with a case-tree option and located errors. Measured: Taylor-Green kinetic-energy error 2.3e-3 (limit 0.02), Euler temporal order 1.034, divergence 1.8e-11 default and 2.8e-15 tight solver tolerance, difference to PISO 3.0e-3 (limit 5e-3), lid-driven cavity Re 100 Ghia centreline error 3.0e-3 and 9.0e-3 (limit 0.02) and difference to SIMPLEC 4.7e-4 (limit 0.01), tree equals library bit for bit. The roadmap acceptance is met by these checks, but three registered checks MISSED and are ignored known-miss tests: BDF2 temporal order 1.04 on the periodic Taylor-Green (band 1.7 to 2.3; wave 25A, ADR 0043: the lagged periodic partner value was a defect and is now extrapolated, order 1.51, the rest is the O(dt h^2) collocated pressure-smoothing term; a wall-bounded mode gives 2.07), spatial ratio 2.48 (limit 3.0; met after the wave 25A fix, 3.95), and the Kim-Moin boundary treatment shows no benefit in the Chorin form (ratio 1.13 against 0.5; the incremental form is insensitive to it). NOT delivered: rotational pressure correction, Crank-Nicolson, Choi-type transient Rhie-Chow, body force and buoyancy, turbulence, energy, rheology, pimple outer loops, moving meshes, restart of fractional runs, verification of the Kim-Moin and Zang et al. references (see docs/reference-data.md). DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P3. Size M. Area: fv. The audit of 2026-10-21 marks the item DONE on the acceptance text as written;
+    scope beyond it, and the caveats in the audit file, are not claimed. Three registered checks MISSED and are ignored
+    known-miss tests: BDF2 temporal order, spatial ratio (met after the wave 25A fix) and the Kim-Moin boundary
+    treatment.
+    - Alternative to the iterated PISO/PIMPLE loop for large steps and low cost.
+    - PARTIAL (wave 21C, ADR 0037).
+    - Delivered:
+      - solver.time_advance = fractional_step for the transient piso algorithm (Euler and BDF2).
+      - solver.fractional_form incremental or chorin.
+      - solver.fractional_boundary kim_moin or plain.
+      - One momentum predictor and ONE pressure Poisson solve per step (library PimpleSettings.fractional, module
+        rcfd-fv pimple/fractional.rs) with a case-tree option and located errors.
+    - Measured:
+      - Taylor-Green kinetic-energy error 2.3e-3 (limit 0.02).
+      - Euler temporal order 1.034.
+      - Divergence 1.8e-11 default and 2.8e-15 tight solver tolerance.
+      - Difference to PISO 3.0e-3 (limit 5e-3).
+      - Lid-driven cavity Re 100 Ghia centreline error 3.0e-3 and 9.0e-3 (limit 0.02) and difference to SIMPLEC 4.7e-4
+        (limit 0.01).
+      - Tree equals library bit for bit.
+    - The roadmap acceptance is met by these checks, but three registered checks MISSED and are ignored known-miss
+      tests:
+      - BDF2 temporal order 1.04 on the periodic Taylor-Green (band 1.7 to 2.3; wave 25A, ADR 0043: the lagged periodic
+        partner value was a defect and is now extrapolated, order 1.51, the rest is the O(dt h^2) collocated
+        pressure-smoothing term; a wall-bounded mode gives 2.07).
+      - Spatial ratio 2.48 (limit 3.0; met after the wave 25A fix, 3.95).
+      - The Kim-Moin boundary treatment shows no benefit in the Chorin form (ratio 1.13 against 0.5; the incremental
+        form is insensitive to it).
+    - NOT delivered: rotational pressure correction, Crank-Nicolson, Choi-type transient Rhie-Chow, body force and
+      buoyancy, turbulence, energy, rheology, pimple outer loops, moving meshes, restart of fractional runs,
+      verification of the Kim-Moin and Zang et al. references (see docs/reference-data.md).
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-211** Advection and transient scheme additions: high-resolution (bounded blended), compressive, specified blend factor, bounded central differencing, bounded second-order time scheme
   - depends on: F-022, F-024
   - acceptance: Order-of-accuracy test on a smooth advected profile gives the nominal order; square-wave advection stays within physical bounds; blend factor 0 and 1 reproduce the upwind and central results
-  - note: ADR 0016 wave 13. Added: blended(beta) (0 = upwind and 1 = central to 0), gamma(beta_m), compressive(k) (Roe-Sweby family, k project-extended below 1), bounded_central (bitwise minmod in NVD form) convection schemes and the bdf2_bounded time scheme. MET: B1 blend 0/1 equal upwind/central (0, 0); order on a smooth profile (central, blended(1), gamma, bounded_central 2.0000; first-order members 0.98 to 1.003); square wave within 1e-3 of the bounds for gamma, compressive and bounded_central (dt = 0.1 h; the registered 0.5 h gave a toothless control); temporal orders. MISS: O1c convergence for compressive(1.5) and compressive(2) (limit cycle at 1e-8 per sweep from limiter switching; orders in band), kept in an ignored known-miss test. Set-up deviations disclosed in the ADR results. Literature references unverified (docs/reference-data.md). Wave 39B (ADR 0093): DONE. New non-ignored test o1d_compressive_order_on_limit_cycle measures the order of compressive(1.5) and compressive(2) on the stationary limit cycle (20000 sweeps, 200-sweep error windows ending at sweeps 10000 and 20000 overlap at every n; worst-case orders over the cycle 1.9812..1.9818 and 1.9909..1.9911 for compressive(1.5), 1.9815..1.9816 and 1.9910 for compressive(2); registered band 1.85 to 2.3). The O1c convergence known miss stays ignored and unchanged as the record.
+  - note: Wave 39B (ADR 0093): DONE. The O1c convergence known miss stays ignored and unchanged as the record.
+    Literature references unverified (docs/reference-data.md).
+    - ADR 0016 wave 13. Added:
+      - blended(beta) (0 = upwind and 1 = central to 0), gamma(beta_m), compressive(k) (Roe-Sweby family, k
+        project-extended below 1), bounded_central (bitwise minmod in NVD form) convection schemes.
+      - The bdf2_bounded time scheme.
+    - MET:
+      - B1 blend 0/1 equal upwind/central (0, 0).
+      - Order on a smooth profile (central, blended(1), gamma, bounded_central 2.0000; first-order members 0.98 to
+        1.003).
+      - Square wave within 1e-3 of the bounds for gamma, compressive and bounded_central (dt = 0.1 h; the registered 0.5
+        h gave a toothless control).
+      - Temporal orders.
+    - MISS: O1c convergence for compressive(1.5) and compressive(2) (limit cycle at 1e-8 per sweep from limiter
+      switching; orders in band), kept in an ignored known-miss test.
+    - Set-up deviations disclosed in the ADR results.
+    - Literature references unverified (docs/reference-data.md).
+    - Wave 39B (ADR 0093): DONE.
+      - New non-ignored test o1d_compressive_order_on_limit_cycle measures the order of compressive(1.5) and
+        compressive(2) on the stationary limit cycle (20000 sweeps, 200-sweep error windows ending at sweeps 10000 and
+        20000 overlap at every n; worst-case orders over the cycle 1.9812..1.9818 and 1.9909..1.9911 for
+        compressive(1.5), 1.9815..1.9816 and 1.9910 for compressive(2); registered band 1.85 to 2.3).
+      - The O1c convergence known miss stays ignored and unchanged as the record.
 - [~] **F-212** Enthalpy-porosity solidification and melting: liquid fraction, mushy-zone damping, pull velocity
   - depends on: F-050, F-031
   - acceptance: 1D Stefan problem interface position within 3 percent of the analytic solution; gallium-melting cavity front shape trend agrees with the published experiment
-  - note: Priority P3. Size M. Area: fv. Momentum damping reuses the porous-media source machinery. Wave 21A (ADR 0035): enthalpy-method library and case-tree wiring (zero flux, piso/pimple), Carman-Kozeny damping and a Brinkman check in the library only. 1D Stefan front within 3 percent at N=240 (one- and two-phase). Misses recorded as ignored tests: P1 order criterion, Newton limit cycle at N=480, K2 ny=20 error 1.0040e-2 vs 1e-2. Wave 25A (ADR 0043): a safeguarded Newton branch (line search on the convex potential) fixes the N=480 limit cycle, P4 to P6 met at all four levels; the P1/P2/P8 order criteria and K2 stay misses (position error floor set by the mush width; K2 is truncation error equal to the exact 1-D discrete solution). Not delivered: melt flow coupling, gallium cavity comparison, pull velocity, damping in the tree.
+  - note: Priority P3. Size M. Area: fv. Not delivered: melt flow coupling, gallium cavity comparison, pull velocity,
+    damping in the tree. The P1/P2/P8 order criteria and K2 stay misses.
+    - Momentum damping reuses the porous-media source machinery.
+    - Wave 21A (ADR 0035):
+      - Enthalpy-method library and case-tree wiring (zero flux, piso/pimple), Carman-Kozeny damping and a Brinkman
+        check in the library only.
+      - 1D Stefan front within 3 percent at N=240 (one- and two-phase).
+      - Misses recorded as ignored tests: P1 order criterion, Newton limit cycle at N=480, K2 ny=20 error 1.0040e-2 vs
+        1e-2.
+    - Wave 25A (ADR 0043): a safeguarded Newton branch (line search on the convex potential) fixes the N=480 limit
+      cycle, P4 to P6 met at all four levels; the P1/P2/P8 order criteria and K2 stay misses (position error floor set
+      by the mush width; K2 is truncation error equal to the exact 1-D discrete solution).
 - [x] **F-213** Electric potential and Joule heating, with electric and thermal coupling
   - depends on: F-050, F-051
   - acceptance: Joule heating of a conducting bar reproduces the analytic parabolic temperature profile within 1 percent; potential drop matches Ohm's law
-  - note: Priority P3. Size M. Area: fv. Conducting solids and fluids; voltage and current boundaries. Wave 21A (ADR 0035): electric potential with sigma(T) and Joule heating in the case tree (prescribed flow only); Ohm bar, Joule parabola and sigma(T) bar reproduced at second order (Joule parabola error 2.5e-3 of the 25 K peak rise at N=20, i.e. 0.25 percent, against the 1 percent target). Not delivered: solved-flow coupling, exact power identity on non-orthogonal meshes, magnetic induction, time-accurate coupling. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P3. Size M. Area: fv. The audit of 2026-10-21 marks the item DONE on the acceptance text as written;
+    scope beyond it, and the caveats in the audit file, are not claimed.
+    - Conducting solids and fluids; voltage and current boundaries.
+    - Wave 21A (ADR 0035): electric potential with sigma(T) and Joule heating in the case tree (prescribed flow only);
+      Ohm bar, Joule parabola and sigma(T) bar reproduced at second order (Joule parabola error 2.5e-3 of the 25 K peak
+      rise at N=20, i.e. 0.25 percent, against the 1 percent target).
+    - Not delivered: solved-flow coupling, exact power identity on non-orthogonal meshes, magnetic induction,
+      time-accurate coupling.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-214** Magnetohydrodynamic Lorentz-force coupling for liquid conductors
   - depends on: F-213
   - acceptance: Hartmann channel flow matches the analytic Hartmann velocity profile within 2 percent
-  - note: PARTIAL (wave 23A, ADR 0039). Delivered: sources.<n> type lorentz (steady SIMPLE/SIMPLEC): uniform imposed B, conductivity, optional applied E, J = sigma(E - grad phi + u x B) at low magnetic Reynolds number; potential none (short circuit, explicit force plus implicit sigma B^2/rho sink) or solve (potential equation on the 21A electric solver with its boundary keys); output fields lorentz_force and current_density. Measured Hartmann channel (periodic box_2d, no-slip plates): profile error 1.6e-3, 6.5e-3, 6.5e-3 of u_max at Ha 2, 10, 20 (limit 2e-2), flow-rate reduction error 1.2e-3, 8.6e-4, 4.1e-4 (limit 1e-2), insulated walls Ha 10 the same; Lorentz integral, work identity and momentum balance at round-off; electrode current within 1.5e-3. WAVE 25C (ADR 0045): the same lorentz source now works in transient PISO and PIMPLE (outer-iteration momentum-source hook); located errors for coupled and compressible. Measured: on a stable step nu dt/dy^2 = 1.6 the Hartmann cases meet the steady limits (profile error 1.6e-3, 6.5e-3, 6.5e-3; flow error 1.2e-3, 8.6e-4, 4.1e-4; last-step change <= 4.9e-14) and PISO/PIMPLE equal steady SIMPLEC to 4.7e-15/5.7e-14. Registered misses (ignored known_miss tests, limits intact): the registered dt 0.02 Hartmann set-up is unstable because transient PISO/PIMPLE diverges at nu dt/dy^2 above about 3 to 6 even without any source (pre-existing; WAVE 26A, ADR 0046: the periodic-box part was the lagged periodic partner of the transient momentum matrix, now implicit and fixed; the wall-bounded remainder is the splitting error of the non-converged pressure correctors at large nu dt/dy^2, a property of the scheme, not a coding defect); solved-potential current cancellation 1e-6 is missed (8.6e-1 at dt 0.02; 8.05e-3 at dt 2.5e-4 with 3 outer iterations, 2.4e-7 at 24 outer iterations as a diagnostic); the periodic-box uniform-acceleration and impulse-balance checks miss because of the pre-existing lagged periodic momentum coupling. Not delivered: coupled solver, Joule heating, case-given or varying B, induced field, non-uniform sigma, a 3-D duct with side-wall layers or a non-trivial solved potential, published experiments. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. Registered misses are ignored known_miss tests with limits intact,
+    including the registered dt 0.02 Hartmann set-up (unstable) and solved-potential current cancellation 1e-6.
+    - PARTIAL (wave 23A, ADR 0039).
+    - Delivered:
+      - sources.<n> type lorentz (steady SIMPLE/SIMPLEC): uniform imposed B, conductivity, optional applied E,
+        J = sigma(E - grad phi + u x B) at low magnetic Reynolds number.
+      - Potential none (short circuit, explicit force plus implicit sigma B^2/rho sink) or solve (potential equation on
+        the 21A electric solver with its boundary keys).
+      - Output fields lorentz_force and current_density.
+    - Measured Hartmann channel (periodic box_2d, no-slip plates):
+      - Profile error 1.6e-3, 6.5e-3, 6.5e-3 of u_max at Ha 2, 10, 20 (limit 2e-2).
+      - Flow-rate reduction error 1.2e-3, 8.6e-4, 4.1e-4 (limit 1e-2).
+      - Insulated walls Ha 10 the same.
+      - Lorentz integral, work identity and momentum balance at round-off.
+      - Electrode current within 1.5e-3.
+    - WAVE 25C (ADR 0045): the same lorentz source now works in transient PISO and PIMPLE (outer-iteration
+      momentum-source hook); located errors for coupled and compressible.
+    - Measured: on a stable step nu dt/dy^2 = 1.6 the Hartmann cases meet the steady limits (profile error 1.6e-3,
+      6.5e-3, 6.5e-3; flow error 1.2e-3, 8.6e-4, 4.1e-4; last-step change <= 4.9e-14) and PISO/PIMPLE equal steady
+      SIMPLEC to 4.7e-15/5.7e-14.
+    - Registered misses (ignored known_miss tests, limits intact):
+      - The registered dt 0.02 Hartmann set-up is unstable because transient PISO/PIMPLE diverges at nu dt/dy^2 above
+        about 3 to 6 even without any source (pre-existing; WAVE 26A, ADR 0046: the periodic-box part was the lagged
+        periodic partner of the transient momentum matrix, now implicit and fixed; the wall-bounded remainder is the
+        splitting error of the non-converged pressure correctors at large nu dt/dy^2, a property of the scheme, not a
+        coding defect).
+      - Solved-potential current cancellation 1e-6 is missed (8.6e-1 at dt 0.02; 8.05e-3 at dt 2.5e-4 with 3 outer
+        iterations, 2.4e-7 at 24 outer iterations as a diagnostic).
+      - The periodic-box uniform-acceleration and impulse-balance checks miss because of the pre-existing lagged
+        periodic momentum coupling.
+    - Not delivered: coupled solver, Joule heating, case-given or varying B, induced field, non-uniform sigma, a 3-D
+      duct with side-wall layers or a non-trivial solved potential, published experiments.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-215** Interface physics: thermal contact resistance, thin and shell conduction with layers, conditional (open/closed) connections, mapped coupled interfaces
   - depends on: F-114, F-051
   - acceptance: Two-solid contact with prescribed resistance reproduces the analytic series-resistance temperature jump within 1 percent; a layered thin wall matches the composite-wall solution
-  - note: Priority P2. Size M. Area: fv. Builds on the conservative non-conformal interface. Wave 21A (ADR 0035): layered resistances (steady, no layer capacity) and open/closed connection in the case tree; series-resistance and layered-wall checks to round-off. Miss: the registered stiff transient enthalpy-drift limit (G5, dt 0.01) is not met (round-off 1e-11), corrected dt 1e-3 passes. Wave 25A (ADR 0043) diagnosis: the drift is the double-precision representation of the stiff matrix (Fourier number 8e3), not an interface defect. Not delivered: layer thermal capacity, in-plane shell conduction, solution-dependent switching, mapped interfaces. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P2. Size M. Area: fv. The audit of 2026-10-21 marks the item DONE on the acceptance text as written;
+    scope beyond it, and the caveats in the audit file, are not claimed. Miss: the registered stiff transient
+    enthalpy-drift limit (G5, dt 0.01) is not met.
+    - Builds on the conservative non-conformal interface.
+    - Wave 21A (ADR 0035): layered resistances (steady, no layer capacity) and open/closed connection in the case tree;
+      series-resistance and layered-wall checks to round-off.
+    - Miss: the registered stiff transient enthalpy-drift limit (G5, dt 0.01) is not met (round-off 1e-11), corrected
+      dt 1e-3 passes.
+    - Wave 25A (ADR 0043) diagnosis: the drift is the double-precision representation of the stiff matrix (Fourier
+      number 8e3), not an interface defect.
+    - Not delivered: layer thermal capacity, in-plane shell conduction, solution-dependent switching, mapped interfaces.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-216** Per-region model sets: assign energy, turbulence, species and radiation models per region and couple regions through interfaces
   - depends on: F-051, F-114
   - acceptance: A published conjugate heat transfer benchmark with a conducting wall is reproduced within published scatter using different model sets in fluid and solid regions
-  - note: PARTIAL (wave 21B, ADR 0036). Delivered: regions.<name> section (zone all/box/cell_zone/register) with turbulence = model | laminar: the momentum equation uses the molecular viscosity on every face touching a laminar region (steady and transient incompressible runs). Measured: laminar region over the whole domain equals a laminar run exactly (0 difference, limit 1e-6) while a partial region changes the solution (1.9e-4); mask semantics exact; located diagnostics for unknown values, empty zones, no turbulence model, RSM/plugin, rheology and temperature-dependent viscosity. Missing (why partial): the turbulence transport equations are still solved inside laminar regions; per-region energy, radiation and species models; coupling of regions through interfaces; the published conjugate heat transfer benchmark with different model sets (the conjugate code was being changed by another wave). Previous scope text: Priority P3. Size M. Area: fv,api. Architectural item: region-scoped settings in the state tree.
+  - note: PARTIAL (wave 21B, ADR 0036).
+    - Missing (why partial):
+      - The turbulence transport equations are still solved inside laminar regions.
+      - Per-region energy, radiation and species models.
+      - Coupling of regions through interfaces.
+      - The published conjugate heat transfer benchmark with different model sets (the conjugate code was being changed
+        by another wave).
+    - Delivered: regions.<name> section (zone all/box/cell_zone/register) with turbulence = model | laminar: the
+      momentum equation uses the molecular viscosity on every face touching a laminar region (steady and transient
+      incompressible runs).
+    - Measured:
+      - Laminar region over the whole domain equals a laminar run exactly (0 difference, limit 1e-6) while a partial
+        region changes the solution (1.9e-4).
+      - Mask semantics exact.
+      - Located diagnostics for unknown values, empty zones, no turbulence model, RSM/plugin, rheology and
+        temperature-dependent viscosity.
+    - Previous scope text: Priority P3. Size M. Area: fv,api. Architectural item: region-scoped settings in the state
+      tree.
 - [x] **F-217** Heat-exchanger domain model: shell-and-tube and dual-cell macro models, with fan, vent, porous-jump and network boundary types as sub-criteria
   - depends on: F-113, F-050
   - acceptance: Counterflow exchanger reproduces the effectiveness-NTU analytic result within 2 percent; fan and vent boundaries reproduce their prescribed pressure-flow curves
-  - note: PARTIAL (wave 23A, ADR 0039). Delivered: rcfd_fv::hx (eps-NTU counter, parallel, crossflow with one stream mixed, shell and tube, both-unmixed fit; pressure-loss closure) and components heat_exchanger mode ntu (arrangement, UA, constant or dual-cell secondary, loss_coefficient/loss_linear on the downstream plane) and type fan_boundary (curve-driven pressure patch). Measured: counterflow/parallel against eps-NTU and an independent marched solution to 1e-14 (limit 2e-2), dual-cell energy exchange to 1e-8, loss closure exact to 1e-14, fan boundary flow within 6.3e-4 of the analytic operating point and patch pressure on the curve (limit 2e-3). The macro cell is algebraic, so these checks verify wiring, not a resolved exchanger. Misses (ignored known_miss tests, limits unchanged): the both-unmixed crossflow curve fit deviates up to 3.3 percent from the exact solution and breaks the small-N slope and parallel <= cross ordering; shell and tube is UNVERIFIED against a published table. Vent and porous jump reuse ADR 0012/0022 evidence (no new CFD vent test); the fan test needs a distributed bed because a lossless pressure-pressure duct diverges in SIMPLEC. Not delivered: segmented/resolved exchanger, multi-branch network, two-phase, fan total pressure with dynamic head. WAVE 25C (ADR 0045): fan, porous jump, loss closure, fan_boundary and the NTU exchanger now also run in transient PISO/PIMPLE (pimple, 3 outer iterations): fixed-point source check 9.0e-6, fan flow 1.5e-5 and jump drop 2.2e-6, loss closure 6e-14, fan_boundary flow 1.9e-13 and patch pressure 5e-15, NTU duty equal to the steady SIMPLEC duty to 1.4e-14 relative; coupled and compressible algorithms give located errors and are not delivered. WAVE 25B (ADR 0044): the both-unmixed crossflow fit is replaced by the exact Poisson-tail series (worst deviation 7.7e-6 from a Richardson-extrapolated marched 2-D reference, limit 1e-4); the three H2/H3 known-miss tests now pass under --ignored and stay ignored with limits intact. WAVE 39D (ADR 0095): X6 fan boundary at three operating points (bed permeability 3e-7, 1e-6, 1e-5 on the X4 set-up): Q = 1.929e-2, 3.052e-2, 3.621e-2 against the analytic operating points within 1.13e-3, 6.35e-4, 8.6e-5 (limit 5e-3), one point on each curve segment; the patch pressure lies on the curve to 1.8e-13 (by construction). X7 vent on its own set-up (periodic duct, velocity inlet, vent with K = 2.5 at xmax) at u = 0.5, 1, 2, -0.5, -1, -2: the outlet pressure equals 0.5 K u|u| within 3.9e-13 (limit 1e-6), which separates the quadratic law from a linear one by a factor of 2. X7 uses pseudo-time at Courant number 1 (pseudo_dt = 0.02/|u|, ADR 0095 amendment 1). The registered fixed pseudo_dt 0.02 gives NaN at u = 2 (ignored test x7_vent_at_fixed_pseudo_dt_known_miss). Plain SIMPLEC with a velocity inlet and a forward vent diverges from the first iteration (max |ux| 6.06, 1.8e2, 1.8e5 at K = 2.5; stable at K = 0); this robustness defect is not fixed. The acceptance is met. The exchanger checks still verify the algebraic macro model, not a resolved exchanger, and shell-and-tube stays UNVERIFIED.
+  - note: The acceptance is met (WAVE 39D, ADR 0095). The exchanger checks still verify the algebraic macro model, not a
+    resolved exchanger, and shell-and-tube stays UNVERIFIED. Plain SIMPLEC with a velocity inlet and a forward vent
+    diverges from the first iteration; this robustness defect is not fixed. Not delivered: segmented/resolved exchanger,
+    multi-branch network, two-phase, fan total pressure with dynamic head.
+    - PARTIAL (wave 23A, ADR 0039).
+    - Delivered:
+      - rcfd_fv::hx (eps-NTU counter, parallel, crossflow with one stream mixed, shell and tube, both-unmixed fit;
+        pressure-loss closure).
+      - Components heat_exchanger mode ntu (arrangement, UA, constant or dual-cell secondary,
+        loss_coefficient/loss_linear on the downstream plane) and type fan_boundary (curve-driven pressure patch).
+    - Measured:
+      - Counterflow/parallel against eps-NTU and an independent marched solution to 1e-14 (limit 2e-2).
+      - Dual-cell energy exchange to 1e-8.
+      - Loss closure exact to 1e-14.
+      - Fan boundary flow within 6.3e-4 of the analytic operating point and patch pressure on the curve (limit 2e-3).
+    - The macro cell is algebraic, so these checks verify wiring, not a resolved exchanger.
+    - Misses (ignored known_miss tests, limits unchanged):
+      - The both-unmixed crossflow curve fit deviates up to 3.3 percent from the exact solution and breaks the small-N
+        slope and parallel <= cross ordering.
+      - Shell and tube is UNVERIFIED against a published table.
+    - Vent and porous jump reuse ADR 0012/0022 evidence (no new CFD vent test); the fan test needs a distributed bed
+      because a lossless pressure-pressure duct diverges in SIMPLEC.
+    - Not delivered: segmented/resolved exchanger, multi-branch network, two-phase, fan total pressure with dynamic
+      head.
+    - WAVE 25C (ADR 0045): fan, porous jump, loss closure, fan_boundary and the NTU exchanger now also run in transient
+      PISO/PIMPLE (pimple, 3 outer iterations).
+      - Fixed-point source check 9.0e-6.
+      - Fan flow 1.5e-5 and jump drop 2.2e-6.
+      - Loss closure 6e-14.
+      - fan_boundary flow 1.9e-13 and patch pressure 5e-15.
+      - NTU duty equal to the steady SIMPLEC duty to 1.4e-14 relative.
+      - Coupled and compressible algorithms give located errors and are not delivered.
+    - WAVE 25B (ADR 0044): the both-unmixed crossflow fit is replaced by the exact Poisson-tail series (worst deviation
+      7.7e-6 from a Richardson-extrapolated marched 2-D reference, limit 1e-4); the three H2/H3 known-miss tests now
+      pass under --ignored and stay ignored with limits intact.
+    - WAVE 39D (ADR 0095):
+      - X6 fan boundary at three operating points (bed permeability 3e-7, 1e-6, 1e-5 on the X4 set-up): Q = 1.929e-2,
+        3.052e-2, 3.621e-2 against the analytic operating points within 1.13e-3, 6.35e-4, 8.6e-5 (limit 5e-3), one point
+        on each curve segment; the patch pressure lies on the curve to 1.8e-13 (by construction).
+      - X7 vent on its own set-up (periodic duct, velocity inlet, vent with K = 2.5 at xmax) at u = 0.5, 1, 2, -0.5, -1,
+        -2: the outlet pressure equals 0.5 K u|u| within 3.9e-13 (limit 1e-6), which separates the quadratic law from a
+        linear one by a factor of 2.
+      - X7 uses pseudo-time at Courant number 1 (pseudo_dt = 0.02/|u|, ADR 0095 amendment 1).
+      - The registered fixed pseudo_dt 0.02 gives NaN at u = 2 (ignored test x7_vent_at_fixed_pseudo_dt_known_miss).
+      - Plain SIMPLEC with a velocity inlet and a forward vent diverges from the first iteration (max |ux| 6.06, 1.8e2,
+        1.8e5 at K = 2.5; stable at K = 0); this robustness defect is not fixed.
+    - The acceptance is met.
+    - The exchanger checks still verify the algebraic macro model, not a resolved exchanger, and shell-and-tube stays
+      UNVERIFIED.
 - [~] **F-218** Actuator-disk (virtual blade) momentum source for rotors and propellers: blade-element lookup, tip loss, trim
   - depends on: F-031, F-113
   - acceptance: Axial hover thrust and induced velocity match momentum theory; a public model-rotor hover data set gives thrust within 10 percent
-  - note: PARTIAL (wave 21B, ADR 0036). Delivered: rcfd-fv actuator.rs and sources type actuator_disk (steady SIMPLE/SIMPLEC; WAVE 25C, ADR 0045: a steady-in-time disk also in transient PISO/PIMPLE, duct kinematic dp 50.0000 and velocity perturbation 1e-12, coupled/compressible give located errors): thrust along a direction over a zone (box, cell_zone, register, all), uniform or linear-in-radius loading, optional swirl torque about the disk axis, force and torque exact to machine precision (3.7 N to 4e-16 relative, 0.7 N m to 1e-15), smoothed distribution (default) that removes the edge-cell imbalance of a sharp top-hat; momentum-theory closed forms (induced velocity, wake velocity, power, figure of merit, Betz coefficients) verified to 1e-13; located diagnostics. Duct pressure jump: corrected set-up (A4b) kinematic dp 50.0000 (limit 0.5), velocity perturbation 2.9e-12; the registered symmetry-wall set-up misses on velocity because the existing solver does not keep plug flow with symmetry side walls (0.159 even without a disk) and the sharp top-hat (distribution = cell) misses with a 3 m/s jet; both are ignored known-miss tests. Missing (why partial): blade-element lookup, tip loss and trim; time-varying and rotating disks; the model-rotor hover data comparison (acceptance 10 percent) and any validated CFD hover induced-velocity result (A5 not attempted); hover momentum-theory formulas are derived, not checked against a rotorcraft text. Previous scope text: Priority P3. Size M. Area: fv. Momentum source distributed over a disk zone.
+  - note: PARTIAL (wave 21B, ADR 0036).
+    - Missing (why partial):
+      - Blade-element lookup, tip loss and trim.
+      - Time-varying and rotating disks.
+      - The model-rotor hover data comparison (acceptance 10 percent) and any validated CFD hover induced-velocity
+        result (A5 not attempted).
+      - Hover momentum-theory formulas are derived, not checked against a rotorcraft text.
+    - Delivered: rcfd-fv actuator.rs and sources type actuator_disk (steady SIMPLE/SIMPLEC; WAVE 25C, ADR 0045: a
+      steady-in-time disk also in transient PISO/PIMPLE, duct kinematic dp 50.0000 and velocity perturbation 1e-12,
+      coupled/compressible give located errors):
+      - Thrust along a direction over a zone (box, cell_zone, register, all), uniform or linear-in-radius loading,
+        optional swirl torque about the disk axis, force and torque exact to machine precision (3.7 N to 4e-16 relative,
+        0.7 N m to 1e-15).
+      - Smoothed distribution (default) that removes the edge-cell imbalance of a sharp top-hat.
+      - Momentum-theory closed forms (induced velocity, wake velocity, power, figure of merit, Betz coefficients)
+        verified to 1e-13.
+      - Located diagnostics.
+    - Duct pressure jump:
+      - Corrected set-up (A4b) kinematic dp 50.0000 (limit 0.5), velocity perturbation 2.9e-12.
+      - The registered symmetry-wall set-up misses on velocity because the existing solver does not keep plug flow with
+        symmetry side walls (0.159 even without a disk) and the sharp top-hat (distribution = cell) misses with a 3 m/s
+        jet; both are ignored known-miss tests.
+    - Previous scope text: Priority P3. Size M. Area: fv. Momentum source distributed over a disk zone.
 - [ ] **F-219** Immersed (non-conforming) solid domain with modified forcing
   - depends on: F-051, F-114
   - acceptance: Flow past a cylinder with an immersed solid matches the published DFG 2D-1 drag, lift and Strouhal number within 5 percent
@@ -605,7 +4002,39 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [x] **F-220** Tabulated and piecewise material properties: pressure-temperature tables with saturation lines, piecewise-linear and piecewise-polynomial forms, nine-coefficient heat-capacity polynomials, compressible-liquid density, curve-fit viscosity laws, orthotropic conductivity
   - depends on: F-111, F-061
   - acceptance: Public water and steam verification values reproduced to the standard's table tolerance; saturation-line round trip closes; a compressible-liquid density law reproduces its defining relation
-  - note: PARTIAL (wave 21B, ADR 0036). Delivered: rcfd-core tabular.rs with piecewise-linear and piecewise-polynomial tables (located validation, monotonic checks, constant/linear/error extrapolation), Vogel-Fulcher-Tammann viscosity, the Tait compressible-liquid density law, and a pressure-temperature table with saturation line, phase selection and bilinear interpolation; case-schema laws piecewise_linear, piecewise_polynomial and vogel in properties.viscosity / conductivity / specific_heat (defaults and baseline hashes unchanged). Measured: interpolation exact at nodes; P1 table-vs-polynomial dT 4.4e-12 K; kinked-conductivity Kirchhoff case 7.4e-2 K (limit 0.5); Vogel Couette 4.4e-5 U; saturation interpolation 5.2e-4 (limit 1e-3), psat(tsat) round trip and phase selection pass. KNOWN MISS: the registered 1e-4 mid-cell interpolation error of the steam table is 2.64e-4 (liquid half 3.3e-5 passes) because steam is non-ideal in the pressure direction; kept as an ignored test, limit not widened. Missing (why partial): orthotropic conductivity; NASA nine-coefficient heat capacity as a case law (exists in the reactor crate); pressure-dependent properties (Tait density, P-T tables) are library-only and not connected to the incompressible solvers; CSV table-file property laws; the water/steam acceptance rests on the existing IF97 module, not on new table data. Tait and Vogel formulas verified against public pages (docs/reference-data.md). Previous scope text: Priority P2. Size M. Area: core,api. Public formulations only; no reference-fluid database import. WAVE 25B (ADR 0044): opt-in PtTable::eval_density_ideal_scaled meets the registered 1e-4 on the T9 vapour table (1.24e-5); plain bilinear eval is unchanged and its known miss (2.6e-4) stays ignored. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: The audit of 2026-10-21 marks the item DONE on the acceptance text as written; scope beyond it, and the
+    caveats in the audit file, are not claimed. KNOWN MISS: plain bilinear eval of the steam table is at 2.6e-4 against
+    the registered 1e-4 and stays ignored. The water/steam acceptance rests on the existing IF97 module, not on new
+    table data.
+    - PARTIAL (wave 21B, ADR 0036).
+    - Delivered:
+      - rcfd-core tabular.rs with piecewise-linear and piecewise-polynomial tables (located validation, monotonic
+        checks, constant/linear/error extrapolation), Vogel-Fulcher-Tammann viscosity, the Tait compressible-liquid
+        density law, and a pressure-temperature table with saturation line, phase selection and bilinear interpolation.
+      - Case-schema laws piecewise_linear, piecewise_polynomial and vogel in properties.viscosity / conductivity /
+        specific_heat (defaults and baseline hashes unchanged).
+    - Measured:
+      - Interpolation exact at nodes.
+      - P1 table-vs-polynomial dT 4.4e-12 K.
+      - Kinked-conductivity Kirchhoff case 7.4e-2 K (limit 0.5).
+      - Vogel Couette 4.4e-5 U.
+      - Saturation interpolation 5.2e-4 (limit 1e-3), psat(tsat) round trip and phase selection pass.
+    - KNOWN MISS: the registered 1e-4 mid-cell interpolation error of the steam table is 2.64e-4 (liquid half 3.3e-5
+      passes) because steam is non-ideal in the pressure direction; kept as an ignored test, limit not widened.
+    - Missing (why partial):
+      - Orthotropic conductivity.
+      - NASA nine-coefficient heat capacity as a case law (exists in the reactor crate).
+      - Pressure-dependent properties (Tait density, P-T tables) are library-only and not connected to the
+        incompressible solvers.
+      - CSV table-file property laws.
+      - The water/steam acceptance rests on the existing IF97 module, not on new table data.
+    - Tait and Vogel formulas verified against public pages (docs/reference-data.md).
+    - Previous scope text: Priority P2. Size M. Area: core,api. Public formulations only; no reference-fluid database
+      import.
+    - WAVE 25B (ADR 0044): opt-in PtTable::eval_density_ideal_scaled meets the registered 1e-4 on the T9 vapour table
+      (1.24e-5); plain bilinear eval is unchanged and its known miss (2.6e-4) stays ignored.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [ ] **F-221** Non-equilibrium condensing (wet) steam in transonic flow
   - depends on: F-220, F-060
   - acceptance: Condensing steam in a converging-diverging nozzle reproduces the published wall-pressure trace and onset location within 5 percent
@@ -613,83 +4042,529 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [~] **F-222** Pollutant post-processing: thermal NOx (extended Zeldovich), prompt, fuel and N2O paths, moment-based soot
   - depends on: F-054
   - acceptance: Zeldovich rate agrees with published data on a premixed laminar flame; a piloted jet flame NO trend lies within the published band
-  - note: Priority P3. Size M. Area: reactor. Run as post-processing on the converged flow, then optionally coupled. PARTIAL (wave 18B, ADR 0027). Delivered: extended Zeldovich thermal NO rate with steady-state N as a library function (crates/rcfd-reactor pollutants.rs), closed form to 1e-12, zero at detailed balance, quasi-steady against the integrated two-reaction system 6.8e-7 on the corrected set-up (the registered set-up missed at 3.8e-3, kept as an ignored known miss). NOT done: prompt, fuel and N2O paths, soot, any CFD coupling or post-processing of a converged field, rate constants (inputs only; literature set UNVERIFIED, not bundled), agreement with published flame data. Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1.
+  - note: Priority P3. Size M. Area: reactor. PARTIAL (wave 18B, ADR 0027). NOT done: prompt, fuel and N2O paths, soot,
+    any CFD coupling or post-processing of a converged field, rate constants (inputs only; literature set UNVERIFIED,
+    not bundled), agreement with published flame data.
+    - Run as post-processing on the converged flow, then optionally coupled.
+    - Delivered: extended Zeldovich thermal NO rate with steady-state N as a library function (crates/rcfd-reactor
+      pollutants.rs), closed form to 1e-12, zero at detailed balance, quasi-steady against the integrated two-reaction
+      system 6.8e-7 on the corrected set-up (the registered set-up missed at 3.8e-3, kept as an ignored known miss).
+    - Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section
+      and addendum A1.
 - [~] **F-223** Stiff chemistry acceleration: in-situ tabulation, dynamic mechanism reduction, clustering of similar cells
   - depends on: F-112, F-054
   - acceptance: 0D ignition delay of a published fuel/mechanism pair reproduced within 5 percent with acceleration enabled, with a documented speed-up
-  - note: PARTIAL (wave 28B, ADR 0053). Delivered: ISAT (Pope 1997) as a library with ellipsoid growth, element-active subspace and frozen-noise rule (crates/rcfd-reactor isat.rs); DRG static skeleton and dynamic per-step reduction (drg.rs); leader clustering of similar cells with increment transfer, tolerance 0 bit-identical (cluster.rs); case keys chemistry.acceleration (off|cluster|isat) and chemistry.accel_tolerance on the transient finite_rate step, chemistry.json acceleration object. Measured: 0D H2/air ignition delay with ISAT 1.7e-3 and with dynamic DRG 1.6e-3 relative difference to the direct integration (limit 5e-2), speed-up 118 for cell ISAT on repeated states and 5.4 to 9 for DRG (reported only). MISSES (ignored known-miss tests, limits intact): ISAT retrieval error 1.27e-3 against 1e-3 on the heated ensemble, element drift 2.4e-9 against 1e-9, and the profile test (cells did not ignite, 0 against 17 above 1500 K). NOT DELIVERED: comparison against a published ignition-delay measurement (the 5 percent point is met only against the same mechanism integrated directly), acceleration of steady or EDC closures, parallel tables. Priority P3. Size L. Area: reactor. Parallel-memory dependency deliberately dropped; works in shared memory.
+  - note: PARTIAL (wave 28B, ADR 0053). The 5 percent point is met only against the same mechanism integrated directly;
+    comparison against a published ignition-delay measurement is NOT DELIVERED.
+    - Delivered:
+      - ISAT (Pope 1997) as a library with ellipsoid growth, element-active subspace and frozen-noise rule
+        (crates/rcfd-reactor isat.rs).
+      - DRG static skeleton and dynamic per-step reduction (drg.rs).
+      - Leader clustering of similar cells with increment transfer, tolerance 0 bit-identical (cluster.rs).
+      - Case keys chemistry.acceleration (off|cluster|isat) and chemistry.accel_tolerance on the transient finite_rate
+        step, chemistry.json acceleration object.
+    - Measured: 0D H2/air ignition delay with ISAT 1.7e-3 and with dynamic DRG 1.6e-3 relative difference to the direct
+      integration (limit 5e-2), speed-up 118 for cell ISAT on repeated states and 5.4 to 9 for DRG (reported only).
+    - MISSES (ignored known-miss tests, limits intact):
+      - ISAT retrieval error 1.27e-3 against 1e-3 on the heated ensemble.
+      - Element drift 2.4e-9 against 1e-9.
+      - The profile test (cells did not ignite, 0 against 17 above 1500 K).
+    - NOT DELIVERED: comparison against a published ignition-delay measurement (the 5 percent point is met only against
+      the same mechanism integrated directly), acceleration of steady or EDC closures, parallel tables.
+    - Priority P3. Size L. Area: reactor. Parallel-memory dependency deliberately dropped; works in shared memory.
 - [~] **F-224** Chemistry input formats: thermo, transport and surface decks, YAML mechanism import, nine-coefficient thermodynamic polynomials
   - depends on: F-054, F-111
   - acceptance: Import of a public mechanism in two formats yields identical species and reaction counts and equal equilibrium states for hydrogen-air at three conditions
-  - note: Priority P2. Size M. Area: reactor,io. Extends the mechanism reader. PARTIAL (wave 18B, ADR 0027). Delivered: optional NASA nine-coefficient thermodynamics on `Species` (derivative consistency 5.6e-10, NASA-7 mapping exact) and a lossless JSON mechanism interchange (format rcfd-mechanism v1, round trip identical rates of progress and equilibrium). NOT done: reading the nine-coefficient text file layout of the public database, YAML mechanism import, transport and surface decks, a public mechanism in two formats (acceptance). Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1.
+  - note: Priority P2. Size M. Area: reactor,io. PARTIAL (wave 18B, ADR 0027). NOT done: reading the nine-coefficient
+    text file layout of the public database, YAML mechanism import, transport and surface decks, a public mechanism in
+    two formats (acceptance).
+    - Extends the mechanism reader.
+    - Delivered: optional NASA nine-coefficient thermodynamics on `Species` (derivative consistency 5.6e-10, NASA-7
+      mapping exact) and a lossless JSON mechanism interchange (format rcfd-mechanism v1, round trip identical rates of
+      progress and equilibrium).
+    - Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section
+      and addendum A1.
 - [~] **F-225** Reactor networks and mechanism analysis: plug-flow reactor, shock tube, network composition, sensitivity ranking, premixed flame-speed library
   - depends on: F-112, F-054
   - acceptance: A PSR-PFR network for a published methane-air case reproduces the blowout residence time and CO profile of the public validation set within 10 percent; sensitivity ranking matches the reference ordering
-  - note: Priority P3. Size M. Area: reactor. Builds on the 0D reactor toolkit. PARTIAL (wave 18B, ADR 0027). Delivered: brute-force logarithmic sensitivity to pre-exponential factors with ranking (|S+1| 6.7e-13 on the scaling problem) and a PSR followed by plug flow network (1e-11 against closed forms); the plug-flow reactor itself was delivered in F-112. NOT done: shock tube, premixed flame-speed library, published methane-air PSR-PFR comparison (acceptance), sensitivity of species outcomes to thermodynamic data. Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section and addendum A1.
+  - note: Priority P3. Size M. Area: reactor. PARTIAL (wave 18B, ADR 0027). NOT done: shock tube, premixed flame-speed
+    library, published methane-air PSR-PFR comparison (acceptance), sensitivity of species outcomes to thermodynamic
+    data.
+    - Builds on the 0D reactor toolkit.
+    - Delivered: brute-force logarithmic sensitivity to pre-exponential factors with ranking (|S+1| 6.7e-13 on the
+      scaling problem) and a PSR followed by plug flow network (1e-11 against closed forms); the plug-flow reactor
+      itself was delivered in F-112.
+    - Checks registered in docs/adr/0027-wave18b-combustion.md before running; results and misses in its Results section
+      and addendum A1.
 - [~] **F-226** Interfacial mass transfer catalogue: evaporation-condensation (temperature or pressure driven), species-equilibrium transfer (Raoult, Henry), wall condensation
   - depends on: F-055, F-127
   - acceptance: 1D Stefan evaporation matches the analytic solution; film condensation agrees with the Nusselt solution within 10 percent
-  - note: PARTIAL (wave 23B library, ADR 0040; wave 28A wiring into the VOF host and case tree, ADR 0052). WAVE 28A: Lee and Hertz-Knudsen-Schrage mass transfer is wired into the VOF host (rcfd-fv vof.rs) and the case tree (multiphase.mass_transfer): source in the alpha equation (exponential integrator of the frozen-temperature relaxation for Lee, alpha stays in [0, 1]) and the continuity volume source mdot (1/rho_v - 1/rho_l) in the pressure equation (solve_pressure_src); the same delivered rate feeds both. Checks M1-M5 pass: closed form 1.4e-14, per-cell phase balance 2.2e-16, coupled volume identity 9.2e-16, continuity 2.1e-13, zero transfer at saturation bit-identical, Hertz-Knudsen 1.1e-15; tree equals library. LIMITATIONS: there is no energy equation in the multiphase path, so the temperature is a PRESCRIBED field (uniform plus constant gradient), the latent heat only enters p_sat and a reported power, there is no latent-heat feedback, no 1D Stefan problem or boiling run, and no phase-change term in the momentum rho phi; a pressure patch is required; the rate is clipped to the phase available in the cell. Library delivered in wave 23B: rcfd-fv masstransfer.rs, per-cell source evaluators taking phase fractions, temperatures and pressures: Lee temperature-driven and Hertz-Knudsen-Schrage kinetic evaporation-condensation, a pressure-driven bubble-dynamics form derived from Rayleigh-Plesset (Zwart-Gerber-Belamri structure), Raoult bubble/dew pressures and Henry's law with van 't Hoff temperature dependence, species transfer rate, Nusselt laminar-film wall condensation (film thickness, wall mass flux, mean coefficient 0.943 form) and a 0-D Lee relaxation cell. Checked against hand values and closed forms (to 1e-13 and better), exact phase-source conservation (liquid + vapour == 0, energy == -mdot h_fg), zero at saturation, sign logic, kinetic-theory maximum flux, Nusselt mass-flow identity, and the frozen-mass relaxation analytic solution (6e-11 relative); located errors for bad inputs. All M1-M9 checks pass, no misses. Missing (why partial): an Euler-Euler host; energy-equation coupling and the 1D Stefan evaporation acceptance (needs an energy equation and a moving-interface solver); the CFD-level film condensation within 10 percent of Nusselt; activity-coefficient equilibrium models; interfacial-area transport (F-228). Lee, ZGB factor values, Schrage factor and Rohsenow 0.68 are from knowledge and UNVERIFIED (docs/reference-data.md). Previous scope text: Priority P3. Size M. Area: fv. Source-term closures on top of the multiphase base.
+  - note: PARTIAL (wave 23B library, ADR 0040; wave 28A wiring into the VOF host and case tree, ADR 0052). The 1D Stefan
+    evaporation acceptance and the CFD-level film condensation within 10 percent of Nusselt are missing. There is no
+    energy equation in the multiphase path, so the temperature is a PRESCRIBED field. Lee, ZGB factor values, Schrage
+    factor and Rohsenow 0.68 are from knowledge and UNVERIFIED (docs/reference-data.md).
+    - WAVE 28A: Lee and Hertz-Knudsen-Schrage mass transfer is wired into the VOF host (rcfd-fv vof.rs) and the case
+      tree (multiphase.mass_transfer).
+      - Source in the alpha equation (exponential integrator of the frozen-temperature relaxation for Lee, alpha stays
+        in [0, 1]) and the continuity volume source mdot (1/rho_v - 1/rho_l) in the pressure equation
+        (solve_pressure_src); the same delivered rate feeds both.
+      - Checks M1-M5 pass: closed form 1.4e-14, per-cell phase balance 2.2e-16, coupled volume identity 9.2e-16,
+        continuity 2.1e-13, zero transfer at saturation bit-identical, Hertz-Knudsen 1.1e-15; tree equals library.
+      - LIMITATIONS: there is no energy equation in the multiphase path, so the temperature is a PRESCRIBED field
+        (uniform plus constant gradient), the latent heat only enters p_sat and a reported power, there is no
+        latent-heat feedback, no 1D Stefan problem or boiling run, and no phase-change term in the momentum rho phi; a
+        pressure patch is required; the rate is clipped to the phase available in the cell.
+    - Library delivered in wave 23B: rcfd-fv masstransfer.rs, per-cell source evaluators taking phase fractions,
+      temperatures and pressures:
+      - Lee temperature-driven and Hertz-Knudsen-Schrage kinetic evaporation-condensation.
+      - A pressure-driven bubble-dynamics form derived from Rayleigh-Plesset (Zwart-Gerber-Belamri structure).
+      - Raoult bubble/dew pressures and Henry's law with van 't Hoff temperature dependence.
+      - Species transfer rate.
+      - Nusselt laminar-film wall condensation (film thickness, wall mass flux, mean coefficient 0.943 form).
+      - A 0-D Lee relaxation cell.
+    - Checked against hand values and closed forms (to 1e-13 and better), exact phase-source conservation (liquid +
+      vapour == 0, energy == -mdot h_fg), zero at saturation, sign logic, kinetic-theory maximum flux, Nusselt mass-flow
+      identity, and the frozen-mass relaxation analytic solution (6e-11 relative); located errors for bad inputs.
+    - All M1-M9 checks pass, no misses.
+    - Missing (why partial):
+      - An Euler-Euler host.
+      - Energy-equation coupling and the 1D Stefan evaporation acceptance (needs an energy equation and a
+        moving-interface solver).
+      - The CFD-level film condensation within 10 percent of Nusselt.
+      - Activity-coefficient equilibrium models.
+      - Interfacial-area transport (F-228).
+    - Lee, ZGB factor values, Schrage factor and Rohsenow 0.68 are from knowledge and UNVERIFIED
+      (docs/reference-data.md).
+    - Previous scope text: Priority P3. Size M. Area: fv. Source-term closures on top of the multiphase base.
 - [~] **F-227** Free-surface wave generation and absorption: linear and Stokes wave inlets, irregular spectrum waves, numerical beach damping
   - depends on: F-055
   - acceptance: Linear dispersion relation and Stokes wave elevation reproduced; reflected-wave fraction below 5 percent with the beach
-  - note: PARTIAL (wave 23B library, ADR 0040; wave 28A wiring into the VOF host and case tree, ADR 0052). WAVE 28A: a wave-inlet boundary (per-face velocity and alpha from Airy / Stokes-2 kinematics with a ramp) and a relaxation-zone beach (still-water target, exponential or polynomial weights) are wired into the VOF host and the case tree (multiphase.waves, multiphase.reference_point). Coarse 2-D tank (depth 0.30 m, T 1 s, H 0.06 m, lambda/32): wave height -10.5 percent at 0.5 lambda and -18.0 percent at 1.5 lambda (limits 12 and 25, numerical damping stated in the ADR before the runs), periods within 0.5 percent; beach K_r 0.014 against the control wall 0.524 (20 periods; Goda-Suzuki two-gauge method; limits 0.15 and 0.5); volume identity 6e-14, level drift 1.4e-3 m (limit 6e-3), alpha bounded; inlet values reproduce the wave to 1e-16 m. KNOWN MISSES (ignored tests, limits intact): the 10-period control (set-up defect, window before the reflected group returns; corrected 20-period tests pass) and still water with the zone and 3 PISO correctors (max|U| 1.3e-8 against 1e-10: base PISO splitting error of the thin air layer, identical without the zone; with 4 correctors 8e-12 passes). Not delivered: a refinement study, Stokes-2 or irregular waves in a tank run, 3-D tanks, comparison with published tank data, relaxation to a wave target in the tree. Library delivered in wave 23B: rcfd-fv waves.rs: finite-depth dispersion solved to 2e-15 residual, Airy and second-order Stokes kinematics (elevation, velocity, potential, pressure) usable as wave-inlet values with a start-up ramp and an exact liquid-volume-fraction helper; irregular waves from Pierson-Moskowitz and JONSWAP spectra with a seeded reproducible phase set (recovered Hs within 4.8e-4 and 3.3e-4 of target, moments m1 and m2 within 2e-5 and 8e-4 of closed forms); relaxation-zone blending weights (exponential and polynomial, exact endpoints, monotone) and sponge profiles; and a 1-D linear shallow-water tank for reflection estimates. Linear dispersion limits, energy equipartition and mean flux, continuity and Laplace pass; the Stokes formulas satisfy both free-surface conditions through second order (the residual is third order: ratio 8.00 for halved amplitude). 1-D toy tank: rigid wall R = 1.00000, exponential relaxation beach of 2 wavelengths R = 2.6e-4 (limit 0.05, acceptance statement met only in this toy, not in a free-surface solver). KNOWN MISSES (ignored tests, limits not changed): the registered W3 residual-scaling statement divided by the amplitude and so cannot pass (corrected test w3b passes); the registered 'abrupt zone reflects at least 0.5' check measured 0.214 (wrong premise; a post-hoc corrected comparison is labelled as such in the ADR addendum). Missing (why partial): the full tank acceptance beyond the coarse 2-D checks of wave 28A; third and higher order Stokes, cnoidal and stream-function waves; directional spectra; piston/flap wave makers; any 2-D/3-D reflection measurement. Second-order Stokes, JONSWAP and the blending formula citations are UNVERIFIED (docs/reference-data.md); the formulas are validated by the tests. Previous scope text: Priority P3. Size M. Area: fv. Wave boundary conditions for the free-surface solver. WAVE 25B (ADR 0044): damping diagnosed as per-step multiplication; the sponge R=0.135 is exp(-2 int sigma dx/c); the W7(d) premise (abrupt zone reflects >= 0.5) is ill-posed for the registered blend (R=0.214); w7d stays ignored, continuum estimate misses its 25 percent limit (ignored w8_4 known miss).
+  - note: PARTIAL (wave 23B library, ADR 0040; wave 28A wiring into the VOF host and case tree, ADR 0052). The full tank
+    acceptance beyond the coarse 2-D checks of wave 28A is missing. WAVE 28A did not deliver a refinement study,
+    Stokes-2 or irregular waves in a tank run, 3-D tanks or a comparison with published tank data.
+    - WAVE 28A: a wave-inlet boundary (per-face velocity and alpha from Airy / Stokes-2 kinematics with a ramp) and a
+      relaxation-zone beach (still-water target, exponential or polynomial weights) are wired into the VOF host and the
+      case tree (multiphase.waves, multiphase.reference_point).
+      - Coarse 2-D tank (depth 0.30 m, T 1 s, H 0.06 m, lambda/32):
+        - Wave height -10.5 percent at 0.5 lambda and -18.0 percent at 1.5 lambda (limits 12 and 25, numerical damping
+          stated in the ADR before the runs), periods within 0.5 percent.
+        - Beach K_r 0.014 against the control wall 0.524 (20 periods; Goda-Suzuki two-gauge method; limits 0.15 and
+          0.5).
+        - Volume identity 6e-14, level drift 1.4e-3 m (limit 6e-3), alpha bounded.
+        - Inlet values reproduce the wave to 1e-16 m.
+      - KNOWN MISSES (ignored tests, limits intact):
+        - The 10-period control (set-up defect, window before the reflected group returns; corrected 20-period tests
+          pass).
+        - Still water with the zone and 3 PISO correctors (max|U| 1.3e-8 against 1e-10: base PISO splitting error of the
+          thin air layer, identical without the zone; with 4 correctors 8e-12 passes).
+      - Not delivered: a refinement study, Stokes-2 or irregular waves in a tank run, 3-D tanks, comparison with
+        published tank data, relaxation to a wave target in the tree.
+    - Library delivered in wave 23B: rcfd-fv waves.rs:
+      - Finite-depth dispersion solved to 2e-15 residual.
+      - Airy and second-order Stokes kinematics (elevation, velocity, potential, pressure) usable as wave-inlet values
+        with a start-up ramp and an exact liquid-volume-fraction helper.
+      - Irregular waves from Pierson-Moskowitz and JONSWAP spectra with a seeded reproducible phase set (recovered Hs
+        within 4.8e-4 and 3.3e-4 of target, moments m1 and m2 within 2e-5 and 8e-4 of closed forms).
+      - Relaxation-zone blending weights (exponential and polynomial, exact endpoints, monotone) and sponge profiles.
+      - A 1-D linear shallow-water tank for reflection estimates.
+    - Linear dispersion limits, energy equipartition and mean flux, continuity and Laplace pass; the Stokes formulas
+      satisfy both free-surface conditions through second order (the residual is third order: ratio 8.00 for halved
+      amplitude).
+    - 1-D toy tank: rigid wall R = 1.00000, exponential relaxation beach of 2 wavelengths R = 2.6e-4 (limit 0.05,
+      acceptance statement met only in this toy, not in a free-surface solver).
+    - KNOWN MISSES (ignored tests, limits not changed):
+      - The registered W3 residual-scaling statement divided by the amplitude and so cannot pass (corrected test w3b
+        passes).
+      - The registered 'abrupt zone reflects at least 0.5' check measured 0.214 (wrong premise; a post-hoc corrected
+        comparison is labelled as such in the ADR addendum).
+    - Missing (why partial):
+      - The full tank acceptance beyond the coarse 2-D checks of wave 28A.
+      - Third and higher order Stokes, cnoidal and stream-function waves.
+      - Directional spectra.
+      - Piston/flap wave makers.
+      - Any 2-D/3-D reflection measurement.
+    - Second-order Stokes, JONSWAP and the blending formula citations are UNVERIFIED (docs/reference-data.md); the
+      formulas are validated by the tests.
+    - Previous scope text: Priority P3. Size M. Area: fv. Wave boundary conditions for the free-surface solver.
+    - WAVE 25B (ADR 0044): damping diagnosed as per-step multiplication; the sponge R=0.135 is exp(-2 int sigma dx/c);
+      the W7(d) premise (abrupt zone reflects >= 0.5) is ill-posed for the registered blend (R=0.214); w7d stays
+      ignored, continuum estimate misses its 25 percent limit (ignored w8_4 known miss).
 - [x] **F-228** Population balance and polydispersed phases: discrete size bins and moment methods with breakup and coalescence kernels
   - depends on: F-127
   - acceptance: Constant-kernel coalescence matches the analytic Smoluchowski moment solution
-  - note: Priority P4. Size L. Area: fv. Single item replaces the separate population-balance and polydispersed scope. Wave 23C (ADR 0041), partial: LIBRARY only, one-way, no multiphase base (F-127 todo). Delivered in rcfd-fv popbal.rs: 0-D fixed-pivot bins (coalescence: constant, sum, product, Brownian, shear, Saffman-Turner; breakup: constant/power rate with binary, uniform, symmetric-beta daughters) and QMOM (Wheeler, located realizability errors), plus a one-way transport helper carrying the bins as passive scalars (no interphase coupling). Constant-kernel Smoluchowski moments matched to 1e-8 or better (bins and QMOM); sum, product and breakup closed forms and conservation to round-off checked. Gaps: case-tree wiring, interphase momentum/mass/volume-fraction coupling, turbulence-driven kernels from a k-epsilon run, DQMOM, method of classes, spatial moment transport. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P4. Size L. Area: fv. The audit of 2026-10-21 marks the item DONE on the acceptance text as written;
+    scope beyond it, and the caveats in the audit file, are not claimed. Wave 23C delivered a LIBRARY only, one-way,
+    with no multiphase base.
+    - Single item replaces the separate population-balance and polydispersed scope.
+    - Wave 23C (ADR 0041), partial: LIBRARY only, one-way, no multiphase base (F-127 todo).
+    - Delivered in rcfd-fv popbal.rs:
+      - 0-D fixed-pivot bins (coalescence: constant, sum, product, Brownian, shear, Saffman-Turner; breakup:
+        constant/power rate with binary, uniform, symmetric-beta daughters).
+      - QMOM (Wheeler, located realizability errors).
+      - A one-way transport helper carrying the bins as passive scalars (no interphase coupling).
+    - Constant-kernel Smoluchowski moments matched to 1e-8 or better (bins and QMOM); sum, product and breakup closed
+      forms and conservation to round-off checked.
+    - Gaps: case-tree wiring, interphase momentum/mass/volume-fraction coupling, turbulence-driven kernels from a
+      k-epsilon run, DQMOM, method of classes, spatial moment transport.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [x] **F-229** Six-degree-of-freedom rigid-body dynamics: force and moment integration, per-axis constraints, springs, coupling modes, user-property hook, coupled to mesh motion
   - depends on: F-063, F-024
   - acceptance: Free fall with a prescribed linear drag law reaches the analytic terminal velocity within 2 percent; a body on a prescribed spring and damper recovers the damped-oscillator frequency within 2 percent; compound pendulum period matches the closed form; locked axes stay fixed
-  - note: Priority P2. Size M. Area: fv,mesh. Merged from two proposals. WAVE 20B (ADR 0033, partial): six-degree-of-freedom rigid body (crates/rcfd-fv/src/sixdof.rs): force and moment integration on chosen patches, quaternion orientation, translation locks, locked / free / about-axis / hinge rotation, gravity, translational and torsional spring and damper, user force hook and drag hook (library), RK4 and Newmark integrators, loose explicit coupling to the moving mesh, `dynamic_mesh.motion = six_dof` in the case tree. Measured: free flight 1e-10, spring oscillator Newmark 1.3e-3 (limit 2e-3, order 2.0) and RK4 2.1e-6 (order 3.97), terminal velocity with drag 2.4e-7 (1e-5), torque-free angular momentum and energy 1e-11, compound pendulum period 8.9e-5 (1e-3) and 4.3e-10 at amplitude 1 (RK4), locked axes exactly fixed, plate on a fluid layer decays with the Couette force (0.9988 of the closed form), piston pushing a fluid column 1.00003 of the closed form. Not done: the flow-coupled spring-mounted body frequency (2 percent) and a free fall with drag in a resolved flow (the drag validation uses a registered drag hook, not a flow), strong coupling and added-mass stabilisation, free 3D rotation with Newmark, contact and multi-body, `mesh_motion = none`. DONE (decision 2026-10-21): acceptance reworded to the prescribed drag law and prescribed spring that the tests use (R1 1.13e-10 vs 1e-8, R3 trajectory 2.4e-7 vs 1e-5, R5 pendulum 8.9e-5 / 4.3e-10 RK4, R6 locked axes exact). Correction: the '2.4e-7' above labelled terminal velocity is the damped-oscillator (R3) number; the free fall is 1.13e-10. The flow-coupled free fall and spring-mounted body are NOT delivered and are tracked in F-244.
+  - note: Priority P2. Size M. Area: fv,mesh. DONE (decision 2026-10-21): acceptance reworded to the prescribed drag law
+    and prescribed spring that the tests use. The flow-coupled free fall and spring-mounted body are NOT delivered and
+    are tracked in F-244.
+    - Merged from two proposals.
+    - WAVE 20B (ADR 0033, partial): six-degree-of-freedom rigid body (crates/rcfd-fv/src/sixdof.rs): force and moment
+      integration on chosen patches, quaternion orientation, translation locks, locked / free / about-axis / hinge
+      rotation, gravity, translational and torsional spring and damper, user force hook and drag hook (library), RK4 and
+      Newmark integrators, loose explicit coupling to the moving mesh, `dynamic_mesh.motion = six_dof` in the case tree.
+    - Measured:
+      - Free flight 1e-10.
+      - Spring oscillator Newmark 1.3e-3 (limit 2e-3, order 2.0) and RK4 2.1e-6 (order 3.97).
+      - Terminal velocity with drag 2.4e-7 (1e-5).
+      - Torque-free angular momentum and energy 1e-11.
+      - Compound pendulum period 8.9e-5 (1e-3) and 4.3e-10 at amplitude 1 (RK4).
+      - Locked axes exactly fixed.
+      - Plate on a fluid layer decays with the Couette force (0.9988 of the closed form).
+      - Piston pushing a fluid column 1.00003 of the closed form.
+    - Not done: the flow-coupled spring-mounted body frequency (2 percent) and a free fall with drag in a resolved flow
+      (the drag validation uses a registered drag hook, not a flow), strong coupling and added-mass stabilisation, free
+      3D rotation with Newmark, contact and multi-body, `mesh_motion = none`.
+    - DONE (decision 2026-10-21): acceptance reworded to the prescribed drag law and prescribed spring that the tests
+      use (R1 1.13e-10 vs 1e-8, R3 trajectory 2.4e-7 vs 1e-5, R5 pendulum 8.9e-5 / 4.3e-10 RK4, R6 locked axes exact).
+    - Correction: the '2.4e-7' above labelled terminal velocity is the damped-oscillator (R3) number; the free fall is
+      1.13e-10.
+    - The flow-coupled free fall and spring-mounted body are NOT delivered and are tracked in F-244.
 - [x] **F-230** Dynamic mesh layering and local remeshing, with displacement-diffusion stiffness variants
   - depends on: F-063
   - acceptance: Piston in a closed cylinder reproduces isentropic compression p V^gamma within 2 percent; volume and mass are conserved through layer add and remove
-  - note: Priority P3. Size L. Area: mesh,fv. Separate from rigid-body motion so each can be scheduled alone. WAVE 38C (ADR 0090, partial): layering for a structured planar layer stack with one moving piston plane (rcfd-mesh layering.rs: removal below 0.4 h0, split above 1.6 h0 into h0 plus the rest, cell source map and conservative remap), an opt-in ALE step for the explicit compressible solver (CompressibleSolver::step_ale: Galilean face-frame flux, moving slip-wall mirror, swept-volume mesh speed, GCL-consistent SSP-RK stage volumes) and an InverseVolume(k) displacement-diffusion stiffness. Measured: piston in a closed cylinder (compression ratio 2.5 and back, peak piston Mach 0.05, 24 layer removals and 24 additions) p_bar V^gamma within 1.5e-5 at full compression and 3.4e-5 after re-expansion (limit 2e-2); volume, mass and energy conserved through every layer event to 4.4e-16; mass drift over the run 5.4e-13; uniform flow on a moving mesh preserved to 4.5e-15 (GCL); inverse-volume stiffness cuts the smallest-cell strain to 0.18 of the Laplacian value (continuous 1-D 0.17). Not delivered: local remeshing, layering of unstructured or prism layers, case-tree or CLI wiring, layering in the incompressible PIMPLE path, ALE with characteristic boundary conditions on moving faces, mesh-speed-aware time step. DONE (decision 2026-10-21): acceptance met as written (p V^gamma 1.5e-5 / 3.4e-5 vs 2e-2; per-event volume, mass and energy change 4.4e-16 vs 1e-13; mass drift 5.4e-13 vs 1e-12) at peak piston Mach 0.05, i.e. near quasi-static. Unmet scope above (local remeshing, unstructured/prism layering, case-tree/CLI wiring, incompressible layering, moving-face characteristic BCs, mesh-speed time step) moved to F-247.
+  - note: Priority P3. Size L. Area: mesh,fv. DONE (decision 2026-10-21): acceptance met as written at peak piston Mach
+    0.05, i.e. near quasi-static. Unmet scope (local remeshing, unstructured/prism layering, case-tree/CLI wiring,
+    incompressible layering, moving-face characteristic BCs, mesh-speed time step) moved to F-247.
+    - Separate from rigid-body motion so each can be scheduled alone.
+    - WAVE 38C (ADR 0090, partial):
+      - Layering for a structured planar layer stack with one moving piston plane (rcfd-mesh layering.rs: removal below
+        0.4 h0, split above 1.6 h0 into h0 plus the rest, cell source map and conservative remap).
+      - An opt-in ALE step for the explicit compressible solver (CompressibleSolver::step_ale: Galilean face-frame flux,
+        moving slip-wall mirror, swept-volume mesh speed, GCL-consistent SSP-RK stage volumes).
+      - An InverseVolume(k) displacement-diffusion stiffness.
+    - Measured:
+      - Piston in a closed cylinder (compression ratio 2.5 and back, peak piston Mach 0.05, 24 layer removals and 24
+        additions) p_bar V^gamma within 1.5e-5 at full compression and 3.4e-5 after re-expansion (limit 2e-2).
+      - Volume, mass and energy conserved through every layer event to 4.4e-16.
+      - Mass drift over the run 5.4e-13.
+      - Uniform flow on a moving mesh preserved to 4.5e-15 (GCL).
+      - Inverse-volume stiffness cuts the smallest-cell strain to 0.18 of the Laplacian value (continuous 1-D 0.17).
+    - Not delivered: local remeshing, layering of unstructured or prism layers, case-tree or CLI wiring, layering in the
+      incompressible PIMPLE path, ALE with characteristic boundary conditions on moving faces, mesh-speed-aware time
+      step.
+    - DONE (decision 2026-10-21): acceptance met as written (p V^gamma 1.5e-5 / 3.4e-5 vs 2e-2; per-event volume, mass
+      and energy change 4.4e-16 vs 1e-13; mass drift 5.4e-13 vs 1e-12) at peak piston Mach 0.05, i.e. near quasi-static.
+    - Unmet scope above (local remeshing, unstructured/prism layering, case-tree/CLI wiring, incompressible layering,
+      moving-face characteristic BCs, mesh-speed time step) moved to F-247.
 - [x] **F-231** Mesh editing and repair operations: merge, slit, separate zones; translate, rotate, scale; extrude; copy by offset; face orientation and handedness repair
   - depends on: F-010, F-011
   - acceptance: Analytic transforms keep volumes and areas exact; repaired inverted-face test meshes pass the quality check
-  - note: Priority P2. Size M. Area: mesh. Bandwidth reordering is part of the partitioning item. Wave 14 PARTIAL (ADR 0018, docs/mesh-quality.md): library rcfd_mesh::edit has translate, rotate, scale and mirror (volumes and area vectors exact to 3e-15, handedness repaired for mirrors), merge of meshes with stitching and copy by offset, patch extrusion (vector or planar normal), face-orientation repair on raw topologies (repaired meshes equal the originals and pass check_mesh), merge of patches and separation of a patch into connected components. The acceptance sentence is met. NOT done: slit/baffle, cell-zone merge and separate, face zones through merge and extrude, owner/neighbour order repair, any CLI, case-tree or GUI entry point. One registered check missed and is kept as an ignored known_miss test: invariance of the existing non-orthogonality angle under rigid maps to 1e-9 (worst 1.5e-6 deg, acos conditioning of the existing metric). DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P2. Size M. Area: mesh. The audit of 2026-10-21 marks the item DONE on the acceptance text as
+    written; scope beyond it, and the caveats in the audit file, are not claimed. One registered check missed and is
+    kept as an ignored known_miss test.
+    - Bandwidth reordering is part of the partitioning item.
+    - Wave 14 PARTIAL (ADR 0018, docs/mesh-quality.md): library rcfd_mesh::edit has:
+      - Translate, rotate, scale and mirror (volumes and area vectors exact to 3e-15, handedness repaired for mirrors).
+      - Merge of meshes with stitching and copy by offset.
+      - Patch extrusion (vector or planar normal).
+      - Face-orientation repair on raw topologies (repaired meshes equal the originals and pass check_mesh).
+      - Merge of patches and separation of a patch into connected components.
+    - The acceptance sentence is met.
+    - NOT done: slit/baffle, cell-zone merge and separate, face zones through merge and extrude, owner/neighbour order
+      repair, any CLI, case-tree or GUI entry point.
+    - One registered check missed and is kept as an ignored known_miss test: invariance of the existing
+      non-orthogonality angle under rigid maps to 1e-9 (worst 1.5e-6 deg, acos conditioning of the existing metric).
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-232** Surface mesh diagnostics, repair and wrapping: free and multi-connected edges, self-intersections, slivers, spikes, leak-tolerant shrink-wrap with material points
   - depends on: F-131, F-010, F-011
   - acceptance: On a public defective surface set the detector reports exact defect counts; repair of a seeded-defect sphere and cube removes all defects with volume preserved within 0.5 percent; wrapping a leaky public model yields a closed manifold with enclosed volume within 2 percent
-  - note: Partial (wave 19B, ADR 0030, docs/meshing.md): library rcfd_mesh::surface diagnoses free, non-manifold and misoriented edges, duplicate and degenerate triangles, slivers, small edges, open loops, multi-connected vertices and components; repair removes degenerates and duplicates, orients, optionally inverts inward closed components, fills holes and compacts. Seeded-defect sphere and cube are repaired to closed manifolds with volume within 0.5 percent (sphere hole case F=318, chi=2). One registered test had a set-up error (vertex 0 fan size) and was replaced by a corrected test, the old one kept ignored. NOT done: self-intersection detection, spikes, leak-tolerant shrink-wrap with material points, a public defective surface set (only generated defects), CLI. Acceptance not met in full. Priority P2. Size L. Area: mesh. Merged diagnostic, repair and wrap work.
+  - note: Partial (wave 19B, ADR 0030, docs/meshing.md). Acceptance not met in full. NOT done: self-intersection
+    detection, spikes, leak-tolerant shrink-wrap with material points, a public defective surface set (only generated
+    defects), CLI.
+    - Library rcfd_mesh::surface diagnoses free, non-manifold and misoriented edges, duplicate and degenerate triangles,
+      slivers, small edges, open loops, multi-connected vertices and components.
+    - Repair removes degenerates and duplicates, orients, optionally inverts inward closed components, fills holes and
+      compacts.
+    - Seeded-defect sphere and cube are repaired to closed manifolds with volume within 0.5 percent (sphere hole case
+      F=318, chi=2).
+    - One registered test had a set-up error (vertex 0 fan size) and was replaced by a corrected test, the old one kept
+      ignored.
+    - Priority P2. Size L. Area: mesh. Merged diagnostic, repair and wrap work.
 - [x] **F-233** Mesh-quality measure catalogue: warp, ortho-skew, size change, inverse orthogonal, face angle, edge-length ratio, in addition to existing measures
   - depends on: F-011
   - acceptance: All measures evaluated on a reference tetrahedron, hexahedron and a degenerate cell match closed-form values
-  - note: Priority P1. Size S. Area: mesh. Adds measures; existing ones unchanged. Includes a poor-mesh warning list. Wave 14 (ADR 0018, docs/mesh-quality.md): rcfd-mesh measures.rs adds face warp, face angle (min and max), ortho-skew, inverse orthogonal quality, size change and face edge-length ratio as project definitions (literature attributions unverified); QualityReport gains a measure summary and a separate poor-mesh list (counts, worst offenders, text lines) that does not alter ok/warnings/errors/exit codes; surfaced by mesh.check, MCP check_mesh, run --check-only and rcfd check-mesh. Closed-form checks (unit cube, right-corner and regular tetrahedra, sheared, warped and sliver hexahedra, collapsed and collinear polygons, zero-volume cell) pass at 1e-12 absolute, 1e-9 degrees and 1e-9 relative (ratio 1000); baseline hashes unchanged. PARTIAL because the acceptance sentence is read strictly: on the one real degenerate CELL (sliver hexahedron) only edge ratio, angles and inverse orthogonal quality are asserted; warp, ortho-skew and size change are not asserted on a degenerate cell (the polygon and orthogonality checks use bare polygons and a hand-built face list), and the four existing measures are not asserted on the tetrahedron. Defects of the first run disclosed in the ADR (acos conditioning of the warp, two test set-up errors, one tolerance coded looser than registered and re-done). Not done: GUI display, case-level limits. Wave 39B (ADR 0093, docs/adr/0093-wave39b-partials-closeout-mesh-and-schemes.md): DONE. Added the missing closed forms at the ADR 0018 tolerances: on the sliver hexahedron warp 0 (cell and every face), ortho-skew 0 and size change 1; on the unit cube, both tetrahedra and the sliver the four pre-existing measures (non-orthogonality max and mean: 0, or atan(sqrt(2)/3) = 25.2394 deg and 0.75 of it on the right-corner tetrahedron; skewness 0; aspect ratio 1, sqrt(2) or 1000; volume ratio 1); size change 1 on the regular tetrahedron. All pass (crates/rcfd-mesh/tests/measures.rs). Every measure is now asserted on a tetrahedron, a hexahedron and the degenerate cell. Remaining (outside the acceptance): GUI display, case-level limits.
+  - note: Priority P1. Size S. Area: mesh. Wave 39B (ADR 0093,
+    docs/adr/0093-wave39b-partials-closeout-mesh-and-schemes.md): DONE. Every measure is now asserted on a tetrahedron,
+    a hexahedron and the degenerate cell. Remaining (outside the acceptance): GUI display, case-level limits.
+    - Adds measures; existing ones unchanged. Includes a poor-mesh warning list.
+    - Wave 14 (ADR 0018, docs/mesh-quality.md):
+      - rcfd-mesh measures.rs adds face warp, face angle (min and max), ortho-skew, inverse orthogonal quality, size
+        change and face edge-length ratio as project definitions (literature attributions unverified).
+      - QualityReport gains a measure summary and a separate poor-mesh list (counts, worst offenders, text lines) that
+        does not alter ok/warnings/errors/exit codes; surfaced by mesh.check, MCP check_mesh, run --check-only and rcfd
+        check-mesh.
+      - Closed-form checks (unit cube, right-corner and regular tetrahedra, sheared, warped and sliver hexahedra,
+        collapsed and collinear polygons, zero-volume cell) pass at 1e-12 absolute, 1e-9 degrees and 1e-9 relative
+        (ratio 1000); baseline hashes unchanged.
+    - PARTIAL because the acceptance sentence is read strictly: on the one real degenerate CELL (sliver hexahedron) only
+      edge ratio, angles and inverse orthogonal quality are asserted; warp, ortho-skew and size change are not asserted
+      on a degenerate cell (the polygon and orthogonality checks use bare polygons and a hand-built face list), and the
+      four existing measures are not asserted on the tetrahedron.
+    - Defects of the first run disclosed in the ADR (acos conditioning of the warp, two test set-up errors, one
+      tolerance coded looser than registered and re-done).
+    - Not done: GUI display, case-level limits.
+    - Wave 39B (ADR 0093, docs/adr/0093-wave39b-partials-closeout-mesh-and-schemes.md): DONE. Added the missing closed
+      forms at the ADR 0018 tolerances:
+      - On the sliver hexahedron warp 0 (cell and every face), ortho-skew 0 and size change 1.
+      - On the unit cube, both tetrahedra and the sliver the four pre-existing measures (non-orthogonality max and mean:
+        0, or atan(sqrt(2)/3) = 25.2394 deg and 0.75 of it on the right-corner tetrahedron; skewness 0; aspect ratio 1,
+        sqrt(2) or 1000; volume ratio 1).
+      - Size change 1 on the regular tetrahedron.
+      - All pass (crates/rcfd-mesh/tests/measures.rs).
+    - Every measure is now asserted on a tetrahedron, a hexahedron and the degenerate cell.
+    - Remaining (outside the acceptance): GUI display, case-level limits.
 - [~] **F-234** Cartesian-core volume fill with prism layers: octree fill, hex-dominant boundary-layer extrusion with uniform, aspect-ratio and last-ratio offsets
   - depends on: F-132, F-108, F-011
   - acceptance: A sphere in a box meets stated quality limits with no negative volumes; drag of the sphere at Re 100 lies within published scatter; a lid-driven cavity on the generated mesh matches Ghia centreline velocities within 3 percent; last-ratio prism offsets on a flat plate reach the target y+ within 10 percent and Cf within 3 percent of Blasius
-  - note: Priority P3. Size XL. Area: mesh. Priority reconciled between P2 and P4 proposals; the GPU octree study is not scheduled. WAVE 26B (ADR 0047), vertical slice, PARTIAL: rcfd_mesh::octree (2:1 balanced octree fill with hanging-node polyhedra, snapped conforming prism-layer shell with uniform/aspect-ratio/last-ratio rules exact to round-off). Sphere in box: valid, positive volumes, volume order 1.84, but non-orthogonality 77.4 degrees vs limit 70 (known miss). Cavity on a generated mesh within 0.008 of Ghia (limit 0.03). Not run: sphere drag at Re 100. Not attempted: flat-plate y+/Cf.
+  - note: Priority P3. Size XL. Area: mesh. WAVE 26B (ADR 0047), vertical slice, PARTIAL: rcfd_mesh::octree (2:1
+    balanced octree fill with hanging-node polyhedra, snapped conforming prism-layer shell with
+    uniform/aspect-ratio/last-ratio rules exact to round-off).
+    - Sphere in box: valid, positive volumes, volume order 1.84, but non-orthogonality 77.4 degrees vs limit 70 (known
+      miss).
+    - Cavity on a generated mesh within 0.008 of Ghia (limit 0.03).
+    - Not run: sphere drag at Re 100.
+    - Not attempted: flat-plate y+/Cf.
+    - Priority reconciled between P2 and P4 proposals; the GPU octree study is not scheduled.
 - [x] **F-235** Sweep, thin-volume and multizone hexahedral meshing
   - depends on: F-012, F-011
   - acceptance: Swept mesh of an annulus or pipe has all-hex cells with prescribed layer counts; fully developed Poiseuille pipe flow on the swept mesh recovers the analytic centreline velocity within 1 percent
-  - note: Priority P3. Size M. Area: mesh. Dependency on the tetrahedral mesher dropped; builds on the structured generator. WAVE 26B (ADR 0047): rcfd_mesh::sweep (Line/Revolve/NormalOffset sweeps, thin_volume, disc/annulus/cylinder-shell bases, O-grid + core pipe_mesh) and case-tree generator pipe_sweep (periodic_z, core_fraction). All-hex, valid, volume order ~2. Poiseuille centreline error 0.134 percent with no-slip walls, reached with non_orthogonal_correctors = 2 on a 2-layer mesh (s10c); the registered settings gave 3.33 percent (known miss) and the 8-layer mesh with correctors diverges (cause not isolated, known miss). Annulus skewness 1e-6 limit was a derivation error (known miss). WAVE 27B (ADR 0050): the divergence is diagnosed (SIMPLEC compensation ignored the non-orthogonal part, feedback gain about alpha_u on axial modes) and fixed by the opt-in solver.simplec_non_orthogonal_compensation: the 8-layer pipe with 2 correctors converges to 0.134 percent centreline error (new test r1_s10d; the old s10/s10b records stay ignored). DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P3. Size M. Area: mesh. The audit of 2026-10-21 marks the item DONE on the acceptance text as
+    written; scope beyond it, and the caveats in the audit file, are not claimed. The registered settings gave
+    3.33 percent centreline error (known miss); the old s10/s10b records stay ignored.
+    - Dependency on the tetrahedral mesher dropped; builds on the structured generator.
+    - WAVE 26B (ADR 0047): rcfd_mesh::sweep (Line/Revolve/NormalOffset sweeps, thin_volume, disc/annulus/cylinder-shell
+      bases, O-grid + core pipe_mesh) and case-tree generator pipe_sweep (periodic_z, core_fraction).
+      - All-hex, valid, volume order ~2.
+      - Poiseuille centreline error 0.134 percent with no-slip walls, reached with non_orthogonal_correctors = 2 on a
+        2-layer mesh (s10c).
+      - The registered settings gave 3.33 percent (known miss) and the 8-layer mesh with correctors diverges (cause not
+        isolated, known miss).
+      - Annulus skewness 1e-6 limit was a derivation error (known miss).
+    - WAVE 27B (ADR 0050): the divergence is diagnosed (SIMPLEC compensation ignored the non-orthogonal part, feedback
+      gain about alpha_u on axial modes) and fixed by the opt-in solver.simplec_non_orthogonal_compensation: the 8-layer
+      pipe with 2 correctors converges to 0.134 percent centreline error (new test r1_s10d; the old s10/s10b records
+      stay ignored).
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-236** Partitioning strategies and reordering: graph partitioner, coordinate-bisection variants, radial and circumferential partitioning, node weighting, partition smoothing, reverse Cuthill-McKee reordering
   - depends on: F-016
   - acceptance: Balance within 5 percent on reference meshes for 2 to 16 parts; edge-cut of the graph partitioner not worse than coordinate bisection; reordering reduces matrix bandwidth on a stretched mesh
-  - note: Downgraded from done to partial by user decision (2026-10-16): library and CLI only, the solver does not use partitions. Priority P3. Size S. Area: mesh,linalg. Extension of a finished partitioner trait. WAVE 15B (ADR 0020), status DONE at library level. rcfd-mesh partition: Bisection { Longest, Cycle, Fixed(axis), Inertial } with optional cell weights, Sectors { Radial, Circumferential } about an axis, GraphPartitioner (RCB-seeded greedy gain-driven boundary refinement under a balance cap; not multilevel), smooth_partition, edge_cut / weighted_imbalance helpers; rcfd-linalg reorder: rcm_order (reverse Cuthill-McKee, pseudo-peripheral start), bandwidth, CsrMatrix::bandwidth and permute_symmetric. Measured (tests partition_strategies.rs, reorder.rs): worst unit-weight imbalance 0.030 over 8 strategies x 3 meshes x n = 2..16 (limit 0.05), worst weighted imbalance 0.0296 (control: unweighted RCB 0.613); graph cut <= RCB cut in all 45 cases (guaranteed by construction: the unit-weight seed is RCB and every move lowers the cut; the evidence of the refinement is the 31 strict reductions, e.g. 167 to 117, 598 to 511); smoothing restores a perturbed slab exactly (10 moves, cut 50); RCM bandwidth 72 against natural 320 on a 40x8x8 box (derived bound 127; bandwidth depends on connectivity only, so a graded mesh of the same index space gives the same numbers) and 7 against 40 on 40x6x1 (bound 11); permutation identity error 3e-16. Not done: no multilevel coarsening, nothing is wired into the case file, CLI, solvers or GUI, and no Mesh renumbering (the ordering is a library facility so solver results and baseline hashes are unchanged). WAVE 16W (ADR 0021): wired through the case tree (`decomposition` section: bisection, inertial, sectors, graph, weights box, smoothing, reorder report, `write_field` adds the cell array `partition` to solution.vtu), `rcfd partition ... --json` (per-part cells and weights, imbalance, edge cut, ghost cells, bandwidths) and the service method `mesh.partition`, with located validation errors. The solver does not use partitions or the ordering (a report and a VTK field only); no MCP tool.
+  - note: Downgraded from done to partial by user decision (2026-10-16): library and CLI only, the solver does not use
+    partitions. Priority P3. Size S. Area: mesh,linalg. Extension of a finished partitioner trait.
+    - WAVE 15B (ADR 0020), status DONE at library level.
+      - rcfd-mesh partition:
+        - Bisection { Longest, Cycle, Fixed(axis), Inertial } with optional cell weights.
+        - Sectors { Radial, Circumferential } about an axis.
+        - GraphPartitioner (RCB-seeded greedy gain-driven boundary refinement under a balance cap; not multilevel).
+        - smooth_partition.
+        - edge_cut / weighted_imbalance helpers.
+      - rcfd-linalg reorder: rcm_order (reverse Cuthill-McKee, pseudo-peripheral start), bandwidth, CsrMatrix::bandwidth
+        and permute_symmetric.
+      - Measured (tests partition_strategies.rs, reorder.rs):
+        - Worst unit-weight imbalance 0.030 over 8 strategies x 3 meshes x n = 2..16 (limit 0.05), worst weighted
+          imbalance 0.0296 (control: unweighted RCB 0.613).
+        - Graph cut <= RCB cut in all 45 cases (guaranteed by construction: the unit-weight seed is RCB and every move
+          lowers the cut; the evidence of the refinement is the 31 strict reductions, e.g. 167 to 117, 598 to 511).
+        - Smoothing restores a perturbed slab exactly (10 moves, cut 50).
+        - RCM bandwidth 72 against natural 320 on a 40x8x8 box (derived bound 127; bandwidth depends on connectivity
+          only, so a graded mesh of the same index space gives the same numbers) and 7 against 40 on 40x6x1 (bound 11).
+        - Permutation identity error 3e-16.
+      - Not done: no multilevel coarsening, nothing is wired into the case file, CLI, solvers or GUI, and no Mesh
+        renumbering (the ordering is a library facility so solver results and baseline hashes are unchanged).
+    - WAVE 16W (ADR 0021): wired through the case tree (`decomposition` section: bisection, inertial, sectors, graph,
+      weights box, smoothing, reorder report, `write_field` adds the cell array `partition` to solution.vtu),
+      `rcfd partition ... --json` (per-part cells and weights, imbalance, edge cut, ghost cells, bandwidths) and the
+      service method `mesh.partition`, with located validation errors.
+    - The solver does not use partitions or the ordering (a report and a VTK field only); no MCP tool.
 - [~] **F-237** Format registry and one-way structural load export: conformance case per supported format, finite-element deck export of pressure and temperature loads
   - depends on: F-119, F-103, F-072
   - acceptance: Exported pressure and temperature loads on a tube reproduce the integrated force and heat rate to 0.1 percent after round-trip import; a public CGNS example round trip preserves node count and field values exactly; each listed format has a pass/fail conformance case
-  - note: Priority P3. Size M. Area: io. Format names stay in the format registry documentation, not in this item. WAVE 27C (ADR 0051), PARTIAL. rcfd-io registry (12 supported formats each with a conformance case, CGNS and HDF5 registered NotSupported), Nastran-style free-field deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located errors), rcfd-post structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap plus linear recovery. Measured: uniform pressure exact (0 vs 4 eps), tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met for force), plane force 2.5e-16, moments within limits, linear temperature exact to 2.4e-14 on 3 structural meshes. Not delivered: public CGNS round trip (acceptance NOT met), heat-rate loads and the heat-rate part of the acceptance, case-tree wiring, third-party solver acceptance (not testable), deck card layouts partly unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified).
+  - note: Priority P3. Size M. Area: io. WAVE 27C (ADR 0051), PARTIAL. Not delivered: public CGNS round trip (acceptance
+    NOT met), heat-rate loads and the heat-rate part of the acceptance, case-tree wiring, third-party solver acceptance
+    (not testable), deck card layouts partly unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified).
+    - Format names stay in the format registry documentation, not in this item.
+    - rcfd-io registry (12 supported formats each with a conformance case, CGNS and HDF5 registered NotSupported).
+    - Nastran-style free-field deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located
+      errors).
+    - rcfd-post structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap
+      plus linear recovery.
+    - Measured:
+      - Uniform pressure exact (0 vs 4 eps).
+      - Tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met for force).
+      - Plane force 2.5e-16.
+      - Moments within limits.
+      - Linear temperature exact to 2.4e-14 on 3 structural meshes.
 - [x] **F-238** Report, surface and post-object catalogue: standard deviation and facet statistics, weighted and vector fluxes, force projections, iso-clip, rake, sphere and quadric surfaces, offset surfaces, point clouds, instance transforms, case comparison and difference fields
   - depends on: F-071, F-072, F-109
   - acceptance: Integrals over an analytic field on a sphere and box (area, flux, mean, standard deviation) match closed form to mesh-convergence order; the difference of two identical solutions is exactly zero and of two uniform-offset analytic fields equals the offset to machine precision, including across meshes
-  - note: Priority P2. Size L. Area: post. Case comparison reuses the interpolation module. WAVE 26C (ADR 0048): all registered acceptance checks met in the library (rcfd_post::{stats, surfaces, compare}): weighted mean / standard deviation / min / max / count (two-pass, offset-safe), flux-weighted average, normal and vector flux, force and moment projection, plane / sphere / cylinder / cone / general quadric cuts (planes exact), iso-clip, offset surfaces, rotational and translated instances, rake and point clouds, case difference fields; sphere and box integrals converge at second order, identical solutions give exactly 0, uniform offsets across meshes equal the offset to 21 eps. Case tree: six new scalar report types (volume_std, area_std, area_min, area_max, mass_weighted_average, vector_flux). Remaining for done: case-tree keys and file output (VTU/CSV) for surfaces, rakes, point clouds, transforms and comparison; cut surfaces are second order only (linear interpolation of the implicit function), mixed-mesh difference uses the existing remap methods. DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope beyond the acceptance text, and the caveats in the audit file, are not claimed.
+  - note: Priority P2. Size L. Area: post. The audit of 2026-10-21 marks the item DONE on the acceptance text as
+    written; scope beyond it, and the caveats in the audit file, are not claimed. WAVE 26C met all registered acceptance
+    checks in the library; it lists case-tree keys and file output (VTU/CSV) for surfaces, rakes, point clouds,
+    transforms and comparison as remaining.
+    - Case comparison reuses the interpolation module.
+    - WAVE 26C (ADR 0048): all registered acceptance checks met in the library (rcfd_post::{stats, surfaces, compare}):
+      - Weighted mean / standard deviation / min / max / count (two-pass, offset-safe).
+      - Flux-weighted average.
+      - Normal and vector flux.
+      - Force and moment projection.
+      - Plane / sphere / cylinder / cone / general quadric cuts (planes exact).
+      - Iso-clip, offset surfaces, rotational and translated instances, rake and point clouds, case difference fields.
+      - Sphere and box integrals converge at second order, identical solutions give exactly 0, uniform offsets across
+        meshes equal the offset to 21 eps.
+    - Case tree: six new scalar report types (volume_std, area_std, area_min, area_max, mass_weighted_average,
+      vector_flux).
+    - Remaining for done: case-tree keys and file output (VTU/CSV) for surfaces, rakes, point clouds, transforms and
+      comparison; cut surfaces are second order only (linear interpolation of the implicit function), mixed-mesh
+      difference uses the existing remap methods.
+    - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
+      beyond the acceptance text, and the caveats in the audit file, are not claimed.
 - [~] **F-239** User-function hook catalogue v2: scalar and vector profiles, material-property, energy, species and turbulence source hooks, initialise, adjust, execute-at-end and exit hooks, reaction-rate and wall-heat-flux hooks, dynamic-zone motion, particle hooks
   - depends on: F-122
   - acceptance: Each hook, set to a constant or analytic function, reproduces the matching built-in setting or closed-form solution (property hook equals constant-property run; heat-source hook equals the slab profile)
-  - note: Priority P2. Size L. Area: api. Partial (wave 38A, ADR 0088). Delivered on the F-122 WebAssembly mechanism (ABI version 1, new optional exports, docs/udf-abi.md, docs/case-schema.md): temperature_profile (boundaries.<p>.temperature_udf, scalar boundary profile), wall_heat_flux (boundaries.<p>.heat_flux_udf; also wired into the CHT heat-flux path, not tested), thermal_conductivity (udf.<n>.conductivity), energy_source (udf.<n>.energy_source, W/m^3), scalar_source (scalars.<s>.source_udf, passive scalars), initial_value (udf.<n>.initialise: velocity, kinematic pressure, temperature) and execute_at_end (udf.<n>.at_end, monitor udf_end_<n>); the vector boundary profile is the existing velocity_profile. Measured (tests/udf_hooks_w38a.rs, limits registered first, all runs steady SIMPLEC): every hook set to a constant equals its built-in counterpart with a relative difference of exactly 0 (limit 1e-9): temperature_expression, heat_flux_value, the constant-property run (physics.conductivity set to 5 in the hook run, hook returns 2), the uniform zone heat source, hook 5e3 plus zone source 5e3 against zone source 1e4 (amendment 1), the uniform scalar source, initial.velocity_expression_x plus uniform p and T (at build and after 50 iterations); the energy-source hook reproduces the slab profile (discrete identity to 1.1e-10 of the rise, limit 1e-6; linear source 2e4 x/L against the closed form 4.7e-4 at 64 cells, limit 6e-4); the heat-flux hook the linear closed form to 3.5e-13; the scalar hook its slab identity to 9.9e-15; execute_at_end is recorded once at the last step and equals the independent sum exactly; 17 misconfigurations are refused and a negative conductivity or a non-finite energy source stop the run. One set-up defect (C1 sanity scale) is kept ignored with a corrected test. Scope limits: conductivity, energy and scalar sources act in steady SIMPLE/SIMPLEC runs only (transient, coupled, frozen-flow refused); conductivity is refused with property laws, CHT, radiation and heat_flux boundaries, energy source with CHT and radiation; boundary hooks are evaluated once at t = 0; execute_at_end is not called when a run is stopped from outside the step (run(n) cap, run-control stop, wall clock, divergence guard). NOT delivered: turbulence source, species (multicomponent) source, adjust, a separate exit hook, reaction rate, dynamic-zone motion, specific heat and density hooks, any hook in the compressible, variable-density or VOF solvers. Particle hooks stay gated on the particle model (F-056 and F-128 are partial); none is offered.
+  - note: Priority P2. Size L. Area: api. Partial (wave 38A, ADR 0088). NOT delivered: turbulence source, species
+    (multicomponent) source, adjust, a separate exit hook, reaction rate, dynamic-zone motion, specific heat and density
+    hooks, any hook in the compressible, variable-density or VOF solvers.
+    - Delivered on the F-122 WebAssembly mechanism (ABI version 1, new optional exports, docs/udf-abi.md,
+      docs/case-schema.md):
+      - temperature_profile (boundaries.<p>.temperature_udf, scalar boundary profile).
+      - wall_heat_flux (boundaries.<p>.heat_flux_udf; also wired into the CHT heat-flux path, not tested).
+      - thermal_conductivity (udf.<n>.conductivity).
+      - energy_source (udf.<n>.energy_source, W/m^3).
+      - scalar_source (scalars.<s>.source_udf, passive scalars).
+      - initial_value (udf.<n>.initialise: velocity, kinematic pressure, temperature).
+      - execute_at_end (udf.<n>.at_end, monitor udf_end_<n>).
+      - The vector boundary profile is the existing velocity_profile.
+    - Measured (tests/udf_hooks_w38a.rs, limits registered first, all runs steady SIMPLEC):
+      - Every hook set to a constant equals its built-in counterpart with a relative difference of exactly 0
+        (limit 1e-9): temperature_expression, heat_flux_value, the constant-property run (physics.conductivity set to 5
+        in the hook run, hook returns 2), the uniform zone heat source, hook 5e3 plus zone source 5e3 against zone
+        source 1e4 (amendment 1), the uniform scalar source, initial.velocity_expression_x plus uniform p and T (at
+        build and after 50 iterations).
+      - The energy-source hook reproduces the slab profile (discrete identity to 1.1e-10 of the rise, limit 1e-6; linear
+        source 2e4 x/L against the closed form 4.7e-4 at 64 cells, limit 6e-4).
+      - The heat-flux hook reproduces the linear closed form to 3.5e-13.
+      - The scalar hook reproduces its slab identity to 9.9e-15.
+      - execute_at_end is recorded once at the last step and equals the independent sum exactly.
+      - 17 misconfigurations are refused and a negative conductivity or a non-finite energy source stop the run.
+    - One set-up defect (C1 sanity scale) is kept ignored with a corrected test.
+    - Scope limits:
+      - Conductivity, energy and scalar sources act in steady SIMPLE/SIMPLEC runs only (transient, coupled, frozen-flow
+        refused).
+      - Conductivity is refused with property laws, CHT, radiation and heat_flux boundaries, energy source with CHT and
+        radiation.
+      - Boundary hooks are evaluated once at t = 0.
+      - execute_at_end is not called when a run is stopped from outside the step (run(n) cap, run-control stop, wall
+        clock, divergence guard).
+    - Particle hooks stay gated on the particle model (F-056 and F-128 are partial); none is offered.
 - [x] **F-240** Declarative setup-validation rule engine with categorised pre-solve diagnostics: dependency, required-object and count checks, auto-fix and warning severities
   - depends on: F-005, F-148, F-011, F-080
   - acceptance: A rule set of at least 10 dependency, required and count checks rejects each seeded invalid setup with the expected message id and accepts the benchmark registry cases; the published validation cases raise no error-level diagnostic
-  - note: Partial (acceptance partly met, scope limited). Delivered in rcfd-api `rules` with the data file crates/rcfd-api/rules/setup_rules.json (format rcfd-setup-rules v1): a strict declarative engine (conditions all/any/not, path and count tests with where, 13 operators, each-iteration, mesh context, located paths, sorted deterministic output of id/severity/category/path/message and optional fix) and 21 registered rules (13 errors, 5 warnings, 3 infos; categories mesh, boundaries, materials, models, solver, output, setup). Wired into `rcfd check`, `rcfd validate`, `rcfd run` (error-level rule: exit 3 before solving; warnings: stderr and `warning` events with the rule id) and the `check` event (`rules` array). Measured (checks registered first in ADR 0031): E1 every one of the 21 rules fires with its id, severity, category and path on a seeded setup and no other error-level rule fires; E3 deterministic bytes; E4 strict loader rejects unknown keys/operators/severities/categories/versions, a rule written only as data works. E2 PARTIAL: on 66 distinct case texts (8 cases/**/*.toml, 1 documentation block, 57 extracted from the test sources) no error-level diagnostic, but one warning, SV103 (aspect ratio above the library's own threshold of 1000) on the wall-resolved mesh of a turbulence test case; the registered assertion lives in an ignored known-miss test, thresholds not changed. Limits: 12 of the 13 error rules restate checks the loaders already enforce (SV004 the turbulence initial-k derivation, SV009 the chain sequence check) and SV011 overlaps the mesh quality error, so through the binary no error-level rule was observed to fire on its own; the new diagnostics are SV101-SV105 and SV201-SV203; no auto-fix is applied (suggestions only); the acceptance wording 'accepts the benchmark registry cases' is evaluated on the TOML setups under cases/ because the registry case.json files are descriptors that do not load; user-function and component checks are not in the rule set. WAVE 39A (ADR 0092, done): the 'accepts the benchmark registry cases' and 'published validation cases' clauses are now measured by crates/rcfd-api/tests/registry_setups_w39a.rs V1: case-tree set-ups of the five registry descriptors (cavity Re 100 n 32; backward_step with the descriptor mesh built by gen::backward_step and read as a polyMesh file; flat_plate laminar Re_L 1e5 with wall layers; heated_cavity Ra 1e3; naca0012 on an O-grid warped onto the NACA 0012 thickness formula, Re 6e6, SST) plus cylinder Re 100, channel Re_tau 178.12 (SST), the wall-function channel and Sod, each through runctl::check_only (the library body of rcfd check). Limit exit 0 and 0 error-level rule diagnostics on all nine: met (0 errors; one warning, SV101 on the NACA O-grid, max non-orthogonality 80.3 deg). Reading registered in ADR 0092: 'published validation cases' = the five registry benchmarks plus the validation-test cases the case tree can express; ADR 0092 amendments 1-2 add V2b, the parallel-plate Graetz set-up on a prescribed parabolic flow (solver.frozen_flow): exit 0, 0 rule diagnostics (the first Graetz set-up, V2, had a zero inlet velocity and is kept as an ignored known miss). Not covered: the FAN-01 case (a format! template in fan01_validation.rs, F-126) and the w33c SST plate/wall-layer library-only set-ups. The NACA O-grid is a rule-check set-up, not a lift-prediction mesh; the registry descriptors still carry no shipped case file. USER DECISION 2026-10-21: accepted as done on the definition in ADR 0092 (five registry cases plus validation cases a case file can express). Outside that definition: FAN-01 (code template, tracked under F-126) and the library-only SST plate tests. Registry folders still hold no case files; the set-ups live inside the test.
+  - note: USER DECISION 2026-10-21: accepted as done on the definition in ADR 0092 (five registry cases plus validation
+    cases a case file can express). Outside that definition: FAN-01 (code template, tracked under F-126) and the
+    library-only SST plate tests. Registry folders still hold no case files; the set-ups live inside the test. Through
+    the binary no error-level rule was observed to fire on its own, and no auto-fix is applied (suggestions only).
+    - Partial (acceptance partly met, scope limited).
+    - Delivered in rcfd-api `rules` with the data file crates/rcfd-api/rules/setup_rules.json (format rcfd-setup-rules
+      v1):
+      - A strict declarative engine (conditions all/any/not, path and count tests with where, 13 operators,
+        each-iteration, mesh context, located paths, sorted deterministic output of id/severity/category/path/message
+        and optional fix).
+      - 21 registered rules (13 errors, 5 warnings, 3 infos; categories mesh, boundaries, materials, models, solver,
+        output, setup).
+    - Wired into `rcfd check`, `rcfd validate`, `rcfd run` (error-level rule: exit 3 before solving; warnings: stderr
+      and `warning` events with the rule id) and the `check` event (`rules` array).
+    - Measured (checks registered first in ADR 0031):
+      - E1 every one of the 21 rules fires with its id, severity, category and path on a seeded setup and no other
+        error-level rule fires.
+      - E3 deterministic bytes.
+      - E4 strict loader rejects unknown keys/operators/severities/categories/versions, a rule written only as data
+        works.
+    - E2 PARTIAL: on 66 distinct case texts (8 cases/**/*.toml, 1 documentation block, 57 extracted from the test
+      sources) no error-level diagnostic, but one warning, SV103 (aspect ratio above the library's own threshold of
+      1000) on the wall-resolved mesh of a turbulence test case; the registered assertion lives in an ignored known-miss
+      test, thresholds not changed.
+    - Limits:
+      - 12 of the 13 error rules restate checks the loaders already enforce (SV004 the turbulence initial-k derivation,
+        SV009 the chain sequence check) and SV011 overlaps the mesh quality error, so through the binary no error-level
+        rule was observed to fire on its own.
+      - The new diagnostics are SV101-SV105 and SV201-SV203.
+      - No auto-fix is applied (suggestions only).
+      - The acceptance wording 'accepts the benchmark registry cases' is evaluated on the TOML setups under cases/
+        because the registry case.json files are descriptors that do not load.
+      - User-function and component checks are not in the rule set.
+    - WAVE 39A (ADR 0092, done): the 'accepts the benchmark registry cases' and 'published validation cases' clauses are
+      now measured by crates/rcfd-api/tests/registry_setups_w39a.rs V1: case-tree set-ups of the five registry
+      descriptors (cavity Re 100 n 32; backward_step with the descriptor mesh built by gen::backward_step and read as a
+      polyMesh file; flat_plate laminar Re_L 1e5 with wall layers; heated_cavity Ra 1e3; naca0012 on an O-grid warped
+      onto the NACA 0012 thickness formula, Re 6e6, SST) plus cylinder Re 100, channel Re_tau 178.12 (SST), the
+      wall-function channel and Sod, each through runctl::check_only (the library body of rcfd check).
+      - Limit exit 0 and 0 error-level rule diagnostics on all nine: met (0 errors; one warning, SV101 on the NACA
+        O-grid, max non-orthogonality 80.3 deg).
+      - Reading registered in ADR 0092: 'published validation cases' = the five registry benchmarks plus the
+        validation-test cases the case tree can express.
+      - ADR 0092 amendments 1-2 add V2b, the parallel-plate Graetz set-up on a prescribed parabolic flow
+        (solver.frozen_flow): exit 0, 0 rule diagnostics (the first Graetz set-up, V2, had a zero inlet velocity and is
+        kept as an ignored known miss).
+      - Not covered: the FAN-01 case (a format! template in fan01_validation.rs, F-126) and the w33c SST
+        plate/wall-layer library-only set-ups.
+      - The NACA O-grid is a rule-check set-up, not a lift-prediction mesh; the registry descriptors still carry no
+        shipped case file.
+    - USER DECISION 2026-10-21: accepted as done on the definition in ADR 0092 (five registry cases plus validation
+      cases a case file can express). Outside that definition: FAN-01 (code template, tracked under F-126) and the
+      library-only SST plate tests. Registry folders still hold no case files; the set-ups live inside the test.
 - [x] **F-241** Chained run configurations: sequenced steady-then-transient restart, interpolating initial values onto a new mesh
   - depends on: F-120, F-030
   - acceptance: Two chained configurations (steady then transient restart) on the lid-driven cavity reach the same final state as a single run
-  - note: Partial (acceptance met; scope limited). Delivered in rcfd-api `chain` and `rcfd run`: the `chain` section (sequence plus named stages with `set` overrides that accumulate, `restart` mode, transfer `method`, `allow_unconverged`), per-stage output directories with restart files, restart from the previous stage through the F-115 machinery (same mesh exact or steady-to-transient initialisation, changed mesh transferred), failure propagation by exit code, status events stage_start/restart/stage_finish/chain_finish with a `stage` field, located static checks. Measured (checks registered first in ADR 0031): the chain's final transient state equals the manual two-run procedure bit for bit (and the CLI solution.vtu is byte-identical to `rcfd run` then `rcfd restart`); acceptance case, 16x16 cavity steady (1e-8) then PISO dt 0.05 to t = 1: speed relative L2 distance to the single steady run 2.08e-3 and pressure (mean removed) 8.35e-3 against the registered 2e-2; 12 to 24 mesh change between stages converges (147 iterations); failure of stage 1 gives exit 5 with stage 2 never started; seven kinds of malformed stage definitions rejected at their located path; threads 1 versus 3 byte-identical. Not done: operating-point sweeps (parametric-study item), chains through the service run.headless and MCP, stage-specific rule checks before the chain starts (each stage is checked as it starts), restart of transient runs with energy/scalars/turbulence, parallel or branching chains. Wave 40A (ADR 0097, test c7 in crates/rcfd-api/tests/chain_w19c.rs): two chained transient stages (PISO dt 0.05, 0 to 0.5 then exact restart to 1.0) equal one transient run from rest to t = 1 bit for bit in ux, uy, p, face flux and time (registered tolerance 0). The split at 0.5 takes ten full steps; a split whose stage end clips a step by a few ulp (e.g. 0.3) is not bitwise equal and is not tested. Done under the user's reading (chain equals an uninterrupted run); the steady-then-transient chain stays covered by C1/C2.
+  - note: Done under the user's reading (chain equals an uninterrupted run); the steady-then-transient chain stays
+    covered by C1/C2. A split whose stage end clips a step by a few ulp (e.g. 0.3) is not bitwise equal and is not
+    tested.
+    - Partial (acceptance met; scope limited).
+    - Delivered in rcfd-api `chain` and `rcfd run`:
+      - The `chain` section (sequence plus named stages with `set` overrides that accumulate, `restart` mode, transfer
+        `method`, `allow_unconverged`).
+      - Per-stage output directories with restart files.
+      - Restart from the previous stage through the F-115 machinery (same mesh exact or steady-to-transient
+        initialisation, changed mesh transferred).
+      - Failure propagation by exit code.
+      - Status events stage_start/restart/stage_finish/chain_finish with a `stage` field.
+      - Located static checks.
+    - Measured (checks registered first in ADR 0031):
+      - The chain's final transient state equals the manual two-run procedure bit for bit (and the CLI solution.vtu is
+        byte-identical to `rcfd run` then `rcfd restart`).
+      - Acceptance case, 16x16 cavity steady (1e-8) then PISO dt 0.05 to t = 1: speed relative L2 distance to the single
+        steady run 2.08e-3 and pressure (mean removed) 8.35e-3 against the registered 2e-2.
+      - 12 to 24 mesh change between stages converges (147 iterations).
+      - Failure of stage 1 gives exit 5 with stage 2 never started.
+      - Seven kinds of malformed stage definitions rejected at their located path.
+      - Threads 1 versus 3 byte-identical.
+    - Not done: operating-point sweeps (parametric-study item), chains through the service run.headless and MCP,
+      stage-specific rule checks before the chain starts (each stage is checked as it starts), restart of transient runs
+      with energy/scalars/turbulence, parallel or branching chains.
+    - Wave 40A (ADR 0097, test c7 in crates/rcfd-api/tests/chain_w19c.rs): two chained transient stages (PISO dt 0.05, 0
+      to 0.5 then exact restart to 1.0) equal one transient run from rest to t = 1 bit for bit in ux, uy, p, face flux
+      and time (registered tolerance 0).
+      - The split at 0.5 takes ten full steps; a split whose stage end clips a step by a few ulp (e.g. 0.3) is not
+        bitwise equal and is not tested.
+    - Done under the user's reading (chain equals an uninterrupted run); the steady-then-transient chain stays covered
+      by C1/C2.
 - [ ] **F-242** Functional-mock-up (FMI) function import and generic co-simulation function types
   - depends on: F-139, F-104
   - acceptance: A public reference FMU (bouncing ball or damped oscillator) used as a time-dependent boundary function gives a coupled response matching its standalone output within solver tolerance
@@ -697,7 +4572,24 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [~] **F-243** Acoustic boundary and source options: impedance boundary, non-reflecting forcing, broadband-noise estimates, wave-equation solver with sponge layers, modal export
   - depends on: F-136, F-062
   - acceptance: Impedance-tube reflection coefficient matches the closed form; a quiet boundary reflects a pulse by less than 1 percent
-  - note: Priority P3. Size M. Area: fv,post. Complements the far-field integral post-processing. WAVE 32B (ADR 0066, partial; the acceptance text above is NOT met: no impedance boundary, no quiet boundary, no wave solver, no modal export). Built: time-domain FW-H 1A for moving impermeable surfaces from sampled surface pressure with uniform-flow evaluation in the medium frame and moving observers (rcfd-post fwh.rs), Gutin-type rotor tonal harmonics derived and checked against FW-H (rotor.rs), SPL/OASPL/A-weighting/1-3 octave/sound power from an observer sphere with JSON/CSV spectra (acoustics.rs), `rcfd-surface-series` v1 reader and adapter from rcfd-post surface sampling (surface_series.rs), `rcfd fwh` CLI, steady-RANS broadband proxies (Proudman, Curle, trailing edge; noise_proxies.rs) which are NOT validated against measurements and are labelled non-predictive. docs/acoustics.md. Registered checks passed except W5a/W5b (impermeable sphere in uniform flow, measured 7.7e-2 and 6.7e-2 against 1e-2 and 1e-3): kept as ignored known-miss tests; a separate permeable-surface flow check W5d passes (4.5e-6). Not done: impedance and quiet boundaries, wave-equation solver with sponge layers, modal export, quadrupole volume term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling from a running solver.
+  - note: Priority P3. Size M. Area: fv,post. WAVE 32B (ADR 0066, partial; the acceptance text above is NOT met: no
+    impedance boundary, no quiet boundary, no wave solver, no modal export).
+    - Complements the far-field integral post-processing.
+    - Built:
+      - Time-domain FW-H 1A for moving impermeable surfaces from sampled surface pressure with uniform-flow evaluation
+        in the medium frame and moving observers (rcfd-post fwh.rs).
+      - Gutin-type rotor tonal harmonics derived and checked against FW-H (rotor.rs).
+      - SPL/OASPL/A-weighting/1-3 octave/sound power from an observer sphere with JSON/CSV spectra (acoustics.rs).
+      - `rcfd-surface-series` v1 reader and adapter from rcfd-post surface sampling (surface_series.rs).
+      - `rcfd fwh` CLI.
+      - Steady-RANS broadband proxies (Proudman, Curle, trailing edge; noise_proxies.rs) which are NOT validated against
+        measurements and are labelled non-predictive.
+    - docs/acoustics.md.
+    - Registered checks passed except W5a/W5b (impermeable sphere in uniform flow, measured 7.7e-2 and 6.7e-2 against
+      1e-2 and 1e-3): kept as ignored known-miss tests; a separate permeable-surface flow check W5d passes (4.5e-6).
+    - Not done: impedance and quiet boundaries, wave-equation solver with sponge layers, modal export, quadrupole volume
+      term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling from a running
+      solver.
 
 ## Revision additions (F-244 to F-247)
 
@@ -705,20 +4597,136 @@ Added after the static feature-gap review; wording is product-independent. Phase
 
 - [ ] **F-244** Flow-coupled six-DOF validation: body falling through a fluid and spring-mounted body in a flow
   - depends on: F-229, F-063
-  - acceptance: Laminar incompressible PISO/PIMPLE on a moving mesh, existing loose coupling (ADR 0033 D7), added-mass-to-body-mass ratio <= 0.2 (from the ADR closed form, not the displaced-fluid mass), no cyclic faces carrying a moving-wall velocity. (a) Falling body: a rigid block falling under gravity minus buoyancy along a closed 2-D channel, the displaced fluid returning through the two side gaps (falling-piston viscometer), reaches the terminal velocity of the lubrication closed form derived in the ADR within 2 percent after an approach of at least 5 time constants that fits inside the F-063 smoothing compression limit; the ADR bounds the neglected end-effect, finite-Reynolds and finite-length terms to <= 0.5 percent before the run. (b) Spring-mounted body: free decay of a spring-mounted piston driving a fluid column (the C2 geometry plus a spring, amplitude <= 1 percent of L0) oscillates at omega = sqrt(k/(M + rho A L0)) within 2 percent, with parameters chosen so the fluid lowers the frequency by at least 4 times the tolerance (mass ratio 0.2 gives 8.7 percent), so the check fails with fluid forces off. Both: halving dt changes the measured quantity by <= 0.5 percent; per-step continuity <= 1e-10 and the uniform-flow GCL to round-off are asserted (not only printed); in (b) the amplitude at successive same-side turning points never grows (ratio <= 1 + 1e-3; the open outlet makes body + spring + fluid energy rise during inflow by -1/2 rho A v^3, which cancels over a full period, so energy is not compared mid-cycle). Out of scope: strong (implicit) coupling and added-mass stabilisation (mass ratio > 0.2), comparison with published falling-sphere or falling-cylinder experiments or wall-correction tables (no source read), cross-flow vortex-induced vibration, free 3-D rotation with Newmark, contact and multi-body, turbulence or energy on moving meshes.
-  - note: Split from F-229 on 2026-10-21 (partials audit; ADR 0033 reads these two clauses as flow-coupled and not delivered). Uses the moving-mesh path (F-063, partial). Size M. REFINED 2026-10-21 (not yet user-approved): the lead's text had no named case and no closed form for 'terminal velocity with drag from the flow' or 'added mass included'. Now (a) names a falling block whose drag comes from fluid displaced past it (not the tangential Couette shear of C1) with a lubrication closed form derived in the ADR, and (b) names a spring-mounted piston-column (C1/C2 are the existing flow-coupled checks; the new cases must differ and must fail without the fluid, hence the 4x frequency-shift requirement). Added a dt-halving check (moving meshes run implicit Euler only), asserted continuity and GCL (the F-063 audit found continuity printed but not asserted) and an amplitude non-growth check at same-side turning points (energy injection is how explicit coupling fails; a mid-cycle energy bound would be wrong because the C2 outlet is open). The 0.2 bound is on added mass, which for a block pushing fluid through narrow gaps far exceeds its displaced mass. The lead's 'needs strong coupling or added-mass stabilisation' holds only above mass ratio 0.2 (ADR 0033 D7); PROPOSED SPLIT: strong (implicit) fluid-structure coupling with added-mass stabilisation as its own item (a feature, not a validation), with a mass-ratio >= 1 version of (b) as its acceptance. OPEN QUESTION: the title's 'spring-mounted body in a flow' is read as free decay in still fluid; a cross-flow (vortex-induced vibration) case would need a published data set chosen by the user. USER DECISION 2026-10-22: split as proposed; "in a flow" is read as free decay in still fluid (no VIV case). Strong coupling is F-251.
+  - acceptance: Laminar incompressible PISO/PIMPLE on a moving mesh, existing loose coupling (ADR 0033 D7),
+    added-mass-to-body-mass ratio <= 0.2 (from the ADR closed form, not the displaced-fluid mass), no cyclic faces
+    carrying a moving-wall velocity.
+    - (a) Falling body: a rigid block falling under gravity minus buoyancy along a closed 2-D channel, the displaced
+      fluid returning through the two side gaps (falling-piston viscometer), reaches the terminal velocity of the
+      lubrication closed form derived in the ADR within 2 percent after an approach of at least 5 time constants that
+      fits inside the F-063 smoothing compression limit; the ADR bounds the neglected end-effect, finite-Reynolds and
+      finite-length terms to <= 0.5 percent before the run.
+    - (b) Spring-mounted body: free decay of a spring-mounted piston driving a fluid column (the C2 geometry plus a
+      spring, amplitude <= 1 percent of L0) oscillates at omega = sqrt(k/(M + rho A L0)) within 2 percent, with
+      parameters chosen so the fluid lowers the frequency by at least 4 times the tolerance (mass ratio 0.2 gives 8.7
+      percent), so the check fails with fluid forces off.
+    - Both: halving dt changes the measured quantity by <= 0.5 percent; per-step continuity <= 1e-10 and the
+      uniform-flow GCL to round-off are asserted (not only printed); in (b) the amplitude at successive same-side
+      turning points never grows (ratio <= 1 + 1e-3; the open outlet makes body + spring + fluid energy rise during
+      inflow by -1/2 rho A v^3, which cancels over a full period, so energy is not compared mid-cycle).
+    - Out of scope: strong (implicit) coupling and added-mass stabilisation (mass ratio > 0.2), comparison with
+      published falling-sphere or falling-cylinder experiments or wall-correction tables (no source read), cross-flow
+      vortex-induced vibration, free 3-D rotation with Newmark, contact and multi-body, turbulence or energy on moving
+      meshes.
+  - note: Split from F-229 on 2026-10-21 (partials audit; ADR 0033 reads these two clauses as flow-coupled and not
+    delivered). Uses the moving-mesh path (F-063, partial). Size M.
+    - REFINED 2026-10-21 (not yet user-approved): the lead's text had no named case and no closed form for 'terminal
+      velocity with drag from the flow' or 'added mass included'.
+      - (a) now names a falling block whose drag comes from fluid displaced past it (not the tangential Couette shear of
+        C1) with a lubrication closed form derived in the ADR.
+      - (b) now names a spring-mounted piston-column (C1/C2 are the existing flow-coupled checks; the new cases must
+        differ and must fail without the fluid, hence the 4x frequency-shift requirement).
+      - Added a dt-halving check (moving meshes run implicit Euler only).
+      - Added asserted continuity and GCL (the F-063 audit found continuity printed but not asserted).
+      - Added an amplitude non-growth check at same-side turning points (energy injection is how explicit coupling
+        fails; a mid-cycle energy bound would be wrong because the C2 outlet is open).
+      - The 0.2 bound is on added mass, which for a block pushing fluid through narrow gaps far exceeds its displaced
+        mass.
+      - The lead's 'needs strong coupling or added-mass stabilisation' holds only above mass ratio 0.2 (ADR 0033 D7).
+    - PROPOSED SPLIT: strong (implicit) fluid-structure coupling with added-mass stabilisation as its own item (a
+      feature, not a validation), with a mass-ratio >= 1 version of (b) as its acceptance.
+    - OPEN QUESTION: the title's 'spring-mounted body in a flow' is read as free decay in still fluid; a cross-flow
+      (vortex-induced vibration) case would need a published data set chosen by the user.
+    - USER DECISION 2026-10-22: split as proposed; "in a flow" is read as free decay in still fluid (no VIV case).
+      Strong coupling is F-251.
 - [ ] **F-245** Particle models: droplet evaporation (d-squared law) and breakup
   - depends on: F-128, F-056
-  - acceptance: Two parts, each gated on its own. (A1) a single droplet evaporating in quiescent hot gas follows the quasi-steady d^2 law with the evaporation constant derived in the ADR from the registered model, measured d^2 slope within 2 percent, and the droplet mass lost equals the vapour mass source delivered to the carrier to 1e-10 relative; (A2) the breakup model reproduces its own analytic breakup time and child-size relation for a drop given a step relative velocity within 2 percent, with liquid mass conserved through breakup to round-off (critical Weber number and model constants read from the source); Out of scope: spray penetration against data (F-252), wall film (F-253), wall interaction (F-254), dispersion and reactions (F-255), group and file injections (F-056 scope).
-  - note: Split from F-128 on 2026-10-21 (partials audit). Depends on F-128 and F-056 (partial: no cyclone case). Size L. REFINED 2026-10-21 (not yet user-approved): the lead's text gated only spray and film against data while the title also lists breakup, erosion and rough-wall interaction; each sub-model now has a closed-form or self-consistency check (d^2 law, model breakup time, impact-flux identity, rebound-distribution KS) plus a mass-conservation check, so the code can be verified before any data set is chosen. The Nusselt thickness is derived from the steady incline film profile (u = g sin(theta)/nu (delta y - y^2/2)), not cited. 'Track files' dropped: particles.tracks / particle_tracks.csv was delivered in wave 21C. PROPOSED SPLIT (this is three items, not one): spray = A (breakup, evaporation, heat/mass transfer; A3 needs a variable-density carrier with energy, a vapour species and two-way mass/energy exchange, which should be confirmed before scheduling and may itself be a fourth item since it alone is data-dependent); wall film = B; wall interaction = C (erosion, rough-wall rebound). OPEN QUESTIONS: which public vaporising-spray data set (not yet identified or read); dispersion from turbulence-model fields and particle reactions were in F-128's not-delivered list and are now tracked nowhere; should 'track files' mean something beyond particle_tracks.csv. USER DECISION 2026-10-22: split into four items plus dispersion and reactions: F-252 (A3), F-253 (B), F-254 (C), F-255. This item keeps A1 and A2, verifiable without a data set.
+  - acceptance: Two parts, each gated on its own.
+    - (A1) a single droplet evaporating in quiescent hot gas follows the quasi-steady d^2 law with the evaporation
+      constant derived in the ADR from the registered model, measured d^2 slope within 2 percent, and the droplet mass
+      lost equals the vapour mass source delivered to the carrier to 1e-10 relative;
+    - (A2) the breakup model reproduces its own analytic breakup time and child-size relation for a drop given a step
+      relative velocity within 2 percent, with liquid mass conserved through breakup to round-off (critical Weber number
+      and model constants read from the source);
+    - Out of scope: spray penetration against data (F-252), wall film (F-253), wall interaction (F-254), dispersion and
+      reactions (F-255), group and file injections (F-056 scope).
+  - note: Split from F-128 on 2026-10-21 (partials audit). Depends on F-128 and F-056 (partial: no cyclone case).
+    Size L.
+    - REFINED 2026-10-21 (not yet user-approved):
+      - The lead's text gated only spray and film against data while the title also lists breakup, erosion and
+        rough-wall interaction.
+      - Each sub-model now has a closed-form or self-consistency check (d^2 law, model breakup time, impact-flux
+        identity, rebound-distribution KS) plus a mass-conservation check, so the code can be verified before any data
+        set is chosen.
+      - The Nusselt thickness is derived from the steady incline film profile (u = g sin(theta)/nu (delta y - y^2/2)),
+        not cited.
+      - 'Track files' dropped: particles.tracks / particle_tracks.csv was delivered in wave 21C.
+    - PROPOSED SPLIT (this is three items, not one):
+      - spray = A (breakup, evaporation, heat/mass transfer; A3 needs a variable-density carrier with energy, a vapour
+        species and two-way mass/energy exchange, which should be confirmed before scheduling and may itself be a fourth
+        item since it alone is data-dependent);
+      - wall film = B;
+      - wall interaction = C (erosion, rough-wall rebound).
+    - OPEN QUESTIONS:
+      - which public vaporising-spray data set (not yet identified or read);
+      - dispersion from turbulence-model fields and particle reactions were in F-128's not-delivered list and are now
+        tracked nowhere;
+      - should 'track files' mean something beyond particle_tracks.csv.
+    - USER DECISION 2026-10-22: split into four items plus dispersion and reactions: F-252 (A3), F-253 (B), F-254 (C),
+      F-255. This item keeps A1 and A2, verifiable without a data set.
 - [ ] **F-246** Pressure-interpolation variants for poor meshes
   - depends on: F-208
-  - acceptance: Pressure-interpolation variants: the set of variants is named in the ADR before the work; on an incompressible manufactured solution (per-cell momentum source) on the F-208 skewed, warped and stretched meshes at n = 16, 32, 64, each variant's finest-pair L2 order is >= 1.7 for velocity and >= a pressure limit registered in the ADR, and on the near-orthogonal meshes no variant raises the error over the default by more than 1.10x (the F-208 M3 limit); a body-force-weighted variant, if named, cuts the spurious velocity of a quiescent stably stratified Boussinesq box on the skewed mesh by at least 10x against the default, below an absolute bound registered in the ADR. Out of scope: new gradient schemes, limiter changes, a separate warped-face correction (dropped, see the note), compressible-solver interpolation, automatic option selection by mesh quality, case-tree wiring (F-256).
-  - note: Split from F-208 on 2026-10-21 (partials audit). F-208 is done (ADR 0098 M5: stretched-mesh 32 -> 64 order 1.908 for C0/C1/C2), so the earlier remark that F-208 stays partial is obsolete and removed. Size M. REFINED 2026-10-21 (not yet user-approved): 'each implemented variant' was unbounded, so the ADR must name the set first; F-208's MMS exercises the scalar diffusion gradient, not pressure interpolation, so (A) needs the incompressible MMS harness ADR 0016 D2 said was missing, plus a stratified-box test where body-force weighting matters; (B) must show an error reduction, because ADR 0016 states the existing face correction already is the warped-face treatment and found it raised the error constant 2.1x on the skewed mesh, so 'does not degrade the order' alone is vacuous; (C) uses the usual wiring checks. PROPOSED SPLIT: A (M, SIMPLE kernel work) stays as F-246; C as its own S item covering the existing GradientOptions (it can ship before A); B decided by the user. OPEN QUESTION: is a separate warped-face correction wanted at all, given ADR 0016 D2 treats the corrected face gradient as the warped-face treatment? USER DECISION 2026-10-22: split: case-tree wiring is F-256; the separate warped-face correction (B) is dropped because ADR 0016 D2 already treats the corrected face gradient as the warped-face treatment and found the correction raised the error constant 2.1x on the skewed mesh; reopen only if A shows a warped-mesh residual.
+  - acceptance: Pressure-interpolation variants:
+    - the set of variants is named in the ADR before the work;
+    - on an incompressible manufactured solution (per-cell momentum source) on the F-208 skewed, warped and stretched
+      meshes at n = 16, 32, 64, each variant's finest-pair L2 order is >= 1.7 for velocity and >= a pressure limit
+      registered in the ADR, and on the near-orthogonal meshes no variant raises the error over the default by more than
+      1.10x (the F-208 M3 limit);
+    - a body-force-weighted variant, if named, cuts the spurious velocity of a quiescent stably stratified Boussinesq
+      box on the skewed mesh by at least 10x against the default, below an absolute bound registered in the ADR.
+    - Out of scope: new gradient schemes, limiter changes, a separate warped-face correction (dropped, see the note),
+      compressible-solver interpolation, automatic option selection by mesh quality, case-tree wiring (F-256).
+  - note: Split from F-208 on 2026-10-21 (partials audit). F-208 is done (ADR 0098 M5: stretched-mesh 32 -> 64 order
+    1.908 for C0/C1/C2), so the earlier remark that F-208 stays partial is obsolete and removed. Size M.
+    - REFINED 2026-10-21 (not yet user-approved):
+      - The phrase 'each implemented variant' was unbounded, so the ADR must name the set first.
+      - F-208's MMS exercises the scalar diffusion gradient, not pressure interpolation, so (A) needs the incompressible
+        MMS harness ADR 0016 D2 said was missing, plus a stratified-box test where body-force weighting matters.
+      - (B) must show an error reduction, because ADR 0016 states the existing face correction already is the
+        warped-face treatment and found it raised the error constant 2.1x on the skewed mesh, so 'does not degrade the
+        order' alone is vacuous.
+      - (C) uses the usual wiring checks.
+    - PROPOSED SPLIT: A (M, SIMPLE kernel work) stays as F-246; C as its own S item covering the existing
+      GradientOptions (it can ship before A); B decided by the user.
+    - OPEN QUESTION: is a separate warped-face correction wanted at all, given ADR 0016 D2 treats the corrected face
+      gradient as the warped-face treatment?
+    - USER DECISION 2026-10-22: split: case-tree wiring is F-256; the separate warped-face correction (B) is dropped
+      because ADR 0016 D2 already treats the corrected face gradient as the warped-face treatment and found the
+      correction raised the error constant 2.1x on the skewed mesh; reopen only if A shows a warped-mesh residual.
 - [ ] **F-247** Dynamic mesh: local remeshing on unstructured tetrahedral meshes
   - depends on: F-230, F-063
-  - acceptance: Every limit not stated here is registered in the ADR before the run. Local remeshing: the ADR 0090 piston in a closed cylinder on an unstructured tetrahedral mesh, with remeshing instead of layering, keeps p_bar V^gamma within 2e-2 at full compression and after re-expansion, conserves volume, mass, momentum and energy through every remeshing event to 1e-13 relative (conservative remap), triggers at least 5 events, and keeps the minimum cell quality above the ADR threshold. Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.
-  - note: Split from F-230 on 2026-10-21 (partials audit). Depends on F-063 (partial). Size L. REFINED 2026-10-21 (not yet user-approved): the lead's text bundled six sub-scopes under one unnamed 'closed-form or benchmark result' and asked for incompressible case-tree selectability, which already exists for prescribed and six-DOF motion (ADR 0033 D8, T1-T4); what is missing is wiring of layering and compressible ALE. Each part now has a named case reusing a registered closed form (ADR 0090 piston p V^gamma, ADR 0033 G5 piston flux) plus conservation checks. ADR 0098's Mach 0.2 piston passed with the |u| + c time step but did not deliver the mesh-speed time step; it stays in (C). PROPOSED SPLIT: remeshing = A (L); layering extensions = B (M); compressible ALE boundaries and time step = C (S to M); wiring = D (S, can ship first). OPEN QUESTION: should more than one moving layered boundary (in ADR 0090's not-delivered list) be tracked here or dropped. USER DECISION 2026-10-22: split four ways: B is F-257, C is F-258, D is F-259; more than one moving layered boundary is dropped as out of scope (no use case). This item keeps A (remeshing), size L.
+  - acceptance: Every limit not stated here is registered in the ADR before the run.
+    - Local remeshing: the ADR 0090 piston in a closed cylinder on an unstructured tetrahedral mesh, with remeshing
+      instead of layering, keeps p_bar V^gamma within 2e-2 at full compression and after re-expansion, conserves volume,
+      mass, momentum and energy through every remeshing event to 1e-13 relative (conservative remap), triggers at least
+      5 events, and keeps the minimum cell quality above the ADR threshold.
+    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
+      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
+      moving-mesh path.
+  - note: Split from F-230 on 2026-10-21 (partials audit). Depends on F-063 (partial). Size L.
+    - REFINED 2026-10-21 (not yet user-approved):
+      - The lead's text bundled six sub-scopes under one unnamed 'closed-form or benchmark result' and asked for
+        incompressible case-tree selectability, which already exists for prescribed and six-DOF motion (ADR 0033 D8,
+        T1-T4); what is missing is wiring of layering and compressible ALE.
+      - Each part now has a named case reusing a registered closed form (ADR 0090 piston p V^gamma, ADR 0033 G5 piston
+        flux) plus conservation checks.
+      - ADR 0098's Mach 0.2 piston passed with the |u| + c time step but did not deliver the mesh-speed time step; it
+        stays in (C).
+    - PROPOSED SPLIT: remeshing = A (L); layering extensions = B (M); compressible ALE boundaries and time step = C (S
+      to M); wiring = D (S, can ship first).
+    - OPEN QUESTION: should more than one moving layered boundary (in ADR 0090's not-delivered list) be tracked here or
+      dropped.
+    - USER DECISION 2026-10-22: split four ways: B is F-257, C is F-258, D is F-259; more than one moving layered
+      boundary is dropped as out of scope (no use case). This item keeps A (remeshing), size L.
 
 ## Revision additions (F-248 to F-250)
 
@@ -727,15 +4735,66 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [x] **F-248** SIMPLEC robustness: velocity inlet with a forward vent (K > 0) diverges from the first iteration
   - depends on: F-217
   - acceptance: The registered vent test x7_vent_at_fixed_pseudo_dt (pseudo-dt 0.02, u = +-0.5, +-1, +-2; outlet pressure 0.5 K u|u| within 1e-6) passes as a non-ignored test with plain SIMPLEC, without changing the default settings of existing cases (baseline hashes unchanged)
-  - note: Found by wave 39D (ADR 0095): plain SIMPLEC diverges from the first iteration with a velocity inlet and a forward vent when K > 0; X7 gave NaN at u = 2 and is an ignored known miss. User decision 2026-10-21: fix in the next foundations wave with the SIMPLEC seam-compensation defect. Size M. WAVE 41B (ADR 0102): DONE with an opt-in key. Root cause (diagnosed by registered switch runs): SIMPLEC added the flux compensation (rAtU - rAU) snGrad(p_old) on internal faces only, so a change of the vent pressure kicked the vent-cell velocity by (rAtU - rAU) times the pressure jump (5.06 m/s in the first plain iteration at u = 1, 1.125 at u = 2 with pseudo-time 0.02) and the vent law, which reads that velocity, fed it back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|; the run diverges when G > 1 (10.1 plain, 1.125 at u = 2, pseudo 0.02), not by Courant number (K = 1 at Courant 2 settles, K = 10 at Courant 1 diverges). Inlet treatment and seams play no role in X7; a face-velocity vent law is not a cure (it diverges through a transverse mode). Fix: solver.simplec_boundary_compensation (default false, bit-identical; steady simplec only, located error otherwise; docs/case-schema.md) adds the compensation on fixed-pressure and periodic boundary faces, so the fixed point equals SIMPLE's (B1 pressure outlet 3.5e-12, B2 periodic seams 4.7e-13 against default differences 4.8e-3 and 2.6e-3; the same key addresses ADR 0084 finding S (seams), opt-in). Acceptance: x7_vent_at_fixed_pseudo_dt (crates/rcfd-api/tests/heat_exchanger.rs, non-ignored) is the registered X7 sweep with the one added line simplec_boundary_compensation = true: worst error 2.93e-12 (limit 1e-6) at all six flows; the default-code x7_vent_at_fixed_pseudo_dt_known_miss stays ignored and still gives NaN at u = 2; baseline hashes unchanged. Reading of the acceptance: 'plain SIMPLEC' = the simplec algorithm with this one opt-in key; the default settings of existing cases are unchanged. Also: X7 without pseudo-time settles with the key (errors <= 6.4e-13). Remains: with the key, plain SIMPLEC with a strong vent (K = 10) still fails through a transverse vent-face mode (F-200 C3 channel non-finite at iteration 2767), pseudo-time needed there; the key is not the default because it changes every converged SIMPLEC result with a pressure boundary or periodic seam; the FAN-01 residual stall is not caused by the missing compensation (ADR 0102 R3, falsified). USER DECISION 2026-10-22: accepted done with the opt-in key solver.simplec_boundary_compensation. Making the key the default is NOT approved (it changes every converged SIMPLEC result with a pressure boundary or seam). Queued: a located diagnostic that suggests the key when a steady SIMPLEC run diverges. WAVE 42A (ADR 0105): the queued diagnostic is delivered. When the steady divergence guard (ADR 0077, unchanged: non-finite values, continuity growth 1e6 over the 50-iteration minimum, speed / pressure runaway) stops a steady SIMPLEC run whose case has a fixed-pressure or periodic boundary face and solver.simplec_boundary_compensation is false, the run-control reason and service error append a hint naming solver.simplec_boundary_compensation = true (only Simulation::steady_divergence_message, read-only; other algorithms and texts unchanged; defaults unchanged). Tests in rcfd-api tests/heat_exchanger.rs: d1 (X7 vent u = 2, pseudo 0.02, no key: diverged at iteration 9, reason names the key; limit 15), d1n (diverging SIMPLE cavity: no hint), d2 (X7 vent u = 0.5 converging, 600 iterations bit-identical with and without querying the message every iteration).
+  - note: Size M. Done with an opt-in key (solver.simplec_boundary_compensation), accepted by the user on 2026-10-22;
+    making the key the default is NOT approved. The default-code X7 test still gives NaN at u = 2, and with the key
+    plain SIMPLEC with a strong vent (K = 10) still fails.
+    - Found by wave 39D (ADR 0095): plain SIMPLEC diverges from the first iteration with a velocity inlet and a forward
+      vent when K > 0; X7 gave NaN at u = 2 and is an ignored known miss.
+    - User decision 2026-10-21: fix in the next foundations wave with the SIMPLEC seam-compensation defect.
+    - WAVE 41B (ADR 0102): DONE with an opt-in key.
+      - Root cause (diagnosed by registered switch runs): SIMPLEC added the flux compensation (rAtU - rAU) snGrad(p_old)
+        on internal faces only, so a change of the vent pressure kicked the vent-cell velocity by (rAtU - rAU) times the
+        pressure jump (5.06 m/s in the first plain iteration at u = 1, 1.125 at u = 2 with pseudo-time 0.02). The vent
+        law, which reads that velocity, fed it back with the gain G = 0.5 (rAtU - rAU) (A/V) K |u|. The run diverges
+        when G > 1 (10.1 plain, 1.125 at u = 2, pseudo 0.02), not by Courant number (K = 1 at Courant 2 settles, K = 10
+        at Courant 1 diverges).
+      - Inlet treatment and seams play no role in X7; a face-velocity vent law is not a cure (it diverges through a
+        transverse mode).
+      - Fix: solver.simplec_boundary_compensation (default false, bit-identical; steady simplec only, located error
+        otherwise; docs/case-schema.md) adds the compensation on fixed-pressure and periodic boundary faces, so the
+        fixed point equals SIMPLE's (B1 pressure outlet 3.5e-12, B2 periodic seams 4.7e-13 against default differences
+        4.8e-3 and 2.6e-3; the same key addresses ADR 0084 finding S (seams), opt-in).
+      - Acceptance: x7_vent_at_fixed_pseudo_dt (crates/rcfd-api/tests/heat_exchanger.rs, non-ignored) is the registered
+        X7 sweep with the one added line simplec_boundary_compensation = true: worst error 2.93e-12 (limit 1e-6) at all
+        six flows; the default-code x7_vent_at_fixed_pseudo_dt_known_miss stays ignored and still gives NaN at u = 2;
+        baseline hashes unchanged.
+      - Reading of the acceptance: 'plain SIMPLEC' = the simplec algorithm with this one opt-in key; the default
+        settings of existing cases are unchanged.
+      - Also: X7 without pseudo-time settles with the key (errors <= 6.4e-13).
+      - Remains:
+        - with the key, plain SIMPLEC with a strong vent (K = 10) still fails through a transverse vent-face mode (F-200
+          C3 channel non-finite at iteration 2767), pseudo-time needed there;
+        - the key is not the default because it changes every converged SIMPLEC result with a pressure boundary or
+          periodic seam;
+        - the FAN-01 residual stall is not caused by the missing compensation (ADR 0102 R3, falsified).
+    - USER DECISION 2026-10-22: accepted done with the opt-in key solver.simplec_boundary_compensation. Making the key
+      the default is NOT approved (it changes every converged SIMPLEC result with a pressure boundary or seam). Queued:
+      a located diagnostic that suggests the key when a steady SIMPLEC run diverges.
+    - WAVE 42A (ADR 0105): the queued diagnostic is delivered.
+      - When the steady divergence guard (ADR 0077, unchanged: non-finite values, continuity growth 1e6 over the
+        50-iteration minimum, speed / pressure runaway) stops a steady SIMPLEC run whose case has a fixed-pressure or
+        periodic boundary face and solver.simplec_boundary_compensation is false, the run-control reason and service
+        error append a hint naming solver.simplec_boundary_compensation = true (only
+        Simulation::steady_divergence_message, read-only; other algorithms and texts unchanged; defaults unchanged).
+      - Tests in rcfd-api tests/heat_exchanger.rs:
+        - d1 (X7 vent u = 2, pseudo 0.02, no key: diverged at iteration 9, reason names the key; limit 15);
+        - d1n (diverging SIMPLE cavity: no hint);
+        - d2 (X7 vent u = 0.5 converging, 600 iterations bit-identical with and without querying the message every
+          iteration).
 - [ ] **F-249** Parametric studies, remaining scope: multi-objective optimiser, Nelder-Mead robustness, warm start beyond steady SIMPLE/SIMPLEC
   - depends on: F-095
   - acceptance: A multi-objective study over at least two design parameters returns a Pareto set verified against a known analytic front within a limit registered in an ADR; the Nelder-Mead optimiser reaches the registered T3 target; a warm-started sweep point reproduces its cold-started result within a registered tolerance
-  - note: Split from F-095 on 2026-10-21 (wave 40C, ADR 0099). Acceptance text proposed by the lead; refine when scheduled. Size L. USER DECISION 2026-10-22: split: CMA-ES and the real-fan study are F-260 (blocked on FAN-01 convergence). This item keeps the analytic clauses.
+  - note: Split from F-095 on 2026-10-21 (wave 40C, ADR 0099). Acceptance text proposed by the lead; refine when
+    scheduled. Size L.
+    - USER DECISION 2026-10-22: split: CMA-ES and the real-fan study are F-260 (blocked on FAN-01 convergence). This
+      item keeps the analytic clauses.
 - [ ] **F-250** Sliding interface (AMI): arbitrary mesh interface between non-conforming moving or rotating zones
   - depends on: F-063, F-114
   - acceptance: A rotor-stator case with a sliding interface, the mesh sliding by at least one full cell pitch, conserves mass across the interface to 1e-10 relative per step summed over all interface faces; rigid rotation of a fluid across the interface differs from the same case on a conforming mesh by no more than 1.5 times the conforming-mesh velocity error; a Taylor-Couette torque across the interface is within 2 percent of the closed form; a case without the interface is bit-identical (baseline hashes unchanged)
-  - note: Split from F-063 on 2026-10-21 (user decision after the F-063 audit). Acceptance text proposed by the lead; refine when scheduled. F-114 handles planar interfaces only; F-126 covers frozen-rotor and mixing-plane. Size L. USER DECISION 2026-10-22: acceptance tightened with numeric limits (the 1.5x ratio and 2 percent are fixed here; refine only with the user).
+  - note: Split from F-063 on 2026-10-21 (user decision after the F-063 audit). Acceptance text proposed by the lead;
+    refine when scheduled. F-114 handles planar interfaces only; F-126 covers frozen-rotor and mixing-plane. Size L.
+    - USER DECISION 2026-10-22: acceptance tightened with numeric limits (the 1.5x ratio and 2 percent are fixed here;
+      refine only with the user).
 
 ## Revision additions (F-251 to F-260)
 
@@ -744,43 +4803,84 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [ ] **F-251** Strong (implicit) fluid-structure coupling with added-mass stabilisation
   - depends on: F-244
   - acceptance: A spring-mounted piston driving a fluid column at an added-mass to body-mass ratio of at least 1 oscillates at omega = sqrt(k/(M + rho A L0)) within 2 percent, the amplitude at successive same-side turning points never grows (ratio <= 1 + 1e-3) over at least 10 periods, and the explicit coupling of ADR 0033 D7 grows or diverges on the same case (registered before the run); halving dt changes the frequency by <= 0.5 percent
-  - note: Split from F-244 on 2026-10-22 (user decision). Acceptance text proposed by the lead; refine when scheduled. Size L. Needed for light structures; not on the first fan path.
+  - note: Split from F-244 on 2026-10-22 (user decision). Acceptance text proposed by the lead; refine when scheduled.
+    Size L. Needed for light structures; not on the first fan path.
 - [ ] **F-252** Spray penetration of a vaporising spray against a public data set
   - depends on: F-245
   - acceptance: liquid and vapour penetration of a constant-volume vaporising spray within 10 percent of a public data set chosen by the user, values read from the source and registered in an ADR before the run. Needs a variable-density carrier with energy, a vapour species and two-way mass and energy exchange; confirm before scheduling.
-  - note: Split from F-245 on 2026-10-22 (user decision). Blocked on the choice of a public vaporising-spray data set (not yet identified or read) and on the carrier physics. Size L.
+  - note: Split from F-245 on 2026-10-22 (user decision). Blocked on the choice of a public vaporising-spray data set
+    (not yet identified or read) and on the carrier physics. Size L.
 - [ ] **F-253** Particle wall film (Nusselt thickness, mass conservation)
   - depends on: F-128, F-056
-  - acceptance: Wall film: a laminar film fed by impinging parcels on an inclined wall reaches the Nusselt thickness derived in the ADR, delta = (3 mu Gamma / (rho^2 g sin(theta)))^(1/3) with Gamma the mass flow per unit width, within 5 percent at a station away from the feed, at a film Reynolds number inside the laminar range registered in the ADR; film + airborne + escaped parcel mass conserved to 1e-10 relative. Out of scope: comparison with measured data beyond the stated data set, particle reactions, discrete-element coupling.
+  - acceptance: Wall film: a laminar film fed by impinging parcels on an inclined wall reaches the Nusselt thickness
+    derived in the ADR, delta = (3 mu Gamma / (rho^2 g sin(theta)))^(1/3) with Gamma the mass flow per unit width,
+    within 5 percent at a station away from the feed, at a film Reynolds number inside the laminar range registered in
+    the ADR; film + airborne + escaped parcel mass conserved to 1e-10 relative.
+    - Out of scope: comparison with measured data beyond the stated data set, particle reactions, discrete-element
+      coupling.
   - note: Split from F-245 on 2026-10-22 (user decision). Size M.
 - [ ] **F-254** Particle wall interaction: erosion and rough-wall rebound
   - depends on: F-128, F-056
-  - acceptance: Wall interaction: for a uniform parcel stream hitting a plate at three angles, the reported erosion rate equals the closed-form impact-flux expression of the chosen correlation (constants read from the source) to 1e-10 relative; the rough-wall rebound model's sampled rebound angles match its prescribed distribution (Kolmogorov distance below the 1 percent critical value for the sample size). Out of scope: comparison with measured data beyond the stated data set, particle reactions, discrete-element coupling.
+  - acceptance: Wall interaction: for a uniform parcel stream hitting a plate at three angles, the reported erosion rate
+    equals the closed-form impact-flux expression of the chosen correlation (constants read from the source) to 1e-10
+    relative; the rough-wall rebound model's sampled rebound angles match its prescribed distribution (Kolmogorov
+    distance below the 1 percent critical value for the sample size).
+    - Out of scope: comparison with measured data beyond the stated data set, particle reactions, discrete-element
+      coupling.
   - note: Split from F-245 on 2026-10-22 (user decision). Size M.
 - [ ] **F-255** Particle dispersion from turbulence-model fields and particle reactions
   - depends on: F-128
   - acceptance: Particle dispersion driven by turbulence-model fields reproduces the analytic dispersion growth of a passive cloud in homogeneous turbulence (Taylor result, closed form derived in the ADR) within 5 percent, and a particle surface reaction conserves the mass of each species to 1e-10 relative
-  - note: Split from F-245 on 2026-10-22 (user decision): these were in F-128's not-delivered list and tracked nowhere. Acceptance text proposed by the lead; refine when scheduled. Size L.
+  - note: Split from F-245 on 2026-10-22 (user decision): these were in F-128's not-delivered list and tracked nowhere.
+    Acceptance text proposed by the lead; refine when scheduled. Size L.
 - [ ] **F-256** Case-tree wiring of the gradient options
   - depends on: F-208
-  - acceptance: Case-tree wiring of the existing GradientOptions (face correction, secondary limiter, boundary-gradient treatment; options added later (for example by F-246) wire under the same checks): invalid values give located errors, a tree run equals the library run with the same options to 1e-12, and a case without the keys is bit-identical (baseline hashes unchanged). Out of scope: new gradient schemes, limiter changes.
+  - acceptance: Case-tree wiring of the existing GradientOptions (face correction, secondary limiter, boundary-gradient
+    treatment; options added later (for example by F-246) wire under the same checks): invalid values give located
+    errors, a tree run equals the library run with the same options to 1e-12, and a case without the keys is
+    bit-identical (baseline hashes unchanged).
+    - Out of scope: new gradient schemes, limiter changes.
   - note: Split from F-246 on 2026-10-22 (user decision). Can ship before F-246. Size S.
 - [ ] **F-257** Dynamic mesh: prism layering and incompressible layering
   - depends on: F-230, F-063
-  - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions: (B1) the same piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event conservation 1e-13, mass drift 1e-12); (B2) layering in the incompressible PIMPLE path: the ADR 0033 G5 piston channel run long enough for at least 5 layer removals keeps per-step continuity <= 1e-9, outlet flux equal to the piston swept flux to 1e-10 per step and volume conserved per layer event to 1e-13. Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions:
+    - (B1) the same piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event
+      conservation 1e-13, mass drift 1e-12);
+    - (B2) layering in the incompressible PIMPLE path: the ADR 0033 G5 piston channel run long enough for at least 5
+      layer removals keeps per-step continuity <= 1e-9, outlet flux equal to the piston swept flux to 1e-10 per step and
+      volume conserved per layer event to 1e-13.
+    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
+      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
+      moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Size M.
 - [ ] **F-258** Compressible ALE boundaries and mesh-speed time step
   - depends on: F-230, F-063
-  - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and time step: max_dt uses |u.n - w_n| + c (checked against the closed form for a uniform gas on a mesh moving at w to round-off); uniform flow is preserved to 1e-12 with characteristic boundary faces that move; a piston-generated simple wave leaving through a moving characteristic outlet reflects with amplitude below the ADR limit. Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and
+    time step:
+    - max_dt uses |u.n - w_n| + c (checked against the closed form for a uniform gas on a mesh moving at w to
+      round-off);
+    - uniform flow is preserved to 1e-12 with characteristic boundary faces that move;
+    - a piston-generated simple wave leaving through a moving characteristic outlet reflects with amplitude below the
+      ADR limit.
+    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
+      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
+      moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Size S to M.
 - [ ] **F-259** Case-tree and CLI wiring of layering and compressible ALE
   - depends on: F-230, F-063
-  - acceptance: Every limit not stated here is registered in the ADR before the run. Case-tree and CLI wiring of layering and compressible ALE (incompressible prescribed and six-DOF motion are already in the tree, ADR 0033 D8): invalid keys give located errors, a tree run equals the library run to 1e-12, and a case without the keys is bit-identical (baseline hashes unchanged). Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Case-tree and CLI wiring of
+    layering and compressible ALE (incompressible prescribed and six-DOF motion are already in the tree, ADR 0033 D8):
+    invalid keys give located errors, a tree run equals the library run to 1e-12, and a case without the keys is
+    bit-identical (baseline hashes unchanged).
+    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
+      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
+      moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S.
 - [ ] **F-260** Parametric studies: CMA-ES and a real-fan study
   - depends on: F-249, F-126
   - acceptance: CMA-ES reaches the registered target on a multimodal analytic test function from a start where Nelder-Mead does not (limits registered in an ADR); a multi-objective study on the FAN-01 passage over at least two blade parameters, using a converged solver, returns a Pareto set whose members are re-run to confirm their reported objectives within 1 percent
-  - note: Split from F-249 on 2026-10-22 (user decision). Acceptance text proposed by the lead; refine when scheduled. Blocked on FAN-01 solver convergence (waves 43B-C). Size L.
+  - note: Split from F-249 on 2026-10-22 (user decision). Acceptance text proposed by the lead; refine when scheduled.
+    Blocked on FAN-01 solver convergence (waves 43B-C). Size L.
 
 ## Revision additions (F-261 to F-269)
 
@@ -789,23 +4889,36 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [~] **F-261** Studio project folder library (rcfd-project)
   - depends on: F-145
   - acceptance: A project is a folder with a versioned manifest, case and mesh references and immutable run records; writes are atomic, a torn file is detected, old schema versions migrate, and a file watcher reports external edits. Limits are registered in ADR 0122 and checked by headless tests.
-  - note: Wave 47A (ADR 0122) and audit fixes in ADR 0128. Library only, no window. Not done: moving the run service onto these types (the runner keeps its own copies, to be unified), and the other additive contract items listed in the ADR addendum. Size M.
+  - note: Wave 47A (ADR 0122) and audit fixes in ADR 0128. Library only, no window. Size M.
+    - Not done: moving the run service onto these types (the runner keeps its own copies, to be unified), and the other
+      additive contract items listed in the ADR addendum.
 - [~] **F-262** Studio run service (rcfd-runner)
   - depends on: F-261
   - acceptance: A detached runner owns a queue of runs under a CPU and memory budget with pause, resume, cancel and crash recovery, and reports state through append-only status files. Kill tests show a killed runner leaves no run in a false running state. Limits are registered in ADR 0123.
-  - note: Wave 47B (ADR 0123), fixes in ADR 0128 (no caller-chosen binary, status-write failure stops the run, liveness needs two misses, bounded output drain, argv quoting, no console window). One registered check (S5) is an ignored known miss. Memory probing uses typeperf with a time limit and a 5 s PowerShell fallback. Not done: socket control (files only), runs started from the application. Size L.
+  - note: Wave 47B (ADR 0123). Size L. One registered check (S5) is an ignored known miss.
+    - Fixes in ADR 0128: no caller-chosen binary, status-write failure stops the run, liveness needs two misses, bounded
+      output drain, argv quoting, no console window.
+    - Memory probing uses typeperf with a time limit and a 5 s PowerShell fallback.
+    - Not done: socket control (files only), runs started from the application.
 - [~] **F-263** Studio time-series field store (rcfd-tsstore)
   - depends on: F-261
   - acceptance: The mesh is stored once and field snapshots per saved time are chunked, compressed and indexed, so a reader can jump to any saved time and read it back bit-exactly. A bad tail left by a crash is tolerated. Limits are registered in ADR 0124.
-  - note: Wave 47C (ADR 0124). Library level. Not done: residual and monitor series are not in the store yet, and the solver does not write to it. Size M.
+  - note: Wave 47C (ADR 0124). Library level. Size M.
+    - Not done: residual and monitor series are not in the store yet, and the solver does not write to it.
 - [~] **F-264** Studio wgpu render core v0 (rcfd-render)
   - depends on: F-263
   - acceptance: An offscreen wgpu renderer draws a surface mesh with per-vertex and per-cell scalars, colour maps and a camera, writes PNG, and is compared with a CPU reference by pixel statistics. Limits are registered in ADR 0125.
-  - note: Wave 47D (ADR 0125), wgpu 30.0.1. Registered check P2 (picking returns the scalar value) is an ignored known miss. Open decision: the egui front end (eframe 0.36.2) needs Rust 1.95 while the workspace builds on an older toolchain. Not done: cut planes, iso-surfaces, streamlines, particles, video. Size L.
+  - note: Wave 47D (ADR 0125), wgpu 30.0.1. Size L. Registered check P2 (picking returns the scalar value) is an ignored
+    known miss.
+    - Open decision: the egui front end (eframe 0.36.2) needs Rust 1.95 while the workspace builds on an older
+      toolchain.
+    - Not done: cut planes, iso-surfaces, streamlines, particles, video.
 - [~] **F-265** Claude Code bridge library (rcfd-claude)
   - depends on: F-261
   - acceptance: The library lists Claude Code sessions for a project folder, tails a transcript, and sends a message to a closed session by resuming it in headless mode, with a conservative tool allow-list and no auto-approval. Behaviour was observed on one CLI build (2.1.310); a fixture set pins it.
-  - note: Wave 47E (ADR 0126), fixes in ADR 0128 (allow-list refuses control files, fail-closed init check). Fixtures carry synthetic ids. Not done: a sidecar for approvals (only if the allow-list proves too narrow), tests against other CLI versions. Size M.
+  - note: Wave 47E (ADR 0126), fixes in ADR 0128 (allow-list refuses control files, fail-closed init check). Fixtures
+    carry synthetic ids. Size M.
+    - Not done: a sidecar for approvals (only if the allow-list proves too narrow), tests against other CLI versions.
 - [ ] **F-266** Studio application shell (egui on wgpu)
   - depends on: F-262, F-263, F-264, F-265
   - acceptance: A window opens a project folder and shows its cases and runs with state, scrubs a run through time with linked fields and residuals, edits case inputs with schema validation, and hosts the Claude Code chat sidebar. The checks listed in docs/ui-restart-plan.md section 6 each exist as a named test. A person views the result and reports.
@@ -817,37 +4930,72 @@ Added after the static feature-gap review; wording is product-independent. Phase
 - [~] **F-268** Design ledger and tolerance study driver
   - depends on: F-249
   - acceptance: Every design variant is recorded in a ledger with its inputs, solver version and results, and a tolerance study driver samples manufacturing spread and reports output spread against registered limits (ADR 0121).
-  - note: Wave 46D (ADR 0121). Not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, Sobol sensitivity indices. Every model is a stated proxy until checked against measured fan data, which does not exist yet. Size M.
+  - note: Wave 46D (ADR 0121). Size M. Every model is a stated proxy until checked against measured fan data, which does
+    not exist yet.
+    - Not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, Sobol sensitivity
+      indices.
 - [~] **F-269** Test gate speed and strictness
   - depends on: F-106
   - acceptance: The full gate runs each test in its own process from a small pool with a per-test time limit, prints the summary format the older scripts read, and a scanner lists tests that cannot fail (ADRs 0127 to 0129, docs/test-process.md).
-  - note: Open items: a vacuous pass in the schemes_wave13 T2 test (it should fail the vacuous case), an environment switch that makes the 12 data-gated tests fail rather than skip, limit headroom on one stage, a test for the R3 limit, a re-measurement at 5 jobs, scanning of inline test modules, and a slot queue in place of the directory locks. Size M.
+  - note: Size M. Open items:
+    - a vacuous pass in the schemes_wave13 T2 test (it should fail the vacuous case);
+    - an environment switch that makes the 12 data-gated tests fail rather than skip;
+    - limit headroom on one stage;
+    - a test for the R3 limit;
+    - a re-measurement at 5 jobs;
+    - scanning of inline test modules;
+    - a slot queue in place of the directory locks.
 
 ## Revision additions (F-270 to F-275)
 
-Added with [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), one workspace layer between the project folder, the MCP server and the Studio. Priority set by the maintainer on 2026-11-04: these items come before the FAN-01 diagnosis.
+Added with [ADR 0173](adr/0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md), one
+workspace layer between the project folder, the MCP server and the Studio. Priority set by the maintainer on
+2026-11-04: these items come before the FAN-01 diagnosis.
 
 - [~] **F-270** Workspace layer (rcfd-workspace) shared by the MCP server and the Studio
   - depends on: F-261, F-262, F-267
   - acceptance: One crate holds the commands, queries and write rule for a project folder, and both the MCP project tools and the Studio use it: the existing project-tool and Studio tests pass unchanged, a Studio save and an edit_case on the same file give one write and one conflict naming the current hash, a comment line in a case survives a Studio save, and the crate graph stays acyclic with rcfd-studio not depending on rcfd-mcp (ADR 0173 W1, W2 and W5, checks C1, C2 and C6).
-  - note: ADR 0173 (proposed 2026-11-04). Priority 1, set by the maintainer on 2026-11-04. Closes the race between Studio saves (save_if_base: no edit lock, no edits.jsonl entry) and edit_case. Size L. PARTIAL (ADR 0185, the registration of F-270, 2026-11-05, branch f270-workspace, not merged): the crate exists and the MCP project tools run on it (W1, W2); the Studio saves under the edit lock with a journal line, creates cases and starts runs through it (W5). Open: a comment line survives a Studio save only in the workspace's line-level form, which the Studio does not use, because the preview's save rule (ADR 0147, ADR 0148) and three Studio tests need the saved bytes to be the editor's whole text (ADR 0185 Q1, a maintainer question).
+  - note: ADR 0173 (proposed 2026-11-04). Priority 1, set by the maintainer on 2026-11-04. Closes the race between
+    Studio saves (save_if_base: no edit lock, no edits.jsonl entry) and edit_case. Size L.
+    - PARTIAL (ADR 0185, the registration of F-270, 2026-11-05, branch f270-workspace, not merged): the crate exists and
+      the MCP project tools run on it (W1, W2); the Studio saves under the edit lock with a journal line, creates cases
+      and starts runs through it (W5).
+    - Open: a comment line survives a Studio save only in the workspace's line-level form, which the Studio does not
+      use, because the preview's save rule (ADR 0147, ADR 0148) and three Studio tests need the saved bytes to be the
+      editor's whole text (ADR 0185 Q1, a maintainer question).
 - [~] **F-271** New simulations from the MCP server in project mode
   - depends on: F-270
   - acceptance: In project mode the MCP server creates a case in cases/ (from a shipped example, a built-in template, TOML, settings or a copy of a project case, never replacing a file) and starts a run of it through the runner, in one call if asked, with the same start plan as the Studio, so the run's fields are stored and the Studio lists the run and can read its snapshots (ADR 0173 R1, W3, check C7, decisions D7 and D2).
-  - note: ADR 0173 (proposed). Priority 2. The shared start plan changes start_run's output for cases with no store setting, so it needs the maintainer's approval (D7). Size M. PARTIAL (ADR 0186, the registration of F-271, 2026-11-05, branch f271-new-simulations, not merged): the project tool new_case makes cases/<name>.toml (or .json) from a shipped example, the built-in template, TOML, settings or a copy, validated first and never replacing a file; start_run makes a new case and runs it in one call with the Studio's field-store plan, so its fields are stored, and the Studio's run poller and store reader show it (C7). Open: start_run of an existing case applies the plan only with store: "plan", because the default change waits for the maintainer's approval of D7 (ADR 0186 Q2); the project tool is named new_case because the session tool create_case is the only way to make a session, so D2's hiding is left to F-275 (ADR 0186 Q1); the Studio still uses its own copy of the start plan, pinned equal by a parity test, until the maintainer's Studio work lands.
+  - note: ADR 0173 (proposed). Priority 2. The shared start plan changes start_run's output for cases with no store
+    setting, so it needs the maintainer's approval (D7). Size M.
+    - PARTIAL (ADR 0186, the registration of F-271, 2026-11-05, branch f271-new-simulations, not merged): the project
+      tool new_case makes cases/<name>.toml (or .json) from a shipped example, the built-in template, TOML, settings or
+      a copy, validated first and never replacing a file; start_run makes a new case and runs it in one call with the
+      Studio's field-store plan, so its fields are stored, and the Studio's run poller and store reader show it (C7).
+    - Open:
+      - start_run of an existing case applies the plan only with store: "plan", because the default change waits for
+        the maintainer's approval of D7 (ADR 0186 Q2);
+      - the project tool is named new_case because the session tool create_case is the only way to make a session, so
+        D2's hiding is left to F-275 (ADR 0186 Q1);
+      - the Studio still uses its own copy of the start plan, pinned equal by a parity test, until the maintainer's
+        Studio work lands.
 - [ ] **F-272** Mesh set-up from the MCP server in project mode
   - depends on: F-270
   - acceptance: In project mode the MCP server checks a case's mesh (the report of rcfd check-mesh and the patch list), draws it with the CPU renderer, imports a Gmsh, Fluent or OpenFOAM file from the project folder into meshes/ with its cell, face and patch counts, lists meshes/ with the cases that use each file, and returns the mesh check when edit_case changes a mesh setting; an invalid mesh setting is refused with a located diagnostic and writes nothing (ADR 0173 R2, W4, check C8, decision D8).
-  - note: ADR 0173 (proposed). Priority 3. Not included: a mesh recipe format and the surface-to-volume pipeline, which no case or command reaches today (D8 (b), a later ADR). Size M.
+  - note: ADR 0173 (proposed). Priority 3. Not included: a mesh recipe format and the surface-to-volume pipeline, which
+    no case or command reaches today (D8 (b), a later ADR). Size M.
 - [ ] **F-273** Project journal and change feed with who, what and why; the Studio updates from it
   - depends on: F-270
   - acceptance: Every accepted write, case creation, mesh import, run submission and run control call appends an entry to .rcfd/edits.jsonl with an actor, a sequence number, the settings changed (path, old and new value) and an optional reason (additive fields only); one ordered feed merges the journal, the run records and events, and the watcher's changes; a change made by one process appears in a second process's feed within the limit fixed by an amendment of ADR 0173, a write made outside the workspace appears as external, and the Studio updates its views from the feed and shows who changed what and why (ADR 0173 R3, W6, check C3, decision D4).
-  - note: ADR 0173 (proposed). Priority 4. Linking an MCP actor to a Claude Code session is NOT VERIFIED (ADR 0173 D4). Size M.
+  - note: ADR 0173 (proposed). Priority 4. Linking an MCP actor to a Claude Code session is NOT VERIFIED (ADR 0173 D4).
+    Size M.
 - [ ] **F-274** Design study evaluations as runner runs in project mode
   - depends on: F-270, F-268
   - acceptance: In project mode each design evaluation is submitted to the runner as a run tagged with its study and variant (additive run-record fields), never more than max_runs at once; the metrics match the in-process evaluator for the same cases within the tolerance fixed by an amendment of ADR 0173, and the extra cost per evaluation is measured and recorded (ADR 0173 W7, check C4).
-  - note: ADR 0173 (proposed). Priority 5. Chained studies need the runner to start a run from a previous result; runner support for continue_from is not established. Size M.
+  - note: ADR 0173 (proposed). Priority 5. Chained studies need the runner to start a run from a previous result; runner
+    support for continue_from is not established. Size M.
 - [ ] **F-275** Project-mode MCP tool list and plugin edit hook
   - depends on: F-271, F-272, F-274
   - acceptance: With --project, each session tool is hidden once its project equivalent has passed its check, until tools/list holds no tool whose state lives only in the server's memory; without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case and create_case, checked in a real session where possible (ADR 0173 W8, check C5, decisions D2 and D5).
-  - note: ADR 0173 (proposed). Priority 6. The hook contract is to be checked on an installed Claude Code build first. Size S.
+  - note: ADR 0173 (proposed). Priority 6. The hook contract is to be checked on an installed Claude Code build first.
+    Size S.
