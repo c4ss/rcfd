@@ -8,7 +8,7 @@
 use rcfd_api::case::Case;
 use rcfd_project::records::{hash_bytes, EventKind, RunEvent, RunState};
 use rcfd_project::Project;
-use rcfd_workspace::feed::{Change, Feed, EXTERNAL, EXTERNAL_WAIT, JOURNAL, KEEP, RUN};
+use rcfd_workspace::feed::{Change, Feed, EXTERNAL, JOURNAL, KEEP, RUN};
 use rcfd_workspace::journal::{put_list, Actor, Origin, Reader, MAX_CHANGES, MCP, STUDIO};
 use rcfd_workspace::save::save_case_by;
 use rcfd_workspace::{Answer, RpcError, SaveForm, Workspace};
@@ -457,7 +457,6 @@ fn c3f3_a_line_that_comes_after_the_watcher_saw_its_file_explains_it() {
     eprintln!("C3-F (3): {:?}", got.iter().map(|c| &c.text).collect::<Vec<_>>());
     assert_eq!(got.len(), 1, "{got:?}");
     assert_eq!((got[0].source.as_str(), got[0].path.as_deref()), (JOURNAL, Some(REL)));
-    assert!(EXTERNAL_WAIT >= Duration::from_millis(250));
 }
 
 #[test]

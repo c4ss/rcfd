@@ -170,6 +170,19 @@ fn state(m: &mut Mcp, run: &str) -> String {
         .to_string()
 }
 
+/// Wait until run `run` is in one of `states`, at most `cap`.
+fn wait_for(m: &mut Mcp, run: &str, states: &[&str], cap: Duration) {
+    let t0 = Instant::now();
+    loop {
+        let s = state(m, run);
+        if states.contains(&s.as_str()) {
+            return;
+        }
+        assert!(t0.elapsed() < cap, "run {run} {s}, not {states:?} after {cap:?}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 #[test]
 fn c3r_run_submissions_and_requests_are_journaled_and_their_states_are_in_the_feed() {
     binaries();
@@ -185,18 +198,15 @@ fn c3r_run_submissions_and_requests_are_journaled_and_their_states_are_in_the_fe
     );
     assert_eq!(r["isError"], false, "{r}");
     let run = r["structuredContent"]["run"].as_str().unwrap().to_string();
-    let t0 = Instant::now();
-    while state(&mut m, &run) != "running" {
-        assert!(t0.elapsed() < Duration::from_secs(120), "run {run} not running");
-        std::thread::sleep(Duration::from_millis(50));
-    }
+    wait_for(&mut m, &run, &["running"], Duration::from_secs(120));
     let c = m.call("cancel_run", json!({"run": run, "reason": "enough"}));
     assert_eq!(c["isError"], false, "{c}");
-    let t0 = Instant::now();
-    while !["cancelled", "finished", "failed"].contains(&state(&mut m, &run).as_str()) {
-        assert!(t0.elapsed() < Duration::from_secs(60), "run {run} not ended");
-        std::thread::sleep(Duration::from_millis(50));
-    }
+    wait_for(
+        &mut m,
+        &run,
+        &["cancelled", "finished", "failed"],
+        Duration::from_secs(60),
+    );
     let j = journal(&root);
     for l in &j {
         eprintln!("C3-R line: {l}");
