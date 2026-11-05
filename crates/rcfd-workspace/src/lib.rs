@@ -25,6 +25,7 @@
 pub mod case_text;
 pub mod cases;
 mod create;
+pub mod design;
 pub mod examples;
 pub mod meshes;
 pub mod plan;
