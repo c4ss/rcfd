@@ -116,12 +116,14 @@ fn l0c_the_key_outside_its_scope_is_a_located_error() {
         &base.replace("convection = \"linear_upwind\"", "convection = \"upwind\""),
         "upwind",
     );
+    // ADR 0183 amendment P-AB: piso and pimple accept the key since P-A (D3), so this line of L0c checks the fractional
+    // step, which is still out of scope
     located(
         &base.replace(
             "algorithm = \"simple\"",
-            "algorithm = \"pimple\"\ndt = 0.01\nend_time = 0.05",
+            "algorithm = \"piso\"\ntime_advance = \"fractional_step\"\ndt = 0.01\nend_time = 0.05",
         ),
-        "pimple",
+        "piso fractional step",
     );
     located(
         &base.replace("algorithm = \"simple\"", "algorithm = \"coupled\""),

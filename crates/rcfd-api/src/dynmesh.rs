@@ -8,7 +8,7 @@ use rcfd_core::expr::{Compiled, Expr};
 use rcfd_core::settings::Schema;
 use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_fv::ale::{move_mesh, set_follow_conditions};
+use rcfd_fv::ale::{move_mesh, set_follow_conditions, set_rest_conditions};
 use rcfd_fv::pimple::{PimpleSolver, StepInfo};
 use rcfd_fv::sixdof::{patch_force_moment, quat_from_axis_angle, Body, BodySpec, BodyState, Integrator, Rotation};
 use rcfd_fv::smoothing::{smooth_displacement, PatchClass, SmoothingMethod};
@@ -79,9 +79,14 @@ pub fn schema() -> Schema {
             Schema::enumeration("rigid", &["rigid", "smoothing"])
                 .doc("rigid: every point follows the motion; smoothing: the moving patches follow it and the interior points are smoothed (fixed_patches stay put, all other patches slide in their plane)"),
         )
-        .field("moving_patches", lst("Patches that carry the motion (required)"))
+        .field("moving_patches", lst("Patches that carry the motion (required, except for a rigid prescribed motion)"))
         .field("follow_patches", lst("Patches whose velocity condition is the mesh velocity (empty = the moving patches); must have the default velocity condition"))
         .field("fixed_patches", lst("Smoothing only: patches whose points do not move"))
+        .field(
+            "rest_patches",
+            lst("Rigid deformation only: walls at rest on the moving mesh (ADR 0183 P-B), face velocity (m_f/|S_f|) n_f with no tangential part, so no relative flux crosses them; not in moving_patches or follow_patches; velocity \"fixed\" with value 0")
+                .hash_omit_default(),
+        )
         .field("displacement_expression_x", expr("Prescribed displacement of the x direction, expression of t with unit m (empty = 0)"))
         .field("displacement_expression_y", expr("As displacement_expression_x, y direction"))
         .field("displacement_expression_z", expr("As displacement_expression_x, z direction"))
@@ -143,8 +148,16 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         return out;
     }
     let motion = get_s(case, "dynamic_mesh.motion");
-    if strings(case, "dynamic_mesh.moving_patches").is_empty() {
+    let rigid = get_s(case, "dynamic_mesh.deformation") == "rigid";
+    // ADR 0183 P-B: a rigid prescribed motion moves every point and may have no moving (following) patch
+    if strings(case, "dynamic_mesh.moving_patches").is_empty() && !(rigid && motion == "prescribed") {
         out.push(d("dynamic_mesh.moving_patches", "name at least one moving patch"));
+    }
+    if !strings(case, "dynamic_mesh.rest_patches").is_empty() && !rigid {
+        out.push(d(
+            "dynamic_mesh.rest_patches",
+            "walls at rest are available with deformation = \"rigid\" only (ADR 0183 P-B)",
+        ));
     }
     for k in ["x", "y", "z"] {
         if let Err(e) = compile_t(
@@ -291,6 +304,7 @@ pub struct DynMesh {
     rigid: bool,
     moving: Vec<String>,
     follow: Vec<String>,
+    rest: Vec<String>,
     classes: Vec<PatchClass>,
     method: SmoothingMethod,
     control: SolveControl,
@@ -324,6 +338,7 @@ impl DynMesh {
         let mut follow = list("follow_patches");
         let fixed = list("fixed_patches");
         let force_patches = list("six_dof.force_patches");
+        let rest = list("rest_patches");
         if follow.is_empty() {
             follow = moving.clone();
         }
@@ -334,6 +349,37 @@ impl DynMesh {
                     &format!("{b}.velocity"),
                     "a patch that follows the mesh takes its velocity from the mesh motion; leave its velocity condition at \"fixed\" (its velocity_value only sets the flux of the initial state)",
                 ));
+            }
+        }
+        // ADR 0183 P-B: walls at rest on the moving mesh
+        for n in &rest {
+            if moving.contains(n) || follow.contains(n) {
+                errs.push(d(
+                    "dynamic_mesh.rest_patches",
+                    format!("patch '{n}' is also a moving or following patch; a wall at rest does not follow the mesh"),
+                ));
+            }
+            if !known.contains(n) {
+                continue;
+            }
+            let b = format!("boundaries.{n}");
+            if get_s(case, &format!("{b}.velocity")) != "fixed" {
+                errs.push(d(
+                    &format!("{b}.velocity"),
+                    "a wall at rest takes its velocity from the mesh flux; leave its velocity condition at \"fixed\" with velocity_value 0",
+                ));
+            }
+            if vec3::norm(get_v(case, &format!("{b}.velocity_value"), vec3::ZERO)) != 0.0 {
+                errs.push(d(
+                    &format!("{b}.velocity_value"),
+                    "a wall at rest has velocity 0 (its face velocity on the moving mesh is the normal part that carries the swept volume)",
+                ));
+            }
+            for k in ["x", "y", "z"] {
+                let key = format!("{b}.velocity_expression_{k}");
+                if case.tree.get(&key).is_ok() && !get_s(case, &key).trim().is_empty() {
+                    errs.push(d(&key, "a wall at rest has no velocity expression"));
+                }
             }
         }
         if !errs.is_empty() {
@@ -463,6 +509,7 @@ impl DynMesh {
             rigid,
             moving,
             follow,
+            rest,
             classes,
             method,
             control: SolveControl {
@@ -524,7 +571,16 @@ impl DynMesh {
         };
         let st = move_mesh(&s.geom, new_points, dt)?;
         let old = s.geom.mesh.clone();
-        let walls = set_follow_conditions(&mut s.u, &st, &old, &self.follow, dt)?;
+        let mut walls = set_follow_conditions(&mut s.u, &st, &old, &self.follow, dt)?;
+        if !self.rest.is_empty() {
+            // ADR 0183 P-B: walls at rest (disjoint from the following patches)
+            let rest = set_rest_conditions(&mut s.u, &st, &self.rest, dt)?;
+            for (w, r) in walls.iter_mut().zip(rest) {
+                if r.is_finite() {
+                    *w = r;
+                }
+            }
+        }
         s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls)
     }
 

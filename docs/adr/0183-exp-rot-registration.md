@@ -361,3 +361,138 @@ and its key is documented in `docs/case-schema.md`. Code of a part that is NOT R
 To be added in this order: amendment 1 (V0 to V5, the smoke values, the caps, the dt fallback if used); the R1 records
 and the P verdict, committed before any Y1 record is read; arm 1 results and the Q-ROT verdict; check H; arm 2 if it
 runs; the decision under D9.
+
+### Amendment P-AB (2026-11-05): the set-up of P-A and P-B and of their checks, written before their code
+
+Job EXP-ROT P-A/P-B, branch `exprot-pab` from main 7c960bb. Open question 2 is answered by the maintainer's loop
+instruction with its recommendation (a): build P-A and P-B. This amendment makes the D3 rows and V5 specific enough to
+code and test. It changes no limit of this ADR, and no part of the experiment (arms, runs, functionals, verdicts) is run
+by this job. P-C and arm 2 are separate jobs.
+
+**P-A as built.** `PimpleSettings` gets `linear_upwind_limiter: Option<gradient::Limiter>` (`None` in `piso()` and
+`pimple()`). With `Some(kind)` and `convection = LinearUpwind`, the momentum predictor of `PimpleSolver::step_with`
+multiplies the least-squares gradient of each velocity component by `gradient::limiter(geom, cells, bvals, grad, kind)`,
+where `cells`, `bvals` and `grad` are the convected cell values, the boundary values and the unlimited gradient that the
+convection already uses. The limited gradient goes to the convection term only; the Laplacian's non-orthogonal
+correction keeps the unlimited gradient (as `SimpleSolver`, ADR 0081 part L). The moving-mesh step (`step_ale*`) runs
+through the same code on the new geometry, so it is covered. The fractional step has its own convection and does not
+use the field. Case tree: `solver.linear_upwind_limiter = "barth_jespersen"` is accepted with `linear_upwind` for
+`piso` and `pimple` (constant density, with or without `dynamic_mesh` and turbulence). It stays a located error at the
+key with any other scheme, with `solver.time_advance = "fractional_step"`, and with every other engine (coupled,
+compressible, variable density, VOF). The line of ADR 0081 L0c that asserts the refusal for `pimple` is superseded by
+D3. That case of the test `l0c_the_key_outside_its_scope_is_a_located_error` becomes `piso` with the fractional step.
+The other lines stay. Turbulence, scalar and energy equations are not limited.
+
+**P-B as built.** New key `dynamic_mesh.rest_patches` (list of patch names, default `[]`, with
+`Schema::hash_omit_default` as ADR 0156 D6 and the ADR 0181 addendum F1). Each face of a listed patch gets the velocity
+`u_b = (m_f / abs(S_f)) n_f` every step, with `m_f` the mesh flux and `S_f`, `n_f` the area vector and unit normal of
+the new mesh. So `u_b . S_f = m_f` (no relative flux) and the tangential part is zero. The pressure condition is the
+fixed-flux one of the following walls (ADR 0033 addendum, deviations): `dp/dn = -n . (u_b,new - u_b,old) / dt`.
+At step 1 the old value is the initial wall value 0, so a face that sweeps volume gets a one-step start-up term
+`-(m_f / abs(S_f)) / dt`. This is the impulsive start of the facets, as for a following wall whose initial value differs
+from the mesh velocity. The library function is new (`ale::set_rest_conditions`); `follow_velocity` and
+`set_follow_conditions` are not changed. Static checks, located: an unknown name, or a name that is also in
+`moving_patches` or `follow_patches`, at `dynamic_mesh.rest_patches`; a non-empty list with `deformation = "smoothing"`
+at `dynamic_mesh.rest_patches` (D3 registers a rigidly moving mesh only); a rest patch whose `velocity` is not `"fixed"`,
+whose `velocity_value` is not zero, or that has a velocity expression, at that boundary key. `moving_patches` may be
+empty when `motion = "prescribed"` and `deformation = "rigid"` (D3: "a rigid prescribed motion is allowed with no
+following patch"); with `six_dof` or `smoothing` it stays required. With `rest_patches` empty every code path is the
+one of today.
+
+**Settings hash and written text.** The content hash of every existing case is unchanged by F1's flag. The text
+`Case::to_toml` / `Case::to_json_string` write gains `rest_patches = []`, so ADR 0155 H1 (`case_hashes_w48u.rs`) gets
+the ADR 0181 addendum F2 treatment: the normalisation also removes `dynamic_mesh.rest_patches` when (and only when) it
+is the empty list; `DEFAULT_KEYS` holds JSON defaults instead of strings; C2 also asserts that every recorded valid
+source holds `[]`; C4 also asserts that a copy with `rest_patches = ["inner"]` differs from R0. R0 and
+`baseline_hashes.rs` are not edited or re-recorded. No fenced TOML block of `docs/` is edited.
+
+**V5 set-up (a deviation from the literal row, for the maintainer).** The row says "axial inflow". With a velocity
+inlet and walls with no slip the developing layers carry a radial velocity `c_r`. A radial vector's Cartesian
+components turn with each cell of the rotating mesh. The Euler time term and the convection by the tangential mesh flux
+cancel that turn only to `O(Delta theta^2, (Omega dt)^2)`, which leaves a swirl source of order
+`Omega c_r (Delta theta^2 - (Omega dt)^2) / 6` per cell. That is a property of convecting Cartesian components on a
+rotating mesh, not of the wall condition, and it is far above `1e-9 U` for any `c_r` above round-off. On the static
+mesh C0 is round-off (mirror symmetry of each cell), so the limit is `1e-9 U`, and V5 would then fail for a reason that
+D3's effort bound would charge to P-B. So V5 is run where `c_r = 0` exactly: an axially periodic sector with an axial
+plug flow that decays through Stokes layers at the walls at rest (exact solution `c = c_z(r, t) e_z`). The literal
+inflow variant is kept as V5-U, report only. The same mechanism bears on D4's premise that the settled empty passage
+has `c_x = c_y = 0` at every cell: the laminar layers of the empty passage also carry `c_r`. This job does not change D4.
+
+On `annulus_3d_sector` every wall face is a planar chord rectangle, symmetric under the half turn about its radial
+centre line, so its swept volume under rotation about z is zero to round-off. V5 therefore tests "at rest against
+following" and the run with no following patch, not the normal part. PB-1 tests the normal part on faces that sweep
+volume.
+
+**Checks (limits fixed now; gate tests unless marked).** Library constants: `Omega = 155.614` rad/s,
+`U = 9.478` m/s, `nu = 1.5e-5` m^2/s, `dt = (pi/180)/Omega = 1.12158e-4` s (`Omega dt = 1` deg, 360 steps a
+revolution), PISO (1 outer, 2 correctors), Euler, `linear_upwind` with Barth-Jespersen (P-A), momentum and pressure
+tolerances `tol_rel = 1e-13`, `tol_abs = 1e-16` (ADR 0033 strict tests).
+
+| Id | Set-up | Limit |
+|---|---|---|
+| V5 | `annulus_3d_sector(8, 8, 2, 0.124, 0.25, 0.05, 40 deg)` with `zmin` / `zmax` made a translational cyclic pair; `inner` and `outer` at rest (P-B), no following patch; initial `u = (0, 0, U)`, `p = 0`; one revolution rigidly about z through the origin, and the same 360 steps with the mesh at rest (C0). Quantity: `max` over steps and cells of `abs(c_theta)`, `c_theta = (x u_y - y u_x) / r` at the cell centre of that step | `max abs(c_theta) <= max(10 C0, 1e-9 U)` (the registered limit) |
+| V5-a | the V5 rotating run | every step: continuity (`StepInfo::continuity`) `<= 1e-9`, GCL residual `<= 1e-12 mean(V)`; step 1: seam pairs `abs(m_f + m_g) <= 1e-12 Omega r_f abs(S_f)` (V2 forms). Reported: `max abs(m_f) / (Omega r_f abs(S_f))` on `inner` and `outer` |
+| V5-N | negative control: the V5 rotating run with `inner` and `outer` following the mesh (`set_follow_conditions`) | `max abs(c_theta)` above the V5 limit, or the divergence guard stops the run (either shows that V5 can fail) |
+| V5-U | report only, ignored test: z not periodic, `annulus_3d_sector(8, 8, 8, 0.124, 0.25, 0.2, 40 deg)`, `zmin` fixed `(0, 0, U)`, `zmax` pressure 0 with zero-gradient velocity; static and rotating | none; `max abs(c_theta)`, `max abs(c_r)` of both runs reported |
+| PB-1 | through the case tree: `annulus_3d` 24 x 4 x 2, `r_in 0.124`, `r_out 0.25`, `lz 0.05`, inlet `zmin` fixed `(0, 0, U)`, outlet `zmax` pressure 0; `rest_patches = ["inner", "outer"]`, `moving_patches = []`, rigid prescribed rotation `155.614 [1/s] * t` about z through `(0.01, 0, 0)` (off the annulus axis, so the wall faces sweep volume), the constants above, 3 steps; `m_f` from `motion::swept_volumes` of the meshes before and after each step | every step, every rest face: `abs(phi_f - m_f) <= 1e-12 Omega r_out abs(S_f)` and `abs(u_b - (u_b . n) n) <= 1e-12 Omega r_out`; non-vacuity: `max abs(m_f) / (Omega r_out abs(S_f)) >= 1e-3` on the rest faces |
+| PB-1N | negative control: PB-1 with `rest_patches = []` (plain `fixed` 0 walls; the rigid motion with no following patch) | `max abs(phi_f - m_f) >= 1e-3 Omega r_out abs(S_f)` on `inner` and `outer` (PB-1's limit is missed) |
+| PB-2 | case tree, static checks | each located error above at its path; `moving_patches = []` accepted with a rigid prescribed motion and refused with `smoothing` and with `six_dof` |
+| PB-3 | case tree, hash | key absent and `rest_patches = []`: equal settings value and content hash; `["inner"]`: a different hash, written by `to_toml`, and the written text parses back to the same value and hash |
+| PA-0 | case tree, `cavity_2d` 20 x 20, `nu 0.01`, `linear_upwind`, 20 steps of `piso` and of `pimple` | the key absent and `"none"`: bit-identical `ux`, `uy`, `p` and flux |
+| PA-1 | case tree, scope | accepted: `piso` and `pimple` with `linear_upwind`, and `piso` with `dynamic_mesh`; located at `solver.linear_upwind_limiter`: `piso` with `upwind`, `piso` with `time_advance = "fractional_step"`, `coupled` |
+| PA-2 | library: `box_2d(100, 2, 1, 0.02)` periodic in y, `nu = 1e-6`, `u = (1, h(x), 0)` with `h = 1` for cell centres in `[0.1, 0.3)` and 0 elsewhere, `xmin` fixed `(1, 0, 0)`, `xmax` zero-gradient velocity and pressure 0; `dt = 0.005` (Courant 0.5), 80 steps; overshoot `O = max` over steps and cells of `max(u_y - 1, -u_y, 0)`; once unlimited (`O_LU`), once with P-A (`O_BJ`) | `O_LU >= 1e-3` (non-vacuity) and `O_BJ <= 0.5 O_LU` |
+| PA-3 | library: the ADR 0033 G3 cavity (8 x 8, `nu 0.05`, 20 steps of 0.02, frame translating with `(0.6, 0.2, 0)`) with `linear_upwind` and P-A | `max abs(u_moving - V - u_fixed) <= 1e-9`; non-vacuity: at least one cell and component with a limiter factor below 1 in the final fixed-mesh state (count reported) |
+
+V0 for P-A and P-B: `baseline_hashes.rs` unchanged and passing; the non-ignored tests of `fan01_stall_w43c.rs`,
+`crates/rcfd-api/tests/dynamic_mesh.rs`, `crates/rcfd-fv/tests/ale_flows.rs` and `ale_gcl.rs`, `w36b_limiter.rs` (L0c as
+amended above) and `case_hashes_w48u.rs` (H1 as amended above) pass. The coupled lid-cavity hashes of V0 belong to arm 2
+(not applicable here).
+
+A miss is reported with its number and kept as an ignored `*_known_miss` test with the limit intact. A miss of V5, V5-a
+or PB-1 is a failed construction check of P-B, and D3's effort bound then applies; a miss of PA-2 or PA-3 is reported
+beside P-A. Results follow in the next addendum.
+
+### Addendum: results of amendment P-AB (2026-11-05)
+
+Code in 9c2a7e0 (amendment d35759b before it). Files: `crates/rcfd-fv/src/pimple.rs` (P-A), `crates/rcfd-fv/src/ale.rs`
+(P-B, `rest_velocity`, `set_rest_conditions`), `crates/rcfd-api/src/dynmesh.rs`, `sim.rs`, `schema.rs` (keys and
+checks), tests `crates/rcfd-fv/tests/exp_rot_pab.rs` and `crates/rcfd-api/tests/exp_rot_pab.rs`, the amended
+`case_hashes_w48u.rs` (H1) and `w36b_limiter.rs` (L0c), `docs/case-schema.md` (the lines of the two keys) and
+`docs/dynamic-mesh.md`. Every check was run once, in release; nothing was re-run to pick a result.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| V5 | C0 = 0 exactly (the static run has no radial or tangential velocity); rotating `max abs(c_theta)` 1.213e-12 m/s (1.28e-13 U); `max abs(c_r)` 1.25e-12 m/s; 360 of 360 steps | `max(10 C0, 1e-9 U)` = 9.478e-9 m/s | met |
+| V5-a | continuity max 4.16e-12; GCL max 6.27e-16 mean(V); seam pairs at step 1 3.65e-15 Omega r abs(S); wall sweep `max abs(m_f)` 2.10e-14 Omega r abs(S) (reported: round-off, as the amendment derived for chord faces) | 1e-9; 1e-12; 1e-12 | met |
+| V5-N | following walls: `max abs(c_theta)` 8.32 m/s; the guard did not stop the run (360 steps) | above 9.478e-9 m/s, or a guard stop | met (V5 can fail) |
+| V5-U | report only. At rest: `max abs(c_theta)` 8.53e-5 m/s, `max abs(c_r)` 1.76e-3 m/s; rotating: `max abs(c_theta)` 1.417e-4 m/s (1.50e-5 U), `max abs(c_r)` 1.68e-3 m/s; continuity max 3.9e-14 | none | reported |
+| PB-1 | steps 1 to 3: `max abs(phi_f - m_f)` 1.38e-17 Omega r_out abs(S_f); tangential part at most 1.72e-17 Omega r_out; `max abs(m_f)` 3.97e-2 Omega r_out abs(S_f) | 1e-12; 1e-12; non-vacuity >= 1e-3 | met |
+| PB-1N | plain `fixed` 0 walls: `max abs(phi_f - m_f)` 3.97e-2 Omega r_out abs(S_f) | >= 1e-3 | met (PB-1 can fail) |
+| PB-2 | every registered located error at its path; `moving_patches = []` accepted with a rigid prescribed motion, refused with `smoothing` and `six_dof` | as registered | met |
+| PB-3 | key absent and `[]`: equal settings value and content hash (07d69e902b96415d on the PB-1 case); `["inner", "outer"]`: 500fb527083c7fe5, written and round-tripped | as registered | met |
+| PA-0 | `piso` and `pimple`: key absent and `"none"` bit-identical in `ux`, `uy`, `p` and flux after 20 steps | bit-identical | met |
+| PA-1 | accepted for `piso`, `pimple` (and the limited run differs from the unlimited one in both) and `piso` with `dynamic_mesh`; located at the key for `piso` with `upwind`, with the fractional step, and `coupled` | as registered | met |
+| PA-2 | overshoot unlimited 0.1134, limited 0 (the limited top hat stays within [0, 1] on every step) | `O_LU >= 1e-3`, `O_BJ <= 0.5 O_LU` | met |
+| PA-3 | `max abs(u_moving - V - u_fixed)` 9.16e-16; 37 of 128 (cell, component) pairs with a limiter factor below 1 | 1e-9; at least 1 | met |
+| H1 | 41 recorded sources, 0 differ after the extended normalisation; C3: 30 of 30 valid sources differ raw in the text columns only; C4: the copy with `rest_patches = ["inner"]` differs from R0 | as the ADR 0181 addendum F2 form | met |
+
+**V5-U and the premise of the V5 deviation.** The amendment expected C0 to be round-off for the inflow variant (mirror
+symmetry of each cell). It is not: the static sector with a velocity inlet has `max abs(c_theta)` 8.53e-5 m/s, about
+5 % of its `max abs(c_r)`. A likely cause, not proven here, is the seam coupling, which PISO lags within a step (D4):
+the lag turns a radial velocity at the rotational seams into a tangential error, and the maximum over the steps
+includes the start-up. The rotating run has 1.66 times C0, so the literal inflow variant would also have met the
+registered V5 limit (`10 C0` = 8.53e-4 m/s). The amendment's reason for the deviation therefore did not apply on this
+mesh. The registered V5 (axially periodic, `c_r = 0`) stays the check of record, and it is the stricter one
+(`1e-9 U` against `10 C0`). These two numbers do not separate the rotating-mesh swirl source that the amendment
+derived from the seam effect; the rotating run exceeds the static one by 5.6e-5 m/s (5.9e-6 U). If the seam lag is the
+cause, the static empty passage I1 (which has seams) carries an L floor of its own; A1-L compares Y1 against that
+floor.
+
+V0: `baseline_hashes.rs` unchanged and passing (not re-recorded); the full release test suites of `rcfd-fv`,
+`rcfd-mesh` and `rcfd-api` were run on 9c2a7e0, including the non-ignored tests of `fan01_stall_w43c.rs`,
+`dynamic_mesh.rs`, `ale_flows.rs`, `ale_gcl.rs`, `w36b_limiter.rs` and `case_hashes_w48u.rs`: 1557 passed, 0 failed, 622 ignored
+(`cargo test -p rcfd-fv -p rcfd-mesh -p rcfd-api --release`).
+`cargo fmt --check` and `cargo clippy --all-targets -D warnings` are clean on the three crates.
+
+No limit was missed, so no `*_known_miss` test was added. P-A and P-B are kept (opt-in, defaults bit-identical). D3's
+first-user checks (V2, V3 of arm 1) belong to the experiment and were not run.

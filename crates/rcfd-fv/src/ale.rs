@@ -1,5 +1,5 @@
 //! Moving-mesh helpers (F-063, ADR 0033): move a geometry to new point positions with its mesh flux, and the
-//! velocity of a patch that follows the mesh.
+//! velocity of a patch that follows the mesh or is a wall at rest on it (ADR 0183 P-B).
 
 use crate::bc::{FixedValue, Profile};
 use crate::field::VectorField;
@@ -70,6 +70,49 @@ pub fn set_follow_conditions(
     for name in patches {
         let v = follow_velocity(old, &step.geom.mesh, &step.mesh_flux, name, dt)
             .ok_or_else(|| format!("no patch '{name}'"))?;
+        let patch = step.geom.mesh.patch(name).ok_or_else(|| format!("no patch '{name}'"))?;
+        for (k, f) in patch.faces().enumerate() {
+            let s = step.geom.mesh.face_area_vectors()[f];
+            let n = vec3::scale(s, 1.0 / vec3::norm(s).max(1e-300));
+            let a = vec3::scale(vec3::sub(v[k], before[f - ni]), 1.0 / dt);
+            dpdn[f - ni] = -vec3::dot(n, a);
+        }
+        u.set_bc(&step.geom, name, Box::new(FixedValue(Profile::PerFace(v))))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(dpdn)
+}
+
+/// Velocity of every face of `patch` for a wall at rest on a moving mesh (ADR 0183 P-B): no tangential part, and the
+/// normal part that carries exactly the swept volume, `u_b = (m_f/|S_f|) n_f` with the area vector of the new mesh, so
+/// `u_b . S = m_f` (no relative flux through the wall).
+pub fn rest_velocity(new: &Mesh, mesh_flux: &[f64], patch: &str) -> Option<Vec<Vec3>> {
+    let p = new.patch(patch)?;
+    Some(
+        p.faces()
+            .map(|f| {
+                let s = new.face_area_vectors()[f];
+                let area = vec3::norm(s).max(1e-300);
+                vec3::scale(s, mesh_flux[f] / (area * area))
+            })
+            .collect(),
+    )
+}
+
+/// Install [`rest_velocity`] as the velocity condition of the given patches (ADR 0183 P-B). Returns the fixed-flux
+/// pressure gradient of these walls, `dp/dn = -n . (u_b,new - u_b,old)/dt` per boundary face (index `f - n_internal`),
+/// `NaN` on faces of other patches, as [`set_follow_conditions`] does for the following walls.
+pub fn set_rest_conditions(
+    u: &mut VectorField,
+    step: &MeshStep,
+    patches: &[String],
+    dt: f64,
+) -> Result<Vec<f64>, String> {
+    let ni = step.geom.n_internal;
+    let mut dpdn = vec![f64::NAN; step.geom.mesh.n_boundary_faces()];
+    let before = u.boundary_values(&step.geom);
+    for name in patches {
+        let v = rest_velocity(&step.geom.mesh, &step.mesh_flux, name).ok_or_else(|| format!("no patch '{name}'"))?;
         let patch = step.geom.mesh.patch(name).ok_or_else(|| format!("no patch '{name}'"))?;
         for (k, f) in patch.faces().enumerate() {
             let s = step.geom.mesh.face_area_vectors()[f];
