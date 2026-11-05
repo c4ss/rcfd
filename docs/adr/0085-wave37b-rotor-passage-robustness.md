@@ -1,26 +1,46 @@
-# ADR 0085: Wave 37B, why the absolute-velocity rotor passage of ADR 0082 does not converge on M0 and M2, and three remedies tried under registered acceptance
+# ADR 0085: Wave 37B, rotor-passage non-convergence on M0 and M2, and three remedies
 
-Status: registered before any code of this wave was written and before any solver run of this wave. Limits and decision rules are fixed; a miss of a
-check becomes an `#[ignore]`d `*_known_miss` test (or a reported miss where the code it needs is removed) with the limit intact; a defective set-up gets
-a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles only; nothing from vendor
-documentation or other CFD codes. Parents: ADR 0082 (the spurious torque of first-order upwind on the rigid part of the relative velocity, F-RP and its
-removal), ADR 0081 part L (`solver.linear_upwind_limiter = "barth_jespersen"`), ADR 0029 (the coupled solver), ADR 0071 C5 (the periodic-pair mean of
-`rAU` in the body-force term of the face flux), ADR 0078 (FAN-01 E0, the X2 empty passage), `docs/milestone-fan.md`. No fan performance claim is made.
+Status: registered before any code of this wave was written and before any solver run of this wave.
+
+Wave 37B asks why the absolute-velocity rotor passage of ADR 0082 does not converge on M0 and M2, and tries three
+remedies under registered acceptance. No arm passes. By the registered rule F-RP and every arm's code are removed, and
+nothing of this wave changes the solver. The lagged frame source is not the cause of the M0 failure: H-S and three other
+candidate mechanisms are falsified. The pseudo-time step `1 / Omega` (arm I) and the coupled solver with the rotation
+implicit (arm C) both converge on M0 and M1, and neither converges on M2 within the registered 60-minute cap.
+Barth-Jespersen `linear_upwind` (arm L) fails on M0 already. F1 (FAN-01 with the fix) was NOT RUN, so no torque or Delta
+p_ts change is reported. The registration comes first below; amendment 1 and the addendum hold the measured values,
+verdicts, misses and deviations.
+
+Rules and parents:
+
+* Limits and decision rules are fixed; a miss of a check becomes an `#[ignore]`d `*_known_miss` test (or a reported miss
+  where the code it needs is removed) with the limit intact; a defective set-up gets a NEW corrected test and the old
+  one stays ignored.
+* Baseline hashes are never re-recorded.
+* Clean-room: first principles only; nothing from vendor documentation or other CFD codes.
+* No fan performance claim is made.
+* Parents: ADR 0082 (the spurious torque of first-order upwind on the rigid part of the relative velocity, F-RP and its
+  removal), ADR 0081 part L (`solver.linear_upwind_limiter = "barth_jespersen"`), ADR 0029 (the coupled solver),
+  ADR 0071 C5 (the periodic-pair mean of `rAU` in the body-force term of the face flux), ADR 0078 (FAN-01 E0, the X2
+  empty passage), `docs/milestone-fan.md`.
 
 ## What was known when this was written
 
-* Every number of ADR 0082, in particular: Y(M1) (F-RP, empty passage, upwind, SIMPLEC, SST) converged in 567 iterations with outlet angular-momentum
-  flux -1.42e-5 N m (inertial control B(M1) 1.63e-4 N m, relative frame R(M1) 2.2544 N m); Y(M0) did not converge (8000 iterations, res_u 0.78,
-  L 0.068 N m, Delta p_tt +981 Pa) while B(M0) converged in 124 and R(M0) in 247 iterations; Y(M2) and B(M2) did not converge within 60 minutes
-  (B(M2): 7 063 iterations, two runs sharing the machine); the bladed F1 smoke had continuity about 0.4 for 300 iterations.
+* Every number of ADR 0082, in particular: Y(M1) (F-RP, empty passage, upwind, SIMPLEC, SST) converged in 567 iterations
+  with outlet angular-momentum flux -1.42e-5 N m (inertial control B(M1) 1.63e-4 N m, relative frame R(M1) 2.2544 N m).
+  Y(M0) did not converge (8000 iterations, res_u 0.78, L 0.068 N m, Delta p_tt +981 Pa) while B(M0) converged in 124 and
+  R(M0) in 247 iterations. Y(M2) and B(M2) did not converge within 60 minutes (B(M2): 7 063 iterations, two runs sharing
+  the machine). The bladed F1 smoke had continuity about 0.4 for 300 iterations.
 * The removed F-RP patch (`w36c_frp_removed.patch`, cut against 6c3ddc9) applies cleanly to feb015f (`git apply --check`). It is re-applied unchanged
   as the starting point of every arm of this wave.
-* Code read on feb015f (read-only): `CoupledSolver::with_solids` refuses periodic patches ("the coupled solver does not support periodic patches");
-  `Simulation::new` refuses `turbulence.model`, `sources` (and others) with `solver.algorithm = "coupled"`; the coupled engine has no counterpart of
-  `conv_flux_offset`; its momentum blocks are one matrix per component (no cross-component block). In `sim.rs` an MRF zone switches
-  `component_diag_correction` on, while `wall_pressure_trapezoid` and with it `coupled_body_pair_mean` stay off (they are set only for `rotating_frame` and
-  accelerations); the relative-frame arm R has the pair mean on and the component correction off. The `-Omega x c` acceleration of `MrfZone::add_force`
-  is evaluated from the previous iterate (cell and face values) and enters SIMPLEC as an explicit source.
+* Code read on feb015f (read-only): `CoupledSolver::with_solids` refuses periodic patches
+  ("the coupled solver does not support periodic patches"). `Simulation::new` refuses `turbulence.model`, `sources`
+  (and others) with `solver.algorithm = "coupled"`. The coupled engine has no counterpart of `conv_flux_offset`; its momentum blocks are
+  one matrix per component (no cross-component block). In `sim.rs` an MRF zone switches `component_diag_correction` on,
+  while `wall_pressure_trapezoid` and with it `coupled_body_pair_mean` stay off (they are set only for `rotating_frame`
+  and accelerations); the relative-frame arm R has the pair mean on and the component correction off. The `-Omega x c`
+  acceleration of `MrfZone::add_force` is evaluated from the previous iterate (cell and face values) and enters SIMPLEC
+  as an explicit source.
 * No run of any kind has been made in this wave.
 * Arithmetic only (no run). A single-cell model of the lagged rotation source in the relaxed segregated momentum iteration (neighbours frozen,
   diagonal `a/alpha`, explicit rotation at rate Omega on a cell of volume V) has the error amplification `|lambda|^2 = (1 - alpha)^2 + (alpha x)^2`,
@@ -44,11 +64,21 @@ Meshes M0, M1, M2 of ADR 0082 amendment 3 (4 320, 13 524, 47 040 cells; M3 is th
 * An arm's variant `Y_A(h)` and its control `B_A(h)` use the same solver settings (algorithm, scheme, limiter, pseudo-time) as each other; only the
   source differs.
 
-Run rules (all runs): release build, single thread per run, at most two runs at a time, one run per set-up (nothing re-run to pick a result), stop at
-8000 iterations or 60 minutes wall clock (a run stopped by the clock is NOT CONVERGED), continuity non-finite or above 1e6 or a recorded steady-guard
-trip ends the run as diverged. Converged = `Simulation::is_converged()` (res_u, res_p and the turbulence change below the tolerance) before a stop rule.
-The wall-clock cap is the binding one on M2 (ADR 0082: about 0.5 s per iteration with two runs sharing the machine); a timing smoke of B(M2) run
-alone (200 iterations) is recorded in amendment 1 before any registered M2 run; it does not change the cap.
+Run rules (all runs):
+
+* release build;
+* single thread per run;
+* at most two runs at a time;
+* one run per set-up (nothing re-run to pick a result);
+* stop at 8000 iterations or 60 minutes wall clock (a run stopped by the clock is NOT CONVERGED);
+* continuity non-finite or above 1e6 or a recorded steady-guard trip ends the run as diverged.
+
+Converged = `Simulation::is_converged()` (res_u, res_p and the turbulence change below the tolerance) before a stop
+rule.
+
+The wall-clock cap is the binding one on M2 (ADR 0082: about 0.5 s per iteration with two runs sharing the machine); a
+timing smoke of B(M2) run alone (200 iterations) is recorded in amendment 1 before any registered M2 run; it does not
+change the cap.
 
 ## Part D: diagnosis of the non-convergence (registered; run before any remedy arm)
 
@@ -147,22 +177,33 @@ copy. Shared files (`sim.rs`, `schema.rs`): only this wave's hunks are committed
 
 ## Amendment 1 (2026-10-20): part D results (no hypothesis stands), smokes, A1, the timing smoke, the coupled-cavity hashes, and the definition of B_C; written before any screening run of arm C and before any acceptance run
 
-What I knew when writing this: the runs below; the screening runs Y_I(M0) and B_I(M0) had been started (as registered, unaffected by this
-amendment) and their results were not known. Code written so far: the ADR 0082 F-RP patch re-applied unchanged; the uncommitted part D switches
-(environment variable `W37B_DIAG` = `no_force`, `turb_abs`, `pair_mean`, `no_compdiag` in the working copy's `sim.rs` / `sources.rs`); arm C (periodic
-faces, flux offset and implicit rotation in `coupled.rs`; turbulence and rotor-passage sources for `algorithm = "coupled"` in `sim.rs`, `turb.rs`,
-`sources.rs`); the test file.
+What I knew when writing this: the runs below. The screening runs Y_I(M0) and B_I(M0) had been started (as registered,
+unaffected by this amendment) and their results were not known.
+
+Code written so far:
+
+* the ADR 0082 F-RP patch re-applied unchanged;
+* the uncommitted part D switches (environment variable `W37B_DIAG` = `no_force`, `turb_abs`, `pair_mean`, `no_compdiag`
+  in the working copy's `sim.rs` / `sources.rs`);
+* arm C (periodic faces, flux offset and implicit rotation in `coupled.rs`; turbulence and rotor-passage sources for
+  `algorithm = "coupled"` in `sim.rs`, `turb.rs`, `sources.rs`);
+* the test file.
 
 **D0 reproduction (rule met).** Y(M1): converged in 567 iterations (1.1 min), outlet L -1.418e-5 N m, Delta p_tt -1.541 Pa (ADR 0082: 567, -1.42e-5,
 -1.541). Y(M0): not converged at 8000 iterations (5.4 min), res_u 0.785, L 0.0682 N m, Delta p_tt +980.9 Pa (ADR 0082: 0.78, 0.068, +981).
 
-**Location record of Y(M0).** res_u is 0.57 at iteration 10 and 0.73 at iteration 100 and never falls below about 0.5 afterwards (continuity 1e-5 to
-1e-3). Of the 80 records (every 100 iterations) the largest velocity change sits 30 times in cell 827 (faces on `outlet` and `seam_lo`, r 0.128 m next to
-the hub, z 0.296), 27 times in cells 285 / 555 / 556 (on `seam_lo` at r 0.124-0.125, i.e. against the hub, z 0.17-0.19 just downstream of the chord
-band), and otherwise in interior chord-band cells at r 0.18-0.24 (1754 twelve times, one change of 233 m/s in one iteration). Worst periodic-pair flux
-sum `|phi_f + phi_g| / (Omega r |S|)`: up to 6.8e-2 with the force, at most 6.2e-14 in DS (without the force the pairs are exact; the asymmetry comes
-from the body-force term of the face flux, ADR 0071 C5). At iteration 8000 the outlet has backflow on 92 of its 240 faces (reverse / forward volume flux
-0.17, measured on DK, which is bit-identical to D0), which is why the mass-weighted outlet swirl energy prints negative (-2.02 Pa).
+**Location record of Y(M0).**
+
+* Residuals: res_u is 0.57 at iteration 10 and 0.73 at iteration 100 and never falls below about 0.5 afterwards
+  (continuity 1e-5 to 1e-3).
+* Largest velocity change, of the 80 records (every 100 iterations): 30 times in cell 827 (faces on `outlet` and
+  `seam_lo`, r 0.128 m next to the hub, z 0.296); 27 times in cells 285 / 555 / 556 (on `seam_lo` at r 0.124-0.125, i.e.
+  against the hub, z 0.17-0.19 just downstream of the chord band); otherwise in interior chord-band cells at r 0.18-0.24
+  (1754 twelve times, one change of 233 m/s in one iteration).
+* Worst periodic-pair flux sum `|phi_f + phi_g| / (Omega r |S|)`: up to 6.8e-2 with the force, at most 6.2e-14 in DS.
+  Without the force the pairs are exact; the asymmetry comes from the body-force term of the face flux (ADR 0071 C5).
+* Outlet at iteration 8000: backflow on 92 of its 240 faces (reverse / forward volume flux 0.17, measured on DK, which
+  is bit-identical to D0). This backflow is why the mass-weighted outlet swirl energy prints negative (-2.02 Pa).
 
 **Verdicts (each one run of Y(M0) with one change, 8000 iterations):**
 
@@ -173,26 +214,43 @@ from the body-force term of the face flux, ADR 0071 C5). At iteration 8000 the o
 | DP, pair mean of `rAU` on | no | 0.66 | 0.412 | +2841 | H-P FALSIFIED |
 | DK, component-diagonal correction off | no | 0.785 | 0.0682 | +980.9 | H-K FALSIFIED (bit-identical to D0: no cell has unequal component diagonals) |
 
-No hypothesis stands, so there is no arm X. The three requested arms run as registered; arm I is now known to be aimed at a term that is not the cause
-(it still damps every momentum update, which is why it is not dropped). What the record does show: the failure starts within 10 iterations, sits next
-to the hub downstream of the chord band and at the outlet / seam corner, and comes with outlet backflow; the inertial control B(M0) converges in 124
-iterations on the same mesh. The remaining difference between B and DS is the convecting flux (`phi` against `phi - F_tri`, the large tangential relative
-flux crossing the seams through the lagged partner coefficients). Not tested further by a registered diagnostic in this wave.
+No hypothesis stands, so there is no arm X. The three requested arms run as registered. Arm I is now known to be aimed
+at a term that is not the cause; it still damps every momentum update, which is why it is not dropped.
 
-**A1 and smokes (30 iterations, continuity at iterations 1 / 10 / 20 / 30, all finite):** seam pairs at iteration 1 (limit 1e-12): Y_L(M0) 1.3e-13,
-Y_I(M0) 1.3e-13, Y_C(M0) 2.9e-14, Y_L(M1) 2.1e-13, Y_I(M1) 2.1e-13, Y_C(M1) 4.9e-14 (pass). Y_L(M0) 1.8e-6 / 2.9e-6 / 3.5e-6 / 3.7e-6 (res_u 0.30 at
-30); B_L(M0) 1.9e-6 / 3.4e-6 / 6.3e-6 / 2.1e-6 (0.048); Y_I(M0) 3.2e-6 / 6.3e-7 / 1.8e-7 / 1.3e-7 (0.029); B_I(M0) 5.7e-6 / 1.8e-6 / 2.9e-7 / 4.7e-8 (0.0080);
-Y_C(M0) 1.2e-4 / 2.5e-5 / 2.0e-5 / 1.5e-5 (0.0052); B_C(M0) 3.8e-4 / 4.7e-6 / 1.1e-6 / 1.4e-7 (2.8e-4); Y_L(M1), Y_I(M1), Y_C(M1) res_u at 30: 0.094,
-0.028, 0.0069. The coupled solver's continuity is not driven below about 2e-5 per iteration by its relative linear tolerance 1e-3 (the default); its
-convergence criterion is res_u and res_p as for SIMPLEC. Cost: Y_C(M1) 1.0 s per iteration (SIMPLEC Y(M1) 0.12 s).
+The record does show that the failure starts within 10 iterations, sits next to the hub downstream of the chord band and
+at the outlet / seam corner, and comes with outlet backflow. The inertial control B(M0) converges in 124 iterations on
+the same mesh. The remaining difference between B and DS is the convecting flux (`phi` against `phi - F_tri`, the large
+tangential relative flux crossing the seams through the lagged partner coefficients). No registered diagnostic in this
+wave tests it further.
 
-**Timing smoke B(M2) alone:** 200 iterations in 89.6 s, 0.448 s per iteration, so 8000 iterations need about 60 minutes on an otherwise idle core;
-res_u was 0.13 at iteration 10 and 0.63 at iteration 200 (the inertial control itself does not converge smoothly on M2). The cap stays as registered.
-For arm C the 60-minute cap allows about 1 000 iterations on M2 (estimated from the M1 cost and the cell ratio 3.5).
+**A1 and smokes (30 iterations, continuity at iterations 1 / 10 / 20 / 30, all finite).** The seam pairs at iteration 1
+pass (limit 1e-12).
 
-**A0 (iv) hashes** (coupled lid cavity 12 x 12, nu 0.01, 20 iterations; FNV-1a over the bits of u, p and phi): upwind `0xbccb8f70fa93d84d`,
-linear_upwind `0x9c4c56461eaa0365`. Recorded on the working copy with only the F-RP patch applied, before any line of `coupled.rs` was changed (F-RP
-touches no code of the coupled path); deterministic in two repeats. After the arm C code: both hashes reproduced (test `a0_coupled_cavity_unchanged`).
+| Run | Seam pairs at iteration 1 | Continuity at 1 / 10 / 20 / 30 | res_u at 30 |
+|---|---|---|---|
+| Y_L(M0) | 1.3e-13 | 1.8e-6 / 2.9e-6 / 3.5e-6 / 3.7e-6 | 0.30 |
+| B_L(M0) | | 1.9e-6 / 3.4e-6 / 6.3e-6 / 2.1e-6 | 0.048 |
+| Y_I(M0) | 1.3e-13 | 3.2e-6 / 6.3e-7 / 1.8e-7 / 1.3e-7 | 0.029 |
+| B_I(M0) | | 5.7e-6 / 1.8e-6 / 2.9e-7 / 4.7e-8 | 0.0080 |
+| Y_C(M0) | 2.9e-14 | 1.2e-4 / 2.5e-5 / 2.0e-5 / 1.5e-5 | 0.0052 |
+| B_C(M0) | | 3.8e-4 / 4.7e-6 / 1.1e-6 / 1.4e-7 | 2.8e-4 |
+| Y_L(M1) | 2.1e-13 | | 0.094 |
+| Y_I(M1) | 2.1e-13 | | 0.028 |
+| Y_C(M1) | 4.9e-14 | | 0.0069 |
+
+The coupled solver's continuity is not driven below about 2e-5 per iteration by its relative linear tolerance 1e-3 (the
+default); its convergence criterion is res_u and res_p as for SIMPLEC. Cost: Y_C(M1) 1.0 s per iteration (SIMPLEC Y(M1)
+0.12 s).
+
+**Timing smoke B(M2) alone:** 200 iterations in 89.6 s, 0.448 s per iteration, so 8000 iterations need about 60 minutes
+on an otherwise idle core. res_u was 0.13 at iteration 10 and 0.63 at iteration 200 (the inertial control itself does
+not converge smoothly on M2). The cap stays as registered. For arm C the 60-minute cap allows about 1 000 iterations on
+M2 (estimated from the M1 cost and the cell ratio 3.5).
+
+**A0 (iv) hashes** (coupled lid cavity 12 x 12, nu 0.01, 20 iterations; FNV-1a over the bits of u, p and phi): upwind
+`0xbccb8f70fa93d84d`, linear_upwind `0x9c4c56461eaa0365`. They were recorded on the working copy with only the F-RP
+patch applied, before any line of `coupled.rs` was changed (F-RP touches no code of the coupled path), and are
+deterministic in two repeats. After the arm C code both hashes reproduced (test `a0_coupled_cavity_unchanged`).
 
 **B_C, departure from the registered control (stated before any B_C or Y_C screening run).** The registered B_C ("coupled, no source") cannot be built:
 the coupled solver takes a turbulence model only together with rotor-passage sources (the scope registered for arm C), and the parse-time checks of
@@ -208,13 +266,15 @@ outside the repository (`w37b_logs`, `w37b_frp_and_arm_c_removed.patch`, `w37b_f
 
 ### Outcome in one paragraph
 
-No arm passes. The lagged frame source is not the cause of the M0 failure (H-S falsified: Y(M0) does not converge with the source removed, and three
-other candidate mechanisms are falsified the same way). Two of the three requested remedies cure the coarse mesh: the pseudo-time step `1 / Omega`
-(arm I) and the coupled solver with the rotation implicit (arm C) both converge on M0 and M1, with outlet angular-momentum flux 3 to 7 times below
-their inertial controls and no swirl energy. Neither converges on the fine mesh M2 within the registered 60-minute cap: arm I stalls at res_u 0.41
-(its SIMPLEC inertial control also stalls, in a frozen limit cycle), arm C oscillates at res_u 1e-3 to 3e-3 for 1 007 iterations while its coupled
-inertial control converges in 326. Barth-Jespersen `linear_upwind` (arm L) fails on M0 already. By the registered rule F-RP and every arm's code are
-removed; F1 (FAN-01 with the fix) was NOT RUN, so no torque or Delta p_ts change is reported.
+No arm passes. The lagged frame source is not the cause of the M0 failure (H-S falsified: Y(M0) does not converge with
+the source removed, and three other candidate mechanisms are falsified the same way). Two of the three requested
+remedies cure the coarse mesh: the pseudo-time step `1 / Omega` (arm I) and the coupled solver with the rotation
+implicit (arm C) both converge on M0 and M1, with outlet angular-momentum flux 3 to 7 times below their inertial
+controls and no swirl energy. Neither converges on the fine mesh M2 within the registered 60-minute cap. Arm I stalls at
+res_u 0.41 (its SIMPLEC inertial control also stalls, in a frozen limit cycle). Arm C oscillates at res_u 1e-3 to 3e-3
+for 1 007 iterations while its coupled inertial control converges in 326. Barth-Jespersen `linear_upwind` (arm L) fails
+on M0 already. By the registered rule F-RP and every arm's code are removed. F1 (FAN-01 with the fix) was NOT RUN, so no
+torque or Delta p_ts change is reported.
 
 ### Checks with limits
 
@@ -249,25 +309,29 @@ B_I(M2) L 8.47e-5 N m.
 
 ### What the runs show (observations, not acceptance)
 
-* Where it converges, the absolute-velocity rotor passage removes the spurious angular momentum with either solver: outlet L 1.2e-4 and -2.5e-5 N m
-  (arm I, M0 and M1), 7.5e-5 and -5.4e-5 N m (arm C), against 3.44 and 2.25 N m in the relative frame (ADR 0082) and 5.9e-4 to 1.6e-4 N m in the
-  inertial controls. The coupled inertial control falls with order 2.4 over M0-M2 (5.41e-4, 1.60e-4, 7.88e-5 N m); Y_C falls by a factor 1.40 from M0
-  to M1 (pairwise order 0.83).
-* The M0 failure of the SIMPLEC rotor passage is cured by damping the momentum update (`pseudo_dt = 1 / Omega`, arm I) or by the coupled solve (arm C),
-  but not by removing the frame source (DS). So damping or a coupled solve stabilises something other than the frame source, in the
-  convection of absolute momentum by the large relative flux. The D0 record put the largest updates next to the hub downstream of the chord band and at
-  the outlet / seam corner, with outlet backflow (92 of 240 faces); the converged arm I and C runs on M0 have no backflow.
-* On M2 the largest updates of Y_C sit in hub-adjacent cells (r 0.1241-0.1245) of the chord band and just downstream; those of Y_I in two interior
-  chord-band cells (r 0.149 in 42 of 57 records, r 0.170 in 14); B_I(M2) cycles in one interior upstream cell (r 0.222, z 0.076, 58 of 59 records).
-  The SIMPLEC inertial control does not converge on M2 with or without the pseudo-time step (ADR 0082: 7 063 iterations; here 5 976): M2 is a hard
-  mesh for SIMPLEC by itself (the subject of agent 37A). The coupled inertial control converges there and the coupled rotor passage does not, so the
+* Where it converges, the absolute-velocity rotor passage removes the spurious angular momentum with either solver:
+  outlet L 1.2e-4 and -2.5e-5 N m (arm I, M0 and M1), 7.5e-5 and -5.4e-5 N m (arm C), against 3.44 and 2.25 N m in the
+  relative frame (ADR 0082) and 5.9e-4 to 1.6e-4 N m in the inertial controls. The coupled inertial control falls with
+  order 2.4 over M0-M2 (5.41e-4, 1.60e-4, 7.88e-5 N m). Y_C falls by a factor 1.40 from M0 to M1 (pairwise order 0.83).
+* Damping the momentum update (`pseudo_dt = 1 / Omega`, arm I) or the coupled solve (arm C) cures the M0 failure of the
+  SIMPLEC rotor passage; removing the frame source (DS) does not. So damping or a coupled solve stabilises something
+  other than the frame source, in the convection of absolute momentum by the large relative flux. The D0 record put the
+  largest updates next to the hub downstream of the chord band and at the outlet / seam corner, with outlet backflow
+  (92 of 240 faces). The converged arm I and C runs on M0 have no backflow.
+* On M2 the largest updates of Y_C sit in hub-adjacent cells (r 0.1241-0.1245) of the chord band and just downstream.
+  Those of Y_I sit in two interior chord-band cells (r 0.149 in 42 of 57 records, r 0.170 in 14). B_I(M2) cycles in one
+  interior upstream cell (r 0.222, z 0.076, 58 of 59 records). The SIMPLEC inertial control does not converge on M2 with
+  or without the pseudo-time step (ADR 0082: 7 063 iterations; here 5 976): M2 is a hard mesh for SIMPLEC by itself (the
+  subject of agent 37A). The coupled inertial control converges there and the coupled rotor passage does not, so the
   remaining M2 obstacle of arm C belongs to the rotor passage and sits against the stationary hub.
-* Cost: the coupled solver needs about 0.3 s (M0), 0.8 s (M1) and 3.6 s (M2) per iteration against 0.04, 0.12 and 0.45 s for SIMPLEC, so the 60-minute
-  cap allows about 1 000 coupled iterations on M2; Y_C needed 476 (M0) and 567 (M1). Whether Y_C(M2) would converge with more iterations is not known;
-  its residual did not decrease over its last 600 iterations.
-* The iteration counts of the converged runs are identical across solvers (M0: Y_I and Y_C 476; M1: Y_U, Y_I, Y_C 567, at 1e-7 772; M1 controls
-  B_I and B_C 170). At the stopping iteration res_u and res_p were between 3e-6 and 2e-12 (below 1e-7 in every Y run), well below the tolerance, so the binding criterion was the
-  turbulence change of the SST update, not the momentum or pressure residual. The counts measure the turbulence model's settling, not solver speed,
+* Cost: the coupled solver needs about 0.3 s (M0), 0.8 s (M1) and 3.6 s (M2) per iteration against 0.04, 0.12 and 0.45 s
+  for SIMPLEC, so the 60-minute cap allows about 1 000 coupled iterations on M2. Y_C needed 476 (M0) and 567 (M1).
+  Whether Y_C(M2) would converge with more iterations is not known; its residual did not decrease over its last 600
+  iterations.
+* The iteration counts of the converged runs are identical across solvers (M0: Y_I and Y_C 476; M1: Y_U, Y_I, Y_C 567,
+  at 1e-7 772; M1 controls B_I and B_C 170). At the stopping iteration res_u and res_p were between 3e-6 and 2e-12
+  (below 1e-7 in every Y run), well below the tolerance, so the binding criterion was the turbulence change of the SST
+  update, not the momentum or pressure residual. The counts measure the turbulence model's settling, not solver speed,
   and must not be used to size an iteration budget for the momentum solve.
 
 ### Verdict on the fixes

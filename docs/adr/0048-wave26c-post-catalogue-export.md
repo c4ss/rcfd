@@ -1,16 +1,28 @@
 # ADR 0048: Wave 26C, report / surface / post-object catalogue and EnSight Gold export (F-238, F-103)
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before
+any run of this wave. Addenda (exact numbers, deviations) may be appended at the end.
 
-Clean-room: first principles and public format descriptions only (the public EnSight Gold casefile/geometry/variable file
-description was read on the web for layouts; page text treated as data); no vendor code, no vendor installs, nothing from
-vendor material. Other waves (26A transient solver, 26B meshing) work in the same tree: this wave adds new files
-(`rcfd-post/src/{stats,surfaces,compare}.rs`, `rcfd-io/src/ensight.rs`, tests) and only small hunks in shared files (`lib.rs`
-of two crates, `sim.rs` report kinds, `schema.rs` report enum, `case-schema.md`, `reference-data.md`, `roadmap.json`), committed
-through a temporary index.
+Wave 26C adds a library catalogue in `rcfd-post` (statistics, fluxes, cut surfaces, rakes, point clouds, transforms and
+comparison fields) and new scalar report kinds in the case tree (both F-238), and an EnSight Gold writer (F-103). In
+addendum A all limits are unchanged and no miss ended as an ignored known-miss test. Q1 failed on its first run for the
+hexagon plane and passed after an algorithm change made on seeing the miss, which the addendum calls a root-cause fix. Only
+readers written by the same author checked the EnSight files: no third-party reader is available locally, third-party
+viewer acceptance is not tested and no cross-check is claimed. CGNS and HDF5 are not delivered. Surfaces, rakes, point
+clouds, transforms and comparison have no case-tree keys and no VTU / CSV writer. F-238 and F-103 stay `partial`.
+
+Rules and parents:
+
+* House rules: limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+  assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
+  away. A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Clean-room: first principles and public format descriptions only (the public EnSight Gold casefile/geometry/variable file
+  description was read on the web for layouts; page text treated as data); no vendor code, no vendor installs, nothing from
+  vendor material.
+* Other waves (26A transient solver, 26B meshing) work in the same tree: this wave adds new files
+  (`rcfd-post/src/{stats,surfaces,compare}.rs`, `rcfd-io/src/ensight.rs`, tests) and only small hunks in shared files
+  (`lib.rs` of two crates, `sim.rs` report kinds, `schema.rs` report enum, `case-schema.md`, `reference-data.md`,
+  `roadmap.json`), committed through a temporary index.
 
 ## Audit (HEAD 2b73501)
 
@@ -39,19 +51,24 @@ meaningless). Orientation: face area vectors point out of the domain; an inflow 
 `project_force(force, dir)` returns `(along, perpendicular vector)`, `project_moment(moment, axis)` the axial component; a zero
 direction is an error.
 
-D3 `surfaces.rs`: `Surface { points, tris, tri_cell }` triangle soup with orientation. Cuts are extracted by marching tetrahedra over
-a decomposition of each cell (cell centre, face centre, two consecutive face points), with an implicit function `g` evaluated
-exactly at tet vertices and linearly interpolated along tet edges. The facet normal points to increasing `g` (decided per tet from
-the linear gradient of `g`, never from vertex order). Constructors: `cut_plane`, `cut_sphere`, `cut_cylinder`, `cut_cone`,
-`cut_quadric` (general `x^T A x + b.x + c`, the others are special cases built through it). A plane cut is exact (linear `g`
-reproduced by the linear interpolation, facets tile the plane section of every cell). Curved cuts are second order in the mesh
-size. Facet field values are the cell value plus a least-squares cell gradient times the facet-centroid offset (exact for linear
+D3 `surfaces.rs`: `Surface { points, tris, tri_cell }` triangle soup with orientation. Cuts are extracted by marching
+tetrahedra over a decomposition of each cell (cell centre, face centre, two consecutive face points), with an implicit
+function `g` evaluated exactly at tet vertices and linearly interpolated along tet edges. The facet normal points to
+increasing `g` (decided per tet from the linear gradient of `g`, never from vertex order). Constructors: `cut_plane`,
+`cut_sphere`, `cut_cylinder`, `cut_cone`, `cut_quadric` (general `x^T A x + b.x + c`, the others are special cases built
+through it). A plane cut is exact (linear `g` reproduced by the linear interpolation, facets tile the plane section of every
+cell). Curved cuts are second order in the mesh size.
+
+Facet field values are the cell value plus a least-squares cell gradient times the facet-centroid offset (exact for linear
 fields); vertex field values (needed by clip) are the same reconstruction in the located cell.
-`clip_by_values(vertex_values, level, keep_above)` clips triangles at the iso-value with linear edge interpolation (the sub-polygon
-fan-triangulated); `offset(distance)` moves vertices along area-weighted vertex normals; `transformed(Transform)`,
-`rotational_copies(n, axis, origin)` and `merged` give instance copies; `PointCloud`/`rake(p0, p1, n)` give sample points, sampled
-with the cell reconstruction (outside the mesh: `NaN` and `inside = false`, like `derived::SampleSet`).
-Surface integrals: `area`, `integral(facet_values)`, `flux(facet_vectors)`, `stats(facet_values)` (area-weighted).
+
+* `clip_by_values(vertex_values, level, keep_above)` clips triangles at the iso-value with linear edge interpolation (the
+  sub-polygon fan-triangulated)
+* `offset(distance)` moves vertices along area-weighted vertex normals
+* `transformed(Transform)`, `rotational_copies(n, axis, origin)` and `merged` give instance copies
+* `PointCloud`/`rake(p0, p1, n)` give sample points, sampled with the cell reconstruction (outside the mesh: `NaN` and
+  `inside = false`, like `derived::SampleSet`)
+* Surface integrals: `area`, `integral(facet_values)`, `flux(facet_vectors)`, `stats(facet_values)` (area-weighted)
 
 D4 `compare.rs`: `difference(ref_mesh, ref_values, mesh, values, method)` = `values - remap(ref_values)` on `mesh`, through
 `remap::Remapper` (so identical meshes are a bit-for-bit copy and the difference is exactly `+0.0` for identical solutions);
@@ -170,19 +187,19 @@ w26c_ensight`. Measured against the registered limits (all limits unchanged):
 | Reports on the 2D channel | volume_std 0, area_min = area_max = 1.5, mass-weighted 1.5, vector_flux outlet 0.45 (= 2 * 0.15 * 1.5, flux non-zero) | 1e-14 / 1e-12 |
 | X1 / X2 EnSight | ASCII and binary round trips, mixed mesh, sizes exact | rel 1e-5 / 1e-7, exact |
 
-Misses: none ended as an ignored known-miss test. Items 2 to 4 of the pre-implementation review (welded vertices, `g >= 0` rule,
-early D1 measurement) were followed; the early D1 measurement shows the remap stencils sum to 1 within 21 eps.
+Misses: none ended as an ignored known-miss test. Items 2 to 4 of the pre-implementation review (welded vertices, `g >= 0`
+rule, early D1 measurement) were followed. The early D1 measurement shows the remap stencils sum to 1 within 21 eps.
 
 Deviations (disclosed):
 
-1. Q1 first run: the registered "min facet-normal dot >= 1 - 1e-12" failed for the hexagon plane (32 of 226 facets at n = 4, 206 of
-   1014 at n = 8, worst dot 0.8165). Diagnosis: collapsed triangles, area about 1e-33 (all three vertices coincide within rounding
-   when `g` is a few ulp from zero at a tet vertex), so their cross-product direction is noise; their area is negligible, which is why the
-   area check passed. A first cull relative to the triangle's own longest edge did not remove them (the edge is also noise); the fix
-   that stayed is `CULL_RATIO = 1e-12` of the squared longest edge of the generating tet (`surfaces.rs`). This is an algorithm change
-   after seeing the miss (a root-cause fix, the limit and the assertion are unchanged); re-run: 0 bad facets, minimum facet area 2.3e-3
-   (n = 8). Facets with doubled area below 1e-12 h^2 are never reported, so cut areas can differ from the exact value by at most
-   that per facet.
+1. Q1 first run: the registered "min facet-normal dot >= 1 - 1e-12" failed for the hexagon plane (32 of 226 facets at n = 4,
+   206 of 1014 at n = 8, worst dot 0.8165). Diagnosis: collapsed triangles, area about 1e-33 (all three vertices coincide
+   within rounding when `g` is a few ulp from zero at a tet vertex), so their cross-product direction is noise; their area
+   is negligible, which is why the area check passed. A first cull relative to the triangle's own longest edge did not
+   remove them (the edge is also noise). The fix that stayed is `CULL_RATIO = 1e-12` of the squared longest edge of the
+   generating tet (`surfaces.rs`). This is an algorithm change after seeing the miss (a root-cause fix, the limit and the
+   assertion are unchanged). Re-run: 0 bad facets, minimum facet area 2.3e-3 (n = 8). Facets with doubled area below 1e-12
+   h^2 are never reported, so cut areas can differ from the exact value by at most that per facet.
 2. `b1_b3_box_area_flux_mean_std`: an auxiliary assertion not in the registry (`patch_stats` mean of the face-centre `y` on an
    8 x 8 patch) expected 0.4375; the correct value is 0.5 (set-up defect). The old test is kept, ignored, with the reason; the corrected
    test `b1_b3_box_area_flux_mean_std_corrected` carries the registered B1 to B3 checks.

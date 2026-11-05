@@ -2,9 +2,19 @@
 
 Status: measured 2026-10-26 on the gate machine (16 logical processors, 96 GB, shared by up to six agents and two gate slots).
 Decision record: [ADR 0127](adr/0127-test-gate-efficiency.md). No test, limit, profile or solver code was changed.
-This page is for whoever runs or changes the gate. It records what the gate runs, where its time and memory go, the options ranked by
-saving against risk, the new test stage that runs each test as its own process, its measured results, and the scan for tests that
-cannot fail.
+
+`scripts/gate_test.py` runs each test as its own process. At the same commit it cut the test stage from 103 min (47E gate) to
+66.8 min (-35 %), its list of tests and outcomes equals the original gate's, and it caught all three negative-control breaks
+(section 5). A time limit per test now frees a slot from a hung test (ADR 0129, section 4). `--jobs 5` shortened the test phase
+under load (-13.2 %), below the registered 25 %, so the default stays 3 (section 5.7).
+
+The scan for tests that cannot fail reports 80 hits, 2 of them real weaknesses. Triaging its skips also found 12 non-ignored tests
+that always skip in the gate and count as passed, because their data is not in git. The mutation spot-check of registered limits
+detected 10 of 12: ADR 0123 S7 and ADR 0119 R3 still pass when mutated. Section 6.3 lists each of these; no test was edited.
+
+This page is for whoever runs or changes the [gate](glossary.md). It records what the gate runs, where its time and memory go, the
+options ranked by saving against risk, the new test stage that runs each test as its own process, its measured results, and the scan
+for tests that cannot fail.
 
 ## 1. What the gate runs today
 
@@ -94,11 +104,16 @@ in rcfd-linalg and rcfd-fv parallelise only part of a solve. Three such tests at
 ### 2.4 Memory while testing
 
 Per-test peak working set from the new runner at 8f04030 (exact, from the process counters): 2087 of the 2093 tests stay under
-500 MB, most under 100 MB. Six are larger: rcfd-post `render_pixels::r2_one_million_cells_render_in_under_two_seconds` 2720 MB,
-rcfd-api `rules_w19c::e2_no_error_level_false_positives_and_warnings_are_only_sv103` 2692 MB, three rcfd-mesh C-grid tests at
-1225 MB to 1290 MB and rcfd-mesh `fan::m4_quality_gates_and_m5_first_cell` 540 MB. The original `cargo test` reaches the same peaks:
-the passive sampler saw `rules_w19c` of another agent's gate at 2460 MB, 2532 MB summed over its test processes. The same sampler saw
-up to 1.6 GB of `rustc` working set (four compilers of other agents). The test stage is not where the memory goes; builds are.
+500 MB, most under 100 MB. Six are larger:
+
+- rcfd-post `render_pixels::r2_one_million_cells_render_in_under_two_seconds`: 2720 MB
+- rcfd-api `rules_w19c::e2_no_error_level_false_positives_and_warnings_are_only_sv103`: 2692 MB
+- three rcfd-mesh C-grid tests: 1225 MB to 1290 MB
+- rcfd-mesh `fan::m4_quality_gates_and_m5_first_cell`: 540 MB
+
+The original `cargo test` reaches the same peaks: the passive sampler saw `rules_w19c` of another agent's gate at 2460 MB, 2532 MB
+summed over its test processes. The same sampler saw up to 1.6 GB of `rustc` working set (four compilers of other agents). The test
+stage is not where the memory goes; builds are.
 
 **Hung tests hold a slot.** On 2026-10-26 a wave 47 gate held slot 1 from 18:04 to about 21:45 while one test
 (`c7_c8_scrubbing_a_1m_cell_store_with_20_fields`) sat at 8 CPU seconds; neither `cargo test` nor the new runner has a time limit.
@@ -128,8 +143,8 @@ Times are for the test stage at 47E (103 min). "Robustness" is what the option c
 
 ## 4. The new test stage
 
-`scripts/gate_test.py` replaces the `cargo test` line. Its first line is the same build command with `--no-run`, so the binaries are
-the ones `cargo test` would run. It lists every binary, runs each non-ignored test as its own process from the package root, and
+`scripts/gate_test.py` replaces the `cargo test` line. It first runs the same build command with `--no-run`, so the binaries are
+the ones `cargo test` would run. It then lists every binary, runs each non-ignored test as its own process from the package root, and
 prints the libtest lines, so the gate's summing `awk` is unchanged. A test passes only if its process exits 0 and reports exactly one
 passed test, so a crash, an abort or a name that matched nothing fails it. Doc-tests run afterwards with `cargo test --doc`.
 
@@ -145,12 +160,12 @@ cp ../times.tsv <work dir>/gate-times-$SLOT.tsv.tmp && mv -f <work dir>/gate-tim
 
 `$SLOT` is `slot-1` or `slot-2`: one order file per slot, replaced by a rename, so a gate never reads a half-written file. The script
 needs Python 3.9 or later (installed: 3.9.13, PSF licence), standard library only, no build step; it uses no syntax newer than 3.9.
-`gate46/stage.sh` and the other stage scripts are not changed by this work; the lines above work once the script is on main, because
+This work does not change `gate46/stage.sh` or the other stage scripts. The lines above work once the script is on main, because
 the gate runs on a `git archive` that must contain it.
 
 **Time limit (ADR 0129).** Each test gets `clamp(F x its seconds in the --order TSV, min, max)` with `--timeout-factor F`
-(default 5), `--timeout-min` (600 s) and `--timeout-max` (3600 s); a test with no record gets the maximum, `--timeout-max 0` turns the
-limit off. On expiry the runner kills that test and the processes it started (never a `cargo.exe`, which `workspace_graph` starts,
+(default 5), `--timeout-min` (600 s) and `--timeout-max` (3600 s). A test with no record gets the maximum, and
+`--timeout-max 0` turns the limit off. On expiry the runner kills that test and the processes it started (never a `cargo.exe`, which `workspace_graph` starts,
 and nothing the runner did not start), prints `test X ... FAILED (timeout after N s)`, writes outcome `TIMEOUT` to the TSV and goes on.
 The last line of the test phase also gives the peak summed working set of the running test processes (sampled every 2 s) and the
 largest ratio of a test's time to its limit. Tests: `python -m unittest scripts/test_gate_test.py` (the end-to-end part needs
@@ -187,8 +202,8 @@ Registered run 1 (ADR 0127): `git archive 8f04030` in `<work dir>\gate-weff\src`
 
 ### 5.2 Memory
 
-The runner never has more than `--jobs` test processes by construction (each pool worker waits for its process). Largest summed
-working set of test processes in a 5 s sample: 2184 MB, almost all of it `rules_w19c` (2160 MB). The sampler cannot tell this run's
+The runner never has more than `--jobs` test processes by construction (each pool worker waits for its process). The largest summed
+working set of test processes in a 5 s sample was 2184 MB, almost all of it `rules_w19c` (2160 MB). The sampler cannot tell this run's
 processes from the other slot's when both run the same binary (same name: the hash does not depend on the folder), so this is an upper
 bound. Per-test peaks are in section 2.4.
 
@@ -199,7 +214,7 @@ The sorted list of (binary, test, outcome) from the runner's log equals the one 
 
 ### 5.4 Negative controls and a pitfall
 
-The first negative-control run reused a shared target folder and **passed** (63 passed, 0 failed): cargo did not rebuild, because the
+The first negative-control run reused a shared target folder and **passed** (63 passed, 0 failed). Cargo did not rebuild, because the
 throwaway copy had been extracted and edited before the other copy's build, so its files were older than the binaries, and binary names
 do not depend on the folder. The runner was not at fault (it ran what cargo built), but the same trap applies to option 4. The controls
 were repeated with their own target folder (section 5.5).
@@ -251,7 +266,7 @@ to back in slot 1. Another gate held slot 2 for about 61 % of the 3-job run and 
 | peak summed working set | 2702 MB | 2704 MB |
 | max test time / limit | 0.264 | 0.521 |
 
-Prediction was the floor 9296 s / 5 = 31.0 min. Under load the processors are already full at three jobs, so five only stretch each
+The prediction was the floor 9296 s / 5 = 31.0 min. Under load the processors are already full at three jobs, so five only stretch each
 test; the gain stays below the registered 25 % and the default stays 3. No test failed only at five jobs.
 
 ## 6. Tests that cannot fail (ADR 0129)
@@ -259,13 +274,18 @@ test; the gain stays below the registered 25 % and the default stays 3. No test 
 ### 6.1 Scanner
 
 `python scripts/limit_audit.py` (read-only, Python 3.9 standard library) reads `crates/**/tests/*.rs` and `crates/**/src/**/*tests*.rs`
-and prints `file:line: (class) line` for five classes: (i) an assertion whose operands are only literals and constants, or a
-sleep/elapsed value in a test that sleeps; (ii) a `#[test]` with no assertion, panic, `unwrap`/`expect`, no `?` in a test returning a
-value and no `should_panic`, counting helper functions and macros of the same file (and of `tests/<folder>/` modules) that check;
-(iii) a test named with the word control(s) or negative whose assertions do not express a failure; (iv) an early `return` before
-the first assertion; (v) `assert!(true)` or a value compared with itself. Self-test: `python -m unittest scripts/test_limit_audit.py`
-(one planted example per class, all five found, and a clean test with a helper assertion, a comment and a string that is not flagged).
-Not scanned: the 99 inline `#[cfg(test)]` modules in other `src/` files (the registered scope).
+and prints `file:line: (class) line` for five classes:
+
+- (i) an assertion whose operands are only literals and constants, or a sleep/elapsed value in a test that sleeps;
+- (ii) a `#[test]` with no assertion, panic, `unwrap`/`expect`, no `?` in a test returning a value and no `should_panic`, counting
+  helper functions and macros of the same file (and of `tests/<folder>/` modules) that check;
+- (iii) a test named with the word control(s) or negative whose assertions do not express a failure;
+- (iv) an early `return` before the first assertion;
+- (v) `assert!(true)` or a value compared with itself.
+
+Self-test: `python -m unittest scripts/test_limit_audit.py` (one planted example per class, all five found, and a clean test with a
+helper assertion, a comment and a string that is not flagged). Not scanned: the 99 inline `#[cfg(test)]` modules in other `src/`
+files (the registered scope).
 
 On the tests of main af9c0fc it reports 80 hits: (i) 15, (ii) 2, (iii) 13, (iv) 50, (v) 0. Every hit was read.
 
@@ -409,16 +429,21 @@ turning the guarded behaviour off. Unmutated, every one of these tests passed in
 | 0119 L3 | `fan_rom_w46b::l3_drag_terms` | drag loss x10 | detected (:446) |
 | 0119 NC-L3 | `fan_rom_w46b::l3_drag_terms` | annulus drag term removed from the model | detected (:445, "NC-L3 does not discriminate") |
 
-**10 of 12 detected.** Finding 1: ADR 0119 R3 asserts only that the error contains "stall". Two separate checks produce such an
+**10 of 12 detected.**
+
+Finding 1: ADR 0119 R3 asserts only that the error contains "stall". Two separate checks produce such an
 error: the slope check of the free `operating_point` ("rising fan characteristic ... stall region", the message the ADR 0119
 addendum recorded for R3) and the strip check of `FanRom::operating_point` ("is stalled: n of 40 strips"). With the slope check off,
 the strip check still fails the R3 point, so R3 passes; the slope check is not guarded by any assertion of this test. The first R3
 mutation (strip check off) made the test fail, but at :545, the R3b part (a separate id), so it was counted as a set-up defect of the
-mutation and replaced by the slope-check mutation before the result was written down. Finding 2: ADR 0123 S7 registers "three cancels within 5 s"; measured 0.116 s, so a cancel path 10 times
+mutation and replaced by the slope-check mutation before the result was written down. R3 is section 6.3 item 6.
+
+Finding 2: ADR 0123 S7 registers "three cancels within 5 s"; measured 0.116 s, so a cancel path 10 times
 slower (and anything up to about 40 times) still passes. The limit stays as registered; whether S7 should get a tighter limit or a
-relative one is a design decision (section 6.3 item 5); R3 is item 6. First attempts that did not count: J3 did not compile (a `f64` times a
-complex value) and L6 had a duplicated test flag; both were corrected and rerun. The first S7 run failed only because the scratch
-target had no `rcfd.exe` (the test says "build it: cargo build -p rcfd-cli"), not because of the mutation; after building it the
-mutated S7 passed.
+relative one is a design decision (section 6.3 item 5).
+
+First attempts that did not count: J3 did not compile (a `f64` times a complex value) and L6 had a duplicated test flag; both were
+corrected and rerun. The first S7 run failed only because the scratch target had no `rcfd.exe` (the test says
+"build it: cargo build -p rcfd-cli"), not because of the mutation; after building it the mutated S7 passed.
 
 Test list (A5): no test was added, removed or edited, so the list is unchanged (checked again in the final gate).

@@ -1,10 +1,22 @@
-# ADR 0094: Wave 39C, partials close-out: coarse-start backward-facing step (F-205), solved flat-plate y+ (F-108), uniform step count on Taylor-Green (F-209)
+# ADR 0094: Wave 39C, partials close-out for F-205, F-108 and F-209
 
-Status: registered before the three comparison runs below. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss`
-test with the limit unchanged, a defective set-up gets a new corrected test and the old one stays ignored. No library code
-changes: test files only, so defaults and `crates/rcfd-api/tests/baseline_hashes.rs` are untouched. No roadmap acceptance text is
-edited; rewordings are proposals for the user. Clean-room: every reference value here is rcfd's own solution or a closed form
-derived below.
+Status: registered before the three comparison runs below.
+
+Wave 39C is a partials close-out with three checks: a coarse-start backward-facing step (F-205), a solved flat-plate y+ (F-108)
+and a uniform step count on Taylor-Green (F-209). The results, written after the runs, are at the end. C1 passes, so F-205 is
+`done`: 220 fine iterations against 253 and 258, though counted as total work it is break-even (254 against 253). Y1 meets its
+limit (worst +8.8 %), and F-108 stays `partial` because the unstructured-wall-patch clause waits on F-234. T1 misses: the
+Courant-controlled run takes 74 steps against N_min = 64, so T1 is kept as a known miss with the limit unchanged. The prediction
+of N_min about 25 was wrong in size but right in direction, and the size difference was not diagnosed. F-209 stays `partial`,
+and the proposal to reword its acceptance is with the user and not applied.
+
+Rules:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged, a defective set-up gets a new
+  corrected test and the old one stays ignored.
+* No library code changes: test files only, so defaults and `crates/rcfd-api/tests/baseline_hashes.rs` are untouched.
+* No roadmap acceptance text is edited; rewordings are proposals for the user.
+* Clean-room: every reference value here is rcfd's own solution or a closed form derived below.
 
 Sources of the gaps: docs/audit/partials-group-5.md (F-205), partials-group-4.md (F-108), partials-group-9.md (F-209). I re-read
 the cited tests before building on the audit's claims: `rcfd-fv/tests/init_potential.rs` (I2), `rcfd-api/tests/init_methods.rs`
@@ -106,10 +118,11 @@ Courant control against uniform steps.
 Prediction, before the run. Taylor-Green is one Fourier mode. Its velocity decays as exp(-2 nu t), and over the run
 2 nu t_end = 1. Implicit Euler multiplies the amplitude by (1 + 2 nu dt)^-1 per step, so N uniform steps give
 (1 + 1/N)^-N against e^-1, a relative error of 2.04 % at N = 24 and 1.96 % at N = 25. The discrete mode on 32 x 32 decays at a
-rate within about 0.3 % of 2 nu (5-point Laplacian eigenvalue, h = 2 pi / 32), and the nonlinear term only feeds the pressure. So N_min(0.02) should be about 25, well below
-the adaptive 74. T1 is expected to MISS. A Courant controller lengthens the step as the flow slows, which does not buy accuracy
-in a single-mode decay. This is the same ill-posedness the audit found for the single-exponential linear-decay clause. The limit
-is registered anyway, as the task asks, and a miss becomes `t1_..._known_miss` with the limit unchanged.
+rate within about 0.3 % of 2 nu (5-point Laplacian eigenvalue, h = 2 pi / 32), and the nonlinear term only feeds the pressure.
+So N_min(0.02) should be about 25, well below the adaptive 74. T1 is expected to MISS. A Courant controller lengthens the step
+as the flow slows, which does not buy accuracy in a single-mode decay. This is the same ill-posedness the audit found for the
+single-exponential linear-decay clause. The limit is registered anyway, as the task asks, and a miss becomes `t1_..._known_miss`
+with the limit unchanged.
 
 Verdict: F-209 stays `partial` whatever T1 gives. The linear-decay clause is a known miss (ADR 0023), and the flat-plate clause,
 residual smoothing, local timescale factors and stretched-mesh acceleration are not delivered.

@@ -2,6 +2,15 @@
 
 Status: **proposed 2026-11-04, revised the same day** for the maintainer's requirements R1 to R3 (scoping only; nothing
 implemented or run). Not yet accepted by the maintainer. Decisions D1 to D8 below are open; each carries a recommendation.
+
+In project mode today the MCP server and the Studio reach the same project folder through separate code, with separate rules
+for writing a case, and the 33 session tools keep their state in the server process, where the Studio does not see it. The
+maintainer requires that the MCP server can run new simulations directly (R1) and can edit and set up meshes (R2), and that the
+Studio updates from the MCP server's changes (R3). This ADR proposes one new crate, `rcfd-workspace`, that both clients depend
+on, so that in project mode a capability exists only as a workspace command that writes the project folder. The design below
+assumes the recommendations. The maintainer set the ADR's roadmap items, F-270 to F-275, as the current priority on 2026-11-04,
+ahead of the FAN-01 diagnosis.
+
 Parent: [the Studio plan](../ui-restart-plan.md), section 2 ("Edits made there appear live in the app"), section 8 (the
 project folder contract) and layer L7; [ADR 0135](0135-wave48f-plugin-and-project-tools.md).
 
@@ -9,8 +18,8 @@ Read at main edb4839. Number: 0172 is the highest on main; checked just before w
 
 ## The request (the maintainer, 2026-11-04)
 
-Three layers: a deep layer that the MCP server works on, a middle layer that abstracts around it, and a Studio that reacts to
-the changes the MCP server makes. Then three requirements:
+The maintainer asked for three layers: a deep layer that the MCP server works on, a middle layer that abstracts around it, and
+a Studio that reacts to the changes the MCP server makes. The maintainer then set three requirements:
 
 * **R1** The MCP server can run new simulations directly.
 * **R2** The MCP server can edit and set up meshes.
@@ -18,7 +27,7 @@ the changes the MCP server makes. Then three requirements:
 
 All of it follows from the project structure, the folder contract of [the Studio plan](../ui-restart-plan.md) section 8.
 
-The principle this ADR draws from that: in project mode, a capability exists only as a workspace command that writes the
+This ADR draws one principle from that: in project mode, a capability exists only as a workspace command that writes the
 project folder, and the MCP server and the Studio offer the same commands. So whatever Claude changes, the Studio shows, and
 whatever the Studio can change, Claude can change.
 
@@ -43,12 +52,12 @@ whatever the Studio can change, Claude can change.
    line 1145). That function takes the edit lock under `.rcfd/locks/` and appends `{t, kind: "edit", who, path, old_hash,
    new_hash}` to `.rcfd/edits.jsonl` (`EDIT_LOG`, `atomic.rs` line 216). `who` is the command name (`"edit_case"`), not the
    session. No crate reads `.rcfd/edits.jsonl`.
-4. **The Studio reaches the same folder through its own code.** `crates/rcfd-studio/src/poll.rs` (the runner client, every
-   250 ms, `PERIOD` at line 25), `watch.rs` (the project watcher, `changes_since` at line 303) and `case_edit.rs`. Its saves go
-   through `save_if_base` (`case_edit.rs` line 54): compare the hash, then `atomic_write`, with no edit lock and no
-   `edits.jsonl` entry. The module comment says the cooperative lock of ADR 0135 replaces it when 48F merges. 48F has merged and
-   the MCP server uses the lock, but the Studio does not yet. A Studio save and an `edit_case` on the same file can therefore
-   still race, and Studio saves leave no record.
+4. **The Studio reaches the same folder through its own code.** It uses `crates/rcfd-studio/src/poll.rs` (the runner client,
+   every 250 ms, `PERIOD` at line 25), `watch.rs` (the project watcher, `changes_since` at line 303) and `case_edit.rs`.
+   Its saves go through `save_if_base` (`case_edit.rs` line 54): compare the hash, then `atomic_write`, with no edit lock and
+   no `edits.jsonl` entry. The module comment says the cooperative lock of ADR 0135 replaces it when 48F merges. 48F has
+   merged and the MCP server uses the lock, but the Studio does not yet. A Studio save and an `edit_case` on the same file can
+   therefore still race, and Studio saves leave no record.
 5. **Two rules for writing a case.** `crates/rcfd-mcp/src/case_edit.rs` changes the `key = value` line in place and keeps
    comments and layout (ADR 0135 amendment 1 item 5, amendment 3 item 3). The Studio editor regenerates the whole file from its
    settings tree (`Case::to_toml` or `to_json_string`, `crates/rcfd-studio/src/case_edit.rs` line 342), so comments, which are
@@ -241,7 +250,7 @@ project case; it never replaces a file. `start_run` takes a project case and set
 (created first, then submitted), and applies the start plan of D7. Every run goes through the runner, so it is counted by the
 budget, survives Claude closing, and shows in the Studio.
 
-**R2, meshes.** The mesh of a case is set up by its settings through `edit_case`; when a `mesh.*` setting changes, the result
+**R2, meshes.** A case's settings set up its mesh, and `edit_case` changes them; when a `mesh.*` setting changes, the result
 includes the mesh check of the new mesh. `check_mesh {case}` returns the quality report and the patch list (the patches are what
 `boundaries.*` must name), the same report as `rcfd check-mesh`. `preview_mesh {case}` returns a PNG drawn by the CPU renderer
 (`rcfd_post::render::render_scalar`, `crates/rcfd-post/src/render.rs` line 460) with a cell-quality measure as the colour; wgpu

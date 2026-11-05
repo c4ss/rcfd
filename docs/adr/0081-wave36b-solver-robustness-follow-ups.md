@@ -1,13 +1,35 @@
-# ADR 0081: Wave 36B, solver robustness follow-ups of ADR 0077 (a limited linear-upwind gradient, the sheared-mesh SIMPLEC divergence, NaN in the steady reports, a coupled-solver guard trip, a testable one-corrector lag warning)
+# ADR 0081: Wave 36B, solver robustness follow-ups of ADR 0077
 
-Status: registered before any code of this wave was written. Everything under "Registered" was committed before the code and the runs it governs.
-Limits are not changed, widened or deleted after a run; a miss becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a
-NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles and published literature only;
-nothing here is taken from another CFD code or its documentation. Written at HEAD 6c3ddc9 (scratch clone `<scratch dir>`).
+Status: registered before any code of this wave was written. Everything under "Registered" was committed before the code and
+the runs it governs. Written at HEAD 6c3ddc9 (scratch clone `<scratch dir>`).
 
-Parents: ADR 0077 (wave 35B: steady divergence guard, part B diagnostics D0-D9 with D3 "Barth-Jespersen-limited gradient STABLE", finding B-X, the
-`f64::max` finding, the C4 miss and the one-corrector restriction), ADR 0073 (B3/B4 lag model and its measured classifications), ADR 0069 (the stability
-criteria of the transient cavity harness), ADR 0050 (SIMPLEC non-orthogonal flux compensation), ADR 0008 (MRF Taylor-Couette checks M2/M4).
+Wave 36B covers five solver robustness follow-ups of ADR 0077: a limited linear-upwind gradient, the sheared-mesh SIMPLEC
+divergence, NaN in the steady reports, a coupled-solver guard trip and a testable one-corrector lag warning. The addendum
+records the measured values, misses and deviations. The opt-in key `solver.linear_upwind_limiter = "barth_jespersen"`
+(default `none`) met every limit and is kept. The sheared-mesh divergence gets no code fix by the registered rule: the two
+defect hypotheses are falsified by their registered rules and the only standing hypothesis is "start-up only" (H-X6); the
+mechanism of the start-up growth is not identified. The steady `max_du`, `continuity` and `res_u` reports now keep NaN, and
+`SimpleSolver::run` no longer reports a NaN state as converged. Two tests make the guard trip on the coupled solver, both
+non-finite (K1) trips: no finite runaway was found, so K2-K4 stay untested there. The lag warning warned exactly on the
+three unstable set-ups of six and was silent on the three stable ones. The registered N1 limit was defective (corrected in
+amendment 1), and the part X scan had no unsheared controls until amendment 2 registered them.
+
+Rules:
+
+* Limits are not changed, widened or deleted after a run.
+* A miss becomes an ignored `*_known_miss` test with the limit intact.
+* A defective set-up gets a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded.
+* Clean-room: first principles and published literature only; nothing here is taken from another CFD code or its documentation.
+
+Parents:
+
+* ADR 0077 (wave 35B: steady divergence guard, part B diagnostics D0-D9 with D3 "Barth-Jespersen-limited gradient STABLE",
+  finding B-X, the `f64::max` finding, the C4 miss and the one-corrector restriction).
+* ADR 0073 (B3/B4 lag model and its measured classifications).
+* ADR 0069 (the stability criteria of the transient cavity harness).
+* ADR 0050 (SIMPLEC non-orthogonal flux compensation).
+* ADR 0008 (MRF Taylor-Couette checks M2/M4).
 
 ## Disclosure: what was run before this registration (rule (d))
 
@@ -76,15 +98,20 @@ REMOVED (rule (b) of wave 35), the tests stay as ignored `*_known_miss` records 
 
 Base set-up B (the ADR 0077 S3 channel, `rcfd_fv` level): `channel` 40 x 10, length 4, height 1, points mapped x' = x + y tan(theta); inlet u = (1, 0),
 walls no-slip, outlet zero-gradient velocity and p = 0; nu 0.01; SIMPLEC, alpha_u 0.9, alpha_p 1.0, `upwind`, no non-orthogonal correctors.
+
 Geometry (stated): every face of this mesh has non-orthogonality theta (the centre-to-centre vector across the slanted faces is (dx, 0), across the
 horizontal faces (dy tan theta, dy)); `lap_coeff` is the over-relaxed form `|S|^2 / (S . d)` = `|S| / (|d| cos theta)`; with zero correctors the
 pressure equation and the corrected flux use only that part, while the cell velocity correction uses the full Green-Gauss pressure gradient.
 
-Run classification (fixed now): 1000 iterations with a `SteadyGuard` observing; UNSTABLE iff the guard trips, or the largest cell speed over iterations
-10..1000 exceeds 3 U_ref (U_ref = the largest boundary-face speed, 1; for the periodic variants the exact largest speed), or the continuity is non-finite,
-or its maximum over iterations 900..1000 exceeds its value at iteration 10; otherwise STABLE. Reported: the iteration at which res_u and res_p first fall
-below 1e-6. Angle set Theta = {45, 50, 52.5, 55, 57.5, 60, 65, 70, 75, 79} degrees. Threshold theta_c(variant) = the smallest angle of Theta classified
-UNSTABLE ("> 79" if none); a non-monotone pattern (stable above an unstable angle) is reported.
+Run classification (fixed now):
+
+* 1000 iterations with a `SteadyGuard` observing; UNSTABLE iff the guard trips, or the largest cell speed over iterations
+  10..1000 exceeds 3 U_ref (U_ref = the largest boundary-face speed, 1; for the periodic variants the exact largest speed), or
+  the continuity is non-finite, or its maximum over iterations 900..1000 exceeds its value at iteration 10; otherwise STABLE.
+* Reported: the iteration at which res_u and res_p first fall below 1e-6.
+* Angle set Theta = {45, 50, 52.5, 55, 57.5, 60, 65, 70, 75, 79} degrees.
+* Threshold theta_c(variant) = the smallest angle of Theta classified UNSTABLE ("> 79" if none); a non-monotone pattern (stable
+  above an unstable angle) is reported.
 
 Variants (each over Theta, one run per angle; `crates/rcfd-fv/tests/w36b_sheared.rs`, ignored diagnostic tests, output recorded here):
 * V0 base B.
@@ -190,6 +217,7 @@ Run on the scratch tree with the part N code (NaN-propagating folds, K1 fields f
 first iteration that ends with non-finite fields) `max_du` and `continuity` are NaN, but `res_u = 0.971` is finite. That is not a reporting defect:
 `res_u` is the normalised momentum residual of the iteration's STARTING state (assembled before the solve), which is still finite at 375; the fields become
 non-finite inside that iteration (the pressure solve, `res_p` NaN). The registered N1 limit asked for a NaN residual of a finite state: a defective limit.
+
 The registered test stays as the ignored `n1_registered_setup_defect` (limit unchanged). Corrected N1' (new test `n1_corrected_reports_are_nan_from_the_
 first_non_finite_state`): at the first iteration whose fields end non-finite, `max_du` and `continuity` are NaN; at the next iteration (whose starting
 state is non-finite) `max_du`, `continuity` and `res_u` are all NaN (on 6c3ddc9 that iteration, 376, reported 0, 0, 0; SM-N).
@@ -210,29 +238,37 @@ Defect found in my registration (rule (d)): a variant whose threshold is 45 (the
 theta_c says nothing about the non-orthogonality. No variant was run at 0 degrees. Readings that rest on such variants: H-X1 (SIMPLE 0.7/0.3), H-X3 (V6),
 H-X4 (V5, V6'), H-X5 (V5). V4a at 0 degrees is the V0 run (the correctors do nothing on an orthogonal mesh), so H-X2 is not affected; V2 enters no reading.
 
-Registered now (one run each, same classification): C0 controls at theta = 0, 15, 30 degrees for V2 (all three), V3 SIMPLE 0.7/0.3, V4a, V5, V6, V6' and,
-as a reference, V0 and V7. Reading: a variant UNSTABLE at 0 degrees is "unstable without shear" and every hypothesis reading that uses it becomes NOT TESTABLE
-(it is neither standing nor falsified); a variant STABLE at 0 degrees keeps its registered reading. V9b (confirmation, reported, no reading): V9 repeated
-with the converged state perturbed by 1e-6 (u_x of cell c multiplied by 1 + 1e-6 sin(c)), rho over the iterations where `max_du` lies in [1e-9, 1e-2].
-Decision rule unchanged (no code fix unless exactly one of H-X1, H-X2 stands).
+Registered now (one run each, same classification):
+
+* C0 controls at theta = 0, 15, 30 degrees for V2 (all three), V3 SIMPLE 0.7/0.3, V4a, V5, V6, V6' and, as a reference, V0 and V7.
+* Reading: a variant UNSTABLE at 0 degrees is "unstable without shear" and every hypothesis reading that uses it becomes NOT
+  TESTABLE (it is neither standing nor falsified); a variant STABLE at 0 degrees keeps its registered reading.
+* V9b (confirmation, reported, no reading): V9 repeated with the converged state perturbed by 1e-6 (u_x of cell c multiplied by
+  1 + 1e-6 sin(c)), rho over the iterations where `max_du` lies in [1e-9, 1e-2].
+* Decision rule unchanged (no code fix unless exactly one of H-X1, H-X2 stands).
 
 ## Addendum (measured values, misses, deviations)
 
 Release builds, scratch tree on top of 2403566 (rebased onto 7c4dff2 before the gate; the rebase touched no file of this wave except the two docs).
 One run per registered set-up unless stated. Limits are the registered ones (with amendments 1 and 2), unchanged.
 
-Outcome. (1) `solver.linear_upwind_limiter = "barth_jespersen"` (opt-in, default `none`) makes `linear_upwind` stable on the FAN-01
-mesh, laminar and SST, keeps every converging case checked converging (also with the limiter forced on in all 542 steady `linear_upwind` simulations
-of the suite: no new guard trip), and keeps second order on the Kovasznay flow (fine-pair L2 order 2.17; fine-mesh error 0.6 % above the unlimited
-scheme): every limit met, the key is kept. (2) The sheared-mesh SIMPLEC divergence needs no wall, no open boundary and no convection (a doubly periodic
-box at cell Peclet 0.2 diverges from 60 degrees). The two defect hypotheses (SIMPLEC compact/wide compensation, omitted non-orthogonal pressure part) are
-falsified by their registered rules, and the converged state at 60 degrees is stable under the same iteration: the only standing hypothesis is "start-up
-only" (H-X6). By the registered rule no code fix; the measured thresholds and the remedy (lower `alpha_p`) are documented. The mechanism of the start-up
-growth itself is not identified. (3) The steady `max_du`, `continuity` and `res_u` reports keep NaN; `SimpleSolver::run` no longer reports a NaN state as
-converged (it did, at iteration 375 of the S2 cavity); a NaN trip of the guard names its cell. (4) Two tests make the guard trip on the coupled solver
-through the run-control driver; both are non-finite (K1) trips: no finite runaway of the coupled solver was found, so K2-K4 stay untested there. (5) The
-one-corrector lag warning was checked against six set-ups whose stability was re-measured to t_end = 10: it warned exactly on the three unstable ones and
-was silent on the three stable ones.
+Outcome:
+
+1. Part L: `solver.linear_upwind_limiter = "barth_jespersen"` (opt-in, default `none`) makes `linear_upwind` stable on the
+   FAN-01 mesh, laminar and SST. It keeps every converging case checked converging (also with the limiter forced on in all 542
+   steady `linear_upwind` simulations of the suite: no new guard trip). It keeps second order on the Kovasznay flow (fine-pair
+   L2 order 2.17; fine-mesh error 0.6 % above the unlimited scheme). Every limit is met and the key is kept.
+2. Part X: the sheared-mesh SIMPLEC divergence needs no wall, no open boundary and no convection (a doubly periodic box at cell
+   Peclet 0.2 diverges from 60 degrees). The two defect hypotheses (SIMPLEC compact/wide compensation, omitted non-orthogonal
+   pressure part) are falsified by their registered rules, and the converged state at 60 degrees is stable under the same
+   iteration: the only standing hypothesis is "start-up only" (H-X6). By the registered rule there is no code fix; the measured
+   thresholds and the remedy (lower `alpha_p`) are documented. The mechanism of the start-up growth itself is not identified.
+3. Part N: the steady `max_du`, `continuity` and `res_u` reports keep NaN. `SimpleSolver::run` no longer reports a NaN state as
+   converged (it did, at iteration 375 of the S2 cavity). A NaN trip of the guard names its cell.
+4. Part G: two tests make the guard trip on the coupled solver through the run-control driver. Both are non-finite (K1) trips:
+   no finite runaway of the coupled solver was found, so K2-K4 stay untested there.
+5. Part P: the one-corrector lag warning was checked against six set-ups whose stability was re-measured to t_end = 10. It warned
+   exactly on the three unstable ones and was silent on the three stable ones.
 
 ### Part L
 
@@ -279,10 +315,16 @@ Readings (registered rules; every variant used by a reading is STABLE at 0 degre
 * H-X6 (start-up only): STANDS (rho 0.982 < 1; V9b 0.889).
 
 Decision (registered): no code fix (neither H-X1 nor H-X2 stands). Documented in `docs/case-schema.md` (SIMPLEC on uniformly sheared meshes).
-Observations, no verdict: lowering `alpha_u` at `alpha_p = 1`, or SIMPLE 0.7/0.3, makes the channel worse; lowering `alpha_p` is the
-effective remedy; two correctors without the ADR 0050 compensation are unstable from 15 degrees (consistent with the ADR 0050 mode). What amplifies the
-start-up transient on these meshes is not identified: the linearised iteration at the converged state contracts, so it is a finite-amplitude or
-transient-growth effect (not tested further). A start-up procedure (an alpha_p ramp) was not tested.
+
+Observations, no verdict:
+
+* Lowering `alpha_u` at `alpha_p = 1`, or SIMPLE 0.7/0.3, makes the channel worse.
+* Lowering `alpha_p` is the effective remedy.
+* Two correctors without the ADR 0050 compensation are unstable from 15 degrees (consistent with the ADR 0050 mode).
+
+What amplifies the start-up transient on these meshes is not identified: the linearised iteration at the converged state
+contracts, so it is a finite-amplitude or transient-growth effect (not tested further). A start-up procedure (an alpha_p ramp)
+was not tested.
 
 ### Part N
 
@@ -337,9 +379,12 @@ before its first violation. This makes C4 non-vacuous for these six set-ups only
 
 ### Unverified references
 
-Barth and Jespersen (1989) for the limiter (the existing rcfd implementation; recalled, UNVERIFIED). The Kovasznay solution (Kovasznay 1948, recalled,
-UNVERIFIED; used only through its closed form). The sqrt(2) linear stability bound of Kolmogorov flow (Meshalkin and Sinai 1961, recalled, UNVERIFIED;
-only used to choose nu = 0.5 for V7). The statement that Barth-Jespersen clips smooth extrema (recalled, UNVERIFIED; not tested).
+* Barth and Jespersen (1989) for the limiter (the existing rcfd implementation; recalled, UNVERIFIED).
+* The Kovasznay solution (Kovasznay 1948, recalled, UNVERIFIED; used only through its closed form).
+* The sqrt(2) linear stability bound of Kolmogorov flow (Meshalkin and Sinai 1961, recalled, UNVERIFIED; only used to choose
+  nu = 0.5 for V7).
+* The statement that Barth-Jespersen clips smooth extrema (recalled, UNVERIFIED; not tested).
+
 ### Further deviations and checks (added after the addendum)
 
 * The commits were landed in the main repository by a fast-forward merge from the scratch clone onto a clean working tree (main HEAD 7c4dff2 had no dirty

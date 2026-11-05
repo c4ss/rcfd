@@ -1,18 +1,29 @@
 # ADR 0118: Wave 46A, computer-fan parameter schema, pre-meshing constraint checker and manufacturing perturbations
 
-Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran. The
-house rules of ADRs 0110-0117 apply:
-* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
-* a defective set-up gets a new corrected test, registered here as an amendment before it runs;
-* defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran.
 
-Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46a`, target `<target dir>`). It serves
-parts A1, A2 and A5 of `docs/fan-project-breakdown.md` for an axial computer fan. Clean-room: first principles, our own ADRs
-and standard statistics. Parents: ADR 0065 (blade geometry), ADR 0067 (seeded generator), ADRs 0068/0083 (C-grid).
+Wave 46A serves parts A1, A2 and A5 of `docs/fan-project-breakdown.md` for an axial computer fan: one parameter schema
+(`rcfd_mesh::fan_design::ComputerFan`), a checker that runs before meshing (`ComputerFan::check`), and manufacturing
+perturbations with a static unbalance (`ComputerFan::ensemble`, `ComputerFan::static_unbalance`). No CFD is run. Every threshold
+of the checker is a **process input**, not physics (see "Checker thresholds"). The tests show that the checker applies the
+thresholds and locates the violation. They do not show that the thresholds are right for any real mould or fan. Every registered
+check passed in its one registered run, no known-miss test was created, and the final gate gave 2042 passed / 0 failed /
+651 ignored. The results do not show that the realised meshes are fit for CFD: S4 builds them but checks no quality limit (and
+reports that c_grid `pursuit` rejects the default). The existing sector generators do not realise per-blade deviations,
+eccentricity, the motor hub length and start, or the frame, and the case tree does not read `ComputerFan` and does not call the
+checker (see "Honest gap list").
 
-No CFD is run. Every threshold of the checker is a **process input**, not physics (see "Checker thresholds"). The tests show that
-the checker applies the thresholds and locates the violation. They do not show that the thresholds are right for any real mould
-or fan.
+Rules and parents:
+
+* The house rules of ADRs 0110-0117 apply:
+  * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
+  * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles, our own ADRs and standard statistics.
+* Parents: [ADR 0065](0065-wave32a-fan-geometry-mesh.md) (blade geometry), [ADR 0067](0067-wave32c-design-loop.md) (seeded
+  generator), ADRs [0068](0068-wave33a-mesh-quality-foundation.md)/[0083](0083-wave36d-cgrid-fan-mesh-quality-and-robustness.md)
+  (C-grid).
+* Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46a`, target `<target dir>`).
 
 ## What exists (re-checked against the source)
 
@@ -447,4 +458,5 @@ distribution.
   passed. `git diff main -- crates/rcfd-api/tests/baseline_hashes.rs` is empty.
 * After the gate, main moved to 48b30bc (wave 46C `rcfd_post::rotordyn` and docs; none of the files touched here). The
   branch was rebased onto it: the commits are 3394a64 (registration), 3a2c648 (implementation) and 9dbb392 (addendum).
-  The re-runs on the rebased branch: fmt clean, workspace clippy clean, and this ADR's tests 13 passed / 2 ignored, plus the `normal_cdf` and `rng` unit tests. There was no second full test gate.
+  The re-runs on the rebased branch: fmt clean, workspace clippy clean, and this ADR's tests 13 passed / 2 ignored, plus the
+  `normal_cdf` and `rng` unit tests. There was no second full test gate.

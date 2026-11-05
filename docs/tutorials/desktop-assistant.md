@@ -1,18 +1,18 @@
 # The desktop app and the assistant sidebar
 
+This tutorial opens a cavity case in the desktop app, runs it, uses the assistant's quick actions, connects a model and walks
+through an approval. It is for people who prefer a window to the command line, or who want to try the assistant on a case. If you
+want to script runs instead, start with the [quick start](quick-start-cli.md).
+
 `rcfd-gui` is the desktop app: a settings editor driven by the case schema, a 2D field viewport, residual and report monitors, run
-controls and an assistant sidebar that talks to a model of your choice (a local server such as Ollama or LM Studio, or a hosted API)
-through the same tools as the [MCP server](mcp-design-loop.md).
+controls and an assistant sidebar. The sidebar talks to a model of your choice (a local server such as Ollama or LM Studio, or a
+hosted API) through the same tools as the [MCP server](mcp-design-loop.md).
 
-This tutorial opens a cavity case in the app, runs it, uses the assistant's quick actions, connects a model and walks through
-an approval. It is for people who prefer a window to the command line, or who want to try the assistant on a case. If you want
-to script runs instead, start with the [quick start](quick-start-cli.md).
-
-**What is and is not tested on this page.** Only the command-line steps (writing and checking the case file) are executed by the
-tutorial test. Every GUI step below is marked `not-executed`: the test suite cannot click through a window. The app's logic is
-covered by headless tests (frames rendered without a window, in `crates/rcfd-gui/tests/`, including a mock-model turn with an
-approval in `smoke.rs`), but nobody has checked these instructions against the running app's look, and no real or local model has
-been run through the sidebar in the test suite (roadmap F-145, F-150).
+**What is and is not tested on this page.** The tutorial test executes only the command-line steps (writing and checking the case
+file). Every GUI step below is marked `not-executed`: the test suite cannot click through a window. Headless tests (frames rendered
+without a window, in `crates/rcfd-gui/tests/`, including a mock-model turn with an approval in `smoke.rs`) cover the app's logic,
+but nobody has checked these instructions against the running app's look, and the test suite has run no real or local model through
+the sidebar (roadmap F-145, F-150).
 
 What you need: a checkout of this repository and a Rust toolchain with cargo (the [quick start](quick-start-cli.md) covers the
 build of the command-line tool used in the first step). Connecting a model needs either a local model
@@ -51,6 +51,8 @@ tolerance_u = 1e-6
 tolerance_p = 1e-6
 ```
 
+Check the case.
+
 ```console run
 $ rcfd check cavity.toml
 ```
@@ -61,16 +63,21 @@ cavity.toml: ok, 1024 cells
 
 ## 2. Start the app
 
+Start the app with the case open:
+
 ```console not-executed
 cargo run --release -p rcfd-gui -- --root . cavity.toml
 ```
 
-`rcfd-gui [--root DIR] [CASE.toml]`: `--root` confines the files the app and the assistant may touch, the optional case is opened at
-start (without one the app starts from a template). The window has dockable panels (settings, viewport, monitors, log, assistant);
-a panel can be hidden, floated or re-docked, and the layout is saved in the per-user config directory (restoring it after a restart
-has not been tested end to end).
+The command line is `rcfd-gui [--root DIR] [CASE.toml]`. The `--root` option confines the files the app and the assistant may
+touch. The app opens the optional case at start; without one it starts from a template.
+
+The window has dockable panels (settings, viewport, monitors, log, assistant). You can hide, float or re-dock a panel. The app
+saves the layout in the per-user config directory; restoring it after a restart has not been tested end to end.
 
 ## 3. Run and look at the result (not executed)
+
+Use these parts of the window to change a setting, run the case and look at the result:
 
 ```text not-executed
 Settings panel   edit a value (for example physics.nu); out-of-range or wrong-type input is refused on the field
@@ -91,7 +98,7 @@ Assistant panel > "No model needed:" > Assess mesh | Validate case | Suggest BCs
 
 ## 5. Connect a model (not executed)
 
-Pick a provider in the sidebar's provider selector and fill in the model name; the presets are:
+Pick a provider in the sidebar's provider selector and fill in the model name. The presets are:
 
 | Preset | Protocol | Default base URL |
 |---|---|---|
@@ -102,11 +109,13 @@ Pick a provider in the sidebar's provider selector and fill in the model name; t
 | `openai` | OpenAI-compatible | `https://api.openai.com/v1` |
 | `anthropic` | Anthropic Messages | the Anthropic API |
 
-A hosted API needs a key: an environment variable named in the provider entry, or the key field of the sidebar. The code stores a key
-from the sidebar in the OS keychain on Windows and macOS and falls back to `keys.json` in the per-user config directory; a round trip
-against a real keychain has not been verified (the tests use an in-memory keychain, and the macOS code has not been built; roadmap
-F-149). That the key stays out of transcripts, logs and error texts is shown by a planted-key scan with a mock provider (F-094 C5,
-F-149), not with a real provider. Whether a given small local model calls the tools well has not been measured.
+A hosted API needs a key: an environment variable named in the provider entry, or the key field of the sidebar. The code stores a
+key from the sidebar in the OS keychain on Windows and macOS and falls back to `keys.json` in the per-user config directory. A round
+trip against a real keychain has not been verified (the tests use an in-memory keychain, and the macOS code has not been built;
+roadmap F-149).
+
+A planted-key scan with a mock provider, not with a real provider, shows that the key stays out of transcripts, logs and error texts
+(F-094 C5, F-149). Whether a given small local model calls the tools well has not been measured.
 
 ## 6. Ask, approve, deny (not executed)
 

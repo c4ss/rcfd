@@ -1,27 +1,49 @@
-# ADR 0161: Job 48AA, Stop in Run's place on the Studio toolbar: the runner's graceful stop, the final state stored as the last snapshot, Ctrl+., the run shown "stopped"
+# ADR 0161: Job 48AA, Stop in Run's place on the Studio toolbar
 
 Status: **registered 2026-10-29**, before any registered run (the code and the tests below were written and compiled
 first; nothing of them had run); amendments 1 (AA1, AA2 known misses of the `cancel_requested` count, AA1b and AA2b;
 AA3's set-up) and 2 (J2's set-up) before the corrected runs; results in the addendum: every check met its limits and
-every control failed as required, but for the two known misses; not yet accepted by the maintainer. Job 48AA, on local main 4e795b1 (wave 48V merged). House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
-corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded; no new crate, no unsafe code, the crate graph stays acyclic. Clean-room: our own Studio code and the egui
-public API. Job 48X (ADR 0158) edits the same crate at the same time (`time_step`, `runs`, `quick_run`, `quick_run_ui`,
-`ui`); this job keeps its code in two new files and touches shared files in a few small hunks (Placement).
+every control failed as required, but for the two known misses; not yet accepted by the maintainer.
+
+The maintainer saw no obvious way to stop a running run: a run was ended by "Cancel" in the status strip at the bottom and
+in the Runs panel. Job 48AA puts Stop in Run's place on the Studio toolbar for the selected case's live toolbar run, with the
+shortcut Ctrl+. (Cmd+. on macOS). Stop is the runner's graceful stop, and no runner change is made: the solver stops after
+the step it is on, and that state is stored as the run's last snapshot. The Studio shows the run "stopped", its label for
+`cancelled` with exit code 7; `status.json` keeps `cancelled`, and a stopped run cannot be continued. Results in the
+addendum: every check met its limits and every control failed as required, but for the two known misses. The known misses
+are AA1 and AA2: their limit of exactly one `cancel_requested` event misread the runner, and their first runs had 0 such
+events; AA1b and AA2b, registered after the miss, allow at most one and no `killed`, and pass. AA3 and ADR 0144's J2 needed
+set-up corrections (amendments 1 and 2), and AA3's in-flight check is weaker than registered. AA6's suite run at df8098a had
+one failure, ADR 0138's GPU timing G10, which the addendum records as a timing miss on the shared GPU, not caused by this job
+(not re-registered).
+
+Rules and context:
+
+- Job 48AA, on local main 4e795b1 (wave 48V merged).
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs`
+  is not re-recorded; no new crate, no unsafe code, the crate graph stays acyclic.
+- Clean-room: our own Studio code and the egui public API.
+- Job 48X (ADR 0158) edits the same crate at the same time (`time_step`, `runs`, `quick_run`, `quick_run_ui`, `ui`); this job
+  keeps its code in two new files and touches shared files in a few small hunks (Placement).
 
 ## The maintainer's request (2026-10-29, relayed)
 
 "How do I stop the run? There is no obvious way to stop a running run." Today a run is ended by "Cancel" in the status
 strip at the bottom and in the Runs panel ([ADR 0133](0133-wave48d-run-control-and-live-monitoring.md),
-[ADR 0141](0141-wave48g4-one-click-run-and-follow.md)). Asked: while a run started from the toolbar is active, the Run button turns
-into a prominent Stop (same place, red, the label "Stop"), with a keyboard shortcut that cannot fire by accident (not
-Escape; Ctrl+. or the button alone, decided here); Stop is a graceful stop that stores the current state as a final
-snapshot and marks the run "stopped", reusing the runner's graceful stop if there is one (else the hard cancel, and a
-question); the hover says what is kept; afterwards the run is listed "stopped" in the Runs panel with its stored
-snapshots viewable; Run is disabled while the run stops; Stop before the runner has started and after the run exited is a
-no-op without an error.
+[ADR 0141](0141-wave48g4-one-click-run-and-follow.md)).
+
+Asked:
+
+- while a run started from the toolbar is active, the Run button turns into a prominent Stop (same place, red, the label
+  "Stop"), with a keyboard shortcut that cannot fire by accident (not Escape; Ctrl+. or the button alone, decided here);
+- Stop is a graceful stop that stores the current state as a final snapshot and marks the run "stopped", reusing the runner's
+  graceful stop if there is one (else the hard cancel, and a question);
+- the hover says what is kept;
+- afterwards the run is listed "stopped" in the Runs panel with its stored snapshots viewable;
+- Run is disabled while the run stops;
+- Stop before the runner has started and after the run exited is a no-op without an error.
 
 ## Context (read at 4e795b1)
 
@@ -88,12 +110,19 @@ status bar says why ("Run: run <id> of <case> is going; press Stop (Ctrl+.) firs
 Options..." or "... is stopping; Run is available again once it has stopped"). `quick_run::run_selected_case` itself is
 unchanged (tests and other callers call it directly), and so is `quick_run::blocked`. Options... still starts any run.
 
-**D5. The shortcut is Ctrl+. (Cmd+. on macOS)**, `consume_key(Modifiers::COMMAND, Key::Period)`, active only in state
-3. Why: it needs a modifier, so typing a full stop in any field, a stray key or Escape (which closes popups and dialogs
-in this app) never stops a run; Cmd+. is the macOS convention for "stop"; egui binds no default to it (zoom is
-Ctrl+Plus/Minus/0); the maintainer named it. Considered: Shift+F5 (the debugger convention, next to F5 = Run) is one
-key away from F5 and would stop a run when Shift is held while starting another; Escape rejected by the brief; the button
-alone rejected because the maintainer asked for a keyboard route. The hover names it.
+**D5. The shortcut is Ctrl+. (Cmd+. on macOS)**, `consume_key(Modifiers::COMMAND, Key::Period)`, active only in state 3.
+Why: it needs a modifier, so typing a full stop in any field, a stray key or Escape (which closes
+popups and dialogs in this app) never stops a run; Cmd+. is the macOS convention for "stop"; egui binds no default to it
+(zoom is Ctrl+Plus/Minus/0); the maintainer named it.
+
+Considered:
+
+- Shift+F5 (the debugger convention, next to F5 = Run) is one key away from F5 and would stop a run when Shift is held while
+  starting another;
+- Escape rejected by the brief;
+- the button alone rejected because the maintainer asked for a keyboard route.
+
+The hover names it.
 
 **D6. The hover says what is kept.** For a running or paused run: "Stop run <id> of <case> (Ctrl+.). The solver stops
 cleanly after the step it is on. That state is stored as the run's last snapshot; every snapshot stored before is kept,
@@ -255,10 +284,16 @@ Where the delivery differs from the brief:
 * D8: the strip's and the Runs panel's "Cancel" keep their label (question 3).
 * D4: F5 now refuses a second run of a case whose toolbar run is going (question 4).
 
-Not run: the Studio tests in a debug build; Linux (the new process tests have never run there); the "Not in CI" items
-(a real window, Cmd+. on macOS, keyboard layouts); a stop whose solver step exceeds the 10 s grace (the hover's kill
-sentence); Stop of a run paused from the strip (the solver leaves its pause loop when the stop file appears, read from
-`rcfd-cli`; not checked); the workspace gate and workspace-wide clippy; other crates' tests (no other crate changed).
+Not run:
+
+* the Studio tests in a debug build;
+* Linux (the new process tests have never run there);
+* the "Not in CI" items (a real window, Cmd+. on macOS, keyboard layouts);
+* a stop whose solver step exceeds the 10 s grace (the hover's kill sentence);
+* Stop of a run paused from the strip (the solver leaves its pause loop when the stop file appears, read from `rcfd-cli`; not
+  checked);
+* the workspace gate and workspace-wide clippy;
+* other crates' tests (no other crate changed).
 
 ## Questions for the maintainer
 

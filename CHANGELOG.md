@@ -1,13 +1,14 @@
 # Changelog
 
-What changed in each release of rcfd, newest first, written for people who use it. Each release has its version and date; its
-changes are grouped as Added, Changed, Deprecated, Removed, Fixed and Security, followed by Known limitations where a release
-has them. Changes merged since the last release are under
-Unreleased. What a version number promises, and how a release is made, is in [docs/releasing.md](docs/releasing.md). The full
-per-item record is in [docs/ROADMAP.md](docs/ROADMAP.md) and the decision records in `docs/adr/`.
+What changed in each release of rcfd, newest first, written for people who use it. Each release has its version and date, and
+groups its changes as Added, Changed, Deprecated, Removed, Fixed and Security, followed by Known limitations where a release has
+them. Changes merged since the last release are under Unreleased.
 
 Before 1.0 a minor version (0.1 to 0.2) may break command-line options, case files, MCP tools, the service protocol, the UDF ABI,
 the Python functions, output formats or default numerical results; a patch version (0.1.0 to 0.1.1) does not.
+
+[docs/releasing.md](docs/releasing.md) says what a version number promises and how a release is made.
+[docs/ROADMAP.md](docs/ROADMAP.md) holds the full per-item record, and `docs/adr/` holds the decision records.
 
 ## Unreleased
 
@@ -47,5 +48,6 @@ cases and its roadmap note states the gap.
 * Sliding-mesh transient solves are not available, so no rotor-stator interaction in time.
 * The old desktop app is frozen and the new one has no window yet.
 * The CUDA backend is optional and off by default. Without a GPU, the GPU tests skip and count as passed.
-* The project's own test gate runs on Windows. Linux is checked by CI (build, clippy, unit tests); macOS is not checked.
+* The project's own test gate, the full check run before work is merged, runs on Windows. Linux is checked by CI (build, clippy,
+  unit tests); macOS is not checked.
 * The Rust crates are not published and their library API may change in any release.

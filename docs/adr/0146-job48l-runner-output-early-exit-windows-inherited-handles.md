@@ -1,14 +1,37 @@
 # ADR 0146: Job 48L, the started runner's output handled explicitly, early exits reported at once, and what still holds a capturing caller on Windows
 
 Status: **registered** 2026-10-28, before any run of the checks below (set-ups, limits and predictions are fixed here; nothing
-of this job has been built or run); results in the addendum; not yet accepted by the maintainer. House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
-becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
-corrected run; defaults of existing code stay bit-identical outside the runner start; `crates/rcfd-api/tests/baseline_hashes.rs`
-is not re-recorded. The workspace forbids unsafe code and none is added; no new crate. Parents:
-[ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md) (questions 1 and 6),
-[ADR 0123](0123-wave47b-run-service.md) (decision 2, S5, amendments 2 and 3), [ADR 0141](0141-wave48g4-one-click-run-and-follow.md)
-(the Studio's budgets check and log tail).
+of this job has been built or run); results in the addendum; not yet accepted by the maintainer.
+
+Before this job a started runner had null stdio: on a bad budgets file its error line was lost and `ensure_runner`
+reported a timeout after 10 s. On Windows a capturing caller also stayed held, because the runner inherits the client's
+pipes (ADR 0143's finding). The job sends a started runner's stdout and stderr to `<project>/.rcfd/runner.log` by default,
+adds `--log-file`, `--stdout` (alias `--foreground`) and `--quiet`, and reports an early exit at once with its exit code
+(decisions 1 and 2). The early-exit limit is met on both platforms: 0.042 s on Windows and 0.021 s on Linux against 2.0 s,
+where the code before the change took 10.072 s and 10.015 s. The capturing-caller limits are met on Linux and missed on
+Windows, as predicted: C1 (`rcfd-runner start` returned within 3.0 s) and C2 (`rcfd-mcp`'s stdout at EOF within 3.0 s of
+its exit) are known misses, ignored on Windows with the limits intact. On Windows there is no safe route in product code
+(decision 4): the investigation (I1-I6) measured that a std-spawned runner holds the caller's pipes whatever its standard
+handles are, and that only turning inheritance off releases the caller, which also drops the standard handles given to
+the runner. Question 1 lists the options that remain and recommends (a), accept and document, now. The `rcfd-studio`
+re-run still has the 3 failures ADR 0143 recorded on main; Claude Code's own Bash and PowerShell tools as the capturing
+caller, a real window by hand and the full gate were not run.
+
+House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
+
+* Limits are fixed before the registered runs.
+* A missed limit becomes an ignored `*_known_miss` test with the limit intact.
+* A defective set-up gets an amendment written before the corrected run.
+* Defaults of existing code stay bit-identical outside the runner start.
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+
+The workspace forbids unsafe code and none is added; no new crate.
+
+Parents:
+
+* [ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md) (questions 1 and 6).
+* [ADR 0123](0123-wave47b-run-service.md) (decision 2, S5, amendments 2 and 3).
+* [ADR 0141](0141-wave48g4-one-click-run-and-follow.md) (the Studio's budgets check and log tail).
 
 The maintainer's decisions of 2026-10-28 that this job implements:
 
@@ -294,8 +317,9 @@ Set-up:
    (question 5).
 7. **Studio re-run set-up.** The first whole-crate Studio re-run had 15 more failures: all 14 ADR 0134 chat tests in
    `chat_e`, and `parity_assistant_access`. All of them stopped at their set-up check, "`target\release\fake-claude.exe`
-   missing": this job's fresh target folder had never built rcfd-claude's replay double. After `cargo build --release -p rcfd-claude --bin fake-claude`, `chat_e` passed 14 and `parity` passed 5
-   (1 ignored, as before). No code changed in between.
+   missing": this job's fresh target folder had never built rcfd-claude's replay double. After
+   `cargo build --release -p rcfd-claude --bin fake-claude`, `chat_e` passed 14 and `parity` passed 5 (1 ignored, as
+   before). No code changed in between.
 8. **Known-miss names.** The brief's rule says a missed limit becomes an ignored `*_known_miss` test. This job's registered
    platform rule names the tests `<name>_known_miss_on_windows`, so they do not match the glob `*_known_miss` literally.
    * No script or document keys on the suffix (`scripts/`, `docs/test-process.md`).

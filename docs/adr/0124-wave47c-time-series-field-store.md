@@ -1,20 +1,34 @@
 # ADR 0124: Wave 47C, the time-series field store (`rcfd-tsstore`, Studio plan L3) and its opt-in run-path hook
 
 Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main 48b30bc on branch `w47c`, target
-`<target dir>`. House rules: limits fixed before the registered runs; a missed limit becomes an ignored
-`*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults are
-bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles only (IEEE 754 rounding,
-the FNV-1a construction, RFC 1951 deflate through an existing crate). Parents: `docs/ui-restart-plan.md` (L3, section 8 contract),
-F-015 (the native container, whose mesh encoding is reused), F-116 (output policy), ADR 0050 (`output.write_time_interval`).
+`<target dir>`.
+
+Wave 47C adds a time-series field store: one append-only file per run, `fields/store.rts`, plus an advisory
+`fields/index.json`. The native container has no time axis and no partial reads and cannot be appended to; the other output
+writers are not indexed, checksummed per chunk or readable field by field. The run-path hook is opt-in: with
+`output.store_interval` and `output.store_time_interval` both 0, `Hook::open` returns `None` and nothing else runs. The gate on
+8e1d2a3 gave 2158 passed, 0 failed, 663 ignored. The final addendum records no misses and one deviation, amendment 1 (C8 probe).
+Amendment 2 (2026-10-28) records that the first full gate in CI failed one C7 row: open with footer 0.1262 s against 0.05 s.
+It keeps the limits and flushes each store to disk before its timed reads; the corrected test passes in local runs. The
+amendment's explanation of the CI miss is a hypothesis, not confirmed on this machine, and the CI runner is not verified.
+
+Rules and parents:
+
+* House rules: limits fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  a defective set-up is corrected by an amendment before the corrected run; defaults are bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles only (IEEE 754 rounding, the FNV-1a construction, RFC 1951 deflate through an existing crate).
+* Parents: `docs/ui-restart-plan.md` (L3, section 8 contract), F-015 (the native container, whose mesh encoding is reused), F-116
+  (output policy), ADR 0050 (`output.write_time_interval`).
 
 ## Context: what exists
 
 * `rcfd_io::container` (F-015): a versioned, sectioned, FNV-64-checksummed file written whole (temp file then rename). It holds a mesh
   (`mesh_to_bytes` / `mesh_from_bytes`, topology exact, geometry recomputed) and named f64 arrays. Restart files (`restart.rcfd`) use
   it. It has no time axis, no partial reads and cannot be appended to; a crash during a write leaves the old file or nothing.
-* `rcfd_io::xdmf` writes XML plus raw binary heavy data; `rcfd_io::vtk`, `ensight`, `tecplot`: one file set per time. The run path
-  writes `snapshots/snapshot_<step>.vtu` (`output.write_interval`, F-116) and `snapshot_t<time>.vtu` (`output.write_times`, ADR 0050).
-  None of them is indexed, checksummed per chunk or readable field by field.
+* `rcfd_io::xdmf` writes XML plus raw binary heavy data; `rcfd_io::vtk`, `ensight` and `tecplot` write one file set per time. The run
+  path writes `snapshots/snapshot_<step>.vtu` (`output.write_interval`, F-116) and `snapshot_t<time>.vtu` (`output.write_times`,
+  ADR 0050). None of them is indexed, checksummed per chunk or readable field by field.
 * HDF5 and CGNS: no reader or writer exists (F-014, F-237 notes; ADR 0048 D7). The open decisions are not touched: this store does not
   depend on HDF5 and does not imitate its format.
 * The project folder contract (plan section 8) lists `runs/<run-id>/fields/` as "time-series store (index.json, mesh once, one
@@ -23,7 +37,7 @@ F-015 (the native container, whose mesh encoding is reused), F-116 (output polic
 ## Decisions
 
 * **D1 One append-only file per run, `fields/store.rts`, plus an advisory `fields/index.json`.** The task asks for a footer index with
-  offsets and a scan when it is missing; the contract names `index.json`. Reading: the binary store is authoritative (footer index);
+  offsets and a scan when it is missing; the contract names `index.json`. Reading: the binary store is authoritative (footer index).
   `index.json` (format `rcfd-tsstore-index`, steps and times, mesh hash, counts) is a mirror written by `Writer::finish` through a
   temp file and rename, and its failure is not an error (a reader may hold it open on Windows). Readers never need it. This is an
   additive reading of the contract, reported to the lead.
@@ -33,43 +47,59 @@ F-015 (the native container, whose mesh encoding is reused), F-116 (output polic
   codec, block size, block offsets), FOOT (JSON index, written by `finish` only); trailer `u64 FOOT offset | "RTSE" | u64 fnv64(previous
   12)`. Fields are scalar; a vector is stored as components (ux, uy, uz). Version: files with version 0 or above this build's are
   refused.
-* **D3 Checksum and codec.** Checksum: `rcfd_core::hash::fnv64` (already in the workspace). FNV-1a over a fixed-length region detects
-  every change confined to one byte with certainty: the state update `h -> (h xor b) * p` is a bijection of the 64-bit state for each
-  byte (xor with a byte is a bijection, multiplication by the odd prime p is a bijection modulo 2^64), so two inputs that differ in one
-  byte reach different states at that byte and stay different. The frame head carries its own checksum so a damaged length is not
-  mistaken for a truncated tail. Lossless codec `shuffle_deflate`: bytes regrouped by significance (all first bytes of a block, then all
-  second bytes, ...) and deflated at level 1 by `miniz_oxide =0.8.9` (MIT OR Zlib OR Apache-2.0), which png 0.18 already pulls into
-  `rcfd-post`; it adds no crate to the build graph (checked with `cargo tree -i miniz_oxide@0.8.9`). Default codec `raw`.
+* **D3 Checksum and codec.**
+  * Checksum: `rcfd_core::hash::fnv64` (already in the workspace). FNV-1a over a fixed-length region detects every change confined
+    to one byte with certainty: the state update `h -> (h xor b) * p` is a bijection of the 64-bit state for each byte (xor with a
+    byte is a bijection, multiplication by the odd prime p is a bijection modulo 2^64), so two inputs that differ in one byte reach
+    different states at that byte and stay different.
+  * The frame head carries its own checksum so a damaged length is not mistaken for a truncated tail.
+  * Lossless codec `shuffle_deflate`: bytes regrouped by significance (all first bytes of a block, then all second bytes, ...) and
+    deflated at level 1 by `miniz_oxide =0.8.9` (MIT OR Zlib OR Apache-2.0), which png 0.18 already pulls into `rcfd-post`; it adds
+    no crate to the build graph (checked with `cargo tree -i miniz_oxide@0.8.9`).
+  * Default codec `raw`.
 * **D4 Lossy mode** `Precision::F32`: each value rounded to the nearest IEEE single. Registered bound per value:
   `|stored - x| <= 2^-24 |x| + 2^-150` (half an ulp relative in the f32 normal range; half the subnormal spacing 2^-149 below it).
   Finite values that round to infinity are refused (the writer returns an error). NaN stays NaN (payload not kept), infinities stay.
-* **D5 Crash safety.** A snapshot's DATA frames are written before its SNAP frame; the snapshot exists once the SNAP frame is complete
-  and the buffer is flushed to the OS (every commit). A reader with no valid footer scans frame heads from the mesh frame on, stops at the
-  first frame that runs past the end of the file (truncated tail) and reports `IndexSource::Scanned { reason, tail_bytes }`. A complete
-  frame head with a wrong checksum is an error, not a tail. `Writer::open_append` scans, cuts everything after the last complete
-  snapshot (interrupted snapshot, old footer) and continues. Assumption: an interrupted write leaves a prefix of the bytes written (true
-  for a killed process: the OS page cache keeps what was handed over). Power loss and `fsync` are not covered and not tested.
-* **D6 Access.** Seek-based: memory mapping needs `unsafe`, which the workspace forbids (`unsafe_code = "forbid"`). The reader keeps
-  only the snapshot index (step, time, offsets); directories and blocks are read per call. Blocks of `block_values` values (default
-  65 536 = 512 KiB of f64) are the unit of partial reads: `read_subset` reads only the blocks holding the requested cells. Lookup by
-  step or time, `Pick::Nearest` (earlier one on a tie) or `Pick::Floor` (equal times: the latest step); `Mode::Linear` interpolates
-  `a + w (b - a)`, `w = (t - t0)/(t1 - t0)`, flagged `interpolated`, and returns the stored values unflagged at a stored time. A live
-  reader picks up new snapshots with `refresh()`.
+* **D5 Crash safety.**
+  * A snapshot's DATA frames are written before its SNAP frame; the snapshot exists once the SNAP frame is complete and the buffer
+    is flushed to the OS (every commit).
+  * A reader with no valid footer scans frame heads from the mesh frame on, stops at the first frame that runs past the end of the
+    file (truncated tail) and reports `IndexSource::Scanned { reason, tail_bytes }`. A complete frame head with a wrong checksum is
+    an error, not a tail.
+  * `Writer::open_append` scans, cuts everything after the last complete snapshot (interrupted snapshot, old footer) and continues.
+  * Assumption: an interrupted write leaves a prefix of the bytes written (true for a killed process: the OS page cache keeps what
+    was handed over). Power loss and `fsync` are not covered and not tested.
+* **D6 Access.**
+  * Seek-based: memory mapping needs `unsafe`, which the workspace forbids (`unsafe_code = "forbid"`).
+  * The reader keeps only the snapshot index (step, time, offsets); directories and blocks are read per call.
+  * Blocks of `block_values` values (default 65 536 = 512 KiB of f64) are the unit of partial reads: `read_subset` reads only the
+    blocks holding the requested cells.
+  * Lookup by step or time, `Pick::Nearest` (earlier one on a tie) or `Pick::Floor` (equal times: the latest step).
+  * `Mode::Linear` interpolates `a + w (b - a)`, `w = (t - t0)/(t1 - t0)`, flagged `interpolated`, and returns the stored values
+    unflagged at a stored time.
+  * A live reader picks up new snapshots with `refresh()`.
 * **D7 Retention** `retain_every(src, dst, k)`: a new store with snapshots 0, k, 2k, ... and the last one, DATA frames copied verbatim
   after their checksums and decoding are checked.
-* **D8 Run-path hook** (rcfd-api). Keys `output.store_interval` (int, 0 = off), `output.store_time_interval` (float s, 0 = off),
-  `output.store_fields` (list, empty = ux uy uz p). The hook lives in `runctl::drive`, the one loop that drives steady iterations and
-  transient steps for `rcfd run`, `run.headless`, chains and studies; it is the narrowest place that sees both drivers, the output
-  directory and the end of the run. `Simulation::step` is not touched. It writes to `<out_dir>/fields/` (the run folder of the
-  contract, when the runner passes it as the output directory): after each step when `index % N == 0` or when the step's time passes the
-  next multiple of `dt` (relative slack 1e-9; the time step is not changed, unlike `output.write_time_interval`), and the final state at
-  the end of every run outcome unless that step was just stored. With both keys 0, `Hook::open` returns `None` after reading the two
-  keys; nothing else runs. Units: `m/s` for velocity components and speed, `K` for `T`, `unknown` otherwise (incompressible `p` is
-  kinematic, compressible `p` is Pa; no unit table exists). Located errors: `store_time_interval` with `simple`, `simplec` or `coupled`;
-  either key with `dynamic_mesh.enabled` (the mesh is stored once). A steady engine selected otherwise (steady compressible, steady
-  variable density) gets a warning and no store. An unknown field name: a warning, no store, run unchanged. A fresh run replaces a store
-  in the same output directory (as `solution.vtu` is replaced); a continued run appends when the mesh hash matches and the store ends
-  before the continued run's first step. Library callers that step a `Simulation` themselves are not covered.
+* **D8 Run-path hook** (rcfd-api).
+  * Keys: `output.store_interval` (int, 0 = off), `output.store_time_interval` (float s, 0 = off), `output.store_fields` (list,
+    empty = ux uy uz p).
+  * The hook lives in `runctl::drive`, the one loop that drives steady iterations and transient steps for `rcfd run`,
+    `run.headless`, chains and studies; it is the narrowest place that sees both drivers, the output directory and the end of the
+    run. `Simulation::step` is not touched.
+  * It writes to `<out_dir>/fields/` (the run folder of the contract, when the runner passes it as the output directory): after
+    each step when `index % N == 0` or when the step's time passes the next multiple of `dt` (relative slack 1e-9; the time step
+    is not changed, unlike `output.write_time_interval`), and the final state at the end of every run outcome unless that step was
+    just stored.
+  * With both keys 0, `Hook::open` returns `None` after reading the two keys; nothing else runs.
+  * Units: `m/s` for velocity components and speed, `K` for `T`, `unknown` otherwise (incompressible `p` is kinematic, compressible
+    `p` is Pa; no unit table exists).
+  * Located errors: `store_time_interval` with `simple`, `simplec` or `coupled`; either key with `dynamic_mesh.enabled` (the mesh is
+    stored once).
+  * A steady engine selected otherwise (steady compressible, steady variable density) gets a warning and no store.
+  * An unknown field name: a warning, no store, run unchanged.
+  * A fresh run replaces a store in the same output directory (as `solution.vtu` is replaced); a continued run appends when the
+    mesh hash matches and the store ends before the continued run's first step.
+  * Library callers that step a `Simulation` themselves are not covered.
 
 ## What I already knew when registering (rules c, d; disclosed)
 
@@ -79,19 +109,26 @@ release gate runs after this commit.
 
 Smoke results (debug unless stated):
 
-* C1 passed (both codecs). C2 worst error / bound 0.9996 (both codecs). C3 ratio 0.647. C4 file 8439 bytes, mesh frame ends at 4239,
-  snapshots at 5594 / 6951 / 8309, 4201 truncations reopened and appended, all correct. C5 3 snapshots recovered, tail 8224 bytes. C5b
-  rounds recovered 5 / 12 / 20 snapshots, tails 8078 / 0 / 8090 bytes. C6 raw 8248 bytes and deflate 8439 bytes, two masks, 0
-  undetected, 204 flagged per codec (the 82-byte footer payload and the 20-byte trailer, times two masks). C9 dyadic error 0, random
-  worst error / bound 0.055; negative controls violated in 196/196 and 200/200 queries. C10, C11, C12 passed.
+* C1 passed (both codecs).
+* C2 worst error / bound 0.9996 (both codecs).
+* C3 ratio 0.647.
+* C4 file 8439 bytes, mesh frame ends at 4239, snapshots at 5594 / 6951 / 8309, 4201 truncations reopened and appended, all correct.
+* C5 3 snapshots recovered, tail 8224 bytes.
+* C5b rounds recovered 5 / 12 / 20 snapshots, tails 8078 / 0 / 8090 bytes.
+* C6 raw 8248 bytes and deflate 8439 bytes, two masks, 0 undetected, 204 flagged per codec (the 82-byte footer payload and the
+  20-byte trailer, times two masks).
+* C9 dyadic error 0, random worst error / bound 0.055; negative controls violated in 196/196 and 200/200 queries.
+* C10, C11, C12 passed.
 * H1 set-up defect found in the smoke: the steady `simple` cavity (nx = ny = 12, default relaxation) diverged at iteration 14 (steady
   divergence guard). Corrected before registration: `alpha_u = 0.7`, `alpha_p = 0.3` for the steady arm; H1-H4 then passed.
 * C7/C8 release smoke (one run; the first attempt failed in the test's own parsing of the child output, the harness prints the test
-  name on the same line; fixed before the counted run): set-up 1M-cell mesh 5.8 s, write 1.3 s, store 674 MB. Medians: open with
-  footer 0.0001 s, open by scan 0.0026 s, nearest field 0.0094 s, linear field 0.0199 s, 1000-cell subset 0.0091 s, 2000-snapshot
-  open with footer 0.0002 s, by scan 0.0123 s, random lookup plus field read 0.00004 s. Peak working set: scrub 28.7 MB, whole-snapshot
-  reader 158.4 MB. The 1000 subset cells are spread over all 16 blocks, so the subset read costs as much as a whole field (stated
-  as measured; a localized subset reads fewer blocks).
+  name on the same line; fixed before the counted run):
+  * Set-up: 1M-cell mesh 5.8 s, write 1.3 s, store 674 MB.
+  * Medians: open with footer 0.0001 s, open by scan 0.0026 s, nearest field 0.0094 s, linear field 0.0199 s, 1000-cell subset
+    0.0091 s, 2000-snapshot open with footer 0.0002 s, by scan 0.0123 s, random lookup plus field read 0.00004 s.
+  * Peak working set: scrub 28.7 MB, whole-snapshot reader 158.4 MB.
+  * The 1000 subset cells are spread over all 16 blocks, so the subset read costs as much as a whole field (stated as measured; a
+    localised subset reads fewer blocks).
 
 ## Registered checks (tests in `crates/rcfd-tsstore/tests/store.rs`, `scale.rs`, `crates/rcfd-api/tests/fieldstore_w47c.rs`)
 
@@ -185,10 +222,15 @@ Misses: none. Deviations: amendment 1 (C8 probe). The `baseline_hashes` test pas
 
 What happened. The first full gate in CI (`gate.yml`, windows-latest, run 40670036763, main a89ccb3; one process per test, three at
 once) failed `c7_c8_scrubbing_a_1m_cell_store_with_20_fields_typeperf` on one row: open with footer (1M x 20 x 3) median of 5 =
-0.1262 s > 0.05 s. Every other row passed in the same run: set-up mesh 10.84 s, write 5.22 s, store 674.0 MB; C8 scrub 28.4 MB,
-whole-snapshot control 158.1 MB; open by scan 0.0072 s, nearest 0.0168 s, linear 0.0382 s, subset 0.0174 s; 2000 snapshots: open
-with footer 0.0004 s, by scan 0.0275 s, access 0.0000 s. The two tests that finished just after it in the gate log were the CPU-bound
-`flat_plate_sst` cases (216 s each), not file-heavy tests.
+0.1262 s > 0.05 s. Every other row passed in the same run:
+
+* set-up mesh 10.84 s, write 5.22 s, store 674.0 MB;
+* C8 scrub 28.4 MB, whole-snapshot control 158.1 MB;
+* open by scan 0.0072 s, nearest 0.0168 s, linear 0.0382 s, subset 0.0174 s;
+* 2000 snapshots: open with footer 0.0004 s, by scan 0.0275 s, access 0.0000 s.
+
+The two tests that finished just after it in the gate log were the CPU-bound `flat_plate_sst` cases (216 s each), not file-heavy
+tests.
 
 What I knew when writing this amendment (disclosed). The median is already of 5 consecutive opens, so at least 3 of the 5 took about
 0.126 s: "a median of warm repeats" is what the registered protocol already does. The reader's own work cannot explain it: open by scan
@@ -196,10 +238,12 @@ does every I/O of open with footer (open, metadata, header, mesh prefix, the 20-
 plus a scan, and took 7 ms on the same runner in the same process. What differs is when it runs: open with footer is timed
 immediately after `Writer::finish` closes the 674 MB file (written in 5.2 s, about 130 MB/s, so OS write-back and any filter that
 acts on a just-closed file were probably still busy); open by scan runs seconds later, after the two C8 child processes and after a
-`set_len`. This is a hypothesis about the runner, not a reproduction. On this machine the unchanged test passes with the temp folder on
-the NVMe `C:` (open with footer 0.0000 s, write 1.36 s) and on the SATA HDD `D:` (0.0002 s, write 14.16 s), so this machine does not
-discriminate; the CI runner is the check. The C7 limits are reader time bounds for scrubbing; a store still being written back by the
-OS is a property of the preceding write, which C7 does not register.
+`set_len`. This is a hypothesis about the runner, not a reproduction.
+
+On this machine the unchanged test passes with the temp folder on the NVMe `C:` (open with footer 0.0000 s, write 1.36 s) and on the
+SATA HDD `D:` (0.0002 s, write 14.16 s), so this machine does not discriminate; the CI runner is the check. The C7 limits are reader
+time bounds for scrubbing; a store still being written back by the OS is a property of the preceding write, which C7 does not
+register.
 
 Correction (same limits, same data, same medians of 5, same order of measurements): the set-up brings each store to rest before its
 timed reads: after `Writer::finish` and after each trailer cut (`set_len`), the store file is flushed to disk (`File::sync_all` on a
@@ -219,9 +263,11 @@ Corrected runs (2026-10-28, release, this machine, after commit d4f4ba4; local r
   took 23 s, so write-back was pending during those opens. On this machine pending write-back does not slow an open: the hypothesis
   of this amendment is not confirmed here.
 * `D:`, 3 tests at once, 2 rounds of the unflushed test: all rows inside the limits except one run whose panic message was not
-  captured (nearest, linear, subset or random lookup: the four open rows printed were inside, open with footer 0.0001 s); in the repeat with full logs, one run had open by scan (just
-  after the unflushed `set_len`) at 0.3531 s against a usual 0.003 s, inside the 0.5 s limit. 2 rounds of 3 `..._at_rest` at once:
-  all pass, open with footer 0.0000-0.0002 s, open by scan 0.0028-0.0034 s, flushes 1.8 to 75 s.
+  captured (nearest, linear, subset or random lookup: the four open rows printed were inside, open with footer 0.0001 s). In the
+  repeat with full logs, one run had open by scan (just after the unflushed `set_len`) at 0.3531 s against a usual 0.003 s, inside
+  the 0.5 s limit.
+* `D:`, 2 rounds of 3 `..._at_rest` at once: all pass, open with footer 0.0000-0.0002 s, open by scan 0.0028-0.0034 s, flushes 1.8
+  to 75 s.
 * In every run the first of the 5 opens is the slowest (5 to 10 ms, then 0.1 ms), on both disks and both stores.
 
 Not verified: the CI runner. Its next gate run prints the 5 opens right after the write and after the flush, which tells whether

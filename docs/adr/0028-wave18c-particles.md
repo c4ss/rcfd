@@ -1,18 +1,32 @@
 # ADR 0028: Wave 18C: Lagrangian particle tracking (F-056)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new code was
-compiled or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
-assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
-test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes not fixed here)
-may be appended at the end without touching registered limits.
+compiled or run.
 
-Roadmap: F-056 (one-way coupled Lagrangian tracking: drag, gravity, wall reflection / trapping). F-128 (two-way coupling,
-turbulent dispersion, breakup, wall film, erosion) is NOT started and stays `todo`.
-Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals, and no
-vendor names in the repository. The drag-law and size-distribution formulas were looked up on the open web (secondary
-sources: journal preprints and general references; the 1933 original of the Schiller-Naumann correlation was not accessed).
-Status words used below: "verified (secondary)" = the formula was found, with the same coefficients, in at least two
-independent published secondary sources during this wave; "derived" = derived in this ADR; "unverified" = from memory only.
+Wave 18C adds one-way coupled Lagrangian point-particle tracking (drag, gravity, wall reflection / trapping) in a new crate,
+`rcfd-particles`. The flow solver is never changed by particles, so the existing flow results are bit-identical. The results
+record four misses against registered limits, all kept as ignored `*_known_miss` tests. The PT3 RK2 order is 2.290 on its first
+pair against [1.9, 2.1], and PT5 solid-body rotation has a position error of 3.68e-8 against 1e-8 at t = 0.1 s and crosses 2 cells
+against at least 3. PT8 (a) under the strict reading has 1522 mismatches of 99 510 in-domain points against 0, and the PT14
+settings-tree hash changes with the section disabled (ill-posed, because the hash covers schema defaults).
+Every other row of the results table is met; the PT7 row holds after the fix of a tracker bug in the first implementation commit
+(c5221c8), recorded in addendum A2. F-056 is `partial` whatever the numbers: the roadmap acceptance names settling and cyclone
+sanity cases, and only settling-type closed forms are registered here. The hook is a library function pair (`track_frozen`,
+`track_transient`); `rcfd run`, the service and the GUI do not call it.
+
+Rules and parents:
+
+* House rules: the limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the
+  assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
+  test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes not fixed here)
+  may be appended at the end without touching registered limits.
+* Roadmap: F-056 (one-way coupled Lagrangian tracking: drag, gravity, wall reflection / trapping). F-128 (two-way coupling,
+  turbulent dispersion, breakup, wall film, erosion) is NOT started and stays `todo`.
+* Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals, and no
+  vendor names in the repository. The drag-law and size-distribution formulas were looked up on the open web (secondary
+  sources: journal preprints and general references; the 1933 original of the Schiller-Naumann correlation was not accessed).
+* Status words used below: "verified (secondary)" = the formula was found, with the same coefficients, in at least two
+  independent published secondary sources during this wave; "derived" = derived in this ADR; "unverified" = from memory only.
 
 ## Decisions
 
@@ -65,12 +79,15 @@ Faces are triangulated in a fan around the face vertex average (the same surface
 partition of space into cells has no gaps or overlaps even for warped faces). A particle moves along the segment `x0 -> x1` of
 a sub-step: in the current cell find the fan triangle through which the segment leaves the cell (outward crossing direction,
 smallest parameter), move to the neighbour, repeat until the end point is inside (parameter monotonically increasing, so the
-walk terminates; an iteration cap raises a failure rather than looping). Point location without a hint starts from the
-nearest cell centre (uniform bin grid) and walks the segment from that centre to the point; if the walk leaves the domain,
-a brute-force search over cell bounding boxes is the fallback. Cell membership for the brute-force reference is the same
-tetrahedral decomposition (cell centre, face vertex average, two face vertices). Non-conformal interfaces: supported only when
-the interface was joined into one conformal mesh by `rcfd_mesh::non_conformal::join_non_conformal`; tracking through an
-unjoined sliding/non-conformal pair is not supported (named gap). Cyclic (periodic) patches are not supported (located error).
+walk terminates; an iteration cap raises a failure rather than looping).
+
+Point location without a hint starts from the nearest cell centre (uniform bin grid) and walks the segment from that centre to
+the point; if the walk leaves the domain, a brute-force search over cell bounding boxes is the fallback. Cell membership for the
+brute-force reference is the same tetrahedral decomposition (cell centre, face vertex average, two face vertices).
+
+Non-conformal interfaces: supported only when the interface was joined into one conformal mesh by
+`rcfd_mesh::non_conformal::join_non_conformal`; tracking through an unjoined sliding/non-conformal pair is not supported (named
+gap). Cyclic (periodic) patches are not supported (located error).
 
 Boundary hit: when a sub-step segment exits through a boundary face, the hit time within the sub-step is refined by bisection
 (60 iterations) on the signed distance of the integrated end position to the face plane, the particle is placed on the face and
@@ -78,13 +95,23 @@ the boundary action applies; the rest of the flow step is continued with the rem
 
 ### D6 Boundary actions
 
-Per patch (default from the patch kind, override per patch name): `reflect` (specular reflection with restitution `e` in
-`[0, 1]`: `v' = v - (1 + e)(v . n) n`, i.e. the normal component is multiplied by `-e`, the tangential component is kept),
-`stick` (deposited: removed from the tracking, counted as deposited, position kept), `escape` (leaves the domain, counted).
-Defaults: `Wall` follows `particles.wall_interaction` (default `reflect`) and `particles.restitution` (default 1); `Outlet`, `Inlet`, `Generic`: escape; `Symmetry` and
-`Empty`: reflect with `e = 1` (specular); `Cyclic`: error. A particle that reflects with `e = 0` and velocity then pointing out
-of the wall is moved along the wall (tangential only). A particle reflected more than 100 times in one flow step is stuck
-(counted as `stuck`, reported). No wall-film, rebound-angle, rough-wall or sticking-probability model (F-128).
+Per patch (default from the patch kind, override per patch name):
+
+* `reflect` (specular reflection with restitution `e` in `[0, 1]`: `v' = v - (1 + e)(v . n) n`, i.e. the normal component is
+  multiplied by `-e`, the tangential component is kept);
+* `stick` (deposited: removed from the tracking, counted as deposited, position kept);
+* `escape` (leaves the domain, counted).
+
+Defaults:
+
+* `Wall` follows `particles.wall_interaction` (default `reflect`) and `particles.restitution` (default 1);
+* `Outlet`, `Inlet`, `Generic`: escape;
+* `Symmetry` and `Empty`: reflect with `e = 1` (specular);
+* `Cyclic`: error.
+
+A particle that reflects with `e = 0` and velocity then pointing out of the wall is moved along the wall (tangential only). A
+particle reflected more than 100 times in one flow step is stuck (counted as `stuck`, reported). No wall-film, rebound-angle,
+rough-wall or sticking-probability model (F-128).
 
 ### D7 Injection and size distributions
 
@@ -95,6 +122,7 @@ fractional remainder carries over, so the total over a run is exact and independ
 represents `parcel_count` real particles (a real number, default 1). Initial velocity: `given` vector, or `fluid` (the local
 fluid velocity). Surface injection places the parcel at the face centre offset into the cell by `1e-9 L_c` along the inward
 normal, only for the sampling of a located cell.
+
 Size distribution: `constant`, or `rosin_rammler` with the published cumulative OVERSIZE mass fraction
 `Y(d) = exp(-(d/d_bar)^n)` (`d_bar` the size constant, `n` the spread parameter; verified (secondary): two independent
 published references give this form, one of which also states that `d_bar` is the diameter where `Y = 1/e`). Sampling by
@@ -103,6 +131,7 @@ inversion: `d = d_bar (-ln u)^(1/n)`, `u` uniform in `(0, 1]` (derived from `Y(d
 of the distribution (so `parcel_count` is scaled by `(d_ref/d)^3` only if the user selects `equal_mass`; default
 `equal_count` keeps `parcel_count` fixed and the sampled diameters follow `Y` as a mass distribution of parcels, a
 documented simplification).
+
 Random numbers: SplitMix64 (published, Steele, Lea and Flood 2014; the constants are used from memory, UNVERIFIED but
 irrelevant to correctness: any 64-bit generator with the same API would do), seeded per injection from `particles.seed`;
 serial, so a run is bit-for-bit reproducible.
@@ -122,6 +151,7 @@ the flow step), `end_time`, `seed`, `wall_interaction`, `restitution`, `walls.<p
 diameter, rr_d_bar, rr_n, d_min, d_max}`, `output_file`, `output_every`. `particles::check(case)` gives located errors
 (for example `particles.injection.jet.rate`). Mesh-dependent checks (unknown patch, cyclic patches) are raised when the tracker
 is built.
+
 Hook: `particles::track_frozen(case, &Simulation)` tracks on the current (frozen or converged) velocity field of the
 simulation; `particles::track_transient(case, &mut Simulation)` advances the simulation step by step and advances the
 particles over each flow step on the current field (fluid velocity frozen over the flow step; the end of the run is
@@ -269,7 +299,7 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
   (steps tau/8 to tau/64, NOT the registered sequence) gives 2.069, 2.034, 2.017. It is a different measurement and does not
   count as meeting the registered check.
 * PT5 (`pt5_known_miss_solid_body_rotation`): two failures. (1) The position error at t = 0.1 s is 3.68e-8 against 1e-8 (4.05e-9 at
-  0.25 s is met). The ADR's prediction of about 1e-10 was an estimate made without a computation; the error is the RK4 time-stepping
+  0.25 s is met). The ADR's prediction of about 1e-10 was an estimate made without a computation. The error is the RK4 time-stepping
   error, since `dt_flow = 0.005 = tau_p/10`: the diagnostic `pt5d_rotation_time_error_diagnostic` (a different start point, see
   below) shows errors 5.16e-8, 3.09e-9, 1.89e-10 for dt 0.005, 0.0025, 0.00125 with observed order 4.06 and 4.03. (2) The "at least
   3 cells" precondition fails (2 cells): the registered start point (3, 2, 0.5) lies on cell faces and the particle moves along one
@@ -294,22 +324,23 @@ Baseline hashes (`baseline_hashes.rs`) and the layering test pass unchanged on a
 * Tracker bug found while diagnosing the PT7 `stuck` count. The first commit refined a wall hit by bisecting on the signed distance
   to the plane of the single face found by the walk. Near an edge or corner (observed at the x = 1 / z = 0 edge of the PT7 box with the
   segment lying in the y = 0.5 face plane) the curved path can leave through a different face first, so the hit point was projected
-  onto the wrong plane and the particle was left slightly outside the box; the walk then reported `Inside` and the particle drifted
-  away with the fluid (in the first PT7 run, tens of `Active` parcels at x about 2, z down to -4.4). Fix: the bisection now uses the
-  tracker's own predicate (the chord from the sub-step start to the shortened step leaves the domain) and takes the face and hit
-  point from the last bisection iterate that left. No tolerance, limit or scenario was changed (`max_bounces` stays 1000).
-  Regression test `pt7c_no_particle_leaves_the_domain_regression` (300 steps, no active parcel outside the box); it failed before the fix.
+  onto the wrong plane and the particle was left slightly outside the box. The walk then reported `Inside` and the particle drifted
+  away with the fluid (in the first PT7 run, tens of `Active` parcels at x about 2, z down to -4.4).
+  Fix: the bisection now uses the tracker's own predicate (the chord from the sub-step start to the shortened step leaves the domain)
+  and takes the face and hit point from the last bisection iterate that left. No tolerance, limit or scenario was changed
+  (`max_bounces` stays 1000). Regression test `pt7c_no_particle_leaves_the_domain_regression` (300 steps, no active parcel outside
+  the box) failed before the fix.
 * PT7 numbers after the fix: 490 = 0 + 431 + 0 + 59 (dt 0.01) and 0 + 433 + 0 + 57 (dt 0.0073). The earlier 38 / 36 "inside" and 24
   stuck counts included the mis-tracked particles and are superseded. The registered identity holds exactly.
-* Why parcels are `stuck`: all listed stuck parcels sit on the reflecting wall x = 1 with a tiny negative `v_x` (1e-5 to 3e-4 m/s), sliding down it
-  at nearly the settling speed, while the uniform fluid velocity (0.3, 0, -0.2) pushes them into that wall. Each reflection is followed by a
-  return to the wall in a time that shrinks, so more than `max_bounces` reflections occur in one flow step (Zeno accumulation of resting
-  contact). This matches the observation but the mechanism is read from positions and velocities, not from a bounce-by-bounce trace.
+* Why parcels are `stuck`: all listed stuck parcels sit on the reflecting wall x = 1 with a tiny negative `v_x` (1e-5 to 3e-4 m/s),
+  sliding down it at nearly the settling speed, while the uniform fluid velocity (0.3, 0, -0.2) pushes them into that wall. Each
+  reflection is followed by a return to the wall in a time that shrinks, so more than `max_bounces` reflections occur in one flow step
+  (Zeno accumulation of resting contact). This matches the observation but the mechanism is read from positions and velocities, not from a bounce-by-bounce trace.
   Resting contact is not modelled (F-128 wall interaction); the parcels are counted and reported.
 * The ADR text of D6 above says "more than 100 reflections"; the implementation and `docs/particles.md` use 1000. This was a text
   inconsistency from the design stage, found now; the implementation value was never tuned.
 * The first-commit rows for PT14 and PT5c overstated what was tested: PT14 did not test the tree-hash sub-check and asserted only
-  `is_err()` for the two schema errors; PT5c did not assert the one-cell-row precondition. Both are now asserted (rows above), the
+  `is_err()` for the two schema errors; PT5c did not assert the one-cell-row precondition. Both are now asserted (rows above); the
   tree-hash sub-check is a recorded miss.
 * The diagnostic formerly named `pt5b_rotation_time_error_diagnostic` is renamed `pt5d_...` because `PT5b` is the registered Couette label.
 

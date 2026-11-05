@@ -1,20 +1,35 @@
-# ADR 0160: Job 48Z, three follow-ups: a fixed step's final time reported on `solver.end_time`, the corrector count in `residuals.jsonl`, SV301 in the run service and the MCP tools with the first-step viscosity
+# ADR 0160: Job 48Z, three follow-ups: final time stamp, corrector count, SV301 wiring
 
 Status: **registered** 2026-10-29, before any code of this job was written or compiled and before any run of this job (set-ups,
 criteria, limits, reading rules and the order of runs are fixed here); one amendment before any run; **results in the
 addendum** (every registered limit met except N5 as worded: two tests fail, both identically on main 444255c, neither from this
 job); not yet accepted by the maintainer.
-House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
-becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
-corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no
-unsafe code, no new crate, the crate graph stays acyclic; no edit of `crates/rcfd-studio`. Clean-room: first principles, the
-repository's own ADRs and code. Parents: [ADR 0145](0145-job48k-end-time-remainder-step.md) (the fixed-step landing,
-`fixed_step`), [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) question 9 (a fixed step ends up to 1e-12 short),
-[ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (adaptive correctors, SV301; its questions 3, 5, 6, 7 and D8),
-[ADR 0050](0050-wave27b-robustness-adaptive-stepping.md) (the adaptive controller's snapped landing),
-[ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md) and
-[ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) (the runner's output).
+
+Job 48Z takes three follow-ups from the maintainer's queue: a fixed step's final time reported on `solver.end_time`, the
+corrector count in `residuals.jsonl`, and SV301 in the run service and the MCP tools with the first-step viscosity. A
+fixed-step run that the end test stops within 1e-12 of `solver.end_time` now reports `solver.end_time` exactly; every field,
+flux, monitor value, statistic, particle and continued run is bit-identical to the unchanged tree, so no opt-in was needed.
+`residuals.jsonl` carries `correctors` and `corrector_cap` on the lines of `adaptive` runs only, and every other line is
+byte-identical. `run.headless` and MCP `run_headless` now give SV301 at a run's start; `run.check` and MCP
+`check_case_headless` already gave it. The preflight sees the first step's viscosity: the power-law channel's estimate goes
+from 0.0112 to 4.30 and warns, no law-free estimate changed by a bit, and no B2a text warns. N5 is missed as registered: two
+tests fail, both identically on main 444255c, neither from this job, and no `*_known_miss` was added. With a turbulence model
+the preflight's viscosity misses the first sweep, by 14 to 21 % on the two set-ups measured. The chain driver, `run.start` /
+`run.step` and `settings.validate` are not wired, and neither Linux nor the workspace test gate beyond N5's crates was run.
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a
+  missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
+  the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
+  no unsafe code, no new crate, the crate graph stays acyclic; no edit of `crates/rcfd-studio`.
+- Clean-room: first principles, the repository's own ADRs and code.
+- Parents: [ADR 0145](0145-job48k-end-time-remainder-step.md) (the fixed-step landing, `fixed_step`),
+  [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) question 9 (a fixed step ends up to 1e-12 short),
+  [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (adaptive correctors, SV301; its questions 3, 5, 6, 7 and D8),
+  [ADR 0050](0050-wave27b-robustness-adaptive-stepping.md) (the adaptive controller's snapped landing),
+  [ADR 0143](0143-job48i-native-runner-start-unix-zombies-linux-known-misses.md) and
+  [ADR 0146](0146-job48l-runner-output-early-exit-windows-inherited-handles.md) (the runner's output).
 
 ## The request
 
@@ -101,17 +116,21 @@ end + 1e-12 max(1, |end|)`, the run's **reported** time becomes `end` exactly. B
 `end` by an ulp. No setting, no schema key (so no case hash changes).
 
 **D2. Reported, not computed.** The snap is applied at the very end of `step()`, after every reader inside it, to:
-the returned `StepSummary.time` (so `iteration` events, the store's per-step snapshot time, `self.last`),
-`Simulation::time()` (a recorded pair: the solver time's bits and `end`; `time()` returns `end` while the solver's time still
-has those bits; cleared at the start of every step and by `reset_run_state`), and the last abscissa of every monitor series
-whose last `x` is this step's time (`MonitorStore::retime_last`, new in `rcfd-post`). Unchanged (they read the solver's own
-time): every engine's `time` and step history, restart files, the next step of a continued run, the scalar step's
-`StepCtx.time`, `stats.accumulate`, `udf_monitor_step`'s `x`, `particles.after_step` (inside `step()`, before the snap), and
-`particles::track_transient`, which is switched to a new `Simulation::solver_time()` (the unsnapped engine time) so that its
-last particle step stays the flow's step. Consumers of the reported time: `runctl` (`RunOutcome.time`, `finish`), the field
-store (per-step and final snapshot times), `status_json`, the export metadata, the service's status. The store's time rule
-`floor(t / interval + 1e-9)` can put the final step in another bucket only when an interval boundary lies within 1e-12 of
-`end`; the set of stored steps is the same (the final state is stored by `finish` otherwise), only its time stamp differs.
+
+- the returned `StepSummary.time` (so `iteration` events, the store's per-step snapshot time, `self.last`);
+- `Simulation::time()` (a recorded pair: the solver time's bits and `end`; `time()` returns `end` while the solver's time still
+  has those bits; cleared at the start of every step and by `reset_run_state`);
+- the last abscissa of every monitor series whose last `x` is this step's time (`MonitorStore::retime_last`, new in `rcfd-post`).
+
+Unchanged (they read the solver's own time): every engine's `time` and step history, restart files, the next step of a
+continued run, the scalar step's `StepCtx.time`, `stats.accumulate`, `udf_monitor_step`'s `x`, `particles.after_step` (inside
+`step()`, before the snap), and `particles::track_transient`, which is switched to a new `Simulation::solver_time()` (the
+unsnapped engine time) so that its last particle step stays the flow's step.
+
+Consumers of the reported time: `runctl` (`RunOutcome.time`, `finish`), the field store (per-step and final snapshot times),
+`status_json`, the export metadata, the service's status. The store's time rule `floor(t / interval + 1e-9)` can put the final
+step in another bucket only when an interval boundary lies within 1e-12 of `end`; the set of stored steps is the same (the final
+state is stored by `finish` otherwise), only its time stamp differs.
 
 **D3. Not opt-in.** By D2 no field, flux, statistic, particle or restart bit depends on the snap. The S checks verify it; if
 any S or N limit shows a changed field bit, the job stops there, makes the snap opt-in (a schema key with a hash-neutral
@@ -125,26 +144,34 @@ ADR 0156 D8 item 4's nested `"coupling": {"correctors", "cap"}` is not chosen: o
 (`#[serde(default, skip_serializing_if = "Option::is_none")]`), so older lines read as before and a line without them writes
 as before. Documented in `docs/run-control.md`.
 
-**D5. SV301 wiring (item 3).** (a) `run.check` and MCP `check_case_headless`: already through `runctl::check_only`; stated here
-and checked (P1, P2), no code. (b) `run.headless` (MCP `run_headless`): when the session's simulation has taken no step yet
-(`iteration() == 0`: freshly initialised, continued from a checkpoint or interpolated in this call), the preflight is made and an
-SV301 diagnostic, if it fires, is put in `info.warnings` (the `rules::warnings_json` form `rcfd run` uses), which
-`runctl::drive` emits as a `warning` event after `start`; the key `warnings` is added to `info` only when it fires, so the
-`start` event of a non-warning case is unchanged. A later call on a session that has already stepped (chunked runs) makes no
-preflight. The static setup rules' warnings stay out of the service's runs (unchanged; question). (c) Not wired: `run.start` /
-`run.step` (interactive stepping, no status stream), `settings.validate` (`rcfd validate`, ADR 0156 D7), the chain driver (not in
-this brief; question). MCP tool descriptions are not changed (`tests/golden/tools_list_default.json`).
+**D5. SV301 wiring (item 3).** By route:
+
+- (a) `run.check` and MCP `check_case_headless`: already through `runctl::check_only`; stated here and checked (P1, P2), no code.
+- (b) `run.headless` (MCP `run_headless`): when the session's simulation has taken no step yet (`iteration() == 0`: freshly
+  initialised, continued from a checkpoint or interpolated in this call), the preflight is made and an SV301 diagnostic, if it
+  fires, is put in `info.warnings` (the `rules::warnings_json` form `rcfd run` uses), which `runctl::drive` emits as a `warning`
+  event after `start`; the key `warnings` is added to `info` only when it fires, so the `start` event of a non-warning case is
+  unchanged. A later call on a session that has already stepped (chunked runs) makes no preflight. The static setup rules'
+  warnings stay out of the service's runs (unchanged; question).
+- (c) Not wired: `run.start` / `run.step` (interactive stepping, no status stream), `settings.validate` (`rcfd validate`, ADR 0156
+  D7), the chain driver (not in this brief; question).
+
+MCP tool descriptions are not changed (`tests/golden/tools_list_default.json`).
 
 **D6. The first-step viscosity (item 3).** `pressure_lag_preflight` hands the trial step the face viscosity that
 `Simulation::step` would set before the next step, computed without changing the simulation (new
-`Simulation::next_step_viscosity()`): with a rheology law, the law on a **copy** of the `Rheology` (the transient call: no
-temperature, `t_init`, relaxed against the copy's history) on the current velocity, which is exactly what the next step sets;
-else with a turbulence model, `TurbState::nu_face()` of the model's **current** state (eddy viscosity of the present state,
-laminar-zone mask included), which is not the state after the step's own sweep (`begin_step`, `update`; a model copy would
-need `Clone` on the turbulence trait: question); else `None`, the existing call bit for bit. `rcfd-fv`:
-`PimpleSolver::lag_preflight_with(dt, iterations, nu_face)` sets the copy's `nu_face` when given; `lag_preflight` calls it
-with `None`. Under BDF2 the trial's two steps keep that viscosity. For the tests, `Simulation::solver_face_viscosity()` returns the
-solver's current `nu_face` (read only).
+`Simulation::next_step_viscosity()`):
+
+- with a rheology law, the law on a **copy** of the `Rheology` (the transient call: no temperature, `t_init`, relaxed against the
+  copy's history) on the current velocity, which is exactly what the next step sets;
+- else with a turbulence model, `TurbState::nu_face()` of the model's **current** state (eddy viscosity of the present state,
+  laminar-zone mask included), which is not the state after the step's own sweep (`begin_step`, `update`; a model copy would
+  need `Clone` on the turbulence trait: question);
+- else `None`, the existing call bit for bit.
+
+`rcfd-fv`: `PimpleSolver::lag_preflight_with(dt, iterations, nu_face)` sets the copy's `nu_face` when given; `lag_preflight`
+calls it with `None`. Under BDF2 the trial's two steps keep that viscosity. For the tests,
+`Simulation::solver_face_viscosity()` returns the solver's current `nu_face` (read only).
 
 **D7. Placement.** `crates/rcfd-api/src/sim.rs`, `particles.rs`, `service.rs`; `crates/rcfd-fv/src/pimple.rs`;
 `crates/rcfd-post/src/monitors.rs`; `crates/rcfd-runner/src/runner.rs`; `crates/rcfd-project/src/records.rs`;
@@ -257,11 +284,19 @@ would have reported 0 entries whatever the code does. Corrected in the test befo
 ## Addendum (2026-10-29): results against the registered limits
 
 Everything below was measured after the registration and amendment 1; no limit or rule was changed after a result was seen.
-Commits: 5e282d6 (registration), 0e66b47 (amendment 1), 8047c58 (a print line of S1 that did not compile; before any run),
-78b4019 (R2: the recorded values, no other change), 9545aae (the code), fc744db (a compile fix of the S7 unit test's literals,
-found by the first N5 build; nothing had run on 9545aae's lib tests). Release builds in `E:\projects\cfd\target-48z`; logs,
-census and probe files in `E:\projects\cfd\w48z-work` (outside the repository). The machine was shared with another agent's
-WSL workload (`vmmemWSL` 58 GB, 2 to 22 GB free during the job); test threads 2 to 6.
+
+Commits:
+
+- 5e282d6 (registration)
+- 0e66b47 (amendment 1)
+- 8047c58 (a print line of S1 that did not compile; before any run)
+- 78b4019 (R2: the recorded values, no other change)
+- 9545aae (the code)
+- fc744db (a compile fix of the S7 unit test's literals, found by the first N5 build; nothing had run on 9545aae's lib tests)
+
+Release builds in `E:\projects\cfd\target-48z`; logs, census and probe files in `E:\projects\cfd\w48z-work` (outside the
+repository). The machine was shared with another agent's WSL workload (`vmmemWSL` 58 GB, 2 to 22 GB free during the job); test
+threads 2 to 6.
 
 ### The answer
 
@@ -365,7 +400,7 @@ WSL workload (`vmmemWSL` 58 GB, 2 to 22 GB free during the job); test threads 2 
    estimate of 4.3; the test drives `Simulation` directly and does not see it).
 5. **`correctors` in MCP `read_residuals` / the Studio's residual plot.** The keys are in `residuals.jsonl` and in
    `ResidualLine`; neither the MCP series nor the Studio plot shows them yet. Recommendation: add a `coupling.correctors` series
-   to `read_residuals` and a Studio plot line in the next Studio job (D8 item 4).
+   to `read_residuals` and a Studio plot line in the next Studio job (ADR 0156 D8 item 4).
 6. **The two pre-existing N5 failures** (H1 against the 48U record after the 48V schema key; the `%TEMP%\x` folder that makes
    rcfd-mcp `t2` fail on this machine). Recommendation: H1 needs its record re-made in a registered job (the record, not the
    cases, changed); the `%TEMP%\x` folder can be removed by the maintainer (this job did not remove it, it is not its own).

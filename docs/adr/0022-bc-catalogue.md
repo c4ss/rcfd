@@ -1,49 +1,85 @@
 # ADR 0022: Boundary-condition catalogue completion (F-200), constant-density segregated kernels
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new code was compiled
-or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test
-set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, details that were not fixed
-here) may be appended at the end without touching registered limits.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new code was
+compiled or run.
 
-Roadmap: F-200 (with the pieces F-062 moved to it: outlet pressure averaging, mass-flow update strategies, flow-regime
-options). Clean-room: published literature only; nothing from vendor material, vendor installs or manuals; no vendor
-names in the repository. Closed forms below are derived here and need no reference. Textbook facts used: Bernoulli, the
-Hagen-Poiseuille / plane Poiseuille / annular Poiseuille laminar solutions, and the radial momentum balance of an axisymmetric
-swirling flow.
+F-200 lists boundary conditions that did not exist, among them mass-flow inlets and outlets, a total-pressure inlet,
+outflow with flow-rate weights, vents, openings, and radial-equilibrium and target-mass-flow outlets. This ADR adds
+them as kinds selected by one new key, `boundaries.<patch>.bc_kind`, for the constant-density segregated kernels
+only; with the compressible kernel, the variable-density kernel and the block-coupled solver they are located
+validation errors. The addendum, written after the implementation, changes no registered limit and records three
+misses. F1 with the `secant` update diverges to NaN; the `bernoulli` option meets F1 and F2. C3 reversed with K = 0
+does not settle within the cap of 6000 iterations. C2, C3, D1, D2 and E2 do not meet the registered residual
+convergence; their accuracy limits are met only under a post-hoc settled-field criterion, which is not a pass of the
+registered one. C5 is trivial (deviation 3). The known limitations say the status stays `partial` whatever the
+numbers.
+
+Rules and roadmap:
+
+* The limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (file names, details that were not fixed here) may be appended at the end without touching registered
+  limits.
+* Roadmap: F-200 (with the pieces F-062 moved to it: outlet pressure averaging, mass-flow update strategies,
+  flow-regime options).
+* Clean-room: published literature only; nothing from vendor material, vendor installs or manuals; no vendor names in
+  the repository.
+* Closed forms below are derived here and need no reference. Textbook facts used: Bernoulli, the Hagen-Poiseuille /
+  plane Poiseuille / annular Poiseuille laminar solutions, and the radial momentum balance of an axisymmetric swirling
+  flow.
 
 ## Scope audit (what existed before this ADR)
 
-Existing, unchanged: `velocity` = fixed (also per-face expressions, tables via `profile`, user functions), zero_gradient,
-symmetry, freestream, moving_wall / shear / partial_slip / marangoni (F-204); `pressure` = zero_gradient | fixed | freestream
-(kinematic value); `temperature` = zero_gradient | fixed | heat_flux; `turbulence` role and intensity/length/viscosity-ratio
-inlet specification (k-epsilon, SST, SA); periodic and empty patches (mesh-level); the compressible kernel's `compressible_bc`
-(ADR 0006: total_inlet, pressure_outlet, farfield, nonreflecting); the variable-density `inlet = stagnation`; lumped
-`network_outlet` components (ADR 0012).
+Existing, unchanged:
 
-F-200 lists: mass-flow inlets/outlets; total-pressure inlet with direction and swirl; outflow with flow-rate weights; vents
-with loss coefficients; outlet-to-inlet recirculation pair; backflow direction and pressure options; target-mass-flow and
-radial-equilibrium pressure outlets; reverse-flow prevention; opening/entrainment-type boundaries; outlet pressure averaging
-and mass-flow update options. None of these exists. Per-boundary thermal conditions (convection coefficient, etc.) are F-051,
-not F-200, and are not touched. Turbulence inlet specification already exists; this ADR only checks that the new inlet kinds
-feed it correctly.
+* `velocity` = fixed (also per-face expressions, tables via `profile`, user functions), zero_gradient, symmetry,
+  freestream, moving_wall / shear / partial_slip / marangoni (F-204)
+* `pressure` = zero_gradient | fixed | freestream (kinematic value)
+* `temperature` = zero_gradient | fixed | heat_flux
+* `turbulence` role and intensity/length/viscosity-ratio inlet specification (k-epsilon, SST, SA)
+* periodic and empty patches (mesh-level)
+* the compressible kernel's `compressible_bc` (ADR 0006: total_inlet, pressure_outlet, farfield, nonreflecting)
+* the variable-density `inlet = stagnation`
+* lumped `network_outlet` components (ADR 0012)
+
+F-200 lists the items below. None of these exists.
+
+* mass-flow inlets/outlets
+* total-pressure inlet with direction and swirl
+* outflow with flow-rate weights
+* vents with loss coefficients
+* outlet-to-inlet recirculation pair
+* backflow direction and pressure options
+* target-mass-flow and radial-equilibrium pressure outlets
+* reverse-flow prevention
+* opening/entrainment-type boundaries
+* outlet pressure averaging and mass-flow update options
+
+Per-boundary thermal conditions (convection coefficient, etc.) are F-051, not F-200, and are not touched. Turbulence
+inlet specification already exists; this ADR only checks that the new inlet kinds feed it correctly.
 
 Scope decision, stated up front: all new kinds are implemented for the constant-density segregated kernels (`simple`,
 `simplec`, `piso`, `pimple`; transient use is covered by check T1 only). They are located validation errors with the
-compressible kernel, the variable-density kernel and the block-coupled solver. A solid circular pipe mesh generator does not exist; the Hagen-Poiseuille check is run on a plane
-channel and on an annular duct (closed form below), not on a solid pipe.
+compressible kernel, the variable-density kernel and the block-coupled solver. A solid circular pipe mesh generator
+does not exist; the Hagen-Poiseuille check is run on a plane channel and on an annular duct (closed form below), not
+on a solid pipe.
 
 ## Decisions
 
 ### D0 Schema (additive)
 
-One new key selects the kind: `boundaries.<patch>.bc_kind` = `none` (default, the unset sentinel: the patch is read exactly as
-before) | `mass_flow` | `outflow` | `pressure_outlet` | `opening` | `vent` | `total_pressure_inlet` |
-`radial_equilibrium_outlet` | `target_mass_flow_outlet`. With a kind other than `none` the kind owns the velocity and pressure
-conditions of the patch: `velocity` must stay `fixed`, `pressure` `zero_gradient`, `velocity_value` zero and no
-`velocity_expression_*`, `velocity_udf` or `profile` given (located errors otherwise); the `temperature`, `turbulence` and
-scalar keys keep their meaning. New pressure keys are in Pa and are converted with `physics.rho` (the older `pressure_value`
-stays kinematic and is not used by the new kinds). New keys, all with inactive defaults:
+One new key selects the kind: `boundaries.<patch>.bc_kind` = `none` (default, the unset sentinel: the patch is read
+exactly as before) | `mass_flow` | `outflow` | `pressure_outlet` | `opening` | `vent` | `total_pressure_inlet` |
+`radial_equilibrium_outlet` | `target_mass_flow_outlet`.
+
+With a kind other than `none` the kind owns the velocity and pressure conditions of the patch: `velocity` must stay
+`fixed`, `pressure` `zero_gradient`, `velocity_value` zero and no `velocity_expression_*`, `velocity_udf` or `profile`
+given (located errors otherwise); the `temperature`, `turbulence` and scalar keys keep their meaning.
+
+New pressure keys are in Pa and are converted with `physics.rho` (the older `pressure_value` stays kinematic and is
+not used by the new kinds). New keys, all with inactive defaults:
 
 | key | default | used by |
 |---|---|---|
@@ -66,29 +102,45 @@ stays kinematic and is not used by the new kinds). New keys, all with inactive d
 A key that is not at its default on a kind that does not use it is a located error naming the key and the kinds that use it.
 Every pressure-type kind takes the kinematic pressure `p = bc_pressure / rho`.
 
-Sign conventions, three of them and deliberately different in the place where the physics names them: the input
-`mass_flow_value` is positive INTO the domain, `target_mass_flow` is positive OUT of the domain, and the `mass_flow` report
-(and `rho sum phi` below) is positive OUT of the domain. Notation: `n` outward unit normal of a boundary face, `A` its area, `rho = physics.rho`, `phi_f` the (kinematic) face flux
-`u.S` of the last iteration or step (outward positive), `u_P` the owner-cell velocity, `u_f` the face velocity. Refresh: the
-conditions that depend on the flow are rebuilt before every iteration (steady) or step (transient) from the lagged fields
-(`phi_f`, `u`, `p`) with `set_bc`, the mechanism the lumped network outlet and the Marangoni stress already use. At build the
-refresh runs once with `phi = 0`.
+Sign conventions, three of them and deliberately different in the place where the physics names them:
+
+* the input `mass_flow_value` is positive INTO the domain;
+* `target_mass_flow` is positive OUT of the domain;
+* the `mass_flow` report (and `rho sum phi` below) is positive OUT of the domain.
+
+Notation:
+
+* `n` outward unit normal of a boundary face, `A` its area;
+* `rho = physics.rho`;
+* `phi_f` the (kinematic) face flux `u.S` of the last iteration or step (outward positive);
+* `u_P` the owner-cell velocity;
+* `u_f` the face velocity.
+
+Refresh: the conditions that depend on the flow are rebuilt before every iteration (steady) or step (transient) from
+the lagged fields (`phi_f`, `u`, `p`) with `set_bc`, the mechanism the lumped network outlet and the Marangoni stress
+already use. At build the refresh runs once with `phi = 0`.
 
 ### D1 `mass_flow` (inlet or outlet, direction, profile, swirl, recirculation)
 
-Signed `m = mass_flow_value` (into the domain). Direction `e`: `flow_direction` normalised, or `-n_f` per face when it is zero
-(`+n_f` for m < 0). A face needs `-e.n_f >= 0.05` (`+e.n_f` for m < 0), otherwise a located error on `flow_direction`.
-Shape `s_f >= 0`: 1, or the expression at the face centre (a negative value, or a zero total, is a located error on
-`mass_flow_shape_expression`). The face velocity is `u_f = c s_f e + t_f` with the swirl `t_f = P_tan(Omega x (x_f - x_0))`
-(`Omega = swirl_rate * axis/|axis|`, `P_tan` removes the normal part), and
-`c = |m| / (rho sum_f s_f |e.n_f| A_f)`. Then `sum_f rho u_f.S_f = -m` exactly (up to round-off, the swirl being tangential)
-and the velocity is a fixed per-face value, so the pressure equation treats the patch as a prescribed flux
-(`pressure_bc.fixed_u`). The pressure condition is zero gradient (implied).
-Recirculation pair: `mass_flow_source_patch = B` with `mass_flow_fraction = f` replaces `mass_flow_value`: `m = f max(m_B, 0)`
-with `m_B = rho sum phi` over B (outward, lagged). Setting both is an error; B must exist, differ from the patch and not itself be
-sourced from this patch (cycle check over the chain). A mass-flow-rate sourced inlet is a Picard iteration of gain `f < 1`.
-With the turbulence model the inlet speed per face is `|u_f|` of the first build (`phi = 0` gives zero for a sourced patch, so a
-sourced patch with a turbulence inlet role needs `turbulence_spec = values`; located error).
+Signed `m = mass_flow_value` (into the domain).
+
+* Direction `e`: `flow_direction` normalised, or `-n_f` per face when it is zero (`+n_f` for m < 0). A face needs
+  `-e.n_f >= 0.05` (`+e.n_f` for m < 0), otherwise a located error on `flow_direction`.
+* Shape `s_f >= 0`: 1, or the expression at the face centre (a negative value, or a zero total, is a located error on
+  `mass_flow_shape_expression`).
+* The face velocity is `u_f = c s_f e + t_f` with the swirl `t_f = P_tan(Omega x (x_f - x_0))`
+  (`Omega = swirl_rate * axis/|axis|`, `P_tan` removes the normal part), and `c = |m| / (rho sum_f s_f |e.n_f| A_f)`.
+  Then `sum_f rho u_f.S_f = -m` exactly (up to round-off, the swirl being tangential) and the velocity is a fixed
+  per-face value, so the pressure equation treats the patch as a prescribed flux (`pressure_bc.fixed_u`).
+* The pressure condition is zero gradient (implied).
+
+Recirculation pair: `mass_flow_source_patch = B` with `mass_flow_fraction = f` replaces `mass_flow_value`:
+`m = f max(m_B, 0)` with `m_B = rho sum phi` over B (outward, lagged). Setting both is an error; B must exist, differ
+from the patch and not itself be sourced from this patch (cycle check over the chain). A mass-flow-rate sourced inlet
+is a Picard iteration of gain `f < 1`.
+
+With the turbulence model the inlet speed per face is `|u_f|` of the first build (`phi = 0` gives zero for a sourced
+patch, so a sourced patch with a turbulence inlet role needs `turbulence_spec = values`; located error).
 
 ### D2 `outflow` with flow-rate weights and reverse-flow prevention
 
@@ -117,13 +169,18 @@ when the interior pressure exceeds the exterior one and the iteration cannot cha
 
 ### D4 `total_pressure_inlet` (incompressible), direction and swirl
 
-Total pressure `p0 = bc_pressure/rho` (kinematic). Velocity: the new `Directed` condition `u_f = e (n.u_P)/(n.e) + t_f`, i.e. the
-normal flux component is zero gradient and the direction `e` (`flow_direction`, default `-n_f`) and the swirl `t_f` of D1 are
-imposed. A face needs `-e.n_f >= 0.05` and `|e_k| >= 0.05 |e|` for the dominant normal component k, otherwise a located error on
-`flow_direction` (the second keeps the pressure solver from taking the face for a prescribed flux). Pressure: inflow faces
-(`phi_f < eps`) `p_f = p0 - |u_f|^2/2`, outflow faces `p_f = p0`, relaxed with weight 0.5 against the previous value.
-Turbulence inlet values need a known speed, which a total-pressure inlet does not have a priori: a turbulence model with this
-kind requires `turbulence_spec = values` (located error).
+Total pressure `p0 = bc_pressure/rho` (kinematic).
+
+Velocity: the new `Directed` condition `u_f = e (n.u_P)/(n.e) + t_f`, i.e. the normal flux component is zero gradient
+and the direction `e` (`flow_direction`, default `-n_f`) and the swirl `t_f` of D1 are imposed. A face needs
+`-e.n_f >= 0.05` and `|e_k| >= 0.05 |e|` for the dominant normal component k, otherwise a located error on
+`flow_direction` (the second keeps the pressure solver from taking the face for a prescribed flux).
+
+Pressure: inflow faces (`phi_f < eps`) `p_f = p0 - |u_f|^2/2`, outflow faces `p_f = p0`, relaxed with weight 0.5
+against the previous value.
+
+Turbulence inlet values need a known speed, which a total-pressure inlet does not have a priori: a turbulence model
+with this kind requires `turbulence_spec = values` (located error).
 
 ### D5 `radial_equilibrium_outlet`
 
@@ -156,10 +213,11 @@ rejects the other kinds with a located error on `bc_kind`. `velocity_udf` is alr
 
 ### D7 Library additions (`rcfd-fv/src/bc.rs`)
 
-`Directed { dir: Option<Vec3>, tangential: Profile }` implements `u_f = e (n.u_P)/(n.e) + t` (with `dir = None`, `e = n`, the
-"normal backflow" condition `u_f = n (n.u_P)`); `Switched { mask: Vec<bool>, on: Box<dyn Bc>, off: Box<dyn Bc> }` picks a branch per
-face by `local_face`. Pure functions (unit tested without a mesh): outflow scaling, radial-equilibrium integration, area-mean
-shift, secant/Bernoulli update.
+* `Directed { dir: Option<Vec3>, tangential: Profile }` implements `u_f = e (n.u_P)/(n.e) + t` (with `dir = None`,
+  `e = n`, the "normal backflow" condition `u_f = n (n.u_P)`).
+* `Switched { mask: Vec<bool>, on: Box<dyn Bc>, off: Box<dyn Bc> }` picks a branch per face by `local_face`.
+* Pure functions (unit tested without a mesh): outflow scaling, radial-equilibrium integration, area-mean shift,
+  secant/Bernoulli update.
 
 ## Registered checks
 
@@ -188,7 +246,22 @@ iterations; "converged" means the run stopped on the residual targets (a run tha
 * A5 direction: the oblique inlet of A1c: the face velocity direction has `|u x e| / |u| <= 1e-12`.
 * A6 recirculation pair: `box_2d` 40 x 40, `xmin` mass-flow inlet `m0 = 0.1`, `ymax` mass-flow inlet sourced from `xmax` with `f = 0.3`, `xmax` fixed pressure outlet, `ymin` wall: converged `m_out = m0/(1 - f)` to `1e-8` rel and `m_ymax = f m_out` to `1e-8` rel.
 * A7 turbulence inlet values: `I = 0.05`, `U = 1` (speed from `m/(rho A)`), `l = 0.07`, `Cmu = 0.09`, `nu = 0.1`: `k = 1.5 (I U)^2 = 3.75e-3`, `eps = Cmu^{3/4} k^{3/2}/l = 5.390521e-4`, `omega = sqrt(k)/(Cmu^{1/4} l) = 1.597191` to 1e-12 rel from the values the model receives; viscosity-ratio form `eps = Cmu k^2/(nu * ratio)` with ratio 10 equals `0.09 * (3.75e-3)^2 / (0.1 * 10) = 1.265625e-6` (limit 1e-12 rel).
-* A8 located validation errors (each asserts the path): V1 every kind with `compressible`, with variable density, and with `coupled` -> `boundaries.<p>.bc_kind`; V2 `bc_kind != none` with `velocity != fixed` -> `.velocity`, with `pressure != zero_gradient` -> `.pressure`, with `velocity_value != 0` -> `.velocity_value`, with a `velocity_expression_x` -> `.velocity_expression_x`; V3 `flow_direction` with a face of `-e.n < 0.05` -> `.flow_direction`; V4 `mass_flow_source_patch` unknown / itself / a cycle / together with `mass_flow_value` / fraction outside (0, 1] -> `.mass_flow_source_patch` or `.mass_flow_fraction`; V5 `flow_rate_weight <= 0` -> `.flow_rate_weight`; V6 `loss_coefficient < 0` -> `.loss_coefficient`; V7 shape expression with a compile error, with a negative value, with zero total -> `.mass_flow_shape_expression`; V8 `target_mass_flow < 0` -> `.target_mass_flow`; V9 turbulence model with `total_pressure_inlet` (`turbulence_spec != values`) -> `.turbulence_spec`; V10 `swirl_axis` of zero length with `swirl_rate != 0` -> `.swirl_axis`; V11 an unused key on a kind (one case per table row) -> that key; V12 a radial outlet face on the axis -> `.swirl_axis`/`.swirl_origin`; V13 an unknown patch is already reported by the existing check (unchanged).
+* A8 located validation errors (each asserts the path):
+* V1 every kind with `compressible`, with variable density, and with `coupled` -> `boundaries.<p>.bc_kind`;
+* V2 `bc_kind != none` with `velocity != fixed` -> `.velocity`, with `pressure != zero_gradient` -> `.pressure`, with
+  `velocity_value != 0` -> `.velocity_value`, with a `velocity_expression_x` -> `.velocity_expression_x`;
+* V3 `flow_direction` with a face of `-e.n < 0.05` -> `.flow_direction`;
+* V4 `mass_flow_source_patch` unknown / itself / a cycle / together with `mass_flow_value` / fraction outside (0, 1]
+  -> `.mass_flow_source_patch` or `.mass_flow_fraction`;
+* V5 `flow_rate_weight <= 0` -> `.flow_rate_weight`;
+* V6 `loss_coefficient < 0` -> `.loss_coefficient`;
+* V7 shape expression with a compile error, with a negative value, with zero total -> `.mass_flow_shape_expression`;
+* V8 `target_mass_flow < 0` -> `.target_mass_flow`;
+* V9 turbulence model with `total_pressure_inlet` (`turbulence_spec != values`) -> `.turbulence_spec`;
+* V10 `swirl_axis` of zero length with `swirl_rate != 0` -> `.swirl_axis`;
+* V11 an unused key on a kind (one case per table row) -> that key;
+* V12 a radial outlet face on the axis -> `.swirl_axis`/`.swirl_origin`;
+* V13 an unknown patch is already reported by the existing check (unchanged).
 
 ### B outflow weights (D2)
 * B1 `box_2d` 30 x 30: `xmin` mass-flow inlet `m_in = 0.2`, `xmax` outflow weight 1, `ymax` outflow weight 3, walls elsewhere; converged: outflow shares `0.25` and `0.75` of `m_in` to `1e-10` rel.
@@ -230,10 +303,14 @@ For every converged case above (A2, A3, A6, B1, B2, C1, C2, C3, D1, D2, E2, F1; 
 * R2 every new key is at its inactive default in an unmodified case, `bc_kind = none` reads the patch exactly as before.
 
 ## Known limitations stated now (status stays `partial` whatever the numbers)
-No compressible, variable-density or coupled-solver support; no solid-pipe mesh; temperature of a recirculated stream is not
-carried (F-051); the recirculation pair transfers mass only; `pressure_average` only on `pressure_outlet`; no time-varying
-mass flow; the lagged dynamic-head conditions (total backflow, total-pressure inlet, vent, radial equilibrium) use a fixed
-relaxation weight 0.5 and are only checked on the cases above.
+* No compressible, variable-density or coupled-solver support.
+* No solid-pipe mesh.
+* Temperature of a recirculated stream is not carried (F-051).
+* The recirculation pair transfers mass only.
+* `pressure_average` only on `pressure_outlet`.
+* No time-varying mass flow.
+* The lagged dynamic-head conditions (total backflow, total-pressure inlet, vent, radial equilibrium) use a fixed
+  relaxation weight 0.5 and are only checked on the cases above.
 
 ## Addendum: results, deviations and misses (written after the implementation; no registered limit is changed)
 
@@ -242,33 +319,122 @@ Commits: library `fed2628`, settings tree `52bfe09`. Tests: `crates/rcfd-fv/test
 
 ### Measured against the registered limits (release build)
 
-* L1-L6 all pass: L1 <= 2.2e-16, L3 3e-16, L4 9e-17, L5 solid body 1.5e-16 / free vortex 1.58e-5 (limit 1e-4) / area mean 0, L6 secant root exact to 2e-15.
-* A1 worst relative flux error 1.39e-16 (limit 1e-12), all seven variants. A2 and A2b: slope -1.194030 Pa/m, error 0.498 % (limit 1 %), profile error 2.475e-3 of 1.5 U (limit 1.5e-2), patch imbalance 5.2e-13. A3: dp/dz -4.757139 against -4.776136, error 0.398 % (limit 1 %), 367 iterations. A4 5.2e-17 (mass_flow) and 1.1e-17 (total_pressure_inlet, D3). A5 4.8e-17. A6 m_out error 4.3e-13, m_ymax/m_out error 5.3e-15 (limit 1e-8). A7 exact to the printed digits. A8 every path asserted (V1 compressible, coupled and variable density; V2; V3; V4 five cases; V5; V6; V7 three cases; V8; V9; V10; V11 all 19 rows; V12; V14).
-* B1 share error 4.4e-16, B2 3.3e-16 (limit 1e-10), B3 imbalance <= 1.4e-16 (limit 1e-12), B4 min u.n 2.6e-2 (limit >= 0).
-* C1 outlet area-average p -1.4e-18 (limit 1e-9), slope error 0.498 %. C4 maximum field difference 0. C5 flux 0 and |u|max 0 with the registered set-up (trivially at rest, see deviation 3). The accuracy of C2, C3 (forward K = 0, 2.5, 10 and reversed K = 2.5, 10), D1, D2 and E2 below was measured under a POST-HOC convergence criterion; their registered residual convergence is NOT MET (misses 2 and 3).
-* Post-hoc criterion, accuracy only: C2 mean |u_x| = 1 to 2e-9 (limit 1e-5); C3 pressure error <= 7.3e-11 (limits 1e-8 / 1.2e-6 / 5e-6); D1 deviation 1.4e-9 (limit 1e-5); D2 magnitude 2.2e-10 (limit 1e-5) and angle 1.7e-10 rad (limit 1e-6).
-* E2 (post-hoc criterion for the convergence, accuracy limits as registered): outlet pressure error 0.408 % of 1.5 Pa (limit 3 %), outlet u_theta error 0.032 % of 2 (limit 3 %), mid-length pressure error 2.669 % (limit 3 %, the tightest margin), discrete balance 2.3e-15 (limit 1e-8).
-* F1 bernoulli |m - 0.1|/0.1 = 1.4e-15 after 3329 iterations (limit 1e-3); F2 slope error 0.498 % (limit 1 %).
-* T1 mass-flow patch error <= 5.6e-16 (limit 1e-12), B1 shares error 3.3e-16 (limit 1e-8), global imbalance <= 2.4e-14 (limit 1e-8).
-* M conservation: the largest imbalance of any listed case is 1.2e-12 (limit 1e-9). R1: the baseline hash tests pass unchanged. R2 and R3 pass.
+* L1-L6 all pass: L1 <= 2.2e-16, L3 3e-16, L4 9e-17, L5 solid body 1.5e-16 / free vortex 1.58e-5 (limit 1e-4) / area
+  mean 0, L6 secant root exact to 2e-15.
+* A1: worst relative flux error 1.39e-16 (limit 1e-12), all seven variants.
+* A2 and A2b: slope -1.194030 Pa/m, error 0.498 % (limit 1 %), profile error 2.475e-3 of 1.5 U (limit 1.5e-2), patch
+  imbalance 5.2e-13.
+* A3: dp/dz -4.757139 against -4.776136, error 0.398 % (limit 1 %), 367 iterations.
+* A4: 5.2e-17 (mass_flow) and 1.1e-17 (total_pressure_inlet, D3).
+* A5: 4.8e-17.
+* A6: m_out error 4.3e-13, m_ymax/m_out error 5.3e-15 (limit 1e-8).
+* A7: exact to the printed digits.
+* A8: every path asserted (V1 compressible, coupled and variable density; V2; V3; V4 five cases; V5; V6; V7 three
+  cases; V8; V9; V10; V11 all 19 rows; V12; V14).
+* B1 share error 4.4e-16, B2 3.3e-16 (limit 1e-10).
+* B3: imbalance <= 1.4e-16 (limit 1e-12).
+* B4: min u.n 2.6e-2 (limit >= 0).
+* C1: outlet area-average p -1.4e-18 (limit 1e-9), slope error 0.498 %.
+* C4: maximum field difference 0.
+* C5: flux 0 and |u|max 0 with the registered set-up (trivially at rest, see deviation 3).
+
+The accuracy of C2, C3 (forward K = 0, 2.5, 10 and reversed K = 2.5, 10), D1, D2 and E2 below was measured under a
+POST-HOC convergence criterion; their registered residual convergence is NOT MET (misses 2 and 3).
+
+Post-hoc criterion, accuracy only:
+
+* C2: mean |u_x| = 1 to 2e-9 (limit 1e-5).
+* C3: pressure error <= 7.3e-11 (limits 1e-8 / 1.2e-6 / 5e-6).
+* D1: deviation 1.4e-9 (limit 1e-5).
+* D2: magnitude 2.2e-10 (limit 1e-5) and angle 1.7e-10 rad (limit 1e-6).
+* E2 (post-hoc criterion for the convergence, accuracy limits as registered): outlet pressure error 0.408 % of 1.5 Pa
+  (limit 3 %), outlet u_theta error 0.032 % of 2 (limit 3 %), mid-length pressure error 2.669 % (limit 3 %, the
+  tightest margin), discrete balance 2.3e-15 (limit 1e-8).
+
+Remaining checks:
+
+* F1: bernoulli |m - 0.1|/0.1 = 1.4e-15 after 3329 iterations (limit 1e-3).
+* F2: slope error 0.498 % (limit 1 %).
+* T1: mass-flow patch error <= 5.6e-16 (limit 1e-12), B1 shares error 3.3e-16 (limit 1e-8), global imbalance <=
+  2.4e-14 (limit 1e-8).
+* M conservation: the largest imbalance of any listed case is 1.2e-12 (limit 1e-9).
+* R1: the baseline hash tests pass unchanged.
+* R2 and R3 pass.
 
 ### Misses (three)
 
-* **F1 secant (registered limit 1e-4 in 6000 iterations): MISS**, kept as the ignored test `f1_f2_target_mass_flow_outlet_secant_known_miss` with the registered limits. The run diverges to NaN (the pressure leaves the physical range at iteration 23). Root cause, diagnosed from the per-iteration trace (m_out and p_out printed for 60 iterations): the secant slope `-(p - p_prev)/(m - m_prev)` is taken from successive iterates in which the flow is still spinning up, so the change in m is not a response to the change in p; at iteration 22 the pair (p up by 1.7, m down by 2.2e-4) gave a spurious slope of 7.6e3, which the registered clip to 1000 times the Bernoulli slope (2.4e4) turned into a pressure step of +530. The registered rule has no safeguard against a secant estimate that is contaminated by the transient. No parameter was changed to hide this. A guarded secant would be a new strategy needing its own registered check; it is not part of this delivery. The `bernoulli` option meets F1 and F2.
-* **C3 reversed K = 0 (registered cap 6000 iterations): MISS**, kept as the ignored test `c3_vent_reversed_k0_known_miss`. Under the post-hoc set-up (pseudo time step 0.02, settled-field criterion) it does not settle within 6000 iterations; it settles after 23174 iterations with pressure error 4.2e-13 (`c3_vent_reversed_k0_long_run_observation`, ignored, a post-hoc observation and not a pass). The probable cause is a slow decaying mode of a fixed static pressure on an inflow face with zero-gradient velocity (not isolated further); with K > 0 the loss law damps it (reversed K = 2.5 and 10 settle in about 900 iterations).
-* **Registered residual convergence for C2, C3, D1, D2 and E2: NOT MET** (registered: plain `simplec`, residual targets 1e-12, 6000 iterations). The as-registered runs are kept as ignored tests `c2_as_registered_known_miss`, `c3_vent_as_registered_known_miss` (K = 2.5 forward), `d1_as_registered_known_miss`, `d2_as_registered_known_miss`, `e2_as_registered_known_miss`; each stops on the iteration cap. For C2, C3, D1 and D2 the plain run diverges from rest (the first K = 2.5 vent iterations reach NaN within 300 iterations). The accuracy limits are met only under the post-hoc settled-field criterion with pseudo-time stepping (deviations 1 and 2), which is a different convergence statement and not a pass of the registered one.
+1. **F1 secant (registered limit 1e-4 in 6000 iterations): MISS**, kept as the ignored test
+   `f1_f2_target_mass_flow_outlet_secant_known_miss` with the registered limits. The run diverges to NaN (the pressure
+   leaves the physical range at iteration 23). Root cause, diagnosed from the per-iteration trace (m_out and p_out
+   printed for 60 iterations): the secant slope `-(p - p_prev)/(m - m_prev)` is taken from successive iterates in
+   which the flow is still spinning up, so the change in m is not a response to the change in p. At iteration 22 the
+   pair (p up by 1.7, m down by 2.2e-4) gave a spurious slope of 7.6e3, which the registered clip to 1000 times the
+   Bernoulli slope (2.4e4) turned into a pressure step of +530. The registered rule has no safeguard against a secant
+   estimate that is contaminated by the transient. No parameter was changed to hide this. A guarded secant would be a
+   new strategy needing its own registered check; it is not part of this delivery. The `bernoulli` option meets F1 and
+   F2.
+2. **C3 reversed K = 0 (registered cap 6000 iterations): MISS**, kept as the ignored test
+   `c3_vent_reversed_k0_known_miss`. Under the post-hoc set-up (pseudo time step 0.02, settled-field criterion) it
+   does not settle within 6000 iterations; it settles after 23174 iterations with pressure error 4.2e-13
+   (`c3_vent_reversed_k0_long_run_observation`, ignored, a post-hoc observation and not a pass). The probable cause is
+   a slow decaying mode of a fixed static pressure on an inflow face with zero-gradient velocity (not isolated
+   further); with K > 0 the loss law damps it (reversed K = 2.5 and 10 settle in about 900 iterations).
+3. **Registered residual convergence for C2, C3, D1, D2 and E2: NOT MET** (registered: plain `simplec`, residual
+   targets 1e-12, 6000 iterations). The as-registered runs are kept as ignored tests `c2_as_registered_known_miss`,
+   `c3_vent_as_registered_known_miss` (K = 2.5 forward), `d1_as_registered_known_miss`, `d2_as_registered_known_miss`,
+   `e2_as_registered_known_miss`; each stops on the iteration cap. For C2, C3, D1 and D2 the plain run diverges from
+   rest (the first K = 2.5 vent iterations reach NaN within 300 iterations). The accuracy limits are met only under
+   the post-hoc settled-field criterion with pseudo-time stepping (deviations 1 and 2), which is a different
+   convergence statement and not a pass of the registered one.
 
 ### Deviations from the ADR text (set-up and measurement, none touches a limit)
 
-1. Residual targets replaced by a settled-field criterion for C2, C3, D1, D2 and E2 (post-hoc). The ADR said converged means the residual targets 1e-12. For the frictionless uniform-flow cases a control with only existing conditions (inlet velocity 1, static outlet 0, frictionless duct) reaches u = 1.000000 and p = 0 and still shows normalised residuals of 0.3 to 0.7 for 1500 iterations, which suggests the normalisation measures round-off there (not proven). E2 is not frictionless and the control does not cover it: its residual stalls at res_u = 4.4e-12 with the fields stationary, cause not diagnosed. The tests iterate until the largest change of ux, uy, uz and p between successive iterations is at most 1e-10 for 20 iterations in a row (`settle`), and fail otherwise. The threshold was first 1e-12 and was loosened to 1e-10 after C3 K = 0 sat at a 1e-12 pressure floor (the uz field was added afterwards, which only tightens the check). The accuracy limits are unchanged.
-2. Pseudo-time stepping (`solver.pseudo_mode = "physical"`) in C2, C3, D1 and D2. Plain SIMPLEC from rest diverges within ten iterations on a frictionless duct driven by two pressure ends (an existing-condition duct with a static pressure drop behaves the same: u = -366 after the first iteration), so the ADR cases are started with a pseudo time step of 0.2 (C2, D1, D2, C4) or 0.02 (C3). With 0.2 the C3 case with K = 2.5 diverged (first attempt, kept as the ignored record `c3_vent_pseudo_dt_02_known_miss`: the quadratic loss law lagged at relaxation 0.5 is not stable from the wild first iterations at that step); 0.02 settled for all K > 0 in both directions and for forward K = 0 (300 to 900 iterations). The set-up was chosen for stability from the traces of the first iterations, not from the accuracy of the results. C5 uses the registered plain set-up.
-3. C5 is trivial. With the face closed and 0.5 Pa at the closed patch against 0 at the other end nothing moves: flux 0 and |u|max 0 hold identically, and the case is already at its solution at the start. It checks that `prevent_reverse_flow` closes the face; it does not test a case in which the closure resists a driving pressure through a developing flow.
-4. Mesh and set-up choices left open by the ADR. C2, C4, C5 and D1 use `box_2d` 20 x 4 with `lx = 5`, `ly = 1`. T1 uses `channel_2d` 50 x 10 (`lx = 10`) for the channel part and the 30 x 30 box for the B1 part, both with `pimple`, `dt = 0.01`, 30 steps, `end_time = 100` so the run does not stop early. A7 uses a 20 x 10 channel with `lx = 4`. C1 reads the outlet area-average pressure from `boundary_field("p")` (the applied face values weighted by area) instead of the report mechanism.
-5. V6 is raised by the schema range check (`loss_coefficient` has a minimum of 0), at the registered path, not by `bc_cat::check`. The message is the generic range message.
-6. Turbulence set-up (found by A7, not anticipated by D6b). The existing static turbulence checks read `velocity_value` and rejected a `mass_flow` inlet ("inlet velocity is zero") and could not derive the initial k. `turb::reference_speed` and the inlet check now use `bc_cat::nominal_speed` (`|m|/(rho A)` with the mesh, positive placeholder without it). A case whose only inlet is a total-pressure inlet, a sourced mass flow or a negative mass flow needs `turbulence.k_initial` and the initial epsilon / omega.
-7. Not asserted as written. R3 asserts the roles from `turb::role`, not the wall set of the built model (the model state has no public accessor). A4/D3 for `total_pressure_inlet` reads the face velocity after one iteration, not at build (the directed condition needs the owner-cell velocity; the tangential part is still exact, 1.1e-17). V13 is checked as the existing located error (mesh has no patch).
-8. Tests added beyond the list: R2 (defaults inert) and D6b (potential initialisation with a mass-flow inlet gives the plug flow to 6.8e-13).
+1. Residual targets replaced by a settled-field criterion for C2, C3, D1, D2 and E2 (post-hoc). The ADR said converged
+   means the residual targets 1e-12. For the frictionless uniform-flow cases a control with only existing conditions
+   (inlet velocity 1, static outlet 0, frictionless duct) reaches u = 1.000000 and p = 0 and still shows normalised
+   residuals of 0.3 to 0.7 for 1500 iterations, which suggests the normalisation measures round-off there (not
+   proven). E2 is not frictionless and the control does not cover it: its residual stalls at res_u = 4.4e-12 with the
+   fields stationary, cause not diagnosed. The tests iterate until the largest change of ux, uy, uz and p between
+   successive iterations is at most 1e-10 for 20 iterations in a row (`settle`), and fail otherwise. The threshold was
+   first 1e-12 and was loosened to 1e-10 after C3 K = 0 sat at a 1e-12 pressure floor (the uz field was added
+   afterwards, which only tightens the check). The accuracy limits are unchanged.
+2. Pseudo-time stepping (`solver.pseudo_mode = "physical"`) in C2, C3, D1 and D2. Plain SIMPLEC from rest diverges
+   within ten iterations on a frictionless duct driven by two pressure ends (an existing-condition duct with a static
+   pressure drop behaves the same: u = -366 after the first iteration), so the ADR cases are started with a pseudo
+   time step of 0.2 (C2, D1, D2, C4) or 0.02 (C3). With 0.2 the C3 case with K = 2.5 diverged (first attempt, kept as
+   the ignored record `c3_vent_pseudo_dt_02_known_miss`: the quadratic loss law lagged at relaxation 0.5 is not stable
+   from the wild first iterations at that step). With 0.02 the C3 case settled for all K > 0 in both directions and
+   for forward K = 0 (300 to 900 iterations). The set-up was chosen for stability from the traces of the first
+   iterations, not from the accuracy of the results. C5 uses the registered plain set-up.
+3. C5 is trivial. With the face closed and 0.5 Pa at the closed patch against 0 at the other end nothing moves: flux 0
+   and |u|max 0 hold identically, and the case is already at its solution at the start. It checks that
+   `prevent_reverse_flow` closes the face; it does not test a case in which the closure resists a driving pressure
+   through a developing flow.
+4. Mesh and set-up choices left open by the ADR. C2, C4, C5 and D1 use `box_2d` 20 x 4 with `lx = 5`, `ly = 1`. T1
+   uses `channel_2d` 50 x 10 (`lx = 10`) for the channel part and the 30 x 30 box for the B1 part, both with `pimple`,
+   `dt = 0.01`, 30 steps, `end_time = 100` so the run does not stop early. A7 uses a 20 x 10 channel with `lx = 4`. C1
+   reads the outlet area-average pressure from `boundary_field("p")` (the applied face values weighted by area)
+   instead of the report mechanism.
+5. V6 is raised by the schema range check (`loss_coefficient` has a minimum of 0), at the registered path, not by
+   `bc_cat::check`. The message is the generic range message.
+6. Turbulence set-up (found by A7, not anticipated by D6b). The existing static turbulence checks read
+   `velocity_value` and rejected a `mass_flow` inlet ("inlet velocity is zero") and could not derive the initial k.
+   `turb::reference_speed` and the inlet check now use `bc_cat::nominal_speed` (`|m|/(rho A)` with the mesh, positive
+   placeholder without it). A case whose only inlet is a total-pressure inlet, a sourced mass flow or a negative mass
+   flow needs `turbulence.k_initial` and the initial epsilon / omega.
+7. Not asserted as written. R3 asserts the roles from `turb::role`, not the wall set of the built model (the model
+   state has no public accessor). A4/D3 for `total_pressure_inlet` reads the face velocity after one iteration, not at
+   build (the directed condition needs the owner-cell velocity; the tangential part is still exact, 1.1e-17). V13 is
+   checked as the existing located error (mesh has no patch).
+8. Tests added beyond the list: R2 (defaults inert) and D6b (potential initialisation with a mass-flow inlet gives the
+   plug flow to 6.8e-13).
 
 ### Not delivered, or limited
 
-Solid circular-pipe mesh (the annular duct was used for the Hagen-Poiseuille acceptance); compressible, variable-density and coupled solvers; temperature of a recirculated stream and per-boundary thermal conditions (F-051); time-varying mass flow; pressure averaging on kinds other than `pressure_outlet`; a guarded secant update; verification of the textbook closed forms against primary sources (see `docs/reference-data.md`, wave 16B).
+* Solid circular-pipe mesh (the annular duct was used for the Hagen-Poiseuille acceptance).
+* Compressible, variable-density and coupled solvers.
+* Temperature of a recirculated stream and per-boundary thermal conditions (F-051).
+* Time-varying mass flow.
+* Pressure averaging on kinds other than `pressure_outlet`.
+* A guarded secant update.
+* Verification of the textbook closed forms against primary sources (see `docs/reference-data.md`, wave 16B).

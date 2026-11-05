@@ -1,20 +1,38 @@
-# ADR 0045: Wave 25C, momentum sources and lumped pressure components in the transient PISO / PIMPLE algorithms (F-214, F-217, F-218)
+# ADR 0045: Wave 25C, momentum sources and lumped pressure components in the transient PISO / PIMPLE algorithms
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any solver code of this wave was changed and
-before any run of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and
-the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A
-test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended
-at the end without touching a registered limit.
+before any run of this wave.
+
+Wave 25C (F-214, F-217, F-218) gives the transient `piso` and `pimple` algorithms the momentum-source hook they lacked.
+`PimpleSolver` gains an outer-iteration hook and an implicit sink, off by default, and unsupported combinations get located errors.
+T2, T4, T6 and T7 pass. T1, T3 and T5 miss as registered and stay ignored with their limits intact. Two pre-existing causes,
+independent of the new hook, are behind the misses: the lagged periodic momentum coupling of the transient solver, and an
+instability of transient PISO / PIMPLE at a high diffusion number, whose root cause was NOT found in this wave. A corrected set-up
+on a stable step stays inside the T3a, T3b and T3c limits, with the registered configuration kept as an ignored known miss. T8 is
+PASS for (i) and PASS WITH DEVIATION for (ii) and (iii): `fan_jump` differs from the registered reference 0aa8135, attributed by
+inference and not bisected to wave 24 commit a9045eb, and four assertions were edited where the ADR listed three. Statuses stay
+`partial`.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the
+  cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (exact numbers, deviations) may be appended at the end without touching a registered limit.
 
 Scope. F-214 (Lorentz force), F-217 (fan / porous-jump / loss closures, heat-exchanger macro models) and F-218 (actuator disk) are all
 `partial`, and one reason in each of their roadmap notes is the same: the transient pressure-velocity algorithms have no
 momentum-source hook. This wave removes that reason for `piso` and `pimple`. No item changes status unless every acceptance point of
 the roadmap entry is genuinely met; none is expected to be (F-218 still lacks the rotor data comparison, F-214 the varying B and
-induced field, F-217 the resolved-exchanger validation). Clean-room: first principles and published literature only; no vendor code,
-text, data or names; nothing from vendor material. Other waves (24 duct/solver diagnosis, 25A fractional step and
-interface code, 25B heat-exchanger effectiveness functions and waves) work in the same tree: this wave does not edit
-`fractional.rs`, the SIMPLE/SIMPLEC duct boundary treatment, `hx.rs` effectiveness functions or `waves.rs`; shared files
-(`sim.rs`, `schema.rs`, `case-schema.md`, `roadmap.json`) get small targeted edits committed through a temporary index.
+induced field, F-217 the resolved-exchanger validation).
+
+Clean-room: first principles and published literature only; no vendor code, text, data or names; nothing from vendor material.
+
+Other waves (24 duct/solver diagnosis, 25A fractional step and interface code, 25B heat-exchanger effectiveness functions and
+waves) work in the same tree. This wave does not edit `fractional.rs`, the SIMPLE/SIMPLEC duct boundary treatment, `hx.rs`
+effectiveness functions or `waves.rs`. Shared files (`sim.rs`, `schema.rs`, `case-schema.md`, `roadmap.json`) get small targeted
+edits committed through a temporary index.
 
 ## Audit of what exists (HEAD 0aa8135)
 
@@ -122,9 +140,10 @@ Euler and BDF2 reproduce exactly.
    `u = a/s + (0.3 - a/s) e^{-s t}`: Euler `<= 1e-2 a/s`, BDF2 `<= 2e-3 a/s` (maximum over the steps).
 
 **T2 (Poiseuille start-up, series).** `box_2d` periodic in x (nx = 4, ny = 40), unit square, no-slip plates at `ymin`/`ymax`,
-`nu = rho = 1`, rest initial, acceleration `G = 8` (steady centre value `G h^2/(8 nu) = 1`), `dt = 1e-3`, `piso` (Euler), `pimple`
-(n_outer = 2), `piso` BDF2. Reference: `u(y,t) = G y(h-y)/(2 nu) - (4 G h^2/(nu pi^3)) sum_{n odd} sin(n pi y/h) exp(-n^2 pi^2 nu t/h^2)/n^3`
-(derivation in `docs/reference-data.md`; 199 terms).
+`nu = rho = 1`, rest initial, acceleration `G = 8` (steady centre value `G h^2/(8 nu) = 1`), `dt = 1e-3`, `piso` (Euler),
+`pimple` (n_outer = 2), `piso` BDF2. Reference:
+`u(y,t) = G y(h-y)/(2 nu) - (4 G h^2/(nu pi^3)) sum_{n odd} sin(n pi y/h) exp(-n^2 pi^2 nu t/h^2)/n^3` (derivation in
+`docs/reference-data.md`; 199 terms).
  * T2a: at `t = 0.02, 0.05, 0.1, 0.5`: `max_c |u_c - u_series(y_c, t)| / 1 <= 1e-2` (Euler, pimple), `<= 1e-2` (BDF2).
  * T2b: at `t = 1.5`: `max_c |u_c - G y_c (h - y_c)/(2 nu)| <= 2e-3` (the steady parabola; the estimated discrete wall-cell
    error is about 3e-4).
@@ -137,9 +156,9 @@ y = 0, 1, `a = 0.5`, `sigma = rho = nu = 1`, `B = (0, 2 Ha, 0)`, `G = 400` actin
  * T3b (A1 limits in the transient algorithm): profile `max |u - u_Hartmann|/u_max <= 2e-2`, flow rate `|U/U_exact - 1| <= 1e-2`.
  * T3c (against the steady result): for `Ha = 10` the steady SIMPLEC run of the identical case (A1 settings) has
    `max |u_transient - u_SIMPLEC| / u_max <= 1e-6`.
- * T3d (solved potential, A5 analogue): `B = (0, 0, 2 Ha)` with `potential = "solve"`, `Ha = 10`, `ny = 80`, `pimple`: compared with the
-   same transient run without the source at `t = 0.1` and `t = 1.0`: `max |u - u_plain| / u_max <= 1e-6` and
-   `max |J| / (sigma B u_max) <= 1e-6`.
+ * T3d (solved potential, A5 analogue): `B = (0, 0, 2 Ha)` with `potential = "solve"`, `Ha = 10`, `ny = 80`, `pimple`:
+   compared with the same transient run without the source at `t = 0.1` and `t = 1.0`: `max |u - u_plain| / u_max <= 1e-6`
+   and `max |J| / (sigma B u_max) <= 1e-6`.
 
 **T4 (transient actuator disk, A4b set-up).** The A4b duct of `tests/actuator_disk.rs` (channel_2d 60x10, 2 m x 0.2 m x 0.05 m,
 `nu = 1e-3`, `rho = 1.2`, inlet 1 m/s, outlet pressure, side walls `fixed (1,0,0)`, upwind, disk box x in [0.9, 1.1],
@@ -222,33 +241,38 @@ corrected or diagnostic variants are separate tests that do not count as criteri
 | T7e (NTU duty, transient = steady) | registered | 451.450431 W, relative difference 1.35e-14; equals the eps-NTU library value to 1e-9 | 1e-4 | PASS |
 | T8 (steady unchanged) | (i) registered; (ii) reference changed; (iii) four edited assertions | (i) identical; (ii) all 8 bit hashes identical to a9045eb, `fan_jump` differs from 0aa8135; (iii) four assertions edited | (i) identical; (ii) identical to 0aa8135; (iii) three assertions | PASS for (i); (ii) and (iii) PASS WITH DEVIATION, see T8 evidence and Deviations |
 
-A corrected set-up (new test, limits unchanged, registered configuration kept as an ignored known miss):
+A corrected set-up (new test, limits unchanged, registered configuration kept as an ignored known miss) repeats T3a / T3b / T3c on a
+stable step (test `t3b_...`; not the ADR check T3b). The viscous number nu dt / dy^2 = 1.6 (the number of the stable T2 set-up)
+sets the step, and the runs use PISO and PIMPLE (n_outer 3, alpha_u 0.9, alpha_p 0.5).
 
-* T3a / T3b / T3c on a stable step (test `t3b_...`; not the ADR check T3b), step set by the viscous number nu dt / dy^2 = 1.6 (the number of the stable T2 set-up), t_end 2.0 / 0.5 / 0.25 for Ha
-  2 / 10 / 20, PISO and PIMPLE (n_outer 3, alpha_u 0.9, alpha_p 0.5): profile error 1.590e-3 / 6.532e-3 / 6.532e-3 (limit 2e-2),
-  flow error 1.218e-3 / 8.580e-4 / 4.064e-4 (1e-2), last-step change at most 4.9e-14 (1e-8). T3c against the steady SIMPLEC Ha 10
-  profile: 4.7e-15 (PISO), 5.7e-14 (PIMPLE) (limit 1e-6). This is a set-up defect (the instability below) and the limits are
-  unchanged.
+| Ha | t_end | Profile error (limit 2e-2) | Flow error (limit 1e-2) |
+| --- | --- | --- | --- |
+| 2 | 2.0 | 1.590e-3 | 1.218e-3 |
+| 10 | 0.5 | 6.532e-3 | 8.580e-4 |
+| 20 | 0.25 | 6.532e-3 | 4.064e-4 |
+
+The last-step change is at most 4.9e-14 (limit 1e-8). T3c against the steady SIMPLEC Ha 10 profile: 4.7e-15 (PISO), 5.7e-14 (PIMPLE)
+(limit 1e-6). This is a set-up defect (the instability below) and the limits are unchanged.
 
 Diagnostics (new tests, NOT registered configurations, NOT criterion passes; they only localise causes):
 
 * T1 with n_outer = 40 (`t1c`): ux error 5.2e-13 (Euler), 1.7e-13 (BDF2), uy 5.6e-14, p 1.5e-11; T1b Euler recursion 1.8e-13,
   analytic 2.554e-3 of a/s, BDF2 analytic 1.87e-4.
 * T3d on the stable step dt 2.5e-4: n_outer 3 gives 8.05e-3 (u) and 3.64e-5 (J) at t = 0.1 (miss); n_outer 12 gives 1.175e-6
-  (miss); n_outer 24 gives 2.430e-7 (u) and 5.67e-9 (J) at t = 0.1 and 6.630e-10 (u), 1.949e-12 (J) at t = 1.0 (the test takes about 18 minutes). Cause: the Lorentz sink s = sigma B^2 / rho is implicit
-  while its balancing term uses the previous outer iterate, so the splitting error decays geometrically with the outer iterations.
-  The statement in D1 or the registered text that the rate is that of s dt / (1 + s dt) was wrong: the measured decay with the
-  relaxed (0.9 / 0.5) settings is slower.
+  (miss); n_outer 24 gives 2.430e-7 (u) and 5.67e-9 (J) at t = 0.1 and 6.630e-10 (u), 1.949e-12 (J) at t = 1.0 (the test takes
+  about 18 minutes). Cause: the Lorentz sink s = sigma B^2 / rho is implicit while its balancing term uses the previous outer
+  iterate, so the splitting error decays geometrically with the outer iterations. The statement in D1 or the registered text that
+  the rate is that of s dt / (1 + s dt) was wrong: the measured decay with the relaxed (0.9 / 0.5) settings is slower.
 * T5 on the stable step (T5b, 800 steps of 2.5e-4): PISO 2.164e-4 (miss). PIMPLE with n_outer = 40: 7.09e-15 (T5a), 4.60e-11
   (T5b), 1.51e-13 (T5c).
 
 ### Why the misses happen (both pre-existing, independent of the new hook)
 
 1. Lagged periodic momentum coupling (T1, T5c, partly T5a). The transient momentum matrix takes the partner value of a periodic
-   face pair from the previous iterate, so the H operator at the wrap cells differs from the interior while u changes in time, and
-   the pressure equation sees a divergence of order dt. Verified on an unmodified `git archive` of a9045eb with the existing
-   `body_force = Some(BodyForce::uniform)` and no source: PISO 5.093e-1, PIMPLE (n_outer 3, alpha 0.8 / 0.5) 1.646e-1, the same
-   error as with the new hook.
+   face pair from the previous iterate. The H operator at the wrap cells therefore differs from the interior while u changes in
+   time, and the pressure equation sees a divergence of order dt. Verified on an unmodified `git archive` of a9045eb with the
+   existing `body_force = Some(BodyForce::uniform)` and no source: PISO 5.093e-1, PIMPLE (n_outer 3, alpha 0.8 / 0.5) 1.646e-1, the
+   same error as with the new hook.
 2. Instability of transient PISO / PIMPLE at a high diffusion number (T3, T3d and T5b as registered). On unmodified HEAD 0aa8135
    the unforced impulsively started plane Couette flow (`box_2d` 4x80 or 40x40, PISO, nu = 1) diverges at nu dt / dy^2 of about
    3 to 6 and above and is stable at 1.6 and below (also with `n_correctors = 1`, `ddt_correction = false`, n_outer 4 or 40,
@@ -260,11 +284,11 @@ Diagnostics (new tests, NOT registered configurations, NOT criterion passes; the
 * `baseline_hashes`: 3 passed, 1 ignored, identical; hashes not re-recorded.
 * Scratch bit-hash test (not committed; 8 steady SIMPLEC cases, 150 iterations): all 8 hashes identical between a `git archive` of
   a9045eb (parent of the wave 25C code commit) and the wave 25C tree. Against the registered reference 0aa8135 only `fan_jump`
-  differs; this is attributed to wave 24 commit a9045eb ("lag the inflow through zero-gradient boundary faces in the steady SIMPLE/SIMPLEC
-  convection"), by inference and not bisected: 0aa8135..a9045eb also contains documentation, F-210/F-212/F-215/F-220/F-227/F-054
-  and F-217 hx-function commits of waves 25A/25B and the wave 24 diagnosis tests, and a9045eb is the only commit of the range that
-  changes the steady SIMPLE/SIMPLEC convection. The registered criterion (ii) names 0aa8135 as the reference, so it is NOT met
-  verbatim; it holds against a9045eb.
+  differs. This is attributed to wave 24 commit a9045eb
+  ("lag the inflow through zero-gradient boundary faces in the steady SIMPLE/SIMPLEC convection"), by inference and not bisected:
+  0aa8135..a9045eb also contains documentation, F-210/F-212/F-215/F-220/F-227/F-054 and F-217 hx-function commits of waves 25A/25B
+  and the wave 24 diagnosis tests, and a9045eb is the only commit of the range that changes the steady SIMPLE/SIMPLEC convection.
+  The registered criterion (ii) names 0aa8135 as the reference, so it is NOT met verbatim; it holds against a9045eb.
 * Existing tests: `sources`, `actuator_disk` (2 passed, 2 ignored), `lumped` (6, 2 ignored), `heat_exchanger` (5, 2 ignored),
   `component_diagonal` (3), `mrf` (10, 11 ignored), `mhd` (5), `rcfd-fv` lib (63), `rcfd-api` lib (54) pass.
 
@@ -285,7 +309,13 @@ Diagnostics (new tests, NOT registered configurations, NOT criterion passes; the
 
 ### Not resolved
 
-Coupled and compressible algorithms (located error), vdens (existing error), `rotating_frame` / `mrf` under PISO / PIMPLE,
-`physics.body_force` under transient algorithms, components with `dynamic_mesh`, `solver.time_advance = "fractional_step"`, the
-lagged periodic momentum coupling of the transient solver, the high-diffusion-number instability of transient PISO / PIMPLE,
-unsteady and rotating actuator disks, blade-element / tip loss / trim and rotor data comparison (F-218).
+* Coupled and compressible algorithms (located error)
+* vdens (existing error)
+* `rotating_frame` / `mrf` under PISO / PIMPLE
+* `physics.body_force` under transient algorithms
+* Components with `dynamic_mesh`
+* `solver.time_advance = "fractional_step"`
+* The lagged periodic momentum coupling of the transient solver
+* The high-diffusion-number instability of transient PISO / PIMPLE
+* Unsteady and rotating actuator disks
+* Blade-element / tip loss / trim and rotor data comparison (F-218)

@@ -1,15 +1,31 @@
 # ADR 0019: Wave 15A: initialisation methods (F-205), zone sources and fixed values (F-201), user transport equations (F-202)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new tests was
-compiled or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and
-the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
-away. A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes
-that were not fixed here) may be appended at the end without touching registered limits.
+compiled or run.
 
-Roadmap: F-205 (first), F-201, F-202. Clean-room: published literature and first principles only; nothing from
-vendor material, vendor installs or vendor manuals; no vendor names in the repository. No registered check
-depends on a literature value: every expected number is a closed form derived below. Statements attributed to the
-literature are marked "(from memory, unverified)".
+Wave 15A adds initialisation methods (potential-flow and coarse-level starts, localised turbulence initialisation; F-205),
+zone sources and fixed values for temperature, scalars and transported species (F-201), and user transport equations in
+diffusive, Poisson and algebraic form (F-202). No registered check depends on a literature value: every expected number is a
+closed form derived below. All three items end `partial`. F-205 misses I2: on the backward-facing step the potential start
+took 258 iterations against 253 (uniform) and 258 (zero), and the limit asked for fewer than both. Its other checks are met;
+the coarse start on the cavity took 112 iterations against 165, with equivalent work of 187 against 165 (reported only).
+F-201 and F-202 meet their registered limits and acceptance statements, and stay `partial` for the scope left out in D2 and
+D3. The first versions of the I4, E1 and E5 tests had set-up defects and stay as ignored records beside corrected tests. No
+limit, reference value, case or algorithm was changed after the first run of the checks, and six deviations from the text of
+this ADR are disclosed under "Results".
+
+Roadmap: F-205 (first), F-201, F-202.
+
+Rules:
+
+* The limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (file names, mesh sizes that were not fixed here) may be appended at the end without touching registered limits.
+* Clean-room: published literature and first principles only; nothing from vendor material, vendor installs or vendor
+  manuals; no vendor names in the repository.
+* Statements attributed to the literature are marked "(from memory, unverified)".
 
 Process disclosure: before this ADR was written I read the existing code (scalar sweep, energy solver, registers, sources,
 `Simulation::new`, `set_fields`) and used a small independent Python model of the *intended 1-D discretisation* (not of the
@@ -50,10 +66,11 @@ or that falls below 2 is a located error at `initial.coarse_factor`), the clone 
 `Interpolator` (non-conservative mode) and `set_fields`. Imported meshes (no cell counts) are a located error. The turbulence state
 and scalars are not transferred (they start from their own initial values).
 
-**Region patching by registers** is the existing F-124 `initial.patches` (velocity, pressure, temperature). **Localised
-turbulence initialisation**: `initial.patches.<n>.variable` gains `k`, `epsilon`, `omega`, `nutilde`; the value is applied inside
-the register to the turbulence model's own field after the model is built (`scalar_mut`), so `k = ...` needs a model that has
-that field (located error at `initial.patches.<n>.variable` otherwise: e.g. `epsilon` with `k_omega_sst`).
+**Region patching by registers** is the existing F-124 `initial.patches` (velocity, pressure, temperature).
+
+**Localised turbulence initialisation**: `initial.patches.<n>.variable` gains `k`, `epsilon`, `omega`, `nutilde`; the value
+is applied inside the register to the turbulence model's own field after the model is built (`scalar_mut`), so `k = ...` needs
+a model that has that field (located error at `initial.patches.<n>.variable` otherwise: e.g. `epsilon` with `k_omega_sst`).
 
 ### D2 Zone sources and fixed values (F-201)
 
@@ -77,9 +94,14 @@ fixed cell. The residual of a fixed cell is zero. Several sources on one target 
 share a cell are a located error. Sources/fixed values act in steady `simple`/`simplec` and transient `piso`/`pimple` runs of
 the incompressible engines (not compressible, not variable density, not `coupled`: located errors).
 
-NOT attempted, stated now: mass sources, momentum sources/fixed values by expression (the F-031 `sources` remain as they are),
-sources and fixed values for turbulence quantities, the variable-density and compressible engines. F-201 is therefore
-`partial` whatever the numbers.
+NOT attempted, stated now:
+
+* mass sources;
+* momentum sources/fixed values by expression (the F-031 `sources` remain as they are);
+* sources and fixed values for turbulence quantities;
+* the variable-density and compressible engines.
+
+F-201 is therefore `partial` whatever the numbers.
 
 ### D3 User transport equations (F-202)
 
@@ -99,8 +121,12 @@ Transient support: `scalars` and `species` are advanced with the time scheme of 
 or BDF2 or the bounded variant) in `piso`/`pimple` runs, on the flux of the step; steady algorithms unchanged. `species`
 transient advance keeps the balance-species closure.
 
-NOT attempted, stated now: the *vector* variant (three-component diffusive/Poisson/algebraic variables) and coupling of the
-user variables into properties, turbulence or other equations. F-202 is therefore `partial` whatever the numbers.
+NOT attempted, stated now:
+
+* the *vector* variant (three-component diffusive/Poisson/algebraic variables);
+* coupling of the user variables into properties, turbulence or other equations.
+
+F-202 is therefore `partial` whatever the numbers.
 
 ## Registered checks
 
@@ -111,11 +137,15 @@ pair of grids. Cell-centre values are compared with the exact function at the ce
 
 **I1 Potential flow around a circular cylinder (tree).** `mesh.generator = "cylinder_ogrid"`, `r_in = a = 1`, `r_out = R = 10`,
 `depth = 1`, `grading = 10`, `physics.nu = 0.01`, `physics.rho = 1`, `cylinder` velocity `fixed` (0), `farfield` velocity
-`fixed` `(U, 0, 0)` with `U = 1`, `initial.method = "potential"`, no iterations. Derivation: `psi = (A r + B/r) cos(theta)`, `theta`
-from the +x axis, with `psi_r(a) = 0` giving `B = A a^2`, and `psi_r(R) = U cos(theta)` (the Neumann condition `u_b . n = U cos theta` on the
-outer circle) giving `A = U R^2 / (R^2 - a^2)`. Velocity: `u_r = A (1 - a^2/r^2) cos(theta)`, `u_theta = -A (1 + a^2/r^2) sin(theta)`;
-surface speed `|u_theta(a)| = 2 A |sin(theta)|`, peak `2A = 2.0202` (the finite-R factor `R^2/(R^2 - a^2) = 1.0101` is part of
-the closed form, so there is no blockage excuse). Meshes M1 = (`nx = 64`, `ny = 40`), M2 = (`nx = 128`, `ny = 80`).
+`fixed` `(U, 0, 0)` with `U = 1`, `initial.method = "potential"`, no iterations.
+
+Derivation: `psi = (A r + B/r) cos(theta)`, `theta` from the +x axis, with `psi_r(a) = 0` giving `B = A a^2`, and
+`psi_r(R) = U cos(theta)` (the Neumann condition `u_b . n = U cos theta` on the outer circle) giving
+`A = U R^2 / (R^2 - a^2)`. Velocity: `u_r = A (1 - a^2/r^2) cos(theta)`, `u_theta = -A (1 + a^2/r^2) sin(theta)`; surface speed
+`|u_theta(a)| = 2 A |sin(theta)|`, peak `2A = 2.0202` (the finite-R factor `R^2/(R^2 - a^2) = 1.0101` is part of the closed
+form, so there is no blockage excuse).
+
+Meshes M1 = (`nx = 64`, `ny = 40`), M2 = (`nx = 128`, `ny = 80`).
 * I1a (M2): at the first cell ring (cell centres at radius `r_c`), `max |u_theta - u_theta,exact(r_c)| / (2A) <= 0.03`.
 * I1b (M2): surface velocity by linear radial extrapolation of `u_theta` from the first two ring centres at the same angular index
   to `r = a`: `max |u_theta,surf - (-2A sin(theta_c))| / (2A) <= 0.03` (the acceptance wording is "surface velocity distribution
@@ -128,13 +158,17 @@ the closed form, so there is no blockage excuse). Meshes M1 = (`nx = 64`, `ny = 
 `backward_step_graded`, expansion ratio 2, `l_in = 2`, `l_out = 20`, `h_in = step = 1`, `n = [8, 80, 8, 8]`, uniform grading, parabolic
 inlet of mean velocity 1, `Re_h = 100`, `LinearUpwind`, SIMPLE with the default relaxation, `h_from_solution`, stop when
 `max(res_u, res_p) < 1e-6` (cap 3000). Initial states: A uniform `u = (1, 0, 0)`, B uniform `u = 0`, C potential velocity with
-Bernoulli pressure. Limit: `iterations(C) < iterations(A)` and `iterations(C) < iterations(B)`, all three converged. Reported
-without a limit: potential velocity with zero pressure.
+Bernoulli pressure.
+
+Limit: `iterations(C) < iterations(A)` and `iterations(C) < iterations(B)`, all three converged. Reported without a limit:
+potential velocity with zero pressure.
 
 **I3 Coarse pre-solve (tree).** `cavity_2d`, `nx = ny = 40`, `physics.nu = 0.01`, lid velocity `(1, 0, 0)`, SIMPLEC,
 `tolerance_u = tolerance_p = 1e-6`, `max_iterations = 3000`. Initial states: uniform, and `coarse` with `coarse_factor = 2`,
-`coarse_iterations = 300`. Limit: iterations to convergence of the coarse-initialised fine run `<` those of the uniform run. Reported:
-the equivalent total work counting a coarse iteration as 1/4 of a fine one.
+`coarse_iterations = 300`.
+
+Limit: iterations to convergence of the coarse-initialised fine run `<` those of the uniform run. Reported: the equivalent
+total work counting a coarse iteration as 1/4 of a fine one.
 
 **I4 Localised turbulence initialisation (tree).** `k_epsilon` on a channel, register `core` (box), `initial.patches.a`
 `variable = "k"` value 0.5 and `.b` `variable = "epsilon"` value 2.0 on `core`: the fields `k`, `epsilon` equal 0.5, 2.0 on exactly
@@ -174,16 +208,22 @@ error `(1/n)^2` for `n = 8, 16, 32, 64`.
 **E2 Linearly varying source by expression.** `value_expression = "2e4 [W/m^3] * x / 0.1 [m]"`, i.e. `q(x) = q0 x / L`, `q0 = 2e4`.
 Exact: `T = 300 + q0 x (L^2 - x^2) / (6 k L)` (derivation: `-k T'' = q0 x / L`, `T' = -q0 x^2/(2kL) + C`, `T(0) = T(L)` fixes
 `C = q0 L/(6k)`). The cell-centre value times the volume is the exact cell integral of a linear function. Model (independent):
-`max |T_h - T_exact| / max T_exact` at `n = 64` is 4.72e-4. Limits: that relative error at `n = 64` `<= 6e-4`, observed order over
-`n = 8, 16, 32, 64` (finest two pairs) in `[1.9, 2.1]`.
+`max |T_h - T_exact| / max T_exact` at `n = 64` is 4.72e-4.
+
+Limits: that relative error at `n = 64` `<= 6e-4`, observed order over `n = 8, 16, 32, 64` (finest two pairs) in `[1.9, 2.1]`.
 
 **E3 Fixed-value cell zone.** No source; `xmin` 300, `xmax` 400 K; `zone_sources.hold` target `temperature`, `kind = fixed_value`,
 `value = 500`, `zone = box` with `box_min = [0.045, -1, -1]`, `box_max = [0.055, 1, 1]`, `n = 40` (fixed cells are those with centres
 in the box: centres at `(i + 0.5) h`, `h = 0.0025`, i.e. `i = 18..21`, centres `0.0462..0.0537`, four cells; the test asserts exactly
-four fixed cells). Limits: E3a every fixed cell equals 500 with difference exactly 0 (`<= 0`); E3b the cells outside lie on the
-piecewise linear profile through the boundary values and the fixed-cell centres (the discrete solution is exactly linear between the
-wall, whose face value is the Dirichlet value, and the first fixed centre, and constant inside): `max |T - T_pl| <= 1e-6 * 200 K`;
-E3c the same with the zone given as a register (`registers.hold` box) gives a result identical to E3 (`<= 0`).
+four fixed cells).
+
+Limits:
+
+* E3a every fixed cell equals 500 with difference exactly 0 (`<= 0`);
+* E3b the cells outside lie on the piecewise linear profile through the boundary values and the fixed-cell centres (the
+  discrete solution is exactly linear between the wall, whose face value is the Dirichlet value, and the first fixed centre,
+  and constant inside): `max |T - T_pl| <= 1e-6 * 200 K`;
+* E3c the same with the zone given as a register (`registers.hold` box) gives a result identical to E3 (`<= 0`).
 
 **E4 Species decay (transient, exp(-k t)).** Closed `box_2d` `4 x 4`, all velocity conditions `fixed` (0), `pimple`, `species.a`
 (`initial 1`, `diffusivity 1e-3`) and `species.b` (balance, `initial 0`), `zone_sources.decay` target `a`, `value 0`,
@@ -212,14 +252,18 @@ Set-up as above: `box_2d`, fluid at rest unless stated, `simplec` (steady) or `p
 **U1 Diffusive scalar, variable diffusivity, fixed-value walls.** `lx = 1`, `ly = 0.1`, `ny = 2`, `nx = n`; `scalars.s` `equation =
 "diffusive"`, `diffusivity_expression = "1 [m^2/s] * (1 + x / 1 [m])"`, `xmin` fixed 0, `xmax` fixed 1, `ymin`, `ymax` zero gradient.
 Exact: `D s' = const` gives `s = ln(1 + x)/ln 2`. Model (face diffusivity at the face centre, half-cell Dirichlet): volume-weighted RMS
-error 4.17e-4, 1.04e-4, 2.61e-5, 6.53e-6 for `n = 16, 32, 64, 128`. Limits: observed order over the finest two pairs in `[1.9, 2.1]`;
-RMS error at `n = 128` `<= 8e-6`. Also the constant-diffusivity run reproduces the linear profile to `1e-9`.
+error 4.17e-4, 1.04e-4, 2.61e-5, 6.53e-6 for `n = 16, 32, 64, 128`.
+
+Limits: observed order over the finest two pairs in `[1.9, 2.1]`; RMS error at `n = 128` `<= 8e-6`. Also the
+constant-diffusivity run reproduces the linear profile to `1e-9`.
 
 **U2 Poisson, manufactured solution.** `box_2d` unit square, `equation = "poisson"`, `D = 1 + x` (expression), exact `s = sin(pi x) cos(pi y)`,
 Dirichlet on all four patches from the exact function (per-patch `value_expression`), `source_expression` from
 `S = -div(D grad s) = -pi cos(pi x) cos(pi y) + 2 pi^2 (1 + x) sin(pi x) cos(pi y)` (`D_x = 1`, `s_x = pi cos(pi x) cos(pi y)`, `lap s = -2 pi^2 s`).
-`n = 8, 16, 32, 64`. Limits: observed order of the volume-weighted RMS error over the finest two pairs in `[1.8, 2.3]`; RMS error at
-`n = 64` `<= 2e-3`.
+`n = 8, 16, 32, 64`.
+
+Limits: observed order of the volume-weighted RMS error over the finest two pairs in `[1.8, 2.3]`; RMS error at `n = 64`
+`<= 2e-3`.
 
 **U3 Transient diffusive eigenmode.** `box_2d` `lx = 1`, `ny = 2`, `nx = 128`, both end walls fixed 0, `D = 0.1`, `initial_expression =
 "sin(pi * x / 1 [m])"`, exact `s = sin(pi x) exp(-pi^2 D t)`, error `max` at `t = 1`. Euler `dt = 0.1, 0.05, 0.025`: observed order
@@ -232,9 +276,10 @@ finest `dt` of each sequence, without a limit).
 outlet zero gradient; `zone_sources.react` target `s` `linear_coefficient = 0.5` (zone all). Exact: `u s' - D s'' + k s = 0`,
 `s(0) = 1`, `s'(1) = 0`: `s = A e^{m1 x} + B e^{m2 x}`, `m_{1,2} = (u +- sqrt(u^2 + 4 k D))/(2 D)` (10.4772, -0.47723),
 `A = -m2 e^{m2}/(m1 e^{m1} - m2 e^{m2})`, `B = 1 - A`. Model (independent, half-cell inlet, zero-gradient outlet): RMS errors central
-2.79e-4, 6.95e-5, 1.74e-5, 4.34e-6, 1.09e-6 for `n = 20..320`; upwind 3.01e-3, 1.72e-3, 9.37e-4, 4.93e-4, 2.53e-4. Limits:
-`central` (`solver.convection = "central"`): observed order (finest two pairs of `n = 40, 80, 160, 320`) in `[1.9, 2.1]`; `upwind`:
-finest two pairs of `n = 80, 160, 320` in `[0.9, 1.15]`.
+2.79e-4, 6.95e-5, 1.74e-5, 4.34e-6, 1.09e-6 for `n = 20..320`; upwind 3.01e-3, 1.72e-3, 9.37e-4, 4.93e-4, 2.53e-4.
+
+Limits: `central` (`solver.convection = "central"`): observed order (finest two pairs of `n = 40, 80, 160, 320`) in
+`[1.9, 2.1]`; `upwind`: finest two pairs of `n = 80, 160, 320` in `[0.9, 1.15]`.
 
 **U5 Algebraic variable.** `scalars.a` (transport, inlet value 1, `diffusivity 0.1`, steady, as U4 without the reaction) and
 `scalars.b` `equation = "algebraic"` `expression = "2 * a + x / 1 [m] + T / 1 [K]"` with `energy.enabled` and a fixed-temperature case
@@ -280,16 +325,18 @@ before the implementation to derive the expectations (as stated above); they wer
 
 **I2 miss and diagnosis.** The registered assertion is kept unchanged in the ignored test
 `i2_potential_start_needs_fewer_iterations_on_the_backward_facing_step_known_miss` (`rcfd-fv/tests/init_potential.rs`;
-`I2_TRACE=1` prints the residual histories). After about 25 iterations all four starts have the same residual decay (for
-example `res_u` at iteration 100: 7.3e-4 uniform, 9.1e-4 zero, 9.2e-4 potential; a factor of about 0.31 per 25 iterations): the
-iteration count to 1e-6 is set by the slow asymptotic recirculation / pressure-velocity mode of the SIMPLE iteration, and the
-potential start only lowers the initial residual (`res_u` 0.29 against 1.0 at iteration 1), saving no iterations. This is a
-property of the flow and of the iteration, not a defect of the potential solve (I1 shows the potential velocity is accurate for
-the flow it models; the step flow at Re_h = 100 is viscous and recirculating, which potential flow does not represent). No
-retuning was done. A start that targets the slow mode (for example a coarse-level start for this geometry) was not tried.
+`I2_TRACE=1` prints the residual histories).
+
+After about 25 iterations all four starts have the same residual decay (for example `res_u` at iteration 100: 7.3e-4 uniform,
+9.1e-4 zero, 9.2e-4 potential; a factor of about 0.31 per 25 iterations). The slow asymptotic recirculation / pressure-velocity
+mode of the SIMPLE iteration sets the iteration count to 1e-6. The potential start only lowers the initial residual (`res_u`
+0.29 against 1.0 at iteration 1) and saves no iterations. This is a property of the flow and of the iteration, not a defect of
+the potential solve: I1 shows the potential velocity is accurate for the flow it models, and the step flow at Re_h = 100 is
+viscous and recirculating, which potential flow does not represent. No retuning was done. A start that targets the slow mode
+(for example a coarse-level start for this geometry) was not tried.
 
 **Set-up defect (I4).** The first version of the localised-turbulence test used the model name `none`, which is not a valid
-laminar setting (the name is `laminar`); it is kept as the ignored record `i4_localised_turbulence_initialisation` and the
+laminar setting (the name is `laminar`). It is kept as the ignored record `i4_localised_turbulence_initialisation`, and the
 corrected `i4b_...` passes with the registered limits.
 
 ### F-201 zone sources and fixed values (verdict `partial`: gaps named in D2)

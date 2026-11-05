@@ -1,9 +1,22 @@
 # ADR 0105: Wave 42A: error control without a chosen step (F-209), SIMPLEC divergence hint (F-248)
 
-Status: registered before the registered tests were run. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test
-with the limit unchanged, a defective set-up gets a new corrected test and the old one stays ignored. Acceptance texts are not
-edited. Defaults stay bit-identical and `crates/rcfd-api/tests/baseline_hashes.rs` is not touched. Clean-room: the reference of
-E2 is rcfd's exact semi-discrete solution (ADR 0101); F-248 has no reference value.
+Status: registered before the registered tests were run.
+
+E2 (F-209) tests whether error-controlled stepping reaches its requested error without a user-chosen step on a two-timescale
+linear decay. F-248 gets a located hint, tested by D1, D1n and D2: when a steady SIMPLEC run diverges and the case has a
+fixed-pressure or periodic boundary and `solver.simplec_boundary_compensation` is false, the error names the key. The hint adds
+no new trip criterion. The results, measured after the registration, meet every limit with no deviation from the registered plan: E / (tol T)
+is 0.792 at tol 1e-2 and 0.832 at tol 2.5e-3, against [0.3, 3]. F-209 stays `partial`: the flat-plate clause is open; the
+case-key path still takes its first, largest and smallest step from `solver.dt`. E2 therefore shows the library controller
+(`rcfd_fv::stepctl`), not the case path with its defaults. F-248 stays `done` with the diagnostic added.
+
+Rules and parents:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged, a defective set-up gets a new
+  corrected test and the old one stays ignored.
+* Acceptance texts are not edited.
+* Defaults stay bit-identical and `crates/rcfd-api/tests/baseline_hashes.rs` is not touched.
+* Clean-room: the reference of E2 is rcfd's exact semi-discrete solution (ADR 0101); F-248 has no reference value.
 
 ## What was run before this ADR was written (disclosed)
 

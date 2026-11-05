@@ -1,13 +1,28 @@
 # ADR 0091: Wave 38D, adjoint shape sensitivities of a laminar 2D duct with FFD morphing (F-137)
 
-Status: registered before any adjoint code was written. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the
-limit unchanged, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are never re-recorded;
-everything here is opt-in (a new module, no existing code path changes). Clean-room: first principles only; no reference value from
-literature enters a gate (the reference derivative is a finite difference of rcfd's own converged solutions).
+Status: registered before any adjoint code was written.
 
-Roadmap entry F-137 (deps F-028 done, F-095 partial). Acceptance text: "Drag sensitivity of a 2D duct with respect to a few shape
-parameters matches finite differences within 5 percent". The existing design loop (`crates/rcfd-api/src/design`, ADR 0067) has
-samplers, Nelder-Mead and differential evolution only; it has no gradient and no geometry parameters.
+F-137 asks for the drag sensitivity of a 2D duct with respect to a few shape parameters, matching finite differences within 5
+percent. This wave adds FFD morphing and option C3, a fixed-point discrete adjoint with a finite-difference-assembled dense Jacobian
+of the one-iteration SIMPLE/SIMPLEC map, for small meshes only. The registered rule requires consistency with the discrete model
+and then takes the smallest code. A1 passes all six pairs with A0 holding (worst relative difference 1.12e-6), so F-137 is set to
+`done` by the registered rule. All six reference values were known when the limits were written, and the test cannot tell the
+adjoint error from the reference's truncation below about 1e-6. Only one configuration was verified (SIMPLEC, upwind, no
+non-orthogonal correctors, Re 20). For these 3 parameters the adjoint costs about 3 times more than one-step central differences; it
+breaks even at about 9 parameters on this mesh. Turbulent gradients are refused, and gradients are not delivered inside
+`design::study`, the `design.*` service methods, MCP tools or case files.
+
+Rules and parents:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged, a defective set-up gets a NEW
+  corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded; everything here is opt-in (a new module, no existing code path changes).
+* Clean-room: first principles only; no reference value from literature enters a gate (the reference derivative is a finite
+  difference of rcfd's own converged solutions).
+* Roadmap entry F-137 (deps F-028 done, F-095 partial). Acceptance text: "Drag sensitivity of a 2D duct with respect to a few shape
+  parameters matches finite differences within 5 percent".
+* The existing design loop (`crates/rcfd-api/src/design`, ADR 0067) has samplers, Nelder-Mead and differential evolution only; it
+  has no gradient and no geometry parameters.
 
 ## What was run before this ADR was written (disclosed)
 
@@ -112,10 +127,15 @@ acceptance text and are listed as not delivered.
 
 ## Addendum: measured values (release build, scratch tree on HEAD 94015e1 plus the wave-38D files)
 
-Delivered: `crates/rcfd-api/src/design/adjoint.rs` (FFD morph `Ffd`, the duct set-up `Duct`, objectives `pressure_drop` and
-`wall_drag`, `solve_primal`, `adjoint_gradient`, `shape_gradient`, a dense LU), `optim::projected_gradient` with `PgOptions`,
-tests `crates/rcfd-api/tests/adjoint_duct.rs` and unit tests in both modules, a section in docs/design-loop.md. No existing code
-path changed.
+Delivered:
+
+* `crates/rcfd-api/src/design/adjoint.rs` (FFD morph `Ffd`, the duct set-up `Duct`, objectives `pressure_drop` and `wall_drag`,
+  `solve_primal`, `adjoint_gradient`, `shape_gradient`, a dense LU);
+* `optim::projected_gradient` with `PgOptions`;
+* tests `crates/rcfd-api/tests/adjoint_duct.rs` and unit tests in both modules;
+* a section in docs/design-loop.md.
+
+No existing code path changed.
 
 | check | limit | measured | verdict |
 |---|---|---|---|
@@ -128,11 +148,20 @@ path changed.
 | A4 guards | error | `nu_face` and `max_state` refused (unit test) | pass |
 | A5 defaults | unchanged | no existing code path edited; gate below | see gate |
 
-A1 per pair (adjoint / D(1e-3) / relative difference): dp a1 1.2885654712 / 1.2885669104 / 1.12e-6; dp a2 1.3284866030 /
-1.3284876841 / 8.1e-7; dp a3 1.1582562470 / 1.1582573656 / 9.7e-7; Fx a1 0.12925909152 / 0.12925919544 / 8.0e-7; Fx a2
-0.13320816779 / 0.13320823825 / 5.3e-7; Fx a3 0.11629478818 / 0.11629486646 / 6.7e-7. The residual difference is the same size
-as the O(h^2) truncation of the reference itself (D(1e-3) and D(2e-3) differ by 1.6e-6 to 2.3e-6), so the 5 percent limit is met
-with a margin of four orders; the test cannot tell the adjoint error from the reference's truncation below about 1e-6.
+A1 per pair:
+
+| pair | adjoint | D(1e-3) | relative difference |
+|---|---|---|---|
+| dp a1 | 1.2885654712 | 1.2885669104 | 1.12e-6 |
+| dp a2 | 1.3284866030 | 1.3284876841 | 8.1e-7 |
+| dp a3 | 1.1582562470 | 1.1582573656 | 9.7e-7 |
+| Fx a1 | 0.12925909152 | 0.12925919544 | 8.0e-7 |
+| Fx a2 | 0.13320816779 | 0.13320823825 | 5.3e-7 |
+| Fx a3 | 0.11629478818 | 0.11629486646 | 6.7e-7 |
+
+The residual difference is the same size as the O(h^2) truncation of the reference itself (D(1e-3) and D(2e-3) differ by 1.6e-6 to
+2.3e-6), so the 5 percent limit is met with a margin of four orders. The test cannot tell the adjoint error from the reference's
+truncation below about 1e-6.
 
 Fixed point: `max |G(X*) - X*|` = 1.55e-15. State N = 2050 (800 u, 400 p, 850 phi).
 
@@ -144,13 +173,19 @@ adjoint per iteration (6.1 s < 10 s, so the test is not ignored, as registered);
 Deviations from the registered plan: none in limits or set-ups. The test runs the noise-floor warm start from the base solution as
 registered. A3 needed no step halving, so the backtracking branch is exercised only by the unit test of `projected_gradient`.
 
-Not delivered: RBF morphing (FFD only); observables other than pressure drop and wall x-force (moments, centre
-of pressure, cumulative forces); turbulent gradients (refused, no frozen-turbulence variant); transient, energy, body-force, driver
-or pseudo-controller cases (refused); meshes above a few thousand state unknowns (dense Jacobian; a sparse or matrix-free
-transposed solve is the upgrade path); gradients inside `design::study` (the `Method` / `Evaluator` / store have no gradient
-slot), the `design.*` service methods, MCP tools and case files; topology, turbulence-coefficient and multi-objective gradient
-optimisers. Only one configuration was verified (SIMPLEC, upwind, no non-orthogonal correctors, Re 20); other schemes and options
-are accepted by the code but not tested, and a limited scheme with an active limiter switch would make the map non-smooth.
+Not delivered:
+
+* RBF morphing (FFD only);
+* observables other than pressure drop and wall x-force (moments, centre of pressure, cumulative forces);
+* turbulent gradients (refused, no frozen-turbulence variant);
+* transient, energy, body-force, driver or pseudo-controller cases (refused);
+* meshes above a few thousand state unknowns (dense Jacobian; a sparse or matrix-free transposed solve is the upgrade path);
+* gradients inside `design::study` (the `Method` / `Evaluator` / store have no gradient slot), the `design.*` service methods, MCP
+  tools and case files;
+* topology, turbulence-coefficient and multi-objective gradient optimisers.
+
+Only one configuration was verified (SIMPLEC, upwind, no non-orthogonal correctors, Re 20). Other schemes and options are accepted
+by the code but not tested, and a limited scheme with an active limiter switch would make the map non-smooth.
 
 Status (by the registered rule): A1 passes all six pairs with A0 holding, so F-137 is set to `done`; the SCOPE extras above are
 listed as not delivered in its note.

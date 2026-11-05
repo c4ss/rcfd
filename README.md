@@ -1,14 +1,15 @@
 # rcfd
 
-Clean-room, open source (AGPL-3.0) finite-volume CFD suite in Rust.
+rcfd is a clean-room, open source (AGPL-3.0) finite-volume CFD suite in Rust.
 It has a command-line solver, a solver service, an MCP server that lets an AI
-assistant drive the solver, and a desktop app. Clean-room means every
-algorithm comes from published literature or first principles, with no vendor
-code, binaries or documentation text. Vendor documentation was consulted in a
-few recorded cases: mostly contents pages, to list capabilities, and some
-theory pages, as a check of model constants that are now marked UNVERIFIED.
-The [provenance record](docs/provenance.md) lists each case.
-[CONTRIBUTING.md](CONTRIBUTING.md) sets out the policy.
+assistant drive the solver, and a desktop app.
+
+Clean-room means every algorithm comes from published literature or first
+principles, with no vendor code, binaries or documentation text. Vendor
+documentation was consulted in a few recorded cases: mostly contents pages, to
+list capabilities, and some theory pages, as a check of model constants that
+are now marked UNVERIFIED. The [provenance record](docs/provenance.md) lists
+each case. [CONTRIBUTING.md](CONTRIBUTING.md) sets out the policy.
 
 ## Status and main limits
 
@@ -36,24 +37,26 @@ root, build the command-line solver and check one of the shipped cases:
     target/release/rcfd --help
     target/release/rcfd check cases/sod/sod.toml
 
-`check` builds the mesh and validates the set-up without solving. For a first
-real run, follow [the quick-start tutorial](docs/tutorials/quick-start-cli.md):
-it writes a small lid-driven cavity case, runs it to convergence and
-post-processes the result. Apart from the build, every command in it (and the
-`check` above) is executed by the test suite.
-On Windows the binary is `target\release\rcfd.exe`.
+On Windows the binary is `target\release\rcfd.exe`. `check` builds the mesh and
+validates the set-up without solving.
+
+For a first real run, follow
+[the quick-start tutorial](docs/tutorials/quick-start-cli.md): it writes a
+small lid-driven cavity case, runs it to convergence and post-processes the
+result. Apart from the build, the test suite executes every command in it (and
+the `check` above).
 
 ## Build and test
 
 Prerequisites:
 
-* Rust 1.90 or later for the solver and libraries; Rust 1.95 or later for
-  the two desktop apps, the Studio (`rcfd-studio`) and the legacy app
-  (`rcfd-gui`): their eframe 0.36 needs 1.95. CI type-checks the workspace
-  without the two desktop apps with 1.90 and builds and tests everything
-  with 1.99; tests have not been run on 1.90. Each crate's `rust-version`
-  states its own minimum (1.75 to 1.95): 1.75, or the highest minimum its
-  dependencies declare if that is higher. Older toolchains are not tested.
+* Rust 1.90 or later for the solver and libraries. The two desktop apps, the
+  Studio (`rcfd-studio`) and the legacy app (`rcfd-gui`), need Rust 1.95 or
+  later: their eframe 0.36 needs 1.95. With 1.90, CI type-checks the workspace
+  without the two desktop apps. With 1.99, it builds and tests everything.
+  Tests have not been run on 1.90. Each crate's `rust-version` states its own
+  minimum (1.75 to 1.95): 1.75, or the highest minimum its dependencies
+  declare if that is higher. Older toolchains are not tested.
 * The render crate uses the GPU through wgpu. Without a GPU or a software
   adapter its tests print a skip message and pass. CUDA support is an
   optional feature, off by default ([docs/gpu.md](docs/gpu.md)).
@@ -66,11 +69,12 @@ Build and test:
     cargo test --workspace --release
 
 The full test suite takes about an hour in release mode on a 16-thread
-machine, and much longer in debug mode. The project's gate runs it with
-`python scripts/gate_test.py` ([docs/test-process.md](docs/test-process.md)).
+machine, and much longer in debug mode. The project's gate, the full check run
+before work is merged, runs it with `python scripts/gate_test.py`
+([docs/test-process.md](docs/test-process.md)).
 
 The Studio starts the run service and the solver from its own folder, so build
-them together; one line builds the four programs in release and opens the
+them together. One line builds the four programs in release and opens the
 Studio on a project folder (the folder is optional):
 
     powershell -ExecutionPolicy Bypass -File scripts\studio.ps1 my-project
@@ -78,7 +82,7 @@ Studio on a project folder (the folder is optional):
 
 Finished example projects that open straight to a picture are in
 `example-projects/` (runs made on Windows) and `example-projects-linux/` (the
-same projects, runs made on x86_64 Linux); open the folder of your platform,
+same projects, runs made on x86_64 Linux). Open the folder of your platform,
 for example `sh scripts/studio.sh example-projects-linux/wind-tunnel`. The
 cases of `wind-tunnel` and `quick-start` are 2D; `axial-fan` holds a 3D blade
 passage of an axial fan that the Studio shows in an orbitable 3D view (for
@@ -87,7 +91,7 @@ viewing only: a first-order run, not a validated fan prediction).
 ## Where to go next
 
 * Documentation, tutorials and the example gallery start at
-  [docs/index.md](docs/index.md); the tutorials are executed by the test suite.
+  [docs/index.md](docs/index.md); the test suite executes the tutorials.
 * [CONTRIBUTING.md](CONTRIBUTING.md) has the clean-room rule and the commands
   to run before you submit a change.
 * [The glossary](docs/glossary.md) explains the project's own terms (wave,

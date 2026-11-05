@@ -1,5 +1,11 @@
 # Job 48T findings: pressure spokes on the refined cylinder O-grid
 
+The spokes are a numerical artefact of the solver at high wall resolution: the case's default PISO loses its
+pressure-velocity coupling in the thin wall cells. Changing one setting of the 256 x 256 case gives a clean run to t = 10, and
+`time_advance = "fractional_step"` is the registered recommendation. Every workaround was run to t = 10 only, and clean to
+t = 10 does not by itself prove the shedding phase. The registered reading of the pressure-lag diagnostic is "rejected" in its
+strict form, because one clean arm crosses rho = 1. K1 and K2 are known misses, and their tests are ignored (see Tools).
+
 Registration, amendments, limits and the full results: [ADR 0154](../../adr/0154-job48t-cylinder-ogrid-pressure-spokes.md).
 Work folder (runs, dumps, metrics, figures; outside the repository): `E:\projects\cfd\w48t-work`. Figures:
 `E:\projects\cfd\w48t-work\report\figures`, Studio-path renders: `E:\projects\cfd\w48t-work\report\studio-renders`.
@@ -7,34 +13,44 @@ Work folder (runs, dumps, metrics, figures; outside the repository): `E:\project
 ## Answer
 
 **(b) a numerical artefact of the solver at high wall resolution.** The default transient algorithm of the case (PISO: one
-outer iteration, two pressure correctors) loses its pressure-velocity coupling in the thin wall cells of the graded O-grid. With
-`grading = 100` and `ny = 256` the first radial cell is 0.00262 D, five times thinner than on the committed 64 x 48 mesh
+outer iteration, two pressure correctors) loses its pressure-velocity coupling in the thin wall cells of the graded O-grid.
+
+With `grading = 100` and `ny = 256` the first radial cell is 0.00262 D, five times thinner than on the committed 64 x 48 mesh
 (0.01366 D). Refining at a fixed Courant number lowers dt only like the cell size, so the wall diffusion number
 nu dt / dr1^2 rises like 1/h: 3.35 on 64 x 48, 6.5 on 128 x 96, 22.7 on the user's 256 x 256 at dt 0.0156. Above an onset
 between 6.5 (clean) and 11.4 (spoky), the error the two correctors leave behind is amplified from step to step (measured
-pressure-lag amplification 2.42 per step on the user's set-up, 0.36 on 64 x 48). The amplified mode lives in the first
-0.2 D at the wall and is grid-scale around the cylinder (dominant wavelength 4.5 to 6 cells, broadband from 2 to about 20 cells,
-the same number of cells at 256 and 512 cells around): these are the spokes. It saturates at about 50 free-stream dynamic
-pressures (p reaches -231 .. 294 near the wall where the physical field spans -0.74 .. 0.58), makes cd jump by 10 to 25 from one
-step to the next, does not decay (the user's dt 0.0625 run held it from t = 2 to 71 and then diverged), and on other set-ups
-(64 x 256, no push, a ramped start, PIMPLE with weak relaxation) it grows until the divergence guard stops the run.
+pressure-lag amplification 2.42 per step on the user's set-up, 0.36 on 64 x 48).
 
-It is **not**: the Studio's save of the case (the resolved settings differ only in nx, ny, dt; the two files give byte-identical
-runs), the display (every rendered pixel shows exactly the stored cell value), the Courant number (256 x 48 at dt 1/16 runs clean
-at a solver Courant number of 6.4 to 8.0; 64 x 256 at dt 1/64 starts at Courant 1.03 and diverges; the Courant numbers near 100
-of the spoky runs come from the spurious velocities, after the start), the cell Peclet number (2U h / nu at the wall falls with
-refinement: 9.9 around and 2.7 across the first cell on 64 x 48, 2.5 and 0.5 on 256 x 256), the transient Rhie-Chow term
-(`ddt_correction = false` still spoky), the convection scheme (upwind still spoky), non-orthogonal correction (the mesh is
-orthogonal to 1e-11; skewness 0.006; the in-plane wall aspect is 4.7 against 3.6 on 64 x 48), the linear-solver tolerances
-(1e-12 still spoky; pressure solves take about 10 iterations against a cap of 3000), the wall pressure condition (at a
-fixed-velocity wall the solver uses zero gradient whatever the case says, and `pressure_update = "bernoulli"` applies only to
-`target_mass_flow_outlet`), or the start (a restart from the developed 64 x 48 field and a ramped start both fail).
+The amplified mode lives in the first 0.2 D at the wall and is grid-scale around the cylinder (dominant wavelength 4.5 to 6
+cells, broadband from 2 to about 20 cells, the same number of cells at 256 and 512 cells around): these are the spokes. It
+saturates at about 50 free-stream dynamic pressures (p reaches -231 .. 294 near the wall where the physical field spans
+-0.74 .. 0.58) and makes cd jump by 10 to 25 from one step to the next. It does not decay: the user's dt 0.0625 run held it
+from t = 2 to 71 and then diverged. On other set-ups (64 x 256, no push, a ramped start, PIMPLE with weak relaxation) it
+grows until the divergence guard stops the run.
+
+It is **not**:
+
+* the Studio's save of the case: the resolved settings differ only in nx, ny, dt, and the two files give byte-identical runs;
+* the display: every rendered pixel shows exactly the stored cell value;
+* the Courant number: 256 x 48 at dt 1/16 runs clean at a solver Courant number of 6.4 to 8.0, and 64 x 256 at dt 1/64 starts
+  at Courant 1.03 and diverges; the Courant numbers near 100 of the spoky runs come from the spurious velocities, after the
+  start;
+* the cell Peclet number: 2U h / nu at the wall falls with refinement (9.9 around and 2.7 across the first cell on 64 x 48,
+  2.5 and 0.5 on 256 x 256);
+* the transient Rhie-Chow term: `ddt_correction = false` is still spoky;
+* the convection scheme: upwind is still spoky;
+* non-orthogonal correction: the mesh is orthogonal to 1e-11, skewness is 0.006, and the in-plane wall aspect is 4.7 against
+  3.6 on 64 x 48;
+* the linear-solver tolerances: 1e-12 is still spoky, and pressure solves take about 10 iterations against a cap of 3000;
+* the wall pressure condition: at a fixed-velocity wall the solver uses zero gradient whatever the case says, and
+  `pressure_update = "bernoulli"` applies only to `target_mass_flow_outlet`;
+* the start: a restart from the developed 64 x 48 field and a ramped start both fail.
 
 ## What to do on the 256 x 256 case (workaround, no code change)
 
-Change one setting of the case; each line below was run to t = 10 and is clean at t = 1, 3 and 10 (`M_hf` is the registered
-spoke measure: the RMS of the grid-scale part of p at r = 0.55 to 0.70 D, in free-stream dynamic pressures; the 64 x 48 control
-has 0.0057 at t = 3, the user's run 52.7):
+Change one setting of the case. Each line below was run to t = 10 and is clean at t = 1, 3 and 10. `M_hf` is the registered
+spoke measure: the RMS of the grid-scale part of p at r = 0.55 to 0.70 D, in free-stream dynamic pressures. The 64 x 48
+control has 0.0057 at t = 3, the user's run 52.7.
 
 | Setting (everything else as the user's case) | M_hf t = 1 / 3 / 10 | cd at t = 3 / 10 | Wall time per simulated second (one thread, shared machine) |
 |---|---|---|---|
@@ -56,21 +72,32 @@ Two things to know before choosing:
   measured rates (one thread, a shared machine) a full 80 s run takes about 40 min with `fractional_step` and about 65 min with
   `n_correctors = 3`. For reference the user's own 256 x 256 run ran at 22.8 s per simulated second.
 
-Also clean, measured to t = 3 or 10: `n_correctors = 4` (to t = 3); and keeping the defaults but
-lowering `mesh.grading` to about 11 at ny = 256 (47 s per simulated second, clean to t = 10), which keeps the 64 x 48 first cell
-and puts the added radial cells into the field instead of the wall: closest to "a higher resolution far field".
-Do not use: PIMPLE with `n_outer = 2` or `4` and `alpha_u = alpha_p = 0.9` (both diverged), `ddt_correction = false`,
-`convection = "upwind"`, `time_scheme = "bdf2"` (still spoky, M_hf 15). Rule of thumb on this O-grid (in-plane wall aspect 3.6 to
-4.7) with the default PISO: clean up to nu dt / dr1^2 = 6.5, spoky from 11.4. It is only a guide: on the stretched 64 x 256 wall
-layer (aspect 18.8) even three correctors stay spoky at 22.8, and the pressure-lag estimate below is the real test.
+Also clean, measured to t = 3 or 10:
 
-What to expect when it is right: at Re = 100 the impulsive start gives one large pressure impulse in the first step (cd 33 at
-dt 1/16, larger at smaller dt), the force then settles within about one time unit (cd 1.47 at t = 3, 1.29 at t = 10 on every
-clean mesh), the pressure field shows the stagnation point in front, suction at the sides and a low-pressure wake, and shedding
-starts later (about 40 D/U with the push). Spokes, p values of hundreds, or cd jumping by tens between steps are never physical
-in this case. The Studio colours each cell flat with its stored value and scales the colours to the snapshot's minimum and
-maximum, so a few extreme wall cells make the rest of the domain one flat colour; that is the display showing a wrong field
-faithfully, not the cause.
+* `n_correctors = 4` (to t = 3);
+* keeping the defaults but lowering `mesh.grading` to about 11 at ny = 256 (47 s per simulated second, clean to t = 10),
+  which keeps the 64 x 48 first cell and puts the added radial cells into the field instead of the wall: closest to
+  "a higher resolution far field".
+
+Do not use:
+
+* PIMPLE with `n_outer = 2` or `4` and `alpha_u = alpha_p = 0.9` (both diverged);
+* `ddt_correction = false`, `convection = "upwind"`, `time_scheme = "bdf2"` (still spoky, M_hf 15).
+
+Rule of thumb on this O-grid (in-plane wall aspect 3.6 to 4.7) with the default PISO: clean up to nu dt / dr1^2 = 6.5, spoky
+from 11.4. It is only a guide: on the stretched 64 x 256 wall layer (aspect 18.8) even three correctors stay spoky at 22.8,
+and the pressure-lag estimate below is the real test.
+
+What to expect when it is right, at Re = 100:
+
+* The impulsive start gives one large pressure impulse in the first step (cd 33 at dt 1/16, larger at smaller dt).
+* The force then settles within about one time unit (cd 1.47 at t = 3, 1.29 at t = 10 on every clean mesh).
+* The pressure field shows the stagnation point in front, suction at the sides and a low-pressure wake.
+* Shedding starts later (about 40 D/U with the push).
+
+Spokes, p values of hundreds, or cd jumping by tens between steps are never physical in this case. The Studio colours each
+cell flat with its stored value and scales the colours to the snapshot's minimum and maximum, so a few extreme wall cells make
+the rest of the domain one flat colour; that is the display showing a wrong field faithfully, not the cause.
 
 ## Measured classification (registered rule L3: clean if M_hf <= max(2 x control, 0.01) at every checked time)
 
@@ -96,14 +123,18 @@ faithfully, not the cause.
 | W3, W5, W6 | fractional step; 3 correctors; 3 correctors at dt 0.0156 | 22.8 | see the workaround table | 0.001 | clean |
 | W4 | 256 x 256, dt 1/256 to t = 10 | 5.7 | see the workaround table | 0.0003 | clean |
 
-The user's own stores: 64 x 48 (0.0057 at t = 3, identical to R64); 256 x 256 dt 0.0625 (28 / 57 / 53, 48 to 69 up to t = 71,
-then diverged); 256 x 256 dt 0.0156 (46 / 53); 512 x 512 dt 0.0625 (369 at t = 1, diverged at step 22).
+The user's own stores:
+
+* 64 x 48: 0.0057 at t = 3, identical to R64;
+* 256 x 256 dt 0.0625: 28 / 57 / 53, 48 to 69 up to t = 71, then diverged;
+* 256 x 256 dt 0.0156: 46 / 53;
+* 512 x 512 dt 0.0625: 369 at t = 1, diverged at step 22.
 
 ## Mechanism (diagnostic DG1, amendment 1)
 
-The repository's ADR 0073 pressure-lag estimate (power iteration of the linearised step map of a lagged pressure error) is enabled
-by the case path only with one corrector. Run through a harness that reproduces the case's run bit for bit (E1), with the
-arm's correctors:
+The case path enables the repository's ADR 0073 pressure-lag estimate (power iteration of the linearised step map of a lagged
+pressure error) only with one corrector. The arms below ran through a harness that reproduces the case's run bit for bit
+(E1), with the arm's correctors:
 
 | Arm | Twin (class) | nu dt/dr1^2 | rho at step 1 | rho near t = 1 | Largest mode entry |
 |---|---|---|---|---|---|
@@ -133,8 +164,9 @@ in the first cell layer at the wall in every failing arm.
 
 ## Tools
 
-`scripts/w48t_run_matrix.py` (the registered runs, through the command line `rcfd-runner` builds), `scripts/w48t_spoke_metrics.py`
-(metrics, screen, classification table, figures), `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs` (store dump; the Studio-path
-display check D1), `crates/rcfd-api/tests/w48t_cylinder_spokes.rs` (replica harness E1, pressure-lag diagnostic DG1, known misses
-K1 and K2, workaround tests W3 and W5; all ignored, run with `cargo test --release -p rcfd-api --test w48t_cylinder_spokes --
---ignored`).
+* `scripts/w48t_run_matrix.py`: the registered runs, through the command line `rcfd-runner` builds.
+* `scripts/w48t_spoke_metrics.py`: metrics, screen, classification table, figures.
+* `crates/rcfd-studio/tests/w48t_cylinder_spokes.rs`: store dump; the Studio-path display check D1.
+* `crates/rcfd-api/tests/w48t_cylinder_spokes.rs`: replica harness E1, pressure-lag diagnostic DG1, known misses K1 and K2,
+  workaround tests W3 and W5; all ignored,
+  run with `cargo test --release -p rcfd-api --test w48t_cylinder_spokes -- --ignored`.

@@ -1,17 +1,36 @@
 # ADR 0058: Wave 29D, transport-agnostic distributed-memory layer (F-100, F-016)
 
-Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and before any run
-of this wave. Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion
-moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up
-defect gets a NEW corrected test and the old one stays as a record. Addenda (exact numbers, deviations) may be appended at the end.
+Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave and
+before any run of this wave.
 
-Clean-room: first principles and published literature only (Saad, "Iterative Methods for Sparse Linear Systems", for CG, BiCGStab
-and block-Jacobi/additive-Schwarz preconditioning; Higham, "Accuracy and Stability of Numerical Algorithms", for the dot-product and
-matrix-vector round-off bounds). No vendor code, text or installs, nothing from vendor material. Waves 29A, 29B, 29C work
-in the same tree: this wave adds a new crate `rcfd-dist` and one-line hunks in the root `Cargo.toml`, `Cargo.lock`,
-`crates/rcfd-cli/tests/workspace_graph.rs`, `docs/architecture.md`, `docs/reference-data.md`, `docs/roadmap.json`, committed through
-a temporary index. No existing solver path is edited, so the baseline hashes and all existing tests are unchanged by construction
-(re-verified at the end).
+Wave 29D adds `rcfd-dist`, a new layer-2 crate with a communicator trait whose only required transport primitive is
+point-to-point, halo exchange, a distributed CSR matrix, distributed `cg` and `bicgstab`, and point Jacobi and
+block-Jacobi preconditioners. The only implementations are `SerialComm` and the in-process `ThreadComm`: MPI and socket
+transports are not delivered, and the roadmap F-100 stays `todo` for the cluster feature. Nothing is added to the case
+schema and `rcfd run` is not wired, because that requires distributed assembly of the whole SIMPLE/PISO stack, which is
+not attempted. Addendum A reports that all registered checks passed at the first run, with no `*_known_miss` tests. The
+matrix-vector product is bit-identical to the serial one at P = 1, 2, 4, 8, and P = 1 solves equal the serial routines
+bit for bit. Strong scaling is reported, never asserted: parallel efficiency is 0.56, 0.38 and 0.20 at P = 2, 4 and 8 on
+36864 cells, with the rank threads on one machine. The F-100 acceptance (70 percent efficiency to 16 ranks on 4M cells)
+is not tested and not claimed. The stretch assembly is delivered for one scalar convection-diffusion problem only; a
+converged distributed momentum/pressure (SIMPLE) laminar flow field was NOT attempted.
+
+Rules and parents:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (exact numbers, deviations) may be appended at the end.
+* Clean-room: first principles and published literature only (Saad, "Iterative Methods for Sparse Linear Systems", for
+  CG, BiCGStab and block-Jacobi/additive-Schwarz preconditioning; Higham,
+  "Accuracy and Stability of Numerical Algorithms", for the dot-product and matrix-vector round-off bounds). No vendor
+  code, text or installs, nothing from vendor material.
+* Waves 29A, 29B, 29C work in the same tree: this wave adds a new crate `rcfd-dist` and one-line hunks in the root
+  `Cargo.toml`, `Cargo.lock`, `crates/rcfd-cli/tests/workspace_graph.rs`, `docs/architecture.md`,
+  `docs/reference-data.md`, `docs/roadmap.json`, committed through a temporary index.
+* No existing solver path is edited, so the baseline hashes and all existing tests are unchanged by construction
+  (re-verified at the end).
 
 ## Audit (HEAD b4e78fd)
 
@@ -56,13 +75,19 @@ partial itself, which is exactly the serial `dot`. The sum order differs between
 to round-off), and the policy is O(P) messages per reduction (an all-to-all of one value); a tree reduction is a later optimisation
 that would change the stated order and is not done.
 
-D4 Halo plan. `HaloPlan` is the `SubDomain` send/recv lists of one rank. `exchange(comm, plan, &mut local)` packs the owned values per
-peer, sends to all peers, then receives from all peers in ascending peer order and fills the ghost slots; owner values are copied
-bit-exactly. `validate_decomposition(mesh, &Decomposition)` is a new validator (the mesh crate is untouched) returning a located
-`rcfd_core::Error::Mesh` naming part, peer and global cell for: a cell owned by no part or by two parts; `part_of_cell` disagreeing
-with the owned lists; a ghost not owned by its stated peer; a ghost that is not a face neighbour of an owned cell; a missing ghost
-(a cut face whose off-part cell is not in the ghost list); `send`/`recv` length or symmetry mismatch between peers; send ids that are not
-owned or recv ids that are not ghosts; duplicate ghosts.
+D4 Halo plan. `HaloPlan` is the `SubDomain` send/recv lists of one rank. `exchange(comm, plan, &mut local)` packs the
+owned values per peer, sends to all peers, then receives from all peers in ascending peer order and fills the ghost
+slots; owner values are copied bit-exactly. `validate_decomposition(mesh, &Decomposition)` is a new validator (the mesh
+crate is untouched) returning a located `rcfd_core::Error::Mesh` naming part, peer and global cell for:
+
+* a cell owned by no part or by two parts;
+* `part_of_cell` disagreeing with the owned lists;
+* a ghost not owned by its stated peer;
+* a ghost that is not a face neighbour of an owned cell;
+* a missing ghost (a cut face whose off-part cell is not in the ghost list);
+* `send`/`recv` length or symmetry mismatch between peers;
+* send ids that are not owned or recv ids that are not ghosts;
+* duplicate ghosts.
 
 D5 Distributed vector and matrix. A rank vector has `n_owned + n_ghost` entries in the `SubDomain` local numbering (owned ascending by
 global id, then ghosts by peer). `DistCsr::from_global(a, decomposition, rank)` extracts the owned rows of the global CSR matrix and
@@ -174,10 +199,17 @@ header), checked at the end.
 
 ## Not delivered (named up front)
 
-MPI and socket transports (the user decides library, launcher and `--hostfile`); overlapping additive Schwarz; coarse-space or
-distributed AMG; distributed assembly of momentum, pressure-velocity coupling, turbulence, energy and the boundary-condition catalogue;
-`rcfd run` wiring and any case-schema key; parallel mesh reading/partitioned I/O; dynamic load balancing; multi-device GPU; tree
-(logarithmic) reductions; non-blocking communication overlap with computation; a cluster performance claim.
+* MPI and socket transports (the user decides library, launcher and `--hostfile`);
+* overlapping additive Schwarz;
+* coarse-space or distributed AMG;
+* distributed assembly of momentum, pressure-velocity coupling, turbulence, energy and the boundary-condition catalogue;
+* `rcfd run` wiring and any case-schema key;
+* parallel mesh reading/partitioned I/O;
+* dynamic load balancing;
+* multi-device GPU;
+* tree (logarithmic) reductions;
+* non-blocking communication overlap with computation;
+* a cluster performance claim.
 
 ## Addendum A (after the runs; limits above untouched)
 
@@ -205,11 +237,21 @@ the first run, there are no `*_known_miss` tests. Host: 16 logical cores.
 * B8 iteration counts (CG): none 99 at all P; point Jacobi 97 at all P (serial 97); block-Jacobi ILU0 48 (serial ILU0, P=1), 64
   (P=2, ratio 1.33), 58 (P=4, 1.21), 77 (P=8, 1.60) against the limit 2.5; BiCGStab block-Jacobi 32 -> 40, 40, 50 (ratio 1.56 at
   P=8). Block-Jacobi at P = 8 (77) is not worse than point Jacobi (97).
-* B9 strong scaling (REPORTED, not a cluster measurement; 192x192 = 36864 cells, CG + block-Jacobi, tol_rel 1e-8, median of 3):
-  P=1 133 iterations 0.0684 s; P=2 188 it 0.0605 s (speed-up 1.13, efficiency 0.56); P=4 179 it 0.0448 s (1.52, 0.38); P=8 231 it
-  0.0421 s (1.62, 0.20). The solve is short (tens of milliseconds), the iteration count grows with P (block-Jacobi without coarse
-  space) and the rank threads share memory bandwidth and the rayon pool, so the numbers say nothing about cluster scaling. The
-  F-100 acceptance (70 percent efficiency to 16 ranks on 4M cells) is not tested and not claimed.
+
+B9 strong scaling (REPORTED, not a cluster measurement; 192x192 = 36864 cells, CG + block-Jacobi, tol_rel 1e-8, median
+of 3):
+
+| P | Iterations | Wall time (s) | Speed-up | Parallel efficiency |
+| --- | --- | --- | --- | --- |
+| 1 | 133 | 0.0684 | | |
+| 2 | 188 | 0.0605 | 1.13 | 0.56 |
+| 4 | 179 | 0.0448 | 1.52 | 0.38 |
+| 8 | 231 | 0.0421 | 1.62 | 0.20 |
+
+The solve is short (tens of milliseconds), the iteration count grows with P (block-Jacobi without coarse space) and the
+rank threads share memory bandwidth and the rayon pool, so the numbers say nothing about cluster scaling. The F-100
+acceptance (70 percent efficiency to 16 ranks on 4M cells) is not tested and not claimed.
+
 * B10 (stretch, delivered for the scalar problem only): linear field gradient exact (interior cells 0, all cells 1.9e-14, limit
   1.2e-12); smooth-field gradient distributed versus P = 1 differs by 0 (bit-identical, limit 2.3e-13) for P = 2, 4, 8; steady
   convection-diffusion (Gamma 0.05, 32x32, rotating field, lid 1): 12 deferred-correction iterations, phi in [0.000216, 0.980854];

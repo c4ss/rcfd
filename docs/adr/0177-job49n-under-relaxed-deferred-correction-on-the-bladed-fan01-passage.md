@@ -5,6 +5,17 @@ validity checks, the acceptance limits, the LE2 location record, the predictions
 are fixed here. Amendments follow this text, each written before what it covers; results go in an addendum. Not yet
 accepted by the maintainer.
 
+F-R under-relaxes the convection deferred correction (ADR 0111 part F, beta 0.25) and had never been run on the bladed
+passage B3. ADR 0175 recommended it after finding that this correction carries the stall and that the blade-root leading
+edge (LE2) sustains a cycle on its own. This job brings F-R back as a doc-hidden, test-only field and runs F-R(0.25) on
+B3 against limits fixed before the run. The addendum of 2026-10-30 reports that F-R(0.25) is not accepted: it misses
+Z2a, Z2b and Z2c (`rho_med` 1.038, `rho_du` 1.929, tolerance never reached). It meets Z2t, Z2p and Z2le: the leading-edge
+cycle is gone within 10 iterations and the torque and Delta p_ts stay inside their reference bands, but a larger cycle
+grows at hub cells at r 0.124-0.125, z 0.170-0.177. The conditional arm F-R(0.1) is worse than the stall and misses every
+limit. Both arms are known misses (`fr_025_b3_known_miss`, `fr_010_b3_known_miss`), and reading rule 3 applies. The
+addendum of 2026-11-04 records two maintainer decisions taken before the merge: the hub diagnosis with F-R(0.25) on was
+approved and run as job 49O (ADR 0178), and the test-only field was kept.
+
 Job 49N, on branch `job49n-fan01-fr-b3` from `job49l-fan01-stall-locus` at 6a41ecf (worktree
 `.claude/worktrees/job49n`). The number 0177 and the job id 49N were given by the coordinator; 0176 is job 49M.
 

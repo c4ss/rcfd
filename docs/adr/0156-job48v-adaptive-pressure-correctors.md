@@ -1,19 +1,34 @@
-# ADR 0156: Job 48V, adaptive PISO/PIMPLE pressure correctors chosen by the pressure-lag estimate (`solver.corrector_control`), a pre-run coupling warning (SV301) and resolution robustness of the refined cylinder
+# ADR 0156: Job 48V, adaptive pressure correctors and a pre-run coupling warning
 
 Status: **registered** 2026-10-28, before any code of this job was compiled and before any run of this job (set-ups,
 criteria, limits and reading rules are fixed here); two amendments before the runs they govern; **results in the addendum**
 (2026-10-29: every registered limit met except the registered A9, a set-up defect corrected by A9b); not yet accepted by the
-maintainer. House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
-becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the corrected
-run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no unsafe
-code, no new crate, the crate graph stays acyclic; no edit of `crates/rcfd-studio` (job 48S works there). Clean-room: first
-principles, the repository's own ADRs and code; nothing of any vendor's software is decompiled or read. Parents:
-[ADR 0154](0154-job48t-cylinder-ogrid-pressure-spokes.md) (job 48T: the spokes are the PISO coupling failing in the thin wall
-cells; DG1, K1, K2), [ADR 0073](0073-wave34b-transient-floor-pimple-lag.md) (the pressure-lag model and its run-time estimate),
-[ADR 0077](0077-wave35b-solver-robustness-under-automation.md) part C (the estimate on the case path, one corrector only),
-[ADR 0031](0031-wave19c-restart-chain.md) (setup rules), [ADR 0130](0130-wave48a-overview-and-run-record-contract.md) (status
-stream, run records). Related, concurrent: job 48S (ADR 0153, Studio run plan: time step set at Run), job 48U (ADR 0155).
+maintainer.
+
+ADR 0154 traced the spokes on the refined cylinder to the PISO coupling failing in the thin wall cells, and the maintainer asked
+that a change of resolution stay stable without hand-tuned settings. This job adds adaptive PISO/PIMPLE pressure correctors chosen
+by the pressure-lag estimate (the opt-in key `solver.corrector_control`; the correctors are counted up until the estimate is at
+most 0.5, with a cap of 10) and a pre-run coupling warning (SV301, which fires when the estimate is at least 1.3), and it checks
+the resolution robustness of the refined cylinder. The addendum records the results, measured after the registration: with
+`adaptive` every refined run is clean at every stored time, K1's and K2's set-ups pass and the resolution sweep converges, and
+the defaults stay unchanged. Against that, the registered A9 is a known miss (a set-up defect, corrected by A9b), and on the
+user's mesh the opt-in costs 1.36 x the three-corrector workaround and 2.3 x the fractional step per step. SV301 would fire on
+nine existing test set-ups if they were run through `rcfd check` or `rcfd run` (four unstable when perturbed, five undetermined),
+and it can miss cases whose viscosity comes from a law (a false negative).
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a
+  missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
+  the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
+  no unsafe code, no new crate, the crate graph stays acyclic; no edit of `crates/rcfd-studio` (job 48S works there).
+- Clean-room: first principles, the repository's own ADRs and code; nothing of any vendor's software is decompiled or read.
+- Parents: [ADR 0154](0154-job48t-cylinder-ogrid-pressure-spokes.md) (job 48T: the spokes are the PISO coupling failing in the
+  thin wall cells; DG1, K1, K2), [ADR 0073](0073-wave34b-transient-floor-pimple-lag.md) (the pressure-lag model and its run-time
+  estimate), [ADR 0077](0077-wave35b-solver-robustness-under-automation.md) part C (the estimate on the case path, one corrector
+  only), [ADR 0031](0031-wave19c-restart-chain.md) (setup rules), [ADR 0130](0130-wave48a-overview-and-run-record-contract.md)
+  (status stream, run records).
+- Related, concurrent: job 48S (ADR 0153, Studio run plan: time step set at Run), job 48U (ADR 0155).
 
 ## The request
 
@@ -21,29 +36,56 @@ The maintainer, after ADR 0154 (verbatim): "i'm not looking for you to fix the s
 where AI is having to solve our settings, the simulation should be stable when changing resolution by adjusting settings around
 it - it's a core feature of the CFD [solver]". A user who raises `mesh.nx`, `mesh.ny` must get a stable, artifact-free run
 without hand-tuning `n_correctors`, `time_advance` or `grading`; the solver (and the Studio's run plan) adapts its own numerics
-to the mesh. Approved by the maintainer (ADR 0154 questions 1 and 2): (1) a pre-run warning when two or more pressure
-correctors are likely unstable, from the existing pressure-lag estimate, warning level between 1.17 and 1.68 (for example 1.3),
-changing no result; (2) an opt-in "correctors until converged" PISO option, accepted against the known misses K1 and K2. Not
-wanted: a settings workaround note for the user.
+to the mesh.
+
+Approved by the maintainer (ADR 0154 questions 1 and 2):
+
+1. a pre-run warning when two or more pressure correctors are likely unstable, from the existing pressure-lag estimate, warning
+   level between 1.17 and 1.68 (for example 1.3), changing no result;
+2. an opt-in "correctors until converged" PISO option, accepted against the known misses K1 and K2.
+
+Not wanted: a settings workaround note for the user.
 
 ## Context (read at local main aad08fe; the worktree started at 1248a76 and was fast-forwarded to aad08fe before any work)
 
 ### What 48T measured (quoted, not re-measured)
 
-* The default transient coupling (`solver.algorithm = "piso"`: `PimpleSettings::piso`, n_outer 1, `n_correctors` 2) loses the
-  pressure-velocity coupling in the thin wall cells of the graded O-grid once the wall diffusion number nu dt / dr1^2 passes an
-  onset between 6.5 and 11.4. The ADR 0073 pressure-lag map (power iteration, 60 iterations, the step's frozen matrices) at
-  step 1 (DG1): G64 (64 x 48, 1/16) 0.358; G128 (128 x 96, 1/32) 0.746; G256x48 0.221; G256g (grading 10.88) 0.219; G256c4
-  (256 x 256, 1/64, 4 correctors) 0.563; G256s (256 x 256, 1/256) 1.166; G256 (256 x 256, 1/64) 2.418; G64x256 (64 x 256,
-  1/64) 4.359; G256p2 (PIMPLE n_outer 2, alpha 0.9) 2.433. Twins: every arm with rho(step 1) <= 1.166 ran clean, every arm with
-  rho(step 1) >= 2.418 was spoky or diverged (near t = 1 the failing arms had 1.68 to 1.95). The leading mode sits in the
-  first cell layer at the wall in every failing arm.
-* Fixed corrector counts on 256 x 256 at dt 1/64: 2 spoky (M_hf 48.3 at t = 3); 3 and 4 clean (9.2e-8, 9.1e-8); on 64 x 256 at
-  dt 1/64 (in-plane wall aspect 18.8): 2 diverges at step 30 (K1), 3 is spoky (K2, M_hf 282 at t = 3).
-* Workarounds (one thread, a shared machine): fractional step (W3) 29 s per simulated second, cd 1.466 (t = 3) / 1.291 (t = 10);
-  three correctors (W5) 49 s, 1.466 / 1.296; the user's own 256 x 256 PISO-2 run 22.8 s per simulated second. The spoke metric
-  `M_hf` and the clean limit L3 (`M_hf <= max(2 M_hf(R64, t), 0.01)`: 0.01 at t = 1, 0.0114 at t = 3, 0.01 at t = 10) are ADR
-  0154's.
+The default transient coupling (`solver.algorithm = "piso"`: `PimpleSettings::piso`, n_outer 1, `n_correctors` 2) loses the
+pressure-velocity coupling in the thin wall cells of the graded O-grid once the wall diffusion number nu dt / dr1^2 passes an
+onset between 6.5 and 11.4.
+
+The ADR 0073 pressure-lag map (power iteration, 60 iterations, the step's frozen matrices) at step 1 (DG1):
+
+| Arm | Set-up | rho(step 1) |
+|---|---|---|
+| G64 | 64 x 48, 1/16 | 0.358 |
+| G128 | 128 x 96, 1/32 | 0.746 |
+| G256x48 | - | 0.221 |
+| G256g | grading 10.88 | 0.219 |
+| G256c4 | 256 x 256, 1/64, 4 correctors | 0.563 |
+| G256s | 256 x 256, 1/256 | 1.166 |
+| G256 | 256 x 256, 1/64 | 2.418 |
+| G64x256 | 64 x 256, 1/64 | 4.359 |
+| G256p2 | PIMPLE n_outer 2, alpha 0.9 | 2.433 |
+
+Twins: every arm with rho(step 1) <= 1.166 ran clean, every arm with rho(step 1) >= 2.418 was spoky or diverged (near t = 1 the
+failing arms had 1.68 to 1.95). The leading mode sits in the first cell layer at the wall in every failing arm.
+
+Fixed corrector counts:
+
+| Mesh, dt | Correctors | Result |
+|---|---|---|
+| 256 x 256, dt 1/64 | 2 | spoky (M_hf 48.3 at t = 3) |
+| 256 x 256, dt 1/64 | 3 | clean (9.2e-8) |
+| 256 x 256, dt 1/64 | 4 | clean (9.1e-8) |
+| 64 x 256, dt 1/64 (in-plane wall aspect 18.8) | 2 | diverges at step 30 (K1) |
+| 64 x 256, dt 1/64 (in-plane wall aspect 18.8) | 3 | spoky (K2, M_hf 282 at t = 3) |
+
+Workarounds (one thread, a shared machine): fractional step (W3) 29 s per simulated second, cd 1.466 (t = 3) / 1.291 (t = 10);
+three correctors (W5) 49 s, 1.466 / 1.296; the user's own 256 x 256 PISO-2 run 22.8 s per simulated second.
+
+The spoke metric `M_hf` and the clean limit L3 (`M_hf <= max(2 M_hf(R64, t), 0.01)`: 0.01 at t = 1, 0.0114 at t = 3, 0.01 at
+t = 10) are ADR 0154's.
 
 ### Data seen before this registration (postdictions where they enter a limit)
 
@@ -98,17 +140,23 @@ a residual target (D2).
 
 **D2. Stopping criterion: the pressure-lag amplification with a safety factor 2.** The correctors of a step are counted up until
 the ADR 0073 estimate of the per-step amplification of a lagged pressure error, made with that many correctors on the step's
-frozen matrices, is at most **0.5** (safety factor 2 below the instability at 1). Why this and not a per-step residual tolerance:
-(a) the 48T evidence is in exactly this quantity: every failing arm had rho >= 2.418 at step 1, every clean arm <= 1.166, and four
-correctors on 256 x 256 gave 0.563; a target of 0.5 is below the largest clean value by a factor 2.3 and below the failing ones by
-a factor 4.8 or more; (b) it is amplitude-independent: the lag mode starts at round-off level, invisible in any residual of the
-step next to the physical pressure change, so a residual-controlled loop only reacts once the mode is large enough to show and
-then holds it at the tolerance level with an amplification near 1 (no margin); (c) PISO's correctors are a non-iterative
-splitting by design (two correctors keep the splitting error below the time error), so a per-step "until converged" tolerance would
-add correctors to every healthy case (the coarse cases' second-corrector change is not small compared with any tolerance that
-also catches the spokes). The search is the "iterate correctors until the lag-amplification estimate falls below a registered
-safety factor" of the request. Predicted counts from DG1: 64 x 48 at 1/16: 2 (0.358); 128 x 96 at 1/32: 3 (0.746 > 0.5);
-256 x 256 at 1/64: 5 (4 correctors gave 0.563); 64 x 256 at 1/64: 5 or more, possibly the cap.
+frozen matrices, is at most **0.5** (safety factor 2 below the instability at 1). The search is the "iterate correctors until the
+lag-amplification estimate falls below a registered safety factor" of the request.
+
+Why this and not a per-step residual tolerance:
+
+- (a) The 48T evidence is in exactly this quantity: every failing arm had rho >= 2.418 at step 1, every clean arm <= 1.166, and
+  four correctors on 256 x 256 gave 0.563; a target of 0.5 is below the largest clean value by a factor 2.3 and below the failing
+  ones by a factor 4.8 or more.
+- (b) It is amplitude-independent: the lag mode starts at round-off level, invisible in any residual of the step next to the
+  physical pressure change, so a residual-controlled loop only reacts once the mode is large enough to show and then holds it at
+  the tolerance level with an amplification near 1 (no margin).
+- (c) PISO's correctors are a non-iterative splitting by design (two correctors keep the splitting error below the time error),
+  so a per-step "until converged" tolerance would add correctors to every healthy case (the coarse cases' second-corrector change
+  is not small compared with any tolerance that also catches the spokes).
+
+Predicted counts from DG1: 64 x 48 at 1/16: 2 (0.358); 128 x 96 at 1/32: 3 (0.746 > 0.5); 256 x 256 at 1/64: 5 (4 correctors gave
+0.563); 64 x 256 at 1/64: 5 or more, possibly the cap.
 
 **D3. When the count is chosen (per step, from estimates).**
 1. The count `n` in use starts at `n_lo = solver.n_correctors`.
@@ -138,11 +186,16 @@ event. With `adaptive` every `iteration` event carries `correctors` (the count o
 `residuals.jsonl` copies only `u`, `p`, `continuity` and `monitors` (`crates/rcfd-runner`, not changed here, D8).
 
 **D5. Scope.** `adaptive` applies to the incompressible transient kernel (`PimpleSolver`, `solver.algorithm` piso or pimple,
-`time_advance = "iterative"`). It is a located error at `solver.corrector_control` with a steady or coupled algorithm, with
-`time_advance = "fractional_step"`, with variable density, VOF or compressible runs (their own corrector loops), with a dynamic mesh
-(the lag map is not defined there, as for the ADR 0077 check) and with `solver.error_tolerance > 0` (step doubling restores
-states, which would replay estimates). With `adaptive` the ADR 0077 one-corrector check is not enabled (the adaptive count
-supersedes it; a case with `n_correctors = 1` starts its search at 1).
+`time_advance = "iterative"`). It is a located error at `solver.corrector_control`:
+
+- with a steady or coupled algorithm;
+- with `time_advance = "fractional_step"`;
+- with variable density, VOF or compressible runs (their own corrector loops);
+- with a dynamic mesh (the lag map is not defined there, as for the ADR 0077 check);
+- with `solver.error_tolerance > 0` (step doubling restores states, which would replay estimates).
+
+With `adaptive` the ADR 0077 one-corrector check is not enabled (the adaptive count supersedes it; a case with `n_correctors = 1`
+starts its search at 1).
 
 **D6. Hash-neutral default.** `rcfd-core` `Schema` gets `hash_omit_default: bool` (default false; builder
 `Schema::hash_omit_default()`); `SettingsTree::content_hash` leaves out every object field so flagged whose value equals its
@@ -154,17 +207,19 @@ other key.
 
 **D7. Pre-run warning SV301 (the maintainer's approved item 1).** A computed setup rule (it needs a built simulation, so it is not
 in `setup_rules.json`): id `SV301`, severity warning, category `solver`, path `solver.corrector_control`, fix
-`{"path": "solver.corrector_control", "value": "adaptive"}`. Made for the incompressible transient kernel with
-`time_advance = "iterative"`, no dynamic mesh, `n_correctors >= 2`, `corrector_control = "fixed"` and
-`pressure_lag_check != "off"`: a copy of the solver at its current state (the real solver is not touched) takes the next step
-(two steps from step 0 under bdf2 / bdf2_bounded) with the ADR 0073 check at that step, **60** power iterations (DG1's, on which
-the level is registered), the case's `n_correctors`. It fires when rho >= **1.3** (between the largest clean step-1 value 1.166
-and the smallest failing one 2.418). Message: the cause (the estimate, its value, the cell and position, "typically a thin wall
-cell", what the run would show) and the one-key remedy (`solver.corrector_control = "adaptive"`). Shown by `rcfd check`,
-`rcfd run --check-only` (the `check` event's `rules`, so also the runner's `check.json`) and `rcfd run` (stderr, and a `warning`
-status event with `rule` `SV301` after `start`, like the static rules' warnings). Not made by `rcfd validate`, the chain driver,
-the run service (`service.rs`) or the MCP tools (stated, not wired). Cost: one step plus 60 lag-map applications (about 61
-step-equivalents of linear algebra).
+`{"path": "solver.corrector_control", "value": "adaptive"}`.
+
+- Made for the incompressible transient kernel with `time_advance = "iterative"`, no dynamic mesh, `n_correctors >= 2`,
+  `corrector_control = "fixed"` and `pressure_lag_check != "off"`: a copy of the solver at its current state (the real solver is
+  not touched) takes the next step (two steps from step 0 under bdf2 / bdf2_bounded) with the ADR 0073 check at that step, **60**
+  power iterations (DG1's, on which the level is registered), the case's `n_correctors`.
+- It fires when rho >= **1.3** (between the largest clean step-1 value 1.166 and the smallest failing one 2.418).
+- Message: the cause (the estimate, its value, the cell and position, "typically a thin wall cell", what the run would show) and
+  the one-key remedy (`solver.corrector_control = "adaptive"`).
+- Shown by `rcfd check`, `rcfd run --check-only` (the `check` event's `rules`, so also the runner's `check.json`) and `rcfd run`
+  (stderr, and a `warning` status event with `rule` `SV301` after `start`, like the static rules' warnings).
+- Not made by `rcfd validate`, the chain driver, the run service (`service.rs`) or the MCP tools (stated, not wired).
+- Cost: one step plus 60 lag-map applications (about 61 step-equivalents of linear algebra).
 
 **D8. Studio integration (prepared, not wired; no edit of `crates/rcfd-studio`).** The hand-off is written in the addendum after the
 results (which override, where, what the user sees, which tests).
@@ -319,14 +374,21 @@ CPU 92 to 100 %, 8 to 15 GB free) for the whole job, so wall times are rough and
 
 ### The answer
 
-`solver.corrector_control = "adaptive"` makes the solver choose its own corrector count from the mesh and the step. It took 2 on
-the committed 64 x 48 (and is then bit-identical to today's default), 3 on 128 x 96, 5 on the user's 256 x 256, 6 and then 5 on
-512 x 512, and 8 on the stretched 64 x 256 wall layer (in-plane wall aspect 18.8) where no hand-picked count of 3 worked; 4 per
-outer iteration for PIMPLE with 2 outer iterations on that mesh (W1's coupling, which diverged in 48T). At the chosen counts the
-estimated per-step amplification of a lagged pressure error is 0.29 to 0.48, against 2.42 to 4.36 with the default two
-correctors. Every refined run is clean at every stored time, K1 and K2 are passing tests, the cap was never needed, and the
-resolution sweep converges (St 0.1517, 0.1614, 0.1646 and mean cd 1.324, 1.349, 1.355 for 64 x 48, 128 x 96, 256 x 256). The
-pre-run warning SV301 fires exactly on the refined set-ups of the user's family, on no user-facing case, and reproduces 48T's
+`solver.corrector_control = "adaptive"` makes the solver choose its own corrector count from the mesh and the step. It took:
+
+- 2 on the committed 64 x 48 (and is then bit-identical to today's default);
+- 3 on 128 x 96;
+- 5 on the user's 256 x 256;
+- 6 and then 5 on 512 x 512;
+- 8 on the stretched 64 x 256 wall layer (in-plane wall aspect 18.8) where no hand-picked count of 3 worked;
+- 4 per outer iteration for PIMPLE with 2 outer iterations on that mesh (W1's coupling, which diverged in 48T).
+
+At the chosen counts the estimated per-step amplification of a lagged pressure error is 0.29 to 0.48, against 2.42 to 4.36 with
+the default two correctors. Every refined run is clean at every stored time, K1 and K2 are passing tests, the cap was never
+needed, and the resolution sweep converges (St 0.1517, 0.1614, 0.1646 and mean cd 1.324, 1.349, 1.355 for 64 x 48, 128 x 96,
+256 x 256).
+
+The pre-run warning SV301 fires exactly on the refined set-ups of the user's family, on no user-facing case, and reproduces 48T's
 DG1 values; the census of the test suite found it on two families of existing test set-ups (B2b, B2c below).
 
 ### Where the delivery differs from the brief's wording
@@ -415,21 +477,33 @@ finds by itself; 3 cannot (K2).
 **B2b.** The instrumented copy (`E:\projects\cfd\w48v-work\b2b`, bbc34b4 plus the logging in `Simulation::new`) ran
 `cargo test --release -p rcfd-api` once: 725 passed, 266 ignored, 1 failed (the registered A9, whose set-up defect amendment 2
 records; the copy predates A9b). It built 248 simulations to which the preflight applies (101 tests, 173 distinct set-ups). Ten
-distinct set-ups have rho >= 1.3: the eight closed boxes at rest of `user_scalars` u3 (1.466, 1.894, 2.624, 3.222, 4.143, 4.819
-on 256 cells; 6.438, 8.156 on 512), the Hartmann set-up of `transient_sources` t5 at dt 0.02 (31.31, 320 cells; its own file calls
-that step "beyond the stability bound"), and the 64 x 256 cylinder of this job's B3 test (4.359, the intended positive). None
-lies between 1 and 1.3, and the largest below 1 is 0.989 (a 12 800-cell registry set-up). Against the prediction: u3, t5 and the
-64 x 256 cylinder found; ADR 0077 C4's rheology channel not (0.011 here, see the limitation below); ADR 0154's K tests are ignored,
-so only B3's instance was in the suite.
+distinct set-ups have rho >= 1.3, listed with their B2c class in the table below: the eight closed boxes at rest of `user_scalars`
+u3, the Hartmann set-up of `transient_sources` t5 at dt 0.02, and the 64 x 256 cylinder of this job's B3 test. None lies between 1
+and 1.3, and the largest below 1 is 0.989 (a 12 800-cell registry set-up). Against the prediction: u3, t5 and the 64 x 256
+cylinder found; ADR 0077 C4's rheology channel not (0.011 here, see the limitation below); ADR 0154's K tests are ignored, so only
+B3's instance was in the suite.
 
-**B2c.** Five true positives: t5 (the perturbed run stopped by the guard at step 24 while the unperturbed one runs 60 steps), u3
-at 8.156 and 6.438 (stopped at steps 14 and 16), u3 at 1.466 (g 1.171, |dp| 3.6e-5 to 4.1e-3 over steps 30 to 60) and the B3
-cylinder (both runs stopped at step 30, as K1). Five undetermined: u3 at 4.819, 4.143, 3.222, 2.624, 1.894 (g 1.000, 1.006, 1.022,
-1.000, 0.965). No false positive: the limit is met. Reading: where the warning fires on the cylinder family it is confirmed (B0,
-B1, DG1, K1); on five of the eight diffusion-only boxes (cells of in-plane aspect 6.4 and 12.8, nu dt / dx^2 from 4 to 33) a
-perturbation neither grows nor decays within 60 steps, so there the estimate is an upper indication, not borne out. None of the
-ten is a user-facing case, and the tests themselves drive `Simulation` directly and see no warning; SV301 would show for them only
-through `rcfd check` or `rcfd run`.
+**B2c.** Five true positives, five undetermined and no false positive: the limit is met.
+
+| Set-up | Cells | rho (B2b) | Perturbation run (B2c) | Class (B2c) |
+|---|---|---|---|---|
+| t5 at dt 0.02 (its own file calls that step "beyond the stability bound") | 320 | 31.31 | the perturbed run stopped by the guard at step 24 while the unperturbed one runs 60 steps | true positive |
+| u3 box | 512 | 8.156 | stopped at step 14 | true positive |
+| u3 box | 512 | 6.438 | stopped at step 16 | true positive |
+| u3 box | 256 | 4.819 | g 1.000 | undetermined |
+| B3 cylinder (the intended positive) | - | 4.359 | both runs stopped at step 30, as K1 | true positive |
+| u3 box | 256 | 4.143 | g 1.006 | undetermined |
+| u3 box | 256 | 3.222 | g 1.022 | undetermined |
+| u3 box | 256 | 2.624 | g 1.000 | undetermined |
+| u3 box | 256 | 1.894 | g 0.965 | undetermined |
+| u3 box | 256 | 1.466 | g 1.171 | true positive |
+
+For the u3 box at 1.466, the difference |dp| goes from 3.6e-5 to 4.1e-3 over steps 30 to 60.
+
+Reading: where the warning fires on the cylinder family it is confirmed (B0, B1, DG1, K1); on five of the eight diffusion-only
+boxes (cells of in-plane aspect 6.4 and 12.8, nu dt / dx^2 from 4 to 33) a perturbation neither grows nor decays within 60 steps,
+so there the estimate is an upper indication, not borne out. None of the ten is a user-facing case, and the tests themselves drive
+`Simulation` directly and see no warning; SV301 would show for them only through `rcfd check` or `rcfd run`.
 
 ### A limitation found by the census (not a registered check)
 
@@ -502,8 +576,8 @@ the adaptive count without touching a setting:
 * The gate's test step for the whole workspace (run: N4's suites, which cover rcfd-core, rcfd-fv, rcfd-api, rcfd-cli,
   rcfd-runner and seven rcfd-studio files). The gate's other two steps were run: `cargo fmt -p <crate> -- --check` for all 22
   crates (clean; `cargo fmt --all` itself stops on Windows' command-line length, os error 206) and `cargo clippy --workspace
-  --all-targets -- -D warnings` (clean: exit 0, no warning, 185 crates checked). The tests of rcfd-turb, rcfd-gui, rcfd-mcp, rcfd-assistant and the other crates
-  that build `PimpleSettings` or a `Schema` were compiled by that clippy run but not run.
+  --all-targets -- -D warnings` (clean: exit 0, no warning, 185 crates checked). The tests of rcfd-turb, rcfd-gui, rcfd-mcp,
+  rcfd-assistant and the other crates that build `PimpleSettings` or a `Schema` were compiled by that clippy run but not run.
 * Linux.
 * The Studio itself (not edited; only N4's listed tests); SV301 in the run service, the MCP tools, the chain driver and
   `rcfd validate` (stated as not wired in D7).

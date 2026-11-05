@@ -2,7 +2,9 @@
 
 Status: plan (2026-10-26), set by the user: restart the UI from scratch, wgpu renderer, project folders holding many runs, background and parallel runs, time scrubbing, a Claude Code chat inside the app, and the same project tools available from Claude Code itself. This is a plan, not a claim of capability.
 
-This page is for the user and for contributors working on the Studio. Read section 5 first for the limits: what agents cannot check, what may not be possible, and what does not exist yet. Section 8 holds the second round of decisions (how the chat sidebar treats open sessions and how tool approvals work) and the project folder contract that the new crates code against. For the computer-fan work that the Studio's later modes serve, see the [computer-fan project breakdown](fan-project-breakdown.md).
+This page is for the user and for contributors working on the Studio. Read section 5 first for the limits: what agents cannot check, what may not be possible, and what does not exist yet. Section 1 holds the first decisions. Section 8 holds the second round of decisions (how the chat sidebar treats open sessions and how tool approvals work) and the project folder contract that the new crates code against. For the computer-fan work that the Studio's later modes serve, see the [computer-fan project breakdown](fan-project-breakdown.md).
+
+The plan runs in [waves](glossary.md), numbered batches of work. Waves 48 and later start after the user has run the previous result and reported on it. `rcfd-gui` stays frozen and is kept building and tested until the new app reaches parity on the checks listed in section 6; its removal is a separate, explicitly requested step (default chosen by the lead; the user can change it). Stress and strain pictures need a structural solver that does not exist yet. Items marked NOT DOCUMENTED in section 7 must be checked on the installed build before any design depends on them.
 
 ## 1. Decisions (user, 2026-10-26)
 
@@ -53,7 +55,14 @@ Waves 48 and later start after the user has run the previous result and reported
 
 ## 6. Parity checks before `rcfd-gui` is removed
 
-Open and save a case; settings editor with schema validation; run with live residual and report monitors and run control; the 2D field view with colour map, legend and hover; assistant access (now through Claude Code); the tutorials that name the GUI still run or are rewritten. Each is a named test in the new crate.
+Each check is a named test in the new crate:
+
+- Open and save a case.
+- Settings editor with schema validation.
+- Run with live residual and report monitors and run control.
+- The 2D field view with colour map, legend and hover.
+- Assistant access (now through Claude Code).
+- The tutorials that name the GUI still run or are rewritten.
 
 ## 7. Claude Code integration: what the official docs say (researched 2026-10-26)
 
@@ -72,11 +81,14 @@ Source: the Claude Code documentation at code.claude.com/docs/en (sessions, head
 
 Two documents' wording matched the harness's injection scanner (permission-mode names such as bypassPermissions); they describe options only, nothing in this plan uses them.
 
-Decisions this research forces, for the user when wave 47 starts: (1) whether the sidebar may type into a session that is closed (resume with `-p`) while only mirroring open ones (recommended), and (2) whether approvals go through an Agent SDK sidecar (Python or TypeScript dependency) or a conservative allow-list.
+Decisions this research forces, for the user when wave 47 starts: (1) whether the sidebar may type into a session that is closed (resume with `-p`) while only mirroring open ones (recommended), and (2) whether approvals go through an Agent SDK sidecar (Python or TypeScript dependency) or a conservative allow-list. Section 8 records the user's decisions.
 
 ## 8. Decisions of 2026-10-26 (second round) and the wave-47 contract
 
-User decisions: (1) the sidebar may type into a Claude Code session that is closed (resume it with `claude -p --resume`) and only mirrors sessions that another process has open; (2) tool approvals use a conservative allow-list first (no sidecar, no auto-approval of everything); a sidecar on the Agent SDK is reconsidered only if the allow-list proves too narrow.
+User decisions:
+
+1. The sidebar may type into a Claude Code session that is closed (resume it with `claude -p --resume`) and only mirrors sessions that another process has open.
+2. Tool approvals use a conservative allow-list first (no sidecar, no auto-approval of everything); a sidecar on the Agent SDK is reconsidered only if the allow-list proves too narrow.
 
 Project folder contract (agents code against it; later changes are additive and go through the lead):
 

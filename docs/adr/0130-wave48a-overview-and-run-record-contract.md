@@ -1,16 +1,28 @@
 # ADR 0130: Wave 48 overview, and 48A: one run-record contract for the runner, the Studio and the plugin
 
-Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to W48-16, scope cut (a)) (scoping only; no code written, nothing run). Written at main 1248a76. Wave 48 starts only after the user
+Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to
+W48-16, scope cut (a)) (scoping only; no code written, nothing run). Written at main 1248a76. Wave 48 starts only after the user
 has run the wave-47 result and reported on it (plan section 4); whether that has happened is not recorded in the repository
-(UNVERIFIED). House rules of ADRs 0110-0129 apply to every wave-48 sub-wave: limits are fixed before the registered runs; a missed limit
-becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment registered before the
-corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parent:
-[`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 3, 4, 6 and 8. Roadmap: F-266 (application shell) and F-267 (plugin) cover
-wave 48; F-261 to F-265 are its foundations.
+(UNVERIFIED).
 
-Part 1 is the wave-48 overview: sub-waves, order, parallel work, crates touched, the gate plan and the ordered
-list of open decisions. Part 2 is sub-wave 48A, a headless prerequisite that the code reading showed is needed before any Studio
-panel can list a run that the runner made.
+Part 1 is the wave-48 overview: sub-waves, order, parallel work, crates touched, the gate plan and the ordered list of open
+decisions. Part 2 is sub-wave 48A, a headless prerequisite that the code reading showed is needed before any Studio panel can list a
+run that the runner made. Reading the wave-47 code showed that a run made by `rcfd-runner` cannot be read by `rcfd-project`, so 48A
+gives them one run-record contract: the runner on `rcfd-project` types, tolerant readers, the store location and opt-in per-step
+monitors. Decisions taken as accepted are D3 (b) `--store-dir` and D5 (a) `--status-monitors`; the Studio applies D4 (a) later. The
+addendum records A1 to A8 as passed with no known miss, but the A4 hash control is only approximated and A5 passes for the touched
+crates only. The workspace gate was not run (the maintainer runs it); each touched crate was built, tested and linted alone. On
+Linux L1, S4a and S4b fail, and they fail the same way on 3492c75 in the same container, so they are not caused by 48A; they were
+not investigated further. One defect was found and not fixed: `rcfd-runner serve --project <relative path>` fails every run; the
+addendum also asks the maintainer when to add an opt-in `output.store_precision` key.
+
+Rules and parents:
+
+* House rules of ADRs 0110-0129 apply to every wave-48 sub-wave: limits are fixed before the registered runs; a missed limit becomes
+  an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment registered before the
+  corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Parent: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) sections 3, 4, 6 and 8.
+* Roadmap: F-266 (application shell) and F-267 (plugin) cover wave 48; F-261 to F-265 are its foundations.
 
 ## Part 1: wave 48 overview
 
@@ -328,8 +340,9 @@ those binaries are 1248a76's code. No 48A code had run. Limits are unchanged.
 
 Decisions taken as accepted: D3 (b) `--store-dir`, D5 (a) `--status-monitors`, D4 (a) is applied by the Studio later (nothing
 here). Commits 7f0555b..7168e80 on main 3492c75; the Windows numbers below are from afb8efc and were re-run on 7168e80
-(rcfd-runner and rcfd-project: same results, A1 6/0/0, S7 0.143 s). No new third-party dependency; new workspace edge `rcfd-runner -> rcfd-project`.
-The workspace gate was not run (the maintainer runs it); each touched crate was built, tested and linted alone.
+(rcfd-runner and rcfd-project: same results, A1 6/0/0, S7 0.143 s). No new third-party dependency; new workspace edge
+`rcfd-runner -> rcfd-project`. The workspace gate was not run (the maintainer runs it); each touched crate was built, tested and
+linted alone.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -366,16 +379,16 @@ Deviations and notes:
   rcfd-runner unit, `contract_w48a` (A1, D3/D5), `runner_wfix` and `no_window_scan` pass; `runner_w47b` 11 passed, S4a and S4b
   failed in 4 of 4 runs; rcfd-cli `run_flags_w48a` (A6, A7) and `workspace_graph` pass. L1, S4a and S4b fail the same way on
   3492c75 in the same container (pre-change copy), so they are not caused by 48A; not investigated further (GitHub CI is the
-  reference for Linux). S7 failed in 2 of 3 Linux runs of an intermediate commit (ba7e834): the final `status.json` became
-  visible before its state event and before the request files were removed, because `rcfd-project`'s atomic write fsyncs the
-  file and then the directory after the rename. Fixed in 7168e80 by `atomic::atomic_write_unsynced` (new, additive) for the
-  runner's `status.json`, and events appended without fsync: the runner's write timing is as before the switch. S7 then passed
-  4 of 4 on Linux and on Windows.
+  reference for Linux).
+* S7 failed in 2 of 3 Linux runs of an intermediate commit (ba7e834): the final `status.json` became visible before its state
+  event and before the request files were removed, because `rcfd-project`'s atomic write fsyncs the file and then the directory
+  after the rename. Fixed in 7168e80 by `atomic::atomic_write_unsynced` (new, additive) for the runner's `status.json`, and events
+  appended without fsync: the runner's write timing is as before the switch. S7 then passed 4 of 4 on Linux and on Windows.
 * Behaviour of the runner that changed with the switch, besides the contract: `run.json`, `case.snapshot`, the creation event and
   `metrics.json` are written with fsync (`rcfd-project`'s helpers); `status.json`, later events and `residuals.jsonl` are not,
-  as before (ADR 0123 limit); temp files are `.<name>.<pid>.<n>.tmp`; JSON files end with a newline; a missing record is reported at once instead of after 1 s of
-  retries; run ids are checked by `runid::is_run_id` (22 characters, lowercase hex), which refuses ids of other shapes that
-  `check_id` let through.
+  as before (ADR 0123 limit); temp files are `.<name>.<pid>.<n>.tmp`; JSON files end with a newline; a missing record is reported
+  at once instead of after 1 s of retries; run ids are checked by `runid::is_run_id` (22 characters, lowercase hex), which refuses
+  ids of other shapes that `check_id` let through.
 * Found, not fixed (present at 1248a76): `rcfd-runner serve --project <relative path>` fails every run, because the solver
   runs in the run folder and is given relative paths. Seen while making the A4 fixture (which then used an absolute path).
 * Question for the maintainer (amendment 1 item 10): add an opt-in `output.store_precision` key now, or with the Studio start

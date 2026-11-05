@@ -1,10 +1,25 @@
-# ADR 0090: Wave 38C, dynamic mesh layering (F-230): cell-layer addition and removal at a moving piston, ALE for the compressible solver, inverse-volume smoothing stiffness
+# ADR 0090: Wave 38C, dynamic mesh layering (F-230)
 
-Status: accepted (registration, then addendum). The registration below was committed before any code of this wave was written. Limits and decision
-rules are fixed now and are not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW
-corrected test and the old one stays ignored. Baseline hashes are never re-recorded. Clean-room: first principles only; no vendor documentation, code or
-data is used. Parents: ADR 0033 (F-063: swept volumes, GCL, displacement-diffusion smoothing, incompressible ALE), ADR 0006 / the explicit
-density-based `CompressibleSolver` (HLLC, MUSCL, SSP-RK).
+Status: accepted (registration, then addendum). The registration below was committed before any code of this wave was written.
+
+This wave adds cell-layer addition and removal at a moving piston, ALE for the compressible solver and an inverse-volume smoothing
+stiffness. It asks whether a closed cylinder, compressed and re-expanded by a piston with layers changing at registered height
+thresholds, reproduces the isentrope within 2 percent (the F-230 acceptance) with volume and mass conserved through every layer
+removal and addition. Every registered check is met: A1 is 1.53e-5 and A2 is 3.42e-5 against the 2 percent limit. At peak piston
+Mach 0.05 the case is nearly quasi-static, so the run shows that the ALE fluxes and the layer remap are consistent. It is not a
+sensitive test of numerical entropy production. B2 is the closest margin (about 2x). F-230 is set to `partial` under the registered
+decision rule, because remeshing and case-tree wiring are missing even though every registered check is met. Defaults stay
+bit-identical, verified by a scratch hash test of the fixed-mesh solver.
+
+Rules and parents:
+
+* Limits and decision rules are fixed now and are not changed after a run.
+* A miss becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a NEW corrected test and the old one
+  stays ignored.
+* Baseline hashes are never re-recorded.
+* Clean-room: first principles only; no vendor documentation, code or data is used.
+* Parents: ADR 0033 (F-063: swept volumes, GCL, displacement-diffusion smoothing, incompressible ALE), ADR 0006 / the explicit
+  density-based `CompressibleSolver` (HLLC, MUSCL, SSP-RK).
 
 ## Question
 
@@ -109,11 +124,16 @@ no ALE step works at all. S1-S3 are a separate registered check; their outcome d
 
 ## Addendum: measured (release build, scratch tree on 262ceb6 plus this wave's files)
 
-Files as planned in D1: `rcfd-mesh/src/layering.rs` (`LayerStack`, `LayerChange`, `LayerEvent`, `remap`, one unit test), `pub mod layering` in
-`rcfd-mesh/src/lib.rs`, `CompressibleSolver::step_ale` and `replace_mesh` in `rcfd-fv/src/compressible.rs` (the fixed-mesh residual is split
-into `flux_sum` plus the unchanged division; with no mesh speed every flux goes through the same `solver.flux` call as before),
-`SmoothingMethod::InverseVolume(k)` in `rcfd-fv/src/smoothing.rs`, tests in `rcfd-fv/tests/layering_w38c.rs`. The `rcfd-fv` compressible unit
-tests, `mesh_smoothing` and `rcfd-api` `baseline_hashes` pass unchanged.
+Files as planned in D1:
+
+* `rcfd-mesh/src/layering.rs` (`LayerStack`, `LayerChange`, `LayerEvent`, `remap`, one unit test), `pub mod layering` in
+  `rcfd-mesh/src/lib.rs`;
+* `CompressibleSolver::step_ale` and `replace_mesh` in `rcfd-fv/src/compressible.rs` (the fixed-mesh residual is split into
+  `flux_sum` plus the unchanged division; with no mesh speed every flux goes through the same `solver.flux` call as before);
+* `SmoothingMethod::InverseVolume(k)` in `rcfd-fv/src/smoothing.rs`;
+* tests in `rcfd-fv/tests/layering_w38c.rs`.
+
+The `rcfd-fv` compressible unit tests, `mesh_smoothing` and `rcfd-api` `baseline_hashes` pass unchanged.
 
 | Id | Measured | Limit | Verdict |
 |---|---|---|---|
@@ -141,11 +161,19 @@ Deviation (disclosed): the first S2 run printed the continuous 1-D reference as 
 cross-section `0.01` instead of the cell cross-section `0.005` (two cells across y). That reference value is a diagnostic with no limit. It was
 corrected to `0.1732` after the run; the registered direction check and its measured ratio are unchanged.
 
-Not delivered: local remeshing; layering of unstructured, prism or non-planar layers; more than one moving layered boundary; layering or
-compressible ALE through the `rcfd-api` case tree (`dynamic_mesh` keys) or the CLI; layering in the incompressible PIMPLE path; ALE with
-characteristic boundary conditions on moving faces (rejected with an error); mesh-speed-aware `max_dt`. The time step uses the absolute velocity
-(shortcut: fine at piston Mach 0.05, needs `|u.n - w_n| + c` for fast walls). Roadmap: F-230 is set to `partial` under the registered decision
-rule, because remeshing and case-tree wiring are missing even though every registered check is met.
+Not delivered:
+
+* local remeshing;
+* layering of unstructured, prism or non-planar layers;
+* more than one moving layered boundary;
+* layering or compressible ALE through the `rcfd-api` case tree (`dynamic_mesh` keys) or the CLI;
+* layering in the incompressible PIMPLE path;
+* ALE with characteristic boundary conditions on moving faces (rejected with an error);
+* mesh-speed-aware `max_dt`.
+
+The time step uses the absolute velocity (shortcut: fine at piston Mach 0.05, needs `|u.n - w_n| + c` for fast walls). Roadmap:
+F-230 is set to `partial` under the registered decision rule, because remeshing and case-tree wiring are missing even though every
+registered check is met.
 
 Defaults bit-identical, verified: a scratch test ran the fixed-mesh `CompressibleSolver` with default settings and each of Euler, RK2 and
 RK3 (300 steps, Sod data with a y shear, `box_2d(100, 3)`). The FNV hash of every conserved value's bits is identical between `compressible.rs`

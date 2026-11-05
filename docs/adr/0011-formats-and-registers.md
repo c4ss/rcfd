@@ -1,46 +1,63 @@
 # ADR 0011: interchange formats, cell registers and GLB validation (F-119, F-124, F-117)
 
 Status: accepted, criteria registered before any code of this ADR was run.
-Rule: no criterion below is changed, widened, replaced or deleted after results are seen. A miss goes to an
-`#[ignore]`d `*_known_miss` test with the registered threshold and the measured value is recorded in
-`docs/reference-data.md` and the roadmap note.
 
-All formats are written from their public specifications (STL, Tecplot ASCII data format, Plot3D, XDMF, glTF 2.0).
-No vendor install or binary is read. Where a third-party reader is used to check conformance it is
-named below; if it cannot be run, that is stated, not assumed.
+This ADR holds the registered acceptance criteria for interchange formats (F-119), for cell registers, regions, adaption
+marks and subdomain statistics (F-124), and for GLB structural validation with an external validator (F-117). Section 1
+sets the hostile-input rules for all new parsers. HDF5 heavy data is NOT in scope, so F-119 stays `partial` whatever else
+passes, and EnSight is not attempted. No viewer is available here, so "a viewer with correct colours" is NOT demonstrated.
+Results are copied to `docs/reference-data.md`. Section 6, appended after the first results, records the errata and deviations.
+R5's 1728 cells is wrong arithmetic for a face-neighbour dilation (measured 1600, ignored test `r5_face_grow_known_miss`).
+R6 and R7 were measured on 100 register cells instead of 1000, and the X4 check used `vtkXdmfReader`, not `vtkXdmf3Reader`.
+
+Rules:
+
+- No criterion below is changed, widened, replaced or deleted after results are seen. A miss goes to an
+  `#[ignore]`d `*_known_miss` test with the registered threshold and the measured value is recorded in
+  `docs/reference-data.md` and the roadmap note.
+- All formats are written from their public specifications (STL, Tecplot ASCII data format, Plot3D, XDMF, glTF 2.0).
+  No vendor install or binary is read. Where a third-party reader is used to check conformance it is
+  named below; if it cannot be run, that is stated, not assumed.
 
 ## 1. Hostile-input rules (all new parsers: STL, Tecplot, Plot3D, XDMF reader helpers, GLB validator, registers)
 
-H1. No panic, whatever the bytes. Test, per format and per parser: (a) every prefix of a valid sample file (all
-    lengths 0..len) is parsed; (b) 3000 deterministic single-byte or small-burst mutations (xorshift64, fixed seed
-    0x9E3779B97F4A7C15) of the valid sample are parsed; each call must return (`Ok` or `Err`) and not panic.
-H2. No allocation scaled by an untrusted header count. Counts read from a header (triangles, nodes, elements,
-    ni*nj*nk, accessor count) are checked, with checked arithmetic, against the bytes that remain before anything is
-    reserved. Test: a 100-byte file whose header declares `u32::MAX` / `i32::MAX` items returns `Err` in under 1 s
-    (and without the process growing by more than 64 MiB; the test only asserts the `Err` and the time).
-H3. Hard caps: file size 1 GiB, 50 million triangles / nodes / elements / grid points per file, 4096 blocks, 4096
-    tokens per header line. Exceeding a cap is an `Err` naming the cap.
-H4. Located errors. ASCII formats report `line N` (1-based) and, when known, the token or keyword; binary formats
-    report `byte offset N` (or `record N`). GLB reports a JSON pointer (`/accessors/3/count`). Test: a file with a
-    garbled token on a known line 7 produces an error text containing `line 7`; a GLB with a bad count reports the
-    exact pointer.
-H5. Non-finite numbers (NaN, Inf) in coordinates are an error with location; in field data they are an error for
-    registers and statistics (naming the first cell) and are written/read verbatim by the interchange writers only
-    if the format can represent them (otherwise the writer refuses).
+- H1. No panic, whatever the bytes. Test, per format and per parser: (a) every prefix of a valid sample file (all
+  lengths 0..len) is parsed; (b) 3000 deterministic single-byte or small-burst mutations (xorshift64, fixed seed
+  0x9E3779B97F4A7C15) of the valid sample are parsed; each call must return (`Ok` or `Err`) and not panic.
+- H2. No allocation scaled by an untrusted header count. Counts read from a header (triangles, nodes, elements,
+  ni*nj*nk, accessor count) are checked, with checked arithmetic, against the bytes that remain before anything is
+  reserved. Test: a 100-byte file whose header declares `u32::MAX` / `i32::MAX` items returns `Err` in under 1 s
+  (and without the process growing by more than 64 MiB; the test only asserts the `Err` and the time).
+- H3. Hard caps: file size 1 GiB, 50 million triangles / nodes / elements / grid points per file, 4096 blocks, 4096
+  tokens per header line. Exceeding a cap is an `Err` naming the cap.
+- H4. Located errors. ASCII formats report `line N` (1-based) and, when known, the token or keyword; binary formats
+  report `byte offset N` (or `record N`). GLB reports a JSON pointer (`/accessors/3/count`). Test: a file with a
+  garbled token on a known line 7 produces an error text containing `line 7`; a GLB with a bad count reports the
+  exact pointer.
+- H5. Non-finite numbers (NaN, Inf) in coordinates are an error with location; in field data they are an error for
+  registers and statistics (naming the first cell) and are written/read verbatim by the interchange writers only
+  if the format can represent them (otherwise the writer refuses).
 
 ## 2. F-119 interchange formats
 
-Scope delivered: STL (ASCII and binary, read and write, surface), Tecplot ASCII (write and read, FE zones of
-triangle/quadrilateral/tetrahedron/brick, BLOCK and POINT packing, cell-centred variables, ordered I/J/K zones in
-the reader), Plot3D structured (multi-block grid, ASCII and Fortran-unformatted binary, single and double
-precision, either byte order on read, optional iblank; function files), XDMF (XML with Binary heavy data, writer).
+Scope delivered:
+
+- STL (ASCII and binary, read and write, surface).
+- Tecplot ASCII (write and read, FE zones of triangle/quadrilateral/tetrahedron/brick, BLOCK and POINT packing,
+  cell-centred variables, ordered I/J/K zones in the reader).
+- Plot3D structured (multi-block grid, ASCII and Fortran-unformatted binary, single and double precision, either byte
+  order on read, optional iblank; function files).
+- XDMF (XML with Binary heavy data, writer).
+
 HDF5 heavy data (the title's "XDMF/HDF5 writer") is NOT in scope of this ADR: it needs an HDF5 writer; the roadmap
 item therefore stays `partial` whatever else passes. EnSight is not attempted.
 
-Wiring: `rcfd convert <in> <out>`; output by extension `.stl` (patches chosen by `--patch a,b`, default all
-non-empty boundary patches, `--ascii` for ASCII), `.dat` (Tecplot ASCII), `.xmf` (+ `.bin` next to it), input by
-extension `.stl` (re-encode only), `.x`/`.xyz`/`.p3d`/`.grd` (Plot3D grid to a mesh with patches imin..kmax). Parser
-errors are printed as `error: <file>: <located message>` with exit status 1.
+Wiring: `rcfd convert <in> <out>`.
+
+- Output by extension: `.stl` (patches chosen by `--patch a,b`, default all non-empty boundary patches, `--ascii` for
+  ASCII), `.dat` (Tecplot ASCII), `.xmf` (+ `.bin` next to it).
+- Input by extension: `.stl` (re-encode only), `.x`/`.xyz`/`.p3d`/`.grd` (Plot3D grid to a mesh with patches imin..kmax).
+- Parser errors are printed as `error: <file>: <located message>` with exit status 1.
 
 ### 2.1 STL
 - S1 ASCII round trip of the vertices of a boundary patch is bit exact (max abs difference 0).
@@ -93,7 +110,8 @@ errors are printed as `error: <file>: <located message>` with exit status 1.
 ### 2.4 XDMF writer (XML + binary heavy data)
 - X1 Heavy data are separate little-endian `.bin` files, `Float64` and `Int64`; the `Dimensions` product times
   `Precision` equals the file size of each referenced file exactly; values read back bit exact.
-- X2 The XML is well formed (checked by a small tag-balance parser in the test) and every `DataItem` file reference exists next to the `.xmf` file; relative paths only, no `..`.
+- X2 The XML is well formed (checked by a small tag-balance parser in the test) and every `DataItem` file reference
+  exists next to the `.xmf` file; relative paths only, no `..`.
 - X3 Mixed topology is written with the XDMF mixed-topology type numbers (triangle 4, quadrilateral 5, tetrahedron
   6, pyramid 7, wedge 8, hexahedron 9); cells outside these (polyhedra) are an error naming the cell.
 - X4 Third-party check (if available): VTK `vtkXdmf3Reader` (or meshio) opens the file; cell count and a cell-data
@@ -117,8 +135,9 @@ Test mesh: unit cube, N x N x N = 20^3 uniform cells (h = 0.05, cell centres (i 
 - R4 Boundary adjacent: patch xmin, layers 1 gives 400 cells; layers 2 gives 800; all six patches, layers 1 gives
   20^3 - 18^3 = 2168 cells. The interface area of the layer-1 xmin set (sum of areas of internal faces between a
   region cell and a non-region cell) is 400 faces * h^2 = 1.0 (1e-12).
-- R5 Algebra: |A u B| + |A n B| = |A| + |B| for A = box, B = threshold; |not A| = N^3 - |A|; difference A\B =
-  |A| - |A n B|; grow of the 10^3 central box by 1 layer is 12^3 = 1728 cells and shrink of that by 1 is 1000 cells.
+- R5 Algebra: |A u B| + |A n B| = |A| + |B| for A = box, B = threshold; |not A| = N^3 - |A|;
+  difference A\B = |A| - |A n B|; grow of the 10^3 central box by 1 layer is 12^3 = 1728 cells and shrink of that by 1
+  is 1000 cells.
 - R6 Patching: `patch_field(values, mask, v)` changes exactly the cells of the mask (count = 1000 for R1) and leaves
   every other cell bit identical; the settings-tree patch `initial.patches` gives the same fields in `Simulation`.
 - R7 Source restriction through the settings tree: `sources.<n>.zone = "register"` with `register = "<name>"`. For a
@@ -141,26 +160,29 @@ Test mesh: unit cube, N x N x N = 20^3 uniform cells (h = 0.05, cell centres (i 
 
 New module `rcfd-post::glb_check` replaces the checks of `gltf::check_glb` (which now calls it). Rules, each a
 distinct error with a JSON pointer, each with one negative test constructed by editing a valid GLB:
-G1 header magic, version 2, length equals file length, chunk lengths 4-byte aligned, first chunk JSON, second BIN,
-   BIN chunk length >= buffers[0].byteLength and < +4, no trailing bytes.
-G2 `accessor.byteOffset % componentSize == 0` and `(view.byteOffset + accessor.byteOffset) % componentSize == 0`;
-   `bufferView.byteStride` (when present) in 4..=252 and a multiple of 4, >= element size, only on vertex-attribute
-   views; extent `offset + stride*(count-1) + elementSize <= view.byteLength` with checked arithmetic.
-G3 view within buffer; `byteLength` >= 1; `count` >= 1; `type` and `componentType` valid; `normalized` only for
-   integer component types; matrices not used.
-G4 `min`/`max`: present and of length n for POSITION; for float accessors with data checked, min and max equal the
-   data exactly (0 tolerance; JSON numbers are widened float32); `min <= max`.
-G5 Indices: component type 5121, 5123 or 5125 only, element type SCALAR, all indices < POSITION count, none equal
-   to the primitive restart value (255, 65535, 4294967295); triangle mode count % 3 == 0; strip and fan >= 3; line
-   modes counts per spec; mode in 0..=6.
-G6 Attributes: POSITION float VEC3; NORMAL float VEC3 with |n| = 1 within 1e-3 and finite; COLOR_0 VEC3/VEC4
-   float or normalized unsigned byte/short; all attributes of a primitive have equal count; float data finite.
-G7 References in range: scene, scenes[].nodes, nodes[].mesh, nodes[].children (acyclic, each node at most one
-   parent), primitives[].material, indices, attribute accessor indices, accessor.bufferView, bufferView.buffer;
-   `extensionsRequired` entries must be known (none are) else error; `sparse` accessors rejected as unsupported.
-G8 No panic and no unbounded allocation on hostile input (H1, H2, H3) for the validator itself.
+
+- G1 header magic, version 2, length equals file length, chunk lengths 4-byte aligned, first chunk JSON, second BIN,
+  BIN chunk length >= buffers[0].byteLength and < +4, no trailing bytes.
+- G2 `accessor.byteOffset % componentSize == 0` and `(view.byteOffset + accessor.byteOffset) % componentSize == 0`;
+  `bufferView.byteStride` (when present) in 4..=252 and a multiple of 4, >= element size, only on vertex-attribute
+  views; extent `offset + stride*(count-1) + elementSize <= view.byteLength` with checked arithmetic.
+- G3 view within buffer; `byteLength` >= 1; `count` >= 1; `type` and `componentType` valid; `normalized` only for
+  integer component types; matrices not used.
+- G4 `min`/`max`: present and of length n for POSITION; for float accessors with data checked, min and max equal the
+  data exactly (0 tolerance; JSON numbers are widened float32); `min <= max`.
+- G5 Indices: component type 5121, 5123 or 5125 only, element type SCALAR, all indices < POSITION count, none equal
+  to the primitive restart value (255, 65535, 4294967295); triangle mode count % 3 == 0; strip and fan >= 3; line
+  modes counts per spec; mode in 0..=6.
+- G6 Attributes: POSITION float VEC3; NORMAL float VEC3 with |n| = 1 within 1e-3 and finite; COLOR_0 VEC3/VEC4
+  float or normalized unsigned byte/short; all attributes of a primitive have equal count; float data finite.
+- G7 References in range: scene, scenes[].nodes, nodes[].mesh, nodes[].children (acyclic, each node at most one
+  parent), primitives[].material, indices, attribute accessor indices, accessor.bufferView, bufferView.buffer;
+  `extensionsRequired` entries must be known (none are) else error; `sparse` accessors rejected as unsupported.
+- G8 No panic and no unbounded allocation on hostile input (H1, H2, H3) for the validator itself.
+
 Registered measurement: every GLB produced by `write_glb` in the test-suite (box all-patches 4^3, 20^3 mesh, a
 polygon-face mesh, no-scalar case) passes G1-G8 with 0 issues.
+
 External: the Khronos `gltf-validator` (npm package `gltf-validator`, run with node) is run on the exported GLB of
 a contour on a boundary: limit numErrors == 0 (warnings and infos are listed in the roadmap note, not limited,
 because the registered acceptance is a validator that loads the file). No viewer is available here: "a viewer with

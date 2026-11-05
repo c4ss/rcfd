@@ -1,17 +1,36 @@
 # ADR 0113: Wave 44C, MRF zones with rotationally cyclic seams (F-126)
 
-Status: registered before any solver code of this wave was written. Limits and decision rules below are not changed after a run; a
-missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a new corrected test registered here
-as an amendment before it runs. Written at HEAD fee6ecc, target `<target dir>`. Clean-room: first principles only
-(exact solutions of the Navier-Stokes equations, rigid-rotation kinematics); no literature value enters a limit.
+Status: registered before any solver code of this wave was written.
+
+ADR 0109 found that a periodic rotor passage with an MRF zone cannot be combined with the cylindrical rotor/stator interface, because
+`MrfZone::worst_non_axisymmetry` refuses a zone with cyclic seams. This wave adds the opt-in case key `sources.<name>.cyclic_seams`
+(default `false`), which gives the frame flux to both faces of a seam pair when both owner cells are in the zone. The first pass as
+registered missed limits of G, K1 and K3. Amendments 2 and 3, written after it, added the solver flag F1 (`coupled_offdiag_in_h1`),
+the checks K3b and K3c, and corrected guards. With F1, G (corrected guards), K1, K2, K3, K3c, K4 and K5 pass and D1, D4 discriminate,
+so by the decision rule F1 and the opt-in are kept; K3b and the two earlier guard versions stay as ignored known misses (defective
+set-ups). The positive path is verified at library level only, because no case-tree mesh reaches it, and this does not deliver the
+fan: the case tree still refuses an MRF zone on the `axial_fan_sector` passage, now at the hub, and K6 is an ignored known miss as
+predicted (7.4e-4 U against 1e-8). Reported outside the task: the default SIMPLEC kernel builds `rAtU` of cyclic cells without the
+lagged partner coefficients, and an inertial 3-D sector through-flow carries 4.6e-3 U of spurious swirl from it. F-126 stays partial;
+the final gate at 2a48571 had 1 failure, and after a test-source fix and a re-run of the two affected test targets the corrected
+totals are 2007 passed, 0 failed, 627 ignored.
+
+Rules:
+
+* Limits and decision rules below are not changed after a run; a missed limit becomes an ignored `*_known_miss` test with the limit
+  intact; a defective set-up gets a new corrected test registered here as an amendment before it runs.
+* Written at HEAD fee6ecc, target `<target dir>`.
+* Clean-room: first principles only (exact solutions of the Navier-Stokes equations, rigid-rotation kinematics); no literature value
+  enters a limit.
 
 ## Context
 
-ADR 0109 (wave 43B) found that a periodic rotor passage with an MRF zone cannot be combined with the cylindrical rotor/stator interface:
+ADR 0109 (wave 43B) found that a periodic rotor passage with an MRF zone cannot be combined with the cylindrical rotor/stator interface.
 `MrfZone::worst_non_axisymmetry` refuses a zone with cyclic seams, because a seam face lies in a plane through the axis and carries the
-frame flux `(Omega x r).S`, while `add_frame_flux` gives the frame flux only to internal faces with both cells in the zone. ADRs 0082 and
-0085 tried a wider change (F-RP: frame flux on every boundary face of the zone, walls included, triangle-exact) on the fan meshes; it did
-not converge on two of three meshes and was removed both times. This wave changes the seams only.
+frame flux `(Omega x r).S`, while `add_frame_flux` gives the frame flux only to internal faces with both cells in the zone.
+
+ADRs 0082 and 0085 tried a wider change (F-RP: frame flux on every boundary face of the zone, walls included, triangle-exact) on the
+fan meshes; it did not converge on two of three meshes and was removed both times. This wave changes the seams only.
 
 ## What the seam flux must be (first principles)
 
@@ -30,10 +49,14 @@ it, `R` commutes with `Omega x .`, so `Omega x r_g = R (Omega x r_f)` and
 
 So the frame flux of a seam pair is equal and opposite, exactly as for the two sides of one internal face: a seam pair is an internal face
 cut in two. The velocity transfer needs no change: the absolute velocity maps by `R` (the existing `periodic_rot`), and so does the
-relative velocity, since `u - Omega x r` maps to `R u - Omega x (R r) = R (u - Omega x r)`. Handled consistently means: (i) both faces of
-a pair get the frame flux, which requires both owner cells to be in the zone; (ii) the MRF axis and origin agree with the periodic
-rotation, which shows as `F_f + F_g = 0`; (iii) the absolute seam fluxes stay antisymmetric as before (pair mean of the body-force flux
-term not changed: off for MRF, as today).
+relative velocity, since `u - Omega x r` maps to `R u - Omega x (R r) = R (u - Omega x r)`.
+
+Handled consistently means:
+
+* (i) both faces of a pair get the frame flux, which requires both owner cells to be in the zone;
+* (ii) the MRF axis and origin agree with the periodic rotation, which shows as `F_f + F_g = 0`;
+* (iii) the absolute seam fluxes stay antisymmetric as before (pair mean of the body-force flux term not changed: off for MRF, as
+  today).
 
 ## Decision (method, opt-in)
 
@@ -191,13 +214,16 @@ level; nothing here was registered in advance):
   correction on): 5.2e-3. Its faces and area vectors equal those of `annulus_3d` to 7e-16 and 3e-17. So the K3 swirl is made by the
   sector with side boundaries in through-flow, cyclic or symmetric, not by the MRF zone or its seams; its cause was not found.
 
-Conclusions. (1) The seam frame flux is exact: with the force removed the MRF sector equals the annulus to 7e-9, K4 holds to 1e-15. (2) The
-K1 miss comes from the fixed-velocity wall pressure condition of `SimpleSolver` (the wall-normal gradient `(rAU / rAtU) f_n` of the owner,
-`body_ratio`): `rAtU = 1 / (a_p - h1)` with `h1` the sum of the off-diagonal magnitudes of the momentum matrix, and a cyclic face puts its
-partner coefficient into the source (lagged), not into the off-diagonals, so `h1` and the ratio of a seam cell differ from those of the same
-cell of the annulus; the force has a wall-normal part only at walls, hence the seam-wall corners. Without a force the ratio is not used,
-hence the exact inertial pairs. (3) K3 as registered is a defective set-up: its sector-annulus limit is already missed by the inertial pair
-without the change (the smoke did not compare the inertial pair; that was a smoke gap).
+Conclusions:
+
+1. The seam frame flux is exact: with the force removed the MRF sector equals the annulus to 7e-9, K4 holds to 1e-15.
+2. The K1 miss comes from the fixed-velocity wall pressure condition of `SimpleSolver` (the wall-normal gradient `(rAU / rAtU) f_n` of
+   the owner, `body_ratio`): `rAtU = 1 / (a_p - h1)` with `h1` the sum of the off-diagonal magnitudes of the momentum matrix, and a
+   cyclic face puts its partner coefficient into the source (lagged), not into the off-diagonals, so `h1` and the ratio of a seam cell
+   differ from those of the same cell of the annulus; the force has a wall-normal part only at walls, hence the seam-wall corners.
+   Without a force the ratio is not used, hence the exact inertial pairs.
+3. K3 as registered is a defective set-up: its sector-annulus limit is already missed by the inertial pair without the change (the
+   smoke did not compare the inertial pair; that was a smoke gap).
 
 Changes, registered now:
 
@@ -279,17 +305,20 @@ Changes, registered now:
 | A3 `cyclic_seams` on `rotating_frame` | located error at `sources.frame.cyclic_seams` (raised when the case is parsed) | located | pass |
 | `s4_absolute_formulation_mrf_is_refused_on_the_sector` (existing) | passes | | pass |
 
-Verdict: G (corrected guards), K1, K2, K3, K3c, K4, K5 pass with F1, and D1, D4 discriminate, so by the decision rule F1 and the opt-in
-are kept. An MRF zone may now contain rotationally cyclic seams, exactly (the sector reproduces the full annulus
-to 1e-8 or better in every check). The positive path is verified at library level only. Through the case tree the key is checked,
-its refusals are located and the default is bit-identical, but no run sends `cyclic_seams = true` through `Sources` and the one-line
-`sim.rs` wiring of F1 into the solver on a mesh with cyclic faces, because no case-tree mesh reaches it (below). The default-path
-refusal message also changed: it now names the patch of the worst face and hints at `cyclic_seams` (diagnostic text only). This does not deliver the fan: the `axial_fan_sector`
-hub and shroud faces are not surfaces of revolution at the face centres (1.8e-2 and 4.5e-3 of `Omega r |S|`), so the case tree still
-refuses an MRF zone on the fan passage, now at the hub; at library level the same passage leaves the exact state by 7.4e-4 U, located
-at hub/shroud cells. Curing that is the wall-frame-flux question of F-RP (ADRs 0082, 0085), or a mesher change that makes the hub and
-shroud faces chord rectangles; neither is attempted here. A sector also cannot reach the case tree through a mesh file (the OpenFOAM
-writer stores `neighbourPatch` only, not the rotation).
+Verdict: G (corrected guards), K1, K2, K3, K3c, K4, K5 pass with F1, and D1, D4 discriminate, so by the decision rule F1 and the
+opt-in are kept. An MRF zone may now contain rotationally cyclic seams, exactly (the sector reproduces the full annulus to 1e-8 or
+better in every check).
+
+The positive path is verified at library level only. Through the case tree the key is checked, its refusals are located and the
+default is bit-identical, but no run sends `cyclic_seams = true` through `Sources` and the one-line `sim.rs` wiring of F1 into the
+solver on a mesh with cyclic faces, because no case-tree mesh reaches it (below). The default-path refusal message also changed: it
+now names the patch of the worst face and hints at `cyclic_seams` (diagnostic text only).
+
+This does not deliver the fan. The `axial_fan_sector` hub and shroud faces are not surfaces of revolution at the face centres (1.8e-2
+and 4.5e-3 of `Omega r |S|`), so the case tree still refuses an MRF zone on the fan passage, now at the hub. At library level the
+same passage leaves the exact state by 7.4e-4 U, located at hub/shroud cells. Curing that is the wall-frame-flux question of F-RP
+(ADRs 0082, 0085), or a mesher change that makes the hub and shroud faces chord rectangles; neither is attempted here. A sector also
+cannot reach the case tree through a mesh file (the OpenFOAM writer stores `neighbourPatch` only, not the rotation).
 
 Finding outside the task, reported: the default SIMPLEC kernel builds `rAtU` of cyclic cells without the lagged partner coefficients.
 Without a body force the converged solution does not depend on it in the 2-D swirl checks (inertial pairs match to 1e-9), but an inertial
@@ -297,11 +326,17 @@ Without a body force the converged solution does not depend on it in the 2-D swi
 periodic SIMPLEC case use that default path. F1 is opt-in here (switched on only by `cyclic_seams`), so every earlier result and
 `crates/rcfd-api/tests/baseline_hashes.rs` stay bit-identical; making it the default for periodic cases is a separate decision.
 
-Deviations from the registered plan, all stated in the amendments: the early run caused by an over-broad name filter (amendment 1); the
-first-pass misses and the unregistered diagnostics that located them (amendment 2); F1 added by amendment 2 with a falsifier that ran
-first; K3 wrongly called defective in amendment 2 and restored in amendment 3 because its registered limits are met with F1; K3b and the
-amendment-2 guard set-ups defective (amendment 3); A3's test first failed because the located error is raised by `Case::parse_toml`
-(the test now accepts the parse-time diagnostics; the criterion is unchanged). The diagnostic switches are not in the committed tests.
+Deviations from the registered plan, all stated in the amendments:
+
+* the early run caused by an over-broad name filter (amendment 1);
+* the first-pass misses and the unregistered diagnostics that located them (amendment 2);
+* F1 added by amendment 2 with a falsifier that ran first;
+* K3 wrongly called defective in amendment 2 and restored in amendment 3 because its registered limits are met with F1;
+* K3b and the amendment-2 guard set-ups defective (amendment 3);
+* A3's test first failed because the located error is raised by `Case::parse_toml` (the test now accepts the parse-time diagnostics;
+  the criterion is unchanged).
+
+The diagnostic switches are not in the committed tests.
 
 Unverified references: none; every reference value is an exact solution or an earlier ADR's measured value (ADR 0008 M3 for L_DIFF).
 

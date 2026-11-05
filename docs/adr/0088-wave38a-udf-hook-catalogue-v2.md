@@ -1,13 +1,29 @@
 # ADR 0088: Wave 38A, user-function hook catalogue v2 (F-239), first slice
 
-Status: registered before any hook code of this wave was written. Limits are not changed, widened or deleted after a run; a miss becomes an
-ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored. Baseline hashes are
-never re-recorded; every new hook is opt-in (a case without the new settings builds and runs exactly as before). Clean-room: first principles only.
-Written at HEAD a4e0f36 (scratch clone `<scratch dir>`, target `<target dir>`).
+Status: registered before any hook code of this wave was written. Written at HEAD a4e0f36 (scratch clone `<scratch dir>`, target
+`<target dir>`).
 
-Parent: F-122 (ADR-less, `docs/udf-abi.md`): sandboxed WebAssembly user functions, ABI version 1, four hooks (`momentum_source`,
-`velocity_profile`, `kinematic_viscosity`, `monitor`). Roadmap F-239 acceptance: "Each hook, set to a constant or analytic function, reproduces the
-matching built-in setting or closed-form solution (property hook equals constant-property run; heat-source hook equals the slab profile)".
+This wave delivers the first slice of the F-239 hook catalogue: hooks H1 to H7, added as optional exports of the sandboxed WebAssembly
+user-function mechanism of F-122, with the ABI staying at version 1. Every hook delivered meets its registered check (C1 to C8, and
+C9 from Amendment 1), and the equivalence results against the built-in settings are exactly 0. F-239 is `partial`, because the
+acceptance names the whole catalogue and the rest of it is not delivered. The addendum discloses two defects of the first runs. The
+C1 sanity part scaled by a range of 0 and "passed" without meaning anything, so a NEW test corrects it. The C6 module text did not
+parse, so that run measured nothing. The CHT heat-flux path of `heat_flux_udf` is wired but untested, and H1, H2 and H6 are tested in
+steady SIMPLEC only. The last complete gate is the one of 70a9406; the re-gate of d6f33a5 was stopped by the host for low memory and
+was not restarted.
+
+Rules and parents:
+
+* Limits are not changed, widened or deleted after a run.
+* A miss becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets a NEW corrected test and the old one
+  stays ignored.
+* Baseline hashes are never re-recorded.
+* Every new hook is opt-in (a case without the new settings builds and runs exactly as before).
+* Clean-room: first principles only.
+* Parent: F-122 (ADR-less, `docs/udf-abi.md`): sandboxed WebAssembly user functions, ABI version 1, four hooks
+  (`momentum_source`, `velocity_profile`, `kinematic_viscosity`, `monitor`).
+* Roadmap F-239 acceptance: "Each hook, set to a constant or analytic function, reproduces the matching built-in setting or
+  closed-form solution (property hook equals constant-property run; heat-source hook equals the slab profile)".
 
 ## Decision: hooks delivered in this slice
 
@@ -29,11 +45,20 @@ panic). The ABI stays version 1: the new exports are optional and additive, so e
 H3, H4, H5 in transient, coupled and frozen-flux (CHT) runs are refused with a diagnostic, because those engines do not pass through the steady path
 that applies them (silently ignoring them would be worse).
 
-**Not delivered in this slice** (stated in the roadmap note): turbulence source hooks (the turbulence models live inside rcfd-fv and expose no source
-input), species (multicomponent) source hooks (only passive scalars), adjust hook (modifying fields between iterations), exit hook as distinct from
-execute-at-end, reaction-rate hook, dynamic-zone motion hook, specific-heat and density property hooks, any hook in the compressible, variable-density
-or VOF solvers (still refused for all user functions), and transient/coupled use of H3-H5. Particle hooks stay gated on the particle model: the
-Lagrangian tracking features F-056 and F-128 are `partial`, and no particle hook (injection, drag law, wall interaction, scalar update) is offered.
+**Not delivered in this slice** (stated in the roadmap note):
+
+* turbulence source hooks (the turbulence models live inside rcfd-fv and expose no source input);
+* species (multicomponent) source hooks (only passive scalars);
+* adjust hook (modifying fields between iterations);
+* exit hook as distinct from execute-at-end;
+* reaction-rate hook;
+* dynamic-zone motion hook;
+* specific-heat and density property hooks;
+* any hook in the compressible, variable-density or VOF solvers (still refused for all user functions);
+* transient/coupled use of H3-H5.
+
+Particle hooks stay gated on the particle model: the Lagrangian tracking features F-056 and F-128 are `partial`, and no particle
+hook (injection, drag law, wall interaction, scalar update) is offered.
 
 ## Registered checks (`crates/rcfd-api/tests/udf_hooks_w38a.rs`)
 
@@ -110,7 +135,7 @@ Deviations from the registered plan, disclosed:
 
 1. **C1 sanity metric was a defective set-up.** As written, the sanity part scaled the difference by the range of the
    uniform-300 K run, which is 0, so it printed 1.4e301; the check "passed" without meaning anything. The test stays
-   as `c1_temperature_profile_equals_the_expression`, ignored with that reason, and the NEW test
+   as `c1_temperature_profile_equals_the_expression`, ignored with that reason. The NEW test
    `c1_corrected_sanity_scale` scales by the range of the hook run (measured 1.01). The equivalence part (0) is the
    same in both.
 2. **C6 module text did not parse on the first run** (one closing parenthesis too many in the WAT of the test module),
@@ -139,9 +164,13 @@ with conjugate heat transfer, and no run used `initialise` or the boundary hooks
   zone source of 5e3 W/m^3, against the zone source of 1e4 W/m^3 alone: rel diff of T < 1e-9 (the same limit and the
   same reason as C4a: the hook adds its value to the zone source assigned in the same iteration). This exercises the
   add-to-the-other-sources branch, where an accumulation over iterations would show as a large difference.
-* Docs are reworded, not tested: the CHT heat-flux path of `heat_flux_udf` is wired but untested; H1, H2 and H6 are
-  tested in steady SIMPLEC only; the sentence that a restart overwrites the initialise hook is removed (not tested);
-  the combination of `energy_source` with components, chemistry and particle heat sources is wired but only the zone
+
+Docs are reworded, not tested:
+
+* the CHT heat-flux path of `heat_flux_udf` is wired but untested;
+* H1, H2 and H6 are tested in steady SIMPLEC only;
+* the sentence that a restart overwrites the initialise hook is removed (not tested);
+* the combination of `energy_source` with components, chemistry and particle heat sources is wired but only the zone
   source combination is tested (C9).
 
 Rule (c) disclosure for deviations 1 and 2 of the addendum: the corrected test `c1_corrected_sanity_scale` was

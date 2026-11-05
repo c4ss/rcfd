@@ -4,8 +4,21 @@ Status: **registered 2026-10-29**, before any solver run of this job. **Amendmen
 runs, before any amended run): the opt-in had a y+ 5 switch (bistable) and over-produced nuTilda in the second cell;
 both were fixed, with new arms F, AF, G. **Results in the addendum:** the default's buffer-layer error and its cause are
 confirmed; the amended opt-in meets every limit; as registered, it missed LP1, LP2 and LP4 at y+ 5 (known misses). The
-set-ups, limits, reading rules and the not-run
-list are fixed here. Results go in an addendum. Not yet accepted by the maintainer.
+set-ups, limits, reading rules and the not-run list are fixed here. Results go in an addendum. Not yet accepted by the
+maintainer.
+
+ADR 0164 recorded a known miss of +19.9 % in Spalart-Allmaras (SA) flat-plate friction at y+ 5, and its question 8 is
+this job. The job characterises that error across y+ 1 to 60, finds its cause in the code and adds an opt-in,
+`turbulence.sa.wall_mode = "auto_sa_law"`; the default `auto` is unchanged. The cause is confirmed: `effective_viscosity`
+interpolates nut linearly to every internal face, across the steep, non-linear rise of the eddy viscosity in the buffer
+layer. In `auto`, plate Cf(0.97) is +19.9 % against TMR at wall y+ 5 and +19.7 % at y+ 8, and the NACA 0012 at 0 degrees
+gives friction +17.4 % and cd +17.8 % on the mesh with median wall y+ 5. As registered, the opt-in missed LP1, LP2 and
+LP4 at y+ 5 (E05); these are known misses. Amendment 1, designed after profile diagnostics of the registered runs, fixed
+two defects: a bistable switch at y+ 5 and over-produced nuTilda in the second cell. As amended, the opt-in meets every
+limit: the plate is +2.3 % to +4.4 % against TMR at all 10 y+ (the plate set-up's baseline of +2 % to +3 % is already
+present at y+ 1 in every mode), and aerofoil cd is +2.0 %, +1.3 %, +2.3 % at median wall y+ 5, 15, 42. Non-equilibrium
+checks of the opt-in were not run, and the default stays a question for the maintainer: the addendum recommends `auto`
+now and `auto_sa_law` after one more job.
 
 Job 49E, on local main f9a520a; the worktree branch was fast-forwarded to it before any work. Number: 0165 is the highest
 on main; 0166 (job 49C) and 0167 (job 49D) are taken in other worktrees; checked just before writing.
@@ -393,8 +406,12 @@ Results: [`docs/investigations/job49e-sa-wall/`](../investigations/job49e-sa-wal
 ### The finding
 
 1. **The default's buffer-layer error is real, and its mechanism is the one identified before the runs.**
-   - Plate Cf(0.97) against TMR in `auto`: +3.1 / +4.9 / +7.7 / +19.9 / +19.7 / +14.2 / +11.4 / +5.7 / +4.3 /
-     +2.9 % at wall y+ 1 / 2 / 3 / 5 / 8 / 12 / 15 / 30 / 40 / 60.
+   - Plate Cf(0.97) against TMR in `auto`:
+
+     | Wall y+ | 1 | 2 | 3 | 5 | 8 | 12 | 15 | 30 | 40 | 60 |
+     |---|---|---|---|---|---|---|---|---|---|---|
+     | Error | +3.1 % | +4.9 % | +7.7 % | +19.9 % | +19.7 % | +14.2 % | +11.4 % | +5.7 % | +4.3 % | +2.9 % |
+
    - The 1-D model of the linear face eddy viscosity (D7), shifted by D01's offset (+2.2 points), predicts every one of
      them within 1.2 points (LH1).
    - On the NACA 0012 at 0 degrees, the mesh with median wall y+ 5 gives friction +17.4 % and cd +17.8 %. Median 15 gives

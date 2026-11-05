@@ -1,13 +1,28 @@
 # ADR 0012: Lumped zone components (F-113) and Rosseland / P1 radiation (F-130)
 
 Status: accepted. The checks, numeric limits and reference values below were written before any code of this
-work was run (only the existing code and docs were read). They are not changed after a run. A miss is reported as
-measured and moved to an ignored `*_known_miss` test; a registered limit is never widened.
-Roadmap: F-113 (lumped zone components), F-130 (radiation extensions), F-052 (radiation, partly).
-Clean room: only published literature (see "Sources"). Note: the repository has no radiation code yet (F-052 is
-`todo`), so there is nothing to reuse on the radiation side except the shared finite-volume operators
-(`diffusion::laplacian`, `convection`, `FvMatrix`, the `Bc` trait) and the energy solver; porous/MRF code of F-031
-(`sources::porous_sink`, `BodyForce`, cell-zone selection) is reused for the momentum side.
+work was run (only the existing code and docs were read).
+
+This ADR adds two opt-in model groups for steady SIMPLE/SIMPLEC flow: lumped zone components (fan, porous jump, heat
+exchanger, network outlet; F-113) and grey Rosseland and P1 radiation (F-130). The addendum records two misses of
+registered limits: Z3 patch pressure against R(Q), +0.085 % against 1e-4 (`z3_network_pressure_known_miss`), and Z4
+reported duty against `eps C_min dT` with the nominal inlet temperature, 1.45e-6 at C_sec = 0 against 1e-6
+(`z4_effectiveness_nominal_formula_known_miss`). The other Z3 and Z4 values, Z1, Z2, Z5 and R1 to R5 are met, and Z6 leaves
+the baseline hashes unchanged. Z1 missed on the first implementation (fan as a balanced-force body force, porous jump as a
+cell-based sink; -17 % at u = 0.5 m/s, limit 1e-3). A pressure-jump plane then replaced that implementation; the criteria
+did not change. The Milne extrapolation length rests on a secondary source and is marked unverified in
+`docs/reference-data.md`. Not done includes non-grey band models, WSGG, discrete ordinates and surface-to-surface radiation.
+
+Rules and parents:
+
+- The checks, numeric limits and reference values are not changed after a run. A miss is reported as measured and moved to
+  an ignored `*_known_miss` test; a registered limit is never widened.
+- Roadmap: F-113 (lumped zone components), F-130 (radiation extensions), F-052 (radiation, partly).
+- Clean room: only published literature (see "Sources").
+- Note: the repository has no radiation code yet (F-052 is `todo`), so there is nothing to reuse on the radiation side
+  except the shared finite-volume operators (`diffusion::laplacian`, `convection`, `FvMatrix`, the `Bc` trait) and the
+  energy solver; porous/MRF code of F-031 (`sources::porous_sink`, `BodyForce`, cell-zone selection) is reused for the
+  momentum side.
 
 ## Models
 
@@ -142,12 +157,13 @@ Parallel plates at x = 0 and x = L = 1 m (black unless stated) with the energy f
 The first implementation realised the fan as a balanced-force body force and the porous jump as a cell-based
 Darcy-Forchheimer sink scaled by thickness/zone length. Z1 missed (u = 0.5 m/s: 17.436 Pa against 21.0 Pa, -17 %, limit
 1e-3): the Rhie-Chow interpolation of rAU/HbyA across a sharp sink makes the edge faces drop about h U s a0/(2 a0 + s V)
-instead of h U s/2, an O(1/n) error. The implementation was then replaced (not the criteria) by a pressure-jump plane:
-`rcfd_fv::lumped::FaceJump` (opt-in `SimpleSolver::face_jump`) puts the fan rise and the jump resistance on the internal
-exit faces of the zone: the face flux is `phi (1 + G K) = phiHbyA + G rise - G snGrad(p)` with the same face coefficient
-`G = gamma_p lap` the flux correction uses; the Green-Gauss cell gradients and the SIMPLEC flux correction use the
-smooth pressure (the relaxed jump is removed). Without a component `face_jump` is `None` and the baseline path is
-unchanged (baseline hashes bit-identical).
+instead of h U s/2, an O(1/n) error.
+
+The implementation was then replaced (not the criteria) by a pressure-jump plane. `rcfd_fv::lumped::FaceJump` (opt-in
+`SimpleSolver::face_jump`) puts the fan rise and the jump resistance on the internal exit faces of the zone. The face flux
+is `phi (1 + G K) = phiHbyA + G rise - G snGrad(p)` with the same face coefficient `G = gamma_p lap` the flux correction
+uses. The Green-Gauss cell gradients and the SIMPLEC flux correction use the smooth pressure (the relaxed jump is removed).
+Without a component `face_jump` is `None` and the baseline path is unchanged (baseline hashes bit-identical).
 
 ### Solver tuning (disclosed)
 
@@ -161,34 +177,44 @@ unchanged (baseline hashes bit-identical).
 
 ### Z results (rcfd-api tests/lumped.rs, release)
 
-* Z1 porous jump vs Darcy-Forchheimer sheet: worst relative error 1.0e-6 (limit 1e-3) over u = 0.5, 2, 5 m/s and the
-  viscous-only and inertial-only variants. Met.
-* Z2 fan plus porous jump (operating point by bisection 0.036961 m^3/s): Q = 0.036984 (+0.061 %, limit 0.5 %), fan
-  rise 107.5068 vs curve 107.4088 Pa (+0.091 %, limit 0.1 %), jump drop +0.030 % (limit 0.1 %), stationarity passed.
-  Met. A small persistent cell-velocity wiggle (about 2 percent of u next to the planes, alternating per iteration)
-  remains; it passes the registered stationarity test because that compares states 300 (even) iterations apart.
-* Z3 network outlet: Q = 0.038778 vs 0.038790 (-0.032 %, limit 0.5 %) met; patch pressure vs R(Q) +0.085 %
-  against the registered **1e-4: MISS** (ignored `z3_network_pressure_known_miss`, assertion unchanged).
-* Z4 heat exchanger: fixed duty stream enthalpy change vs duty 3.1e-12 (limit 1e-6), reported duty exact; effectiveness
-  stream enthalpy rise vs reported duty 1e-12 for C_sec = 0 and 20 (limit 1e-6) met. Reported duty vs
-  `eps C_min dT` with the nominal inlet temperature: 1.45e-6 (C_sec = 0) and 6.0e-7 (C_sec = 20) against the
-  registered **1e-6: MISS for C_sec = 0** (the wording "exact inlet temperature" was read as the nominal 300 K; with the component's own reported inlet temperature the same quantity agrees to 1e-9, see below) (ignored `z4_effectiveness_nominal_formula_known_miss`, unchanged). Cause:
-  axial conduction (k = 1e-3) warms the entry-face upstream temperature by 7.3e-5 K above 300 K; a supplementary (not
-  registered) test confirms duty = eps C_min (T_sec - reported T_in) to 1e-9.
-* Z5 located diagnostics met. Z6 baseline hashes unchanged (3 pass, 1 pre-existing ignored).
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| Z1 porous jump vs Darcy-Forchheimer sheet, worst relative error over u = 0.5, 2, 5 m/s and the viscous-only and inertial-only variants | 1.0e-6 | 1e-3 | met |
+| Z2 fan plus porous jump, Q vs operating point by bisection 0.036961 m^3/s | Q = 0.036984 (+0.061 %) | 0.5 % | met |
+| Z2 fan rise vs curve 107.4088 Pa | 107.5068 (+0.091 %) | 0.1 % | met |
+| Z2 jump drop | +0.030 % | 0.1 % | met |
+| Z2 stationarity | passed | | met |
+| Z3 network outlet, Q vs 0.038790 | Q = 0.038778 (-0.032 %) | 0.5 % | met |
+| Z3 patch pressure vs R(Q) | +0.085 % | 1e-4 | **MISS** (ignored `z3_network_pressure_known_miss`, assertion unchanged) |
+| Z4 heat exchanger, fixed duty: stream enthalpy change vs duty | 3.1e-12 | 1e-6 | met |
+| Z4 fixed duty: reported duty | exact | | met |
+| Z4 effectiveness: stream enthalpy rise vs reported duty, C_sec = 0 and 20 | 1e-12 | 1e-6 | met |
+| Z4 reported duty vs `eps C_min dT` with the nominal inlet temperature | 1.45e-6 (C_sec = 0), 6.0e-7 (C_sec = 20) | 1e-6 | **MISS for C_sec = 0** (ignored `z4_effectiveness_nominal_formula_known_miss`, unchanged) |
+| Z5 located diagnostics | | | met |
+| Z6 baseline hashes | 3 pass, 1 pre-existing ignored | | unchanged |
+
+Z2: a small persistent cell-velocity wiggle (about 2 percent of u next to the planes, alternating per iteration) remains. It
+passes the registered stationarity test because that compares states 300 (even) iterations apart.
+
+Z4: the wording "exact inlet temperature" was read as the nominal 300 K; with the component's own reported inlet temperature
+the same quantity agrees to 1e-9. Cause: axial conduction (k = 1e-3) warms the entry-face upstream temperature by 7.3e-5 K
+above 300 K. A supplementary (not registered) test confirms duty = eps C_min (T_sec - reported T_in) to 1e-9.
 
 ### R results (rcfd-api tests/radiation.rs, release)
 
-* R1 P1 radiative equilibrium vs analytic P1/Marshak flux: worst 2.6e-9 (limit 1e-3) over tau = 0.1, 1, 10, emissivities
-  0.8/0.5 and scattering. Met.
-* R2 P1 vs the Milne transport asymptote at tau = 20: 0.410 % (limit 1 %); met (equals the analytic P1 difference).
-* R3 Rosseland slab: Kirchhoff deviation 2.4e-5 (k = 0.1) and 3.6e-5 (k = 1e-9) (limit 1e-3); wall flux -0.0026 % and
-  -0.0038 % (limit 0.1 %). Met.
-* R4 P1 with conduction: wall energy balance 2.0e-12 (limit 1e-4), absorbed power vs net radiative wall flow 3.0e-13
-  (limit 1e-6), P1 vs Rosseland total flux at tau = 50: ratio 0.9886 (limit 5 %). Met.
-* R5 located diagnostics met.
-* Test-side note: the heat_flow reports in the radiation cases must carry `conductivity = k` (the report default is
-  not the energy conductivity); a first run with the default gave wrong (10x) conductive flows for that reason.
+| Check | Measured | Limit | Result |
+| --- | --- | --- | --- |
+| R1 P1 radiative equilibrium vs analytic P1/Marshak flux, worst over tau = 0.1, 1, 10, emissivities 0.8/0.5 and scattering | 2.6e-9 | 1e-3 | met |
+| R2 P1 vs the Milne transport asymptote at tau = 20 | 0.410 % (equals the analytic P1 difference) | 1 % | met |
+| R3 Rosseland slab, Kirchhoff deviation | 2.4e-5 (k = 0.1) and 3.6e-5 (k = 1e-9) | 1e-3 | met |
+| R3 wall flux | -0.0026 % and -0.0038 % | 0.1 % | met |
+| R4 P1 with conduction, wall energy balance | 2.0e-12 | 1e-4 | met |
+| R4 absorbed power vs net radiative wall flow | 3.0e-13 | 1e-6 | met |
+| R4 P1 vs Rosseland total flux at tau = 50 | ratio 0.9886 | 5 % | met |
+| R5 located diagnostics | | | met |
+
+Test-side note: the heat_flow reports in the radiation cases must carry `conductivity = k` (the report default is not the
+energy conductivity); a first run with the default gave wrong (10x) conductive flows for that reason.
 
 ### Not done
 

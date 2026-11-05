@@ -1,24 +1,45 @@
-# ADR 0152: Job 48R, a store key at its schema default is not the case's own: a case saved in the Studio stores its fields when the Studio starts it
+# ADR 0152: Job 48R, a store key at its schema default is not the case's own
 
 Status: **registered 2026-10-28**, before any registered run (what had run before is listed under "What I already
 knew"); amendment 1 (DV4's control text) before its corrected run; results in the addendum: every registered limit met
 and every control failed as required (DV4's control after amendment 1); DV7's first whole-suite run missed on one earlier
 test (ADR 0134 E11, a torn read in its helper, not this job's code), its rerun is reported; not yet accepted by the
-maintainer. Job 48R, on local main 6867e40 (waves 48A-48O merged). House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
-the corrected run; defaults of existing code stay bit-identical outside the Studio; `crates/rcfd-api/tests/baseline_hashes.rs`
-is not re-recorded; no new crate, no unsafe code, the crate graph stays acyclic. Clean-room: our own Studio code.
+maintainer.
+
+A store key at its schema default is not the case's own, so a case saved in the Studio stores its fields when the Studio
+starts it. The defect: the case editor's save writes every setting, the Studio's start plan read the store keys from the
+case's text, and so a saved case's run stored no fields (ADR 0149 addendum deviation 4). The maintainer's answer to ADR 0149
+question 9 takes a zero store key that equals the schema's default as not set. Decision 2 applies the rule to the four store
+keys; that scope is my reading of the brief, and question 1 of the six for the maintainer offers the narrower reading. An
+explicit zero cannot be told from the default, so from the Studio a run without stored fields starts only through the Start
+run dialog, and Run and F5 always store (a moving mesh and a chain as before). Results: every registered limit met and
+every control failed as required (DV4's control after amendment 1). DV7's first whole-suite run missed on ADR 0134 E11
+(a torn read in its helper, not this job's code), and its rerun gave 246 passed, 0 failed, 5 ignored. Not run: a person at
+the real window, Linux and the workspace gate, among others listed in the addendum.
+
+Rules and parents:
+
+* Job 48R, on local main 6867e40 (waves 48A-48O merged).
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical outside the Studio;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays acyclic.
+* Clean-room: our own Studio code.
 
 ## The maintainer's decision (2026-10-28, relayed)
 
 [ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md) question 9, answer **(b)**: the start plan takes a
 zero store key that equals the schema's default as not set, so that the Studio's store-fields default applies to a case
-saved in the Studio; an explicit non-zero interval stays the case's own. The brief of this job adds: define precisely what
-"default-valued" means from the defaults of `rcfd-api` and its schema (`output.store_interval`,
-`output.store_time_interval`, `output.store_precision` and the rest); a non-default value is honoured exactly as today; an
-explicit zero cannot be told from the default, which is documented in the docs and here with the Start run dialog's
-"Store fields" tick as the override; Studio-side planning only, unless the investigation shows otherwise.
+saved in the Studio; an explicit non-zero interval stays the case's own.
+
+The brief of this job adds:
+
+* define precisely what "default-valued" means from the defaults of `rcfd-api` and its schema (`output.store_interval`,
+  `output.store_time_interval`, `output.store_precision` and the rest);
+* a non-default value is honoured exactly as today;
+* an explicit zero cannot be told from the default, which is documented in the docs and here with the Start run dialog's
+  "Store fields" tick as the override;
+* Studio-side planning only, unless the investigation shows otherwise.
 
 ## Context (read at 6867e40)
 
@@ -38,12 +59,12 @@ explicit zero cannot be told from the default, which is documented in the docs a
 * **The solver** (`rcfd-api` `fieldstore::Hook::open`): the store is written when the resolved `store_interval > 0` or
   `store_time_interval > 0`; f32 only for `"f32"`; fields `[]` are the four defaults. For `rcfd run` a key at its default
   and an absent key are the same.
-* **The Studio's start plan** reads the store keys from the case text, not from the resolved settings:
+* **The Studio's start plan** reads the store keys from the case text, not from the resolved settings.
   `runs::case_facts_with` sets `sets_store` when the text has `output.store_interval` or `output.store_time_interval`
-  (any value) and `sets_precision` when it has `output.store_precision`; `store_plan::case_extra` lists in `case_store`
-  every store key the text has. Then `propose_store` makes no proposal when `sets_store`; `StartPlan::set` adds no
-  `output.store_precision=f32` when `sets_precision`; `store_plan::effective` applies `case_store` first (an interval at 0:
-  `OffBy::Case`); `case_off_key`, `case_lines` and `warnings` give "The case turns the field store off ({key} = 0) ..."
+  (any value) and `sets_precision` when it has `output.store_precision`. `store_plan::case_extra` lists in `case_store`
+  every store key the text has. Then `propose_store` makes no proposal when `sets_store`, and `StartPlan::set` adds no
+  `output.store_precision=f32` when `sets_precision`. `store_plan::effective` applies `case_store` first (an interval at 0:
+  `OffBy::Case`). `case_off_key`, `case_lines` and `warnings` give "The case turns the field store off ({key} = 0) ..."
   (W-case-off of ADR 0140) with its fix "Store fields for this run" and, once fixed, the line "Overrides the case's {key} =
   0 for this run."; `fields_ui::store_section` greys the precision radios out "(set by the case)" when `sets_precision`.
 * **The plan's users**: Run and F5 (`quick_run::start_job`, `StartPlan::new_with`), the Start run dialog (`poll`,
@@ -129,12 +150,17 @@ and not saving; for a pure check, the same edit through a `CaseEditor` and its `
 | DV6 | Check 3, unedited TOML cases, the plan bit-identical: the ten files under `cases/`, the ten cases of `example-projects/`, `common::RUN_CASE` and `common::CAVITY` (22 plans), and as the control the 30-iteration cavity with `physics.nu` 0.02 written by `rcfd-api`'s writer (`Case::to_toml`, every key spelled out). (a) Recorded once on 6867e40, before any code change of this job: per case the `Debug` text of `StartPlan::new`'s result and of its `set()`, written by `plans_record_r.rs` (an ignored test that writes only to a new file named by `RCFD_DV6_RECORD`) and kept as `tests/fixtures/plans_6867e40.txt`; after the change, the same text of each; (b) after the change, the app's route against the route before | (a) the 22 texts byte-equal to the record; (b) the 22 plans equal (`==` and `Debug`), `set()` and `settings()` equal | the saved control: its app-route text differs from the record, and its route-before text equals it (the switch reproduces 6867e40's reading) |
 | DV7 | The rest: the whole `rcfd-studio` suite (`fake-claude` built first) with the changed earlier tests below; `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings`; `cargo fmt -p rcfd-studio -- --check`; `rcfd-cli`'s `workspace_graph`; `rcfd-api`'s `baseline_hashes` (run, not re-recorded); `git diff 6867e40` outside `crates/rcfd-studio/` and `docs/` empty and `Cargo.lock` unchanged; `scripts/third_party_licenses.py --check` | pass; the four known misses ignored as before (ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b) | (their own) |
 
-How the registered runs are made: DV6 (a)'s record first, on 6867e40 with only the recording files added
-(`RCFD_DV6_RECORD=<a new file> cargo test --release -p rcfd-studio --test plans_record_r -- --ignored`, the file then
-kept as the fixture), committed; then the code; then `cargo test --release -p
-rcfd-studio --test saved_store_r -- --test-threads 1 --nocapture` and the changed earlier test files, each output to a file;
-then the whole `rcfd-studio` suite once with `--no-fail-fast -- --test-threads 1 --nocapture` (`fake-claude` built first),
-output to a file; clippy, fmt, `workspace_graph`, `baseline_hashes`, the diff and the licence check on the final commit.
+How the registered runs are made:
+
+1. DV6 (a)'s record first, on 6867e40 with only the recording files added
+   (`RCFD_DV6_RECORD=<a new file> cargo test --release -p rcfd-studio --test plans_record_r -- --ignored`, the file then
+   kept as the fixture), committed.
+2. Then the code.
+3. Then `cargo test --release -p rcfd-studio --test saved_store_r -- --test-threads 1 --nocapture` and the changed earlier
+   test files, each output to a file.
+4. Then the whole `rcfd-studio` suite once with `--no-fail-fast -- --test-threads 1 --nocapture` (`fake-claude` built
+   first), output to a file.
+5. Clippy, fmt, `workspace_graph`, `baseline_hashes`, the diff and the licence check on the final commit.
 
 ## Changes to earlier tests (registered here, none run yet)
 
@@ -204,16 +230,27 @@ the commit of this amendment.
 
 ## Addendum: results against the registered limits (2026-10-28)
 
-Branch `worktree-agent-ae06d5f587d6943c4`. Commits: registration 839ff09 (on main 6867e40); DV6 (a)'s record bbac993 (the
-source still 6867e40's); the code, the docs and the tests 6563bfa; amendment 1 6fbdbb7 (the final code); 4b75913 (this
-addendum's DV1-DV6 results, DV7's first run and the plan of its rerun, the dated notes; docs only); then the commit that
-completes this addendum (docs only). Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11,
-16 threads, 93.6 GB; 22.4 to 30.2 GB free during the runs), `TMP` in this job's scratch folder (outside every checkout);
-`rcfd`, `rcfd-runner` and `fake-claude` built at the baseline from the same sources (no file of theirs changed).
-Registered runs: `saved_store_r.rs` on 6563bfa (first) and on 6fbdbb7 (after amendment 1), the changed earlier files
-(`start_plan_r10`, `store_plan_sf`, `case_output_sf9`) and `json_o` on 6fbdbb7, then the whole suite on 6fbdbb7 (DV7) and,
-after its E11 failure, once more on 4b75913 (docs only after 6fbdbb7: the same code; see "DV7's first whole-suite run and
-its rerun"). The table gives the 6fbdbb7 values; where the first run differed, it says so.
+Branch `worktree-agent-ae06d5f587d6943c4`. Commits:
+
+* registration 839ff09 (on main 6867e40);
+* DV6 (a)'s record bbac993 (the source still 6867e40's);
+* the code, the docs and the tests 6563bfa;
+* amendment 1 6fbdbb7 (the final code);
+* 4b75913 (this addendum's DV1-DV6 results, DV7's first run and the plan of its rerun, the dated notes; docs only);
+* then the commit that completes this addendum (docs only).
+
+Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 16 threads, 93.6 GB; 22.4 to
+30.2 GB free during the runs), `TMP` in this job's scratch folder (outside every checkout); `rcfd`, `rcfd-runner` and
+`fake-claude` built at the baseline from the same sources (no file of theirs changed).
+
+Registered runs:
+
+* `saved_store_r.rs` on 6563bfa (first) and on 6fbdbb7 (after amendment 1);
+* the changed earlier files (`start_plan_r10`, `store_plan_sf`, `case_output_sf9`) and `json_o` on 6fbdbb7;
+* then the whole suite on 6fbdbb7 (DV7) and, after its E11 failure, once more on 4b75913 (docs only after 6fbdbb7: the same
+  code; see "DV7's first whole-suite run and its rerun").
+
+The table gives the 6fbdbb7 values; where the first run differed, it says so.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -231,7 +268,16 @@ its rerun"). The table gives the 6fbdbb7 values; where the first run differed, i
 | DV6 control | the saved control's app-route text differs from the record; its route-before text equals it | differs (the app's route proposes the store); the route before equal to the record byte for byte | as required |
 | DV7 | the whole suite (the four known misses ignored) and the rest | the whole suite, first run on 6fbdbb7 (438 s): 52 test binaries, 245 passed, **1 failed** (ADR 0134 E11, a torn read in its test helper, see below), 5 ignored; `chat_e` alone three times on 6fbdbb7: 14 of 14 each; the rerun on 4b75913 (the same code, 703 s, 26.5 GB free at its start): 52 binaries, **246 passed, 0 failed, 5 ignored** (the four known misses ADR 0131 B9, ADR 0133 R6, ADR 0141 G1, ADR 0144 J3b, and DV6 (a)'s recorder, ignored by design); against the baseline's 239, the 7 new tests (DV1-DV6, the changed SF9 (k)); `cargo clippy -p rcfd-studio --release --all-targets -- -D warnings` clean on 6fbdbb7; `cargo fmt -p rcfd-studio -- --check` clean; `workspace_graph` 3 passed; `baseline_hashes` 3 passed, 1 ignored as before, the file unchanged since 6867e40; `git diff 6867e40` outside `crates/rcfd-studio/` and `docs/`: empty, `Cargo.toml`, `Cargo.lock` unchanged; `scripts/third_party_licenses.py --check`: up to date | first run missed (E11), rerun pass |
 
-**The changed earlier tests** (registered under "Changes to earlier tests"), on 6fbdbb7: R10 `start_plan_r10.rs` 2 of 2 ((b0) `set()` the proposal; the route before empty); SF1, SF3, SF9 `store_plan_sf.rs` 4 of 4 ((c) the plan of (a), no warning, no case line; the registered (c) with the route before: W-case-off for `output.store_interval`, its fix, the "Overrides" line); SF9 (j)-(l) `case_output_sf9.rs` 4 of 4 ((k) as changed: `set()` the proposal, `, f32.`, 342 016 bytes, the control 230 400; the registered (k) with the route before: `output.store_interval=4`, `, f64.`, 572 416); O10, O11 `json_o.rs` 4 of 4 (O10 (b) now `simplec 30 iterations, Some(144) cells; sets its store false; --set ["output.store_interval=1", "output.store_precision=f32"]`; the JSON case's run stored its fields and its residuals equal the TOML run's, 30 lines).
+**The changed earlier tests** (registered under "Changes to earlier tests"), on 6fbdbb7:
+
+* R10 `start_plan_r10.rs` 2 of 2: (b0) `set()` the proposal; the route before empty.
+* SF1, SF3, SF9 `store_plan_sf.rs` 4 of 4: (c) the plan of (a), no warning, no case line; the registered (c) with the route
+  before: W-case-off for `output.store_interval`, its fix, the "Overrides" line.
+* SF9 (j)-(l) `case_output_sf9.rs` 4 of 4: (k) as changed: `set()` the proposal, `, f32.`, 342 016 bytes, the control
+  230 400; the registered (k) with the route before: `output.store_interval=4`, `, f64.`, 572 416.
+* O10, O11 `json_o.rs` 4 of 4: O10 (b) now
+  `simplec 30 iterations, Some(144) cells; sets its store false; --set ["output.store_interval=1", "output.store_precision=f32"]`;
+  the JSON case's run stored its fields and its residuals equal the TOML run's, 30 lines.
 
 **Other keys a saved case spells out** (the brief's check of the editor's saved bytes): the `output` table above, read
 where the Studio reads a case's text rather than its settings.
@@ -285,9 +331,12 @@ test binaries, 246 passed, 0 failed, 5 ignored (the four known misses and DV6 (a
 
 ## Not in CI (by hand)
 
-A person at the real window: a case edited and saved, then Run: the Run side shows the field; Runs > Start run... on the
-saved case: "Store fields" ticked, f32 selectable, no orange warning, and unticking it starts a run without fields; the
-same with a `.json` case.
+A person at the real window:
+
+* a case edited and saved, then Run: the Run side shows the field;
+* Runs > Start run... on the saved case: "Store fields" ticked, f32 selectable, no orange warning, and unticking it starts
+  a run without fields;
+* the same with a `.json` case.
 
 ## Questions for the maintainer (not decided here)
 

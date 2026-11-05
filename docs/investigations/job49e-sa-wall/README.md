@@ -1,9 +1,7 @@
 # SA wall treatment with the wall cell in the buffer layer (job 49E, ADR 0168)
 
-The set-ups, limits, amendment 1 and the evaluation are in
-[ADR 0168](../../adr/0168-job49e-sa-wall-treatment-in-the-buffer-layer.md). This folder holds the results only. No run or
-mesh enters git. To build them again, use `scripts/w49e_sa_wall.py` (`mesh`, `cases`, `run`, `collect`, `model`) in an
-empty work folder.
+This folder holds only the results of job 49E. The set-ups, limits, amendment 1 and the evaluation are in
+[ADR 0168](../../adr/0168-job49e-sa-wall-treatment-in-the-buffer-layer.md).
 
 ## Finding
 
@@ -12,20 +10,20 @@ SA's default wall mode `auto` over-predicts the friction when the wall cell lies
   y+ 40.
 - On the NACA 0012 at 0 degrees it is +17 % in friction on a mesh of median wall y+ 5, and +9.5 % at 15.
 
-**Cause.** Linear interpolation of the eddy viscosity to the face between the wall cell and the next
-cell, across the steep, non-linear buffer-layer profile.
+The cause is linear interpolation of the eddy viscosity to the face between the wall cell and the next cell, across the
+steep, non-linear buffer-layer profile.
 - The wall function itself is consistent. Its u_tau iteration, wall-face viscosity and wall nuTilda are not the cause.
 - A 1-D model of exactly that discretisation reproduces the default curve within 1.2 points at all 10 y+ (limit LH1).
 
-**The opt-in fix.** `turbulence.sa.wall_mode = "auto_sa_law"`, as amended (amendment 1):
+The opt-in fix is `turbulence.sa.wall_mode = "auto_sa_law"`, as amended (amendment 1):
 - the wall law is the SA model's own inner-layer law;
 - nuTilda = kappa u_tau y in every wall cell;
 - on the wall cell's wall-normal face, the law's series-resistance viscosity and the law's tangential velocity in the
   velocity gradient;
 - on all other internal faces, nut of the interpolated nuTilda.
 
-It brings the plate within +2.3 % to +4.4 % of TMR at every y+ from 1 to 60, within 2.0 % of its own y+ 1 value. The
-aerofoil's cd is within 1.3 % to 2.3 % of TMR at wall y+ 5, 15 and 40. No constant was tuned.
+The amended opt-in brings the plate within +2.3 % to +4.4 % of TMR at every y+ from 1 to 60, within 2.0 % of its own
+y+ 1 value. The aerofoil's cd is within 1.3 % to 2.3 % of TMR at wall y+ 5, 15 and 40. No constant was tuned.
 
 As registered, the opt-in had a y+ 5 switch that made it bistable at y+ 5 (E05 +7.5 %, a known miss) and over-produced
 nuTilda in the second cell. Amendment 1 fixed both before its runs.
@@ -77,3 +75,6 @@ The spread of the opt-in cd over the three meshes is 1.0 % of TMR (amendment 1) 
 | `results.json` | every run: exit, iterations, window statistics, plate wall data and profile diagnostics, aerofoil wall y+; the bit comparisons with ADR 0164; the evaluation of every limit (registered and amendment 1) and the 1-D model |
 | `results.csv` | one row per run |
 | `cf_vs_yplus.png` | plate Cf(0.97) error against wall y+: default, as registered, amendment 1 and the 1-D model |
+
+No run or mesh enters git. To build them again, use `scripts/w49e_sa_wall.py` (`mesh`, `cases`, `run`, `collect`, `model`)
+in an empty work folder.

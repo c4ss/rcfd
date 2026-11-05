@@ -13,6 +13,15 @@ split, collapse, flip and tangential smoothing); nothing from vendor material, v
 names in the repository. Every expected number below is derived from definitions, closed forms or invariants; no registered check
 depends on a literature value. Attributions to the literature are marked "(from memory, unverified)".
 
+This wave adds surface diagnostics and repair (F-232), size fields and surface remeshing (F-131) and tetrahedral volume meshing
+from a closed surface (F-132) as library code, with no CLI or case-file hooks. All three stay `partial`, and no claim is made that
+their acceptance sentences are met. In the results, measured after the registration, two registered limits miss, both on the
+torus, and both stay as ignored known-miss tests: T5's radius-edge fraction (0.634 against >= 0.99) and R5's volume change
+(4.18 percent against <= 3 percent). S3's registered text has a set-up defect (vertex 0 has valence 5, not 6): the old test is
+kept ignored and a corrected test passes with the same limits. T9 passes, but its file, reference and case count differ from the
+registered text. All other rows of the results table pass. Sliver tetrahedra with small dihedral angles remain, and the addendum
+discloses algorithm additions beyond the ADR text. All literature attributions are from memory; no primary source was consulted.
+
 New library code lives in new files of `rcfd-mesh`: `surface.rs` (triangle surface type, generators, diagnostics, repair),
 `predicates.rs` (exact orientation and in-sphere tests), `surface_remesh.rs` (size fields, remeshing), `tetmesh.rs` (Delaunay,
 boundary recovery, refinement, conversion to `Mesh`). `lib.rs` gains four `pub mod` lines. The solver smoke test is a NEW file in
@@ -38,13 +47,18 @@ normal `(b-a) x (c-a)`). Welding from a soup uses exact bitwise vertex equality 
 7. `components` (edge-connected triangle components), `enclosed_volume` (divergence theorem, valid for closed outward-oriented
    components), `area`.
 
-`repair(&TriSurface, &RepairOptions) -> (TriSurface, RepairReport)` applies, in this fixed order: (1) remove degenerate triangles
-(repeated ids and zero-area); (2) remove duplicate faces; (3) orient consistently by flooding each edge-connected component with
-orientation propagation across manifold edges (seed: smallest triangle id of the component), then, for a closed component with
-negative enclosed volume, flip it; (4) fill each open loop by ear clipping (the ear with the shortest closing diagonal whose triangle
-is convex relative to the loop normal and contains no other loop vertex; ties by smallest first vertex id), orientation matching the
-adjacent triangles; (5) compact unused vertices. Non-manifold edges and unclosed chains are reported, not repaired. Steps are
-deterministic and independent of hash iteration order (sorted keys everywhere).
+`repair(&TriSurface, &RepairOptions) -> (TriSurface, RepairReport)` applies, in this fixed order:
+
+1. remove degenerate triangles (repeated ids and zero-area);
+2. remove duplicate faces;
+3. orient consistently by flooding each edge-connected component with orientation propagation across manifold edges (seed:
+   smallest triangle id of the component), then, for a closed component with negative enclosed volume, flip it;
+4. fill each open loop by ear clipping (the ear with the shortest closing diagonal whose triangle is convex relative to the loop
+   normal and contains no other loop vertex; ties by smallest first vertex id), orientation matching the adjacent triangles;
+5. compact unused vertices.
+
+Non-manifold edges and unclosed chains are reported, not repaired. Steps are deterministic and independent of hash iteration
+order (sorted keys everywhere).
 
 ### A2 Closed forms used
 
@@ -91,26 +105,38 @@ deterministic and independent of hash iteration order (sorted keys everywhere).
 
 Size field `SizeField` is a sum type evaluated at a point with an optional surface vertex index: `Uniform(h)`, `Curvature { theta,
 h_min, h_max }`, `Proximity { cells_per_gap, h_min, h_max }`, `Box { lo, hi, h }` (body of influence, hard override inside), and
-`Min(Vec<SizeField>)`. The combined target at a vertex is the minimum. Curvature estimate at vertex `i`: `kappa_i = max over incident
+`Min(Vec<SizeField>)`. The combined target at a vertex is the minimum.
+
+Curvature estimate at vertex `i`: `kappa_i = max over incident
 edges (i,j) of angle(n_i, n_j) / |x_i - x_j|`, where `n` are area-weighted vertex normals (on a smooth surface this is the largest
-normal-curvature estimate of the edge direction, equal to `1/rho` for a sphere of radius `rho` to the discretisation error). Curvature
-size `h = clamp(theta / kappa, h_min, h_max)` (`theta` is the angular resolution in radians: a chord of angle `theta` has length
-`2 rho sin(theta/2)`, about `theta rho`). Proximity size `h = clamp(d / cells_per_gap, h_min, h_max)` where `d` is the distance from
-the vertex along the inward normal to the first hit on the surface (brute force over triangles; a vertex without a hit uses `h_max`).
+normal-curvature estimate of the edge direction, equal to `1/rho` for a sphere of radius `rho` to the discretisation error).
+
+Curvature size `h = clamp(theta / kappa, h_min, h_max)` (`theta` is the angular resolution in radians: a chord of angle `theta` has
+length `2 rho sin(theta/2)`, about `theta rho`).
+
+Proximity size `h = clamp(d / cells_per_gap, h_min, h_max)` where `d` is the distance from the vertex along the inward normal to
+the first hit on the surface (brute force over triangles; a vertex without a hit uses `h_max`).
+
 Vertices on the surface have their target; an edge's target is the mean of its end targets; after each pass sizes are smoothed by
 `h_i <- min(h_i, min_j (h_j + grad |x_i - x_j|))` with growth gradient `grad=0.5` so that transitions are bounded.
 
 `remesh(&TriSurface, &SizeField, &RemeshOptions) -> (TriSurface, RemeshReport)`, incremental isotropic remeshing (published method,
-from memory unverified): repeat `iterations` times: split every edge longer than `4/3` of its target at the midpoint; collapse edges
-shorter than `4/5` of the target when the result edges stay below `4/3`, the link condition holds and no incident triangle normal turns
-by more than 90 degrees; flip edges that reduce the sum of squared valence excess `(val - 6)^2` (when both adjacent triangles' normal
-angle stays below `flip_angle` 30 degrees and the flip does not create an existing edge); tangential smoothing, where each vertex moves
-toward the area-weighted centroid of its neighbours restricted to the tangent plane, then is projected to the closest point of the
-ORIGINAL surface (brute force). Feature edges: edges with dihedral angle above `feature_angle` (default 40 degrees) or between triangles
-of different tags. Feature vertices with 2 feature edges move only by collapse along the feature and are never smoothed; vertices with
-other than 0 or 2 feature edges (corners) are fixed; feature edges are split at the midpoint, never flipped. Vertices created by a split
-lie on the old edge and so on the old surface; smoothed vertices are projected to the original surface. Tags are inherited by split
-and flip. Output is renumbered by first use for determinism. No random numbers.
+from memory unverified): repeat `iterations` times:
+
+* split every edge longer than `4/3` of its target at the midpoint;
+* collapse edges shorter than `4/5` of the target when the result edges stay below `4/3`, the link condition holds and no incident
+  triangle normal turns by more than 90 degrees;
+* flip edges that reduce the sum of squared valence excess `(val - 6)^2` (when both adjacent triangles' normal angle stays below
+  `flip_angle` 30 degrees and the flip does not create an existing edge);
+* tangential smoothing, where each vertex moves toward the area-weighted centroid of its neighbours restricted to the tangent
+  plane, then is projected to the closest point of the ORIGINAL surface (brute force).
+
+Feature edges: edges with dihedral angle above `feature_angle` (default 40 degrees) or between triangles of different tags. Feature
+vertices with 2 feature edges move only by collapse along the feature and are never smoothed; vertices with other than 0 or 2
+feature edges (corners) are fixed; feature edges are split at the midpoint, never flipped.
+
+Vertices created by a split lie on the old edge and so on the old surface; smoothed vertices are projected to the original surface.
+Tags are inherited by split and flip. Output is renumbered by first use for determinism. No random numbers.
 
 ### B2 Derivations
 
@@ -156,20 +182,29 @@ and flip. Output is renumbered by first use for determinism. No random numbers.
 Method: incremental Delaunay tetrahedralisation (Bowyer-Watson) of the surface vertices inside a large bounding tetrahedron, with
 exact orientation and in-sphere predicates (Shewchuk-style floating-point expansions; a floating-point filter first, exact fallback),
 ties in the in-sphere test treated as outside with the cavity then grown across any boundary face coplanar with the new point so the
-cavity stays strictly star-shaped. Boundary recovery by conforming Steiner insertion: every surface edge missing from the tetrahedralisation
-is split at its midpoint (both adjacent surface triangles split), then every surface triangle whose edges are present but which is not a
-face of the tetrahedralisation has its longest edge split; repeated until all surface triangles are faces; capped at a stated number of
+cavity stays strictly star-shaped.
+
+Boundary recovery by conforming Steiner insertion: every surface edge missing from the tetrahedralisation is split at its midpoint
+(both adjacent surface triangles split), then every surface triangle whose edges are present but which is not a face of the
+tetrahedralisation has its longest edge split; repeated until all surface triangles are faces; capped at a stated number of
 insertions, otherwise an error. So the boundary of the volume mesh is a conforming subdivision of the input surface (same geometry,
-more vertices). Cells are classified by flood fill from the tetrahedra on the inner side of the outward-oriented surface faces, never
-crossing a surface face. Quality: Delaunay refinement, circumcentre insertion for inside tetrahedra with circumradius over shortest
-edge above `max_radius_edge` (default 2.0) or circumradius above the size function; a circumcentre outside the domain or whose cavity
-contains an outside tetrahedron is not inserted and the encroached surface triangle's longest edge is split instead. Capped. No sliver
+more vertices).
+
+Cells are classified by flood fill from the tetrahedra on the inner side of the outward-oriented surface faces, never crossing a
+surface face.
+
+Quality: Delaunay refinement, circumcentre insertion for inside tetrahedra with circumradius over shortest edge above
+`max_radius_edge` (default 2.0) or circumradius above the size function; a circumcentre outside the domain or whose cavity contains
+an outside tetrahedron is not inserted and the encroached surface triangle's longest edge is split instead. Capped. No sliver
 removal (flips, smoothing) is implemented; this is a named gap and slivers are measured and reported.
+
 Conversion to `Mesh` via `Mesh::from_cell_faces`; boundary faces form patches by surface tag (`wall` for tag 0, `wall<tag>` otherwise).
+
 Error contract: an input that is not a closed, consistently oriented, manifold surface returns `Error::Mesh` with a message containing
-`<n> free edge(s)`, `<n> non-manifold edge(s)` or `<n> misoriented edge(s)` as applicable (counts from `diagnose`). Output is
-deterministic: no hashing order dependence (sorted or index-ordered iteration), no random numbers (the point-location walk uses a
-fixed-seed linear congruential generator).
+`<n> free edge(s)`, `<n> non-manifold edge(s)` or `<n> misoriented edge(s)` as applicable (counts from `diagnose`).
+
+Output is deterministic: no hashing order dependence (sorted or index-ordered iteration), no random numbers (the point-location
+walk uses a fixed-seed linear congruential generator).
 
 ### C2 Derivations
 
@@ -275,7 +310,7 @@ Measured values against the registered limits (release build, all runs determini
   fraction 0.927, min dihedral 3.34 deg, volume and `check_mesh` ok. Sliver tetrahedra with small dihedral angles remain; there is
   no sliver exudation or optimisation.
 * Algorithm additions beyond ADR text. (i) `TetOptions::split_boundary` (default false): splitting surface edges during
-  refinement ran away on small-angle surfaces (Steiner budget exhausted), so it is experimental and off; (ii) bistellar
+  refinement ran away on small-angle surfaces (Steiner budget exhausted), so it is experimental and off. (ii) Bistellar
   improvement (2-3 flips and edge removal for 3..7 incident tetrahedra, `sliver_q = 0.03`) and (iii) `split_flat_boundary`
   (flat tetrahedra with two surface faces: split the shared surface edge) were added after flat boundary slivers appeared on the
   torus (125 of 1061 tetrahedra, down to 3 after flips, 0 after the flat split). `TetReport` gained `flips` and `flat_split`.

@@ -8,6 +8,16 @@ Status: **registered** 2026-10-28, in two parts.
 * Results are in the addendum: every registered limit is met, with no miss and no amendment. Not yet accepted by the
   maintainer.
 
+Full gate run 40745275594 on `windows-latest` failed two release timing limits of the 1M-cell CPU render: r2's render took
+2.316 s and r4's `rcfd call render.png` 2.086 s, each against 2 s. The maintainer asked to investigate a real speedup with
+those limits unchanged. Allocation is the largest single cost, about 58 % of the base render. The change reuses
+buffers, deduplicates each cell's point indices before the sort and splits the polygon and fill phases over threads; no
+floating-point expression changed. The addendum reports every registered limit met and the image byte-identical to the
+base on every check. The 1M-cell render on this host went from 0.73 s to 0.05 s unrestricted and from 2.18 s to 0.21 s in
+the CI-like S2L condition. Two threads under S2L were slower than one (0.619 s against 0.381 s), and no discriminating test
+exists for D1's non-finite path. The Full gate and CI on `windows-latest` were not run on the change: the addendum's CI
+figures are predictions from S2L and the ratios.
+
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 * limits are fixed before the registered runs;
 * a missed limit becomes an ignored `*_known_miss` test with the limit intact;

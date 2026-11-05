@@ -1,18 +1,31 @@
 # ADR 0137: The first Linux full gate: per-platform expected values, the L1 control rule per run, reported defects
 
 Status: **registered** 2026-10-28 before any changed test ran; the probe runs that measured the values below were made first and are
-disclosed in "What was run before this ADR was written". House rules as in [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
-no limit is changed; a missed limit becomes an ignored `*_known_miss` test with the limit intact; defaults of existing code stay
-bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded (its registered Windows values stay as they are).
+disclosed in "What was run before this ADR was written".
+
+The first `Full gate` workflow run on `ubuntu-latest` failed 16 tests. Every expected value in the suite was recorded on Windows,
+and libm's last bits differ between the Microsoft CRT and glibc. A test that asserts bit identity now gets an x86_64 Linux expected
+value next to the Windows one only if, in one Linux container, that value comes out at the test's reference commit and at HEAD and,
+where the CI log prints it, equals the CI value. By an amendment for the maintainer to confirm or replace, the L1 negative control
+applies the registered rule of ADR 0128 finding 12 on every run. In Docker with the change, 12 of the 16 tests pass and 4 fail as
+reported here: S4a and S4b (a production defect on Unix), C3 (a production defect, 1 ulp) and P1 (an unregistered check, decision
+needed). On Windows the 14 changed tests pass and print the registered Windows values, and no production code changed. The next
+`Full gate` run on `ubuntu-latest` is the real check: the container has glibc 2.36, the CI image glibc 2.39. The note at the end
+records the follow-up in ADR 0143: a production fix for S4a and S4b, with C3 and P1 ignored on every platform but Windows as Linux
+known misses.
+
+House rules as in [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): no limit is changed; a missed limit becomes an
+ignored `*_known_miss` test with the limit intact; defaults of existing code stay bit-identical;
+`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded (its registered Windows values stay as they are).
 
 ## Context
 
 The first `Full gate` workflow run on `ubuntu-latest` (CI run 40670041161, main a89ccb3) failed 16 tests (2273 passed). Every
 expected value in the suite was recorded on the maintainer's Windows machine (x86_64-pc-windows-msvc). Mesh generators and several
 initial fields call the platform's libm (`sin`, `cos`, `exp`, `powf`, `cbrt`), whose last bits differ between the Microsoft CRT and
-glibc, so a bit-identity hash of anything built from them differs per platform. Precedent: `g0_planar_join_bit_identical_to_head_80c26e9`
-(`crates/rcfd-mesh/src/non_conformal.rs`), one expected pair per platform, each proven on its platform against the code before the
-change, other platforms print and skip.
+glibc, so a bit-identity hash of anything built from them differs per platform. The precedent is
+`g0_planar_join_bit_identical_to_head_80c26e9` (`crates/rcfd-mesh/src/non_conformal.rs`): one expected pair per platform, each proven
+on its platform against the code before the change; other platforms print and skip.
 
 All 16 failures were reproduced in Docker `rust:1.99-bookworm` (glibc 2.36, rustc 1.99.1, release, `--cpuset-cpus 0-3`) on main
 a521f76 with the same values the CI log prints.
@@ -52,9 +65,12 @@ the ids the remapped ADR texts cite for the same recording, checked by subject a
 ADR 0128 finding 12 registered a decision rule: if `10 w > 500 ms` (w = slowest of the 3 warm listings) the control "the listing done
 10 times exceeds the budget" is asserted; if `10 w <= 500 ms` the budget cannot catch a 10x slowdown and the remaining guard is the
 budget assertion itself. The rule was evaluated once, on Windows (w = 196 ms). On Linux the listing takes about 4-6 ms, so the
-asserted control fails although the listing is 85-140 times inside the budget. Amendment (an interpretation of finding 12, for the maintainer
-to confirm or to replace with another control): the test applies the registered rule on every run. With `10 w > 500 ms` it asserts the control as before (Windows unchanged); otherwise it prints `10 w` and the factor
-`500 ms / w` the budget does catch and does not assert the control. The 500 ms budget and its assertion are unchanged.
+asserted control fails although the listing is 85-140 times inside the budget.
+
+Amendment (an interpretation of finding 12, for the maintainer to confirm or to replace with another control): the test applies
+the registered rule on every run. With `10 w > 500 ms` it asserts the control as before (Windows unchanged); otherwise it prints
+`10 w` and the factor `500 ms / w` the budget does catch and does not assert the control. The 500 ms budget and its assertion are
+unchanged.
 
 ### Reported, not changed (production code or a decision is needed)
 
@@ -81,9 +97,10 @@ to confirm or to replace with another control): the test applies the registered 
 
 ## What was run before this ADR was written (disclosed)
 
-Docker `rust:1.99-bookworm`, `--cpuset-cpus 0-3 --memory 16g --init`, release, one container at a time, on `git archive` copies:
-the 16 failing tests at a521f76 (all reproduce, same values as CI), then each test's computation (copied from a521f76, printing every
-value instead of stopping at the first assertion) at a521f76 and at its reference commit:
+These runs used Docker `rust:1.99-bookworm`, `--cpuset-cpus 0-3 --memory 16g --init`, release, one container at a time, on
+`git archive` copies: the 16 failing tests at a521f76 (all reproduce, same values as CI), then each test's
+computation (copied from a521f76, printing every value instead of stopping at the first assertion) at a521f76 and at its reference
+commit:
 
 | Computation | HEAD a521f76 (Linux) | Reference commit (Linux) | CI value (left:) | Windows (registered) |
 |---|---|---|---|---|
@@ -112,14 +129,15 @@ log.
 
 ## Addendum: results with the change (2026-10-28)
 
-Docker (same image and limits), `git archive` of the branch head a2dfecf (before the rebase onto main 81cf498, whose commits touch none of the changed files), the 16 tests of the CI failure list: 12 pass (G6, P5,
-`cavity_paths_match_registered_hashes`, T4, L1, A1, W33B, the three B1, W0, X0 40 x 80); 4 fail as reported above (S4a, S4b,
-C3, P1). L1 printed `10 w = 90.9 ms <= budget: the budget catches a listing 55x slower than measured`.
+In Docker, of the 16 tests of the CI failure list, 12 pass (G6, P5, `cavity_paths_match_registered_hashes`, T4, L1, A1, W33B, the
+three B1, W0, X0 40 x 80) and 4 fail as reported above (S4a, S4b, C3, P1). This run used the same image and limits on a
+`git archive` of the branch head a2dfecf, before the rebase onto main 81cf498, whose commits touch none of the changed files. L1
+printed `10 w = 90.9 ms <= budget: the budget catches a listing 55x slower than measured`.
 
-Windows (this machine, release, `git archive` of a2dfecf, own target dir): the 14 changed tests (the three B1, W0, A1, W33B, L1,
-the three `baseline_hashes` tests, T4, G6, P5, X0 40 x 80) pass and print the registered Windows values (for example G6
-8471bf9a1aef1dd4 / be64f588a252d0b4 / 04fbabedbad41768, T4 0x6eca7279950f43c3, X0 diff 0 to the 43A values). L1 asserted the
-control as before: worst listing 80.6 ms, the listing 10 times 844 ms > 500 ms. No production code changed.
+On Windows, the 14 changed tests (the three B1, W0, A1, W33B, L1, the three `baseline_hashes` tests, T4, G6, P5, X0 40 x 80) pass
+and print the registered Windows values (for example G6 8471bf9a1aef1dd4 / be64f588a252d0b4 / 04fbabedbad41768, T4
+0x6eca7279950f43c3, X0 diff 0 to the 43A values). This run used this machine, release, a `git archive` of a2dfecf and its own target
+dir. L1 asserted the control as before: worst listing 80.6 ms, the listing 10 times 844 ms > 500 ms. No production code changed.
 
 ## Consequences
 

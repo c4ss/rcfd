@@ -6,8 +6,8 @@ service, the MCP server and the assistant. Several parts are not delivered yet; 
 at the end. For a first run step by step, follow the [command-line quick start](tutorials/quick-start-cli.md); for the keys of the
 case file itself, see the [case schema](case-schema.md).
 
-Everything here is implemented in `rcfd-api` (`runctl`, `workflow`) and shared by the CLI, the
-service (`docs/service-protocol.md`) and the MCP tools, so all of them behave the same way.
+`rcfd-api` (`runctl`, `workflow`) implements everything here. The CLI, the service (`docs/service-protocol.md`) and the MCP
+tools share it, so all of them behave the same way.
 
 On this page:
 
@@ -96,24 +96,28 @@ Every line is a JSON object with `format: "rcfd-status"`, `version: 1`, `event`,
 within one launch) and `wall_s`. Events:
 
 - `start`: `cells`, `algorithm`, `steady`, `start_iteration`, `case_hash`, `info` (`driver`, `threads`, `precision`, `continue_from`)
-- `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`; with `--status-monitors` also `monitors` (report name to
-  value, `null` when not finite); with `solver.corrector_control = "adaptive"` (ADR 0156) also `correctors` (the pressure
-  correctors of the step's final outer iteration) and `corrector_cap` (how many estimates so far ended at the cap of 10); a
-  `fixed` run's events have neither key. The run service copies both into the step's `residuals.jsonl` line (top-level, same
-  names; ADR 0160), only when the event has them, so the lines of every other run are unchanged
+- `iteration`: `index`, `time`, `res_u`, `res_p`, `continuity`, `done`. With `--status-monitors` it also has `monitors`
+  (report name to value, `null` when not finite). With `solver.corrector_control = "adaptive"` (ADR 0156) it also has
+  `correctors` (the pressure correctors of the step's final outer iteration) and `corrector_cap` (how many estimates so far
+  ended at the cap of 10); a `fixed` run's events have neither key. The run service copies both into the step's
+  `residuals.jsonl` line (top-level, same names; ADR 0160), only when the event has them, so the lines of every other run
+  are unchanged
 - `checkpoint`: `path`, `iteration`, `why` (`periodic`, `interrupted`, `time_limit`, `step_limit`, `converged`, ...)
 - `snapshot`: `path`, `index`, `time` (a numbered result file, see Output policy)
-- `warning`: `message` (for example a run that cannot be checkpointed); a setup-rule warning also has `rule` (id), `path` and `category`
-  (including the computed rule `SV301` of ADR 0156, the pre-run pressure-lag estimate, emitted right after `start`); a
-  pressure-lag warning of PISO/PIMPLE (ADR 0077, `solver.pressure_lag_check = "warn"`) also has `kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`;
-  an adaptive corrector estimate that ends at the cap (ADR 0156) has `kind = "corrector_cap"`, `step`, `rho`, `correctors`, `cell`, `position`
+- `warning`: `message` (for example a run that cannot be checkpointed). A setup-rule warning also has `rule` (id), `path` and
+  `category` (including the computed rule `SV301` of ADR 0156, the pre-run pressure-lag estimate, emitted right after
+  `start`). A pressure-lag warning of PISO/PIMPLE (ADR 0077, `solver.pressure_lag_check = "warn"`) also has
+  `kind = "pressure_lag"`, `step`, `rho`, `cell`, `position`. An adaptive corrector estimate that ends at the cap (ADR 0156)
+  has `kind = "corrector_cap"`, `step`, `rho`, `correctors`, `cell`, `position`
 - `check` (only from `--check-only`): `ok`, `exit_code`, `cells`, `diagnostics`, `rules` (setup-rule diagnostics, `id severity category path message [fix]`), `mesh` (quality report)
-- `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`; a run stopped by a divergence guard (state `diverged`) also has
-  `divergence` (ADR 0077): `solver` (`steady` or `transient`), `kind` (steady: `non_finite`, `continuity_growth`, `velocity_runaway`, `pressure_runaway`;
-  transient: `non_finite`, `courant`, `lag_amplification`), `quantity`, `iteration` (steady) or `step`, `outer`, `stage` (transient), `cell`, `position`,
-  `value`, `limit`, `last_good` (steady: the iteration with the smallest continuity before the trip; transient: the previous step). `summarize_stream`
-  passes it on as `divergence`. With `solver.corrector_control = "adaptive"` it also has `correctors` (ADR 0156): `mode`, `steps`, `mean`,
-  `max`, `last`, `estimates`, `cap_bound`, `triggered` and `log` (one `[step, correctors, rho, cap_bound, triggered]` per estimate).
+- `finish`: `state`, `exit_code`, `ok`, `iterations`, `time`, `reason`, `elapsed_s`. A run stopped by a divergence guard
+  (state `diverged`) also has `divergence` (ADR 0077): `solver` (`steady` or `transient`), `kind` (steady: `non_finite`,
+  `continuity_growth`, `velocity_runaway`, `pressure_runaway`; transient: `non_finite`, `courant`, `lag_amplification`),
+  `quantity`, `iteration` (steady) or `step`, `outer`, `stage` (transient), `cell`, `position`, `value`, `limit`, `last_good`
+  (steady: the iteration with the smallest continuity before the trip; transient: the previous step). `summarize_stream`
+  passes it on as `divergence`. With `solver.corrector_control = "adaptive"` the event also has `correctors` (ADR 0156):
+  `mode`, `steps`, `mean`, `max`, `last`, `estimates`, `cap_bound`, `triggered` and `log` (one
+  `[step, correctors, rho, cap_bound, triggered]` per estimate).
 
 The MCP tool `read_status_stream` (service method `status.read`) summarises such a file; the
 tool `run_headless` (service method `run.headless`) produces the same stream through the service.
@@ -124,13 +128,19 @@ A checkpoint (restart file) is a checksummed `rcfd-io` container holding velocit
 iteration counter and (with the energy equation) temperature, tied to the mesh by its content hash. Since ADR 0031 it also
 holds the mesh itself (section `mesh`) and, for transient runs, the time, the step counter and the BDF2 history
 (`meta.engine` is `steady` or `transient`; old files stay readable).
-It is available for steady SIMPLE/SIMPLEC laminar runs, with or without the energy equation, and for transient
-laminar constant-density PISO/PIMPLE runs without energy equation, scalars, statistics, frozen flow, solids, rheology
-or user functions. Other runs (compressible, turbulence models, energy or scalars in transient runs) report a `warning`
-event instead of writing one, and `--continue-from` fails with exit 1. A checkpoint of a different mesh, or a damaged file, is
-refused by `--continue-from`; `--restart-from` transfers the solution onto the new mesh instead. A transient restart on the
-same mesh continues bit for bit like the uninterrupted run (measured: PISO Euler, PISO BDF2, PIMPLE BDF2); after a mesh change
-the time is kept but the BDF2 history starts fresh.
+
+A checkpoint is available for:
+
+- steady SIMPLE/SIMPLEC laminar runs, with or without the energy equation;
+- transient laminar constant-density PISO/PIMPLE runs without energy equation, scalars, statistics, frozen flow, solids, rheology
+  or user functions.
+
+Other runs (compressible, turbulence models, energy or scalars in transient runs) report a `warning` event instead of writing
+one, and `--continue-from` fails with exit 1.
+
+`--continue-from` refuses a checkpoint of a different mesh or a damaged file; `--restart-from` transfers the solution onto the
+new mesh instead. A transient restart on the same mesh continues bit for bit like the uninterrupted run (measured: PISO Euler,
+PISO BDF2, PIMPLE BDF2). After a mesh change the time is kept but the BDF2 history starts fresh.
 
 Field transfer methods (`rcfd-post::remap`): `nearest`, `inverse_distance`, `least_squares`, `gradient`, `conservative` and
 `conservative_overlap`; measured orders and conservation are in the addendum of `docs/adr/0031-wave19c-restart-chain.md`.
@@ -145,14 +155,19 @@ transient phase the stopping iteration is not guaranteed to be identical.
 ## Chains
 
 `rcfd run` on a case with `chain.sequence` runs the stages in order (case-schema.md, `chain`). Every status event carries a
-`stage` field; additional events: `stage_start` (`stage`, `index`, `of`), `restart` (`stage`, `report`), `stage_finish`
-(`stage`, `exit_code`, `state`, `accepted`) and a closing `chain_finish` (`ok`, `exit_code`, `state`, `stages_run`, `stages`). The
-exit code is that of the first stage that did not end with 0 (a steady stage at its iteration cap, exit 5, is accepted with
+`stage` field. A chain adds these events:
+
+- `stage_start`: `stage`, `index`, `of`
+- `restart`: `stage`, `report`
+- `stage_finish`: `stage`, `exit_code`, `state`, `accepted`
+- `chain_finish` (closing): `ok`, `exit_code`, `state`, `stages_run`, `stages`
+
+The exit code is that of the first stage that did not end with 0 (a steady stage at its iteration cap, exit 5, is accepted with
 `allow_unconverged`). `summarize_stream` is unchanged and reports the last `finish` event, which is that of the last stage run.
 
 ## Setup check
 
-`rcfd check <case> [--json]` validates the settings, builds the simulation, checks the mesh and evaluates the setup rules; exit 0
+`rcfd check <case> [--json]` validates the settings, builds the simulation, checks the mesh and evaluates the setup rules. It exits 0
 (also with warnings and infos), 3 (invalid case or an error-level rule) or 4 (mesh failed). `--json` prints one object with the keys
 `ok`, `exit_code`, `diagnostics`, `rules`, `mesh`. `rcfd validate` prints the rule diagnostics too; `rcfd run` stops with exit 3 before
 solving on an error-level rule and reports warnings as `warning` events. For a chain, `rcfd check` checks the base case; each stage is
@@ -176,28 +191,37 @@ Settings of the case, honoured by `rcfd run` and by `run.headless` with an `out_
 - The wall-clock limit (`--max-elapsed`) and the stop file (`--stop-file`) are the F-121 controls described above and
   work for transient runs too.
 
-Not covered: statistics are not part of a restart file (a transient run with statistics.enabled cannot be restarted), no
-statistics for the compressible solver or steady runs, no cumulative time-averaging restarts, no time-based
-(rather than step-based) write interval.
+Not covered:
+
+- Statistics are not part of a restart file (a transient run with statistics.enabled cannot be restarted).
+- No statistics for the compressible solver or steady runs.
+- No cumulative time-averaging restarts.
+- No time-based (rather than step-based) write interval.
 
 ### Field store (ADR 0124)
 
-Off by default. With `output.store_interval = N` (steps or iterations) or `output.store_time_interval = dt`
-(simulated seconds, transient runs only) and an output directory, `rcfd run` and `run.headless` (any caller of
-`runctl::drive` that passes an output directory) add a snapshot of the cell fields `output.store_fields` (default
-`ux uy uz p`) to `<out>/fields/store.rts` (`--store-dir d`: `d/store.rts`), and the final state when the run ends. `store_time_interval` stores the
-first step at or after each multiple of `dt`; it does not change the time steps (unlike `output.write_time_interval`).
-The store keeps the mesh once (with its hash), each snapshot field by field in blocks with checksums; a run that is
-killed leaves every earlier snapshot readable. The Rust reader is `rcfd_tsstore::Reader` (by step or time, nearest,
-floor or linear in time, one field or a cell subset). Units are recorded for velocity (`m/s`) and `T` (`K`); other
-fields carry `unknown`. `output.store_precision` is `"f64"` (default: every value bit-exact) or `"f32"` (opt-in, ADR
-0133: each value rounded to the nearest single precision, half the size, error at most `|x| 2^-24 + 2^-150`; the run
-itself is unchanged; a finite value beyond the single-precision range disables the store with a warning). The Studio
-proposes `"f32"` for the runs it starts. A fresh run replaces a store left in the same output directory; a continued run appends.
-Located errors: `store_time_interval` on a steady algorithm, either key with `dynamic_mesh.enabled`. An unknown
-field name gives a warning and no store. Library callers that step a `Simulation` themselves are not covered.
+The field store is off by default. With `output.store_interval = N` (steps or iterations) or
+`output.store_time_interval = dt` (simulated seconds, transient runs only) and an output directory, `rcfd run` and
+`run.headless` (any caller of `runctl::drive` that passes an output directory) add a snapshot of the cell fields
+`output.store_fields` (default `ux uy uz p`) to `<out>/fields/store.rts` (`--store-dir d`: `d/store.rts`), and the final state
+when the run ends. `store_time_interval` stores the first step at or after each multiple of `dt`; it does not change the time
+steps (unlike `output.write_time_interval`).
 
-Runs the Studio starts (Run, F5, Runs > Start run...) store fields unless the case sets its own store, and a store key
+- Format: the store keeps the mesh once (with its hash), each snapshot field by field in blocks with checksums. A run that is
+  killed leaves every earlier snapshot readable.
+- Reader: the Rust reader is `rcfd_tsstore::Reader` (by step or time, nearest, floor or linear in time, one field or a cell
+  subset).
+- Units: recorded for velocity (`m/s`) and `T` (`K`); other fields carry `unknown`.
+- Precision: `output.store_precision` is `"f64"` (default: every value bit-exact) or `"f32"` (opt-in, ADR 0133: each value
+  rounded to the nearest single precision, half the size, error at most `|x| 2^-24 + 2^-150`; the run itself is unchanged; a
+  finite value beyond the single-precision range disables the store with a warning). The Studio proposes `"f32"` for the runs it
+  starts.
+- Existing store: a fresh run replaces a store left in the same output directory; a continued run appends.
+- Located errors: `store_time_interval` on a steady algorithm, either key with `dynamic_mesh.enabled`. An unknown field name
+  gives a warning and no store.
+- Library callers that step a `Simulation` themselves are not covered.
+
+Runs the Studio starts (Run, F5, Runs > Start run...) store fields unless the case sets its own store. A store key
 counts as the case's own only when its value differs from its default: `store_interval` 0, `store_time_interval` 0.0,
 `store_fields` `[]`, `store_precision` `"f64"` (ADR 0152). A case saved by the Studio, or written by `rcfd-api`'s writer,
 spells out every key at its default, so an explicit `store_interval = 0` cannot be told from the default and does not

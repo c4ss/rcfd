@@ -1,28 +1,42 @@
-# ADR 0163: Job 48AC, ADR 0155's H1 (`case_hashes_w48u`) compared after a documented normalisation of the one new default-valued key `solver.corrector_control`; rcfd-mcp `t2` gets its own temp parent
+# ADR 0163: Job 48AC, H1 compared after normalising the corrector-control key; rcfd-mcp `t2` gets its own temp parent
 
 Status: **registered** 2026-10-29, before any code of this job was written and before any run of this job (set-ups, limits
 and the not-run list are fixed here); **results in the addendum** (2026-10-29: L1, L2, L3 met; L4, L6, L7 not run and L5
 incomplete because the suite run was stopped by the session's low-memory reaper; two failures in the partial L5 run, both
-outside this job's files, see Q1; one set-up deviation, D-1). House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; defaults stay bit-identical (no
-library code is touched); `crates/rcfd-api/tests/baseline_hashes.rs` is not edited or re-recorded; the record
-`crates/rcfd-api/tests/fixtures/case_hashes_6867e40.txt` (R0) is not edited or re-recorded; no unsafe code, no new crate.
-Parents: [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) (H1 and its record R0, base 6867e40),
-[ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (the key `solver.corrector_control`, default `"fixed"`,
-`Schema::hash_omit_default`, D6), [ADR 0160](0160-job48z-end-time-stamp-corrector-count-record-sv301-wiring.md) deviation 3 /
-question 6 and [ADR 0162](0162-job48ab-adaptive-correctors-follow-the-time-step.md) question 6 (both report the H1 failure and
-the `%TEMP%\x` failure of rcfd-mcp `t2` as pre-existing). Number: no ADR 0163 or above exists in this worktree, the main
-checkout or any sibling worktree on disk (checked 2026-10-29). Base: local main 6366587 (the worktree was fast-forwarded to it
-before any work).
+outside this job's files, see Q1; one set-up deviation, D-1).
+
+ADR 0155's H1 (`case_hashes_w48u`) has failed on main since ADR 0156 added the key `solver.corrector_control`: the
+written TOML/JSON of every valid case now lists it, so the text hashes differ from the record R0 (made on 6867e40). This
+job compares H1 after a documented normalisation of that one new default-valued key and keeps R0 as the only record. It
+also gives rcfd-mcp `t2` its own temp parent, because the test's assertion depends on the shared temp directory. H1
+passes after normalisation, and the written text of every recorded case differs from 6867e40 by exactly that key (L1 and
+L2 met). L3 is met: `t2` on unmodified code passes with `TEMP`/`TMP` at a fresh empty directory. The session's
+low-memory reaper stopped the suite run, so L4 (the fixed `t2` under the normal `TEMP`), L6 and L7 were not run and L5
+is incomplete. The partial L5 run has two failures, both outside this job's files (Q1).
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits fixed before the runs; defaults
+  stay bit-identical (no library code is touched); `crates/rcfd-api/tests/baseline_hashes.rs` is not edited or
+  re-recorded; the record `crates/rcfd-api/tests/fixtures/case_hashes_6867e40.txt` (R0) is not edited or re-recorded; no
+  unsafe code, no new crate.
+- Parents: [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) (H1 and its record R0, base 6867e40),
+  [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (the key `solver.corrector_control`, default `"fixed"`,
+  `Schema::hash_omit_default`, D6), [ADR 0160](0160-job48z-end-time-stamp-corrector-count-record-sv301-wiring.md)
+  deviation 3 / question 6 and [ADR 0162](0162-job48ab-adaptive-correctors-follow-the-time-step.md) question 6 (both
+  report the H1 failure and the `%TEMP%\x` failure of rcfd-mcp `t2` as pre-existing).
+- Number: no ADR 0163 or above exists in this worktree, the main checkout or any sibling worktree on disk (checked
+  2026-10-29).
+- Base: local main 6366587 (the worktree was fast-forwarded to it before any work).
 
 ## The problem
 
-H1 (ADR 0155) asserts that every case file of the repository is unchanged by `[mesh.transform]`: for each case source the
-settings content hash, the FNV-64 of the text `Case::to_toml` and `Case::to_json_string` write, and the mesh content hash equal
-R0 (made on 6867e40). ADR 0156 later added `solver.corrector_control` (default `"fixed"`). Every valid case's settings tree is
-filled with schema defaults, so the written TOML/JSON now lists the new key; the settings hash omits the key at its default
-(`hash_omit_default`), so settings and mesh hashes still match, but the text columns of every valid source differ (ADR 0160:
-"the same 30 entries differ"). H1 has failed on main since ADR 0156.
+H1 (ADR 0155) asserts that every case file of the repository is unchanged by `[mesh.transform]`: for each case source
+the settings content hash, the FNV-64 of the text `Case::to_toml` and `Case::to_json_string` write, and the mesh content
+hash equal R0 (made on 6867e40). ADR 0156 later added `solver.corrector_control` (default `"fixed"`). Every valid case's
+settings tree is filled with schema defaults, so the written TOML/JSON now lists the new key. The settings hash omits
+the key at its default (`hash_omit_default`), so settings and mesh hashes still match, but the text columns of every
+valid source differ (ADR 0160: "the same 30 entries differ"). H1 has failed on main since ADR 0156.
 
 ## Decision (set-up)
 
@@ -93,27 +107,33 @@ code or run), 47c253e (the test changes). Files changed: `crates/rcfd-api/tests/
 | L6 | `cargo test -p rcfd-mcp`: 0 failures | not run (D-2) | not run |
 | L7 | clippy `-D warnings` and fmt `--check`, rcfd-api and rcfd-mcp | not run as registered (D-2); `cargo fmt -p rcfd-api -p rcfd-mcp` was applied before the test run and commit 47c253e, and both test builds compiled without warnings | not run |
 
-What the record shows (the brief's "show it"): for all 30 valid R0 sources the settings content hash and the mesh content hash
-(compared, Windows) of the current code equal R0 unchanged; the raw toml and json hashes of all 30 differ; after removing the
-single entry `solver.corrector_control = "fixed"` from the settings value, both text hashes of all 30 equal R0, and C1 shows
-that the serialisation used is byte-identical to `Case::to_toml` / `Case::to_json_string`. So the written text of every
-recorded case differs from 6867e40 by exactly that one default-valued key. Three sources not in R0 (the `docs/case-schema.md`
-block 46e761937bab06b8, `example-projects/wind-tunnel/cases/naca0012-aoa{2,4}-rotated.toml`) are printed, not compared, as H1
-already did.
+What the record shows (the brief's "show it"): the written text of every recorded case differs from 6867e40 by exactly one
+default-valued key.
+
+- For all 30 valid R0 sources, the settings content hash and the mesh content hash (compared, Windows) of the current
+  code equal R0 unchanged.
+- The raw toml and json hashes of all 30 differ.
+- After removing the single entry `solver.corrector_control = "fixed"` from the settings value, both text hashes of all
+  30 equal R0.
+- C1 shows that the serialisation used is byte-identical to `Case::to_toml` / `Case::to_json_string`.
+
+Three sources not in R0 (the `docs/case-schema.md` block 46e761937bab06b8,
+`example-projects/wind-tunnel/cases/naca0012-aoa{2,4}-rotated.toml`) are printed, not compared, as H1 already did.
 
 The stray `%TEMP%\x` (dated 2026-10-15) still exists after the job (`Test-Path` true); nothing outside the tests' own
 directories was deleted.
 
 ### Deviations
 
-D-1. S1 registered `serde_json::Map::shift_remove`; it does not compile here (the method needs serde_json's `preserve_order`
-feature, so this build's `Map` is the key-sorted BTreeMap). The test uses `Map::remove`, which on a BTreeMap cannot reorder
-the remaining keys; with `preserve_order` it could only swap keys, which would make the line differ from R0 (a false failure,
-never a false pass). Changed after the compile error and before the first H1 run; no amendment was written beforehand.
+D-1. S1 registered `serde_json::Map::shift_remove`; it does not compile here (the method needs serde_json's
+`preserve_order` feature, so this build's `Map` is the key-sorted BTreeMap). The test uses `Map::remove`, which on a
+BTreeMap cannot reorder the remaining keys; with `preserve_order` it could only swap keys, which would make the line
+differ from R0 (a false failure, never a false pass). The change came after the compile error and before the first H1
+run; no amendment was written beforehand.
 
-D-2. The background chain (rcfd-api suite, then rcfd-mcp suite, clippy, fmt check) was stopped by the Claude Code session's
-low-memory reaper during the rcfd-api suite; as instructed by that notice it was not restarted. Hence L4, L6, L7 not run and
-L5 incomplete.
+D-2. The Claude Code session's low-memory reaper stopped the background chain (rcfd-api suite, then rcfd-mcp suite,
+clippy, fmt check) during the rcfd-api suite. As instructed by that notice, the chain was not restarted. Hence L4, L6,
+L7 were not run and L5 is incomplete.
 
 ### Not run
 

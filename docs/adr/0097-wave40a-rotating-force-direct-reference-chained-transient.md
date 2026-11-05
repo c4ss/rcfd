@@ -1,16 +1,32 @@
 # ADR 0097: Wave 40A, independent rotating-force far field (F-136) and chained transient vs single transient (F-241)
 
-Status: registered before the registered tests were run. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss`
-test with the limit unchanged. No library code changes: every addition is test code, so defaults and the baseline hashes
-are untouched. Clean-room: no literature value is used; both references below are derived from first principles in this
-ADR. The acceptance text of both items is unchanged. The user decided both plans: F-136 is set done if the independent
-check passes, F-241 is set done if the chained transient matches the single transient run.
+Status: registered before the registered tests were run.
+
+Wave 40A adds a check to each of two items. F-136 gets an independent check, a direct retarded-time solution of a rotating point
+force, because both sides of the earlier W3 comparison are project code. F-241 compares chained transient segments with one
+transient run from rest, because the earlier C2 check is weak. The addendum, written after the first and only run of the
+registered tests, records the outcome: all registered checks pass, with no amendment and no deviation from the registered
+set-ups. R1 gives e = 1.87e-8 to 3.4e-8 against the limit 1e-3, and T1 is identical bit for bit. F-136 is set done, and F-241
+is set done under the reading the user chose. The attribution of the Gutin-type formula to Gutin (1936) and Lowson (1965) is
+still UNVERIFIED (the papers were not read). A split whose stage end clips a step by a few ulp is not bitwise equal and is not
+tested.
+
+Rules:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged.
+* No library code changes: every addition is test code, so defaults and the baseline hashes are untouched.
+* Clean-room: no literature value is used; both references below are derived from first principles in this ADR.
+* The acceptance text of both items is unchanged.
+* The user decided both plans: F-136 is set done if the independent check passes, F-241 is set done if the chained transient
+  matches the single transient run.
 
 Gaps re-checked before writing ([partials group 5](../audit/partials-group-5.md), [partials group 9](../audit/partials-group-9.md)):
-W3 in crates/rcfd-post/tests/fwh_impermeable.rs compares the FW-H code with `Rotor::harmonic_amplitude`, a Gutin-type
-Bessel formula derived in this repository (ADR 0066) and never checked against Gutin (1936) or Lowson (1965). Both sides
-of that comparison are project code. For F-241, C2 compares the chain with the single steady run; the transient stage
-starts from the converged steady state, so that check is weak.
+
+* F-136: W3 in crates/rcfd-post/tests/fwh_impermeable.rs compares the FW-H code with `Rotor::harmonic_amplitude`, a Gutin-type
+  Bessel formula derived in this repository (ADR 0066) and never checked against Gutin (1936) or Lowson (1965). Both sides of
+  that comparison are project code.
+* F-241: C2 compares the chain with the single steady run; the transient stage starts from the converged steady state, so that
+  check is weak.
 
 ## F-136: direct retarded-time solution of a rotating point force (test file crates/rcfd-post/tests/fwh_impermeable.rs)
 

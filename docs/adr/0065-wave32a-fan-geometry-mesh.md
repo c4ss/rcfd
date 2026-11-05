@@ -4,6 +4,17 @@ Status: registered before any implementation (criteria below are fixed; a miss b
 limit unchanged, a set-up defect becomes a new corrected test with the old one kept). Serves `docs/milestone-fan.md`
 (capability links "parametric blade/hub geometry" and "volume mesh of a periodic blade passage"). Branch main.
 
+Wave 32A adds parametric axial-fan geometry (library `rcfd-mesh::fan`) and a lower-fidelity, hex-only, axially sheared
+H-type single-passage mesh of a thin blade with blunt leading and trailing edges. It is NOT validated for accurate fan
+performance prediction, and no comparison with a published fan was made. Addendum 1 measures each check against its
+registered limit; the checks not named here pass. M4 quality misses on both registered set-ups: A reaches
+non-orthogonality 73.4 deg, skewness 7.57 and aspect 810 against 70, 2.0 and 300, and B reaches 89.8 deg, 66 and 19 123
+against 70, 2.0 and 3000. S3 abs(m_in + m_out) misses at 4.5e-5 of |m_in| against 1e-6, and the cause was not
+investigated. S2 misses 0.08 at nu 1e-3 (0.0936 at t = 0.015); its corrected set-up at nu 1e-4 passes but is not
+converged, to be read as a smoke check. The G1 polygon area at 400 points (1.03e-5 against 1e-5) and M5 set-up B at 1e-12
+(9.9e-12) miss through set-up defects, and their corrected tests pass. The M1 envelope and blade-solid rows pass on the
+refined meshes only: the coarsest meshes give 1.16e-2 and 1.9e-2 against 5e-3 and 2e-3.
+
 ## Scope statement (what this is NOT)
 
 A lower-fidelity, hex-only, axially sheared H-type single-passage mesh of a thin blade with BLUNT (axially truncated) leading
@@ -12,14 +23,32 @@ comparison with a published fan was made. Validated scope is only what the check
 
 ## Geometry (library `rcfd-mesh::fan`)
 
-`AxialFan`: `n_blades`, `r_hub`, `r_tip` (blade tip), `tip_clearance` (shroud radius = `r_tip + tip_clearance`), `z_inlet = 0`,
-`axial_extent` (outlet at `z = axial_extent`), `z_le_root` (axial position of the hub leading edge), a section family and a
-table of radial stations (first at `r_hub`, last at `r_tip`, strictly increasing), each with `chord`, `stagger` (angle of the chord
-from the axis, positive = trailing edge toward -theta, i.e. the blade moves toward +theta when the rotor turns about +z),
-`camber` m (fraction of chord), `camber_pos` p, `thickness` t (fraction of chord), `sweep` (axial shift of the leading edge, m),
-`lean` (tangential shift of the leading edge along the cylinder, m). Piecewise-linear interpolation in r. Sections lie on
-cylinders and are described in the unrolled plane (z, s = r theta); the chord frame is e_c = (cos g, -sin g), e_v = (-sin g, -cos g)
-(v > 0 is the suction side, at smaller theta). Validation returns a list of errors with a path (`stations[2].chord`) and a message.
+`AxialFan`:
+
+* `n_blades`;
+* `r_hub`;
+* `r_tip` (blade tip);
+* `tip_clearance` (shroud radius = `r_tip + tip_clearance`);
+* `z_inlet = 0`;
+* `axial_extent` (outlet at `z = axial_extent`);
+* `z_le_root` (axial position of the hub leading edge);
+* a section family;
+* a table of radial stations (first at `r_hub`, last at `r_tip`, strictly increasing).
+
+Each station has:
+
+* `chord`;
+* `stagger` (angle of the chord from the axis, positive = trailing edge toward -theta, i.e. the blade moves toward +theta
+  when the rotor turns about +z);
+* `camber` m (fraction of chord);
+* `camber_pos` p;
+* `thickness` t (fraction of chord);
+* `sweep` (axial shift of the leading edge, m);
+* `lean` (tangential shift of the leading edge along the cylinder, m).
+
+Piecewise-linear interpolation in r. Sections lie on cylinders and are described in the unrolled plane (z, s = r theta);
+the chord frame is e_c = (cos g, -sin g), e_v = (-sin g, -cos g) (v > 0 is the suction side, at smaller theta). Validation
+returns a list of errors with a path (`stations[2].chord`) and a message.
 
 Section families (published forms):
 * NACA 4-digit (checked on the NACA-airfoil Wikipedia page, fetched 2026-10-18, which cites Moran 2003 p. 7; the originals, Jacobs, Ward and Pinkerton NACA TR-460 (1933), were not read):
@@ -37,14 +66,21 @@ as strips between the two surfaces), points `(r cos(s/r), r sin(s/r), z)`.
 
 Chosen: structured hex multi-block in one index space (i axial column, j pitchwise, k radial), "H-grid with a slit": per radial
 node layer a 2-D grid in the unrolled plane, cells of the solid footprint deleted (i in the chord range, j in the middle band, k below
-the blade tip). Blade faces are the faces of kept cells next to deleted ones. Rejected: tet/prism from `tetmesh` (no layer
-extrusion that survives a sharp periodic seam with exact node matching in the current crate), octree cut cell (periodic exactness
-and wall-normal layers are not available), full O/C-H topology (best quality but exceeds the time box). Columns are z = const
-lines; the seams follow the camber line inside the chord range (lower seam `s = s_c(z) - P/2`, upper = lower + P, P = 2 pi r/N) and
+the blade tip). Blade faces are the faces of kept cells next to deleted ones.
+
+Rejected:
+
+* tet/prism from `tetmesh` (no layer extrusion that survives a sharp periodic seam with exact node matching in the current
+  crate);
+* octree cut cell (periodic exactness and wall-normal layers are not available);
+* full O/C-H topology (best quality but exceeds the time box).
+
+Columns are z = const lines; the seams follow the camber line inside the chord range (lower seam `s = s_c(z) - P/2`, upper = lower + P, P = 2 pi r/N) and
 are axial outside it, so the upper seam is the lower seam rotated by exactly 2 pi/N and nodes match to round-off. The blade is
 truncated by planes z = const at `trunc_le` and `trunc_te` (chord fractions, along the camber line) giving a blunt flat leading
-and trailing face resolved by `n_mid` cells. The tip gap is `n_gap` radial layers without a slit. Cell zone `rotor` = all cells.
-Patches: `inlet`, `outlet`, `hub`, `shroud`, `blade` (pressure, suction, both end faces, tip cap), `seam_lo`/`seam_hi`
+and trailing face resolved by `n_mid` cells. The tip gap is `n_gap` radial layers without a slit.
+
+Cell zone `rotor` = all cells. Patches: `inlet`, `outlet`, `hub`, `shroud`, `blade` (pressure, suction, both end faces, tip cap), `seam_lo`/`seam_hi`
 (`set_periodic_rotation(seam_lo, seam_hi, 0, +z, 2 pi/N)`).
 
 Boundary-layer stack: first-cell height `h1` either given or from a target y+: `h1 = 2 y+ nu / u_tau` (cell centre at y+),
@@ -53,11 +89,15 @@ layers with exact geometric growth `g` on hub, shroud, tip cap (radial), the lea
 (pitchwise offset `h1/(e_s . n)` so that the wall-normal distance, measured in the unrolled section plane from the wall node along its
 central-difference normal, is h1). After the exact layers the spacing continues by a geometric law solved to fit the length.
 
-Known limits (declared in advance): cells next to the blade are sheared parallelograms, so the non-orthogonality is about the local
-stagger angle; the blade is cut by axial planes (blunt edges, flat end faces of height about 2 yt(trunc)); sections must be monotone in z
-(located error otherwise); the wall-normal height is exact in the unrolled section plane, the 3-D normal differs by the twist/lean rate;
-the blade must fit between its seams (located error); radial spacing across the span is not normal-to-blade; the tip gap needs room for
-the two boundary-layer stacks.
+Known limits (declared in advance):
+
+* cells next to the blade are sheared parallelograms, so the non-orthogonality is about the local stagger angle;
+* the blade is cut by axial planes (blunt edges, flat end faces of height about 2 yt(trunc));
+* sections must be monotone in z (located error otherwise);
+* the wall-normal height is exact in the unrolled section plane, the 3-D normal differs by the twist/lean rate;
+* the blade must fit between its seams (located error);
+* radial spacing across the span is not normal-to-blade;
+* the tip gap needs room for the two boundary-layer stacks.
 
 ## Pre-registered checks (tests `crates/rcfd-mesh/tests/fan.rs`, `crates/rcfd-api/tests/fan_sector.rs`)
 
@@ -123,13 +163,22 @@ Per check, measured against the registered limit. All numbers from `cargo test -
 
 Deviations and fixes made during the work (nothing in the criteria above was edited):
 
-* The blade end caps were first single flat strips: their sagitta made G2 non-monotone. They are now subdivided across the thickness (`n_cap = max(n_chord / 8, 2)`), and the G2 reference area is integrated over the full span, order 2.
-* The test cell counts of the specifications (`n_up`, `n_span`, ...) were enlarged where the exact boundary-layer ridge could not fit (a located error `n_up`, `n_span`, `n_gap`). The mesh rejects a specification it cannot fit.
-* `wall_line` (displacement of the pitchwise lines decaying toward the seam, blended into the first spacing) and `BAND_FAR` (the middle band opens linearly to 0.15 pitch at inlet and outlet) were added to lower the shear: set-up A aspect 2 562 to 810, non-orthogonality 88 to 73 deg, skewness 10 to 7.6. They did not reach the registered gates. The worst cells are the first columns downstream of the trailing plane at mid-span, where the band height is the trailing-face thickness over `n_mid` cells and the axial spacing is the boundary-layer first cell.
-* The validation test of the mesh-level error uses a specification error (`n_span` too small) because the stagger angle that failed earlier now meshes.
+* The blade end caps were first single flat strips: their sagitta made G2 non-monotone. They are now subdivided across the
+  thickness (`n_cap = max(n_chord / 8, 2)`), and the G2 reference area is integrated over the full span, order 2.
+* The test cell counts of the specifications (`n_up`, `n_span`, ...) were enlarged where the exact boundary-layer ridge
+  could not fit (a located error `n_up`, `n_span`, `n_gap`). The mesh rejects a specification it cannot fit.
+* `wall_line` (displacement of the pitchwise lines decaying toward the seam, blended into the first spacing) and
+  `BAND_FAR` (the middle band opens linearly to 0.15 pitch at inlet and outlet) were added to lower the shear: set-up A
+  aspect 2 562 to 810, non-orthogonality 88 to 73 deg, skewness 10 to 7.6. They did not reach the registered gates. The
+  worst cells are the first columns downstream of the trailing plane at mid-span, where the band height is the
+  trailing-face thickness over `n_mid` cells and the axial spacing is the boundary-layer first cell.
+* The validation test of the mesh-level error uses a specification error (`n_span` too small) because the stagger angle
+  that failed earlier now meshes.
 * `include_blade = false` builds the same nodes with the footprint cells kept (empty passage for S1 and M1).
 * Cases hook: `mesh.generator = "axial_fan_sector"`, nested section `mesh.fan` (rcfd-api `fan_case.rs`), example `cases/axial_fan_sector`.
 
 Not claimed: any accuracy of fan performance, any comparison with a published fan, y+ of a converged solution, sharp or rounded edges.
 
-After the final-gate run found that the example case (n_mid = 2, non-orthogonality 78 deg) raises the rules warning SV101, the example uses `n_mid = 1` (13 332 cells, non-orthogonality 69.6 deg, aspect 392). The n_mid dependence was found by a scan of the small set-up (n_mid 1 / 2 / 3: 69.6 / 78.1 / 81.4 deg; truncation 0.05 to 0.15 with n_mid = 1: 65.5 to 67.8 deg).
+The final-gate run found that the example case (n_mid = 2, non-orthogonality 78 deg) raises the rules warning SV101, so the
+example uses `n_mid = 1` (13 332 cells, non-orthogonality 69.6 deg, aspect 392). A scan of the small set-up found the n_mid
+dependence (n_mid 1 / 2 / 3: 69.6 / 78.1 / 81.4 deg; truncation 0.05 to 0.15 with n_mid = 1: 65.5 to 67.8 deg).

@@ -1,9 +1,22 @@
 # ADR 0100: Wave 40D, Hysing bubble refinement check (F-055) and a NaN-rejecting stationarity check in the heat-exchanger tests
 
-Status: registered before the registered runs. Limits are not changed after a run; a miss becomes an ignored `*_known_miss` test with the
-limit intact. No library code changes: both parts are test code only, so defaults and the baseline hashes are untouched. Clean-room: the only
-literature values are the Hysing et al. (2009) case-1 values read in wave 39E (ADR 0096). Written at HEAD a9a6107 (scratch copy
-`<scratch dir>`, target `<target dir>`).
+Status: registered before the registered runs.
+
+Wave 40D has two parts, both test code: part B checks the rising bubble of F-055 under refinement against Hysing et al.
+(2009), and part H makes the heat-exchanger stationarity check reject NaN and infinite fields. In the addendum, part B misses
+B1, B2 and B3 and meets B4: the errors grow under refinement (y_c(3) 0.0531, 0.0635, 0.0689; V_c,max 0.0213, 0.0230, 0.0237).
+All three grids are finite and bounded, and the solution converges, but not to the reference: the algebraic
+VOF discretisation converges to a bubble that rises about 10 % too slowly. The 40 x 80 pass of ADR 0049 / 0096 is the
+coarse-grid point of that error, not a grid-converged agreement. The cause is not investigated in this wave. F-055 stays done,
+as the user decided, and the test stays as an ignored known miss with limits unchanged. Part H passes H1, H2 and H3, and no
+test that passed before fails now.
+
+Rules:
+
+* Limits are not changed after a run; a miss becomes an ignored `*_known_miss` test with the limit intact.
+* No library code changes: both parts are test code only, so defaults and the baseline hashes are untouched.
+* Clean-room: the only literature values are the Hysing et al. (2009) case-1 values read in wave 39E (ADR 0096).
+* Written at HEAD a9a6107 (scratch copy `<scratch dir>`, target `<target dir>`).
 
 ## Part B: F-055 rising-bubble refinement (test file `crates/rcfd-fv/tests/vof_bubble_refinement_w40d.rs`)
 
@@ -40,6 +53,7 @@ Fallback (registered now): if the 160 x 320 run exceeds 60 minutes or is not fin
 sqrt 2) with the same checks, and I say so. No other change.
 
 Smoke (rule d, before registering; no reference value was compared):
+
 * Timing, t = 0.05 on each grid: CG 0.3 s / 8.2 s / 127.7 s (40 / 80 / 160), AMG 0.4 s / 2.5 s / 32.7 s. Extrapolated full runs to t = 3:
   CG about 2.1 h on 160 x 320, AMG about 33 min. Phase-volume drift <= 4.2e-15 and bound violation <= 1.3e-12 on all grids.
 * 160 x 320 with AMG to t = 0.4 (640 steps, 198 s, dt / dt_cap 0.946): all fields finite, max|U| 0.28, drift 9.7e-15, bound violation
@@ -86,13 +100,21 @@ not needed.
 
 The test is kept, limits unchanged, as the ignored `b1_hysing_bubble_error_decreases_under_refinement_known_miss`. It is not a set-up
 defect: the set-up is the registered one, all three grids are finite and bounded, and the solution converges, but not to the reference.
-Successive differences of y_c(3) are 0.0105 and 0.0054 (observed order 0.96); a Richardson extrapolation from these three grids gives
-y_c(3) about 1.007, against 1.0813. For V_c,max the differences are 0.0017 and 0.0007 (order 1.3) and the extrapolated value is about
-0.2175, 10 % below 0.2417. The peak also comes earlier on finer grids (0.850, 0.829, 0.820 against 0.9213). So the algebraic VOF discretisation
-converges to a bubble that rises about 10 % too slowly. The 40 x 80 pass of ADR 0049 / 0096 is the coarse-grid point of that error, not a
-grid-converged agreement. The cause is not investigated in this wave. Candidates for a later wave, not tested here: the linear-in-alpha
-mixture viscosity and density at the interface, the CSF curvature from the smoothed alpha, the interface-compression smearing, and the
-missing transposed viscous stress at the viscosity jump (listed as not delivered in the F-055 note). F-055 stays done, as the user decided.
+
+* y_c(3): successive differences are 0.0105 and 0.0054 (observed order 0.96). A Richardson extrapolation from these three grids gives
+  y_c(3) about 1.007, against 1.0813.
+* V_c,max: the differences are 0.0017 and 0.0007 (order 1.3) and the extrapolated value is about 0.2175, 10 % below 0.2417.
+* Peak time: the peak also comes earlier on finer grids (0.850, 0.829, 0.820 against 0.9213).
+
+So the algebraic VOF discretisation converges to a bubble that rises about 10 % too slowly. The 40 x 80 pass of ADR 0049 / 0096 is the
+coarse-grid point of that error, not a grid-converged agreement. F-055 stays done, as the user decided.
+
+The cause is not investigated in this wave. Candidates for a later wave, not tested here:
+
+* the linear-in-alpha mixture viscosity and density at the interface;
+* the CSF curvature from the smoothed alpha;
+* the interface-compression smearing;
+* the missing transposed viscous stress at the viscosity jump (listed as not delivered in the F-055 note).
 
 ### Part H
 
@@ -103,6 +125,8 @@ missing transposed viscous stress at the viscosity jump (listed as not delivered
 | H3 non-ignored tests | the 7 tests x1-x7 pass, as at a9a6107; with H1 and H2, 9 of 9 | pass |
 | H3 known misses still fail | x1 registered stationarity: p change 0.423 (as before); x4 registered lossless: ux change 4.06e-8 > 1e-8 with finite fields; x7 fixed pseudo-dt: now stops at the new finiteness assert in `run` (it stopped at the finiteness assert of `x7_sweep` before) | pass |
 
-No test that passed before fails now, so no existing pass came from a non-finite field. One stale comment found: the ignore reason and the doc
-comment of `x4_registered_lossless_setup_known_miss` say "flow NaN", but at this HEAD the registered lossless X4 duct ends with finite
-fields and fails on the ux change (4.06e-8). The text is left as written (not this item); the finiteness check would have caught a NaN.
+No test that passed before fails now, so no existing pass came from a non-finite field.
+
+One stale comment found: the ignore reason and the doc comment of `x4_registered_lossless_setup_known_miss` say "flow NaN", but at this
+HEAD the registered lossless X4 duct ends with finite fields and fails on the ux change (4.06e-8). The text is left as written (not this
+item); the finiteness check would have caught a NaN.

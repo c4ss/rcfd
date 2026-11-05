@@ -1,13 +1,33 @@
 # ADR 0140: Wave 48G job 3, first run gives a picture: Studio-started runs store fields by default, helpful empty states
 
 Status: **PROPOSED 2026-10-28** (registered before any run of the checks below; implemented, every registered limit met, see the
-addendum; the questions at the end are open). Written at main f3bf005 (waves 47 and 48 and the
-Linux gate fixes merged). One of four parallel jobs "48G, first run to first picture" (1 mesh preview from a case, 2 case starter
-menu, 3 this ADR, 4 one-click start-and-follow). House rules of ADRs 0110-0133 apply: limits are fixed here before the registered
-runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment
-registered before the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded; the crate graph stays acyclic. Parents: ADR 0130 D3/D4 (W48-4 (b), W48-5 (a)), ADR 0132 (viewport), ADR 0133 (start
-plan, R10, `output.store_precision`), [`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 2 ("scrub a run through time").
+addendum; the questions at the end are open).
+
+The Studio's viewport shows nothing for a run unless the run was started with fields stored. W48-5 (a) decided that
+Studio-started runs store fields by default; this ADR checks whether that default really holds for every case type and makes
+the empty viewport say why it is empty and what to do. Transient `compressible` runs get the time rule (D2), the start dialog
+shows the effective store, snapshot count and estimated size (D3, D4, D6), and the viewport also opens pre-48A stores,
+explains each empty state and can offer a re-run with fields stored (D7, D8, D9). Only the `rcfd-studio` crate changes (D10).
+Every registered limit was met, amendment 2's SF9 (j)-(l) included. Real stores held 342 012, 346 419 and 271 872 bytes against
+estimates of 342 016, 342 016 and 260 000 (SF4). Not run: the "Not in CI" checklist, Linux (the new process tests SF4, SF5, SF8
+have never run there), debug builds of the new tests, the workspace gate and workspace-wide clippy, and `cargo deny`. Dated
+notes at the end of the addendum record later changes from ADR 0149 (SF1's limit for the six `case.json`) and ADR 0152 (a store
+key at its schema default; SF9 (c) and SF9 (k)).
+
+Written at main f3bf005 (waves 47 and 48 and the Linux gate fixes merged). This is one of four parallel jobs
+"48G, first run to first picture" (1 mesh preview from a case, 2 case starter menu, 3 this ADR, 4 one-click start-and-follow).
+
+House rules of ADRs 0110-0133 apply:
+
+* Limits are fixed here before the registered runs.
+* A missed limit becomes an ignored `*_known_miss` test with the limit intact.
+* A defective set-up is corrected by an amendment registered before the corrected run.
+* Defaults of existing code stay bit-identical.
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* The crate graph stays acyclic.
+
+Parents: ADR 0130 D3/D4 (W48-4 (b), W48-5 (a)), ADR 0132 (viewport), ADR 0133 (start plan, R10, `output.store_precision`),
+[`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 2 ("scrub a run through time").
 
 ## Problem (reported by the maintainer)
 
@@ -86,19 +106,28 @@ say why it is empty and what to do.
   on a short-lived control thread of the run worker (never in the tick loop) and the count arrives as a new run-worker update that
   fills the open plan's `cells` if it is still the same case; the dialog shows "counting" meanwhile.
 * **D6 dialog text, warnings and fixes** (texts registered below, SF9). The checkbox label names the stored fields. A store line,
-  a size line, and lines for the case's own output settings are shown under it. Warnings: store switched off (fix: "Store fields");
-  the case turns the store off (fix: "Store fields for this run", the proposal's keys as `--set` entries, the case file unchanged);
-  an override turns it off (no button: the override is the user's text); more than 100 snapshots (fix: "Store at most 100
-  snapshots", the interval re-derived from the effective budget); estimate above **1 GB** (`1 000 000 000` bytes; fix: f32 and the
-  largest snapshot count whose estimate fits); moving mesh; chain. A fix changes only the plan.
+  a size line, and lines for the case's own output settings are shown under it. A fix changes only the plan. Warnings:
+  * store switched off (fix: "Store fields");
+  * the case turns the store off (fix: "Store fields for this run", the proposal's keys as `--set` entries, the case file
+    unchanged);
+  * an override turns it off (no button: the override is the user's text);
+  * more than 100 snapshots (fix: "Store at most 100 snapshots", the interval re-derived from the effective budget);
+  * estimate above **1 GB** (`1 000 000 000` bytes; fix: f32 and the largest snapshot count whose estimate fits);
+  * moving mesh;
+  * chain.
 * **D7 store lookup.** The viewport opens `runs/<id>/fields/store.rts` when it exists, else `runs/<id>/output/fields/store.rts`
   (pre-48A runs), and says so when it uses the second.
 * **D8 empty states.** When the selected run has no store, or a store without snapshots, the viewport worker explains it from
   `run.json` (its `set` overrides), `case.snapshot` (both read once per run), `status.json` (each poll) and the `solver` warning
-  lines of `events.jsonl` (read again only when its length changed, at most its last 256 KiB). Precedence: record unreadable;
-  moving mesh; chain; store not asked for (no store key > 0 in the case text and the `set` overrides, last wins), with the
-  turned-off variant when a key is explicitly 0; a solver warning containing "field store"; then by state (queued, paused,
-  running, failed, cancelled, finished). Texts registered below (SF7).
+  lines of `events.jsonl` (read again only when its length changed, at most its last 256 KiB). Texts registered below (SF7).
+  Precedence:
+  * record unreadable;
+  * moving mesh;
+  * chain;
+  * store not asked for (no store key > 0 in the case text and the `set` overrides, last wins), with the turned-off variant
+    when a key is explicitly 0;
+  * a solver warning containing "field store";
+  * then by state (queued, paused, running, failed, cancelled, finished).
 * **D9 re-run with fields stored.** Offered under "not stored" and "turned off" only, when the case named in `run.json` is a file
   whose bytes hash to `case_snapshot_hash` (the same case as run; the `fnv1a64:` legacy spelling accepted). The new run is queued
   through the run worker (a new command; the UI thread does no file I/O) with `Client::start(<project>/<case>)`, so the runner
@@ -112,12 +141,24 @@ say why it is empty and what to do.
 
 ## Placement
 
-Only `rcfd-studio`. New modules `store_plan.rs` (effective store, snapshot count, size, dialog text and fixes, cell count, re-run
-plan), `run_fields.rs` (store lookup, empty-state explanation) and `fields_ui.rs` (drawing of both). Small hooks: `runs.rs`
-(D2 and three fields), `poll.rs` (the cell-count update, the re-run command), `studio.rs` (two arms, one method), `viewport.rs`
-(lookup and explanation in `try_open`, two fields), `viewport_ui.rs` (two arms), `ui.rs` (`store_ui` delegates), `lib.rs`. No new
-dependency and no new workspace edge (`rcfd-api`, `rcfd-mesh`, `rcfd-project`, `rcfd-runner`, `rcfd-tsstore` are already
-dependencies); `workspace_graph.rs` and `docs/architecture.md` unchanged.
+Only `rcfd-studio`. No new dependency and no new workspace edge (`rcfd-api`, `rcfd-mesh`, `rcfd-project`, `rcfd-runner`,
+`rcfd-tsstore` are already dependencies); `workspace_graph.rs` and `docs/architecture.md` unchanged.
+
+New modules:
+
+* `store_plan.rs`: effective store, snapshot count, size, dialog text and fixes, cell count, re-run plan.
+* `run_fields.rs`: store lookup, empty-state explanation.
+* `fields_ui.rs`: drawing of both.
+
+Small hooks:
+
+* `runs.rs`: D2 and three fields.
+* `poll.rs`: the cell-count update, the re-run command.
+* `studio.rs`: two arms, one method.
+* `viewport.rs`: lookup and explanation in `try_open`, two fields.
+* `viewport_ui.rs`: two arms.
+* `ui.rs`: `store_ui` delegates.
+* `lib.rs`.
 
 ## Registered checks (limits fixed here, before any run)
 
@@ -221,11 +262,15 @@ SF9 cases (the cavity is `tests/common` `RUN_CASE`, 144 cells, `simplec`, 400 it
 
 ## What I already knew (rules c, d)
 
-The code reading above. A release build of main f3bf005 in this worktree (`rcfd`, `rcfd-runner`, `rcfd-studio` and its test
-binaries); its `rcfd.exe` was copied aside (sha256 `911b94e2...27c7`) as SF10's previous binary. No test of this ADR and no Studio
-test had run in this worktree. Prior data from ADR 0133: R11's stores of the lid cavity (144 cells, 6 snapshots, 4 fields) were
-71 355 bytes (f64) and 57 531 bytes (f32), and R8's store of the cavity held 100 f32 snapshots; D4's constants were checked against
-R11's sizes by hand (the formula gives about 69 500 and 55 700 for those stores, within 4 %). Nothing of SF1-SF11 was observed.
+* The code reading above.
+* A release build of main f3bf005 in this worktree (`rcfd`, `rcfd-runner`, `rcfd-studio` and its test binaries); its `rcfd.exe`
+  was copied aside (sha256 `911b94e2...27c7`) as SF10's previous binary.
+* No test of this ADR and no Studio test had run in this worktree.
+* Prior data from ADR 0133: R11's stores of the lid cavity (144 cells, 6 snapshots, 4 fields) were 71 355 bytes (f64) and
+  57 531 bytes (f32), and R8's store of the cavity held 100 f32 snapshots.
+* D4's constants were checked against R11's sizes by hand (the formula gives about 69 500 and 55 700 for those stores, within
+  4 %).
+* Nothing of SF1-SF11 was observed.
 
 ## Not in CI (view-and-report checklist for the maintainer)
 
@@ -297,9 +342,9 @@ constant of D4), with an `[output]` table appended. New test file `tests/case_ou
 
 ## Addendum: results against the registered limits (2026-10-28, branch `worktree-agent-aa058b4029a5cb958`, release builds)
 
-Registration f8999c8; code, tests and amendment 1 2c48494 (before any test of this ADR was built or run). All registered runs on
-this host from 2c48494, release, `--test-threads 1`, output to files; the process tests started `rcfd-runner serve` directly with
-`rcfd` and `rcfd-runner` of the same build. The workspace gate was not run (the maintainer runs it).
+Registration is f8999c8. Code, tests and amendment 1 are 2c48494, before any test of this ADR was built or run. All registered
+runs came from 2c48494 on this host: release, `--test-threads 1`, output to files. The process tests started `rcfd-runner serve`
+directly with `rcfd` and `rcfd-runner` of the same build. The workspace gate was not run (the maintainer runs it).
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -334,18 +379,26 @@ this host from 2c48494, release, `--test-threads 1`, output to files; the proces
 | SF9 (l) (amendment 2) | `set()`, fields `["p"]`, store line, 123 316 bytes, label drawn, store holds only `p` in `F32` | all exact; one snapshot (step 3) holding `p`, `F32`, no warning | pass |
 | SF9 (j)-(l) controls | R10's `estimated_bytes()`: none for (j), 230 400 for (k) and (l); the 48D label not drawn | none; 230 400; 230 400; 48D label not drawn | discriminate |
 
-Code after the registered runs (behaviour-neutral; the whole suite and SF1-SF9 were run again on it): 5010e8c applies `cargo fmt`
-and four clippy findings (`rfind` for a `filter(..).next_back()`, a collapsed match guard, `CaseFacts::extra` boxed so that the run
-worker's `Update` enum stays within clippy's variant-size limit, two test assertions written with `contains`), and a doc comment of
-`store_plan::case_unchanged` edited while the first SF11 run was going (that run used the binaries built before the edit). The
-SF tests re-run on 5010e8c with their output printed gave the registered run's numbers exactly: SF3 11 536 and 13 332 cells; SF4
-100, 100 and 100 snapshots of 342 012, 346 419 and 271 872 bytes against 342 016, 342 016 and 260 000; SF9 (a) 342 016 and (d)
-1 864 313 600 / 984 141 615. Amendment 2's checks ran once, on 5010e8c plus the new test file, and passed.
+Code after the registered runs (behaviour-neutral; the whole suite and SF1-SF9 were run again on it):
+
+* 5010e8c applies `cargo fmt` and four clippy findings: `rfind` for a `filter(..).next_back()`, a collapsed match guard,
+  `CaseFacts::extra` boxed so that the run worker's `Update` enum stays within clippy's variant-size limit, and two test
+  assertions written with `contains`.
+* A doc comment of `store_plan::case_unchanged` was edited while the first SF11 run was going (that run used the binaries built
+  before the edit).
+
+The SF tests re-run on 5010e8c with their output printed gave the registered run's numbers exactly:
+
+* SF3: 11 536 and 13 332 cells.
+* SF4: 100, 100 and 100 snapshots of 342 012, 346 419 and 271 872 bytes against 342 016, 342 016 and 260 000.
+* SF9: (a) 342 016 and (d) 1 864 313 600 / 984 141 615.
+
+Amendment 2's checks ran once, on 5010e8c plus the new test file, and passed.
 
 Deviations and notes:
 * SF11's first run stopped at `chat_e` (14 tests): this fresh worktree had no `fake-claude` test double, which ADR 0134
-  amendment 3 requires to be built (`cargo build -p rcfd-claude --bin fake-claude`); a set-up step, not a code change. It was
-  built and the whole suite was run again with `--no-fail-fast` (the row above).
+  amendment 3 requires to be built (`cargo build -p rcfd-claude --bin fake-claude`). This was a set-up step, not a code change.
+  The double was built and the whole suite was run again with `--no-fail-fast` (the SF11 row above).
 * Amendment 2 was written after SF1-SF11 had run, for a requirement no registered check covered (a case's own output settings);
   its limits were fixed and committed (7a26de7) before its test was written or run.
 * Reported, not limited: `sod` stored 100 snapshots, the plan's upper bound; the transient estimates are slightly low because the
@@ -354,9 +407,13 @@ Deviations and notes:
   is job 4's one-click start-and-follow).
 * No new third-party crate, no new workspace edge, no change of `Cargo.lock`, `workspace_graph.rs` or `docs/architecture.md`.
 
-Not run: the "Not in CI" checklist (a person looking at the window); Linux (the new process tests SF4, SF5, SF8 have never run
-there: a CI risk, as ADR 0133's); debug builds of the new tests; the workspace gate and workspace-wide clippy; `cargo deny` (not
-installed).
+Not run:
+
+* the "Not in CI" checklist (a person looking at the window);
+* Linux (the new process tests SF4, SF5, SF8 have never run there: a CI risk, as ADR 0133's);
+* debug builds of the new tests;
+* the workspace gate and workspace-wide clippy;
+* `cargo deny` (not installed).
 
 Note (2026-10-28, [ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md)): the start plan reads a `.json`
 case as `rcfd run` does (the maintainer's answer to ADR 0148 question 6), so SF1's six `case.json` are refused with ADR

@@ -1,15 +1,29 @@
 # ADR 0096: Wave 39E, partials close-out for F-143, F-052 and F-055
 
-Status: registered before the registered tests were run. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test
-with the limit unchanged. No library code changes: every addition is test code (and one corrected print string), so defaults
-and the baseline hashes are untouched. Clean-room: the only literature values used are the Ghia et al. (1982) Re 100 u
-centreline (already verified, docs/reference-data.md) and the Hysing et al. (2009) case-1 values (read in this wave, below).
-The acceptance text of every item is unchanged; rewordings are proposals only.
+Status: registered before the registered tests were run.
+
+Wave 39E adds a measurable cavity-vortex check on the raster (F-143), checks the optically thin limit of the P1 slab (F-052) and
+reads the Hysing case-1 reference values (F-055). The addendum, written after the runs, records the outcome. F-055 is done: its
+reference values are now read and the bubble and dam break tests pass. F-052 T1 passes (7.50e-5 and 3.33e-5 against the limit
+1e-3). F-143 C1 passes (max deviation from the Ghia centreline 0.00277 against 0.02). F-143 C2 misses: the window holds two strict
+speed minima where the limit is exactly one. C2 stays an ignored known miss and there is no corrected C2. F-143 and F-052 stay
+partial under their current acceptance text; the rewordings proposed below are the user's decision.
+
+Rules:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged.
+* No library code changes: every addition is test code (and one corrected print string), so defaults and the baseline hashes are
+  untouched.
+* Clean-room: the only literature values used are the Ghia et al. (1982) Re 100 u centreline (already verified,
+  docs/reference-data.md) and the Hysing et al. (2009) case-1 values (read in this wave, below).
+* The acceptance text of every item is unchanged; rewordings are proposals only.
 
 The residual gaps are those of [partials group 6](../audit/partials-group-6.md) (F-143, F-052) and
-[partials group 8](../audit/partials-group-8.md) (F-055). I re-checked each claim before writing this ADR: `v10` in
-crates/rcfd-gui/tests/viewport_raster.rs asserts only the sign of the return flow and the row of the speed maximum; tests/radiation.rs
-in rcfd-api has no check below tau = 0.1; the Hysing values in crates/rcfd-fv/tests/vof_bubble.rs were marked recalled from memory.
+[partials group 8](../audit/partials-group-8.md) (F-055). I re-checked each claim before writing this ADR:
+
+* `v10` in crates/rcfd-gui/tests/viewport_raster.rs asserts only the sign of the return flow and the row of the speed maximum.
+* In rcfd-api, tests/radiation.rs has no check below tau = 0.1.
+* The Hysing values in crates/rcfd-fv/tests/vof_bubble.rs were marked recalled from memory.
 
 ## F-143: measurable cavity-vortex check on the raster (test file crates/rcfd-gui/tests/viewport_raster.rs)
 

@@ -1,32 +1,53 @@
 # ADR 0016: Wave 13 numerics: scheme additions (F-211), poor-mesh options (F-208), wall motion and shear conditions (F-204)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any of the new tests was
-compiled or run. The limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and
-the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned
-away. A test set-up defect gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes
-that were not fixed here) may be appended at the end without touching registered limits.
+compiled or run.
 
-Roadmap: F-211, F-208, F-204 (and the closing of the wall-options hook of ADR 0015, check C5, item 0 below).
-Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals. No vendor
-names in the repository. Where a formula is quoted from memory the reference is marked "(from memory, unverified)"; closed
-forms that are derived below carry their derivation and need no reference.
+Wave 13 adds convection and time schemes (F-211), poor-mesh options (F-208) and wall motion and shear conditions (F-204), and
+closes the wall-options hook of ADR 0015 check C5. F-211, F-208, F-204 and F-203 are all `partial` in this ADR. In F-211,
+compressive(1.5) and compressive(2) have orders in band but do NOT converge, so the registered "all runs converged" is not
+met for them. In F-208 the options do not help the manufactured problem on these meshes and no benefit is claimed;
+pressure-interpolation variants, a separate warped-face correction and tree wiring of the gradient options were not
+delivered. In F-204 the three acceptance items are met on the registered cases; D5b misses its velocity limit at n_r = 32,
+and the MRF Taylor-Couette variant and turbulence with the new kinds were not delivered. In C5 the tree equals the library
+run (max abs difference 0.000e0, limit 1e-12), which does not validate the options physically. No parameter was tuned to
+pass a check; the deviations are the O1 profile and sweep budget, W1b time step (at the registered dt = 0.5 h the positive
+control failed), G3 mesh (registered G2 misses its precondition, 13.96 degrees > 12), corrected component diagonal for
+D2/D3/D4 and depth in D5.
+
+Rules and parents:
+
+* The limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (file names, mesh sizes that were not fixed here) may be appended at the end without touching registered limits.
+* Roadmap: F-211, F-208, F-204 (and the closing of the wall-options hook of ADR 0015, check C5, item 0 below).
+* Clean-room: published literature only; nothing from vendor material, vendor installs or vendor manuals. No vendor
+  names in the repository.
+* Where a formula is quoted from memory the reference is marked "(from memory, unverified)"; closed forms that are derived
+  below carry their derivation and need no reference.
 
 ## Item 0: wall-options hook (ADR 0015 C5), context
 
-`TurbulenceModel::apply_wall_options(&mut self, &WallOptions)` (defaulted) was added; `WallOptions`, `apply_kepsilon`,
+`TurbulenceModel::apply_wall_options(&mut self, &WallOptions)` (defaulted) was added. `WallOptions`, `apply_kepsilon`,
 `apply_sst` moved from `rcfd-api` to `rcfd-turb::model` (the trait lives in `rcfd-turb`, which cannot depend on `rcfd-api`;
 `rcfd_api::wall_opts` re-exports them and reads the options with the extension trait `WallOptionsFromCase`).
-`TurbState::new` calls the hook once after `create_model` for the built-in models; it does not call it for
+
+`TurbState::new` calls the hook once after `create_model` for the built-in models. It does not call it for
 `turbulence.model = "plugin"` (plugins own their wall treatment and `wall_opts::check` already rejects wall options on them;
-calling it would overwrite what the plugin factory chose, which is what the equality test relies on). Registered check
-(from ADR 0015 C5, unchanged): the run through the tree equals the library run to 1e-12 after 60 iterations for each of
-`wall_function = scalable | enhanced`, `roughness_height` (with and without explicit `roughness_constant`),
+calling it would overwrite what the plugin factory chose, which is what the equality test relies on).
+
+Registered check (from ADR 0015 C5, unchanged): the run through the tree equals the library run to 1e-12 after 60 iterations
+for each of `wall_function = scalable | enhanced`, `roughness_height` (with and without explicit `roughness_constant`),
 `wall_omega = low_re`, `sst_variant = bsl`, SST roughness. The "library run" is the same case with the model supplied by a
 registered plugin factory that builds the library model and sets the option fields directly. Tests
 `c5_tree_run_equals_library_run`, `c5b_enhanced_and_explicit_roughness_constant` in `rcfd-api/tests/wall_options.rs`.
-Results are in "Results" at the end. The channel wall cell has k_s+ about 0.4 for k_s = 1e-3, so the wall is hydraulically
-smooth and the option has no effect; k_s = 2e-2 (k_s+ about 8) is used so that the check is not vacuous; every compared option
-must change the tree result relative to the default run (asserted).
+Results are in "Results" at the end.
+
+The channel wall cell has k_s+ about 0.4 for k_s = 1e-3, so the wall is hydraulically smooth and the option has no effect;
+k_s = 2e-2 (k_s+ about 8) is used so that the check is not vacuous; every compared option must change the tree result
+relative to the default run (asserted).
 
 ## Decisions
 
@@ -143,25 +164,34 @@ order of BOTH pairs (64->128, 128->256):
 * O1c all runs converged.
 
 Blend factor B1: on the O1 problem at `n = 64`, converged: `max|phi_{Blended(0)} - phi_{Upwind}| <= 1e-12` and
-`max|phi_{Blended(1)} - phi_{Central}| <= 1e-10`. Tree-level B2 (`rcfd-api/tests/schemes_wave13.rs`): the cavity case (Re 100,
-SIMPLEC, 60 iterations) with `solver.convection = "blended"`, `blend_factor = 0` equals `"upwind"` and `blend_factor = 1`
-equals `"central"` in `ux`, `uy`, `p`: `<= 1e-10`. B3: `BoundedCentral` equals `Tvd(Minmod)` bitwise on the O1 problem.
+`max|phi_{Blended(1)} - phi_{Central}| <= 1e-10`.
+
+Tree-level B2 (`rcfd-api/tests/schemes_wave13.rs`): the cavity case (Re 100, SIMPLEC, 60 iterations) with
+`solver.convection = "blended"`, `blend_factor = 0` equals `"upwind"` and `blend_factor = 1` equals `"central"` in `ux`,
+`uy`, `p`: `<= 1e-10`.
+
+B3: `BoundedCentral` equals `Tvd(Minmod)` bitwise on the O1 problem.
 
 Boundedness W1 (square wave). Non-periodic `[0,2] x [0,0.1]`, `n = 200`, `u = (1,0,0)`, `Gamma = 0`, initial
 `phi = 1` for `0.1 <= x <= 0.35` and 0 elsewhere (cell-centre sampling), inlet `phi = 0` (Dirichlet), outlet zero gradient,
-implicit Euler, `dt = 0.5 h` (CFL 0.5), 80 steps (front travels 0.4), 20 deferred-correction sweeps per step. Limits, for
-`Gamma(0.2)`, `Compressive(1.5)`, `Compressive(2)`, `BoundedCentral`: `max(phi) - 1 <= 1e-3` and `0 - min(phi) <= 1e-3`.
-Positive control (the test can fail): `Central` must violate the bounds by more than `0.02` in `max(phi) - 1` or
-`-min(phi)`. Sharpness: the number of cells with `0.1 < phi < 0.9` at the trailing and leading edge together is
-`<= 0.6` times the `Upwind` number for `Gamma(0.2)` and `Compressive(2)`.
+implicit Euler, `dt = 0.5 h` (CFL 0.5), 80 steps (front travels 0.4), 20 deferred-correction sweeps per step.
+
+* Limits, for `Gamma(0.2)`, `Compressive(1.5)`, `Compressive(2)`, `BoundedCentral`: `max(phi) - 1 <= 1e-3` and
+  `0 - min(phi) <= 1e-3`.
+* Positive control (the test can fail): `Central` must violate the bounds by more than `0.02` in `max(phi) - 1` or
+  `-min(phi)`.
+* Sharpness: the number of cells with `0.1 < phi < 0.9` at the trailing and leading edge together is `<= 0.6` times the
+  `Upwind` number for `Gamma(0.2)` and `Compressive(2)`.
 
 Time T1 (temporal order). `phi' = -lambda phi`, `lambda = 1`, `phi(0) = 1`, error at `t = 1` against `exp(-1)`, steps
 `dt = 0.2, 0.1, 0.05, 0.025` (`add_ddt` with a diagonal spatial matrix on a single-cell-like mesh; no spatial error). Observed
 order of the finest two pairs: Euler `[0.9, 1.15]`; BDF2 `[1.8, 2.3]`; `Bdf2Bounded` `[1.8, 2.3]`.
+
 Time T2 (bounded time scheme, square wave). Same domain/wave as W1, spatial scheme `Upwind` (one linear solve per step),
 `n = 100`, `dt = 2 h` (CFL 2), steps to `t = 0.8`. Define `over = max(max(phi) - 1, -min(phi), 0)`. If
 `over(BDF2) >= 0.02` (the test has teeth) then require `over(Bdf2Bounded) <= 0.25 over(BDF2)` and
 `over(Bdf2Bounded) <= 0.02`; if `over(BDF2) < 0.02` the check is reported as vacuous, not as passed.
+
 Tree T3: `solver.time_scheme = "bdf2_bounded"` accepted and runs a transient cavity step sequence (finite, differs from
 `bdf2` by more than 0).
 
@@ -264,79 +294,134 @@ Measured on the final code (dates 2026-10). Limits are the registered ones above
 
 ### F-211 schemes
 
-* O1 (order of accuracy). The first run (`o1_order_of_accuracy`, ignored record) had a set-up bug: a Dirichlet value on the
-  outflow boundary leaves the last cell row without a diagonal for upwind-type schemes, all orders about 0.5. DEVIATION: the
-  corrected set-up `o1c` uses phi = 1 + sin(pi x/2) (zero slope at the outlet), inlet Dirichlet, outlet zero gradient, instead of
-  exp(x) with two Dirichlet ends. The sweep budget of the registered 600 was too small for the deferred-correction schemes at
-  n = 256 (`o1b_known_miss_convergence_cap`, ignored, record); `o1c` uses 20000 sweeps with change <= 1e-13 times the solution
-  range as the convergence test.
-  Measured orders (two finest pairs): central, blended(1), gamma(0.2), bounded_central 2.00007 / 2.00002 (band [1.85, 2.3]);
-  upwind 0.9972 / 0.9986, blended(0.5) 1.0029 / 1.0014, compressive(0) 0.9972 / 0.9986, compressive(0.5) 0.9832 / 0.9917
-  (band [0.9, 1.15]); all converged.
-  MISS: compressive(1.5) and compressive(2) have orders in band (1.981 / 1.991 and 1.982 / 1.991) but do NOT converge: the change
-  per sweep stalls at 7e-8 and 1.4e-8 at n = 256 (4.7e-6 and 9.4e-7 at n = 64), identical after 600 and 60000 sweeps, a limit
-  cycle from non-smooth limiter switching. The registered "all runs converged" is not met for these two
-  (`o1c_known_miss_compressive_convergence`, ignored, assertion unchanged). Root cause identified (limiter switching under
-  deferred correction); no remedy (e.g. smoothing the limiter) was applied because that would change the scheme.
-* B1 |blended(0) - upwind| = 0, |blended(1) - central| = 0 (limits 1e-12, 1e-10). B3 bounded_central equals Tvd(Minmod)
-  bitwise. B2 (cavity Re 100, SIMPLEC, 60 iterations): 0 and 0 (limit 1e-10); controls |upwind - central| 6.76e-2,
-  |blended(0.5) - upwind| 2.85e-2.
-* W1 (square wave). At the registered dt = 0.5 h the positive control failed (central overshoot 0.0043, undershoot 0.0178, below
-  the 0.02 threshold), so the bounded schemes were not examined (`w1_square_wave_stays_bounded`, ignored record). DEVIATION:
-  `w1b` uses dt = 0.1 h. Central: over 0.1469, under 0.1318 (control ok). Largest excess over 1 / undershoot / width of
-  0.1 < phi < 0.9: gamma(0.2) -3.05e-5 / 1e-26 / 28 cells; compressive(1.5) -1.22e-5 / 1.9e-33 / 24; compressive(2) -5.0e-11 /
-  1.5e-13 / 24; bounded_central -1.83e-3 / 1.7e-33 / 32; upwind width 70. Bounds limit 1e-3 met by all. Sharpness
-  (<= 0.6 x upwind width) met by gamma (0.40) and compressive(2) (0.34), the schemes it was registered for.
-* T1 temporal order (two finest pairs): Euler 0.971 / 0.985 (band [0.9, 1.15]); BDF2 2.071 / 2.028 and Bdf2Bounded 1.914 /
-  1.958 (band [1.8, 2.3]). T2 overshoot of BDF2 2.467e-2 (>= 0.02, so the test has teeth), Bdf2Bounded 1.16e-9 (<= 0.25 x BDF2
-  and <= 0.02), met. T3: `bdf2_bounded` accepted and differs from `bdf2` by 0.276 on an impulsively started cavity; a bad name is a
-  located error at `solver.time_scheme`.
-* Verdict: F-211 `partial`, because O1c convergence is missed for two compressive members (by the ADR's own rule H4).
-* Disclosures: `Eq` removed from the derive lists of `ConvScheme` and `TvdLimiter` (they carry an f64). On periodic faces the
-  existing TVD behaviour is unchanged and the new schemes fall back to upwind or beta-scaled upwind. Bounded central is the
-  minmod limiter in normalised variables. Bdf2Bounded is project-defined.
+Verdict: F-211 `partial`, because O1c convergence is missed for two compressive members (by the ADR's own rule H4).
+
+O1 (order of accuracy). The first run (`o1_order_of_accuracy`, ignored record) had a set-up bug: a Dirichlet value on the
+outflow boundary leaves the last cell row without a diagonal for upwind-type schemes, all orders about 0.5. DEVIATION: the
+corrected set-up `o1c` uses phi = 1 + sin(pi x/2) (zero slope at the outlet), inlet Dirichlet, outlet zero gradient, instead
+of exp(x) with two Dirichlet ends. The sweep budget of the registered 600 was too small for the deferred-correction schemes
+at n = 256 (`o1b_known_miss_convergence_cap`, ignored, record). The `o1c` set-up uses 20000 sweeps with change <= 1e-13 times
+the solution range as the convergence test.
+
+Measured orders (two finest pairs):
+
+| Scheme | Order | Band | Converged |
+| --- | --- | --- | --- |
+| central, blended(1), gamma(0.2), bounded_central | 2.00007 / 2.00002 | [1.85, 2.3] | yes |
+| upwind | 0.9972 / 0.9986 | [0.9, 1.15] | yes |
+| blended(0.5) | 1.0029 / 1.0014 | [0.9, 1.15] | yes |
+| compressive(0) | 0.9972 / 0.9986 | [0.9, 1.15] | yes |
+| compressive(0.5) | 0.9832 / 0.9917 | [0.9, 1.15] | yes |
+| compressive(1.5) | 1.981 / 1.991 | in band | NO (MISS) |
+| compressive(2) | 1.982 / 1.991 | in band | NO (MISS) |
+
+MISS: compressive(1.5) and compressive(2) do NOT converge. The change per sweep stalls at 7e-8 and 1.4e-8 at n = 256 (4.7e-6
+and 9.4e-7 at n = 64), identical after 600 and 60000 sweeps, a limit cycle from non-smooth limiter switching. The registered
+"all runs converged" is not met for these two (`o1c_known_miss_compressive_convergence`, ignored, assertion unchanged). Root
+cause identified (limiter switching under deferred correction); no remedy (e.g. smoothing the limiter) was applied because
+that would change the scheme.
+
+B1 |blended(0) - upwind| = 0, |blended(1) - central| = 0 (limits 1e-12, 1e-10). B3 bounded_central equals Tvd(Minmod)
+bitwise. B2 (cavity Re 100, SIMPLEC, 60 iterations): 0 and 0 (limit 1e-10);
+controls |upwind - central| 6.76e-2, |blended(0.5) - upwind| 2.85e-2.
+
+W1 (square wave). At the registered dt = 0.5 h the positive control failed (central overshoot 0.0043, undershoot 0.0178,
+below the 0.02 threshold), so the bounded schemes were not examined (`w1_square_wave_stays_bounded`, ignored record).
+DEVIATION: `w1b` uses dt = 0.1 h. Central: over 0.1469, under 0.1318 (control ok).
+
+| Scheme | Largest excess over 1 | Undershoot | Width of 0.1 < phi < 0.9 (cells) |
+| --- | --- | --- | --- |
+| gamma(0.2) | -3.05e-5 | 1e-26 | 28 |
+| compressive(1.5) | -1.22e-5 | 1.9e-33 | 24 |
+| compressive(2) | -5.0e-11 | 1.5e-13 | 24 |
+| bounded_central | -1.83e-3 | 1.7e-33 | 32 |
+
+Bounds limit 1e-3 met by all. The upwind width is 70. Sharpness (<= 0.6 x upwind width) met by gamma (0.40) and
+compressive(2) (0.34), the schemes it was registered for.
+
+T1 temporal order (two finest pairs): Euler 0.971 / 0.985 (band [0.9, 1.15]); BDF2 2.071 / 2.028 and Bdf2Bounded 1.914 /
+1.958 (band [1.8, 2.3]). T2 overshoot of BDF2 2.467e-2 (>= 0.02, so the test has teeth), Bdf2Bounded 1.16e-9 (<= 0.25 x BDF2
+and <= 0.02), met. T3: `bdf2_bounded` accepted and differs from `bdf2` by 0.276 on an impulsively started cavity; a bad name
+is a located error at `solver.time_scheme`.
+
+Disclosures:
+
+* `Eq` removed from the derive lists of `ConvScheme` and `TvdLimiter` (they carry an f64).
+* On periodic faces the existing TVD behaviour is unchanged and the new schemes fall back to upwind or beta-scaled upwind.
+* Bounded central is the minmod limiter in normalised variables.
+* Bdf2Bounded is project-defined.
 
 ### F-208 poor-mesh numerics
 
-* Preconditions at n = 16. MISS: registered G2 (amplitude 0.02) has max non-orthogonality 13.96 degrees > 12 (the estimate in
-  this ADR was wrong; `m0_g2_precondition`, ignored record). DEVIATION: mesh G3 (amplitude 0.015) is used as the mild mesh,
-  10.50 degrees (met). K 38.31 degrees (>= 25), W 61.27 degrees and non-planarity 2.306e-2 (>= 20, >= 1e-4), S aspect ratio
-  13.40 (>= 10), all met.
-* Orders (n = 8 to 16, 16 to 32), all runs converged. C0 default, C1 face correction + corrected boundary gradient, C2 = C1 +
-  Venkatakrishnan secondary limiter. G: 1.988 / 1.996 for all three. G2: C0 2.013 / 2.003, C1 2.008 / 2.001, C2 2.006 / 1.965.
-  G3: 2.004 / 2.000, 2.001 / 1.999, 2.001 / 1.976. K: 2.040 / 2.002, 2.032 / 2.019, 1.990 / 1.756. W: 1.872 / 1.939,
-  1.896 / 1.959, 1.883 / 1.866. S: 1.594 / 1.744 for all three (the options are inert on the orthogonal stretched mesh).
-  M1 (>= 1.7 for C0, C1) and M2 (>= 1.5 for C2) met.
-* M3 error ratio at n = 32 (limits 1.10 for C1/C0, 1.25 for C2/C0): G 1.0000 / 1.0000; G2 1.0215 / 1.0455; G3 1.0125 / 1.0268; met.
-* M4, reported without a limit: K C1/C0 2.1437, C2/C0 2.6617 (n = 32 errors 3.84e-5 and 8.24e-5: the face correction raises the
-  error constant on the affine skewed mesh while keeping the order); W 1.1544 / 1.2409; S 1.0 / 1.0. Dropping the boundary gradient
-  on K is 60.6 times worse. The options therefore do not help the manufactured problem on these meshes; they were validated
-  not to degrade it on good meshes and to keep design order on poor ones. No benefit is claimed.
-* Default options reproduce `laplacian` bit-exactly (test). L1 solution limits: free heated cavity T in [0.0221, 0.9779], clipped
-  count 0; with the band [0.2, 0.8] T lies in [0.2, 0.8] to 1e-14 with 1692 clipped cell events; an invalid band is a located
-  error at `limits.temperature.min`.
-* NOT delivered: pressure-interpolation variants, a warped-face correction separate from the face correction, wiring of the
-  gradient options into the case tree (library level only). F-208 stays `partial`.
+F-208 stays `partial`. NOT delivered: pressure-interpolation variants, a warped-face correction separate from the face
+correction, wiring of the gradient options into the case tree (library level only).
+
+Preconditions at n = 16. MISS: registered G2 (amplitude 0.02) has max non-orthogonality 13.96 degrees > 12 (the estimate in
+this ADR was wrong; `m0_g2_precondition`, ignored record). DEVIATION: mesh G3 (amplitude 0.015) is used as the mild mesh,
+10.50 degrees (met). K 38.31 degrees (>= 25), W 61.27 degrees and non-planarity 2.306e-2 (>= 20, >= 1e-4), S aspect ratio
+13.40 (>= 10), all met.
+
+Orders (n = 8 to 16, 16 to 32), all runs converged. C0 is the default, C1 the face correction + corrected boundary gradient,
+and C2 = C1 + Venkatakrishnan secondary limiter. M1 (>= 1.7 for C0, C1) and M2 (>= 1.5 for C2) met. The options are inert on
+the orthogonal stretched mesh S.
+
+| Mesh | C0 | C1 | C2 |
+| --- | --- | --- | --- |
+| G | 1.988 / 1.996 | 1.988 / 1.996 | 1.988 / 1.996 |
+| G2 | 2.013 / 2.003 | 2.008 / 2.001 | 2.006 / 1.965 |
+| G3 | 2.004 / 2.000 | 2.001 / 1.999 | 2.001 / 1.976 |
+| K | 2.040 / 2.002 | 2.032 / 2.019 | 1.990 / 1.756 |
+| W | 1.872 / 1.939 | 1.896 / 1.959 | 1.883 / 1.866 |
+| S | 1.594 / 1.744 | 1.594 / 1.744 | 1.594 / 1.744 |
+
+Error ratios at n = 32. The M3 limits are 1.10 for C1/C0 and 1.25 for C2/C0, and the M3 rows meet them. M4 is reported
+without a limit.
+
+| Check, mesh | C1/C0 | C2/C0 |
+| --- | --- | --- |
+| M3 G | 1.0000 | 1.0000 |
+| M3 G2 | 1.0215 | 1.0455 |
+| M3 G3 | 1.0125 | 1.0268 |
+| M4 K | 2.1437 | 2.6617 |
+| M4 W | 1.1544 | 1.2409 |
+| M4 S | 1.0 | 1.0 |
+
+On K (n = 32 errors 3.84e-5 and 8.24e-5) the face correction raises the error constant on the affine skewed mesh while
+keeping the order. Dropping the boundary gradient on K is 60.6 times worse. The options therefore do not help the
+manufactured problem on these meshes; they were validated not to degrade it on good meshes and to keep design order on poor
+ones. No benefit is claimed.
+
+Default options reproduce `laplacian` bit-exactly (test).
+
+L1 solution limits: free heated cavity T in [0.0221, 0.9779], clipped count 0; with the band [0.2, 0.8] T lies in [0.2, 0.8]
+to 1e-14 with 1692 clipped cell events; an invalid band is a located error at `limits.temperature.min`.
 
 ### F-204 wall motion and shear
+
+Verdict: the three acceptance items (Couette, thermocapillary, torque within 1 percent) are met on the registered cases.
+F-204 is marked `partial` because of the D5b velocity miss and the unsupported combinations, which an honest reading of the
+registered checks does not allow to be called complete. NOT delivered: MRF Taylor-Couette variant, turbulence with the new
+kinds.
 
 * D1 plane Couette: max error 1.059e-13 for a wall at rest against a moving wall, 4.77e-14 counter-translating (limit 1e-8).
 * D2/D3 set-up: with the default averaged component diagonal the specified-shear run stalls (res_u 0.145, relative error 0.79).
   The root cause is not the new condition: an existing `symmetry` + body force Poiseuille case stalls identically (error 4.0;
   ADR 0010 documents the averaged-diagonal issue). `d2b` and `d3b` use `solver.component_diagonal = "corrected"`; the first
-  versions are kept ignored as records. D2b error 9.29e-12 (limit 1e-8; the converged flag is false only because the residual
-  tolerance 1e-12 was not reached in 3000 iterations). D3b slip length l = 0.3: 1.70e-13; l = 0 equals no-slip: 0;
-  s = 0.5, lambda = 0.1 equals l = 0.3: 0 (limit 1e-12); s = 1 is a located error at `boundaries.ymin.specularity`; a moving
-  wall with a normal component is a located error at `boundaries.ymin.velocity_value`.
+  versions are kept ignored as records.
+* D2b error 9.29e-12 (limit 1e-8; the converged flag is false only because the residual tolerance 1e-12 was not reached in
+  3000 iterations).
+* D3b slip length l = 0.3: 1.70e-13; l = 0 equals no-slip: 0; s = 0.5, lambda = 0.1 equals l = 0.3: 0 (limit 1e-12). s = 1
+  is a located error at `boundaries.ymin.specularity`. A moving wall with a normal component is a located error at
+  `boundaries.ymin.velocity_value`.
 * D4 thermocapillary layer (box_2d(160, 24, 20, 1), T = 1 K/m x): column at x = 10.0625, max error 3.25e-5 (limit 7.5e-4),
   190 iterations, converged. D4b `marangoni` equals the explicit shear coefficients: 1.94e-16 (limit 1e-12).
 * D5 Taylor-Couette torque (exact 2.513274). Set-up slip: the first run left `mesh.depth` at its default 0.1 instead of the
   registered 1 (torque off by 10; `d5_taylor_couette_torque`, ignored record). `d5c` (depth 1, viscous moment): n_r = 32
-  -2.473156 (relative error -1.596e-2), 64 -2.492650 (-8.206e-3), 128 -2.502450 (-4.307e-3); limit 1 percent at the finest met;
-  observed order 0.93 (first order, as predicted for the wall-adjacent half-cell treatment). The n_r = 128 run did not reach the
-  1e-11 tolerance in 6000 iterations (converged flag false); a diagnostic (`d5_finest_grid_convergence_diagnostic`, ignored)
-  was added; it shows res_u 1.76e-11 and res_p 1.37e-11 after 6000 iterations (just above the 1e-11 target), torque
-  unchanged at -2.502450. Not part of the verdict.
+  -2.473156 (relative error -1.596e-2), 64 -2.492650 (-8.206e-3), 128 -2.502450 (-4.307e-3). The limit of 1 percent at the
+  finest is met. The observed order is 0.93 (first order, as predicted for the wall-adjacent half-cell treatment). The
+  n_r = 128 run did not reach the 1e-11 tolerance in 6000 iterations (converged flag false). A diagnostic
+  (`d5_finest_grid_convergence_diagnostic`, ignored) was added; it shows res_u 1.76e-11 and res_p 1.37e-11 after 6000
+  iterations (just above the 1e-11 target), torque unchanged at -2.502450. Not part of the verdict.
 * D5b rigid rotation (both cylinders at Omega = 1): torque relative to the D5 exact 1.04e-4 (n_r = 32), 1.46e-5 (n_r = 64)
   (limit 1e-3) met. MISS: max |u_theta - r| = 1.413e-5 at n_r = 32 against the registered 1e-6
   (`d5b_known_miss_rigid_rotation_velocity`, ignored, assertion unchanged); 9.913e-7 at n_r = 64 (the ADR did not name n_r;
@@ -345,10 +430,6 @@ Measured on the final code (dates 2026-10). Limits are the registered ones above
 * D6: the four kinds are walls for the turbulence role even with a non-zero velocity_value (unit test). Turbulence combined
   with these kinds is a located error in `turb::check`. `marangoni` needs the energy equation and a simple, simplec, piso or
   pimple algorithm.
-* NOT delivered: MRF Taylor-Couette variant, turbulence with the new kinds.
-* Verdict: the three acceptance items (Couette, thermocapillary, torque within 1 percent) are met on the registered cases. F-204
-  is marked `partial` because of the D5b velocity miss and the unsupported combinations, which an honest reading of the
-  registered checks does not allow to be called complete.
 
 ### Tunings
 

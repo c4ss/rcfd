@@ -1,9 +1,22 @@
 # ADR 0092: Wave 39A, partials close-out for F-240, F-118 and F-073
 
-Status: registered before the registered tests were committed. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss`
-test with the limit unchanged. No library code changes: every addition is test code, so defaults and the baseline hashes are
-untouched. Clean-room: the only formula used is the NACA 4-digit thickness of `cases/naca0012/reference/naca4_thickness.txt`;
-no literature value enters a gate.
+Status: registered before the registered tests were committed.
+
+This wave is the partials close-out for three roadmap entries, with test code only: F-240 (set-ups for the registry and validation
+cases), F-118 (a 3D Fluent mesh through the quality check, ASCII and binary) and F-073 (a timed CLI render of a 1M-cell mesh). The
+first registered runs (V1, F1 to F3, and R4 at 1.555 s against the 2 s limit) met every limit, and all three entries are set to
+done. F-240 is done under a reading of "published validation cases" registered here for the lead to accept or reject. Review after
+the addendum found two statements of that reading wrong. The Graetz case came into scope: its check V2 failed in its set-up (exit 3)
+and stays an ignored `*_known_miss` test, and the corrected V2b is met. The FAN-01 case of `fan01_validation.rs` (template, F-126) is
+not covered. F-118 remains a round trip, so it does not verify the binary layout against a Fluent-written file. The gate recorded
+here (a351a3d) ran before the amendments.
+
+Rules:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged.
+* No library code changes: every addition is test code, so defaults and the baseline hashes are untouched.
+* Clean-room: the only formula used is the NACA 4-digit thickness of `cases/naca0012/reference/naca4_thickness.txt`; no
+  literature value enters a gate.
 
 The residual gaps are those stated in docs/audit/partials-group-8.md (F-240), partials-group-10.md (F-118) and
 partials-group-3.md (F-073). I re-checked each claim against the code before writing this ADR:

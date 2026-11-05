@@ -2,10 +2,26 @@
 
 Status: accepted. The decisions and registered checks below were written before any code of this wave was changed and before any
 run of the new checks (the only run before this text was a timing probe of the EXISTING batch integrator on GRI-Mech 3.0, see
-"Facts read from the repository"). Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured
-and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away.
-A set-up defect gets a NEW corrected test and the old one stays as a record. A known miss that later passes gets a NEW passing test
-with the same limit. Addenda (measured numbers, deviations) are appended at the end without touching a registered limit.
+"Facts read from the repository").
+
+Wave 28B adds stiff-chemistry acceleration by ISAT, the directed relation graph (DRG) and clustering (F-223), and combustion
+libraries for the mixture-fraction approach, steady flamelets and premixed progress variables (F-129). F-223 ends `partial`:
+library ISAT, DRG and clustering, wired for the transient finite_rate step. Its acceptance point is met for the same mechanism
+integrated directly (1.7e-3 ISAT, 1.6e-3 dynamic DRG), not against a published measurement, and the documented ISAT speed-up in I4
+is 0.23 (a slowdown). Its misses are the I3 retrieval error, I4 and I5 element drift and the I5 profile, where the final profile
+difference is 1222 K against a limit of 10 K. F-129 ends `partial`: libraries only, and any comparison with Sandia or other
+published flames was not attempted. The P3 clause that a temperature-based c is monotone is also a miss; a corrected Y_H2O-based
+test passes. Amendment 1 (written before any registered check was run) and Amendment 2 (written after the first I3/I4 runs) change
+design and set-up points, and each says that no registered limit is changed.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact; the
+  cause is diagnosed, not tuned away.
+* A set-up defect gets a NEW corrected test and the old one stays as a record.
+* A known miss that later passes gets a NEW passing test with the same limit.
+* Addenda (measured numbers, deviations) are appended at the end without touching a registered limit.
 
 Clean-room: first principles and published literature only: Pope 1997 (ISAT, Combust. Theory Modelling 1, 41), Lu and Law 2005
 (directed relation graph, Proc. Combust. Inst. 30, 1333), Peters (steady flamelet, Prog. Energy Combust. Sci. 10, 1984), Burke and
@@ -101,7 +117,7 @@ Record: `(phi0, R0 = R(phi0), A = dR/dphi at phi0, M, Minv)`, `M` symmetric posi
 Leader clustering in the scaled max-norm: cells are visited in order; a cell joins the first existing cluster whose representative
 (the first cell of the cluster) is within `|phi_cell - phi_rep|_s <= tau`, else it starts a cluster. Only representatives are
 integrated. A member receives the INCREMENT of its representative, `phi_m + (R(phi_rep) - phi_rep)`, which preserves the element
-masses of the member exactly (the increment of an element-conserving map has zero element sums) and, with `tau = 0`, a member that is
+masses of the member exactly (the increment of an element-conserving map has zero element sums). With `tau = 0`, a member that is
 bitwise equal to its representative receives `R(phi_rep)` itself, so `tau = 0` reproduces the direct result bit for bit (a distinct
 state is its own representative). Error estimate of the increment transfer: `(A - I) (phi_m - phi_rep)`, i.e. at most
 `|A - I|_s tau`. Cost: `O(cells x clusters)` distance evaluations (documented; no spatial hashing).
@@ -167,10 +183,12 @@ Toy mechanisms are those of `rcfd_reactor::toy`; GRI-Mech tests skip with a mess
   `< 100`; every member's scaled error vs its own direct integration `<= 10 tau = 1e-2`; element masses of every member preserved
   within `1e-12` (absolute); the speed-up over the direct cell loop REPORTED.
 * W1 through the case tree. The wave 21C K2b adiabatic isomerisation box (4 x 4 cells) with `acceleration = cluster`,
-  `accel_tolerance = 0`: fields bit-identical to `acceleration = off`. W2 `acceleration = isat`, `accel_tolerance = 1e-3`: species
-  and temperature differ from `off` by at most 1e-3 scaled and the retrievals > 0 (counter exposed in `chemistry.json`). W3 located
-  errors: `acceleration` with `eddy_dissipation`, a negative or unset tolerance, `isat` with tolerance 0, an unknown value. W4 the
-  default (`off`) leaves a case without the keys bit-identical (baseline hashes and every existing test unchanged in the final gate).
+  `accel_tolerance = 0`: fields bit-identical to `acceleration = off`.
+* W2 `acceleration = isat`, `accel_tolerance = 1e-3`: species and temperature differ from `off` by at most 1e-3 scaled and the
+  retrievals > 0 (counter exposed in `chemistry.json`).
+* W3 located errors: `acceleration` with `eddy_dissipation`, a negative or unset tolerance, `isat` with tolerance 0, an unknown value.
+* W4 the default (`off`) leaves a case without the keys bit-identical (baseline hashes and every existing test unchanged in the final
+  gate).
 
 ## Part 2. F-129 combustion extensions (target `partial`; the Sandia-flame acceptance is NOT attempted)
 
@@ -242,13 +260,18 @@ Toy mechanisms are those of `rcfd_reactor::toy`; GRI-Mech tests skip with a mess
 * B1 Burke-Schumann versus equilibrium. Toy streams above, 301-point Z grid including `Z_st`: equilibrium (HP) table versus the
   closed form: `max |T_eq - T_BS| <= 1e-3 K` over the grid, `max |Y_k,eq - Y_k,BS| <= 1e-8`, `T_st` equals 2194.7368 K within 1e-3 K,
   the table's second difference of T is zero (to 1e-3 K) away from the node `Z_st`, i.e. piecewise linear with one kink.
-* B2 beta PDF. (a) Linear function: `<f> = f(Zm)` within `1e-12 |f|` for 12 `(Zm, v)` pairs including `Zm` near 0 and 1 and
-  `a, b < 1` (U-shaped PDF); (b) normalisation `<1> = 1` within `1e-12`; (c) delta limit: `v = 0` gives the lookup bit for bit; with
-  `v = 1e-8` the Burke-Schumann mean at `Zm` at least `0.05` from the kink equals the lookup within `1e-6 (T_max - T_min)`; (d) maximum
-  variance limit: `v = (1 - 1e-6) Zm (1 - Zm)` gives `(1 - Zm) f(0) + Zm f(1)` within `1e-4 (T_max - T_min)` for the BS table;
-  (e) independent quadrature: for `(Zm, v) = (0.3, 0.02)` (`a = 2.85`, `b = 6.65`, smooth) the beta mean of the BS temperature equals a
-  200-panel composite Gauss-Legendre (5-point) integral to `1e-8` relative; (f) mean and variance of the PDF reproduced by integrating
-  `Z` and `Z^2` with a fine (4001-point) table: mean within 1e-12, `Z^2` mean within `Zm^2 + v` to `1e-6`.
+* B2 beta PDF.
+* B2(a) Linear function: `<f> = f(Zm)` within `1e-12 |f|` for 12 `(Zm, v)` pairs including `Zm` near 0 and 1 and `a, b < 1` (U-shaped
+  PDF).
+* B2(b) normalisation `<1> = 1` within `1e-12`.
+* B2(c) delta limit: `v = 0` gives the lookup bit for bit; with `v = 1e-8` the Burke-Schumann mean at `Zm` at least `0.05` from the
+  kink equals the lookup within `1e-6 (T_max - T_min)`.
+* B2(d) maximum variance limit: `v = (1 - 1e-6) Zm (1 - Zm)` gives `(1 - Zm) f(0) + Zm f(1)` within `1e-4 (T_max - T_min)` for the BS
+  table.
+* B2(e) independent quadrature: for `(Zm, v) = (0.3, 0.02)` (`a = 2.85`, `b = 6.65`, smooth) the beta mean of the BS temperature equals
+  a 200-panel composite Gauss-Legendre (5-point) integral to `1e-8` relative.
+* B2(f) mean and variance of the PDF reproduced by integrating `Z` and `Z^2` with a fine (4001-point) table: mean within 1e-12, `Z^2`
+  mean within `Zm^2 + v` to `1e-6`.
 * B3 special functions. `ln Gamma(5) = ln 24`, `Gamma(1/2) = sqrt(pi)`, `Gamma(10.5)` against the closed form
   `945 sqrt(pi)/1024`, all `1e-13` relative; `I_x(1,1) = x`, `I_x(2,1) = x^2`, `I_x(1,3) = 1 - (1-x)^3`, `I_x(1/2,1/2) = (2/pi) asin(sqrt x)`,
   symmetry `I_x(a,b) = 1 - I_{1-x}(b,a)` (several a, b, x), all `1e-12` absolute; `erf(1) = 0.8427007929497149` and round trip
@@ -277,25 +300,35 @@ Toy mechanisms are those of `rcfd_reactor::toy`; GRI-Mech tests skip with a mess
   `Z = 1/2`.
 * F6 flamelet table lookup. Bilinear in `(Z, ln chi_st)`: exact reproduction of a node and of a linear field; PDF-integrated
   table value with `v = 0` equals the lookup.
-* P1 front speed. Zeldovich cubic, `Gamma = 2`, `k = 5`: `m = sqrt(Gamma k/2) = sqrt 5` within `1e-4` relative; P2 the profile
-  from the phase plane agrees with the logistic profile (as `g(c) = a c (1-c)`) within `1e-4` absolute in `g/a`; P3 progress variable
-  from the HP equilibrium: `c = 0` for the unburnt state, `c = 1` for the equilibrium state, monotone along a constant-pressure ignition
-  trajectory (GRI H2/air, `c` from `T`), PDF mean of a source linear in `c` equals the source at the mean within `1e-12`.
+* P1 front speed. Zeldovich cubic, `Gamma = 2`, `k = 5`: `m = sqrt(Gamma k/2) = sqrt 5` within `1e-4` relative.
+* P2 the profile from the phase plane agrees with the logistic profile (as `g(c) = a c (1-c)`) within `1e-4` absolute in `g/a`.
+* P3 progress variable from the HP equilibrium: `c = 0` for the unburnt state, `c = 1` for the equilibrium state, monotone along a
+  constant-pressure ignition trajectory (GRI H2/air, `c` from `T`), PDF mean of a source linear in `c` equals the source at the mean
+  within `1e-12`.
 * **P4 not attempted** (named): a premixed flame table from a detailed-chemistry flame, the burning-velocity versus equivalence-ratio
   comparison, and any comparison with experiments.
 
 ## Not delivered / named gaps (registered before the work)
 
-Binary tree search and cutting-plane shrink of ISAT; ISAT / DRG / clustering with the EDC and eddy-dissipation closures, the steady
-source-term path and variable density; DRGEP and QSS; combined acceleration; flamelet table of a real fuel; wiring of `Z`, `Z''^2`,
-`chi` and table lookups into the case tree; premixed models beyond the library; any comparison with a Sandia flame or experimental
-lift-off; published ignition-delay comparisons (no verifiable numbers).
+* Binary tree search and cutting-plane shrink of ISAT.
+* ISAT / DRG / clustering with the EDC and eddy-dissipation closures, the steady source-term path and variable density.
+* DRGEP and QSS.
+* Combined acceleration.
+* Flamelet table of a real fuel.
+* Wiring of `Z`, `Z''^2`, `chi` and table lookups into the case tree.
+* Premixed models beyond the library.
+* Any comparison with a Sandia flame or experimental lift-off.
+* Published ignition-delay comparisons (no verifiable numbers).
 
 ## References (to be recorded in `docs/reference-data.md` with their verification status)
 
-Pope S.B. 1997 Combust. Theory Modelling 1:41 (ISAT); Lu T., Law C.K. 2005 Proc. Combust. Inst. 30:1333 (DRG); Peters N. 1984 Prog.
-Energy Combust. Sci. 10:319 (laminar diffusion flamelet models); Burke S.P., Schumann T.E.W. 1928 Ind. Eng. Chem. 20:998; Fisher R.A.
-1937 Ann. Eugenics 7:355, Kolmogorov Petrovskii Piskunov 1937. Citations are from memory unless an addendum says a page was read.
+Citations are from memory unless an addendum says a page was read.
+
+* Pope S.B. 1997 Combust. Theory Modelling 1:41 (ISAT).
+* Lu T., Law C.K. 2005 Proc. Combust. Inst. 30:1333 (DRG).
+* Peters N. 1984 Prog. Energy Combust. Sci. 10:319 (laminar diffusion flamelet models).
+* Burke S.P., Schumann T.E.W. 1928 Ind. Eng. Chem. 20:998.
+* Fisher R.A. 1937 Ann. Eugenics 7:355, Kolmogorov Petrovskii Piskunov 1937.
 
 ## Amendment 1 (written before any registered check was run; no limit is changed)
 
@@ -349,18 +382,18 @@ Release build, one machine; wall times are reported only and vary run to run.
 
 * I1 FD sensitivity vs analytic: worst entry error relative to column maximum 7.0e-8 (1e-3): pass.
 * I2 exact on a linear map: 1 record, 195 retrievals, 4 growths, worst scaled error vs analytic 6.7e-9 (1e-5): pass.
-* I3 toy adiabatic ensemble (4000 queries, 1785 retrieved, 1586 grown, 629 added): crossing-time difference 5.0e-4 (5e-2): pass; worst
+* I3 toy adiabatic ensemble (4000 queries, 1785 retrieved, 1586 grown, 629 added). Crossing-time difference 5.0e-4 (5e-2): pass. Worst
   retrieval error 1.272e-3 (1e-3): MISS (`i3_retrieval_error_known_miss`). Root cause (diagnosed with `last_hit`): the growth rule
   verifies the linear prediction only at the query that triggers the growth, so an ellipsoid grown several times contains points
   where the linear error exceeds eps. A fix would be a secondary check or a conservative growth factor (not done: not tuned).
-* I4 GRI H2/air homogeneous ensemble (16 members, 40 steps, 640 queries, 193 retrieved, 407 grown, 40 records): worst retrieval error
+* I4 GRI H2/air homogeneous ensemble (16 members, 40 steps, 640 queries, 193 retrieved, 407 grown, 40 records). Worst retrieval error
   9.7e-4 (1e-3), delay difference 1.7e-3 (5e-2), final T difference 0.39 K (10), enthalpy change 1.35e-3 K (1): pass. Element drift
-  2.37e-9 (1e-9): MISS (`i4_element_drift_known_miss`); the direct integration alone conserves the elements to 8.8e-16, so the drift
+  2.37e-9 (1e-9): MISS (`i4_element_drift_known_miss`). The direct integration alone conserves the elements to 8.8e-16, so the drift
   is finite-difference noise in the invariant columns of the sensitivity matrix (integration error about 1e-10 divided by delta).
   Speed-up 0.23 (wall) and rhs-evaluation ratio 0.23, REPORTED only: with 16 members and 640 queries the 40 records each cost 22
   extra integrations, which a retrieval fraction of 30 % does not repay.
-* I5 GRI mixing layer (6000 queries, 5902 retrieved, 97 grown, 1 record): worst retrieval error 3.2e-6 (1e-3) pass; speed-up 118 (> 1)
-  pass but not meaningful, see the miss; final profile difference 1222 K (10): MISS (`i5_profile_known_miss`): cells above 1500 K
+* I5 GRI mixing layer (6000 queries, 5902 retrieved, 97 grown, 1 record). Worst retrieval error 3.2e-6 (1e-3): pass. Speed-up 118
+  (> 1): pass but not meaningful, see the miss. Final profile difference 1222 K (10): MISS (`i5_profile_known_miss`): cells above 1500 K
   direct 17, ISAT 0. Element drift 1.5e-7 (1e-9): MISS (`i5_element_drift_known_miss`). Root cause of the profile miss: the scaled error
   norm (0.01 in mass fraction) cannot see the radical pool of the induction period (1e-10), so a single ellipsoid is grown over
   states whose radical content differs by orders of magnitude while every scaled error stays below 1e-3 and the ignition is
@@ -402,16 +435,20 @@ F-129 (`crates/rcfd-reactor/tests/combustion.rs`):
 * B2 beta PDF: linear function 9.7e-16 (1e-12), normalisation 0 (1e-12), v = 0 bitwise, v = 1e-8 difference 0 K (1.9e-3 K), maximum
   variance 1.55e-3 K (0.19 K), independent quadrature 9.2e-13 (1e-8), Z mean 1.4e-15 (1e-12), Z^2 1.0e-8 (1e-6): pass.
 * B3 special functions: lnGamma 4.0e-15 (1e-13), incomplete beta 3.8e-15 (1e-12), erf(1) 1.3e-16, erfc round trip 1.0e-14 (1e-12): pass.
-* B4 mixing: toy element 3.2e-15 (1e-12), GRI 1.1e-14 (1e-9): pass. B5 variance dissipation 8e-17 from h^2/4, ratio 4.000: pass.
-  B6 all error cases located: pass. B7 (report only): GRI CH4/air Z_st 0.055185, T_max 2225.5 K at Z = 0.05519, T(Z_st/2) 1451.6 K,
-  T(2 Z_st) 1488.4 K.
-* F1 linear h profile 2.0e-14 (1e-12), 2 Newton iterations (2). F2 discrete 2.9e-14 (1e-9), continuous 4.4e-6 (2e-4).
-  F3 one-step flamelet T_max 2192.60, 2193.52, 2194.30 K against 2194.74 K (Burke-Schumann): relative deviation 1.13e-3, 6.4e-4,
+* B4 mixing: toy element 3.2e-15 (1e-12), GRI 1.1e-14 (1e-9): pass.
+* B5 variance dissipation 8e-17 from h^2/4, ratio 4.000: pass.
+* B6 all error cases located: pass.
+* B7 (report only): GRI CH4/air Z_st 0.055185, T_max 2225.5 K at Z = 0.05519, T(Z_st/2) 1451.6 K, T(2 Z_st) 1488.4 K.
+* F1 linear h profile 2.0e-14 (1e-12), 2 Newton iterations (2).
+* F2 discrete 2.9e-14 (1e-9), continuous 4.4e-6 (2e-4).
+* F3 one-step flamelet T_max 2192.60, 2193.52, 2194.30 K against 2194.74 K (Burke-Schumann): relative deviation 1.13e-3, 6.4e-4,
   2.3e-4, monotone in chi_st and <= 0.1; residual <= 4.2e-13 (1e-8); X linearity <= 2.4e-13 (1e-9): pass.
-  F4 19 burning values, T_max strictly decreasing from 2143 to 1777 K, extinction between the last burning chi_st and 3.469: pass.
-  F5 chi(Z_st) exact, symmetry 2.7e-15 (1e-12). F6 table lookup of a linear field 5.7e-14 (1e-10), v = 0 mean equals the lookup exactly.
-* P1 front flux 2.23613507 against 2.23606798 (Gamma k/2 closed form), relative error 3.0e-5 (1e-4). P2 9.9e-6 (1e-4).
-  P3 burnt T 2717.67 K, PDF mean of a linear source 4.4e-16 (1e-12): pass. P3 temperature-based c monotone: MISS
+* F4 19 burning values, T_max strictly decreasing from 2143 to 1777 K, extinction between the last burning chi_st and 3.469: pass.
+* F5 chi(Z_st) exact, symmetry 2.7e-15 (1e-12).
+* F6 table lookup of a linear field 5.7e-14 (1e-10), v = 0 mean equals the lookup exactly.
+* P1 front flux 2.23613507 against 2.23606798 (Gamma k/2 closed form), relative error 3.0e-5 (1e-4).
+* P2 9.9e-6 (1e-4).
+* P3 burnt T 2717.67 K, PDF mean of a linear source 4.4e-16 (1e-12): pass. P3 temperature-based c monotone: MISS
   (`p3_temperature_progress_monotone_known_miss`, limit intact; dip about 6e-9 in c because the H2/air induction period is slightly
   endothermic). The corrected `p3b_water_progress_variable_is_monotone` (Y_H2O based) passes; the old test is kept ignored.
 
@@ -437,6 +474,12 @@ F-223 `partial`: library ISAT, DRG and clustering, wired for the transient finit
 integrated directly (1.7e-3 ISAT, 1.6e-3 dynamic DRG), not against a published measurement. Misses: I3 retrieval error, I4 and I5
 element drift, I5 profile. F-129 `partial`: libraries only.
 
-Not delivered / not attempted: any comparison with Sandia or other published flames (not attempted), a GRI flamelet table (only the
-toy and H2/air flamelets), G-equation, BML, thickened-flame and coherent-flame models, spark and ignition-kernel models, wiring of Z,
-variance or flamelet tables into the case tree, acceleration of steady or EDC chemistry, per-species log scales for the ISAT error.
+Not delivered / not attempted:
+
+* Any comparison with Sandia or other published flames (not attempted).
+* A GRI flamelet table (only the toy and H2/air flamelets).
+* G-equation, BML, thickened-flame and coherent-flame models.
+* Spark and ignition-kernel models.
+* Wiring of Z, variance or flamelet tables into the case tree.
+* Acceleration of steady or EDC chemistry.
+* Per-species log scales for the ISAT error.

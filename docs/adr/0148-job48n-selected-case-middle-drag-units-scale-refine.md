@@ -1,14 +1,37 @@
-# ADR 0148: Job 48N, the selected case is a piece of state of its own, the middle drag orbits, the Run page says its units and offers a finer mesh, and three answers to ADR 0147 (data files, a save not built again, the Start dialog waits)
+# ADR 0148: Job 48N, the selected case, the middle drag, Run page units and a finer mesh
 
 Status: **registered 2026-10-28**, before any registered run (the code and the tests below were written and compiled
 first; what had run before is listed under "What I already knew"); amendment 1 (N6's control, the hovers of N8, N9 and
 N11, N9's steady run) before the corrected runs; results in the addendum: every check met its limit and every control
-failed as required (N6's control and N8 after amendment 1), no known miss; not yet accepted by the maintainer. Job 48N, on local
-main 7eb8b79 (waves 48A-48M merged). House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits
-are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a
-defective set-up gets an amendment written before the corrected run; defaults of existing code stay bit-identical outside
-the Studio; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph
-stays acyclic. Clean-room: our own Studio code and the egui and egui_plot public APIs.
+failed as required (N6's control and N8 after amendment 1), no known miss; not yet accepted by the maintainer.
+
+On 2026-10-28 the maintainer reported that the Run and Mesh tabs were not linked to the selected case, asked that the
+middle click rotate the camera, and asked what scale the Run page is at and what "1t" represents in time. This job makes
+the selected case a piece of state of its own, which Run and F5, the toolbar's label, the Project panel's highlight, the
+Mesh side, the Runs panel's "Start run..." dialog and the case editor follow. The middle drag orbits, the Run page says
+its units and offers a finer mesh, and ADR 0147 gets three answers: data files listed apart, a save not built again, and a
+Start dialog that waits for the case editor. Headless probes reproduced R1-R4, the consequences of the missing state, but
+on copies of both example projects all 10 cases open in the case editor and a click made the editor, the Mesh side, Run
+and the highlight follow within one read. R1-R3 alone do not make "only the first case" on those projects, and which of
+R1-R5 the maintainer met is not known; R1-R4 are fixed here, and R5 (ADR 0144's rule) is question 1, not changed. The
+addendum records that every check met its limit and every control failed as required (N6's control and N8 after amendment
+1), with no known miss and the whole `rcfd-studio` suite at 212 passed, 0 failed, 4 ignored (known misses of earlier
+ADRs). Not run: a person at the real window, Linux, debug builds of the new tests, the workspace gate, workspace-wide
+clippy and the other crates' own tests. Later notes change parts of this:
+[ADR 0149](0149-job48o-linked-selection-drafts-per-case-json-cases.md) changes decisions 1 (a) and 1 (d) and the limits of
+N1 (c), N3 (c), N4 and the set-up of N11; [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) supersedes question
+4; the left (primary) drag no longer rotates or pans the view (2026-10-29); and N9's two steady checks are an ignored known
+miss under ADR 0169, limits intact.
+
+Rules and parents:
+
+* Job 48N, on local main 7eb8b79 (waves 48A-48M merged).
+* House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical outside the Studio;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, the crate graph stays
+  acyclic.
+* Clean-room: our own Studio code and the egui and egui_plot public APIs.
 
 ## What the maintainer reported and asked (2026-10-28, relayed)
 
@@ -135,14 +158,14 @@ Runs panel's time column `8.0000e1`. Decision 6 words every one of them.
    with a hover note, not selectable); the Start run dialog lists the case files only. `rcfd-project`'s `Project::cases`
    is unchanged (every file). Test switch `view_toggle::Switches::data_files_as_cases`.
 4. **A save of the shown text is not built again** (ADR 0147 Q2 (b); `preview::build_unless`, `Preview::want_check`,
-   `Stats::skipped_saved`). When the case editor's base hash changes to the shown mesh's `case_hash` (a save of the text on
-   screen), and when the watcher reports the case file while a clean case editor's base is the shown text (the notice of
-   that save), the build compares the file with the shown mesh on the build thread first: when its bytes hash to the
-   shown mesh's `case_hash` and its mesh file is unchanged (`mesh_input_unchanged`, ADR 0147), nothing is parsed or built
-   (`Refusal::Unchanged`); the shown mesh is the file's from then on (`from_editor` false: the source line says it is
-   built from the case file on disk; the same surface, no upload, the camera kept; `read_hash` the saved hash). Any other
-   change of the file, a save of another text, "Rebuild", "anyway" and a new case build as before. Test switch
-   `preview::Switches::no_save_skip` (ADR 0147's rule).
+   `Stats::skipped_saved`). The build first compares the file with the shown mesh on the build thread in two cases: when
+   the case editor's base hash changes to the shown mesh's `case_hash` (a save of the text on screen), and when the
+   watcher reports the case file while a clean case editor's base is the shown text (the notice of that save). When the
+   file's bytes hash to the shown mesh's `case_hash` and its mesh file is unchanged (`mesh_input_unchanged`, ADR 0147),
+   nothing is parsed or built (`Refusal::Unchanged`). The shown mesh is the file's from then on (`from_editor` false: the
+   source line says it is built from the case file on disk; the same surface, no upload, the camera kept; `read_hash` the
+   saved hash). Any other change of the file, a save of another text, "Rebuild", "anyway" and a new case build as before.
+   Test switch `preview::Switches::no_save_skip` (ADR 0147's rule).
 5. **The Start run dialog waits for the case editor** (ADR 0147 Q4 (b); `quick_run::start_blocked`, `editor_blocks`):
    while the case editor holds the dialog's case in conflict, with a field being typed or with unsaved edits, Start is
    greyed out with Run's text as its hover text; another case in the dialog is not held up. Test switch
@@ -170,13 +193,14 @@ Runs panel's time column `8.0000e1`. Decision 6 words every one of them.
    selected case). The domain is the mesh's bounding box: x and y of a 2D case, x, y and z of a 3D one. Test switch
    `viewport::Switches::no_scale` (no bar, no domain, no resolution line, so no "Refine x2").
 8. **Refine x2** (the extra scope (c); `preview::count_keys`, `resolution_of`, `Resolution`, `refine_offer`,
-   `Refinement`, `refine_blocked`, `refine`, `refine_hover`, `runner_mem_mb`; `preview_ui::REFINE`). On the resolution
-   line of a generator mesh whose cells are products (or sums of products) of its counts: the 2D generators and
-   `cylinder_ogrid` (`mesh.nx`, `mesh.ny`), the 3D annulus generators and `pipe_sweep` (`mesh.nx`, `mesh.ny`, `mesh.nz`),
-   with the `_right` counts of a second block that are set (0 means "as the first block" and follows it). Not offered
-   for `axial_fan_sector` (its counts are `mesh.fan.n_*`; said on hover) or a mesh file (the line says the resolution is
-   the file's). A click doubles every count in the case editor through `set_value`, after checking each against its
-   schema maximum (100,000): an unsaved edit, so the preview builds it after the debounce and Run says "save it first".
+   `Refinement`, `refine_blocked`, `refine`, `refine_hover`, `runner_mem_mb`; `preview_ui::REFINE`). Refine x2 is offered
+   on the resolution line of a generator mesh whose cells are products (or sums of products) of its counts: the 2D
+   generators and `cylinder_ogrid` (`mesh.nx`, `mesh.ny`), the 3D annulus generators and `pipe_sweep` (`mesh.nx`,
+   `mesh.ny`, `mesh.nz`), with the `_right` counts of a second block that are set (0 means "as the first block" and follows
+   it). Not offered for `axial_fan_sector` (its counts are `mesh.fan.n_*`; said on hover) or a mesh file (the line says the
+   resolution is the file's). A click doubles every count in the case editor through `set_value`, after checking each
+   against its schema maximum (100,000): an unsaved edit, so the preview builds it after the debounce and Run says "save it
+   first".
    Its hover text: the counts before and after, the cells (4 times in 2D, 8 times in 3D; exact for these generators,
    every count doubling), "each iteration does about that much more work", the runner's memory estimate of a run of it
    (64 MB + 4 KB per cell) and, when the finer mesh is over the preview's cell limit (2,000,000), that the preview asks
@@ -195,14 +219,18 @@ unchanged. Nothing outside the Studio changes.
 
 ## Registered checks (limits fixed here, before any of them ran)
 
-Release builds, `--test-threads 1 --nocapture`, output to files, this host; `rcfd-runner` and `rcfd` of the same build
-next to the test's `rcfd-studio` (`common::binaries`). "Settled": nothing being read and the preview neither building
-nor waiting for its debounce (`lj::settled`). "Run before it was read": `run_selected_case` (the call F5 makes) right
-after `open_case`, with no drain between. Drawn frames are 1280 x 800 at scale 1, the default layout. The runner-served
-fixture (N1, N3, N4): ADR 0133's `RunnerProject` (budgets `max_runs` 3) with `cases/a.toml`, `b.toml` and `c.toml` (the
-12 x 12 cavity of ADR 0133 at `nx` 8, 10 and 14, 30 iterations) and `cases/cav/case.json` (the shipped
-`cases/cavity/case.json`), served. Every wait has a 30 s limit (an upper bound, not a timing claim). Files:
-`crates/rcfd-studio/tests/selection_n.rs` (N1-N4), `followups_n.rs` (N5-N8), `scale_n.rs` (N9-N11).
+Set-up and terms:
+
+* Release builds, `--test-threads 1 --nocapture`, output to files, this host; `rcfd-runner` and `rcfd` of the same build
+  next to the test's `rcfd-studio` (`common::binaries`).
+* "Settled": nothing being read and the preview neither building nor waiting for its debounce (`lj::settled`).
+* "Run before it was read": `run_selected_case` (the call F5 makes) right after `open_case`, with no drain between.
+* Drawn frames are 1280 x 800 at scale 1, the default layout.
+* The runner-served fixture (N1, N3, N4): ADR 0133's `RunnerProject` (budgets `max_runs` 3) with `cases/a.toml`, `b.toml`
+  and `c.toml` (the 12 x 12 cavity of ADR 0133 at `nx` 8, 10 and 14, 30 iterations) and `cases/cav/case.json` (the shipped
+  `cases/cavity/case.json`), served.
+* Every wait has a 30 s limit (an upper bound, not a timing claim).
+* Files: `crates/rcfd-studio/tests/selection_n.rs` (N1-N4), `followups_n.rs` (N5-N8), `scale_n.rs` (N9-N11).
 
 | Id | Check | Limit | Negative control (must fail) |
 |---|---|---|---|
@@ -240,23 +268,23 @@ with `--no-fail-fast -- --test-threads 1 --nocapture` (`fake-claude` built first
   committed):
   * Round 1. Copies of `example-projects/wind-tunnel` (6 cases) and `quick-start` (4), the Studio with the watcher (500
     ms) and the run worker on: each of the 10 cases opened in the case editor and its preview settled 0.007-0.054 s
-    after the click (0.017, 0.018, 0.044, 0.033, 0.054, 0.043; 0.012, 0.007, 0.012, 0.012 s); just after a click
+    after the click (0.017, 0.018, 0.044, 0.033, 0.054, 0.043; 0.012, 0.007, 0.012, 0.012 s). Just after a click
     (before its `Loaded`) `selected_case`, the editor and `blocked` named the case before while `Preview::case` named the
-    new one; three cases clicked in a row without drains ended on the last; drawn clicks on 4 cases the same. The Run page
+    new one. Three cases clicked in a row without drains ended on the last; drawn clicks on 4 cases the same. The Run page
     drawn: the cylinder (transient) slider value `80.0` and label `time`, the line `snapshot 80/80  step 1280  t = 80`;
     steady runs `2000` and `step`, `snapshot 10/10  step 2000  t = 0`; the Runs rows `... finished 1280 8.0000e1 ...`
     wrapping in the left panel. In that dump the case editor held `cases/naca0012-aoa4.toml` (the last case clicked)
     while the Run side showed the cylinder runs selected by the probe.
-  * Round 2. P1: a served project with three small cavities, drawn app: Run on `a` queued a run of `a`; `b` clicked then
+  * Round 2, P1: a served project with three small cavities, drawn app. Run on `a` queued a run of `a`; `b` clicked then
     Run clicked (the click helper's first frame applied `b`'s read) queued `b`; `a` selected, Run clicked, and `c`
     clicked before the run was queued: the run was `a`'s, and when it was queued the Viewport switched from `c`'s mesh to
     `a`'s run (R4); the toolbar's label then `c`; Options... opened with `c` (the dialog keeps the case it was opened
-    with; its window then covered the list in that set-up). P3: the cavity open, a listed case removed from disk,
-    selected, then `b` selected before a drain: 1.5 s later the editor and Run's case were the cavity, nothing being
-    read, the Mesh side `b` (R3); a benchmark descriptor clicked: the editor and Run stayed on the cavity, the Mesh side
-    on the descriptor (R2). P4: at 1280 x 800 (scale 1, 1.25, 1.5), 1024 x 768 and 1920 x 1080 (1, 1.5), the cylinder's
-    first snapshot: slider `1.0` and `time`, `snapshot 1/80  step 16  t = 1`, the strip `... step 1280  t 8.0000e1 ...`;
-    no text `1t`.
+    with; its window then covered the list in that set-up).
+  * Round 2, P3: the cavity open, a listed case removed from disk, selected, then `b` selected before a drain: 1.5 s later
+    the editor and Run's case were the cavity, nothing being read, the Mesh side `b` (R3); a benchmark descriptor clicked:
+    the editor and Run stayed on the cavity, the Mesh side on the descriptor (R2).
+  * Round 2, P4: at 1280 x 800 (scale 1, 1.25, 1.5), 1024 x 768 and 1920 x 1080 (1, 1.5), the cylinder's first snapshot:
+    slider `1.0` and `time`, `snapshot 1/80  step 16  t = 1`, the strip `... step 1280  t 8.0000e1 ...`; no text `1t`.
 * egui_plot 0.37.0's default hover label (`label.rs`: `x = {:.3}` / `y = {:.3}`) and axis formatter (numbers), read.
 * No baseline suite run of this job before the change. The last whole-suite run on this code is ADR 0147's addendum (bf33373,
   merged as main 7eb8b79): 189 passed, 0 failed, 4 ignored.
@@ -287,24 +315,37 @@ Reading N9's set-up again for the same helper, before its first run, found one m
   to (the slider, its value box and the row they are in) was not checked, so the point is moved onto the slider's bar
   (a precaution, not a measured defect).
 
-Corrected set-ups (the same test names; every other limit and control unchanged): N8, N9 and N11 draw with the tooltip
-delay set to 0 (`ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0)`, as M1); N6's control: `Cases (5)`, no
-`Data files` header, the csv selected by the click and drawn at least twice; N9's steady run is the run of
-`cases/naca0012-aoa4.toml` (steady: 10 snapshots, 2000 iterations; its row is the third, in view), with the limits
-`snapshot 10/10  iteration 2000` and a strip holding `  iteration 2000  ` (the rest of N9's steady limits as
-registered); N9's hover is made on the slider's bar, 70 points left of its label. N10 keeps `step-re400` (its Run side
-does not need the row). What I knew when writing this: the values of the run above (N6's control: the csv drawn 3 times
-and selected; N8: the refusal texts as registered, no hover in 30 frames), round 1's dump and egui's code; the corrected
-tests had not run, N9, N10 and N11 not at all.
+Corrected set-ups (the same test names; every other limit and control unchanged):
+
+* N8, N9 and N11 draw with the tooltip delay set to 0 (`ctx.all_styles_mut(|s| s.interaction.tooltip_delay = 0.0)`, as
+  M1).
+* N6's control: `Cases (5)`, no `Data files` header, the csv selected by the click and drawn at least twice.
+* N9's steady run is the run of `cases/naca0012-aoa4.toml` (steady: 10 snapshots, 2000 iterations; its row is the third,
+  in view), with the limits `snapshot 10/10  iteration 2000` and a strip holding `  iteration 2000  ` (the rest of N9's
+  steady limits as registered).
+* N9's hover is made on the slider's bar, 70 points left of its label.
+
+N10 keeps `step-re400` (its Run side does not need the row).
+
+What I knew when writing this: the values of the run above (N6's control: the csv drawn 3 times and selected; N8: the
+refusal texts as registered, no hover in 30 frames), round 1's dump and egui's code; the corrected tests had not run, N9,
+N10 and N11 not at all.
 
 ## Addendum: results against the registered limits (2026-10-28)
 
 Branch `worktree-agent-a640d97871463f2d7`. Commits: registration fb2e260 (on main 7eb8b79); amendment 1 ef73ebb; then
-this addendum. Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 93.6 GB, 11.7
-to 21 GB free during the runs); the target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built from the same
-sources (no file of theirs changed). The registered runs: `selection_n.rs` on fb2e260 (13.9 GB free at its start);
-`followups_n.rs` on fb2e260, then its corrected run on ef73ebb (amendment 1); `scale_n.rs` on ef73ebb (its first run,
-after amendment 1); the whole suite (N12) on ef73ebb.
+this addendum.
+
+Every run: release, `--test-threads 1 --nocapture`, output to files, this host (Windows 11, 93.6 GB, 11.7 to 21 GB free
+during the runs); the target folder of this job; `rcfd`, `rcfd-runner` and `fake-claude` built from the same sources (no
+file of theirs changed).
+
+The registered runs:
+
+* `selection_n.rs` on fb2e260 (13.9 GB free at its start);
+* `followups_n.rs` on fb2e260, then its corrected run on ef73ebb (amendment 1);
+* `scale_n.rs` on ef73ebb (its first run, after amendment 1);
+* the whole suite (N12) on ef73ebb.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -337,7 +378,7 @@ after amendment 1); the whole suite (N12) on ef73ebb.
 **Deviations and notes.**
 
 1. Amendment 1: N6's control counted the csv twice, but the control's own click selects it in the route before, so the
-   toolbar's label draws it a third time; N8's hover helper drew with egui's default tooltip delay of 0.5 s, which fills
+   toolbar's label draws it a third time. N8's hover helper drew with egui's default tooltip delay of 0.5 s, which fills
    the 30-frame window (ADR 0147 had met the same in M1 and set the delay to 0). N9's steady run moved to the aerofoil
    (the step's row is out of view at 1280 x 800) and its hover point to the slider's bar, before N9 ran.
 2. The scale bar is on 2D (orthographic) views only; a 3D perspective view has no single scale (asked for 2D).

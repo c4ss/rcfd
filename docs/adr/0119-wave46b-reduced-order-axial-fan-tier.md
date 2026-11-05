@@ -1,15 +1,31 @@
 # ADR 0119: Wave 46B, a reduced-order axial-fan tier (strip theory, losses, fan curve, operating point, fan laws, steady-loading tones)
 
-Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran. House
-rules of ADRs 0110-0117:
-* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
-* a defective set-up gets a new corrected test, registered here as an amendment before it runs;
-* defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran.
 
-Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46b`, target `<target dir>`). Serves parts C7,
-C4/C5 (reduced-order part) and D1 of `docs/fan-project-breakdown.md`. Clean-room: first principles, our own ADRs, and the labelled
-recollections below. Parents: ADRs 0012 (F-113 lumped fan curve, `bisect`, `network_pressure`), 0036 (F-218 actuator disk), 0065
-(`rcfd_mesh::fan`), 0066 (Gutin-type closed form, `rcfd_post::rotor`), 0075 (FAN-01 data), 0078 (arm E, blade-element estimate).
+Wave 46B adds a reduced-order model (ROM) tier for axial fans in `crates/rcfd-post/src/fan_rom.rs` (strip theory, losses, a fan
+curve, an operating point, fan laws and steady-loading tones), plus an opt-in design evaluator. It serves parts C7, C4/C5
+(reduced-order part) and D1 of `docs/fan-project-breakdown.md`. The tier is not validated against any measured fan, and a design
+ranking from it is a hypothesis for CFD or test. Every registered check passed except the registered Z1, a known miss from a
+set-up defect that amendment 1 corrected as Z1'; the final gate gave 2059 passed, 0 failed, 654 ignored. The FAN-01 comparison V1
+has no limit and is reported: over all 20 points the rms dp_s difference is 104 Pa and the rms power difference is 24 %, and at
+the design point the ROM gives dp_s 45.7 Pa (-64 %) with 33 of 40 strips stalled. The addendum's reading, not a finding: this
+tier, as registered, does not bound FAN-01 below 1.6 m^3/s. An efficiency objective on this tier drives a design to the stall
+edge, so a design loop needs a stall-margin constraint (not provided here). The steady-loading tone (1.25e-9 Pa at 1 m for
+set-up C) is a lower bound of the tonal level, not a prediction of it.
+
+Rules and parents:
+
+* House rules of ADRs 0110-0117:
+  * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
+  * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles, our own ADRs, and the labelled recollections below.
+* Parents: ADRs [0012](0012-lumped-zones-radiation.md) (F-113 lumped fan curve, `bisect`, `network_pressure`),
+  [0036](0036-wave21b-tables-actuator.md) (F-218 actuator disk), [0065](0065-wave32a-fan-geometry-mesh.md) (`rcfd_mesh::fan`),
+  [0066](0066-wave32b-aeroacoustics.md) (Gutin-type closed form, `rcfd_post::rotor`),
+  [0075](0075-wave34d-rotating-machinery-data-and-mesh-study.md) (FAN-01 data),
+  [0078](0078-wave35c-fan01-deficit-diagnosis.md) (arm E, blade-element estimate).
+* Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46b`, target `<target dir>`).
 
 ## What already existed (re-checked at 4ea5b7b)
 
@@ -41,20 +57,26 @@ All quantities per strip; incompressible, steady, no inlet swirl.
 * **D-M1 strips.** `n_strips` (default 40) equal radial strips on `[r_hub, r_tip]`, midpoint rule; each is an independent 2-D cascade
   (no radial velocity, no radial-equilibrium coupling). Axial velocity `c_x = Q / (pi (r_tip^2 - r_hub^2))`, uniform over the bladed
   annulus. Sections are interpolated linearly in r (clamped).
-* **D-M2 velocity triangles and cascade momentum (first principles).** `U = Omega r`; `w_inf = U - dc/2`; `W = sqrt(c_x^2 + w_inf^2)`;
-  `beta = atan2(w_inf, c_x)` from the axis; `alpha_e = beta - stagger - alpha_L0`. Pitch `s = 2 pi r / B`. Forces on the fluid per
-  blade per unit span: `F_theta = rho W^2 c (C_L cos beta + C_D sin beta) / 2`, `F_x = rho W^2 c (C_L sin beta - C_D cos beta) / 2`.
-  Swirl from `F_theta = rho s c_x dc`, solved by `bisect` on a branch (decreasing in `dc`). Total pressure rise of the strip from axial
-  momentum: `dp0 = F_x / s + rho dc^2 / 2`. Torque `B sum F_theta r dr`, power `Omega` times torque, thrust `B sum F_x dr`.
-  From these, `P = Q dp0_mean + sum B D W dr` is an identity (`c_x F_x + D W = F_theta w_inf`), checked in L1.
-* **D-M3 section model: thin cambered plate with stall (LABELLED).** Attached: `C_L = 2 pi alpha_e` (thin-airfoil theory, first
-  principles; `alpha_L0` by the thin-airfoil integral of the camber line, 24-point Gauss-Legendre on the two smooth pieces). Stall when
-  `2 pi |alpha_e| > cl_max`; post-stall flat plate `C_N = cd_normal sin alpha_e`, `C_L = C_N cos alpha_e`, extra drag
-  `C_N sin alpha_e`. `cl_max = 1.1` (the ADR 0078 EB value, ASSUMED, UNVERIFIED), `cd_normal = 2.0` (normal-plate drag, recollection,
-  UNVERIFIED). Thickness is not modelled. No cascade (solidity) correction: isolated-section lift over-predicts at solidity near 1.
-  Branch rule: the attached root if its `|alpha_e| <= cl_max / 2 pi`; else the post-stall root if its `|alpha_e|` is above; else
-  (neither consistent, hysteresis gap) `C_L = +-cl_max` ("capped", counted as stalled). Preferring the attached root is the
-  throttling-from-free-delivery convention.
+* **D-M2 velocity triangles and cascade momentum (first principles).**
+  * `U = Omega r`; `w_inf = U - dc/2`; `W = sqrt(c_x^2 + w_inf^2)`; `beta = atan2(w_inf, c_x)` from the axis;
+    `alpha_e = beta - stagger - alpha_L0`. Pitch `s = 2 pi r / B`.
+  * Forces on the fluid per blade per unit span: `F_theta = rho W^2 c (C_L cos beta + C_D sin beta) / 2`,
+    `F_x = rho W^2 c (C_L sin beta - C_D cos beta) / 2`.
+  * Swirl from `F_theta = rho s c_x dc`, solved by `bisect` on a branch (decreasing in `dc`).
+  * Total pressure rise of the strip from axial momentum: `dp0 = F_x / s + rho dc^2 / 2`.
+  * Torque `B sum F_theta r dr`, power `Omega` times torque, thrust `B sum F_x dr`.
+  * From these, `P = Q dp0_mean + sum B D W dr` is an identity (`c_x F_x + D W = F_theta w_inf`), checked in L1.
+* **D-M3 section model: thin cambered plate with stall (LABELLED).**
+  * Attached: `C_L = 2 pi alpha_e` (thin-airfoil theory, first principles; `alpha_L0` by the thin-airfoil integral of the camber
+    line, 24-point Gauss-Legendre on the two smooth pieces).
+  * Stall when `2 pi |alpha_e| > cl_max`; post-stall flat plate `C_N = cd_normal sin alpha_e`, `C_L = C_N cos alpha_e`, extra drag
+    `C_N sin alpha_e`.
+  * `cl_max = 1.1` (the ADR 0078 EB value, ASSUMED, UNVERIFIED), `cd_normal = 2.0` (normal-plate drag, recollection, UNVERIFIED).
+  * Thickness is not modelled.
+  * No cascade (solidity) correction: isolated-section lift over-predicts at solidity near 1.
+  * Branch rule: the attached root if its `|alpha_e| <= cl_max / 2 pi`; else the post-stall root if its `|alpha_e|` is above; else
+    (neither consistent, hysteresis gap) `C_L = +-cl_max` ("capped", counted as stalled). Preferring the attached root is the
+    throttling-from-free-delivery convention.
 * **D-M4 profile drag.** Laminar Blasius friction on both sides, `2 x 1.328 / sqrt(Re_c)`, `Re_c = W c / nu` (first principles; a lower
   bound at chord Re 2e4-2e5, where laminar separation bubbles add drag that is not modelled). Strips with Re outside [2e4, 2e5] are
   counted (`re_outside`), not refused.
@@ -69,9 +91,11 @@ All quantities per strip; incompressible, steady, no inlet swirl.
 * **D-M7 static pressure.** Total-to-static for free discharge with no stator: `dp_s = dp_t - rho c_x^2 / 2 - (swirl kinetic energy
   flux) / Q`. Efficiencies `eta_t = Q dp_t / P`, `eta_s = Q dp_s / P` (NaN when `P <= 0`).
 * **D-M8 operating point.** System `dp = k Q^2 + l Q` against `dp_s`. Scan `n_scan` intervals of `[q_lo, q_hi]`; the highest-flow
-  fan-above-to-below crossing is bisected. Located failures: an evaluation error (with its flow), no crossing (range and the largest
-  fan-minus-system value), a rising fan characteristic at the crossing (central-difference slope > 0, "stall region"), or stalled
-  strips at the crossing (their radii). Several crossings are reported in `crossings`, not refused.
+  fan-above-to-below crossing is bisected.
+  * Located failures: an evaluation error (with its flow), no crossing (range and the largest fan-minus-system value), a rising
+    fan characteristic at the crossing (central-difference slope > 0, "stall region"), or stalled strips at the crossing (their
+    radii).
+  * Several crossings are reported in `crossings`, not refused.
 * **Fan laws.** `fan_law(q, dp, P, n, rho_ratio) = (q n, dp rho_ratio n^2, P rho_ratio n^3)`; exact for the model only at equal
   Reynolds number (Blasius drag depends on Re).
 * **D1 tones.** `tonal_harmonic`: the signed sum over strips of `Rotor::harmonic_pressure` with ring radius r_i, thrust `B F_x dr` and
@@ -91,48 +115,55 @@ Common set-up "C" (a constructed 120 mm class fan): B = 7, r_hub 0.030 m, r_tip 
 Q_D = 0.045 m^3/s with `K = 45 Pa / (rho Omega)` (ideal 45 Pa), with the model under test. Default model unless stated.
 
 * **E1 Euler work.** At q/Q_D in {0.6, 1.0, 1.2}: per strip `|U dc - [(c2^2 - c1^2)/2 + (W1^2 - W2^2)/2]| <= 1e-12 U^2`, with
-  `c1^2 = c_x^2`, `c2^2 = c_x^2 + dc^2`, `W1^2 = c_x^2 + U^2`, `W2^2 = c_x^2 + (U - dc)^2`. Reason: algebraic identity, rounding only.
-  NC-E1: `W2` built with `U + dc` must miss by >= 10x.
+  `c1^2 = c_x^2`, `c2^2 = c_x^2 + dc^2`, `W1^2 = c_x^2 + U^2`, `W2^2 = c_x^2 + (U - dc)^2`.
+  * Reason: algebraic identity, rounding only.
+  * NC-E1: `W2` built with `U + dc` must miss by >= 10x.
 * **E2 free vortex.** C at Q_D: per strip `|dc - K/r| <= 1e-12 K/r`; torque `rho Q K`, power `rho Q Omega K` and the mass-averaged
-  Euler work `Omega K` each within 1e-12 relative. Reason: closed form; the midpoint rule is exact because `r dc` is constant and the
-  weight `r dr` is linear. NC-E2: design with the lossless model, evaluate with the default model (the drag missing from the design);
-  the per-strip error must exceed 1e-11.
+  Euler work `Omega K` each within 1e-12 relative.
+  * Reason: closed form; the midpoint rule is exact because `r dc` is constant and the weight `r dr` is linear.
+  * NC-E2: design with the lossless model, evaluate with the default model (the drag missing from the design); the per-strip
+    error must exceed 1e-11.
 * **Z1 zero loss.** C designed and evaluated with `RomModel::lossless()`, at q/Q_D in {0.7, 1.0, 1.2}: `dp_t` against
-  `rho sum U dc dQ / Q` and `eta_t` against 1, each <= 1e-12 relative; at Q_D `dp_t = 45 Pa` (closed form) within 1e-12. NC-Z1: the
-  momentum route without the swirl term `rho dc^2/2` must miss by >= 10x.
+  `rho sum U dc dQ / Q` and `eta_t` against 1, each <= 1e-12 relative; at Q_D `dp_t = 45 Pa` (closed form) within 1e-12.
+  * NC-Z1: the momentum route without the swirl term `rho dc^2/2` must miss by >= 10x.
 * **Z2 zero lift.** C with zero camber and stagger `atan2(Omega r, c_x)` at every strip mid radius (sections at the strip radii), at
-  Q_D, lossless: `|dc| <= 1e-12 U` per strip, `|dp_t| <= 1e-12 rho U_tip^2`, `|P| <= 1e-12 rho Q U_tip^2`. With the default model:
-  `dp_t < 0` and `P > 0` (drag only absorbs power and lowers the pressure). NC-Z2: camber 0.02, lossless, must give
-  `|dp_t| >= 1e-11 rho U_tip^2`.
+  Q_D, lossless: `|dc| <= 1e-12 U` per strip, `|dp_t| <= 1e-12 rho U_tip^2`, `|P| <= 1e-12 rho Q U_tip^2`.
+  * With the default model: `dp_t < 0` and `P > 0` (drag only absorbs power and lowers the pressure).
+  * NC-Z2: camber 0.02, lossless, must give `|dp_t| >= 1e-11 rho U_tip^2`.
 * **L1 power ledger.** C, default model, at q/Q_D in {0.5, 0.75, 1.0, 1.2} (the first two have stalled strips):
   `|P - (Q dp_t + drag_loss + tip_loss)| <= 1e-12 P`. Each term is computed separately (torque integral; strip `dp0` from axial
-  momentum; `B D W dr`; the tip formula). NCs, each must miss by >= 10x: (a) tip loss left out of the ledger; (b) drag loss left out;
-  (c) `dp0` recomputed with the drag sign flipped in `F_x`; (d) `dp0` recomputed without the swirl term.
+  momentum; `B D W dr`; the tip formula).
+  * NCs, each must miss by >= 10x: (a) tip loss left out of the ledger; (b) drag loss left out; (c) `dp0` recomputed with the drag
+    sign flipped in `F_x`; (d) `dp0` recomputed without the swirl term.
 * **L2 tip loss.** C at Q_D: `tip_loss` equals `B C_d tau c dp sqrt(2 dp / rho)` recomputed from the outermost strip, <= 1e-12
-  relative; doubling the gap doubles it (<= 1e-12) and lowers `eta_t`; gap 0 gives `tip_loss = 0` and the highest `eta_t`. NC-L2: the
-  formula with `dp_tip` from the inlet relative speed `W1` must miss by >= 10x.
+  relative; doubling the gap doubles it (<= 1e-12) and lowers `eta_t`; gap 0 gives `tip_loss = 0` and the highest `eta_t`.
+  * NC-L2: the formula with `dp_tip` from the inlet relative speed `W1` must miss by >= 10x.
 * **L3 drag terms.** C at Q_D (all strips attached): `drag_loss` equals `sum B rho W^3 c C_D dr / 2` with `C_D = 2.656/sqrt(Re) +
-  0.020 s/h + 0.018 C_L^2` recomputed per strip, <= 1e-12 relative. NC-L3: the annulus term left out must miss by >= 10x.
+  0.020 s/h + 0.018 C_L^2` recomputed per strip, <= 1e-12 relative.
+  * NC-L3: the annulus term left out must miss by >= 10x.
 * **F1 fan laws.** C at q1/Q_D in {0.6, 1.0, 1.2} and 3000 rpm, rho 1.2, nu 1.5e-5, against 4500 rpm, rho 1.0, nu 2.25e-5 (equal Re)
-  at `q2 = 1.5 q1`: `dp_t`, `dp_s`, `P` equal `fan_law(...)` of point 1 within 1e-12 relative, `eta_t` equal within 1e-12. Reason:
-  dimensional similarity at equal Re. NC-F1: power scaled with `n^2` must miss by >= 10x. Reported: the deviation with nu held fixed
-  (the Reynolds effect of the Blasius drag).
+  at `q2 = 1.5 q1`: `dp_t`, `dp_s`, `P` equal `fan_law(...)` of point 1 within 1e-12 relative, `eta_t` equal within 1e-12.
+  * Reason: dimensional similarity at equal Re.
+  * NC-F1: power scaled with `n^2` must miss by >= 10x.
+  * Reported: the deviation with nu held fixed (the Reynolds effect of the Blasius drag).
 * **R1 root finding, analytic pair.** Fan `40 - 1e4 Q^2` against `5e3 Q^2 + 200 Q` on `[1e-3, 0.1]`, 100 intervals: `q*` within
-  1e-12 relative of `(-200 + sqrt(200^2 + 4 x 1.5e4 x 40)) / (2 x 1.5e4)`, `crossings = 1`. NC-R1: the closed form without the linear
-  term must miss by >= 10x. R1b: on C with `k = dp_s(Q_D) / Q_D^2`, the returned point has `|dp_s - k q^2| <= 1e-10 Pa` and
-  `|q - Q_D| <= 1e-9 Q_D`.
-* **R2 no intersection.** C with `k` 1000 times the R1b value: an error containing "no intersection" and the scan range. NC-R2: the
-  R1b system gives Ok.
-* **R3 stall.** C with 20 times the R1b `k` (crossing near 0.35 Q_D): an error containing "stall". R3b: the system through
-  `(0.75 Q_D, dp_s(0.75 Q_D))`: an error containing "stalled" and the radius of at least one strip. NC-R3: the R1b system is Ok.
+  1e-12 relative of `(-200 + sqrt(200^2 + 4 x 1.5e4 x 40)) / (2 x 1.5e4)`, `crossings = 1`.
+  * NC-R1: the closed form without the linear term must miss by >= 10x.
+  * R1b: on C with `k = dp_s(Q_D) / Q_D^2`, the returned point has `|dp_s - k q^2| <= 1e-10 Pa` and `|q - Q_D| <= 1e-9 Q_D`.
+* **R2 no intersection.** C with `k` 1000 times the R1b value: an error containing "no intersection" and the scan range.
+  * NC-R2: the R1b system gives Ok.
+* **R3 stall.** C with 20 times the R1b `k` (crossing near 0.35 Q_D): an error containing "stall".
+  * R3b: the system through `(0.75 Q_D, dp_s(0.75 Q_D))`: an error containing "stalled" and the radius of at least one strip.
+  * NC-R3: the R1b system is Ok.
 * **M1 monotone behaviour.** C designed and evaluated with `cl_max = 100` (no stall), at q/Q_D = 0.50, 0.55, ..., 1.30: `dp_t` and
-  `dp_s` strictly decreasing, and the largest `eta_t` sits at an interior node and exceeds both end values by >= 1e-3. NC-M1: the same
-  with `RomModel::lossless()` (`eta_t = 1` everywhere) must fail the efficiency criterion.
+  `dp_s` strictly decreasing, and the largest `eta_t` sits at an interior node and exceeds both end values by >= 1e-3.
+  * NC-M1: the same with `RomModel::lossless()` (`eta_t = 1` everywhere) must fail the efficiency criterion.
 * **G1 Gutin check against its closed form.** C at Q_D, default model. Loads `(R, B F_x dr, B F_theta r dr)` of all strips placed at
   one radius `R = 0.8 r_tip` and summed by `tonal_harmonic` must equal `Rotor { r_tip: R, thrust: T, torque: M }.harmonic_amplitude`
   with `T = sum [rho U dc - D W / (s c_x) - rho dc^2 / 2] 2 pi r dr` (Euler work minus loss minus swirl, the static rise) and `M = rho
-  sum r dc c_x 2 pi r dr` (Euler), at m = 1 and 2, 1 m, theta = 60 deg, within 1e-12 relative. Reason: the closed form is linear in the
-  loads, and T, M are independent momentum forms of the strip forces. NC-G1: the torque passed with the wrong sign must miss by >= 10x.
+  sum r dc c_x 2 pi r dr` (Euler), at m = 1 and 2, 1 m, theta = 60 deg, within 1e-12 relative.
+  * Reason: the closed form is linear in the loads, and T, M are independent momentum forms of the strip forces.
+  * NC-G1: the torque passed with the wrong sign must miss by >= 10x.
 * **D1 defaults.** `Rotor::harmonic_amplitude` equals the pre-change expression `n Omega / (2 pi c r) |J| |load|` bit for bit (assert_eq
   on f64) at 3 harmonics x 3 angles; `fwh_impermeable.rs` passes unchanged in the gate.
 * **D2 evaluator** (`crates/rcfd-api/tests/fan_rom_design_w46b.rs`). A `Study` with `FanRomEvaluator` (one parameter: a stagger
@@ -142,14 +173,17 @@ Q_D = 0.045 m^3/s with `K = 45 Pa / (rho Omega)` (ideal 45 Pa), with the model u
 
 ### V1, FAN-01 comparison (REPORTED, not pass/fail; `v1_fan01_reported`, run once)
 
-Fixed now, before any evaluation: sections and data from `validation-data/reference/w34d_fan01_*.csv` (all 17 rows, extrapolated rows
-included), NACA 4-digit family, B = 9, r_hub 0.124, r_tip 0.2475, gap 2.5 mm, 1486 rpm, rho 1.2 and nu 1.5e-5 (ADR 0075 ASSUMED),
-default model. Compared at the 20 measured flows: ROM `dp_s` against measured `dp_ts` (an installation value: bellmouth, hub,
-struts, diffuser are not in either model), shaft power, `eta_s` against `Q dp_ts / P_meas`. Reported: the table, the rms and the signed
-differences, the design point (1.4032 m^3/s), and the ROM stall onset (the largest measured flow with a stalled strip) against the
-measured onset of about 1.1 m^3/s. FAN-01 is a 500 mm fan, not a computer fan: the distance is a sanity bound on the tier, not a
-calibration. Reported too: the ROM chord-Re range (FAN-01 is near the 2e5 top of the section model). No parameter is changed after the
-run.
+Fixed now, before any evaluation:
+
+* Sections and data from `validation-data/reference/w34d_fan01_*.csv` (all 17 rows, extrapolated rows included), NACA 4-digit
+  family, B = 9, r_hub 0.124, r_tip 0.2475, gap 2.5 mm, 1486 rpm, rho 1.2 and nu 1.5e-5 (ADR 0075 ASSUMED), default model.
+* Compared at the 20 measured flows: ROM `dp_s` against measured `dp_ts` (an installation value: bellmouth, hub, struts, diffuser
+  are not in either model), shaft power, `eta_s` against `Q dp_ts / P_meas`.
+* Reported: the table, the rms and the signed differences, the design point (1.4032 m^3/s), and the ROM stall onset (the largest
+  measured flow with a stalled strip) against the measured onset of about 1.1 m^3/s. FAN-01 is a 500 mm fan, not a computer fan:
+  the distance is a sanity bound on the tier, not a calibration.
+* Reported too: the ROM chord-Re range (FAN-01 is near the 2e5 top of the section model).
+* No parameter is changed after the run.
 
 Also reported (no limit): the BPF tone of C at Q_D, 1 m, 90 and 60 deg (amplitude and SPL), and the same loads at a compact `0.8 r_tip`.
 
@@ -157,9 +191,10 @@ Also reported (no limit): the BPF tone of C at Q_D, 1 m, 90 and 60 deg (amplitud
 
 The closed form is exact for its assumptions and agrees with the FW-H solver within 4e-5 (ADR 0066). The strip loads are model
 values. The steady-loading component of a low-Mach rotor is tiny: the smoke gives 1.25e-9 Pa at 1 m for C (tip Mach 0.053; the
-Bessel factor is J_7 at an argument of about 0.37, which is about 1e-9). Measured computer-fan BPF tones are, by common experience, far louder; they come from unsteady loading (struts, inflow
-distortion, rotor-stator interaction) that this model does not contain (UNVERIFIED as a quantitative statement; no measured small-fan
-noise is in the repository, D5). The number is a lower bound of the tonal level, not a prediction of it.
+Bessel factor is J_7 at an argument of about 0.37, which is about 1e-9). Measured computer-fan BPF tones are, by common
+experience, far louder; they come from unsteady loading (struts, inflow distortion, rotor-stator interaction) that this model
+does not contain (UNVERIFIED as a quantitative statement; no measured small-fan noise is in the repository, D5). The number is a
+lower bound of the tonal level, not a prediction of it.
 
 ### Status decision rule (registered now)
 
@@ -172,15 +207,16 @@ noise is in the repository, D5). The number is a lower bound of the tonal level,
 ## Smoke results before registration (rule d)
 
 `smoke_w46b`, debug build, one run:
-* Design consistency at Q_D: max relative `|dc - K/r|` 2.65e-15. Default model at Q_D: dp_t 32.77 Pa, dp_s 7.92 Pa, P 2.025 W,
-  eta_t 0.728, eta_s 0.176, tip loss 0.054 W, drag loss 0.496 W; 3 strips below Re 2e4 (hub, 1.9e4). Strip C_L from 0.69 (hub) to
-  0.30; alpha_e 6.3 to 2.7 deg.
+* Design consistency at Q_D: max relative `|dc - K/r|` 2.65e-15.
+* Default model at Q_D: dp_t 32.77 Pa, dp_s 7.92 Pa, P 2.025 W, eta_t 0.728, eta_s 0.176, tip loss 0.054 W, drag loss 0.496 W; 3
+  strips below Re 2e4 (hub, 1.9e4). Strip C_L from 0.69 (hub) to 0.30; alpha_e 6.3 to 2.7 deg.
 * Curve 0.004-0.096 m^3/s: stalled strips appear below 0.036 m^3/s (0.80 Q_D); dp_s peaks at about 0.032 (34.8 Pa) and dips to
   15.9 Pa at 0.024 (a stall dip); dp_t is strictly decreasing from 0.036 upward; power turns negative above 0.060.
 * No-stall variant (`cl_max = 100`): eta_t 0.7304 at 0.5 Q_D, peak 0.7714 at 0.80 Q_D, 0.0428 at 1.25 Q_D, -1.23 at 1.30 Q_D.
 * Operating points: the R1b system returns q = 0.045 exactly with crossings 1; 20 k: "rising fan characteristic ... stall region" at
   0.0156; 1000 k: "no intersection"; through 0.75 Q_D: "stalled: 5 of 40 strips beyond cl_max (r = 0.0303, ...)".
-* Ledger residual -4.4e-16 of P. Tone 1.25e-9 Pa (90 deg), 4.8e-10 Pa (60 deg); compact rotor at r_tip 3.2e-9 Pa.
+* Ledger residual -4.4e-16 of P.
+* Tone 1.25e-9 Pa (90 deg), 4.8e-10 Pa (60 deg); compact rotor at r_tip 3.2e-9 Pa.
 * Strips 40 against 80 at 0.6 Q_D (partly stalled): dp_t 48.806 / 48.680 Pa, P 2.2929 / 2.2932 W.
 * FAN-01 construction: 17 sections, 20 data rows, `FanRom::new` ok (not evaluated).
 * No set-up was found defective.
@@ -237,8 +273,9 @@ Mechanics and Thermodynamics of Turbomachinery"), the 2-D slot contraction `pi /
 | D2 evaluator | DOE centre ok with 8 finite metrics (q = Q_D); Nelder-Mead 10 evaluations to the bound -3 deg (eta_s 0.211); `bogus` key and the stall condition fail with located messages | functional | | pass |
 
 Reported (no limit):
-* **F1, Reynolds effect.** With nu held fixed at 4500 rpm (Re 1.5 times higher), the largest deviation from the fan laws is 3.9 % (dp_t +3.9 % and
-  P -1.9 % at 1.2 Q_D; eta_t 0.4275 against 0.4038). The fan laws are exact for this model only at equal Reynolds number.
+* **F1, Reynolds effect.** With nu held fixed at 4500 rpm (Re 1.5 times higher), the largest deviation from the fan laws is 3.9 %
+  (dp_t +3.9 % and P -1.9 % at 1.2 Q_D; eta_t 0.4275 against 0.4038). The fan laws are exact for this model only at equal Reynolds
+  number.
 * **Tones (D1).** Set-up C at Q_D, 1 m: BPF amplitude 1.25e-9 Pa at 90 deg (-87 dB re 20 uPa, rms), 4.8e-10 Pa at 60 deg (-96 dB); the
   same loads at a compact 0.8 r_tip give 1.06e-9 Pa. The steady-loading tone of a tip-Mach-0.05 rotor is inaudible; this is a lower
   bound, as stated above, not a prediction.
@@ -257,16 +294,22 @@ Reported (no limit):
 | 1.907 | 40.9 | 42.8 | 372.6 | 272.9 | 0 |
 | 2.079 | -6.9 | 6.8 | 324.9 | 235.3 | 0 |
 
-  Over all 20 points: rms dp_s difference 104 Pa (the measured design-point value is 126 Pa), rms power difference 24 %. At the design
-  point the ROM gives dp_s 45.7 Pa (-64 %), P 308.6 W (-7.4 %), eta_s 0.21 against 0.53. The ROM stalls at the design point: its stall
-  onset (largest measured flow with a stalled strip) is 1.59 m^3/s against about 1.1 measured. Above 1.7 m^3/s, where no ROM strip is
-  stalled, dp_s is within 2 to 14 Pa of the measurement but the power is 32 to 38 % high. Chord Re 5.0e4 to 1.45e5.
+  V1 results:
+
+  * Over all 20 points: rms dp_s difference 104 Pa (the measured design-point value is 126 Pa), rms power difference 24 %.
+  * At the design point the ROM gives dp_s 45.7 Pa (-64 %), P 308.6 W (-7.4 %), eta_s 0.21 against 0.53.
+  * The ROM stalls at the design point: its stall onset (largest measured flow with a stalled strip) is 1.59 m^3/s against about
+    1.1 measured.
+  * Above 1.7 m^3/s, where no ROM strip is stalled, dp_s is within 2 to 14 Pa of the measurement but the power is 32 to 38 % high.
+  * Chord Re 5.0e4 to 1.45e5.
+
   Reading, not a finding: at the design point 33 of 40 strips are stalled, so most of the span is past the threshold, not only the
   hub (solidity 1.14). The threshold is `cl_max / 2 pi` = 10.0 deg of effective incidence, and the camber adds about 4.3 deg through
   `alpha_L0`. An isolated thin plate with this `cl_max` therefore stalls where the real blade row, a cascade with a measured stall
   onset near 1.1 m^3/s, still turns the flow. The ROM has no cascade correction (D-M3). The distance is the size of an uncorrected
   strip model on a fan it was not built for. It is not a calibration, and nothing was changed after the run. It does show that this
   tier, as registered, does not bound FAN-01 below 1.6 m^3/s, and that the stall model sets the shape of the curve below its onset.
+
 * **Efficiency maximum and the design loop.** M1 passes with stall switched off (`cl_max = 100`). With the default model, the eta_t
   maximum inside the unstalled range [0.80, 1.30] Q_D lies at the stall boundary (0.7714 at 0.80 Q_D against 0.7682 at 0.85 Q_D): the
   model's efficiency keeps rising with loading until a strip stalls. D2 shows the consequence: Nelder-Mead on eta_s ran to the
@@ -294,8 +337,9 @@ Measured (one run each, debug build): **S1** worst 3.0e-16 against 1e-12; NC swi
 
 ## Final gate
 
-Written at main 4ea5b7b and rebased three times: onto 2d798b2, then 8d53017 (ADR 0120), then 48b30bc (one docs file, `docs/ui-restart-plan.md`).
-The commit ids in the addendum are pre-rebase: 618c8c6 (implementation) is now 8865cc7.
+Written at main 4ea5b7b and rebased three times: onto 2d798b2, then 8d53017 (ADR 0120), then 48b30bc (one docs file,
+`docs/ui-restart-plan.md`). The commit ids in the addendum are pre-rebase: 618c8c6 (implementation) is now 8865cc7.
+
 * Gate 1, a fresh `git archive` of a3217b2 (on 2d798b2), `<scratch dir>`: `cargo test --workspace --release --no-fail-fast`
   2045 passed, 0 failed, 652 ignored (fmt and clippy clean).
 * Gate 2, a fresh `git archive` of db7e521 (amendment 2 included, on 8d53017): fmt clean; `cargo clippy --workspace --all-targets

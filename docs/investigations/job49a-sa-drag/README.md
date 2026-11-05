@@ -1,11 +1,18 @@
 # Why the steady SA drag of the NACA 0012 was wrong (job 49A, ADR 0164)
 
+ADR 0159's SA drag had two independent causes: the force report at 0 degrees and the far-field nuTilda from 4 degrees up. With
+the opt-in component `total_effective`, cd at 0 degrees is +3.6 % against the TMR reference. With the opt-in far-field role as
+well, cd at 10 degrees is +26 % on the 50-chord far field and +10 % on 500 chords, and the remaining +10 % is not attributed.
+At y+ 5 SA's wall mode `auto` over-predicts the friction by 20 %, which is a separate wall-treatment item.
+
 The set-up, the limits, amendment 1 and the evaluation are in
 [ADR 0164](../../adr/0164-job49a-why-the-sa-drag-of-the-naca0012-is-wrong.md). This folder holds the results only. No run
 or mesh enters git. To build the runs again, use `scripts/w49a_sa_drag.py` in an empty work folder outside the repository
-(`mesh`, `cases`, `run`, `adopt`, `collect`; see the script's docstring). The reference is the NASA TMR NACA 0012 SA
-validation case (CFL3D, 897 x 257 grid, 500 chords, nuTilda = 3 nu): cd 0.00819 at 0 degrees, of which the friction is
-0.00683 and the pressure 0.00136; cl 1.0909 and cd 0.01231 at 10 degrees. The two files are in `validation-data/reference/w49a_*`.
+(`mesh`, `cases`, `run`, `adopt`, `collect`; see the script's docstring).
+
+The reference is the NASA TMR NACA 0012 SA validation case (CFL3D, 897 x 257 grid, 500 chords, nuTilda = 3 nu): cd 0.00819
+at 0 degrees, of which the friction is 0.00683 and the pressure 0.00136; cl 1.0909 and cd 0.01231 at 10 degrees. The two
+files are in `validation-data/reference/w49a_*`.
 
 ## Finding
 

@@ -19,8 +19,8 @@ the end), so the commands and the quoted output lines are what the current code 
 cargo build --release -p rcfd-cli
 ```
 
-The binary is `target/release/rcfd` (`rcfd.exe` on Windows); put it on your `PATH` or call it with its full path. The commands
-below are run from the repository root.
+The binary is `target/release/rcfd` (`rcfd.exe` on Windows); put it on your `PATH` or call it with its full path. Run the commands
+below from the repository root.
 
 ```console run
 $ rcfd --version
@@ -35,9 +35,9 @@ failed, 5 not converged, 6 diverged, 7 interrupted, 8 wall-clock limit).
 
 ## 2. Write the case file
 
-A case is a TOML (or JSON) file with the sections described in [the case schema](../case-schema.md). This one is a lid-driven
-cavity on a built-in 16 x 16 mesh; the patch names `lid` and `walls` come from the `cavity_2d` generator
-(see [meshing](../meshing.md) for the generators). Save it as `my_cavity.toml` in the repository root.
+A case is a TOML (or JSON) file with the sections described in [the case schema](../case-schema.md). Save this one as
+`my_cavity.toml` in the repository root. It is a lid-driven cavity on a built-in 16 x 16 mesh; the patch names `lid` and `walls`
+come from the `cavity_2d` generator (see [meshing](../meshing.md) for the generators).
 
 ```toml file=my_cavity.toml
 title = "my first cavity"
@@ -83,7 +83,7 @@ $ rcfd validate my_cavity.toml
 my_cavity.toml: ok
 ```
 
-A mistake is reported with its line number and the list of known keys, and the exit code is 3. Here the report key `patch`
+`validate` reports a mistake with its line number and the list of known keys, and the exit code is 3. Here the report key `patch`
 is misspelt as `patches`:
 
 ```toml file=broken.toml
@@ -129,7 +129,9 @@ converged: residual targets met
 ```
 
 The output directory holds `solution.vtu` (open it in ParaView), `monitors.json` / `monitors.csv` (residual and report
-histories), `report.html` and the checkpoint `restart.rcfd`. A setting can be changed for one run without editing the file:
+histories), `report.html` and the checkpoint `restart.rcfd`.
+
+You can change a setting for one run without editing the file:
 
 ```console run
 $ rcfd run my_cavity.toml --out results_nu002 --quiet --set physics.nu=0.02
@@ -161,11 +163,15 @@ $ rcfd schema --out schema.json
 
 ## How these tutorials are tested
 
-Every code block of a tutorial is tagged in its fence: `file=<name>` blocks are written to a fresh working directory (which also
-holds a copy of `cases/`), `run` blocks are executed with the real binary and must reach their exit code (`exit=<n>`, default 0),
-`output` blocks list lines that must appear in the preceding command's output, `run-slow` blocks run only in the ignored slow test,
-and `not-executed` blocks (like the build command above) are never run. An untagged block fails the test. See
-[ADR 0089](../adr/0089-wave38b-docs-site-tutorials-gallery.md).
+Every code block of a tutorial is tagged in its fence:
+
+* `file=<name>` blocks are written to a fresh working directory (which also holds a copy of `cases/`).
+* `run` blocks are executed with the real binary and must reach their exit code (`exit=<n>`, default 0).
+* `output` blocks list lines that must appear in the preceding command's output.
+* `run-slow` blocks run only in the ignored slow test.
+* `not-executed` blocks (like the build command above) are never run.
+
+An untagged block fails the test. See [ADR 0089](../adr/0089-wave38b-docs-site-tutorials-gallery.md).
 
 ## Where to go next
 

@@ -1,13 +1,27 @@
 # ADR 0093: Wave 39B, partials close-out for F-233, F-211 and F-131
 
-Status: registered before the registered tests were run. Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test
-with the limit unchanged. No library code changes: every addition is test code, so defaults and the baseline hashes are
-untouched. Clean-room: closed forms derived below from first principles; no literature value enters a gate.
+Status: registered before the registered tests were run.
+
+Wave 39B adds test code for the residual gaps of three roadmap items. F-233 gains closed-form assertions on the reference cells,
+F-211 gains a measured order for compressive(1.5) and compressive(2) on their limit cycle, and F-131 sends a closed STL file
+through the cylinder-in-box pipeline. The results, measured after the registration, are at the end. F-233 and F-211 pass. On
+F-131, S1 passes, S2 misses (minimum dihedral 1.84 deg vs the registered 3.0) and S3 misses (radius-edge fraction 0.936 vs
+0.99). F-131 stays partial: the STL clause and watertightness are met; the tetrahedral quality is not. Gate on a fresh archive of
+bc9f846: fmt and clippy clean, 1914 passed / 0 failed / 540 ignored.
+
+Rules:
+
+* Limits are fixed; a miss becomes an `#[ignore]`d `*_known_miss` test with the limit unchanged.
+* No library code changes: every addition is test code, so defaults and the baseline hashes are untouched.
+* Clean-room: closed forms derived below from first principles; no literature value enters a gate.
 
 The residual gaps are those stated in docs/audit/partials-group-1.md. I re-checked each claim against the code before writing
-this ADR: `q2a_sliver_hexahedron` asserts only edge ratio, angles and inverse orthogonal quality; no tetrahedron test asserts the
-four pre-existing measures; `o1c_known_miss_compressive_convergence` is the only test that measures compressive(1.5) and
-compressive(2); `p1_pipeline_cylinder_in_box` builds its surface in code and only prints the tetrahedral quality.
+this ADR:
+
+* `q2a_sliver_hexahedron` asserts only edge ratio, angles and inverse orthogonal quality.
+* No tetrahedron test asserts the four pre-existing measures.
+* `o1c_known_miss_compressive_convergence` is the only test that measures compressive(1.5) and compressive(2).
+* `p1_pipeline_cylinder_in_box` builds its surface in code and only prints the tetrahedral quality.
 
 ## F-233: closed forms on the reference cells (test file crates/rcfd-mesh/tests/measures.rs)
 
@@ -17,8 +31,8 @@ quality, size change, face edge-length ratio) plus the four pre-existing ones of
 non-orthogonality, maximum skewness, maximum aspect ratio, maximum volume ratio). Tolerances are the ADR 0018 ones: 1e-12
 absolute for dimensionless values, 1e-9 degrees for angles, 1e-9 relative for the ratio 1000.
 
-Closed forms for the pre-existing measures. Every cell below is a single cell, so every face is a boundary face, the
-non-orthogonality of a face is the angle between `d = face centre - cell centre` and the face normal, the skewness is
+Closed forms for the pre-existing measures. Every cell below is a single cell, so every face is a boundary face. On such a
+cell the non-orthogonality of a face is the angle between `d = face centre - cell centre` and the face normal, the skewness is
 `|face centre - (cell centre + d (d.n)/(d.n))| / |d| = 0` and the volume ratio is 1 (no internal face; the report starts at 1).
 
 * Unit cube (q1a, n = 1 and n = 2, the latter with internal faces between equal cubes): non-orthogonality max and mean 0,
@@ -96,12 +110,15 @@ registered results below.
 
 ### F-233: pass
 
-`measures`: 17 passed, 1 ignored (the old q2d record). q1a, q1b, q1c and q2a pass with the added assertions at the registered
-tolerances: unit cube non-orthogonality 0, skewness 0, aspect ratio 1, volume ratio 1; right-corner tetrahedron maximum
-non-orthogonality atan(sqrt(2)/3) = 25.2394 deg and mean 0.75 of it, aspect ratio sqrt(2); regular tetrahedron size change 1
-and the four pre-existing measures; sliver hexahedron warp 0 on the cell and every face, ortho-skew 0, size change 1,
-non-orthogonality 0, skewness 0, aspect ratio 1000, volume ratio 1. Every ADR 0018 measure and every pre-existing measure is
-now asserted on a tetrahedron, a hexahedron and the degenerate cell.
+`measures`: 17 passed, 1 ignored (the old q2d record). Every ADR 0018 measure and every pre-existing measure is now asserted on
+a tetrahedron, a hexahedron and the degenerate cell. q1a, q1b, q1c and q2a pass with the added assertions at the registered
+tolerances:
+
+* Unit cube: non-orthogonality 0, skewness 0, aspect ratio 1, volume ratio 1.
+* Right-corner tetrahedron: maximum non-orthogonality atan(sqrt(2)/3) = 25.2394 deg and mean 0.75 of it, aspect ratio sqrt(2).
+* Regular tetrahedron: size change 1 and the four pre-existing measures.
+* Sliver hexahedron: warp 0 on the cell and every face, ortho-skew 0, size change 1, non-orthogonality 0, skewness 0, aspect
+  ratio 1000, volume ratio 1.
 
 ### F-211: pass
 
@@ -121,8 +138,8 @@ compressive(2) 1.9815..1.9816 and 1.9910..1.9910. Limit band [1.85, 2.3]: met.
   maximum 174.02 deg, radius-edge fraction 0.9274, 83 bad left after 4 rounds, so the wave 19B record still holds. The STL
   surface has the same coordinates (bit exact ASCII round trip) but a different vertex numbering from the welding. The
   difference is consistent with the remesh and the refinement depending on the numbering, but I did not isolate that cause
-  and did not try other numberings: that would be picking a favourable set-up. Note that even p1's 3.34 deg passes the
-  3.0 limit only narrowly.
+  and did not try other numberings: that would be picking a favourable set-up. Even p1's 3.34 deg passes the 3.0 limit only
+  narrowly.
 * S3: radius-edge fraction 0.936 vs 0.99: MISS (as expected; p1 gave 0.927). Maximum dihedral 176.8 deg, maximum radius-edge
   27.9, 68 bad tetrahedra left after 3 refinement rounds.
 

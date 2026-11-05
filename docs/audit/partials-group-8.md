@@ -1,13 +1,22 @@
 # Partials audit, group 8
 
-Read-only audit of ten roadmap items with status `partial` (HEAD e20b7fc, 2026-10-21). Each item is graded against its
-`acceptance` field in docs/roadmap.json only. Wider scope from the title, from a "SCOPE (merged review)" addition or from
-"acceptance additions" in the note is listed separately with the prefix "scope-only". It does not lower the grade, but the
-paragraph says how to record it.
+This read-only audit grades ten roadmap items with status `partial` (HEAD e20b7fc, 2026-10-21). Counts: DONE 7, PARTIAL 3
+(F-041, F-218, F-240), TODO 0, OVERSTATED 0. Of the seven DONE items, only F-149 can flip now. The other six are DONE
+pending a reference check (F-055, Hysing values) or a user decision on wording or scope split (F-095, F-115, F-128, F-208,
+F-230). F-115 is met as written, but its residual check is vacuous; the meaningful check, S5b, passes, and S5a is a
+known miss. The last section lists the unverified references this group depends on.
 
-Grades: DONE = the acceptance text, as written, is met by a passing non-ignored test with numeric limits; PARTIAL = a real
-tested slice exists, with the unmet clause named; TODO = nothing usable; OVERSTATED = the roadmap note claims more than the
-tests show.
+Each item is graded against its `acceptance` field in docs/roadmap.json only. Wider scope from the title, from a
+"SCOPE (merged review)" addition or from "acceptance additions" in the note is listed separately with the prefix
+"scope-only". It does not lower the grade, but the paragraph says how to record it. The [glossary](../glossary.md) defines
+F-xxx, wave and known miss.
+
+Grades:
+
+* DONE: the acceptance text, as written, is met by a passing non-ignored test with numeric limits.
+* PARTIAL: a real tested slice exists, with the unmet clause named.
+* TODO: nothing usable.
+* OVERSTATED: the roadmap note claims more than the tests show.
 
 How the runs were made: a clean `git archive e20b7fc` copy, Windows 11,
 `cargo test --release -p <crate> --test <name> -- --include-ignored --nocapture`, with a private target directory, on a
@@ -32,22 +41,22 @@ GUI key test on Linux.
 | F-230 | Dynamic mesh layering and remeshing | DONE | ran rcfd-fv `layering_w38c` 5/5, `ale_gcl` 4/4, `ale_flows` (4 pass; 4 F-063 known misses fail as recorded); read ADR 0090 | none against the text (p V^gamma 1.53e-5 and 3.42e-5 against 2e-2; layer-event conservation 4.4e-16). Scope-only: local remeshing, unstructured layering, case-tree wiring, PIMPLE layering | L (scope) | none | no (scope) | yes (split the scope) |
 | F-240 | Declarative setup-validation rule engine | PARTIAL | ran rcfd-api `rules_w19c` (5 pass; E2 zero-warning known miss fails on SV103); read crates/rcfd-api/rules/setup_rules.json, ADR 0031 | "published validation cases raise no error-level diagnostic" was never measured: the validation tests build their solvers through the library or from templates, which E2 skips; the five registry descriptors (case.json) have no loadable setup | S | none | yes | no |
 
-Counts: DONE 7, PARTIAL 3 (F-041, F-218, F-240), TODO 0, OVERSTATED 0. Of the seven DONE items, only F-149 can flip now. The
-other six are DONE pending a reference check (F-055, Hysing values) or a user decision on wording or scope split (F-095,
-F-115, F-128, F-208, F-230).
-
 ## F-041 Spalart-Allmaras one-equation model (PARTIAL)
-
-Re-run (wall-resolved plate, y+ 0.52): Cf(0.97) = 0.002786. Against the TMR CFL3D SA value this is +2.97 %. Against
-White's correlation it is -4.1 / -3.6 / -3.1 / -3.0 % at x 0.4 / 0.6 / 0.97 / 1.0. Against the power law
-0.0576 Re_x^-0.2 it is +0.8 / +2.7 / +5.29 % at x 0.4 / 0.6 / 1.0. All of these match the note. The wall-function mesh
-gives +5.81 % against TMR SA (limit 10 %), and resolved mode is identical to auto mode.
 
 The miss is S2 (power law at x = 1.0). ADR 0014 registered that the acceptance is met only when S1, S2 and S3 all pass.
 That rule is the problem. At Re_x = 5e6 the power law gives about 2.64e-3 and White's correlation about 2.86e-3, which are
-8.5 % apart. To sit within 5 % of both, Cf must fall in a band about 2 % wide (2.72e-3 to 2.77e-3), and the TMR SA reference itself sits
-about +2.4 % above the power law at x = 0.97. The acceptance "within 5 percent of correlation" never names a correlation,
-so it is ill-posed as written.
+8.5 % apart. To sit within 5 % of both, Cf must fall in a band about 2 % wide (2.72e-3 to 2.77e-3), and the TMR SA
+reference itself sits about +2.4 % above the power law at x = 0.97. The acceptance "within 5 percent of correlation" never
+names a correlation, so it is ill-posed as written.
+
+Re-run (wall-resolved plate, y+ 0.52): Cf(0.97) = 0.002786.
+
+- Against the TMR CFL3D SA value this is +2.97 %.
+- Against White's correlation it is -4.1 / -3.6 / -3.1 / -3.0 % at x 0.4 / 0.6 / 0.97 / 1.0.
+- Against the power law 0.0576 Re_x^-0.2 it is +0.8 / +2.7 / +5.29 % at x 0.4 / 0.6 / 1.0.
+
+All of these match the note. The wall-function mesh gives +5.81 % against TMR SA (limit 10 %), and resolved mode is
+identical to auto mode.
 
 Proposed rewording, for the user to decide: "flat plate Cf within 5 % of the TMR SA reference and of White's correlation
 for 0.4 <= x <= 1.0 (Re_x 2e6 to 5e6)". Any new reading must be registered in a new ADR before the item is re-graded, so
@@ -87,8 +96,9 @@ The literal acceptance is met:
 - The study runner is exposed as the `design_run_study` MCP tool (T4 passes).
 
 The specific "5 inlet velocities" study exists only in the ignored S7 test. That test runs `--parallel 2`, exits 0 and
-returns 5 rows (table.json left by this run: 5 rows, all `ok`, u = 0.02 to 0.1). It fails only on the merged-review 1 % clause (u = 0.02: dp 0.9417 against 0.96, -1.9 %). The non-ignored
-refinement diagnostic gives 1.90 % at ny 10 and 0.29 % at ny 20, and dp/U is constant to 1e-3.
+returns 5 rows (table.json left by this run: 5 rows, all `ok`, u = 0.02 to 0.1). It fails only on the merged-review 1 %
+clause (u = 0.02: dp 0.9417 against 0.96, -1.9 %). The non-ignored refinement diagnostic gives 1.90 % at ny 10 and 0.29 %
+at ny 20, and dp/U is constant to 1e-3.
 
 No non-ignored test runs the five-velocity sweep. The DONE grade combines three passing tests: s2 (thread independence),
 s3 (resume on the slab study), and the 3-velocity `--parallel 2` run inside `poiseuille_error_decreases_with_refinement`.

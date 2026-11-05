@@ -6,11 +6,23 @@ registered limit met, no known miss; amendment 1 (the live model switch) correct
 results; no stored example run and no `baseline_hashes.rs` case changes. Not yet
 accepted by the maintainer. 2026-10-29: questions 1 (b) and 3 (b) are taken in
 [ADR 0169](0169-job49f-sst-and-k-epsilon-far-field-default-and-the-naca-example-runs.md) (job 49F), which supersedes D2's
-SA-only scope and with it T6 and T8 (a). Job 49C, on local main f9a520a (the
-worktree branch was fast-forwarded to it before any work). Number: 0165 is the highest in this worktree and in the main
-checkout; 0167 is taken by job 49D on another branch; 0166 was free when this was written.
+SA-only scope and with it T6 and T8 (a).
 **2026-10-29: D3 and test T4 are superseded by [ADR 0170](0170-job49g-moment-reports-follow-the-effective-wall-shear-default.md)
 (question 2 (a)): `moment` reports now follow the force default; T4 is respelled as T4'.**
+
+This job makes the effective wall shear and the far-field `freestream` role, both opt-in in ADR 0164, the defaults, on the
+maintainer's decision; D1 to D4 are this ADR's own decisions within it, none presented as the maintainer's. `force` and
+`force_coefficient` reports with component `total` or `viscous` take the momentum equation's face viscosity when a turbulence
+model is active and the engine has a face viscosity (D1). Under `turbulence = "auto"`, a `velocity = "freestream"` patch gets
+the `freestream` role with Spalart-Allmaras only, since the literal default would turn existing k-epsilon and SST far-field
+cases into validation errors (D2, whose SA-only scope ADR 0169 has since superseded). `moment` reports keep their default (D3,
+since superseded by ADR 0170), and the old behaviours stay spellable as explicit values (D4). The addendum records every registered
+limit met, with no known miss; ADR 0159's SA cases at 0 and 10 degrees reproduce bit for bit under the old spellings over
+prefixes of 1099 and 876 iterations, not their full length. An unchanged ADR 0159 case text now gives what ADR 0164's opt-in
+F10 gave, bit for bit: cl 1.055 and cd 0.01548 at 10 degrees, against 0.982 and 0.0396 before. Review found a defect in the
+live model switch after the registered results, and amendment 1 registered it before its fix and its test T8. The full
+workspace test suite, the gate and Linux were not run, and this job does not regenerate the 8 stored NACA 0012 example runs,
+although a re-run gives other `cl` and `cd`.
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -28,8 +40,12 @@ Parents:
   reproducible.
 - [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) D6, [ADR 0160](0160-job48z-end-time-stamp-corrector-count-record-sv301-wiring.md)
   and [ADR 0163](0163-job48ac-case-hashes-h1-after-the-corrector-control-key.md): how a new key at its default is kept
-  out of the case hash (`Schema::hash_omit_default`). [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md):
-  a key at its schema default is not the case's own.
+  out of the case hash (`Schema::hash_omit_default`).
+- [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md): a key at its schema default is not the case's
+  own.
+
+Job 49C, on local main f9a520a (the worktree branch was fast-forwarded to it before any work). Number: 0165 is the highest
+in this worktree and in the main checkout; 0167 is taken by job 49D on another branch; 0166 was free when this was written.
 
 ## The maintainer's decision (2026-10-29, relayed)
 
@@ -394,7 +410,6 @@ tests, clippy and fmt. All passed or were clean. The other G tests and R1-R3 wer
   by review after the registered results. It was registered as amendment 1 before its fix and its test T8.
 - T8 (c) is checked by what can be seen from outside the crate (the far-field faces after the switch), not by comparing
   the inlet list itself, which is private.
-
 - `w48v_case_hashes` was registered in G1 as "passes". Its only test is an ignored print tool. The registered intent (the
   case hashes are unchanged) is met by `case_hashes_w48u`, which compares every shipped case against the 6867e40 fixture.
 - The R1-R3 comparison output (`E:\projects\cfd\w49c-work\runs\compare.json`) is recorded in the table above and is not

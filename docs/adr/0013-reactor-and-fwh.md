@@ -1,10 +1,24 @@
 # ADR 0013: 0D reactor toolkit (F-112) and Ffowcs Williams-Hawkings acoustics (F-136)
 
 Status: accepted. The checks, numeric limits and decision rules below were written before any code of the two
-modules was compiled or run. They are not changed, widened, replaced or deleted after a run; a miss is reported as
-measured and the test moves to an `#[ignore]`d `*_known_miss` test with the registered limit intact.
-Roadmap: F-112 (reactors), F-136 (FW-H). F-054 (CHEMKIN reader) is still `todo`; this ADR only uses the reader that
-F-112 needs (`rcfd-reactor::chemkin`), it does not advance F-054 (no CFD coupling).
+modules was compiled or run.
+
+This ADR adds a 0D reactor toolkit (F-112) and Ffowcs Williams-Hawkings (FW-H) acoustics (F-136). F-112 stays `partial` at
+best, whatever the checks show: 1D flame speed is not in scope, and published GRI-based ignition delay values are NOT
+registered because no number could be verified from an accessible source in this session. GRI-Mech 3.0 thermo data misses
+the R3 NASA continuity limit of 1e-3 relative (5.1e-3 in h, 4.8e-4 in s, `r3_gri_nasa_continuity_known_miss`), a property of
+the data file, not of the reader. Every other reactor value under "Results" that has a limit is within it. All FW-H checks
+passed on the first run, and no limit is close to its bound, which also means the limits were loose relative to what the
+method achieves. The A7 CLI test has reduced scope, a disclosed deviation: it compares the CLI with the library on a
+72-element surface file, not with the A1 r = 10 m result. During development the 3-stage Radau IIA method of order 5 replaced
+the ODE method named under "Scope". The R2 reference digits, the 2225 K in R7 and the Farassat/Brentner formulas are from memory.
+
+Rules and parents:
+
+- The checks, numeric limits and decision rules are not changed, widened, replaced or deleted after a run; a miss is
+  reported as measured and the test moves to an `#[ignore]`d `*_known_miss` test with the registered limit intact.
+- Roadmap: F-112 (reactors), F-136 (FW-H). F-054 (CHEMKIN reader) is still `todo`; this ADR only uses the reader that
+  F-112 needs (`rcfd-reactor::chemkin`), it does not advance F-054 (no CFD coupling).
 
 ## Scope
 
@@ -90,9 +104,9 @@ e = RMS(p_fwh - p_exact) / RMS(p_exact) over one source period at steady state.
 * A2 1/r decay: amplitude(r) * r for r = 50, 100, 200, 400 m: max/min - 1 <= 1e-3.
 * A3 Retarded-time phase: phase of the fundamental (DFT over whole periods) of the FW-H signal at r = 50 m minus the
   analytic -w r/c: |dphi| <= 1e-3 rad.
-* A4 Stationary dipole (point force F(t) e_x, exact p', exact potential-flow u, formulas in the test): directivity
-  |p'(theta)| / |p'(0)| = |cos theta| at r = 100 m, theta = 0, 30, 60, 90, 120, 150, 180 deg: abs error <= 1e-3, and the
-  RMS time-series error e <= 1e-3 at theta = 45 deg, r = 100 m.
+* A4 Stationary dipole (point force F(t) e_x, exact p', exact potential-flow u, formulas in the test):
+  directivity |p'(theta)| / |p'(0)| = |cos theta| at r = 100 m, theta = 0, 30, 60, 90, 120, 150, 180 deg: abs error
+  <= 1e-3, and the RMS time-series error e <= 1e-3 at theta = 45 deg, r = 100 m.
 * A5 Rotating monopole (circular orbit radius 1 m, tip Mach 0.3, source frequency 4x rotation frequency; the permeable sphere
   of radius 0.3 m translates with the source, exact Lienard-Wiechert potential phi = -q(tau)/(4 pi r (1 - Mr)), p' = -rho0 phi_t,
   u = grad phi by 8th-order central differences): observers at r = 30 m in the orbit plane (angle 0 and 90 deg to the
@@ -116,15 +130,16 @@ the full title scope are met; otherwise `partial` with an honest note.
 
 * ODE method replaced twice during development (an implementation choice, not a registered criterion). The
   extrapolated linearly implicit Euler method of the Scope section needed 4e4 to 7e4 steps for 3e-4 s of GRI H2/air
-  ignition (tried 2 to 6 columns, a central-difference Jacobian and looser tolerances, no fix) and was discarded. It was
-  replaced by the 3-stage Radau IIA method of order 5 (Hairer and Wanner, Solving ODEs II, IV.8: simplified Newton on
+  ignition (tried 2 to 6 columns, a central-difference Jacobian and looser tolerances, no fix) and was discarded.
+* The 3-stage Radau IIA method of order 5 replaced it (Hairer and Wanner, Solving ODEs II, IV.8: simplified Newton on
   the 3n stage system, Radau5 embedded error estimator, forward-difference Jacobian reused while the Newton contraction
-  rate is below 1e-3, collocation start values). That version first showed thousands of rejected steps on
-  Prothero-Robinson and on the toy dissociation: the cause was a defect in the dense LU solver (row swaps were applied
-  interleaved with the forward substitution although the stored multipliers had been swapped with the rows), invisible
-  on diagonally dominant systems and wrong when pivoting happens. Fixed in `ode::lu_solve`; no tolerance or limit was
-  touched for it. Final step counts: Prothero-Robinson 10 steps, Robertson to t = 40 hundreds of steps, GRI H2/air
-  ignition 430 to 520 steps.
+  rate is below 1e-3, collocation start values).
+* That version first showed thousands of rejected steps on Prothero-Robinson and on the toy dissociation. The cause was a
+  defect in the dense LU solver (row swaps were applied interleaved with the forward substitution although the stored
+  multipliers had been swapped with the rows), invisible on diagonally dominant systems and wrong when pivoting happens.
+  Fixed in `ode::lu_solve`; no tolerance or limit was touched for it.
+* Final step counts: Prothero-Robinson 10 steps, Robertson to t = 40 hundreds of steps, GRI H2/air ignition 430 to 520
+  steps.
 * The Prothero-Robinson test was first written with time as a second state (autonomous form) and is now written with the
   explicit-time right-hand side (the integrator accepts f(t, y)); same problem, same limit (1e-6), same tolerances.
 * Default tolerances: unchanged from the Scope section (rtol 1e-8, atol 1e-14 species / 1e-8 T).
@@ -146,33 +161,63 @@ Measured (release builds, commit hashes in the final report):
 
 Reactor (`cargo test --release -p rcfd-reactor`, R7 with `-- --ignored`):
 
-* R1 Prothero-Robinson lambda = 1e6: max node error 1.2e-9 in 10 steps (limit 1e-6); decay rel error 1.4e-11 (1e-7).
-* R2 Robertson t = 40: relative errors 2.7e-11 / 6.1e-11 / 1.6e-10 for y1 / y2 / y3 (limits 1e-5 / 1e-4 / 1e-5);
-  sum - 1 = 2.2e-16 (1e-12); 782 steps. (Reference digits from memory, see reference-data.md.)
-* R3 GRI reads 53 species, 325 reactions, 5 elements, zero element imbalance: pass. NASA continuity: known miss (above).
-* R4 TP equilibrium relative error <= 1.3e-15 (limit 1e-9); HP enthalpy 1.8e-15 (1e-9); CV isothermal relaxation 1.4e-16
-  (1e-6).
-* R5 adiabatic energy drift 1.5e-13 (CP) and 2.8e-12 (CV) (limit 1e-8); element drift 7.1e-16, sum Y drift 8.9e-16
-  (limit 1e-12).
-* R6 plug flow 7.1e-15, PSR 5.2e-15 (limit 1e-8).
-* R7 GRI-Mech 3.0, H2/air phi = 1, 1 atm, ignition delay at max dT/dt:
-  constant volume 3.054e-4 s (1000 K), 8.616e-5 s (1100 K), 4.422e-5 s (1200 K);
-  constant pressure 3.120e-4 s, 8.861e-5 s, 4.533e-5 s. Strictly decreasing; element drift <= 2.4e-15; sum Y error
-  <= 1.6e-15. These numbers are NOT compared with published values (see above).
-  CH4/air phi = 1 HP T_ad = 2225.5 K (registered 2225 K +- 1 percent), element error 2.2e-14.
-  1 s limits: CV 2931.78 K vs UV equilibrium 2931.78 K (rel 2.1e-11); CP 2751.87 K vs HP 2751.87 K (rel 9.0e-12).
-  PSR blowout (residence time bracket): phi 1, 300 K inlet: [1.494e-5, 1.534e-5] s (bracket 2.6 percent);
-  phi 1, 600 K: [1.034e-5, 1.061e-5] s (2.6 percent); phi 0.5, 300 K: [4.286e-5, 4.400e-5] s (2.6 percent). Trends hold
-  (preheat shortens, lean lengthens).
-* CLI `rcfd reactor` run on the 1100 K H2/air constant-volume case: delay 8.616e-5 s (same as the test), 610 steps,
-  1 s wall; malformed case file gives located errors (`reactor.temperature: must be a positive number (got -5)`),
-  exit code 3.
+| Check | Measured | Limit |
+| --- | --- | --- |
+| R1 Prothero-Robinson lambda = 1e6, max node error | 1.2e-9 in 10 steps | 1e-6 |
+| R1 decay, rel error | 1.4e-11 | 1e-7 |
+| R2 Robertson t = 40, relative errors for y1 / y2 / y3, 782 steps (reference digits from memory, see reference-data.md) | 2.7e-11 / 6.1e-11 / 1.6e-10 | 1e-5 / 1e-4 / 1e-5 |
+| R2 sum - 1 | 2.2e-16 | 1e-12 |
+| R3 GRI reads 53 species, 325 reactions, 5 elements, zero element imbalance | pass | |
+| R3 NASA continuity | known miss (see "Tuning disclosure") | |
+| R4 TP equilibrium relative error | <= 1.3e-15 | 1e-9 |
+| R4 HP enthalpy | 1.8e-15 | 1e-9 |
+| R4 CV isothermal relaxation | 1.4e-16 | 1e-6 |
+| R5 adiabatic energy drift, CP and CV | 1.5e-13 and 2.8e-12 | 1e-8 |
+| R5 element drift | 7.1e-16 | 1e-12 |
+| R5 sum Y drift | 8.9e-16 | 1e-12 |
+| R6 plug flow | 7.1e-15 | 1e-8 |
+| R6 PSR | 5.2e-15 | 1e-8 |
+
+R7 GRI-Mech 3.0, H2/air phi = 1, 1 atm, ignition delay at max dT/dt:
+
+| Reactor | 1000 K | 1100 K | 1200 K |
+| --- | --- | --- | --- |
+| constant volume | 3.054e-4 s | 8.616e-5 s | 4.422e-5 s |
+| constant pressure | 3.120e-4 s | 8.861e-5 s | 4.533e-5 s |
+
+The delays are strictly decreasing; element drift <= 2.4e-15; sum Y error <= 1.6e-15. These numbers are NOT compared with
+published values (see above). Other R7 results:
+
+* CH4/air phi = 1 HP T_ad = 2225.5 K (registered 2225 K +- 1 percent), element error 2.2e-14.
+* 1 s limits: CV 2931.78 K vs UV equilibrium 2931.78 K (rel 2.1e-11); CP 2751.87 K vs HP 2751.87 K (rel 9.0e-12).
+
+R7 PSR blowout (residence time bracket):
+
+| Case | Residence time bracket | Bracket |
+| --- | --- | --- |
+| phi 1, 300 K inlet | [1.494e-5, 1.534e-5] s | 2.6 percent |
+| phi 1, 600 K | [1.034e-5, 1.061e-5] s | 2.6 percent |
+| phi 0.5, 300 K | [4.286e-5, 4.400e-5] s | 2.6 percent |
+
+Trends hold (preheat shortens, lean lengthens).
+
+CLI `rcfd reactor` run on the 1100 K H2/air constant-volume case: delay 8.616e-5 s (same as the test), 610 steps, 1 s wall;
+malformed case file gives located errors (`reactor.temperature: must be a positive number (got -5)`), exit code 3.
 
 FW-H (`cargo test --release -p rcfd-post --test fwh`, also passes in debug in 26 s):
 
-* A1 e = 4.08e-6 / 4.39e-6 / 4.49e-6 at r = 3 / 10 / 50 m (limit 1e-3). A2 spread 2.7e-8 (1e-3). A3 phase error 8.8e-9
-  rad (1e-3). A4 directivity abs error <= 2.0e-9 (1e-3), series e = 4.9e-6 (1e-3). A5 e = 4.6e-6 in plane, 4.6e-6 at
-  30 degrees out of plane (1e-3). A6 e = 1.0e-5 (1e-3). A7 round trip bit exact, located errors; CLI vs library
-  relative difference 0 (limit 1e-12). A8 guards pass.
-* All FW-H checks passed on the first run; no limit is close to its bound, which also means the limits were loose
-  relative to what the method achieves.
+| Check | Measured | Limit |
+| --- | --- | --- |
+| A1 e at r = 3 / 10 / 50 m | 4.08e-6 / 4.39e-6 / 4.49e-6 | 1e-3 |
+| A2 spread | 2.7e-8 | 1e-3 |
+| A3 phase error | 8.8e-9 rad | 1e-3 |
+| A4 directivity abs error | <= 2.0e-9 | 1e-3 |
+| A4 series e | 4.9e-6 | 1e-3 |
+| A5 e in plane, at 30 degrees out of plane | 4.6e-6, 4.6e-6 | 1e-3 |
+| A6 e | 1.0e-5 | 1e-3 |
+| A7 round trip | bit exact, located errors | |
+| A7 CLI vs library relative difference | 0 | 1e-12 |
+| A8 guards | pass | |
+
+All FW-H checks passed on the first run; no limit is close to its bound, which also means the limits were loose relative to
+what the method achieves.

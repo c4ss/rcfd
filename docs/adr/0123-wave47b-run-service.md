@@ -1,11 +1,29 @@
 # ADR 0123: Wave 47B, the run service (`rcfd-runner`, Studio layer L2)
 
-Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs). Written at main 48b30bc on branch `w47b`, target
-`<target dir>`. House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed limit becomes an
-ignored `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults
-are bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parents: [the Studio plan](../ui-restart-plan.md)
-(layer L2, the section-8 folder contract), [run control](../run-control.md) (F-120, F-121). ADR 0122 (`rcfd-project`, wave 47A) is
-built in parallel; this ADR codes against the section-8 file contract with local types (see "Switching to rcfd-project").
+Status: **ACCEPTED 2026-10-26** (limits registered before the registered runs).
+
+This ADR adds the run service `rcfd-runner` (Studio layer L2). One `rcfd-runner serve` per project launches each run as an
+`rcfd run` child process and uses plain files in the project folder as queue and transport, with no socket and no network port.
+A paused run is held in memory at a step boundary through the opt-in `rcfd run --pause-file f`, and a new runner adopts running
+solvers and never relaunches them. All checks were met on the first registered run, and S11, added by amendment 1, was met in
+debug. Gate run 1 failed 12 process tests because `powershell.exe` hung on the gate host; amendment 2 calls the dependence on
+PowerShell a defect of the product and adds a direct-start fallback. With PowerShell still hung, S5 failed on its EOF part, so amendment 3 keeps S5 as
+the ignored `s5_runner_survives_the_client_known_miss` with its limit intact and adds S5a for the survival check. The final gate
+had 2126 passed, 0 failed and 662 ignored in the workspace tests; workspace clippy exited 101 on two errors outside this
+branch's files and was clean after the rebase on 624f228. Notes of 2026-10-28 record that ADR 0143 replaced the Windows start
+route of decision 2 and amendment 2, and that S5 stays an ignored known miss: on Windows the runner inherits the client's
+inheritable handles, and ADR 0146 found no safe way around it on stable Rust.
+
+Rules and parents:
+
+* Written at main 48b30bc on branch `w47b`, target `<target dir>`.
+* House rules of ADRs 0110-0117: limits fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test
+  with the limit intact; a defective set-up is corrected by an amendment before the corrected run; defaults are bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Parents: [the Studio plan](../ui-restart-plan.md) (layer L2, the section-8 folder contract), [run control](../run-control.md)
+  (F-120, F-121).
+* [ADR 0122](0122-wave47a-project-folder-library.md) (`rcfd-project`, wave 47A) is built in parallel; this ADR codes against the
+  section-8 file contract with local types (see "Switching to rcfd-project").
 
 ## Context (checked against the code at 48b30bc)
 
@@ -133,8 +151,9 @@ The runner and the client reach records only through the trait `store::RunStore`
    `step`, `time`, `pid`, `updated`, plus `reason` and `exit_code`), `RunRecord` (`id`, `created`, `case_dir`, `settings`, plus
    `case_source`, `case_snapshot_hash`, `mesh_hash`, `solver_version`), `RunSettings`, `new_run_id`, `now_iso`, `atomic_write`,
    `append_line`, `retry`. Any field missing in `rcfd-project` goes to the lead as an additive change (list in decision 9).
-2. Re-implement the nine required `RunStore` methods of `FsStore` (`project`, `list_runs`, `create_run`, `read_record`, `read_status`, `write_status`, `append_event`, `append_residual`, `write_metrics`; `run_dir` has a default) on `rcfd-project`'s helpers. `create_run` takes `rcfd-project`'s snapshot
-   hash instead of `fnv1a64`.
+2. Re-implement the nine required `RunStore` methods of `FsStore` (`project`, `list_runs`, `create_run`, `read_record`,
+   `read_status`, `write_status`, `append_event`, `append_residual`, `write_metrics`; `run_dir` has a default) on
+   `rcfd-project`'s helpers. `create_run` takes `rcfd-project`'s snapshot hash instead of `fnv1a64`.
 3. Replace `client::check_id` with `rcfd-project`'s run-id validator.
 4. Add `rcfd-project` to `crates/rcfd-runner/Cargo.toml`, both crates to `layer()` in `crates/rcfd-cli/tests/workspace_graph.rs` (it
    panics on a crate with an rcfd dependency that it does not know), and the edge to `docs/architecture.md`.
@@ -230,6 +249,7 @@ S11 runs in the debug build now; the release gate runs it again.
 Result of S11 (debug, 2026-10-26): the run finished at step 30. The negative control (`rcfd run <snapshot> --check-only` without
 `--case-dir`) exited 3 with "mesh.file: <run folder>\../meshes/cavity/polyMesh: io error: The system cannot find the path specified".
 Met.
+
 ## Note: differences from `rcfd-project` as committed on branch `w47a` (95e1e3c), read only, for the merge
 
 * `RunRecord`: it has `case`, where this ADR has `case_source`, and `mesh`. It has no `case_dir`. Its `solver_version` is a `String`,
@@ -244,6 +264,7 @@ Met.
   `null`.
 * Hash: `rcfd-project` has `hash_bytes`; this runner writes `fnv1a64:<hex>`. Run ids: `is_run_id` and `claim` replace `check_id` and
   `new_run_id`.
+
 ## Amendment 2 (2026-10-26, before the second gate run): the gate failure and the direct-start fallback
 
 **Gate run 1 failed.** It ran on a fresh archive of 61d986d: fmt 0, clippy 0, then the test stage, 2077 passed / 12 failed / 656

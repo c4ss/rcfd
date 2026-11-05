@@ -1,4 +1,4 @@
-# ADR 0159: Job 48Y, NACA 0012 angle-of-attack sweep up to and through stall (rotated mesh, a finer O-grid, steady SA and SST, SA-DDES where steady fails)
+# ADR 0159: Job 48Y, NACA 0012 angle-of-attack sweep up to and through stall
 
 Status: **registered 2026-10-29**, part 1 (design, set-up, every acceptance limit and every reading rule), before any
 solver run of this job; the iteration cap of the steady arms and the time step and end time of the transient arm may be
@@ -6,40 +6,59 @@ changed by amendment 1 after the disclosed smoke runs (S0 below) and before the 
 **Amendment 1:** the registered mesh was defective (it diverged at the trailing edge); corrected before any counted run.
 **Amendment 2:** the report-only SST arm was reduced for cost. **Results in the addendum:** every registered limit is
 met (L3 only with the registered extension to 24 degrees); no known miss. Not yet accepted by the maintainer. Job 48Y,
-on local main 4e795b1 (waves 48A-48W merged; ADR 0158 is job 48X on another branch). House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before
-the corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
-re-recorded; no new crate, no unsafe code; no commit trailers; nothing is pushed. Clean-room: our own code, public
-experimental data only (the NASA TMR copy of Ladson 1988 that the repository already holds). Parents:
-[ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) (`[mesh.transform]`, alpha = -`rotate_z_deg`),
-[ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (`solver.corrector_control = "adaptive"`),
-[ADR 0142](0142-wave48h-example-projects.md) / [ADR 0150](0150-job48p-linux-example-stores.md) /
-[ADR 0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md) (the example projects, their per-platform trees
-and size caps), [ADR 0092](0092-wave39a-partials-closeout-rules-fluent-render.md) (the NACA 0012 O-grid route).
-[ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the Studio's time step) is read for context only: these runs
-go through `rcfd run`, not the Studio, and set `solver.dt` in the case.
+on local main 4e795b1 (waves 48A-48W merged; ADR 0158 is job 48X on another branch).
+
+This job sweeps the NACA 0012 at Re 6e6 from 0 to 24 degrees through `rcfd run` (rotated mesh, a finer O-grid, steady SA and
+SST, SA-DDES where steady fails) and compares cl, cd and the stall angle with Ladson 1988. The registered sweep mesh M1
+diverged at its trailing-edge cells in every smoke run, so the counted runs use M1w, with a wall y+ of about 40 instead of
+about 2. The lift slope meets L2 at 0.920 x 2 pi, 0.02 above the lower edge. On the base sweep L3 finds no stall (peak at 20
+degrees, nothing after it), so L3 is met only with D8's extension: first below 0.9 cl_max at 24 degrees. SA's cl_max is 1.528
+at 20 degrees and SST's is 1.397 at 14 degrees, against Ladson's 1.612 at 17.1 degrees; the two RANS models bracket the
+measured stall angle by about 3 degrees on either side. SA's drag is half the measured value at 0 degrees and 1.4 to 4.6
+times it from 4 degrees up, and the cause was not investigated here. SA was steady by D4 at all 16 angles, so the curve is SA
+throughout and SA-DDES (report only) ran at 18 and 20 degrees only. SST (report only) is not steady by D4 at 16, 18 and 20
+degrees, and SA-DDES at 20 degrees is not settled (half-window drift -0.21 in cl).
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code; no commit trailers; nothing
+  is pushed.
+- Clean-room: our own code, public experimental data only (the NASA TMR copy of Ladson 1988 that the repository already
+  holds).
+- Parents: [ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) (`[mesh.transform]`, alpha = -`rotate_z_deg`),
+  [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (`solver.corrector_control = "adaptive"`),
+  [ADR 0142](0142-wave48h-example-projects.md) / [ADR 0150](0150-job48p-linux-example-stores.md) /
+  [ADR 0157](0157-job48w-merge-48u-rotated-cases-with-the-linux-tree.md) (the example projects, their per-platform trees
+  and size caps), [ADR 0092](0092-wave39a-partials-closeout-rules-fluent-render.md) (the NACA 0012 O-grid route).
+- [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the Studio's time step) is read for context only: these runs
+  go through `rcfd run`, not the Studio, and set `solver.dt` in the case.
 
 ## The request (the maintainer, 2026-10-29, relayed)
 
 "Create angle of attack simulations up until full stall." The details were not fixed; the framing approved for this job:
-alpha 0 to 20 degrees in 2-degree steps plus 1-degree steps from 12 to 18; the angle set by the mesh rotation key, not by
-turning the flow; a mesh fine enough to be credible (a finer mesh or a C-grid, decided here from what the repository's
-NACA mesh route supports); transient runs (PISO/PIMPLE, adaptive correctors) at the high angles where steady runs fail to
-converge; cl(alpha), cd(alpha) and the stall angle compared with published NACA 0012 data, honestly and without tuning;
-a storage route with the smaller footprint (the example trees have about 175 KB left under their caps); a driver
-`scripts/w48y_aoa_sweep.py` that builds the cases, runs them through the `rcfd` command line, collects cl and cd
-(time-averaged with min and max for unsteady runs) and writes a table and small plots.
+
+- alpha 0 to 20 degrees in 2-degree steps plus 1-degree steps from 12 to 18;
+- the angle set by the mesh rotation key, not by turning the flow;
+- a mesh fine enough to be credible (a finer mesh or a C-grid, decided here from what the repository's NACA mesh route
+  supports);
+- transient runs (PISO/PIMPLE, adaptive correctors) at the high angles where steady runs fail to converge;
+- cl(alpha), cd(alpha) and the stall angle compared with published NACA 0012 data, honestly and without tuning;
+- a storage route with the smaller footprint (the example trees have about 175 KB left under their caps);
+- a driver `scripts/w48y_aoa_sweep.py` that builds the cases, runs them through the `rcfd` command line, collects cl and cd
+  (time-averaged with min and max for unsteady runs) and writes a table and small plots.
 
 ## Context (read at 4e795b1, before this registration)
 
 * **The example aerofoil** (`example-projects/wind-tunnel/cases/naca0012-aoa4-rotated.toml`, ADR 0142, 0155): Re 6e6
-  (nu = 1/6e6, U = c = 1), k-omega SST, SIMPLEC, linear upwind, 2000 iterations; mesh `meshes/naca0012-ogrid`, the
+  (nu = 1/6e6, U = c = 1), k-omega SST, SIMPLEC, linear upwind, 2000 iterations. Its mesh `meshes/naca0012-ogrid` is the
   `cylinder_ogrid` generator (128 around, 48 radial, grading 200) written by `rcfd convert` and warped onto the aerofoil by
   `scripts/make_example_projects.py` `naca_warp` (a straight blend from the aerofoil point to a far-field circle of 20 chords
   about mid-chord). First cell about 0.01 chord (wall y+ about a thousand), maximum non-orthogonality 80 degrees.
-  Results: cl 0.348 at 4 degrees, 0.199 at 2 (a slope well below 2 pi), not converged at the 2000-iteration cap; at 8 degrees
-  the same set-up did not converge ("lift swung between -0.1 and 0.9"); its notes say "a finer O-grid or a C-grid is
+  Results: cl 0.348 at 4 degrees, 0.199 at 2 (a slope well below 2 pi), not converged at the 2000-iteration cap. At 8 degrees
+  the same set-up did not converge ("lift swung between -0.1 and 0.9"). Its notes say "a finer O-grid or a C-grid is
   needed for higher angles".
 * **No aerofoil C-grid exists.** `cases/naca0012/case.json` says "requires an airfoil C-grid generator (not yet
   implemented)"; `crates/rcfd-mesh/src/fan_cgrid.rs` is a 3D blade-passage builder of the fan (periodic seams, tip gap), not
@@ -75,7 +94,7 @@ a storage route with the smaller footprint (the example trees have about 175 KB 
    `warp`; `make_example_projects.py` is not changed, only its `naca_thickness` is imported). Two changes against the
    example's straight blend, both needed for a wall cell of about 1e-5 chord: the grid line leaves the wall along the
    surface normal and turns into the straight line to its far-field point over the first `blend` = 0.1 of the radial
-   coordinate (smoothstep); near the sharp trailing edge the normal is turned towards +x with the weight
+   coordinate (smoothstep). Near the sharp trailing edge the normal is turned towards +x with the weight
    exp(-(theta/0.05)^2) (`te_fan` = 0.05 rad, about two cells), so that the two lines next to the trailing edge do not
    jump by the trailing-edge angle. Far field: a circle of **50 chords** about mid-chord (the example: 20), to reduce the
    circulation error of a fixed free stream on the boundary (of order cl c / (4 pi R)). **M1** (the sweep mesh): 256 cells
@@ -91,8 +110,8 @@ a storage route with the smaller footprint (the example trees have about 175 KB 
 3. **D3 Steady arms.** **SA** (primary): `turbulence.model = "spalart_allmaras"` with its defaults (SA-noft2, SA-neg,
    `wall_mode = "auto"`), SIMPLEC, `convection = "linear_upwind"`, every other key at the example's value or default;
    **SST** (report only): the same with `k_omega_sst` (the example projects' model). Why SA is primary: the only
-   transient closure with a wall treatment is SA-DDES (Context), whose attached region is SA; with SA as the steady model
-   the curve keeps one attached-flow model on both sides of the steady/transient join; SST is kept as a column so that the
+   transient closure with a wall treatment is SA-DDES (Context), whose attached region is SA. With SA as the steady model
+   the curve keeps one attached-flow model on both sides of the steady/transient join. SST is kept as a column so that the
    sweep ties to the example. Iteration cap **8000** (amendment 1 may change it after S0), store: the last iteration only
    (`store_interval` = the cap). One thread per run (results do not depend on it, `docs/run-control.md`).
 4. **D4 Steady value and the "fails to converge" rule.** The residual targets (1e-6) are not used: the example's runs
@@ -178,12 +197,15 @@ each with its reason; the windows (last 1000 iterations; the second half of a DD
 
 ## Honest differences from the experiment (stated before any result)
 
-Re 6e6 is Ladson's Reynolds number, so the comparison is at the measured condition, but: incompressible here against
-M 0.15 in the tunnel; 2D, without the tunnel's walls and side-wall effects; a far field of 50 chords with a fixed free
-stream (no point-vortex correction); fully turbulent RANS against a tripped boundary layer; SA and SST are not calibrated
-for stall, and steady RANS of a separating aerofoil is known to depend on the model; SA-DDES in 2D gives coherent
-two-dimensional shedding, not resolved turbulence (its "LES" region has no third direction); each angle starts from the
-free stream, so a hysteresis loop of the experiment would not be seen.
+Re 6e6 is Ladson's Reynolds number, so the comparison is at the measured condition, but:
+
+- incompressible here against M 0.15 in the tunnel;
+- 2D, without the tunnel's walls and side-wall effects;
+- a far field of 50 chords with a fixed free stream (no point-vortex correction);
+- fully turbulent RANS against a tripped boundary layer;
+- SA and SST are not calibrated for stall, and steady RANS of a separating aerofoil is known to depend on the model;
+- SA-DDES in 2D gives coherent two-dimensional shedding, not resolved turbulence (its "LES" region has no third direction);
+- each angle starts from the free stream, so a hysteresis loop of the experiment would not be seen.
 
 ## Out of scope
 
@@ -202,17 +224,20 @@ What had run when this was written (binary `rcfd-4e795b1.exe`, the registration'
    rho 0.39; at step 6 the search ended at the cap of 10 with rho 1.049 at cell 255, the other trailing-edge wall cell,
    then the PIMPLE guard stopped the run on a Courant number of 4e6; cl swung from 0.64 to -2.8 to -38 in steps 4-6).
 2. **Diagnostics (not registered, not counted; a scratch script `diag.py` that writes the driver's case text with another
-   mesh path and runs it).** SA and SST at 6 degrees on the example's mesh: 300 iterations, no divergence. On M1: SST at 6
-   degrees diverged at iteration 16 (cell 0); M1 without the trailing-edge fan, SA at 6: iteration 24 (cell 255); the M1
-   grid with a wall cell of 4.3e-5 chord (grading 1e5): iteration 26 (cell 254). With wall cells of 1.3e-4 (grading 3e4)
-   and **3.5e-4** chord (grading **1e4**): 300 iterations each, no divergence. On the grading-1e4 grid (bit-equal points to
-   M1w below): SA-DDES at 16 degrees, dt 0.01, 100 steps (t = 1): no divergence, 2 correctors at every step (one estimate),
-   0.3 s per step; SA at 6 and 14 degrees (stopped by me after 2751 and 2746 of 12000 iterations to free the CPU) and
-   SST at 6 (2972): SA's cl falls and cd rises slowly (6 degrees: cl 0.6383 / 0.6248 / 0.6219 and cd 0.0101 / 0.0157 /
-   0.0168 at 500 / 2000 / 2751; 14 degrees: cl 1.356 / 1.303 / 1.295, cd 0.042 / 0.065 / 0.069), the increments shrinking by
-   about 0.7 per 500 iterations; SST at 6: cl 0.64405, cd 0.00611 from iteration 500 on. SA's momentum residual was
-   1.1e-6 at 2751 iterations, next to the 1e-6 target, while cd still rose by about 3e-4 per 250 iterations. Cost on the
-   loaded host (total CPU 70 to 100 % with other agents): 0.17 to 0.5 s per iteration on 32 768 cells.
+   mesh path and runs it).**
+   - SA and SST at 6 degrees on the example's mesh: 300 iterations, no divergence.
+   - On M1: SST at 6 degrees diverged at iteration 16 (cell 0); M1 without the trailing-edge fan, SA at 6: iteration 24
+     (cell 255); the M1 grid with a wall cell of 4.3e-5 chord (grading 1e5): iteration 26 (cell 254).
+   - With wall cells of 1.3e-4 (grading 3e4) and **3.5e-4** chord (grading **1e4**): 300 iterations each, no divergence.
+   - On the grading-1e4 grid (bit-equal points to M1w below): SA-DDES at 16 degrees, dt 0.01, 100 steps (t = 1): no
+     divergence, 2 correctors at every step (one estimate), 0.3 s per step.
+   - Also on that grid, SA at 6 and 14 degrees (stopped by me after 2751 and 2746 of 12000 iterations to free the CPU) and
+     SST at 6 (2972): SA's cl falls and cd rises slowly (6 degrees: cl 0.6383 / 0.6248 / 0.6219 and cd 0.0101 / 0.0157 /
+     0.0168 at 500 / 2000 / 2751; 14 degrees: cl 1.356 / 1.303 / 1.295, cd 0.042 / 0.065 / 0.069), the increments shrinking
+     by about 0.7 per 500 iterations; SST at 6: cl 0.64405, cd 0.00611 from iteration 500 on.
+   - SA's momentum residual was 1.1e-6 at 2751 iterations, next to the 1e-6 target, while cd still rose by about 3e-4 per
+     250 iterations.
+   - Cost on the loaded host (total CPU 70 to 100 % with other agents): 0.17 to 0.5 s per iteration on 32 768 cells.
 
 **Defect 1 (the mesh, D2).** M1's wall cell of 1.6e-5 chord makes the two trailing-edge wall cells slivers (face angles
 8.4 and 171.7 degrees, aspect ratio in the thousands), and both solvers diverge there within 30 iterations or steps; the
@@ -248,9 +273,11 @@ SA at 8 to 14 and the extension 22 and 24 (started before SA at 20 had finished,
 finished runs in the addendum) and SA2 at 6 and 14 were running; no SST and no DD run. On the loaded host the steady runs
 take 0.5 to 1.1 s per iteration (9 of my processes next to other agents' builds and containers, total CPU 100 %), so a
 steady run of 8000 iterations takes 1.2 to 2.4 hours. The SST arm at all 14 (16) angles would take another 6 or more
-hours. **Changed (report-only arm, no limit depends on it):** SST runs at **0, 4, 8, 12, 14, 16, 18, 20** degrees (and 22,
+hours.
+
+**Changed (report-only arm, no limit depends on it):** SST runs at **0, 4, 8, 12, 14, 16, 18, 20** degrees (and 22,
 24 when its own curve shows no 10 % drop by 20), with a cap and `min_iterations` of **4000** (the diagnostic SST run at 6
-degrees on M1w held cl 0.64405 and cd 0.00611 to every printed digit from iteration 500 to 2972); D4's window (the last
+degrees on M1w held cl 0.64405 and cd 0.00611 to every printed digit from iteration 500 to 2972). D4's window (the last
 1000 iterations) and rule are unchanged. The SA, DD and SA2 arms are unchanged.
 
 ## Addendum: results (2026-10-29)
@@ -341,7 +368,8 @@ The table with Ladson is in the folder's README; the figures are `cl_alpha.png` 
 * Linux, where the meshes' last bits depend on libm.
 * The workspace test suite and the gate: only the new test file, rcfd-api's clippy of its tests and fmt ran. No crate
   source changed, so `baseline_hashes` was not re-run.
-* No ADR index lists ADR 0157 or earlier ones, and no test or script self-test reads `docs/adr/` or `docs/investigations/` (`git grep`), so none needed an update or a run.
+* No ADR index lists ADR 0157 or earlier ones, and no test or script self-test reads `docs/adr/` or
+  `docs/investigations/` (`git grep`), so none needed an update or a run.
 * A field-level look at the solutions (separation point, nuTilda in the wake). The drag finding below is from the
   monitors only.
 

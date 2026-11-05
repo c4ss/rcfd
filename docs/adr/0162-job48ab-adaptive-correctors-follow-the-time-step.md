@@ -1,20 +1,38 @@
-# ADR 0162: Job 48AB, the adaptive pressure-corrector count is re-estimated when the time step has changed by a factor 1.5 (the dt trigger)
+# ADR 0162: Job 48AB, the adaptive corrector count follows the time step (the dt trigger)
 
 Status: **registered** 2026-10-29, before any code of this job was written and before any run of this job (set-ups, limits,
 reading rules and the cost bound are fixed here); **results in the addendum** (2026-10-29: every registered limit met except N3 and
 N6 as worded, both only because of a failure of `case_hashes_w48u` that is identical at 444255c; the control B in class
-B-iii, the caveat not reproduced as an instability); no amendment; not yet accepted by the maintainer. House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered runs; a missed limit
-becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the corrected
-run; defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no unsafe code, no new crate,
-the crate graph stays acyclic; no edit of `crates/rcfd-studio` or of the `rcfd-runner` schema. Clean-room: first principles,
-the repository's own ADRs and code. Parents: [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (the adaptive count, D2-D4,
-its harness and records), [ADR 0158](0158-job48x-studio-run-plan-adaptive-pressure-correctors.md) (the Studio turns it on; its
-finding "the count is chosen at the automatic step's first dt" and question 2, option (b)),
-[ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the Studio's automatic step),
-[ADR 0154](0154-job48t-cylinder-ogrid-pressure-spokes.md) (DG1, `M_hf`, L3). Number: no ADR 0159 or above exists in this
-worktree or any sibling worktree on disk (checked 2026-10-29); the brief names 0162 (0159-0161 are expected from the concurrent
-jobs).
+B-iii, the caveat not reproduced as an instability); no amendment; not yet accepted by the maintainer.
+
+ADR 0158 found that "the count is chosen at the automatic step's first dt", and the maintainer requires stability
+whatever the resolution and whatever dt the controller picks, without hand-tuning. This job re-estimates the adaptive
+pressure-corrector count when the time step has changed by a factor 1.5 or more, up or down, since the last estimate
+(the dt trigger). The trigger acts only with `solver.corrector_control = "adaptive"`, and a run whose dt never changes
+stays bit-identical. On the 256 x 256 cylinder under the Studio's plan it fired at step 4, which took the count from 2
+to 3, and at step 14, which kept 3; the run stayed clean to t = 10, and the extra estimates cost 3.3 % of the steps'
+wall time to t = 3 and 1.1 % to t = 10. The control without the trigger was clean too, so the caveat of ADR 0158 is not
+reproduced as an instability at t <= 10 (class B-iii): what the trigger buys here is the registered margin (from about
+1.0 to about 0.4) for the first 1000 steps, not the removal of a visible defect. The resolution sweep under the Studio's
+plan to t = 100 is clean at every stored time and converges. The only failing test, `case_hashes_w48u`, fails
+identically at 444255c and leaves N3 and N6 not met as worded. The registered runs drive `Simulation` in-process; no
+Studio Run of the 256 x 256 case was made.
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an
+  amendment written before the corrected run; defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is
+  not re-recorded; no unsafe code, no new crate, the crate graph stays acyclic; no edit of `crates/rcfd-studio` or of
+  the `rcfd-runner` schema.
+- Clean-room: first principles, the repository's own ADRs and code.
+- Parents: [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) (the adaptive count, D2-D4, its harness and records),
+  [ADR 0158](0158-job48x-studio-run-plan-adaptive-pressure-correctors.md) (the Studio turns it on; its
+  finding "the count is chosen at the automatic step's first dt" and question 2, option (b)),
+  [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the Studio's automatic step),
+  [ADR 0154](0154-job48t-cylinder-ogrid-pressure-spokes.md) (DG1, `M_hf`, L3).
+- Number: no ADR 0159 or above exists in this worktree or any sibling worktree on disk (checked 2026-10-29); the brief
+  names 0162 (0159-0161 are expected from the concurrent jobs).
 
 ## The request
 
@@ -29,12 +47,12 @@ hand-tuning.
 * ADR 0156 D3: estimates at the first step (step 2 under bdf2), every 1000 steps, and after the growth monitor fired (it fired
   in no run). ADR 0158 X5 (a): the Studio plan on 256 x 256 (`solver.end_time=3`, `solver.dt=0.00116`,
   `solver.max_courant=0.5`, `solver.max_dt=0.03`, adaptive) took 891 steps with one estimate (step 1: 2 correctors, rho 0.406)
-  and stayed clean (M_hf 1.17e-7 at t = 3); ADR 0153 D2: dt 0.00116 to 0.00354 s over the same 3 s. DG1 (ADR 0154): two
+  and stayed clean (M_hf 1.17e-7 at t = 3). ADR 0153 D2: dt 0.00116 to 0.00354 s over the same 3 s. DG1 (ADR 0154): two
   correctors at dt 1/256 = 0.0039 s give 1.166 at step 1. So the run spends most of its steps at a dt where its count's
   estimate is near or above 1 (not measured at the grown step itself; this job measures it).
 * The controller (`rcfd-fv` `stepctl`): `plan` lands a step on the next **write** time or the end time when it lies within 1.05
-  of the proposal (`land`); `output.store_time_interval` is not a landing target (`next_target` reads `write_times` and
-  `write_time_interval` only); the next proposal is computed from the unshortened proposal `dt_next` (`propose_courant(st, d,
+  of the proposal (`land`). `output.store_time_interval` is not a landing target (`next_target` reads `write_times` and
+  `write_time_interval` only). The next proposal is computed from the unshortened proposal `dt_next` (`propose_courant(st, d,
   dt_prop)` scales from `dt_prop`), so a shortened landing step is a single short step and the step after it is of the
   ordinary size. The fixed step (`sim.rs` `fixed_step`, ADR 0145) can make the last step short when `end_time` is not a whole
   number of steps.
@@ -52,34 +70,45 @@ At a step at or after the first estimate, the control makes an estimate when the
 first-step, 1000-step and monitor triggers (an estimate due for one of those keeps its own reason). Only with
 `corrector_control = "adaptive"`: with `fixed` the control is `None` and no code of this job runs.
 
-**D2. Landing steps are skipped.** A step whose dt differs from the step size the time control proposed for it (a step shortened
-or stretched by the controller's `land` onto a write time or the end time; the fixed step's short last step; the min with the
-end time of the legacy Courant control) is not compared: `PimpleSolver::correctors.mark_landing_step()` before the step, called
-by `rcfd-api` `Simulation::step` when the step's dt is not bit-equal to the proposal; `PimpleSolver::run_fixed` marks its own
-shortened last step. Such a step neither fires the dt trigger nor becomes `dt_e`; the next ordinary step is compared. (A
-landing step that is also a first-step, 1000-step or monitor estimate is estimated as in ADR 0156.) Why: a landing step at the
-end of a run would otherwise re-estimate on its last step (cost, and a different last step for a fixed-dt adaptive run whose
-`end_time` is not a whole number of steps), and write-time landings would cost two estimates each.
+**D2. Landing steps are skipped.** A step whose dt differs from the step size the time control proposed for it (a step
+shortened or stretched by the controller's `land` onto a write time or the end time; the fixed step's short last step;
+the min with the end time of the legacy Courant control) is not compared. `rcfd-api` `Simulation::step` calls
+`PimpleSolver::correctors.mark_landing_step()` before the step when the step's dt is not bit-equal to the proposal;
+`PimpleSolver::run_fixed` marks its own shortened last step. Such a step neither fires the dt trigger nor becomes
+`dt_e`; the next ordinary step is compared. (A landing step that is also a first-step, 1000-step or monitor estimate is
+estimated as in ADR 0156.)
+
+Why: a landing step at the end of a run would otherwise re-estimate on its last step (cost, and a different last step
+for a fixed-dt adaptive run whose `end_time` is not a whole number of steps), and write-time landings would cost two
+estimates each.
 
 **D3. The search of a dt-fired estimate.** As ADR 0156 D3.3's later estimates (from the count in use: count up while above
 0.5; else one step down when `n - 1` is at or below 0.5), except that an estimate fired by an **increase** of dt makes no
 step-down check (the step grew, so the count in use is the floor; saves one evaluation). 20 power iterations, warm start from
 the previous estimate's mode, target 0.5, cap 10: unchanged.
 
-**D4. Records.** `CorrectorEstimate` gains `dt` (the step's dt), `dt_triggered` (fired by D1) and `work` (lag-map corrector
-applications of the search: the sum over its evaluations of count x iterations; deterministic). `CorrectorRecord` gains
-`dt_triggered` (count). `triggered` keeps meaning the growth monitor only (a dt-fired estimate does not set its gap). The run
-summary (`Simulation::corrector_summary`, the `finish` event's `correctors`) gains `dt_triggered`, and each `log` entry gains
-three elements after the existing five: `[step, correctors, rho, cap_bound, triggered, dt, dt_triggered, work]` (readers that
-index positions 0 to 4 are unchanged). No wall-clock time enters `rcfd-fv` or any event (cost is measured in the harness, E).
-A `fixed` run's events are unchanged (ADR 0156 N5).
+**D4. Records.**
 
-**D5. Test switch and diagnostic (`rcfd-api` `Simulation`).** `set_corrector_dt_factor(f) -> bool` sets `dt_factor` of an
-adaptive run (0 turns the dt trigger off; the control B); `lag_estimate_next_step(iterations) -> Option<LagPreflight>`: on a
-copy of the solver (the simulation is not changed), the ADR 0073 estimate at the next step (the controller's planned dt, else
-the last step's, else `solver.dt`) with the count in use (the adaptive control's current count, else `n_correctors`) and
-`iterations` cold power iterations (`PimpleSolver::lag_trial`, built on ADR 0156's `lag_preflight`). Neither is reachable from a
-case file, the command line or the Studio.
+- `CorrectorEstimate` gains `dt` (the step's dt), `dt_triggered` (fired by D1) and `work` (lag-map corrector
+  applications of the search: the sum over its evaluations of count x iterations; deterministic).
+- `CorrectorRecord` gains `dt_triggered` (count). `triggered` keeps meaning the growth monitor only (a dt-fired estimate
+  does not set its gap).
+- The run summary (`Simulation::corrector_summary`, the `finish` event's `correctors`) gains `dt_triggered`, and each
+  `log` entry gains three elements after the existing five:
+  `[step, correctors, rho, cap_bound, triggered, dt, dt_triggered, work]` (readers that index positions 0 to 4 are
+  unchanged).
+- No wall-clock time enters `rcfd-fv` or any event (cost is measured in the harness, E).
+- A `fixed` run's events are unchanged (ADR 0156 N5).
+
+**D5. Test switch and diagnostic (`rcfd-api` `Simulation`).**
+
+- `set_corrector_dt_factor(f) -> bool` sets `dt_factor` of an adaptive run (0 turns the dt trigger off; the control B).
+- `lag_estimate_next_step(iterations) -> Option<LagPreflight>`: on a copy of the solver (the simulation is not changed),
+  the ADR 0073 estimate at the next step (the controller's planned dt, else the last step's, else `solver.dt`) with the
+  count in use (the adaptive control's current count, else `n_correctors`) and `iterations` cold power iterations
+  (`PimpleSolver::lag_trial`, built on ADR 0156's `lag_preflight`).
+
+Neither is reachable from a case file, the command line or the Studio.
 
 **D6.** `CorrectorControl::registered()` includes `dt_factor` 1.5, so every adaptive run (the case key, the Studio's override)
 gets the trigger; its doc names ADR 0162. Nothing else of ADR 0156's control changes.
@@ -101,16 +130,21 @@ gets the trigger; its doc names ADR 0162. Nothing else of ADR 0156's control cha
 
 ## Registered checks and limits
 
-Common: release build of this branch; in-process through `Simulation` (the control needs D5's switch, so every run of A-C uses
-the same harness, `crates/rcfd-api/tests/w48ab_dt_trigger.rs`); the case is the shipped `cylinder-re100.toml` with the
-**Studio plan's full `--set` list** applied as tree overrides: `solver.end_time=N`, `solver.dt=dt0`, `solver.max_courant=0.5`,
-`solver.max_dt=N/100`, `solver.corrector_control=adaptive`, with dt0 ADR 0153's values (64 x 48: 0.00602, 128 x 96: 0.00307,
-256 x 256: 0.00116), plus `mesh.nx`, `mesh.ny`. The case's own `store_time_interval` 1.0 stays, so the **stored times** are the
-steps at which the time first reaches k x 1.0 (where `rcfd run` would store). `M_hf` is the Rust `m_hf` of
-`w48t_cylinder_spokes.rs` (copied into the harness), on the f64 pressure. Each run writes a status-like stream
-(`iteration` events with `index`, `time`, `dt`, `monitors.cd`, `monitors.cl`, `correctors`, `wall_s`; `store` events with
-`M_hf`; `lag_trial` events; a `finish` event with the summary) that `scripts/w48v_shedding.py` reads unchanged. Thread counts
-do not change results (`docs/run-control.md`).
+Common:
+
+- release build of this branch;
+- in-process through `Simulation` (the control needs D5's switch, so every run of A-C uses the same harness,
+  `crates/rcfd-api/tests/w48ab_dt_trigger.rs`);
+- the case is the shipped `cylinder-re100.toml` with the **Studio plan's full `--set` list** applied as tree overrides:
+  `solver.end_time=N`, `solver.dt=dt0`, `solver.max_courant=0.5`, `solver.max_dt=N/100`,
+  `solver.corrector_control=adaptive`, with dt0 ADR 0153's values (64 x 48: 0.00602, 128 x 96: 0.00307, 256 x 256:
+  0.00116), plus `mesh.nx`, `mesh.ny`.
+
+The case's own `store_time_interval` 1.0 stays, so the **stored times** are the steps at which the time first reaches k
+x 1.0 (where `rcfd run` would store). `M_hf` is the Rust `m_hf` of `w48t_cylinder_spokes.rs` (copied into the harness),
+on the f64 pressure. Each run writes a status-like stream (`iteration` events with `index`, `time`, `dt`, `monitors.cd`,
+`monitors.cl`, `correctors`, `wall_s`; `store` events with `M_hf`; `lag_trial` events; a `finish` event with the
+summary) that `scripts/w48v_shedding.py` reads unchanged. Thread counts do not change results (`docs/run-control.md`).
 
 ### N: defaults and fixed-dt adaptive runs unchanged
 
@@ -148,11 +182,16 @@ do not change results (`docs/run-control.md`).
 ### B: the control, AB256 with `set_corrector_dt_factor(0)` (AB256-off), N = 10
 
 Measured: `M_hf` at the same times as A2; the count; `lag_estimate_next_step(60)` at the first step at or after t = 1, 3, 10.
-**Reading rule (fixed now):** (B-i) `M_hf > 0.0114` at any time: the caveat reproduced as spokes; (B-ii) not (B-i), but the
-60-iteration estimate with 2 correctors >= 1 at t = 1 or t = 3 (before the 1000-step estimate): the caveat reproduced as a
-missing margin (at or above lag-neutral at the grown step), not as spokes; (B-iii) neither: **the caveat is not reproduced**;
-reported as such; the job's change then restores the registered margin 0.5 at the grown step but no instability is shown at
-t <= 10. The control is not a pass/fail limit of this job; its outcome is reported with its class.
+
+**Reading rule (fixed now):**
+
+- (B-i) `M_hf > 0.0114` at any time: the caveat reproduced as spokes;
+- (B-ii) not (B-i), but the 60-iteration estimate with 2 correctors >= 1 at t = 1 or t = 3 (before the 1000-step
+  estimate): the caveat reproduced as a missing margin (at or above lag-neutral at the grown step), not as spokes;
+- (B-iii) neither: **the caveat is not reproduced**; reported as such; the job's change then restores the registered
+  margin 0.5 at the grown step but no instability is shown at t <= 10.
+
+The control is not a pass/fail limit of this job; its outcome is reported with its class.
 
 ### C: resolution sweep under the Studio plan with automatic dt, N = 100 (ADR 0156 C3, C5 bands)
 
@@ -204,28 +243,37 @@ C256 is started first (the longest). Free RAM is checked before starting (other 
 
 ## Addendum (2026-10-29): results against the registered limits
 
-Everything below was measured after the registration (fedae40) on the code of c0dc6d8 (no amendment was needed: no set-up
-defect was found and no limit or rule was changed after a result was seen). Runs from copies of c0dc6d8's test binaries
-(`E:\projects\cfd\w48ab-work\bin\`), work folder `E:\projects\cfd\w48ab-work` (run streams `runs/<id>/solver-status.jsonl`, logs
-`logs/`, the 444255c copy and its fingerprints). The machine was shared with other agents' workloads (CPU 85 % busy before
-these runs started, 26 to 35 GB free), so wall times are rough; E's shares compare steps of the same run.
+Everything below was measured after the registration (fedae40) on the code of c0dc6d8. No amendment was needed: no
+set-up defect was found and no limit or rule was changed after a result was seen. The runs used copies of c0dc6d8's test
+binaries (`E:\projects\cfd\w48ab-work\bin\`) and the work folder `E:\projects\cfd\w48ab-work` (run streams
+`runs/<id>/solver-status.jsonl`, logs `logs/`, the 444255c copy and its fingerprints). Other agents' workloads shared
+the machine (CPU 85 % busy before these runs started, 26 to 35 GB free), so wall times are rough; E's shares compare
+steps of the same run.
 
 ### The answer
 
-With the dt trigger the adaptive count follows the automatic step. On the 256 x 256 cylinder under the Studio's plan the
-count is 2 at step 1 (dt 0.00116, 0.406), the trigger fires at step 4 (dt 0.00200, 1.73 dt0: 3 correctors, 0.242) and at step
-14 (dt 0.00302, 1.51 times the step-4 dt: 3 kept, 0.358), and the run then holds 3 to t = 10 (the 1000-step estimates at steps
-1014 and 2014: 3, 0.419 and 0.432). The 60-iteration estimate of the count in use stays 0.39 to 0.45 at t = 1, 3, 10; the run is
-clean (largest M_hf 5.7e-7). The extra estimates cost 3.3 % of the steps' wall time to t = 3 and 1.1 % to t = 10. Without the
-trigger (the control) the count stays 2 for 1000 steps and the 60-iteration estimate with 2 correctors at the grown step is
-0.938 (t = 1) and 0.997 (t = 3): below 1, but at lag-neutral rather than at the registered margin 0.5; that run is clean too
-(largest M_hf 5.7e-7), and its own 1000-step estimate at step 1001 (t = 3.44) chooses 3 (0.392), the count the trigger chose at
-step 4. **So the caveat of ADR 0158 is not reproduced as an instability at t <= 10 (class B-iii)**: on this mesh at the Studio's
-Courant 0.5 the two-corrector coupling sits just under lag-neutral, and what the trigger buys here is the registered margin (from
-about 1.0 to about 0.4) for the first 1000 steps, not the removal of a visible defect. The resolution sweep under the Studio's
-plan to t = 100 (64 x 48, 128 x 96, 256 x 256) is clean at every stored time and converges (St 0.1573, 0.1649, 0.1665; mean cd
-1.3264, 1.3532, 1.3578), with counts 2, 2, 3. Fixed-dt adaptive runs and default runs are bit-identical to 444255c; the only
-failing test (`case_hashes_w48u`) fails identically at 444255c.
+With the dt trigger the adaptive count follows the automatic step. On the 256 x 256 cylinder under the Studio's plan:
+
+- the count is 2 at step 1 (dt 0.00116, 0.406);
+- the trigger fires at step 4 (dt 0.00200, 1.73 dt0: 3 correctors, 0.242) and at step 14 (dt 0.00302, 1.51 times the
+  step-4 dt: 3 kept, 0.358);
+- the run then holds 3 to t = 10 (the 1000-step estimates at steps 1014 and 2014: 3, 0.419 and 0.432).
+
+The 60-iteration estimate of the count in use stays 0.39 to 0.45 at t = 1, 3, 10, and the run is clean (largest M_hf
+5.7e-7). The extra estimates cost 3.3 % of the steps' wall time to t = 3 and 1.1 % to t = 10.
+
+Without the trigger (the control) the count stays 2 for 1000 steps. The 60-iteration estimate with 2 correctors at the
+grown step is 0.938 (t = 1) and 0.997 (t = 3): below 1, but at lag-neutral rather than at the registered margin 0.5.
+That run is clean too (largest M_hf 5.7e-7), and its own 1000-step estimate at step 1001 (t = 3.44) chooses 3 (0.392),
+the count the trigger chose at step 4.
+
+**So the caveat of ADR 0158 is not reproduced as an instability at t <= 10 (class B-iii).** On this mesh at the Studio's
+Courant 0.5 the two-corrector coupling sits just under lag-neutral. What the trigger buys here is the registered margin
+(from about 1.0 to about 0.4) for the first 1000 steps, not the removal of a visible defect.
+
+The resolution sweep under the Studio's plan to t = 100 (64 x 48, 128 x 96, 256 x 256) is clean at every stored time and
+converges (St 0.1573, 0.1649, 0.1665; mean cd 1.3264, 1.3532, 1.3578), with counts 2, 2, 3. Fixed-dt adaptive runs and
+default runs are bit-identical to 444255c. The only failing test (`case_hashes_w48u`) fails identically at 444255c.
 
 ### Results
 
@@ -254,33 +302,36 @@ failing test (`case_hashes_w48u`) fails identically at 444255c.
 
 ### Against the predictions
 
-* The count followed the prediction (2, then 3 from step 4); the second dt-fired estimate came at step 14, not about step 7,
-  because the controller's step levelled off at Courant 0.45 near 0.0029 to 0.0030 s (1.42 to 1.50 times the step-4 dt) and
-  crossed 1.5 only at step 14; it kept 3. No dt-fired estimate after step 14 on any 256 x 256 run (the step stayed within
-  0.0030 to 0.0039 s, under 1.5 times 0.00302).
-* 64 x 48 and 128 x 96 kept 2 throughout (predicted 2, and 2 or 3); their grown-step estimates 0.085 and 0.25.
+* The count followed the prediction (2, then 3 from step 4). The second dt-fired estimate came at step 14, not about
+  step 7, because the controller's step levelled off at Courant 0.45 near 0.0029 to 0.0030 s (1.42 to 1.50 times the
+  step-4 dt) and crossed 1.5 only at step 14; it kept 3. No dt-fired estimate came after step 14 on any 256 x 256 run
+  (the step stayed within 0.0030 to 0.0039 s, under 1.5 times 0.00302).
+* 64 x 48 and 128 x 96 kept 2 throughout (predicted 2, and 2 or 3); their grown-step estimates were 0.085 and 0.25.
 * The control: the 2-corrector estimate at the grown step was 0.94 to 1.00 (predicted 0.9 to 1.2), no spokes (predicted).
 
 ### Deviations
 
 1. The worktree started at 1248a76, the merge base, and was fast-forwarded to local main 444255c (48S, 48V, 48W, 48X merged)
    before any work.
-2. D2 names `Simulation::step` and `run_fixed` as the places that mark a landing step; the library's `ControlledRun::advance`
-   (`stepctl.rs`, the controller's own driver, not used by `Simulation` for these runs) marks its landed steps the same way, for
-   consistency of the library. No registered run goes through it.
+2. D2 names `Simulation::step` and `run_fixed` as the places that mark a landing step. The library's
+   `ControlledRun::advance` (`stepctl.rs`, the controller's own driver, not used by `Simulation` for these runs) marks
+   its landed steps the same way, for consistency of the library. No registered run goes through it.
 3. The harness's `wall_s` includes its own diagnostics (the 60-iteration trials, 30 to 42 s each on 256 x 256, and the M_hf
-   evaluations); E uses the per-step `step_s` only, as registered.
-4. `scripts/w48v_shedding.py` prints `cd(3) None` for C64 and `cd(10) None` for C128: its nearest-step tolerance is taken from the
-   first step's size, which is small under the automatic step. Not a registered quantity (C2 uses its St and mean cd only).
-5. N2 and N3 (`baseline_hashes`, `case_hashes_w48u`) ran inside N6's `cargo test -p rcfd-api`, N1 (`w33b_default_bits`) inside
-   N6's `cargo test -p rcfd-fv`; N5's ignored A4 was run on its own afterwards. A first rcfd-api run without `--no-fail-fast`
-   stopped at N3's failure; the reported N6 is the second, full run.
+   evaluations). E uses the per-step `step_s` only, as registered.
+4. `scripts/w48v_shedding.py` prints `cd(3) None` for C64 and `cd(10) None` for C128: its nearest-step tolerance is
+   taken from the first step's size, which is small under the automatic step. Not a registered quantity (C2 uses
+   its St and mean cd only).
+5. N2 and N3 (`baseline_hashes`, `case_hashes_w48u`) ran inside N6's `cargo test -p rcfd-api`, N1 (`w33b_default_bits`)
+   inside N6's `cargo test -p rcfd-fv`. N5's ignored A4 was run on its own afterwards. A first rcfd-api run without
+   `--no-fail-fast` stopped at N3's failure; the reported N6 is the second, full run.
 6. N3 as registered ("passes") is not met, but the failure is the same at 444255c, before this job, and concerns written case
    texts, which this job does not touch. It was **not** turned into a `*_known_miss` test: the test belongs to ADR 0155 and the
-   miss is not this job's; question 6 asks for its owner's decision.
-7. While this job ran, local main advanced to 1a9c566 (jobs 48Y, 48Z, 48AA). The branch stays on 444255c; a trial merge with
-   1a9c566 (aborted afterwards) has no conflict and `cargo check -p rcfd-fv -p rcfd-api --all-targets` of it is clean; no run or
-   test of this job was repeated on the merged tree. Read of 1a9c566's `sim.rs`: `let proposed = dt;` still precedes `fixed_step` and the end clamp, and 48Z's end-time snap changes the reported time after the step, not the step, so D2's landing mark sees the same values there.
+   miss is not this job's. Question 6 asks for its owner's decision.
+7. While this job ran, local main advanced to 1a9c566 (jobs 48Y, 48Z, 48AA). The branch stays on 444255c. A trial merge
+   with 1a9c566 (aborted afterwards) has no conflict and `cargo check -p rcfd-fv -p rcfd-api --all-targets` of it is
+   clean; no run or test of this job was repeated on the merged tree. Read of 1a9c566's `sim.rs`: `let proposed = dt;`
+   still precedes `fixed_step` and the end clamp, and 48Z's end-time snap changes the reported time after the step, not
+   the step, so D2's landing mark sees the same values there.
 
 ### Not run
 

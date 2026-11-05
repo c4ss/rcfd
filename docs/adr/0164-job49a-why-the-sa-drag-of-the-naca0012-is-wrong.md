@@ -8,23 +8,36 @@ unanchored far-field nuTilda); limits met except LA4 (cd at 10 degrees +25.95 %,
 artefact) and LP1 at y+ 5 (+19.9 %), which are known misses. Not yet accepted by the maintainer. **2026-10-29:** the
 maintainer answered questions 1, 2, 4 and 5 with the recommendations; the defaults are changed by
 [ADR 0166](0166-job49c-effective-wall-shear-and-sa-far-field-defaults.md) (the molecular values are now
-`total_molecular` / `viscous_molecular`). Job 49A, on local main 8d2ea58 (the worktree branch was reset to
-it before any work). Number: ADR 0163 is the highest in this worktree and in the main checkout. House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
-- limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
-  intact;
-- a defective set-up gets an amendment before the corrected run;
-- defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
-- no new crate, no unsafe code, no commit trailers, nothing is pushed.
+`total_molecular` / `viscous_molecular`).
 
-Clean-room: our own code and published data only. The data are the NASA Turbulence Modeling Resource (TMR) NACA 0012
-validation case and its SA results (CFL3D files, fetched 2026-10-29), Ladson (NASA TM 4074, 1988) as already in the
-repository, and the TMR flat-plate SA value already used by ADR 0014.
+Steady SA on M1w in ADR 0159 gave cd about half of Ladson's at 0 degrees and 1.4 to 4.6 times it from 4 degrees up, and
+its cd kept rising for thousands of iterations. This job finds two independent causes; neither is the SA model, its
+coefficients or its wall law. The default force report takes the molecular viscosity, so on a wall-function mesh the
+reported friction is a fraction of the shear the solver applies: 0.319 of it on the aerofoil at y+ about 42. Nothing
+fixes nuTilda on a `freestream` far field: the median outer nuTilda/nu of ADR 0159's runs is 6.02e4 at 10 degrees, and
+its growth is the cd drift. With the opt-in `total_effective`, A00 (ADR 0159's case unchanged) gives cd +3.6 % against
+TMR at 0 degrees. With the opt-in `turbulence = "freestream"` as well, F10 gives cd +26 % and cl -3.3 % at 10 degrees on
+50 chords; C10 on 500 chords gives cd +10 %, and that remainder is not attributed. Three registered limits are known
+misses: LA4 (+25.95 %, band 25 %), LA6 (a reading-rule artefact) and LP1 at y+ 5 (+19.9 %). Arm B, the registered
+far-field set-up, was itself defective (`inlet` traps nuTilda), and amendment 1 replaced it with arm F before any
+corrected run.
 
-Parents:
-- [ADR 0159](0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md): the sweep, its mesh M1w, its driver, question 4
-  (this job) and question 5 (the trailing-edge divergence, not this job).
-- [ADR 0014](0014-sa-and-turbulence-interface.md): the SA model, its wall mode `auto` and the flat-plate checks S1-S6.
+Rules and parents:
+
+- Job 49A, on local main 8d2ea58 (the worktree branch was reset to it before any work). Number: ADR 0163 is the highest
+  in this worktree and in the main checkout.
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the
+  registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets
+  an amendment before the corrected run; defaults of existing code stay bit-identical;
+  `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe code, no commit trailers,
+  nothing is pushed.
+- Clean-room: our own code and published data only. The data are the NASA Turbulence Modeling Resource (TMR) NACA 0012
+  validation case and its SA results (CFL3D files, fetched 2026-10-29), Ladson (NASA TM 4074, 1988) as already in the
+  repository, and the TMR flat-plate SA value already used by ADR 0014.
+- Parent [ADR 0159](0159-job48y-naca0012-angle-of-attack-sweep-through-stall.md): the sweep, its mesh M1w, its driver,
+  question 4 (this job) and question 5 (the trailing-edge divergence, not this job).
+- Parent [ADR 0014](0014-sa-and-turbulence-interface.md): the SA model, its wall mode `auto` and the flat-plate checks
+  S1-S6.
 
 ## The request (the maintainer, relayed)
 

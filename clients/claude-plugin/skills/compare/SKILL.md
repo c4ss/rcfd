@@ -10,11 +10,11 @@ allowed-tools: mcp__plugin_rcfd_project__list_runs, mcp__plugin_rcfd_project__co
 Arguments: $ARGUMENTS (run ids; when none are given, use the two newest finished runs from `list_runs` with
 `state: finished`).
 
-1. `compare_runs` with the run ids (2 to 10). The first run is the baseline; `differences` are other minus baseline,
-   exactly as stored (no rounding).
-2. `read_residuals` for each run with `max_points` 50 to compare how fast the residuals fell; the `residual_lines` of
-   `compare_runs` give the history lengths.
-3. If a metric the user asks about is missing from `compare_runs`, `read_metrics` shows the raw `metrics.json`.
+1. Call `compare_runs` with the run ids (2 to 10). The first run is the baseline; `differences` are other minus
+   baseline, exactly as stored (no rounding).
+2. Call `read_residuals` for each run with `max_points` 50 to compare how fast the residuals fell; the `residual_lines`
+   of `compare_runs` give the history lengths.
+3. If a metric the user asks about is missing from `compare_runs`, call `read_metrics`: it shows the raw `metrics.json`.
 
-Report the metrics as a table with the differences, then one or two sentences on convergence. Say when runs used
-different cases (the `case` column): their metrics are then not like for like.
+Report the metrics as a table with the differences, then one or two sentences on convergence. If runs used different
+cases (the `case` column), say so: their metrics are then not like for like.

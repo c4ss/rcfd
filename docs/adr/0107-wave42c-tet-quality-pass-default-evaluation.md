@@ -1,9 +1,23 @@
 # ADR 0107: Wave 42C, the tetrahedral quality pass as a default? (F-131, F-132)
 
-Status: registered before the experiment, the timing run and the registered tests were run. Limits and the decision rule are not
-changed after a run; a missed limit becomes an ignored `*_known_miss` test with the limit intact. The main tree keeps
-`TetOptions::quality_sweeps = 0` unless the decision rule below is met. Written at HEAD 3e755c9, target `<target dir>`.
-Clean-room: first principles only; no literature value enters a limit.
+Status: registered before the experiment, the timing run and the registered tests were run.
+
+Wave 42C evaluates making the opt-in tetrahedral quality pass of ADR 0104 the default, under the user decision of 2026-10-22:
+only if every existing baseline hash stays identical. The results, measured after the registration, do NOT meet the registered
+rule, and the default stays `quality_sweeps = 0`. Two conditions block: B4 (`t5_torus_known_miss`: its recorded 0.634 becomes
+1.000) and B5 (L1 on M1 and M10, L2). L1 is 3.051 on M1 (a marginal miss) and 4.810 on M10 against 3.0, and L2 is 2.787 against
+2.0, with other agents' builds on the machine in both runs. Not blocking: B1, B2 and B3 hold (no non-ignored failure, no
+changed literal outside W0, baseline hashes unchanged, no new `Err`). L3 (safety, M1 and M10) and Q8 (T5 limits, M10) pass. No
+fingerprint and no baseline hash was re-recorded. Switching would need a user decision on `t5_torus_known_miss`, a cheaper pass
+or a user decision accepting the cost, and then the pins, docs and listed ADR addenda.
+
+Rules and parents:
+
+* Limits and the decision rule are not changed after a run; a missed limit becomes an ignored `*_known_miss` test with the limit
+  intact.
+* The main tree keeps `TetOptions::quality_sweeps = 0` unless the decision rule below is met.
+* Written at HEAD 3e755c9, target `<target dir>`.
+* Clean-room: first principles only; no literature value enters a limit.
 
 ## Context
 
@@ -186,11 +200,15 @@ rotating-channel record), unchanged. No test outside the five binaries and this 
 The second run gave M1 3.080; the registered L1 verdict on M1 is the first run's 3.051 (amendment 1). Both runs had other agents'
 builds on the machine; wall-clock numbers carry that caveat. L1 on M1 is within the repeat spread (per-repeat factors about 2.8
 to 3.2 in the first run): a marginal miss. M10 (4.81) and L2 (2.79) exceed their limits by far more than the spread; the decision
-does not depend on M1. Steiner budget used: M1 0.0048 with the pass (0.0039 without), M10 0.0018 (0.0017); no case came near the budget
-error. Pass counters: M1 25 extra interior points, 530 moves, 277 extra flips; M10 28 extra points, 2592 moves, 1630 extra flips;
-M10 ends with fewer cells (10614 vs 10710) because flips remove cells. The added cost per cell grows with the mesh (2.79x per cell
-at 8.7x the output cells), so the pass is superlinear on this family; the cause was not isolated (candidates read from the code: every sweep
-rescans all tetrahedra in `refine_constrained` and `improve`, whose 30-pass loop also rescans; not measured).
+does not depend on M1.
+
+Steiner budget used: M1 0.0048 with the pass (0.0039 without), M10 0.0018 (0.0017); no case came near the budget error. Pass
+counters: M1 25 extra interior points, 530 moves, 277 extra flips; M10 28 extra points, 2592 moves, 1630 extra flips; M10 ends
+with fewer cells (10614 vs 10710) because flips remove cells.
+
+The added cost per cell grows with the mesh (2.79x per cell at 8.7x the output cells), so the pass is superlinear on this family;
+the cause was not isolated (candidates read from the code: every sweep rescans all tetrahedra in `refine_constrained` and
+`improve`, whose 30-pass loop also rescans; not measured).
 
 ### Decision
 
@@ -199,17 +217,23 @@ Not blocking: B1, B2, B3 hold (no non-ignored failure, no changed literal outsid
 default stays `quality_sweeps = 0`; W0, S2/S3 and the diagnostics are not pinned (nothing to pin while the default is 0); no
 fingerprint and no baseline hash was re-recorded.
 
-What switching would need: (1) a user decision on `t5_torus_known_miss`: either it is declared a record of the mesher without the
-pass and pinned to `quality_sweeps: 0`, or its record is retired as met with the pass on (and ADR 0030 gets an addendum); (2) a
-cheaper pass or a user decision accepting about 3x on 1k cells and about 5x on 10k cells: the superlinear part would have to be
-found and removed first (for example by working on a list of cells changed in the previous sweep instead of rescanning); (3) then
-the pins, docs and the listed ADR addenda (ADR 0030 T5/T6/T10/P1/T5b, ADR 0093 S2b, ADR 0104 smoke and D tables).
+What switching would need:
 
-Deviations: the L1/L2 harness stopped at the first miss and was corrected and run a second time (amendment 1, written before the
-second run). The first registered run of `l3`, `q8` and `l12` used a version of the file not yet committed: the "without the pass"
-side was changed from `TetOptions::default()` to an explicit `no_pass()` (`quality_sweeps: 0`) after the registration commit
-d2e0d4a and committed with amendment 1 (c45aae5); with the default at 0 the two are the same options, so no result changes. Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke),
-so `tetrahedralize` refused that surface; not pursued.
+1. a user decision on `t5_torus_known_miss`: either it is declared a record of the mesher without the pass and pinned to
+   `quality_sweeps: 0`, or its record is retired as met with the pass on (and ADR 0030 gets an addendum);
+2. a cheaper pass or a user decision accepting about 3x on 1k cells and about 5x on 10k cells: the superlinear part would have to
+   be found and removed first (for example by working on a list of cells changed in the previous sweep instead of rescanning);
+3. then the pins, docs and the listed ADR addenda (ADR 0030 T5/T6/T10/P1/T5b, ADR 0093 S2b, ADR 0104 smoke and D tables).
+
+Deviations:
+
+* The L1/L2 harness stopped at the first miss and was corrected and run a second time (amendment 1, written before the second run).
+* The first registered run of `l3`, `q8` and `l12` used a version of the file not yet committed: the "without the pass" side was
+  changed from `TetOptions::default()` to an explicit `no_pass()` (`quality_sweeps: 0`) after the registration commit d2e0d4a and
+  committed with amendment 1 (c45aae5); with the default at 0 the two are the same options, so no result changes.
+
+Side finding: the curvature remesher produced 2 degenerate triangles at theta 0.12, h_min 0.025, h_max 0.25 (smoke), so
+`tetrahedralize` refused that surface; not pursued.
 
 Gate on a fresh archive of 1e3aded: `cargo fmt --check` and `cargo clippy --workspace --all-targets -D warnings` clean,
 `cargo test --workspace --release --no-fail-fast` 1967 passed / 0 failed / 585 ignored (this ADR's file: 2 passed, 2 ignored; the

@@ -1,11 +1,27 @@
 # ADR 0066: Wave 32B, aeroacoustics library chain for fan noise (F-243 partial, builds on F-136)
 
 Status: accepted. The checks, numeric limits and decision rules below are written before any code of the new modules
-is compiled or run. They are not widened, replaced or deleted after a run; a miss is reported as measured and the test
-moves to an `#[ignore]`d `*_known_miss` test with the registered limit intact. Deviations go into a dated addendum.
-Plan served: `docs/milestone-fan.md` (noise link: time-domain FW-H, steady-RANS broadband proxies, tonal Gutin check,
-SPL/OASPL/octave bands). Roadmap: F-243 (stays `partial`: its acceptance text, impedance-tube reflection coefficient and
-a quiet boundary reflecting less than 1 percent, is NOT addressed by this wave), builds on F-136 (ADR 0013).
+is compiled or run.
+
+Wave 32B adds a fan-noise library chain to `crates/rcfd-post` and one new command, `rcfd fwh`, to `crates/rcfd-cli`:
+time-domain FW-H, steady-RANS broadband proxies, a tonal Gutin check and SPL/OASPL/octave bands. Addendum 1 reports every
+registered check as pass except W5a and W5b, the impermeable sphere in uniform flow, at 7.695e-2 and 6.673e-2 against
+limits of 1e-2 and 1e-3. Both stay ignored known-miss tests with their limits intact, so the impermeable-in-flow case is
+NOT verified against an exact solution in this wave. The explanation of that miss is a hypothesis, not proven. A new
+check, W5d, passes on a permeable pulsating sphere in a stream and does not replace W5a/W5b. Proxy levels are NOT
+validated: P1 to P3 test identities only, and none compares with measured noise. F-243 stays `partial`, because this wave
+does not address its acceptance text. The A-weighting table check M2 uses a table recalled from memory, and the
+Gutin-type formula is derived here and checked against the FW-H code, not against a citation.
+
+Rules and parents:
+
+* The checks, numeric limits and decision rules are not widened, replaced or deleted after a run; a miss is reported as
+  measured and the test moves to an `#[ignore]`d `*_known_miss` test with the registered limit intact.
+* Deviations go into a dated addendum.
+* Plan served: `docs/milestone-fan.md` (noise link: time-domain FW-H, steady-RANS broadband proxies, tonal Gutin check,
+  SPL/OASPL/octave bands).
+* Roadmap: F-243 (stays `partial`: its acceptance text, impedance-tube reflection coefficient and a quiet boundary
+  reflecting less than 1 percent, is NOT addressed by this wave), builds on F-136 (ADR 0013).
 
 ## Process disclosure (before registration)
 
@@ -261,16 +277,20 @@ Limits are the registered ones above; "pass" means measured <= limit.
 
 Registered: W5a (on axis, M = 0.3, amplitude <= 1e-2 and phase <= 5e-3 rad against the closed form of a compact point
 source at rest in the stream) and W5b (off axis, <= 1e-3 against the Lienard-Wiechert field of a moving monopole) for
-an impermeable pulsating sphere. Measured 7.695e-2 and 6.673e-2. The hypothesis, not proven: the reference is the field
-of a point mass source, whereas the impermeable sphere held in a stream is a different physical problem (the steady flow
-around the body carries steady loading that the constructed data omit, and the face data used constant areas), so the
-error scales with U and the registered reference does not describe the constructed problem. Diagnostic run
-after the miss (not a gate): at M = 0.01 the same construction gives 2.4e-3, consistent with an error proportional to U.
+an impermeable pulsating sphere. Measured: 7.695e-2 and 6.673e-2.
+
+The hypothesis, not proven: the reference is the field of a point mass source, whereas the impermeable sphere held in a
+stream is a different physical problem (the steady flow around the body carries steady loading that the constructed data
+omit, and the face data used constant areas), so the error scales with U and the registered reference does not describe
+the constructed problem. Diagnostic run after the miss (not a gate): at M = 0.01 the same construction gives 2.4e-3,
+consistent with an error proportional to U.
+
 To check the medium-frame and moving-observer machinery itself, a new check W5d was added with the same limit as W5a
 (1e-2): a permeable pulsating sphere, whose field in the medium frame is exact, observed downstream, upstream and off
-axis in a stream; measured 4.5e-6 (amplitude) and phase errors of 1e-4 .. 2.5e-4 rad. W5d does not replace W5a/W5b; the
-original tests remain ignored with their limits intact, and the impermeable-in-flow case is therefore NOT verified
-against an exact solution in this wave.
+axis in a stream. It measured 4.5e-6 (amplitude) and phase errors of 1e-4 .. 2.5e-4 rad.
+
+W5d does not replace W5a/W5b. The original tests remain ignored with their limits intact, and the impermeable-in-flow
+case is therefore NOT verified against an exact solution in this wave.
 
 ### Other deviations from the registration
 

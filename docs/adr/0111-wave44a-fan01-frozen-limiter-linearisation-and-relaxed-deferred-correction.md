@@ -1,22 +1,38 @@
-# ADR 0111: Wave 44A, the linear stability of the FAN-01 frozen-limiter map, its attribution, an under-relaxed deferred correction, and the stop rule
+# ADR 0111: Wave 44A, FAN-01 frozen-limiter linear stability, under-relaxed deferred correction, stop rule
 
-Status: registered before any registered run. Limits and decision rules are fixed here and are not changed after a run; a miss becomes an
-ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the corrected run. Defaults stay
-bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Clean-room: first principles only. Written at HEAD fee6ecc
-(scratch clone `<scratch dir>`, target `<target dir>`). Parents: ADR 0084 (the Jacobian method), ADR 0086
-(the FAN-01 family), ADR 0110 (the stall diagnosis), `docs/milestone-fan.md`. No agreement with measured fan data is a question of this ADR
-or is claimed.
+Status: registered before any registered run.
+
+ADR 0110 diagnosed the FAN-01 stall and inferred, without measuring it, that the frozen-limiter map has an eigenvalue at or beyond
+-1 at the blade-root leading-edge cells. This wave registers a linearisation of that map with an attribution of the instability, an
+under-relaxed deferred correction (the fix candidate F-R), and a test of whether the SST change criterion is a defect of the stop
+rule. Nothing was attributed: M3 missed, so by the registered rule the attribution is NOT TESTABLE by linearisation at x_ref (the
+B3 default state after 1000 iterations). P1 holds and P2 is falsified: the leading eigenvalue is -1.3306 (real), and its mode sits
+at hub-region mid-chord cells, not at the leading edge. F-R ran as an unattributed candidate with beta* = 0.25: the empty-passage
+arms E3 and E1 met their Z1 criteria and E2 missed Z1 (a), so Z2 on the bladed B3 was not run and F-R was removed. The stop rule
+reads NOT A DEFECT, and no stop-rule change was made. The bladed stall has no attributed mechanism. The final gate recorded 2007
+passed, 1 failed, 631 ignored; the failure lists mesh warnings from the test files of the other wave-44 agents and names no file
+of this wave.
+
+Rules and parents:
+
+* Limits and decision rules are fixed here and are not changed after a run; a miss becomes an ignored `*_known_miss` test with the
+  limit intact; a defective set-up gets an amendment written before the corrected run.
+* Defaults stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles only.
+* Written at HEAD fee6ecc (scratch clone `<scratch dir>`, target `<target dir>`).
+* Parents: ADR 0084 (the Jacobian method), ADR 0086 (the FAN-01 family), ADR 0110 (the stall diagnosis), `docs/milestone-fan.md`.
+* No agreement with measured fan data is a question of this ADR or is claimed.
 
 ## Starting point (ADR 0110)
 
-* The ADR 0086 runs stall in limit cycles. On the empty passage E3 the Barth-Jespersen factors psi flip every iteration; freezing psi
+* The ADR 0086 runs stall in limit cycles. On the empty passage E3 the Barth-Jespersen factors psi flip every iteration. Freezing psi
   converges E3 to 1e-12, but the frozen fixed point is not a Barth-Jespersen fixed point, and freezing diverges on E2 and E1.
 * On the bladed B3, freezing psi at iteration 1000 makes the oscillation at the blade-root leading-edge cells grow (`max_du` 2.2 to
   16.8 m/s; cells c17, c665, c701, c341, c53; c17 touches the hub and the blade). First-order `upwind` converges B3 (S10). Falsified as
   causes: the pressure-velocity coupling, SST, the seam gradient, the linear-solver tolerance, outlet backflow, the explicit Coriolis source.
-* ADR 0110 inferred, without measuring it, that the frozen-limiter map has an eigenvalue at or beyond -1 at those cells, and proposed to
+* ADR 0110 inferred, without measuring it, that the frozen-limiter map has an eigenvalue at or beyond -1 at those cells. It proposed to
   attribute it to the explicit `linear_upwind` (deferred) correction gain or to the least-squares gradient of the cell with two wall faces.
-* `is_converged()` stayed false in S10 although `res_u` and `res_p` were below 1e-5 from iteration 1114; the conjunction in `sim.rs` then
+* `is_converged()` stayed false in S10 although `res_u` and `res_p` were below 1e-5 from iteration 1114. The conjunction in `sim.rs` then
   points at the SST criterion (`res_nut`, the largest relative change of the eddy viscosity per iteration, documented in
   `docs/case-schema.md` as part of the convergence test).
 
@@ -43,19 +59,29 @@ Smoke runs (release, one each; no eigenvalue was computed):
 ## Part J: the linearisation (method)
 
 **The map F.** State x = (u_x, u_y, u_z, p of every cell, phi of every non-empty face): 35 371 entries on B3. F(x) = one
-`SimpleSolver::iterate` from x with: psi frozen at the reference state (the ADR 0110 hook); the eddy viscosity `nu_face` that the real
-iteration 1001 used; the lagged wall-pressure quantities of the reference state; the rotating-frame force evaluated from the velocity of x
-with the case's `Sources` exactly as `Simulation::step` does (M0 checks this); the ADR 0110 S6 linear solves (relative 1e-10, absolute
-1e-16 / 1e-18). The turbulence model is therefore frozen; ADR 0110 S4 falsified SST as the cause of the stall, and the frozen-psi growth was
+`SimpleSolver::iterate` from x with:
+
+* psi frozen at the reference state (the ADR 0110 hook);
+* the eddy viscosity `nu_face` that the real iteration 1001 used;
+* the lagged wall-pressure quantities of the reference state;
+* the rotating-frame force evaluated from the velocity of x with the case's `Sources` exactly as `Simulation::step` does (M0 checks
+  this);
+* the ADR 0110 S6 linear solves (relative 1e-10, absolute 1e-16 / 1e-18).
+
+The turbulence model is therefore frozen; ADR 0110 S4 falsified SST as the cause of the stall, and the frozen-psi growth was
 observed with SST live (a difference this method does not see; stated).
 
 **Reference state** x_ref = the B3 default state after 1000 iterations (the S1 switch state of ADR 0110). It lies on the default cycle and is
 not a fixed point of F; J(x_ref) describes one iteration from there (check M3 tests whether it predicts the frozen iteration).
 
-**The Jacobian** J = dF/dx is never formed. Matrix-free Arnoldi on the scaled operator D^-1 J D (ADR 0084 scales: velocity U = max(1,
-max|u|), pressure max(max|p|, U^2), flux U times the largest face area; with the F-R state block its largest magnitude), J v by central
-differences with step h times the entry scale, h = 1e-6, start vector sin(0.7071 i) normalised, m = 200 steps, modified Gram-Schmidt with one
-reorthogonalisation. Ritz values and vectors from the Hessenberg matrix (`numpy.linalg.eig`, `scripts/w44a_arnoldi_analysis.py`).
+**The Jacobian** J = dF/dx is never formed. The method:
+
+* Matrix-free Arnoldi on the scaled operator D^-1 J D (ADR 0084 scales: velocity U = max(1, max|u|), pressure max(max|p|, U^2), flux U
+  times the largest face area; with the F-R state block its largest magnitude).
+* J v by central differences with step h times the entry scale, h = 1e-6.
+* Start vector sin(0.7071 i) normalised.
+* m = 200 steps, modified Gram-Schmidt with one reorthogonalisation.
+* Ritz values and vectors from the Hessenberg matrix (`numpy.linalg.eig`, `scripts/w44a_arnoldi_analysis.py`).
 
 **rho** of a Jacobian = the largest modulus among its converged Ritz values; **rho_neg** = the same over the Ritz values with negative real
 part. A Ritz value is **converged** iff its residual estimate `h_{m+1,m} |y_m|` (y normalised) is at most 1e-2 |theta|.
@@ -170,9 +196,18 @@ registered in an amendment before its code.
 
 ## Run order and rules
 
-J0, J0 with h = 1e-7, H17, H5, Hall, GG17 (`w44a_lin_base_and_attribution`), analysis; M3 (`w44a_lin_m3`); J(beta) (`w44a_lin_relaxed`),
-analysis; the beta rule; the beta* smoke; Z1 E3, E2, E1; Z2 B3; G1; Z3. Each registered run once, at most two at a time, none over 60
-minutes. Tests in `crates/rcfd-api/tests/fan01_stall_w43c.rs`, ignored when over 60 s.
+1. J0, J0 with h = 1e-7, H17, H5, Hall, GG17 (`w44a_lin_base_and_attribution`), analysis.
+2. M3 (`w44a_lin_m3`).
+3. J(beta) (`w44a_lin_relaxed`), analysis.
+4. The beta rule.
+5. The beta* smoke.
+6. Z1 E3, E2, E1.
+7. Z2 B3.
+8. G1.
+9. Z3.
+
+Each registered run once, at most two at a time, none over 60 minutes. Tests in `crates/rcfd-api/tests/fan01_stall_w43c.rs`, ignored
+when over 60 s.
 
 ## Not claimed
 
@@ -188,11 +223,19 @@ None used. The Arnoldi method and the single-cell relaxation model are first pri
 What I knew when writing it: the part J results below (each registered run made once). No limit or rule is changed; this amendment applies
 the registered rules and fixes beta*.
 
-* **Method checks.** M0: the harness map reproduces the real iteration 1001 in all 35 371 entries bit for bit (in each of the three runs that
-  built the reference). M0': H17, H5 and Hall leave F(x_ref) bit-identical; GG17 changes it, as stated. M2: bit-identical. M1:
-  rho(1e-6) 1.330555, rho(1e-7) 1.330553, |diff| 2e-6 (limit 1e-3), met; the smallest |phi_f| / (U A_max) on the n5 faces is 1.16e-6 against
-  the largest relative step 1e-6 (no flux sign can flip). M-A: the leading Ritz value converged (residual estimate below 1e-50), rho from
-  150 steps equals rho from 200 to 5e-15: met. Resolution: rho_0 - 1 = 0.33 against 3 u0 = 6e-6: resolved.
+Method checks:
+
+* M0: the harness map reproduces the real iteration 1001 in all 35 371 entries bit for bit (in each of the three runs that built the
+  reference).
+* M0': H17, H5 and Hall leave F(x_ref) bit-identical; GG17 changes it, as stated.
+* M2: bit-identical.
+* M1: rho(1e-6) 1.330555, rho(1e-7) 1.330553, |diff| 2e-6 (limit 1e-3), met; the smallest |phi_f| / (U A_max) on the n5 faces is
+  1.16e-6 against the largest relative step 1e-6 (no flux sign can flip).
+* M-A: the leading Ritz value converged (residual estimate below 1e-50), rho from 150 steps equals rho from 200 to 5e-15: met.
+* Resolution: rho_0 - 1 = 0.33 against 3 u0 = 6e-6: resolved.
+
+Part J results and readings:
+
 * **J0**: leading eigenvalue -1.3306 (real), then +1.163, +1.112 +- 0.104i, -1.097, +1.047; 118 of 200 Ritz values converged. **P1
   holds.** The leading mode is NOT at the leading edge: 0.1 % of its scaled velocity energy is in the five cells and 0.2 % in n5, so **P2
   is falsified**. Its most energetic cells are c1234 (seam, r 0.1408, z 0.149, 59 deg), c365 and c401 (interior, r 0.1249, z 0.172, 38 and
@@ -218,9 +261,9 @@ the registered rules and fixes beta*.
 
 ## Addendum: measured values, verdicts, deviations
 
-Release builds of the scratch clone at fee6ecc plus this wave's files; each registered run made once. The commits on main in the meantime
-(ADR 0112, 0113) touch `simple.rs` only in a separate opt-in hunk (`coupled_offdiag_in_h1`, default off) and nothing else on the path of
-these runs; this wave's hunks were applied onto main's current files.
+The runs used release builds of the scratch clone at fee6ecc plus this wave's files, and each registered run was made once. The
+commits on main in the meantime (ADR 0112, 0113) touch `simple.rs` only in a separate opt-in hunk (`coupled_offdiag_in_h1`, default
+off) and nothing else on the path of these runs. This wave's hunks were applied onto main's current files.
 
 ### Part J (linearisation at x_ref; numbers in amendment 1)
 
@@ -237,12 +280,18 @@ these runs; this wave's hunks were applied onto main's current files.
 | P2 localisation in n5 | 0.2 % (five cells 0.1 %) | >= 50 % (falsified below 20 %) | **falsified** |
 | P3 branch 3 | branch 5 by the numbers, but NOT TESTABLE (M3) | branch 3 | not met |
 
-**Attributed: nothing.** M3 failed, so by the registered rule the attribution is NOT TESTABLE by linearisation at x_ref. Observations only
-(no verdict): at x_ref, holding the convection gradient of c17, of the five leading-edge cells, or replacing c17's gradient by Green-Gauss
-changes rho by less than 1e-5; holding every convection gradient lowers it to 1.2915; the under-relaxed correction (J(beta)) does not lower it
-(1.335-1.341); the leading mode sits at hub-region mid-chord cells (c1234, c365, c401; z 0.149-0.172, 38-59 deg), not at the leading edge.
-The linear map at a cycle point did not predict the frozen nonlinear iteration, and (below) it did not predict the live-limiter F-R runs
-either. Why is not explained here.
+**Attributed: nothing.** M3 failed, so by the registered rule the attribution is NOT TESTABLE by linearisation at x_ref.
+
+Observations only (no verdict), at x_ref:
+
+* Holding the convection gradient of c17, of the five leading-edge cells, or replacing c17's gradient by Green-Gauss changes rho by
+  less than 1e-5.
+* Holding every convection gradient lowers it to 1.2915.
+* The under-relaxed correction (J(beta)) does not lower it (1.335-1.341).
+* The leading mode sits at hub-region mid-chord cells (c1234, c365, c401; z 0.149-0.172, 38-59 deg), not at the leading edge.
+
+The linear map at a cycle point did not predict the frozen nonlinear iteration, and (below) it did not predict the live-limiter F-R
+runs either. Why is not explained here.
 
 ### Part F (F-R, unattributed candidate, beta* = 0.25; switch at 1000, 2000 more)
 

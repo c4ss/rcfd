@@ -1,29 +1,36 @@
-# ADR 0136: Fidelity tiers xhigh to xlow: one `fidelity` setting expanded into explicit knobs, error budgets against an xhigh reference, target speedups
+# ADR 0136: Fidelity tiers xhigh to xlow
 
 Status: **PROPOSED 2026-10-28** (scoping only; nothing implemented or run). The maintainer decided F-13 on 2026-10-28: the tier is
 reachable through the MCP project tools (D9). F-1 to F-12 remain proposals. Written at main a89ccb3, revised at main 83343d9 with D9
-and the validation plan. House rules as in [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed
-before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is
-corrected by an amendment registered before the corrected run; defaults of existing code stay bit-identical;
-`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+and the validation plan.
 
-Parents: [`docs/fan-project-breakdown.md`](../fan-project-breakdown.md) parts C7, H3, H4 and H7;
-ADRs [0119](0119-wave46b-reduced-order-axial-fan-tier.md), [0121](0121-wave46d-design-ledger-and-tolerance-study-driver.md), 0130,
-[0038](0038-wave22-gpu-cuda.md) and [0058](0058-wave29d-distributed-parallel.md).
+Maintainer's framing: build the foundation for an extra high precision simulation, and lower tiers that deliver a stated percentage
+accuracy for a multiplier speedup. This ADR proposes fidelity tiers xhigh, high, medium, low and xlow: one `fidelity` setting
+expanded into explicit knobs, error budgets against an xhigh reference, and target speedups. Each budget and speedup band is a claim
+for a case class and holds only after that class's calibration checks pass. Without `--fidelity`, the solver gets today's input.
+Nothing is implemented or run, so this ADR has no results; stage T5, the computer-fan class (class F), is blocked.
 
 Every accuracy and speedup number in this ADR is a TARGET or an ESTIMATE, stated with the way it would be measured. Numbers marked
 MEASURED are earlier results of this repository, cited where they were recorded; none is a result of this ADR. **Every number for the
 computer-fan class is an estimate, because no fan reference at any fidelity exists in the repository.**
+
+House rules, as in [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
+* limits are fixed before the registered runs;
+* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+* a defective set-up is corrected by an amendment registered before the corrected run;
+* defaults of existing code stay bit-identical;
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+
+Parents: [`docs/fan-project-breakdown.md`](../fan-project-breakdown.md) parts C7, H3, H4 and H7;
+ADRs [0119](0119-wave46b-reduced-order-axial-fan-tier.md), [0121](0121-wave46d-design-ledger-and-tolerance-study-driver.md), 0130,
+[0038](0038-wave22-gpu-cuda.md) and [0058](0058-wave29d-distributed-parallel.md).
 
 Naming:
 * The decision ids F-1 to F-13 belong to this ADR. They are not roadmap items (F-001 to F-269).
 * "Part F1" is the fan breakdown's tolerance study; "check F1" of ADRs 0038 and 0135 are those ADRs' checks.
 * Proposed roadmap items get ids from the maintainer, as in ADR 0130.
 * The D sections describe the design under the recommended option of each open decision, named in brackets. Another choice changes
-  the section named.
-
-Maintainer's framing: build the foundation for an extra high precision simulation, and lower tiers that deliver a stated percentage
-accuracy for a multiplier speedup.
+  the section named. The options and recommendations are under "Open decisions (maintainer)".
 
 ## Context (read at main a89ccb3)
 
@@ -163,11 +170,10 @@ Reasons for the numbers:
   low are then 0.33-0.41, 1 and 1.8-2.3 times the medium difference. (For p = 1: 0.207, 0.5, 0.914 of `C h`; for p = 2: 0.25, 0.75,
   1.75 of `C h^2`.) The budgets 1, 3 and 7 % follow the p = 2 ratios; at p = 1 they would be 1.24 % and 5.5 %. The ratios hold
   only for runs that differ in h and dt alone (Table B1 notes).
-* **Class F, flow against pressure.**
-  * Take a system curve `dp = k Q^2 + l Q` (the form of ADR 0119 D-M8) with slope `S`, crossed by a fan curve of slope
-    `s <= 0`. Then `dQ/Q = (d dp/dp) / (S Q/dp - s Q/dp)`, with `S Q/dp` between 1 (`k = 0`) and 2 (`l = 0`).
-  * The flow budgets are half the pressure budgets, which holds for a quadratic system.
-  * With a linear term the check divides the pressure budget by the case's `S Q/dp`, up to the full pressure budget.
+* **Class F, flow against pressure.** Take a system curve `dp = k Q^2 + l Q` (the form of ADR 0119 D-M8) with slope `S`, crossed by
+  a fan curve of slope `s <= 0`. Then `dQ/Q = (d dp/dp) / (S Q/dp - s Q/dp)`, with `S Q/dp` between 1 (`k = 0`) and 2 (`l = 0`). The
+  flow budgets are half the pressure budgets, which holds for a quadratic system. With a linear term the check divides the pressure
+  budget by the case's `S Q/dp`, up to the full pressure budget.
 * **Class F, model-axis budgets.** They are set so that medium is useful for trends, and they cannot be checked until a fan xhigh
   exists (T5). The only fan evidence: coarsening the FAN-01 passage by two sqrt 2 steps moved Delta p_ts by -37 % and torque by -9 %.
   This is MEASURED in ADR 0086, B3 against B1, on runs ended by the cap rule. That is why the class F low preset keeps medium's counts
@@ -180,11 +186,11 @@ Reasons for the numbers:
   to V-a's band (Fs 3, the coarser member of the pair). That multiplies them by about 9.6 for the ratio-2 Nu families (`2.4 r^p`
   with r = 2 and p = 2: the quoted GCI is that of the partner's mesh). For the cylinder the factor is about 2.4: the quoted GCI is
   that of xhigh's own mesh, and the partner is one sqrt 2 step finer. VR1 measures the actual bands.
-  * **Nu.** The quoted GCIs are 0.014-0.053 % (MEASURED: ADR 0061 lines 257-259; ADR 0062 line 118, which supersedes ADR 0061's
+  * **Nu.** The quoted GCIs are 0.014-0.053 % (MEASURED: ADR 0061 lines 454-456; ADR 0062 line 251, which supersedes ADR 0061's
     0.13 % at Ra 1e6), giving bands of about 0.13-0.51 %. Nu is then discriminating at high (band at most 0.33 %) for Ra 1e3 to 1e5,
     not for Ra 1e6. At medium and low it is discriminating for every Ra.
-  * **Cylinder.** The quoted GCIs are C_D 0.96 % and St 1.62 % (ADR 0062 lines 165-166), giving bands of about 2.3 % and 0.0063
-    before the time part, which first-order time makes large (ADR 0062 lines 158-161). C_D is at most borderline at low, and St
+  * **Cylinder.** The quoted GCIs are C_D 0.96 % and St 1.62 % (ADR 0062 lines 344-354), giving bands of about 2.3 % and 0.0063
+    before the time part, which first-order time makes large (ADR 0062 lines 323-334). C_D is at most borderline at low, and St
     discriminates at no tier. A transient class S claim therefore needs a case written with `time_scheme = bdf2`, as the ADR 0069
     cylinder run was, or a finer reference.
 
@@ -203,7 +209,7 @@ Table E, the factors:
 
 | Knob | Factor | Basis | Kind |
 |---|---|---|---|
-| One sqrt 2 step coarser, steady | cells / 2 (2D), / 2.83 (3D); iterations / 1.0-1.8 | heated cavity Ra 1e6: 336, 1057, 3592 iterations at n = 32, 64, 128 (ADR 0062 line 117); FAN-01 at a fixed 8000 iterations: 7.1, 25.6, 58.8 min for 4 920, 13 627, 38 184 cells (ADR 0086 lines 172-174), two runs at a time on a shared machine (lines 159-160) | MEASURED anchors |
+| One sqrt 2 step coarser, steady | cells / 2 (2D), / 2.83 (3D); iterations / 1.0-1.8 | heated cavity Ra 1e6: 336, 1057, 3592 iterations at n = 32, 64, 128 (ADR 0062 line 241); FAN-01 at a fixed 8000 iterations: 7.1, 25.6, 58.8 min for 4 920, 13 627, 38 184 cells (ADR 0086 lines 172-174), two runs at a time on a shared machine (lines 159-160) | MEASURED anchors |
 | One sqrt 2 step coarser, transient | cells as steady, steps / 1.41 at a fixed Courant number | constant CFL | arithmetic |
 | Tolerances | xhigh and high cost x1.5-3 over medium; low costs /1.5-3 under medium | Krylov iterations grow like log(1/tol) | ESTIMATE; no effect where runs end at a cap |
 | Mixed precision (presets v2) | SpMV bytes per nonzero 16 -> 12 with `usize` columns (at most 1.33x), 16 -> 8 with u32 columns (at most 2x); GPU, already 32-bit indices: 12 -> 8 (at most 1.5x) and half the value upload; whole run 1.2-1.6x | bytes moved; assembly, gradients and reductions stay f64 (Amdahl) | arithmetic, ESTIMATE |
@@ -332,13 +338,13 @@ Delivery:
   * Medium from (medium, high): `abs(f_m - f_h) (1 - 2^-p) / (1 - 2^(-p/2))`, a factor of 1.5 to 1.71 for p in [1, 2].
   * Low from (low, medium): `abs(f_l - f_m) (2^(p/2) - 2^-p) / (2^(p/2) - 1)`, a factor of 1.75 to 2.21.
   * The stated bound uses p = 0.5, factors 1.84 (medium) and 2.55 (low), because orders below 1 occur in the calibration cases:
-    * Nu at Ra 1e5, 0.88 (ADR 0061 line 259);
-    * the cylinder's time order, 0.68-0.87 (ADR 0062 line 158).
+    * Nu at Ra 1e5, 0.88 (ADR 0061 line 456);
+    * the cylinder's time order, 0.68-0.87 (ADR 0062 line 323).
 
     A pair whose own triplet shows a lower order, or a change of sign, is refused. VE1 tests whether p = 0.5 suffices.
-  * It is reported as "estimated difference from xhigh". The difference from the exact solution would use `r^p / (r^p - 1)`, a
-    factor of 2 to 3.4 for p in [1, 2].
-  * It needs no calibration, so it is offered from T1, labelled "coverage not yet validated" until VE1 passes.
+  * The estimate is reported as "estimated difference from xhigh". The difference from the exact solution would use
+    `r^p / (r^p - 1)`, a factor of 2 to 3.4 for p in [1, 2].
+  * The estimate needs no calibration, so it is offered from T1, labelled "coverage not yet validated" until VE1 passes.
   * The estimate holds only when the two runs use the same schemes. For a transient pair, which scales h and dt together, p is the
     smaller of the space and time orders: 1 for euler.
   * Model-axis error (closure, reduced-order) cannot be estimated this way; it is reported as the class's calibration bound
@@ -370,7 +376,7 @@ The full procedure is the validation plan below.
   * Every entry from a tiered run or an xlow evaluation carries its tier.
   * A design is reported as chosen only with a `cross_tier_check` entry at high or above [F-8 (b)] whose verdict is
     `within_budget`. A new function writes it; `rerun_check` refuses other evaluator versions, so it is not reused.
-  * **Verdict rule**, per quantity. d is the difference between the lower run (budget b_l against xhigh) and the higher run
+  * **Verdict rule**, per quantity. Here d is the difference between the lower run (budget b_l against xhigh) and the higher run
     (budget b_h).
     * Against xhigh: `within_budget` if `abs(d) <= b_l`, otherwise `budget_exceeded`.
     * Against a tier below xhigh, by the triangle inequality: `within_budget` if `abs(d) <= b_l - b_h`; `budget_exceeded` if
@@ -458,7 +464,7 @@ House rules apply:
 |---|---|---|---|---|
 | VR1 | xhigh's band per quantity | xhigh and its partner run first, before any lower tier | U recorded in an amendment before any lower-tier run; a quantity's checks are discriminating only where U <= budget/3 | a partner identical to xhigh (no refinement) is refused as a degenerate pair |
 | VR2 | the band is not optimistic | after all runs: the observed order from (high, xhigh, partner) and its Richardson value | the Richardson value lies within U of xhigh. Reported only: the triplet contains a judged run (high), so a miss is a known miss that flags the band as optimistic in the claim table, but it changes no check's status | a triplet whose differences change sign reports "order undefined" |
-| VR3 | the transient band | the cylinder: space pair at xhigh's dt, time pair on xhigh's mesh, SE by batch means (VQ2) | each part recorded; U as above | a sequence that refines h and dt together (the defect ADR 0062 corrected, lines 65-66) is not accepted as a band |
+| VR3 | the transient band | the cylinder: space pair at xhigh's dt, time pair on xhigh's mesh, SE by batch means (VQ2) | each part recorded; U as above | a sequence that refines h and dt together (the defect ADR 0062 corrected, lines 132-133) is not accepted as a band |
 | VR4 | iteration error of xhigh and its partner | the ADR 0086 rule (line 101): the last-1000-iteration change of each quantity | below 0.1 abs(f_x - f_p); otherwise an amendment tightens the tolerances before the lower tiers run | a run stopped at a tenth of its iterations fails |
 | VR5 | the class F reference (T5) | two LES resolutions, SE, comparison with measured data (part G2) | registered in T5 | |
 | VR6 | xhigh against the published or exact value | each class S case's vendored reference (V-b) | `abs(f_x - f_ref) <= U` plus the reference's own stated accuracy, with U as frozen in the VR1 amendment. It is decided only where U is at most a third of the quantity's smallest budget; otherwise it reads "non-discriminating", never "pass". A miss becomes a known miss, and that quantity's claim reads "consistency with xhigh only" | the swept pipe should miss: its centreline error is 3.93, 3.46, 3.33 and 3.30 % at nx = 5, 9, 17 and 33, a bias refinement does not remove (`crates/rcfd-api/tests/pipe_sweep.rs` lines 148-151, ADR 0047) |
@@ -478,11 +484,11 @@ tree.
 |---|---|---|---|---|
 | S, 2D steady | lid-driven cavity Re 100, 400 and 1000 (`crates/rcfd-api/tests/validation_cavity_ghia.rs`, ADR 0060) | yes: `cavity_2d`, as in `crates/rcfd-api/tests/baseline_hashes.rs` line 16 | velocity extremum (u_min) | medium is the coarsest registered mesh; xhigh (2n) and the partner (4n) are the registered ratio-2 members; high and low are new |
 | S, 2D steady | heated cavity Ra 1e3, 1e4, 1e5 and 1e6 (`crates/rcfd-fv/tests/validation_natural_convection.rs`, ADRs 0061, 0062) | yes: `box_2d` with energy, as in the case-tree test at `crates/rcfd-api/src/sim.rs` line 4380 (Ra 1e3) | mean Nu; velocity extremum (u_max) | as the cavity |
-| S, 2D steady | Poiseuille channel (`crates/rcfd-cli/tests/study_w20c.rs`, ADR 0034; observed order about 2.7, from 1.90 % at ny 10 and 0.29 % at ny 20, ADR 0099 lines 31-32) | yes | pressure drop | new members from `expand` |
+| S, 2D steady | Poiseuille channel (`crates/rcfd-cli/tests/study_w20c.rs`, ADR 0034; observed order about 2.7, from 1.90 % at ny 10 and 0.29 % at ny 20, ADR 0099 lines 44-45) | yes | pressure drop | new members from `expand` |
 | S, 2D steady | developing turbulent channel (`cases/channel/kepsilon_inlet.toml`) | yes, a native case file: no harness, so no VC0 and no VR6 reference; a pressure-drop report is to be added (the file carries k, y+ and mass-flow reports) | pressure drop | new members |
 | S, 3D steady | swept pipe (`crates/rcfd-api/tests/pipe_sweep.rs`, ADR 0047) | yes | flow resistance (U_b at fixed forcing); VR6's bias case | new members: the registered nx 5, 9, 17, 33 are not `expand`'s counts |
 | S, 2D steady | SST and k-epsilon channels, Re_tau 395 (`cases/channel/sst_channel.toml`, `kepsilon_channel.toml`) | yes, native case files: no VC0, no VR6 reference. A skin-friction report is to be added (the files carry y+ reports only). The SST channel's 16 layers, growth 1.1 and target y+ 1.0 follow the wall-layer note of Table B1 | skin friction | new members |
-| S, 2D transient | cylinder Re 100, written with `time_scheme = bdf2`. VC0 reference: the BDF2 run `validation_cylinder_re100_w33b.rs` (128x100, dt 0.05, St 0.16480, C_D 1.35247; ADR 0069 line 298) | to be shown: `cylinder_ogrid` (`crates/rcfd-api/src/schema.rs` line 78); whether it reproduces the harness meshes is VC0's question | drag, Strouhal | counts from the ADR 0062 study (`validation_cylinder_re100_w31.rs`), reused for their counts only: medium 64x50, xhigh 128x100, partner 181x141; high is `expand`'s 90x71 (the study used 90x70), low 45x35 |
+| S, 2D transient | cylinder Re 100, written with `time_scheme = bdf2`. VC0 reference: the BDF2 run `validation_cylinder_re100_w33b.rs` (128x100, dt 0.05, St 0.16480, C_D 1.35247; ADR 0069 line 397) | to be shown: `cylinder_ogrid` (`crates/rcfd-api/src/schema.rs` line 78); whether it reproduces the harness meshes is VC0's question | drag, Strouhal | counts from the ADR 0062 study (`validation_cylinder_re100_w31.rs`), reused for their counts only: medium 64x50, xhigh 128x100, partner 181x141; high is `expand`'s 90x71 (the study used 90x70), low 45x35 |
 | S, 3D steady, fixed SST closure | FAN-01 passage (`crates/rcfd-api/tests/fan01_gci_w37c.rs`, ADR 0086); a 500 mm fan, not a computer fan | yes | torque, pressure rise | B3, B2 and B1 as medium, high and xhigh (a sqrt 2 family), re-run at the T2 commit (about 1.5 h, by hand). There is no partner (a finer member exceeds the 60-minute guard), so there is no band and every check is reported, not limited |
 | S, 2D steady | laminar step Re_D 800 (`validation_bfs_step.rs`, ADR 0060) and Re 200 and 400 (`crates/rcfd-fv/tests/step_laminar.rs`) | no: the case tree has no step generator | reattachment | after a case-file equivalent passes VC0 |
 | S, 2D steady, separated RANS | turbulent step BFS-C, RNG k-epsilon (`crates/rcfd-turb/tests/step_kepsilon_corrected.rs`, ADR 0015) | no: needs a step geometry and the measured inlet profile | reattachment | as above; its own grid study has ratio 1.5, not `expand`'s steps |
@@ -502,7 +508,8 @@ Cases per Table C row that can be discriminating, from case files today (and aft
 * Strouhal number: 1;
 * ranking: 3 sets (for ranking, a case is a variant set).
 
-A row needs at least 3 discriminating cases for a claim (V-c). Drag and Strouhal therefore need new cases: proposed, the cylinder at Re 40 (steady drag) and at Re 200 (transient), both with `cylinder_ogrid`. Reattachment needs the harness-only cases to pass VC0.
+A row needs at least 3 discriminating cases for a claim (V-c). Drag and Strouhal therefore need new cases: proposed, the cylinder
+at Re 40 (steady drag) and at Re 200 (transient), both with `cylinder_ogrid`. Reattachment needs the harness-only cases to pass VC0.
 
 Not calibrated by this set:
 * the 3D transient speedup band, which stays an estimate;
@@ -648,9 +655,9 @@ and the old file is kept. Limit: each within its budget. A failure follows the h
 
 ## Staged plan
 
-Stages T1 to T6. Wave numbers are the maintainer's: waves 49 and 50 are planned for the Studio
-([`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 4). Each stage is its own branch and ADR (or amendment), gated as in
-[`docs/test-process.md`](../test-process.md). The checks are a proposal, to be fixed before any run.
+The plan has stages T1 to T6. Each stage is its own branch and ADR (or amendment), gated as in
+[`docs/test-process.md`](../test-process.md). The checks are a proposal, to be fixed before any run. Wave numbers are the
+maintainer's: waves 49 and 50 are planned for the Studio ([`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 4).
 
 ```text
 T1 records, expansion, MCP tier tools  -->  T2 validation of class S  --+-->  T3 mixed precision, CPU  -->  T4 GPU f32
@@ -700,11 +707,11 @@ T1 also runs VE3, VM1, VL1 and VL2 (fixtures and cheap cavity runs).
 * **Order.** As in D8: xhigh and the partners first, then the amendment with the bands and the discriminating checks, then high,
   medium and low.
 * **Negative control per case.** The case's tiers compared with an xhigh run at another Reynolds or Rayleigh number must miss.
-* **Poiseuille.** Its order is about 2.7: 1.90 % at ny 10 and 0.29 % at ny 20 (ADR 0099 lines 31-32). The ny 10 test stays a known
+* **Poiseuille.** Its order is about 2.7: 1.90 % at ny 10 and 0.29 % at ny 20 (ADR 0099 lines 44-45). The ny 10 test stays a known
   miss (`study_w20c.rs` line 744).
 * **Where the runs happen [F-11 (c)].** The gate's per-test limit is 5 times the recorded time, clamped to 600-3600 s (ADR 0129 D1).
   Longer runs are run by hand and recorded in the addendum. The laminar step's registered fine mesh alone took 2166 s (MEASURED, ADR
-  0060 line 209).
+  0060 line 297).
 
 ### T3: mixed precision on the CPU (opt-in)
 
@@ -806,15 +813,14 @@ T1 also runs VE3, VM1, VL1 and VL2 (fixtures and cheap cavity runs).
    * Where a scheme limit-cycles (ADR 0110), the speedup is undefined.
    * Convergence and accuracy can part ways. On the FAN-01 B3 passage, switching to first-order `upwind` after 1000 iterations
      brought the residuals below 1e-5 by iteration 1114, where limited `linear_upwind` had stalled. Even so, `is_converged()` stayed
-     false, and the first-order torque, 1.335 N m, is far from the second-order 1.850 N m (ADR 0110 lines 228-230 and 281; ADR 0086
+     false, and the first-order torque, 1.335 N m, is far from the second-order 1.850 N m (ADR 0110 lines 250-252 and 303; ADR 0086
      line 172).
 8. **Platform floats.** Bit-identity of every tier is per platform and build (D4). An expansion is platform-independent only because
    it uses no `powi` and no libm.
-9. **Mixed precision.** These are why D6 keeps the state, limiters and refinement residuals in f64; T3-4's negative control shows the
-   stagnation.
+9. **Mixed precision.** D6 keeps the state, limiters and refinement residuals in f64 for these reasons:
    * An f32 state loses small increments.
    * f32 limiter decisions can flip and start limit cycles.
-   * f32 inner solves stagnate near 1e-6 relative.
+   * f32 inner solves stagnate near 1e-6 relative; T3-4's negative control shows the stagnation.
 10. **xhigh for the fan is a foundation, not a setting.**
     * Wall-resolved LES of a 120 mm fan needs of the order of 1e7 to 1e8 cells (ESTIMATE, UNVERIFIED). The FAN-01 passages run so
       far have 4 920 to 38 184 cells.
@@ -868,8 +874,7 @@ T1 also runs VE3, VM1, VL1 and VL2 (fixtures and cheap cavity runs).
     **Recommendation: (a)**, then T2, then T3.
 13. **F-13, the tier in the MCP tools: DECIDED by the maintainer, 2026-10-28.** The tier must be reachable through the MCP tools for
     rapid prototyping. It goes on the `--project` tool set (D9), and the default tool list stays byte-identical (ADR 0135 check F1).
-    The earlier recommendation kept the tier off the MCP tools except through the run path; the decision
-    replaces it.
+    The earlier recommendation kept the tier off the MCP tools except through the run path; the decision replaces it.
 
 ## Proposed roadmap items (ids to be assigned by the maintainer)
 

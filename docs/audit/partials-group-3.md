@@ -1,8 +1,19 @@
 # Partials audit, group 3
 
-This is a read-only audit of ten roadmap items whose status is `partial` (HEAD 272eb89, 2026-10-21). Each item is graded
+This read-only audit grades ten roadmap items whose status is `partial` (HEAD 272eb89, 2026-10-21). Each item is graded
 only against its `acceptance` field in docs/roadmap.json. Wider scope, from the title or from a "SCOPE (merged review)"
 addition, is listed separately as "scope beyond acceptance". It does not lower the grade.
+
+Grade counts: DONE 3 (F-203, F-213, F-235), PARTIAL 7, TODO 0, OVERSTATED 0. F-203's text names no model, and SST
+misses at y+ 1 (-8.44 %) and rough (-22 %) are scope beyond the acceptance. F-235's 8-layer pipe needs an opt-in
+compensation flag, and the default settings still give 3.33 % (s10 known miss).
+
+Two notes are stale in ways that matter:
+
+- F-133: the note does not mention the FAN-01 C-grid waves 34A-37D.
+- F-106: the note keeps a wave-5 narrative whose premise its own wave-6 entry refutes.
+
+The [glossary](../glossary.md) defines F-xxx, wave, known miss and FAN-01.
 
 Grades:
 
@@ -12,9 +23,12 @@ Grades:
 - TODO: nothing usable exists.
 - OVERSTATED: the roadmap note claims more than the tests show.
 
-How the runs were made: Windows 11, `cargo test --release -p <crate> --test <name> -- --include-ignored --nocapture`, with a
-private target directory, on a machine shared with other agents' cargo jobs, so wall times are noisy. "Known misses FAIL"
-means that the `#[ignore]`d `*_known_miss` tests fail with the values their notes record. None of them failed in any other way.
+How the runs were made: Windows 11, `cargo test --release -p <crate> --test <name> -- --include-ignored --nocapture`,
+with a
+private target directory, on a machine shared with other agents' cargo jobs, so wall times are noisy.
+"Known misses FAIL"
+means that the `#[ignore]`d `*_known_miss` tests fail with the values their notes record. None of them failed in any
+other way.
 
 Not re-run:
 
@@ -39,111 +53,126 @@ Not re-run:
 | F-225 | Reactor networks and mechanism analysis | PARTIAL | ran rcfd-reactor `slices` (K11a \|S+1\| 6.7e-13, K11b 1e-11; known miss K10 fails); read ADR 0027 | no published methane-air PSR-PFR comparison (blowout tau, CO profile), no reference sensitivity ordering; scope: no shock tube, no flame-speed library | M | missing reference data (an unnamed "public validation set"); GRI-Mech licence unverified | no (until data is chosen) | yes (name the dataset) |
 | F-235 | Sweep, thin-volume and multizone hex meshing | DONE | ran rcfd-mesh `sweep` 9 pass (known miss s8 annulus skewness fails); rcfd-api `pipe_sweep` s10c pass (centreline 0.1337 %, limit 1 %), s11 pass; `pipe_sweep_compensation` r1_s10d pass (8 layers, 0.1337 %) | none; caveats: 8 layers need the opt-in `solver.simplec_non_orthogonal_compensation`, and the default settings still give 3.33 % (s10 known miss) | - | - | - | no |
 
-Grade counts: DONE 3 (F-203, F-213, F-235), PARTIAL 7, TODO 0, OVERSTATED 0. Two notes are stale in ways that matter:
-
-- F-133: the note does not mention the FAN-01 C-grid waves 34A-37D.
-- F-106: the note keeps a wave-5 narrative whose premise its own wave-6 entry refutes.
-
 ## Items not DONE
 
-**F-004 (PARTIAL).** ADRs 0001-0003 are merged and marked "Status: accepted". The acceptance also asks for "reviewed", which is
-a human act that leaves no trace in the repository. The note's ADR list is stale: 91 ADRs exist now. ADR 0003 says "MPI comes
-later". ADR 0058 (distributed parallel) has since happened, so a reviewer should check whether ADR 0003 needs a superseded-by
-line.
+### F-004 (PARTIAL)
 
-- Proposed rewording: "ADRs 0001-0003 accepted, each with a reviewer and date line".
-- Closing it takes the user a few minutes. No agent can close it.
+ADRs 0001-0003 are merged and marked "Status: accepted". The acceptance also asks for "reviewed", which is a human act
+that leaves no trace in the repository. Closing it takes the user a few minutes. No agent can close it.
 
-**F-046 (PARTIAL).** The RSM slice is real and tested: term invariants, homogeneous shear, decay ODEs, the semi-implicit update
-and the momentum source, all at 1e-8 or tighter. The two known misses reproduce.
+Proposed rewording: "ADRs 0001-0003 accepted, each with a reviewer and date line".
 
-- Neither acceptance clause has any evidence. No transition or intermittency code exists in any crate, so no T3A run is
-  possible.
-- The RSM refuses walls, so no wall-bounded swirl case can run.
-- "RSM swirl benchmark" names no case and no limit, so it cannot be measured. Name a published case, for example a swirling
-  pipe or a confined swirl with a profile table, with a numeric limit.
+The note's ADR list is stale: 91 ADRs exist now. ADR 0003 says "MPI comes later". ADR 0058 (distributed parallel) has
+since happened, so a reviewer should check whether ADR 0003 needs a superseded-by line.
+
+### F-046 (PARTIAL)
+
+Neither acceptance clause has any evidence. No transition or intermittency code exists in any crate, so no T3A run is
+possible. The RSM refuses walls, so no wall-bounded swirl case can run.
+
+The RSM slice is real and tested: term invariants, homogeneous shear, decay ODEs, the semi-implicit update and the
+momentum source, all at 1e-8 or tighter. The two known misses reproduce.
+
+- "RSM swirl benchmark" names no case and no limit, so it cannot be measured. Name a published case, for example a
+  swirling pipe or a confined swirl with a profile table, with a numeric limit.
 - Split the item: RSM walls plus swirl (L), and gamma or gamma-Re_theta transition plus T3A (L).
-- Unverified constants: LRR-IP C2 = 0.6, and Ce1, Ce2 and C_eps (docs/reference-data.md marks them "from memory"). The T3A
-  data (ERCOFTAC) is not in validation-data.
+- Unverified constants: LRR-IP C2 = 0.6, and Ce1, Ce2 and C_eps (docs/reference-data.md marks them "from memory"). The
+  T3A data (ERCOFTAC) is not in validation-data.
 
-**F-073 (PARTIAL, near done).** The library renders a 1M-cell 2-D mesh in 0.903 s here (1.033 s recorded), well under 2 s;
-the PNG encode adds 0.053 s.
+### F-073 (PARTIAL, near done)
 
-- The acceptance says "CLI renders". The CLI (crates/rcfd-cli/src/main.rs) has no render subcommand. The only CLI route is
-  `rcfd serve` followed by `rcfd call render.png`, which needs a live session, and that route has no test at 1M cells.
-- The note's "the criterion measured" is true for the library only.
-- Close it by adding a `post`/`render` CLI path with one timed release test on a 1M-cell case (mesh load excluded or
-  stated). The alternative is to reword the acceptance to "library render".
+The acceptance says "CLI renders". The CLI (crates/rcfd-cli/src/main.rs) has no render subcommand. The only CLI route is
+`rcfd serve` followed by `rcfd call render.png`, which needs a live session, and that route has no test at 1M cells.
 
-**F-106 (PARTIAL).**
+The library renders a 1M-cell 2-D mesh in 0.903 s here (1.033 s recorded), well under 2 s; the PNG encode adds 0.053 s.
+The note's "the criterion measured" is true for the library only.
 
-- Met:
-  - The settings-tree clause is met: off/auto/local/physical modes, `pseudo_factor` and `pseudo_cfl` all run from the tree,
-    and the lib test passes.
-  - Pseudo-transient converges the Re 1000 cavity: local cfl 5 in 346 its, physical 547, auto 594.
-- The comparative clause "where plain SIMPLE needs lower relaxation" is false after the wave-6 `h_from_solution` fix. The
-  kept test asserts that plain SIMPLEC 0.95 converges (442 its).
+Close it by adding a `post`/`render` CLI path with one timed release test on a 1M-cell case (mesh load excluded or
+stated). The alternative is to reword the acceptance to "library render".
+
+### F-106 (PARTIAL)
+
+The comparative clause "where plain SIMPLE needs lower relaxation" is false after the wave-6 `h_from_solution` fix. The
+kept test asserts that plain SIMPLEC 0.95 converges (442 its).
+
+Met:
+
+- The settings-tree clause is met: off/auto/local/physical modes, `pseudo_factor` and `pseudo_cfl` all run from the
+  tree, and the lib test passes.
+- Pseudo-transient converges the Re 1000 cavity: local cfl 5 in 346 its, physical 547, auto 594.
+
+Step and controllers:
+
 - For the step, the only kept test is Re_h 100. Both variants converge there (SIMPLE 240 its, pseudo 135). The Re_h 200
   pseudo result (607 its) is only in an ignored exploration test, and Re_h 400 does not converge with pseudo.
 - The automatic controllers (`pseudo_control = ser | ser2`) fail all their registered checks (12 ignored known misses).
-- Proposed rewording: "cavity Re 1000 and BFS Re_h 200 converge to residual 1e-6 with alpha_u = 1 in local, physical and
-  auto modes; modes and factor selectable in the tree".
-- With that rewording, one kept Re_h 200 step test closes it (S).
 
-**F-123 (PARTIAL).** The library delivers:
+Proposed rewording: "cavity Re 1000 and BFS Re_h 200 converge to residual 1e-6 with alpha_u = 1 in local, physical and
+auto modes; modes and factor selectable in the tree". With that rewording, one kept Re_h 200 step test closes it (S).
+
+### F-123 (PARTIAL)
+
+No solved turbomachine field has been post-processed, and no independent script exists. Nothing calls `rcfd_post::turbo`
+outside its own tests.
+
+The library delivers the following, checked only against closed forms, at 1e-13:
 
 - constant-span and streamwise surfaces;
 - pitch and mass-flow averages;
 - head, pressure-ratio and efficiency formulas;
 - CSV/HTML reports.
 
-It is checked only against closed forms, at 1e-13. Nothing calls `rcfd_post::turbo` outside its own tests. No solved
-turbomachine field has been post-processed, and no independent script exists.
+Blocker: a converged rotating-machine solution. FAN-01 is the only public machine in the repo and is still in the
+milestone loop. The user should decide whether a low-speed fan counts as "a public pump or compressor case".
 
-- Blocker: a converged rotating-machine solution. FAN-01 is the only public machine in the repo and is still in the
-  milestone loop.
-- The user should decide whether a low-speed fan counts as "a public pump or compressor case".
-- One part could be closed now (S-M): an independent numpy script on an exported surface from any rotating-frame solution,
-  plus a CLI or case-file export hook.
+One part could be closed now (S-M): an independent numpy script on an exported surface from any rotating-frame solution,
+plus a CLI or case-file export hook.
 
-**F-133 (PARTIAL; the note is stale).**
+### F-133 (PARTIAL; the note is stale)
 
-- What has changed since the note:
-  - The note says there is no public blade. In fact the FAN-01 axial fan (CC BY 4.0, vendored in wave 34D) builds a closed,
-    periodic, exact-stack C-grid passage mesh (p1_p8 pass).
-- What is still missing:
-  - Its quality misses the project gates. Measured here: non-orthogonality 83.26 deg, skewness 3.978, aspect 227.2 (limits
-    70 / 2.0 / 300); p99 non-orthogonality is 70.35 deg.
-  - Four waves of C-grid changes (ADRs 0079, 0083, 0087) have not cleared it. ADR 0087 says the index-offset topology has
-    not been tried.
-  - Rotor 37 numbers are not transcribed; validation-data holds only NASA TP-1337.
-  - Curve-file input does not exist.
-- Problems with the acceptance itself:
-  - "Acceptable angle/expansion ratios" has no number.
-  - The project gates on non-orthogonality, skewness and aspect ratio. None of the tests checks the expansion (volume)
-    ratio the acceptance names.
-- Proposed rewording: "FAN-01 (or Rotor 37) passage mesh with max non-orthogonality <= 70 deg, skewness <= 2, aspect <= 300
-  and adjacent volume ratio <= N".
-- Size: L.
+The note says there is no public blade. In fact the FAN-01 axial fan (CC BY 4.0, vendored in wave 34D) builds a closed,
+periodic, exact-stack C-grid passage mesh (p1_p8 pass).
 
-**F-225 (PARTIAL).** The sensitivity ranking (|S+1| 6.7e-13) and the PSR-into-plug network (1e-11 against closed forms)
-pass. The library also has a PSR blowout search (`psr_blowout`, F-112), but it is exercised only by an ignored GRI test that
-was not re-run here.
+What is still missing:
 
-- Missing: a published methane-air PSR-PFR case with its blowout residence time, CO profile and sensitivity ordering.
-- "The public validation set" is unnamed, so the acceptance cannot be measured until a dataset is chosen.
-- The GRI-Mech 3.0 licence is unverified (docs/reference-data.md).
-- Scope beyond acceptance: shock tube and premixed flame-speed library, both absent.
-- Size: M once a dataset is named.
+- Its quality misses the project gates. Measured here: non-orthogonality 83.26 deg, skewness 3.978, aspect 227.2 (limits
+  70 / 2.0 / 300); p99 non-orthogonality is 70.35 deg.
+- Four waves of C-grid changes (ADRs 0079, 0083, 0087) have not cleared it. ADR 0087 says the index-offset topology has
+  not been tried.
+- Rotor 37 numbers are not transcribed; validation-data holds only NASA TP-1337.
+- Curve-file input does not exist.
 
-**DONE items, for the record.**
+Problems with the acceptance itself:
 
-- F-203: the numbers in the note reproduce to the printed digit.
-  - The text names no model. k-epsilon Scalable meets both smooth clauses and k-epsilon Standard plus roughness meets the
-    rough clause.
-  - SST misses at y+ 1 (-8.44 %) and rough (-22 %). Non-equilibrium wall functions and a converging Enhanced treatment are
-    title scope.
-  - The Prandtl-Schlichting and fully-rough laws are confirmed from secondary sources only (docs/reference-data.md).
+- "Acceptable angle/expansion ratios" has no number.
+- The project gates on non-orthogonality, skewness and aspect ratio. None of the tests checks the expansion (volume)
+  ratio the acceptance names.
+
+Proposed rewording: "FAN-01 (or Rotor 37) passage mesh with max non-orthogonality <= 70 deg, skewness <= 2, aspect <=
+300 and adjacent volume ratio <= N".
+
+Size: L.
+
+### F-225 (PARTIAL)
+
+Missing: a published methane-air PSR-PFR case with its blowout residence time, CO profile and sensitivity ordering.
+"The public validation set" is unnamed, so the acceptance cannot be measured until a dataset is chosen. Size: M once a
+dataset is named.
+
+The sensitivity ranking (|S+1| 6.7e-13) and the PSR-into-plug network (1e-11 against closed forms) pass. The library
+also has a PSR blowout search (`psr_blowout`, F-112), but it is exercised only by an ignored GRI test that was not
+re-run here.
+
+The GRI-Mech 3.0 licence is unverified (docs/reference-data.md).
+
+Scope beyond acceptance: shock tube and premixed flame-speed library, both absent.
+
+## DONE items, for the record
+
+- F-203: the numbers in the note reproduce to the printed digit. The text names no model. k-epsilon Scalable meets both
+  smooth clauses and k-epsilon Standard plus roughness meets the rough clause. SST misses at y+ 1 (-8.44 %) and rough
+  (-22 %). Non-equilibrium wall functions and a converging Enhanced treatment are title scope. The Prandtl-Schlichting
+  and fully-rough laws are confirmed from secondary sources only (docs/reference-data.md).
 - F-213 meets both clauses, including through the case tree.
-- F-235 meets both clauses: all-hex with exact layer counts, and a centreline error of 0.13 % against 1 %. The 8-layer pipe
-  needs an opt-in compensation flag.
+- F-235 meets both clauses: all-hex with exact layer counts, and a centreline error of 0.13 % against 1 %. The 8-layer
+  pipe needs an opt-in compensation flag.

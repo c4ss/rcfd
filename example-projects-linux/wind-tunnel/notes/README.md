@@ -1,8 +1,11 @@
 # Wind tunnel: three flow problems in one project
 
-This is a finished example project of the rcfd Studio. It holds three classic external and internal flows, each as a case
-file, a variant of it and a completed run of both, made by the real solver through the run service (ADR 0142). Open it to
-see a picture at once, scrub a run through time, and compare a case with its variant.
+This finished example project of the rcfd Studio holds three classic external and internal flows, each as a case file, a
+variant of it and a completed run of both, made by the real solver through the run service (ADR 0142). Open it to see a
+picture at once, scrub a run through time, and compare a case with its variant. Every mesh is coarse on purpose and no
+result here is a validation, so read the limits at the end of this page before using a number. To start, follow "Open it";
+the table names each problem's own note. ADR numbers refer to the architecture decision records in the repository's
+`docs/adr/`.
 
 | Problem | Cases | Mesh | Notes |
 |---|---|---|---|
@@ -11,40 +14,43 @@ see a picture at once, scrub a run through time, and compare a case with its var
 | Backward-facing step, laminar (steady) | `cases/step-re800.toml`, variant `cases/step-re400.toml` | box generator in the case | `notes/step.md` |
 
 The design ledger `designs/variants.ledger.jsonl` (format of ADR 0121, one line per run) holds the parameters and the
-results of the eight runs, so a case and its variant can be compared as numbers. The two aerofoil cases ending in
+results of the eight runs, so you can compare a case and its variant as numbers. The two aerofoil cases ending in
 `-rotated` set the angle of attack by rotating the mesh (`[mesh.transform]`, ADR 0155) instead of the flow; their
 results equal those of the flow-rotated cases to about 1e-7 (`notes/naca0012.md`).
 
 ## Open it
 
 1. Build the Studio and the two programs it starts: `cargo build --release -p rcfd-studio -p rcfd-runner -p rcfd-cli`.
-2. Copy this folder out of the repository first if you want to start runs of your own (new runs would otherwise appear as
-   untracked files in the repository; the committed runs are not changed by the Studio).
+2. If you want to start runs of your own, first copy this folder out of the repository. New runs would otherwise appear as
+   untracked files in the repository. The Studio does not change the committed runs.
 3. Start `target\release\rcfd-studio.exe <this folder>`, or start the Studio and use Project > Open project...
 
 ## What to click, in order
 
-1. Project panel: the eight cases are listed under `cases/`, the mesh files under `meshes/`, the ledger under `designs/`.
+1. In the Project panel, find the eight cases under `cases/`, the mesh files under `meshes/` and the ledger under
+   `designs/`.
 2. Select a case (for example `cases/cylinder-re100.toml`): the Case editor shows its settings. Case > Validate checks
-   it. If your Studio has the mesh preview of wave 48G, the Viewport shows the case's mesh.
-3. Runs panel: the eight finished runs, one per case, with their final state and step. Select the run of
+   it. If your Studio has the mesh preview of wave 48G (a wave is a numbered batch of work), the Viewport shows the case's
+   mesh.
+3. In the Runs panel, find the eight finished runs, one per case, with their final state and step. Select the run of
    `cases/cylinder-re100.toml`.
-4. Viewport: the run's pressure field `p` appears on the mesh. Pick another field (`vorticity_z` for the cylinder) in the
+4. The Viewport shows the run's pressure field `p` on the mesh. Pick another field (`vorticity_z` for the cylinder) in the
    "field" box; hover to read values.
-5. Scrub: drag the time slider, or use the first, previous, play, next and last buttons. A transient run (the cylinder)
+5. To scrub, drag the time slider, or use the first, previous, play, next and last buttons. A transient run (the cylinder)
    slides over simulated time; a steady run (aerofoil, step) slides over iterations. The Plots panel shows the residuals
    and the report monitors (`cd`, `cl`, ...) of the selected run, with a line at the viewport's step.
-6. Compare a variant: select the run of the variant case (for example `cases/cylinder-re200.toml`) and look at the same
+6. To compare a variant, select the run of the variant case (for example `cases/cylinder-re200.toml`) and look at the same
    field and time. Side-by-side views are not in the Studio yet (wave 49); the numbers of both runs are in the table below
    and in `designs/variants.ledger.jsonl`.
-7. Run a variant yourself (in a copy of the folder, step 2): Runs > Start run..., pick the case, keep "Store fields"
-   as the case sets it, Start. The new run streams into the Runs and Plots panels; the committed run stays for comparison.
-   Change a value in the Case editor first (for example `physics.nu`), Save, then start a run of it.
+7. To run a variant yourself, work in a copy of the folder (step 2 of "Open it"). To try another value, first change it in
+   the Case editor (for example `physics.nu`) and Save. Then choose Runs > Start run..., pick the case, keep "Store fields"
+   as the case sets it, and choose Start. The new run streams into the Runs and Plots panels; the committed run stays for
+   comparison.
 
 ## The runs in this folder
 
-The table is written by `scripts/make_example_projects.py` from the run folders; times are wall-clock times of the solver
-on the machine that made them (see `designs/variants.ledger.jsonl` for every value with its unit).
+`scripts/make_example_projects.py` writes the table from the run folders. Times are wall-clock times of the solver on the
+machine that made them. `designs/variants.ledger.jsonl` holds every value with its unit.
 
 <!-- generated: runs (scripts/make_example_projects.py) -->
 
@@ -66,8 +72,8 @@ on the machine that made them (see `designs/variants.ledger.jsonl` for every val
 * Every mesh is coarse on purpose, so that a run takes about a minute and the folder stays small. No result here is a
   validation: there is no mesh study, no time-step study and no uncertainty estimate. Each problem's note says how its
   numbers relate to the published benchmark.
-* The aerofoil runs meet the residual targets well before their 2000-iteration cap since the far-field default of
-  ADR 0169 (2026-10-29); the runs stored before stopped at the cap with solver state "not_converged". See
+* Since the far-field default of ADR 0169 (2026-10-29), the aerofoil runs meet the residual targets well before their
+  2000-iteration cap. The runs stored earlier stopped at the cap with solver state "not_converged". See
   `notes/naca0012.md`.
 * The fields are stored in single precision (f32, ADR 0133): each stored value is within |x| 2^-24 of the solver's
   value. The solver itself runs in double precision.

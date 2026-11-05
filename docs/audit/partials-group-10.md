@@ -1,19 +1,35 @@
 # Partials audit, group 10
 
-This is a read-only audit of ten roadmap items with status `partial`. It started at HEAD 3558616 on 2026-10-21. Each item is graded
-against its `acceptance` field in docs/roadmap.json only. Wider scope from the title or from a "SCOPE (merged review)" addition is listed
-as "scope beyond acceptance". That scope does not lower the grade.
+This read-only audit grades ten roadmap items with status `partial`, each against its `acceptance` field in
+docs/roadmap.json only. It started at HEAD 3558616 on 2026-10-21.
 
-Grades: DONE = the acceptance text, as written, is met by a passing non-ignored (or reproducibly run) test with numeric limits. PARTIAL =
-a real tested slice exists, and the unmet clause is named. TODO = nothing usable. OVERSTATED = the roadmap note claims more than the tests
-show.
+Counts: DONE 2 (F-101, F-210), PARTIAL 8, OVERSTATED 0, TODO 0. F-222 and F-243 meet 0 of 2 clauses, and two of F-043's
+three named validations are not met. F-101's acceptance holds on the one machine with the device, but its test asserts
+only GPU < CPU (1x), not 3x, and the test skips without a device, so default CI never checks it. The heavy SST runs were
+not repeated, and no test was run in a hosted CI or on Linux.
 
-How the runs were made: Windows 11, `cargo test --release -p <crate> --test <name> -- --include-ignored` (or `--ignored <filter>` for
-the heavy ones) with a private target directory, on a machine shared with other agents' cargo jobs, so wall times are noisy. "Known misses
-fail as recorded" means the `#[ignore]`d known-miss or superseded tests fail, as their notes say. Heavy runs NOT repeated (recorded
-addendum numbers were read instead): the wall-resolved backward-facing step `step_sst.rs` (three to six 8000-iteration runs), the ADR 0070
-three-mesh flat plate `validation_w33c_sst_plate.rs` (about 30 minutes for the finest mesh), the ADR 0070 full-channel Karman-measure run
-(58532 iterations), the ADR 0074 TMR-grid plate runs `w34c_sst_plate_hypotheses.rs`, and `c3_vent_reversed_k0_long_run_observation`.
+Wider scope from the title or from a "SCOPE (merged review)" addition is listed as "scope beyond acceptance". That scope
+does not lower the grade. The [glossary](../glossary.md) defines F-xxx, wave and known miss.
+
+Grades:
+
+- DONE: the acceptance text, as written, is met by a passing non-ignored (or reproducibly run) test with numeric limits.
+- PARTIAL: a real tested slice exists, and the unmet clause is named.
+- TODO: nothing usable.
+- OVERSTATED: the roadmap note claims more than the tests show.
+
+How the runs were made: Windows 11, `cargo test --release -p <crate> --test <name> -- --include-ignored` (or
+`--ignored <filter>` for the heavy ones) with a private target directory, on a machine shared with other agents' cargo
+jobs, so wall times are noisy. "Known misses fail as recorded" means the `#[ignore]`d known-miss or superseded tests
+fail, as their notes say.
+
+Heavy runs NOT repeated (recorded addendum numbers were read instead):
+
+- the wall-resolved backward-facing step `step_sst.rs` (three to six 8000-iteration runs);
+- the ADR 0070 three-mesh flat plate `validation_w33c_sst_plate.rs` (about 30 minutes for the finest mesh);
+- the ADR 0070 full-channel Karman-measure run (58532 iterations);
+- the ADR 0074 TMR-grid plate runs `w34c_sst_plate_hypotheses.rs`;
+- `c3_vent_reversed_k0_long_run_observation`.
 
 ## Summary table
 
@@ -30,107 +46,191 @@ three-mesh flat plate `validation_w33c_sst_plate.rs` (about 30 minutes for the f
 | F-232 | Surface diagnostics, repair, wrapping | PARTIAL (1 of 3 clauses) | ran rcfd-mesh `surface_diag` 6 pass, the superseded `s3_repair_outcomes` fails as recorded | no public defective surface set; no self-intersection or spike detection; no shrink-wrap | L | missing reference data (public defective and leaky models) | no | yes (choose the public set) |
 | F-243 | Acoustic boundaries and sources | PARTIAL (0 of 2 clauses) | read ADR 0066 and the source; grep for impedance or quiet boundaries (none in the acoustics scope); F-062's `b_no_spurious_reflection` re-run (above) | impedance tube not built; no quiet-boundary test with the 1 % limit | M (impedance); S (quiet boundary via the F-062 sigma = 0 outlet) | F-062 boundary exists; none for the S part | yes for the quiet boundary, no for both | no |
 
-Counts: DONE 2, PARTIAL 8, OVERSTATED 0, TODO 0.
-
 ## Items not DONE, and the DONE items with a caveat
 
-**F-043 (PARTIAL).** The flat plate and the channel reproduce. The default channel test gives U_c+ 20.457 (+1.6 %) and U_b+ 18.167 (+4.4 %)
-at y+ 1.00, and U_b+ 16.920 (-2.8 %) at y+ 28. The flat plate (140 x 110, y+ 0.5, 1989 iterations) gives Cf(0.97) = 0.002663, -0.7 %
-against the TMR page value, and B1 -0.80 / -1.04 / -1.18 % against CFL3D at x = 0.5, 0.97, 1.5 (limit 3 %). BSL (B3) is within 1.6 %
-of CFL3D. The White 5 % band still misses at -7.36 %. ADR 0070 and ADR 0074 show this is a property of the published model, not a defect:
-the TMR codes sit the same way against White. The ADR 0070 P2a to P2e plate checks pass as recorded, and the H6c TMR-grid sequence
-reaches order 1.07 (recorded, not re-run). Two of the three named validations are not met. First, the backward-facing step (ADR 0015
-B5b, recorded) gives x_r/h 6.554 (SST) and 5.956 (BSL) on the y+ ~ 1 mesh, against the experimental window [6.16, 6.36]. The y+ 2 runs
-of both models and the SST y+ 0.5 run did not converge, so "y+~1 meshes stable" holds on the plate and in the channel but not on the step.
-Second, NACA0012 was never attempted. The TMR NACA0012 data (Ladson, Gregory, Abbott, McCroskey and the TMR grid points) is already on
-disk in validation-data/data/naca0012-tmr, so missing data does not block it. A wall-resolved airfoil mesh is the main work, and
-rcfd-mesh has C-grid generators from the fan work. The acceptance wording "validation passes" is unmeasurable without limits. Suggested
-rewording: "flat-plate Cf within 3 % of TMR CFL3D; BFS x_r/h within <band> of the published SST result for the TMR step; NACA0012 CL and
-CP at alpha 0, 10, 15 within <band> of the TMR SST results; every y+ ~ 1 run converges". The SST and BSL spread (6.55 and 5.96 against
-6.26) is larger than the window, so comparing with published SST results rather than the experiment is a user decision. Citations:
-Menter (1994, 2003) were not read (TMR transcription only), and the 6.26 +- 0.10 window comes from the TMR page.
+### F-043 (PARTIAL)
 
-**F-062 (PARTIAL).** Re-run: free-stream preservation and the face-state checks pass, the pressure outlet reflects 0.9412, and the
-non-reflecting outlet at sigma = 0 reflects 0.0000 (limit 0.02). The registered sigma = 0.02 known miss fails as recorded. Nozzle C
-passes in 136934 steps: Mach 5.38e-3, p/p0 5.73e-4, T/T0 1.81e-4, mass -4.94e-3, in/out 3.3e-7, all inside their limits. So the
-"no spurious reflection test" clause is met as written. Caveat: the same test prints 0.0000 for the legacy `Fixed` (ambient state) and
-`Extrapolate` conditions too. A 1-D normal-incidence pulse through a Riemann-solver boundary does not separate a good non-reflecting
-treatment from plain extrapolation. An oblique-wave or 2-D vortex test would. The NACA0012 transonic clause is open. The vendored TMR
-NACA0012 data is low-speed only, and no transonic reference with a scatter band is chosen (candidates named from memory, UNVERIFIED:
-AGARD AR-138 or AR-211, or the Vassberg-Jameson Euler values). The acceptance needs a named reference before it is measurable.
+The flat plate and the channel reproduce. Two of the three named validations are not met: the backward-facing step and
+NACA0012.
 
-**F-101 (DONE, see the numbers).** The acceptance holds on the one machine with the device: the re-run at 5000211 unknowns (171^3, CG-Jacobi, tol 1e-6,
-median of 5 after a warm-up) gives 11.4x one-shot, including matrix upload and download, and 30.4x resident, against one CPU thread. The
-recorded runs gave 9.7x and 15.2x. Caveats. (1) The test's numeric limit is "GPU faster than one CPU thread", not 3x, so the roadmap
-figure is measured but not asserted. Raising the assertion to 3x is S. (2) The CPU single-thread time varies with machine load (1.82 s
-here, 1.94 s and 2.84 s recorded), so the speedup is noisy, though always well above 3x. (3) The test skips without a device, so default
-CI never checks it. (4) The matrix is the pure 7-point Dirichlet Poisson operator (no diagonal shift), but the right-hand side is
-b = A x_e with a period-17 pattern for x_e, which is mostly high-frequency. That is why CG-Jacobi stops after 37 iterations, where a smooth
-pressure right-hand side would need hundreds. With more iterations the per-iteration ratio dominates (52558 us CPU against 1315 us GPU in
-docs/gpu.md, about 40x) and the matrix upload is spread over more work, so the speedup should rise, not fall (inferred, not measured).
-(5) The CPU's best path is AMG. In the recorded docs/gpu.md table the one-shot GPU CG-Jacobi is 90x faster than one-thread AMG-CG
-including set-up (18.1 s, not re-run), so the 3x holds against that baseline too. The
-title's flux assembly on the device, the multi-GPU and other-vendor work, and the SCOPE list (energy, free surface, species, turbulence,
-radiation on the device) are scope beyond the acceptance. They should become their own item if wanted.
+The backward-facing step (ADR 0015 B5b, recorded) gives x_r/h 6.554 (SST) and 5.956 (BSL) on the y+ ~ 1 mesh, against
+the experimental window [6.16, 6.36]. The y+ 2 runs of both models and the SST y+ 0.5 run did not converge, so
+"y+~1 meshes stable" holds on the plate and in the channel but not on the step.
 
-**F-118 (PARTIAL).** The real Fluent-written 2D elbow mesh (fetched, SHA-256 a7a3c881...) imports with 918 cells, five named zones plus
-`frontAndBack`, and passes `check_mesh`. The extruded volume equals the shoelace area times the thickness to 5.4e-16. Unknown sections
-are reported (`(4, 1), (33, 2), (37, 1)` in the unit test), and the CLI prints "Fluent sections not read". The 2D Fluent channel runs a
-laminar case. Unmet: "imports ... a 3D mesh ... and passes mesh checks". The only 3D import is a 2-cell hand-written sample that checks
-counts, zones and volume, and no test calls the mesh quality check on it. Running `check_mesh` on a larger synthetic 3D file (ASCII and
-binary) is S. The stronger reading, a real 3D or binary Fluent file, needs a public file that has not been found. HDF5 and gzip are title
-scope beyond the acceptance.
+NACA0012 was never attempted. The TMR NACA0012 data (Ladson, Gregory, Abbott, McCroskey and the TMR grid points) is
+already on disk in validation-data/data/naca0012-tmr, so missing data does not block it. A wall-resolved airfoil mesh is
+the main work, and rcfd-mesh has C-grid generators from the fan work.
 
-**F-130 (PARTIAL).** Clause 1 is met in a narrow sense. R1 compares P1 with the analytic P1 solution (worst 2.6e-9, limit 1e-3), which is
-a self-consistency check of the P1 discretisation. Only R2 compares with radiative transport, at one optical thickness (tau = 20, 0.410 %
-from the Milne asymptote). The Milne-to-slab mapping was re-derived in the repo, not taken from a source (docs/reference-data.md). A
-transport comparison at tau of order 1, for example the tabulated exact slab Psi of Heaslet and Warming (source named from memory, UNVERIFIED), would need a non-P1 method such
-as discrete ordinates (F-052), and its table is not on disk. Clause 2 (non-grey band model reproducing tabulated emissivity) has nothing
-built. It needs a verifiable WSGG or band coefficient set and the emissivity table it should reproduce, and choosing them is the user's
-call. Monte Carlo, solar load and six-flux are scope beyond the acceptance.
+Flat plate and channel results:
 
-**F-200 (PARTIAL).** Re-run: A1 flux exactness 1.4e-16. A2 plane Poiseuille with a prescribed mass flow gives a dp/dx error of 0.498 %
-(limit 1 %), which meets the channel half of clause 1. A3 annular Hagen-Poiseuille gives 0.398 %. E2 gives outlet pressure 0.408 %, u_theta
-0.032 % and mid-length 2.669 % (limits 3 %). Mass imbalance is at most about 5e-13 everywhere. F1 bernoulli converges in 2093
-iterations. The secant known miss diverges to NaN and the residual-criterion known misses fail as recorded. Three points stop a DONE.
-(1) Both "pipe" clauses are run on an annulus. A3 is an annular duct, and E2 is an annulus with both walls in solid-body rotation, not a
-pipe. A solid circular-pipe mesh now exists (rcfd-mesh `pipe_mesh`, case generator `pipe_sweep`, ADR 0047). Its body-force Poiseuille
-check missed at 3.33 % with the registered settings and passes with non-orthogonal correctors on two layers. A mass-flow Hagen-Poiseuille
-on it is S to M. (2) E2 and C2, C3, D1, D2 pass only under a post-hoc settled-field criterion. The registered residual criterion was not
-met (the known misses reproduce). (3) "Every boundary kind" includes C5 (prevent-reverse-flow), which is trivially at rest, and no
-compressible or coupled kinds exist, because the new kinds are rejected there. Suggested rewording: name the annulus explicitly if the user
-accepts it.
+- The default channel test gives U_c+ 20.457 (+1.6 %) and U_b+ 18.167 (+4.4 %) at y+ 1.00, and U_b+ 16.920 (-2.8 %) at
+  y+ 28.
+- The flat plate (140 x 110, y+ 0.5, 1989 iterations) gives Cf(0.97) = 0.002663, -0.7 % against the TMR page value, and
+  B1 -0.80 / -1.04 / -1.18 % against CFL3D at x = 0.5, 0.97, 1.5 (limit 3 %).
+- BSL (B3) is within 1.6 % of CFL3D.
+- The White 5 % band still misses at -7.36 %. ADR 0070 and ADR 0074 show this is a property of the published model, not
+  a defect: the TMR codes sit the same way against White.
+- The ADR 0070 P2a to P2e plate checks pass as recorded, and the H6c TMR-grid sequence reaches order 1.07 (recorded, not
+  re-run).
 
-**F-210 (DONE).** F1 Taylor-Green kinetic-energy error 2.303e-3 and L2 1.485e-3 (limits 0.02). The Euler order is 1.034. F6 Ghia Re 100
-centreline errors are u 3.0e-3 and v 9.0e-3 (limit 0.02), from a transient fractional-step run marched to steady state, and the reference
-is vendored at cases/cavity/reference/ghia1982_u_centerline.csv. The BDF2 periodic order (1.513, band 1.7 to 2.3) and the Kim-Moin ratio
-(1.130 against 0.5) fail as recorded. Stale ignore: `f3_known_miss_spatial_order` is still `#[ignore]`d but now PASSES (ratio 3.954,
-limit 3.0), as its own ignore text says. Under the ADR rules it should be lifted or kept with a note. The "transient lid-driven cavity" is
-compared only at its steady end state. If a time history was meant, the acceptance needs a named transient reference. Suggested rewording:
-"... marched to steady state agrees with Ghia et al.".
+The acceptance wording "validation passes" is unmeasurable without limits. Suggested rewording: "flat-plate Cf within
+3 % of TMR CFL3D; BFS x_r/h within <band> of the published SST result for the TMR step; NACA0012 CL and CP at alpha 0,
+10, 15 within <band> of the TMR SST results; every y+ ~ 1 run converges". The SST and BSL spread (6.55 and 5.96 against
+6.26) is larger than the window, so comparing with published SST results rather than the experiment is a user decision.
 
-**F-222 (PARTIAL, 0 of 2 clauses).** Only the library rate function exists. The k10 test gives the closed form to 1e-12 and a quasi-steady
-error of 6.8e-7 on the corrected set-up. The registered set-up known miss fails as recorded. No laminar premixed flame is computed, so no
-Zeldovich rate is compared with published flame data, and no piloted-jet NO trend exists. Blockers: F-054 (constant density only), the
-rate constants (UNVERIFIED, not bundled), and the absence of a chosen flame dataset. The acceptance is not measurable until the flame and
-band are named.
+Citations: Menter (1994, 2003) were not read (TMR transcription only), and the 6.26 +- 0.10 window comes from the TMR
+page.
 
-**F-232 (PARTIAL, 1 of 3 clauses).** S2 detector counts are exact on generated defects. S3c repairs a one-triangle hole in the sphere and
-the cube to the original volume (1e-12), and a six-triangle sphere hole to a closed manifold (F = 318, chi = 2) within 0.5 %. Orientation,
-duplicate and degenerate repairs are tested on the sphere only. The cube is checked only for the single missing triangle, so "seeded-defect
-cube ... removes all defects" is thinly covered. Unmet: exact counts on a public defective surface set (none chosen), self-intersection
-and spike detection, and leak-tolerant wrapping with a 2 % volume check on a public leaky model. Data choice is the user's.
+### F-062 (PARTIAL)
 
-**F-243 (PARTIAL, 0 of 2 clauses).** The delivered FW-H, rotor-tone, spectra and proxy work (ADR 0066) is real but outside this acceptance,
-and its tests were not re-run here. No impedance boundary and no acoustic quiet boundary exist (the only "sponge" in the source is the VOF
-wave tank). The quiet-boundary clause is almost free: F-062's non-reflecting outlet at sigma = 0 already reflects 0.0000 of a 1-D pulse
-in `b_no_spurious_reflection`. That test's limit is 0.02, not 1 %, and it has the discrimination caveat noted under F-062. A registered 1 %
-test (normal and oblique incidence) is S. The impedance tube (a 1-D wave solver or the compressible solver with an impedance condition,
-against the closed form R = (Z - rho c)/(Z + rho c)) is M.
+The "no spurious reflection test" clause is met as written, with a caveat about what the test can separate. The NACA0012
+transonic clause is open.
+
+Re-run: free-stream preservation and the face-state checks pass, the pressure outlet reflects 0.9412, and the
+non-reflecting outlet at sigma = 0 reflects 0.0000 (limit 0.02). The registered sigma = 0.02 known miss fails as
+recorded. Nozzle C passes in 136934 steps: Mach 5.38e-3, p/p0 5.73e-4, T/T0 1.81e-4, mass -4.94e-3, in/out 3.3e-7, all
+inside their limits.
+
+Caveat: the same test prints 0.0000 for the legacy `Fixed` (ambient state) and `Extrapolate` conditions too. A 1-D
+normal-incidence pulse through a Riemann-solver boundary does not separate a good non-reflecting treatment from plain
+extrapolation. An oblique-wave or 2-D vortex test would.
+
+The vendored TMR NACA0012 data is low-speed only, and no transonic reference with a scatter band is chosen (candidates
+named from memory, UNVERIFIED: AGARD AR-138 or AR-211, or the Vassberg-Jameson Euler values). The acceptance needs a
+named reference before it is measurable.
+
+### F-101 (DONE, see the numbers)
+
+The acceptance holds on the one machine with the device. The re-run at 5000211 unknowns (171^3, CG-Jacobi, tol 1e-6,
+median of 5 after a warm-up) gives 11.4x one-shot, including matrix upload and download, and 30.4x resident, against one
+CPU thread. The recorded runs gave 9.7x and 15.2x.
+
+Caveats:
+
+1. The test's numeric limit is "GPU faster than one CPU thread", not 3x, so the roadmap figure is measured but not
+   asserted. Raising the assertion to 3x is S.
+2. The CPU single-thread time varies with machine load (1.82 s here, 1.94 s and 2.84 s recorded), so the speedup is
+   noisy, though always well above 3x.
+3. The test skips without a device, so default CI never checks it.
+4. The matrix is the pure 7-point Dirichlet Poisson operator (no diagonal shift), but the right-hand side is b = A x_e
+   with a period-17 pattern for x_e, which is mostly high-frequency. That is why CG-Jacobi stops after 37 iterations,
+   where a smooth pressure right-hand side would need hundreds. With more iterations the per-iteration ratio dominates
+   (52558 us CPU against 1315 us GPU in docs/gpu.md, about 40x) and the matrix upload is spread over more work, so the
+   speedup should rise, not fall (inferred, not measured).
+5. The CPU's best path is AMG. In the recorded docs/gpu.md table the one-shot GPU CG-Jacobi is 90x faster than
+   one-thread AMG-CG including set-up (18.1 s, not re-run), so the 3x holds against that baseline too.
+
+The title's flux assembly on the device, the multi-GPU and other-vendor work, and the SCOPE list (energy, free surface,
+species, turbulence, radiation on the device) are scope beyond the acceptance. They should become their own item if
+wanted.
+
+### F-118 (PARTIAL)
+
+Unmet: "imports ... a 3D mesh ... and passes mesh checks". The only 3D import is a 2-cell hand-written sample that
+checks counts, zones and volume, and no test calls the mesh quality check on it. Running `check_mesh` on a larger
+synthetic 3D file (ASCII and binary) is S. The stronger reading, a real 3D or binary Fluent file, needs a public file
+that has not been found.
+
+The real Fluent-written 2D elbow mesh (fetched, SHA-256 a7a3c881...) imports with 918 cells, five named zones plus
+`frontAndBack`, and passes `check_mesh`. The extruded volume equals the shoelace area times the thickness to 5.4e-16.
+Unknown sections are reported (`(4, 1), (33, 2), (37, 1)` in the unit test), and the CLI prints
+"Fluent sections not read". The 2D Fluent channel runs a laminar case.
+
+HDF5 and gzip are title scope beyond the acceptance.
+
+### F-130 (PARTIAL)
+
+Clause 1 is met in a narrow sense, and clause 2 has nothing built.
+
+For clause 1, R1 compares P1 with the analytic P1 solution (worst 2.6e-9, limit 1e-3), which is a self-consistency check
+of the P1 discretisation. Only R2 compares with radiative transport, at one optical thickness (tau = 20, 0.410 % from
+the Milne asymptote). The Milne-to-slab mapping was re-derived in the repo, not taken from a source
+(docs/reference-data.md). A transport comparison at tau of order 1, for example the tabulated exact slab Psi of Heaslet
+and Warming (source named from memory, UNVERIFIED), would need a non-P1 method such as discrete ordinates (F-052), and
+its table is not on disk.
+
+Clause 2 (non-grey band model reproducing tabulated emissivity) needs a verifiable WSGG or band coefficient set and the
+emissivity table it should reproduce, and choosing them is the user's call.
+
+Monte Carlo, solar load and six-flux are scope beyond the acceptance.
+
+### F-200 (PARTIAL)
+
+Three points stop a DONE:
+
+1. Both "pipe" clauses are run on an annulus. A3 is an annular duct, and E2 is an annulus with both walls in solid-body
+   rotation, not a pipe. A solid circular-pipe mesh now exists (rcfd-mesh `pipe_mesh`, case generator `pipe_sweep`,
+   ADR 0047). Its body-force Poiseuille check missed at 3.33 % with the registered settings and passes with
+   non-orthogonal correctors on two layers. A mass-flow Hagen-Poiseuille on it is S to M.
+2. E2 and C2, C3, D1, D2 pass only under a post-hoc settled-field criterion. The registered residual criterion was not
+   met (the known misses reproduce).
+3. "Every boundary kind" includes C5 (prevent-reverse-flow), which is trivially at rest, and no compressible or coupled
+   kinds exist, because the new kinds are rejected there.
+
+Suggested rewording: name the annulus explicitly if the user accepts it.
+
+Re-run results:
+
+- A1 flux exactness is 1.4e-16.
+- A2 plane Poiseuille with a prescribed mass flow gives a dp/dx error of 0.498 % (limit 1 %), which meets the channel
+  half of clause 1.
+- A3 annular Hagen-Poiseuille gives 0.398 %.
+- E2 gives outlet pressure 0.408 %, u_theta 0.032 % and mid-length 2.669 % (limits 3 %).
+- Mass imbalance is at most about 5e-13 everywhere.
+- F1 bernoulli converges in 2093 iterations.
+- The secant known miss diverges to NaN and the residual-criterion known misses fail as recorded.
+
+### F-210 (DONE)
+
+F1 Taylor-Green kinetic-energy error is 2.303e-3 and L2 1.485e-3 (limits 0.02). The Euler order is 1.034. F6 Ghia Re 100
+centreline errors are u 3.0e-3 and v 9.0e-3 (limit 0.02), from a transient fractional-step run marched to steady state,
+and the reference is vendored at cases/cavity/reference/ghia1982_u_centerline.csv. The BDF2 periodic order (1.513, band
+1.7 to 2.3) and the Kim-Moin ratio (1.130 against 0.5) fail as recorded.
+
+Stale ignore: `f3_known_miss_spatial_order` is still `#[ignore]`d but now PASSES (ratio 3.954, limit 3.0), as its own
+ignore text says. Under the ADR rules it should be lifted or kept with a note.
+
+The "transient lid-driven cavity" is compared only at its steady end state. If a time history was meant, the acceptance
+needs a named transient reference. Suggested rewording: "... marched to steady state agrees with Ghia et al.".
+
+### F-222 (PARTIAL, 0 of 2 clauses)
+
+Only the library rate function exists. No laminar premixed flame is computed, so no Zeldovich rate is compared with
+published flame data, and no piloted-jet NO trend exists.
+
+The k10 test gives the closed form to 1e-12 and a quasi-steady error of 6.8e-7 on the corrected set-up. The registered
+set-up known miss fails as recorded.
+
+Blockers: F-054 (constant density only), the rate constants (UNVERIFIED, not bundled), and the absence of a chosen flame
+dataset. The acceptance is not measurable until the flame and band are named.
+
+### F-232 (PARTIAL, 1 of 3 clauses)
+
+Unmet: exact counts on a public defective surface set (none chosen), self-intersection and spike detection, and
+leak-tolerant wrapping with a 2 % volume check on a public leaky model. Data choice is the user's.
+
+S2 detector counts are exact on generated defects. S3c repairs a one-triangle hole in the sphere and the cube to the
+original volume (1e-12), and a six-triangle sphere hole to a closed manifold (F = 318, chi = 2) within 0.5 %.
+Orientation, duplicate and degenerate repairs are tested on the sphere only. The cube is checked only for the single
+missing triangle, so "seeded-defect cube ... removes all defects" is thinly covered.
+
+### F-243 (PARTIAL, 0 of 2 clauses)
+
+No impedance boundary and no acoustic quiet boundary exist (the only "sponge" in the source is the VOF wave tank). The
+delivered FW-H, rotor-tone, spectra and proxy work (ADR 0066) is real but outside this acceptance, and its tests were
+not re-run here.
+
+The quiet-boundary clause is almost free: F-062's non-reflecting outlet at sigma = 0 already reflects 0.0000 of a 1-D
+pulse in `b_no_spurious_reflection`. That test's limit is 0.02, not 1 %, and it has the discrimination caveat noted
+under F-062. A registered 1 % test (normal and oblique incidence) is S.
+
+The impedance tube (a 1-D wave solver or the compressible solver with an impedance condition, against the closed form R
+= (Z - rho c)/(Z + rho c)) is M.
 
 ## What was not re-run or not checked
 
-- The heavy SST runs listed at the top (BFS, ADR 0070 three-mesh plate, full-channel Karman measure, ADR 0074 TMR-grid sequence).
+- The heavy SST runs listed at the top (BFS, ADR 0070 three-mesh plate, full-channel Karman measure, ADR 0074 TMR-grid
+  sequence).
 - The F-243 FW-H and acoustics tests (rcfd-post), which are outside the acceptance.
 - `c3_vent_reversed_k0_long_run_observation` (F-200).
 - The other GPU checks of ADR 0038 (K1, K2, S1, S2, C1, M1, E1) and the `gpu_bench` table; only F1 was re-run.

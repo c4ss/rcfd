@@ -5,7 +5,10 @@ Status: written 2026-10-27, before the first release. No version has been tagged
 
 This page is for the maintainer who cuts a release and for contributors who want to know what the automatic checks on a pull
 request prove. It says what a version number means, what counts as a release, what each check covers and does not, and the steps to
-cut a release. How the gate itself works and how long it takes is in [the test process](test-process.md).
+cut a release. The checks on a pull request do not run the integration tests in `crates/*/tests`, which include every solver
+validation case; the `Full gate` workflow runs the non-ignored ones on Sundays and on demand, and some of those skip there and
+count as passed (see "What the checks prove"). How the gate itself works and how long it takes is in
+[the test process](test-process.md).
 
 ## Version numbers
 
@@ -33,8 +36,8 @@ A version is `MAJOR.MINOR.PATCH`. Before 1.0 (now) the rules are:
 ## What a release is
 
 A release is a tag `vX.Y.Z` on a commit of `main` on which the full gate passed, plus a GitHub release whose notes are the
-`X.Y.Z` section of CHANGELOG.md. A release has no binaries; you build from source (README). Once its release is published a tag is never moved
-or reused: a broken release is followed by a new one with a higher number.
+`X.Y.Z` section of CHANGELOG.md. A release has no binaries; you build from source (README). Once its release is published a tag
+is never moved or reused: a broken release is followed by a new one with a higher number.
 
 ## What the checks prove
 
@@ -48,20 +51,22 @@ or reused: a broken release is followed by a new one with a higher number.
 | CI `script self-tests` | same | the gate runner's time-limit rule, the limit scanner and the release-notes check work | |
 | `Full gate` workflow | Sundays and on demand | fmt, clippy and every non-ignored test plus the doc-tests pass, one process per test (`scripts/gate_test.py`) | the about 660 `#[ignore]` tests; CUDA tests (no device: they skip and count as passed); wgpu tests where the runner offers no adapter (same); the 12 tests that need fetched validation data (they skip and count as passed, [test process](test-process.md) section 6.3); macOS |
 
-GitHub switches off scheduled workflows in a public repository after 60 days without a push, so the weekly gate stops by itself in a quiet
-period: start it by hand before a release and re-enable it in the Actions tab if it was switched off.
+GitHub switches off scheduled workflows in a public repository after 60 days without a push, so the weekly gate stops by itself
+in a quiet period. Start it by hand before a release, and re-enable it in the Actions tab if it was switched off.
 
-The workflow runs in a fresh checkout with no build cache, which matches the maintainer's `git archive` copy with an empty target
-folder: `.gitattributes` fixes line endings to LF on every platform, and no build script reads git. The full gate on a GitHub
-runner has not been timed, and tests with elapsed-time limits were measured on a faster machine. The maintainer's gate machine needs about 65 minutes for the test stage, three tests at
-once on 16 logical processors (test process, section 5); a 4-core runner will take longer. The step stops after 290 minutes and the logs are uploaded
-either way. A run counts only if its summary shows 0 failed and its job is green.
+A run of the workflow counts only if its summary shows 0 failed and its job is green. The workflow runs in a fresh checkout with
+no build cache, which matches the maintainer's `git archive` copy with an empty target folder: `.gitattributes` fixes line
+endings to LF on every platform, and no build script reads git.
+
+The full gate on a GitHub runner has not been timed, and tests with elapsed-time limits were measured on a faster machine. The
+maintainer's gate machine needs about 65 minutes for the test stage, three tests at once on 16 logical processors (test process,
+section 5); a 4-core runner will take longer. The step stops after 290 minutes and the logs are uploaded either way.
 
 ## Cutting a release
 
 Every step has a check; do not go on until it holds. `X.Y.Z` is the new version, `vP` the previous tag (none for 0.1.0).
 
-1. **History is final.** Any planned rewrite of `main`'s history is finished and pushed. A tag on a commit that is rewritten later
+1. **History is final.** Finish and push any planned rewrite of `main`'s history. A tag on a commit that is rewritten later
    points at a commit that is no longer on `main`. Check: after `git fetch`, `git rev-parse main` and `git rev-parse origin/main`
    print the same id, and no rewrite is still planned.
 2. **Choose the number.** Read `git log --oneline vP..main` and the `Unreleased` section against the rules above. For 0.1.0 the
@@ -80,8 +85,8 @@ Every step has a check; do not go on until it holds. `X.Y.Z` is the new version,
 5. **Full gate on that exact commit.** Merge nothing else into `main` until the tag is pushed. Either start the workflow with
    `gh workflow run gate.yml --ref main` and follow it with `gh run list --workflow gate.yml --limit 1`, or run the gate procedure of
    [the test process](test-process.md) on a `git archive <sha>` copy. Check: the gate ran on `<sha>`, finished, and reports
-   0 failed (in the workflow: a green job and its summary). A gate on any other commit does not count: the version change alone alters version strings in outputs. If it fails, fix on `main` and start again at
-   step 3; nothing has been tagged.
+   0 failed (in the workflow: a green job and its summary). A gate on any other commit does not count: the version change alone
+   alters version strings in outputs. If it fails, fix on `main` and start again at step 3; nothing has been tagged.
 6. **Tag and push the tag:**
 
        git tag -a vX.Y.Z -m "rcfd X.Y.Z" <sha>

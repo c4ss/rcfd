@@ -1,17 +1,17 @@
 # Drive rcfd from an assistant: the MCP design loop
 
 This tutorial walks through a design loop driven over MCP: you connect a client to the rcfd MCP server, set up and run a case,
-run a small optimisation study, write the chosen variant and map its operating range. It is for people who connect an AI
-assistant to rcfd or write their own MCP client. The fan part of the page stops at checking the mesh on purpose; the reason is
-in that section. If you want the desktop app instead, see the [desktop tutorial](desktop-assistant.md): its assistant sidebar
-uses the same tools in-process.
+run a small optimisation study, write the chosen variant and map its operating range. It shows the exact JSON-RPC messages an
+assistant sends, on two examples: the contraction duct of the design loop (a pressure-drop minimisation) and the parametric axial
+fan passage. The fan part of the page stops at checking the mesh on purpose; the reason is in that section.
+
+The page is for people who connect an AI assistant to rcfd or write their own MCP client. If you want the desktop app instead, see
+the [desktop tutorial](desktop-assistant.md): its assistant sidebar uses the same tools in-process.
 
 `rcfd-mcp` is a Model Context Protocol server on stdio. An MCP client (an AI assistant such as Claude, or any program that speaks
-JSON-RPC 2.0) lists its tools, sets up and runs cases, and iterates on a design with the `design_*` tools. This tutorial shows the
-exact JSON-RPC messages an assistant sends, on two examples: the contraction duct of the design loop (a pressure-drop minimisation)
-and the parametric axial fan passage. The tool reference is [MCP tools](../mcp-tools.md); the design machinery (studies, optimisers,
-operating maps, the store) is explained in [the design loop](../design-loop.md); the plan and state of the fan work are in
-[the fan milestone](../milestone-fan.md).
+JSON-RPC 2.0) lists its tools, sets up and runs cases, and iterates on a design with the `design_*` tools. [MCP tools](../mcp-tools.md)
+is the tool reference. [The design loop](../design-loop.md) explains the design machinery (studies, optimisers, operating maps, the
+store). [The fan milestone](../milestone-fan.md) gives the plan and state of the fan work.
 
 What you need: a checkout of this repository and a Rust toolchain to build the server, and an MCP client or any program that can
 write JSON-RPC lines to the server's standard input. The case file format is introduced in the [quick start](quick-start-cli.md).
@@ -37,12 +37,12 @@ this shape (the file name and location depend on the client):
 
 `--root` confines every file the tools read or write to that directory (paths with `..` or outside it are refused with error 1004).
 Other options: `--read-only` (refuse every tool that changes state), `--max-cells`, `--max-steps`, `--max-run-seconds`,
-`--max-design-evaluations` (`rcfd-mcp --help`). Tools that change state are marked in `tools/list` (`annotations.readOnlyHint` false,
+`--max-design-evaluations` (`rcfd-mcp --help`). `tools/list` marks the tools that change state (`annotations.readOnlyHint` false,
 `_meta."rcfd/needsApproval"` true) so that the client can ask you before each such call.
 
-Each `jsonl` block below is one session: the test of this tutorial starts `rcfd-mcp --root .` in a fresh working directory (holding a
-copy of the repository's `cases/`), sends the lines and requires every response to be free of errors. What one session leaves on
-disk (case files, study directories) is used by the next; the in-memory simulation sessions are not.
+Each `jsonl` block below is one session. The test of this tutorial starts `rcfd-mcp --root .` in a fresh working directory (holding a
+copy of the repository's `cases/`), sends the lines and requires every response to be free of errors. Each session uses what the
+previous one left on disk (case files, study directories), but not its in-memory simulation sessions.
 
 ## Start a session and list the tools
 
@@ -61,9 +61,9 @@ disk (case files, study directories) is used by the next; the in-memory simulati
 
 ## Optimise a contraction duct
 
-A 2D channel of length 5 and height 1 whose upper wall ramps down at `ramp_angle` degrees from `ramp_start` (mesh generator
-`wedge_2d`, 40 x 12 cells), laminar, inlet velocity 1. The reports give the inlet and outlet pressures, the mean outlet velocity and
-the pressure drop `dp`; reports are the metrics the design tools optimise. Save it as `duct.toml` in the `--root` directory.
+Save this case as `duct.toml` in the `--root` directory. It is a 2D channel of length 5 and height 1 whose upper wall ramps down at
+`ramp_angle` degrees from `ramp_start` (mesh generator `wedge_2d`, 40 x 12 cells), laminar, inlet velocity 1. The reports give the
+inlet and outlet pressures, the mean outlet velocity and the pressure drop `dp`; reports are the metrics the design tools optimise.
 
 ```toml file=duct.toml
 title = "contraction duct"
@@ -143,9 +143,9 @@ expression = "p_in - p_out"
 
 ### Create a design study and evaluate candidates
 
-Two parameters, the ramp angle in [0, 12] degrees and the ramp start in [0.5, 3]; minimise `dp` subject to "mean outlet velocity at
-least 1.3" (the constraint keeps the optimiser from flattening the ramp), Nelder-Mead from (6, 0.5). The study lives in the
-directory `contraction` (`study.json` and the evaluation store `evaluations.jsonl`).
+The study has two parameters, the ramp angle in [0, 12] degrees and the ramp start in [0.5, 3]. It minimises `dp` subject to "mean
+outlet velocity at least 1.3" (the constraint keeps the optimiser from flattening the ramp), using Nelder-Mead from (6, 0.5). The
+study lives in the directory `contraction` (`study.json` and the evaluation store `evaluations.jsonl`).
 
 ```jsonl run
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"design_create_study","arguments":{"dir":"contraction","base":"duct.toml","name":"contraction","parameters":[{"name":"angle","lo":0,"hi":12,"init":6,"path":"mesh.ramp_angle"},{"name":"start","lo":0.5,"hi":3.0,"init":0.5,"path":"mesh.ramp_start"}],"objectives":[{"metric":"dp","sense":"min"}],"constraints":[{"metric":"ux_out","cmp":">=","limit":1.3,"scale":1.3}],"method":{"type":"nelder_mead","budget":80,"restarts":1,"seed":1}}}}
@@ -181,8 +181,9 @@ next call continues from the store. Then it reads the best feasible record and c
 ```
 
 Running the method to its budget (80 evaluations plus one restart) takes longer and runs only in the slow test, which checks only
-that the study completes. For reference, ADR 0067 E1 ran the same study through the library API and measured `dp` falling from 9.94
-to 5.07 at an angle of 4.46 degrees and a start of 1.77 after 77 evaluations; this tutorial does not re-check those numbers.
+that the study completes. For reference, decision record [ADR 0067](../adr/0067-wave32c-design-loop.md) E1 ran the same study through
+the library API and measured `dp` falling from 9.94 to 5.07 at an angle of 4.46 degrees and a start of 1.77 after 77 evaluations.
+This tutorial does not re-check those numbers.
 
 ```jsonl run-slow
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"design_run_study","arguments":{"dir":"contraction","max_evaluations":200}}}
@@ -234,7 +235,7 @@ The fan example files are smoke cases of the geometry and the plumbing, as the [
 
 ## What an assistant adds
 
-The messages above are what an assistant sends; the assistant's part is choosing them: which parameters, bounds, objectives and
+The messages above are what an assistant sends. The assistant's part is choosing them: which parameters, bounds, objectives and
 constraints, when to stop, and how to read the metrics. The rcfd side is deterministic: the same study definition and seed give the
 same history, and every evaluation is stored and resumable.
 

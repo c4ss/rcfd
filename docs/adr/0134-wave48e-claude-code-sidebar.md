@@ -1,22 +1,45 @@
 # ADR 0134: Wave 48E, the Claude Code sidebar in the Studio (`rcfd-claude` in the UI)
 
-Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). Library part (`rcfd-claude` additions) can start at once;
-integration needs ADR 0131 (48B). House rules as in ADR 0130. Parent: plan sections 2, 3 (L6), 7 and 8. Roadmap: F-266, F-265.
+Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision
+W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). Library part (`rcfd-claude` additions) can start
+at once; integration needs ADR 0131 (48B).
 
-User decisions that this ADR does not reopen (plan section 8, 2026-10-26): (1) the sidebar may type into a Claude Code session that is
-closed, by resuming it with `claude -p --resume`, and only mirrors a session that another process has open; (2) tool approvals use a
-conservative allow-list first, with no Agent SDK sidecar and no auto-approval of everything.
+Wave 48E puts a Claude Code chat sidebar in the Studio, on top of `rcfd-claude`. As a consequence of the documented
+`claude -p` behaviour (read, not observed), a project folder received from someone else, holding a `.mcp.json` or hooks,
+makes the sidebar's `claude -p` run commands from that folder, and the allow-list cannot prevent this. The maintainer's
+decisions are W48-10 (a) and (b) (pin MCP servers, confirm the folder), W48-11 (a) (a per-project allow-list file) and
+Amendment 2 (a per-user trust record outside the project). Addendum 3 reports the checks E1 to E11 as passed with
+`fake-claude` (E5, E8 and E9 in the library addenda), and no known miss. E5 failed in the first library run because a refusal
+reported the wrong line (Amendment 1), and the E10 negative control did not fail as required in the first integration run
+(Amendment 4); both were corrected and re-run. Not run in Addendum 3: a real window, any real Claude Code session (H1 to H5),
+the full gate and Linux. Addendum 3 lists seven open questions, among them how the E5 rerun is treated and discovery
+running `claude agents --json` while the folder is not confirmed (whether `claude agents` reads a project's hooks or
+`.mcp.json` is not verified). Amendment 5 (2026-10-30) makes `Exited` wait for the stderr reader, after a test failed once
+on the Ubuntu gate.
+
+Rules and parents:
+
+* House rules as in ADR 0130.
+* Parent: plan sections 2, 3 (L6), 7 and 8.
+* Roadmap: F-266, F-265.
+
+User decisions that this ADR does not reopen (plan section 8, 2026-10-26):
+
+1. The sidebar may type into a Claude Code session that is closed, by resuming it with `claude -p --resume`, and only mirrors
+   a session that another process has open.
+2. Tool approvals use a conservative allow-list first, with no Agent SDK sidecar and no auto-approval of everything.
 
 ## Context (read at main 1248a76)
 
 * `rcfd-claude` (ADR 0126, fixes in ADR 0128): `Claude::discover(project)` gives sessions OPEN, CLOSED or UNKNOWN
-  (`crates/rcfd-claude/src/driver.rs` line 119); `new_session` and `resume` spawn `claude -p` per message with the prompt on stdin and
-  return a `Chat` that streams `StreamEvent`s over a channel and cancels without orphans (lines 151, 157, 361-384); `resume` refuses an
-  open session (`Error::SessionOpen`) or an unknown state (`OpenStateUnknown`); `transcript::tail` and `read_new` follow a transcript.
-* Allow-list (`src/allow.rs`): every chat gets `--permission-mode dontAsk --permission-prompts none` plus one `--allowedTools` value
-  per rule; `check_args` refuses `--settings`, `--permission-prompt-tool`, `--add-dir` and bypass tokens; `suggest` gives the narrowest
-  exact rule for a denied call; control files (`.mcp.json`, `CLAUDE.md`, `.claude/**`, `.rcfd/**`, `rcfd-project.json`) are refused.
-  The list lives in memory only; nothing persists it.
+  (`crates/rcfd-claude/src/driver.rs` line 119). `new_session` and `resume` spawn `claude -p` per message with the prompt on
+  stdin and return a `Chat` that streams `StreamEvent`s over a channel and cancels without orphans (lines 151, 157, 361-384).
+  `resume` refuses an open session (`Error::SessionOpen`) or an unknown state (`OpenStateUnknown`). `transcript::tail` and
+  `read_new` follow a transcript.
+* Allow-list (`src/allow.rs`): every chat gets `--permission-mode dontAsk --permission-prompts none` plus one `--allowedTools`
+  value per rule. `check_args` refuses `--settings`, `--permission-prompt-tool`, `--add-dir` and bypass tokens. `suggest` gives
+  the narrowest exact rule for a denied call. Control files (`.mcp.json`, `CLAUDE.md`, `.claude/**`, `.rcfd/**`,
+  `rcfd-project.json`) are refused. The list lives in memory only; nothing persists it.
 * `AllowRule::Tool` accepts only ASCII letters, digits and `_` (`allow.rs` line 137).
 * Read in the Claude Code documentation on 2026-10-28 (code.claude.com/docs/en/headless, /mcp; not observed on 2.1.310):
   non-bare `claude -p` loads installed plugins and a project's `.mcp.json` servers, and in `-p` runs project-scoped servers load
@@ -44,10 +67,14 @@ conservative allow-list first, with no Agent SDK sidecar and no auto-approval of
   confirms them; the confirmed hashes go into `.rcfd/claude-trust.json`; any later change asks again.
 * (c) Document only: state the risk in the tutorial and do nothing in code.
 
-Trade-offs: (a) also stops the sidebar from using the user's other MCP servers in that chat, which may surprise; (b) adds one dialog
-per new folder and per change; (c) leaves a known way to run code from a received folder. **Recommendation: (b) and (a) together**:
-(b) covers hooks and CLAUDE.md, (a) makes the server set exactly the one the app intends. If the user wants other MCP servers in the
-sidebar, (a) can list them in the app-owned file.
+Trade-offs:
+
+* (a) also stops the sidebar from using the user's other MCP servers in that chat, which may surprise.
+* (b) adds one dialog per new folder and per change.
+* (c) leaves a known way to run code from a received folder.
+
+**Recommendation: (b) and (a) together**: (b) covers hooks and CLAUDE.md, (a) makes the server set exactly the one the app
+intends. If the user wants other MCP servers in the sidebar, (a) can list them in the app-owned file.
 
 ### W48-11: where the allow-list lives and what it holds at first
 
@@ -59,8 +86,12 @@ sidebar, (a) can list them in the app-owned file.
 * (b) Per user, in the Studio's config directory, shared by all projects.
 * (c) Per project as (a) but empty at first.
 
-Trade-offs: (b) carries a rule allowed for one project into every other; (c) makes the first chat deny every project tool until the
-user clicks "allow" for each. **Recommendation: (a)**.
+Trade-offs:
+
+* (b) carries a rule allowed for one project into every other.
+* (c) makes the first chat deny every project tool until the user clicks "allow" for each.
+
+**Recommendation: (a)**.
 
 Naming consequence (any option): the plugin and its server must be named without hyphens (ADR 0135 names them `rcfd` and `project`),
 or `AllowRule::Tool` must be widened to accept `-`. The first is preferred: it keeps the validator unchanged.
@@ -76,16 +107,17 @@ or `AllowRule::Tool` must be widened to accept `-`. The first is preferred: it k
   adds exactly that rule to the file and says it applies from the next message (`-p` is one process per message). Rules can be removed.
   The panel states the floor caveat of ADR 0126 (CLI and settings may allow more).
 * Costs: `total_cost_usd` of each result is shown per turn and summed per session.
-* Claude Code missing: `Claude::from_env()` none: the panel says so and how to install; the rest of the app works.
+* Claude Code missing: when `Claude::from_env()` gives none, the panel says so and how to install, and the rest of the app works.
 
 ## Placement
 
 `rcfd-studio -> rcfd-claude`. `rcfd-claude` gets additive API: allow-list load and save (`AllowList::from_file`, `to_file`), the
-folder control-file scan, and the W48-10 (a) flags in `chat_args` and `check_args`. The file writes use `rcfd_project::atomic`, so
-`rcfd-claude` gains the edge `rcfd-claude -> rcfd-project` and moves from layer 0 to layer 2 (with `rcfd-runner`) in
-`workspace_graph.rs` and `docs/architecture.md`; this avoids another copy of the atomic-write code that ADR 0128 finding 16b lists as
-debt, and the graph stays acyclic (`rcfd-project` depends on `rcfd-core` only). It also lets the ADR 0128 finding 10 tests of both
-sides become one test. No new third-party dependency.
+folder control-file scan, and the W48-10 (a) flags in `chat_args` and `check_args`. No new third-party dependency.
+
+The file writes use `rcfd_project::atomic`, so `rcfd-claude` gains the edge `rcfd-claude -> rcfd-project` and moves from layer 0
+to layer 2 (with `rcfd-runner`) in `workspace_graph.rs` and `docs/architecture.md`. This avoids another copy of the atomic-write
+code that ADR 0128 finding 16b lists as debt, and the graph stays acyclic (`rcfd-project` depends on `rcfd-core` only). It also
+lets the ADR 0128 finding 10 tests of both sides become one test.
 
 ## Registered checks (proposal; all with `fake-claude`, never the real CLI)
 
@@ -144,11 +176,14 @@ confirm this or have it converted.
 
 ## Addendum: library part, results against the registered limits (2026-10-28)
 
-Branch `worktree-agent-a99d9f825a90b2d6c` on main 3492c75. Commits: 0a3a2ac (edge `rcfd-claude -> rcfd-project`, layer 2 in
-`workspace_graph.rs` and `docs/architecture.md`), 16fa6f5 (allow-list file, first list, MCP pinning), 50d6264 (tests),
-cb92479 (control-file scan). Runs: `cargo test --release -p rcfd-claude -- --nocapture` with `CARGO_TARGET_DIR=target-w48e`,
-`CARGO_BUILD_JOBS=2`, Windows 11; clippy `-p rcfd-claude --all-targets -D warnings` clean before each run. Run 1 is described in
-Amendment 1; run 2 (the corrected run, code of 50d6264) and run 3 (cb92479, adds the scan) passed every test.
+Run 1 is described in Amendment 1. Run 2 (the corrected run, code of 50d6264) and run 3 (cb92479, adds the scan) passed every
+test.
+
+* Branch: `worktree-agent-a99d9f825a90b2d6c` on main 3492c75.
+* Commits: 0a3a2ac (edge `rcfd-claude -> rcfd-project`, layer 2 in `workspace_graph.rs` and `docs/architecture.md`), 16fa6f5
+  (allow-list file, first list, MCP pinning), 50d6264 (tests), cb92479 (control-file scan).
+* Runs: `cargo test --release -p rcfd-claude -- --nocapture` with `CARGO_TARGET_DIR=target-w48e`, `CARGO_BUILD_JOBS=2`,
+  Windows 11. Clippy `-p rcfd-claude --all-targets -D warnings` was clean before each run.
 
 What was built (additive; `Claude::new` and `check_args` give the same results as before):
 * `allow::ALLOW_FILE` (`.rcfd/claude-allow.json`), `AllowList::{from_file, to_file, from_file_bytes, to_file_bytes, file_of,
@@ -208,16 +243,20 @@ accepts). `.rcfd/` being a control path only stops Claude from editing these fil
 * (b) keep `.rcfd/claude-trust.json` but require a matching per-user record (or a per-user secret) as well;
 * (c) in addition to (a) or (b), list `.rcfd/claude-allow.json` with the control files, so a received list is confirmed
   before its first use (the Studio updates the record when the user clicks "allow").
-Related points for the same decision: `fnv64` is not collision-resistant, so someone who controls a later update of the folder
-(for example through `git pull`) can make a changed file keep its hash; a cryptographic hash would need a new crate (for
-example `sha2`, MIT/Apache-2.0). The ADR list leaves out `CLAUDE.local.md` and `CLAUDE.md` files in folders above the project,
-which Claude Code also reads according to its memory documentation (from prior reading, not re-read for this addendum,
-not observed). `check_args_in` does not refuse `--plugin-dir` and similar flags,
-because the ADR does not list them; the driver never generates them. Should `check_args` itself also refuse the
-project-independent MCP forms (relative path, inline JSON, `=` forms, several values, `--mcp-config` without
-`--strict-mcp-config`)? It was left unchanged so that existing callers get the same verdicts. The outside-the-project check
-compares paths lexically and after `canonicalize`; it does not detect hard links or UNC aliases (`\\localhost\E$\...`) of a file
-in the project. The Studio chooses the config path, so this is a stated limit, not a hole a received folder can use.
+
+Related points for the same decision:
+
+* `fnv64` is not collision-resistant, so someone who controls a later update of the folder (for example through `git pull`) can
+  make a changed file keep its hash. A cryptographic hash would need a new crate (for example `sha2`, MIT/Apache-2.0).
+* The ADR list leaves out `CLAUDE.local.md` and `CLAUDE.md` files in folders above the project, which Claude Code also reads
+  according to its memory documentation (from prior reading, not re-read for this addendum, not observed).
+* `check_args_in` does not refuse `--plugin-dir` and similar flags, because the ADR does not list them; the driver never
+  generates them.
+* Should `check_args` itself also refuse the project-independent MCP forms (relative path, inline JSON, `=` forms, several
+  values, `--mcp-config` without `--strict-mcp-config`)? It was left unchanged so that existing callers get the same verdicts.
+* The outside-the-project check compares paths lexically and after `canonicalize`; it does not detect hard links or UNC aliases
+  (`\\localhost\E$\...`) of a file in the project. The Studio chooses the config path, so this is a stated limit, not a hole a
+  received folder can use.
 
 ## Amendment 2 (2026-10-28, maintainer decisions after the library addendum; registered before the E8 run)
 
@@ -260,10 +299,13 @@ writes the grown list with `TrustStore::save_allow_list` (the "allow" button) in
 
 ## Addendum 2: E8 and the trust record, results (2026-10-28)
 
-Branch `worktree-agent-a99d9f825a90b2d6c` rebased onto main 15b00ef (48A, 48C and 48E library merged). Commits: fd6458c
-(Amendment 2, registered before any run), d04c7f8 (trust record and gate), c1ea451 (E8 tests, E4 set-up change). One release
-run at c1ea451 (`cargo test --release -p rcfd-claude -- --nocapture`, `target-w48e`, `CARGO_BUILD_JOBS=2`, Windows 11), clippy
-`-D warnings` clean before it. Every test passed on this first run; no further amendment.
+Every test passed on this first run; no further amendment.
+
+* Branch: `worktree-agent-a99d9f825a90b2d6c` rebased onto main 15b00ef (48A, 48C and 48E library merged).
+* Commits: fd6458c (Amendment 2, registered before any run), d04c7f8 (trust record and gate), c1ea451 (E8 tests, E4 set-up
+  change).
+* Run: one release run at c1ea451 (`cargo test --release -p rcfd-claude -- --nocapture`, `target-w48e`, `CARGO_BUILD_JOBS=2`,
+  Windows 11). Clippy `-D warnings` was clean before it.
 
 | Check | Limit | Result |
 |---|---|---|
@@ -409,17 +451,22 @@ values are the registered results.
 
 ## Addendum 3: integration results (2026-10-28)
 
-Branch of the 48E integration worktree on main 7486ecb. Commits: b870cf1 (panel, model, worker, tests), 0d85f78 (Amendment
-3), ca03916 (Amendment 4 and the control fix), then, after the registered runs, 18550ae (closing the window cancels a turn)
-and df9aa00 (a collapsed "turn details" section: `system/init`, the argument list, stderr). Runs: release,
-`CARGO_TARGET_DIR` of the worktree, `CARGO_BUILD_JOBS=3`, Windows 11, one cargo job at a time; clippy `-p rcfd-studio
---all-targets --locked -D warnings` and `cargo fmt -p rcfd-studio --check` clean before each run. Run 1 at 0d85f78
-(Amendment 4); **run 2 at ca03916 is the registered run**: `cargo test --release -p rcfd-studio --no-fail-fast --
+Run 1 ran at 0d85f78 (Amendment 4); **run 2 at ca03916 is the registered run**: `cargo test --release -p rcfd-studio --no-fail-fast --
 --test-threads 1`, every test binary of the crate, all pass (the ignored known misses of 48B/48C and R6's of 48D,
-unchanged). After 18550ae, `chat_e`, `frames_b4`, `parity` and `prefs_b8` were run again, and after df9aa00 `chat_e`,
-`frames_b4`, `frame_cost_b7` and `parity`: all pass; the values after df9aa00 are in brackets below. Run 5, the whole
-crate again at 9fb5284 (the code of df9aa00), `--no-fail-fast`: every test binary passes (E6 0.624 s, E7 0.499 s and
-0.047 s, E10 0.193 ms, its control 43.122 ms, B7 0.329 ms).
+unchanged).
+
+After 18550ae, `chat_e`, `frames_b4`, `parity` and `prefs_b8` were run again, and after df9aa00 `chat_e`, `frames_b4`,
+`frame_cost_b7` and `parity`: all pass. The values after df9aa00 are in brackets below. Run 5, the whole crate again at 9fb5284
+(the code of df9aa00), `--no-fail-fast`: every test binary passes (E6 0.624 s, E7 0.499 s and 0.047 s, E10 0.193 ms, its control
+43.122 ms, B7 0.329 ms).
+
+* Branch: the 48E integration worktree on main 7486ecb.
+* Commits: b870cf1 (panel, model, worker, tests), 0d85f78 (Amendment 3), ca03916 (Amendment 4 and the control fix), then, after
+  the registered runs, 18550ae (closing the window cancels a turn) and df9aa00 (a collapsed "turn details" section:
+  `system/init`, the argument list, stderr).
+* Runs: release, `CARGO_TARGET_DIR` of the worktree, `CARGO_BUILD_JOBS=3`, Windows 11, one cargo job at a time. Before each run,
+  clippy `-p rcfd-studio
+  --all-targets --locked -D warnings` and `cargo fmt -p rcfd-studio --check` were clean.
 
 | Check | Limit | Result (run 2; run 1; [after df9aa00]) |
 |---|---|---|

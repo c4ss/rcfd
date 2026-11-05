@@ -1,14 +1,26 @@
 # ADR 0120: Wave 46C, rotor dynamics of a small fan rotor on two bearings (fan breakdown E1, E2, the E3 interface and an E4 hook)
 
-Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran. The
-house rules of ADRs 0110-0117 apply:
-* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
-* a defective set-up gets a new corrected test, registered here as an amendment before it runs;
-* defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+Status: **ACCEPTED (registered 2026-10-26)**. The limits and decision rules below were fixed before any registered test ran.
 
-Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46c`, target `<target dir>`). Clean-room: first
-principles (rigid-body mechanics, harmonic analysis) and our own ADRs only. Parent plan: [fan-project-breakdown.md](../fan-project-breakdown.md)
-parts E1, E2, E3 (interface only) and E4 (F-237, [ADR 0051](0051-wave27c-viscoelastic-structural-export.md)).
+Wave 46C gives the fan plan its vibration side (bearing loads and housing-mount loads from imbalance and blade-passing forces)
+without a structural solver. The new module `rcfd_post::rotordyn` models a rigid rotor on flexible, damped bearings and covers
+parts E1 and E2 of the fan breakdown, the E3 interface (`response`) and an E4 hook (`load_deck`, F-237). Every check passed with
+its negative control discriminating; J1 passed in its check and failed in its control set-up (amendment 1), and its corrected
+test J1b passed. There is no known miss. The final gate gave 2040 passed / 0 failed / 651 ignored. The worked example W is
+REPORTED with no limit, and every value is ASSUMED, not measured. Every number is a stated proxy until checked against measured
+data, and any comparison with measured fan vibration is out of scope (no data).
+The ISO 1940-1 grade scale and the `FORCE` / `MOMENT` field layout are recalled and UNVERIFIED.
+
+Rules and parents:
+
+* The house rules of ADRs 0110-0117 apply:
+  * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
+  * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Clean-room: first principles (rigid-body mechanics, harmonic analysis) and our own ADRs only.
+* Parent plan: [fan-project-breakdown.md](../fan-project-breakdown.md) parts E1, E2, E3 (interface only) and E4 (F-237,
+  [ADR 0051](0051-wave27c-viscoelastic-structural-export.md)).
+* Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46c`, target `<target dir>`).
 
 ## What I already knew when registering (disclosed)
 
@@ -31,7 +43,7 @@ parts E1, E2, E3 (interface only) and E4 (F-237, [ADR 0051](0051-wave27c-viscoel
 
 The fan plan needs the vibration side (bearing loads and housing-mount loads from imbalance and blade-passing forces) without a
 structural solver: E5 (blade and housing FEM, FSI) is deferred by decision (F-139, F-242). A computer-fan rotor (40 to 140 mm,
-1 000 to 5 000 rpm) is a short hub with a magnet ring on a shaft in two small bearings; its own bending frequencies are far above
+1 000 to 5 000 rpm) is a short hub with a magnet ring on a shaft in two small bearings. Its own bending frequencies are far above
 the running range (assumed here, not checked), so a rigid rotor on flexible, damped bearings is the standard first model.
 
 ## Decisions
@@ -90,11 +102,18 @@ the running range (assumed here, not checked), so a rigid rotor on flexible, dam
 
 ## What this does NOT model
 
-Blade flexibility and blade modes; shaft bending (the rotor is rigid); housing and mount flexibility (the housing is rigid and
-grounded); anisotropic or cross-coupled bearings (fluid-film or sleeve bearings, ball-bearing anisotropy); bearing nonlinearity,
-clearance, preload change and ball-pass excitation; rotor internal damping (and its whirl instability); thermal effects (stiffness
-change, growth); speed fluctuation and motor electromagnetic forces; axial and torsional dynamics (rigid pass-through, D5);
-backward critical speeds (they need anisotropy). Every number is a stated proxy until checked against measured data.
+* Blade flexibility and blade modes.
+* Shaft bending (the rotor is rigid).
+* Housing and mount flexibility (the housing is rigid and grounded).
+* Anisotropic or cross-coupled bearings (fluid-film or sleeve bearings, ball-bearing anisotropy).
+* Bearing nonlinearity, clearance, preload change and ball-pass excitation.
+* Rotor internal damping (and its whirl instability).
+* Thermal effects (stiffness change, growth).
+* Speed fluctuation and motor electromagnetic forces.
+* Axial and torsional dynamics (rigid pass-through, D5).
+* Backward critical speeds (they need anisotropy).
+
+Every number is a stated proxy until checked against measured data.
 
 ## Registered checks (`crates/rcfd-post/tests/w46c_rotordyn.rs`)
 
@@ -126,12 +145,14 @@ Every check runs the general two-bearing solver, never a closed-form helper insi
 
 ### Worked example W (REPORTED; every value is ASSUMED, not measured)
 
-35 g impeller with magnet ring, `It = 1.2e-5`, `Ip = 2.0e-5` kg m^2 (disc-like); two ball bearings at `z = -10, +6` mm in a plastic
-bearing tube, effective radial stiffness `2e5` N/m each (tube included), `c = 4` N s/m, `eta = 0.02`; 7 blades; 2000 rpm. Residual
-unbalance: 1.0 g mm static in the centre-of-mass plane plus a 0.5 g mm couple at `+-10` mm (at 1 rad from the static one). Blade-passing loads: 5 mN lateral (fixed `x` direction) and 20 mN axial at BPF, 2 mN and 8 mN at 2 BPF. Reported:
-`U_per` at G 6.3, the grade of the static unbalance, critical speeds, natural frequencies at 2000 rpm, the unbalance response
-(orbit, bearing forces, mount force and moment) at 600, 1000, 2000, 3000, 4800 rpm, and the bearing and mount spectra at BPF and
-2 BPF. These are the numbers an optimiser would see.
+* 35 g impeller with magnet ring, `It = 1.2e-5`, `Ip = 2.0e-5` kg m^2 (disc-like); two ball bearings at `z = -10, +6` mm in a
+  plastic bearing tube, effective radial stiffness `2e5` N/m each (tube included), `c = 4` N s/m, `eta = 0.02`; 7 blades; 2000 rpm.
+* Residual unbalance: 1.0 g mm static in the centre-of-mass plane plus a 0.5 g mm couple at `+-10` mm (at 1 rad from the static
+  one).
+* Blade-passing loads: 5 mN lateral (fixed `x` direction) and 20 mN axial at BPF, 2 mN and 8 mN at 2 BPF.
+* Reported: `U_per` at G 6.3, the grade of the static unbalance, critical speeds, natural frequencies at 2000 rpm, the unbalance
+  response (orbit, bearing forces, mount force and moment) at 600, 1000, 2000, 3000, 4800 rpm, and the bearing and mount spectra
+  at BPF and 2 BPF. These are the numbers an optimiser would see.
 
 ### Status decision rule (registered now)
 
@@ -159,9 +180,11 @@ the purely decaying massless tilt, `lam = i kr / cr`). The asym and energy rotor
 
 ## Out of scope
 
-E3's source of the harmonics (unsteady blade loads need C1/C2 and a converged fan: the FAN-01 stall is open); E5; a case-tree or
-assistant-tool key (proposed as a roadmap item in the hand-back); frequency-response deck cards; any comparison with measured fan
-vibration (no data).
+* E3's source of the harmonics (unsteady blade loads need C1/C2 and a converged fan: the FAN-01 stall is open).
+* E5.
+* A case-tree or assistant-tool key (proposed as a roadmap item in the hand-back).
+* Frequency-response deck cards.
+* Any comparison with measured fan vibration (no data).
 
 ## Files
 

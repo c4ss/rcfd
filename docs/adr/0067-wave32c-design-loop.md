@@ -1,14 +1,33 @@
-# ADR 0067: Wave 32C, design-loop infrastructure (PIMPLE divergence guard, operating-map automation, DOE and optimisation, assistant tools)
+# ADR 0067: Wave 32C, design-loop infrastructure
 
-Status: accepted. Everything below "Registered" was written before the code or run it governs. Limits are not changed, widened, replaced or deleted after a run;
-a miss stays an ignored `*_known_miss` test with the limit intact, a test set-up defect gets a NEW corrected test and the old one stays. Deviations are disclosed in
-addenda at the end. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) and all existing tests stay bit-identical and are never re-recorded; if a proven
-change would alter one, the work stops and is reported. Clean-room: published literature only (listed in `docs/reference-data.md`); no source listing of any other
-CFD or optimisation code was opened. The real fan is not part of this wave (`docs/milestone-fan.md`, wave 33).
+Status: accepted. Everything below "Registered" was written before the code or run it governs.
 
-Parents: `docs/milestone-fan.md` (design-loop infrastructure, "Solver robustness under automation"), ADR 0034 (parametric studies F-095), ADR 0050 (robustness),
-ADR 0062 item 3 (the 181 x 141 cylinder dt 0.05 blow-up, wave 31A finding: no divergence guard in `PimpleSolver::step`, 12000 pressure iterations per step after a NaN).
-Permission model: F-091 (`rcfd-mcp::policy`); tool layer: F-090, F-147, F-148.
+Wave 32C adds design-loop infrastructure: a PIMPLE divergence guard, operating-map automation, DOE and optimisation, and
+assistant tools; the real fan is not part of this wave (`docs/milestone-fan.md`, wave 33). Addendum 2 records one miss: T3
+reaches best f = 3.1255e-3 after 120 candidates against the limit 1e-3, and the limit stays in the ignored test
+`t3_best_after_120_known_miss`. The other checks reported there pass, including the end-to-end demo E1 (pressure drop
+9.942 to 5.0716, 49.0 % reduction, limit 25 %). In Addendum 1 the guard trips at step 130 (limit 300) on candidate B,
+because candidate A does NOT blow up within 500 steps. G3 deviates: no unstable run is reachable from the case tree, so it
+tests the tree plumbing with `solver.divergence_courant_limit = 1e-3` on a stable PISO cavity. For G2 and G4, Addendum 1
+lists tests that pass unchanged, and the full workspace run is the final gate. Warm start covers only steady SIMPLE and
+SIMPLEC without energy or turbulence fields, and CMA-ES, Halton sequences, NSGA-II or any multi-objective optimiser, a
+generator hook in the tool layer and any real-fan study are not delivered. The Sobol (Joe-Kuo) direction numbers were
+typed from memory and are checked by net properties only.
+
+Rules and parents:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss stays an ignored `*_known_miss` test with the limit intact.
+* A test set-up defect gets a NEW corrected test and the old one stays.
+* Deviations are disclosed in addenda at the end.
+* Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) and all existing tests stay bit-identical and are never
+  re-recorded; if a proven change would alter one, the work stops and is reported.
+* Clean-room: published literature only (listed in `docs/reference-data.md`); no source listing of any other CFD or
+  optimisation code was opened.
+* Parents: `docs/milestone-fan.md` (design-loop infrastructure, "Solver robustness under automation"), ADR 0034
+  (parametric studies F-095), ADR 0050 (robustness), ADR 0062 item 3 (the 181 x 141 cylinder dt 0.05 blow-up, wave 31A
+  finding: no divergence guard in `PimpleSolver::step`, 12000 pressure iterations per step after a NaN).
+* Permission model: F-091 (`rcfd-mcp::policy`); tool layer: F-090, F-147, F-148.
 
 ## Registered
 
@@ -46,17 +65,27 @@ Numeric checks (registered):
   are bit-identical (u, p, phi compared by `to_bits`).
 
 ### 1. Operating-map automation (F-254 candidate)
-Module `crates/rcfd-api/src/design/opmap.rs`. A map is a list of operating points; each point is a set of settings-tree overrides `(path, JSON value)`
-(for example `boundaries.inlet.velocity_value`, `boundaries.outlet.pressure_value`, a rotation speed path) with a label, built from axes (`grid` row-major,
-first axis slowest, optional serpentine order for the last axis; or an explicit list). Points run in order, each restarting from the previous solution
-(velocity and pressure of the previous converged point written into the freshly built simulation of the next point through `set_fields`, iteration counter 0;
-steady laminar SIMPLE/SIMPLEC and transient without extras; where the engine cannot be seeded the point runs cold and says so). Collected per point: all
-reports of the case (chosen subset optional), iterations, run state, exit code, wall seconds (not in the deterministic table), `restart` = `warm`/`cold`/`cold_retry`,
-`status` = `converged`, `not_converged`, `diverged`, `failed`. Failure handling: `on_failure = "continue"` (default; the next point is cold-started from the base
-case, because the failed state is not a usable guess), `"stop"`, and `retry_cold` (default true: a warm point that fails is repeated once cold, both attempts
-recorded in the message). Outputs: `map.csv`, `map.json` (written after every point, atomically). The numeric core is generic over a `PointEvaluator` trait so that
-an analytic surrogate and the real case evaluator share it. Case-tree commands: `rcfd map <case> --axis path=v1,v2,... [--axis ...] [--out dir] [--cold] [--stop-on-failure] [--set ...]`
-and the `map` section is NOT added to the case schema (a map is a driver, not a setting); API/MCP: `design.run_map` / `design_run_operating_map`.
+Module `crates/rcfd-api/src/design/opmap.rs`.
+
+* A map is a list of operating points; each point is a set of settings-tree overrides `(path, JSON value)` (for example
+  `boundaries.inlet.velocity_value`, `boundaries.outlet.pressure_value`, a rotation speed path) with a label, built from
+  axes (`grid` row-major, first axis slowest, optional serpentine order for the last axis; or an explicit list).
+* Points run in order, each restarting from the previous solution (velocity and pressure of the previous converged point
+  written into the freshly built simulation of the next point through `set_fields`, iteration counter 0; steady laminar
+  SIMPLE/SIMPLEC and transient without extras; where the engine cannot be seeded the point runs cold and says so).
+* Collected per point: all reports of the case (chosen subset optional), iterations, run state, exit code, wall seconds
+  (not in the deterministic table), `restart` = `warm`/`cold`/`cold_retry`, `status` = `converged`, `not_converged`,
+  `diverged`, `failed`.
+* Failure handling: `on_failure = "continue"` (default; the next point is cold-started from the base case, because the
+  failed state is not a usable guess), `"stop"`, and `retry_cold` (default true: a warm point that fails is repeated once
+  cold, both attempts recorded in the message).
+* Outputs: `map.csv`, `map.json` (written after every point, atomically).
+* The numeric core is generic over a `PointEvaluator` trait so that an analytic surrogate and the real case evaluator
+  share it.
+* Case-tree commands: `rcfd map <case> --axis path=v1,v2,... [--axis ...] [--out dir] [--cold] [--stop-on-failure] [--set ...]`
+  and the `map` section is NOT added to the case schema (a map is a driver, not a setting); API/MCP: `design.run_map` /
+  `design_run_operating_map`.
+
 Numeric checks (registered):
 * M1 Analytic surrogate: pump/fan curve `dP(Q, N) = a N^2 - b N Q - c Q^2` with a = 2.0, b = 0.5, c = 3.0, shaft power `P(Q, N) = p0 N^3 + p1 N Q^2` with p0 = 0.1, p1 = 0.25,
   efficiency `eta = Q dP / P` (P > 0), axes Q in {0.1, 0.2, 0.3, 0.4, 0.5} (inner) and N in {1.0, 1.5, 2.0} (outer): 15 points; every table value equals the closed form
@@ -169,16 +198,40 @@ The final gate runs on a `git archive` of the final commit: `cargo fmt --check`,
 
 Registered criteria are unchanged. Measured values, one miss and the deviations of the implementation:
 
-* Measured against the registered limits: O1 Rosenbrock 20 of 20 seeds at f about 1e-19 with 463 to 589 evaluations (limit 18 of 20 at 1e-6, budget 800); O2 Rastrigin d = 4 differential evolution 20 of 20 at f = 0 with about 10.7k to 14.2k evaluations
-  (limit 12 of 20 at 1e-6, 19 of 20 at 1.0, budget 20000); O3, O4 (1 against 3 and 4 workers, bit-identical), O5, P1, R1, S1, S2 pass; D1 to D3 pass (Sobol L2-star discrepancy 0.00512 against a random mean 0.01306, ratio 0.39, limit 0.5);
-  M1, M2, M4 pass; M3 on a real 40 x 10 channel: warm chain 577 iterations against 746 cold (ratio 0.773, limit 0.85), pressure drops agree to about 2e-8 relative (limit 5e-4); E1: 77 evaluations, all converged, pressure drop 9.942 to 5.0716
-  (49.0 % reduction, limit 25 %) at (4.456 degrees, 1.774) with outlet velocity ratio 1.30005, three repeated evaluations bit-identical, resume makes 0 new evaluations; T1, T2, T4, T5 pass.
-* MISS, T3: Nelder-Mead on Rosenbrock through the propose/record loop has best f = 3.1255e-3 after 120 candidates (limit 1e-3); it reaches 3.4e-19 after 347 candidates. The live test `t3_propose_record_loop_on_rosenbrock`
-  asserts the non-numeric T3 behaviours and only f < 1.0; the registered limit is kept intact in the ignored test `t3_best_after_120_known_miss`.
-* Deviations: (a) the tool count is six write and four read design tools, not six and three: `design_run_study` was added (the MCP tool count test goes from 19 to 29). (b) Warm start covers only steady SIMPLE and SIMPLEC without energy
-  or turbulence fields; transient and other set-ups run cold and say so, so "transient without extras" is not delivered. (c) The store key is the exact bit pattern of the parameters only; one record per candidate holds all conditions
-  (the ADR said the key includes the condition label). (d) Additions: `map.meta.json` signature caching of repeated map calls, `Store::open_read`, the service limit `max_design_evaluations` (default 1000, `--max-design-evaluations`),
-  `Simulation::seed_fields`, the CLI command `rcfd map`.
-* Not delivered: CMA-ES, Halton sequences, NSGA-II or any multi-objective optimiser (Pareto extraction only), a generator hook in the tool layer (library only), any real-fan study.
-* Unverified references: the Sobol (Joe-Kuo) direction numbers were typed from memory and are checked by net properties only; Nelder-Mead, Storn-Price, Deb, McKay-Beckman-Conover, Warnock and xoshiro/SplitMix texts were not read
-  (see docs/reference-data.md, Wave 32C).
+Measured against the registered limits:
+
+* O1 Rosenbrock: 20 of 20 seeds at f about 1e-19 with 463 to 589 evaluations (limit 18 of 20 at 1e-6, budget 800).
+* O2 Rastrigin d = 4 differential evolution: 20 of 20 at f = 0 with about 10.7k to 14.2k evaluations (limit 12 of 20 at
+  1e-6, 19 of 20 at 1.0, budget 20000).
+* O3, O4 (1 against 3 and 4 workers, bit-identical), O5, P1, R1, S1, S2 pass.
+* D1 to D3 pass (Sobol L2-star discrepancy 0.00512 against a random mean 0.01306, ratio 0.39, limit 0.5).
+* M1, M2, M4 pass.
+* M3 on a real 40 x 10 channel: warm chain 577 iterations against 746 cold (ratio 0.773, limit 0.85), pressure drops agree
+  to about 2e-8 relative (limit 5e-4).
+* E1: 77 evaluations, all converged, pressure drop 9.942 to 5.0716 (49.0 % reduction, limit 25 %) at (4.456 degrees,
+  1.774) with outlet velocity ratio 1.30005, three repeated evaluations bit-identical, resume makes 0 new evaluations.
+* T1, T2, T4, T5 pass.
+
+MISS, T3: Nelder-Mead on Rosenbrock through the propose/record loop has best f = 3.1255e-3 after 120 candidates (limit
+1e-3); it reaches 3.4e-19 after 347 candidates. The live test `t3_propose_record_loop_on_rosenbrock` asserts the
+non-numeric T3 behaviours and only f < 1.0; the registered limit is kept intact in the ignored test
+`t3_best_after_120_known_miss`.
+
+Deviations:
+
+* (a) The tool count is six write and four read design tools, not six and three: `design_run_study` was added (the MCP
+  tool count test goes from 19 to 29).
+* (b) Warm start covers only steady SIMPLE and SIMPLEC without energy or turbulence fields; transient and other set-ups
+  run cold and say so, so "transient without extras" is not delivered.
+* (c) The store key is the exact bit pattern of the parameters only; one record per candidate holds all conditions (the
+  ADR said the key includes the condition label).
+* (d) Additions: `map.meta.json` signature caching of repeated map calls, `Store::open_read`, the service limit
+  `max_design_evaluations` (default 1000, `--max-design-evaluations`), `Simulation::seed_fields`, the CLI command
+  `rcfd map`.
+
+Not delivered: CMA-ES, Halton sequences, NSGA-II or any multi-objective optimiser (Pareto extraction only), a generator
+hook in the tool layer (library only), any real-fan study.
+
+Unverified references: the Sobol (Joe-Kuo) direction numbers were typed from memory and are checked by net properties
+only; Nelder-Mead, Storn-Price, Deb, McKay-Beckman-Conover, Warnock and xoshiro/SplitMix texts were not read (see
+docs/reference-data.md, Wave 32C).

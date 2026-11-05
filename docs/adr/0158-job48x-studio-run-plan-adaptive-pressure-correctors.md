@@ -1,39 +1,61 @@
-# ADR 0158: Job 48X, the Studio's Run makes the pressure correctors adaptive (`solver.corrector_control=adaptive` as a run-time setting), with a toolbar line, a switch in Advanced and coherent pre-run messages
+# ADR 0158: Job 48X, the Studio's Run makes the pressure correctors adaptive
 
 Status: **registered** 2026-10-29, after the code and the tests below were written and compiled and before any registered
 run (what had run before is listed under "What I already knew"); amendment 1 (X2's check, a set-up defect) before its
 corrected run; **results in the addendum**: every registered limit met but the registered X2 (set-up defect, corrected by
 X2b, met), every control failed as required; amendment 2 (X6, the dialog line) after those runs and before its own, met;
-not yet accepted by the maintainer. House rules of
-[ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered runs; a missed
-limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment written before the
-corrected run; defaults of existing code stay bit-identical outside the Studio's run plan; `rcfd run`, the runner and the
-command line behave exactly as before; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new crate, no unsafe
-code, the crate graph stays acyclic. Clean-room: our own Studio code, the repository's ADRs and the egui public API. Parents:
-[ADR 0156](0156-job48v-adaptive-pressure-correctors.md) D8 (the hand-off this job carries out) and its question 1,
-[ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the Studio's run-time settings, `StartPlan::time`, the toolbar's
-time row), [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md) (a key at its schema default is not the
-case's own), [ADR 0154](0154-job48t-cylinder-ogrid-pressure-spokes.md) (the spoke metric `M_hf` and the clean limit L3).
+not yet accepted by the maintainer.
+
+The Studio's Run now adds `solver.corrector_control=adaptive` as a run-time setting to the run of every transient iterative
+piso/pimple case that does not choose the key itself, with a toolbar line, a switch in Advanced and coherent pre-run
+messages. On the maintainer's 256 x 256 cylinder at the step that showed the spokes (1/64) the Studio run is clean (M_hf
+2.7e-7 / 9.1e-8 at t = 1 / 3, 5 correctors, no SV301). The same run with the switch off reproduces 48T's spokes (M_hf 42.6 /
+48.3) and SV301 at 2.42. The measured cost is 1.0 (count 2) to about 1.6 per step (5 correctors on 256 x 256 against 2), ADR
+0156 A7. The registered X2 is a known miss, a set-up defect of the check, and the corrected X2b met its limits. At ADR
+0153's automatic step the opt-in chose 2 correctors and the run equals the switched-off one, clean either way over 3 s. So
+under the Studio's default automatic step the opt-in did nothing on 256 x 256 for the first 1000 steps, and why the 3 s run
+stayed clean was not measured. Question 2 covers that gap, the most important open item for "stable whatever the
+resolution" under the Studio's defaults.
+
+Rules and parents:
+
+- House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md): limits are fixed here before the registered
+  runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run; defaults of existing code stay bit-identical outside the Studio's run plan; `rcfd run`,
+  the runner and the command line behave exactly as before; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
+  no new crate, no unsafe code, the crate graph stays acyclic.
+- Clean-room: our own Studio code, the repository's ADRs and the egui public API.
+- Parents: [ADR 0156](0156-job48v-adaptive-pressure-correctors.md) D8 (the hand-off this job carries out) and its question 1,
+  [ADR 0153](0153-job48s-time-step-set-when-a-run-starts.md) (the Studio's run-time settings, `StartPlan::time`, the toolbar's
+  time row), [ADR 0152](0152-job48r-store-key-at-its-default-is-not-the-case-s-own.md) (a key at its schema default is not the
+  case's own), [ADR 0154](0154-job48t-cylinder-ogrid-pressure-spokes.md) (the spoke metric `M_hf` and the clean limit L3).
 
 ## The request
 
 The maintainer approved turning ADR 0156's opt-in on by default in the Studio ("yes turn on adaptive correctors", ADR 0156
-question 1); the core idea (ADR 0156, "The request"): the simulation must be stable whatever the resolution, without
-hand-tuning. Asked: the Studio's run plan adds the run-time override `--set solver.corrector_control=adaptive` for transient
-iterative piso/pimple cases with constant density, no VOF, no dynamic mesh and no `solver.error_tolerance`; after job 48S's
-time-step entries and before the user's own overrides; only when the case's key is at its default (ADR 0152's rule); shown in
-the toolbar's run row and hover next to the step label; recorded in `run.json` `settings.set` only (the case file and its
-snapshot untouched); switchable off in the Advanced popover; the pre-run Courant/SV301 messages coherent (no SV301 nag when
-adaptive is on). Only `crates/rcfd-studio` and `docs`; a `residuals.jsonl` field (`crates/rcfd-runner`) is a question, not
-this job's change.
+question 1). The core idea (ADR 0156, "The request"): the simulation must be stable whatever the resolution, without
+hand-tuning.
+
+Asked: the Studio's run plan adds the run-time override `--set solver.corrector_control=adaptive`:
+
+- for transient iterative piso/pimple cases with constant density, no VOF, no dynamic mesh and no `solver.error_tolerance`;
+- after job 48S's time-step entries and before the user's own overrides;
+- only when the case's key is at its default (ADR 0152's rule);
+- shown in the toolbar's run row and hover next to the step label;
+- recorded in `run.json` `settings.set` only (the case file and its snapshot untouched);
+- switchable off in the Advanced popover;
+- with the pre-run Courant/SV301 messages coherent (no SV301 nag when adaptive is on).
+
+The job changes only `crates/rcfd-studio` and `docs`; a `residuals.jsonl` field (`crates/rcfd-runner`) is a question, not this
+job's change.
 
 ## Context (read at local main 4e795b1, the merge of wave 48V)
 
-* **Run's plan** (ADR 0153 D9): `quick_run::start_job` makes `StartPlan::new_route` and, for a case whose time-step facts
-  (`time_step::facts`, the case's simulation built on the control thread) are `Kind::Transient`, adds `TimePlan`
-  (`with_time`); `StartPlan::set()` gives store keys, time entries, then `extra_set` (empty for Run; the Start run dialog's
+* **Run's plan** (ADR 0153 D9): `quick_run::start_job` makes `StartPlan::new_route`. For a case whose time-step facts
+  (`time_step::facts`, the case's simulation built on the control thread) are `Kind::Transient`, it adds `TimePlan`
+  (`with_time`). `StartPlan::set()` gives store keys, time entries, then `extra_set` (empty for Run; the Start run dialog's
   overrides for the dialog's own plan, which has no time entries). The runner records `set` in `run.json` and passes each
-  entry as `--set` to the pre-launch check (`rcfd run --check-only --status-json` into `check.json`) and to the run; it
+  entry as `--set` to the pre-launch check (`rcfd run --check-only --status-json` into `check.json`) and to the run. It
   forwards every solver status event but `iteration` into `events.jsonl` (`{"kind": "solver", "solver": ...}`), and the
   solver's own stream stays in `solver-status.jsonl`.
 * **`Kind::Transient`** (ADR 0153 D1) is piso/pimple, not compressible, not variable density, not VOF, not a prescribed
@@ -42,12 +64,12 @@ this job's change.
   engine is `Engine::Transient` with piso/pimple, and with `time_advance = "fractional_step"`, a dynamic mesh or
   `solver.error_tolerance > 0`.
 * **SV301** (ADR 0156 D7) is made only with `corrector_control = "fixed"`, two or more correctors, the iterative advance,
-  no dynamic mesh and `pressure_lag_check != "off"`; with `adaptive` the solver makes no preflight, so a run with the entry
+  no dynamic mesh and `pressure_lag_check != "off"`. With `adaptive` the solver makes no preflight, so a run with the entry
   can show no SV301 (neither in `check.json` nor in `events.jsonl`). The Studio itself shows no SV301 text anywhere today
   (it shows the run's events in the Log panel).
 * **The automatic step and the count.** ADR 0153's (a) ran the 256 x 256 cylinder with the automatic step at a wall
-  diffusion number of 5.4 to 5.7, below ADR 0154's onset (6.5 to 11.4); the step starts at 0.00116 s and grows to about
-  0.0035 s within 70 steps; a 3 s run is about 900 steps, below ADR 0156's 1000-step re-estimate, and the growth monitor
+  diffusion number of 5.4 to 5.7, below ADR 0154's onset (6.5 to 11.4). The step starts at 0.00116 s and grows to about
+  0.0035 s within 70 steps. A 3 s run is about 900 steps, below ADR 0156's 1000-step re-estimate, and the growth monitor
   fired in no run of ADR 0156. So at the automatic step the adaptive count is chosen at the first step's dt and is expected
   to stay at the case's 2, where it is bit-identical to fixed correctors (ADR 0156 A1, A4). The case where the opt-in is
   needed is the maintainer's own step 1/64 (or 0.0156) on 256 x 256: ADR 0156 TV256 (adaptive, 5 correctors, clean) against
@@ -73,11 +95,18 @@ hand-written `Debug` prints `correctors` only when set, so a plan without Run's 
 `solver.corrector_control` as resolved, and `not_adaptive`, the reason the solver would refuse the key (ADR 0156 D5): not
 `Kind::Transient` (`a steady run has no time steps`, or the kind's own reason), `solver.time_advance = "fractional_step" (a
 non-iterative step has no correctors)`, `dynamic_mesh (the pressure-lag estimate is not defined on a moving mesh)`,
-`solver.error_tolerance (step doubling restores the state of trial steps)`. The plan: `Fixed { why: Scope(reason) }` when
-there is a reason; `CaseAdaptive` (no entry) when the case resolves `adaptive` itself; `Fixed { why: Off }` when the
-run-time switch is off; else `Adaptive { n }`. ADR 0152's rule: `"fixed"` is the schema default, so a text that spells it out
-(the Studio editor's full save; any JSON case) gets the entry like one without the key (ADR 0156 question 4's
-recommendation). A prescribed flow and a chain are left alone (ADR 0153's scope) even where the solver might accept the key.
+`solver.error_tolerance (step doubling restores the state of trial steps)`.
+
+The plan:
+
+- `Fixed { why: Scope(reason) }` when there is a reason;
+- `CaseAdaptive` (no entry) when the case resolves `adaptive` itself;
+- `Fixed { why: Off }` when the run-time switch is off;
+- else `Adaptive { n }`.
+
+ADR 0152's rule: `"fixed"` is the schema default, so a text that spells it out (the Studio editor's full save; any JSON case)
+gets the entry like one without the key (ADR 0156 question 4's recommendation). A prescribed flow and a chain are left alone
+(ADR 0153's scope) even where the solver might accept the key.
 
 **D3. The switch** (`RunTime::adaptive_correctors`, default `time_step::DEFAULT_ADAPTIVE_CORRECTORS` = true). Per case, in
 memory, forgotten when the project closes (as ADR 0153's run-time settings). The Advanced popover gets a section "Pressure
@@ -87,16 +116,25 @@ it.
 
 **D4. What the toolbar shows** (`time_step::corrector_label`, `corrector_hover`). A line of its own under the time row
 (wrapped to the window, so that ADR 0153's row keeps its width: ADR 0153 amendment 2), for a transient case whose time plan is
-made: `pressure correctors: adaptive for this run (at least <n>, at most 10; the solver adds them where the mesh needs them)`
-(weak), `pressure correctors: fixed, <n> per step (adaptive switched off in Advanced)` (warning colour),
-`pressure correctors: adaptive (the case's own solver.corrector_control)`, `pressure correctors: the case's own (<n> per step;
-adaptive is not available for this case)`. Its hover, also a third line of Run's hover after ADR 0153's plan hover: what the
-solver does (ADR 0156 D2-D4 in words), the measured cost (`CORRECTOR_COST`: 2 on the shipped 64 x 48 cylinder, bit-identical
-to fixed; 3 on 128 x 96; 5 on 256 x 256 at dt 1/64, about 1.6 times the time per step of 2 fixed correctors (ADR 0156 A7:
-1.057 / 0.667 s), plus a first-step search of about 50 steps' time), that the count is in the run's events, and that it is a
-run-time setting switchable in Advanced. ADR 0153's step label, indicator (`overrides the case's ...`), Mesh line and plan
-hover are not changed: by ADR 0152's rule the case's `"fixed"` is not the case's own, so nothing of the case's own is
-overridden (a deviation from ADR 0156 D8 item 4's wording, which put the corrector in the indicator).
+made:
+
+- `pressure correctors: adaptive for this run (at least <n>, at most 10; the solver adds them where the mesh needs them)` (weak);
+- `pressure correctors: fixed, <n> per step (adaptive switched off in Advanced)` (warning colour);
+- `pressure correctors: adaptive (the case's own solver.corrector_control)`;
+- `pressure correctors: the case's own (<n> per step; adaptive is not available for this case)`.
+
+Its hover, also a third line of Run's hover after ADR 0153's plan hover, gives:
+
+- what the solver does (ADR 0156 D2-D4 in words);
+- the measured cost (`CORRECTOR_COST`: 2 on the shipped 64 x 48 cylinder, bit-identical to fixed; 3 on 128 x 96; 5 on 256 x 256
+  at dt 1/64, about 1.6 times the time per step of 2 fixed correctors (ADR 0156 A7: 1.057 / 0.667 s), plus a first-step search
+  of about 50 steps' time);
+- that the count is in the run's events;
+- that it is a run-time setting switchable in Advanced.
+
+ADR 0153's step label, indicator (`overrides the case's ...`), Mesh line and plan hover are not changed: by ADR 0152's rule
+the case's `"fixed"` is not the case's own, so nothing of the case's own is overridden (a deviation from ADR 0156 D8 item 4's
+wording, which put the corrector in the indicator).
 
 **D5. Coherent pre-run messages.** With the entry the solver makes no SV301 preflight, so no SV301 reaches `check.json` or the
 events (no nag). With the switch off the line is in warning colour and its hover says that the solver's check before the run
@@ -204,19 +242,22 @@ cylinder. Its control is in-test (the two cases without a line). What I knew whe
 
 ## Addendum (2026-10-29): results against the registered limits
 
-Code at 405e219 (registration; X1, X3, X4 ran on it) and b52505d (amendment 1: the test file only; X2b, X5, W and the lints
-ran on it). Release builds in this worktree's `target/`; this host (Windows 11, 16 threads, 93.6 GB, 4 to 5 GB free during
-the runs: another agent's WSL workload held 55 GB), so wall times are rough.
+The code was at 405e219 (registration; X1, X3, X4 ran on it) and b52505d (amendment 1: the test file only; X2b, X5, W and the
+lints ran on it). The runs used release builds in this worktree's `target/` on this host (Windows 11, 16 threads, 93.6 GB, 4
+to 5 GB free during the runs: another agent's WSL workload held 55 GB), so wall times are rough.
 
 ### The answer
 
 Run now adds `solver.corrector_control=adaptive` to the run of every transient iterative piso/pimple case that does not
-choose the key itself, records it in `run.json` `settings.set` and nowhere else, and says so in a toolbar line, Run's hover
-and the Advanced popover, where it can be switched off. On the maintainer's 256 x 256 cylinder at the step that showed the
-spokes (1/64) the Studio run is clean (M_hf 2.7e-7 / 9.1e-8 at t = 1 / 3, 5 correctors, no SV301), and the same run with the
-switch off reproduces 48T's spokes (M_hf 42.6 / 48.3) and SV301 at 2.42. At ADR 0153's automatic step the opt-in chose 2
-correctors (the estimate 0.406 at the first step's dt 0.00116 s) and the run equals the switched-off one: clean either way
-over 3 s, no extra cost; but see "a finding" below.
+choose the key itself. It records the key in `run.json` `settings.set` and nowhere else, and says so in a toolbar line, Run's
+hover and the Advanced popover, where it can be switched off.
+
+On the maintainer's 256 x 256 cylinder at the step that showed the spokes (1/64) the Studio run is clean (M_hf 2.7e-7 /
+9.1e-8 at t = 1 / 3, 5 correctors, no SV301), and the same run with the switch off reproduces 48T's spokes (M_hf 42.6 / 48.3)
+and SV301 at 2.42.
+
+At ADR 0153's automatic step the opt-in chose 2 correctors (the estimate 0.406 at the first step's dt 0.00116 s) and the run
+equals the switched-off one: clean either way over 3 s, no extra cost; but see "a finding" below.
 
 ### Results
 
@@ -241,18 +282,22 @@ over 3 s, no extra cost; but see "a finding" below.
 
 ### A finding: the count is chosen at the automatic step's first dt
 
+Under the Studio's default automatic step the opt-in did nothing on 256 x 256 for the first 1000 steps, and the coupling ran
+at a step whose two-corrector estimate is about 1.0 to 1.17. The 3 s run was clean (M_hf 1.2e-7 at 3 s), but why it stayed
+clean was not measured. Longer runs at the grown step are not covered by this job (ADR 0153's (a) ran 40 s with two fixed
+correctors and shed normally; its M_hf was not measured).
+
 At ADR 0153's automatic step the first estimate is made at dt0 = 0.00116 s, where two correctors give 0.406 on the 256 x 256
-cylinder; the controller then grows the step about threefold within 70 steps (to 0.0033 to 0.0039 s, ADR 0153 (a)), where
+cylinder. The controller then grows the step about threefold within 70 steps (to 0.0033 to 0.0039 s, ADR 0153 (a)), where
 DG1 measured 1.166 for two correctors at 1/256 = 0.0039 s (ADR 0154): at or above 1 (lag-neutral or slowly growing), far
-above ADR 0156's target 0.5; ADR 0153's P4 saw slow growth at a fixed 0.0042 s on this mesh. The adaptive control
-re-estimates only every 1000 steps or when its growth monitor fires (three steps in a row growing by 1.5, which an
-amplification near 1 does not do); a 3 s run has 891 steps, so it kept 2 throughout. So under the Studio's default automatic
-step the opt-in did nothing on 256 x 256 for the first 1000 steps, and the coupling ran at a step whose two-corrector
-estimate is about 1.0 to 1.17. The 3 s run was clean (M_hf 1.2e-7 at 3 s), but why it stayed clean was not measured, and
-longer runs at the grown step (ADR 0153's (a) ran 40 s with two fixed correctors and shed normally; its M_hf was not
-measured) are not covered by this job. ADR 0156 D8 item 5 named the gap; closing it is a solver change (`crates/rcfd-fv`),
-outside this job: question 2. Until then, resolution robustness under the Studio's defaults rests on the solver's 1000-step
-re-estimate and growth monitor, not on the first estimate's margin.
+above ADR 0156's target 0.5. ADR 0153's P4 saw slow growth at a fixed 0.0042 s on this mesh.
+
+The adaptive control re-estimates only every 1000 steps or when its growth monitor fires (three steps in a row growing by
+1.5, which an amplification near 1 does not do). A 3 s run has 891 steps, so it kept 2 throughout.
+
+ADR 0156 D8 item 5 named the gap. Closing it is a solver change (`crates/rcfd-fv`), outside this job: question 2. Until then,
+resolution robustness under the Studio's defaults rests on the solver's 1000-step re-estimate and growth monitor, not on the
+first estimate's margin.
 
 ### Deviations
 
@@ -293,11 +338,10 @@ re-estimate and growth monitor, not on the first estimate's margin.
    count is chosen at the first step's dt (0.00116 s) and kept while the step grows threefold, so on 256 x 256 the opt-in
    does nothing for the first 1000 steps and the coupling runs where two correctors' estimate is about 1.0 to 1.17 (at or
    above lag-neutral) instead of the target 0.5. This is the most important open item for "stable whatever the resolution"
-   under the Studio's defaults. Options: (a) keep (the 3 s run was
-   clean); (b) a solver change in `PimpleSolver`: re-estimate when dt has changed by a factor 1.5 since the last estimate;
-   (c) a Studio change: start the automatic step at the controller's later step size. Recommendation: (b), registered with
-   ADR 0156's harness (V256 under the controller to 10 s, cost reported), since it is what makes "stable whatever the
-   resolution" hold under the automatic step.
+   under the Studio's defaults. Options: (a) keep (the 3 s run was clean); (b) a solver change in `PimpleSolver`: re-estimate
+   when dt has changed by a factor 1.5 since the last estimate; (c) a Studio change: start the automatic step at the
+   controller's later step size. Recommendation: (b), registered with ADR 0156's harness (V256 under the controller to 10 s,
+   cost reported), since it is what makes "stable whatever the resolution" hold under the automatic step.
 3. **The Start run dialog**: it keeps the case's own correctors (D6, with a line saying Run on the toolbar makes them
    adaptive). Should the dialog's plan add the entry too (its `set` and ADR 0140/0152's dialog checks would change)?
    Recommendation: yes together with ADR 0153 question 3 (the dialog taking the toolbar's time plan), in one registered job,

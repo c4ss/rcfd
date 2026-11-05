@@ -1,17 +1,30 @@
-# ADR 0021: Wave 16W, wiring of existing library features (partitioning F-236, derived fields and sampling F-072, inflation report F-108, heat_flow conductivity validation)
+# ADR 0021: Wave 16W, wiring of existing library features
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any wiring code or test existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect
-gets a NEW corrected test and the old one stays as a record. Addenda (file names, mesh sizes not fixed here) may be appended
-at the end without touching a registered limit.
 
-Scope: surface the library features of ADR 0020 (partitioning, derived fields, sampling, inflation) through the case tree,
-the CLI and the JSON-RPC service, and close one validation gap (item W). No solver numerics change: nothing here renumbers a
-mesh, alters a matrix or touches a field during iterations. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`)
-stay bit-identical and are not re-recorded. Clean-room: published methods and first principles only; no vendor code, text,
-data or names. Every expected number is derived below from definitions, closed forms or invariants; no registered check
-depends on a literature value.
+The scope of Wave 16W is to surface the library features of [ADR 0020](0020-wave15b-mesh-post.md) (partitioning F-236,
+derived fields and sampling F-072, inflation and the inflation report F-108) through the case tree, the CLI and the
+JSON-RPC service, and to close one validation gap (item W, heat_flow conductivity validation). No solver numerics change:
+nothing here renumbers a mesh, alters a matrix or touches a field during iterations. The solver runs in one process and
+ignores `decomposition` for its numerics. A `heat_flow` report with `reports.<n>.conductivity` greater than 0 is a located
+validation error when `fluid.density` is `ideal_gas` or `real_gas`. The addendum lists the measured values and states that
+all other registered checks pass as stated and that none was a known miss. It also discloses that P9 compared `rcfd sample`
+with `rcfd run` using `--max-iterations 1` instead of 0; the 0-iteration `rcfd sample` form is exercised separately only in
+the library-level P6/P7 checks, not through the binary. The `rcfd inflate` exit 4 for quality errors is unexercised by
+tests. Not delivered (as registered): MCP tools, case-tree inflation key, volume fill, lambda2, wall-function shear,
+solution-file reader, multilevel partitioning, solver use of partitions or RCM.
+
+Rules:
+
+* Limits are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+* A test set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (file names, mesh sizes not fixed here) may be appended at the end without touching a registered limit.
+* Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded.
+* Clean-room: published methods and first principles only; no vendor code, text, data or names.
+* Every expected number is derived below from definitions, closed forms or invariants; no registered check depends on a
+  literature value.
 
 ## Decisions
 
@@ -25,14 +38,19 @@ accessors on `Simulation`. The boundary-condition code of the parallel wave is n
 
 ### D2 `decomposition` (F-236)
 
-Keys: `method` = `none` (default) | `bisection` | `inertial` | `sectors` | `graph`; `parts` (int, default 1); `rule`
-(bisection: `longest` default | `cycle` | `x` | `y` | `z`); `sector_kind` (sectors: `circumferential` default | `radial`);
-`origin` (default `[0,0,0]`), `axis` (default `[0,0,1]`), `reference` (default `[1,0,0]`) for sectors; `weights.mode` =
-`none` (default) | `box` with `weights.box_min`, `weights.box_max`, `weights.inside`, `weights.outside` (cell weight
-`inside` when the cell centre lies in the closed box, else `outside`; both default 1); `tolerance` (graph and smoothing,
-default 0.03), `max_passes` (default 20); `smooth` (bool, default false: apply `smooth_partition` after the strategy);
-`reorder` (bool, default false: the report adds the bandwidth of the natural and of the reverse Cuthill-McKee ordering);
-`write_field` (bool, default false: `rcfd run` writes the part id as the cell array `partition` in the VTK files).
+Keys:
+
+* `method` = `none` (default) | `bisection` | `inertial` | `sectors` | `graph`.
+* `parts` (int, default 1).
+* `rule` (bisection: `longest` default | `cycle` | `x` | `y` | `z`).
+* `sector_kind` (sectors: `circumferential` default | `radial`).
+* `origin` (default `[0,0,0]`), `axis` (default `[0,0,1]`), `reference` (default `[1,0,0]`) for sectors.
+* `weights.mode` = `none` (default) | `box` with `weights.box_min`, `weights.box_max`, `weights.inside`, `weights.outside`
+  (cell weight `inside` when the cell centre lies in the closed box, else `outside`; both default 1).
+* `tolerance` (graph and smoothing, default 0.03), `max_passes` (default 20).
+* `smooth` (bool, default false: apply `smooth_partition` after the strategy).
+* `reorder` (bool, default false: the report adds the bandwidth of the natural and of the reverse Cuthill-McKee ordering).
+* `write_field` (bool, default false: `rcfd run` writes the part id as the cell array `partition` in the VTK files).
 
 `method = none` is inert. **The solver runs in one process and ignores `decomposition`** for its numerics: the section is
 used by `rcfd partition`, the service method `mesh.partition` and `write_field`; the schema documentation and
@@ -41,18 +59,31 @@ REPORTS bandwidth; the mesh and the solvers are never renumbered (that would cha
 hashes, as ADR 0020 A1 already ruled out). `bisection` uses `Bisection { rule, weights }`, `inertial` uses
 `Bisection { Inertial }`, `sectors` uses `Sectors`, `graph` uses `GraphPartitioner { weights, tolerance, max_passes }`.
 
-Report (`decomp::run(case, mesh) -> PartitionReport`, serialised for CLI and service): `method`, `n_parts`, `n_cells`,
-`part_cells` (cells per part), `part_weights`, `imbalance` (`weighted_imbalance`, which equals the count imbalance for unit
-weights), `edge_cut` (`partition::edge_cut`), `ghost_cells` (per part, from `Decomposition::from_assignment`), `smoothed_moves`
-(when `smooth`), `bandwidth` `{natural, rcm}` (when `reorder`), and `part` (the cell-to-part vector; omitted from the CLI
-JSON unless `--parts-vector` is given, always present in the Rust struct).
+Report (`decomp::run(case, mesh) -> PartitionReport`, serialised for CLI and service):
 
-Errors are located `Diagnostic`s. Static checks (`decomp::check`, run by `semantic_errors`): `parts < 1`
-(`decomposition.parts`); `method = none` with `parts > 1` (`decomposition.method`); `sectors` with a zero `axis`
-(`decomposition.axis`) or a `reference` parallel to the axis (`decomposition.reference`); `weights.mode = box` with
-`box_min > box_max` in any component (`decomposition.weights.box_max`); `weights.inside <= 0` or `weights.outside <= 0`
-(`decomposition.weights.inside` / `.outside`); `tolerance < 0` (`decomposition.tolerance`). Mesh-dependent check (in `run`
-and in `Simulation::new`): `parts > n_cells` (`decomposition.parts`).
+* `method`, `n_parts`, `n_cells`.
+* `part_cells` (cells per part), `part_weights`.
+* `imbalance` (`weighted_imbalance`, which equals the count imbalance for unit weights).
+* `edge_cut` (`partition::edge_cut`).
+* `ghost_cells` (per part, from `Decomposition::from_assignment`).
+* `smoothed_moves` (when `smooth`).
+* `bandwidth` `{natural, rcm}` (when `reorder`).
+* `part` (the cell-to-part vector; omitted from the CLI JSON unless `--parts-vector` is given, always present in the Rust
+  struct).
+
+Errors are located `Diagnostic`s. Static checks (`decomp::check`, run by `semantic_errors`):
+
+| Condition | Path |
+| --- | --- |
+| `parts < 1` | `decomposition.parts` |
+| `method = none` with `parts > 1` | `decomposition.method` |
+| `sectors` with a zero `axis` | `decomposition.axis` |
+| `sectors` with a `reference` parallel to the axis | `decomposition.reference` |
+| `weights.mode = box` with `box_min > box_max` in any component | `decomposition.weights.box_max` |
+| `weights.inside <= 0` or `weights.outside <= 0` | `decomposition.weights.inside` / `.outside` |
+| `tolerance < 0` | `decomposition.tolerance` |
+
+Mesh-dependent check (in `run` and in `Simulation::new`): `parts > n_cells` (`decomposition.parts`).
 
 ### D3 `rcfd partition <case|mesh> [--method m] [--parts n] [--rule r] [--weights-box ...] [--smooth] [--reorder] [--out f.vtu] [--json]`
 
@@ -286,10 +317,17 @@ case); iso-clip, offset surfaces, point clouds and user variables (F-238); GUI s
 Files: `crates/rcfd-api/src/{decomp,postproc,inflate}.rs`, `crates/rcfd-cli/src/cmd_wiring.rs`; tests
 `crates/rcfd-api/tests/{decomposition,postprocessing,inflate_report,report_conductivity_vd}.rs`, `crates/rcfd-cli/tests/wiring.rs`.
 
-Measured (release): D1 to D4 worst unit-weight imbalance 0.0278 over 90 cases (limit 0.05); D5 worst weighted imbalance 0.0240
-(0.05); D7 natural bandwidth 40, reverse Cuthill-McKee 5 on Q3 (bound 7); P1 worst analytic error 1.4e-14 on 80 interior cells
-(1e-12, minimum 40); P2 and P3 0 (1e-12); P4 |tau| 1.4e-15, y+ 2.6e-15 (1e-12); P6 1.8e-15, P7 8.9e-16 (1e-12). All other
-registered checks pass as stated; none was a known miss.
+Measured (release):
+
+* D1 to D4: worst unit-weight imbalance 0.0278 over 90 cases (limit 0.05).
+* D5: worst weighted imbalance 0.0240 (0.05).
+* D7: natural bandwidth 40, reverse Cuthill-McKee 5 on Q3 (bound 7).
+* P1: worst analytic error 1.4e-14 on 80 interior cells (1e-12, minimum 40).
+* P2 and P3: 0 (1e-12).
+* P4: |tau| 1.4e-15, y+ 2.6e-15 (1e-12).
+* P6: 1.8e-15; P7: 8.9e-16 (1e-12).
+
+All other registered checks pass as stated; none was a known miss.
 
 Deviations, disclosed:
 

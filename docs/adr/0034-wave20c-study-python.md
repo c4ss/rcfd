@@ -1,27 +1,50 @@
 # ADR 0034: Wave 20C, parametric studies (F-095) and Python access (F-083)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (file names, measured numbers, the crafted failing point) may be
-appended at the end without touching a registered limit.
 
-Scope. F-095 and F-083 are `todo`. This wave delivers a first slice of each and stops at `partial` with named gaps. F-239 and
-F-238 are attempted only if cheap (they are not part of the registered checks below; whatever is done is recorded in an addendum,
-otherwise they stay `todo`). F-139/F-242 (co-simulation, FMI) are NOT attempted. Clean-room: first principles only, no vendor
-code, text, data or names. Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not
-re-recorded: nothing here touches a numerical kernel; the study runner calls the existing `Simulation` and `runctl::drive`
-unchanged, and a case without a `study` section never enters it. Schema additions are additive with explicit unset sentinels
-(empty list, `""`, 0).
+Wave 20C delivers a first slice of parametric studies (F-095) and of Python access (F-083), and stops each at `partial` with
+named gaps. Studies run through a new `study` case section and the `rcfd study` command; a point that fails gives a failed table
+row and the other points run. Python access is the pure-Python package `python/rcfd`, which drives the CLI as subprocesses, and
+the PyO3 extension stays a named gap. F-239 and F-238 stay `todo`, and F-139/F-242 were not attempted. The addenda record the
+results, and no registered limit was changed. S7 is a known miss: the operating-point map is 1.86 to 1.91 percent low against a
+limit of 1 percent. The registered S1 closed form (a set-up defect, it assumed a unit depth) and S3 at the registered
+`tolerance_u = 1e-12` are also known misses; the corrected S1 test and the 1e-9 S3 test pass. S2 and S3 were first run only at
+1e-9, a set-up change made after the 1e-12 grid ended at the iteration cap, and S4-S6 and the Python tests also use 1e-9.
+
+Rules and scope:
+
+- Limits are not changed, widened, replaced or deleted after a run.
+- A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit intact;
+  the cause is diagnosed, not tuned away.
+- A test set-up defect gets a NEW corrected test and the old one stays as a record.
+- Addenda (file names, measured numbers, the crafted failing point) may be appended at the end without touching a registered
+  limit.
+- Scope: F-095 and F-083 are `todo`. This wave delivers a first slice of each and stops at `partial` with named gaps. F-239 and
+  F-238 are attempted only if cheap (they are not part of the registered checks below; whatever is done is recorded in an
+  addendum, otherwise they stay `todo`). F-139/F-242 (co-simulation, FMI) are NOT attempted.
+- Clean-room: first principles only, no vendor code, text, data or names.
+- Baseline hashes (`crates/rcfd-api/tests/baseline_hashes.rs`) stay bit-identical and are not re-recorded: nothing here touches
+  a numerical kernel; the study runner calls the existing `Simulation` and `runctl::drive` unchanged, and a case without a
+  `study` section never enters it.
+- Schema additions are additive with explicit unset sentinels (empty list, `""`, 0).
 
 ## Decisions
 
 ### D1 Layout and shared files
 
-New: `rcfd-api::study` (planning, running, tables), CLI file `rcfd-cli/src/cmd_study.rs` (command `rcfd study`), the package
-`python/rcfd` with tests under `python/tests`, a Rust integration test that runs those with the system Python. Shared files get
-small targeted edits only, re-read before editing: one `.field("study", ...)` line in `schema.rs`, one `out.extend(...)` in
-`case.rs` (static checks), one `pub mod` in `lib.rs`, one dispatch line and usage text in `rcfd-cli/src/main.rs`.
+New:
+
+- `rcfd-api::study` (planning, running, tables);
+- CLI file `rcfd-cli/src/cmd_study.rs` (command `rcfd study`);
+- the package `python/rcfd` with tests under `python/tests`;
+- a Rust integration test that runs those with the system Python.
+
+Shared files get small targeted edits only, re-read before editing:
+
+- one `.field("study", ...)` line in `schema.rs`;
+- one `out.extend(...)` in `case.rs` (static checks);
+- one `pub mod` in `lib.rs`;
+- one dispatch line and usage text in `rcfd-cli/src/main.rs`.
 
 ### D2 The `study` section
 
@@ -39,79 +62,136 @@ strings = []                    # list: string values (used instead of values wh
 start = 0.0  stop = 0.0  count = 0   # linspace / logspace
 ```
 
-Sweep kinds. `list`: the given values in the given order. `linspace`: `count >= 1` values, `start + (stop - start) * i / (count - 1)`
-for `i < count - 1` and exactly `stop` for the last (a single value is `start`). `logspace`: geometric progression between the two
-actual values (not exponents): `start * (stop / start)^(i / (count - 1))`, last exactly `stop`, `start > 0` and `stop > 0`. A
-value that is integral and whose target setting is an integer is passed as an integer (`mesh.nx` swept by a list `[8, 16]` works).
+Sweep kinds:
 
-Design points. Parameter names are sorted lexicographically. `grid`: row-major with the first (alphabetical) parameter slowest;
-`zip`: point i takes entry i of every parameter. The point index (0-based) is the position in this order and is the only ordering
-key of every output. A point is the base case plus the overrides applied in parameter-name order with `Case::set`, exactly the
-`--set` mechanism of `rcfd run` (so the two agree by construction), then `semantic_errors`.
+* `list`: the given values in the given order.
+* `linspace`: `count >= 1` values, `start + (stop - start) * i / (count - 1)` for `i < count - 1` and exactly `stop` for the last
+  (a single value is `start`).
+* `logspace`: geometric progression between the two actual values (not exponents):
+  `start * (stop / start)^(i / (count - 1))`, last exactly `stop`, `start > 0` and `stop > 0`.
 
-Static checks (all located, collected together, exit 3, nothing runs and no output directory is created): unknown setting path
-(`study.parameters.<n>.path`), a value of the wrong type for that path (`study.parameters.<n>.values.<i>` or `.strings.<i>`),
-empty path, empty sweep, `count` below 1 or missing for linspace/logspace, logspace with non-positive ends, non-finite numbers,
-`values` and `strings` both non-empty, `zip` with unequal lengths (`study.combine`), unknown output report name (`study.outputs.<i>`),
-no parameters at all, `parallel` below 1, two parameters with the same path (`study.parameters.<n>.path`). A value that passes
-the type check but makes a point unrunnable (build error, semantic error, mesh failure, divergence) is NOT a static error: it is a
-failed row (D4). A `chain` in the base case is ignored by the study (the base case runs alone); this is a named gap.
+A value that is integral and whose target setting is an integer is passed as an integer (`mesh.nx` swept by a list `[8, 16]`
+works).
+
+Design points. Parameter names are sorted lexicographically.
+
+* `grid`: row-major with the first (alphabetical) parameter slowest.
+* `zip`: point i takes entry i of every parameter.
+
+The point index (0-based) is the position in this order and is the only ordering key of every output. A point is the base case
+plus the overrides applied in parameter-name order with `Case::set`, exactly the `--set` mechanism of `rcfd run` (so the two agree
+by construction), then `semantic_errors`.
+
+Static checks (all located, collected together, exit 3, nothing runs and no output directory is created):
+
+* unknown setting path (`study.parameters.<n>.path`);
+* a value of the wrong type for that path (`study.parameters.<n>.values.<i>` or `.strings.<i>`);
+* empty path;
+* empty sweep;
+* `count` below 1 or missing for linspace/logspace;
+* logspace with non-positive ends;
+* non-finite numbers;
+* `values` and `strings` both non-empty;
+* `zip` with unequal lengths (`study.combine`);
+* unknown output report name (`study.outputs.<i>`);
+* no parameters at all;
+* `parallel` below 1;
+* two parameters with the same path (`study.parameters.<n>.path`).
+
+A value that passes the type check but makes a point unrunnable (build error, semantic error, mesh failure, divergence) is NOT a
+static error: it is a failed row (D4). A `chain` in the base case is ignored by the study (the base case runs alone); this is a
+named gap.
 
 ### D3 Running
 
 `rcfd study <case> [--out dir] [--parallel n] [--resume] [--max-new-points n] [--no-fields] [--list] [--json] [--set path=json]...`
-(`--set` applies to the base case before the sweep; `--parallel` overrides `study.parallel`; `--list` prints the design points
-and exits 0 without running; `--max-new-points n` stops after n newly run points, state `partial`, for chunked and tested resume).
+
+* `--set` applies to the base case before the sweep.
+* `--parallel` overrides `study.parallel`.
+* `--list` prints the design points and exits 0 without running.
+* `--max-new-points n` stops after n newly run points, state `partial`, for chunked and tested resume.
+
 Each point: build `Simulation`, mesh quality, setup rules, `runctl::drive` with the case's own limits, `write_results` into
 `<out>/points/pNNNN/` (unless `write_results` is false), then the values of the chosen reports (`Simulation::report_values`) are
-read. `parallel > 1` runs points on that many scoped OS threads taking indices from an atomic counter; results are stored by
-index, so the table does not depend on the schedule. Every point is wrapped in `catch_unwind`; a panic is a failed row with exit 1.
+read.
+
+`parallel > 1` runs points on that many scoped OS threads taking indices from an atomic counter; results are stored by index, so
+the table does not depend on the schedule. Every point is wrapped in `catch_unwind`; a panic is a failed row with exit 1.
+
 Output dir default: `study` in the current directory.
 
 ### D4 Table, failure isolation, exit code, resume
 
 Files in the output dir: `table.json` and `table.csv`, written (atomically, via a temporary file and rename) after every completed
 point with the completed rows sorted by point index, and finally with all rows. No wall-clock or thread number enters them, so
-they are byte-identical for any `parallel`. Row (JSON): `point`, `parameters` (name to value), `status` (`ok` or `failed`),
-`exit_code`, `state`, `iterations`, `fingerprint`, `reports` (name to number or null), `message`. CSV: header
-`point,<parameter names>,status,exit_code,state,iterations,<output names>,message`; numbers by the shortest round-trip decimal
-(the JSON number text); null as an empty cell; the message quoted with `"` doubled when it contains `,` `"` or a newline.
-`fingerprint` is a 64-bit FNV-1a hash (16 hex digits) of the resolved settings JSON of the point with the `study` section
-removed. `status` is `ok` only for exit code 0; the report values of a non-converged or diverged point are still recorded.
+they are byte-identical for any `parallel`.
+
+* Row (JSON): `point`, `parameters` (name to value), `status` (`ok` or `failed`), `exit_code`, `state`, `iterations`,
+  `fingerprint`, `reports` (name to number or null), `message`.
+* CSV: header `point,<parameter names>,status,exit_code,state,iterations,<output names>,message`; numbers by the shortest
+  round-trip decimal (the JSON number text); null as an empty cell; the message quoted with `"` doubled when it contains `,` `"`
+  or a newline.
+* `fingerprint` is a 64-bit FNV-1a hash (16 hex digits) of the resolved settings JSON of the point with the `study` section
+  removed.
+* `status` is `ok` only for exit code 0; the report values of a non-converged or diverged point are still recorded.
 
 Failure isolation: a point that fails (any non-zero exit code of the run-control contract, an invalid point, a panic) gives a row
-and the other points run. Study exit code: 0 when every point has exit 0; otherwise the exit code of the lowest-index failed
-point (the rule of `chain`: the contract's per-run codes 1 build/IO failure or panic, 3 invalid settings, 4 mesh, 5 not
-converged, 6 diverged); 3 for static sweep errors; 2 for usage errors; `partial` (a `--max-new-points` stop, with no failed
-row) is exit 0 and the final line says `partial`. The final stdout line with `--json` is one object: `format: "rcfd-study"`,
-`points`, `run`, `skipped`, `failed`, `state` (`finished`, `failed`, `partial`), `exit_code`, `table`.
+and the other points run.
 
-Resume (`--resume`): rows of an existing `table.json` in the output dir whose `status` is `ok` and whose `fingerprint` equals the
-fingerprint of the planned point (and whose parameter values are equal) are kept and not run; failed or missing points are run
-again; rows of the old table that no longer match any planned point are dropped. Without `--resume` an existing table is
-overwritten and all points run.
+Study exit code:
+
+* 0 when every point has exit 0;
+* otherwise the exit code of the lowest-index failed point (the rule of `chain`: the contract's per-run codes 1 build/IO failure
+  or panic, 3 invalid settings, 4 mesh, 5 not converged, 6 diverged);
+* 3 for static sweep errors;
+* 2 for usage errors;
+* `partial` (a `--max-new-points` stop, with no failed row) is exit 0 and the final line says `partial`.
+
+The final stdout line with `--json` is one object: `format: "rcfd-study"`, `points`, `run`, `skipped`, `failed`, `state`
+(`finished`, `failed`, `partial`), `exit_code`, `table`.
+
+Resume (`--resume`):
+
+* Rows of an existing `table.json` in the output dir whose `status` is `ok` and whose `fingerprint` equals the fingerprint of the
+  planned point (and whose parameter values are equal) are kept and not run.
+* Failed or missing points are run again.
+* Rows of the old table that no longer match any planned point are dropped.
+
+Without `--resume` an existing table is overwritten and all points run.
 
 ### D5 Python package (F-083)
 
-Feasibility check (done before the decision): the workspace sets `unsafe_code = "forbid"` for every crate
-and PyO3's macros expand to unsafe code, so an `rcfd-py` crate would have to opt out of the workspace lints; PyO3 and maturin are
-not in the offline cargo registry cache; the only Python on this machine is a Microsoft Store Python 3.9 whose install lives in
-the protected `WindowsApps` directory (linking against `python39.lib` and the unrelocatable DLL from a build is fragile there);
-there is no wheel tooling pinned. Decision: deliver the pure-Python package `python/rcfd` driving the CLI (`rcfd run`, `check`,
-`study`, `schema`) as subprocesses with an argument list (never a shell), and name the PyO3 extension (in-process access to
-fields without VTU round trips, wheel packaging, numpy zero-copy) as a gap; F-083 stays `partial`. numpy is used when importable
-(fields as arrays) and everything works without it (lists).
+Feasibility check (done before the decision):
 
-API: `rcfd.find_binary()` (argument, `RCFD_BIN` environment variable, then the workspace `target` dirs; a clear error otherwise),
-`rcfd.Case.load(path)` / `Case.from_dict`, `case.get(path)`, `case.set(path, value)` (validates immediately through the Rust
-validator, raising `SettingsError` with `path` and `message` as the CLI prints them), `case.settings` (resolved tree from
-`--print-settings`), `case.check()` (`rcfd check --json`), `case.run(out_dir, **limits)` returning a `RunResult` with `exit_code`,
-`state`, `reports` (last value of every report), `field(name)` (parsed from `solution.vtu`, ASCII DataArray) and
-`monitors`; `rcfd.study(case, parameters, outputs, combine, parallel, out, resume)` returning a table; `rcfd.schema()` (the JSON
-schema from `rcfd schema`). The process environment is passed through unchanged except that nothing is added; no secret is read or
-written by the package, the package never prints or stores the environment, and `python -I` is able to import it (no use of the
-current directory or `PYTHONPATH`; the test adds the package directory with `sys.path` inside the script it runs, not through the
-environment).
+* the workspace sets `unsafe_code = "forbid"` for every crate and PyO3's macros expand to unsafe code, so an `rcfd-py` crate would
+  have to opt out of the workspace lints;
+* PyO3 and maturin are not in the offline cargo registry cache;
+* the only Python on this machine is a Microsoft Store Python 3.9 whose install lives in the protected `WindowsApps` directory
+  (linking against `python39.lib` and the unrelocatable DLL from a build is fragile there);
+* there is no wheel tooling pinned.
+
+Decision: deliver the pure-Python package `python/rcfd` driving the CLI (`rcfd run`, `check`, `study`, `schema`) as subprocesses
+with an argument list (never a shell), and name the PyO3 extension (in-process access to fields without VTU round trips, wheel
+packaging, numpy zero-copy) as a gap; F-083 stays `partial`. numpy is used when importable (fields as arrays) and everything
+works without it (lists).
+
+API:
+
+* `rcfd.find_binary()` (argument, `RCFD_BIN` environment variable, then the workspace `target` dirs; a clear error otherwise);
+* `rcfd.Case.load(path)` / `Case.from_dict`;
+* `case.get(path)`;
+* `case.set(path, value)` (validates immediately through the Rust validator, raising `SettingsError` with `path` and `message` as
+  the CLI prints them);
+* `case.settings` (resolved tree from `--print-settings`);
+* `case.check()` (`rcfd check --json`);
+* `case.run(out_dir, **limits)` returning a `RunResult` with `exit_code`, `state`, `reports` (last value of every report),
+  `field(name)` (parsed from `solution.vtu`, ASCII DataArray) and `monitors`;
+* `rcfd.study(case, parameters, outputs, combine, parallel, out, resume)` returning a table;
+* `rcfd.schema()` (the JSON schema from `rcfd schema`).
+
+The process environment is passed through unchanged except that nothing is added; no secret is read or written by the package,
+the package never prints or stores the environment, and `python -I` is able to import it (no use of the current directory or
+`PYTHONPATH`; the test adds the package directory with `sys.path` inside the script it runs, not through the environment).
 
 Overrides travel to the CLI as `--set path=<JSON>` with `json.dumps(value, allow_nan=False)` (Python floats round-trip exactly),
 and `case.set` on a loaded case records the override list; running a modified case passes the same `--set` list, which makes the
@@ -180,10 +260,17 @@ the addendum.
   `SKIPPED: no python interpreter found` to stderr and returns without asserting (the skip is visible in the test output, not a
   silent pass); if the `rcfd` binary of the workspace is not built the test builds nothing and fails with a clear message.
 
-Not delivered by this wave, named up front: in-process PyO3 bindings and wheel (D5), adaptive/optimising studies and design
-exploration, studies of chains, a distributed or queueing runner, expression-valued (named expression) sweep parameters,
-parametrising mesh file imports other than by path, resuming a single interrupted point (resume is per completed point), the
-service/MCP exposure of studies (the CLI and the Python package only), F-139 and F-242.
+Not delivered by this wave, named up front:
+
+* in-process PyO3 bindings and wheel (D5);
+* adaptive/optimising studies and design exploration;
+* studies of chains;
+* a distributed or queueing runner;
+* expression-valued (named expression) sweep parameters;
+* parametrising mesh file imports other than by path;
+* resuming a single interrupted point (resume is per completed point);
+* the service/MCP exposure of studies (the CLI and the Python package only);
+* F-139 and F-242.
 
 ## Addendum: measured results and deviations (written after the runs; no registered limit was changed)
 
@@ -193,21 +280,22 @@ Everything below was measured with the release build (`cargo test --release -p r
 
 ### Deviations from the registered set-up (disclosed)
 
-1. S1 set-up defect (my error): the registered closed form assumed a unit depth. `box_2d` is one cell thick with depth `lx / nx`, so
-   the exact heat flow is `k * ly * (lx/nx) * dT / lx = k ly dT / nx`, independent of `lx`. The registered formula is kept as the
-   ignored test `s1_unit_depth_known_miss` (measured: relative error 0.9969 at the worst point, i.e. a miss by the factor
-   `lx/nx`); the corrected test `s1_corrected_depth` takes the depth from the mesh (total cell volume divided by `lx * ly`), not from
-   the formula under test. The reported value is negative for this case (sign convention of the report not investigated): the comparison is on the absolute
-   value as registered.
-2. The registered solver setting `tolerance_u = 1e-12` never meets the residual target on this case (the energy residual stalls at
-   about 1e-11; the run stops at the 400-iteration cap, exit 5, `not_converged`), so every point of the S1 study has status `failed`
-   with exit 5 at that tolerance, which is also a demonstration of the exit-code contract. `s1_corrected_depth` is run at both
-   tolerances (identical q to the digit shown below); S2 and S3 were first run only at 1e-9, which I switched to after the 1e-12 grid ended at the iteration cap
-   (a set-up change made after seeing that outcome, not before); S4-S6 and the Python tests also use `tolerance_u = 1e-9` (converges in 4
-   iterations, exit 0). The registered 1e-12 versions were added afterwards (second addendum below).
-3. S7: the generator is `channel_2d` (patches `inlet`, `outlet`, `walls`), not `box_2d` with `ymin/ymax`, and `depth = 0.1`; the
-   inlet velocity is a vector setting, which the scalar `values` list cannot express, so the parameter kind `list` got an additive key
-   `json` (list of JSON texts) beside `values` and `strings`. This extends D2.
+1. S1 set-up defect (my error): the registered closed form assumed a unit depth. `box_2d` is one cell thick with depth `lx / nx`,
+   so the exact heat flow is `k * ly * (lx/nx) * dT / lx = k ly dT / nx`, independent of `lx`. The registered formula is kept as
+   the ignored test `s1_unit_depth_known_miss` (measured: relative error 0.9969 at the worst point, i.e. a miss by the factor
+   `lx/nx`). The corrected test `s1_corrected_depth` takes the depth from the mesh (total cell volume divided by `lx * ly`), not
+   from the formula under test. The reported value is negative for this case (sign convention of the report not investigated);
+   the comparison is on the absolute value as registered.
+2. The registered solver setting `tolerance_u = 1e-12` never meets the residual target on this case: the energy residual stalls
+   at about 1e-11 and the run stops at the 400-iteration cap (exit 5, `not_converged`). Every point of the S1 study therefore has
+   status `failed` with exit 5 at that tolerance, which is also a demonstration of the exit-code contract. `s1_corrected_depth`
+   is run at both tolerances (identical q to the digit shown below). S2 and S3 were first run only at 1e-9, which I switched to
+   after the 1e-12 grid ended at the iteration cap (a set-up change made after seeing that outcome, not before). S4-S6 and the
+   Python tests also use `tolerance_u = 1e-9` (converges in 4 iterations, exit 0). The registered 1e-12 versions were added
+   afterwards (second addendum below).
+3. S7: the generator is `channel_2d` (patches `inlet`, `outlet`, `walls`), not `box_2d` with `ymin/ymax`, and `depth = 0.1`. The
+   inlet velocity is a vector setting, which the scalar `values` list cannot express, so the parameter kind `list` got an
+   additive key `json` (list of JSON texts) beside `values` and `strings`. This extends D2.
 4. D2 said sweep paths are applied "exactly like `--set`"; to make `rcfd study --set study.parameters.<n>.path=...` (used by the Python
    helper) work, `Case::set` now creates named entries nested deeper than one level (it only handled `<collection>.<name>.<field>`).
    Existing paths behave as before (baseline hashes unchanged).
@@ -242,12 +330,12 @@ Everything below was measured with the release build (`cargo test --release -p r
 | P7 | visible skip without Python | the harness test ran the Python tests (11 after review); the skip branch prints `SKIPPED: ...` (not exercised on this machine) | met (skip path untested) |
 
 S7 diagnosis (not tuned): at 10 cells across the gap the pressure deficit is 1.9 percent and it falls to 0.29 percent at 20 cells
-(`poiseuille_error_decreases_with_refinement`, a diagnostic added after the miss, not a replacement). The probable cause (consistent with the
-refinement trend, not isolated by a separate experiment) is the first-order
-treatment of the wall in the cell-centred finite-volume scheme (wall shear from `u_P / (dy/2)` of a parabolic profile is low by
-`dy / (2 h)`, so the discrete channel is slightly more conductive), plus half a cell of pressure extrapolation at the inlet face
-(about 0.5 percent of `dp`). The estimate in S7 ("a few tenths of a percent") ignored the wall-treatment term. The sweep is also
-nearly linear in `U` (dp/U constant to 1e-3 over three values; the convective terms break exactness), also unregistered.
+(`poiseuille_error_decreases_with_refinement`, a diagnostic added after the miss, not a replacement). The probable cause
+(consistent with the refinement trend, not isolated by a separate experiment) is the first-order treatment of the wall in the
+cell-centred finite-volume scheme (wall shear from `u_P / (dy/2)` of a parabolic profile is low by `dy / (2 h)`, so the discrete
+channel is slightly more conductive), plus half a cell of pressure extrapolation at the inlet face (about 0.5 percent of `dp`).
+The estimate in S7 ("a few tenths of a percent") ignored the wall-treatment term. The sweep is also nearly linear in `U` (dp/U
+constant to 1e-3 over three values; the convective terms break exactness), also unregistered.
 
 ## Second addendum: gaps closed after review
 

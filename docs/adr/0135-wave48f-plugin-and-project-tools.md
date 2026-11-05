@@ -1,15 +1,32 @@
 # ADR 0135: Wave 48F, the Claude Code plugin: project tools in `rcfd-mcp`, skills, slash commands, file watching and edit conflicts
 
-Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). The server part needs ADR 0130 (48A) only and can run in
-parallel with ADR 0131 (48B); the conflict part needs the 48B case editor. House rules as in ADR 0130. Parent: plan sections 2 (tools
-in Claude Code outside the app; edits there appear live in the app), 3 (L7), 7 (plugins, MCP). Roadmap: F-267.
+Status: **ACCEPTED 2026-10-28** (the maintainer accepted the ADR and took the recommended option of every open decision
+W48-1 to W48-16, scope cut (a)) (scoping only; nothing implemented or run). The server part needs ADR 0130 (48A) only and can
+run in parallel with ADR 0131 (48B); the conflict part needs the 48B case editor.
+
+Plan section 2 asks for tools in Claude Code outside the app, with edits there appearing live in the app. The accepted options
+put the project tools in `rcfd-mcp` behind `--project` (W48-12 (a)), start the server from the plugin's `.mcp.json` with
+`rcfd-mcp` found on PATH (W48-13 (a)), package a new plugin `rcfd` in `clients/claude-plugin/` (W48-14 (a)), and handle edit
+conflicts with a base hash and a cooperative lock (W48-15 (a)). The first addendum reports F1 to F5 and F8 to F13 as passed,
+with no known miss. F6 and F7 need the Studio and remain not run; a library-level F6 stand-in, reported and not registered, lost
+0 updates. Amendment 3 records the maintainer's answers to the addendum questions, and Addendum 2 reports its checks M1, R1 and
+E1 as passed. Also not run: the Not-in-CI items, the gate, Linux and the build-cost measurement of the Risks section. An
+existing `rcfd-mcp` test, `design_tests::t2_paths_are_sandboxed_and_names_are_restricted`, fails on the host of these runs
+because `%TEMP%\x` exists, and was skipped in the first addendum's runs. The marketplace owner name ("rcfd maintainers") is
+still a placeholder.
+
+Rules and parents:
+
+* House rules as in ADR 0130.
+* Parent: plan sections 2 (tools in Claude Code outside the app; edits there appear live in the app), 3 (L7), 7 (plugins, MCP).
+* Roadmap: F-267.
 
 ## Context (read at main 1248a76)
 
 * `rcfd-mcp` (`crates/rcfd-mcp/src/lib.rs`, `main.rs`): a stdio JSON-RPC MCP server over `rcfd_api::service::Service`, std threads and
   `serde_json` only. Tools are a static list (`fn tools()`, line 69) with access classes `read`, `mutate`, `execute`, `write_files`
-  (`src/policy.rs`); `tools/list` marks `readOnlyHint` and `_meta."rcfd/access"`; `initialize` declares `tools.listChanged: false`
-  (line 957); file paths are sandboxed by `--root` (error 1004). The 33 tools ([`docs/mcp-tools.md`](../mcp-tools.md)) work on
+  (`src/policy.rs`). `tools/list` marks `readOnlyHint` and `_meta."rcfd/access"`. `initialize` declares `tools.listChanged: false`
+  (line 957). `--root` sandboxes file paths (error 1004). The 33 tools ([`docs/mcp-tools.md`](../mcp-tools.md)) work on
   in-memory sessions; none knows project folders, the runner or the time-series store.
 * `rcfd-mcp` is a dependency of `rcfd-assistant` and of the frozen `rcfd-gui` ([`docs/architecture.md`](../architecture.md)). Whatever
   `rcfd-mcp` depends on, both of them build.
@@ -47,11 +64,14 @@ in Claude Code outside the app; edits there appear live in the app), 3 (L7), 7 (
   `rcfd-mcp`; only the new crate depends on the project crates.
 * (c) As (a), plus a cargo feature `gpu-render` that adds a 3D render tool through `rcfd-render`.
 
-Trade-offs: (a) keeps one server binary, which is what the plan says ("extending `rcfd-mcp`"), and adds three small std-only crates to
-the build of `rcfd-assistant` and `rcfd-gui` (no third-party dependency beyond `miniz_oxide`, already compiled); (b) keeps those builds
-as they are but adds a crate and an extension API; (c) would put wgpu into the build of everything that enables the feature and makes
-the MCP server need a GPU for one tool. **Recommendation: (a)**; a 3D render tool waits for wave 49 and goes into a separate binary if
-it needs wgpu.
+Trade-offs:
+
+* (a) keeps one server binary, which is what the plan says ("extending `rcfd-mcp`"), and adds three small std-only crates to the
+  build of `rcfd-assistant` and `rcfd-gui` (no third-party dependency beyond `miniz_oxide`, already compiled).
+* (b) keeps those builds as they are but adds a crate and an extension API.
+* (c) would put wgpu into the build of everything that enables the feature and makes the MCP server need a GPU for one tool.
+
+**Recommendation: (a)**; a 3D render tool waits for wave 49 and goes into a separate binary if it needs wgpu.
 
 ### W48-13: how the plugin finds and starts the server
 
@@ -60,13 +80,18 @@ it needs wgpu.
 * (b) Ship built binaries in the plugin's folder and call `${CLAUDE_PLUGIN_ROOT}/bin/rcfd-mcp`.
 * (c) The Studio writes a project-scoped `.mcp.json` into each project folder.
 
-Trade-offs: (b) contradicts "a release has no binaries" and needs per-platform builds in the plugin; (c) puts a control file into the
-project (the allow-list refuses `.mcp.json`, and ADR 0134 W48-10 treats such files as untrusted), and project servers load without a
-prompt in `-p`. (a) needs `rcfd-mcp` installed (built from source, as the README says for everything), and for the run tools also
-`rcfd-runner` next to it (`Client::with_default_runner`) and `rcfd` next to the runner or named by `RCFD_BIN` (ADR 0128 finding 1):
-the install layout is the three binaries in one folder on PATH, as `cargo install` or a release build directory gives. The server takes its project
-from the argument, never from its working directory, which is not documented. **Recommendation: (a)**; the server refuses to start when
-`--project` is not a project (located error naming the path), so a session outside a project folder simply has no project tools.
+Trade-offs:
+
+* (b) contradicts "a release has no binaries" and needs per-platform builds in the plugin.
+* (c) puts a control file into the project (the allow-list refuses `.mcp.json`, and ADR 0134 W48-10 treats such files as
+  untrusted), and project servers load without a prompt in `-p`.
+* (a) needs `rcfd-mcp` installed (built from source, as the README says for everything), and for the run tools also
+  `rcfd-runner` next to it (`Client::with_default_runner`) and `rcfd` next to the runner or named by `RCFD_BIN` (ADR 0128
+  finding 1): the install layout is the three binaries in one folder on PATH, as `cargo install` or a release build directory
+  gives. The server takes its project from the argument, never from its working directory, which is not documented.
+
+**Recommendation: (a)**; the server refuses to start when `--project` is not a project (located error naming the path), so a
+session outside a project folder has no project tools.
 
 ### W48-14: plugin packaging and distribution
 
@@ -78,9 +103,13 @@ from the argument, never from its working directory, which is not documented. **
   names with `-` that `AllowRule::Tool` refuses.
 * (c) A separate public repository for the plugin.
 
-Trade-offs: (c) is the usual route for a public plugin, but the repository is private now and a second repository splits versions;
-(b) revives a demoted item. **Recommendation: (a)**; public distribution is decided when the repository's visibility is (the history
-rewrite and visibility are open items of their own).
+Trade-offs:
+
+* (c) is the usual route for a public plugin, but the repository is private now and a second repository splits versions.
+* (b) revives a demoted item.
+
+**Recommendation: (a)**; public distribution is decided when the repository's visibility is (the history rewrite and visibility
+are open items of their own).
 
 ### W48-15: edit conflict policy
 
@@ -93,9 +122,13 @@ rewrite and visibility are open items of their own).
 * (b) Last writer wins, with the replaced content kept in `.rcfd/backup/`.
 * (c) A lock held for the whole editing session: Claude cannot edit a file the Studio has open.
 
-Trade-offs: (b) never blocks but silently loses an edit until someone looks at the backup; (c) blocks the assistant whenever the user
-has a file open. **Recommendation: (a)**. Limits stated: the lock covers cooperating writers only; on Windows a non-cooperating writer can
-still replace the file between the check and the rename (the window is the duration of one rename).
+Trade-offs:
+
+* (b) never blocks but silently loses an edit until someone looks at the backup.
+* (c) blocks the assistant whenever the user has a file open.
+
+**Recommendation: (a)**. Limits stated: the lock covers cooperating writers only; on Windows a non-cooperating writer can still
+replace the file between the check and the rename (the window is the duration of one rename).
 
 ## Design (proposed, assuming the recommendations)
 
@@ -268,11 +301,18 @@ unchanged:
 
 ## Addendum: 48F server part results (2026-10-28, branch `worktree-agent-a3111463805750a3f`, debug builds on the gate host)
 
-Decisions applied as accepted: W48-12 (a), W48-13 (a), W48-14 (a), W48-15 (a). Base main 15b00ef. New workspace edges
-`rcfd-mcp -> rcfd-project, rcfd-runner, rcfd-tsstore, rcfd-post` and the dev-only `rcfd-mcp -> rcfd-claude` (all lower layers;
-`workspace_graph` 3 passed; `docs/architecture.md` updated). No new third-party crate. `rcfd-claude` and the Studio crate were
-not edited. The workspace gate was not run (the maintainer runs it); `rcfd-project` and `rcfd-mcp` were tested and linted alone,
-and `rcfd-assistant`, `rcfd-gui`, `rcfd-runner`, `rcfd-claude` pass `cargo check --all-targets`.
+No known miss. Not run here: F6, F7 (Studio), the "Not in CI" items (`claude plugin validate`, a real `--plugin-dir` session, the
+marketplace install), Linux, and the build-cost measurement of the Risks section (only an incremental `cargo check` of
+`rcfd-assistant` and `rcfd-gui`, 17.5 s, which is not a cost measurement).
+
+* Decisions applied as accepted: W48-12 (a), W48-13 (a), W48-14 (a), W48-15 (a).
+* Base: main 15b00ef.
+* New workspace edges: `rcfd-mcp -> rcfd-project, rcfd-runner, rcfd-tsstore, rcfd-post` and the dev-only
+  `rcfd-mcp -> rcfd-claude` (all lower layers; `workspace_graph` 3 passed; `docs/architecture.md` updated). No new third-party
+  crate.
+* `rcfd-claude` and the Studio crate were not edited.
+* The workspace gate was not run (the maintainer runs it). `rcfd-project` and `rcfd-mcp` were tested and linted alone, and
+  `rcfd-assistant`, `rcfd-gui`, `rcfd-runner`, `rcfd-claude` pass `cargo check --all-targets`.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -300,10 +340,6 @@ and `rcfd-assistant`, `rcfd-gui`, `rcfd-runner`, `rcfd-claude` pass `cargo check
 | F12 | `plugin.json` name `rcfd`, version = workspace; `.mcp.json` args with `${CLAUDE_PROJECT_DIR}`; skills valid; release check | as listed, 3 skills; `scripts/test_release_notes.py` 6 passed (4 version places, the new plugin alone named) | pass |
 | F12 control | a skill naming an unknown tool fails | refused naming `no_such_tool` | fails as required |
 | F13 | not a project: non-zero, names the path; a project answers `initialize` | exit 2, message names the folder; `initialize` and 50 tools | pass |
-
-No known miss. Not run here: F6, F7 (Studio), the "Not in CI" items (`claude plugin validate`, a real `--plugin-dir` session, the
-marketplace install), Linux, and the build-cost measurement of the Risks section (only an incremental `cargo check` of
-`rcfd-assistant` and `rcfd-gui`, 17.5 s, which is not a cost measurement).
 
 Deviations and notes:
 * The first run of the F8, F9 and F10 tests stopped in their set-up before measuring anything: the store helper gave the service a
@@ -338,11 +374,16 @@ Questions for the maintainer:
 
 ## Amendment 3 (2026-10-28, after the maintainer's answers to the addendum questions, before any run of the changes)
 
-Maintainer decisions (recommendations taken): (1) the runner also writes the final report values into `metrics.json`, additively,
-and `list_runs` and `compare_runs` use them; (2) no `RCFD_MCP` override, PATH only; (3) `--project` implies `--root <project>` when
-`--root` is not given; (4) `edit_case` refuses an edit that would need the whole case rewritten with every default spelled out;
-(5) marketplace name `rcfd` kept, the owner name "rcfd maintainers" stays a placeholder (open); (6) codes 1200, 1201, 1202
-confirmed. Written at main 64732bb before any code of these changes. Set-ups and limits:
+Maintainer decisions (recommendations taken):
+
+* (1) the runner also writes the final report values into `metrics.json`, additively, and `list_runs` and `compare_runs` use them;
+* (2) no `RCFD_MCP` override, PATH only;
+* (3) `--project` implies `--root <project>` when `--root` is not given;
+* (4) `edit_case` refuses an edit that would need the whole case rewritten with every default spelled out;
+* (5) marketplace name `rcfd` kept, the owner name "rcfd maintainers" stays a placeholder (open);
+* (6) codes 1200, 1201, 1202 confirmed.
+
+Written at main 64732bb before any code of these changes. Set-ups and limits:
 
 1. **Report values.** `rcfd-runner` adds one key to the `metrics.json` it writes at a run's end: `reports`, an object
    `{report name: final value}`. The names are the keys of `monitors` in the run's last `residuals.jsonl` line (the reports, 48A

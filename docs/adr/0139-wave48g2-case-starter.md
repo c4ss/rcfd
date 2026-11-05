@@ -1,12 +1,29 @@
 # ADR 0139: Wave 48G item 2, case starter: new case files from the shipped examples
 
-Status: **PROPOSED 2026-10-28, implemented; results in the addendum; amendment 2 with ADR 0147** (sub-wave 48G, "first run to first picture", item 2 of 4;
-the other three items are the mesh preview from a case, the store-fields default and one-click start-and-follow, done on other
-branches). Checks registered below before any run of them. Written at main f3bf005. House rules as in ADR 0130: limits are fixed before
-the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit intact; a defective set-up is corrected
-by an amendment written before the corrected run; defaults of existing code stay bit-identical;
-`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded. Parents: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) section
-8 (project folder contract) and ADR 0131 (Studio shell: browser, case editor, worker threads, conflict-safe saves).
+Status: **PROPOSED 2026-10-28, implemented; results in the addendum; amendment 2 with ADR 0147**. Checks registered below before
+any run of them. Written at main f3bf005.
+
+The maintainer reported that the Studio has no way to create a case: a case reaches `<project>/cases/` only when the user copies a
+file there by hand. This ADR adds "New case from example...", which writes a shipped example's bytes unchanged to
+`cases/<name>.toml` and never replaces a file. As registered it offers the 9 TOML files that open and validate in the editor, and
+no "New empty case", because the all-defaults case does not validate. Run 1 passed 23 of 24 tests and stopped in a defective set-up
+of CS1's validate-stage control; amendment 1 corrected it, run 2 passed 24 of 24, and the addendum records no known miss. A defect
+found in review after those runs (the dialog could stay closed after a click on the Project panel's button until the mouse moved)
+was fixed, and the re-run passed 25 of 25. Amendment 2, the maintainer's decision, offers 10 examples by adding
+`channel/profile_inlet.toml` with its table, and amendment 3, also the maintainer's, makes a transient example's run length say
+"simulated time". The changed checks of both amendments had not run when they were written, and the addendum's numbers are for the
+9 examples. Not run: a person looking at the window, a debug build of the new tests, Linux, the workspace gate, workspace-wide
+clippy and `cargo deny`.
+
+Rules and parents:
+
+* Sub-wave 48G, "first run to first picture", item 2 of 4. The other three items are the mesh preview from a case, the
+  store-fields default and one-click start-and-follow, done on other branches.
+* House rules as in ADR 0130: limits are fixed before the registered runs; a missed limit becomes an ignored `*_known_miss` test
+  with the limit intact; a defective set-up is corrected by an amendment written before the corrected run; defaults of existing
+  code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+* Parents: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 8 (project folder contract) and ADR 0131 (Studio shell:
+  browser, case editor, worker threads, conflict-safe saves).
 
 ## Context (read at main f3bf005)
 
@@ -209,10 +226,10 @@ adding examples to `cases/`; the mesh preview, store default and start-and-follo
 
 ## Addendum: results (2026-10-28, branch `worktree-agent-a38bcefbdba6707af`, release build on the gate host)
 
-Commits on main f3bf005: 8b78d17 (this ADR, registration), b06f4a5 (implementation and tests), 0761022 (amendment 1), then this
-addendum. Run 1 (at b06f4a5): 23 of 24 tests passed; the CS1 validate-stage control's set-up was defective (amendment 1). Run 2 (at
+Run 1 (at b06f4a5): 23 of 24 tests passed; the CS1 validate-stage control's set-up was defective (amendment 1). Run 2 (at
 0761022, after the amendment): 24 of 24 passed. The numbers below are from run 2. Run 1's numbers were the same wherever run 1 got
-that far, except the timings (CS13 7.386 ms, its control 212.327 ms).
+that far, except the timings (CS13 7.386 ms, its control 212.327 ms). Commits on main f3bf005: 8b78d17 (this ADR, registration),
+b06f4a5 (implementation and tests), 0761022 (amendment 1), then this addendum.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|

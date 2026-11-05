@@ -1,16 +1,33 @@
 # ADR 0142: Wave 48H, finished example projects: a wind tunnel and a quick start that open straight to a picture
 
 Status: **PROPOSED 2026-10-28** (checks registered before any counted run; amendment 1 before the corrected
-post-processing; results in the addendum: every registered limit met except two predicted known misses). Written at main f558285
-(waves 47 and 48, the 48G case starter and store-fields default, the Linux gate fixes). Job 5 of the "first run to first
-picture" work; jobs 1 (mesh preview from a case), 3 (store fields by default, merged as ADR 0140) and 4 (one-click start
-and follow) are done on other branches and edit the Studio, which this job does not. House rules of ADRs 0110-0140 apply:
-limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
-intact; a defective set-up is corrected by an amendment registered before the corrected run; defaults of existing code
-stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; the crate graph stays acyclic.
-Parents: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 8 (project folder contract), ADR 0130 (run-record
-contract), ADR 0132 (viewport), ADR 0133 (run control, `output.store_precision`), ADR 0139 (shipped case files), ADR 0092
-(registry set-ups of the benchmark descriptors), ADR 0121 (design ledger).
+post-processing; results in the addendum: every registered limit met except two predicted known misses). Written at main
+f558285 (waves 47 and 48, the 48G case starter and store-fields default, the Linux gate fixes).
+
+The Studio showed nothing on first open, because a new project is empty. This job adds two finished example projects under
+`example-projects/`, wind-tunnel and quick-start, built to open straight to a picture, with 10 committed runs, a
+regeneration script and a staleness test. Amendment 1 corrected D8's defective shedding window; the post-processing ran
+again on the counted runs, which were not repeated. The addendum reports every registered limit met except two predicted
+known misses: E1 for the 2 aerofoil cases in the Studio's case editor, and G3's crossing count for the Re 100 cylinder (6
+upward crossings, limit 7). None of the runs is a validation; the aerofoil runs end at their iteration cap and give a lift
+slope about 30 % below the slope of Ladson's data as the repository reads it. Not run: the "Not in CI" checklist, H2 (the
+real Studio binary), Linux, the workspace gate, workspace-wide clippy and `cargo deny`. The addendum also records a defect
+found, not fixed: a transient run whose `solver.end_time` is not reached exactly by a whole number of steps ends on a
+remainder step with spoiled pressure, and that state is its final result. Later notes record the maintainer's decision on
+questions 2 and 11 (ADR 0144 amendment 3, which un-ignored E1's test), two added aerofoil cases (ADR 0155), and G1's
+aerofoil expectation becoming an ignored known miss (ADR 0169).
+
+Rules and parents:
+
+* Job 5 of the "first run to first picture" work. Jobs 1 (mesh preview from a case), 3 (store fields by default, merged as
+  ADR 0140) and 4 (one-click start and follow) are done on other branches and edit the Studio, which this job does not.
+* House rules of ADRs 0110-0140 apply: limits are fixed here before the registered runs; a missed limit becomes an ignored
+  `*_known_miss` test with the limit intact; a defective set-up is corrected by an amendment registered before the
+  corrected run; defaults of existing code stay bit-identical; `crates/rcfd-api/tests/baseline_hashes.rs` is not
+  re-recorded; the crate graph stays acyclic.
+* Parents: [`docs/ui-restart-plan.md`](../ui-restart-plan.md) section 8 (project folder contract), ADR 0130 (run-record
+  contract), ADR 0132 (viewport), ADR 0133 (run control, `output.store_precision`), ADR 0139 (shipped case files), ADR 0092
+  (registry set-ups of the benchmark descriptors), ADR 0121 (design ledger).
 
 ## Problem (reported by the maintainer)
 
@@ -20,24 +37,25 @@ than one problem per project; a regeneration script; a staleness test; this ADR.
 
 ## Context (read at main f558285)
 
-* Runnable case files in `cases/`: the nine TOML files of ADR 0139 plus `channel/profile_inlet.toml`. None is a cavity,
-  heated cavity, cylinder, aerofoil or step; for those `cases/` holds benchmark descriptors (`case.json`) only, which
-  `rcfd run` refuses. The task names "the lid-driven cavity and the heated cavity (runnable TOMLs from the 48G list)":
-  that list has no such files (deviation 1).
-* Mesh generators of the case schema (`crates/rcfd-api/src/schema.rs`): `cylinder_ogrid` and the box family, no aerofoil
-  and no step generator. ADR 0092's registry set-ups (`crates/rcfd-api/tests/registry_setups_w39a.rs`) build the
+* The runnable case files in `cases/` are the nine TOML files of ADR 0139 plus `channel/profile_inlet.toml`. None is a
+  cavity, heated cavity, cylinder, aerofoil or step; for those `cases/` holds benchmark descriptors (`case.json`) only,
+  which `rcfd run` refuses. The task names
+  "the lid-driven cavity and the heated cavity (runnable TOMLs from the 48G list)", but that list has no such files
+  (deviation 1).
+* The case schema's mesh generators (`crates/rcfd-api/src/schema.rs`) are `cylinder_ogrid` and the box family, with no
+  aerofoil and no step generator. ADR 0092's registry set-ups (`crates/rcfd-api/tests/registry_setups_w39a.rs`) build the
   descriptors' meshes in Rust (`gen::backward_step`; a `cylinder_ogrid` warped onto NACA 0012), write them as OpenFOAM
-  polyMesh folders and read them with `mesh.source = "file"`; they were only put through `rcfd check`, never solved.
+  polyMesh folders and read them with `mesh.source = "file"`. They were only put through `rcfd check`, never solved.
   `rcfd convert <case.toml> <dir>` writes a case's generator mesh as `<dir>/polyMesh`.
 * The run service (`crates/rcfd-runner/src/runner.rs` `launch`) runs `rcfd run runs/<id>/case.snapshot --case-dir <the
   case's folder> --out runs/<id>/output --store-dir runs/<id>/fields --status-monitors ...`; `run.json` records `case`
-  project-relative and `case_source`, `case_dir` as absolute paths; `serve --project <relative path>` fails every run
-  (ADR 0130 addendum, found, not fixed), so absolute paths are used. Requests are files; a client started from a
-  capturing shell can hand the runner inheritable handles (ADR 0123 S5), so the runner is started directly with its
-  output in a file.
+  project-relative and `case_source`, `case_dir` as absolute paths. `serve --project <relative path>` fails every run
+  (ADR 0130 addendum, found, not fixed), so absolute paths are used.
+* Requests are files. A client started from a capturing shell can hand the runner inheritable handles (ADR 0123 S5), so
+  the runner is started directly with its output in a file.
 * The field store is written only when the case (or an override) sets `output.store_interval` or
-  `output.store_time_interval`; `output.store_precision = "f32"` (ADR 0133) halves it; `output.store_fields` picks the
-  fields (`vorticity_z` and `speed` are available, `crates/rcfd-api/src/sim.rs` `field`).
+  `output.store_time_interval`. The key `output.store_precision = "f32"` (ADR 0133) halves it, and `output.store_fields`
+  picks the fields (`vorticity_z` and `speed` are available, `crates/rcfd-api/src/sim.rs` `field`).
 * `Project::validate` (`crates/rcfd-project/src/project.rs`) reports a missing directory for each of `cases`, `meshes`,
   `runs`, `designs`, `notes`, `.rcfd`; git keeps no empty folder. `.gitignore` does not name `.rcfd/` and ignores `*.vtu`.
   `.gitattributes` has `* text=auto eol=lf`, which normalises line ends of text files on commit (a CRLF case file would
@@ -89,15 +107,20 @@ cell width deep (`lx / nx`, `crates/rcfd-mesh/src/gen.rs`), so the divisor is 0.
    Every variant also gets its completed run (each is cheap, smoke above). Names carry the changed value. The aerofoil
    variant is at 2 degrees because 8 degrees did not converge (smoke); the cylinder's dt is a power of two because of the
    remainder step (smoke). None of this is a validation; each problem's note says how it relates to its benchmark.
-2. **D2 Generation through the real run service.** `scripts/make_example_projects.py` per project: keeps the manifest
-   (written once: schema 1, name, created, `rcfd --version`), rebuilds the meshes from their recipes (D3), empties `runs/`
-   and `.rcfd/`, writes `.rcfd/runner-config.json` (`max_runs` 1, `cpu_threads` = threads, `poll_ms` 100), starts
-   `rcfd-runner serve --project <absolute>` itself (stdout and stderr to a file in `.rcfd/`, `RCFD_BIN` set), queues every
-   case with `rcfd-runner start <absolute case> --threads 1 --no-runner` in the order of D1 (no `--set`: the case file
-   alone describes each run; no `--mem-mb`: the runner's own pre-launch check runs), waits with `rcfd-runner wait`, shuts
-   the runner down, prunes (D5), writes the ledger (D8) and the run tables (D9), then `example-projects/manifest.json`
-   (D6) and runs its own `--check`. One solver at a time, one thread (results do not depend on the thread count,
-   `docs/run-control.md`).
+2. **D2 Generation through the real run service.** One solver at a time, one thread (results do not depend on the thread
+   count, `docs/run-control.md`). `scripts/make_example_projects.py` per project:
+   * keeps the manifest (written once: schema 1, name, created, `rcfd --version`);
+   * rebuilds the meshes from their recipes (D3);
+   * empties `runs/` and `.rcfd/`;
+   * writes `.rcfd/runner-config.json` (`max_runs` 1, `cpu_threads` = threads, `poll_ms` 100);
+   * starts `rcfd-runner serve --project <absolute>` itself (stdout and stderr to a file in `.rcfd/`, `RCFD_BIN` set);
+   * queues every case with `rcfd-runner start <absolute case> --threads 1 --no-runner` in the order of D1 (no `--set`: the
+     case file alone describes each run; no `--mem-mb`: the runner's own pre-launch check runs);
+   * waits with `rcfd-runner wait`;
+   * shuts the runner down;
+   * prunes (D5);
+   * writes the ledger (D8) and the run tables (D9), then `example-projects/manifest.json` (D6);
+   * runs its own `--check`.
 3. **D3 Aerofoil mesh recipe.** `meshes/naca0012-ogrid.recipe.toml` is a case holding only the `cylinder_ogrid` mesh of
    ADR 0092 (128 x 48, r 1..2, grading 200, depth 0.1). The script writes it with `rcfd convert` and moves every point as
    ADR 0092's `naca0012_mesh` does (formula in the recipe's comment; ported to Python, points written with `repr`), and
@@ -105,15 +128,17 @@ cell width deep (`lx / nx`, `crates/rcfd-mesh/src/gen.rs`), so the divisor is 0.
    aerofoil cases name it `../meshes/naca0012-ogrid` (relative to the case's folder, as the run service resolves it).
    Every other case uses a generator in the case, so it validates from any working folder.
 4. **D4 Field stores.** Set by each case: f32, the fields of D1, at most 100 snapshots; steady runs store fewer.
-5. **D5 What a rebuild keeps.** Kept per run: the contract files (`run.json`, `case.snapshot`, `status.json`,
-   `events.jsonl`, `log.txt`, `residuals.jsonl`, `fields/`, `metrics.json`), the runner's `check.json` and the solver's
-   `output/monitors.json`, `output/monitors.csv`, `output/report.html`. Removed: `solver-status.jsonl` (the raw stream that
-   `residuals.jsonl` and `events.jsonl` carry), `output/*.vtu` (ignored by git anyway) and `output/*.rcfd` (the
-   checkpoint); request files. `.rcfd/` keeps only a `.gitignore` (`*`, `!.gitignore`), so the folder exists in every
-   checkout (validation needs it) and the Studio's and runner's state there is never versioned. `quick-start/meshes/`
-   holds a `README.md` so the folder exists (the Studio lists it as a mesh entry; accepted). `example-projects/.gitattributes`
-   has `* -text`, so git keeps every byte (snapshot hashes, binary stores). `log.txt` and the solver events name the
-   removed checkpoint; accepted and noted.
+5. **D5 What a rebuild keeps.**
+   * Kept per run: the contract files (`run.json`, `case.snapshot`, `status.json`, `events.jsonl`, `log.txt`,
+     `residuals.jsonl`, `fields/`, `metrics.json`), the runner's `check.json` and the solver's `output/monitors.json`,
+     `output/monitors.csv`, `output/report.html`.
+   * Removed: `solver-status.jsonl` (the raw stream that `residuals.jsonl` and `events.jsonl` carry), `output/*.vtu` (ignored
+     by git anyway) and `output/*.rcfd` (the checkpoint); request files.
+   * `.rcfd/` keeps only a `.gitignore` (`*`, `!.gitignore`), so the folder exists in every checkout (validation needs it)
+     and the Studio's and runner's state there is never versioned.
+   * `quick-start/meshes/` holds a `README.md` so the folder exists (the Studio lists it as a mesh entry; accepted).
+   * `example-projects/.gitattributes` has `* -text`, so git keeps every byte (snapshot hashes, binary stores).
+   * `log.txt` and the solver events name the removed checkpoint; accepted and noted.
 6. **D6 Committed runs and user runs.** `example-projects/manifest.json` lists each project's committed runs (id and
    case), the solver version and the caps. The checks read only those runs; a run a user starts inside the checkout is
    reported as "not one of the committed example runs" and left out of every check and of the size count. The notes ask
@@ -123,36 +148,51 @@ cell width deep (`lx / nx`, `crates/rcfd-mesh/src/gen.rs`), so the divisor is 0.
    output sizes: wind-tunnel about 29 MB (cylinder runs about 5.8 MB each, aerofoil 4.1, step 4.3 and 3.5, the polyMesh
    1.3), quick-start about 4.4 MB.
 8. **D8 Design ledger.** `designs/variants.ledger.jsonl` per project, one `rcfd-ledger-1` entry (ADR 0121 D1, keys
-   sorted) per run: `study` per problem (`cylinder-reynolds`, `naca0012-angle-of-attack`, `step-reynolds`,
-   `cavity-reynolds`, `heated-cavity-rayleigh`), `variant` the case stem, `params` the changed value (`Re`, `alpha` in
-   deg, `Ra`), `metrics` every report of `metrics.json` plus derived values, `evaluator` "rcfd-runner + rcfd run",
-   `evaluator_version` and `solver_version` from `run.json`, `geometry_hash` the store's mesh hash, `settings` (case,
-   snapshot hash, run id, run settings), `verdict` ok, `fidelity` cfd, `recorded_at_ms` the run's final state event,
-   `wall_s` launched to final state, `provenance` (driver, project, run, state, solver state, reason). Derived: cylinder
-   `strouhal`, `cd_mean`, `cl_amplitude` over the last 6 whole periods of `cl` (upward crossings through its mean over the
-   second half of the run; D = U = 1; trapezoidal mean); step `x_reattach` (last sign change of `ux` along the first cell
-   row above the floor of the last snapshot, linear interpolation, as `crates/rcfd-fv/tests/step_laminar.rs`), and
-   `x_top_separation`, `x_top_reattach` (the first two sign changes along the row below the upper wall), in m = H. An
-   aerofoil run that ends at its iteration cap is `ok` with the solver state "not_converged" in `provenance` (its metrics
+   sorted) per run:
+   * `study` per problem (`cylinder-reynolds`, `naca0012-angle-of-attack`, `step-reynolds`, `cavity-reynolds`,
+     `heated-cavity-rayleigh`);
+   * `variant` the case stem;
+   * `params` the changed value (`Re`, `alpha` in deg, `Ra`);
+   * `metrics` every report of `metrics.json` plus derived values;
+   * `evaluator` "rcfd-runner + rcfd run";
+   * `evaluator_version` and `solver_version` from `run.json`;
+   * `geometry_hash` the store's mesh hash;
+   * `settings` (case, snapshot hash, run id, run settings);
+   * `verdict` ok;
+   * `fidelity` cfd;
+   * `recorded_at_ms` the run's final state event;
+   * `wall_s` launched to final state;
+   * `provenance` (driver, project, run, state, solver state, reason);
+   * derived: cylinder `strouhal`, `cd_mean`, `cl_amplitude` over the last 6 whole periods of `cl` (upward crossings through
+     its mean over the second half of the run; D = U = 1; trapezoidal mean); step `x_reattach` (last sign change of `ux`
+     along the first cell row above the floor of the last snapshot, linear interpolation, as
+     `crates/rcfd-fv/tests/step_laminar.rs`), and `x_top_separation`, `x_top_reattach` (the first two sign changes along
+     the row below the upper wall), in m = H.
+
+   An aerofoil run that ends at its iteration cap is `ok` with the solver state "not_converged" in `provenance` (its metrics
    are finite and are what the run gives); question 4.
 9. **D9 Notes.** `notes/README.md` per project (contents, how to open, what to click in order, limits) with a run table
    between two markers that the script rewrites (run id, state, steps, wall time, snapshots, final values), and one note
    per wind-tunnel problem (`cylinder.md`, `naca0012.md`, `step.md`). Paths in backticks are checked (S7); repository
    files are named as `../../<path>`.
-10. **D10 Reproducibility.** Byte-reproducible on the same machine and binaries (checked by `--rerun-check`, R1):
-    `case.snapshot`, `residuals.jsonl`, `fields/store.rts`, `fields/index.json`, `output/monitors.json`, the polyMesh.
-    Not reproducible: run ids, time stamps and pids (`run.json`, `status.json`, `events.jsonl`, `metrics.json`
-    `solver_finish`), absolute paths (`run.json`, `log.txt`, solver events), `report.html`, the ledger's
-    `recorded_at_ms`, `wall_s` and run ids, the run tables.
+10. **D10 Reproducibility.**
+    * Byte-reproducible on the same machine and binaries (checked by `--rerun-check`, R1): `case.snapshot`,
+      `residuals.jsonl`, `fields/store.rts`, `fields/index.json`, `output/monitors.json`, the polyMesh.
+    * Not reproducible: run ids, time stamps and pids (`run.json`, `status.json`, `events.jsonl`, `metrics.json`
+      `solver_finish`), absolute paths (`run.json`, `log.txt`, solver events), `report.html`, the ledger's
+      `recorded_at_ms`, `wall_s` and run ids, the run tables.
 
 ## Placement
 
-No change to any crate's source, no new dependency, no new workspace edge. New: `example-projects/` (two projects,
-`README.md`, `manifest.json`, `.gitattributes`), `scripts/make_example_projects.py` and its self-test
-`scripts/test_make_example_projects.py` (added to the `scripts` job of `.github/workflows/ci.yml`, next to the other script
-self-tests), `crates/rcfd-mcp/tests/example_projects_w48h.rs`, and a headless Studio test
-`crates/rcfd-studio/tests/example_projects_h.rs` (a test file only; the Studio's source is not edited).
-`workspace_graph.rs` and `docs/architecture.md` are unchanged.
+No change to any crate's source, no new dependency, no new workspace edge. `workspace_graph.rs` and `docs/architecture.md`
+are unchanged. New:
+
+* `example-projects/` (two projects, `README.md`, `manifest.json`, `.gitattributes`);
+* `scripts/make_example_projects.py` and its self-test `scripts/test_make_example_projects.py` (added to the `scripts` job
+  of `.github/workflows/ci.yml`, next to the other script self-tests);
+* `crates/rcfd-mcp/tests/example_projects_w48h.rs`;
+* a headless Studio test `crates/rcfd-studio/tests/example_projects_h.rs` (a test file only; the Studio's source is not
+  edited).
 
 ## Registered checks (limits fixed here, before any counted run)
 
@@ -200,9 +240,12 @@ View-and-report checklist:
 
 ## Out of scope
 
-Side-by-side comparison of runs in the Studio (wave 49); a NACA or step generator in the case schema; a finer or C-grid
-aerofoil mesh; validation of any of these flows; the mesh preview, store default and start-and-follow jobs of 48G; the
-transonic NACA 0012 condition of the descriptor.
+* Side-by-side comparison of runs in the Studio (wave 49).
+* A NACA or step generator in the case schema.
+* A finer or C-grid aerofoil mesh.
+* Validation of any of these flows.
+* The mesh preview, store default and start-and-follow jobs of 48G.
+* The transonic NACA 0012 condition of the descriptor.
 
 ## Amendment 1 (2026-10-28, after the counted rebuild's solver runs, before its post-processing ran again)
 
@@ -228,15 +271,17 @@ and the quick-start project were not written. Nothing else of the runs was looke
 
 ## Addendum: results (2026-10-28, branch `worktree-agent-a62d8ecd6bf092d6d`, release build of f558285's solver and runner)
 
-Commits: acc912b (registration), 47b4873 (amendment 1), 4abace8 (the generated examples), then this addendum. The
-counted rebuild: `python scripts/make_example_projects.py` at acc912b ran the six wind-tunnel runs through the run
-service (first launch 15:21:29.9, last finish 15:24:35.7 UTC, one solver at a time, one thread) and stopped in its
-post-processing (amendment 1); after amendment 1, `--project wind-tunnel --summarise-only` wrote the wind-tunnel
-ledger and run table from those run folders, and `--project quick-start` built the quick-start project (15:26:41, 6 s)
-and the manifest; its own `--check` reported 0 problems. The tests ran in release with `--test-threads 1`, output to
-files. The machine was shared with three other agents' builds and a Visual Studio update that removed `link.exe` for
-about 15 minutes: two compile attempts of the staleness test failed at the link step then; nothing counted ran while it
-was missing.
+Commits: acc912b (registration), 47b4873 (amendment 1), 4abace8 (the generated examples), then this addendum.
+
+The counted rebuild ran in two parts. First, `python scripts/make_example_projects.py` at acc912b ran the six wind-tunnel
+runs through the run service (first launch 15:21:29.9, last finish 15:24:35.7 UTC, one solver at a time, one thread) and
+stopped in its post-processing (amendment 1). After amendment 1, `--project wind-tunnel --summarise-only` wrote the
+wind-tunnel ledger and run table from those run folders, and `--project quick-start` built the quick-start project
+(15:26:41, 6 s) and the manifest. Its own `--check` reported 0 problems.
+
+The tests ran in release with `--test-threads 1`, output to files. The machine was shared with three other agents' builds
+and a Visual Studio update that removed `link.exe` for about 15 minutes. Two compile attempts of the staleness test failed
+at the link step then; nothing counted ran while it was missing.
 
 | Id | Limit | Measured | Result |
 |---|---|---|---|
@@ -267,13 +312,20 @@ was missing.
 
 No known miss other than the two predicted ones (E1 for the aerofoil cases, G3's crossing count for the Re 100 cylinder).
 
-**Sizes** (bytes; every file of the committed runs): cylinder runs 5 554 735 and 5 553 650 (store 4 782 536 each, output
-523 067, residuals 240 587); aerofoil runs 3 706 139 and 3 706 323 (store 2 574 878, output 744 858); step runs 4 222 831
-(Re 800) and 3 320 728 (store 3 904 422 and 3 131 998); cavity runs 649 368 and 755 226; heated-cavity runs 1 512 282 and
-1 319 956; the aerofoil polyMesh 1 306 825. Projects on the final tree: wind-tunnel 27 404 656, quick-start 4 250 540
-(as `manifest.json` records them); with `README.md`, `manifest.json` and `.gitattributes` 31 658 565 bytes in all (S8's
-second run). The ADR 0140 D4 estimates of the
-stores were within 2 % (for example 4.85 MB estimated for 81 cylinder snapshots, 4.78 MB measured for 80).
+**Sizes** (bytes; every file of the committed runs):
+
+| Item | Bytes | Of which |
+|---|---|---|
+| Cylinder runs | 5 554 735 and 5 553 650 | store 4 782 536 each, output 523 067, residuals 240 587 |
+| Aerofoil runs | 3 706 139 and 3 706 323 | store 2 574 878, output 744 858 |
+| Step runs | 4 222 831 (Re 800) and 3 320 728 | store 3 904 422 and 3 131 998 |
+| Cavity runs | 649 368 and 755 226 | |
+| Heated-cavity runs | 1 512 282 and 1 319 956 | |
+| Aerofoil polyMesh | 1 306 825 | |
+
+Projects on the final tree: wind-tunnel 27 404 656, quick-start 4 250 540 (as `manifest.json` records them); with
+`README.md`, `manifest.json` and `.gitattributes` 31 658 565 bytes in all (S8's second run). The ADR 0140 D4 estimates of
+the stores were within 2 % (for example 4.85 MB estimated for 81 cylinder snapshots, 4.78 MB measured for 80).
 
 **What the runs give** (for orientation; none of it is a validation, each with one coarse mesh):
 * Cylinder: St 0.1517 (5 periods), mean C_D 1.323, C_L amplitude 0.309 at Re 100; St 0.1751 (6 periods), mean C_D 1.291,
@@ -310,10 +362,14 @@ stores were within 2 % (for example 4.85 MB estimated for 81 cylinder snapshots,
 9. H2 (the real Studio binary with ADR 0132's smoke hook) was not run: the task allows only headless trials of the Studio,
    and the hook opens a window on the desktop.
 
-**Not run.** The "Not in CI" checklist (a person at the window); H2; Linux (the gate runs the new tests there; the
-example folders are read with `-text` and LF-only files, so the bytes are the same; not run on Linux here); the
-workspace gate and workspace-wide clippy (`cargo clippy -p rcfd-mcp -p rcfd-studio --tests` only); `cargo deny` (no new
-dependency).
+**Not run.**
+
+* The "Not in CI" checklist (a person at the window).
+* H2.
+* Linux (the gate runs the new tests there; the example folders are read with `-text` and LF-only files, so the bytes are
+  the same; not run on Linux here).
+* The workspace gate and workspace-wide clippy (`cargo clippy -p rcfd-mcp -p rcfd-studio --tests` only).
+* `cargo deny` (no new dependency).
 
 **New dependencies:** none (no crate, no `Cargo.lock` change, no new workspace edge).
 

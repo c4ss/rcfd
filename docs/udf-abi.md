@@ -1,13 +1,13 @@
 # Sandboxed user functions: WebAssembly ABI version 1 (F-122, hook catalogue v2 F-239)
 
+A case can load user code as WebAssembly modules (`udf.<name>`). The code runs inside the `wasmi` interpreter
+(pure Rust, no JIT), so a module cannot touch the host: there is no file, network, clock, process or host-memory
+access, and no WASI. Any language that compiles to plain `wasm32` works (Rust `no_std`, C, Zig, WAT).
+
 This page is the contract between rcfd and a user-function module: the case keys that load a module, the exports the solver
 calls with their signatures and units, the sandbox limits and what happens when a module fails. It is for people who write a
 module or wire one into a case. Read "Limits and failure behaviour" and "Not implemented" before you start: the source and
 property hooks work in a narrow set of runs only. For the other keys of the case file, see the [case schema](case-schema.md).
-
-A case can load user code as WebAssembly modules (`udf.<name>`). The code runs inside the `wasmi` interpreter
-(pure Rust, no JIT), so a module cannot touch the host: there is no file, network, clock, process or host-memory
-access, and no WASI. Any language that compiles to plain `wasm32` works (Rust `no_std`, C, Zig, WAT).
 
 ## Case settings
 
@@ -78,14 +78,18 @@ cell momentum balance together with `physics.body_force` and buoyancy. Results m
   `udf.<name>.*`.
 * Calls are deterministic (the module has no clock or randomness), so a run is reproducible.
 
-Scope of the source and property hooks: `momentum_source`, `kinematic_viscosity`, `thermal_conductivity`,
-`energy_source` and `scalar_source` act in steady SIMPLE/SIMPLEC runs only (any other algorithm is refused with a
-diagnostic). `thermal_conductivity` is refused together with `properties.conductivity` / `properties.specific_heat`
-laws, conjugate heat transfer, radiation and `heat_flux` boundaries (which convert the flux with
-`physics.conductivity`); `energy_source` is refused with conjugate heat transfer and radiation. Both need
-`energy.enabled`. The `heat_flow` report keeps its own `conductivity` setting. `initialise` needs
-`initial.method = "uniform"`. `execute_at_end` is not called when a run is ended from outside the step: a
-`Simulation::run(n)` cap below the iteration limit, a run-control stop, a wall-clock limit or the divergence guard.
+Scope of the source and property hooks:
+
+* `momentum_source`, `kinematic_viscosity`, `thermal_conductivity`, `energy_source` and `scalar_source` act in steady
+  SIMPLE/SIMPLEC runs only (any other algorithm is refused with a diagnostic).
+* `thermal_conductivity` is refused together with `properties.conductivity` / `properties.specific_heat` laws,
+  conjugate heat transfer, radiation and `heat_flux` boundaries (which convert the flux with `physics.conductivity`).
+* `energy_source` is refused with conjugate heat transfer and radiation.
+* `thermal_conductivity` and `energy_source` both need `energy.enabled`.
+* The `heat_flow` report keeps its own `conductivity` setting.
+* `initialise` needs `initial.method = "uniform"`.
+* `execute_at_end` is not called when a run is ended from outside the step: a `Simulation::run(n)` cap below the
+  iteration limit, a run-control stop, a wall-clock limit or the divergence guard.
 
 ## Not implemented
 
@@ -105,25 +109,33 @@ laws, conjugate heat transfer, radiation and `heat_flux` boundaries (which conve
 `crates/rcfd-api/tests/udf_hooks_w38a.rs` (F-239, ADR 0088): each new hook set to a constant or analytic function
 reproduces the matching built-in setting (relative difference below 1e-9, measured 0 in every case; all runs steady
 SIMPLEC):
-`temperature_profile` = `temperature_expression`; `wall_heat_flux` = `heat_flux_value` and the linear closed form
-(3.5e-13); `thermal_conductivity` = the constant-property run (`physics.conductivity` set differently in the hook
-run); `energy_source` = the uniform zone source, the slab profile identity (1.1e-10 of the rise) and, for the linear
-source 2e4 x / L, the closed form (4.7e-4 at 64 cells); hook 5e3 plus zone source 5e3 = zone source 1e4; `scalar_source` = the uniform scalar `source` and its slab
-identity (9.9e-15); `initial_value` = `initial.velocity_expression_x` plus uniform pressure and temperature (at build
-and after 50 iterations); `execute_at_end` runs once on the final fields (the independent sum to 1e-12). Missing
-exports, undefined modules, wrong boundary conditions, two providers, transient algorithms, property-law, heat-flux
-and initial-method conflicts are refused; a negative conductivity and a non-finite energy source stop the run.
 
-F-122 tests:
+* `temperature_profile` = `temperature_expression`.
+* `wall_heat_flux` = `heat_flux_value` and the linear closed form (3.5e-13).
+* `thermal_conductivity` = the constant-property run (`physics.conductivity` set differently in the hook run).
+* `energy_source` = the uniform zone source, the slab profile identity (1.1e-10 of the rise) and, for the linear
+  source 2e4 x / L, the closed form (4.7e-4 at 64 cells); hook 5e3 plus zone source 5e3 = zone source 1e4.
+* `scalar_source` = the uniform scalar `source` and its slab identity (9.9e-15).
+* `initial_value` = `initial.velocity_expression_x` plus uniform pressure and temperature (at build and after 50
+  iterations).
+* `execute_at_end` runs once on the final fields (the independent sum to 1e-12).
 
-`crates/rcfd-api/tests/udf.rs` (modules written in WAT): constant momentum source equals `physics.body_force`
-(relative difference below 1e-9); a curl-free source a = (3x, 0, 0) in a closed box is balanced by p = 1.5 x^2
-with the spurious velocity falling from 4.4e-2 (10x10) to 1.1e-2 (20x20) and the pressure error from 3.9e-2 to
-1.9e-2; a constant viscosity module and a parabolic `velocity_profile` module reproduce the plain
-`physics.nu` / expression runs (below 1e-9); the monitor equals the independent sum to 1e-12; imports, wrong ABI,
-wrong signature, missing ABI export, infinite loop, memory growth, NaN, negative viscosity are rejected or stop
-the run; 20 000 calls of a 1000-fuel budget succeed (budget renewal); the sandbox keeps module files inside the
-root.
+In the same file, missing exports, undefined modules, wrong boundary conditions, two providers, transient algorithms,
+property-law, heat-flux and initial-method conflicts are refused; a negative conductivity and a non-finite energy
+source stop the run.
+
+F-122 tests in `crates/rcfd-api/tests/udf.rs` (modules written in WAT):
+
+* A constant momentum source equals `physics.body_force` (relative difference below 1e-9).
+* A curl-free source a = (3x, 0, 0) in a closed box is balanced by p = 1.5 x^2, with the spurious velocity falling
+  from 4.4e-2 (10x10) to 1.1e-2 (20x20) and the pressure error from 3.9e-2 to 1.9e-2.
+* A constant viscosity module and a parabolic `velocity_profile` module reproduce the plain `physics.nu` / expression
+  runs (below 1e-9).
+* The monitor equals the independent sum to 1e-12.
+* Imports, wrong ABI, wrong signature, missing ABI export, infinite loop, memory growth, NaN, negative viscosity are
+  rejected or stop the run.
+* Budget renewal: 20 000 calls of a 1000-fuel budget succeed.
+* The sandbox keeps module files inside the root.
 
 ## Where to go next
 

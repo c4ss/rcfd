@@ -2,10 +2,17 @@
 
 Status: **registered 2026-10-29**, before any solver run of this job. The set-up, every limit, the reading rules and the
 not-run list are fixed here. **Results in the addendum (2026-10-30):** every limit met except LT15 (cd at 15 degrees
-+26.0 %, band 25 %) and LD (the drift metric), which are known misses. No amendment was needed; one driver correction to D7's text (deviation 2). Not yet accepted by the
-maintainer. Job 49D, on local main f9a520a (the worktree branch was fast-forwarded to it before any
-work; branch `job49d-aoa-sweep-fixed`). Number: 0165 is the highest ADR in the main checkout and in every worktree; 0166 is
-left to job 49C as the brief says.
++26.0 %, band 25 %) and LD (the drift metric), which are known misses. No amendment was needed; one driver correction to
+D7's text (deviation 2). Not yet accepted by the maintainer.
+
+This job re-runs ADR 0159's NACA 0012 angle-of-attack sweep with ADR 0164's two fixes, through their opt-in keys, on far
+fields at 500 chords, with steady SA as the primary arm and steady SST report-only. The addendum records two known misses:
+LT15, on cd only (cl -3.4 %, inside its band), and LD, over at 12, 13, 16, 17 and 24 degrees. Against TMR's SA values, cd is
++2.5 % at 0 degrees, +9.8 % at 10 and +26.0 % at 15, and the excess is not attributed. The lift slope is 0.986 x 2 pi, and cl
+stays within 0.013 of Ladson's from 2 to 15 degrees. Steady SA peaks at 1.542 at 16 degrees, 4.3 % below Ladson's 1.612 at
+17.13 and about 1 degree early. From 17 degrees up steady SIMPLEC does not converge, so those angles enter the curve as
+flagged iteration means, which are not flow values. In the four-way comparison, neither fix alone is right at lift; both are
+needed. SA-DDES, the M2w grid check, the workspace test suite and the gate were not run.
 
 House rules of [ADR 0130](0130-wave48a-overview-and-run-record-contract.md):
 - limits are fixed here before the registered runs; a missed limit becomes an ignored `*_known_miss` test with the limit
@@ -25,6 +32,10 @@ Parents:
   opt-in fixes (D1 the `total_effective` force component, amendment 1 the far-field `turbulence = "freestream"` role);
   its question 3 (this job), question 6 (500 chords now, the point-vortex correction later) and question 7 (a drift
   metric relative to the run length).
+
+Job 49D, on local main f9a520a (the worktree branch was fast-forwarded to it before any work; branch
+`job49d-aoa-sweep-fixed`). Number: 0165 is the highest ADR in the main checkout and in every worktree; 0166 is left to
+job 49C as the brief says.
 
 ## The request (the maintainer, relayed)
 

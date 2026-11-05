@@ -1,11 +1,27 @@
-# ADR 0108: Wave 43A, Hysing refinement with all three VOF options and exact initial fractions; CSF fallback of the height function (F-055)
+# ADR 0108: Wave 43A, Hysing refinement with all three VOF options; CSF fallback of the height function (F-055)
 
-Status: registered before any code and any run. Limits are fixed here; a miss becomes an ignored `*_known_miss` test with the limit
-intact; a defective set-up gets an amendment written before the corrected run. Results go into the addendum. Written at HEAD 83d2c1b
-(scratch copy `<scratch dir>`, target `<target dir>`). Clean-room: first principles and the Hysing et al.
-(2009) case-1 values read in ADR 0096 (V_c,max 0.2417 at t 0.9213, y_c(3) 1.0813). Context: ADR 0100 (refinement check B1-B4),
-ADR 0103 (component-diagonal wall defect), ADR 0106 (height-function curvature; H4 verdict missed; H5 with all three options on 40
-and 80 only).
+Status: registered before any code and any run. Results go into the addendum. Written at HEAD 83d2c1b
+(scratch copy `<scratch dir>`, target `<target dir>`).
+
+This wave reruns the Hysing rising-bubble refinement check of ADR 0100 (B1-B4) for F-055 with all three VOF options on and exact
+initial fractions, beside a control series with the 10-point indicator field. It also adds the opt-in CSF fallback of the height
+function, code for a later default switch, because ADR 0106 found that `height_function` forced on makes `cavitating_venturi.rs`
+fail at `VofSolver::new`. The addendum records the results, measured after the registration: the verdict series X misses B1 and B2
+on y_c(3) (errors 0.0021, 0.0013, 0.0018 on 40, 80, 160; e(160) / e(40) = 0.90) and meets every other limit. X is now the ignored
+`b1x_..._all_options_exact_fraction_known_miss`, limits unchanged, and F-055 stays partial. The control XC misses B1 on y_c(3) the
+same way, and the initial field has no measurable effect on the bubble with these options. Whether this result is acceptable is
+the user's decision, not taken here. F1-F4 pass, and with the fallback the four options can be switched on together without
+breaking an existing test; no default was changed. The dam-break clause rests on the Martin-Moyce average front velocity (1.69,
+secondary source); a pointwise front-versus-time test is not feasible with the data in the file.
+
+Rules and parents:
+
+* Limits are fixed here; a miss becomes an ignored `*_known_miss` test with the limit intact; a defective set-up gets an amendment
+  written before the corrected run.
+* Clean-room: first principles and the Hysing et al. (2009) case-1 values read in ADR 0096 (V_c,max 0.2417 at t 0.9213,
+  y_c(3) 1.0813).
+* Context: ADR 0100 (refinement check B1-B4), ADR 0103 (component-diagonal wall defect), ADR 0106 (height-function curvature; H4
+  verdict missed; H5 with all three options on 40 and 80 only).
 
 ## What I already know when writing this (rule c)
 
@@ -28,9 +44,12 @@ fields, the only difference between the two series:
   there by H1 to round-off; copied, not made a library API). The set-up asserts the phase-2 volume sum A = pi R^2 to relative 1e-10.
 * XC (control): the 10-point indicator field of ADR 0100 (`indicator_fraction(&geom, 10, ..)`).
 
-Limits: ADR 0100 B1-B4 unchanged (B1 e_y and e_v decrease strictly 40 -> 80 -> 160; B2 e(160) <= 0.5 e(40) for both; B3
-e_t(160) < e_t(40); B4 drift <= 1e-12 and bound violation <= 1e-9 on every grid), asserted in that order after all three grids are
-printed (the existing `b1` helper).
+Limits: ADR 0100 B1-B4 unchanged, asserted in that order after all three grids are printed (the existing `b1` helper):
+
+* B1 e_y and e_v decrease strictly 40 -> 80 -> 160;
+* B2 e(160) <= 0.5 e(40) for both;
+* B3 e_t(160) < e_t(40);
+* B4 drift <= 1e-12 and bound violation <= 1e-9 on every grid.
 
 Decision rules (fixed now):
 
@@ -91,7 +110,7 @@ baseline_hashes.rs); per file pass / fail. Target: cavitating_venturi passes.
 
 Settled now, before the runs, from `docs/reference-data.md` (section Wave 27A) and ADR 0049 part D: the only published dam-break
 data in the reference file are the Martin and Moyce non-dimensional average front velocities `v / sqrt(g H)` = 1.48 (H = 57 mm) and
-1.69 (H = 114 mm), averaging window t* > 1, from Table 1 of a 2014 secondary source (arXiv:1308.0115, page read); the primary
+1.69 (H = 114 mm), averaging window t* > 1, from Table 1 of a 2014 secondary source (arXiv:1308.0115, page read). The primary
 Z-T table was not obtained and the original time normalisation was not resolved. The test geometry is the H = 114 mm column
 (width a = 57.15 mm, H = 2a), so ADR 0049 maps it to 1.69.
 
@@ -110,10 +129,11 @@ wave does not change it; it checks that `d_dam_break_front` still passes.
 * S1 construction of X: the phase-volume assert passes on 40 x 80, 80 x 160, 160 x 320. Height-function curvature error of the
   exact initial field: rms 5.01e-3 / 1.22e-3 / 3.19e-4, max 6.85e-3 / 1.75e-3 / 4.78e-4, no fallback on any grid (order 2; the
   indicator field of ADR 0106 S2 gives rms 0.209 / 0.126 / 0.740).
-* S2 X on 40 x 80 to t = 0.05: finite, max|U| 0.038, drift 3.1e-16, bound 4.9e-15. X on 160 x 320 to t = 0.1 (35 s): finite,
-  max|U| 0.063, drift 4.9e-15, bound 1.5e-13. XC on 160 x 320 to t = 0.1 (41 s): finite, max|U| 0.063, drift 4.5e-15, bound
-  1.4e-13. Every set-up constructs and runs; by the smoke rule no amendment. Measured rate about 0.22 to 0.26 s per step on
-  160 x 320, so a 160 x 320 run to t = 3 is about 20 min.
+* S2 X on 40 x 80 to t = 0.05: finite, max|U| 0.038, drift 3.1e-16, bound 4.9e-15.
+* S2 X on 160 x 320 to t = 0.1 (35 s): finite, max|U| 0.063, drift 4.9e-15, bound 1.5e-13.
+* S2 XC on 160 x 320 to t = 0.1 (41 s): finite, max|U| 0.063, drift 4.5e-15, bound 1.4e-13.
+* Every set-up constructs and runs; by the smoke rule no amendment. Measured rate about 0.22 to 0.26 s per step on 160 x 320, so a
+  160 x 320 run to t = 3 is about 20 min.
 * Part 2 tests F1-F4 were written and pass (4 of 4, 0.04 s); they are equality tests, so no limit was set after a run.
 
 ## Addendum: measured values (after the runs)
@@ -154,19 +174,28 @@ and 80 points equal ADR 0106 H5 to the printed digits (reproducibility of the co
 
 ### Reading
 
-* Effect of the initial field (X minus XC): y_c(3) -0.0002, 0.0000, +0.0001 and V_c,max below 1e-4 on 40, 80, 160; peak time
-  -0.0025 on 40 and 0 on 80 and 160. The initial field has no measurable effect on the bubble with these options, although it
-  changes the initial curvature error by a factor 40 to 2300 (S1 against ADR 0106 S2). By the registered rule the initial field
-  does not explain anything (X does not meet B1).
-* Errors of X per metric: y_c(3) 0.19, 0.12, 0.17 percent; V_c,max 0.62, 0.32, 0.04 percent; peak time 1.8, 0.13, 0.41 percent
-  (40, 80, 160). V_c,max falls on every refinement. y_c(3) varies by at most 0.0008 across the three grids (differences +0.0008,
-  -0.0005, which change sign, so no order is read from them) and sits 0.0013 to 0.0021 below Hysing's TP2D 1.0813, which is 3 to
-  5 times the 0.0004 difference between the TP2D and MooNMD (1.0817) values read in ADR 0096. B1 and B2 on y_c(3) miss; the
-  limits stay as written. Whether this result is acceptable is the user's decision, not taken here.
-* Against ADR 0106 H4 (component diagonal and height function without the transposed stress, same indicator field as XC): on
-  160 x 320 the transposed viscous stress moves V_c,max from 0.2486 to 0.2416 (the 3 percent over-speed is gone) and y_c(3) from
-  1.0737 to 1.0794. So the offset of the defaults (ADR 0100) is accounted for, to the size above, by three opt-ins: the wall defect
-  (ADR 0103), the non-convergent CSF curvature (ADR 0106) and the missing transposed stress.
+The initial field has no measurable effect on the bubble with these options, although it changes the initial curvature error by a
+factor 40 to 2300 (S1 against ADR 0106 S2). Effect of the initial field (X minus XC): y_c(3) -0.0002, 0.0000, +0.0001 and V_c,max
+below 1e-4 on 40, 80, 160; peak time -0.0025 on 40 and 0 on 80 and 160. By the registered rule the initial field does not explain
+anything (X does not meet B1).
+
+B1 and B2 on y_c(3) miss; the limits stay as written. Whether this result is acceptable is the user's decision, not taken here.
+Errors of X per metric, in percent:
+
+| Metric | 40 | 80 | 160 |
+|--------|----|----|-----|
+| y_c(3) | 0.19 | 0.12 | 0.17 |
+| V_c,max | 0.62 | 0.32 | 0.04 |
+| Peak time | 1.8 | 0.13 | 0.41 |
+
+On every refinement V_c,max falls. Across the three grids y_c(3) varies by at most 0.0008 (differences +0.0008, -0.0005, which
+change sign, so no order is read from them). It sits 0.0013 to 0.0021 below Hysing's TP2D 1.0813, which is 3 to 5 times the 0.0004
+difference between the TP2D and MooNMD (1.0817) values read in ADR 0096.
+
+Against ADR 0106 H4 (component diagonal and height function without the transposed stress, same indicator field as XC): on
+160 x 320 the transposed viscous stress moves V_c,max from 0.2486 to 0.2416 (the 3 percent over-speed is gone) and y_c(3) from
+1.0737 to 1.0794. So the offset of the defaults (ADR 0100) is accounted for, to the size above, by three opt-ins: the wall defect
+(ADR 0103), the non-convergent CSF curvature (ADR 0106) and the missing transposed stress.
 
 ### Part 2, fallback
 

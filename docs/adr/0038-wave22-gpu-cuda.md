@@ -1,18 +1,39 @@
 # ADR 0038: Wave 22, GPU linear solvers through CUDA (F-101)
 
 Status: accepted. Everything under "Decisions" and "Registered checks" was written before any code of this wave existed.
-Limits are not changed, widened, replaced or deleted after a run. A miss is reported as measured and the assertion moves to an
-ignored `*_known_miss` test with the registered limit intact; the cause is diagnosed, not tuned away. A test set-up defect gets a
-NEW corrected test and the old one stays as a record. Addenda (file names, measured numbers, deviations) may be appended at the
-end without touching a registered limit.
 
-Scope. F-101 is `todo`; this wave delivers a first slice (device linear solvers for the pressure Poisson equation) and stops at
-`partial` at best. Named gaps, none of which is attempted: device-resident finite-volume assembly (flux assembly stays on the
-CPU, the matrix is uploaded every solve), AMG on the device, ILU/IC on the device, GMRES on the device, multi-GPU and MPI
-(F-100), non-NVIDIA vendors (wgpu was not chosen), and every flow/energy/species/turbulence/radiation equation other than the
-pressure equation of the segregated incompressible algorithms. Clean-room: published algorithms only (CSR SpMV, CG, BiCGStab,
-Chebyshev polynomial preconditioning, tree reductions); no vendor sample code, text or data. NVIDIA and CUDA appear only as
-technology names. The user decided: CUDA through the `cudarc` crate, linear solvers first.
+Wave 22 delivers a first slice of F-101: device linear solvers for the pressure Poisson equation, through CUDA. The user
+decided: CUDA through the `cudarc` crate, linear solvers first. The new crate `rcfd-gpu` holds the CUDA code behind a
+Cargo feature `cuda` that is OFF by default, and `device = cpu` (the default) is bit-identical. The workspace lint
+`unsafe_code = "forbid"` stays for every other crate; `rcfd-gpu` keeps all `unsafe` in one module, `launch.rs`. The
+addendum table reports every registered check inside its limit, including F1: at 171^3 the GPU one-shot solve takes
+0.2009 s against 1.9446 s for one CPU thread in the benchmark (9.7x), and 0.187 s against 2.839 s (15.2x) in the ignored
+test. The GPU is slower than one CPU thread at 4096 unknowns (0.22x one-shot). Disclosed deviations include a C1 set-up
+defect (the first test's case diverged, and that test is kept as an ignored test) and the run-header print from D6,
+which is NOT implemented. F-101 is `partial`: multi-GPU, device-resident finite-volume assembly, AMG/ILU/GMRES on the
+device, other vendors and non-segregated algorithms on the device are not delivered.
+
+Scope. F-101 is `todo`; this wave delivers a first slice (device linear solvers for the pressure Poisson equation) and
+stops at `partial` at best. Named gaps, none of which is attempted:
+
+- device-resident finite-volume assembly (flux assembly stays on the CPU, the matrix is uploaded every solve)
+- AMG on the device
+- ILU/IC on the device
+- GMRES on the device
+- multi-GPU and MPI (F-100)
+- non-NVIDIA vendors (wgpu was not chosen)
+- every flow/energy/species/turbulence/radiation equation other than the pressure equation of the segregated
+  incompressible algorithms
+
+Rules:
+
+- Limits are not changed, widened, replaced or deleted after a run.
+- A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; the cause is diagnosed, not tuned away.
+- A test set-up defect gets a NEW corrected test and the old one stays as a record.
+- Addenda (file names, measured numbers, deviations) may be appended at the end without touching a registered limit.
+- Clean-room: published algorithms only (CSR SpMV, CG, BiCGStab, Chebyshev polynomial preconditioning, tree reductions);
+  no vendor sample code, text or data. NVIDIA and CUDA appear only as technology names.
 
 ## Decisions
 
@@ -50,15 +71,22 @@ Gershgorin bound as the device version, so iteration counts are comparable). `rc
 
 ### D4 Runtime discovery
 
-`rcfd_gpu::probe()` returns `DeviceStatus::{Available{name, compute_capability, total_mem, driver_version, toolkit}, Unavailable{reason}}`
-and never panics. Order: (1) `RCFD_GPU_DISABLE` set to anything but `0` or empty gives `Unavailable("disabled by RCFD_GPU_DISABLE")`
-(this is the simulated-absent-device override); (2) feature `cuda` not compiled gives `Unavailable("built without feature cuda")`;
-(3) locate the toolkit directory holding `nvrtc64_*.dll` (Windows): `RCFD_CUDA_BIN`, then `CUDA_PATH`, then `CUDA_PATH_V*`, then
-the newest `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*` , each trying `bin\x64` then `bin`; the directory is prepended
-to the PATH of the running process only (never persisted) before the first library load, and is recorded in the status;
-(4) load the driver, count devices, create the context of device 0 (`RCFD_GPU_DEVICE` selects another ordinal), compile the
-kernels. Each failing step produces a located reason ("nvrtc not found; searched: ...", "no CUDA device", the driver error).
-The result is cached in a process-wide `OnceLock`.
+`rcfd_gpu::probe()` returns
+`DeviceStatus::{Available{name, compute_capability, total_mem, driver_version, toolkit}, Unavailable{reason}}` and never
+panics. Order:
+
+1. `RCFD_GPU_DISABLE` set to anything but `0` or empty gives `Unavailable("disabled by RCFD_GPU_DISABLE")` (this is the
+   simulated-absent-device override);
+2. feature `cuda` not compiled gives `Unavailable("built without feature cuda")`;
+3. locate the toolkit directory holding `nvrtc64_*.dll` (Windows): `RCFD_CUDA_BIN`, then `CUDA_PATH`, then
+   `CUDA_PATH_V*`, then the newest `C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v*` , each trying `bin\x64` then
+   `bin`; the directory is prepended to the PATH of the running process only (never persisted) before the first library
+   load, and is recorded in the status;
+4. load the driver, count devices, create the context of device 0 (`RCFD_GPU_DEVICE` selects another ordinal), compile
+   the kernels.
+
+Each failing step produces a located reason ("nvrtc not found; searched: ...", "no CUDA device", the driver error). The
+result is cached in a process-wide `OnceLock`.
 
 ### D5 Kernels (f64, NVRTC)
 
@@ -88,28 +116,44 @@ live-count counter (exposed as `rcfd_gpu::alloc_stats()`); the counters are the 
 ### D6 Case settings (additive, unset sentinels)
 
 New section `linear_solver`:
-`device = "cpu"` (`cpu | cuda | auto`; unset is `cpu`), `preconditioner = "jacobi"` (`jacobi | chebyshev`, device only),
-`chebyshev_degree = 0` (0 = unset = 4; range 0..32). Meaning: `cpu` is the unchanged CPU path; `cuda` runs the pressure
-CG on the device and is a located error (`linear_solver.device`, with the discovery reason) if the device is unavailable or the
-build lacks the feature; `auto` uses the device only if it is available and the system has at least 100000 unknowns, otherwise
-the unchanged CPU path (silently, the reason is available from `rcfd_gpu::status()` and printed by `rcfd run` in the run header);
-the threshold is a registered parameter, fixed before any measurement and not tuned from the benchmark. The setting applies to the
-pressure equation of `simple/simplec/piso/pimple` (including the non-orthogonal-corrector systems); with the device selected the
-pressure CG uses the device preconditioner (Jacobi or Chebyshev) instead of DIC or AMG (so the iteration count differs from the
-CPU path and the converged fields agree only to solver tolerance). `device != cpu` together with `coupled`, `compressible` or a variable-density fluid is a located semantic error at
-`linear_solver.device` (those solvers do not use the segregated pressure solve). The non-orthogonal "extras" systems (periodic
-pairs) are plain CSR and also run on the device.
+
+* `device = "cpu"` (`cpu | cuda | auto`; unset is `cpu`)
+* `preconditioner = "jacobi"` (`jacobi | chebyshev`, device only)
+* `chebyshev_degree = 0` (0 = unset = 4; range 0..32)
+
+Meaning:
+
+* `cpu` is the unchanged CPU path;
+* `cuda` runs the pressure CG on the device and is a located error (`linear_solver.device`, with the discovery reason)
+  if the device is unavailable or the build lacks the feature;
+* `auto` uses the device only if it is available and the system has at least 100000 unknowns, otherwise the unchanged
+  CPU path (silently, the reason is available from `rcfd_gpu::status()` and printed by `rcfd run` in the run header);
+  the threshold is a registered parameter, fixed before any measurement and not tuned from the benchmark.
+
+The setting applies to the pressure equation of `simple/simplec/piso/pimple` (including the non-orthogonal-corrector
+systems); with the device selected the pressure CG uses the device preconditioner (Jacobi or Chebyshev) instead of DIC
+or AMG (so the iteration count differs from the CPU path and the converged fields agree only to solver tolerance).
+`device != cpu` together with `coupled`, `compressible` or a variable-density fluid is a located semantic error at
+`linear_solver.device` (those solvers do not use the segregated pressure solve). The non-orthogonal "extras" systems
+(periodic pairs) are plain CSR and also run on the device.
 
 ### D7 Benchmarks
 
 `cargo run -p rcfd-gpu --features cuda --release --example gpu_bench`: 3-D 7-point Poisson, cube sizes `16^3` (4096),
-`32^3`, `64^3`, `100^3` (1e6), `171^3` (5 000 211). Per size: CPU single thread (rayon pool of 1) CG+Jacobi, CPU all threads
-CG+Jacobi, CPU single thread AMG-preconditioned CG (the best available CPU path, reported so the speedup is not flattered),
-GPU CG+Jacobi resident (matrix already on the device), GPU CG+Jacobi one-shot including upload and download, and the
-transfer costs alone (A+b up, x down, bytes and ms). Tolerance `tol_rel = 1e-6`, `tol_abs = 0`, `max_iter = 5000`,
-right-hand side from a fixed manufactured solution. 1 warm-up run, then median of N = 5 (wall clock, device synchronised
-before the clock stops). Speedup = CPU median / GPU median, printed whether above or below one. Iteration counts are printed
-(GPU and CPU run the identical algorithm and tolerance). The first-call cost (toolkit location, context creation, NVRTC compile) is reported as its own line. Results go in `docs/gpu.md` as measured.
+`32^3`, `64^3`, `100^3` (1e6), `171^3` (5 000 211). Per size:
+
+* CPU single thread (rayon pool of 1) CG+Jacobi,
+* CPU all threads CG+Jacobi,
+* CPU single thread AMG-preconditioned CG (the best available CPU path, reported so the speedup is not flattered),
+* GPU CG+Jacobi resident (matrix already on the device),
+* GPU CG+Jacobi one-shot including upload and download, and
+* the transfer costs alone (A+b up, x down, bytes and ms).
+
+Tolerance `tol_rel = 1e-6`, `tol_abs = 0`, `max_iter = 5000`, right-hand side from a fixed manufactured solution. 1
+warm-up run, then median of N = 5 (wall clock, device synchronised before the clock stops). Speedup = CPU median / GPU
+median, printed whether above or below one. Iteration counts are printed (GPU and CPU run the identical algorithm and
+tolerance). The first-call cost (toolkit location, context creation, NVRTC compile) is reported as its own line. Results
+go in `docs/gpu.md` as measured.
 
 ## Registered checks
 
@@ -154,16 +198,18 @@ differences `||a-b||_2 / ||b||_2` unless stated.
   `max|a-b| / max|b|` <= 1e-6 for each of `ux, uy, p` (fixed iteration/step counts, no convergence claim).
 - C2 cpu unchanged. The cavity case with `linear_solver.device = "cpu"` explicit has every field and flux bit equal to the
   case without the section; baseline hashes (B1) unchanged.
-- M1 leaks. Runs in its own integration-test binary containing a single test (the counters are process-wide). The baseline is
-  taken after one warm-up solve (cached module/scratch allowed). After 200 repeated one-shot CG solves (n = 10000, new buffers each time) and 50 repeated resident-system
-  create/solve/drop cycles, `alloc_stats()` live bytes == value before the loop and live buffer count == value before (exact
-  equality); the driver free-memory difference is reported, not a criterion.
+- M1 leaks. Runs in its own integration-test binary containing a single test (the counters are process-wide). The
+  baseline is taken after one warm-up solve (cached module/scratch allowed). After 200 repeated one-shot CG solves (n =
+  10000, new buffers each time) and 50 repeated resident-system create/solve/drop cycles, `alloc_stats()` live bytes ==
+  value before the loop and live buffer count == value before (exact equality); the driver free-memory difference is
+  reported, not a criterion.
 - E1 error paths. `linear_solver.device = "gpu"` is a schema error at `linear_solver.device`; `chebyshev_degree = 99` is
-  a schema range error at that path; `device = cuda` with `solver.algorithm = "compressible"` is a located semantic error;
-  the rcfd-gpu API returns `BackendError` (message names the argument and the lengths) for a b/x length mismatch, a non-square
-  matrix, and the size-validation step (a pure function of the counts, tested with synthetic counts and no allocation) rejects a
-  nonzero count above `i32::MAX` and a row count above `i32::MAX` with a located message; a solve whose `max_iter` is exhausted returns `converged = false`
-  without panic; a right-hand side containing NaN returns without panic or hang (converged = false, iterations <= max_iter).
+  a schema range error at that path; `device = cuda` with `solver.algorithm = "compressible"` is a located semantic
+  error; the rcfd-gpu API returns `BackendError` (message names the argument and the lengths) for a b/x length mismatch,
+  a non-square matrix, and the size-validation step (a pure function of the counts, tested with synthetic counts and no
+  allocation) rejects a nonzero count above `i32::MAX` and a row count above `i32::MAX` with a located message; a solve
+  whose `max_iter` is exhausted returns `converged = false` without panic; a right-hand side containing NaN returns
+  without panic or hang (converged = false, iterations <= max_iter).
 - Commands. Default gate: `cargo test --workspace --release` (P1, B1, B2, default-build halves of D2/E1; GPU tests skip visibly).
   GPU gate: `cargo test -p rcfd-gpu --features cuda --release -- --nocapture` (D1, K1, K2, S1, S2, M1, E1 API half, D2 child) and
   `cargo test -p rcfd-api --features cuda --release --test gpu_case --test baseline_hashes -- --nocapture` (C1, C2, B1 with the
@@ -185,7 +231,8 @@ command and the results table.
 
 ## Addendum: results and deviations (end of wave 22)
 
-Measured on RTX 5080 (sm_120, 16275 MiB), driver 617.42, toolkit 13.4 (found by the Program Files scan; `CUDA_PATH` unset), 16 CPU threads.
+Measured on RTX 5080 (sm_120, 16275 MiB), driver 617.42, toolkit 13.4 (found by the Program Files scan; `CUDA_PATH`
+unset), 16 CPU threads.
 No registered limit was changed.
 
 | Check | Limit | Measured |
@@ -204,23 +251,36 @@ No registered limit was changed.
 | E1 | located errors | pass |
 | F1 | GPU one-shot faster than 1-thread CPU at 171^3 | pass: 0.2009 s vs 1.9446 s in the benchmark (9.7x); 0.187 s vs 2.839 s (15.2x) in the ignored test |
 
-The full benchmark table (sizes 16^3 to 171^3, 16 threads, AMG-CG, transfer costs) is in `docs/gpu.md`. The GPU is slower than one CPU thread at
-4096 unknowns (0.22x one-shot).
+The full benchmark table (sizes 16^3 to 171^3, 16 threads, AMG-CG, transfer costs) is in `docs/gpu.md`. The GPU is
+slower than one CPU thread at 4096 unknowns (0.22x one-shot).
 
 Deviations and set-up defects, disclosed:
 
-1. C1 set-up defect. The first C1 test ran the steady `simple` case with the default relaxation factors; the case diverges (fields ~1e60) on the CPU and on
-   the device, so the comparison meant nothing. That test is kept as the ignored `c1_full_case_cuda_matches_cpu_diverged_setup`; the corrected test
-   `c1_full_case_cuda_matches_cpu` sets `alpha_u = 0.7`, `alpha_p = 0.3` for the steady case. The limit (1e-6) is unchanged.
-2. `GpuPrecond::None` exists in the library API only, so that the registered S1/S2 "none" preconditioner can be run; the case schema offers `jacobi` and `chebyshev`.
-3. Run header. D6 mentioned printing the device decision in the `rcfd run` header; this is NOT implemented. The decision is available through
-   `rcfd_gpu::probe`, `resolve` and `fallbacks()`, and errors are located diagnostics.
-4. Runtime failure. A device failure during a run with `device = cuda` (after the up-front diagnostic) panics with a located message; `auto` falls back and records it.
-5. Unsupported combinations. `device` other than `cpu` with `coupled`, compressible/energy or non-constant density is a located semantic error.
-6. Timing variation. CPU 1-thread time at 171^3 was 1.94 s in the benchmark and 2.84 s in the F1 test; both runs pass F1.
-7. Unsafe policy. The workspace lint `unsafe_code = "forbid"` stays for every other crate; `rcfd-gpu` has its own lint table (`deny`, allowed only in `src/cuda/launch.rs`).
-8. Layering test. The existing test `layering_matches_architecture_doc` (rcfd-cli/tests/workspace_graph.rs) failed on the first full-workspace gate run with `unknown crate rcfd-gpu`. `rcfd-gpu` is now a layer of its own between `linalg` and `fv` (the later layers are renumbered, their relative order is unchanged), and `docs/architecture.md` lists it. No rule was loosened.
-9. Benchmark reporting defect. The first version of the transfer table in `docs/gpu.md` labelled a single cold upload sample as the matrix upload time next to medians, and it exceeded the one-shot median at two sizes. The column is relabelled as a single cold sample and a derived column (one-shot minus resident, from medians) is added. The benchmark was not rerun.
+1. C1 set-up defect. The first C1 test ran the steady `simple` case with the default relaxation factors; the case
+   diverges (fields ~1e60) on the CPU and on the device, so the comparison meant nothing. That test is kept as the
+   ignored `c1_full_case_cuda_matches_cpu_diverged_setup`; the corrected test `c1_full_case_cuda_matches_cpu` sets
+   `alpha_u = 0.7`, `alpha_p = 0.3` for the steady case. The limit (1e-6) is unchanged.
+2. `GpuPrecond::None` exists in the library API only, so that the registered S1/S2 "none" preconditioner can be run; the
+   case schema offers `jacobi` and `chebyshev`.
+3. Run header. D6 mentioned printing the device decision in the `rcfd run` header; this is NOT implemented. The decision
+   is available through `rcfd_gpu::probe`, `resolve` and `fallbacks()`, and errors are located diagnostics.
+4. Runtime failure. A device failure during a run with `device = cuda` (after the up-front diagnostic) panics with a
+   located message; `auto` falls back and records it.
+5. Unsupported combinations. `device` other than `cpu` with `coupled`, compressible/energy or non-constant density is a
+   located semantic error.
+6. Timing variation. CPU 1-thread time at 171^3 was 1.94 s in the benchmark and 2.84 s in the F1 test; both runs pass
+   F1.
+7. Unsafe policy. The workspace lint `unsafe_code = "forbid"` stays for every other crate; `rcfd-gpu` has its own lint
+   table (`deny`, allowed only in `src/cuda/launch.rs`).
+8. Layering test. The existing test `layering_matches_architecture_doc` (rcfd-cli/tests/workspace_graph.rs) failed on
+   the first full-workspace gate run with `unknown crate rcfd-gpu`. `rcfd-gpu` is now a layer of its own between
+   `linalg` and `fv` (the later layers are renumbered, their relative order is unchanged), and `docs/architecture.md`
+   lists it. No rule was loosened.
+9. Benchmark reporting defect. The first version of the transfer table in `docs/gpu.md` labelled a single cold upload
+   sample as the matrix upload time next to medians, and it exceeded the one-shot median at two sizes. The column is
+   relabelled as a single cold sample and a derived column (one-shot minus resident, from medians) is added. The
+   benchmark was not rerun.
 
-Not delivered: multi-GPU, device-resident finite-volume assembly, AMG/ILU/GMRES on the device, other vendors, non-segregated algorithms on the device.
+Not delivered: multi-GPU, device-resident finite-volume assembly, AMG/ILU/GMRES on the device, other vendors,
+non-segregated algorithms on the device.
 F-101 is `partial`.

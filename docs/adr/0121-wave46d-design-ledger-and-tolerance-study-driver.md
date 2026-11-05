@@ -1,14 +1,29 @@
 # ADR 0121: Wave 46D, a durable design ledger (H4) and a tolerance/uncertainty study driver (F1)
 
-Status: **ACCEPTED (registered 2026-10-26)**. The limits, seeds and sample sizes below were fixed before any registered test ran. The
-house rules of ADRs 0110-0117 apply:
-* a missed limit becomes an ignored `*_known_miss` test with the limit intact;
-* a defective set-up gets a new corrected test, registered here as an amendment before it runs;
-* defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
+Status: **ACCEPTED (registered 2026-10-26)**. The limits, seeds and sample sizes below were fixed before any registered
+test ran.
 
-Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46d`, target `<target dir>`). Clean-room: first
-principles and published statistics only. Parents: ADR 0067 (design loop, store, MCP design tools), `docs/fan-project-breakdown.md`
-parts H4 and F1.
+This ADR adds a durable design ledger (part H4 of `docs/fan-project-breakdown.md`) and a tolerance/uncertainty study driver
+(part F1). The ledger is a JSON-lines file of evaluated variants, with units, evaluator, solver version, verdict and fidelity
+tier on each entry; it survives sessions and lets a result be re-run. The driver samples named inputs by Monte Carlo or Latin
+hypercube, stops on a standard-error rule, and reports mean, sd, quantile intervals, the probability of violating each
+requirement and a ranking by standardised regression coefficients. The ledger has four service methods and four MCP tools; F1
+is library-only, because a closure evaluator cannot cross MCP. No default changes: no existing path calls the ledger or the
+driver, and the existing design tools are not wired to log into the ledger. All registered checks passed, with no known miss
+and no amendment when the addendum was written. Amendment 1, written after those runs, added L3b because L3 has no negative
+control of its own and its registered run did not tear the tail; L3b passed. The measured numbers verify the driver and the
+ledger on analytic functions and say nothing about the spread of a real fan's flow, power, noise or vibration; F1 stays partial.
+
+Rules and parents:
+
+* Written at main 4ea5b7b (worktree `<scratch dir>`, branch `w46d`, target `<target dir>`).
+* Clean-room: first principles and published statistics only.
+* Parents: [ADR 0067](0067-wave32c-design-loop.md) (design loop, store, MCP design tools),
+  `docs/fan-project-breakdown.md` parts H4 and F1.
+* The house rules of ADRs 0110-0117 apply:
+  * a missed limit becomes an ignored `*_known_miss` test with the limit intact;
+  * a defective set-up gets a new corrected test, registered here as an amendment before it runs;
+  * defaults stay bit-identical, and `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded.
 
 ## Context
 
@@ -46,12 +61,21 @@ driver takes any evaluator through a generic trait, and every check uses analyti
 1. **D1 Ledger file and entry** (`crates/rcfd-api/src/design/ledger.rs`).
    * One JSON object per line, keys sorted (serde_json `BTreeMap`), `format = "rcfd-ledger-1"` on every line (no header line, so two
      first appends cannot race on a header). The entry index is the position of the valid line; nothing else numbers entries.
-   * Fields: `kind` (`evaluation`, or a summary kind such as `uq_summary`), `study`, `variant`, `params` and `metrics` as lists of
-     `{name, value, unit}` (unit required, `"1"` for dimensionless; names unique), `evaluator`, `evaluator_version`, `solver_version`
-     (stamped `rcfd <version>` plus ` (<rev>)` when the build sets `RCFD_GIT_REV`; a `git archive` build has no revision),
-     `geometry_hash`, `settings` (free JSON: what re-runs it), `verdict` (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`;
-     a located `reason` is required unless `ok`; `ok` requires finite metrics), `fidelity` (`analytic`, `reduced_order`, `cfd`),
-     `recorded_at_ms` (from an injectable clock), `wall_s`, `seed`, `provenance` (free JSON).
+   * Fields:
+     * `kind` (`evaluation`, or a summary kind such as `uq_summary`);
+     * `study`, `variant`;
+     * `params` and `metrics` as lists of `{name, value, unit}` (unit required, `"1"` for dimensionless; names unique);
+     * `evaluator`, `evaluator_version`;
+     * `solver_version` (stamped `rcfd <version>` plus ` (<rev>)` when the build sets `RCFD_GIT_REV`; a `git archive` build
+       has no revision);
+     * `geometry_hash`;
+     * `settings` (free JSON: what re-runs it);
+     * `verdict` (`ok`, `diverged`, `constraint_rejected`, `not_evaluated`; a located `reason` is required unless `ok`; `ok`
+       requires finite metrics);
+     * `fidelity` (`analytic`, `reduced_order`, `cfd`);
+     * `recorded_at_ms` (from an injectable clock);
+     * `wall_s`, `seed`;
+     * `provenance` (free JSON).
    * Numbers: the workspace enables serde_json `float_roundtrip`, so every finite value reads back bit for bit; a NaN metric of a
      non-ok entry is stored as null and reads back as NaN.
 2. **D2 Crash safety and concurrency.**
@@ -82,8 +106,8 @@ driver takes any evaluator through a generic trait, and every check uses analyti
    * Sampling by inverse CDF of uniforms clamped into the open unit interval. Monte Carlo: one xoshiro256** stream, so the first n
      samples do not depend on the batch size. Latin hypercube: replicated, one independent LHS of `batch` points per replicate (an LHS
      cannot be extended and stay stratified).
-   * Stopping rule: after each batch (and at least `min_batches`), stop when every controlled metric has `SE <= max(se_abs, se_rel
-     |mean|)`; stop with `converged = false` at `max_samples`. MC: `SE = s / sqrt(n)`. LHS: `SE = sd(replicate means) /
+   * Stopping rule: after each batch (and at least `min_batches`), stop when every controlled metric has `SE <= max(se_abs,
+     se_rel |mean|)`; stop with `converged = false` at `max_samples`. MC: `SE = s / sqrt(n)`. LHS: `SE = sd(replicate means) /
      sqrt(replicates)`, at least 2 replicates.
    * Per metric: mean, sd (n - 1), SE, quantile `X_(ceil(n p))` with the distribution-free order-statistic interval `[X_(l), X_(u)]`
      chosen from the binomial CDF (`P(B <= k) = I_{1-p}(n - k, k + 1)`) with each tail at most `(1 - confidence) / 2`, and its exact
@@ -259,9 +283,13 @@ H4 is done when L1-L6 and M1 pass; F1 is partial in any case (library only, anal
 
 ## Out of scope
 
-* MCP tool for the tolerance driver (needs a named evaluator), Morris and Sobol sensitivity indices, correlated inputs, resuming a
-  killed tolerance study, an OS file lock for several writer processes, logging the existing `design.*` study evaluations into the
-  ledger automatically, and any fan-specific perturbation (46A) or evaluator (46B).
+* MCP tool for the tolerance driver (needs a named evaluator).
+* Morris and Sobol sensitivity indices.
+* Correlated inputs.
+* Resuming a killed tolerance study.
+* An OS file lock for several writer processes.
+* Logging the existing `design.*` study evaluations into the ledger automatically.
+* Any fan-specific perturbation (46A) or evaluator (46B).
 
 ## Files
 

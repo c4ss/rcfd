@@ -1,15 +1,37 @@
-# ADR 0084: Wave 37A, the SIMPLEC instability on uniformly sheared meshes by linearisation of the outer iteration, and an opt-in fix if a mechanism is found
+# ADR 0084: Wave 37A, the SIMPLEC instability on uniformly sheared meshes and an opt-in fix
 
-Status: registered before any run it governs and before any solver code of this wave was written. Limits are not changed, widened or deleted after a
-run; a miss becomes an ignored `*_known_miss` test with the limit intact, a defective set-up gets a NEW corrected test and the old one stays ignored.
-Baseline hashes are never re-recorded; every change is opt-in. Clean-room: first principles and published literature only. Written at HEAD feb015f
-(scratch clone `<scratch dir>`, target `<target dir>`).
+Status: registered before any run it governs and before any solver code of this wave was written.
 
-Parent: ADR 0081 part X (wave 36B). Its outcome: SIMPLEC (alpha_u 0.9, alpha_p 1.0, `upwind`, no non-orthogonal correctors) on the uniformly sheared
-channel B overshoots from 50 degrees and diverges from 55; the doubly periodic Kolmogorov box V7 (nu 0.5, cell Peclet 0.2, no wall, no open boundary)
-is UNSTABLE from 60 degrees; lower `alpha_p` raises the channel threshold (0.7: 60, 0.5: 70, 0.3: > 79); the hypotheses H-X1 (SIMPLEC compact/wide
-compensation) and H-X2 (omitted non-orthogonal pressure part, by its registered rule) were falsified; H-X6 "start-up only" stood on the evidence of V9 /
-V9b (channel B at 60 degrees, nu 0.01: increments from the converged state decay, 0.982 and 0.889 per iteration). The mechanism was not identified.
+ADR 0081 part X left the SIMPLEC instability on uniformly sheared meshes without an identified mechanism. This wave registered a
+linearisation of the outer iteration to find it, and an opt-in fix if a mechanism is found. The amendments and the addendum record
+the outcome, measured after this registration. The SIMPLEC divergence is a period-two pressure mode of the outer iteration: a linear
+instability of the converged state on the doubly periodic box V7, and a start-up instability on channel B. H1, H2, H3, H4 (both
+clauses) and H5 stand, and M1 is met in the scaled variables only (raw K40 60: 4.26e-4 against 1e-4). The fix R, the opt-in key
+`solver.velocity_correction = "face_flux"`, met every acceptance limit and is kept; the final gate on 18904b1 gave 1879 passed, 0
+failed, 525 ignored. On FAN-01 the key meets P10 (L / c10 0.330 against 8.36), but "Converges" is not met: `res_u` and `res_p` are
+never both below 1e-4 within 1500 iterations. Finding S, the SIMPLEC compensation missing on periodic seam faces, is reported, not
+fixed.
+
+Rules and parents:
+
+* Limits are not changed, widened or deleted after a run; a miss becomes an ignored `*_known_miss` test with the limit intact, a
+  defective set-up gets a NEW corrected test and the old one stays ignored.
+* Baseline hashes are never re-recorded; every change is opt-in.
+* Clean-room: first principles and published literature only.
+* Written at HEAD feb015f (scratch clone `<scratch dir>`, target `<target dir>`).
+
+Parent: ADR 0081 part X (wave 36B). Its outcome:
+
+* SIMPLEC (alpha_u 0.9, alpha_p 1.0, `upwind`, no non-orthogonal correctors) on the uniformly sheared channel B overshoots from 50
+  degrees and diverges from 55;
+* the doubly periodic Kolmogorov box V7 (nu 0.5, cell Peclet 0.2, no wall, no open boundary) is UNSTABLE from 60 degrees;
+* lower `alpha_p` raises the channel threshold (0.7: 60, 0.5: 70, 0.3: > 79);
+* the hypotheses H-X1 (SIMPLEC compact/wide compensation) and H-X2 (omitted non-orthogonal pressure part, by its registered rule)
+  were falsified;
+* H-X6 "start-up only" stood on the evidence of V9 / V9b (channel B at 60 degrees, nu 0.01: increments from the converged state
+  decay, 0.982 and 0.889 per iteration).
+
+The mechanism was not identified.
 
 ## What was run before this registration (disclosed; rule (d))
 
@@ -59,10 +81,16 @@ periodic seams, see S below), stopped at res 1e-12 or 20 000 iterations, accepte
 most 1e-12 (max abs, raw units; SM6). x0: the initial state (fields at rest, p = 0, flux from `SimpleSolver::new`). x_k: the k-th iterate of the base map
 (tight) from x0.
 
-**Set-ups.** K40: V7 as ADR 0081 (40 x 10 on 4 x 1, nu 0.5, body force nu k^2 sin(k y), k = 2 pi, exact u = (sin(k y), 0)). K20: 20 x 10 on 2 x 1. K10:
-10 x 10 on 1 x 1. KS: K40 with nu = 50 (the same forcing law, so the same exact solution; cell Peclet 0.002: the Stokes limit). KC: K40 with `central`
-convection. B: channel B of ADR 0081 (40 x 10, nu 0.01, inlet 1, walls, outlet p = 0). Base map: SIMPLEC, alpha_u 0.9, alpha_p 1.0, `upwind`, no
-correctors (unless stated).
+**Set-ups.**
+
+* K40: V7 as ADR 0081 (40 x 10 on 4 x 1, nu 0.5, body force nu k^2 sin(k y), k = 2 pi, exact u = (sin(k y), 0)).
+* K20: 20 x 10 on 2 x 1.
+* K10: 10 x 10 on 1 x 1.
+* KS: K40 with nu = 50 (the same forcing law, so the same exact solution; cell Peclet 0.002: the Stokes limit).
+* KC: K40 with `central` convection.
+* B: channel B of ADR 0081 (40 x 10, nu 0.01, inlet 1, walls, outlet p = 0).
+
+Base map: SIMPLEC, alpha_u 0.9, alpha_p 1.0, `upwind`, no correctors (unless stated).
 
 **Jacobians (each formed once):**
 
@@ -170,12 +198,17 @@ recalled, UNVERIFIED). The Kolmogorov-flow linear stability bound used by ADR 00
 
 ## Amendment 1 (written after J1, J10 and the J1 checks ran, before J2-J9 were analysed and before any attribution switch ran; no limit changed)
 
-What I knew when writing this: J1 (K40 x*): rho 0.9505 (50 deg), 0.9472 (55), 0.9919 (57.5), **1.0612 (60)**, 1.2375 (65), 1.4425 (70); from 57.5 deg
-on the leading eigenvalue is real and NEGATIVE (-0.9919, -1.0612, -1.2375, -1.4425: a period-two oscillation), its eigenvector is 99 % pressure, x-Fourier
-index m = 1 (the next, m = 2), no checkerboard; at 50-55 the leading mode is a slow positive one (m = 1, mixed u/v). Two neutral modes (both mean
-velocities) at 1 +- 3e-9 at every angle. M2 held everywhere. M3: measured growth 1.0586 / 1.2287 / 1.4343 against rho 1.0612 / 1.2375 / 1.4425 (60 / 65
-/ 70; within 0.25 / 0.7 / 0.6 %). J10: rho 0.9684 (0 deg), 0.9612 (30 deg). J10 ran in the same invocation as J1 (the selection `W37A_ONLY=J1` matched
-`J10` as a prefix); it was a registered run and was formed once.
+What I knew when writing this:
+
+* J1 (K40 x*): rho 0.9505 (50 deg), 0.9472 (55), 0.9919 (57.5), **1.0612 (60)**, 1.2375 (65), 1.4425 (70).
+* From 57.5 deg on the leading eigenvalue is real and NEGATIVE (-0.9919, -1.0612, -1.2375, -1.4425: a period-two oscillation). Its
+  eigenvector is 99 % pressure, x-Fourier index m = 1 (the next, m = 2), no checkerboard. At 50-55 the leading mode is a slow positive
+  one (m = 1, mixed u/v).
+* Two neutral modes (both mean velocities) at 1 +- 3e-9 at every angle.
+* M2 held everywhere.
+* M3: measured growth 1.0586 / 1.2287 / 1.4343 against rho 1.0612 / 1.2375 / 1.4425 (60 / 65 / 70; within 0.25 / 0.7 / 0.6 %).
+* J10: rho 0.9684 (0 deg), 0.9612 (30 deg). J10 ran in the same invocation as J1 (the selection `W37A_ONLY=J1` matched `J10` as a
+  prefix); it was a registered run and was formed once.
 
 **M1, an ambiguity in my registration.** The registration says "relative Frobenius difference <= 1e-4" without saying in which variables. In the raw
 variables J(h = 1e-6) and J(1e-7) at K40 60 differ by **4.26e-4 (above the limit)**; in the scaled variables in which every eigenvalue of this ADR is
@@ -216,15 +249,24 @@ Cost per outer iteration (pressure solves) is reported for every candidate.
 Transient growth at x* (deflated, scaled): 50 deg max ||J^k|| = 59.9 (k = 1), 55: 64.8 (k = 1), decaying from k = 10 on; at 60 and above it grows
 without bound (rho > 1). Neutral modes: two (mean u_x and u_y) at 1 +- 3e-9 at every K40 x*; none excluded at the non-fixed states.
 
-Method checks: **M1** K40 60: scaled 1.65e-5 (raw 4.26e-4, see amendment 1), rho 1.061189 for both steps; B 55: scaled 4.8e-7, raw 7.0e-7, rho
-0.910535 / 0.910551: met in the scaled variables. **M2** every state: stateless. **M3** 60 / 65 / 70 (alpha_p 1.0) and 70 (0.7): measured growth
-1.0586 / 1.2287 / 1.4343 / 1.1170 against rho 1.0612 / 1.2375 / 1.4425 / 1.1258 (0.25 / 0.71 / 0.57 / 0.79 %): met. **M4** every formed K40 pair agrees
-with its measured classification (alpha_p 1.0: 50-57.5 rho < 1 STABLE, 60-70 rho > 1 UNSTABLE; 0.7: 60, 65 STABLE / rho < 1, 70 UNSTABLE / rho > 1).
+Method checks:
 
-Readings (registered rules): **H1 stands** (V7 is a linear instability of its converged state, a period-two pressure mode; not a start-up
-transient). **H2 stands** (Stokes limit 1.0587, central 1.0625: no convection needed). **H3 stands** (m = 1; K10 0.910 <= 1 < K20 1.047: the 1 x 1 box
-cannot hold the mode). **H4 stands, both clauses** (channel B: x* stable 0.91 at 50-60; the linearisation along the start-up is unstable at x0, x5,
-x10, x20; the ADR 0081 H-X6 reading is confirmed for the channel and refuted for V7). **H5 stands** (no instability without shear).
+* **M1** K40 60: scaled 1.65e-5 (raw 4.26e-4, see amendment 1), rho 1.061189 for both steps; B 55: scaled 4.8e-7, raw 7.0e-7, rho
+  0.910535 / 0.910551: met in the scaled variables.
+* **M2** every state: stateless.
+* **M3** 60 / 65 / 70 (alpha_p 1.0) and 70 (0.7): measured growth 1.0586 / 1.2287 / 1.4343 / 1.1170 against rho 1.0612 / 1.2375 /
+  1.4425 / 1.1258 (0.25 / 0.71 / 0.57 / 0.79 %): met.
+* **M4** every formed K40 pair agrees with its measured classification (alpha_p 1.0: 50-57.5 rho < 1 STABLE, 60-70 rho > 1 UNSTABLE;
+  0.7: 60, 65 STABLE / rho < 1, 70 UNSTABLE / rho > 1).
+
+Readings (registered rules):
+
+* **H1 stands** (V7 is a linear instability of its converged state, a period-two pressure mode; not a start-up transient).
+* **H2 stands** (Stokes limit 1.0587, central 1.0625: no convection needed).
+* **H3 stands** (m = 1; K10 0.910 <= 1 < K20 1.047: the 1 x 1 box cannot hold the mode).
+* **H4 stands, both clauses** (channel B: x* stable 0.91 at 50-60; the linearisation along the start-up is unstable at x0, x5, x10,
+  x20; the ADR 0081 H-X6 reading is confirmed for the channel and refuted for V7).
+* **H5 stands** (no instability without shear).
 
 ### Attribution (K40 60 x* alpha_p 1.0, base rho 1.0612; K40 70 x* alpha_p 0.7, base 1.1258; B 55 x0, base 1.5836)
 
@@ -240,13 +282,14 @@ x10, x20; the ADR 0081 H-X6 reading is confirmed for the channel and refuted for
 With P or R the period-two pressure mode is gone at K40; what remains (0.943-0.950) is the slow velocity mode of the alpha_p 0.7 / 0 deg maps. On the channel
 start-up state x0 the P family leaves a positive mode concentrated at the boundary rows/columns (seam fraction 0.70-0.94), R does not.
 
-**Mechanism (stated with the measurements above):** the outer SIMPLEC iteration on a uniformly sheared mesh has a period-two pressure mode whose
-eigenvalue passes -1 between 57.5 and 60 degrees at alpha_p 1.0 (between 65 and 70 at 0.7); it lives in the Stokes part of the iteration (no convection,
-no wall, no open boundary needed) and is the mismatch between the cell velocity correction (`rAtU` times the full Green-Gauss gradient of the pressure
-change, tangential part included) and the face flux correction (the over-relaxed orthogonal part only): either making the face correction carry the
-non-orthogonal part of the CHANGE (P) or making the cell correction carry only what the face correction carries (R) removes the mode, and neither changes
-the fixed point. The missing SIMPLEC compensation on periodic seams (S) also moves it; it is a separate defect of periodic meshes (the converged seam
-flux carries rAtU where internal faces carry rAU) and is reported for a later wave, not fixed here.
+**Mechanism (stated with the measurements above):** the outer SIMPLEC iteration on a uniformly sheared mesh has a period-two pressure
+mode whose eigenvalue passes -1 between 57.5 and 60 degrees at alpha_p 1.0 (between 65 and 70 at 0.7). It lives in the Stokes part of
+the iteration (no convection, no wall, no open boundary needed) and is the mismatch between the cell velocity correction (`rAtU` times
+the full Green-Gauss gradient of the pressure change, tangential part included) and the face flux correction (the over-relaxed
+orthogonal part only). Either making the face correction carry the non-orthogonal part of the CHANGE (P) or making the cell correction
+carry only what the face correction carries (R) removes the mode, and neither changes the fixed point. The missing SIMPLEC compensation
+on periodic seams (S) also moves it. S is a separate defect of periodic meshes (the converged seam flux carries rAtU where internal
+faces carry rAU) and is reported for a later wave, not fixed here.
 
 ### The fix, frozen (choice rule: R and every P qualify; the smallest rho at K40 70 alpha_p 0.7 is R's, 0.94282; R is also the cheapest)
 
@@ -308,13 +351,17 @@ The ADR 0083 A0 set-up with `solver.velocity_correction = "face_flux"`, one 1500
 `crates/rcfd-api/tests/fan01_p10_w36d.rs`; about 8 minutes):
 
 * c10 6.92e-4, L (200-300) 2.29e-4, **L / c10 0.330: P10 met** (without the key 8.36, ADR 0083).
-* `res_u` 8.3e-2 (iteration 10), 2.8e-3 (100), 1.2e-3 (300), 6.7e-3 (1000), 3.5e-3 (1500); `res_p` 4.5e-2, 7.4e-4, 6.8e-4, 1.0e-3, 7.9e-4.
 * The argmax cells are not poor (f_poor 0). Largest relative speed 42.6 m/s (without the key 63-68).
 * **"Converges": not met.** `res_u` and `res_p` are never both below 1e-4 within 1500 iterations; from iteration 100 on they stall between 1e-3 and 7e-3.
 
-No FAN-01 Jacobian was formed: whether the A0 oscillation (`res_u` 0.35-0.43) is the same mode was not diagnosed; the key removes the P10 growth
-and leaves a non-convergence about a hundred times smaller in `res_u`. Candidates for it are the 83-degree faces, the rotating-frame terms and the laminar
-flow at Re 1.4e5; none was diagnosed.
+| Iteration | 10 | 100 | 300 | 1000 | 1500 |
+|---|---|---|---|---|---|
+| `res_u` | 8.3e-2 | 2.8e-3 | 1.2e-3 | 6.7e-3 | 3.5e-3 |
+| `res_p` | 4.5e-2 | 7.4e-4 | 6.8e-4 | 1.0e-3 | 7.9e-4 |
+
+No FAN-01 Jacobian was formed: whether the A0 oscillation (`res_u` 0.35-0.43) is the same mode was not diagnosed. The key removes
+the P10 growth and leaves a non-convergence about a hundred times smaller in `res_u`. Candidates for it are the 83-degree faces, the
+rotating-frame terms and the laminar flow at Re 1.4e5; none was diagnosed.
 
 ### Deviations from the registered plan (candid list)
 

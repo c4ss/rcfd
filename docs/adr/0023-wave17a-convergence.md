@@ -1,15 +1,30 @@
 # ADR 0023: Wave 17A convergence: residual-floor diagnosis (known misses), pseudo-transient controller (F-106), adaptive stepping (F-209)
 
-Status: accepted. Everything under "Diagnosis experiments", "Decisions" and "Registered checks" was written before any of
-the new experiments or tests was compiled or run (only the existing code and records were read). Limits and decision rules are not changed, widened, replaced or deleted after a run.
-A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
-intact; causes are diagnosed, not tuned away. A set-up defect gets a NEW corrected test and the old one stays as a
-record. Addenda (measured values, file names, deviations) may be appended at the end without touching registered limits.
+Status: accepted. Everything under "Diagnosis experiments", "Decisions" and "Registered checks" was written before any
+of the new experiments or tests was compiled or run (only the existing code and records were read).
 
-Roadmap: F-106 (pseudo-transient), F-209 (adaptive stepping, accelerators; partial), F-210 (only if time: not
-registered here, see "Not registered"). Touches F-032, F-027, F-050 only by the audit notes below.
-Clean-room: published literature only; no vendor code, text or data; no vendor names in the repository. Formulas quoted
-from memory are marked "(from memory, unverified)".
+Several registered known misses share one symptom: the residual does not get below the target. Wave 17A diagnoses them
+under registered decision rules, adds a pseudo-transient controller (F-106) and adds an error-estimator transient step
+(F-209, partial). Addenda A1 to A7 register further experiments and corrected variants as the earlier runs came in; A8
+holds the results. Its verdict: the residual stalls of the incompressible known misses are a normalisation artefact,
+the option `residual_norm` (default `reference`, bit-identical) is the delivered remedy, and no solver defect was
+found. With `residual_norm = scaled`, F4 passes, and F1c, F2c and F3c (fixed physical step 0.2, no controller) pass
+their registered accuracy limits. D5b is slow convergence, not a floor, and the nozzle stays UNDIAGNOSED. The F-106
+controller `pseudo_control` (`ser`, `ser2`) is NOT validated: P1 to P4 and F1 to F3 (b variants) all missed or
+diverged. F-209 E1 and E1b missed, and E2/E2b (Taylor-Green), E3 and F-210 were NOT run or implemented (no
+`PimpleSolver::run_error_controlled`); the `ErrorController` is a library building block only, not wired to the tree.
+
+Rules and roadmap:
+
+* Limits and decision rules are not changed, widened, replaced or deleted after a run.
+* A miss is reported as measured and the assertion moves to an ignored `*_known_miss` test with the registered limit
+  intact; causes are diagnosed, not tuned away.
+* A set-up defect gets a NEW corrected test and the old one stays as a record.
+* Addenda (measured values, file names, deviations) may be appended at the end without touching registered limits.
+* Roadmap: F-106 (pseudo-transient), F-209 (adaptive stepping, accelerators; partial), F-210 (only if time: not
+  registered here, see "Not registered"). Touches F-032, F-027, F-050 only by the audit notes below.
+* Clean-room: published literature only; no vendor code, text or data; no vendor names in the repository.
+* Formulas quoted from memory are marked "(from memory, unverified)".
 
 ## Context (audit of what exists)
 
@@ -22,23 +37,30 @@ from memory are marked "(from memory, unverified)".
   solve: `sum|b - A x| / (sum(|A x - A xbar| + |b - A xbar|) + 1e-30)`, `xbar` the mean of `x` (the usual
   reference-subtracted normalisation, from memory, unverified as a literature citation). The pressure residual
   uses the same function on the first non-orthogonal pass.
-* Registered known misses sharing "the residual does not get below the target": ADR 0022 addendum (C2, C3, D1, D2 plain
-  `simplec` from rest diverges on a frictionless duct driven by two pressure ends; the control with existing conditions
-  shows normalised residuals 0.3 to 0.7 for 1500 iterations; E2 stalls at `res_u = 4.4e-12` with stationary fields),
-  `variable_density.rs::subsonic_nozzle_residual_target_1e8_known_miss` (res_u 2.6e-5, res_p 6e-13 at 3000 iterations;
-  note: variable-density kernel `varden.rs`, same `normalised_residual`), wave-13 D5b / D5 n_r = 128 (residual about
-  1.7e-11 against a target 1e-11, `wall_motion.rs`, ADR 0016).
+
+Registered known misses sharing "the residual does not get below the target":
+
+* ADR 0022 addendum (C2, C3, D1, D2 plain `simplec` from rest diverges on a frictionless duct driven by two pressure
+  ends; the control with existing conditions shows normalised residuals 0.3 to 0.7 for 1500 iterations; E2 stalls at
+  `res_u = 4.4e-12` with stationary fields).
+* `variable_density.rs::subsonic_nozzle_residual_target_1e8_known_miss` (res_u 2.6e-5, res_p 6e-13 at 3000 iterations;
+  note: variable-density kernel `varden.rs`, same `normalised_residual`).
+* Wave-13 D5b / D5 n_r = 128 (residual about 1.7e-11 against a target 1e-11, `wall_motion.rs`, ADR 0016).
 
 ## Diagnosis experiments (Task 1), registered with decision rules
 
-Notation. For a momentum system `A x = b` at the iterate `x`: `num = sum|b - A x|`;
-`N_ref = sum(|A x - A xbar| + |b - A xbar|)` (denominator of the existing residual); `S = sum_i (sum_j |a_ij||x_j| + |b_i|)`
-(the magnitude of the terms that are added up, so `eps * S` is the round-off size of `num`, `eps = 2.2e-16`);
-`res_ref = num / N_ref` (existing), `res_bwd = num / S` (normwise backward error). These are computed by a
-diagnostic that does not alter the solve (`SimpleSolver::record_parts`, off by default). Everything is the largest
-over the active velocity components, as the existing residual is. Fields are read from a SETTLED state (largest change
-of ux, uy, uz, p between iterations <= 1e-10 for 20 iterations; the post-hoc settle criterion of ADR 0022) and from the
-stall point for E2 and D5b.
+Notation. For a momentum system `A x = b` at the iterate `x`:
+
+* `num = sum|b - A x|`;
+* `N_ref = sum(|A x - A xbar| + |b - A xbar|)` (denominator of the existing residual);
+* `S = sum_i (sum_j |a_ij||x_j| + |b_i|)` (the magnitude of the terms that are added up, so `eps * S` is the round-off
+  size of `num`, `eps = 2.2e-16`);
+* `res_ref = num / N_ref` (existing), `res_bwd = num / S` (normwise backward error).
+
+These are computed by a diagnostic that does not alter the solve (`SimpleSolver::record_parts`, off by default).
+Everything is the largest over the active velocity components, as the existing residual is. Fields are read from a
+SETTLED state (largest change of ux, uy, uz, p between iterations <= 1e-10 for 20 iterations; the post-hoc settle
+criterion of ADR 0022) and from the stall point for E2 and D5b.
 
 * X1 (H1 normalisation denominator vanishes with the iterate). Cases: the ADR 0022 control (frictionless
   `box_2d` 20 x 4 duct, existing conditions: inlet velocity 1, static outlet 0, symmetry sides, `pseudo_dt = 0.2` so that
@@ -110,22 +132,27 @@ else:                                    s <- min(max_scale, s * clamp(r_{n-1} /
 Registered constants (library defaults, not tuned after any run): `growth = 2.0`, `backoff = 0.5`, `rise = 2.0`,
 `min_scale = 1/64`, `max_scale = 1000`. The first iteration uses `s = 1`. The base step is the existing mode's step
 times `factor`, so the starting local Courant number is `pseudo_cfl * pseudo_factor`, the cap is that times
-`max_scale`. Settings tree: `solver.pseudo_control = "off" | "ser"` (default off; any other pseudo_mode `off` with
-control on is a located error) and `solver.pseudo_scale_max` (default 1000). With control on, `alpha_u` is whatever the
-user sets (the checks use 1.0). The history of `s` is kept in `SimpleSolver.pseudo_scale_history`.
+`max_scale`.
+
+Settings tree: `solver.pseudo_control = "off" | "ser"` (default off; any other pseudo_mode `off` with control on is a
+located error) and `solver.pseudo_scale_max` (default 1000). With control on, `alpha_u` is whatever the user sets (the
+checks use 1.0). The history of `s` is kept in `SimpleSolver.pseudo_scale_history`.
 
 Not part of this decision (not delivered): per-cell step limiting by a local residual, residual smoothing, extrapolated
 step initialisation, nonlinear (Aitken-type) acceleration, stretched-mesh pseudo-time acceleration (F-209 remainder).
 
 ### D2 Error-estimator transient step controller (F-209, partial), `rcfd-fv/src/ddt.rs`, `pimple.rs`
 
-`ErrorController { tol, safety = 0.9, growth = 1.5, shrink_min = 0.3, min_dt, max_dt, order = 1 }`. The local error
-estimate of step `n` is `e = max_c |u_n - u_pred| / U_ref` where `u_pred` is the linear extrapolation of the two
-previous levels to `t_n`, `U_ref = max(max|u_n|, 1e-30)`; `0.5` of that difference estimates the local error of a
-first-order (implicit Euler) step (the extrapolation error of a smooth solution is `O(dt^2)`, same order as the
-Euler local error; the factor is the usual Milne-type constant for the pair, from memory, unverified, used as stated
-and not fitted). Step update `dt_new = dt * clamp(safety * (tol / e)^(1/2), shrink_min, growth)` bounded by
-`[min_dt, max_dt]`. A step with `e > 2 tol` is rejected (state restored, `dt` reduced) only in the scalar utility; the
+`ErrorController { tol, safety = 0.9, growth = 1.5, shrink_min = 0.3, min_dt, max_dt, order = 1 }`.
+
+The local error estimate of step `n` is `e = max_c |u_n - u_pred| / U_ref` where `u_pred` is the linear extrapolation
+of the two previous levels to `t_n`, `U_ref = max(max|u_n|, 1e-30)`; `0.5` of that difference estimates the local
+error of a first-order (implicit Euler) step (the extrapolation error of a smooth solution is `O(dt^2)`, same order as
+the Euler local error; the factor is the usual Milne-type constant for the pair, from memory, unverified, used as
+stated and not fitted).
+
+Step update `dt_new = dt * clamp(safety * (tol / e)^(1/2), shrink_min, growth)` bounded by `[min_dt, max_dt]`. A step
+with `e > 2 tol` is rejected (state restored, `dt` reduced) only in the scalar utility; the
 `PimpleSolver::run_error_controlled` accepts every step (no restore of PIMPLE history: documented limitation) and uses
 the update for the next step. A Courant cap `max_cfl` may be combined (minimum of both). Not wired into the settings
 tree unless stated in an addendum.
@@ -193,17 +220,21 @@ A miss is recorded as `f?_known_miss` and not retried with other constants.
   re-asserted for the combined controller).
 
 ## Not registered (not delivered unless an addendum says so)
-F-210 fractional-step (no time after the above), the high-aspect-ratio flat-plate acceleration of F-209 (needs the
-turbulence stack; separate wave), residual smoothing, Aitken acceleration, error-estimator wiring in the settings tree.
+* F-210 fractional-step (no time after the above).
+* The high-aspect-ratio flat-plate acceleration of F-209 (needs the turbulence stack; separate wave).
+* Residual smoothing.
+* Aitken acceleration.
+* Error-estimator wiring in the settings tree.
+
 The coupled solver (F-032) and AMG (F-027) are audited, not modified: F-027's V-cycle gate is not in scope.
 
 ## Addendum A1: post-hoc experiments registered after the first diagnosis runs (rules written before these runs)
 
 The first runs (X1, X5, X6, X7; E2 with a wrongly typed mesh that lacked `nx = 48`, discarded, never reported as an E2
 result) showed that the registered X1 rule does not separate two things: a residual that is at round-off, and a
-reference-normalised residual that stays near 0.95 while the numerator falls by six orders (the numerator at the settle point
-of C2 was 1e-9, not yet round-off, because the settle criterion (change <= 1e-10) fires early). The following controlled
-experiments are therefore registered now, before they are run; they do not replace X1-X7.
+reference-normalised residual that stays near 0.95 while the numerator falls by six orders. The numerator at the
+settle point of C2 was 1e-9, not yet round-off, because the settle criterion (change <= 1e-10) fires early. The
+following controlled experiments are therefore registered now, before they are run; they do not replace X1-X7.
 
 * X1b (continue past the settle point, two normalisations). C2, D1, D2 post-hoc set-ups (physical pseudo step 0.2,
   `component_diagonal = corrected`, targets 1e-12, cap 6000) run with `residual_norm = reference` and with `backward`.
@@ -219,10 +250,10 @@ experiments are therefore registered now, before they are run; they do not repla
 
 ## Addendum A2: third normalisation `scaled`, registered after the X1b / E2 / X8 results and before any use (no limit changed)
 
-Reason. E2 with the registered mesh (X2/X4) is a round-off floor amplified by the reference normalisation
-(`res_bwd` 6e-17, `N_ref/S` 1.4e-5); X1b shows that `backward` fixes the stall of a component whose exact value is
-non-zero but not of a component whose exact value is zero (`uy`, and the pressure `p`, in the uniform-flow ducts), for which
-every iterate-relative denominator is itself round-off. An iterate-independent common scale is needed:
+Reason. E2 with the registered mesh (X2/X4) is a round-off floor amplified by the reference normalisation (`res_bwd`
+6e-17, `N_ref/S` 1.4e-5). X1b shows that `backward` fixes the stall of a component whose exact value is non-zero but
+not of a component whose exact value is zero (`uy`, and the pressure `p`, in the uniform-flow ducts), for which every
+iterate-relative denominator is itself round-off. An iterate-independent common scale is needed:
 
 * `ResidualNorm::Scaled` (`solver.residual_norm = "scaled"`): momentum `res_u = max_k num_k / max_j S_j` (the
   largest summed-term magnitude over the active components, common to all components); pressure
@@ -236,15 +267,22 @@ every iterate-relative denominator is itself round-off. An iterate-independent c
 
 ## Addendum A3: controller law v1 missed P1-P4 as registered; symmetric law `ser2` registered before its first run
 
-Observation (first run of D1 as registered; limits untouched). With the law of D1 (`ser`) the scale ratchets to its cap: P1 (cavity,
-start cfl 1) ends after 6000 iterations with residual 0.18 and the scale at 1000; P2 physical, P3 starts 0.5 and 10 and P4 (step,
-res 8.9e-5 after 4000 iterations, scale in [1, 1000]) also miss. The fixed-step references converge (cfl 5 in 346, cfl 2
-in 637, cfl 1 in 1148 iterations), so the controller, not the problem, is at fault. Diagnosis: the registered law grows the scale on
-every iteration in which the residual falls and reduces it only when one iteration raises the residual by more than a factor 2. A
-residual that oscillates with an amplitude below 2 therefore gains scale on every falling half-cycle and never loses it (a one-way
-ratchet), whatever the mean trend; the published switched-evolution-relaxation rule is symmetric (the step follows the
-inverse of the residual in both directions), which the D1 safeguard clause broke. The v1 tests are kept as ignored
-`*_known_miss` records with their registered limits.
+Observation (first run of D1 as registered; limits untouched). With the law of D1 (`ser`) the scale ratchets to its
+cap:
+
+* P1 (cavity, start cfl 1) ends after 6000 iterations with residual 0.18 and the scale at 1000.
+* P2 physical, P3 starts 0.5 and 10 and P4 (step, res 8.9e-5 after 4000 iterations, scale in [1, 1000]) also miss.
+
+The fixed-step references converge (cfl 5 in 346, cfl 2 in 637, cfl 1 in 1148 iterations), so the controller, not the
+problem, is at fault.
+
+Diagnosis: the registered law grows the scale on every iteration in which the residual falls and reduces it only when
+one iteration raises the residual by more than a factor 2. A residual that oscillates with an amplitude below 2
+therefore gains scale on every falling half-cycle and never loses it (a one-way ratchet), whatever the mean trend. The
+published switched-evolution-relaxation rule is symmetric (the step follows the inverse of the residual in both
+directions), which the D1 safeguard clause broke.
+
+The v1 tests are kept as ignored `*_known_miss` records with their registered limits.
 
 Registered now, before any run of it: `pseudo_control = "ser2"` (library `PseudoLaw::Symmetric`, otherwise the same controller
 type and constants): `s <- clamp(s * clamp(r_{n-1} / r_n, backoff, growth), min_scale, max_scale)` with `growth = 2`,
@@ -256,9 +294,13 @@ caps stay).
 
 ## Addendum A4: `ser2` also missed P1-P4; diagnosis experiment X9 registered before its run
 
-Observation (first run of `ser2`, limits and constants untouched): P1 ends after 6000 iterations at residual 1.6e-2 with the
-scale between 57 and 107 (max 107, final 57); P2 physical, P3 starts 0.5 (7.9e-3 after 3000) and 10 (9.0e-2 after 3500) and P4
-(7.7e-5 after 4000, scale near its cap 988) miss. All are recorded as ignored `*_ser2_known_miss` tests. No constant is changed.
+Observation (first run of `ser2`, limits and constants untouched):
+
+* P1 ends after 6000 iterations at residual 1.6e-2 with the scale between 57 and 107 (max 107, final 57).
+* P2 physical, P3 starts 0.5 (7.9e-3 after 3000) and 10 (9.0e-2 after 3500) and P4 (7.7e-5 after 4000, scale near its
+  cap 988) miss.
+
+All are recorded as ignored `*_ser2_known_miss` tests. No constant is changed.
 
 * X9 (is there a stability limit of the underlying iteration below the scales the controller reaches?). Fixed local pseudo-Courant
   numbers 5, 10, 20, 50, 100, 1000 on the P1 problem (no controller, 4000 iterations, tolerance 1e-6), and the same on the P4 step
@@ -269,20 +311,35 @@ scale between 57 and 107 (max 107, final 57); P2 physical, P3 starts 0.5 (7.9e-3
 
 ## Addendum A5: X9 result, F1-F3 as registered missed (local pseudo mode from rest); corrected set-up F1b-F3b registered before its run
 
-X9 (rule of addendum A4 applied to the measured numbers). Cavity (P1): fixed local cfl 5, 10, 20, 50 converge (346, 333, 458, 979
-iterations), cfl 100 and 1000 do not (residual 9.0e-2, 0.19 after 4000): the stability limit of the fixed-step iteration lies
-between cfl 50 and 100, which is where the `ser2` controller ends up (scale 57 to 107): the limit-cycle explanation holds for the
-cavity (cfl 57 itself was not run; the nearest runs bracket it). Step (P4): fixed cfl 5 does NOT converge (4.9e-2), cfl 10 converges
-(603), cfl 20, 50, 100, 1000 do not (4.2e-1, 2.9e-5, 3.5e-5, 3.1e-3): the first clause of the rule (converge for cfl <= 5) fails, so
-the explanation is REJECTED for the step: its convergence is not monotone in the step (the wave-6 observation that Re_h = 400 converges only for
-particular scheme/coupling combinations is of the same kind) and no residual-ratio law can find a "largest stable" step there.
+X9 (rule of addendum A4 applied to the measured numbers):
 
-F1, F2, F3 (C2, D1, D2 with `pseudo_mode = local`, `pseudo_cfl = 1`, controller on, `residual_norm = scaled`; plain `simplec`
-otherwise) MISS as registered: F1 ends at residual 0.21 (res_p 3.2e-2) after 6000 iterations, F2 and F3 end with a non-finite
-pressure residual. F4 (E2) is met (see results). Diagnosis (same as X5): at rest the local pseudo step has no convective rate,
-`dt_c = cfl V / (0.5 sum|phi| + nu lap)` is set by the viscosity 1e-3 alone and is thousands of times the step that works
-(0.2), so the first iteration over-shoots exactly like the plain run (u1 = 366 in X5); the controller reacts after the damage. The three
-registered tests are kept as ignored `*_known_miss` records.
+| Fixed local cfl | Cavity (P1) | Step (P4) |
+|---|---|---|
+| 5 | converges (346 iterations) | does NOT converge (4.9e-2) |
+| 10 | converges (333 iterations) | converges (603) |
+| 20 | converges (458 iterations) | does not converge (4.2e-1) |
+| 50 | converges (979 iterations) | does not converge (2.9e-5) |
+| 100 | does not converge (residual 9.0e-2 after 4000) | does not converge (3.5e-5) |
+| 1000 | does not converge (residual 0.19 after 4000) | does not converge (3.1e-3) |
+
+Cavity (P1): the stability limit of the fixed-step iteration lies between cfl 50 and 100, which is where the `ser2`
+controller ends up (scale 57 to 107). The limit-cycle explanation holds for the cavity (cfl 57 itself was not run; the
+nearest runs bracket it).
+
+Step (P4): the first clause of the rule (converge for cfl <= 5) fails, so the explanation is REJECTED for the step.
+Its convergence is not monotone in the step (the wave-6 observation that Re_h = 400 converges only for particular
+scheme/coupling combinations is of the same kind) and no residual-ratio law can find a "largest stable" step there.
+
+F1, F2, F3 (C2, D1, D2 with `pseudo_mode = local`, `pseudo_cfl = 1`, controller on, `residual_norm = scaled`; plain
+`simplec` otherwise) MISS as registered: F1 ends at residual 0.21 (res_p 3.2e-2) after 6000 iterations, F2 and F3 end
+with a non-finite pressure residual. F4 (E2) is met (see results).
+
+Diagnosis (same as X5): at rest the local pseudo step has no convective rate. The step
+`dt_c = cfl V / (0.5 sum|phi| + nu lap)` is set by the viscosity 1e-3 alone and is thousands of times the step that
+works (0.2), so the first iteration over-shoots exactly like the plain run (u1 = 366 in X5). The controller reacts
+after the damage.
+
+The three registered tests are kept as ignored `*_known_miss` records.
 
 Corrected set-up (a set-up defect of the check, not of the limits), registered before it is run: F1b, F2b, F3b are F1-F3 with
 `pseudo_mode = physical`, `pseudo_dt = 0.2` (the start step of ADR 0022 C2/D1/D2), `pseudo_control = ser2`,
@@ -291,14 +348,20 @@ recorded as `f?b_known_miss`.
 
 ## Addendum A6: F1b-F3b missed (controller diverges); F1c-F3c (scaled norm, fixed physical step, no controller) registered
 
-F1b, F2b, F3b (physical start 0.2 with the `ser2` controller) MISS: the run ends with non-finite fields (res_p NaN) in all three. A
-trace of the first iterations of C2 (the only look taken before this paragraph; it covers four set-ups, 400 iterations each) shows
-why: with `ser2` the scale doubles in the first iterations (the residual falls fast in the start-up transient), reaches about 31 in
-12 iterations and the iteration blows up at about iteration 39 (the step 0.2 x 31 is beyond the stability limit of this
-frictionless pressure-driven duct), the same ratchet-to-instability mechanism as for the cavity (addendum A4). The same trace shows
-that with the fixed step 0.2 and `residual_norm = scaled` and NO controller the residual falls monotonically by about a factor 5
-per 50 iterations (3e-8 at iteration 400) while the reference normalisation sits at 0.95. The three tests are kept as ignored
-`f?b_*_known_miss` records.
+F1b, F2b, F3b (physical start 0.2 with the `ser2` controller) MISS: the run ends with non-finite fields (res_p NaN) in
+all three.
+
+A trace of the first iterations of C2 (the only look taken before this paragraph; it covers four set-ups, 400
+iterations each) shows why. With `ser2` the scale doubles in the first iterations (the residual falls fast in the
+start-up transient) and reaches about 31 in 12 iterations. The iteration blows up at about iteration 39 (the step 0.2
+x 31 is beyond the stability limit of this frictionless pressure-driven duct), the same ratchet-to-instability
+mechanism as for the cavity (addendum A4).
+
+The same trace shows that with the fixed step 0.2 and `residual_norm = scaled` and NO controller the residual falls
+monotonically by about a factor 5 per 50 iterations (3e-8 at iteration 400) while the reference normalisation sits at
+0.95.
+
+The three tests are kept as ignored `f?b_*_known_miss` records.
 
 Registered now, before the full runs: F1c, F2c, F3c = F1-F3 with `pseudo_mode = physical`, `pseudo_dt = 0.2`, no controller,
 `residual_norm = scaled`, identical targets (1e-12), cap (6000 iterations) and accuracy limits. A miss becomes `f?c_*_known_miss`.
@@ -306,11 +369,15 @@ These pass or fail on the normalisation alone; they say nothing in favour of the
 
 ## Addendum A7: E1 missed as registered (relative error scale); absolute-reference variant E1b / E2b registered before its run
 
-E1 as registered (library unit test in `ddt.rs`): the error-controlled run takes 81 steps to a final error 2.96e-3, the uniform step
-count that reaches that error is 76, so the limit `N_c <= 0.8 N_f` is MISSED (the other limit, `E_c <= 10 tol`, is met). Diagnosis
-(analytic): the registered estimate divides by the current maximum of the solution, so for the scale-invariant exponential decay the
-relative local error `0.5 (lambda dt)^2` does not depend on `u` and the controller holds a constant step; it cannot beat uniform
-stepping (and pays the start-up from `dt0 = 1e-3`). The registered test is kept, ignored, as `e1_*_known_miss`.
+E1 as registered (library unit test in `ddt.rs`): the error-controlled run takes 81 steps to a final error 2.96e-3,
+and the uniform step count that reaches that error is 76. The limit `N_c <= 0.8 N_f` is therefore MISSED (the other
+limit, `E_c <= 10 tol`, is met).
+
+Diagnosis (analytic): the registered estimate divides by the current maximum of the solution. For the scale-invariant
+exponential decay the relative local error `0.5 (lambda dt)^2` therefore does not depend on `u` and the controller
+holds a constant step; it cannot beat uniform stepping (and pays the start-up from `dt0 = 1e-3`).
+
+The registered test is kept, ignored, as `e1_*_known_miss`.
 
 Registered now, before it is run: `ErrorController.abs_ref: Option<f64>`; with `Some(r)` the divisor is the fixed `r` instead of the
 current maximum (an absolute error target relative to a reference magnitude; default `None` keeps the registered relative behaviour).
@@ -323,27 +390,38 @@ become `*_known_miss` tests.
 
 All numbers measured in release builds; limits are the registered ones, none widened.
 
-Task 1 diagnosis (tests in `crates/rcfd-api/tests/convergence_diagnosis.rs`, ignored diagnostics, plus `defaults_are_inert`):
-- E2 annulus (48 x 12 x 24): the reference residual stalls at 4.4e-12 from iteration 500 to 6000 while the residual numerator is 2.3e-13, the
-  backward-normalised residual 6.2e-17 (below machine epsilon), the field change per iteration 8.9e-16 and continuity 9e-15. The
-  solver is converged to round-off; the reference denominator sum(|Ax - A xbar| + |b - A xbar|) is 1.4e-5 of sum(|A||x| + |b|) and amplifies the
-  floor. H1 (normalisation) holds; H2 (linear-solver tolerance floor) rejected (tol_abs 0, tol_rel 1e-9, caps 5000: final 7.4e-12 vs 4.4e-12);
-  flux round-off accumulation (X4) is a noise band. With `residual_norm = scaled` E2 converges in 183 iterations (F4 passes: accuracy 0.408 / 0.032 /
-  2.669 %, balance 1.9e-15, imbalance 7.1e-14).
-- Frictionless duct C2/D1/D2: the reference residual stays 0.3 to 0.95 because uniform or exactly zero components make the denominator track the
-  numerator (the registered X1 rules by themselves came out REJECTED/inconclusive for several parts because of a flaw in the settle-point definition,
-  which is disclosed; X1b showed `backward` fixes only D2). With `scaled` and a fixed physical step 0.2: F1c (C2) 689 iterations, F2c (D1) 711, F3c (D2) 310;
-  all pass their registered accuracy limits.
-- X5: first-iteration max|u| after plain SIMPLEC from rest scales 1/nu (u1*nu = 0.36643 constant): diagonal-limited step, not a defect.
-- X6 closed cavity: momentum converges below 1e-12 by iteration ~1000, pressure floors at 6.8e-12 with the same amplification pattern (inconclusive by rule).
-- D5b n_r = 128: still falling by about x4 per 500 iterations at 6000: slow convergence, not a floor.
-- Nozzle: flat at 2.619e-5 from iteration 500 to 3000; none of the single-change variants (linear tolerance, upwind, alpha_u 0.5, pressure tolerance) changes it.
-  UNDIAGNOSED (variable-density kernel offers no backward residual).
-- Verdict: the residual stalls of the incompressible known misses are a normalisation artefact; the option `residual_norm` (default `reference`, bit-identical,
-  baseline hashes unchanged) is the delivered remedy. No solver defect found.
+Task 1 diagnosis (tests in `crates/rcfd-api/tests/convergence_diagnosis.rs`, ignored diagnostics, plus
+`defaults_are_inert`):
 
-Task 2: F-106 controller `pseudo_control` (`ser`, `ser2`) is NOT validated: P1 to P4 and F1 to F3 (b variants) all missed or diverged (numbers in A3 to A6 and in
-the `*_known_miss` tests); fixed pseudo CFL still converges (cavity cfl 5/10/20/50 in 346/333/458/979 iterations, fails at 100). F-209 E1: relative scale 81 vs 76
-steps (MISS, registered limit 0.8), E1b absolute reference 46 steps (error 6.4e-3) vs 36 uniform (MISS). Both recorded as ignored known-miss unit tests in
-`crates/rcfd-fv/src/ddt.rs`. E2/E2b (Taylor-Green), E3 and F-210 were NOT run or implemented (no `PimpleSolver::run_error_controlled`); the
-`ErrorController` is a library building block only, not wired to the tree.
+- E2 annulus (48 x 12 x 24): the reference residual stalls at 4.4e-12 from iteration 500 to 6000 while the residual
+  numerator is 2.3e-13, the backward-normalised residual 6.2e-17 (below machine epsilon), the field change per
+  iteration 8.9e-16 and continuity 9e-15. The solver is converged to round-off; the reference denominator sum(|Ax - A
+  xbar| + |b - A xbar|) is 1.4e-5 of sum(|A||x| + |b|) and amplifies the floor. H1 (normalisation) holds. H2
+  (linear-solver tolerance floor) is rejected (tol_abs 0, tol_rel 1e-9, caps 5000: final 7.4e-12 vs 4.4e-12). Flux
+  round-off accumulation (X4) is a noise band. With `residual_norm = scaled` E2 converges in 183 iterations (F4
+  passes: accuracy 0.408 / 0.032 / 2.669 %, balance 1.9e-15, imbalance 7.1e-14).
+- Frictionless duct C2/D1/D2: the reference residual stays 0.3 to 0.95 because uniform or exactly zero components make
+  the denominator track the numerator. The registered X1 rules by themselves came out REJECTED/inconclusive for
+  several parts because of a flaw in the settle-point definition, which is disclosed; X1b showed `backward` fixes only
+  D2. With `scaled` and a fixed physical step 0.2: F1c (C2) 689 iterations, F2c (D1) 711, F3c (D2) 310; all pass their
+  registered accuracy limits.
+- X5: first-iteration max|u| after plain SIMPLEC from rest scales 1/nu (u1*nu = 0.36643 constant): diagonal-limited
+  step, not a defect.
+- X6 closed cavity: momentum converges below 1e-12 by iteration ~1000, pressure floors at 6.8e-12 with the same
+  amplification pattern (inconclusive by rule).
+- D5b n_r = 128: still falling by about x4 per 500 iterations at 6000: slow convergence, not a floor.
+- Nozzle: flat at 2.619e-5 from iteration 500 to 3000; none of the single-change variants (linear tolerance, upwind,
+  alpha_u 0.5, pressure tolerance) changes it. UNDIAGNOSED (variable-density kernel offers no backward residual).
+- Verdict: the residual stalls of the incompressible known misses are a normalisation artefact; the option
+  `residual_norm` (default `reference`, bit-identical, baseline hashes unchanged) is the delivered remedy. No solver
+  defect found.
+
+Task 2:
+
+- F-106 controller `pseudo_control` (`ser`, `ser2`) is NOT validated: P1 to P4 and F1 to F3 (b variants) all missed or
+  diverged (numbers in A3 to A6 and in the `*_known_miss` tests). Fixed pseudo CFL still converges (cavity cfl
+  5/10/20/50 in 346/333/458/979 iterations, fails at 100).
+- F-209 E1: relative scale 81 vs 76 steps (MISS, registered limit 0.8). E1b absolute reference 46 steps (error 6.4e-3)
+  vs 36 uniform (MISS). Both recorded as ignored known-miss unit tests in `crates/rcfd-fv/src/ddt.rs`.
+- E2/E2b (Taylor-Green), E3 and F-210 were NOT run or implemented (no `PimpleSolver::run_error_controlled`); the
+  `ErrorController` is a library building block only, not wired to the tree.

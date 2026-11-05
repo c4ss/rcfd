@@ -1,6 +1,17 @@
 # ADR 0186: ADR 0173 amendment 2, F-271 registration: new simulations from the MCP server in project mode
 
 Status: **REGISTERED 2026-11-05**, written before any code of F-271. Not yet accepted by the maintainer.
+
+F-271 lets the MCP server in project mode create a case in `cases/` and start a run of it through the runner, in one call
+if asked, with the same start plan as the Studio. This text fixes the choices (G1 to G8) and the acceptance limits (C-7,
+C-S, C-P, C-N, C-L, C-1 and Defaults) before any code. The project command is `new_case`, because the session tool
+`create_case` already holds that name (Q1, option (a), reversible). The start plan is on by default only with `new_case`,
+which leaves every existing call bit-identical; Q2's recommendation, on for every `start_run`, waits for the maintainer's
+approval. Amendment 1, written before the change it covers, adds a third edited tool count, in `project_w48f.rs`.
+Addendum 1 reports G1 to G8 built as written, with amendment 1, on branch `f271-new-simulations`, not merged. The gate at
+`a71f57f` gave 2810 passed, 0 failed, 800 ignored. `start_run` keeps its access class `execute` but can now create a case
+file; whether such a call should also need `write_files` is left to the maintainer with F-275's tool list.
+
 Parent: [ADR 0173](0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) (proposed, not accepted),
 requirement R1, work item W3, check C7, decisions D2 and D7, roadmap item F-271; it builds on
 [ADR 0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) (amendment 1, F-270, merged at a662c4a).
@@ -13,9 +24,14 @@ ADR 0173 is not accepted. Where it gives a recommendation, this text uses it und
 that is a recommendation taken, not a maintainer decision. Where the code read below raises a question ADR 0173 does not answer,
 the options and a recommendation are listed (Q1, Q2), and work proceeds only on a choice that is reversible.
 
-House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md)): defaults stay bit-identical; no solver result, case
-hash or byte of an existing case changes; no case-schema key and no run-record field is added;
-`crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded; no new third-party crate; no commit trailers.
+House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md)):
+
+* defaults stay bit-identical;
+* no solver result, case hash or byte of an existing case changes;
+* no case-schema key and no run-record field is added;
+* `crates/rcfd-api/tests/baseline_hashes.rs` is not re-recorded;
+* no new third-party crate;
+* no commit trailers.
 
 ## What F-271 asks
 
@@ -99,19 +115,24 @@ entries are applied to it first (`rcfd_api::chain::apply_set`, as `rcfd run --se
 `propose_store` (its `runs.rs` and `store_plan.rs` are being changed in the maintainer's worktree, item 5) until it switches to the
 workspace's; a parity test (C-P below) pins the two equal meanwhile.
 
-**G5. `start_run` grows two arguments.** `new_case` (an object with `new_case`'s arguments): the case is made and then run, in one
-call; `case` and `new_case` are exclusive and one is needed (-32602). `store`: `"plan"` applies the start plan, `"none"` does
-not. Omitted, it is `"plan"` with `new_case` and `"none"` with `case` (Q2; one constant, `PLAN_FOR_PROJECT_CASES = false`).
-The caller sets the store explicitly, so the plan is not applied (ADR 0173 D7's wording), when a `set` entry's path is
-`output.store_interval` or `output.store_time_interval`. Order: the case text is made and validated (G3), the `set` entries are
-checked against the case and the plan is made (a malformed or refused entry: 1003, nothing written or queued), the case is
-written, then the run is submitted with the plan's entries before the caller's (the Studio's order) and the runner started. A
-`case` with the plan is read and planned the same way; a case that does not parse is refused with 1003 before anything is
-queued. The `RunSettings` construction of F-270 is kept line for line (only the `set` value it receives is longer), so the
-maintainer's `threads`/`device` hunk still applies there. Result: `run`, `case`, `state` as before; plus `created` (the
-`new_case` result) when a case was made; plus `store` {`applied`, `set` (the entries added), `snapshots`, `estimated_bytes`,
-`note`} when the plan was asked for. A `start_run {case}` without `store` gives exactly `{run, case, state}` and the run record
-it gave before F-271.
+**G5. `start_run` grows two arguments.**
+
+* `new_case` (an object with `new_case`'s arguments): the case is made and then run, in one call; `case` and `new_case` are
+  exclusive and one is needed (-32602).
+* `store`: `"plan"` applies the start plan, `"none"` does not. Omitted, it is `"plan"` with `new_case` and `"none"` with
+  `case` (Q2; one constant, `PLAN_FOR_PROJECT_CASES = false`). The caller sets the store explicitly, so the plan is not
+  applied (ADR 0173 D7's wording), when a `set` entry's path is `output.store_interval` or `output.store_time_interval`.
+
+Order: the case text is made and validated (G3), the `set` entries are checked against the case and the plan is made (a
+malformed or refused entry: 1003, nothing written or queued), the case is written, then the run is submitted with the
+plan's entries before the caller's (the Studio's order) and the runner started. A `case` with the plan is read and
+planned the same way; a case that does not parse is refused with 1003 before anything is queued. The `RunSettings`
+construction of F-270 is kept line for line (only the `set` value it receives is longer), so the maintainer's
+`threads`/`device` hunk still applies there.
+
+Result: `run`, `case`, `state` as before; plus `created` (the `new_case` result) when a case was made; plus `store`
+{`applied`, `set` (the entries added), `snapshots`, `estimated_bytes`, `note`} when the plan was asked for. A
+`start_run {case}` without `store` gives exactly `{run, case, state}` and the run record it gave before F-271.
 
 **G6. The MCP descriptors.** One new project tool `new_case` after `write_note`; `start_run`'s descriptor gains the properties
 `new_case` and `store` and its `required` list becomes empty; its description and its other properties are unchanged. The
@@ -130,17 +151,26 @@ and passes on its own.
 **Q1. The tool name (item 1, D2).** ADR 0173 D2 (b) hides the session `create_case` once the workspace's `create_case` passes C7.
 Taken literally in F-271 that (i) breaks R1's probe in `project_runs_w48f.rs` (item 2) and (ii) leaves every session tool in
 project mode without a way to make a session, so `check_mesh` and `run` of a session stop working before their project
-equivalents exist (F-272, F-275). Options: (a) the project command is `new_case`; the session tools stay as they are until F-275
-(W8) decides the project-mode list, which may rename it; (b) the project `create_case` replaces the session one under
-`--project` now, with R1's probe rewritten; (c) one `create_case` with both meanings, chosen by its arguments.
+equivalents exist (F-272, F-275). Options:
+
+* (a) the project command is `new_case`; the session tools stay as they are until F-275 (W8) decides the project-mode list,
+  which may rename it;
+* (b) the project `create_case` replaces the session one under `--project` now, with R1's probe rewritten;
+* (c) one `create_case` with both meanings, chosen by its arguments.
+
 Recommendation: (a), reversible (a rename). Proceeding on (a). D2 (b) is otherwise not applied in F-271 (`run` and `status`
 stay; W8).
 
 **Q2. D7's default for a project case.** ADR 0173 D7 (a) and the roadmap note say that applying the start plan to `start_run`
 with no store argument changes what it writes for cases with no store setting, so it needs the maintainer's explicit approval.
-Options: (a) the plan is on by default for every `start_run`; (b) on by default only where there was no behaviour before
-(`new_case`), off for `case` unless `store: "plan"`; (c) off everywhere unless asked. Recommendation: (a) once the maintainer
-approves; proceeding on (b), which leaves every existing call bit-identical. Reversible: one constant.
+Options:
+
+* (a) the plan is on by default for every `start_run`;
+* (b) on by default only where there was no behaviour before (`new_case`), off for `case` unless `store: "plan"`;
+* (c) off everywhere unless asked.
+
+Recommendation: (a) once the maintainer approves; proceeding on (b), which leaves every existing call bit-identical.
+Reversible: one constant.
 
 ## Acceptance checks and limits (fixed here, before any code)
 
@@ -184,8 +214,12 @@ approves; proceeding on (b), which leaves every existing call bit-identical. Rev
 
 ## Not in F-271
 
-The Studio switching to the workspace's start plan (after the maintainer's worktree lands), hiding session tools (W8, F-275),
-journal lines and the feed (W6, F-273), mesh commands (W4, F-272), design studies on the runner (W7, F-274), and ADR 0185 Q1.
+* the Studio switching to the workspace's start plan (after the maintainer's worktree lands)
+* hiding session tools (W8, F-275)
+* journal lines and the feed (W6, F-273)
+* mesh commands (W4, F-272)
+* design studies on the runner (W7, F-274)
+* ADR 0185 Q1
 
 ## Where to go next
 
@@ -205,18 +239,21 @@ call is refused with 1100 and the project folder is unchanged.
 
 ## Addendum 1: what was built, and the results (2026-11-05)
 
-Branch `f271-new-simulations`, after this text and amendment 1: `85440ca` (the workspace and `rcfd-mcp`), `4afe4cf` (the Studio's
-re-export and its test file), then the documents. Not merged.
+The work is on branch `f271-new-simulations`, after this text and amendment 1: `85440ca` (the workspace and `rcfd-mcp`),
+`4afe4cf` (the Studio's re-export and its test file), then the documents. The branch is not merged.
 
-**Built as registered.** G1 to G8 as written, with amendment 1. `rcfd-workspace` gains `examples.rs` (moved from the Studio,
-text unchanged but two doc lines), `templates.rs` (moved from `rcfd-mcp`), `plan.rs` (the rule, `Plan::with_set` and
-`parse_case`, which `start_run` calls and the parity test calls), `create.rs` (`new_case`) and the `start_run` changes in
-`runs.rs`; the `RunSettings` lines of F-270 are unchanged. `rcfd-mcp` gains the `new_case` descriptor, `start_run`'s two
-properties (written above `case`, so the `threads`/`mem_mb` lines of the maintainer's hunk are untouched) and the re-export of
-the template. The Studio changes are `src/case_starter.rs` (the moved block replaced by one `pub use` with 2 lines of comment,
-the module comment's sentence on where the examples are compiled, and 3 imports fewer) and the new
-`tests/new_simulations_f271.rs`. Existing tests edited: `project_list_f270.rs` (C-L), and the tool counts of
-`project_runs_w48f.rs` (two) and `project_w48f.rs` (one, amendment 1).
+**Built as registered.** G1 to G8 were built as written, with amendment 1.
+
+* `rcfd-workspace` gains `examples.rs` (moved from the Studio, text unchanged but two doc lines), `templates.rs` (moved
+  from `rcfd-mcp`), `plan.rs` (the rule, `Plan::with_set` and `parse_case`, which `start_run` calls and the parity test
+  calls), `create.rs` (`new_case`) and the `start_run` changes in `runs.rs`; the `RunSettings` lines of F-270 are unchanged.
+* `rcfd-mcp` gains the `new_case` descriptor, `start_run`'s two properties (written above `case`, so the
+  `threads`/`mem_mb` lines of the maintainer's hunk are untouched) and the re-export of the template.
+* The Studio changes are `src/case_starter.rs` (the moved block replaced by one `pub use` with 2 lines of comment, the
+  module comment's sentence on where the examples are compiled, and 3 imports fewer) and the new
+  `tests/new_simulations_f271.rs`.
+* Existing tests edited: `project_list_f270.rs` (C-L), and the tool counts of `project_runs_w48f.rs` (two) and
+  `project_w48f.rs` (one, amendment 1).
 
 **Results.**
 
