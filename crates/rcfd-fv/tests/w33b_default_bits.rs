@@ -1,5 +1,6 @@
 //! ADR 0069 acceptance: with every wave 33B option off (the defaults) the transient solver is bit-identical to the code before the wave.
-//! The fingerprints were recorded from the unchanged code and written into the ADR (amendment 1) before any solver change.
+//! The fingerprints, in `tests/fixtures/expected_hashes/w33b_default_bits.tsv`, were recorded from the unchanged code and written into
+//! the ADR (amendment 1) before any solver change.
 
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::ddt::TimeScheme;
@@ -9,6 +10,17 @@ use rcfd_fv::{FixedValue, FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::gen::{box_2d, cavity_2d};
 use std::f64::consts::PI;
 use std::sync::Arc;
+
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "w33b_default_bits",
+        include_str!("fixtures/expected_hashes/w33b_default_bits.tsv"),
+    )
+}
 
 fn fingerprint(s: &PimpleSolver) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
@@ -95,44 +107,22 @@ fn cases() -> Vec<(&'static str, PimpleSolver)> {
 
 #[test]
 fn defaults_are_bit_identical_to_the_code_before_wave_33b() {
-    // Recorded on Windows. The Taylor-Green initial fields call the platform's libm (sin, cos), so their fingerprints differ
-    // per platform: x86_64 Linux values proven equal at the amendment-1 code (c4a593d) and at HEAD (ADR 0137); other platforms
-    // print and skip. The cavity fingerprints are the same on both.
-    let windows: [(&str, &str); 5] = [
-        ("tg piso bdf2", "e9dca234e513bec8"),
-        ("tg pimple2 euler", "72d935a8d4993955"),
-        ("tg frac bdf2", "e46fbe511183e9fc"),
-        ("cavity piso bounded", "c21a6553acb2a7a6"),
-        ("cavity pimple2 bdf2", "2c71144215f1d245"),
-    ];
-    let linux_x86_64: [(&str, &str); 5] = [
-        ("tg piso bdf2", "793cc167a5c8dce3"),
-        ("tg pimple2 euler", "7a9cd18ebf2fcbc2"),
-        ("tg frac bdf2", "275aa31d35e717ff"),
-        ("cavity piso bounded", "c21a6553acb2a7a6"),
-        ("cavity pimple2 bdf2", "2c71144215f1d245"),
-    ];
-    let expected = if cfg!(windows) {
-        Some(windows)
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        Some(linux_x86_64)
-    } else {
-        None
-    };
+    let table = hash_table();
     let mut bad = Vec::new();
-    for (i, (name, s)) in cases().iter().enumerate() {
+    let mut unrecorded = false;
+    for (name, s) in cases().iter() {
         let fp = format!("{:016x}", fingerprint(s));
         println!("FINGERPRINT {name} {fp}");
-        let Some(expected) = expected else {
+        let Some(want) = table.hash(name) else {
+            unrecorded = true;
             continue;
         };
-        let (ename, efp) = expected[i];
-        assert_eq!(*name, ename);
+        let efp = format!("{want:016x}");
         if fp != efp {
             bad.push(format!("{name}: {fp} != {efp}"));
         }
     }
-    if expected.is_none() {
+    if unrecorded {
         eprintln!("no recorded fingerprints for this platform (printed above)");
     }
     assert!(bad.is_empty(), "{bad:#?}");

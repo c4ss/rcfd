@@ -1,0 +1,11 @@
+# Expected hashes of crates/rcfd-post/tests/render_speed_w48q.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# Recorded from the base code (main 6867e40), ADR 0151. Q2: SHA-256 of r1's and r3's images.
+r1-rgba	any	8902a5bd06d0a563a8c8046330ccd2ffa63b6b09d05ab503d9be96683c1ea415
+r1-png	any	26185d0854af3cadf9226ccb391a689489a81ad5b3c620f53a694463c839ec4b
+r3-rgba	any	a9cc025acfecf67490a370c03a338916e9c704b540d29008cc211e218c9477c0
+r3-png	any	1cbd86702c2cde0805db44c2c10ac981638d2928dbd1963e562d4c6c0226839e
+# Q3: the 1M-cell image of r2 (SHA-256) and the f64 bits of its value range.
+r2-rgba	any	9ac74c0801a555bd5a16cfa724abedc4b6c522911f2d77b97c3d6284210bf027
+r2-png	any	59638fce7adee79af86dbd727324e8db0724b9ca2202fb3b951eb1f79278c8b4
+r2-vmin-bits	any	0xbfeffbe708600597
+r2-vmax-bits	any	0x3feffbe40acae0c8

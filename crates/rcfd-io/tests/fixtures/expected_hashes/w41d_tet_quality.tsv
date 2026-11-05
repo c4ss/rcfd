@@ -1,0 +1,24 @@
+# Expected hashes of crates/rcfd-io/tests/w41d_tet_quality.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# W0: default options give the fingerprints (cell count, Mesh::content_hash) recorded at HEAD a2e0bfd (e325ab4 in the current history) before any
+# library change (the ADR 0104 smoke table), so the default output is bit-identical. Written as decimals in the source; the same numbers here.
+# The registered values were recorded on Windows; the surfaces call the platform's libm (sin, cos), so coordinates, cell counts and hashes differ
+# per platform. The x86_64 Linux value was proven equal at the reference commit and at HEAD in one container (ADR 0137); other platforms print the
+# fingerprint and skip. The cell counts stay in the test source.
+cube	windows	0x22cc0dcda90c07a4
+cube	linux-x86_64	0x22cc0dcda90c07a4
+sphere	windows	0xdd336b141251eed3
+sphere	linux-x86_64	0xdd336b141251eed3
+torus	windows	0x0b79074e7593b99b
+torus	linux-x86_64	0x829889384bbb0792
+cyl_in_box	windows	0x8a3a760d9c746bd1
+cyl_in_box	linux-x86_64	0x96a9a10db340fc43
+p1_in_code	windows	0x108e3fec28f1b2f1
+p1_in_code	linux-x86_64	0x752b749fd66b308d
+s2_stl	windows	0x69e7a113e860c2b3
+s2_stl	linux-x86_64	0x9141732a2235ea02
+sphere_h0.3	windows	0x3fa816a7c0741cd5
+sphere_h0.3	linux-x86_64	0x3fa816a7c0741cd5
+sphere_h0.25	windows	0x874f3f0941516e40
+sphere_h0.25	linux-x86_64	0x874f3f0941516e40
+cube4_h0.5	windows	0x98bbf5e1dbc888b2
+cube4_h0.5	linux-x86_64	0x98bbf5e1dbc888b2

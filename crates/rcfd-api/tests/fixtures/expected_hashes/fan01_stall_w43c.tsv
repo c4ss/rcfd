@@ -1,0 +1,9 @@
+# Expected hashes of crates/rcfd-api/tests/fan01_stall_w43c.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# ADR 0115 P5: the key absent, `none` (both p5-absent) and `barth_jespersen` give B3 after 30 iterations bit-identical to main 511bed4
+# (hashes recorded there, on Windows). The FAN-01 mesh calls the platform's libm, so the hashes differ per platform: the x86_64 Linux values
+# were produced at 511bed4 (e65b4ea in the current history) and at HEAD in one Linux container, with the same guard outcome (ADR 0137);
+# other platforms print and skip.
+p5-absent	windows	0xec721116c0963182
+p5-absent	linux-x86_64	0x971b2e8ae81ee451
+p5-barth_jespersen	windows	0x26e5a0c524957698
+p5-barth_jespersen	linux-x86_64	0xbb748c1fc0d93169

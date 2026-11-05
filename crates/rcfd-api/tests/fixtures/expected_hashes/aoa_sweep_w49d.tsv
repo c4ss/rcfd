@@ -1,0 +1,4 @@
+# Expected hashes of crates/rcfd-api/tests/aoa_sweep_w49d.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# ADR 0167 (job 49D) P2: the SHA-256 of the registered meshes, compared with the committed results.json.
+M1w	any	bd8ef3c6da2dd3681d38c18914c8fbdcddab77bb1381c0688e1e2dce5f0c0299
+M1w-far500	any	59e707a866e34ec2fef6dd13a41de6411f844ceff99a2b6a644cb45f3a70c889

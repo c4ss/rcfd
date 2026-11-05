@@ -447,3 +447,12 @@ corrected and rerun. The first S7 run failed only because the scratch target had
 "build it: cargo build -p rcfd-cli"), not because of the mutation; after building it the mutated S7 passed.
 
 Test list (A5): no test was added, removed or edited, so the list is unchanged (checked again in the final gate).
+
+## 7. Where expected hashes live (ADR 0190)
+
+A test's registered expected content and bit hashes are in `tests/fixtures/expected_hashes/<test_file>.tsv` of its crate, not in the
+test source. Columns: key, platform (`any`, `windows`, `linux-x86_64`), hash; `#` lines hold the provenance (commit, ADR, how the value
+was produced). Tests read a table through `crates/rcfd-core/tests/support/expected_hashes.rs`, included with `#[path]` and
+`include_str!`. An unknown key or a duplicate row fails the test. The fixture walkers take `.toml` and `.json` only, so a table is never
+read as a case. A new platform value still needs the rule of [ADR 0137](adr/0137-linux-gate-platform-values.md); adding a row does not
+replace it. `crates/rcfd-api/tests/fixtures/case_hashes_6867e40.txt` is a separate record with its own format (ADR 0155).

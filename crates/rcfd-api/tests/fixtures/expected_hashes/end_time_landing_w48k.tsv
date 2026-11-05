@@ -1,0 +1,25 @@
+# Expected hashes of crates/rcfd-api/tests/end_time_landing_w48k.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# The final state on the unfixed tree, recorded by run R1 of ADR 0145 on Windows x86_64 and written into the test before any fix code (R2).
+# Compared on Windows x86_64 only; other platforms print (bit-identity is per platform, ADR 0137). The step counts stay in the test source.
+piso-E	windows	0x311aed3df1158964
+piso-T	windows	0x01f98d890f4d0ebd
+piso-J	windows	0x40f7c7404c3ae2f8
+piso-N	windows	0x1f630542a2b74fcf
+piso-W-	windows	0x1fe8a48c457d1e20
+piso-W+	windows	0x8780c099cb836647
+piso_courant-E	windows	0x311aed3df1158964
+piso_courant-T	windows	0x01f98d890f4d0ebd
+piso_courant-J	windows	0x40f7c7404c3ae2f8
+piso_courant-N	windows	0x1f630542a2b74fcf
+frozen-E	windows	0x63676cfc5953f9d8
+frozen-T	windows	0x3bc1517691771c5e
+frozen-J	windows	0x80176db8fb42f4ad
+frozen-N	windows	0x46252b23e5531c31
+variable_density-E	windows	0xf3b7338710ebdffe
+variable_density-T	windows	0x738dbd15049f2063
+variable_density-J	windows	0x62911882de788a97
+variable_density-N	windows	0x8aefb8f9adb16758
+vof-E	windows	0x75ea9b9e2ea73dd7
+vof-T	windows	0xff4cd23857524e32
+vof-J	windows	0x70e5191d8baaa2af
+vof-N	windows	0x3c97d09f38ec2228

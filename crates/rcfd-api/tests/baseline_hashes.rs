@@ -3,15 +3,27 @@
 //! The notes of F-031, F-050 and ADR 0005 check d1 claim that the paths that existed before the variable-density
 //! kernel give bit-identical results. This test makes the claim repeatable: each case runs a fixed number of
 //! iterations and the exact f64 bit patterns of `ux, uy, p, T` and the face fluxes are hashed with FNV-1a (64 bit,
-//! over the little-endian bytes of `f64::to_bits`). The expected values below were produced at commit 8b68e46
-//! (F-114, the last commit before ADR 0005) in a separate worktree, run twice with identical output, and were
-//! reproduced bit for bit at HEAD for every case except `rotating_channel` (see the ignored test).
+//! over the little-endian bytes of `f64::to_bits`). The expected values, in
+//! `tests/fixtures/expected_hashes/baseline_hashes.tsv` (ADR 0190), were produced at commit 8b68e46 (F-114, the last commit
+//! before ADR 0005) in a separate worktree, run twice with identical output, and were reproduced bit for bit at HEAD for every
+//! case except `rotating_channel` (see the ignored test).
 //!
 //! A mismatch means the numerics of a constant-density path changed. If that is intended, say so in the commit and
-//! update the value; do not update it silently.
+//! update the value in the table; do not update it silently.
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
+
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "baseline_hashes",
+        include_str!("fixtures/expected_hashes/baseline_hashes.tsv"),
+    )
+}
 
 fn cavity(alg: &str) -> String {
     format!(
@@ -102,61 +114,80 @@ fn check(name: &str, got: (usize, u64), steps: usize, hash: u64) {
 
 #[test]
 fn cavity_paths_match_registered_hashes() {
-    check("cavity-simple", run(&cavity("simple")), 60, 0x07e7461c36893384);
-    check("cavity-simplec", run(&cavity("simplec")), 60, 0x58d5c4fd29432b05);
-    // The coupled hash is the only cavity value that differs per platform. 0x123b5330dae3f36a is the registered value (Windows,
-    // 8b68e46); the x86_64 Linux value 0xfa937c4ec7bcb078 was produced by this computation at 8b68e46 (e79f7db in the current
-    // history) and at HEAD in one Linux container, and equals the first Linux CI gate's value (ADR 0137). Other platforms print.
-    if cfg!(windows) {
-        check("cavity-coupled", run(&cavity("coupled")), 59, 0x123b5330dae3f36a);
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        check("cavity-coupled", run(&cavity("coupled")), 59, 0xfa937c4ec7bcb078);
-    } else {
-        let (n, h) = run(&cavity("coupled"));
-        eprintln!("cavity-coupled: no registered hash for this platform; (steps, hash) = ({n}, {h:016x})");
+    let table = hash_table();
+    check(
+        "cavity-simple",
+        run(&cavity("simple")),
+        60,
+        table.expect_hash("cavity-simple"),
+    );
+    check(
+        "cavity-simplec",
+        run(&cavity("simplec")),
+        60,
+        table.expect_hash("cavity-simplec"),
+    );
+    // The coupled hash is the only cavity value that differs per platform (two rows); other platforms print.
+    match table.hash("cavity-coupled") {
+        Some(hash) => check("cavity-coupled", run(&cavity("coupled")), 59, hash),
+        None => {
+            let (n, h) = run(&cavity("coupled"));
+            eprintln!("cavity-coupled: no registered hash for this platform; (steps, hash) = ({n}, {h:016x})");
+        }
     }
-    check("cavity-piso", run(&cavity("piso")), 30, 0x2a042a42594c418b);
-    check("cavity-pimple", run(&cavity("pimple")), 30, 0x2a042a42594c418b);
+    check(
+        "cavity-piso",
+        run(&cavity("piso")),
+        30,
+        table.expect_hash("cavity-piso"),
+    );
+    check(
+        "cavity-pimple",
+        run(&cavity("pimple")),
+        30,
+        table.expect_hash("cavity-pimple"),
+    );
 }
 
 #[test]
 fn heated_cavity_paths_match_registered_hashes() {
+    let table = hash_table();
     check(
         "heated-simple",
         run(&HEATED.replace("ALG", "simple")),
         60,
-        0x30a23d946786fd8a,
+        table.expect_hash("heated-simple"),
     );
     check(
         "heated-simplec",
         run(&HEATED.replace("ALG", "simplec")),
         60,
-        0x7d35b1f2f7fcc4b7,
+        table.expect_hash("heated-simplec"),
     );
     check(
         "heated-piso",
         run(&HEATED.replace("ALG", "piso")),
         40,
-        0xfe7b5aa0a252ec0f,
+        table.expect_hash("heated-piso"),
     );
 }
 
 #[test]
 fn shipped_cases_match_registered_hashes() {
+    let table = hash_table();
     check(
         "packed_bed",
         run_file("packed_bed/packed_bed.toml"),
         60,
-        0x19e53df373637262,
+        table.expect_hash("packed_bed"),
     );
-    check("sod", run_file("sod/sod.toml"), 60, 0xe1612365139bf898);
-    check("wedge", run_file("wedge/wedge.toml"), 60, 0xe198a93b898bd79b);
+    check("sod", run_file("sod/sod.toml"), 60, table.expect_hash("sod"));
+    check("wedge", run_file("wedge/wedge.toml"), 60, table.expect_hash("wedge"));
     check(
         "kepsilon_channel",
         run_file("channel/kepsilon_channel.toml"),
         60,
-        // corrected after review: 8b68e46 (pre-ADR-0005) and HEAD both give this value; the first registered value was wrong
-        0x6ddc55969af2a835,
+        table.expect_hash("kepsilon_channel"),
     );
 }
 
@@ -172,6 +203,6 @@ fn rotating_channel_matches_pre_adr0005_hash() {
         "rotating_channel",
         run_file("rotating_channel/rotating_channel.toml"),
         60,
-        0x54d9bee17b5895e8,
+        hash_table().expect_hash("rotating_channel"),
     );
 }

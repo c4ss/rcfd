@@ -12,6 +12,14 @@ use rcfd_mesh::mesh::Mesh;
 use rcfd_mesh::quality::compute_metrics;
 use std::f64::consts::PI;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load("cgrid_w35d", include_str!("fixtures/expected_hashes/cgrid_w35d.tsv"))
+}
+
 // ---------------------------------------------------------------- set-ups
 
 fn st(r: f64, chord: f64, stagger_deg: f64, camber: f64, t: f64, sweep: f64, lean: f64) -> Station {
@@ -221,19 +229,6 @@ fn mesh_hash(m: &Mesh) -> u64 {
     h
 }
 
-/// The expected hash on this platform (ADR 0137). The registered values were recorded on Windows; the constructions call the
-/// platform's libm, so the last bits of the nodes, and the hashes, differ per platform. The x86_64 Linux value was proven equal at
-/// the reference commit and at HEAD in one container (ADR 0137); other platforms print the hash and skip.
-fn on_platform(windows: u64, linux_x86_64: u64) -> Option<u64> {
-    if cfg!(windows) {
-        Some(windows)
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        Some(linux_x86_64)
-    } else {
-        None
-    }
-}
-
 fn check_hash(got: u64, want: Option<u64>, what: &str) {
     match want {
         Some(h) => assert_eq!(got, h, "{what}"),
@@ -245,13 +240,9 @@ fn check_hash(got: u64, want: Option<u64>, what: &str) {
 /// default construction still refuses FAN-01 with the same message.
 #[test]
 fn b1_existing_constructions_are_bit_identical() {
-    let want = [
-        ("S", "pursuit", on_platform(0xeebcf5467f718bf0u64, 0xbc973db0a03e9cf3)),
-        ("S", "E", on_platform(0xde01897c36a13987, 0x482c0bf220810dff)),
-        ("A'", "pursuit", on_platform(0x3247673c05cd65bf, 0x6f5b873240edf079)),
-        ("A'", "E", on_platform(0x35359c0db0e47e3a, 0x0eb5abb172afc247)),
-    ];
-    for (tag, ct, h) in want {
+    let table = hash_table();
+    for (tag, ct) in [("S", "pursuit"), ("S", "E"), ("A'", "pursuit"), ("A'", "E")] {
+        let h = table.hash(&format!("b1 {tag} {ct}"));
         let spec = if tag == "S" { spec_s() } else { spec_a() };
         let opts = if ct == "E" {
             construction_e()
@@ -1561,20 +1552,9 @@ fn part_b_step() {
 #[test]
 fn b1_construction_g_is_bit_identical() {
     let g = CGridOptions::camber_seam_construction();
-    for (tag, fan, spec, want) in [
-        (
-            "S",
-            blade_b(),
-            spec_s(),
-            on_platform(0x59b26da9febc9b2eu64, 0xaecdcc838d239069),
-        ),
-        (
-            "FAN-01-C",
-            fan01(),
-            spec_fan01(),
-            on_platform(0x00b3e9673d470e52, 0xcbed3848e92d676a),
-        ),
-    ] {
+    let table = hash_table();
+    for (tag, fan, spec) in [("S", blade_b(), spec_s()), ("FAN-01-C", fan01(), spec_fan01())] {
+        let want = table.hash(&format!("b1 G {tag}"));
         let got = mesh_hash(&build_cgrid_mesh_with(&fan, &spec, &g).unwrap().mesh);
         println!("B1 G {tag}: {got:#018x}");
         check_hash(got, want, tag);
@@ -1645,20 +1625,9 @@ fn q1_h(h: &CGridOptions) {
 #[test]
 fn b1_construction_h_is_bit_identical() {
     let h = CGridOptions::camber_seam_h_construction();
-    for (tag, fan, spec, want) in [
-        (
-            "S",
-            blade_b(),
-            spec_s(),
-            on_platform(0x6f6342d53409da61u64, 0xce09460b1aa09597),
-        ),
-        (
-            "FAN-01-C",
-            fan01(),
-            spec_fan01(),
-            on_platform(0x21104bbbdd9b9129, 0xa8bb6d7c50d384e1),
-        ),
-    ] {
+    let table = hash_table();
+    for (tag, fan, spec) in [("S", blade_b(), spec_s()), ("FAN-01-C", fan01(), spec_fan01())] {
+        let want = table.hash(&format!("b1 H {tag}"));
         let got = mesh_hash(&build_cgrid_mesh_with(&fan, &spec, &h).unwrap().mesh);
         println!("B1 H {tag}: {got:#018x}");
         check_hash(got, want, tag);

@@ -1,0 +1,24 @@
+# Expected hashes of crates/rcfd-api/tests/baseline_hashes.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# Moved from the test source as values only; nothing re-recorded. A mismatch means the numerics of a constant-density path changed.
+# Hash: FNV-1a (64 bit) over the little-endian bytes of f64::to_bits of ux, uy, p, T and the face fluxes.
+# Produced at commit 8b68e46 (F-114, the last commit before ADR 0005) in a separate worktree, run twice with identical output, and
+# reproduced bit for bit at HEAD for every case except rotating_channel.
+cavity-simple	any	0x07e7461c36893384
+cavity-simplec	any	0x58d5c4fd29432b05
+# The coupled hash is the only cavity value that differs per platform. 0x123b5330dae3f36a is the registered value (Windows, 8b68e46);
+# the x86_64 Linux value was produced by this computation at 8b68e46 (e79f7db in the current history) and at HEAD in one Linux
+# container, and equals the first Linux CI gate's value (ADR 0137). Other platforms print.
+cavity-coupled	windows	0x123b5330dae3f36a
+cavity-coupled	linux-x86_64	0xfa937c4ec7bcb078
+cavity-piso	any	0x2a042a42594c418b
+cavity-pimple	any	0x2a042a42594c418b
+heated-simple	any	0x30a23d946786fd8a
+heated-simplec	any	0x7d35b1f2f7fcc4b7
+heated-piso	any	0xfe7b5aa0a252ec0f
+packed_bed	any	0x19e53df373637262
+sod	any	0xe1612365139bf898
+wedge	any	0xe198a93b898bd79b
+# corrected after review: 8b68e46 (pre-ADR-0005) and HEAD both give this value; the first registered value was wrong
+kepsilon_channel	any	0x6ddc55969af2a835
+# KNOWN DIFFERS (ignored test): the pre-ADR-0005 value at 8b68e46; changed at d1b43f0 (F-031 rotating-frame rest-state fix).
+rotating_channel	any	0x54d9bee17b5895e8

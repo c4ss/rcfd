@@ -11,7 +11,16 @@ use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_mesh::gen::{box_2d, warp};
 use std::sync::Arc;
 
-const REGISTERED: u64 = 0xbbedca02b6f39a6d;
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "varden_ideal_hash",
+        include_str!("fixtures/expected_hashes/varden_ideal_hash.tsv"),
+    )
+}
 
 fn run() -> u64 {
     let (r, gamma, p0, t0, h_t, l) = (287.0, 1.4, 101_325.0, 300.0, 0.05, 2.0);
@@ -74,5 +83,6 @@ fn run() -> u64 {
 #[test]
 fn ideal_gas_nozzle_matches_registered_hash() {
     let got = run();
-    assert_eq!(got, REGISTERED, "got {got:#018x}");
+    let registered = hash_table().expect_hash("ideal-gas-nozzle");
+    assert_eq!(got, registered, "got {got:#018x}");
 }

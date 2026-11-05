@@ -16,6 +16,17 @@ use rcfd_fv::simple::SimpleSolver;
 use std::f64::consts::PI;
 use std::time::Instant;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "fan01_stall_w43c",
+        include_str!("fixtures/expected_hashes/fan01_stall_w43c.tsv"),
+    )
+}
+
 const N_BLADES: f64 = 9.0;
 const R_HUB: f64 = 0.124;
 const R_DUCT: f64 = 0.250;
@@ -1863,16 +1874,8 @@ fn w45a_hash(sim: &Simulation) -> u64 {
 /// ADR 0115 P5: the key absent, `none` and `barth_jespersen` give B3 after 30 iterations bit-identical to main 511bed4 (hashes recorded there).
 #[test]
 fn w45a_p5_defaults_are_bit_identical_to_main() {
-    // Recorded on Windows. The FAN-01 mesh calls the platform's libm, so the hashes differ per platform: the x86_64 Linux values
-    // were produced at 511bed4 (e65b4ea in the current history) and at HEAD in one Linux container, with the same guard outcome
-    // (ADR 0137); other platforms print and skip.
-    let (absent, bj) = if cfg!(windows) {
-        (Some(0xec72_1116_c096_3182u64), Some(0x26e5_a0c5_2495_7698u64))
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        (Some(0x971b_2e8a_e81e_e451), Some(0xbb74_8c1f_c0d9_3169))
-    } else {
-        (None, None)
-    };
+    let table = hash_table();
+    let (absent, bj) = (table.hash("p5-absent"), table.hash("p5-barth_jespersen"));
     let mut miss = Vec::new();
     for (lim, want) in [
         ("", absent),

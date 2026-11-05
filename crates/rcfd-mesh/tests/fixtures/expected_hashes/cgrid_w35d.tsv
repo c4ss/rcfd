@@ -1,0 +1,23 @@
+# Expected hashes of crates/rcfd-mesh/tests/cgrid_w35d.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
+# The registered values were recorded on Windows; the constructions call the platform's libm, so the last bits of the nodes, and the hashes,
+# differ per platform. The x86_64 Linux value was proven equal at the reference commit and at HEAD in one container (ADR 0137); other
+# platforms print the hash and skip.
+# B1 (ADR 0079 part 4): S and A' with the 33A construction (pursuit) and with construction E, recorded on 0cef8f5 (211d3e3 in the current history).
+b1 S pursuit	windows	0xeebcf5467f718bf0
+b1 S pursuit	linux-x86_64	0xbc973db0a03e9cf3
+b1 S E	windows	0xde01897c36a13987
+b1 S E	linux-x86_64	0x482c0bf220810dff
+b1 A' pursuit	windows	0x3247673c05cd65bf
+b1 A' pursuit	linux-x86_64	0x6f5b873240edf079
+b1 A' E	windows	0x35359c0db0e47e3a
+b1 A' E	linux-x86_64	0x0eb5abb172afc247
+# B1 of ADR 0083: construction G (case value camber_seam) at the HEAD of the ADR 0083 registration, c89495f (6c3ddc9 in the current history).
+b1 G S	windows	0x59b26da9febc9b2e
+b1 G S	linux-x86_64	0xaecdcc838d239069
+b1 G FAN-01-C	windows	0x00b3e9673d470e52
+b1 G FAN-01-C	linux-x86_64	0xcbed3848e92d676a
+# B1 of ADR 0087: construction H (case value camber_seam_h) at the HEAD of the ADR 0087 registration, 6f97dcb (feb015f in the current history).
+b1 H S	windows	0x6f6342d53409da61
+b1 H S	linux-x86_64	0xce09460b1aa09597
+b1 H FAN-01-C	windows	0x21104bbbdd9b9129
+b1 H FAN-01-C	linux-x86_64	0xa8bb6d7c50d384e1

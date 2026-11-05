@@ -8,6 +8,17 @@
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
 
+#[path = "../../rcfd-core/tests/support/expected_hashes.rs"]
+mod expected_hashes;
+
+/// The registered hashes of this file (ADR 0190); their provenance is in the table.
+fn hash_table() -> expected_hashes::Table {
+    expected_hashes::Table::load(
+        "w34c_component_diagonal_default",
+        include_str!("fixtures/expected_hashes/w34c_component_diagonal_default.tsv"),
+    )
+}
+
 fn cavity(alg: &str) -> String {
     format!(
         "[mesh]\ngenerator = \"cavity_2d\"\nnx = 20\nny = 20\n[physics]\nnu = 0.01\n[boundaries.lid]\nvelocity = \"fixed\"\nvelocity_value = [1.0, 0.0, 0.0]\n[boundaries.walls]\nvelocity = \"fixed\"\n[solver]\nalgorithm = \"{alg}\"\nconvection = \"linear_upwind\"\nmax_iterations = 60\nend_time = 0.3\ndt = 0.01\n"
@@ -58,36 +69,41 @@ fn file(rel: &str) -> String {
 #[test]
 #[ignore = "diagnostic (ADR 0074 part C), no limit"]
 fn c1_baseline_hash_cases_with_the_corrected_diagonal() {
+    let table = hash_table();
     let mut cases: Vec<(String, String, (usize, u64))> = Vec::new();
     for (alg, reg) in [
-        ("simple", (60, 0x07e7461c36893384)),
-        ("simplec", (60, 0x58d5c4fd29432b05)),
-        ("coupled", (59, 0x123b5330dae3f36a)),
-        ("piso", (30, 0x2a042a42594c418b)),
-        ("pimple", (30, 0x2a042a42594c418b)),
+        ("simple", (60, table.expect_hash("cavity-simple"))),
+        ("simplec", (60, table.expect_hash("cavity-simplec"))),
+        ("coupled", (59, table.expect_hash("cavity-coupled"))),
+        ("piso", (30, table.expect_hash("cavity-piso"))),
+        ("pimple", (30, table.expect_hash("cavity-pimple"))),
     ] {
         cases.push((format!("cavity-{alg}"), cavity(alg), reg));
     }
     for (alg, reg) in [
-        ("simple", (60, 0x30a23d946786fd8a)),
-        ("simplec", (60, 0x7d35b1f2f7fcc4b7)),
-        ("piso", (40, 0xfe7b5aa0a252ec0f)),
+        ("simple", (60, table.expect_hash("heated-simple"))),
+        ("simplec", (60, table.expect_hash("heated-simplec"))),
+        ("piso", (40, table.expect_hash("heated-piso"))),
     ] {
         cases.push((format!("heated-{alg}"), HEATED.replace("ALG", alg), reg));
     }
     for (name, rel, reg) in [
-        ("packed_bed", "packed_bed/packed_bed.toml", (60, 0x19e53df373637262)),
-        ("sod", "sod/sod.toml", (60, 0xe1612365139bf898)),
-        ("wedge", "wedge/wedge.toml", (60, 0xe198a93b898bd79b)),
+        (
+            "packed_bed",
+            "packed_bed/packed_bed.toml",
+            (60, table.expect_hash("packed_bed")),
+        ),
+        ("sod", "sod/sod.toml", (60, table.expect_hash("sod"))),
+        ("wedge", "wedge/wedge.toml", (60, table.expect_hash("wedge"))),
         (
             "kepsilon_channel",
             "channel/kepsilon_channel.toml",
-            (60, 0x6ddc55969af2a835),
+            (60, table.expect_hash("kepsilon_channel")),
         ),
         (
             "rotating_channel (ignored test)",
             "rotating_channel/rotating_channel.toml",
-            (60, 0x54d9bee17b5895e8),
+            (60, table.expect_hash("rotating_channel")),
         ),
     ] {
         cases.push((name.to_string(), file(rel), reg));
