@@ -8,7 +8,7 @@
 
 use crate::bc::{Bc, BcCtx, FaceCoeffs};
 use crate::convection::convection;
-use crate::diffusion::{laplacian, uniform_gamma};
+use crate::diffusion::{laplacian, laplacian_opt, uniform_gamma};
 use crate::energy::EnergySolver;
 use crate::field::ScalarField;
 use crate::fvmatrix::FvMatrix;
@@ -243,7 +243,15 @@ pub fn iterate_with_implicit(e: &mut EnergySolver, phi: &[f64], implicit: &[f64]
     };
     let grad = e.convection.needs_gradient().then(|| least_squares(&g, &cells, &bvals));
     let mut m = convection(&g, phi, &cells, &bc, e.convection, grad.as_deref());
-    m.add(&laplacian(&g, &gamma, &bc, grad.as_deref()));
+    m.add(&laplacian_opt(
+        &g,
+        &gamma,
+        &bc,
+        grad.as_deref(),
+        &cells,
+        &bvals,
+        e.gradient,
+    ));
     let vol = g.mesh.cell_volumes();
     for c in 0..cells.len() {
         m.a.diag[c] += implicit[c] * vol[c];

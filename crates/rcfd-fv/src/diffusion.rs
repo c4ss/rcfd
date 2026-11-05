@@ -78,6 +78,23 @@ pub fn laplacian_with(
     laplacian_impl(geom, gamma, bc, grad, Some((cells, bvals, opts)), None)
 }
 
+/// [`laplacian`] when `opts` is `None` (the operator of every case without the gradient options, unchanged) and
+/// [`laplacian_with`] with the options otherwise (ADR 0190 K3). `cells` and `bvals` are read only with options.
+pub fn laplacian_opt(
+    geom: &FvGeometry,
+    gamma: &[f64],
+    bc: &[FaceCoeffs],
+    grad: Option<&[Vec3]>,
+    cells: &[f64],
+    bvals: &[f64],
+    opts: Option<GradientOptions>,
+) -> FvMatrix {
+    match opts {
+        Some(o) => laplacian_with(geom, gamma, bc, grad, cells, bvals, o),
+        None => laplacian(geom, gamma, bc, grad),
+    }
+}
+
 fn laplacian_impl(
     geom: &FvGeometry,
     gamma: &[f64],

@@ -14,7 +14,7 @@
 use crate::bc::FaceCoeffs;
 use crate::convection::{convection, ConvScheme};
 use crate::ddt::{add_ddt, History, TimeScheme};
-use crate::diffusion::{laplacian, uniform_gamma};
+use crate::diffusion::{laplacian_opt, uniform_gamma, GradientOptions};
 use crate::field::ScalarField;
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
@@ -53,6 +53,9 @@ pub struct SweepExtras<'a> {
     /// Capacity weight per cell multiplying the cell volume in the time derivative (conjugate heat transfer, ADR 0024
     /// D1: `(rho cp)_c / (rho cp)_ref`); `None` is the plain derivative and leaves the existing path untouched.
     pub ddt_weight: Option<&'a [f64]>,
+    /// Options of the explicit non-orthogonal flux of the diffusion term (ADR 0016 D2, ADR 0190 K3); `None` assembles the
+    /// plain [`crate::diffusion::laplacian`] as before. They act only where the scheme computes a cell gradient.
+    pub gradient: Option<GradientOptions>,
 }
 
 /// One implicit sweep of the transport equation for `field`; returns the normalised residual
@@ -75,7 +78,15 @@ pub fn sweep_ext(geom: &FvGeometry, field: &mut ScalarField, inp: &SweepInputs, 
     let bvals = field.boundary_values(geom);
     let grad = inp.scheme.needs_gradient().then(|| least_squares(geom, &cells, &bvals));
     let mut m = convection(geom, inp.phi, &cells, &bc, inp.scheme, grad.as_deref());
-    m.add(&laplacian(geom, inp.gamma, &bc, grad.as_deref()));
+    m.add(&laplacian_opt(
+        geom,
+        inp.gamma,
+        &bc,
+        grad.as_deref(),
+        &cells,
+        &bvals,
+        ext.gradient,
+    ));
     if let Some(s) = inp.source {
         let vol = geom.mesh.cell_volumes();
         for c in 0..cells.len() {
@@ -223,6 +234,8 @@ pub struct ScalarTransport {
     pub fixed: Option<Vec<Option<f64>>>,
     /// Old time levels for transient runs ([`ScalarTransport::advance`]).
     pub history: History,
+    /// Gradient options of the diffusion term, see [`SweepExtras::gradient`] (`None` from [`ScalarTransport::new`]).
+    pub gradient: Option<GradientOptions>,
 }
 
 impl ScalarTransport {
@@ -245,6 +258,7 @@ impl ScalarTransport {
             sink: None,
             fixed: None,
             history,
+            gradient: None,
         }
     }
 
@@ -274,6 +288,7 @@ impl ScalarTransport {
             &SweepExtras {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
+                gradient: self.gradient,
                 ..Default::default()
             },
         )
@@ -299,6 +314,7 @@ impl ScalarTransport {
             &SweepExtras {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
+                gradient: self.gradient,
                 ..Default::default()
             },
         );

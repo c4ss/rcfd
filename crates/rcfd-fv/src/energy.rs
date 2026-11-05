@@ -48,6 +48,9 @@ pub struct EnergySolver {
     /// Capacity weight `(rho cp)_c / (rho cp)_ref` per cell of the time derivative (conjugate heat transfer), see
     /// [`SweepExtras::ddt_weight`]; `None` for a single material.
     pub ddt_weight: Option<Vec<f64>>,
+    /// Gradient options of the diffusion term (ADR 0190 K3), see [`SweepExtras::gradient`]; `None` from
+    /// [`EnergySolver::new`] assembles the plain Laplacian.
+    pub gradient: Option<crate::diffusion::GradientOptions>,
 }
 
 impl EnergySolver {
@@ -71,6 +74,7 @@ impl EnergySolver {
             sink: None,
             fixed: None,
             ddt_weight: None,
+            gradient: None,
         }
     }
 
@@ -99,6 +103,7 @@ impl EnergySolver {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
                 ddt_weight: self.ddt_weight.as_deref(),
+                gradient: self.gradient,
             },
         )
     }
@@ -128,6 +133,7 @@ impl EnergySolver {
                 sink: self.sink.as_deref(),
                 fixed: self.fixed.as_deref(),
                 ddt_weight: self.ddt_weight.as_deref(),
+                gradient: self.gradient,
             },
         );
         self.history.push(self.t.values.clone(), dt);
