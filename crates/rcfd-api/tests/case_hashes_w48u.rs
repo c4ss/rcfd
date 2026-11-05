@@ -8,7 +8,8 @@
 //! ADR 0163: the text columns are compared after removing `solver.corrector_control` when it holds its default `"fixed"`
 //! (ADR 0156 added the key after R0; the settings hash omits it at its default, the written text lists it), with controls
 //! that the test's serialisers equal the library's (C1), every recorded valid case holds the default (C2), the raw lines
-//! differ from R0 in the text columns only (C3), and a non-default value is not normalised away (C4).
+//! differ from R0 in the text columns only (C3), and a non-default value is not normalised away (C4). ADR 0181 addendum
+//! (2026-11-05) F2: `mesh.fan.c_grid_grading` at its default `"capped"` is removed the same way, with C2 and C4 extended to it.
 
 use rcfd_api::case::Case;
 use std::path::{Path, PathBuf};
@@ -124,25 +125,35 @@ fn json_text(v: &serde_json::Value) -> String {
     serde_json::to_string_pretty(v).unwrap()
 }
 
-/// ADR 0163 S1: the case's settings value without `solver.corrector_control` when (and only when) it holds its default
-/// `"fixed"`. ADR 0156 added that key after R0 (6867e40); the settings hash omits it at its default, the written text lists
-/// it. This is the one normalisation of the text columns; a non-default value is kept and so differs from R0.
-fn without_default_corrector_control(c: &Case) -> serde_json::Value {
+/// The keys added after R0 (6867e40) whose default the settings hash omits (`hash_omit_default`) and the written text
+/// lists: (JSON pointer of the parent object, key, default). `solver.corrector_control` (ADR 0156, ADR 0163 S1) and
+/// `mesh.fan.c_grid_grading` (ADR 0181, its addendum of 2026-11-05 F2).
+const DEFAULT_KEYS: [(&str, &str, &str); 2] = [
+    ("/solver", "corrector_control", "fixed"),
+    ("/mesh/fan", "c_grid_grading", "capped"),
+];
+
+/// ADR 0163 S1 (extended by the ADR 0181 addendum F2): the case's settings value without each of [`DEFAULT_KEYS`] when
+/// (and only when) it holds its default. This is the one normalisation of the text columns; a non-default value is kept
+/// and so differs from R0.
+fn without_default_keys(c: &Case) -> serde_json::Value {
     let mut v = c.tree.to_json();
-    if let Some(s) = v.get_mut("solver").and_then(|s| s.as_object_mut()) {
-        if s.get("corrector_control").and_then(|x| x.as_str()) == Some("fixed") {
-            s.remove("corrector_control");
+    for (parent, key, default) in DEFAULT_KEYS {
+        if let Some(s) = v.pointer_mut(parent).and_then(|s| s.as_object_mut()) {
+            if s.get(key).and_then(|x| x.as_str()) == Some(default) {
+                s.remove(key);
+            }
         }
     }
     v
 }
 
 /// One source of the current code: its record line with the text columns normalised (ADR 0163 S1), the same line with
-/// the raw text columns (as R0's recorder wrote them) and its `solver.corrector_control` value.
+/// the raw text columns (as R0's recorder wrote them) and the values of [`DEFAULT_KEYS`] in its settings data.
 struct Entry {
     norm: String,
     raw: String,
-    corrector_control: Option<String>,
+    defaults: Vec<Option<String>>,
 }
 
 fn src_of(l: &str) -> &str {
@@ -157,7 +168,7 @@ fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> Ent
             // ADR 0163 C1: the test's serialisers write what the library writes.
             assert_eq!(toml_text(&raw), c.to_toml(), "C1 toml {src}");
             assert_eq!(json_text(&raw), c.to_json_string(), "C1 json {src}");
-            let norm = without_default_corrector_control(&c);
+            let norm = without_default_keys(&c);
             let mesh = if est_cells(&c) > 400_000 {
                 "mesh skipped (large)".to_string()
             } else {
@@ -180,10 +191,13 @@ fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> Ent
             Entry {
                 norm: mk(&norm),
                 raw: mk(&raw),
-                corrector_control: c
-                    .get("solver.corrector_control")
-                    .ok()
-                    .and_then(|v| v.as_str().map(str::to_string)),
+                defaults: DEFAULT_KEYS
+                    .iter()
+                    .map(|(parent, key, _)| {
+                        raw.pointer(&format!("{parent}/{key}"))
+                            .and_then(|v| v.as_str().map(str::to_string))
+                    })
+                    .collect(),
             }
         }
         Err(d) => {
@@ -194,7 +208,7 @@ fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> Ent
             Entry {
                 norm: l.clone(),
                 raw: l,
-                corrector_control: None,
+                defaults: Vec::new(),
             }
         }
     }
@@ -285,8 +299,9 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
     assert!(valid >= 20 && meshes >= 20, "set-up: {valid} valid, {meshes} meshes");
-    // ADR 0163 C2 and C3: every recorded valid source holds the default `"fixed"`; count the recorded lines whose raw text
-    // columns differ (and check that settings and mesh columns are equal raw, i.e. only the text columns differ).
+    // ADR 0163 C2 and C3: every recorded valid source holds the defaults of DEFAULT_KEYS in its data (ADR 0181 addendum F2:
+    // `"capped"` too); count the recorded lines whose raw text columns differ (and check that settings and mesh columns are
+    // equal raw, i.e. only the text columns differ).
     let mut raw_text_differs = 0;
     let mut raw_other_differs = Vec::new();
     for w in &want {
@@ -294,7 +309,9 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
             continue;
         };
         if w.contains("\tvalid\t") {
-            assert_eq!(e.corrector_control.as_deref(), Some("fixed"), "C2 {}", src_of(w));
+            for ((_, key, default), v) in DEFAULT_KEYS.iter().zip(&e.defaults) {
+                assert_eq!(v.as_deref(), Some(*default), "C2 {key} {}", src_of(w));
+            }
         }
         if e.raw != *w {
             raw_text_differs += 1;
@@ -315,26 +332,31 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     }
     println!("H1 C3: {raw_text_differs} of {valid} recorded valid sources differ raw (text columns only), 0 after normalisation");
     assert!(raw_other_differs.is_empty(), "C3: {raw_other_differs:?}");
-    // ADR 0163 C4: a non-default value is not normalised away (one recorded valid case file, set to adaptive).
+    // ADR 0163 C4: a non-default value is not normalised away (one recorded valid case file, set to adaptive; ADR 0181
+    // addendum F2: a second copy with c_grid_grading = radial_geometric).
     let w = want
         .iter()
         .find(|l| l.contains("\tvalid\t") && !src_of(l).contains(" block "))
         .expect("a recorded valid case file");
-    let mut c = Case::load(repo().join(src_of(w))).expect("C4 case loads");
-    c.set("solver.corrector_control", serde_json::json!("adaptive"))
-        .expect("C4 set");
-    let n = without_default_corrector_control(&c);
-    let toml_col = format!("toml {}", fnv(toml_text(&n).as_bytes()));
-    let json_col = format!("json {}", fnv(json_text(&n).as_bytes()));
-    assert!(
-        !w.split('\t').any(|f| f == toml_col) && !w.split('\t').any(|f| f == json_col),
-        "C4: an adaptive copy of {} still matches R0's text columns",
-        src_of(w)
-    );
-    println!(
-        "H1 C4: {} with corrector_control = adaptive differs from R0 ({toml_col}, {json_col})",
-        src_of(w)
-    );
+    for (path, value) in [
+        ("solver.corrector_control", "adaptive"),
+        ("mesh.fan.c_grid_grading", "radial_geometric"),
+    ] {
+        let mut c = Case::load(repo().join(src_of(w))).expect("C4 case loads");
+        c.set(path, serde_json::json!(value)).expect("C4 set");
+        let n = without_default_keys(&c);
+        let toml_col = format!("toml {}", fnv(toml_text(&n).as_bytes()));
+        let json_col = format!("json {}", fnv(json_text(&n).as_bytes()));
+        assert!(
+            !w.split('\t').any(|f| f == toml_col) && !w.split('\t').any(|f| f == json_col),
+            "C4: a copy of {} with {path} = {value} still matches R0's text columns",
+            src_of(w)
+        );
+        println!(
+            "H1 C4: {} with {path} = {value} differs from R0 ({toml_col}, {json_col})",
+            src_of(w)
+        );
+    }
     let control = rec.lines().nth(1).unwrap_or_default();
     println!("H1 R0 {control}");
     assert!(

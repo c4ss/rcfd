@@ -630,6 +630,55 @@ fn w49r_default_meshes_are_bit_identical() {
     }
 }
 
+/// ADR 0181 addendum (2026-11-05) F3: the default `"capped"` leaves the case's settings and content hash unchanged (absent,
+/// written or set); every other value changes the hash, is written in the TOML and JSON text and round-trips through the TOML.
+#[test]
+fn w49r_c_grid_grading_hash_and_text() {
+    let parse = |t: &str| Case::parse_toml(t).unwrap_or_else(|e| panic!("{e:?}"));
+    let c0 = parse(&case_toml(F3));
+    assert_eq!(c0.get("mesh.fan.c_grid_grading").unwrap(), json!("capped"));
+    let h0 = c0.tree.content_hash();
+    let written = parse(&case_toml_g(F3, Some("capped")));
+    let mut set = parse(&case_toml(F3));
+    set.set("mesh.fan.c_grid_grading", json!("capped")).unwrap();
+    println!(
+        "W49R F3 capped: absent {h0:016x}, written {:016x}, set {:016x}",
+        written.tree.content_hash(),
+        set.tree.content_hash()
+    );
+    assert_eq!(written.tree.to_json(), c0.tree.to_json());
+    assert_eq!(set.tree.to_json(), c0.tree.to_json());
+    assert_eq!(written.tree.content_hash(), h0);
+    assert_eq!(set.tree.content_hash(), h0);
+    let mut hashes = vec![h0];
+    for g in ["radial_geometric", "wake_geometric", "radial_wake_geometric"] {
+        let c = parse(&case_toml_g(F3, Some(g)));
+        let h = c.tree.content_hash();
+        let toml = c.to_toml();
+        let back = parse(&toml);
+        println!(
+            "W49R F3 {g}: hash {h:016x}, parsed back {:016x}",
+            back.tree.content_hash()
+        );
+        assert!(
+            !hashes.contains(&h),
+            "{g}: hash {h:016x} equals the default's or another value's"
+        );
+        hashes.push(h);
+        assert!(
+            toml.contains(&format!("c_grid_grading = \"{g}\"")),
+            "{g}: not in the TOML"
+        );
+        assert!(
+            c.to_json_string().contains(&format!("\"c_grid_grading\": \"{g}\"")),
+            "{g}: not in the JSON"
+        );
+        assert_eq!(back.get("mesh.fan.c_grid_grading").unwrap(), json!(g));
+        assert_eq!(back.tree.to_json(), c.tree.to_json(), "{g}: TOML round trip");
+        assert_eq!(back.tree.content_hash(), h, "{g}: hash after the TOML round trip");
+    }
+}
+
 // ---------------------------------------------------------------- arms (ADR 0181, fixed before any arm mesh was built)
 
 /// The case of the harness with `mesh.fan.c_grid_grading = g` (None: the key absent).

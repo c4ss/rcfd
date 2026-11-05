@@ -83,7 +83,8 @@ pub fn schema() -> Schema {
         .field(
             "c_grid_grading",
             Schema::enumeration("capped", &["capped", "radial_geometric", "wake_geometric", "radial_wake_geometric"])
-                .doc("c_grid only, experimental (ADR 0181, not accepted): capped (the default, the construction above) or one geometric ratio solved to fill the length instead of the capped growth, for the span layers (radial_geometric: h1 at hub and tip, no stack-to-middle jump), the wake axial cells (wake_geometric), or both"),
+                .doc("c_grid only, experimental (ADR 0181, not accepted): capped (the default, the construction above) or one geometric ratio solved to fill the length instead of the capped growth, for the span layers (radial_geometric: h1 at hub and tip, no stack-to-middle jump), the wake axial cells (wake_geometric), or both")
+                .hash_omit_default(),
         )
         .field("station_radius", flist("Optional radial stations [m] of the blade (ADR 0075): when this list is not empty, the station_* lists (all of the same length, first radius r_hub, last radius r_tip, strictly increasing) replace the hub_* / tip_* values and the blade varies linearly between neighbouring stations"))
         .field("station_chord", flist("Chord [m] at each station_radius"))
