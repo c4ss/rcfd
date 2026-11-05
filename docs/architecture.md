@@ -24,7 +24,7 @@ rcfd-turb   -> core, mesh, fv
 rcfd-post   -> core, mesh
 rcfd-tsstore -> core, mesh, io   (time-series field store of a run, Studio L3, ADR 0124)
 rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
-rcfd-workspace -> api, project, runner, tsstore, post   (the project folder's commands, queries and write rule, shared by the MCP server and the Studio; ADR 0173, ADR 0185)
+rcfd-workspace -> api, project, runner, tsstore, post, io, mesh   (the project folder's commands, queries and write rule, shared by the MCP server and the Studio; ADR 0173, ADR 0185; io and mesh for the mesh commands, ADR 0187)
 rcfd-mcp    -> api, workspace, project, runner, tsstore, post   (project tools behind --project: their MCP descriptors over the workspace; ADR 0135, ADR 0185)
 rcfd-cli    -> core, mesh, io, post, fv, api
 rcfd-assistant -> api, mcp   (provider adapters, agent loop, setup tools; no UI)

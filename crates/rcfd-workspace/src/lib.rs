@@ -4,7 +4,8 @@
 //!
 //! [`Workspace`] is one open project with its run service and change watcher. [`Workspace::call`] runs one command or
 //! query by the name of its MCP project tool (`project_info`, `list_runs`, ..., `edit_case`, `write_note`, `new_case`,
-//! `start_run`, `wait_run`) with that tool's arguments and returns the tool's result object ([`Answer`]); errors are
+//! the mesh commands of [`meshes`], `start_run`, `wait_run`) with that tool's arguments and returns the tool's result
+//! object ([`Answer`]); errors are
 //! [`RpcError`]s with the codes of ADR 0135 ([`CONFLICT`], [`LOCK_BUSY`], [`NOT_FOUND`] and the service codes). The MCP
 //! descriptors (names, schemas, access classes) stay in `rcfd-mcp`, which wraps these answers as MCP results.
 //!
@@ -15,8 +16,9 @@
 //! compare-and-replace of `rcfd_project::atomic::replace_if_hash` (ADR 0135 W48-15 (a)): under the file's edit lock,
 //! one `.rcfd/edits.jsonl` line per accepted write ([`write`]; the Studio's save, [`save`]). New case files are created
 //! without ever replacing one ([`cases`]), from the shipped [`examples`], the built-in [`templates`], text, settings or a
-//! copy (`new_case`, ADR 0186). Runs go through one handle on the project's run service ([`runs::RunService`]), with the
-//! start plan of [`plan`] (ADR 0173 D7) when asked.
+//! copy (`new_case`, ADR 0186). A case's mesh is checked, drawn, imported into `meshes/` and listed by [`meshes`]
+//! (ADR 0187), with its mesh file confined to the project. Runs go through one handle on the project's run service
+//! ([`runs::RunService`]), with the start plan of [`plan`] (ADR 0173 D7) when asked.
 //!
 //! The crate has no UI and no MCP types.
 
@@ -24,6 +26,7 @@ pub mod case_text;
 pub mod cases;
 mod create;
 pub mod examples;
+pub mod meshes;
 pub mod plan;
 mod queries;
 pub mod runs;
@@ -64,7 +67,7 @@ pub const FILE_PAGE: usize = 32_000;
 pub const MAX_WAIT_S: f64 = 60.0;
 
 /// The names [`Workspace::call`] answers, in the order of the MCP project tools.
-pub const COMMANDS: [&str; 18] = [
+pub const COMMANDS: [&str; 22] = [
     "project_info",
     "list_runs",
     "run_status",
@@ -78,6 +81,10 @@ pub const COMMANDS: [&str; 18] = [
     "edit_case",
     "write_note",
     "new_case",
+    "check_case_mesh",
+    "preview_mesh",
+    "import_mesh",
+    "list_meshes",
     "start_run",
     "pause_run",
     "resume_run",
@@ -196,6 +203,10 @@ impl Workspace {
             "edit_case" => value(self.edit_case(args)),
             "write_note" => value(self.write_note(args)),
             "new_case" => value(self.new_case(args)),
+            "check_case_mesh" => value(self.check_case_mesh(args)),
+            "preview_mesh" => self.preview_mesh(args),
+            "import_mesh" => value(self.import_mesh(args)),
+            "list_meshes" => value(self.list_meshes(args)),
             "start_run" => value(self.start_run(args)),
             "pause_run" | "resume_run" | "cancel_run" => value(self.control(name, args)),
             "wait_run" => value(self.wait_run(args)),
