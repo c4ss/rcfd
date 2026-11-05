@@ -1,9 +1,13 @@
 //! ADR 0183 amendment P-C, case-tree checks of the EXP-ROT prerequisite P-C (`rotating_frame` with `pimple` on a static
 //! mesh): PC-1 the Coriolis term re-evaluated every outer iteration (with PC-1b and the negative control PC-1N), PC-2 the
-//! rest state in a rotating frame with the transient wall pressure (PC-2N without it), PC-2b the rotating channel, PC-3 the
-//! seam pair conservation with the coupled mean `rAU` (PC-3N without it), PC-4 the casing `moving_wall` with the tangential
-//! projection on the FAN-01 empty passage E3 (PC-4N unprojected), PC-5 scope and located errors, PC-6 the flags of the
-//! built solver. The limits are those registered in the amendment before this code ran.
+//! rest state in a rotating frame, PC-2b the rotating channel, PC-3 the seam pair conservation with the coupled mean `rAU`
+//! (PC-3N without it), PC-4 the casing `moving_wall` with the tangential projection on the FAN-01 empty passage E3 (PC-4N
+//! unprojected), PC-5 scope and located errors, PC-6 the flag of the built solver. The limits are those registered in the
+//! amendment before this code ran.
+//!
+//! The transient wall pressure registered with PC-2 / PC-2N was measured once (commit a225005, the record) and removed by
+//! the registered rule: without it the PC-2 rest state met both limits (PC-2N did not miss), so it was not needed on the
+//! transient path. PC-2 below is the run without it; PC-2N and the second flag of PC-6 went with the code.
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
@@ -197,16 +201,8 @@ fn rest_errors(sim: &Simulation) -> (f64, f64) {
 }
 
 /// 400 steps from rest; (final speed, final pressure error, max speed over the steps, max pressure error over the steps).
-fn pc2_run(trapezoid: bool) -> (f64, f64, f64, f64) {
+fn pc2_run() -> (f64, f64, f64, f64) {
     let mut sim = sim_of(&pc2_text());
-    {
-        let s = sim.pimple_solver_mut().expect("pimple engine");
-        assert!(
-            s.settings.wall_pressure_trapezoid,
-            "P-C did not switch the wall pressure on"
-        );
-        s.settings.wall_pressure_trapezoid = trapezoid;
-    }
     let (mut um, mut pm) = (0.0_f64, 0.0_f64);
     let mut last = (0.0, 0.0);
     for _ in 0..400 {
@@ -219,21 +215,13 @@ fn pc2_run(trapezoid: bool) -> (f64, f64, f64, f64) {
     (last.0, last.1, um, pm)
 }
 
-/// PC-2: the wave-9 rest criterion on the final state (t = 20 s) with the transient wall pressure.
+/// PC-2: the wave-9 rest criterion on the final state (t = 20 s).
 #[test]
-fn pc2_rest_state_in_a_rotating_frame_with_the_wall_pressure() {
-    let (u, p, um, pm) = pc2_run(true);
+fn pc2_rest_state_in_a_rotating_frame() {
+    let (u, p, um, pm) = pc2_run();
     println!("PC-2: final speed/(Omega R) {u:.3e} (limit 1e-3), pressure error {p:.3e} of range (limit 1e-2); max over steps {um:.3e}, {pm:.3e}");
     assert!(u <= 1e-3, "PC-2 speed {u:.3e}");
     assert!(p <= 1e-2, "PC-2 pressure {p:.3e}");
-}
-
-/// PC-2N: the same run without the transient wall pressure misses a PC-2 limit.
-#[test]
-fn pc2n_rest_state_without_the_wall_pressure_misses() {
-    let (u, p, um, pm) = pc2_run(false);
-    println!("PC-2N: final speed/(Omega R) {u:.3e}, pressure error {p:.3e} of range (a limit must be missed: 1e-3, 1e-2); max over steps {um:.3e}, {pm:.3e}");
-    assert!(u > 1e-3 || p > 1e-2, "PC-2N did not fire: {u:.3e}, {p:.3e}");
 }
 
 const PC2B_TEXT: &str = r#"
@@ -628,14 +616,16 @@ fn pc5_scope_of_the_rotating_frame_on_the_transient_path() {
     println!("PC-5: located errors at {at} (piso; mrf with pimple and piso; fractional step), dynamic_mesh.enabled, turbulence.model (k_omega_sst with pimple)");
 }
 
-/// (coupled_body_pair_mean, wall_pressure_trapezoid) of the built pimple solver.
-fn flags(source: &str) -> (bool, bool) {
+/// `coupled_body_pair_mean` of the built pimple solver.
+fn flags(source: &str) -> bool {
     let sim = sim_of(&scope_text("pimple", source, ""));
-    let s = sim.pimple_solver().expect("pimple engine");
-    (s.settings.coupled_body_pair_mean, s.settings.wall_pressure_trapezoid)
+    sim.pimple_solver()
+        .expect("pimple engine")
+        .settings
+        .coupled_body_pair_mean
 }
 
-/// PC-6: the rotating frame switches both flags on; no source and the other sources leave both off.
+/// PC-6: the rotating frame switches the pair mean on; no source and the other sources leave it off.
 #[test]
 fn pc6_flags_of_the_built_pimple_solver() {
     let rf = frame_block("rotating_frame");
@@ -644,12 +634,8 @@ fn pc6_flags_of_the_built_pimple_solver() {
     let disk = "[sources.disk]\ntype = \"actuator_disk\"\nzone = \"box\"\nbox_min = [0.2, 0.0, -1.0]\nbox_max = [0.4, 1.0, 1.0]\nthrust = 0.1\ndirection = [1.0, 0.0, 0.0]\n";
     let mhd =
         "[sources.mhd]\ntype = \"lorentz\"\nzone = \"all\"\nmagnetic_field = [0.0, 1.0, 0.0]\nconductivity = 1.0\n";
-    assert_eq!(flags(&rf), (true, true), "PC-6 rotating_frame");
-    assert_eq!(
-        flags(&format!("{rf}{acc}")),
-        (true, true),
-        "PC-6 rotating_frame + acceleration"
-    );
+    assert!(flags(&rf), "PC-6 rotating_frame");
+    assert!(flags(&format!("{rf}{acc}")), "PC-6 rotating_frame + acceleration");
     for (name, src) in [
         ("none", ""),
         ("acceleration", acc),
@@ -657,7 +643,7 @@ fn pc6_flags_of_the_built_pimple_solver() {
         ("actuator_disk", disk),
         ("lorentz", mhd),
     ] {
-        assert_eq!(flags(src), (false, false), "PC-6 {name}");
+        assert!(!flags(src), "PC-6 {name}");
     }
-    println!("PC-6: rotating_frame (alone and with an acceleration) -> both flags on; none, acceleration, porous, actuator_disk, lorentz -> both off");
+    println!("PC-6: rotating_frame (alone and with an acceleration) -> pair mean on; none, acceleration, porous, actuator_disk, lorentz -> off");
 }

@@ -626,8 +626,8 @@ impl Sources {
     }
 
     /// Is a relative-velocity `rotating_frame` source configured? On the transient engine it switches on the seam body-force
-    /// pair mean and the wall pressure of the rotating frame (ADR 0183 P-C); unlike `wall_pressure_trapezoid` it is false for
-    /// acceleration, actuator-disk and Lorentz sources, whose transient runs stay unchanged.
+    /// pair mean (ADR 0183 P-C); unlike `wall_pressure_trapezoid` it is false for acceleration, actuator-disk and Lorentz
+    /// sources, whose transient runs stay unchanged.
     pub fn has_rotating_frame(&self) -> bool {
         self.items.iter().any(|i| matches!(i.kind, Kind::Rotating(_)))
     }

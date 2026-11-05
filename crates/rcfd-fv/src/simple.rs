@@ -625,58 +625,48 @@ impl SimpleSolver {
     /// component of the cell gradient equals the cell-centre body force exactly (the gradient of the
     /// linearly interpolated opposite faces is O(h) off for a curved pressure otherwise).
     fn gradient_wall_values(&self, pbc: &PressureBc, body: Option<&BodyForce>, p: &[f64]) -> Vec<f64> {
-        match (body, self.wall_pressure_trapezoid) {
-            (Some(bf), true) => trapezoid_wall_values(&self.geom, pbc, bf, p),
-            _ => boundary_values_pbc(&self.geom, pbc, p),
-        }
-    }
-}
-
-/// Boundary-face pressures for the cell Green-Gauss gradients with the wall treatment of
-/// [`SimpleSolver::wall_pressure_trapezoid`] (wave 10): the values of `pbc`, except on fixed-velocity faces that are not
-/// coupled, where the value is chosen so that the wall-normal component of the owner's gradient equals the cell-centre body
-/// force `bf` exactly. Shared by the steady solver and the transient one (`PimpleSettings::wall_pressure_trapezoid`, ADR 0183
-/// P-C).
-pub(crate) fn trapezoid_wall_values(g: &FvGeometry, pbc: &PressureBc, bf: &BodyForce, p: &[f64]) -> Vec<f64> {
-    let mut out = boundary_values_pbc(g, pbc, p);
-    let mesh = &g.mesh;
-    let (sf, own, nei, vol) = (
-        mesh.face_area_vectors(),
-        mesh.owner(),
-        mesh.neighbour(),
-        mesh.cell_volumes(),
-    );
-    let base = out.clone();
-    for i in 0..out.len() {
-        if !(pbc.fixed_u[i] && pbc.coupled[i].is_none()) {
-            continue;
-        }
-        let f = g.n_internal + i;
-        let c = own[f];
-        let area = vec3::norm(sf[f]).max(1e-300);
-        let nhat = vec3::scale(sf[f], 1.0 / area);
-        let mut others = 0.0;
-        for &fo in mesh.cell_faces(c) {
-            if fo == f || g.empty[fo] {
+        let g = &self.geom;
+        let mut out = boundary_values_pbc(g, pbc, p);
+        let (Some(bf), true) = (body, self.wall_pressure_trapezoid) else {
+            return out;
+        };
+        let mesh = &g.mesh;
+        let (sf, own, nei, vol) = (
+            mesh.face_area_vectors(),
+            mesh.owner(),
+            mesh.neighbour(),
+            mesh.cell_volumes(),
+        );
+        let base = out.clone();
+        for i in 0..out.len() {
+            if !(pbc.fixed_u[i] && pbc.coupled[i].is_none()) {
                 continue;
             }
-            let (pf, sign) = if fo < g.n_internal {
-                let w = g.weights[fo];
-                (
-                    w * p[own[fo]] + (1.0 - w) * p[nei[fo]],
-                    if own[fo] == c { 1.0 } else { -1.0 },
-                )
-            } else {
-                (base[fo - g.n_internal], 1.0)
-            };
-            others += pf * sign * vec3::dot(sf[fo], nhat);
+            let f = g.n_internal + i;
+            let c = own[f];
+            let area = vec3::norm(sf[f]).max(1e-300);
+            let nhat = vec3::scale(sf[f], 1.0 / area);
+            let mut others = 0.0;
+            for &fo in mesh.cell_faces(c) {
+                if fo == f || g.empty[fo] {
+                    continue;
+                }
+                let (pf, sign) = if fo < g.n_internal {
+                    let w = g.weights[fo];
+                    (
+                        w * p[own[fo]] + (1.0 - w) * p[nei[fo]],
+                        if own[fo] == c { 1.0 } else { -1.0 },
+                    )
+                } else {
+                    (base[fo - g.n_internal], 1.0)
+                };
+                others += pf * sign * vec3::dot(sf[fo], nhat);
+            }
+            out[i] = (vol[c] * vec3::dot(bf.cell[c], nhat) - others) / area;
         }
-        out[i] = (vol[c] * vec3::dot(bf.cell[c], nhat) - others) / area;
+        out
     }
-    out
-}
 
-impl SimpleSolver {
     /// Create a solver; initial flux is computed from the velocity field.
     pub fn new(geom: Arc<FvGeometry>, u: VectorField, p: ScalarField, settings: SimpleSettings) -> Self {
         let bu = u.boundary_values(&geom);
