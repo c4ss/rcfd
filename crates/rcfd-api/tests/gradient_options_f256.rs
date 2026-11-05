@@ -25,6 +25,8 @@ const TEETH: f64 = 1e-9;
 const ITERS: usize = 60;
 const STEPS: usize = 16;
 const DT: f64 = 0.0625;
+/// Thermal diffusivity of E1 and E2, `k / (rho cp)` = 0.1 / (1 * 1).
+const ALPHA: f64 = 0.1;
 
 /// One option set: name, the `[solver]` lines of the case, the library options.
 struct Set {
@@ -275,7 +277,7 @@ fn field_w(geom: &FvGeometry, name: &str, zero_gradient_explicit: bool) -> Scala
 
 /// Library run of E1 (`steady`) or E2: an `EnergySolver` set up as the tree sets it, the options on its field.
 fn energy_library(geom: &Arc<FvGeometry>, steady: bool, opts: Option<GradientOptions>) -> Vec<f64> {
-    let mut en = EnergySolver::new(geom.clone(), field_w(geom, "T", true), 0.1 / (1.0 * 1.0));
+    let mut en = EnergySolver::new(geom.clone(), field_w(geom, "T", true), ALPHA);
     en.convection = ConvScheme::LinearUpwind;
     en.relax = 0.9;
     en.gradient = opts;
