@@ -261,3 +261,46 @@ the feed (W6, F-273), Studio changes (its preview keeps its own builder and limi
 * [ADR 0186](0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md) for the tool list this extends.
 * [Mesh import](../mesh-import.md) and [mesh quality](../mesh-quality.md) for the readers and the report.
 * [MCP tools](../mcp-tools.md) for the project tools.
+
+## Addendum 1: what was built, and the results (2026-11-05)
+
+Branch `f272-mesh-setup`, after this text: the workspace commands with the `edit_case` change and their tests, then the MCP
+descriptors and their tests, then the documents. Not merged.
+
+**Built as registered.** M1 to M10 as written. `rcfd-workspace` gains `src/meshes.rs` (the four commands, the mesh-file rule of
+M2 as `resolve_mesh_file`, the per-cell measures and the check object), the mesh check in `edit_case` (`write.rs`: built only
+when a key of `set` is a mesh setting; the result's other keys unchanged), four names in `COMMANDS` and the dependencies
+`rcfd-io` and `rcfd-mesh`; `cases::RESERVED` became crate-visible for the mesh name rule. `rcfd-mcp` gains the four descriptors
+after `new_case` and the sentence of the instructions; `edit_case`'s descriptor is unchanged. No Studio file changed. Existing
+tests edited: `project_list_f270.rs` (C-L restated), the counts of `project_runs_w48f.rs` (two) and `project_w48f.rs` (one).
+New tests: `crates/rcfd-workspace/tests/mesh_f272.rs` (7) and `crates/rcfd-mcp/tests/mesh_setup_f272.rs` (2).
+
+**Differences found while building.** (1) The session tools cannot load a project case that names its mesh as
+`../meshes/x.msh` when the server has a sandbox root, as it has under `--project`: the service refuses any `..` component of a
+path ("leaves the sandbox", `sandbox_path`, `crates/rcfd-api/src/service.rs`), and `create_case {path}` checks `mesh.file`
+that way. C8-C's comparison with the session `check_mesh` therefore uses a session server without a root and the same case by
+its absolute path; the refusal under the project root is asserted in the test as an observation. Not changed (session tools
+are outside F-272). (2) `list_meshes`' `outside` also lists a case whose mesh file is under `meshes/` but is not one of its
+entries (a missing file), not only files outside `meshes/` and refused ones as M6 says. (3) `import_mesh` also returns
+`zones_total`, and every `list_meshes` row has `files` (1 for a file).
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| C8-I | the 12 Gmsh files: `format` gmsh, 1139, 64 and 336 cells, counts, patches (`inlet`, `outlet`, `walls`) and zones equal to `read_msh_file`'s, bounds [0, 2] x [0, 1] x [0, 1] within 1e-9, files byte-equal. The Fluent channel written by the test: 32 cells, patches `frontAndBack`, `inlet`, `outlet`, `walls`, the extrusion note, counts equal to the reader's. OpenFOAM (18 cells): counts equal to `read_dir`'s, its files byte-equal under `meshes/foam/`; as the `polyMesh` folder named `foam2`, written again; unnamed, the existing `meshes/foam` (`copied` false). The same Fluent file again: `copied` false, nothing written. Nine refusals with `meshes/` unchanged: no reader 1003, missing 1202, `../outside.msh` and an absolute path outside 1004, a separator, another extension, another letter case of an existing name, an existing name with other bytes and a device name 1004; control: the same file under a free name imported. The public elbow is not fetched on this machine: its test printed "skipped" (not checked) |
+| C8-C | through the binary, `report` equal to `rcfd check-mesh --json` and `ok`, `report`, `patches` equal to the session `check_mesh` for the cavity (144 cells), the imported hexahedral mesh by `../meshes/` (64 cells) and the cavity turned by 30 degrees (144 cells); refused: `../../outside.msh` and an absolute path outside 1004, a missing file 1003, each located at `mesh.file`; a relative and an absolute path inside the project accepted |
+| C8-P | the wedge: `max` 19.911 degrees, equal to the report's `max_non_orthogonality` and to the test's own per-cell maximum, `min` equal, `range` [0, max], the PNG (6896 base64 bytes) equal to `render_scalar` with the reported plane and with the renderer's own plane rule; `aspect_ratio` another image with range starting at 1; the uniform cavity below 1e-9 with range [0, 1]; the annulus 128 of 256 cells drawn across z, equal to the reference; width 4096 drawn at 2048 pixels (`reduced_from` 4096) within the budget; a plane outside the mesh 1003 |
+| C8-E | `mesh.nx = 10` written with `mesh.ok` true and 120 cells, the comment kept; a mesh `dry_run` with the check and nothing written; refused with the file and `.rcfd/edits.jsonl` unchanged: `mesh.grading = 2` on `cavity_2d` 1003 at `mesh.grading`, a missing mesh file 1003 at `mesh.file`, `../../outside.msh` and an absolute path outside 1004 at `mesh.file`; the sheared Fluent mesh (max non-orthogonality 87.1 degrees) written with `mesh.ok` false and an error; control: `physics.nu` gives exactly the seven keys of before |
+| C8-L | `meshes/a.msh` used by `cases/sub/y.toml` and `cases/x.toml`, `meshes/b.msh` unused, `meshes/foam` one `openfoam` entry used by `cases/z.json`; `outside` `cases/v.toml` (refused, leaves the project) and `cases/w.toml` (`cases/local.msh`, exists); `unread` `cases/u.toml`; `limit 1` gives `next_offset` 1 |
+| C-M | through the binary each new tool answers (`preview_mesh` an image block, 2528 bytes); the instructions name the four; read-only: `import_mesh` 1100 with the folder unchanged, the read tools answer; control: the default policy imports |
+| C-L | 55 tools, 45 592 bytes; without the four the F-271 list byte for byte (the F-270 golden, 38 978 bytes, not re-recorded, with the F-271 changes); the four after `new_case` with the registered access and required lists; `default_f1.rs` passes |
+| C-1 | every test of `rcfd-mcp` passes in release (67, the known-miss tests ignored as before), `project_w48f.rs` and `project_runs_w48f.rs` with only their counts changed; `cargo test --release -p rcfd-workspace -p rcfd-studio`: 319 passed, 1 failed, 21 ignored; the failure is `chat_e.rs` `e1_session_list_open_closed_unknown` (the order of the Claude Code session rows, line 75), which reads session files and no workspace code, failed once in that parallel run and passed 3 of 3 run alone; `workspace_graph.rs` 4 of 4, including that `rcfd-studio` does not depend on `rcfd-mcp` |
+| Can fail | two mutations of the workspace, each restored and compared byte for byte with the committed file afterwards (equal). (1) M2's confinement removed from the mesh build: `c8c_mesh_file_confinement` and `c8e_edit_case_with_mesh_settings` failed (`../../outside.msh` gave 1003, the build's missing file, not 1004); the other five passed. (2) M7's build removed from `edit_case`: `c8e_edit_case_with_mesh_settings` failed at its first mesh assertion (no `mesh` key); a probe (a test file made for it and deleted) showed that under this mutation `mesh.grading = 2` on `cavity_2d` and a missing mesh file are written, and without it both are refused with 1003, so the two registered refusals depend on the build |
+| Defaults | `Cargo.lock`: only `rcfd-io` and `rcfd-mesh` in `rcfd-workspace`'s list; `baseline_hashes.rs` and the H1 hashes untouched; no case-schema key or run-record field added; an `edit_case` without a mesh key returns the keys and writes the bytes it did before. `scripts/limit_audit.py` reports one hit in the new tests, the elbow test's data-gated `return` (class iv, with its skip message), the same as `fluent_public.rs` line 91 |
+| Gate | GATE_RESULT |
+
+**Questions for the maintainer.** Q1 to Q6 stand as registered, each proceeding on its reversible choice. Q6 changes what the
+Studio's sidebar runs without asking and was not acted on. The finding of difference (1) is a further one: under `--project`
+the session `check_mesh` and `load_mesh` cannot reach a case that names `meshes/` with `..`, which bears on D2's hiding of
+them (F-275).
