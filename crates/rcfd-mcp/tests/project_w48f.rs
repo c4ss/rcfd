@@ -96,7 +96,7 @@ fn f3_access_classes_read_only_and_schema() {
     let dir = project("f3p");
     let s = server(&dir, Policy::default());
     let list = s.tool_list();
-    assert_eq!(names(&list).len(), 33 + 18);
+    assert_eq!(names(&list).len(), 33 + 22);
     for (name, access) in PROJECT_TOOLS {
         let t = list["tools"]
             .as_array()

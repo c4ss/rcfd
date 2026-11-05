@@ -28,6 +28,11 @@ fn state_schema() -> Value {
     json!({"type": "string", "enum": STATES})
 }
 
+/// A project case argument of the mesh tools (ADR 0187).
+fn case_schema() -> Value {
+    json!({"type": "string", "description": "project-relative case file (.toml or .json), e.g. cases/cavity.toml"})
+}
+
 /// The arguments of `new_case` (ADR 0186 G3), also `start_run`'s `new_case` object.
 fn new_case_schema() -> Value {
     let examples: Vec<&str> = rcfd_workspace::examples::EXAMPLES.iter().map(|e| e.source).collect();
@@ -192,6 +197,57 @@ pub(crate) fn tools() -> Vec<Tool> {
             description: "Create a new case file cases/<name>.toml (or .json) in the project from exactly one source: a shipped example (byte for byte, with the data files it reads), a built-in template, TOML text, a settings object (written as JSON) or a copy of a project case. The case is validated before anything is written and no file is ever replaced. Returns its path and hash (the base_hash for edit_case).",
             access: Access::WriteFiles,
             schema: new_case_schema,
+        },
+        Tool {
+            name: "check_case_mesh",
+            description: "Build a project case's mesh as its settings describe it (a generator, or mesh.file with mesh.scale and mesh.transform) and return the quality report of rcfd check-mesh and the boundary patches, whose names boundaries.* must use. The mesh file must be in the project folder. Change mesh settings with edit_case, which checks the edited mesh too.",
+            access: Access::Read,
+            schema: || obj(json!({"case": case_schema()}), &["case"]),
+        },
+        Tool {
+            name: "preview_mesh",
+            description: "PNG image of a project case's mesh coloured by a cell-quality measure (default non_orthogonality, the largest of the cell's faces, degrees), drawn by the CPU renderer of render_field: the cells cut by a plane, by default the middle of the thinnest direction (a 2D case face on). Colours run from the ideal value up to the largest value. An image over the size budget is drawn narrower.",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({
+                        "case": case_schema(),
+                        "measure": {"type": "string", "enum": rcfd_workspace::meshes::MEASURES},
+                        "width": {"type": "integer", "minimum": 64, "maximum": 4096},
+                        "axis": {"type": "string", "enum": ["x", "y", "z"], "description": "normal of the drawn plane"},
+                        "slice": {"type": "number", "description": "coordinate of the plane along axis (default the middle)"}
+                    }),
+                    &["case"],
+                )
+            },
+        },
+        Tool {
+            name: "import_mesh",
+            description: "Bring a mesh that is in the project folder into meshes/: a Gmsh or Fluent .msh/.cas file, or an OpenFOAM polyMesh folder. It is read with the solver's readers first (cells, faces, patches, zones and bounds are returned), then copied to meshes/<name> without replacing anything. Point a case at it with edit_case: mesh.source = \"file\" and mesh.file = the returned mesh_file.",
+            access: Access::WriteFiles,
+            schema: || {
+                obj(
+                    json!({
+                        "path": {"type": "string", "description": "project-relative mesh file or OpenFOAM folder"},
+                        "name": {"type": "string", "description": "name in meshes/ (default the source's name; a file keeps its extension)"}
+                    }),
+                    &["path"],
+                )
+            },
+        },
+        Tool {
+            name: "list_meshes",
+            description: "Meshes under meshes/ (files, and OpenFOAM folders as one entry) with their size and the project cases whose mesh.file names each one; also case mesh files that are not in meshes/ and cases that could not be read. Paged (offset, limit; next_offset when more).",
+            access: Access::Read,
+            schema: || {
+                obj(
+                    json!({
+                        "offset": {"type": "integer", "minimum": 0},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 100}
+                    }),
+                    &[],
+                )
+            },
         },
         Tool {
             name: "start_run",

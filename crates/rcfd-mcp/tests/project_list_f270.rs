@@ -5,12 +5,23 @@
 //! ADR 0186 C-L restates it for F-271, which changes the list by design (G6, G7): the golden with exactly the registered
 //! changes. `new_case` is added right after `write_note`; `start_run` gains the properties `new_case` and `store` and an
 //! empty `required`; every other byte is the golden's.
+//!
+//! ADR 0187 C-L restates it again for F-272 (M1, M8): the four mesh tools `check_case_mesh`, `preview_mesh`,
+//! `import_mesh` and `list_meshes` come right after `new_case`; without them the list is the F-271 one, byte for byte.
 
 use serde_json::{json, Value};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 const GOLDEN: &str = include_str!("golden/tools_list_project_f270.json");
+
+/// ADR 0187 M1: the mesh tools, in order, with their access class and required arguments.
+const MESH_TOOLS: [(&str, &str, &[&str]); 4] = [
+    ("check_case_mesh", "read", &["case"]),
+    ("preview_mesh", "read", &["case"]),
+    ("import_mesh", "write_files", &["path"]),
+    ("list_meshes", "read", &[]),
+];
 
 #[test]
 fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
@@ -54,7 +65,7 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         GOLDEN.len()
     );
     assert_eq!(gold.len(), 50, "the golden: 33 session tools and 17 project tools");
-    assert_eq!(live.len(), 51, "33 session tools and 18 project tools");
+    assert_eq!(live.len(), 55, "33 session tools and 22 project tools");
     let name = |t: &Value| t["name"].as_str().unwrap().to_string();
     // new_case: right after write_note, writes files
     let at = live
@@ -64,8 +75,17 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     assert_eq!(live[at - 1]["name"], "write_note");
     assert_eq!(live[at]["_meta"]["rcfd/access"], "write_files");
     assert_eq!(live[at]["inputSchema"]["required"], json!(["name"]));
+    // ADR 0187: the four mesh tools right after new_case
+    for (k, (n, access, required)) in MESH_TOOLS.iter().enumerate() {
+        let t = &live[at + 1 + k];
+        assert_eq!(t["name"], *n);
+        assert_eq!(t["_meta"]["rcfd/access"], *access, "{n}");
+        assert_eq!(t["inputSchema"]["additionalProperties"], false, "{n}");
+        assert_eq!(t["inputSchema"]["required"], json!(required), "{n}");
+    }
+    let mesh = |t: &Value| MESH_TOOLS.iter().any(|m| t["name"] == m.0);
     // every other tool in the golden's order, byte-identical but start_run
-    let rest: Vec<&Value> = live.iter().filter(|t| t["name"] != "new_case").collect();
+    let rest: Vec<&Value> = live.iter().filter(|t| t["name"] != "new_case" && !mesh(t)).collect();
     assert_eq!(
         rest.iter().map(|t| name(t)).collect::<Vec<_>>(),
         gold.iter().map(name).collect::<Vec<_>>()
@@ -112,6 +132,9 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     want[sr]["inputSchema"]["required"] = json!([]);
     let wn = want.iter().position(|t| t["name"] == "write_note").unwrap();
     want.insert(wn + 1, live[at].clone());
+    for k in 0..MESH_TOOLS.len() {
+        want.insert(wn + 2 + k, live[at + 1 + k].clone());
+    }
     assert!(
         serde_json::to_string(&json!({"tools": want})).unwrap() == got,
         "tools/list with --project differs from the golden with the registered changes"
