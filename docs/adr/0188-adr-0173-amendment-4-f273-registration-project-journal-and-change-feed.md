@@ -288,3 +288,16 @@ progress (ADR 0173 D3 (b)).
 * [ADR 0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) for the write rule and the Studio's save.
 * [ADR 0135](0135-wave48f-plugin-and-project-tools.md) for the edit lock and the first journal line.
 * [MCP tools](../mcp-tools.md) for the project tools.
+
+## Amendment 1 (2026-11-05, before the change it covers)
+
+The first run of the C3-O workspace test found that C3-O contradicts J2. J2 closes a torn last line with a newline before the
+next line; the torn bytes are then a complete line that is not JSON, which the reader skips and counts. So after the append the
+reader counts two skipped lines, not "still one" as C3-O said. C3-O's last clause becomes: the reader then gives that entry and
+counts two skipped lines (the line that was not JSON, and the torn line closed by the append). Nothing else changes.
+
+## Amendment 2 (2026-11-05, before the change it covers)
+
+C-1 and item 3 miscounted the creations of `new_case_f271.rs` C-N: the test makes six case files (two examples, the template,
+TOML, settings and a copy), not five. The edit by design of C-1 becomes: the journal holds exactly six `case_created` lines,
+one per new case file. Item 3's "after five creations" reads "after six creations".
