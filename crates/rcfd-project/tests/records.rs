@@ -51,6 +51,9 @@ fn r1_every_record_round_trips() {
         created: "2026-10-26T10:00:00.123Z".into(),
         case_source: None,
         case_dir: None,
+        study: None,
+        variant: None,
+        condition: None,
     };
     round_trip(&rec);
     round_trip(&RunRecord {

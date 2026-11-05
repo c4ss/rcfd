@@ -2213,9 +2213,9 @@
       "F-270",
       "F-268"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "In project mode each design evaluation is submitted to the runner as a run tagged with its study and variant (additive run-record fields), never more than max_runs at once; the metrics match the in-process evaluator for the same cases within the tolerance fixed by an amendment of ADR 0173, and the extra cost per evaluation is measured and recorded (ADR 0173 W7, check C4).",
-    "note": "ADR 0173 (proposed). Priority 5. Chained studies need the runner to start a run from a previous result; runner support for continue_from is not established. Size M."
+    "note": "ADR 0173 (proposed). Priority 5. Chained studies need the runner to start a run from a previous result; runner support for continue_from is not established. Size M. PARTIAL (ADR 0189, the registration of F-274, 2026-11-05, branch f274-design-evals, not merged): with --project, design_run_study and design_evaluate evaluate each candidate at each operating condition as one run of the project's runner, the base case with rcfd run --set entries checked to give the in-process settings tree, tagged in run.json with study, variant and condition (three optional fields, absent from every other run); the result is read from metrics.json by the in-process status rule; three points on the 32 x 32 cavity gave three tagged runs, at most max_runs = 2 at once, with records equal to the in-process ones bit for bit; one evaluation cost 0.64 s on the runner against 0.23 s in process (C4). Open: a chained study with several conditions, a study with its own max_steps and operating maps stay in the server process (the runner cannot start a run from another run's result or cap its steps; ADR 0189 Q2, Q3); runs that outlive a call are submitted again (Q5); no journal line for design runs and records yet (Q6, now that F-273 is merged); the design tools keep the access class write_files though they now start runs (Q7, F-275); the run-record fields need the lead's approval (Q4, ADR 0130)."
   },
   {
     "id": "F-275",
