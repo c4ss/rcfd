@@ -5,7 +5,7 @@
 //! implementation against its documented layout; they do NOT show acceptance by third-party software.
 //! `tamper = true` corrupts the written data before validation (used to show that each case can fail).
 
-use crate::{ensight, gmsh, nastran, openfoam, plot3d, stl, tecplot, vtk, xdmf};
+use crate::{ensight, gltf, gmsh, nastran, obj, openfoam, plot3d, stl, tecplot, vtk, xdmf};
 use rcfd_mesh::gen::{box_mesh, Grading};
 use rcfd_mesh::Mesh;
 
@@ -68,6 +68,8 @@ pub fn all() -> Vec<FormatInfo> {
         f("gmsh", &[".msh"], Read, case_gmsh),
         f("fluent", &[".msh", ".cas"], Read, case_fluent),
         f("nastran_deck", &[".bdf"], ReadWrite, case_deck),
+        f("obj", &[".obj"], Read, case_obj),
+        f("gltf", &[".gltf", ".glb"], Read, case_gltf),
         FormatInfo {
             name: "cgns",
             extensions: &[".cgns"],
@@ -562,4 +564,122 @@ fn case_deck(tamper: bool) -> Result<(), String> {
     } else {
         Err("deck changed in the round trip".into())
     }
+}
+
+/// Unit cube, outward counter-clockwise quads (1-based OBJ vertex ids).
+const CUBE_QUADS: [[usize; 4]; 6] = [
+    [1, 4, 3, 2],
+    [5, 6, 7, 8],
+    [1, 2, 6, 5],
+    [4, 8, 7, 3],
+    [1, 5, 8, 4],
+    [2, 3, 7, 6],
+];
+const CUBE_POINTS: [[f64; 3]; 8] = [
+    [0.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0],
+    [1.0, 1.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [0.0, 0.0, 1.0],
+    [1.0, 0.0, 1.0],
+    [1.0, 1.0, 1.0],
+    [0.0, 1.0, 1.0],
+];
+
+/// Shared check of the surface-reader cases: the unit cube as one patch named `cube`.
+fn check_cube(s: &crate::common::SurfaceImport) -> Result<(), String> {
+    use rcfd_mesh::surface::{diagnose, DiagOptions};
+    if s.patches != ["cube"] {
+        return Err(format!("patches {:?}, expected [\"cube\"]", s.patches));
+    }
+    if s.surface.points.len() != 8 || s.surface.n_tris() != 12 {
+        return Err(format!(
+            "{} vertices and {} triangles, expected 8 and 12",
+            s.surface.points.len(),
+            s.surface.n_tris()
+        ));
+    }
+    let d = diagnose(&s.surface, &DiagOptions::default());
+    if !d.is_closed_manifold() || d.euler != 2 {
+        return Err(format!("not a closed manifold of Euler characteristic 2: {d:?}"));
+    }
+    if (s.surface.area() - 6.0).abs() > 1e-12 || (s.surface.enclosed_volume() - 1.0).abs() > 1e-12 {
+        return Err(format!(
+            "area {} and volume {}, expected 6 and 1",
+            s.surface.area(),
+            s.surface.enclosed_volume()
+        ));
+    }
+    Ok(())
+}
+
+fn case_obj(tamper: bool) -> Result<(), String> {
+    use std::fmt::Write as _;
+    let mut txt = String::from("# registry cube\no cube\n");
+    for p in CUBE_POINTS {
+        let _ = writeln!(txt, "v {:?} {:?} {:?}", p[0], p[1], p[2]);
+    }
+    for q in CUBE_QUADS {
+        let _ = writeln!(txt, "f {} {} {} {}", q[0], q[1], q[2], q[3]);
+    }
+    if tamper {
+        txt = txt.replacen("v 1.0 1.0 1.0", "v 1.0 1.0 2.0", 1);
+    }
+    let s = obj::read_bytes(txt.as_bytes(), "m", &obj::ObjOptions::default()).map_err(|e| e.to_string())?;
+    check_cube(&s)
+}
+
+fn case_gltf(tamper: bool) -> Result<(), String> {
+    let mut bin = Vec::new();
+    for p in CUBE_POINTS {
+        for c in p {
+            bin.extend_from_slice(&(c as f32).to_le_bytes());
+        }
+    }
+    if tamper {
+        bin[..4].copy_from_slice(&0.5f32.to_le_bytes());
+    }
+    let mut n_idx = 0;
+    for q in CUBE_QUADS {
+        for k in [0, 1, 2, 0, 2, 3] {
+            bin.extend_from_slice(&((q[k] - 1) as u16).to_le_bytes());
+            n_idx += 1;
+        }
+    }
+    let doc = serde_json::json!({
+        "asset": {"version": "2.0"},
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0, "name": "cube"}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+        "buffers": [{"byteLength": bin.len()}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 96},
+            {"buffer": 0, "byteOffset": 96, "byteLength": 2 * n_idx}
+        ],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 8, "type": "VEC3",
+             "min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0]},
+            {"bufferView": 1, "componentType": 5123, "count": n_idx, "type": "SCALAR"}
+        ]
+    });
+    let mut json = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
+    while json.len() % 4 != 0 {
+        json.push(b' ');
+    }
+    while bin.len() % 4 != 0 {
+        bin.push(0);
+    }
+    let mut glb = Vec::new();
+    glb.extend_from_slice(b"glTF");
+    glb.extend_from_slice(&2u32.to_le_bytes());
+    glb.extend_from_slice(&((12 + 8 + json.len() + 8 + bin.len()) as u32).to_le_bytes());
+    glb.extend_from_slice(&(json.len() as u32).to_le_bytes());
+    glb.extend_from_slice(b"JSON");
+    glb.extend_from_slice(&json);
+    glb.extend_from_slice(&(bin.len() as u32).to_le_bytes());
+    glb.extend_from_slice(b"BIN\0");
+    glb.extend_from_slice(&bin);
+    let s = gltf::read_bytes(&glb, "m", gltf::no_external).map_err(|e| e.to_string())?;
+    check_cube(&s)
 }

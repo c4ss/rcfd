@@ -1,9 +1,132 @@
-//! Helpers shared by the cell-based mesh readers.
+//! Helpers shared by the cell-based mesh readers, and the result type of the surface readers ([`SurfaceImport`],
+//! F-274, ADR 0184).
 
+use rcfd_core::units::{Dimension, Unit};
 use rcfd_core::vec3::Vec3;
 use rcfd_core::{Error, Result};
+use rcfd_mesh::surface::TriSurface;
 use rcfd_mesh::{BoundarySpec, Mesh, PatchKind};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+
+/// A triangulated surface read from a surface file (OBJ, glTF), with one patch per named object (ADR 0184 D2).
+///
+/// Coordinates are in metres. Triangle tag `k` is patch `patches[k]`. Boundary types are not part of the result: the
+/// readers never guess them (ADR 0184 D4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceImport {
+    /// Welded surface: bitwise-equal vertices merged, unused vertices dropped.
+    pub surface: TriSurface,
+    /// Patch names in order of first appearance; only patches that have triangles.
+    pub patches: Vec<String>,
+    /// What was ignored, merged or triangulated, as counts (not one line per item).
+    pub notes: Vec<String>,
+}
+
+impl SurfaceImport {
+    /// Tag-to-name map in the form `TetMesh::to_mesh` takes.
+    pub fn patch_names(&self) -> BTreeMap<u32, String> {
+        self.patches
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (i as u32, n.clone()))
+            .collect()
+    }
+
+    /// Triangles of one patch as coordinate triples.
+    pub fn patch_triangles(&self, tag: u32) -> Vec<[Vec3; 3]> {
+        (0..self.surface.n_tris())
+            .filter(|&i| self.surface.tags[i] == tag)
+            .map(|i| self.surface.tri_points(i))
+            .collect()
+    }
+}
+
+/// Factor from a length unit to metres (`"m"`, `"mm"`, `"cm"`, `"in"`, `"ft"`, ...), parsed by
+/// [`rcfd_core::units::Unit::parse`]. Anything that is not a length with zero offset is an error.
+pub fn length_factor(unit: &str) -> Result<f64> {
+    let u = Unit::parse(unit.trim()).map_err(|e| Error::Io(format!("length unit '{unit}': {e}")))?;
+    if u.dim != Dimension::LENGTH || u.offset != 0.0 || !u.factor.is_finite() || u.factor <= 0.0 {
+        return Err(Error::Io(format!(
+            "'{unit}' is not a length unit (for example m, mm, cm, in, ft)"
+        )));
+    }
+    Ok(u.factor)
+}
+
+/// Build a [`SurfaceImport`] from raw reader output (ADR 0184 D7): merge bitwise-equal vertices (`-0.0` equals `0.0`;
+/// the first used occurrence in vertex order is kept), drop vertices no triangle uses, drop names with no triangle and
+/// renumber the tags in name order. `what` names the format in the error for an empty result.
+pub fn finish_import(
+    points: Vec<Vec3>,
+    tris: Vec<[usize; 3]>,
+    tags: Vec<u32>,
+    names: Vec<String>,
+    mut notes: Vec<String>,
+    what: &str,
+) -> Result<SurfaceImport> {
+    if tris.is_empty() {
+        return Err(Error::Io(format!("{what}: the file has no triangles")));
+    }
+    let mut used = vec![false; points.len()];
+    for t in &tris {
+        for &v in t {
+            used[v] = true;
+        }
+    }
+    let mut remap = vec![usize::MAX; points.len()];
+    let mut key_to_new: HashMap<[u64; 3], usize> = HashMap::new();
+    let mut new_points: Vec<Vec3> = Vec::new();
+    let (mut welded, mut unused) = (0usize, 0usize);
+    for (i, p) in points.iter().enumerate() {
+        if !used[i] {
+            unused += 1;
+            continue;
+        }
+        let key = [(p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits(), (p[2] + 0.0).to_bits()];
+        remap[i] = match key_to_new.get(&key) {
+            Some(&j) => {
+                welded += 1;
+                j
+            }
+            None => {
+                new_points.push(*p);
+                key_to_new.insert(key, new_points.len() - 1);
+                new_points.len() - 1
+            }
+        };
+    }
+    let mut count = vec![0usize; names.len()];
+    for &t in &tags {
+        count[t as usize] += 1;
+    }
+    let mut tag_map = vec![u32::MAX; names.len()];
+    let mut patches = Vec::new();
+    for (k, n) in names.iter().enumerate() {
+        if count[k] > 0 {
+            tag_map[k] = patches.len() as u32;
+            patches.push(n.clone());
+        }
+    }
+    let empty = names.len() - patches.len();
+    let new_tris: Vec<[usize; 3]> = tris.iter().map(|t| [remap[t[0]], remap[t[1]], remap[t[2]]]).collect();
+    let new_tags: Vec<u32> = tags.iter().map(|&t| tag_map[t as usize]).collect();
+    if welded > 0 {
+        notes.push(format!("{welded} vertices with bitwise-equal coordinates merged"));
+    }
+    if unused > 0 {
+        notes.push(format!("{unused} vertices used by no triangle dropped"));
+    }
+    if empty > 0 {
+        notes.push(format!("{empty} named objects with no triangles dropped"));
+    }
+    let mut surface = TriSurface::new(new_points, new_tris);
+    surface.tags = new_tags;
+    Ok(SurfaceImport {
+        surface,
+        patches,
+        notes,
+    })
+}
 
 /// Guess a patch kind from a conventional patch name.
 pub fn guess_kind(name: &str) -> PatchKind {
