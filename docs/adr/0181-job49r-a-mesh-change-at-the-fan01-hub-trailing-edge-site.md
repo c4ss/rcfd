@@ -409,3 +409,47 @@ limit, verdict, known miss or default changes.
    default changes on it.
 4. Question 4: ADRs 0111 and 0175-0180 stay as written. This ADR is the correction: their "hub mid-chord" means the hub
    trailing edge (z 0.1716).
+
+## Addendum: the default of `mesh.fan.c_grid_grading` made hash-neutral (2026-11-05, written before the fix)
+
+Job J2b, on branch `j2-fan-stack` at 77d3a9a (main edb4839 with jobs 49K-49R and 49M merged). Written before any code of
+the fix; the fix, its tests and its limits are fixed here, the results follow in the next addendum.
+
+**The problem.** dd73d0c added `mesh.fan.c_grid_grading` (default `"capped"`) without `Schema::hash_omit_default`
+([ADR 0156](0156-job48v-adaptive-pressure-correctors.md) D6). Every valid case's settings tree is filled with the schema
+defaults, so the key is in the data of every case. So the settings content hash (the `case_hash` of every run) and the text
+`Case::to_toml` / `Case::to_json_string` write changed for every case; the mesh hashes did not. The workspace gate on
+77d3a9a (2760 passed, 1 failed, 799 ignored) failed only in `case_hashes_w48u::h1_case_files_are_unchanged_against_the_base_record`
+([ADR 0155](0155-job48u-rotate-the-mesh-instead-of-the-flow.md) H1): 30 of the 41 recorded sources (every valid one)
+differ in the settings, toml and json columns, none in the mesh column. This breaks this ADR's house rule "the default
+results stay bit-identical" for the case hash; V2 did not list H1, and the workspace gate was not run (deviation 4).
+
+**The fix (set-up).**
+- F1. The field gets `.hash_omit_default()`, as D6 of ADR 0156 does for `solver.corrector_control`. Nothing else in the
+  schema or the generator changes: the default, the values, the doc text, `to_json`, `--print-settings` and the JSON schema
+  stay as they are (the flag is not written into any of them).
+- F2. H1's text columns: the normalisation of [ADR 0163](0163-job48ac-case-hashes-h1-after-the-corrector-control-key.md) S1
+  removes one more entry, `mesh.fan.c_grid_grading`, when (and only when) its value is the string `"capped"`. ADR 0163's
+  controls stay and are extended: C1 and C3 unchanged (C3 asserts that the settings and mesh columns of every recorded
+  source equal R0 without any normalisation, which is the check that F1 works); C2 also asserts that every recorded valid
+  source holds `"capped"` in its settings value (read from the data, not through the schema default); C4 also asserts that
+  a copy of the same recorded case with `c_grid_grading = "radial_geometric"` gives text columns different from R0. The
+  record R0 (`tests/fixtures/case_hashes_6867e40.txt`) is not edited or re-recorded (`RCFD_W48U_RECORD=1` is not run);
+  `baseline_hashes.rs` is not edited or re-recorded.
+- F3. A new test `w49r_c_grid_grading_hash_and_text` in `fan01_hub_mesh_w49r.rs` on the B3 harness case: the key absent,
+  written as `"capped"` and set to `"capped"` give equal settings values and equal content hashes; each of
+  `radial_geometric`, `wake_geometric` and `radial_wake_geometric` gives a content hash different from the default and from
+  the other two, the written TOML and JSON hold the value, and the written TOML parses back to the same settings value and
+  the same content hash.
+
+**Limits (fixed before the code).**
+
+| id | what | limit |
+| --- | --- | --- |
+| A1 | H1 | passes: all 41 recorded sources equal R0 after F2; the settings and mesh columns of every recorded source equal R0 raw (C3); C1, C2, C4 hold |
+| A2 | F3 | passes: a non-default value changes the hash, is written and round-trips |
+| A3 | defaults | `w49r_default_meshes_are_bit_identical`, the ADR 0156 key test `w48v_key_defaults_to_fixed_and_its_default_leaves_the_case_hash_unchanged` and the 3 `baseline_hashes.rs` tests pass unchanged |
+| A4 | lint | `cargo fmt --check` and `cargo clippy -D warnings` clean on the touched crate |
+| A5 | the workspace gate on a git archive of the final commit (with main merged) | 0 failed |
+
+A missed limit is reported, not hidden; no limit changes after a run.
