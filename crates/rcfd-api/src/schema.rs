@@ -925,7 +925,7 @@ pub fn case_schema() -> Schema {
         )
         .field(
             "linear_upwind_limiter",
-            Schema::enumeration("none", &["none", "barth_jespersen"]).doc("Slope limiter of the linear_upwind face extrapolation of the steady simple/simplec momentum equation (ADR 0081): none (default) extrapolates with the unlimited least-squares cell gradient; barth_jespersen multiplies each velocity component's gradient by its Barth-Jespersen factor (the face values stay within the cell's own and neighbour values) in the convection term only. Measured stable on the FAN-01 sector mesh (laminar and SST) where the unlimited scheme diverges, and second order on the Kovasznay flow (ADR 0081). Any other algorithm or scheme is an error"),
+            Schema::enumeration("none", &["none", "barth_jespersen"]).doc("Slope limiter of the linear_upwind face extrapolation of the momentum equation of simple/simplec (ADR 0081) and of piso/pimple, the moving-mesh step included (ADR 0183 P-A; not with time_advance = fractional_step): none (default) extrapolates with the unlimited least-squares cell gradient; barth_jespersen multiplies each velocity component's gradient by its Barth-Jespersen factor (the face values stay within the cell's own and neighbour values) in the convection term only. Measured stable on the FAN-01 sector mesh (laminar and SST, steady) where the unlimited scheme diverges, and second order on the Kovasznay flow (ADR 0081). Any other algorithm or scheme is an error"),
         )
         .field(
             "velocity_correction",

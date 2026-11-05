@@ -24,6 +24,13 @@ sides).
 - **ALE momentum and pressure.** The convective flux is the relative flux `phi - W/dt`; the time derivative uses the old and new volumes; the continuity
   equation of the flux uses the relative flux. A wall that follows the mesh has the mesh velocity as boundary value; on accelerating walls the pressure
   condition is the fixed-flux `dp/dn = -n.a_wall` (a condition of the ALE path only).
+- **Walls at rest on a rigidly moving mesh** (`dynamic_mesh.rest_patches`, ADR 0183 P-B). For example the hub and casing of a rotating passage whose
+  faceted faces do not lie on a surface of revolution. Each face gets the velocity `(m_f/|S_f|) n_f`: no tangential part (the wall is at rest) and a
+  normal part that carries the swept volume, so no relative flux crosses the wall (a plain `fixed` 0 wall would leave the relative flux `-m_f`). The
+  pressure condition is that of a following wall. A rigid prescribed motion may then have no moving patch at all. Checked by the ADR 0183 amendment
+  P-AB checks V5 and PB-1.
+- **Limited `linear_upwind`.** `solver.linear_upwind_limiter = "barth_jespersen"` also applies to the momentum convection of the moving-mesh step
+  (ADR 0183 P-A).
 - **Mesh motion.** Prescribed: displacement `d(t)` (expressions of `t`) and a rotation `angle(t)` about an axis through a point, applied to the points of the
   moving patches. Interior: `rigid` (all points follow) or `smoothing` (Laplacian or inverse-distance-diffusivity displacement equation solved from the
   initial mesh each step, prescribed on the moving patches, zero on `fixed_patches`, sliding in the plane for all other patches). Every moved mesh is validated;

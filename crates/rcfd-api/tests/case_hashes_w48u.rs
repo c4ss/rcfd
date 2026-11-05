@@ -10,6 +10,7 @@
 //! that the test's serialisers equal the library's (C1), every recorded valid case holds the default (C2), the raw lines
 //! differ from R0 in the text columns only (C3), and a non-default value is not normalised away (C4). ADR 0181 addendum
 //! (2026-11-05) F2: `mesh.fan.c_grid_grading` at its default `"capped"` is removed the same way, with C2 and C4 extended to it.
+//! ADR 0183 amendment P-AB: `dynamic_mesh.rest_patches` at its default `[]` likewise (the defaults are JSON values).
 
 use rcfd_api::case::Case;
 use std::path::{Path, PathBuf};
@@ -126,12 +127,19 @@ fn json_text(v: &serde_json::Value) -> String {
 }
 
 /// The keys added after R0 (6867e40) whose default the settings hash omits (`hash_omit_default`) and the written text
-/// lists: (JSON pointer of the parent object, key, default). `solver.corrector_control` (ADR 0156, ADR 0163 S1) and
-/// `mesh.fan.c_grid_grading` (ADR 0181, its addendum of 2026-11-05 F2).
-const DEFAULT_KEYS: [(&str, &str, &str); 2] = [
-    ("/solver", "corrector_control", "fixed"),
-    ("/mesh/fan", "c_grid_grading", "capped"),
+/// lists: (JSON pointer of the parent object, key, default as JSON text). `solver.corrector_control` (ADR 0156, ADR 0163
+/// S1), `mesh.fan.c_grid_grading` (ADR 0181, its addendum of 2026-11-05 F2) and `dynamic_mesh.rest_patches` (ADR 0183
+/// amendment P-AB).
+const DEFAULT_KEYS: [(&str, &str, &str); 3] = [
+    ("/solver", "corrector_control", "\"fixed\""),
+    ("/mesh/fan", "c_grid_grading", "\"capped\""),
+    ("/dynamic_mesh", "rest_patches", "[]"),
 ];
+
+/// The default of a [`DEFAULT_KEYS`] entry as a value.
+fn default_value(json: &str) -> serde_json::Value {
+    serde_json::from_str(json).unwrap()
+}
 
 /// ADR 0163 S1 (extended by the ADR 0181 addendum F2): the case's settings value without each of [`DEFAULT_KEYS`] when
 /// (and only when) it holds its default. This is the one normalisation of the text columns; a non-default value is kept
@@ -140,7 +148,7 @@ fn without_default_keys(c: &Case) -> serde_json::Value {
     let mut v = c.tree.to_json();
     for (parent, key, default) in DEFAULT_KEYS {
         if let Some(s) = v.pointer_mut(parent).and_then(|s| s.as_object_mut()) {
-            if s.get(key).and_then(|x| x.as_str()) == Some(default) {
+            if s.get(key) == Some(&default_value(default)) {
                 s.remove(key);
             }
         }
@@ -153,7 +161,7 @@ fn without_default_keys(c: &Case) -> serde_json::Value {
 struct Entry {
     norm: String,
     raw: String,
-    defaults: Vec<Option<String>>,
+    defaults: Vec<Option<serde_json::Value>>,
 }
 
 fn src_of(l: &str) -> &str {
@@ -193,10 +201,7 @@ fn line(src: &str, parsed: Result<Case, Vec<rcfd_api::case::Diagnostic>>) -> Ent
                 raw: mk(&raw),
                 defaults: DEFAULT_KEYS
                     .iter()
-                    .map(|(parent, key, _)| {
-                        raw.pointer(&format!("{parent}/{key}"))
-                            .and_then(|v| v.as_str().map(str::to_string))
-                    })
+                    .map(|(parent, key, _)| raw.pointer(&format!("{parent}/{key}")).cloned())
                     .collect(),
             }
         }
@@ -300,7 +305,7 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     assert!(problems.is_empty(), "{}", problems.join("\n"));
     assert!(valid >= 20 && meshes >= 20, "set-up: {valid} valid, {meshes} meshes");
     // ADR 0163 C2 and C3: every recorded valid source holds the defaults of DEFAULT_KEYS in its data (ADR 0181 addendum F2:
-    // `"capped"` too); count the recorded lines whose raw text columns differ (and check that settings and mesh columns are
+    // `"capped"` too; ADR 0183 amendment P-AB: `[]`); count the recorded lines whose raw text columns differ (and check that settings and mesh columns are
     // equal raw, i.e. only the text columns differ).
     let mut raw_text_differs = 0;
     let mut raw_other_differs = Vec::new();
@@ -310,7 +315,7 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
         };
         if w.contains("\tvalid\t") {
             for ((_, key, default), v) in DEFAULT_KEYS.iter().zip(&e.defaults) {
-                assert_eq!(v.as_deref(), Some(*default), "C2 {key} {}", src_of(w));
+                assert_eq!(v.as_ref(), Some(&default_value(default)), "C2 {key} {}", src_of(w));
             }
         }
         if e.raw != *w {
@@ -333,17 +338,19 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     println!("H1 C3: {raw_text_differs} of {valid} recorded valid sources differ raw (text columns only), 0 after normalisation");
     assert!(raw_other_differs.is_empty(), "C3: {raw_other_differs:?}");
     // ADR 0163 C4: a non-default value is not normalised away (one recorded valid case file, set to adaptive; ADR 0181
-    // addendum F2: a second copy with c_grid_grading = radial_geometric).
+    // addendum F2: a second copy with c_grid_grading = radial_geometric; ADR 0183 amendment P-AB: a third copy with
+    // rest_patches = ["inner"]).
     let w = want
         .iter()
         .find(|l| l.contains("\tvalid\t") && !src_of(l).contains(" block "))
         .expect("a recorded valid case file");
     for (path, value) in [
-        ("solver.corrector_control", "adaptive"),
-        ("mesh.fan.c_grid_grading", "radial_geometric"),
+        ("solver.corrector_control", serde_json::json!("adaptive")),
+        ("mesh.fan.c_grid_grading", serde_json::json!("radial_geometric")),
+        ("dynamic_mesh.rest_patches", serde_json::json!(["inner"])),
     ] {
         let mut c = Case::load(repo().join(src_of(w))).expect("C4 case loads");
-        c.set(path, serde_json::json!(value)).expect("C4 set");
+        c.set(path, value.clone()).expect("C4 set");
         let n = without_default_keys(&c);
         let toml_col = format!("toml {}", fnv(toml_text(&n).as_bytes()));
         let json_col = format!("json {}", fnv(json_text(&n).as_bytes()));

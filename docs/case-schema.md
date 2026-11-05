@@ -1664,9 +1664,10 @@ Moving mesh for incompressible laminar `piso` / `pimple` runs with `solver.time_
 | `dynamic_mesh.enabled` | bool, false | move the mesh |
 | `dynamic_mesh.motion` | `prescribed` (default), `six_dof` | source of the motion of the moving patches |
 | `dynamic_mesh.deformation` | `rigid` (default), `smoothing` | all points follow, or the interior is smoothed |
-| `dynamic_mesh.moving_patches` | list of strings, `[]` | patches that carry the motion (required) |
+| `dynamic_mesh.moving_patches` | list of strings, `[]` | patches that carry the motion (required, except for a rigid prescribed motion, ADR 0183 P-B) |
 | `dynamic_mesh.follow_patches` | list of strings, `[]` | patches whose velocity is the mesh velocity (empty = the moving patches); their `velocity` must stay `"fixed"` and their `velocity_value` only sets the initial flux |
 | `dynamic_mesh.fixed_patches` | list of strings, `[]` | smoothing: patches whose points do not move; all other non-moving patches slide in their plane |
+| `dynamic_mesh.rest_patches` | list of strings, `[]` | `deformation = "rigid"` only: walls at rest on the moving mesh (ADR 0183 P-B); each face gets the velocity `(m_f/abs(S_f)) n_f` (no tangential part; the normal part carries the swept volume, so no relative flux crosses the wall) and the fixed-flux pressure condition of a following wall; not in `moving_patches` or `follow_patches`; `velocity` must stay `"fixed"` with `velocity_value` 0 and no velocity expression (located errors) |
 | `dynamic_mesh.displacement_expression_x`, `_y`, `_z` | string, `""` | displacement in m, expression of `t` (e.g. `"1 [m/s^2] * t^2"`); empty = 0 |
 | `dynamic_mesh.rotation_angle_expression` | string, `""` | dimensionless angle in radian, expression of `t` |
 | `dynamic_mesh.rotation_origin`, `.rotation_axis` | list of 3 floats, `[]` | point on the axis (default origin), axis (default z) |
@@ -1914,7 +1915,8 @@ degrees). The limiter costs about 3 % of `cd_eff` at 0 degrees, all of it in the
 ## Limited linear-upwind extrapolation (`solver.linear_upwind_limiter`)
 
 `solver.linear_upwind_limiter` (`none` default, `barth_jespersen`) applies to `solver.convection = "linear_upwind"` with `solver.algorithm = "simple"` or
-`"simplec"` (incompressible, constant density); with any other algorithm or scheme a value other than `none` is a located error (ADR 0081 part L).
+`"simplec"` (ADR 0081 part L) and with `"piso"` or `"pimple"`, the moving-mesh step of `dynamic_mesh` included (ADR 0183 P-A), incompressible with constant
+density; with any other algorithm or scheme, and with `solver.time_advance = "fractional_step"`, a value other than `none` is a located error.
 `barth_jespersen` multiplies the least-squares gradient of each velocity component by its Barth-Jespersen factor before the face extrapolation
 `u_U + grad(u)_U . (x_f - x_U)`, so the face value stays within the range of the upwind cell's own and neighbour values (boundary values included); the
 explicit non-orthogonal correction of the momentum Laplacian keeps the unlimited gradient. Turbulence, scalar and energy equations are not limited.

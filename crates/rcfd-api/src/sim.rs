@@ -1755,14 +1755,20 @@ impl Simulation {
                 s.pressure_lag_check = Some(c);
             }
             s.amg_pressure = geom.n_cells() > 2000;
+            // ADR 0183 P-A (opt-in): the Barth-Jespersen-limited linear-upwind extrapolation of the momentum convection
+            if get_s(case, "solver.linear_upwind_limiter") == "barth_jespersen" {
+                s.linear_upwind_limiter = Some(rcfd_fv::gradient::Limiter::BarthJespersen);
+            }
             Engine::Transient(Box::new(PimpleSolver::new(geom.clone(), u, p, s)))
         };
+        let limiter_engine = matches!(engine, Engine::Steady(_))
+            || (matches!(engine, Engine::Transient(_)) && get_s(case, "solver.time_advance") != "fractional_step");
         if get_s(case, "solver.linear_upwind_limiter") != "none"
-            && !(matches!(engine, Engine::Steady(_)) && conv == ConvScheme::LinearUpwind)
+            && !(limiter_engine && conv == ConvScheme::LinearUpwind)
         {
             return Err(diag(
                 "solver.linear_upwind_limiter",
-                "the limiter applies only to solver.convection = \"linear_upwind\" with solver.algorithm = \"simple\" or \"simplec\" (incompressible, constant density)",
+                "the limiter applies only to solver.convection = \"linear_upwind\" with solver.algorithm = \"simple\", \"simplec\", \"piso\" or \"pimple\" (incompressible, constant density; not with solver.time_advance = \"fractional_step\")",
             ));
         }
         if get_s(case, "solver.velocity_correction") != "gradient" && !matches!(engine, Engine::Steady(_)) {

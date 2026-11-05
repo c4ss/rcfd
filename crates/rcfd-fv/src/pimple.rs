@@ -90,6 +90,11 @@ pub struct PimpleSettings {
     /// `Some` = at least `n_correctors`, raised until the estimated pressure-lag amplification of the step is at most the
     /// control's target. Not used by the fractional step or moving meshes.
     pub corrector_control: Option<CorrectorControl>,
+    /// Slope limiter of the `linear_upwind` face extrapolation of the momentum convection (ADR 0183 P-A, as the steady
+    /// `SimpleSolver::linear_upwind_limiter` of ADR 0081 part L): the least-squares gradient of each velocity component is
+    /// multiplied by its limiter factor in the convection term only, also on the moving-mesh step. `None` (default) =
+    /// unlimited. Only with `ConvScheme::LinearUpwind`; not used by the fractional step.
+    pub linear_upwind_limiter: Option<crate::gradient::Limiter>,
 }
 
 /// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
@@ -486,6 +491,7 @@ impl PimpleSettings {
             pressure_lag_check: None,
             coupled_body_pair_mean: false,
             corrector_control: None,
+            linear_upwind_limiter: None,
         }
     }
 
@@ -1003,7 +1009,22 @@ impl PimpleSolver {
                 } else {
                     None
                 };
-                let mut m = convection(&g, &phi_conv, &conv_cells, &bc, s.convection, grad.as_deref());
+                // ADR 0183 P-A (opt-in): the limited gradient in the convection term only
+                let limited: Option<Vec<Vec3>> = match (s.linear_upwind_limiter, &grad) {
+                    (Some(kind), Some(gr)) if s.convection == ConvScheme::LinearUpwind => {
+                        let psi = crate::gradient::limiter(&g, &conv_cells, &bv, gr, kind);
+                        Some(gr.iter().zip(&psi).map(|(v, k)| vec3::scale(*v, *k)).collect())
+                    }
+                    _ => None,
+                };
+                let mut m = convection(
+                    &g,
+                    &phi_conv,
+                    &conv_cells,
+                    &bc,
+                    s.convection,
+                    limited.as_deref().or(grad.as_deref()),
+                );
                 m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
                 // periodic partner values implicit (ADR 0046): move the lagged partner term back into the matrix
                 let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
