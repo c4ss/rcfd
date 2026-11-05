@@ -301,3 +301,73 @@ counts two skipped lines (the line that was not JSON, and the torn line closed b
 C-1 and item 3 miscounted the creations of `new_case_f271.rs` C-N: the test makes six case files (two examples, the template,
 TOML, settings and a copy), not five. The edit by design of C-1 becomes: the journal holds exactly six `case_created` lines,
 one per new case file. Item 3's "after five creations" reads "after six creations".
+
+## Addendum 1: what was built, and the results (2026-11-05)
+
+Branch `f273-journal-feed`, after this text and amendments 1 and 2: `rcfd-project` (the journal lock and `seq`), the workspace
+(journal entries, `reason`, the feed, `read_feed`), the MCP descriptors, the Studio, an added `rcfd-project` check, the
+documents, and two later test and rule fixes (`504d0b8`, `6cef342`). Not merged.
+
+**Built as registered.** J1 to J8 as written, with these files.
+
+* `rcfd-project`: `src/journal.rs` (new: the lock, `seq`, the append), `src/atomic.rs` (`replace_if_hash_with`; the edit line
+  and the `stale_lock_broken` line go through the numbered append), `src/lib.rs` (one module line).
+* `rcfd-workspace`: `src/journal.rs` (new: `Actor`, `Origin`, `reason_arg`, the changes and the caps, the reader),
+  `src/feed.rs` (new: `Feed`, `Change`, `Polled`), and the journal lines in `write.rs`, `save.rs` (`save_case_by`), `cases.rs`
+  (`create_by`), `create.rs`, `meshes.rs` and `runs.rs` (`RunService::with_actor` and `by`); `read_feed` in `queries.rs`;
+  `Workspace::with_actor` and `Workspace::changes` in `lib.rs`; `COMMANDS` 23.
+* `rcfd-mcp`: `src/project.rs` (the `read_feed` descriptor, `reason` on the eight tools, `ProjectTools::open` with the actor
+  `mcp`) and the instructions sentence in `src/lib.rs`. The maintainer's `threads`/`device` hunk now lands in
+  `rcfd-workspace/src/runs.rs`, whose `RunSettings` lines are unchanged.
+* Studio files changed: `crates/rcfd-studio/src/watch.rs` (the worker's feed, `Event::Feed`, `studio_actor`, `announce`, the
+  saves and creations with the Studio's actor) and `crates/rcfd-studio/src/studio.rs` (one arm of `apply`, outside the hunks of
+  the maintainer's worktree); new test `crates/rcfd-studio/tests/feed_f273.rs`. No other Studio file.
+* Existing tests edited: `new_case_f271.rs` (six `case_created` lines, amendment 2), `project_list_f270.rs` (C-L),
+  `project_runs_w48f.rs` (two counts), `project_w48f.rs` (one count), `rcfd-mcp/tests/common/mod.rs` (`Mcp::pid`). New tests:
+  `rcfd-project/tests/journal_f273.rs` (4), `rcfd-workspace/tests/journal_f273.rs` (9), `rcfd-mcp/tests/feed_f273.rs` (3),
+  `rcfd-studio/tests/feed_f273.rs` (3).
+* Documents: `docs/mcp-tools.md` (23 tools, `read_feed`, `reason`, the journal's line format), `docs/architecture.md` (one
+  clause), the F-273 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (PARTIAL).
+
+**Differences found while building.**
+
+1. ADR 0173's `Workspace::open(root, actor)` is `Workspace::open(root)` followed by `with_actor(actor)`, so every existing caller
+   keeps working and writes no actor.
+2. `RunService::by(who, reason)` gives one call its command and reason. `RunService::start` is now `submit` then
+   `ensure_runner` in the workspace (the calls the runner client's `start` makes), so a start is journaled once.
+3. `Feed::poll` returns `Polled {paths, changes}`; the Studio's worker uses `paths` exactly as it used the watcher's changes.
+4. `read_feed` returns an entry over half of `TEXT_BUDGET` with only `n`, `source`, `kind`, `t`, `seq`, `path`, `run`, `who`,
+   `actor`, `reason` and `text`, plus `omitted`; J7 did not say so. Checked by an added test, C3-F (7).
+5. The session tool `design_ledger_append` has a `reason` property of its own. C-L removes `reason` from the eight project
+   tools only; the byte comparison covers the session tools.
+6. An `external` entry says "changed" or "removed": the watcher does not tell a new file from a changed one.
+7. A creation's `run_state` entry has `from` null (text "new -> queued"); a `run_state` entry's `reason` is the event's
+   (`created`, `launched`, ...).
+8. Registered behaviour with no test: a journal shorter than the reader's position is read again from its start, and a
+   `stale_lock_broken` line now carries `seq`.
+9. J9 was not checked commit by commit; only the last commit was gated. For example `88a31f3` adds `read_feed` to `COMMANDS`
+   before `1897fc2` gives it an MCP descriptor.
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| C3-J | A workspace with the actor `mcp` of the test process. `edit_case` with a reason: one `edit` line, `seq` 1, the actor, `changes` [{`physics.nu`, 0.01, 0.02}, {`solver.max_iterations`, 30, 40}], the reason. `write_note` with a blank reason: `seq` 2, no `changes`, no `reason`. `new_case` of `channel/profile_inlet.toml`: `seq` 3, `case_created` with the case's and the data file's hashes, `from` and the reason. `import_mesh` of `hex_v4.1_ascii.msh`: `seq` 4, `mesh_imported` with the reader's cell, face and patch counts and the copied file's hash; the same import again (`copied` false): no line. A workspace without an actor: `seq` 5 with no `actor`. Nothing written by a dry run, `physics.nu = -1` (1003), a wrong base (1200), a reason of 501 characters or a number (-32602, the file's bytes unchanged) or a name with a space (1004). The keys of the `edit_case` (7), `write_note` (4) and `new_case` (5) results are as before |
+| C3-D | `save_case_by` with the editor's whole text (more than twice as long as the file) of the 16-cell cavity with `mesh.nx` 10: `changes` exactly [{`mesh.nx`, 16, 10}], actor `studio`; the free `save_case` after it: no actor, [{`mesh.nx`, 10, 11}]. The cut: 120 entries kept as 100 with `changes_total` 120; a value of 2 000 bytes written as `{bytes: 2000, hash}`, one of 1 000 bytes kept |
+| C3-S | Two threads, 200 edits each of one file: 400 lines with `seq` 1 to 400 in file order, the hash chain holds. Added: two threads appending 300 lines each directly, so no edit lock is shared: 600 lines, 600 distinct `seq` 1 to 600 in file order, none without `seq`. A held lock: the append waited 251 ms and wrote no `seq`; the lock made older than 5 s was removed and the line has `seq` 2 and `journal_lock_broken_s` |
+| C3-O | The two lines of main 5fdde2d, a line that is not JSON and a torn line: the feed gives two entries without `seq` or `actor`, `skipped_lines` 1, and leaves the torn line; the next append is `seq` 1 on a line of its own (the torn line is left as it was); then `skipped_lines` 2 (amendment 1); a reader from the start gives the same |
+| C3-F | (1) an `edit_case`: one journal entry with its actor, changes and reason, and no `external` entry in 6 polls of 250 ms; (2) a plain write of `notes/x.md`: one `external` entry, path only, within 4 polls; (3) the late line made on purpose: the first poll after the write saw the path and gave no entry, and once the line was appended there was one journal entry and no `external` one. The test sets the file's modification time 30 s ahead, so its result does not depend on how fast it runs; (4) the creation event, a state change, two `solver` events, a warning and a stop: `run_state` twice, `run_warning`, `run_stop`, nothing for `solver`, no `external` entry under `runs/`; (5) 40 polls (a `Feed` and `Workspace::changes`) left every file and byte of the project as it was; (6) 1 005 entries: 1 000 kept, `dropped` 5; added (7): an entry of about 60 KB from `read_feed` without `changes`, with `reason` and `omitted`, the result within `TEXT_BUDGET`, `next` past it |
+| C3 | Through the `rcfd-mcp` binary: the `edit_case` with a reason was in the test process's feed at poll 1 of 4 (0.004 s after the result was read), actor `mcp` with the server's process id (not the test's), `changes` [{`physics.nu`, 0.01, 0.02}], the reason, `new_hash` equal to the result's. The plain write: `external`, path only, at poll 3 of 4 (0.508 s). A Studio save in the test process (actor `studio`, its process id) was in the server's `read_feed` with `changes` [{`mesh.nx`, 12, 10}] and no `external` entry. Control: an `edit_case` without a reason has no `reason` |
+| C3-R | `start_run` with a reason: `run_submitted`, `seq` 1, with the run, the case, `set`, the actor `mcp` (the server's process id) and the reason; `cancel_run` with a reason: `run_control`, `seq` 2. `read_feed`: both entries and the run's `run_state` entries queued, running, cancelled ("running -> cancelled (cancelled on request; ...)"). A `pause_run` of the ended run: 1002, no line. `read_project_file` of `.rcfd/edits.jsonl` through the server gives the two lines |
+| C3-St | (1) an `edit_case` with a reason by a workspace with the actor `mcp`: after 0.322 s (limit 2 s) the editor held 0.02 (clean) and the Studio said "edit_case by mcp (pid N): cases/a.toml physics.nu 0.01 -> 0.02; why: to reach Re 50"; (2) `new_case`: after 0.503 s the browser listed `cases/fresh.toml` and the Studio said "new_case by mcp (pid N): created cases/fresh.toml (template lid_driven_cavity); why: a second case"; (3) the Studio's own save: one line, actor `studio`, `who` `save_case`, `changes` [{`mesh.nx`, 16, 10}]; its messages were only "opened ..." and "saved cases/a.toml"; (4) an edit by a workspace without an actor reloaded the editor ("changed on disk, reloaded") and added no feed message; `sod.toml` from the case starter: `case_created`, `who` `case_starter`, actor `studio`, the example's hash |
+| C-M | `read_feed` under `Policy::read_only()`: cursor 0, no entries; a 501-character reason -32602 and no journal; 500 characters accepted |
+| C-L | 56 tools, 48 294 bytes. `read_feed` after `list_changes`, `read`, required `[]`, `additionalProperties` false; the eight tools' `reason` properties are the same; without `read_feed` and those properties, the F-272 list byte for byte (from the F-270 golden, not re-recorded, with the F-271 and F-272 changes); `default_f1.rs` passes |
+| C-1 | Release: every test of `rcfd-project` (with `edit_lock_w48f.rs` unedited) and `rcfd-workspace` (`save_f270.rs` and `mesh_f272.rs` unedited); `rcfd-mcp` 70 passed, 7 ignored, with only the registered edits; `rcfd-studio` 300 passed, 0 failed, 21 ignored (with `fake-claude` built), `workspace_f270.rs`, `watch_b6.rs` and `editor_b5.rs` among them unedited; `workspace_graph.rs` 4 of 4 |
+| Can fail | Three mutations, each file restored and compared byte for byte with the kept one afterwards (equal). (1) The wait of J6 set to 0: C3-F (3) failed at its first poll (an `external` entry for the edited case); the other 7 passed. It fails only because the test sets the file's time ahead (C3-F (3) above). (2) The journal lock not taken: the registered C3-S check of two writers of one file passed, because the file's edit lock already orders them, so that check could not fail; the added check of two appenders failed (300 distinct `seq` of 600, not in file order), and so did the held-lock check (`seq` 2 written after 4.7 ms). (3) The MCP adapter's actor removed: C3 failed at the actor (none) and C3-R at the line's actor |
+| Defaults | `Cargo.lock` unchanged; `baseline_hashes.rs` and the H1 hashes untouched; no case-schema key or run-record field added; no command result gains a key (F3's shape golden passes, C3-J); `scripts/limit_audit.py` reports no hit in the new tests (after two literal wait caps became a helper and an assertion on a constant was removed) |
+| Gate | `6cef342` (the code of this branch and the documents before this addendum), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test): fmt 0, clippy `-D warnings` 0, 2846 passed, 2 failed, 800 ignored, 2848 test processes in 546 binaries, 78 min wall (65 min of tests). The two failures are timing tests of `rcfd-runner`, a crate F-273 does not change and whose code calls no journal function: `runner_w47b.rs` `s1_concurrency_never_exceeds_max_runs` (its negative control's process sampler saw 0 solver processes under `max_runs` 3) and `s9_memory_and_thread_budget_refusals_are_located` (the 60 + 60 MB pair never ran together). Run alone three times each on the gate's own binary: 3 of 3 passed, each. Against the F-272 gate (2819 / 0 / 800, 541 binaries): the 19 tests of F-273 in 4 new binaries, and the 10 tests of `exp_rot_pc.rs` (1 binary), merged to main after that gate |
+
+**Questions for the maintainer.** Q1 and Q2 depart from ADR 0173's design text, which says that `list_changes` returns the feed
+and lists a `note` kind; they are deviations to confirm, each reversible. Q3 to Q7 stand as registered. Q4 stays NOT VERIFIED:
+nothing links an `mcp` actor to a Claude Code session. Q6 changes what the Studio's sidebar runs without asking and was not acted
+on.
