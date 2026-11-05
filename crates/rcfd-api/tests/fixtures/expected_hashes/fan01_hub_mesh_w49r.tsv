@@ -1,4 +1,9 @@
 # Expected hashes of crates/rcfd-api/tests/fan01_hub_mesh_w49r.rs (ADR 0190). Columns: key, platform (any, windows, linux-x86_64), hash.
 # Content hashes of the default B3 and B2 meshes recorded on the unchanged generator (ADR 0181 bit-identity check, recorded on Windows).
-B3	any	0xbe64f588a252d0b4
-B2	any	0xcae52c4997c9463f
+B3	windows	0xbe64f588a252d0b4
+B2	windows	0xcae52c4997c9463f
+# x86_64 Linux values under the rule of ADR 0137 (ADR 0190): this computation at the reference commit f556d86 (the parent of dd73d0c, the
+# last commit with the unchanged generator) and at HEAD 201ea17 in one container, Ubuntu 24.04, glibc 2.39, rustc 1.99.0, release. B3 equals the
+# value in the CI log of the Ubuntu full gate on eef6c09; CI stopped at B3 and never printed B2. Other platforms print and skip.
+B3	linux-x86_64	0xb2563dff49086f53
+B2	linux-x86_64	0xb9ff46541fae1983
