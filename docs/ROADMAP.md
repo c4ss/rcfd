@@ -3677,6 +3677,8 @@ Added after the static feature-gap review; wording is product-independent. Phase
       case-tree wiring of GradientOptions.
     - F-256 (ADR 0190, branch f256-gradient-wiring, not merged): the gradient options are wired into the case tree as
       solver.gradient_*.
+    - F-246 (ADR 0193, branch f246-pressure-interp, not merged): pressure-interpolation variants of the steady kernel,
+      solver.pressure_interpolation; partial.
 - [~] **F-209** Adaptive time stepping and convergence accelerators: error-estimator steps, period-based steps, RMS/MAX Courant criteria, local timescale factors, residual smoothing, extrapolated step initialisation, nonlinear (Aitken-type) acceleration, stretched-mesh pseudo-time acceleration
   - depends on: F-024, F-106, F-027
   - acceptance: Error-controlled stepping (step doubling, `solver.error_tolerance`) on a two-timescale linear decay (rates differing by at least 100, both modes of unit initial amplitude) reaches its requested error without a user-chosen step: the final error E satisfies E / (tol T) within [0.3, 3] for two tolerances a factor 4 apart; on the Taylor-Green vortex the error-controlled global error scales with the tolerance (E / (tol T) within [0.3, 3]); a high-aspect-ratio flat-plate boundary-layer mesh converges to Blasius and turbulent skin-friction values within the unaccelerated tolerance
@@ -4675,7 +4677,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
       - should 'track files' mean something beyond particle_tracks.csv.
     - USER DECISION 2026-10-22: split into four items plus dispersion and reactions: F-252 (A3), F-253 (B), F-254 (C),
       F-255. This item keeps A1 and A2, verifiable without a data set.
-- [ ] **F-246** Pressure-interpolation variants for poor meshes
+- [~] **F-246** Pressure-interpolation variants for poor meshes
   - depends on: F-208
   - acceptance: Pressure-interpolation variants:
     - the set of variants is named in the ADR before the work;
@@ -4704,6 +4706,35 @@ Added after the static feature-gap review; wording is product-independent. Phase
     - USER DECISION 2026-10-22: split: case-tree wiring is F-256; the separate warped-face correction (B) is dropped
       because ADR 0016 D2 already treats the corrected face gradient as the warped-face treatment and found the
       correction raised the error constant 2.1x on the skewed mesh; reopen only if A shows a warped-mesh residual.
+    - PARTIAL (ADR 0193, the registration of F-246, 2026-11-06, branch f246-pressure-interp, not merged):
+      - The set named before the work, on the steady simple/simplec kernel: linear (the default), skew_corrected (the
+        Green-Gauss face pressure moved to the face centre with the interpolated cell gradient) and body_force_weighted
+        (the same discretisation applied to the pressure minus a local potential of the body force: in the Green-Gauss
+        face pressures, the wall pressures, the least-squares gradients of the non-orthogonal correction and the
+        body-force part of the face flux). Case key solver.pressure_interpolation, left out of the settings hash at its
+        default, wired under F-256's checks: located errors, tree equals library exactly (0, limit 1e-12), the default
+        unchanged bit for bit.
+      - Met: the stably stratified Boussinesq box on the skewed mesh K at n = 16: body_force_weighted cuts the largest
+        spurious cell speed from 1.6e-2 to 3.7e-12 (SIMPLEC with face_flux) and from 4.6e-3 to 1.0e-11 (SIMPLE with one
+        corrector); limits 10x and 1e-6 (1e-8 of the buoyancy velocity 100). skew_corrected keeps the velocity error on
+        the near-orthogonal meshes at 1.000 (G) and 1.0015 (G3) times the default's (limit 1.10).
+      - Met on the manufactured flow (orders of the pair (32, 64), limits 1.7 velocity and 1.2 pressure): skewed mesh K,
+        skew_corrected 2.176 / 1.491 and body_force_weighted 2.235 / 1.444; stretched mesh S, body_force_weighted 1.966
+        / 1.318, skew_corrected 1.735 / 1.756. The n = 64 sequences take about two hours each and are ignored heavy
+        tests run by name.
+      - Missed (ignored *_known_miss tests, limits unchanged):
+        - the default kernel diverges on F-208's warped mesh W from n = 32 under every set-up tried (relaxation,
+          viscosity, convection scheme, correctors, pseudo-time, face_flux, SIMPLEC); skew_corrected and
+          body_force_weighted diverge there too, so M1 on W is not met; amendment 1 added a milder warp W2 (amplitude
+          0.07, 45 degrees) as supplementary evidence, on which both variants meet the limits (skew_corrected 1.999 /
+          1.745, body_force_weighted 1.999 / 1.648);
+        - body_force_weighted raises the velocity error on the near-orthogonal meshes 1.342 (G) and 1.150 (G3) times
+          (limit 1.10): it assumes the pressure balances the body force, and the manufactured source does not.
+      - Amendment 1 also corrected the stratified-box set-up B-a (SIMPLEC at alpha_p = 1 without correctors diverged for
+        both variants) by adding face_flux.
+      - Open (ADR 0193 Q1 to Q9): the key's name, the transient kernel, the rotating-frame sources, the readings of the
+        acceptance, the default, the wiring, further variants, W2 as the warped mesh, and whether the divergence on W
+        reopens the dropped warped-face item.
 - [ ] **F-247** Dynamic mesh: local remeshing on unstructured tetrahedral meshes
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run.

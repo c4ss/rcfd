@@ -632,6 +632,11 @@ impl Sources {
         self.items.iter().any(|i| matches!(i.kind, Kind::Rotating(_)))
     }
 
+    /// Does a source give the momentum equation a body force (every type except `porous`, which is an implicit sink only)?
+    pub fn has_force(&self) -> bool {
+        self.items.iter().any(|i| !matches!(i.kind, Kind::Porous { .. }))
+    }
+
     /// Body acceleration and implicit sink for the current velocity field.
     pub fn evaluate(&self, geom: &FvGeometry, u: &VectorField) -> (Option<BodyForce>, Option<Vec<f64>>) {
         let ub = u.boundary_values(geom);

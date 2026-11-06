@@ -949,6 +949,9 @@ they are no longer rejected. Plugin models keep their own settings.
 **Gradient options** of F-208 (face-gradient correction, secondary-gradient limiter, boundary treatment): the keys
 `solver.gradient_*` of the energy and scalar diffusion term, in their own section below (ADR 0190).
 
+**Pressure-interpolation variants** of the steady kernel (F-246): the key `solver.pressure_interpolation`, in its own section
+below (ADR 0193).
+
 ## `tables` and profile inputs (F-105)
 
 `tables.<name>` reads a lookup table or profile from CSV (`file`, relative to the case file, or inline
@@ -2700,6 +2703,45 @@ options (ADR 0190).
 The `heat_flow` report of a conjugate case still adds the default secondary part (owner gradient, no limiter) to its face flows,
 so with the options it is not exactly the flux the solver used on skewed cells (ADR 0190 Q3). With all four keys at their
 defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case files list them.
+
+## Pressure interpolation of the steady kernel (`solver.pressure_interpolation`)
+
+The steady `simple` / `simplec` kernel sums face pressures into Green-Gauss cell gradients: the gradient in the momentum source
+and the one that corrects the cell velocity after the pressure solve. `solver.pressure_interpolation` chooses those face pressures
+(ADR 0193):
+
+| Value | Face pressure |
+|---|---|
+| `linear` (default) | the linear interpolation of the two cell pressures, which sits where the line between the cell centres meets the face; boundary faces take the pressure condition (zero gradient, or the body force at walls) |
+| `skew_corrected` | that value moved to the face centre with the interpolated cell gradient; nothing changes where the two points coincide (orthogonal meshes and affine images of uniform grids) |
+| `body_force_weighted` | the same interpolation applied to the pressure minus a local potential of the body force (trapezoid line integrals of the cell accelerations); also at walls, in the least-squares gradients of the non-orthogonal correction and in the body-force part of the face flux |
+
+With `body_force_weighted`, a fluid at rest under a linear conservative body force (a Boussinesq fluid with a linear temperature
+profile along gravity) is an exact fixed point of the kernel on meshes of parallelepipeds. With `linear` such a fluid gets a
+spurious flow on skewed meshes, because the wall pressure is extrapolated along the wall normal only. When the body force is not
+balanced by the pressure, `body_force_weighted` is less accurate near walls than `linear`.
+
+Measured (ADR 0193):
+
+* Stratified fluid at rest on a 38-degree skewed mesh: `body_force_weighted` cut the largest spurious speed from 1.6e-2 to
+  3.7e-12 (SIMPLEC with `velocity_correction = "face_flux"`) and from 4.6e-3 to 1.0e-11 (SIMPLE with one non-orthogonal
+  corrector), against a buoyancy velocity scale of 100.
+* Manufactured flow with a source the pressure does not balance: every variant kept second order in velocity on the skewed and
+  stretched meshes, but `body_force_weighted` raised the velocity error by up to 34 percent and the pressure error up to 4.4 times.
+  `skew_corrected` changed the velocity error by at most 0.5 percent and the pressure error by at most 3 percent.
+* On a strongly warped mesh (about 64 degrees non-orthogonality) the steady kernel diverged from 32 cells per side with every
+  variant.
+
+Located errors at `solver.pressure_interpolation`:
+
+* any value other than `linear` without the steady incompressible constant-density kernel: `coupled`, `piso`, `pimple`,
+  `compressible`, variable density, VOF or `solver.frozen_flow = true`;
+* `body_force_weighted` without a body force: none of `physics.body_force`, Boussinesq buoyancy with gravity, a momentum UDF, a
+  source other than `porous`, `solver.bulk_velocity` or two-way particles;
+* `body_force_weighted` with a `rotating_frame`, `acceleration`, `actuator_disk` or `lorentz` source, whose wall pressure the
+  kernel sets by its own construction (ADR 0071).
+
+With `linear` every result is unchanged bit for bit, and the settings hash leaves the key out; written case files list it.
 
 ## Design-loop files (not part of the case schema)
 

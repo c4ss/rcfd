@@ -12,7 +12,8 @@
 //! (2026-11-05) F2: `mesh.fan.c_grid_grading` at its default `"capped"` is removed the same way, with C2 and C4 extended to it.
 //! ADR 0183 amendment P-AB: `dynamic_mesh.rest_patches` at its default `[]` likewise (the defaults are JSON values).
 //! ADR 0190 H2: the four gradient options `solver.gradient_face_correction`, `gradient_secondary_limiter`,
-//! `gradient_limiter_k` and `gradient_boundary` at their defaults likewise.
+//! `gradient_limiter_k` and `gradient_boundary` at their defaults likewise. ADR 0193 H2: `solver.pressure_interpolation` at
+//! its default `"linear"` likewise.
 
 use rcfd_api::case::Case;
 use std::path::{Path, PathBuf};
@@ -131,8 +132,8 @@ fn json_text(v: &serde_json::Value) -> String {
 /// The keys added after R0 (6867e40) whose default the settings hash omits (`hash_omit_default`) and the written text
 /// lists: (JSON pointer of the parent object, key, default as JSON text). `solver.corrector_control` (ADR 0156, ADR 0163
 /// S1), `mesh.fan.c_grid_grading` (ADR 0181, its addendum of 2026-11-05 F2), `dynamic_mesh.rest_patches` (ADR 0183
-/// amendment P-AB) and the four gradient options of ADR 0190 (H2).
-const DEFAULT_KEYS: [(&str, &str, &str); 7] = [
+/// amendment P-AB), the four gradient options of ADR 0190 (H2) and the pressure interpolation of ADR 0193 (H2).
+const DEFAULT_KEYS: [(&str, &str, &str); 8] = [
     ("/solver", "corrector_control", "\"fixed\""),
     ("/mesh/fan", "c_grid_grading", "\"capped\""),
     ("/dynamic_mesh", "rest_patches", "[]"),
@@ -140,6 +141,7 @@ const DEFAULT_KEYS: [(&str, &str, &str); 7] = [
     ("/solver", "gradient_secondary_limiter", "\"none\""),
     ("/solver", "gradient_limiter_k", "5.0"),
     ("/solver", "gradient_boundary", "\"owner\""),
+    ("/solver", "pressure_interpolation", "\"linear\""),
 ];
 
 /// The default of a [`DEFAULT_KEYS`] entry as a value.
@@ -345,7 +347,8 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
     assert!(raw_other_differs.is_empty(), "C3: {raw_other_differs:?}");
     // ADR 0163 C4: a non-default value is not normalised away (one recorded valid case file, set to adaptive; ADR 0181
     // addendum F2: a second copy with c_grid_grading = radial_geometric; ADR 0183 amendment P-AB: a third copy with
-    // rest_patches = ["inner"]; ADR 0190 H2: one copy per gradient option at a non-default value).
+    // rest_patches = ["inner"]; ADR 0190 H2: one copy per gradient option at a non-default value; ADR 0193 H2: one copy with
+    // pressure_interpolation = skew_corrected).
     let w = want
         .iter()
         .find(|l| l.contains("\tvalid\t") && !src_of(l).contains(" block "))
@@ -361,6 +364,7 @@ fn h1_case_files_are_unchanged_against_the_base_record() {
         ),
         ("solver.gradient_limiter_k", serde_json::json!(1.0)),
         ("solver.gradient_boundary", serde_json::json!("corrected")),
+        ("solver.pressure_interpolation", serde_json::json!("skew_corrected")),
     ] {
         let mut c = Case::load(repo().join(src_of(w))).expect("C4 case loads");
         c.set(path, value.clone()).expect("C4 set");

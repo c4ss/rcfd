@@ -30,6 +30,7 @@ pub mod pimple;
 pub mod popbal;
 pub mod potential;
 pub mod pressure;
+pub mod pressure_interp;
 pub mod radiation;
 pub mod realgas;
 pub mod riemann;

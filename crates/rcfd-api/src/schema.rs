@@ -953,6 +953,12 @@ pub fn case_schema() -> Schema {
                 .hash_omit_default(),
         )
         .field(
+            "pressure_interpolation",
+            Schema::enumeration("linear", &["linear", "skew_corrected", "body_force_weighted"])
+                .doc("Face pressures of the steady simple/simplec kernel (ADR 0193): linear (default) interpolates the cell pressures linearly to the point where the line between the cell centres meets the face (Green-Gauss cell gradients); skew_corrected moves that value to the face centre with the interpolated cell gradient (acts only where the two points differ, i.e. on skewed cells); body_force_weighted applies the same discretisation to the pressure relative to a local potential of the body force (trapezoid line integrals of the cell accelerations) in the cell gradients, the least-squares gradients of the non-orthogonal correction and the body-force part of the face flux, so a fluid at rest under a linear conservative body force stays at rest on meshes of parallelepipeds. Needs the steady incompressible constant-density solver (not coupled, piso, pimple, compressible, variable density, VOF or frozen_flow); body_force_weighted needs a body force (physics.body_force, Boussinesq buoyancy with gravity, a momentum UDF, a non-porous source, bulk_velocity or two-way particles) and is refused with rotating_frame, acceleration, actuator_disk and lorentz sources. Default linear keeps every earlier result bit for bit")
+                .hash_omit_default(),
+        )
+        .field(
             "velocity_correction",
             Schema::enumeration("gradient", &["gradient", "face_flux"]).doc("Cell velocity correction of the steady simple/simplec solver after the pressure solve (ADR 0084): gradient (default) subtracts rAtU times the Green-Gauss gradient of the new pressure; face_flux keeps the old-pressure gradient and adds the reconstruction of the face flux correction (only the pressure change the face fluxes carry). Both give the same converged solution; face_flux removes the period-two pressure mode that makes simplec diverge on strongly non-orthogonal meshes (uniformly sheared cells from 55 to 60 degrees at alpha_p = 1). Any other algorithm is an error"),
         )

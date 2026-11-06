@@ -171,6 +171,39 @@ pub fn least_squares_partner(
     (0..n).map(|c| solve_masked(mat[c], rhs[c], geom.active)).collect()
 }
 
+/// The weighted least-squares fit of [`least_squares`] applied to given increments instead of the differences of a cell field
+/// (ADR 0193 V2-c): `internal[f]` is the increment from the owner to the neighbour of internal face `f`, `boundary[f - n_internal]`
+/// the increment from the owner centre to the boundary face centre (faces on empty patches are skipped). With the plain differences
+/// `cells[N] - cells[P]` and `bvals[i] - cells[P]` it gives [`least_squares`] bit for bit.
+pub fn least_squares_increments(geom: &FvGeometry, internal: &[f64], boundary: &[f64]) -> Vec<Vec3> {
+    let mesh = &geom.mesh;
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let n = mesh.n_cells();
+    let mut mat = vec![[[0.0; 3]; 3]; n];
+    let mut rhs = vec![[0.0; 3]; n];
+    let mut add = |c: usize, dr: Vec3, dphi: f64| {
+        let w = 1.0 / vec3::dot(dr, dr);
+        for i in 0..3 {
+            for j in 0..3 {
+                mat[c][i][j] += w * dr[i] * dr[j];
+            }
+            rhs[c][i] += w * dr[i] * dphi;
+        }
+    };
+    for f in 0..geom.n_internal {
+        let (o, nb) = (own[f], nei[f]);
+        let d = geom.delta[f];
+        add(o, d, internal[f]);
+        add(nb, vec3::scale(d, -1.0), -internal[f]);
+    }
+    for f in geom.n_internal..mesh.n_faces() {
+        if !geom.empty[f] {
+            add(own[f], geom.delta[f], boundary[f - geom.n_internal]);
+        }
+    }
+    (0..n).map(|c| solve_masked(mat[c], rhs[c], geom.active)).collect()
+}
+
 /// Node interpolation stencil with Holmes-Connell pseudo-Laplacian weights.
 ///
 /// Each node value is a weighted mean of the surrounding cell values and
