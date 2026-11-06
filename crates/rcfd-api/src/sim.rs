@@ -316,7 +316,7 @@ fn check_mesh_options(case: &Case, generator: &str) -> std::result::Result<(), V
         );
     }
     let graded = (get_f(case, "mesh.grading") - 1.0).abs() > 1e-12;
-    if graded && matches!(generator, "cavity_2d" | "wedge_2d" | "nozzle_2d") {
+    if graded && matches!(generator, "cavity_2d" | "wedge_2d" | "nozzle_2d" | "box_3d") {
         bad("mesh.grading", "grading");
     }
     if generator != "pipe_sweep" {
@@ -673,6 +673,13 @@ fn build_untransformed_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagno
             .map_err(me)
         }
         "axial_fan_sector" => crate::fan_case::build(case),
+        // F-259, ADR 0191 W3: the uniform six-patch box of `rcfd_mesh::gen::box_mesh`, the mesh of a layered piston
+        "box_3d" => gen::box_mesh(
+            [nx, ny, get_i(case, "mesh.nz").max(1) as usize],
+            [lx, ly, get_f(case, "mesh.lz")],
+            [Grading::Uniform; 3],
+        )
+        .map_err(me),
         "cylinder_ogrid" => {
             let g = if (grading - 1.0).abs() < 1e-12 {
                 Grading::Uniform
@@ -2093,7 +2100,15 @@ impl Simulation {
             _ => None,
         };
         let dynmesh = crate::dynmesh::DynMesh::from_case(case, &geom)?;
-        if dynmesh.is_some() && !matches!(engine, Engine::Transient(_)) {
+        // F-259, ADR 0191 W2: a transient compressible run moves its mesh too
+        let moving_compressible = matches!(&engine, Engine::Compressible(c) if !c.steady);
+        if dynmesh.is_some() && matches!(engine, Engine::Compressible(_)) && !moving_compressible {
+            return Err(diag(
+                "dynamic_mesh.enabled",
+                "a moving mesh needs compressible.mode = \"transient\" (ADR 0191)",
+            ));
+        }
+        if dynmesh.is_some() && !matches!(engine, Engine::Transient(_)) && !moving_compressible {
             return Err(diag(
                 "dynamic_mesh.enabled",
                 "needs a transient incompressible run (solver.algorithm = piso or pimple)",
@@ -3546,7 +3561,26 @@ impl Simulation {
             }
             Engine::Compressible(c) => {
                 let t_end = (!c.steady).then_some(self.end_time);
-                let a = c.advance(t_end);
+                // F-259, ADR 0191 W4: the ALE step on a moving mesh; a failure of the mesh motion stops the run as on the
+                // incompressible path
+                let moved = self.dynmesh.as_mut().map(|dm| c.advance_moving(t_end, dm));
+                let a = match moved {
+                    None => c.advance(t_end),
+                    Some(Ok(a)) => {
+                        self.geom = Arc::new(c.solver.geom.clone());
+                        a
+                    }
+                    Some(Err(e)) => {
+                        udf_error = Some(e);
+                        crate::comp::Advance {
+                            res_rho: f64::NAN,
+                            res_p: f64::NAN,
+                            mass_drift: f64::NAN,
+                            dt: 0.0,
+                            error: None,
+                        }
+                    }
+                };
                 c.refresh();
                 let index = c.solver.steps;
                 let (done, converged) = if let Some(e) = &a.error {
