@@ -305,3 +305,14 @@ test as run stays as an ignored record (`s1_first_run_record`).
 The corrected S1 reads the static diagnostics of a text as the error of `Case::parse_toml` or, when the text parses, as its
 `semantic_errors`; both come before `Simulation::new`, so MU7 still separates a static refusal from the model's own refusal of the
 option. The cases, the paths, the message condition and the R2 case are unchanged. No limit changes.
+
+### Amendment 2 (2026-11-06): a graded seam for F1, written before any mutation was run
+
+Found while preparing the mutations, before any of them ran: MU2 (the swapped weight) cannot be seen by F1 as registered. On
+BOX the two faces of every pair are at the same distance from their owners (`w = 1/2` exactly, so the swapped weight gives the
+same bits) and on SEC by symmetry up to round-off (P0: areas equal to 1e-15), so F1 would at best catch MU2 by a last-bit
+accident. F1 stays as registered; MU2 is run against it once as registered and its result is recorded. The corrected set-up adds
+**F1g**: F1 on **GBOX**, `box_2d_graded(16, 4, 1.0, 1.0, [Expansion(4), Uniform])` periodic in x (cell widths growing by 4 from
+`xmin` to `xmax`, so `dn` at `xmax` is four times `dn` at `xmin` and `w = 0.8`), model walls `ymin`, `ymax`, the F1 field
+`nu_t = 0.1 (1 + 0.5 sin(2 pi x))` and the limits of F1 (exact, exact, exact, `>= 1e-3`). MU2 must make F1g fail. Nothing else
+changes.
