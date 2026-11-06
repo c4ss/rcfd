@@ -432,11 +432,16 @@ case-tree keys.
 `cavity_2d` is an `nx` x `ny` uniform grid on `lx` x `ly` (patches `lid` = ymax, `walls`, `frontAndBack`). It is square only
 when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` cavity of side `lx`.
 
+`box_3d` (F-259, ADR 0191) is the uniform box `[0, lx] x [0, ly] x [0, lz]` of `nx` x `ny` x `nz` cells, with the patches
+`xmin`, `xmax`, `ymin`, `ymax`, `zmin` and `zmax`, all walls. It has no grading and no periodic pairs. It is the mesh of
+`dynamic_mesh.deformation = "layering"` and can also be used on its own. The Studio gives no cell estimate for it yet
+(ADR 0191 Q4).
+
 Options a generator does not apply are rejected with a located diagnostic instead of being ignored:
 
 - `mesh.wall_layers` (`box_2d` and `channel_2d` only)
 - `mesh.periodic_x` / `periodic_y` (`box_2d` only)
-- `mesh.grading != 1` (not for `cavity_2d`, `wedge_2d`, `nozzle_2d`)
+- `mesh.grading != 1` (not for `cavity_2d`, `wedge_2d`, `nozzle_2d`, `box_3d`)
 
 Since wave 14 (F-233), the mesh quality report returned by `rcfd check-mesh`, `mesh.check` and `run --check-only` has an
 extended-measure summary and a poor-mesh list; see `docs/mesh-quality.md`.
@@ -2205,15 +2210,15 @@ Static errors are located (exit 3, nothing runs):
 
 ## Wave 20B: `dynamic_mesh` (F-063, F-229, ADR 0033)
 
-`dynamic_mesh` moves the mesh in incompressible laminar `piso` / `pimple` runs with `solver.time_scheme = "euler"`; see
-`docs/dynamic-mesh.md`. Every key is inert while `dynamic_mesh.enabled = false` (the default) and older cases are
-unchanged. Unset values: empty strings and lists, 0.
+`dynamic_mesh` moves the mesh in incompressible laminar `piso` / `pimple` runs with `solver.time_scheme = "euler"`, and
+since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic-mesh.md`. Every key is inert while
+`dynamic_mesh.enabled = false` (the default) and older cases are unchanged. Unset values: empty strings and lists, 0.
 
 | key | type, default | meaning |
 | --- | --- | --- |
 | `dynamic_mesh.enabled` | bool, false | move the mesh |
 | `dynamic_mesh.motion` | `prescribed` (default), `six_dof` | source of the motion of the moving patches |
-| `dynamic_mesh.deformation` | `rigid` (default), `smoothing` | all points follow, or the interior is smoothed |
+| `dynamic_mesh.deformation` | `rigid` (default), `smoothing`, `layering` | all points follow, or the interior is smoothed, or (compressible only) the layer next to the piston `xmax` deforms and layers are removed and added |
 | `dynamic_mesh.moving_patches` | list of strings, `[]` | patches that carry the motion (required, except for a rigid prescribed motion, ADR 0183 P-B) |
 | `dynamic_mesh.follow_patches` | list of strings, `[]` | patches whose velocity is the mesh velocity (empty = the moving patches); their `velocity` must stay `"fixed"` and their `velocity_value` only sets the initial flux |
 | `dynamic_mesh.fixed_patches` | list of strings, `[]` | smoothing: patches whose points do not move; all other non-moving patches slide in their plane |
@@ -2249,11 +2254,42 @@ Static errors are located at the key:
 
 Combinations that are not implemented are reported at `dynamic_mesh.enabled`:
 
-* `solver.algorithm` other than `piso` / `pimple`
-* a `time_scheme` other than `euler`
+* `solver.algorithm` other than `piso` / `pimple` / `compressible`
+* a `time_scheme` other than `euler` (`piso` / `pimple`)
 * turbulence, energy, scalars, particles, momentum sources, rheology, statistics, restart
 
 A mesh that becomes invalid stops the run: `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
+
+### Compressible ALE and layering (F-259, ADR 0191)
+
+With `solver.algorithm = "compressible"` and `compressible.mode = "transient"`, `dynamic_mesh` moves the mesh of the
+explicit density-based solver with the ALE step of ADR 0090. The motion is prescribed (`displacement_expression_*`,
+`rotation_angle_expression`) with `deformation = "rigid"` or `"smoothing"` as above. A slip wall that moves carries the mesh
+speed itself, so `follow_patches` and `rest_patches` stay empty.
+
+`deformation = "layering"` runs ADR 0090's planar layer stack. The mesh is `box_3d` with `nx >= 2` layers along x, and the
+piston is the patch `xmax` (`moving_patches = ["xmax"]`) at `x = lx + d_x(t)` from `displacement_expression_x`. Only the
+layer next to the piston deforms. It is merged with its neighbour when its height falls below 0.4 `lx / nx` and split into
+`lx / nx` plus the rest above 1.6 `lx / nx` (ADR 0090's registered thresholds, no key). Cell totals of mass, momentum and
+energy are carried through every change exactly, and the cell count of the run changes with the layers.
+
+The time step is the explicit step of the current mesh with the absolute velocity (`|u.n| + c`); the mesh speed does not
+enter it (F-258), so keep the piston well below the speed of sound.
+
+Located errors (the path in brackets):
+
+* `compressible.mode = "steady"` (`dynamic_mesh.enabled`)
+* `motion = "six_dof"` (`dynamic_mesh.motion`; six-DOF coupling of the compressible solver is F-244)
+* a non-empty `follow_patches` or `rest_patches` (that key)
+* a characteristic `compressible_bc` (`total_inlet`, `pressure_outlet`, `nonreflecting`, `farfield`) on a patch that moves:
+  every patch under `rigid`, a patch not in `fixed_patches` under `smoothing`, every patch except `xmin` under `layering`
+  (`boundaries.<patch>.compressible_bc`; characteristic conditions on moving faces are F-258)
+* layering with `piso` / `pimple` (`dynamic_mesh.deformation`; F-257), with a mesh file (`mesh.source`) or another
+  generator (`mesh.generator`), with `moving_patches` other than `["xmax"]`, with a y or z displacement or a rotation (that
+  key), with `mesh.nx < 2`, with `fixed_patches`, or with `mesh.transform` (`mesh.transform.rotate_z_deg`)
+
+A piston driven through the last static plane stops the run: `dynamic_mesh: step N, t = ...: mesh error: layering: piston at
+... is not beyond the last static plane ...`.
 
 ## Wave 21B: `regions` (F-216, ADR 0036)
 
