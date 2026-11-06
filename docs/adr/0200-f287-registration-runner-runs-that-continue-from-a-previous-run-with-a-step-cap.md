@@ -280,3 +280,32 @@ runs (Q4); the Studio showing a run's source run.
   extends.
 * [Run control](../run-control.md) for `rcfd run` and its restart files; [the design loop](../design-loop.md) and
   [MCP tools](../mcp-tools.md) for the tools.
+
+## Amendment 1 (2026-11-06): the start iteration of a continued run
+
+Written after the first run of R-1, before any further code or test, and before C-CH, C-MS, C-MAP or C-U was written.
+
+**What happened.** R-1 as registered failed at its first assertion on run B: B's `start` event has `start_iteration` 0, not 25
+(its `info.continue_from` named A's restart file, as registered). Item 2 misread the code: the event's `start_iteration` is
+`Simulation::iteration()` (`sim.rs` line 2566), the index of the last step taken, and `load_restart` clears that step
+(`reset_run_state`, `load_checkpoint`), so a continued run's `start` event always says 0. The restored counter shows in the
+run's first `iteration` event (index 26 after a restart at 25) and in `solver_finish.iterations` (50). Checked by hand with
+`rcfd run --max-steps 25` and `--continue-from` on the same 12 x 12 case: `start_iteration` 0, first index 26, finish
+iterations 50. No solver code is changed for this (the field's meaning stays as it is).
+
+**The corrections.** No limit changes.
+
+* **S7.** The start iteration of a continued run is the `iteration` of the restart file's `meta` that it continues from (the
+  counter `load_checkpoint` restores), read by the evaluator when S6 lets the run continue, before it is queued; the record's
+  `iterations` is `solver_finish.iterations` minus it. The `start` event is not read.
+* **R-1.** The registered test stays, ignored, as the record of this defect (its reason names this amendment and the corrected
+  test). The corrected test asserts, in place of B's `start_iteration` 25: B's `start` event `start_iteration` 0 and
+  `info.continue_from` the path of A's restart file; B's first residual step 26; the `iteration` of A's restart file 25. Every
+  other assertion of R-1 is unchanged.
+* **C-CH.** In place of "its `start` event `start_iteration` equal to that `base` run's `solver_finish.iterations`": the `iteration`
+  of that `base` run's restart file equals its `solver_finish.iterations`, and the `slow` run's first residual step is one more;
+  the `slow` run's `info.continue_from` is the path of that file, and its record's `iterations` plus that `iteration` equals its
+  `solver_finish.iterations`.
+* **C-U.** In place of the stream: `iterations` from a `solver_finish` of 130 iterations with a start iteration of 86 is 44, with
+  none 130; the start iteration read from the restart file of a run of 25 steps is 25.
+* **Can fail (4)** is unchanged: S7's subtraction left out fails C-CH at the iteration sum.
