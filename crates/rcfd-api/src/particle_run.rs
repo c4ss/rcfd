@@ -313,6 +313,27 @@ impl ParticleRun {
                 "max_reynolds": f.max_reynolds(),
             });
         }
+        if let Some(er) = t.erosion() {
+            // ADR 0194 S3: only when erosion is on; rates over the tracked time
+            v["erosion"] = json!({
+                "faces": er.len(),
+                "hits": er.total_hits(),
+                "impact_mass": er.total_impact_mass(),
+                "eroded": er.total_eroded(),
+                "max_rate": er.max_rate(t.time),
+                "max_depth_rate": er.max_depth_rate(t.time),
+            });
+        }
+        if let Some(rw) = t.rough_wall() {
+            let c = rw.counts();
+            v["rough_wall"] = json!({
+                "collisions": c.collisions,
+                "redraws": c.redraws,
+                "fallbacks": c.fallbacks,
+                "normal_incidence": c.normal_incidence,
+                "grazing": c.grazing,
+            });
+        }
         if with_tracks && self.tracks.is_some() {
             let rows: Vec<Value> = self
                 .track_rows()
@@ -324,8 +345,8 @@ impl ParticleRun {
         v
     }
 
-    /// Write `particles.vtp`, `particle_report.json`, with `particles.tracks` `particle_tracks.csv`, and with the wall film
-    /// `particle_film.csv` (ADR 0192) into `dir`.
+    /// Write `particles.vtp`, `particle_report.json`, with `particles.tracks` `particle_tracks.csv`, with the wall film
+    /// `particle_film.csv` (ADR 0192) and with erosion `particle_erosion.csv` (ADR 0194) into `dir`.
     pub fn write_outputs(&self, dir: &Path) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| io_err(e, &dir.display().to_string()))?;
         let put = |name: &str, bytes: &[u8]| {
@@ -339,6 +360,9 @@ impl ParticleRun {
         }
         if let Some(f) = self.tracker.film() {
             put("particle_film.csv", f.csv().as_bytes())?;
+        }
+        if let Some(er) = self.tracker.erosion() {
+            put("particle_erosion.csv", er.csv(self.tracker.time).as_bytes())?;
         }
         Ok(())
     }

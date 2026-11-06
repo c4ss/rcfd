@@ -28,7 +28,9 @@ rcfd does not deliver:
 * in the wall film (F-253, see "Wall film" below): gas shear, splash and rebound at impact, film separation and
   dripping, evaporation and heat transfer of the film, any effect of the film on the flow, the film with two-way coupling
   or heat transfer
-* erosion
+* in the wall interaction (F-254, see "Wall interaction" below): erosion correlations other than DNV RP O501, the brittle
+  angle function, erosion that changes the wall shape, friction and particle rotation at the wall, roughness out of the
+  plane of incidence or depending on the particle size, the shadow-effect distribution of Sommerfeld and Huber
 * periodic patches
 * tracking through unjoined non-conformal pairs
 * gradient limiting in the interpolation
@@ -169,6 +171,67 @@ Not modelled: shear and pressure gradients from the gas, surface tension and the
 rebound at impact, separation and dripping, evaporation and heat transfer of the film. The film never acts on the flow,
 and it is refused together with `two_way` or `heat_transfer`. From code, `Tracker::set_film(FilmSpec)` switches it on
 and `Tracker::film()` reads it (`rcfd_particles::film`).
+
+## Wall interaction (F-254, ADR 0194)
+
+Two optional models act where parcels hit walls. Both are off unless their table is written, and a run without them is
+unchanged bit for bit.
+
+### Erosion
+
+With `[particles.erosion]` (`enabled = true`, the wall `patches`, `k`, `n` and the wall material `density`), every parcel
+hit on a face of an erosion patch erodes the mass
+
+    dE = m K U^n F(alpha),   F(alpha) = sum_{i=1..8} (-1)^(i+1) A_i alpha^i
+
+from that face. `m` is the parcel mass, `U` the impact speed, `alpha` the angle between the path and the wall (in radians,
+from 0 for a grazing hit to `pi/2` for a normal one), and `A_1` to `A_8` = 9.370, 42.295, 110.864, 175.804, 170.137,
+98.398, 31.211, 4.170. This is DNV RP O501 (Revision 4.2-2007), eq. 7.1 to 7.3 and Table 7-1, with the angle function DNV
+gives for steel grades: it is 0 at grazing incidence, largest (1.002) near 36 degrees and 0.569 at normal incidence.
+
+`K` and `n` have no default, because DNV says they have to be found by experiment. Its Table 7-2 recommends:
+
+| Material | `K` [(m/s)^-n] | `n` | density [kg/m^3] |
+| --- | --- | --- | --- |
+| steel grades | 2.0e-9 | 2.6 | 7800 |
+| titanium grades | 2.0e-9 | 2.6 | 4500 |
+| GRP/epoxy | 0.3e-9 | 3.6 | 1800 |
+| GRP/vinyl ester | 0.6e-9 | 3.6 | 1800 |
+
+The angle function is the steel one whatever `K` and `n` are; DNV gives the brittle curve only as a plot.
+
+The hit is booked before the wall action, whatever it is: reflect, rough reflect, stick or escape. Erosion is an
+observation and never changes a parcel. An erosion patch cannot carry the wall film. The run writes
+`particle_erosion.csv` with, per face, the hits, the parcel mass that hit it, the eroded mass `E`, the rate `E/(A T)` in
+kg/(m^2 s) over the tracked time `T`, and the depth rate (the rate over the material density) in m/s. DNV's eq. 8.1 gives
+the same depth rate in mm/year through a unit factor; rcfd reports SI only.
+
+ADR 0194 checks the model with three uniform parcel streams hitting a plate at 15, 35 and 90 degrees: the reported rate of
+each face equals `G K U^n F(alpha)`, with `G` the impact mass flux, to 1e-10.
+
+### Rough walls
+
+With `[particles.rough_wall]` (`enabled = true`, the `patches`, `angle_std`), a parcel that hits a rough patch reflects
+about a virtual wall instead of the face. The virtual wall normal is the face normal tilted, in the plane of incidence, by
+a roughness angle `gamma = angle_std xi` with `xi` drawn from a standard normal distribution, so the parcel meets the
+virtual wall at `alpha + gamma` instead of `alpha`. This is the virtual-wall model of Sommerfeld (1992), as restated in
+the literature that ADR 0194 lists. The reflection about the virtual wall uses the patch restitution `e` (normal part
+times `-e`, tangential part kept).
+
+A draw is kept only if the parcel reaches the virtual wall from the fluid side and its rebound leaves the real wall;
+otherwise `gamma` is drawn again. At small impact angles this removes many negative angles, which tilts the rebounds
+upwards. The literature calls this the shadow effect; the exact distribution of Sommerfeld and Huber (1999) was not read
+and is not used. At normal incidence the plane of incidence is drawn at random.
+
+Measured roughness angles in the literature range from about 1 to 15 degrees and depend on the particle size and the
+wall; `angle_std` is limited to 30 degrees. A rough patch must reflect with a restitution above 0. The roughness has its
+own random numbers (`seed`), so the other random streams of a run do not change. Not modelled: wall friction and
+particle rotation, roughness out of the plane of incidence, a roughness that depends on the particle size.
+
+ADR 0194 checks that the rebound angles of 20 000 parcels at each of 10, 40 and 75 degrees follow the distribution the
+model prescribes (the Gaussian, truncated by the rule above and mapped through the reflection), with a Kolmogorov distance
+below the 1 percent critical value. From code, `Tracker::set_erosion(ErosionSpec)` and `Tracker::set_rough_wall(RoughSpec)`
+switch the models on (`rcfd_particles::erosion`, `rcfd_particles::rough`).
 
 ## Where to go next
 

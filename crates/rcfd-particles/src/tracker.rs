@@ -1,12 +1,14 @@
-//! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6).
+//! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6; erosion and rough walls ADR 0194).
 
 use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
 use crate::dispersion::{Dispersion, Eddy};
 use crate::drag::{drag_factor, reflect, step_particle, tau_p, DragLaw, Fluid, Scheme};
+use crate::erosion::{Erosion, ErosionSpec};
 use crate::film::{Film, FilmSpec};
 use crate::inject::{InjKind, InjectorExt, InjectorSpec, VelMode};
 use crate::locate::{Locator, Walk};
 use crate::rng::SplitMix64;
+use crate::rough::{RoughSpec, RoughWall};
 use crate::{err, Result};
 use rcfd_core::vec3::{add, cross, dot, norm, scale, sub, Vec3};
 use rcfd_mesh::{Mesh, PatchKind};
@@ -32,6 +34,9 @@ pub enum WallAction {
     Escape,
     /// The particle joins the wall film of the face (ADR 0192; set by [`Tracker::set_film`]).
     Film,
+    /// Reflection with restitution `e` in `(0, 1]` about a randomly tilted virtual wall (ADR 0194; set by
+    /// [`Tracker::set_rough_wall`]).
+    Rough(f64),
 }
 
 /// Life-cycle state of a particle.
@@ -152,6 +157,8 @@ struct Ctx<'a> {
     thermal: Option<&'a Thermal>,
     cpl: Option<&'a mut Coupling>,
     film: Option<&'a mut Film>,
+    erosion: Option<&'a mut Erosion>,
+    rough: Option<&'a mut RoughWall>,
 }
 
 struct Injector {
@@ -176,6 +183,8 @@ pub struct Tracker {
     thermal: Option<Thermal>,
     coupling: Option<Coupling>,
     film: Option<Film>,
+    erosion: Option<Erosion>,
+    rough: Option<RoughWall>,
     /// All parcels, including finished ones.
     pub particles: Vec<Particle>,
     /// Current time [s].
@@ -237,6 +246,8 @@ impl Tracker {
             thermal: None,
             coupling: None,
             film: None,
+            erosion: None,
+            rough: None,
             particles: Vec::new(),
             time: 0.0,
         })
@@ -302,6 +313,20 @@ impl Tracker {
         }
         let film = Film::new(self.loc.mesh(), &spec)?;
         let nint = self.loc.mesh().n_internal_faces();
+        for (k, &f) in film.faces().iter().enumerate() {
+            if self.erosion.as_ref().is_some_and(|e| e.local(f).is_some()) {
+                return err(format!(
+                    "wall film: patch '{}' also books erosion (ADR 0194)",
+                    film.patch_name(k)
+                ));
+            }
+            if matches!(self.actions[f - nint], WallAction::Rough(_)) {
+                return err(format!(
+                    "wall film: patch '{}' is a rough wall (ADR 0194)",
+                    film.patch_name(k)
+                ));
+            }
+        }
         for &f in film.faces() {
             self.actions[f - nint] = WallAction::Film;
         }
@@ -317,6 +342,68 @@ impl Tracker {
     /// The wall film, mutable.
     pub fn film_mut(&mut self) -> Option<&mut Film> {
         self.film.as_mut()
+    }
+
+    /// Book the erosion of every parcel hit on the patches of `spec` (ADR 0194 E1 to E4). An observation: the parcels do not
+    /// change. Refused when erosion is already set and on a face of the wall film.
+    pub fn set_erosion(&mut self, spec: ErosionSpec) -> Result<()> {
+        if self.erosion.is_some() {
+            return err("erosion: erosion is already set");
+        }
+        let er = Erosion::new(self.loc.mesh(), &spec)?;
+        let nint = self.loc.mesh().n_internal_faces();
+        for (k, &f) in er.faces().iter().enumerate() {
+            if self.actions[f - nint] == WallAction::Film {
+                return err(format!("erosion: patch '{}' carries the wall film", er.patch_name(k)));
+            }
+        }
+        self.erosion = Some(er);
+        Ok(())
+    }
+
+    /// The erosion booking, if set.
+    pub fn erosion(&self) -> Option<&Erosion> {
+        self.erosion.as_ref()
+    }
+
+    /// Make the reflecting faces of the patches of `spec` rough (ADR 0194 W1 to W7): each hit reflects about a virtual wall
+    /// tilted by a random roughness angle. Refused when a rough wall is already set and on a face that does not reflect
+    /// (stick, escape, film) or reflects with restitution 0.
+    pub fn set_rough_wall(&mut self, spec: RoughSpec) -> Result<()> {
+        if self.rough.is_some() {
+            return err("rough wall: a rough wall is already set");
+        }
+        let rw = RoughWall::new(self.loc.mesh(), &spec)?;
+        let nint = self.loc.mesh().n_internal_faces();
+        for (k, &f) in rw.faces().iter().enumerate() {
+            match self.actions[f - nint] {
+                WallAction::Reflect(e) if e > 0.0 && e <= 1.0 => {}
+                WallAction::Reflect(e) => {
+                    return err(format!(
+                        "rough wall: patch '{}' reflects with restitution {e}; a rough wall needs one in (0, 1]",
+                        rw.patch_name(k)
+                    ))
+                }
+                _ => {
+                    return err(format!(
+                        "rough wall: patch '{}' does not reflect (stick, escape or film)",
+                        rw.patch_name(k)
+                    ))
+                }
+            }
+        }
+        for &f in rw.faces() {
+            if let WallAction::Reflect(e) = self.actions[f - nint] {
+                self.actions[f - nint] = WallAction::Rough(e);
+            }
+        }
+        self.rough = Some(rw);
+        Ok(())
+    }
+
+    /// The rough wall, if set.
+    pub fn rough_wall(&self) -> Option<&RoughWall> {
+        self.rough.as_ref()
     }
 
     /// Temperature of parcel `i` [K] (NaN when heat transfer is off).
@@ -496,6 +583,8 @@ impl Tracker {
                 thermal: self.thermal.as_ref(),
                 cpl: self.coupling.as_mut(),
                 film: self.film.as_mut(),
+                erosion: self.erosion.as_mut(),
+                rough: self.rough.as_mut(),
             };
             for (p, a) in self.particles[..n_old].iter_mut().zip(self.aux.iter_mut()) {
                 if p.state == State::Active {
@@ -519,6 +608,8 @@ impl Tracker {
                     thermal: self.thermal.as_ref(),
                     cpl: self.coupling.as_mut(),
                     film: self.film.as_mut(),
+                    erosion: self.erosion.as_mut(),
+                    rough: self.rough.as_mut(),
                 };
                 advance_particle(&self.loc, &opts, &self.actions, flow, p, a, &mut ctx, left)?;
             }
@@ -551,6 +642,17 @@ impl Tracker {
         if let Some(film) = &self.film {
             out.extend(film.masses().iter().map(|m| m.to_bits()));
             out.push(film.drained().to_bits());
+        }
+        if let Some(er) = &self.erosion {
+            for k in 0..er.len() {
+                out.push(er.eroded()[k].to_bits());
+                out.push(er.impact_mass()[k].to_bits());
+                out.push(er.hits()[k]);
+            }
+        }
+        if let Some(rw) = &self.rough {
+            let c = rw.counts();
+            out.extend([c.collisions, c.redraws, c.fallbacks, c.normal_incidence, c.grazing]);
         }
         out
     }
@@ -750,9 +852,28 @@ fn advance_particle(
                 if upr.is_some() {
                     aux.eddy.t_left -= h_hit;
                 }
+                if let Some(er) = ctx.erosion.as_deref_mut() {
+                    er.book(face, mass, v_hit, n);
+                }
                 match actions[face - nint] {
                     WallAction::Reflect(e) => {
                         p.v = reflect(v_hit, n, e);
+                        if let Some(cpl) = ctx.cpl.as_deref_mut() {
+                            let dj = scale(sub(p.v, v_hit), mass);
+                            for k in 0..3 {
+                                cpl.wall_impulse[k] += dj[k];
+                            }
+                        }
+                        bounces += 1;
+                        if bounces > opts.max_bounces {
+                            p.state = State::Stuck;
+                        }
+                    }
+                    WallAction::Rough(e) => {
+                        p.v = match ctx.rough.as_deref_mut() {
+                            Some(rw) => rw.rebound(v_hit, n, e),
+                            None => reflect(v_hit, n, e),
+                        };
                         if let Some(cpl) = ctx.cpl.as_deref_mut() {
                             let dj = scale(sub(p.v, v_hit), mass);
                             for k in 0..3 {

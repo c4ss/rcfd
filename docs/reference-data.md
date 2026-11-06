@@ -1391,3 +1391,17 @@ Nothing in F-253 is compared with measured data. The film model is derived; two 
 | Long-wave instability of a film on a plane inclined at `theta` above `R_c = (5/4) cot(theta)`, `R = rho h U_s/mu`, `U_s` the Nusselt surface speed (`(5/6) cot(theta)` for a Reynolds number on the mean velocity) | verified (secondary) | Thompson, Tseluiko and Papageorgiou, "Falling liquid films with blowing and suction", J. Fluid Mech. 2015, arXiv:1506.01579, read 2026-11-05; a second search result gives the mean-velocity form; Benjamin (1957) and Yih (1963) not accessed. In `Re_f = 4 Gamma/mu` the threshold is `(10/3) cot(theta)`, 5.774 at 30 degrees |
 | Donor-cell transport, Courant limit on the kinematic wave speed `3 u_bar`, steady state exact below the feed | derived | ADR 0192 M5 to M7 |
 | Falling-film thickness against a measured data set | not used | no comparison attempted |
+
+## F-254 particle wall interaction (ADR 0194)
+
+Nothing in F-254 is compared with measured data. The erosion correlation is read from its source; the rough-wall model is
+taken from secondary sources, and its realizability rule and rebound-angle distribution are derived.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Erosion `E = m_p K U_p^n F(alpha)`, `F(alpha) = sum_{i=1..8} (-1)^(i+1) A_i (alpha pi/180)^i`, `A_1..A_8` = 9.370, 42.295, 110.864, 175.804, 170.137, 98.398, 31.211, 4.170; `alpha` the angle between the particle path and the surface; depth rate `E/(rho_t A_t)` | read | DNV RP O501 "Erosive wear in piping systems", Revision 4.2-2007 (amended January 2011), eq. 7.1 to 7.3, Table 7-1, Figure 7-1, eq. 8.1, read 2026-11-06 from a third-party copy (wiki.pengtools.com); the binding dnv.com version and the later DNVGL-RP-O501 editions not read; Haugen et al. (1994), the source DNV cites for F, not read |
+| `K`, `n` and density of Table 7-2: steel grades 2.0e-9 (m/s)^-n, 2.6, 7800 kg/m^3; titanium 2.0e-9, 2.6, 4500; GRP/epoxy 0.3e-9, 3.6, 1800; GRP/vinyl ester 0.6e-9, 3.6, 1800 | read | the same pages; quoted in the docs, not used as defaults |
+| Rough wall: impact angle `theta' = theta + Delta_gamma xi`, `xi` standard normal; a virtual wall tilted by the roughness angle; the shadow effect described in words | verified (secondary) | Tian, Inthavong, Tu and Yeoh, ANZIAM J. 48 (CTAC2006) C509-C526 (2007), eq. 5 and Figure 2; Lain and Sommerfeld, slides of the 14th Workshop on Two-Phase Flow Predictions (Halle, 2015); Radenkovic, doctoral dissertation, University of Belgrade (2019), eq. 7.21 and 7.27; Sommerfeld (1992) and Sommerfeld and Huber (1999) not accessed |
+| Realizability rule (redraw until the parcel reaches the virtual wall from the fluid side and rebounds away from the real wall) and the resulting rebound-angle distribution | derived | ADR 0194 W4 and W5; not the effective distribution of Sommerfeld and Huber (1999), which was not read |
+| One-sample Kolmogorov-Smirnov test, Kolmogorov distribution `1 - 2 sum (-1)^(k-1) exp(-2 k^2 x^2)`, `K_0.01 = 1.6276` | verified (secondary) | Wikipedia "Kolmogorov-Smirnov test", read 2026-11-06; the originals not accessed |
+| Measured erosion rates or rebound distributions | not used | no comparison attempted |

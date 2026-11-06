@@ -1996,6 +1996,27 @@ Located errors: `particles.film.enabled` without `particles.enabled` or together
 `particles.film.viscosity` unset; `particles.gravity` false or `physics.gravity` zero (the film is driven by gravity
 alone).
 
+Erosion and rough walls (F-254, ADR 0194; `docs/particles.md`, "Wall interaction"). `particles.erosion` and
+`particles.rough_wall` are optional tables: absent, they are not in the case data and change nothing (a case that writes
+one with its defaults keeps its settings hash).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `erosion.enabled` | `false` | every parcel hit on an erosion patch erodes the mass `m K U^n F(alpha)` (DNV RP O501 eq. 7.1 to 7.3), booked on the face before the wall action; the parcels do not change |
+| `erosion.patches` | `[]` | the wall patches where hits are booked; required, each once, not a film patch |
+| `erosion.k` | `-1` | `K` [(m/s)^-n], must be set (> 0); DNV Table 7-2 recommends `2.0e-9` for steel grades |
+| `erosion.n` | `-1` | velocity exponent, must be set (> 0); DNV Table 7-2 recommends 2.6 for steel grades |
+| `erosion.density` | `-1` | density of the wall material [kg/m^3] for the depth rate, must be set (> 0) |
+| `rough_wall.enabled` | `false` | a parcel that hits a rough patch reflects about a virtual wall tilted by a Gaussian roughness angle in the plane of incidence |
+| `rough_wall.patches` | `[]` | the rough patches; required, each once, reflecting (by `particles.walls.<patch>` or `wall_interaction`) with a restitution above 0, not a film patch |
+| `rough_wall.angle_std` | `-1` | standard deviation of the roughness angle [degrees], must be set in `(0, 30]` |
+| `rough_wall.seed` | `1` | seed of the roughness random numbers |
+
+Located errors: either table enabled without `particles.enabled`; a patch list empty, with an empty or repeated name, or
+naming a film patch; `erosion.k`, `erosion.n` or `erosion.density` unset; a rough patch that sticks or escapes, or reflects
+with restitution 0; `rough_wall.angle_std` outside `(0, 30]`; (when the mesh is built) an unknown patch or one that is not
+a wall.
+
 Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
 patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
 --check-only` (exit 3) and `rcfd validate`. `particles` with `dynamic_mesh.enabled` is refused (located at `dynamic_mesh.enabled`
@@ -2018,6 +2039,11 @@ Outputs next to `solution.vtu`:
 * with `film.enabled` (ADR 0192): `particle_film.csv`, one row per film face
   (`face,patch,x,y,z,area,thickness,mass,ux,uy,uz`); the report then also has `counts.film`, `mass_by_state.film` and
   `film {faces, held, drained, absorbed, max_thickness, max_reynolds}`. Without the film the report is unchanged
+* with `erosion.enabled` (ADR 0194): `particle_erosion.csv`, one row per erosion face
+  (`face,patch,x,y,z,area,hits,impact_mass,eroded,rate,depth_rate`; `rate` is `eroded/(area time)` in kg/(m^2 s) over the
+  report's `time`, `depth_rate` is `rate/density` in m/s); the report then also has `erosion {faces, hits, impact_mass,
+  eroded, max_rate, max_depth_rate}`. With `rough_wall.enabled` the report has `rough_wall {collisions, redraws,
+  fallbacks, normal_incidence, grazing}`. Without them the report is unchanged
 
 A transient run with particles is not restartable (the tracker state is not in the checkpoint; the run-control warning is
 emitted). Service method `particles.report` (`session`, optional `with_tracks`) returns the report of the live session (a

@@ -13,8 +13,8 @@ use rcfd_core::settings::Schema;
 use rcfd_core::vec3::Vec3;
 use rcfd_particles::vtp::write_vtp;
 use rcfd_particles::{
-    ConeSpec, Dispersion, DragLaw, Flow, InjKind, InjectorExt, InjectorSpec, Interp, Options, Scheme, SizeDist,
-    Tracker, VelMode, WallAction,
+    ConeSpec, Dispersion, DragLaw, ErosionSpec, Flow, InjKind, InjectorExt, InjectorSpec, Interp, Options, RoughSpec,
+    Scheme, SizeDist, Tracker, VelMode, WallAction,
 };
 
 /// Sentinel of the numeric keys that are not set.
@@ -158,6 +158,41 @@ pub fn schema() -> Schema {
             Schema::float(UNSET).doc("Dynamic viscosity of the film liquid [Pa s] (> 0); -1 = unset (an error when the film is enabled)"),
         )
         .hash_omit_default();
+    let erosion = Schema::object()
+        .optional()
+        .doc("Erosion of wall patches by the parcels (ADR 0194): every parcel hit on an erosion patch erodes the mass m K U^n F(alpha) of DNV RP O501 eq. 7.1 to 7.3 (Revision 4.2-2007), with m the parcel mass, U the impact speed, alpha the angle between the path and the wall and F the angle function DNV gives for steel grades; booked before the wall action, whatever it is, and never changing a parcel. Reported per face over the tracked time (particle_erosion.csv). Absent = no erosion")
+        .field("enabled", Schema::boolean(false).doc("Book the erosion of the parcel hits on the erosion patches"))
+        .field(
+            "patches",
+            Schema::list(Schema::string("")).doc("Wall patches where the hits are booked (required, each once, not a film patch)"),
+        )
+        .field(
+            "k",
+            Schema::float(UNSET).doc("K of DNV eq. 7.1 [(m/s)^-n] (> 0; DNV Table 7-2 recommends 2.0e-9 for steel grades); -1 = unset (an error when erosion is enabled)"),
+        )
+        .field(
+            "n",
+            Schema::float(UNSET).doc("Velocity exponent n of DNV eq. 7.1 (> 0; DNV Table 7-2 recommends 2.6 for steel grades); -1 = unset"),
+        )
+        .field(
+            "density",
+            Schema::float(UNSET).doc("Density of the wall material [kg/m^3] for the depth rate (> 0); -1 = unset"),
+        )
+        .hash_omit_default();
+    let rough_wall = Schema::object()
+        .optional()
+        .doc("Rough reflecting walls (ADR 0194): a parcel that hits a rough patch reflects, with the patch restitution, about a virtual wall whose normal is tilted in the plane of incidence by a Gaussian roughness angle of standard deviation angle_std (the virtual-wall model of Sommerfeld 1992 as restated in the literature); a draw that would let the parcel reach the virtual wall from behind or rebound into the wall is drawn again. No friction, no particle rotation. Absent = smooth walls")
+        .field("enabled", Schema::boolean(false).doc("Make the listed reflecting patches rough"))
+        .field(
+            "patches",
+            Schema::list(Schema::string("")).doc("Reflecting wall patches that are rough (required, each once, restitution above 0, not a film patch)"),
+        )
+        .field(
+            "angle_std",
+            Schema::float(UNSET).doc("Standard deviation of the roughness angle [degrees], in (0, 30]; -1 = unset (an error when the rough wall is enabled)"),
+        )
+        .field("seed", Schema::int(1).at_least(0.0).doc("Seed of the roughness random numbers; a run is reproducible bit for bit"))
+        .hash_omit_default();
     Schema::object()
         .doc("One-way coupled Lagrangian particle tracking (ADR 0028). Point particles with drag, gravity and buoyancy on a frozen or transient flow field; no effect on the flow")
         .field("enabled", Schema::boolean(false).doc("Enable the particle section"))
@@ -221,6 +256,8 @@ pub fn schema() -> Schema {
             Schema::int(1).at_least(1.0).doc("tracks = true: log a position every this many tracking steps"),
         )
         .field("film", film)
+        .field("erosion", erosion)
+        .field("rough_wall", rough_wall)
 }
 
 /// Is the wall film requested (ADR 0192)?
@@ -228,16 +265,143 @@ pub fn film(case: &Case) -> bool {
     enabled(case) && gb(case, "particles.film.enabled")
 }
 
-/// The film patch names as written (non-strings read as empty names).
-fn film_patches(case: &Case) -> Vec<String> {
+/// A patch list as written (non-strings read as empty names).
+fn patch_list(case: &Case, key: &str) -> Vec<String> {
     case.tree
-        .get("particles.film.patches")
+        .get(key)
         .ok()
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default()
         .iter()
         .map(|v| v.as_str().unwrap_or_default().to_string())
         .collect()
+}
+
+/// The film patch names as written (non-strings read as empty names).
+fn film_patches(case: &Case) -> Vec<String> {
+    patch_list(case, "particles.film.patches")
+}
+
+/// Is erosion requested (ADR 0194)?
+pub fn erosion(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.erosion.enabled")
+}
+
+/// Is the rough wall requested (ADR 0194)?
+pub fn rough_wall(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.rough_wall.enabled")
+}
+
+/// The names of a patch list with its located errors (empty list, empty or repeated name); the first occurrence of each
+/// non-empty name is returned.
+fn checked_patches(case: &Case, key: &str, what: &str, out: &mut Vec<Diagnostic>) -> Vec<String> {
+    let names = patch_list(case, key);
+    if names.is_empty() {
+        out.push(d(key, format!("{what} needs at least one wall patch in {key}")));
+    }
+    let mut kept = Vec::new();
+    for (i, n) in names.iter().enumerate() {
+        if n.is_empty() {
+            out.push(d(key, "a patch name is empty"));
+        } else if names[..i].contains(n) {
+            out.push(d(key, format!("patch '{n}' is listed twice")));
+        } else {
+            kept.push(n.clone());
+        }
+    }
+    kept
+}
+
+/// Located errors for the patches of `key` that also carry an enabled wall film (ADR 0194).
+fn check_not_film(case: &Case, key: &str, names: &[String], out: &mut Vec<Diagnostic>) {
+    if !gb(case, "particles.film.enabled") {
+        return;
+    }
+    let film = film_patches(case);
+    for n in names {
+        if film.contains(n) {
+            out.push(d(
+                key,
+                format!("patch '{n}' carries the wall film; {key} is not available on a film patch (ADR 0194)"),
+            ));
+        }
+    }
+}
+
+/// Checks of the erosion keys (ADR 0194 S2), located; mesh-dependent ones are made by [`build_tracker`].
+fn check_erosion(case: &Case, out: &mut Vec<Diagnostic>) {
+    if !gb(case, "particles.erosion.enabled") {
+        return;
+    }
+    let names = checked_patches(case, "particles.erosion.patches", "erosion", out);
+    check_not_film(case, "particles.erosion.patches", &names, out);
+    for (k, what) in [
+        ("k", "K of DNV eq. 7.1 [(m/s)^-n]"),
+        ("n", "the velocity exponent n"),
+        ("density", "the density of the wall material [kg/m^3]"),
+    ] {
+        if !(gf(case, &format!("particles.erosion.{k}")) > 0.0) {
+            out.push(d(
+                format!("particles.erosion.{k}"),
+                format!("{what} must be set (> 0); -1 means unset"),
+            ));
+        }
+    }
+}
+
+/// The action a wall patch gets from `particles.walls`, `wall_interaction` and `restitution` as [`build_tracker`] sets it:
+/// `Some(e)` for a reflection with restitution `e`, `None` for stick or escape.
+fn wall_reflection(case: &Case, n: &str) -> Option<f64> {
+    let walls = case.tree.names("particles.walls").unwrap_or_default();
+    let global = || match gs(case, "particles.wall_interaction").as_str() {
+        "stick" | "escape" => None,
+        _ => Some(gf(case, "particles.restitution")),
+    };
+    if !walls.iter().any(|w| w == n) {
+        return global();
+    }
+    let r = gf(case, &format!("particles.walls.{n}.restitution"));
+    let e = if r == UNSET {
+        gf(case, "particles.restitution")
+    } else {
+        r
+    };
+    match gs(case, &format!("particles.walls.{n}.interaction")).as_str() {
+        "reflect" => Some(e),
+        "stick" | "escape" => None,
+        _ if r != UNSET => Some(r),
+        _ => global(),
+    }
+}
+
+/// Checks of the rough-wall keys (ADR 0194 S2), located; mesh-dependent ones are made by [`build_tracker`].
+fn check_rough_wall(case: &Case, out: &mut Vec<Diagnostic>) {
+    if !gb(case, "particles.rough_wall.enabled") {
+        return;
+    }
+    let key = "particles.rough_wall.patches";
+    let names = checked_patches(case, key, "the rough wall", out);
+    check_not_film(case, key, &names, out);
+    for n in &names {
+        match wall_reflection(case, n) {
+            None => out.push(d(
+                key,
+                format!("patch '{n}' does not reflect (particles.walls.{n}.interaction or particles.wall_interaction is stick or escape); a rough wall must reflect"),
+            )),
+            Some(e) if !(e > 0.0) => out.push(d(
+                key,
+                format!("patch '{n}' reflects with restitution {e}; a rough wall needs a restitution above 0"),
+            )),
+            Some(_) => {}
+        }
+    }
+    let s = gf(case, "particles.rough_wall.angle_std");
+    if !(s > 0.0 && s <= rcfd_particles::rough::MAX_ANGLE_STD_DEG) {
+        out.push(d(
+            "particles.rough_wall.angle_std",
+            "the standard deviation of the roughness angle [degrees] must be set in (0, 30]; -1 means unset",
+        ));
+    }
 }
 
 /// Checks of the wall-film keys (ADR 0192 S2), located; mesh-dependent ones are made by [`build_tracker`].
@@ -433,10 +597,20 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         if gb(case, "particles.film.enabled") {
             out.push(d("particles.film.enabled", "needs particles.enabled = true (ADR 0192)"));
         }
+        for k in ["erosion", "rough_wall"] {
+            if gb(case, &format!("particles.{k}.enabled")) {
+                out.push(d(
+                    format!("particles.{k}.enabled"),
+                    "needs particles.enabled = true (ADR 0194)",
+                ));
+            }
+        }
         return out;
     }
     check_coupling(case, &mut out);
     check_film(case, &mut out);
+    check_erosion(case, &mut out);
+    check_rough_wall(case, &mut out);
     if gf(case, "particles.density") <= 0.0 {
         out.push(d(
             "particles.density",
@@ -797,6 +971,25 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
         };
         tr.set_film(spec)
             .map_err(|e| vec![d("particles.film.patches", e.to_string())])?;
+    }
+    if erosion(case) {
+        let spec = ErosionSpec {
+            patches: patch_list(case, "particles.erosion.patches"),
+            k: gf(case, "particles.erosion.k"),
+            n: gf(case, "particles.erosion.n"),
+            density: gf(case, "particles.erosion.density"),
+        };
+        tr.set_erosion(spec)
+            .map_err(|e| vec![d("particles.erosion.patches", e.to_string())])?;
+    }
+    if rough_wall(case) {
+        let spec = RoughSpec {
+            patches: patch_list(case, "particles.rough_wall.patches"),
+            angle_std: gf(case, "particles.rough_wall.angle_std").to_radians(),
+            seed: gi(case, "particles.rough_wall.seed").max(0) as u64,
+        };
+        tr.set_rough_wall(spec)
+            .map_err(|e| vec![d("particles.rough_wall.patches", e.to_string())])?;
     }
     Ok(tr)
 }
