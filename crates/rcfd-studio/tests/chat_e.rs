@@ -547,7 +547,29 @@ fn e11_confirmation_dialog_gates_the_first_chat() {
         "{\"hooks\": {\"SessionStart\": []}}\n",
     )
     .unwrap();
-    let mut first = AllowList::project_initial();
+    // ADR 0195 amendment 1: main's 11 first rules (project_initial has 15 since F-275, and the 16th rule of a file is below
+    // the fold of the dialog's first frame, Q8), then the extra rule
+    let mut first = AllowList::new();
+    for t in [
+        "project_info",
+        "list_runs",
+        "run_status",
+        "read_metrics",
+        "read_residuals",
+        "field_summary",
+        "render_field",
+        "compare_runs",
+        "list_changes",
+        "read_project_file",
+        "wait_run",
+    ] {
+        first
+            .add(AllowRule::Tool(format!(
+                "mcp__{}__{t}",
+                rcfd_claude::allow::PINNED_SERVER
+            )))
+            .unwrap();
+    }
     first.add(AllowRule::Bash("echo hi".into())).unwrap();
     first.to_file(&AllowList::file_of(&s.project)).unwrap();
     let mut st = s.studio();
