@@ -404,7 +404,9 @@ fn ct2_ct3(name: &str, text: &str, by: impl Fn(&Simulation) -> Tracker, h: f64) 
         film.gas(),
         film.opposed()
     );
-    assert!(e <= 0.05 && e <= 1e-6, "CT3 {name}");
+    // the two registered limits of CT3, each asserted on its own (the acceptance limit and the consistency limit)
+    assert!(e <= 0.05, "CT3 {name}: 5 percent");
+    assert!(e <= 1e-6, "CT3 {name}: 1e-6");
 }
 
 /// CT2, CT3 on KB: the buoyant film in the tree equals the library and meets the buoyant thickness.
