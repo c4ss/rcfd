@@ -562,6 +562,14 @@ pub struct SimpleSolver {
     /// cell gradients and, for `BodyForceWeighted`, the non-orthogonal correction gradients and the body-force part of the face flux.
     /// `Linear` (default) leaves the solver unchanged.
     pub pressure_interpolation: PressureInterpolation,
+    /// Solve the pressure equation with its non-orthogonal part implicit (ADR 0198, F-285): with `true` and
+    /// `settings.non_orth_correctors > 0` the equation `A p = b_N(p) - D(HbyA)` that the corrector passes iterate on is solved by
+    /// [`crate::pressure::solve_pressure_implicit_non_orth`] in place of those passes (with `BodyForceWeighted` its V2-c gradient),
+    /// so its fixed points are those of the corrector passes. The deferred correction diverges where its step has an eigenvalue
+    /// below -1 (F-208's warped mesh W from n = 32); the implicit solve does not. Ignored without correctors; periodic faces are
+    /// not supported (panics); the linear-solver device is not used by it. F-285's fix is this field together with
+    /// `reconstructed_correction`. `false` (default) leaves the solver unchanged. Not set by the API.
+    pub implicit_non_orth_pressure: bool,
     /// State of `deferred_correction_relaxation_test_only`: the relaxed correction of each component.
     dc_state: [Vec<f64>; 3],
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
@@ -724,6 +732,7 @@ impl SimpleSolver {
             high_order_mask_test_only: None,
             deferred_correction_relaxation_test_only: None,
             pressure_interpolation: PressureInterpolation::Linear,
+            implicit_non_orth_pressure: false,
             dc_state: [Vec::new(), Vec::new(), Vec::new()],
             jump_state: Vec::new(),
             pseudo: None,
@@ -1203,7 +1212,28 @@ impl SimpleSolver {
             linear: s.linear,
         };
         let want_parts = self.record_parts || self.residual_norm == ResidualNorm::Scaled;
+        let implicit = self.implicit_non_orth_pressure && s.non_orth_correctors > 0;
         let (res_p, p_iters, p_parts) = match &bfw {
+            // ADR 0198: the non-orthogonal part implicit
+            None if implicit => {
+                let (r, it) = crate::pressure::solve_pressure_implicit_non_orth(
+                    &g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, None,
+                );
+                (r, it, None)
+            }
+            Some(w) if implicit => {
+                let grad = |p: &[f64]| Self::bfw_least_squares(&g, &pbc, w, p);
+                let (r, it) = crate::pressure::solve_pressure_implicit_non_orth(
+                    &g,
+                    &gamma_p,
+                    &pbc,
+                    &phi_hby_a,
+                    &mut p_new,
+                    &controls,
+                    Some(&grad),
+                );
+                (r, it, None)
+            }
             None => solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, want_parts),
             Some(w) => {
                 // ADR 0193 V2-c: the non-orthogonal correction gradient of the pressure equation

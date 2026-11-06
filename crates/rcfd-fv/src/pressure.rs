@@ -301,6 +301,9 @@ pub fn solve_pressure_parts_src_k(
 /// A pressure gradient for the explicit non-orthogonal correction, as a function of the current cell pressures.
 pub type PressureGradientFn<'a> = &'a dyn Fn(&[f64]) -> Vec<Vec3>;
 
+/// [`PressureGradientFn`] that can be shared between threads (the operator of [`solve_pressure_implicit_non_orth`]).
+pub type SyncPressureGradientFn<'a> = &'a (dyn Fn(&[f64]) -> Vec<Vec3> + Sync);
+
 /// [`solve_pressure_parts`] whose explicit non-orthogonal correction takes its cell gradient from `grad` (called with the current
 /// pressure in every corrector pass) instead of the least-squares gradient of the pressure and its boundary values (ADR 0193 V2-c).
 /// `None` is [`solve_pressure_parts`]; `grad` is not called without non-orthogonal correctors.
@@ -441,6 +444,90 @@ fn solve_pressure_inner(
         }
     }
     (res0, iters, parts)
+}
+
+/// The pressure equation of [`solve_pressure_parts_grad`] with its explicit non-orthogonal part made implicit (ADR 0198, F-285):
+/// `F(p) = A p - b(grad(p)) = 0`, `A` and `b` the assembly of the corrector passes (the compact matrix with the reference-cell pin,
+/// and the right-hand side with the non-orthogonal part of the gradient `grad`, `None` the least-squares gradient), solved from `p`
+/// by restarted GMRES (restart 30) right-preconditioned with one AMG V-cycle of `A`, to the controls `ctl.solver` relative to the
+/// initial residual `|F(p)|`. Its solutions are the fixed points of the corrector passes. Periodic (coupled) faces are not
+/// supported (panics). Returns the normalised residual of the first corrector pass (as [`solve_pressure_parts`]) and the GMRES
+/// iterations. Used by `SimpleSolver::implicit_non_orth_pressure`.
+pub fn solve_pressure_implicit_non_orth(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    grad: Option<SyncPressureGradientFn>,
+) -> (f64, usize) {
+    assert!(
+        bc.coupled.iter().all(|c| c.is_none()),
+        "implicit non-orthogonal pressure solve: periodic faces are not supported"
+    );
+    let div = divergence(geom, phi_hby_a);
+    let gamma_eff = coupled_gamma(geom, bc, gamma_p);
+    let grad_of = |x: &[f64]| -> Vec<Vec3> {
+        match grad {
+            Some(gf) => gf(x),
+            None => least_squares(geom, x, &boundary_values_pbc(geom, bc, x)),
+        }
+    };
+    let assemble = |gr: Option<&[Vec3]>| -> FvMatrix {
+        let mut pm: FvMatrix = laplacian(geom, &gamma_eff, &bc.coeffs, gr);
+        for (b, d) in pm.b.iter_mut().zip(&div) {
+            *b -= d;
+        }
+        if !bc.has_dirichlet() {
+            let (cell, value) = ctl.p_ref;
+            let d = pm.a.diag[cell];
+            pm.a.diag[cell] += d;
+            pm.b[cell] += d * value;
+        }
+        pm
+    };
+    let x0 = p.to_vec();
+    let m0 = assemble(Some(&grad_of(&x0)));
+    let res0 = crate::simple::normalised_residual(&m0, &x0);
+    struct Op<'a> {
+        a: &'a LduMatrix,
+        rhs: &'a (dyn Fn(&[f64]) -> Vec<f64> + Sync),
+        b0: &'a [f64],
+        x0: &'a [f64],
+    }
+    impl rcfd_linalg::LinearOperator for Op<'_> {
+        fn size(&self) -> usize {
+            self.x0.len()
+        }
+        fn apply(&self, d: &[f64], y: &mut [f64]) {
+            // J d = A d - (b(grad(x0 + d)) - b(grad(x0))), exact for the affine F
+            self.a.matvec(d, y);
+            let x: Vec<f64> = self.x0.iter().zip(d).map(|(a, b)| a + b).collect();
+            let b = (self.rhs)(&x);
+            for ((yi, bi), b0) in y.iter_mut().zip(&b).zip(self.b0) {
+                *yi -= bi - b0;
+            }
+        }
+    }
+    // the matrix part does not depend on the gradient; only the right-hand side does
+    let rhs = |x: &[f64]| assemble(Some(&grad_of(x))).b;
+    let op = Op {
+        a: &m0.a,
+        rhs: &rhs,
+        b0: &m0.b,
+        x0: &x0,
+    };
+    let mut ax = vec![0.0; x0.len()];
+    m0.a.matvec(&x0, &mut ax);
+    let r0: Vec<f64> = m0.b.iter().zip(&ax).map(|(b, a)| b - a).collect();
+    let amg = Amg::new(&m0.a.to_csr(), AmgSettings::default());
+    let mut d = vec![0.0; x0.len()];
+    let st = rcfd_linalg::gmres(&op, &r0, &mut d, &amg, 30, &ctl.solver);
+    for (pi, di) in p.iter_mut().zip(&d) {
+        *pi += di;
+    }
+    (res0, st.iterations)
 }
 
 /// Conservative face flux `phiHbyA - gamma snGrad(p) |S|` (prescribed flux on

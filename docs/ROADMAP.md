@@ -5172,6 +5172,7 @@ fixed by the item's registration ADR before any code.
     the pressure-velocity step, not at the face gradient), not (c), reopening the dropped warped-face item. W stays the
     binding warped mesh of F-246 and W2 is supplementary evidence only (ADR 0193 Q8 (a)). ADR 0193 amendment 1 found the
     divergence to be a property of the default kernel on W, not of the harness.
+  - RESULT (ADR 0198, branch f285-warped-kernel, not merged): the deferred non-orthogonal correction of the pressure equation diverges on W from n = 32 (its step has an eigenvalue of about -1.18; 0.86 at n = 16); the opt-in library field SimpleSolver::implicit_non_orth_pressure solves that part implicitly (GMRES) and, with face_flux, the kernel converges on W at n = 16, 32 and 64 (218, 716, 2489 iterations), converged results elsewhere unchanged to 3e-12; F-246's M1 on W run again with it is met (skew_corrected 1.994 / 1.780, body_force_weighted 1.990 / 1.662, limits 1.7 / 1.2); defaults unchanged; the status is left to the maintainer (ADR 0198 Q1 to Q5).
 - [x] **F-286** Transient k-omega SST with pimple on a static mesh
   - depends on: F-043
   - acceptance: Every limit is fixed by its registration ADR before any code. turbulence.model = k_omega_sst runs with
