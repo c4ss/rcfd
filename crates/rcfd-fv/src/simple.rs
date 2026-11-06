@@ -562,6 +562,10 @@ pub struct SimpleSolver {
     /// cell gradients and, for `BodyForceWeighted`, the non-orthogonal correction gradients and the body-force part of the face flux.
     /// `Linear` (default) leaves the solver unchanged.
     pub pressure_interpolation: PressureInterpolation,
+    /// Test-only cell-velocity corrections of ADR 0198 D3 (F-285 diagnosis): `None` (default) leaves the solver unchanged; ignored
+    /// with `reconstructed_correction`. Not set by the API.
+    #[doc(hidden)]
+    pub correction_test_only: Option<CorrectionTestOnly>,
     /// State of `deferred_correction_relaxation_test_only`: the relaxed correction of each component.
     dc_state: [Vec<f64>; 3],
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
@@ -606,6 +610,18 @@ impl HighOrderMask {
         }
         m
     }
+}
+
+/// Test-only cell-velocity corrections of [`SimpleSolver::correction_test_only`] (ADR 0198 D3). Both keep the fixed points of the
+/// default: they differ from it by a term that vanishes when the new pressure equals the old one.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CorrectionTestOnly {
+    /// `u = HbyA - rAtU ((1 - beta) grad(p_old) + beta grad(p_new))` with the kernel's two cell gradients of the pressure.
+    Beta(f64),
+    /// `u = HbyA - rAtU grad(p_old) - rAtU LS(p_new - p_old)`, the least-squares gradient of the pressure change with homogeneous
+    /// boundary values.
+    LeastSquares,
 }
 
 /// Diagnostic hook of [`SimpleSolver::conv_gradient_hook`]: (component, cell values, boundary values, convection gradient).
@@ -724,6 +740,7 @@ impl SimpleSolver {
             high_order_mask_test_only: None,
             deferred_correction_relaxation_test_only: None,
             pressure_interpolation: PressureInterpolation::Linear,
+            correction_test_only: None,
             dc_state: [Vec::new(), Vec::new(), Vec::new()],
             jump_state: Vec::new(),
             pseudo: None,
@@ -1282,13 +1299,30 @@ impl SimpleSolver {
                 *a = vec3::add(*a, *b);
             }
         }
+        // ADR 0198 D3 (test-only): the least-squares gradient of the pressure change, homogeneous boundary values
+        let ls_change: Option<Vec<Vec3>> = match (self.correction_test_only, &recon) {
+            (Some(CorrectionTestOnly::LeastSquares), None) => {
+                let q: Vec<f64> = p_new.iter().zip(&p_old).map(|(a, b)| a - b).collect();
+                let (bn, bo) = (
+                    boundary_values_pbc(&g, &pbc, &p_new),
+                    boundary_values_pbc(&g, &pbc, &p_old),
+                );
+                let bq: Vec<f64> = bn.iter().zip(&bo).map(|(a, b)| a - b).collect();
+                Some(least_squares(&g, &q, &bq))
+            }
+            _ => None,
+        };
         let mut max_du: f64 = 0.0;
         for c in 0..n {
             for k in 0..3 {
                 if g.active[k] {
-                    let un = match &recon {
-                        Some(r) => hby_a[c][k] - r_atu[c] * grad_p[c][k] + r[c][k],
-                        None => hby_a[c][k] - r_atu[c] * grad_corr[c][k],
+                    let un = match (&recon, self.correction_test_only, &ls_change) {
+                        (Some(r), _, _) => hby_a[c][k] - r_atu[c] * grad_p[c][k] + r[c][k],
+                        (None, Some(CorrectionTestOnly::Beta(b)), _) => {
+                            hby_a[c][k] - r_atu[c] * ((1.0 - b) * grad_p[c][k] + b * grad_corr[c][k])
+                        }
+                        (None, _, Some(l)) => hby_a[c][k] - r_atu[c] * grad_p[c][k] - r_atu[c] * l[c][k],
+                        (None, _, None) => hby_a[c][k] - r_atu[c] * grad_corr[c][k],
                     };
                     self.u.values[c][k] = un;
                     max_du = nan_max(max_du, (un - u_old[c][k]).abs());
