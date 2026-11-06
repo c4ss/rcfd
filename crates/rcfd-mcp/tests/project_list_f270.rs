@@ -13,7 +13,8 @@
 //! the property `reason`; without `read_feed` and those eight properties the list is the F-272 one, byte for byte.
 //!
 //! ADR 0195 C5-L restates it for F-275 (P1): with `--project` the 16 session tools of P1 are not listed; put back from the
-//! list without `--project` (`golden/tools_list_default.json`, F1's golden) at their places, the list is the F-273 one.
+//! list without `--project` (`golden/tools_list_default.json`, F1's golden) at their places, and with `read_feed`'s added
+//! property `from_seq` (P7) removed, the list is the F-273 one.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -136,6 +137,17 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         }
     }
     live_f273.extend(kept.cloned());
+    // ADR 0195 P7: read_feed's one added property, from_seq
+    let rf = live_f273.iter_mut().find(|t| t["name"] == "read_feed").unwrap();
+    let fs = rf["inputSchema"]["properties"]
+        .as_object_mut()
+        .unwrap()
+        .remove("from_seq")
+        .expect("read_feed has from_seq");
+    assert_eq!(
+        (fs["type"].clone(), fs["minimum"].clone()),
+        (json!("integer"), json!(1))
+    );
     let live_f273 = &live_f273;
     assert_eq!(live_f273.len(), 56, "33 session tools and 23 project tools");
     // ADR 0188 C-L: read_feed right after list_changes, a read tool with no required argument

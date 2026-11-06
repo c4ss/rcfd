@@ -291,6 +291,37 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
     );
 }
 
+/// C5-F (the binary part): an edit made through one server process is replayed by a second one's `read_feed
+/// {from_seq: 1}`, with its reason and the first process's actor.
+#[test]
+fn c5f_a_later_server_replays_an_earlier_servers_edit() {
+    let dir = project("c5f");
+    let d = dir.to_string_lossy().to_string();
+    let mut a = Mcp::start(&["--project", &d]);
+    let pid = a.pid();
+    let h = ok(&a.call("read_project_file", json!({"path": "cases/cavity.toml"})))["hash"].clone();
+    ok(&a.call(
+        "edit_case",
+        json!({"path": "cases/cavity.toml", "base_hash": h, "set": {"physics.nu": 0.02}, "reason": "to reach Re 50"}),
+    ));
+    drop(a);
+    let mut b = Mcp::start(&["--project", &d]);
+    let live = ok(&b.call("read_feed", json!({"since": 0})));
+    assert_eq!(live["entries"], json!([]), "a new feed starts at the present");
+    let r = ok(&b.call("read_feed", json!({"from_seq": 1})));
+    let e = &r["entries"][0];
+    assert_eq!(r["total"], 1, "{r}");
+    assert_eq!(
+        (e["seq"].clone(), e["who"].clone(), e["reason"].clone()),
+        (json!(1), json!("edit_case"), json!("to reach Re 50"))
+    );
+    assert_eq!(e["actor"]["client"], "mcp");
+    assert_eq!(e["actor"]["instance"]["pid"], pid);
+    assert_eq!(e["changes"], json!([{"path": "physics.nu", "old": 0.01, "new": 0.02}]));
+    assert!(e.get("n").is_none());
+    eprintln!("C5-F binary: {}", e["text"]);
+}
+
 /// C5-I: under `--project` the instructions name no hidden tool; without it they are unchanged (`default_f1.rs`).
 #[test]
 fn c5i_initialize_under_project_names_no_hidden_tool() {

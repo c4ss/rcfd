@@ -204,6 +204,33 @@ fn journal_text(kind: &str, line: &Value, actor: Option<&Actor>) -> String {
     format!("{who}{by}: {what}{why}")
 }
 
+/// The entry of one journal line, not yet numbered (`n` 0): what [`Feed::poll`] reports for the line, and what
+/// `read_feed {from_seq}` replays (ADR 0195 P7).
+pub fn journal_entry(line: &Value) -> Change {
+    let kind = s(line, "kind").unwrap_or_default();
+    let actor = line.get("actor").and_then(Actor::from_json);
+    let text = journal_text(&kind, line, actor.as_ref());
+    let mut other = line.as_object().cloned().unwrap_or_default();
+    for k in ["kind", "t", "seq", "path", "run", "who", "actor", "reason", "changes"] {
+        other.remove(k);
+    }
+    Change {
+        n: 0,
+        source: JOURNAL.into(),
+        kind,
+        t: s(line, "t"),
+        seq: line.get("seq").and_then(Value::as_u64),
+        path: s(line, "path"),
+        run: s(line, "run"),
+        who: s(line, "who"),
+        actor: line.get("actor").cloned(),
+        reason: s(line, "reason"),
+        changes: line.get("changes").cloned(),
+        other,
+        text,
+    }
+}
+
 impl Feed {
     /// The feed of the project at `root` (canonical), from now: what the journal and the runs hold already is not
     /// reported.
@@ -362,28 +389,7 @@ impl Feed {
             for (p, h) in Self::claims_of(&line) {
                 self.claim(&p, h, now);
             }
-            let kind = s(&line, "kind").unwrap_or_default();
-            let actor = line.get("actor").and_then(Actor::from_json);
-            let text = journal_text(&kind, &line, actor.as_ref());
-            let mut other = line.as_object().cloned().unwrap_or_default();
-            for k in ["kind", "t", "seq", "path", "run", "who", "actor", "reason", "changes"] {
-                other.remove(k);
-            }
-            out.push(Change {
-                n: 0,
-                source: JOURNAL.into(),
-                kind,
-                t: s(&line, "t"),
-                seq: line.get("seq").and_then(Value::as_u64),
-                path: s(&line, "path"),
-                run: s(&line, "run"),
-                who: s(&line, "who"),
-                actor: line.get("actor").cloned(),
-                reason: s(&line, "reason"),
-                changes: line.get("changes").cloned(),
-                other,
-                text,
-            });
+            out.push(journal_entry(&line));
         }
         // the runs' events
         let runs: Vec<String> = paths.iter().filter_map(|p| events_run(p)).map(String::from).collect();

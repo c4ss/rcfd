@@ -160,7 +160,8 @@ pub(crate) fn tools() -> Vec<Tool> {
             access: Access::Read,
             schema: || {
                 obj(
-                    json!({"since": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 200}}),
+                    json!({"since": {"type": "integer", "minimum": 0}, "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                        "from_seq": {"type": "integer", "minimum": 1, "description": "instead of since: replay the project journal from this seq on (1 for all of it), also what happened before this server started; entries carry no n; next_seq continues, and since = cursor continues live"}}),
                     &[],
                 )
             },
