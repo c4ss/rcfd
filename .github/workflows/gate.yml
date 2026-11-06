@@ -46,7 +46,16 @@ jobs:
           python-version: "3.x"
       # No build cache: the gate starts from an empty target folder.
       - name: fmt
-        run: cargo fmt --all -- --check
+        # One package at a time: `cargo fmt --all` hands every target to one rustfmt command, and with this many targets
+        # that command is too long for Windows (os error 206).
+        run: |
+          packages=$(cargo metadata --no-deps --format-version 1 | python -c 'import json, sys; sys.stdout.write(" ".join(p["name"] for p in json.load(sys.stdin)["packages"]))')
+          test -n "$packages"
+          status=0
+          for package in $packages; do
+            cargo fmt -p "$package" -- --check || status=1
+          done
+          exit $status
       - name: clippy
         timeout-minutes: 45
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
