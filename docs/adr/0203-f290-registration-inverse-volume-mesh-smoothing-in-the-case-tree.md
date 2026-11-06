@@ -201,4 +201,11 @@ smallest cell).
 
 `scripts/limit_audit.py` reports no hit in the new test file.
 
+**Gate.** `387236a` (the code, the documents and addendum 1 of ADRs 0202 and 0203, on main 9edfbda), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test), one gate for F-289 and F-290 under the machine lock: fmt 0, clippy `--workspace --all-targets -D warnings` 0, tests 2938 passed, 2 failed, 822 ignored, 2940 test processes in 569 binaries, 85 min of tests, peak summed working set 3.6 GB. The run waited for memory from 15:59 to 16:54 under the 30 GB free threshold of the gate script; on the coordinator's instruction the wait was restarted with 20 GB (the lock kept) and the gate ran at once. Every test of F-289 and F-290, `baseline_hashes.rs`, `case_hashes_w48u.rs` and `rules_w19c.rs` passed. The 2 failures are the known flaky tests of `rcfd-runner` `runner_w47b.rs`, a crate F-289 and F-290 do not change:
+
+* `s1_concurrency_never_exceeds_max_runs` ("the sampler does not see an over-subscription of 2"): rerun alone on the gate's binary it failed 3 of 3; control: the same test from the binary of the ADR 0196 gate (`1c86f24`, without this work) failed 2 of 2 right after, with the same message;
+* `s9_memory_and_thread_budget_refusals_are_located` ("two 60 MB runs ran together under a 100 MB budget"): rerun alone on the gate's binary it failed 1 of 3 and passed 2 of 3.
+
+This paragraph is documents only and was not gated again.
+
 **Questions for the maintainer.** Q1 stands as registered (proceeding on (a)).
