@@ -1,7 +1,12 @@
 # ADR 0200: F-287 registration: runner runs that continue from a previous run, with a step cap
 
-Status: **REGISTERED 2026-11-06**, written before any code of F-287. Not yet accepted by the maintainer. Results go in an
-addendum at the end.
+Status: **REGISTERED 2026-11-06**, written before any code of F-287. Not yet accepted by the maintainer. Amendment 1 corrects
+the start iteration of a continued run (its `start` event says 0) before any further code. Addendum 1 reports S1 to S12 built as
+registered on branch `f287-f288-runner`, not merged: a run continued after 25 steps ends where a run of 50 steps does, bit for
+bit; on the 16 x 16 cavity a chained study and an operating map on the runner agree with the in-process chain to 6.7e-10 relative
+(limit 1e-4), the cold and step-capped runs bit for bit. The gate at `56b194b` gave 2934 passed, 3 failed (the flakes
+`runner_w47b` s1 and s9, and the race control `edit_lock_w48f`, which passed alone), 823 ignored. The two new `settings` keys
+wait for the lead's approval (Q1).
 
 Parents: [ADR 0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) (F-274, its decision
 record of 2026-11-06: Q2 (d) and Q3 (d)), [ADR 0196](0196-three-code-changes-decided-2026-11-06-f246-r2-record-design-tool-class-sv202-text.md)
@@ -309,3 +314,58 @@ iterations 50. No solver code is changed for this (the field's meaning stays as 
 * **C-U.** In place of the stream: `iterations` from a `solver_finish` of 130 iterations with a start iteration of 86 is 44, with
   none 130; the start iteration read from the restart file of a run of 25 steps is 25.
 * **Can fail (4)** is unchanged: S7's subtraction left out fails C-CH at the iteration sum.
+
+## Addendum 1: what was built, and the results (2026-11-06)
+
+The work is on branch `f287-f288-runner` (worktree `w49i-work/f287`), from main 9edfbda, with F-288 (ADR 0201). After this text
+(3d63cc2) and amendment 1 (6562280):
+
+* `a18ad80`: `rcfd-runner` and `rcfd-cli`, S1 to S4, with R-1 (registered, ignored by amendment 1), R-1c and R-2;
+* `37bc4f1`: `rcfd-api`, the map seam of S8;
+* `a1c3a31`: `rcfd-workspace` and `rcfd-mcp`, S5 to S10, C-CH, C-MS, C-MAP, C-U and the registered edits E1 to E3;
+* `702183d`: F-288 (ADR 0201);
+* `56b194b`: the documents of both items. The gate ran on `56b194b`; the branch is not merged.
+
+**Built as registered**, with amendment 1's S7. Details:
+
+* `rcfd-runner`: `records::LaunchSettings` (`of`, `is_empty`, `merged`), `FsStore::create_run_with` (the body of
+  `create_run_tagged`, now a call of it), `Client::submit_with` with its refusals and `Client::solver_version` (also used by F-288),
+  and in `runner.rs` `continue_file` and the two options added to the launch command only.
+* `rcfd-cli`: `--max-steps` in the usage text, `RUN_VALUE_OPTS` and `cmd_run`; `info.max_steps` only when given.
+* `rcfd-api`: `MapRun`, the default method `EvaluatorSource::map_evaluator`, `run_map_with` and `design.run_map` in `call_with`;
+  `run_map` without a source runs exactly as before (it now also collects the prefix of S8, which nothing in process reads).
+* `rcfd-workspace` `design.rs`: `case_run`, `cond_result_from` (`cond_result` is it with 0), `restart_iteration`, `StartFrom` and
+  `start_from`, the shared `Queue`, `RunnerEvaluator` with the chained path, `RunnerMapEvaluator`, the map rule of the source,
+  `ON_RUNNER` with `design.run_map`, and `continue_from` in the run objects; `runs.rs` gains `submit_with`.
+* `rcfd-mcp`: `PROJECT_EXECUTE` with `design_run_operating_map`, and a comment in `dispatch`.
+
+No Studio file, MCP descriptor text, `initialize` text or case-schema key changed; `Cargo.lock` is unchanged.
+
+New tests: `rcfd-runner` `tests/continue_f287.rs` (R-1 ignored, R-1c), `rcfd-cli` `tests/max_steps_f287.rs` (R-2),
+`rcfd-workspace` `tests/design_f287.rs` (C-U, 2), `rcfd-mcp` `tests/design_runner_f287.rs` (C-CH, C-MS and C-MAP in one project).
+
+**Differences found while building.**
+
+1. Amendment 1 (the `start` event of a continued run), registered before the corrected code and tests.
+2. A map's `out_dir` does not exist before its first table is written, so the source's project test takes a path that does not
+   exist yet from its nearest existing folder (`RunnerSource::in_project`).
+3. The ignored R-1 was run once, before amendment 1: it failed at B's `start_iteration` (0 for 25), as amendment 1 records.
+
+**Results.** The numbers are those the tests printed at `a1c3a31` (release build, this machine).
+
+| Check | Result |
+|---|---|
+| R-1c | refusals: `../x` ("not a run id"), `r-20000101T000000-abcd` ("no run ... in this project") and `max_steps` 0, each with no folder made. A and C: `step_limit`, exit 0, steps 1 to 25 and 1 to 50, `settings.max_steps` and `info.max_steps` 25 and 50. B: `start_iteration` 0, `info.continue_from` A's restart file, whose `meta` says `iteration` 25; steps 26 to 50; its line of step 50 equals C's (`u` 5.239876409525057e-5, `p` 5.859085143335133e-5, continuity 4.6755819764314434e-7); `solver_finish.iterations` 50. D: the 8 keys of today, `settings` `mem_mb`, `priority`, `set`, `threads`, `info.continue_from` null, no `info.max_steps`. E: failed before launch, "continue_from: run <F> left no restart file .../runs/<F>/output/restart.rcfd", no `launched` event |
+| R-2 | `--max-steps 0` exit 2; `--max-steps 5`: exit 0, `finish` `step_limit` with 5 iterations, `info.max_steps` 5, `restart.rcfd` written; with `chain.sequence`: exit 2 ("--max-steps caps a single run; ...") |
+| C-CH | `evaluator` `runner`, 2 evaluations, 4 runs; the `slow` runs continue from their variant's `base` run: `nu=0.01` base ended at 88 (restart file `iteration` 88), slow steps 89 to 179, record 91; `nu=0.02` base 86, slow 87 to 175, record 89; `info.continue_from` the base run's restart file. Against in process: `base` iterations equal (88, 86) and `lid_drag` bit for bit; `slow` `lid_drag` -0.003935181616902512 against -0.003935181614683011 and -0.007530798984346871 against -0.007530798985682589, largest relative difference 5.6e-10 (limit 1e-4); `slow` iterations 91 and 89 on the runner, 91 and 88 in process; the same `slow` conditions cold on the runner took 86 and 87 |
+| C-MS | (i) `max_steps` 3000, chain false: 4 runs with `settings.max_steps` 3000, records equal to in process bit for bit (iterations 88, 86, 86, 87). (ii) `max_steps` 20, chain default: 4 runs, each `step_limit` with 20 iterations, none continued, every condition `not_converged` without metrics, equal to in process |
+| C-MAP | `evaluator` `runner`, 3 untagged runs, points 1 and 2 continued from the run before; `restart` cold, warm, warm and `status` converged on both; point 0 88 iterations both and `lid_drag` bit for bit; points 1 and 2: 82 and 83 iterations both, `lid_drag` within 4.2e-10 and 6.7e-10 (limit 1e-4). The second call: `cached`, no new run |
+| C-U | `LaunchSettings::default()` is `{}`; both keys round-trip; `RunSettings::of` reads the object. The restart file of 25 steps of the 16 x 16 case has `iteration` 25; the case at another lid speed continues from it (`Continue { iteration: 25 }`); at 20 x 20 cells: cold, "cold start: the restart file was written for another mesh"; a transient PISO file: cold, no note; no file: cold with a note. 130 iterations from 86: 44; from 0: 130 |
+| C-1 | E1, E2 and E3 as registered; `default_f1.rs`, `project_list_f270.rs` (with E2), `tool_list_f275.rs` (with E1), `design_runner_f274.rs` (with E3: both studies now `runner`, four runs each) and the F-274 tests of `rcfd-workspace` pass. Every other test: see the gate |
+| Can fail | (1) no `--continue-from`: R-1c failed at B's first step (1 for 26). (2) no `--max-steps`: R-1c failed at A (`not_converged` after 400 steps, not `step_limit`). (3) `slow` continued from the first run of the call: C-CH failed at `continue_from` (the other variant's `base` run). (4) S7's subtraction left out: C-CH failed at the iteration sum (261 for 175). (5) the map never continued: C-MAP failed at point 1's `continue_from` (asserted before `restart`). Each file restored and compared byte for byte with the kept copy: equal |
+| Defaults | against 9edfbda: `Cargo.lock`, `baseline_hashes.rs`, `case_hashes_w48u.rs` and the case schema unchanged (`git diff` empty); no solver file changed (`rcfd-api` changes only `design/tools.rs`). `scripts/limit_audit.py` reports 154 hits on the branch as on main 9edfbda, none in the new tests |
+| Gate | `56b194b` (the code and documents of both items, before these addenda), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test), under the machine's gate lock, after 15 quiet minutes and 20 GB of free memory (the coordinator's threshold of 2026-11-06, in place of 30): fmt 0, clippy `-D warnings` 0, 2934 passed, 3 failed, 823 ignored, 2937 test processes, 572 binaries, the doc-tests passed; 84 min from start to end (71 min of tests), peak summed working set 3163 MB, lowest free memory 26 GB. Every new test passed there (R-1c, R-2, C-U, C-CH, C-MS, C-MAP, A-U, A-R, A-N), as did the tests with the registered edits. The three failures: `runner_w47b` `s1` and `s9`, known flakes, which failed the same way in the gates of `f289-f290` and `f286-transient-sst` the same evening (branches without this work); rerun alone on the gate's build, `s1` failed 3 of 3 (its OS sampler saw no solver process, "max by OS 0") and `s9` 2 of 3 ("two 60 MB runs ran together under a 100 MB budget": 0 for 1). And `rcfd-project` `edit_lock_w48f` `two_writers_without_lock_and_hash_lose_updates_control`, a race control in a crate this branch does not change, whose two writers did not interleave in the gate ("no update lost"); rerun alone it passed 3 of 3 (200, 200 and 195 updates lost). Reported as failures, with their names |
+
+**Questions for the maintainer.** Q1 to Q7 stand as registered, each built on its option (a). In order of weight: Q1 (the two
+`settings` keys, the lead's approval under ADR 0130, and where they live); Q5 (the class of `design_run_operating_map`); Q6 (the
+iteration cap of a continued run); Q2, Q3, Q4 and Q7. Also for the maintainer: `rcfd run --max-steps` is a new command-line option.

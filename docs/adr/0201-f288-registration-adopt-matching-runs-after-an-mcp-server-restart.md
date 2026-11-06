@@ -1,7 +1,10 @@
 # ADR 0201: F-288 registration: adopt matching runs after an MCP server restart
 
-Status: **REGISTERED 2026-11-06**, written before any code of F-288. Not yet accepted by the maintainer. Results go in an
-addendum at the end.
+Status: **REGISTERED 2026-11-06**, written before any code of F-288. Not yet accepted by the maintainer. Addendum 1 reports
+S1 to S6 built as registered on branch `f287-f288-runner`, not merged: an `rcfd-mcp` killed during a three-point study and started
+again made no new run and adopted the three, its records bit for bit those of an uninterrupted study; ten runs that differ in one
+item of the key, or failed or were cancelled, were not adopted. The gate at `56b194b` (with F-287) gave 2934 passed, 3 failed
+(flakes, see ADR 0200 addendum 1), 823 ignored.
 
 Parents: [ADR 0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md) (F-274, Q5 and its
 decision record of 2026-11-06: option (b)), [ADR 0200](0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md)
@@ -141,3 +144,45 @@ Cases as in ADR 0200: the `lid_driven_cavity` template at 32 x 32 (`cases/cavity
 
 Adoption for operating maps (Q3); a runner-side index (Q4); adopting runs of another project or of a server without a project
 (their studies evaluate in process); the Studio showing which runs a study adopted.
+
+## Addendum 1: what was built, and the results (2026-11-06)
+
+The work is on branch `f287-f288-runner`, after ADR 0200's code: `702183d` (`rcfd-workspace` and `rcfd-mcp`: the index, the key,
+the choice, the adoption in the evaluator's queue, `runs_adopted`, and the tests), then the documents with ADR 0200's (`56b194b`).
+
+**Built as registered.** S1 to S6 as written:
+
+* `rcfd-workspace` `design.rs`: `RunKey` (with `matches`), `choose`, `RunIndex` (`read`, `adopt`), the per-call `Adoption` (the
+  index, the base case's project-relative path, the hash of its bytes and the solver version), read by the source before it makes
+  sure of the runner; `Queue::queue` adopts for a tagged run before it submits; `Made.adopted`, `adopted: true` in the run object,
+  `runs_total` the runs submitted and `runs_adopted` for `design_run_study` and `design_evaluate` (not for a map). `runs.rs`
+  gains `RunService::solver_version`.
+* `rcfd-runner`: `Client::solver_version`, which `submit_with` uses (built with ADR 0200's commit `a18ad80`).
+
+No MCP descriptor or Studio file changed; no run-record field was added.
+
+New tests: `rcfd-workspace` `tests/adopt_f288.rs` (A-U), `rcfd-mcp` `tests/adopt_f288.rs` (A-R, A-N).
+
+**Differences found while building.**
+
+1. The index is read before the source makes sure of a runner (S3 says "when the source has chosen the runner"): with no runner
+   alive, a queued run cannot start between the read and the choice, which A-N's positive control relies on. The order changes
+   nothing else.
+2. The index reads each run folder's `run.json` and `status.json` itself rather than through `RunService::list`, which fails as a
+   whole when one status does not read (S3 asks that such a folder be skipped).
+
+**Results.** The numbers are those the tests printed at `702183d`'s code (release build, this machine).
+
+| Check | Result |
+|---|---|
+| A-R (i) | the first server killed once the three runs of `designs/nu3` existed: all three `queued` at the kill. The second server's `design_run_study` (5.0 s): `evaluations_run` 3, `runs_total` 0, `runs_adopted` 3, each run object `adopted: true`; `runs/` the same three folders, each `finished`. `designs/nu3-ref` without interruption: `runs_adopted` 0, three new runs. The records of both studies and of the in-process study agree in `params`, `ok`, `status` and `iterations` (106, 102, 100) and bit for bit in `lid_drag`. The index read of the project's 6 runs took 0.002 s |
+| A-R (ii) | the chained study killed once two of its runs existed (both `base` runs, `queued`); the third server: `evaluations_run` 2, `runs_adopted` 2, `runs_total` 2; afterwards exactly one run per (variant, condition), four in all, each `slow` run continued from its variant's `base` run; the records equal those of `designs/two-chain-ref` bit for bit, iterations included (88 and 91, 86 and 89) |
+| A-N | the ten decoys (a) to (j) were not adopted: (a) to (h) stayed `paused`, (i) `cancelled`, (j) `failed`; the call made one new run (`runs_total` 1, `runs_adopted` 0), its record equal to in process bit for bit (102 iterations). Control (k): queued with the runner stopped, adopted (`runs_total` 0, `runs_adopted` 1, `adopted: true`), waited for to `finished`, its record equal to in process bit for bit |
+| A-U | the full key matches (also with other `threads`, `priority`, `mem_mb`); each of 11 single changes (the three tags, no tags, `case`, the hash, one more entry, no entry, `continue_from`, `max_steps`, `solver_version`) does not; a key with `max_steps` matches only a record with it; `queued`, `running`, `paused` and `finished` are adopted, `failed` and `cancelled` not; a `finished` match before a newer `queued` one; of `queued` and a newer `running` one, the newer |
+| Can fail | (1) no adoption: A-R (i) failed at `runs_total` (3 for 0). (2) the hash not compared: A-N adopted decoy (e), which is paused, and waited on it until stopped after 240 s with no new run in its project (10 runs, the decoys); A-U failed at its hash case. (3) `settings.set` not compared: the same with decoy (d); A-U failed. (4) the state not checked: A-N failed at `runs_total` (0 for 1: decoy (i), "cancelled before launch", adopted); A-U failed at `Failed`. (5) the solver version not compared: A-N waited on decoy (h), stopped after 240 s with no new run; A-U failed. Each file restored and compared byte for byte with the kept copy: equal. A hung check is a failure of it; the run stopped is the test executable, never cargo, and the stopped runs' runners were sent the shutdown request |
+| Defaults | no run-record field or tool added; without `--project` nothing changes; ADR 0200's checks pass with F-288 built (the gate) |
+| Gate | `56b194b` (the code and documents of both items, before these addenda), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test), under the machine's gate lock, after 15 quiet minutes and 20 GB of free memory (the coordinator's threshold of 2026-11-06, in place of 30): fmt 0, clippy `-D warnings` 0, 2934 passed, 3 failed, 823 ignored, 2937 test processes, 572 binaries, the doc-tests passed; 84 min from start to end (71 min of tests), peak summed working set 3163 MB, lowest free memory 26 GB. Every new test passed there (R-1c, R-2, C-U, C-CH, C-MS, C-MAP, A-U, A-R, A-N), as did the tests with the registered edits. The three failures: `runner_w47b` `s1` and `s9`, known flakes, which failed the same way in the gates of `f289-f290` and `f286-transient-sst` the same evening (branches without this work); rerun alone on the gate's build, `s1` failed 3 of 3 (its OS sampler saw no solver process, "max by OS 0") and `s9` 2 of 3 ("two 60 MB runs ran together under a 100 MB budget": 0 for 1). And `rcfd-project` `edit_lock_w48f` `two_writers_without_lock_and_hash_lose_updates_control`, a race control in a crate this branch does not change, whose two writers did not interleave in the gate ("no update lost"); rerun alone it passed 3 of 3 (200, 200 and 195 updates lost). Reported as failures, with their names |
+
+**Questions for the maintainer.** Q1 to Q5 stand as registered, each built on its option (a). In order of weight: Q1 (the solver
+version in the key, beyond the three items of ADR 0189 Q5 (b)), Q2 (failed runs never adopted), Q5, Q3 and Q4. The result key
+`runs_adopted` and `adopted` in a run object are new keys of the design tools' results in project mode.
