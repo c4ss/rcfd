@@ -318,7 +318,7 @@ fn diag_w() {
             ConvScheme::Upwind,
             3000,
         ),
-        _ => {}
+        other => panic!("set F246_DIAG to a set-up of the amendment (got {other:?})"),
     }
 }
 
@@ -362,7 +362,7 @@ fn diag_box() {
         "b" => (Coupling::Simplec, 1.0, 0, true),
         "c" => (Coupling::Simplec, 0.7, 0, false),
         "d" => (Coupling::Simple, 0.3, 0, false),
-        _ => return,
+        other => panic!("set F246_DIAG to a, b, c or d (got {other:?})"),
     };
     let geom = geometry_of(false, 16);
     let mesh = &geom.mesh;
