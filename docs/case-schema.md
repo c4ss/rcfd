@@ -2701,7 +2701,7 @@ Measured (ADR 0193):
   3.7e-12 (SIMPLEC with `velocity_correction = "face_flux"`) and from 4.6e-3 to 1.0e-11 (SIMPLE with one non-orthogonal
   corrector), against a buoyancy velocity scale of 100.
 * Manufactured flow with a source the pressure does not balance: every variant kept second order in velocity on the skewed and
-  stretched meshes, but `body_force_weighted` raised the velocity error 8 to 34 percent and the pressure error up to 4.4 times.
+  stretched meshes, but `body_force_weighted` raised the velocity error by up to 34 percent and the pressure error up to 4.4 times.
   `skew_corrected` changed the velocity error by at most 0.5 percent and the pressure error by at most 3 percent.
 * On a strongly warped mesh (about 64 degrees non-orthogonality) the steady kernel diverged from 32 cells per side with every
   variant.

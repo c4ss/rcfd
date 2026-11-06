@@ -404,8 +404,7 @@ edited: `case_hashes_w48u.rs` (H2 only). New tests: `crates/rcfd-fv/tests/pressu
    restored and compared byte for byte with the kept copies.
 3. `limit_audit.py` flagged the silent `return` of an unknown set-up in the diagnosis tests; it panics now. No hit in the other
    new tests.
-4. B-b ran for about 14 minutes next to B-a (4000 iterations of SIMPLE with a corrector on 4096 cells); the registered settings
-   were kept.
+4. Run next to B-a and eight heavy runs, B-b took about 14 minutes; in the gate it took 57 s. The registered settings were kept.
 
 **Results.** Errors are L2 over the cells; orders are `log2(e(n) / e(2n))`; "it." counts SIMPLE iterations to the stop rule.
 
@@ -416,10 +415,10 @@ edited: `case_hashes_w48u.rs` (H2 only). New tests: `crates/rcfd-fv/tests/pressu
 | M1 K | V1: velocity 2.176, pressure 1.491 (pair (32, 64); limits 1.7, 1.2), the same numbers as V0 to five digits (V1 changes nothing beyond rounding on K); V2: 2.235, 1.444. All runs converged (1911 to 1923 it. at n = 64). **Met** |
 | M1 S | V1: velocity 1.735, pressure 1.756, the same numbers as V0 to five digits; V2: 1.966, 1.318 (1841 to 1867 it. at n = 64). **Met** |
 | M1 W | V1 and V2 diverge at n = 32 (not finite at it. 1168 and 1215), as V0 does (939). **Not met** (known misses `m1_w_v1_known_miss`, `m1_w_v2_known_miss`) |
-| M1 W2 (supplementary) | V1: velocity 1.999, pressure 1.745; V2: 1.999, 1.648 (2034 to 2037 it. at n = 64). **Met** |
+| M1 W2 (supplementary) | V1: velocity 1.999, pressure 1.745; V2: 1.999, 1.648 (2034 to 2037 it. at n = 64). **Met**. V0 (reported): 2.000, 1.754 |
 | M2 | at n = 32, `e_u(V) / e_u(V0)` (limit 1.10): V1 1.0000 on G and 1.0015 on G3, **met**; V2 1.3422 on G and 1.1500 on G3, **not met** (known miss `m2_near_orthogonal_meshes_v2_known_miss`). Pressure ratios (reported): V1 1.0000, 0.9995; V2 2.660, 2.244 |
 | M3 (orders of the pair (16, 32), velocity / pressure) | K: V0 and V1 2.234 / 1.457, V2 2.279 / 1.456; S: V0 and V1 1.337 / 1.660, V2 2.063 / 1.002; W2: V0 1.975 / 1.754, V1 1.973 / 1.744, V2 1.980 / 1.655; W: every variant diverges at n = 32 |
-| M3 ratios at n = 64 (reported) | `e(V2) / e(V0)`: K velocity 1.076, pressure 1.001; S 1.151, 4.375. V1 equals V0 on K |
+| M3 ratios at n = 64 (reported) | `e(V2) / e(V0)`: K velocity 1.076, pressure 1.001; S 1.151, 4.375; W2 0.994, 1.177. `e(V1) / e(V0)`: K and S 1.000, 1.000; W2 0.998, 0.983 |
 | B-a (record) | SIMPLEC without correctors: V0 and V2 not finite after 4000 it.; B3 failed, NOT MET as registered (amendment 1) |
 | B-a' | SIMPLEC with `face_flux`: largest cell speed V0 1.618e-2 (1.6e-4 `U_b`), V2 3.742e-12 (3.7e-14 `U_b`); ratio 4.3e9 (limit 10), V2 below 1e-6 (limit), V0 above 1e-5 (teeth floor); last change 2.8e-17 in both (limit 1e-10). **Met** |
 | B-b | SIMPLE with one corrector: V0 4.553e-3 (4.6e-5 `U_b`), V2 1.034e-11 (1.0e-13 `U_b`); ratio 4.4e8; last change 1.5e-14 and 1.1e-13. **Met** |
@@ -432,9 +431,10 @@ edited: `case_hashes_w48u.rs` (H2 only). New tests: `crates/rcfd-fv/tests/pressu
 | T4 | (i) settings hash unchanged with the key written at its default (C1 `8129287614d0e713`, C2 `82487320653bc7f2`), 0 of 768 values differ in a bit; (ii) `baseline_hashes.rs` unedited: 3 passed, 1 ignored; (iii) H1 with H2: 41 recorded sources, 0 differ; C4: the copy with `pressure_interpolation = "skew_corrected"` differs from R0 |
 | Can fail | the line of K2 that sets the variant removed: T2 C1 V1 4.968e-3 and V2 3.756e-1 (tree vs library), T3 change 0; `sim.rs` restored and equal byte for byte to the kept copy |
 | Audit | `scripts/limit_audit.py`: no hit in the new tests after difference 3 |
+| Gate | `15c189c` (a3ae358 merged with main ef44c31, F-259), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test): fmt 0, clippy `-D warnings` 0, tests **2895 passed, 0 failed, 820 ignored**, 559 binaries, 66 min of tests (wall 3957.5 s), largest time over limit 0.213. Every non-ignored F-246 test passed, as did `case_hashes_w48u` H1, `baseline_hashes`, F-256's tests and F-259's. The heavy M1 tests are ignored there (rows M1 above) |
 
 **Time.** On this machine, shared with other agents' gates: a sequence test (n = 16, 32, 64) took 84 to 141 minutes (5048 to
-8445 s), most of it the n = 64 run (4933 to 8261 s); B-a' 1.7 minutes, M2 14 minutes and M3 on W 20 minutes when run alone.
+8445 s), most of it the n = 64 run (4933 to 8261 s). In the gate: M3 199 to 333 s per mesh, M2 216 s, B-a' 43 s, B-b 57 s.
 
 **Which code produced the heavy numbers.** The heavy M1 tests are not run by the gate. V1 and V2 on K, S and W2, and V0 on W2,
 ran from the test binary of 4d901bc; V0 on K and S from the binary of 51a639f (before amendment 1; its `mms` harness is the same).
@@ -447,8 +447,8 @@ The library code (`rcfd-fv/src`) has not changed since 51a639f; the later commit
   (lower on W2). It does not stop the divergence on W. No benefit is claimed.
 - `body_force_weighted` does what it was built for: a fluid at rest under a linear conservative body force stays at rest to
   1e-11 on the skewed mesh, where the default makes a spurious flow of 1e-2. With a body force the pressure does not balance (the
-  manufactured source) it costs accuracy: 8 to 34 percent in velocity, and in pressure up to 4.4 times (1.0 on K, 2.2 to 4.4 on
-  G, G3 and S), with the orders still above the limits on K, S and W2.
+  manufactured source) it costs accuracy: 8 to 34 percent in velocity on G, G3, K and S (0.6 percent less on W2), and in pressure up
+  to 4.4 times (1.0 on K, 1.18 on W2, 2.2 to 4.4 on G, G3 and S), with the orders still above the limits on K, S and W2.
 - The default kernel diverges on F-208's warped mesh W from n = 32 with every variant. The amendment's reading (the step from
   `HbyA` to the corrected velocity amplifies on that mesh) is not proven here; it is the open question Q9 below.
 
