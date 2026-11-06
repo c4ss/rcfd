@@ -1,6 +1,10 @@
 # ADR 0195: ADR 0173 amendment 6, F-275 registration: the project-mode tool list and the plugin edit hook
 
-Status: **REGISTERED 2026-11-06**, written before any code of F-275. Not yet accepted by the maintainer.
+Status: **REGISTERED 2026-11-06**, written before any code of F-275. Not yet accepted by the maintainer. Addendum 1 reports P1
+to P11 built as written, with amendment 1 (one more Studio test edited by design, and Q8), on branch `f275-project-mode-tools`,
+not merged. With `--project` the 16 session-only tools are neither listed nor callable (40 tools); the plugin's hook refused a
+Write and an Edit under `cases/` in a real Claude Code 2.1.319 session. The gate at `00fbd30` gave 2918 passed, 0 failed,
+821 ignored. Eleven answers wait for the maintainer under [Decisions needed](#decisions-needed).
 Parent: [ADR 0173](0173-workspace-layer-between-the-project-folder-the-mcp-server-and-the-studio.md) (proposed, not accepted),
 work item W8, check C5, decisions D2 and D5, roadmap item F-275; it builds on
 [ADR 0185](0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md) (F-270),
@@ -384,3 +388,68 @@ reading) is the 16th or later and is below the fold of the confirmation dialog u
 scrolls and its count is in the heading; (b) list the rules that are not the project's read tools first, or show the read tools
 as one line; (c) a taller area. Recommendation (b), a Studio change after the maintainer's Studio worktree lands; not acted on in
 F-275. It joins [Decisions needed](#decisions-needed) as item 11.
+
+## Addendum 1: what was built, and the results (2026-11-06)
+
+Branch `f275-project-mode-tools`, after this text (`9bfb97f`):
+
+* `9e23b2c`: the project-mode tool list and `initialize` (P1 to P3), with C5-L, C5-H, C5-S and C5-I and the C-1 edits;
+* `a2a2f82`: the allow-list (P5) and C5-A, F2 restated;
+* `fb802bf`: `read_feed {from_seq}` (P7) and C5-F;
+* `4525e4c`: the edit hook and its plugin file (P6), C5-K and C5-R;
+* `584b306`: C5-A through `project_initial` (below, difference 5);
+* `28f9de0`, `00fbd30`: the documents;
+* `2fa8742`, `92953fd`: amendment 1 and the `chat_e.rs` e11 edit it covers.
+
+The gate ran on `00fbd30`. The branch is not merged.
+
+**Built as registered.** P1 to P11 as written, with amendment 1.
+
+* `rcfd-mcp`: `SESSION_ONLY` (the 16 names) and the filter in `all_tools`; `initialize`'s first sentence under a project;
+  `read_feed`'s `from_seq` property; the new module `src/edit_hook.rs` and the `--edit-hook` branch of `main.rs` (one help line).
+* `rcfd-workspace`: `feed::journal_entry` (the entry of one journal line, which `Feed::poll` now calls) and `from_seq` in
+  `read_feed`, whose page rule moved into one function both modes use.
+* `rcfd-claude`: `PROJECT_READ_TOOLS` 15 names.
+* `clients/claude-plugin/hooks/hooks.json` (new); `plugin.json`, `.mcp.json` and the skills unchanged.
+* Existing tests edited, and only these: `project_list_f270.rs` (C5-L), `project_runs_w48f.rs` (two counts, R1's probe),
+  `project_w48f.rs` (F3's count, F2's read set), `mesh_setup_f272.rs` (the observation), `chat_e.rs` e11 (amendment 1). New tests:
+  `rcfd-mcp/tests/tool_list_f275.rs` (6), `rcfd-mcp/tests/edit_hook_f275.rs` (1, and the ignored C5-R),
+  `rcfd-workspace/tests/feed_replay_f275.rs` (1), one unit test in `edit_hook.rs`.
+
+**Differences found while building.**
+
+1. Amendment 1: `chat_e.rs` e11 depended on the length of the first allow-list (Q8).
+2. C5-F refused a third input besides the two registered: `from_seq` given as a string (-32602).
+3. C5-S: two kept tools answered with an error other than 1001 on the test's arguments, as the registration allows:
+   `read_status_stream` (-32602; the test's one-line file is not a status stream) and `design_compare_variants` (-32602).
+4. Public names the registration did not list: `rcfd_mcp::SESSION_ONLY`, the module `rcfd_mcp::edit_hook` and
+   `rcfd_workspace::feed::journal_entry`. The tests keep their own tables and do not read `SESSION_ONLY`.
+5. C5-A first compared `PROJECT_READ_TOOLS` with a constant; `scripts/limit_audit.py` reported those two assertions as class (i),
+   and the check now reads the rules `project_initial` makes.
+6. C5-R confirmed Edit's input on 2.1.319 (`replace_all`, `file_path`, `old_string`, `new_string`) and that the plugin's MCP server
+   started in the same session (`plugin:rcfd:project` connected). `MultiEdit` and `NotebookEdit` are checked through the binary
+   only (C5-K): 2.1.319 has no `MultiEdit` and the session did not use `NotebookEdit`.
+7. The probe of the registration and C5-R each ran one `claude -p` session: 0.17 USD and 0.22 USD as the CLI reported.
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| C5-L | Through the binary under `--project`: 40 tools, 36 970 bytes; the 17 kept session tools in the default list's order, each byte-identical to its entry in `tools_list_default.json`; then the 23 project tools in the F-273 order; none of the 16 listed. `project_list_f270.rs`: with the 16 put back from the default golden and `from_seq` removed (an integer, minimum 1), the 56-tool F-273 list passes every check of that file, byte for byte; neither golden re-recorded; `default_f1.rs` passes unedited |
+| C5-H | Each of the 16 under `--project`: JSON-RPC -32602 `unknown tool '<name>'`; the project's files and bytes the same before and after. Control (a server without `--project`): all 16 reached their handlers |
+| C5-S | Without a project or a session: the 15 hidden tools other than `create_case` answered 1001, `create_case` made a session. The 17 kept tools without `session`: no JSON-RPC error and no 1001 (15 answered without error, two with -32602, difference 3); `session.list` empty after them |
+| C5-I | Under `--project`: 852 characters starting "Clean-room open source CFD solver. This server also has a project folder"; none of the 14 hidden names with `_` is a word of them; the old sentence absent. Without `--project` unchanged (`default_f1.rs`) |
+| C5-A | A new project's first list: 15 rules, main's 11 in their order, then `read_feed`, `check_case_mesh`, `preview_mesh`, `list_meshes`. F2: the read-class project tools of the live list are those 15. A file written from main's 11 names (464 bytes) read back as the 11 rules and written back byte for byte |
+| C5-F | Workspace: after an old line without `seq` and five commands (seq 1 to 5), a workspace made afterwards replayed exactly the five lines, in file order, without `n`, each equal to the live feed's entry for the line; `total` 5, `next_seq` null, `skipped_lines` 0, `cursor` equal to `read_feed {}`'s; `{from_seq: 3, limit: 2}` gave seq 3 and 4, `total` 3, `next_seq` 5; `{from_seq: 6}` nothing; three refusals -32602 (difference 2). Binary: a second server's `read_feed {from_seq: 1}` gave the first server's edit (seq 1, `edit_case`, its reason, actor `mcp` with the first process's id, `changes` [{`physics.nu`, 0.01, 0.02}]) while its live feed from `since: 0` was empty |
+| C5-K | 14 refused with exit 2, an empty stdout and a message naming `edit_case`, `new_case` and the path (the 12 registered, the link input as a directory junction, and the two Windows inputs); 10 allowed with exit 0 and nothing printed; 2 not read with exit 1 and a message. `hooks/hooks.json` as registered; F12 passes unedited |
+| C5-R | Claude Code 2.1.319, the plugin loaded as `rcfd@inline` with its MCP server connected, the branch's `rcfd-mcp` first on PATH (no other on PATH). The Write of `cases/new.toml` and, after a Read, the Edit of `cases/cavity.toml` came back with `is_error` true and the text `PreToolUse:<tool> hook error: [rcfd-mcp --edit-hook ${CLAUDE_PROJECT_DIR}]: rcfd: <tool> of cases/<file> refused: ...` (naming `edit_case` and `new_case`) and "This hook comes from the rcfd@inline plugin."; `cases/new.toml` absent, `cases/cavity.toml` byte for byte as before; `notes/ok.md` written. Debug log: `Hooks: PreToolUse:Write [...] (plugin rcfd@inline) finished with status 2 (30ms)` and the same for Edit (22 ms). 14.9 s, 0.22 USD |
+| C-1 | The registered edits only (C5-L, two counts and R1, F3 and F2, the `mesh_setup_f272.rs` observation) and amendment 1's. Release run of `rcfd-mcp`, `rcfd-workspace`, `rcfd-claude`, `rcfd-project` and `rcfd-studio` before amendment 1: 492 passed, 1 failed (e11, amendment 1), 34 ignored; after it `chat_e.rs` 14 of 14. `workspace_graph.rs` passed in the gate |
+| Can fail | Four mutations, each file restored and compared with the committed one afterwards (equal). (1) P1's filter removed: C5-L and C5-H failed, the other four passed. (2) The hook's component comparison made a text prefix: C5-K failed at the allowed `casesx/a.toml` (refused). (3) The hook's resolved form dropped: C5-K failed at the link input (exit 0, not 2). (4) `from_seq` exclusive: C5-F failed in the workspace (seq 2 to 5 for 1 to 5) and through the binary |
+| Defaults | Against f0d7983: `Cargo.lock`, `baseline_hashes.rs`, `case_hashes_w48u.rs` and both MCP goldens unchanged (`git diff` empty); no case-schema key or run-record field added; without `--project` `tools/list` and `initialize` byte-identical (`default_f1.rs`). `scripts/limit_audit.py`: 154 hits, as on main f0d7983, none in the new tests |
+| Gate | `00fbd30` (the code of this branch and the documents before this addendum), `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test): fmt 0, clippy `-D warnings` 0, 2918 passed, 0 failed, 821 ignored, 2918 test processes in 564 binaries, 82 min wall (69 min of tests); lowest free commit 53 GB. The 9 tests of F-275 (and the ignored C5-R) in 3 new binaries; no failure, so nothing was run again |
+
+**Questions for the maintainer.** The answers of [Decisions needed](#decisions-needed), items 1 to 11, stand as registered.
+In order of weight: Q2 (the workflow tools and `run_headless`'s restart options are not offered in project mode); item 6 with Q8
+(the Studio's sidebar now runs four more read tools without asking in a new project, and a rule the user adds falls below the
+fold of the confirmation dialog); Q1 (the hook names `new_case`, not `create_case`); Q6 (access classes); item 8 (the lead's
+approval of the three run-record fields of ADR 0189). The hook under `bypassPermissions` stays NOT VERIFIED.
