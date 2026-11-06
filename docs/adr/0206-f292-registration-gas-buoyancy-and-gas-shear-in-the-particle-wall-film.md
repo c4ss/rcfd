@@ -364,3 +364,90 @@ the film state in a restart); a comparison with measured data.
   13.9 m/s at the cell centre in KS).
 - **Q6. The laminar range of a sheared film.** No source was read. Recommendation: read one before relying on sheared films
   above the `Re_f = 2` of the checks; until then the report gives the largest face `Re_f`, as ADR 0192 does.
+
+## Addendum 1: results (2026-11-06)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+9d994dd (with the records R6 and R7), the code, tests and docs e698ca5, and c96fa5c splits one assertion of CT3 for clippy
+(below). Each registered check ran once, the library checks on the code of e698ca5 before its commit and the case-tree
+checks on e698ca5; the runs are deterministic and none was repeated to change a result. Every check met its limit, both
+negative controls held, and every mutation made its check fail.
+
+### Library (`crates/rcfd-particles/tests/film_gas.rs`, 18 tests, 9.7 s on one thread)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| GB1 `Gamma` round trip (250 and 1.2); `h_B / h_N`; `rho_g = 0` | 1e-14; 1e-14; bit for bit | 2.2e-16; 4.4e-16 (1.100642 and 1.000400); equal | met |
+| GB2 rows 1 to 9; loss of row 0; held + drained; sub-steps | 1e-13; 1e-13; 1e-14; 1 | 0; 1.2e-15; 1.8e-16; 1 | met |
+| GB3 rows 1 to 9 at 20 s (worst: row 9); ledger; smallest mass; sub-steps | 1e-10; 1e-12; `>= 0`; 2000 | 1.4e-14; 1.8e-13; 0; 2000 | met (predicted 5.1e-15) |
+| GB4 (acceptance) the four station faces, window average and at 20 s; ledger; lost parcels; smallest mass; largest `Re_f` | 5 percent; 1e-10; 0; `>= 0`; `<= 30` | 3.3e-15 and 1.4e-11 on each face; 6.1e-13; 0 (58 400 injected, 58 324 absorbed, 76 in flight); 0; 2.0000 | met (predicted 2.2e-15, 1.4e-11) |
+| GB5 window average (250); absorbed against held + drained; window average with air | 1e-6; 1e-10; 1e-6 | 3.3e-15; 6.1e-13; 1.0e-15 (`h_B(1.2)` is 4.0e-4 above `h_N`) | met (predicted 6.0e-16 with air) |
+| GBN (negative control) window average against `h_N`; against `h_B` | `<= 1e-6`; `>= 0.05` | 2.6e-15; 0.0914 | held (predicted 2.8e-15, 0.0914) |
+| GS1 `Gamma` round trip | 1e-14 | 2.2e-16 (`h_S = 1e-4` m, `u_bar = 5.0e-3` m/s) | met |
+| GS2 carrier shear: (a) floor; (b) with a normal part; (c) incline | 1e-14 each | 1.4e-16; 1.4e-16; 2.8e-15 | met |
+| GS3 rows 1 to 9; loss of row 0; held + drained; sub-steps | 1e-13; 1e-13; 1e-14; 1 | 0; 7.3e-15; 1.4e-16; 1 | met |
+| GS4 rows 1 to 9 at 40 s (worst: row 9); ledger; smallest mass; sub-steps | 1e-10; 1e-12; `>= 0`; 4000 | 3.8e-14; 8.5e-14; 0; 4000 | met (predicted 5.4e-16 at 30 s) |
+| GS5 (acceptance) the four station faces, window average and at 40 s; ledger; lost parcels; smallest mass; largest `Re_f`; `opposed` | 5 percent; 1e-10; 0; `>= 0`; `<= 30`; 0 | 2.7e-14 and 1.3e-13 on each face; 1.8e-12; 0 (116 800 injected, 116 740 absorbed); 0; 2.0000; 0 | met (predicted 2.8e-14, 1.4e-13) |
+| GS6 window average; absorbed against held + drained | 1e-6; 1e-10 | 2.7e-14; 1.8e-12 | met |
+| GSN (negative control) station masses at 40 s | `== 0` | 0 on the four faces (116 740 parcels absorbed, all on row 0) | held |
+| GC1 Cardano against bisection; loss of row 0; rows 1 to 9; `opposed` | 1e-12; 1e-12; 1e-13; 0 | 1.6e-13 (`h_C = 6.266368e-5` m); 1.2e-15; 0; 0 | met |
+| GC2 `opposed` after one `advance` | 40 times the sub-steps | 40 (one sub-step) | met |
+| GT1 gas density and shear passed by the tracker | bit for bit | equal | met |
+| GT2 six refusals; two controls | `Err`; `Ok` | all six `Err`; both `Ok` | met |
+| GD1 explicit default gas against no call | bit for bit | equal (759 243 words) | met |
+
+### Case tree and run path (`crates/rcfd-api/tests/film_gas_f292.rs`, 9 tests, 3.2 s)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| CT1 nine invalid inputs; six controls | each at its path; none | each at its path; none | met |
+| CT2 KB and KS: `track_frozen`, `steady_run`, by hand | bit for bit | equal (KB 189 813 words, KS 379 613 words) | met |
+| CT3 (acceptance in the tree) row-6 face: KB against `h_B(250)` at 20 s; KS against `h_S` at 40 s | 5 percent and 1e-6 each | 1.4e-11; 1.3e-13 | met |
+| CT4 shear against `wall_shear`; against `(0.1, 0, 0)` | 1e-15; 1e-12 | 0 (bit for bit); 1.4e-16 | met (predicted bit for bit) |
+| CT5 report `film.gas`; CSV headers and shear columns | equal; as stated | KB `{buoyancy: true, shear: false, gas_density: 250, max_shear: 0, opposed: 0}` and the header of ADR 0192; KS `{buoyancy: false, shear: true, gas_density: 1.2, max_shear: 0.1, opposed: 0}`, the 14-column header and the shear columns equal; 10 rows each | met |
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D1 the suites listed | pass unedited | `wall_film` (R1 `e56421d672c5454f`), `wall_film_f253` (R2 `ce9df10b3a885c96`), `wall_interaction` (R3 `fe94f34ac9fc5dbd`), `wall_interaction_f254` (R4 `5514d6332741d3a4`), `erosion_presets`, `erosion_presets_f254` (R5), `closed_forms`, `lagrangian_ext`, `particles_case`, `particles_ext_case`, `particle_run`, `particles_two_way`, H1 (41 recorded sources, 0 differ), `baseline_hashes`: all pass, none edited | met |
+| D2 R6: K; K with both keys false | `2a6c2d99f94d77dc` | equal; equal | met |
+| D3 R7: K; both false; `gas_shear = true`; `gas_buoyancy = true` | equal, equal, differs, differs | `95175a46b9941edc`; `95175a46b9941edc`; `e2887d4c2c25776d`; `5b3cb43a25d5113a` | met |
+
+`rules_w19c` and `w48v_adaptive_correctors`, whose census tests read every case text in the test sources (K and KS are new
+there), pass as well.
+
+### Mutations
+
+Each was applied alone to c96fa5c by an exact text replacement, the named test was run once, and the file was restored and
+compared byte for byte with the kept copy (equal in all seven).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 | GB4 | failed: the station 0.0914 from `h_B` (the Nusselt thickness) |
+| MU2 | GS5 | failed: the station 0.2247 from `h_S` (`sqrt(3/2) - 1`) |
+| MU3 | GS2 | failed at (b): 2.16e-2 with the normal part kept |
+| MU4 | CT3 (KB) | failed: the row-6 face 0.0914 from `h_B(250)` |
+| MU5 | D3 | failed: the hash of K became `f20e4382aac31594` |
+| MU6 | CT1 | failed at input 5 (`moving_wall` on `ymin`): no diagnostic |
+| MU7 | D2 | failed: R6 became `9bffcf7ee9383ba4` |
+
+`scripts/limit_audit.py` on the two new files has one hit, `film_gas_f292.rs` (iv), the early `return` of the record test
+D3 when `RCFD_F292_RECORD=1` is set (the record switch of ADR 0192's record tests); read: without the variable the test
+asserts.
+
+Disclosures:
+
+- c96fa5c changes CT3 after its run: clippy refused `e <= 0.05 && e <= 1e-6` (the first bound is implied by the second), so
+  the two registered limits are now asserted one after the other. Nothing else in the test changed.
+- GB3 and GS4 end above their predictions (1.4e-14 against 5.1e-15, 3.8e-14 against 5.4e-16): the row-9 values sit at the
+  round-off floor of the Rust arithmetic, as ADR 0192 A3 did (1.3e-14 against 5e-15); both are four orders below the limit.
+- CT1: inputs 2, 3, 7 and 8 also give diagnostics of their own (k-epsilon with the energy equation and without an initial
+  k; a moving mesh with simple and the energy equation; the expression `0.1` without units; the unknown user function
+  `w`); the registered diagnostic is present in each.
+- KS carries the Couette field through `xmin` and `xmax`, which the tracker treats as reflecting walls; no parcel reaches
+  them.
+- Not exercised by a test: the transient run path with a gas drive (`ParticleRun::after_step` and `track_transient` call the
+  same `Tracker::advance`), the service method `particles.report` with a gas drive, the JSON Schema export of the two keys,
+  the written text of S4 (from the code read), the shear on a non-orthogonal face (G4 is first order there), and a film
+  over more than one patch with the shear.
