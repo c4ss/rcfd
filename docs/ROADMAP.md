@@ -5079,8 +5079,20 @@ workspace layer between the project folder, the MCP server and the Studio. Prior
     support for continue_from is not established. Size M.
     - PARTIAL (ADR 0189, the registration of F-274, 2026-11-05, branch f274-design-evals, not merged): with --project, design_run_study and design_evaluate evaluate each candidate at each operating condition as one run of the project's runner, the base case with rcfd run --set entries checked to give the in-process settings tree, tagged in run.json with study, variant and condition (three optional fields, absent from every other run); the result is read from metrics.json by the in-process status rule; three points on the 32 x 32 cavity gave three tagged runs, at most max_runs = 2 at once, with records equal to the in-process ones bit for bit; one evaluation cost 0.64 s on the runner against 0.23 s in process (C4).
     - Open: a chained study with several conditions, a study with its own max_steps and operating maps stay in the server process (the runner cannot start a run from another run's result or cap its steps; ADR 0189 Q2, Q3); runs that outlive a call are submitted again (Q5); no journal line for design runs and records yet (Q6, now that F-273 is merged); the design tools keep the access class write_files though they now start runs (Q7, F-275); the run-record fields need the lead's approval (Q4, ADR 0130).
-- [ ] **F-275** Project-mode MCP tool list and plugin edit hook
+- [~] **F-275** Project-mode MCP tool list and plugin edit hook
   - depends on: F-271, F-272, F-274
   - acceptance: With --project, each session tool is hidden once its project equivalent has passed its check, until tools/list holds no tool whose state lives only in the server's memory; without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case and create_case, checked in a real session where possible (ADR 0173 W8, check C5, decisions D2 and D5).
   - note: ADR 0173 (proposed). Priority 6. The hook contract is to be checked on an installed Claude Code build first.
     Size S.
+    - PARTIAL (ADR 0195, the registration of F-275, 2026-11-06, branch f275-project-mode-tools, not merged): with --project
+      the 16 session tools whose every use needs or makes a session (create_case, set_setting, get_setting, load_mesh,
+      check_mesh, run, status, get_residuals, get_field_stats, export_vtk, the four workflow tools, run_headless,
+      render_image) are neither listed nor callable, 40 tools remain, the 17 kept session tools byte-identical; without
+      --project tools/list and initialize are byte-identical; read_feed gains from_seq, which replays the journal (ADR 0188
+      Q7 (b)); the Studio bridge's first allow-list gains read_feed, check_case_mesh, preview_mesh and list_meshes (ADR 0187
+      Q6 (b), ADR 0188 Q6 (b)); the plugin's PreToolUse hook (rcfd-mcp --edit-hook) refuses Edit, Write, MultiEdit and
+      NotebookEdit under cases/, runs/ and designs/ of an rcfd project, checked in a real Claude Code 2.1.319 session (C5-R).
+    - Open: the message names edit_case and new_case, not create_case, since new_case and check_case_mesh keep their names
+      (ADR 0195 Q1); the workflow tools and run_headless's restart, interpolation and checkpoint options have no project
+      equivalent and are not offered (Q2); access classes unchanged (Q6); the hook under bypassPermissions is NOT VERIFIED;
+      existing allow-list files are not changed (Q4).

@@ -62,6 +62,9 @@ F-147, F-148):
 | `design_ledger_rerun_check` | read | `design.ledger_rerun_check` | compare a re-run's metrics with a ledger entry |
 | `render_image` | read | `render.png` | PNG image of a field |
 
+With `--project` the 16 tools above that need a session of the server's memory, or make one, are not offered (see
+[Project mode](#project-mode-the-session-tools-that-are-not-offered)); the other 17 are.
+
 ## Design tools
 
 The design tools (ADR 0067, `docs/design-loop.md`) keep their state in a study directory inside the sandbox: `study.json` and
@@ -107,7 +110,8 @@ next entry.
 ## Project tools (`--project`)
 
 `rcfd-mcp --project <dir>` adds 23 tools that work on one Studio project folder ([ADR 0135](adr/0135-wave48f-plugin-and-project-tools.md),
-folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8). Without `--project` the tool list is unchanged. The server
+folder contract in [ui-restart-plan.md](ui-restart-plan.md) section 8), and leaves out 16 session tools (below), so it lists 40.
+Without `--project` the tool list is unchanged. The server
 refuses to start (exit 2, a message naming the folder) when `<dir>` holds no `rcfd-project.json`. The Claude Code plugin in
 `clients/claude-plugin` starts `rcfd-mcp --project ${CLAUDE_PROJECT_DIR} --root ${CLAUDE_PROJECT_DIR}` from PATH (PATH only).
 Without `--root`, `--project` also confines the existing tools' file access to the project. The run tools also need `rcfd-runner`
@@ -118,7 +122,8 @@ The tools are the commands and queries of the project workspace, the crate `crat
 [ADR 0185](adr/0185-adr-0173-amendment-1-f270-registration-the-rcfd-workspace-crate.md),
 [ADR 0186](adr/0186-adr-0173-amendment-2-f271-registration-new-simulations-from-the-mcp-server.md),
 [ADR 0187](adr/0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md),
-[ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md)).
+[ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md),
+[ADR 0195](adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md)).
 `rcfd-mcp` keeps their descriptors.
 
 Paths are project-relative (`cases/cavity.toml`) and checked like every project path (no `..`, no absolute paths, no links; refused
@@ -148,7 +153,7 @@ kept with the change in the project journal (below) and shown in the Studio and 
 | `render_field` | read | an image block (PNG) and the text {`run`, `field`, `snapshot`, `interpolated`, `min`, `max`, `width`, `height`, `png_bytes`}; or, over the budget, the text with `path` and `note`. Cell fields of 2D (one cell layer) meshes only; same renderer and options as `render_image` |
 | `compare_runs` | read | `baseline` (the first id), `runs` [{`id`, `case`, `state`, `step`, `time`, `residual_lines`}], `metrics` {report name: {run id: value}} (as in `list_runs`), `differences` {name: {run id: value minus the baseline's}}, `metrics_total`, `metrics_omitted`; 2 to 10 runs |
 | `list_changes` | read | `token`, `changes` [paths], `total`, `truncated`, and `since` when given; call without `since` to get a token (`.rcfd/` is not watched) |
-| `read_feed` | read | without `since`: `cursor`, `entries` [], `total` 0 (the server's feed starts at its first call); with `since`: `since`, `cursor`, `entries` (numbered after `since`, oldest first, at most `limit`, 1-200, default 50, and within the size budget), `total`, `next` (the number to pass as `since` to continue, null when none), `dropped` (entries after `since` no longer kept; the feed keeps 1 000), `skipped_lines`. An entry has `n`, `source` (`journal`, `run` or `external`), `kind`, `t`, `seq`, `path`, `run`, `who`, `actor` {`client`, `instance` {`pid`, `started`}}, `reason`, `changes` [{`path`, `old`, `new`}], the line's other fields, and `text` (one line: who changed what and why); an entry over half the size budget comes without `changes` and the line's other fields, with `omitted` (the journal keeps the whole line). Journal entries are the lines of the project journal; run entries are a run's `state`, `warning` and `stop` events (`run_state`, `run_warning`, `run_stop`); an `external` entry is a file outside `runs/` that changed with no journal line for its new content, 500 ms after its modification ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) J6, J7) |
+| `read_feed` | read | without `since`: `cursor`, `entries` [], `total` 0 (the server's feed starts at its first call); with `since`: `since`, `cursor`, `entries` (numbered after `since`, oldest first, at most `limit`, 1-200, default 50, and within the size budget), `total`, `next` (the number to pass as `since` to continue, null when none), `dropped` (entries after `since` no longer kept; the feed keeps 1 000), `skipped_lines`. An entry has `n`, `source` (`journal`, `run` or `external`), `kind`, `t`, `seq`, `path`, `run`, `who`, `actor` {`client`, `instance` {`pid`, `started`}}, `reason`, `changes` [{`path`, `old`, `new`}], the line's other fields, and `text` (one line: who changed what and why); an entry over half the size budget comes without `changes` and the line's other fields, with `omitted` (the journal keeps the whole line). Journal entries are the lines of the project journal; run entries are a run's `state`, `warning` and `stop` events (`run_state`, `run_warning`, `run_stop`); an `external` entry is a file outside `runs/` that changed with no journal line for its new content, 500 ms after its modification ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md) J6, J7). With `from_seq` (at least 1; not with `since`) instead: `from_seq`, `cursor`, `entries` (the journal's lines whose `seq` is at least `from_seq`, read from the start of the file, in file order, each as a journal entry without `n`; lines without `seq` are not replayed), `total`, `next_seq` (to continue, null when none are left), `skipped_lines`; then `since` = `cursor` continues live ([ADR 0195](adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) P7) |
 | `read_project_file` | read | `path`, `hash` (of the whole file; the `base_hash` for edits), `size`, `offset`, `text`, `next_offset` (null at the end); pages of at most 32 000 bytes |
 | `edit_case` | write_files | `path`, `written`, `valid`, `form` (`minimal`: the changed lines edited in place, comments kept; an edit that cannot be placed in the file's own lines, such as a value written over several lines, is refused with 1003 and nothing is written), `old_hash`, `new_hash`, `values` {setting: stored value}; arguments `path` (.toml or .json), `base_hash`, `set` {setting: value}, `dry_run`; when `set` holds a `mesh.*` setting the edited mesh is built and checked before anything is written (a refused mesh file 1004, a mesh that cannot be built 1003 with located `data.diagnostics`) and the result has `mesh` {`ok`, `report`, `patches`, `patches_total`} as `check_case_mesh`; a mesh that builds but fails the check is written with `mesh.ok` false ([ADR 0187](adr/0187-adr-0173-amendment-3-f272-registration-mesh-set-up-from-the-mcp-server.md) M7, Q2) |
 | `write_note` | write_files | `path`, `created`, `old_hash`, `new_hash`; under `notes/` only; no `base_hash` means "create, the file must not exist" |
@@ -169,7 +174,8 @@ server.
 
 Edits (`edit_case`, `write_note`) are compare-and-replace under a cooperative lock (`rcfd_project::atomic::replace_if_hash`). The
 file is replaced only if it still has `base_hash`, while `.rcfd/locks/<hash of the path>.lock` is held. Writers that do not take the
-lock (Claude Code's own Edit and Write tools, an editor) are not stopped; the feed reports their edits afterwards as `external`.
+lock (an editor, a shell command, Claude Code's own Edit and Write tools outside the folders the plugin's hook guards) are not
+stopped; the feed reports their edits afterwards as `external`.
 
 The project journal, `.rcfd/edits.jsonl`, has one JSON line per accepted write, case creation, mesh import, run submission and
 accepted run request, from the MCP server and from the Studio alike ([ADR 0188](adr/0188-adr-0173-amendment-4-f273-registration-project-journal-and-change-feed.md)).
@@ -188,6 +194,42 @@ Each line has `t`, `kind`, `who` (the command), `seq` (one more than the last, g
 
 Which Claude Code session an `mcp` actor belongs to is not recorded: no way to link the server's process to a session has been
 checked (ADR 0188 Q4).
+
+### Project mode: the session tools that are not offered
+
+With `--project`, a session tool whose every use needs a session of the server's memory, or makes one, is neither listed nor
+callable (a call is the JSON-RPC error -32602 `unknown tool`), because in project mode cases, meshes and runs live in the
+project folder ([ADR 0195](adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) P1).
+The 17 others (`list_cases`, `check_case_headless`, `read_status_stream` and the design and ledger tools) stay, with the same
+descriptors; their `session` arguments cannot be used there. `initialize`'s first sentence then names no session tool.
+
+| Not offered with `--project` | Use instead |
+|---|---|
+| `create_case` | `new_case`, or `start_run` with `new_case` |
+| `set_setting`, `get_setting` | `edit_case`; `read_project_file` (and `edit_case` with `dry_run`, whose `values` give the stored values) |
+| `load_mesh`, `check_mesh` | `import_mesh` then `edit_case` of `mesh.source` and `mesh.file`; `check_case_mesh` |
+| `run`, `status` | `start_run`, `wait_run`, `run_status` |
+| `get_residuals`, `get_field_stats`, `render_image` | `read_residuals`, `field_summary`, `render_field` |
+| `export_vtk` | every run of the run service writes `runs/<id>/output/solution.vtu` |
+| `run_headless` | `start_run`; no equivalent for `continue_from`, interpolation, checkpoints, `out_dir` and `max_elapsed_s` |
+| `list_workflow_tasks`, `create_workflow`, `edit_workflow`, `run_workflow_task` | none yet |
+
+The Studio's Claude Code sidebar allows the project's read tools without asking: in a project whose allow-list file
+(`.rcfd/claude-allow.json`) the Studio makes after this change, those are the 15 read-class project tools, `read_feed`,
+`check_case_mesh`, `preview_mesh` and `list_meshes` among them; an existing allow-list file is not changed (ADR 0195 P5).
+
+### The plugin's edit hook
+
+The plugin's `hooks/hooks.json` runs `rcfd-mcp --edit-hook ${CLAUDE_PROJECT_DIR}` before every Claude Code `Edit`, `Write`,
+`MultiEdit` and `NotebookEdit` call ([ADR 0195](adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md)
+P6, ADR 0173 D5). In an rcfd project (a folder with `rcfd-project.json`) a call that writes a file under `cases/`, `runs/` or
+`designs/` is refused (exit 2) with a message that names `edit_case` and `new_case`; Claude sees it as the tool's error.
+`meshes/`, `notes/` and every other file stay writable, so Claude can still place a mesh file for `import_mesh`. Paths are
+compared by whole components, with `..` applied, and again with links resolved (on Windows without letter case). Outside an
+rcfd project the hook allows everything. It fails open: a missing `rcfd-mcp`, unreadable input (exit 1) or a timeout lets the
+call go ahead, by Claude Code's rule. Shell commands and `.rcfd/` are not covered. Checked on Claude Code 2.1.319 with the
+plugin loaded by `--plugin-dir`; its behaviour under `bypassPermissions` is not verified. To turn it off, disable the plugin
+(which also removes its tools) or turn hooks off with Claude Code's `disableAllHooks` setting.
 
 ## Where to go next
 

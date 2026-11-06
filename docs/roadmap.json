@@ -2226,8 +2226,8 @@
       "F-272",
       "F-274"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "With --project, each session tool is hidden once its project equivalent has passed its check, until tools/list holds no tool whose state lives only in the server's memory; without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case and create_case, checked in a real session where possible (ADR 0173 W8, check C5, decisions D2 and D5).",
-    "note": "ADR 0173 (proposed). Priority 6. The hook contract is to be checked on an installed Claude Code build first. Size S."
+    "note": "ADR 0173 (proposed). Priority 6. The hook contract is to be checked on an installed Claude Code build first. Size S. PARTIAL (ADR 0195, the registration of F-275, 2026-11-06, branch f275-project-mode-tools, not merged): with --project the 16 session tools whose every use needs or makes a session (create_case, set_setting, get_setting, load_mesh, check_mesh, run, status, get_residuals, get_field_stats, export_vtk, the four workflow tools, run_headless, render_image) are neither listed nor callable, 40 tools remain, the 17 kept session tools byte-identical; without --project tools/list and initialize are byte-identical; read_feed gains from_seq, which replays the journal (ADR 0188 Q7 (b)); the Studio bridge's first allow-list gains read_feed, check_case_mesh, preview_mesh and list_meshes (ADR 0187 Q6 (b), ADR 0188 Q6 (b)); the plugin's PreToolUse hook (rcfd-mcp --edit-hook) refuses Edit, Write, MultiEdit and NotebookEdit under cases/, runs/ and designs/ of an rcfd project, checked in a real Claude Code 2.1.319 session (C5-R). Open: the message names edit_case and new_case, not create_case, since new_case and check_case_mesh keep their names (Q1); the workflow tools and run_headless's restart, interpolation and checkpoint options have no project equivalent and are not offered (Q2); access classes unchanged (Q6); the hook under bypassPermissions is NOT VERIFIED; existing allow-list files are not changed (Q4)."
   }
 ]
