@@ -529,16 +529,15 @@ fn d3(kind: MeshKind, n: usize) {
         );
     }
     // C-LS and C-beta 0.75, 0.5, 0.25 were run from the binary of d698fe8 (their switch was removed by amendment 2)
-    for cand in [Candidate::R] {
-        let r = run_a(kind, n, cand, 5000);
-        let diff = base.as_ref().map(|b| differences(&r, b));
-        println!(
-            "D3 {kind:?} n={n} {cand:?}: converged {}, {} iterations; largest difference against V0 (u, p - mean) {diff:?}; {:.0} s",
-            r.converged,
-            r.iterations,
-            start.elapsed().as_secs_f64()
-        );
-    }
+    let cand = Candidate::R;
+    let r = run_a(kind, n, cand, 5000);
+    let diff = base.as_ref().map(|b| differences(&r, b));
+    println!(
+        "D3 {kind:?} n={n} {cand:?}: converged {}, {} iterations; largest difference against V0 (u, p - mean) {diff:?}; {:.0} s",
+        r.converged,
+        r.iterations,
+        start.elapsed().as_secs_f64()
+    );
 }
 
 #[test]

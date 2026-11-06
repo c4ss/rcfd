@@ -301,6 +301,9 @@ pub fn solve_pressure_parts_src_k(
 /// A pressure gradient for the explicit non-orthogonal correction, as a function of the current cell pressures.
 pub type PressureGradientFn<'a> = &'a dyn Fn(&[f64]) -> Vec<Vec3>;
 
+/// [`PressureGradientFn`] that can be shared between threads (the operator of [`solve_pressure_implicit_non_orth`]).
+pub type SyncPressureGradientFn<'a> = &'a (dyn Fn(&[f64]) -> Vec<Vec3> + Sync);
+
 /// [`solve_pressure_parts`] whose explicit non-orthogonal correction takes its cell gradient from `grad` (called with the current
 /// pressure in every corrector pass) instead of the least-squares gradient of the pressure and its boundary values (ADR 0193 V2-c).
 /// `None` is [`solve_pressure_parts`]; `grad` is not called without non-orthogonal correctors.
@@ -457,7 +460,7 @@ pub fn solve_pressure_implicit_non_orth(
     phi_hby_a: &[f64],
     p: &mut [f64],
     ctl: &PressureControls,
-    grad: Option<&(dyn Fn(&[f64]) -> Vec<Vec3> + Sync)>,
+    grad: Option<SyncPressureGradientFn>,
 ) -> (f64, usize) {
     assert!(
         bc.coupled.iter().all(|c| c.is_none()),
