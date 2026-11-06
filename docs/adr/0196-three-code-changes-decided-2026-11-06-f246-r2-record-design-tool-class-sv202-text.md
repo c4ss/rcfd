@@ -1,7 +1,10 @@
 # ADR 0196: three code changes decided on 2026-11-06: the F-246 R2 record, the class of two design tools in project mode, SV202's text per solver
 
 Status: **REGISTERED 2026-11-06**, written before any code of the three changes. The changes were decided by the maintainer
-on 2026-11-06; this text fixes how each is built and checked. Results go in the addendum at the end.
+on 2026-11-06; this text fixes how each is built and checked. Addendum 1 reports A, B and C built as registered, every check
+met, on branch `decisions-code-1106`, not merged. The gate at `1c86f24` gave 2919 passed, 2 failed (the known flakes
+`runner_w47b` s1 and s9, rerun alone below), 822 ignored; it overlapped another agent's gate. Two questions wait for the
+maintainer (Q1, Q2).
 
 Parents: [ADR 0193](0193-f246-registration-pressure-interpolation-variants.md) (F-246, addendum 1 difference 1),
 [ADR 0192](0192-f253-registration-particle-wall-film.md) (the record and corrected tests of case K, the pattern used in A),
@@ -180,3 +183,67 @@ decided texts leave out: for the incompressible solvers a case without boundarie
 `boundaries.<patch>` entry, and an entry without keys is a fixed no-slip wall; for the compressible solver a patch of kind outlet
 is extrapolated, not a slip wall. Recommendation (b): the message then says what happens. Proceeding on (a), the decision; (b) is
 a text change only.
+
+## Addendum 1: what was built, the results and the gate (2026-11-06)
+
+Branch `decisions-code-1106`, from main 2f60baf: `2eb00af` (the text above), `354558d` (A), `02412f5` (B), `b078b97` (C),
+`1c86f24` (documents). `1c86f24` was gated. Not merged. While the branch was built, main moved to 0c9bc21 (the decision records
+of 2026-11-06 in ADRs 0183 and 0187 to 0195, roadmap items F-284 to F-293, and ADR 0197); `git merge-tree` of the branch with
+0c9bc21 gives no conflict. The merged tree was not gated.
+
+**Built as registered.** A0, B0 with E1 and E2, and C0, as written. No golden was edited or re-recorded; `baseline_hashes.rs`
+and `case_hashes_w48u.rs` are unedited. Differences found while building:
+
+1. B1 also checks `annotations.idempotentHint` (false in both classes), one assertion more than registered.
+2. C5-L's printed line now also says how many kept tools have the class `execute`; its assertions are those of E1.
+3. In A0 the comment above the two R2 cases now covers both variants of the cases; the case texts are unchanged.
+4. ADR 0195's decision record (on main since d632f71, read after the gate) says the class change comes "with the registered
+   update of the tool-list goldens it needs". No golden needed an update: the class changes under `--project` only (B, pinned
+   bytes), and the project golden is restated by E2, not re-recorded. See Q2.
+
+**Results.**
+
+| Check | Result |
+|---|---|
+| A1 | `t1b_located_errors` passed in the gate: its eleven cases as ADR 0193's row T1. **Met** |
+| A2 | `t1_located_errors_setup_defect` ignored in the gate; run by name in release it fails, as expected. Nine of its ten cases give the registered outcome; R2 V1 `pimple` on C1 is refused when the case is read, first diagnostic at `physics.body_force` (wanted `solver.pressure_interpolation`). R2 V1 `coupled` on C1, run for the first time, is refused at `solver.pressure_interpolation` ("`"skew_corrected"` acts on the steady incompressible constant-density solver ... coupled, piso, pimple, ..."), as registered. **Recorded** |
+| A3 | the diff of `pressure_interp_f246.rs` against main touches the module comment, T1 and its two helpers only. **Met** |
+| B1 | under a project both tools `execute`, `needsApproval` true, `readOnlyHint` and `idempotentHint` false; each call asked the hook once with `Access::Execute` and was denied with 1100 and `data.access` `"execute"`; without a project `write_files` and `Access::WriteFiles`; the project folder unchanged. **Met** |
+| B2 | E1 (C5-L: 40 tools, 17 kept, 2 of them `execute`) and E2 (A2: 40 tools, 36 962 bytes, golden 50 tools, 38 978 bytes) passed; F1 unedited passed (33 tools, 27 188 bytes, byte-identical). **Met** |
+| B3 | the `Access::Execute` line removed: C5-L, A2 and B1 failed (live `"write_files"`, want `"execute"`), F1 passed; `lib.rs` restored and byte-identical to the kept copy. **Met** |
+| C1 | E5: the default algorithm, `simple`, `simplec`, `coupled`, `piso` and `pimple` give the no-slip text, `compressible` the slip text, each byte for byte, with id, severity, category and path unchanged and no fix; none fires with one boundary entry. **Met** |
+| C2 | E4b: a valid two-entry `first_of` gives each entry's text by its condition, with `{name}` substituted; the nine malformed shapes are refused, each naming the message. **Met** |
+| C3 | `rules_w19c.rs` E1 to E4 passed unedited (21 rules). **Met** |
+| C4 | SV202's `"compressible"` changed to `"no_such_algorithm"`: E5 failed (`compressible` got the no-slip text), the other tests of the file passed; `setup_rules.json` restored and byte-identical to the kept copy. **Met** |
+| CLI (Q1, measured) | the gate's `rcfd`: a `box_2d` case with `solver.algorithm = "compressible"` and no boundaries: `rcfd validate` prints SV202 with the slip text, `rcfd check --json` exit 0 with that rule; the same mesh with the default algorithm and no boundaries: exit 3, four diagnostics "no boundary condition for mesh patch '<patch>'" at `boundaries.<patch>`, `rules` empty |
+
+**The gate.** `1c86f24`, `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test), target
+`w49i-work/target-dec1`: fmt per package 0, clippy `-D warnings` 0, tests **2919 passed, 2 failed, 822 ignored**, 2921 test
+processes in 564 binaries, wall 5900.6 s, peak summed working set 3196 MB, largest time over limit 0.417, lowest free physical
+memory 29 GB. Against the F-275 gate (2918 / 0 / 821, 564 binaries) the difference is B1, E5 and E4b (non-ignored) and the
+record of A (ignored); T1 is now `t1b`. `baseline_hashes` 3 passed, 1 ignored; `case_hashes_w48u` H1 passed.
+
+The gate overlapped another agent's gate (`gate-ero`, ADR 0197, dac0f50, 11:34:42 to 13:25:50 by its stamps; this one 11:33:44
+to 13:26:01). Each script waited until it had seen no running gate process for 15 minutes; two scripts that are both still
+waiting cannot see each other, so both started within a minute. The machine ran six test processes at a time instead of three.
+
+The two failures, both in `rcfd-runner` (which this branch does not change), are known flakes:
+
+- `s9_memory_and_thread_budget_refusals_are_located` ("two 60 MB runs ran together under a 100 MB budget"): rerun alone on the
+  gate's binary, 3 of 3 passed. The other gate also failed it.
+- `s1_concurrency_never_exceeds_max_runs`: its own check passed (at most 2 runs by status and by the OS); its negative control's
+  OS sampler saw 0 solver processes. Rerun alone on the gate's binary with the machine otherwise idle: 3 of 8 passed. Control,
+  the binary of dac0f50 (main with the erosion preset; `crates/rcfd-runner` byte-identical to this branch's): 3 of 4 passed; then
+  five interleaved pairs: 3 of 5 each. Every failure was the same (the sampler saw 0, once 1). Not caused by this branch.
+
+## Questions for the maintainer (addendum 1)
+
+**Q1** stands as registered; the measured row CLI above confirms item 3.
+
+**Q2 (new). The class without `--project`.** ADR 0195's decision record says the two tools "become access class `execute`"
+without naming a mode. This branch changes the class under `--project` only, because the list without a project is pinned by
+`tools_list_default.json` (F1, never re-recorded), and because the reason given, that the tools start runner runs, holds only
+there; without a project they evaluate in the server process. (a) As built. (b) `execute` without a project too: F1's golden
+changes by a registered edit (the two `_meta."rcfd/access"` values, before `"write_files"`, after `"execute"`), E1's exception
+goes, and `rcfd-assistant` sees the new class (its approval does not change, since both classes are not `read`).
+Recommendation (a): it follows the stated reason and keeps F1's golden; (b) is a two-value edit if wanted.
