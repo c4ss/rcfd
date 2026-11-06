@@ -2264,8 +2264,8 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | `dynamic_mesh.displacement_expression_x`, `_y`, `_z` | string, `""` | displacement in m, expression of `t` (e.g. `"1 [m/s^2] * t^2"`); empty = 0 |
 | `dynamic_mesh.rotation_angle_expression` | string, `""` | dimensionless angle in radian, expression of `t` |
 | `dynamic_mesh.rotation_origin`, `.rotation_axis` | list of 3 floats, `[]` | point on the axis (default origin), axis (default z) |
-| `dynamic_mesh.smoothing.method` | `laplacian` (default), `inverse_distance` | diffusivity 1 or `1/l^exponent` (distance to the nearest moving face) |
-| `dynamic_mesh.smoothing.exponent` | float, 1 | exponent of the inverse-distance diffusivity (not negative) |
+| `dynamic_mesh.smoothing.method` | `laplacian` (default), `inverse_distance`, `inverse_volume` | diffusivity 1, `1/l^exponent` (distance to the nearest moving face) or `1/V^exponent` (mean initial volume of the two cells of the face, so small cells deform less; ADR 0203) |
+| `dynamic_mesh.smoothing.exponent` | float, 1 | exponent of the inverse-distance or inverse-volume diffusivity (0 to 10) |
 | `dynamic_mesh.smoothing.substeps` | int, 1 | reserved; only 1 is accepted |
 | `dynamic_mesh.smoothing.tolerance` | float, 1e-12 | relative tolerance of the displacement solve |
 | `dynamic_mesh.six_dof.mass` | float, 0 | kg, must be > 0 for `motion = six_dof` |
