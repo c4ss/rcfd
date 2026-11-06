@@ -1,12 +1,15 @@
 //! ADR 0195 (F-275, ADR 0173 C5): the project-mode tool list. C5-L the list through the binary, C5-H the hidden tools are
 //! not callable, C5-S which session tools need a session, C5-I the `initialize` text. The F-273 list itself is checked by
 //! `project_list_f270.rs` (C5-L restated there).
+//!
+//! ADR 0196 B: under `--project`, `design_run_study` and `design_evaluate` have the class `execute` (C5-L's registered edit E1,
+//! and B1); without a project they keep `write_files`.
 
 mod common;
 
 use common::*;
 use rcfd_api::service::{Service, ServiceConfig};
-use rcfd_mcp::policy::Policy;
+use rcfd_mcp::policy::{Access, Policy};
 use rcfd_mcp::McpServer;
 use serde_json::{json, Value};
 use std::path::Path;
@@ -36,6 +39,9 @@ fn hidden() -> Vec<(&'static str, Value)> {
         ("create_case", json!({"template": "lid_driven_cavity"})),
     ]
 }
+
+/// ADR 0196 B: the session tools that have the class `execute` under `--project` (`write_files` without it).
+const EXECUTE: [&str; 2] = ["design_run_study", "design_evaluate"];
 
 /// ADR 0195 P1: the 23 project tools in the order of the F-273 list.
 const PROJECT_TOOLS: [&str; 23] = [
@@ -83,8 +89,8 @@ fn files(dir: &Path) -> Vec<(String, Vec<u8>)> {
     out
 }
 
-/// C5-L: under `--project`, 40 tools: the list without `--project` less the 16 of P1, in its order and byte for byte,
-/// then the 23 project tools.
+/// C5-L: under `--project`, 40 tools: the list without `--project` less the 16 of P1, in its order and byte for byte (but the
+/// class `execute` of `design_run_study` and `design_evaluate`, ADR 0196 B), then the 23 project tools.
 #[test]
 fn c5l_project_list_has_no_session_only_tool() {
     let dir = project("c5l");
@@ -102,21 +108,31 @@ fn c5l_project_list_has_no_session_only_tool() {
         .collect();
     assert_eq!(kept.len(), 17);
     assert_eq!(live.len(), 40, "17 session tools and 23 project tools");
+    let mut execute = 0;
     for (l, k) in live.iter().zip(&kept) {
+        let mut l = l.clone();
+        // ADR 0196 B (registered edit E1): under --project these two have the class execute, every other byte as without it
+        if EXECUTE.contains(&k["name"].as_str().unwrap()) {
+            assert_eq!(l["_meta"]["rcfd/access"], "execute", "{}", k["name"]);
+            assert_eq!(k["_meta"]["rcfd/access"], "write_files", "{}", k["name"]);
+            l["_meta"]["rcfd/access"] = k["_meta"]["rcfd/access"].clone();
+            execute += 1;
+        }
         assert_eq!(
-            serde_json::to_string(l).unwrap(),
+            serde_json::to_string(&l).unwrap(),
             serde_json::to_string(k).unwrap(),
             "{} differs from its entry without --project",
             k["name"]
         );
     }
+    assert_eq!(execute, EXECUTE.len());
     let names: Vec<&str> = live[17..].iter().map(|t| t["name"].as_str().unwrap()).collect();
     assert_eq!(names, PROJECT_TOOLS);
     for t in live {
         assert!(!hidden.contains(&t["name"].as_str().unwrap()), "{} listed", t["name"]);
     }
     eprintln!(
-        "C5-L: {} tools under --project: {} session tools byte-identical to the list without it, then {} project tools; {} hidden",
+        "C5-L: {} tools under --project: {} session tools byte-identical to the list without it ({execute} with the class execute, ADR 0196), then {} project tools; {} hidden",
         live.len(),
         kept.len(),
         names.len(),
@@ -344,4 +360,72 @@ fn c5i_initialize_under_project_names_no_hidden_tool() {
         "C5-I: {} characters, none of the 14 hidden names with '_' a word of them",
         text.len()
     );
+}
+
+/// ADR 0196 B1: under a project `design_run_study` and `design_evaluate` are `execute` in `tools/list` and in the call the policy
+/// sees (a refusing hook: the call is denied with that class and changes nothing); without a project they stay `write_files`.
+#[test]
+fn b1_design_tools_are_execute_under_project_adr0196() {
+    use std::sync::{Arc, Mutex};
+    let asked: Arc<Mutex<Vec<(String, Access)>>> = Arc::new(Mutex::new(Vec::new()));
+    let hook = |seen: Arc<Mutex<Vec<(String, Access)>>>| {
+        Policy::with_hook(move |c| {
+            seen.lock().unwrap().push((c.tool.to_string(), c.access));
+            false
+        })
+    };
+    let args = |name: &str| match name {
+        "design_run_study" => json!({"dir": "designs/s", "max_evaluations": 1}),
+        _ => json!({"dir": "designs/s", "params": {"nu": 0.02}}),
+    };
+    let dir = project("b1-0196");
+    let with_project = server(&dir, hook(asked.clone()));
+    let root = scratch("b1-0196-plain");
+    let plain = McpServer::new(
+        Service::new(ServiceConfig {
+            root: Some(root.clone()),
+            ..Default::default()
+        }),
+        hook(asked.clone()),
+    );
+    for (s, class) in [(&with_project, "execute"), (&plain, "write_files")] {
+        let list = s.tool_list();
+        for name in EXECUTE {
+            let t = list["tools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|t| t["name"] == name)
+                .unwrap_or_else(|| panic!("{name} not listed"));
+            assert_eq!(t["_meta"]["rcfd/access"], class, "{name}");
+            assert_eq!(t["_meta"]["rcfd/needsApproval"], true, "{name}");
+            assert_eq!(t["annotations"]["readOnlyHint"], false, "{name}");
+            assert_eq!(t["annotations"]["idempotentHint"], false, "{name}");
+        }
+    }
+    let before = files(&dir);
+    for name in EXECUTE {
+        asked.lock().unwrap().clear();
+        let r = call(&with_project, name, args(name));
+        assert_eq!(err_code(&r), 1100, "{name}: {r}");
+        assert_eq!(
+            r["structuredContent"]["error"]["data"]["access"], "execute",
+            "{name}: {r}"
+        );
+        assert_eq!(*asked.lock().unwrap(), [(name.to_string(), Access::Execute)], "{name}");
+        asked.lock().unwrap().clear();
+        let r = call(&plain, name, args(name));
+        assert_eq!(err_code(&r), 1100, "{name}: {r}");
+        assert_eq!(
+            r["structuredContent"]["error"]["data"]["access"], "write_files",
+            "{name}: {r}"
+        );
+        assert_eq!(
+            *asked.lock().unwrap(),
+            [(name.to_string(), Access::WriteFiles)],
+            "{name}"
+        );
+    }
+    assert!(files(&dir) == before, "a denied call changed the project");
+    eprintln!("B1: {EXECUTE:?} execute under a project (listed, and asked of the hook), write_files without one; denied calls changed nothing");
 }
