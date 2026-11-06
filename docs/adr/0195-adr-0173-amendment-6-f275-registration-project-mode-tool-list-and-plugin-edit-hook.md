@@ -277,6 +277,8 @@ Each item is an answer this text takes, for the maintainer to confirm or overtur
 8. ADR 0189 Q4 (a): the three flat run-record fields, as built; they still need the lead's approval (ADR 0130).
 9. Q6 (a): access classes unchanged; no recommendation was written in ADR 0186 or ADR 0189.
 10. Q3 (a), Q5 (a), Q7 (a).
+11. Q8 (amendment 1): with 15 first rules, a rule the user adds is below the fold of the Studio's confirmation dialog until
+    scrolled; not acted on.
 
 ## Acceptance checks and limits (fixed here, before any code)
 
@@ -362,3 +364,23 @@ between an `mcp` actor and a Claude Code session (ADR 0188 Q4).
 * [ADR 0135](0135-wave48f-plugin-and-project-tools.md) for the plugin and the project tools; [ADR 0134](0134-wave48e-claude-code-sidebar.md)
   for the Studio's allow-list.
 * [MCP tools](../mcp-tools.md) for both tool families.
+
+## Amendment 1 (2026-11-06, before the change it covers)
+
+The first run of `rcfd-studio`'s tests after P5 found an existing test that C-1 did not name: `crates/rcfd-studio/tests/chat_e.rs`
+`e11_confirmation_dialog_gates_the_first_chat` (lines 550 to 584) writes `AllowList::project_initial()` plus `Bash(echo hi)` as
+the project's allow-list file and checks that the confirmation dialog's first frame shows `Bash(echo hi)`. The dialog lists the
+file's rules inside a scroll area 440 pixels high (`crates/rcfd-studio/src/chat_ui.rs` lines 414 to 461). With 15 first rules the
+file has 16, and the first frame shows the rules down to `preview_mesh` (the 14th); `list_meshes` and `Bash(echo hi)` lie below
+the fold and are not painted, so the check fails, the same way alone as in the run (deterministic, not a flake).
+
+C-1 therefore covers one more edit by design: e11's file is main's 11 read-tool rules, built from the names as C5-A builds them,
+plus `Bash(echo hi)`, so the test keeps checking what it checked (a 12-rule file shown whole, the extra rule visible). Nothing
+else of `chat_e.rs` changes, and no Studio source file changes.
+
+What the test found stays a question for the maintainer, **Q8. The confirmation dialog's fold.** In a project made after F-275 the
+allow-list file starts with 15 rules, so a rule the user adds later (for example a `Bash(..)` or `Edit(..)` rule, the ones worth
+reading) is the 16th or later and is below the fold of the confirmation dialog until the user scrolls. (a) Leave it: the list
+scrolls and its count is in the heading; (b) list the rules that are not the project's read tools first, or show the read tools
+as one line; (c) a taller area. Recommendation (b), a Studio change after the maintainer's Studio worktree lands; not acted on in
+F-275. It joins [Decisions needed](#decisions-needed) as item 11.
