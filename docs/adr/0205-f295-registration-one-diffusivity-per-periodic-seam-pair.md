@@ -290,3 +290,18 @@ B2 builds in 0.83 s, 0.09 s per SIMPLEC iteration, 0.9 s per `pimple` step).
 ## Addenda
 
 Results of the checks follow in an addendum, in the order of the tables.
+
+### Amendment 1 (2026-11-06): the static refusals of S1, written after its first run and before the corrected run
+
+S1 ran once (release; code of D5 in 7c3b6fd, tests in a5f8cf3). Every accepted case met: CH on SIMPLEC with `pair`, CH on
+`pimple` with `pair`, CH with `owner`, `k_epsilon` with `owner`, laminar CH with `owner`, NP with `pair`. The first refusal case,
+laminar CH with `pair`, stopped the test in its own harness: the test read the static errors with `semantic_errors` after
+`Case::parse_toml(..).unwrap()`, but `Case::parse_toml` runs the semantic checks itself and returns them as its error (here
+`turbulence.periodic_seam.diffusivity`, line 25: `periodic_seam.diffusivity = "pair" is available with turbulence.model =
+"k_omega_sst" only (ADR 0205), not with "laminar"`), as ADR 0199 item 1 records for its own refusal. The refusal is the one R1
+registers, at its path and naming `k_omega_sst`; the `k_epsilon`, `spalart_allmaras` and `harmonic` cases were not reached. The
+test as run stays as an ignored record (`s1_first_run_record`).
+
+The corrected S1 reads the static diagnostics of a text as the error of `Case::parse_toml` or, when the text parses, as its
+`semantic_errors`; both come before `Simulation::new`, so MU7 still separates a static refusal from the model's own refusal of the
+option. The cases, the paths, the message condition and the R2 case are unchanged. No limit changes.
