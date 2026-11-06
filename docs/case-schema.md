@@ -2709,9 +2709,12 @@ meshes and cost at most 4.6 % of the error on near-orthogonal meshes, but they d
 raised it 2.1 times on an affine skewed mesh. No benefit is claimed. Through the tree a run equals the library run with the same
 options (ADR 0190).
 
-The `heat_flow` report of a conjugate case still adds the default secondary part (owner gradient, no limiter) to its face flows,
-so with the options it is not exactly the flux the solver used on skewed cells (ADR 0190 Q3). With all four keys at their
-defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case files list them.
+The `heat_flow` report of a conjugate case (solid zones) forms its face flows with the same options as the solver (F-289,
+ADR 0202), so on skewed cells it is the flux the matrix solved: on a skewed conjugate case with a heat source the reports
+balance the source to the solver's residual for every option set. The `heat_flow` report of a case without solid zones takes
+the wall gradient of the boundary condition only and has no secondary part, with or without the options (ADR 0202 Q1). With
+all four keys at their defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case
+files list them.
 
 ## Pressure interpolation of the steady kernel (`solver.pressure_interpolation`)
 
