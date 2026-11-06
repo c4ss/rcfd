@@ -402,3 +402,8 @@ timing and process tests outside the particle crates, and each passed when run a
 
 All fourteen F-254 tests ran in the gate and passed, and so did R1, R2 (ADR 0192), H1 and `baseline_hashes`. The 803
 ignored tests are as many as in the F-253 gate; F-254 adds none.
+
+Main moved to ef44c31 (F-259, ADR 0191) during the gate. A scratch merge of the branch into ef44c31 had no conflict, and
+on it the targeted suites passed: `wall_interaction`, `wall_film` (R1), `wall_interaction_f254`, `wall_film_f253` (R2),
+`case_hashes_w48u` (H1), `baseline_hashes`, `particle_run`, `particles_case`, `particles_ext_case` and F-259's
+`layering_ale_f259`. The scratch merge was not kept.
