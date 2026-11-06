@@ -6,6 +6,13 @@ periodic set-up of ADR 0199 C1 with the existing owner-cell diffusivity, and the
 viscosity on the B2 fan passage. Its numbers are quoted in item 10, where they set a sweep count and the limits of the negative
 controls. Results go in the addendum at the end.
 
+Summary of the results (addendum): with `turbulence.periodic_seam.diffusivity = "pair"` both faces of every seam pair carry one
+value in the SST momentum face viscosity and in the k and omega diffusivities, and the global k and omega budgets of the periodic
+box of ADR 0199 C1 close to 1e-14 of the destruction (the owner rule misses them by 1.7e-7 to 6.5e-2); on the B2 fan passage the
+pairs are equal to the bit where the owner rule differs by 13 to 27 percent. The defaults are bit-identical. Two set-ups were
+corrected by amendments before their corrected runs (the S1 harness, and a graded seam for F1 so that the swapped weight can be
+seen). Every check met its limit, every negative control fired, and every mutation made its check fail.
+
 Parents: [ADR 0199](0199-f286-registration-transient-k-omega-sst-with-pimple.md) amendment 2 (the finding) and question 5
 (option (b), recommendation taken by the lead), [ADR 0183](0183-exp-rot-registration.md) (check H, a rotational seam), ADR 0155
 (optional objects of the case schema), ADR 0156 D6 (`hash_omit_default`), ADR 0036 (laminar regions). Roadmap item F-295
@@ -316,3 +323,66 @@ accident. F1 stays as registered; MU2 is run against it once as registered and i
 `xmin` to `xmax`, so `dn` at `xmax` is four times `dn` at `xmin` and `w = 0.8`), model walls `ymin`, `ymax`, the F1 field
 `nu_t = 0.1 (1 + 0.5 sin(2 pi x))` and the limits of F1 (exact, exact, exact, `>= 1e-3`). MU2 must make F1g fail. Nothing else
 changes.
+
+### Addendum: results (2026-11-06)
+
+Commits: registration d0dd005, V0b record d87c745 (on main 9631754, before any code), code 7c3b6fd (`rcfd-fv/src/geometry.rs`
+`PeriodicPair` and `FvGeometry::periodic_pairs`, `rcfd-turb/src/eddy.rs` `SeamDiffusivity` and `pair_periodic_faces`,
+`rcfd-turb/src/sst.rs` `set_periodic_diffusivity` and the paired `nu_face`, `gk_f`, `gw_f`, `rcfd-turb/src/model.rs`
+`SstModel::set_option`, `rcfd-api/src/schema.rs` the optional `turbulence.periodic_seam`, `rcfd-api/src/turb.rs` R1, the option and
+the laminar pair rule, `docs/case-schema.md`), tests as first run a5f8cf3, amendment 1 d825071 and the corrected S1 9585a25,
+amendment 2 0e89ade and F1g 46469a9, and 22efe0b (a float literal of the tests written without excess digits for clippy, the
+same bits). Every check was run once, in release; the exceptions are named where they occur. Tests:
+`crates/rcfd-turb/tests/f295_seam_diffusivity.rs`, `crates/rcfd-api/tests/f295_seam_diffusivity.rs`,
+`crates/rcfd-api/tests/f295_default_bits.rs`, with the case texts in `crates/rcfd-api/tests/f295_common/mod.rs`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| P0 | BOX 4 pairs of 8 periodic faces, SEC 24 of 48; each face in one pair, each the other's partner; largest relative area difference 0 (BOX), 9.99e-16 (SEC); every `dn > 0` | as stated | met |
+| R3 | `periodic_pairs` and `set_periodic_diffusivity(Pair)` return `the periodic faces are not paired: the partner of face 108 is face 113, whose partner is face 109`; the model stays `Owner`; `Owner` is accepted | as stated | met |
+| F1 | BOX and SEC: 0 pairs with unequal bits, 0 off the D1 bits, 0 other faces changed; owner pair difference 7.83e-2 (BOX), 0.155 (SEC) of the largest `nu_face` | exact; `>= 1e-3` | met |
+| F1g | GBOX (amendment 2), `w = 0.799999999999999` for all 4 pairs: 0, 0, 0; owner 8.83e-2 | exact; `>= 1e-3` | met |
+| G1 | `pair`: BOX `q` 7.1e-16, `u_x` 6.5e-17, `u_y` 1.0e-16, SEC `q` 1.8e-16; `owner`: 8.67e-3, 8.79e-3, 4.88e-3, 3.23e-2 | `<= 1e-13`; `>= 1e-5` | met |
+| C1p | largest `abs(B_k) / D_k` over the steps: Euler upwind 1.78e-14, Euler `linear_upwind` 1.38e-14, BDF2 upwind 1.67e-14, BDF2 `linear_upwind` 1.47e-14. Preconditions: F1 = 1 in every cell of every sweep; last-sweep change at most 8.5e-16 (k), 7.6e-16 (omega). Non-vacuity: smallest step change of k 2.79e-2 to 3.08e-2; largest seam `nu_t` difference 1.35e-2 to 1.42e-2 | `<= 1e-10`; `<= 1e-13`; `>= 1e-3` | met |
+| C1pN | `owner`, smallest / largest `abs(B_k) / D_k`: Euler upwind 2.20e-6 / 2.876e-2, Euler `linear_upwind` 6.85e-7 / 3.16e-2, BDF2 upwind 5.34e-6 / 2.876e-2, BDF2 `linear_upwind` 1.39e-5 / 3.16e-2 | `>= 1e-8`; `>= 1e-3` | met (C1p can fail) |
+| C2p | largest `abs(B_k) / D_k`, `abs(B_w) / D_w`: Euler upwind 9.7e-15, 8.2e-15; Euler `linear_upwind` 1.07e-14, 1.09e-14; BDF2 upwind 6.2e-15, 7.3e-15; BDF2 `linear_upwind` 6.2e-15, 7.6e-15. Preconditions met (F1 = 1; last-sweep change at most 1.0e-15, 7.6e-16). Non-vacuity: smallest step change k 2.89e-2, omega 0.263; seam `nu_t` difference up to 2.50e-2 to 2.60e-2 | `<= 1e-10`; `<= 1e-13`; `>= 1e-3` | met |
+| C2pN | `owner`, smallest / largest of k and omega: Euler upwind 6.89e-6 / 5.91e-2, 4.82e-6 / 3.59e-2; Euler `linear_upwind` 4.96e-7 / 6.49e-2, 1.65e-7 / 3.90e-2; BDF2 upwind 2.40e-5 / 5.91e-2, 1.67e-5 / 3.59e-2; BDF2 `linear_upwind` 4.98e-5 / 6.49e-2, 3.58e-5 / 3.90e-2 | `>= 1e-8`; `>= 1e-3` | met (C2p can fail) |
+| C1p30 | report only, `pair`, 30 sweeps: largest `abs(B_k) / D_k` 5.12e-9 (upwind, both schemes), 1.13e-8 (`linear_upwind`); `abs(B_w) / D_w` 1.46e-10 to 4.50e-10; last-sweep change of k 7.1e-10 to 1.2e-9 | none | reported |
+| S1 | first run (a5f8cf3): the accepted cases met, then the harness stopped at the first refusal (amendment 1); corrected (9585a25): every accepted case without a diagnostic; `pair` with laminar, `k_epsilon` and `spalart_allmaras` located statically at the key with `periodic_seam.diffusivity = "pair" is available with turbulence.model = "k_omega_sst" only (ADR 0205), not with "<model>"`; `harmonic` located at the key | as stated | met (corrected set-up) |
+| S2 | content hash without the key 18a63e11897b386c, with `owner` 18a63e11897b386c, with `pair` ebf6531e45333a22; the written text of CH holds no `periodic_seam` | as stated | met |
+| T1 | B2S, 5 iterations, 638 seam pairs: `pair` 0 with unequal bits, 0 off the D1 bits; `owner` 0.271 | exact; `>= 1e-2` | met |
+| T2 | B2, 3 `pimple` steps, 638 pairs: 0, 0; `owner` 0.131 | exact; `>= 1e-2` | met |
+| T3 | LAM, 3 iterations, 40 seam faces: `pair` 0 off the bits of `nu`; `owner` largest 2.712e-2 = 10.7 `nu` | exact; `>= 1.001 nu` | met |
+| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited; both pass before the gate (below); the gate: pending | pass | met before the gate |
+| V0b | 5 of 5 runs bit-identical to the record of 9631754 after the code: CH `pimple` 0xdada28263c5403a0, S4 sector 0xabd83aa0fd750ae7, LAM 0xd8e366294f570e5e, CH `k_epsilon` 0x051bdeb285ab7c4a, B2S 0x85db6064d7777a63 | bit-identical | met |
+| V0c | V0c1: CH `pimple` with `owner` written gives the V0b record 0xdada28263c5403a0; V0c2: NP with `pair` and without the key, 100 iterations each, both (100, 7, 0xf30d3fbec2e549d2) | the record; equal | met |
+| V0d | `f286_default_bits.rs` unedited; passes before the gate (below); the gate: pending | pass | met before the gate |
+| V0e | the gate of the commit that adds this addendum: pending | pass, apart from the known flakes | pending |
+
+**The S1 runs.** The first S1 run stopped in its harness (amendment 1). Before the corrected test existed, a failed edit of the
+test file left the first-run harness in place and that test was run a second time, with the same output; nothing was chosen from
+it. The corrected S1 then ran once.
+
+**Mutations** (scratch, each applied alone to 46469a9 and reverted; the named test run once; the tree was clean after each):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MU1 | F1 | BOX: 4 pairs with unequal bits | fails |
+| MU2 | F1 (as registered) | BOX: 0 pairs off the D1 bits (`w = 1/2`, as amendment 2 said); SEC: 19 of 24 pairs off the D1 bits in the last bit (the round-off of its distances), so F1 failed | fails (by round-off only on SEC) |
+| MU2 | F1g | `w` became 0.2; 4 of 4 pairs off the D1 bits | fails |
+| MU3 | C1p | Euler upwind `abs(B_k) / D_k` 2.876e-2 (the owner value) | fails |
+| MU4 | C2p | Euler upwind `abs(B_k) / D_k` 1.02e-14, `abs(B_w) / D_w` 3.61e-2 | fails |
+| MU5 | T3 | `pair`: 20 of 40 seam faces off the bits of `nu` | fails |
+| MU6 | T1 | 638 of 638 pairs with unequal bits and off the D1 bits | fails |
+| MU7 | S1 | laminar CH with `pair`: no static diagnostic | fails |
+
+**Predictions.** PR1 met for F1 and for G1 with `pair` (6.5e-17 to 7.1e-16), falsified in size for the owner G1 of SEC (3.2e-2,
+above the predicted 1e-2). PR2 met (at most 1.8e-14). PR3 met for `B_w` (1.5e-10 to 4.5e-10) and falsified for `B_k`
+(5.1e-9 to 1.1e-8): with 30 sweeps the lag of k itself (last-sweep change 7e-10 to 1.2e-9) enters its budget through the seam
+faces. PR4 met.
+
+Before the gate, on 22efe0b in release: `cargo fmt --check` of `rcfd-fv`, `rcfd-turb`, `rcfd-api` and `cargo clippy -p rcfd-fv
+-p rcfd-turb -p rcfd-api --all-targets -D warnings` clean; the non-ignored tests of `baseline_hashes`, `case_hashes_w48u`, `exp_rot_pc`, `f286_default_bits`, `f286_transient_sst`,
+`physics_schema`, `regions`, `registers`, `sst_schema`, `turb_models` and `wall_options`: 60 passed, 0 failed.
+
+**Questions added by the results:** none. Questions 1 to 3 stand.
