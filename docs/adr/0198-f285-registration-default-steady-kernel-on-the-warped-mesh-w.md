@@ -247,6 +247,86 @@ iterations: the growth factor as the geometric mean of the ratio of successive `
 lies in [1e-7, 1e-3], and `c`, `f_edge`, `f_wall` and the largest cell of `u_k - u*` at the last of those iterations. The
 readings H3 and H4 are given again on D6 beside the registered ones (the registered ones stand as read).
 
+## Amendment 2 (2026-11-06): the diagnosis read, the fix chosen, and its checks
+
+Written after every run of D0 to D5 and before any fix code; D6 was running. No limit is changed. The numbers are those of
+the addendum's diagnosis table (binaries of d698fe8 for D0, D1, D3 and of 91210eb for D4, D5).
+
+### Readings (final, by the registered rules)
+
+- **H1 stands as registered**: `g(A, W32)` 1.2078, `g(L, W32)` 1.2940, ratio 1.071 (within 10 %); read on the runaway
+  window (amendment 1), so it says that the runaway does not depend on the relaxation, not what the onset rate is (D6).
+- **H2 stands**: `rho(Pi_GG, W32)` 1.1991; at n = 64 it is 1.3200.
+- **H3 is falsified**: `f_edge` 0.0109 (D0) and 0.0049 (D1). The modes are not at the edges where W is most
+  non-orthogonal. The correction-step mode sits at interior points such as cell (27, 28, 28) at n = 32 (and (7, 8, 56) at
+  n = 64), where the map compresses the cells along a body diagonal: at `(7/8, 7/8, 7/8)` its Jacobian is
+  `(1 - a) I + a 1 1^T` with `a = 0.1 pi sin(4 pi 7/8) = -0.314`, so the cells shrink to 0.37 of their size along `(1, 1, 1)`
+  (derived from the map). The mode of `X_p` sits near a corner (cell (1, 29, 1), `f_wall` 0.67, `f_edge` 0.16).
+- **H4 partly**: `c` +0.9915 in D0 (the runaway) and -1.0000 in D1.
+- **H5 stands**: `rho(Pi_GG)` 1.0000 on G, K, W2 at n = 32 and on W at n = 16.
+
+### The mechanism (stated with the measurements)
+
+With the registered set-up (one non-orthogonal corrector) the kernel solves the pressure equation `A p = b_N(p) - D(HbyA)`
+by deferred correction: each corrector pass and each outer iteration (through `p_old`) applies the step `X_p`. On W at
+n = 32 `X_p` has an eigenvalue of about -1.18 (`rho` 1.1781, `c` -1); on W at n = 16, W2 and K it is 0.861, 0.813 and 0.619.
+A real eigenvalue below -1 cannot be damped by any relaxation of that iteration, and the truncated correction then flips
+the sign of the cell correction on some modes (`Pi_GG1` and `Pi_R1` have positive modes of 1.40 and 1.37). Without
+correctors the correction step has a second, period-two mode (`Pi_GG` -1.20) that `face_flux` or a smaller `beta` removes,
+but then the non-orthogonal part of the discretisation is missing. With the non-orthogonal part of the pressure equation
+solved implicitly both modes are gone: `Pi_GG,imp`, `Pi_R,imp` and `Pi_GG,imp,beta` have `rho` 1.0000 on W at n = 32, and
+every implicit candidate converges there in 716 iterations, while every corrector-path candidate (R, C-LS, C-beta 0.75,
+0.5, 0.25) diverges (not finite at iterations 1155 to 1550). The pressure-velocity step was suspected (ADR 0193 Q9);
+the diagnosis locates the growing mode in the deferred non-orthogonal correction of the pressure equation, and on the
+cell-correction step only when that part is left out. The momentum's deferred step `X_u` (pure diffusion, zero walls) is
+1.0525 on W at n = 32 (0.73 to 0.75 on W2 and W16, 0.57 on K); it does not stop the implicit candidates from converging and
+is reported, not acted on.
+
+### The fix chosen (the registered rule)
+
+Qualifying: I-R, I-GG, I-beta 0.75 and I-beta 0.5 (each converges on W at n = 32 in 716 iterations and on W16, K32 and W2-32,
+with largest differences against V0 of at most 3.0e-12 in `u` and 4.3e-12 in `p`; limit 1e-8). None of R, C-LS and C-beta
+qualifies (each diverges on W at n = 32). All four take the same count, so the tie order chooses **I-R**: the pressure
+equation with its non-orthogonal part solved implicitly, with the existing `face_flux` cell correction.
+
+**The switch.** The D5 switch becomes the public field `SimpleSolver::implicit_non_orth_pressure: bool` (default `false`,
+the existing path), and `pressure::solve_pressure_implicit_non_orth` becomes a documented public function. With `true` and
+`non_orth_correctors > 0` the pressure equation is solved by it in place of the corrector passes (with
+`BodyForceWeighted` the V2-c gradient); with no corrector the field is ignored; periodic faces are refused by a panic with a
+message; the linear-solver device is not used by it (CPU). **F-285's fix** is `implicit_non_orth_pressure = true` together
+with `reconstructed_correction = true`. The D3 switch (`correction_test_only`, `CorrectionTestOnly`) is removed and the
+velocity correction of `iterate` returns to the code of main; the diagnosis harness keeps the tests that do not need it (its
+D3 tests and the I-beta rows of D5 were run from the binaries named above).
+
+### Checks (A1 to A6 as registered, made concrete; A7 added)
+
+The harness is `pressure_interp_f246.rs`'s, so the checks live there (the registration's "unless stated"): `mms` becomes
+`mms_run(kind, n, v, fix)` returning the outcome and the solver, `mms(kind, n, v)` is `mms_run(kind, n, v, false).0`,
+`sequence(kind, name)` is `sequence_with(kind, name, false)`; `fix` sets the two fields of the fix after
+`pressure_interpolation`. Every existing test keeps its code path, its limits and its printed lines.
+
+- **A1**: `f285_a1_a3_w_16_32` (V0 with the fix on W at n = 16 and 32, each converged under the stop rule within the cap)
+  and the heavy `m1_w_v0_f285` (the V0 sequence 16, 32, 64 with the fix: every run converged; its orders reported).
+- **A2**: `f285_a2_k32`, `f285_a2_s32`, `f285_a2_w2_32` and `f285_a2_w16`, the limits as registered.
+- **A3**: in `f285_a1_a3_w_16_32`, from the converged fix state on W at n = 32, both fields set back to `false`, one
+  iteration: `max_du <= 1e-8`.
+- **A4**: as registered.
+- **A5**: the heavy `m1_w_v1_f285` and `m1_w_v2_f285` as registered.
+- **A6**: the mutation replaces the line `let implicit = self.implicit_non_orth_pressure && s.non_orth_correctors > 0;`
+  of `iterate` by `let implicit = false;`; then `f285_a1_a3_w_16_32` must fail.
+- **A7 (reported, no limit)**: the iterations and the time per iteration with and without the fix in A2.
+- **Heavy rule** as F-246's: a test that takes more than 15 minutes in release is ignored and run by name.
+
+### Questions added
+
+**Q4. I-R or I-GG.** The tie order chose I-R (two switches); I-GG (the implicit solve alone) took the same 716 iterations on
+W at n = 32 and is one switch. Options: (a) keep I-R as chosen; (b) make I-GG the fix in a later change. Recommendation (a),
+the rule's outcome; I-GG remains available as the field alone.
+
+**Q5. The momentum's deferred step.** `X_u` is 1.0525 on W at n = 32, above 1, without stopping convergence here. Options:
+(a) record it; (b) a later item for an implicit non-orthogonal momentum Laplacian. Recommendation (a) until a case diverges
+through it.
+
 ## Where to go next
 
 - [ADR 0193](0193-f246-registration-pressure-interpolation-variants.md) for the manufactured solution, the meshes and the M1
