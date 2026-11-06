@@ -222,3 +222,54 @@ Presets for the titanium and GRP rows of Table 7-2 (Q2), presets from another DN
   Recommendation: (a), for the reason in P4.
 - **Q4. The edition (ADR 0194 Q4, still open).** The preset rests on a third-party copy. Recommendation: check the three
   values against the edition the maintainer holds; until then the warning of P7 stays.
+
+## Addendum 1: results and the gate (2026-11-06)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+5c7dfe8, the code, tests and docs 27d0cd1, and the gated commit dac0f50 (27d0cd1 merged with main fc26ec0). The runs are
+deterministic, and no check was repeated to change a result.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| G1 one preset; values against the literals and the quoted row of `docs/reference-data.md`; lookups; `from_preset` | one; `==`; `None` for the four other names; bit for bit | one, `dnv_o501_2007_steel`, `steel grades`; `2e-9`, `2.6`, `7800.0` equal to both (the row parsed as `[2e-9, 2.6, 7800.0]`); `None` for all four; equal | met |
+| G2 library run of ADR 0194 B with the preset against the typed constants | bit for bit | fingerprints equal (22 788 words each); 0 of 12 faces differ in `rate` or `depth_rate`; `Erosion::csv` equal; 1750 hits | met |
+| G3 case D with the preset against case D: `track_frozen`; CSV after three lines; `particles.vtp`; report without `erosion.material` | bit for bit; equal | fingerprints equal (22 770 words each); CSV equal (10 lines against 7); VTP equal; report equal | met |
+| G4 overrides (a) density, (b) `k` and `n`, (c) all three: values; fingerprints; `from` | `==`; equal to the explicit case, (b) differs from the preset alone; as registered | (a) `2e-9`, `2.6`, `2700`; (b) `3e-9`, `2.4`, `7800`; (c) `3e-9`, `2.4`, `2700`; all three equal to their explicit cases, (b) differs; `from` as registered, `preset` the name | met |
+| G5 seven invalid inputs; four controls | each at its path; none | each at its path (the unknown names by the enumeration when the case is read, the others by `check_erosion`); none | met |
+| G6 report `erosion.material`; CSV head; G4 (a) second line; no preset; schema doc | as registered | as registered (the four CSV lines and the second line of (a) exactly); no `material` and the header first without a preset; the schema doc holds `PRESET_PROVENANCE` | met |
+| G7 the name and the two phrases in the four documents | present | present in all four | met |
+| G8 R3; R4; R5 (five hashes); the suites | `fe94f34ac9fc5dbd`; `5514d6332741d3a4`; `03a6467e53b50ec2` twice, `4b830c0bb7976b35` three times; pass unedited | equal; equal; all five equal; `wall_interaction`, `wall_interaction_f254`, `wall_film` (R1), `wall_film_f253` (R2), H1, `baseline_hashes` and the particle suites pass, none edited | met |
+| M1 preset wins over an explicit value | G4 fails | G4 failed at (a) ("G4 0: values": density 7800 for 2700); the file restored and equal byte for byte to the kept copy | met |
+| `limit_audit.py` on the two new files | every hit read | no hit | met |
+
+The gate ran on a `git archive` copy of dac0f50 with three jobs and one process per test (`scripts/gate_test.py`), in the
+target dir `E:/projects/cfd/w49i-work/target-ero`, after 15 minutes with no `gate_test.py` process on the machine and
+33 GB of physical memory free: `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests
+**2925 passed, 1 failed, 821 ignored** (2926 test processes in 566 binaries, wall 5862 s, peak summed working set 4127 MB,
+largest time against its limit 0.386, lowest free physical memory 30 GB). The one failure is `rcfd-runner` `runner_w47b`
+s9 ("two 60 MB runs ran together under a 100 MB budget": 0 of 1), a known flake of the gate; run again alone on the same
+build it passed (3.2 s). All eight tests of this ADR ran in the gate and passed; the ignored count equals that of the
+F-275 gate (821), so this ADR adds no ignored test. The doc-tests ran and passed.
+
+Disclosures:
+
+- Main moved from 2f60baf to fc26ec0 during the work (documents only: the decision records of 2026-11-06 and roadmap items
+  F-284 to F-293). Its decision record in ADR 0194 writes Q3 as "named steel presets, against the recommendation (a)", a
+  preset "named in the case file so that it stays visible there" that fills K, n and the target density from the steel
+  grades of Table 7-2 and says that the values come from a third-party copy not checked against the maintainer's edition.
+  That agrees with what this ADR registered; nothing was changed for it. The merge had one conflict, in the F-254 note of
+  `docs/ROADMAP.md`, resolved by keeping main's decision note and this ADR's one line after it.
+- A first gate launch on 27d0cd1 was stopped during its wait, before anything was built, when main moved; the gate was
+  launched again on the merge.
+- G7 first ran before the docs were written and failed (`docs/particles.md` lacked the name); it passed once the docs
+  were written. The first build of the case-tree test file stopped at a borrow error in G6, fixed before any test ran.
+- In G4 (a) the fingerprint equals that of the preset alone: the density enters only the depth rate, and the fingerprint
+  holds the eroded mass, the impact mass and the hits. The value check is what tells (a) apart, and M1 failed on it.
+- The written text of a case that writes `particles.erosion` now lists `material = "none"` (G8 prints the data value
+  `"none"` for case D); its settings hash does not change (P10).
+- Not exercised by a test: a transient run with a preset (`ParticleRun::new`, `report` and `write_outputs` are the code of
+  the steady run, used by both), the service method `particles.report` with a preset, and the JSON Schema export of the new
+  key (G6 reads the schema doc through `SettingsTree::schema_at`).
+- The new tests take under half a second each in release.
+
+Q1 to Q4 above stay open for the maintainer. F-254 stays partial (ADR 0194 decision record, Q1).
