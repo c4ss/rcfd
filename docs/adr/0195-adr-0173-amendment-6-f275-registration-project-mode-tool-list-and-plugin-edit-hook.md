@@ -403,7 +403,7 @@ Branch `f275-project-mode-tools`, after this text (`9bfb97f`):
 
 The gate ran on `00fbd30`. The branch is not merged.
 
-**Built as registered.** P1 to P11 as written, with amendment 1.
+**Built as registered.** P1 to P10 as written, with amendment 1; P11 not (difference 8).
 
 * `rcfd-mcp`: `SESSION_ONLY` (the 16 names) and the filter in `all_tools`; `initialize`'s first sentence under a project;
   `read_feed`'s `from_seq` property; the new module `src/edit_hook.rs` and the `--edit-hook` branch of `main.rs` (one help line).
@@ -430,6 +430,19 @@ The gate ran on `00fbd30`. The branch is not merged.
    started in the same session (`plugin:rcfd:project` connected). `MultiEdit` and `NotebookEdit` are checked through the binary
    only (C5-K): 2.1.319 has no `MultiEdit` and the session did not use `NotebookEdit`.
 7. The probe of the registration and C5-R each ran one `claude -p` session: 0.17 USD and 0.22 USD as the CLI reported.
+8. P11 was not met commit by commit: from `a2a2f82` (15 first rules) to `2fa8742`, `chat_e.rs` e11 fails (amendment 1); it passes
+   from `92953fd` on. Only `00fbd30` was gated. The history was not rewritten.
+9. For `NotebookEdit` the hook reads `tool_input.notebook_path` and, when that is absent, `tool_input.file_path`; P6 step 4 names
+   `notebook_path` only.
+10. Q8's reason for waiting, "after the maintainer's Studio worktree lands", does not hold: that worktree does not change
+    `chat_ui.rs`. The dialog is left as it is because the change is a design of the dialog that F-275 does not register.
+
+**Known misses** (not checked, by design of this registration; none is an ignored test):
+
+* the hook under `bypassPermissions` or `--dangerously-skip-permissions`: not run, by choice, because it needs the bypass flag;
+  the documentation read does not say whether a `PreToolUse` refusal applies there (NOT VERIFIED);
+* the plugin installed from the marketplace (`/plugin install`) rather than loaded with `--plugin-dir` (NOT VERIFIED);
+* `NotebookEdit` and `MultiEdit` in a real session: checked through the binary only (C5-K); 2.1.319 has no `MultiEdit`.
 
 **Results.**
 
