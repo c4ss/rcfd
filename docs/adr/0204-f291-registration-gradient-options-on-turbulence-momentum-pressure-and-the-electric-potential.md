@@ -364,3 +364,68 @@ T2 was:
 * The test of amendment 1 that runs T3 as registered stays as the ignored record `g2_g3_t3_spalart_allmaras_c2_setup_defect`; the
   corrected test is `g2_g3_t3b_spalart_allmaras_c2`.
 * G4 (i) and G4 (iv), not yet run, take T3b in place of T3.
+
+## Addendum 1: what was built and the results (2026-11-06)
+
+Branch `f291-gradient-options`, on main 3b89aac, after this text (`22a59c4`): `rcfd-fv` and `rcfd-turb` (K3) with the library test
+(`8e4e8d3`), amendments 1 and 2 (`e64b124`, `59cc878`), `rcfd-api` (K1, K2, K4, K5) with the tree tests (`2b7c02f`), the case
+schema (`9f3eb0e`). Not merged.
+
+**Built as registered.** K1 to K6 as written, with these details. `rcfd-fv`: `diffusion::secondary_cell_gradient` and
+`secondary_face_gradient`; `pressure::solve_pressure_parts_opt` and `corrected_flux_opt` (the old functions call the shared
+inner functions with `None`); `SimpleSolver::gradient_momentum`, `gradient_pressure` and `PimpleSettings::gradient_momentum`,
+`gradient_pressure` (all `None` by default); `electric::solve_opt`, `solve_with_source_opt`. `rcfd-turb`: the field `gradient` of
+`KEpsilon`, `KOmegaSst`, `SpalartAllmaras` and `TurbulenceModel::set_gradient_options`. `rcfd-api`: the optional table in
+`schema.rs` (the F-256 key texts now name it), `sim::gradient_selected`, `check_gradient_equations` (R5 to R8, rule by rule) and
+`check_gradient_options` (R2 and R3 skipped with a selector), the kernel wiring after the checks, one call in `TurbState::new`, the
+field of `ElectricState`. No Studio file, no existing test and neither `baseline_hashes.rs` nor `case_hashes_w48u.rs` changed. New
+tests: `crates/rcfd-fv/tests/gradient_pressure_f291.rs` (3) and `crates/rcfd-api/tests/gradient_equations_f291.rs` (13, and the two
+ignored records of amendments 1 and 2). Documents: section "Further equations" of `docs/case-schema.md` (a `text` block, not a
+TOML block), the roadmap entries.
+
+**Differences found while building.** (1) The set-ups of T2 and T3 (amendments 1 and 2). (2) The design adjoint
+(`rcfd-api/src/design/adjoint.rs`) builds its own `SimpleSolver` from its own settings, not from the case tree's keys; it does not
+take the options (not a tree run). (3) Every tree run equals its library run bit for bit (difference 0), not only to 1e-12.
+
+**Results.** Release build, Windows.
+
+| Check | Measured | Limit | Verdict |
+|---|---|---|---|
+| P | mesh W 29.641 degrees; mesh K 38.309 degrees | at least 20; at least 25 | met |
+| F | every default run finite, ended after 60 iterations, 16 steps or 20 iterations. Scales (`ux`, `uy`, `p`, then the turbulence fields): M1 0.858, 0.367, 5.56; M2 6.42, 5.89, 1157; P1 15.2, 30.1, 320; P2 3.19, 0.931, 19.9; P3 3.95, 2.55, 116; T1 0.858, 0.367, 5.56, `k` 1.76e-6, `omega` 6.71e4; T2b 0.860, 0.368, 5.63, `k` 0.173, `epsilon` 1.35; T3b 0.858, 0.367, 5.56, `nuTilda` 5.46e-2; E1 `electric_potential` 0.960. Every set's run ended finite | set-up | met |
+| G1 | every row of the table refused at its path (R1 `"yes"` and `energy`; R5 without an option and with K alone; R6 prescribed flow, coupled, fractional step, laminar, mixing_length (R6-T, the model's message), electric off; R7 momentum upwind, pressure without correctors, turbulence upwind; R8; R4 with a selector); the ten controls accepted | as stated | met |
+| G2 | tree vs library, every control and every set of M1, M2, P1, P2, P3, T1, T2b, T3b, E1 and P2-all: 0 | `<= 1e-12` | met |
+| G3 | M1: O1 2.42e-3, O2 7.72e-3, O3 1.81e-2, O4 6.77e-3, O5 5.88e-3, O6 7.95e-3, C2 1.17e-2; M2 C2 6.50e-2; P1: O1 2.32e1, O2 1.44e-3, O3 6.58e-3, O4 9.98e-1, O5 1.02, O6 1.02, C2 5.84; P2 C2 9.45e-3; P3 C2 3.99e-1; T1: O1 6.31e-2, O2 5.36e-2, O3 3.83e-2, O4 1.64e-2, O5 1.17e-2, O6 1.17e-2, C2 1.21e-1; T2b C2 8.16e-3; T3b C2 8.44e-4; E1: O1 8.45e-3, O2 7.72e-3, O3 1.84e-2, O4 6.35e-6, O5 1.79e-3, O6 1.25e-3, C2 1.56e-2 | `> 1e-9` | met |
+| G3-K | O5 vs O6: M1 2.23e-3, P1 2.81e-3, T1 3.79e-7, E1 8.07e-4 | `> 1e-12` | met |
+| P2-all (supplementary) | G2 0 for every set; G3 O1 3.05e-2, O2 8.48e-3, O3 3.37e-2, O4 3.12e-2, O5 3.63e-2, O6 3.66e-2, C2 9.45e-3; G3-K 2.97e-4 | as G2, G3, G3-K | met |
+| G4 (i) | settings hash unchanged with the four keys and the table at their defaults (M1 `631a8779e4acf44b`, M2 `a8e610ce6d9f8f0f`, P1 `6226f0649e1bb8ab`, P2 `909e5f89b92566c0`, P3 `6e355ceeb0b7d7a3`, T1 `c2fbe7b71eb7ef72`, T2b `11bf8a46c3a1cf9b`, T3b `e677caa82a1101ca`, E1 `ff3388747e9d3660`); 0 values differ in a bit in each | equal | met |
+| G4 (ii) | `baseline_hashes.rs` unedited: 3 passed, 1 ignored | passes | met |
+| G4 (iii) | `case_hashes_w48u.rs` unedited: passes; `Case::new()` writes no `gradient_equations` (TOML 12349 bytes, JSON 16577 bytes) | passes; absent | met |
+| G4 (iv) | `Some(GradientOptions::default())` against `None`, library runs of M1, M2, P2, P3, T1, T2b, T3b, E1: 0 values differ in a bit | equal bits | met |
+| P-lib | default 1.29e-15 `S`; the seven sets 1.12e-15 to 1.46e-15 `S` (`S` 0.0665 to 0.0751) | `<= 1e-12 S` | met |
+| P-lib-T | the flux without the options against the operator with them: O1 2.60e-1, O4 1.23e-1, O5 4.39e-3, O6 1.14e-1, C2 2.56e-1 of `S` | `> 1e-9 S` | met |
+| P-lib-D | `corrected_flux_opt` with `None` and the default options: 0 of 1728 faces differ in a bit; `solve_pressure_parts_opt`: 0 of 512 cells, the same residual bits; control: C2 moves the pressure by 6.48e-2 | equal bits | met |
+| P-lib-B | cells with a fixed-pressure face (reported): default 2.94e-2, O1 3.17e-2, O2 1.14e-1, O3 3.7e-16, O4 3.44e-2, O5 3.07e-2, O6 3.29e-2, C2 1.82e-1 of `S`; the other cells 3.2e-16 to 3.7e-16 | others `<= 1e-12 S` | met |
+| D | `rcfd-api`: `gradient_options_f256.rs` (5 passed), `pressure_interp_f246.rs` (4, 1 ignored), `cht_flows_f289.rs` (3), `turb_models.rs` (8, 1 ignored), `rules_w19c.rs` (7, 1 ignored); `rcfd-fv`: `gradient_sweep_f256.rs` (1), `pressure_interp_f246.rs` (10, 14 ignored), `cht_flows_f289.rs` (2), `electric.rs` (7); the `rcfd-turb` tests: all pass unedited | pass | met |
+
+**Can fail.** Each mutation was made, its test run, the file restored and compared byte for byte with the kept copy (equal each
+time, and `git diff` of the file empty):
+
+* M1 (the steady kernel's `gradient_momentum` line removed): G2 M1 failed for every set (O1 2.42e-3, the value of G3) and G3 gave 0;
+* M2 (the steady kernel's `gradient_pressure` line removed): G2 P1 failed for every set (O1 2.32e1);
+* M3 (the transient kernel's momentum line removed): G2 M2 C2 failed (6.50e-2);
+* M4 (the `set_gradient_options` call of `TurbState::new` removed): G2 T1 failed for every set (O1 6.31e-2);
+* M5 (`ElectricState` with `None`): G2 E1 failed for every set (O1 8.45e-3);
+* M6 (the face correction skipped in `corrected_flux_opt`): P-lib O1 failed (2.31e-1 of `S`) and so did C2 (2.31e-1).
+
+`scripts/limit_audit.py` reports no hit in the two new test files.
+
+**Reading.** The options now reach the four equation families through the tree exactly as the library applies them, and they
+move every result on the skewed wedge; no accuracy benefit is claimed (the checks are of wiring and consistency, as ADR 0190's).
+P-lib-B measures the gap of Q3: on cells beside a skewed fixed-pressure face the default flux correction misses the operator it is
+paired with by 2.9e-2 of the cell flux scale (with correctors), `gradient_boundary = "dropped"` closes it (3.7e-16), and
+`corrected` widens it (1.1e-1). The default runs of P1 and M2 are not converged flows (amendment 1, finding 2); P2-all shows the
+same wiring and teeth on a channel that does not diverge.
+
+**Questions for the maintainer.** Q1 to Q8 stand as registered and amended, each proceeding on its reversible choice. P-lib-B's
+numbers bear on Q3.
