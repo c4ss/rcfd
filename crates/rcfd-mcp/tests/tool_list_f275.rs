@@ -242,7 +242,7 @@ fn c5s_hidden_tools_need_a_session_kept_tools_do_not() {
 /// written from main's 11 reads back as those 11 rules and is written back byte for byte (no migration).
 #[test]
 fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
-    use rcfd_claude::allow::{AllowList, AllowRule, PINNED_SERVER, PROJECT_READ_TOOLS};
+    use rcfd_claude::allow::{AllowList, AllowRule, PINNED_SERVER};
     const MAIN: [&str; 11] = [
         "project_info",
         "list_runs",
@@ -256,16 +256,15 @@ fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
         "read_project_file",
         "wait_run",
     ];
-    assert_eq!(PROJECT_READ_TOOLS[..11], MAIN);
-    assert_eq!(
-        PROJECT_READ_TOOLS[11..],
-        ["read_feed", "check_case_mesh", "preview_mesh", "list_meshes"]
-    );
+    // a new project's first list: main's 11 in their order, then the four (the set is checked against the live list by
+    // project_w48f.rs F2)
     let first = AllowList::project_initial();
-    assert_eq!(first.rules().len(), 15);
-    for (r, t) in first.rules().iter().zip(PROJECT_READ_TOOLS) {
-        assert_eq!(r, &AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")));
-    }
+    let want: Vec<AllowRule> = MAIN
+        .iter()
+        .chain(&["read_feed", "check_case_mesh", "preview_mesh", "list_meshes"])
+        .map(|t| AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")))
+        .collect();
+    assert_eq!(first.rules(), &want[..]);
     // an allow-list file of a project made before F-275
     let mut old = AllowList::new();
     for t in MAIN {
