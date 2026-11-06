@@ -407,15 +407,19 @@ fn m1_w_v0() {
     sequence(MeshKind::W, "V0");
 }
 
+/// M1 on F-208's W, a known miss: the run at n = 32 is not finite at iteration 1168, as the default's is at 939 (ADR 0193
+/// amendment 1, finding 1); the order of the pair (32, 64) cannot be formed.
 #[test]
-#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
-fn m1_w_v1() {
+#[ignore = "known miss (ADR 0193 M1, heavy): V1 diverges on W at n = 32, as the default does"]
+fn m1_w_v1_known_miss() {
     sequence(MeshKind::W, "V1");
 }
 
+/// M1 on F-208's W, a known miss: the run at n = 32 is not finite at iteration 1215, as the default's is at 939 (ADR 0193
+/// amendment 1, finding 1); the order of the pair (32, 64) cannot be formed.
 #[test]
-#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
-fn m1_w_v2() {
+#[ignore = "known miss (ADR 0193 M1, heavy): V2 diverges on W at n = 32, as the default does"]
+fn m1_w_v2_known_miss() {
     sequence(MeshKind::W, "V2");
 }
 
