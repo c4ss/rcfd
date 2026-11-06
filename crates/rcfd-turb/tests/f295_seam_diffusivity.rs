@@ -5,13 +5,14 @@
 //! The limits are those registered in ADR 0205 before this code ran.
 //!
 //! BOX: `box_2d(16, 4, 1, 1)` periodic in x. SEC: `annulus_3d_sector(8, 6, 4, 0.5, 1.0, 0.5, 40 degrees)`, a rotational seam.
+//! GBOX (amendment 2, F1g): BOX graded by 4 in x, so the two faces of a pair are at different distances (`w = 0.8`).
 
 use rcfd_fv::convection::{face_flux, ConvScheme};
 use rcfd_fv::ddt::TimeScheme;
 use rcfd_fv::diffusion::laplacian;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField, ZeroGradient};
 use rcfd_linalg::SolveControl;
-use rcfd_mesh::gen::{annulus_3d_sector, box_2d, Grading};
+use rcfd_mesh::gen::{annulus_3d_sector, box_2d, box_2d_graded, Grading};
 use rcfd_turb::{KOmegaSst, SeamDiffusivity};
 use std::collections::HashSet;
 use std::f64::consts::PI;
@@ -27,19 +28,31 @@ const SEC_ANGLE_DEG: f64 = 40.0;
 enum Mesh {
     Box,
     Sec,
+    /// Amendment 2.
+    GBox,
 }
 
 fn geometry(mesh: Mesh) -> Arc<FvGeometry> {
     let m = match mesh {
         Mesh::Box => box_2d(16, 4, 1.0, 1.0, true, false).unwrap(),
         Mesh::Sec => annulus_3d_sector(8, 6, 4, 0.5, 1.0, 0.5, SEC_ANGLE_DEG.to_radians(), Grading::Uniform).unwrap(),
+        Mesh::GBox => box_2d_graded(
+            16,
+            4,
+            1.0,
+            1.0,
+            [Grading::Expansion(4.0), Grading::Uniform],
+            true,
+            false,
+        )
+        .unwrap(),
     };
     Arc::new(FvGeometry::new(Arc::new(m)).unwrap())
 }
 
 fn walls(mesh: Mesh) -> &'static [&'static str] {
     match mesh {
-        Mesh::Box => &["ymin", "ymax"],
+        Mesh::Box | Mesh::GBox => &["ymin", "ymax"],
         Mesh::Sec => &["inner", "outer"],
     }
 }
@@ -50,10 +63,10 @@ fn model(geom: &Arc<FvGeometry>, mesh: Mesh, mode: SeamDiffusivity) -> KOmegaSst
     m
 }
 
-/// The coordinate `s` of a point: `x` (BOX) or `theta / angle` (SEC).
+/// The coordinate `s` of a point: `x` (BOX, GBOX) or `theta / angle` (SEC).
 fn s_of(mesh: Mesh, p: [f64; 3]) -> f64 {
     match mesh {
-        Mesh::Box => p[0],
+        Mesh::Box | Mesh::GBox => p[0],
         Mesh::Sec => p[1].atan2(p[0]) / SEC_ANGLE_DEG.to_radians(),
     }
 }
@@ -225,6 +238,15 @@ fn f1(mesh: Mesh) {
 fn f1_one_value_per_pair_and_the_d1_bits() {
     f1(Mesh::Box);
     f1(Mesh::Sec);
+}
+
+/// F1g (amendment 2): F1 on the graded box, where the weight of a pair is not 1/2.
+#[test]
+fn f1g_one_value_per_pair_on_a_graded_seam() {
+    let geom = geometry(Mesh::GBox);
+    let w: Vec<f64> = geom.periodic_pairs().unwrap().iter().map(|p| p.w).collect();
+    println!("F1g: pair weights {w:?}");
+    f1(Mesh::GBox);
 }
 
 /// G1 of one field: `abs(sum_c (A x - b)_c) / sum_f abs(F_f)` with the field's own boundary coefficients.
