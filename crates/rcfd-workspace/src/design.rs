@@ -12,7 +12,9 @@
 //! case before it is queued (ADR 0189 S4); its result follows the in-process status rule on the solver's `finish` event
 //! ([`cond_result`], ADR 0189 S5). A chained condition, or a map point after a converged one, continues from the run before
 //! it when its restart file fits ([`start_from`], ADR 0200 S6), its iterations counted from the restart (ADR 0200 S7); a
-//! study's own step cap is the runs' `max_steps` (ADR 0200 S5).
+//! study's own step cap is the runs' `max_steps` (ADR 0200 S5). Before a study's run is submitted, a run of the project
+//! that already is that evaluation ([`RunKey`], a run left by a server stopped during the study) is adopted instead:
+//! waited for, or read from its `metrics.json` ([`choose`], ADR 0201).
 
 use crate::runs::RunService;
 use crate::{err, Workspace, INTERNAL};
@@ -25,7 +27,7 @@ use rcfd_api::design::tools::{call_with, EvaluatorSource, MapRun, StudyRun};
 use rcfd_api::runctl::exit;
 use rcfd_api::service::{RpcError, Service};
 use rcfd_runner::client::state_name;
-use rcfd_runner::records::{LaunchSettings, RunSettings};
+use rcfd_runner::records::{LaunchSettings, RunRecord, RunSettings, RunState, RunStatus};
 use rcfd_runner::store::{extra, RunTags};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -206,6 +208,106 @@ pub fn start_from(restart: &Path, next: &Case) -> StartFrom {
     }
 }
 
+/// What a run must record to be the evaluation of a study's candidate at a condition (ADR 0201 S1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunKey {
+    /// The tags (ADR 0189 S6).
+    pub tags: RunTags,
+    /// `case` of `run.json`: the base case's project-relative path.
+    pub case: String,
+    /// `hash_bytes` of the base case file's bytes now.
+    pub case_snapshot_hash: String,
+    /// `settings.set`: the entries, in order.
+    pub set: Vec<String>,
+    /// `settings.continue_from` and `settings.max_steps` (ADR 0200).
+    pub launch: LaunchSettings,
+    /// The `solver_version` a new run would record.
+    pub solver_version: String,
+}
+
+impl RunKey {
+    /// Whether the record `rec` is this evaluation: every item of the key equal (absent as absent).
+    pub fn matches(&self, rec: &RunRecord) -> bool {
+        let set: Option<Vec<String>> = serde_json::from_value(rec.settings["set"].clone()).ok();
+        rec.study == self.tags.study
+            && rec.variant == self.tags.variant
+            && rec.condition == self.tags.condition
+            && rec.case == self.case
+            && rec.case_snapshot_hash == self.case_snapshot_hash
+            && set.as_ref() == Some(&self.set)
+            && LaunchSettings::of(rec).ok().as_ref() == Some(&self.launch)
+            && rec.solver_version == self.solver_version
+    }
+}
+
+/// The run to adopt for `key` among `runs` (ADR 0201 S2): of the matches that are not `failed` or `cancelled`, the newest
+/// `finished` one, else the newest of the others (`queued`, `running` or `paused`; newest: the largest run id).
+pub fn choose<'a>(key: &RunKey, runs: &'a [(RunRecord, RunStatus)]) -> Option<&'a RunRecord> {
+    let live = || {
+        runs.iter()
+            .filter(|(rec, st)| !matches!(st.state, RunState::Failed | RunState::Cancelled) && key.matches(rec))
+    };
+    live()
+        .filter(|(_, st)| st.state == RunState::Finished)
+        .map(|(rec, _)| rec)
+        .max_by(|a, b| a.id.cmp(&b.id))
+        .or_else(|| live().map(|(rec, _)| rec).max_by(|a, b| a.id.cmp(&b.id)))
+}
+
+/// The runs of a project as a study's call finds them (ADR 0201 S3): every run folder's `run.json` and `status.json`; a
+/// folder that does not read is skipped.
+#[derive(Debug, Default)]
+pub struct RunIndex {
+    runs: Vec<(RunRecord, RunStatus)>,
+}
+
+impl RunIndex {
+    /// Read the runs of `runs`' project.
+    pub fn read(runs: &RunService) -> RunIndex {
+        let root = runs.project().join("runs");
+        let mut ids: Vec<String> = std::fs::read_dir(&root)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok()?.file_name().into_string().ok())
+                    .filter(|n| rcfd_project::runid::is_run_id(n))
+                    .collect()
+            })
+            .unwrap_or_default();
+        ids.sort();
+        let read = |id: &str| -> Option<(RunRecord, RunStatus)> {
+            let dir = root.join(id);
+            let rec: RunRecord = rcfd_project::atomic::read_json(&dir.join("run.json")).ok()?;
+            let st: RunStatus = rcfd_project::atomic::read_json(&dir.join("status.json")).ok()?;
+            Some((rec, st))
+        };
+        RunIndex {
+            runs: ids.iter().filter_map(|id| read(id)).collect(),
+        }
+    }
+
+    /// The number of runs read.
+    pub fn len(&self) -> usize {
+        self.runs.len()
+    }
+
+    /// No run read.
+    pub fn is_empty(&self) -> bool {
+        self.runs.is_empty()
+    }
+
+    /// The run to adopt for `key` ([`choose`]).
+    pub fn adopt(&self, key: &RunKey) -> Option<&RunRecord> {
+        choose(key, &self.runs)
+    }
+}
+
+/// What the key of a study's runs takes from the project and the solver once per call (ADR 0201 S1, S3).
+struct Adoption {
+    index: RunIndex,
+    case: String,
+    case_snapshot_hash: String,
+    solver_version: String,
+}
+
 /// The dotted path of the first place where `a` and `b` differ (`None` when equal).
 fn first_difference(a: &Value, b: &Value, at: &str) -> Option<String> {
     let join = |k: &str| {
@@ -238,7 +340,7 @@ fn first_difference(a: &Value, b: &Value, at: &str) -> Option<String> {
     }
 }
 
-/// One run made by an evaluator of this module.
+/// One run made or adopted by an evaluator of this module.
 #[derive(Debug, Clone, Default)]
 struct Made {
     run: String,
@@ -247,14 +349,17 @@ struct Made {
     point: Option<usize>,
     continue_from: Option<String>,
     state: String,
+    adopted: bool,
 }
 
-/// What the two evaluators share: the run service, the base case file, and the list of the runs they made.
+/// What the two evaluators share: the run service, the base case file, the list of the runs they made, and for a study the
+/// runs it may adopt (ADR 0201).
 struct Queue<'s> {
     runs: &'s RunService,
     root: PathBuf,
     base_path: PathBuf,
     made: &'s Mutex<Vec<Made>>,
+    adoption: Option<Adoption>,
 }
 
 /// One run waited for: its result, its id, the iteration it started at (the restart file's, ADR 0200 S7, amendment 1) and,
@@ -305,8 +410,27 @@ impl Queue<'_> {
         }
     }
 
-    /// Queue a run of the base case file with `set`, `launch` and `tags`, recorded in the list of runs.
+    /// Queue a run of the base case file with `set`, `launch` and `tags`, recorded in the list of runs; for a study, a run
+    /// of the project that already is this evaluation is adopted instead (ADR 0201 S1 to S3).
     fn queue(&self, set: &[String], launch: &LaunchSettings, tags: &RunTags, mut made: Made) -> Result<String, String> {
+        if let Some(a) = self.adoption.as_ref().filter(|_| tags.study.is_some()) {
+            let key = RunKey {
+                tags: tags.clone(),
+                case: a.case.clone(),
+                case_snapshot_hash: a.case_snapshot_hash.clone(),
+                set: set.to_vec(),
+                launch: launch.clone(),
+                solver_version: a.solver_version.clone(),
+            };
+            if let Some(rec) = a.index.adopt(&key) {
+                made.run = rec.id.clone();
+                made.continue_from = launch.continue_from.clone();
+                made.state = self.runs.status(&rec.id).map(|st| state_name(st.state))?;
+                made.adopted = true;
+                self.made.lock().unwrap_or_else(|e| e.into_inner()).push(made);
+                return Ok(rec.id.clone());
+            }
+        }
         let settings = RunSettings {
             set: set.to_vec(),
             ..RunSettings::default()
@@ -716,13 +840,37 @@ impl<'w> RunnerSource<'w> {
         *self.chosen.lock().unwrap_or_else(|e| e.into_inner()) = Some(c);
     }
 
-    fn queue(&self, base_path: &Path) -> Queue<'_> {
+    fn queue(&self, base_path: &Path, adoption: Option<Adoption>) -> Queue<'_> {
         Queue {
             runs: &self.ws.runs,
             root: self.ws.root().to_path_buf(),
             base_path: base_path.to_path_buf(),
             made: &self.made,
+            adoption,
         }
+    }
+
+    /// What adopting a study's runs needs (ADR 0201 S3): the project's runs, read before the runner is made sure of, the
+    /// base case's project-relative path and the hash of its bytes, and the solver version.
+    fn adoption(&self, base_path: &Path) -> Result<Adoption, RpcError> {
+        let bytes = std::fs::read(base_path).map_err(|e| {
+            err(
+                INTERNAL,
+                format!("cannot read the base case {}: {e}", base_path.display()),
+            )
+        })?;
+        Ok(Adoption {
+            index: RunIndex::read(&self.ws.runs),
+            case: self
+                .in_project(base_path)
+                .unwrap_or_else(|| base_path.display().to_string()),
+            case_snapshot_hash: rcfd_project::records::hash_bytes(&bytes),
+            solver_version: self
+                .ws
+                .runs
+                .solver_version()
+                .unwrap_or_else(|| rcfd_project::records::UNKNOWN_SOLVER_VERSION.to_string()),
+        })
     }
 
     fn ensure_runner(&self) -> Result<(), RpcError> {
@@ -732,15 +880,20 @@ impl<'w> RunnerSource<'w> {
             .map_err(|e| err(INTERNAL, format!("the project's run service did not start: {e}")))
     }
 
-    /// Add what the source chose to the method's result (ADR 0189 S7, ADR 0200 S10).
-    fn annotate(&self, out: &mut Value) {
+    /// Add what the source chose to the method's result (ADR 0189 S7, ADR 0200 S10; with `adopting`, a study's call, the
+    /// count of the runs it adopted, ADR 0201 S4).
+    fn annotate(&self, out: &mut Value, adopting: bool) {
         let chosen = self.chosen.lock().unwrap_or_else(|e| e.into_inner()).clone();
         match chosen {
             Some(Ok(())) => {
                 let made = self.made.lock().unwrap_or_else(|e| e.into_inner());
+                let adopted = made.iter().filter(|m| m.adopted).count();
                 out["evaluator"] = json!("runner");
                 out["runs"] = Value::Array(made.iter().take(MAX_LISTED_RUNS).map(run_object).collect());
-                out["runs_total"] = json!(made.len());
+                out["runs_total"] = json!(made.len() - adopted);
+                if adopting {
+                    out["runs_adopted"] = json!(adopted);
+                }
             }
             Some(Err(note)) => {
                 out["evaluator"] = json!("process");
@@ -766,6 +919,9 @@ fn run_object(m: &Made) -> Value {
     if let Some(c) = &m.continue_from {
         o["continue_from"] = json!(c);
     }
+    if m.adopted {
+        o["adopted"] = json!(true);
+    }
     o
 }
 
@@ -778,12 +934,13 @@ impl EvaluatorSource for RunnerSource<'_> {
                 return Ok(None);
             }
         };
+        let adoption = self.adoption(study.base_path)?;
         self.ensure_runner()?;
         self.choose(Ok(()));
         // ADR 0200 S5: a study's own step cap is the in-process cap of its runs
         let max_steps = study.max_steps.and(study.limits.max_steps).map(|m| m as u64);
         Ok(Some(Box::new(RunnerEvaluator {
-            q: self.queue(study.base_path),
+            q: self.queue(study.base_path, Some(adoption)),
             study: folder,
             in_process: CaseEvaluator::new(study.base.clone(), study.limits, study.chain),
             chain: study.chain,
@@ -802,7 +959,7 @@ impl EvaluatorSource for RunnerSource<'_> {
         self.ensure_runner()?;
         self.choose(Ok(()));
         Ok(Some(Box::new(RunnerMapEvaluator {
-            q: self.queue(map.base_path),
+            q: self.queue(map.base_path, None),
             prefix: map.prefix.to_vec(),
             base: map.base.clone(),
             max_steps: map.max_steps.map(|m| m as u64),
@@ -813,13 +970,14 @@ impl EvaluatorSource for RunnerSource<'_> {
 impl Workspace {
     /// `design.run_study`, `design.evaluate` or `design.run_map` of the MCP server `svc` in project mode (ADR 0189 S1, ADR
     /// 0200 S8): the candidates or points are evaluated on the project's runner when [`RunnerSource`] can, else in the server
-    /// process as before; the result has the method's keys plus `evaluator` and, for the runner, `runs` and `runs_total`, or
-    /// `evaluator_note` (ADR 0189 S7, ADR 0200 S10). Any other design method is the service's.
+    /// process as before; the result has the method's keys plus `evaluator` and, for the runner, `runs` and `runs_total`
+    /// (and for a study `runs_adopted`, ADR 0201 S4), or `evaluator_note` (ADR 0189 S7, ADR 0200 S10). Any other design
+    /// method is the service's.
     pub fn design_call(&self, svc: &Arc<Service>, method: &str, args: &Value) -> Result<Value, RpcError> {
         let source = RunnerSource::new(self);
         let mut out = call_with(svc, method, args, &source)?;
         if ON_RUNNER.contains(&method) {
-            source.annotate(&mut out);
+            source.annotate(&mut out, method != "design.run_map");
         }
         Ok(out)
     }
