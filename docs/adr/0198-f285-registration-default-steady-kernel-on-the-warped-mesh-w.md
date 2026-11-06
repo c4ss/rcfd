@@ -194,6 +194,59 @@ acceptance is on the library harness, and a key needs its own wiring checks. Pro
 **Q3. The default.** The fix keeps the fixed point but changes every iterate, so it cannot be the default without changing the
 baseline hashes; it stays opt-in. Making it the default needs the maintainer to lift the bit-identity rule.
 
+## Amendment 1 (2026-11-06): more of the correction step, implicit non-orthogonal candidates, and the linear onset
+
+Written after D0, after D1 on every mesh but W at n = 64, and after D3 on W at n = 16 (and the V0 rows of K and W2), and
+before any other run; D3 on W, K and W2 at n = 32 was running. No limit is changed. What was known:
+
+- D1 `Pi_GG` on W at n = 32: `rho` 1.1991, `c` -1.0000 (a period-two mode, a ratio of about 2.2 in item 2), the mode in the
+  interior near the cells (27, 28, 28), not at the edges (`f_edge` 0.0049); `Pi_GG1` 1.3995 with `c` +1.0000 (a positive
+  mode), `Pi_LS` 1.1045 (`c` -1), `Pi_R` 1.0000, `Pi_GG,beta` 1.0000 for each `beta`. On W at n = 16, W2, K and G at n = 32
+  every map has `rho` 1.0000.
+- D0: the run on W at n = 32 has `max_du` 8.8e-4, 4.6e-2, 1.4e8, 1.8e16, 3.0e24, 4.5e32 at iterations 1, 10, 100, 200, 300,
+  400, and the pressure change is 1.3e33 times the velocity change at iteration 400 (L: 2.1e42 and 2.0e43). So D0's
+  registered window (200 to 400) lies far in the nonlinear runaway (velocities of 1e16 and more, pressures like their
+  square), not in the linear regime where the mode starts: its `g`, `c` and `f_edge` describe the runaway. They are reported
+  and H1 is read on them as registered; the linear onset is measured by D6 below. That is a defect of the registered D0
+  window; D0 stays as the record.
+- D3 on W at n = 16: every candidate converges in 218 iterations, as V0, with the largest differences against V0 of 2e-13
+  to 7e-13 (`u`) and 7e-13 to 6e-12 (`p`).
+
+Reading of what is known, not a result: with no corrector the correction step has a period-two mode on W at n = 32 that
+`Pi_R` and every `Pi_GG,beta` remove; with one corrector a positive mode appears, which a smaller `beta` cannot remove
+(`1 - beta mu` exceeds 1 for a negative `mu`). The registered kernel set-up has one corrector, so the deferred
+non-orthogonal part of the pressure equation is the next suspect.
+
+**D4 (more sub-maps; the same meshes, power iteration, `rho`, `c` and `f_edge` as D1).**
+
+- `X_p`: the deferred non-orthogonal step of the pressure equation, `q -> A^-1 b_N(q)`, `A` the compact matrix of the
+  pressure equation (zero-gradient walls, the reference cell as the kernel pins it), `b_N(q)` the explicit non-orthogonal
+  part of its right-hand side for the least-squares gradient of `q` (homogeneous boundary values). Its spectral radius above 1
+  means the deferred correction cannot converge, however many correctors.
+- `X_u`: the same for the momentum Laplacian (`nu = 1`, zero velocity on every wall, the Dirichlet boundary part included),
+  one scalar component.
+- `Pi_R1`: `Pi_R` with the one-corrector pressure solve of `Pi_GG1` and the face-flux change including its non-orthogonal
+  part (as the kernel's `face_flux` with one corrector).
+- `Pi_GG,imp`, `Pi_R,imp` and `Pi_GG,imp,beta` (`beta` in {0.75, 0.5}): `q` from the pressure equation with its
+  non-orthogonal part solved implicitly, `F(q) = A q - b_N(q) - (-D v) = 0` by restarted GMRES (restart 30) right-preconditioned
+  with one AMG V-cycle of `A`, to `tol_rel = 1e-12`; for `Pi_R,imp` the face-flux change includes the non-orthogonal part.
+
+**D5 (implicit candidates in the kernel).** A second test-only switch (hidden, default off) solves the kernel's pressure
+equation as in D4 (`A` and `b_N` the kernel's own assembly, GMRES from `p_old` to the kernel's pressure tolerance, restart 30,
+the iteration cap of `pressure_solver`) in place of the corrector passes; the flux and the cell correction then use that
+pressure as the default does. It needs `non_orth_correctors > 0`. Its fixed points are those of the default with
+correctors (at a fixed point the corrector passes solve the same equation `A p = b_N(p) - D(HbyA)`). Candidates, added to
+D3's list under the registered qualifying and choice rules: **I-GG** (the implicit solve alone), **I-R** (with
+`face_flux`), **I-beta 0.75** and **I-beta 0.5** (with C-beta). The tie order of the choice rule is extended: R, C-LS, C-beta
+0.75, 0.5, 0.25, then I-R, I-GG, I-beta 0.75, I-beta 0.5 (the corrector path first, as the cheaper one). Each on W at n = 32
+and on the controls W16, K32, W2-32, cap 5000, as D3.
+
+**D6 (the linear onset).** If a candidate converges on W at n = 32: from its converged state plus `1e-8 w` (`w`: the
+`x` velocity of cell `c` times `sin(c)`), the default kernel (switches off), until `max |u_k - u*|` exceeds 1e-3 or 2000
+iterations: the growth factor as the geometric mean of the ratio of successive `max |u_k - u*|` over the iterations where it
+lies in [1e-7, 1e-3], and `c`, `f_edge`, `f_wall` and the largest cell of `u_k - u*` at the last of those iterations. The
+readings H3 and H4 are given again on D6 beside the registered ones (the registered ones stand as read).
+
 ## Where to go next
 
 - [ADR 0193](0193-f246-registration-pressure-interpolation-variants.md) for the manufactured solution, the meshes and the M1
