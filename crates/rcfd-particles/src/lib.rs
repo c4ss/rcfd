@@ -2,27 +2,32 @@
 //!
 //! Point particles with Stokes or Schiller-Naumann drag, gravity with buoyancy, integrated by an analytic exponential
 //! scheme or Euler / midpoint / RK4, located and tracked across the faces of an unstructured polyhedral mesh, with wall
-//! reflection, trapping and escape, point and surface injection, constant and Rosin-Rammler diameters and VTK output.
+//! reflection, trapping and escape, point and surface injection, constant and Rosin-Rammler diameters and VTK output;
+//! a wall film (ADR 0192), erosion and rough-wall rebound (ADR 0194).
 //!
 //! The crate depends on `rcfd-mesh` only; the fluid velocity and its gradient are inputs ([`Flow`]).
 
 pub mod coupling;
 pub mod dispersion;
 pub mod drag;
+pub mod erosion;
 pub mod film;
 pub mod inject;
 pub mod locate;
 pub mod rng;
+pub mod rough;
 pub mod tracker;
 pub mod vtp;
 
 pub use coupling::{Coupling, Thermal};
 pub use dispersion::Dispersion;
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
+pub use erosion::{dnv_angle_function, impact_angle, Erosion, ErosionSpec, DNV_A};
 pub use film::{film_velocity, nusselt_thickness, Film, FilmSpec};
 pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};
 pub use rng::SplitMix64;
+pub use rough::{rough_rebound, tangent_pair, RoughCounts, RoughSpec, RoughWall};
 pub use tracker::{fluid_at, Flow, Interp, Options, Particle, State, Tracker, WallAction};
 
 /// Errors of the particle tracker.
