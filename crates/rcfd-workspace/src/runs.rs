@@ -174,6 +174,23 @@ impl RunService {
     ) -> Result<String, String> {
         self.client.submit_tagged(case, settings, tags)
     }
+
+    /// The `solver_version` a run submitted now records (ADR 0201 S1).
+    pub fn solver_version(&self) -> Option<String> {
+        self.client.solver_version()
+    }
+
+    /// [`Self::submit_tagged`] with the run's launch settings, `continue_from` and `max_steps` (ADR 0200 S2); like it, no
+    /// journal line.
+    pub fn submit_with(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &rcfd_runner::records::LaunchSettings,
+        tags: &rcfd_runner::store::RunTags,
+    ) -> Result<String, String> {
+        self.client.submit_with(case, settings, launch, tags)
+    }
 }
 
 impl Workspace {

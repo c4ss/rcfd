@@ -66,6 +66,8 @@ COMMANDS:
                                  output.store_time_interval is set (default: <out>/fields)
         --status-monitors        add the report values of each step (monitors) to the iteration events
         --max-elapsed <seconds>  stop cleanly (exit 8) after this wall-clock time
+        --max-steps <n>          stop cleanly after n steps of this launch (state step_limit, exit 0; a continued
+                                 run counts from its checkpoint); not with chain.sequence
         --threads <n>            worker threads (sets RAYON_NUM_THREADS; results do not depend on it)
         --precision double       only double precision is supported
         --journal <file>         run the case recorded in a service journal (journal.get) instead of a file
@@ -331,6 +333,7 @@ const RUN_VALUE_OPTS: &[&str] = &[
     "--case-dir",
     "--store-dir",
     "--max-elapsed",
+    "--max-steps",
     "--threads",
     "--precision",
     "--hostfile",
@@ -383,6 +386,12 @@ fn cmd_run(args: &[String]) -> u8 {
     if threads == Some(0) || max_elapsed.is_some_and(|m| m.is_nan() || m <= 0.0) {
         return usage_error("--threads and --max-elapsed must be positive");
     }
+    // ADR 0200 S4: the drive's step cap (steps of this launch)
+    let max_steps = match parse_opt::<usize>(args, "--max-steps") {
+        Ok(Some(0)) => return usage_error("--max-steps must be at least 1"),
+        Ok(m) => m,
+        Err(m) => return usage_error(&m),
+    };
     if let Some(n) = threads {
         // the global worker pool reads this on first use, which is after this point
         std::env::set_var("RAYON_NUM_THREADS", n.to_string());
@@ -466,6 +475,11 @@ fn cmd_run(args: &[String]) -> u8 {
         return code;
     }
     if cmd_w19c::chain_requested(&case, args) {
+        if max_steps.is_some() {
+            return usage_error(
+                "--max-steps caps a single run; a case with chain.sequence runs its stages (use --no-chain)",
+            );
+        }
         return cmd_w19c::run_chain_cli(&case, args, &label);
     }
     let sim = match Simulation::new(&case) {
@@ -566,8 +580,17 @@ fn cmd_run(args: &[String]) -> u8 {
         },
         None => None,
     };
+    let mut info = serde_json::json!({
+        "driver": "cli", "case": label, "continue_from": cont,
+        "threads": threads.or_else(|| std::thread::available_parallelism().ok().map(|n| n.get())),
+        "precision": "double", "warnings": rule_warnings,
+    });
+    if let Some(n) = max_steps {
+        // only when given, so the start event of every other run is unchanged
+        info["max_steps"] = n.into();
+    }
     let opts = RunOptions {
-        max_steps: None,
+        max_steps,
         max_elapsed,
         stop_file: opt(args, "--stop-file").map(PathBuf::from),
         status_every: status_every.unwrap_or(0),
@@ -578,11 +601,7 @@ fn cmd_run(args: &[String]) -> u8 {
         ),
         checkpoint_every: ckpt_every.unwrap_or(0),
         out_dir: Some(out_dir.clone()),
-        info: serde_json::json!({
-            "driver": "cli", "case": label, "continue_from": cont,
-            "threads": threads.or_else(|| std::thread::available_parallelism().ok().map(|n| n.get())),
-            "precision": "double", "warnings": rule_warnings,
-        }),
+        info,
         store_dir: opt(args, "--store-dir").map(PathBuf::from),
         status_monitors: flag(args, "--status-monitors"),
     };

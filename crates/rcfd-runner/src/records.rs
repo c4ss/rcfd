@@ -50,6 +50,43 @@ impl RunSettings {
     }
 }
 
+/// The settings of a run that start it from another run's result or cap its steps (ADR 0200 S1): `continue_from` and
+/// `max_steps` of `run.json` `settings`, each written only when set and read beside [`RunSettings`] from the same object,
+/// so a run without them keeps the bytes of its `run.json`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LaunchSettings {
+    /// The id of a run of the same project whose `output/restart.rcfd` the run starts from (`rcfd run --continue-from`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continue_from: Option<String>,
+    /// The most steps of the run's launch (`rcfd run --max-steps`); at least 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_steps: Option<u64>,
+}
+
+impl LaunchSettings {
+    /// The launch settings of a run record (`settings` of `run.json`; both keys optional).
+    pub fn of(rec: &RunRecord) -> Result<LaunchSettings, String> {
+        serde_json::from_value(rec.settings.clone()).map_err(|e| format!("run.json settings: {e}"))
+    }
+
+    /// Neither key set.
+    pub fn is_empty(&self) -> bool {
+        self.continue_from.is_none() && self.max_steps.is_none()
+    }
+
+    /// `settings` of `run.json`: `settings` with these keys added (none when both are unset).
+    pub fn merged(&self, settings: &RunSettings) -> Result<serde_json::Value, String> {
+        let mut v = serde_json::to_value(settings).map_err(|e| e.to_string())?;
+        if let (Some(o), serde_json::Value::Object(l)) = (
+            v.as_object_mut(),
+            serde_json::to_value(self).map_err(|e| e.to_string())?,
+        ) {
+            o.extend(l);
+        }
+        Ok(v)
+    }
+}
+
 /// FNV-1a 64-bit hash (not cryptographic; identifies a snapshot's content): `rcfd_core::hash::fnv64`.
 pub fn fnv1a64(bytes: &[u8]) -> u64 {
     rcfd_project::records::fnv64(bytes)

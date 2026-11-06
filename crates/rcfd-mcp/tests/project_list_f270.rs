@@ -151,8 +151,9 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         (fs["type"].clone(), fs["minimum"].clone()),
         (json!("integer"), json!(1))
     );
-    // ADR 0196 B (registered edit E2): under --project these two have the class execute; the F-273 list had write_files
-    for n in ["design_run_study", "design_evaluate"] {
+    // ADR 0196 B (registered edit E2): under --project these two have the class execute; the F-273 list had write_files.
+    // ADR 0200 S9 (registered edit E2 there): design_run_operating_map too
+    for n in ["design_run_study", "design_evaluate", "design_run_operating_map"] {
         let t = live_f273.iter_mut().find(|t| t["name"] == n).unwrap();
         assert_eq!(t["_meta"]["rcfd/access"], "execute", "{n}");
         t["_meta"]["rcfd/access"] = json!("write_files");

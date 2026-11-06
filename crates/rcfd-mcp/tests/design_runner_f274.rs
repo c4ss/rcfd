@@ -2,7 +2,8 @@
 //! evaluate each candidate at each operating condition as one run of the project's runner, tagged in `run.json` with its
 //! study, variant and condition, never more than `max_runs` at once; the records equal those of the in-process evaluator
 //! (the same tools on a server without a project) within the registered limit; the wall time per evaluation of both is
-//! recorded; a chained study with several conditions, and a study with its own step cap, stay in the server process.
+//! recorded; a chained study with several conditions, and a study with its own step cap, stayed in the server process until
+//! F-287, which runs them on the runner (ADR 0200 registered edit E3: C4-C (ii) and (iii) now assert that).
 //! Needs `rcfd` and `rcfd-runner` next to `rcfd-mcp` (one cargo build profile).
 
 mod common;
@@ -388,25 +389,35 @@ fn c4_design_studies_run_on_the_runner_in_project_mode() {
     assert_eq!(seen.len(), 4);
     let before = run_folders(&dir);
 
-    // C4-C (ii): chain left to its default (true) with two conditions: in process, no run
+    // C4-C (ii): chain left to its default (true) with two conditions; ADR 0200 E3: on the runner since F-287 (four runs),
+    // checked in full by design_runner_f287.rs C-CH
     ok(&m.call("design_create_study", two_args("designs/two-chain", json!({}))));
     let v = ok(&m.call("design_run_study", json!({"dir": "designs/two-chain"})));
-    eprintln!("C4-C (ii): evaluator {} note {}", v["evaluator"], v["evaluator_note"]);
-    assert_eq!(v["evaluator"], "process", "{v}");
-    assert!(v["evaluator_note"].as_str().unwrap().contains("chain"), "{v}");
+    eprintln!("C4-C (ii): evaluator {} runs_total {}", v["evaluator"], v["runs_total"]);
+    assert_eq!(v["evaluator"], "runner", "{v}");
     assert_eq!(v["evaluations_run"], 2);
-    assert!(v.get("runs").is_none());
-    assert_eq!(run_folders(&dir), before, "a chained study made runs");
+    assert_eq!(
+        run_folders(&dir).len(),
+        before.len() + 4,
+        "ADR 0200 E3: a chained study makes four runs"
+    );
+    let before = run_folders(&dir);
 
-    // C4-C (iii): its own step cap: in process, no run
+    // C4-C (iii): its own step cap; ADR 0200 E3: on the runner since F-287 (four runs), checked by C-MS
     ok(&m.call(
         "design_create_study",
         two_args("designs/two-steps", json!({"chain": false, "max_steps": 3000})),
     ));
     let v = ok(&m.call("design_run_study", json!({"dir": "designs/two-steps"})));
-    eprintln!("C4-C (iii): evaluator {} note {}", v["evaluator"], v["evaluator_note"]);
-    assert_eq!(v["evaluator"], "process", "{v}");
-    assert!(v["evaluator_note"].as_str().unwrap().contains("max_steps"), "{v}");
-    assert_eq!(run_folders(&dir), before, "a study with max_steps made runs");
+    eprintln!(
+        "C4-C (iii): evaluator {} runs_total {}",
+        v["evaluator"], v["runs_total"]
+    );
+    assert_eq!(v["evaluator"], "runner", "{v}");
+    assert_eq!(
+        run_folders(&dir).len(),
+        before.len() + 4,
+        "ADR 0200 E3: a study with max_steps makes four runs"
+    );
     eprintln!("C4: largest relative difference over every compared record {worst:e}");
 }
