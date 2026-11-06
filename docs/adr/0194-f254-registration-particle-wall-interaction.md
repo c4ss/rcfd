@@ -335,9 +335,10 @@ comparison with measured erosion or rebound data, the erosion and roughness stat
 ## Addendum 1: results (2026-11-06)
 
 Measured against the limits registered above; no limit was changed and no check was run before its code was complete.
-Release builds on Windows: the library checks on commit c0f1868, the case-tree checks on edd0364 (the library checks ran
-again there with the same numbers). Each registered check ran once on its code, and the Kolmogorov checks ran with the
-registered seed 254 only.
+Release builds on Windows. The library checks first ran on the library code before its commit, again after a change
+for clippy that rewrote one condition of W4 without changing its meaning (c0f1868), and again on edd0364; the case-tree
+checks ran twice on edd0364. The runs are deterministic, and every repeat gave the same numbers; none was repeated to
+change a result. The Kolmogorov checks ran with the registered seed 254 only.
 
 | Check | Limit | Measured | Verdict |
 | --- | --- | --- | --- |
