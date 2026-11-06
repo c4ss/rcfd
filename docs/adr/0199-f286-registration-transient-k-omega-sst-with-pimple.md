@@ -287,3 +287,40 @@ solver.algorithm = "piso"`, and on `piso` `is not available with a turbulence mo
 CH on `pimple` with `time_advance = "fractional_step"`, located at `solver.time_advance` (the rule that the fractional step
 needs `piso`, reached because `pimple` with SST is no longer a static error). CH on `piso` with the fractional step stays in
 S1 as a second case, located at `turbulence.model`. No limit changes.
+
+### Amendment 2 (2026-11-06): H and C1 on a closed box, written after their first run and before the corrected run
+
+The first run of the library checks (code of D5 in the working tree, release, each test once) found both set-ups defective,
+for a reason of the existing kernel, not of the transient code:
+
+- every H run stopped at H0 in step 1, sweep 1: the spread of k was 1.889e-2 and of omega 1.458e-2 (limit 1e-13). F1 was 1 in
+  every cell, as derived. The cells next to the periodic seam differ from the others because a periodic face takes the partner
+  cell's value of the previous iterate (`rcfd_fv::bc::Periodic`, lagged), so within one sweep the seam acts like a wall at the
+  old value. D1 to D2b therefore did not run past H0;
+- C1 (Euler, upwind, the first case) gave `abs(B) / sum V beta* omega* k'` = 2.876e-2 (limit 1e-10). A scratch probe (not
+  committed) shows the sweeps converging (change 7e-10 at sweep 30) and the budget converging to -1.494e-3 against a
+  destruction of 5.196e-2. The cause is the periodic seam again: `rcfd_turb::eddy::effective_viscosity` gives a boundary face,
+  periodic faces included, the diffusivity `nu + nu_t` of its owner cell only, so the two faces of a seam pair carry different
+  diffusivities when `nu_t` differs across the seam, and the diffusive fluxes of the pair do not cancel. C1 then measures this
+  property of the steady kernel (it is the same in a steady SST sweep and in the momentum face viscosity of every RANS run with
+  periodic seams), not the transient term.
+
+The records stay as ignored tests (`d1_..._periodic_record` and the others, `c1_periodic_record`), with their limits
+unchanged. The corrected set-ups remove the seam; nothing else changes (constants, step sizes, sweeps, limits, reference
+values):
+
+- **H (corrected).** `box_2d(4, 4, 1.0, 1.0)` with no periodic direction; all four sides (`xmin`, `xmax`, `ymin`, `ymax`) are
+  the model's walls, with k and omega at zero gradient on them. Every cell centre is still at most 0.375 from its nearest side,
+  so the argument for `F1 = 1` holds, and zero-gradient sides keep a uniform field uniform in every sweep.
+- **C1 (corrected).** `box_2d(16, 16, 1.0, 1.0)` with no periodic direction, all four sides the walls with k and omega at zero
+  gradient. The model gets `u = 0` (so `S = 0` and the wall law is inactive) and the flux of the stream function
+  `psi = (1/pi) sin(pi x) sin(pi y)` (largest speed 1, Courant number 0.8 at `dt = 0.05`): on each side face from point A to
+  point B of the xy plane, `phi_f = +-(psi(B) - psi(A)) depth`, the sign that of the area vector against the right-hand normal
+  of `B - A`. This flux is divergence-free in every cell by construction and zero on every side, since `psi = 0` there.
+  Precondition C1-0 (a miss is a defective set-up): `max_c abs(sum_f phi_f) <= 1e-14 max_f abs(phi_f)` and `phi_f = 0` on
+  every boundary face. `k = 1 + 0.5 sin(2 pi x)`, `omega = 10`, the schemes, step, steps, sweeps, convection schemes, budget
+  and limits are those of the C1 row.
+
+Found, not changed (out of scope, for the maintainer): on a periodic seam the scalar transport of k and omega (and the
+momentum face viscosity of RANS runs) is not conservative where `nu_t` differs across the seam (above). Check S4 and check H of
+ADR 0183 have rotational seams.
