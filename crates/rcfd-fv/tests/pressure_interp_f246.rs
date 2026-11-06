@@ -4,6 +4,10 @@
 //! P: mesh preconditions. M: an incompressible manufactured solution on the F-208 meshes (M1 orders of the pair (32, 64), M2 error
 //! ratios on the near-orthogonal meshes at n = 32, M3 the levels 16 and 32). B: the quiescent stably stratified Boussinesq box on the
 //! skewed mesh K. L0: the body-force-weighted variant without a body force is the default bit for bit.
+//!
+//! Amendment 1 of ADR 0193: V0 diverges on F-208's W from n = 32 (W stays binding for V1 and V2; M3 records the divergence); W2
+//! (W with amplitude 0.07) is a supplementary warped mesh with the same limits; B-a as registered does not converge (kept as an
+//! ignored record) and B-a' adds `face_flux`; every M1 sequence (n = 16, 32, 64) is heavy (ignored, run by name in release).
 
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::bc::{FixedValue, Profile};
@@ -36,6 +40,8 @@ enum MeshKind {
     G3,
     K,
     W,
+    /// Amendment 1: W with amplitude 0.07 instead of 0.1 (supplementary).
+    W2,
     S,
 }
 
@@ -52,14 +58,17 @@ fn make_mesh(kind: MeshKind, n: usize) -> Mesh {
             [p[0] + 0.7 * p[1] + 0.3 * p[2], p[1] + 0.3 * p[2], p[2]]
         })
         .unwrap(),
-        MeshKind::W => warp(&box_mesh([n; 3], [1.0; 3], un).unwrap(), |p| {
-            [
-                p[0] + 0.1 * (TP * p[1]).sin() * (TP * p[2]).sin(),
-                p[1] + 0.1 * (TP * p[0]).sin() * (TP * p[2]).sin(),
-                p[2] + 0.1 * (TP * p[0]).sin() * (TP * p[1]).sin(),
-            ]
-        })
-        .unwrap(),
+        MeshKind::W | MeshKind::W2 => {
+            let a = if kind == MeshKind::W { 0.1 } else { 0.07 };
+            warp(&box_mesh([n; 3], [1.0; 3], un).unwrap(), |p| {
+                [
+                    p[0] + a * (TP * p[1]).sin() * (TP * p[2]).sin(),
+                    p[1] + a * (TP * p[0]).sin() * (TP * p[2]).sin(),
+                    p[2] + a * (TP * p[0]).sin() * (TP * p[1]).sin(),
+                ]
+            })
+            .unwrap()
+        }
         MeshKind::S => box_mesh(
             [n; 3],
             [1.0; 3],
@@ -305,7 +314,20 @@ fn p_preconditions() {
     assert!(sg3 >= 1e-6 && sw >= 1e-6, "P G3 {sg3}, W {sw}");
 }
 
-/// M3 (reported): the levels n = 16 and 32 of every variant on one mesh; V0 must converge (the set-up-defect rule).
+/// P for W2 (ADR 0193 amendment 1): the preconditions of the warped mesh at n = 16.
+#[test]
+fn p_preconditions_w2() {
+    let m = make_mesh(MeshKind::W2, 16);
+    let (q, np, sk) = (check_mesh(&m), non_planarity(&m), skewness(&geometry(MeshKind::W2, 16)));
+    println!(
+        "P W2: nonorth {:.2} deg (at least 20), nonplanarity {np:.3e} (at least 1e-4), largest |x_f - x_f'| / |d| {sk:.3e} (at least 1e-6)",
+        q.max_non_orthogonality
+    );
+    assert!(q.max_non_orthogonality >= 20.0 && np >= 1e-4 && sk >= 1e-6);
+}
+
+/// M3 (reported): the levels n = 16 and 32 of every variant on one mesh; V0 must converge (the set-up-defect rule), except on W
+/// where it diverges from n = 32 (amendment 1).
 fn levels_16_32(kind: MeshKind) {
     for (name, v) in VARIANTS {
         let (a, b) = (mms(kind, 16, v), mms(kind, 32, v));
@@ -314,7 +336,7 @@ fn levels_16_32(kind: MeshKind) {
             (a.e_u / b.e_u).log2(),
             (a.e_p / b.e_p).log2()
         );
-        if name == "V0" {
+        if name == "V0" && kind != MeshKind::W {
             assert!(a.converged && b.converged, "set-up: V0 on {kind:?} not converged");
         }
     }
@@ -328,6 +350,11 @@ fn m3_k_levels_16_32() {
 #[test]
 fn m3_w_levels_16_32() {
     levels_16_32(MeshKind::W);
+}
+
+#[test]
+fn m3_w2_levels_16_32() {
+    levels_16_32(MeshKind::W2);
 }
 
 #[test]
@@ -357,46 +384,73 @@ fn sequence(kind: MeshKind, name: &str) {
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_k_v0() {
     sequence(MeshKind::K, "V0");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_k_v1() {
     sequence(MeshKind::K, "V1");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_k_v2() {
     sequence(MeshKind::K, "V2");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_w_v0() {
     sequence(MeshKind::W, "V0");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_w_v1() {
     sequence(MeshKind::W, "V1");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_w_v2() {
     sequence(MeshKind::W, "V2");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
+fn m1_w2_v0() {
+    sequence(MeshKind::W2, "V0");
+}
+
+#[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
+fn m1_w2_v1() {
+    sequence(MeshKind::W2, "V1");
+}
+
+#[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
+fn m1_w2_v2() {
+    sequence(MeshKind::W2, "V2");
+}
+
+#[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_s_v0() {
     sequence(MeshKind::S, "V0");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_s_v1() {
     sequence(MeshKind::S, "V1");
 }
 
 #[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0193 amendment 1)"]
 fn m1_s_v2() {
     sequence(MeshKind::S, "V2");
 }
@@ -436,8 +490,17 @@ struct BoxRun {
     last_change: f64,
 }
 
-/// The box on K at n = 16 with the frozen profile T = z, `beta = 1`, `g = (0, 0, -10)`, `t_ref = 0.5`, `nu = 0.1`.
-fn stratified_box(coupling: Coupling, correctors: usize, v: PressureInterpolation) -> BoxRun {
+/// The largest of `values`, not finite if one is not.
+fn nan_max(values: impl Iterator<Item = f64>) -> f64 {
+    values.fold(
+        0.0,
+        |a: f64, b: f64| if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) },
+    )
+}
+
+/// The box on K at n = 16 with the frozen profile T = z, `beta = 1`, `g = (0, 0, -10)`, `t_ref = 0.5`, `nu = 0.1`; `face_flux` is
+/// the velocity correction of ADR 0084 (amendment 1, B-a').
+fn stratified_box(coupling: Coupling, correctors: usize, face_flux: bool, v: PressureInterpolation) -> BoxRun {
     let geom = geometry(MeshKind::K, 16);
     let mesh = &geom.mesh;
     let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
@@ -455,16 +518,18 @@ fn stratified_box(coupling: Coupling, correctors: usize, v: PressureInterpolatio
     let mut sol = SimpleSolver::new(geom.clone(), u, p, s);
     sol.body_force = Some(boussinesq_force(&geom, &t, 1.0, [0.0, 0.0, -10.0], 0.5));
     sol.pressure_interpolation = v;
+    sol.reconstructed_correction = face_flux;
     let mut last = f64::NAN;
     for _ in 0..B_ITERS {
         last = sol.iterate().max_du;
     }
-    let speed = sol.u.values.iter().map(|x| vec3::norm(*x)).fold(0.0, f64::max);
+    let speed = nan_max(sol.u.values.iter().map(|x| vec3::norm(*x)));
     let sf = mesh.face_area_vectors();
-    let face_speed = (0..mesh.n_faces())
-        .filter(|&f| !geom.empty[f])
-        .map(|f| sol.phi[f].abs() / vec3::norm(sf[f]))
-        .fold(0.0, f64::max);
+    let face_speed = nan_max(
+        (0..mesh.n_faces())
+            .filter(|&f| !geom.empty[f])
+            .map(|f| sol.phi[f].abs() / vec3::norm(sf[f])),
+    );
     BoxRun {
         speed,
         face_speed,
@@ -473,9 +538,14 @@ fn stratified_box(coupling: Coupling, correctors: usize, v: PressureInterpolatio
 }
 
 /// B0 to B3 for one kernel set-up.
-fn stratified(label: &str, coupling: Coupling, correctors: usize) {
-    let r0 = stratified_box(coupling, correctors, PressureInterpolation::Linear);
-    let r2 = stratified_box(coupling, correctors, PressureInterpolation::BodyForceWeighted);
+fn stratified(label: &str, coupling: Coupling, correctors: usize, face_flux: bool) {
+    let r0 = stratified_box(coupling, correctors, face_flux, PressureInterpolation::Linear);
+    let r2 = stratified_box(
+        coupling,
+        correctors,
+        face_flux,
+        PressureInterpolation::BodyForceWeighted,
+    );
     println!(
         "B {label}: largest cell speed V0 {:.3e} ({:.3e} U_b), V2 {:.3e} ({:.3e} U_b); ratio {:.3e}; face speed V0 {:.3e}, V2 {:.3e}; last change V0 {:.3e}, V2 {:.3e}",
         r0.speed,
@@ -506,14 +576,23 @@ fn stratified(label: &str, coupling: Coupling, correctors: usize) {
     assert!(r2.speed <= 1e-8 * U_B, "B2 {label}: V2 {}", r2.speed);
 }
 
+/// Record (ADR 0193 amendment 1): B-a as registered; both runs are not finite after 4000 iterations (the period-two mode of SIMPLEC
+/// at `alpha_p = 1`, ADR 0084), so B3 fails. Superseded by B-a'.
 #[test]
+#[ignore = "record: B-a as registered does not converge (V0 and V2 not finite), superseded by B-a' (ADR 0193 amendment 1)"]
 fn b_stratified_box_simplec_without_correctors() {
-    stratified("B-a", Coupling::Simplec, 0);
+    stratified("B-a", Coupling::Simplec, 0, false);
+}
+
+/// B-a' (ADR 0193 amendment 1): B-a with `velocity_correction = face_flux`.
+#[test]
+fn b_stratified_box_simplec_face_flux_without_correctors() {
+    stratified("B-a'", Coupling::Simplec, 0, true);
 }
 
 #[test]
 fn b_stratified_box_simple_with_a_corrector() {
-    stratified("B-b", Coupling::Simple, 1);
+    stratified("B-b", Coupling::Simple, 1, false);
 }
 
 /// L0: without a body force the body-force-weighted variant is the default bit for bit (lid cavity on K, n = 8).
