@@ -315,3 +315,37 @@ test-only masked Laplacian, a claim that the options improve accuracy (ADR 0016 
 * [ADR 0190](0190-f256-registration-case-tree-wiring-of-the-gradient-options.md) for the options, their keys and their wiring.
 * [ADR 0016](0016-wave13-numerics.md) D2 for what the options do on the manufactured scalar problem.
 * [Case schema](../case-schema.md), section "Gradient options of the energy and scalar diffusion term".
+
+## Amendment 1 (2026-11-06): the set-up of T2, and what the first runs showed about P1 and M2
+
+Written after the first runs and before any corrected run. Run before this text, with the code of K3 to K5: the library test
+(`gradient_pressure_f291.rs`: P, P-lib, P-lib-T, P-lib-D, P-lib-B), G1, and G2 with G3 of M1, M2, P1, P2, P3, T1 and E1; T2 as
+registered (below). Not run: T3, G4 (i) and G4 (iv). No limit is changed.
+
+**Finding 1: T2 as registered does not parse.** `Case::parse_toml` refuses T2 at `boundaries.ymax.turbulence` ("moving walls are
+not supported by the wall functions (the wall velocity must be zero)"): the k-epsilon wall functions refuse the lid of M1 as a
+wall, which T1 (SST) accepts. The test `g2_g3_t2_t3_k_epsilon_and_spalart_allmaras_c2` stopped there, before T3. A set-up defect;
+corrected as follows.
+
+* **T2b (corrected):** T2 with `boundaries.ymax.turbulence = "zero_gradient"` in place of `"wall"`: the lid is neither a wall nor
+  an inlet of the model (zero-gradient k and epsilon there), the walls are `xmax`, `xmin` and `ymin` (sorted names). The library
+  run of T2b passes those walls. Compared fields, sets and limits as T2.
+* T3 runs as registered, in a test of its own.
+* The registered test stays as the ignored record `g2_g3_t2_t3_k_epsilon_and_spalart_allmaras_c2_setup_defect`; the corrected
+  tests are `g2_g3_t2b_k_epsilon_c2` and `g2_g3_t3_spalart_allmaras_c2`.
+* G4 (i) and G4 (iv), not yet run, take T2b in place of T2.
+
+**Finding 2 (disclosed): P1's default run is not a converged flow.** After its 60 iterations the default run of P1 has largest
+speeds of 15.2 (`ux`) and 30.1 (`uy`) against the inlet's 1, and a pressure scale of 320: SIMPLEC with a non-orthogonal corrector
+and without `simplec_non_orthogonal_compensation`, the configuration ADR 0050 D1 found unstable. G2 and G3 compare the same 60
+iterations and stay as registered; G3's changes on P1 are therefore changes of a diverging iterate, not of a flow. P2 (the same
+channel with the compensation) has scales of 3.19 and 0.93 against the inlet's 1. M2's default run (transient cavity) has a
+largest speed of 6.42 against the lid's 1 after its 16 steps; disclosed, no change.
+
+* **P2-all (supplementary, not binding):** P2 with every set O1 to O6 and C2, G2 and G3 with the registered limits (`<= 1e-12`,
+  `> 1e-9`) and G3-K, in the test `g2_g3_p2_all_sets_supplementary`; the scales of its default run are printed. It is evidence
+  of the options on a channel that does not diverge; P1 stays the binding case of the pressure checks.
+
+**Q8 (new). The P1 set-up.** (a) Keep P1 binding as registered (the checks hold whatever the iterate does) with P2-all as
+supplementary evidence; (b) make P2-all the binding all-set case of the pressure. Recommendation (a): (b) would change the
+acceptance after a run. Proceeding on (a).
