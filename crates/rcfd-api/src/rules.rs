@@ -11,6 +11,9 @@
 //! `"where": c` that filters the counted items (`@` is bound to each item). `P` may start with `@`
 //! (the item bound by the rule's `each`) or `$mesh.` (the mesh context); `V` may be `{"path": P2}`.
 //! Operators: eq ne gt ge lt le in not_in vec_zero vec_nonzero is_empty non_empty name_in.
+//!
+//! A rule's `path` and `message` are strings or `{"first_of": [{"when": c, ..}, ..]}`: the first entry whose condition holds
+//! (or that has none) gives the value. A message's last entry has no condition (ADR 0196 C).
 
 use crate::case::Case;
 use serde::Serialize;
@@ -120,7 +123,8 @@ struct Rule {
     each: Option<String>,
     when: Value,
     path: Value,
-    message: String,
+    /// A string, or `{"first_of": [{"when"?, "message"}, ..]}` (ADR 0196 C).
+    message: Value,
     fix: Option<Value>,
 }
 
@@ -271,7 +275,33 @@ impl RuleSet {
                 }
                 _ => return Err(format!("{what}: 'path' must be a string or {{\"first_of\": [..]}}")),
             }
-            let message = s("message")?;
+            let message = r.get("message").cloned().unwrap_or(Value::Null);
+            match &message {
+                Value::String(_) => {}
+                Value::Object(_) => {
+                    // ADR 0196 C: a message chosen by condition, read like the path's first_of; the last entry has no
+                    // condition, so a rule that fires always has a message
+                    check_keys(&message, &["first_of"], &format!("{what}.message"))?;
+                    let l = message["first_of"]
+                        .as_array()
+                        .filter(|l| !l.is_empty())
+                        .ok_or(format!("{what}.message: 'first_of' needs a non-empty list"))?;
+                    for (k, c) in l.iter().enumerate() {
+                        let at = format!("{what}.message.first_of[{k}]");
+                        check_keys(c, &["when", "message"], &at)?;
+                        if !c["message"].is_string() {
+                            return Err(format!("{at}: needs a string 'message'"));
+                        }
+                        if let Some(w) = c.get("when") {
+                            if k + 1 == l.len() {
+                                return Err(format!("{at}: the last entry takes no 'when'"));
+                            }
+                            check_cond(w, &format!("{at}.when"))?;
+                        }
+                    }
+                }
+                _ => return Err(format!("{what}: needs a string 'message' or {{\"first_of\": [..]}}")),
+            }
             let fix = match r.get("fix") {
                 None => None,
                 Some(f) => {
@@ -372,13 +402,24 @@ impl Rule {
                 })
                 .unwrap_or_default(),
         };
+        let message = match &self.message {
+            Value::String(s) => s.as_str(),
+            other => other["first_of"]
+                .as_array()
+                .and_then(|l| {
+                    l.iter()
+                        .find(|c| c.get("when").is_none_or(|w| eval(w, ctx)))
+                        .and_then(|c| c["message"].as_str())
+                })
+                .unwrap_or_default(),
+        };
         let sub = |s: &str| s.replace("{name}", name);
         out.push(RuleDiagnostic {
             id: self.id.clone(),
             severity: self.severity,
             category: self.category.clone(),
             path: sub(&path),
-            message: sub(&self.message),
+            message: sub(message),
             fix: self.fix.as_ref().map(|f| {
                 let mut f = f.clone();
                 if let Some(p) = f["path"].as_str() {

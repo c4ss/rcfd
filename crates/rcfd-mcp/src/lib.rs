@@ -56,6 +56,11 @@ pub const SESSION_ONLY: [&str; 16] = [
     "render_image",
 ];
 
+/// Session tools whose access class is `execute` with a project (ADR 0196 B): there they evaluate on the project's runner,
+/// starting runs as `start_run` does (ADR 0189). Without a project they keep their class `write_files`, so the tool list
+/// without a project is unchanged.
+pub const PROJECT_EXECUTE: [&str; 2] = ["design_run_study", "design_evaluate"];
+
 /// Added to the `initialize` instructions when the server has a project (ADR 0135).
 const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; new_case makes a case file in cases/; check_case_mesh and preview_mesh check and draw a case's mesh, import_mesh brings a mesh file into meshes/ and list_meshes lists them (a case's mesh settings change through edit_case, which checks the edited mesh); start_run (which can make its case first), wait_run, pause_run, resume_run and cancel_run drive the project's run service; the tools that change the project take an optional reason, kept with the change in the project journal, and read_feed lists who changed what and why.";
 
@@ -615,8 +620,8 @@ impl McpServer {
     }
 
     /// Add the project tools of ADR 0135 for one project folder (`rcfd-mcp --project`); the session tools of
-    /// [`SESSION_ONLY`] are then neither listed nor callable (ADR 0195 P1). Without this call the tool list and every
-    /// answer are those of a server without a project.
+    /// [`SESSION_ONLY`] are then neither listed nor callable (ADR 0195 P1), and those of [`PROJECT_EXECUTE`] have the class
+    /// `execute` (ADR 0196 B). Without this call the tool list and every answer are those of a server without a project.
     pub fn with_project(mut self, project: project::ProjectTools) -> Self {
         self.project = Some(project);
         self
@@ -631,6 +636,9 @@ impl McpServer {
         let mut t = tools();
         if self.project.is_some() {
             t.retain(|x| !SESSION_ONLY.contains(&x.name));
+            for x in t.iter_mut().filter(|x| PROJECT_EXECUTE.contains(&x.name)) {
+                x.access = Access::Execute;
+            }
             t.extend(project::tools());
         }
         t

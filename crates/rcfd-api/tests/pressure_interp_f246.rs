@@ -5,6 +5,9 @@
 //! library run (`rcfd_fv` only) with the same variant to 1e-12. T3: every variant moves the tree result away from the default run
 //! by more than 1e-9, so T2 cannot pass unwired. T4 (i): the key written at its default changes neither the settings hash nor a bit
 //! of the result. The variants are one table (`VARIANTS`), as F-256's option sets are (ADR 0190).
+//!
+//! T1 as registered is kept as the ignored record `t1_located_errors_setup_defect`, beside the corrected `t1b_located_errors`
+//! (ADR 0193 addendum 1 difference 1, ADR 0196 A).
 
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
@@ -329,8 +332,10 @@ fn refused_at(text: &str) -> String {
     }
 }
 
-#[test]
-fn t1_located_errors() {
+/// T1's cases: name, case text, the expected path (or "accepted"). `registered`: the cases as ADR 0193 registered them, the two
+/// R2 cases on C1 (with `physics.body_force`); otherwise the corrected cases (ADR 0193 addendum 1 difference 1): the two R2 cases
+/// without the body force, which `pimple` refuses first, and the control "pimple without the key".
+fn t1_cases(registered: bool) -> Vec<(&'static str, String, &'static str)> {
     const KEY: &str = "solver.pressure_interpolation";
     let (v1, v2) = (VARIANTS[0].1, VARIANTS[1].1);
     let porous =
@@ -338,16 +343,16 @@ fn t1_located_errors() {
     let accel = "[sources.drive]\ntype = \"acceleration\"\nacceleration = [1.0, 0.0, 0.0]\nzone = \"all\"\n";
     let pimple = format!("algorithm = \"pimple\"\ndt = 0.01\nend_time = 0.05\n{v1}");
     let coupled = format!("algorithm = \"coupled\"\nmax_iterations = {ITERS}\n{v1}");
-    let checks: Vec<(&str, String, &str)> = vec![
+    let mut checks: Vec<(&str, String, &str)> = vec![
         // R1: a value the schema refuses
         (
             "R1 unknown variant",
             cavity_text(0, true, &steady("pressure_interpolation = \"momentum_weighted\"\n"), ""),
             KEY,
         ),
-        // R2: no kernel takes it (no physics.body_force here: piso and pimple refuse it first)
-        ("R2 pimple", cavity_text(0, false, &pimple, ""), KEY),
-        ("R2 coupled", cavity_text(0, false, &coupled, ""), KEY),
+        // R2: no kernel takes it (corrected: no physics.body_force here, piso and pimple refuse it first)
+        ("R2 pimple", cavity_text(0, registered, &pimple, ""), KEY),
+        ("R2 coupled", cavity_text(0, registered, &coupled, ""), KEY),
         ("R2 frozen flow", frozen_text(v1), KEY),
         // R3: nothing to weight
         ("R3 no body force", cavity_text(0, false, &steady(v2), ""), KEY),
@@ -366,15 +371,39 @@ fn t1_located_errors() {
             "accepted",
         ),
         ("control V2 buoyant", buoyant_text(v2), "accepted"),
-        (
+    ];
+    if !registered {
+        checks.push((
             "control pimple without the key",
             cavity_text(0, false, "algorithm = \"pimple\"\ndt = 0.01\nend_time = 0.05\n", ""),
             "accepted",
-        ),
-    ];
+        ));
+    }
+    checks
+}
+
+/// Every case's outcome is printed; then each must have been refused at its path or accepted as expected.
+fn t1(label: &str, checks: Vec<(&str, String, &str)>) {
+    let mut missed = Vec::new();
     for (what, text, want) in checks {
         let got = refused_at(&text);
-        println!("T1 {what}: {got} (want {want})");
-        assert_eq!(got, want, "T1 {what}");
+        println!("{label} {what}: {got} (want {want})");
+        if got != want {
+            missed.push(format!("{what}: {got} (want {want})"));
+        }
     }
+    assert!(missed.is_empty(), "{label}: {missed:?}");
+}
+
+/// T1 as registered (ADR 0193): kept as the record of its set-up defect (ADR 0196 A).
+#[test]
+#[ignore = "ADR 0193 addendum 1 difference 1 (ADR 0196 A): the registered R2 cases on C1 carry physics.body_force, which pimple refuses first; t1b_located_errors is the corrected test"]
+fn t1_located_errors_setup_defect() {
+    t1("T1 (registered)", t1_cases(true));
+}
+
+/// T1 (corrected, ADR 0193 addendum 1 difference 1; ADR 0196 A).
+#[test]
+fn t1b_located_errors() {
+    t1("T1", t1_cases(false));
 }

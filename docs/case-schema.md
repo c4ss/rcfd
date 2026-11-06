@@ -2176,6 +2176,8 @@ Located static errors:
 before anything is solved. Each diagnostic has `id`, `severity` (`error`, `warning`, `info`), `category`, a located `path`, `message`
 and sometimes a suggested `fix` (never applied). Errors stop the run with exit 3; warnings go to stderr and to `warning` status events
 with the rule id. The 21 rules (SV001-SV013 errors, SV101-SV105 warnings, SV201-SV203 infos) and the grammar are in ADR 0031.
+A rule's message can depend on the case (`first_of`, as a path can, ADR 0196 C): SV202 (no boundary conditions) names the default
+of the compressible solver, a slip wall, when `solver.algorithm = "compressible"`, and a fixed no-slip wall otherwise.
 
 One computed rule needs a built simulation and is not in the rule file: **SV301** (warning, `solver`, path
 `solver.corrector_control`, fix `adaptive`; ADR 0156).

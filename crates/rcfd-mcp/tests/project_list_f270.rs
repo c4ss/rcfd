@@ -15,6 +15,9 @@
 //! ADR 0195 C5-L restates it for F-275 (P1): with `--project` the 16 session tools of P1 are not listed; put back from the
 //! list without `--project` (`golden/tools_list_default.json`, F1's golden) at their places, and with `read_feed`'s added
 //! property `from_seq` (P7) removed, the list is the F-273 one.
+//!
+//! ADR 0196 B restates it for the class of `design_run_study` and `design_evaluate`, `execute` with `--project`: set back to
+//! `write_files`, the list is the F-273 one. The goldens are not edited.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -148,6 +151,12 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
         (fs["type"].clone(), fs["minimum"].clone()),
         (json!("integer"), json!(1))
     );
+    // ADR 0196 B (registered edit E2): under --project these two have the class execute; the F-273 list had write_files
+    for n in ["design_run_study", "design_evaluate"] {
+        let t = live_f273.iter_mut().find(|t| t["name"] == n).unwrap();
+        assert_eq!(t["_meta"]["rcfd/access"], "execute", "{n}");
+        t["_meta"]["rcfd/access"] = json!("write_files");
+    }
     let live_f273 = &live_f273;
     assert_eq!(live_f273.len(), 56, "33 session tools and 23 project tools");
     // ADR 0188 C-L: read_feed right after list_changes, a read tool with no required argument

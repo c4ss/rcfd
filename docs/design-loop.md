@@ -156,17 +156,18 @@ feasible stored candidates in the objective space (minimised form), as record in
 
 The service methods `design.*` and the MCP tools `design_*` (see `docs/mcp-tools.md`) expose the loop. Access classes: the eight
 tools that write files are `write_files` and need approval under the permission model of F-091; the six that only inspect are
-`read`. All paths go through the sandbox (`..` and absolute paths outside the root are error 1004 and create nothing). Names
-(study, condition labels, variant names) use `[A-Za-z0-9_.-]` without a leading dot. Errors are located, for example
-`parameter 'angle': value 14 is outside [0, 12]`.
+`read`. With `rcfd-mcp --project`, `design_run_study` and `design_evaluate` are `execute` instead, since they start runs of the
+project's runner there (ADR 0196 B); they still need approval. All paths go through the sandbox (`..` and absolute paths outside
+the root are error 1004 and create nothing). Names (study, condition labels, variant names) use `[A-Za-z0-9_.-]` without a leading
+dot. Errors are located, for example `parameter 'angle': value 14 is outside [0, 12]`.
 
 | MCP tool | Service method | Access | Purpose |
 |---|---|---|---|
 | `design_create_study` | `design.create_study` | write_files | define a study (writes `study.json`; the base case is a file or the session settings) |
 | `design_create_variant` | `design.create_variant` | write_files | base case (or study with parameter values) plus overrides to a variant case file |
 | `design_run_operating_map` | `design.run_map` | write_files | operating map; a repeated identical call returns the stored table |
-| `design_run_study` | `design.run_study` | write_files | run the method with the case solver, resumable |
-| `design_evaluate` | `design.evaluate` | write_files | evaluate and store one candidate (cached when present) |
+| `design_run_study` | `design.run_study` | write_files (execute with `--project`) | run the method with the case solver, resumable |
+| `design_evaluate` | `design.evaluate` | write_files (execute with `--project`) | evaluate and store one candidate (cached when present) |
 | `design_record` | `design.record` | write_files | store externally computed metrics for a candidate |
 | `design_get_metrics` | `design.get_metrics` | read | metrics of a stored evaluation (index or exact parameters) or of a map (`map_dir`) |
 | `design_compare_variants` | `design.compare` | read | side by side metrics, exact differences to the first, ranking |
