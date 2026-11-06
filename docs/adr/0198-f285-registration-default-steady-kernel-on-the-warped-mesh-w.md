@@ -327,6 +327,118 @@ the rule's outcome; I-GG remains available as the field alone.
 (a) record it; (b) a later item for an implicit non-orthogonal momentum Laplacian. Recommendation (a) until a case diverges
 through it.
 
+## Addendum 1: what was built, the results and the gate (2026-11-06)
+
+Branch `f285-warped-kernel` from main 9edfbda. Commits: the registration 7b10bf3; the D0, D1, D3 harness and the D3 switch
+d698fe8; amendment 1 1e8c3fd; the D4 to D6 harness and the D5 switch 91210eb; amendment 2 60f7bc0; the fix and the checks
+b72ce92; clippy ebe48fa (a type alias and a one-element loop; no change of behaviour). Release builds on Windows, each
+registered run once, on a machine shared with other agents' work. No limit was changed.
+
+**Built.** `rcfd-fv`: `pressure::solve_pressure_implicit_non_orth` (the pressure equation `A p = b_N(p) - D(HbyA)` of the
+corrector passes, solved as `F(p) = 0` by `rcfd_linalg::gmres`, restart 30, right-preconditioned by one AMG V-cycle of `A`,
+from `p_old` to the controls of `pressure_solver`; its matrix-vector product `J d = A d - (b(grad(p_old + d)) - b(grad(p_old)))`
+is exact for the affine `F`), the type `SyncPressureGradientFn`, and `SimpleSolver::implicit_non_orth_pressure` (default
+`false`; read in one line of `iterate`, which picks the implicit solve in two new match arms in front of the existing ones).
+The velocity correction of `iterate` is the code of main again (the D3 switch is removed). Tests: the diagnosis harness
+`crates/rcfd-fv/tests/warped_kernel_f285_diag.rs` (ignored tests) and, in `crates/rcfd-fv/tests/pressure_interp_f246.rs`,
+`mms_run` and `sequence_with` (the fix as an added argument; `mms` and `sequence` call them with `false`), the non-ignored
+`f285_a1_a3_w_16_32`, `f285_a2_k32`, `f285_a2_s32`, `f285_a2_w2_32`, `f285_a2_w16` and the heavy `m1_w_v0_f285`,
+`m1_w_v1_f285`, `m1_w_v2_f285`. No other crate changed; no case key, no Studio file.
+
+### Diagnosis results
+
+`rho` from power iteration (`c` the sign of the leading mode: -1 period two, +1 positive); "1.0000" means no mode outside the
+unit disc (the divergence-free fields keep the norm). Locations are logical cell indices.
+
+| Map | W n = 32 | W n = 16 | W2 n = 32 | K n = 32 | G n = 32 | W n = 64 |
+|---|---|---|---|---|---|---|
+| `Pi_GG` | **1.1991** (c -1), cell (27, 28, 28) | 1.0000 | 1.0000 | 1.0000 | 1.0000 | **1.3200** (c -1), cell (7, 8, 56) |
+| `Pi_GG1` | **1.3995** (c +1), cell (28, 28, 28) | 1.0000 | 1.0000 | 1.0000 | 1.0000 | |
+| `Pi_R` | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | |
+| `Pi_LS` | **1.1045** (c -1), cell (28, 28, 28) | 1.0000 | 1.0000 | 1.0000 | 1.0000 | |
+| `Pi_GG,beta` 0.75, 0.5, 0.25 | 1.0000 each | 1.0000 each | 1.0000 each | 1.0000 each | 1.0000 each | |
+| `X_p` | **1.1781** (c -1), cell (1, 29, 1) | 0.8610 (c -1), cell (15, 15, 15) | 0.8130 (c -1) | 0.6191 (c +1) | not completed | |
+| `X_u` | **1.0525** (c -0.997), cell (19, 19, 12) | 0.7529 | 0.7350 | 0.5707 | not completed | |
+| `Pi_R1` | **1.3711** (c +1), cell (28, 28, 28) | 1.0000 | 1.0000 | 1.0000 | not completed | |
+| `Pi_GG,imp`, `Pi_R,imp`, `Pi_GG,imp,beta` 0.75, 0.5 | 1.0000 each | 1.0000 each | 1.0000 each | 1.0000 each | not completed | |
+
+D0 (V0, 400 iterations): set-up A on W at n = 32: `g` 1.2078, `c` +0.9915, `f_edge` 0.0109, `f_wall` 0.1576, the largest
+change at cell (4, 27, 5); `max_du` 8.8e-4, 4.6e-2, 1.4e8, 1.8e16, 3.0e24, 4.5e32 at iterations 1, 10, 100, 200, 300, 400;
+`max|dp| / max|du|` 1.3e33. Set-up L: `g` 1.2940, `c` +0.9999, `f_edge` 0.0492, `f_wall` 0.5316, cell (27, 31, 27);
+`max_du` 2.1e42 at 400. Set-up A on W at n = 16: `g` 0.9457 (it converges; `max_du` 4.4e-16 at 400), `c` -0.31.
+
+D3 and D5 (set-up A, stop rule, cap 5000; differences against V0 without a switch, largest over the cells):
+
+| Candidate | W n = 32 | W n = 16 | K n = 32 | W2 n = 32 |
+|---|---|---|---|---|
+| V0 | (diverges) | 218 it. | 542 it. | 591 it. |
+| R | not finite at it. 1163 | 218 it., 5.9e-13 / 6.8e-13 | 542 it., 9.2e-14 / 2.2e-13 | 591 it., 5.3e-14 / 2.2e-13 |
+| C-LS | not finite at it. 1155 | 218 it., 7.3e-13 / 6.8e-13 | 542 it., 2.8e-15 / 1.0e-13 | 591 it., 6.0e-15 / 1.3e-13 |
+| C-beta 0.75 | not finite at it. 1290 | 218 it., 2.1e-13 / 2.1e-12 | 542 it., 1.3e-14 / 6.5e-13 | 591 it., 2.1e-14 / 7.5e-13 |
+| C-beta 0.5 | not finite at it. 1424 | 218 it., 4.1e-13 / 4.0e-12 | 542 it., 4.0e-14 / 1.3e-12 | 591 it., 4.1e-14 / 1.5e-12 |
+| C-beta 0.25 | not finite at it. 1550 | 218 it., 6.1e-13 / 5.9e-12 | 542 it., 5.5e-14 / 1.9e-12 | 591 it., 6.1e-14 / 2.2e-12 |
+| **I-R** | **converged, 716 it.** | 218 it., 6.7e-13 / 1.0e-12 | 543 it., 3.0e-12 / 2.3e-12 | 591 it., 5.1e-14 / 1.2e-13 |
+| I-GG | converged, 716 it. | 218 it., 3.1e-13 / 5.0e-13 | 543 it., 3.0e-12 / 2.3e-12 | 591 it., 1.8e-14 / 4.6e-13 |
+| I-beta 0.75 | converged, 716 it. | 218 it., 1.9e-13 / 2.4e-12 | 543 it., 3.0e-12 / 3.0e-12 | 591 it., 1.9e-14 / 7.7e-13 |
+| I-beta 0.5 | converged, 716 it. | 218 it., 3.3e-13 / 4.3e-12 | 543 it., 3.0e-12 / 3.6e-12 | 591 it., 3.8e-14 / 1.5e-12 |
+
+D6 (the default kernel from the converged I-R state on W at n = 32 plus `1e-8 w`): growth **1.8189** per iteration over the
+14 iterations in which the deviation lies in [1e-7, 1e-3] (the last at iteration 26), `f_edge` 0.0020, `f_wall` 0.1706, the
+largest deviation at cell (3, 28, 3). This is the linear onset rate: the "about 1.8" of ADR 0193 amendment 1. The D6 code did
+not compute `c` (an omission of the harness, found when reading its output); H4 is therefore not read on D6, and D6 was not
+run again.
+
+Readings on D6 beside the registered ones (amendment 1): H3 on D6 falsified as well (`f_edge` 0.0020); H4 not available.
+
+### Acceptance results (the fix I-R; binary of b72ce92, the mutation of A6 built from it)
+
+Errors are L2 over the cells; orders are `log2(e(n) / e(2n))`; "it." counts SIMPLE iterations to the stop rule.
+
+| Check | Limit | Measured | Verdict |
+|---|---|---|---|
+| A1 W n = 16, 32 (`f285_a1_a3_w_16_32`) | converged under the stop rule within the cap | converged in 218 and 716 it. (`e_u` 2.3792e-3, 6.1113e-4; `e_p` 5.5970e-3, 1.8055e-3) | met |
+| A1 W n = 64 (`m1_w_v0_f285`, heavy) | converged | converged in 2489 it. (5241 s; `e_u` 1.5342e-4, `e_p` 5.2401e-4) | met |
+| V0 on W with the fix, orders (reported, no limit) | | velocity 1.961 / 1.994, pressure 1.632 / 1.785 (pairs (16, 32) / (32, 64)) | reported |
+| A2 K n = 32 | `abs(e ratio - 1) <= 1e-6`; cell differences `<= 1e-8` | 4.2e-10 (`e_u`), 4.0e-11 (`e_p`); `u` 3.0e-12, `p` 2.3e-12; 542 / 543 it. | met |
+| A2 S n = 32 | the same | 6.5e-13, 8.2e-13; `u` 4.7e-14, `p` 4.3e-12; 532 / 532 it. | met |
+| A2 W2 n = 32 | the same | 3.1e-13, 5.0e-13; `u` 5.1e-14, `p` 1.2e-13; 591 / 591 it. | met |
+| A2 W n = 16 | the same | 3.4e-12, 2.1e-12; `u` 6.7e-13, `p` 1.0e-12; 218 / 218 it. | met |
+| A3 one default iteration from the fix's state on W at n = 32 | `max_du <= 1e-8` | 2.19e-12 | met |
+| A4 defaults | the switch off is the existing path; `baseline_hashes.rs`, `case_hashes_w48u.rs` unedited and passing; F-246's tests unchanged in behaviour | the field is read in one line, the two new match arms are guarded by it, the velocity correction is main's code; the hash suites and F-246's tests: see the gate | see the gate |
+| **A5 M1 on W, V1** (`m1_w_v1_f285`, heavy) | orders of the pair (32, 64) at least 1.7 (velocity) and 1.2 (pressure), every run converged | velocity **1.994**, pressure **1.780** (pair (16, 32): 1.959, 1.624); converged in 218, 716, 2491 it. | **met** |
+| **A5 M1 on W, V2** (`m1_w_v2_f285`, heavy) | the same | velocity **1.990**, pressure **1.662** (pair (16, 32): 1.961, 1.595); converged in 217, 714, 2485 it. | **met** |
+| A6 the line reading the switch replaced by `let implicit = false;` | `f285_a1_a3_w_16_32` fails | it failed: W at n = 32 not finite at it. 1163 (as R alone in D3), "A1: not converged"; `simple.rs` restored and equal byte for byte to the kept copy | met |
+| A7 (reported) time per iteration without / with the fix | | K 0.337 / 0.283 s, S 0.161 / 0.282 s, W2 0.295 / 0.276 s, W16 0.016 / 0.030 s, each run beside two to five others; n = 64 on W with the fix about 2.1 s per iteration | reported |
+| `limit_audit.py` on the new tests | every hit read | no hit in `pressure_interp_f246.rs` or `warped_kernel_f285_diag.rs` | met |
+
+Errors on W with the fix at n = 64 (reported): V1 `e_u` 1.5312e-4, `e_p` 5.1718e-4; V2 1.5211e-4, 5.2368e-4; their ratios
+to V0's are 0.998, 0.987 (V1) and 0.991, 0.999 (V2).
+
+**Reading.** F-246's M1 check on W, missed by both variants because the default kernel diverged (ADR 0193 amendment 1),
+is met by both when the kernel solves the non-orthogonal part of its pressure equation implicitly and corrects the cell
+velocity from the face flux: second order in velocity, above 1.6 in pressure. The known-miss tests `m1_w_v1_known_miss` and
+`m1_w_v2_known_miss` stay unchanged as the record of the default kernel. The fix leaves the converged solution of every
+case where the default converges unchanged to 3e-12 (A2), and W's converged state is a fixed point of the default kernel to
+2e-12 (A3), while the default kernel leaves that state at 1.82 per iteration (D6).
+
+### Disclosures
+
+- D0's registered window lies in the runaway (amendment 1); H1 was read on it as registered.
+- D6 did not compute `c` (an omission of the harness); H4 is not read on D6. D6 was not run again.
+- D4 on G at n = 32 did not complete: it printed nothing in 25 minutes and was stopped. On the orthogonal box the
+  non-orthogonal part `b_N` is zero to rounding, so the power iteration of `X_p` divides rounding by rounding and each step
+  ran the AMG-preconditioned solve to its iteration cap. G's other rows (D1) completed; G is not a control of the fix.
+- Amendment 2 says that `Pi_GG,imp,beta` 0.5 has `rho` 1.0000 on W at n = 32; that run finished a few minutes after the
+  amendment was committed, with 1.0000.
+- The A1 to A7 runs used the test binary of b72ce92; ebe48fa only adds a type alias (clippy) and turns a one-element loop of
+  the diagnosis harness into straight code.
+- The D3 switch (`correction_test_only`) existed in the solver from d698fe8 to 91210eb and was removed by b72ce92, as
+  amendment 2 fixed; the diagnosis harness keeps R, I-GG and I-R.
+- The runs shared the machine with other agents' builds and gates and with each other (up to nine at once), so the
+  times are indicative only.
+
+<!-- GATE -->
+
 ## Where to go next
 
 - [ADR 0193](0193-f246-registration-pressure-interpolation-variants.md) for the manufactured solution, the meshes and the M1
