@@ -73,6 +73,31 @@ pub fn injection_names(case: &Case) -> Vec<String> {
     case.tree.names("particles.injection").unwrap_or_default()
 }
 
+/// The value of `particles.erosion.material` that names no preset.
+pub const NO_PRESET: &str = "none";
+
+/// Schema of `particles.erosion.material` (ADR 0197 P1): `"none"` or the name of a preset of
+/// [`rcfd_particles::EROSION_PRESETS`]; left out of the settings hash at its default.
+fn erosion_material_schema() -> Schema {
+    let mut names = vec![NO_PRESET];
+    names.extend(rcfd_particles::EROSION_PRESETS.iter().map(|p| p.name));
+    let rows: Vec<String> = rcfd_particles::EROSION_PRESETS
+        .iter()
+        .map(|p| {
+            format!(
+                "{} = the {} of {} (K {:?}, n {:?}, density {:?})",
+                p.name, p.row, p.source, p.k, p.n, p.density
+            )
+        })
+        .collect();
+    let doc = format!(
+        "Preset of k, n and density (ADR 0197): none = no preset (k, n and density must be set); {}. With a preset, k, n and density written with a value other than -1 override it, and k and n are overridden together or not at all; the report and particle_erosion.csv record the preset and the values used. {}",
+        rows.join("; "),
+        rcfd_particles::PRESET_PROVENANCE
+    );
+    Schema::enumeration(NO_PRESET, &names).doc(&doc).hash_omit_default()
+}
+
 /// Schema of the `particles` section.
 pub fn schema() -> Schema {
     let injection = Schema::named(
@@ -168,16 +193,17 @@ pub fn schema() -> Schema {
         )
         .field(
             "k",
-            Schema::float(UNSET).doc("K of DNV eq. 7.1 [(m/s)^-n] (> 0; DNV Table 7-2 recommends 2.0e-9 for steel grades); -1 = unset (an error when erosion is enabled)"),
+            Schema::float(UNSET).doc("K of DNV eq. 7.1 [(m/s)^-n] (> 0; DNV Table 7-2 recommends 2.0e-9 for steel grades); -1 = unset (an error when erosion is enabled, unless material names a preset)"),
         )
         .field(
             "n",
-            Schema::float(UNSET).doc("Velocity exponent n of DNV eq. 7.1 (> 0; DNV Table 7-2 recommends 2.6 for steel grades); -1 = unset"),
+            Schema::float(UNSET).doc("Velocity exponent n of DNV eq. 7.1 (> 0; DNV Table 7-2 recommends 2.6 for steel grades); -1 = unset (the preset value when material names one)"),
         )
         .field(
             "density",
-            Schema::float(UNSET).doc("Density of the wall material [kg/m^3] for the depth rate (> 0); -1 = unset"),
+            Schema::float(UNSET).doc("Density of the wall material [kg/m^3] for the depth rate (> 0); -1 = unset (the preset value when material names one)"),
         )
+        .field("material", erosion_material_schema())
         .hash_omit_default();
     let rough_wall = Schema::object()
         .optional()
@@ -328,24 +354,95 @@ fn check_not_film(case: &Case, key: &str, names: &[String], out: &mut Vec<Diagno
     }
 }
 
-/// Checks of the erosion keys (ADR 0194 S2), located; mesh-dependent ones are made by [`build_tracker`].
+/// The constants of the erosion model as a case gives them (ADR 0194 S2, ADR 0197 P3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErosionConstants {
+    /// `K` [(m/s)^-n].
+    pub k: f64,
+    /// Velocity exponent.
+    pub n: f64,
+    /// Density of the wall material [kg/m^3].
+    pub density: f64,
+    /// The preset named by `particles.erosion.material`, if any.
+    pub preset: Option<rcfd_particles::ErosionPreset>,
+    /// For `k`, `n` and `density`: true when the value is the preset's (the case leaves the key at -1).
+    pub from_preset: [bool; 3],
+}
+
+/// The keys of the erosion constants, in the order of [`ErosionConstants::from_preset`].
+const EROSION_KEYS: [&str; 3] = ["k", "n", "density"];
+
+/// The constants of the erosion model (ADR 0197 P3): with a preset, each key the case leaves at -1 takes the preset value
+/// and a written value overrides it; without one, the values as written.
+pub fn erosion_constants(case: &Case) -> ErosionConstants {
+    let preset = rcfd_particles::erosion_preset(&gs(case, "particles.erosion.material")).copied();
+    let written = EROSION_KEYS.map(|k| gf(case, &format!("particles.erosion.{k}")));
+    let Some(p) = preset else {
+        let [k, n, density] = written;
+        return ErosionConstants {
+            k,
+            n,
+            density,
+            preset: None,
+            from_preset: [false; 3],
+        };
+    };
+    let from_preset = written.map(|x| x == UNSET);
+    let pick = |i: usize, v: f64| if from_preset[i] { v } else { written[i] };
+    ErosionConstants {
+        k: pick(0, p.k),
+        n: pick(1, p.n),
+        density: pick(2, p.density),
+        preset: Some(p),
+        from_preset,
+    }
+}
+
+/// Checks of the erosion keys (ADR 0194 S2, ADR 0197 P5), located; mesh-dependent ones are made by [`build_tracker`].
 fn check_erosion(case: &Case, out: &mut Vec<Diagnostic>) {
     if !gb(case, "particles.erosion.enabled") {
         return;
     }
     let names = checked_patches(case, "particles.erosion.patches", "erosion", out);
     check_not_film(case, "particles.erosion.patches", &names, out);
-    for (k, what) in [
-        ("k", "K of DNV eq. 7.1 [(m/s)^-n]"),
-        ("n", "the velocity exponent n"),
-        ("density", "the density of the wall material [kg/m^3]"),
-    ] {
-        if !(gf(case, &format!("particles.erosion.{k}")) > 0.0) {
+    let what = [
+        "K of DNV eq. 7.1 [(m/s)^-n]",
+        "the velocity exponent n",
+        "the density of the wall material [kg/m^3]",
+    ];
+    let c = erosion_constants(case);
+    let Some(p) = c.preset else {
+        for (k, what) in EROSION_KEYS.iter().zip(what) {
+            if !(gf(case, &format!("particles.erosion.{k}")) > 0.0) {
+                out.push(d(
+                    format!("particles.erosion.{k}"),
+                    format!("{what} must be set (> 0); -1 means unset"),
+                ));
+            }
+        }
+        return;
+    };
+    for (i, (k, what)) in EROSION_KEYS.iter().zip(what).enumerate() {
+        let x = gf(case, &format!("particles.erosion.{k}"));
+        if !c.from_preset[i] && !(x > 0.0) {
             out.push(d(
                 format!("particles.erosion.{k}"),
-                format!("{what} must be set (> 0); -1 means unset"),
+                format!(
+                    "{what} must be above 0, or -1 to take the value of the preset {} (ADR 0197)",
+                    p.name
+                ),
             ));
         }
+    }
+    if c.from_preset[0] != c.from_preset[1] {
+        let (set, unset) = if c.from_preset[0] { ("n", "k") } else { ("k", "n") };
+        out.push(d(
+            format!("particles.erosion.{unset}"),
+            format!(
+                "particles.erosion.{set} is set and particles.erosion.{unset} is not: K [(m/s)^-n] and n are a fitted pair, so with the preset {} set both or neither (ADR 0197)",
+                p.name
+            ),
+        ));
     }
 }
 
@@ -973,11 +1070,13 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
             .map_err(|e| vec![d("particles.film.patches", e.to_string())])?;
     }
     if erosion(case) {
+        // ADR 0197 P9: without a preset these are the three values as written
+        let c = erosion_constants(case);
         let spec = ErosionSpec {
             patches: patch_list(case, "particles.erosion.patches"),
-            k: gf(case, "particles.erosion.k"),
-            n: gf(case, "particles.erosion.n"),
-            density: gf(case, "particles.erosion.density"),
+            k: c.k,
+            n: c.n,
+            density: c.density,
         };
         tr.set_erosion(spec)
             .map_err(|e| vec![d("particles.erosion.patches", e.to_string())])?;
