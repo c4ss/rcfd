@@ -277,3 +277,13 @@ reported as such.
 ## Addenda
 
 Results of the checks follow in an addendum, in the order of the tables.
+
+### Amendment 1 (2026-11-06): the fractional-step case of S1, written before S1 ran
+
+Found while writing the S1 test, before any check was run. The S1 row names "CH on `piso` with `fractional_step`, located at
+`solver.time_advance`". That case cannot show the row's refusal: `piso` with SST is a static error at `turbulence.model`
+(D3), and the static errors stop the case before `Simulation::new`, where the fractional-step rule (`fractional_step needs
+solver.algorithm = "piso"`, and on `piso` `is not available with a turbulence model`) is checked. The case of record becomes
+CH on `pimple` with `time_advance = "fractional_step"`, located at `solver.time_advance` (the rule that the fractional step
+needs `piso`, reached because `pimple` with SST is no longer a static error). CH on `piso` with the fractional step stays in
+S1 as a second case, located at `turbulence.model`. No limit changes.
