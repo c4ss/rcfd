@@ -5095,4 +5095,5 @@ workspace layer between the project folder, the MCP server and the Studio. Prior
     - Open: the message names edit_case and new_case, not create_case, since new_case and check_case_mesh keep their names
       (ADR 0195 Q1); the workflow tools and run_headless's restart, interpolation and checkpoint options have no project
       equivalent and are not offered (Q2); access classes unchanged (Q6); the hook under bypassPermissions is NOT VERIFIED;
-      existing allow-list files are not changed (Q4).
+      existing allow-list files are not changed (Q4); with 15 first rules, a rule the user adds is below the fold of the
+      Studio's confirmation dialog until scrolled (Q8, amendment 1).
