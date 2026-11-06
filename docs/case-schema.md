@@ -941,8 +941,8 @@ and species). Clipping breaks conservation locally; the number of clipped cells 
 build path now applies them to the model it creates (`TurbulenceModel::apply_wall_options`), with the equality check of ADR 0015 C5;
 they are no longer rejected. Plugin models keep their own settings.
 
-Not in the settings tree: the gradient options of F-208 (face-gradient correction, secondary-gradient limiter, boundary treatments) exist in
-`rcfd-fv` (`diffusion::GradientOptions`, `laplacian_with`) and are exercised by the library tests only.
+**Gradient options** of F-208 (face-gradient correction, secondary-gradient limiter, boundary treatment): the keys
+`solver.gradient_*` of the energy and scalar diffusion term, in their own section below (ADR 0190).
 
 ## `tables` and profile inputs (F-105)
 
@@ -2604,6 +2604,40 @@ Measured (ADR 0081):
 * Second order is kept on the Kovasznay flow (L2 order 2.17 on the finest pair, error within 1 % of the unlimited scheme).
 
 Not checked: smooth flows with interior extrema of a velocity component, where the limiter clips.
+
+## Gradient options of the energy and scalar diffusion term (`solver.gradient_*`)
+
+The diffusion term `-div(gamma grad phi)` has an explicit non-orthogonal (secondary-gradient) part on skewed cells, built from
+the interpolated cell gradient. Four keys change how that part is formed (ADR 0016 D2, wired by ADR 0190):
+
+| Key | Values | Effect |
+|---|---|---|
+| `solver.gradient_face_correction` | `false` (default), `true` | replaces the component of the interpolated face gradient along the cell-centre line by the compact difference `(phi_N - phi_P)/abs(d)` |
+| `solver.gradient_secondary_limiter` | `none` (default), `barth_jespersen`, `venkatakrishnan` | limits the cell gradients that enter the secondary part; the convection term is not limited |
+| `solver.gradient_limiter_k` | float at least 0, default `5.0` | the constant K of `venkatakrishnan`, `eps^2 = (K V^(1/3))^3` per cell |
+| `solver.gradient_boundary` | `owner` (default), `corrected`, `dropped` | on fixed-value boundary faces: the owner-cell gradient, that gradient with its component along the cell-to-face vector replaced by `(phi_b - phi_P)/abs(d)`, or no secondary part |
+
+They act on the energy equation of the incompressible constant-density solvers (steady `simple`/`simplec`, `coupled`, `piso`,
+`pimple`, prescribed flow, Rosseland and P1 radiation, conjugate solids) and on the transported scalars and species. They do not
+act on momentum, pressure, turbulence, the electric potential, the energy of the variable-density, compressible and VOF solvers,
+or the enthalpy-method phase change. `solver.periodic_gradient` is unrelated (the momentum gradient on periodic faces).
+
+Located errors (at the first key that is not at its default):
+
+* `solver.convection` = `upwind`, `central` or `blended`: these schemes compute no cell gradient, so the diffusion term has no
+  secondary part for the options to act on.
+* No equation of the case takes the options: no such energy equation and no scalar or species swept on a solved flow (with
+  `solver.frozen_flow` only the energy equation is solved).
+* `gradient_limiter_k` other than 5 without `gradient_secondary_limiter = "venkatakrishnan"`.
+
+What is known about them (ADR 0016): on the manufactured problem the options keep second order on skewed, warped and stretched
+meshes and cost at most 4.6 % of the error on near-orthogonal meshes, but they do not reduce the error; the face correction
+raised it 2.1 times on an affine skewed mesh. No benefit is claimed. Through the tree a run equals the library run with the same
+options (ADR 0190).
+
+The `heat_flow` report of a conjugate case still adds the default secondary part (owner gradient, no limiter) to its face flows,
+so with the options it is not exactly the flux the solver used on skewed cells (ADR 0190 Q3). With all four keys at their
+defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case files list them.
 
 ## Design-loop files (not part of the case schema)
 

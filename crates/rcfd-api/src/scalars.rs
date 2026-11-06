@@ -494,6 +494,8 @@ fn make(
     };
     let mut t = ScalarTransport::new(geom.clone(), field, d);
     t.convection = scheme;
+    // ADR 0190 K4: the gradient options of the diffusion term (None without the keys)
+    t.gradient = crate::sim::gradient_options(case);
     t.relax = gf(case, &p("relax"));
     let src = gf(case, &p("source"));
     if src != 0.0 {
@@ -657,6 +659,11 @@ impl ScalarState {
             species,
             balance,
         }))
+    }
+
+    /// Is any scalar or species swept by the transport routine (an entry that is not algebraic; ADR 0190 K5 R3)?
+    pub(crate) fn sweeps_any(&self) -> bool {
+        self.passive.iter().chain(self.species.iter()).any(|e| e.alg.is_none())
     }
 
     /// One sweep of every scalar and species on the flux `phi`. `nu_face` (the flow solver's face

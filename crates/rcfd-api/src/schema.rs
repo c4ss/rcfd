@@ -928,6 +928,31 @@ pub fn case_schema() -> Schema {
             Schema::enumeration("none", &["none", "barth_jespersen"]).doc("Slope limiter of the linear_upwind face extrapolation of the momentum equation of simple/simplec (ADR 0081) and of piso/pimple, the moving-mesh step included (ADR 0183 P-A; not with time_advance = fractional_step): none (default) extrapolates with the unlimited least-squares cell gradient; barth_jespersen multiplies each velocity component's gradient by its Barth-Jespersen factor (the face values stay within the cell's own and neighbour values) in the convection term only. Measured stable on the FAN-01 sector mesh (laminar and SST, steady) where the unlimited scheme diverges, and second order on the Kovasznay flow (ADR 0081). Any other algorithm or scheme is an error"),
         )
         .field(
+            "gradient_face_correction",
+            Schema::boolean(false)
+                .doc("Gradient options of the diffusion term of the energy equation (incompressible constant-density solvers) and of the transported scalars and species (ADR 0016 D2, ADR 0190); they act only on the explicit non-orthogonal (secondary-gradient) flux, never on momentum, pressure, turbulence or the electric potential, and are unrelated to periodic_gradient. true replaces the component of the interpolated face gradient along the cell-centre line by the compact difference (phi_N - phi_P)/|d|. Needs a convection scheme that computes a cell gradient (not upwind, central or blended) and an energy, scalar or species equation that takes the options (located errors otherwise). Default false keeps every earlier result bit for bit")
+                .hash_omit_default(),
+        )
+        .field(
+            "gradient_secondary_limiter",
+            Schema::enumeration("none", &["none", "barth_jespersen", "venkatakrishnan"])
+                .doc("Gradient options (see gradient_face_correction, ADR 0190): limit the cell gradients that enter the explicit non-orthogonal flux of the energy and scalar diffusion term with the Barth-Jespersen or the Venkatakrishnan limiter (smoothing constant gradient_limiter_k); the convection term is not limited. Default none")
+                .hash_omit_default(),
+        )
+        .field(
+            "gradient_limiter_k",
+            Schema::float(5.0)
+                .at_least(0.0)
+                .doc("Smoothing constant K of gradient_secondary_limiter = venkatakrishnan, eps^2 = (K V^(1/3))^3 per cell (default 5, the value of ADR 0016's checks); another value with any other limiter is a located error")
+                .hash_omit_default(),
+        )
+        .field(
+            "gradient_boundary",
+            Schema::enumeration("owner", &["owner", "corrected", "dropped"])
+                .doc("Gradient options (see gradient_face_correction, ADR 0190): the explicit non-orthogonal flux of the energy and scalar diffusion term on fixed-value boundary faces uses the owner-cell gradient (owner, default), that gradient with its component along the cell-to-face vector replaced by the one-sided difference (phi_b - phi_P)/|d| (corrected), or is left out (dropped)")
+                .hash_omit_default(),
+        )
+        .field(
             "velocity_correction",
             Schema::enumeration("gradient", &["gradient", "face_flux"]).doc("Cell velocity correction of the steady simple/simplec solver after the pressure solve (ADR 0084): gradient (default) subtracts rAtU times the Green-Gauss gradient of the new pressure; face_flux keeps the old-pressure gradient and adds the reconstruction of the face flux correction (only the pressure change the face fluxes carry). Both give the same converged solution; face_flux removes the period-two pressure mode that makes simplec diverge on strongly non-orthogonal meshes (uniformly sheared cells from 55 to 60 degrees at alpha_p = 1). Any other algorithm is an error"),
         )
