@@ -1,0 +1,18 @@
+{
+  "description": "rcfd project folders: Claude Code's own Edit and Write do not change cases/, runs/ or designs/ (use edit_case and new_case; ADR 0195)",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rcfd-mcp",
+            "args": ["--edit-hook", "${CLAUDE_PROJECT_DIR}"],
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

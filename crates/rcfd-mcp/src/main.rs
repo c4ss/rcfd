@@ -3,16 +3,34 @@
 //! Options: `--root <dir>` confine file access, `--read-only` refuse mutating
 //! tools, `--max-cells <n>`, `--max-steps <n>`, `--max-run-seconds <s>`,
 //! `--cases <dir>`, `--project <dir>` add the project tools of ADR 0135 for that project folder.
+//! `--edit-hook [<dir>]` instead answers one Claude Code `PreToolUse` hook input on stdin (the plugin's edit hook,
+//! ADR 0195 P6) and exits.
 
 use rcfd_api::service::{Service, ServiceConfig};
 use rcfd_mcp::{policy::Policy, project::ProjectTools, McpServer};
+use std::io::Read;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // ADR 0195 P6: the plugin's edit hook, before anything else (no service, no project tools)
+    if let Some(i) = args.iter().position(|a| a == "--edit-hook") {
+        let folder = args.get(i + 1).map(String::as_str).filter(|a| !a.starts_with("--"));
+        let mut input = Vec::new();
+        if let Err(e) = std::io::stdin().read_to_end(&mut input) {
+            eprintln!("rcfd edit hook: stdin: {e}; the call is not checked");
+            return ExitCode::from(rcfd_mcp::edit_hook::NOT_READ);
+        }
+        let env = std::env::var("CLAUDE_PROJECT_DIR").ok();
+        let o = rcfd_mcp::edit_hook::decide(&input, folder, env.as_deref());
+        if !o.stderr.is_empty() {
+            eprintln!("{}", o.stderr);
+        }
+        return ExitCode::from(o.code);
+    }
     if args.iter().any(|a| a == "-h" || a == "--help") {
-        println!("rcfd-mcp: MCP server (stdio)\n\nOPTIONS:\n    --root <dir>            confine all file access to <dir>\n    --read-only             refuse tools that change state\n    --max-cells <n>         refuse larger meshes (default 2000000)\n    --max-steps <n>         largest iteration count per run call\n    --max-run-seconds <s>   wall-clock cap per run\n    --max-design-evaluations <n>  case runs one design call may start (default 1000)\n    --cases <dir>           cases directory for list_cases\n    --project <dir>         add the project tools for this rcfd project folder (ADR 0135);\n                            without --root, file access is confined to it");
+        println!("rcfd-mcp: MCP server (stdio)\n\nOPTIONS:\n    --root <dir>            confine all file access to <dir>\n    --read-only             refuse tools that change state\n    --max-cells <n>         refuse larger meshes (default 2000000)\n    --max-steps <n>         largest iteration count per run call\n    --max-run-seconds <s>   wall-clock cap per run\n    --max-design-evaluations <n>  case runs one design call may start (default 1000)\n    --cases <dir>           cases directory for list_cases\n    --project <dir>         add the project tools for this rcfd project folder (ADR 0135);\n                            without --root, file access is confined to it\n    --edit-hook [<dir>]     answer one Claude Code PreToolUse hook input on stdin: refuse Edit and\n                            Write under cases/, runs/ and designs/ of the rcfd project <dir> (ADR 0195)");
         return ExitCode::SUCCESS;
     }
     let val = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1));
