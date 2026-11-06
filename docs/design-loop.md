@@ -197,12 +197,36 @@ the server process. Their arguments, the study folder and the store are the same
   The runs count against the runner's budgets; as every run of the runner, they go on when the server stops and show in the
   Studio's run list (ADR 0123, ADR 0133; not checked again by F-274's tests).
 * The result adds `evaluator` (`runner`), `runs` (at most 50 objects {`run`, `variant`, `condition`, `state`} of the runs this
-  call made) and `runs_total`.
+  call made or adopted, with `continue_from` for a continued run and `adopted: true` for an adopted one), `runs_total` (the runs
+  it submitted) and `runs_adopted`.
 
-Two kinds of study stay in the server process, as before, with `evaluator: process` and the reason in `evaluator_note`: a study
-whose conditions are chained (`chain`, true by default, with two or more conditions), because a run cannot yet start from another
-run's result, and a study with its own `max_steps`. Operating maps stay in the server process too. The server's `max_cells` and
-`max_steps_per_call` do not bound runs on the runner, as they do not bound `start_run`.
+Chained conditions and step caps ([ADR 0200](adr/0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md)):
+
+* With `chain` (true by default) and two or more conditions, the conditions of a candidate run one after another. A condition
+  continues from the run of the condition before (`run.json` `settings.continue_from`, which the runner passes as `rcfd run
+  --continue-from runs/<id>/output/restart.rcfd`) when that condition was usable and its restart file is of the steady engine,
+  without a temperature field, written for the same mesh; otherwise it runs cold and its message says why (`cold start: ...`).
+  A continued run keeps the face flux and the iteration counter of the run before, where the in-process chain rebuilds the flux
+  and counts from 0, so the two agree to the solver tolerance, not bit for bit: measured on the 16 x 16 cavity, 5.6e-10
+  relative on `lid_drag` (ADR 0200 C-CH, limit 1e-4). Its `iterations` count the steps of that run; because `--continue-from`
+  keeps the iteration cap, it has `max_iterations` minus the restart's iteration left (said in the message when it does not
+  converge).
+* A study's own `max_steps` caps each run (`settings.max_steps`, passed as `rcfd run --max-steps`), at the value the in-process
+  evaluator uses (at most `max_steps_per_call`).
+* `design_run_operating_map` runs each point as one run (untagged), each continued from the run of the converged point before by
+  the same rule; the table, its files and the cache are those of the server process.
+
+Adopting runs ([ADR 0201](adr/0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md)): a server stopped during
+a study leaves its runs in the runner and no record of them in the store. Before a study's run is submitted, the call looks for a
+run of the project with the same `study`, `variant`, `condition`, `case`, case bytes (`case_snapshot_hash`), `settings.set`,
+`settings.continue_from`, `settings.max_steps` and `solver_version`; one that is not `failed` or `cancelled` is adopted (the newest
+`finished` one, else the newest of the others), waited for or read from its `metrics.json`. A resumed study so makes no second run
+for a candidate that has one, and its records equal those of a study that was not interrupted. Operating maps adopt nothing (an
+identical map call returns its stored table).
+
+A study or map whose base case is outside the project is evaluated in the server process, as before, with `evaluator: process`
+and the reason in `evaluator_note`. The server's `max_cells` and `max_steps_per_call` do not bound runs on the runner, as they do
+not bound `start_run`, except that a study's own step cap is bounded by `max_steps_per_call` as in process.
 
 Measured (ADR 0189 C4, the 32 x 32 lid-driven cavity at three viscosities): the runner's records equal the in-process ones bit for
 bit (largest relative difference of a metric 0, the same iteration counts). One evaluation took 0.64 s on the runner and 0.23 s in

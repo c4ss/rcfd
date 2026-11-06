@@ -48,7 +48,7 @@ F-147, F-148):
 | `read_status_stream` | read | `status.read` | summarise a status stream file |
 | `design_create_study` | write_files | `design.create_study` | define a design study (parameters, conditions, objectives, constraints, method) |
 | `design_create_variant` | write_files | `design.create_variant` | variant case file from a base case or a study point |
-| `design_run_operating_map` | write_files | `design.run_map` | chained operating-point map with a metrics table |
+| `design_run_operating_map` | write_files (execute with `--project`) | `design.run_map` | chained operating-point map with a metrics table |
 | `design_run_study` | write_files (execute with `--project`) | `design.run_study` | run the study's sampler or optimiser, resumable |
 | `design_evaluate` | write_files (execute with `--project`) | `design.evaluate` | evaluate and store one candidate |
 | `design_record` | write_files | `design.record` | store externally computed metrics for a candidate |
@@ -88,11 +88,19 @@ leading dot, and a base case that changed since the study was created are locate
 
 With `--project`, `design_run_study` and `design_evaluate` evaluate each candidate at each operating condition as one run of the
 project's runner, tagged in its `run.json` with `study`, `variant` and `condition`, and add `evaluator` (`runner`), `runs` (at most
-50) and `runs_total` to their result. A study with chained conditions (`chain`, the default, with two or more conditions) or its
-own `max_steps` is evaluated in the server process as before, with `evaluator: process` and `evaluator_note`
+50), `runs_total` and `runs_adopted` to their result. A chained condition (`chain`, the default, with two or more conditions)
+continues from the run of the condition before (`settings.continue_from`), and a study's own `max_steps` caps each run
+(`settings.max_steps`); `design_run_operating_map` runs each point the same way, untagged, continuing from the run of the
+converged point before ([ADR 0200](adr/0200-f287-registration-runner-runs-that-continue-from-a-previous-run-with-a-step-cap.md)).
+Before a study's run is submitted, a run of the project that already is that evaluation (the same tags, case, case bytes,
+entries, launch settings and solver version, not failed or cancelled) is adopted instead, so a study resumed after the server
+was stopped makes no second run for a candidate that has one; an adopted run's object in `runs` has `adopted: true`
+([ADR 0201](adr/0201-f288-registration-adopt-matching-runs-after-an-mcp-server-restart.md)). A study or map whose base case is
+outside the project is evaluated in the server process, with `evaluator: process` and `evaluator_note`
 ([ADR 0189](adr/0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md), `docs/design-loop.md`).
-Because they start runs there, as `start_run` does, both have the access class `execute` with `--project`; without it they stay
-`write_files` ([ADR 0196](adr/0196-three-code-changes-decided-2026-11-06-f246-r2-record-design-tool-class-sv202-text.md) B).
+Because they start runs there, as `start_run` does, the three have the access class `execute` with `--project`; without it they
+stay `write_files` ([ADR 0196](adr/0196-three-code-changes-decided-2026-11-06-f246-r2-record-design-tool-class-sv202-text.md) B,
+ADR 0200 S9).
 
 ## Design ledger tools
 
@@ -203,7 +211,8 @@ With `--project`, a session tool whose every use needs a session of the server's
 callable (a call is the JSON-RPC error -32602 `unknown tool`), because in project mode cases, meshes and runs live in the
 project folder ([ADR 0195](adr/0195-adr-0173-amendment-6-f275-registration-project-mode-tool-list-and-plugin-edit-hook.md) P1).
 The 17 others (`list_cases`, `check_case_headless`, `read_status_stream` and the design and ledger tools) stay, with the same
-descriptors except the access class `execute` of `design_run_study` and `design_evaluate` (ADR 0196 B); their `session`
+descriptors except the access class `execute` of `design_run_study`, `design_evaluate` and `design_run_operating_map` (ADR 0196
+B, ADR 0200 S9); their `session`
 arguments cannot be used there. `initialize`'s first sentence then names no session tool.
 
 | Not offered with `--project` | Use instead |
