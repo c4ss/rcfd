@@ -5172,7 +5172,7 @@ fixed by the item's registration ADR before any code.
     the pressure-velocity step, not at the face gradient), not (c), reopening the dropped warped-face item. W stays the
     binding warped mesh of F-246 and W2 is supplementary evidence only (ADR 0193 Q8 (a)). ADR 0193 amendment 1 found the
     divergence to be a property of the default kernel on W, not of the harness.
-- [ ] **F-286** Transient k-omega SST with pimple on a static mesh
+- [x] **F-286** Transient k-omega SST with pimple on a static mesh
   - depends on: F-043
   - acceptance: Every limit is fixed by its registration ADR before any code. turbulence.model = k_omega_sst runs with
     the pimple algorithm on a static mesh, which the case tree refuses today with a located error at turbulence.model
@@ -5264,3 +5264,21 @@ fixed by the item's registration ADR before any code.
     (ADR 0187 Q3, ADR 0188 Q3 and Q5, ADR 0191 Q4). Agents do not touch that worktree. The third change ADR 0188 Q5
     names, the run worker reading the feed in place of its own poll, was not part of the answer and stays an open
     question of ADR 0188.
+
+- [ ] **F-294** Transient k-epsilon and Spalart-Allmaras (without DES) on pimple
+  - depends on: F-286
+  - acceptance: Every limit is fixed by its registration ADR before any code. k-epsilon and Spalart-Allmaras without
+    DES run with the pimple algorithm on a static mesh, which the case tree refuses today; each model gets its own
+    registration with its time derivative (the existing k-epsilon kernel has none, and the Spalart-Allmaras one is once
+    per step and Euler only), checked against closed forms named in the ADR; steady runs and every existing transient
+    run are unchanged bit for bit.
+  - note: From ADR 0199 (F-286) question 2, recommendation taken by the lead: a follow-up item, each model with its own
+    registration. SA-DES and the Reynolds stress model stay on their once-per-step path (question 3).
+- [ ] **F-295** One diffusivity per periodic seam pair
+  - depends on: F-286
+  - acceptance: Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair
+    takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy
+    viscosity differs; opt-in, defaults bit-identical (baseline hashes unchanged); a global budget on a periodic case
+    with a differing eddy viscosity is checked within a limit fixed by the ADR.
+  - note: From ADR 0199 amendment 2 and question 5, recommendation taken by the lead. FAN-01 and EXP-ROT check H both
+    have rotational seams, so this item comes before check H is read.

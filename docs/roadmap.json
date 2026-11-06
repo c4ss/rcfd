@@ -2259,7 +2259,7 @@
     "deps": [
       "F-043"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit is fixed by its registration ADR before any code. turbulence.model = k_omega_sst runs with the pimple algorithm on a static mesh, which the case tree refuses today with a located error at turbulence.model (ADR 0183 PC-5): the k and omega equations get their time derivative and are updated within the outer iterations (ADR 0183 amendment P-C, question 8 (a)), also with a rotating_frame source, so that check H of ADR 0183 can run as registered; the transient terms are checked against closed forms named in the ADR, within limits fixed by its registration ADR; steady SST runs and every existing transient run are unchanged bit for bit (baseline hashes unchanged).",
     "note": "Prerequisite of EXP-ROT check H (ADR 0183; the experiment's roadmap item F-276 is on the unmerged branch m0-gate-roadmap). From the maintainer's answer of 2026-11-06 to question 8 of ADR 0183 amendment P-C: transient SST is its own item, and check H stays NOT RUNNABLE until it lands. k-omega SST on moving meshes is another item (F-277 on the same branch). ADR 0136 lists URANS as missing. BUILT (ADR 0199, the registration of F-286, 2026-11-06, branch f286-transient-sst, not merged): k_omega_sst runs with pimple on a static mesh, one sweep with the time derivative of solver.time_scheme at the start of every outer iteration (piso, k-epsilon and SA without DES stay refused); the decay recursions and closed forms, the k budget, the steady state against SIMPLEC (1.7e-9) and the rotating frame meet their limits, defaults bit-identical; the case-tree BDF2 order check is a known miss (p 2.4 to 2.7, pre-asymptotic); check H's case text builds and its smoke is finite."
   },
@@ -2343,5 +2343,27 @@
     "status": "todo",
     "acceptance": "Every limit is fixed by its registration ADR, written before any code and after the maintainer's worktree studio-case-lineage has landed on main: (1) the Studio's run starts and controls are journaled with the Studio's actor, one with_actor at each of the four RunService constructions (ADR 0188 Q3 (a)); (2) a Studio panel lists the change feed with who, what and why, and a notes/ list (ADR 0188 Q5 (a)); (3) box_3d is in the Studio's and the workspace start plan's generator lists, with a cell estimate (ADR 0191 Q4 (a)); (4) the MCP server's mesh builds use the Studio's size limits (2 000 000 estimated cells, 256 MiB) through one preview::estimate moved from the Studio into the workspace layer, which the Studio's preview also uses (ADR 0187 Q3 (b)). Each part has named tests, and the existing Studio and project-tool tests pass.",
     "note": "From the maintainer's answers of 2026-11-06: the maintainer lands studio-case-lineage first, and these follow (ADR 0187 Q3, ADR 0188 Q3 and Q5, ADR 0191 Q4). Agents do not touch that worktree. The third change ADR 0188 Q5 names, the run worker reading the feed in place of its own poll, was not part of the answer and stays an open question of ADR 0188."
+  },
+  {
+    "id": "F-294",
+    "title": "Transient k-epsilon and Spalart-Allmaras (without DES) on pimple",
+    "phase": 3,
+    "deps": [
+      "F-286"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. k-epsilon and Spalart-Allmaras without DES run with the pimple algorithm on a static mesh, which the case tree refuses today; each model gets its own registration with its time derivative (the existing k-epsilon kernel has none, and the Spalart-Allmaras one is once per step and Euler only), checked against closed forms named in the ADR; steady runs and every existing transient run are unchanged bit for bit.",
+    "note": "From ADR 0199 (F-286) question 2, recommendation taken by the lead: a follow-up item, each model with its own registration. SA-DES and the Reynolds stress model stay on their once-per-step path (ADR 0199 question 3), because moving them would change existing transient results."
+  },
+  {
+    "id": "F-295",
+    "title": "One diffusivity per periodic seam pair",
+    "phase": 3,
+    "deps": [
+      "F-286"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy viscosity differs; the option is opt-in with defaults bit-identical (baseline hashes unchanged), and a global budget on a periodic case with a differing eddy viscosity is checked within a limit fixed by the ADR.",
+    "note": "From ADR 0199 (F-286) amendment 2 and question 5, recommendation taken by the lead: found while correcting the F-286 set-ups; each face of a seam pair takes the diffusivity of its own owner cell. FAN-01 and EXP-ROT check H both have rotational seams, so this item comes before check H is read."
   }
 ]
