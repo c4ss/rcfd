@@ -18,7 +18,7 @@ fn fnv1a(values: &[f64], acc: &mut u64) {
 }
 
 /// `n` steps or iterations; (steps taken, fields hashed, hash).
-fn run(text: &str, n: usize) -> (usize, usize, u64) {
+fn run(text: &str, n: usize) -> Record {
     let case = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
     let errs = case.semantic_errors();
     assert!(errs.is_empty(), "{errs:?}\n{text}");
@@ -245,8 +245,11 @@ pressure_max_iter = 1000
 const PIMPLE_SECTOR: &str =
     "algorithm = \"pimple\"\ntime_scheme = \"bdf2\"\nn_outer = 3\nn_correctors = 2\ndt = 0.05\nend_time = 100.0\n";
 
-/// (name, case text, steps, registered (steps, fields, hash)).
-fn cases() -> Vec<(&'static str, String, usize, (usize, usize, u64))> {
+/// (steps, fields hashed, hash).
+type Record = (usize, usize, u64);
+
+/// (name, case text, steps, registered record).
+fn cases() -> Vec<(&'static str, String, usize, Record)> {
     let drive = "[sources.drive]\ntype = \"acceleration\"\nacceleration = [1.0, 0.0, 0.0]\nzone = \"all\"\n";
     vec![
         (
