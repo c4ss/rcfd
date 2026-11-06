@@ -238,6 +238,59 @@ fn c5s_hidden_tools_need_a_session_kept_tools_do_not() {
     eprintln!("C5-S: 15 hidden tools 1001, create_case a session; 17 kept tools without a session ({answered_ok} answered without error), no session made");
 }
 
+/// C5-A: the Studio bridge's first allow-list is main's 11 read tools, then the four read tools added since (P5); a file
+/// written from main's 11 reads back as those 11 rules and is written back byte for byte (no migration).
+#[test]
+fn c5a_allow_list_has_the_read_tools_and_old_files_stay() {
+    use rcfd_claude::allow::{AllowList, AllowRule, PINNED_SERVER, PROJECT_READ_TOOLS};
+    const MAIN: [&str; 11] = [
+        "project_info",
+        "list_runs",
+        "run_status",
+        "read_metrics",
+        "read_residuals",
+        "field_summary",
+        "render_field",
+        "compare_runs",
+        "list_changes",
+        "read_project_file",
+        "wait_run",
+    ];
+    assert_eq!(PROJECT_READ_TOOLS[..11], MAIN);
+    assert_eq!(
+        PROJECT_READ_TOOLS[11..],
+        ["read_feed", "check_case_mesh", "preview_mesh", "list_meshes"]
+    );
+    let first = AllowList::project_initial();
+    assert_eq!(first.rules().len(), 15);
+    for (r, t) in first.rules().iter().zip(PROJECT_READ_TOOLS) {
+        assert_eq!(r, &AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}")));
+    }
+    // an allow-list file of a project made before F-275
+    let mut old = AllowList::new();
+    for t in MAIN {
+        old.add(AllowRule::Tool(format!("mcp__{PINNED_SERVER}__{t}"))).unwrap();
+    }
+    let file = AllowList::file_of(&scratch("c5a"));
+    old.to_file(&file).unwrap();
+    let bytes = std::fs::read(&file).unwrap();
+    let back = AllowList::from_file(&file).unwrap();
+    assert_eq!(back.rules().len(), 11);
+    assert_eq!(back, old);
+    back.to_file(&file).unwrap();
+    assert_eq!(
+        std::fs::read(&file).unwrap(),
+        bytes,
+        "the old file was rewritten differently"
+    );
+    eprintln!(
+        "C5-A: {} rules for a new project; an old file of {} rules read and written back byte for byte ({} bytes)",
+        first.rules().len(),
+        back.rules().len(),
+        bytes.len()
+    );
+}
+
 /// C5-I: under `--project` the instructions name no hidden tool; without it they are unchanged (`default_f1.rs`).
 #[test]
 fn c5i_initialize_under_project_names_no_hidden_tool() {

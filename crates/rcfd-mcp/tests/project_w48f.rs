@@ -80,8 +80,20 @@ fn f2_tool_names_pass_the_allow_list_rules() {
     assert!(AllowRule::Tool("mcp__plugin_rcfd-panel_project__list_runs".into())
         .validate()
         .is_err());
-    // the bridge's first allow-list is exactly the read-class project tools
-    let read: BTreeSet<&str> = PROJECT_TOOLS.iter().filter(|t| t.1 == "read").map(|t| t.0).collect();
+    // the bridge's first allow-list is exactly the read-class project tools (ADR 0195 C5-A: of the live list, the tools a
+    // server without a project does not have)
+    let plain = names(
+        &rcfd_mcp::McpServer::new(rcfd_api::service::Service::new(Default::default()), Policy::default()).tool_list(),
+    );
+    let live = s.tool_list();
+    let read: BTreeSet<&str> = live["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| t["_meta"]["rcfd/access"] == "read" && !plain.iter().any(|p| t["name"] == p.as_str()))
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(read.len(), 15);
     assert_eq!(read, PROJECT_READ_TOOLS.into_iter().collect::<BTreeSet<_>>());
     eprintln!(
         "F2: {} tools x 2 forms valid, longest {longest} characters; plugin '{plugin_name}', server '{server_name}', app-owned '{PINNED_SERVER}'",
