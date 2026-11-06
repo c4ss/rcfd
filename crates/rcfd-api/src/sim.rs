@@ -144,13 +144,125 @@ pub fn gradient_options(case: &Case) -> Option<rcfd_fv::diffusion::GradientOptio
     (opts != GradientOptions::default()).then_some(opts)
 }
 
+/// The gradient options of the further equation `name` of `solver.gradient_equations` (ADR 0204 K2): the options of
+/// [`gradient_options`] when the selector is true, else `None` (the equation's assembly unchanged).
+pub fn gradient_selected(case: &Case, name: &str) -> Option<rcfd_fv::diffusion::GradientOptions> {
+    if get_b(case, &format!("solver.gradient_equations.{name}")) {
+        gradient_options(case)
+    } else {
+        None
+    }
+}
+
+/// The selectors of `solver.gradient_equations`, in the order of ADR 0204 K5.
+const GRADIENT_EQUATIONS: [&str; 4] = ["momentum", "pressure", "turbulence", "electric_potential"];
+
+/// What the built simulation solves, for the rules of ADR 0204 K5.
+struct EquationFacts {
+    /// The steady (simple, simplec) or transient (piso, pimple) constant-density kernel solves the flow (not prescribed, not the
+    /// fractional step).
+    flow_kernel: bool,
+    /// A turbulence model is built and the flow is solved.
+    turbulence: bool,
+    /// `electric.enabled`.
+    electric: bool,
+}
+
+/// ADR 0204 K5 R5 to R8: the located error of a selector of `solver.gradient_equations` that would act on nothing. Returns
+/// whether any selector is true (ADR 0190's R2 and R3 are then not made).
+fn check_gradient_equations(
+    case: &Case,
+    conv: ConvScheme,
+    facts: &EquationFacts,
+) -> std::result::Result<bool, Vec<Diagnostic>> {
+    let on: Vec<&str> = GRADIENT_EQUATIONS
+        .into_iter()
+        .filter(|n| get_b(case, &format!("solver.gradient_equations.{n}")))
+        .collect();
+    let Some(first) = on.first() else {
+        return Ok(false);
+    };
+    let path = |n: &str| format!("solver.gradient_equations.{n}");
+    // R5: no option to act with (`solver.gradient_limiter_k` alone is not an option)
+    if gradient_options(case).is_none() {
+        return Err(diag(
+            &path(first),
+            "selects an equation for the gradient options, but solver.gradient_face_correction, gradient_secondary_limiter and gradient_boundary all hold their defaults; set one of them or remove the selector",
+        ));
+    }
+    // R6: the equation is not solved by a kernel that takes the options
+    for n in &on {
+        let why = match *n {
+            "momentum" | "pressure" if !facts.flow_kernel => Some(format!(
+                "the gradient options act on the {} of the steady simple/simplec and the transient piso/pimple kernels (constant density, a solved flow, not time_advance = \"fractional_step\"); this case does not solve it with them",
+                if *n == "momentum" { "momentum Laplacian" } else { "pressure equation" }
+            )),
+            "turbulence" if !facts.turbulence => Some(
+                "needs a turbulence model whose transport equations take the gradient options (k_epsilon, k_omega_sst or spalart_allmaras) on a solved flow; this case has none"
+                    .to_string(),
+            ),
+            "electric_potential" if !facts.electric => {
+                Some("needs electric.enabled = true (the potential that takes the gradient options)".to_string())
+            }
+            _ => None,
+        };
+        if let Some(m) = why {
+            return Err(diag(&path(n), m));
+        }
+    }
+    // R7: no explicit non-orthogonal flux to act on
+    let correctors = get_i(case, "solver.non_orthogonal_correctors");
+    for n in &on {
+        let why = match *n {
+            "momentum" if !conv.needs_gradient() && correctors == 0 => Some(format!(
+                "the momentum Laplacian has no explicit non-orthogonal flux with solver.convection = \"{}\" and non_orthogonal_correctors = 0 (no velocity gradient); use a gradient-based scheme or a non-orthogonal corrector, or remove the selector",
+                get_s(case, "solver.convection")
+            )),
+            "pressure" if correctors == 0 => Some(
+                "the pressure equation has an explicit non-orthogonal flux only with solver.non_orthogonal_correctors > 0"
+                    .to_string(),
+            ),
+            "turbulence"
+                if !conv_scheme(&get_s(case, "turbulence.convection"))
+                    .unwrap_or(ConvScheme::Upwind)
+                    .needs_gradient() =>
+            {
+                Some(format!(
+                    "the turbulence transport has no explicit non-orthogonal flux with turbulence.convection = \"{}\" (no cell gradient); use a gradient-based scheme such as linear_upwind",
+                    get_s(case, "turbulence.convection")
+                ))
+            }
+            _ => None,
+        };
+        if let Some(m) = why {
+            return Err(diag(&path(n), m));
+        }
+    }
+    // R8: ADR 0193's body-force-weighted gradient already enters the non-orthogonal pressure terms
+    if on.contains(&"pressure")
+        && pressure_interpolation(case) == rcfd_fv::pressure_interp::PressureInterpolation::BodyForceWeighted
+    {
+        return Err(diag(
+            &path("pressure"),
+            "cannot be combined with solver.pressure_interpolation = \"body_force_weighted\", whose own gradient enters the non-orthogonal pressure terms (ADR 0193 V2-c, ADR 0204 Q6)",
+        ));
+    }
+    Ok(true)
+}
+
 /// The default of `solver.gradient_limiter_k` (ADR 0190 K1: ADR 0016's option set C2).
 const GRADIENT_LIMITER_K_DEFAULT: f64 = 5.0;
 
 /// ADR 0190 K5 R2 to R4: the located error of gradient options that would act on nothing. `takes` is whether the built
 /// simulation solves an equation that takes them (an `EnergySolver` energy equation without the phase change, or a swept
-/// scalar or species on a solved flow).
-fn check_gradient_options(case: &Case, conv: ConvScheme, takes: bool) -> std::result::Result<(), Vec<Diagnostic>> {
+/// scalar or species on a solved flow). With a selector of `solver.gradient_equations` (`selected`, checked by
+/// [`check_gradient_equations`]) R2 and R3 are not made (ADR 0204 K5).
+fn check_gradient_options(
+    case: &Case,
+    conv: ConvScheme,
+    takes: bool,
+    selected: bool,
+) -> std::result::Result<(), Vec<Diagnostic>> {
     let first = [
         (
             "solver.gradient_face_correction",
@@ -167,7 +279,8 @@ fn check_gradient_options(case: &Case, conv: ConvScheme, takes: bool) -> std::re
     ]
     .into_iter()
     .find(|(_, default)| !default)
-    .map(|(path, _)| path);
+    .map(|(path, _)| path)
+    .filter(|_| !selected);
     if let Some(path) = first {
         if !conv.needs_gradient() {
             return Err(diag(
@@ -2160,7 +2273,31 @@ impl Simulation {
             let frozen = cht.as_ref().is_some_and(|c| c.frozen_flux.is_some());
             let takes = (energy.is_some() && phase.is_none())
                 || (!frozen && scalars.as_ref().is_some_and(ScalarState::sweeps_any));
-            check_gradient_options(case, conv, takes)?;
+            // ADR 0204 K5 R5 to R8, then ADR 0190's rules (R2 and R3 only without a selector)
+            let selected = check_gradient_equations(
+                case,
+                conv,
+                &EquationFacts {
+                    flow_kernel: matches!(engine, Engine::Steady(_) | Engine::Transient(_))
+                        && !frozen
+                        && get_s(case, "solver.time_advance") != "fractional_step",
+                    turbulence: turb.is_some() && !frozen,
+                    electric: electric.is_some(),
+                },
+            )?;
+            check_gradient_options(case, conv, takes, selected)?;
+            // ADR 0204 K4: the options of the momentum Laplacian and of the pressure equation (`None` without the selectors)
+            match &mut engine {
+                Engine::Steady(s) => {
+                    s.gradient_momentum = gradient_selected(case, "momentum");
+                    s.gradient_pressure = gradient_selected(case, "pressure");
+                }
+                Engine::Transient(s) => {
+                    s.settings.gradient_momentum = gradient_selected(case, "momentum");
+                    s.settings.gradient_pressure = gradient_selected(case, "pressure");
+                }
+                _ => {}
+            }
             // ADR 0193 K3 R2 to R4
             let body = base_body.is_some()
                 || energy

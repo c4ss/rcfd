@@ -930,7 +930,7 @@ pub fn case_schema() -> Schema {
         .field(
             "gradient_face_correction",
             Schema::boolean(false)
-                .doc("Gradient options of the diffusion term of the energy equation (incompressible constant-density solvers) and of the transported scalars and species (ADR 0016 D2, ADR 0190); they act only on the explicit non-orthogonal (secondary-gradient) flux, never on momentum, pressure, turbulence or the electric potential, and are unrelated to periodic_gradient. true replaces the component of the interpolated face gradient along the cell-centre line by the compact difference (phi_N - phi_P)/|d|. Needs a convection scheme that computes a cell gradient (not upwind, central or blended) and an energy, scalar or species equation that takes the options (located errors otherwise). Default false keeps every earlier result bit for bit")
+                .doc("Gradient options of the diffusion term of the energy equation (incompressible constant-density solvers) and of the transported scalars and species (ADR 0016 D2, ADR 0190); they act only on the explicit non-orthogonal (secondary-gradient) flux, on momentum, the pressure equation, turbulence transport and the electric potential only where solver.gradient_equations selects them (ADR 0204), and are unrelated to periodic_gradient. true replaces the component of the interpolated face gradient along the cell-centre line by the compact difference (phi_N - phi_P)/|d|. Without solver.gradient_equations: needs a convection scheme that computes a cell gradient (not upwind, central or blended) and an energy, scalar or species equation that takes the options (located errors otherwise). Default false keeps every earlier result bit for bit")
                 .hash_omit_default(),
         )
         .field(
@@ -950,6 +950,37 @@ pub fn case_schema() -> Schema {
             "gradient_boundary",
             Schema::enumeration("owner", &["owner", "corrected", "dropped"])
                 .doc("Gradient options (see gradient_face_correction, ADR 0190): the explicit non-orthogonal flux of the energy and scalar diffusion term on fixed-value boundary faces uses the owner-cell gradient (owner, default), that gradient with its component along the cell-to-face vector replaced by the one-sided difference (phi_b - phi_P)/|d| (corrected), or is left out (dropped)")
+                .hash_omit_default(),
+        )
+        .field(
+            "gradient_equations",
+            Schema::object()
+                .optional()
+                .doc("Further equations that take the gradient options of solver.gradient_face_correction, gradient_secondary_limiter, gradient_limiter_k and gradient_boundary (ADR 0204), besides the energy and scalar diffusion terms, which always take them. Each selector needs one of those options set and an equation it can act on (located errors otherwise). Absent or all false = the options act on the energy and scalar terms only, every earlier result bit for bit")
+                .field(
+                    "momentum",
+                    Schema::boolean(false)
+                        .doc("The momentum Laplacian of the steady simple/simplec and the transient piso/pimple kernels (constant density; not the fractional step), where the kernel computes the velocity gradient (a gradient-based solver.convection or non_orthogonal_correctors > 0)")
+                        .hash_omit_default(),
+                )
+                .field(
+                    "pressure",
+                    Schema::boolean(false)
+                        .doc("The pressure equation of the same kernels, the internal faces of its flux correction and the SIMPLEC non-orthogonal compensation; needs non_orthogonal_correctors > 0. The flux correction's boundary faces and the PISO/PIMPLE pressure-lag estimate are unchanged; not with pressure_interpolation = body_force_weighted")
+                        .hash_omit_default(),
+                )
+                .field(
+                    "turbulence",
+                    Schema::boolean(false)
+                        .doc("The transport equations of k_epsilon (k, epsilon), k_omega_sst (k, omega) and spalart_allmaras (nuTilda); needs a gradient-based turbulence.convection. Other models refuse it")
+                        .hash_omit_default(),
+                )
+                .field(
+                    "electric_potential",
+                    Schema::boolean(false)
+                        .doc("The potential of electric.enabled (its sweep always computes the gradient). The Joule heat and the current density keep the default face flows; the potential of a Lorentz source is not included")
+                        .hash_omit_default(),
+                )
                 .hash_omit_default(),
         )
         .field(

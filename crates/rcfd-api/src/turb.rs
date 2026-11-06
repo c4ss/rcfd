@@ -941,6 +941,12 @@ impl TurbState {
             }
         }
 
+        // ADR 0204 K4: the gradient options of the transport equations (`None` without solver.gradient_equations.turbulence);
+        // a model without a transport that takes them refuses them (R6-T)
+        model
+            .set_gradient_options(crate::sim::gradient_selected(case, "turbulence"))
+            .map_err(|e| vec![diag("solver.gradient_equations.turbulence", e)])?;
+
         // inlet values
         let cmu_now = model
             .coefficients()
