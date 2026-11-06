@@ -4534,6 +4534,10 @@ Added after the static feature-gap review; wording is product-independent. Phase
     - USER DECISION 2026-10-21: accepted as done on the definition in ADR 0092 (five registry cases plus validation
       cases a case file can express). Outside that definition: FAN-01 (code template, tracked under F-126) and the
       library-only SST plate tests. Registry folders still hold no case files; the set-ups live inside the test.
+    - KNOWN ISSUE (ADR 0191 addendum 1, observation): SV202 (info, when no boundary condition is set) says every patch
+      takes the default "a fixed no-slip wall"; for the compressible solver a patch without a condition is a slip wall
+      (an outlet patch extrapolates; docs/case-schema.md), so the message is wrong there. USER DECISION 2026-11-06: the
+      message becomes solver-aware; the change is made separately.
 - [x] **F-241** Chained run configurations: sequenced steady-then-transient restart, interpolating initial values onto a new mesh
   - depends on: F-120, F-030
   - acceptance: Two chained configurations (steady then transient restart) on the lid-driven cavity reach the same final state as a single run
@@ -4735,6 +4739,10 @@ Added after the static feature-gap review; wording is product-independent. Phase
       - Open (ADR 0193 Q1 to Q9): the key's name, the transient kernel, the rotating-frame sources, the readings of the
         acceptance, the default, the wiring, further variants, W2 as the warped mesh, and whether the divergence on W
         reopens the dropped warped-face item.
+    - USER DECISION 2026-11-06 (ADR 0193 decision record): stays PARTIAL; W stays the binding warped mesh and W2 is
+      supplementary evidence only (Q8 (a)); amendment 1 and the heavy tests run by hand are accepted as evidence; the
+      divergence on W is the new item F-285 (Q9 (b)), after which M1 on W is run again unchanged; the R2 cases of T1 are
+      redone by the house rule, separately. Q1 to Q7 were not asked and stay open.
 - [ ] **F-247** Dynamic mesh: local remeshing on unstructured tetrahedral meshes
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run.
@@ -4867,6 +4875,9 @@ Added after the static feature-gap review; wording is product-independent. Phase
       ignored.
     - Open: gas buoyancy is left out of the film so that its steady state is the roadmap formula (ADR 0192 Q2); gas
       shear (Q3) and splash or rebound at impact (Q4) are not delivered.
+    - USER DECISION 2026-11-06 (ADR 0192 decision record): stays PARTIAL (Q1, not closed yet); gas buoyancy and gas
+      shear are the new item F-292 (Q2, Q3); splash and rebound at the film are the new item F-284, not part of F-254
+      (Q4).
 - [~] **F-254** Particle wall interaction: erosion and rough-wall rebound
   - depends on: F-128, F-056
   - acceptance: Wall interaction: for a uniform parcel stream hitting a plate at three angles, the reported erosion rate
@@ -4895,6 +4906,11 @@ Added after the static feature-gap review; wording is product-independent. Phase
       in for it (ADR 0194 Q2); K and n have no default (Q3); the DNV edition read is a third-party copy of Revision
       4.2-2007 (Q4); splash and rebound at the wall film (ADR 0192 Q4) are not delivered (Q5); wall friction and
       particle rotation are not modelled (Q6).
+    - USER DECISION 2026-11-06 (ADR 0194 decision record): stays PARTIAL (Q1, not closed yet); named steel presets for
+      K, n and the target density (Q3, against the recommendation), made separately, which must say that the Table 7-2
+      values come from a third-party copy of DNV RP O501 Revision 4.2-2007 not checked against the maintainer's edition;
+      Q2 (the Sommerfeld and Huber 1999 paper) and Q4 (the DNV edition) wait for the maintainer; splash and rebound at
+      the film are the new item F-284 (Q5); Q6 was not asked.
 - [ ] **F-255** Particle dispersion from turbulence-model fields and particle reactions
   - depends on: F-128
   - acceptance: Particle dispersion driven by turbulence-model fields reproduces the analytic dispersion growth of a passive cloud in homogeneous turbulence (Taylor result, closed form derived in the ADR) within 5 percent, and a particle surface reaction conserves the mass of each species to 1e-10 relative
@@ -4921,6 +4937,9 @@ Added after the static feature-gap review; wording is product-independent. Phase
       (G4).
     - Open: the names and place of the keys (ADR 0190 Q1); the default K (Q2); the conjugate heat_flow report keeps the
       default secondary flux (Q3); the options stay off momentum, pressure, turbulence and the electric potential (Q4).
+    - USER DECISION 2026-11-06 (ADR 0190 decision record): the heat_flow report with the options and a balance check is
+      the new item F-289 (Q3 (b)); the options on turbulence transport, momentum, pressure and the electric potential
+      are the new item F-291 (Q4 (b)); Q1 and Q2 were not asked.
 - [ ] **F-257** Dynamic mesh: prism layering and incompressible layering
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions:
@@ -4958,6 +4977,9 @@ Added after the static feature-gap review; wording is product-independent. Phase
   - note: Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S.
     - PARTIAL (ADR 0191, the registration of F-259, 2026-11-05, branch f259-layering-ale-wiring, not merged): a transient compressible run (solver.algorithm = compressible) moves its mesh under a prescribed dynamic_mesh motion with rigid or smoothing deformation (the ALE step of ADR 0090), and dynamic_mesh.deformation = layering runs ADR 0090's planar layer stack of a piston on the new generator mesh.generator = box_3d (thresholds 0.4 and 1.6 of lx / nx, no key); no new key, defaults and the incompressible checks unchanged; invalid settings give located errors (E1 to E13; E8 and E2 also through rcfd validate, E8 with its line number), and a piston driven through the last static plane stops the run with a dynamic_mesh: message; ADR 0090's piston P (9191 steps, 24 removals and 24 additions), a smoothed piston with a static pressure outlet and a rigidly moving uniform flow give the same bits through the tree as through library calls (limit 1e-12), and rcfd run gives the reports of the in-process run; ADR 0090's limits hold on the tree run (p V^gamma 1.5e-5 at full compression and 3.4e-5 after the stroke against 2e-2, mass drift 5.4e-13 against 1e-12); fixed-mesh compressible runs are bit-identical to main (D0), baseline hashes and H1 unedited.
     - Open: the wiring of F-257 (prism and incompressible layering) and F-258 (characteristic conditions on moving faces, the mesh-speed time step) waits for that library work, and done or partial is the maintainer's call (ADR 0191 Q3); layer thresholds are not keys (Q1); the InverseVolume smoothing stiffness is not in the tree (Q2); the Studio gives no cell estimate for box_3d (Q4).
+    - USER DECISION 2026-11-06 (ADR 0191 decision record): stays PARTIAL (Q3, not closed yet); inverse-volume smoothing
+      is the new item F-290 (Q2 (b)); box_3d in the Studio's lists follows the maintainer's Studio worktree (Q4 (a),
+      F-293); Q1 was not asked. The SV202 message observed in addendum 1 is recorded under F-240.
 - [ ] **F-260** Parametric studies: CMA-ES and a real-fan study
   - depends on: F-249, F-126
   - acceptance: CMA-ES reaches the registered target on a multimodal analytic test function from a start where Nelder-Mead does not (limits registered in an ADR); a multi-objective study on the FAN-01 passage over at least two blade parameters, using a converged solver, returns a Pareto set whose members are re-run to confirm their reported objectives within 1 percent
@@ -5065,6 +5087,9 @@ workspace layer between the project folder, the MCP server and the Studio. Prior
   - depends on: F-270
   - acceptance: In project mode the MCP server checks a case's mesh (the report of rcfd check-mesh and the patch list), draws it with the CPU renderer, imports a Gmsh, Fluent or OpenFOAM file from the project folder into meshes/ with its cell, face and patch counts, lists meshes/ with the cases that use each file, and returns the mesh check when edit_case changes a mesh setting; an invalid mesh setting is refused with a located diagnostic and writes nothing (ADR 0173 R2, W4, check C8, decision D8).
   - note: ADR 0173 (proposed). Priority 3. Not included: a mesh recipe format and the surface-to-volume pipeline, which no case or command reaches today (D8 (b), a later ADR). Size M. PARTIAL (ADR 0187, the registration of F-272, 2026-11-05, branch f272-mesh-setup, not merged): the project tools check_case_mesh (the report of rcfd check-mesh and the patch list of a case's mesh), preview_mesh (a PNG coloured by a cell-quality measure, drawn by the CPU renderer), import_mesh (a Gmsh or Fluent file or an OpenFOAM folder read with the solver's readers, its cells, faces, patches, zones and bounds reported, copied into meshes/ without replacing anything) and list_meshes (meshes/ with the cases that use each mesh); edit_case builds and checks the edited mesh when a mesh setting changes and refuses, writing nothing, a mesh file outside the project (1004) or a mesh that cannot be built (1003, located); a case's mesh file is confined to the project folder by every mesh command (C8). Open: the check is named check_case_mesh because the session tool check_mesh holds the name until F-275 (ADR 0187 Q1); a mesh that builds but fails the quality check is written with mesh.ok false (Q2); no size limit on a mesh build (Q3); a preview over the size budget is drawn narrower (Q4); non-orthogonality is the default measure (Q5); the three new read tools are not in the Studio bridge's allow-list (Q6, the maintainer's); the public Fluent elbow is checked only where it is fetched.
+    - USER DECISION 2026-11-06 (ADR 0187 decision record): the Studio's size limits, through a preview::estimate shared
+      in the workspace, follow once the maintainer's Studio worktree has landed (Q3 (b), F-293); Q1, Q2, Q4, Q5 and Q6
+      were not asked (Q6 is (b) on main since F-275).
 - [~] **F-273** Project journal and change feed with who, what and why; the Studio updates from it
   - depends on: F-270
   - acceptance: Every accepted write, case creation, mesh import, run submission and run control call appends an entry to .rcfd/edits.jsonl with an actor, a sequence number, the settings changed (path, old and new value) and an optional reason (additive fields only); one ordered feed merges the journal, the run records and events, and the watcher's changes; a change made by one process appears in a second process's feed within the limit fixed by an amendment of ADR 0173, a write made outside the workspace appears as external, and the Studio updates its views from the feed and shows who changed what and why (ADR 0173 R3, W6, check C3, decision D4).
@@ -5072,6 +5097,10 @@ workspace layer between the project folder, the MCP server and the Studio. Prior
     Size M.
     - PARTIAL (ADR 0188, the registration of F-273, 2026-11-05, branch f273-journal-feed, not merged): every accepted write, case creation, mesh import, run submission and accepted run request of the workspace, from the MCP server and from the Studio, leaves one line in .rcfd/edits.jsonl with seq (given under a short project-wide lock), who, the actor {client, instance {pid, started}} (mcp, or studio for the Studio's saves and creations), the reason the caller gave and the changed settings with old and new values (additive fields and kinds only; lines written before still read); the feed (rcfd_workspace::feed, the MCP tool read_feed) merges the journal, the runs' state, warning and stop events and the watcher's changes, and labels a change no journal line explains external with its path only; an edit_case with a reason made by the rcfd-mcp binary reaches another process's feed at the first poll of 250 ms (limit 4), a plain write within 4 polls; the Studio's project worker reads the feed and says who changed what and why for changes another actor made (C3).
     - Open: the Studio's run starts and controls are journaled without an actor until the maintainer's Studio worktree lands (ADR 0188 Q3); the run worker, a feed panel and a notes list in the Studio wait for that worktree (Q5); the feed is offered as the new tool read_feed, list_changes unchanged (Q1); a write_note line keeps kind edit (Q2); linking an mcp actor to a Claude Code session is NOT VERIFIED and not built (Q4); read_feed is not in the Studio bridge's allow-list (Q6, the maintainer's); a feed shows no history from before it was opened (Q7).
+    - USER DECISION 2026-11-06 (ADR 0188 decision record): the Studio's actor on its run starts and controls (Q3 (a))
+      and a feed panel and notes list (Q5 (a)) follow once the maintainer's Studio worktree has landed (F-293); no link
+      from an mcp actor to a Claude Code session for now (Q4 (c)); Q1, Q2, Q6, Q7 and the run worker of Q5 were not
+      asked.
 - [~] **F-274** Design study evaluations as runner runs in project mode
   - depends on: F-270, F-268
   - acceptance: In project mode each design evaluation is submitted to the runner as a run tagged with its study and variant (additive run-record fields), never more than max_runs at once; the metrics match the in-process evaluator for the same cases within the tolerance fixed by an amendment of ADR 0173, and the extra cost per evaluation is measured and recorded (ADR 0173 W7, check C4).
@@ -5079,6 +5108,11 @@ workspace layer between the project folder, the MCP server and the Studio. Prior
     support for continue_from is not established. Size M.
     - PARTIAL (ADR 0189, the registration of F-274, 2026-11-05, branch f274-design-evals, not merged): with --project, design_run_study and design_evaluate evaluate each candidate at each operating condition as one run of the project's runner, the base case with rcfd run --set entries checked to give the in-process settings tree, tagged in run.json with study, variant and condition (three optional fields, absent from every other run); the result is read from metrics.json by the in-process status rule; three points on the 32 x 32 cavity gave three tagged runs, at most max_runs = 2 at once, with records equal to the in-process ones bit for bit; one evaluation cost 0.64 s on the runner against 0.23 s in process (C4).
     - Open: a chained study with several conditions, a study with its own max_steps and operating maps stay in the server process (the runner cannot start a run from another run's result or cap its steps; ADR 0189 Q2, Q3); runs that outlive a call are submitted again (Q5); no journal line for design runs and records yet (Q6, now that F-273 is merged); the design tools keep the access class write_files though they now start runs (Q7, F-275); the run-record fields need the lead's approval (Q4, ADR 0130).
+    - USER DECISION 2026-11-06 (ADR 0189 decision record): the run-record fields study, variant and condition are
+      approved flat as built (Q4 (a), the lead's approval under ADR 0130); a runner setting to continue from a previous
+      run, with a step cap, is the new item F-287 (Q2 (d), Q3 (d)); adopting matching runs is the new item F-288 (Q5
+      (b)); design_run_study and design_evaluate become access class execute, made separately (Q7); Q1, Q6 and Q8 were
+      not asked.
 - [~] **F-275** Project-mode MCP tool list and plugin edit hook
   - depends on: F-271, F-272, F-274
   - acceptance: With --project, each session tool is hidden once its project equivalent has passed its check, until tools/list holds no tool whose state lives only in the server's memory; without --project it is byte-identical to before; the plugin refuses Claude Code's own Edit and Write under cases/, runs/ and designs/ with a message naming edit_case and create_case, checked in a real session where possible (ADR 0173 W8, check C5, decisions D2 and D5).
@@ -5097,3 +5131,130 @@ workspace layer between the project folder, the MCP server and the Studio. Prior
       equivalent and are not offered (Q2); access classes unchanged (Q6); the hook under bypassPermissions is NOT VERIFIED;
       existing allow-list files are not changed (Q4); with 15 first rules, a rule the user adds is below the fold of the
       Studio's confirmation dialog until scrolled (Q8, amendment 1).
+    - USER DECISION 2026-11-06 (ADR 0195 decision record): design_run_study and design_evaluate become access class
+      execute, made separately (Q6 (a) overturned); the hook's gaps are accepted: it fails open (Q7 (a)), shell writes
+      are not guarded (Q5 (a)), and the bypass modes stay untested; the run-record fields of F-274 are approved (item
+      8); the other items of Decisions needed were not asked.
+
+## Revision additions (F-284 to F-293)
+
+Added with the maintainer's answers of 2026-11-06 to the open questions of ADR 0183 and ADRs 0187 to 0195; each of those
+ADRs ends with a decision record of 2026-11-06. F-276 to F-283 are held by the milestone roadmap on the unmerged branch
+m0-gate-roadmap, which ADRs 0183 and 0184 already cite, so these items start at F-284. Every limit of these items is
+fixed by the item's registration ADR before any code.
+
+- [ ] **F-284** Particle splash and rebound at a wall film (impact regime maps)
+  - depends on: F-253
+  - acceptance: Every limit is fixed by its registration ADR before any code. Parcels that reach the wall film of F-253
+    are absorbed, rebound or splash by an impact regime map taken from a published source that the ADR names and reads
+    (constants read from the source): for parcel streams set in each regime the model gives the regime and the rebound
+    or splash outcome of the source's relations, and the parcel mass ledger of F-253 (injected = airborne + deposited +
+    escaped + stuck + film + drained) balances with the new outcomes counted, each within limits fixed by its
+    registration ADR; runs without the new setting are unchanged bit for bit (the records R1 to R4 of ADRs 0192 and 0194
+    and the baseline hashes unchanged).
+  - note: From the maintainer's answers of 2026-11-06 to ADR 0192 Q4 and ADR 0194 Q5: a new item, not part of F-254 (ADR
+    0192 recommended F-254, ADR 0194 a new item). It needs its own sources (impact regime maps) and checks; none has
+    been read yet. ADR 0192's list of what it does not deliver also names breakup at impact; whether breakup belongs
+    here is for the registration ADR.
+- [ ] **F-285** Default steady kernel diverging on F-208's warped mesh W from n = 32: diagnose and fix
+  - depends on: F-246
+  - acceptance: Every limit is fixed by its registration ADR before any code. Registered diagnosis runs locate the
+    growing mode by which the default steady simple/simplec kernel diverges on F-208's warped mesh W from n = 32 (ADR
+    0193 amendment 1: growth of about 1.8 times per iteration under every relaxation, viscosity, convection scheme,
+    corrector count, pseudo-time, face_flux and SIMPLEC set-up tried; the pressure-velocity step from HbyA to the
+    corrected velocity is suspected, not proven), and a fix makes the kernel converge on W at n = 32 and 64 under
+    F-246's registered set-up, within limits fixed by its registration ADR, with the defaults bit-identical (baseline
+    hashes unchanged) unless the maintainer lifts that rule for the fix. Afterwards F-246's missed M1 check on W (the
+    ignored tests m1_w_v1_known_miss and m1_w_v2_known_miss) is run again with its registered set-up and limits
+    unchanged; how the fix is switched on for that run is fixed by the registration ADR.
+  - note: From the maintainer's answer of 2026-11-06 to ADR 0193 Q9: option (b), as recommended (the evidence points at
+    the pressure-velocity step, not at the face gradient), not (c), reopening the dropped warped-face item. W stays the
+    binding warped mesh of F-246 and W2 is supplementary evidence only (ADR 0193 Q8 (a)). ADR 0193 amendment 1 found the
+    divergence to be a property of the default kernel on W, not of the harness.
+- [ ] **F-286** Transient k-omega SST with pimple on a static mesh
+  - depends on: F-043
+  - acceptance: Every limit is fixed by its registration ADR before any code. turbulence.model = k_omega_sst runs with
+    the pimple algorithm on a static mesh, which the case tree refuses today with a located error at turbulence.model
+    (ADR 0183 PC-5): the k and omega equations get their time derivative and are updated within the outer iterations
+    (ADR 0183 amendment P-C, question 8 (a)), also with a rotating_frame source, so that check H of ADR 0183 can run as
+    registered; the transient terms are checked against closed forms named in the ADR, within limits fixed by its
+    registration ADR; steady SST runs and every existing transient run are unchanged bit for bit (baseline hashes
+    unchanged).
+  - note: Prerequisite of EXP-ROT check H (ADR 0183; the experiment's roadmap item F-276 is on the unmerged branch
+    m0-gate-roadmap). From the maintainer's answer of 2026-11-06 to question 8 of ADR 0183 amendment P-C: transient SST
+    is its own item, and check H stays NOT RUNNABLE until it lands. k-omega SST on moving meshes is another item (F-277
+    on the same branch). ADR 0136 lists URANS as missing.
+- [ ] **F-287** Runner run setting: continue from a previous run (rcfd run --continue-from), with a step cap
+  - depends on: F-262, F-274
+  - acceptance: Every limit is fixed by its registration ADR before any code. A run setting that the runner passes to
+    rcfd run --continue-from (a change to RunSettings and the launch; ADR 0189 Q2 (d)) and a run setting for the step
+    cap (ADR 0189 Q3 (d)), so that in project mode a chained design study with several conditions, a study with its own
+    max_steps and an operating map (design_run_operating_map) are evaluated on the runner instead of in the server
+    process; their records match the in-process evaluator for the same cases within the tolerance fixed by its
+    registration ADR, and a run without the new settings keeps the bytes of its run.json and its results.
+  - note: From the maintainer's answers of 2026-11-06 to ADR 0189 Q2 and Q3: option (d) of each, as recommended; until
+    this lands such studies stay in the server process (option (a), as built). Operating maps move with it (ADR 0189
+    Q2). It is also the project-mode equivalent of run_headless's continue_from that ADR 0195 Q2 names. A new run-record
+    field needs the lead's approval (ADR 0130).
+- [ ] **F-288** Adopt matching runs when a restarted MCP server resumes a design study
+  - depends on: F-274
+  - acceptance: Every limit is fixed by its registration ADR before any code. In project mode, before a design-study
+    candidate is submitted, the server adopts a run of the project's runner with the same tags (study, variant,
+    condition), case snapshot hash and entries, waiting for it or reading its metrics.json (ADR 0189 Q5 (b)); after the
+    MCP server is stopped during a study and started again, the next call submits no second run for a candidate that has
+    one, and the adopted records equal those of a study that was not interrupted, within limits fixed by its
+    registration ADR; a candidate without a matching run is submitted as before.
+  - note: From the maintainer's answer of 2026-11-06 to ADR 0189 Q5: option (b), as recommended. Until this lands, runs
+    that outlive a call are submitted again (option (a), as built).
+- [ ] **F-289** Conjugate heat_flow report with the gradient options, checked by a heat balance
+  - depends on: F-256
+  - acceptance: Every limit is fixed by its registration ADR before any code. The conjugate heat_flow report
+    (conductive_face_flows) uses the gradient options of F-256 that the energy equation was solved with (ADR 0190 Q3
+    (b)); on a skewed conjugate case with gradient_boundary = corrected or dropped, the face correction or a limiter
+    set, the reported flows balance against the source to the solver tolerance, within a limit fixed by its registration
+    ADR; without the options the report is unchanged bit for bit (baseline hashes unchanged).
+  - note: From the maintainer's answer of 2026-11-06 to ADR 0190 Q3: option (b) as its own item with a balance check, as
+    recommended. Until this lands, with the options set the report adds the default operator's non-orthogonal terms, so
+    on skewed cells it is not the flux the matrix solved (option (a), documented).
+- [ ] **F-290** Inverse-volume mesh smoothing in the case tree
+  - depends on: F-230, F-063
+  - acceptance: Every limit is fixed by its registration ADR before any code. A third value inverse_volume of
+    dynamic_mesh.smoothing.method, with its exponent from dynamic_mesh.smoothing.exponent (an enumeration value, no new
+    key; ADR 0191 Q2 (b)), runs the InverseVolume(k) displacement-diffusion stiffness of ADR 0090 D4, today in the
+    library only: invalid settings give located errors, a tree run equals the library run to a limit fixed by its
+    registration ADR, and a case without the value is bit-identical (baseline hashes unchanged).
+  - note: From the maintainer's answer of 2026-11-06 to ADR 0191 Q2: option (b), a separate small item, as recommended.
+- [ ] **F-291** Gradient options on turbulence transport, momentum, pressure and the electric potential
+  - depends on: F-256
+  - acceptance: Every limit is fixed by its registration ADR before any code. The gradient options of F-256 (face
+    correction, secondary limiter, boundary-gradient treatment) also act on the turbulence transport equations,
+    momentum, the pressure equation and the electric potential, each under new checks of the kinds F-256 used (ADR 0190
+    G1 to G4): invalid values give located errors, a tree run equals the library run with the same options to a limit
+    fixed by its registration ADR, the options change the result on a non-orthogonal mesh, and a case without the keys
+    is bit-identical (baseline hashes unchanged).
+  - note: From the maintainer's answer of 2026-11-06 to ADR 0190 Q4: option (b), a new item with new checks (the
+    recommendation was (a)). ADR 0016 D2 defined and checked the options on the scalar sweep only.
+- [ ] **F-292** Gas buoyancy and gas shear in the particle wall film
+  - depends on: F-253
+  - acceptance: Every limit is fixed by its registration ADR before any code. Two opt-in additions to the film of F-253:
+    gas buoyancy, the film driven by (rho_l - rho_g) g_t in place of rho_l g_t (ADR 0192 Q2 (b)), and gas shear, a
+    shear-driven closure checked against h = (2 mu_l Gamma / (rho_l tau_g))^(1/2) for a film driven by shear alone (ADR
+    0192 Q3 (a)); each meets a closed form derived in the ADR within limits fixed by its registration ADR, the parcel
+    mass ledger of F-253 balances, and runs without them are unchanged bit for bit (F-253's checks, the records R1 and
+    R2 and the baseline hashes unchanged).
+  - note: From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended
+    leaving them out until a case needs them). The film of F-253 stays without them.
+- [ ] **F-293** Studio follow-ups that wait on the maintainer's Studio worktree
+  - depends on: F-272, F-273, F-259
+  - acceptance: Every limit is fixed by its registration ADR, written before any code and after the maintainer's
+    worktree studio-case-lineage has landed on main: (1) the Studio's run starts and controls are journaled with the
+    Studio's actor, one with_actor at each of the four RunService constructions (ADR 0188 Q3 (a)); (2) a Studio panel
+    lists the change feed with who, what and why, and a notes/ list (ADR 0188 Q5 (a)); (3) box_3d is in the Studio's and
+    the workspace start plan's generator lists, with a cell estimate (ADR 0191 Q4 (a)); (4) the MCP server's mesh builds
+    use the Studio's size limits (2 000 000 estimated cells, 256 MiB) through one preview::estimate moved from the
+    Studio into the workspace layer, which the Studio's preview also uses (ADR 0187 Q3 (b)). Each part has named tests,
+    and the existing Studio and project-tool tests pass.
+  - note: From the maintainer's answers of 2026-11-06: the maintainer lands studio-case-lineage first, and these follow
+    (ADR 0187 Q3, ADR 0188 Q3 and Q5, ADR 0191 Q4). Agents do not touch that worktree. The third change ADR 0188 Q5
+    names, the run worker reading the feed in place of its own poll, was not part of the answer and stays an open
+    question of ADR 0188.
