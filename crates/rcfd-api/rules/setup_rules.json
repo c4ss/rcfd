@@ -93,7 +93,10 @@
     {"id": "SV202", "name": "no boundary conditions", "severity": "info", "category": "boundaries",
      "when": {"count": "boundaries", "op": "eq", "value": 0},
      "path": "boundaries",
-     "message": "no boundary conditions are set: every patch takes the default (a fixed no-slip wall)"},
+     "message": {"first_of": [
+       {"when": {"path": "solver.algorithm", "op": "eq", "value": "compressible"},
+        "message": "no boundary conditions are set: every patch takes the default of the compressible solver (a slip wall)"},
+       {"message": "no boundary conditions are set: every patch takes the default (a fixed no-slip wall)"}]}},
     {"id": "SV203", "name": "report conductivity only used by heat-flow reports", "severity": "info", "category": "materials",
      "each": {"over": "reports"},
      "when": {"all": [{"path": "@.conductivity", "op": "gt", "value": 0}, {"path": "@.type", "op": "ne", "value": "heat_flow"}]},

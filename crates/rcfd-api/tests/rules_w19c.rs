@@ -703,3 +703,113 @@ fn e4_check_only_adds_the_rules_array() {
     let keys: Vec<_> = ev["rules"][0].as_object().unwrap().keys().cloned().collect();
     assert_eq!(keys.len(), 5, "{keys:?}");
 }
+
+// ---------------------------------------------------------------------------------------------
+// ADR 0196 C: SV202's message names the default of the solver; a message chosen by condition
+
+/// SV202's text for the compressible solver (ADR 0196 C).
+const SV202_SLIP: &str =
+    "no boundary conditions are set: every patch takes the default of the compressible solver (a slip wall)";
+/// SV202's text for every other solver, as before ADR 0196.
+const SV202_NO_SLIP: &str = "no boundary conditions are set: every patch takes the default (a fixed no-slip wall)";
+
+#[test]
+fn e5_sv202_names_the_default_of_the_solver_adr0196() {
+    let sv202 = |c: &Case| -> Vec<RuleDiagnostic> { eval(c, &None).into_iter().filter(|d| d.id == "SV202").collect() };
+    let algorithms = Case::new().tree.allowed_values("solver.algorithm").unwrap();
+    assert!(algorithms.iter().any(|a| a == "compressible"), "{algorithms:?}");
+    let mut checked = Vec::new();
+    // the default algorithm, then every value of the enum
+    let mut cases = vec![("default".to_string(), Case::new())];
+    for a in &algorithms {
+        let mut c = Case::new();
+        c.set("solver.algorithm", json!(a)).unwrap();
+        cases.push((a.clone(), c));
+    }
+    for (a, c) in cases {
+        let want = if a == "compressible" { SV202_SLIP } else { SV202_NO_SLIP };
+        let d = sv202(&c);
+        assert_eq!(d.len(), 1, "{a}: {d:?}");
+        let x = &d[0];
+        assert_eq!(
+            (x.severity, x.category.as_str(), x.path.as_str()),
+            (Severity::Info, "boundaries", "boundaries"),
+            "{a}"
+        );
+        assert_eq!(x.message, want, "{a}");
+        assert!(x.fix.is_none(), "{a}");
+        // one boundary entry: no SV202
+        let mut b = c.clone();
+        b.set("boundaries.walls.velocity", json!("fixed")).unwrap();
+        assert!(sv202(&b).is_empty(), "{a} with a boundary");
+        checked.push(format!("{a}: {}", if want == SV202_SLIP { "slip" } else { "no-slip" }));
+    }
+    eprintln!("E5 (ADR 0196 C1): SV202 {checked:?}; none with a boundary entry");
+}
+
+#[test]
+fn e4b_message_first_of_is_validated_strictly_adr0196() {
+    let rule = |message: &str| {
+        format!(
+            r#"{{"format":"rcfd-setup-rules","version":1,"rules":[{{"id":"X1","name":"n","severity":"info","category":"setup","each":{{"over":"reports"}},"when":{{"path":"@.type","op":"non_empty"}},"path":"reports.{{name}}.type","message":{message}}}]}}"#
+        )
+    };
+    let valid = r#"{"first_of":[{"when":{"path":"solver.algorithm","op":"eq","value":"compressible"},"message":"compressible '{name}'"},{"message":"other '{name}'"}]}"#;
+    let set = RuleSet::parse(&rule(valid)).expect("a valid first_of");
+    for (algorithm, want) in [("compressible", "compressible 'r'"), ("simplec", "other 'r'")] {
+        let mut c = Case::new();
+        c.set("solver.algorithm", json!(algorithm)).unwrap();
+        c.set("reports.r.type", json!("volume_average")).unwrap();
+        let d = set.evaluate(&c.tree.to_json(), None);
+        assert_eq!(d.len(), 1, "{algorithm}: {d:?}");
+        assert_eq!(
+            (d[0].message.as_str(), d[0].path.as_str()),
+            (want, "reports.r.type"),
+            "{algorithm}"
+        );
+    }
+    for (what, message, needle) in [
+        ("not a string or object", "1", "needs a string 'message'"),
+        (
+            "unknown key",
+            r#"{"first_of":[{"message":"m"}],"x":1}"#,
+            "unknown key 'x'",
+        ),
+        (
+            "first_of not a list",
+            r#"{"first_of":{"message":"m"}}"#,
+            "non-empty list",
+        ),
+        ("empty first_of", r#"{"first_of":[]}"#, "non-empty list"),
+        (
+            "unknown entry key",
+            r#"{"first_of":[{"message":"m","path":"title"}]}"#,
+            "unknown key 'path'",
+        ),
+        (
+            "entry without a message",
+            r#"{"first_of":[{"when":{"path":"title","op":"non_empty"}},{"message":"m"}]}"#,
+            "needs a string 'message'",
+        ),
+        (
+            "entry message not a string",
+            r#"{"first_of":[{"message":2}]}"#,
+            "needs a string 'message'",
+        ),
+        (
+            "invalid when",
+            r#"{"first_of":[{"when":{"path":"title","op":"approx","value":1},"message":"a"},{"message":"m"}]}"#,
+            "approx",
+        ),
+        (
+            "last entry with a when",
+            r#"{"first_of":[{"message":"a"},{"when":{"path":"title","op":"non_empty"},"message":"m"}]}"#,
+            "last entry",
+        ),
+    ] {
+        let e = RuleSet::parse(&rule(message)).expect_err(what);
+        assert!(e.contains(needle), "{what}: {e}");
+        assert!(e.contains("message"), "{what}: {e}");
+    }
+    eprintln!("E4b (ADR 0196 C2): a valid first_of message per condition with {{name}}; 9 malformed shapes refused");
+}
