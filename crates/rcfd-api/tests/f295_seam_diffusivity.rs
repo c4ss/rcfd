@@ -32,13 +32,24 @@ fn ok(text: &str) {
     assert!(p.is_empty(), "expected no diagnostic, got {p:?}\n{text}");
 }
 
-/// The static diagnostics (`semantic_errors`) of a text that parses: (path, message).
-fn static_errors(text: &str) -> Vec<(String, String)> {
+/// The static diagnostics of a text as the first run of S1 read them: `semantic_errors` of a text that parses (a text that
+/// `Case::parse_toml` refuses panics; amendment 1).
+fn static_errors_first_run(text: &str) -> Vec<(String, String)> {
     let c = Case::parse_toml(text).unwrap_or_else(|e| panic!("{e:?}\n{text}"));
     c.semantic_errors()
         .iter()
         .map(|x| (x.path.clone(), x.message.clone()))
         .collect()
+}
+
+/// The static diagnostics of a text (ADR 0205 amendment 1): the error of `Case::parse_toml`, which runs the semantic checks,
+/// or the `semantic_errors` of a text that parses; both before `Simulation::new`.
+fn static_errors(text: &str) -> Vec<(String, String)> {
+    let d = match Case::parse_toml(text) {
+        Err(d) => d,
+        Ok(c) => c.semantic_errors(),
+    };
+    d.iter().map(|x| (x.path.clone(), x.message.clone())).collect()
 }
 
 fn with_model(text: &str, model: &str) -> String {
@@ -50,9 +61,8 @@ fn with_model(text: &str, model: &str) -> String {
 // S1 scope, S2 text and hash
 // ---------------------------------------------------------------------------------------------------------------
 
-/// S1: what the case tree accepts and where it refuses.
-#[test]
-fn s1_scope_of_the_seam_diffusivity() {
+/// S1: what the case tree accepts and where it refuses; `corrected` reads the static errors as amendment 1 says.
+fn s1(corrected: bool) {
     let pimple = "algorithm = \"pimple\"\ntime_scheme = \"euler\"\nn_outer = 3\ndt = 0.1\nend_time = 1.0\n";
     ok(&ch("", &seam("pair"), SIMPLEC));
     ok(&ch("", &seam("pair"), pimple));
@@ -63,7 +73,11 @@ fn s1_scope_of_the_seam_diffusivity() {
     println!("S1: accepted: CH SIMPLEC pair, CH pimple pair, CH owner, k_epsilon owner, laminar owner, NP pair");
     for model in ["laminar", "k_epsilon", "spalart_allmaras"] {
         let text = with_model(&ch("", &seam("pair"), SIMPLEC), model);
-        let e = static_errors(&text);
+        let e = if corrected {
+            static_errors(&text)
+        } else {
+            static_errors_first_run(&text)
+        };
         let hit = e.iter().find(|(p, _)| p == KEY);
         let Some((_, msg)) = hit else {
             panic!("S1 {model}: pair not refused statically at {KEY}: {e:?}");
@@ -78,6 +92,19 @@ fn s1_scope_of_the_seam_diffusivity() {
     let p = paths(&bad);
     assert!(p.iter().any(|x| x == KEY), "S1 harmonic: {p:?}");
     println!("S1: diffusivity = \"harmonic\" located at {p:?}");
+}
+
+/// S1 (the case of record, amendment 1).
+#[test]
+fn s1_scope_of_the_seam_diffusivity() {
+    s1(true)
+}
+
+/// S1 as first run: the harness unwrapped `Case::parse_toml` on a text it refuses (amendment 1).
+#[test]
+#[ignore = "record of the first S1 run (ADR 0205 amendment 1): the harness unwrapped Case::parse_toml of the laminar pair text"]
+fn s1_first_run_record() {
+    s1(false)
 }
 
 /// S2: the absent object keeps the written text, the explicit default keeps the hash, `pair` changes it.
