@@ -371,3 +371,26 @@ documents, and two later test and rule fixes (`504d0b8`, `6cef342`). Not merged.
 and lists a `note` kind; they are deviations to confirm, each reversible. Q3 to Q7 stand as registered. Q4 stays NOT VERIFIED:
 nothing links an `mcp` actor to a Claude Code session. Q6 changes what the Studio's sidebar runs without asking and was not acted
 on.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the reversible choice the work proceeded on, which is not a maintainer decision. This
+record changes no limit, check or result above.
+
+* **Q1 (where the feed is offered to MCP).** Not asked; proceeding on (a), a deviation from ADR 0173's design text still to
+  be confirmed. F-275 kept both `read_feed` and `list_changes` (ADR 0195, Decisions needed item 5).
+* **Q2 (the kind of a `write_note` line).** Not asked; proceeding on (a), a deviation from ADR 0173's design text still to be
+  confirmed.
+* **Q3 (the Studio's run starts and controls carry no actor).** Answered: (a). The maintainer lands the Studio worktree
+  `studio-case-lineage` first; then one `with_actor` goes at each of the four `RunService` constructions (roadmap item
+  F-293).
+* **Q4 (linking an MCP actor to a Claude Code session).** Answered: (c), no link for now. Nothing claims a link, and it stays
+  NOT VERIFIED.
+* **Q5 (the Studio's views beyond messages).** Answered: (a) for the panel that lists the feed with who, what and why and for
+  the `notes/` list: they follow once that worktree has landed (F-293). The third change Q5 names, the run worker reading the
+  feed in place of its own poll, was not part of the question put to the maintainer: not asked, proceeding on (a).
+* **Q6 (`read_feed` and the Studio bridge's allow-list).** Not asked. This ADR proceeded on (a); F-275 then took (b) (ADR
+  0195, Decisions needed item 6), and (b) is what main holds.
+* **Q7 (a reader starts at the present).** Not asked. This ADR proceeded on (a); F-275 then built (b), `read_feed {from_seq}`
+  (ADR 0195, Decisions needed item 7), and (b) is what main holds.

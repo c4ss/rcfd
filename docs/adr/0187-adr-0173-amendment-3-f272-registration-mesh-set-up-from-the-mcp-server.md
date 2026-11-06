@@ -306,3 +306,23 @@ Studio's sidebar runs without asking and was not acted on. The finding of differ
 sandbox root, `create_case {path}` of a case that names `meshes/` with `..` is refused, so no session, and no session
 `check_mesh`, can be made from it (the session `load_mesh` was not tested); this bears on D2's hiding of the session mesh
 tools (F-275).
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the reversible choice the work proceeded on, which is not a maintainer decision. This
+record changes no limit, check or result above.
+
+* **Q1 (the name `check_case_mesh`).** Not asked; proceeding on (a). F-275 kept the name under `--project` (ADR 0195 Q1 (a)).
+* **Q2 (a mesh that builds but fails the quality check).** Not asked; proceeding on (a).
+* **Q3 (size limits of a mesh build).** Answered: (b), later. The MCP server takes the Studio's limits (2 000 000 estimated
+  cells, 256 MiB), with `preview::estimate` moved from the Studio into the workspace and the Studio's preview using it, once
+  the maintainer's Studio worktree `studio-case-lineage` has landed (roadmap item F-293). Until then (a): no limit, and none
+  is invented.
+* **Q4 (a preview over the size budget).** Not asked; proceeding on (a).
+* **Q5 (the preview's measure).** Not asked; proceeding on (a).
+* **Q6 (the new read tools and the Studio bridge's allow-list).** Not asked. This ADR proceeded on (a); F-275 then took (b)
+  (ADR 0195, Decisions needed item 6), and (b) is what main holds.
+* The further finding of addendum 1 (under the project's sandbox root, `create_case {path}` refuses a case that names
+  `meshes/` with `..`) is not a numbered question and was not asked. Under `--project`, F-275 hides `create_case` and the
+  session mesh tools.

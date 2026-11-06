@@ -360,3 +360,16 @@ ignored (wall 4831 s, peak summed working set 3339 MB, largest time against its 
 than the F-272 gate (2819 / 0 / 800) include the three `*_k_setup_defect` records of amendment 1. The gate overlapped
 another agent's gate (gate-f256), which restarted a minute before this one began; no test failed or timed out. All
 eleven F-253 tests ran in it and passed, and the existing particle suites, H1 and `baseline_hashes` passed unchanged.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. They change no limit, check or result above.
+
+* **Q1 (status of F-253).** Answered: not closed yet. F-253 stays partial; the maintainer closed none of F-253, F-254 and
+  F-259 on 2026-11-06.
+* **Q2 (gas buoyancy in the film).** Answered: gas buoyancy, the `(rho_l - rho_g) g_t` of option (b), is added as a new item
+  together with gas shear: roadmap item F-292 (the recommendation was (a)). The film of F-253 stays as registered, without it.
+* **Q3 (gas shear).** Answered: (a), a new item for a shear-driven closure: F-292, together with gas buoyancy (the
+  recommendation was (b)).
+* **Q4 (impact regimes).** Answered: (b), a new item, not part of F-254: roadmap item F-284 (the recommendation was (a); ADR
+  0194 Q5 recommended (b)).
