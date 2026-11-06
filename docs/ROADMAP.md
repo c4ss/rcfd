@@ -5157,7 +5157,7 @@ fixed by the item's registration ADR before any code.
     0192 recommended F-254, ADR 0194 a new item). It needs its own sources (impact regime maps) and checks; none has
     been read yet. ADR 0192's list of what it does not deliver also names breakup at impact; whether breakup belongs
     here is for the registration ADR.
-- [ ] **F-285** Default steady kernel diverging on F-208's warped mesh W from n = 32: diagnose and fix
+- [x] **F-285** Default steady kernel diverging on F-208's warped mesh W from n = 32: diagnose and fix
   - depends on: F-246
   - acceptance: Every limit is fixed by its registration ADR before any code. Registered diagnosis runs locate the
     growing mode by which the default steady simple/simplec kernel diverges on F-208's warped mesh W from n = 32 (ADR
