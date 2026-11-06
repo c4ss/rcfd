@@ -357,3 +357,25 @@ though in project mode they start runs); Q2 (d) and Q3 (d) (a run setting that t
 and a step cap, which would bring chained studies, studies with `max_steps` and operating maps onto the runner); Q6 (journal
 lines for design runs and stored evaluations, no longer blocked now that F-273 is merged); Q5 (adopting runs that outlive a
 call); Q1 and Q8.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the reversible choice the work proceeded on, which is not a maintainer decision. This
+record changes no limit, check or result above.
+
+* **Q1 (the entry point).** Not asked; proceeding on (a).
+* **Q2 (a chained study with several conditions).** Answered: (d), in a later item: roadmap item F-287, a run setting that the
+  runner passes to `rcfd run --continue-from` (a change to `RunSettings` and the launch). Operating maps move with it. Until
+  it lands, (a): such a study is evaluated in the server process.
+* **Q3 (a study's `max_steps`).** Answered: (d) with Q2 (d), a run setting for the step cap, in F-287. Until it lands, (a).
+* **Q4 (the tags).** Answered: (a), the three flat fields `study`, `variant` and `condition`, approved as built. This is the
+  lead's approval of run-record fields that ADR 0130 asks for, given by the maintainer on 2026-11-06.
+* **Q5 (runs that outlive the call).** Answered: (b), in a later item: roadmap item F-288, which adopts a run with the same
+  tags, case snapshot hash and entries before submitting. Until it lands, (a): such runs are submitted again.
+* **Q6 (the journal).** Not asked. As built, F-274 writes no journal line for design runs or stored evaluations; no item was
+  registered for the recommendation (a).
+* **Q7 (the access class).** Answered (the maintainer's answer to ADR 0195 Q6, the same question): `design_run_study` and
+  `design_evaluate` become access class `execute`. The change, with the registered update of the tool-list goldens it needs,
+  is made separately, not by this record.
+* **Q8 (a store with records of both evaluators).** Not asked; proceeding on (a).

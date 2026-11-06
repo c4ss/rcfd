@@ -407,3 +407,21 @@ Main moved to ef44c31 (F-259, ADR 0191) during the gate. A scratch merge of the 
 on it the targeted suites passed: `wall_interaction`, `wall_film` (R1), `wall_interaction_f254`, `wall_film_f253` (R2),
 `case_hashes_w48u` (H1), `baseline_hashes`, `particle_run`, `particles_case`, `particles_ext_case` and F-259's
 `layering_ale_f259`. The scratch merge was not kept.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the choice the work proceeded on, which is not a maintainer decision. This record changes
+no limit, check or result above.
+
+* **Q1 (status of F-254).** Answered: not closed yet. F-254 stays partial; the maintainer closed none of F-253, F-254 and
+  F-259 on 2026-11-06.
+* **Q2 (the shadow effect).** Still open: it waits for the paper of Sommerfeld and Huber (1999) from the maintainer. Until
+  then (a), W4 stays the model.
+* **Q3 (K, n and the target density).** Answered: named steel presets, against the recommendation (a). A preset, named in
+  the case file so that it stays visible there, fills K, n and the target density from the steel grades of Table 7-2. The
+  presets must say that the Table 7-2 values come from a third-party copy of DNV RP O501 Revision 4.2-2007 that has not been
+  checked against the maintainer's edition (Q4). The presets are made separately, not by this record.
+* **Q4 (the DNV edition).** Still open: the constants wait to be checked against the edition the maintainer holds.
+* **Q5 (impact regimes at the wall film, ADR 0192 Q4).** Answered: (b), a new item: roadmap item F-284.
+* **Q6 (friction and rotation).** Not asked; nothing is built for them.

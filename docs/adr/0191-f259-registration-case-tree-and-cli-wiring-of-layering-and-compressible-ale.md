@@ -367,3 +367,19 @@ with the processor at 97 % load from other work. So these are failures of the ma
 This gate paragraph is documents only and was not gated again.
 
 **Questions for the maintainer.** Q3 (done or partial; the recommendation is done) and Q1, Q2 and Q4 stand as registered.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the reversible choice the work proceeded on, which is not a maintainer decision. This
+record changes no limit, check or result above.
+
+* **Q1 (layer thresholds as keys).** Not asked; proceeding on (a).
+* **Q2 (the `InverseVolume(k)` smoothing stiffness).** Answered: (b), as a separate small item: roadmap item F-290, the value
+  `inverse_volume` of `dynamic_mesh.smoothing.method` with its exponent from `smoothing.exponent`. Until it lands, (a).
+* **Q3 (roadmap status).** Answered: not closed yet. F-259 stays partial; the maintainer closed none of F-253, F-254 and F-259
+  on 2026-11-06 (the recommendation was (b), done).
+* **Q4 (`box_3d` in the Studio and the workspace's start plan).** Answered: (a), once the maintainer's Studio worktree
+  `studio-case-lineage` has landed (roadmap item F-293).
+* **The SV202 observation of addendum 1.** The maintainer decided that the message becomes solver-aware (a slip wall for the
+  compressible solver). The change is made separately, not by this record; the roadmap note of F-240 records the issue.
