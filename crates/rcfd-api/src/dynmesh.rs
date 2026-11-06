@@ -1,6 +1,7 @@
 //! The `dynamic_mesh` section of the case tree (F-063, F-229, ADR 0033 D8): a prescribed rigid motion or a six-degree-of-
 //! freedom body drives the moving patches of an incompressible PISO/PIMPLE run; the interior mesh follows rigidly or by
-//! Laplacian / inverse-distance smoothing. F-259 (ADR 0191): a prescribed motion also moves the mesh of a transient
+//! Laplacian / inverse-distance / inverse-volume (F-290, ADR 0203) smoothing. F-259 (ADR 0191): a prescribed motion also
+//! moves the mesh of a transient
 //! compressible run (the ALE step of ADR 0090), and `deformation = "layering"` runs ADR 0090's planar layer stack of a
 //! piston (compressible only).
 
@@ -48,10 +49,10 @@ pub fn schema() -> Schema {
         .doc("Interior mesh smoothing (deformation = smoothing)")
         .field(
             "method",
-            Schema::enumeration("laplacian", &["laplacian", "inverse_distance"])
-                .doc("Diffusivity of the point-displacement equation: 1 (laplacian) or 1/l^exponent with l the distance to the nearest moving face"),
+            Schema::enumeration("laplacian", &["laplacian", "inverse_distance", "inverse_volume"])
+                .doc("Diffusivity of the point-displacement equation: 1 (laplacian), 1/l^exponent with l the distance to the nearest moving face (inverse_distance), or 1/V^exponent with V the mean initial volume of the two cells of a face, so small cells deform less (inverse_volume, ADR 0090 D4, F-290)"),
         )
-        .field("exponent", Schema::float(1.0).range(0.0, 10.0).doc("Exponent of the inverse-distance diffusivity"))
+        .field("exponent", Schema::float(1.0).range(0.0, 10.0).doc("Exponent of the inverse-distance or inverse-volume diffusivity"))
         .field("substeps", Schema::int(1).range(1.0, 1000.0).doc("Reserved; only 1 is implemented (the displacement from the initial mesh is solved once per step)"))
         .field("tolerance", Schema::float(1e-12).range(0.0, 1.0).doc("Relative tolerance of the displacement solve"));
     let six = Schema::object()
@@ -604,10 +605,11 @@ impl DynMesh {
             })
             .collect();
         let exponent = get_f(case, "dynamic_mesh.smoothing.exponent");
-        let method = if get_s(case, "dynamic_mesh.smoothing.method") == "inverse_distance" {
-            SmoothingMethod::InverseDistance(exponent)
-        } else {
-            SmoothingMethod::Laplacian
+        // ADR 0203 W2: the stiffness of the initial mesh, as the displacement is solved from it every step
+        let method = match get_s(case, "dynamic_mesh.smoothing.method").as_str() {
+            "inverse_distance" => SmoothingMethod::InverseDistance(exponent),
+            "inverse_volume" => SmoothingMethod::InverseVolume(exponent),
+            _ => SmoothingMethod::Laplacian,
         };
         let tol = get_f(case, "dynamic_mesh.smoothing.tolerance");
         let v3 = |k: &str, def: Vec3| {
