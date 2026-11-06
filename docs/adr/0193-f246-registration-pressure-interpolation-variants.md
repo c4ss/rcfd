@@ -313,3 +313,66 @@ automatic selection by mesh quality, momentum-weighted and staggered interpolati
 - [ADR 0016](0016-wave13-numerics.md) D2 for the meshes and the scalar manufactured problem of F-208.
 - [ADR 0190](0190-f256-registration-case-tree-wiring-of-the-gradient-options.md) for the wiring checks this item follows.
 - [Case schema](../case-schema.md) for the key.
+
+## Amendment 1 (2026-11-06): the warped mesh W at n = 32, a supplementary warped mesh W2, and the set-up of B-a
+
+Written after the first runs and before any corrected run. Run before this text: P, L0, T0 to T4, H1 and `baseline_hashes.rs`;
+B as registered; V0 on K and S at n = 16 and 32 (n = 64 still running) and on W at n = 16 and 32; and the diagnosis runs below
+(V0 only, convergence only, `crates/rcfd-fv/tests/pressure_interp_f246_diag.rs`, ignored tests). No error of V1 or V2 had been
+computed. No limit is changed.
+
+**Finding 1: V0 diverges on W from n = 32.** Under the registered set-up V0 converges on W at n = 16 (218 iterations) and
+diverges at n = 32: the largest velocity change grows about 1.8 times per iteration from the first iteration and is not finite
+at iteration 939. The growth rate stays about the same with 2 or 0 correctors, with upwind or linear-upwind convection instead
+of central, with `alpha_u / alpha_p` = 0.5 / 0.2 and 0.2 / 0.1, with pseudo-time steps (local, CFL 1), with the H operator of the
+previous iterate, with `velocity_correction = face_flux`, with SIMPLEC (`alpha_p = 0.7`, ADR 0050 compensation, `face_flux`), and
+with `nu` = 1 and 0.01. The largest error sits at a box edge (cell centre near x = y = 0.97). The geometry is sound: no cell
+centre lies on the wrong side of a face, the weights lie in [0.475, 0.525], and the maximum non-orthogonality is 63.5 degrees at
+n = 32 (61.3 at 16, 64.1 at 64). The same harness converges on K and S at n = 16 and 32 and on W at n = 16.
+
+Reading: since neither relaxation nor viscosity changes the rate, the growing mode lives in the step from `HbyA` to the corrected
+velocity, `u = HbyA - rAU grad p` with `p` from the compact face Laplacian; on this mesh the Green-Gauss cell gradient and the
+compact Laplacian disagree enough that the step amplifies. This is a property of the default kernel on F-208's W from n = 32, not
+a defect of the harness. The defaults stay bit-identical (L0, T4, `baseline_hashes.rs` and H1 passed), so the kernel is the one of
+main.
+
+**Rule applied.** The set-up-defect rule called for an amendment before any V1 or V2 error; the defect is in the default kernel,
+not in the set-up, so:
+
+- **W stays binding as registered.** M1 on W binds V1 and V2 unchanged (orders of the pair (32, 64) at least 1.7 and 1.2, every
+  run converged). V0 on W is reported (it diverges). V1 changes the Green-Gauss face values, the part of the step the reading
+  above points at, so whether V1 converges on W is measured and reported as it comes; no benefit is claimed in advance. A variant
+  that diverges on W is a miss of M1, moved to an ignored `*_known_miss` test with the limits intact.
+- **M3 on W** no longer asserts that V0 converges; the divergence is recorded.
+- **W2, supplementary.** The F-208 map with amplitude `a` instead of 0.1. Selection rule (convergence only): the largest `a` of
+  {0.07, 0.05} for which V0 converges under the stop rule at n = 16 and 32 and its largest velocity change falls over the first 200
+  iterations at n = 64. Measured: `a = 0.07` converges at 16 (183 iterations) and 32 (591), and at 64 the change falls from
+  3.0e-5 (iteration 3) to 1.3e-7 (iteration 200); `a = 0.05` likewise. So **W2 = W with amplitude 0.07** (45.1 degrees at n = 16).
+  Preconditions at n = 16, measured in P: maximum non-orthogonality at least 20 degrees, non-planarity at least 1e-4, largest
+  `|x_f - x_f'| / |d|` at least 1e-6. W2 carries the M1 limits (1.7, 1.2) for V1 and V2 and V0 reported, and its levels 16 and 32
+  run in M3 (V0 must converge there). W2 is not the roadmap's warped mesh; whether it may stand in for W is Q8.
+
+**Finding 2: B-a as registered does not converge.** After 4000 iterations both runs of B-a (SIMPLEC, `alpha_u = 0.9`,
+`alpha_p = 1`, no correctors) are not finite, so B3 fails and B-a is NOT MET as registered. Diagnosis on V0 (box on K at n = 16,
+400 iterations): the change falls to 5e-2 by iteration 10 and then grows (3.8e27 at 400), the period-two pressure mode of SIMPLEC
+at `alpha_p = 1` on non-orthogonal cells (ADR 0084). With `velocity_correction = face_flux` it falls to 3e-17 by iteration 320;
+with `alpha_p = 0.7` to 3e-17; SIMPLE with `alpha_p = 0.3` and no corrector grows slowly. B-b (SIMPLE, one corrector) met every
+check.
+
+- **B-a' (corrected):** B-a with `reconstructed_correction = true` (the case key `velocity_correction = "face_flux"`, ADR 0084's
+  remedy for that mode), which keeps the tree defaults `alpha_u = 0.9`, `alpha_p = 1`. B0 to B3 unchanged. The fixed point of V2
+  survives: at `p_new = p_old` the reconstruction term is zero, and with SIMPLEC
+  `u = HbyA - rAtU grad p_old = rAU f_P - (rAU - rAtU) grad p - rAtU grad p = rAU (f_P - grad p) = 0`.
+- The registered B-a test stays as an ignored record.
+
+**Heavy rule applied.** V0 on K at n = 64 has run for more than 23 minutes without finishing, and every n = 64 run is of that size,
+so every M1 sequence test (n = 16, 32, 64) is heavy: ignored, run by name in release, numbers in the addendum. The levels 16 and
+32 run in M3 (non-ignored) on K, W, W2 and S.
+
+**Q8. W2.** (a) W stays the acceptance's warped mesh and W2 is supplementary evidence only; (b) accept W2 as the warped mesh of
+F-246's acceptance, since the default kernel cannot be converged on F-208's W from n = 32. Recommendation (a): (b) changes the
+acceptance after the fact. Proceeding on (a); a variant that misses on W makes F-246 partial.
+
+**Disclosed, no change:** L0's lid cavity (SIMPLEC, `alpha_u = 0.9`, one corrector, no compensation) does not converge: its
+largest speed is 301 after 50 iterations, the axial mode of ADR 0050 D1. The bit comparison still holds; its control "the lid
+drives a flow" is met by that growth, not by a converged flow.
