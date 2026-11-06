@@ -277,7 +277,9 @@ must fail A-eq. Nothing else changes.
 
 Branch `f259-layering-ale-wiring`: this text (`a8faf09`), amendment 1 (`fa9193b`), the code and tests (`284aad7`), amendment 2
 (`b8d8116`) and the documents (`f17194d`). Not merged. Main has since gained ADRs 0189, 0190 and 0192 (`54ec840`); 0191 is
-still free there, and the branch merges onto `54ec840` without a textual conflict (`git merge-tree`).
+still free there, and the branch merges onto `54ec840` without a textual conflict (`git merge-tree`). On that merge (a scratch
+commit, not a branch) `layering_ale_f259.rs` of rcfd-api and rcfd-cli, `baseline_hashes.rs`, `case_hashes_w48u.rs`,
+`dynamic_mesh.rs` and `rules_w19c.rs` pass (release); D0's hashes are unchanged there. The merge was not gated.
 
 **Built as registered.** W1 to W7 as written.
 
