@@ -383,3 +383,22 @@ Disclosures:
   frozen shear flow in which the parcels were pressed against a reflecting wall until stuck (10 s of run time), and was
   changed to the registered air-like case.
 - The tests take about a second each in release (`wall_interaction` 1.3 s, `wall_interaction_f254` 0.2 s).
+
+### The gate (2026-11-06)
+
+Main stayed at 54ec840 while F-254 was built, so no merge was needed. At that point 0194 is on no branch; 0191 is on
+`f259-layering-ale-wiring` and 0193 on `f246-pressure-interp`, so the number 0194 stands.
+
+The full gate ran on a `git archive` copy of 045f5db with three jobs and one process per test (`scripts/gate_test.py`),
+after the F-259 gate had finished (no gate active for 15 minutes, 30 GB of memory free): `cargo fmt` per package 0,
+`cargo clippy --workspace --all-targets -- -D warnings` 0, tests 2880 passed, 5 failed, 803 ignored (2885 test
+processes, wall 5326 s, peak summed working set 3223 MB, largest time against its limit 0.513). The five failures are
+timing and process tests outside the particle crates, and each passed when run again alone on the same build:
+
+- `rcfd-runner` `runner_w47b` s1 and s9, known flakes of the gate;
+- `runner_w47b` s4a ("the solver died with the runner"), whose sibling s4b failed the same way in the F-259 gate;
+- `rcfd-claude` `driver_fake` d5 (the cancel took 6.7 s);
+- `rcfd-studio` `preview_gpu_g1` g10 (the frame that uploads 250 000 triangles took 102.9 ms against 100 ms).
+
+All fourteen F-254 tests ran in the gate and passed, and so did R1, R2 (ADR 0192), H1 and `baseline_hashes`. The 803
+ignored tests are as many as in the F-253 gate; F-254 adds none.
