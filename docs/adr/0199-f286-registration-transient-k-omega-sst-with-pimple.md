@@ -5,6 +5,14 @@ probe of an existing capability was run on main 9edfbda (not committed): the ste
 and the refusal of the same case with `pimple`. Its numbers are quoted where they set a run length. Results go in the addendum
 at the end.
 
+Summary of the results (addendum): k-omega SST runs with `pimple` on a static mesh, with the rotating frame too, and the
+defaults are bit-identical. Three set-ups were found defective by their first run and corrected by amendments 2 and 3 before
+the corrected runs (the periodic seam of H and C1, the fractional-step case of S1). Every corrected check met its limit except
+S3 for BDF2, whose observed order on the channel start-up (2.4 to 2.7) is above its band; it is an ignored known miss, with a
+diagnosis. Every mutation made its check fail. The case text of ADR 0183 check H builds, and its 200-step smoke on B2 is
+finite. The amendment 2 record also names an existing property of the kernel: a periodic seam is not conservative for a
+diffusivity that differs across it.
+
 Parents: [ADR 0183](0183-exp-rot-registration.md) (EXP-ROT; D5 check H, amendment P-C and its question 8, the decision record
 of 2026-11-06, D9), [ADR 0136](0136-fidelity-tiers-xhigh-to-xlow.md) (URANS listed as missing), ADR 0015 and ADR 0070 (the SST
 model and its term audit), ADR 0032 (the once-per-step time derivative of SA-DES and of the Reynolds stress model), ADR 0045
@@ -337,3 +345,87 @@ print the panic message, with the same result. The S1 test as run stays as an ig
 The case of record becomes CH without `[sources.drive]` on `pimple` with the fractional step, located at
 `solver.time_advance`. Without the source and with `pimple` the case has no static error, so the rule of `Simulation::new`
 (`fractional_step needs solver.algorithm = "piso"`) is what refuses it. Every other S1 case is unchanged. No limit changes.
+
+### Addendum: results (2026-11-06)
+
+Code in 3505192 (after the registration 6cc77f7, the V0b record b204c7a and amendments 1 to 3): `crates/rcfd-turb/src/sst.rs`
+(`KOmegaSst::begin_step`, the transient branch of `update`), `crates/rcfd-turb/src/model.rs` (`begin_time_step`,
+`updates_in_outer_iterations`), `crates/rcfd-fv/src/pimple.rs` (`OuterUpdate::nu_face`), `crates/rcfd-api/src/turb.rs` (D3),
+`crates/rcfd-api/src/sim.rs` (D2), the doc strings of `schema.rs`, the SST section of `docs/case-schema.md`, and PC-5 of
+`exp_rot_pc.rs` as D5 says. Tests: `crates/rcfd-turb/tests/f286_transient_sst.rs`, `crates/rcfd-api/tests/f286_transient_sst.rs`,
+`crates/rcfd-api/tests/f286_default_bits.rs`. e5f974e gives the V0b record type a name for clippy, with the hashes unchanged. Every check was run once, in release; the exceptions are named
+where they occur (amendments 2 and 3, and the S3 diagnosis below).
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited; both pass in the gate of e5f974e | pass | met |
+| V0b | 8 of 8 runs bit-identical to the record of 9edfbda (steady SIMPLEC CH 0xe0c06d93f89a6026, steady SIMPLEC SST sector 0xc2f1699892d63041, SA-DDES `piso` 0x5815ab1e8181474b and `pimple` with a drive 0xb22cd2c49440a812, RSM 0xc39e0dbb60c181bc, Smagorinsky 0x50bfd09892f59843, laminar `pimple` sector 0x01737054b51921c3, laminar `pimple` channel 0x83467df6f8e66875) | bit-identical | met |
+| V0c | gate of e5f974e (git archive, `scripts/gate_test.py`, 3 jobs): fmt per package 0, clippy `--workspace --all-targets -D warnings` 0; 2941 passed, 3 failed, 834 ignored, 2944 test processes, wall 4627 s. The 3 failures are on the list of known flakes: `runner_w47b` s1 and s9 failed again alone (three times each), and so did the same two tests of the pre-F-286 build of the ADR 0196 gate (`target-dec1`) run alone at the same time (its sampler saw no `rcfd` process: "max by OS 0"), so they do not come from this change; `journal_f273` c3s passed alone | pass, apart from the known flakes | met |
+| H0 | `F1 = 1` and uniform k, omega in every sweep of every corrected H run (the first, periodic run missed, amendment 2) | as stated | met (corrected set-up) |
+| D1 | Euler 4.466e-15, BDF2 1.754e-14 | `<= 1e-12` | met |
+| D1v | 1.813e-14 | `<= 1e-12` | met |
+| D1b | 2.276e-15 | `<= 1e-12` | met |
+| D1N | 4.067e-2 | `>= 1e-3` | met (D1 can fail) |
+| D2 | Euler k: `e(40)` 1.1738e-2, `e(80)` 5.9084e-3, `p` 0.9903; omega: 8.5548e-3, 4.3046e-3, 0.9909. BDF2 k: 1.9984e-4, 5.0212e-5, 1.9927; omega: 1.5510e-4, 3.8869e-5, 1.9965 | Euler [0.9, 1.1], `<= 1e-2`; BDF2 [1.9, 2.1], `<= 1e-4` | met |
+| D2v | k: `e(80)` 9.5928e-5, `e(160)` 2.4215e-5, `p` 1.9860; omega: 7.0734e-5, 1.7820e-5, 1.9889 | [1.9, 2.1]; `<= 5e-5` | met |
+| D2b | bounded BDF2 k: `e(40)` 6.5047e-4, `e(80)` 1.6806e-4, `p` 1.9525; omega: 4.4305e-4, 1.1388e-4, 1.9600 | report only | reported |
+| C1 | `abs(B)` / destruction: Euler upwind 2.098e-14, Euler `linear_upwind` 2.214e-14, BDF2 upwind 2.614e-14, BDF2 `linear_upwind` 2.559e-14; smallest per-step change 4.027e-2 to 4.191e-2; C1-0: largest cell divergence 1.117e-16 of the largest flux, boundary flux 0 | `<= 1e-10`; `>= 1e-3` | met (corrected set-up) |
+| S1 | every case as registered (the case of amendment 3 at `solver.time_advance`) | as stated | met (the run of amendment 1 missed, amendment 3) |
+| R1 | settled: last-step change of `ux` 7.637e-16 `max abs(ux)` after 5000 steps (t = 1000); `ux` 2.657e-10, k 1.251e-9, omega 1.681e-9, nut 3.668e-10; `max abs(uy)` / `max ux` 3.264e-13 (pimple), 2.311e-13 (simplec) | settled `<= 1e-11`; `<= 1e-8`; `<= 1e-8` | met |
+| S3 `bdf2` | `ux`: `e(80,160)` 6.0811e-5, `e(160,320)` 9.5591e-6, `p` 2.6694; k: 2.8774e-4, 5.4233e-5, 2.4075; omega: 7.2853e-5, 1.2244e-5, 2.5729; largest `nut_change` of a step 1.0e-11 / 2.7e-13 / 4.6e-14 (T/80, T/160, T/320) | [1.7, 2.3] | **missed** (above the band): ignored `s3_bdf2_time_order_known_miss` |
+| S3 `euler` | `ux`: `e(80,160)` 4.7734e-4, `e(160,320)` 2.3997e-4, `p` 0.9922; k: 1.6647e-3, 8.5471e-4, 0.9617; omega: 8.9465e-4, 4.6180e-4, 0.9541 | [0.8, 1.2] | met |
+| S3N | `bdf2`, `n_outer = 1`: `p` 0.7719 (`ux`), 0.8612 (k), 0.7297 (omega); largest `nut_change` of a step 0.74 to 0.76 | smallest `<= 1.3` | met (S3 can fail) |
+| S4 | 10 of 10 steps finite, no guard trip; worst seam pair sum 1.065e-15; smallest k 2.19e-4, smallest omega 1.83; `max nut / nu` 8.717e-2 | `<= 1e-8` | met |
+| S6 | H(dt) builds with no diagnostic: 13 627 cells, 1.44 s | as stated | met |
+| V3H | 200 of 200 steps of H(dt) on B2 (13 627 cells), no failure and no guard trip, every field finite; 1.315 s per step (measured while another test ran on the machine) | report only | reported |
+
+**S3, BDF2: the miss and its diagnosis.** The registered S3 test asserted BDF2 before Euler and stopped at the BDF2 miss, so the
+Euler half was run afterwards, once (it had not run). The two halves are now separate tests: `s3_euler_time_order` (gate) and the
+ignored `s3_bdf2_time_order_known_miss` (limit intact). Diagnosis, report only (`s3_bdf2_finer_levels_diagnosis`, ignored, run
+once): the same runs one and two levels finer give `p` 3.3618 / 2.7810 / 2.7219 (`ux` / k / omega) from T/160, T/320, T/640 and
+1.5526 / 2.2684 / 2.0082 from T/320, T/640, T/1280, with the outer iterations converged throughout (`nut_change` below 5e-14).
+The observed order first rises above 2 and then falls back, so the registered levels are not in the asymptotic range of
+this start-up. A likely cause, not proven here: the start goes from a uniform state into a channel whose near-wall k relaxes
+on a time scale of about 0.06 (`1 / (beta* omega)` with omega up to 182, the steady maximum of R1), only 2.4 steps of
+`dt = T/80 = 0.025`. At the finest pair, k and omega show the second order of the BDF2 time derivative (2.27, 2.01). `ux` shows 1.55 there, at an absolute
+difference of 5.7e-6 m/s (3.2e-7 of `max ux`); these runs do not explain it, and the momentum side of the outer iteration is not
+monitored by them. The library checks D1, D1v and D2 show the scheme of the k and omega equations exactly. The limit is not
+changed.
+
+**Mutations** (scratch, each applied alone to 3505192 and reverted; the named test run once):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| M1 | D1 | fails at its precondition H0 in step 1, sweep 1: spread of k 4.937e-2 (the relaxed k equation does not keep a uniform field uniform) | fails |
+| M2 | D2 `bdf2` | k: `e(40)` 1.1738e-2, `e(80)` 5.9084e-3, `p` 0.9903 (the Euler numbers) | fails |
+| M3 | S3 `bdf2` | `p` 0.7721 / 0.8612 / 0.7297 (`ux` / k / omega; the numbers of S3N); largest `nut_change` of a step 0.74 to 0.76 | fails (below the band; the code of record fails above it) |
+| M4 | D1v | 4.184e-3 | fails |
+| M5 | S3 `bdf2` | `p` 1.0480 / 1.0877 / 0.9622; the outer iterations converge (`nut_change` 1.6e-10 to 4.6e-14) but the momentum keeps the face viscosity of the previous step | fails (below the band) |
+
+**Predictions.** PR1 met (D1, D1v, D1b below 2e-14; D2 and D2v reproduce the recursion to the printed digits). PR2 falsified
+in size: R1 met, at 2.7e-10 to 1.7e-9, not near round-off; these runs do not separate the convergence of the two iterations
+from a difference between their fixed points at that level. PR3 met for Euler (0.95 to 0.99) and for S3N (0.86 for k), falsified
+for BDF2 at the registered levels (2.4 to 2.7). PR4 met (1.1e-15). PR5 met (1.3 s per step).
+
+**Check H of ADR 0183 is now runnable as registered** (S6), with the gap of question 4: its outer-iteration rule needs a
+per-outer record that the case tree does not keep. The registered runs H(dt) and H(dt/2) were not made; they belong to the
+EXP-ROT job.
+
+Before the gate, on 3505192 in release: the non-ignored tests of `baseline_hashes`, `case_hashes_w48u`, `des_tree`,
+`exp_rot_pab`, `exp_rot_pc` (PC-5 as amended), `f286_default_bits`, `f286_transient_sst`, `physics_schema`, `rsm_tree`,
+`sgs_tree`, `sst_schema`, `transient_sources`, `turb_models` and `wall_options`: 85 passed, 0 failed; the `rcfd-fv` and
+`rcfd-turb` suites: 600 passed, 0 failed, when the one-hour cap of that run stopped it (the gate runs them all).
+`cargo clippy -p rcfd-turb -p rcfd-fv -p rcfd-api --all-targets -D warnings` and `cargo fmt --check` of the three packages
+are clean on e5f974e.
+
+**Questions added by the results** (each with a recommendation):
+
+5. **The periodic seam of the scalar transport** (amendment 2). On a periodic seam `effective_viscosity` gives each face of a
+   pair the diffusivity of its own owner cell, so the k, omega (and momentum) diffusion is not conservative across a seam where
+   `nu_t` differs; FAN-01 and check H have rotational seams. Options: (a) leave it; (b) a roadmap item that gives the two faces
+   of a pair one diffusivity (opt-in, defaults bit-identical), checked by C1's budget on the periodic box of the first set-up.
+   Recommendation: (b), before check H is read.
+6. **The S3 BDF2 miss.** Options: (a) keep it as the known miss it is, with the diagnosis above (as done); (b) register a new
+   time-order check that starts from a resolved state (for example from the R1 steady state with the drive changed) and run it
+   once. Recommendation: (a) now, (b) only if the maintainer wants a case-tree order record for URANS; D1 and D2 already show
+   the order of the k and omega time derivative exactly.
