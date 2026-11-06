@@ -195,6 +195,51 @@ fn check_gradient_options(case: &Case, conv: ConvScheme, takes: bool) -> std::re
     Ok(())
 }
 
+/// The pressure-interpolation variant of the steady kernel named by `solver.pressure_interpolation` (ADR 0193 K2).
+pub fn pressure_interpolation(case: &Case) -> rcfd_fv::pressure_interp::PressureInterpolation {
+    use rcfd_fv::pressure_interp::PressureInterpolation;
+    match get_s(case, "solver.pressure_interpolation").as_str() {
+        "skew_corrected" => PressureInterpolation::SkewCorrected,
+        "body_force_weighted" => PressureInterpolation::BodyForceWeighted,
+        _ => PressureInterpolation::Linear,
+    }
+}
+
+/// ADR 0193 K3 R2 to R4: the located error of a pressure-interpolation variant that no kernel takes (`steady`: the built engine is
+/// the steady constant-density kernel and the flow is solved), that has no body force to weight with (`body`: the steady kernel can
+/// receive one), or that meets the kernel's own wall-pressure treatment of the trapezoid sources (`trapezoid`).
+fn check_pressure_interpolation(
+    case: &Case,
+    steady: bool,
+    body: bool,
+    trapezoid: bool,
+) -> std::result::Result<(), Vec<Diagnostic>> {
+    const KEY: &str = "solver.pressure_interpolation";
+    let v = get_s(case, KEY);
+    if v == "linear" {
+        return Ok(());
+    }
+    if !steady {
+        return Err(diag(
+            KEY,
+            format!("\"{v}\" acts on the steady incompressible constant-density solver (solver.algorithm = \"simple\" or \"simplec\", the flow solved); this case does not run it (coupled, piso, pimple, compressible, variable density, VOF or frozen_flow)"),
+        ));
+    }
+    if v == "body_force_weighted" && !body {
+        return Err(diag(
+            KEY,
+            "body_force_weighted weights the face pressures with the body force, and this case has none (physics.body_force, Boussinesq buoyancy with gravity, a momentum UDF, a source other than porous, solver.bulk_velocity or two-way particles); use linear",
+        ));
+    }
+    if v == "body_force_weighted" && trapezoid {
+        return Err(diag(
+            KEY,
+            "body_force_weighted is not available with rotating_frame, acceleration, actuator_disk or lorentz sources, whose wall pressure the solver sets by its own construction (ADR 0071, ADR 0193 Q3)",
+        ));
+    }
+    Ok(())
+}
+
 /// Time scheme of `solver.time_scheme`.
 pub fn solver_time_scheme(case: &Case) -> TimeScheme {
     match get_s(case, "solver.time_scheme").as_str() {
@@ -1715,6 +1760,8 @@ impl Simulation {
             solver.reconstructed_correction = get_s(case, "solver.velocity_correction") == "face_flux";
             // ADR 0102 (opt-in): SIMPLEC flux compensation on fixed-pressure and periodic boundary faces
             solver.simplec_boundary_compensation = get_b(case, "solver.simplec_boundary_compensation");
+            // ADR 0193 (opt-in): the pressure-interpolation variant
+            solver.pressure_interpolation = pressure_interpolation(case);
             let bf = get_v(case, "physics.body_force", [0.0; 3]);
             if vec3::norm(bf) > 0.0 {
                 let b = BodyForce::uniform(&geom, bf);
@@ -2099,6 +2146,21 @@ impl Simulation {
             let takes = (energy.is_some() && phase.is_none())
                 || (!frozen && scalars.as_ref().is_some_and(ScalarState::sweeps_any));
             check_gradient_options(case, conv, takes)?;
+            // ADR 0193 K3 R2 to R4
+            let body = base_body.is_some()
+                || energy
+                    .as_ref()
+                    .is_some_and(|e| e.buoyancy && vec3::norm(e.gravity) > 0.0)
+                || udf_momentum.is_some()
+                || sources.as_ref().is_some_and(|s| s.has_force())
+                || get_f(case, "solver.bulk_velocity") != 0.0
+                || crate::particles::two_way(case);
+            check_pressure_interpolation(
+                case,
+                matches!(engine, Engine::Steady(_)) && !frozen,
+                body,
+                sources.as_ref().is_some_and(|s| s.wall_pressure_trapezoid),
+            )?;
         }
         let timectl = {
             let transient = matches!(engine, Engine::Transient(_)) && !compressible;
