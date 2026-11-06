@@ -404,7 +404,8 @@ edited: `case_hashes_w48u.rs` (H2 only). New tests: `crates/rcfd-fv/tests/pressu
    restored and compared byte for byte with the kept copies.
 3. `limit_audit.py` flagged the silent `return` of an unknown set-up in the diagnosis tests; it panics now. No hit in the other
    new tests.
-4. B-b takes about 14 minutes (4000 iterations of SIMPLE with a corrector on 4096 cells); the registered settings were kept.
+4. B-b ran for about 14 minutes next to B-a (4000 iterations of SIMPLE with a corrector on 4096 cells); the registered settings
+   were kept.
 
 **Results.** Errors are L2 over the cells; orders are `log2(e(n) / e(2n))`; "it." counts SIMPLE iterations to the stop rule.
 
@@ -432,8 +433,12 @@ edited: `case_hashes_w48u.rs` (H2 only). New tests: `crates/rcfd-fv/tests/pressu
 | Can fail | the line of K2 that sets the variant removed: T2 C1 V1 4.968e-3 and V2 3.756e-1 (tree vs library), T3 change 0; `sim.rs` restored and equal byte for byte to the kept copy |
 | Audit | `scripts/limit_audit.py`: no hit in the new tests after difference 3 |
 
-**Time.** On this machine, shared with other agents' gates: a sequence n = 16, 32, 64 took 104 to 141 minutes (6253 to 8445 s);
-B-a' 1.7 minutes; B-b about 14 minutes; M2 14 minutes; M3 on W 20 minutes.
+**Time.** On this machine, shared with other agents' gates: a sequence test (n = 16, 32, 64) took 84 to 141 minutes (5048 to
+8445 s), most of it the n = 64 run (4933 to 8261 s); B-a' 1.7 minutes, M2 14 minutes and M3 on W 20 minutes when run alone.
+
+**Which code produced the heavy numbers.** The heavy M1 tests are not run by the gate. V1 and V2 on K, S and W2, and V0 on W2,
+ran from the test binary of 4d901bc; V0 on K and S from the binary of 51a639f (before amendment 1; its `mms` harness is the same).
+The library code (`rcfd-fv/src`) has not changed since 51a639f; the later commits touched only test files and documents.
 
 **Reading.**
 
