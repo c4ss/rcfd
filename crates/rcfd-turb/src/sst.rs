@@ -28,6 +28,11 @@
 //! with `omega_vis = 6 nu / (beta_1 y^2)` and `omega_log = u_tau / (sqrt(beta*) kappa y)`, the strain is
 //! the Spalding velocity gradient, and the production is the turbulent share of the wall shear
 //! stress times that gradient. `k` has zero gradient at walls.
+//!
+//! Transient form (F-286, ADR 0199 D1): after [`KOmegaSst::begin_step`] every sweep adds the time derivative of the momentum's
+//! time scheme (`rcfd_fv::ddt::add_ddt`, old levels fixed for the step) in place of the implicit under-relaxation, and the eddy
+//! viscosity is not relaxed. The `pimple` solver makes one sweep at the start of every outer iteration. A model that never
+//! starts a step (the steady algorithms) runs the steady sweep unchanged.
 
 use crate::eddy::{effective_viscosity, patch_faces};
 use crate::kepsilon::velocity_gradient;
@@ -35,6 +40,7 @@ use crate::wall::{wall_distance, Roughness, SpaldingLaw};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
+use rcfd_fv::ddt::{add_ddt, History, TimeScheme};
 use rcfd_fv::diffusion::laplacian;
 use rcfd_fv::gradient::{green_gauss, least_squares};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
@@ -132,7 +138,19 @@ pub fn wall_omega(nu: f64, y: f64) -> f64 {
     10.0 * 6.0 * nu / (BETA[0] * y * y)
 }
 
-/// Steady k-omega SST model state.
+/// Time levels of a transient run (F-286, ADR 0199 D1).
+struct SstTime {
+    /// Time scheme of the step in progress.
+    scheme: TimeScheme,
+    /// Size of the step in progress.
+    dt: f64,
+    /// Old levels of k.
+    k: History,
+    /// Old levels of omega.
+    w: History,
+}
+
+/// k-omega SST model state (steady; transient after [`KOmegaSst::begin_step`]).
 pub struct KOmegaSst {
     /// Geometry.
     pub geom: Arc<FvGeometry>,
@@ -172,6 +190,8 @@ pub struct KOmegaSst {
     f1: Vec<f64>,
     y_plus: Vec<f64>,
     started: bool,
+    /// `None` until the first transient step starts (the steady path never sets it).
+    time: Option<SstTime>,
 }
 
 impl KOmegaSst {
@@ -237,7 +257,36 @@ impl KOmegaSst {
             y_plus: vec![0.0; wall_faces_len],
             geom,
             started: false,
+            time: None,
         })
+    }
+
+    /// Start a transient step of size `dt` with the time scheme `scheme` (F-286, ADR 0199 D1). The first call takes the
+    /// present k and omega as the old level; every later call pushes the fields at the end of the previous step with that
+    /// step's size. Every [`KOmegaSst::update`] until the next call is a sweep of this step: the time derivative of `scheme`
+    /// (Euler on the first step of either BDF2) replaces the implicit under-relaxation, and the eddy viscosity is not relaxed.
+    pub fn begin_step(&mut self, dt: f64, scheme: TimeScheme) {
+        match &mut self.time {
+            None => {
+                self.time = Some(SstTime {
+                    scheme,
+                    dt,
+                    k: History::new(self.k.values.clone()),
+                    w: History::new(self.omega.values.clone()),
+                })
+            }
+            Some(t) => {
+                t.k.push(self.k.values.clone(), t.dt);
+                t.w.push(self.omega.values.clone(), t.dt);
+                t.dt = dt;
+                t.scheme = scheme;
+            }
+        }
+    }
+
+    /// Has a transient step been started ([`KOmegaSst::begin_step`])?
+    pub fn is_transient(&self) -> bool {
+        self.time.is_some()
     }
 
     /// Select the wall treatment. `LowRe` sets `k = 0` on the wall faces; `Automatic` restores zero gradient.
@@ -404,7 +453,11 @@ impl KOmegaSst {
             mk.b[c] += ptil[c] * vol[c];
             mk.a.diag[c] += BETA_STAR * wv[c] * vol[c];
         }
-        mk.relax(self.relax_turb, &kv);
+        match &self.time {
+            // ADR 0199 D1: the time derivative takes the place of the relaxation
+            Some(t) => mk = add_ddt(t.scheme, mk, &vol, t.dt, &t.k),
+            None => mk.relax(self.relax_turb, &kv),
+        }
         let mut knew = kv.clone();
         mk.solve(&mut knew, &self.solver);
         knew.iter_mut().for_each(|x| *x = x.max(1e-12));
@@ -423,7 +476,10 @@ impl KOmegaSst {
             mw.b[c] += src * vol[c];
             mw.a.diag[c] += coef * vol[c];
         }
-        mw.relax(self.relax_turb, &wv);
+        match &self.time {
+            Some(t) => mw = add_ddt(t.scheme, mw, &vol, t.dt, &t.w),
+            None => mw.relax(self.relax_turb, &wv),
+        }
         for &c in &wall_cells {
             if let Some(w) = wall_w[c] {
                 let big = 1e8 * mw.a.diag[c].abs().max(1e-30);
@@ -440,7 +496,12 @@ impl KOmegaSst {
         let (kc, wcv) = (self.k.values.clone(), self.omega.values.clone());
         let cap = 1e5 * nu;
         let mut change: f64 = 0.0;
-        let alpha = if self.started { self.relax_nut } else { 1.0 };
+        // ADR 0199 D1: a transient sweep takes the new eddy viscosity
+        let alpha = if self.started && self.time.is_none() {
+            self.relax_nut
+        } else {
+            1.0
+        };
         for c in 0..n {
             let new = self.nut_of(kc[c], wcv[c], s_mag[c], f2[c]).min(cap);
             let upd = alpha * new + (1.0 - alpha) * self.nut[c];

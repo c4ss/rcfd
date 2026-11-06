@@ -3789,7 +3789,16 @@ impl Simulation {
                         }
                     }
                 }
-                if let Some(t) = &mut self.turb {
+                // F-286 (ADR 0199 D2): k-omega SST on pimple makes its sweep at the start of every outer iteration, in
+                // the hook below; here the step only starts (old levels) and the solver gets the present face viscosity
+                let outer_turb = self
+                    .turb
+                    .as_ref()
+                    .is_some_and(|t| t.model.updates_in_outer_iterations());
+                if let Some(t) = self.turb.as_mut().filter(|_| outer_turb) {
+                    t.model.begin_time_step(dt, s.settings.time_scheme);
+                    s.nu_face = Some(t.nu_face());
+                } else if let Some(t) = &mut self.turb {
                     // algebraic models (subgrid scale, mixing length; ADR 0026): evaluated explicitly from the
                     // velocity and flux of the old time level, no relaxation
                     t.model.begin_step(dt);
@@ -3885,13 +3894,16 @@ impl Simulation {
                     },
                     None if self.sources.is_some()
                         || self.components.is_some()
-                        || self.particles.as_ref().is_some_and(|p| p.is_two_way()) =>
+                        || self.particles.as_ref().is_some_and(|p| p.is_two_way())
+                        || outer_turb =>
                     {
                         // momentum sources and lumped pressure components (ADR 0045): one evaluation per outer iteration;
                         // the two-way particle acceleration of the step (ADR 0059) is added to the source force
                         let tw_force: Option<BodyForce> =
                             self.particles.as_ref().and_then(|p| p.two_way_force().cloned());
                         let (geom, sources, components) = (&self.geom, &self.sources, &mut self.components);
+                        // F-286 (ADR 0199 D2): the SST sweep of this outer iteration and its face viscosity
+                        let mut turb_outer = self.turb.as_mut().filter(|_| outer_turb);
                         let mut hook = |u: &VectorField, phi: &[f64]| {
                             let mut up = rcfd_fv::pimple::OuterUpdate::default();
                             if let Some(src) = sources {
@@ -3908,6 +3920,10 @@ impl Simulation {
                             if let Some(cm) = components.as_mut() {
                                 up.face_jump = cm.face_jump(geom, phi);
                                 up.patch_pressures = cm.network_pressures(geom, phi);
+                            }
+                            if let Some(t) = turb_outer.as_mut() {
+                                t.change = t.model.update(u, phi);
+                                up.nu_face = Some(t.nu_face());
                             }
                             up
                         };

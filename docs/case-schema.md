@@ -99,10 +99,16 @@ Menter, Kuntz and Langtry, Turbulence, Heat and Mass Transfer 4, 2003), in the f
 Turbulence Modeling Resource (TMR) page. The constants and blending functions were checked against it, see
 docs/reference-data.md.
 
-Restrictions: the same as `k_epsilon` (steady algorithms, a wall patch, no energy), except that a fixed wall may move. The
-wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the stationary casing of a rotor solved in the
-rotating frame is allowed. `turbulence = "wall"` must then be set on that patch, because the automatic role calls a moving
-fixed-velocity patch an inlet.
+Restrictions: the same as `k_epsilon` (a wall patch, no energy), except that it also runs with `pimple` (below) and that a
+fixed wall may move. The wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the stationary casing
+of a rotor solved in the rotating frame is allowed. `turbulence = "wall"` must then be set on that patch, because the
+automatic role calls a moving fixed-velocity patch an inlet.
+
+Transient runs (ADR 0199): with `solver.algorithm = "pimple"` on a static mesh, k and omega get the time derivative of
+`solver.time_scheme` (`euler`, `bdf2`, `bdf2_bounded`) and one sweep at the start of every outer iteration, whose eddy
+viscosity the momentum equation of that outer iteration uses. `turbulence.relax` and `relax_nut` are not used there (the time
+derivative takes their place). With `n_outer = 1` the sweep sees only the old time level. `piso`, a dynamic mesh,
+`solver.error_tolerance` and the fractional step are located errors.
 
 Wall treatment: automatic.
 
