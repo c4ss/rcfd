@@ -295,6 +295,42 @@ pub fn solve_pressure_parts_src_k(
     vol_src: Option<&[f64]>,
     slope: Option<&[f64]>,
 ) -> (f64, usize, Option<crate::simple::ResidualParts>) {
+    solve_pressure_inner(geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, vol_src, slope, None)
+}
+
+/// A pressure gradient for the explicit non-orthogonal correction, as a function of the current cell pressures.
+pub type PressureGradientFn<'a> = &'a dyn Fn(&[f64]) -> Vec<Vec3>;
+
+/// [`solve_pressure_parts`] whose explicit non-orthogonal correction takes its cell gradient from `grad` (called with the current
+/// pressure in every corrector pass) instead of the least-squares gradient of the pressure and its boundary values (ADR 0193 V2-c).
+/// `None` is [`solve_pressure_parts`]; `grad` is not called without non-orthogonal correctors.
+#[allow(clippy::too_many_arguments)]
+pub fn solve_pressure_parts_grad(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    want_parts: bool,
+    grad: Option<PressureGradientFn>,
+) -> (f64, usize, Option<crate::simple::ResidualParts>) {
+    solve_pressure_inner(geom, gamma_p, bc, phi_hby_a, p, ctl, want_parts, None, None, grad)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn solve_pressure_inner(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &mut [f64],
+    ctl: &PressureControls,
+    want_parts: bool,
+    vol_src: Option<&[f64]>,
+    slope: Option<&[f64]>,
+    grad_fn: Option<PressureGradientFn>,
+) -> (f64, usize, Option<crate::simple::ResidualParts>) {
     let mut parts = None;
     let mut div = divergence(geom, phi_hby_a);
     if let Some(src) = vol_src {
@@ -349,8 +385,13 @@ pub fn solve_pressure_parts_src_k(
         // the explicit non-orthogonal term uses the current pressure from the first solve on (so that repeated
         // outer iterations converge to the fully corrected solution and the initial residual below vanishes there)
         let grad = if ctl.non_orth_correctors > 0 {
-            let bv = boundary_values_pbc(geom, bc, p);
-            Some(least_squares(geom, p, &bv))
+            Some(match grad_fn {
+                Some(gf) => gf(p),
+                None => {
+                    let bv = boundary_values_pbc(geom, bc, p);
+                    least_squares(geom, p, &bv)
+                }
+            })
         } else {
             None
         };
@@ -413,16 +454,30 @@ pub fn corrected_flux(
     ub: &[Vec3],
     non_orth: bool,
 ) -> Vec<f64> {
-    let mesh = &geom.mesh;
-    let sf = mesh.face_area_vectors();
-    let (own, nei) = (mesh.owner(), mesh.neighbour());
-    let gamma_p = &coupled_gamma(geom, bc, gamma_p)[..];
     let grad = if non_orth {
         let bv = boundary_values_pbc(geom, bc, p);
         Some(least_squares(geom, p, &bv))
     } else {
         None
     };
+    corrected_flux_with(geom, gamma_p, bc, phi_hby_a, p, ub, grad.as_deref())
+}
+
+/// [`corrected_flux`] with the cell gradient of the explicit non-orthogonal part given (`None`: no non-orthogonal part); ADR 0193
+/// V2-c passes the body-force-weighted gradient. [`corrected_flux`] calls it with the least-squares gradient.
+pub fn corrected_flux_with(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    p: &[f64],
+    ub: &[Vec3],
+    grad: Option<&[Vec3]>,
+) -> Vec<f64> {
+    let mesh = &geom.mesh;
+    let sf = mesh.face_area_vectors();
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let gamma_p = &coupled_gamma(geom, bc, gamma_p)[..];
     let mut phi = vec![0.0; mesh.n_faces()];
     for f in 0..mesh.n_faces() {
         if geom.empty[f] {

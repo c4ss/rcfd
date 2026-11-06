@@ -25,6 +25,7 @@ use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure_parts,
     PressureBc, PressureControls,
 };
+use crate::pressure_interp::{BodyForceWeighting, PressureInterpolation};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::{LinearOptions, SolveControl};
 use std::sync::Arc;
@@ -557,6 +558,10 @@ pub struct SimpleSolver {
     /// unchanged and clears the state. Not set by the API.
     #[doc(hidden)]
     pub deferred_correction_relaxation_test_only: Option<f64>,
+    /// Pressure-interpolation variant (ADR 0193, case value `solver.pressure_interpolation`): the face pressures of the Green-Gauss
+    /// cell gradients and, for `BodyForceWeighted`, the non-orthogonal correction gradients and the body-force part of the face flux.
+    /// `Linear` (default) leaves the solver unchanged.
+    pub pressure_interpolation: PressureInterpolation,
     /// State of `deferred_correction_relaxation_test_only`: the relaxed correction of each component.
     dc_state: [Vec<f64>; 3],
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
@@ -667,6 +672,33 @@ impl SimpleSolver {
         out
     }
 
+    /// Green-Gauss cell gradient of the pressure `p` with the face pressures of [`Self::pressure_interpolation`] (ADR 0193):
+    /// `Linear` is `green_gauss(p, gradient_wall_values, 0)` as before, `SkewCorrected` one skewness pass, `BodyForceWeighted`
+    /// (with `bfw` built for a body force) V2-a and V2-b.
+    fn pressure_gradient(
+        &self,
+        pbc: &PressureBc,
+        body: Option<&BodyForce>,
+        bfw: Option<&BodyForceWeighting>,
+        p: &[f64],
+    ) -> Vec<Vec3> {
+        let bvals = self.gradient_wall_values(pbc, body, p);
+        match (self.pressure_interpolation, bfw) {
+            (_, Some(w)) => {
+                let bv = w.boundary_values(&self.geom, p, &bvals);
+                w.green_gauss(&self.geom, p, &bv)
+            }
+            (PressureInterpolation::SkewCorrected, None) => green_gauss(&self.geom, p, &bvals, 1),
+            _ => green_gauss(&self.geom, p, &bvals, 0),
+        }
+    }
+
+    /// V2-c of ADR 0193: the body-force-weighted least-squares gradient of `p` for the non-orthogonal corrections.
+    fn bfw_least_squares(geom: &FvGeometry, pbc: &PressureBc, w: &BodyForceWeighting, p: &[f64]) -> Vec<Vec3> {
+        let bv = w.boundary_values(geom, p, &boundary_values_pbc(geom, pbc, p));
+        w.least_squares(geom, p, &bv)
+    }
+
     /// Create a solver; initial flux is computed from the velocity field.
     pub fn new(geom: Arc<FvGeometry>, u: VectorField, p: ScalarField, settings: SimpleSettings) -> Self {
         let bu = u.boundary_values(&geom);
@@ -691,6 +723,7 @@ impl SimpleSolver {
             conv_gradient_hook: None,
             high_order_mask_test_only: None,
             deferred_correction_relaxation_test_only: None,
+            pressure_interpolation: PressureInterpolation::Linear,
             dc_state: [Vec::new(), Vec::new(), Vec::new()],
             jump_state: Vec::new(),
             pseudo: None,
@@ -818,8 +851,12 @@ impl SimpleSolver {
         let wall_used: Vec<f64> = pbc.coeffs.iter().map(|c| c.d).collect();
         // wall pressure used by the cell gradients only: with the trapezoid option the wall gradient is the mean
         // of the cell-centre and face force (the matrix and the flux keep the face value, so mass stays balanced)
-        let p_bvals_for_grad = self.gradient_wall_values(&pbc, body.as_ref(), &self.p.values);
-        let mut grad_p = green_gauss(&g, &self.p.values, &p_bvals_for_grad, 0);
+        // ADR 0193: the body-force-weighted variant needs a body force; without one it is the linear path
+        let bfw: Option<BodyForceWeighting> = match (self.pressure_interpolation, &body) {
+            (PressureInterpolation::BodyForceWeighted, Some(bf)) => Some(BodyForceWeighting::new(&g, bf, &pbc)),
+            _ => None,
+        };
+        let mut grad_p = self.pressure_gradient(&pbc, body.as_ref(), bfw.as_ref(), &self.p.values);
         if let Some(j) = &self.face_jump {
             if self.jump_state.len() != j.rise.len() {
                 self.jump_state = vec![0.0; j.rise.len()];
@@ -1104,9 +1141,15 @@ impl SimpleSolver {
                     }
                 }
             }
+            let non_orth = s.non_orth_correctors > 0;
             for f in 0..mesh.n_faces() {
                 if !g.empty[f] {
-                    phi_hby_a[f] += r_au_f[f] * bf.face[f];
+                    // ADR 0193 V2-d: the internal body-force flux matched to the face pressure gradient
+                    let a = match &bfw {
+                        Some(w) if f < n_int => w.face_flux(&g, f, non_orth),
+                        _ => bf.face[f],
+                    };
+                    phi_hby_a[f] += r_au_f[f] * a;
                 }
             }
         }
@@ -1125,7 +1168,7 @@ impl SimpleSolver {
                 phi_hby_a[f] += corr[f];
             }
             if s.simplec_non_orth_compensation && s.non_orth_correctors > 0 {
-                let corr = self.simplec_non_orth_flux_correction(&r_au, &r_atu, &pbc);
+                let corr = self.simplec_non_orth_flux_correction(&r_au, &r_atu, &pbc, bfw.as_ref());
                 for f in 0..n_int {
                     phi_hby_a[f] += corr[f];
                 }
@@ -1159,15 +1202,24 @@ impl SimpleSolver {
             amg: false,
             linear: s.linear,
         };
-        let (res_p, p_iters, p_parts) = solve_pressure_parts(
-            &g,
-            &gamma_p,
-            &pbc,
-            &phi_hby_a,
-            &mut p_new,
-            &controls,
-            self.record_parts || self.residual_norm == ResidualNorm::Scaled,
-        );
+        let want_parts = self.record_parts || self.residual_norm == ResidualNorm::Scaled;
+        let (res_p, p_iters, p_parts) = match &bfw {
+            None => solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, want_parts),
+            Some(w) => {
+                // ADR 0193 V2-c: the non-orthogonal correction gradient of the pressure equation
+                let grad = |p: &[f64]| Self::bfw_least_squares(&g, &pbc, w, p);
+                crate::pressure::solve_pressure_parts_grad(
+                    &g,
+                    &gamma_p,
+                    &pbc,
+                    &phi_hby_a,
+                    &mut p_new,
+                    &controls,
+                    want_parts,
+                    Some(&grad),
+                )
+            }
+        };
         let res_p = match (self.residual_norm, p_parts) {
             (ResidualNorm::Scaled, Some(pp)) => {
                 let t: f64 = (0..mesh.n_faces())
@@ -1183,27 +1235,18 @@ impl SimpleSolver {
             self.pressure_parts_history.push(p_parts);
         }
         // flux correction: phi = phiHbyA - rAtU_f snGrad(p) |S|
-        let bv_new = self.gradient_wall_values(&pbc, body.as_ref(), &p_new);
-        self.phi = corrected_flux(
-            &g,
-            &gamma_p,
-            &pbc,
-            &phi_hby_a,
-            &p_new,
-            ub_mass,
-            s.non_orth_correctors > 0,
-        );
+        // ADR 0193 V2-c: with the body-force-weighted variant the non-orthogonal part takes its gradient
+        let flux_of = |p: &[f64]| match &bfw {
+            None => corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, p, ub_mass, s.non_orth_correctors > 0),
+            Some(w) => {
+                let grad = (s.non_orth_correctors > 0).then(|| Self::bfw_least_squares(&g, &pbc, w, p));
+                crate::pressure::corrected_flux_with(&g, &gamma_p, &pbc, &phi_hby_a, p, ub_mass, grad.as_deref())
+            }
+        };
+        self.phi = flux_of(&p_new);
         // ADR 0084: the cell-velocity correction reconstructed from the part of the face flux that depends on q = p_new - p_old
         let recon: Option<Vec<Vec3>> = if self.reconstructed_correction {
-            let phi_old_p = corrected_flux(
-                &g,
-                &gamma_p,
-                &pbc,
-                &phi_hby_a,
-                &p_old,
-                ub_mass,
-                s.non_orth_correctors > 0,
-            );
+            let phi_old_p = flux_of(&p_old);
             let (cf, cc) = (mesh.face_centres(), mesh.cell_centres());
             let mut r = vec![[0.0; 3]; n];
             for f in 0..mesh.n_faces() {
@@ -1228,7 +1271,7 @@ impl SimpleSolver {
             self.p.values[c] = p_old[c] + s.alpha_p * (p_new[c] - p_old[c]);
         }
         // velocity correction uses the new (unrelaxed-consistent) pressure gradient
-        let mut grad_corr = green_gauss(&g, &p_new, &bv_new, 0);
+        let mut grad_corr = self.pressure_gradient(&pbc, body.as_ref(), bfw.as_ref(), &p_new);
         if let Some(j) = &self.face_jump {
             let r_new = j.totals(&self.phi);
             let fix = j.gradient_fix(&g, &r_new);
@@ -1420,13 +1463,25 @@ impl SimpleSolver {
 
     /// Non-orthogonal part of the SIMPLEC flux compensation, `(rAtU - rAU)_f k . grad(p_old)_f` with the least-squares cell
     /// gradient and boundary values of the pressure corrector (ADR 0050 D1); internal faces only.
-    fn simplec_non_orth_flux_correction(&self, r_au: &[f64], r_atu: &[f64], pbc: &PressureBc) -> Vec<f64> {
+    fn simplec_non_orth_flux_correction(
+        &self,
+        r_au: &[f64],
+        r_atu: &[f64],
+        pbc: &PressureBc,
+        bfw: Option<&BodyForceWeighting>,
+    ) -> Vec<f64> {
         let g = &self.geom;
         let mesh = &g.mesh;
         let (own, nei) = (mesh.owner(), mesh.neighbour());
         let sf = mesh.face_area_vectors();
-        let bv = boundary_values_pbc(g, pbc, &self.p.values);
-        let gr = least_squares(g, &self.p.values, &bv);
+        // ADR 0193 V2-c: the body-force-weighted gradient with that variant
+        let gr = match bfw {
+            Some(w) => Self::bfw_least_squares(g, pbc, w, &self.p.values),
+            None => {
+                let bv = boundary_values_pbc(g, pbc, &self.p.values);
+                least_squares(g, &self.p.values, &bv)
+            }
+        };
         let mut out = vec![0.0; mesh.n_faces()];
         for f in 0..g.n_internal {
             let d = g.delta[f];
