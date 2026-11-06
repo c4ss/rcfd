@@ -437,7 +437,7 @@ case where the default converges unchanged to 3e-12 (A2), and W's converged stat
 - The runs shared the machine with other agents' builds and gates and with each other (up to nine at once), so the
   times are indicative only.
 
-<!-- GATE -->
+- **Gate on 52bc9fd** (`E:/projects/cfd/w49i-work/gate-f285`, 2026-11-06 22:13 to 23:36): fmt 0, clippy `--workspace --all-targets -D warnings` 0, tests 2934 processes in 567 binaries, 3 jobs, wall 4236 s, peak summed working set 3304 MB: 2931 passed, 3 failed, 848 ignored. The three failures are the known flakes `runner_w47b` s1 and s9 and `case_path_wfix` r9, in crates this work does not change. A4 is met: `baseline_hashes.rs` and `case_hashes_w48u.rs` passed unedited. (Line written by the lead from `stages.txt` and `progress.log`.)
 
 ## Where to go next
 
