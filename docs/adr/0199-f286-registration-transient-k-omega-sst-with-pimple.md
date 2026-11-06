@@ -324,3 +324,16 @@ values):
 Found, not changed (out of scope, for the maintainer): on a periodic seam the scalar transport of k and omega (and the
 momentum face viscosity of RANS runs) is not conservative where `nu_t` differs across the seam (above). Check S4 and check H of
 ADR 0183 have rotational seams.
+
+### Amendment 3 (2026-11-06): the fractional-step case of S1 again, written after its run and before the corrected run
+
+S1 as amended by amendment 1 ran once (release, code of D5 in the working tree) and missed at the fractional-step case: CH on
+`pimple` with `time_advance = "fractional_step"` is located at `sources.drive.type` only, because `sources::check` refuses
+momentum sources with the fractional step, a static rule that again stops the case before `Simulation::new`. Every S1 case
+before it in the test met (the accepted texts, `piso`, k-epsilon and SA on `pimple`, the energy equation, the dynamic mesh,
+`error_tolerance`); the `piso` case with the fractional step after it was not reached. The test was run a second time only to
+print the panic message, with the same result. The S1 test as run stays as an ignored record (`s1_amendment1_record`).
+
+The case of record becomes CH without `[sources.drive]` on `pimple` with the fractional step, located at
+`solver.time_advance`. Without the source and with `pimple` the case has no static error, so the rule of `Simulation::new`
+(`fractional_step needs solver.algorithm = "piso"`) is what refuses it. Every other S1 case is unchanged. No limit changes.
