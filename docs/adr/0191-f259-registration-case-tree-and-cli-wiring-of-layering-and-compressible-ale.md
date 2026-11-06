@@ -272,3 +272,96 @@ the file was restored and compared byte for byte with the kept copy (equal). M1 
 it only keeps the test from ending. A terminating mutation is added and is the check of record: **M1b**, a removal gives
 the merged cell the state of its first source cell instead of the volume-weighted remap (an addition is unchanged), which
 must fail A-eq. Nothing else changes.
+
+## Addendum 1: what was built, the results and the gate (2026-11-06)
+
+Branch `f259-layering-ale-wiring`: this text (`a8faf09`), amendment 1 (`fa9193b`), the code and tests (`284aad7`), amendment 2
+(`b8d8116`) and the documents (`f17194d`). Not merged. Main has since gained ADRs 0189, 0190 and 0192 (`54ec840`); 0191 is
+still free there, and the branch merges onto `54ec840` without a textual conflict (`git merge-tree`).
+
+**Built as registered.** W1 to W7 as written.
+
+* `crates/rcfd-api/src/dynmesh.rs`: the value `layering`; the static checks E1 to E12 (`check_compressible`,
+  `check_layering`); in `DynMesh::from_case` the same refusals of E2 to E4, E6 and E8, and the layer stack with its
+  bit-for-bit comparison with the case mesh (`Layers`); `new_points` (the point map of the incompressible step moved into one
+  function, same operations), `compressible_geometry` and `layer_event`; the constants `LAYER_REMOVAL_RATIO` 0.4 and
+  `LAYER_ADDITION_RATIO` 1.6.
+* `crates/rcfd-api/src/comp.rs`: `CompState::advance_moving` (W4). `advance` is not edited.
+* `crates/rcfd-api/src/sim.rs`: the generator `box_3d` and its grading refusal (E13; periodic pairs were already refused for
+  every generator but `box_2d`, and the compressible checks refuse them too), the engine check that admits a transient
+  compressible run, and the compressible branch of `step`, which calls `advance_moving` and sets `Simulation.geom`.
+* `crates/rcfd-api/src/schema.rs`: the two enumeration values and their texts.
+* Tests: `crates/rcfd-api/tests/layering_ale_f259.rs` (8: K1, A, A-1, B, C, L, R1, D0) and
+  `crates/rcfd-cli/tests/layering_ale_f259.rs` (2: X1, X2). No existing test was edited.
+* Documents: `docs/case-schema.md` (`box_3d`, the value `layering`, a section on compressible ALE and layering),
+  `docs/dynamic-mesh.md` (the section is no longer library only; a TOML example of piston P, a new docs block that H1 lists as
+  new), and the F-259 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (partial, by the decision rule).
+
+**Results.** Release build, Windows.
+
+| Check | Measured | Limit | Verdict |
+|---|---|---|---|
+| K1 | P-T (40 x 2 x 2): content hash `1636a54da1e6271f` for both; P-X (20 x 1 x 1): `c3dfcb8acaec8048` for both; every point's bits equal | equal | met |
+| A-eq | 9191 steps; the cell count equal after every step, 160 at the end; differences rho 0, p 0, u 0 (the same bits); the end time equal | `1e-12` | met |
+| A-1 | `1.528e-5` (V/V0 0.400000, 4797 steps, 64 cells) | `2e-2` | met |
+| A-2 | `3.415e-5` | `2e-2` | met |
+| A-B2 | `5.38e-13` | `1e-12` | met |
+| A-B3 | `8.88e-16` | `1e-13` | met |
+| A-B4 | 24 removals, 24 additions | each `>= 5` | met |
+| A-B5 | 0 | none | met |
+| B-eq | 138 steps, differences 0; the piston at 0.800000 at `t = 1` | `1e-12` | met |
+| B-0 | the `xmin` points have their initial bits | equal | met |
+| C-eq | 277 steps, differences 0 | `1e-12` | met |
+| C-gcl | `5.0e-15` | `1e-12` | met |
+| L | E1 to E13 each give a diagnostic at the registered path (with `six_dof` the existing `six_dof.mass` and `six_dof.inertia` diagnostics come too); the three set-ups and a layered piston with a pressure outlet at `xmin` give none | as stated | met |
+| R1 | `dynamic_mesh: step 1, t = 1.408590e-2: mesh error: layering: piston at 0.09999999999999998 is not beyond the last static plane 0.75` | as stated | met |
+| X1 | exit 0, 625 steps; `rho_total` 0.009999999999999645, `p_mean` 3.608500885039438, `p_max` 3.701044532968453 from `monitors.csv`, equal to the in-process run (difference 0); `solution.vtu` 8 cells, as in process | `1e-12`; below 20 cells | met |
+| X2 | exit 3 for both; `line 30: dynamic_mesh.moving_patches: ...` (the line of `moving_patches`); `dynamic_mesh.motion` named | as stated | met |
+| D0 | `919c6d4caef875de`, `3c87a648a9da72e0`, `220cf1723c972add` | the recorded hashes | met |
+| D1 | `baseline_hashes.rs` and `case_hashes_w48u.rs` pass, unedited | pass | met |
+| D2 | `dynamic_mesh.rs`, `exp_rot_pab.rs`, `exp_rot_pc.rs` (rcfd-api), `layering_w38c.rs`, `exp_rot_pab.rs` (rcfd-fv) pass, unedited | pass | met |
+
+**Can fail.** Each file was restored afterwards and compared byte for byte with the kept copy (equal each time).
+
+* M1 did not end (amendment 2). The run was stopped by stopping its test binary by process id; cargo was not stopped.
+* M1b failed A-eq: 9190 steps against the library's 9191.
+* M2 failed B-eq: 124 steps against 138. Under M2, C passed (C-eq `4.1e-15`, C-gcl `2.2e-15`), as amendment 1 said.
+
+`scripts/limit_audit.py` reports no hit in the two new test files.
+
+**Run or read beyond the registration (disclosed, no limit).**
+
+* While the targeted suites were built, the machine ran short of memory. Two compiles and one run of `exp_rot_pc.rs` stopped
+  with `memory allocation ... failed`. Built again with two jobs, and `exp_rot_pc.rs` run alone: 10 passed.
+* The TOML example of `docs/dynamic-mesh.md`, run with the release `rcfd run`, took 9191 steps.
+* P-X with `[boundaries.xmin] compressible_bc = "pressure_outlet"`, `pressure_value = 1.0` (allowed by E5) ran with
+  `rcfd run` to `t = 4` in 589 steps. The gas leaves through `xmin` (total mass 0.0100 to 0.00367) and the run ends with 8
+  cells, with no moving-face refusal: the rebuilt stack keeps the bits of the `xmin` points, so their swept volume is exactly 0.
+* Outputs after a layer event, from the code: reports, `postprocessing.samples`, wall files, the VTU snapshots of
+  `output.write_interval` and of landed write times, and the final outputs are all built at write time from
+  `Simulation.geom`. The field store is refused with `dynamic_mesh.enabled` (the existing case check). No cell-indexed object
+  is built once for the compressible engine: energy, turbulence, scalars, particles, statistics, sources and lumped components
+  are refused or absent. Restart stays refused.
+
+**Observation, not fixed.** The set-up rule SV202 (info) says that a patch without a boundary condition takes "a fixed no-slip
+wall". For the compressible solver such a wall is a slip wall. The docs example and P-T trigger the message.
+
+**Gate.** `f17194d` (the code and the documents before this addendum), `git archive` copy, three jobs (`scripts/gate_test.py`,
+one process per test): fmt 0, clippy `-D warnings` 0, 2855 passed, 3 failed, 800 ignored, 2858 test processes in 548
+binaries, 113 min wall. Against the F-273 gate (2846 / 2 / 800, 546 binaries) the difference is the 10 tests of F-259 in 2 new
+binaries. The 3 failures are timing tests in crates F-259 does not change, and none of them runs a case of F-259:
+
+* `rcfd-runner` `runner_w47b.rs` `s1_concurrency_never_exceeds_max_runs` (a known flake): its negative control's sampler saw
+  fewer than 3 solver processes;
+* `rcfd-runner` `runner_w47b.rs` `s4b_solver_dead_while_runner_dead_is_marked_failed`: marked failed 2.507 s after the start,
+  limit 2.5 s;
+* `rcfd-project` `journal_f273.rs` `c3s_two_appenders_without_a_shared_edit_lock_number_every_line_once`: a writer waited
+  longer than the lock's wait.
+
+Rerun alone on the gate's own binaries after the gate: `c3s` passed 2 of 3, `s1` and `s4b` failed 3 of 3. Control: the same
+`s1` and `s4b` from the binary of the F-253 gate (a tree without F-259, where they passed in that gate two hours earlier),
+run alone right after, also failed 2 of 2 (`s4b` marked failed after 4.2 to 4.3 s; `s1`'s sampler saw 0 solver processes),
+with the processor at 97 % load from other work. So these are failures of the machine's state at the time, not of F-259.
+This gate paragraph is documents only and was not gated again.
+
+**Questions for the maintainer.** Q3 (done or partial; the recommendation is done) and Q1, Q2 and Q4 stand as registered.
