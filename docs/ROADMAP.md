@@ -5185,6 +5185,11 @@ fixed by the item's registration ADR before any code.
     m0-gate-roadmap). From the maintainer's answer of 2026-11-06 to question 8 of ADR 0183 amendment P-C: transient SST
     is its own item, and check H stays NOT RUNNABLE until it lands. k-omega SST on moving meshes is another item (F-277
     on the same branch). ADR 0136 lists URANS as missing.
+    - BUILT (ADR 0199, the registration of F-286, 2026-11-06, branch f286-transient-sst, not merged): k_omega_sst runs
+      with pimple on a static mesh, one sweep with the time derivative of solver.time_scheme at the start of every outer
+      iteration (piso, k-epsilon and SA without DES stay refused); the decay recursions and closed forms, the k budget, the
+      steady state against SIMPLEC (1.7e-9) and the rotating frame meet their limits, defaults bit-identical; the case-tree
+      BDF2 order check is a known miss (p 2.4 to 2.7, pre-asymptotic); check H's case text builds and its smoke is finite.
 - [ ] **F-287** Runner run setting: continue from a previous run (rcfd run --continue-from), with a step cap
   - depends on: F-262, F-274
   - acceptance: Every limit is fixed by its registration ADR before any code. A run setting that the runner passes to

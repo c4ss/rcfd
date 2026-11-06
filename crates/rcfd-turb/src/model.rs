@@ -16,6 +16,7 @@ use crate::wall::Roughness;
 use crate::zeroeq::{mixing_length_infos, MixingLengthModel, MixingProfile, A_PLUS_ML};
 use rcfd_core::{Error, Result};
 use rcfd_fv::convection::ConvScheme;
+use rcfd_fv::ddt::TimeScheme;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -165,6 +166,16 @@ pub trait TurbulenceModel: Send {
     /// A transient step of size `dt` is about to start (called once per step before [`TurbulenceModel::update`] by the
     /// transient algorithms). Models with a time derivative store their old level here; the default does nothing.
     fn begin_step(&mut self, _dt: f64) {}
+    /// A transient step of size `dt` with the momentum's time scheme `scheme` is about to start (F-286, ADR 0199). The default
+    /// calls [`TurbulenceModel::begin_step`] and ignores the scheme, which is what every model did before.
+    fn begin_time_step(&mut self, dt: f64, _scheme: TimeScheme) {
+        self.begin_step(dt)
+    }
+    /// Does the model make its transient sweep at the start of every outer iteration of `pimple` (F-286, ADR 0199 D2), with
+    /// the momentum's time scheme? `false` (the default): one sweep per step before the flow step.
+    fn updates_in_outer_iterations(&self) -> bool {
+        false
+    }
     /// Set a string-valued model option (`des`, `des_delta`, `pressure_strain`, ...); `Err` carries the reason. The
     /// default accepts none.
     fn set_option(&mut self, name: &str, _value: &str) -> std::result::Result<(), String> {
@@ -466,6 +477,15 @@ impl TurbulenceModel for SstModel {
             self.m.omega.values[c] = (self.m.k.values[c].max(1e-12) / v.max(1e-30)).max(1e-10);
         }
         self.m.nut = nut.to_vec();
+    }
+    fn begin_step(&mut self, dt: f64) {
+        self.m.begin_step(dt, TimeScheme::ImplicitEuler)
+    }
+    fn begin_time_step(&mut self, dt: f64, scheme: TimeScheme) {
+        self.m.begin_step(dt, scheme)
+    }
+    fn updates_in_outer_iterations(&self) -> bool {
+        true
     }
 }
 
