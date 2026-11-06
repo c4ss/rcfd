@@ -1,0 +1,201 @@
+# ADR 0198: F-285 registration: why the default steady kernel diverges on F-208's warped mesh W, and an opt-in fix
+
+Status: **REGISTERED 2026-11-06**, written before any run of F-285 and before any code. Not yet accepted by the maintainer.
+Nothing was run for this text; it rests on reading the code of main 9edfbda and on the runs ADR 0193 amendment 1 reports.
+This text fixes the diagnosis runs, their readings, the fix candidates with the rule that chooses among them, and the
+acceptance limits of the fix. Amendment 1, written after the diagnosis and before any fix code, names the chosen fix and
+may add checks; it does not loosen a limit fixed here. Results go in the addendum.
+
+Parents: [ADR 0193](0193-f246-registration-pressure-interpolation-variants.md) (F-246: the manufactured solution M, its
+kernel set-up and stop rule, the meshes, amendment 1 finding 1, Q9 and its decision record),
+[ADR 0084](0084-wave37a-sheared-mesh-simplec-linearisation.md) (the period-two pressure mode of SIMPLEC on sheared meshes,
+the mismatch between the cell and the face corrections, the fix R = `velocity_correction = "face_flux"`),
+[ADR 0016](0016-wave13-numerics.md) D2 (the F-208 meshes), [ADR 0050](0050-wave27b-robustness-adaptive-stepping.md) D1.
+Roadmap item F-285.
+
+Number: 0197 is the highest on main and no branch holds a 0198; the number was assigned to this work by the lead.
+
+House rules ([ADR 0130](0130-wave48a-overview-and-run-record-contract.md), ADR 0193):
+
+- limits are fixed here, before the code and the runs, and are not changed after a run;
+- a missed limit becomes an ignored `*_known_miss` test with the limit intact, and the cause is diagnosed, not tuned away;
+- a defective set-up gets a new corrected test (by an amendment written before the corrected run), and the old one stays as an
+  ignored record;
+- the default stays bit-identical: every new code path is opt-in, `crates/rcfd-api/tests/baseline_hashes.rs` and
+  `crates/rcfd-api/tests/case_hashes_w48u.rs` are not edited and pass, no baseline or golden is re-recorded; if the diagnosis
+  shows that the cause cannot be fixed without changing converged defaults, the work stops there and reports;
+- no new third-party crate, no commit trailers.
+
+Clean-room: every formula below is derived here from the code read and from first principles (Fourier symbols on a uniform
+grid, the algebra of one iteration). No published source is quoted, and no vendor code, text or install was used.
+
+## What F-285 asks
+
+The roadmap entry: registered diagnosis runs locate the growing mode by which the default steady SIMPLE/SIMPLEC kernel
+diverges on W from n = 32 (growth about 1.8 times per iteration under every set-up ADR 0193 amendment 1 tried; the
+pressure-velocity step from `HbyA` to the corrected velocity is suspected, not proven); a fix makes the kernel converge on W
+at n = 32 and 64 under F-246's registered set-up, within limits fixed here, with the defaults bit-identical; afterwards
+F-246's missed M1 check on W (`m1_w_v1_known_miss`, `m1_w_v2_known_miss`) is run again with its registered set-up and limits
+unchanged; how the fix is switched on for that run is fixed here.
+
+## What the code read shows (main 9edfbda, nothing run)
+
+1. **One iteration of `SimpleSolver::iterate`** (kinematic pressure; SIMPLE, so `rAtU = rAU`): the predictor solves the
+   relaxed momentum equation with the source `-V grad_p`, `grad_p` the Green-Gauss gradient of the stored (relaxed) pressure
+   `p_old`; `HbyA = H / a_P` (plus `rAU f` with a body force); the pressure equation `L p_new = D(HbyA)` with `L` the compact
+   operator `gamma_f lap_f (p_N - p_P)`, `lap_f = |S|^2 / (S . d)`, and with correctors the deferred `k . grad p` part; the
+   face flux `phi = phiHbyA - gamma_f (lap_f (p_N - p_P) + k . grad p_f)`; the cell velocity `u = HbyA - rAtU G(p_new)`, `G`
+   the same Green-Gauss gradient (`grad_corr`); then `p = p_old + alpha_p (p_new - p_old)`, which is read only by the next
+   predictor. `D` is the divergence of the linearly interpolated face flux of `HbyA` (prescribed velocity on fixed-velocity
+   faces).
+2. **Why no relaxation, viscosity or convection scheme changes the rate (derivation).** Let `e` be a velocity perturbation
+   with `a_P^-1 H e = h e` (the momentum stencil's neighbour sum over the diagonal; `h` near 1 for a perturbation that is
+   smooth on that stencil). The relaxed predictor gives `u* = (1 - alpha_u) / (1 - alpha_u h) e` and `HbyA = u* + rAU G p_old`,
+   so for `h` near 1 the perturbation of `HbyA` is `e` for every `alpha_u`. The cell velocity's perturbation is then `Pi e`
+   with `Pi = I - rAtU G L^-1 D`, and `alpha_p` does not enter this path; the viscosity, the convection scheme and a pseudo
+   time step enter only through `h`. So a mode of `Pi` outside the unit disc, smooth on the momentum stencil, grows at a rate
+   that none of those settings changes, which is what ADR 0193 amendment 1 saw. The non-zero eigenvalues of `rAtU G L^-1 D`
+   are those of `L^-1 D rAtU G`, the "wide" Laplacian over the compact one. On a uniform orthogonal grid their symbol ratio
+   is `cos^2(kh/2)` in `[0, 1]`, so the eigenvalues of `Pi` lie in `[0, 1]`; growth needs a ratio above 2 (an eigenvalue of
+   `Pi` below -1, a period-two mode) or below 0. This is the hypothesis to test; nothing here proves that W has such a mode.
+3. **`face_flux` (ADR 0084's R)** replaces the cell correction by `u = HbyA - rAtU G(p_old) + R(phi(p_new) - phi(p_old))`,
+   `R(psi)_c = (1/V_c) sum_f s_cf psi_f (x_f - x_c)`. The same reading gives `Pi_R = I - R Lambda L^-1 D`, `Lambda q =
+   gamma_f lap_f (q_N - q_P)`: `R Lambda` takes the place of `G`. ADR 0193 amendment 1 found that `face_flux` does not stop
+   the divergence on W.
+4. **Where W is poor (derivation from the map).** W's box faces are not planar (for example `x' = 1 + 0.1 sin(2 pi y)
+   sin(2 pi z)` on `xmax`). Near the edge `x = y = 1` the two walls are `x' - 1 = s (y - 1)` and `y' - 1 = s (x - 1)` with
+   `s = 0.2 pi sin(2 pi z)`, so the interior angle between them is `acos(2 s / (1 + s^2))`: 25.7 degrees where
+   `sin(2 pi z) = 1` and 154.3 degrees where it is -1; every edge has such an acute part. The edge cells there tend, as `n`
+   grows, to thin parallelepipeds whose non-orthogonality is `acos((1 - s^2) / (1 + s^2)) = 64.2` degrees, the limit of the
+   61.3, 63.5 and 64.1 degrees of ADR 0193 at n = 16, 32, 64. The largest error ADR 0193 reports (cell centre near
+   x = y = 0.97) lies in such an edge cell.
+5. **Fixed-point-keeping changes of the cell correction.** Any cell correction `u = HbyA - rAtU G(p_old) - rAtU C(q)`,
+   `q = p_new - p_old`, with `C(0) = 0`, has the fixed points of the default: at a fixed point `q = 0`, so the cell velocity
+   is `HbyA - rAtU G(p)` as in the default, and the face flux, the pressure equation and the predictor are not changed. The
+   default is `C(q) = G(p_new) - G(p_old)` (the Green-Gauss gradient of `q` with homogeneous boundary values, as `G` is affine
+   in the pressure); R is `C = -R Lambda`. A fix of this kind leaves the discretisation, and so F-246's variants (which act on
+   `G` and on the flux), unchanged; only the path to the fixed point changes.
+
+## Diagnosis runs (registered; each run once)
+
+Harness: a new file `crates/rcfd-fv/tests/warped_kernel_f285_diag.rs`, ignored tests run by name in release. The meshes (W,
+W2, K, G) and the manufactured solution M are copied unchanged from `crates/rcfd-fv/tests/pressure_interp_f246.rs`; set-up A
+is ADR 0193's registered kernel set-up (SIMPLE, `alpha_u = 0.7`, `alpha_p = 0.3`, `central`, one corrector, linear-solver
+`tol_abs = 1e-300`, the data of M). "Edge cells" are the cells with at least two of their logical indices `(i, j, k)` (taken
+from the cell centres of the unwarped `box_mesh`) in `{0, n - 1}`; "wall cells" those with at least one. At n = 32 the edge
+cells are 1.1 % of the cells and the wall cells 17.6 %.
+
+**D0 (the kernel, V0).** Set-up A on W at n = 32 and at n = 16, and set-up L (A with `alpha_u = 0.2`, `alpha_p = 0.1`) on W
+at n = 32; 400 iterations each, or until an iterate is not finite. Measured:
+
+- `g`, the growth factor `(max_du_400 / max_du_200)^(1/200)`;
+- `c`, the correlation `<du_400, du_399> / (|du_400| |du_399|)` of the last two velocity increments (volume-weighted over all
+  cells and components): near -1 for a negative real eigenvalue (period two), near +1 for a positive one;
+- `f_edge` and `f_wall`, the fractions of `sum_c V_c |du_400,c|^2` in the edge cells and in the wall cells;
+- the logical indices of the cell with the largest `|du_400|` and the sign of `sin(2 pi z)` there (the acute or the obtuse
+  part of its edge);
+- reported: `max |dp_400| / max |du_400|`.
+
+**D1 (the correction step alone).** Linear maps of a cell velocity field `v` built from the public functions of `rcfd-fv`,
+with `rAtU = 1` in every cell (so no momentum coefficient enters), zero velocity on every boundary face (so zero boundary flux
+and the zero-gradient pressure condition of fixed-velocity walls), the pressure level fixed as the kernel fixes it (cell 0),
+and pressure solves to `tol_rel = 1e-12`:
+
+- `Pi_GG(v) = v - G(q)`, `q` from the pressure solve `L q = D v` without correctors, `G` the Green-Gauss gradient with the
+  pressure-condition boundary values;
+- `Pi_GG1`: the same with one non-orthogonal corrector in the pressure solve (starting from `q = 0`);
+- `Pi_R(v) = v + R(-Lambda q)` (internal faces; zero on the boundary faces);
+- `Pi_LS(v) = v - LS(q)`, `LS` the least-squares gradient with the same boundary values;
+- `Pi_GG,beta(v) = v - beta G(q)` for `beta` in {0.75, 0.5, 0.25}.
+
+Each map on W at n = 16 and 32, on W2 and K at n = 32 (controls on which V0 converges), on the orthogonal box G at n = 32;
+`Pi_GG` also on W at n = 64. Power iteration from a fixed pseudo-random field (all components, a linear congruential
+generator with a stated seed), 300 steps (200 at n = 64), the field normalised in every step in the volume-weighted norm.
+Measured: `rho`, the geometric mean of `|Pi v| / |v|` over the last 100 steps; `c`, the correlation of `Pi v` and `v` at the
+last step; `f_edge` of the last field. `Pi` keeps the fields with `D v = 0`, so `rho` is at least 1 on every mesh; a mode
+outside the unit disc shows as `rho > 1.01`.
+
+**D3 (fix candidates in the kernel).** A test-only switch of `SimpleSolver` (hidden, default off, read only when set, so the
+default path is unchanged by construction) selects the cell correction of item 5:
+
+- **C-beta**: `C(q) = beta (G(p_new) - G(p_old))`, i.e. `u = HbyA - rAtU ((1 - beta) grad_p + beta grad_corr)` with the
+  gradients the kernel already forms (so it acts with every pressure-interpolation variant), `beta` in {0.75, 0.5, 0.25};
+- **C-LS**: `C(q) = LS(q)`, the least-squares gradient of `q` with homogeneous boundary values;
+- **R**: the existing `reconstructed_correction` (`face_flux`), not a new switch.
+
+Each candidate with set-up A, V0, on W at n = 32 (cap 5000 iterations) and on the controls W at n = 16, K and W2 at n = 32
+(cap 5000), with ADR 0193's stop rule. Measured: converged or not, iterations, and on the controls the largest cell
+difference of `u` and of `p - mean(p)` against the V0 run without the switch (the same test run computes both).
+
+## Hypotheses (registered with their falsifiers; each reading is final)
+
+| id | hypothesis | stands iff | falsified iff |
+|----|------------|------------|---------------|
+| H1 | the divergence is a linear mode whose rate does not depend on the relaxation | `g(A, W32) > 1.05` and `g(L, W32) > 1.05` and `abs(g(L) / g(A) - 1) <= 0.1` | `g(L, W32) <= 1` |
+| H2 | the mode lives in the correction step (item 2) | `rho(Pi_GG, W32) > 1.01` | `rho(Pi_GG, W32) <= 1.01` |
+| H3 | it lives in the edge cells | `f_edge > 0.5` both in D0 (A, W32) and in D1 (`Pi_GG`, W32) | `f_edge <= 0.5` in both |
+| H4 | it is a period-two mode (a ratio above 2 in item 2) | `c < -0.9` both in D0 (A, W32) and in D1 (`Pi_GG`, W32) | `c > 0` in both |
+| H5 | the controls have no such mode | `rho(Pi_GG) <= 1.01` on G, K, W2 at n = 32 and on W at n = 16 | `rho(Pi_GG) > 1.01` on one of them |
+
+A reading between "stands" and "falsified" is reported as "partly" with the numbers. Also reported: whether `rho(Pi_GG, W32)`
+predicts `g(A, W32)` (their ratio), and which of `Pi_GG1`, `Pi_R`, `Pi_LS`, `Pi_GG,beta` have `rho <= 1.01` on W at n = 32.
+
+## The fix (candidates and the choice rule, registered now)
+
+**Qualifies**: a candidate of D3 that converges on W at n = 32 within its cap and on every control (W16, K32, W2-32), and on
+each control has the largest cell difference against V0 of at most `1e-8` for `u` and for `p - mean(p)`. **Choice**: of the
+qualifying candidates the one with the fewest iterations on W at n = 32; within 5 % of that count, the first of R, C-LS,
+C-beta 0.75, C-beta 0.5, C-beta 0.25. **None qualifies**: amendment 1 records it; it may add candidates that D0 to D3 point at
+(disclosed as added after the diagnosis, under the same rule), or it stops F-285 with the evidence and the work reports
+without a fix. A candidate that changes the fixed point is not one (item 5): changing converged defaults is not in scope.
+
+**The opt-in switch (registered now; its name in amendment 1).** A public field of `SimpleSolver`, default off: the existing
+path, unchanged and bit-identical by construction. It is a library switch only; no case key (Q2). The test-only switch of D3
+is removed once the public field exists, or becomes it.
+
+## Acceptance of the fix (limits fixed now; amendment 1 may add checks, not loosen these)
+
+All in release, in `crates/rcfd-fv/tests/warped_kernel_f285.rs` unless stated; the harness is `pressure_interp_f246.rs`'s
+`mms` (set-up, data, stop rule, cap 30000 and errors unchanged) with the fix switched on through an added argument.
+
+- **A1 (W converges).** With the fix, V0 converges under the stop rule on W at n = 16, 32 and 64 (heavy test for n = 64,
+  ignored, run by name). A run that reaches the cap is a miss.
+- **A2 (the same fixed point where V0 converges).** With the fix, V0 on K, S and W2 at n = 32 and on W at n = 16: converged,
+  `abs(e_u(fix) / e_u(V0) - 1) <= 1e-6` and the same for `e_p`, and the largest cell difference against V0 without the fix at
+  most `1e-8` for `u` and for `p - mean(p)` (the stop rule leaves an estimated iteration error of `1e-10 U` in each run).
+- **A3 (W's fixed point is the default's).** From the converged fix state on W at n = 32, one iteration of the default kernel
+  (the switch off) changes the velocity by at most `1e-8` (`max_du`).
+- **A4 (defaults).** The switch off is the existing path (by construction); `baseline_hashes.rs` and `case_hashes_w48u.rs`
+  pass unedited; every non-ignored test of `pressure_interp_f246.rs` passes, its existing tests unchanged in behaviour.
+- **A5 (F-246's M1 on W, run again).** Two new ignored heavy tests in `pressure_interp_f246.rs`, `m1_w_v1_f285` and
+  `m1_w_v2_f285`, run `sequence(W, "V1")` and `sequence(W, "V2")` exactly as `m1_w_v1_known_miss` and `m1_w_v2_known_miss`
+  do (set-up, stop rule, cap and the limits 1.7 and 1.2 unchanged) with the fix switched on (Q1). The known-miss tests stay
+  unchanged as the record without the fix. The result is recorded as it comes; a miss becomes a `*_known_miss` test with the
+  limits intact. V0 on W with the fix (the sequence of A1) is reported with its orders, without a limit (as in F-246).
+- **A6 (can fail).** One mutation, restored afterwards and compared byte for byte with the kept copy: the line that reads the
+  fix switch in `iterate` removed; then A1 at n = 32 must fail. `scripts/limit_audit.py` on the new tests.
+- **Gate.** fmt per package, clippy `-D warnings`, every test in release on a `git archive` copy, one process per test, three
+  jobs: no failure; a known flaky failure is rerun alone and reported with its name.
+
+## Not in F-285
+
+A default change (Q3); the transient kernel and the other solvers; a case key (Q2); a new gradient scheme or a change of the
+discretisation (item 5); reopening the dropped warped-face item (ADR 0193 decision record, Q9 (c) not taken).
+
+## Open questions
+
+**Q1. How the fix is switched on for M1 on W.** (a) New heavy tests beside the known-miss ones, the harness taking the fix as
+an added argument that the existing tests leave off (A5); (b) edit the two known-miss tests to switch the fix on. Recommendation
+(a): the known-miss tests stay the record of the default kernel. Proceeding on (a).
+
+**Q2. A case key.** (a) Library only in F-285; (b) wire a key now under F-256's checks. Recommendation (a): the roadmap's
+acceptance is on the library harness, and a key needs its own wiring checks. Proceeding on (a).
+
+**Q3. The default.** The fix keeps the fixed point but changes every iterate, so it cannot be the default without changing the
+baseline hashes; it stays opt-in. Making it the default needs the maintainer to lift the bit-identity rule.
+
+## Where to go next
+
+- [ADR 0193](0193-f246-registration-pressure-interpolation-variants.md) for the manufactured solution, the meshes and the M1
+  check this item runs again.
+- [ADR 0084](0084-wave37a-sheared-mesh-simplec-linearisation.md) for the related period-two mode on sheared meshes.
