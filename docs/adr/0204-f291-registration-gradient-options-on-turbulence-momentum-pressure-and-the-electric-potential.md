@@ -349,3 +349,18 @@ largest speed of 6.42 against the lid's 1 after its 16 steps; disclosed, no chan
 **Q8 (new). The P1 set-up.** (a) Keep P1 binding as registered (the checks hold whatever the iterate does) with P2-all as
 supplementary evidence; (b) make P2-all the binding all-set case of the pressure. Recommendation (a): (b) would change the
 acceptance after a run. Proceeding on (a).
+
+## Amendment 2 (2026-11-06): the set-up of T3
+
+Written after the run of amendment 1's tests and before any corrected run of T3. Run under amendment 1: T2b
+(`g2_g3_t2b_k_epsilon_c2`), P2-all and T3 as registered (`g2_g3_t3_spalart_allmaras_c2`). No limit is changed.
+
+**Finding 3: T3 as registered does not parse either.** `Case::parse_toml` refuses T3 at `boundaries.ymax.turbulence` with the
+message of finding 1: the Spalart-Allmaras wall treatment refuses the moving lid as a wall too (only SST accepts it). Corrected as
+T2 was:
+
+* **T3b (corrected):** T3 with `boundaries.ymax.turbulence = "zero_gradient"`; walls `xmax`, `xmin`, `ymin`; nuTilda zero-gradient
+  on the lid. Compared fields, set and limits as T3.
+* The test of amendment 1 that runs T3 as registered stays as the ignored record `g2_g3_t3_spalart_allmaras_c2_setup_defect`; the
+  corrected test is `g2_g3_t3b_spalart_allmaras_c2`.
+* G4 (i) and G4 (iv), not yet run, take T3b in place of T3.
