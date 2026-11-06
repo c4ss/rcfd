@@ -25,9 +25,10 @@ rcfd does not deliver:
 * turbulent dispersion of the heat transfer
 * evaporation and mass transfer
 * breakup
-* in the wall film (F-253, see "Wall film" below): gas shear, splash and rebound at impact, film separation and
-  dripping, evaporation and heat transfer of the film, any effect of the film on the flow, the film with two-way coupling
-  or heat transfer
+* in the wall film (F-253, see "Wall film" below): splash and rebound at impact, film separation and dripping,
+  evaporation and heat transfer of the film, any effect of the film on the flow, the film with two-way coupling or heat
+  transfer; with the gas drives of F-292, counter-current films, turbulent or wall-function shear, and the shear on
+  moving walls
 * in the wall interaction (F-254, see "Wall interaction" below): erosion correlations other than DNV RP O501, the brittle
   angle function, erosion that changes the wall shape, friction and particle rotation at the wall, roughness out of the
   plane of incidence or depending on the particle size, the shadow-effect distribution of Sommerfeld and Huber
@@ -167,10 +168,43 @@ airborne + deposited + escaped + stuck + film on the wall + drained to 1e-10. Th
 `Re_f` up to about 30. It has no film inertia, so it cannot show the waves of a real film. The run report gives the
 largest face `Re_f`.
 
-Not modelled: shear and pressure gradients from the gas, surface tension and the hydrostatic gradient, splash and
-rebound at impact, separation and dripping, evaporation and heat transfer of the film. The film never acts on the flow,
-and it is refused together with `two_way` or `heat_transfer`. From code, `Tracker::set_film(FilmSpec)` switches it on
-and `Tracker::film()` reads it (`rcfd_particles::film`).
+Not modelled: the dynamic pressure gradient of the gas, surface tension and the hydrostatic gradient, splash and
+rebound at impact, separation and dripping, evaporation and heat transfer of the film. Gas buoyancy and gas shear are
+opt-in (next section). The film never acts on the flow, and it is refused together with `two_way` or `heat_transfer`.
+From code, `Tracker::set_film(FilmSpec)` switches it on and `Tracker::film()` reads it (`rcfd_particles::film`).
+
+### Gas buoyancy and gas shear (F-292, ADR 0206)
+
+Two keys of `[particles.film]` add the gas to the film. Both are off by default, and a film without them is the film
+above, bit for bit.
+
+`gas_buoyancy = true` drives the film by `(rho_l - rho_g) g_t` in place of `rho_l g_t`, with `rho_g = physics.rho` (the
+buoyancy the parcels already have). Down an incline the steady film then has the thickness
+
+    h_B = (3 mu_l Gamma / (rho_l (rho_l - rho_g) g sin(theta)))^(1/3) = h_N (1 - rho_g/rho_l)^(-1/3)
+
+which is 4.0e-4 thicker than `h_N` for water in air and 10 percent thicker under a gas of 250 kg/m^3. The carrier
+density must be below `particles.density`.
+
+`gas_shear = true` adds the stress `tau` of the gas on the film surface: the film velocity gains the Couette part
+`h tau / (2 mu_l)`. A film driven by the shear alone (on a floor, gravity normal to it) has the thickness
+
+    h_S = (2 mu_l Gamma / (rho_l tau))^(1/2)
+
+`tau` is the carrier's wall shear at each film face, `mu_g (u_P)_t / d`, from the velocity `u_P` of the cell next to the
+face and the normal distance `d` of its centre: the laminar wall stress of a no-slip wall at rest, the same number as
+the `wall_shear` field of the post-processing. It is taken from the flow at every tracking step. The film does not act
+on the carrier, so `tau` is the stress at the bare wall; the film surface speed is not subtracted. The gas shear is
+refused with a turbulence model, a moving mesh, a rotating frame and a film patch that is not a no-slip wall at rest.
+
+ADR 0206 checks both closed forms through the parcel-fed runs of ADR 0192 (the incline under a dense gas, and a floor
+under a frozen Couette flow of 0.1 Pa): the station is within 3.3e-15 of `h_B` and 2.7e-14 of `h_S` as window
+averages, and the parcel mass ledger closes to 1.8e-12. Where the gravity part and the shear part of the film velocity
+point against each other (gas blowing up an incline), the donor-cell flux is not upwind for the film's kinematic wave;
+such counter-current films are not delivered, and the report counts the face sub-steps where it happens
+(`film.gas.opposed`). With a gas drive the report's `film` object gains `gas {buoyancy, shear, gas_density, max_shear,
+opposed}`, and with the shear `particle_film.csv` gains the columns `tx,ty,tz`. From code: `Tracker::set_film_gas(FilmGas
+{buoyancy, shear})`.
 
 ## Wall interaction (F-254, ADR 0194)
 
