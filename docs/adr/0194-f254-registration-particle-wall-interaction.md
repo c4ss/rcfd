@@ -331,3 +331,54 @@ comparison with measured erosion or rebound data, the erosion and roughness stat
   them; (b) a new item. Recommendation: (b), because they need their own sources (impact regime maps) and checks.
 - **Q6. Friction and rotation.** Tian et al. eqs. 1 to 4 need a particle rotation state that the tracker does not keep.
   Options: (a) a new item; (b) nothing for now. Recommendation: (b) until a case needs it.
+
+## Addendum 1: results (2026-11-06)
+
+Measured against the limits registered above; no limit was changed and no check was run before its code was complete.
+Release builds on Windows: the library checks on commit c0f1868, the case-tree checks on edd0364 (the library checks ran
+again there with the same numbers). Each registered check ran once on its code, and the Kolmogorov checks ran with the
+registered seed 254 only.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `dnv_angle_function` against eq. 7.2 at whole degrees; `F(0)`; smallest `F` on the 0.1-degree grid | 1e-11; 0; `>= 0` | 4.2e-13; 0; 0 (at 0); `F(36.4 deg)` 1.00186, `F(90 deg)` 0.56851 | met |
+| A2 impact angle on the tilted face | 1e-13 rad | 2.2e-16 rad | met |
+| B1 reported rate against `G K U^n F(alpha)` at 15, 35, 90 degrees | 1e-10 | 1.1e-14, 1.1e-14, 5.4e-13 | met |
+| B2 hits; impact mass; the 9 other faces; depth rate | `N_k`; 1e-12; no hit, no erosion; 1e-15 | 500, 1000, 250; 4.0e-15; none, 0; 0 | met |
+| B3 particle fingerprint with and without erosion | bit for bit | equal (22 752 words; 22 788 with erosion) | met |
+| C1 Kolmogorov distance at 10, 40, 75 degrees (`n = 20 000`) | below 0.011509 | 0.004746, 0.005930, 0.005821 | met |
+| C2 out-of-plane part; speed; counts | 1e-12; 1e-12; `n`, 0, 0, 0 | 0; 7.1e-16; 20 000 collisions, no fallback, normal incidence or grazing hit | met |
+| C3 distance from the untruncated map at 10 degrees | above 0.011509 | 0.266 (predicted 0.27) | met |
+| C4 `e = 0.8`, 40 degrees: `gamma` inside `(gamma_lo, gamma_hi)`; speed | all; 1e-10 | all 2000 inside (-17.95, 67.95) degrees; 6.3e-16 | met |
+| C5 normal incidence: polar angle, azimuth; counts | below 0.011509; `n` | 0.004504, 0.003759; 20 000 | met |
+| D1 21 invalid inputs; case D with and without the rough wall | each at its path; none | each at its path; none | met |
+| D2 `track_frozen`, run path and tracker by hand (fingerprint with erosion and rough counts) | bit for bit | equal (22 775 words; 1750 parcels, 1750 rough collisions, 118 redraws, 250 normal incidences) | met |
+| D3 `rate` column of `particle_erosion.csv` against the closed form | 1e-10 | 1.1e-14, 1.1e-14, 5.4e-13 | met |
+| D4 report objects; CSV rows; `rate` read back | equal; 6; 1e-15 | equal; 6; 0 | met |
+| E1 R3 | `fe94f34ac9fc5dbd` | equal | met |
+| E2 R4 | `5514d6332741d3a4` | equal | met |
+| E3 R1, R2 of ADR 0192; H1; `baseline_hashes`; the particle suites | unchanged | equal; pass; pass; pass | met |
+| E4 no key in the data; settings hash with an inert table | equal | equal (`4b830c0bb7976b35`, both tables) | met |
+
+The accepted fractions of the draws in C1 were 0.7322, 0.99384 and 1.000000, against 0.7340, 0.99379 and 0.999999 for the
+truncated Gaussian of W4: consistent, and not a registered check.
+
+Disclosures:
+
+- The difference of 4.2e-13 in A1 and the 5.4e-13 at 90 degrees in B1 and D3 come from the cancellation in the
+  alternating sum of eq. 7.2, whose terms reach about 1600 at 90 degrees for a value of 0.57; the code evaluates it in
+  Horner form, the test as printed.
+- The Kolmogorov checks use the asymptotic critical value `K_0.01 / sqrt(n)` of the source as the value for the sample
+  size; with a correct sampler each fails with probability 0.01 at the fixed seed.
+- C1 checks the distribution for `e = 1` only; `e < 1` is checked per parcel by C4, without a statistical test.
+- D1 inputs 4 and 12 (an erosion or rough patch that carries the film) also give the film's own error at
+  `particles.gravity`, because case D has no gravity; the registered diagnostic is present in both.
+- Not exercised by a test: the fallback after 1000 rejected draws and the grazing branch of W4 (no registered case
+  reaches them), the library refusals of a second `set_erosion` or `set_rough_wall` call, and the refusals between the film
+  and the new models inside the library (the case tree refuses the overlaps first, D1).
+- The records changed before this text was registered, all on main before any code of F-254: R3's thrown stream first
+  missed the sticking wall (no parcel deposited, its set-up assertion failed) and was aimed at it; R4's case was first a
+  steady SIMPLE lid-driven box, which diverged on main at iteration 14 (with `linear_upwind` and with `upwind`), then a
+  frozen shear flow in which the parcels were pressed against a reflecting wall until stuck (10 s of run time), and was
+  changed to the registered air-like case.
+- The tests take about a second each in release (`wall_interaction` 1.3 s, `wall_interaction_f254` 0.2 s).
