@@ -5190,7 +5190,7 @@ fixed by the item's registration ADR before any code.
       iteration (piso, k-epsilon and SA without DES stay refused); the decay recursions and closed forms, the k budget, the
       steady state against SIMPLEC (1.7e-9) and the rotating frame meet their limits, defaults bit-identical; the case-tree
       BDF2 order check is a known miss (p 2.4 to 2.7, pre-asymptotic); check H's case text builds and its smoke is finite.
-- [ ] **F-287** Runner run setting: continue from a previous run (rcfd run --continue-from), with a step cap
+- [~] **F-287** Runner run setting: continue from a previous run (rcfd run --continue-from), with a step cap
   - depends on: F-262, F-274
   - acceptance: Every limit is fixed by its registration ADR before any code. A run setting that the runner passes to
     rcfd run --continue-from (a change to RunSettings and the launch; ADR 0189 Q2 (d)) and a run setting for the step
@@ -5203,7 +5203,7 @@ fixed by the item's registration ADR before any code.
     Q2). It is also the project-mode equivalent of run_headless's continue_from that ADR 0195 Q2 names. A new run-record
     field needs the lead's approval (ADR 0130).
     - PARTIAL (ADR 0200, the registration of F-287, 2026-11-06, branch f287-f288-runner, not merged): run.json settings gains continue_from (a run id) and max_steps, each written only when set (rcfd_runner::records::LaunchSettings, read beside RunSettings so that the Studio's struct literal is unchanged); the runner passes rcfd run --continue-from runs/<id>/output/restart.rcfd and the new rcfd run --max-steps (the drive's step cap); with --project a chained study, a study with its own max_steps and design_run_operating_map run on the runner, a chained condition or map point continuing from the run before when its restart file fits; a run continued after 25 steps ends where a run of 50 steps does, bit for bit (R-1c); on the 16 x 16 cavity the continued conditions and map points agree with the in-process chain to 5.6e-10 and 6.7e-10 relative on lid_drag (limit 1e-4), the cold and step-capped runs bit for bit (C-CH, C-MS, C-MAP); design_run_operating_map has the class execute with --project. Open: the two settings need the lead's approval (ADR 0130, ADR 0200 Q1); ADR 0200 Q2 to Q7 (a source run that has not ended, what continue_from names, tags of map runs, the class of design_run_operating_map, the iteration cap of a continued run, a condition with another mesh of the same size).
-- [ ] **F-288** Adopt matching runs when a restarted MCP server resumes a design study
+- [~] **F-288** Adopt matching runs when a restarted MCP server resumes a design study
   - depends on: F-274
   - acceptance: Every limit is fixed by its registration ADR before any code. In project mode, before a design-study
     candidate is submitted, the server adopts a run of the project's runner with the same tags (study, variant,
