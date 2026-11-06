@@ -11,8 +11,8 @@ use std::f64::consts::PI;
 /// The cell fields a record hashes (as `f286_default_bits.rs`).
 pub const FIELDS: [&str; 9] = ["ux", "uy", "uz", "p", "k", "omega", "nuTilda", "epsilon", "nut"];
 
-/// The kinematic viscosity of CH, NP and LAM (`1/395`).
-pub const NU_CH: f64 = 0.0025316455696202532;
+/// The kinematic viscosity of CH, NP and LAM (`1/395`; the bits of the text's `0.0025316455696202532`).
+pub const NU_CH: f64 = 0.002_531_645_569_620_253;
 
 /// FNV-1a (64 bit) over the little-endian bytes of `f64::to_bits`, as `baseline_hashes.rs`.
 pub fn fnv1a(values: &[f64], acc: &mut u64) {
