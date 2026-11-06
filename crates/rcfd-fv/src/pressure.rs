@@ -443,14 +443,13 @@ fn solve_pressure_inner(
     (res0, iters, parts)
 }
 
-/// The pressure equation of [`solve_pressure_parts_grad`] with its explicit non-orthogonal part made implicit (ADR 0198 D4, D5):
+/// The pressure equation of [`solve_pressure_parts_grad`] with its explicit non-orthogonal part made implicit (ADR 0198, F-285):
 /// `F(p) = A p - b(grad(p)) = 0`, `A` and `b` the assembly of the corrector passes (the compact matrix with the reference-cell pin,
 /// and the right-hand side with the non-orthogonal part of the gradient `grad`, `None` the least-squares gradient), solved from `p`
 /// by restarted GMRES (restart 30) right-preconditioned with one AMG V-cycle of `A`, to the controls `ctl.solver` relative to the
 /// initial residual `|F(p)|`. Its solutions are the fixed points of the corrector passes. Periodic (coupled) faces are not
 /// supported (panics). Returns the normalised residual of the first corrector pass (as [`solve_pressure_parts`]) and the GMRES
-/// iterations.
-#[doc(hidden)]
+/// iterations. Used by `SimpleSolver::implicit_non_orth_pressure`.
 pub fn solve_pressure_implicit_non_orth(
     geom: &FvGeometry,
     gamma_p: &[f64],

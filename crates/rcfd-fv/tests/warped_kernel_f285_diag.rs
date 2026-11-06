@@ -3,9 +3,13 @@
 //!
 //! D0 the kernel (V0) on W: growth factor, sign of the mode, where it lives. D1 the correction step alone: power iteration of
 //! linear maps of a cell velocity field (`Pi_GG`, `Pi_GG1`, `Pi_R`, `Pi_LS`, `Pi_GG,beta`) on W, W2, K and G. D3 the fix
-//! candidates of the registration in the kernel (the test-only switch `SimpleSolver::correction_test_only` and the existing
-//! `reconstructed_correction`). The meshes and the manufactured solution M are those of `pressure_interp_f246.rs`, copied
-//! unchanged.
+//! candidates of the registration in the kernel. Amendment 1: D4 more sub-maps (`X_p`, `X_u`, `Pi_R1`, the implicit ones), D5
+//! the implicit candidates in the kernel, D6 the linear onset of the default kernel. The meshes and the manufactured solution M
+//! are those of `pressure_interp_f246.rs`, copied unchanged.
+//!
+//! Amendment 2 removed the test-only switch of D3 (`correction_test_only`: C-LS and C-beta) and made the D5 switch the public
+//! field `implicit_non_orth_pressure`. The rows of C-LS and C-beta (D3) and of I-beta (D5) were run from the test binaries of
+//! d698fe8 and 91210eb; this file keeps the candidates that the remaining fields express (R, I-GG, I-R).
 
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::bc::{FixedValue, Profile};
@@ -16,7 +20,7 @@ use rcfd_fv::pressure::{
     boundary_values_pbc, corrected_flux, pressure_bc, solve_pressure, solve_pressure_implicit_non_orth, PressureBc,
     PressureControls,
 };
-use rcfd_fv::simple::{BodyForce, CorrectionTestOnly, Coupling, SimpleSettings, SimpleSolver};
+use rcfd_fv::simple::{BodyForce, Coupling, SimpleSettings, SimpleSolver};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_linalg::{LinearOptions, SolveControl};
 use rcfd_mesh::gen::{box_mesh, warp, Grading};
@@ -166,16 +170,10 @@ fn kernel(kind: MeshKind, n: usize, au: f64, ap: f64, cand: Candidate) -> (Arc<F
     match cand {
         Candidate::Default => {}
         Candidate::R => sol.reconstructed_correction = true,
-        Candidate::Ls => sol.correction_test_only = Some(CorrectionTestOnly::LeastSquares),
-        Candidate::Beta(b) => sol.correction_test_only = Some(CorrectionTestOnly::Beta(b)),
-        Candidate::Imp => sol.implicit_non_orth_test_only = true,
+        Candidate::Imp => sol.implicit_non_orth_pressure = true,
         Candidate::ImpR => {
-            sol.implicit_non_orth_test_only = true;
+            sol.implicit_non_orth_pressure = true;
             sol.reconstructed_correction = true;
-        }
-        Candidate::ImpBeta(b) => {
-            sol.implicit_non_orth_test_only = true;
-            sol.correction_test_only = Some(CorrectionTestOnly::Beta(b));
         }
     }
     let umax = cc.iter().map(|&x| vec3::norm(exact_u(x))).fold(0.0, f64::max);
@@ -187,12 +185,9 @@ fn kernel(kind: MeshKind, n: usize, au: f64, ap: f64, cand: Candidate) -> (Arc<F
 enum Candidate {
     Default,
     R,
-    Ls,
-    Beta(f64),
-    /// Amendment 1 D5: I-GG, I-R, I-beta.
+    /// Amendment 1 D5: I-GG and I-R (F-285's fix).
     Imp,
     ImpR,
-    ImpBeta(f64),
 }
 
 /// Volume-weighted inner product of two cell vector fields.
@@ -533,13 +528,8 @@ fn d3(kind: MeshKind, n: usize) {
             b.converged, b.iterations
         );
     }
-    for cand in [
-        Candidate::R,
-        Candidate::Ls,
-        Candidate::Beta(0.75),
-        Candidate::Beta(0.5),
-        Candidate::Beta(0.25),
-    ] {
+    // C-LS and C-beta 0.75, 0.5, 0.25 were run from the binary of d698fe8 (their switch was removed by amendment 2)
+    for cand in [Candidate::R] {
         let r = run_a(kind, n, cand, 5000);
         let diff = base.as_ref().map(|b| differences(&r, b));
         println!(
@@ -775,12 +765,8 @@ fn d5(kind: MeshKind, n: usize) {
     let start = Instant::now();
     let control = kind != MeshKind::W || n == 16;
     let base = control.then(|| run_a(kind, n, Candidate::Default, 5000));
-    for cand in [
-        Candidate::ImpR,
-        Candidate::Imp,
-        Candidate::ImpBeta(0.75),
-        Candidate::ImpBeta(0.5),
-    ] {
+    // I-beta 0.75 and 0.5 were run from the binary of 91210eb (the beta switch was removed by amendment 2)
+    for cand in [Candidate::ImpR, Candidate::Imp] {
         let r = run_a(kind, n, cand, 5000);
         let diff = base.as_ref().map(|b| differences(&r, b));
         println!(
@@ -876,14 +862,8 @@ fn d6(cand: Candidate) {
 fn d6_w32() {
     let cand = match std::env::var("F285_D6").unwrap_or_default().as_str() {
         "R" => Candidate::R,
-        "Ls" => Candidate::Ls,
-        "Beta0.75" => Candidate::Beta(0.75),
-        "Beta0.5" => Candidate::Beta(0.5),
-        "Beta0.25" => Candidate::Beta(0.25),
         "ImpR" => Candidate::ImpR,
         "Imp" => Candidate::Imp,
-        "ImpBeta0.75" => Candidate::ImpBeta(0.75),
-        "ImpBeta0.5" => Candidate::ImpBeta(0.5),
         other => panic!("set F285_D6 to a candidate (got {other:?})"),
     };
     d6(cand);
