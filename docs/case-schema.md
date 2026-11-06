@@ -2010,15 +2010,17 @@ one with its defaults keeps its settings hash).
 | `erosion.k` | `-1` | `K` [(m/s)^-n], must be set (> 0); DNV Table 7-2 recommends `2.0e-9` for steel grades |
 | `erosion.n` | `-1` | velocity exponent, must be set (> 0); DNV Table 7-2 recommends 2.6 for steel grades |
 | `erosion.density` | `-1` | density of the wall material [kg/m^3] for the depth rate, must be set (> 0) |
+| `erosion.material` | `"none"` | preset of `k`, `n` and `density` (ADR 0197): `"none"` (the three keys are required) or `"dnv_o501_2007_steel"`, the steel grades of DNV RP O501 Rev 4.2-2007 Table 7-2 (`k = 2.0e-9`, `n = 2.6`, `density = 7800.0`). The Table 7-2 values come from a third-party copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's edition; a preset gives an indicative, not certified, erosion rate. With a preset, a key written with a value other than -1 overrides it; `k` and `n` are set together or not at all; `density` may be set alone. Left out of the settings hash at its default |
 | `rough_wall.enabled` | `false` | a parcel that hits a rough patch reflects about a virtual wall tilted by a Gaussian roughness angle in the plane of incidence |
 | `rough_wall.patches` | `[]` | the rough patches; required, each once, reflecting (by `particles.walls.<patch>` or `wall_interaction`) with a restitution above 0, not a film patch |
 | `rough_wall.angle_std` | `-1` | standard deviation of the roughness angle [degrees], must be set in `(0, 30]` |
 | `rough_wall.seed` | `1` | seed of the roughness random numbers |
 
 Located errors: either table enabled without `particles.enabled`; a patch list empty, with an empty or repeated name, or
-naming a film patch; `erosion.k`, `erosion.n` or `erosion.density` unset; a rough patch that sticks or escapes, or reflects
-with restitution 0; `rough_wall.angle_std` outside `(0, 30]`; (when the mesh is built) an unknown patch or one that is not
-a wall.
+naming a film patch; `erosion.k`, `erosion.n` or `erosion.density` unset without a preset; with a preset, `erosion.k`
+set and `erosion.n` not (at `erosion.n`) or the reverse (at `erosion.k`), or a written value not above 0 (at its key); an
+unknown `erosion.material` (when the case is read); a rough patch that sticks or escapes, or reflects with restitution 0;
+`rough_wall.angle_std` outside `(0, 30]`; (when the mesh is built) an unknown patch or one that is not a wall.
 
 Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
 patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
@@ -2045,8 +2047,13 @@ Outputs next to `solution.vtu`:
 * with `erosion.enabled` (ADR 0194): `particle_erosion.csv`, one row per erosion face
   (`face,patch,x,y,z,area,hits,impact_mass,eroded,rate,depth_rate`; `rate` is `eroded/(area time)` in kg/(m^2 s) over the
   report's `time`, `depth_rate` is `rate/density` in m/s); the report then also has `erosion {faces, hits, impact_mass,
-  eroded, max_rate, max_depth_rate}`. With `rough_wall.enabled` the report has `rough_wall {collisions, redraws,
-  fallbacks, normal_incidence, grazing}`. Without them the report is unchanged
+  eroded, max_rate, max_depth_rate}`. With an `erosion.material` preset (ADR 0197), `erosion` also has `material {preset,
+  row, source, k, n, density, from {k, n, density}, provenance}` (the values used, each from `"preset"` or `"case"`) and
+  `particle_erosion.csv` starts with three `#` lines (the preset, the values used, and the provenance text: the Table 7-2
+  values come from a third-party copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's
+  edition; a preset gives an indicative, not certified, erosion rate) before its header; without a preset both are as
+  above. With `rough_wall.enabled` the report has `rough_wall {collisions, redraws, fallbacks, normal_incidence,
+  grazing}`. Without them the report is unchanged
 
 A transient run with particles is not restartable (the tracker state is not in the checkpoint; the run-control warning is
 emitted). Service method `particles.report` (`session`, optional `with_tracks`) returns the report of the live session (a

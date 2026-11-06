@@ -22,7 +22,10 @@ pub mod vtp;
 pub use coupling::{Coupling, Thermal};
 pub use dispersion::Dispersion;
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
-pub use erosion::{dnv_angle_function, impact_angle, Erosion, ErosionSpec, DNV_A};
+pub use erosion::{
+    dnv_angle_function, erosion_preset, impact_angle, Erosion, ErosionPreset, ErosionSpec, DNV_A, EROSION_PRESETS,
+    PRESET_PROVENANCE,
+};
 pub use film::{film_velocity, nusselt_thickness, Film, FilmSpec};
 pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};

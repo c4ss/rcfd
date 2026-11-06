@@ -76,10 +76,58 @@ pub struct ParticleRun {
     out_dir: Option<PathBuf>,
     tracks: Option<TrackLog>,
     two_way: Option<TransientCoupling>,
+    /// The erosion constants when they use a preset (ADR 0197 P6); `None` without erosion or without a preset.
+    erosion_preset: Option<particles::ErosionConstants>,
 }
 
 fn io_err(e: std::io::Error, what: &str) -> String {
     format!("cannot write {what}: {e}")
+}
+
+/// `"preset"` or `"case"`: where an erosion constant comes from (ADR 0197 P6).
+fn origin(from_preset: bool) -> &'static str {
+    if from_preset {
+        "preset"
+    } else {
+        "case"
+    }
+}
+
+/// The record of the preset in the report (ADR 0197 P6), with the values the tracker uses.
+fn erosion_material_json(c: &particles::ErosionConstants, er: &rcfd_particles::Erosion) -> Value {
+    let p = c.preset.expect("a preset");
+    json!({
+        "preset": p.name,
+        "row": p.row,
+        "source": p.source,
+        "k": er.k(),
+        "n": er.n(),
+        "density": er.density(),
+        "from": {
+            "k": origin(c.from_preset[0]),
+            "n": origin(c.from_preset[1]),
+            "density": origin(c.from_preset[2]),
+        },
+        "provenance": rcfd_particles::PRESET_PROVENANCE,
+    })
+}
+
+/// The three comment lines `particle_erosion.csv` starts with when a preset is used (ADR 0197 P6).
+fn erosion_csv_preamble(c: &particles::ErosionConstants, er: &rcfd_particles::Erosion) -> String {
+    let p = c.preset.expect("a preset");
+    format!(
+        "# erosion preset {}: {}, {}\n# values used: k = {:?} ({}), n = {:?} ({}), density = {:?} ({})\n# {}\n",
+        p.name,
+        p.row,
+        p.source,
+        er.k(),
+        origin(c.from_preset[0]),
+        er.n(),
+        origin(c.from_preset[1]),
+        er.density(),
+        origin(c.from_preset[2]),
+        rcfd_particles::PRESET_PROVENANCE
+    )
 }
 
 impl ParticleRun {
@@ -114,6 +162,9 @@ impl ParticleRun {
                 .unwrap_or(false)
                 .then(TrackLog::default),
             two_way,
+            erosion_preset: particles::erosion(case)
+                .then(|| particles::erosion_constants(case))
+                .filter(|c| c.preset.is_some()),
         }
     }
 
@@ -323,6 +374,10 @@ impl ParticleRun {
                 "max_rate": er.max_rate(t.time),
                 "max_depth_rate": er.max_depth_rate(t.time),
             });
+            if let Some(c) = &self.erosion_preset {
+                // ADR 0197 P6: only with a preset
+                v["erosion"]["material"] = erosion_material_json(c, er);
+            }
         }
         if let Some(rw) = t.rough_wall() {
             let c = rw.counts();
@@ -362,7 +417,13 @@ impl ParticleRun {
             put("particle_film.csv", f.csv().as_bytes())?;
         }
         if let Some(er) = self.tracker.erosion() {
-            put("particle_erosion.csv", er.csv(self.tracker.time).as_bytes())?;
+            // ADR 0197 P6: with a preset, three comment lines before the header; without one, the file of ADR 0194
+            let mut csv = match &self.erosion_preset {
+                Some(c) => erosion_csv_preamble(c, er),
+                None => String::new(),
+            };
+            csv.push_str(&er.csv(self.tracker.time));
+            put("particle_erosion.csv", csv.as_bytes())?;
         }
         Ok(())
     }

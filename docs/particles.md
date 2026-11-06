@@ -179,7 +179,8 @@ unchanged bit for bit.
 
 ### Erosion
 
-With `[particles.erosion]` (`enabled = true`, the wall `patches`, `k`, `n` and the wall material `density`), every parcel
+With `[particles.erosion]` (`enabled = true`, the wall `patches`, `k`, `n` and the wall material `density`, or the steel
+preset of ADR 0197 below in place of the three numbers), every parcel
 hit on a face of an erosion patch erodes the mass
 
     dE = m K U^n F(alpha),   F(alpha) = sum_{i=1..8} (-1)^(i+1) A_i alpha^i
@@ -189,7 +190,8 @@ from 0 for a grazing hit to `pi/2` for a normal one), and `A_1` to `A_8` = 9.370
 98.398, 31.211, 4.170. This is DNV RP O501 (Revision 4.2-2007), eq. 7.1 to 7.3 and Table 7-1, with the angle function DNV
 gives for steel grades: it is 0 at grazing incidence, largest (1.002) near 36 degrees and 0.569 at normal incidence.
 
-`K` and `n` have no default, because DNV says they have to be found by experiment. Its Table 7-2 recommends:
+`K`, `n` and `density` have no default, because DNV says `K` and `n` have to be found by experiment. Its Table 7-2
+recommends:
 
 | Material | `K` [(m/s)^-n] | `n` | density [kg/m^3] |
 | --- | --- | --- | --- |
@@ -199,6 +201,36 @@ gives for steel grades: it is 0 at grazing incidence, largest (1.002) near 36 de
 | GRP/vinyl ester | 0.6e-9 | 3.6 | 1800 |
 
 The angle function is the steel one whatever `K` and `n` are; DNV gives the brittle curve only as a plot.
+
+**The steel preset (ADR 0197).** Instead of writing the three numbers, a case can name the steel row:
+
+    [particles.erosion]
+    enabled = true
+    patches = ["ymin"]
+    material = "dnv_o501_2007_steel"
+
+This fills `k = 2.0e-9`, `n = 2.6` and `density = 7800.0`, the steel grades of the table above. **The Table 7-2 values come
+from a third-party copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's edition; a preset
+gives an indicative, not certified, erosion rate.** It is the only preset: the GRP rows go with the brittle curve, which is
+not delivered, and titanium is not steel.
+
+The preset is opt-in. Without `material` (or with `material = "none"`, the default) the three keys are required as
+before, and the run and the settings hash of the case are unchanged. With a preset, a key written with a value other
+than -1 overrides the preset value. `k` and `n` go together: `K` has the unit (m/s)^-n and the table gives the two as a
+pair, so with a preset you set both or neither, and setting one alone is an error at the other. `density` can be set
+alone. An unknown preset name is an error at `particles.erosion.material`.
+
+The preset never fills in silently. The case file names it, the case data keeps the unset keys at -1, and the run records
+what it used: `particle_report.json` gets `erosion.material` (the preset, its row and table, the three values used, for
+each whether it came from the preset or the case, and the provenance text above), and `particle_erosion.csv` starts with
+three comment lines, for example
+
+    # erosion preset dnv_o501_2007_steel: steel grades, DNV RP O501 Rev 4.2-2007 Table 7-2
+    # values used: k = 2e-9 (preset), n = 2.6 (preset), density = 2700.0 (case)
+    # The Table 7-2 values come from a third-party copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's edition; a preset gives an indicative, not certified, erosion rate.
+
+before its usual header. From code, `ErosionSpec::from_preset(patches, erosion_preset("dnv_o501_2007_steel").unwrap())`
+gives the same spec (`rcfd_particles::erosion::EROSION_PRESETS`, `PRESET_PROVENANCE`).
 
 The hit is booked before the wall action, whatever it is: reflect, rough reflect, stick or escape. Erosion is an
 observation and never changes a parcel. An erosion patch cannot carry the wall film. The run writes

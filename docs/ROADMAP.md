@@ -4895,6 +4895,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
       in for it (ADR 0194 Q2); K and n have no default (Q3); the DNV edition read is a third-party copy of Revision
       4.2-2007 (Q4); splash and rebound at the wall film (ADR 0192 Q4) are not delivered (Q5); wall friction and
       particle rotation are not modelled (Q6).
+    - ADR 0197 (2026-11-06, branch erosion-presets, not merged): Q3 decided (b) by the maintainer, delivered as the opt-in preset `particles.erosion.material = "dnv_o501_2007_steel"` (Table 7-2 steel grades from a third-party copy not checked against the maintainer's edition; indicative, not certified rates); without the key nothing changes.
 - [ ] **F-255** Particle dispersion from turbulence-model fields and particle reactions
   - depends on: F-128
   - acceptance: Particle dispersion driven by turbulence-model fields reproduces the analytic dispersion growth of a passive cloud in homogeneous turbulence (Taylor result, closed form derived in the ADR) within 5 percent, and a particle surface reaction conserves the mass of each species to 1e-10 relative

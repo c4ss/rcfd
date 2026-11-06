@@ -3,6 +3,9 @@
 //! At every hit of a face of an erosion patch, the mass `m K U^n F(alpha)` eroded by the parcel is booked on the face
 //! (DNV RP O501, Revision 4.2-2007, eq. 7.1 to 7.3 and Table 7-1), with `m` the parcel mass, `U` the impact speed and
 //! `alpha` the angle between the path and the face. Erosion is an observation: it never changes a parcel.
+//!
+//! [`EROSION_PRESETS`] names the steel row of DNV Table 7-2 (ADR 0197), for [`ErosionSpec::from_preset`]; see
+//! [`PRESET_PROVENANCE`] for what those values are worth.
 
 use crate::{err, Result};
 use rcfd_core::vec3::{dot, norm, scale, sub, Vec3};
@@ -43,6 +46,59 @@ pub struct ErosionSpec {
     pub n: f64,
     /// Target material density [kg/m^3] (for the depth rate).
     pub density: f64,
+}
+
+/// Provenance of the erosion presets (ADR 0197 P7), to be shown wherever a preset is used.
+pub const PRESET_PROVENANCE: &str = "The Table 7-2 values come from a third-party copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's edition; a preset gives an indicative, not certified, erosion rate.";
+
+/// A named set of erosion constants: one row of DNV RP O501 Table 7-2 (ADR 0197 P2). The values come from a third-party
+/// copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's edition; a preset gives an
+/// indicative, not certified, erosion rate ([`PRESET_PROVENANCE`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ErosionPreset {
+    /// Name of the preset (`particles.erosion.material` in a case).
+    pub name: &'static str,
+    /// The row of the table.
+    pub row: &'static str,
+    /// The table and its edition.
+    pub source: &'static str,
+    /// `K` of DNV eq. 7.1 [(m/s)^-n].
+    pub k: f64,
+    /// Velocity exponent `n`.
+    pub n: f64,
+    /// Density of the wall material [kg/m^3].
+    pub density: f64,
+}
+
+/// The erosion presets (ADR 0197 P2): the steel grades of DNV RP O501 Rev 4.2-2007 Table 7-2, the row whose angle function
+/// is the one of [`dnv_angle_function`]. The values come from a third-party copy of DNV RP O501 Rev 4.2-2007 that has not
+/// been checked against the maintainer's edition; a preset gives an indicative, not certified, erosion rate.
+pub const EROSION_PRESETS: [ErosionPreset; 1] = [ErosionPreset {
+    name: "dnv_o501_2007_steel",
+    row: "steel grades",
+    source: "DNV RP O501 Rev 4.2-2007 Table 7-2",
+    k: 2.0e-9,
+    n: 2.6,
+    density: 7800.0,
+}];
+
+/// The preset of a name, if there is one (ADR 0197 P2).
+pub fn erosion_preset(name: &str) -> Option<&'static ErosionPreset> {
+    EROSION_PRESETS.iter().find(|p| p.name == name)
+}
+
+impl ErosionSpec {
+    /// Erosion on `patches` with the three constants of `preset` (ADR 0197). The preset values come from a third-party
+    /// copy of DNV RP O501 Rev 4.2-2007 that has not been checked against the maintainer's edition; a preset gives an
+    /// indicative, not certified, erosion rate ([`PRESET_PROVENANCE`]).
+    pub fn from_preset(patches: Vec<String>, preset: &ErosionPreset) -> ErosionSpec {
+        ErosionSpec {
+            patches,
+            k: preset.k,
+            n: preset.n,
+            density: preset.density,
+        }
+    }
 }
 
 /// Erosion booked on the faces of the erosion patches.
