@@ -97,7 +97,7 @@ fn f3_f11_project_tools_on_runner_made_runs() {
         .unwrap()
         .contains("project folder"));
     let list = m.request("tools/list", json!({}));
-    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 56);
+    assert_eq!(list["result"]["tools"].as_array().unwrap().len(), 40);
 
     // F11 part 1: start_run then wait_run reaches finished on a 30-step cavity
     let r = m.call("start_run", json!({"case": "cases/cavity.toml"}));
@@ -279,21 +279,22 @@ fn f3_f11_project_tools_on_runner_made_runs() {
 }
 
 /// ADR 0135 amendment 3 R1: `--project` without `--root` confines the existing tools' paths to the project, whatever
-/// the working folder; an explicit `--root` wins.
+/// the working folder; an explicit `--root` wins. ADR 0195 C-1: the probe is `check_case_headless {path}`, a session tool
+/// still listed with `--project` (`create_case` is not, P1).
 #[test]
 fn r1_project_implies_root() {
     let dir = project("r1");
     let elsewhere = scratch("r1-cwd");
     let d = dir.to_string_lossy().to_string();
     let mut m = Mcp::start_in(&["--project", &d], &elsewhere);
-    let r = m.call("create_case", json!({"path": "cases/cavity.toml"}));
+    let r = m.call("check_case_headless", json!({"path": "cases/cavity.toml"}));
     assert_eq!(r["isError"], false, "{r}");
-    let r = m.call("create_case", json!({"path": "../x.toml"}));
+    let r = m.call("check_case_headless", json!({"path": "../x.toml"}));
     assert_eq!(err_code(&r), 1004, "{r}");
     // control: an explicit --root is used instead
     let other = elsewhere.to_string_lossy().to_string();
     let mut m2 = Mcp::start_in(&["--project", &d, "--root", &other], &elsewhere);
-    let r = m2.call("create_case", json!({"path": "cases/cavity.toml"}));
+    let r = m2.call("check_case_headless", json!({"path": "cases/cavity.toml"}));
     assert_eq!(r["isError"], true, "{r}");
     eprintln!("R1: cases/cavity.toml resolved in the project without --root; ../x refused 1004; with --root <other> not found");
 }
@@ -323,6 +324,6 @@ fn f13_server_start() {
             .as_array()
             .unwrap()
             .len(),
-        56
+        40
     );
 }

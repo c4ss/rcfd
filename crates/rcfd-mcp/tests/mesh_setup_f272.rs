@@ -120,16 +120,14 @@ fn c8c_check_case_mesh_is_rcfd_check_mesh() {
         ok(&m.call("check_case_mesh", json!({"case": "cases/hex.toml"})))["mesh"],
         json!({"source": "file", "file": "meshes/hex_v4.1_ascii.msh"})
     );
-    // observation: the session tools under the project's sandbox root refuse the case that names meshes/ by `..`
+    // observation: under the project, the session tools cannot load the case (ADR 0195 C-1: since F-275 create_case is
+    // not a tool there at all, P1; before, it refused the case that names meshes/ by `..`, "leaves the sandbox")
     let sandboxed = server(&root, Policy::default());
-    let refused = call(&sandboxed, "create_case", json!({"path": "cases/hex.toml"}));
-    assert_eq!(refused["isError"], true, "{refused}");
-    let msg = refused["structuredContent"]["error"]["message"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string();
-    assert!(msg.contains("leaves the sandbox"), "{msg}");
-    eprintln!("C8-C observation: session create_case of cases/hex.toml under the project root: {msg}");
+    let refused = rpc_call(&sandboxed, "create_case", json!({"path": "cases/hex.toml"}));
+    assert_eq!(refused["error"]["code"], -32602, "{refused}");
+    let msg = refused["error"]["message"].as_str().unwrap_or_default().to_string();
+    assert!(msg.contains("unknown tool"), "{msg}");
+    eprintln!("C8-C observation: session create_case of cases/hex.toml under the project: {msg}");
     // refusals
     let outside = root
         .parent()

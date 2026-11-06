@@ -11,12 +11,38 @@
 //!
 //! ADR 0188 C-L restates it for F-273 (J4, J7): `read_feed` comes right after `list_changes`, and eight write tools gain
 //! the property `reason`; without `read_feed` and those eight properties the list is the F-272 one, byte for byte.
+//!
+//! ADR 0195 C5-L restates it for F-275 (P1): with `--project` the 16 session tools of P1 are not listed; put back from the
+//! list without `--project` (`golden/tools_list_default.json`, F1's golden) at their places, the list is the F-273 one.
 
 use serde_json::{json, Value};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
 const GOLDEN: &str = include_str!("golden/tools_list_project_f270.json");
+
+/// The list without `--project` (ADR 0135 F1, never re-recorded).
+const DEFAULT: &str = include_str!("golden/tools_list_default.json");
+
+/// ADR 0195 P1: the session tools not listed with `--project`.
+const HIDDEN: [&str; 16] = [
+    "create_case",
+    "set_setting",
+    "get_setting",
+    "load_mesh",
+    "check_mesh",
+    "run",
+    "status",
+    "get_residuals",
+    "get_field_stats",
+    "export_vtk",
+    "list_workflow_tasks",
+    "create_workflow",
+    "edit_workflow",
+    "run_workflow_task",
+    "run_headless",
+    "render_image",
+];
 
 /// ADR 0187 M1: the mesh tools, in order, with their access class and required arguments.
 const MESH_TOOLS: [(&str, &str, &[&str]); 4] = [
@@ -73,18 +99,44 @@ fn a2_tools_list_with_project_is_the_golden_with_the_f271_changes() {
     // live text
     assert_eq!(serde_json::to_string(&gold).unwrap(), GOLDEN);
     assert_eq!(serde_json::to_string(&live_value).unwrap(), got);
-    let (live_f273, gold) = (
+    let (live_f275, gold) = (
         live_value["tools"].as_array().unwrap(),
         gold["tools"].as_array().unwrap(),
     );
     eprintln!(
         "A2/C-L: {} tools, {} bytes, golden {} tools, {} bytes",
-        live_f273.len(),
+        live_f275.len(),
         got.len(),
         gold.len(),
         GOLDEN.len()
     );
     assert_eq!(gold.len(), 50, "the golden: 33 session tools and 17 project tools");
+    // ADR 0195 C5-L: 17 session tools and 23 project tools; the 16 hidden ones put back from the list without --project
+    // at their places give the F-273 list
+    assert_eq!(live_f275.len(), 40, "17 session tools and 23 project tools");
+    let default: Value = serde_json::from_str(DEFAULT).unwrap();
+    let session = default["tools"].as_array().unwrap();
+    assert_eq!(session.len(), 33);
+    for t in live_f275 {
+        assert!(
+            !HIDDEN.contains(&t["name"].as_str().unwrap()),
+            "{} is listed",
+            t["name"]
+        );
+    }
+    let mut kept = live_f275.iter();
+    let mut live_f273: Vec<Value> = Vec::new();
+    for s in session {
+        if HIDDEN.contains(&s["name"].as_str().unwrap()) {
+            live_f273.push(s.clone());
+        } else {
+            let k = kept.next().unwrap();
+            assert_eq!(k["name"], s["name"], "the kept session tools in their order");
+            live_f273.push(k.clone());
+        }
+    }
+    live_f273.extend(kept.cloned());
+    let live_f273 = &live_f273;
     assert_eq!(live_f273.len(), 56, "33 session tools and 23 project tools");
     // ADR 0188 C-L: read_feed right after list_changes, a read tool with no required argument
     let fp = live_f273
