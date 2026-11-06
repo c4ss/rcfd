@@ -461,3 +461,20 @@ evidence points at the pressure-velocity step, not at the face gradient. No deci
 
 **Questions for the maintainer.** Q1 to Q8 stand as registered and amended, each proceeding on its reversible choice; Q9 is new.
 F-246 is partial: M1 on W and M2 for `body_force_weighted` are not met.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the reversible choice the work proceeded on, which is not a maintainer decision. This
+record changes no limit, check or result above.
+
+* **Q1 to Q7.** Not asked; each stands as registered and amended, on the choice the work proceeded on.
+* **Q8 (W2).** Answered: (a). W stays the binding warped mesh of the acceptance, and W2 is supplementary evidence only.
+* **Amendment 1 and the heavy tests.** Answered: amendment 1 (the supplementary mesh W2 and the corrected set-up B-a') and
+  the heavy M1 tests, ignored in the gate and run by hand by name, are accepted as evidence. F-246 stays partial: M1 on W
+  and M2 for `body_force_weighted` are not met.
+* **Q9 (the divergence on W).** Answered: (b), a new item to diagnose and fix the kernel on W: roadmap item F-285. Once it
+  lands, M1 on W (`m1_w_v1_known_miss`, `m1_w_v2_known_miss`) is run again unchanged. The dropped warped-face item is not
+  reopened (option (c) is not taken).
+* **The R2 cases of T1 (difference 1 of addendum 1).** Answered: redone by the house rule. The registered R2 cases are kept
+  as ignored set-up-defect records, and corrected tests are added beside them. This is done separately, not by this record.

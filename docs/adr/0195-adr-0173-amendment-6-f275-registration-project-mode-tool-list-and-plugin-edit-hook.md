@@ -466,3 +466,33 @@ In order of weight: Q2 (the workflow tools and `run_headless`'s restart options 
 (the Studio's sidebar now runs four more read tools without asking in a new project, and a rule the user adds falls below the
 fold of the confirmation dialog); Q1 (the hook names `new_case`, not `create_case`); Q6 (access classes); item 8 (the lead's
 approval of the three run-record fields of ADR 0189). The hook under `bypassPermissions` stays NOT VERIFIED.
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06, by the items of [Decisions needed](#decisions-needed). An item marked *not asked*
+was not put to the maintainer that day; it stays as registered, which is not a maintainer decision. This record changes no
+limit, check or result above.
+
+1. **D2 (b), the 16 hidden session tools.** Not asked; stands as registered.
+2. **Q2 (a), the workflow tools and `run_headless`'s restart options not offered in project mode.** Not asked; stands as
+   registered. The project equivalent Q2 names, a runner run that continues from another (ADR 0189 Q2 (d)), is now roadmap
+   item F-287.
+3. **D5 (b), the plugin hook.** The hook itself was not asked about separately; its gaps were, and are accepted (item 10).
+4. **Q1 (a), the names `new_case` and `check_case_mesh`.** Not asked; stands as registered.
+5. **ADR 0188 Q1 (a).** Not asked; stands as registered.
+6. **ADR 0187 Q6 (b), ADR 0188 Q6 (b), and Q4 (a).** Not asked; stand as registered.
+7. **ADR 0188 Q7 (b), `read_feed {from_seq}`.** Not asked; stands as registered.
+8. **ADR 0189 Q4 (a), the three flat run-record fields.** Answered: approved as built. This is the lead's approval that ADR
+   0130 asks for, given by the maintainer on 2026-11-06.
+9. **Q6 (a), access classes unchanged.** Answered: overturned. `design_run_study` and `design_evaluate` become access class
+   `execute`. The change, with the registered update of the tool-list goldens it needs, is made separately, not by this
+   record. The other half of option (b), `start_run` with `new_case` also checked as `write_files`, was not part of the
+   answer.
+10. **Q3 (a), Q5 (a), Q7 (a).** Q5 and Q7 answered: the hook's gaps are accepted, since the hook is a guide rail. It fails
+    open when it cannot decide (Q7 (a)), writes by Bash or PowerShell are not guarded (Q5 (a)), and its behaviour under
+    `bypassPermissions` and `--dangerously-skip-permissions` stays untested (NOT VERIFIED). Q3 (a): not asked; stands as
+    registered.
+11. **Q8, the confirmation dialog's fold.** Not asked; not acted on, as registered.
+
+The other known misses of addendum 1 (the plugin installed from the marketplace; `NotebookEdit` and `MultiEdit` in a real
+session) were not asked and stand as recorded.

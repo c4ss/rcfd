@@ -234,3 +234,17 @@ bit for bit (difference 0), not only to 1e-12.
 **Questions for the maintainer.** Q1 to Q4 stand as registered, each proceeding on its reversible choice. Two failures outside
 F-256 were seen in the gates: the F-273 lock test (intermittent also when run alone) and an `rcfd-project` file-lock failure
 (passes alone).
+
+## Decision record 2026-11-06
+
+The maintainer's answers of 2026-11-06 to the open questions of this ADR. A question marked *not asked* was not put to the
+maintainer that day; it stays on the reversible choice the work proceeded on, which is not a maintainer decision. This
+record changes no limit, check or result above.
+
+* **Q1 (names and place of the keys).** Not asked; proceeding on (a).
+* **Q2 (the default of `gradient_limiter_k`).** Not asked; proceeding on (a).
+* **Q3 (reports with the options).** Answered: (b), as its own item with a balance check of the reported flows against the
+  source to the solver tolerance: roadmap item F-289. Until it lands, (a): the conjugate `heat_flow` report keeps the default
+  operator's non-orthogonal terms, as documented.
+* **Q4 (turbulence transport, momentum, pressure, electric potential).** Answered: (b), a new item with new checks: roadmap
+  item F-291 (the recommendation was (a)). F-256 keeps the options on the scalar sweep, as built.

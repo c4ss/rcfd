@@ -704,3 +704,16 @@ release suites of `rcfd-fv` and `rcfd-api` on 4b0cec2 (`cargo test -p rcfd-fv -p
 
 No construction check of P-C was missed, so P-C is kept (opt-in by the source type, defaults bit-identical). No
 `*_known_miss` test was added.
+
+### Decision record 2026-11-06
+
+The maintainer's answer of 2026-11-06 to the one question of this ADR put to the maintainer that day. It changes no limit,
+check or result above.
+
+* **Open question 8 of amendment P-C (check H needs k-omega SST with `pimple`).** Answered: check H stays NOT RUNNABLE, so
+  row 3 of D9 does not fire (the last row of D9). k-omega SST with `pimple` on a static mesh, the prerequisite that option
+  (a) describes, is registered as its own roadmap item, F-286, and H becomes runnable as registered when F-286 lands. D5 is
+  not changed (option (b) is not taken).
+* Not covered by this record: open questions 1 and 3 to 7 of the registration (open question 2 was answered by the
+  maintainer's loop instruction, amendment P-AB), and the drafting conflict over PC-2N named in the addendum of amendment
+  P-C.
