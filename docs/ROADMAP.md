@@ -4829,10 +4829,11 @@ Added after the static feature-gap review; wording is product-independent. Phase
       Nusselt thickness as a window average and 1.7e-11 at 20 s (limit 5 percent); injected = airborne + deposited +
       escaped + stuck + film + drained to 6.1e-13 (limit 1e-10). The case tree, with gravity tilted instead of the mesh,
       gives 1.7e-11 and equals the library bit for bit. Runs without the film are unchanged bit for bit (records R1 and
-      R2, made on main before the code).
+      R2, made on main before the code). The first run of the tree checks stopped at a set-up defect of case K (frozen
+      flow needs energy.enabled), corrected by amendment 1 before the corrected run; the tests on the registered K stay
+      ignored.
     - Open: gas buoyancy is left out of the film so that its steady state is the roadmap formula (ADR 0192 Q2); gas
-      shear (Q3) and splash or rebound at impact (Q4) are not delivered; the first run of the tree checks stopped at a
-      set-up defect of case K (frozen flow needs energy.enabled), corrected by amendment 1 before the corrected run.
+      shear (Q3) and splash or rebound at impact (Q4) are not delivered.
 - [ ] **F-254** Particle wall interaction: erosion and rough-wall rebound
   - depends on: F-128, F-056
   - acceptance: Wall interaction: for a uniform parcel stream hitting a plate at three angles, the reported erosion rate

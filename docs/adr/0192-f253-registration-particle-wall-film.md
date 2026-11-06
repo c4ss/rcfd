@@ -349,4 +349,14 @@ Disclosures:
   says so.
 - The tests take under a second each in release (`wall_film` 0.6 s, `wall_film_f253` 0.4 s).
 
-The full gate result is appended below once it has run.
+### The gate (2026-11-06)
+
+Main moved to b367ae9 (F-274, ADR 0189) while F-253 was built, and it was merged into the branch without conflict before
+the gate (914a505). At that point 0189 is on main, and 0190, 0191 and 0192 are not, so the number 0192 stands.
+
+The full gate ran on a `git archive` copy of 914a505 with three jobs and one process per test (`scripts/gate_test.py`):
+`cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests 2865 passed, 0 failed, 803
+ignored (wall 4831 s, peak summed working set 3339 MB, largest time against its limit 0.331). The three more ignored tests
+than the F-272 gate (2819 / 0 / 800) include the three `*_k_setup_defect` records of amendment 1. The gate overlapped
+another agent's gate (gate-f256), which restarted a minute before this one began; no test failed or timed out. All
+eleven F-253 tests ran in it and passed, and the existing particle suites, H1 and `baseline_hashes` passed unchanged.
