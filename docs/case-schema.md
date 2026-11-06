@@ -110,6 +110,15 @@ viscosity the momentum equation of that outer iteration uses. `turbulence.relax`
 derivative takes their place). With `n_outer = 1` the sweep sees only the old time level. `piso`, a dynamic mesh,
 `solver.error_tolerance` and the fractional step are located errors.
 
+Periodic seams (ADR 0205): by default each face of a periodic (cyclic) pair takes the diffusivity of its own owner cell, so
+where the eddy viscosity differs across the seam the diffusive fluxes of k, omega and momentum through the two faces do not
+cancel. `turbulence.periodic_seam.diffusivity = "pair"` (an optional table `[turbulence.periodic_seam]`) gives both faces of
+every pair one value, `nu + w a_P + (1 - w) a_Q` with `w = dn_g / (dn_f + dn_g)` (the interpolation of an internal face across
+the seam), in the momentum face viscosity and in the k and omega diffusivities, on the steady algorithms and on `pimple`, for
+translational and rotational seams. A pair that touches a laminar region takes the molecular viscosity on both faces, and the
+scalars with a Schmidt number follow the momentum face viscosity. `"owner"` is the default and keeps every earlier result. `pair`
+is a located error with any model other than `k_omega_sst`, and has no effect on a mesh without periodic patches.
+
 Wall treatment: automatic.
 
 - A Spalding (1961) law of the wall gives the wall shear for any first-cell y+. `kappa` and `e_wall` define this law.

@@ -34,7 +34,7 @@
 //! viscosity is not relaxed. The `pimple` solver makes one sweep at the start of every outer iteration. A model that never
 //! starts a step (the steady algorithms) runs the steady sweep unchanged.
 
-use crate::eddy::{effective_viscosity, patch_faces};
+use crate::eddy::{effective_viscosity, pair_periodic_faces, patch_faces, SeamDiffusivity};
 use crate::kepsilon::velocity_gradient;
 use crate::wall::{wall_distance, Roughness, SpaldingLaw};
 use rcfd_core::vec3;
@@ -43,7 +43,7 @@ use rcfd_fv::convection::{convection, ConvScheme};
 use rcfd_fv::ddt::{add_ddt, History, TimeScheme};
 use rcfd_fv::diffusion::laplacian;
 use rcfd_fv::gradient::{green_gauss, least_squares};
-use rcfd_fv::{FvGeometry, ScalarField, VectorField};
+use rcfd_fv::{FvGeometry, PeriodicPair, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
 use std::sync::Arc;
 
@@ -192,6 +192,8 @@ pub struct KOmegaSst {
     started: bool,
     /// `None` until the first transient step starts (the steady path never sets it).
     time: Option<SstTime>,
+    /// The periodic pairs when every pair takes one diffusivity (F-295, ADR 0205); `None`: each face its owner's value.
+    seam_pairs: Option<Vec<PeriodicPair>>,
 }
 
 impl KOmegaSst {
@@ -258,6 +260,7 @@ impl KOmegaSst {
             geom,
             started: false,
             time: None,
+            seam_pairs: None,
         })
     }
 
@@ -282,6 +285,36 @@ impl KOmegaSst {
                 t.scheme = scheme;
             }
         }
+    }
+
+    /// Diffusivity of the faces of a periodic pair (F-295, ADR 0205 D2): with [`SeamDiffusivity::Pair`] both faces of every pair
+    /// take `nu + w a_P + (1 - w) a_Q` in the momentum face viscosity and in the k and omega diffusivities of every sweep;
+    /// [`SeamDiffusivity::Owner`] (the default) gives each face its own owner's value. An error when the periodic maps of the
+    /// mesh are not a pairing (the model is then unchanged).
+    pub fn set_periodic_diffusivity(&mut self, mode: SeamDiffusivity) -> Result<()> {
+        self.seam_pairs = match mode {
+            SeamDiffusivity::Owner => None,
+            SeamDiffusivity::Pair => Some(self.geom.periodic_pairs()?),
+        };
+        Ok(())
+    }
+
+    /// The diffusivity rule of the periodic pairs ([`KOmegaSst::set_periodic_diffusivity`]).
+    pub fn periodic_diffusivity(&self) -> SeamDiffusivity {
+        if self.seam_pairs.is_some() {
+            SeamDiffusivity::Pair
+        } else {
+            SeamDiffusivity::Owner
+        }
+    }
+
+    /// `effective_viscosity` of the cell values `a`, with one value per periodic pair when it is set (ADR 0205 D1).
+    fn face_diffusivity(&self, a: &[f64], wall_nut: &[(usize, f64)]) -> Vec<f64> {
+        let mut v = effective_viscosity(&self.geom, self.nu, a, wall_nut);
+        if let Some(pairs) = &self.seam_pairs {
+            pair_periodic_faces(pairs, self.geom.mesh.owner(), self.nu, a, &mut v);
+        }
+        v
     }
 
     /// Has a transient step been started ([`KOmegaSst::begin_step`])?
@@ -334,9 +367,10 @@ impl KOmegaSst {
         &self.f1
     }
 
-    /// Effective face viscosity `nu + nu_t` (wall faces from the wall law) for the momentum equation.
+    /// Effective face viscosity `nu + nu_t` (wall faces from the wall law) for the momentum equation; with
+    /// [`SeamDiffusivity::Pair`] one value per periodic pair (ADR 0205).
     pub fn nu_face(&self) -> Vec<f64> {
-        effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut)
+        self.face_diffusivity(&self.nut, &self.wall_nut)
     }
 
     /// Tangential speed of the wall cell relative to the wall (ADR 0075: the cell velocity minus the face boundary velocity, so a
@@ -437,8 +471,9 @@ impl KOmegaSst {
         let nut_now: Vec<f64> = (0..n).map(|c| self.nut_of(kv[c], wv[c], s_mag[c], f2[c])).collect();
         let gam_k: Vec<f64> = (0..n).map(|c| mix(f1[c], c_sigma_k) * nut_now[c]).collect();
         let gam_w: Vec<f64> = (0..n).map(|c| mix(f1[c], c_sigma_w) * nut_now[c]).collect();
-        let gk_f = effective_viscosity(&g, nu, &gam_k, &[]);
-        let gw_f = effective_viscosity(&g, nu, &gam_w, &[]);
+        // ADR 0205 D2: one value per periodic pair when it is set
+        let gk_f = self.face_diffusivity(&gam_k, &[]);
+        let gw_f = self.face_diffusivity(&gam_w, &[]);
 
         // production (limited)
         let mut ptil = vec![0.0; n];

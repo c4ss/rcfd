@@ -264,6 +264,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     let names = case.tree.names("boundaries").unwrap_or_default();
     check_algebraic_options(case, &mut out);
     check_viscous_stress(case, &mut out);
+    check_periodic_seam(case, &mut out);
     if !enabled(case) {
         for n in &names {
             let p = format!("boundaries.{n}.turbulence");
@@ -614,6 +615,24 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     out
 }
 
+/// The key of the periodic-seam diffusivity (F-295, ADR 0205 D3).
+pub const PERIODIC_SEAM_KEY: &str = "turbulence.periodic_seam.diffusivity";
+
+/// ADR 0205 R1: `turbulence.periodic_seam.diffusivity = "pair"` is available with `k_omega_sst` only.
+fn check_periodic_seam(case: &Case, out: &mut Vec<Diagnostic>) {
+    if get_s(case, PERIODIC_SEAM_KEY) == "owner" || is_sst(case) {
+        return;
+    }
+    let model = get_s(case, "turbulence.model");
+    out.push(diag(
+        PERIODIC_SEAM_KEY,
+        format!(
+            "periodic_seam.diffusivity = \"{}\" is available with turbulence.model = \"k_omega_sst\" only (ADR 0205), not with \"{model}\"",
+            get_s(case, PERIODIC_SEAM_KEY)
+        ),
+    ));
+}
+
 /// `solver.viscous_stress = "full"` (ADR 0032) is available for the incompressible constant-density transient algorithms only.
 fn check_viscous_stress(case: &Case, out: &mut Vec<Diagnostic>) {
     if get_s(case, "solver.viscous_stress") != "full" {
@@ -759,6 +778,8 @@ pub(crate) struct TurbState {
     geom: Arc<FvGeometry>,
     /// Cells of the laminar regions (`regions.<n>.turbulence = "laminar"`, ADR 0036) and the molecular viscosity; `None` without any.
     laminar: Option<(Vec<bool>, f64)>,
+    /// The periodic pairs with `turbulence.periodic_seam.diffusivity = "pair"` (ADR 0205 D2), for the laminar rule; `None` else.
+    seam_pairs: Option<Vec<rcfd_fv::PeriodicPair>>,
 }
 
 impl TurbState {
@@ -870,6 +891,19 @@ impl TurbState {
                 .apply_wall_options(&crate::wall_opts::WallOptions::from_case(case))
                 .map_err(|e| vec![diag("turbulence", e)])?;
         }
+
+        // ADR 0205 D3: one diffusivity per periodic pair (k_omega_sst only, R1); an error of the pairing is located at the key (R3)
+        let seam_pairs = if get_s(case, PERIODIC_SEAM_KEY) == "pair" {
+            model
+                .set_option("periodic_diffusivity", "pair")
+                .map_err(|e| vec![diag(PERIODIC_SEAM_KEY, e)])?;
+            Some(
+                geom.periodic_pairs()
+                    .map_err(|e| vec![diag(PERIODIC_SEAM_KEY, e.to_string())])?,
+            )
+        } else {
+            None
+        };
 
         // coefficient overrides from the settings tree
         let mut errs = Vec::new();
@@ -1024,6 +1058,7 @@ impl TurbState {
             inlet_speeds: inlet_speeds.to_vec(),
             geom: geom.clone(),
             laminar,
+            seam_pairs,
         })
     }
 
@@ -1032,6 +1067,16 @@ impl TurbState {
         let mut nu = self.model.nu_face();
         if let Some((cells, nu_lam)) = &self.laminar {
             crate::regions::mask_faces(&self.geom, cells, *nu_lam, &mut nu);
+            // ADR 0205 D2: a periodic pair that touches a laminar cell takes the molecular value on both faces
+            if let Some(pairs) = &self.seam_pairs {
+                let own = self.geom.mesh.owner();
+                for p in pairs {
+                    if cells[own[p.f]] || cells[own[p.g]] {
+                        nu[p.f] = *nu_lam;
+                        nu[p.g] = *nu_lam;
+                    }
+                }
+            }
         }
         nu
     }

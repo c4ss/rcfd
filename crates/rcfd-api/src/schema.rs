@@ -1513,6 +1513,17 @@ pub fn case_schema() -> Schema {
         Schema::enumeration("ssg", &["ssg", "lrr_ip"]).doc("Pressure-strain model: ssg (Speziale, Sarkar and Gatski 1991, quadratic) or lrr_ip (Launder, Reece and Rodi 1975, isotropisation of production, linear). Its epsilon-equation constant Ce2 differs (1.83 / 1.92)"),
     );
 
+    // ADR 0205 D3: an optional object, so the data, written text and hashes of every case without it stay as they are
+    let periodic_seam = Schema::object()
+        .optional()
+        .doc("Periodic seams of the turbulence model (F-295, ADR 0205). Absent = owner")
+        .field(
+            "diffusivity",
+            Schema::enumeration("owner", &["owner", "pair"])
+                .doc("Diffusivity of the two faces of a periodic (cyclic) pair, translational or rotational: owner (default, every earlier result) gives each face the value of its own owner cell, so where the eddy viscosity differs across the seam the two diffusive fluxes of the pair do not cancel; pair gives both faces nu + w a_P + (1 - w) a_Q, the linear interpolation between the two owner cells with w = dn_g / (dn_f + dn_g), in the momentum face viscosity and in the k and omega diffusivities (steady and pimple), and a pair that touches a laminar region takes the molecular viscosity on both faces. The scalars with a Schmidt number follow the momentum face viscosity. turbulence.model = k_omega_sst only (pair with any other model is a located error); no effect on a mesh without periodic patches")
+                .hash_omit_default(),
+        )
+        .hash_omit_default();
     let turbulence = Schema::object()
         .doc("Turbulence modelling (RANS models: steady SIMPLE / SIMPLEC runs; smagorinsky and wale: transient runs; mixing_length: both)")
         .field(
@@ -1651,6 +1662,7 @@ pub fn case_schema() -> Schema {
         )
         .field("sa", sa_group)
         .field("rsm", rsm_group)
+        .field("periodic_seam", periodic_seam)
         .field("coefficients", coefficients)
         .field(
             "plugin_coefficients",
