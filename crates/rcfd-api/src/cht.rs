@@ -616,8 +616,10 @@ impl ChtModel {
     }
 
     /// Conductive heat flow out of the domain through `patch` (W), with the conductivity of the owner cell of every face.
+    /// The face flows follow the gradient options the energy solver was built with (F-289, ADR 0202 D2; `None` without the
+    /// keys, the unchanged formula).
     pub fn heat_flow_out(&self, geom: &FvGeometry, solver: &EnergySolver, patch: &str) -> Option<f64> {
-        let flows = cht::conductive_face_flows(geom, &solver.t, &self.face_k, self.non_orthogonal);
+        let flows = cht::conductive_face_flows_opt(geom, &solver.t, &self.face_k, self.non_orthogonal, solver.gradient);
         cht::patch_heat_flow_out(geom, &flows, patch)
     }
 

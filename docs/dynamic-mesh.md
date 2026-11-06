@@ -31,10 +31,10 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 ## Method
 
 - **Mesh motion.** Prescribed: displacement `d(t)` (expressions of `t`) and a rotation `angle(t)` about an axis through a point,
-  applied to the points of the moving patches. Interior: `rigid` (all points follow) or `smoothing` (Laplacian or
-  inverse-distance-diffusivity displacement equation solved from the initial mesh each step, prescribed on the moving patches,
-  zero on `fixed_patches`, sliding in the plane for all other patches). Every moved mesh is validated; a failure stops the run
-  with `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
+  applied to the points of the moving patches. Interior: `rigid` (all points follow) or `smoothing` (Laplacian,
+  inverse-distance or inverse-volume diffusivity of the displacement equation solved from the initial mesh each step,
+  prescribed on the moving patches, zero on `fixed_patches`, sliding in the plane for all other patches). Every moved mesh is
+  validated; a failure stops the run with `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
 - **Swept volume and mesh flux.** For every face the volume swept between the old and the new position, divided by `dt`, is the
   mesh flux. The cell volume change equals the sum of its swept volumes to round-off (geometric conservation law, checks G1 to G3).
 - **ALE momentum and pressure.** The convective flux is the relative flux `phi - W/dt`, the time derivative uses the old and new
@@ -77,7 +77,10 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
 - **The tree equals the library.** Run through the case tree, the piston and the moving-mesh checks of ADR 0191 give the same
   bits as the same set-ups driven by library calls, and `rcfd run` gives the same reports.
 - **Stiffness.** The smoothing method `SmoothingMethod::InverseVolume(k)` uses the diffusivity `1/V^k`, so small cells deform less.
-  It is a library call only (ADR 0191 Q2).
+  In the case tree it is `dynamic_mesh.smoothing.method = "inverse_volume"` with `k = smoothing.exponent` (F-290, ADR 0203),
+  on the incompressible and the compressible moving paths; `V` is the volume of the initial mesh, from which the displacement
+  is solved. On ADR 0033's piston with cells 8 times smaller at the ends it keeps the smallest cell at 0.945 of its initial
+  volume where the Laplacian keeps 0.75, and lowers the largest aspect ratio from 9.3 to 7.4.
 - **Not available:** local remeshing, prism or unstructured layering, layering with PISO/PIMPLE, characteristic boundary
   conditions on moving faces, and a time step that includes the mesh speed.
 

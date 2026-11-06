@@ -7,10 +7,11 @@
 //! existing [`EnergySolver`] solves it once it carries the per-face `gamma` (its `alpha_face`) and the weight (its
 //! `ddt_weight`); [`ChtMaterials::configure`] sets both.
 
+use crate::diffusion::{BoundaryGradient, GradientOptions};
 use crate::energy::EnergySolver;
 use crate::field::ScalarField;
 use crate::geometry::FvGeometry;
-use crate::gradient::least_squares;
+use crate::gradient::{least_squares, limiter};
 use rcfd_core::vec3::{self, Vec3};
 
 /// Contact (or fouling-layer) resistance on one internal face.
@@ -104,23 +105,60 @@ pub fn contact_faces(geom: &FvGeometry, material: &[usize], a: usize, b: usize, 
 /// plus, when `non_orthogonal`, the explicit correction with the least-squares cell gradient (a scheme that needs a
 /// gradient, as `ConvScheme::LinearUpwind`, assembles it; `Upwind` does not). Boundary faces: `-k A dT/dn` with the
 /// boundary condition's gradient, plus the Dirichlet skewness term of the operator when the face is fixed-value.
+/// This is the operator of [`crate::diffusion::laplacian`]; [`conductive_face_flows_opt`] follows the gradient options.
 pub fn conductive_face_flows(geom: &FvGeometry, t: &ScalarField, k: &[f64], non_orthogonal: bool) -> Vec<f64> {
+    conductive_face_flows_opt(geom, t, k, non_orthogonal, None)
+}
+
+/// [`conductive_face_flows`] for an energy equation solved with the gradient options `opts` (F-289, ADR 0202 D1): the
+/// face terms of [`crate::diffusion::laplacian_with`] with the field's current cell and boundary values, so the flows are
+/// the solved operator's face fluxes times `(rho cp)_ref`. With a secondary limiter the cell gradients are limited and
+/// scaled; the face correction replaces the component of the interpolated gradient along the cell-centre line by
+/// `(T_n - T_o)/|d|` on internal faces; `opts.boundary` chooses the term of fixed-value boundary faces. `None` is
+/// [`conductive_face_flows`] operation for operation; without a gradient (`non_orthogonal = false`) the options do nothing.
+pub fn conductive_face_flows_opt(
+    geom: &FvGeometry,
+    t: &ScalarField,
+    k: &[f64],
+    non_orthogonal: bool,
+    opts: Option<GradientOptions>,
+) -> Vec<f64> {
     let own = geom.mesh.owner();
     let nei = geom.mesh.neighbour();
     let sf = geom.mesh.face_area_vectors();
     let bc = t.boundary_coeffs(geom);
     let bvals = t.boundary_values(geom);
     let grad = non_orthogonal.then(|| least_squares(geom, &t.values, &bvals));
+    // the limited cell gradients of `laplacian_with`
+    let grad = match (grad, opts.and_then(|o| o.secondary_limiter)) {
+        (Some(gr), Some(kind)) => {
+            let psi = limiter(geom, &t.values, &bvals, &gr, kind);
+            Some(
+                gr.iter()
+                    .zip(&psi)
+                    .map(|(g, p)| vec3::scale(*g, *p))
+                    .collect::<Vec<Vec3>>(),
+            )
+        }
+        (gr, _) => gr,
+    };
+    let o = opts.unwrap_or_default();
     let mut out = vec![0.0; geom.mesh.n_faces()];
     for f in 0..geom.n_internal {
-        let (o, n) = (own[f], nei[f]);
-        let mut flow = k[f] * geom.lap_coeff[f] * (t.values[o] - t.values[n]);
+        let (ow, n) = (own[f], nei[f]);
+        let mut flow = k[f] * geom.lap_coeff[f] * (t.values[ow] - t.values[n]);
         if let Some(gr) = &grad {
             let d = geom.delta[f];
             let delta = vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d));
             let kv = vec3::sub(sf[f], delta);
             let w = geom.weights[f];
-            let gf: Vec3 = [0, 1, 2].map(|i| w * gr[o][i] + (1.0 - w) * gr[n][i]);
+            let mut gf: Vec3 = [0, 1, 2].map(|i| w * gr[ow][i] + (1.0 - w) * gr[n][i]);
+            if o.face_correction {
+                let len = vec3::norm(d);
+                let e = vec3::scale(d, 1.0 / len);
+                let c = (t.values[n] - t.values[ow]) / len - vec3::dot(gf, e);
+                vec3::axpy(&mut gf, c, e);
+            }
             flow -= k[f] * vec3::dot(kv, gf);
         }
         out[f] = flow;
@@ -135,7 +173,18 @@ pub fn conductive_face_flows(geom: &FvGeometry, t: &ScalarField, k: &[f64], non_
         if let (Some(gr), true) = (&grad, co.a == 0.0) {
             let d = geom.delta[f];
             let kv = vec3::sub(sf[f], vec3::scale(d, a * a / vec3::dot(sf[f], d)));
-            flow -= k[f] * vec3::dot(kv, gr[own[f]]);
+            match o.boundary {
+                BoundaryGradient::Owner => flow -= k[f] * vec3::dot(kv, gr[own[f]]),
+                BoundaryGradient::Dropped => {}
+                BoundaryGradient::Corrected => {
+                    let len = vec3::norm(d);
+                    let e = vec3::scale(d, 1.0 / len);
+                    let mut gb = gr[own[f]];
+                    let corr = (bvals[f - geom.n_internal] - t.values[own[f]]) / len - vec3::dot(gb, e);
+                    vec3::axpy(&mut gb, corr, e);
+                    flow -= k[f] * vec3::dot(kv, gb);
+                }
+            }
         }
         out[f] = flow;
     }

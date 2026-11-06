@@ -2264,8 +2264,8 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | `dynamic_mesh.displacement_expression_x`, `_y`, `_z` | string, `""` | displacement in m, expression of `t` (e.g. `"1 [m/s^2] * t^2"`); empty = 0 |
 | `dynamic_mesh.rotation_angle_expression` | string, `""` | dimensionless angle in radian, expression of `t` |
 | `dynamic_mesh.rotation_origin`, `.rotation_axis` | list of 3 floats, `[]` | point on the axis (default origin), axis (default z) |
-| `dynamic_mesh.smoothing.method` | `laplacian` (default), `inverse_distance` | diffusivity 1 or `1/l^exponent` (distance to the nearest moving face) |
-| `dynamic_mesh.smoothing.exponent` | float, 1 | exponent of the inverse-distance diffusivity (not negative) |
+| `dynamic_mesh.smoothing.method` | `laplacian` (default), `inverse_distance`, `inverse_volume` | diffusivity 1, `1/l^exponent` (distance to the nearest moving face) or `1/V^exponent` (mean initial volume of the two cells of the face, so small cells deform less; ADR 0203) |
+| `dynamic_mesh.smoothing.exponent` | float, 1 | exponent of the inverse-distance or inverse-volume diffusivity (0 to 10) |
 | `dynamic_mesh.smoothing.substeps` | int, 1 | reserved; only 1 is accepted |
 | `dynamic_mesh.smoothing.tolerance` | float, 1e-12 | relative tolerance of the displacement solve |
 | `dynamic_mesh.six_dof.mass` | float, 0 | kg, must be > 0 for `motion = six_dof` |
@@ -2709,9 +2709,12 @@ meshes and cost at most 4.6 % of the error on near-orthogonal meshes, but they d
 raised it 2.1 times on an affine skewed mesh. No benefit is claimed. Through the tree a run equals the library run with the same
 options (ADR 0190).
 
-The `heat_flow` report of a conjugate case still adds the default secondary part (owner gradient, no limiter) to its face flows,
-so with the options it is not exactly the flux the solver used on skewed cells (ADR 0190 Q3). With all four keys at their
-defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case files list them.
+The `heat_flow` report of a conjugate case (solid zones) forms its face flows with the same options as the solver (F-289,
+ADR 0202), so on skewed cells it is the flux the matrix solved: on a skewed conjugate case with a heat source the reports
+balance the source to the solver's residual for every option set. The `heat_flow` report of a case without solid zones takes
+the wall gradient of the boundary condition only and has no secondary part, with or without the options (ADR 0202 Q1). With
+all four keys at their defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case
+files list them.
 
 ## Pressure interpolation of the steady kernel (`solver.pressure_interpolation`)
 
