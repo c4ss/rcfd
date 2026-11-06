@@ -95,6 +95,45 @@ pub fn laplacian_opt(
     }
 }
 
+/// The cell gradients the explicit non-orthogonal flux of [`laplacian_with`] uses under `opts`: `grad` scaled by the limiter of
+/// `opts.secondary_limiter`, computed from `cells` and `bvals` as [`laplacian_with`] computes it; `None` without a limiter (then
+/// `grad` itself is used). For a face term that must follow the operator, e.g. the pressure flux correction (ADR 0204 K3).
+pub fn secondary_cell_gradient(
+    geom: &FvGeometry,
+    cells: &[f64],
+    bvals: &[f64],
+    grad: &[Vec3],
+    opts: &GradientOptions,
+) -> Option<Vec<Vec3>> {
+    opts.secondary_limiter.map(|kind| {
+        let psi = limiter(geom, cells, bvals, grad, kind);
+        grad.iter().zip(&psi).map(|(g, p)| vec3::scale(*g, *p)).collect()
+    })
+}
+
+/// The interpolated cell gradient of internal face `f`, as the explicit non-orthogonal flux of [`laplacian_with`] forms it: with
+/// `face_correction` its component along the cell-centre line is replaced by the compact difference `(phi_N - phi_P)/|d|` of
+/// `cells` (ADR 0204 K3).
+pub fn secondary_face_gradient(
+    geom: &FvGeometry,
+    f: usize,
+    grad: &[Vec3],
+    cells: &[f64],
+    face_correction: bool,
+) -> Vec3 {
+    let (o, n) = (geom.mesh.owner()[f], geom.mesh.neighbour()[f]);
+    let w = geom.weights[f];
+    let mut gf = [0, 1, 2].map(|i| w * grad[o][i] + (1.0 - w) * grad[n][i]);
+    if face_correction {
+        let d = geom.delta[f];
+        let len = vec3::norm(d);
+        let e = vec3::scale(d, 1.0 / len);
+        let c = (cells[n] - cells[o]) / len - vec3::dot(gf, e);
+        vec3::axpy(&mut gf, c, e);
+    }
+    gf
+}
+
 fn laplacian_impl(
     geom: &FvGeometry,
     gamma: &[f64],

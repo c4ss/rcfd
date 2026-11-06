@@ -16,7 +16,9 @@
 //! with `H1` the sum of neighbour coefficients.
 
 use crate::convection::{convection, face_flux, lag_boundary_inflow, ConvScheme};
-use crate::diffusion::{laplacian, uniform_gamma};
+use crate::diffusion::{
+    laplacian_opt, secondary_cell_gradient, secondary_face_gradient, uniform_gamma, GradientOptions,
+};
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
@@ -562,6 +564,13 @@ pub struct SimpleSolver {
     /// cell gradients and, for `BodyForceWeighted`, the non-orthogonal correction gradients and the body-force part of the face flux.
     /// `Linear` (default) leaves the solver unchanged.
     pub pressure_interpolation: PressureInterpolation,
+    /// Gradient options of the explicit non-orthogonal flux of the momentum Laplacian (ADR 0204, case value
+    /// `solver.gradient_equations.momentum` with the `solver.gradient_*` keys); `None` (default) assembles the plain Laplacian.
+    pub gradient_momentum: Option<GradientOptions>,
+    /// Gradient options of the explicit non-orthogonal flux of the pressure equation, of the flux correction's internal faces and of
+    /// the SIMPLEC non-orthogonal compensation (ADR 0204, `solver.gradient_equations.pressure`); `None` (default) leaves them
+    /// unchanged. They act only with `non_orth_correctors > 0`.
+    pub gradient_pressure: Option<GradientOptions>,
     /// State of `deferred_correction_relaxation_test_only`: the relaxed correction of each component.
     dc_state: [Vec<f64>; 3],
     /// Relaxed jump per face consistent with the relaxed pressure (face-jump hook state).
@@ -724,6 +733,8 @@ impl SimpleSolver {
             high_order_mask_test_only: None,
             deferred_correction_relaxation_test_only: None,
             pressure_interpolation: PressureInterpolation::Linear,
+            gradient_momentum: None,
+            gradient_pressure: None,
             dc_state: [Vec::new(), Vec::new(), Vec::new()],
             jump_state: Vec::new(),
             pseudo: None,
@@ -964,7 +975,16 @@ impl SimpleSolver {
             }
             lag_boundary_inflow(&g, &phi_conv, &cells, &bc, &mut m);
             match &ho_masks {
-                None => m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref())),
+                // ADR 0204 K3: the gradient options of the momentum Laplacian (`None`: the plain Laplacian)
+                None => m.add(&laplacian_opt(
+                    &g,
+                    &gamma_nu,
+                    &bc,
+                    grad.as_deref(),
+                    &cells,
+                    &bvals,
+                    self.gradient_momentum,
+                )),
                 Some((_, fl)) => m.add(&crate::diffusion::laplacian_masked(
                     &g,
                     &gamma_nu,
@@ -1203,9 +1223,11 @@ impl SimpleSolver {
             linear: s.linear,
         };
         let want_parts = self.record_parts || self.residual_norm == ResidualNorm::Scaled;
-        let (res_p, p_iters, p_parts) = match &bfw {
-            None => solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, want_parts),
-            Some(w) => {
+        // ADR 0204 K3: the gradient options of the pressure equation (`None`: the equation as before)
+        let gp = self.gradient_pressure;
+        let (res_p, p_iters, p_parts) = match (&bfw, gp) {
+            (None, None) => solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, want_parts),
+            (Some(w), None) => {
                 // ADR 0193 V2-c: the non-orthogonal correction gradient of the pressure equation
                 let grad = |p: &[f64]| Self::bfw_least_squares(&g, &pbc, w, p);
                 crate::pressure::solve_pressure_parts_grad(
@@ -1219,6 +1241,31 @@ impl SimpleSolver {
                     Some(&grad),
                 )
             }
+            (Some(w), Some(o)) => {
+                let grad = |p: &[f64]| Self::bfw_least_squares(&g, &pbc, w, p);
+                crate::pressure::solve_pressure_parts_opt(
+                    &g,
+                    &gamma_p,
+                    &pbc,
+                    &phi_hby_a,
+                    &mut p_new,
+                    &controls,
+                    want_parts,
+                    Some(&grad),
+                    Some(o),
+                )
+            }
+            (None, Some(o)) => crate::pressure::solve_pressure_parts_opt(
+                &g,
+                &gamma_p,
+                &pbc,
+                &phi_hby_a,
+                &mut p_new,
+                &controls,
+                want_parts,
+                None,
+                Some(o),
+            ),
         };
         let res_p = match (self.residual_norm, p_parts) {
             (ResidualNorm::Scaled, Some(pp)) => {
@@ -1236,11 +1283,28 @@ impl SimpleSolver {
         }
         // flux correction: phi = phiHbyA - rAtU_f snGrad(p) |S|
         // ADR 0193 V2-c: with the body-force-weighted variant the non-orthogonal part takes its gradient
-        let flux_of = |p: &[f64]| match &bfw {
-            None => corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, p, ub_mass, s.non_orth_correctors > 0),
-            Some(w) => {
+        // ADR 0204 K3: with the pressure equation's gradient options the internal faces follow them too
+        let flux_of = |p: &[f64]| match (&bfw, gp) {
+            (None, None) => corrected_flux(&g, &gamma_p, &pbc, &phi_hby_a, p, ub_mass, s.non_orth_correctors > 0),
+            (Some(w), None) => {
                 let grad = (s.non_orth_correctors > 0).then(|| Self::bfw_least_squares(&g, &pbc, w, p));
                 crate::pressure::corrected_flux_with(&g, &gamma_p, &pbc, &phi_hby_a, p, ub_mass, grad.as_deref())
+            }
+            (w, Some(o)) => {
+                let grad = (s.non_orth_correctors > 0).then(|| match w {
+                    Some(w) => Self::bfw_least_squares(&g, &pbc, w, p),
+                    None => least_squares(&g, p, &boundary_values_pbc(&g, &pbc, p)),
+                });
+                crate::pressure::corrected_flux_opt(
+                    &g,
+                    &gamma_p,
+                    &pbc,
+                    &phi_hby_a,
+                    p,
+                    ub_mass,
+                    grad.as_deref(),
+                    Some(o),
+                )
             }
         };
         self.phi = flux_of(&p_new);
@@ -1482,13 +1546,27 @@ impl SimpleSolver {
                 least_squares(g, &self.p.values, &bv)
             }
         };
+        // ADR 0204 K3: the face rule of the pressure equation's gradient options (`None`: unchanged)
+        let opts = self.gradient_pressure;
+        let gr = match opts.and_then(|o| {
+            let bv = boundary_values_pbc(g, pbc, &self.p.values);
+            secondary_cell_gradient(g, &self.p.values, &bv, &gr, &o)
+        }) {
+            Some(l) => l,
+            None => gr,
+        };
+        let face_correction = opts.is_some_and(|o| o.face_correction);
         let mut out = vec![0.0; mesh.n_faces()];
         for f in 0..g.n_internal {
             let d = g.delta[f];
             let delta = vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d));
             let k = vec3::sub(sf[f], delta);
             let w = g.weights[f];
-            let gf = [0, 1, 2].map(|i| w * gr[own[f]][i] + (1.0 - w) * gr[nei[f]][i]);
+            let gf = if face_correction {
+                secondary_face_gradient(g, f, &gr, &self.p.values, true)
+            } else {
+                [0, 1, 2].map(|i| w * gr[own[f]][i] + (1.0 - w) * gr[nei[f]][i])
+            };
             let dr = w * (r_atu[own[f]] - r_au[own[f]]) + (1.0 - w) * (r_atu[nei[f]] - r_au[nei[f]]);
             out[f] = dr * vec3::dot(k, gf);
         }

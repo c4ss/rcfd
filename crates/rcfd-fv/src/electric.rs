@@ -7,6 +7,7 @@
 
 use crate::cht::conductive_face_flows;
 use crate::convection::ConvScheme;
+use crate::diffusion::GradientOptions;
 use crate::field::ScalarField;
 use crate::geometry::FvGeometry;
 use crate::scalar::{sweep_ext, SweepExtras, SweepInputs};
@@ -54,6 +55,19 @@ pub fn solve(
     solve_with_source(geom, phi, sigma, None, false, ctl, max_sweeps)
 }
 
+/// [`solve`] with the gradient options on the explicit non-orthogonal flux of the potential's diffusion term (ADR 0204 K3, case
+/// value `solver.gradient_equations.electric_potential`); `None` is [`solve`].
+pub fn solve_opt(
+    geom: &FvGeometry,
+    phi: &mut ScalarField,
+    sigma: &[f64],
+    ctl: &SolveControl,
+    max_sweeps: usize,
+    gradient: Option<GradientOptions>,
+) -> (Vec<f64>, usize) {
+    solve_with_source_opt(geom, phi, sigma, None, false, ctl, max_sweeps, gradient)
+}
+
 /// [`solve`] with a volumetric source: `-div(sigma_f grad phi) = source` per cell (A/m^3; ADR 0039 D1: the divergence of the
 /// motional current `sigma u x B`). With `pin_reference` the first conducting cell is held at `phi = 0`, for a problem
 /// without any fixed-potential boundary (the potential is then defined up to a constant).
@@ -65,6 +79,22 @@ pub fn solve_with_source(
     pin_reference: bool,
     ctl: &SolveControl,
     max_sweeps: usize,
+) -> (Vec<f64>, usize) {
+    solve_with_source_opt(geom, phi, sigma, source, pin_reference, ctl, max_sweeps, None)
+}
+
+/// [`solve_with_source`] with the gradient options of [`solve_opt`] (ADR 0204 K3); `None` is [`solve_with_source`]. The sweep
+/// always computes the cell gradient (`LinearUpwind` on a zero flux), so the options act on every non-orthogonal face.
+#[allow(clippy::too_many_arguments)]
+pub fn solve_with_source_opt(
+    geom: &FvGeometry,
+    phi: &mut ScalarField,
+    sigma: &[f64],
+    source: Option<&[f64]>,
+    pin_reference: bool,
+    ctl: &SolveControl,
+    max_sweeps: usize,
+    gradient: Option<GradientOptions>,
 ) -> (Vec<f64>, usize) {
     let sf = face_conductivity(geom, sigma);
     let mut fixed: Vec<Option<f64>> = sigma.iter().map(|&s| (s <= 0.0).then_some(0.0)).collect();
@@ -93,6 +123,7 @@ pub fn solve_with_source(
             },
             &SweepExtras {
                 fixed: any_fixed.then_some(fixed.as_slice()),
+                gradient,
                 ..Default::default()
             },
         );

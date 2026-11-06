@@ -35,7 +35,7 @@ use crate::wall::{wall_distance, Roughness, SpaldingLaw};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
-use rcfd_fv::diffusion::laplacian;
+use rcfd_fv::diffusion::{laplacian_opt, GradientOptions};
 use rcfd_fv::gradient::{green_gauss, least_squares};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
@@ -165,6 +165,10 @@ pub struct KOmegaSst {
     pub wall_mode: SstWallMode,
     /// Equivalent-sand-grain roughness of the wall patches (default smooth; `Automatic` mode only).
     pub roughness: Roughness,
+    /// Gradient options of the explicit non-orthogonal flux of the transport equations' diffusion term (ADR 0204, case value
+    /// `solver.gradient_equations.turbulence`); `None` (default) assembles the plain Laplacian. They act only where `convection`
+    /// computes a cell gradient.
+    pub gradient: Option<GradientOptions>,
     wall_names: Vec<String>,
     wall_dist: Vec<f64>,
     wall_faces: Vec<usize>,
@@ -229,6 +233,7 @@ impl KOmegaSst {
             variant: SstVariant::Sst,
             wall_mode: SstWallMode::Automatic,
             roughness: Roughness::SMOOTH,
+            gradient: None,
             wall_names: walls.iter().map(|w| w.to_string()).collect(),
             wall_dist,
             wall_faces,
@@ -310,7 +315,15 @@ impl KOmegaSst {
             None
         };
         let mut m = convection(g, phi, &cells, &bc, self.convection, grad.as_deref());
-        m.add(&laplacian(g, gamma_f, &bc, grad.as_deref()));
+        m.add(&laplacian_opt(
+            g,
+            gamma_f,
+            &bc,
+            grad.as_deref(),
+            &cells,
+            &bvals,
+            self.gradient,
+        ));
         m
     }
 
