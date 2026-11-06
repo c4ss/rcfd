@@ -145,6 +145,19 @@ pub fn schema() -> Schema {
             ),
     )
     .doc("Per-patch particle boundary actions");
+    let film = Schema::object()
+        .optional()
+        .doc("Wall film fed by the parcels (ADR 0192): a parcel that reaches a face of a film patch is absorbed into a thin laminar film on that face; the film runs down the wall under gravity with the depth-averaged velocity rho h^2 g_t/(3 mu) of a steady laminar film of its own thickness (no gas shear, no splash, no evaporation) and leaves the film where no other film face continues it. The film liquid density is particles.density; the film never acts on the flow. Absent = no film")
+        .field("enabled", Schema::boolean(false).doc("Absorb the parcels that reach the film patches into a wall film"))
+        .field(
+            "patches",
+            Schema::list(Schema::string("")).doc("Wall patches that carry the film (required, each once, without a particles.walls entry)"),
+        )
+        .field(
+            "viscosity",
+            Schema::float(UNSET).doc("Dynamic viscosity of the film liquid [Pa s] (> 0); -1 = unset (an error when the film is enabled)"),
+        )
+        .hash_omit_default();
     Schema::object()
         .doc("One-way coupled Lagrangian particle tracking (ADR 0028). Point particles with drag, gravity and buoyancy on a frozen or transient flow field; no effect on the flow")
         .field("enabled", Schema::boolean(false).doc("Enable the particle section"))
@@ -207,6 +220,79 @@ pub fn schema() -> Schema {
             "track_every",
             Schema::int(1).at_least(1.0).doc("tracks = true: log a position every this many tracking steps"),
         )
+        .field("film", film)
+}
+
+/// Is the wall film requested (ADR 0192)?
+pub fn film(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.film.enabled")
+}
+
+/// The film patch names as written (non-strings read as empty names).
+fn film_patches(case: &Case) -> Vec<String> {
+    case.tree
+        .get("particles.film.patches")
+        .ok()
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .map(|v| v.as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+/// Checks of the wall-film keys (ADR 0192 S2), located; mesh-dependent ones are made by [`build_tracker`].
+fn check_film(case: &Case, out: &mut Vec<Diagnostic>) {
+    if !gb(case, "particles.film.enabled") {
+        return;
+    }
+    for k in ["two_way", "heat_transfer"] {
+        if gb(case, &format!("particles.{k}")) {
+            out.push(d(
+                "particles.film.enabled",
+                format!("the wall film is not available with particles.{k} (ADR 0192)"),
+            ));
+        }
+    }
+    let names = film_patches(case);
+    let walls = case.tree.names("particles.walls").unwrap_or_default();
+    if names.is_empty() {
+        out.push(d(
+            "particles.film.patches",
+            "the wall film needs at least one wall patch in particles.film.patches",
+        ));
+    }
+    for (i, n) in names.iter().enumerate() {
+        if n.is_empty() {
+            out.push(d("particles.film.patches", "a film patch name is empty"));
+        } else if names[..i].contains(n) {
+            out.push(d("particles.film.patches", format!("patch '{n}' is listed twice")));
+        } else if walls.contains(n) {
+            out.push(d(
+                "particles.film.patches",
+                format!("patch '{n}' carries the film and also has an entry particles.walls.{n}; remove one"),
+            ));
+        }
+    }
+    if !(gf(case, "particles.film.viscosity") > 0.0) {
+        out.push(d(
+            "particles.film.viscosity",
+            "the film liquid viscosity [Pa s] must be set (> 0); -1 means unset",
+        ));
+    }
+    if !gb(case, "particles.gravity") {
+        out.push(d(
+            "particles.gravity",
+            "the wall film is driven by gravity alone: particles.gravity must be true",
+        ));
+    } else {
+        let g = vec3_of(case, "physics.gravity").ok().flatten().unwrap_or([0.0; 3]);
+        if !(g.iter().all(|x| x.is_finite()) && g.iter().any(|x| *x != 0.0)) {
+            out.push(d(
+                "physics.gravity",
+                "the wall film is driven by gravity alone: physics.gravity must be a non-zero vector",
+            ));
+        }
+    }
 }
 
 /// Is two-way coupling requested (ADR 0059)?
@@ -344,9 +430,13 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 out.push(d(format!("particles.{k}"), "needs particles.enabled = true (ADR 0059)"));
             }
         }
+        if gb(case, "particles.film.enabled") {
+            out.push(d("particles.film.enabled", "needs particles.enabled = true (ADR 0192)"));
+        }
         return out;
     }
     check_coupling(case, &mut out);
+    check_film(case, &mut out);
     if gf(case, "particles.density") <= 0.0 {
         out.push(d(
             "particles.density",
@@ -697,6 +787,16 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
             t_fluid,
         })
         .map_err(|e| vec![d("particles.heat_transfer", e.to_string())])?;
+    }
+    if film(case) {
+        let spec = rcfd_particles::FilmSpec {
+            patches: film_patches(case),
+            density,
+            viscosity: gf(case, "particles.film.viscosity"),
+            gravity: tr.opts.gravity,
+        };
+        tr.set_film(spec)
+            .map_err(|e| vec![d("particles.film.patches", e.to_string())])?;
     }
     Ok(tr)
 }

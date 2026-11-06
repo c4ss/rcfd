@@ -40,6 +40,7 @@ fn state_name(s: State) -> &'static str {
         State::Deposited => "deposited",
         State::Escaped => "escaped",
         State::Stuck => "stuck",
+        State::Film => "film",
     }
 }
 
@@ -277,7 +278,7 @@ impl ParticleRun {
     /// The report: counts, mean diameter and mass by state.
     pub fn report(&self, with_tracks: bool) -> Value {
         let ps = &self.tracker.particles;
-        let mut mass = [0.0f64; 4];
+        let mut mass = [0.0f64; 5];
         let mut dsum = 0.0;
         for p in ps {
             mass[p.state as usize] += p.parcel * p.rho * std::f64::consts::PI * p.d.powi(3) / 6.0;
@@ -299,6 +300,19 @@ impl ParticleRun {
             },
             "steps": self.steps,
         });
+        if let Some(f) = t.film() {
+            // ADR 0192 S3: only when the film is on, so a run without it writes the report it always wrote
+            v["counts"]["film"] = json!(t.count(State::Film));
+            v["mass_by_state"]["film"] = json!(mass[4]);
+            v["film"] = json!({
+                "faces": f.len(),
+                "held": f.held(),
+                "drained": f.drained(),
+                "absorbed": f.received(),
+                "max_thickness": f.max_thickness(),
+                "max_reynolds": f.max_reynolds(),
+            });
+        }
         if with_tracks && self.tracks.is_some() {
             let rows: Vec<Value> = self
                 .track_rows()
@@ -310,7 +324,8 @@ impl ParticleRun {
         v
     }
 
-    /// Write `particles.vtp`, `particle_report.json` and, with `particles.tracks`, `particle_tracks.csv` into `dir`.
+    /// Write `particles.vtp`, `particle_report.json`, with `particles.tracks` `particle_tracks.csv`, and with the wall film
+    /// `particle_film.csv` (ADR 0192) into `dir`.
     pub fn write_outputs(&self, dir: &Path) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| io_err(e, &dir.display().to_string()))?;
         let put = |name: &str, bytes: &[u8]| {
@@ -321,6 +336,9 @@ impl ParticleRun {
         put("particle_report.json", self.report(false).to_string().as_bytes())?;
         if let Some(csv) = self.tracks_csv() {
             put("particle_tracks.csv", csv.as_bytes())?;
+        }
+        if let Some(f) = self.tracker.film() {
+            put("particle_film.csv", f.csv().as_bytes())?;
         }
         Ok(())
     }

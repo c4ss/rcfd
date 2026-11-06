@@ -9,6 +9,7 @@
 pub mod coupling;
 pub mod dispersion;
 pub mod drag;
+pub mod film;
 pub mod inject;
 pub mod locate;
 pub mod rng;
@@ -18,6 +19,7 @@ pub mod vtp;
 pub use coupling::{Coupling, Thermal};
 pub use dispersion::Dispersion;
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
+pub use film::{film_velocity, nusselt_thickness, Film, FilmSpec};
 pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};
 pub use rng::SplitMix64;
