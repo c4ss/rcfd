@@ -156,3 +156,49 @@ other stiffness laws, substeps, layering or smoothing on new paths, a Studio lis
 
 * [ADR 0090](0090-wave38c-dynamic-mesh-layering.md) D4 and S1 to S3 for the stiffness and its library checks.
 * [Dynamic mesh](../dynamic-mesh.md) and [case schema](../case-schema.md) for the keys.
+
+## Addendum 1: what was built and the results (2026-11-06)
+
+Branch `f289-f290`, after this text and D0's test file (`d7154bd`): the code with the tests (`ed1e512`), the documents (`36b8e7a`).
+Not merged.
+
+**Built as registered.** W1 to W4 as written. `crates/rcfd-api/src/dynmesh.rs`: the value `inverse_volume` and the texts of
+`method` and `exponent` (W1), the `match` of W2. No key, default, range or check changed; no Studio file changed. The test file
+`crates/rcfd-api/tests/inverse_volume_f290.rs` gained the checks (6 tests: D0; V1 with V1b, Q1 to Q3 and T; V3; V2; D1; L); D0
+now asserts the recorded hashes. No existing test was edited. Documents: the two `smoothing` rows of `docs/case-schema.md`, the
+method and stiffness paragraphs of `docs/dynamic-mesh.md` (no TOML block added), the F-290 entries of `docs/ROADMAP.md` and
+`docs/roadmap.json` (done, by the decision rule).
+
+**Results.** Release build, Windows. P-I takes 100 steps with each method.
+
+| Check | Measured | Limit | Verdict |
+|---|---|---|---|
+| V1 | 0 of 12600 step points (100 steps of 126 points) differ in a bit | equal bits | met |
+| V1b | 0 differ; exponent 2 against 1 at the end 1.67e-2 m | equal bits; `> 1e-9` m | met |
+| V2 | 314 tree steps and 314 library steps, the same cell counts and end time (1); 0 of 200 values differ in a bit | equal bits | met |
+| V3 | 0 step points differ in a bit over 100 steps | equal bits | met |
+| Q1 | the smallest ratio over the steps 1.000020 (the first step); at the end `6.764e-5 / 5.368e-5 = 1.260` | `>= 1` | met |
+| Q2 | the largest excess over the steps -1.4e-6; at the end 1.2454 against 1.2599 (initial 1.2599) | `<= 0` | met |
+| Q3 | the largest excess over the steps -1.4e-4; at the end 7.392 against 9.315 (initial 6.986) | `<= 0` | met |
+| T | 2.45e-2 m | `> 1e-6` m | met |
+| D0 | the five hashes as recorded | equal | met |
+| D1 | settings hash `bd8183148b7a2d8c` both; 0 points and 0 `ux` values differ in a bit | equal | met |
+| D2 | `rcfd-api`: `baseline_hashes.rs`, `case_hashes_w48u.rs`, `dynamic_mesh.rs`, `layering_ale_f259.rs`, `exp_rot_pab.rs`, `exp_rot_pc.rs`; `rcfd-cli`: `layering_ale_f259.rs`; `rcfd-fv`: `layering_w38c.rs`, `mesh_smoothing.rs`: all pass unedited (`baseline_hashes.rs` 3 passed, 1 ignored) | pass | met |
+| L | `inverse_volumes` at `dynamic_mesh.smoothing.method`; exponents -1 and 11 at `dynamic_mesh.smoothing.exponent`; `substeps = 2` at `dynamic_mesh.smoothing.substeps`; the four controls give none | as stated | met |
+
+Reported without a limit: the initial P-I mesh has `min_volume` 7.157e-5, `max_volume_ratio` 1.2599 and `max_aspect_ratio`
+6.986; the smallest cell ends at 0.945 of its initial volume with `inverse_volume` and at 0.750 with `laplacian` (a uniform
+strain: the piston advances a quarter of the length). P-V at its end: `inverse_volume` `min_volume` 3.421e-5, volume ratio
+1.2484, aspect ratio 3.654, in 314 steps; `laplacian` 2.863e-5, 1.2599, 4.366, in 332 steps (the explicit step follows the
+smallest cell).
+
+**Can fail.** Each file was restored afterwards and compared byte for byte with the kept copy (equal each time).
+
+* M1 (`inverse_volume` mapped to `Laplacian`): V1 failed (11120 of 12600 step points differ) and T failed (0 m); Q1 to Q3 were
+  met with ratio 1 and excess 0, as the registration expects, so T is the check that catches it.
+* M2 (`InverseVolume(1.0)` in place of the exponent): V1b failed (10938 step points differ; exponent 2 against 1, 0 m); V1
+  passed.
+
+`scripts/limit_audit.py` reports no hit in the new test file.
+
+**Questions for the maintainer.** Q1 stands as registered (proceeding on (a)).

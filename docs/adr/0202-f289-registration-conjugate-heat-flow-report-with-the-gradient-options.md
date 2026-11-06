@@ -167,3 +167,48 @@ conjugate cases, a per-material or interface report in the case tree, the electr
 * [ADR 0190](0190-f256-registration-case-tree-wiring-of-the-gradient-options.md) for the options and their wiring.
 * [ADR 0024](0024-wave17b-cht.md) for the conjugate model and its reports.
 * [Case schema](../case-schema.md), section "Gradient options of the energy and scalar diffusion term".
+
+## Addendum 1: what was built and the results (2026-11-06)
+
+Branch `f289-f290`, after this text (`0a44758`): `rcfd-fv` (D1) with its library test (`e19e7e0`), `rcfd-api` (D2) with the
+tree test (`ca0fb7b`), the documents (`27c0444`). Not merged.
+
+**Built as registered.** D1 to D4 as written. `rcfd-fv/src/cht.rs`: `conductive_face_flows_opt`, and `conductive_face_flows`
+as its call with `None`. `rcfd-api/src/cht.rs`: one line, `ChtModel::heat_flow_out` passes `solver.gradient`. No key, value,
+rule or message changed; no Studio file changed. New tests: `crates/rcfd-fv/tests/cht_flows_f289.rs` (2: E-lib with E-lib-T,
+D1) and `crates/rcfd-api/tests/cht_flows_f289.rs` (3: P, E-tree, R-eq, B1 to B3 and the teeth in one test; D2; L). No existing
+test was edited. Documents: the paragraph on the `heat_flow` report in `docs/case-schema.md` (section "Gradient options"), the
+F-289 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (done, by the decision rule).
+
+**Results.** Release build, Windows. The tree runs of C stop on `tolerance_u` after 374 to 376 iterations.
+
+| Check | Measured | Limit | Verdict |
+|---|---|---|---|
+| P | mesh W 29.641 degrees; 128 of 256 cells solid, `Q = 2.673945e-2` W | at least 20 degrees | met |
+| E-lib | default 6.9e-15; O1 to O6 and C2 5.3e-15 to 7.0e-15 (K2: 512 cells, 38.3 degrees, `S = 0.485`) | `<= 1e-12 S` | met |
+| E-lib-T | O1 1.48e-1, O2 1.04e-1, O3 1.26e-1, O4 1.75e-2, O5 1.59e-3, O6 2.02e-2, C2 1.87e-1 | `> 1e-9 S` | met |
+| D1 | `None` and the default options, with and without a gradient, and C2 without a gradient: 0 of 1728 faces differ in a bit; control: C2 with a gradient moves a face flow by 6.7e-2 | equal bits | met |
+| E-tree | 2.3e-16 to 4.5e-16 over the eight runs | `<= 1e-12 S` | met |
+| R-eq | 0 for every run (the same bits); the default also has the bits of the unchanged formula | `<= 1e-12 (Q + sum abs(H_p))`; bits | met |
+| B1 | `abs(sum H - Q)` 3.20e-13 to 3.34e-13 W against bounds of 1.97e-12 to 2.05e-12 W (`tol_W` 3.21e-13 to 3.35e-13 W, `1e-12 F` 1.65e-12 to 1.71e-12 W) | `<= tol_W + 1e-12 F` | met |
+| B2 | `tol_W / Q` 1.20e-11 to 1.25e-11 | `<= 1e-8` | met |
+| B3 | fluid 1.48e-13 to 1.54e-13 W, solid 1.72e-13 to 1.80e-13 W, against bounds of 1.80e-12 to 1.89e-12 W | `<= tol_W(g) + 1e-12 F` | met |
+| T-B1 | the unchanged formula: O2 5.37e-4, O3 6.14e-4, O4 2.03e-6, O5 4.36e-5, O6 2.63e-4, C2 2.13e-3 W | `> tol_W + 1e-12 F` | met |
+| T-B3 | the unchanged formula, (fluid, solid) in W: O1 (1.26e-5, 1.26e-5), O2 (1.08e-4, 4.29e-4), O3 (9.93e-5, 7.13e-4), O4 (2.73e-6, 7.07e-7), O5 (1.07e-4, 6.35e-5), O6 (2.65e-4, 1.64e-6), C2 (1.24e-4, 2.00e-3) | a miss in at least one group | met |
+| T-O1 | O1: the new and the unchanged patch reports have the same bits | equal bits | met |
+| D2 | settings hash `6024270187cdcd78` with and without the keys at their defaults; 376 iterations both; 0 of 256 cells and 0 of 4 reports differ in a bit | equal | met |
+| D3 | `rcfd-api`: `baseline_hashes.rs` (3 passed, 1 ignored), `case_hashes_w48u.rs`, `cht_case.rs`, `coupled_cht.rs`, `thermal_extras_case.rs`, `gradient_options_f256.rs`; `rcfd-fv`: `cht.rs`, `thermal_bc.rs`, `electric.rs`, `solidification.rs`, `gradient_sweep_f256.rs`: all pass unedited | pass | met |
+| L | refused at the registered key: `upwind` with O2 at `solver.gradient_boundary`, `central` with O1 at `solver.gradient_face_correction`, K = 1 alone at `solver.gradient_limiter_k`, `minmod` at `solver.gradient_secondary_limiter`; C and C with each of the seven sets build | as stated | met |
+
+The solid's own balance (B3) shows what the face correction does to the flows at the material interface: 1.3e-5 W, 4.7e-4 of
+`Q`, which no patch report can show.
+
+**Can fail.** Each file was restored afterwards and compared byte for byte with the kept copy (equal each time).
+
+* M1 (`heat_flow_out` with `None`): R-eq and B1 failed for O2 (R-eq 2.10e-2, B1 5.37e-4 W against 2.02e-12 W), and also for
+  O3 to O6 and C2; the default and O1 passed, as item 4 predicts.
+* M2 (the face correction skipped): E-lib of O1 failed (1.48e-1, the value of the unchanged formula).
+
+`scripts/limit_audit.py` reports no hit in the two new test files.
+
+**Questions for the maintainer.** Q1 stands as registered (proceeding on (a)).
