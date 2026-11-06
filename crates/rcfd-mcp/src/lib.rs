@@ -10,6 +10,7 @@
 //! denied permission) are tool results with `isError: true` whose text is a
 //! JSON object `{"error": {"code", "message", "data"?}}`.
 
+pub mod edit_hook;
 pub mod policy;
 pub mod project;
 
@@ -26,6 +27,34 @@ pub const DEFAULT_PROTOCOL_VERSION: &str = "2025-06-18";
 // The built-in templates of `create_case` (and of the project tool `new_case`) live in the project workspace (ADR 0186
 // G2), unchanged; re-exported here at their old paths.
 pub use rcfd_workspace::templates::{LID_DRIVEN_CAVITY, TEMPLATES};
+
+/// The first sentence of the `initialize` instructions without a project.
+const INSTRUCTIONS: &str = "Clean-room open source CFD solver. create_case, adjust settings, check_mesh, run, then inspect residuals, fields and images.";
+
+/// The first sentence with a project (ADR 0195 P3): the session tools it named are not offered there.
+const PROJECT_FIRST: &str = "Clean-room open source CFD solver.";
+
+/// The session tools that are not offered with a project (ADR 0173 D2 (b), ADR 0195 P1): every use of each needs a session
+/// of the server's memory, or makes one, and the project tools offer its equivalent. They are neither listed nor callable
+/// there; without a project the tool list is unchanged.
+pub const SESSION_ONLY: [&str; 16] = [
+    "create_case",
+    "set_setting",
+    "get_setting",
+    "load_mesh",
+    "check_mesh",
+    "run",
+    "status",
+    "get_residuals",
+    "get_field_stats",
+    "export_vtk",
+    "list_workflow_tasks",
+    "create_workflow",
+    "edit_workflow",
+    "run_workflow_task",
+    "run_headless",
+    "render_image",
+];
 
 /// Added to the `initialize` instructions when the server has a project (ADR 0135).
 const PROJECT_INSTRUCTIONS: &str = " This server also has a project folder: project_info and list_runs describe it; run_status, read_residuals, read_metrics, field_summary, render_field and compare_runs read runs; read_project_file gives a file with its hash, edit_case and write_note change files only if that hash still holds; new_case makes a case file in cases/; check_case_mesh and preview_mesh check and draw a case's mesh, import_mesh brings a mesh file into meshes/ and list_meshes lists them (a case's mesh settings change through edit_case, which checks the edited mesh); start_run (which can make its case first), wait_run, pause_run, resume_run and cancel_run drive the project's run service; the tools that change the project take an optional reason, kept with the change in the project journal, and read_feed lists who changed what and why.";
@@ -585,8 +614,9 @@ impl McpServer {
         }
     }
 
-    /// Add the project tools of ADR 0135 for one project folder (`rcfd-mcp --project`). Without this call the tool
-    /// list and every answer are those of a server without a project.
+    /// Add the project tools of ADR 0135 for one project folder (`rcfd-mcp --project`); the session tools of
+    /// [`SESSION_ONLY`] are then neither listed nor callable (ADR 0195 P1). Without this call the tool list and every
+    /// answer are those of a server without a project.
     pub fn with_project(mut self, project: project::ProjectTools) -> Self {
         self.project = Some(project);
         self
@@ -600,6 +630,7 @@ impl McpServer {
     fn all_tools(&self) -> Vec<Tool> {
         let mut t = tools();
         if self.project.is_some() {
+            t.retain(|x| !SESSION_ONLY.contains(&x.name));
             t.extend(project::tools());
         }
         t
@@ -962,10 +993,10 @@ impl McpServer {
         id.as_ref()?;
         let result = match method {
             "initialize" => {
-                let mut instructions = String::from("Clean-room open source CFD solver. create_case, adjust settings, check_mesh, run, then inspect residuals, fields and images.");
-                if self.project.is_some() {
-                    instructions.push_str(PROJECT_INSTRUCTIONS);
-                }
+                let instructions = match self.project {
+                    Some(_) => format!("{PROJECT_FIRST}{PROJECT_INSTRUCTIONS}"),
+                    None => INSTRUCTIONS.to_string(),
+                };
                 json!({
                     "protocolVersion": params.get("protocolVersion").and_then(Value::as_str).unwrap_or(DEFAULT_PROTOCOL_VERSION),
                     "capabilities": {"tools": {"listChanged": false}},

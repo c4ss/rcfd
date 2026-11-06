@@ -18,6 +18,33 @@ pub(crate) fn state_name(s: RunState) -> String {
     rcfd_runner::client::state_name(s)
 }
 
+/// One page of feed entries for the result `v` (its `entries` still empty): at most `limit`, within `TEXT_BUDGET`; an entry
+/// too large for a page loses its setting values and other fields (they stay in .rcfd/edits.jsonl), ADR 0188 J7.
+fn feed_page(v: &Value, entries: impl Iterator<Item = Value>, limit: usize) -> Vec<Value> {
+    let mut size = text_len(v);
+    let mut out = Vec::new();
+    for mut j in entries.take(limit) {
+        if text_len(&j) > TEXT_BUDGET / 2 {
+            if let Some(o) = j.as_object_mut() {
+                o.retain(|k, _| {
+                    matches!(
+                        k.as_str(),
+                        "n" | "source" | "kind" | "t" | "seq" | "path" | "run" | "who" | "actor" | "reason" | "text"
+                    )
+                });
+                o.insert("omitted".into(), json!("over the size budget: read .rcfd/edits.jsonl"));
+            }
+        }
+        let n = text_len(&j) + 1;
+        if size + n > TEXT_BUDGET {
+            break;
+        }
+        size += n;
+        out.push(j);
+    }
+    out
+}
+
 /// `s` with its metrics taken from the `reports` object of `metrics.json` (final report values, written by the run
 /// service, ADR 0135 amendment 3) when it has one; otherwise the numeric top-level entries as `rcfd-project` reads them.
 fn with_reports(root: &Path, mut s: RunSummary) -> RunSummary {
@@ -519,8 +546,19 @@ impl Workspace {
             "truncated": out.len() < all.len(), "changes": out}))
     }
 
-    /// The change feed (ADR 0188 J6, J7): without `since` the latest number; with it the entries numbered after it.
+    /// The change feed (ADR 0188 J6, J7): without `since` the latest number; with it the entries numbered after it. With
+    /// `from_seq` (ADR 0195 P7) the journal's lines numbered `seq` from it on, replayed from the start of the file.
     pub(crate) fn read_feed(&self, args: &Value) -> Result<Value, RpcError> {
+        let from_seq = match args.get("from_seq") {
+            None => None,
+            Some(v) => match v.as_u64() {
+                Some(n) if n >= 1 => Some(n),
+                _ => return Err(err(PARAMS, "read_feed: from_seq must be an integer of at least 1")),
+            },
+        };
+        if from_seq.is_some() && args.get("since").is_some() {
+            return Err(err(PARAMS, "read_feed: give since or from_seq, not both"));
+        }
         let mut g = self.feed.lock().unwrap_or_else(|e| e.into_inner());
         if g.is_none() {
             *g = Some(crate::feed::Feed::open(self.project.root()).map_err(perr)?);
@@ -528,45 +566,39 @@ impl Workspace {
         let f = g.as_mut().expect("made above");
         f.poll().map_err(perr)?;
         let cursor = f.cursor();
+        let limit = u64_arg(args, "limit").unwrap_or(50).clamp(1, 200) as usize;
+        if let Some(from) = from_seq {
+            // after the poll: a line written between the two reads is in both, never in neither
+            let mut r = crate::journal::Reader::at_start(self.project.root());
+            let lines = r.read();
+            let all: Vec<Value> = lines
+                .iter()
+                .filter(|l| l.get("seq").and_then(Value::as_u64).is_some_and(|s| s >= from))
+                .map(|l| {
+                    let mut j = crate::feed::journal_entry(l).to_json();
+                    if let Some(o) = j.as_object_mut() {
+                        o.remove("n");
+                    }
+                    j
+                })
+                .collect();
+            let mut v = json!({"from_seq": from, "cursor": cursor, "entries": [], "total": all.len(),
+                "next_seq": null, "skipped_lines": r.skipped()});
+            let total = all.len();
+            let out = feed_page(&v, all.into_iter(), limit);
+            if let Some(s) = out.last().and_then(|l| l["seq"].as_u64()).filter(|_| out.len() < total) {
+                v["next_seq"] = json!(s + 1);
+            }
+            v["entries"] = json!(out);
+            return Ok(v);
+        }
         let Some(since) = u64_arg(args, "since") else {
             return Ok(json!({"cursor": cursor, "entries": [], "total": 0}));
         };
-        let limit = u64_arg(args, "limit").unwrap_or(50).clamp(1, 200) as usize;
         let (all, dropped) = f.since(since);
         let mut v = json!({"since": since, "cursor": cursor, "entries": [], "total": all.len(), "next": null,
             "dropped": dropped, "skipped_lines": f.skipped_lines()});
-        let mut size = text_len(&v);
-        let mut out = Vec::new();
-        for c in all.iter().take(limit) {
-            let mut j = c.to_json();
-            // an entry too large for a page loses its setting values and other fields (they stay in .rcfd/edits.jsonl)
-            if text_len(&j) > TEXT_BUDGET / 2 {
-                if let Some(o) = j.as_object_mut() {
-                    o.retain(|k, _| {
-                        matches!(
-                            k.as_str(),
-                            "n" | "source"
-                                | "kind"
-                                | "t"
-                                | "seq"
-                                | "path"
-                                | "run"
-                                | "who"
-                                | "actor"
-                                | "reason"
-                                | "text"
-                        )
-                    });
-                    o.insert("omitted".into(), json!("over the size budget: read .rcfd/edits.jsonl"));
-                }
-            }
-            let n = text_len(&j) + 1;
-            if size + n > TEXT_BUDGET {
-                break;
-            }
-            size += n;
-            out.push(j);
-        }
+        let out = feed_page(&v, all.iter().map(|c| c.to_json()), limit);
         if let Some(last) = out.last() {
             v["next"] = last["n"].clone();
         }
