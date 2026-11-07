@@ -371,3 +371,220 @@ everything outside F-258 (the roadmap's out-of-scope list).
 - **Q5. Status of F-258.** If T1a, U1 and S1 are met, the acceptance as written is met in the library. Options: (a) done,
   with the wiring tracked by F-259; (b) partial until the tree uses it. Recommendation (a). The roadmap says partial until
   the maintainer decides.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+1d8b484 (with the records R1 to R4), d4b7440 is a rustfmt layout change of the record file (no other change), and the
+code, tests and documents are 514c530. Each registered check ran once, on the code of 514c530 before its commit; the runs
+are deterministic and none was repeated to change a result. Every check met its limit, the set-up checks and the
+negative controls held, and every mutation made its check fail.
+
+**Built as registered.** S1 and S2 as written.
+
+- `crates/rcfd-fv/src/compressible.rs`: `CompressibleSolver::max_dt_moving`, `mesh_speeds` and `max_dt_ale` (M1, M2;
+  the private field `ale_speeds`, set by `step_ale` after its stages and dropped by `replace_mesh`); the free function
+  `characteristic_face_state` (M3); in `flux_sum`, a characteristic condition on a face with `vn != 0.0` takes that face
+  state, and its flux is the physical flux of the face-frame state transformed back (`lab_flux`); the refusal of read 2 is
+  gone. `face_state` calls the static match, now the private `static_face_state`, and `face_flux`'s moving branch calls
+  `lab_flux` (the same operations in the same order). `max_dt`, `step`, `residual`, `run_to`, `run_steady` and
+  `compressible_bc` are not edited.
+- Tests: `crates/rcfd-fv/tests/compressible_ale_f258.rs` (8 tests: T1, T1c, U, S, T4a to T4d) and the records file
+  `compressible_ale_f258_records.rs` (4 tests). No existing test was edited.
+- Documents: `docs/dynamic-mesh.md` and `docs/case-schema.md` (prose: what the library does, that the tree does not use
+  it yet; no TOML block edited), and the F-258 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (partial, by the
+  decision rule).
+- Not changed: `rcfd-api`, `rcfd-cli`, the case schema.
+
+### Results (`compressible_ale_f258.rs`, 8 tests, 2.4 s on one thread)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| T1a (acceptance) M3D; M2D | relative `1e-12` | `2.81e-15` (closed form `1.048868192212e-2`); `1.14e-15` (`1.062013091472e-2`) | met |
+| T1b zero speeds against `max_dt()` before step 1 and after step 10; `max_dt()` against the closed form with `w = 0` | bit for bit; `1e-12` | equal (both set-ups, both times); M3D `7.9e-16` and `5.3e-16`, M2D `6.2e-16` and `5.0e-16` | met |
+| T1n (negative control) `max_dt()` against `dt_w` | `>= 0.05` | M3D `0.2516`, M2D `0.3140` | held (M1 gave 0.2516 and 0.314) |
+| T1c the API | as stated | `None` new; `Some` with 227 values after `step_ale`; `None` after `step` and after `replace_mesh`; `max_dt_ale()` = `max_dt()` bit for bit without speeds; `Err` for a list one short and for a NaN | met |
+| U1 (acceptance) the largest deviation over the run | `<= 1e-12` | `1.85e-14` | met |
+| U2 (set-up) steps; largest `abs(w_n)` on `xmin`, `xmax`, `ymin`, `ymax` | `>= 100`; `>= 0.02` each | 152; `0.123`, `0.348`, `0.198`, `0.399` | held |
+| S0 (set-up) at `t = 0.7`: the plateau against `p1`; ahead of the front against `p0` | `<= 1e-2` each | `5.9e-7`; `2.6e-13` | held |
+| S1 (acceptance) far-field outlet `R` | `<= 1e-2` | `4.56e-4` (1275 steps) | met |
+| S2 non-reflecting outlet, `sigma = 0`, `R` | `<= 1e-2` | `3.84e-4` (1275 steps) | met |
+| SN (negative control) pressure outlet `R` | `>= 0.5` | `1.000` (1311 steps) | held |
+| T4a `wn = 0` against `compressible_bc`, 20 states x 4 conditions; `None` for slip, extrapolate, fixed | bit for bit | equal; `None` | met |
+| T4b the face pressure with `wn = 0`; the interior state with `wn = -0.6 a`; the face pressure with a supersonic interior and `wn = +0.5 a` | `1e-14` each | `0`; `0` in every component; `0` | met |
+| T4c tangential velocity; `p / rho^gamma` against the free stream | `<= 1e-14`; `1e-12` | `0`; `2.2e-16` | met |
+| T4d `TotalInlet` with `wn = -0.3`, `0.2` against `wn = 0` | bit for bit | equal | met |
+
+Printed, no limit: `R = 1.000` with `NonReflecting {p: 1, sigma: 0.25}` (1311 steps), as much as the pressure outlet. The
+partly non-reflecting outlet of ADR 0006 pulls the face pressure by `sigma` towards the target at every evaluation, so
+over the some 600 steps between the arrival of the wave and the end of the window the column next to the outlet is
+brought to `p0` as with `sigma = 1`; this is the condition as ADR 0006 defines it, on a static face as on a moving one
+(observation, not changed). The plateau of S0 sits `5.9e-7 dp` from M5's `p1`: the run follows the simple-wave relation
+far inside the limit, so `R` measures the outlet.
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D1 R1 to R4 after the code | equal | `6c63454d45c1e84b`, `56d082d8b41c8da9`, `6e414e610c2290bd`, `3912775885144ca1`: equal | met |
+| D2 the existing suites, unedited | pass | see below | met |
+
+D2 before the gate, release: `rcfd-fv` the unit tests of `compressible` and `compressible_bc` (8 passed, 1 ignored as
+before), `layering_w38c` (6), `ale_gcl` (4), `exp_rot_pab` (5); `rcfd-api` `layering_ale_f259` (8, with the D0 hashes of
+ADR 0191 and the refusal E5 in L), `inverse_volume_f290` (6), `compressible_bc_case` (3), `far_field_w49f` (5). The gate
+runs every suite of D2 (below).
+
+### Mutations (scratch, not committed)
+
+Each is applied alone to the final tree, the named test is run once, and it must fail; the file is restored and checked
+byte for byte against a kept copy. Their numbers go in the addendum. `scripts/limit_audit.py` is run on the new test files
+and every hit is read.
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MU1 | `max_dt_moving` drops `w_n` (`|u.n| + a`) | T1a |
+| MU2 | a moving characteristic face takes the lab physical flux `F(q).n` (the static branch) in place of the ALE flux | U1 |
+| MU3 | `characteristic_face_state` evaluates the pressure-type conditions and the far field with the unshifted interior state and free stream | T4b, T4c |
+| MU4 | `step_ale` does not keep its `wn` (`mesh_speeds()` stays `None`) | T1a |
+
+### The gate
+
+`cargo fmt` per package, `cargo clippy --workspace --all-targets -- -D warnings`, and every test in release on a
+`git archive` copy of the gated commit, one process per test, three jobs (`scripts/gate_test.py`), in the target dir
+`E:/projects/cfd/w49i-work/target-f258-gate`, taken in turn through the machine's gate lock and started with at least
+20 GB of physical memory free. A failure of a known flaky test is run again alone on the same build and reported with its
+name.
+
+### Classes
+
+D1 and D2 are preconditions of landing: a miss means the change is not merged and the cause is recorded. A miss of any
+other limit is reported with its number and kept as an ignored `*_known_miss` test with the limit intact. A set-up check
+(U2, S0) or a negative control (T1n, SN) that does not hold, or a mutation that does not make its check fail, means the
+check is not shown to be able to fail: it is reported as a defective set-up, corrected by an amendment before any re-run,
+and never counted as a pass.
+
+**Decision rule.** T1a, U1 and S1 met (with D1, D2): the acceptance is met in the library, and F-258 is set to partial
+(`[~]`) with that reason, because marking it done is the maintainer's (Q5). A miss of one of them: partial with the miss
+named. No moving characteristic face that runs at all: todo.
+
+## Not delivered
+
+The case-tree and CLI wiring (E5 stays, the tree's moving step keeps `max_dt()`; Q1, Q2); a mesh-speed step with predicted
+speeds (Q3); total conditions in the frame of the face (Q4); a total inlet whose face moves into the domain faster than the
+inflow (seen from the face the gas then leaves; the condition is applied as written, as on a static mesh with backflow);
+everything outside F-258 (the roadmap's out-of-scope list).
+
+## Open questions and choices for the maintainer
+
+- **Q1. The case-tree wiring.** Not in F-258's acceptance; the open part of F-259 (ADR 0191 W7). Options: (a) wire it under
+  F-259's checks (located errors, a tree run equal to the library run to 1e-12, a case without the new behaviour
+  bit-identical): lift E5 for the four conditions, with a registered edit of the three E5 inputs of ADR 0191's test L
+  (they become runs, kept as ignored records by the house rule, with new controls); (b) keep the refusal. Recommendation
+  (a), as a follow-up registration under F-259.
+- **Q2. The time step of the existing moving runs.** ADR 0191 W4's tree step and the library loops of ADR 0090, 0098 and
+  0191 use `max_dt()`. Options: (a) keep it (no bit changes); (b) make `max_dt_ale()` the step of the tree's moving
+  compressible runs, which changes the bits of every such run and needs a registered edit of ADR 0191's library loops and
+  the maintainer's lift of the bit-identical default for that path; (c) an opt-in key (it would go in an optional table so
+  that H1's record R0 needs no edit). Recommendation (b) together with Q1 (a): the absolute step lets the CFL number grow by
+  `|w| / (|u| + a)` at a fast wall (up to 0.49 for the registered 0.4 at ADR 0098's Mach 0.2 piston).
+- **Q3. Lagged or predicted mesh speed.** Options: (a) the speed of the last ALE step (as registered, M2); (b) a predictor
+  per step: move to `t + dt0`, take those speeds, `dt1 = max_dt_moving`, move to `t + dt1` (two motion evaluations, and two
+  displacement solves for a smoothing motion). Recommendation (a): the lag is one step of the speed's change, small next to
+  the CFL margin for the motions of the checks.
+- **Q4. The frame of the total-inlet data on a moving face.** Options: (a) lab-frame total conditions and direction (as
+  registered, M3; the face state is the static one, only the flux changes); (b) total conditions relative to the face, as
+  for the inlet of a moving body's own frame. Recommendation (a), the convention of the fixed state and the far field on a
+  moving face; (b) as a separate option if a case needs it.
+- **Q5. Status of F-258.** If T1a, U1 and S1 are met, the acceptance as written is met in the library. Options: (a) done,
+  with the wiring tracked by F-259; (b) partial until the tree uses it. Recommendation (a). The roadmap says partial until
+  the maintainer decides.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+1d8b484 (with the records R1 to R4), d4b7440 is a rustfmt layout change of the record file (no other change), and the
+code, tests and documents are 514c530. Each registered check ran once, on the code of 514c530 before its commit; the runs
+are deterministic and none was repeated to change a result. Every check met its limit, the set-up checks and the
+negative controls held, and every mutation made its check fail.
+
+**Built as registered.** S1 and S2 as written.
+
+- `crates/rcfd-fv/src/compressible.rs`: `CompressibleSolver::max_dt_moving`, `mesh_speeds` and `max_dt_ale` (M1, M2;
+  the private field `ale_speeds`, set by `step_ale` after its stages and dropped by `replace_mesh`); the free function
+  `characteristic_face_state` (M3); in `flux_sum`, a characteristic condition on a face with `vn != 0.0` takes that face
+  state, and its flux is the physical flux of the face-frame state transformed back (`lab_flux`); the refusal of read 2 is
+  gone. `face_state` calls the static match, now the private `static_face_state`, and `face_flux`'s moving branch calls
+  `lab_flux` (the same operations in the same order). `max_dt`, `step`, `residual`, `run_to`, `run_steady` and
+  `compressible_bc` are not edited.
+- Tests: `crates/rcfd-fv/tests/compressible_ale_f258.rs` (8 tests: T1, T1c, U, S, T4a to T4d) and the records file
+  `compressible_ale_f258_records.rs` (4 tests). No existing test was edited.
+- Documents: `docs/dynamic-mesh.md` and `docs/case-schema.md` (prose: what the library does, that the tree does not use
+  it yet; no TOML block edited), and the F-258 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (partial, by the
+  decision rule).
+- Not changed: `rcfd-api`, `rcfd-cli`, the case schema.
+
+### Results (`compressible_ale_f258.rs`, 8 tests, 2.4 s on one thread)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| T1a (acceptance) M3D; M2D | relative `1e-12` | `2.81e-15` (closed form `1.048868192212e-2`); `1.14e-15` (`1.062013091472e-2`) | met |
+| T1b zero speeds against `max_dt()` before step 1 and after step 10; `max_dt()` against the closed form with `w = 0` | bit for bit; `1e-12` | equal (both set-ups, both times); M3D `7.9e-16` and `5.3e-16`, M2D `6.2e-16` and `5.0e-16` | met |
+| T1n (negative control) `max_dt()` against `dt_w` | `>= 0.05` | M3D `0.2516`, M2D `0.3140` | held (M1 gave 0.2516 and 0.314) |
+| T1c the API | as stated | `None` new; `Some` with 227 values after `step_ale`; `None` after `step` and after `replace_mesh`; `max_dt_ale()` = `max_dt()` bit for bit without speeds; `Err` for a list one short and for a NaN | met |
+| U1 (acceptance) the largest deviation over the run | `<= 1e-12` | `1.85e-14` | met |
+| U2 (set-up) steps; largest `abs(w_n)` on `xmin`, `xmax`, `ymin`, `ymax` | `>= 100`; `>= 0.02` each | 152; `0.123`, `0.348`, `0.198`, `0.399` | held |
+| S0 (set-up) at `t = 0.7`: the plateau against `p1`; ahead of the front against `p0` | `<= 1e-2` each | `5.9e-7`; `2.6e-13` | held |
+| S1 (acceptance) far-field outlet `R` | `<= 1e-2` | `4.56e-4` (1275 steps) | met |
+| S2 non-reflecting outlet, `sigma = 0`, `R` | `<= 1e-2` | `3.84e-4` (1275 steps) | met |
+| SN (negative control) pressure outlet `R` | `>= 0.5` | `1.000` (1311 steps) | held |
+| T4a `wn = 0` against `compressible_bc`, 20 states x 4 conditions; `None` for slip, extrapolate, fixed | bit for bit | equal; `None` | met |
+| T4b the face pressure with `wn = 0`; the interior state with `wn = -0.6 a`; the face pressure with a supersonic interior and `wn = +0.5 a` | `1e-14` each | `0`; `0` in every component; `0` | met |
+| T4c tangential velocity; `p / rho^gamma` against the free stream | `<= 1e-14`; `1e-12` | `0`; `2.2e-16` | met |
+| T4d `TotalInlet` with `wn = -0.3`, `0.2` against `wn = 0` | bit for bit | equal | met |
+
+Printed, no limit: `R = 1.000` with `NonReflecting {p: 1, sigma: 0.25}` (1311 steps), as much as the pressure outlet. The
+partly non-reflecting outlet of ADR 0006 pulls the face pressure by `sigma` towards the target at every evaluation, so
+over the some 600 steps between the arrival of the wave and the end of the window the column next to the outlet is
+brought to `p0` as with `sigma = 1`; this is the condition as ADR 0006 defines it, on a static face as on a moving one
+(observation, not changed). The plateau of S0 sits `5.9e-7 dp` from M5's `p1`: the run follows the simple-wave relation
+far inside the limit, so `R` measures the outlet.
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D1 R1 to R4 after the code | equal | `6c63454d45c1e84b`, `56d082d8b41c8da9`, `6e414e610c2290bd`, `3912775885144ca1`: equal | met |
+| D2 the existing suites, unedited | pass | see below | met |
+
+D2 before the gate, release: `rcfd-fv` the unit tests of `compressible` and `compressible_bc` (8 passed, 1 ignored as
+before), `layering_w38c` (6), `ale_gcl` (4), `exp_rot_pab` (5); `rcfd-api` `layering_ale_f259` (8, with the D0 hashes of ADR 0191 and the refusal E5 in L), `inverse_volume_f290` (6), `compressible_bc_case` (3), `far_field_w49f` (5). The gate runs every suite of D2
+(below).
+
+### Mutations
+
+Each was applied alone to the code of 514c530 by an exact text replacement (a script that checks that each replaced text
+occurs once), the named test was run once, and the file was restored and compared byte for byte with the kept copy (equal
+in all four).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `max_dt_moving` without `w_n` | T1a | failed: `2.52e-1` on M3D (the absolute step) |
+| MU2 the lab physical flux on a moving characteristic face | U1 | failed: `0.748` |
+| MU3 the pressure-type conditions and the far field in the lab frame | T4b, T4c | T4b failed at its second part (the face pressure imposed: `rho` off by `0.39` relative, `u_x` by `0.56`, `p` by `0.5` relative); T4c failed (tangential velocity `0.4`, entropy `0.12`) |
+| MU4 `step_ale` does not keep its `wn` | T1a | failed: T1a found no mesh speeds before step 2 (`mesh_speeds()` `None`, the `unwrap` of its second quantity) |
+
+`scripts/limit_audit.py` reports no hit in the two new test files.
+
+Disclosures:
+
+- Before the registered run the new test file was compiled without running (two format strings fixed: `{e1:.1e?}` and
+  `{speed:.4?}` became `{e1:?}` and `{speed:?}`) and laid out by rustfmt, and `cargo clippy -p rcfd-fv --all-targets
+  -- -D warnings` was run on it (clean). No test of the file ran before the registered run.
+- D1 was run once after the code, before the new test file existed.
+- In S the outlet's first step uses `max_dt()` (no speeds yet), as M2 says; the outlet moves at `W` from `t = 0`, so that
+  one step's CFL number is about 10 percent above 0.4 in the outlet cell.
+- Not exercised by a test: the moving characteristic faces with the Roe, Rusanov and AUSM+ fluxes, with RK1 and RK2, and
+  on a three-dimensional mesh (the conditions and the flux transform do not depend on them); `characteristic_face_state`
+  with a total inlet whose relative normal velocity is an outflow (Not delivered).
+
+Q1 to Q5 stay open for the maintainer. F-258 is partial in the roadmap (Q5; the recommendation is done).
