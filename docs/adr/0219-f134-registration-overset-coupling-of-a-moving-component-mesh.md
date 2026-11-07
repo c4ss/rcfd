@@ -478,3 +478,147 @@ of the registered set-up asserts T2 at level 1 and T3. Corrected checks, registe
 
 N3 and N4 keep the registered set-up (level 1, `dt = 0.0025`). MU3 (must fail T2) is read as failing T2 at level 1 or
 T2c. The decision rule is unchanged: T1 and T2 at level 2 are missed as registered, so F-134 cannot be done under it.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above and in amendments 1 and 2; no limit was changed. Release builds on Windows.
+The registration is 463d775 (with the record R1); the code and the tests of the registered runs, with amendment 1, are
+25ee122; amendment 2, its corrected checks and the known-miss tests are 9d52fec. Each registered check ran once on the
+code it is committed with (the runs are deterministic; none was repeated to change a result). D-R ran first, then the K
+checks, then Q0, U, N2 and E, then T with N3/N4; amendment 2 was written after T and before the corrected run; A and NM
+ran after T (they do not depend on it), and the corrected T checks last.
+
+**Built as registered** (S1, S2, S4, S5; S3 as amended by amendment 1).
+
+- `crates/rcfd-mesh/src/overset.rs` (new): `compose`, `Composite` (`points_at`, `background_cells`, `component_cells`),
+  `pose_inverse_apply`, `containment_margin`, `CellLocator` (`locate`, `locate_brute_force`), `linear_weights`,
+  `CellKind`, `Stencil`, `Connectivity`, `HoleFn`, `OversetSpec`, `Overset` (`new`, `connectivity`, `neighbours`, the two
+  locators), with the unit tests K1 to K5 and a pose-inverse test. `crates/rcfd-mesh/src/gen.rs`: `rectilinear_2d`
+  added; nothing else in it is edited.
+- `crates/rcfd-fv/src/overset.rs` (new): `MassMode`, `OversetCoupling`, `OversetStep`, `OversetInfo`, `OversetSolver`
+  (`new`, `prepare`, `step`, `advance`, `advance_mesh`). `pimple.rs`, `moving.rs`, `ale.rs` and every other existing
+  function are not edited.
+- Tests: `crates/rcfd-fv/tests/overset_f134.rs` (14 tests: 12 run, 2 ignored known misses) and the record file of the
+  registration (1). After the registered run of T, its test was split as amendment 2 says: the gate-run test of the
+  registered set-up asserts T2 at level 1 and T3; T1 and T2 at level 2 are in `t_known_miss_order_and_fine_level_ratio`;
+  the corrected test asserts T2c and T3c, and T1c is in `t_corrected_known_miss_order`. The helpers of the TG runs take the
+  step count since then; `0.5 / 200` is the registered `0.0025`, so the registered runs are unchanged. No existing test
+  was edited.
+- Documents: this ADR, `docs/dynamic-mesh.md` and the README's gap list (prose only), and the F-134 entries of
+  `docs/ROADMAP.md` and `docs/roadmap.json` (partial, by the decision rule).
+- Not changed: `rcfd-api`, `rcfd-cli`, the Studio, the case schema; `baseline_hashes.rs`, `case_hashes_w48u.rs` and the
+  goldens.
+
+### Results
+
+Run times on one test thread: the A test with NM 174 s (TR 129 s, BF 24 s), T 34 s, N3/N4 7 s, the corrected T 85 s, the
+rest under 6 s; the K unit tests 2.3 s.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| K1 composite | exact | 20,350 + 2880 cells; centres, volumes, patches equal | met |
+| K2 locator | exact | every centre found; 2000 points per part equal to the full search (background 2000 inside; component 1212 inside, 788 outside) | met |
+| K3 weights, five poses | `<= 1e-13`, `<= 1e-12` | `abs(sum w - 1)` `6.7e-16`; linear field `5.0e-17` of `max abs(f)`; smallest stencil 5; weights in `[-0.034, 0.997]` | met |
+| K4 kinds, five poses | exact | holds; 316 holes, 58 or 60 background fringe and 96 component fringe cells | met |
+| K5 refusals | named | `frontAndBack`, `nope`, `no donor` | met |
+| Q0 overset step with every cell calculated against the library | `<= 1e-12` | `0` for `u`, `p`, `phi`: equal bit for bit, hash `af2c9e6bd3e5596d` (that of R1) | met |
+| U1 uniform flow: velocity, pressure | `<= 1e-10` each | `1.40e-14`, `6.21e-13` | met |
+| U2 GCL of the component | `<= 1e-12` | `5.0e-16` | met |
+| U3 continuity, outflow | `<= 1e-9`, `<= 1e-10` | `1.58e-14`, `2.4e-15` | met |
+| U4 (set-up) kind changes | `>= 20` | 245 | held |
+| N2 (negative control) weights times 1.001 | `>= 1e-6` | `1.60e-3` | held |
+| T1 observed order, as registered | `>= 1.7` | `0.747` | **missed** (amendment 2) |
+| T2 level 1, as registered | `<= 2` | `1.404` | met |
+| T2 level 2, as registered | `<= 2` | `3.313` | **missed** (amendment 2) |
+| T3 continuity, as registered | `<= 1e-9` | `5.2e-14` | met |
+| T1c observed order, `dt` proportional to `h^2` | `>= 1.7` | `1.618` (`e(TG_1) = 1.0785e-3`, `e(TG_2) = 3.514e-4`) | **missed** |
+| T2c level 1, level 2 | `<= 2` | `1.404`, `1.821` (`e(TGB_2) = 1.930e-4`) | met |
+| T3c continuity | `<= 1e-9` | `6.1e-14` | met |
+| N3 (negative control) zero mesh flux | `>= 2 e(TGB_1)` | `220 e(TGB_1)` | held |
+| N4 (negative control) donor cell only | `>= 2 e(TGB_1)` | `57.2 e(TGB_1)` | held |
+| A1a (acceptance, mass) continuity, 400 steps | `<= 1e-9` | `8.1e-17` | met |
+| A1b (acceptance, mass) net outflow / `U D L`, 400 steps | `<= 1e-9` | `7.5e-15` | met |
+| A2 (acceptance, drag) every step of `[2, 8]` | `<= 5e-2` | `6.25e-3` (largest at step 399, `t = 7.98`) | met |
+| NM (negative control) interpolated overlap, 100 steps | `>= 1e-6` | `2.69e-3` | held |
+| X1 holes inside the body | exact | every step | held |
+| X2 fringe and hole counts | exact | every step | held |
+| X3 kind changes | `>= 500` | 6300 | held |
+| X4 converged solves | all | TR: no unconverged solve; BF: at most 310 pressure iterations in a step | held |
+| S0 (smoke) | finite | finite (2.6 s per step before amendment 1) | held |
+| E1 refused settings | `Err` each | BDF2, `n_outer = 2`, a non-orthogonal corrector, linear upwind, the consistent correctors | met |
+| E2 uncovered hole cell | `Err`, state unchanged | "cell 8452 was a hole and is uncovered", `u`, `p`, `phi`, time unchanged | met |
+| E3 step of another composite | `Err` | "the step does not fit the solver's mesh" | met |
+
+Printed, no limit:
+
+- A: `C_D` overset / body-fitted at `t = 2` `2.0005` / `2.0031`, `t = 4` `1.8226` / `1.8267`, `t = 6` `1.7228` / `1.7292`,
+  `t = 8` `1.6675` / `1.6739`; mean over `[2, 8]` `1.7877` / `1.7933`, mean relative difference `-0.32 %`; `delta / (U^2/2)`
+  in `[-2.0e-3, 7.4e-3]`; continuity of BF `6.1e-16`; 60 pressure iterations per TR step (three solves).
+- T (registered): background alone `7.68e-4`, `1.94e-4` (order 1.99); `delta` in `[7.5e-4, 2.9e-3]` (level 1) and
+  `[4.3e-4, 1.2e-3]` (level 2). Corrected: background alone `7.68e-4`, `1.93e-4` (order 1.99).
+
+**Reading.**
+
+- The acceptance is met. The cylinder moves 7.5 diameters through the background while 6300 background cells change kind,
+  every calculated cell keeps its continuity to `1e-16`, and the domain keeps its mass to `7.5e-15` of `U D L`. The plain
+  interpolated overlap loses `2.7e-3` of `U D L` through the outlet (NM), and with `delta` forced to zero (MU2) `8.5e-3`:
+  the offset of M7 is what conserves the mass. The drag stays within `0.62 %` of the body-fitted run at every step of the
+  window, `0.32 %` below it on average. The difference grows slowly with the distance travelled (`-0.13 %` at `t = 2`,
+  `-0.38 %` at `t = 8`) as the wake moves from the component onto the background, whose resolution and outer boundary
+  differ from those of BF.
+- The overset step is the library's step: with every cell calculated it gives the bits of R1 (Q0), and a uniform flow
+  through a component that moves and turns, with the hole and the fringe rebuilt every step, stays uniform to `1e-14`.
+- T1 and T2 at level 2 as registered missed through the time error of the moving cells (amendment 2). With the step
+  proportional to `h^2` the overset error is within 1.82 times that of the background alone at both levels (T2c), but its
+  observed order is `1.62` against `1.7` (T1c missed). A diagnostic after the corrected run (disclosed; a scratch test,
+  not committed, once) located the largest error: at both levels, moving and at rest, it lies in a component fringe cell
+  (an interpolated cell of the outer ring). The largest background error converges from `8.94e-4` to `2.27e-4` (order
+  1.98), the root mean square over the calculated background cells from `5.60e-4` to `1.42e-4` (order 1.98), and at rest
+  the largest error from `1.496e-3` to `3.51e-4` (order 2.09). The largest component error (`1.0785e-3`, `3.514e-4`)
+  depends on where the fringe centres fall in their donor stencils, which differs between the levels and the poses. It is
+  not diagnosed further here (Q5).
+
+### Mutations
+
+Each was applied alone to the code of 9d52fec by an exact text replacement (`E:/projects/cfd/w49i-work/f134-mut/mutate.py`,
+which checks that the replaced text occurs once), the named test was run once in its own target dir, and the file was
+restored and compared byte for byte with the kept copy (equal in all six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 inverse-distance weights | K3 | failed: linear field `1.18e-3` of `max abs(f)` (`sum w - 1` stays `3e-16`) |
+| MU2 `delta` left at zero | A1b | failed: `8.49e-3` of `U D L` |
+| MU3 component mesh flux zero | T2 | failed: T2 at level 1 `220` (and the printed T2 at level 2 `733`) |
+| MU4 fringe `HbyA` from the own rows | U1 | failed: velocity `3.13e-2`, pressure `0.469` |
+| MU5 nearest centre, no containment | K2 | failed: a point located in cell 549 against 550 by the full search |
+| MU6 no background fringe layer | K4 | failed: "calculated cell 8267 next to a hole" |
+
+`scripts/limit_audit.py` reports two hits in the new test file, both class (iii):
+`n2_uniform_flow_negative_control_perturbed_weights` and `n3_n4_taylor_green_negative_controls` assert their `>=`
+expectations through `Checks::at_least`, which the scanner does not see; both are false positives. It does not scan the
+unit tests in `src`.
+
+Disclosures:
+
+- Before the registered runs the new code and tests were compiled without running, laid out by rustfmt, and `cargo
+  clippy -p rcfd-mesh -p rcfd-fv --all-targets -- -D warnings` was run (clean). S0 ran before amendment 1, as registered.
+- The diagnostics of amendments 1 and 2 and the one in the reading above ran from a temporary switch in the source and
+  from scratch tests, removed afterwards; their logs are in `E:/projects/cfd/w49i-work` (`f134-diag-*.log`).
+
+### Further open questions
+
+- **Q5. The order of the overset error.** Options: (a) keep T1c as a recorded known miss (T2c holds at both levels and
+  the background converges at order 2); (b) register, with the follow-up of Q1, an order check on a third level (TG_3) or
+  on a norm that does not pick single fringe cells, with the fringe-cell error printed; (c) interpolation of higher
+  order. Recommendation (b).
+- **Q6. The status of F-134.** The acceptance (A1, A2) is met; T1 and T2 at level 2 as registered, and T1c, are missed.
+  Options: (a) partial, as the decision rule says; (b) done, if the maintainer does not count the accuracy checks outside
+  the acceptance. Recommendation (a), with the wiring (Q1) and Q5 as the remaining work. The roadmap follows the decision
+  rule until the maintainer decides.
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D-R record R1 after the code | equal | `af2c9e6bd3e5596d`: equal | met |
+| D-S the existing suites, unedited | pass | in the gate (below) | see the gate |

@@ -19,6 +19,10 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   cylinder, the interface rebuilt every step, in the PISO/PIMPLE path (`rcfd_fv::sliding`,
   `PimpleSolver::step_sliding`). The tree does not use it yet (ADR 0216 Q1); no planar or sector slide. No local
   remeshing (F-247).
+* Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
+  background mesh (`rcfd_mesh::overset`, `rcfd_fv::overset::OversetSolver`), PISO with implicit Euler and upwind, central
+  or blended convection, no non-orthogonal correctors. The tree does not use it yet (ADR 0219 Q1); no second component,
+  no moving background.
 * Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
   stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
   use them yet (the wiring is open under F-259, ADR 0213 Q1).
@@ -76,6 +80,29 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   to 0.46 percent before the run, the end effect by a minimum-dissipation argument). The C2 piston on a spring oscillates
   at `sqrt(k/(M + rho A L0))` to 0.13 percent (mass ratio 0.2), where without the fluid force it is 9.5 percent off, and its
   amplitude decays by about 5 percent per period at 100 steps per period (the lag of the explicit coupling).
+
+## Overset meshes (F-134, ADR 0219; library only)
+
+- **Composite mesh.** `rcfd_mesh::overset::compose` joins a background mesh and a component mesh into one mesh with no
+  face between them (the component patches get a prefix). Every step the component is moved rigidly to a pose and
+  `Overset::connectivity` sorts the cells into calculated, fringe and hole cells: the component cells on its outer patches
+  are fringe, the background cells where the user's hole function is true (in the component's frame) are holes, and the
+  background cells next to a hole are fringe.
+- **Interpolation.** A fringe cell takes its values from the cell of the other part that contains its centre and that
+  cell's calculated neighbours, with weights that reproduce linear fields exactly. The fringe rows of the momentum and
+  pressure systems are these interpolations, so the coupling is implicit (one system for both meshes).
+- **Mass.** With `MassMode::Conservative` one offset of the background fringe pressures makes the net flux into the hole
+  region zero (or, in a closed domain, keeps the reference cell exact). Then every calculated cell keeps its continuity
+  and the domain keeps its mass. `MassMode::Interpolated` leaves the overlap non-conservative.
+- **Checks.** A cylinder at Re 40 moving 7.5 diameters through a Cartesian background: the net outflow of the domain is
+  `7.5e-15` of `U D L` and the continuity `8e-17` in every step, and the drag is within 0.62 percent of a body-fitted run of
+  the same motion between `t = 2` and `t = 8` (limit 5 percent). Without the offset the domain loses `2.7e-3` of `U D L`. A
+  uniform flow through a moving, turning component stays uniform to `1.4e-14`. In the Taylor-Green vortex the overset error
+  stays within 1.82 times that of the background alone; its largest value, in an interpolated cell of the component,
+  converges at order 1.62 between the two meshes tried (registered limit 1.7, missed), and the background at order 1.98.
+- **Not available:** a second component, a moving background, hole cutting from the wall geometry, more than linear
+  interpolation, outer iterations, BDF2, non-orthogonal correctors, linear-upwind convection, turbulence, energy and the
+  case tree.
 
 ## Case tree
 

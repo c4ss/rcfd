@@ -3313,10 +3313,28 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
         is used; no fan performance prediction and no comparison with published fan data.
       - Not done: O-grid or C-grid topology that removes the sheared columns, rounded or sharp edges, splitter blades,
         partial tip clearance, curve-file input, y+ check of a converged solution.
-- [ ] **F-134** Overset (chimera) mesh coupling
+- [~] **F-134** Overset (chimera) mesh coupling
   - depends on: F-063
   - acceptance: A cylinder moving through a background mesh conserves mass and gives drag within 5 percent of a body-fitted run
   - note: P4 (long-term). Gap: overset boundary type and methods; extends F-063.
+    - ADR 0219 (registration of F-134, 2026-11-07, branch `f134-overset`, not merged): PARTIAL, library only.
+      - Built: a component mesh moving rigidly over a static background mesh, joined into one composite mesh with the
+        hole cut by a user function, one fringe layer, donor search and weights exact for linear fields
+        (`rcfd_mesh::overset`), and an implicit overset PISO step (`rcfd_fv::overset::OversetSolver`) whose one offset of
+        the background fringe pressures makes the mass of the domain exact.
+      - Met (acceptance): a cylinder at Re 40 moving 7.5 diameters through a Cartesian background keeps the continuity of
+        every calculated cell to 8.1e-17 and the mass of the domain to 7.5e-15 of U D L (limits 1e-9); its drag is within
+        0.62 % of a body-fitted run of the same motion at every step from t = 2 to t = 8 (limit 5 %; mean C_D 1.788
+        against 1.793). Without the offset the domain loses 2.7e-3 of U D L.
+      - Also met: with every cell calculated the overset step gives the library's ALE step bit for bit; a uniform flow
+        through a moving, turning component stays uniform to 1.4e-14; the Taylor-Green error stays within 1.82 times
+        that of the background alone.
+      - Known misses: the Taylor-Green observed order, 0.75 as registered (the time error of the moving cells at the
+        registered step) and 1.62 with dt proportional to h^2 (limit 1.7; the largest error lies in an interpolated cell
+        of the component, the background converges at order 1.98); the fine-level ratio 3.31 as registered (limit 2;
+        1.82 with dt proportional to h^2).
+      - Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1); several components, a moving background, hole
+        cutting from the wall geometry, BDF2, outer iterations, non-orthogonal correctors, turbulence (Q2 to Q5).
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
   - depends on: F-110, F-029
   - acceptance: Planar contraction and Poiseuille start-up compare with analytic Oldroyd-B solutions
