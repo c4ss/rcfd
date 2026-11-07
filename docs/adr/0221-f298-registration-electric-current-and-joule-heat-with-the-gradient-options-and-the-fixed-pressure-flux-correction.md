@@ -288,3 +288,10 @@ only. (a) Leave; (b) an item. Recommendation (a) until a case needs it. Proceedi
 * [ADR 0202](0202-f289-registration-conjugate-heat-flow-report-with-the-gradient-options.md) for the face flows with the options.
 * [ADR 0035](0035-wave21a-thermal-extras.md) for the electric model.
 * [Case schema](../case-schema.md), section "Further equations (`[solver.gradient_equations]`)".
+
+## Amendment 1 (2026-11-07, written before any run of a check): where B-tree-T and B-D are evaluated
+
+No limit changes. B-tree-T is a property of F-291's code, which D3 replaces, so it is asserted by the test of M-sets at commit (2)
+(`m_sets_before_d3`); if D3 is built, that test is kept as an ignored record of commit (2) (its numbers in the addendum), because the
+code it measures no longer exists. B-D compares the hashes printed by M and M-O3 at commit (2) with those of the same runs after D3:
+the test of D3 asserts the recorded values, written into it after M ran.
