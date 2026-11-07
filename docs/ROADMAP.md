@@ -5364,3 +5364,16 @@ fixed by the item's registration ADR before any code.
     known misses (N3: the Nelder-Mead start rule gives a tiny step near zero; question 3 keeps MATLAB's rule). Open for
     the maintainer: questions 1 (done or partial), 6 (tool description naming nsga2 needs a registered golden edit) and
     7 (extended warm start as default needs the bit-identity lift).
+
+- [ ] **F-298** Electric current and Joule heat with the gradient options, and the fixed-pressure flux correction
+  - depends on: F-291
+  - acceptance: Every limit is fixed by its registration ADR before any code. (a) When electric_potential takes the
+    gradient options (F-291), the current density and the Joule heat use the same face flows, with a current balance
+    check (the F-289 pattern; the default must miss it, the option must meet it). (b) First measure what the 2.9e-2
+    mismatch of the default flux correction beside skewed fixed-pressure faces (ADR 0204 question 3) does to the mass
+    balance of a converged run; only if it matters, give the flux correction the equation's boundary term under the
+    options. Defaults bit-identical.
+  - note: From ADR 0204 (F-291) questions 2 and 3, recommendations (b) and (c) taken by the lead. Questions 1, 4 to 8:
+    recommendation (a) taken (optional table kept; PISO/PIMPLE lag estimate on the default operator; Lorentz-source
+    potential not wired; body_force_weighted refused with pressure options; other solvers and models refused; P1 binding
+    with P2-all supplementary).

@@ -2387,5 +2387,16 @@
     "status": "todo",
     "acceptance": "A new registration ADR re-registers MO1z (ZDT1 with 30 parameters, C within its limit) with the per-variable coordinate exchange between parents added to NSGA-II (ADR 0209 diagnostic DG1: C about 1.5e-3 with it), after the operator is read from Deb 2002 and the crossover and mutation papers; the MO1z known miss is then met or recorded again with its numbers; defaults bit-identical.",
     "note": "From ADR 0209 (F-249) question 5, recommendation taken by the lead. F-249 stays partial for the MO1z and N3 known misses (N3: the Nelder-Mead start rule gives a tiny step near zero; question 3 keeps MATLAB's rule). Open for the maintainer: questions 1 (done or partial), 6 (tool description naming nsga2 needs a registered golden edit) and 7 (extended warm start as default needs the bit-identity lift)."
+  },
+  {
+    "id": "F-298",
+    "title": "Electric current and Joule heat with the gradient options, and the fixed-pressure flux correction",
+    "phase": 3,
+    "deps": [
+      "F-291"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. (a) When electric_potential takes the gradient options (F-291), the current density and the Joule heat use the same face flows, with a current balance check (the F-289 pattern; the default must miss it, the option must meet it). (b) First measure what the 2.9e-2 mismatch of the default flux correction beside skewed fixed-pressure faces (ADR 0204 question 3) does to the mass balance of a converged run; only if it matters, give the flux correction the equation's boundary term under the options. Defaults bit-identical.",
+    "note": "From ADR 0204 (F-291) questions 2 and 3, recommendations (b) and (c) taken by the lead. Questions 1, 4 to 8: recommendation (a) taken (optional table kept; PISO/PIMPLE lag estimate on the default operator; Lorentz-source potential not wired; body_force_weighted refused with pressure options; other solvers and models refused; P1 binding with P2-all supplementary)."
   }
 ]
