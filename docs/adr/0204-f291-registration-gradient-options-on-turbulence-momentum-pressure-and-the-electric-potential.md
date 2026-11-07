@@ -429,3 +429,25 @@ same wiring and teeth on a channel that does not diverge.
 
 **Questions for the maintainer.** Q1 to Q8 stand as registered and amended, each proceeding on its reversible choice. P-lib-B's
 numbers bear on Q3.
+
+**Merge with main and gate.** Main moved to 05f0d73 (F-285 to F-295) during the work; `75700cf` merges it into the branch. Three
+conflicts, resolved without a change of either side's arithmetic: `SimpleSolver` keeps both new fields (`gradient_momentum`,
+`gradient_pressure` and ADR 0198's `implicit_non_orth_pressure`) and their defaults; the pressure solve takes ADR 0198's implicit
+arms first, so that solve keeps its own operator without the gradient options (documented on `gradient_pressure`; the implicit
+solve is not set by the API); `rcfd-turb` `model.rs` and `sst.rs` keep both sets of imports (`sst.rs`'s transport, with F-286's
+time derivative around it, calls `laplacian_opt`). After the merge the two new test files gave the numbers of the table above
+(every G2 0, the same G3 values, the same G4 hashes), fmt per package 0 and workspace clippy `-D warnings` 0.
+
+Gate of `75700cf`, `git archive` copy, three jobs (`scripts/gate_test.py`, one process per test), under the machine lock: fmt 0,
+clippy `--workspace --all-targets -D warnings` 0, tests 3025 passed, 2 failed, 865 ignored, 3027 test processes in 586 binaries,
+4435.5 s of tests, peak summed working set 3.4 GB, largest time over limit 0.220. Every test of F-291 passed, as did
+`baseline_hashes.rs`, `case_hashes_w48u.rs`, `rules_w19c.rs` and the tests of F-256 and F-289. The 2 failures are the known flaky
+tests of `rcfd-runner` `runner_w47b.rs`, a crate this branch does not change (no line differs from main):
+
+* `s1_concurrency_never_exceeds_max_runs` ("the sampler does not see an over-subscription of 2"): rerun alone on the gate's binary
+  it failed 3 of 3; control: the same test from the binary of the ADR 0202 gate (without this work) failed 2 of 2 right after;
+* `s9_memory_and_thread_budget_refusals_are_located`: rerun alone on the gate's binary it passed 3 of 3.
+
+The lock was taken at 07:54 on 2026-11-07 after a wait from 19:56 the day before. The first acquire (`gate-lock.sh`, 60 s poll)
+was replaced at 02:25 and again at 06:59 by the same mkdir lock polled every 5 s (`gate-f291/outer2.sh`); the run waited for 20 GB
+of free memory from 07:54 to 08:22. This paragraph is documents only and was not gated again.
