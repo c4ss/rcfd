@@ -353,11 +353,11 @@ same bits). Every check was run once, in release; the exceptions are named where
 | T1 | B2S, 5 iterations, 638 seam pairs: `pair` 0 with unequal bits, 0 off the D1 bits; `owner` 0.271 | exact; `>= 1e-2` | met |
 | T2 | B2, 3 `pimple` steps, 638 pairs: 0, 0; `owner` 0.131 | exact; `>= 1e-2` | met |
 | T3 | LAM, 3 iterations, 40 seam faces: `pair` 0 off the bits of `nu`; `owner` largest 2.712e-2 = 10.7 `nu` | exact; `>= 1.001 nu` | met |
-| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited; both pass before the gate (below); the gate: pending | pass | met before the gate |
+| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited; both pass before the gate (below) and in the gate of 723e053 | pass | met |
 | V0b | 5 of 5 runs bit-identical to the record of 9631754 after the code: CH `pimple` 0xdada28263c5403a0, S4 sector 0xabd83aa0fd750ae7, LAM 0xd8e366294f570e5e, CH `k_epsilon` 0x051bdeb285ab7c4a, B2S 0x85db6064d7777a63 | bit-identical | met |
 | V0c | V0c1: CH `pimple` with `owner` written gives the V0b record 0xdada28263c5403a0; V0c2: NP with `pair` and without the key, 100 iterations each, both (100, 7, 0xf30d3fbec2e549d2) | the record; equal | met |
-| V0d | `f286_default_bits.rs` unedited; passes before the gate (below); the gate: pending | pass | met before the gate |
-| V0e | the gate of the commit that adds this addendum: pending | pass, apart from the known flakes | pending |
+| V0d | `f286_default_bits.rs` unedited; passes before the gate (below) and in the gate of 723e053 | pass | met |
+| V0e | gate of 723e053 (git archive, `scripts/gate_test.py`, 3 jobs, the shared gate lock): fmt per package 0, clippy `--workspace --all-targets -D warnings` 0; 2969 passed, 2 failed, 836 ignored, 2971 test processes, wall 4111 s (lowest free memory 19 GB). The 2 failures are `runner_w47b` s1 and s9, on the list of known flakes (they fail on builds before this change too); every F-295 test passed in it | pass, apart from the known flakes | met |
 
 **The S1 runs.** The first S1 run stopped in its harness (amendment 1). Before the corrected test existed, a failed edit of the
 test file left the first-run harness in place and that test was run a second time, with the same output; nothing was chosen from
