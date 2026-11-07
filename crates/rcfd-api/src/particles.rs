@@ -217,6 +217,16 @@ pub fn schema() -> Schema {
         )
         .field("material", erosion_material_schema())
         .hash_omit_default();
+    let dispersion_from_model = Schema::object()
+        .optional()
+        .doc("dispersion = drw on the turbulence model's fields (ADR 0208): k and epsilon per cell of turbulence.model = k_epsilon (its epsilon) or k_omega_sst (epsilon = 0.09 k omega), in place of dispersion_k and dispersion_epsilon. Read when the tracker is built for steady and frozen tracking, and before every tracking step of a transient run (the fields at the end of the flow step; the old time level with two_way). Absent = the constants")
+        .field(
+            "enabled",
+            Schema::boolean(false)
+                .doc("Take k and epsilon from the turbulence model (needs dispersion = drw, turbulence.model = k_epsilon or k_omega_sst, and dispersion_k, dispersion_epsilon left at -1)")
+                .hash_omit_default(),
+        )
+        .hash_omit_default();
     let rough_wall = Schema::object()
         .optional()
         .doc("Rough reflecting walls (ADR 0194): a parcel that hits a rough patch reflects, with the patch restitution, about a virtual wall whose normal is tilted in the plane of incidence by a Gaussian roughness angle of standard deviation angle_std (the virtual-wall model of Sommerfeld 1992 as restated in the literature); a draw that would let the parcel reach the virtual wall from behind or rebound into the wall is drawn again. No friction, no particle rotation. Absent = smooth walls")
@@ -296,6 +306,37 @@ pub fn schema() -> Schema {
         .field("film", film)
         .field("erosion", erosion)
         .field("rough_wall", rough_wall)
+        .field("dispersion_from_model", dispersion_from_model)
+}
+
+/// Does the random walk take `k` and `epsilon` from the turbulence model (ADR 0208 D2, amendment 2)?
+pub fn dispersion_from_model(case: &Case) -> bool {
+    enabled(case) && gs(case, "particles.dispersion") == "drw" && gb(case, "particles.dispersion_from_model.enabled")
+}
+
+/// `k` and `epsilon` per cell of the turbulence state (ADR 0208 D2): the transported `epsilon` of k-epsilon, or
+/// `epsilon = beta* k omega` of k-omega SST with the SST's `beta*`, as `chemistry::mixing_vectors` does.
+pub(crate) fn model_k_epsilon(
+    turb: Option<&crate::turb::TurbState>,
+) -> std::result::Result<(Vec<f64>, Vec<f64>), String> {
+    let t = turb.ok_or("dispersion_from_model needs a turbulence model (k_epsilon or k_omega_sst)")?;
+    let k = t
+        .scalar("k")
+        .ok_or("dispersion_from_model needs a model that transports k (k_epsilon or k_omega_sst)")?
+        .values
+        .clone();
+    if let Some(e) = t.scalar("epsilon") {
+        return Ok((k, e.values.clone()));
+    }
+    let w = t
+        .scalar("omega")
+        .ok_or("dispersion_from_model needs epsilon or omega (k_epsilon or k_omega_sst)")?;
+    let eps = k
+        .iter()
+        .zip(&w.values)
+        .map(|(k, w)| rcfd_turb::sst::BETA_STAR * k * w)
+        .collect();
+    Ok((k, eps))
 }
 
 /// Is the wall film requested (ADR 0192)?
@@ -939,24 +980,55 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             }
         }
     }
+    let model_fields = gb(case, "particles.dispersion_from_model.enabled");
+    if model_fields {
+        check_dispersion_from_model(case, &mut out);
+    }
     if gs(case, "particles.dispersion") == "drw" {
-        if !(gf(case, "particles.dispersion_k") > 0.0) {
-            out.push(d(
-                "particles.dispersion_k",
-                "dispersion = drw needs dispersion_k > 0; -1 means unset",
-            ));
-        }
-        if !(gf(case, "particles.dispersion_epsilon") > 0.0) {
-            out.push(d(
-                "particles.dispersion_epsilon",
-                "dispersion = drw needs dispersion_epsilon > 0; -1 means unset",
-            ));
+        if !model_fields {
+            if !(gf(case, "particles.dispersion_k") > 0.0) {
+                out.push(d(
+                    "particles.dispersion_k",
+                    "dispersion = drw needs dispersion_k > 0; -1 means unset",
+                ));
+            }
+            if !(gf(case, "particles.dispersion_epsilon") > 0.0) {
+                out.push(d(
+                    "particles.dispersion_epsilon",
+                    "dispersion = drw needs dispersion_epsilon > 0; -1 means unset",
+                ));
+            }
         }
         if !(gf(case, "particles.dispersion_cl") > 0.0) {
             out.push(d("particles.dispersion_cl", "dispersion_cl must be positive"));
         }
     }
     out
+}
+
+/// The located errors of `particles.dispersion_from_model.enabled` (ADR 0208 S2 as amended, DE1 to DE3).
+fn check_dispersion_from_model(case: &Case, out: &mut Vec<Diagnostic>) {
+    if gs(case, "particles.dispersion") != "drw" {
+        out.push(d(
+            "particles.dispersion_from_model.enabled",
+            "dispersion_from_model needs particles.dispersion = \"drw\" (ADR 0208)",
+        ));
+    }
+    let tm = gs(case, "turbulence.model");
+    if !matches!(tm.as_str(), "k_epsilon" | "k_omega_sst") {
+        out.push(d(
+            "particles.dispersion_from_model.enabled",
+            format!("dispersion_from_model needs the turbulence fields k and epsilon (turbulence.model = \"k_epsilon\" or \"k_omega_sst\"), not \"{tm}\" (ADR 0208)"),
+        ));
+    }
+    for k in ["dispersion_k", "dispersion_epsilon"] {
+        if gf(case, &format!("particles.{k}")) != UNSET {
+            out.push(d(
+                format!("particles.{k}"),
+                format!("{k} is not used with dispersion_from_model (the turbulence model gives k and epsilon); leave it -1 (ADR 0208)"),
+            ));
+        }
+    }
 }
 
 fn options(case: &Case) -> Options {
@@ -1109,13 +1181,17 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
             crossing: gb(case, "particles.dispersion_crossing"),
         };
         let dseed = (gi(case, "particles.dispersion_seed").max(0) as u64).wrapping_add(0x5EED_D15B);
-        tr.set_dispersion(
-            model,
-            vec![gf(case, "particles.dispersion_k"); nc],
-            vec![gf(case, "particles.dispersion_epsilon"); nc],
-            dseed,
-        )
-        .map_err(|e| vec![d("particles.dispersion", e.to_string())])?;
+        let (k, eps) = if dispersion_from_model(case) {
+            // ADR 0208 D2: the turbulence model's fields of the current state
+            model_k_epsilon(sim.turb_state()).map_err(|e| vec![d("particles.dispersion_from_model.enabled", e)])?
+        } else {
+            (
+                vec![gf(case, "particles.dispersion_k"); nc],
+                vec![gf(case, "particles.dispersion_epsilon"); nc],
+            )
+        };
+        tr.set_dispersion(model, k, eps, dseed)
+            .map_err(|e| vec![d("particles.dispersion", e.to_string())])?;
     }
     if heat_transfer(case) {
         // carrier temperature of the cells: the energy solution
@@ -1299,6 +1375,13 @@ pub fn track_transient(case: &Case, sim: &mut Simulation) -> std::result::Result
             break;
         }
         let h = dt.min(end - tr.time);
+        if dispersion_from_model(case) {
+            // ADR 0208 D2: the fields at the end of the flow step, the level of the velocity tracked on
+            let (k, eps) =
+                model_k_epsilon(sim.turb_state()).map_err(|e| vec![d("particles.dispersion_from_model.enabled", e)])?;
+            tr.set_dispersion_fields(&k, &eps)
+                .map_err(|e| vec![d("particles.dispersion_from_model.enabled", e.to_string())])?;
+        }
         let fd = flow_data(case, sim);
         tr.advance(&fd.flow(), h)
             .map_err(|e| vec![d("particles", e.to_string())])?;

@@ -4912,11 +4912,32 @@ Added after the static feature-gap review; wording is product-independent. Phase
       Q2 (the Sommerfeld and Huber 1999 paper) and Q4 (the DNV edition) wait for the maintainer; splash and rebound at
       the film are the new item F-284 (Q5); Q6 was not asked.
     - ADR 0197 (2026-11-06, branch erosion-presets, not merged): Q3 of the decision record above delivered as the opt-in preset `particles.erosion.material = "dnv_o501_2007_steel"` (Table 7-2 steel grades from a third-party copy not checked against the maintainer's edition; indicative, not certified rates); without the key nothing changes.
-- [ ] **F-255** Particle dispersion from turbulence-model fields and particle reactions
+- [~] **F-255** Particle dispersion from turbulence-model fields and particle reactions
   - depends on: F-128
   - acceptance: Particle dispersion driven by turbulence-model fields reproduces the analytic dispersion growth of a passive cloud in homogeneous turbulence (Taylor result, closed form derived in the ADR) within 5 percent, and a particle surface reaction conserves the mass of each species to 1e-10 relative
   - note: Split from F-245 on 2026-10-22 (user decision): these were in F-128's not-delivered list and tracked nowhere.
     Acceptance text proposed by the lead; refine when scheduled. Size L.
+    - PARTIAL (ADR 0208, the registration of F-255, 2026-11-07, branch f255-particle-dispersion, not merged): every
+      registered check is met, the surface reaction in the library only; marking the item done is the maintainer's (ADR
+      0208 Q1). Dispersion: the opt-in table `particles.dispersion_from_model` (`enabled`; hash_omit_default, absent from
+      every existing case; amendment 2 moved it out of `particles` because H1 of `case_hashes_w48u` compares the written
+      text) makes the random walk of ADR 0057 take k and epsilon per cell from `k_epsilon` (its epsilon) or `k_omega_sst`
+      (epsilon = 0.09 k omega), once for steady and frozen tracking and before every tracking step of a transient run
+      (the old time level with two-way coupling); library `Tracker::set_dispersion_fields`. The closed form for a Stokes
+      parcel released at rest (`rcfd_particles::drw_msd`, Taylor's `taylor_msd` for tau -> 0) is derived in the ADR and
+      matches the moment equations of the walk to 7.6e-12. A cloud of 20 000 tracer parcels (tau = 1e-3 T_L) on the
+      k-epsilon and SST models' homogeneous fields is within 0.04 to 0.79 percent of both forms at 0.25, 1, 4 and 10 T_L
+      (limit 5 percent), an inertial cloud (tau = T_L) within 1.1 percent; the tree equals the library bit for bit on
+      non-uniform fields, and the transient and two-way refreshes give the fields of the right time level bit for bit.
+      Reaction (`rcfd_particles::reaction`, `Tracker::set_reaction`): a first-order kinetic surface reaction with an
+      inert residue (a choice of the ADR, Q7), linear shrinkage to 1.7e-14, the mass of the solid and of each gas
+      species measured on the parcel side and on the carrier side within 2.0e-14 at every step of a run with wall hits
+      (limit 1e-10). Runs without the new keys and calls are unchanged bit for bit (records R8, R9, R1 to R7, H1,
+      baseline hashes). Ten mutations made their checks fail; two set-up defects of checks and the place of the key were corrected by amendments 1 to 3
+      before the corrected runs.
+    - Open (ADR 0208 Q1 to Q10): the key; the models (RSM, SA, LES refused); C_mu of the eddy length; the homogeneous
+      check on the model's initial state; the zero eddy held forever; the reaction law, its case keys, parcels that burn
+      out completely and the molar masses.
 - [x] **F-256** Case-tree wiring of the gradient options
   - depends on: F-208
   - acceptance: Case-tree wiring of the existing GradientOptions (face correction, secondary limiter, boundary-gradient

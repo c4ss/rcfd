@@ -21,8 +21,12 @@ rcfd does not deliver:
 * droplet / combusting / multicomponent particle types
 * group / file injections
 * feedback of the two-way sources inside `Simulation::step` (the exchange is a library record only)
-* dispersion from the turbulence-model k and epsilon fields (constants only)
+* dispersion from turbulence models other than k-epsilon and k-omega SST (Spalart-Allmaras, the mixing length, the LES
+  models, the Reynolds stress model, plugins), an anisotropic random walk (F-255, ADR 0208 Q3)
 * turbulent dispersion of the heat transfer
+* surface reactions in the case tree, a reaction rate that depends on temperature or film diffusion, the heat of
+  reaction, the reaction together with heat transfer or the exchange record, parcels that burn out completely (F-255,
+  ADR 0208; the reaction is a library model)
 * evaporation and mass transfer
 * breakup
 * in the wall film (F-253, see "Wall film" below): splash and rebound at impact, film separation and dripping,
@@ -139,8 +143,41 @@ The output format is ASCII VTK PolyData (`.vtp`): points and point data `id`, `d
   `Simulation::step` does NOT apply the sources to the carrier: the caller feeds them into its equations (the checks use an explicit
   cell momentum update in a closed particle/carrier loop).
 * Discrete random walk (`Dispersion`, `Tracker::set_dispersion`; case keys `particles.dispersion*`): see ADR 0057 D2 and the closed
-  form `sigma_p^2 = sigma^2 T_L/(T_L + tau_p)`. Homogeneous isotropic turbulence of given k and epsilon only.
+  form `sigma_p^2 = sigma^2 T_L/(T_L + tau_p)`. Isotropic turbulence of the given k and epsilon per cell; from the turbulence model
+  since F-255 (below).
 * Injection: `uniform` diameters, equal-mass parcels from `mass_flow`, cone injections (`ConeSpec`, `InjectorExt`).
+
+## Dispersion from the turbulence model (F-255, ADR 0208)
+
+With `particles.dispersion = "drw"` and `[particles.dispersion_from_model]` with `enabled = true` the random walk takes
+`k` and `epsilon` per cell from the case's turbulence model instead of the constants `dispersion_k` and
+`dispersion_epsilon`: k-epsilon (any variant) gives its transported `epsilon`, k-omega SST gives
+`epsilon = beta* k omega` with `beta* = 0.09`. Other models are refused with a located error, and so are `dispersion_k`
+or `dispersion_epsilon` set together with the model fields. Steady and frozen tracking read the fields once, when the tracker is built; a transient run reads them
+before every tracking step, at the time level of the velocity the step tracks on (the end of the flow step; the old level
+with two-way coupling). An eddy a parcel holds is not redrawn when the fields change; the next draw uses the new values.
+From code, `Tracker::set_dispersion_fields(k, eps)` replaces the arrays.
+
+The check is Taylor's result. In homogeneous fields with no mean flow the walk's fluid velocity has the autocorrelation
+`sigma^2 exp(-abs(s)/T_L)`, and a Stokes parcel of relaxation time `tau` released at rest has the mean-square
+displacement per component `rcfd_particles::drw_msd(sigma^2, T_L, tau, t)`, which for `tau -> 0` is Taylor's
+`taylor_msd = 2 sigma^2 T_L^2 (t/T_L - 1 + exp(-t/T_L))` (both derived in ADR 0208 D3). A cloud of 20 000 tracer parcels
+on the k-epsilon and on the SST model's uniform initial fields follows both within 1 percent at 0.25, 1, 4 and 10 `T_L`
+(limit 5 percent). The homogeneous check tracks on the model's state before its first sweep, because a two-equation model
+has no stationary homogeneous solution without production.
+
+## Surface reaction (F-255, ADR 0208; library only)
+
+`Tracker::set_reaction(ReactionSpec, y_o)` makes the parcels react with the carrier: `nu_s S(solid) + gas reactants ->
+gas products`, with the molar masses and signed coefficients the caller gives (they must balance to 1e-12). The rate per
+unit external surface is `omega = k_s rho_g Y_o / M_o`, first order in the oxidiser's molar concentration of the cell
+where a sub-step starts (`y_o` per cell, replaceable with `set_reaction_oxidiser`). A parcel holds the reacting fraction
+`f_r` of its mass, in `(0, 1)`, and an inert rest; it shrinks at constant density, `dd/dt = -2 nu_s M_s omega / rho_p`,
+exactly over a sub-step. The carrier is not changed: `SurfaceReaction::sources(i)` books, per cell, the mass every gas
+species gains or loses, with `solid_reacted()` and `extent()`. The rate law is a choice of ADR 0208 (its Q7), not a
+published char model; there are no case keys yet (Q8). The reaction is refused together with heat transfer or the
+exchange record. ADR 0208 checks the linear shrinkage to round-off and the mass of each species (the solid and every gas
+species, measured on the parcel side and on the carrier side) to 1e-10 at every step of a run with wall hits.
 
 ## Wall film (F-253, ADR 0192)
 

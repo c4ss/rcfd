@@ -1,4 +1,5 @@
-//! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6; erosion and rough walls ADR 0194).
+//! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6; erosion and rough walls ADR 0194; dispersion
+//! fields and the surface reaction ADR 0208).
 
 use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
 use crate::dispersion::{Dispersion, Eddy};
@@ -7,6 +8,7 @@ use crate::erosion::{Erosion, ErosionSpec};
 use crate::film::{Film, FilmGas, FilmSpec};
 use crate::inject::{InjKind, InjectorExt, InjectorSpec, VelMode};
 use crate::locate::{Locator, Walk};
+use crate::reaction::{ReactionSpec, SurfaceReaction};
 use crate::rng::SplitMix64;
 use crate::rough::{RoughSpec, RoughWall};
 use crate::{err, Result};
@@ -132,6 +134,10 @@ struct Aux {
     eddy: Eddy,
     /// Particle temperature [K]; NaN = not yet set.
     tp: f64,
+    /// Reacting mass per real particle [kg] (ADR 0208 R2); NaN = not yet set.
+    m_r: f64,
+    /// Inert mass per real particle [kg] (ADR 0208 R2).
+    m_i: f64,
 }
 
 impl Default for Aux {
@@ -139,6 +145,8 @@ impl Default for Aux {
         Aux {
             eddy: Eddy::default(),
             tp: f64::NAN,
+            m_r: f64::NAN,
+            m_i: f64::NAN,
         }
     }
 }
@@ -159,6 +167,7 @@ struct Ctx<'a> {
     film: Option<&'a mut Film>,
     erosion: Option<&'a mut Erosion>,
     rough: Option<&'a mut RoughWall>,
+    reaction: Option<&'a mut SurfaceReaction>,
 }
 
 struct Injector {
@@ -185,6 +194,7 @@ pub struct Tracker {
     film: Option<Film>,
     erosion: Option<Erosion>,
     rough: Option<RoughWall>,
+    reaction: Option<SurfaceReaction>,
     /// All parcels, including finished ones.
     pub particles: Vec<Particle>,
     /// Current time [s].
@@ -248,6 +258,7 @@ impl Tracker {
             film: None,
             erosion: None,
             rough: None,
+            reaction: None,
             particles: Vec::new(),
             time: 0.0,
         })
@@ -271,9 +282,67 @@ impl Tracker {
         Ok(())
     }
 
+    /// Replace the per-cell `k` and `eps` of the random walk (ADR 0208 S1), for example with the turbulence model's fields of
+    /// the current step. The generator, the model and the eddies the parcels hold are untouched. Refused without
+    /// [`Tracker::set_dispersion`], for a length other than the cell count and for a value that is not finite.
+    pub fn set_dispersion_fields(&mut self, k: &[f64], eps: &[f64]) -> Result<()> {
+        let n = self.loc.mesh().n_cells();
+        let Some(dc) = self.disp.as_mut() else {
+            return err("dispersion: the fields need the random walk (Tracker::set_dispersion first)");
+        };
+        if k.len() != n || eps.len() != n {
+            return err("dispersion: k and epsilon must have one value per cell");
+        }
+        if k.iter().chain(eps).any(|v| !v.is_finite()) {
+            return err("dispersion: k and epsilon must be finite");
+        }
+        dc.k.copy_from_slice(k);
+        dc.eps.copy_from_slice(eps);
+        Ok(())
+    }
+
+    /// The per-cell `k` and `eps` of the random walk, if on.
+    pub fn dispersion_fields(&self) -> Option<(&[f64], &[f64])> {
+        self.disp.as_ref().map(|d| (d.k.as_slice(), d.eps.as_slice()))
+    }
+
+    /// Switch on the surface reaction of ADR 0208 D4 with the oxidiser mass fraction `y_o` per cell. Refused when a
+    /// reaction is already set, with heat transfer or the exchange record on, and for an invalid spec or field.
+    pub fn set_reaction(&mut self, spec: ReactionSpec, y_o: Vec<f64>) -> Result<()> {
+        if self.reaction.is_some() {
+            return err("reaction: a reaction is already set");
+        }
+        if self.thermal.is_some() || self.coupling.is_some() {
+            return err("reaction: not available with heat transfer or the exchange record (ADR 0208 S1)");
+        }
+        self.reaction = Some(SurfaceReaction::new(spec, y_o, self.loc.mesh().n_cells())?);
+        Ok(())
+    }
+
+    /// Replace the oxidiser mass fraction of the reaction (refused without one).
+    pub fn set_reaction_oxidiser(&mut self, y_o: &[f64]) -> Result<()> {
+        match self.reaction.as_mut() {
+            Some(r) => r.set_oxidiser_fraction(y_o),
+            None => err("reaction: no reaction is set (Tracker::set_reaction first)"),
+        }
+    }
+
+    /// The surface reaction, if set.
+    pub fn reaction(&self) -> Option<&SurfaceReaction> {
+        self.reaction.as_ref()
+    }
+
+    /// Reacting mass per real particle of parcel `i` [kg] (NaN before its first sub-step with the reaction on).
+    pub fn reacting_mass(&self, i: usize) -> f64 {
+        self.aux.get(i).map_or(f64::NAN, |a| a.m_r)
+    }
+
     /// Switch on convective heat transfer with the given carrier data (the temperature field may be refreshed with
     /// [`Tracker::thermal_mut`] before each step).
     pub fn set_thermal(&mut self, th: Thermal) -> Result<()> {
+        if self.reaction.is_some() {
+            return err("thermal: not available with the surface reaction (ADR 0208 S1)");
+        }
         if th.t_fluid.len() != self.loc.mesh().n_cells() {
             return err("thermal: the carrier temperature needs one value per cell");
         }
@@ -558,8 +627,8 @@ impl Tracker {
         let tinj = ij.ext.temperature;
         self.aux.resize(self.particles.len(), Aux::default());
         self.aux.push(Aux {
-            eddy: Eddy::default(),
             tp: tinj.unwrap_or(f64::NAN),
+            ..Aux::default()
         });
         self.particles.push(Particle {
             id,
@@ -582,6 +651,9 @@ impl Tracker {
         }
         if self.opts.interp == Interp::Gradient && flow.grad.is_none() {
             return err("gradient interpolation needs the velocity gradient");
+        }
+        if self.reaction.is_some() && self.coupling.is_some() {
+            return err("reaction: not available with the exchange record (ADR 0208 S1)");
         }
         if let Some(film) = self.film.as_mut() {
             let gas = film.gas();
@@ -610,6 +682,7 @@ impl Tracker {
                 film: self.film.as_mut(),
                 erosion: self.erosion.as_mut(),
                 rough: self.rough.as_mut(),
+                reaction: self.reaction.as_mut(),
             };
             for (p, a) in self.particles[..n_old].iter_mut().zip(self.aux.iter_mut()) {
                 if p.state == State::Active {
@@ -635,6 +708,7 @@ impl Tracker {
                     film: self.film.as_mut(),
                     erosion: self.erosion.as_mut(),
                     rough: self.rough.as_mut(),
+                    reaction: self.reaction.as_mut(),
                 };
                 advance_particle(&self.loc, &opts, &self.actions, flow, p, a, &mut ctx, left)?;
             }
@@ -679,6 +753,10 @@ impl Tracker {
             let c = rw.counts();
             out.extend([c.collisions, c.redraws, c.fallbacks, c.normal_incidence, c.grazing]);
         }
+        if let Some(rx) = &self.reaction {
+            out.extend(rx.bits());
+            out.extend((0..self.particles.len()).map(|i| self.reacting_mass(i).to_bits()));
+        }
         out
     }
 }
@@ -693,6 +771,21 @@ fn heat_step(th: &Thermal, fl: Fluid, p: &Particle, t0: f64, cell: usize, rel_sp
     let t1 = t0 + (tf - t0) * -(-h / tau_t).exp_m1();
     let m = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
     (t1, m * th.cp_p * (t1 - t0))
+}
+
+/// The surface reaction over a sub-step of length `h` that started in `cell` (ADR 0208 R2 to R5): sets the composition at
+/// the parcel's first reacting sub-step, shrinks the parcel and updates `mass` (the parcel mass) when mass reacted.
+fn react(rx: &mut SurfaceReaction, p: &mut Particle, aux: &mut Aux, cell: usize, rho_g: f64, h: f64, mass: &mut f64) {
+    if aux.m_r.is_nan() {
+        let m0 = p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+        let f = rx.spec().reacting_fraction;
+        aux.m_r = f * m0;
+        aux.m_i = (1.0 - f) * m0;
+    }
+    if let Some(d) = rx.react(cell, rho_g, p.rho, p.d, p.parcel, &mut aux.m_r, aux.m_i, h) {
+        p.d = d;
+        *mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+    }
 }
 
 /// Book the exchange of one sub-step (before any wall reflection) in the cell `cell` where it started.
@@ -726,7 +819,7 @@ fn advance_particle(
         mu: flow.mu,
     };
     let geff = scale(opts.gravity, 1.0 - fl.rho / p.rho);
-    let mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+    let mut mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
     if let Some(th) = ctx.thermal {
         if aux.tp.is_nan() {
             aux.tp = th.t_fluid[p.cell];
@@ -824,6 +917,9 @@ fn advance_particle(
                 if upr.is_some() {
                     aux.eddy.t_left -= h;
                 }
+                if let Some(rx) = ctx.reaction.as_deref_mut() {
+                    react(rx, p, aux, cell0, fl.rho, h, &mut mass);
+                }
             }
             Walk::Lost => return err(format!("particle {}: the cell walk did not terminate", p.id)),
             Walk::Boundary { cell, face, point } => {
@@ -876,6 +972,9 @@ fn advance_particle(
                 rem -= h_hit;
                 if upr.is_some() {
                     aux.eddy.t_left -= h_hit;
+                }
+                if let Some(rx) = ctx.reaction.as_deref_mut() {
+                    react(rx, p, aux, cell0, fl.rho, h_hit, &mut mass);
                 }
                 if let Some(er) = ctx.erosion.as_deref_mut() {
                     er.book(face, mass, v_hit, n);
