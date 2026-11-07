@@ -5,7 +5,7 @@
 //! their closed forms can be tested without a mesh. The wall helper [`WallInfo`] (nearest wall face, wall shear velocity,
 //! `y+`) is shared with the mixing-length closure in `zeroeq.rs`.
 
-use crate::eddy::{effective_viscosity, patch_faces};
+use crate::eddy::{effective_viscosity, patch_faces, SeamPairs};
 use crate::model::{CoefficientInfo, ModelContext, TurbulenceModel};
 use crate::wall::wall_distance;
 use rcfd_core::{vec3, Result};
@@ -103,6 +103,9 @@ pub struct WallInfo {
     pub nearest: Vec<usize>,
     /// Wall shear velocity of the wall faces from the last [`WallInfo::update_shear`].
     pub u_tau: Vec<f64>,
+    /// One momentum face viscosity per periodic seam pair (F-296, ADR 0212 D1): the pairs with
+    /// `periodic_seam.diffusivity = "pair"`.
+    pub seam: SeamPairs,
     nu: f64,
     geom: Arc<FvGeometry>,
 }
@@ -138,6 +141,7 @@ impl WallInfo {
             faces,
             dist,
             nearest,
+            seam: SeamPairs::default(),
             nu,
             geom: geom.clone(),
         })
@@ -181,10 +185,13 @@ impl WallInfo {
             .collect()
     }
 
-    /// Effective face viscosity `nu + nu_t` with `nu_t = 0` on the wall faces (wall-resolved treatment).
+    /// Effective face viscosity `nu + nu_t` with `nu_t = 0` on the wall faces (wall-resolved treatment); one value per periodic
+    /// pair when it is set (ADR 0212).
     pub fn nu_face(&self, nut: &[f64]) -> Vec<f64> {
         let wall_nut: Vec<(usize, f64)> = self.faces.iter().map(|&f| (f, 0.0)).collect();
-        effective_viscosity(&self.geom, self.nu, nut, &wall_nut)
+        let mut v = effective_viscosity(&self.geom, self.nu, nut, &wall_nut);
+        self.seam.apply(&self.geom, self.nu, nut, &mut v);
+        v
     }
 }
 
@@ -363,5 +370,12 @@ impl TurbulenceModel for AlgebraicSgs {
     }
     fn initialize_from_nut(&mut self, nut: &[f64]) {
         self.nut = nut.to_vec();
+    }
+    /// `periodic_diffusivity` = `owner` | `pair` (F-296, ADR 0212 D5); any other option is refused as by every model.
+    fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
+        if name != "periodic_diffusivity" {
+            return Err(format!("the model '{}' has no option '{name}'", self.key()));
+        }
+        self.wall.seam.set_option(&self.geom, value)
     }
 }

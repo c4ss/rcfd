@@ -5393,7 +5393,7 @@ fixed by the item's registration ADR before any code.
       (owner: 13 to 27 percent apart); other models refused at the key; defaults bit-identical. Open: other models (Q1),
       check H's texts (Q2), the default (Q3).
 
-- [ ] **F-296** One diffusivity per periodic seam pair for the other models
+- [x] **F-296** One diffusivity per periodic seam pair for the other models
   - depends on: F-295
   - acceptance: Every limit is fixed by its registration ADR before any code. The rule of F-295
     (turbulence.periodic_seam.diffusivity = "pair") is applied to the face viscosity or diffusivity of k-epsilon,
@@ -5403,6 +5403,16 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the
     same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set
     pair before H runs. Question 3: the default stays owner.
+    - BUILT (ADR 0212, the registration of F-296, 2026-11-07, branch f296-pair-diffusivity, not merged): every
+      registered check is met. turbulence.periodic_seam.diffusivity = "pair" now also gives both faces of a periodic
+      pair one value (the model's internal-face formula across the seam) for k-epsilon (momentum, k and epsilon),
+      Spalart-Allmaras (momentum, nuTilda), the Reynolds stress model (momentum, its momentum-source viscosity, stresses
+      and epsilon), smagorinsky, wale and mixing_length (momentum) and a laminar run's viscosity law (rheology); refused
+      with laminar without a law and with plugin. The global diffusion budgets close to 1e-15 with pair and miss by
+      4.9e-3 to 3.2e-2 with owner; the one-sweep k, nuTilda, stress and epsilon budgets (seam lag accounted) close to
+      5e-15 with pair and miss by 1.4e-4 to 5.7e-2 with owner; the case-tree seam pairs are equal to the bit. Finding:
+      SA's nuTilda diffusivity is already one value per pair under owner. ADR 0205 S1 is an ignored record (superseded).
+      Defaults bit-identical. Open: ADR 0212 Q1 to Q5.
 
 - [ ] **F-297** NSGA-II per-variable crossover and the 30-parameter ZDT1 check
   - depends on: F-249
@@ -5468,3 +5478,9 @@ fixed by the item's registration ADR before any code.
     (question 1: the default stays false until then); defaults bit-identical.
   - note: From ADR 0214 (F-299) questions 1 and 3 to 7, recommendations taken by the lead; question 2: F-299 stays
     partial. Question 5: extend the refused combinations one at a time, each with a steady-state identity check.
+- [ ] **F-302** Periodic seam pair diffusivity: remaining viscosities and the pimple check
+  - depends on: F-296, F-294
+  - acceptance: Pair diffusivity covers the temperature-dependent properties viscosity and the user-function viscosity;
+    a case-tree check of k-epsilon and Spalart-Allmaras with pair on pimple.
+  - note: From ADR 0212 questions 1 and 4, recommendations taken by the lead. RSM on a rotational seam only if RSM ever
+    runs there.

@@ -2135,7 +2135,18 @@ impl Simulation {
                 "statistics are collected by the transient incompressible algorithms (piso, pimple)",
             ));
         }
-        let rheology = Rheology::from_case(case);
+        let mut rheology = Rheology::from_case(case);
+        // ADR 0212 D4: one viscosity per periodic pair for the viscosity law (R1' allows pair on a laminar run with a law); an
+        // error of the pairing is located at the key (R3)
+        if let Some(r) = rheology
+            .as_mut()
+            .filter(|_| get_s(case, turb::PERIODIC_SEAM_KEY) == "pair")
+        {
+            let pairs = geom
+                .periodic_pairs()
+                .map_err(|e| diag(turb::PERIODIC_SEAM_KEY, e.to_string()))?;
+            r.set_seam_pairs(Some(pairs));
+        }
         if let (Some(_), Some(n)) = (&rheology, &udf_viscosity) {
             return Err(diag(
                 &format!("udf.{n}.viscosity"),

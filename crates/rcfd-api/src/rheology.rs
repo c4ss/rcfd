@@ -110,6 +110,9 @@ pub struct Rheology {
     /// Density (kg/m^3).
     pub rho: f64,
     prev: Option<Vec<f64>>,
+    /// The periodic pairs with `turbulence.periodic_seam.diffusivity = "pair"` (F-296, ADR 0212 D1); `None`: each face of a pair
+    /// takes its own owner's viscosity.
+    seam: Option<Vec<rcfd_fv::PeriodicPair>>,
 }
 
 fn f(c: &Case, p: &str) -> f64 {
@@ -191,7 +194,14 @@ impl Rheology {
             relax: f(case, "rheology.relax"),
             rho,
             prev: None,
+            seam: None,
         })
+    }
+
+    /// One face viscosity per periodic pair (F-296, ADR 0212 D1): with `Some(pairs)` both faces of every pair take
+    /// `(w mu_P + (1 - w) mu_Q) / rho` before the relaxation; `None` (the default) gives each face its own owner's value.
+    pub fn set_seam_pairs(&mut self, pairs: Option<Vec<rcfd_fv::PeriodicPair>>) {
+        self.seam = pairs;
     }
 
     /// Temperature shift factor `a_T` (1 without a shift).
@@ -267,6 +277,14 @@ impl Rheology {
                 mu / self.rho
             })
             .collect();
+        if let Some(pairs) = &self.seam {
+            // ADR 0212 D1: one value per periodic pair, before the relaxation (face by face, so a paired history stays paired)
+            for p in pairs {
+                let v = (p.w * mu_cell[own[p.f]] + (1.0 - p.w) * mu_cell[own[p.g]]) / self.rho;
+                nu[p.f] = v;
+                nu[p.g] = v;
+            }
+        }
         if let Some(p) = &self.prev {
             if self.relax < 1.0 && p.len() == nu.len() {
                 for (a, b) in nu.iter_mut().zip(p) {
@@ -432,6 +450,7 @@ mod tests {
             relax: 1.0,
             rho: 1.0,
             prev: None,
+            seam: None,
         }
     }
 

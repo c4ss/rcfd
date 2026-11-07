@@ -2,7 +2,7 @@
 //! effective face viscosity of the momentum equation (with wall-function
 //! values on wall faces) and the algebraic mixing-length model (Prandtl, 1925).
 
-use rcfd_core::vec3;
+use rcfd_core::{vec3, Result};
 use rcfd_fv::gradient::green_gauss;
 use rcfd_fv::{FvGeometry, PeriodicPair, VectorField};
 
@@ -55,6 +55,61 @@ pub fn pair_periodic_faces(pairs: &[PeriodicPair], owner: &[usize], nu: f64, cel
         let v = nu + p.w * cell[owner[p.f]] + (1.0 - p.w) * cell[owner[p.g]];
         face[p.f] = v;
         face[p.g] = v;
+    }
+}
+
+/// The value of `turbulence.periodic_seam.diffusivity` as the model option `periodic_diffusivity` (ADR 0205 D3, ADR 0212 D5).
+pub fn seam_mode(value: &str) -> std::result::Result<SeamDiffusivity, String> {
+    match value {
+        "owner" => Ok(SeamDiffusivity::Owner),
+        "pair" => Ok(SeamDiffusivity::Pair),
+        other => Err(format!("periodic_diffusivity = '{other}': use owner or pair")),
+    }
+}
+
+/// The periodic pairs of a model under `turbulence.periodic_seam.diffusivity` (F-296, ADR 0212 D5): none for
+/// [`SeamDiffusivity::Owner`] (each face its own owner's value, every earlier result), the pairs of the mesh for
+/// [`SeamDiffusivity::Pair`].
+#[derive(Debug, Clone, Default)]
+pub struct SeamPairs(Option<Vec<PeriodicPair>>);
+
+impl SeamPairs {
+    /// Set the rule. `Pair` reads the pairs of the mesh: an error when its periodic maps are not a pairing (ADR 0205 R3), and
+    /// the rule is then unchanged.
+    pub fn set(&mut self, geom: &FvGeometry, mode: SeamDiffusivity) -> Result<()> {
+        self.0 = match mode {
+            SeamDiffusivity::Owner => None,
+            SeamDiffusivity::Pair => Some(geom.periodic_pairs()?),
+        };
+        Ok(())
+    }
+
+    /// The rule in force.
+    pub fn mode(&self) -> SeamDiffusivity {
+        if self.0.is_some() {
+            SeamDiffusivity::Pair
+        } else {
+            SeamDiffusivity::Owner
+        }
+    }
+
+    /// The pairs, `None` for [`SeamDiffusivity::Owner`].
+    pub fn pairs(&self) -> Option<&[PeriodicPair]> {
+        self.0.as_deref()
+    }
+
+    /// With the pairs set, [`pair_periodic_faces`] (`nu + w a_P + (1 - w) a_Q` on both faces of every pair, ADR 0205 D1) of the
+    /// cell values `cell`; nothing otherwise.
+    pub fn apply(&self, geom: &FvGeometry, nu: f64, cell: &[f64], face: &mut [f64]) {
+        if let Some(p) = &self.0 {
+            pair_periodic_faces(p, geom.mesh.owner(), nu, cell, face);
+        }
+    }
+
+    /// The model option `periodic_diffusivity = value` (ADR 0212 D5), with the error text of the parse or of the pairing.
+    pub fn set_option(&mut self, geom: &FvGeometry, value: &str) -> std::result::Result<(), String> {
+        let mode = seam_mode(value)?;
+        self.set(geom, mode).map_err(|e| e.to_string())
     }
 }
 

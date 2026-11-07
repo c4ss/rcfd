@@ -96,6 +96,7 @@ fn s1(corrected: bool) {
 
 /// S1 (the case of record, amendment 1).
 #[test]
+#[ignore = "superseded by ADR 0212 R1' (F-296): pair is accepted with k_epsilon and spalart_allmaras; the cases are in S1' of f296_seam_diffusivity.rs"]
 fn s1_scope_of_the_seam_diffusivity() {
     s1(true)
 }

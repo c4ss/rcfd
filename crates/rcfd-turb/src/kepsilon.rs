@@ -286,6 +286,8 @@ pub struct KEpsilon {
     /// `solver.gradient_equations.turbulence`); `None` (default) assembles the plain Laplacian. They act only where `convection`
     /// computes a cell gradient.
     pub gradient: Option<GradientOptions>,
+    /// One diffusivity per periodic seam pair (F-296, ADR 0212 D1): the pairs with `periodic_seam.diffusivity = "pair"`.
+    seam: crate::eddy::SeamPairs,
     wall_dist: Vec<f64>,
     wall_faces: Vec<usize>,
     /// Wall face of every wall-adjacent cell (nearest wall face), `usize::MAX` otherwise.
@@ -355,6 +357,7 @@ impl KEpsilon {
             sigma_k,
             sigma_e,
             gradient: None,
+            seam: Default::default(),
             wall_log: vec![false; geom.n_cells()],
             wall_dist,
             wall_faces,
@@ -440,9 +443,25 @@ impl KEpsilon {
         }
     }
 
-    /// Effective face viscosity `nu + nu_t` (wall faces from the wall function) for the momentum equation.
+    /// Diffusivity of the faces of a periodic pair (F-296, ADR 0212 D1): with [`crate::SeamDiffusivity::Pair`] both faces of
+    /// every pair take `nu + w nu_t,P + (1 - w) nu_t,Q` in the momentum face viscosity and the face eddy viscosity
+    /// `w nu_t,P + (1 - w) nu_t,Q` in the k and epsilon diffusivities of every sweep; `Owner` (the default) gives each face its
+    /// own owner's value. An error when the periodic maps of the mesh are not a pairing (the model is then unchanged).
+    pub fn set_periodic_diffusivity(&mut self, mode: crate::SeamDiffusivity) -> Result<()> {
+        self.seam.set(&self.geom, mode)
+    }
+
+    /// The diffusivity rule of the periodic pairs ([`KEpsilon::set_periodic_diffusivity`]).
+    pub fn periodic_diffusivity(&self) -> crate::SeamDiffusivity {
+        self.seam.mode()
+    }
+
+    /// Effective face viscosity `nu + nu_t` (wall faces from the wall function) for the momentum equation; one value per
+    /// periodic pair when it is set (ADR 0212).
     pub fn nu_face(&self) -> Vec<f64> {
-        effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut)
+        let mut v = effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut);
+        self.seam.apply(&self.geom, self.nu, &self.nut, &mut v);
+        v
     }
 
     /// Tangential speed of the cell next to a wall face relative to the wall.
@@ -525,7 +544,9 @@ impl KEpsilon {
                 cmu
             }
         };
-        let nut_f = effective_viscosity(&g, 0.0, &self.nut, &[]);
+        let mut nut_f = effective_viscosity(&g, 0.0, &self.nut, &[]);
+        // ADR 0212 D1: one face eddy viscosity per periodic pair when it is set (k and epsilon)
+        self.seam.apply(&g, 0.0, &self.nut, &mut nut_f);
 
         // wall-cell production and dissipation (wall functions)
         let mut prod = vec![0.0; n];

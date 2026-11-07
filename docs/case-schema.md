@@ -124,7 +124,17 @@ every pair one value, `nu + w a_P + (1 - w) a_Q` with `w = dn_g / (dn_f + dn_g)`
 the seam), in the momentum face viscosity and in the k and omega diffusivities, on the steady algorithms and on `pimple`, for
 translational and rotational seams. A pair that touches a laminar region takes the molecular viscosity on both faces, and the
 scalars with a Schmidt number follow the momentum face viscosity. `"owner"` is the default and keeps every earlier result. `pair`
-is a located error with any model other than `k_omega_sst`, and has no effect on a mesh without periodic patches.
+has no effect on a mesh without periodic patches.
+
+The same key applies to the other models (ADR 0212): each diffusivity takes on both faces of a pair the formula of the model's
+internal faces with the pair's weight. k-epsilon: the momentum face viscosity and the face eddy viscosity of its k and epsilon
+diffusivities. Spalart-Allmaras: the momentum face viscosity and the `nuTilda` diffusivity (which already takes one value per pair
+by default, the value at the periodic face; `pair` gives it the internal-face rule, which differs where `nuTilda < 0`). `rsm`: the
+momentum face viscosity, the viscosity of its explicit momentum source, and the stress and epsilon diffusivities, with the normal
+stress of each owner on its own face. `smagorinsky`, `wale`, `mixing_length`: the momentum face viscosity. A laminar run with a
+`rheology` law: the law's face viscosity, `(w mu_P + (1 - w) mu_Q) / rho` before its relaxation. `pair` is a located error with a
+laminar run without a viscosity law and with a `plugin` model. The temperature-dependent `properties` viscosity and a
+user-function viscosity keep their face values.
 
 Wall treatment: automatic.
 
@@ -1163,7 +1173,9 @@ The apparent viscosity follows the shear rate `sqrt(2 S:S)` of the current veloc
 interpolated, relaxed with `rheology.relax`).
 
 `rheology` works in steady SIMPLE/SIMPLEC (also with the energy equation) and in transient PISO/PIMPLE runs. It is not
-combined with turbulence models, the compressible solver or a user-function viscosity (diagnostics).
+combined with turbulence models, the compressible solver or a user-function viscosity (diagnostics). On a periodic seam each face
+takes the viscosity of its own owner cell; `turbulence.periodic_seam.diffusivity = "pair"` gives both faces of a pair one value
+(ADR 0212, see `k_omega_sst` above).
 
 Not implemented: the transposed-gradient viscous term of a variable viscosity, yield-stress laws with a temperature shift,
 checkpoints that carry the viscosity history.

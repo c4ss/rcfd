@@ -443,6 +443,8 @@ pub struct SpalartAllmaras {
     /// Time step of the current transient step (`None`: steady pseudo-time sweep).
     step_dt: Option<f64>,
     nutilde_old: Vec<f64>,
+    /// One diffusivity per periodic seam pair (F-296, ADR 0212 D1): the pairs with `periodic_seam.diffusivity = "pair"`.
+    seam: crate::eddy::SeamPairs,
     pub(crate) delta_cache: Option<Vec<f64>>,
     // wall mode SaLaw only (ADR 0168): the inner law, the wall-normal first faces (wall face, internal face, neighbour,
     // wall-normal distance between the cell centres) and the relaxed internal-face eddy viscosity
@@ -508,6 +510,7 @@ impl SpalartAllmaras {
             started: false,
             step_dt: None,
             nutilde_old: Vec::new(),
+            seam: Default::default(),
             delta_cache: None,
             inner: None,
             law_faces: None,
@@ -616,7 +619,20 @@ impl SpalartAllmaras {
         &self.y_plus
     }
 
-    /// Effective face viscosity `nu + nu_t` for the momentum equation.
+    /// Diffusivity of the faces of a periodic pair (F-296, ADR 0212 D1): with [`crate::SeamDiffusivity::Pair`] both faces of
+    /// every pair take `nu + w nu_t,P + (1 - w) nu_t,Q` in the momentum face viscosity and `(nu + w e_P + (1 - w) e_Q) / sigma`
+    /// in the `nuT` diffusivity of every sweep, `e` the cell values of the internal faces; `Owner` (the default) keeps the
+    /// existing values. An error when the periodic maps of the mesh are not a pairing (the model is then unchanged).
+    pub fn set_periodic_diffusivity(&mut self, mode: crate::SeamDiffusivity) -> Result<()> {
+        self.seam.set(&self.geom, mode)
+    }
+
+    /// The diffusivity rule of the periodic pairs ([`SpalartAllmaras::set_periodic_diffusivity`]).
+    pub fn periodic_diffusivity(&self) -> crate::SeamDiffusivity {
+        self.seam.mode()
+    }
+
+    /// Effective face viscosity `nu + nu_t` for the momentum equation; one value per periodic pair when it is set (ADR 0212).
     pub fn nu_face(&self) -> Vec<f64> {
         let mut out = effective_viscosity(&self.geom, self.nu, &self.nut, &self.wall_nut);
         if self.wall_mode == SaWallMode::SaLaw {
@@ -624,6 +640,7 @@ impl SpalartAllmaras {
                 *o = self.nu + v;
             }
         }
+        self.seam.apply(&self.geom, self.nu, &self.nut, &mut out);
         out
     }
 
@@ -804,6 +821,8 @@ impl SpalartAllmaras {
             let bb = if self.negative_nutilde { b } else { b.max(0.0) };
             gam[g.n_internal + i] = nu + fnv(b) * bb;
         }
+        // ADR 0212 D1: one value per periodic pair when it is set, from the cell values of the internal faces
+        self.seam.apply(&g, nu, &eff, &mut gam);
         gam.iter_mut().for_each(|x| *x /= cf.sigma);
 
         // ---- matrix
