@@ -386,3 +386,20 @@ in the rotating frame) and `turbulence = "wall"`, in place of the moving wall; e
 frame, the rotational seams, the inlet expressions, the inlet turbulence values, the solver). S1 adds one located case: the
 k-epsilon S4 text with the moving wall of ADR 0199 is located at `boundaries.outer.velocity` (the rule as it is). No limit
 changes.
+
+### Amendment 2 (2026-11-07): the solver controls of HK, written after the first run of part K and before the corrected run
+
+The first run of the part K library checks (code of D6 in the working tree, release, each test once) found the HK set-up
+defective: every HK test stopped at HK0 in step 1, sweep 1, with k uniform (spread 2.2e-16 to 4.7e-16) and epsilon not (spread
+1.017e-6 in K1, K1b and K1N, 1.255e-6 in K1r, 1.355e-7 in K1v, 1.820e-6 in K2 and K2b, 3.107e-6 in K2v; limit 1e-13). KC1 ran
+and met its limits (addendum). The cause is the linear solver, not the transient term: its stopping rule is
+`residual <= max(tol_abs, tol_rel r0)` on the 2-norm of the whole system, and the epsilon of block B's wall cell is fixed by a
+diagonal 1e8 times its own (point 3), so that row dominates `r0` by about 1e8 and the rows of A stop near
+`1e-14 x 1e8 = 1e-6` of their own scale. The k matrix has no such row. A scratch probe (not committed) of three sweeps of the
+first K1 step gives an epsilon spread of 1.0e-6, 1.8e-7, 2.3e-8 with the registered controls and 3.6e-16 to 4.9e-16 (k 3.5e-16
+to 5.8e-16) with `tol_rel = 0`.
+
+The records stay as ignored tests (`*_tol_record`), with their limits unchanged. The corrected HK takes the solver controls
+`tol_rel = 0`, `tol_abs = 1e-300`, `max_iter = 1000`: the HK matrices are symmetric (`phi = 0`), so the solver is CG, which then
+stops at an exactly zero residual or after 1000 iterations, past round-off in every row of the 17-cell system. Nothing else
+changes (mesh, constants, steps, sweeps, limits, reference values). KC1 keeps its registered controls and its run of record.
