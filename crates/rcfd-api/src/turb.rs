@@ -446,13 +446,21 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 ),
             ));
         }
-    } else if sst && algorithm == "pimple" {
-        // F-286 (ADR 0199 D3): transient k-omega SST, one sweep at the start of every outer iteration
+    } else if (sst || ke || sa) && algorithm == "pimple" {
+        // F-286 (ADR 0199 D3): transient k-omega SST; F-294 (ADR 0210 D4): k-epsilon and Spalart-Allmaras without DES (SA-DES
+        // is the branch above); one sweep at the start of every outer iteration
     } else if sst && !matches!(algorithm.as_str(), "simple" | "simplec") {
         out.push(diag(
             "turbulence.model",
             format!(
                 "{mname} is available with the steady algorithms (simple, simplec) and with pimple (ADR 0199: k and omega are updated in every outer iteration), not with solver.algorithm = \"{algorithm}\""
+            ),
+        ));
+    } else if (ke || sa) && !matches!(algorithm.as_str(), "simple" | "simplec") {
+        out.push(diag(
+            "turbulence.model",
+            format!(
+                "{mname} is available with the steady algorithms (simple, simplec) and with pimple (ADR 0210: the model is updated in every outer iteration), not with solver.algorithm = \"{algorithm}\""
             ),
         ));
     } else if !matches!(algorithm.as_str(), "simple" | "simplec") {

@@ -202,20 +202,15 @@ fn s1(amended: usize) {
     let m = messages(&piso);
     let (_, text) = m.iter().find(|(p, _)| p == "turbulence.model").expect("piso message");
     assert!(text.contains("pimple"), "the piso refusal does not name pimple: {text}");
-    has(
-        &ch(&pimple("euler"), "").replace(
-            "model = \"k_omega_sst\"\nk_initial = 1.0\nomega_initial = 40.0\n",
-            "model = \"k_epsilon\"\n",
-        ),
-        "turbulence.model",
-    );
-    has(
-        &ch(&pimple("euler"), "").replace(
-            "model = \"k_omega_sst\"\nk_initial = 1.0\nomega_initial = 40.0\n",
-            "model = \"spalart_allmaras\"\n",
-        ),
-        "turbulence.model",
-    );
+    // superseded by ADR 0210 D4 (F-294): k-epsilon and Spalart-Allmaras without DES are accepted on pimple
+    ok(&ch(&pimple("euler"), "").replace(
+        "model = \"k_omega_sst\"\nk_initial = 1.0\nomega_initial = 40.0\n",
+        "model = \"k_epsilon\"\n",
+    ));
+    ok(&ch(&pimple("euler"), "").replace(
+        "model = \"k_omega_sst\"\nk_initial = 1.0\nomega_initial = 40.0\n",
+        "model = \"spalart_allmaras\"\n",
+    ));
     has(
         &format!("{}[energy]\nenabled = true\n", ch(&pimple("euler"), "")),
         "turbulence.model",
@@ -247,7 +242,7 @@ fn s1(amended: usize) {
         ),
         "turbulence.model",
     );
-    println!("S1: located at turbulence.model (piso, with pimple named; k_epsilon and SA on pimple; energy; piso with the fractional step), dynamic_mesh.enabled, solver.error_tolerance, solver.time_advance (pimple with the fractional step)");
+    println!("S1: located at turbulence.model (piso, with pimple named; energy; piso with the fractional step), dynamic_mesh.enabled, solver.error_tolerance, solver.time_advance (pimple with the fractional step); k_epsilon and SA on pimple accepted (ADR 0210 D4)");
 }
 
 /// S1 (the case of record, amendment 3).

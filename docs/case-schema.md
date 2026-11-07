@@ -87,10 +87,17 @@ Example cases (all run in seconds to a minute in a debug build):
 | `omega_initial` | 0 | k-omega SST only, replaces `epsilon_initial` (`k_initial` and `omega_initial` together, or both 0 to derive them) |
 | `initial_intensity`, `initial_viscosity_ratio` | 0.05, 10 | used to derive the initial k, epsilon from the initial velocity when the two above are 0 |
 
-`k_epsilon` runs with the steady algorithms (`simple`, `simplec`) only, needs at least one wall
+`k_epsilon` runs with the steady algorithms (`simple`, `simplec`) and with `pimple` (below), needs at least one wall
 patch, a positive `physics.nu`, and cannot be combined with `energy.enabled`. Walls must be at
 rest (moving walls are rejected). The momentum equation uses the solved-H operator
 (`solver.h_operator = from_solution`) automatically unless you choose otherwise.
+
+Transient runs (ADR 0210): with `solver.algorithm = "pimple"` on a static mesh, k and epsilon get the time derivative of
+`solver.time_scheme` (`euler`, `bdf2`, `bdf2_bounded`) and one sweep at the start of every outer iteration, whose eddy
+viscosity the momentum equation of that outer iteration uses, as for `k_omega_sst` (ADR 0199). Every variant, wall function
+and wall treatment is accepted. `turbulence.relax` and `relax_nut` are not used there (the time derivative takes their
+place). With `n_outer = 1` the sweep sees only the old time level. `piso`, a dynamic mesh, `solver.error_tolerance` and the
+fractional step are located errors.
 
 ### `k_omega_sst`
 
@@ -141,7 +148,11 @@ Spalart-Allmaras one-equation model, SA-noft2 form of the NASA Turbulence Modeli
 (https://tmbwg.github.io/turbmodels/spalart.html, ADR 0014). The working variable is `nuTilda`, with `nut = nuTilda fv1`.
 Coefficients: sigma 2/3, cb1 0.1355, cb2 0.622, kappa 0.41, cw2 0.3, cw3 2, cv1 7.1 (`cw1` derived).
 
-Restrictions: the same as the other RANS models (steady algorithms, a wall patch, no energy).
+Restrictions: the same as the other RANS models (a wall patch, no energy). With `sa.des = "off"` it runs with the steady
+algorithms and with `pimple` (ADR 0210): on a static mesh, `nuTilda` gets the time derivative of `solver.time_scheme` and
+one sweep at the start of every outer iteration, as for `k_epsilon` and `k_omega_sst`; `turbulence.relax` and `relax_nut`
+are not used there, and `piso` is a located error. With `sa.des = "des"` or `"ddes"` it keeps the once-per-step
+implicit-Euler update below.
 
 Extra keys:
 
@@ -167,7 +178,7 @@ DES rules:
 
 - The `sa.des*` keys are errors (located at the key) with any other model.
 - `sa.des != "off"` with a steady algorithm is a located error at `turbulence.sa.des`.
-- Plain SA (`sa.des = "off"`) stays steady-only.
+- Plain SA (`sa.des = "off"`) runs with the steady algorithms and with `pimple` (ADR 0210, see above), not with `piso`.
 
 With the DES length scale, the model is a hybrid RANS-LES closure on the Spalart-Allmaras equation only. The SA-based DES
 and DDES of ADR 0032 are not validated on a separated flow (no case in this version). IDDES, SAS, the Strelets variants

@@ -19,6 +19,12 @@
 //!
 //! Numerics: the production and the cb2 term are explicit, the destruction is linearised on the diagonal, convection and
 //! diffusion go through the shared finite-volume operators. Wall treatment: see [`SaWallMode`].
+//!
+//! Time derivative: [`SpalartAllmaras::begin_step`] (SA-DES and SA-DDES, ADR 0032) adds an implicit-Euler term to the next
+//! sweep only. [`SpalartAllmaras::begin_time_step`] (F-294, ADR 0210 D2, SA without DES on `pimple`) starts a step whose every
+//! sweep adds the time derivative of the momentum's time scheme (`rcfd_fv::ddt::add_ddt`, old levels fixed for the step) in
+//! place of the implicit under-relaxation, without relaxing the eddy viscosity; the `pimple` solver makes one sweep at the start
+//! of every outer iteration. A model that never starts a step (the steady algorithms) runs the steady sweep unchanged.
 
 use crate::eddy::{effective_viscosity, patch_faces};
 use crate::kepsilon::velocity_gradient;
@@ -26,6 +32,7 @@ use crate::wall::{wall_distance, SpaldingLaw};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
+use rcfd_fv::ddt::{add_ddt, History, TimeScheme};
 use rcfd_fv::diffusion::laplacian;
 use rcfd_fv::gradient::{green_gauss, least_squares};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
@@ -375,7 +382,18 @@ pub fn cell_delta(geom: &FvGeometry, kind: DesDelta) -> Vec<f64> {
     }
 }
 
-/// Steady Spalart-Allmaras model state.
+/// Time levels of a transient run started by [`SpalartAllmaras::begin_time_step`] (F-294, ADR 0210 D2).
+struct SaTime {
+    /// Time scheme of the step in progress.
+    scheme: TimeScheme,
+    /// Size of the step in progress.
+    dt: f64,
+    /// Old levels of `nuT`.
+    nt: History,
+}
+
+/// Spalart-Allmaras model state (steady; transient after [`SpalartAllmaras::begin_step`] or
+/// [`SpalartAllmaras::begin_time_step`]).
 pub struct SpalartAllmaras {
     /// Geometry.
     pub geom: Arc<FvGeometry>,
@@ -427,6 +445,8 @@ pub struct SpalartAllmaras {
     inner: Option<SaInnerLaw>,
     law_faces: Option<Vec<(usize, usize, f64)>>,
     face_nut: Vec<f64>,
+    /// ADR 0210 D2: `None` until [`SpalartAllmaras::begin_time_step`] starts a step (every existing path leaves it `None`).
+    time: Option<SaTime>,
 }
 
 impl SpalartAllmaras {
@@ -487,6 +507,7 @@ impl SpalartAllmaras {
             inner: None,
             law_faces: None,
             face_nut: Vec::new(),
+            time: None,
         })
     }
 
@@ -618,10 +639,39 @@ impl SpalartAllmaras {
     }
 
     /// Start a transient step of size `dt`: the next [`SpalartAllmaras::update`] adds the implicit-Euler time derivative
-    /// (no under-relaxation) with the present `nuT` as the old level.
+    /// (no under-relaxation) with the present `nuT` as the old level. It ends a step history of
+    /// [`SpalartAllmaras::begin_time_step`] (ADR 0210 D2), so the two paths are never mixed.
     pub fn begin_step(&mut self, dt: f64) {
         self.step_dt = Some(dt);
         self.nutilde_old = self.nutilde.values.clone();
+        self.time = None;
+    }
+
+    /// Start a transient step of size `dt` with the time scheme `scheme` (F-294, ADR 0210 D2: SA without DES on `pimple`).
+    /// The first call takes the present `nuT` as the old level; every later call pushes the field at the end of the previous
+    /// step with that step's size. Every [`SpalartAllmaras::update`] until the next call is a sweep of this step: the time
+    /// derivative of `scheme` (Euler on the first step of either BDF2) replaces the implicit under-relaxation, and the eddy
+    /// viscosity is not relaxed.
+    pub fn begin_time_step(&mut self, dt: f64, scheme: TimeScheme) {
+        match &mut self.time {
+            None => {
+                self.time = Some(SaTime {
+                    scheme,
+                    dt,
+                    nt: History::new(self.nutilde.values.clone()),
+                })
+            }
+            Some(t) => {
+                t.nt.push(self.nutilde.values.clone(), t.dt);
+                t.dt = dt;
+                t.scheme = scheme;
+            }
+        }
+    }
+
+    /// Has a step of [`SpalartAllmaras::begin_time_step`] been started?
+    pub fn is_transient(&self) -> bool {
+        self.time.is_some()
     }
 
     /// Length scale of every cell: the wall distance, or the DES / DDES length.
@@ -785,6 +835,9 @@ impl SpalartAllmaras {
                 m.a.diag[c] += vol[c] / dt;
                 m.b[c] += vol[c] * self.nutilde_old[c] / dt;
             }
+        } else if let Some(t) = &self.time {
+            // ADR 0210 D2: the time derivative of the step's scheme takes the place of the relaxation
+            m = add_ddt(t.scheme, m, &vol, t.dt, &t.nt);
         } else {
             m.relax(self.relax_turb, &nt);
         }
@@ -805,7 +858,7 @@ impl SpalartAllmaras {
         // ---- eddy viscosity and wall values
         let cap = 1e5 * nu;
         let mut change: f64 = 0.0;
-        let alpha = if self.started && self.step_dt.is_none() {
+        let alpha = if self.started && self.step_dt.is_none() && self.time.is_none() {
             self.relax_nut
         } else {
             1.0

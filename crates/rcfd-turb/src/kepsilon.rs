@@ -28,12 +28,18 @@
 //! wall-shear value `G = tau_w C_mu^(1/4) sqrt(k) / (kappa y)`; `k` has zero gradient at the wall
 //! and the wall-face eddy viscosity follows from `k` (`nu_t,w`). A cell with several wall faces
 //! uses the nearest one.
+//!
+//! Transient form (F-294, ADR 0210 D1): after [`KEpsilon::begin_step`] every sweep adds the time derivative of the momentum's
+//! time scheme (`rcfd_fv::ddt::add_ddt`, old levels fixed for the step) to the k and epsilon matrices in place of the implicit
+//! under-relaxation, and the eddy viscosity is not relaxed. The `pimple` solver makes one sweep at the start of every outer
+//! iteration. A model that never starts a step (the steady algorithms) runs the steady sweep unchanged.
 
 use crate::eddy::{effective_viscosity, patch_faces};
 use crate::wall::{wall_distance, KaderLaw, Roughness, WallConstants};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
+use rcfd_fv::ddt::{add_ddt, History, TimeScheme};
 use rcfd_fv::diffusion::laplacian;
 use rcfd_fv::gradient::{green_gauss, least_squares};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
@@ -219,7 +225,19 @@ pub const REALIZABLE_A0_DEFAULT: f64 = 4.04;
 /// The Realizable `A0` printed in the original report (NASA TM-106721).
 pub const REALIZABLE_A0_ORIGINAL: f64 = 4.0;
 
-/// Steady k-epsilon model state.
+/// Time levels of a transient run (F-294, ADR 0210 D1).
+struct KeTime {
+    /// Time scheme of the step in progress.
+    scheme: TimeScheme,
+    /// Size of the step in progress.
+    dt: f64,
+    /// Old levels of k.
+    k: History,
+    /// Old levels of epsilon.
+    eps: History,
+}
+
+/// k-epsilon model state (steady; transient after [`KEpsilon::begin_step`]).
 pub struct KEpsilon {
     /// Variant.
     pub variant: KEpsilonVariant,
@@ -271,6 +289,8 @@ pub struct KEpsilon {
     /// Branch remembered by the hysteresis treatment (`true` = log layer).
     wall_log: Vec<bool>,
     started: bool,
+    /// `None` until the first transient step starts (the steady path never sets it).
+    time: Option<KeTime>,
 }
 
 impl KEpsilon {
@@ -336,7 +356,36 @@ impl KEpsilon {
             cell_wall_face,
             geom,
             started: false,
+            time: None,
         })
+    }
+
+    /// Start a transient step of size `dt` with the time scheme `scheme` (F-294, ADR 0210 D1). The first call takes the
+    /// present k and epsilon as the old level; every later call pushes the fields at the end of the previous step with that
+    /// step's size. Every [`KEpsilon::update`] until the next call is a sweep of this step: the time derivative of `scheme`
+    /// (Euler on the first step of either BDF2) replaces the implicit under-relaxation, and the eddy viscosity is not relaxed.
+    pub fn begin_step(&mut self, dt: f64, scheme: TimeScheme) {
+        match &mut self.time {
+            None => {
+                self.time = Some(KeTime {
+                    scheme,
+                    dt,
+                    k: History::new(self.k.values.clone()),
+                    eps: History::new(self.eps.values.clone()),
+                })
+            }
+            Some(t) => {
+                t.k.push(self.k.values.clone(), t.dt);
+                t.eps.push(self.eps.values.clone(), t.dt);
+                t.dt = dt;
+                t.scheme = scheme;
+            }
+        }
+    }
+
+    /// Has a transient step been started ([`KEpsilon::begin_step`])?
+    pub fn is_transient(&self) -> bool {
+        self.time.is_some()
     }
 
     /// Wall distance of every cell centre.
@@ -502,7 +551,11 @@ impl KEpsilon {
             let e = wall_eps[c].unwrap_or(ev[c]);
             mk.a.diag[c] += e / kv[c].max(1e-30) * vol[c];
         }
-        mk.relax(self.relax_turb, &kv);
+        match &self.time {
+            // ADR 0210 D1: the time derivative takes the place of the relaxation
+            Some(t) => mk = add_ddt(t.scheme, mk, &vol, t.dt, &t.k),
+            None => mk.relax(self.relax_turb, &kv),
+        }
         let mut knew = kv.clone();
         mk.solve(&mut knew, &self.solver);
         knew.iter_mut().for_each(|x| *x = x.max(1e-10));
@@ -537,7 +590,10 @@ impl KEpsilon {
                 }
             }
         }
-        me.relax(self.relax_turb, &ev);
+        match &self.time {
+            Some(t) => me = add_ddt(t.scheme, me, &vol, t.dt, &t.eps),
+            None => me.relax(self.relax_turb, &ev),
+        }
         // wall cells: fix epsilon with a dominant diagonal
         for &c in &wall_cells {
             if let Some(e) = wall_eps[c] {
@@ -569,7 +625,12 @@ impl KEpsilon {
         let (kc, ec) = (self.k.values.clone(), self.eps.values.clone());
         let cap = 1e5 * self.nu;
         let mut change: f64 = 0.0;
-        let alpha = if self.started { self.relax_nut } else { 1.0 };
+        // ADR 0210 D1: a transient sweep takes the new eddy viscosity
+        let alpha = if self.started && self.time.is_none() {
+            self.relax_nut
+        } else {
+            1.0
+        };
         for c in 0..n {
             let mut new = (c_mu_cell(c) * kc[c] * kc[c] / ec[c]).min(cap);
             if let Some((nut2, lam, eps_solved)) = nut_outer[c] {
