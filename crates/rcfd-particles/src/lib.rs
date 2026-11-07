@@ -3,7 +3,7 @@
 //! Point particles with Stokes or Schiller-Naumann drag, gravity with buoyancy, integrated by an analytic exponential
 //! scheme or Euler / midpoint / RK4, located and tracked across the faces of an unstructured polyhedral mesh, with wall
 //! reflection, trapping and escape, point and surface injection, constant and Rosin-Rammler diameters and VTK output;
-//! a wall film (ADR 0192), erosion and rough-wall rebound (ADR 0194).
+//! a wall film (ADR 0192) with optional gas buoyancy and gas shear (ADR 0206), erosion and rough-wall rebound (ADR 0194).
 //!
 //! The crate depends on `rcfd-mesh` only; the fluid velocity and its gradient are inputs ([`Flow`]).
 
@@ -26,7 +26,9 @@ pub use erosion::{
     dnv_angle_function, erosion_preset, impact_angle, Erosion, ErosionPreset, ErosionSpec, DNV_A, EROSION_PRESETS,
     PRESET_PROVENANCE,
 };
-pub use film::{film_velocity, nusselt_thickness, Film, FilmSpec};
+pub use film::{
+    buoyant_thickness, film_velocity, nusselt_thickness, shear_film_velocity, shear_thickness, Film, FilmGas, FilmSpec,
+};
 pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};
 pub use rng::SplitMix64;

@@ -5,9 +5,14 @@
 //! (lubrication closure, ADR 0192 M1, M2), and mass moves between faces by a donor-cell flux across their shared edges,
 //! integrated by explicit Euler sub-steps under a Courant limit on the kinematic wave (M4 to M6). Mass that leaves through
 //! an edge no other film face shares is booked as drained. Parcels that reach a film face are absorbed into it (M8).
+//!
+//! Two opt-in gas drives (F-292, ADR 0206), switched on by [`Film::set_gas`]: gas buoyancy drives the film by
+//! `(rho_l - rho_g) g_t` in place of `rho_l g_t` (G1), and gas shear adds the Couette part `h tau / (2 mu_l)` of a surface
+//! stress `tau` (G2), with `tau` the carrier's one-sided laminar wall stress at each film face (G4). Without them the film
+//! is the film of ADR 0192, bit for bit.
 
 use crate::{err, Result};
-use rcfd_core::vec3::{cross, dot, norm, scale, sub, Vec3};
+use rcfd_core::vec3::{add, cross, dot, norm, scale, sub, Vec3};
 use rcfd_mesh::{Mesh, PatchKind};
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -25,6 +30,33 @@ pub fn film_velocity(rho: f64, mu: f64, h: f64, g_t: Vec3) -> Vec3 {
 /// (ADR 0192 M1).
 pub fn nusselt_thickness(rho: f64, mu: f64, gamma: f64, g_t: f64) -> f64 {
     (3.0 * mu * gamma / (rho * rho * g_t)).cbrt()
+}
+
+/// Thickness `(3 mu Gamma / (rho_l (rho_l - rho_g) |g_t|))^(1/3)` of a film under gravity with gas buoyancy, carrying the
+/// mass flow `gamma` per unit width (ADR 0206 G1).
+pub fn buoyant_thickness(rho_l: f64, rho_g: f64, mu: f64, gamma: f64, g_t: f64) -> f64 {
+    (3.0 * mu * gamma / (rho_l * (rho_l - rho_g) * g_t)).cbrt()
+}
+
+/// Depth-averaged velocity `h tau / (2 mu)` of a steady laminar film of thickness `h` under the surface shear stress `tau`
+/// (the Couette part, ADR 0206 G2).
+pub fn shear_film_velocity(mu: f64, h: f64, tau: Vec3) -> Vec3 {
+    scale(tau, h / (2.0 * mu))
+}
+
+/// Thickness `(2 mu Gamma / (rho |tau|))^(1/2)` of a film driven by the surface shear `tau` alone, carrying the mass flow
+/// `gamma` per unit width (ADR 0206 G2).
+pub fn shear_thickness(rho: f64, mu: f64, gamma: f64, tau: f64) -> f64 {
+    (2.0 * mu * gamma / (rho * tau)).sqrt()
+}
+
+/// The gas drives of the film (ADR 0206); both off (the default) is the film of ADR 0192.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct FilmGas {
+    /// Drive the film by `(rho_l - rho_g) g_t`, with `rho_g` the gas density of the step (G1).
+    pub buoyancy: bool,
+    /// Add `h tau / (2 mu_l)` to the film velocity, with `tau` the gas shear of each face (G2, G4).
+    pub shear: bool,
 }
 
 /// What a film is made of and where it lies.
@@ -69,6 +101,13 @@ pub struct Film {
     received: f64,
     min_mass: f64,
     substeps: usize,
+    /// Owner cell and normal distance from its centre of each face (for the gas shear, ADR 0206 G4).
+    owner: Vec<usize>,
+    dn: Vec<f64>,
+    gas: FilmGas,
+    rho_g: f64,
+    tau: Vec<Vec3>,
+    opposed: u64,
 }
 
 fn unit(v: Vec3) -> Vec3 {
@@ -117,6 +156,8 @@ impl Film {
         let mut centre = Vec::with_capacity(n);
         let mut normal = Vec::with_capacity(n);
         let mut g_t = Vec::with_capacity(n);
+        let mut owner = Vec::with_capacity(n);
+        let mut dn = Vec::with_capacity(n);
         for (k, &f) in faces.iter().enumerate() {
             local.insert(f, k);
             let nv = unit(mesh.face_area_vectors()[f]);
@@ -124,6 +165,10 @@ impl Film {
             centre.push(mesh.face_centres()[f]);
             normal.push(nv);
             g_t.push(sub(spec.gravity, scale(nv, dot(spec.gravity, nv))));
+            // the normal distance of the owner centre as `FvGeometry::dn` computes it (ADR 0206 G4)
+            let (s, c) = (mesh.face_area_vectors()[f], mesh.owner()[f]);
+            owner.push(c);
+            dn.push(dot(s, sub(mesh.face_centres()[f], mesh.cell_centres()[c])).abs() / norm(s));
         }
         // Edges in order of first appearance: (face, start point, end point) of each holder.
         let pts = mesh.points();
@@ -198,7 +243,104 @@ impl Film {
             received: 0.0,
             min_mass: 0.0,
             substeps: 0,
+            owner,
+            dn,
+            gas: FilmGas::default(),
+            rho_g: 0.0,
+            tau: vec![[0.0; 3]; n],
+            opposed: 0,
         })
+    }
+
+    /// Switch the gas drives (ADR 0206); [`FilmGas::default`] is the film of ADR 0192.
+    pub fn set_gas(&mut self, gas: FilmGas) {
+        self.gas = gas;
+    }
+
+    /// The gas drives.
+    pub fn gas(&self) -> FilmGas {
+        self.gas
+    }
+
+    /// Set the gas density `rho_g` and, with the shear on, the shear `tau` of every film face (one vector per face, in
+    /// face order; ignored with the shear off). Refuses a density that is not finite or is negative, a density not below
+    /// the liquid's with the buoyancy on, and with the shear on a list of the wrong length or a value that is not finite.
+    pub fn set_gas_state(&mut self, rho_g: f64, tau: &[Vec3]) -> Result<()> {
+        if !(rho_g.is_finite() && rho_g >= 0.0) {
+            return err("wall film: the gas density must be finite and not negative");
+        }
+        if self.gas.buoyancy && rho_g >= self.rho {
+            return err(format!(
+                "wall film: gas buoyancy needs a gas density below the liquid density ({rho_g} against {})",
+                self.rho
+            ));
+        }
+        if self.gas.shear {
+            if tau.len() != self.len() {
+                return err(format!(
+                    "wall film: {} gas shear vectors for {} film faces",
+                    tau.len(),
+                    self.len()
+                ));
+            }
+            if !tau.iter().all(|t| t.iter().all(|x| x.is_finite())) {
+                return err("wall film: the gas shear must be finite");
+            }
+            self.tau.copy_from_slice(tau);
+        }
+        self.rho_g = rho_g;
+        Ok(())
+    }
+
+    /// The carrier's wall shear on every film face, `mu_g (u_P - (u_P . n) n) / d` with `u_P` the velocity of the owner
+    /// cell and `d` the normal distance of its centre from the face (ADR 0206 G4: the one-sided laminar stress of a
+    /// no-slip wall at rest). `u` has one velocity per mesh cell.
+    pub fn carrier_shear(&self, u: &[Vec3], mu_g: f64) -> Vec<Vec3> {
+        (0..self.len())
+            .map(|k| {
+                let n = self.normal[k];
+                let v = scale(u[self.owner[k]], mu_g / self.dn[k]);
+                sub(v, scale(n, dot(v, n)))
+            })
+            .collect()
+    }
+
+    /// Gas density of the last [`Film::set_gas_state`] [kg/m^3] (0 before any).
+    pub fn gas_density(&self) -> f64 {
+        self.rho_g
+    }
+
+    /// Gas shear of film face `k` [Pa] (zero with the shear off).
+    pub fn shear(&self, k: usize) -> Vec3 {
+        self.tau[k]
+    }
+
+    /// Largest face gas shear [Pa].
+    pub fn max_shear(&self) -> f64 {
+        self.tau.iter().map(|t| norm(*t)).fold(0.0, f64::max)
+    }
+
+    /// Face sub-steps so far in which the gravity and shear parts of the velocity had a negative dot product (a
+    /// counter-current film, which ADR 0206 G5 does not deliver).
+    pub fn opposed(&self) -> u64 {
+        self.opposed
+    }
+
+    /// Gravity part and shear part of the velocity of face `k` with the gas drives (ADR 0206 G1, G2).
+    fn velocity_parts(&self, k: usize) -> (Vec3, Vec3) {
+        let h = self.thickness(k);
+        let drive = if self.gas.buoyancy {
+            self.rho - self.rho_g
+        } else {
+            self.rho
+        };
+        let g = film_velocity(drive, self.mu, h, self.g_t[k]);
+        let s = if self.gas.shear {
+            shear_film_velocity(self.mu, h, self.tau[k])
+        } else {
+            [0.0; 3]
+        };
+        (g, s)
     }
 
     /// Number of film faces.
@@ -256,9 +398,13 @@ impl Film {
         self.mass[k] / (self.rho * self.area[k])
     }
 
-    /// Depth-averaged film velocity of face `k` [m/s].
+    /// Depth-averaged film velocity of face `k` [m/s]: ADR 0192 M2, with the gas drives of ADR 0206 G1 and G2 when set.
     pub fn velocity(&self, k: usize) -> Vec3 {
-        film_velocity(self.rho, self.mu, self.thickness(k), self.g_t[k])
+        if self.gas == FilmGas::default() {
+            return film_velocity(self.rho, self.mu, self.thickness(k), self.g_t[k]);
+        }
+        let (g, s) = self.velocity_parts(k);
+        add(g, s)
     }
 
     /// Film Reynolds number `4 Gamma / mu` of face `k`, with `Gamma = rho h |u|` (ADR 0192 M9).
@@ -343,6 +489,16 @@ impl Film {
             for (k, uk) in u.iter_mut().enumerate() {
                 *uk = self.velocity(k);
             }
+            if self.gas.shear {
+                // ADR 0206 G5: count the faces whose gravity and shear parts oppose (not delivered, reported)
+                let opposed = (0..n)
+                    .filter(|&k| {
+                        let (g, s) = self.velocity_parts(k);
+                        dot(g, s) < 0.0
+                    })
+                    .count();
+                self.opposed += opposed as u64;
+            }
             rate.iter_mut().for_each(|r| *r = 0.0);
             for (e, c) in self.edges.iter().zip(coef.iter_mut()) {
                 c[0] = e.len * dot(u[e.a], e.m_a).max(0.0) / self.area[e.a];
@@ -384,12 +540,14 @@ impl Film {
         }
     }
 
-    /// One row per film face: `face,patch,x,y,z,area,thickness,mass,ux,uy,uz` (shortest round-trip numbers).
+    /// One row per film face: `face,patch,x,y,z,area,thickness,mass,ux,uy,uz` (shortest round-trip numbers), with the gas
+    /// shear on also `tx,ty,tz` (ADR 0206 S1).
     pub fn csv(&self) -> String {
-        let mut s = String::from("face,patch,x,y,z,area,thickness,mass,ux,uy,uz\n");
+        let mut s = String::from("face,patch,x,y,z,area,thickness,mass,ux,uy,uz");
+        s.push_str(if self.gas.shear { ",tx,ty,tz\n" } else { "\n" });
         for k in 0..self.len() {
             let (c, u) = (self.centre[k], self.velocity(k));
-            let _ = writeln!(
+            let _ = write!(
                 s,
                 "{},{},{},{},{},{},{},{},{},{},{}",
                 self.faces[k],
@@ -404,6 +562,11 @@ impl Film {
                 u[1],
                 u[2]
             );
+            if self.gas.shear {
+                let t = self.tau[k];
+                let _ = write!(s, ",{},{},{}", t[0], t[1], t[2]);
+            }
+            s.push('\n');
         }
         s
     }

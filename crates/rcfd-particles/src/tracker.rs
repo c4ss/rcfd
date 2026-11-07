@@ -4,7 +4,7 @@ use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
 use crate::dispersion::{Dispersion, Eddy};
 use crate::drag::{drag_factor, reflect, step_particle, tau_p, DragLaw, Fluid, Scheme};
 use crate::erosion::{Erosion, ErosionSpec};
-use crate::film::{Film, FilmSpec};
+use crate::film::{Film, FilmGas, FilmSpec};
 use crate::inject::{InjKind, InjectorExt, InjectorSpec, VelMode};
 use crate::locate::{Locator, Walk};
 use crate::rng::SplitMix64;
@@ -334,6 +334,19 @@ impl Tracker {
         Ok(())
     }
 
+    /// Switch the gas drives of the wall film (ADR 0206). With a drive on, every [`Tracker::advance`] first gives the film
+    /// the gas density `flow.rho` and, with the shear on, the carrier's wall shear from `flow.u` and `flow.mu`
+    /// ([`Film::carrier_shear`]). Refused when no film is set.
+    pub fn set_film_gas(&mut self, gas: FilmGas) -> Result<()> {
+        match self.film.as_mut() {
+            Some(f) => {
+                f.set_gas(gas);
+                Ok(())
+            }
+            None => err("wall film: the gas drives need a film (Tracker::set_film first)"),
+        }
+    }
+
     /// The wall film, if set.
     pub fn film(&self) -> Option<&Film> {
         self.film.as_ref()
@@ -569,6 +582,18 @@ impl Tracker {
         }
         if self.opts.interp == Interp::Gradient && flow.grad.is_none() {
             return err("gradient interpolation needs the velocity gradient");
+        }
+        if let Some(film) = self.film.as_mut() {
+            let gas = film.gas();
+            if gas != FilmGas::default() {
+                // ADR 0206 S1: the gas state of the step, before any parcel moves
+                let tau = if gas.shear {
+                    film.carrier_shear(flow.u, flow.mu)
+                } else {
+                    Vec::new()
+                };
+                film.set_gas_state(flow.rho, &tau)?;
+            }
         }
         let t0 = self.time;
         let t1 = t0 + dt;

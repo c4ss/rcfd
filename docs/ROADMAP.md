@@ -5243,7 +5243,7 @@ fixed by the item's registration ADR before any code.
     is bit-identical (baseline hashes unchanged).
   - note: From the maintainer's answer of 2026-11-06 to ADR 0190 Q4: option (b), a new item with new checks (the
     recommendation was (a)). ADR 0016 D2 defined and checked the options on the scalar sweep only.
-- [ ] **F-292** Gas buoyancy and gas shear in the particle wall film
+- [~] **F-292** Gas buoyancy and gas shear in the particle wall film
   - depends on: F-253
   - acceptance: Every limit is fixed by its registration ADR before any code. Two opt-in additions to the film of F-253:
     gas buoyancy, the film driven by (rho_l - rho_g) g_t in place of rho_l g_t (ADR 0192 Q2 (b)), and gas shear, a
@@ -5253,6 +5253,19 @@ fixed by the item's registration ADR before any code.
     R2 and the baseline hashes unchanged).
   - note: From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended
     leaving them out until a case needs them). The film of F-253 stays without them.
+    - PARTIAL (ADR 0206, the registration of F-292, 2026-11-06, branch f292-film-gas, not merged): every registered check
+      is met; marking the item done is the maintainer's (ADR 0206 Q1). Two opt-in keys of `particles.film`
+      (`gas_buoyancy`, `gas_shear`, each `hash_omit_default`; library `FilmGas` and `Tracker::set_film_gas`): the buoyancy
+      drives the film by (rho_l - rho_g) g_t with rho_g = physics.rho; the shear adds h tau/(2 mu_l) with tau the carrier's
+      one-sided laminar wall stress at each film face (bit for bit the post-processing's wall_shear), refused with a
+      turbulence model, a moving mesh, a rotating frame and a film patch that is not a no-slip wall at rest. The
+      parcel-fed incline of ADR 0192 under a gas of 250 kg/m^3 is within 3.3e-15 of h_B = h_N (1 - rho_g/rho_l)^(-1/3) as a
+      window average (1.4e-11 at 20 s; limit 5 percent, consistency 1e-6; without the buoyancy 9.1 percent off); a
+      parcel-fed floor under a frozen Couette flow of 0.1 Pa is within 2.7e-14 of h = (2 mu_l Gamma/(rho_l tau))^(1/2)
+      (1.3e-13 at 40 s); the ledger closes to 1.8e-12 (limit 1e-10); the case tree equals the library bit for bit; seven
+      mutations each made their check fail. Runs without the keys are unchanged bit for bit (R1 to R5 and the new R6, R7
+      made on main before the code; baseline hashes and H1 unedited). Open: ADR 0206 Q2 to Q6 (the source of the shear,
+      counter-current films, gravity with the shear, the film surface velocity, a laminar range for sheared films).
 - [ ] **F-293** Studio follow-ups that wait on the maintainer's Studio worktree
   - depends on: F-272, F-273, F-259
   - acceptance: Every limit is fixed by its registration ADR, written before any code and after the maintainer's

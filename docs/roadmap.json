@@ -2327,9 +2327,9 @@
     "deps": [
       "F-253"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit is fixed by its registration ADR before any code. Two opt-in additions to the film of F-253: gas buoyancy, the film driven by (rho_l - rho_g) g_t in place of rho_l g_t (ADR 0192 Q2 (b)), and gas shear, a shear-driven closure checked against h = (2 mu_l Gamma / (rho_l tau_g))^(1/2) for a film driven by shear alone (ADR 0192 Q3 (a)); each meets a closed form derived in the ADR within limits fixed by its registration ADR, the parcel mass ledger of F-253 balances, and runs without them are unchanged bit for bit (F-253's checks, the records R1 and R2 and the baseline hashes unchanged).",
-    "note": "From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended leaving them out until a case needs them). The film of F-253 stays without them."
+    "note": "From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended leaving them out until a case needs them). The film of F-253 stays without them. PARTIAL (ADR 0206, the registration of F-292, 2026-11-06, branch f292-film-gas, not merged): every registered check is met; marking the item done is the maintainer's (ADR 0206 Q1). Opt-in keys particles.film.gas_buoyancy and gas_shear (hash_omit_default; library FilmGas, Tracker::set_film_gas): the buoyant film under a gas of 250 kg/m^3 is within 3.3e-15 of h_B as a window average, the shear-driven film under 0.1 Pa within 2.7e-14 of (2 mu_l Gamma/(rho_l tau))^(1/2), the ledger closes to 1.8e-12, the tree equals the library bit for bit, seven mutations made their checks fail, and runs without the keys are unchanged bit for bit (R1 to R7, baseline hashes, H1). Open: ADR 0206 Q2 to Q6."
   },
   {
     "id": "F-293",

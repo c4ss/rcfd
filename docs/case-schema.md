@@ -1999,11 +1999,17 @@ the case data and changes nothing (a case that writes it with its defaults keeps
 | `film.enabled` | `false` | a parcel that reaches a face of a film patch is absorbed into a thin laminar film on that face (state `film`); the film runs down the wall under gravity and leaves it where no other film face continues it |
 | `film.patches` | `[]` | the wall patches that carry the film; required, each once, and without a `particles.walls.<patch>` entry |
 | `film.viscosity` | `-1` | dynamic viscosity of the film liquid [Pa s], must be set (> 0); the liquid density is `particles.density` |
+| `film.gas_buoyancy` | `false` | gas buoyancy (F-292, ADR 0206): the film is driven by `(rho_l - rho_g) g_t` with `rho_g = physics.rho` |
+| `film.gas_shear` | `false` | gas shear (F-292, ADR 0206): the film velocity gains `h tau / (2 mu_l)`, with `tau` the carrier's laminar wall shear at each film face |
 
 Located errors: `particles.film.enabled` without `particles.enabled` or together with `two_way` or `heat_transfer`;
 `particles.film.patches` empty, repeated, also in `particles.walls`, or (when the mesh is built) unknown or not a wall;
 `particles.film.viscosity` unset; `particles.gravity` false or `physics.gravity` zero (the film is driven by gravity
-alone).
+alone). With the film enabled: `particles.film.gas_buoyancy` with `physics.rho` not below `particles.density`;
+`particles.film.gas_shear` with a turbulence model, with `dynamic_mesh.enabled`, with a `rotating_frame` or `mrf` source,
+or with a film patch that is not a no-slip wall at rest (`velocity = "fixed"` with `velocity_value = [0, 0, 0]`, no
+`velocity_expression_*` and no `velocity_udf`). The two keys are left out of the settings hash at `false`; a case that
+writes `[particles.film]` now lists them in its written text.
 
 Erosion and rough walls (F-254, ADR 0194; `docs/particles.md`, "Wall interaction"). `particles.erosion` and
 `particles.rough_wall` are optional tables: absent, they are not in the case data and change nothing (a case that writes
