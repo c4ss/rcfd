@@ -235,6 +235,7 @@ fn m_o3_control_dropped_boundary_term_closes_the_balance() {
 /// M-sets and B-tree-T: the option sets without a boundary term in the flux (F-291's code) keep the outlet's continuity error;
 /// O1, O2 and C2 must miss by more than 1e-6.
 #[test]
+#[ignore = "record of commit 3834e1af (ADR 0221 amendment 1): it measures F-291's flux correction, which D3 replaced; numbers in the addendum"]
 fn m_sets_before_d3() {
     let mut missed = Vec::new();
     for (name, k) in SETS {

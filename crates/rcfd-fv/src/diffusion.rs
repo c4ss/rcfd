@@ -134,6 +134,35 @@ pub fn secondary_face_gradient(
     gf
 }
 
+/// The cell gradient of boundary face `f` that the explicit non-orthogonal flux of [`laplacian_with`] uses on a Dirichlet face
+/// (`a = 0`) under `boundary`: the owner cell's `grad` (`Owner`), the same with its component along the cell-to-face vector
+/// replaced by `(phi_b - phi_P)/|d|` of `cells` and `bvals` (`Corrected`), or none (`Dropped`). `grad` is the gradient the
+/// operator uses (limited when it limits). For a face term that must follow the operator, e.g. the pressure flux correction on
+/// fixed-pressure faces (ADR 0221 D3).
+pub fn secondary_boundary_gradient(
+    geom: &FvGeometry,
+    f: usize,
+    grad: &[Vec3],
+    cells: &[f64],
+    bvals: &[f64],
+    boundary: BoundaryGradient,
+) -> Option<Vec3> {
+    let c = geom.mesh.owner()[f];
+    match boundary {
+        BoundaryGradient::Owner => Some(grad[c]),
+        BoundaryGradient::Dropped => None,
+        BoundaryGradient::Corrected => {
+            let d = geom.delta[f];
+            let len = vec3::norm(d);
+            let e = vec3::scale(d, 1.0 / len);
+            let mut gb = grad[c];
+            let corr = (bvals[f - geom.n_internal] - cells[c]) / len - vec3::dot(gb, e);
+            vec3::axpy(&mut gb, corr, e);
+            Some(gb)
+        }
+    }
+}
+
 fn laplacian_impl(
     geom: &FvGeometry,
     gamma: &[f64],

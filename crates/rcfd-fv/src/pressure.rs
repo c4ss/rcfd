@@ -4,7 +4,10 @@
 //! correction `phi = phiHbyA - rAU snGrad(p) |S|`.
 
 use crate::bc::FaceCoeffs;
-use crate::diffusion::{laplacian, laplacian_with, secondary_cell_gradient, secondary_face_gradient, GradientOptions};
+use crate::diffusion::{
+    laplacian, laplacian_with, secondary_boundary_gradient, secondary_cell_gradient, secondary_face_gradient,
+    BoundaryGradient, GradientOptions,
+};
 use crate::field::rotate;
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
@@ -590,15 +593,17 @@ pub fn corrected_flux_with(
     ub: &[Vec3],
     grad: Option<&[Vec3]>,
 ) -> Vec<f64> {
-    corrected_flux_impl(geom, gamma_p, bc, phi_hby_a, p, ub, grad, false)
+    corrected_flux_impl(geom, gamma_p, bc, phi_hby_a, p, ub, grad, false, None)
 }
 
 /// [`corrected_flux_with`] with the gradient options of the pressure equation (ADR 0204 K3): the explicit non-orthogonal part of
 /// every internal face takes the cell gradients limited as [`laplacian_with`] limits them
 /// ([`secondary_cell_gradient`], with the pressure and its boundary values) and the face correction
-/// ([`secondary_face_gradient`]), so that the flux carries the face flux of the pressure operator assembled with the same options.
-/// The boundary faces are those of [`corrected_flux_with`] (they have no non-orthogonal part; ADR 0204 Q3). `None` options, or no
-/// gradient, is [`corrected_flux_with`].
+/// ([`secondary_face_gradient`]); every fixed-pressure boundary face (`a = 0`, neither a fixed-velocity nor a periodic face) takes
+/// the non-orthogonal part the equation has there, `gamma_f k_f . g_b` with `g_b` of [`secondary_boundary_gradient`] under the
+/// options' boundary treatment (ADR 0221 D3; none for `Dropped`). So the flux carries the face flux of the pressure operator
+/// assembled with the same options on every face. `None` options, or no gradient, is [`corrected_flux_with`] (whose fixed-pressure
+/// faces have no non-orthogonal part, ADR 0204 Q3).
 #[allow(clippy::too_many_arguments)]
 pub fn corrected_flux_opt(
     geom: &FvGeometry,
@@ -615,12 +620,24 @@ pub fn corrected_flux_opt(
             let bv = boundary_values_pbc(geom, bc, p);
             let limited = secondary_cell_gradient(geom, p, &bv, gr, &o);
             let g = limited.as_deref().unwrap_or(gr);
-            corrected_flux_impl(geom, gamma_p, bc, phi_hby_a, p, ub, Some(g), o.face_correction)
+            corrected_flux_impl(
+                geom,
+                gamma_p,
+                bc,
+                phi_hby_a,
+                p,
+                ub,
+                Some(g),
+                o.face_correction,
+                Some((o.boundary, &bv)),
+            )
         }
         _ => corrected_flux_with(geom, gamma_p, bc, phi_hby_a, p, ub, grad),
     }
 }
 
+/// The face flux of the flux correction. `boundary`: the boundary treatment and the boundary pressures of the options, for the
+/// non-orthogonal part of the fixed-pressure faces (ADR 0221 D3); `None` adds no operation there.
 #[allow(clippy::too_many_arguments)]
 fn corrected_flux_impl(
     geom: &FvGeometry,
@@ -631,6 +648,7 @@ fn corrected_flux_impl(
     ub: &[Vec3],
     grad: Option<&[Vec3]>,
     face_correction: bool,
+    boundary: Option<(BoundaryGradient, &[f64])>,
 ) -> Vec<f64> {
     let mesh = &geom.mesh;
     let sf = mesh.face_area_vectors();
@@ -664,6 +682,15 @@ fn corrected_flux_impl(
         } else {
             let co = &bc.coeffs[f - geom.n_internal];
             phi[f] = phi_hby_a[f] - gamma_p[f] * vec3::norm(sf[f]) * co.gradient(p[own[f]]);
+            // ADR 0221 D3: the non-orthogonal part of the paired equation on a fixed-pressure face, under the options
+            if let (Some(gr), Some((kind, bv)), true) = (grad, boundary, co.a == 0.0) {
+                if let Some(gb) = secondary_boundary_gradient(geom, f, gr, p, bv, kind) {
+                    let d = geom.delta[f];
+                    let a = vec3::norm(sf[f]);
+                    let k = vec3::sub(sf[f], vec3::scale(d, a * a / vec3::dot(sf[f], d)));
+                    phi[f] -= gamma_p[f] * vec3::dot(k, gb);
+                }
+            }
         }
     }
     phi

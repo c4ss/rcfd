@@ -3,9 +3,11 @@
 //! The potential is solved with the shared scalar sweep (zero convective flux, steady) on the face conductivity
 //! `sigma_f`, the distance-weighted harmonic mean of the cell values (zero when either cell is an insulator). Insulating
 //! cells (`sigma = 0`) are held at `phi = 0` and decouple. The Joule heat is the face dissipation of the discrete
-//! operator, so that on an orthogonal mesh the total heat equals the electric power `-sum_b F_b phi_b` exactly.
+//! operator, so that on an orthogonal mesh the total heat equals the electric power `-sum_b F_b phi_b` exactly. With the
+//! gradient options the `_opt` functions use the currents of the solved operator, and the Joule heat the full face power, so
+//! that for a converged potential the total equals the power on any mesh (ADR 0221).
 
-use crate::cht::conductive_face_flows;
+use crate::cht::{conductive_face_flows, conductive_face_flows_opt};
 use crate::convection::ConvScheme;
 use crate::diffusion::GradientOptions;
 use crate::field::ScalarField;
@@ -177,6 +179,79 @@ pub fn joule_heat(geom: &FvGeometry, phi: &ScalarField, sigma_face: &[f64], non_
 /// Total electric power delivered by the boundaries, `-sum_b F_b phi_b` (W), the quantity the Joule heat must add up to.
 pub fn boundary_power(geom: &FvGeometry, phi: &ScalarField, sigma_face: &[f64], non_orthogonal: bool) -> f64 {
     let flows = face_currents(geom, phi, sigma_face, non_orthogonal);
+    power_of_flows(geom, phi, &flows)
+}
+
+/// [`face_currents`] of a potential solved with the gradient options `opts` ([`solve_opt`]): the face fluxes of the solved
+/// operator ([`crate::cht::conductive_face_flows_opt`], ADR 0221 D1). `None` is [`face_currents`].
+pub fn face_currents_opt(
+    geom: &FvGeometry,
+    phi: &ScalarField,
+    sigma_face: &[f64],
+    non_orthogonal: bool,
+    opts: Option<GradientOptions>,
+) -> Vec<f64> {
+    conductive_face_flows_opt(geom, phi, sigma_face, non_orthogonal, opts)
+}
+
+/// [`joule_heat`] of a potential solved with the gradient options (ADR 0221 D1). `None` is [`joule_heat`]. With `Some`, `F` the
+/// currents of [`face_currents_opt`]: each internal face gives half of its power `F_f (phi_o - phi_n)` to each of its cells
+/// and each boundary face `F_b (phi_P - phi_b)` to its owner, so the total is the boundary power plus `sum_c phi_c net_c`
+/// (`net_c` the current leaving cell `c`), exactly; for a converged potential it equals [`boundary_power_opt`]. The face power is
+/// not a square, so on a strongly skewed mesh a cell value can be negative. `Some(GradientOptions::default())` gives this
+/// formula with the default operator's currents (not the bits of [`joule_heat`]).
+pub fn joule_heat_opt(
+    geom: &FvGeometry,
+    phi: &ScalarField,
+    sigma_face: &[f64],
+    non_orthogonal: bool,
+    opts: Option<GradientOptions>,
+) -> Vec<f64> {
+    if opts.is_none() {
+        return joule_heat(geom, phi, sigma_face, non_orthogonal);
+    }
+    let own = geom.mesh.owner();
+    let nei = geom.mesh.neighbour();
+    let vol = geom.mesh.cell_volumes();
+    let flows = face_currents_opt(geom, phi, sigma_face, non_orthogonal, opts);
+    let mut q = vec![0.0; geom.n_cells()];
+    for f in 0..geom.n_internal {
+        let p = 0.5 * flows[f] * (phi.values[own[f]] - phi.values[nei[f]]);
+        q[own[f]] += p;
+        q[nei[f]] += p;
+    }
+    let bc = phi.boundary_coeffs(geom);
+    for f in geom.n_internal..geom.mesh.n_faces() {
+        if geom.empty[f] {
+            continue;
+        }
+        let co = &bc[f - geom.n_internal];
+        let pp = phi.values[own[f]];
+        q[own[f]] += flows[f] * (pp - co.value(pp));
+    }
+    for (x, v) in q.iter_mut().zip(vol) {
+        *x /= v;
+    }
+    q
+}
+
+/// [`boundary_power`] with the currents of [`face_currents_opt`] (ADR 0221 D1); `None` is [`boundary_power`].
+pub fn boundary_power_opt(
+    geom: &FvGeometry,
+    phi: &ScalarField,
+    sigma_face: &[f64],
+    non_orthogonal: bool,
+    opts: Option<GradientOptions>,
+) -> f64 {
+    if opts.is_none() {
+        return boundary_power(geom, phi, sigma_face, non_orthogonal);
+    }
+    let flows = face_currents_opt(geom, phi, sigma_face, non_orthogonal, opts);
+    power_of_flows(geom, phi, &flows)
+}
+
+/// `-sum_b F_b phi_b` over the non-empty boundary faces.
+fn power_of_flows(geom: &FvGeometry, phi: &ScalarField, flows: &[f64]) -> f64 {
     let bc = phi.boundary_coeffs(geom);
     let own = geom.mesh.owner();
     let mut p = 0.0;
