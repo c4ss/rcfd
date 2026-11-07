@@ -4974,7 +4974,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
       than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
       moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Size M.
-- [~] **F-258** Compressible ALE boundaries and mesh-speed time step
+- [x] **F-258** Compressible ALE boundaries and mesh-speed time step
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and
     time step:
