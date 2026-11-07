@@ -2324,7 +2324,8 @@ layer next to the piston deforms. It is merged with its neighbour when its heigh
 energy are carried through every change exactly, and the cell count of the run changes with the layers.
 
 The time step is the explicit step of the current mesh with the absolute velocity (`|u.n| + c`); the mesh speed does not
-enter it (F-258), so keep the piston well below the speed of sound.
+enter it, so keep the piston well below the speed of sound. The library's mesh-speed step (`max_dt_ale`, F-258,
+ADR 0207) is not used by the case tree yet.
 
 Located errors (the path in brackets):
 
@@ -2333,7 +2334,8 @@ Located errors (the path in brackets):
 * a non-empty `follow_patches` or `rest_patches` (that key)
 * a characteristic `compressible_bc` (`total_inlet`, `pressure_outlet`, `nonreflecting`, `farfield`) on a patch that moves:
   every patch under `rigid`, a patch not in `fixed_patches` under `smoothing`, every patch except `xmin` under `layering`
-  (`boundaries.<patch>.compressible_bc`; characteristic conditions on moving faces are F-258)
+  (`boundaries.<patch>.compressible_bc`; the library evaluates them on moving faces since F-258, ADR 0207, but the case
+  tree does not wire that yet)
 * layering with `piso` / `pimple` (`dynamic_mesh.deformation`; F-257), with a mesh file (`mesh.source`) or another
   generator (`mesh.generator`), with `moving_patches` other than `["xmax"]`, with a y or z displacement or a rotation (that
   key), with `mesh.nx < 2`, with `fixed_patches`, or with `mesh.transform` (`mesh.transform.rotate_z_deg`)
