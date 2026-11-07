@@ -5358,7 +5358,7 @@ fixed by the item's registration ADR before any code.
     names, the run worker reading the feed in place of its own poll, was not part of the answer and stays an open
     question of ADR 0188.
 
-- [ ] **F-294** Transient k-epsilon and Spalart-Allmaras (without DES) on pimple
+- [~] **F-294** Transient k-epsilon and Spalart-Allmaras (without DES) on pimple
   - depends on: F-286
   - acceptance: Every limit is fixed by its registration ADR before any code. k-epsilon and Spalart-Allmaras without
     DES run with the pimple algorithm on a static mesh, which the case tree refuses today; each model gets its own
@@ -5367,6 +5367,16 @@ fixed by the item's registration ADR before any code.
     run are unchanged bit for bit.
   - note: From ADR 0199 (F-286) question 2, recommendation taken by the lead: a follow-up item, each model with its own
     registration. SA-DES and the Reynolds stress model stay on their once-per-step path (question 3).
+    - PARTIAL (ADR 0210, the registration of F-294, 2026-11-07, branch f294-transient-keps-sa, not merged): every
+      registered check is met except one, a known miss. k_epsilon (every variant, wall function and wall treatment) and
+      spalart_allmaras with des = off run with pimple on a static mesh, one sweep with the time derivative of
+      solver.time_scheme at the start of every outer iteration (the F-286 path, chosen by the model); piso stays refused,
+      SA-DES and SA-DDES keep their once-per-step Euler path. The decay recursions meet to 6.1e-15 and the closed forms give
+      the orders of the schemes (k-epsilon on a two-block mesh whose only wall touches no cell of the test block, amendments 2
+      and 3; SA on a one-row channel at zero vorticity), the k and nuTilda budgets close to 1e-15, the steady states equal
+      SIMPLEC (1.6e-9, 5.4e-10), the rotating frame runs, and the case-tree time order meets for SA (BDF2 1.93, 2.20) and for
+      k-epsilon with Euler; k-epsilon with BDF2 is a known miss (p 0.80 to 1.53 at T/80 to T/320, rising to 1.81 to 1.89 at
+      T/320 to T/1280). Defaults bit-identical (V0b on 765ac64, baseline hashes unedited). Open: ADR 0210 Q1 to Q7.
 - [x] **F-295** One diffusivity per periodic seam pair
   - depends on: F-286
   - acceptance: Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair

@@ -3936,8 +3936,9 @@ impl Simulation {
                         }
                     }
                 }
-                // F-286 (ADR 0199 D2): k-omega SST on pimple makes its sweep at the start of every outer iteration, in
-                // the hook below; here the step only starts (old levels) and the solver gets the present face viscosity
+                // F-286 (ADR 0199 D2): a model that updates in the outer iterations (k-omega SST; k-epsilon and SA without DES,
+                // F-294, ADR 0210 D3) makes its sweep at the start of every outer iteration of pimple, in the hook below; here
+                // the step only starts (old levels) and the solver gets the present face viscosity
                 let outer_turb = self
                     .turb
                     .as_ref()
@@ -4049,7 +4050,7 @@ impl Simulation {
                         let tw_force: Option<BodyForce> =
                             self.particles.as_ref().and_then(|p| p.two_way_force().cloned());
                         let (geom, sources, components) = (&self.geom, &self.sources, &mut self.components);
-                        // F-286 (ADR 0199 D2): the SST sweep of this outer iteration and its face viscosity
+                        // F-286 (ADR 0199 D2): the turbulence sweep of this outer iteration and its face viscosity
                         let mut turb_outer = self.turb.as_mut().filter(|_| outer_turb);
                         let mut hook = |u: &VectorField, phi: &[f64]| {
                             let mut up = rcfd_fv::pimple::OuterUpdate::default();

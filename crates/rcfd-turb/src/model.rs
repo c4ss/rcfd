@@ -376,6 +376,16 @@ impl TurbulenceModel for KEpsilonModel {
         }
         self.m.nut = nut.to_vec();
     }
+    fn begin_step(&mut self, dt: f64) {
+        self.m.begin_step(dt, TimeScheme::ImplicitEuler)
+    }
+    fn begin_time_step(&mut self, dt: f64, scheme: TimeScheme) {
+        self.m.begin_step(dt, scheme)
+    }
+    /// F-294 (ADR 0210 D3): k and epsilon are updated at the start of every outer iteration of `pimple`.
+    fn updates_in_outer_iterations(&self) -> bool {
+        true
+    }
 }
 
 // ---------------------------------------------------------------- SST
@@ -710,6 +720,20 @@ impl TurbulenceModel for SpalartAllmaras {
     }
     fn begin_step(&mut self, dt: f64) {
         SpalartAllmaras::begin_step(self, dt)
+    }
+    /// F-294 (ADR 0210 D3): SA without DES starts a step of the momentum's scheme; SA-DES and SA-DDES keep their once-per-step
+    /// Euler term (ADR 0032).
+    fn begin_time_step(&mut self, dt: f64, scheme: TimeScheme) {
+        if self.des == DesMode::Off {
+            SpalartAllmaras::begin_time_step(self, dt, scheme)
+        } else {
+            SpalartAllmaras::begin_step(self, dt)
+        }
+    }
+    /// F-294 (ADR 0210 D3): SA without DES is updated at the start of every outer iteration of `pimple`; SA-DES and SA-DDES
+    /// once per step before the flow step (ADR 0199 question 3).
+    fn updates_in_outer_iterations(&self) -> bool {
+        self.des == DesMode::Off
     }
     fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
         match (name, value) {
