@@ -5298,3 +5298,10 @@ fixed by the item's registration ADR before any code.
     with a differing eddy viscosity is checked within a limit fixed by the ADR.
   - note: From ADR 0199 amendment 2 and question 5, recommendation taken by the lead. FAN-01 and EXP-ROT check H both
     have rotational seams, so this item comes before check H is read.
+    - BUILT (ADR 0205, the registration of F-295, 2026-11-06, branch f295-seam-diffusivity, not merged): k_omega_sst with
+      turbulence.periodic_seam.diffusivity = "pair" (an optional table; default "owner", every earlier result) gives both
+      faces of a periodic pair nu + w a_P + (1 - w) a_Q in the momentum face viscosity and the k and omega diffusivities,
+      steady and pimple, translational and rotational seams, with the laminar-region rule across the seam; the k and omega
+      budgets of ADR 0199's periodic C1 box close to 1e-14 (owner: 1.7e-7 to 6.5e-2), the B2 seam pairs are equal to the bit
+      (owner: 13 to 27 percent apart); other models refused at the key; defaults bit-identical. Open: other models (Q1),
+      check H's texts (Q2), the default (Q3).

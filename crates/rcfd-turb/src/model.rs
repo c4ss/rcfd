@@ -7,7 +7,7 @@
 //! `spalart_allmaras`; an external crate adds its own with [`register_model`] and selects it with
 //! `turbulence.model = "plugin"`, `turbulence.plugin = "<key>"`.
 
-use crate::eddy::patch_faces;
+use crate::eddy::{patch_faces, SeamDiffusivity};
 use crate::kepsilon::{KEpsilon, KEpsilonVariant, WallFunction, WallTreatment};
 use crate::les::{sgs_infos, AlgebraicSgs, SgsKind, A_PLUS_SGS, CS_DEFAULT, CW_DEFAULT};
 use crate::sa::{DesDelta, DesMode, SLimiter, SaWallMode, SpalartAllmaras};
@@ -486,6 +486,18 @@ impl TurbulenceModel for SstModel {
     }
     fn updates_in_outer_iterations(&self) -> bool {
         true
+    }
+    /// `periodic_diffusivity` = `owner` | `pair` (F-295, ADR 0205 D3); any other option is refused as by every model.
+    fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
+        if name != "periodic_diffusivity" {
+            return Err(format!("the model '{}' has no option '{name}'", self.key()));
+        }
+        let mode = match value {
+            "owner" => SeamDiffusivity::Owner,
+            "pair" => SeamDiffusivity::Pair,
+            other => return Err(format!("periodic_diffusivity = '{other}': use owner or pair")),
+        };
+        self.m.set_periodic_diffusivity(mode).map_err(|e| e.to_string())
     }
 }
 
