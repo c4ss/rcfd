@@ -5498,3 +5498,11 @@ fixed by the item's registration ADR before any code.
     a case-tree check of k-epsilon and Spalart-Allmaras with pair on pimple.
   - note: From ADR 0212 questions 1 and 4, recommendations taken by the lead. RSM on a rotational seam only if RSM ever
     runs there.
+- [ ] **F-303** Sliding interface in the case tree: rotor-stator generator, simulation loop and a non-axisymmetric check
+  - depends on: F-250
+  - acceptance: A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).
+  - note: From ADR 0216 questions 1 and 7, recommendations taken. Golden edits, if any, are listed for the maintainer.
+- [ ] **F-304** Planar and sector sliding interfaces
+  - depends on: F-250
+  - acceptance: A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off; periodic pairs are kept by the join.
+  - note: From ADR 0216 question 3, recommendation taken: a separate item.

@@ -2443,5 +2443,27 @@
     "status": "todo",
     "acceptance": "Pair diffusivity covers the temperature-dependent properties viscosity and the user-function viscosity; a case-tree check of k-epsilon and Spalart-Allmaras with pair on pimple.",
     "note": "From ADR 0212 questions 1 and 4, taken at the recommendation. RSM on a rotational seam only if RSM ever runs there."
+  },
+  {
+    "id": "F-303",
+    "title": "Sliding interface in the case tree: rotor-stator generator, simulation loop and a non-axisymmetric check",
+    "phase": 9,
+    "deps": [
+      "F-250"
+    ],
+    "status": "todo",
+    "acceptance": "A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).",
+    "note": "From ADR 0216 questions 1 and 7, recommendations taken. Golden edits, if any, are listed for the maintainer."
+  },
+  {
+    "id": "F-304",
+    "title": "Planar and sector sliding interfaces",
+    "phase": 9,
+    "deps": [
+      "F-250"
+    ],
+    "status": "todo",
+    "acceptance": "A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off; periodic pairs are kept by the join.",
+    "note": "From ADR 0216 question 3, recommendation taken: a separate item."
   }
 ]
