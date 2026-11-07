@@ -629,3 +629,8 @@ per-step check of RX2 and RX2b (both then assert that all 300 steps were checked
 
 F-255 stays partial in the roadmap (Q1). Q1 to Q10 stay open for the maintainer; Q2 now asks about the table
 `particles.dispersion_from_model` of amendment 2 in place of the registered field `dispersion_fields`.
+
+### Gate result (lead, 2026-11-07)
+
+Gated commit 709aaa4: fmt exit 0, clippy exit 0, 3019 test processes passed, 2 failed, 863 ignored (584 binaries, wall
+4365 s). The two failures are the known flakes `runner_w47b` s1 and s9; both also fail on builds without this change.
