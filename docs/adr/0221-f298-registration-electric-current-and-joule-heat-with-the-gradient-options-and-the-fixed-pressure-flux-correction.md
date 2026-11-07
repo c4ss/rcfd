@@ -1,7 +1,8 @@
 # ADR 0221: F-298 registration: the electric current and the Joule heat with the gradient options, and the flux correction on fixed-pressure faces
 
-Status: **REGISTERED 2026-11-07**, written before any code of F-298 and before any run of its checks. Not yet accepted by the
-maintainer. Results go in an addendum at the end.
+Status: **REGISTERED 2026-11-07**, written before any code of F-298 and before any run of its checks. Results in addendum 1 (every
+registered check met; measurement M: the default's missing boundary term costs a converged run 2.0e-3 of the inflow, so D3 was
+built; F-298 done by the decision rule). Not yet accepted by the maintainer.
 
 Parent: [ADR 0204](0204-f291-registration-gradient-options-on-turbulence-momentum-pressure-and-the-electric-potential.md) (F-291)
 questions Q2 and Q3, where the lead took recommendation (b) for Q2 (the derived electric quantities take the potential's options,
@@ -321,3 +322,133 @@ for bit" a library-wide rule. A defect of D3's text, corrected as follows:
   and a gradient against `corrected_flux_with`, equal bits on every face (the fixed-pressure faces included); **L3b**, KE:
   `joule_heat_opt` with `Some(GradientOptions::default())` against `joule_heat`, gradient true and false, equal bits on every cell.
 * The other checks are run again on the corrected code, D2 in full.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Branch `f298-joule-heat` on main 50c4a83c. Commits: the registration `c6ce7039` and amendment 1 `de4c00a8`; the measurement M
+`3834e1af` (a test only; M, M-O3, M-C and M-sets ran there, on F-291's code); D1 and D3 in `rcfd-fv` with the library tests
+`e6635637`; amendment 2 `3b830157`; its library change with L3b and B-lib-D2 `3d735d6c`; D2 in `rcfd-api` with the tree tests
+`bdcd0f4b`; the documents and this addendum after them. Release builds on Windows. Every number below is from the code of
+`bdcd0f4b` unless it says commit (2); the tree runs of E2 and CH printed the same numbers before and after amendment 2 (the tree
+never passes the default options).
+
+**Built.** `rcfd-fv/src/electric.rs`: `face_currents_opt`, `joule_heat_opt`, `boundary_power_opt` (D1; `None` and the default
+options call the unchanged functions, amendment 2), and a private `power_of_flows` that `boundary_power` now calls with the same
+operations. `rcfd-fv/src/diffusion.rs`: `secondary_boundary_gradient` (the boundary rule of `laplacian_with`; `laplacian_impl`
+unchanged). `rcfd-fv/src/pressure.rs`: `corrected_flux_opt` with non-default options gives every fixed-pressure face (`a = 0`, not a
+fixed-velocity or periodic face) the equation's non-orthogonal part (D3, built because M matters); `corrected_flux_impl` takes the
+boundary treatment as an argument, `None` from `corrected_flux_with` (no operation added on the default path).
+`rcfd-api/src/electric.rs`: the two calls of D2. No key, rule, message, golden, `baseline_hashes.rs`, `case_hashes_w48u.rs`, Studio
+file or existing test file changed. New tests: `crates/rcfd-fv/tests/electric_opt_f298.rs` (2), `crates/rcfd-fv/tests/flux_boundary_f298.rs`
+(2), `crates/rcfd-api/tests/electric_opt_f298.rs` (2), `crates/rcfd-api/tests/flux_boundary_f298.rs` (4, and the ignored record
+`m_sets_before_d3` of amendment 1). Documents: the section "Further equations" of `docs/case-schema.md`, the F-298 entries of
+`docs/ROADMAP.md` and `docs/roadmap.json`.
+
+### Results of (a)
+
+| Check | Measured | Limit | Verdict |
+| --- | --- | --- | --- |
+| P | K 38.309 degrees; W 29.641 degrees | at least 25; at least 20 | met |
+| L1 | default 5.8e-15; O1 to O6, C2 5.2e-15 to 6.2e-15 of `S` (`S` 0.117) | `<= 1e-12 S` | met |
+| L1-T | O1 1.74e-1, O2 8.07e-2, O3 1.39e-1, O4 8.82e-2, O5 1.09e-2, O6 8.38e-2, C2 1.85e-1 of `S` | `> 1e-9 S` | met |
+| L2 | 1.9e-17 to 1.2e-16 of `W` (`W` 68 to 75; `P` 1.09 to 1.41 W) | `<= 1e-12 W` | met |
+| L2-T | the default formula with its own currents: 3.71e-1, that is 5.0e-3 of `W` | `> 1e-9 W` | met |
+| L3, L3b | 0 of 1728 faces and 0 of 512 cells differ in a bit (currents and power with `None` and the default options, the Joule heat with `None` and, L3b, the default options; gradient true and false); control: C2 moves a face current by 9.7e-3 | equal bits | met |
+| L4 | 0 (the two formulas give the same bits here) | `<= 1e-12 max q` | met |
+| F | every E2 run ended after its 200 iterations without a failure, finite | set-up | met |
+| E-tree | 2.2e-16 to 4.5e-16 of `S` over the eight runs | `<= 1e-12 S` | met |
+| R-eq-J | default: 0 faces differ in a bit from the unchanged current density; sets 0 to 1.4e-16 of the largest boundary current | bits; `<= 1e-12` | met |
+| R-eq-Q | default: 0 cells differ in a bit from `joule_heat`; sets 0 (the same bits) | bits; `<= 1e-12` | met |
+| B1 | `abs(sum F_b)` 1.7e-17 to 2.2e-16 A against bounds of 2.18e-12 to 2.25e-12 A (`tol_A` 2.8e-15 to 3.3e-15 A) | `<= tol_A + 1e-12 F` | met |
+| B2 | `tol_A / I_in` 1.07e-14 to 1.28e-14 (`I_in` 0.239 to 0.267 A) | `<= 1e-8` | met |
+| B3 | both groups 2.6e-18 to 2.6e-16 A against bounds of about 2.2e-12 A | `<= tol_A(g) + 1e-12 F` | met |
+| J1 | `abs(sum qV - P)` 0 to 5.0e-16 W against bounds of 1.89e-12 to 1.96e-12 W (`P` 0.2390 to 0.2666 W) | `<= R + 1e-12 W` | met |
+| T-B1 | the unchanged currents: O2 4.35e-4, O3 1.95e-3, O4 4.71e-7, O5 6.36e-5, O6 2.48e-4, C2 6.96e-4 A | `> tol_A + 1e-12 F` | met |
+| T-O1 | 0 boundary currents differ in a bit | equal bits | met |
+| T-B3 | the unchanged currents, (group 0, group 1) in A: O1 (1.48e-5, 1.48e-5), O2 (1.85e-4, 2.50e-4), O3 (1.67e-3, 2.83e-4), O4 (1.0e-16, 4.71e-7: group 1 misses), O5 (1.43e-4, 7.95e-5), O6 (7.88e-4, 5.41e-4), C2 (3.72e-4, 3.24e-4) | a miss in at least one group | met |
+| T-J1 | the unchanged Joule heat and power on the sets' runs: 3.00e-2 to 3.64e-2 W | `> R + 1e-12 W` | met |
+| T-J1-D | the default run's own Joule heat against its power: 3.146e-2 W, 11.9 % of `P = 0.2648` W | `> R + 1e-12 W` | met |
+| D1 | settings hash `664afb0ba53bf26f` with and without the keys and the table at their defaults; 200 iterations both; 0 values differ in a bit | equal | met |
+
+The smallest cell Joule heat of the E2 runs is 9.0e-3 to 9.4e-3 W/m^3 (none negative; on KE 1.15 to 1.46).
+
+### Results of (b)
+
+| Check | Measured | Limit | Verdict |
+| --- | --- | --- | --- |
+| S-CH | default: 3000 iterations, no failure, `res_u` 2.40e-16, `res_p` 2.15e-12, `e_i` 3.2e-14 | `1e-12`, `1e-10`, `1e-8` | held |
+| M | default: `m_dom` **2.003e-3**, `e_b` **6.844e-4** of the inflow (`Q_in` 0.0625); hash `4a8d6c1e2e8a48f2` | matters above 1e-6 | **matters**: D3 built |
+| M-O3 | O3: `m_dom` 2.0e-13, `e_b` 2.4e-14 (converged: `res_p` 1.92e-12, `e_i` 2.0e-14); hash `85ca4cac6091df27` | `<= 1e-8` | met |
+| M-sets (commit (2)) | `m_dom`, `e_b`: O1 2.10e-3, 7.06e-4; O2 4.25e-3, 1.17e-3; O4 8.62e-4, 3.50e-4; O5 7.62e-4, 3.08e-4; O6 7.58e-4, 3.07e-4; C2 4.67e-3, 1.09e-3; all converged | reported | |
+| M-C | CH-C default: 152 iterations to 1e-12, `m_dom` 4.96e-3, `e_b` 2.22e-3, `e_i` 1.8e-14 | reported | |
+| B-lib | cells with an `xmax` face 4.8e-16 to 7.3e-16 of `S`, the others 3.1e-16 to 4.0e-16 (`S` 0.228 to 0.303) | `<= 1e-12 S` | met |
+| B-lib-T | O1 6.58e-2, O2 1.14e-1, O4 9.80e-2, O5 4.06e-2, O6 9.84e-2, C2 2.57e-1 of `S` | `> 1e-9 S` | met |
+| B-lib-D, B-lib-D2 | `None` 0 of 1728 faces; O3's boundary faces 0 of 384; C2 without a gradient 0 of 1728; the default options with a gradient 0 of 1728 | equal bits | met |
+| B-tree | after D3, all converged (`res_p` 2.3e-12 to 3.1e-12): `m_dom` O1 1.06e-12, O2 1.26e-12, O4 6.7e-14, O5 6.2e-13, O6 8.9e-13, C2 4.8e-13; `e_b` 1.5e-14 to 2.7e-14 | `<= 1e-8` | met |
+| B-tree-T | commit (2): `e_b` O1 7.06e-4, O2 1.17e-3, C2 1.09e-3 | `> 1e-6` | met |
+| B-D | default `4a8d6c1e2e8a48f2`, O3 `85ca4cac6091df27`: the hashes of M and M-O3 | equal | met |
+
+So the default flux correction's missing boundary term leaves a converged SIMPLE run with a mass imbalance of 2.0e-3 of the inflow on
+this 30-degree outlet (5.0e-3 with SIMPLEC and its compensation), which does not converge away (the interior cells are at 3e-14),
+and the run with `gradient_boundary = "dropped"` on the pressure closes it to 2e-13, so the missing term is its cause. Under the
+options D3 closes it for every set.
+
+### Common checks
+
+| Check | Measured | Verdict |
+| --- | --- | --- |
+| D2 | `rcfd-api`: `baseline_hashes.rs` (3 passed, 1 ignored), `case_hashes_w48u.rs` (1), `electric_case.rs` (4), `mhd.rs` (5), `phase_change_case.rs` (3), `gradient_equations_f291.rs` (13, 2 ignored; G4 (iv) P2 0 of 768 values after amendment 2), `gradient_options_f256.rs` (5), `cht_flows_f289.rs` (3), `rules_w19c.rs` (7, 1 ignored); `rcfd-fv`: `electric.rs` (7), `gradient_pressure_f291.rs` (3), `cht_flows_f289.rs` (2), `gradient_sweep_f256.rs` (1): all pass unedited | met |
+| N | the gate section below | |
+
+With D3 the F-291 pressure cases with options carry the boundary term, so ADR 0204's printed numbers of those cases move (its limits
+hold): G3 P1 O2 2.83e-3 (was 1.44e-3), P2 C2 1.49e-2 (was 9.45e-3), P3 C2 3.66e-1 (was 3.99e-1), P2-all O2 1.64e-2 (was 8.48e-3);
+its P-lib-B now prints 4.8e-16 to 7.3e-16 for the sets (the default 2.94e-2 as before); every G2 stays 0.
+
+`scripts/limit_audit.py` (workspace scan) reports one hit in the new files: `crates/rcfd-api/tests/flux_boundary_f298.rs`, class
+(iii), `m_o3_control_dropped_boundary_term_closes_the_balance`: a false positive, a positive control that asserts success (a closed
+balance), like `duct_diagnosis.rs`'s `a_control_...` in docs/test-process.md.
+
+### Mutations
+
+Applied one at a time to the code of `bdcd0f4b` by `w49i-work/f298-scratch/mutations.sh` (an exact text replacement that checks
+that the text occurs once, `f298-scratch/mutate.py`), the named test run once in release in `target-f298-mut`, the file restored and
+compared byte for byte with the kept copy (equal after each of the five).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `update` with `joule_heat` | R-eq-Q and J1 of O1 | failed: R-eq-Q O1 4.66e-2 of the largest cell heat, J1 O1 3.29e-2 W against 1.96e-12 W (and every other set) |
+| MU2 `boundary_current_density` with `face_currents` | R-eq-J and B1 of O2 | failed: R-eq-J O2 7.10e-2, B1 O2 4.35e-4 A against 2.22e-12 A (and O3 to C2; O1 passed, as T-O1 predicts) |
+| MU3 internal faces of `joule_heat_opt` with `sigma_f lap_f d^2` | L2 of O1 | failed: L2 O1 9.49e-3 of `W` (every set 3.9e-3 to 1.0e-2) |
+| MU4 the boundary term of `corrected_flux_opt` skipped | B-lib O1; B-tree O1 | failed: B-lib O1 3.17e-2 of `S`; B-tree O1 `m_dom` 2.10e-3, `e_b` 7.06e-4, the hash `148d28b7157a338c` of M-sets O1 at commit (2) (the mutated code is F-291's flux correction) |
+| MU5 `Corrected` with the owner gradient | B-lib of O2 | failed: B-lib O2 1.21e-1 of `S` (and C2 1.85e-1) |
+
+### Disclosures
+
+- Before the registration only the two convergence probes named there were run; between the registration and M only the build.
+- M ran once at commit (2) and decided D3. After amendment 2 every check was run again; the tree numbers did not change.
+- After the mutations, clippy (`incompatible_msrv`) refused `Option::is_none_or` in `joule_heat_opt` and `boundary_power_opt` (stable
+  since Rust 1.82, `rcfd-fv` declares 1.80); it was replaced by `opts.unwrap_or_default() == GradientOptions::default()`, the same
+  truth table. L3b, E2 and ADR 0204's G4 (iv) were run again on it and printed the same numbers.
+- The B-lib-D test also asserts a control that the registration did not name (C2 with a gradient moves a fixed-pressure boundary
+  flux: 4.8e-2), so that its bit comparisons can fail.
+- Not exercised: a current patch in the tree (E2 has two potential patches; KE has one), insulating cells with the options, PIMPLE
+  runs of D3 to convergence (the transient kernel takes D3 through the same function; ADR 0204's P3 tree and library runs still
+  agree bit for bit), a negative cell Joule heat (none occurred).
+
+### Status by the decision rule
+
+Every check of (a) met; (b): M matters, D3 built and every check of D3 met; D2 met; every mutation failed its test; N is the gate
+below. F-298 is set **done** (`[x]`).
+
+### Questions for the maintainer (revised by the results)
+
+- **Q1 (the default Joule heat on a skewed mesh).** T-J1-D: on the 29.6-degree wedge the default Joule heat adds up to 11.9 % less
+  or more than the electric power (3.1e-2 W of 0.265 W), so the energy equation of a default electric case on a skewed mesh gets a
+  heat that is not the power the boundaries deliver. Revised recommendation: (b) as its own item with the bit-identical rule lifted
+  for it (the D1 formula with the default currents; every skewed electric case changes its heat and temperature), because the gap is
+  a conservation defect of the default rather than a modelling choice; (a) until then. Proceeding on (a).
+- **Q2 (the default flux correction on fixed-pressure faces).** M: 2.0e-3 of the inflow (5.0e-3 with SIMPLEC) in a converged run on a
+  30-degree outlet with one corrector. Recommendation as registered: (b) as its own item with the rule lifted (every converged
+  result of a skewed fixed-pressure case with correctors changes; the goldens and baselines it moves would be listed there). Until
+  then a case that needs the balance sets `[solver.gradient_equations] pressure = true` with any option. Proceeding on (a).
+- **Q3, Q4** stand as registered (proceeding on (a)).
