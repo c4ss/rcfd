@@ -376,3 +376,28 @@ NC1, NC2}.
 - **Q7. Status.** Recommendation: as the decision rule says.
 - **Q8. Data location.** The case-203 points live in the test file and `docs/reference-data.md`, not in `validation-data`
   (its manifest has checksum tests). Recommendation: move them in when the manifest is next touched.
+
+## Amendment 1 (2026-11-07, written after the first run of the fast checks and before any corrected run)
+
+The first run of the fast checks (release, `crates/rcfd-fv/tests/wetsteam.rs`, log kept outside the repository) met P1, P2,
+M1, E1, C1, C1b, S1, D1a and D1b, and **missed L1**: at `t = 4e-5 s` the relative spread of the four box cells was
+`8.91e-12` against the registered `1e-12` (`1.7e-15` at `2e-5 s`, `6.5e-16` at `1e-5 s`). The test stopped at that assertion;
+the other L1 numbers at `4e-5 s` were inside their limits (`y` relative `1.63e-4`, `n` `2.45e-9`, `T` `-4.33e-3 K`) and the
+values at `1e-4 s` were not evaluated.
+
+Diagnosis (a scratch program, `f221-scratch/diag`, not committed): `rcfd_core::iapws::saturation_temperature`, stopped at the
+registered relative tolerance `1e-13` (M3), is not smooth below that level: over 2000 pressures in 8 to 16 kPa, a step of
+three units in the last place of `p` moves `T_s` by up to `6.7e-14` relative beyond the true change (about `2e-11 K`). Late in
+the relaxation `T_s - T` is about 10 K, so the growth rate of cells whose pressures differ in the last bits differs by about
+`2e-12` relative; the box cells drift apart at that level. The spread is not a flux asymmetry (D1 reproduces the perfect-gas
+solver bit for bit) but the iteration tolerance of M3, which the L1 limit did not allow for: a set-up defect of the
+implementation registered in M3.
+
+Corrections (registered here, before the corrected run):
+
+- **M3 amended:** `T_s(p)` is iterated until the Newton step is at most `1e-15 T` (in place of `1e-13`), i.e. to the last
+  bits; P2 and every other check keep their limits.
+- **L1b:** the L1 set-up and all its limits unchanged, run once with the amended M3 (`l1b_...`). L1b takes L1's place in the
+  correctness set K; L1 stays as the ignored record `l1_isochoric_relaxation_matches_an_independent_ode_known_miss` with its
+  numbers.
+- The heavy runs had not been started; they run with the amended M3.
