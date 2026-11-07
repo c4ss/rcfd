@@ -488,7 +488,7 @@ frequent and many change nothing; that costs time (193 s against 12.5 s for ADR 
 | Check | Limit | Measured | Verdict |
 | --- | --- | --- | --- |
 | D1 `git diff 08316f7 -- crates` | the new files and one line | `crates/rcfd-mesh/src/remesh.rs` and `crates/rcfd-fv/tests/remesh_f247.rs` new, one line in `crates/rcfd-mesh/src/lib.rs` | met |
-| D2 the existing suites, unedited | pass | in the gate below | see the gate |
+| D2 the existing suites, unedited | pass | all passed in the gate below | met |
 
 ### Mutations
 
@@ -522,3 +522,29 @@ Disclosures:
 - A first attempt of the mutation script stopped on an invalid log file name (a `:` in it) after applying MU1 and before
   running any test; the file was restored (byte for byte) and the script was run again from MU1.
 - MU3's failure to fail is reported, not hidden; MU3' was registered by amendment 3 before it ran.
+
+### The gate (2026-11-07)
+
+Main stayed at 08316f7 while F-247 was built, so no merge was needed; 0215 is on no other branch. The gate ran on a
+`git archive` copy of 6e7ee92 (addendum 1 before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f247-gate`. The machine lock was taken
+with the atomic `mkdir` lock and owner file of `gate-lock.sh`, polled every 5 s instead of 60 s (as
+`gate-f291/outer2.sh`, disclosed), by `gate-f247/outer2.sh`; its `run.sh` refuses to start unless the lock's owner file
+names f247, and the release trap releases only a lock that f247 holds. It waited from 14:36 (UTC) behind other gates and
+was taken at 18:50. The start threshold of free physical memory was 20 GB (the coordinator's figure of 2026-11-06), and
+the gate started with 24 GB free.
+
+Result: `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3150 passed, 0
+failed, 889 ignored** (3150 test processes in 604 binaries, wall 4623 s, peak summed working set 3465 MB, largest time
+against its limit 0.222). The lowest free physical memory during the gate was 18 GB (19:50). The lock was released at
+the end (20:19). No known flaky test failed, so nothing was run again.
+
+All 5 tests of this ADR ran in the gate and passed (P-T in 168 s, N2 in 26 s, U1 to U3), and so did the suites of D2
+(rcfd-mesh's unit tests and its `tetmesh` and `surface_remesh` tests; rcfd-fv's `layering_w38c`, `layering_f257`,
+`layering_f257_records`, `ale_flows`, `ale_gcl`, `compressible_ale_f258`, `compressible_ale_f258_records`,
+`mesh_smoothing`; rcfd-api's `layering_ale_f259`, `dynamic_mesh`, `baseline_hashes` and H1 of `case_hashes_w48u`;
+rcfd-cli's `layering_ale_f259`), so D2 is met. F-247 adds no ignored test. This gate section and one rewrapped line of the
+F-247 roadmap entry are documents only and were not gated again.
+
+Q1 to Q7 stay open for the maintainer. F-247 is done in the roadmap by the decision rule (Q6; the recommendation is done,
+the acceptance still the maintainer's).

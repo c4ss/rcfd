@@ -4803,13 +4803,15 @@ Added after the static feature-gap review; wording is product-independent. Phase
         (limit 0.2); raw intersection mismatch 5.1e-14 (1e-11). 55497 steps in 193 s.
       - Negative controls: a largest-source remap changes the mass by 7.9e-7 at an event; without remeshing the mean ratio
         falls below 0.2 at `t = 5.2` (`T = 16`). Unit checks: intersection volumes of two cube splits to 1.7e-16, each
-        operator and the events of a small piston carry totals to 3.0e-14, the M0 mesh through the remesher. Four of five mutations failed their checks at once; the fifth (the trigger without the
-        mean ratio) changed nothing, because the edge-length conditions kept the trigger on, and was replaced by amendment 3
-        (a remesher blind to quality: Q 0.097 at the first event).
+        operator and the events of a small piston carry totals to 3.0e-14, the M0 mesh through the remesher. Four of five
+        mutations failed their checks at once; the fifth (the trigger without the mean ratio) changed nothing, because the
+        edge-length conditions kept the trigger on, and was replaced by amendment 3 (a remesher blind to quality: Q 0.097
+        at the first event).
       - Amendments before the registered runs: 1 (U2's piston moves gradually), 2 (development runs on scratch set-ups
         found a point caught by a piston that moves alone, a split-collapse cycle, short edges that could not be collapsed
         and flat cells on a wall; fixed by the band motion, collapse rules and boundary edge removal). Defaults: only new
         files and one `pub mod` line; baseline hashes and H1 unedited; no case-schema key.
+      - Gate of 6e7ee92: fmt 0, clippy 0, 3150 passed, 0 failed, 889 ignored.
     - Open (ADR 0215 Q1 to Q7): the case-tree wiring, the quality measure and threshold, remeshing in the incompressible
       path (a face-flux map), non-planar walls, a higher-order remap, the status, and a panic of the existing mesher seen
       while choosing M0 (`tetrahedralize` of `box_surface(..., [10, 1, 1])` with size 0.035 and 3 quality sweeps).
