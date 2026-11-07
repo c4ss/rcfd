@@ -358,8 +358,8 @@ met its limit, the set-up checks and the negative controls held, and every mutat
   private `apply_thresholds`, which holds the code of `LayerStack::adjust` unchanged and is called by both stacks. The face
   identity of M2 is the private `FaceTag`. `LayerStack`'s other methods and `remap` are not edited.
 - `crates/rcfd-fv/src/pimple/moving.rs`: `PimpleSolver::replace_mesh` (S2). Nothing else in `rcfd-fv` is edited.
-- Tests: `crates/rcfd-fv/tests/layering_f257.rs` (5 tests: P with N1, I with N2, X, S1, S2), four unit tests in
-  `crates/rcfd-mesh/src/layering.rs` (F1 with F1n and F2 in one, K1, K2) and the records file of the registration (2).
+- Tests: `crates/rcfd-fv/tests/layering_f257.rs` (5 tests: P with N1, I with N2, X, S1, S2), three unit tests in
+  `crates/rcfd-mesh/src/layering.rs` next to its existing one (F1 with F1n and F2 in one, K1, K2) and the records file of the registration (2).
   No existing test was edited.
 - Documents: `docs/dynamic-mesh.md` and `docs/case-schema.md` (prose: what the library does, that the tree does not use
   it yet; no TOML block edited), and the F-257 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (done, by the
@@ -414,8 +414,8 @@ Printed, no limit:
 discrete continuity and the piston's swept flux through every event. The cell velocity next to the piston lags the plug
 flow by 4.7e-3 of `a0 t` on the layered mesh, against the 2.9e-4 of ADR 0033's smoothed mesh (its known miss of G5
 (iii), limit `1e-6 a0 t_end`, cause not proven there). B2 registers no cell-velocity limit, and this one was printed,
-not checked. The layered piston cell is down to `0.4 h0`, about four times thinner than a smoothed cell at the end of
-G5, which is consistent with a lag that grows as the piston cell thins. That is a reading, not a diagnosis. P4 holds with
+not checked. The layered piston cell is down to `0.4 h0`, about half the height of a smoothed cell at the end of G5
+(`0.75 h0`), which is consistent with a lag that grows as the piston cell thins. That is a reading, not a diagnosis. P4 holds with
 a margin of 1.4 (ADR 0090's hexahedra: 5.4e-13).
 
 ### Defaults
@@ -453,3 +453,34 @@ Disclosures:
   registered run.
 - D1 was run once after the code, before the registered checks.
 - The mutations used the target dir `target-f257-mut`, so the kept build of 0cbaf33 was not touched.
+- Two wording corrections after the gate, documents only: the unit-test count of "Built as registered" (three new next
+  to the existing one, not four) and the height comparison of the reading (half the height of G5's last smoothed cell,
+  not a quarter).
+
+### The gate (2026-11-07)
+
+Main stayed at c398654 while F-257 was built, so no merge was needed; 0213 is on no other branch. The gate ran on a
+`git archive` copy of 990a285 (addendum 1 before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f257-gate`. The machine lock was taken
+with the atomic `mkdir` lock and owner file of `gate-lock.sh`, polled every 5 s instead of 60 s (as `gate-f291/outer2.sh`,
+disclosed). It waited from 10:21 (UTC) behind the F-244 gate and was taken at 11:21. The start threshold of free physical
+memory was 19 GB (the lead's figure for this gate; ADR 0207's gate used 20 GB), and the gate started with 20 GB free.
+
+Result: `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3108 passed, 1
+failed, 869 ignored** (3109 test processes in 598 binaries, wall 6909 s, peak summed working set 2759 MB, largest time
+against its limit 0.427). The lowest free physical memory during the gate was 10 GB (13:20), from other work on the
+machine. The lock was released at the end (13:31).
+
+The one failure is `rcfd-studio` `preview_cost_g1` `g8_overlay_frame_cost_at_the_edge_limit`, a frame-time test: median
+10.136 ms over 100 frames against its limit of 8 ms (when in the gate it ran is not logged; the machine was loaded by other work). It is not on
+the list of known flakes.
+F-257 changes no file of `rcfd-studio` and none that it renders (`rcfd-mesh` `layering` and `rcfd-fv` `pimple::moving`
+only). Run again alone on the gate's binary right after the gate, three times: passed 3 of 3 (medians 2.07, 2.32 and
+2.63 ms; its control held each time). All 10 tests of this ADR (5 checks, 2 records, 3 unit tests) ran in the gate and passed, and so did the suites of D2
+(`layering_ale_f259` of rcfd-api and rcfd-cli, `dynamic_mesh`, `inverse_volume_f290`, `baseline_hashes`, H1 of
+`case_hashes_w48u`, and rcfd-fv's `layering_w38c`, `ale_flows`, `ale_gcl`, `compressible_ale_f258`,
+`compressible_ale_f258_records`, `exp_rot_pab`, `mesh_smoothing`). F-257 adds no ignored test. This gate section is
+documents only and was not gated again.
+
+Q1 to Q5 stay open for the maintainer. F-257 is done in the roadmap by the decision rule (Q5; the recommendation is
+done, the acceptance still the maintainer's).
