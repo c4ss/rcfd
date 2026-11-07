@@ -121,7 +121,8 @@ service method `design.create_study`) creates it:
 * Methods: `factorial` (`levels` per parameter), `lhs` (Latin hypercube, `n`, `seed`), `sobol` (`n`, up to 10 parameters),
   `nelder_mead` (`budget`, `restarts`, `seed`, and the optional `initial_simplex` and `coefficients` below),
   `differential_evolution` (`budget`, `pop` default `max(10 d, 20)`, `seed`), `nsga2` (`budget` and `pop` required, `pop` even
-  and at least 4, `seed`; see Multi-objective). **CMA-ES is not provided** (F-260).
+  and at least 4, `seed`, and the optional `crossover`, `"sbx"` or `"exchange"`; see Multi-objective). **CMA-ES is not
+  provided** (F-260).
 * Nelder-Mead options (ADR 0209, both opt-in; without them the method is unchanged): `initial_simplex = "start"` builds the first
   simplex as MATLAB's `fminsearch` does, `x0 + 0.05 x0_i e_i` (`0.00025 e_i` when `x0_i = 0`), instead of 5 % of each range
   (`"range"`, the default); `coefficients = "adaptive"` uses the dimension-dependent coefficients of Gao and Han (2012): expansion
@@ -184,7 +185,18 @@ one). The objective weights are not used; the study's `best` is still the best b
 methods. Measured (ADR 0209): on FON (3 parameters, 10 000 evaluations, population 100) every member of the returned Pareto set
 lies within 4.4e-3 of the analytic front and the front is covered with gaps below 4.8e-3 (limits 1e-2 and 5e-2, three seeds); on
 ZDT1 with 30 parameters (25 000 evaluations) the set stays 0.35 to 0.54 from the front (a known miss, ADR 0209 MO1z, limit
-1e-2). The operator constants are those of Deb et al. (2002) recalled from memory, not read (`docs/reference-data.md`).
+1e-2).
+
+The crossover (ADR 0220, opt-in). With the default `crossover = "sbx"` (or no key) each child stays next to its own parent in
+every variable, so a good coordinate of one parent reaches the other's line only through selection and mutation; that is the
+cause of the ZDT1 miss. `crossover = "exchange"` also exchanges the two children's values of each variable of a crossed pair with
+probability 1/2. Measured (ADR 0220): on ZDT1 with 30 parameters every member of the Pareto set lies within 1.6e-3 of the front,
+gaps below 1.5e-3 (three seeds, the limits above); on FON within 5.9e-3, gaps below 6.4e-3. Without the key a study writes and
+replays exactly what it did before; with it, `study.json` records the key. The constants (crossover probability 0.9, indices
+20, mutation probability 1/d) and the test problems were checked against Deb et al. (2002), and the SBX and mutation formulas
+against Deb and Agrawal (1995, 1999), for ADR 0220. Two differences from those papers remain: they cross each variable with
+probability 0.5 (rcfd crosses every variable), and they bound the distributions where rcfd clamps into the box
+(`docs/reference-data.md`, ADR 0220 questions 2 and 4).
 
 ## Assistant tools
 

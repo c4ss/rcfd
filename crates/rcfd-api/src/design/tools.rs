@@ -12,6 +12,7 @@
 
 use super::case_eval::{CaseEvaluator, CaseMapEvaluator, RunLimits};
 use super::ledger;
+use super::nsga2::Crossover;
 use super::opmap::{self, Axis, MapOptions, MapPoint, OnFailure, PointEvaluator, PointResult};
 use super::optim::{Coefficients, InitialSimplex, Stop};
 use super::store::{CondResult, Store};
@@ -196,6 +197,10 @@ fn parse_method(m: &Value) -> Rpc<Method> {
             return Err(bad(format!("method.{k}: only nelder_mead takes this key")));
         }
     }
+    // ADR 0220 D4: the crossover belongs to nsga2 only
+    if kind != "nsga2" && present("crossover") {
+        return Err(bad("method.crossover: only nsga2 takes this key"));
+    }
     let choice = |k: &str, allowed: [&str; 2]| -> Rpc<Option<usize>> {
         match m.get(k) {
             None | Some(Value::Null) => Ok(None),
@@ -261,7 +266,15 @@ fn parse_method(m: &Value) -> Rpc<Method> {
                     "method.budget: {budget} is smaller than the population {pop}"
                 )));
             }
-            Method::Nsga2 { budget, pop, seed }
+            match choice("crossover", ["sbx", "exchange"])? {
+                None => Method::Nsga2 { budget, pop, seed },
+                Some(i) => Method::Nsga2With {
+                    budget,
+                    pop,
+                    seed,
+                    crossover: if i == 1 { Crossover::Exchange } else { Crossover::Sbx },
+                },
+            }
         }
         "differential_evolution" => Method::Differential {
             budget: usize_of("budget", 500)?,
@@ -324,6 +337,18 @@ fn method_json(m: &Method) -> Value {
         }
         Method::Nsga2 { budget, pop, seed } => {
             json!({"type": "nsga2", "budget": budget, "pop": pop, "seed": seed})
+        }
+        Method::Nsga2With {
+            budget,
+            pop,
+            seed,
+            crossover,
+        } => {
+            let crossover = match crossover {
+                Crossover::Sbx => "sbx",
+                Crossover::Exchange => "exchange",
+            };
+            json!({"type": "nsga2", "budget": budget, "pop": pop, "seed": seed, "crossover": crossover})
         }
         Method::Differential { budget, pop, seed } => {
             json!({"type": "differential_evolution", "budget": budget, "pop": pop, "seed": seed})

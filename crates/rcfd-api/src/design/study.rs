@@ -2,7 +2,7 @@
 //! constraints, concurrent evaluation with a worker limit, and a resumable store. The optimisers of [`super::optim`] and the
 //! samplers of [`super::sampling`] are driven through [`Study`].
 
-use super::nsga2::{self, MoFitness};
+use super::nsga2::{self, Crossover, MoFitness};
 use super::optim::{self, Coefficients, DeOptions, Fitness, InitialSimplex, NmOptions, OptResult, Stop};
 use super::pareto;
 use super::sampling;
@@ -356,6 +356,17 @@ pub enum Method {
         /// Seed.
         seed: u64,
     },
+    /// NSGA-II with a chosen crossover (ADR 0220 D3; `Nsga2` is this with [`Crossover::Sbx`]).
+    Nsga2With {
+        /// Evaluation budget (whole generations).
+        budget: usize,
+        /// Population (even, at least 4).
+        pop: usize,
+        /// Seed.
+        seed: u64,
+        /// The crossover of a crossed pair.
+        crossover: Crossover,
+    },
 }
 
 /// Outcome of asking for the next candidates.
@@ -648,47 +659,57 @@ impl<'a> Study<'a> {
                 };
                 optim::nelder_mead(&bounds, &opts, &mut |xs| self.fitness_batch(xs))
             }
-            Method::Nsga2 { budget, pop, seed } => {
-                let opts = nsga2::Options {
-                    max_evals: *budget,
-                    pop: *pop,
-                    seed: *seed,
-                    x0: self.start_point(),
-                };
-                let m = self.def.objectives.len();
-                let r = nsga2::run(&bounds, &opts, &mut |xs| {
-                    let pos = self.eval_points(xs, "evaluated")?;
-                    Ok(pos
-                        .iter()
-                        .map(|&p| {
-                            let rec = &self.store.records()[p];
-                            match self.objective_vector(rec) {
-                                Some(o) => MoFitness::new(o, self.violation_of(rec)),
-                                None => MoFitness::failed(m),
-                            }
-                        })
-                        .collect())
-                })?;
-                // the member of the last population that is best by the weighted scalar (Deb's rules), the first on a tie
-                let mut best: Option<(Vec<f64>, Fitness)> = None;
-                for (x, _) in &r.population {
-                    let f = self
-                        .store
-                        .get(&key_of(x))
-                        .map_or(Fitness::FAILED, |rec| self.fitness_of(rec));
-                    if best.as_ref().is_none_or(|(_, b)| f.better(b)) {
-                        best = Some((x.clone(), f));
+            Method::Nsga2 { budget, pop, seed } => self.run_nsga2(*budget, *pop, *seed, Crossover::Sbx),
+            Method::Nsga2With {
+                budget,
+                pop,
+                seed,
+                crossover,
+            } => self.run_nsga2(*budget, *pop, *seed, *crossover),
+        }
+    }
+
+    /// NSGA-II through the store (ADR 0209 D1, ADR 0220 D3).
+    fn run_nsga2(&mut self, budget: usize, pop: usize, seed: u64, crossover: Crossover) -> Result<OptResult, Stop> {
+        let bounds = self.def.bounds();
+        let opts = nsga2::Options {
+            max_evals: budget,
+            pop,
+            seed,
+            x0: self.start_point(),
+        };
+        let m = self.def.objectives.len();
+        let r = nsga2::run_with(&bounds, &opts, crossover, &mut |xs| {
+            let pos = self.eval_points(xs, "evaluated")?;
+            Ok(pos
+                .iter()
+                .map(|&p| {
+                    let rec = &self.store.records()[p];
+                    match self.objective_vector(rec) {
+                        Some(o) => MoFitness::new(o, self.violation_of(rec)),
+                        None => MoFitness::failed(m),
                     }
-                }
-                let (x, fitness) = best.ok_or_else(|| Stop::Error("internal error: empty population".into()))?;
-                Ok(OptResult {
-                    x,
-                    fitness,
-                    evaluations: r.evaluations,
-                    converged: false,
                 })
+                .collect())
+        })?;
+        // the member of the last population that is best by the weighted scalar (Deb's rules), the first on a tie
+        let mut best: Option<(Vec<f64>, Fitness)> = None;
+        for (x, _) in &r.population {
+            let f = self
+                .store
+                .get(&key_of(x))
+                .map_or(Fitness::FAILED, |rec| self.fitness_of(rec));
+            if best.as_ref().is_none_or(|(_, b)| f.better(b)) {
+                best = Some((x.clone(), f));
             }
         }
+        let (x, fitness) = best.ok_or_else(|| Stop::Error("internal error: empty population".into()))?;
+        Ok(OptResult {
+            x,
+            fitness,
+            evaluations: r.evaluations,
+            converged: false,
+        })
     }
 
     /// The next candidates the method asks for, given the store (no evaluation is made).

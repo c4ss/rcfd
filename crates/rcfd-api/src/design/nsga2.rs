@@ -10,6 +10,12 @@
 //!
 //! The run is a deterministic function of (bounds, options, evaluation results); the random draws come in a fixed order
 //! (ADR 0209 D1 step 3).
+//!
+//! [`Crossover::Exchange`] (ADR 0220, opt-in through [`run_with`]) also exchanges the two children's values of each variable of a
+//! crossed pair with probability 1/2, so that a child takes coordinates from both parents; the default [`Crossover::Sbx`] keeps
+//! each child next to its own parent in every variable (ADR 0209), which misses ZDT1 with 30 parameters (ADR 0209 MO1z). The
+//! papers read for ADR 0220 (Deb et al. 2002, Deb and Agrawal 1995 and 1999) cross each variable with probability 0.5 and do
+//! not state an exchange; see ADR 0220 for the reading.
 
 use super::optim::{clamp_into, random_in_box, Bounds, Stop};
 use super::pareto;
@@ -21,6 +27,17 @@ pub const P_CROSSOVER: f64 = 0.9;
 pub const ETA_C: f64 = 20.0;
 /// Distribution index of the polynomial mutation.
 pub const ETA_M: f64 = 20.0;
+
+/// The crossover of a crossed pair (ADR 0220 D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Crossover {
+    /// Simulated binary crossover on every variable, the first child next to the first parent (ADR 0209 D1).
+    #[default]
+    Sbx,
+    /// As `Sbx`, then the two children's values of each variable exchanged when one more draw, made right after that variable's
+    /// SBX draw, is below 0.5 (ADR 0220 D1).
+    Exchange,
+}
 
 /// Objective values (minimised) and total constraint violation of one point.
 #[derive(Debug, Clone, PartialEq)]
@@ -194,8 +211,41 @@ fn split(f: &[MoFitness]) -> (Vec<Vec<f64>>, Vec<f64>) {
     )
 }
 
-/// Run NSGA-II in the box `b` (ADR 0209 D1).
+/// The two children of the parents `p1` and `p2` (ADR 0209 D1 step 3 after the tournaments): the crossover coin, the crossover,
+/// the polynomial mutation of child 1 then child 2, and the clamp into the box `b`. With [`Crossover::Exchange`] each variable of
+/// a crossed pair draws once more after its SBX draw, and the two values are exchanged when that draw is below 0.5 (ADR 0220 D1).
+pub fn vary_pair(p1: &[f64], p2: &[f64], b: &Bounds, crossover: Crossover, rng: &mut Rng) -> (Vec<f64>, Vec<f64>) {
+    let d = b.len();
+    let (mut c1, mut c2) = (p1.to_vec(), p2.to_vec());
+    if rng.uniform() < P_CROSSOVER {
+        for j in 0..d {
+            let beta = sbx_beta(rng.uniform(), ETA_C);
+            c1[j] = 0.5 * ((1.0 + beta) * p1[j] + (1.0 - beta) * p2[j]);
+            c2[j] = 0.5 * ((1.0 - beta) * p1[j] + (1.0 + beta) * p2[j]);
+            if crossover == Crossover::Exchange && rng.uniform() < 0.5 {
+                std::mem::swap(&mut c1[j], &mut c2[j]);
+            }
+        }
+    }
+    let pm = 1.0 / d as f64;
+    for child in [&mut c1, &mut c2] {
+        for j in 0..d {
+            if rng.uniform() < pm {
+                child[j] += poly_delta(rng.uniform(), ETA_M) * (b[j].1 - b[j].0);
+            }
+        }
+        clamp_into(child, b);
+    }
+    (c1, c2)
+}
+
+/// Run NSGA-II in the box `b` (ADR 0209 D1): [`run_with`] with [`Crossover::Sbx`].
 pub fn run(b: &Bounds, opts: &Options, eval: &mut MoEval<'_>) -> Result<MoResult, Stop> {
+    run_with(b, opts, Crossover::Sbx, eval)
+}
+
+/// Run NSGA-II in the box `b` with the given crossover (ADR 0209 D1, ADR 0220 D1).
+pub fn run_with(b: &Bounds, opts: &Options, crossover: Crossover, eval: &mut MoEval<'_>) -> Result<MoResult, Stop> {
     let d = b.len();
     if d == 0 {
         return Err(Stop::Error("no parameters".into()));
@@ -224,29 +274,12 @@ pub fn run(b: &Bounds, opts: &Options, eval: &mut MoEval<'_>) -> Result<MoResult
     let mut generations = 1;
     let (o, v) = split(&fit);
     let (_, mut rank, mut crowd) = rank_and_crowd(&o, &v);
-    let pm = 1.0 / d as f64;
     while evals + np <= opts.max_evals {
         let mut kids: Vec<Vec<f64>> = Vec::with_capacity(np);
         for _ in 0..np / 2 {
             let a = tournament(&mut rng, &rank, &crowd);
             let c = tournament(&mut rng, &rank, &crowd);
-            let (mut c1, mut c2) = (pop[a].clone(), pop[c].clone());
-            if rng.uniform() < P_CROSSOVER {
-                for j in 0..d {
-                    let beta = sbx_beta(rng.uniform(), ETA_C);
-                    let (p1, p2) = (pop[a][j], pop[c][j]);
-                    c1[j] = 0.5 * ((1.0 + beta) * p1 + (1.0 - beta) * p2);
-                    c2[j] = 0.5 * ((1.0 - beta) * p1 + (1.0 + beta) * p2);
-                }
-            }
-            for child in [&mut c1, &mut c2] {
-                for j in 0..d {
-                    if rng.uniform() < pm {
-                        child[j] += poly_delta(rng.uniform(), ETA_M) * (b[j].1 - b[j].0);
-                    }
-                }
-                clamp_into(child, b);
-            }
+            let (c1, c2) = vary_pair(&pop[a], &pop[c], b, crossover, &mut rng);
             kids.push(c1);
             kids.push(c2);
         }
