@@ -106,7 +106,7 @@ Menter, Kuntz and Langtry, Turbulence, Heat and Mass Transfer 4, 2003), in the f
 Turbulence Modeling Resource (TMR) page. The constants and blending functions were checked against it, see
 docs/reference-data.md.
 
-Restrictions: the same as `k_epsilon` (a wall patch, no energy), except that it also runs with `pimple` (below) and that a
+Restrictions: the same as `k_epsilon` (a wall patch, no energy; the steady algorithms and `pimple`, below), except that a
 fixed wall may move. The wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the stationary casing
 of a rotor solved in the rotating frame is allowed. `turbulence = "wall"` must then be set on that patch, because the
 automatic role calls a moving fixed-velocity patch an inlet.
