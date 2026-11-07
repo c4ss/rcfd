@@ -253,8 +253,11 @@ fn with(budget: usize, pop: usize, seed: u64, crossover: Crossover) -> Method {
     }
 }
 
-/// Every record as bits: index, key, params, source, each condition's label, status and metrics, message.
-fn bits(recs: &[Record]) -> Vec<(usize, String, Vec<u64>, Vec<(String, u64)>)> {
+/// A record as bits: index, key, params, and each condition's metrics (`label.name`).
+type RecordBits = (usize, String, Vec<u64>, Vec<(String, u64)>);
+
+/// Every record as bits.
+fn bits(recs: &[Record]) -> Vec<RecordBits> {
     recs.iter()
         .map(|r| {
             (
