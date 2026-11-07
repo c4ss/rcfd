@@ -3,8 +3,9 @@
 rcfd can move the mesh during a run and integrate a rigid body driven by the flow. Status: partial. Incompressible laminar
 PISO/PIMPLE with implicit Euler on a mesh whose points move every step, and the explicit compressible solver with a
 prescribed motion or a layered piston. Decisions and checks are in `docs/adr/0033-wave20b-dynamic-mesh.md` (read its addendum
-for the misses), `docs/adr/0090-wave38c-dynamic-mesh-layering.md` and
-`docs/adr/0191-f259-registration-case-tree-and-cli-wiring-of-layering-and-compressible-ale.md`.
+for the misses), `docs/adr/0090-wave38c-dynamic-mesh-layering.md`,
+`docs/adr/0191-f259-registration-case-tree-and-cli-wiring-of-layering-and-compressible-ale.md` and
+`docs/adr/0213-f257-registration-prism-layering-and-incompressible-layering.md`.
 
 This page explains how the mesh moves, how the body is integrated, and where the method stops. It is for users who plan a
 moving-wall or moving-body case and want to know what the solver does and does not cover. For the exact keys and defaults of the
@@ -15,8 +16,9 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 * Euler time scheme only (PISO/PIMPLE).
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
 * No sliding interfaces (AMI, F-250) and no local remeshing (F-247).
-* Layering only for the compressible solver, on a `box_3d` stack with one piston. Prism or unstructured layering and
-  layering on the PISO/PIMPLE path are F-257.
+* Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
+  stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
+  use them yet (the wiring is open under F-259, ADR 0213 Q1).
 * Compressible runs in the case tree: no characteristic boundary condition on a moving face, and a time step without the
   mesh speed. The library has both since F-258 (ADR 0207); the tree does not use them yet (the wiring is open under F-259,
   ADR 0207 Q1 and Q2). No six-DOF body (F-244).
@@ -85,6 +87,18 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   `a_max = 1.6`. The example below is ADR 0090's piston P as a case, with the compressible keys at their defaults (HLLC, van
   Leer, SSP-RK3, CFL 0.4): 9191 steps, 24 removals and 24 additions, and `p_bar V^gamma` back within 3.4e-5 of its start
   after the stroke.
+- **Prism layers and layering on the PISO/PIMPLE path (F-257, ADR 0213; library only).**
+  `rcfd_mesh::layering::ExtrudedStack` stacks prisms over the cells of a planar cross-section `Section` (for example
+  `Section::rect_triangles`, rectangles cut into triangles) with the piston, the thresholds and the cell source map of
+  `LayerStack`. ADR 0090's piston on triangular prisms meets ADR 0090's limits (`p_bar V^gamma` within 1.5e-5 and 3.4e-5,
+  conservation over an event 6.7e-16, mass drift 7.0e-13). For the incompressible solver, `face_sources` and
+  `remap_face_flux` carry the face flux through an event: a merged side face takes the sum of the two old faces, a split
+  one the share of its layer height, and the faces of a new plane close the balance of the cell below them, so the
+  discrete continuity holds across the event. `PimpleSolver::replace_mesh` then installs the new mesh with the remapped
+  velocity, pressure and flux. On ADR 0033's piston channel (mirrored: the piston is `xmax`) with 7 removals, every step
+  keeps the continuity within 3.1e-15 and the outlet flux within 1.3e-14 of the piston's swept flux, and each event
+  conserves the volume to 2.2e-16. The piston can only be the last plane, and `replace_mesh` refuses BDF2, a face
+  viscosity, body forces, sources and jumps.
 - **The tree equals the library.** Run through the case tree, the piston and the moving-mesh checks of ADR 0191 give the same
   bits as the same set-ups driven by library calls, and `rcfd run` gives the same reports.
 - **Stiffness.** The smoothing method `SmoothingMethod::InverseVolume(k)` uses the diffusivity `1/V^k`, so small cells deform less.
@@ -92,8 +106,9 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   on the incompressible and the compressible moving paths; `V` is the volume of the initial mesh, from which the displacement
   is solved. On ADR 0033's piston with cells 8 times smaller at the ends it keeps the smallest cell at 0.945 of its initial
   volume where the Laplacian keeps 0.75, and lowers the largest aspect ratio from 9.3 to 7.4.
-- **Not available:** local remeshing, prism or unstructured layering, layering with PISO/PIMPLE, and, in the case tree,
-  characteristic boundary conditions on moving faces and a time step that includes the mesh speed (library only, above).
+- **Not available:** local remeshing, non-planar layers, more than one moving layered boundary, and, in the case tree,
+  prism layers, layering with PISO/PIMPLE, characteristic boundary conditions on moving faces and a time step that
+  includes the mesh speed (library only, above).
 
 ```toml
 # ADR 0090's piston P: a closed box compressed to 0.4 of its length and re-expanded (peak piston Mach 0.05)

@@ -4962,7 +4962,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
     - USER DECISION 2026-11-06 (ADR 0190 decision record): the heat_flow report with the options and a balance check is
       the new item F-289 (Q3 (b)); the options on turbulence transport, momentum, pressure and the electric potential
       are the new item F-291 (Q4 (b)); Q1 and Q2 were not asked.
-- [ ] **F-257** Dynamic mesh: prism layering and incompressible layering
+- [x] **F-257** Dynamic mesh: prism layering and incompressible layering
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions:
     - (B1) the same piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event
@@ -4974,6 +4974,26 @@ Added after the static feature-gap review; wording is product-independent. Phase
       than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
       moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Size M.
+    - DONE (ADR 0213, the registration of F-257, 2026-11-07, branch f257-prism-layering, not merged): every registered
+      check is met; the acceptance is still the maintainer's (ADR 0213 Q5). Library only.
+      `rcfd_mesh::layering::ExtrudedStack` stacks prisms over a planar cross-section (`Section::rect`,
+      `Section::rect_triangles`) with the piston, thresholds and cell source map of `LayerStack` (one shared event
+      function); `face_sources` and `remap_face_flux` carry the face flux through an event (a merged side face takes the
+      sum of the two old faces, a split one the share of its layer height, the faces of a new plane close the cell below
+      them); `PimpleSolver::replace_mesh` installs the new mesh with the remapped velocity, pressure and flux.
+      - (B1) ADR 0090's piston on 320 triangular prisms: `p V^gamma` 1.53e-5 at T and 3.42e-5 at 2T (limit 2e-2),
+        per-event conservation 6.7e-16 (1e-13), mass drift 6.95e-13 (1e-12), volume 1.1e-15 (1e-13), 24 removals and 24
+        additions.
+      - (B2) ADR 0033 G5b mirrored in x on a layered mesh (the piston is `xmax`), 120 steps with 7 removals: step
+        continuity 3.1e-15 (1e-9), outlet against the piston's swept flux 1.3e-14 (1e-10), volume per event 2.2e-16
+        (1e-13). With the piston pulled out, 7 additions meet the same limits.
+      - The face map's balance and uniform-flow checks hold to 9.1e-16 and 1.6e-16; `replace_mesh` with the same mesh
+        changes no bit. Four mutations each made their check fail. Records L1 and L2 (made on main before the code),
+        ADR 0207's R1 to R4, baseline hashes and H1 unedited. The case tree is not changed (ADR 0191 E6 and E7 stay).
+      - Observed, no limit: the cell velocity next to the piston lags by 4.7e-3 of `a0 t` on the layered channel
+        (2.9e-4 on the smoothed mesh, ADR 0033's known miss of G5 (iii)).
+    - Open (ADR 0213 Q1 to Q5): the case-tree wiring under F-259, the piston end, the flux and the pressure of a split,
+      and the status.
 - [x] **F-258** Compressible ALE boundaries and mesh-speed time step
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and
