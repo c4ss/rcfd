@@ -434,3 +434,47 @@ changes.
 X4 for BF: `PimpleSolver` does not return the converged flags of its solves. X4 for BF is read as "the pressure
 iterations of every step below 3000", which excludes a pressure solve that stopped at its cap; the momentum solves of BF
 are not covered.
+
+## Amendment 2 (2026-11-07, written after the registered run of T and before any corrected run)
+
+The registered runs of K1 to K5, D-R, Q0, U1 to U4, N2 and E1 to E3 met every limit and held every negative control (the
+numbers are in the addendum). The registered run of T and N3/N4 (once, release, 27 s and 7 s) met T2 at level 1 (`1.404`
+against 2) and T3 (`5.2e-14`), held N3 (`220 e(TGB_1)`) and N4 (`57.2 e(TGB_1)`), and missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| T1 | `>= 1.7` | `0.747` (`e(TG_1) = 1.079e-3`, `e(TG_2) = 6.43e-4`) |
+| T2 at level 2 | `<= 2` | `3.313` (`e(TGB_2) = 1.94e-4`) |
+
+The background alone converges at order `1.99` (`7.68e-4`, `1.94e-4`).
+
+Diagnostic (disclosed; a scratch test, not committed, once): TG_L with the registered `dt = 0.0025` and with `dt =
+0.00125` (400 steps), the component moving as registered or held at its start pose, conservative and interpolated:
+
+| Run | `dt = 0.0025` | `dt = 0.00125` |
+| --- | --- | --- |
+| TG_1 moving, conservative | `1.079e-3` (`1.40 e_B`) | `1.041e-3` (`1.35 e_B`) |
+| TG_1 at rest, conservative | `1.496e-3` (`1.95 e_B`) | `1.503e-3` (`1.95 e_B`) |
+| TG_2 moving, conservative | `6.43e-4` (`3.31 e_B`) | `3.83e-4` (`1.98 e_B`) |
+| TG_2 at rest, conservative | `3.52e-4` (`1.82 e_B`) | `3.51e-4` (`1.82 e_B`) |
+| interpolated (no `delta`), all eight runs | `1.04e-3` to `3.06e-3` (`3.1` to `6.5 e_B`), continuity `2.7e-3` to `7.6e-3` | |
+
+At rest the overset error converges at order `2.09`. The excess of the moving component at level 2 halves with the time
+step. It is the time error of the cells that move: backward Euler errs by about `(dt/2) |d^2 u/dt^2|` along the path of a
+cell, and on a cell moving with the speed `w` the derivative along its path is `du/dt + (w . grad) u`; with `|w|` from 0.6
+to 0.9 here that gives an error of the size of the spatial error of level 2. The registration judged the time error from
+the background, where only `du/dt = -2 nu u` acts. T1 and T2 at level 2 as registered measure that time error together
+with the spatial one: a defective set-up. (Printed in the same diagnostic: without `delta`, the closed domain is not
+consistent and the soft pin takes the defect, a continuity of `3e-3` to `8e-3`, as M7 says.)
+
+T1 and T2 at level 2 stay as registered, as the ignored test `t_known_miss_order_and_fine_level_ratio`; the gate-run test
+of the registered set-up asserts T2 at level 1 and T3. Corrected checks, registered here before they run, each run once:
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| T1c | TG_1 with `dt = 0.0025` (200 steps), TG_2 with `dt = 0.000625` (800 steps), so that the time error falls with `h^2` as the spatial error does | `log2(e(TG_1) / e(TG_2))` | `>= 1.7` |
+| T2c | the same, with TGB_L at the same steps | `e(TG_L) <= 2 e(TGB_L)` for `L = 1, 2` | as stated |
+| T3c | the same | every step the continuity of the calculated cells | `<= 1e-9` |
+
+N3 and N4 keep the registered set-up (level 1, `dt = 0.0025`). MU3 (must fail T2) is read as failing T2 at level 1 or
+T2c. The decision rule is unchanged: T1 and T2 at level 2 are missed as registered, so F-134 cannot be done under it.
