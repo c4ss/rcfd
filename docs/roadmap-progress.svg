@@ -10,7 +10,9 @@
     .big { font-size: 34px; font-weight: 700; }
     .sub { font-size: 15px; fill: var(--mute); }
     .lab { font-size: 14px; font-weight: 600; }
+    .row { font-size: 14px; }
     .num { font-size: 13px; fill: var(--mute); }
+    .fam { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; fill: var(--mute); }
   </style>
   <rect width="720" height="176" fill="var(--bg)"/>
   <defs>

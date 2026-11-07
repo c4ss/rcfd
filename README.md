@@ -26,6 +26,8 @@ warranty of any kind (see the licences). The main gaps today:
 
 ![Roadmap progress: done, partly done and not started items](docs/roadmap-progress.svg)
 
+![Roadmap progress by area](docs/roadmap-categories.svg)
+
 [The roadmap overview](docs/roadmap-overview.md) says what works today, what
 does not and what comes next. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
 plan.
