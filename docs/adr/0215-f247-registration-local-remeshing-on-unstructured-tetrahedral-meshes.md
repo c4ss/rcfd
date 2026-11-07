@@ -359,3 +359,49 @@ before any event runs, and the check would test a mesh that no run produces. Cor
 everything else in U2 unchanged): the piston plane of M_s is moved inward in steps of 0.001 to `x = 0.27` and then
 outward in steps of 0.001 to `x = 0.33`, with `remesh()` after each step; at every event, (a) to (e) as registered. At
 least one event inward and one outward are required (set-up). No limit changes.
+
+## Amendment 2 (2026-11-07, before any registered run)
+
+Written after the code of S1 was first written and before any registered check (P-T, N1, N2, U1 to U3) was run. The
+development runs allowed by the house rules, on scratch set-ups only, found four defects of M1 and M7. No limit changes and
+no threshold of S1 changes; the operators and the motion change as below.
+
+Development set-ups (scratch crate `w49i-work/f247-scratch/dev`, outside the repository; neither is P-T or M_s):
+
+- D-a: `tetrahedralize(box_surface([0, 0, 0], [0.5, 0.12, 0.08], [10, 3, 2]))` with `size` and `h0` 0.035, 0.04 and 0.05
+  (`quality_sweeps` 3), the remesher alone (no solver): `xmax` moved in steps of 2e-4 to 0.2 and back to 0.5, `remesh()`
+  after each step;
+- D-b: `tetrahedralize(box_surface([0, 0, 0], [0.8, 0.1, 0.12], [16, 2, 3]))`, `size` and `h0` 0.035, 1742 cells, the
+  compressible loop of P-T with `T = 4` (a piston four times faster than P-T's) to `2T`.
+
+Defects found on D-a and their changes:
+
+1. *A point is caught by the piston.* With only the piston plane moving, a point just behind it (in one run a side point
+   0.00015 from the piston) sits on cells that flatten as caps faster than the operators remove it, and a cell inverts
+   (D-a at `h0` 0.035, 0.04 and 0.05). Change of M1: the motion carries a band. `move_plane_with_band(k, value, w)` moves
+   the points on the plane to `value` and every point at a distance `d < w` on its inner side (and on no plane of the same
+   axis) along the axis by `(value - old) (1 - d / w)`. The map is monotone along the axis with slope `1 + Δ/w > 0`, so the
+   motion alone inverts no cell and overtakes no point; the cells next to the piston thin gradually and the triggers of M7
+   see them. P-T, N2 and U2's piston use `w = 2 h0 = 0.07`. `set_plane` is unchanged (plane points only).
+2. *A split and a collapse undo each other.* In the expansion a split leaves a cell below `q_good`, and the improvement
+   collapses the new point back, which makes the long edge again: thousands of operators per run, ten passes per event.
+   Change of M7 step 3: a collapse candidate makes no edge longer than `l_max`.
+3. *A short edge whose end points cannot collapse onto each other* (a point of a box-edge line next to a piston corner)
+   stays until its cells degrade, and the size rule rejects the good collapse onto the point behind it. Change of M7 step 2:
+   the candidates are the collapses of either end point onto any of its neighbours allowed by M3, and a step-2 collapse may
+   make edges up to `max(2 l_max, longest edge of C)` (step 1 splits them in the next pass into halves of at most `l_max`).
+4. *A flat cell whose three points on a side plane become collinear* (two static points of a box-edge line and a piston
+   edge point between them) can be repaired only by flipping the boundary edge on that plane. Change of M3: edge removal
+   also takes an edge on exactly one plane, whose ring is open (`n >= 2` cells, `n + 1` ring points, the two ends on the
+   plane); its polygon is closed by the segment of the two ends, and the fans are formed as for a closed ring (`n = 2` is
+   the 2-2 flip of the boundary edge). An edge on two planes (a box-edge line) is not removed.
+
+With these changes the development runs gave (numbers of scratch set-ups, no limit applies to them): D-a at `h0` 0.035,
+0.04, 0.05 with the band: no failure, smallest mean ratio over the run 0.345, 0.321, 0.373, the largest raw mismatch of M5
+2.2e-14; D-b: `p_bar V^gamma` 9.4e-5 at `T` and 2.3e-4 at `2T`, per-event volume, mass and energy within 1.5e-15,
+smallest mean ratio 0.288, raw mismatch 1.9e-13, the smallest x of a touched point 0.249 (piston at rest at 0.56), 14613
+steps in 53 s. Events after which a trigger condition remained were frequent (D-b: 1368 of 1433; mostly edges just over
+`l_max` whose split the quality rule refused), which costs time but is not a check (it is printed in P-T).
+
+The text of M1, M3 and M7 above is read with these changes; S1 gains `TetRemesher::move_plane_with_band`. The record M0,
+the limits, the checks, the negative controls and the mutations are unchanged.
