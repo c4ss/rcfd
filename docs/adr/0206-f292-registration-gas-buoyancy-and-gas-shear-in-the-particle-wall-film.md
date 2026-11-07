@@ -451,3 +451,22 @@ Disclosures:
   same `Tracker::advance`), the service method `particles.report` with a gas drive, the JSON Schema export of the two keys,
   the written text of S4 (from the code read), the shear on a non-orthogonal face (G4 is first order there), and a film
   over more than one patch with the shear.
+
+### The gate (2026-11-07)
+
+Main stayed at 8db45fb while F-292 was built, so no merge was needed; 0206 is on no other branch. The gate ran on a
+`git archive` copy of 0ebe292 (this addendum's commit before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f292-gate`. It took the machine's gate lock
+at 23:36 when the F-285 gate released it (the F-291 and F-295 gates were waiting for the lock too; the lock takes no turns
+by arrival) and started with 30 GB of physical memory free: `cargo fmt` per package 0, `cargo clippy --workspace
+--all-targets -- -D warnings` 0, tests **2989 passed, 1 failed, 835 ignored** (2990 test processes in 580 binaries, wall
+4058 s, peak summed working set 3906 MB, largest time against its limit 0.222, lowest free physical memory 22 GB). The lock
+was released at the end.
+
+The one failure is `rcfd-runner` `runner_w47b` s1, a known flake of the gate: its negative control ("the sampler does not see
+an over-subscription of 2") saw status 3 and OS 0 under `max_runs = 3`, while its registered part held (status 2, OS 2).
+Run again alone on the gate's sources it failed the same way (status 3, OS 0), as it did three times in the F-289 / F-290
+gate; the runner tests do not run the particle code. All 27 tests of this ADR ran in the gate and passed, and so did the
+suites of D1 (R1 to R5, H1, `baseline_hashes`). F-292 adds no ignored test.
+
+Q1 to Q6 stay open for the maintainer. F-292 stays partial (Q1).
