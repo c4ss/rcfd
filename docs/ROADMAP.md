@@ -5305,3 +5305,14 @@ fixed by the item's registration ADR before any code.
       budgets of ADR 0199's periodic C1 box close to 1e-14 (owner: 1.7e-7 to 6.5e-2), the B2 seam pairs are equal to the bit
       (owner: 13 to 27 percent apart); other models refused at the key; defaults bit-identical. Open: other models (Q1),
       check H's texts (Q2), the default (Q3).
+
+- [ ] **F-296** One diffusivity per periodic seam pair for the other models
+  - depends on: F-295
+  - acceptance: Every limit is fixed by its registration ADR before any code. The rule of F-295
+    (turbulence.periodic_seam.diffusivity = "pair") is applied to the face viscosity or diffusivity of k-epsilon,
+    Spalart-Allmaras, the Reynolds stress model, the subgrid and mixing-length models and the rheology face viscosity,
+    each with a global-budget check on a periodic box with a differing viscosity (the owner rule must miss it, the pair
+    rule must meet it); defaults bit-identical (baseline hashes unchanged).
+  - note: From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the
+    same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set
+    pair before H runs. Question 3: the default stays owner.

@@ -2365,5 +2365,16 @@
     "status": "todo",
     "acceptance": "Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy viscosity differs; the option is opt-in with defaults bit-identical (baseline hashes unchanged), and a global budget on a periodic case with a differing eddy viscosity is checked within a limit fixed by the ADR.",
     "note": "From ADR 0199 (F-286) amendment 2 and question 5, recommendation taken by the lead: found while correcting the F-286 set-ups; each face of a seam pair takes the diffusivity of its own owner cell. FAN-01 and EXP-ROT check H both have rotational seams, so this item comes before check H is read."
+  },
+  {
+    "id": "F-296",
+    "title": "One diffusivity per periodic seam pair for the other models",
+    "phase": 3,
+    "deps": [
+      "F-295"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. The rule of F-295 (turbulence.periodic_seam.diffusivity = \"pair\") is applied to the face viscosity or diffusivity of k-epsilon, Spalart-Allmaras, the Reynolds stress model, the subgrid and mixing-length models and the rheology face viscosity, each with a global-budget check on a periodic box with a differing viscosity (the owner rule must miss it, the pair rule must meet it); defaults bit-identical (baseline hashes unchanged).",
+    "note": "From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set pair before H runs. Question 3: the default stays owner."
   }
 ]
