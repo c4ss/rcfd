@@ -420,7 +420,7 @@ The two failures:
   "pair"` with k-epsilon on PIMPLE to be refused (ADR 0210 S1), and gets no diagnostic. Run again alone on the same build: fails the
   same way. Run on a `git archive` of main 981804b without F-219 (target `target-f219-chkmain`): fails the same way. It is an
   interaction of two merges on main (F-294's S1 written before F-296, ADR 0212, made `pair` valid for k-epsilon and SA), not an
-  effect of F-219, whose code is not reached by it. The test file is not edited here (Q7).
+  effect of F-219 (the test sets no immersed forcing, so none of F-219's statements run in it). The test file is not edited here (Q7).
 
 Every test of `immersed_solid_f219.rs` that is not ignored passed (11); the known miss and the diagnostic were ignored. The suites
 named under N2 passed unedited (`baseline_hashes`, H1 of `case_hashes_w48u`, `w33b_default_bits`, `cylinder`, `solidification`,
