@@ -87,7 +87,10 @@ fn r1_rigidly_rotating_annulus_record() {
     let p = ScalarField::from_fn("p", &geom, |c| 0.5 * w * w * (c[0] * c[0] + c[1] * c[1]));
     let mut s = PimpleSolver::new(geom, u, p, settings(0.01));
     let dt = 0.02;
-    let names: Vec<String> = ["inner", "outer", "zmin", "zmax"].iter().map(|s| s.to_string()).collect();
+    let names: Vec<String> = ["inner", "outer", "zmin", "zmax"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
     for n in 1..=20 {
         let pose = Pose {
             origin: vec3::ZERO,
@@ -145,13 +148,22 @@ fn r2_cylindrical_join_of_the_pair_record() {
 #[test]
 fn r3_static_joined_pair_taylor_couette_record() {
     let (a, b) = pair();
-    let (m, _) = join_non_conformal_cylindrical(&a, "farfield", &b, "cylinder", vec3::ZERO, [0.0, 0.0, 1.0], 1e-8).unwrap();
+    let (m, _) =
+        join_non_conformal_cylindrical(&a, "farfield", &b, "cylinder", vec3::ZERO, [0.0, 0.0, 1.0], 1e-8).unwrap();
     let geom = Arc::new(FvGeometry::new(Arc::new(m)).unwrap());
     let mut u = VectorField::uniform("U", &geom, vec3::ZERO);
     let cf = geom.mesh.face_centres();
-    let inner: Vec<Vec3> = geom.mesh.patch("cylinder").unwrap().faces().map(|f| [-cf[f][1], cf[f][0], 0.0]).collect();
-    u.set_bc(&geom, "cylinder", Box::new(FixedValue(Profile::PerFace(inner)))).unwrap();
-    u.set_bc(&geom, "farfield", Box::new(FixedValue::vector(vec3::ZERO))).unwrap();
+    let inner: Vec<Vec3> = geom
+        .mesh
+        .patch("cylinder")
+        .unwrap()
+        .faces()
+        .map(|f| [-cf[f][1], cf[f][0], 0.0])
+        .collect();
+    u.set_bc(&geom, "cylinder", Box::new(FixedValue(Profile::PerFace(inner))))
+        .unwrap();
+    u.set_bc(&geom, "farfield", Box::new(FixedValue::vector(vec3::ZERO)))
+        .unwrap();
     let p = ScalarField::uniform("p", &geom, 0.0);
     let mut st = settings(1.0);
     st.non_orth_correctors = 2;

@@ -9,7 +9,8 @@
 //!
 //! The convection operator is assembled in conservative form, so the relative flux `phi - m` is simply handed to it;
 //! the right-hand side of the transient term carries the old volume. Child module of `pimple`: it reads the private
-//! solver history. Between two steps `replace_mesh` installs a mesh of another topology (a layer event, F-257, ADR 0213).
+//! solver history. Between two steps `replace_mesh` installs a mesh of another topology (a layer event, F-257, ADR 0213);
+//! `step_sliding` takes a step onto a mesh with the same cells and other faces (a sliding interface, F-250, ADR 0216).
 
 use super::{PimpleSolver, StepInfo};
 use crate::convection::face_flux;
@@ -133,6 +134,99 @@ impl PimpleSolver {
             vec![0.0; n_int]
         };
         self.geom = new_geom;
+        self.ale = Some(AleStep {
+            mesh_flux,
+            vol_old,
+            defect,
+            wall_dpdn,
+        });
+        let info = self.step(dt);
+        self.ale = None;
+        Ok(info)
+    }
+
+    /// Advance one Euler step of size `dt` across a sliding interface (F-250, ADR 0216 S3): `step` (from
+    /// `sliding::sliding_step`) holds the new joined mesh, which has the cells of the current one but other faces, its mesh
+    /// flux, the old volumes, the old-level face flux remapped onto the new faces and the old-level Rhie-Chow defect. The
+    /// remapped flux becomes the solver's flux (and the start of its flux history, as `replace_mesh`), the defect is scaled
+    /// by `w V0_o/V1_o + (1 - w) V0_n/V1_n` as in `step_ale_with_walls`, `wall_dpdn` is the fixed-flux gradient of the moving
+    /// walls (from `sliding::rotating_wall_conditions`; empty = none), and the step is taken.
+    ///
+    /// Fails, leaving the solver unchanged, for a time scheme other than implicit Euler, another number of cells, data that do
+    /// not fit the step's mesh, a patch list that differs in number, names, kinds or sizes, and a set face viscosity, body
+    /// force, source force, sink or face jump (their data are sized to the current mesh).
+    pub fn step_sliding(
+        &mut self,
+        dt: f64,
+        step: crate::sliding::SlidingStep,
+        wall_dpdn: Vec<f64>,
+    ) -> Result<StepInfo, String> {
+        if self.settings.time_scheme != TimeScheme::ImplicitEuler {
+            return Err("step_sliding: a moving mesh supports the implicit Euler time scheme only".into());
+        }
+        let g = step.geom.clone();
+        if g.n_cells() != self.geom.n_cells() {
+            return Err(format!(
+                "step_sliding: the step's mesh has {} cells, the solver's {}",
+                g.n_cells(),
+                self.geom.n_cells()
+            ));
+        }
+        let (nf, ni, nb) = (g.mesh.n_faces(), g.n_internal, g.mesh.n_boundary_faces());
+        if step.mesh_flux.len() != nf
+            || step.phi_old.len() != nf
+            || step.vol_old.len() != g.n_cells()
+            || step.old_defect.len() != ni
+            || !(wall_dpdn.is_empty() || wall_dpdn.len() == nb)
+        {
+            return Err("step_sliding: the step's data do not fit its mesh".into());
+        }
+        let same_patches = {
+            let (a, b) = (self.geom.mesh.patches(), g.mesh.patches());
+            a.len() == b.len()
+                && a.iter()
+                    .zip(b)
+                    .all(|(x, y)| x.name == y.name && x.kind == y.kind && x.size == y.size)
+        };
+        if !same_patches {
+            return Err("step_sliding: the step's mesh must have the patches of the current one".into());
+        }
+        if self.nu_face.is_some()
+            || self.body_force.is_some()
+            || self.source_force.is_some()
+            || self.sink.is_some()
+            || self.face_jump.is_some()
+        {
+            return Err(
+                "step_sliding: a face viscosity, body force, source force, sink or face jump is set (sized to the current mesh)"
+                    .into(),
+            );
+        }
+        let mut mesh_flux = step.mesh_flux;
+        for (f, m) in mesh_flux.iter_mut().enumerate() {
+            if g.empty[f] {
+                *m = 0.0;
+            }
+        }
+        let vol_new = g.mesh.cell_volumes();
+        let vol_old = step.vol_old;
+        let defect = if self.settings.ddt_correction {
+            let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+            (0..ni)
+                .map(|f| {
+                    let (o, n) = (own[f], nei[f]);
+                    let w = g.weights[f];
+                    let r = w * vol_old[o] / vol_new[o] + (1.0 - w) * vol_old[n] / vol_new[n];
+                    r * step.old_defect[f]
+                })
+                .collect()
+        } else {
+            vec![0.0; ni]
+        };
+        self.phi_hist = History::new(step.phi_old.clone());
+        self.phi = step.phi_old;
+        self.fs_q = Vec::new();
+        self.geom = g;
         self.ale = Some(AleStep {
             mesh_flux,
             vol_old,

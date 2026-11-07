@@ -452,3 +452,83 @@ between cells at different angles (ADR 0109) is unchanged.
 - **Q6. Status of F-250.** With every check met: options (a) partial until the tree can run a sliding case (the decision
   rule); (b) done, with the wiring as its own item. Recommendation (a): unlike F-257, whose wiring is tracked by F-259, no
   item tracks this wiring yet. The roadmap follows the decision rule until the maintainer decides.
+
+## Amendment 1 (2026-11-07, written after the registered run of K1 to K4 and before any flow check ran)
+
+The registered run of the unit tests K1 to K4 (once, release) gave: K1 exact at all four steps, K3 `5.2e-15` at worst,
+K4 every refusal with its word, K2 (ii) `2.53e-14` over 1008 radial faces and K2 (iii) no non-zero value; and a **miss of
+K2 (i)**: the largest `abs(sum_f sigma_f W_f) / V_c` over the rotor cells without an interface face is `1.07e-14`
+against `1e-14`. The records R1 to R3 (D-R) were run once after the code, before K1 to K4: equal.
+
+Reading of the miss (not a diagnosis yet; the check below decides it): ADR 0033's identity is `sum_f sigma_f W_f = V1 -
+V0` for the two point sets the swept volume is given, here the mesh `M1` and `M1` turned back by `theta1 - theta0`. A
+rotation in floating point keeps a cell's volume only to the round-off of the turned points (about `1e-16 |x|` against
+cell sizes of 0.04 to 0.06, so `1e-15` to `1e-14` of the volume), so `V1 - V_back` is of that size, not zero, and K2 (i)
+measured it against zero. K2 (i) stays as registered, as an ignored `*_known_miss` test with the measured number.
+
+Added check, registered here before it runs:
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| K2c | P from 0.0123 to 0.0173 rad, every rotor cell without an interface face: `abs(sum_f sigma_f W_f - (V1_c - V_back,c)) / V_c`, `V_back` the cell volume of `M1` with all points turned back by `theta0 - theta1` (`motion::moved_mesh`, the same rotation as `rotor_swept_volumes`), the mesh the swept volumes are computed from; printed with it, no limit, the largest `abs(V1_c - V_back,c) / V_c` | `<= 1e-14` |
+
+If K2c holds and `abs(V1_c - V_back,c) / V_c` is of the size of the K2 (i) value, the miss is the round-off of the
+rotation and not of the swept volume. The flow checks' GCL limit (`1e-12 mean(V)`, S4 and the others) is not affected.
+
+## Amendment 2 (2026-11-07, written after the registered run of the flow checks and before any corrected run)
+
+The registered run of `sliding_interface_f250.rs` (once, release, one thread, 75 s) met F1, F1n, S2, S4, N3, U1 to U4, N1,
+N2, R0, R1, R2, R3 of RR=, T1 to T4, B0, D1, D2, E1, E2 and X0 in every set-up, and missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| S1 (acceptance A1) | `<= 1e-10` | `1.51e-10` |
+| S3 | `<= 1e-9` | `1.78e-9` |
+| S5 | `<= 1e-9` | `7.77e-3` |
+| S6 (set-up) | every step | 58 of 100 steps |
+| T5 | net `<= 1e-10`, GCL `<= 1e-12`, continuity `<= 1e-9` | `8.58e-11`, `1.20e-14`, **`4.21e-9`** |
+| R1b | `<= 2.153e-5` (1.5 x the rotating controls' `1.435e-5`) | `5.939e-4` |
+| R3 of RR | net `<= 1e-10`, GCL `<= 1e-12`, continuity `<= 1e-9` | `6.20e-11`, `1.38e-14`, **`1.42e-8`** |
+| D3 | GCL `<= 1e-12`, continuity `<= 1e-9` | `1.20e-14`, **`1.67e-8`** |
+
+All results go in the addendum. Four diagnostics were run after it (scratch tests, not committed; disclosed here):
+
+- (a) SF, steps 1 to 6, the largest cell divergence of the remapped old flux and where: step 1 `7.77e-3` (relative to
+  `max abs(S_f)`) at cell 2016, a stator cell at `r = 1.968` that has no interface face, where the old flux is the start
+  flux of `PimpleSolver::new` (the face interpolation of the start velocity, divergence `8.1e-5`), which M4 does not
+  touch; steps 2 to 6 at most `2.5e-12`. S5 as registered measures the start flux in its first step: a defective set-up.
+- (b) TC, 60 steps, with 0, 2 and 6 non-orthogonal correctors, sliding and on the static joined P at 0.0123 rad: the
+  largest `continuity` sliding `2.8e-13`, `3.8e-9`, `3.1e-13`, static `1.9e-10` (2), `7.6e-14` (6); the largest net
+  interface flux sliding `7.6e-11` (2) and `1.7e-15` (6). The continuity, S1 and T5 misses are the lag of the explicit
+  non-orthogonal flux: the final flux carries the non-orthogonal term of the last pressure, which the last solved equation
+  did not hold, so its divergence is the change of that term over the last corrector. The sliding mesh makes the pressure
+  correction of a step near the interface about 20 times larger than on the static non-conforming mesh. With 2
+  correctors on these 49-degree interface faces the registered set-up does not meet the precondition of the continuity
+  measure (a converged non-orthogonal correction).
+- (c) S6: the expectation "every step" was wrong. A rotor vertex at `2 pi i / 144 + theta` meets a stator vertex at `2 pi j
+  / 120` when `theta = 2 pi (6 j - 5 i) / 720`, so the owner-neighbour pairs of the interface change only at the angles
+  `m 2 pi / 720`: 57 of them in `(0, 0.5]`, at most one per step (`0.00873 > Omega dt = 0.005`), none on a step end
+  (`m pi / 360 = 0.005 n` has no integer solution), plus the first step from the coincident vertices at angle 0: 58.
+  S6 is a defective set-up check.
+- (d) RR, the cell of the largest error: sliding `5.939e-4` at `r = 1.968` (the outermost stator cell, next to the static
+  stator wall; the rotor cells at most `5.03e-4`), the static control C120 `5.935e-4` at the same radius. The rotating
+  controls have no static wall (both walls follow the mesh with ADR 0033's fixed-flux pressure gradient). R1b's miss is
+  the zero-normal-gradient pressure condition of the static stator wall, which the sliding case shares with the static
+  controls (R1 and R2 against them are met), not the interface.
+
+The registered checks stay as they are and the missed ones become ignored `*_known_miss` tests with their limits
+(S1, S3, S5, S6, T5, R1b, R3 of RR, D3). Corrected checks, registered here before they run, each run once:
+
+| Id | Set-up | Check | Limit |
+| --- | --- | --- | --- |
+| S5c | SF | every step from the second, S5's measure | `<= 1e-9` |
+| S6c (set-up) | SF | the number of steps in which the owner-neighbour pairs of the interface change | 58 exactly |
+| (all of S) | SF6 | S1, S2, S3, S4, S5c, S6c, N3 and X0 | as registered |
+| (all of T) | TC6 | T1 to T5 and X0 | as registered |
+| (R) | RR6 | R1, R3 and X0 | as registered |
+| (all of D) | DM6 | D1 to D3 and X0 | as registered |
+
+SF6, TC6, RR6 and DM6 are SF, TC, RR and DM with `non_orth_correctors = 6` in every solver of the set-up (the controls
+too), the count at which diagnostic (b) gave a continuity of `3e-13`; nothing else changes. R1b is not re-checked on RR6
+(its cause, (d), does not depend on the correctors). The decision rule is unchanged: A1 is met if S1 holds on SF6, and the
+roadmap status stays partial (Q6).

@@ -38,6 +38,7 @@ pub mod rotor_interface;
 pub mod scalar;
 pub mod simple;
 pub mod sixdof;
+pub mod sliding;
 pub mod smoothing;
 pub mod solidification;
 pub mod sources;
