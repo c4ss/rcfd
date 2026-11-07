@@ -522,3 +522,109 @@ Correction, before any further run:
 - MU2 (amended): must fail CT2 (c) and CT4b. MU3 is run once more against CT3b.
 - Prediction: CT3b and CT4b give the numbers of CT3 and CT4 (the fields equal the inputs to the last bit, item 8 and
   CT2); under MU2, CT4b misses at every time (`T_L` 0.09 in the run against 1.0 in the closed form).
+
+## Addendum 1: results (2026-11-07)
+
+Measured against the limits registered above and in amendments 1 to 3; no limit was changed. Release builds on Windows.
+The registration is d63d920 (with the records R8 and R9), amendment 1 69d0be3, the first run of the code 8f02f50,
+amendment 2 ee5e221, the corrected code 1d52cc9, amendment 3 7d46018, and the corrected tests CT3b, CT4b with this
+addendum in the following commit. Every check ran once, except where an amendment named a corrected run; the runs are
+deterministic and none was repeated to change a result. Every registered check met its limit (the corrected checks for
+the three set-up defects), every negative control held, and every mutation made its check fail (MU2 after amendment 3).
+
+### A, B. The closed form and the fields (library; `crates/rcfd-particles/tests/dispersion_f255.rs`, 6 tests, 0.8 s)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| CF1 closed form against the moment equations, 24 pairs | 1e-9 each | worst 7.6e-12 (`tau = 10`, `t = 0.25`); 1.1e-12 at `tau = 2`, `t = 0.25`; all others 1.9e-13 or less | met (predicted 1e-10 at most) |
+| CF2 `tau = 1e-9` against Taylor at 0.25, 1, 4, 10; Taylor at 50 T | 1e-7; 1e-14 | 7.7e-9, 1.7e-9, 3.3e-10, 1.1e-10; 0 | met (predicted `2 tau/t`) |
+| CF3 long-time diffusivity, `tau` = 1e-3, 0.5, 2 | 1e-9 | 0, 0, 0 | met |
+| LF1 four refusals; read back | `Err`; bit for bit | all `Err`; equal | met |
+| LF2 the same arrays before every advance; `2 k` from step 76 | bit for bit; equal after 75, differ after 150 | equal (2862 words); as stated | met |
+| LT the library cloud at 0.25, 1, 4, 10 s; all active | 5 percent each; all | 1.08, 0.89, 0.22, 0.76 percent; 20 000 active | met |
+
+### C. Case tree (`crates/rcfd-api/tests/dispersion_f255.rs`, 16 tests of which 1 ignored, 1.3 s)
+
+The first run with the registered key (8f02f50) and the corrected run with the key of amendment 2 (1d52cc9) gave the same
+numbers to the printed digits, as amendment 2 predicted; the table gives them once.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| CT1 six invalid inputs; five controls | each at its path; none | each gives exactly the registered diagnostic; none | met |
+| CT2 (a) k-epsilon before any sweep; (b) after two sweeps; (c) SST before and after | bit for bit; ratio `>= 1.05`; bit for bit | equal; equal, `k` 0.1357 to 0.1508 (ratio 1.112); equal | met |
+| CT3 (acceptance) k-epsilon tracer cloud at 0.25, 1, 4, 10 `T_L`: against `drw_msd`; against Taylor; `N`; all active | 5 percent each; 20 000; all | 0.44, 0.42, 0.68, 0.32 percent; 0.33, 0.25, 0.65, 0.31 percent; 20 000; all | met |
+| CT3b (amendment 3) the same against the case's inputs | 5 percent each | the numbers of CT3 | met |
+| CT4 (record, amendment 3) SST tracer cloud, closed form from the tracker | 5 percent each | 0.54, 0.79, 0.07, 0.79 percent; Taylor 0.23, 0.62, 0.04, 0.78 percent | met, but blind to MU2: ignored record |
+| CT4b (amendment 3) SST cloud against the case's inputs | 5 percent each | the numbers of CT4 | met |
+| CT5 inertial cloud (`tau = T_L`, no crossing) | 5 percent each | 0.03, 0.01, 1.08, 0.06 percent | met |
+| CTN1 (negative control) CT5 at 1 s against Taylor's tracer form | `>= 50` percent off | 85.8 percent off | held (predicted 86) |
+| CTN2 (negative control) T6 at 1 s: its own fields; the fields of T | 5 percent; `>= 50` percent off | 0.16 percent; 104.9 percent off | held (predicted 105) |
+| CTN3 (negative control) TC6 at 1 s against the constants | 5 percent | 0.42 percent (the cloud of CT3 at 1 s, bit for bit: the same seed and values) | held |
+| CT6 run path, `track_frozen`, hand-built tracker on non-uniform fields | bit for bit | equal (26 002 words, 2000 parcels) | met |
+| CT7 (a) the run path's arrays after each of 10 steps; the fields change; (b) `track_transient` arrays and fingerprint | bit for bit; as stated; bit for bit | equal at every step, all 125 cells change every step; equal (26 002 words) | met |
+| CT8 two-way: the arrays after each of 10 steps against the old level | bit for bit | equal at every step | met |
+
+### D. The surface reaction (library; `crates/rcfd-particles/tests/reaction_f255.rs`, 6 tests of which 1 ignored, 7 s)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| RX1 `d` after steps 100, 200, 300; after 400: reacting mass, `d_i`, solid, sources | 1e-12; exact, 1e-14, 1e-12, 1e-12 | 5.2e-15, 1.2e-14, 1.7e-14; 0 exactly, 1.4e-16, 1.6e-16, 4.7e-16 and 3.4e-16 | met |
+| RX2 (record, amendment 1) per species at all 300 steps | 1e-10 each | solid 1.0e-14, O 7.4e-15, P 7.3e-15, total 8.0e-15 | met |
+| RX3 (record, amendment 1) | as stated | 220 parcels: 160 burnt out, 60 partly; 9 active, **0 deposited**, 60 escaped, 151 stuck | missed "one deposited": set-up defect |
+| RX2b (acceptance, amendment 1) per species at all 300 steps | 1e-10 each | solid 2.0e-14, O 1.5e-14, P 1.5e-14, total 1.5e-14 | met |
+| RX3b (amendment 1) | as stated | 300 parcels: 162 burnt out, 138 partly; 11 active, 80 deposited, 60 escaped, 149 stuck | met (predicted) |
+| RX4 inert at zero oxidiser | bit for bit | the 2862 words of the run without equal the leading words of the run with (3324 words) | met |
+| RX5 after steps 150 and 200 | 1e-12 | 2.8e-15, 9.0e-15 | met |
+| RX6 eleven invalid specs and fields, five other refusals; control | `Err`; `Ok` | all `Err`; `Ok` | met |
+
+### E. Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D1 the suites listed, unedited | pass | first run: all but H1 (30 of 30 valid sources differ in the text columns: amendment 2). After amendment 2: `closed_forms`, `lagrangian_ext`, `wall_film` (R1), `film_gas`, `wall_interaction` (R3), `erosion_presets`, `particles_case`, `particles_ext_case`, `particle_run`, `particles_two_way`, `wall_film_f253` (R2), `wall_interaction_f254` (R4), `erosion_presets_f254` (R5), `film_gas_f292` (R6, R7), H1 (41 recorded sources, 0 differ), `baseline_hashes`: all pass, none edited | met after amendment 2 |
+| D2 R8: TC; TC with the default written | `fcb39f5493969989` | equal; equal (first run: `dispersion_fields = "constant"`; corrected: the table with `enabled = false`) | met |
+| D3 R9: TCR; TCR with the default written | `98977560c22d623c` | equal; equal (as D2) | met |
+
+### Mutations
+
+Each was applied alone by an exact text replacement (a scratch script, not committed), the named test was run once, and the
+file was restored and compared byte for byte with the kept copy (equal in all thirteen runs). MU1 to MU10 ran on
+1d52cc9; MU2 and MU3 against the checks of amendment 3 ran on the tree of this addendum.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 | CF1 | failed: 1.7e-5 at `tau = 1e-3`, `t = 0.25` |
+| MU2 | CT4 | **did not fail** (0.01 to 1.35 percent): amendment 3 |
+| MU2 (amendment 3) | CT4b; CT2 (c) | failed: 48 percent at 0.25 s; the epsilon bits before any sweep |
+| MU3 | CT3; CT3b (amendment 3) | failed: `V = 0` (the constants `-1` give no fluctuation), 100 percent off; the same |
+| MU4 | CT7 | failed at (a) step 1: the arrays kept the initial `k` |
+| MU5 | CT8 | failed at step 2: the arrays kept the initial `k` |
+| MU6 | D2 | failed: the hash of TC with the table off became `c8e4710d7e63619c` |
+| MU7 | CT1 | failed at input 4: no diagnostic |
+| MU8 | RX2 (RX2b) | failed at step 1: P 0.27, total 1.0 |
+| MU9 | RX1 | failed: 8.0e-2 after step 100 |
+| MU10 | CT7 | failed at (b): the arrays kept the initial `k` |
+
+`scripts/limit_audit.py` has four hits in the new files, all class (iv) and all read: the record switch
+`RCFD_F255_RECORD` of R8, the platform rule of ADR 0137 in D3, and the skip of steps without any reaction inside the
+per-step check of RX2 and RX2b (both then assert that all 300 steps were checked).
+
+### Disclosures
+
+- After the library run of A, B and D, `cargo fmt` re-wrapped the new files and clippy (`neg_cmp_op_on_partial_ord`)
+  asked for two rewrites in `reaction.rs`: `!((gas - solid).abs() <= tol)` became `(gas - solid).abs() > tol` and
+  `!(dm > 0.0)` became `dm <= 0.0`, equal for the finite values that reach them. The gate runs every check again on the
+  final code.
+- S3 named a read accessor `ParticleRun::tracker()`; it was not added, because the field `tracker` is already public.
+- RX2's injector `a` keeps the cone and the mass flow of the R1 scenario, without its injection temperature (heat
+  transfer is off with the reaction).
+- Not exercised by a test: the steady two-way coupling with the model fields (each re-track builds a tracker with
+  `build_tracker`, which reads them, as CT2 checks), the service and MCP paths, the JSON Schema export and the written
+  text of the table, a mesh with laminar regions (`regions.<n>.turbulence`), and the reaction together with the film,
+  erosion or rough walls (allowed; their bookings use the parcel mass after the reaction).
+- The probe of item 8 measured the constant-key cloud at 10 s (17.959, -0.22 percent); CT3 with its own seed measured
+  0.32 percent at 10 s.
+
+### Status
+
+F-255 stays partial in the roadmap (Q1). Q1 to Q10 stay open for the maintainer.

@@ -430,9 +430,42 @@ fn ct3_tracer_cloud_on_k_epsilon_fields_follows_taylor() {
     }
 }
 
-/// CT4: the same on the SST model's fields.
+/// CT3b and CT4b (ADR 0208 amendment 3): the clouds of CT3 and CT4 against the closed form of the case's inputs
+/// (`sigma2`, `t_l`), not of the tracker's fields.
+fn against_inputs(id: &str, text: &str, sigma2: f64, t_l: f64) {
+    let tau = tau_of(D_TRACER);
+    for t in TIMES {
+        let tr = frozen(&with_end(text, t));
+        let (v, c, active, n) = cloud(&tr, &|a| drw_msd(sigma2, t_l, tau, a));
+        let (_, ct, _, _) = cloud(&tr, &|a| taylor_msd(sigma2, t_l, a));
+        let (e, et) = (rel(v, c), rel(v, ct));
+        println!("{id} t {t}: V {v:.6e} C {c:.6e} rel {e:.4}; Taylor {ct:.6e} rel {et:.4}; N {n}, all active {active} (inputs: sigma2 {sigma2}, T_L {t_l})");
+        assert!(active && n == 20_000, "{id} set-up");
+        assert!(e <= 0.05 && et <= 0.05, "{id} t {t}: {e} {et}");
+    }
+}
+
+/// CT3b: case T against `sigma^2 = 2 k/3`, `T_L = 0.15 k/epsilon` of `k_initial = 1.5`, `epsilon_initial = 0.225`.
 #[test]
-fn ct4_tracer_cloud_on_sst_fields_follows_taylor() {
+fn ct3b_tracer_cloud_against_the_case_inputs() {
+    let (k, eps) = (1.5, 0.225);
+    against_inputs("CT3b", &t_text(), 2.0 * k / 3.0, 0.15 * k / eps);
+}
+
+/// CT4b: case TS against the same `sigma^2` and `T_L = 0.15 k/(0.09 k omega)` of `k_initial = 1.5`,
+/// `omega_initial = 1.6666666666666667` (`beta*` written as a number, not read from the code).
+#[test]
+fn ct4b_tracer_cloud_against_the_case_inputs() {
+    let (k, omega) = (1.5, 1.6666666666666667);
+    against_inputs("CT4b", &ts_text(), 2.0 * k / 3.0, 0.15 * k / (0.09 * k * omega));
+}
+
+/// CT4: the same on the SST model's fields. ADR 0208 amendment 3: the record of a check whose closed form follows the
+/// tracker's own fields, so MU2 (a wrong SST conversion) does not make it fail; the corrected test is
+/// `ct4b_tracer_cloud_against_the_case_inputs`.
+#[test]
+#[ignore = "ADR 0208 amendment 3: set-up defect (closed form from the tracker's fields, blind to MU2); met in its run (0.07 to 0.79 percent); corrected test ct4b_tracer_cloud_against_the_case_inputs"]
+fn ct4_tracer_cloud_on_sst_fields_follows_taylor_setup_defect() {
     let tau = tau_of(D_TRACER);
     for t in TIMES {
         let tr = frozen(&with_end(&ts_text(), t));
