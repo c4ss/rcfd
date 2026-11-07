@@ -467,3 +467,36 @@ Correction, before any further run of D:
   conditions of RX3 (every reacting mass `>= 0`; every `d` in `[d_i (1 - 1e-14), d0]`; at least 10 percent burnt out and
   10 percent partly reacted; at least one escaped and one deposited) at the end.
 - Prediction: the parcels of `c` reach the floor within about 0.15 s, partly reacted, so RX3b holds; RX2b as RX2.
+
+## Amendment 2 (2026-11-07, written after the first run of C, D1 to D3 and before any corrected run)
+
+The code with the key as registered (S2: the field `dispersion_fields` of `particles`) and the checks of C, D2 and D3 ran
+once in commit 8f02f50 (`cargo test --release -p rcfd-api --test dispersion_f255`): all 14 tests passed (the numbers are in
+the addendum). The precondition D1 then **missed at H1** of `case_hashes_w48u.rs`: of its 41 recorded sources, the 30 valid
+ones differ in the text columns `toml` and `json` (their settings and mesh columns are equal). Cause: every field of the
+object `particles` is in the data of every case, so the new field is written in the text of every case (S4 said so),
+and H1 compares the written text against its record R0 after removing only the keys of its own list `DEFAULT_KEYS`.
+Adding the key to that list would edit `case_hashes_w48u.rs`, which the house rules of this work forbid. The other suites
+of D1 passed (`baseline_hashes` included). S2 and S4 are defective as registered; nothing measured is in question.
+
+Correction, before any corrected run:
+
+- **S2 (amended).** The key is the optional table `particles.dispersion_from_model` with the one field `enabled`
+  (boolean, default `false`), `.optional().hash_omit_default()` on the table and `.hash_omit_default()` on the field, as
+  `particles.film`. The table is absent from the data unless a case writes it, so no written text changes. `enabled =
+  true` is what `dispersion_fields = "turbulence_model"` was; an absent table or `enabled = false` is `"constant"`. The
+  located errors: DE1 and DE2 at `particles.dispersion_from_model.enabled`, DE3 at `particles.dispersion_k` and
+  `particles.dispersion_epsilon`, with the same conditions. D2 of the library code (S1, S3) is unchanged.
+- **S4 (amended).** The written text of a case changes only when it writes the table.
+- **Case texts.** In T and its variants, `[particles.dispersion_from_model]` with `enabled = true` takes the place of
+  `dispersion_fields = "turbulence_model"`; nothing else changes (seeds, sizes, times, limits).
+- **CT1 (amended inputs).** Input 6 (an unknown value) becomes `enabled = "yes"` (not a boolean), at
+  `particles.dispersion_from_model.enabled`; the other inputs as registered with the new spelling. The control "TC with the
+  default written" becomes TC with `[particles.dispersion_from_model]` and `enabled = false`.
+- **D2 and D3 (amended texts).** After the code: TC, and TC with the table written with `enabled = false`, against R8;
+  TCR, and TCR with the table written with `enabled = false`, against R9.
+- **D1.** Unchanged, H1 included.
+- **MU6 (amended).** `.hash_omit_default()` removed from the table `particles.dispersion_from_model` and from its field.
+- The checks of C, D2 and D3 run once more with the corrected key; A, B and D are unaffected (library only) and are not
+  re-run but in the gate. The first run's tests are in commit 8f02f50; their numbers stay in the addendum.
+- Prediction: every check of C as in the first run, bit for bit (the key changes no arithmetic): the same numbers.
