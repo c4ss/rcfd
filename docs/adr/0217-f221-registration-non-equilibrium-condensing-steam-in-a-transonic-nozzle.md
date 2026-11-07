@@ -401,3 +401,114 @@ Corrections (registered here, before the corrected run):
   correctness set K; L1 stays as the ignored record `l1_isochoric_relaxation_matches_an_independent_ode_known_miss` with its
   numbers.
 - The heavy runs had not been started; they run with the amended M3.
+
+## Addendum: results (2026-11-07; the registered text above is unchanged)
+
+Code: `crates/rcfd-fv/src/wetsteam.rs` (model, HLLC, solver), additions to `crates/rcfd-core/src/iapws.rs`
+(`saturation_pressure_extended`, `saturation_temperature`, `region1_state`, `region2_state`, `saturated_liquid`,
+`saturated_vapour`; `saturation_pressure` now calls the same Eq. 30 helper, bit for bit), `ls_inverse` and `safe` of
+`compressible.rs` made `pub(crate)`, checks in `crates/rcfd-fv/tests/wetsteam.rs`. The fast checks' first run and the
+mutations used the working tree before amendment 1's tolerance change; L1b and the heavy runs used commit 83c92f9 (the
+amended tolerance). No case-schema key, golden, `baseline_hashes.rs`, `case_hashes_w48u.rs` or existing test file was touched.
+
+### Fast checks (release; first run before amendment 1, L1b after it)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P1 surface tension vs [S5] Table 1 col. 4 | 0.006 mN/m | -0.0037, +0.0022, +0.0039, +0.0030, +0.0019 mN/m at 0.01, 25, 50, 75, 100 °C | met |
+| P2 `p_s(T_s(p))/p - 1` | 1e-12 | at most 5.0e-15 (1 to 100 kPa) | met |
+| P2 `T_s(p_s(T)) - T` | 1e-9 K | at most 1.8e-11 K (first run, tolerance 1e-13) | met |
+| P2 extended `p_s` = IF97 `p_s` at 273.15, 300, 500 K | bit for bit | bit for bit | met |
+| M1 model values vs the prototype | 1e-6 relative | worst 8.1e-8 | met |
+| L1 cell spread (first run) | 1e-12 | 6.5e-16, 1.7e-15, **8.91e-12** at 1e-5, 2e-5, 4e-5 s | **missed** (amendment 1; ignored record `..._known_miss`) |
+| L1b cell spread | 1e-12 | 0 at all four times | met |
+| L1b `y` | 1e-3 relative | 2.2e-9, 2.3e-10, 1.63e-4, 2.6e-5 at 1e-5, 2e-5, 4e-5, 1e-4 s | met |
+| L1b `n` | 1e-3 relative | at most 2.6e-9 | met |
+| L1b `T` | 0.01 K | at most 4.33e-3 K (at 4e-5 s) | met |
+| E1 final `y` vs the growth-equilibrium root | 1e-4 relative | 5.1e-14 (`y = 0.0262060`, `n = 1.4074e17 /kg`, `T = 324.11 K`, `S = 1.02613`) | met |
+| C1 mass / energy drift | 1e-12 | 1.39e-14 / 1.72e-14 | met |
+| C1 liquid / droplet bookkeeping | 1e-12 | 1.22e-14 / 1.78e-14; zero clips | met |
+| C1b mass / energy drift (point-implicit on) | 1e-12 | 1.41e-14 / 1.73e-14 | met |
+| S1 frozen wet shock tube, density L1 / `rho_L` | 4.0e-3 | 2.478e-3 (`Gamma(0.05) = 1.269743`, 346 steps) | met |
+| S1 `max abs(y - 0.05)` | 1e-13 | 2.7e-16 | met |
+| D1a dry shock tube vs `CompressibleSolver` | 1e-12 | 0 (bit for bit, 346 steps, the same `max_dt`) | met |
+| D1b dry coarse nozzle vs `CompressibleSolver` | 1e-12 | 0 (bit for bit, 200 steps) | met |
+| B1 defaults | the gate | see "The gate" | see below |
+
+### Mutations (a `git archive` copy of 83c92f9, the ten fast checks run once per mutation)
+
+| Mutation | Fast checks that failed | Verdict |
+| --- | --- | --- |
+| MU1 `phi = 0` | M1, E1 (its bracket assertion: the extra droplets put the root outside `[1e-6, 0.2]`), L1b | caught |
+| MU2 `(1 - r*/r)` dropped | M1, E1 | caught |
+| MU3 nucleated-mass term dropped | none | **survived** |
+| MU4 `q(y) = 0` | C1, C1b and E1 (a cell fell below 200 K: the M8 guard), L1b | caught |
+| MU5 source also into the mixture density | C1 (mass drift 8.5e-3), C1b, L1b | caught |
+| MU6 frozen sound speed with `gamma_v` | none | **survived** |
+
+Diagnosis of the survivors. MU3: the mass of droplets born at `r*` is tiny against the growth term in every fast set-up (in the
+L1 box about `7.7e-8` of `y = 1.34e-3` at `1e-5 s`, against the L1 limit `1e-3`); no fast check isolates the term. MU6: the
+sound speed enters only the HLLC wave-speed estimates and `max_dt`, so the mutant widens the estimated wave fan of a flux
+that stays consistent and conservative, and S1 stays inside its limit: a dissipation-only mutant for these checks. Both are
+weaknesses of the registered check set; neither is a defect found in the code (Q9).
+
+### Heavy checks (release, one process, `--ignored --test-threads=1`, 54 min; the three runs computed once each)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| S1n fine wet | below 1e-8 within 100000 steps | 9.99e-9 at step 93164 (`t = 6.84 ms`, 35 min) | met |
+| S1n fine dry | below 1e-8 within 100000 steps | 9.93e-9 at step 93405 (14 min) | met |
+| S1n coarse wet | below 1e-8 within 50000 steps | not reached: 8.18e-6 at the cap (sampled 2.78e-7, 2.86e-7, 2.72e-7 at steps 20000, 30000, 40000) | **missed** (ignored record `..._known_miss`) |
+| S2 minimum temperature, wet runs | at least 273.15 K | fine 280.66 K, coarse 280.69 K (printed; the test's assertion was not reached after the S1n panic) | met (by the printed numbers) |
+| S2 clips | reported | fine wet 81,306,117, coarse wet 22,035,135, fine dry 0 | reported, see below |
+| N1 column-mean `p/p0` vs isentropic | 1.5 % | worst 0.189 % | met |
+| N1 inlet mass flow vs choked `rho* a* H` | 0.5 % | -0.303 % (0.290137 against 0.291017 kg/(m s)) | met |
+| Q1 column-mean `p/p0` vs R-Q1D | 2.0 % | worst 0.161 % | met |
+| Q1 onset vertex vs R-Q1D | 1.5 mm | 36.144 mm against 35.956 mm (0.19 mm) | met |
+| Q1 exit `y`, `n` vs R-Q1D | 5 %, factor 2 | 0.04738 against 0.04750 (-0.25 %); 1.361e18 against 1.390e18 (ratio 0.979) | met |
+| **V1a** centreline `p/p_t1` vs the 41 data points | 5 % each | worst **-4.932 %** (x = 5.9293 cm: 0.22196 against 0.23348); every point below the data, from -1.6 % near the onset to -4.9 % at the exit; 0 of 41 beyond 5 % | **met** |
+| **V1b** onset vertex vs 34.906 mm | 5 % | 35.570 mm, **+1.90 %** | **met** |
+| V2 centreline `r` vs `r32`, 12 stations `x >= 4.16 cm` | 25 % | worst +3.85 % (x = 4.1599 cm: 16.06 against 15.46 nm) | met |
+| G1g coarse vs fine, centreline `p/p_t1` | 1.5 % | worst 0.356 % (on the coarse run's final, unsteady state) | met |
+| G1g onset vertex | 1.0 mm | 35.570 (fine) against 36.381 mm (coarse): 0.81 mm | met |
+| NC1 dry centreline vs data | must exceed 5 % | 25.40 % | met |
+| NC2 wet column means vs dry isentropic | must exceed 2 % | 28.02 % | met |
+
+The prototype's expectation (V1a missing at 6.03 %) did not hold for the 2-D run: the column means follow the quasi-1-D
+reference to 0.16 % (Q1), and the centreline pressure lies above the column mean by about 1 % near the exit, which keeps every
+point inside 5 %, by a margin of 0.07 percentage points at the last station. The deficit against the data grows towards the
+exit as it does in the dry part upstream of the onset (-2.2 % at 1.5 cm, -3.3 % at 2.4 cm), consistent with [S1]'s attribution
+of this narrow nozzle's pressure to boundary-layer blockage, which an inviscid calculation leaves out (Q3).
+
+**Clips (S2), diagnosed on the scratch copy** (an instrumented `clip`, the coarse wet run for 20000 steps; not committed):
+9,075,135 clips in 621 cells. Nearly all are round-off-sized values (`rho y/rho` at most `1e-78` in magnitude, `n` at most
+`1e-55`) in dry cells upstream of the throat (x = -11 to -5 mm, `S` = 1.3 to 1.6), where the nucleation rate is about
+`exp(-200)` and the droplets born at `r*` sit on the edge of evaporation (M6). The largest clipped wetness, `y = -1.96e-4`,
+occurred in cells near the outlet (x = 60 to 65 mm) during the start-up, when the condensation front entered the initially
+cold (235 K) dry supersonic flow of G3 (about 100 clips per cell there). Clipping does not touch mixture mass or energy; the
+liquid it adds is round-off upstream and a start-up transient downstream.
+
+**The coarse run's unsteadiness (S1n)** is not diagnosed further: its density change per step stalls at about 3e-7 and
+fluctuates up to 8e-6, while the fine run converges geometrically to 1e-8; a flicker of the nucleation front, which the
+coarse grid resolves with about ten cells, is the likely cause (Q10).
+
+### Status by the decision rule
+
+K: P1, P2, M1, L1b (amendment 1, in place of L1), E1, C1, C1b, S1, D1 met; B1 by the gate; **mutations MU3 and MU6
+survived**. F: S1n missed on the coarse run; S2, N1, Q1, G1g, NC1, NC2 met. V1 (a) and (b) met; V2 met.
+
+The registered rule defines K as the correctness checks *and every mutation caught*, and says "any miss in K: F-221 stays
+todo". Two mutations survived, so **F-221 stays todo** (`[ ]`), with the acceptance comparison met and the misses named: the
+surviving mutations MU3 and MU6 and the coarse run's S1n. Q9 and Q11 ask the maintainer whether to register the missing
+checks and set partial.
+
+### Open questions added by the results
+
+- **Q9. The surviving mutations.** Options: (a) register, as an amendment or a follow-up item, a check that isolates the
+  nucleated-mass term (the `rates()` decomposition at the M1 states against the prototype) and a check of the HLLC wave-speed
+  bounds against the frozen sound speed for MU6, then re-apply the decision rule; (b) leave F-221 todo. Recommendation (a).
+- **Q10. Coarse-grid unsteadiness.** Options: (a) a registered study of the condensation front on 230 x 10 (time history of
+  the onset position and the nucleation-rate peak); (b) accept the fine grid only. Recommendation (a), together with Q3.
+- **Q11. Status.** By the rule: todo. With Q9 (a) done and met: partial, the remaining part being Q1 (case keys), Q2 (real-gas
+  vapour) and Q3 (viscous terms). Done (`[x]`) remains the maintainer's call; the acceptance comparison (V1) is met at library
+  level, inviscid, with a perfect-gas vapour, by a margin of 0.07 percentage points at the last station.

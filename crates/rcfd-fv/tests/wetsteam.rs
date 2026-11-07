@@ -957,10 +957,13 @@ fn report(name: &str, r: &NozzleRun) {
     );
 }
 
-/// S1n and S2: steadiness of the three runs and the final minimum temperature of the wet runs.
+/// S1n and S2: steadiness of the three runs and the final minimum temperature of the wet runs. KNOWN MISS (ADR 0217
+/// addendum): the fine wet run reached 9.99e-9 at step 93164 and the fine dry run 9.93e-9 at step 93405, but the coarse wet
+/// run stopped at its 50000-step cap with a last change of 8.18e-6 (about 2.8e-7 at steps 20000 to 40000). S2 was not
+/// asserted after that panic; the printed minimum temperatures (fine wet 280.66 K, coarse wet 280.69 K) meet it.
 #[test]
-#[ignore = "heavy: three nozzle runs (ADR 0217 S1n, S2), release, about an hour"]
-fn s1n_s2_nozzle_runs_reach_a_steady_state_above_the_triple_point() {
+#[ignore = "known miss (ADR 0217): the coarse wet run is not steady at its cap (last change 8.18e-6 > 1e-8)"]
+fn s1n_s2_nozzle_runs_reach_a_steady_state_above_the_triple_point_known_miss() {
     let (fw, fd, cw) = (fine_wet(), fine_dry(), coarse_wet());
     report("fine wet", fw);
     report("fine dry", fd);
