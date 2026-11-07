@@ -121,7 +121,11 @@ fn r2_smoothing_with_a_static_outlet_record() {
             presc[q] = [-0.2 * (1.0 - (PI * t_new / 2.0).cos()), 0.0, 0.0];
         }
         let sm = smooth_displacement(&geom0, &classes, &presc, SmoothingMethod::Laplacian, &control).unwrap();
-        let points: Vec<Vec3> = p0.iter().zip(&sm.displacement).map(|(p, d)| vec3::add(*p, *d)).collect();
+        let points: Vec<Vec3> = p0
+            .iter()
+            .zip(&sm.displacement)
+            .map(|(p, d)| vec3::add(*p, *d))
+            .collect();
         s.step_ale(geom(moved_mesh(&mesh0, points).unwrap()), dt).unwrap();
     }
     check("R2", &s, "56d082d8b41c8da9");
@@ -133,7 +137,11 @@ fn r2_smoothing_with_a_static_outlet_record() {
 fn r3_rigid_motion_with_a_pulse_record() {
     let mesh0 = box_2d(20, 4, 1.0, 0.2, false, false).unwrap();
     let u0 = [0.3, 0.1, 0.0];
-    let free = Prim { rho: 1.0, u: u0, p: 1.0 };
+    let free = Prim {
+        rho: 1.0,
+        u: u0,
+        p: 1.0,
+    };
     let init = |x: Vec3| {
         let r2 = (x[0] - 0.5).powi(2) + (x[1] - 0.1).powi(2);
         let rho = 1.0 + 0.2 * (-r2 / 0.01).exp();
@@ -191,7 +199,15 @@ fn r4_fixed_mesh_characteristic_conditions_record() {
     )
     .unwrap();
     s.set_bc("xmax", CompBc::PressureOutlet { p: 1.0 }).unwrap();
-    s.set_bc("ymin", CompBc::FarField(Prim { rho: 1.0, u: u0, p: 1.0 })).unwrap();
+    s.set_bc(
+        "ymin",
+        CompBc::FarField(Prim {
+            rho: 1.0,
+            u: u0,
+            p: 1.0,
+        }),
+    )
+    .unwrap();
     s.set_bc("ymax", CompBc::NonReflecting { p: 1.0, sigma: 0.3 }).unwrap();
     for _ in 0..150 {
         let dt = s.max_dt();
