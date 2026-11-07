@@ -376,7 +376,9 @@ impl ImmersedForcing {
     }
 
     /// Force and moment about `x_ref` of the fluid on body `body` for the cell velocities `u`:
-    /// `F = rho sum_t V_c (coeff_t u_c - source_t)`, `M = sum_t (x_t - x_ref) x dF_t` (ADR 0218 D1).
+    /// `F = rho sum_t V_c (coeff_t u_c - source_t)`, `M = sum_t (x_t - x_ref) x dF_t` (ADR 0218 D1). This is the reaction of the
+    /// whole forcing: for a body whose solid cells touch the domain boundary it also holds the force of the boundary on those cells
+    /// (the boundary pressure and wall terms), so it is the fluid force only for a body that lies inside the domain (ADR 0218 Q5).
     pub fn force_moment(&self, body: usize, u: &[Vec3], rho: f64, x_ref: Vec3) -> (Vec3, Vec3) {
         let (mut force, mut moment) = (vec3::ZERO, vec3::ZERO);
         for t in &self.bodies[body].terms {

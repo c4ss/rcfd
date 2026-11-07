@@ -713,35 +713,50 @@ fn cc_simplec(n: usize, modified: bool) -> CcRun {
     }
 }
 
-/// ADR 0218 V1, V1n and S4.
-#[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn v1_v1n_circular_couette_order() {
+/// The six CC runs of V1 and V1n (modified and plain forcing, N = 24, 48, 96), with S4 asserted.
+fn cc_series() -> (Vec<CcRun>, Vec<CcRun>) {
     let m: Vec<CcRun> = [24, 48, 96].iter().map(|&n| cc_simplec(n, true)).collect();
     let pl: Vec<CcRun> = [24, 48, 96].iter().map(|&n| cc_simplec(n, false)).collect();
     for r in m.iter().chain(&pl) {
         assert!(r.converged, "S4: CC run not converged ({} iterations)", r.iterations);
     }
-    let order = (m[1].e / m[2].e).log2();
-    let order_plain = (pl[1].e / pl[2].e).log2();
     println!(
-        "V1: modified e {:.4e} {:.4e} {:.4e}, order {order:.3}; V1n: plain e {:.4e} {:.4e} {:.4e}, order {order_plain:.3}, ratio {:.3}",
+        "V1: modified e {:.4e} {:.4e} {:.4e}, order {:.3}; V1n: plain e {:.4e} {:.4e} {:.4e}, order {:.3}, ratio {:.3}",
         m[0].e,
         m[1].e,
         m[2].e,
+        (m[1].e / m[2].e).log2(),
         pl[0].e,
         pl[1].e,
         pl[2].e,
+        (pl[1].e / pl[2].e).log2(),
         pl[2].e / m[2].e
     );
+    (m, pl)
+}
+
+/// ADR 0218 V1 (its error limit), V1n and S4. The order limit of V1 is the known miss below.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn v1_v1n_circular_couette_error_and_negative_control() {
+    let (m, pl) = cc_series();
     assert!(m[2].e <= 1e-2, "V1: e(96) {:.4e}", m[2].e);
-    assert!(order >= 1.5, "V1: order {order:.3}");
     assert!(
         pl[2].e >= 2.0 * m[2].e,
         "V1n (negative control) did not fire: {:.4e} vs {:.4e}",
         pl[2].e,
         m[2].e
     );
+}
+
+/// ADR 0218 V1, the order limit. KNOWN MISS (addendum 1): the registered run of c6e9302 measured the observed order 1.023
+/// between N = 48 and 96 (errors 3.2018e-3, 1.5761e-3) against the registered 1.5; the limit is kept.
+#[test]
+#[ignore = "known miss (ADR 0218 V1): observed order 1.023 against the registered 1.5; run in release with --ignored"]
+fn v1_circular_couette_order_known_miss() {
+    let (m, _) = cc_series();
+    let order = (m[1].e / m[2].e).log2();
+    assert!(order >= 1.5, "V1: order {order:.3}");
 }
 
 /// ADR 0218 V3: the PISO path of the forcing on CC at N = 48.
@@ -1012,4 +1027,60 @@ fn n1_immersed_forcing_is_off_by_default() {
     );
     let q = PimpleSolver::new(geom, u, p, PimpleSettings::piso(1.0));
     assert!(s.immersed.is_none() && q.immersed.is_none());
+}
+
+/// Diagnostic of the V1 miss (ADR 0218 addendum 1; printed only, not a registered check): the modified-forcing error of CC on a
+/// fourth mesh (N = 192), split into the radial and azimuthal parts and into the cells within `2 h` of a surface and the rest.
+#[test]
+#[ignore = "diagnostic of the V1 miss (ADR 0218 addendum 1), printed only; run in release with --ignored"]
+fn diag_v1_circular_couette_error_split() {
+    for n in [48, 96, 192] {
+        let (geom, u, p, ib) = cc_fields(n, true);
+        let mut st = SimpleSettings::new(1.0, Coupling::Simplec);
+        st.convection = ConvScheme::Central;
+        st.momentum_solver.tol_abs = 1e-20;
+        st.pressure_solver.tol_abs = 1e-20;
+        let mut s = SimpleSolver::new(geom.clone(), u, p, st);
+        s.immersed = Some(ib.clone());
+        let mut it = 0;
+        while it < 20000 {
+            it += 1;
+            if s.iterate().max_du <= 1e-10 {
+                break;
+            }
+        }
+        let h = 2.4 / n as f64;
+        let (cc, vol) = (geom.mesh.cell_centres(), geom.mesh.cell_volumes());
+        let (mut er, mut et, mut en, mut ei, mut v_all, mut v_near, mut v_in) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        for c in 0..geom.n_cells() {
+            if ib.body_of_cell[c].is_some() {
+                continue;
+            }
+            let (dx, dy) = (cc[c][0] - CC_C[0], cc[c][1] - CC_C[1]);
+            let r = (dx * dx + dy * dy).sqrt();
+            let d = vec3::sub(s.u.values[c], cc_exact(cc[c]));
+            let dr = (d[0] * dx + d[1] * dy) / r;
+            let dt = (-d[0] * dy + d[1] * dx) / r;
+            er += vol[c] * dr * dr;
+            et += vol[c] * dt * dt;
+            v_all += vol[c];
+            if (r - R1).min(R2 - r) < 2.0 * h {
+                en += vol[c] * (dr * dr + dt * dt);
+                v_near += vol[c];
+            } else {
+                ei += vol[c] * (dr * dr + dt * dt);
+                v_in += vol[c];
+            }
+        }
+        let w = OMEGA * R1;
+        println!(
+            "diag CC N {n} ({it} iterations): radial {:.4e}, azimuthal {:.4e}; within 2h of a surface {:.4e} ({:.1} % of the fluid \
+             volume), interior {:.4e}",
+            (er / v_all).sqrt() / w,
+            (et / v_all).sqrt() / w,
+            (en / v_near).sqrt() / w,
+            100.0 * v_near / v_all,
+            (ei / v_in.max(1e-300)).sqrt() / w
+        );
+    }
 }

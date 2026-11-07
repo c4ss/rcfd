@@ -1,7 +1,8 @@
 # ADR 0218: F-219 registration: an immersed (non-conforming) solid with modified forcing
 
-Status: **REGISTERED 2026-11-07**, written before any code of F-219 and before any run of its checks. Results go in the addendum at
-the end. Not yet accepted by the maintainer.
+Status: **REGISTERED 2026-11-07**, written before any code of F-219 and before any run of its checks. Results in addendum 1 (every
+acceptance check met: 2D-1 `C_D` -0.02 %, `C_L` +0.67 %, 2D-2 `St` -0.38 %; the order limit of V1 missed, 1.02 against 1.5, kept
+as an ignored known miss; F-219 partial by the decision rule). Not yet accepted by the maintainer.
 
 Parents: ADR 0029 D3 (the solid-cell mask of the block-coupled solver, a staircase without forcing), ADR 0035 (the Carman-Kozeny
 damping, an implicit momentum sink), ADR 0067 (the divergence guard that carries the refusals), ADR 0214 (the house rules and the
@@ -292,3 +293,110 @@ the do-nothing outlet of the DFG set-up; the 2D-3 case; the lift and drag via a 
   follow-up of Q2.
 - **Q4. Moving shapes.** The forcing is built once; a moving body needs a rebuild per step and a treatment of the cells that change
   side (fresh cells). Recommendation: a separate item with its own registration, checked on an oscillating cylinder.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above; no limit was changed and no amendment was needed. Release builds on Windows. The
+registration is 904f2da; the library and the registered tests are c6e9302, on which every registered run was made once; this
+addendum's commit splits the V1 test into its met part and its known miss (no limit changed), adds one diagnostic test (printed
+only, below) and carries the documents. The runs are deterministic (the M1 state hash `8d13ea8c24b75cd0` is the same in the V2 test
+and in the A1/A2 chain) and none was repeated to change a result.
+
+**Built.** `crates/rcfd-fv/src/immersed.rs`: `SolidShape` (cylinder, sphere, cuboid with signed distances), `ImmersedBody` (inverted
+solids, rigid velocity), `ImmersedSettings`, `ImmersedForcing::build` (solid-cell penalisation, the modification terms of D2, the
+located build errors), `force_moment`, `solid_mask`. `SimpleSolver::immersed` and `PimpleSolver::immersed` (default `None`; two
+added statements each, behind `if let Some`), the trial copy, the refusals of D4 (the fractional step through the guard with its
+own message, `step_ale_with_walls` and `replace_mesh` by `Err`; the existing `replace_mesh` message is unchanged).
+`rcfd_mesh::gen::box_2d_coords`. `crates/rcfd-fv/tests/immersed_solid_f219.rs`: the registered checks, the ignored known miss of V1
+and one ignored diagnostic. No case-schema key, golden, `baseline_hashes.rs`, `case_hashes_w48u.rs` or existing test file was
+touched. Documents: `docs/reference-data.md` (the sources read), the F-219 entries of `docs/ROADMAP.md` and `docs/roadmap.json`
+(partial, by the decision rule).
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 2D-1 `C_D` on M3 | within 5 % of 5.57953523384 | 5.57833680 (`-0.0215 %`) | met |
+| A2 2D-1 `C_L` on M3 | within 5 % of 0.010618948146 | 0.0106899517 (`+0.669 %`) | met |
+| A3 2D-2 `St` on T | within 5 % of 0.30188 | 0.30073 (`-0.382 %`), `1/f` 0.33253 s | met |
+| S1 convergence rule | met within the caps 4000, 4000, 6000 | M1 470, M2 750, M3 2190 iterations (last `max_du` 4.8e-15, 5.1e-11, 1.4e-10) | held |
+| S2 the 2D-2 window `[5.5, 8]` | `>= 6` crossings; periods within 1 %; maxima within 2 %; amplitude `>= 1` | 7 crossings; 5.5e-6; 2.1e-4; 2.058 | held |
+| S3 cell counts, mirror symmetry | as registered | 4 576, 18 304, 73 216, 53 136; symmetric on all four meshes (316, 1 264, 5 024, 1 264 solid cells) | held |
+| S4 CC convergence | `max_du <= 1e-10` within 20 000 | 105 to 353 iterations (all six runs and V3's) | held |
+| E1 solid velocity | `<= 1e-3 U_bar` | M1 `7.6e-6`, M3 `2.7e-5`, T `3.8e-5` (in units of `U_bar`) | met |
+| V1 CC, modified: `e(96)` | `<= 1e-2` | `1.576e-3` (`e` 8.293e-3, 3.202e-3, 1.576e-3 at N 24, 48, 96) | met |
+| V1 CC, modified: observed order 48 to 96 | `>= 1.5` | **1.023** | **missed** (ignored known miss `v1_circular_couette_order_known_miss`) |
+| V1n (negative control) plain forcing | `e(96) >= 2 e_mod(96)` | `1.357e-2`, 8.6 times (5.43e-2, 2.98e-2, 1.36e-2; order 1.14) | held |
+| V2 momentum balance, M1 | `<= 1e-3 abs(F_x)` per component | x `1.8e-13`, y `2.2e-14` | met |
+| V2n (negative control) | `>= 1e-2 abs(F_x)` | `0.161` (the modification carries 16 % of the M1 drag) | held |
+| V3 CC with PISO, N = 48 | set-up change `<= 1e-9`; `e <= 1.5 e_SIMPLEC(48)` | `6.9e-13`; `3.195e-3` against `3.202e-3` | met |
+| G1 level sets; crossings | `<= 1e-13`; `<= 1e-12` | `2.2e-16`; `2.2e-16` | met |
+| B1 build errors | located `Err` | every case (penalty 0, NaN, -1; `theta_min` 0, 1.5, NaN; radius 0, -1, inf; zero axis; empty cuboid; a cell in two bodies; a solid cell on a periodic face; a short `gamma`) | met |
+| R1 fractional step | stopped at step 1, stage, quantity, state bit-identical, `ADR 0218` | as required | met |
+| R2, R3 moving mesh | `Err` naming ADR 0218, state, geometry and time unchanged; `Err` | as required | met |
+| N1 defaults | `None` | `None`, `None` | met |
+| N2 the gate | pass | see the gate section | |
+
+Printed, no limit. 2D-1 with the modified forcing: `C_D` 5.52887, 5.57022, 5.57834 (M1 to M3, observed order 2.35), `C_L`
+0.0117566, 0.0109084, 0.0106900 (order 1.96); the pressure difference 0.11185, 0.11491, 0.11638 (FeatFlow 0.11752; from the cell
+values next to the two points, so half a cell away from them) and the recirculation length 0.0834, 0.0843, 0.0846. With the plain
+forcing: M1 `C_D` 5.32268 (`-4.60 %`), `C_L` 0.0117742 (`+10.9 %`); M2 5.47051 (`-1.95 %`), 0.0111246 (`+4.76 %`), against the
+modified 5.57022 (`-0.17 %`) and 0.0109084 (`+2.73 %`) on M2. 2D-2 (FeatFlow level 6 in brackets): max `C_D` 3.2462 (3.2200), min
+3.1805 (3.1569), mean 3.2135 (3.1884), max `C_L` 1.0113 (0.9859), min -1.0469 (-1.0206): all within 2.6 %. CC torque on the inner
+cylinder -4.07749, -4.14059, -4.17006 against -4.18879. The outer body's sums (3.37, 3.58, 3.62) are not the torque of the fluid:
+the outer solid touches the box walls, and its forcing also carries the reaction of the wall pressure; `force_moment` is the force
+of everything on the solid, so a body that touches the domain boundary does not give the fluid force (Q5). Run times: M3 972 s
+(the chain 1055 s), the 2D-2 run 1729 s, the CC series 17 s, each with two other registered runs on the machine.
+
+**The V1 miss (diagnosed, not removed).** The modification makes the CC error 8.6 times smaller than the plain forcing at N = 96 but
+leaves it first order (1.37 from 24 to 48, 1.02 from 48 to 96). A diagnostic after the registered runs (the ignored
+`diag_v1_circular_couette_error_split`, printed only, no limit; N = 48, 96 and a fourth mesh, 192) splits the error: radial part
+2.47e-3, 1.17e-3, 3.97e-4 and azimuthal part 2.04e-3, 1.05e-3, 4.34e-4 (the exact radial velocity is zero); cells within `2 h` of a
+surface 4.33e-3, 2.85e-3, 1.32e-3, the other cells 2.16e-3, 1.05e-3, 4.37e-4. So the error is spread over the annulus, its order
+wanders between 1.0 and 1.4 with the mesh (from 96 to 192 it is 1.42), and a radial velocity of the size of the azimuthal error
+appears. Reading (a hypothesis, not checked): the modification corrects the viscous wall flux, which is the only place it acts; the
+mass flux through the faces between fluid and solid cells is still the Rhie-Chow interpolation of `HbyA` across the surface (the
+solid side carrying the rigid velocity of the solid cell centre), so continuity sees the staircase at first order and the pressure
+correction puts a first-order normal velocity into the fluid. A face flux reconstructed with the same crossing would be the next
+step (Q6). The acceptance quantities converge faster on the DFG family (orders 2.35 and 1.96), where the staircase is
+mirror-symmetric about the cylinder centre.
+
+### Mutations
+
+Applied one at a time to the library of c6e9302 (with this commit's test split) by `w49i-work/f219-scratch/mutate.py` (an exact
+text replacement that checks that the text occurs once), the named test run once in release in `target-f219-mut`, the file
+restored and compared byte for byte with the kept copy (equal after each of the eight).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 modification not added | V1 | failed: `e(96)` 1.357e-2 (the plain forcing's number), V1n ratio 1.000 |
+| MU2 `theta -> 1 - theta` | V1 | failed: `e(96)` 2.379e-2 |
+| MU3 solid-cell terms not added | E1 (M1) | failed: 1.12 `U_bar` in the solid |
+| MU4 SIMPLE source not added | V1 | failed: `e(96)` 0.457 (the inner cylinder at rest) |
+| MU5 PIMPLE source not added | V3 | failed: `e` 0.455 |
+| MU6 PIMPLE coefficient not added | V3 | failed: the run stopped by the divergence guard |
+| MU7 `force_moment` without the modification | V2 | failed: `1.91e-1` |
+| MU8 fractional-step refusal removed | R1 | failed: the step was not stopped |
+
+`scripts/limit_audit.py` (workspace scan) reports no hit in the new test file.
+
+### Disclosures
+
+- Before the registration only the timing probe named there was run; between the registration and the runs only the build, clippy
+  and fmt. The diagnostic of the V1 miss was written and run after all registered runs and has no limit.
+- The convergence rule of the 2D-1 runs compares with the value 200 iterations earlier; the coefficients of the initial state
+  (iteration 0) are recorded, so the first comparison is at iteration 200 as registered.
+- The V1 test as registered asserted the error limit, then the order, then V1n; the order assertion stopped it after V1n's numbers
+  were printed (ratio 8.609). The split tests assert the same limits.
+- Not exercised: the sphere and the cuboid in a flow (G1 only), BDF2 with the forcing on a mesh other than T, a non-orthogonal mesh,
+  a moving or deforming body, turbulence.
+
+Status by the decision rule: A1 to A3 met with S1 to S4 held; E1, V2, V3, G1, B1, R1 to R3 and N1 met (N2 is the gate); V1n and V2n
+held; every mutation failed its test; V1 missed its order limit. F-219 is set **partial** (`[~]`): the acceptance is met as read
+(Q1), and the immersed forcing is first order (V1, known miss). Q1 to Q6 are open.
+
+- **Q5 (added). The force of a body that touches the domain boundary.** `force_moment` sums the forcing, which for such a body also
+  holds the reaction of the boundary. Options: (a) document it (done: the documentation of `force_moment`, a comment-only change after the mutations); (b) subtract the boundary-face
+  terms of the solid cells. Recommendation (a) until a case needs it.
+- **Q6 (added). The order of the immersed forcing.** Options: (a) a follow-up item that reconstructs the face flux between fluid and
+  solid cells with the crossing, registered with V1 again as its check; (b) accept first order. Recommendation (a).
