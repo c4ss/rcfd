@@ -343,3 +343,113 @@ pressure split by the parent gradient (Q4); everything outside F-257 (the roadma
 - **Q5. Status of F-257.** If every check is met, the acceptance as written is met in the library. Options: (a) done, with
   the wiring tracked by F-259; (b) partial until the tree uses it. Recommendation (a), as for F-258. The roadmap follows
   the decision rule until the maintainer decides.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+8ebbba8 (with the records L1 and L2), and the code, tests and documents are 0cbaf33. Each registered check ran once, on
+the code of 0cbaf33 before its commit; the runs are deterministic and none was repeated to change a result. Every check
+met its limit, the set-up checks and the negative controls held, and every mutation made its check fail.
+
+**Built as registered.** S1 to S3 as written.
+
+- `crates/rcfd-mesh/src/layering.rs`: `Section` (`rect`, `rect_triangles`), `ExtrudedStack` (`uniform`, `n_layers`,
+  `piston_height`, `set_piston`, `adjust`, `points`, `mesh`, `face_sources`), `FaceSource` and `remap_face_flux`; the
+  private `apply_thresholds`, which holds the code of `LayerStack::adjust` unchanged and is called by both stacks. The face
+  identity of M2 is the private `FaceTag`. `LayerStack`'s other methods and `remap` are not edited.
+- `crates/rcfd-fv/src/pimple/moving.rs`: `PimpleSolver::replace_mesh` (S2). Nothing else in `rcfd-fv` is edited.
+- Tests: `crates/rcfd-fv/tests/layering_f257.rs` (5 tests: P with N1, I with N2, X, S1, S2), four unit tests in
+  `crates/rcfd-mesh/src/layering.rs` (F1 with F1n and F2 in one, K1, K2) and the records file of the registration (2).
+  No existing test was edited.
+- Documents: `docs/dynamic-mesh.md` and `docs/case-schema.md` (prose: what the library does, that the tree does not use
+  it yet; no TOML block edited), and the F-257 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (done, by the
+  decision rule).
+- Not changed: `rcfd-api`, `rcfd-cli`, the case schema.
+
+### Results
+
+`layering_f257.rs`, 5 tests, 19.5 s on one thread; the unit tests 0.01 s.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P0 (set-up) 8 cells per layer, 5 faces each, after every step and event | as stated | held | held |
+| P1 (acceptance) at `t = T` | `abs <= 2e-2` | `1.530e-5` (`V/V0 = 0.400000`, 16 layers, `p_bar = 3.606805` against the isentrope's `3.606750`) | met |
+| P2 (acceptance) at `t = 2T` | `abs <= 2e-2` | `3.416e-5` (40 layers) | met |
+| P3 (acceptance) per-event conservation | `<= 1e-13` | `6.66e-16` | met |
+| P4 (acceptance) mass drift | `<= 1e-12` | `6.95e-13` | met |
+| P5 (acceptance) volume against `0.01 x_p` | `<= 1e-13` | `1.11e-15` | met |
+| P6 (acceptance) removals, additions | each `>= 5` | 24, 24 | met |
+| P7 (acceptance) opposite events in consecutive steps | none | 0 | met |
+| N1 (negative control) first-source remap, largest mass change over the removals | `>= 1e-10` | `3.72e-6` | held |
+| I1 (acceptance) step continuity | `<= 1e-9` | `3.12e-15` | met |
+| I2 (acceptance) `abs(Q_out + m_p) / abs(m_p)` | `<= 1e-10` | `1.30e-14` | met |
+| I3 (acceptance) volume per event | `<= 1e-13` | `2.22e-16` | met |
+| I4 (acceptance, set-up) removals | `>= 5` | 7 (no addition; 13 layers at the end) | met |
+| I5 continuity of the remapped flux; `xmin` fluxes | `<= 1e-9`; bit for bit | `2.43e-15`; kept | met |
+| I6 momentum per event | `<= 1e-13` | `2.29e-16` | met |
+| N2 (negative control) the swept flux one step late | `>= 1e-3` | `8.37e-3` (at step 120, `2/239`) | held |
+| X1 step continuity | `<= 1e-9` | `3.30e-15` | met |
+| X2 `abs(Q_out + m_p) / abs(m_p)` | `<= 1e-10` | `1.49e-14` | met |
+| X3 volume per event | `<= 1e-13` | `0` | met |
+| X4 (set-up) additions | `>= 5` | 7 (no removal; 27 layers at the end) | held |
+| X5 continuity of the remapped flux | `<= 1e-9` | `2.95e-15` | met |
+| F1 balance, removal and addition, rectangles and triangles | `<= 1e-13` | `9.09e-16`, `2.28e-16`; `6.70e-16`, `4.47e-16` | met |
+| F2 uniform-flow flux, the same four | `<= 1e-13` | `0`, `1.16e-16`; `0`, `1.64e-16` | met |
+| F1n (negative control) the second old face dropped | `>= 1e-2` | `1.011` (rectangles), `1.868` (triangles) | held |
+| K1 rectangle stack against `LayerStack` | patches equal; `1e-13` | equal; volumes `4.34e-16`, centres `4.46e-16` | met |
+| K2 prism stack structure; layer volumes | as stated; `1e-13` | as stated; `1.78e-15` | met |
+| S1 `replace_mesh` with the same mesh | bit for bit | equal | met |
+| S2 refusals: one cell short, another patch list, BDF2, `nu_face` | `Err` each, state unchanged | `Err` each with its message; unchanged | met |
+
+Printed, no limit:
+
+- P-Δ took 12 100 steps (the prisms' smaller cells give a smaller explicit step) in 12.5 s; the largest
+  `abs(p_bar V^gamma / (p0 V0^gamma) - 1)` over the steps is `3.427e-5`; at `T` the cell values of `p / rho^gamma` lie in
+  `[0.999986, 1.000137]`. ADR 0090's hexahedral run of the same loop: 9192 steps, P1 `1.528e-5`, P2 `3.415e-5`;
+  `p_bar` at `T` is `3.606804933` on the prisms and `3.606804870` on the hexahedra (difference `6.3e-8`).
+- G5L: G5 (iii)'s cell-velocity error `4.745e-3` of the plug flow (transverse `2.9e-15`), G5 (v)'s pressure error
+  `1.015e-2` against G5's `4e-2`. G5X: `7.391e-3` (transverse `5.2e-15`) and `6.691e-3`.
+
+**Reading.** The flux-level checks of both channel runs hold to round-off, so the face map and `replace_mesh` keep the
+discrete continuity and the piston's swept flux through every event. The cell velocity next to the piston lags the plug
+flow by 4.7e-3 of `a0 t` on the layered mesh, against the 2.9e-4 of ADR 0033's smoothed mesh (its known miss of G5
+(iii), limit `1e-6 a0 t_end`, cause not proven there). B2 registers no cell-velocity limit, and this one was printed,
+not checked. The layered piston cell is down to `0.4 h0`, about four times thinner than a smoothed cell at the end of
+G5, which is consistent with a lag that grows as the piston cell thins. That is a reading, not a diagnosis. P4 holds with
+a margin of 1.4 (ADR 0090's hexahedra: 5.4e-13).
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D1 L1 and L2 after the code | equal | `affff0bb34a248e2`, `52af54712423ce0a`: equal | met |
+| D2 the existing suites, unedited | pass | see below | met |
+
+D2 before the gate, release: `rcfd-mesh` unit tests (51 passed, the new ones included); `rcfd-fv` `layering_w38c` (6
+passed, 1 ignored as before), `ale_flows` (5, 5 ignored as before), `ale_gcl` (4), `compressible_ale_f258` (8),
+`compressible_ale_f258_records` (R1 to R4, 4), `exp_rot_pab` (5, 1 ignored), `mesh_smoothing` (5, 2 ignored), the
+`compressible` unit tests (8, 1 ignored). The `rcfd-api` and `rcfd-cli` suites of D2 were left to the gate, which runs
+every test.
+
+### Mutations
+
+Each was applied alone to the code of 0cbaf33 by an exact text replacement (a script in a scratch folder that checks
+that the replaced text occurs once), in its own target dir, the named tests were run once, and the file was restored and
+compared byte for byte with the kept copy (equal in all four).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 a merged cell gets only its first source | P3 | failed: P3 `2.30e-2` (the test stopped at its first assertion, P1 `-0.306`; P2 `-0.306`, P4 `0.251`; P5 to P7 held) |
+| MU2 a merged side face from one old face | F1 | failed: F1 `1.81` (rectangles) and `2.00` (triangles) at the removal; F2 `0.43` and `0.45` |
+| MU3 a `Closure` face gets 0 | F1, X5 | failed: F1 `1.06` and `1.09` at the addition; X5 `1.14` |
+| MU4 the side fractions of a split swapped | F2 | failed: F2 `0.267` and `0.283` at the addition (F1 held, as M3 predicts: the closure keeps both balances) |
+
+`scripts/limit_audit.py` reports no hit in the new test files (it does not scan unit tests in `src`).
+
+Disclosures:
+
+- Before the registered runs the new code and tests were compiled without running, laid out by rustfmt, and `cargo
+  clippy -p rcfd-mesh -p rcfd-fv --all-targets -- -D warnings` was run on them (clean). No registered check ran before its
+  registered run.
+- D1 was run once after the code, before the registered checks.
+- The mutations used the target dir `target-f257-mut`, so the kept build of 0cbaf33 was not touched.
