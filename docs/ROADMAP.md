@@ -4926,14 +4926,14 @@ Added after the static feature-gap review; wording is product-independent. Phase
       (the old time level with two-way coupling); library `Tracker::set_dispersion_fields`. The closed form for a Stokes
       parcel released at rest (`rcfd_particles::drw_msd`, Taylor's `taylor_msd` for tau -> 0) is derived in the ADR and
       matches the moment equations of the walk to 7.6e-12. A cloud of 20 000 tracer parcels (tau = 1e-3 T_L) on the
-      k-epsilon and SST models' homogeneous fields is within 0.32 to 0.79 percent of both forms at 0.25, 1, 4 and 10 T_L
+      k-epsilon and SST models' homogeneous fields is within 0.04 to 0.79 percent of both forms at 0.25, 1, 4 and 10 T_L
       (limit 5 percent), an inertial cloud (tau = T_L) within 1.1 percent; the tree equals the library bit for bit on
       non-uniform fields, and the transient and two-way refreshes give the fields of the right time level bit for bit.
       Reaction (`rcfd_particles::reaction`, `Tracker::set_reaction`): a first-order kinetic surface reaction with an
       inert residue (a choice of the ADR, Q7), linear shrinkage to 1.7e-14, the mass of the solid and of each gas
       species measured on the parcel side and on the carrier side within 2.0e-14 at every step of a run with wall hits
       (limit 1e-10). Runs without the new keys and calls are unchanged bit for bit (records R8, R9, R1 to R7, H1,
-      baseline hashes). Ten mutations made their checks fail; three set-up defects were corrected by amendments 1 to 3
+      baseline hashes). Ten mutations made their checks fail; two set-up defects of checks and the place of the key were corrected by amendments 1 to 3
       before the corrected runs.
     - Open (ADR 0208 Q1 to Q10): the key; the models (RSM, SA, LES refused); C_mu of the eddy length; the homogeneous
       check on the model's initial state; the zero eddy held forever; the reaction law, its case keys, parcels that burn

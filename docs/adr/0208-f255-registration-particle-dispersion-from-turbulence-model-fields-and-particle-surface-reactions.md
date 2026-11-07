@@ -627,4 +627,5 @@ per-step check of RX2 and RX2b (both then assert that all 300 steps were checked
 
 ### Status
 
-F-255 stays partial in the roadmap (Q1). Q1 to Q10 stay open for the maintainer.
+F-255 stays partial in the roadmap (Q1). Q1 to Q10 stay open for the maintainer; Q2 now asks about the table
+`particles.dispersion_from_model` of amendment 2 in place of the registered field `dispersion_fields`.
