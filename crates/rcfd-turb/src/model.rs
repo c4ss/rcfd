@@ -17,6 +17,7 @@ use crate::zeroeq::{mixing_length_infos, MixingLengthModel, MixingProfile, A_PLU
 use rcfd_core::{Error, Result};
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::ddt::TimeScheme;
+use rcfd_fv::diffusion::GradientOptions;
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -186,6 +187,19 @@ pub trait TurbulenceModel: Send {
     fn momentum_source(&self, _u: &VectorField) -> Option<Vec<[f64; 3]>> {
         None
     }
+    /// Gradient options of the explicit non-orthogonal flux of the model's transport equations (ADR 0204, case value
+    /// `solver.gradient_equations.turbulence`). `None` changes nothing. The default accepts `None` only: a model without a
+    /// transport equation whose diffusion term takes the options (algebraic models, the Reynolds stress model, plugins) refuses
+    /// `Some` with the reason.
+    fn set_gradient_options(&mut self, opts: Option<GradientOptions>) -> std::result::Result<(), String> {
+        match opts {
+            None => Ok(()),
+            Some(_) => Err(format!(
+                "the turbulence model '{}' has no transport equation whose diffusion term takes the gradient options (they act on k_epsilon, k_omega_sst and spalart_allmaras)",
+                self.key()
+            )),
+        }
+    }
 }
 
 fn check_range(infos: &[CoefficientInfo], name: &str, v: f64) -> std::result::Result<usize, String> {
@@ -234,6 +248,10 @@ impl KEpsilonModel {
 }
 
 impl TurbulenceModel for KEpsilonModel {
+    fn set_gradient_options(&mut self, opts: Option<GradientOptions>) -> std::result::Result<(), String> {
+        self.m.gradient = opts;
+        Ok(())
+    }
     fn apply_wall_options(&mut self, o: &WallOptions) -> std::result::Result<(), String> {
         apply_kepsilon(o, &mut self.m);
         Ok(())
@@ -413,6 +431,10 @@ impl SstModel {
 }
 
 impl TurbulenceModel for SstModel {
+    fn set_gradient_options(&mut self, opts: Option<GradientOptions>) -> std::result::Result<(), String> {
+        self.m.gradient = opts;
+        Ok(())
+    }
     fn apply_wall_options(&mut self, o: &WallOptions) -> std::result::Result<(), String> {
         apply_sst(o, &mut self.m).map_err(|e| e.to_string())
     }
@@ -635,6 +657,10 @@ pub fn new_spalart_allmaras(ctx: &ModelContext) -> Result<SpalartAllmaras> {
 impl TurbulenceModel for SpalartAllmaras {
     fn key(&self) -> &str {
         "spalart_allmaras"
+    }
+    fn set_gradient_options(&mut self, opts: Option<GradientOptions>) -> std::result::Result<(), String> {
+        self.gradient = opts;
+        Ok(())
     }
     fn update(&mut self, u: &VectorField, phi: &[f64]) -> f64 {
         SpalartAllmaras::update(self, u, phi)

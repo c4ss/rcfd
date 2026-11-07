@@ -34,7 +34,7 @@ use crate::wall::{wall_distance, KaderLaw, Roughness, WallConstants};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
-use rcfd_fv::diffusion::laplacian;
+use rcfd_fv::diffusion::{laplacian_opt, GradientOptions};
 use rcfd_fv::gradient::{green_gauss, least_squares};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
@@ -264,6 +264,10 @@ pub struct KEpsilon {
     pub sigma_k: f64,
     /// Prandtl number of epsilon.
     pub sigma_e: f64,
+    /// Gradient options of the explicit non-orthogonal flux of the transport equations' diffusion term (ADR 0204, case value
+    /// `solver.gradient_equations.turbulence`); `None` (default) assembles the plain Laplacian. They act only where `convection`
+    /// computes a cell gradient.
+    pub gradient: Option<GradientOptions>,
     wall_dist: Vec<f64>,
     wall_faces: Vec<usize>,
     /// Wall face of every wall-adjacent cell (nearest wall face), `usize::MAX` otherwise.
@@ -330,6 +334,7 @@ impl KEpsilon {
             a0: REALIZABLE_A0_DEFAULT,
             sigma_k,
             sigma_e,
+            gradient: None,
             wall_log: vec![false; geom.n_cells()],
             wall_dist,
             wall_faces,
@@ -411,7 +416,15 @@ impl KEpsilon {
         };
         let mut m = convection(g, phi, &cells, &bc, self.convection, grad.as_deref());
         let gamma: Vec<f64> = nut_f.iter().map(|&nt| self.nu + nt / gamma_t).collect();
-        m.add(&laplacian(g, &gamma, &bc, grad.as_deref()));
+        m.add(&laplacian_opt(
+            g,
+            &gamma,
+            &bc,
+            grad.as_deref(),
+            &cells,
+            &bvals,
+            self.gradient,
+        ));
         m
     }
 

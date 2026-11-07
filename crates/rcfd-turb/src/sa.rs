@@ -26,7 +26,7 @@ use crate::wall::{wall_distance, SpaldingLaw};
 use rcfd_core::vec3;
 use rcfd_core::Result;
 use rcfd_fv::convection::{convection, ConvScheme};
-use rcfd_fv::diffusion::laplacian;
+use rcfd_fv::diffusion::{laplacian_opt, GradientOptions};
 use rcfd_fv::gradient::{green_gauss, least_squares};
 use rcfd_fv::{FvGeometry, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
@@ -413,6 +413,10 @@ pub struct SpalartAllmaras {
     pub c_des: f64,
     /// Definition of the grid scale.
     pub des_delta: DesDelta,
+    /// Gradient options of the explicit non-orthogonal flux of the transport equation's diffusion term (ADR 0204, case value
+    /// `solver.gradient_equations.turbulence`); `None` (default) assembles the plain Laplacian. They act only where `convection`
+    /// computes a cell gradient.
+    pub gradient: Option<GradientOptions>,
     wall_dist: Vec<f64>,
     wall_faces: Vec<usize>,
     cell_wall_face: Vec<usize>,
@@ -476,6 +480,7 @@ impl SpalartAllmaras {
             des: DesMode::Off,
             c_des: 0.65,
             des_delta: DesDelta::MaxExtent,
+            gradient: None,
             y_plus: vec![0.0; wall_faces.len()],
             wall_faces,
             cell_wall_face,
@@ -760,7 +765,15 @@ impl SpalartAllmaras {
             None
         };
         let mut m = convection(&g, phi, &cells, &bc, self.convection, grad.as_deref());
-        m.add(&laplacian(&g, &gam, &bc, grad.as_deref()));
+        m.add(&laplacian_opt(
+            &g,
+            &gam,
+            &bc,
+            grad.as_deref(),
+            &cells,
+            &nb,
+            self.gradient,
+        ));
         for c in 0..n {
             let d = len[c];
             let x = nt[c];

@@ -199,6 +199,9 @@ pub struct ElectricState {
     sigma_face: Vec<f64>,
     heat: Vec<f64>,
     ctl: SolveControl,
+    /// Gradient options of the potential's diffusion term (ADR 0204 K4, `solver.gradient_equations.electric_potential`); `None`
+    /// without the selector.
+    gradient: Option<rcfd_fv::diffusion::GradientOptions>,
 }
 
 impl ElectricState {
@@ -266,6 +269,7 @@ impl ElectricState {
                 tol_rel: 1e-13,
                 max_iter: 5000,
             },
+            gradient: crate::sim::gradient_selected(case, "electric_potential"),
         }))
     }
 
@@ -300,7 +304,7 @@ impl ElectricState {
             );
             let _ = self.phi.set_bc(geom, name, Box::new(FixedGradient(prof)));
         }
-        let (sf, _) = lib::solve(geom, &mut self.phi, &sigma, &self.ctl, 20);
+        let (sf, _) = lib::solve_opt(geom, &mut self.phi, &sigma, &self.ctl, 20, self.gradient);
         self.sigma_face = sf;
         self.heat = lib::joule_heat(geom, &self.phi, &self.sigma_face, true);
         Ok(self

@@ -962,7 +962,8 @@ build path now applies them to the model it creates (`TurbulenceModel::apply_wal
 they are no longer rejected. Plugin models keep their own settings.
 
 **Gradient options** of F-208 (face-gradient correction, secondary-gradient limiter, boundary treatment): the keys
-`solver.gradient_*` of the energy and scalar diffusion term, in their own section below (ADR 0190).
+`solver.gradient_*` of the energy and scalar diffusion term, and the table `[solver.gradient_equations]` that adds momentum, the
+pressure equation, turbulence transport and the electric potential, in their own section below (ADR 0190, ADR 0204).
 
 **Pressure-interpolation variants** of the steady kernel (F-246): the key `solver.pressure_interpolation`, in its own section
 below (ADR 0193).
@@ -2727,11 +2728,12 @@ the interpolated cell gradient. Four keys change how that part is formed (ADR 00
 | `solver.gradient_boundary` | `owner` (default), `corrected`, `dropped` | on fixed-value boundary faces: the owner-cell gradient, that gradient with its component along the cell-to-face vector replaced by `(phi_b - phi_P)/abs(d)`, or no secondary part |
 
 They act on the energy equation of the incompressible constant-density solvers (steady `simple`/`simplec`, `coupled`, `piso`,
-`pimple`, prescribed flow, Rosseland and P1 radiation, conjugate solids) and on the transported scalars and species. They do not
-act on momentum, pressure, turbulence, the electric potential, the energy of the variable-density, compressible and VOF solvers,
-or the enthalpy-method phase change. `solver.periodic_gradient` is unrelated (the momentum gradient on periodic faces).
+`pimple`, prescribed flow, Rosseland and P1 radiation, conjugate solids) and on the transported scalars and species, and on the
+equations `[solver.gradient_equations]` selects (next subsection). They do not act on the energy of the variable-density,
+compressible and VOF solvers, or on the enthalpy-method phase change. `solver.periodic_gradient` is unrelated (the momentum
+gradient on periodic faces).
 
-Located errors (at the first key that is not at its default):
+Located errors without `[solver.gradient_equations]` (at the first key that is not at its default):
 
 * `solver.convection` = `upwind`, `central` or `blended`: these schemes compute no cell gradient, so the diffusion term has no
   secondary part for the options to act on.
@@ -2750,6 +2752,46 @@ balance the source to the solver's residual for every option set. The `heat_flow
 the wall gradient of the boundary condition only and has no secondary part, with or without the options (ADR 0202 Q1). With
 all four keys at their defaults every result is unchanged bit for bit, and the settings hash leaves them out; written case
 files list them.
+
+### Further equations (`[solver.gradient_equations]`)
+
+The optional table adds equations that take the same options (ADR 0204). Each selector is a boolean, default `false`:
+
+| Key | The options also act on |
+|---|---|
+| `solver.gradient_equations.momentum` | the momentum Laplacian of the steady `simple`/`simplec` and the transient `piso`/`pimple` kernels (constant density, the moving-mesh step included; not `time_advance = "fractional_step"`), where the kernel computes the velocity gradient: a gradient-based `solver.convection` or `non_orthogonal_correctors > 0` |
+| `solver.gradient_equations.pressure` | the pressure equation of the same kernels, the internal faces of its flux correction and the SIMPLEC non-orthogonal compensation; only with `non_orthogonal_correctors > 0` |
+| `solver.gradient_equations.turbulence` | the transport equations of `k_epsilon` (k, epsilon), `k_omega_sst` (k, omega) and `spalart_allmaras` (nuTilda), with a gradient-based `turbulence.convection` |
+| `solver.gradient_equations.electric_potential` | the potential of `electric.enabled` (its sweep always computes the gradient, whatever `solver.convection`) |
+
+```text
+[solver]
+gradient_face_correction = true
+non_orthogonal_correctors = 1
+
+[solver.gradient_equations]
+momentum = true
+pressure = true
+```
+
+The energy and scalar terms keep taking the options whenever they have a gradient; a selector cannot take them away from those.
+With a selector, the two errors above (no cell gradient, no equation) are replaced by these, each at the selector:
+
+* a selector while `gradient_face_correction`, `gradient_secondary_limiter` and `gradient_boundary` all hold their defaults;
+* the equation is not solved with the options: momentum or pressure without the steady or transient constant-density kernel, with
+  prescribed flow or with the fractional step; turbulence without a model, with prescribed flow, or with a model whose transport
+  does not take them (`rsm`, `smagorinsky`, `wale`, `mixing_length`, plugins); the electric potential without `electric.enabled`;
+* no explicit non-orthogonal flux: momentum with `upwind`, `central` or `blended` and no non-orthogonal corrector; pressure
+  without a non-orthogonal corrector; turbulence with `turbulence.convection` = `upwind` (its default), `central` or `blended`;
+* `pressure` with `solver.pressure_interpolation = "body_force_weighted"`.
+
+What stays as it was with the selectors: the flux correction's boundary faces (on a fixed-pressure face the pressure equation has
+a non-orthogonal part with correctors and the flux correction has none, with or without the options; `gradient_boundary =
+"dropped"` removes it from the equation; ADR 0204 Q3), the PISO/PIMPLE pressure-lag estimate and the SV301 trial, the Joule heat
+and the current density (the default face flows; ADR 0204 Q2), the potential of a Lorentz source, the coupled solver, the
+fractional step, variable density, VOF and compressible. Through the tree a run equals the library run with the same options
+(ADR 0204); no accuracy benefit is claimed. Absent, or with every selector `false`, the table changes no bit and no settings hash,
+and written case files leave it out.
 
 ## Pressure interpolation of the steady kernel (`solver.pressure_interpolation`)
 

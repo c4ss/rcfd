@@ -19,7 +19,7 @@
 use crate::bc::FixedValue;
 use crate::convection::{convection, face_flux, ConvScheme};
 use crate::ddt::{add_ddt, max_courant, CflController, History, TimeScheme};
-use crate::diffusion::{laplacian, uniform_gamma};
+use crate::diffusion::{laplacian_opt, uniform_gamma, GradientOptions};
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
@@ -95,6 +95,15 @@ pub struct PimpleSettings {
     /// multiplied by its limiter factor in the convection term only, also on the moving-mesh step. `None` (default) =
     /// unlimited. Only with `ConvScheme::LinearUpwind`; not used by the fractional step.
     pub linear_upwind_limiter: Option<crate::gradient::Limiter>,
+    /// Gradient options of the explicit non-orthogonal flux of the momentum Laplacian (ADR 0204, case value
+    /// `solver.gradient_equations.momentum`), also on the moving-mesh step; `None` (default) assembles the plain Laplacian. Not used by
+    /// the fractional step.
+    pub gradient_momentum: Option<GradientOptions>,
+    /// Gradient options of the explicit non-orthogonal flux of every corrector's pressure equation and of the internal faces of its
+    /// flux correction (ADR 0204, `solver.gradient_equations.pressure`); `None` (default) leaves them unchanged. They act only with
+    /// `non_orth_correctors > 0`; the pressure-lag estimate keeps the plain pressure operator (ADR 0204 Q4). Not used by the
+    /// fractional step.
+    pub gradient_pressure: Option<GradientOptions>,
 }
 
 /// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
@@ -492,6 +501,8 @@ impl PimpleSettings {
             coupled_body_pair_mean: false,
             corrector_control: None,
             linear_upwind_limiter: None,
+            gradient_momentum: None,
+            gradient_pressure: None,
         }
     }
 
@@ -1033,7 +1044,16 @@ impl PimpleSolver {
                     s.convection,
                     limited.as_deref().or(grad.as_deref()),
                 );
-                m.add(&laplacian(&g, &gamma_nu, &bc, grad.as_deref()));
+                // ADR 0204 K3: the gradient options of the momentum Laplacian, with the values the gradient was computed from
+                m.add(&laplacian_opt(
+                    &g,
+                    &gamma_nu,
+                    &bc,
+                    grad.as_deref(),
+                    &conv_cells,
+                    &bv,
+                    s.gradient_momentum,
+                ));
                 // periodic partner values implicit (ADR 0046): move the lagged partner term back into the matrix
                 let lk = PeriodicLinks::build(&g, &self.u, &phi_conv, &gamma_nu, &bc);
                 let q_lag: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
@@ -1189,7 +1209,24 @@ impl PimpleSolver {
                 };
                 let p_old = self.p.values.clone();
                 let mut p_new = p_old.clone();
-                let (r0, it) = solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls);
+                // ADR 0204 K3: the gradient options of the pressure equation (`None`: as before)
+                let (r0, it) = match s.gradient_pressure {
+                    None => solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls),
+                    Some(o) => {
+                        let (r, i, _) = crate::pressure::solve_pressure_parts_opt(
+                            &g,
+                            &gamma_j,
+                            &pbc,
+                            &phi_hby_a,
+                            &mut p_new,
+                            &controls,
+                            false,
+                            None,
+                            Some(o),
+                        );
+                        (r, i)
+                    }
+                };
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
@@ -1205,7 +1242,23 @@ impl PimpleSolver {
                         (res_u, res_p, p_iters),
                     );
                 }
-                self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0);
+                self.phi = match s.gradient_pressure {
+                    None => corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, s.non_orth_correctors > 0),
+                    Some(o) => {
+                        let grad = (s.non_orth_correctors > 0)
+                            .then(|| least_squares(&g, &p_new, &boundary_values_pbc(&g, &pbc, &p_new)));
+                        crate::pressure::corrected_flux_opt(
+                            &g,
+                            &gamma_j,
+                            &pbc,
+                            &phi_hby_a,
+                            &p_new,
+                            &ub,
+                            grad.as_deref(),
+                            Some(o),
+                        )
+                    }
+                };
                 let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
                 let mut grad_new = green_gauss(&g, &p_new, &bv_new, 0);
                 if let Some(j) = &self.face_jump {
