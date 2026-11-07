@@ -471,6 +471,9 @@ pub struct SimpleSolver {
     pub body_force: Option<BodyForce>,
     /// Implicit linear momentum sink per cell, `-sink * u` (porous media), in 1/s.
     pub sink: Option<Vec<f64>>,
+    /// Immersed-solid forcing `-(coeff u - source)` (F-219, ADR 0218 D3): added to the momentum diagonal and right-hand side next to
+    /// the sink. `None` (default) leaves the solver unchanged.
+    pub immersed: Option<crate::immersed::ImmersedForcing>,
     /// Pseudo-transient (local time stepping) option.
     pub pseudo: Option<PseudoTransient>,
     /// Automatic pseudo-time-step controller (ADR 0023); needs `pseudo`. `None` keeps the step as configured.
@@ -731,6 +734,7 @@ impl SimpleSolver {
             nu_face: None,
             body_force: None,
             sink: None,
+            immersed: None,
             face_jump: None,
             impermeable: None,
             periodic_gradient_partner: false,
@@ -1006,6 +1010,13 @@ impl SimpleSolver {
             if let Some(sink) = &self.sink {
                 for c in 0..n {
                     m.a.diag[c] += sink[c] * vol[c];
+                }
+            }
+            if let Some(ib) = &self.immersed {
+                // ADR 0218 D3: the immersed-solid forcing, implicit coefficient and source
+                for c in 0..n {
+                    m.a.diag[c] += ib.coeff[c] * vol[c];
+                    m.b[c] += ib.source[c][k] * vol[c];
                 }
             }
             if let Some(dtc) = &pseudo_dt {

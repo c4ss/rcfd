@@ -456,6 +456,11 @@ impl Divergence {
                 "maximum Courant number is {:.4e}, above the limit {:.1e}",
                 self.value, self.limit
             )
+        } else if self.quantity == "immersed solid" {
+            return format!(
+                "PIMPLE immersed-solid forcing (ADR 0218) is not defined with the {}: the run is stopped at step {}{outer}",
+                self.stage, self.step
+            );
         } else if self.quantity == "consistent correctors" {
             return format!(
                 "PIMPLE consistent correctors (ADR 0214) are not defined with the {}: the run is stopped at step {}{outer}",
@@ -669,6 +674,9 @@ pub struct PimpleSolver {
     pub source_force: Option<BodyForce>,
     /// Implicit linear momentum sink per cell, `-sink * u`, in 1/s (porous media, Lorentz damping), set by the hook.
     pub sink: Option<Vec<f64>>,
+    /// Immersed-solid forcing `-(coeff u - source)` (F-219, ADR 0218 D3), added next to the sink; the hook does not change it. The
+    /// fractional step and moving meshes refuse it (ADR 0218 D4). `None` (default) leaves the solver unchanged.
+    pub immersed: Option<crate::immersed::ImmersedForcing>,
     /// Pressure jumps at internal faces (lumped fans and porous jumps), set by the hook; same algebra as the SIMPLE kernel.
     pub face_jump: Option<FaceJump>,
     /// Moving-mesh data of the current step (set only by `step_ale`, ADR 0033).
@@ -719,6 +727,7 @@ impl PimpleSolver {
             body_force: None,
             source_force: None,
             sink: None,
+            immersed: None,
             face_jump: None,
             ale: None,
             fs_q: Vec::new(),
@@ -747,6 +756,7 @@ impl PimpleSolver {
             body_force: self.body_force.clone(),
             source_force: self.source_force.clone(),
             sink: self.sink.clone(),
+            immersed: self.immersed.clone(),
             face_jump: self.face_jump.clone(),
             ale: None,
             fs_q: self.fs_q.clone(),
@@ -917,6 +927,19 @@ impl PimpleSolver {
                     (0.0, 0.0, 0),
                 );
             }
+        }
+        if self.immersed.is_some() && self.settings.fractional.is_some() {
+            // ADR 0218 D4: the fractional step does not apply the immersed-solid forcing
+            self.step_no += 1;
+            return self.trip(
+                dt,
+                None,
+                "fractional step",
+                "immersed solid",
+                None,
+                f64::NAN,
+                (0.0, 0.0, 0),
+            );
         }
         if self.settings.fractional.is_some() && self.ale.is_none() {
             return self.step_fractional(dt);
@@ -1145,6 +1168,13 @@ impl PimpleSolver {
                 if let Some(sink) = &self.sink {
                     for c in 0..n {
                         m.a.diag[c] += sink[c] * vol[c];
+                    }
+                }
+                if let Some(ib) = &self.immersed {
+                    // ADR 0218 D3: the immersed-solid forcing, implicit coefficient and source
+                    for c in 0..n {
+                        m.a.diag[c] += ib.coeff[c] * vol[c];
+                        m.b[c] += ib.source[c][k] * vol[c];
                     }
                 }
                 let mut m = add_ddt(s.time_scheme, m, &vol, dt, &self.hist_u[k]);

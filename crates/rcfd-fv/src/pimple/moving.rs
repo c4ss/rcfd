@@ -101,6 +101,11 @@ impl PimpleSolver {
         if self.settings.time_scheme != TimeScheme::ImplicitEuler {
             return Err("a moving mesh supports the implicit Euler time scheme only".into());
         }
+        if self.immersed.is_some() {
+            return Err(
+                "moving-mesh step: the immersed-solid forcing (ADR 0218) is not defined on a moving mesh".into(),
+            );
+        }
         let old = self.geom.clone();
         if new_geom.n_cells() != old.n_cells()
             || new_geom.mesh.n_faces() != old.mesh.n_faces()
@@ -151,7 +156,7 @@ impl PimpleSolver {
     ///
     /// Fails, leaving the solver unchanged, for a time scheme other than implicit Euler, a patch list that differs in
     /// number, names or kinds, sizes that do not fit the new mesh, and a set face viscosity, body force, source force,
-    /// sink or face jump (their data are sized to the current mesh).
+    /// sink, face jump or immersed-solid forcing (their data are sized to the current mesh).
     pub fn replace_mesh(
         &mut self,
         geom: Arc<FvGeometry>,
@@ -181,6 +186,11 @@ impl PimpleSolver {
             return Err(
                 "replace_mesh: a face viscosity, body force, source force, sink or face jump is set (sized to the current mesh)"
                     .into(),
+            );
+        }
+        if self.immersed.is_some() {
+            return Err(
+                "replace_mesh: the immersed-solid forcing (ADR 0218) is set (sized to the current mesh)".into(),
             );
         }
         self.hist_u = [0, 1, 2].map(|k| History::new(u.iter().map(|v| v[k]).collect()));
