@@ -174,6 +174,12 @@ struct Outcome {
 
 /// The manufactured solution on `kind` at `n` with the variant `v` (ADR 0193 M: data, kernel set-up, stop rule, errors).
 fn mms(kind: MeshKind, n: usize, v: PressureInterpolation) -> Outcome {
+    mms_run(kind, n, v, false).0
+}
+
+/// [`mms`] with F-285's fix (ADR 0198 amendment 2: `implicit_non_orth_pressure` and `reconstructed_correction`) switched on when
+/// `fix`, returning the solver after the last iteration too. With `fix = false` it is [`mms`].
+fn mms_run(kind: MeshKind, n: usize, v: PressureInterpolation, fix: bool) -> (Outcome, SimpleSolver) {
     let start = Instant::now();
     let geom = geometry(kind, n);
     let mesh = &geom.mesh;
@@ -232,6 +238,10 @@ fn mms(kind: MeshKind, n: usize, v: PressureInterpolation) -> Outcome {
     let mut sol = SimpleSolver::new(geom.clone(), u, p, s);
     sol.body_force = Some(BodyForce { cell, face });
     sol.pressure_interpolation = v;
+    if fix {
+        sol.implicit_non_orth_pressure = true;
+        sol.reconstructed_correction = true;
+    }
     let umax = cc.iter().map(|&x| vec3::norm(exact_u(x))).fold(0.0, f64::max);
     let mut deltas: Vec<f64> = Vec::new();
     let mut converged = false;
@@ -265,7 +275,8 @@ fn mms(kind: MeshKind, n: usize, v: PressureInterpolation) -> Outcome {
         converged,
     };
     println!(
-        "  {kind:?} n={n} {v:?}: e_u {:.4e} e_p {:.4e}, {} iterations, converged {}, net flux {:.1e} of {:.1e}, {:.1} s",
+        "  {kind:?} n={n} {v:?}{}: e_u {:.4e} e_p {:.4e}, {} iterations, converged {}, net flux {:.1e} of {:.1e}, {:.1} s",
+        if fix { " with the F-285 fix" } else { "" },
         o.e_u,
         o.e_p,
         o.iterations,
@@ -274,7 +285,7 @@ fn mms(kind: MeshKind, n: usize, v: PressureInterpolation) -> Outcome {
         gross,
         start.elapsed().as_secs_f64()
     );
-    o
+    (o, sol)
 }
 
 /// P: the registered preconditions of the meshes (ADR 0193 P).
@@ -364,11 +375,17 @@ fn m3_s_levels_16_32() {
 
 /// M1: the sequence n = 16, 32, 64 of one variant on one mesh; the order of the pair (32, 64) is bound for V1 and V2 (V0 reported).
 fn sequence(kind: MeshKind, name: &str) {
+    sequence_with(kind, name, false);
+}
+
+/// [`sequence`] with F-285's fix switched on when `fix` (ADR 0198 amendment 2); returns the three outcomes.
+fn sequence_with(kind: MeshKind, name: &str, fix: bool) -> Vec<Outcome> {
     let v = VARIANTS.iter().find(|x| x.0 == name).unwrap().1;
-    let r: Vec<Outcome> = [16, 32, 64].iter().map(|&n| mms(kind, n, v)).collect();
+    let r: Vec<Outcome> = [16, 32, 64].iter().map(|&n| mms_run(kind, n, v, fix).0).collect();
     let (ou, op) = ((r[1].e_u / r[2].e_u).log2(), (r[1].e_p / r[2].e_p).log2());
     println!(
-        "M1 {kind:?} {name}: orders velocity {:.3} / {ou:.3}, pressure {:.3} / {op:.3} (pairs (16, 32) / (32, 64)); converged {:?}",
+        "M1 {kind:?} {name}{}: orders velocity {:.3} / {ou:.3}, pressure {:.3} / {op:.3} (pairs (16, 32) / (32, 64)); converged {:?}",
+        if fix { " with the F-285 fix" } else { "" },
         (r[0].e_u / r[1].e_u).log2(),
         (r[0].e_p / r[1].e_p).log2(),
         r.iter().map(|o| o.converged).collect::<Vec<_>>()
@@ -381,6 +398,7 @@ fn sequence(kind: MeshKind, name: &str) {
         assert!(ou >= ORDER_U, "M1 {kind:?} {name}: velocity order {ou:.3} < {ORDER_U}");
         assert!(op >= ORDER_P, "M1 {kind:?} {name}: pressure order {op:.3} < {ORDER_P}");
     }
+    r
 }
 
 #[test]
@@ -421,6 +439,108 @@ fn m1_w_v1_known_miss() {
 #[ignore = "known miss (ADR 0193 M1, heavy): V2 diverges on W at n = 32, as the default does"]
 fn m1_w_v2_known_miss() {
     sequence(MeshKind::W, "V2");
+}
+
+// ---- F-285 (ADR 0198): M1 on W run again with the fix, and the checks of the fix --------------------------------------------------
+
+/// ADR 0198 A5: F-246's M1 on W for V1 as `m1_w_v1_known_miss` runs it (set-up, stop rule, cap, limits unchanged) with F-285's fix.
+#[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0198 A5)"]
+fn m1_w_v1_f285() {
+    sequence_with(MeshKind::W, "V1", true);
+}
+
+/// ADR 0198 A5: F-246's M1 on W for V2 as `m1_w_v2_known_miss` runs it with F-285's fix.
+#[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0198 A5)"]
+fn m1_w_v2_f285() {
+    sequence_with(MeshKind::W, "V2", true);
+}
+
+/// ADR 0198 A1 at n = 64: the V0 sequence on W with F-285's fix converges at every level (orders reported, no limit).
+#[test]
+#[ignore = "heavy: n = 64, run by name in release (ADR 0198 A1)"]
+fn m1_w_v0_f285() {
+    let r = sequence_with(MeshKind::W, "V0", true);
+    assert!(
+        r.iter().all(|o| o.converged),
+        "A1: V0 with the fix did not converge on W at every level: {:?}",
+        r.iter().map(|o| (o.converged, o.iterations)).collect::<Vec<_>>()
+    );
+}
+
+/// ADR 0198 A1 at n = 16 and 32 and A3: V0 with F-285's fix converges on W; from the converged state at n = 32 one iteration of
+/// the default kernel (both fields off) changes the velocity by at most 1e-8.
+#[test]
+fn f285_a1_a3_w_16_32() {
+    let (a, _) = mms_run(MeshKind::W, 16, PressureInterpolation::Linear, true);
+    let (b, mut sol) = mms_run(MeshKind::W, 32, PressureInterpolation::Linear, true);
+    sol.implicit_non_orth_pressure = false;
+    sol.reconstructed_correction = false;
+    let du = sol.iterate().max_du;
+    println!(
+        "A1: W n=16 converged {} in {} iterations, n=32 converged {} in {} iterations; A3: one default iteration from the n=32 state changes u by {du:.3e} (limit 1e-8)",
+        a.converged, a.iterations, b.converged, b.iterations
+    );
+    assert!(a.converged && b.converged, "A1: not converged");
+    assert!(du <= 1e-8, "A3: {du:e}");
+}
+
+/// ADR 0198 A2 (and A7, reported): with F-285's fix V0 converges to the fixed point of the default on a mesh where the default
+/// converges.
+fn same_fixed_point(kind: MeshKind, n: usize) {
+    let t0 = Instant::now();
+    let (r0, s0) = mms_run(kind, n, PressureInterpolation::Linear, false);
+    let t1 = Instant::now();
+    let (r1, s1) = mms_run(kind, n, PressureInterpolation::Linear, true);
+    let t2 = Instant::now();
+    let vol = s0.geom.mesh.cell_volumes();
+    let tot: f64 = vol.iter().sum();
+    let mean = |p: &[f64]| p.iter().zip(vol).map(|(x, v)| x * v).sum::<f64>() / tot;
+    let (m0, m1) = (mean(&s0.p.values), mean(&s1.p.values));
+    let du =
+        s0.u.values
+            .iter()
+            .zip(&s1.u.values)
+            .map(|(a, b)| vec3::norm(vec3::sub(*a, *b)))
+            .fold(0.0, f64::max);
+    let dp =
+        s0.p.values
+            .iter()
+            .zip(&s1.p.values)
+            .map(|(a, b)| ((a - m0) - (b - m1)).abs())
+            .fold(0.0, f64::max);
+    let (ru, rp) = ((r1.e_u / r0.e_u - 1.0).abs(), (r1.e_p / r0.e_p - 1.0).abs());
+    println!(
+        "A2 {kind:?} n={n}: |e_u ratio - 1| {ru:.3e}, |e_p ratio - 1| {rp:.3e} (limit 1e-6); largest cell difference u {du:.3e}, p - mean {dp:.3e} (limit 1e-8); A7: {} / {} iterations, {:.3} / {:.3} s per iteration (without / with the fix)",
+        r0.iterations,
+        r1.iterations,
+        (t1 - t0).as_secs_f64() / r0.iterations as f64,
+        (t2 - t1).as_secs_f64() / r1.iterations as f64
+    );
+    assert!(r0.converged && r1.converged, "A2 {kind:?} n={n}: not converged");
+    assert!(ru <= 1e-6 && rp <= 1e-6, "A2 {kind:?} n={n}: error ratios");
+    assert!(du <= 1e-8 && dp <= 1e-8, "A2 {kind:?} n={n}: cell differences");
+}
+
+#[test]
+fn f285_a2_k32() {
+    same_fixed_point(MeshKind::K, 32);
+}
+
+#[test]
+fn f285_a2_s32() {
+    same_fixed_point(MeshKind::S, 32);
+}
+
+#[test]
+fn f285_a2_w2_32() {
+    same_fixed_point(MeshKind::W2, 32);
+}
+
+#[test]
+fn f285_a2_w16() {
+    same_fixed_point(MeshKind::W, 16);
 }
 
 #[test]

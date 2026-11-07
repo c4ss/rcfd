@@ -151,6 +151,66 @@ impl FvGeometry {
             .flat_map(|(pi, p)| p.faces().map(move |f| (pi, f)))
             .filter(|&(_, f)| !self.empty[f])
     }
+
+    /// The periodic face pairs (F-295, ADR 0205 D5): every face of every periodic patch in exactly one pair `f < g`, each the
+    /// other's partner, with the weight `w = dn_g / (dn_f + dn_g)` of the owner of `f`. An error when the partner maps are not
+    /// a pairing: a face whose partner lies on a patch without a map, or whose partner's partner is not the face.
+    pub fn periodic_pairs(&self) -> Result<Vec<PeriodicPair>> {
+        let mesh = &self.mesh;
+        let n_int = self.n_internal;
+        // partner of every periodic boundary face (index f - n_internal)
+        let mut partner = vec![usize::MAX; mesh.n_faces() - n_int];
+        for (pi, p) in mesh.patches().iter().enumerate() {
+            if let Some(map) = &self.periodic_partner[pi] {
+                for (local, f) in p.faces().enumerate() {
+                    partner[f - n_int] = map[local];
+                }
+            }
+        }
+        let mut pairs = Vec::new();
+        for (i, &g) in partner.iter().enumerate() {
+            if g == usize::MAX {
+                continue;
+            }
+            let f = n_int + i;
+            let back = if g >= n_int && g != f {
+                partner[g - n_int]
+            } else {
+                usize::MAX
+            };
+            if back != f {
+                return Err(Error::Mesh(format!(
+                    "the periodic faces are not paired: the partner of face {f} is face {g}, whose partner is {}",
+                    if back == usize::MAX {
+                        "not set".to_string()
+                    } else {
+                        format!("face {back}")
+                    }
+                )));
+            }
+            if f < g {
+                let (dn_f, dn_g) = (self.dn[f - n_int], self.dn[g - n_int]);
+                pairs.push(PeriodicPair {
+                    f,
+                    g,
+                    w: dn_g / (dn_f + dn_g),
+                });
+            }
+        }
+        Ok(pairs)
+    }
+}
+
+/// One pair of periodic faces (F-295, ADR 0205): `f < g`, each the other's partner; `w = dn_g / (dn_f + dn_g)` is the linear
+/// interpolation weight of the owner of `f` across the seam (the weight of the periodic condition's face value).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PeriodicPair {
+    /// The face of the lower global index.
+    pub f: usize,
+    /// Its partner face.
+    pub g: usize,
+    /// Weight of the owner of `f`.
+    pub w: f64,
 }
 
 /// Match each face of `patch` to the face of `partner` obtained by a pure

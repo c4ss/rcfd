@@ -1544,11 +1544,22 @@ pub fn case_schema() -> Schema {
         Schema::enumeration("ssg", &["ssg", "lrr_ip"]).doc("Pressure-strain model: ssg (Speziale, Sarkar and Gatski 1991, quadratic) or lrr_ip (Launder, Reece and Rodi 1975, isotropisation of production, linear). Its epsilon-equation constant Ce2 differs (1.83 / 1.92)"),
     );
 
+    // ADR 0205 D3: an optional object, so the data, written text and hashes of every case without it stay as they are
+    let periodic_seam = Schema::object()
+        .optional()
+        .doc("Periodic seams of the turbulence model (F-295, ADR 0205). Absent = owner")
+        .field(
+            "diffusivity",
+            Schema::enumeration("owner", &["owner", "pair"])
+                .doc("Diffusivity of the two faces of a periodic (cyclic) pair, translational or rotational: owner (default, every earlier result) gives each face the value of its own owner cell, so where the eddy viscosity differs across the seam the two diffusive fluxes of the pair do not cancel; pair gives both faces nu + w a_P + (1 - w) a_Q, the linear interpolation between the two owner cells with w = dn_g / (dn_f + dn_g), in the momentum face viscosity and in the k and omega diffusivities (steady and pimple), and a pair that touches a laminar region takes the molecular viscosity on both faces. The scalars with a Schmidt number follow the momentum face viscosity. turbulence.model = k_omega_sst only (pair with any other model is a located error); no effect on a mesh without periodic patches")
+                .hash_omit_default(),
+        )
+        .hash_omit_default();
     let turbulence = Schema::object()
         .doc("Turbulence modelling (RANS models: steady SIMPLE / SIMPLEC runs; smagorinsky and wale: transient runs; mixing_length: both)")
         .field(
             "model",
-            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "smagorinsky", "wale", "mixing_length", "rsm", "plugin"]).doc("rsm is the Reynolds stress transport model (SSG or LRR-IP pressure-strain, generalised gradient diffusion; ADR 0032): transient algorithms (piso, pimple) only, no wall treatment, so no wall patches. smagorinsky and wale are algebraic subgrid-scale models for large-eddy simulation (transient algorithms piso/pimple only; resolved walls, nu_sgs = 0 on wall faces, filter width = cell volume^(1/3); ADR 0026), mixing_length is the Prandtl algebraic closure (steady or transient, needs a wall and turbulence.length_scale; ADR 0026). Otherwise: laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer, Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
+            Schema::enumeration("laminar", &["laminar", "k_epsilon", "k_omega_sst", "spalart_allmaras", "smagorinsky", "wale", "mixing_length", "rsm", "plugin"]).doc("rsm is the Reynolds stress transport model (SSG or LRR-IP pressure-strain, generalised gradient diffusion; ADR 0032): transient algorithms (piso, pimple) only, no wall treatment, so no wall patches. smagorinsky and wale are algebraic subgrid-scale models for large-eddy simulation (transient algorithms piso/pimple only; resolved walls, nu_sgs = 0 on wall faces, filter width = cell volume^(1/3); ADR 0026), mixing_length is the Prandtl algebraic closure (steady or transient, needs a wall and turbulence.length_scale; ADR 0026). Otherwise: laminar, the k-epsilon eddy-viscosity family with wall functions, k-omega SST (Menter 2003) with an automatic wall treatment that works from y+ about 1 (wall-resolved) to the log layer (steady algorithms, and pimple on a static mesh: k and omega get the time derivative of solver.time_scheme and one sweep at the start of every outer iteration, ADR 0199), Spalart-Allmaras (SA-noft2 with the negative-nuTilda treatment, wall-resolved or with the automatic wall treatment), or a registered plugin model (turbulence.plugin). The model can be changed in a live session with settings.set (the flow field is kept, see docs/case-schema.md)"),
         )
         .field(
             "variant",
@@ -1614,13 +1625,13 @@ pub fn case_schema() -> Schema {
             "relax",
             Schema::float(0.7)
                 .range(0.05, 1.0)
-                .doc("Implicit under-relaxation of the k and epsilon equations"),
+                .doc("Implicit under-relaxation of the k and epsilon equations (steady algorithms; not used by k_omega_sst on pimple, where the time derivative takes its place, ADR 0199)"),
         )
         .field(
             "relax_nut",
             Schema::float(0.5)
                 .range(0.05, 1.0)
-                .doc("Under-relaxation of the eddy viscosity"),
+                .doc("Under-relaxation of the eddy viscosity (steady algorithms; not used by k_omega_sst on pimple, ADR 0199)"),
         )
         .field(
             "k_initial",
@@ -1682,6 +1693,7 @@ pub fn case_schema() -> Schema {
         )
         .field("sa", sa_group)
         .field("rsm", rsm_group)
+        .field("periodic_seam", periodic_seam)
         .field("coefficients", coefficients)
         .field(
             "plugin_coefficients",

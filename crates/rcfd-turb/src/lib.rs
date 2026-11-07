@@ -11,7 +11,7 @@ pub mod sst;
 pub mod wall;
 pub mod zeroeq;
 
-pub use eddy::{effective_viscosity, patch_faces, MixingLength};
+pub use eddy::{effective_viscosity, pair_periodic_faces, patch_faces, MixingLength, SeamDiffusivity};
 pub use kepsilon::{
     wall_cell_sources, KEpsilon, KEpsilonVariant, WallTreatment, REALIZABLE_A0_DEFAULT, REALIZABLE_A0_ORIGINAL,
 };

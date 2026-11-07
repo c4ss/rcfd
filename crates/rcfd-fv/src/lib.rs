@@ -54,5 +54,5 @@ pub use bc::{
 };
 pub use field::{ScalarField, VectorField};
 pub use fvmatrix::FvMatrix;
-pub use geometry::FvGeometry;
+pub use geometry::{FvGeometry, PeriodicPair};
 pub use thermal_bc::ConvectiveWall;

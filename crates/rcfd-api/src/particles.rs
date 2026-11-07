@@ -13,8 +13,8 @@ use rcfd_core::settings::Schema;
 use rcfd_core::vec3::Vec3;
 use rcfd_particles::vtp::write_vtp;
 use rcfd_particles::{
-    ConeSpec, Dispersion, DragLaw, ErosionSpec, Flow, InjKind, InjectorExt, InjectorSpec, Interp, Options, RoughSpec,
-    Scheme, SizeDist, Tracker, VelMode, WallAction,
+    ConeSpec, Dispersion, DragLaw, ErosionSpec, FilmGas, Flow, InjKind, InjectorExt, InjectorSpec, Interp, Options,
+    RoughSpec, Scheme, SizeDist, Tracker, VelMode, WallAction,
 };
 
 /// Sentinel of the numeric keys that are not set.
@@ -172,7 +172,7 @@ pub fn schema() -> Schema {
     .doc("Per-patch particle boundary actions");
     let film = Schema::object()
         .optional()
-        .doc("Wall film fed by the parcels (ADR 0192): a parcel that reaches a face of a film patch is absorbed into a thin laminar film on that face; the film runs down the wall under gravity with the depth-averaged velocity rho h^2 g_t/(3 mu) of a steady laminar film of its own thickness (no gas shear, no splash, no evaporation) and leaves the film where no other film face continues it. The film liquid density is particles.density; the film never acts on the flow. Absent = no film")
+        .doc("Wall film fed by the parcels (ADR 0192): a parcel that reaches a face of a film patch is absorbed into a thin laminar film on that face; the film runs down the wall under gravity with the depth-averaged velocity rho h^2 g_t/(3 mu) of a steady laminar film of its own thickness (gas buoyancy and gas shear only with gas_buoyancy and gas_shear, ADR 0206; no splash, no evaporation) and leaves the film where no other film face continues it. The film liquid density is particles.density; the film never acts on the flow. Absent = no film")
         .field("enabled", Schema::boolean(false).doc("Absorb the parcels that reach the film patches into a wall film"))
         .field(
             "patches",
@@ -181,6 +181,18 @@ pub fn schema() -> Schema {
         .field(
             "viscosity",
             Schema::float(UNSET).doc("Dynamic viscosity of the film liquid [Pa s] (> 0); -1 = unset (an error when the film is enabled)"),
+        )
+        .field(
+            "gas_buoyancy",
+            Schema::boolean(false)
+                .doc("Gas buoyancy (ADR 0206 G1): drive the film by (rho_l - rho_g) g_t in place of rho_l g_t, with rho_g = physics.rho (the buoyancy the parcels have); needs physics.rho below particles.density")
+                .hash_omit_default(),
+        )
+        .field(
+            "gas_shear",
+            Schema::boolean(false)
+                .doc("Gas shear (ADR 0206 G2, G4): add h tau/(2 mu_l) to the film velocity, with tau = mu_g (u_P)_t / d the one-sided laminar wall stress of the carrier at each film face (u_P the velocity of the cell next to the face, d the normal distance of its centre). Laminar carriers only, the film patches no-slip walls at rest (velocity = \"fixed\" with velocity_value [0, 0, 0], no expression or udf), no moving mesh, no rotating frame. A film whose gravity and shear parts oppose (counter-current) is not delivered and is counted in the report")
+                .hash_omit_default(),
         )
         .hash_omit_default();
     let erosion = Schema::object()
@@ -551,6 +563,65 @@ fn check_film(case: &Case, out: &mut Vec<Diagnostic>) {
             out.push(d(
                 "physics.gravity",
                 "the wall film is driven by gravity alone: physics.gravity must be a non-zero vector",
+            ));
+        }
+    }
+    check_film_gas(case, &names, out);
+}
+
+/// Checks of the gas drives of the wall film (ADR 0206 S2, E1 to E5), with the film enabled.
+fn check_film_gas(case: &Case, names: &[String], out: &mut Vec<Diagnostic>) {
+    let (rho_g, rho_l) = (gf(case, "physics.rho"), gf(case, "particles.density"));
+    if gb(case, "particles.film.gas_buoyancy") && rho_l > 0.0 && !(rho_g < rho_l) {
+        out.push(d(
+            "particles.film.gas_buoyancy",
+            format!("gas buoyancy needs a carrier density physics.rho ({rho_g}) below the liquid density particles.density ({rho_l}) (ADR 0206)"),
+        ));
+    }
+    if !gb(case, "particles.film.gas_shear") {
+        return;
+    }
+    let key = "particles.film.gas_shear";
+    let model = gs(case, "turbulence.model");
+    if !matches!(model.as_str(), "" | "laminar") {
+        out.push(d(
+            key,
+            format!("the gas shear of the film is the laminar wall stress of the carrier; it is not available with turbulence.model = \"{model}\" (ADR 0206)"),
+        ));
+    }
+    if gb(case, "dynamic_mesh.enabled") {
+        out.push(d(
+            key,
+            "the gas shear of the film needs walls at rest; it is not available with dynamic_mesh.enabled (ADR 0206)",
+        ));
+    }
+    for n in case.tree.names("sources").unwrap_or_default() {
+        let t = gs(case, &format!("sources.{n}.type"));
+        if matches!(t.as_str(), "rotating_frame" | "mrf") {
+            out.push(d(
+                key,
+                format!("the gas shear of the film is not available with a rotating frame (sources.{n}.type = \"{t}\") (ADR 0206)"),
+            ));
+        }
+    }
+    for n in names.iter().filter(|n| !n.is_empty()) {
+        let b = |f: &str| format!("boundaries.{n}.{f}");
+        let kind = gs(case, &b("velocity"));
+        if kind.is_empty() {
+            // no boundaries entry: Simulation::new reports the missing condition
+            continue;
+        }
+        let moving = vec3_of(case, &b("velocity_value"))
+            .ok()
+            .flatten()
+            .is_some_and(|v| v.iter().any(|x| *x != 0.0));
+        let expr = ["x", "y", "z"]
+            .iter()
+            .any(|c| !gs(case, &b(&format!("velocity_expression_{c}"))).is_empty());
+        if kind != "fixed" || moving || expr || !gs(case, &b("velocity_udf")).is_empty() {
+            out.push(d(
+                key,
+                format!("the gas shear of the film needs the film patch '{n}' to be a no-slip wall at rest (boundaries.{n}: velocity = \"fixed\" with velocity_value [0, 0, 0], no velocity_expression or velocity_udf) (ADR 0206)"),
             ));
         }
     }
@@ -1068,6 +1139,15 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
         };
         tr.set_film(spec)
             .map_err(|e| vec![d("particles.film.patches", e.to_string())])?;
+        let gas = FilmGas {
+            buoyancy: gb(case, "particles.film.gas_buoyancy"),
+            shear: gb(case, "particles.film.gas_shear"),
+        };
+        if gas != FilmGas::default() {
+            // ADR 0206 S2: only with a gas drive
+            tr.set_film_gas(gas)
+                .map_err(|e| vec![d("particles.film.enabled", e.to_string())])?;
+        }
     }
     if erosion(case) {
         // ADR 0197 P9: without a preset these are the three values as written

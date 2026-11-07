@@ -606,14 +606,21 @@ fn pc5_scope_of_the_rotating_frame_on_the_transient_path() {
         &format!("{}[dynamic_mesh]\nenabled = true\n", scope_text("pimple", &rf, "")),
         "dynamic_mesh.enabled",
     );
-    has(
-        &format!(
-            "{}[turbulence]\nmodel = \"k_omega_sst\"\n",
-            scope_text("pimple", &rf, "")
-        ),
-        "turbulence.model",
+    // ADR 0199 D5 (F-286) supersedes the last case: k_omega_sst with pimple and the frame is accepted, k_omega_sst with piso is
+    // located at turbulence.model
+    let sst = |alg: &str, source: &str| {
+        format!(
+            "{}[turbulence]\nmodel = \"k_omega_sst\"\nk_initial = 1e-4\nomega_initial = 1.0\n",
+            scope_text(alg, source, "")
+        )
+    };
+    assert!(
+        paths(&sst("pimple", &rf)).is_empty(),
+        "PC-5 (ADR 0199) k_omega_sst with pimple and the frame: {:?}",
+        paths(&sst("pimple", &rf))
     );
-    println!("PC-5: located errors at {at} (piso; mrf with pimple and piso; fractional step), dynamic_mesh.enabled, turbulence.model (k_omega_sst with pimple)");
+    has(&sst("piso", ""), "turbulence.model");
+    println!("PC-5: located errors at {at} (piso; mrf with pimple and piso; fractional step), dynamic_mesh.enabled, turbulence.model (k_omega_sst with piso); k_omega_sst with pimple and the frame accepted (ADR 0199)");
 }
 
 /// `coupled_body_pair_mean` of the built pimple solver.

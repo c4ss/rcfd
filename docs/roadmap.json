@@ -2248,9 +2248,9 @@
     "deps": [
       "F-246"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit is fixed by its registration ADR before any code. Registered diagnosis runs locate the growing mode by which the default steady simple/simplec kernel diverges on F-208's warped mesh W from n = 32 (ADR 0193 amendment 1: growth of about 1.8 times per iteration under every relaxation, viscosity, convection scheme, corrector count, pseudo-time, face_flux and SIMPLEC set-up tried; the pressure-velocity step from HbyA to the corrected velocity is suspected, not proven), and a fix makes the kernel converge on W at n = 32 and 64 under F-246's registered set-up, within limits fixed by its registration ADR, with the defaults bit-identical (baseline hashes unchanged) unless the maintainer lifts that rule for the fix. Afterwards F-246's missed M1 check on W (the ignored tests m1_w_v1_known_miss and m1_w_v2_known_miss) is run again with its registered set-up and limits unchanged; how the fix is switched on for that run is fixed by the registration ADR.",
-    "note": "From the maintainer's answer of 2026-11-06 to ADR 0193 Q9: option (b), as recommended (the evidence points at the pressure-velocity step, not at the face gradient), not (c), reopening the dropped warped-face item. W stays the binding warped mesh of F-246 and W2 is supplementary evidence only (ADR 0193 Q8 (a)). ADR 0193 amendment 1 found the divergence to be a property of the default kernel on W, not of the harness."
+    "note": "From the maintainer's answer of 2026-11-06 to ADR 0193 Q9: option (b), as recommended (the evidence points at the pressure-velocity step, not at the face gradient), not (c), reopening the dropped warped-face item. W stays the binding warped mesh of F-246 and W2 is supplementary evidence only (ADR 0193 Q8 (a)). ADR 0193 amendment 1 found the divergence to be a property of the default kernel on W, not of the harness. RESULT (ADR 0198, branch f285-warped-kernel, not merged): the deferred non-orthogonal correction of the pressure equation diverges on W from n = 32 (its step has an eigenvalue of about -1.18; 0.86 at n = 16); the opt-in library field SimpleSolver::implicit_non_orth_pressure solves that part implicitly (GMRES) and, with face_flux, the kernel converges on W at n = 16, 32 and 64 (218, 716, 2489 iterations), converged results elsewhere unchanged to 3e-12; F-246's M1 on W run again with it is met (skew_corrected 1.994 / 1.780, body_force_weighted 1.990 / 1.662, limits 1.7 / 1.2); defaults unchanged; the status is left to the maintainer (ADR 0198 Q1 to Q5)."
   },
   {
     "id": "F-286",
@@ -2259,9 +2259,9 @@
     "deps": [
       "F-043"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit is fixed by its registration ADR before any code. turbulence.model = k_omega_sst runs with the pimple algorithm on a static mesh, which the case tree refuses today with a located error at turbulence.model (ADR 0183 PC-5): the k and omega equations get their time derivative and are updated within the outer iterations (ADR 0183 amendment P-C, question 8 (a)), also with a rotating_frame source, so that check H of ADR 0183 can run as registered; the transient terms are checked against closed forms named in the ADR, within limits fixed by its registration ADR; steady SST runs and every existing transient run are unchanged bit for bit (baseline hashes unchanged).",
-    "note": "Prerequisite of EXP-ROT check H (ADR 0183; the experiment's roadmap item F-276 is on the unmerged branch m0-gate-roadmap). From the maintainer's answer of 2026-11-06 to question 8 of ADR 0183 amendment P-C: transient SST is its own item, and check H stays NOT RUNNABLE until it lands. k-omega SST on moving meshes is another item (F-277 on the same branch). ADR 0136 lists URANS as missing."
+    "note": "Prerequisite of EXP-ROT check H (ADR 0183; the experiment's roadmap item F-276 is on the unmerged branch m0-gate-roadmap). From the maintainer's answer of 2026-11-06 to question 8 of ADR 0183 amendment P-C: transient SST is its own item, and check H stays NOT RUNNABLE until it lands. k-omega SST on moving meshes is another item (F-277 on the same branch). ADR 0136 lists URANS as missing. BUILT (ADR 0199, the registration of F-286, 2026-11-06, branch f286-transient-sst, not merged): k_omega_sst runs with pimple on a static mesh, one sweep with the time derivative of solver.time_scheme at the start of every outer iteration (piso, k-epsilon and SA without DES stay refused); the decay recursions and closed forms, the k budget, the steady state against SIMPLEC (1.7e-9) and the rotating frame meet their limits, defaults bit-identical; the case-tree BDF2 order check is a known miss (p 2.4 to 2.7, pre-asymptotic); check H's case text builds and its smoke is finite."
   },
   {
     "id": "F-287",
@@ -2271,9 +2271,9 @@
       "F-262",
       "F-274"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit is fixed by its registration ADR before any code. A run setting that the runner passes to rcfd run --continue-from (a change to RunSettings and the launch; ADR 0189 Q2 (d)) and a run setting for the step cap (ADR 0189 Q3 (d)), so that in project mode a chained design study with several conditions, a study with its own max_steps and an operating map (design_run_operating_map) are evaluated on the runner instead of in the server process; their records match the in-process evaluator for the same cases within the tolerance fixed by its registration ADR, and a run without the new settings keeps the bytes of its run.json and its results.",
-    "note": "From the maintainer's answers of 2026-11-06 to ADR 0189 Q2 and Q3: option (d) of each, as recommended; until this lands such studies stay in the server process (option (a), as built). Operating maps move with it (ADR 0189 Q2). It is also the project-mode equivalent of run_headless's continue_from that ADR 0195 Q2 names. A new run-record field needs the lead's approval (ADR 0130)."
+    "note": "From the maintainer's answers of 2026-11-06 to ADR 0189 Q2 and Q3: option (d) of each, as recommended; until this lands such studies stay in the server process (option (a), as built). Operating maps move with it (ADR 0189 Q2). It is also the project-mode equivalent of run_headless's continue_from that ADR 0195 Q2 names. A new run-record field needs the lead's approval (ADR 0130). PARTIAL (ADR 0200, the registration of F-287, 2026-11-06, branch f287-f288-runner, not merged): run.json settings gains continue_from (a run id) and max_steps, each written only when set (rcfd_runner::records::LaunchSettings, read beside RunSettings so that the Studio's struct literal is unchanged); the runner passes rcfd run --continue-from runs/<id>/output/restart.rcfd and the new rcfd run --max-steps (the drive's step cap); with --project a chained study, a study with its own max_steps and design_run_operating_map run on the runner, a chained condition or map point continuing from the run before when its restart file fits; a run continued after 25 steps ends where a run of 50 steps does, bit for bit (R-1c); on the 16 x 16 cavity the continued conditions and map points agree with the in-process chain to 5.6e-10 and 6.7e-10 relative on lid_drag (limit 1e-4), the cold and step-capped runs bit for bit (C-CH, C-MS, C-MAP); design_run_operating_map has the class execute with --project. Open: the two settings need the lead's approval (ADR 0130, ADR 0200 Q1); ADR 0200 Q2 to Q7 (a source run that has not ended, what continue_from names, tags of map runs, the class of design_run_operating_map, the iteration cap of a continued run, a condition with another mesh of the same size)."
   },
   {
     "id": "F-288",
@@ -2282,9 +2282,9 @@
     "deps": [
       "F-274"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit is fixed by its registration ADR before any code. In project mode, before a design-study candidate is submitted, the server adopts a run of the project's runner with the same tags (study, variant, condition), case snapshot hash and entries, waiting for it or reading its metrics.json (ADR 0189 Q5 (b)); after the MCP server is stopped during a study and started again, the next call submits no second run for a candidate that has one, and the adopted records equal those of a study that was not interrupted, within limits fixed by its registration ADR; a candidate without a matching run is submitted as before.",
-    "note": "From the maintainer's answer of 2026-11-06 to ADR 0189 Q5: option (b), as recommended. Until this lands, runs that outlive a call are submitted again (option (a), as built)."
+    "note": "From the maintainer's answer of 2026-11-06 to ADR 0189 Q5: option (b), as recommended. Until this lands, runs that outlive a call are submitted again (option (a), as built). PARTIAL (ADR 0201, the registration of F-288, 2026-11-06, branch f287-f288-runner, not merged): before a study's run is submitted, a run of the project with the same tags, case, case bytes, entries, launch settings and solver version that has not failed or been cancelled is adopted, waited for or read from its metrics.json, and the result gains runs_adopted; an rcfd-mcp killed during a three-point study and started again made no new run and adopted the three, its records bit for bit those of an uninterrupted study, and a chained study killed after two of its runs ended with exactly one run per variant and condition (A-R); ten decoys that differ in one item of the key, or failed or were cancelled, were not adopted (A-N). Open: ADR 0201 Q1 to Q5 (the solver version in the key, failed runs, operating maps, the index, runs of an earlier definition)."
   },
   {
     "id": "F-289",
@@ -2327,9 +2327,9 @@
     "deps": [
       "F-253"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit is fixed by its registration ADR before any code. Two opt-in additions to the film of F-253: gas buoyancy, the film driven by (rho_l - rho_g) g_t in place of rho_l g_t (ADR 0192 Q2 (b)), and gas shear, a shear-driven closure checked against h = (2 mu_l Gamma / (rho_l tau_g))^(1/2) for a film driven by shear alone (ADR 0192 Q3 (a)); each meets a closed form derived in the ADR within limits fixed by its registration ADR, the parcel mass ledger of F-253 balances, and runs without them are unchanged bit for bit (F-253's checks, the records R1 and R2 and the baseline hashes unchanged).",
-    "note": "From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended leaving them out until a case needs them). The film of F-253 stays without them."
+    "note": "From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended leaving them out until a case needs them). The film of F-253 stays without them. PARTIAL (ADR 0206, the registration of F-292, 2026-11-06, branch f292-film-gas, not merged): every registered check is met; marking the item done is the maintainer's (ADR 0206 Q1). Opt-in keys particles.film.gas_buoyancy and gas_shear (hash_omit_default; library FilmGas, Tracker::set_film_gas): the buoyant film under a gas of 250 kg/m^3 is within 3.3e-15 of h_B as a window average, the shear-driven film under 0.1 Pa within 2.7e-14 of (2 mu_l Gamma/(rho_l tau))^(1/2), the ledger closes to 1.8e-12, the tree equals the library bit for bit, seven mutations made their checks fail, and runs without the keys are unchanged bit for bit (R1 to R7, baseline hashes, H1). Open: ADR 0206 Q2 to Q6."
   },
   {
     "id": "F-293",
@@ -2343,5 +2343,38 @@
     "status": "todo",
     "acceptance": "Every limit is fixed by its registration ADR, written before any code and after the maintainer's worktree studio-case-lineage has landed on main: (1) the Studio's run starts and controls are journaled with the Studio's actor, one with_actor at each of the four RunService constructions (ADR 0188 Q3 (a)); (2) a Studio panel lists the change feed with who, what and why, and a notes/ list (ADR 0188 Q5 (a)); (3) box_3d is in the Studio's and the workspace start plan's generator lists, with a cell estimate (ADR 0191 Q4 (a)); (4) the MCP server's mesh builds use the Studio's size limits (2 000 000 estimated cells, 256 MiB) through one preview::estimate moved from the Studio into the workspace layer, which the Studio's preview also uses (ADR 0187 Q3 (b)). Each part has named tests, and the existing Studio and project-tool tests pass.",
     "note": "From the maintainer's answers of 2026-11-06: the maintainer lands studio-case-lineage first, and these follow (ADR 0187 Q3, ADR 0188 Q3 and Q5, ADR 0191 Q4). Agents do not touch that worktree. The third change ADR 0188 Q5 names, the run worker reading the feed in place of its own poll, was not part of the answer and stays an open question of ADR 0188."
+  },
+  {
+    "id": "F-294",
+    "title": "Transient k-epsilon and Spalart-Allmaras (without DES) on pimple",
+    "phase": 3,
+    "deps": [
+      "F-286"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. k-epsilon and Spalart-Allmaras without DES run with the pimple algorithm on a static mesh, which the case tree refuses today; each model gets its own registration with its time derivative (the existing k-epsilon kernel has none, and the Spalart-Allmaras one is once per step and Euler only), checked against closed forms named in the ADR; steady runs and every existing transient run are unchanged bit for bit.",
+    "note": "From ADR 0199 (F-286) question 2, recommendation taken by the lead: a follow-up item, each model with its own registration. SA-DES and the Reynolds stress model stay on their once-per-step path (ADR 0199 question 3), because moving them would change existing transient results."
+  },
+  {
+    "id": "F-295",
+    "title": "One diffusivity per periodic seam pair",
+    "phase": 3,
+    "deps": [
+      "F-286"
+    ],
+    "status": "done",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy viscosity differs; the option is opt-in with defaults bit-identical (baseline hashes unchanged), and a global budget on a periodic case with a differing eddy viscosity is checked within a limit fixed by the ADR.",
+    "note": "From ADR 0199 (F-286) amendment 2 and question 5, recommendation taken by the lead: found while correcting the F-286 set-ups; each face of a seam pair takes the diffusivity of its own owner cell. FAN-01 and EXP-ROT check H both have rotational seams, so this item comes before check H is read."
+  },
+  {
+    "id": "F-296",
+    "title": "One diffusivity per periodic seam pair for the other models",
+    "phase": 3,
+    "deps": [
+      "F-295"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit is fixed by its registration ADR before any code. The rule of F-295 (turbulence.periodic_seam.diffusivity = \"pair\") is applied to the face viscosity or diffusivity of k-epsilon, Spalart-Allmaras, the Reynolds stress model, the subgrid and mixing-length models and the rheology face viscosity, each with a global-budget check on a periodic box with a differing viscosity (the owner rule must miss it, the pair rule must meet it); defaults bit-identical (baseline hashes unchanged).",
+    "note": "From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set pair before H runs. Question 3: the default stays owner."
   }
 ]

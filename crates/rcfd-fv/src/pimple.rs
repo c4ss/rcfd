@@ -618,6 +618,9 @@ pub struct OuterUpdate {
     pub face_jump: Option<FaceJump>,
     /// New fixed kinematic pressure of named pressure patches.
     pub patch_pressures: Vec<(String, f64)>,
+    /// Face viscosity of this outer iteration's momentum predictor and of the solver from then on (`PimpleSolver::nu_face`),
+    /// e.g. from a turbulence sweep made at the start of the outer iteration (F-286, ADR 0199 D2); `None` keeps the present one.
+    pub nu_face: Option<Vec<f64>>,
 }
 
 /// Hook of [`PimpleSolver::step_with`]: called at the start of every outer iteration with the current velocity and flux.
@@ -868,7 +871,7 @@ impl PimpleSolver {
         let s = self.settings.clone();
         self.step_no += 1;
 
-        let gamma_nu = match &self.nu_face {
+        let mut gamma_nu = match &self.nu_face {
             Some(v) => v.clone(),
             None => uniform_gamma(&g, s.nu),
         };
@@ -931,6 +934,11 @@ impl PimpleSolver {
                 self.face_jump = up.face_jump;
                 for (patch, pk) in up.patch_pressures {
                     let _ = self.p.set_bc(&g, &patch, Box::new(FixedValue::scalar(pk)));
+                }
+                if let Some(nu) = up.nu_face {
+                    // ADR 0199 D2: the face viscosity of this outer iteration
+                    gamma_nu = nu.clone();
+                    self.nu_face = Some(nu);
                 }
             }
             // effective body acceleration of this outer iteration: the static part plus the hook's source

@@ -99,7 +99,8 @@ Project folder contract (agents code against it; later changes are additive and 
   meshes/                  mesh files or recipes referenced by cases
   runs/<run-id>/           run-id = r-<UTC yyyymmddThhmmss>-<4 hex>, sortable
     run.json               immutable record: case snapshot hash, mesh hash, solver version, settings, created
-                           (a design study's run also study, variant and condition; ADR 0189; absent on every other run)
+                           (a design study's run also study, variant and condition; ADR 0189; absent on every other run;
+                           settings.continue_from, a run id, and settings.max_steps only on a run that sets them; ADR 0200)
     case.snapshot          copy of the case as run
     status.json            state (queued, running, paused, finished, failed, cancelled), step, time, pid, updated; replaced atomically
     events.jsonl           append-only events (state changes, warnings, stop reasons)

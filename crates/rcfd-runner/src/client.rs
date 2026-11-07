@@ -3,7 +3,7 @@
 //! Every call works on the project folder; only [`Client::ensure_runner`] starts a process. Control calls
 //! write request files the solver and the runner watch, so they also work while no runner is alive.
 
-use crate::records::{RunSettings, RunState, RunStatus};
+use crate::records::{LaunchSettings, RunSettings, RunState, RunStatus};
 use crate::runner::{dot_dir, sibling_exe, EXIT_ALREADY_RUNNING};
 use crate::store::{extra, FsStore, RunStore, RunTags};
 use crate::sys;
@@ -206,14 +206,42 @@ impl Client {
 
     /// [`Client::submit`] with the run's design-study `tags` in `run.json` (ADR 0189 S6).
     pub fn submit_tagged(&self, case: &Path, settings: &RunSettings, tags: &RunTags) -> Result<String, String> {
-        let version = version_cmd(&sibling_of(&self.runner_exe, "rcfd"))
+        self.submit_with(case, settings, &LaunchSettings::default(), tags)
+    }
+
+    /// The `solver_version` a run submitted now records: the output of `rcfd --version` next to the runner, trimmed
+    /// (`None` when it does not run; the record then says `unknown`).
+    pub fn solver_version(&self) -> Option<String> {
+        version_cmd(&sibling_of(&self.runner_exe, "rcfd"))
             .0
             .output()
             .ok()
             .filter(|o| o.status.success())
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    }
+
+    /// [`Client::submit_tagged`] with the run's launch settings (ADR 0200 S2): `continue_from` must be the id of a run
+    /// folder of this project and `max_steps` at least 1, else nothing is written. Without launch settings the run is the
+    /// one `submit_tagged` makes.
+    pub fn submit_with(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        tags: &RunTags,
+    ) -> Result<String, String> {
+        if let Some(src) = &launch.continue_from {
+            check_id(src).map_err(|e| format!("continue_from: {e}"))?;
+            if !self.store.run_dir(src).join("run.json").is_file() {
+                return Err(format!("continue_from: no run {src} in this project"));
+            }
+        }
+        if launch.max_steps == Some(0) {
+            return Err("max_steps: must be at least 1".into());
+        }
+        let version = self.solver_version();
         self.store
-            .create_run_tagged(case, settings, version, tags)
+            .create_run_with(case, settings, launch, version, tags)
             .map_err(|e| format!("{}: {e}", case.display()))
     }
 

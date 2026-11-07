@@ -6,7 +6,7 @@
 //! the runner and a later runner adopts it. Pause and cancel are request files in the run folder that the
 //! solver itself watches (`--pause-file`, `--stop-file`). ADR 0123.
 
-use crate::records::{self, RunRecord, RunSettings, RunState, RunStatus};
+use crate::records::{self, LaunchSettings, RunRecord, RunSettings, RunState, RunStatus};
 use crate::store::{event_kind, extra, state_event, FsStore, RunStore};
 use crate::sys;
 use serde::{Deserialize, Serialize};
@@ -645,10 +645,47 @@ impl<S: RunStore> Runner<S> {
         }
     }
 
+    /// The restart file a run with `continue_from` starts from (ADR 0200 S3): `runs/<id>/output/restart.rcfd` of a run of
+    /// this project that has ended; the reason when there is none.
+    fn continue_file(&self, launch: &LaunchSettings) -> Result<Option<PathBuf>, String> {
+        let Some(src) = &launch.continue_from else {
+            return Ok(None);
+        };
+        if !rcfd_project::runid::is_run_id(src) {
+            return Err(format!(
+                "continue_from: '{src}' is not a run id (run.json settings.continue_from)"
+            ));
+        }
+        let st = self
+            .store
+            .read_status(src)
+            .map_err(|e| format!("continue_from: run {src}: {e}"))?;
+        if !st.state.is_terminal() {
+            return Err(format!(
+                "continue_from: run {src} has not ended (it is {}); a run continues only from the restart file of an ended run",
+                crate::client::state_name(st.state)
+            ));
+        }
+        let file = self.dir(src).join(extra::OUTPUT).join("restart.rcfd");
+        if !file.is_file() {
+            return Err(format!(
+                "continue_from: run {src} left no restart file {}",
+                file.display()
+            ));
+        }
+        Ok(Some(file))
+    }
+
     fn launch(&mut self, i: usize) {
         let (id, rec, settings, mem_mb) = {
             let p = &self.pending[i];
             (p.id.clone(), p.rec.clone(), p.settings.clone(), p.mem_mb.unwrap_or(0))
+        };
+        // ADR 0200 S3: the launch settings, checked before anything is started
+        let started = LaunchSettings::of(&rec).and_then(|l| Ok((self.continue_file(&l)?, l.max_steps)));
+        let (continue_file, max_steps) = match started {
+            Ok(s) => s,
+            Err(why) => return self.fail_pending(&id, why),
         };
         let dir = self.dir(&id);
         let mut cmd = self.solver_cmd(&rec, &settings, &dir);
@@ -667,6 +704,12 @@ impl<S: RunStore> Runner<S> {
             .arg("--store-dir")
             .arg(dir.join(extra::FIELDS))
             .arg("--status-monitors");
+        if let Some(f) = &continue_file {
+            cmd.arg("--continue-from").arg(f);
+        }
+        if let Some(n) = max_steps {
+            cmd.arg("--max-steps").arg(n.to_string());
+        }
         let log = OpenOptions::new().create(true).append(true).open(dir.join("log.txt"));
         cmd.stdout(log.map_or_else(|_| Stdio::null(), Stdio::from));
         sys::no_window(&mut cmd);

@@ -363,6 +363,17 @@ impl ParticleRun {
                 "max_thickness": f.max_thickness(),
                 "max_reynolds": f.max_reynolds(),
             });
+            let g = f.gas();
+            if g != rcfd_particles::FilmGas::default() {
+                // ADR 0206 S3: only with a gas drive
+                v["film"]["gas"] = json!({
+                    "buoyancy": g.buoyancy,
+                    "shear": g.shear,
+                    "gas_density": f.gas_density(),
+                    "max_shear": f.max_shear(),
+                    "opposed": f.opposed(),
+                });
+            }
         }
         if let Some(er) = t.erosion() {
             // ADR 0194 S3: only when erosion is on; rates over the tracked time

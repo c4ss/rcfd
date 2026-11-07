@@ -3,7 +3,7 @@
 //! The runner and the client reach the run records only through [`RunStore`]; [`FsStore`] implements it on
 //! the section-8 folder layout with `rcfd-project`'s records and helpers (`atomic`, `jsonl`, `runid`; ADR 0130 D1).
 
-use crate::records::{self, io_error, RunRecord, RunSettings, RunState, RunStatus};
+use crate::records::{self, io_error, LaunchSettings, RunRecord, RunSettings, RunState, RunStatus};
 use rcfd_project::{atomic, jsonl, paths, runid};
 use serde_json::{json, Value};
 use std::io;
@@ -91,6 +91,20 @@ impl FsStore {
         solver_version: Option<String>,
         tags: &RunTags,
     ) -> io::Result<String> {
+        self.create_run_with(case, settings, &LaunchSettings::default(), solver_version, tags)
+    }
+
+    /// [`FsStore::create_run_tagged`] with the run's launch settings (`continue_from`, `max_steps`) in `run.json`
+    /// `settings` (ADR 0200 S2); without them the run is the one `create_run_tagged` makes, byte for byte. The settings
+    /// are not checked here (see [`crate::client::Client::submit_with`]).
+    pub fn create_run_with(
+        &self,
+        case: &Path,
+        settings: &RunSettings,
+        launch: &LaunchSettings,
+        solver_version: Option<String>,
+        tags: &RunTags,
+    ) -> io::Result<String> {
         let text = std::fs::read(case)?;
         let case_abs = std::env::current_dir()?.join(case);
         let case_dir = case_abs.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -109,7 +123,7 @@ impl FsStore {
             mesh: None,
             mesh_hash: None,
             solver_version: solver_version.unwrap_or_else(|| rcfd_project::records::UNKNOWN_SOLVER_VERSION.into()),
-            settings: serde_json::to_value(settings).map_err(bad)?,
+            settings: launch.merged(settings).map_err(bad)?,
             created: records::now_iso(),
             case_source: Some(case_abs.display().to_string()),
             case_dir: Some(case_dir.display().to_string()),

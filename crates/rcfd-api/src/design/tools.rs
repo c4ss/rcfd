@@ -6,8 +6,9 @@
 //! All paths go through [`Service::sandbox_path`]; names are restricted to `[A-Za-z0-9_.-]` without a leading dot.
 //!
 //! [`call_with`] is [`call`] with another evaluator for `design.run_study` and `design.evaluate`, chosen per study by an
-//! [`EvaluatorSource`] (ADR 0189 S2): the project workspace evaluates on the project's runner that way. Everything else of
-//! those methods (loading the study, the allowance, the store and its signature, the result) is the same code.
+//! [`EvaluatorSource`] (ADR 0189 S2), and for `design.run_map`, chosen per map ([`EvaluatorSource::map_evaluator`], ADR 0200
+//! S8): the project workspace evaluates on the project's runner that way. Everything else of those methods (loading the
+//! study, the allowance, the store and its signature, the map's table and cache, the result) is the same code.
 
 use super::case_eval::{CaseEvaluator, CaseMapEvaluator, RunLimits};
 use super::ledger;
@@ -564,11 +565,38 @@ pub struct StudyRun<'a> {
     pub limits: RunLimits,
 }
 
-/// Chooses the evaluator of `design.run_study` and `design.evaluate` for a loaded study ([`call_with`], ADR 0189 S2).
+/// An operating map about to run, as an [`EvaluatorSource`] sees it (ADR 0200 S8).
+#[derive(Debug)]
+pub struct MapRun<'a> {
+    /// The base case file: the study's base case, or the map's `base`.
+    pub base_path: &'a Path,
+    /// The settings applied to the base case file before each point's own, in order: a study candidate's parameter
+    /// targets and its condition's settings, then the map's `overrides`.
+    pub prefix: &'a [(String, Value)],
+    /// The base case as the in-process evaluator runs it (the file with `prefix` applied).
+    pub base: &'a Case,
+    /// The map's own step cap (`max_steps` of the call, at most `max_steps_per_call`; `None` when the call gives none).
+    pub max_steps: Option<usize>,
+    /// The limits the in-process evaluator runs a point with.
+    pub limits: RunLimits,
+    /// The folder of the map's tables.
+    pub out_dir: &'a Path,
+}
+
+/// Chooses the evaluator of `design.run_study` and `design.evaluate` for a loaded study ([`call_with`], ADR 0189 S2), and
+/// of `design.run_map` for a map (ADR 0200 S8).
 pub trait EvaluatorSource {
     /// The evaluator of `study`, or `None` for the in-process [`CaseEvaluator`]. An error ends the call before the study's
     /// store is opened, so nothing is written.
     fn evaluator<'s>(&'s self, study: &StudyRun<'_>) -> Rpc<Option<Box<dyn Evaluator + 's>>>;
+
+    /// The point evaluator of `map`, whose state is the id of the run the next point may start from, or `None` (the
+    /// default) for the in-process [`CaseMapEvaluator`]. Asked after the map's stored table was looked for, before any
+    /// point runs; an error ends the call with nothing written.
+    fn map_evaluator<'s>(&'s self, map: &MapRun<'_>) -> Rpc<Option<Box<dyn PointEvaluator<State = String> + 's>>> {
+        let _ = map;
+        Ok(None)
+    }
 }
 
 impl Loaded {
@@ -586,6 +614,11 @@ impl Loaded {
 }
 
 // ---------------------------------------------------------------- record output
+
+/// A parameter target's value as `CaseEvaluator::build_case` writes it.
+fn num(x: f64) -> Value {
+    serde_json::Number::from_f64(x).map_or(Value::Null, Value::Number)
+}
 
 fn params_obj(def: &StudyDef, x: &[f64]) -> Value {
     Value::Object(
@@ -671,12 +704,13 @@ pub fn call(svc: &Arc<Service>, method: &str, p: &Value) -> Rpc {
     }
 }
 
-/// [`call`], with the evaluator of `design.run_study` and `design.evaluate` chosen by `source` (ADR 0189 S2); every other
-/// method is [`call`]'s.
+/// [`call`], with the evaluator of `design.run_study` and `design.evaluate` chosen by `source` (ADR 0189 S2), and the point
+/// evaluator of `design.run_map` (ADR 0200 S8); every other method is [`call`]'s.
 pub fn call_with(svc: &Arc<Service>, method: &str, p: &Value, source: &dyn EvaluatorSource) -> Rpc {
     match method {
         "design.run_study" => run_study_with(svc, p, Some(source)),
         "design.evaluate" => evaluate_with(svc, p, Some(source)),
+        "design.run_map" => run_map_with(svc, p, Some(source)),
         _ => call(svc, method, p),
     }
 }
@@ -817,6 +851,21 @@ impl PointEvaluator for Counting<'_> {
     }
 }
 
+/// Counts the points of a map evaluator from an [`EvaluatorSource`] (ADR 0200 S8); its state is the id of the run the next
+/// point may start from.
+struct CountingFrom<'a, 'e> {
+    inner: &'a (dyn PointEvaluator<State = String> + 'e),
+    runs: &'a std::sync::atomic::AtomicUsize,
+}
+
+impl PointEvaluator for CountingFrom<'_, '_> {
+    type State = String;
+    fn run(&self, point: &MapPoint, warm: Option<&String>) -> PointResult<String> {
+        self.runs.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.inner.run(point, warm)
+    }
+}
+
 fn parse_axes(p: &Value) -> Rpc<Vec<MapPoint>> {
     if let Some(pts) = p.get("points") {
         let list = pts
@@ -877,6 +926,10 @@ fn parse_axes(p: &Value) -> Rpc<Vec<MapPoint>> {
 }
 
 fn run_map(svc: &Service, p: &Value) -> Rpc {
+    run_map_with(svc, p, None)
+}
+
+fn run_map_with(svc: &Service, p: &Value, source: Option<&dyn EvaluatorSource>) -> Rpc {
     let out_dir = svc.sandbox_path(str_arg(p, "out_dir")?)?;
     let points = parse_axes(p)?;
     let cap = svc.config().max_design_evaluations;
@@ -886,7 +939,9 @@ fn run_map(svc: &Service, p: &Value) -> Rpc {
             points.len()
         )));
     }
-    let (mut base, base_desc) = if p.get("dir").is_some() {
+    // ADR 0200 S8: the base case file and the settings applied to it before each point's own, for a source's evaluator
+    let mut prefix: Vec<(String, Value)> = Vec::new();
+    let (mut base, base_desc, base_path) = if p.get("dir").is_some() {
         let l = load_study(svc, p)?;
         let x = if p.get("params").is_some() {
             l.x_from(p)?
@@ -908,18 +963,32 @@ fn run_map(svc: &Service, p: &Value) -> Rpc {
             None => None,
         };
         let c = l.evaluator(svc).build_case(&l.def, &x, cond).map_err(bad)?;
-        (c, format!("study {} {}", l.dir.display(), params_obj(&l.def, &x)))
+        for (q, &v) in l.def.params.iter().zip(&x) {
+            for t in &q.targets {
+                prefix.push((t.path.clone(), num(t.scale * v + t.offset)));
+            }
+        }
+        if let Some(cond) = cond {
+            prefix.extend(cond.set.iter().cloned());
+        }
+        (
+            c,
+            format!("study {} {}", l.dir.display(), params_obj(&l.def, &x)),
+            l.meta.base_path.clone(),
+        )
     } else {
         let b = svc.sandbox_path(str_arg(p, "base")?)?;
-        (load_case(svc, &b)?, b.display().to_string())
+        (load_case(svc, &b)?, b.display().to_string(), b)
     };
     if let Some(ov) = p.get("overrides") {
         for (path, v) in json_to_pairs(ov, "overrides")? {
             crate::study::apply_value(&mut base, &path, &v).map_err(|e| bad(format!("overrides: {path}: {e}")))?;
+            prefix.push((path, v));
         }
     }
     let cfg = svc.config();
-    let max_steps = opt_usize(p, "max_steps")?
+    let own_max_steps = opt_usize(p, "max_steps")?;
+    let max_steps = own_max_steps
         .unwrap_or(cfg.max_steps_per_call)
         .min(cfg.max_steps_per_call);
     let opts = MapOptions {
@@ -962,17 +1031,32 @@ fn run_map(svc: &Service, p: &Value) -> Rpc {
         }
     }
     let runs = std::sync::atomic::AtomicUsize::new(0);
-    let ev = Counting {
-        inner: CaseMapEvaluator {
-            base,
-            limits: RunLimits {
-                max_cells: cfg.max_cells,
-                max_steps: Some(max_steps),
-            },
-        },
-        runs: &runs,
+    let limits = RunLimits {
+        max_cells: cfg.max_cells,
+        max_steps: Some(max_steps),
     };
-    let outcome = opmap::run_and_write(&points, &ev, &opts).map_err(|e| RpcError::new(code::INTERNAL, e))?;
+    let other = match source {
+        Some(s) => s.map_evaluator(&MapRun {
+            base_path: &base_path,
+            prefix: &prefix,
+            base: &base,
+            max_steps: own_max_steps.map(|m| m.min(cfg.max_steps_per_call)),
+            limits,
+            out_dir: &out_dir,
+        })?,
+        None => None,
+    };
+    let outcome = match other.as_deref() {
+        Some(inner) => opmap::run_and_write(&points, &CountingFrom { inner, runs: &runs }, &opts),
+        None => {
+            let ev = Counting {
+                inner: CaseMapEvaluator { base, limits },
+                runs: &runs,
+            };
+            opmap::run_and_write(&points, &ev, &opts)
+        }
+    }
+    .map_err(|e| RpcError::new(code::INTERNAL, e))?;
     write_text(&meta_path, &json!({"signature": sig}).to_string())?;
     Ok(json!({
         "cached": false, "evaluations_run": runs.load(std::sync::atomic::Ordering::SeqCst), "state": outcome.state,

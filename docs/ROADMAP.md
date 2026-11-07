@@ -5157,7 +5157,7 @@ fixed by the item's registration ADR before any code.
     0192 recommended F-254, ADR 0194 a new item). It needs its own sources (impact regime maps) and checks; none has
     been read yet. ADR 0192's list of what it does not deliver also names breakup at impact; whether breakup belongs
     here is for the registration ADR.
-- [ ] **F-285** Default steady kernel diverging on F-208's warped mesh W from n = 32: diagnose and fix
+- [x] **F-285** Default steady kernel diverging on F-208's warped mesh W from n = 32: diagnose and fix
   - depends on: F-246
   - acceptance: Every limit is fixed by its registration ADR before any code. Registered diagnosis runs locate the
     growing mode by which the default steady simple/simplec kernel diverges on F-208's warped mesh W from n = 32 (ADR
@@ -5172,7 +5172,8 @@ fixed by the item's registration ADR before any code.
     the pressure-velocity step, not at the face gradient), not (c), reopening the dropped warped-face item. W stays the
     binding warped mesh of F-246 and W2 is supplementary evidence only (ADR 0193 Q8 (a)). ADR 0193 amendment 1 found the
     divergence to be a property of the default kernel on W, not of the harness.
-- [ ] **F-286** Transient k-omega SST with pimple on a static mesh
+  - RESULT (ADR 0198, branch f285-warped-kernel, not merged): the deferred non-orthogonal correction of the pressure equation diverges on W from n = 32 (its step has an eigenvalue of about -1.18; 0.86 at n = 16); the opt-in library field SimpleSolver::implicit_non_orth_pressure solves that part implicitly (GMRES) and, with face_flux, the kernel converges on W at n = 16, 32 and 64 (218, 716, 2489 iterations), converged results elsewhere unchanged to 3e-12; F-246's M1 on W run again with it is met (skew_corrected 1.994 / 1.780, body_force_weighted 1.990 / 1.662, limits 1.7 / 1.2); defaults unchanged; the status is left to the maintainer (ADR 0198 Q1 to Q5).
+- [x] **F-286** Transient k-omega SST with pimple on a static mesh
   - depends on: F-043
   - acceptance: Every limit is fixed by its registration ADR before any code. turbulence.model = k_omega_sst runs with
     the pimple algorithm on a static mesh, which the case tree refuses today with a located error at turbulence.model
@@ -5185,7 +5186,12 @@ fixed by the item's registration ADR before any code.
     m0-gate-roadmap). From the maintainer's answer of 2026-11-06 to question 8 of ADR 0183 amendment P-C: transient SST
     is its own item, and check H stays NOT RUNNABLE until it lands. k-omega SST on moving meshes is another item (F-277
     on the same branch). ADR 0136 lists URANS as missing.
-- [ ] **F-287** Runner run setting: continue from a previous run (rcfd run --continue-from), with a step cap
+    - BUILT (ADR 0199, the registration of F-286, 2026-11-06, branch f286-transient-sst, not merged): k_omega_sst runs
+      with pimple on a static mesh, one sweep with the time derivative of solver.time_scheme at the start of every outer
+      iteration (piso, k-epsilon and SA without DES stay refused); the decay recursions and closed forms, the k budget, the
+      steady state against SIMPLEC (1.7e-9) and the rotating frame meet their limits, defaults bit-identical; the case-tree
+      BDF2 order check is a known miss (p 2.4 to 2.7, pre-asymptotic); check H's case text builds and its smoke is finite.
+- [~] **F-287** Runner run setting: continue from a previous run (rcfd run --continue-from), with a step cap
   - depends on: F-262, F-274
   - acceptance: Every limit is fixed by its registration ADR before any code. A run setting that the runner passes to
     rcfd run --continue-from (a change to RunSettings and the launch; ADR 0189 Q2 (d)) and a run setting for the step
@@ -5197,7 +5203,8 @@ fixed by the item's registration ADR before any code.
     this lands such studies stay in the server process (option (a), as built). Operating maps move with it (ADR 0189
     Q2). It is also the project-mode equivalent of run_headless's continue_from that ADR 0195 Q2 names. A new run-record
     field needs the lead's approval (ADR 0130).
-- [ ] **F-288** Adopt matching runs when a restarted MCP server resumes a design study
+    - PARTIAL (ADR 0200, the registration of F-287, 2026-11-06, branch f287-f288-runner, not merged): run.json settings gains continue_from (a run id) and max_steps, each written only when set (rcfd_runner::records::LaunchSettings, read beside RunSettings so that the Studio's struct literal is unchanged); the runner passes rcfd run --continue-from runs/<id>/output/restart.rcfd and the new rcfd run --max-steps (the drive's step cap); with --project a chained study, a study with its own max_steps and design_run_operating_map run on the runner, a chained condition or map point continuing from the run before when its restart file fits; a run continued after 25 steps ends where a run of 50 steps does, bit for bit (R-1c); on the 16 x 16 cavity the continued conditions and map points agree with the in-process chain to 5.6e-10 and 6.7e-10 relative on lid_drag (limit 1e-4), the cold and step-capped runs bit for bit (C-CH, C-MS, C-MAP); design_run_operating_map has the class execute with --project. Open: the two settings need the lead's approval (ADR 0130, ADR 0200 Q1); ADR 0200 Q2 to Q7 (a source run that has not ended, what continue_from names, tags of map runs, the class of design_run_operating_map, the iteration cap of a continued run, a condition with another mesh of the same size).
+- [~] **F-288** Adopt matching runs when a restarted MCP server resumes a design study
   - depends on: F-274
   - acceptance: Every limit is fixed by its registration ADR before any code. In project mode, before a design-study
     candidate is submitted, the server adopts a run of the project's runner with the same tags (study, variant,
@@ -5207,6 +5214,7 @@ fixed by the item's registration ADR before any code.
     registration ADR; a candidate without a matching run is submitted as before.
   - note: From the maintainer's answer of 2026-11-06 to ADR 0189 Q5: option (b), as recommended. Until this lands, runs
     that outlive a call are submitted again (option (a), as built).
+    - PARTIAL (ADR 0201, the registration of F-288, 2026-11-06, branch f287-f288-runner, not merged): before a study's run is submitted, a run of the project with the same tags, case, case bytes, entries, launch settings and solver version that has not failed or been cancelled is adopted, waited for or read from its metrics.json, and the result gains runs_adopted; an rcfd-mcp killed during a three-point study and started again made no new run and adopted the three, its records bit for bit those of an uninterrupted study, and a chained study killed after two of its runs ended with exactly one run per variant and condition (A-R); ten decoys that differ in one item of the key, or failed or were cancelled, were not adopted (A-N). Open: ADR 0201 Q1 to Q5 (the solver version in the key, failed runs, operating maps, the index, runs of an earlier definition).
 - [x] **F-289** Conjugate heat_flow report with the gradient options, checked by a heat balance. DONE (ADR 0202, 2026-11-06, branch f289-f290, not merged): rcfd_fv::cht::conductive_face_flows_opt applies the solver's limiter, face correction and boundary treatment to the face flows, and the conjugate heat_flow report passes the energy solver's options (no key, no rule); on the skewed conjugate case of ADR 0202 (wedge mesh of 29.6 degrees, a solid zone with a source of 2.67e-2 W) the reports balance the source to the solver residual for the default and the seven option sets (imbalance 3.2e-13 to 3.3e-13 W, limit tol_W + 1e-12 F, about 2e-12 W), per material too, and the face flows are the solved operator per cell (at most 4.5e-16, and 7.1e-15 on a 3-D skewed two-material mesh, limit 1e-12), while the unchanged formula misses the balance by 2.0e-6 to 2.1e-3 W; without the options the report is unchanged bit for bit; baseline hashes and H1 unedited. Open: the heat_flow report of a case without solid zones has no secondary flux (ADR 0202 Q1).
   - depends on: F-256
   - acceptance: Every limit is fixed by its registration ADR before any code. The conjugate heat_flow report
@@ -5235,7 +5243,7 @@ fixed by the item's registration ADR before any code.
     is bit-identical (baseline hashes unchanged).
   - note: From the maintainer's answer of 2026-11-06 to ADR 0190 Q4: option (b), a new item with new checks (the
     recommendation was (a)). ADR 0016 D2 defined and checked the options on the scalar sweep only.
-- [ ] **F-292** Gas buoyancy and gas shear in the particle wall film
+- [~] **F-292** Gas buoyancy and gas shear in the particle wall film
   - depends on: F-253
   - acceptance: Every limit is fixed by its registration ADR before any code. Two opt-in additions to the film of F-253:
     gas buoyancy, the film driven by (rho_l - rho_g) g_t in place of rho_l g_t (ADR 0192 Q2 (b)), and gas shear, a
@@ -5245,6 +5253,19 @@ fixed by the item's registration ADR before any code.
     R2 and the baseline hashes unchanged).
   - note: From the maintainer's answers of 2026-11-06 to ADR 0192 Q2 and Q3, both added as an item (ADR 0192 recommended
     leaving them out until a case needs them). The film of F-253 stays without them.
+    - PARTIAL (ADR 0206, the registration of F-292, 2026-11-06, branch f292-film-gas, not merged): every registered check
+      is met; marking the item done is the maintainer's (ADR 0206 Q1). Two opt-in keys of `particles.film`
+      (`gas_buoyancy`, `gas_shear`, each `hash_omit_default`; library `FilmGas` and `Tracker::set_film_gas`): the buoyancy
+      drives the film by (rho_l - rho_g) g_t with rho_g = physics.rho; the shear adds h tau/(2 mu_l) with tau the carrier's
+      one-sided laminar wall stress at each film face (bit for bit the post-processing's wall_shear), refused with a
+      turbulence model, a moving mesh, a rotating frame and a film patch that is not a no-slip wall at rest. The
+      parcel-fed incline of ADR 0192 under a gas of 250 kg/m^3 is within 3.3e-15 of h_B = h_N (1 - rho_g/rho_l)^(-1/3) as a
+      window average (1.4e-11 at 20 s; limit 5 percent, consistency 1e-6; without the buoyancy 9.1 percent off); a
+      parcel-fed floor under a frozen Couette flow of 0.1 Pa is within 2.7e-14 of h = (2 mu_l Gamma/(rho_l tau))^(1/2)
+      (1.3e-13 at 40 s); the ledger closes to 1.8e-12 (limit 1e-10); the case tree equals the library bit for bit; seven
+      mutations each made their check fail. Runs without the keys are unchanged bit for bit (R1 to R5 and the new R6, R7
+      made on main before the code; baseline hashes and H1 unedited). Open: ADR 0206 Q2 to Q6 (the source of the shear,
+      counter-current films, gravity with the shear, the film surface velocity, a laminar range for sheared films).
 - [ ] **F-293** Studio follow-ups that wait on the maintainer's Studio worktree
   - depends on: F-272, F-273, F-259
   - acceptance: Every limit is fixed by its registration ADR, written before any code and after the maintainer's
@@ -5259,3 +5280,39 @@ fixed by the item's registration ADR before any code.
     (ADR 0187 Q3, ADR 0188 Q3 and Q5, ADR 0191 Q4). Agents do not touch that worktree. The third change ADR 0188 Q5
     names, the run worker reading the feed in place of its own poll, was not part of the answer and stays an open
     question of ADR 0188.
+
+- [ ] **F-294** Transient k-epsilon and Spalart-Allmaras (without DES) on pimple
+  - depends on: F-286
+  - acceptance: Every limit is fixed by its registration ADR before any code. k-epsilon and Spalart-Allmaras without
+    DES run with the pimple algorithm on a static mesh, which the case tree refuses today; each model gets its own
+    registration with its time derivative (the existing k-epsilon kernel has none, and the Spalart-Allmaras one is once
+    per step and Euler only), checked against closed forms named in the ADR; steady runs and every existing transient
+    run are unchanged bit for bit.
+  - note: From ADR 0199 (F-286) question 2, recommendation taken by the lead: a follow-up item, each model with its own
+    registration. SA-DES and the Reynolds stress model stay on their once-per-step path (question 3).
+- [x] **F-295** One diffusivity per periodic seam pair
+  - depends on: F-286
+  - acceptance: Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair
+    takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy
+    viscosity differs; opt-in, defaults bit-identical (baseline hashes unchanged); a global budget on a periodic case
+    with a differing eddy viscosity is checked within a limit fixed by the ADR.
+  - note: From ADR 0199 amendment 2 and question 5, recommendation taken by the lead. FAN-01 and EXP-ROT check H both
+    have rotational seams, so this item comes before check H is read.
+    - BUILT (ADR 0205, the registration of F-295, 2026-11-06, branch f295-seam-diffusivity, not merged): k_omega_sst with
+      turbulence.periodic_seam.diffusivity = "pair" (an optional table; default "owner", every earlier result) gives both
+      faces of a periodic pair nu + w a_P + (1 - w) a_Q in the momentum face viscosity and the k and omega diffusivities,
+      steady and pimple, translational and rotational seams, with the laminar-region rule across the seam; the k and omega
+      budgets of ADR 0199's periodic C1 box close to 1e-14 (owner: 1.7e-7 to 6.5e-2), the B2 seam pairs are equal to the bit
+      (owner: 13 to 27 percent apart); other models refused at the key; defaults bit-identical. Open: other models (Q1),
+      check H's texts (Q2), the default (Q3).
+
+- [ ] **F-296** One diffusivity per periodic seam pair for the other models
+  - depends on: F-295
+  - acceptance: Every limit is fixed by its registration ADR before any code. The rule of F-295
+    (turbulence.periodic_seam.diffusivity = "pair") is applied to the face viscosity or diffusivity of k-epsilon,
+    Spalart-Allmaras, the Reynolds stress model, the subgrid and mixing-length models and the rheology face viscosity,
+    each with a global-budget check on a periodic box with a differing viscosity (the owner rule must miss it, the pair
+    rule must meet it); defaults bit-identical (baseline hashes unchanged).
+  - note: From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the
+    same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set
+    pair before H runs. Question 3: the default stays owner.

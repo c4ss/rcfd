@@ -40,8 +40,9 @@ fn hidden() -> Vec<(&'static str, Value)> {
     ]
 }
 
-/// ADR 0196 B: the session tools that have the class `execute` under `--project` (`write_files` without it).
-const EXECUTE: [&str; 2] = ["design_run_study", "design_evaluate"];
+/// ADR 0196 B: the session tools that have the class `execute` under `--project` (`write_files` without it);
+/// `design_run_operating_map` since ADR 0200 S9 (registered edit E1).
+const EXECUTE: [&str; 3] = ["design_run_study", "design_evaluate", "design_run_operating_map"];
 
 /// ADR 0195 P1: the 23 project tools in the order of the F-273 list.
 const PROJECT_TOOLS: [&str; 23] = [
@@ -376,6 +377,10 @@ fn b1_design_tools_are_execute_under_project_adr0196() {
     };
     let args = |name: &str| match name {
         "design_run_study" => json!({"dir": "designs/s", "max_evaluations": 1}),
+        // ADR 0200 E1
+        "design_run_operating_map" => {
+            json!({"out_dir": "designs/m", "base": "cases/cavity.toml", "axes": [{"path": "physics.nu", "values": [0.02]}]})
+        }
         _ => json!({"dir": "designs/s", "params": {"nu": 0.02}}),
     };
     let dir = project("b1-0196");

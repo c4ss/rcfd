@@ -4,7 +4,7 @@
 
 use rcfd_core::vec3;
 use rcfd_fv::gradient::green_gauss;
-use rcfd_fv::{FvGeometry, VectorField};
+use rcfd_fv::{FvGeometry, PeriodicPair, VectorField};
 
 /// Faces of the named patches (global face indices).
 pub fn patch_faces(geom: &FvGeometry, patches: &[&str]) -> Vec<usize> {
@@ -35,6 +35,27 @@ pub fn effective_viscosity(geom: &FvGeometry, nu: f64, nut: &[f64], wall_nut: &[
         out[f] = nu + v;
     }
     out
+}
+
+/// Diffusivity of the two faces of a periodic pair (F-295, ADR 0205 D3): the value of `turbulence.periodic_seam.diffusivity`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SeamDiffusivity {
+    /// Each face takes its own owner cell's value ([`effective_viscosity`]; every earlier run).
+    #[default]
+    Owner,
+    /// Both faces take one value, the linear interpolation between the two owner cells ([`pair_periodic_faces`]).
+    Pair,
+}
+
+/// Give both faces of every periodic pair the diffusivity `nu + w a_P + (1 - w) a_Q` (F-295, ADR 0205 D1), with `P` the owner
+/// of `f`, `Q` the owner of `g`, `w` the pair's weight and `a` the cell part of the diffusivity; computed once per pair and
+/// written on both faces, so the diffusive fluxes of the pair cancel.
+pub fn pair_periodic_faces(pairs: &[PeriodicPair], owner: &[usize], nu: f64, cell: &[f64], face: &mut [f64]) {
+    for p in pairs {
+        let v = nu + p.w * cell[owner[p.f]] + (1.0 - p.w) * cell[owner[p.g]];
+        face[p.f] = v;
+        face[p.g] = v;
+    }
 }
 
 /// Magnitude of the strain rate `sqrt(2 S_ij S_ij)` in every cell.

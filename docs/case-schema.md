@@ -99,10 +99,25 @@ Menter, Kuntz and Langtry, Turbulence, Heat and Mass Transfer 4, 2003), in the f
 Turbulence Modeling Resource (TMR) page. The constants and blending functions were checked against it, see
 docs/reference-data.md.
 
-Restrictions: the same as `k_epsilon` (steady algorithms, a wall patch, no energy), except that a fixed wall may move. The
-wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the stationary casing of a rotor solved in the
-rotating frame is allowed. `turbulence = "wall"` must then be set on that patch, because the automatic role calls a moving
-fixed-velocity patch an inlet.
+Restrictions: the same as `k_epsilon` (a wall patch, no energy), except that it also runs with `pimple` (below) and that a
+fixed wall may move. The wall law uses the cell velocity relative to the wall velocity (ADR 0075), so the stationary casing
+of a rotor solved in the rotating frame is allowed. `turbulence = "wall"` must then be set on that patch, because the
+automatic role calls a moving fixed-velocity patch an inlet.
+
+Transient runs (ADR 0199): with `solver.algorithm = "pimple"` on a static mesh, k and omega get the time derivative of
+`solver.time_scheme` (`euler`, `bdf2`, `bdf2_bounded`) and one sweep at the start of every outer iteration, whose eddy
+viscosity the momentum equation of that outer iteration uses. `turbulence.relax` and `relax_nut` are not used there (the time
+derivative takes their place). With `n_outer = 1` the sweep sees only the old time level. `piso`, a dynamic mesh,
+`solver.error_tolerance` and the fractional step are located errors.
+
+Periodic seams (ADR 0205): by default each face of a periodic (cyclic) pair takes the diffusivity of its own owner cell, so
+where the eddy viscosity differs across the seam the diffusive fluxes of k, omega and momentum through the two faces do not
+cancel. `turbulence.periodic_seam.diffusivity = "pair"` (an optional table `[turbulence.periodic_seam]`) gives both faces of
+every pair one value, `nu + w a_P + (1 - w) a_Q` with `w = dn_g / (dn_f + dn_g)` (the interpolation of an internal face across
+the seam), in the momentum face viscosity and in the k and omega diffusivities, on the steady algorithms and on `pimple`, for
+translational and rotational seams. A pair that touches a laminar region takes the molecular viscosity on both faces, and the
+scalars with a Schmidt number follow the momentum face viscosity. `"owner"` is the default and keeps every earlier result. `pair`
+is a located error with any model other than `k_omega_sst`, and has no effect on a mesh without periodic patches.
 
 Wall treatment: automatic.
 
@@ -1994,11 +2009,17 @@ the case data and changes nothing (a case that writes it with its defaults keeps
 | `film.enabled` | `false` | a parcel that reaches a face of a film patch is absorbed into a thin laminar film on that face (state `film`); the film runs down the wall under gravity and leaves it where no other film face continues it |
 | `film.patches` | `[]` | the wall patches that carry the film; required, each once, and without a `particles.walls.<patch>` entry |
 | `film.viscosity` | `-1` | dynamic viscosity of the film liquid [Pa s], must be set (> 0); the liquid density is `particles.density` |
+| `film.gas_buoyancy` | `false` | gas buoyancy (F-292, ADR 0206): the film is driven by `(rho_l - rho_g) g_t` with `rho_g = physics.rho` |
+| `film.gas_shear` | `false` | gas shear (F-292, ADR 0206): the film velocity gains `h tau / (2 mu_l)`, with `tau` the carrier's laminar wall shear at each film face |
 
 Located errors: `particles.film.enabled` without `particles.enabled` or together with `two_way` or `heat_transfer`;
 `particles.film.patches` empty, repeated, also in `particles.walls`, or (when the mesh is built) unknown or not a wall;
 `particles.film.viscosity` unset; `particles.gravity` false or `physics.gravity` zero (the film is driven by gravity
-alone).
+alone). With the film enabled: `particles.film.gas_buoyancy` with `physics.rho` not below `particles.density`;
+`particles.film.gas_shear` with a turbulence model, with `dynamic_mesh.enabled`, with a `rotating_frame` or `mrf` source,
+or with a film patch that is not a no-slip wall at rest (`velocity = "fixed"` with `velocity_value = [0, 0, 0]`, no
+`velocity_expression_*` and no `velocity_udf`). The two keys are left out of the settings hash at `false`; a case that
+writes `[particles.film]` now lists them in its written text.
 
 Erosion and rough walls (F-254, ADR 0194; `docs/particles.md`, "Wall interaction"). `particles.erosion` and
 `particles.rough_wall` are optional tables: absent, they are not in the case data and change nothing (a case that writes

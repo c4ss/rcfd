@@ -29,7 +29,7 @@ rcfd run <case> [--out dir] [--max-iterations n] [--quiet]
          [--status-json] [--status-file file] [--status-every n]
          [--continue-from checkpoint] [--checkpoint file] [--checkpoint-every n]
          [--stop-file file] [--pause-file file] [--case-dir dir] [--store-dir dir] [--status-monitors]
-         [--max-elapsed seconds]
+         [--max-elapsed seconds] [--max-steps n]
          [--threads n] [--precision double] [--journal file]
          [--set path=json]... [--print-settings] [--restart-from file] [--source-case case] [--method m] [--no-chain]
 rcfd restart <case> --from file [--mesh mesh] [--source-case case] [--method m]   (plus every run flag)
@@ -52,6 +52,7 @@ rcfd check <case> [--json] [--set path=json]...
 | `--store-dir d` | write the field store (Field store, below) to `d` instead of `<out>/fields`; only used when the case turns the store on. The run service passes `runs/<id>/fields` (ADR 0130) |
 | `--status-monitors` | add `monitors`, the value of every report of the case at that step (`{"lid_drag": 0.31}`), to each `iteration` event; the values are the ones `monitors.json` records, a report that could not be evaluated at that step is left out. Without the flag the events are unchanged. Plain runs only (not chains). The run service passes it and forwards the values into `residuals.jsonl` (ADR 0130) |
 | `--max-elapsed s` | stop cleanly after s wall-clock seconds |
+| `--max-steps n` | stop cleanly after n steps of this launch: state `step_limit`, exit 0, the checkpoint written (a continued run counts from its checkpoint; `--max-iterations` instead sets `solver.max_iterations`, which a continued run counts in total). `n` at least 1; not with `chain.sequence` (exit 2). The `start` event's `info` has `max_steps` only when it is given. The run service passes it for a run whose `settings.max_steps` is set, and `--continue-from runs/<id>/output/restart.rcfd` for a run whose `settings.continue_from` names run `<id>` (ADR 0200) |
 | `--threads n` | number of worker threads (`RAYON_NUM_THREADS`); results are bit-identical for any thread count (measured, see below) |
 | `--precision double` | the only supported value; `single` is rejected with exit 2 |
 | `--journal f` | run the case recorded in a service journal (`journal.get`) instead of a case file |
