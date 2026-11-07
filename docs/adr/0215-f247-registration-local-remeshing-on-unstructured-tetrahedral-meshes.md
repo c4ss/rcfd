@@ -349,3 +349,13 @@ everything outside F-247 (the roadmap's out-of-scope list).
 - **Q7. The mesher panic.** `tetrahedralize(box_surface([0, 0, 0], [1, 0.1, 0.1], [10, 1, 1]))` with `size = 0.035` and
   `quality_sweeps = 3` panics at `tetmesh.rs:386` (`neighbour link`), seen while choosing M0. Options: (a) a new item to
   reproduce and fix it; (b) note only. Recommendation (a).
+
+## Amendment 1 (2026-11-07, before any code)
+
+Written after the registration commit and before any code of F-247 was written or run. U2's two events of the procedure
+set `xmax` of M_s from 0.3 to 0.285 in one jump. That moves the piston plane by 0.015 while the smallest cell altitude of
+meshes from this generator is about 0.012 (the probe of M0: 0.0124), so the jump can invert a cell next to the piston
+before any event runs, and the check would test a mesh that no run produces. Corrected U2 (replaces those two events;
+everything else in U2 unchanged): the piston plane of M_s is moved inward in steps of 0.001 to `x = 0.27` and then
+outward in steps of 0.001 to `x = 0.33`, with `remesh()` after each step; at every event, (a) to (e) as registered. At
+least one event inward and one outward are required (set-up). No limit changes.
