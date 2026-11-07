@@ -3,7 +3,8 @@
 //! Point particles with Stokes or Schiller-Naumann drag, gravity with buoyancy, integrated by an analytic exponential
 //! scheme or Euler / midpoint / RK4, located and tracked across the faces of an unstructured polyhedral mesh, with wall
 //! reflection, trapping and escape, point and surface injection, constant and Rosin-Rammler diameters and VTK output;
-//! a wall film (ADR 0192) with optional gas buoyancy and gas shear (ADR 0206), erosion and rough-wall rebound (ADR 0194).
+//! a wall film (ADR 0192) with optional gas buoyancy and gas shear (ADR 0206), erosion and rough-wall rebound (ADR 0194),
+//! random-walk dispersion on per-cell fields that a caller may replace every step and a surface reaction (ADR 0208).
 //!
 //! The crate depends on `rcfd-mesh` only; the fluid velocity and its gradient are inputs ([`Flow`]).
 
@@ -14,13 +15,14 @@ pub mod erosion;
 pub mod film;
 pub mod inject;
 pub mod locate;
+pub mod reaction;
 pub mod rng;
 pub mod rough;
 pub mod tracker;
 pub mod vtp;
 
 pub use coupling::{Coupling, Thermal};
-pub use dispersion::Dispersion;
+pub use dispersion::{drw_msd, taylor_msd, Dispersion};
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
 pub use erosion::{
     dnv_angle_function, erosion_preset, impact_angle, Erosion, ErosionPreset, ErosionSpec, DNV_A, EROSION_PRESETS,
@@ -31,6 +33,7 @@ pub use film::{
 };
 pub use inject::{rr_oversize, rr_sample, ConeSpec, InjKind, InjectorExt, InjectorSpec, SizeDist, VelMode};
 pub use locate::{Locator, Walk};
+pub use reaction::{GasSpecies, ReactionSpec, SurfaceReaction};
 pub use rng::SplitMix64;
 pub use rough::{rough_rebound, tangent_pair, RoughCounts, RoughSpec, RoughWall};
 pub use tracker::{fluid_at, Flow, Interp, Options, Particle, State, Tracker, WallAction};

@@ -2474,6 +2474,11 @@ impl Simulation {
         }
     }
 
+    /// The RANS turbulence state, if any (ADR 0208: the particle random walk reads its `k` and `epsilon`).
+    pub(crate) fn turb_state(&self) -> Option<&TurbState> {
+        self.turb.as_ref()
+    }
+
     /// The particle run driven by the transient step, if `particles.enabled` with a transient algorithm.
     pub fn particle_run(&self) -> Option<&crate::particle_run::ParticleRun> {
         self.particles.as_ref()
@@ -3782,7 +3787,9 @@ impl Simulation {
                     if pr.is_two_way() {
                         // ADR 0059 D2: the particles first, over this step, on the field of the old time level
                         let temp = self.energy.as_ref().map(|e| e.solver.t.values.as_slice());
-                        if let Err(e) = pr.pre_step(&self.case, &self.geom, &s.u, temp, dt) {
+                        // ADR 0208 D2: and on the turbulence fields of the old time level
+                        let refreshed = pr.refresh_dispersion(&self.case, self.turb.as_ref());
+                        if let Err(e) = refreshed.and_then(|()| pr.pre_step(&self.case, &self.geom, &s.u, temp, dt)) {
                             let e = format!("particle tracking: {e}");
                             reason_override = Some(e.clone());
                             udf_error = Some(e);

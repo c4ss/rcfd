@@ -1392,6 +1392,18 @@ Nothing in F-253 is compared with measured data. The film model is derived; two 
 | Donor-cell transport, Courant limit on the kinematic wave speed `3 u_bar`, steady state exact below the feed | derived | ADR 0192 M5 to M7 |
 | Falling-film thickness against a measured data set | not used | no comparison attempted |
 
+## F-255 particle dispersion from turbulence-model fields and particle surface reactions (ADR 0208)
+
+Nothing in F-255 is compared with measured data. No source was read for this work.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Mean-square displacement of a Stokes particle released at rest in a fluid velocity of autocorrelation `sigma^2 exp(-abs(s)/T)`: `sigma^2 (I0 - 2 I1 + I2)` (ADR 0208 D3), and its `tau -> 0` limit `2 sigma^2 T^2 (t/T - 1 + exp(-t/T))` | derived | from `X = int u (1 - exp(-(t - a)/tau)) da` and `<X^2> = int int g g R`; checked against the moment equations of the jump process (CF1, 7.6e-12); the limit is the form of Taylor's result for an exponential autocorrelation (Taylor 1921, "Diffusion by continuous movements", not read) |
+| Long-time diffusivity `sigma^2 T` independent of `tau` | derived | the limit of the same closed form; consistent with the Tchen/Hinze result recalled in the wave 29C row (not read) |
+| `epsilon = beta* k omega`, `beta* = 0.09` | standard; `beta*` verified (TMR, the k-omega SST row above) | the conversion `chemistry::mixing_vectors` already uses; not read in a source for this work |
+| First-order kinetic surface reaction `omega = k_s rho_g Y_o / M_o` per unit surface, shrinking sphere at constant density `dd/dt = -2 nu_s M_s omega / rho_p` | registered here; the shrinkage derived | ADR 0208 D4 and Q7; no char or particle kinetics source read, no constants; the molar masses of the checks (0.012, 0.032, 0.044 kg/mol) are round test inputs, not data |
+| Measured dispersion of particles in grid turbulence, char burnout data | not used | no comparison attempted |
+
 ## F-254 particle wall interaction (ADR 0194)
 
 Nothing in F-254 is compared with measured data. The erosion correlation is read from its source; the rough-wall model is

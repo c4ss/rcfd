@@ -54,6 +54,39 @@ pub fn crossing_time(tau: f64, l_e: f64, w: f64) -> f64 {
     }
 }
 
+/// `(1 - exp(-y)) / y`, 1 at `y = 0`, without cancellation for small `y`.
+fn phi(y: f64) -> f64 {
+    if y == 0.0 {
+        1.0
+    } else {
+        -(-y).exp_m1() / y
+    }
+}
+
+/// `(exp(-c t) - exp(-e t)) / ((e - c) t)`, finite and free of cancellation when `c = e`.
+fn divided_exp(c: f64, e: f64, t: f64) -> f64 {
+    (-c.min(e) * t).exp() * phi((e - c).abs() * t)
+}
+
+/// Taylor's mean-square displacement per component of a fluid particle whose velocity has the autocorrelation
+/// `sigma2 exp(-abs(s)/t_l)` (ADR 0208 D3 with `tau = 0`): `2 sigma2 t_l^2 (t/t_l - 1 + exp(-t/t_l))`.
+pub fn taylor_msd(sigma2: f64, t_l: f64, t: f64) -> f64 {
+    let x = t / t_l;
+    2.0 * sigma2 * t_l * t_l * (x + (-x).exp_m1())
+}
+
+/// Mean-square displacement per component at time `t` of a Stokes particle of relaxation time `tau` released at rest at
+/// `t = 0` in a stationary fluid velocity of autocorrelation `sigma2 exp(-abs(s)/t_l)` (ADR 0208 D3):
+/// `sigma2 (I0 - 2 I1 + I2)`. It is the random walk of [`Eddy::draw`] without crossing times in homogeneous fields with no
+/// mean flow.
+pub fn drw_msd(sigma2: f64, t_l: f64, tau: f64, t: f64) -> f64 {
+    let (a, b) = (1.0 / tau, 1.0 / t_l);
+    let i0 = 2.0 * t_l * t_l * (t / t_l + (-t / t_l).exp_m1());
+    let i1 = t_l * (-2.0 * (-a * t).exp_m1() / a + (-(a + b) * t).exp_m1() / (a + b) - t * divided_exp(b, a, t));
+    let i2 = (-(-(a + b) * t).exp_m1() - (a + b) * t * divided_exp(a + b, 2.0 * a, t)) / (a * (a + b));
+    sigma2 * (i0 - 2.0 * i1 + i2)
+}
+
 /// The eddy currently seen by one parcel.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Eddy {

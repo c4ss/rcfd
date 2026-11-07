@@ -271,6 +271,12 @@ pub fn schema() -> Schema {
         .field("dispersion_cl", Schema::float(0.15).doc("dispersion = drw: constant C_L of the Lagrangian integral time T_L = C_L k/epsilon (> 0)"))
         .field("dispersion_crossing", Schema::boolean(true).doc("dispersion = drw: limit the interaction time by the eddy crossing time"))
         .field("dispersion_seed", Schema::int(1).at_least(0.0).doc("dispersion = drw: seed of the dispersion random numbers"))
+        .field(
+            "dispersion_fields",
+            Schema::enumeration(DISPERSION_CONSTANT, &[DISPERSION_CONSTANT, DISPERSION_MODEL])
+                .doc("dispersion = drw: where k and epsilon come from (ADR 0208): constant = dispersion_k and dispersion_epsilon in every cell (ADR 0057); turbulence_model = k and epsilon per cell of the turbulence model (k_epsilon, or k_omega_sst with epsilon = 0.09 k omega), read when the tracker is built for steady and frozen tracking and before every tracking step of a transient run (the fields of the time level the step tracks on); dispersion_k and dispersion_epsilon must then stay -1")
+                .hash_omit_default(),
+        )
         .field("two_way", Schema::boolean(false).doc("Two-way coupling (ADR 0059): the momentum the parcels receive from the carrier is given back to the carrier momentum equation as a body acceleration impulse/(rho V T) (opposite sign to the parcel gain); transient: particles first on the field of the old time level, source constant over the step; steady: fixed-point iteration with a fresh tracker, source normalised by the injection window; constant-density segregated algorithms only"))
         .field("two_way_relax", Schema::float(0.5).doc("Steady two-way: under-relaxation beta of the source, S <- S + beta (S_new - S), 0 < beta <= 1"))
         .field("two_way_every", Schema::int(1).at_least(1.0).doc("Steady two-way: re-track every this many iterations (>= 1)"))
@@ -296,6 +302,44 @@ pub fn schema() -> Schema {
         .field("film", film)
         .field("erosion", erosion)
         .field("rough_wall", rough_wall)
+}
+
+/// `particles.dispersion_fields`: the constants `dispersion_k`, `dispersion_epsilon` (ADR 0057).
+pub const DISPERSION_CONSTANT: &str = "constant";
+
+/// `particles.dispersion_fields`: the turbulence model's `k` and `epsilon` per cell (ADR 0208 D2).
+pub const DISPERSION_MODEL: &str = "turbulence_model";
+
+/// Does the random walk take `k` and `epsilon` from the turbulence model (ADR 0208 D2)?
+pub fn dispersion_from_model(case: &Case) -> bool {
+    enabled(case)
+        && gs(case, "particles.dispersion") == "drw"
+        && gs(case, "particles.dispersion_fields") == DISPERSION_MODEL
+}
+
+/// `k` and `epsilon` per cell of the turbulence state (ADR 0208 D2): the transported `epsilon` of k-epsilon, or
+/// `epsilon = beta* k omega` of k-omega SST with the SST's `beta*`, as `chemistry::mixing_vectors` does.
+pub(crate) fn model_k_epsilon(
+    turb: Option<&crate::turb::TurbState>,
+) -> std::result::Result<(Vec<f64>, Vec<f64>), String> {
+    let t = turb.ok_or("dispersion_fields = turbulence_model needs a turbulence model (k_epsilon or k_omega_sst)")?;
+    let k = t
+        .scalar("k")
+        .ok_or("dispersion_fields = turbulence_model needs a model that transports k (k_epsilon or k_omega_sst)")?
+        .values
+        .clone();
+    if let Some(e) = t.scalar("epsilon") {
+        return Ok((k, e.values.clone()));
+    }
+    let w = t
+        .scalar("omega")
+        .ok_or("dispersion_fields = turbulence_model needs epsilon or omega (k_epsilon or k_omega_sst)")?;
+    let eps = k
+        .iter()
+        .zip(&w.values)
+        .map(|(k, w)| rcfd_turb::sst::BETA_STAR * k * w)
+        .collect();
+    Ok((k, eps))
 }
 
 /// Is the wall film requested (ADR 0192)?
@@ -939,24 +983,55 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             }
         }
     }
+    let model_fields = gs(case, "particles.dispersion_fields") == DISPERSION_MODEL;
+    if model_fields {
+        check_dispersion_fields(case, &mut out);
+    }
     if gs(case, "particles.dispersion") == "drw" {
-        if !(gf(case, "particles.dispersion_k") > 0.0) {
-            out.push(d(
-                "particles.dispersion_k",
-                "dispersion = drw needs dispersion_k > 0; -1 means unset",
-            ));
-        }
-        if !(gf(case, "particles.dispersion_epsilon") > 0.0) {
-            out.push(d(
-                "particles.dispersion_epsilon",
-                "dispersion = drw needs dispersion_epsilon > 0; -1 means unset",
-            ));
+        if !model_fields {
+            if !(gf(case, "particles.dispersion_k") > 0.0) {
+                out.push(d(
+                    "particles.dispersion_k",
+                    "dispersion = drw needs dispersion_k > 0; -1 means unset",
+                ));
+            }
+            if !(gf(case, "particles.dispersion_epsilon") > 0.0) {
+                out.push(d(
+                    "particles.dispersion_epsilon",
+                    "dispersion = drw needs dispersion_epsilon > 0; -1 means unset",
+                ));
+            }
         }
         if !(gf(case, "particles.dispersion_cl") > 0.0) {
             out.push(d("particles.dispersion_cl", "dispersion_cl must be positive"));
         }
     }
     out
+}
+
+/// The located errors of `particles.dispersion_fields = "turbulence_model"` (ADR 0208 S2, DE1 to DE3).
+fn check_dispersion_fields(case: &Case, out: &mut Vec<Diagnostic>) {
+    if gs(case, "particles.dispersion") != "drw" {
+        out.push(d(
+            "particles.dispersion_fields",
+            "dispersion_fields = turbulence_model needs particles.dispersion = \"drw\" (ADR 0208)",
+        ));
+    }
+    let tm = gs(case, "turbulence.model");
+    if !matches!(tm.as_str(), "k_epsilon" | "k_omega_sst") {
+        out.push(d(
+            "particles.dispersion_fields",
+            format!("dispersion_fields = turbulence_model needs the turbulence fields k and epsilon (turbulence.model = \"k_epsilon\" or \"k_omega_sst\"), not \"{tm}\" (ADR 0208)"),
+        ));
+    }
+    for k in ["dispersion_k", "dispersion_epsilon"] {
+        if gf(case, &format!("particles.{k}")) != UNSET {
+            out.push(d(
+                format!("particles.{k}"),
+                format!("{k} is not used with dispersion_fields = turbulence_model (the turbulence model gives k and epsilon); leave it -1 (ADR 0208)"),
+            ));
+        }
+    }
 }
 
 fn options(case: &Case) -> Options {
@@ -1109,13 +1184,17 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
             crossing: gb(case, "particles.dispersion_crossing"),
         };
         let dseed = (gi(case, "particles.dispersion_seed").max(0) as u64).wrapping_add(0x5EED_D15B);
-        tr.set_dispersion(
-            model,
-            vec![gf(case, "particles.dispersion_k"); nc],
-            vec![gf(case, "particles.dispersion_epsilon"); nc],
-            dseed,
-        )
-        .map_err(|e| vec![d("particles.dispersion", e.to_string())])?;
+        let (k, eps) = if dispersion_from_model(case) {
+            // ADR 0208 D2: the turbulence model's fields of the current state
+            model_k_epsilon(sim.turb_state()).map_err(|e| vec![d("particles.dispersion_fields", e)])?
+        } else {
+            (
+                vec![gf(case, "particles.dispersion_k"); nc],
+                vec![gf(case, "particles.dispersion_epsilon"); nc],
+            )
+        };
+        tr.set_dispersion(model, k, eps, dseed)
+            .map_err(|e| vec![d("particles.dispersion", e.to_string())])?;
     }
     if heat_transfer(case) {
         // carrier temperature of the cells: the energy solution
@@ -1299,6 +1378,12 @@ pub fn track_transient(case: &Case, sim: &mut Simulation) -> std::result::Result
             break;
         }
         let h = dt.min(end - tr.time);
+        if dispersion_from_model(case) {
+            // ADR 0208 D2: the fields at the end of the flow step, the level of the velocity tracked on
+            let (k, eps) = model_k_epsilon(sim.turb_state()).map_err(|e| vec![d("particles.dispersion_fields", e)])?;
+            tr.set_dispersion_fields(&k, &eps)
+                .map_err(|e| vec![d("particles.dispersion_fields", e.to_string())])?;
+        }
         let fd = flow_data(case, sim);
         tr.advance(&fd.flow(), h)
             .map_err(|e| vec![d("particles", e.to_string())])?;

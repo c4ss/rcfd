@@ -247,6 +247,20 @@ impl ParticleRun {
         Ok(())
     }
 
+    /// Give the random walk the turbulence model's `k` and `epsilon` of `turb` (ADR 0208 D2); nothing unless
+    /// `particles.dispersion_fields = "turbulence_model"`.
+    pub(crate) fn refresh_dispersion(
+        &mut self,
+        case: &Case,
+        turb: Option<&crate::turb::TurbState>,
+    ) -> Result<(), String> {
+        if !particles::dispersion_from_model(case) {
+            return Ok(());
+        }
+        let (k, eps) = particles::model_k_epsilon(turb)?;
+        self.tracker.set_dispersion_fields(&k, &eps).map_err(|e| e.to_string())
+    }
+
     /// Directory of the numbered `particles_<n>.vtp` files written during the run (none = not written).
     pub fn set_output_dir(&mut self, dir: Option<PathBuf>) {
         self.out_dir = dir;
@@ -299,6 +313,8 @@ impl ParticleRun {
             return Ok(());
         }
         let h = dt.min(self.end - self.tracker.time);
+        // ADR 0208 D2: the turbulence fields at the end of the step (nothing without dispersion_fields)
+        self.refresh_dispersion(&sim.case, sim.turb_state())?;
         let fd = particles::flow_data(&sim.case, sim);
         self.advance_step(&fd.flow(), h)
     }
