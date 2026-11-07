@@ -472,3 +472,20 @@ Status by the decision rule: D1 to D7 met (D6 through D6b) with D0, D0b, DN1b, D
 A4u-c, R1, N1 and N2 met; every mutation failed its tests; N3 is the gate. F-299 is set partial (`[~]`) in the roadmap: the
 mechanism is located and the instability is removed under the opt-in; the default path still has the limit (the known miss of
 F-244 fails by construction, Q1) and the moving-mesh default path has no refusal (Q3). Q1 to Q7 stay open.
+
+### The gate (2026-11-07)
+
+Main stayed at c4b2cae while F-299 was built, so no merge was needed; 0214 is on no other branch. The gate ran on a `git archive`
+copy of dcfb817 (this addendum's commit before this section) with three jobs and one process per test (`scripts/gate_test.py`),
+in the target dir `E:/projects/cfd/w49i-work/target-f299-gate`, through the machine's gate lock (`gate-lock.sh acquire f299`, the
+standard 60 s poll; queued from 12:15 behind f257 and f294, taken at 13:33:26 UTC). It started with 20 GB of physical memory free
+(the registered start threshold was 19 GB, below ADR 0211's 20 GB, because the machine holds about 18 to 25 GB free while other
+gates run): `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3125 passed, 0 failed,
+872 ignored** (3125 test processes in 598 binaries, wall 5958 s, peak summed working set 3297 MB, largest time against its limit
+0.434, lowest free physical memory 20 GB). The lock was released at the end (15:32:51). No known flaky test failed, so nothing
+was run again.
+
+The 18 non-ignored tests of `piso_thin_gap_f299.rs` passed (`a1c` 29 s, `f2` 41 s) and its two defective-set-up records were
+ignored; the suites named under N3 (`sixdof_flow_f244` with its ignored known miss, `sixdof_coupled`, `ale_flows`, `ale_gcl`,
+`w34b_lag`, the `pimple` unit tests, `rcfd-api` `w48t_cylinder_spokes`, `w48v_adaptive_correctors`, `baseline_hashes`, H1 of
+`case_hashes_w48u`) passed unedited, so N3 is met. This gate section is a document only and was not gated again.
