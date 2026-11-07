@@ -317,6 +317,42 @@ pub fn box_2d_graded(
     Ok(m)
 }
 
+/// [`box_2d`] on given coordinates (ADR 0218 D5): the tensor mesh of the strictly increasing lines `xs` and `ys` (at least two
+/// each), one cell of thickness `dz` in z, patches `xmin, xmax, ymin, ymax` (walls) and `frontAndBack` (empty). Cell `i + nx j`
+/// lies between `xs[i], xs[i + 1]` and `ys[j], ys[j + 1]`.
+pub fn box_2d_coords(xs: &[f64], ys: &[f64], dz: f64) -> Result<Mesh> {
+    for (name, v) in [("xs", xs), ("ys", ys)] {
+        if v.len() < 2 || v.iter().any(|x| !x.is_finite()) || v.windows(2).any(|w| w[1] <= w[0]) {
+            return Err(Error::Mesh(format!(
+                "box_2d_coords: {name} must hold at least two finite, strictly increasing coordinates"
+            )));
+        }
+    }
+    if !(dz.is_finite() && dz > 0.0) {
+        return Err(Error::Mesh("box_2d_coords: dz must be positive".into()));
+    }
+    build_masked(MaskedGrid {
+        xs,
+        ys,
+        zs: &[0.0, dz],
+        mask: &|_, _| true,
+        patch: &|d, _, _| match d {
+            0 => "xmin",
+            1 => "xmax",
+            2 => "ymin",
+            3 => "ymax",
+            _ => "frontAndBack",
+        },
+        kinds: &[
+            ("xmin", PatchKind::Wall),
+            ("xmax", PatchKind::Wall),
+            ("ymin", PatchKind::Wall),
+            ("ymax", PatchKind::Wall),
+            ("frontAndBack", PatchKind::Empty),
+        ],
+    })
+}
+
 /// Channel of length `l`, height `h`, width `w` with patches `inlet` (xmin),
 /// `outlet` (xmax), `walls` (ymin, ymax) and `sides` (zmin, zmax; symmetry).
 /// `nz == 1` with `two_d = true` makes the sides `empty` instead.

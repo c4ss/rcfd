@@ -3999,10 +3999,30 @@ Added after the static feature-gap review; wording is product-independent. Phase
         symmetry side walls (0.159 even without a disk) and the sharp top-hat (distribution = cell) misses with a 3 m/s
         jet; both are ignored known-miss tests.
     - Previous scope text: Priority P3. Size M. Area: fv. Momentum source distributed over a disk zone.
-- [ ] **F-219** Immersed (non-conforming) solid domain with modified forcing
+- [~] **F-219** Immersed (non-conforming) solid domain with modified forcing
   - depends on: F-051, F-114
   - acceptance: Flow past a cylinder with an immersed solid matches the published DFG 2D-1 drag, lift and Strouhal number within 5 percent
-  - note: Priority P4. Size L. Area: fv,mesh. Speculative; validate need before scheduling.
+  - note: PARTIAL (ADR 0218, 2026-11-07). The acceptance is read as the DFG 2D-1 drag and lift (Re 20) and the DFG 2D-2
+    Strouhal number (Re 100; 2D-1 has none, ADR 0218 Q1), against the FeatFlow reference values.
+    - Delivered: rcfd-fv immersed.rs, an immersed solid (cylinder, sphere, cuboid, inverted, rigid velocity) as an implicit
+      forcing in SimpleSolver and PimpleSolver (field `immersed`, default None, defaults bit-identical): volume penalisation
+      of the solid cells and, in the first fluid cells, the modified forcing that imposes the no-slip value at the true
+      crossing of the surface (the linear Dirichlet extrapolation written as a face coefficient); force and moment from the
+      reaction of the forcing; refusals of the fractional step and moving meshes; rcfd_mesh::gen::box_2d_coords.
+    - Measured (limits registered before the code):
+      - 2D-1 on a Cartesian mesh with D/80 around the cylinder: C_D 5.57834 (-0.02 %), C_L 0.0106900 (+0.67 %), limit
+        5 %; observed orders 2.35 and 1.96 over D/20, D/40, D/80.
+      - 2D-2 on D/40, BDF2 PISO: St 0.30073 (-0.38 %); max C_D and max C_L within 2.6 % of FeatFlow.
+      - The forcing sum equals the momentum balance of the domain to 1.8e-13.
+      - The plain (unmodified) forcing gives C_D -1.95 % and C_L +4.76 % on D/40, against -0.17 % and +2.73 %.
+    - Missing (why partial):
+      - The immersed forcing is first order. KNOWN MISS: circular Couette flow between an immersed rotating cylinder and an
+        immersed ring has the observed order 1.02 against the registered 1.5 (error 1.6e-3 of omega R1 at N 96, 8.6 times
+        below the plain forcing); diagnosed as the Rhie-Chow mass flux across the staircase faces, not checked (Q6).
+      - No case-schema key or Studio control (a schema golden would change, Q2); no moving or deforming bodies (Q4); not in
+        the block-coupled solver, the fractional step or on moving meshes; momentum only; 3-D shapes checked by their level
+        sets only; the outlet is zero gradient, not do-nothing.
+    - Previous scope text: Priority P4. Size L. Area: fv,mesh. Speculative; validate need before scheduling.
 - [x] **F-220** Tabulated and piecewise material properties: pressure-temperature tables with saturation lines, piecewise-linear and piecewise-polynomial forms, nine-coefficient heat-capacity polynomials, compressible-liquid density, curve-fit viscosity laws, orthotropic conductivity
   - depends on: F-111, F-061
   - acceptance: Public water and steam verification values reproduced to the standard's table tolerance; saturation-line round trip closes; a compressible-liquid density law reproduces its defining relation

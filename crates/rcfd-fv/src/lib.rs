@@ -20,6 +20,7 @@ pub mod fvmatrix;
 pub mod geometry;
 pub mod gradient;
 pub mod hx;
+pub mod immersed;
 pub mod lorentz;
 pub mod lumped;
 pub mod masstransfer;
