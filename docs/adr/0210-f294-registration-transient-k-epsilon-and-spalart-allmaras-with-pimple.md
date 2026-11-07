@@ -6,6 +6,13 @@ the steady SIMPLEC channel of ADR 0199 R1 with k-epsilon and with Spalart-Allmar
 transient SST, as registered there and with an initial velocity that meets the walls. Their numbers are quoted in items 9 and 10,
 where they set a run length and the start of S3. Results go in the addendum at the end.
 
+Summary of the results (addendum): k-epsilon (every variant, wall function and wall treatment) and Spalart-Allmaras without DES
+run with `pimple` on a static mesh, with the rotating frame too, and the defaults are bit-identical. Three set-ups were found
+defective and corrected by amendments before their corrected runs (the S4 moving wall; twice the solver controls of HK, whose
+wall row in block B set the stopping rule). Every corrected check met its limit except S3 for k-epsilon with BDF2, whose
+observed order on the channel start-up (0.80 to 1.53) is below its band and rises towards 2 at finer levels (1.81 to 1.89); it
+is an ignored known miss, with a diagnosis. Every negative control fired and every mutation made its check fail.
+
 Parents: [ADR 0199](0199-f286-registration-transient-k-omega-sst-with-pimple.md) (F-286: the outer-iteration path this item
 reuses; question 2, option (b), recommendation taken by the lead; question 3, SA-DES and the Reynolds stress model stay on their
 path; the addendum's S3 BDF2 known miss and question 6), [ADR 0205](0205-f295-registration-one-diffusivity-per-periodic-seam-pair.md)
@@ -420,3 +427,131 @@ scaled by `(1, 1, 1e-12)` (`Affine::scaling`) before its translation, so its one
 and its volume is 1e-12; its rows, the wall row included, are then about 1e-4 of A's instead of 1e8 times, and the solver
 controls go back to those registered (`tol_rel = 1e-14`, `tol_abs = 1e-300`, `max_iter = 1000`). HK0's mesh part is unchanged
 and also asserts that volume. Nothing else changes. KC1 keeps its run of record.
+
+### Addendum: results (2026-11-07)
+
+Code in affe302 (after the registration d739244, amendment 1 ad04582, the V0b record a7a4970 and amendments 2 ba6b89f and 3
+cb212be): `crates/rcfd-turb/src/kepsilon.rs` (`KEpsilon::begin_step`, `is_transient`, the transient branch of `update`),
+`crates/rcfd-turb/src/sa.rs` (`SpalartAllmaras::begin_time_step`, `is_transient`, the transient branch of `update`, and
+`begin_step` clearing the new state), `crates/rcfd-turb/src/model.rs` (the trait methods of D3), `crates/rcfd-api/src/turb.rs`
+(D4), the comments of the dispatch in `crates/rcfd-api/src/sim.rs`, the doc strings of `schema.rs`, the k-epsilon and SA
+sections of `docs/case-schema.md`, and the two S1 cases of ADR 0199 in `f286_transient_sst.rs`, as D6 says. Tests:
+`crates/rcfd-turb/tests/f294_transient_kepsilon.rs`, `crates/rcfd-turb/tests/f294_transient_sa.rs`,
+`crates/rcfd-api/tests/f294_transient_keps_sa.rs`, `crates/rcfd-api/tests/f294_default_bits.rs` (a7a4970). Every check was run
+once, in release; the exceptions are named where they occur (amendments 2 and 3, and the S3 diagnosis below).
+
+Summary: both models run with `pimple` on a static mesh, with the rotating frame too, and the defaults are bit-identical. Three
+set-ups were found defective and corrected by amendments 1 to 3 before their corrected runs (the S4 moving wall, and twice the
+solver controls of HK, whose wall row in block B set the stopping rule). Every corrected check met its limit except S3 for
+k-epsilon with BDF2, whose observed order on the channel start-up (0.80 to 1.53) is below its band; it is an ignored known miss,
+with a diagnosis. S3 for SA with BDF2 met (1.93, 2.20), from the start that P2 chose. Every negative control fired and every
+mutation made its check fail; M4 acts on the known-miss check, and a report-only run of the diagnosis under M4 separates it.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| V0a | `baseline_hashes.rs`, `case_hashes_w48u.rs`, `f286_default_bits.rs`, `f295_default_bits.rs` unedited; all pass on affe302 in release (and see the gate line below) | pass | met |
+| V0b | 9 of 9 runs bit-identical to the record of 765ac64 (steady SIMPLEC CH-K 0xdb8fab77628384d0, realizable with the enhanced wall function 0x629f58307f83bf41, RNG scalable hysteresis 0x8d6a2b47a3568ecb, the k-epsilon sector with the frame 0xc9cd944de516406b, CH-A 0xfe68bf9b402352b6, CH-A `auto_sa_law` 0x0e47cb237b676340, SA-DES `piso` 0xe59a424a65564884, SA-DDES `pimple` without a source 0xf53cf8acd9b6ae13, transient SST CH on `pimple` 0xdada28263c5403a0) | bit-identical | met |
+| V0c | the gate of affe302 (git archive, `scripts/gate_test.py`, 3 jobs): queued on the machine lock when this addendum was written; its line follows below | pass, apart from the known flakes | pending |
+| HK0 | k and epsilon of A uniform to 1.0e-14 or better in every sweep of every corrected HK run (the registered set-up missed, 1.0e-6, amendment 2; the set-up of amendment 2 missed once, 2.7e-8, amendment 3) | as stated | met (corrected set-up) |
+| K1 | standard Euler 1.244e-15, BDF2 1.546e-15; RNG Euler 5.162e-16, BDF2 1.054e-15 | `<= 1e-12` | met |
+| K1r | Euler 1.988e-15, BDF2 6.080e-15 | `<= 1e-12` | met |
+| K1v | 1.651e-15 | `<= 1e-12` | met |
+| K1b | 1.434e-15 | `<= 1e-12` | met |
+| K1N | 5.148e-2 | `>= 1e-3` | met (K1 can fail) |
+| K2 | standard Euler k: `e(160)` 1.5069e-3, `e(320)` 7.5430e-4, `p` 0.9983; epsilon: 5.8787e-3, 2.9421e-3, 0.9987. Standard BDF2 k: 6.1050e-5, 1.5823e-5, 1.9480; epsilon: 1.7448e-4, 4.5079e-5, 1.9526. RNG Euler k: 2.4149e-3, 1.2085e-3, 0.9988; epsilon: 7.5375e-3, 3.7705e-3, 0.9993. RNG BDF2 k: 9.7507e-5, 2.5307e-5, 1.9460; epsilon: 2.3122e-4, 5.9866e-5, 1.9494 | Euler [0.9, 1.1], `<= 5e-3`; BDF2 [1.9, 2.1], `<= 1e-4` | met |
+| K2v | k: 7.8347e-5, 2.0288e-5, 1.9493; epsilon: 2.2414e-4, 5.7828e-5, 1.9546 | [1.9, 2.1]; `<= 1e-4` | met |
+| K2b | bounded BDF2 k: 6.1642e-5, 1.5932e-5, 1.9520; epsilon: 1.7717e-4, 4.5610e-5, 1.9577 | report only | reported |
+| KC1 | `abs(B_K)` / dissipation: Euler upwind 4.795e-15, Euler `linear_upwind` 5.160e-15, BDF2 upwind 3.428e-15, BDF2 `linear_upwind` 3.582e-15; smallest per-step change 4.806e-2 to 5.252e-2; C1-0: largest cell divergence 1.117e-16 of the largest flux, boundary flux 0 (the first run, registered set-up, which KC1 keeps) | `<= 1e-10`; `>= 1e-3` | met |
+| HA0 | met in every sweep of every HA run | as stated | met |
+| A1 | Euler 6.387e-16, BDF2 3.254e-15 (`a` 25.97958794, `T` 0.2405734847 as computed) | `<= 1e-12` | met |
+| A1v | 7.834e-16 | `<= 1e-12` | met |
+| A1b | 5.898e-16 | `<= 1e-12` | met |
+| A1N | 3.449e-2 | `>= 1e-3` | met (A1 can fail) |
+| A2 | Euler `e(40)` 8.5548e-3, `e(80)` 4.3046e-3, `p` 0.9909; BDF2 1.5510e-4, 3.8869e-5, 1.9965 | Euler [0.9, 1.1], `<= 1e-2`; BDF2 [1.9, 2.1], `<= 1e-4` | met |
+| A2v | `e(80)` 7.0734e-5, `e(160)` 1.7820e-5, `p` 1.9889 | [1.9, 2.1]; `<= 5e-5` | met |
+| A2b | bounded BDF2 4.4305e-4, 1.1388e-4, 1.9600 | report only | reported |
+| AC1 | `abs(B_A)` / sources: Euler upwind 7.472e-16, Euler `linear_upwind` 8.954e-16, BDF2 upwind 1.075e-15, BDF2 `linear_upwind` 1.093e-15; smallest per-step change 9.050e-2 to 9.526e-2 of `max nuT`; one cell negative at the last BDF2 upwind step, so the negative branch was in the budget; C1-0 as KC1 | `<= 1e-10`; `>= 1e-3` | met |
+| S1 | every case as registered and as amendment 1 adds | as stated | met |
+| R1 CH-K | settled: last-step change of `ux` 1.362e-15 `max abs(ux)` after 5000 steps (t = 1000); `ux` 1.452e-10, k 5.620e-11, epsilon 1.621e-9, nut 3.245e-10; `max abs(uy)` / `max ux` 7.524e-13 (pimple), 5.307e-13 (simplec); 12.0 s and 18.1 s | settled `<= 1e-11`; `<= 1e-8`; `<= 1e-8` | met |
+| R1 CH-A | settled 1.695e-15; `ux` 8.452e-11, nuTilda 4.194e-10, nut 5.440e-10; `max abs(uy)` / `max ux` 1.156e-12, 7.692e-13; 10.0 s and 14.3 s | as CH-K | met |
+| S3 CH-K `bdf2` | `ux`: `e(80,160)` 1.5225e-5, `e(160,320)` 8.7598e-6, `p` 0.7975; k: 3.0625e-4, 1.0895e-4, 1.4910; epsilon: 7.0086e-4, 2.4264e-4, 1.5303; largest `nut_change` of a step 1.8e-8 / 2.8e-12 / 1.3e-15 (T/80, T/160, T/320) | [1.7, 2.3] | **missed** (below the band): ignored `s3_kepsilon_bdf2_time_order_known_miss` |
+| S3 CH-K `euler` | `ux`: 1.0200e-3, 5.1677e-4, 0.9809; k: 3.9828e-3, 1.9872e-3, 1.0030; epsilon: 2.9452e-3, 1.5088e-3, 0.9650 | [0.8, 1.2] | met |
+| S3N CH-K | `p` 0.9877 (`ux`), 0.7762 (k), 0.5144 (epsilon); largest `nut_change` of a step 0.55 to 0.61 | smallest `<= 1.3` | met (fired) |
+| S3 CH-A `bdf2` | `ux`: 1.6466e-5, 4.3211e-6, 1.9300; nuTilda: 9.4881e-5, 2.0677e-5, 2.1981; largest `nut_change` 4.1e-8 / 4.8e-10 / 5.5e-13 | [1.7, 2.3] | met |
+| S3 CH-A `euler` | `ux`: 5.6058e-4, 2.7904e-4, 1.0064; nuTilda: 4.5722e-3, 2.3340e-3, 0.9700 | [0.8, 1.2] | met |
+| S3N CH-A | `p` 0.6143 (`ux`), 0.7914 (nuTilda); largest `nut_change` 0.97 | smallest `<= 1.3` | met (fired) |
+| S4 k-epsilon | 10 of 10 steps finite, no guard trip; worst seam pair sum 1.216e-15; smallest k 2.49e-3, smallest epsilon 2.02e-3; `max nut / nu` 0.9488 | `<= 1e-8` | met |
+| S4 SA | 10 of 10 steps finite, no guard trip; worst seam pair sum 1.047e-15; smallest nuTilda 1.24e-3; `max nut / nu` 0.1353 | `<= 1e-8` | met |
+
+**Records of the defective set-ups.** The registered HK (first run): every HK test stopped at HK0 in step 1, sweep 1 (epsilon
+spread 1.0e-6 to 3.1e-6, K1v 1.4e-7), amendment 2; ignored `*_tol_record`. The HK of amendment 2 (`tol_rel = 0`): K1 (standard
+Euler 8.645e-16, BDF2 2.465e-15, RNG 1.124e-15, 1.593e-15), K1r (6.686e-16, 5.409e-15), K1v 3.346e-15, K1b 8.250e-16, K1N
+5.148e-2, K2v and K2b with the numbers of the table, and the standard half of K2 with them too, met; K2 stopped at HK0 in its RNG
+Euler run (2.676e-8 at `N = 160`, step 16, sweep 2), amendment 3; ignored `*_amendment2_record`. The corrected runs of amendment 3
+are those of the table: the recursion and closed-form numbers are the same to the printed digits in all three set-ups wherever a
+run reached them.
+
+**S3, k-epsilon with BDF2: the miss and its diagnosis.** The registered test asserted every field and stopped at `ux`; all
+three orders were printed (table). It is now the ignored `s3_kepsilon_bdf2_time_order_known_miss`, with the limit intact.
+Diagnosis, report only (`s3_kepsilon_bdf2_diagnosis` and `s3_kepsilon_bdf2_diagnosis_enhanced`, ignored, each run once):
+
+- the outer iterations had converged in the run of record (largest `nut_change` of a step 1.3e-15 at T/320), and Euler is first
+  order in all three fields (S3 Euler), as are both schemes in the library checks K1 and K2, which show the time derivative of
+  the k and epsilon equations exactly;
+- the same runs one and two levels finer give `p` 1.5598 / 1.7638 / 1.7816 (`ux` / k / epsilon) from T/160, T/320, T/640 and
+  1.8119 / 1.8796 / 1.8874 from T/320, T/640, T/1280: the observed order rises towards 2, so the registered levels are not in
+  the asymptotic range of this start-up for k-epsilon (they were for SA and, in P2, for SST);
+- a likely contributor, not proven by these runs: the standard wall function's wall-face eddy viscosity
+  (`WallConstants::nut_wall_from_k`) is 0 below `y*_lam` = 11.530107 and the log-law value above it, a kink in `y*`, and in the
+  T/320 run the wall-cell `y*` (8.78 to 12.48) crosses `y*_lam` twice in the window (at t 0.481 and t 1.425). A coefficient
+  with a kink in time gives the BDF2 error a part whose size depends on where the crossing falls inside a step. A start with
+  k 2 and epsilon 14.4 (the same initial eddy viscosity) also crosses (3 steps with a crossing) and gives 3.5073 / 1.8581 /
+  1.7352, so it does not isolate the cause;
+- with the enhanced wall function (no switch at `y*_lam`) on this mesh (`y+` about 20, not the wall-resolved mesh that wall
+  function is meant for) the 20 outer iterations do not converge at T/80 and T/160 (largest `nut_change` of a step 4.7e-2 and
+  1.0e-4) and neither scheme shows an order (BDF2 -0.17 / -0.20 / 0.04, Euler 0.46 / 0.46 / 0.58), so that run does not
+  separate the kink either. It is a finding of its own (question 6).
+
+The limit is not changed.
+
+**Mutations** (scratch, each applied alone to affe302 and reverted; the named test run once):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| M1 | K1 | fails at its precondition HK0 in step 1, sweep 1: spread k 8.074e-2, epsilon 9.291e-3 (the relaxed k equation does not keep a uniform field uniform) | fails |
+| M2 | K2 (`bdf2`) | standard BDF2 k: `e(160)` 1.5069e-3, `e(320)` 7.5430e-4, `p` 0.9983 (the Euler numbers) | fails |
+| M3 | K1v | 7.382e-3 | fails |
+| M4 | S3 CH-K (`bdf2`) | `p` 0.9502 / 0.7856 / 0.5844 (`ux` / k / epsilon) at errors `e(80,160)` 9.4e-3 / 3.3e-2 / 4.5e-2, 600 to 60 times those of the code; largest `nut_change` of a step 0.55 to 0.61 | fails (below the band, where the code of record also misses; see below) |
+| M5 | A1 | fails at its precondition HA0 in step 1, sweep 2: spread of nuTilda 9.499e-2 | fails |
+| M6 | A2 (`bdf2`) | `e(40)` 8.5548e-3, `e(80)` 4.3046e-3, `p` 0.9909 (the Euler numbers) | fails |
+| M7 | A1v | 3.475e-3 | fails |
+| M8 | S3 CH-A (`bdf2`) | `p` 0.5602 / 0.7359 (`ux` / nuTilda); largest `nut_change` of a step 0.97 | fails (the code of record meets) |
+| M9 | S1 | CH-K on `piso` accepted with no diagnostic | fails |
+
+M4 makes a check fail that the code of record also misses, so on its own it does not show that S3 separates the coupled step
+from the lagged one for k-epsilon. The diagnosis of the miss was therefore run once more with M4 applied (report only): the
+finer levels give `p` 1.0141 / 0.7784 / 0.6161 (T/160, T/320, T/640) and 1.0425 / 0.8345 / 0.7611 (T/320, T/640, T/1280),
+where the code gives 1.56 to 1.78 and 1.81 to 1.89. The order that rises towards 2 comes from the sweep in the outer iterations.
+
+**Predictions.** PR1 met (every recursion check at or below 6.1e-15; K2, K2v, A2, A2v reproduce the recursion to the printed
+digits). PR2 met (1e-15). PR3 met (R1 at 5.6e-11 to 1.6e-9). PR4 met for SA and for k-epsilon Euler and S3N, falsified for
+k-epsilon BDF2 at the registered levels (0.80 to 1.53). PR5 met (1.0e-15 and 1.2e-15).
+
+Before the gate, on affe302 in release: the non-ignored tests of 18 related `rcfd-api` files (`bc_catalogue`, `des_tree`,
+`dispersion_f255`, `exp_rot_pab`, `exp_rot_pc`, `f286_transient_sst` with D6, `f295_seam_diffusivity`, `init_methods`,
+`physics_schema`, `rsm_tree`, `rules_w19c`, `runctl`, `sgs_tree`, `sst_schema`, `transient_sources`, `turb_models`,
+`w48z_followups`, `wall_options`): 144 passed, 0 failed; the `rcfd-turb` unit tests and `channel_kepsilon`, `des`,
+`f286_transient_sst`, `f294_transient_kepsilon`, `f294_transient_sa`, `f295_seam_diffusivity`, `flat_plate_sa`, `rsm`: 76
+passed, 0 failed. `cargo clippy -p rcfd-turb -p rcfd-fv -p rcfd-api --all-targets -- -D warnings` and `cargo fmt --check` of
+the three packages are clean.
+
+**Questions added by the results** (each with a recommendation):
+
+6. **The enhanced wall function on `pimple`.** On the CH mesh (`y+` about 20) its outer iterations do not converge in 20 at
+   `dt` = 0.025 and 0.0125 (above). Options: (a) leave it accepted, documented as meant for wall-resolved meshes, as today for
+   the steady algorithms; (b) a follow-up item that measures it on a wall-resolved channel on `pimple`. Recommendation: (a) now,
+   (b) if a case needs it.
+7. **The S3 k-epsilon BDF2 miss.** Options: (a) keep it as the known miss it is, with the diagnosis above (as done); (b) a
+   registered follow-up that makes the standard wall-function eddy viscosity smooth at `y*_lam` (opt-in, defaults
+   bit-identical) and repeats S3 with it, which would test the likely cause. Recommendation: (a) now; (b) only if transient
+   k-epsilon with wall functions needs a case-tree order record, since K1 and K2 show the scheme exactly.
