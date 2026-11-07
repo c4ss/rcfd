@@ -400,3 +400,33 @@ held; every mutation failed its test; V1 missed its order limit. F-219 is set **
   terms of the solid cells. Recommendation (a) until a case needs it.
 - **Q6 (added). The order of the immersed forcing.** Options: (a) a follow-up item that reconstructs the face flux between fluid and
   solid cells with the crossing, registered with V1 again as its check; (b) accept first order. Recommendation (a).
+
+### The gate (2026-11-07)
+
+The gate ran on a `git archive` copy of 2f9470b (addendum 1's commit) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f219-gate`, through the machine's gate lock (the 5 s
+poll of `gate-f291/outer2.sh`; queued at 18:27:27 UTC behind f250, taken at 20:19:47, released at 22:07:16). It started with 21 GB
+of physical memory free (registered threshold 19 GB); the lowest sample during the run was 17 GB (20:59), below the threshold, with
+other agents building. `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3188 passed, 2
+failed, 894 ignored** (3190 test processes in 608 binaries, wall 5630 s, peak summed working set 3373 MB, largest time against its
+limit 0.465, which is `a3_two_d_two_strouhal_number` at 1674 s; `a1_a2_two_d_one_drag_and_lift_on_m3` took 900 s).
+
+The two failures:
+
+- `rcfd-mcp` `adopt_f288::a_n_a_run_that_differs_in_one_item_is_not_adopted`: `Access is denied` on the replace of a `run.json`
+  after 12 attempts (a file held by another process). Run again alone on the same build three times: passed three times. A flaky
+  file-replace test, not in the earlier gate lines; not related to F-219.
+- `rcfd-api` `f294_transient_keps_sa::s1_scope_of_transient_kepsilon_and_sa`: expects `turbulence.periodic_seam.diffusivity =
+  "pair"` with k-epsilon on PIMPLE to be refused (ADR 0210 S1), and gets no diagnostic. Run again alone on the same build: fails the
+  same way. Run on a `git archive` of main 981804b without F-219 (target `target-f219-chkmain`): fails the same way. It is an
+  interaction of two merges on main (F-294's S1 written before F-296, ADR 0212, made `pair` valid for k-epsilon and SA), not an
+  effect of F-219, whose code is not reached by it. The test file is not edited here (Q7).
+
+Every test of `immersed_solid_f219.rs` that is not ignored passed (11); the known miss and the diagnostic were ignored. The suites
+named under N2 passed unedited (`baseline_hashes`, H1 of `case_hashes_w48u`, `w33b_default_bits`, `cylinder`, `solidification`,
+`piso_thin_gap_f299`). So N2 is met for every suite F-219 can reach; the one deterministic failure is the base's. This gate section
+is a document only and was not gated again.
+
+- **Q7 (added). The F-294 scope test on main.** `s1_scope_of_transient_kepsilon_and_sa` fails on main 981804b since the F-296 merge.
+  Options: (a) the owner of F-294 updates its S1 case for `pair` (now accepted, ADR 0212) by an amendment of ADR 0210; (b) leave it
+  failing. Recommendation (a), before the next merge is gated.
