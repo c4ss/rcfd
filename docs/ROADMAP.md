@@ -5397,3 +5397,14 @@ fixed by the item's registration ADR before any code.
     recommendation (a) taken (optional table kept; PISO/PIMPLE lag estimate on the default operator; Lorentz-source
     potential not wired; body_force_weighted refused with pressure options; other solvers and models refused; P1 binding
     with P2-all supplementary).
+
+- [ ] **F-299** PISO/PIMPLE instability at large cell diffusion number across a thin gap
+  - depends on: F-244
+  - acceptance: Every limit is fixed by its registration ADR before any code. The mechanism of the failure found in ADR 0211
+    amendment 1 is identified (fixed mesh, block at rest, time step above between tau/40 and tau/20, cell diffusion number
+    3 to 6 across the gap; not removed by dropping the Rhie-Chow time term, IC0 pressure solver, upwind convection, 3
+    correctors, 5 PIMPLE outer iterations or cell aspect ratios 16 and 8), and either removed with the ignored tau/10
+    known-miss test of F-244 then passing, or recorded as a located limit with a refusal; defaults bit-identical.
+  - note: From ADR 0211 (F-244) question 4, recommendation taken by the lead. Questions 1 to 3: recommendation taken
+    (the 2026-10-22 decision approves the refined acceptance text; no case-tree version, T4 covers the tree path; F-244
+    done).
