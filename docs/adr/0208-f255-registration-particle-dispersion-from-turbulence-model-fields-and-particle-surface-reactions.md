@@ -500,3 +500,25 @@ Correction, before any corrected run:
 - The checks of C, D2 and D3 run once more with the corrected key; A, B and D are unaffected (library only) and are not
   re-run but in the gate. The first run's tests are in commit 8f02f50; their numbers stay in the addendum.
 - Prediction: every check of C as in the first run, bit for bit (the key changes no arithmetic): the same numbers.
+
+## Amendment 3 (2026-11-07, written after the mutation runs and before any corrected run)
+
+The mutations ran once on 1d52cc9. MU1 and MU3 to MU10 made their checks fail (numbers in the addendum). **MU2 did not**:
+with the SST conversion mutated to `epsilon = k omega` (2.5 in place of 0.225), CT4 passed (0.01 to 1.35 percent).
+CT4 takes `sigma^2` and `T_L` from the tracker's own fields, so a wrong conversion moves the closed form with the cloud
+and the check cannot see it; the conversion is pinned only by CT2 (c), bit for bit. CT3 has the same form (CT2 (a) pins
+the k-epsilon fields). So CT4 is not shown to be able to fail against MU2: a defective set-up.
+
+Correction, before any further run:
+
+- CT4 stays, unchanged but for its name and an `#[ignore]` with this reason, as the record
+  `ct4_tracer_cloud_on_sst_fields_follows_taylor_setup_defect`.
+- New tests `ct3b_tracer_cloud_against_the_case_inputs` and `ct4b_tracer_cloud_against_the_case_inputs`: the runs of CT3
+  (case T) and CT4 (case TS), with the closed form evaluated from the case's inputs and not from the tracker: CT3b with
+  `sigma^2 = 2 k_initial / 3` and `T_L = 0.15 k_initial / epsilon_initial` (1.5 and 0.225); CT4b with the same `sigma^2`
+  and `T_L = 0.15 k_initial / (beta* k_initial omega_initial)`, `beta* = 0.09` written as a number in the test (1.5 and
+  1.6666666666666667). Limits as CT3: `V` against `drw_msd` and against Taylor, 5 percent each at the four times; every
+  parcel active; `N = 20 000`.
+- MU2 (amended): must fail CT2 (c) and CT4b. MU3 is run once more against CT3b.
+- Prediction: CT3b and CT4b give the numbers of CT3 and CT4 (the fields equal the inputs to the last bit, item 8 and
+  CT2); under MU2, CT4b misses at every time (`T_L` 0.09 in the run against 1.0 in the closed form).
