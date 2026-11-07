@@ -345,3 +345,38 @@ DP1 (C 0.47 to 0.65) and DP2 (C at most 1.8e-3), falsified for DL (C 1.66e-3 on 
 **Status.** Every registered check run before the gate is met, X1n and the X4a counts hold, and every mutation fails its test.
 By the decision rule F-297 is **done** in the roadmap (the reading clause taken as met by R1 to R4, question 1), subject to the
 gate below.
+
+### The gate (2026-11-07)
+
+The gate ran on a `git archive` copy of 7d08fe1 (addendum 1 before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f297-gate`. The machine lock was taken with the
+atomic `mkdir` lock and owner file of `gate-lock.sh`, polled every 5 s instead of 60 s (as `gate-f291/outer2.sh`); the gate's
+`run.sh` refuses to start unless the owner file names f297. It waited from 21:05 (UTC) behind the F-219 gate and was taken at
+22:07:16. The start threshold of free physical memory was 19 GB (the value given for this job; the template `gate-f292/run.sh` has
+20 GB), and the gate started at once with 20 GB free. A first start of the waiting script at 21:04:57 was ended by the shell
+before it took the lock (its line stays in `outer.log`); only the second one held the lock.
+
+Result: `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3218 passed, 1 failed, 897
+ignored** (3219 test processes in 613 binaries, wall 4858 s, peak summed working set 3198 MB, largest time against its limit
+0.247). The lock was released at the end (23:47:27).
+
+The failure is `f294_transient_keps_sa::s1_scope_of_transient_kepsilon_and_sa` (ADR 0210 S1). Run again alone on the gate's
+build it fails the same way: it expects the case check to refuse `turbulence.periodic_seam.diffusivity = "pair"` with k-epsilon
+(`turbulence.periodic_seam.diffusivity: got []`), which F-296 (ADR 0212, merged before main 36466d0) made valid. It is not on the
+list of known flakes; it is a failure of the base 36466d0, outside this change (no file it touches differs from 36466d0 here: the
+branch changes only `nsga2.rs`, `study.rs`, `tools.rs` and adds three test files), it failed in the F-219 gate too, and main
+50c4a83 has since ignored the test ("f294 S1 superseded by ADR 0212 R1'"). V0e is counted met for this change with that failure
+disclosed.
+
+The free physical memory fell to between 0 and 5 GB from 23:06 to 23:10 through other processes on the machine (the gate's own
+peak summed working set was 3.2 GB); no test failed or timed out then.
+
+All tests of this ADR ran in the gate and passed: the 9 tests of `f297_moo`, the 3 of `f297_default_bits` and the 2 of
+`design_f297`. So did V0a to V0d: `baseline_hashes` (cavity, heated cavity and shipped-case paths), H1 of `case_hashes_w48u`,
+`default_f1`, `project_list_f270`, `tool_list_f275`, `design_f249` (N1, N1d, N6, MO4), `f249_moo` (the MO1z known miss ignored),
+`f249_default_bits`, `f249_nm`, `f249_warm` and the `nsga2` unit tests. This section is documents only and was not gated again.
+
+Q1 to Q5 stay open for the maintainer. F-297 is done in the roadmap by the decision rule.
+
+Merge note for the lead: main has moved to 50c4a83 since the branch point; a trial merge (`git merge-tree`) conflicts only in
+`docs/reference-data.md`, where both sides append a section at the end (keep both).
