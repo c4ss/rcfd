@@ -405,3 +405,17 @@ steps in 53 s. Events after which a trigger condition remained were frequent (D-
 
 The text of M1, M3 and M7 above is read with these changes; S1 gains `TetRemesher::move_plane_with_band`. The record M0,
 the limits, the checks, the negative controls and the mutations are unchanged.
+
+## Amendment 3 (2026-11-07, after the mutation MU3 and before MU3')
+
+MU3 (the trigger ignores the mean ratio) did not make Q fail: the mutated run of P-T gave the registered run's numbers bit
+for bit (1806 events, smallest mean ratio 0.2407). In this run the edge-length conditions keep the trigger on at almost
+every step (the trigger fired in 37332 of 55497 steps, 35526 times without a change), so the quality condition of the
+trigger never decides an event. MU3 is reported as a mutation that did not fail, which by the Classes shows nothing about
+Q; Q's ability to fail is shown by N2. Corrected mutation, run once after this text:
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MU3' | the remesher scores every candidate as perfect: in `Work::evaluate` the new cells' mean ratio is replaced by 1 (`min_new = min_new.min(1.0)`), so splits and collapses ignore quality and any valid candidate counts as an improvement; the test measures Q with `TetRemesher::min_quality`, which the mutation does not touch | Q or R1 (P-T) |
+
+No limit changes.
