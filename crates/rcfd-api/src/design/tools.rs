@@ -13,7 +13,7 @@
 use super::case_eval::{CaseEvaluator, CaseMapEvaluator, RunLimits};
 use super::ledger;
 use super::opmap::{self, Axis, MapOptions, MapPoint, OnFailure, PointEvaluator, PointResult};
-use super::optim::Stop;
+use super::optim::{Coefficients, InitialSimplex, Stop};
 use super::store::{CondResult, Store};
 use super::study::{
     Cmp, Condition, ConstraintDef, Doe, Evaluator, Method, ObjectiveDef, ParamDef, Proposal, Robust, Sense, Study,
@@ -189,12 +189,80 @@ fn parse_method(m: &Value) -> Rpc<Method> {
                 .ok_or_else(|| bad(format!("method.{k}: expected a non-negative integer"))),
         }
     };
+    // ADR 0209 D3: the two Nelder-Mead options belong to nelder_mead only
+    let present = |k: &str| m.get(k).is_some_and(|v| !v.is_null());
+    for k in ["initial_simplex", "coefficients"] {
+        if kind != "nelder_mead" && present(k) {
+            return Err(bad(format!("method.{k}: only nelder_mead takes this key")));
+        }
+    }
+    let choice = |k: &str, allowed: [&str; 2]| -> Rpc<Option<usize>> {
+        match m.get(k) {
+            None | Some(Value::Null) => Ok(None),
+            Some(v) => match v.as_str().and_then(|s| allowed.iter().position(|a| *a == s)) {
+                Some(i) => Ok(Some(i)),
+                None => {
+                    let text = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+                    Err(bad(format!(
+                        "method.{k}: '{text}' is not {} or {}",
+                        allowed[0], allowed[1]
+                    )))
+                }
+            },
+        }
+    };
     Ok(match kind {
-        "nelder_mead" => Method::NelderMead {
-            budget: usize_of("budget", 100)?,
-            restarts: usize_of("restarts", 0)?,
-            seed,
-        },
+        "nelder_mead" => {
+            let simplex = choice("initial_simplex", ["range", "start"])?;
+            let coefficients = choice("coefficients", ["standard", "adaptive"])?;
+            if simplex.is_none() && coefficients.is_none() {
+                Method::NelderMead {
+                    budget: usize_of("budget", 100)?,
+                    restarts: usize_of("restarts", 0)?,
+                    seed,
+                }
+            } else {
+                Method::NelderMeadWith {
+                    budget: usize_of("budget", 100)?,
+                    restarts: usize_of("restarts", 0)?,
+                    seed,
+                    initial_simplex: if simplex == Some(1) {
+                        InitialSimplex::Start
+                    } else {
+                        InitialSimplex::Range
+                    },
+                    coefficients: if coefficients == Some(1) {
+                        Coefficients::Adaptive
+                    } else {
+                        Coefficients::Standard
+                    },
+                }
+            }
+        }
+        "nsga2" => {
+            let required = |k: &str, missing: &str| -> Rpc<usize> {
+                match m.get(k) {
+                    None | Some(Value::Null) => Err(bad(missing.to_string())),
+                    Some(v) => v
+                        .as_u64()
+                        .map(|x| x as usize)
+                        .ok_or_else(|| bad(format!("method.{k}: expected a non-negative integer"))),
+                }
+            };
+            let budget = required("budget", "method.budget: nsga2 needs a budget (no default)")?;
+            let pop = required("pop", "method.pop: nsga2 needs a population size pop (no default)")?;
+            if pop < 4 || pop % 2 != 0 {
+                return Err(bad(format!(
+                    "method.pop: nsga2 needs an even population of at least 4, got {pop}"
+                )));
+            }
+            if budget < pop {
+                return Err(bad(format!(
+                    "method.budget: {budget} is smaller than the population {pop}"
+                )));
+            }
+            Method::Nsga2 { budget, pop, seed }
+        }
         "differential_evolution" => Method::Differential {
             budget: usize_of("budget", 500)?,
             pop: match m.get("pop") {
@@ -225,7 +293,7 @@ fn parse_method(m: &Value) -> Rpc<Method> {
         "sobol" => Method::Doe(Doe::Sobol { n: usize_of("n", 0)? }),
         other => {
             return Err(bad(format!(
-                "method.type: '{other}' is not nelder_mead, differential_evolution, factorial, lhs or sobol (CMA-ES is not available)"
+                "method.type: '{other}' is not nelder_mead, differential_evolution, nsga2, factorial, lhs or sobol (CMA-ES is not available)"
             )))
         }
     })
@@ -235,6 +303,27 @@ fn method_json(m: &Method) -> Value {
     match m {
         Method::NelderMead { budget, restarts, seed } => {
             json!({"type": "nelder_mead", "budget": budget, "restarts": restarts, "seed": seed})
+        }
+        Method::NelderMeadWith {
+            budget,
+            restarts,
+            seed,
+            initial_simplex,
+            coefficients,
+        } => {
+            let simplex = match initial_simplex {
+                InitialSimplex::Range => "range",
+                InitialSimplex::Start => "start",
+            };
+            let coefficients = match coefficients {
+                Coefficients::Standard => "standard",
+                Coefficients::Adaptive => "adaptive",
+            };
+            json!({"type": "nelder_mead", "budget": budget, "restarts": restarts, "seed": seed,
+                   "initial_simplex": simplex, "coefficients": coefficients})
+        }
+        Method::Nsga2 { budget, pop, seed } => {
+            json!({"type": "nsga2", "budget": budget, "pop": pop, "seed": seed})
         }
         Method::Differential { budget, pop, seed } => {
             json!({"type": "differential_evolution", "budget": budget, "pop": pop, "seed": seed})
@@ -382,10 +471,20 @@ pub fn parse_study(v: &Value, base_path: PathBuf, base_fingerprint: String) -> R
             });
         }
     }
-    let method = parse_method(
-        v.get("method")
-            .ok_or_else(|| bad("method: missing (nelder_mead, differential_evolution, factorial, lhs or sobol)"))?,
-    )?;
+    let method = parse_method(v.get("method").ok_or_else(|| {
+        bad("method: missing (nelder_mead, differential_evolution, nsga2, factorial, lhs or sobol)")
+    })?)?;
+    if let Method::NelderMeadWith {
+        coefficients: Coefficients::Adaptive,
+        ..
+    } = &method
+    {
+        if pdefs.len() < 2 {
+            return Err(bad(
+                "method.coefficients: adaptive needs at least 2 parameters (the shrink 1 - 1/d is 0 for d = 1)",
+            ));
+        }
+    }
     let workers = match v.get("workers") {
         None | Some(Value::Null) => 1,
         Some(x) => x

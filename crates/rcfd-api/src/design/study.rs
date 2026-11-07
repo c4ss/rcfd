@@ -2,7 +2,8 @@
 //! constraints, concurrent evaluation with a worker limit, and a resumable store. The optimisers of [`super::optim`] and the
 //! samplers of [`super::sampling`] are driven through [`Study`].
 
-use super::optim::{self, DeOptions, Fitness, NmOptions, OptResult, Stop};
+use super::nsga2::{self, MoFitness};
+use super::optim::{self, Coefficients, DeOptions, Fitness, InitialSimplex, NmOptions, OptResult, Stop};
 use super::pareto;
 use super::sampling;
 use super::store::{key_of, CondResult, Record, Store};
@@ -333,6 +334,28 @@ pub enum Method {
         /// Seed.
         seed: u64,
     },
+    /// Nelder-Mead with the options of ADR 0209 D3 (`NelderMead` is this with `Range` and `Standard`).
+    NelderMeadWith {
+        /// Evaluation budget.
+        budget: usize,
+        /// Restarts.
+        restarts: usize,
+        /// Seed.
+        seed: u64,
+        /// Rule of the initial simplex.
+        initial_simplex: InitialSimplex,
+        /// Step coefficients.
+        coefficients: Coefficients,
+    },
+    /// NSGA-II (ADR 0209 D1): the Pareto set is [`Study::pareto`] of the records.
+    Nsga2 {
+        /// Evaluation budget (whole generations).
+        budget: usize,
+        /// Population (even, at least 4).
+        pop: usize,
+        /// Seed.
+        seed: u64,
+    },
 }
 
 /// Outcome of asking for the next candidates.
@@ -606,6 +629,64 @@ impl<'a> Study<'a> {
                     ..Default::default()
                 };
                 optim::differential_evolution(&bounds, &opts, &mut |xs| self.fitness_batch(xs))
+            }
+            Method::NelderMeadWith {
+                budget,
+                restarts,
+                seed,
+                initial_simplex,
+                coefficients,
+            } => {
+                let opts = NmOptions {
+                    max_evals: *budget,
+                    restarts: *restarts,
+                    seed: *seed,
+                    x0: self.start_point(),
+                    initial_simplex: *initial_simplex,
+                    coefficients: *coefficients,
+                    ..Default::default()
+                };
+                optim::nelder_mead(&bounds, &opts, &mut |xs| self.fitness_batch(xs))
+            }
+            Method::Nsga2 { budget, pop, seed } => {
+                let opts = nsga2::Options {
+                    max_evals: *budget,
+                    pop: *pop,
+                    seed: *seed,
+                    x0: self.start_point(),
+                };
+                let m = self.def.objectives.len();
+                let r = nsga2::run(&bounds, &opts, &mut |xs| {
+                    let pos = self.eval_points(xs, "evaluated")?;
+                    Ok(pos
+                        .iter()
+                        .map(|&p| {
+                            let rec = &self.store.records()[p];
+                            match self.objective_vector(rec) {
+                                Some(o) => MoFitness::new(o, self.violation_of(rec)),
+                                None => MoFitness::failed(m),
+                            }
+                        })
+                        .collect())
+                })?;
+                // the member of the last population that is best by the weighted scalar (Deb's rules), the first on a tie
+                let mut best: Option<(Vec<f64>, Fitness)> = None;
+                for (x, _) in &r.population {
+                    let f = self
+                        .store
+                        .get(&key_of(x))
+                        .map_or(Fitness::FAILED, |rec| self.fitness_of(rec));
+                    if best.as_ref().is_none_or(|(_, b)| f.better(b)) {
+                        best = Some((x.clone(), f));
+                    }
+                }
+                let (x, fitness) = best.ok_or_else(|| Stop::Error("internal error: empty population".into()))?;
+                Ok(OptResult {
+                    x,
+                    fitness,
+                    evaluations: r.evaluations,
+                    converged: false,
+                })
             }
         }
     }

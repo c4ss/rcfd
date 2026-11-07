@@ -69,12 +69,23 @@ pub fn non_dominated_sort(objs: &[Vec<f64>], violation: &[f64]) -> Vec<Vec<usize
     fronts
 }
 
-/// The first front only.
+/// The first front only: the indices, in ascending order, of the points no other point dominates. This is the first front of
+/// [`non_dominated_sort`] (the same treatment of non-finite objectives), computed without its lists of dominated pairs, so the
+/// memory is O(n) instead of O(n^2) (ADR 0209 D2).
 pub fn front(objs: &[Vec<f64>], violation: &[f64]) -> Vec<usize> {
-    non_dominated_sort(objs, violation)
-        .into_iter()
-        .next()
-        .unwrap_or_default()
+    let n = objs.len();
+    let viol: Vec<f64> = (0..n)
+        .map(|i| {
+            if objs[i].iter().any(|x| !x.is_finite()) {
+                f64::INFINITY
+            } else {
+                violation.get(i).copied().unwrap_or(0.0)
+            }
+        })
+        .collect();
+    (0..n)
+        .filter(|&i| !(0..n).any(|j| j != i && dominates(&objs[j], viol[j], &objs[i], viol[i])))
+        .collect()
 }
 
 /// Crowding distance of the members of one front (Deb et al. 2002); boundary points get infinity.
