@@ -2406,8 +2406,8 @@
     "deps": [
       "F-244"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit is fixed by its registration ADR before any code. The mechanism of the failure found in ADR 0211 amendment 1 is identified (fixed mesh, block at rest, time step above between tau/40 and tau/20, cell diffusion number 3 to 6 across the gap; not removed by dropping the Rhie-Chow time term, IC0 pressure solver, upwind convection, 3 correctors, 5 PIMPLE outer iterations or cell aspect ratios 16 and 8), and either removed with the ignored tau/10 known-miss test of F-244 then passing, or recorded as a located limit with a refusal; defaults bit-identical.",
-    "note": "From ADR 0211 (F-244) question 4, recommendation taken by the lead. Questions 1 to 3: recommendation taken (the 2026-10-22 decision approves the refined acceptance text; no case-tree version, T4 covers the tree path; F-244 done)."
+    "note": "From ADR 0211 (F-244) question 4, recommendation taken by the lead. Questions 1 to 3: recommendation taken (the 2026-10-22 decision approves the refined acceptance text; no case-tree version, T4 covers the tree path; F-244 done). PARTIAL (ADR 0214, 2026-11-07): mechanism located (H-RC: the first corrector over-corrects a pressure error by about the cross-gap diffusion number, and on the collocated mesh the second corrector leaves the Rhie-Chow part of a pressure wave of four cells along the gap; twin-run radii within 0.6 % of the replica); removed under the library opt-in PimpleSettings::consistent_correctors (SIMPLEC-type correctors, defaults bit-identical), with which the registered tau/10 set-up of F-244 passes (A1c: U(10 tau)/U_t 1.00548). Open: the default path (the known miss of F-244 still fails by construction; ADR 0214 Q1), a refusal on the moving-mesh default path (Q3), a case key (Q4)."
   }
 ]

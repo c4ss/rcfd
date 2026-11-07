@@ -5398,7 +5398,7 @@ fixed by the item's registration ADR before any code.
     potential not wired; body_force_weighted refused with pressure options; other solvers and models refused; P1 binding
     with P2-all supplementary).
 
-- [ ] **F-299** PISO/PIMPLE instability at large cell diffusion number across a thin gap
+- [~] **F-299** PISO/PIMPLE instability at large cell diffusion number across a thin gap
   - depends on: F-244
   - acceptance: Every limit is fixed by its registration ADR before any code. The mechanism of the failure found in ADR 0211
     amendment 1 is identified (fixed mesh, block at rest, time step above between tau/40 and tau/20, cell diffusion number
@@ -5408,3 +5408,10 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0211 (F-244) question 4, recommendation taken by the lead. Questions 1 to 3: recommendation taken
     (the 2026-10-22 decision approves the refined acceptance text; no case-tree version, T4 covers the tree path; F-244
     done).
+  - note: PARTIAL (ADR 0214, 2026-11-07). Mechanism located (H-RC): the first corrector over-corrects a pressure error by
+    about the cross-gap diffusion number, and on the collocated mesh the second corrector leaves the Rhie-Chow part of a
+    pressure wave of four cells along the gap; twin-run radii of the solver within 0.6 % of the replica (D1 3.160 at tau/10,
+    D2 1.731 at tau/20, D3 4.984, D4 1.660 with three correctors, D5 0.970 at tau/40, D6b 7.326 with one corrector). Removed
+    under the library opt-in `PimpleSettings::consistent_correctors` (SIMPLEC-type correctors, defaults bit-identical): F-244's
+    registered tau/10 set-up passes with it (A1c: U(10 tau)/U_t 1.00548). Open: the default path (the known miss of F-244
+    still fails by construction; ADR 0214 Q1), a refusal on the moving-mesh default path (Q3), a case key (Q4).

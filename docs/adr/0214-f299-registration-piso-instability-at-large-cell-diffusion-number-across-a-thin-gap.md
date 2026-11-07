@@ -1,7 +1,8 @@
 # ADR 0214: F-299 registration: the PISO/PIMPLE instability at a large cell diffusion number across a thin gap
 
-Status: **REGISTERED 2026-11-07**, written before any code of F-299 and before any rcfd run of its checks. Not yet accepted by
-the maintainer. Results go in the addendum at the end.
+Status: **REGISTERED 2026-11-07**, written before any code of F-299 and before any rcfd run of its checks; two amendments
+before the runs they govern; results in the addendum (every registered check met, two set-up defects corrected by the amendments;
+F-299 partial by the decision rule). Not yet accepted by the maintainer.
 
 Parents: [ADR 0211](0211-f244-registration-flow-coupled-six-dof-validation.md) (F-244, amendment 1: the failure and its
 fixed-mesh reproduction, the ignored known miss `a1_falling_block_reaches_the_lubrication_terminal_velocity_known_miss`, Q4),
@@ -357,3 +358,117 @@ B, `max |u - u_S0| <= 1e-10 U0` and `max |p - p_S0| <= 1e-10 (max p_S0 - min p_S
 branch A after the 50 steps is printed. MU2 to MU4 must fail S1b. The registered test stays as the ignored record
 `s0_s1_steady_state_of_the_consistent_correctors_is_the_default_one_defective_setup`; the new test is
 `s0b_s1b_steady_state_of_the_consistent_correctors_is_the_default_one`.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above and in amendments 1 and 2; no limit was changed. Release builds on Windows. The
+registration is 5cc001a; the diagnosis tests are 4ae3ec7 (test code only, library of c4b2cae); amendment 1 and its corrected test
+are 55094db (library of c4b2cae); the opt-in and its tests are 2bd0faa; amendment 2 and its corrected test are 8225a19; this
+addendum's commit carries the documents. Each registered check ran once (N2 is the registered identity re-run); the runs are
+deterministic and none was repeated to change a result.
+
+**Built.** `crates/rcfd-fv/src/pimple.rs`: `PimpleSettings::consistent_correctors` (default `false`, set by `piso` and therefore
+by `pimple`), the refusal `consistent_conflict` (before any work) and the per-outer-iteration check of hook sources, `h1` and
+`rAtU` (`consistent_rau`, the floor of the steady SIMPLEC) in `step_with` and in `lag_map`, the split `consistent_split` (cell term,
+internal and boundary compensation), the pressure equation, flux correction, cell update and `add_wall_flux` with `interp(rAtU)`,
+and one branch of `Divergence::message` for the refusal. Every new statement is behind the flag; with it off the six changed
+lines compute the same values (N2). `crates/rcfd-fv/tests/piso_thin_gap_f299.rs` holds 20 tests: the D, L, F, S, A1c, A4u-c, R1
+and N1 checks and the two ignored defective-set-up records of the amendments; the heavy ones are ignored in debug builds only.
+No case-schema key, golden, `baseline_hashes.rs`, `case_hashes_w48u.rs` or existing test file was touched. Documents:
+`docs/dynamic-mesh.md` (the time-step limit, its mechanism and the opt-in), the F-299 entries of `docs/ROADMAP.md` and
+`docs/roadmap.json` (partial, by the decision rule).
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D0 (set-up) FX default `tau/10` | not bounded within 100 steps | not bounded at step 15 (`max |u|` 15.6 `U_t`; 2.31, 2.75, 3.77, 6.99 `U_t` at steps 11 to 14; the guard had not tripped) | held |
+| D0b (set-up) FX default `tau/40` | bounded, 400 steps | bounded; continuity `3.40e-12`; block force at `10 tau` 0.751841 | held |
+| D1 TW `tau/10` | within 10 % of 3.165; alternating | 3.15959 (`-0.17 %`), sign `-1.000` | met |
+| D2 TW `tau/20` | within 10 % of 1.737; alternating | 1.73092 (`-0.35 %`), `-1.000` | met |
+| D3 TW `tau/5` | within 10 % of 4.992; alternating | 4.98354 (`-0.17 %`), `-1.000` | met |
+| D4 TW `tau/10`, 3 correctors | within 10 % of 1.660; alternating | 1.66032 (`+0.02 %`), `-1.000` | met |
+| D5 TW `tau/40` | `< 1` | 0.97040 (sign `+1`, a smooth decaying mode above the block) | met |
+| D6, DN1 as registered | | not measured: the one-corrector base run not bounded at step 4 (amendment 1) | defective set-up, ignored record |
+| D6b TW `tau/40`, 1 corrector (amendment 1) | within 10 % of 7.315 | 7.32581 (`+0.15 %`) | met |
+| DN1b (negative control) | `>= 1`; alternating | 7.32581, `-1.000` | held |
+| D7 shape of the D1 mode | `E >= 0.9`, `X <= 0.05`, `abs(c_1) <= 0.3`, `c_2 <= -0.7` | `E` 0.9999, `X 4.0e-8`, `c_1 +0.083`, `c_2 -0.972` | met |
+| D7 shape of the D2 mode | as above | `E` 0.9994, `X 1.5e-7`, `c_1 +0.106`, `c_2 -0.962` | met |
+| DN2 (negative control) shape test on the base pressure | fails (`c_2 > -0.7`) | `c_2 +0.990` (`c_1 +0.995`, `E` 0.847) | held |
+| L1 B4 check, Raise, FX default `tau/10` | stops at step 1, `lag amplification >= 1.3`, cell in a gap | step 1, 3.30207, cell 5583 at (0.00969, 2.2405): the gap column beside the block | met |
+| F1 TW with the option at `tau/5`, `tau/10`, `tau/20` | `< 1` each | 0.95364, 0.91984, 0.94214 (signs `+1`; replica 0.977, 0.957, 0.972) | met |
+| F2 FX with the option, `tau/10` | bounded; continuity `<= 1e-10`; force relative `<= 1e-3` | bounded (`max |u|` 3.25 `U_t`); `4.07e-11`; 0.75184038 against 0.75184108, `9.4e-7` | met |
+| F3 B4 estimate with the option, `tau/10` | `< 1` | 0.91697 (the default's: 3.30207, L1) | met |
+| S0 (set-up) as registered | last step change `<= 1e-12 U0` | `1.95e-12 U0` (the solvers' floor, amendment 2) | defective set-up, ignored record |
+| S0b (set-up, amendment 2) | branch A drift `<= 2e-11 U0` | `2.48e-12 U0` (pressure `2.76e-11` of the range) | held |
+| S1b (amendment 2) | `<= 1e-10 U0`; `<= 1e-10` of the range | `1.97e-12 U0`; `1.77e-11` (B against A: `1.81e-12 U0`, `9.2e-12`) | met |
+| A1c (acceptance) A1, `tau/10` with the option | `abs(. - 1) <= 0.02` | 1.00548 | met |
+| A1c A2, `tau/20` against `tau/10` | `<= 0.005` | `1.51e-5` (1.00546) | met |
+| A1c A3 continuity, both runs | `<= 1e-10` | `4.86e-11`, `9.17e-11` | met |
+| A1c A4 GCL; total volume | `<= 1e-12 mean(V)`; `<= 1e-12 V0` | `6.68e-16`, `6.34e-16`; `5.69e-14`, `5.56e-14` | met |
+| A1c A5 `min V(t)/V(0)` | `>= 0.5` | 0.9154, 0.9160 | met |
+| A1c A7, A8, A9 | `<= 1e-3`; `<= 1e-9 abs(s)`; `>= 0.25 h`, no cyclic patch | `3.05e-5`; `9.1e-13`; `0.424 h`, none | met |
+| A1c AN1 (negative control) | `>= 0.08` | 0.2062 | held |
+| A4u-c | `<= 1e-12 abs(u0)`; `<= 1e-12 abs(u0)^2` | `4.2e-15`; 0 | met |
+| R1 refusals | stopped at step 1, stage, quantity, state bit-identical, message names ADR 0214 | all seven (fractional step, non-orthogonal correctors, component diagonal, body force, face jump, periodic faces, body force from the hook at outer iteration 1) | met |
+| N1 | `false` in `piso` and `pimple` | `false`, `false` | met |
+| N2 D and L hash lines, diagnosis tree against the final tree | equal | all 12 lines equal (D0, D0b, D1 to D5, D4 and D5 printed, D6b, the no-Rhie-Chow print, L1); F2's reference hash `b705ecdf1f7aba7e` equals D0b's | met |
+| N3 | the gate | see the gate section | |
+
+Printed, no limit. TW at `tau/10` with four correctors: 1.03537 (replica 1.035: still unstable); without the transient
+Rhie-Chow term: 3.14847 (replica 3.153); at `tau/30`: 1.13741 (replica 1.144). So the onset with two correctors lies between
+`tau/40` and `tau/30` (D 2.98 to 3.97 across the gap), and a fixed corrector count only moves it. Every two-corrector mode of D1
+to D4 sits in the long rows of the gaps (largest entry at `y` 1.7 to 3.4), the one-corrector mode of D6b is smooth along the gap
+and largest in the graded rows at its end (`y` 0.11), as M1 and the one-column model say. The option's slowest modes (F1) have
+cross-gap structure (`X` about 0.98) and lie in the cells under the block; they decay by 4.6 to 8 % per step. A1c's approach at
+`tau/10`: `U/U_t` 0.683, 0.899, 1.0017 at `tau`, `2 tau`, `5 tau` (closed form 0.632, 0.865, 0.993; ADR 0211's `tau/40` run 0.642,
+0.873, 0.9991): faster at the larger step, not diagnosed (no limit). Cost: 2434 pressure iterations over the 100 steps of the
+`tau/10` run (24.3 per step) against 9384 over the 400 steps of ADR 0211's `tau/40` default run (23.5 per step), so the option
+reaches `10 tau` with a quarter of the work. F2's run used 2375.
+
+**Reading.** Every prediction of H-RC was met: the solver's own step-map radii agree with the replica of M3 within 0.6 % at five
+set-ups (two, three and one correctors, four time steps), the mode has the predicted shape (uniform across the gap, period four
+rows along it, alternating), and the shape test and the radius measurement both fail where they should (DN1b, DN2). The mechanism
+is located: M1 (the first corrector's over-correction by about the cross-gap diffusion number) together with M2 (the collocated
+cell update leaves the Rhie-Chow part of short pressure waves, which the next corrector amplifies again). The SIMPLEC-type
+correctors remove it with an unchanged steady state (S1b) and the registered `tau/10` falling block of F-244 passes every A check
+of ADR 0211 with them.
+
+### Mutations
+
+Applied one at a time to the code of 8225a19 by `f299-scratch/mutate.py` (an exact text replacement that checks that the
+replaced text occurs once), the named tests run once in release in a separate target directory, the file restored and compared
+byte for byte with the kept copy (equal after each of the six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `rAtU = rAU` | F1 (`tau/10`), A1c | F1 failed: 4.98354 and 3.15959 at `tau/5` and `tau/10`, D3's and D1's numbers bit for bit (D1's hash); A1c failed: "mesh error: cell 0 has non-positive volume" in the `tau/10` run, the failure of the known miss |
+| MU2 cell term dropped | S1b | failed: `1.06e-1 U0` (pressure `3.4e-1` of the range) |
+| MU3 internal-face compensation dropped | S1b | failed: `9.45e-2 U0` |
+| MU4 boundary-face compensation dropped | S1b | failed: `7.04e-3 U0` |
+| MU5 `add_wall_flux` with `interp(rAU)` | A1c (A3) | failed: A3 `1.81e-5` (`tau/10`) and `1.70e-5` (`tau/20`); A1, A2, A7 to A9 unchanged |
+| MU6 `lag_map` without the option | F3 | failed: 3.30207, L1's number |
+
+`scripts/limit_audit.py` (workspace scan) reports no hit in the new test file.
+
+### Disclosures
+
+- Order of the runs: registration; the D and L tests once on 4ae3ec7 (the test binary was linked at 11:58:36 UTC from the
+  library built at 11:57:44, before the first library edit at 11:59:25; the library edits were stashed while amendment 1 and D6b
+  were committed and run, then restored); D6b once; the opt-in; the F, S, A1c, A4u-c, R1, N1 tests once; amendment 2 and S0b/S1b
+  once; N2 (the D and L tests again on 8225a19); the mutations.
+- TW's start direction: the xorshift values were scaled by `U_t` (velocity) and `P` (pressure) so that both parts weigh alike in
+  the registered norm (the registration gave the values, not their units).
+- The S0 miss: the registered 3000 steps reach the floor of the solvers (`tol_rel 1e-13`), about `2e-13` m/s per step; S1's
+  numbers on that run equal S1b's (`1.97e-12 U0`, `1.77e-11`), but are not counted.
+- The F-244 set-up (mesh builder, closed forms, smoothing, coupled loop, the A-check helper) is a copy of
+  `sixdof_flow_f244.rs` with the settings as a parameter; the mesh copy is asserted to give ADR 0211's counts, and F2's reference
+  run reproduces D0b's hash.
+- The replica of M3 and every scratch script stay uncommitted in `E:/projects/cfd/w49i-work/f299-scratch`.
+- Not exercised: the option with BDF2 (the fixed-mesh checks use implicit Euler), with PIMPLE outer iterations, with the adaptive
+  corrector count, on periodic faces or with body forces (refused), and the cylinder spokes of ADR 0154 (Q6).
+
+Status by the decision rule: D1 to D7 met (D6 through D6b) with D0, D0b, DN1b, DN2 held, L1 met; F1 to F3, S1b (S0b held), A1c,
+A4u-c, R1, N1 and N2 met; every mutation failed its tests; N3 is the gate. F-299 is set partial (`[~]`) in the roadmap: the
+mechanism is located and the instability is removed under the opt-in; the default path still has the limit (the known miss of
+F-244 fails by construction, Q1) and the moving-mesh default path has no refusal (Q3). Q1 to Q7 stay open.

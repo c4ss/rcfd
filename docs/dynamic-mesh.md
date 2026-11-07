@@ -22,9 +22,15 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   ADR 0207 Q1 and Q2). No six-DOF body (F-244).
 * No strong coupling or added-mass stabilisation. The explicit coupling needs a body that is not much lighter than the displaced
   fluid; the checks use a fluid-to-body mass ratio of 0.2.
-* A time-step limit of the PISO step found by F-244 (ADR 0211 amendment 1): on a block in a narrow channel the step grows
-  unstable above a diffusion number `nu dt/dx^2` of about 3 to 6 across the finest cells, on a fixed mesh as on a moving
-  one (cause not proven). Keep `nu dt/dx^2` near 3 or below in narrow gaps.
+* A time-step limit of the default PISO step found by F-244 (ADR 0211 amendment 1) and located by F-299 (ADR 0214): across a
+  narrow gap the step grows unstable above a diffusion number `nu dt/dx^2` of about 3 to 4 across the finest cells (16 cells
+  across the gap, two correctors), on a fixed mesh as on a moving one. The first corrector over-corrects a pressure error by
+  about that number, and on the collocated mesh the second corrector does not remove what is left for a pressure wave of four
+  cells along the gap (the Rhie-Chow term the cell-gradient velocity update leaves); the mode alternates in sign every step.
+  More correctors only raise the onset (three: unstable at `tau/10` with `-1.66` per step). Keep `nu dt/dx^2` near 3 or below
+  in narrow gaps, or use the library opt-in `PimpleSettings::consistent_correctors` (SIMPLEC-type correctors, ADR 0214; no case
+  key yet), which removes the instability: F-244's registered `tau/10` falling block passes with it. On a fixed mesh the
+  ADR 0073 lag check in Raise mode refuses the default at step 1 (3.30 per step); on a moving mesh there is no such check.
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
   1e-6 missed, cause not proven).
 * The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed mesh
