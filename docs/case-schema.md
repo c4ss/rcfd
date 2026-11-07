@@ -2358,7 +2358,8 @@ Located errors (the path in brackets):
   every patch under `rigid`, a patch not in `fixed_patches` under `smoothing`, every patch except `xmin` under `layering`
   (`boundaries.<patch>.compressible_bc`; the library evaluates them on moving faces since F-258, ADR 0207, but the case
   tree does not wire that yet)
-* layering with `piso` / `pimple` (`dynamic_mesh.deformation`; F-257), with a mesh file (`mesh.source`) or another
+* layering with `piso` / `pimple` (`dynamic_mesh.deformation`; the library has it since F-257, ADR 0213, but the case
+  tree does not wire it yet), with a mesh file (`mesh.source`) or another
   generator (`mesh.generator`), with `moving_patches` other than `["xmax"]`, with a y or z displacement or a rotation (that
   key), with `mesh.nx < 2`, with `fixed_patches`, or with `mesh.transform` (`mesh.transform.rotate_z_deg`)
 

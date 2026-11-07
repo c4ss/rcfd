@@ -9,11 +9,11 @@
 //!
 //! The convection operator is assembled in conservative form, so the relative flux `phi - m` is simply handed to it;
 //! the right-hand side of the transient term carries the old volume. Child module of `pimple`: it reads the private
-//! solver history.
+//! solver history. Between two steps `replace_mesh` installs a mesh of another topology (a layer event, F-257, ADR 0213).
 
 use super::{PimpleSolver, StepInfo};
 use crate::convection::face_flux;
-use crate::ddt::TimeScheme;
+use crate::ddt::{History, TimeScheme};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use rcfd_core::vec3::Vec3;
@@ -142,5 +142,54 @@ impl PimpleSolver {
         let info = self.step(dt);
         self.ale = None;
         Ok(info)
+    }
+
+    /// Install a geometry of another topology between two steps, with one velocity and pressure per cell and one face
+    /// flux per face of it (a layer event, F-257, ADR 0213 S2; the remapped state of `rcfd_mesh::layering`). The old time
+    /// level of the next step becomes this state; the time, the step count, the history, the settings and the boundary
+    /// conditions are kept. A condition with per-face data must be on a patch whose face count does not change.
+    ///
+    /// Fails, leaving the solver unchanged, for a time scheme other than implicit Euler, a patch list that differs in
+    /// number, names or kinds, sizes that do not fit the new mesh, and a set face viscosity, body force, source force,
+    /// sink or face jump (their data are sized to the current mesh).
+    pub fn replace_mesh(
+        &mut self,
+        geom: Arc<FvGeometry>,
+        u: Vec<Vec3>,
+        p: Vec<f64>,
+        phi: Vec<f64>,
+    ) -> Result<(), String> {
+        if self.settings.time_scheme != TimeScheme::ImplicitEuler {
+            return Err("replace_mesh: a moving mesh supports the implicit Euler time scheme only".into());
+        }
+        let same_patches = {
+            let (a, b) = (self.geom.mesh.patches(), geom.mesh.patches());
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.name == y.name && x.kind == y.kind)
+        };
+        if !same_patches {
+            return Err("replace_mesh: the new mesh must have the patches of the current one".into());
+        }
+        if u.len() != geom.n_cells() || p.len() != geom.n_cells() || phi.len() != geom.mesh.n_faces() {
+            return Err("replace_mesh: one velocity and pressure per cell and one flux per face are required".into());
+        }
+        if self.nu_face.is_some()
+            || self.body_force.is_some()
+            || self.source_force.is_some()
+            || self.sink.is_some()
+            || self.face_jump.is_some()
+        {
+            return Err(
+                "replace_mesh: a face viscosity, body force, source force, sink or face jump is set (sized to the current mesh)"
+                    .into(),
+            );
+        }
+        self.hist_u = [0, 1, 2].map(|k| History::new(u.iter().map(|v| v[k]).collect()));
+        self.phi_hist = History::new(phi.clone());
+        self.geom = geom;
+        self.u.values = u;
+        self.p.values = p;
+        self.phi = phi;
+        self.fs_q = Vec::new();
+        Ok(())
     }
 }
