@@ -104,6 +104,15 @@ pub struct PimpleSettings {
     /// `non_orth_correctors > 0`; the pressure-lag estimate keeps the plain pressure operator (ADR 0204 Q4). Not used by the
     /// fractional step.
     pub gradient_pressure: Option<GradientOptions>,
+    /// Consistent (SIMPLEC-type) pressure correctors (ADR 0214 F0): every corrector, with `p_prev` the pressure that drove it,
+    /// uses `rAtU = V/(a_P - H1)` (`H1` the component-averaged off-diagonal magnitudes) in the pressure equation, the flux
+    /// correction and the cell velocity, the cell term `-(rAU - rAtU) grad(p_prev)` and the face compensation
+    /// `(rAtU - rAU)_f snGrad(p_prev) |S|`, so that a converged state is that of the default. It removes the over-correction of a
+    /// pressure error by about the cell diffusion number that makes two correctors unstable across thin cells (ADR 0214 M1, M2).
+    /// Also on the moving-mesh step and in the pressure-lag estimate. Refused (the step stops through the divergence guard) with
+    /// the fractional step, non-orthogonal correctors, the component diagonal, periodic faces, a body force or a face jump.
+    /// Default `false` (bit-identical).
+    pub consistent_correctors: bool,
 }
 
 /// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
@@ -447,6 +456,11 @@ impl Divergence {
                 "maximum Courant number is {:.4e}, above the limit {:.1e}",
                 self.value, self.limit
             )
+        } else if self.quantity == "consistent correctors" {
+            return format!(
+                "PIMPLE consistent correctors (ADR 0214) are not defined with the {}: the run is stopped at step {}{outer}",
+                self.stage, self.step
+            );
         } else if self.quantity == "lag amplification" {
             return format!(
                 "PIMPLE pressure-lag check: the lagged pressure error is amplified by {:.3} per step (>= 1) at step {}, {}{at}; \
@@ -503,6 +517,7 @@ impl PimpleSettings {
             linear_upwind_limiter: None,
             gradient_momentum: None,
             gradient_pressure: None,
+            consistent_correctors: false,
         }
     }
 
@@ -837,6 +852,35 @@ impl PimpleSolver {
         None
     }
 
+    /// The first setting the consistent correctors are not defined with (ADR 0214 F0), as the stage of the refusal; the sources
+    /// a hook supplies are checked again in every outer iteration.
+    fn consistent_conflict(&self) -> Option<&'static str> {
+        let s = &self.settings;
+        if s.fractional.is_some() {
+            return Some("fractional step");
+        }
+        if s.non_orth_correctors > 0 {
+            return Some("non-orthogonal correctors");
+        }
+        if s.component_diagonal {
+            return Some("component diagonal");
+        }
+        if self.body_force.is_some() || self.source_force.is_some() {
+            return Some("body force");
+        }
+        if self.face_jump.is_some() {
+            return Some("face jump");
+        }
+        if pressure_bc(&self.geom, &self.u, &self.p)
+            .coupled
+            .iter()
+            .any(|c| c.is_some())
+        {
+            return Some("periodic faces");
+        }
+        None
+    }
+
     /// First cell with a non-finite velocity component.
     fn bad_velocity(&self) -> Option<(usize, f64)> {
         let c = self.u.values.iter().position(|v| v.iter().any(|x| !x.is_finite()))?;
@@ -858,6 +902,21 @@ impl PimpleSolver {
         if let Some(d) = &self.diverged {
             // the guard has stopped this run (ADR 0067): do no work
             return d.info;
+        }
+        if self.settings.consistent_correctors {
+            // ADR 0214 F0: refuse the combinations the consistent correctors are not defined with, before any work
+            if let Some(conflict) = self.consistent_conflict() {
+                self.step_no += 1;
+                return self.trip(
+                    dt,
+                    None,
+                    conflict,
+                    "consistent correctors",
+                    None,
+                    f64::NAN,
+                    (0.0, 0.0, 0),
+                );
+            }
         }
         if self.settings.fractional.is_some() && self.ale.is_none() {
             return self.step_fractional(dt);
@@ -941,6 +1000,25 @@ impl PimpleSolver {
                     self.nu_face = Some(nu);
                 }
             }
+            if s.consistent_correctors
+                && (self.body_force.is_some() || self.source_force.is_some() || self.face_jump.is_some())
+            {
+                // ADR 0214 F0: a source the hook supplied for this outer iteration
+                let what = if self.face_jump.is_some() {
+                    "face jump"
+                } else {
+                    "body force"
+                };
+                return self.trip(
+                    dt,
+                    Some(outer),
+                    what,
+                    "consistent correctors",
+                    None,
+                    f64::NAN,
+                    (res_u, res_p, p_iters),
+                );
+            }
             // effective body acceleration of this outer iteration: the static part plus the hook's source
             let body_cow: Option<std::borrow::Cow<BodyForce>> = match (&self.body_force, &self.source_force) {
                 (None, None) => None,
@@ -995,6 +1073,12 @@ impl PimpleSolver {
                 PeriodicLinks::default(),
             ];
             let mut a_p = vec![0.0; n];
+            // ADR 0214 F0: the off-diagonal magnitudes of the consistent correctors (empty when the option is off)
+            let mut h1 = if s.consistent_correctors {
+                vec![0.0; n]
+            } else {
+                Vec::new()
+            };
             let mut diag_k: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             let u_iter: Vec<Vec3> = self.u.values.clone();
             // second-order linearisation: on the first outer iteration of a BDF2 step the
@@ -1091,6 +1175,11 @@ impl PimpleSolver {
                     self.u.values[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
+                if s.consistent_correctors {
+                    for (h, o) in h1.iter_mut().zip(m.a.off_diag_abs_sum()) {
+                        *h += o;
+                    }
+                }
                 diag_k[k] = m.a.diag.clone();
                 mats[k] = Some(m);
                 links[k] = lk;
@@ -1108,6 +1197,9 @@ impl PimpleSolver {
             }
             for a in a_p.iter_mut() {
                 *a /= n_active;
+            }
+            for h in h1.iter_mut() {
+                *h /= n_active;
             }
             if lag_due && last {
                 lag_ctx = Some(LagCtx {
@@ -1139,6 +1231,9 @@ impl PimpleSolver {
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             let gamma_p = face_interpolate(&g, &r_au);
             let gamma_bf = (s.coupled_body_pair_mean && body.is_some()).then(|| coupled_gamma(&g, &pbc, &gamma_p));
+            // ADR 0214 F0: rAtU of the consistent correctors and its face values (`None` = the default correctors)
+            let r_t: Option<Vec<f64>> = s.consistent_correctors.then(|| consistent_rau(&vol, &a_p, &h1));
+            let gamma_t: Option<Vec<f64>> = r_t.as_ref().map(|r| face_interpolate(&g, r));
 
             // ---- pressure correctors ---------------------------------------
             for corr in 0..n_corr {
@@ -1173,10 +1268,18 @@ impl PimpleSolver {
                     }
                 }
                 if let Some(a) = &self.ale {
-                    a.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
+                    // the face coefficient of the pressure equation (ADR 0214 F0: interp(rAtU) with the consistent correctors)
+                    a.add_wall_flux(&g, &pbc, gamma_t.as_deref().unwrap_or(&gamma_p), &mut phi_hby_a);
+                }
+                if let Some(rt) = &r_t {
+                    // ADR 0214 F0: the SIMPLEC split of this corrector with the pressure that drove it
+                    consistent_split(&g, &pbc, &r_au, rt, &self.p.values, &mut phi_hby_a, &mut hby_a);
                 }
                 // pressure jumps: phi (1 + G R) = phiHbyA + G rise - G snGrad p with G = gamma lap, as in the SIMPLE kernel
-                let mut gamma_j = gamma_p.clone();
+                let mut gamma_j = match &gamma_t {
+                    Some(t) => t.clone(),
+                    None => gamma_p.clone(),
+                };
                 if let Some(j) = &self.face_jump {
                     for f in 0..n_int {
                         if g.empty[f] || (j.rise[f] == 0.0 && j.resist[f] == 0.0) {
@@ -1268,10 +1371,12 @@ impl PimpleSolver {
                     }
                 }
                 for c in 0..n {
+                    // the coefficient of the new pressure gradient (ADR 0214 F0: rAtU with the consistent correctors)
+                    let r_c = r_t.as_ref().map_or(r_au[c], |r| r[c]);
                     for k in 0..3 {
                         if g.active[k] {
                             let bforce = body.map_or(0.0, |bf| r_au[c] * bf.cell[c][k]);
-                            self.u.values[c][k] = hby_a[c][k] + bforce - r_au[c] * grad_new[c][k];
+                            self.u.values[c][k] = hby_a[c][k] + bforce - r_c * grad_new[c][k];
                         }
                     }
                 }
@@ -1390,6 +1495,12 @@ impl PimpleSolver {
             let grad = green_gauss(g, &p, &bv, 0);
             let mut used: Vec<Option<FvMatrix>> = vec![None, None, None];
             let mut a_p = vec![0.0; n];
+            // ADR 0214 F0: the off-diagonal magnitudes of the consistent correctors (empty when the option is off)
+            let mut h1 = if s.consistent_correctors {
+                vec![0.0; n]
+            } else {
+                Vec::new()
+            };
             let mut diag_k: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             for k in 0..3 {
                 let Some(m0) = &ctx.mats[k] else {
@@ -1411,14 +1522,25 @@ impl PimpleSolver {
                     u[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
+                if s.consistent_correctors {
+                    for (h, o) in h1.iter_mut().zip(m.a.off_diag_abs_sum()) {
+                        *h += o;
+                    }
+                }
                 diag_k[k] = m.a.diag.clone();
                 used[k] = Some(m);
             }
             for a in a_p.iter_mut() {
                 *a /= n_active;
             }
+            for h in h1.iter_mut() {
+                *h /= n_active;
+            }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
-            let gamma = face_interpolate(g, &r_au);
+            // ADR 0214 F0: the consistent correctors' rAtU (`None` = the default correctors)
+            let r_t: Option<Vec<f64>> = s.consistent_correctors.then(|| consistent_rau(vol, &a_p, &h1));
+            let r_c: &[f64] = r_t.as_deref().unwrap_or(&r_au);
+            let gamma = face_interpolate(g, r_c);
             for corr in 0..n_corr {
                 let mut hby_a = vec![[0.0; 3]; n];
                 for k in 0..3 {
@@ -1435,7 +1557,10 @@ impl PimpleSolver {
                     }
                 }
                 let hb = boundary_hby_a(g, pbc_h, &zero_ub, &hby_a);
-                let phi_h = face_flux(g, &hby_a, &hb);
+                let mut phi_h = face_flux(g, &hby_a, &hb);
+                if let Some(rt) = &r_t {
+                    consistent_split(g, pbc_h, &r_au, rt, &p, &mut phi_h, &mut hby_a);
+                }
                 let p_old = p.clone();
                 let mut p_new = p_old.clone();
                 solve_pressure(g, &gamma, pbc_h, &phi_h, &mut p_new, &controls);
@@ -1444,7 +1569,7 @@ impl PimpleSolver {
                 for c in 0..n {
                     for k in 0..3 {
                         if g.active[k] {
-                            u[c][k] = hby_a[c][k] - r_au[c] * gn[c][k];
+                            u[c][k] = hby_a[c][k] - r_c[c] * gn[c][k];
                         }
                     }
                 }
@@ -1745,6 +1870,54 @@ impl PeriodicLinks {
         h
     }
 }
+/// `rAtU = V/(a_P - H1)` of the consistent correctors (ADR 0214 F0), with the floor of the steady SIMPLEC
+/// (`a_P - H1 >= 1e-3 a_P`); `a_p` and `h1` are the component averages.
+fn consistent_rau(vol: &[f64], a_p: &[f64], h1: &[f64]) -> Vec<f64> {
+    (0..a_p.len())
+        .map(|c| vol[c] / (a_p[c] - h1[c]).max(1e-3 * a_p[c]))
+        .collect()
+}
+
+/// The SIMPLEC split of one consistent corrector (ADR 0214 F0) with the pressure `p_prev` that drove it: adds to `phi_hby_a` the
+/// compensation `(rAtU - rAU)_f snGrad(p_prev) |S|` on internal faces and `(rAtU - rAU)_owner gradient_b(p_prev) |S|` on boundary
+/// faces whose flux the pressure sets (not fixed-velocity, not periodic, not empty), and to `hby_a` the cell term
+/// `-(rAU - rAtU) grad(p_prev)` (Green-Gauss with the boundary values of `pbc`). With `p_new = p_prev` the face flux and the cell
+/// velocity of the corrector are those of the default.
+fn consistent_split(
+    g: &FvGeometry,
+    pbc: &crate::pressure::PressureBc,
+    r_au: &[f64],
+    r_t: &[f64],
+    p_prev: &[f64],
+    phi_hby_a: &mut [f64],
+    hby_a: &mut [Vec3],
+) {
+    let mesh = &g.mesh;
+    let (own, nei, sf) = (mesh.owner(), mesh.neighbour(), mesh.face_area_vectors());
+    let n_int = g.n_internal;
+    let dr: Vec<f64> = r_t.iter().zip(r_au).map(|(t, a)| t - a).collect();
+    let dr_f = face_interpolate(g, &dr);
+    for f in 0..n_int {
+        phi_hby_a[f] += dr_f[f] * g.lap_coeff[f] * (p_prev[nei[f]] - p_prev[own[f]]);
+    }
+    for f in n_int..mesh.n_faces() {
+        let i = f - n_int;
+        if g.empty[f] || pbc.fixed_u[i] || pbc.coupled[i].is_some() {
+            continue;
+        }
+        phi_hby_a[f] += dr_f[f] * vec3::norm(sf[f]) * pbc.coeffs[i].gradient(p_prev[own[f]]);
+    }
+    let bv = boundary_values_pbc(g, pbc, p_prev);
+    let grad = green_gauss(g, p_prev, &bv, 0);
+    for (c, h) in hby_a.iter_mut().enumerate() {
+        for k in 0..3 {
+            if g.active[k] {
+                h[k] -= (r_au[c] - r_t[c]) * grad[c][k];
+            }
+        }
+    }
+}
+
 /// Weights `(c1, c2)` of the old levels in the time derivative
 /// `(c0 u - c1 u^n + c2 u^{n-1}) / dt` for the active scheme and history.
 fn ddt_history_weights(scheme: &TimeScheme, hist: &History, dt: f64) -> (f64, f64) {

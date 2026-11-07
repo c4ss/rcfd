@@ -5428,7 +5428,7 @@ fixed by the item's registration ADR before any code.
     potential not wired; body_force_weighted refused with pressure options; other solvers and models refused; P1 binding
     with P2-all supplementary).
 
-- [ ] **F-299** PISO/PIMPLE instability at large cell diffusion number across a thin gap
+- [~] **F-299** PISO/PIMPLE instability at large cell diffusion number across a thin gap
   - depends on: F-244
   - acceptance: Every limit is fixed by its registration ADR before any code. The mechanism of the failure found in ADR 0211
     amendment 1 is identified (fixed mesh, block at rest, time step above between tau/40 and tau/20, cell diffusion number
@@ -5438,7 +5438,13 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0211 (F-244) question 4, recommendation taken by the lead. Questions 1 to 3: recommendation taken
     (the 2026-10-22 decision approves the refined acceptance text; no case-tree version, T4 covers the tree path; F-244
     done).
-
+  - note: PARTIAL (ADR 0214, 2026-11-07). Mechanism located (H-RC): the first corrector over-corrects a pressure error by
+    about the cross-gap diffusion number, and on the collocated mesh the second corrector leaves the Rhie-Chow part of a
+    pressure wave of four cells along the gap; twin-run radii of the solver within 0.6 % of the replica (D1 3.160 at tau/10,
+    D2 1.731 at tau/20, D3 4.984, D4 1.660 with three correctors, D5 0.970 at tau/40, D6b 7.326 with one corrector). Removed
+    under the library opt-in `PimpleSettings::consistent_correctors` (SIMPLEC-type correctors, defaults bit-identical): F-244's
+    registered tau/10 set-up passes with it (A1c: U(10 tau)/U_t 1.00548). Open: the default path (the known miss of F-244
+    still fails by construction; ADR 0214 Q1), a refusal on the moving-mesh default path (Q3), a case key (Q4).
 - [ ] **F-300** Transient RANS follow-ups from F-294
   - depends on: F-294
   - acceptance: Every limit is fixed by its registration ADR before any code. (a) `rcfd_turb::supports_transient` says
@@ -5450,3 +5456,15 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0210 (F-294) questions 3, 5 and 7, recommendations taken by the lead. Questions 1, 2, 4 and 6: keep
     piso refused, one ADR with two parts, plugin models refused on pimple, the enhanced wall function accepted and
     documented for wall-resolved meshes.
+
+- [ ] **F-301** PISO consistent correctors: moving-mesh lag estimate, case key and benchmarks
+  - depends on: F-299
+  - acceptance: Every limit is fixed by its registration ADR before any code. (a) The lag estimate of ADR 0073 is defined
+    on a moving mesh per step, with the pre-run warning and adaptive correctors connected to it (ADR 0214 question 3);
+    (b) a case key (for example `solver.consistent_correctors`) with the schema golden edit registered, and the
+    LagCheck documentation and Raise message corrected, since a second corrector does not remove the lag for short
+    waves on thin cells (questions 4 and 7); (c) a registered benchmark set (the ADR 0069 and 0073 harnesses, the ADR
+    0154 cylinder K1 and K2, the Studio examples) run with the option, and only then a decision on the default
+    (question 1: the default stays false until then); defaults bit-identical.
+  - note: From ADR 0214 (F-299) questions 1 and 3 to 7, recommendations taken by the lead; question 2: F-299 stays
+    partial. Question 5: extend the refused combinations one at a time, each with a steady-state identity check.
