@@ -22,6 +22,9 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   ADR 0207 Q1 and Q2). No six-DOF body (F-244).
 * No strong coupling or added-mass stabilisation. The explicit coupling needs a body that is not much lighter than the displaced
   fluid; the checks use a fluid-to-body mass ratio of 0.2.
+* A time-step limit of the PISO step found by F-244 (ADR 0211 amendment 1): on a block in a narrow channel the step grows
+  unstable above a diffusion number `nu dt/dx^2` of about 3 to 6 across the finest cells, on a fixed mesh as on a moving
+  one (cause not proven). Keep `nu dt/dx^2` near 3 or below in narrow gaps.
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
   1e-6 missed, cause not proven).
 * The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed mesh
@@ -55,6 +58,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   rotations). Orientation is a unit quaternion. The flow force and moment are
   `F = rho sum [p S - nu (grad u + grad u^T).S]` on the force patches. Coupling is loose and explicit: the force comes from the
   old step, the body advances, the mesh moves to the new pose, and the flow steps.
+- **Flow-coupled validation (F-244, ADR 0211; library tests in `crates/rcfd-fv/tests/sixdof_flow_f244.rs`).** A block
+  falling along a closed 2-D channel, the displaced fluid returning through two side gaps of a 500:1 length ratio, reaches
+  the lubrication terminal velocity `U_t = (M - rho V_b) g / C`, `C = 2 mu H_b dz (3 B^2 + 1)/h`, `B = (w_b + h)/h`, to
+  0.55 percent after 10 time constants (added-mass ratio 0.18; the neglected end, inertia and finite-time terms are bounded
+  to 0.46 percent before the run, the end effect by a minimum-dissipation argument). The C2 piston on a spring oscillates
+  at `sqrt(k/(M + rho A L0))` to 0.13 percent (mass ratio 0.2), where without the fluid force it is 9.5 percent off, and its
+  amplitude decays by about 5 percent per period at 100 steps per period (the lag of the explicit coupling).
 
 ## Case tree
 
