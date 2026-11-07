@@ -5438,3 +5438,15 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0211 (F-244) question 4, recommendation taken by the lead. Questions 1 to 3: recommendation taken
     (the 2026-10-22 decision approves the refined acceptance text; no case-tree version, T4 covers the tree path; F-244
     done).
+
+- [ ] **F-300** Transient RANS follow-ups from F-294
+  - depends on: F-294
+  - acceptance: Every limit is fixed by its registration ADR before any code. (a) `rcfd_turb::supports_transient` says
+    which models run transient on pimple (k-epsilon, SA without DES, SST), checked by a test against what the case tree
+    accepts; (b) an amendment to ADR 0199 re-registers S3 for SST from the wall-matching start that F-294 used (BDF2
+    order in the band in the probe), the old S3 kept as an ignored record; (c) k-epsilon BDF2 order (known miss of ADR 0210,
+    p = 0.80 / 1.49 / 1.53): test the suspected cause, the kink of the wall-function eddy viscosity at y* = 11.53, with a
+    smooth variant under a registered check; defaults bit-identical.
+  - note: From ADR 0210 (F-294) questions 3, 5 and 7, recommendations taken by the lead. Questions 1, 2, 4 and 6: keep
+    piso refused, one ADR with two parts, plugin models refused on pimple, the enhanced wall function accepted and
+    documented for wall-resolved meshes.
