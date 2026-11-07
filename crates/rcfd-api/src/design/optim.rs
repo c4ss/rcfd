@@ -83,7 +83,7 @@ pub struct OptResult {
 /// Box constraints (lo, hi) per parameter.
 pub type Bounds = [(f64, f64)];
 
-fn clamp_into(x: &mut [f64], b: &Bounds) {
+pub(crate) fn clamp_into(x: &mut [f64], b: &Bounds) {
     for (v, &(lo, hi)) in x.iter_mut().zip(b) {
         *v = v.clamp(lo, hi);
     }
@@ -94,6 +94,38 @@ pub fn random_in_box(b: &Bounds, rng: &mut Rng) -> Vec<f64> {
     b.iter().map(|&(lo, hi)| rng.range(lo, hi)).collect()
 }
 
+/// How [`nelder_mead`] builds its initial simplex (ADR 0209 D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialSimplex {
+    /// `x0 + initial_step (hi_i - lo_i) e_i` (ADR 0067).
+    #[default]
+    Range,
+    /// The rule of MATLAB's `fminsearch` as its documentation states it: `x0 + 0.05 x0_i e_i`, or `x0 + 0.00025 e_i` when
+    /// `x0_i = 0`.
+    Start,
+}
+
+/// The reflection, expansion, contraction and shrink coefficients of [`nelder_mead`] (ADR 0209 D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Coefficients {
+    /// Nelder and Mead (1965): 1, 2, 1/2, 1/2.
+    #[default]
+    Standard,
+    /// Gao and Han (2012), as the Optim.jl documentation restates them: 1, `1 + 2/d`, `0.75 - 1/(2d)`, `1 - 1/d`.
+    Adaptive,
+}
+
+/// The coefficients `[reflection, expansion, contraction, shrink]` of `c` for `d` parameters.
+pub fn nm_coefficients(c: Coefficients, d: usize) -> [f64; 4] {
+    match c {
+        Coefficients::Standard => [1.0, 2.0, 0.5, 0.5],
+        Coefficients::Adaptive => {
+            let n = d as f64;
+            [1.0, 1.0 + 2.0 / n, 0.75 - 1.0 / (2.0 * n), 1.0 - 1.0 / n]
+        }
+    }
+}
+
 /// Options of [`nelder_mead`].
 #[derive(Debug, Clone)]
 pub struct NmOptions {
@@ -101,7 +133,7 @@ pub struct NmOptions {
     pub max_evals: usize,
     /// Restarts after the simplex has converged (each with half the previous initial simplex size).
     pub restarts: usize,
-    /// Initial simplex edge as a fraction of the range of each parameter.
+    /// Initial simplex edge as a fraction of the range of each parameter (the `Range` rule).
     pub initial_step: f64,
     /// Convergence: largest vertex distance to the best vertex relative to the range.
     pub xtol: f64,
@@ -109,6 +141,10 @@ pub struct NmOptions {
     pub x0: Option<Vec<f64>>,
     /// Seed (start point and restart orientations).
     pub seed: u64,
+    /// Rule of the initial simplex (ADR 0209 D3; default `Range`).
+    pub initial_simplex: InitialSimplex,
+    /// Step coefficients (ADR 0209 D3; default `Standard`).
+    pub coefficients: Coefficients,
 }
 
 impl Default for NmOptions {
@@ -120,6 +156,8 @@ impl Default for NmOptions {
             xtol: 1e-9,
             x0: None,
             seed: 1,
+            initial_simplex: InitialSimplex::Range,
+            coefficients: Coefficients::Standard,
         }
     }
 }
@@ -144,12 +182,19 @@ fn sort_vertices(v: &mut [Vertex]) {
     });
 }
 
-/// Nelder-Mead with clamping into the box and restarts. Coefficients 1, 2, 0.5, 0.5.
+/// Nelder-Mead with clamping into the box and restarts. Coefficients 1, 2, 0.5, 0.5 by default; the initial simplex and the
+/// coefficients follow `opts.initial_simplex` and `opts.coefficients` (ADR 0209 D3).
 pub fn nelder_mead(b: &Bounds, opts: &NmOptions, eval: &mut Eval<'_>) -> Result<OptResult, Stop> {
     let d = b.len();
     if d == 0 {
         return Err(Stop::Error("no parameters".into()));
     }
+    if opts.coefficients == Coefficients::Adaptive && d < 2 {
+        return Err(Stop::Error(
+            "the adaptive coefficients need at least 2 parameters (the shrink 1 - 1/d is 0 for d = 1)".into(),
+        ));
+    }
+    let [_, c_exp, c_con, c_shr] = nm_coefficients(opts.coefficients, d);
     let range: Vec<f64> = b.iter().map(|&(lo, hi)| hi - lo).collect();
     let mut rng = Rng::new(opts.seed);
     let mut x0 = match &opts.x0 {
@@ -166,7 +211,17 @@ pub fn nelder_mead(b: &Bounds, opts: &NmOptions, eval: &mut Eval<'_>) -> Result<
         let mut pts = vec![centre.clone()];
         for i in 0..d {
             let mut p = centre.clone();
-            let mut step = size * range[i];
+            let mut step = match opts.initial_simplex {
+                InitialSimplex::Range => size * range[i],
+                InitialSimplex::Start => {
+                    let s = if centre[i] != 0.0 { 0.05 * centre[i] } else { 0.00025 };
+                    if restart > 0 {
+                        0.5f64.powi(restart as i32) * s
+                    } else {
+                        s
+                    }
+                }
+            };
             if restart > 0 && rng.uniform() < 0.5 {
                 step = -step;
             }
@@ -224,7 +279,7 @@ pub fn nelder_mead(b: &Bounds, opts: &NmOptions, eval: &mut Eval<'_>) -> Result<
                     budget_hit = true;
                     break;
                 }
-                let xe = along(-2.0);
+                let xe = along(-c_exp);
                 let fe = one(eval, xe, &mut evals)?;
                 s[d] = if fe.1.better(&fr.1) { fe } else { fr };
                 continue;
@@ -235,7 +290,7 @@ pub fn nelder_mead(b: &Bounds, opts: &NmOptions, eval: &mut Eval<'_>) -> Result<
                 budget_hit = true;
                 break;
             }
-            let xc = if outside { along(-0.5) } else { along(0.5) };
+            let xc = if outside { along(-c_con) } else { along(c_con) };
             let fc = one(eval, xc, &mut evals)?;
             let accept = if outside {
                 !fr.1.better(&fc.1)
@@ -254,7 +309,7 @@ pub fn nelder_mead(b: &Bounds, opts: &NmOptions, eval: &mut Eval<'_>) -> Result<
             let b0 = s[0].0.clone();
             let pts: Vec<Vec<f64>> = (1..=d)
                 .map(|j| {
-                    let mut p: Vec<f64> = (0..d).map(|i| b0[i] + 0.5 * (s[j].0[i] - b0[i])).collect();
+                    let mut p: Vec<f64> = (0..d).map(|i| b0[i] + c_shr * (s[j].0[i] - b0[i])).collect();
                     clamp_into(&mut p, b);
                     p
                 })

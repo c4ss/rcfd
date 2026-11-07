@@ -5,12 +5,14 @@
 //! [`study::Evaluator`]; `case_eval` is the evaluator that runs rcfd cases; `opmap` is the chained operating-point driver;
 //! `tools` holds the `design.*` service methods. `adjoint` gives shape sensitivities of laminar SIMPLE/SIMPLEC solutions with
 //! respect to free-form-deformation parameters (ADR 0091) for the gradient method `optim::projected_gradient`. `ledger` is the
-//! cross-study design ledger and `uq` the tolerance/uncertainty study driver (ADR 0121).
+//! cross-study design ledger and `uq` the tolerance/uncertainty study driver (ADR 0121). `nsga2` is the multi-objective
+//! optimiser (ADR 0209).
 
 pub mod adjoint;
 pub mod case_eval;
 pub mod fan_rom_eval;
 pub mod ledger;
+pub mod nsga2;
 pub mod opmap;
 pub mod optim;
 pub mod pareto;

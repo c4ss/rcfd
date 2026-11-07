@@ -13,14 +13,14 @@ exercised on small laminar cases and on analytic surrogates. The [glossary](glos
 
 ## Not delivered
 
-* CMA-ES
-* multi-objective evolutionary search
+* CMA-ES (F-260)
 * Halton sequences
 * adjoint gradients for turbulent, transient or energy runs
 * adjoint gradients through studies, the service or MCP tools
 * RBF morphing
 * surrogate models
-* warm start for transient, energy or turbulence runs (they run cold)
+* warm start for transient runs, the coupled solver and turbulence models other than k-epsilon and k-omega SST (they run
+  cold); the warm start of energy and k-epsilon / k-omega SST runs exists in the library only (below)
 * any use with the real fan (the fan case belongs to the other wave 32 work and the milestone itself)
 
 ## Operating maps
@@ -53,6 +53,18 @@ SIMPLEC algorithms without energy or turbulence fields; every other set-up runs 
 ...`), `restart = cold`. A point that fails when started warm is repeated once cold (`retry_cold`, default on); the row then says
 `restart = cold_retry`, counts the iterations of both attempts and keeps the first failure in `message`. After a failed point the
 next one starts cold from the base case because the failed state is not a usable guess (`on_failure = continue`, default).
+
+**Extended warm start (library only, ADR 0209).** `design::case_eval::ExtendedMapEvaluator` (an operating map) and
+`CaseEvaluator::warm = WarmStart::Extended` (chained conditions of a study) also carry the temperature of the energy equation
+and the fields of the k-epsilon and k-omega SST models (k, epsilon or omega, and the eddy viscosity), through
+`Simulation::warm_state` and `Simulation::seed_state`. It is for steady SIMPLE and SIMPLEC runs; a case with scalars,
+chemistry, conjugate heat transfer, radiation, an electric potential, phase change, two-way particle coupling, a mixing plane or a
+dynamic mesh, another turbulence model, or a state that does not fit (another mesh, another model, a temperature for a case
+without energy) runs cold with the reason in the message. `rcfd map`, the study definition and the MCP tools still use the
+velocity-and-pressure warm start; wiring the extended one in is an open question of ADR 0209 (question 7). Measured (ADR 0209 W1
+to W3): warm points agree with cold runs of the same points to 6.9e-9 relative on a heated channel (energy), 3.1e-11 on the
+k-epsilon channel and 2.6e-11 on the k-omega SST channel (limit 1e-4); the heated channel needed 141 iterations warm against
+181 cold for two points.
 
 Per point the table holds:
 
@@ -107,8 +119,15 @@ service method `design.create_study`) creates it:
   infeasible candidates compare by total violation, two feasible ones by the objective (Deb's rules).
 * A failed or unconverged evaluation is the worst possible value and is stored.
 * Methods: `factorial` (`levels` per parameter), `lhs` (Latin hypercube, `n`, `seed`), `sobol` (`n`, up to 10 parameters),
-  `nelder_mead` (`budget`, `restarts`, `seed`), `differential_evolution` (`budget`, `pop` default `max(10 d, 20)`, `seed`). **CMA-ES is
-  not provided.** The Joe-Kuo direction numbers of the Sobol sampler were typed from memory and are verified only by the net
+  `nelder_mead` (`budget`, `restarts`, `seed`, and the optional `initial_simplex` and `coefficients` below),
+  `differential_evolution` (`budget`, `pop` default `max(10 d, 20)`, `seed`), `nsga2` (`budget` and `pop` required, `pop` even
+  and at least 4, `seed`; see Multi-objective). **CMA-ES is not provided** (F-260).
+* Nelder-Mead options (ADR 0209, both opt-in; without them the method is unchanged): `initial_simplex = "start"` builds the first
+  simplex as MATLAB's `fminsearch` does, `x0 + 0.05 x0_i e_i` (`0.00025 e_i` when `x0_i = 0`), instead of 5 % of each range
+  (`"range"`, the default); `coefficients = "adaptive"` uses the dimension-dependent coefficients of Gao and Han (2012): expansion
+  `1 + 2/d`, contraction `0.75 - 1/(2d)`, shrink `1 - 1/d` (`"standard"`: 2, 1/2, 1/2). In two dimensions the adaptive
+  coefficients equal the standard ones. `adaptive` needs at least two parameters. The `start` rule scales with the start values,
+  so keep `range` when a parameter starts at or near zero compared with its range. The Joe-Kuo direction numbers of the Sobol sampler were typed from memory and are verified only by the net
   properties (every power-of-two prefix is stratified, the first two dimensions form a (0, m, 2)-net), not against the published table.
 * Everything is deterministic: the same definition and seed give bit-identical histories, for any `workers` value (a worker limit is
   a hard cap on simultaneous evaluations; results are written back by index).
@@ -137,7 +156,12 @@ Measured (ADR 0067):
 * The Sobol sequence has an L2-star discrepancy of 0.0051 against a seeded random mean of 0.0131 for 256 points in d = 4 (ratio
   0.39, limit 0.5).
 * In the tool loop on Rosenbrock the Nelder-Mead best after 120 recorded candidates is 3.1e-3 (the registered check T3 asked for
-  1e-3: a known miss, the run reaches 3.4e-19 after 347 candidates).
+  1e-3: a known miss, the run reaches 3.4e-19 after 347 candidates). With `initial_simplex = "start"` and `coefficients =
+  "adaptive"` the same loop reaches 3.7e-4 after 120 candidates (ADR 0209 N1) and 5.3e-19 after 330.
+* With both options, Rosenbrock from 20 seeded starts (800 evaluations) reaches f < 1e-18 on 20 of 20 seeds; the constrained
+  quadratic of ADR 0067 O3 is solved on 19 of 20 seeds (seed 16 stops at f = 1.67: a known miss, ADR 0209 N3). On the sum of
+  squares from (1, ..., 1) with the `start` simplex, `adaptive` needs 1543 evaluations in 10 dimensions and 3706 in 20, against
+  2096 and 15 901 with `standard` (ADR 0209 N5, recorded).
 
 End-to-end demonstration (E1): contraction channel (`wedge_2d`, 40 x 12 cells, laminar SIMPLEC, nu 0.05, inlet velocity 1), minimise
 the pressure drop over the ramp angle in [0, 12] degrees and the ramp start in [0.5, 3.0] with the constraint "mean outlet velocity
@@ -147,10 +171,20 @@ outlet velocity ratio 1.30005.
 
 ### Multi-objective
 
-Several objectives are combined into a scalar for the optimisers. The tool `design_list_study` reports the Pareto front of all
-feasible stored candidates in the objective space (minimised form), as record indices in `pareto`. The function
-`pareto::non_dominated_sort` gives all fronts and `crowding_distance` the usual spread measure. A multi-objective optimiser
-(NSGA-II) is not provided.
+Several objectives are combined into a scalar for the single-objective optimisers. The tool `design_list_study` reports the
+Pareto front of all feasible stored candidates in the objective space (minimised form), as record indices in `pareto`. The
+function `pareto::non_dominated_sort` gives all fronts and `crowding_distance` the usual spread measure.
+
+The method `nsga2` (ADR 0209, `design::nsga2`) searches for that front directly: NSGA-II of Deb et al. (2002), generation by
+generation (`pop` evaluations per generation, one parallel batch), with binary tournaments on rank and crowding distance,
+simulated binary crossover (probability 0.9, index 20), polynomial mutation (probability 1/d, index 20), and survivors chosen
+front by front from parents and children. Constraints use constrained domination (a feasible candidate beats an infeasible
+one). The objective weights are not used; the study's `best` is still the best by the weighted scalar. The method's result is the
+`pareto` list of `design_list_study`, over every stored candidate. Propose, record, resume and `workers` work as for the other
+methods. Measured (ADR 0209): on FON (3 parameters, 10 000 evaluations, population 100) every member of the returned Pareto set
+lies within 4.4e-3 of the analytic front and the front is covered with gaps below 4.8e-3 (limits 1e-2 and 5e-2, three seeds); on
+ZDT1 with 30 parameters (25 000 evaluations) the set stays 0.35 to 0.54 from the front (a known miss, ADR 0209 MO1z, limit
+1e-2). The operator constants are those of Deb et al. (2002) recalled from memory, not read (`docs/reference-data.md`).
 
 ## Assistant tools
 
@@ -321,12 +355,13 @@ The code is `crates/rcfd-api/src/design/`:
 |---|---|
 | `rng` | SplitMix64-seeded xoshiro256** generator (deterministic, documented) |
 | `sampling` | full factorial, Latin hypercube (seeded), Sobol (dimensions 1 to 10), L2-star discrepancy |
-| `optim` | Nelder-Mead with restarts, differential evolution (DE/rand/1/bin), Deb's feasibility rules |
+| `optim` | Nelder-Mead with restarts and the ADR 0209 options, differential evolution (DE/rand/1/bin), Deb's feasibility rules |
+| `nsga2` | NSGA-II, the multi-objective optimiser (ADR 0209) |
 | `pareto` | fast non-dominated sorting with constrained domination, crowding distance |
 | `store` | JSON-lines evaluation store, exact bit-pattern keys, resume |
 | `study` | study definition, robust scalarisation, concurrent evaluation, propose/record, best, Pareto front |
 | `opmap` | operating-map driver (generic over a point evaluator), CSV/JSON tables |
-| `case_eval` | running rcfd cases: the candidate evaluator, the map point evaluator, warm start |
+| `case_eval` | running rcfd cases: the candidate evaluator, the map point evaluators, warm start (flow, or extended) |
 | `tools` | the `design.*` service methods behind the MCP tools |
 | `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
 | `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
