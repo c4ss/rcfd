@@ -414,7 +414,7 @@ set-up and becomes the ignored `a1_falling_block_reaches_the_lubrication_termina
 amendment). A4u keeps its registered `tau/10` replay (a uniform flow has nothing to seed the mode, and it ran once, above).
 Expected Courant number at the gap ends: 0.08 at `tau/40`. The decision rule counts A1 to A9 from the corrected test.
 
-Added to Q (below): **Q4.** The time-step limit of the baseline PISO found here. Options: (a) a new roadmap item to diagnose
+Added to the open questions above: **Q4.** The time-step limit of the baseline PISO found here. Options: (a) a new roadmap item to diagnose
 and remove it (a fixed-mesh reproduction exists: the fixed-mesh variant of the table, block at rest, `tau/10`); (b) record it
 only. Recommendation (a): an implicit scheme that needs `D <= 3` across the finest cells limits every narrow-gap case.
 
@@ -505,3 +505,21 @@ Disclosures:
 
 Status by the decision rule: every registered check met (A1 to A9 from the corrected test), both negative controls held, every
 mutation failed its tests. F-244 is set done in the roadmap; the acceptance is still the maintainer's. Q1 to Q4 stay open.
+
+### The gate (2026-11-07)
+
+Main stayed at c744b5f while F-244 was built, so no merge was needed; 0211 is on no other branch. The gate ran on a
+`git archive` copy of 95af0e1 (this addendum's commit before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f244-gate`. It took the machine's gate lock at
+09:49 (UTC) when the F-249 gate released it and started with 25 GB of physical memory free: `cargo fmt` per package 0,
+`cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3055 passed, 2 failed, 866 ignored** (3057 test processes in
+590 binaries, wall 4720 s, peak summed working set 3435 MB, largest time against its limit 0.218, lowest free physical memory
+18 GB). The lock was released at the end (11:21).
+
+The two failures are `rcfd-runner` `runner_w47b` s1 and s9, both known flakes of the gate. Run again alone on the gate's binary,
+s9 passed; s1 failed the same way as in the F-292 and F-258 gates (its negative control saw status 3 and OS 0 under
+`max_runs = 3`). The runner tests do not run the flow solver. All eight non-ignored tests of this ADR ran in the gate and passed
+(`a1b` 112 s), with the ignored known-miss record of amendment 1; the suites named under Classes (`sixdof`, `sixdof_coupled`,
+`ale_flows`, `ale_gcl`, `mesh_smoothing`, `rcfd-api` `dynamic_mesh`, `baseline_hashes`, H1 of `case_hashes_w48u`) passed
+unedited. F-244 adds one ignored test (the known-miss record). This gate section and the wording fix in amendment 1 ("the
+open questions above") are documents only and were not gated again.
