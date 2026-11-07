@@ -21,7 +21,8 @@ warranty of any kind (see the licences). The main gaps today:
   reach its expected operating point, and the diagnosis is open
   ([fan milestone](docs/milestone-fan.md)).
 * There is no structural solver.
-* Sliding-mesh transient solves are not available.
+* Sliding-mesh transient solves are not available from a case or the app;
+  the library has a first rotor-stator sliding interface (F-250, ADR 0216).
 * The desktop app is being rebuilt; the new one does not have a window yet.
 
 ![Roadmap progress: done, partly done and not started items](docs/roadmap-progress.svg)

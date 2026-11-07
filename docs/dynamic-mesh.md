@@ -15,7 +15,10 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 
 * Euler time scheme only (PISO/PIMPLE).
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
-* No sliding interfaces (AMI, F-250) and no local remeshing (F-247).
+* Sliding interfaces in the library only (F-250, ADR 0216): a rotor block turning against a stator block across a
+  cylinder, the interface rebuilt every step, in the PISO/PIMPLE path (`rcfd_fv::sliding`,
+  `PimpleSolver::step_sliding`). The tree does not use it yet (ADR 0216 Q1); no planar or sector slide. No local
+  remeshing (F-247).
 * Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
   stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
   use them yet (the wiring is open under F-259, ADR 0213 Q1).

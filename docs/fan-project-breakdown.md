@@ -63,7 +63,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 |---|---|---|
 | B1 | Periodic blade-passage sector mesh with boundary layers and quality gates | partial (F-133, F-126) |
 | B2 | Exact-sector generator for verification | done (wave 45B, ADR 0116) |
-| B3 | Full-annulus rotor mesh plus a stationary zone with a non-conforming interface | partial (cylindrical interface works on near-isotropic meshes, ADR 0112; sliding AMI F-250 is todo) |
+| B3 | Full-annulus rotor mesh plus a stationary zone with a non-conforming interface | partial (cylindrical interface works on near-isotropic meshes, ADR 0112; sliding AMI F-250 is partial: library only, ADR 0216) |
 | B4 | Frame, struts, grille and heat-sink (system) mesh around the fan | missing |
 | B5 | Automatic mesh quality verdict and sizing from the geometry parameters, with located failures | partial (F-131, F-232) |
 
@@ -72,7 +72,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 | Part | What | Status |
 |---|---|---|
 | C1 | Steady rotating-frame operating-point solve | partial (MRF exists; FAN-01 stall open) |
-| C2 | Transient sliding-mesh solve (needed for broadband noise and unsteady loads) | missing (needs B3, F-250) |
+| C2 | Transient sliding-mesh solve (needed for broadband noise and unsteady loads) | missing (needs B3 and the case-tree wiring of F-250, ADR 0216 Q1) |
 | C3 | Low-Reynolds transition handling suitable for chord Re about 1e5 | partial (SST variants exist; transition model status to be checked) |
 | C4 | Metrics extraction: flow rate, total and static pressure rise, torque, shaft power, efficiency, from any solution | partial (F-123) |
 | C5 | Fan curve sweep with restart, and the operating point against a system curve | partial (F-095 parametric runner; F-113 lumped fan curves) |
