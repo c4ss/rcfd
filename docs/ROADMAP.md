@@ -4974,7 +4974,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
       than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
       moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Size M.
-- [ ] **F-258** Compressible ALE boundaries and mesh-speed time step
+- [~] **F-258** Compressible ALE boundaries and mesh-speed time step
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and
     time step:
@@ -4987,6 +4987,22 @@ Added after the static feature-gap review; wording is product-independent. Phase
       than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
       moving-mesh path.
   - note: Split from F-247 on 2026-10-22 (user decision). Size S to M.
+    - PARTIAL (ADR 0207, the registration of F-258, 2026-11-07, branch f258-compressible-ale, not merged): every
+      registered check is met in the library; marking the item done is the maintainer's (ADR 0207 Q5). On a moving face
+      the compressible ALE step evaluates the total inlet, the pressure outlet, the non-reflecting outlet and the far field
+      in the frame of the face (`rcfd_fv::compressible::characteristic_face_state`: lab-frame data, switches on the normal
+      velocity relative to the face, flux F(q).n - w_n U(q)); the new `CompressibleSolver::max_dt_moving` and
+      `max_dt_ale` take the explicit step with |u.n - w_n| + c (`max_dt_ale` with the face speeds of the last ALE step,
+      `mesh_speeds`). The step of a uniform gas on a translating box equals its closed form to 2.8e-15 (limit 1e-12; the
+      absolute step is 25 and 31 percent off); a uniform flow with the four conditions on faces that dilate, rotate and
+      translate stays uniform to 1.9e-14 (limit 1e-12); a piston-generated simple wave leaves through an outlet moving at
+      Mach 0.2 with a reflection of 4.6e-4 of its pressure jump through the far field and 3.8e-4 through the
+      non-reflecting outlet (limit 1e-2; a fixed-pressure outlet reflects 1.0); four mutations each made their check
+      fail. `max_dt()` and every run without a characteristic condition on a moving face are unchanged bit for bit
+      (records R1 to R4 made on main before the code; baseline hashes and H1 unedited). The case tree is not changed: it
+      still refuses a characteristic condition on a patch that moves (ADR 0191 E5) and steps with `max_dt()`.
+    - Open: the case-tree wiring (ADR 0207 Q1, the open part of F-259), the tree's moving step (Q2), a lagged or a
+      predicted mesh speed (Q3), the frame of the total-inlet data (Q4).
 - [~] **F-259** Case-tree and CLI wiring of layering and compressible ALE
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Case-tree and CLI wiring of

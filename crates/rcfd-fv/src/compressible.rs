@@ -99,6 +99,8 @@ pub struct CompressibleSolver {
     pub time: f64,
     /// Number of steps taken.
     pub steps: usize,
+    /// The step count after the last [`Self::step_ale`] and the normal mesh speed of every face in it (F-258, ADR 0207 M2).
+    ale_speeds: Option<(usize, Vec<f64>)>,
 }
 
 impl CompressibleSolver {
@@ -134,6 +136,7 @@ impl CompressibleSolver {
             ls_inv,
             time: 0.0,
             steps: 0,
+            ale_speeds: None,
         })
     }
 
@@ -182,6 +185,60 @@ impl CompressibleSolver {
             * self.settings.cfl
     }
 
+    /// Largest stable explicit step on a moving mesh (F-258, ADR 0207 M1): [`Self::max_dt`] with the signal speed of a face
+    /// taken relative to the face, `cfl` times `V / (sum_f (|u.n - w_n| + a)|S| / 2)` on the current geometry. `wn` is the
+    /// normal mesh speed of every face, along the owner's outward normal as [`Self::step_ale`] takes it; with every value
+    /// zero this is `max_dt` operation for operation. An error when `wn` has not one finite value per face.
+    pub fn max_dt_moving(&self, wn: &[f64]) -> Result<f64> {
+        let mesh = &self.geom.mesh;
+        if wn.len() != mesh.n_faces() || wn.iter().any(|w| !w.is_finite()) {
+            return Err(Error::Numerical(format!(
+                "max_dt_moving: one finite normal mesh speed per face is required ({} values for {} faces)",
+                wn.len(),
+                mesh.n_faces()
+            )));
+        }
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let sf = mesh.face_area_vectors();
+        let prim = self.primitives();
+        let mut sum = vec![0.0; mesh.n_cells()];
+        for f in 0..mesh.n_faces() {
+            if self.geom.empty[f] {
+                continue;
+            }
+            let a = vec3::norm(sf[f]);
+            let n = vec3::scale(sf[f], 1.0 / a);
+            let lam = |p: &Prim| ((vec3::dot(p.u, n) - wn[f]).abs() + p.sound_speed(self.gas)) * a;
+            sum[own[f]] += lam(&prim[own[f]]);
+            if f < self.geom.n_internal {
+                sum[nei[f]] += lam(&prim[nei[f]]);
+            }
+        }
+        let vol = mesh.cell_volumes();
+        Ok((0..mesh.n_cells())
+            .map(|c| 2.0 * vol[c] / sum[c])
+            .fold(f64::INFINITY, f64::min)
+            * self.settings.cfl)
+    }
+
+    /// The normal mesh speed of every face in the last [`Self::step_ale`] (`W_f / (dt |S_f|)`), while no [`Self::step`] and
+    /// no [`Self::replace_mesh`] came after it (F-258, ADR 0207 M2).
+    pub fn mesh_speeds(&self) -> Option<&[f64]> {
+        match &self.ale_speeds {
+            Some((step, w)) if *step == self.steps => Some(w),
+            _ => None,
+        }
+    }
+
+    /// The step of a moving mesh with a lagged mesh speed (F-258, ADR 0207 M2): [`Self::max_dt_moving`] with the speeds of
+    /// the last ALE step ([`Self::mesh_speeds`]), which stand in for those of the next one; [`Self::max_dt`] when there are
+    /// none.
+    pub fn max_dt_ale(&self) -> f64 {
+        self.mesh_speeds()
+            .and_then(|w| self.max_dt_moving(w).ok())
+            .unwrap_or_else(|| self.max_dt())
+    }
+
     /// Ghost state across boundary face `f` of patch `pi`.
     fn ghost(&self, pi: usize, interior: &Prim, n: Vec3) -> Prim {
         match self.bcs[pi] {
@@ -194,14 +251,7 @@ impl CompressibleSolver {
 
     /// Boundary face state of the characteristic conditions (None for the ghost-state ones).
     fn face_state(&self, pi: usize, interior: &Prim, n: Vec3) -> Option<Prim> {
-        let gas = self.gas;
-        match self.bcs[pi] {
-            CompBc::TotalInlet(t) => Some(compressible_bc::total_inlet(gas, &t, interior, n)),
-            CompBc::PressureOutlet { p } => Some(compressible_bc::pressure_outlet(gas, p, 1.0, interior, n)),
-            CompBc::NonReflecting { p, sigma } => Some(compressible_bc::pressure_outlet(gas, p, sigma, interior, n)),
-            CompBc::FarField(fs) => Some(compressible_bc::far_field(gas, &fs, interior, n)),
-            _ => None,
-        }
+        static_face_state(self.gas, &self.bcs[pi], interior, n)
     }
 
     /// Weighted least-squares gradients of the five primitive variables.
@@ -266,14 +316,7 @@ impl CompressibleSolver {
             u: vec3::sub(p.u, v),
             ..*p
         };
-        let f = self.settings.solver.flux(self.gas, &rel(l), &rel(r), n);
-        [
-            f[0],
-            f[1] + v[0] * f[0],
-            f[2] + v[1] * f[0],
-            f[3] + v[2] * f[0],
-            f[4] + v[0] * f[1] + v[1] * f[2] + v[2] * f[3] + 0.5 * vec3::dot(v, v) * f[0],
-        ]
+        lab_flux(self.settings.solver.flux(self.gas, &rel(l), &rel(r), n), v)
     }
 
     /// Undivided residual `-sum_f F_f |S_f|`; `wn` (per face, ALE only) is the normal mesh speed.
@@ -327,13 +370,13 @@ impl CompressibleSolver {
             };
             ghost[f - n_int] = g;
             let pr = &prim[own[f]];
-            if vn != 0.0 && self.face_state(pi, pr, n).is_some() {
-                return Err(Error::Numerical(format!(
-                    "compressible ALE: patch {} moves but its characteristic boundary condition does not support mesh motion",
-                    mesh.patches()[pi].name
-                )));
-            }
-            if let Some(fs) = self.face_state(pi, pr, n) {
+            // F-258 (ADR 0207 M3): a characteristic condition on a moving face is evaluated in the frame of the face
+            let fs = if vn != 0.0 {
+                characteristic_face_state(gas, &self.bcs[pi], pr, n, vn)
+            } else {
+                self.face_state(pi, pr, n)
+            };
+            if let Some(fs) = fs {
                 ghost[f - n_int] = fs;
                 bface[f - n_int] = fs;
                 direct[f - n_int] = true;
@@ -406,7 +449,22 @@ impl CompressibleSolver {
                 }
                 self.face_flux(&pl, &pr, n, vn)
             } else if direct[f - n_int] {
-                ghost[f - n_int].flux(gas, n)
+                if vn == 0.0 {
+                    ghost[f - n_int].flux(gas, n)
+                } else {
+                    // the ALE flux F(q).n - w_n U(q): the physical flux of the state seen from the face, transformed back
+                    // (ADR 0207 M3)
+                    let v = vec3::scale(n, vn);
+                    let q = &ghost[f - n_int];
+                    lab_flux(
+                        Prim {
+                            u: vec3::sub(q.u, v),
+                            ..*q
+                        }
+                        .flux(gas, n),
+                        v,
+                    )
+                }
             } else {
                 self.face_flux(&prim[o], &ghost[f - n_int], n, vn)
             };
@@ -422,7 +480,9 @@ impl CompressibleSolver {
 
     /// One step of size `dt` while the mesh moves from the current geometry to `new_geom` (same topology), ALE form of
     /// ADR 0090 D2: `d(V U)/dt = -sum_f (F.n - w_n U)|S_f|` with `w_n = W_f / (dt |S_f|)` from the swept volumes, so a uniform
-    /// state stays uniform to round-off (discrete GCL) and the moving slip walls carry no mass.
+    /// state stays uniform to round-off (discrete GCL) and the moving slip walls carry no mass. A characteristic condition on
+    /// a moving face is evaluated in the frame of the face ([`characteristic_face_state`], F-258, ADR 0207 M3). The step
+    /// keeps its `w_n` for [`Self::mesh_speeds`] and [`Self::max_dt_ale`].
     pub fn step_ale(&mut self, new_geom: FvGeometry, dt: f64) -> Result<()> {
         let old = &self.geom.mesh;
         if new_geom.mesh.n_points() != old.n_points() || new_geom.mesh.n_cells() != old.n_cells() {
@@ -466,10 +526,13 @@ impl CompressibleSolver {
         };
         self.time += dt;
         self.steps += 1;
+        // F-258 (ADR 0207 M2): the speeds of this step stand in for those of the next one in `max_dt_ale`
+        self.ale_speeds = Some((self.steps, wn));
         Ok(())
     }
 
-    /// Replace the mesh (any topology) and the conserved state, e.g. after a layer change (ADR 0090 D3).
+    /// Replace the mesh (any topology) and the conserved state, e.g. after a layer change (ADR 0090 D3). The mesh speeds of
+    /// the last ALE step are dropped ([`Self::mesh_speeds`]).
     pub fn replace_mesh(&mut self, geom: FvGeometry, u: Vec<Cons>) -> Result<()> {
         if u.len() != geom.n_cells() || geom.mesh.patches().len() != self.bcs.len() {
             return Err(Error::Numerical(
@@ -479,6 +542,7 @@ impl CompressibleSolver {
         self.geom = geom;
         self.ls_inv = ls_inverse(&self.geom);
         self.u = u;
+        self.ale_speeds = None;
         Ok(())
     }
 
@@ -558,6 +622,58 @@ impl CompressibleSolver {
         }
         t
     }
+}
+
+/// The lab-frame flux of a flux `f` computed in the frame moving with the velocity `v` (ADR 0090 D2): `F_rho = F'_rho`,
+/// `F_m = F'_m + v F'_rho`, `F_E = F'_E + v.F'_m + |v|^2/2 F'_rho`.
+fn lab_flux(f: Cons, v: Vec3) -> Cons {
+    [
+        f[0],
+        f[1] + v[0] * f[0],
+        f[2] + v[1] * f[0],
+        f[3] + v[2] * f[0],
+        f[4] + v[0] * f[1] + v[1] * f[2] + v[2] * f[3] + 0.5 * vec3::dot(v, v) * f[0],
+    ]
+}
+
+/// Face state of a characteristic condition on a static face (ADR 0006); `None` for the ghost-state conditions.
+fn static_face_state(gas: Gas, bc: &CompBc, interior: &Prim, n: Vec3) -> Option<Prim> {
+    match *bc {
+        CompBc::TotalInlet(t) => Some(compressible_bc::total_inlet(gas, &t, interior, n)),
+        CompBc::PressureOutlet { p } => Some(compressible_bc::pressure_outlet(gas, p, 1.0, interior, n)),
+        CompBc::NonReflecting { p, sigma } => Some(compressible_bc::pressure_outlet(gas, p, sigma, interior, n)),
+        CompBc::FarField(fs) => Some(compressible_bc::far_field(gas, &fs, interior, n)),
+        _ => None,
+    }
+}
+
+/// The lab-frame face state of a characteristic condition (ADR 0006) on a face moving with the normal mesh speed `wn`
+/// along the outward unit normal `n` (F-258, ADR 0207 M3). The condition is evaluated in the frame of the face,
+/// `v = wn n`: the pressure outlet, the non-reflecting outlet and the far field see the interior state and the free stream
+/// (a lab-frame state) with `v` removed, and their result is shifted back by `v`, so their switches read the normal velocity
+/// relative to the face. The total inlet's total conditions and direction are lab-frame data; `wn` cancels in its outgoing
+/// invariant, so its face state is the static one. `None` for slip, extrapolated and fixed faces. With `wn == 0.0` this is
+/// the static face state of [`compressible_bc`], bit for bit.
+pub fn characteristic_face_state(gas: Gas, bc: &CompBc, interior: &Prim, n: Vec3, wn: f64) -> Option<Prim> {
+    if wn == 0.0 {
+        return static_face_state(gas, bc, interior, n);
+    }
+    let v = vec3::scale(n, wn);
+    let rel = |p: &Prim| Prim {
+        u: vec3::sub(p.u, v),
+        ..*p
+    };
+    let back = |p: Prim| Prim {
+        u: vec3::add(p.u, v),
+        ..p
+    };
+    Some(match *bc {
+        CompBc::TotalInlet(t) => compressible_bc::total_inlet(gas, &t, interior, n),
+        CompBc::PressureOutlet { p } => back(compressible_bc::pressure_outlet(gas, p, 1.0, &rel(interior), n)),
+        CompBc::NonReflecting { p, sigma } => back(compressible_bc::pressure_outlet(gas, p, sigma, &rel(interior), n)),
+        CompBc::FarField(fs) => back(compressible_bc::far_field(gas, &rel(&fs), &rel(interior), n)),
+        _ => return None,
+    })
 }
 
 /// Inverse of the (masked) inverse-distance weighted least-squares matrix of each cell.

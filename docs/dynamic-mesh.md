@@ -17,8 +17,9 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 * No sliding interfaces (AMI, F-250) and no local remeshing (F-247).
 * Layering only for the compressible solver, on a `box_3d` stack with one piston. Prism or unstructured layering and
   layering on the PISO/PIMPLE path are F-257.
-* Compressible runs: no characteristic boundary condition on a moving face, and a time step without the mesh speed (F-258);
-  no six-DOF body (F-244).
+* Compressible runs in the case tree: no characteristic boundary condition on a moving face, and a time step without the
+  mesh speed. The library has both since F-258 (ADR 0207); the tree does not use them yet (the wiring is open under F-259,
+  ADR 0207 Q1 and Q2). No six-DOF body (F-244).
 * No strong coupling or added-mass stabilisation. The explicit coupling needs a body that is not much lighter than the displaced
   fluid; the checks use a fluid-to-body mass ratio of 0.2.
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
@@ -66,6 +67,16 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   move (same topology). The fluxes are computed in the frame of the moving face, and a moving slip wall mirrors relative to the
   wall. A uniform state stays uniform to round-off. In the case tree: `solver.algorithm = "compressible"`,
   `compressible.mode = "transient"` and a prescribed `dynamic_mesh` motion with `deformation = "rigid"` or `"smoothing"`.
+- **Characteristic conditions on moving faces and the mesh-speed step (F-258, ADR 0207; library only).** On a moving
+  face, `step_ale` evaluates the total inlet, the pressure outlet, the non-reflecting outlet and the far field in the
+  frame of the face (`compressible::characteristic_face_state`): the switches read the normal velocity relative to the
+  face, the far field's free stream and the total inlet's total conditions are lab-frame data, and the flux is
+  `F(q).n - w_n U(q)`. A uniform flow stays uniform to 1.9e-14 with all four on faces that move, and a piston-generated
+  simple wave leaves through an outlet moving at Mach 0.2 with a reflection of 4.6e-4 (far field) and 3.8e-4
+  (non-reflecting, `sigma = 0`) of its pressure jump, where a fixed-pressure outlet reflects all of it.
+  `max_dt_moving(wn)` is the explicit step with the signal speed `|u.n - w_n| + c` relative to each face, and
+  `max_dt_ale()` takes the face speeds of the last ALE step (`mesh_speeds()`). `max_dt()` stays the absolute step. The
+  case tree does not use this yet: it refuses a characteristic condition on a patch that moves and steps with `max_dt()`.
 - **Layering.** `rcfd_mesh::layering::LayerStack` is a planar layer stack along x whose last plane is a piston. Only the layer
   next to the piston deforms. Below `a_min h0` it merges with its neighbour; above `a_max h0` it splits into `h0` plus the rest
   (`1 + a_min <= a_max` is required). Every change returns a cell source map, `remap` carries cell totals over exactly, and
@@ -81,8 +92,8 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   on the incompressible and the compressible moving paths; `V` is the volume of the initial mesh, from which the displacement
   is solved. On ADR 0033's piston with cells 8 times smaller at the ends it keeps the smallest cell at 0.945 of its initial
   volume where the Laplacian keeps 0.75, and lowers the largest aspect ratio from 9.3 to 7.4.
-- **Not available:** local remeshing, prism or unstructured layering, layering with PISO/PIMPLE, characteristic boundary
-  conditions on moving faces, and a time step that includes the mesh speed.
+- **Not available:** local remeshing, prism or unstructured layering, layering with PISO/PIMPLE, and, in the case tree,
+  characteristic boundary conditions on moving faces and a time step that includes the mesh speed (library only, above).
 
 ```toml
 # ADR 0090's piston P: a closed box compressed to 0.4 of its length and re-expanded (peak piston Mach 0.05)
