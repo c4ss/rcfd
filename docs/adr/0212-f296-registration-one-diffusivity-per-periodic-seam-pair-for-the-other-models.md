@@ -421,3 +421,11 @@ and will likely conflict. After the merge, k-epsilon and SA on `pimple` use the 
 (question 4).
 
 **Questions added by the results:** none. Questions 1 to 5 stand.
+
+### Addendum: the gate of e70613d (2026-11-07)
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| V0e | gate of e70613d (git archive, `scripts/gate_test.py`, 3 jobs, the shared gate lock, held from 15:32 to 17:17): fmt per package 0, clippy `--workspace --all-targets -D warnings` 0; 3097 passed, 2 failed, 868 ignored, 3099 test processes, wall 5510 s. The free-memory start threshold was 19 GB (the value given for this job; the F-292 template had 20 GB), met at once (38 GB); the lowest free memory during the run was 26 GB. The 2 failures are `journal_f273` `c3s_two_appenders_without_a_shared_edit_lock_number_every_line_once` and `c3s_two_writers_number_every_line_once_in_file_order`, on the list of known flakes (`journal_f273` c3s); every F-296 and F-295 test, `f296_default_bits`, `f295_default_bits`, `f286_default_bits`, `baseline_hashes` and `case_hashes_w48u` passed in it | pass, apart from the known flakes | met |
+
+After the gate only this text changed (a docs-only commit).
