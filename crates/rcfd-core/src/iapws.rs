@@ -270,13 +270,104 @@ pub fn saturation_pressure(t: f64) -> Result<f64> {
             "saturation pressure needs 273.15 K <= T <= {T_CRITICAL} K, got {t}"
         ));
     }
+    Ok(saturation_eq30(t))
+}
+
+/// Lowest temperature (K) of the extrapolated saturation line of [`saturation_pressure_extended`] (F-221, ADR 0217 M3).
+pub const T_SATURATION_EXTENDED_MIN: f64 = 200.0;
+
+/// Saturation pressure (Pa) from the IF97 Eq. 30 for 200 K to the critical temperature (F-221, ADR 0217 M3). Above 273.15 K
+/// this is [`saturation_pressure`] bit for bit; below it the equation is extrapolated (metastable, supercooled vapour in a
+/// condensing-flow transient), which IF97 does not cover.
+pub fn saturation_pressure_extended(t: f64) -> Result<f64> {
+    if !(T_SATURATION_EXTENDED_MIN..=T_CRITICAL).contains(&t) {
+        return err(format!(
+            "extended saturation pressure needs {T_SATURATION_EXTENDED_MIN} K <= T <= {T_CRITICAL} K, got {t}"
+        ));
+    }
+    Ok(saturation_eq30(t))
+}
+
+/// Saturation temperature (K) at pressure `p` (Pa): the inverse of [`saturation_pressure_extended`] by a safeguarded Newton
+/// iteration on `ln p_s(T)`, stopped when the step is at most `1e-15 T` (to the last bits, so that `T_s(p)` is smooth at the
+/// level of round-off; ADR 0217 amendment 1), for `p_s(200 K) <= p <= p_s(T_c)` (F-221, ADR 0217 M3).
+pub fn saturation_temperature(p: f64) -> Result<f64> {
+    let (t_lo, t_hi) = (T_SATURATION_EXTENDED_MIN, T_CRITICAL);
+    let (p_lo, p_hi) = (saturation_eq30(t_lo), saturation_eq30(t_hi));
+    if !(p.is_finite() && p >= p_lo && p <= p_hi) {
+        return err(format!(
+            "saturation temperature needs {p_lo:.6e} Pa <= p <= {p_hi:.6e} Pa, got {p}"
+        ));
+    }
+    let lp = p.ln();
+    // bracket kept by the monotone saturation line; Newton on ln p_s(T) with a central-difference slope
+    let (mut lo, mut hi) = (t_lo, t_hi);
+    // start from a Clausius-Clapeyron-like interpolation in 1/T between the bracket ends
+    let (a_lo, a_hi) = (p_lo.ln(), p_hi.ln());
+    let inv = 1.0 / t_lo + (lp - a_lo) / (a_hi - a_lo) * (1.0 / t_hi - 1.0 / t_lo);
+    let mut t = (1.0 / inv).clamp(lo, hi);
+    for _ in 0..100 {
+        let f = saturation_eq30(t).ln() - lp;
+        if f > 0.0 {
+            hi = t;
+        } else {
+            lo = t;
+        }
+        let h = 1e-6 * t;
+        let d = (saturation_eq30(t + h).ln() - saturation_eq30(t - h).ln()) / (2.0 * h);
+        let mut next = t - f / d;
+        if !(next > lo && next < hi) || !next.is_finite() {
+            next = 0.5 * (lo + hi);
+        }
+        if (next - t).abs() <= 1e-15 * t {
+            return Ok(next);
+        }
+        t = next;
+    }
+    Ok(t)
+}
+
+/// IF97 region 1 (compressed liquid) evaluated at `(t, p)` without the region test; for saturated or metastable liquid
+/// (F-221, ADR 0217 M3). `t` must lie in `[200 K, 623.15 K]` and `p` in `(0, 100 MPa]`.
+pub fn region1_state(t: f64, p: f64) -> Result<WaterState> {
+    if !(T_SATURATION_EXTENDED_MIN..=623.15).contains(&t) || !(p > 0.0 && p <= 100.0e6) {
+        return err(format!(
+            "region-1 evaluation needs 200 K <= T <= 623.15 K and 0 < p <= 100 MPa, got T = {t}, p = {p}"
+        ));
+    }
+    Ok(region1(t, p))
+}
+
+/// IF97 region 2 (vapour) evaluated at `(t, p)` without the region test; for saturated or metastable vapour (F-221, ADR 0217
+/// M3; IF97 extrapolates its region-2 equation into the metastable region). `t` in `[200 K, 1073.15 K]`, `p` in `(0, 100 MPa]`.
+pub fn region2_state(t: f64, p: f64) -> Result<WaterState> {
+    if !(T_SATURATION_EXTENDED_MIN..=1073.15).contains(&t) || !(p > 0.0 && p <= 100.0e6) {
+        return err(format!(
+            "region-2 evaluation needs 200 K <= T <= 1073.15 K and 0 < p <= 100 MPa, got T = {t}, p = {p}"
+        ));
+    }
+    Ok(region2(t, p))
+}
+
+/// Saturated liquid at temperature `t`: region 1 at `(t, p_s(t))` with the extended saturation line (F-221, ADR 0217 M3).
+pub fn saturated_liquid(t: f64) -> Result<WaterState> {
+    region1_state(t, saturation_pressure_extended(t)?)
+}
+
+/// Saturated vapour at temperature `t`: region 2 at `(t, p_s(t))` with the extended saturation line (F-221, ADR 0217 M3).
+pub fn saturated_vapour(t: f64) -> Result<WaterState> {
+    region2_state(t, saturation_pressure_extended(t)?)
+}
+
+/// The IF97 Eq. 30 itself (no range test).
+fn saturation_eq30(t: f64) -> f64 {
     let n = &SAT_N;
     let th = t + n[8] / (t - n[9]);
     let a = th * th + n[0] * th + n[1];
     let b = n[2] * th * th + n[3] * th + n[4];
     let c = n[5] * th * th + n[6] * th + n[7];
     let x = 2.0 * c / (-b + (b * b - 4.0 * a * c).sqrt());
-    Ok(x.powi(4) * 1.0e6)
+    x.powi(4) * 1.0e6
 }
 
 /// Pressure (Pa) of the B23 boundary between regions 2 and 3 at temperature `t` (R7-97 Eq. 5, 623.15-863.15 K).
