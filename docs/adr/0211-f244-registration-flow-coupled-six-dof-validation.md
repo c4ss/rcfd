@@ -417,3 +417,91 @@ Expected Courant number at the gap ends: 0.08 at `tau/40`. The decision rule cou
 Added to Q (below): **Q4.** The time-step limit of the baseline PISO found here. Options: (a) a new roadmap item to diagnose
 and remove it (a fixed-mesh reproduction exists: the fixed-mesh variant of the table, block at rest, `tau/10`); (b) record it
 only. Recommendation (a): an implicit scheme that needs `D <= 3` across the finest cells limits every narrow-gap case.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above and in amendment 1; no limit was changed. Release builds on Windows. The
+registration is 7a36513, amendment 1 is 9978c5f, the test file is 4c12b68, and this addendum's commit also carries a
+layout fix of three printed lines of that file (no value or assertion changed). Each registered check ran once; the runs are
+deterministic and none was repeated to change a result.
+
+**Built as registered.** S1 as written: test code only. `crates/rcfd-fv/tests/sixdof_flow_f244.rs` holds nine tests: `a0`
+(A0, A6), `fb_setup_smoke`, `a1_..._known_miss` (the registered `tau/10` set-up, ignored, amendment 1), `a1b` (A1 to A5, A7 to
+A9, AN1 at `tau/40` and `tau/80`), `a4u`, `b0`, `b1` (B1 to B6), `bn1`, `b4u`. The heavy ones are ignored in debug builds only.
+No library file, case-schema key, golden, `baseline_hashes.rs` or `case_hashes_w48u.rs` was touched. Documents:
+`docs/dynamic-mesh.md` (the validation and the time-step limit), and the F-244 entries of `docs/ROADMAP.md` and
+`docs/roadmap.json` (done, by the decision rule).
+
+FB mesh as built: 12 320 cells, 26 060 points, grid 56 x 343 with 24 x 287 cells removed (16 cells per gap, 24 across the
+block span, 28 rows below and above the block, 287 along it; the middle cells along the block are `1.9975 h` tall, aspect
+32). Patches: `block` 622 faces, `left` and `right` 343, `bottom` and `top` 56, `frontAndBack` 24 640.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A0 trial quadrature against `J(1.64 h)` | relative `1e-10` | `6.2e-16` (`J = 68.919062`) | met |
+| A0 bound of the neglected terms | `<= 0.5 %` | `eps_1 0.3627 % + eps_2 0.0630 % + eps_3 0.0345 % = 0.4602 %` | met |
+| A6 added-mass ratio | `<= 0.2` | `m_a/M = 0.1778`, with the end layers `0.1788` | met |
+| A1 (acceptance) `U(10 tau)/U_t`, `tau/40` | `abs(. - 1) <= 0.02` | `1.00545` | met |
+| A2 (acceptance) `tau/80` against `tau/40` | `<= 0.005` | `3.4e-6` (`1.00545` both) | met |
+| A3 (acceptance) continuity, every step | `<= 1e-10` | `1.89e-11` (`tau/40`), `3.88e-11` (`tau/80`) | met |
+| A4 (acceptance) GCL every step; total volume | `<= 1e-12 mean(V)`; `<= 1e-12 V0` | `6.46e-16`, `6.49e-16`; `5.96e-14`, `5.81e-14` | met |
+| A4u (acceptance) uniform flow on the moving FB mesh | `<= 1e-12 abs(u0)`; `<= 1e-12 abs(u0)^2` | `4.2e-15`; `0` | met |
+| A5 (acceptance) `min V(t)/V(0)` | `>= 0.5` | `0.9164` (both runs) | met |
+| A7 (set-up) `abs(U(10 tau) - U(9 tau))/U_t` | `<= 1e-3` | `7.1e-5` | held |
+| A8 (set-up) scaled unit field against direct smoothing | `<= 1e-9 abs(s)` | `9.1e-13` | held |
+| A9 (set-up) travel; cyclic patches | `>= 0.25 h`; none | `0.419 h`; none | held |
+| AN1 (negative control) against `U_t'` (sides at rest) | `>= 0.08` | `0.206` | held |
+| B0 model period; mass ratio; fluid-free shift | `1e-5`; `<= 0.2`; `>= 0.08` | `1.2e-7`; `0.2`; `0.0954` | met |
+| B1 (acceptance) `omega_m/omega`, `T/100` | `abs(. - 1) <= 0.02` | `1.001307` | met |
+| B2 (acceptance) `T/200` against `T/100` | `<= 0.005` | `1.96e-4` (`1.001111`) | met |
+| B3 (acceptance) continuity, every step | `<= 1e-10` | `3.88e-15`, `3.47e-15` | met |
+| B4 (acceptance) GCL every step | `<= 1e-12 mean(V)` | `6.09e-16`, `5.99e-16` | met |
+| B4u (acceptance) uniform flow on the moving SP mesh | `<= 1e-12 abs(u0)`; `<= 1e-12 abs(u0)^2` | `1.3e-15`; `0` | met |
+| B5 (acceptance) largest ratio of successive same-side turning points | `<= 1 + 1e-3` | `0.95299` (`T/100`), `0.97604` (`T/200`) | met |
+| B6 (set-up) crossings; `max abs(x)`; cyclic patches | `>= 6`; `<= 0.01 L0 (1 + 1e-9)`; none | 6 and 6; `1.0e-2`; none | held |
+| BN1 (negative control) fluid force off | `abs(. - 1) >= 0.08` | `1.095445` (7 crossings), off by `0.0954` | held |
+| A1 as registered (`tau/10`) | as A1 | did not finish (amendment 1) | ignored record |
+
+Printed, no limit. The approach at `tau/40`: `U/U_t` `0.642`, `0.873`, `0.9991` at `tau`, `2 tau`, `5 tau` against
+`0.632`, `0.865`, `0.9933` of the closed form, so the coupled approach is a little faster than the quasi-steady model of M3
+(the instantaneous added mass is the smaller potential one, M2). Pressure iterations (AMG-CG, two correctors): 9 384 over the
+400 steps and 17 681 over the 800. The turning points of B5 decay by 4.7 percent per period at `T/100` and 2.4 percent at
+`T/200`, as the coupling lag of M6 predicts (4.8 and 2.4). B1's `+0.13 %` is above the lag's expected `+0.04 %`; the difference
+is not diagnosed and is within the limit.
+
+Against the expectations of M4 and M5: the discrete drag at `U_t` was `0.9944 D_lub` (amendment 1). The 1-D discrete gap gives
+`0.99235`, so the discrete end regions add about `0.21 %` to the drag, inside the registered `0 <= eps_1 <= 0.363 %` of the
+continuum (consistent with, though not a check of, E1).
+
+### Mutations
+
+Each was applied alone to the code of 4c12b68 (with the print layout fix) by an exact text replacement (a script that checks
+that each replaced text occurs once), the named tests were run once, and the file was restored and compared byte for byte with
+the kept copy (equal in all four).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 no pressure in `patch_force_moment` | A1, B1 | A1 failed: `U(10 tau)/U_t = 4.369` (and A7 `0.115`); B1 failed: `1.095445`, the fluid-free frequency, with turning-point ratios exactly 1 |
+| MU2 no viscous term in `patch_force_moment` | A1 | failed: `1.2728` (AN1 `0.0049`: the block falls at the speed of a block whose sides do not move, as M1 says it should) |
+| MU3 `AleStep::fix_ddt` does nothing | A4u, B4u | both failed: `9.8e6 abs(u0)` (FB, the flow blows up), `2.4e-3 abs(u0)` (SP) |
+| MU4 `AleStep::relative_flux` returns `phi` | A4u, B4u | both failed: `1.7e7 abs(u0)`, `2.4e-3 abs(u0)` |
+
+`scripts/limit_audit.py` reports two hits in the new file, both class (i), B0's assertions on the mass ratio and the
+fluid-free frequency shift: they check the registered constants (as the acceptance asks that the parameters be chosen so), so
+they cannot fail unless the constants change; read and kept.
+
+Disclosures:
+
+- Order of the runs: the smoke, then the registered run of every test once (A1 crashed, amendment 1), then the diagnostics of
+  amendment 1, then the corrected `a1b` once, then the mutations.
+- Between the registered runs and `a1b`: the diagnostic code was removed; the A1 checks moved into a helper called by the
+  ignored registered test and by `a1b` (the same checks and limits); `std::iter::repeat_n` in the FB mesh builder became
+  `Vec::resize` with the same value (clippy's MSRV lint; the mesh is identical, and A4u, which uses it, had already run).
+- After `a1b`: three printed lines of the A1 helper had their string continuations broken by a scripted edit (spaces in the
+  output); they were fixed by hand. No value or assertion changed.
+- Not exercised: Newmark in the coupled loop, a free rotation of the falling block, a mesh study of (a) (Not delivered).
+
+Status by the decision rule: every registered check met (A1 to A9 from the corrected test), both negative controls held, every
+mutation failed its tests. F-244 is set done in the roadmap; the acceptance is still the maintainer's. Q1 to Q4 stay open.

@@ -4603,7 +4603,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
 
 Added after the static feature-gap review; wording is product-independent. Phases follow the phase headings above.
 
-- [ ] **F-244** Flow-coupled six-DOF validation: body falling through a fluid and spring-mounted body in a flow
+- [x] **F-244** Flow-coupled six-DOF validation: body falling through a fluid and spring-mounted body in a flow
   - depends on: F-229, F-063
   - acceptance: Laminar incompressible PISO/PIMPLE on a moving mesh, existing loose coupling (ADR 0033 D7),
     added-mass-to-body-mass ratio <= 0.2 (from the ADR closed form, not the displaced-fluid mass), no cyclic faces
@@ -4646,6 +4646,26 @@ Added after the static feature-gap review; wording is product-independent. Phase
       (vortex-induced vibration) case would need a published data set chosen by the user.
     - USER DECISION 2026-10-22: split as proposed; "in a flow" is read as free decay in still fluid (no VIV case).
       Strong coupling is F-251.
+    - DONE (ADR 0211, the registration of F-244, 2026-11-07, branch f244-six-dof-validation, not merged): every
+      registered check is met by library tests (`crates/rcfd-fv/tests/sixdof_flow_f244.rs`, test code only, no library or
+      schema change); the acceptance is still the maintainer's.
+      - (a) A block 4 h wide and 500 h tall falling in a closed 2-D channel (gaps h) reaches 1.00545 of the lubrication
+        terminal velocity `(M - rho V_b) g / C`, `C = 2 mu H_b dz (3 B^2 + 1)/h`, after 10 time constants (limit 2 %;
+        added-mass ratio 0.178 from the closed form, Re_U 0.1, travel 0.42 h, smallest cell volume 0.916 of its start
+        against the F-063 limit 0.5). The neglected terms were bounded to 0.46 % before the run: the end effect to
+        [0, 0.363 %] by the minimum-dissipation theorem (lubrication is a lower bound of the Stokes drag; an explicit
+        trial field gives the upper bound), inertia and finite time to 0.10 %. Halving dt changes it by 3.4e-6; the drag of
+        a block whose sides did not move is 21 % off (negative control).
+      - (b) The C2 piston on a spring (mass ratio 0.2, amplitude 0.01 L0) oscillates at 1.0013 of sqrt(k/(M + rho A L0))
+        (limit 2 %), dt halving 2e-4; with the fluid force off it is 9.5 % off; successive same-side turning points
+        decay by 4.7 % per period at T/100 (the lag of the explicit coupling), never grow.
+      - Both: continuity at most 3.9e-11 per step (limit 1e-10), discrete GCL 6.5e-16 mean(V), a uniform flow on both
+        moving meshes stays uniform to 4.2e-15; four library mutations each made their checks fail.
+      - Found, not fixed (ADR 0211 amendment 1): the baseline PISO step is unstable on the block-in-channel mesh above a
+        time step between tau/40 and tau/20 (cell diffusion number 3 to 6 across the gap), on a fixed mesh as well; the
+        registered tau/10 run is kept as an ignored known miss and (a) runs at tau/40 and tau/80.
+      - Open: ADR 0211 Q1 (approval of the refined acceptance text), Q2 (a case-tree version), Q3 (status), Q4 (a new
+        item for the PISO time-step limit).
 - [ ] **F-245** Particle models: droplet evaporation (d-squared law) and breakup
   - depends on: F-128, F-056
   - acceptance: Two parts, each gated on its own.

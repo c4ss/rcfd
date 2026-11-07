@@ -614,7 +614,8 @@ fn falling_block_terminal_velocity(spt: usize) {
         );
     }
     println!(
-        "A: {} cells; tau/{spt}: U(10 tau)/U_t {a1:.5} (limit |. - 1| <= 0.02), continuity {:.2e}, GCL {:.2e} mean(V),          volume {:.2e} V0, min V/V0 {:.4}, travel {:.4} h, pressure iterations {}",
+        "A: {} cells; tau/{spt}: U(10 tau)/U_t {a1:.5} (limit |. - 1| <= 0.02), continuity {:.2e}, GCL {:.2e} mean(V), \
+         volume {:.2e} V0, min V/V0 {:.4}, travel {:.4} h, pressure iterations {}",
         fb.mesh0.n_cells(),
         r1.cont,
         r1.gcl,
@@ -624,7 +625,8 @@ fn falling_block_terminal_velocity(spt: usize) {
         r1.p_iters
     );
     println!(
-        "A: tau/{}: U(10 tau)/U_t {:.5}, continuity {:.2e}, GCL {:.2e} mean(V), volume {:.2e} V0, min V/V0 {:.4},          pressure iterations {}",
+        "A: tau/{}: U(10 tau)/U_t {:.5}, continuity {:.2e}, GCL {:.2e} mean(V), volume {:.2e} V0, min V/V0 {:.4}, \
+         pressure iterations {}",
         2 * spt,
         u2 / forms.u_t,
         r2.cont,
@@ -634,7 +636,8 @@ fn falling_block_terminal_velocity(spt: usize) {
         r2.p_iters
     );
     println!(
-        "A2 dt halving {a2:.2e} (limit 5e-3); A7 |U(10 tau) - U(9 tau)|/U_t {a7:.2e} (limit 1e-3); A8 {a8:.2e} (limit 1e-9);          AN1 against U_t' {an1:.4} (limit >= 0.08)"
+        "A2 dt halving {a2:.2e} (limit 5e-3); A7 |U(10 tau) - U(9 tau)|/U_t {a7:.2e} (limit 1e-3); A8 {a8:.2e} (limit 1e-9); \
+         AN1 against U_t' {an1:.4} (limit >= 0.08)"
     );
     assert!((a1 - 1.0).abs() <= 0.02, "A1 {a1}");
     assert!(a2 <= 5e-3, "A2 {a2}");
