@@ -1,7 +1,7 @@
 //! F-255 (ADR 0208): particle dispersion from the turbulence model's fields, in the case tree and the run path. This file
 //! starts with the records R8 and R9 of ADR 0208 (checks D2, D3), made on main d953cd6 before any code of F-255; the
-//! registered checks CT1 to CT8 and the parts of D2 and D3 that need the code follow them. The limits are those of ADR 0208,
-//! fixed before the code ran.
+//! registered checks CT1 to CT8 and the parts of D2 and D3 that need the code follow them, with the key of its amendment
+//! 2. The limits are those of ADR 0208, fixed before the code ran.
 
 use rcfd_api::case::Case;
 use rcfd_api::runctl::{self, RunOptions};
@@ -169,12 +169,30 @@ const D_INERTIAL: f64 = 5.692099788303082e-4;
 
 /// Case T of ADR 0208: TC with the random walk on the k-epsilon model's fields.
 fn t_text() -> String {
-    TC_CASE
-        .replace("title = \"dispersion TC\"", "title = \"dispersion T\"")
-        .replace(
-            "dispersion_k = 1.5\ndispersion_epsilon = 0.225\n",
-            "dispersion_fields = \"turbulence_model\"\n",
-        )
+    with_table(
+        &TC_CASE
+            .replace("title = \"dispersion TC\"", "title = \"dispersion T\"")
+            .replace("dispersion_k = 1.5\ndispersion_epsilon = 0.225\n", ""),
+        FROM_MODEL,
+    )
+}
+
+/// The table of ADR 0208 amendment 2 (in place of the registered `dispersion_fields = "turbulence_model"`).
+const FROM_MODEL: &str = "[particles.dispersion_from_model]\nenabled = true\n";
+
+/// The table of amendment 2 written with its default.
+const FROM_MODEL_OFF: &str = "[particles.dispersion_from_model]\nenabled = false\n";
+
+/// `text` with `table` before the injection table.
+fn with_table(text: &str, table: &str) -> String {
+    assert!(
+        text.contains("[particles.injection.c]\n"),
+        "set-up: the injection table"
+    );
+    text.replace(
+        "[particles.injection.c]\n",
+        &format!("{table}[particles.injection.c]\n"),
+    )
 }
 
 const KE_INIT: &str = "model = \"k_epsilon\"\nk_initial = 1.5\nepsilon_initial = 0.225";
@@ -309,31 +327,23 @@ fn min_max(v: &[f64]) -> (f64, f64) {
 #[test]
 fn ct1_located_errors() {
     let t = t_text();
-    let fields = "dispersion_fields = \"turbulence_model\"\n";
+    let key = "particles.dispersion_from_model.enabled";
+    let seed = "dispersion_seed = 20261107\n";
     let cases: Vec<(String, &str)> = vec![
+        (t.replace("dispersion = \"drw\"", "dispersion = \"none\""), key),
+        (t.replace(KE_INIT, "model = \"laminar\""), key),
+        (t.replace(KE_INIT, "model = \"spalart_allmaras\""), key),
         (
-            t.replace("dispersion = \"drw\"", "dispersion = \"none\""),
-            "particles.dispersion_fields",
-        ),
-        (t.replace(KE_INIT, "model = \"laminar\""), "particles.dispersion_fields"),
-        (
-            t.replace(KE_INIT, "model = \"spalart_allmaras\""),
-            "particles.dispersion_fields",
-        ),
-        (
-            t.replace(fields, &format!("{fields}dispersion_k = 1.5\n")),
+            t.replace(seed, &format!("{seed}dispersion_k = 1.5\n")),
             "particles.dispersion_k",
         ),
         (
-            t.replace(fields, &format!("{fields}dispersion_epsilon = 0.225\n")),
+            t.replace(seed, &format!("{seed}dispersion_epsilon = 0.225\n")),
             "particles.dispersion_epsilon",
         ),
         (
-            t.replace(
-                "dispersion_fields = \"turbulence_model\"",
-                "dispersion_fields = \"model\"",
-            ),
-            "particles.dispersion_fields",
+            t.replace(FROM_MODEL, "[particles.dispersion_from_model]\nenabled = \"yes\"\n"),
+            key,
         ),
     ];
     for (i, (text, path)) in cases.iter().enumerate() {
@@ -345,12 +355,11 @@ fn ct1_located_errors() {
             i + 1
         );
     }
-    let constant = "dispersion = \"drw\"\ndispersion_fields = \"constant\"\n";
     let controls = [
         ("T", t.clone()),
         ("TS", ts_text()),
         ("TC", TC_CASE.to_string()),
-        ("TC constant", TC_CASE.replace("dispersion = \"drw\"\n", constant)),
+        ("TC with the table off", with_table(TC_CASE, FROM_MODEL_OFF)),
         (
             "T disabled",
             t.replace("[particles]\nenabled = true", "[particles]\nenabled = false"),
@@ -473,7 +482,7 @@ fn ctn2_cloud_follows_other_model_fields() {
     assert!(e_t >= 0.5, "CTN2 fields of T: {e_t}");
 }
 
-/// CTN3: with dispersion_fields = constant the walk follows the constants whatever the model holds.
+/// CTN3: without the table of amendment 2 the walk follows the constants whatever the model holds.
 #[test]
 fn ctn3_constants_ignore_the_model() {
     let tau = tau_of(D_TRACER);
@@ -605,30 +614,24 @@ fn ct8_two_way_refresh_uses_the_old_level() {
     }
 }
 
-/// D2 after the code: TC and TC with dispersion_fields = constant hash as R8.
+/// D2 after the code: TC and TC with the table of amendment 2 written off hash as R8.
 #[test]
 fn d2_written_default_keeps_the_hash() {
-    let explicit = TC_CASE.replace(
-        "dispersion = \"drw\"\n",
-        "dispersion = \"drw\"\ndispersion_fields = \"constant\"\n",
-    );
+    let explicit = with_table(TC_CASE, FROM_MODEL_OFF);
     let (a, b) = (parse(TC_CASE).tree.content_hash(), parse(&explicit).tree.content_hash());
-    println!("D2 TC {a:016x}, TC constant {b:016x}");
+    println!("D2 TC {a:016x}, TC with the table off {b:016x}");
     assert_eq!(a, R8, "D2 TC");
     assert_eq!(b, R8, "D2 TC with the default written");
 }
 
-/// D3 after the code: TCR with dispersion_fields = constant writes the files of R9.
+/// D3 after the code: TCR with the table of amendment 2 written off writes the files of R9.
 #[test]
 fn d3_written_default_keeps_the_outputs() {
     let dir = tmp("d3c");
-    let text = tcr_text().replace(
-        "dispersion = \"drw\"\n",
-        "dispersion = \"drw\"\ndispersion_fields = \"constant\"\n",
-    );
+    let text = with_table(&tcr_text(), FROM_MODEL_OFF);
     run_path(&text, &dir);
     let (h, names) = particle_files_hash(&dir);
-    println!("D3 TCR constant {h:016x} over {names:?}");
+    println!("D3 TCR with the table off {h:016x} over {names:?}");
     let _ = std::fs::remove_dir_all(&dir);
     if !cfg!(windows) {
         return;

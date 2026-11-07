@@ -1966,8 +1966,7 @@ section is read by `rcfd_api::particles` (`track_frozen`, `track_transient`) and
 | `injection.<n>.mass_flow` | `-1` | ADR 0057: mass flow [kg/s]; every parcel carries `mass_flow/rate` and its weight (real particles per parcel) follows from its diameter, overriding `parcel_count` (equal-mass parcels, unbiased mass distribution); `-1` = off |
 | `injection.<n>.cone_half_angle`, `cone_inner_half_angle`, `cone_axis`, `cone_speed` | `-1`, `0`, `[]`, `-1` | ADR 0057: cone injection. Half angle in degrees in (0, 180], inner half angle in `[0, half)` (hollow cone), non-zero axis, speed > 0; directions uniform in solid angle, overrides `velocity_mode`; `cone_half_angle = -1` = no cone. Positions follow `kind` (point or surface) |
 | `dispersion` | `none` | ADR 0057: `none` or `drw` (discrete random walk in homogeneous isotropic turbulence): eddy lifetime exponential with mean `T_L = dispersion_cl k/eps`, eddy length `0.09^0.75 k^1.5/eps`, fluctuation `sqrt(2k/3)` per component |
-| `dispersion_k`, `dispersion_epsilon` | `-1`, `-1` | `drw` with `dispersion_fields = "constant"`: k [m^2/s^2] and epsilon [m^2/s^3] (> 0, the same in every cell); located errors when unset; with `"turbulence_model"` they must stay `-1` (located error) |
-| `dispersion_fields` | `constant` | ADR 0208: `drw` only. `constant`: `dispersion_k` and `dispersion_epsilon`; `turbulence_model`: k and epsilon per cell of `turbulence.model` = `k_epsilon` (its epsilon) or `k_omega_sst` (`epsilon = 0.09 k omega`), read when the tracker is built (steady, frozen) and before every tracking step of a transient run (the end of the flow step; the old time level with `two_way`). Other models, or `dispersion = none`, are located errors. Left out of the settings hash at its default |
+| `dispersion_k`, `dispersion_epsilon` | `-1`, `-1` | `drw`: k [m^2/s^2] and epsilon [m^2/s^3] (> 0, the same in every cell); located errors when unset; with `dispersion_from_model.enabled` (below) they must stay `-1` (located error) |
 | `dispersion_cl`, `dispersion_crossing`, `dispersion_seed` | `0.15`, `true`, `1` | `drw`: `C_L`, limit the interaction time by the eddy crossing time, seed of the dispersion generator (separate from `seed`) |
 | `output_file`, `output_every` | `""`, `0` | VTK PolyData file written by the LIBRARY hooks (relative to the working directory), extra files every n tracking steps; the run path writes `particles.vtp` / `particles_<n>.vtp` into the output directory instead |
 | `tracks` | `false` | run path: also write `particle_tracks.csv` (`id,time,x,y,z,state`) |
@@ -2011,6 +2010,18 @@ alone). With the film enabled: `particles.film.gas_buoyancy` with `physics.rho` 
 or with a film patch that is not a no-slip wall at rest (`velocity = "fixed"` with `velocity_value = [0, 0, 0]`, no
 `velocity_expression_*` and no `velocity_udf`). The two keys are left out of the settings hash at `false`; a case that
 writes `[particles.film]` now lists them in its written text.
+
+Dispersion from the turbulence model (F-255, ADR 0208; `docs/particles.md`, "Dispersion from the turbulence model").
+`particles.dispersion_from_model` is an optional table: absent, it is not in the case data and changes nothing (a case
+that writes it with `enabled = false` keeps its settings hash).
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `dispersion_from_model.enabled` | `false` | `dispersion = "drw"` takes k and epsilon per cell from `turbulence.model` = `k_epsilon` (its epsilon) or `k_omega_sst` (`epsilon = 0.09 k omega`) in place of `dispersion_k` and `dispersion_epsilon`; read when the tracker is built (steady, frozen) and before every tracking step of a transient run (the end of the flow step; the old time level with `two_way`) |
+
+Located errors (with `particles.enabled`): `particles.dispersion_from_model.enabled` with `dispersion` other than `drw`
+or with a turbulence model other than `k_epsilon` and `k_omega_sst`; `particles.dispersion_k` or
+`particles.dispersion_epsilon` set (not `-1`) together with it.
 
 Erosion and rough walls (F-254, ADR 0194; `docs/particles.md`, "Wall interaction"). `particles.erosion` and
 `particles.rough_wall` are optional tables: absent, they are not in the case data and change nothing (a case that writes

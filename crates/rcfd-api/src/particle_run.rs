@@ -248,7 +248,7 @@ impl ParticleRun {
     }
 
     /// Give the random walk the turbulence model's `k` and `epsilon` of `turb` (ADR 0208 D2); nothing unless
-    /// `particles.dispersion_fields = "turbulence_model"`.
+    /// `particles.dispersion_from_model.enabled`.
     pub(crate) fn refresh_dispersion(
         &mut self,
         case: &Case,
@@ -313,7 +313,7 @@ impl ParticleRun {
             return Ok(());
         }
         let h = dt.min(self.end - self.tracker.time);
-        // ADR 0208 D2: the turbulence fields at the end of the step (nothing without dispersion_fields)
+        // ADR 0208 D2: the turbulence fields at the end of the step (nothing without dispersion_from_model)
         self.refresh_dispersion(&sim.case, sim.turb_state())?;
         let fd = particles::flow_data(&sim.case, sim);
         self.advance_step(&fd.flow(), h)

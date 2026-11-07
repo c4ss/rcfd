@@ -149,11 +149,11 @@ The output format is ASCII VTK PolyData (`.vtp`): points and point data `id`, `d
 
 ## Dispersion from the turbulence model (F-255, ADR 0208)
 
-With `particles.dispersion = "drw"` and `particles.dispersion_fields = "turbulence_model"` the random walk takes `k` and
-`epsilon` per cell from the case's turbulence model instead of the constants `dispersion_k` and `dispersion_epsilon`:
-k-epsilon (any variant) gives its transported `epsilon`, k-omega SST gives `epsilon = beta* k omega` with `beta* = 0.09`.
-Other models are refused with a located error, and so are `dispersion_k` or `dispersion_epsilon` set together with the
-model fields. Steady and frozen tracking read the fields once, when the tracker is built; a transient run reads them
+With `particles.dispersion = "drw"` and `[particles.dispersion_from_model]` with `enabled = true` the random walk takes
+`k` and `epsilon` per cell from the case's turbulence model instead of the constants `dispersion_k` and
+`dispersion_epsilon`: k-epsilon (any variant) gives its transported `epsilon`, k-omega SST gives
+`epsilon = beta* k omega` with `beta* = 0.09`. Other models are refused with a located error, and so are `dispersion_k`
+or `dispersion_epsilon` set together with the model fields. Steady and frozen tracking read the fields once, when the tracker is built; a transient run reads them
 before every tracking step, at the time level of the velocity the step tracks on (the end of the flow step; the old level
 with two-way coupling). An eddy a parcel holds is not redrawn when the fields change; the next draw uses the new values.
 From code, `Tracker::set_dispersion_fields(k, eps)` replaces the arrays.
