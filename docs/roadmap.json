@@ -2373,9 +2373,9 @@
     "deps": [
       "F-295"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit is fixed by its registration ADR before any code. The rule of F-295 (turbulence.periodic_seam.diffusivity = \"pair\") is applied to the face viscosity or diffusivity of k-epsilon, Spalart-Allmaras, the Reynolds stress model, the subgrid and mixing-length models and the rheology face viscosity, each with a global-budget check on a periodic box with a differing viscosity (the owner rule must miss it, the pair rule must meet it); defaults bit-identical (baseline hashes unchanged).",
-    "note": "From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set pair before H runs. Question 3: the default stays owner."
+    "note": "From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set pair before H runs. Question 3: the default stays owner. BUILT (ADR 0212, the registration of F-296, 2026-11-07, branch f296-pair-diffusivity, not merged): every registered check is met. turbulence.periodic_seam.diffusivity = \"pair\" now also gives both faces of a periodic pair one value (the model's internal-face formula across the seam) for k-epsilon (momentum, k and epsilon), Spalart-Allmaras (momentum, nuTilda), the Reynolds stress model (momentum, its momentum-source viscosity, stresses and epsilon), smagorinsky, wale and mixing_length (momentum) and a laminar run's viscosity law (rheology); refused with laminar without a law and with plugin. The global diffusion budgets close to 1e-15 with pair and miss by 4.9e-3 to 3.2e-2 with owner; the one-sweep k, nuTilda, stress and epsilon budgets (seam lag accounted) close to 5e-15 with pair and miss by 1.4e-4 to 5.7e-2 with owner; the case-tree seam pairs are equal to the bit. Finding: SA's nuTilda diffusivity is already one value per pair under owner. ADR 0205 S1 is an ignored record (superseded). Defaults bit-identical. Open: ADR 0212 Q1 to Q5."
   },
   {
     "id": "F-297",

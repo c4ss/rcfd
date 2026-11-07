@@ -6,6 +6,13 @@ values and global diffusion budgets of every model named below with the existing
 Spalart-Allmaras and the Reynolds stress model, and the seam pair differences of the case-tree texts. Its numbers are quoted in
 item 9, where they set the limits of the negative controls. Results go in the addendum at the end.
 
+Summary of the results (addendum): with `turbulence.periodic_seam.diffusivity = "pair"` both faces of every seam pair carry one value
+in every diffusivity named by F-296 (k-epsilon, Spalart-Allmaras, the Reynolds stress model, Smagorinsky, WALE, the mixing length,
+the viscosity law); the global diffusion budgets close to 1e-15 (owner: 4.9e-3 to 3.2e-2), the one-sweep budgets of k, `nuTilda`,
+the stresses and epsilon with the seam lag accounted close to 5e-15 (owner: 1.4e-4 to 5.7e-2), and the case-tree seam pairs are
+equal to the bit. The `nuTilda` diffusivity of SA is already one value per pair with `owner` (a finding of the code read). The
+defaults are bit-identical. Every check met its limit, every negative control fired, and every mutation made its check fail.
+
 Parents: [ADR 0205](0205-f295-registration-one-diffusivity-per-periodic-seam-pair.md) (F-295: the rule, the key, the pairs,
 question 1 with option (b) taken by the lead), ADR 0155 (optional objects), ADR 0156 D6 (`hash_omit_default`), ADR 0036 (laminar
 regions), ADR 0032 (the Reynolds stress model), ADR 0026 (the algebraic models), F-110 (rheology). Roadmap item F-296 (depends on
@@ -344,3 +351,73 @@ below 0.1 s for its iterations).
 ## Addenda
 
 Results of the checks follow in an addendum, in the order of the tables.
+
+### Addendum: results (2026-11-07)
+
+Commits: registration c9c099f, V0b' record 0123691 (on main 54167b0 with the registration, before any code), code 23fd241
+(`rcfd-turb/src/eddy.rs` `SeamPairs` and `seam_mode`, `kepsilon.rs`, `sa.rs`, `rsm.rs`, `les.rs` (`WallInfo`), `zeroeq.rs`,
+`model.rs` (the option of k-epsilon and SA), `rcfd-api/src/rheology.rs`, `sim.rs` (the pairs of the viscosity law), `turb.rs`
+(R1'), `schema.rs` (the text of the key), `docs/case-schema.md`, and the `#[ignore]` of ADR 0205 S1 of D4), checks as first run
+1f0a585. Every check was run once, in release. Tests: `crates/rcfd-turb/tests/f296_seam_diffusivity.rs`,
+`crates/rcfd-api/tests/f296_seam_diffusivity.rs`, `crates/rcfd-api/tests/f296_default_bits.rs`, with the case texts and the
+V0b' records in `crates/rcfd-api/tests/f296_common/mod.rs`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| F2 | each of the six models on BOX (4 pairs), SEC (24), GBOX (4): 0 pairs with unequal bits, 0 off the D1 bits, 0 other faces changed; owner pair difference 7.83e-2 (BOX), 0.155 (SEC), 8.83e-2 (GBOX) of the largest `nu_face`, the same for every model | exact; `>= 1e-3` | met |
+| G2 | `pair`: 2.5e-17 to 7.1e-16 for every model, mesh and field; `owner`: 8.67e-3, 8.79e-3, 4.88e-3 (BOX q, u_x, u_y), 3.23e-2 (SEC q), 9.08e-3, 9.19e-3, 6.85e-3 (GBOX), the same for every model | `<= 1e-13`; `>= 1e-5` | met |
+| R3' | every model: `set_option(.., "pair")` returns `the periodic faces are not paired: the partner of face 108 is face 113, whose partner is face 109`, `nu_face` keeps the owner bits, `owner` is accepted | as stated | met |
+| M1 | `pair`: 4.4e-16, 7.4e-17 (BOX x, y), 3.1e-16, 2.6e-16 (GBOX); `owner`: 4.65e-2, 2.45e-2, 5.22e-2, 3.31e-2 | `<= 1e-13`; `>= 1e-5` | met |
+| K1 | `pair` B(L_D1) 0 (BOX), 5.2e-15 (GBOX); harness (owner B(L_owner)) 6.0e-16, 5.3e-15; owner control B(L_D1) 4.67e-3, 4.23e-2; step change 1.33 to 1.35; smallest k after the sweep 9.08e-2, 8.53e-2 | `<= 1e-12`; `<= 1e-12`; `>= 1e-6`; `>= 1e-3`; `> 1e-10` | met |
+| A1 | 4 (BOX) and 8 (GBOX) seam owner cells with `nuTilda < 0`; `pair` 6.8e-16, 4.8e-16; harness 1.1e-15, 2.0e-16; owner control 1.40e-4, 3.39e-4; step change 0.118, 0.121 | as K1 | met |
+| A1p | `pair` 2.6e-15 (BOX), 1.9e-15 (GBOX); `owner` B(L_owner) 2.6e-15, 2.3e-15 and B(L_D1) 2.6e-15, 2.2e-15; step change 0.109 | `<= 1e-12`; `<= 1e-12`; `>= 1e-3` | met (item 2 confirmed) |
+| Q1 | `pair`: BOX `Rxx`, `Ryy`, `Rzz` 6.3e-16, `Rxy` 6.0e-17, epsilon 1.5e-15; GBOX 1.1e-15, 6.9e-16, 4.1e-15; harness at most 2.5e-15; owner control BOX 4.37e-2, 7.57e-3, 2.29e-2, GBOX 5.14e-2, 2.49e-2, 5.72e-2; step change 3.1e-2 to 0.169; `Rxz`, `Ryz` all cell terms zero (not checked, as registered) | as K1 | met |
+| S1' | the 13 accepted texts without a diagnostic; CH laminar with `pair` and CH plugin with `pair` located statically at the key (`... is available with turbulence.model = k_epsilon, k_omega_sst, spalart_allmaras, smagorinsky, wale, mixing_length or rsm, and on a laminar run with a viscosity law (rheology) (ADR 0212), not with "laminar": a laminar run without a viscosity law (rheology.model or rheology.shift) has no diffusivity to pair`; `... not with "plugin": a plugin model owns its diffusivities`); `harmonic` located at the key | as stated | met |
+| S2' | CHX k_epsilon: 69c3999868ddfc66 without the key and with `owner`, 1e8e2802e9306444 with `pair` | as stated | met |
+| T4 | 20 seam pairs (CHX), 32 (TGS); `pair` 0 with unequal bits and 0 off the D1 bits for every model; `owner` k_epsilon 2.03e-2, spalart_allmaras 5.19e-2, mixing_length 2.98e-2, smagorinsky 2.72e-2, wale 0.136, rsm 1.48e-4 | exact; `>= 1e-3`, rsm `>= 1e-5` | met |
+| T4r | CHXR, 20 pairs: `pair` 0 with unequal bits; `owner` 3.11e-2 | exact; `>= 1e-3` | met |
+| T5 | LAMX, 40 seam faces: `pair` 0 off the bits of `nu`; `owner` largest 2.886e-2 = 11.4 `nu` | exact; `>= 1.001 nu` | met |
+| F2r | BOX 4 pairs, SEC 24, GBOX 4 (`relax = 0.7`): 0 with unequal bits, 0 off the D1 bits, 0 other faces changed, 0 unequal after the relaxed call; owner 5.76e-3, 3.28e-2, 2.26e-2 of the largest face viscosity | exact; `>= 1e-3` | met |
+| G2r | `pair` 3.3e-17 to 9.4e-16; `owner` 7.34e-4, 7.44e-4, 3.73e-4 (BOX), 6.08e-3 (SEC), 2.85e-3, 2.89e-3, 1.97e-3 (GBOX) | `<= 1e-13`; `>= 1e-5` | met |
+| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited; both pass before the gate (below) and in the gate | pass | met |
+| V0b' | 10 of 10 runs bit-identical to the record after the code: CHX k_epsilon 0xe527a1d35ffe4343, spalart_allmaras 0x78efcb6e2d322296, mixing_length 0x90c0c54c9ddda72c, CHXR 0xb9234b3a11e75d52, TGS smagorinsky 0xd096c2c562825b75, wale 0x4ba5616d29ee4494, rsm 0x67da49ac2a52dfaa, TGS laminar law 0xeb0fc754285775f2, LAMX 0xfe1d4be4f9efcf72, NPK 0xaacd20672fc86114 | bit-identical | met |
+| V0c' | V0c1': the 10 runs with `owner` written give their V0b' records; V0c2': NPK with `pair` (50, 7, 0xaacd20672fc86114) | the records | met |
+| V0d | `f295_default_bits.rs` and `f286_default_bits.rs` unedited; both pass before the gate and in the gate | pass | met |
+
+**Mutations** (scratch, each applied alone to 1f0a585 and reverted; the named test run once; the tree was clean after the last):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MU1 | F2 | k_epsilon BOX: 4 pairs with unequal bits, 4 off the D1 bits | fails |
+| MU2 | K1 | BOX `pair` B(L_D1) 4.67e-3 (the owner value) | fails |
+| MU3 | F2 | spalart_allmaras BOX: 4 pairs with unequal bits | fails |
+| MU4 | A1 | BOX `pair` B(L_D1) 1.40e-4 | fails |
+| MU5 | Q1 | BOX `Rxx` `pair` B(L_D1) 4.37e-2 | fails |
+| MU6 | Q1 | BOX meets (`w = 1/2`); GBOX `Rxx` `pair` B(L_D1) 2.81e-3 | fails (on GBOX, as registered) |
+| MU7 | M1 | BOX `pair` 4.65e-2, 2.45e-2 | fails |
+| MU8 | F2 | smagorinsky BOX: 4 pairs with unequal bits | fails |
+| MU9 | F2r | BOX: 4 pairs with unequal bits, 4 off the D1 bits, 4 unequal after the relaxed call | fails |
+| MU10 | T4r | 20 of 20 pairs with unequal bits | fails |
+| MU11 | T4 | CHX k_epsilon: 20 of 20 pairs with unequal bits and off the D1 bits | fails |
+| MU12 | S1' | CH laminar with `pair`: no static diagnostic | fails |
+
+MU10: the scratch script's first two applications did not change the source (its pattern did not match the line as `cargo fmt`
+wrote it), so they stopped before any build and the test was not run; the third application changed it and the test ran once.
+
+**Predictions.** PR1 met (F2 and F2r exact; G2, G2r and M1 with `pair` 2.5e-17 to 9.4e-16; the owner values those of the probe,
+to the digits printed). PR2 met (K1, A1 and Q1 with `pair` at most 5.2e-15; the owner controls those of the probe). PR3 met. PR4
+met for T4, T4r, T5 and V0.
+
+Before the gate, on 1f0a585 in release: `cargo fmt` of `rcfd-turb` and `rcfd-api` and `cargo clippy -p rcfd-turb -p rcfd-api
+--all-targets -D warnings` clean; every test of `rcfd-turb` (104 passed, 0 failed, 88 ignored) and the tests `baseline_hashes`,
+`case_hashes_w48u`, `f286_default_bits`, `f286_transient_sst`, `f295_seam_diffusivity` (S1 now an ignored record),
+`f295_default_bits`, `turb_models`, `sst_schema`, `rsm_tree`, `sgs_tree`, `regions`, `physics_schema`, `defaults_w49c`,
+`wall_options` and `registers` of `rcfd-api` (71 passed, 0 failed, 9 ignored).
+
+**Merging with F-294** (branch `f294-transient-keps-sa`, ADR 0210): both change `kepsilon.rs`, `sa.rs`, `model.rs`, `schema.rs`
+and `docs/case-schema.md`. The F-296 edits there were placed away from the F-294 hunks where possible (new fields and methods next
+to `nu_face`, the option at the head of `set_option`); the documentation text of the key in `schema.rs` lies next to an F-294 hunk
+and will likely conflict. After the merge, k-epsilon and SA on `pimple` use the paired diffusivities through the same code
+(question 4).
+
+**Questions added by the results:** none. Questions 1 to 5 stand.
