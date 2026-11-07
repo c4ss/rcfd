@@ -553,8 +553,9 @@ before the corrected runs.
   `sliding_step`, `rotating_wall_conditions`.
 - `crates/rcfd-fv/src/pimple/moving.rs`: `PimpleSolver::step_sliding` (S3), added; `step`, `step_ale*` and `replace_mesh`
   not edited.
-- Tests: `crates/rcfd-fv/tests/sliding_interface_f250.rs` (18 tests: 13 run, 5 ignored known misses) and the records file
-  of the registration (3). No existing test was edited.
+- Tests: `crates/rcfd-fv/tests/sliding_interface_f250.rs` (18 tests: 14 run, 4 ignored known misses), the unit tests in
+  `sliding.rs` (5: 4 run, the K2 (i) known miss ignored) and the records file of the registration (3). No existing test
+  was edited.
 - Documents: this ADR, `docs/dynamic-mesh.md`, `docs/fan-project-breakdown.md` and the README's gap list (prose only),
   and the F-250 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (partial, by the decision rule).
 - Not changed: `rcfd-api`, `rcfd-cli`, the Studio, the case schema; `baseline_hashes.rs`, `case_hashes_w48u.rs` and the
@@ -693,3 +694,40 @@ Disclosures:
   K2 (MU4). Options: (a) in the wiring follow-up (Q1), register a limit on a non-axisymmetric flow through the turning
   rotor, for example SF's velocity error against the potential flow `U_in r_i / r` (`6.19e-3 U_in` here, `2.19e-1` with
   MU4) or a uniform cross-flow past a rotating wall; (b) keep K2 as the only check. Recommendation (a).
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D-R records R1 to R3 after the code | equal | `e4bc6f7b23554262`, `77a3c29e4ad6f213`, `6378ceeeaacb6799`: equal | met |
+| D-S the existing suites, unedited | pass | see below and the gate | met |
+
+D-S before the gate, release: the `rcfd-mesh` unit tests (55 passed, 1 ignored: the new K2 (i) known miss), the `rcfd-fv`
+unit tests (84, 5 ignored as before), `non_conformal` (2), `cylindrical_interface_w43b` (2, 4 ignored as before),
+`cylindrical_interface_w44b` (2, 2 ignored), `mrf_cyclic_seams_w44c` (12, 4 ignored), `ale_flows` (5, 5 ignored),
+`ale_gcl` (4), `layering_f257` (5), `rotating_mesh_study` (3). The `rcfd-api` suites of D-S ran in the gate.
+
+### The gate (2026-11-07)
+
+Main stayed at 08316f7 while F-250 was built, so no merge was needed; 0216 is on no other branch. The gate ran on a `git
+archive` copy of ad8c5ee (addendum 1 before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f250-gate`. The machine lock was taken with
+the atomic `mkdir` lock and owner file of `gate-lock.sh`, polled every 5 s instead of 60 s (as `gate-f291/outer2.sh`,
+disclosed); the gate's `run.sh` refuses to start unless the owner file names f250. It waited from 14:34 (UTC) behind the
+F-299 and F-296 gates and was taken at 17:17:40. The start threshold of free physical memory was 20 GB (the template
+`gate-f292/run.sh`), and the gate started with 26 GB free.
+
+Result: `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3166 passed, 0
+failed, 894 ignored** (3166 test processes in 605 binaries, wall 4710 s, peak summed working set 3463 MB, largest time
+against its limit 0.228). The lowest free physical memory during the gate was 24 GB (17:20). The lock was released at the
+end (18:49:58).
+
+All tests of this ADR ran in the gate and passed: the 14 flow tests, the 3 records and the 4 unit tests; its 5 known
+misses are ignored. So did the suites of D-S (`baseline_hashes`, H1 of `case_hashes_w48u`, `dynamic_mesh`,
+`cylindrical_interface_w43b` and `cylindrical_interface_w44b` of rcfd-api, and the rcfd-mesh and rcfd-fv suites above). No
+known flaky test failed. This section and one wording correction of "Built as registered" (the test counts: 14 run and 4
+ignored in the flow file, not 13 and 5, plus the 5 unit tests) are documents only and were not gated again.
+
+Q1 to Q7 stay open for the maintainer. F-250 is partial in the roadmap by the decision rule (Q6): A1 missed as
+registered and was met on the corrected set-up of amendment 2, A2 and A3 are met, A4 holds, and the case-tree wiring is
+not done.
