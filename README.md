@@ -24,6 +24,8 @@ warranty of any kind (see the licences). The main gaps today:
 * Sliding-mesh transient solves are not available.
 * The desktop app is being rebuilt; the new one does not have a window yet.
 
+![Roadmap progress: done, partly done and not started items](docs/roadmap-progress.svg)
+
 [The roadmap overview](docs/roadmap-overview.md) says what works today, what
 does not and what comes next. See [docs/ROADMAP.md](docs/ROADMAP.md) for the
 plan.
