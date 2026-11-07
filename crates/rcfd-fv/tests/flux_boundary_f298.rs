@@ -7,7 +7,7 @@
 //! carries the face flux of the pressure operator with the same options on every cell, those with a fixed-pressure face included
 //! (to 1e-12 of the flux scale). B-lib-T: the flux correction without the options and without the boundary term misses that on
 //! the cells beside the fixed-pressure faces. B-lib-D: `None`, the dropped boundary treatment and a run without a gradient give
-//! the bits of the existing function.
+//! the bits of the existing function; B-lib-D2 (amendment 2): so do the default options.
 
 use rcfd_core::vec3::Vec3;
 use rcfd_fv::diffusion::{laplacian_opt, BoundaryGradient, GradientOptions};
@@ -228,6 +228,23 @@ fn b_lib_d_no_options_dropped_and_no_gradient_change_no_bit() {
     let none = corrected_flux_opt(&geom, &gamma, &pbc, &phi_hby_a, &pv, &zero_ub, Some(&grad), None);
     let o3 = sets().into_iter().find(|(n, _)| *n == "O3").unwrap().1;
     let dropped = corrected_flux_opt(&geom, &gamma, &pbc, &phi_hby_a, &pv, &zero_ub, Some(&grad), Some(o3));
+    // B-lib-D2 (ADR 0221 amendment 2): the default options are `corrected_flux_with`, the fixed-pressure faces included
+    let dflt = corrected_flux_opt(
+        &geom,
+        &gamma,
+        &pbc,
+        &phi_hby_a,
+        &pv,
+        &zero_ub,
+        Some(&grad),
+        Some(GradientOptions::default()),
+    );
+    let n4 = bits(&base, &dflt);
+    println!(
+        "B-lib-D2: the default options {n4} of {} faces differ in a bit (limit 0)",
+        base.len()
+    );
+    assert_eq!(n4, 0, "B-lib-D2");
     let (_, c2) = sets().pop().unwrap();
     let base_ng = corrected_flux_with(&geom, &gamma, &pbc, &phi_hby_a, &pv, &zero_ub, None);
     let c2_ng = corrected_flux_opt(&geom, &gamma, &pbc, &phi_hby_a, &pv, &zero_ub, None, Some(c2));

@@ -198,8 +198,8 @@ pub fn face_currents_opt(
 /// currents of [`face_currents_opt`]: each internal face gives half of its power `F_f (phi_o - phi_n)` to each of its cells
 /// and each boundary face `F_b (phi_P - phi_b)` to its owner, so the total is the boundary power plus `sum_c phi_c net_c`
 /// (`net_c` the current leaving cell `c`), exactly; for a converged potential it equals [`boundary_power_opt`]. The face power is
-/// not a square, so on a strongly skewed mesh a cell value can be negative. `Some(GradientOptions::default())` gives this
-/// formula with the default operator's currents (not the bits of [`joule_heat`]).
+/// not a square, so on a strongly skewed mesh a cell value can be negative. `Some(GradientOptions::default())` is
+/// [`joule_heat`], bit for bit (ADR 0221 amendment 2).
 pub fn joule_heat_opt(
     geom: &FvGeometry,
     phi: &ScalarField,
@@ -207,7 +207,7 @@ pub fn joule_heat_opt(
     non_orthogonal: bool,
     opts: Option<GradientOptions>,
 ) -> Vec<f64> {
-    if opts.is_none() {
+    if opts.is_none_or(|o| o == GradientOptions::default()) {
         return joule_heat(geom, phi, sigma_face, non_orthogonal);
     }
     let own = geom.mesh.owner();
@@ -235,7 +235,8 @@ pub fn joule_heat_opt(
     q
 }
 
-/// [`boundary_power`] with the currents of [`face_currents_opt`] (ADR 0221 D1); `None` is [`boundary_power`].
+/// [`boundary_power`] with the currents of [`face_currents_opt`] (ADR 0221 D1); `None` and `Some(GradientOptions::default())` are
+/// [`boundary_power`].
 pub fn boundary_power_opt(
     geom: &FvGeometry,
     phi: &ScalarField,
@@ -243,7 +244,7 @@ pub fn boundary_power_opt(
     non_orthogonal: bool,
     opts: Option<GradientOptions>,
 ) -> f64 {
-    if opts.is_none() {
+    if opts.is_none_or(|o| o == GradientOptions::default()) {
         return boundary_power(geom, phi, sigma_face, non_orthogonal);
     }
     let flows = face_currents_opt(geom, phi, sigma_face, non_orthogonal, opts);

@@ -602,8 +602,8 @@ pub fn corrected_flux_with(
 /// ([`secondary_face_gradient`]); every fixed-pressure boundary face (`a = 0`, neither a fixed-velocity nor a periodic face) takes
 /// the non-orthogonal part the equation has there, `gamma_f k_f . g_b` with `g_b` of [`secondary_boundary_gradient`] under the
 /// options' boundary treatment (ADR 0221 D3; none for `Dropped`). So the flux carries the face flux of the pressure operator
-/// assembled with the same options on every face. `None` options, or no gradient, is [`corrected_flux_with`] (whose fixed-pressure
-/// faces have no non-orthogonal part, ADR 0204 Q3).
+/// assembled with the same options on every face. `None` options, `Some(GradientOptions::default())` (ADR 0221 amendment 2) or no
+/// gradient is [`corrected_flux_with`], bit for bit (whose fixed-pressure faces have no non-orthogonal part, ADR 0204 Q3).
 #[allow(clippy::too_many_arguments)]
 pub fn corrected_flux_opt(
     geom: &FvGeometry,
@@ -629,7 +629,8 @@ pub fn corrected_flux_opt(
                 ub,
                 Some(g),
                 o.face_correction,
-                Some((o.boundary, &bv)),
+                // ADR 0221 amendment 2: the default options are the default flux, bit for bit
+                (o != GradientOptions::default()).then_some((o.boundary, &bv[..])),
             )
         }
         _ => corrected_flux_with(geom, gamma_p, bc, phi_hby_a, p, ub, grad),

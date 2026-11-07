@@ -8,7 +8,8 @@
 //! potential's operator with the same options (per cell to 1e-12 of the flux scale); L1-T: the unchanged currents miss that.
 //! L2: the total of `joule_heat_opt` equals `boundary_power_opt` plus `sum phi_c net_c` (to 1e-12 of the power scale); L2-T: the
 //! default formula misses that identity with its own currents. L3: `None` (and the default options for the currents and the power)
-//! give the bits of the existing functions. L4: without a gradient the new Joule formula is the old one to round-off.
+//! give the bits of the existing functions; L3b (amendment 2): the default options for the Joule heat too. L4: without a
+//! gradient the new Joule formula is the old one to round-off.
 
 use rcfd_core::vec3::Vec3;
 use rcfd_fv::bc::{FixedGradient, Profile};
@@ -298,6 +299,18 @@ fn l3_l4_no_options_change_no_bit() {
         );
         if nq != 0 {
             missed.push(format!("L3 joule {non_orth}"));
+        }
+        // L3b (ADR 0221 amendment 2): the default options are `joule_heat` too
+        let nd = bits(
+            &base_q,
+            &joule_heat_opt(&geom, &phi, &sf, non_orth, Some(GradientOptions::default())),
+        );
+        println!(
+            "L3b joule heat default options, gradient {non_orth}: {nd} of {} cells differ in a bit",
+            base_q.len()
+        );
+        if nd != 0 {
+            missed.push(format!("L3b joule {non_orth}"));
         }
     }
     let (_, c2) = sets().pop().unwrap();
