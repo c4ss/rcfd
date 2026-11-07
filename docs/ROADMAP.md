@@ -4822,7 +4822,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
         - d1n (diverging SIMPLE cavity: no hint);
         - d2 (X7 vent u = 0.5 converging, 600 iterations bit-identical with and without querying the message every
           iteration).
-- [ ] **F-249** Parametric studies, remaining scope: multi-objective optimiser, Nelder-Mead robustness, warm start beyond steady SIMPLE/SIMPLEC
+- [~] **F-249** Parametric studies, remaining scope: multi-objective optimiser, Nelder-Mead robustness, warm start beyond steady SIMPLE/SIMPLEC
   - depends on: F-095
   - acceptance: A multi-objective study over at least two design parameters returns a Pareto set verified against a known analytic front within a limit registered in an ADR; the Nelder-Mead optimiser reaches the registered T3 target; a warm-started sweep point reproduces its cold-started result within a registered tolerance
   - note: Split from F-095 on 2026-10-21 (wave 40C, ADR 0099). Acceptance text proposed by the lead; refine when
@@ -5353,3 +5353,14 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0205 (F-295) question 1, recommendation taken by the lead: a low-priority follow-up with checks of the
     same kind. Question 2: EXP-ROT check H and FAN-01 do not set the key yet; the EXP-ROT job amends ADR 0183 to set
     pair before H runs. Question 3: the default stays owner.
+
+- [ ] **F-297** NSGA-II per-variable crossover and the 30-parameter ZDT1 check
+  - depends on: F-249
+  - acceptance: A new registration ADR re-registers MO1z (ZDT1 with 30 parameters, C within its limit) with the per-variable
+    coordinate exchange between parents added to NSGA-II (ADR 0209 diagnostic DG1: C about 1.5e-3 with it), after the
+    operator is read from Deb 2002 and the crossover and mutation papers; the MO1z known miss is then met or recorded again
+    with its numbers; defaults bit-identical.
+  - note: From ADR 0209 (F-249) question 5, recommendation taken by the lead. F-249 stays partial for the MO1z and N3
+    known misses (N3: the Nelder-Mead start rule gives a tiny step near zero; question 3 keeps MATLAB's rule). Open for
+    the maintainer: questions 1 (done or partial), 6 (tool description naming nsga2 needs a registered golden edit) and
+    7 (extended warm start as default needs the bit-identity lift).
