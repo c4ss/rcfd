@@ -372,3 +372,17 @@ outer iterations).
 ## Addenda
 
 Results of the checks follow in an addendum, in the order of the tables.
+
+### Amendment 1 (2026-11-07): the outer wall of the S4 sector, written before any code and before any run of S1 and S4
+
+Found while recording V0b, before any code of F-294: its case "steady SIMPLEC k-epsilon on the S4 sector with the frame" stops
+at `Case::semantic_errors` with `boundaries.outer.velocity`: `moving_wall, shear, partial_slip and marangoni walls are not
+supported by the turbulence wall treatments`. `turb::check` accepts a `moving_wall` for `k_omega_sst` only (ADR 0078 S2), so the
+S4 text of ADR 0199, whose `outer` is a `moving_wall` counter-rotating at `-2` rad/s, cannot carry k-epsilon or SA. No run of the
+V0b record had been kept (the record had not been written) and S1 and S4 had not run.
+
+The S4 texts of record for k-epsilon and SA (and the V0b case) take `outer` as `velocity = "fixed"` with no value (a wall at rest
+in the rotating frame) and `turbulence = "wall"`, in place of the moving wall; everything else is the text of the S4 row (the
+frame, the rotational seams, the inlet expressions, the inlet turbulence values, the solver). S1 adds one located case: the
+k-epsilon S4 text with the moving wall of ADR 0199 is located at `boundaries.outer.velocity` (the rule as it is). No limit
+changes.
