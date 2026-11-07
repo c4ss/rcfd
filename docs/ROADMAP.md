@@ -5561,3 +5561,15 @@ fixed by the item's registration ADR before any code.
   - depends on: F-247
   - acceptance: tetrahedralize of box_surface([0,0,0],[1,0.1,0.1],[10,1,1]) at size 0.035 and quality_sweeps 3 returns a mesh or a located error instead of panicking at tetmesh.rs:386.
   - note: Found during F-247 (ADR 0215 question 7); recommendation taken: a new item.
+- [ ] **F-307** Immersed solids in the case tree: optional immersed_solids table
+  - depends on: F-219
+  - acceptance: A case file with an optional immersed_solids table runs the F-219 forcing from the CLI; the penalty warns below 1e3 times the largest fluid diagonal; the schema golden edit is registered and approved by the maintainer.
+  - note: From ADR 0218 questions 2 and 3, recommendations taken. Needs the maintainer's approval of the schema golden edit before it merges.
+- [ ] **F-308** Moving immersed shapes
+  - depends on: F-219
+  - acceptance: An oscillating cylinder gives the force and the wake against a body-fitted moving-mesh run within a registered limit.
+  - note: From ADR 0218 question 4, recommendation taken.
+- [ ] **F-309** Second-order immersed forcing: fluid-solid face flux at the surface crossing
+  - depends on: F-219
+  - acceptance: Circular Couette flow with an immersed rotating cylinder reaches an observed order of 1.5 (the F-219 V1 check, limit unchanged).
+  - note: From ADR 0218 question 6, recommendation taken. F-219's V1 order was 1.02, an ignored known-miss test.
