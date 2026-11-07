@@ -399,7 +399,7 @@ Defects found on D-a and their changes:
 With these changes the development runs gave (numbers of scratch set-ups, no limit applies to them): D-a at `h0` 0.035,
 0.04, 0.05 with the band: no failure, smallest mean ratio over the run 0.345, 0.321, 0.373, the largest raw mismatch of M5
 2.2e-14; D-b: `p_bar V^gamma` 9.4e-5 at `T` and 2.3e-4 at `2T`, per-event volume, mass and energy within 1.5e-15,
-smallest mean ratio 0.288, raw mismatch 1.9e-13, the smallest x of a touched point 0.249 (piston at rest at 0.56), 14613
+smallest mean ratio 0.288, raw mismatch 1.9e-13, the smallest x of a touched point 0.249 (the piston at rest at 0.32 at `T`), 14613
 steps in 53 s. Events after which a trigger condition remained were frequent (D-b: 1368 of 1433; mostly edges just over
 `l_max` whose split the quality rule refused), which costs time but is not a check (it is printed in P-T).
 
