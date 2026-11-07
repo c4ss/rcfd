@@ -403,3 +403,20 @@ The records stay as ignored tests (`*_tol_record`), with their limits unchanged.
 `tol_rel = 0`, `tol_abs = 1e-300`, `max_iter = 1000`: the HK matrices are symmetric (`phi = 0`), so the solver is CG, which then
 stops at an exactly zero residual or after 1000 iterations, past round-off in every row of the 17-cell system. Nothing else
 changes (mesh, constants, steps, sweeps, limits, reference values). KC1 keeps its registered controls and its run of record.
+
+### Amendment 3 (2026-11-07): block B of HK made thin, written after the run of amendment 2 and before the corrected run
+
+The HK checks as corrected by amendment 2 ran once (release, each test once). HK0 held to round-off in K1 (standard and RNG,
+both schemes), K1r, K1v, K1b, K1N, K2b, K2v and the standard half of K2, and these met their limits with the numbers of the
+recursion, but K2 stopped at HK0 in its RNG Euler run with `N = 160`, step 16, sweep 2: epsilon spread 2.676e-8 (k 0). So the
+corrected set-up is still defective, and by the classes every closed-form check of part K under it is a record. A scratch probe
+(not committed) of the eight K2 runs (both variants, both schemes, `N = 160` and `320`) repeats the miss in that one run
+(2.676e-8 at step 16, sweep 2; the seven others 3.4e-15 to 9.4e-15) and gives 3.5e-15 to 1.0e-14 in all eight with the
+correction below. The cause is again B's wall row: with `tol_rel = 0` CG runs its 1000 iterations on a system whose B row is
+about 1e9 times A's, and past round-off its iterate can drift in the rows of A.
+
+The runs of amendment 2 stay as ignored tests (`*_amendment2_record`), with their limits unchanged. Corrected HK: block B is
+scaled by `(1, 1, 1e-12)` (`Affine::scaling`) before its translation, so its one cell keeps its wall distance 0.5 in the plane
+and its volume is 1e-12; its rows, the wall row included, are then about 1e-4 of A's instead of 1e8 times, and the solver
+controls go back to those registered (`tol_rel = 1e-14`, `tol_abs = 1e-300`, `max_iter = 1000`). HK0's mesh part is unchanged
+and also asserts that volume. Nothing else changes. KC1 keeps its run of record.
