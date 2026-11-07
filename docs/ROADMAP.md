@@ -5455,7 +5455,7 @@ fixed by the item's registration ADR before any code.
       SA's nuTilda diffusivity is already one value per pair under owner. ADR 0205 S1 is an ignored record (superseded).
       Defaults bit-identical. Open: ADR 0212 Q1 to Q5.
 
-- [ ] **F-297** NSGA-II per-variable crossover and the 30-parameter ZDT1 check
+- [x] **F-297** NSGA-II per-variable crossover and the 30-parameter ZDT1 check
   - depends on: F-249
   - acceptance: A new registration ADR re-registers MO1z (ZDT1 with 30 parameters, C within its limit) with the per-variable
     coordinate exchange between parents added to NSGA-II (ADR 0209 diagnostic DG1: C about 1.5e-3 with it), after the
@@ -5465,6 +5465,15 @@ fixed by the item's registration ADR before any code.
     known misses (N3: the Nelder-Mead start rule gives a tiny step near zero; question 3 keeps MATLAB's rule). Open for
     the maintainer: questions 1 (done or partial), 6 (tool description naming nsga2 needs a registered golden edit) and
     7 (extended warm start as default needs the bit-identity lift).
+    - BUILT (ADR 0220, the registration of F-297, 2026-11-07, branch f297-nsga2-crossover, not merged): every registered
+      check is met. The opt-in `crossover = "exchange"` of `nsga2` (library `nsga2::run_with`, `Method::Nsga2With`, the
+      design tools' `method.crossover`) exchanges the two children's values of each variable of a crossed pair with
+      probability 1/2. ZDT1 with 30 parameters (25 000 evaluations, population 100): C 1.5e-3, 1.3e-3, 1.6e-3 on seeds 1 to 3
+      (limit 1e-2; G and I met), the numbers of DG1; FON within the limits (C at most 5.9e-3). The default `sbx` is
+      bit-identical (V0b record) and still misses ZDT1 (C 0.543; the ADR 0209 known miss stays ignored). Read: Deb et al.
+      (2002), Deb and Agrawal (1995, 1999), Deb and Deb (2012); Deb and Goyal (1996) not obtained. The papers cross each
+      variable with probability 0.5 and state no exchange (recorded diagnostics DP1, DP2). Open: ADR 0220 Q1 to Q5 (the
+      reading clause, the papers' rule, the default, bounded forms, the tool description).
 
 - [ ] **F-298** Electric current and Joule heat with the gradient options, and the fixed-pressure flux correction
   - depends on: F-291

@@ -4,6 +4,12 @@ Status: **REGISTERED 2026-11-07**, written before any code of F-297 and before a
 maintainer. Before this text no rcfd code or test was run for F-297; four papers were read (the reading section below). Results
 go in the addendum at the end.
 
+Summary of the results (addendum 1): with the opt-in `crossover = "exchange"` NSGA-II meets the ZDT1 check with 30 parameters on
+all three seeds (C 1.3e-3 to 1.6e-3 against the limit 1e-2, the numbers of ADR 0209's DG1), and FON stays within the limits (C at
+most 5.9e-3); the default operator is bit-identical and still misses ZDT1 (C 0.543). Every mutation fails its test. The reading:
+the constants and the test problems of ADR 0209 are those of Deb et al. (2002); the papers cross each variable with probability 0.5
+and state no exchange between the children (F3, F4; questions 1 to 5).
+
 Parents: [ADR 0209](0209-f249-registration-nsga2-studies-nelder-mead-options-and-extended-warm-start.md) (F-249: NSGA-II, its
 operator D1, the checks MO1 to MO4, the known miss MO1z, the diagnostic DG1 and question 5), [ADR 0067](0067-wave32c-design-loop.md)
 (the design loop, the store, propose / record). Roadmap item F-297 (depends on F-249, merged).
@@ -65,8 +71,8 @@ defaults bit-identical. From ADR 0209 question 5, recommendation (b) taken by th
 | Id | Paper | Copy read | What it states (quoted where it matters) |
 |---|---|---|---|
 | R1 | K. Deb, A. Pratap, S. Agarwal, T. Meyarivan, "A fast and elitist multiobjective genetic algorithm: NSGA-II", IEEE Trans. Evol. Comput. 6 (2002) 182-197 | `cse.unr.edu/~sushil/class/gas/papers/nsga2.pdf` (the journal pages) | Section IV-A: "the simulated binary crossover (SBX) operator and polynomial mutation [6] for real-coded GAs. The crossover probability of pc = 0.9 and a mutation probability of pm = 1/n ... are used. For real-coded NSGA-II, we use distribution indexes [6] for crossover and mutation operators as ηc = 20 and ηm = 20"; 25 000 evaluations, population 100, 250 generations; [6] is Deb and Agrawal (1995). Table I: ZDT1 (n = 30, [0, 1], `f1 = x1`, `f2 = g [1 - sqrt(x1/g)]`, `g = 1 + 9 (sum_{i=2}^n x_i)/(n - 1)`) and FON (n = 3, [-4, 4], `1 - exp(-sum (x_i -+ 1/sqrt 3)^2)`). Section III-C: binary tournament on the crowded comparison (rank, then crowding distance), fronts filled in order, the last by descending crowding distance. Section on the rotated problem: "a generic search operator, such as the variablewise SBX operator used here". Table II (10 runs): the convergence metric of real-coded NSGA-II on ZDT1 is 0.033482 (mean), variance 0.004750; on FON 0.001931 |
-| R2 | K. Deb, R. B. Agrawal, "Simulated binary crossover for continuous search space", Complex Systems 9 (1995) 115-148 | the publisher's PDF, `content.wolfram.com/sites/13/2018/02/09-2-2.pdf` | Eq. (6): the spread factor `beta = |(c1 - c2)/(p1 - p2)|`, the children equidistant from the parents' mid-point; eqs. (19), (20): `C(beta) = 0.5 (n + 1) beta^n` for `beta <= 1`, `0.5 (n + 1) / beta^(n + 2)` for `beta > 1`. Section 3.1, multi-variable problems: a single-point crossover in the k-th variable "creates a new value of the kth variable and swaps the (k + 1)st to Nth variables between the parents"; "we use a mechanism similar to uniform crossover for multiple variables ... for choosing which variables to cross ... we choose to perform SBX in each variable with probability 0.5. But in the case of single-variable functions ... with probability 1.0". Children may lie anywhere in the real line; section 6 suggests a bounded distribution as an extension; mutation is not used in the paper |
-| R3 | K. Deb, S. Agrawal, "A niched-penalty approach for constraint handling in genetic algorithms", ICANNGA 1999 | `homes.cs.washington.edu/~sagarwal/icannga.pdf` | Appendix A, SBX: `u` in [0, 1]; `beta_q = (u alpha)^(1/(eta_c + 1))` if `u <= 1/alpha`, else `(1/(2 - u alpha))^(1/(eta_c + 1))`, `alpha = 2 - beta^-(eta_c + 1)`, `beta = 1 + 2 min[(y1 - y_l), (y_u - y2)]/(y2 - y1)`; `c1 = 0.5 [(y1 + y2) - beta_q |y2 - y1|]`, `c2 = 0.5 [(y1 + y2) + beta_q |y2 - y1|]`; "It is assumed here that y1 < y2. A simple modification to the above equation can be made for y1 > y2. For handling multiple variables, each variable is chosen with a probability 0.5 and the above SBX operator is applied variable-by-variable." Polynomial mutation, citing Deb and Goyal (1996): eq. (12) `delta_q = [2u + (1 - 2u)(1 - delta)^(eta_m + 1)]^(1/(eta_m + 1)) - 1` for `u <= 0.5`, else `1 - [2(1 - u) + 2(u - 0.5)(1 - delta)^(eta_m + 1)]^(1/(eta_m + 1))`, `delta = min[(y - y_l), (y_u - y)]/(y_u - y_l)`, `c = y + delta_q (y_u - y_l)` |
+| R2 | K. Deb, R. B. Agrawal, "Simulated binary crossover for continuous search space", Complex Systems 9 (1995) 115-148 | the publisher's PDF, `content.wolfram.com/sites/13/2018/02/09-2-2.pdf` | Eq. (6): the spread factor `beta = abs((c1 - c2)/(p1 - p2))`, the children equidistant from the parents' mid-point; eqs. (19), (20): `C(beta) = 0.5 (n + 1) beta^n` for `beta <= 1`, `0.5 (n + 1) / beta^(n + 2)` for `beta > 1`. Section 3.1, multi-variable problems: a single-point crossover in the k-th variable "creates a new value of the kth variable and swaps the (k + 1)st to Nth variables between the parents"; "we use a mechanism similar to uniform crossover for multiple variables ... for choosing which variables to cross ... we choose to perform SBX in each variable with probability 0.5. But in the case of single-variable functions ... with probability 1.0". Children may lie anywhere in the real line; section 6 suggests a bounded distribution as an extension; mutation is not used in the paper |
+| R3 | K. Deb, S. Agrawal, "A niched-penalty approach for constraint handling in genetic algorithms", ICANNGA 1999 | `homes.cs.washington.edu/~sagarwal/icannga.pdf` | Appendix A, SBX: `u` in [0, 1]; `beta_q = (u alpha)^(1/(eta_c + 1))` if `u <= 1/alpha`, else `(1/(2 - u alpha))^(1/(eta_c + 1))`, `alpha = 2 - beta^-(eta_c + 1)`, `beta = 1 + 2 min[(y1 - y_l), (y_u - y2)]/(y2 - y1)`; `c1 = 0.5 [(y1 + y2) - beta_q abs(y2 - y1)]`, `c2 = 0.5 [(y1 + y2) + beta_q abs(y2 - y1)]`; "It is assumed here that y1 < y2. A simple modification to the above equation can be made for y1 > y2. For handling multiple variables, each variable is chosen with a probability 0.5 and the above SBX operator is applied variable-by-variable." Polynomial mutation, citing Deb and Goyal (1996): eq. (12) `delta_q = [2u + (1 - 2u)(1 - delta)^(eta_m + 1)]^(1/(eta_m + 1)) - 1` for `u <= 0.5`, else `1 - [2(1 - u) + 2(u - 0.5)(1 - delta)^(eta_m + 1)]^(1/(eta_m + 1))`, `delta = min[(y - y_l), (y_u - y)]/(y_u - y_l)`, `c = y + delta_q (y_u - y_l)` |
 | R4 | K. Deb, D. Deb, "Analyzing mutation schemes for real-parameter genetic algorithms", KanGAL report 2012016 (published in Int. J. Artif. Intell. Soft Comput. 4 (2014) 1-28) | `egr.msu.edu/~kdeb/papers/k2012016.pdf` | Section 2: polynomial mutation, attributed to Deb and Agrawal (R3): `p' = p + delta_L (p - x_L)` for `u <= 0.5`, `p + delta_R (x_U - p)` for `u > 0.5`, `delta_L = (2u)^(1/(1 + eta_m)) - 1`, `delta_R = 1 - (2(1 - u))^(1/(1 + eta_m))` |
 
 Not obtained: K. Deb, M. Goyal, "A combined genetic adaptive search (GeneAS) for engineering design", Computer Science and
@@ -258,3 +264,84 @@ the default operator (question 3); the tool description (question 5); the other 
 ## Addenda
 
 Results follow in addenda.
+
+### Addendum 1: what was built and the results (2026-11-07)
+
+Commits on `f297-nsga2-crossover` (from main 36466d0): registration d1dfeb6; V0b record 9827d12 (test only, recorded twice on
+main's code with equal values before any code); f5ad4c1 (`Crossover`, `vary_pair`, `run_with`, `Method::Nsga2With`, and the
+tools' `parse_method` and `method_json`, with `f297_moo.rs`: the tools had to come with the study change because `method_json`
+matches every `Method` variant, so D6's commits 3 and 4 overlap there, as in ADR 0209); 1c239b3 (`design_f297.rs`); e3b8faf (a
+type alias in `f297_moo.rs` for clippy's `type_complexity`, after the registered run: it names the tuple type and changes nothing
+that is compared); documents and this addendum after it. Every check was run once, in release: the library checks on f5ad4c1's
+tree, the tool checks on 1c239b3's. No limit, set-up or test was changed after a run.
+
+One edit of the registered text, a correction of rendering only: in the reading table, `|(c1 - c2)/(p1 - p2)|` and `beta_q |y2 -
+y1|` are written `abs(..)`, since a `|` splits a Markdown table cell. No content changed.
+
+#### Results
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| X1 | seed 1: C 1.496e-3, G 1.284e-3, I 4.081e-4 (2460 Pareto members of 24 020 records); seed 2: 1.323e-3, 1.376e-3, 3.822e-4 (2499 of 24 077); seed 3: 1.594e-3, 1.431e-3, 4.322e-4 (2400 of 24 089); about 3 s per seed; no point outside the box | C 1e-2, G 5e-2, I 1e-2 | **met** |
+| X1n | `Nsga2With { Sbx }` and `Nsga2` give equal records (24 060 each, bit for bit); C 0.5427, G 0.2879, I 0.2545 (150 members), ADR 0209's seed-1 numbers | records equal; C > 1e-2 | held (C can fail on this set-up) |
+| X2 | seed 1: C 4.650e-3, G 6.296e-3, I 1.655e-3 (614 of 9683); seed 2: 5.928e-3, 5.580e-3, 1.640e-3 (600 of 9658); seed 3: 4.380e-3, 6.384e-3, 1.470e-3 (626 of 9695) | as X1 | met |
+| X3a | seed 4: 391 records, equal in two runs and with 4 workers; seed 5 (378 records) differs; `Sbx` seed 4 (374) differs | exact | met |
+| X3b | no point outside the box in any X1 to X3 run; budgets 400 and 410 with pop 20: 400 evaluations, 20 generations | exact | met |
+| X3c | 20 proposals, 391 records equal to the evaluator-driven run | exact | met |
+| X3d | k = 37: the resume evaluated 354 of 391; records equal | exact | met |
+| X4a | `vary_pair` equals the replica bit for bit for both variants on 20 seeds; the replica made 36 exchanges, kept 54 crossed variables and left 2 pairs uncrossed | bit for bit; counts non-zero | met (set-up held) |
+| X4b | `run` and `run_with(.., Sbx, ..)`: 13 482 values (points, objectives, population, ranks, counts) equal | exact | met |
+| T1 | `study.json` `method` `{"budget":400,"crossover":"exchange","pop":20,"seed":1,"type":"nsga2"}`; the first batches of the studies with and without the key equal, the second differ; 20 proposals to `complete`, 345 records, 169 Pareto members, `pareto` equal to the recomputation from `evaluations.jsonl`; max D 1.706e-3 (recorded; ADR 0209 MO4 without the key: 4.79e-4) | as stated | met |
+| T2 | `method.crossover: 'uniform' is not sbx or exchange`; `method.crossover: '1' is not sbx or exchange`; `method.crossover: only nsga2 takes this key` (nelder_mead and lhs); all -32602, nothing written; an explicit `"sbx"` is written (`budget, crossover, pop, seed, type`) and its first two batches equal the default study's, whose `method` keeps `budget, pop, seed, type` | as stated | met |
+| V0a | `baseline_hashes.rs`, `case_hashes_w48u.rs`, `Cargo.lock` and the goldens unedited (`git diff 36466d0` empty for them) | pass | see the gate |
+| V0b | after the code: library ZDT1 `0x3d40dd97932daaa3`, constrained `0x80ada5d6a437c4da`, study ZDT1 `0xfff234ff184699f2`, FON `0xa5de8eb8efbe8d28`, proposals `0x7a6b79cc2fd2ed45`: equal to the record | bit-identical | met |
+| V0c, V0d | no existing test file changed (the only modified source files are `nsga2.rs`, `study.rs` and `tools.rs`); `f249_moo` (12 passed, the MO1z known miss ignored, MO1f and MO2 with ADR 0209's numbers) and `design_f249` (N1 3.6995e-4, N1d bits `0x3f699ab6bfa96f0b`, N6, MO4) passed before the gate | pass | met before the gate; see the gate |
+
+The acceptance's check X1 meets C (and G, I) with a margin of about 6 on every seed. X1's numbers equal DG1's to every digit
+ADR 0209 recorded (C, G, I and the Pareto and record counts of all three seeds), so DG1 was the same rule (`w_j < 0.5` drawn after
+`u_j`).
+
+The exchange costs FON something within the limits: against ADR 0209 MO1f (the default operator: C 3.5e-3 to 4.4e-3, G 3.7e-3 to
+4.7e-3, I 9.4e-4 to 9.9e-4, about 1050 Pareto members) X2 has C 4.4e-3 to 5.9e-3, G 5.6e-3 to 6.4e-3, I 1.5e-3 to 1.7e-3 and about
+610 members. FON's Pareto set is the diagonal `x1 = x2 = x3`, which an exchange of coordinates between two different points
+leaves.
+
+#### Mutations
+
+Each applied alone to e3b8faf by the scratch script `w49i-work/f297-mut/apply.py`, its test run once in release, the file restored
+and compared with the commit (`git diff --quiet HEAD -- crates`: equal after every one).
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MX1 | X1 | seed 1: C 0.260, G 0.230, I 0.188 (128 members); seeds 2 and 3: C 0.384 and 0.473 | fails |
+| MX2 | X4a | seed 1 `Exchange` child 1 differs from the replica | fails |
+| MX3 | X4a | seed 1 `Exchange` child 1 differs from the replica | fails |
+| MX4 | X1 | seed 1: C 0.5427 (the default's number) | fails |
+| MX5 | T1 | `study.json` `crossover` `"sbx"` for `"exchange"` | fails |
+| MX6 | V0b | library ZDT1 `0x9a3cc63afd0fa188`, constrained `0x940890d94f2aff6b` (the study and proposal records unchanged: the study calls `run_with` directly) | fails |
+| MX7 | `design_f249` N6 | the default `nsga2` `method` keys `budget, crossover, pop, seed, type` | fails |
+
+#### Diagnostics (registered; recorded only, nothing adopted)
+
+| Id | Measured | Note |
+|---|---|---|
+| DP1, the papers' rule without an exchange | MO1z seeds 1 to 3: C 0.582, 0.469, 0.652; G 0.324, 0.290, 0.330; I 0.284, 0.228, 0.299 (96, 87, 103 members) | misses like the default: crossing each variable with probability 0.5 does not move coordinates between the parents |
+| DP2, the papers' rule with the exchange | seeds 1 to 3: C 1.799e-3, 8.946e-4, 1.083e-3; G 2.060e-3, 2.240e-3, 1.691e-3; I 3.071e-4, 2.709e-4, 3.056e-4 (2369, 2510, 2353 members) | within the limits; against X1, C is smaller on seeds 2 and 3 and larger on seed 1, G larger on all three, I smaller on all three |
+| DL, R3's literal order (the first child always the lower value) | MO1z seed 1: C 1.657e-3, G 2.895e-3, I 3.399e-4 (4312 members); FON seed 1: C 2.933e-3, G 3.335e-3, I 8.209e-4 (1127 members) | the same test run also printed seeds 2 and 3 (not registered; in the scratch log) |
+
+**Predictions.** P1 met (X1 within 1.3e-3 to 1.6e-3, and equal to DG1). P2 met (0.5427). P3 met (C 4.4e-3 to 5.9e-3). P4 met for
+DP1 (C 0.47 to 0.65) and DP2 (C at most 1.8e-3), falsified for DL (C 1.66e-3 on seed 1, larger than X1's 1.50e-3).
+
+#### The questions after the results
+
+* Question 2 (the papers' rule): DP2, the papers' variable-wise probability with the exchange, is within the limits too, but not
+  clearly better than the built `Exchange` (G worse on all three seeds, C better on two of three), and it was not run on FON.
+  Recommendation: (a), as built. DP1 shows that the papers' rule alone, read with ADR 0209's children order, does not fix ZDT1.
+* Question 3 (the default): the default still misses ZDT1 by a factor of 35 to 54 in C, and the exchange meets it with a margin
+  of about 6; on FON the exchange stays within the limits with G and I about 1.5 times the default's. Recommendation unchanged:
+  (b), the maintainer's decision.
+* Questions 1, 4 and 5: unchanged.
+
+**Status.** Every registered check run before the gate is met, X1n and the X4a counts hold, and every mutation fails its test.
+By the decision rule F-297 is **done** in the roadmap (the reading clause taken as met by R1 to R4, question 1), subject to the
+gate below.
