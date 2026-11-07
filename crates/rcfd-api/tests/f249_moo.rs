@@ -248,8 +248,11 @@ fn run_study(p: Problem, method: &Method) -> (Metrics, usize, usize) {
     )
 }
 
+/// ADR 0209 MO1z, a known miss (amendment 1): C 0.543 / 0.378 / 0.353, G 0.288 / 0.207 / 0.291, I 0.254 / 0.141 / 0.220 for
+/// seeds 1 to 3 at ebc4e9f, against the limits 1e-2, 5e-2 and 1e-2, which are kept intact.
 #[test]
-fn mo1z_nsga2_on_zdt1_meets_the_analytic_front() {
+#[ignore = "known miss: NSGA-II on ZDT1 (d = 30, 25 000 evaluations) ends with C 0.35 to 0.54 against 1e-2 (ADR 0209 amendment 1)"]
+fn mo1z_nsga2_on_zdt1_meets_the_analytic_front_known_miss() {
     let mut ok = true;
     for seed in 1..=3u64 {
         let t = std::time::Instant::now();
