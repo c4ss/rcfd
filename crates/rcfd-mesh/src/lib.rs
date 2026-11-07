@@ -23,6 +23,7 @@ pub mod mesh;
 pub mod motion;
 pub mod non_conformal;
 pub mod octree;
+pub mod overset;
 pub mod partition;
 pub mod polydual;
 pub mod predicates;

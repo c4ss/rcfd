@@ -403,3 +403,34 @@ compressible solver; parallel runs.
 - **Q4. Conservation.** Options: (a) a global offset `delta` that makes the mass of the domain exact (M7, as registered);
   (b) face-by-face conservative interpolation of the fluxes across the overlap. Recommendation (a): it keeps the
   continuity of every calculated cell and the mass of the domain exact with one scalar per step.
+
+## Amendment 1 (2026-11-07, written after the smoke run S0 and before any registered check ran)
+
+S0 (registered as the run that sizes TR) ran TR for 5 steps with the code as registered. Its own check held (finite
+fields). It showed 2.6 s per step and, in every step, one linear solve that did not converge: the response `p1` to the
+unit offset (M7, solved from zero), on which BiCGStab with ILU(0) stopped at its cap of 3000 iterations with a residual of
+`1.4e-3` (step 1) and `2.6` (step 2) against `4.5e-2` at the start. The largest continuity of the five steps, `1.7e-9`,
+followed from it.
+
+Diagnostic (disclosed; a temporary switch of the solver pair in the source, removed afterwards; steps 1 to 5 of S0, once
+each), for the overset pressure systems:
+
+| Pair | Iterations per solve | Converged | Time per step |
+| --- | --- | --- | --- |
+| BiCGStab, ILU(0) (as registered) | 175 to 187, and 3000 for `p1` | no (`p1`) | 2.6 s |
+| GMRES(50), ILU(0) | 830 to 1350 | yes | 4.6 to 5.3 s |
+| BiCGStab, one AMG cycle | 1 to 31 | yes | 0.50 s |
+| GMRES(30), one AMG cycle | 2 to 21 | yes | 0.42 s |
+
+`delta` of step 1 was `3.769e-7` with each of the three converged pairs and `2.926e-7` with the unconverged `p1`.
+
+Change, registered here before any registered run: **S3 is amended.** A pressure system with fringe or hole rows is solved
+by restarted GMRES(30) right-preconditioned with one cycle of the library's aggregation AMG (default settings) of its
+matrix, the pair of `solve_pressure_implicit_non_orth`. The matrix and its hierarchy are built once per step, as `p1`
+(they do not change between the correctors, M7). A momentum system with fringe or hole rows stays on BiCGStab with ILU(0)
+(4 to 11 iterations in S0). The systems without such rows keep the library's calls. No limit, set-up or other check
+changes.
+
+X4 for BF: `PimpleSolver` does not return the converged flags of its solves. X4 for BF is read as "the pressure
+iterations of every step below 3000", which excludes a pressure solve that stopped at its cap; the momentum solves of BF
+are not covered.

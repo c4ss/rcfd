@@ -317,6 +317,39 @@ pub fn box_2d_graded(
     Ok(m)
 }
 
+/// 2D rectilinear grid (one cell in z, `empty` front/back) through the node coordinates `xs` and `ys` (strictly
+/// increasing, at least two each) with the depth `depth` (z from 0), F-134 (ADR 0219 S1). Patches `xmin`, `xmax`, `ymin`,
+/// `ymax` (walls) and `frontAndBack` (empty), as [`box_2d`].
+pub fn rectilinear_2d(xs: &[f64], ys: &[f64], depth: f64) -> Result<Mesh> {
+    let increasing = |v: &[f64]| v.len() >= 2 && v.windows(2).all(|w| w[1] > w[0]) && v.iter().all(|x| x.is_finite());
+    if !increasing(xs) || !increasing(ys) || depth <= 0.0 || !depth.is_finite() {
+        return Err(Error::Mesh(
+            "rectilinear_2d needs strictly increasing finite node coordinates (two or more per direction) and a positive depth"
+                .into(),
+        ));
+    }
+    build_masked(MaskedGrid {
+        xs,
+        ys,
+        zs: &[0.0, depth],
+        mask: &|_, _| true,
+        patch: &|d, _, _| match d {
+            0 => "xmin",
+            1 => "xmax",
+            2 => "ymin",
+            3 => "ymax",
+            _ => "frontAndBack",
+        },
+        kinds: &[
+            ("xmin", PatchKind::Wall),
+            ("xmax", PatchKind::Wall),
+            ("ymin", PatchKind::Wall),
+            ("ymax", PatchKind::Wall),
+            ("frontAndBack", PatchKind::Empty),
+        ],
+    })
+}
+
 /// Channel of length `l`, height `h`, width `w` with patches `inlet` (xmin),
 /// `outlet` (xmax), `walls` (ymin, ymax) and `sides` (zmin, zmax; symmetry).
 /// `nz == 1` with `two_d = true` makes the sides `empty` instead.

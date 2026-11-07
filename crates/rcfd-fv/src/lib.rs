@@ -26,6 +26,7 @@ pub mod masstransfer;
 pub mod mixing_plane;
 pub mod mixture;
 pub mod outlets;
+pub mod overset;
 pub mod pimple;
 pub mod popbal;
 pub mod potential;
