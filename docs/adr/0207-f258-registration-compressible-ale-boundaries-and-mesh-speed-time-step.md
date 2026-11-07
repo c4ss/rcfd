@@ -463,4 +463,22 @@ Disclosures:
   on a three-dimensional mesh (the conditions and the flux transform do not depend on them); `characteristic_face_state`
   with a total inlet whose relative normal velocity is an outflow (Not delivered).
 
+### The gate (2026-11-07)
+
+Main stayed at d953cd6 while F-258 was built, so no merge was needed; 0207 is on no other branch. The gate ran on a
+`git archive` copy of 0d9750a (this addendum's commit before this section) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f258-gate`. It took the machine's gate lock
+at 03:43 (UTC) when the F-255 gate released it, after the F-295 and F-255 gates, and started with 20 GB of physical memory
+free: `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3006 passed, 1 failed,
+861 ignored** (3007 test processes in 583 binaries, wall 4432 s, peak summed working set 3340 MB, largest time against its
+limit 0.215, lowest free physical memory 18 GB). The lock was released at the end (05:10).
+
+The one failure is `rcfd-runner` `runner_w47b` s1, a known flake of the gate: its negative control ("the sampler does not
+see an over-subscription of 2") saw status 3 and OS 0 under `max_runs = 3`, while its registered part held (status 2,
+OS 2). Run again alone on the gate's binary it failed the same way (status 3, OS 0), as in the F-292 gate; the runner tests
+do not run the compressible solver. All 12 tests of this ADR ran in the gate and passed, and so did the suites of D2
+(`layering_ale_f259` of rcfd-api and rcfd-cli, `inverse_volume_f290`, `compressible_bc_case`, `far_field_w49f`, H1 of
+`case_hashes_w48u`, `baseline_hashes`, and rcfd-fv's `layering_w38c`, `ale_gcl`, `exp_rot_pab` and unit tests). F-258 adds
+no ignored test. This gate section is documents only and was not gated again.
+
 Q1 to Q5 stay open for the maintainer. F-258 is partial in the roadmap (Q5; the recommendation is done).
