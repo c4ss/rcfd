@@ -6,6 +6,16 @@ warm-start cases of W1 to W3 run cold with `design::case_eval::run_case`, and th
 Its numbers are in item 12, where they set the cases and the time budget; they set no limit. Results go in the addenda at the
 end.
 
+Summary of the results (amendment 1, addendum 1): the T3 study with the opt-in `initial_simplex = "start"` and `coefficients =
+"adaptive"` reaches best f 3.70e-4 after 120 recorded candidates (limit 1e-3; the default stays at 3.1e-3, bit for bit); NSGA-II
+(`method.type = "nsga2"`) returns on FON (3 parameters) a Pareto set within 4.4e-3 of the analytic front with gaps below 4.8e-3
+(limits 1e-2 and 5e-2, three seeds), but misses the limits on ZDT1 with 30 parameters (0.35 to 0.54), a known miss whose cause a
+diagnostic confirmed (the registered crossover never exchanges coordinates; question 5); the extended warm start (temperature,
+k-epsilon and k-omega SST fields) reproduces cold runs to 6.9e-9, 3.1e-11 and 2.6e-11 (limit 1e-4). The constrained-quadratic
+check of the Nelder-Mead options is a second known miss (19 of 20 seeds). Defaults, baseline hashes and the tool list are
+bit-identical. The gate of c09f508 gave 3043 passed, 2 failed (the known flakes `runner_w47b` s1 and s9), 865 ignored, run with a
+19 GB free-memory threshold instead of 20 (addendum 1).
+
 Parents: [ADR 0067](0067-wave32c-design-loop.md) (the design loop: Nelder-Mead, differential evolution, Pareto extraction, the
 store, the tools, check T3 and its known miss), [ADR 0099](0099-wave40c-five-velocity-sweep-fixed-norm-interpolated-start.md)
 (F-095 done, the remaining scope split off), [ADR 0189](0189-adr-0173-amendment-5-f274-registration-design-study-evaluations-on-the-runner.md),
@@ -464,3 +474,96 @@ run. No limit changes.
     through selection and mutation. Test of that hypothesis: MO1z seed 1 with the two children's values exchanged per variable
     with probability 1/2 after the SBX step (one more `rng.uniform()` per variable, drawn after that variable's `u`).
   * DG2, the N3 miss: the end point of seed 16 and the evaluations its restarts spent.
+
+### Addendum 1: results (2026-11-07)
+
+Commits on `f249-parametric-studies` (from main 05f0d73): registration 382d2c1; V0b record d98f680 (on main, before any code);
+f973866 (`pareto::front`, the Nelder-Mead options, `design::nsga2`, `Method::NelderMeadWith` and `Method::Nsga2`, the tools'
+parsing, with `f249_moo.rs` and `f249_nm.rs`: the tools' `parse_method` and `method_json` had to come with it, since their match
+on `Method` must name the new variants, so D7's commits 3 and 5 overlap there); 7ae2b28 (the warm start, with `f249_warm.rs`);
+ebc4e9f (`crates/rcfd-mcp/tests/design_f249.rs`); amendment 1 9a7273f and the two known-miss markings 15e289f; documents
+c09f508. Every check was run once, in release, at ebc4e9f (the tests as first written); the numbers below are those runs. No
+limit, case or test set-up was changed after a run.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| MO1z | seed 1: C 0.543, G 0.288, I 0.254 (150 Pareto members of 24 060 records); seed 2: 0.378, 0.207, 0.141 (144 of 24 046); seed 3: 0.353, 0.291, 0.220 (118 of 24 059); 3.0 s per seed | C 1e-2, G 5e-2, I 1e-2 | **missed** (amendment 1; ignored `*_known_miss`) |
+| MO1f | seed 1: C 4.37e-3, G 4.73e-3, I 9.87e-4 (1052 Pareto members of 9721 records); seed 2: 3.47e-3, 4.35e-3, 9.56e-4 (1066 of 9720); seed 3: 3.66e-3, 3.73e-3, 9.42e-4 (1050 of 9682) | as MO1z | met |
+| MO1c | ZDT1 LHS (25 000): C 3.90, G 1.92, I 1.65 (23 Pareto members); FON LHS (10 000), recorded: C 5.20e-2, G 0.101, I 4.13e-2 (17 members) | ZDT1: C must fail | met (C can fail) |
+| MO2a | seed 4: 374 records, identical in two runs and with 4 workers; seed 5 (386 records) differs | exact | met |
+| MO2b | no point outside the box in any MO1 or MO2 run; budgets 400 and 410 with pop 20: 400 evaluations, 20 generations | exact | met |
+| MO2c | k = 37: the resume evaluated 337 of 374; k = 250: 124; a third launch 0; records equal to the uninterrupted run | exact | met |
+| MO2d | 20 proposals, 374 records equal to the evaluator-driven run | exact | met |
+| MO2e | 2 failed records of 376, 66 Pareto members, none failed | as stated | met |
+| MO2f | pop 7 and pop 2: `the population must be even and at least 4, got <n>`; budget 10 with pop 20: `the evaluation budget 10 is smaller than the population 20`; no parameter: `no parameters`; nothing evaluated | as stated | met |
+| MO3a to MO3d | bit for bit; `select` gives [0, 3, 1, 6]; ZDT1 and FON closed forms; `front` equals the full sort's first front on 20 sets | as stated | met |
+| N1 | **T3 with the options: best f after 120 recorded candidates 3.70e-4**; 5.28e-19 at the end (330 candidates) | 1e-3 | met |
+| N1d | without the keys: 3.1255311308039427e-3 at 120 (bits 0x3f699ab6bfa96f0b, the V0b record), 3.42e-19 at 347 | exact | met |
+| N2 | 20 of 20 seeds, f 5.2e-20 to 9.4e-19 after 454 to 570 evaluations | 18 of 20 | met |
+| N3 | 19 of 20 seeds; seed 16 ends at f = 1.6668, violation 0, after 600 evaluations | all 20 | **missed** (amendment 1; ignored `*_known_miss`) |
+| N4a to N4d | coefficients bit for bit (d = 2 gives 1, 2, 0.5, 0.5); in 2 dimensions `adaptive` gives the `standard` history (300 evaluations) for both simplex rules; the first simplex from (-1.2, 1, 0) is (-1.26, 1, 0), (-1.2, 1.05, 0), (-1.2, 1, 0.00025), and from (2, 0.5) the vertex is flipped to 1.9; the d = 4 histories differ; d = 1 refused with nothing evaluated | as stated | met |
+| N5 | sum of squares, `start` simplex: d = 10 `standard` 6.3e-17 after 2096 evaluations, `adaptive` 1.5e-17 after 1543; d = 20 `standard` 3.0e-16 after 15 901, `adaptive` 2.1e-17 after 3706 (all converged) | none | recorded |
+| N6 | the eight refusals, each -32602 with the registered message naming its key; nothing written; `study.json` `method` keys `budget, restarts, seed, type` (default Nelder-Mead) and `budget, pop, seed, type` (`nsga2`) | as stated | met |
+| MO4 | 20 proposals, 360 records, 166 Pareto members; `pareto` equals the recomputation from `evaluations.jsonl`; the same first batch for two studies; max D 4.8e-4 (recorded) | as stated | met |
+| W1 | HE: warm rows 1 and 2 `warm`, 71 and 70 iterations against 90 and 91 cold; largest relative difference of a report 6.9e-9; row 0 bit for bit | `REL_WARM` 1e-4 | met |
+| W1b | 141 warm against 181 cold iterations | warm < cold | met |
+| W2 | KE: 4391 and 4411 iterations warm against 4665 and 4782 cold; largest relative difference 3.1e-11 | 1e-4 | met |
+| W3 | SST: 5538 and 5568 iterations warm against 5468 and 5764 cold; largest relative difference 2.6e-11 | 1e-4 | met |
+| W4 | condition `b` warm (71 iterations against 90 unchained), largest relative difference 6.9e-9; condition `a` bit for bit | 1e-4 | met |
+| WU1 | HE `ux, uy, uz, p, T`; KE `ux, uy, uz, p, nut, k, epsilon`; SST `ux, uy, uz, p, nut, k, omega`: bit for bit | exact | met |
+| WU2 | the six refusals with their messages (`warm start is available for the steady SIMPLE and SIMPLEC algorithms`; `the warm state has a temperature field and this case solves no energy equation`; `this case solves the energy equation and the warm state has no temperature field`; `the warm state is of the turbulence model k_epsilon and this case uses k_omega_sst`; `warm state field 'u': 400 values for 410 cells (another mesh)`; `... this case also has scalars or species`), the fields unchanged | as stated | met |
+| WU3 | `run_case` with an HE seed: cold, with the note of item 6; the Flow path collects no warm state | as stated | met |
+| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited (`git diff 05f0d73` empty for them, and for `Cargo.lock` and the goldens); in the gate `baseline_hashes` (cavity, heated cavity and shipped-case paths) and `case_hashes_w48u` h1 passed in release | pass | met |
+| V0b | the four records bit-identical after the code: run on the code before its commit, and in the gate (`v0b_optimiser_histories`, `v0b_t3_default_loop`, `v0b_pareto_fronts`, `v0b_default_maps`) | bit-identical | met |
+| V0c, V0d | the goldens unedited; `default_f1`, `project_list_f270` and `tool_list_f275` passed in the gate; no existing file under `tests/` or `src/design_tests.rs` changed (the only modified files are the seven source files of D1 to D4 and two documents); `t3_best_after_120_known_miss` stays ignored and unedited; `design_tests` T1 to T5 passed | pass | met |
+| V0e | gate of c09f508 (`git archive`, `scripts/gate_test.py`, 3 jobs, under the machine gate lock): fmt per package 0, clippy `--workspace --all-targets -D warnings` 0; 3043 passed, 2 failed, 865 ignored; 3045 test processes, 589 binaries, wall 4235 s (06:31 to 07:54), peak summed working set 3457 MB, lowest free memory 11 GB. The 2 failures are `runner_w47b` s1 and s9, on the list of known flakes (they fail on builds before this change too); every F-249 test passed in it (28; the two known misses are ignored) | pass, apart from the known flakes | met |
+
+**The gate's memory threshold (a deviation).** The gate took the lock at 05:10 and then waited for 20 GB of free physical memory,
+the coordinator's threshold. Free memory stayed at 19.3 to 19.8 GB for 80 minutes (the machine's browser held about 17 GB, the
+WSL VM 8 GB) while two other gates queued behind the lock. The waiting script was stopped without releasing the lock and a copy
+of it with the threshold 19 GB (`gate-f249/run2.sh`, otherwise identical, which checks that the lock is held by `f249` and does
+not acquire it again) ran the gate from 06:31. The gate's own peak summed working set was 3.5 GB; free memory fell to 11 GB
+during the run through other processes. Disclosed here for the lead.
+
+**Mutations** (scratch, each applied alone to 15e289f with the named test run once; each file restored and compared with the
+commit: equal):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MM1 | MO1f (amendment 1) | seed 1: 2 Pareto members of 100 records, C 9.6e-2, G 0.596, I 0.266 | fails |
+| MM2 | MO1f | seed 1: 5 members of 9511, C 9.6e-2, G 0.440, I 0.208 | fails |
+| MM3 | MO1f, recorded | seed 1: C 3.2e-3, G 3.3e-3, I 9.1e-4 (all seeds met) | passes (recorded: the rank in the tournament is not needed on FON) |
+| MN1 | N1 | 3.1255e-3 at 120 (the default's number) | fails |
+| MN2 | N4a | d = 2: expansion 1.5 for 2 | fails |
+| MW1 | WU1 | HE `T` all zero (the initial temperature) | fails |
+| MW2 | WU1 | KE `nut` the initial value in every cell | fails |
+| MW3 | W1 | point 1 `cold` | fails |
+| MD1 | MO3d | set 0: [48] for [48, 86] | fails |
+
+**Diagnostics** (amendment 1; scratch, not committed, not adopted):
+
+* DG1: with the two children's values exchanged per variable with probability 1/2 after SBX, MO1z gives C 1.50e-3, G 1.28e-3,
+  I 4.08e-4 on seed 1 (2460 Pareto members of 24 020 records), and 1.32e-3 / 1.38e-3 / 3.82e-4 and 1.59e-3 / 1.43e-3 / 4.32e-4 on
+  seeds 2 and 3. The hypothesis holds: the registered SBX, which never exchanges coordinates, is the cause of the miss. Nothing
+  was changed (question 5).
+* DG2: seed 16 starts at (4.581, 0.0849): the `start` rule's step in y is 0.05 x 0.0849 = 4.2e-3, 8.5e-4 of the range 5 (the
+  `range` rule's is 0.25). The simplex then alternates between x = 2.749 and 3.207 while y creeps up by about 0.0057 per 50
+  evaluations; the best feasible f falls steadily, 3.51 after 50 evaluations, 2.59 after 300, 1.67 after 600, at (2.863, 0.716),
+  and the budget ends before the first convergence, so no restart happens. The default rule from the same start reaches 0.5000
+  within 150 evaluations. This is question 3's case: a start value near zero compared with its range.
+
+**Predictions.** PR1 falsified (MO1z C 0.35 to 0.54). PR2 met for G and I, falsified for C (3.5e-3 to 4.4e-3 above the predicted
+1e-3). PR3 met (ZDT1 control C 3.90; FON control 5.2e-2). PR4 met (3.70e-4). PR5 met for N2 and N5, falsified for N3 (19 of 20).
+PR6 met for W1 to W4 (at most 6.9e-9) and W1b; falsified in part for SST (point 1 needed 5538 warm against 5468 cold iterations;
+point 2 and the sum, 11 106 against 11 232, are lower).
+
+**Questions added by the results.**
+
+* Question 5 gains a finding: DG1 shows that a per-variable exchange of the children's values makes NSGA-II meet MO1z by a wide
+  margin. Options: (a) as built, with MO1z a known miss; (b) a new registration that adds the exchange (as an option, or as the
+  only rule, since `nsga2` is new and no study uses it yet), with MO1z re-registered as a new check. Recommendation: (b), after
+  the maintainer has read how Deb et al. (2002) and Deb and Agrawal (1995) state the operator.
+* Question 3 gains a finding: DG2 is the N3 miss, a start value of 1.7 percent of the range. Recommendation unchanged ((a), and
+  the documentation says when to keep `range`); a range floor would remove this miss and is the maintainer's constant to choose.
+* Question 1: the T3 clause (N1), the Pareto clause (MO1f, with FON's 3 parameters) and the warm-start clause (W1 to W3) are met
+  by their registered checks; MO1z and N3 are misses of further registered checks.
