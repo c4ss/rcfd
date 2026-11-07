@@ -4,8 +4,9 @@ rcfd can move the mesh during a run and integrate a rigid body driven by the flo
 PISO/PIMPLE with implicit Euler on a mesh whose points move every step, and the explicit compressible solver with a
 prescribed motion or a layered piston. Decisions and checks are in `docs/adr/0033-wave20b-dynamic-mesh.md` (read its addendum
 for the misses), `docs/adr/0090-wave38c-dynamic-mesh-layering.md`,
-`docs/adr/0191-f259-registration-case-tree-and-cli-wiring-of-layering-and-compressible-ale.md` and
-`docs/adr/0213-f257-registration-prism-layering-and-incompressible-layering.md`.
+`docs/adr/0191-f259-registration-case-tree-and-cli-wiring-of-layering-and-compressible-ale.md`,
+`docs/adr/0213-f257-registration-prism-layering-and-incompressible-layering.md` and
+`docs/adr/0215-f247-registration-local-remeshing-on-unstructured-tetrahedral-meshes.md`.
 
 This page explains how the mesh moves, how the body is integrated, and where the method stops. It is for users who plan a
 moving-wall or moving-body case and want to know what the solver does and does not cover. For the exact keys and defaults of the
@@ -15,7 +16,8 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 
 * Euler time scheme only (PISO/PIMPLE).
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
-* No sliding interfaces (AMI, F-250) and no local remeshing (F-247).
+* No sliding interfaces (AMI, F-250). Local remeshing of tetrahedral meshes is in the library since F-247 (ADR 0215),
+  for the compressible solver in a box with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
   stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
   use them yet (the wiring is open under F-259, ADR 0213 Q1).
@@ -116,7 +118,7 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   on the incompressible and the compressible moving paths; `V` is the volume of the initial mesh, from which the displacement
   is solved. On ADR 0033's piston with cells 8 times smaller at the ends it keeps the smallest cell at 0.945 of its initial
   volume where the Laplacian keeps 0.75, and lowers the largest aspect ratio from 9.3 to 7.4.
-- **Not available:** local remeshing, non-planar layers, more than one moving layered boundary, and, in the case tree,
+- **Not available:** non-planar layers, more than one moving layered boundary, and, in the case tree,
   prism layers, layering with PISO/PIMPLE, characteristic boundary conditions on moving faces and a time step that
   includes the mesh speed (library only, above).
 
@@ -148,6 +150,30 @@ deformation = "layering"
 moving_patches = ["xmax"]
 displacement_expression_x = "-0.3 [m] * (1 - cos(pi * t / 16 [s]))"
 ```
+
+## Local remeshing of tetrahedral meshes (F-247, ADR 0215; library only)
+
+- **What it is.** `rcfd_mesh::remesh::TetRemesher` holds a tetrahedral mesh bounded by axis-aligned planes (for example
+  the six sides of a box from `box_planes`). `move_plane_with_band(k, value, w)` moves one plane (a piston) with its
+  points and drags the points within `w` behind it in proportion, so no point is overtaken and the motion alone inverts no
+  cell. After each step `needs_event()` checks the cells: a mean ratio below `q_trigger`, or an edge shorter than `l_min`
+  or longer than `l_max`. `remesh()` then repairs the mesh locally with edge splits, edge collapses, edge removals (3-2
+  flips, larger rings and the 2-2 flip of an edge on a wall), 2-3 flips and point relocations, each checked to tile the
+  same region with its boundary on the planes. `RemeshSettings::for_size(h0)` gives the registered thresholds
+  (`l_min = 0.5 h0`, `l_max = 2 h0`, `q_trigger = 0.3`).
+- **Conservation.** Every operator gives the totals of the cells it removes to the cells it makes in proportion to their
+  intersection volumes, so an event returns, for every new cell, the fractions of the old cells it receives
+  (`RemeshChange::sources`). `remesh::remap` carries the cell densities through it, and
+  `CompressibleSolver::replace_mesh` installs the new mesh. Mass, momentum, energy and volume are kept to round-off; the
+  remap is first order (cell averages).
+- **Measured** (ADR 0215, `crates/rcfd-fv/tests/remesh_f247.rs`). ADR 0090's piston on a Delaunay tetrahedral mesh of
+  1711 cells (`tetmesh::tetrahedralize`, `h0 = 0.035`), compressed to 0.4 of its length and back with remeshing instead
+  of layering: `p_bar V^gamma` within 3.7e-6 at full compression and 9.4e-6 after the stroke (limit 2e-2), 1806 events,
+  volume, mass, momentum and energy through every event within 1.6e-15, smallest mean ratio over the run 0.241 (threshold
+  0.2), and no point below `x = 0.35` touched. Without remeshing the mean ratio falls below 0.2 when the piston is 0.14
+  into its 0.6 stroke. The run takes 55497 steps (193 s); events are frequent, and many find nothing to change.
+- **Limits.** Walls must be axis-aligned planes; one uniform target size; no face-flux map, so not for the PISO/PIMPLE
+  path; not wired into the case tree (ADR 0215 Q1, Q3, Q4).
 
 ## Where to go next
 

@@ -178,6 +178,11 @@ fn p_tetrahedral_piston_with_local_remeshing() {
             q_run = q_run.min(r.min_quality());
             let (pm, vm) = mean_pressure(&s);
             diag = diag.max((pm * vm.powf(gamma) / inv0 - 1.0).abs());
+            // the per-step checks also stop the run where they fail (the same limits as below)
+            assert!(
+                b2s <= 1e-13 && b3 <= 1e-13 && q_run >= Q_MIN,
+                "step {steps}: B2s {b2s:e}, B3 {b3:e}, Q {q_run}"
+            );
             // the trigger, then the event (what remesh() does), so that a triggered event that changes nothing is counted
             if !r.needs_event() {
                 continue;
@@ -217,6 +222,15 @@ fn p_tetrahedral_piston_with_local_remeshing() {
             r2 = r2.max(ch.mismatch);
             add_ops(&mut ops, &ch.ops);
             events += 1;
+            // the per-event checks also stop the run where they fail (the same limits as below)
+            assert!(
+                b1v <= 1e-13 && b1m <= 1e-13 && b1p <= 1e-13 && b1e <= 1e-13,
+                "event {events}: B1v {b1v:e}, B1m {b1m:e}, B1p {b1p:e}, B1e {b1e:e}"
+            );
+            assert!(
+                b3 <= 1e-13 && q_run >= Q_MIN && l1 >= 0.2 && r2 <= 1e-11,
+                "event {events}: B3 {b3:e}, Q {q_run}, L1 {l1}, R2 {r2:e}"
+            );
             if r.needs_event() {
                 unresolved += 1;
             }

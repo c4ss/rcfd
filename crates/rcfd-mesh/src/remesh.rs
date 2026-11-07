@@ -1449,7 +1449,8 @@ mod tests {
         None
     }
 
-    /// U2: each operator once, then the events of a gradual piston motion (amendment 1), on M_s.
+    /// U2: each operator once, then the events of a gradual piston motion (amendment 1) with the band of amendment 2, on
+    /// M_s.
     #[test]
     fn u2_each_operator_and_the_events_of_a_piston_carry_totals_on_m_s() {
         let s = box_surface([0.0; 3], [0.3, 0.1, 0.1], [6, 2, 2]);
@@ -1472,7 +1473,8 @@ mod tests {
         for (target, step) in [(0.27, -0.001), (0.33, 0.001)] {
             while (target - x) * step > 1e-12 {
                 x = ((x + step) * 1000.0f64).round() / 1000.0;
-                r.set_plane(xmax, x).unwrap();
+                // the band of ADR 0215 amendment 2, w = 2 h0
+                r.move_plane_with_band(xmax, x, 0.07).unwrap();
                 let before = r.mesh().expect("U2: the moved mesh is valid");
                 if let Some(ch) = r.remesh().unwrap() {
                     check_change(&before, &r, &ch, &format!("event at x = {x:.3}"));

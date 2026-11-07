@@ -419,3 +419,106 @@ Q; Q's ability to fail is shown by N2. Corrected mutation, run once after this t
 | MU3' | the remesher scores every candidate as perfect: in `Work::evaluate` the new cells' mean ratio is replaced by 1 (`min_new = min_new.min(1.0)`), so splits and collapses ignore quality and any valid candidate counts as an improvement; the test measures Q with `TetRemesher::min_quality`, which the mutation does not touch | Q or R1 (P-T) |
 
 No limit changes.
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+b6be7b4, amendment 1 6e44acf, amendment 2 da387b7, the code and tests fa35a34, amendment 3 7df1878. Each registered check
+ran once on the code of fa35a34 (P-T and N2 in one run of the test binary, 193 s; U1 to U3 in one run, 0.24 s); the runs
+are deterministic and none was repeated to change a result. Every registered check met its limit, the set-up checks and
+the negative controls held, and every mutation made its check fail except MU3, which amendment 3 replaced by MU3'.
+
+**Built as registered** (S1 with amendment 2).
+
+- `crates/rcfd-mesh/src/remesh.rs` (new): `AxisPlane`, `box_planes`, `RemeshSettings` (`for_size`), `OpCounts`,
+  `RemeshChange`, `TetRemesher` (`new`, `from_tet_mesh`, `points`, `cells`, `planes`, `settings`, `plane_index`,
+  `set_plane`, `move_plane_with_band`, `mesh`, `quality`, `min_quality`, `edge_range`, `needs_event`, `remesh`, `event`),
+  `mean_ratio`, `tet_intersection_volume`, `remap`; the operators, the validity checks M4, the remap M5 and the event
+  procedure M7 are private (`Work`). Three unit tests U1 to U3.
+- `crates/rcfd-mesh/src/lib.rs`: one `pub mod remesh;` line. Nothing else in `rcfd-mesh` and nothing in `rcfd-fv`,
+  `rcfd-api` or `rcfd-cli` is edited.
+- `crates/rcfd-fv/tests/remesh_f247.rs` (new): P-T with N1, and N2.
+- Documents: `docs/dynamic-mesh.md` (prose: what the library does, that the tree does not use it), the F-247 entries of
+  `docs/ROADMAP.md` and `docs/roadmap.json` (done, by the decision rule). No TOML block and no case-schema key.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P0 (set-up) M0 record, mean ratio, edges, no trigger; every mesh valid with the six patches | as stated | hash `aaf8f4c36f6446e4`, 1711 cells, 522 points, mean ratio min 0.5646, edges `[0.0250, 0.0669]` in `[0.0175, 0.07]`, no trigger; every mesh valid | held |
+| A1 (acceptance) at `t = T` | `abs <= 2e-2` | `3.69e-6` (`V/V0 = 0.400000`, 729 cells, `p_bar = 3.606763` against the isentrope's `3.606750`) | met |
+| A2 (acceptance) at `t = 2T` | `abs <= 2e-2` | `9.45e-6` (1860 cells) | met |
+| B1v (acceptance) volume per event | `<= 1e-13` | `1.55e-15` | met |
+| B1m (acceptance) mass per event | `<= 1e-13` | `1.22e-15` | met |
+| B1p (acceptance) momentum per event, against `sum abs(m) V` | `<= 1e-13` | `1.19e-15` | met |
+| B1e (acceptance) energy per event | `<= 1e-13` | `1.11e-15` | met |
+| B4 (acceptance) events that changed the mesh | `>= 5` | 1806 | met |
+| Q (acceptance) smallest mean ratio after every step and event | `>= 0.2` | `0.2407` | met |
+| B2s mass per step | `<= 1e-13` | `7.55e-15` | met |
+| B3 volume against `0.01 x_p` | `<= 1e-13` | `5.00e-15` | met |
+| L1 smallest x of a touched point | `>= 0.2` | `0.350` | met |
+| R1 no error | as stated | none | met |
+| R2 raw intersection mismatch | `<= 1e-11` | `5.05e-14` | met |
+| N1 (negative control) largest-source remap, largest mass change | `>= 1e-10` | `7.92e-7` | held |
+| N2 (negative control) without remeshing, the time the run breaks | `< T` | `t = 5.199` (`x_p = 0.857`): the mean ratio falls to 0.2000 | held |
+| U1 cube splits: row and column sums; a cell with itself; disjoint and touching cells | `1e-13`; `1e-13`; `0`, `1e-15` | `1.67e-16`; `0`; `0`, `0` | met |
+| U2 each operator and the events of the piston on M_s: (a) to (d); (e); events in and out | `<= 1e-13`; valid; at least one each | `3.05e-14` (the five single operators at most `8.9e-16`), raw mismatch at most `4.7e-14`; valid; 1 inward and 4 outward events (see the deviation below) | met |
+| U3 M0 through the remesher's mesh | as stated; `1e-13` | 1711 cells of 4 faces, patches `[16, 16, 208, 208, 208, 208]` (864, M0's surface triangles), volume `1.9e-15` | met |
+
+Printed, no limit (P-T): 55497 steps in 193 s; the trigger fired in 37332 steps, 1806 times with a change and 35526
+times without (an edge just over `l_max` whose split the quality rule refused, or a short edge whose collapses failed);
+after 1753 events a trigger condition remained. Operators over the run: 435 splits, 454 collapses, 337 edge removals,
+5 2-3 flips, 2086 relocations. The largest `abs(p_bar V^gamma / (p0 V0^gamma) - 1)` over the steps is `9.45e-6`; at `T`
+the cell values of `p / rho^gamma` lie in `[0.999984, 1.000031]`. The final mesh has a smallest mean ratio of 0.4014 and a
+smallest dihedral angle of 13.4 degrees. The mass drift over the run against the initial mass is `3.23e-12` (ADR 0090's
+B2 limit was `1e-12` over 9192 steps; this run takes 55497 steps, and the drift is round-off that grows with the step
+count: per step it is at most `7.6e-15`, B2s).
+
+**Reading.** The isentrope holds to 1e-5 with a first-order remap at 1806 events because the state is nearly uniform at
+piston Mach 0.05 (as ADR 0090 says of its layered run, this is not a sensitive test of numerical entropy production).
+Every event conserves the totals to round-off by construction (fractions per old cell summing to one), and the negative
+control shows that a remap that does not carry the totals is seen (7.9e-7, eight orders above the measured round-off).
+The remeshing stays within the band and the cells next to the piston: no point below `x = 0.35` was touched while the
+piston came to `x = 0.4`. Q holds with a margin of 0.04; the smallest mean ratio is reached next to the piston before a
+collapse is accepted (M7 step 2 accepts a collapse whose cells are no worse than `min(q_collapse, before)`). Events are
+frequent and many change nothing; that costs time (193 s against 12.5 s for ADR 0213's prism stack) and is not a check.
+
+### Defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| D1 `git diff 08316f7 -- crates` | the new files and one line | `crates/rcfd-mesh/src/remesh.rs` and `crates/rcfd-fv/tests/remesh_f247.rs` new, one line in `crates/rcfd-mesh/src/lib.rs` | met |
+| D2 the existing suites, unedited | pass | in the gate below | see the gate |
+
+### Mutations
+
+Each was applied alone to the final tree by an exact text replacement (a script in a scratch folder that checks that the
+replaced text occurs once), in the target dir `target-f247-mut`; the named tests were run once and the file was restored
+and compared byte for byte with the kept copy (equal in all five).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 fractions per new cell | B1m, U2 (a) | failed: U2 (a) `1.00` at the first operator (a split); P-T at the first event: B1m `1.14e-2`, B1p `2.47e-2`, B1e `1.14e-2` (B1v `8.9e-16` held) |
+| MU2 three of the four half-spaces | R1, U1 | failed: U1 sums `2.00`; P-T stopped at the first event with the remap error (raw mismatch `0.34`, a collapse) |
+| MU3 the trigger ignores the mean ratio | Q or R1 | **did not fail**: the run gave the registered numbers bit for bit (amendment 3) |
+| MU3' every candidate scored as perfect (amendment 3) | Q or R1 | failed: Q `0.097` at the first event |
+| MU4 improvement of every cell below 1 | L1 | failed: L1 `0` at the first event |
+
+`scripts/limit_audit.py` reports no hit in the new test file (it does not scan unit tests in `src`).
+
+Disclosures:
+
+- Before the registered runs the new code and tests were compiled without running, laid out by rustfmt, and
+  `cargo clippy -p rcfd-mesh -p rcfd-fv --all-targets -- -D warnings` was run on them (clean). The development runs of
+  amendment 2 used only the scratch set-ups D-a and D-b.
+- **Deviation (U2).** The unit test of fa35a34 moved M_s's piston with `set_plane` (plane points only), not with the
+  band that amendment 2 registered for U2. That run passed: 4 inward and 15 outward events, (a) to (d) at most `8.3e-15`,
+  raw mismatch at most `1.8e-14`. The test was then corrected to the registered band (`move_plane_with_band(xmax, x,
+  0.07)`) and run once; the table gives that run. Both runs are reported; the corrected one is the registered check.
+- After the registered run, P-T also asserts its per-step checks (B2s, B3, Q) and its per-event checks (B1v, B1m, B1p,
+  B1e, B3, Q, L1, R2) where they are measured, with the same limits, so that a mutated run stops at the first failing
+  event; the assertions at the end are unchanged. The mutations and the gate ran this version; with every check met it
+  gives the same numbers (the run is deterministic; MU3's run of it reproduced them bit for bit).
+- A first attempt of the mutation script stopped on an invalid log file name (a `:` in it) after applying MU1 and before
+  running any test; the file was restored (byte for byte) and the script was run again from MU1.
+- MU3's failure to fail is reported, not hidden; MU3' was registered by amendment 3 before it ran.
