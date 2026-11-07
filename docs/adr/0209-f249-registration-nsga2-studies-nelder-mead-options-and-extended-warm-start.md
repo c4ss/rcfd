@@ -443,3 +443,24 @@ In release: MO1z about 10 s per seed (the store's linear lookups, item 10), MO1f
 ## Addenda
 
 Results follow in addenda, in the order of the tables.
+
+### Amendment 1 (2026-11-07): two misses, and the mutations of MO1z moved to MO1f
+
+Written after the first run of `f249_moo`, `f249_nm`, `design_f249` and `f249_warm` at ebc4e9f, before any mutation or diagnostic
+run. No limit changes.
+
+* **MO1z missed.** ZDT1, pop 100, 25 000 evaluations: seed 1 C 0.543, G 0.288, I 0.254; seed 2 C 0.378, G 0.207, I 0.141; seed 3
+  C 0.353, G 0.291, I 0.220 (limits 1e-2, 5e-2, 1e-2), with 118 to 150 Pareto members among about 24 050 records. The test stays
+  with its limits as `mo1z_nsga2_on_zdt1_meets_the_analytic_front_known_miss`, ignored. MO1f (FON) met C, G and I on all three
+  seeds, and the control MO1c failed C as required (C 3.90 on ZDT1), so the convergence metric can fail.
+* **N3 missed.** 19 of 20 seeds; seed 16 ended at f = 1.6668 with violation 0 after 600 evaluations (limit: all 20 with f - 0.5
+  <= 1e-3). The test stays with its limit as `n3_constrained_quadratic_from_20_seeded_starts_known_miss`, ignored.
+* **Mutations MM1 and MM2.** They were registered to make MO1z seed 1 fail, which fails without them, so they cannot show that a
+  check fails because of them. They are applied to MO1f instead (must fail C, G or I on seed 1); MM3 is recorded on MO1f seed 1.
+  The other mutations are as registered.
+* **Diagnostics** (scratch, not committed, not results and not adopted; their numbers go in the addendum):
+  * DG1, the cause of the MO1z miss: the registered SBX keeps each child near its own parent in every variable and never
+    exchanges coordinates between the two parents, so on ZDT1 a good coordinate of one parent can reach another member only
+    through selection and mutation. Test of that hypothesis: MO1z seed 1 with the two children's values exchanged per variable
+    with probability 1/2 after the SBX step (one more `rng.uniform()` per variable, drawn after that variable's `u`).
+  * DG2, the N3 miss: the end point of seed 16 and the evaluations its restarts spent.
