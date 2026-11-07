@@ -5290,7 +5290,7 @@ fixed by the item's registration ADR before any code.
     run are unchanged bit for bit.
   - note: From ADR 0199 (F-286) question 2, recommendation taken by the lead: a follow-up item, each model with its own
     registration. SA-DES and the Reynolds stress model stay on their once-per-step path (question 3).
-- [ ] **F-295** One diffusivity per periodic seam pair
+- [x] **F-295** One diffusivity per periodic seam pair
   - depends on: F-286
   - acceptance: Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair
     takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy

@@ -2362,7 +2362,7 @@
     "deps": [
       "F-286"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit is fixed by its registration ADR before any code. On a periodic seam each face of a pair takes one common diffusivity, so that k, omega and momentum diffusion is conservative across a seam where the eddy viscosity differs; the option is opt-in with defaults bit-identical (baseline hashes unchanged), and a global budget on a periodic case with a differing eddy viscosity is checked within a limit fixed by the ADR.",
     "note": "From ADR 0199 (F-286) amendment 2 and question 5, recommendation taken by the lead: found while correcting the F-286 set-ups; each face of a seam pair takes the diffusivity of its own owner cell. FAN-01 and EXP-ROT check H both have rotational seams, so this item comes before check H is read."
   },
