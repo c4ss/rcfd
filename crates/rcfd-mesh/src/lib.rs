@@ -27,6 +27,7 @@ pub mod partition;
 pub mod polydual;
 pub mod predicates;
 pub mod quality;
+pub mod remesh;
 pub mod sliding;
 pub mod surface;
 pub mod surface_remesh;

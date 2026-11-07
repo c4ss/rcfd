@@ -1902,9 +1902,9 @@
       "F-230",
       "F-063"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Local remeshing: the ADR 0090 piston in a closed cylinder on an unstructured tetrahedral mesh, with remeshing instead of layering, keeps p_bar V^gamma within 2e-2 at full compression and after re-expansion, conserves volume, mass, momentum and energy through every remeshing event to 1e-13 relative (conservative remap), triggers at least 5 events, and keeps the minimum cell quality above the ADR threshold. Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.",
-    "note": "Split from F-230 on 2026-10-21 (partials audit). Depends on F-063 (partial). Size L. REFINED 2026-10-21 (not yet user-approved): The lead's text bundled six sub-scopes under one unnamed 'closed-form or benchmark result' and asked for incompressible case-tree selectability, which already exists for prescribed and six-DOF motion (ADR 0033 D8, T1-T4); what is missing is wiring of layering and compressible ALE. Each part now has a named case reusing a registered closed form (ADR 0090 piston p V^gamma, ADR 0033 G5 piston flux) plus conservation checks. ADR 0098's Mach 0.2 piston passed with the |u| + c time step but did not deliver the mesh-speed time step; it stays in (C). PROPOSED SPLIT: remeshing = A (L); layering extensions = B (M); compressible ALE boundaries and time step = C (S to M); wiring = D (S, can ship first). OPEN QUESTION: should more than one moving layered boundary (in ADR 0090's not-delivered list) be tracked here or dropped. USER DECISION 2026-10-22: split four ways: B is F-257, C is F-258, D is F-259; more than one moving layered boundary is dropped as out of scope (no use case). This item keeps A (remeshing), size L."
+    "note": "Split from F-230 on 2026-10-21 (partials audit). Depends on F-063 (partial). Size L. REFINED 2026-10-21 (not yet user-approved): The lead's text bundled six sub-scopes under one unnamed 'closed-form or benchmark result' and asked for incompressible case-tree selectability, which already exists for prescribed and six-DOF motion (ADR 0033 D8, T1-T4); what is missing is wiring of layering and compressible ALE. Each part now has a named case reusing a registered closed form (ADR 0090 piston p V^gamma, ADR 0033 G5 piston flux) plus conservation checks. ADR 0098's Mach 0.2 piston passed with the |u| + c time step but did not deliver the mesh-speed time step; it stays in (C). PROPOSED SPLIT: remeshing = A (L); layering extensions = B (M); compressible ALE boundaries and time step = C (S to M); wiring = D (S, can ship first). OPEN QUESTION: should more than one moving layered boundary (in ADR 0090's not-delivered list) be tracked here or dropped. USER DECISION 2026-10-22: split four ways: B is F-257, C is F-258, D is F-259; more than one moving layered boundary is dropped as out of scope (no use case). This item keeps A (remeshing), size L. DONE (ADR 0215, the registration of F-247, 2026-11-07, branch f247-local-remeshing, not merged): every registered check is met; the acceptance is still the maintainer's (ADR 0215 Q6). Library only. rcfd_mesh::remesh::TetRemesher holds a tetrahedral mesh bounded by axis-aligned planes; move_plane_with_band moves a piston plane and drags the points within 2 h0 behind it in proportion; a cell below mean ratio 0.3 or an edge outside [0.5 h0, 2 h0] triggers an event of local operators (edge split, collapse, edge removal including the 2-2 flip of a wall edge, 2-3 flip, point relocation), each checked to tile the same region; every operator gives the cell totals to the new cells by exact tetrahedron intersection volumes, and remesh::remap carries them through CompressibleSolver::replace_mesh. ADR 0090's piston on the Delaunay tetrahedral mesh M0 (1711 cells): p V^gamma 3.7e-6 at full compression and 9.4e-6 after re-expansion (limit 2e-2); 1806 events (limit 5); volume, mass, momentum and energy through every event within 1.6e-15 (1e-13); smallest mean ratio 0.241 (ADR threshold 0.2); per-step mass 7.6e-15 and volume 5.0e-15; no point below x = 0.35 touched (limit 0.2); raw intersection mismatch 5.1e-14 (1e-11); 55497 steps in 193 s. Negative controls: a largest-source remap changes the mass by 7.9e-7; without remeshing the mean ratio falls below 0.2 at t = 5.2 (T = 16). Unit checks met; four mutations failed their checks, the fifth did not and was replaced by amendment 3 (MU3': Q 0.097). Amendments before the registered runs: 1 (U2 gradual), 2 (band motion, collapse rules, boundary edge removal, from development runs on scratch set-ups). Defaults: new files and one pub mod line; baseline hashes and H1 unedited; no case-schema key. Gate of 6e7ee92: fmt 0, clippy 0, 3150 passed, 0 failed, 889 ignored. Open (ADR 0215 Q1 to Q7): case-tree wiring, the quality measure and threshold, remeshing in the incompressible path, non-planar walls, a higher-order remap, the status, a panic of the existing mesher seen while choosing M0."
   },
   {
     "id": "F-248",
@@ -2465,5 +2465,28 @@
     "status": "todo",
     "acceptance": "A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off; periodic pairs are kept by the join.",
     "note": "From ADR 0216 question 3, recommendation taken: a separate item."
+  },
+  {
+    "id": "F-305",
+    "title": "Local remeshing in the case tree (compressible solver)",
+    "phase": 9,
+    "deps": [
+      "F-247",
+      "F-259"
+    ],
+    "status": "todo",
+    "acceptance": "dynamic_mesh.deformation = remeshing runs a compressible case from the CLI; the tetrahedral generator and h0 in an optional table so existing case hashes are unchanged.",
+    "note": "From ADR 0215 question 1, recommendation taken."
+  },
+  {
+    "id": "F-306",
+    "title": "Tetrahedral mesher panic on a thin box (tetmesh neighbour link)",
+    "phase": 9,
+    "deps": [
+      "F-247"
+    ],
+    "status": "todo",
+    "acceptance": "tetrahedralize of box_surface([0,0,0],[1,0.1,0.1],[10,1,1]) at size 0.035 and quality_sweeps 3 returns a mesh or a located error instead of panicking at tetmesh.rs:386.",
+    "note": "Found during F-247 (ADR 0215 question 7); recommendation taken: a new item."
   }
 ]

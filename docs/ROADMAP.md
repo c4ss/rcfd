@@ -4763,7 +4763,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
       supplementary evidence only (Q8 (a)); amendment 1 and the heavy tests run by hand are accepted as evidence; the
       divergence on W is the new item F-285 (Q9 (b)), after which M1 on W is run again unchanged; the R2 cases of T1 are
       redone by the house rule, separately. Q1 to Q7 were not asked and stay open.
-- [ ] **F-247** Dynamic mesh: local remeshing on unstructured tetrahedral meshes
+- [x] **F-247** Dynamic mesh: local remeshing on unstructured tetrahedral meshes
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run.
     - Local remeshing: the ADR 0090 piston in a closed cylinder on an unstructured tetrahedral mesh, with remeshing
@@ -4788,6 +4788,33 @@ Added after the static feature-gap review; wording is product-independent. Phase
       dropped.
     - USER DECISION 2026-10-22: split four ways: B is F-257, C is F-258, D is F-259; more than one moving layered
       boundary is dropped as out of scope (no use case). This item keeps A (remeshing), size L.
+    - DONE (ADR 0215, the registration of F-247, 2026-11-07, branch f247-local-remeshing, not merged): every registered
+      check is met; the acceptance is still the maintainer's (ADR 0215 Q6). Library only. `rcfd_mesh::remesh::TetRemesher`
+      holds a tetrahedral mesh bounded by axis-aligned planes; `move_plane_with_band` moves a piston plane and drags the
+      points within `2 h0` behind it in proportion; after each step a cell below mean ratio 0.3 or an edge outside
+      `[0.5 h0, 2 h0]` triggers an event of local operators (edge split, collapse, edge removal including the 2-2 flip of a
+      wall edge, 2-3 flip, point relocation), each checked to tile the same region; every operator gives the cell totals to
+      the new cells by exact tetrahedron intersection volumes, and `remesh::remap` carries them through
+      `CompressibleSolver::replace_mesh`.
+      - ADR 0090's piston on the Delaunay tetrahedral mesh M0 (1711 cells from `tetmesh::tetrahedralize`): `p V^gamma`
+        3.7e-6 at full compression and 9.4e-6 after re-expansion (limit 2e-2); 1806 events (limit 5); volume, mass,
+        momentum and energy through every event within 1.6e-15 (1e-13); smallest mean ratio over the run 0.241 (ADR
+        threshold 0.2); per-step mass 7.6e-15 and volume 5.0e-15 (1e-13); no event touched a point below `x = 0.35`
+        (limit 0.2); raw intersection mismatch 5.1e-14 (1e-11). 55497 steps in 193 s.
+      - Negative controls: a largest-source remap changes the mass by 7.9e-7 at an event; without remeshing the mean ratio
+        falls below 0.2 at `t = 5.2` (`T = 16`). Unit checks: intersection volumes of two cube splits to 1.7e-16, each
+        operator and the events of a small piston carry totals to 3.0e-14, the M0 mesh through the remesher. Four of five
+        mutations failed their checks at once; the fifth (the trigger without the mean ratio) changed nothing, because the
+        edge-length conditions kept the trigger on, and was replaced by amendment 3 (a remesher blind to quality: Q 0.097
+        at the first event).
+      - Amendments before the registered runs: 1 (U2's piston moves gradually), 2 (development runs on scratch set-ups
+        found a point caught by a piston that moves alone, a split-collapse cycle, short edges that could not be collapsed
+        and flat cells on a wall; fixed by the band motion, collapse rules and boundary edge removal). Defaults: only new
+        files and one `pub mod` line; baseline hashes and H1 unedited; no case-schema key.
+      - Gate of 6e7ee92: fmt 0, clippy 0, 3150 passed, 0 failed, 889 ignored.
+    - Open (ADR 0215 Q1 to Q7): the case-tree wiring, the quality measure and threshold, remeshing in the incompressible
+      path (a face-flux map), non-planar walls, a higher-order remap, the status, and a panic of the existing mesher seen
+      while choosing M0 (`tetrahedralize` of `box_surface(..., [10, 1, 1])` with size 0.035 and 3 quality sweeps).
 
 ## Revision additions (F-248 to F-250)
 
@@ -5506,3 +5533,11 @@ fixed by the item's registration ADR before any code.
   - depends on: F-250
   - acceptance: A planar sliding interface and a periodic sector join conserve mass and a uniform flow to round-off; periodic pairs are kept by the join.
   - note: From ADR 0216 question 3, recommendation taken: a separate item.
+- [ ] **F-305** Local remeshing in the case tree (compressible solver)
+  - depends on: F-247, F-259
+  - acceptance: dynamic_mesh.deformation = remeshing runs a compressible case from the CLI; the tetrahedral generator and h0 in an optional table so existing case hashes are unchanged.
+  - note: From ADR 0215 question 1, recommendation taken.
+- [ ] **F-306** Tetrahedral mesher panic on a thin box (tetmesh neighbour link)
+  - depends on: F-247
+  - acceptance: tetrahedralize of box_surface([0,0,0],[1,0.1,0.1],[10,1,1]) at size 0.035 and quality_sweeps 3 returns a mesh or a located error instead of panicking at tetmesh.rs:386.
+  - note: Found during F-247 (ADR 0215 question 7); recommendation taken: a new item.
