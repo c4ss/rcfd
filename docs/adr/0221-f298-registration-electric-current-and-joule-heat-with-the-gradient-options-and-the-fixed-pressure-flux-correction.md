@@ -295,3 +295,29 @@ No limit changes. B-tree-T is a property of F-291's code, which D3 replaces, so 
 (`m_sets_before_d3`); if D3 is built, that test is kept as an ignored record of commit (2) (its numbers in the addendum), because the
 code it measures no longer exists. B-D compares the hashes printed by M and M-O3 at commit (2) with those of the same runs after D3:
 the test of D3 asserts the recorded values, written into it after M ran.
+
+## Amendment 2 (2026-11-07, written after the first runs of the D2 suites and before any corrected run): `Some(GradientOptions::default())` is `None`
+
+No limit changes. Run before this text, on the code of D1 to D3 as registered (commit e6635637 and the D2 wiring, uncommitted): the
+library tests (P, L1 to L4, B-lib, B-lib-T, B-lib-D), the tree tests (E2: F, E-tree, R-eq-J, R-eq-Q, B1 to B3, J1, the T rows and
+D1; CH: S-CH, M, M-O3, M-C, B-tree, B-D) and part of D2: `rcfd-fv` `electric.rs`, `gradient_pressure_f291.rs`, `cht_flows_f289.rs`,
+`gradient_sweep_f256.rs` (all passed); `rcfd-api` `baseline_hashes.rs`, `case_hashes_w48u.rs`, `cht_flows_f289.rs`,
+`electric_case.rs` (passed) and `gradient_equations_f291.rs`, where one test failed (cargo stopped there, so `mhd.rs`,
+`phase_change_case.rs`, `gradient_options_f256.rs` and `rules_w19c.rs` did not run).
+
+**Finding: D3 as registered breaks ADR 0204's G4 (iv).** `g4_iv_library_default_options_equal_no_options` asserts that every
+library run with `Some(GradientOptions::default())` equals the run with `None` bit for bit; for P2 (the channel with a fixed-pressure
+outlet) 768 of 768 values now differ, because D3 adds the owner-gradient boundary term whenever options are given, the default
+options included. D2 requires that test to pass unedited, and F-291 made "the default options reproduce the default operator, bit
+for bit" a library-wide rule. A defect of D3's text, corrected as follows:
+
+* **D3 (corrected):** `corrected_flux_opt` adds the boundary term only when the options differ from `GradientOptions::default()`;
+  with `Some(GradientOptions::default())` it is `corrected_flux_with`, bit for bit, as before F-298. The tree never passes the default
+  options (ADR 0204 K2, R5), so no tree run changes against the registered code.
+* **D1 (made uniform, not forced by a failure):** `joule_heat_opt` and `boundary_power_opt` with `Some(GradientOptions::default())` are
+  `joule_heat` and `boundary_power`, bit for bit, so that one rule holds for every function F-298 adds. No registered check used
+  `joule_heat_opt` with the default options (L3 compared `None` only).
+* **New checks** (with the limits of their kind): **B-lib-D2**, K-B: `corrected_flux_opt` with `Some(GradientOptions::default())`
+  and a gradient against `corrected_flux_with`, equal bits on every face (the fixed-pressure faces included); **L3b**, KE:
+  `joule_heat_opt` with `Some(GradientOptions::default())` against `joule_heat`, gradient true and false, equal bits on every cell.
+* The other checks are run again on the corrected code, D2 in full.
