@@ -250,3 +250,41 @@ fn m_sets_before_d3() {
     }
     assert!(missed.is_empty(), "{missed:?}");
 }
+
+/// B-tree: after D3 every option set's converged run closes its mass balance, the outlet cells included.
+#[test]
+fn b_tree_the_fixed_pressure_term_closes_the_mass_balance() {
+    let mut missed = Vec::new();
+    for (name, k) in SETS {
+        if name == "O3" {
+            continue;
+        }
+        let r = run(false, k);
+        println!("{} (converged {})", r.line(&format!("B-tree CH {name}")), r.converged());
+        if !r.converged() {
+            missed.push(format!("B-tree {name}: the run is not converged (NOT MET)"));
+        } else if r.m_dom > CONVERGED || r.e_b > CONVERGED {
+            missed.push(format!(
+                "B-tree {name}: m_dom {:e}, e_b {:e} (limit {CONVERGED:e})",
+                r.m_dom, r.e_b
+            ));
+        }
+    }
+    assert!(missed.is_empty(), "{missed:?}");
+}
+
+/// The hashes M and M-O3 printed at commit 3834e1af (before D3), recorded for B-D.
+const HASH_DEFAULT_M: u64 = 0x4a8d_6c1e_2e8a_48f2;
+const HASH_O3_M: u64 = 0x85ca_4cac_6091_df27;
+
+/// B-D: D3 changes no bit of the default run and of the O3 run (no boundary term under `dropped`).
+#[test]
+fn b_d_default_and_dropped_runs_unchanged_by_d3() {
+    let d = run(false, "");
+    let o3 = run(false, keys("O3"));
+    println!(
+        "B-D: default hash {:016x} (M {HASH_DEFAULT_M:016x}), O3 hash {:016x} (M-O3 {HASH_O3_M:016x})",
+        d.hash, o3.hash
+    );
+    assert_eq!((d.hash, o3.hash), (HASH_DEFAULT_M, HASH_O3_M), "B-D");
+}

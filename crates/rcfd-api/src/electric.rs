@@ -306,7 +306,8 @@ impl ElectricState {
         }
         let (sf, _) = lib::solve_opt(geom, &mut self.phi, &sigma, &self.ctl, 20, self.gradient);
         self.sigma_face = sf;
-        self.heat = lib::joule_heat(geom, &self.phi, &self.sigma_face, true);
+        // ADR 0221 D2: the heat of the solved operator's currents (`None`: `joule_heat`)
+        self.heat = lib::joule_heat_opt(geom, &self.phi, &self.sigma_face, true, self.gradient);
         Ok(self
             .joule
             .then(|| self.heat.iter().map(|q| q / self.rho_cp).collect::<Vec<f64>>()))
@@ -322,7 +323,7 @@ impl ElectricState {
         self.phi.boundary_values(geom)
     }
 
-    /// Joule heat (W/m^3) per cell.
+    /// Joule heat (W/m^3) per cell (with the gradient options the dissipation of the solved currents, ADR 0221 D1).
     pub fn heat(&self) -> &[f64] {
         &self.heat
     }
@@ -343,9 +344,10 @@ impl ElectricState {
             .collect()
     }
 
-    /// Current density INTO the domain (A/m^2) at the boundary faces: `sigma_f dphi/dn` (outward gradient).
+    /// Current density INTO the domain (A/m^2) at the boundary faces: `sigma_f dphi/dn` (outward gradient), the currents of the
+    /// operator the potential was solved with (ADR 0221 D2; without the gradient options the default operator's).
     pub fn boundary_current_density(&self, geom: &FvGeometry) -> Vec<f64> {
-        let flows = lib::face_currents(geom, &self.phi, &self.sigma_face, true);
+        let flows = lib::face_currents_opt(geom, &self.phi, &self.sigma_face, true, self.gradient);
         let sf = geom.mesh.face_area_vectors();
         (geom.n_internal..geom.mesh.n_faces())
             .map(|f| {
