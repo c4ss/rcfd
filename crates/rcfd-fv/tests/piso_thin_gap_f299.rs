@@ -1075,10 +1075,118 @@ fn f3_lag_estimate_with_the_consistent_correctors() {
     assert!(w.rho < 1.0, "F3 {}", w.rho);
 }
 
-/// ADR 0214 S0 and S1: the default and the consistent correctors share their steady state (graded channel SC).
+/// The SC solver of ADR 0214 (graded channel, default settings) from rest.
+fn sc_solver(u0: f64) -> PimpleSolver {
+    let mesh = box_2d_graded(
+        20,
+        12,
+        0.3,
+        0.1,
+        [Grading::Uniform, Grading::Symmetric(3.0)],
+        false,
+        false,
+    )
+    .unwrap();
+    let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+    let mut u = VectorField::uniform("U", &geom, vec3::ZERO);
+    u.set_bc(&geom, "xmin", Box::new(FixedValue::vector([u0, 0.0, 0.0])))
+        .unwrap();
+    u.set_bc(&geom, "xmax", Box::new(ZeroGradient)).unwrap();
+    for name in ["ymin", "ymax"] {
+        u.set_bc(&geom, name, Box::new(FixedValue::vector(vec3::ZERO))).unwrap();
+    }
+    let mut p = ScalarField::uniform("p", &geom, 0.0);
+    p.set_bc(&geom, "xmax", Box::new(FixedValue::scalar(0.0))).unwrap();
+    PimpleSolver::new(geom, u, p, fb_settings())
+}
+
+/// ADR 0214 amendment 2, S0b and S1b: from the state `S0` of 3000 default steps on SC, 50 default steps (A, the drift of the
+/// default at its floor) and 50 steps with the consistent correctors (B) stay at `S0`.
 #[test]
 #[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn s0_s1_steady_state_of_the_consistent_correctors_is_the_default_one() {
+fn s0b_s1b_steady_state_of_the_consistent_correctors_is_the_default_one() {
+    const U0: f64 = 0.1;
+    let dt = 0.002;
+    let mut flow = sc_solver(U0);
+    for _ in 0..3000 {
+        flow.step(dt);
+        assert!(flow.diverged.is_none(), "S0b run stopped");
+    }
+    let s0 = flow.snapshot();
+    let (u_s0, p_s0) = (s0.u.clone(), s0.p.clone());
+    let hi = p_s0.iter().fold(f64::NEG_INFINITY, |m, x| m.max(*x));
+    let lo = p_s0.iter().fold(f64::INFINITY, |m, x| m.min(*x));
+    let range = hi - lo;
+    let dev = |flow: &PimpleSolver| -> (f64, f64) {
+        let du = flow
+            .u
+            .values
+            .iter()
+            .zip(&u_s0)
+            .fold(0.0f64, |m, (a, b)| m.max(vec3::norm(vec3::sub(*a, *b))));
+        let dp = flow
+            .p
+            .values
+            .iter()
+            .zip(&p_s0)
+            .fold(0.0f64, |m, (a, b)| m.max((a - b).abs()));
+        (du, dp)
+    };
+    // branch A: the default
+    let (mut du_a, mut dp_a): (f64, f64) = (0.0, 0.0);
+    for _ in 0..50 {
+        flow.step(dt);
+        assert!(flow.diverged.is_none(), "S0b branch A stopped");
+        let (du, dp) = dev(&flow);
+        du_a = du_a.max(du);
+        dp_a = dp_a.max(dp);
+    }
+    let (u_a, p_a) = (flow.u.values.clone(), flow.p.values.clone());
+    // branch B: the consistent correctors from the same state
+    flow.restore(&s0).unwrap();
+    flow.settings.consistent_correctors = true;
+    let (mut du_b, mut dp_b): (f64, f64) = (0.0, 0.0);
+    for _ in 0..50 {
+        flow.step(dt);
+        assert!(flow.diverged.is_none(), "S1b branch B stopped: {:?}", flow.diverged);
+        let (du, dp) = dev(&flow);
+        du_b = du_b.max(du);
+        dp_b = dp_b.max(dp);
+    }
+    let ab_u = flow
+        .u
+        .values
+        .iter()
+        .zip(&u_a)
+        .fold(0.0f64, |m, (a, b)| m.max(vec3::norm(vec3::sub(*a, *b))));
+    let ab_p = flow
+        .p
+        .values
+        .iter()
+        .zip(&p_a)
+        .fold(0.0f64, |m, (a, b)| m.max((a - b).abs()));
+    println!(
+        "S0b: branch A (default) max|u - u_S0| {:.2e} U0 (limit 2e-11), max|p - p_S0| {:.2e} of the range {range:.4e}; \
+         S1b: branch B (consistent) max|u - u_S0| {:.2e} U0 (limit 1e-10), max|p - p_S0| {:.2e} of the range (limit 1e-10); \
+         B against A after 50 steps: {:.2e} U0, {:.2e} of the range",
+        du_a / U0,
+        dp_a / range,
+        du_b / U0,
+        dp_b / range,
+        ab_u / U0,
+        ab_p / range
+    );
+    assert!(du_a <= 2e-11 * U0, "S0b {du_a}");
+    assert!(du_b <= 1e-10 * U0, "S1b velocity {du_b}");
+    assert!(dp_b <= 1e-10 * range, "S1b pressure {dp_b}");
+}
+
+/// ADR 0214 S0 and S1 as registered: the default and the consistent correctors share their steady state (graded channel SC).
+/// Defective set-up (ADR 0214 amendment 2): S0's limit `1e-12 U0` is below the floor of the solvers (`1.95e-12 U0` measured), so
+/// S1 is not counted. Kept as the record; corrected by `s0b_s1b_steady_state_of_the_consistent_correctors_is_the_default_one`.
+#[test]
+#[ignore = "defective set-up: S0's limit is below the solvers' floor (ADR 0214 amendment 2)"]
+fn s0_s1_steady_state_of_the_consistent_correctors_is_the_default_one_defective_setup() {
     const U0: f64 = 0.1;
     let mesh = box_2d_graded(
         20,

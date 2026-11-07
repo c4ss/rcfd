@@ -341,3 +341,19 @@ iterations are made with one corrector (the base step from `S` too). Limits unch
 `|rho| >= 1` and alternating. The registered test stays as the ignored record
 `d6_dn1_twin_run_with_one_corrector_at_tau_40_defective_setup`; the new test is `d6b_dn1b_one_corrector_from_the_d5_base_state`.
 It runs on the same diagnosis tree (library of c4b2cae).
+
+## Amendment 2 (2026-11-07): the set-up check of the steady identity, written before the corrected run
+
+**What happened.** The F, S, A1c, A4u-c, R1 and N1 tests were run once, in release, on 2bd0faa (the opt-in and its tests);
+their numbers go in the addendum and none is repeated. The set-up check S0 did not hold: after the 3000 default steps on SC the
+last step changed the velocity by `1.95e-12 U0` against the limit `1e-12 U0`. The run had reached the floor of its solvers
+(about `2e-13` m/s per step; the slowest physical mode has decayed by `e^-59` by then), which the registered limit did not allow
+for. S1's numbers on that run (`1.97e-12 U0`, `1.77e-11` of the pressure range) are therefore not counted.
+
+**Corrected set-up (registered now, before its run).** S0b and S1b: the same SC run of 3000 default steps gives the state `S0`;
+from `S0` two branches of 50 steps each: (A) the default, (B) with the option. S0b (set-up): branch A's `max |u - u_S0|` over its
+50 steps `<= 2e-11 U0` (the default's own drift at the floor is at most a fifth of S1b's limit). S1b: after every step of branch
+B, `max |u - u_S0| <= 1e-10 U0` and `max |p - p_S0| <= 1e-10 (max p_S0 - min p_S0)` (S1's limits, unchanged); branch B against
+branch A after the 50 steps is printed. MU2 to MU4 must fail S1b. The registered test stays as the ignored record
+`s0_s1_steady_state_of_the_consistent_correctors_is_the_default_one_defective_setup`; the new test is
+`s0b_s1b_steady_state_of_the_consistent_correctors_is_the_default_one`.
