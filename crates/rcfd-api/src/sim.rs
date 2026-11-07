@@ -50,6 +50,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 mod restart;
+mod warm;
+
+pub use warm::{TurbWarm, WarmState};
 
 pub(crate) fn diag(path: &str, message: impl Into<String>) -> Vec<Diagnostic> {
     vec![Diagnostic {

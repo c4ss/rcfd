@@ -1,12 +1,14 @@
 //! Running rcfd cases for the design loop (ADR 0067): one case run with an optional warm start, and the evaluators built on it
-//! (the candidate evaluator of a study and the point evaluator of an operating map).
+//! (the candidate evaluator of a study and the point evaluator of an operating map). The warm start carries velocity and
+//! pressure ([`WarmStart::Flow`], the default), or also the temperature and the k-epsilon / k-omega SST fields
+//! ([`WarmStart::Extended`], ADR 0209 D4).
 
 use super::opmap::{MapPoint, PointEvaluator, PointResult, PointStatus};
 use super::store::CondResult;
 use super::study::{Condition, Evaluator, StudyDef};
 use crate::case::Case;
 use crate::runctl::{self, exit, RunOptions};
-use crate::sim::Simulation;
+use crate::sim::{Simulation, WarmState};
 use rcfd_core::vec3::Vec3;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -21,6 +23,18 @@ pub struct Fields {
     pub u: Vec<Vec3>,
     /// Cell (kinematic) pressure.
     pub p: Vec<f64>,
+    /// The full warm state ([`WarmStart::Extended`] only; `None` under [`WarmStart::Flow`]).
+    pub state: Option<WarmState>,
+}
+
+/// What a warm start carries (ADR 0209 D4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WarmStart {
+    /// Velocity and pressure ([`Simulation::seed_fields`]): steady SIMPLE/SIMPLEC without energy or turbulence.
+    #[default]
+    Flow,
+    /// Also the temperature and the k-epsilon / k-omega SST fields ([`Simulation::seed_state`]).
+    Extended,
 }
 
 /// Limits of one case run.
@@ -87,7 +101,13 @@ impl CaseRun {
 /// Run `case` (built fresh), optionally starting from `seed`. Never panics; a seed that cannot be applied is ignored and
 /// the run is cold (`warm == false`, the reason is in `message`).
 pub fn run_case(case: &Case, seed: Option<&Fields>, limits: &RunLimits) -> CaseRun {
-    match catch_unwind(AssertUnwindSafe(|| run_case_inner(case, seed, limits))) {
+    run_case_with(case, seed, limits, WarmStart::Flow)
+}
+
+/// [`run_case`] with the warm start `warm` (ADR 0209 D4): under [`WarmStart::Extended`] the seed is applied by
+/// [`Simulation::seed_state`] and a converged steady run returns its [`Simulation::warm_state`] in `fields.state`.
+pub fn run_case_with(case: &Case, seed: Option<&Fields>, limits: &RunLimits, warm: WarmStart) -> CaseRun {
+    match catch_unwind(AssertUnwindSafe(|| run_case_inner(case, seed, limits, warm))) {
         Ok(r) => r,
         Err(p) => {
             let msg = p
@@ -100,7 +120,7 @@ pub fn run_case(case: &Case, seed: Option<&Fields>, limits: &RunLimits) -> CaseR
     }
 }
 
-fn run_case_inner(case: &Case, seed: Option<&Fields>, limits: &RunLimits) -> CaseRun {
+fn run_case_inner(case: &Case, seed: Option<&Fields>, limits: &RunLimits, mode: WarmStart) -> CaseRun {
     let sem = case.semantic_errors();
     if !sem.is_empty() {
         return CaseRun::failed(
@@ -145,7 +165,19 @@ fn run_case_inner(case: &Case, seed: Option<&Fields>, limits: &RunLimits) -> Cas
     let mut notes = Vec::new();
     let mut warm = false;
     if let Some(f) = seed {
-        match sim.seed_fields(f.u.clone(), f.p.clone()) {
+        let applied = match mode {
+            WarmStart::Flow => sim.seed_fields(f.u.clone(), f.p.clone()),
+            WarmStart::Extended => match &f.state {
+                Some(st) => sim.seed_state(st),
+                None => sim.seed_state(&WarmState {
+                    u: f.u.clone(),
+                    p: f.p.clone(),
+                    t: None,
+                    turbulence: None,
+                }),
+            },
+        };
+        match applied {
             Ok(()) => warm = true,
             Err(e) => notes.push(format!("cold start: {e}")),
         }
@@ -176,6 +208,10 @@ fn run_case_inner(case: &Case, seed: Option<&Fields>, limits: &RunLimits) -> Cas
         Some(Fields {
             u: sim.velocity().values.clone(),
             p: sim.pressure().values.clone(),
+            state: match mode {
+                WarmStart::Flow => None,
+                WarmStart::Extended => sim.warm_state(),
+            },
         })
     } else {
         None
@@ -211,6 +247,8 @@ pub struct CaseEvaluator {
     pub hook: Option<Generator>,
     /// Case runs made so far (a cache hit does not count).
     pub runs: AtomicUsize,
+    /// What a chained condition carries from the one before (ADR 0209 D4; `Flow` from [`CaseEvaluator::new`]).
+    pub warm: WarmStart,
 }
 
 impl CaseEvaluator {
@@ -222,6 +260,7 @@ impl CaseEvaluator {
             chain,
             hook: None,
             runs: AtomicUsize::new(0),
+            warm: WarmStart::Flow,
         }
     }
 
@@ -262,7 +301,7 @@ impl Evaluator for CaseEvaluator {
             };
             self.runs.fetch_add(1, Ordering::SeqCst);
             let seed = if self.chain { prev.as_ref() } else { None };
-            let run = run_case(&case, seed, &self.limits);
+            let run = run_case_with(&case, seed, &self.limits, self.warm);
             let status = run.status();
             let ok = status == PointStatus::Converged && !run.metrics.is_empty();
             out.push(CondResult {
@@ -291,28 +330,55 @@ impl PointEvaluator for CaseMapEvaluator {
     type State = Fields;
 
     fn run(&self, point: &MapPoint, warm: Option<&Fields>) -> PointResult<Fields> {
-        let mut c = self.base.clone();
-        for (path, v) in &point.set {
-            if let Err(e) = crate::study::apply_value(&mut c, path, v) {
-                return PointResult::failed(format!("{path}: {e}"));
-            }
+        map_point(&self.base, &self.limits, point, warm, WarmStart::Flow)
+    }
+}
+
+/// Operating-map point evaluator with the extended warm start (ADR 0209 D4): each point starts from the previous converged
+/// point's velocity, pressure, temperature and k-epsilon / k-omega SST fields where the case allows it.
+pub struct ExtendedMapEvaluator {
+    /// The base case.
+    pub base: Case,
+    /// Run limits.
+    pub limits: RunLimits,
+}
+
+impl PointEvaluator for ExtendedMapEvaluator {
+    type State = Fields;
+
+    fn run(&self, point: &MapPoint, warm: Option<&Fields>) -> PointResult<Fields> {
+        map_point(&self.base, &self.limits, point, warm, WarmStart::Extended)
+    }
+}
+
+fn map_point(
+    base: &Case,
+    limits: &RunLimits,
+    point: &MapPoint,
+    warm: Option<&Fields>,
+    mode: WarmStart,
+) -> PointResult<Fields> {
+    let mut c = base.clone();
+    for (path, v) in &point.set {
+        if let Err(e) = crate::study::apply_value(&mut c, path, v) {
+            return PointResult::failed(format!("{path}: {e}"));
         }
-        let run = run_case(&c, warm, &self.limits);
-        let status = run.status();
-        let usable = status == PointStatus::Converged;
-        PointResult {
-            status,
-            exit_code: run.exit_code,
-            state_name: run.state.clone(),
-            iterations: run.iterations,
-            metrics: if usable {
-                run.metrics.iter().map(|(k, v)| (k.clone(), *v)).collect()
-            } else {
-                Vec::new()
-            },
-            message: run.message.clone(),
-            warm_applied: run.warm,
-            state: if usable { run.fields } else { None },
-        }
+    }
+    let run = run_case_with(&c, warm, limits, mode);
+    let status = run.status();
+    let usable = status == PointStatus::Converged;
+    PointResult {
+        status,
+        exit_code: run.exit_code,
+        state_name: run.state.clone(),
+        iterations: run.iterations,
+        metrics: if usable {
+            run.metrics.iter().map(|(k, v)| (k.clone(), *v)).collect()
+        } else {
+            Vec::new()
+        },
+        message: run.message.clone(),
+        warm_applied: run.warm,
+        state: if usable { run.fields } else { None },
     }
 }
