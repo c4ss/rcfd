@@ -367,3 +367,53 @@ only, as C2).
   the tree path of six-DOF coupling is already checked by T4.
 - **Q3. Status.** If every check is met the acceptance as written is met by library tests. Options: (a) done; (b) partial until a
   tree version exists. Recommendation (a).
+
+## Amendment 1 (2026-11-07): the time step of the falling block, written before the corrected run
+
+**What happened.** The test file was written as registered (S1) and every registered test was run once, in release, on
+7a36513 plus the new file: A0, A4u, B0, B1 (with B2 to B6), B4u and BN1 ran to the end (their numbers go in the addendum; none
+is repeated). The registered A1 run (`dt = tau/10`) did not finish: at step 31 `move_mesh` stopped with "mesh error: cell 0 has
+non-positive volume", so no quantity of A1 to A9 or AN1 was measured. Before that the set-up smoke (two steps, counts only) had
+shown 12 320 cells (grid 56 x 343, block 24 x 287 cells), as estimated in FB.
+
+**Diagnosis** (scratch tests, not committed, release; each printed the fluid force on the block every few steps). From step 10
+on, the force of the coupled run alternates in sign and grows by a factor of about -3.4 per step, its x component as well,
+although the body's x translation is locked, so the growth is in the flow and not in the coupling. Then:
+
+| Variant (everything else as FB) | `dt` | Result |
+| --- | --- | --- |
+| prescribed travel `s(t)` of M3, no body | `tau/10` | grows from step 15, non-finite by step 30 |
+| the same without the Rhie-Chow transient term; IC0-CG pressure; upwind convection | `tau/10` | the same in each |
+| the same with 3 correctors | `tau/10` | grows from step 30, slower |
+| PIMPLE, 5 outer iterations, no relaxation | `tau/10` | grows from step 4 |
+| prescribed travel | `tau/20` | grows from step 30 |
+| prescribed travel | `tau/40` | 400 steps, no growth (x force below 2e-9 throughout) |
+| **fixed mesh**, block at rest, its faces given the velocity `(0, -U(t))`, `step` (not ALE) | `tau/10`, `tau/20` | grows as with the moving mesh |
+| fixed mesh, cells along the block capped at `h` (aspect 16) or `h/2` (aspect 8) | `tau/10` | grows as with `2 h` |
+| fixed mesh, registered mesh | `tau/40` | 400 steps, no growth |
+| a straight 2-D channel (16 x 40 cells of aspect 32, one wall moving with `U(t)`, open ends at `p = 0`) | `D` = 12, 6, 3 | no growth (the parallel flow is exact, nothing seeds a mode) |
+
+On the registered mesh the growing mode sits in the gap cells where the y grading reaches its cap (`y = 0.24` to `0.28` and the
+mirror positions), symmetric about mid-height and between the two gaps. Conclusion: the baseline PISO step of rcfd is unstable on
+this geometry above a time step between `tau/40` and `tau/20`, that is, a cell diffusion number across the gap
+`D = nu dt/dx^2` between 3.0 and 6.0. It is not caused by the moving mesh, the six-DOF coupling, the Rhie-Chow transient term,
+the pressure solver, the convection scheme or the cell aspect ratio. The mechanism (the PISO splitting at large diffusion
+numbers near the gap ends is the likely candidate) is not proven, and nothing in the solver is changed (S1). This is a
+baseline-solver limitation; it joins the list of ADR 0033's addendum (Q4).
+
+**Disclosed.** The `tau/40` prescribed-travel diagnostic moves the block at the closed-form trajectory of M3, so its last force
+is the discrete drag at `U_t`: `0.7518` against `F_net = 0.7560`, so the discrete drag at `U_t` is `0.9944 D_lub`. This
+foreshadows the corrected A1: with a drag linear in `U`, the terminal velocity would be about `1.0056 U_t`. The limits are not
+changed by it.
+
+**Corrected set-up (registered now, before its run).** FB with `dt = tau/40` (400 steps) and `dt = tau/80` (800 steps) to
+`t_end = 10 tau`; everything else as registered. The new test `a1b_falling_block_reaches_the_lubrication_terminal_velocity`
+checks A1 to A3, A4, A5, A7 to A9 and AN1 with their registered limits on these two runs: A1 on `tau/40`, A2 `tau/80` against
+`tau/40`, A3 to A5 on both runs, A7 `abs(U(10 tau) - U(9 tau))/U_t` and A8, A9 on the `tau/40` run. The registered test keeps its
+set-up and becomes the ignored `a1_falling_block_reaches_the_lubrication_terminal_velocity_known_miss` (the record of this
+amendment). A4u keeps its registered `tau/10` replay (a uniform flow has nothing to seed the mode, and it ran once, above).
+Expected Courant number at the gap ends: 0.08 at `tau/40`. The decision rule counts A1 to A9 from the corrected test.
+
+Added to Q (below): **Q4.** The time-step limit of the baseline PISO found here. Options: (a) a new roadmap item to diagnose
+and remove it (a fixed-mesh reproduction exists: the fixed-mesh variant of the table, block at rest, `tau/10`); (b) record it
+only. Recommendation (a): an implicit scheme that needs `D <= 3` across the finest cells limits every narrow-gap case.
