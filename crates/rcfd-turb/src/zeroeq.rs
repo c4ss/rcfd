@@ -202,4 +202,11 @@ impl TurbulenceModel for MixingLengthModel {
     fn initialize_from_nut(&mut self, nut: &[f64]) {
         self.nut = nut.to_vec();
     }
+    /// `periodic_diffusivity` = `owner` | `pair` (F-296, ADR 0212 D5); any other option is refused as by every model.
+    fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
+        if name != "periodic_diffusivity" {
+            return Err(format!("the model '{}' has no option '{name}'", self.key()));
+        }
+        self.wall.seam.set_option(&self.geom, value)
+    }
 }

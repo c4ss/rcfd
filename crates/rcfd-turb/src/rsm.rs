@@ -16,7 +16,7 @@
 //! face coefficient; the cross terms `R_kl`, `k != l`, are not delivered). Walls are not delivered: there is no wall
 //! treatment and no wall reflection.
 
-use crate::eddy::effective_viscosity;
+use crate::eddy::{effective_viscosity, SeamPairs};
 use crate::kepsilon::velocity_gradient;
 use crate::model::{CoefficientInfo, ModelContext, TurbulenceModel};
 use rcfd_core::{Error, Result};
@@ -400,6 +400,8 @@ pub struct ReynoldsStress {
     zeros: Vec<f64>,
     step_dt: Option<f64>,
     old: Vec<Vec<f64>>,
+    /// One diffusivity per periodic seam pair (F-296, ADR 0212 D1): the pairs with `periodic_seam.diffusivity = "pair"`.
+    seam: SeamPairs,
 }
 
 impl ReynoldsStress {
@@ -434,8 +436,22 @@ impl ReynoldsStress {
             zeros: vec![0.0; n],
             step_dt: None,
             old: Vec::new(),
+            seam: SeamPairs::default(),
             geom,
         }
+    }
+
+    /// Diffusivity of the faces of a periodic pair (F-296, ADR 0212 D1): with [`crate::SeamDiffusivity::Pair`] both faces of
+    /// every pair take one value in the momentum face viscosity, the momentum-source viscosity and the stress and epsilon
+    /// diffusivities (the internal-face formulas across the seam, each owner's normal stress on its own face); `Owner` (the
+    /// default) gives each face its own owner's value. An error when the periodic maps are not a pairing (then unchanged).
+    pub fn set_periodic_diffusivity(&mut self, mode: crate::SeamDiffusivity) -> Result<()> {
+        self.seam.set(&self.geom, mode)
+    }
+
+    /// The diffusivity rule of the periodic pairs ([`ReynoldsStress::set_periodic_diffusivity`]).
+    pub fn periodic_diffusivity(&self) -> crate::SeamDiffusivity {
+        self.seam.mode()
     }
 
     /// Stress tensor of a cell.
@@ -520,8 +536,32 @@ impl ReynoldsStress {
             }
             *v = s.max(0.0);
         }
-        let gam_r: Vec<f64> = (0..nf).map(|f| self.nu + cf.c_s * koe_f[f] * rnn[f]).collect();
-        let gam_e: Vec<f64> = (0..nf).map(|f| self.nu + cf.c_eps * koe_f[f] * rnn[f]).collect();
+        let mut gam_r: Vec<f64> = (0..nf).map(|f| self.nu + cf.c_s * koe_f[f] * rnn[f]).collect();
+        let mut gam_e: Vec<f64> = (0..nf).map(|f| self.nu + cf.c_eps * koe_f[f] * rnn[f]).collect();
+        if let Some(pairs) = self.seam.pairs() {
+            // ADR 0212 D1: one value per periodic pair, the internal-face formula across the seam with the normal stress of each
+            // owner on its own face (the frame of that face on a rotational seam)
+            let own = g.mesh.owner();
+            let normal_stress = |c: usize, f: usize| -> f64 {
+                let nrm = g.normal(f);
+                let mut s = 0.0;
+                for (m, &(i, j)) in COMPS.iter().enumerate() {
+                    let fac = if i == j { 1.0 } else { 2.0 };
+                    s += fac * nrm[i] * nrm[j] * rt[m][c];
+                }
+                s
+            };
+            for p in pairs {
+                let (a, b) = (own[p.f], own[p.g]);
+                let koe = p.w * kf_over_eps[a] + (1.0 - p.w) * kf_over_eps[b];
+                let rn = (p.w * normal_stress(a, p.f) + (1.0 - p.w) * normal_stress(b, p.g)).max(0.0);
+                let (vr, ve) = (self.nu + cf.c_s * koe * rn, self.nu + cf.c_eps * koe * rn);
+                gam_r[p.f] = vr;
+                gam_r[p.g] = vr;
+                gam_e[p.f] = ve;
+                gam_e[p.g] = ve;
+            }
+        }
 
         let mut new_vals: Vec<Vec<f64>> = Vec::with_capacity(7);
         for m in 0..7 {
@@ -569,7 +609,9 @@ impl ReynoldsStress {
         let vol = g.mesh.cell_volumes();
         let stresses: Vec<Sym> = (0..n).map(|c| self.stress(c)).collect();
         let div = tensor_divergence(g, &stresses);
-        let gamma = effective_viscosity(g, 0.0, &self.nut, &[]);
+        let mut gamma = effective_viscosity(g, 0.0, &self.nut, &[]);
+        // ADR 0212 D1: the same face values as `nu_face`, so that the implicit part is removed exactly on a periodic pair too
+        self.seam.apply(g, 0.0, &self.nut, &mut gamma);
         let mut out: Vec<[f64; 3]> = div.iter().map(|d| [-d[0], -d[1], -d[2]]).collect();
         for k in 0..3 {
             if !g.active[k] {
@@ -614,7 +656,10 @@ impl TurbulenceModel for ReynoldsStress {
         ReynoldsStress::update(self, u, phi)
     }
     fn nu_face(&self) -> Vec<f64> {
-        effective_viscosity(&self.geom, self.nu, &self.nut, &[])
+        let mut v = effective_viscosity(&self.geom, self.nu, &self.nut, &[]);
+        // ADR 0212 D1: one value per periodic pair when it is set
+        self.seam.apply(&self.geom, self.nu, &self.nut, &mut v);
+        v
     }
     fn nut(&self) -> &[f64] {
         &self.nut
@@ -684,6 +729,8 @@ impl TurbulenceModel for ReynoldsStress {
     }
     fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
         match (name, value) {
+            // F-296 (ADR 0212 D5): one diffusivity per periodic seam pair
+            ("periodic_diffusivity", v) => return self.seam.set_option(&self.geom, v),
             ("pressure_strain", "ssg") => self.ps = PressureStrain::Ssg,
             ("pressure_strain", "lrr_ip") => self.ps = PressureStrain::LrrIp,
             ("pressure_strain", v) => {

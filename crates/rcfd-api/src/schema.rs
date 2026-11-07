@@ -1516,11 +1516,11 @@ pub fn case_schema() -> Schema {
     // ADR 0205 D3: an optional object, so the data, written text and hashes of every case without it stay as they are
     let periodic_seam = Schema::object()
         .optional()
-        .doc("Periodic seams of the turbulence model (F-295, ADR 0205). Absent = owner")
+        .doc("Periodic seams of the turbulence model or of the viscosity law (F-295, ADR 0205; F-296, ADR 0212). Absent = owner")
         .field(
             "diffusivity",
             Schema::enumeration("owner", &["owner", "pair"])
-                .doc("Diffusivity of the two faces of a periodic (cyclic) pair, translational or rotational: owner (default, every earlier result) gives each face the value of its own owner cell, so where the eddy viscosity differs across the seam the two diffusive fluxes of the pair do not cancel; pair gives both faces nu + w a_P + (1 - w) a_Q, the linear interpolation between the two owner cells with w = dn_g / (dn_f + dn_g), in the momentum face viscosity and in the k and omega diffusivities (steady and pimple), and a pair that touches a laminar region takes the molecular viscosity on both faces. The scalars with a Schmidt number follow the momentum face viscosity. turbulence.model = k_omega_sst only (pair with any other model is a located error); no effect on a mesh without periodic patches")
+                .doc("Diffusivity of the two faces of a periodic (cyclic) pair, translational or rotational: owner (default, every earlier result) gives each face the value of its own owner cell, so where the eddy viscosity differs across the seam the two diffusive fluxes of the pair do not cancel; pair gives both faces one value, the formula of the model's internal faces across the seam (nu + w a_P + (1 - w) a_Q with w = dn_g / (dn_f + dn_g) for a cell value a), in the momentum face viscosity and in the diffusivities of the transported quantities (k_omega_sst: k and omega, steady and pimple, ADR 0205; k_epsilon: k and epsilon; spalart_allmaras: nuTilda; rsm: the stresses, epsilon and its momentum-source viscosity; smagorinsky, wale, mixing_length: the momentum face viscosity; a laminar run with a rheology law: the law's face viscosity, ADR 0212), and a pair that touches a laminar region takes the molecular viscosity on both faces. The scalars with a Schmidt number follow the momentum face viscosity. pair with a laminar run without a viscosity law or with a plugin model is a located error; no effect on a mesh without periodic patches")
                 .hash_omit_default(),
         )
         .hash_omit_default();

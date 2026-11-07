@@ -238,6 +238,14 @@ impl TurbulenceModel for KEpsilonModel {
         apply_kepsilon(o, &mut self.m);
         Ok(())
     }
+    /// `periodic_diffusivity` = `owner` | `pair` (F-296, ADR 0212 D5); any other option is refused as by every model.
+    fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
+        if name != "periodic_diffusivity" {
+            return Err(format!("the model '{}' has no option '{name}'", self.key()));
+        }
+        let mode = crate::eddy::seam_mode(value)?;
+        self.m.set_periodic_diffusivity(mode).map_err(|e| e.to_string())
+    }
     fn key(&self) -> &str {
         "k_epsilon"
     }
@@ -686,6 +694,11 @@ impl TurbulenceModel for SpalartAllmaras {
         SpalartAllmaras::begin_step(self, dt)
     }
     fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
+        if name == "periodic_diffusivity" {
+            // F-296 (ADR 0212 D5): one diffusivity per periodic seam pair
+            let mode = crate::eddy::seam_mode(value)?;
+            return self.set_periodic_diffusivity(mode).map_err(|e| e.to_string());
+        }
         match (name, value) {
             ("des", "off") => self.des = DesMode::Off,
             ("des", "des") => self.des = DesMode::Des,
