@@ -207,7 +207,7 @@ pub fn joule_heat_opt(
     non_orthogonal: bool,
     opts: Option<GradientOptions>,
 ) -> Vec<f64> {
-    if opts.is_none_or(|o| o == GradientOptions::default()) {
+    if opts.unwrap_or_default() == GradientOptions::default() {
         return joule_heat(geom, phi, sigma_face, non_orthogonal);
     }
     let own = geom.mesh.owner();
@@ -244,7 +244,7 @@ pub fn boundary_power_opt(
     non_orthogonal: bool,
     opts: Option<GradientOptions>,
 ) -> f64 {
-    if opts.is_none_or(|o| o == GradientOptions::default()) {
+    if opts.unwrap_or_default() == GradientOptions::default() {
         return boundary_power(geom, phi, sigma_face, non_orthogonal);
     }
     let flows = face_currents_opt(geom, phi, sigma_face, non_orthogonal, opts);
