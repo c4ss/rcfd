@@ -443,3 +443,27 @@ finite hold of a zero eddy (Q6); a comparison with measured dispersion data.
   Options: (a) a new parcel state for a vanished parcel; (b) keep `f_r < 1`. Recommendation: (a) with Q8.
 - **Q10. Molar masses.** Inputs of the caller, refused unless they balance to 1e-12. Options: (a) keep; (b) element
   compositions and a table of atomic weights (needs a source). Recommendation: (a) in the library; (b) with Q8.
+
+## Amendment 1 (2026-11-07, written after the first run of RX2 and RX3 and before any corrected run)
+
+The library checks of A, B and D ran once on the code before its commit (`cargo test --release -p rcfd-particles --test
+dispersion_f255 --test reaction_f255`). RX2 and RX3 are one test (`rx2_rx3_species_conservation`). RX2 met its limits at
+every one of the 300 steps (worst 1.0e-14), and RX3 met every condition but the last: of the 220 parcels, 160 burnt out and
+60 partly reacted, every reacting mass was `>= 0` and every diameter in range, 60 escaped, but **none was deposited** (9
+active, 151 stuck). The parcels of injector `a`, shrunk to the inert diameter, fall at about 0.1 m/s and are carried by the
+flow onto the reflecting wall `xmax`, where the tracker stops them after 1000 reflections in one step (ADR 0028 A2), before
+any reaches the sticking floor `zmin`. The condition "one deposited" was there to make the scenario cover the stick action
+in the ledger; the scenario does not, so the set-up is defective for that condition. Nothing in the reaction or its ledger
+is in question (the stuck parcels are in RX2's ledger).
+
+Correction, before any further run of D:
+
+- The test as run stays, unchanged but for its name and an `#[ignore]` with this reason, as the record
+  `rx2_rx3_species_conservation_setup_defect`.
+- New test `rx2b_rx3b_species_conservation_with_deposition`: the scenario of RX2 with a third injector `c`, point
+  `(0.6, 0.5, 0.05)` (half a cell above the floor), 200 parcels/s from 0 to 0.4 s, released at rest
+  (`VelMode::Given([0, 0, 0])`), `d = 1e-4`, density 1300, `parcel_count = 10`, seed 13. RX2b: the checks and limits of RX2
+  at the end of every step (1e-10 relative each, `d0` by density: 1500 and 1300 give 1e-4, 1400 gives 6e-5). RX3b: the
+  conditions of RX3 (every reacting mass `>= 0`; every `d` in `[d_i (1 - 1e-14), d0]`; at least 10 percent burnt out and
+  10 percent partly reacted; at least one escaped and one deposited) at the end.
+- Prediction: the parcels of `c` reach the floor within about 0.15 s, partly reacted, so RX3b holds; RX2b as RX2.
