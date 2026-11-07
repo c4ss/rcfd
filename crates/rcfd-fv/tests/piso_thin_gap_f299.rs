@@ -400,6 +400,12 @@ struct Tw {
 
 /// Twin-run power iteration of the step map of FX at `dt = tau/spt` with `settings` (ADR 0214 TW).
 fn twin(fx: &Fx, settings: PimpleSettings, spt: usize) -> Tw {
+    twin_with(fx, settings, spt, None)
+}
+
+/// [`twin`] whose iterations (and the base step from `S`) use `tw_correctors` correctors when given, the base run the
+/// correctors of `settings` (ADR 0214 amendment 1, D6b and DN1b).
+fn twin_with(fx: &Fx, settings: PimpleSettings, spt: usize, tw_correctors: Option<usize>) -> Tw {
     const K: usize = 60;
     let dt = fx.forms.tau / spt as f64;
     let nb = (spt / 2).max(1);
@@ -409,6 +415,9 @@ fn twin(fx: &Fx, settings: PimpleSettings, spt: usize) -> Tw {
         assert!(ok, "TW base run not bounded at step {n}");
     }
     let s: PimpleState = flow.snapshot();
+    if let Some(nc) = tw_correctors {
+        flow.settings.n_correctors = nc;
+    }
     fx.set_block(&mut flow, (nb + 1) as f64 * dt);
     flow.step(dt);
     assert!(flow.diverged.is_none(), "TW base step");
@@ -656,15 +665,29 @@ fn d5_twin_run_at_tau_40() {
     assert!(tw.rho < 1.0, "D5 {}", tw.rho);
 }
 
-/// ADR 0214 D6 and DN1: TW at `tau/40` with one corrector (R5's one-corrector instability).
+/// ADR 0214 D6 and DN1 as registered: TW at `tau/40` with one corrector (R5's one-corrector instability). Defective set-up
+/// (ADR 0214 amendment 1): the one-corrector base run is not bounded at step 4, so the base state does not exist. Kept as the
+/// record; corrected by `d6b_dn1b_one_corrector_from_the_d5_base_state`.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn d6_dn1_twin_run_with_one_corrector_at_tau_40() {
+#[ignore = "defective set-up: the one-corrector base run is not bounded at step 4 (ADR 0214 amendment 1)"]
+fn d6_dn1_twin_run_with_one_corrector_at_tau_40_defective_setup() {
     let fx = Fx::new();
     let tw = twin(&fx, with_correctors(1), 40);
     report(&fx, "D6", &tw, Some(7.315));
     assert!(tw.rho >= 1.0 && tw.sign <= -0.5, "DN1 {} {}", tw.rho, tw.sign);
     assert!(within(tw.rho, 7.315), "D6 {}", tw.rho);
+}
+
+/// ADR 0214 amendment 1, D6b and DN1b: the base state of D5 (two correctors, `tau/40`), then the TW iterations with one
+/// corrector.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn d6b_dn1b_one_corrector_from_the_d5_base_state() {
+    let fx = Fx::new();
+    let tw = twin_with(&fx, fb_settings(), 40, Some(1));
+    report(&fx, "D6b", &tw, Some(7.315));
+    assert!(tw.rho >= 1.0 && tw.sign <= -0.5, "DN1b {} {}", tw.rho, tw.sign);
+    assert!(within(tw.rho, 7.315), "D6b {}", tw.rho);
 }
 
 /// ADR 0214 (printed, no limit): TW at `tau/10` without the transient Rhie-Chow term.

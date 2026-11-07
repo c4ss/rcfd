@@ -325,3 +325,19 @@ BDF2 with the option on a moving mesh (the ALE step is implicit Euler only).
 - **Q7. The LagCheck text.** Its documentation and its Raise message say that a second corrector removes the lag; M2 shows that
   this does not hold for short waves on thin cells. Changing the message changes a user-visible string. Recommendation: correct
   the text in the follow-up of Q4.
+
+## Amendment 1 (2026-11-07): the base state of D6 and DN1, written before the corrected run
+
+**What happened.** The D and L tests were run once, in release, on the diagnosis commit 4ae3ec7 (the library of c4b2cae, test
+code only; the test binary was linked at 11:58:36 UTC from the library built at 11:57:44, before any library edit). Every test
+ran to its end except `d6_dn1_twin_run_with_one_corrector_at_tau_40`: TW's base run with one corrector at `tau/40` was not
+bounded at step 4 (of the `n_b = 20` base steps), so the base state `S` of D6 and DN1 does not exist and neither was measured.
+The one-corrector step is unstable from the start-up (R5: about `-7` per step on the start-up error), which the registered rule
+`n_b = max(1, spt/2)` did not allow for. The numbers of the other D and L tests go in the addendum; none is repeated.
+
+**Corrected set-up (registered now, before its run).** D6b and DN1b: the base state is that of D5 (FX at `tau/40` with the
+registered two correctors, `n_b = 20` steps, bounded in D5's run); then `n_correctors = 1` is set on the solver and the 60 TW
+iterations are made with one corrector (the base step from `S` too). Limits unchanged: D6b within 10 % of 7.315; DN1b
+`|rho| >= 1` and alternating. The registered test stays as the ignored record
+`d6_dn1_twin_run_with_one_corrector_at_tau_40_defective_setup`; the new test is `d6b_dn1b_one_corrector_from_the_d5_base_state`.
+It runs on the same diagnosis tree (library of c4b2cae).
