@@ -532,3 +532,164 @@ SF6, TC6, RR6 and DM6 are SF, TC, RR and DM with `non_orth_correctors = 6` in ev
 too), the count at which diagnostic (b) gave a continuity of `3e-13`; nothing else changes. R1b is not re-checked on RR6
 (its cause, (d), does not depend on the correctors). The decision rule is unchanged: A1 is met if S1 holds on SF6, and the
 roadmap status stays partial (Q6).
+
+## Addendum 1: what was built and the results (2026-11-07)
+
+Measured against the limits registered above and in amendments 1 and 2; no limit was changed. Release builds on Windows.
+The registration is 2bbdd80 (with the records R1 to R3); the code and the tests of the registered runs, with amendments 1
+and 2, are 3277c1a; the known-miss tests and the corrected checks of amendment 2 are 2c56c21. Each registered check ran
+once on the code it is committed with (the runs are deterministic; none was repeated to change a result). The K checks
+ran before the flow checks, and amendment 1 was written between them; amendment 2 was written after the flow checks and
+before the corrected runs.
+
+**Built as registered.** S1 to S4 as written.
+
+- `crates/rcfd-mesh/src/sliding.rs` (new): `SlidingInterface` (`cylindrical`, `n_rotor_cells`, `rotor`, `stator`,
+  `origin`, `axis`, `mesh_at`) and `SlidingMesh` (`mesh`, `report`, `angle`, `is_interface`, `is_rotor_face`,
+  `face_map_from`, `rotor_swept_volumes`), with the unit tests K1, K2 (with K2c and the K2 (i) known miss), K3, K4.
+  `non_conformal.rs` and `motion.rs` are not edited.
+- `crates/rcfd-fv/src/sliding.rs` (new): `interface_balance` (conjugate gradients on the weighted graph Laplacian with
+  mean removal per connected part and up to three passes of refinement on the true residual), `SlidingStep`,
+  `sliding_step`, `rotating_wall_conditions`.
+- `crates/rcfd-fv/src/pimple/moving.rs`: `PimpleSolver::step_sliding` (S3), added; `step`, `step_ale*` and `replace_mesh`
+  not edited.
+- Tests: `crates/rcfd-fv/tests/sliding_interface_f250.rs` (18 tests: 13 run, 5 ignored known misses) and the records file
+  of the registration (3). No existing test was edited.
+- Documents: this ADR, `docs/dynamic-mesh.md`, `docs/fan-project-breakdown.md` and the README's gap list (prose only),
+  and the F-250 entries of `docs/ROADMAP.md` and `docs/roadmap.json` (partial, by the decision rule).
+- Not changed: `rcfd-api`, `rcfd-cli`, the Studio, the case schema; `baseline_hashes.rs`, `case_hashes_w48u.rs` and the
+  goldens.
+
+### Results
+
+The flow tests take 75 s (registered run, ten tests) and 81 s (the five tests of the corrected run) on one thread; the
+unit tests 0.3 s. "2" and "6" are the non-orthogonal corrector counts of PS and of amendment 2.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| K1 face map, four steps | exact | exact (240 then 264 interface faces) | met |
+| K2 (i) rotor cell `abs(sum W) / V_c` | `<= 1e-14` | `1.07e-14` | **missed** (amendment 1) |
+| K2 (ii) radial faces against the straight-path sector | `<= 1e-12` | `2.53e-14` (1008 faces) | met |
+| K2 (iii) stator and interface faces | exact zero | none non-zero | met |
+| K2c (amendment 1) against `V1 - V_back` | `<= 1e-14` | `4.76e-16`; printed `abs(V1 - V_back) / V_c` `1.08e-14` | met |
+| K3 total volume, five angles | `<= 1e-12` | `5.19e-15` at worst | met |
+| K4 refusals | located | `nope`, `nada`, `axis`, `cylinder`, `angle` | met |
+| F1 interface solve | `<= 1e-12` | `1.14e-15` (264 cells, 264 faces, 411 iterations) | met |
+| F1n (negative control) without the mean | `>= 1e-3` | `3.59e-2` | held |
+| S1 (acceptance A1) `abs(Q_I - Q_in) / Q_in`, 2 | `<= 1e-10` | `1.51e-10` | **missed** |
+| S1, SF6 (amendment 2) | `<= 1e-10` | `3.00e-15` | met |
+| S2 `abs(Q_out - Q_in) / Q_in`, 2; 6 | `<= 1e-10` | `3.18e-15`; `2.83e-15` | met |
+| S3 continuity, 2 | `<= 1e-9` | `1.78e-9` | **missed** |
+| S3, SF6 | `<= 1e-9` | `3.99e-14` | met |
+| S4 GCL, 2; 6 | `<= 1e-12` | `1.16e-14`; `1.16e-14` | met |
+| S5 remapped old flux, every step | `<= 1e-9` | `7.77e-3` (the start flux, step 1) | **missed** (defective set-up, amendment 2 (a)) |
+| S5c (amendment 2) from the second step, 2; 6 | `<= 1e-9` | `2.49e-12`; `7.46e-16` | met |
+| S6 (set-up) pairs change in every step | every step | 58 of 100 | **defective** (amendment 2 (c)) |
+| S6c (set-up, amendment 2), 2; 6 | 58 | 58; 58 | held |
+| N3 (negative control) interpolated interface flux, 2; 6 | `>= 1e-6` | `9.96e-5`; `9.96e-5` | held |
+| U1 uniform flow, 2-D: velocity, pressure | `<= 1e-10` each | `9.09e-15`, `5.15e-14` | met |
+| U2 GCL, 2-D | `<= 1e-12` | `1.16e-14` | met |
+| U3 uniform flow, 3-D | `<= 1e-10` each | `4.43e-15`, `2.25e-14` | met |
+| U4 GCL, 3-D | `<= 1e-12` | `5.77e-15` | met |
+| N1 (negative control) interface mesh flux zero | `>= 1e-6` | `1.04e-3` | held |
+| N2 (negative control) old interface flux not projected | `>= 1e-6` | `5.10e-3` | held |
+| R1 (acceptance A2, reading A), 2; 6 | `<= 1.5 x 5.935e-4 = 8.902e-4` | `5.939e-4`; `5.939e-4` | met |
+| R1b against the rotating controls, 2 | `<= 1.5 x 1.435e-5 = 2.153e-5` | `5.939e-4` | **missed** (amendment 2 (d)) |
+| R2 (acceptance A2, reading B) | `<= 1.5 x 5.750e-4 = 8.625e-4` | `2.361e-4` | met |
+| R0 (set-up) conforming at the end | 144 faces | 144 | held |
+| R3 of RR, 2: net, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `6.20e-11`, `1.38e-14`, **`1.42e-8`** | **missed** (continuity) |
+| R3 of RR6 | as above | `7.32e-16`, `1.38e-14`, `7.99e-12` | met |
+| R3 of RR= | as above | `2.33e-16`, `1.30e-14`, `5.43e-12` | met |
+| T1 (acceptance A3) rotor wall torque, 2; 6 | `<= 2e-2` | `+1.410e-2`; `+1.410e-2` | met |
+| T2 (acceptance A3) stator wall torque, 2; 6 | `<= 2e-2` | `-1.344e-2`; `-1.344e-2` | met |
+| T3 (acceptance A3) torque through the interface, 2; 6 | `<= 2e-2` | `-1.033e-3`; `-1.033e-3` | met |
+| T4 (set-up) steady, 2; 6 | `<= 1e-4` | `8.07e-6`; `8.07e-6` | held |
+| T5, 2: net, GCL, continuity | `1e-10`, `1e-12`, `1e-9` | `8.58e-11`, `1.20e-14`, **`4.21e-9`** | **missed** (continuity) |
+| T5, TC6 | as above | `1.89e-15`, `1.20e-14`, `3.30e-13` | met |
+| B0 (set-up) Wronskian | `<= 1e-11` | `2.53e-14` | held |
+| D1 (closed form) decay rate, 2; 6 | `<= 2e-2` | `-4.065e-3`; `-4.065e-3` (rate `1.017657927` against `nu k^2 = 1.021811334`, `k = 3.196578380811`) | met |
+| D2 against the static controls, 2; 6 | `<= 1.5 x 5.548e-3 lambda = 8.503e-3` | `4.153e-3`; `4.153e-3` | met |
+| D3, 2: GCL, continuity | `1e-12`, `1e-9` | `1.20e-14`, **`1.67e-8`** | **missed** (continuity) |
+| D3, DM6 | as above | `1.20e-14`, `3.92e-13` | met |
+| E1 refusals of `step_sliding` | `Err`, unchanged | BDF2, another pair, `nu_face`: `Err` each, state unchanged | met |
+| E2 refusals of `sliding_step` | `Err` | flux one short, mesh of another pair: `Err` each | met |
+| X0 (set-up) every flow run | `<= 70 deg`; one pitch | `49.2 deg` (P), `46.0 deg` (P=), `62.8 deg` (P3); every run turned at least one stator pitch (0.0873 to 1.2 rad) | held |
+
+Printed, no limit:
+
+- SF: `max abs(u - U_in r_i / r)` `6.19e-3 U_in` (2 and 6).
+- TC: velocity error `1.865e-3 V_i`; ADR 0016's first-order wall torques `-3.135e-2` (rotor wall) and `+1.451e-2`
+  (stator wall); the static controls C144 and C120: rotor wall `+1.373e-2` and `+1.359e-2`, stator wall `-1.332e-2` and
+  `-1.346e-2`, velocity errors `1.893e-3` and `2.164e-3 V_i`.
+- DM: the static controls' rates `-5.548e-3` (C144) and `-5.343e-3` (C120) relative to `nu k^2`.
+- RR: rotating controls `1.435e-5 Omega r_o` (C144 and C120).
+
+**Reading.**
+
+- A1 (S1) missed as registered: `1.51e-10` against `1e-10` with two non-orthogonal correctors. The interface faces are
+  shared by the two zones, so the miss is not a loss of flux at the interface. It is the sum over the rotor cells of
+  their continuity error, the divergence of the lagged explicit non-orthogonal flux (amendment 2 (b)). With six correctors
+  (SF6) the interface carries the inflow to `3.0e-15`.
+- The uniform state is held to `1e-14` in 2-D and 3-D while the interface topology changes in 58 of 100 steps. Both parts
+  of the construction are needed: without the GCL closure (N1) or without the old-flux projection (N2) the state leaves
+  uniformity by `1e-3` and `5e-3`.
+- A2 is met in both readings against the static conforming meshes. The sliding error equals the static controls' error
+  (`5.94e-4`), and its largest value is in the outermost stator cell next to the static stator wall (amendment 2 (d)). A
+  mesh that rotates as a whole has no static wall and is 40 times more accurate (R1b's miss), so the error comes from the
+  static wall's zero-normal-gradient pressure condition, not from the interface.
+- A3 is met: the torque through the interface is within `0.10 %` of the closed form, and the wall torques within `1.41 %`.
+  The static conforming controls give the same wall-torque errors to within `5.1e-4`, so the wall-torque error is the
+  near-wall discretisation of the solver and not the interface.
+- The decaying mode (the closed-form transient check) decays at `-0.41 %` of `nu k^2`, closer than both static controls
+  (`-0.55 %` and `-0.53 %`; the registered estimate was `-0.26 %` from the time scheme and `-0.3 %` from the radial
+  spacing).
+- The continuity misses (S3, T5, R3 of RR, D3) have one cause, the explicit non-orthogonal flux of the last corrector
+  (amendment 2 (b)). Six correctors bring every one of them below `1e-11`. None of the accuracy results changed with the
+  corrector count, to the printed digits.
+
+### Mutations
+
+Each was applied alone to the code of 2c56c21 by an exact text replacement (a script in a scratch folder that checks
+that the replaced text occurs once). The named tests were run once in the working target dir, and the file was restored
+and compared byte for byte with the kept copy (equal in all five).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 interface mesh flux left at zero | U1, S4 | failed: U1 velocity `1.04e-3`, pressure `4.07e-3`; S4 (and U2) GCL `1.06e-3 mean(V)` |
+| MU2 interface old flux not projected | U1, S5 | failed: U1 velocity `5.10e-3`; S5c `7.04e-5` (S5 as registered fails without the mutation, amendment 2 (a)) |
+| MU3 boundary faces mapped to the same index | K1 | failed: `face_map_from` refused the pair (the boundary owners differ) |
+| MU4 rotor swept volumes zero | K2, R1b | failed: K2 (ii) relative error 1. R1b failed, but it fails without the mutation too, and R1 did not move (`5.940e-4`) |
+| MU5 new volumes used as the old ones | U1 | failed: U1 velocity `1.04e-3` |
+
+MU4 is caught by the unit check K2 only. A diagnostic run after the mutation table (disclosed; MU4 applied, the TC, DM and
+SF tests with two correctors, once) showed that no registered flow limit sees a zero rotor mesh flux: no verdict changed (T1 to T3
+moved by at most `2e-5` of `T_ex`, D1 by `4e-4`). Only SF's printed velocity error moved, from `6.19e-3` to
+`2.19e-1 U_in`. The flows of the T, D and R checks are axisymmetric, and a uniform flow does not depend on a mesh flux
+that closes the GCL. A rotor mesh flux error is then either a rotation of each cell velocity, which the pressure projection
+removes as a divergent radial field, or an azimuthal transport of an axisymmetric field, which changes nothing.
+
+`scripts/limit_audit.py` reports two hits in the new test file, both class (iii) (a test name with "control" and no
+assertion that the scanner sees expecting a failure). Both were read. `n1_n2_uniform_flow_negative_controls` asserts its
+`>= 1e-6` expectations through `check` and `require`, so it is a false positive. `r1_known_miss_rotating_controls_and_continuity`
+is a known-miss record whose name contains "controls", not a negative control. It does not scan unit tests in `src`.
+
+Disclosures:
+
+- Before the registered runs the new code and tests were compiled without running, laid out by rustfmt, and `cargo
+  clippy -p rcfd-mesh -p rcfd-fv --all-targets -- -D warnings` was run (clean). rustfmt also re-laid the records file of
+  the registration (line breaks only; its hashes are unchanged).
+- The records R1 to R3 (D-R) were run once after the code, before every other check: equal.
+- Amendment 1's K2c and amendment 2's corrected checks ran once each, after their amendment was written. The diagnostics
+  (a) to (d) of amendment 2 and the MU4 diagnostic above ran from scratch tests, which are not committed (kept in
+  `E:/projects/cfd/w49i-work/f250-scratch`).
+- The 2-corrector tests that the gate runs (`s_radial_source_flow_through_the_sliding_interface`, `r1_*`, `t_*`, `d_*`)
+  repeat the set-ups of the registered run and assert only the checks that run met, plus S5c and S6c. The missed checks
+  are in the ignored `*_known_miss` tests with their limits.
+
+### A further open question
+
+- **Q7. A flow check that sees the rotor mesh flux.** Every registered flow check either holds for any mesh flux that
+  closes the GCL (uniform flow) or uses an axisymmetric flow, so a wrong rotor mesh flux is caught only by the unit check
+  K2 (MU4). Options: (a) in the wiring follow-up (Q1), register a limit on a non-axisymmetric flow through the turning
+  rotor, for example SF's velocity error against the potential flow `U_in r_i / r` (`6.19e-3 U_in` here, `2.19e-1` with
+  MU4) or a uniform cross-flow past a rotating wall; (b) keep K2 as the only check. Recommendation (a).

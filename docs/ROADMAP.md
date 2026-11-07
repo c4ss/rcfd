@@ -4849,13 +4849,27 @@ Added after the static feature-gap review; wording is product-independent. Phase
     scheduled. Size L.
     - USER DECISION 2026-10-22: split: CMA-ES and the real-fan study are F-260 (blocked on FAN-01 convergence). This
       item keeps the analytic clauses.
-- [ ] **F-250** Sliding interface (AMI): arbitrary mesh interface between non-conforming moving or rotating zones
+- [~] **F-250** Sliding interface (AMI): arbitrary mesh interface between non-conforming moving or rotating zones
   - depends on: F-063, F-114
   - acceptance: A rotor-stator case with a sliding interface, the mesh sliding by at least one full cell pitch, conserves mass across the interface to 1e-10 relative per step summed over all interface faces; rigid rotation of a fluid across the interface differs from the same case on a conforming mesh by no more than 1.5 times the conforming-mesh velocity error; a Taylor-Couette torque across the interface is within 2 percent of the closed form; a case without the interface is bit-identical (baseline hashes unchanged)
   - note: Split from F-063 on 2026-10-21 (user decision after the F-063 audit). Acceptance text proposed by the lead;
     refine when scheduled. F-114 handles planar interfaces only; F-126 covers frozen-rotor and mixing-plane. Size L.
     - USER DECISION 2026-10-22: acceptance tightened with numeric limits (the 1.5x ratio and 2 percent are fixed here;
       refine only with the user).
+    - ADR 0216 (registration of F-250, 2026-11-07, branch `f250-sliding-interface`, not merged): PARTIAL, library only.
+      - Built: a rotor block turns against a stator block across a cylinder and the interface is rebuilt every step
+        (`rcfd_mesh::sliding`, `rcfd_fv::sliding`, `PimpleSolver::step_sliding`); the mesh flux of the interface faces
+        closes the GCL of the interface slivers, and the old flux is projected onto the new faces.
+      - Met: rigid rotation (A2) 5.94e-4 against 1.5 x the static conforming controls (8.90e-4), and the equal-count cell
+        difference 2.36e-4 against 8.63e-4; Taylor-Couette torque (A3) on the rotor wall +1.41 %, on the stator wall
+        -1.34 %, through the interface -0.10 % (limit 2 %); uniform flow held to 9e-15 (2-D) and 4e-15 (3-D); the decaying
+        azimuthal mode at -0.41 % of nu k^2 (closed form); a case without the interface unchanged (no tree change).
+      - A1 missed as registered (two non-orthogonal correctors): interface mass 1.51e-10 against 1e-10, the lagged
+        non-orthogonal flux; met with six correctors (amendment 2): 3.0e-15. Other known misses: continuity 1.8e-9 to
+        1.7e-8 with two correctors (limit 1e-9), and R1b against rotating conforming controls (the static stator wall's
+        pressure condition).
+      - Not delivered: the case-tree, CLI and Studio wiring (ADR 0216 Q1); planar and sector sliding (Q3); a flow check
+        that sees the rotor mesh flux (Q7).
 
 ## Revision additions (F-251 to F-260)
 
