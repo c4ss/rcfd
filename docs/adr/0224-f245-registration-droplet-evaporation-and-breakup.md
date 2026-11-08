@@ -5,6 +5,14 @@ maintainer. Before this text no rcfd code or test was run for F-245. Three texts
 model of my own (scratch, not committed, `w49i-work/f245-scratch/predict.py`) evaluated the closed forms of this text to make
 the predictions; it does not contain or run rcfd code. Results go in the addendum at the end.
 
+Summary of the results (addendum 1): in the library (`rcfd-particles`, no case key), a droplet at its wet bulb in still 800 K gas
+follows the d-squared law with the derived evaporation constant `K = 3.4196739796e-7` m^2/s to 1.1e-15 (limit 2 percent), one
+injected at 300 K to 7.1e-12 after its heat-up, and the vapour booked equals the liquid lost to 2.9e-16 (3.0e-12 in a spray with
+breakup; limit 1e-10). The TAB breakup time and product radius of a drop at rest in a step relative velocity match their closed
+forms to 1.5e-14 at Weber numbers 6.1 to 1000 and with viscosity (limit 2 percent), the source's limits within 0.82 percent, and
+`n d^3` through breakup to 3.9e-16. Five negative controls held, eleven mutations failed their checks, no amendment. By the rule
+F-245 is done, the acceptance still the maintainer's (Q1); case-tree wiring is Q2.
+
 Parents: [ADR 0028](0028-wave18c-particles.md) (F-056, the tracker), [ADR 0057](0057-wave29c-lagrangian-extensions.md) (F-128:
 the heat transfer of the parcels, the exchange record, the random walk), [ADR 0192](0192-f253-registration-particle-wall-film.md)
 and [ADR 0194](0194-f254-registration-particle-wall-interaction.md) (the house rules of the particle items),
