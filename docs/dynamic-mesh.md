@@ -35,9 +35,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   about that number, and on the collocated mesh the second corrector does not remove what is left for a pressure wave of four
   cells along the gap (the Rhie-Chow term the cell-gradient velocity update leaves); the mode alternates in sign every step.
   More correctors only raise the onset (three: unstable at `tau/10` with `-1.66` per step). Keep `nu dt/dx^2` near 3 or below
-  in narrow gaps, or use the library opt-in `PimpleSettings::consistent_correctors` (SIMPLEC-type correctors, ADR 0214; no case
-  key yet), which removes the instability: F-244's registered `tau/10` falling block passes with it. On a fixed mesh the
-  ADR 0073 lag check in Raise mode refuses the default at step 1 (3.30 per step); on a moving mesh there is no such check.
+  in narrow gaps, or use the consistent correctors (SIMPLEC-type correctors, ADR 0214; the case key
+  `[solver.consistent_correctors] enabled = true` since F-301, ADR 0223), which remove the instability: F-244's registered `tau/10`
+  falling block passes with them. On a fixed mesh the ADR 0073 lag check in Raise mode refuses the default at step 1 (3.30 per
+  step). On a moving mesh the library makes the same estimate on the moving step's own matrices with the opt-in
+  `PimpleSettings::moving_mesh_lag` (ADR 0223 E0: the check, the adaptive corrector count and `lag_preflight_moving`, the pre-run
+  estimate of the next moving step); the case path does not use it yet (the adaptive count and SV301 still exclude dynamic meshes,
+  ADR 0223 Q2).
 * The streamwise velocity in the cell next to an accelerating piston lags by about 3e-4 of the piston speed (registered limit
   1e-6 missed, cause not proven).
 * The cyclic-face lag of PISO that earlier needed 10 outer iterations no longer reproduces (test `g4b`, moving-vs-fixed mesh

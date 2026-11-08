@@ -570,8 +570,15 @@ fn dc5_no_new_order_miss() {
         .filter(|r| r.in_band(&r.d) && !r.in_band(&r.c))
         .map(|r| {
             format!(
-                "{} {:?}/{:?} dt={}: D {:.3} C {:.3}",
-                r.id, r.cfg.prob, r.cfg.path, r.dt, r.d.order, r.c.order
+                "{} {:?}/{:?}/{:?} dt={}{}: D {:.3} C {:.3}",
+                r.id,
+                r.cfg.prob,
+                r.cfg.path,
+                r.cfg.scheme,
+                r.dt,
+                if r.variable { " variable" } else { "" },
+                r.d.order,
+                r.c.order
             )
         })
         .collect();
@@ -866,7 +873,7 @@ fn bsc_bsd_the_stability_set_ran_and_the_default_reproduces_adr_0069() {
     let expected = |r: &&BsRun| r.2 == Alg::Pimple2 && r.1 == 100.0 && r.4 == 4.0;
     let bsd = required_d.len() == 88
         && required_d.iter().filter(|r| !r.7.stable).all(|r| expected(r))
-        && required_d.iter().filter(expected).all(|r| !r.7.stable);
+        && required_d.iter().filter(|r| expected(r)).all(|r| !r.7.stable);
     println!(
         "BSc: {} runs, refused {refused:?}; BSd: D required set {} runs, unstable {unstable_d:?} (ADR 0069: exactly the four PIMPLE-2 \
          Co_t 4 Re 100 runs) -> {bsd}",
