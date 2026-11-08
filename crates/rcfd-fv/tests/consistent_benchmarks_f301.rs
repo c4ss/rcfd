@@ -537,9 +537,11 @@ fn boc_every_run_of_the_option_completes() {
 }
 
 /// ADR 0223 DC4 (default-decision criterion): the option's exact velocity and pressure errors at most 1.05 times the default's.
+/// KNOWN MISS of the option (limit intact): 20 of 21 comparisons met; the MMS pressure error at dt 0.025 is 1.119 times the
+/// default's (ADR 0223 addendum).
 #[test]
-#[ignore = "heavy (ADR 0223 BO, several minutes in release)"]
-fn dc4_no_harm_on_the_exact_errors() {
+#[ignore = "known miss of the option (ADR 0223 DC4): the MMS PISO pressure error at dt 0.025 is 1.119 x the default's (limit 1.05); heavy"]
+fn dc4_no_harm_on_the_exact_errors_known_miss() {
     let mut bad = Vec::new();
     let mut count = 0;
     for (prob, dt, ev, ep, _) in &bo().no_harm {
@@ -560,9 +562,11 @@ fn dc4_no_harm_on_the_exact_errors() {
 }
 
 /// ADR 0223 DC5 (default-decision criterion): every row whose default order is in its band has the option's order in the band.
+/// KNOWN MISS of the option (limit intact): TG PISO's coarse pair (O1) has the order 2.305 with the option (2.290 by default)
+/// against the band's top 2.3; the option brings MMS PISO and PIMPLE-C coarse into the band (ADR 0223 addendum).
 #[test]
-#[ignore = "heavy (ADR 0223 BO, several minutes in release)"]
-fn dc5_no_new_order_miss() {
+#[ignore = "known miss of the option (ADR 0223 DC5): O1 coarse order 2.305 with the option, above the band [1.9, 2.3] (default 2.290); heavy"]
+fn dc5_no_new_order_miss_known_miss() {
     let b = bo();
     let lost: Vec<String> = b
         .rows
