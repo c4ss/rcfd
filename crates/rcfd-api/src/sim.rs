@@ -1169,6 +1169,9 @@ pub struct Simulation {
     udfs: BTreeMap<String, Udf>,
     udf_momentum: Option<String>,
     udf_viscosity: Option<String>,
+    /// The periodic pairs of the user-function viscosity with `turbulence.periodic_seam.diffusivity = "pair"` (F-302, ADR 0227
+    /// D1); `None`: each face of a pair takes its own owner's values.
+    udf_seam: Option<Vec<rcfd_fv::PeriodicPair>>,
     udf_monitors: Vec<String>,
     /// Hook catalogue v2 (F-239, ADR 0088): conductivity and energy-source modules, (scalar, module) source pairs,
     /// execute-at-end modules.
@@ -2153,6 +2156,23 @@ impl Simulation {
                 .map_err(|e| diag(turb::PERIODIC_SEAM_KEY, e.to_string()))?;
             r.set_seam_pairs(Some(pairs));
         }
+        // ADR 0227 D4: the same for the property viscosity and the user-function viscosity (R1'' allows pair on a laminar run with
+        // either); an error of the pairing is located at the key (R3)
+        let seam_pair = get_s(case, turb::PERIODIC_SEAM_KEY) == "pair";
+        let mut props = Properties::from_case(case);
+        if let Some(pr) = props.as_mut().filter(|pr| seam_pair && pr.has_viscosity()) {
+            let pairs = geom
+                .periodic_pairs()
+                .map_err(|e| diag(turb::PERIODIC_SEAM_KEY, e.to_string()))?;
+            pr.set_seam_pairs(Some(pairs));
+        }
+        let udf_seam = match (seam_pair, &udf_viscosity) {
+            (true, Some(_)) => Some(
+                geom.periodic_pairs()
+                    .map_err(|e| diag(turb::PERIODIC_SEAM_KEY, e.to_string()))?,
+            ),
+            _ => None,
+        };
         if let (Some(_), Some(n)) = (&rheology, &udf_viscosity) {
             return Err(diag(
                 &format!("udf.{n}.viscosity"),
@@ -2387,6 +2407,7 @@ impl Simulation {
             udfs,
             udf_momentum,
             udf_viscosity,
+            udf_seam,
             udf_monitors,
             udf_conductivity,
             udf_energy,
@@ -2406,7 +2427,7 @@ impl Simulation {
             two_way: None,
             mixing: None,
             frozen_iter: 0,
-            props: Properties::from_case(case),
+            props,
             t_init: get_f(case, "initial.temperature"),
             stats,
             report_exprs,
@@ -3468,26 +3489,12 @@ impl Simulation {
                     }
                 }
                 if let (Some(name), None) = (&self.udf_viscosity, &udf_error) {
-                    let g = &self.geom;
-                    let (fc, u) = (g.mesh.face_centres(), &s.u.values);
+                    // the face loop of F-122, with one value per periodic pair for pair (ADR 0227 D1)
                     let u0 = self.udfs.get_mut(name).expect("checked at build time");
-                    let mut nu = Vec::with_capacity(g.mesh.n_faces());
-                    for f in 0..g.mesh.n_faces() {
-                        let (o, w) = (g.mesh.owner()[f], if f < g.n_internal { g.weights[f] } else { 1.0 });
-                        let n = if f < g.n_internal { g.mesh.neighbour()[f] } else { o };
-                        let blend = |a: f64, b: f64| w * a + (1.0 - w) * b;
-                        let speed = blend(vec3::norm(u[o]), vec3::norm(u[n]));
-                        let temperature = temp_cells.map_or(0.0, |t| blend(t[o], t[n]));
-                        match u0.kinematic_viscosity(fc[f], 0.0, temperature, speed) {
-                            Ok(v) => nu.push(v),
-                            Err(e) => {
-                                udf_error = Some(e);
-                                break;
-                            }
-                        }
-                    }
-                    if udf_error.is_none() {
-                        s.nu_face = Some(nu);
+                    match crate::udf::face_viscosity(u0, &self.geom, &s.u.values, temp_cells, self.udf_seam.as_deref())
+                    {
+                        Ok(nu) => s.nu_face = Some(nu),
+                        Err(e) => udf_error = Some(e),
                     }
                 }
                 if let (Some(pr), Some(en)) = (&self.props, &self.energy) {
