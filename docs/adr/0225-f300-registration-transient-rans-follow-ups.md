@@ -306,3 +306,17 @@ checks well under a second.
 ## Addenda
 
 Results of the checks follow in an addendum, in the order of the tables.
+
+### Amendment 1 (2026-11-08): two V0b runs with the wall cells in the log layer, written before any code and before their run
+
+Found while recording V0b on c201a770 (this text and the test only, no code of F-300): the four transient CH-K runs of V0b start
+from k 1, so the wall cells sit at `y*` about 10.8, below `y*_lam`, where `nut_wall_from_k` is 0 on both sides of the switch; in 20
+steps they do not reach the log branch. The rough-wall run (`roughness_height = 0.002`) gave the bits of the first run, and so did
+an unregistered attempt with `roughness_height = 0.02` (run once while recording, then dropped). The steady run reaches the log
+layer (the steady wall cells sit near `y* = 19`, ADR 0210 P1), the transient ones do not, so V0b does not show that the log
+branch of the transient path is unchanged. The six registered runs keep their records (recorded on c201a770: 0x89acd6f402fb0b3c,
+0xdc8f65037faa4a96, 0x3f140c900c0a7c17, 0x89acd6f402fb0b3c, 0xc9540fae514ff3f8, 0x0ce33c79d483d023). V0b adds two runs, recorded on
+the same commit before any code: CH-K on `pimple`, `bdf2`, `n_outer = 3`, `dt = 0.1`, 20 steps, from `k_initial = 2`,
+`epsilon_initial = 14.4` (the start of the ADR 0210 S3 diagnosis, the same initial eddy viscosity; wall cells at `y*` about 15);
+the same with `roughness_height = 0.02` (`k_s+` about 6, transitional). The test prints the wall-cell `y*` range at the end of each
+run (report only). No limit changes.
