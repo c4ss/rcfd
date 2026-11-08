@@ -1,7 +1,9 @@
 # ADR 0225: F-300 registration: transient RANS follow-ups of F-294 (the transient answer of the model registry, the time order of SST from a start that meets the walls, and a smooth wall eddy viscosity for the k-epsilon order miss)
 
-Status: **REGISTERED 2026-11-08**, written before any code of F-300 and before any run of its checks. Not yet accepted by the
-maintainer. Results go in the addendum at the end.
+Status: **REGISTERED 2026-11-08**, written before any code of F-300 and before any run of its checks. Results in addendum 1:
+every registered check is met except S3s `bdf2`, a known miss (the smooth wall eddy viscosity leaves the k-epsilon BDF2 order as
+it was, so the kink is not its cause); every negative control fired and every mutation made its check fail; defaults
+bit-identical. F-300 is partial by the decision rule (question 5). Not yet accepted by the maintainer.
 
 Parents: [ADR 0210](0210-f294-registration-transient-k-epsilon-and-spalart-allmaras-with-pimple.md) (F-294: questions 3, 5 and 7,
 recommendations taken by the lead; the S1 test, the S3 k-epsilon BDF2 known miss and its diagnosis; probe P2),
@@ -320,3 +322,109 @@ the same commit before any code: CH-K on `pimple`, `bdf2`, `n_outer = 3`, `dt = 
 `epsilon_initial = 14.4` (the start of the ADR 0210 S3 diagnosis, the same initial eddy viscosity; wall cells at `y*` about 15);
 the same with `roughness_height = 0.02` (`k_s+` about 6, transitional). The test prints the wall-cell `y*` range at the end of each
 run (report only). No limit changes.
+
+### Addendum 1: what was built and the results (2026-11-08)
+
+Commits: registration 64763621, amendment 1 9d0e28d0, the V0b record 35471ce9 (main c201a770 with this text and the test only,
+before any code), code and tests d26ce83d, the S3s known miss marked 6e4e650a. Built as D6 says: `rcfd-turb/src/model.rs`
+(`supports_transient`, `KEpsilonModel::set_option("wall_nut_law", ..)`), `rcfd-turb/src/wall.rs` (`SpaldingLaw::u_plus`,
+`WallConstants::nut_wall_from_k_spalding`), `rcfd-turb/src/kepsilon.rs` (`WallNutLaw`, `KEpsilon::wall_nut_law`,
+`wall_cell_sources_law`, the branch in `wall_face_nut`, the sweep's call), `rcfd-turb/src/lib.rs` (re-exports),
+`rcfd-api/src/sim.rs` (`Simulation::turbulence_model_mut`); tests `crates/rcfd-turb/tests/f300_wall_nut_law.rs`,
+`crates/rcfd-api/tests/f300_transient_rans.rs`, `crates/rcfd-api/tests/f300_default_bits.rs`, the `#[ignore]` reason of the ADR 0210
+S1 record in `f294_transient_keps_sa.rs`. Documents: ADR 0199 amendment 4, the note at the end of ADR 0210, the F-300 section of
+`docs/reference-data.md`, the F-300 entries of `docs/ROADMAP.md` and `docs/roadmap.json`. No case key, schema text, golden,
+`baseline_hashes.rs` or `case_hashes_w48u.rs` was touched; `Cargo.lock` is unchanged. Every check was run once, in release, on
+d26ce83d; the report-only diagnosis of the S3s miss (below) ran once on 6e4e650a.
+
+Summary: every registered check is met except S3s `bdf2`, a known miss. `supports_transient` now agrees with the case tree for
+every registry key (main's answer disagreed for k_epsilon, k_omega_sst and spalart_allmaras); the scope of ADR 0210 S1 is
+restored as S1c; SST from the start that meets the walls is second order with BDF2 (S3', the numbers of P2 to the printed digits).
+The Spalding wall eddy viscosity has no kink at `y*_lam` and reaches the production and the wall faces, but with it the k-epsilon
+BDF2 order on the channel start-up is the same as with the standard law (0.80 / 1.48 / 1.43 against 0.80 / 1.49 / 1.53), and at
+finer levels it rises towards 2 in the same way: the kink is not the cause of the ADR 0210 miss. Every negative control fired. The
+defaults are bit-identical.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| T1-0 | the eight base texts (seven built-in keys and `f300_plugin`) accepted with their reference lines | accepted | met |
+| T1 | registry keys `k_epsilon`, `k_omega_sst`, `spalart_allmaras`, `smagorinsky`, `wale`, `rsm`, `mixing_length`: `supports_transient` true, accepted on `pimple`; `f300_plugin`: false, located at `turbulence.model`; SA with `des = "des"` and `"ddes"` accepted on `pimple` | as stated | met |
+| T1N | main's answer disagrees with the case tree for exactly `k_epsilon`, `k_omega_sst`, `spalart_allmaras` | as stated | met (T1 can fail) |
+| T1p | `piso`: `k_epsilon`, `k_omega_sst`, `spalart_allmaras` and `f300_plugin` located at `turbulence.model`; `smagorinsky`, `wale`, `mixing_length`, `rsm`, SA-DES and SA-DDES accepted | as stated | met |
+| S1c | every case as registered, `pair` with CH-K and CH-A on `pimple` accepted | as stated | met |
+| S3' `bdf2` | `ux`: `e(80,160)` 1.5819e-5, `e(160,320)` 3.8332e-6, `p` 2.0450; k: 6.7420e-5, 1.6401e-5, 2.0394; omega: 1.5805e-5, 3.8685e-6, 2.0306; largest `nut_change` of a step 3.3e-14 at every level | [1.7, 2.3] | met |
+| S3' `euler` | `ux`: 6.8600e-4, 3.4228e-4, 1.0030; k: 3.4130e-3, 1.7304e-3, 0.9800; omega: 6.1601e-4, 3.0740e-4, 1.0028; `nut_change` 6.9e-13 / 3.4e-14 / 3.4e-14 | [0.8, 1.2] | met |
+| S3'N | `p` 0.8007 (`ux`), 0.8503 (k), 0.8038 (omega); largest `nut_change` of a step 0.52 to 0.54 | smallest `<= 1.3` | met (fired) |
+| W1 | (i) largest `abs(y+_S(u+_S(y*)) - y*) / y*` on the grid 1.145e-15; (ii) `g >= 0` on the grid, `g(1e-2)` 1.202e-10, `g(1e3) / g_std(1e3) - 1` 4.325e-4; (iii) `D-` 5.014909e-2, `D+` 5.017801e-2, `abs(D+ - D-) / max` 5.763e-4; `g(y*_lam)` 0.2521 | 1e-12; 1e-6, 1e-2; 1e-2 | met |
+| W1N | standard: `D-` 1.9e-14, `D+` 6.837783e-2 (the slope `0.0684 nu` of item 5), `abs(D+ - D-) / max` 1.000 | `>= 0.5` | met (fired) |
+| W2 | W2-0 met in every run; `abs(k' - G_w k0 / eps_w) / k'` at most 4.4e-15 (Standard: 1.3e-15, 4.3e-16, 3.9e-16; Spalding: 4.4e-15, 0, 3.7e-16 at `y*` 5, 11.53, 30); the wall-face eddy viscosity has the law's bits in all six runs (Standard 0 in all three, because `k'` puts `y*` below `y*_lam`; Spalding 2.03e-7, 3.08e-4, 2.10e-3); `abs(k'_Spalding - k'_Standard) / k'_Standard` 2.23e-2, 0.252, 6.08e-2 | 1e-12; exact; `>= 1e-3` | met |
+| T3 | 8 of 8 wall faces with the bits of `nu + nut_wall_from_k_spalding(nu, k_c, y_f)` after 5 steps (all `1.128601 nu`); `kader` refused (`'kader' is not a valid value of the option 'wall_nut_law' (standard or spalding)`); `spalding` with the scalable wall function refused (`wall_nut_law = spalding acts on the standard wall function on a smooth wall only (ADR 0225)`) | exact; as stated | met |
+| T3N | 0 of 8 wall faces off the bits of `nu + nut_wall_from_k`; largest relative difference of the two runs' wall faces 0.1286 | exact; `>= 1e-3` | met (fired) |
+| S3s `bdf2` | `ux`: `e(80,160)` 1.6613e-5, `e(160,320)` 9.5214e-6, `p` 0.8031; k: 2.8192e-4, 1.0097e-4, 1.4814; epsilon: 5.3269e-4, 1.9788e-4, 1.4287; largest `nut_change` of a step 1.8e-8 / 2.9e-12 / 5.9e-16 (T/80, T/160, T/320); wall-cell `y*` of the T/320 run in [8.8101, 13.4234] | [1.7, 2.3] | **missed** (below the band): ignored `s3s_kepsilon_spalding_bdf2_time_order_known_miss` |
+| S3s `euler` | `ux`: 9.2443e-4, 4.7525e-4, 0.9599; k: 3.6407e-3, 1.8167e-3, 1.0029; epsilon: 7.1858e-3, 3.6482e-3, 0.9780 | [0.8, 1.2] | met |
+| S3sN | `p` 1.0063 (`ux`), 0.7464 (k), 0.2002 (epsilon); largest `nut_change` of a step 0.54 to 0.61 | smallest `<= 1.3` | met (fired) |
+| V0b | 8 of 8 runs bit-identical to the record of c201a770 (0x89acd6f402fb0b3c, 0xdc8f65037faa4a96, 0x3f140c900c0a7c17, 0x89acd6f402fb0b3c, 0x02fd48933dabaa94, 0x70a0889f7f89bccd, 0xc9540fae514ff3f8, 0x0ce33c79d483d023); the two runs of amendment 1 start near `y* = 15` and end with the wall-cell `y*` in [11.07, 11.23] (smooth wall) and [13.33, 14.26] (rough), so the log branch ran, and the smooth run crossed `y*_lam` | bit-identical | met |
+
+**S3s, BDF2: the miss and its diagnosis.** The registered test asserted every field and stopped at `ux`; all three orders were
+printed (table). It is now the ignored `s3s_kepsilon_spalding_bdf2_time_order_known_miss`, with the limit intact. By the reading
+fixed before the run, the kink of the standard wall eddy viscosity is not shown to be the cause of the ADR 0210 miss, and no other
+variant is tried here. The numbers say more than that: at the registered levels the orders with the Spalding law are within 0.1
+of those with the standard law (`ux` 0.8031 against 0.7975, k 1.4814 against 1.4910, epsilon 1.4287 against 1.5303) and the errors
+within 10 percent (`ux` `e(80,160)` 1.66e-5 against 1.52e-5), although the Spalding law changes the wall viscosity by 13 percent
+(T3N) and is smooth where the wall cells cross `y*_lam`. A report-only diagnosis (`s3s_kepsilon_spalding_bdf2_finer_levels_diagnosis`,
+ignored, run once) of the same runs at finer levels gives `p` 1.5755 / 1.7565 / 1.7427 (`ux` / k / epsilon) from T/160, T/320,
+T/640 and 1.8089 / 1.8806 / 1.8753 from T/320, T/640, T/1280, where ADR 0210 recorded 1.5598 / 1.7638 / 1.7816 and 1.8119 / 1.8796 /
+1.8874 for the standard law; the outer iterations converged throughout (`nut_change` at most 1.2e-15). So the order deficit is a
+pre-asymptotic property of the k-epsilon start-up from k 1, epsilon 3.6 on this mesh that does not depend on the law of the wall
+eddy viscosity, and with both laws the observed order approaches 2 with refinement. What makes the k-epsilon start-up slower to
+reach the asymptotic range than the SST and SA start-ups is not found by these runs (question 6). ADR 0210's known miss and its
+limit are unchanged.
+
+**Mutations** (scratch, `f300-mut/apply.py`, each applied alone to 918aaaa4's tree, the named test run once in release, the file
+reverted; the script asserts that its pattern matched exactly once):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MA1 | T1 | `k_epsilon`: `supports_transient` false but accepted on `pimple` (stops at the first key) | fails |
+| MA2 | S1c | CH-K on `piso` accepted with no diagnostic (`turbulence.model: got []`) | fails |
+| MB1 | S3' `bdf2` | `p` 0.8007 / 0.8503 / 0.8038 (`ux` / k / omega), the numbers of S3'N; largest `nut_change` of a step 0.52 to 0.54 | fails (below the band) |
+| MB2 | S3' `bdf2` | `p` 1.0334 / 1.0393 / 1.0426; the outer iterations converge (`nut_change` 7.6e-15 to 3.4e-14) but the momentum keeps the face viscosity of the start of the step | fails (below the band) |
+| MC1 | W1 | (iii) `D-` 1.9e-14, `D+` 6.837783e-2, ratio 1.000 (the standard law's kink); (i) and (ii) met | fails |
+| MC2 | T3 | 8 of 8 wall faces at `nu` (1.000000 `nu`), off the Spalding bits | fails |
+| MC3 | W2 | `y* = 5`, Spalding: `abs(k' - G_w k0 / eps_w) / k'` 2.229e-2 (the production of the standard law) | fails |
+
+**Predictions.** PR1 met. PR2 met (S3' gives P2's numbers to every printed digit; S3'N 0.80). PR3 met (W1 (iii) 5.8e-4, W2 at most
+4.4e-15, T3 exact). PR4 met for S3s `euler` and S3sN, falsified for S3s `bdf2`.
+
+**Before the gate**, in release: the related `rcfd-api` tests (`baseline_hashes`, `case_hashes_w48u`, `des_tree`, `exp_rot_pc`,
+`f286_default_bits`, `f286_transient_sst`, `f294_default_bits`, `f294_transient_keps_sa`, `f295_default_bits`,
+`f295_seam_diffusivity`, `f296_default_bits`, `f296_seam_diffusivity`, `mixing_length_tree`, `physics_schema`, `regions`,
+`rsm_tree`, `runctl`, `sgs_tree`, `sst_schema`, `transient_sources`, `turb_models`, `w48z_followups`, `wall_options`,
+`f300_default_bits`) on 6e4e650a: 123 passed, 0 failed, 20 ignored (V0a: the hash files unedited, all pass); every `rcfd-turb`
+test on 6e4e650a: 124 passed, 0 failed, 104 ignored. `cargo clippy -p rcfd-turb -p rcfd-api --all-targets -- -D warnings` found
+one lint in the new test file (`excessive_precision` on the CH viscosity constant); 918aaaa4 writes it with clippy's digits, which
+parse to the same `f64` (checked), and clippy and `cargo fmt --check` of both packages are then clean. After d26ce83d the only
+changes to code or tests are the `#[ignore]` of the S3s miss with the report-only diagnosis (6e4e650a) and that literal (918aaaa4).
+
+**Questions revised by the results** (each with a recommendation). Questions 1, 2 and 4 stand.
+
+3. **The Spalding wall eddy viscosity** (revised). It did not change the k-epsilon order. Options: (a) keep it as the library
+   opt-in it is (W1, W2, T3 test it; S3s and its diagnosis need it to be reproduced); (b) remove it, since it did not help; (c) a
+   case key with its own registration. Recommendation: (a); (c) only if a case needs a k-epsilon wall function without a switch.
+5. **The status of F-300.** By the decision rule F-300 is partial: S3s `bdf2` is a registered check and a known miss. The
+   roadmap's (c) asks for the test of the suspected cause, which was made, and its reading was registered for both outcomes.
+   Options: (a) partial, as the rule gives; (b) done by the maintainer's acceptance, with the miss recorded as the answer of (c).
+   Recommendation: (a) by the rule; (b) is the maintainer's call.
+6. **The k-epsilon BDF2 order on the channel start-up** (both known misses: ADR 0210 S3 and S3s). Options: (a) keep both, with the
+   diagnosis (pre-asymptotic at the registered levels, the order rising to 1.8 to 1.9 at T/320 to T/1280 with either law);
+   (b) a follow-up item that registers a k-epsilon time-order check from a resolved state (ADR 0199 question 6 (b): the steady
+   state of R1 with the drive changed) or at the finer levels; (c) a follow-up that looks for what makes the k-epsilon start-up
+   slower than SST and SA (for example the algebraic wall-cell epsilon, fixed in every sweep, against the transported one).
+   Recommendation: (a) now; (b) only if a case-tree order record for transient k-epsilon is wanted, since ADR 0210 K1 and K2 show
+   the time derivative of the k and epsilon equations exactly.
+
+### Status by the decision rule
+
+Every registered check of ADR 0225 is met except S3s `bdf2`, an ignored known miss with its numbers and a diagnosis; every negative
+control fired and every mutation made its check fail (above). F-300 is **partial** (`[~]`; question 5). Maintainer acceptance is
+still required.

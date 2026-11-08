@@ -1501,3 +1501,10 @@ Afzalifar et al. 2016 `bcbaa6e78b8f441fc62cb118138dd6c3eb45eed76303aa548687939ea
 | Boltzmann constant `1.380 649 x 10^-23 J/K`, exact | read | NIST CODATA, physics.nist.gov/cgi-bin/cuu/Value?k, 2026-11-07 |
 | Saturation line, liquid density, latent heat, `c_p`, vapour viscosity and conductivity | existing | IAPWS-IF97 and the IAPWS 2008/2011 transport correlations as implemented and verified in `rcfd-core::iapws` (F-111); the saturation equation and region 1 are extrapolated below 273.15 K only in transients (ADR 0217 M3) |
 | Moore nozzle B geometry | not read | stated in GT2016-57598 to be "available in the IWSMP collaboration"; not printed in any source read |
+
+## F-300 transient RANS follow-ups (ADR 0225)
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Spalding (1961) law of the wall `y+ = u+ + (1/E)[exp(kappa u+) - 1 - kappa u+ - (kappa u+)^2/2 - (kappa u+)^3/6]`, used for the k-based wall eddy viscosity `nu (y*/u+ - 1)` of the opt-in `wall_nut_law = spalding` (`WallConstants::nut_wall_from_k_spalding`) and its inverse `SpaldingLaw::u_plus` | existing | the row "Spalding (1961) law of the wall" above (standard cubic form, two secondary sources, original paper not read); no new source was read for F-300 |
+| The standard k-based wall eddy viscosity `nu (y* kappa/ln(E y*) - 1)` above `y*_lam` and 0 below, written as `nu (y*/u+ - 1)` with `u+ = min(y*, ln(E y*)/kappa)`; its slope jump `0.0684 nu` at `y*_lam = 11.53` | derived | from the existing `WallConstants::nut_wall_from_k` (Launder and Spalding 1974 as recorded above, not read) |
