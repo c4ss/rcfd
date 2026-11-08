@@ -5495,7 +5495,7 @@ fixed by the item's registration ADR before any code.
       variable with probability 0.5 and state no exchange (recorded diagnostics DP1, DP2). Open: ADR 0220 Q1 to Q5 (the
       reading clause, the papers' rule, the default, bounded forms, the tool description).
 
-- [ ] **F-298** Electric current and Joule heat with the gradient options, and the fixed-pressure flux correction
+- [x] **F-298** Electric current and Joule heat with the gradient options, and the fixed-pressure flux correction
   - depends on: F-291
   - acceptance: Every limit is fixed by its registration ADR before any code. (a) When electric_potential takes the
     gradient options (F-291), the current density and the Joule heat use the same face flows, with a current balance
@@ -5507,6 +5507,28 @@ fixed by the item's registration ADR before any code.
     recommendation (a) taken (optional table kept; PISO/PIMPLE lag estimate on the default operator; Lorentz-source
     potential not wired; body_force_weighted refused with pressure options; other solvers and models refused; P1 binding
     with P2-all supplementary).
+    - DONE (ADR 0221, 2026-11-07, branch f298-joule-heat, not merged). (a) With
+      solver.gradient_equations.electric_potential the boundary current density and the Joule heat use the currents of
+      the operator the potential was solved with (rcfd-fv electric::face_currents_opt, joule_heat_opt,
+      boundary_power_opt; a cell's Joule heat is half the face power F_f (phi_o - phi_n) of its internal faces plus F_b
+      (phi_P - phi_b) of its boundary faces, so the total is the boundary power up to the solver's residual). On the
+      29.6-degree wedge, for the seven option sets, the boundary currents add up to zero within the solver tolerance (at
+      most 2.2e-16 A against bounds of 2.2e-12 A), per group of cells too, and the Joule heat equals the electric power
+      to 5e-16 W (P 0.24 to 0.27 W); the tree's current density and heat are the library's. The unchanged currents miss
+      the domain balance by 4.7e-7 to 1.9e-3 A (every set that changes boundary faces) and a group balance for every
+      set; the unchanged Joule heat misses the power by 3.0e-2 to 3.6e-2 W; the default's own Joule heat misses its
+      power by 3.1e-2 W (11.9 percent) on the skewed mesh (kept, ADR 0221 Q1). (b) Measured first: in a converged SIMPLE
+      channel on the wedge with a fixed-pressure outlet and one corrector the default flux correction leaves a domain
+      mass imbalance of 2.0e-3 of the inflow and 6.8e-4 in one outlet cell (interior 3e-14; 5.0e-3 with SIMPLEC and its
+      compensation; with gradient_boundary dropped 2e-13), which matters by the registered rule (1e-6). So under the
+      pressure options (solver.gradient_equations.pressure) the flux correction now takes the equation's non-orthogonal
+      part on fixed-pressure faces (owner, corrected or none): on the 38-degree box it carries the operator's flux to
+      7.3e-16 of the cell scale on the outlet cells (6.6e-2 to 2.6e-1 without), and the converged channel runs close
+      their mass balance (at most 1.3e-12 of the inflow) for six sets. Defaults bit-identical (the default and dropped
+      runs' hashes, the settings hash and every field of the electric case unchanged; baseline hashes and H1 unedited).
+      Amendment 2: Some(GradientOptions::default()) is None in the new functions (found by ADR 0204 G4 (iv)). Open: the
+      default Joule heat on skewed meshes (Q1), the default flux correction on fixed-pressure faces (Q2), a negative
+      cell Joule heat under the options (Q3, none seen), the SIMPLEC boundary compensation under the options (Q4).
 
 - [~] **F-299** PISO/PIMPLE instability at large cell diffusion number across a thin gap
   - depends on: F-244

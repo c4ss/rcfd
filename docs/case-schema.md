@@ -2784,9 +2784,9 @@ The optional table adds equations that take the same options (ADR 0204). Each se
 | Key | The options also act on |
 |---|---|
 | `solver.gradient_equations.momentum` | the momentum Laplacian of the steady `simple`/`simplec` and the transient `piso`/`pimple` kernels (constant density, the moving-mesh step included; not `time_advance = "fractional_step"`), where the kernel computes the velocity gradient: a gradient-based `solver.convection` or `non_orthogonal_correctors > 0` |
-| `solver.gradient_equations.pressure` | the pressure equation of the same kernels, the internal faces of its flux correction and the SIMPLEC non-orthogonal compensation; only with `non_orthogonal_correctors > 0` |
+| `solver.gradient_equations.pressure` | the pressure equation of the same kernels, its flux correction (the internal faces and the non-orthogonal part of the fixed-pressure faces, ADR 0221) and the SIMPLEC non-orthogonal compensation; only with `non_orthogonal_correctors > 0` |
 | `solver.gradient_equations.turbulence` | the transport equations of `k_epsilon` (k, epsilon), `k_omega_sst` (k, omega) and `spalart_allmaras` (nuTilda), with a gradient-based `turbulence.convection` |
-| `solver.gradient_equations.electric_potential` | the potential of `electric.enabled` (its sweep always computes the gradient, whatever `solver.convection`) |
+| `solver.gradient_equations.electric_potential` | the potential of `electric.enabled` (its sweep always computes the gradient, whatever `solver.convection`), and with it the boundary current density and the Joule heat, which then use the currents of the solved operator (ADR 0221) |
 
 ```text
 [solver]
@@ -2809,11 +2809,19 @@ With a selector, the two errors above (no cell gradient, no equation) are replac
   without a non-orthogonal corrector; turbulence with `turbulence.convection` = `upwind` (its default), `central` or `blended`;
 * `pressure` with `solver.pressure_interpolation = "body_force_weighted"`.
 
-What stays as it was with the selectors: the flux correction's boundary faces (on a fixed-pressure face the pressure equation has
-a non-orthogonal part with correctors and the flux correction has none, with or without the options; `gradient_boundary =
-"dropped"` removes it from the equation; ADR 0204 Q3), the PISO/PIMPLE pressure-lag estimate and the SV301 trial, the Joule heat
-and the current density (the default face flows; ADR 0204 Q2), the potential of a Lorentz source, the coupled solver, the
-fractional step, variable density, VOF and compressible. Through the tree a run equals the library run with the same options
+With `pressure`, the flux correction also takes the non-orthogonal part that the pressure equation has on a fixed-pressure face
+(owner gradient, `corrected`, or none with `dropped`), so that the corrected flux carries the equation's face flux on every face.
+Without the selector it does not: on a skewed fixed-pressure outlet with correctors the default flux correction leaves a continuity
+error in the outlet cells that does not converge away (on a 30-degree wedge channel, SIMPLE with one corrector, 2.0e-3 of the inflow
+in the domain mass balance and 6.8e-4 in one outlet cell; ADR 0221 M). With `electric_potential`, the Joule heat of a cell is half the
+power `F_f (phi_o - phi_n)` of each of its internal faces plus `F_b (phi_P - phi_b)` of its boundary faces, `F` the solved currents,
+so the total equals the electric power the boundaries deliver up to the solver's residual; without the selector the Joule heat keeps
+the orthogonal face power `sigma_f lap_f (phi_o - phi_n)^2`, which on a skewed mesh does not add up to the power (ADR 0221 Q1). A
+cell's Joule heat under the options can be negative on a strongly skewed mesh (the face power is not a square).
+
+What stays as it was with the selectors: the PISO/PIMPLE pressure-lag estimate and the SV301 trial, the potential and the current of
+a Lorentz source, the SIMPLEC boundary compensation (orthogonal part only), the coupled solver, the fractional step, variable density,
+VOF and compressible. Through the tree a run equals the library run with the same options
 (ADR 0204); no accuracy benefit is claimed. Absent, or with every selector `false`, the table changes no bit and no settings hash,
 and written case files leave it out.
 
