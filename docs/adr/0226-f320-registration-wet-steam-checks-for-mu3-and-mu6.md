@@ -263,3 +263,14 @@ To evaluate the predictions for the mutations whose F-320 target the registered 
 | MU2 | R1 (state 2: 2414.66 against 2307.82 /s), **L2** (`y` 6.051429e-9 against 6.051446e-9 at 2.5e-7 s, 2.8e-6 relative) | R1 held; L2 predicted to pass, it failed: without `(1 - r*/r)` the droplets born at `r*` grow at once (`y` doubles) and the stiff growth separates the solver's step from the fine RK4 |
 | MU4 | none | held |
 | MU5 | **L2** (`y` 1.2074878e-8 against 1.2074858e-8 at 1e-6 s, 1.7e-6 relative) | predicted to pass, it failed: the source added to the density lowers `e` and `T` by about 1e-8 relative, and `J` responds at about 1/K |
+
+### The gate (2026-11-08)
+
+Gated commit `e8e7359511149bbe8ba0f284e1cfa85b3bdb00bf` (addendum 1 and the F-320 roadmap entry; the branch head differs from it
+only by this ADR's text: the supplementary section and this section). A `git archive` copy in `E:/projects/cfd/w49i-work/gate-f320/src`,
+`run.sh` from `gate-f301/run.sh`, started by the 5 s poll wrapper `outer2.sh` (one acquire process). The wrapper waited from
+17:56 to 21:12 behind the f301 gate, then `run.sh` waited for 19 GB of free memory until 22:02. Results: fmt per package 0,
+`clippy --workspace --all-targets --locked -D warnings` 0, tests (release, `scripts/gate_test.py`, three jobs) **3302 passed,
+0 failed, 913 ignored** (3302 test processes in 625 binaries, wall 6031 s, lowest free memory 12 GB), the eight F-320 checks
+among them. No known flake failed. This settles B1 for F-320: every existing test passes with the new test file, and no library
+file changed.
