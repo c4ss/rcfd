@@ -5661,3 +5661,7 @@ fixed by the item's registration ADR before any code.
   - depends on: F-134
   - acceptance: The Taylor-Green order (T1 0.747 against 1.7, T2 level 2 3.31 against 2, T1c 1.618 against 1.7, the F-134 ignored known-miss tests) reaches the registered limits, or the ADR names the donor-interpolation cause with a number.
   - note: From ADR 0219 question 4, recommendation taken; the known-miss tests stay as recorded.
+- [ ] **F-315** Real-fan parametric study with CMA-ES
+  - depends on: F-260
+  - acceptance: A CMA-ES study over blade parameters of the 120 mm fan converges within a registered budget and beats the baseline pressure rise at the design flow; the study record is reproducible.
+  - note: From ADR 0222: the real-fan study was split out of F-260. Waits on FAN-01 convergence and the blade-parameter case keys. The design_create_study description change goes with F-310 (golden edit).

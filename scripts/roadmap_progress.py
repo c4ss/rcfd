@@ -29,7 +29,7 @@ CATEGORIES = [
     ("Data", "Meshing and mesh formats", [10, 11, 12, 13, 14, 15, 102, 103, 108, 115, 118, 119, 131, 132, 133,
         231, 232, 233, 234, 235, 306]),
     ("Data", "Post-processing and output", [70, 71, 72, 73, 74, 109, 116, 117, 123, 124, 238]),
-    ("Data", "Design studies and optimisation", [95, 137, 249, 260, 268, 297, 310]),
+    ("Data", "Design studies and optimisation", [95, 137, 249, 260, 268, 297, 310, 315]),
     ("Use", "Command line, Python and API", [5, 80, 81, 82, 83, 84, 85, 104, 120, 121, 122, 239, 240, 241, 307]),
     ("Use", "Claude and the MCP server", [90, 91, 92, 93, 94, 145, 146, 147, 148, 149, 150, 265, 267, 270, 271,
         272, 273, 274, 275, 287, 288]),
