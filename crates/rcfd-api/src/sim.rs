@@ -2718,6 +2718,17 @@ impl Simulation {
         }
     }
 
+    /// Mutable access to the turbulence model of a RANS run (diagnostics and tests; F-300, ADR 0225 D5), for example to set a
+    /// library option of the model that the case schema does not carry (`TurbulenceModel::set_option`). A change made here is
+    /// not part of the case: [`Simulation::reconfigure_turbulence`] or a new simulation drops it. `None` without a turbulence
+    /// model.
+    pub fn turbulence_model_mut(&mut self) -> Option<&mut dyn rcfd_turb::TurbulenceModel> {
+        match &mut self.turb {
+            Some(t) => Some(t.model.as_mut()),
+            None => None,
+        }
+    }
+
     /// Iterations or steps performed.
     pub fn iteration(&self) -> usize {
         self.last.map_or(0, |l| l.index)

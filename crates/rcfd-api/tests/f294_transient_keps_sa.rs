@@ -262,7 +262,7 @@ fn registry_model(key: &str) -> Box<dyn TurbulenceModel> {
 
 /// S1: what the case tree accepts and where it refuses, after F-294.
 #[test]
-#[ignore = "superseded by ADR 0212 R1' (F-296): periodic_seam.diffusivity = pair is accepted with k_epsilon and spalart_allmaras; the cases are in S1' of f296_seam_diffusivity.rs; the lead ignored this record after the F-296 merge, in the way ADR 0212 D4 ignored the F-295 S1"]
+#[ignore = "record, superseded by ADR 0212 R1' (F-296): periodic_seam.diffusivity = pair is accepted with k_epsilon and spalart_allmaras; ignored by the lead after the F-296 merge; every case of this test, with pair accepted, is S1c of ADR 0225 (F-300) in f300_transient_rans.rs"]
 fn s1_scope_of_transient_kepsilon_and_sa() {
     use Model::{KEpsilon as K, Sa as A};
     for m in [K, A] {
