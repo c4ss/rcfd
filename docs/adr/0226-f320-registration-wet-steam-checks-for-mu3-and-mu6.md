@@ -250,3 +250,16 @@ the coarse 230 x 10 run, 8.18e-6 at its cap; S2, N1, Q1, G1g, NC1, NC2 met); V1 
 +1.90 percent). By the registered reading of the unwritten case (Q1), **F-221 partial** (`[~]`), with the remaining part named as
 ADR 0217 Q11 does: case keys (F-316), real-gas vapour (F-317), viscous terms (F-318); polydispersion (F-319) and the coarse-grid
 unsteadiness (ADR 0217 Q10) also open; done stays the maintainer's call.
+
+### Supplementary run (not registered, informational; after the registered results)
+
+To evaluate the predictions for the mutations whose F-320 target the registered command did not reach, the F-320 target alone
+(`cargo test --release -p rcfd-fv --test wetsteam_f320`) ran once for MU1, MU2, MU4, MU5 on the same copy (log
+`f320-supplementary.log`). It changes no verdict above.
+
+| Mutation | F-320 checks that failed | Prediction |
+| --- | --- | --- |
+| MU1 | R1 (state 1: 1.124 against 1.2075e-2 /s, the factor `1 + phi`); L2 passes (its reference calls the same `nucleation`) | held |
+| MU2 | R1 (state 2: 2414.66 against 2307.82 /s), **L2** (`y` 6.051429e-9 against 6.051446e-9 at 2.5e-7 s, 2.8e-6 relative) | R1 held; L2 predicted to pass, it failed: without `(1 - r*/r)` the droplets born at `r*` grow at once (`y` doubles) and the stiff growth separates the solver's step from the fine RK4 |
+| MU4 | none | held |
+| MU5 | **L2** (`y` 1.2074878e-8 against 1.2074858e-8 at 1e-6 s, 1.7e-6 relative) | predicted to pass, it failed: the source added to the density lowers `e` and `T` by about 1e-8 relative, and `J` responds at about 1/K |
