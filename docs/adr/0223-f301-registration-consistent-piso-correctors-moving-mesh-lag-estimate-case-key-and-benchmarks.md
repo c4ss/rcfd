@@ -559,3 +559,16 @@ are known misses of the option, for Q1.
   stays refused (it has no correctors).
 - **Q6. S1p3.** Recommendation: accept the periodic identity on its velocity part and the floor comparison; a re-registration would
   need a periodic set-up with a pressure Dirichlet condition or tighter pressure tolerances.
+
+### The gate (2026-11-08): not obtained yet
+
+The gate of 34b20dd7 (this addendum's code; the commits after it are documents only) is prepared in
+`E:/projects/cfd/w49i-work/gate-f301` (a `git archive` copy, `run.sh` from gate-f298's with the 19 GB start threshold and the target
+directory `target-f301-gate`, `outer2.sh` with the 5 s poll of the machine lock). One acquire process (pid 38654) has been queued
+since 03:24:50 UTC. The lock has been held since 02:06:19 UTC by a duplicate run of the f298 gate, which waits for 19 GB of free
+physical memory; the machine has had 6 to 8 GB free since then (of 94 GB: the WSL VM holds 33.5 GB and a browser about 20 GB). So N3 is
+not yet met. Before it, on the same tree: `cargo fmt` per package (`rcfd-fv`, `rcfd-api`) and `cargo clippy --workspace --all-targets
+-- -D warnings` clean, and the suites named under N3 run locally in release (`rcfd-fv` lib, `piso_thin_gap_f299`, `w34b_lag`,
+`sixdof_flow_f244`, `sixdof_coupled`, `ale_flows`, `ale_gcl`, `w33b_default_bits`, `w33b_stability`, `w48v_corrector_control`;
+`rcfd-api` `w48t_cylinder_spokes`, `w48v_adaptive_correctors`, `w35b_lag_check`, `baseline_hashes`, `case_hashes_w48u`, `dynamic_mesh`,
+`setup_warnings_w49j`, `sv301_service_w48z`; and this item's files): 197 passed, 0 failed, 57 ignored. This is not the gate.
