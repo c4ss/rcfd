@@ -1,7 +1,9 @@
 # ADR 0223: F-301 registration: consistent PISO correctors: the pressure-lag estimate on a moving mesh, a case key and the benchmark set
 
-Status: **REGISTERED 2026-11-08**, written before any code of F-301 and before any rcfd run of its checks; results in the addendum.
-Not yet accepted by the maintainer.
+Status: **REGISTERED 2026-11-08**, written before any code of F-301 and before any rcfd run of its checks; three amendments before
+the runs they govern (corrected set-ups of the steady identities and of the examples' window); results in the addendum (every
+deliverable met except the periodic pressure identity S1p3, a known miss; the benchmark set complete, two of its default-decision
+criteria missed; F-301 partial by the decision rule). Not yet accepted by the maintainer.
 
 Parents: [ADR 0214](0214-f299-registration-piso-instability-at-large-cell-diffusion-number-across-a-thin-gap.md) (F-299: the
 mechanism H-RC, the opt-in `PimpleSettings::consistent_correctors`, its refusals and its open questions 1 and 3 to 7, which define
@@ -405,3 +407,155 @@ from t = 40 instead of 50 (the example's own comment: the start sheds within abo
 mean over t >= 40, St from the last four whole periods (the last 5 crossings), the mean `cd` over them by the trapezoid rule.
 **BXc2**: every run reaches t = 80 unstopped with at least 5 crossings after t = 40. **DC8b**: DC8's limits (1 % on St and on the mean
 `cd`, both examples). The registered tests stay as the ignored records `bxc_..._defective_setup` and `dc8_..._defective_setup`.
+
+## Addendum 1: what was built and the results (2026-11-08)
+
+Measured against the limits registered above and in amendments 1 to 3; no limit was changed. Release builds on Windows, target
+directory `E:/projects/cfd/w49i-work/target-f301` (the mutations in `target-f301-mut`). The registration is 32d6670d; the N2
+fingerprints were printed on the library of 46a5f029 (0bc419aa, 185ea729: test code only); E0 to E4 and the MA, S, R2, MSG1, N1
+tests are 8a45de9e (run 1); amendment 1 and its tests d3ae30c7, 54d612d2; amendment 2 and S-p3 4f33bad7, 513ff218; K0 ran on the
+schema table alone (the tree of ac2f6f78 with `schema.rs` changed), then E5 and the benchmark tests 43384eea, a19acf2c (compile
+fixes before any run), the benchmark runs on a19acf2c; amendment 3 and BX2 6f258aa0, 10ac24dc. Each registered run was made once;
+the runs are deterministic and none was repeated to change a result.
+
+**Built.** `crates/rcfd-fv/src/pimple.rs`: `PimpleSettings::moving_mesh_lag`, `consistent_periodic`, `consistent_body_force` (all
+`false`, set by `piso` and so by `pimple`); the ALE exclusions of the lag check and of the adaptive count kept unless
+`moving_mesh_lag` (E0); `PimpleSolver::lag_preflight_moving` (E1); the coupled-face compensation in `consistent_split` and the shared
+helper `add_consistent_h1`, which counts the periodic link coefficients in `H1` in the step and in the lag map (E2); the body-force
+face term with `interp(rAtU)` on fixed-velocity faces under the option (E3); the periodic and body-force refusals only without their
+flags; the LagCheck documentation and the Raise message (E4). `crates/rcfd-api/src/schema.rs`: the optional table
+`[solver.consistent_correctors]` with `enabled` (both `hash_omit_default`); `sim.rs`: the key sets the three library flags, and its
+located errors (E5). Tests: `crates/rcfd-fv/tests/consistent_correctors_f301.rs` (MA, S, R2, MSG1, N1 and the ignored records),
+`consistent_defaults_f301.rs` (N2), `consistent_benchmarks_f301.rs` (BO, BF, BS, BB, DC1 to DC5);
+`crates/rcfd-api/tests/consistent_correctors_case_f301.rs` (C1 to C4, BK, BY, BX, DC6 to DC8), `consistent_defaults_case_f301.rs`
+(N2). Documents: `docs/case-schema.md`, `docs/dynamic-mesh.md`, the F-301 entries of `docs/ROADMAP.md` and `docs/roadmap.json`. No
+existing test file, golden, `baseline_hashes.rs` or `case_hashes_w48u.rs` was touched.
+
+### Results: the deliverables
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| MA1 moving step that does not move | same estimate (1e-9), same cell, fields 1e-12 | rho 3.30206784 both, cell 5583 both, fields bit-identical | met |
+| MA1n (negative control) | no estimate without the flag; fields bit-identical | none; bit-identical | held |
+| MA2s (set-up) | 5 coupled base steps bounded | bounded, `max|u|` at most 1.293 `U_t` | held |
+| MA2 TW-ALE, default | `|rho|` within 10 % of 3.15959, alternating; E-ALE within 10 % of it | 3.15736 (-0.07 %), sign -1.000; E-ALE 3.29454 (+4.3 %), cell 5583 | met |
+| MA2c TW-ALE, consistent | both `< 1` | 0.91985 (sign +1); E-ALE 0.91699 | met |
+| MA3 adaptive count on the moving mesh | step-1 count `>= 3`, `rho <= 0.5`, not cap-bound; 100 steps; A1 0.02; A3 1e-10 | count 8, rho 0.4572 (7 evaluations); 100 steps (one estimate, the count stayed 8); `U(10 tau)/U_t` 1.00547; continuity 5.7e-12 | met |
+| MA3n (negative control) | record empty; the run fails within 100 steps | record empty; step 30: "mesh error: cell 0 has non-positive volume" | held |
+| MA4 pre-run estimate of the moving step | the step's own, bit for bit; solver unchanged; within 10 % of 3.30207 | 3.30176712 at cell 5583, bit-identical; unchanged; -0.009 % | met |
+| S0p, SPs, S1p as registered | | S0p 2.09e-12 U0, SPs 0.157; S1p 1.88e-12 U0 and 4.31e-10 of the range | defective set-up (amendment 1), ignored record |
+| S0p2, SPs, S1p2 (amendment 1) | | S0p2 2.09e-12 U0; S1p2 velocity 1.65e-12 U0, pressure 4.19e-10 | defective set-up (amendment 2), ignored record |
+| S0p3, SPs (set-up, amendment 2) | `2e-11 U0`; `>= 1e-2` | 2.09e-12 U0; 0.157 | held |
+| S1p3 (amendment 2) | velocity `1e-10 U0`, mean-removed pressure `1e-10` of the range | velocity 1.65e-12 U0 (met); pressure 2.49e-10 (A's own mean-removed drift from `S0`: 3.32e-10) | **known miss** (`s_p3_..._known_miss`) |
+| SPx | C `<= max(1e-10 U0, 10 x D)` | D 6.06e-4 U0 / 1.29e-2; C 6.08e-4 / 5.51e-3 | met |
+| SPx2 (amendment 1) | as SPx | D 8.18e-13 U0 / 3.75e-11; C 1.28e-12 / 3.68e-11 | met |
+| S0B, SBs, S1B, S1Bh as registered | | `U_s` 4.36e-4 m/s, A's drift 8.5e-10 `U_s` | defective set-up (amendment 1), ignored record |
+| S0B2, SBs2 (set-up, amendment 1) | `2e-11 U_s`; `>= 1e-3` m/s | 7.77e-12 `U_s`; 0.0436 m/s | held |
+| S1B2, S1Bh2 (amendment 1) | `1e-10 U_s`, `1e-10` of the range | 6.56e-12 `U_s`, 6.14e-12 (both) | met |
+| R2 refusals and acceptances | (i) to (v) | all as registered | met |
+| K0 (gate of E5) | the listed tests pass, no edit | all pass (the Studio's `correctors_x` after building `rcfd-runner` in this target directory, an environment step) | held |
+| C1 the key is the library option | bit-identical to the replica with C; acts | `p`, `ux`, `uy` bit-identical; different from the run without the key | met |
+| C2 located errors | six arms; each builds without the key | all six at `solver.consistent_correctors.enabled` | met |
+| C3 the default of the key | equal hash; no key in the written text; `true` changes it | 6ac54a8827aedab0 both; absent; 2f289c1f9f0fa3ea | met |
+| C4 dynamic mesh with the key | builds, 10 steps, acts | yes | met |
+| MSG1 Raise message | the parts present, the old text absent | as registered (the text is in the test output) | met |
+| BOc | every C run of BO completes | 18 rows, O9 and the 24 DC4 runs: none stopped | met |
+| BSc, BSd | 232 runs, none refused; D's required verdicts those of ADR 0069 | 232, none refused; D unstable on exactly the four PIMPLE-2 Co_t 4 Re 100 runs, with ADR 0069's first violations to the printed digits (max|u| 2.138 at t 0.750, 1.536 at 2.125, max|p| 55.487 at 0.227, 91.630 at 0.094) | met, held |
+| BBc | 20 B2 rows, 7 B3 runs | made, none stopped | met |
+| BKc, BYc | the runs made | made | met |
+| BXc as registered | | Re 100: 4 crossings after t = 50 in both arms | defective set-up (amendment 3), ignored record |
+| BXc2 (amendment 3) | 4 runs to t = 80, `>= 5` crossings after t = 40 | Re 100: 6 crossings, Re 200: 7, all four runs | met |
+| N1 | four flags `false` | `false` | met |
+| N2 | the nine lines equal on 46a5f029 and on the final tree | equal (a 2437c2441ec5c618 ... i 6ac54a8827aedab0 a44cabd4832f4930) | met |
+| N3 | the gate | see the gate section | |
+
+The D rows of BO reproduce ADR 0069 and ADR 0073 to the printed digits (O1 1.624 and 2.290, O2 1.223 and 1.587, O3 1.031, O5 2.016
+and 2.070, O6 1.939 and 1.605, 1.738 and 2.834, O7 1.832 and 1.902, O8 1.079, 1.040, 1.060, O9 3.814 and 3.254, TG-S 0.975 and
+0.823), so the copied harness is ADR 0069's.
+
+### Results: the benchmark set (the default-decision criteria, for Q1)
+
+| Criterion | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| DC1 cavity required set with C | 88 of 88 stable | 88 of 88 (the default: 84 of 88); the scan with C: 56 of 56 stable, PISO to Co_t 8 and PIMPLE to Co_t 16 at Re 100 and 1000 on both meshes (the default is unstable on about 20 of these, ADR 0073 B4b) | met |
+| DC2 B2 periodic Stokes box with C | every row `g < 1`, `rho < 1` | `g` 0.10 to 0.50, `rho` 0.18 to 0.72 (the default grows from D = 4, ADR 0073 B2) | met |
+| DC3 B3 cavity runs with C | 7 of 7 stable | 7 of 7 (the default: 4 of 7 unstable, as ADR 0073 predicted) | met |
+| DC4 no harm on the exact errors | 21 ratios `<= 1.05` | 20 met (velocity 0.990 to 1.000; TG, TG-S pressure 1.000 to 1.025); MMS pressure at dt 0.025: **1.119** (0.999 at 0.05, 1.043 at 0.0125) | **known miss** |
+| DC5 no new order miss | | O1 coarse 2.305 with C (2.290 by default; band top 2.3); C enters the band on O6 MMS PISO coarse (1.605 to 1.919) and PIMPLE-C coarse (2.834 to 2.089) and halves the MMS PISO temporal errors (fine pair 2.92e-4 / 7.62e-5 to 1.43e-4 / 3.08e-5); the other rows within 0.01, except MMS PIMPLE-C fine (1.738 to 1.568, both outside the band) | **known miss** |
+| DC6 ADR 0154 K1, K2 with the key | t = 3, `M_hf <= 0.0114` | K1 5.738e-3, K2 5.738e-3, 192 steps each, 21 s (the default: K1 diverges at step 30, K2 `M_hf` 282) | met |
+| DC7 ADR 0069 BDF2 cylinder with C | K1b, K2b, K4 | St 0.16467, C_D 1.34578, 17 crossings; T1 met too (the default: 0.16480, 1.35247); 36 pressure iterations per step | met |
+| DC8 as registered | | not evaluable for Re 100 | defective set-up (amendment 3) |
+| DC8b (amendment 3) the Studio examples | St and mean `cd` within 1 % | Re 100: St 0.15169 to 0.15237 (0.44 %), cd 1.32349 to 1.32585 (0.18 %); Re 200: St 0.17514 to 0.17605 (0.52 %), cd 1.29133 to 1.29421 (0.22 %) | met |
+
+Printed (BF): the TG BDF2 fine-pair orders with C equal the default's within 0.003 at N = 16, 32, 64 (PISO 1.036, 1.627, 2.359;
+PIMPLE-4 1.005, 1.031, 2.010): the option does not touch ADR 0073's iterative-path floor. Cost: on the falling block the adaptive
+count (MA3) needed 8 correctors and 8491 pressure iterations to 10 tau where the consistent correctors needed 2 and 2434 (ADR 0214
+A1c).
+
+**Reading.** With the option the step is stable on every set-up of the set, including the ones the default loses (the cavity at
+Co_t 4 to 16, the B2 box from D = 4, the refined cylinder wall layer of K1 and K2, the falling block), and the answers of the
+examples move by less than 0.6 %. The temporal accuracy is unchanged on TG and TG-S, better on MMS's velocity, and worse in one
+place: MMS's pressure at dt 0.025 (+12 %). The DC5 miss is the coarse TG pair's order 2.305, 0.005 above the band (its errors change
+by under 2 %).
+
+### Mutations
+
+Applied one at a time to b5c33ed4's code by `f301-scratch/mutate.py` (an exact text replacement that checks that the text occurs
+once), the named tests run once in release in `target-f301-mut`, each file restored and compared byte for byte with its kept copy
+(equal after each of the seven).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 ALE exclusions kept | MA1, MA3, MA4 | MA1: no estimate on the moving step; MA3: no estimate, the run fails at step 30 (mesh error); MA4: no preflight estimate |
+| MU2 coupled-face compensation dropped | S1p3 | failed on its velocity part: 1.18e-3 U0 (limit 1e-10) |
+| MU3 E3 with `interp(rAU)` | S1B2 | failed: 9.46e-2 `U_s` |
+| MU4 periodic links not in `H1` | SPx2 | failed: 2.62e-3 U0 (D 8.2e-13); SPx (reported) passed (2.62e-3 against its limit 6.1e-3) |
+| MU5 preflight without the flag | MA4 | failed: no preflight estimate |
+| MU6 the key not passed | C1 | failed: not the replica, not different from the default |
+| MU7 the old Raise message | MSG1 | failed: "short pressure waves" missing |
+
+`scripts/limit_audit.py` (workspace scan) reports no hit in the new test files.
+
+### Disclosures
+
+- Order of the runs: registration; N2 on the base; E0 to E4; run 1 of the deliverable tests; amendment 1 and its three tests once;
+  amendment 2 and S-p3 once; K0 on the schema table alone; E5; C1 to C4 once; the rcfd-fv benchmark set once (a first start stopped
+  at compilation, before any run); the rcfd-api benchmark set once; amendment 3 and BX2 once; N2 on the final tree; the mutations;
+  clippy-only edits of the test files afterwards (`allow` attributes, `is_ok_and`, a removed wrapper; no change of behaviour).
+- S1p3 is a known miss of a deliverable: the periodic steady identity holds in velocity to 1.65e-12 U0 (about 60 times under its
+  limit) and its pressure difference to the default (2.49e-10 of the range) lies below the default's own drift (3.32e-10), but the
+  registered pressure limit is below the floor of this problem without a pressure Dirichlet condition; it was not re-registered a
+  third time.
+- SPx as registered was met, but the default's seam faces carry no transient carry-over (ADR 0073 R3) and dominate its comparison;
+  MU4 shows that SPx alone would not see the periodic links (SPx2 does).
+- K0's run of the Studio test `correctors_x` first failed on a missing `rcfd-runner.exe` in this target directory (an environment
+  step of that test); after building it the test passed unchanged.
+- The key is an optional table; no fenced TOML block was added to the documents (the H1 record and `rules_w19c` read those blocks).
+- The machine was shared: other agents ran (CPU load 60 to 100 %, 7 to 9 GB of physical memory free during the runs); a duplicate
+  acquire of the earlier f298 gate held the gate lock from 02:06 UTC and waited for 20 GB free memory.
+
+Status by the decision rule: the deliverables are met except S1p3 (known miss), with every set-up check and negative control held
+and every mutation failing its tests; the benchmark set is complete. F-301 is set **partial** (`[~]`): the case-level wiring of the
+moving-mesh estimate (SV301 and the adaptive count for dynamic meshes, Q2) is not delivered, and S1p3 is a known miss. DC4 and DC5
+are known misses of the option, for Q1.
+
+### Open questions for the maintainer, with recommendations
+
+- **Q1. The default.** The benchmark set favours the option on stability (DC1, DC2, DC3, DC6 met, the whole scan stable) at
+  unchanged answers (DC7, DC8b) and accuracy, with two small misses (DC4: MMS pressure +12 % at one step size; DC5: an order 0.005
+  above a band). A flip changes every transient result, so it needs the bit-identity lift and re-recorded hashes, and the default
+  path would then refuse non-orthogonal correctors, the component diagonal and face jumps. Recommendation: keep `false` now; flip it
+  in its own item once Q5's remainder is done (so that the flip refuses nothing a case uses), with the lift approved; meanwhile let
+  SV301's remedy name the key as well (the Raise message already does).
+- **Q2. Case-level wiring for moving meshes.** Recommendation: yes, as a follow-up: SV301 for `dynamic_mesh` cases from
+  `lag_preflight_moving` with the dynamic mesh's next motion (on a copy), its remedy naming `[solver.consistent_correctors]` (cheaper
+  than the adaptive count here: 2 against 8 correctors); lift ADR 0156's refusal of the adaptive count with a dynamic mesh only with
+  the edits of its test A9b and of the Studio's scope test approved.
+- **Q3. One flag.** Recommendation: fold `consistent_periodic` and `consistent_body_force` into `consistent_correctors` (the key
+  already sets all three), with an amendment to ADR 0214 for its R1 record.
+- **Q4. Status.** Recommendation: partial, as the decision rule says.
+- **Q5. The remaining refused combinations.** Recommendation: non-orthogonal correctors next (the SIMPLEC non-orthogonal
+  compensation of ADR 0050), then the component diagonal and face jumps, each with its steady identity check; the fractional step
+  stays refused (it has no correctors).
+- **Q6. S1p3.** Recommendation: accept the periodic identity on its velocity part and the floor comparison; a re-registration would
+  need a periodic set-up with a pressure Dirichlet condition or tighter pressure tolerances.
