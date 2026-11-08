@@ -512,3 +512,19 @@ checks and set partial.
 - **Q11. Status.** By the rule: todo. With Q9 (a) done and met: partial, the remaining part being Q1 (case keys), Q2 (real-gas
   vapour) and Q3 (viscous terms). Done (`[x]`) remains the maintainer's call; the acceptance comparison (V1) is met at library
   level, inviscid, with a perfect-gas vapour, by a margin of 0.07 percentage points at the last station.
+
+### The gate (not run)
+
+The gate was prepared for a47fcff (this addendum's commit before this section): a `git archive` copy in
+`E:/projects/cfd/w49i-work/gate-f221/src`, `run.sh` (fmt per package, workspace clippy `-D warnings`, every test in release
+with `scripts/gate_test.py`, three jobs, a wait for 20 GB of free memory) started only by `outer2.sh`, the 5 s poll variant
+of the shared atomic `mkdir` lock (`gate-lock.sh`'s lock and owner file). The poller started at 2026-11-07 17:19 and lost
+the lock to the f250, f247, f219, f297 and f298 gates in turn; from 02:06 on 2026-11-08 the f298 gate held the lock while
+waiting for 20 GB of free memory (5 to 6 GB free: the WSL VM held 33.8 GB and the browser 12.6 GB). At about 07:30 Claude
+Code stopped the poller for low system memory. It never held the lock and `run.sh` never started; it was not restarted.
+
+What ran instead, outside the gate: `cargo fmt -p rcfd-fv -p rcfd-core -- --check` (clean), `cargo clippy --workspace
+--all-targets --locked -- -D warnings` on 83c92f9 plus the test-file edits (clean), and the F-221 tests themselves (above).
+B1 (every existing test unchanged) is therefore not verified by a gate. The change to existing code is limited to
+`ls_inverse` and `safe` becoming `pub(crate)` and `saturation_pressure` calling a helper with the same arithmetic (P2 checks
+it bit for bit).
