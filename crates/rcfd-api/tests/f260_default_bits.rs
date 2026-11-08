@@ -60,17 +60,29 @@ component = "viscous"
 fn methods() -> Vec<(bool, Value)> {
     vec![
         (true, json!({"type": "nelder_mead"})),
-        (true, json!({"type": "nelder_mead", "budget": 80, "restarts": 1, "seed": 3})),
+        (
+            true,
+            json!({"type": "nelder_mead", "budget": 80, "restarts": 1, "seed": 3}),
+        ),
         (
             true,
             json!({"type": "nelder_mead", "budget": 400, "restarts": 1, "seed": 1, "initial_simplex": "start", "coefficients": "adaptive"}),
         ),
         (true, json!({"type": "nelder_mead", "initial_simplex": "range"})),
         (true, json!({"type": "differential_evolution"})),
-        (true, json!({"type": "differential_evolution", "budget": 300, "pop": 12, "seed": 2})),
+        (
+            true,
+            json!({"type": "differential_evolution", "budget": 300, "pop": 12, "seed": 2}),
+        ),
         (true, json!({"type": "nsga2", "budget": 400, "pop": 20})),
-        (true, json!({"type": "nsga2", "budget": 400, "pop": 20, "seed": 5, "crossover": "exchange"})),
-        (true, json!({"type": "nsga2", "budget": 400, "pop": 20, "crossover": "sbx"})),
+        (
+            true,
+            json!({"type": "nsga2", "budget": 400, "pop": 20, "seed": 5, "crossover": "exchange"}),
+        ),
+        (
+            true,
+            json!({"type": "nsga2", "budget": 400, "pop": 20, "crossover": "sbx"}),
+        ),
         (true, json!({"type": "factorial", "levels": [3, 2]})),
         (true, json!({"type": "lhs", "n": 8, "seed": 4})),
         (true, json!({"type": "sobol", "n": 8})),
@@ -82,7 +94,10 @@ fn methods() -> Vec<(bool, Value)> {
         (false, json!({"type": "nsga2", "budget": 10, "pop": 20})),
         (false, json!({"type": "nsga2", "pop": 20})),
         (false, json!({"type": "nsga2", "budget": 400})),
-        (false, json!({"type": "nsga2", "budget": 400, "pop": 20, "crossover": "uniform"})),
+        (
+            false,
+            json!({"type": "nsga2", "budget": 400, "pop": 20, "crossover": "uniform"}),
+        ),
         (false, json!({"type": "nelder_mead", "crossover": "exchange"})),
         (false, json!({"type": "nelder_mead", "seed": -1})),
         (false, json!({"type": "factorial"})),
@@ -127,7 +142,8 @@ fn v0b_method_parsing_and_written_method() {
         if valid {
             call(&svc, "design.create_study", &v).unwrap_or_else(|e| panic!("{i}: {}", e.message));
             let sj: Value =
-                serde_json::from_str(&std::fs::read_to_string(root.join(format!("s{i:02}/study.json"))).unwrap()).unwrap();
+                serde_json::from_str(&std::fs::read_to_string(root.join(format!("s{i:02}/study.json"))).unwrap())
+                    .unwrap();
             let w = serde_json::to_string(&sj["method"]).unwrap();
             println!("V0b {i:02} written: {w}");
             written.s(&w);
