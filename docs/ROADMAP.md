@@ -5710,3 +5710,11 @@ fixed by the item's registration ADR before any code.
   - depends on: F-221
   - acceptance: New registered checks make mutations MU3 (nucleated-mass term dropped) and MU6 (sound speed in the wave-speed estimates) fail; the F-221 decision rule is applied again and F-221 becomes partial.
   - note: From ADR 0217 question 9, recommendation taken. MU3 and MU6 survived in F-221.
+- [ ] **F-321** Consistent correctors on the moving-mesh case path
+  - depends on: F-301
+  - acceptance: A moving-mesh case with [solver.consistent_correctors] enabled runs through the case tree and reproduces the library falling-block result; the edit to ADR 0156 A9b and the Studio scope test are made only with the maintainer's approval.
+  - note: From ADR 0223 question 2. NEEDS THE USER: it edits a registered check (ADR 0156 A9b) and a Studio scope test.
+- [ ] **F-322** Consistent correctors: fold the flags into one key and extend the refused combinations
+  - depends on: F-301
+  - acceptance: The optional table carries all consistent-corrector flags in one place with a located refusal for each unsupported combination; defaults bit-identical.
+  - note: From ADR 0223 questions 3 and 4, recommendation taken.
