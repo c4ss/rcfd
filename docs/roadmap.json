@@ -1594,7 +1594,7 @@
     ],
     "status": "todo",
     "acceptance": "Condensing steam in a converging-diverging nozzle reproduces the published wall-pressure trace and onset location within 5 percent",
-    "note": "Priority P4. Size L. Area: fv. Needs an accurate real-gas steam model first."
+    "note": "Priority P4. Size L. Area: fv. Needs an accurate real-gas steam model first. TODO by the decision rule of ADR 0217 (two mutations survived the fast checks); the acceptance comparison is met at library level. Delivered (ADR 0217): rcfd-fv::wetsteam, an explicit density-based Euler solver for the single-fluid wet-steam mixture (monodisperse droplets, classical nucleation with the Kantrowitz correction, Young's growth with alpha = 11, IF97 saturation line and liquid density, IAPWS surface tension, perfect-gas vapour), HLLC for the general EOS, point-implicit wetness; new rcfd-core::iapws functions (extended saturation line, saturation_temperature). Library only, opt-in; defaults and hashes unchanged. Acceptance (Moses and Stein case 203, digitized from Starzmann et al. GT2016-57598): centreline p/p0 within 5 percent at all 41 points (worst -4.93 percent at the exit), onset location +1.90 percent; droplet radius within 3.9 percent of r32. Checks: model values, isochoric relaxation and equilibrium, conservation, frozen wet shock tube, bit-identical dry limit against compressible.rs, quasi-1-D reference (0.16 percent), dry isentropic nozzle, grid study. NOT done or missed: mutations MU3 (nucleated-mass term) and MU6 (sound speed in the wave-speed estimates) survived; the coarse 230 x 10 run is not steady at its cap (8.2e-6); L1's first run missed its cell-spread limit (amendment 1, L1b met). No case keys (Q1), no real-gas vapour EOS (Q2), inviscid only (Q3), Moore nozzle B geometry not readable (Q4), no moments/polydispersion (Q5). Open questions Q1 to Q11 in ADR 0217."
   },
   {
     "id": "F-222",
@@ -2587,5 +2587,60 @@
     "status": "todo",
     "acceptance": "A CMA-ES study over blade parameters of the 120 mm fan converges within a registered budget and beats the baseline pressure rise at the design flow; the study record is reproducible.",
     "note": "From ADR 0222: the real-fan study was split out of F-260. Waits on FAN-01 convergence and the blade-parameter case keys. The design_create_study description change goes with F-310 (golden edit)."
+  },
+  {
+    "id": "F-316",
+    "title": "Wet steam in the case tree",
+    "phase": 9,
+    "deps": [
+      "F-221"
+    ],
+    "status": "todo",
+    "acceptance": "A case file with a [wet_steam] table runs the Moses and Stein nozzle and reproduces the library result bit for bit; the key is optional and omitted from the settings hash at its default.",
+    "note": "From ADR 0217 question 1, recommendation taken. Follows F-317."
+  },
+  {
+    "id": "F-317",
+    "title": "Wet steam: real-gas vapour model",
+    "phase": 9,
+    "deps": [
+      "F-221"
+    ],
+    "status": "todo",
+    "acceptance": "The nozzle's remaining centre-line pressure error (worst -4.93 % at the exit in F-221) is re-measured with a real-gas vapour equation of state against the same 5 % limit, with the margin reported.",
+    "note": "From ADR 0217 question 2, recommendation taken: F-221 should not be marked done before this."
+  },
+  {
+    "id": "F-318",
+    "title": "Wet steam: viscous terms",
+    "phase": 9,
+    "deps": [
+      "F-221"
+    ],
+    "status": "todo",
+    "acceptance": "The wall boundary layer is solved (no fitted correction) and the exit-pressure deficit of the Moses and Stein nozzle is explained to a registered fraction.",
+    "note": "From ADR 0217 question 3, recommendation taken: do not fit a boundary-layer correction to the data."
+  },
+  {
+    "id": "F-319",
+    "title": "Wet steam: polydisperse droplets",
+    "phase": 9,
+    "deps": [
+      "F-221"
+    ],
+    "status": "todo",
+    "acceptance": "A method-of-moments droplet spectrum reproduces the measured Sauter radius and the pressure trace of the Moses and Stein nozzle within the F-221 limits.",
+    "note": "From ADR 0217 question 5, recommendation taken."
+  },
+  {
+    "id": "F-320",
+    "title": "Wet steam: checks that catch the nucleated-mass term and the wave-speed sound speed",
+    "phase": 9,
+    "deps": [
+      "F-221"
+    ],
+    "status": "todo",
+    "acceptance": "New registered checks make mutations MU3 (nucleated-mass term dropped) and MU6 (sound speed in the wave-speed estimates) fail; the F-221 decision rule is applied again and F-221 becomes partial.",
+    "note": "From ADR 0217 question 9, recommendation taken. MU3 and MU6 survived in F-221."
   }
 ]

@@ -677,7 +677,7 @@ pub fn characteristic_face_state(gas: Gas, bc: &CompBc, interior: &Prim, n: Vec3
 }
 
 /// Inverse of the (masked) inverse-distance weighted least-squares matrix of each cell.
-fn ls_inverse(geom: &FvGeometry) -> Vec<[[f64; 3]; 3]> {
+pub(crate) fn ls_inverse(geom: &FvGeometry) -> Vec<[[f64; 3]; 3]> {
     let mesh = &geom.mesh;
     let (own, nei) = (mesh.owner(), mesh.neighbour());
     let mut mat = vec![[[0.0; 3]; 3]; mesh.n_cells()];
@@ -733,7 +733,7 @@ fn ls_inverse(geom: &FvGeometry) -> Vec<[[f64; 3]; 3]> {
         .collect()
 }
 
-fn safe(x: f64) -> f64 {
+pub(crate) fn safe(x: f64) -> f64 {
     if x.abs() < 1e-300 {
         if x < 0.0 {
             -1e-300

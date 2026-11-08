@@ -50,6 +50,7 @@ pub mod varden;
 pub mod viscoelastic;
 pub mod vof;
 pub mod waves;
+pub mod wetsteam;
 
 pub use bc::{
     Bc, BcCtx, Directed, Empty, FaceCoeffs, FixedGradient, FixedValue, Freestream, Mixed, Periodic, Profile, Switched,
