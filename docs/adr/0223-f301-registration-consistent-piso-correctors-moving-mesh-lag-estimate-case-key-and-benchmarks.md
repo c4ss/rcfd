@@ -373,3 +373,20 @@ numbers go in the addendum and none is repeated. Two set-ups did not resolve the
 - Mutations: MU2 must fail S1p2, MU3 must fail S1B2, MU4 must fail SPx2 (SPx reported with it).
 - The registered S tests stay as the ignored records `s0p_sps_s1p_steady_state_on_periodic_faces_defective_setup` and
   `s0b_sbs_s1b_s1bh_steady_state_with_a_body_force_defective_setup`; their bodies are unchanged.
+
+## Amendment 2 (2026-11-08): the pressure level in the periodic identity, written before the corrected run
+
+**What happened.** The three corrected tests of amendment 1 were run once (commit after amendment 1). SPx2 was met (consistent
+1.28e-12 U0 and 3.68e-11 of the range, default 8.18e-13 and 3.75e-11). S-B2: S0B2 (7.77e-12 `U_s`) and SBs2 (`U_s` 0.0436 m/s) held,
+S1B2 and S1Bh2 were met (6.56e-12 `U_s`, 6.14e-12 of the range). S-p2: S0p2 (2.09e-12 U0) and SPs (0.157) held, S1p2's velocity part
+was met (1.65e-12 U0) and its pressure part missed: `max|p_B - p_A|` over the steps 4.19e-10 of the range (1.1e-11 m^2/s^2) against
+1e-10. SPC has no pressure Dirichlet condition: its level is fixed only by the reference-cell pin of the pressure solve, and the
+level is the near-null mode the solver converges last, so each branch's level wanders at that size from step to step (A from `S0`:
+5.78e-10 of the range), independently of the corrector algebra. Amendment 1's comparison kept the level; SPX's comparison already
+removed it. The pressure level is not part of the steady state of such a problem (ADR 0214 M3 removed it the same way).
+
+**Corrected set-up (registered now, before its run).** **S-p3** (test `s_p3_steady_state_on_periodic_faces_without_the_pressure_level`):
+S-p2 exactly, with each branch's pressure taken with its volume mean removed in the pressure comparisons (B against A and both against
+`S0`, whose mean is removed too). S0p3 = S0p2 and SPs (set-up), S1p3: after every step `max|u_B - u_A| <= 1e-10 U0` and
+`max|p'_B - p'_A| <= 1e-10 (max p_S0 - min p_S0)`, `p'` the mean-removed pressure. Printed: the raw-pressure numbers too. MU2 must fail
+S1p3. S-p2 stays as the ignored record `s_p2_..._defective_setup`; its body is unchanged.
