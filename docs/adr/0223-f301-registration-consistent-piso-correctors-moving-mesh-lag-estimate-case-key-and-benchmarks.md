@@ -334,3 +334,42 @@ Registered now; their recommendations are given in the addendum with the results
 - **Q4. Status** of F-301.
 - **Q5. The remaining refused combinations** (face jumps, non-orthogonal correctors, the component diagonal, the fractional step).
 - **Q-K** (only if K0 fails): the golden edit the key needs.
+
+## Amendment 1 (2026-11-08): the steady-identity set-ups of E2 and E3, and a seam check without the transient carry-over, written before the corrected runs
+
+**What happened.** The N2 tests were printed on the library of 46a5f029 (commits 0bc419aa, 185ea729, test code only). Then E0 to E4
+were written and the tests of `consistent_correctors_f301.rs` (MA, S, R2, MSG1, N1) were run once, in release, on that code; their
+numbers go in the addendum and none is repeated. Two set-ups did not resolve their limits:
+
+- **S0p / S1p.** S0p (velocity drift of branch A, 2.09e-12 U0) and SPs (0.157) held. S1p's velocity part was met (1.88e-12 U0), its
+  pressure part missed (4.31e-10 of the range against 1e-10). The default's own branch A moved its pressure from `S0` by 5.78e-10 of
+  the range in the same 50 steps (a common level drift of a problem without a pressure Dirichlet condition, at the solvers' floor),
+  which S0p did not check: `S0` is not a fixed point of the default at the 1e-10 pressure level, so S1p's pressure limit measured the
+  floor, not the identity. B against A after 50 steps: 6.0e-13 U0 and 3.6e-11 of the range.
+- **S0B / SBs / S1B.** The flow of SBC is weaker than assumed (`U_s` 4.36e-4 m/s against SBs's 1e-3), and branch A's drift is 8.54e-10
+  `U_s` (3.7e-13 m/s, the solvers' absolute floor; S0B's limit 2e-11 `U_s`). Both set-up checks failed, so S1B and S1Bh (7.31e-10 `U_s`,
+  2.99e-10 of the range, below A's own drift) are not counted.
+- **SPx** was met (consistent 6.08e-4 U0, default 6.06e-4 U0, limit ten times the default's), but the default's one-period and
+  two-period runs differ by 6e-4 U0: the transient Rhie-Chow carry-over is added on internal faces only (ADR 0073 R3), so a seam face
+  differs from the internal face of the two-period box, and that difference hides the effect SPx is meant to see.
+
+**Corrected set-ups (registered now, before their runs).**
+
+- **S-p2** (test `s_p2_steady_state_on_periodic_faces_against_the_default_branch`): SPC and `S0` as before (3000 default steps).
+  Branches A (default) and B (`consistent_correctors`, `consistent_periodic`) run side by side from `S0` for 50 steps (two solvers
+  restored from the same snapshot). **S0p2** (set-up): A's `max|u - u_S0|` over the 50 steps `<= 2e-11 U0`. SPs unchanged. **S1p2**:
+  after every step `max|u_B - u_A| <= 1e-10 U0` and `max|p_B - p_A| <= 1e-10 (max p_S0 - min p_S0)` (S1p's limits, with the
+  default's own trajectory as the reference, so that a common drift of the floor cancels). Printed: A's and B's deviations from `S0`.
+- **S-B2** (test `s_b2_steady_state_with_a_body_force_against_the_default_branch`): SBC with `A = 10` (so that the flow is far above
+  the floor: prediction `U_s` about 0.044 m/s by linear scaling of the measured 4.36e-4 m/s at `A = 0.1`; Reynolds number about 0.4),
+  3000 default steps give `S0`; branches A (default), B (`consistent_correctors`, `consistent_body_force`, the static force) and B'
+  (the same flags, the force from the hook) side by side from `S0`, 50 steps. **S0B2** (set-up): A's `max|u - u_S0| <= 2e-11 U_s`.
+  **SBs2** (set-up): `U_s >= 1e-3` m/s. **S1B2** and **S1Bh2**: after every step, B and B' against A: `max|u - u_A| <= 1e-10 U_s`,
+  `max|p - p_A| <= 1e-10` of the range of `p_S0`.
+- **SPx2** (test `spx2_seam_cells_behave_as_interior_cells_without_the_carry_over`): SPX as registered with `ddt_correction = false`
+  in both arms (no carry-over on any face, so the default's seam faces are the internal faces of the two-period box up to the
+  solvers). Limits as SPx: C's matched velocity difference `<= max(1e-10 U0, 10 x D's)`, pressure `<= max(1e-10, 10 x D's)` of box 1's
+  range. SPx stays registered and is reported as met.
+- Mutations: MU2 must fail S1p2, MU3 must fail S1B2, MU4 must fail SPx2 (SPx reported with it).
+- The registered S tests stay as the ignored records `s0p_sps_s1p_steady_state_on_periodic_faces_defective_setup` and
+  `s0b_sbs_s1b_s1bh_steady_state_with_a_body_force_defective_setup`; their bodies are unchanged.
