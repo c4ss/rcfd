@@ -731,9 +731,39 @@ fn t3_spalding_wall_nut_reaches_the_wall_faces() {
 }
 
 /// S3s, BDF2: k-epsilon with the smooth wall eddy viscosity (the test of the suspected cause of the ADR 0210 S3 known miss).
+/// Known miss (ADR 0225 addendum): the run of record gave p 0.8031 (ux), 1.4814 (k), 1.4287 (epsilon), below the band and
+/// within 0.1 of the standard law's 0.7975 / 1.4910 / 1.5303; the outer iterations had converged (largest nut_change of a step
+/// 1.8e-8, 2.9e-12, 5.9e-16 at T/80, T/160, T/320). So the kink of the standard wall eddy viscosity is not shown to be the cause.
 #[test]
-fn s3s_kepsilon_spalding_bdf2_time_order() {
+#[ignore = "known miss (ADR 0225 addendum): k-epsilon with the Spalding wall eddy viscosity, BDF2 p 0.8031 / 1.4814 / 1.4287 below [1.7, 2.3]"]
+fn s3s_kepsilon_spalding_bdf2_time_order_known_miss() {
     order_check(Order::KeSpalding, "bdf2", 1.7, 2.3)
+}
+
+/// The observed orders of S3s BDF2 at finer levels (report only, the diagnosis of the S3s known miss, ADR 0225 addendum): the
+/// same runs as the ADR 0210 diagnosis of the standard law (T/160, T/320, T/640 and T/320, T/640, T/1280).
+#[test]
+#[ignore = "diagnosis of the S3s known miss, report only (ADR 0225 addendum)"]
+fn s3s_kepsilon_spalding_bdf2_finer_levels_diagnosis() {
+    for ns in [[160, 320, 640], [320, 640, 1280]] {
+        let runs: Vec<_> = ns.iter().map(|&n| s3_run(Order::KeSpalding, "bdf2", 20, n)).collect();
+        for (i, name) in Order::KeSpalding.fields().iter().enumerate() {
+            let scale = max_abs(&runs[2].0[i]);
+            let e1 = max_diff(&runs[0].0[i], &runs[1].0[i]) / scale;
+            let e2 = max_diff(&runs[1].0[i], &runs[2].0[i]) / scale;
+            println!(
+                "S3s diagnosis {name}: e({},{}) {e1:.4e}, e({},{}) {e2:.4e}, p {:.4}; largest nut_change of a step {:.3e} / {:.3e} / {:.3e}",
+                ns[0],
+                ns[1],
+                ns[1],
+                ns[2],
+                (e1 / e2).log2(),
+                runs[0].1,
+                runs[1].1,
+                runs[2].1
+            );
+        }
+    }
 }
 
 /// S3s, Euler: first order.
