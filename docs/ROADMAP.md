@@ -5738,3 +5738,7 @@ fixed by the item's registration ADR before any code.
   - depends on: F-301
   - acceptance: The optional table carries all consistent-corrector flags in one place with a located refusal for each unsupported combination; defaults bit-identical.
   - note: From ADR 0223 questions 3 and 4, recommendation taken.
+- [ ] **F-323** Droplet models: feedback to the carrier and use with the exchange record
+  - depends on: F-245
+  - acceptance: Vapour mass, heat and momentum from evaporating and breaking-up parcels are returned to the gas, conserved to 1e-10 relative; the evaporation and breakup models may be used with the particle exchange record.
+  - note: From ADR 0224 question 3, recommendation taken: a separate item before F-252. Case-tree wiring (optional particles.evaporation and particles.breakup tables, question 2) goes with F-252.

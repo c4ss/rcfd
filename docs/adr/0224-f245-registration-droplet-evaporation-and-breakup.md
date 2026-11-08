@@ -543,3 +543,11 @@ and compared byte for byte with the kept copy (equal in all eleven runs).
 Every registered check of A1 and A2 is met in the library; by the decision rule F-245 is done, with the maintainer's acceptance
 still required (Q1). The roadmap entry is marked done on this branch with that note (the registration's Q1 said "partial until
 then"; the rule of the brief governs). Q2 to Q9 stay open; Q2 (case-tree wiring) is the main one.
+
+### Gate line (added at the merge, 2026-11-08)
+
+The gate of `e3850cc5` ran on a `git archive` copy (`scripts/gate_test.py`, 3 jobs, wall 6191 s, lowest free memory 9 GB): fmt per
+package 0, `clippy --workspace --all-targets -D warnings` 0, tests 3309 passed, 0 failed, 913 ignored (3309 test processes in
+626 binaries). The merge with main was clean. After the merge: clippy of rcfd-particles and rcfd-api clean; `evaporation_f245`
+and `breakup_f245` pass in release. Every registered check is met, so F-245 is done by the decision rule, pending the
+maintainer's acceptance (Q1).
