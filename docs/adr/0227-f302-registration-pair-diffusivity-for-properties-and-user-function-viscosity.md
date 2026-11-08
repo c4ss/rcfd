@@ -7,6 +7,15 @@ the owner halves of the case-tree checks below, the owner halves of the transien
 texts. The `pair` halves of the pimple checks (code already on main, item 5) were not run. Its numbers are quoted in item 8,
 where they set the limits of the negative controls. Results go in the addendum at the end.
 
+Summary of the results (addendum): with `turbulence.periodic_seam.diffusivity = "pair"` a laminar run with a temperature-dependent
+property viscosity or a user-function viscosity now gives both faces of every seam pair one value (R1'' accepts both; F2p, F2u,
+T4p, T4u exact). The property viscosity was already one value per pair by default up to rounding (0 to 5.6e-16, a finding of the code
+read), so `pair` changes only its last bits on graded seams; the user-function budgets close to 4.5e-16 with `pair` and miss by
+1.2e-4 to 1.3e-3 with `owner`. On `pimple` k-epsilon and Spalart-Allmaras with `pair` give one momentum face viscosity per pair to the
+bit (owner 5.2e-3 to 1.6e-2), the laminar rule holds across the seam, and the transient k and `nuTilda` sweep budgets close to 3.1e-15
+(owner 1.4e-4 to 3.5e-2). The cases of the ignored F-294 S1 run again (S1t). The defaults are bit-identical. Every check met its
+limit, every negative control fired, and every mutation made its check fail.
+
 Parents: [ADR 0212](0212-f296-registration-one-diffusivity-per-periodic-seam-pair-for-the-other-models.md) (F-296: the rule D1,
 R1', the face values its item 8 left out; question 1, option (b), and question 4, option (b), recommendations taken by the lead),
 [ADR 0205](0205-f295-registration-one-diffusivity-per-periodic-seam-pair.md) (F-295: the pairs, the key, the laminar rule across the
@@ -309,3 +318,64 @@ below 0.1 s).
 ## Addenda
 
 Results of the checks follow in an addendum, in the order of the tables.
+
+### Addendum: results (2026-11-08)
+
+Commits: registration 023ec27d; V0b'' record 61b2f8f9 (on main 9f95fb12 with the registration, before any code; the same commit
+names the field `T` in the registration's V0b'' row, an edit written before the record was first run); code a2af1073
+(`rcfd-api/src/properties.rs` `Properties::set_seam_pairs`, `viscosity_enabled`; `udf.rs` `face_viscosity`; `sim.rs` the pairs of
+`Simulation::new` and the call in the steady engine; `turb.rs` R1''; `schema.rs` the text of the key; `docs/case-schema.md`,
+`docs/udf-abi.md`); checks 5399d9f8, committed before their run. Every check was run once, in release. Tests:
+`crates/rcfd-api/tests/f302_seam_diffusivity.rs`, `crates/rcfd-api/tests/f302_default_bits.rs`,
+`crates/rcfd-turb/tests/f302_transient_seam.rs`, with the case texts, the modules and the V0b'' records in
+`crates/rcfd-api/tests/f302_common/mod.rs`.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| F2p | BOX (4 pairs), SEC (24), GBOX (4): `pair` 0 with unequal bits, 0 off the D1 bits, 0 other faces changed; `owner` 0, 0 and 1 pairs with unequal bits, largest pair difference 0, 0, 5.58e-16 of the largest face viscosity | exact; `owner <= 1e-14` | met (item 2 confirmed) |
+| G2p | `pair` 4.4e-17 to 1.4e-16; `owner` 4.0e-17 to 1.3e-16 (BOX q, u_x, u_y 1.302e-16, 1.331e-16, 4.40e-17 in both modes; SEC 4.04e-17 in both; GBOX q 1.086e-16 in both, u_x 1.396e-16 / 1.213e-16, u_y 7.47e-17 / 8.52e-17) | `pair <= 1e-13`; `owner <= 1e-13` | met |
+| F2u | BOX, SEC, GBOX: `pair` 0 with unequal bits, 0 off the D1 bits, 0 other faces changed; `owner` 4 of 4, 24 of 24, 4 of 4 pairs with unequal bits, largest pair difference 6.67e-3, 7.94e-3, 3.30e-3 of the largest face viscosity | exact; `>= 1e-3` | met |
+| G2u | `pair` 2.8e-17 to 4.5e-16; `owner` 4.98e-4, 5.05e-4, 2.79e-4 (BOX), 1.27e-3 (SEC), 1.61e-4, 1.63e-4, 1.23e-4 (GBOX) | `<= 1e-13`; `>= 1e-5` | met |
+| F2x | BOX, module UX: `pair` 0 with unequal bits, 0 off the value at `x_f`; the value at `x_g` differs by at least 3.93e-2 of it; `owner` 3.34e-2 | exact; `>= 1e-3`; `>= 1e-3` | met |
+| S1p | the 7 accepted texts without a diagnostic; CH laminar, CHXP with `law = "constant"`, CHXP with a conductivity law only located statically at the key with the message of R1'' (it names `rheology`, `properties.viscosity` and `udf`); CH plugin located there (`... not with "plugin": a plugin model owns its diffusivities`) | as stated | met |
+| S1t | every case of ADR 0210 S1 and amendment 1 as recorded there, and CH-K and CH-A on `pimple` with `pair` accepted with no diagnostic; the dispatch answers as there | as stated | met |
+| T4p | GCHXP, 20 pairs: `pair` 0 with unequal bits, 0 off the D1 bits from the temperature after iteration 4; `owner` 2 pairs with unequal bits, largest relative pair difference 6.93e-16 | exact; `owner <= 1e-14` | met |
+| T4u | CHXU, 20 pairs: `pair` 0 with unequal bits, 0 off the D1 bits from the velocity after iteration 4; `owner` 9.12e-3 | exact; `>= 1e-3` | met |
+| T4k | 20 pairs each: `pair` 0 with unequal bits and 0 off the D1 bits in CHXK and CHXA with `euler` and `bdf2`; `owner` CHXK 7.18e-3 (`euler`), 5.15e-3 (`bdf2`), CHXA 1.60e-2, 1.16e-2 | exact; `>= 1e-3` | met |
+| T5k | LAMXP, 40 seam faces: `pair` 0 off the bits of `nu`; `owner` the largest 2.726e-2 = 10.77 `nu` | exact; `>= 1.001 nu` | met |
+| R0p | CHXP with `pair`: (50, 5, 0x4feda2368847708c), equal to the V0b'' record | reported | equal (PR5) |
+| K1t | `pair` B(L_D1) 3.1e-15 (BOX), 1.3e-15 (GBOX); harness (owner B(L_owner)) 3.0e-15, 1.6e-15; owner control B(L_D1) 1.91e-2, 3.46e-2; step change 0.61, 0.62; smallest k after the sweep 0.380, 0.378; `is_transient()` true | `<= 1e-12`; `<= 1e-12`; `>= 1e-6`; `>= 1e-3`; `> 1e-10` | met |
+| A1t | 4 (BOX) and 8 (GBOX) seam owner cells with `nuTilda < 0`; `pair` 6.8e-16, 2.0e-16; harness 9.5e-16, 4.8e-16; owner control 1.40e-4, 3.39e-4; step change 0.118, 0.121 | as K1t | met |
+| V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs` unedited; both pass in the gate (below) | pass | see the gate |
+| V0b'' | 9 of 9 runs bit-identical to the record after the code: CHXP 0x4feda2368847708c, GCHXP 0x3dd17d17fbb04550, CHXU 0xdb69c17d91403384, CHXUT 0xf255d266d551acaf, CHXK `euler` 0xdcb496a6f63c8273, `bdf2` 0x7dd89fbdcd8c979d, CHXA `euler` 0x9525367ec22cff7f, `bdf2` 0xf4758e19b0d6a7cd, LAMXP 0xacc05f0e5534153d | bit-identical | met |
+| V0c'' | the 9 runs with `owner` written give their V0b'' records | the records | met |
+| V0d | `f296_default_bits.rs`, `f295_default_bits.rs`, `f294_default_bits.rs`, `f286_default_bits.rs`, `udf.rs` unedited; they pass in the gate (below) | pass | see the gate |
+
+**Mutations** (scratch, `w49i-work/f302-scratch/mutate.py`, each applied alone to 5399d9f8 in the worktree and reverted with
+`git checkout`; the named test run once in release; the tree was clean after the last):
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MU1 | F2p | GBOX: 1 pair with unequal bits (BOX and SEC pass: item 2) | fails (on GBOX, as registered) |
+| MU2 | T4p | GCHXP: 2 of 20 pairs with unequal bits | fails |
+| MU3 | F2u | BOX: 4 pairs with unequal bits, 4 off the D1 bits | fails |
+| MU4 | T4u | CHXU: 20 of 20 pairs with unequal bits and off the D1 bits | fails |
+| MU5 | F2x | BOX: 4 pairs off the value at `x_f` (one value per pair still) | fails |
+| MU6 | F2u | BOX meets (`w = 1/2`); SEC: 1 pair off the D1 bits (its weights differ from 1/2 by rounding), so the test stopped before GBOX | fails (on SEC, before the GBOX the table names) |
+| MU7 | S1p | CH laminar with `pair`: no static diagnostic | fails |
+| MU8 | K1t | BOX `pair` B(L_D1) 1.91e-2 (the owner value) | fails |
+| MU9 | A1t | BOX `pair` B(L_D1) 1.40e-4 | fails |
+| MU10 | T5k | LAMXP: 40 of 40 seam faces off the bits of `nu` | fails |
+| MU11 | T4k | CHXK `euler`: 20 of 20 pairs with unequal bits | fails |
+| MU12 | T4k | CHXK passes; CHXA `euler`: 20 of 20 pairs with unequal bits | fails |
+
+**Predictions.** PR1 met (F2p, F2u, F2x exact; G2p and G2u with `pair` at most 4.5e-16; the owner values those of the probe to the
+digits printed). PR2 met. PR3 met (K1t and A1t with `pair` at most 3.1e-15). PR4 met. PR5 met (R0p equal). PR6 met for V0b'' and
+V0c''.
+
+**Disclosures.** The probe before the registration (item 8) ran the owner halves only. After the V0b'' record was taken (one run,
+which printed the nine records and failed on the empty placeholders), the transcribed records were checked by one more run on main
+before any code (it passed); no other check was run more than once. The texts with a module write it from WAT into a directory
+of the test process (`f302_common::case_dir`).
+
+**Questions added by the results:** none. Questions 1 to 5 stand.

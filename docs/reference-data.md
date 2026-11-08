@@ -1523,3 +1523,13 @@ arXiv:2201.02818v1 `52c7b9dd554ccd34d2150a68fbdb5717710a5bf25ada3ed1495283993c1a
 | Molar gas constant `R = 8.314 462 618... J/(mol K)` (exact), Avogadro constant `6.022 140 76 x 10^23 /mol` (exact) | read | NIST CODATA 2022, physics.nist.gov/cgi-bin/cuu/Value?r and ?na, read 2026-11-08; rcfd uses `R = N_A k = 8.31446261815324` with `k` of the F-221 row |
 | Abramzon-Sirignano film correction, Langmuir-Knudsen non-equilibrium, Miller, Harstad and Bellan (1998), Godsave and Spalding (1953), Taylor (1963), Reitz and Diwakar (1987) | not read | named in the sources above; not used (ADR 0224 Q6) |
 | Measured droplet lifetimes, product drop sizes or breakup times | not used | no comparison attempted (F-252) |
+
+## F-302 periodic seam pair diffusivity: the property and user-function viscosities (ADR 0227)
+
+Nothing was read for ADR 0227. The rule is the flux balance of a pair of finite-volume faces, derived in ADR 0205 D1, applied to the
+face formulas the code already uses on internal faces (`crates/rcfd-api/src/properties.rs`, the user-function face loop of F-122).
+
+| Item | Status | Source |
+|---|---|---|
+| Both faces of a periodic pair take one diffusivity, the internal-face formula with the pair's weight `w = dn_g / (dn_f + dn_g)`: `mu(w T_P + (1 - w) T_Q) / rho` for a property law, the module at the centre of the pair's face of lower index with `w T_P + (1 - w) T_Q` and `w abs(u_P) + (1 - w) abs(u_Q)` for a user function | derived | ADR 0205 D1, ADR 0212 D1, ADR 0227 D1 (the face of lower index is a choice of ADR 0227, question 1) |
+| The property viscosity is already one value per pair by default, up to rounding (the periodic face temperature is the same interpolation) | derived | ADR 0227 item 2 (code read), checked by F2p, G2p and T4p |
