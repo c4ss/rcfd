@@ -5608,3 +5608,7 @@ fixed by the item's registration ADR before any code.
   - depends on: F-297
   - acceptance: create_study writes crossover = exchange into new nsga2 studies while old studies keep sbx; the design_create_study description names nsga2 and crossover; both goldens updated by a registered edit.
   - note: From ADR 0220 questions 3 and 5. Changes the tools' default output, so it needs the bit-identity lift and the golden edit approved by the maintainer; not started.
+- [ ] **F-311** Default Joule heat and fixed-pressure flux correction: lift the bit-identity rule
+  - depends on: F-298
+  - acceptance: The default Joule heat equals the electric power on skewed meshes (it misses by 11.9 percent on the F-298 wedge) and the default flux correction on fixed-pressure faces closes the domain mass balance (it leaves 2.0e-3 of the inflow); the changed default hashes are registered and approved by the maintainer.
+  - note: From ADR 0221 questions 1 and 2, recommendation (b) taken as its own item. Needs the maintainer's lift of the bit-identity rule and approval of the baseline hash changes; not started. Until then a case can set [solver.gradient_equations] pressure = true.
