@@ -390,3 +390,18 @@ S-p2 exactly, with each branch's pressure taken with its volume mean removed in 
 `S0`, whose mean is removed too). S0p3 = S0p2 and SPs (set-up), S1p3: after every step `max|u_B - u_A| <= 1e-10 U0` and
 `max|p'_B - p'_A| <= 1e-10 (max p_S0 - min p_S0)`, `p'` the mean-removed pressure. Printed: the raw-pressure numbers too. MU2 must fail
 S1p3. S-p2 stays as the ignored record `s_p2_..._defective_setup`; its body is unchanged.
+
+## Amendment 3 (2026-11-08): the window of the Studio examples, written before the corrected run
+
+**What happened.** The benchmark runs of `consistent_correctors_case_f301.rs` were started once (BK, BY, BX). BX's four runs reached
+t = 80 unstopped, but `cylinder-re100.toml` has only 4 upward zero crossings of `cl` after t = 50 in both arms (D and C), so BXc's
+"at least 5 crossings after t = 50" does not hold for either arm and St and the mean `cd` cannot be formed for Re 100; DC8 is then
+not evaluable. At St about 0.16 the registered window (t 50 to 80) holds 4.8 periods, so whether it contains 5 upward crossings
+depends on the phase: the window was too short for this example, in both arms alike (a defective set-up, not a property of the
+option). `cylinder-re200.toml` had 5 crossings in both arms.
+
+**Corrected set-up (registered now, before its run).** **BX2** (tests `bxc2_...` and `dc8b_...`): the same four runs, with the window
+from t = 40 instead of 50 (the example's own comment: the start sheds within about 40 D/U): the upward zero crossings of `cl` minus its
+mean over t >= 40, St from the last four whole periods (the last 5 crossings), the mean `cd` over them by the trapezoid rule.
+**BXc2**: every run reaches t = 80 unstopped with at least 5 crossings after t = 40. **DC8b**: DC8's limits (1 % on St and on the mean
+`cd`, both examples). The registered tests stay as the ignored records `bxc_..._defective_setup` and `dc8_..._defective_setup`.
