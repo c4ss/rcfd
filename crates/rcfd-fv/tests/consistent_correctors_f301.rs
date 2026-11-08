@@ -806,10 +806,12 @@ fn spc_solver(periods: usize, settings: PimpleSettings) -> PimpleSolver {
     PimpleSolver::new(geom, u, p, settings)
 }
 
-/// ADR 0223 S0p, SPs, S1p: the consistent correctors on periodic faces keep the default's steady state of SPC.
+/// ADR 0223 S0p, SPs, S1p as registered: the consistent correctors on periodic faces keep the default's steady state of SPC.
+/// Defective set-up (ADR 0223 amendment 1): `S0` is not a fixed point of the default at S1p's pressure level (the default's own
+/// branch A drifts by 5.78e-10 of the range), which S0p did not check. Kept as the record; corrected by `s_p2_...`.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn s0p_sps_s1p_steady_state_on_periodic_faces() {
+#[ignore = "defective set-up: S1p's pressure limit is below the default's own drift from S0 (ADR 0223 amendment 1)"]
+fn s0p_sps_s1p_steady_state_on_periodic_faces_defective_setup() {
     let dt = 0.002;
     let mut flow = spc_solver(1, fb_settings());
     for _ in 0..3000 {
@@ -923,24 +925,26 @@ fn spx_seam_cells_behave_as_interior_cells() {
     assert!(c.1 <= 1e-10f64.max(10.0 * d.1), "SPx pressure {}", c.1);
 }
 
+/// The amplitude of SBC as registered (`A = 0.1`) and of S-B2 (`A = 10`, ADR 0223 amendment 1).
 const A_SB: f64 = 0.1;
+const A_SB2: f64 = 10.0;
 
-fn sb_accel(x: Vec3) -> Vec3 {
-    [A_SB * (PI * x[1] / 0.1).sin(), -A_SB, 0.0]
+fn sb_accel(a: f64, x: Vec3) -> Vec3 {
+    [a * (PI * x[1] / 0.1).sin(), -a, 0.0]
 }
 
-/// The body force of SBC: cell values at the centres, `f(x_f) . S_f` on every non-empty face.
-fn sbc_force(geom: &FvGeometry) -> BodyForce {
+/// The body force of SBC with amplitude `a`: cell values at the centres, `f(x_f) . S_f` on every non-empty face.
+fn sbc_force_a(geom: &FvGeometry, a: f64) -> BodyForce {
     let mesh = &geom.mesh;
     let (cc, fc, sf) = (mesh.cell_centres(), mesh.face_centres(), mesh.face_area_vectors());
     BodyForce {
-        cell: cc.iter().map(|&c| sb_accel(c)).collect(),
+        cell: cc.iter().map(|&c| sb_accel(a, c)).collect(),
         face: (0..mesh.n_faces())
             .map(|f| {
                 if geom.empty[f] {
                     0.0
                 } else {
-                    vec3::dot(sb_accel(fc[f]), sf[f])
+                    vec3::dot(sb_accel(a, fc[f]), sf[f])
                 }
             })
             .collect(),
@@ -948,6 +952,10 @@ fn sbc_force(geom: &FvGeometry) -> BodyForce {
 }
 
 fn sbc_solver(settings: PimpleSettings) -> PimpleSolver {
+    sbc_solver_a(settings, A_SB)
+}
+
+fn sbc_solver_a(settings: PimpleSettings, a: f64) -> PimpleSolver {
     let mesh = box_2d_graded(
         20,
         12,
@@ -965,14 +973,16 @@ fn sbc_solver(settings: PimpleSettings) -> PimpleSolver {
     }
     let p = ScalarField::uniform("p", &geom, 0.0);
     let mut flow = PimpleSolver::new(geom.clone(), u, p, settings);
-    flow.body_force = Some(sbc_force(&geom));
+    flow.body_force = Some(sbc_force_a(&geom, a));
     flow
 }
 
-/// ADR 0223 S0B, SBs, S1B, S1Bh: the consistent correctors with a body force keep the default's steady state of SBC.
+/// ADR 0223 S0B, SBs, S1B, S1Bh as registered: the consistent correctors with a body force keep the default's steady state of SBC.
+/// Defective set-up (ADR 0223 amendment 1): the flow is weaker than SBs asks (`U_s` 4.36e-4 m/s) and branch A's drift (the solvers'
+/// absolute floor) is above S0B's limit. Kept as the record; corrected by `s_b2_...`.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn s0b_sbs_s1b_s1bh_steady_state_with_a_body_force() {
+#[ignore = "defective set-up: SBs and S0B do not hold (ADR 0223 amendment 1)"]
+fn s0b_sbs_s1b_s1bh_steady_state_with_a_body_force_defective_setup() {
     let dt = 0.002;
     let mut flow = sbc_solver(fb_settings());
     for _ in 0..3000 {
@@ -1037,6 +1047,162 @@ fn s0b_sbs_s1b_s1bh_steady_state_with_a_body_force() {
     assert!(dp_b <= 1e-10 * rg, "S1B pressure {dp_b}");
     assert!(du_h <= 1e-10 * us, "S1Bh velocity {du_h}");
     assert!(dp_h <= 1e-10 * rg, "S1Bh pressure {dp_h}");
+}
+
+/// The step-by-step comparison of amendment 1: `a` (the default) and the branches `others` advance side by side for 50 steps
+/// (`hooked[i]`: branch `i` takes its body force from the hook); returns A's largest velocity and pressure deviation from the
+/// snapshot, and per branch the largest velocity and pressure difference to A and its deviation from the snapshot.
+#[allow(clippy::type_complexity)]
+fn side_by_side(
+    a: &mut PimpleSolver,
+    others: &mut [(PimpleSolver, Option<BodyForce>)],
+    s0: &PimpleState,
+    dt: f64,
+) -> ((f64, f64), Vec<(f64, f64, f64, f64)>) {
+    let (u_s0, p_s0) = (s0.u.clone(), s0.p.clone());
+    let mut dev_a = (0.0f64, 0.0f64);
+    let mut out = vec![(0.0f64, 0.0f64, 0.0f64, 0.0f64); others.len()];
+    for _ in 0..50 {
+        a.step(dt);
+        assert!(a.diverged.is_none(), "branch A stopped");
+        dev_a.0 = dev_a.0.max(max_du(&a.u.values, &u_s0));
+        dev_a.1 = dev_a.1.max(max_dp(&a.p.values, &p_s0));
+        for ((b, hook_force), o) in others.iter_mut().zip(out.iter_mut()) {
+            match hook_force {
+                Some(f) => {
+                    let f = f.clone();
+                    let mut hook = move |_u: &VectorField, _phi: &[f64]| OuterUpdate {
+                        source_force: Some(f.clone()),
+                        ..Default::default()
+                    };
+                    b.step_with(dt, Some(&mut hook as &mut OuterHook));
+                }
+                None => {
+                    b.step(dt);
+                }
+            }
+            assert!(b.diverged.is_none(), "a branch stopped: {:?}", b.diverged);
+            o.0 = o.0.max(max_du(&b.u.values, &a.u.values));
+            o.1 = o.1.max(max_dp(&b.p.values, &a.p.values));
+            o.2 = o.2.max(max_du(&b.u.values, &u_s0));
+            o.3 = o.3.max(max_dp(&b.p.values, &p_s0));
+        }
+    }
+    (dev_a, out)
+}
+
+/// ADR 0223 amendment 1, S0p2, SPs, S1p2: the consistent correctors on periodic faces against the default's own trajectory from the
+/// steady state `S0` of SPC.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn s_p2_steady_state_on_periodic_faces_against_the_default_branch() {
+    let dt = 0.002;
+    let mut a = spc_solver(1, fb_settings());
+    for _ in 0..3000 {
+        a.step(dt);
+        assert!(a.diverged.is_none(), "S0p2 run stopped");
+    }
+    let s0 = a.snapshot();
+    let rg = range(&s0.p);
+    let pbc = pressure_bc(&a.geom, &a.u, &a.p);
+    let own = a.geom.mesh.owner();
+    let ni = a.geom.n_internal;
+    let seam = pbc
+        .coupled
+        .iter()
+        .enumerate()
+        .filter_map(|(i, q)| q.map(|q| (s0.p[own[q]] - s0.p[own[ni + i]]).abs()))
+        .fold(0.0f64, f64::max);
+    let mut s = fb_settings();
+    s.consistent_correctors = true;
+    s.consistent_periodic = true;
+    let mut b = spc_solver(1, s);
+    b.restore(&s0).unwrap();
+    let mut others = vec![(b, None)];
+    let (dev_a, out) = side_by_side(&mut a, &mut others, &s0, dt);
+    let (du, dp, du_s0, dp_s0) = out[0];
+    println!(
+        "S0p2: branch A max|u - u_S0| {:.2e} U0 (limit 2e-11), max|p - p_S0| {:.2e} of the range {rg:.4e}; SPs: {:.3e} of the range \
+         (limit >= 1e-2); S1p2: B against A after every step: max|u_B - u_A| {:.2e} U0 (limit 1e-10), max|p_B - p_A| {:.2e} of \
+         the range (limit 1e-10); B against S0: {:.2e} U0, {:.2e}",
+        dev_a.0 / U0,
+        dev_a.1 / rg,
+        seam / rg,
+        du / U0,
+        dp / rg,
+        du_s0 / U0,
+        dp_s0 / rg
+    );
+    assert!(dev_a.0 <= 2e-11 * U0, "S0p2 {}", dev_a.0);
+    assert!(seam >= 1e-2 * rg, "SPs {seam}");
+    assert!(du <= 1e-10 * U0, "S1p2 velocity {du}");
+    assert!(dp <= 1e-10 * rg, "S1p2 pressure {dp}");
+}
+
+/// ADR 0223 amendment 1, S0B2, SBs2, S1B2, S1Bh2: the consistent correctors with a body force (`A = 10`) against the default's own
+/// trajectory from the steady state `S0` of SBC.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn s_b2_steady_state_with_a_body_force_against_the_default_branch() {
+    let dt = 0.002;
+    let mut a = sbc_solver_a(fb_settings(), A_SB2);
+    for _ in 0..3000 {
+        a.step(dt);
+        assert!(a.diverged.is_none(), "S0B2 run stopped");
+    }
+    let s0 = a.snapshot();
+    let rg = range(&s0.p);
+    let us = s0.u.iter().fold(0.0f64, |m, v| m.max(vec3::norm(*v)));
+    let mut s = fb_settings();
+    s.consistent_correctors = true;
+    s.consistent_body_force = true;
+    let mut b = sbc_solver_a(s.clone(), A_SB2);
+    b.restore(&s0).unwrap();
+    let mut bh = sbc_solver_a(s, A_SB2);
+    bh.restore(&s0).unwrap();
+    let force = bh.body_force.take();
+    let mut others = vec![(b, None), (bh, force)];
+    let (dev_a, out) = side_by_side(&mut a, &mut others, &s0, dt);
+    println!(
+        "S0B2: U_s {us:.4e} m/s (SBs2 limit >= 1e-3); branch A max|u - u_S0| {:.2e} U_s (limit 2e-11), max|p - p_S0| {:.2e} of the \
+         range {rg:.4e}; S1B2: B against A max|du| {:.2e} U_s, max|dp| {:.2e} (limits 1e-10), B against S0 {:.2e}, {:.2e}; S1Bh2: B' \
+         against A max|du| {:.2e} U_s, max|dp| {:.2e}, B' against S0 {:.2e}, {:.2e}",
+        dev_a.0 / us,
+        dev_a.1 / rg,
+        out[0].0 / us,
+        out[0].1 / rg,
+        out[0].2 / us,
+        out[0].3 / rg,
+        out[1].0 / us,
+        out[1].1 / rg,
+        out[1].2 / us,
+        out[1].3 / rg
+    );
+    assert!(dev_a.0 <= 2e-11 * us, "S0B2 {}", dev_a.0);
+    assert!(us >= 1e-3, "SBs2 {us}");
+    assert!(out[0].0 <= 1e-10 * us && out[0].1 <= 1e-10 * rg, "S1B2 {:?}", out[0]);
+    assert!(out[1].0 <= 1e-10 * us && out[1].1 <= 1e-10 * rg, "S1Bh2 {:?}", out[1]);
+}
+
+/// ADR 0223 amendment 1, SPx2: SPx with `ddt_correction = false` in both arms.
+#[test]
+fn spx2_seam_cells_behave_as_interior_cells_without_the_carry_over() {
+    let mut s = fb_settings();
+    s.ddt_correction = false;
+    let d = spx_arm(&s);
+    s.consistent_correctors = true;
+    s.consistent_periodic = true;
+    let c = spx_arm(&s);
+    println!(
+        "SPx2: default max|du| {:.2e} U0, max|dp| {:.2e} of the range; consistent max|du| {:.2e} U0 (limit max(1e-10, 10 x the \
+         default's)), max|dp| {:.2e} (limit max(1e-10, 10 x the default's))",
+        d.0 / U0,
+        d.1,
+        c.0 / U0,
+        c.1
+    );
+    assert!(c.0 <= (1e-10 * U0).max(10.0 * d.0), "SPx2 velocity {}", c.0);
+    assert!(c.1 <= 1e-10f64.max(10.0 * d.1), "SPx2 pressure {}", c.1);
 }
 
 // =================================================================================================================
