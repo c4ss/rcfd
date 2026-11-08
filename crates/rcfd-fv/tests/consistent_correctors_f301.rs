@@ -433,13 +433,15 @@ fn ma1_ma1n_the_estimate_of_a_moving_step_that_does_not_move() {
     // A: the same step as a moving-mesh step with the same geometry, no mesh flux and no wall gradients
     let mut a = fb.solver(s.clone());
     fb.set_block(&mut a, dt);
-    a.step_ale_with_walls(dt, fb.g0.clone(), vec![0.0; nf], Vec::new()).unwrap();
+    a.step_ale_with_walls(dt, fb.g0.clone(), vec![0.0; nf], Vec::new())
+        .unwrap();
     // A': A without moving_mesh_lag
     let mut an = s.clone();
     an.moving_mesh_lag = false;
     let mut a0 = fb.solver(an);
     fb.set_block(&mut a0, dt);
-    a0.step_ale_with_walls(dt, fb.g0.clone(), vec![0.0; nf], Vec::new()).unwrap();
+    a0.step_ale_with_walls(dt, fb.g0.clone(), vec![0.0; nf], Vec::new())
+        .unwrap();
     let (wa, wb) = (a.lag_estimates.first().copied(), b.lag_estimates.first().copied());
     let pmax = b.p.values.iter().fold(0.0f64, |m, x| m.max(x.abs()));
     let du = max_du(&a.u.values, &b.u.values);
@@ -452,9 +454,17 @@ fn ma1_ma1n_the_estimate_of_a_moving_step_that_does_not_move() {
         a0.lag_estimates.len(),
         ubits(&a0.u.values) == ubits(&a.u.values) && bits(&a0.p.values) == bits(&a.p.values) && bits(&a0.phi) == bits(&a.phi)
     );
-    let (wa, wb) = (wa.expect("MA1: no estimate on the moving step"), wb.expect("MA1: no estimate on the fixed step"));
+    let (wa, wb) = (
+        wa.expect("MA1: no estimate on the moving step"),
+        wb.expect("MA1: no estimate on the fixed step"),
+    );
     assert!(wa.step == 1 && wb.step == 1, "MA1 steps");
-    assert!((wa.rho - wb.rho).abs() <= 1e-9 * wb.rho, "MA1 rho {} {}", wa.rho, wb.rho);
+    assert!(
+        (wa.rho - wb.rho).abs() <= 1e-9 * wb.rho,
+        "MA1 rho {} {}",
+        wa.rho,
+        wb.rho
+    );
     assert_eq!(wa.cell, wb.cell, "MA1 cell");
     assert!(du <= 1e-12 * fb.forms.u_t && dp <= 1e-12 * pmax, "MA1 fields {du} {dp}");
     assert!(a0.lag_estimates.is_empty(), "MA1n: an estimate without moving_mesh_lag");
@@ -481,8 +491,15 @@ fn twin_ale(fb: &Fb, settings: PimpleSettings) -> TwAle {
     for n in 1..=NB {
         let r = coupled_step(fb, &mut c, dt);
         let um = umax(&c.flow);
-        println!("MA2s: base step {n}: {:?}, max|u|/U_t {:.4}", r.as_ref().err(), um / fb.forms.u_t);
-        assert!(r.is_ok() && um <= 10.0 * fb.forms.u_t, "MA2s: base step {n} not bounded");
+        println!(
+            "MA2s: base step {n}: {:?}, max|u|/U_t {:.4}",
+            r.as_ref().err(),
+            um / fb.forms.u_t
+        );
+        assert!(
+            r.is_ok() && um <= 10.0 * fb.forms.u_t,
+            "MA2s: base step {n} not bounded"
+        );
     }
     let s: PimpleState = c.flow.snapshot();
     let g_s = c.flow.geom.clone();
@@ -607,7 +624,12 @@ fn ma2_the_estimate_of_a_moving_step_predicts_its_growth() {
         t.rho,
         t.sign
     );
-    assert!((t.estimate - t.rho).abs() <= 0.10 * t.rho, "MA2 E-ALE {} |rho| {}", t.estimate, t.rho);
+    assert!(
+        (t.estimate - t.rho).abs() <= 0.10 * t.rho,
+        "MA2 E-ALE {} |rho| {}",
+        t.estimate,
+        t.rho
+    );
 }
 
 /// ADR 0223 MA2c: MA2 with the consistent correctors.
@@ -658,7 +680,11 @@ fn ma3_the_adaptive_count_on_a_moving_mesh() {
     let a1 = hist.last().map_or(f64::NAN, |h| h.1 / fb.forms.u_t);
     for t in [1usize, 2, 5] {
         if let Some((time, uu)) = hist.get(10 * t - 1) {
-            println!("MA3 approach: t = {:.0} tau: U/U_t {:.5}", time / fb.forms.tau, uu / fb.forms.u_t);
+            println!(
+                "MA3 approach: t = {:.0} tau: U/U_t {:.5}",
+                time / fb.forms.tau,
+                uu / fb.forms.u_t
+            );
         }
     }
     println!(
@@ -726,7 +752,9 @@ fn ma4_the_pre_run_estimate_of_a_moving_step() {
     c.flow.settings.pressure_lag_check = warn_at(1);
     c.flow.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls).unwrap();
     let real = c.flow.lag_estimates.first().copied();
-    println!("MA4: preflight {pre:?}; the real step's estimate {real:?}; the solver unchanged by the preflight {unchanged}");
+    println!(
+        "MA4: preflight {pre:?}; the real step's estimate {real:?}; the solver unchanged by the preflight {unchanged}"
+    );
     let pre = pre.expect("MA4: no preflight estimate");
     let real = real.expect("MA4: no estimate on the real step");
     assert_eq!(pre.step, 1, "MA4 step");
@@ -759,7 +787,8 @@ fn spc_solver(periods: usize, settings: PimpleSettings) -> PimpleSolver {
     .unwrap();
     let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
     let mut u = VectorField::uniform("U", &geom, vec3::ZERO);
-    u.set_bc(&geom, "ymin", Box::new(FixedValue::vector(vec3::ZERO))).unwrap();
+    u.set_bc(&geom, "ymin", Box::new(FixedValue::vector(vec3::ZERO)))
+        .unwrap();
     let fc = geom.mesh.face_centres();
     let top = geom
         .mesh
@@ -1077,20 +1106,38 @@ fn body(mut f: PimpleSolver) -> PimpleSolver {
 fn r2_refusals_with_the_extension_flags() {
     // (i) the consistent correctors alone: as ADR 0214 R1
     let on = with_flags(true, false, false);
-    assert_eq!(refusal("(i) periodic", box_solver(true, on.clone()), false), Some("periodic faces"));
-    assert_eq!(refusal("(i) body force", body(box_solver(false, on.clone())), false), Some("body force"));
-    assert_eq!(refusal("(i) body force (hook)", box_solver(false, on.clone()), true), Some("body force"));
+    assert_eq!(
+        refusal("(i) periodic", box_solver(true, on.clone()), false),
+        Some("periodic faces")
+    );
+    assert_eq!(
+        refusal("(i) body force", body(box_solver(false, on.clone())), false),
+        Some("body force")
+    );
+    assert_eq!(
+        refusal("(i) body force (hook)", box_solver(false, on.clone()), true),
+        Some("body force")
+    );
     // (ii) with consistent_periodic: the periodic box is accepted
-    assert_eq!(refusal("(ii) periodic", box_solver(true, with_flags(true, true, false)), false), None);
+    assert_eq!(
+        refusal("(ii) periodic", box_solver(true, with_flags(true, true, false)), false),
+        None
+    );
     // (iii) with consistent_body_force: the static and the hook body force are accepted
     let b = with_flags(true, false, true);
-    assert_eq!(refusal("(iii) body force", body(box_solver(false, b.clone())), false), None);
+    assert_eq!(
+        refusal("(iii) body force", body(box_solver(false, b.clone())), false),
+        None
+    );
     assert_eq!(refusal("(iii) body force (hook)", box_solver(false, b), true), None);
     // (iv) with both flags the other refusals stay
     let all = with_flags(true, true, true);
     let mut s = all.clone();
     s.fractional = Some(FractionalSettings::default());
-    assert_eq!(refusal("(iv) fractional", box_solver(false, s), false), Some("fractional step"));
+    assert_eq!(
+        refusal("(iv) fractional", box_solver(false, s), false),
+        Some("fractional step")
+    );
     let mut s = all.clone();
     s.non_orth_correctors = 1;
     assert_eq!(

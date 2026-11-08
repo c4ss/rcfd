@@ -1352,7 +1352,11 @@ impl PimpleSolver {
                     for f in 0..mesh.n_faces() {
                         if !g.empty[f] {
                             let c = match wall_t {
-                                Some(gt) if f >= n_int && pbc.fixed_u[f - n_int] && pbc.coupled[f - n_int].is_none() => gt[f],
+                                Some(gt)
+                                    if f >= n_int && pbc.fixed_u[f - n_int] && pbc.coupled[f - n_int].is_none() =>
+                                {
+                                    gt[f]
+                                }
                                 _ => gbf[f],
                             };
                             phi_hby_a[f] += c * bf.face[f];
