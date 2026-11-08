@@ -418,7 +418,13 @@ fn n2e_cavity_raise_stop() {
         d.value.to_bits(),
         d.cell.unwrap_or(usize::MAX) as u64,
     ]);
-    println!("N2 e {:016x} (stop at step {}, {} {:.6})", fnv(words), d.step, d.quantity, d.value);
+    println!(
+        "N2 e {:016x} (stop at step {}, {} {:.6})",
+        fnv(words),
+        d.step,
+        d.quantity,
+        d.value
+    );
 }
 
 /// N2 (f): a channel periodic in x driven by a body force, PISO, 5 steps.
