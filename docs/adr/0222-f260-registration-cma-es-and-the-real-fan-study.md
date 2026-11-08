@@ -424,3 +424,27 @@ and compared with the commit (`git diff --quiet HEAD -- crates` and no untracked
 **Status.** Every registered check is met, the set-up checks (N0, C1c, K4 (b), S7's two runs) hold and every mutation fails its
 test, so clause 1 of the acceptance is met. Clause 2, the FAN-01 study, is not attempted (reading 2). By the decision rule F-260 is
 **partial** in the roadmap, subject to the gate below; question 1 asks whether to split the real-fan study off and call F-260 done.
+
+### The gate (2026-11-08): queued, not yet run
+
+The gate of 3f475d3 (addendum 1, the last commit with code or tests; this section is documents only) is set up in
+`E:/projects/cfd/w49i-work/gate-f260`: a `git archive` copy of 3f475d3 in `src`, `run.sh` and `outer.sh` from the F-297 gate
+(`gate_test.py`, three jobs, target dir `target-f260-gate`, fmt per package, clippy `--workspace --all-targets -D warnings`, the
+start threshold of 19 GB of free physical memory) and the machine lock taken with the atomic `mkdir` lock and owner file of
+`gate-lock.sh`, polled every 5 s (as `gate-f291/outer2.sh`). `outer.sh` has been waiting for the lock since 00:33:55 (UTC).
+
+It has not run by the time of this section (03:58): the F-298 gate held the lock from 23:47 to 02:06:18 and, one second after it
+released it, a second waiting copy of the F-298 `outer2.sh` (its log records a first copy thought ended) took the lock again for
+the same commit; that run has been waiting since 02:06 for 19 GB of free memory, with 7 to 9 GB free (the WSL VM held about 32 GB
+and a browser about 13 GB). The waiting acquire of this gate was left as it is.
+
+Checked instead on this branch's tree, which equals 3f475d3 in every file under `crates/` (no substitute for the gate):
+
+* `cargo fmt -p <package> -- --check` for every workspace package: 0;
+* `cargo clippy --workspace --all-targets --locked -- -D warnings`: 0;
+* in release: `f260_cmaes` (22 passed), `f260_default_bits` (1), `design_f260` (2), the `rcfd-api` library tests under `design::`
+  (51 passed, 2 ignored), `f249_default_bits` (4), `f297_default_bits` (3), `f249_moo` (12, the ADR 0209 known miss
+  ignored), `f249_nm` (6, its known miss ignored), `f297_moo` (9), and in `rcfd-mcp` `default_f1` (2), `design_f249` (4),
+  `design_f297` (2), `project_list_f270` (1) and `tool_list_f275` (7): all passed.
+
+V0a and V0e stay open until the gate has run; its result belongs in a further section.
