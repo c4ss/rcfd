@@ -641,11 +641,7 @@ fn dc7_the_bdf2_cylinder_meets_k1b_k2b_k4_with_the_option() {
 /// One BX run: (example, with the key, time reached, stopped, upward crossings of cl after t = 50, St, mean cd, seconds).
 type BxRun = (&'static str, bool, f64, bool, usize, f64, f64, f64);
 
-fn bx_run(example: &'static str, keyed: bool) -> BxRun {
-    bx_run_from(example, keyed, 50.0)
-}
-
-/// [`bx_run`] with the window from `t_from` (ADR 0223 amendment 3: 40).
+/// One BX run with the window from `t_from` (50 as registered; ADR 0223 amendment 3: 40).
 fn bx_run_from(example: &'static str, keyed: bool, t_from: f64) -> BxRun {
     let mut case = parse(&repo_file(&format!(
         "example-projects/wind-tunnel/cases/{example}.toml"
