@@ -3317,7 +3317,7 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
   - depends on: F-063
   - acceptance: A cylinder moving through a background mesh conserves mass and gives drag within 5 percent of a body-fitted run
   - note: P4 (long-term). Gap: overset boundary type and methods; extends F-063.
-    - ADR 0219 (registration of F-134, 2026-11-07, branch `f134-overset`, not merged): PARTIAL, library only.
+    - ADR 0219 (registration of F-134, 2026-11-07, branch `f134-overset`, merged 2026-11-08): PARTIAL, library only.
       - Built: a component mesh moving rigidly over a static background mesh, joined into one composite mesh with the
         hole cut by a user function, one fringe layer, donor search and weights exact for linear fields
         (`rcfd_mesh::overset`), and an implicit overset PISO step (`rcfd_fv::overset::OversetSolver`) whose one offset of
@@ -5630,3 +5630,15 @@ fixed by the item's registration ADR before any code.
   - depends on: F-298
   - acceptance: The default Joule heat equals the electric power on skewed meshes (it misses by 11.9 percent on the F-298 wedge) and the default flux correction on fixed-pressure faces closes the domain mass balance (it leaves 2.0e-3 of the inflow); the changed default hashes are registered and approved by the maintainer.
   - note: From ADR 0221 questions 1 and 2, recommendation (b) taken as its own item. Needs the maintainer's lift of the bit-identity rule and approval of the baseline hash changes; not started. Until then a case can set [solver.gradient_equations] pressure = true.
+- [ ] **F-312** Overset meshes in the case tree
+  - depends on: F-134
+  - acceptance: A case with an overset component runs from a case file; the CLI and the tool surface list it; a registered check reproduces the library result bit for bit.
+  - note: From ADR 0219 question 1, recommendation taken.
+- [ ] **F-313** Overset: several components, a moving background, hole cutting
+  - depends on: F-134
+  - acceptance: Two component meshes over a background run in one case; a cell cut by a hole is excluded from the solve; the registered conservation check holds.
+  - note: From ADR 0219 questions 2 and 3, recommendation taken.
+- [ ] **F-314** Overset: close the observed-order miss
+  - depends on: F-134
+  - acceptance: The Taylor-Green order (T1 0.747 against 1.7, T2 level 2 3.31 against 2, T1c 1.618 against 1.7, the F-134 ignored known-miss tests) reaches the registered limits, or the ADR names the donor-interpolation cause with a number.
+  - note: From ADR 0219 question 4, recommendation taken; the known-miss tests stay as recorded.

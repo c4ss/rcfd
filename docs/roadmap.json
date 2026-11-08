@@ -2543,5 +2543,38 @@
     "status": "todo",
     "acceptance": "The default Joule heat equals the electric power on skewed meshes (it misses by 11.9 percent on the F-298 wedge) and the default flux correction on fixed-pressure faces closes the domain mass balance (it leaves 2.0e-3 of the inflow); the changed default hashes are registered and approved by the maintainer.",
     "note": "From ADR 0221 questions 1 and 2, recommendation (b) taken as its own item. Needs the maintainer's lift of the bit-identity rule and approval of the baseline hash changes; not started. Until then a case can set [solver.gradient_equations] pressure = true."
+  },
+  {
+    "id": "F-312",
+    "title": "Overset meshes in the case tree",
+    "phase": 9,
+    "deps": [
+      "F-134"
+    ],
+    "status": "todo",
+    "acceptance": "A case with an overset component runs from a case file; the CLI and the tool surface list it; a registered check reproduces the library result bit for bit.",
+    "note": "From ADR 0219 question 1, recommendation taken."
+  },
+  {
+    "id": "F-313",
+    "title": "Overset: several components, a moving background, hole cutting",
+    "phase": 9,
+    "deps": [
+      "F-134"
+    ],
+    "status": "todo",
+    "acceptance": "Two component meshes over a background run in one case; a cell cut by a hole is excluded from the solve; the registered conservation check holds.",
+    "note": "From ADR 0219 questions 2 and 3, recommendation taken."
+  },
+  {
+    "id": "F-314",
+    "title": "Overset: close the observed-order miss",
+    "phase": 9,
+    "deps": [
+      "F-134"
+    ],
+    "status": "todo",
+    "acceptance": "The Taylor-Green order (T1 0.747 against 1.7, T2 level 2 3.31 against 2, T1c 1.618 against 1.7, the F-134 ignored known-miss tests) reaches the registered limits, or the ADR names the donor-interpolation cause with a number.",
+    "note": "From ADR 0219 question 4, recommendation taken; the known-miss tests stay as recorded."
   }
 ]
