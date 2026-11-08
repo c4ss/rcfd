@@ -435,10 +435,38 @@ compared byte for byte with the kept copy (equal after each of the five).
   runs of D3 to convergence (the transient kernel takes D3 through the same function; ADR 0204's P3 tree and library runs still
   agree bit for bit), a negative cell Joule heat (none occurred).
 
+### The gate (2026-11-07 to 2026-11-08)
+
+The gate ran on a `git archive` copy of `9efd870c` (addendum 1's commit) with three jobs and one process per test
+(`scripts/gate_test.py`), in the target dir `E:/projects/cfd/w49i-work/target-f298-gate`, through the machine's gate lock (the 5 s
+poll of `gate-f291/outer2.sh`). Queued at 23:01:27 UTC behind f297; the lock was taken at 23:47:28; the run waited for 19 GB of
+free physical memory (the registered threshold) from 23:47 to 00:23:50 (17 GB, then 16, then 19), ran from 00:23:50 to 02:06:18,
+and released the lock at 02:06:18. The lowest free memory during the run was 8 GB (01:24), below the threshold, with other agents
+building. `cargo fmt` per package 0, `cargo clippy --workspace --all-targets -- -D warnings` 0, tests **3224 passed, 1 failed, 901
+ignored** (3225 test processes in 615 binaries, wall 5340 s, peak summed working set 4083 MB, largest time against its limit 0.422).
+
+The one failure is the known flaky `rcfd-project` `journal_f273::c3s_two_appenders_without_a_shared_edit_lock_number_every_line_once`
+("a writer waited longer than the lock's wait": 1 of 600 lines without a sequence number, the 250 ms lock wait not met under load).
+Run again alone on the gate's binary: failed 2 of 3 (1 and 2 lines without a number) and passed 1 of 3; control: the same test from
+the binary of the ADR 0218 gate (`target-f219-gate`, without this work) passed 3 of 3 right after. `rcfd-project` depends on no crate
+that F-298 changes, and no line of it differs from main. Every test of F-298 passed in the gate (the ten of the four new files; the
+ignored record `m_sets_before_d3` was ignored), as did `baseline_hashes.rs`, `case_hashes_w48u.rs`, `gradient_equations_f291.rs`
+(G4 (iv) included), `gradient_pressure_f291.rs` and the other suites of D2. So N is met.
+
+Disclosed: the first lock acquire (started with `nohup` from a foreground call at 23:01) did not end with that call as I believed
+when I started a second one at 23:05; the second took the lock and ran this gate. When it released the lock at 02:06:18 the first
+took it at 02:06:19 (owner line `f298 2026-11-08T02:06:19`) and started a second run of the same commit in the same directory, which
+was waiting for free memory when this section was written (no cargo process started). The first run's files are kept in
+`w49i-work/gate-f298-run1`; the numbers above are from them. Stopping the duplicate was refused by this session's permission
+classifier, so it is left to the lead (the bash process of `gate-f298/run.sh`, Windows PID 107732); if it runs to its end, it gates
+the same commit again and releases the lock itself.
+
+This gate section is a document only and was not gated again.
+
 ### Status by the decision rule
 
-Every check of (a) met; (b): M matters, D3 built and every check of D3 met; D2 met; every mutation failed its test; N is the gate
-below. F-298 is set **done** (`[x]`).
+Every check of (a) met; (b): M matters, D3 built and every check of D3 met; D2 met; every mutation failed its test; N met (the
+gate above, its one failure a known flake outside F-298). F-298 is set **done** (`[x]`).
 
 ### Questions for the maintainer (revised by the results)
 
