@@ -27,8 +27,9 @@ rcfd does not deliver:
 * surface reactions in the case tree, a reaction rate that depends on temperature or film diffusion, the heat of
   reaction, the reaction together with heat transfer or the exchange record, parcels that burn out completely (F-255,
   ADR 0208; the reaction is a library model)
-* evaporation and mass transfer
-* breakup
+* evaporation and breakup in the case tree, the vapour, heat and momentum of evaporating or breaking parcels fed to the
+  carrier, either model with the exchange record, boiling, multicomponent droplets, temperature-dependent properties, the
+  chi-squared product-size distribution of the TAB source, other breakup models (F-245, ADR 0224; the two are library models)
 * in the wall film (F-253, see "Wall film" below): splash and rebound at impact, film separation and dripping,
   evaporation and heat transfer of the film, any effect of the film on the flow, the film with two-way coupling or heat
   transfer; with the gas drives of F-292, counter-current films, turbulent or wall-function shear, and the shear on
@@ -178,6 +179,37 @@ species gains or loses, with `solid_reacted()` and `extent()`. The rate law is a
 published char model; there are no case keys yet (Q8). The reaction is refused together with heat transfer or the
 exchange record. ADR 0208 checks the linear shrinkage to round-off and the mass of each species (the solid and every gas
 species, measured on the parcel side and on the carrier side) to 1e-10 at every step of a run with wall hits.
+
+## Droplet evaporation and breakup (F-245, ADR 0224; library only)
+
+**Evaporation.** `Tracker::set_evaporation(EvaporationSpec, y_s)` (after `set_thermal`) makes the parcels evaporating
+droplets of a single liquid. The model is the quasi-steady film model with Bird's correction of the heat transfer (model "B"
+of Both, Mira and Lehmkuhl, arXiv:2201.02818): per droplet `mdot = pi d rho D Sh0 ln(1 + B_M)` and
+`m c_l dT_p/dt = pi d lambda Nu0 g(beta) (T_s - T_p) - mdot L_v`, `g(beta) = beta/(e^beta - 1)`, with Ranz-Marshall
+`Nu0` and `Sh0`, the Spalding number `B_M = (Y_i - Y_s)/(1 - Y_i)` and the surface vapour from the Clausius-Clapeyron relation
+through the boiling point and Raoult's law. The carrier temperature is `Thermal::t_fluid`, its vapour mass fraction `y_s` per cell
+(replaceable with `set_evaporation_vapour`), its density and viscosity those of `Flow`, its conductivity and specific heat those of
+`Thermal`; the caller gives mean-state values (the 1/3 law). The liquid density is the parcel density; every property is constant.
+Over a sub-step `d^2` falls linearly and the temperature takes one exponential Euler step whose fixed point is the wet bulb, so a
+droplet at its wet bulb in still gas follows the d-squared law `d^2 = d0^2 - K t` exactly, with
+`K = 8 rho D ln(1 + B_M(T_wb))/rho_l` (ADR 0224 DK). The sub-step is at most `max_step_fraction` of the droplet's thermal time;
+a droplet that reaches `min_diameter` is `State::Evaporated` and its rest is booked as vapour. The carrier is not changed:
+`Evaporation::source()` books the vapour mass per cell (`evaporated()` in total). A droplet at its boiling point at the carrier
+pressure is an error. Evaporation replaces the heat step of ADR 0057 for every parcel and is refused with the surface reaction and
+the exchange record.
+
+**Breakup.** `Tracker::set_breakup(BreakupSpec::tab(sigma, mu_l, seed))` adds the TAB method of O'Rourke and Amsden (1987): a
+forced damped oscillator for the distortion `y` with the source's constants `C_F = 1/3`, `C_k = 8`, `C_d = 5`, `C_b = 1/2`,
+`K = 10/3`, `C_v = 1` (critical Weber number 6), the relative velocity of the sub-step and the gas density of `Flow`. The drop
+breaks when `y` reaches 1, at the time the undamped oscillation of its state gives (the sub-step is cut there); the product drops
+take the Sauter mean radius of the source's energy relation, the parcel count follows the liquid mass (`n d^3` unchanged), and the
+parcel gains the normal velocity `C_v C_b r dy/dt` in a random direction normal to the relative velocity. `distortion(i)` and
+`breakups(i)` read the state. Breakup is refused with the surface reaction and the exchange record.
+
+ADR 0224 checks the d-squared slope (to 1e-15, limit 2 percent), the vapour against the liquid lost (to 3e-12 in a spray of 160
+parcels, limit 1e-10), the breakup time and product size from rest against their closed forms at Weber numbers 6.1 to 1000 (to
+1.5e-14, limit 2 percent), the source's limits (its eqs. 12a, 13, 16, 23) and the liquid mass through breakup to round-off. There
+are no case keys yet (ADR 0224 Q2).
 
 ## Wall film (F-253, ADR 0192)
 

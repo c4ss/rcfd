@@ -41,6 +41,7 @@ fn state_name(s: State) -> &'static str {
         State::Escaped => "escaped",
         State::Stuck => "stuck",
         State::Film => "film",
+        State::Evaporated => "evaporated",
     }
 }
 

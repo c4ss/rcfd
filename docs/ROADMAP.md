@@ -4719,7 +4719,7 @@ Added after the static feature-gap review; wording is product-independent. Phase
         registered tau/10 run is kept as an ignored known miss and (a) runs at tau/40 and tau/80.
       - Open: ADR 0211 Q1 (approval of the refined acceptance text), Q2 (a case-tree version), Q3 (status), Q4 (a new
         item for the PISO time-step limit).
-- [ ] **F-245** Particle models: droplet evaporation (d-squared law) and breakup
+- [x] **F-245** Particle models: droplet evaporation (d-squared law) and breakup
   - depends on: F-128, F-056
   - acceptance: Two parts, each gated on its own.
     - (A1) a single droplet evaporating in quiescent hot gas follows the quasi-steady d^2 law with the evaporation
@@ -4754,6 +4754,26 @@ Added after the static feature-gap review; wording is product-independent. Phase
       - should 'track files' mean something beyond particle_tracks.csv.
     - USER DECISION 2026-10-22: split into four items plus dispersion and reactions: F-252 (A3), F-253 (B), F-254 (C),
       F-255. This item keeps A1 and A2, verifiable without a data set.
+    - DONE (ADR 0224, the registration of F-245, 2026-11-08, branch f245-droplet, not merged): every registered check is
+      met in the library (`rcfd-particles`, no case key); the acceptance is still the maintainer's (ADR 0224 Q1).
+      - (A1) Evaporation (`rcfd_particles::evaporation`, `Tracker::set_evaporation`): the quasi-steady film model with
+        Bird's correction (model B of Both, Mira and Lehmkuhl, arXiv:2201.02818, read), Ranz-Marshall Nu and Sh,
+        Clausius-Clapeyron through the boiling point; `d^2` linear and one exponential Euler step of the temperature per
+        sub-step (its fixed point is the wet bulb); the vapour booked per cell. The evaporation constant
+        `K = 8 rho D ln(1 + B_M(T_wb))/rho_l` was derived in the ADR (3.4196739796e-7 m^2/s for the test inputs): the d^2
+        slope of a droplet at its wet bulb in still 800 K gas is within 1.1e-15 of K, of one injected at 300 K within
+        7.1e-12 after the heat-up (limit 2 percent); the vapour equals the liquid lost to 2.9e-16 for the droplet and
+        3.0e-12 in a spray of 160 parcels with breakup (limit 1e-10).
+      - (A2) TAB breakup (`rcfd_particles::breakup`, `Tracker::set_breakup`) with the constants and the numerical method
+        read in O'Rourke and Amsden, LA-UR-87-2105 (1987) (`C_F = 1/3`, `C_k = 8`, `C_d = 5`, `C_b = 1/2`, `K = 10/3`,
+        `We_crit = 6`): the breakup time `arccos(1 - 12/We)/omega` and the product radius `r/(4/3 + We/6)` of a drop at
+        rest in a step relative velocity are reproduced to 1.5e-14 at We 6.1 to 1000 (limit 2 percent), a viscous drop to
+        equal bits, the source's limits (eqs. 12a, 13, 16, 23) within 0.82 percent; `n d^3` through breakup to 3.9e-16
+        and liquid plus vapour against the injected mass to 8.8e-16 in the spray.
+      - Five negative controls held, eleven mutations made their checks fail, no amendment; defaults unchanged (the
+        particle suites of rcfd-particles and rcfd-api, H1, baseline hashes). New `State::Evaporated`.
+      - Open: ADR 0224 Q1 (acceptance), Q2 (case-tree wiring, recommended with F-252), Q3 (two-way exchange of mass,
+        heat and momentum), Q4 (chi-squared product sizes), Q5 (boiling), Q6 (Abramzon-Sirignano), Q7 to Q9.
 - [~] **F-246** Pressure-interpolation variants for poor meshes
   - depends on: F-208
   - acceptance: Pressure-interpolation variants:

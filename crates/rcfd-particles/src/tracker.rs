@@ -1,16 +1,18 @@
 //! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6; erosion and rough walls ADR 0194; dispersion
-//! fields and the surface reaction ADR 0208).
+//! fields and the surface reaction ADR 0208; droplet evaporation and TAB breakup ADR 0224).
 
+use crate::breakup::{normal_speed, oscillator, sauter_radius, Breakup, BreakupSpec, Oscillator};
 use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
 use crate::dispersion::{Dispersion, Eddy};
 use crate::drag::{drag_factor, reflect, step_particle, tau_p, DragLaw, Fluid, Scheme};
 use crate::erosion::{Erosion, ErosionSpec};
+use crate::evaporation::{phi1, EvapRates, Evaporation, EvaporationSpec};
 use crate::film::{Film, FilmGas, FilmSpec};
 use crate::inject::{InjKind, InjectorExt, InjectorSpec, VelMode};
 use crate::locate::{Locator, Walk};
 use crate::reaction::{ReactionSpec, SurfaceReaction};
 use crate::rng::SplitMix64;
-use crate::rough::{RoughSpec, RoughWall};
+use crate::rough::{tangent_pair, RoughSpec, RoughWall};
 use crate::{err, Result};
 use rcfd_core::vec3::{add, cross, dot, norm, scale, sub, Vec3};
 use rcfd_mesh::{Mesh, PatchKind};
@@ -54,6 +56,8 @@ pub enum State {
     Stuck = 3,
     /// Absorbed into the wall film (ADR 0192); its mass is in the film.
     Film = 4,
+    /// Evaporated to the minimum diameter (ADR 0224 E6); its mass is in the vapour booking.
+    Evaporated = 5,
 }
 
 /// One parcel.
@@ -138,6 +142,12 @@ struct Aux {
     m_r: f64,
     /// Inert mass per real particle [kg] (ADR 0208 R2).
     m_i: f64,
+    /// TAB distortion `y` and its rate (ADR 0224 B2).
+    y: f64,
+    yd: f64,
+    /// Breakups of the parcel and its age at the last one (NaN = none).
+    n_bu: u32,
+    t_bu: f64,
 }
 
 impl Default for Aux {
@@ -147,6 +157,10 @@ impl Default for Aux {
             tp: f64::NAN,
             m_r: f64::NAN,
             m_i: f64::NAN,
+            y: 0.0,
+            yd: 0.0,
+            n_bu: 0,
+            t_bu: f64::NAN,
         }
     }
 }
@@ -168,6 +182,8 @@ struct Ctx<'a> {
     erosion: Option<&'a mut Erosion>,
     rough: Option<&'a mut RoughWall>,
     reaction: Option<&'a mut SurfaceReaction>,
+    evap: Option<&'a mut Evaporation>,
+    breakup: Option<&'a mut Breakup>,
 }
 
 struct Injector {
@@ -195,6 +211,8 @@ pub struct Tracker {
     erosion: Option<Erosion>,
     rough: Option<RoughWall>,
     reaction: Option<SurfaceReaction>,
+    evaporation: Option<Evaporation>,
+    breakup: Option<Breakup>,
     /// All parcels, including finished ones.
     pub particles: Vec<Particle>,
     /// Current time [s].
@@ -259,6 +277,8 @@ impl Tracker {
             erosion: None,
             rough: None,
             reaction: None,
+            evaporation: None,
+            breakup: None,
             particles: Vec::new(),
             time: 0.0,
         })
@@ -312,6 +332,9 @@ impl Tracker {
         if self.reaction.is_some() {
             return err("reaction: a reaction is already set");
         }
+        if self.evaporation.is_some() || self.breakup.is_some() {
+            return err("reaction: not available with evaporation or breakup (ADR 0224 E8, B5)");
+        }
         if self.thermal.is_some() || self.coupling.is_some() {
             return err("reaction: not available with heat transfer or the exchange record (ADR 0208 S1)");
         }
@@ -335,6 +358,64 @@ impl Tracker {
     /// Reacting mass per real particle of parcel `i` [kg] (NaN before its first sub-step with the reaction on).
     pub fn reacting_mass(&self, i: usize) -> f64 {
         self.aux.get(i).map_or(f64::NAN, |a| a.m_r)
+    }
+
+    /// Switch on droplet evaporation (ADR 0224 E1 to E8) with the seen vapour mass fraction `y_s` per cell. Needs heat
+    /// transfer ([`Tracker::set_thermal`] first); refused when evaporation is already set, with the surface reaction, and for an
+    /// invalid spec or field. `advance` refuses it with the exchange record.
+    pub fn set_evaporation(&mut self, spec: EvaporationSpec, y_s: Vec<f64>) -> Result<()> {
+        if self.evaporation.is_some() {
+            return err("evaporation: evaporation is already set");
+        }
+        if self.thermal.is_none() {
+            return err("evaporation: needs heat transfer (Tracker::set_thermal first, ADR 0224 E8)");
+        }
+        if self.reaction.is_some() {
+            return err("evaporation: not available with the surface reaction (ADR 0224 E8)");
+        }
+        self.evaporation = Some(Evaporation::new(spec, y_s, self.loc.mesh().n_cells())?);
+        Ok(())
+    }
+
+    /// Replace the seen vapour mass fraction of the evaporation (refused without it).
+    pub fn set_evaporation_vapour(&mut self, y_s: &[f64]) -> Result<()> {
+        match self.evaporation.as_mut() {
+            Some(e) => e.set_vapour_fraction(y_s),
+            None => err("evaporation: evaporation is not set (Tracker::set_evaporation first)"),
+        }
+    }
+
+    /// The evaporation and its vapour booking, if set.
+    pub fn evaporation(&self) -> Option<&Evaporation> {
+        self.evaporation.as_ref()
+    }
+
+    /// Switch on TAB breakup (ADR 0224 B1 to B6). Refused when breakup is already set, with the surface reaction and for an
+    /// invalid spec. `advance` refuses it with the exchange record.
+    pub fn set_breakup(&mut self, spec: BreakupSpec) -> Result<()> {
+        if self.breakup.is_some() {
+            return err("breakup: breakup is already set");
+        }
+        if self.reaction.is_some() {
+            return err("breakup: not available with the surface reaction (ADR 0224 B5)");
+        }
+        self.breakup = Some(Breakup::new(spec)?);
+        Ok(())
+    }
+
+    /// The breakup model, if set.
+    pub fn breakup(&self) -> Option<&Breakup> {
+        self.breakup.as_ref()
+    }
+
+    /// TAB distortion `(y, dy/dt)` of parcel `i` (NaN for an unknown parcel).
+    pub fn distortion(&self, i: usize) -> (f64, f64) {
+        self.aux.get(i).map_or((f64::NAN, f64::NAN), |a| (a.y, a.yd))
+    }
+
+    /// Breakups of parcel `i` and its age at the last one (NaN when none).
+    pub fn breakups(&self, i: usize) -> (u32, f64) {
+        self.aux.get(i).map_or((0, f64::NAN), |a| (a.n_bu, a.t_bu))
     }
 
     /// Switch on convective heat transfer with the given carrier data (the temperature field may be refreshed with
@@ -655,6 +736,9 @@ impl Tracker {
         if self.reaction.is_some() && self.coupling.is_some() {
             return err("reaction: not available with the exchange record (ADR 0208 S1)");
         }
+        if (self.evaporation.is_some() || self.breakup.is_some()) && self.coupling.is_some() {
+            return err("evaporation and breakup: not available with the exchange record (ADR 0224 E8, B5)");
+        }
         if let Some(film) = self.film.as_mut() {
             let gas = film.gas();
             if gas != FilmGas::default() {
@@ -683,6 +767,8 @@ impl Tracker {
                 erosion: self.erosion.as_mut(),
                 rough: self.rough.as_mut(),
                 reaction: self.reaction.as_mut(),
+                evap: self.evaporation.as_mut(),
+                breakup: self.breakup.as_mut(),
             };
             for (p, a) in self.particles[..n_old].iter_mut().zip(self.aux.iter_mut()) {
                 if p.state == State::Active {
@@ -709,6 +795,8 @@ impl Tracker {
                     erosion: self.erosion.as_mut(),
                     rough: self.rough.as_mut(),
                     reaction: self.reaction.as_mut(),
+                    evap: self.evaporation.as_mut(),
+                    breakup: self.breakup.as_mut(),
                 };
                 advance_particle(&self.loc, &opts, &self.actions, flow, p, a, &mut ctx, left)?;
             }
@@ -757,6 +845,18 @@ impl Tracker {
             out.extend(rx.bits());
             out.extend((0..self.particles.len()).map(|i| self.reacting_mass(i).to_bits()));
         }
+        if let Some(ev) = &self.evaporation {
+            out.extend(ev.bits());
+            out.extend((0..self.particles.len()).map(|i| self.temperature(i).to_bits()));
+        }
+        if let Some(bu) = &self.breakup {
+            out.push(bu.events());
+            for i in 0..self.particles.len() {
+                let (y, yd) = self.distortion(i);
+                let (n, t) = self.breakups(i);
+                out.extend([y.to_bits(), yd.to_bits(), n as u64, t.to_bits()]);
+            }
+        }
         out
     }
 }
@@ -786,6 +886,60 @@ fn react(rx: &mut SurfaceReaction, p: &mut Particle, aux: &mut Aux, cell: usize,
         p.d = d;
         *mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
     }
+}
+
+/// The evaporation over a sub-step of length `h` that started in `cell`, with the rates of its start (ADR 0224 E6): the
+/// temperature by one exponential Euler step, `d^2` linearly, the vapour booked in `cell`; with `complete` the parcel's whole
+/// liquid mass is booked and it becomes `Evaporated`. Updates `mass` (the parcel mass).
+#[allow(clippy::too_many_arguments)]
+fn evaporate(
+    ev: &mut Evaporation,
+    p: &mut Particle,
+    aux: &mut Aux,
+    cell: usize,
+    r: &EvapRates,
+    h: f64,
+    complete: bool,
+    mass: &mut f64,
+) {
+    aux.tp += h * phi1(r.jac * h) * r.f;
+    let c = std::f64::consts::PI * p.rho / 6.0;
+    let d0 = p.d;
+    if complete {
+        ev.book(cell, p.parcel * c * d0 * d0 * d0);
+        ev.complete();
+        p.d = 0.0;
+        p.state = State::Evaporated;
+    } else {
+        let d1 = (d0 * d0 - r.k * h).sqrt();
+        ev.book(cell, p.parcel * c * (d0 * d0 * d0 - d1 * d1 * d1));
+        p.d = d1;
+    }
+    *mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+}
+
+/// The TAB breakup at the end of a sub-step of length `s` (the breakup time) with the oscillator of its start and its
+/// relative velocity `w_rel` (ADR 0224 B4). Updates `mass`.
+fn break_up(bu: &mut Breakup, p: &mut Particle, aux: &mut Aux, o: &Oscillator, s: f64, w_rel: Vec3, mass: &mut f64) {
+    let (_, yd_b) = o.advance(aux.y, aux.yd, s);
+    let r = 0.5 * p.d;
+    let r32 = sauter_radius(bu.spec(), p.rho, r, yd_b);
+    let q = r / r32;
+    p.parcel *= q * q * q;
+    p.d = 2.0 * r32;
+    let vn = normal_speed(bu.spec(), r, yd_b);
+    let psi = 2.0 * std::f64::consts::PI * bu.rng.uniform();
+    let wn = norm(w_rel);
+    if vn != 0.0 && wn > 0.0 {
+        let (e1, e2) = tangent_pair(scale(w_rel, 1.0 / wn));
+        p.v = add(p.v, scale(add(scale(e1, psi.cos()), scale(e2, psi.sin())), vn));
+    }
+    aux.y = 0.0;
+    aux.yd = 0.0;
+    aux.n_bu += 1;
+    aux.t_bu = p.age;
+    bu.count();
+    *mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
 }
 
 /// Book the exchange of one sub-step (before any wall reflection) in the cell `cell` where it started.
@@ -873,6 +1027,38 @@ fn advance_particle(
         if upr.is_some() && aux.eddy.t_left < h {
             h = aux.eddy.t_left;
         }
+        // ADR 0224 E6: the evaporation rates of the sub-step's start, the thermal limit and the completion
+        let mut evap_rates = None;
+        let mut completes = false;
+        if let (Some(ev), Some(th)) = (ctx.evap.as_deref(), ctx.thermal) {
+            let r = ev.rates(th, fl.rho, fl.mu, cell0, p.d, p.rho, aux.tp, norm(sub(u_start, v0)))?;
+            h = h.min(ev.spec().max_step_fraction * r.tau_t);
+            if r.k > 0.0 {
+                let dmin = ev.spec().min_diameter;
+                let hc = ((p.d * p.d - dmin * dmin) / r.k).max(0.0);
+                if hc <= h {
+                    h = hc;
+                    completes = true;
+                }
+            }
+            evap_rates = Some(r);
+        }
+        // ADR 0224 B3: the oscillator of the sub-step's start and the time to breakup
+        let mut osc = None;
+        let mut bu_due = false;
+        if let Some(bu) = ctx.breakup.as_deref() {
+            let w_rel = sub(u_start, v0);
+            let o = oscillator(bu.spec(), fl.rho, p.rho, 0.5 * p.d, norm(w_rel));
+            let s = o.time_to_breakup(aux.y, aux.yd);
+            if s < h {
+                h = s;
+                bu_due = true;
+                completes = false;
+            } else if s == h {
+                bu_due = true;
+            }
+            osc = Some((o, w_rel));
+        }
         let mut u_at = |x: Vec3| -> Vec3 {
             if x == x0 {
                 return u_start;
@@ -901,7 +1087,9 @@ fn advance_particle(
         match loc.walk(cell0, x0, x1) {
             Walk::Inside(c) => {
                 let mut dq = 0.0;
-                if let Some(th) = ctx.thermal {
+                if let (Some(ev), Some(r)) = (ctx.evap.as_deref_mut(), evap_rates.as_ref()) {
+                    evaporate(ev, p, aux, cell0, r, h, completes, &mut mass);
+                } else if let Some(th) = ctx.thermal {
                     let (t1, q) = heat_step(th, fl, p, aux.tp, cell0, norm(sub(u_start, v0)), h);
                     aux.tp = t1;
                     dq = q;
@@ -919,6 +1107,13 @@ fn advance_particle(
                 }
                 if let Some(rx) = ctx.reaction.as_deref_mut() {
                     react(rx, p, aux, cell0, fl.rho, h, &mut mass);
+                }
+                if let (Some(bu), Some((o, w_rel))) = (ctx.breakup.as_deref_mut(), osc) {
+                    if bu_due && p.state == State::Active {
+                        break_up(bu, p, aux, &o, h, w_rel, &mut mass);
+                    } else {
+                        (aux.y, aux.yd) = o.advance(aux.y, aux.yd, h);
+                    }
                 }
             }
             Walk::Lost => return err(format!("particle {}: the cell walk did not terminate", p.id)),
@@ -957,7 +1152,9 @@ fn advance_particle(
                 let n = loc.face_normal(face);
                 let (h_hit, x_hit) = (hi, hit_pt);
                 let mut dq = 0.0;
-                if let Some(th) = ctx.thermal {
+                if let (Some(ev), Some(r)) = (ctx.evap.as_deref_mut(), evap_rates.as_ref()) {
+                    evaporate(ev, p, aux, cell0, r, h_hit, false, &mut mass);
+                } else if let Some(th) = ctx.thermal {
                     let (t1, q) = heat_step(th, fl, p, aux.tp, cell0, norm(sub(u_start, v0)), h_hit);
                     aux.tp = t1;
                     dq = q;
@@ -975,6 +1172,9 @@ fn advance_particle(
                 }
                 if let Some(rx) = ctx.reaction.as_deref_mut() {
                     react(rx, p, aux, cell0, fl.rho, h_hit, &mut mass);
+                }
+                if let Some((o, _)) = osc {
+                    (aux.y, aux.yd) = o.advance(aux.y, aux.yd, h_hit);
                 }
                 if let Some(er) = ctx.erosion.as_deref_mut() {
                     er.book(face, mass, v_hit, n);
