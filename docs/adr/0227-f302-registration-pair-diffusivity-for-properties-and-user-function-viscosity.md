@@ -228,7 +228,7 @@ the probe's largest harness value (3.0e-15) by more than a factor 100.
 | Id | Check | Limit |
 |---|---|---|
 | V0a | `baseline_hashes.rs` and `case_hashes_w48u.rs`, unedited | pass |
-| V0b'' | `crates/rcfd-api/tests/f302_default_bits.rs`: FNV-1a of the fields and the face flux (`f296_common::record`, with the case directory of the module), recorded on main 9f95fb12 with this text and the test only, committed before any code: CHXP, GCHXP, CHXU, CHXUT (50 iterations each), CHXK and CHXA with `euler` and with `bdf2`, LAMXP (10 steps each) | bit-identical after the code |
+| V0b'' | `crates/rcfd-api/tests/f302_default_bits.rs`: FNV-1a of the fields and the face flux (as `f296_common::record`, with the case directory of the module and the field `T` added to the fields hashed), recorded on main 9f95fb12 with this text and the test only, committed before any code: CHXP, GCHXP, CHXU, CHXUT (50 iterations each), CHXK and CHXA with `euler` and with `bdf2`, LAMXP (10 steps each) | bit-identical after the code |
 | V0c'' | after the code: every V0b'' run with `diffusivity = "owner"` written | its V0b'' record |
 | V0d | `f296_default_bits.rs`, `f295_default_bits.rs`, `f294_default_bits.rs`, `f286_default_bits.rs` and `udf.rs`, unedited | pass |
 | V0e | the gate (fmt per package, clippy `--workspace --all-targets -D warnings`, every test in release on a git-archive copy, `scripts/gate_test.py`, 3 jobs, the gate lock) on the final commit | pass, apart from the known flakes |
