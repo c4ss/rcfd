@@ -428,3 +428,110 @@ model (WAVE, KH-RT, Reitz-Diwakar); collisions; a comparison with measured data 
   0.1`, `d_min = 1e-3` of the injected diameter) only when keys are added (Q2).
 - **Q9. TAB under damping across steps.** The source re-estimates the breakup time from the damped state at every time step, so
   with viscosity the breakup time depends on the step (BU3s records it). Recommendation: keep the source's rule.
+
+## Addendum 1: results (2026-11-08)
+
+Measured against the limits registered above; no limit was changed and no amendment was needed. Release builds on Windows. The
+registration is 18bb5e1a; the code and the tests are 7105ec0a, committed before their first run; every library check ran once on
+7105ec0a (`cargo test --release -p rcfd-particles --test evaporation_f245 --test breakup_f245`, log `w49i-work/f245-run1.log`),
+the suites of DF1 once after it. The runs are deterministic and none was repeated to change a result. Every registered check met
+its limit, every negative control held, and every mutation made its check fail.
+
+### A. Evaporation (`crates/rcfd-particles/tests/evaporation_f245.rs`, 7 tests, 0.01 s)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| DK (the test's own derivation) | | `T_wb = 356.5724920247` K, `X = 0.648102`, `Y_i = 0.863960`, `B_M = 6.35080493`, `phi = 0.75`, `B_T = 3.46427741`, `K = 3.4196739796e-7` m^2/s (both forms of DK to the printed 11 digits) | as predicted (PR1) |
+| EV1 (acceptance A1) slope over 66 samples | 2 percent | `3.4196739796e-7`, 1.1e-15 | met |
+| EV1b residual | `1e-3 d0^2` | `9.1e-16 d0^2` | met |
+| EV1c `T_p` at every sample | `1e-6` K | `5.7e-14` K | met |
+| EV1d completion; age against `(d0^2 - d_min^2)/K` | `Evaporated`; 2 percent | `Evaporated` after 74 samples; `7.3106091835e-3` s, 1.2e-16 | met |
+| EV1e (acceptance A1) vapour against the liquid lost at every step; `evaporated()` against the sources | 1e-10; 1e-12 | worst 2.9e-16; at completion the vapour equals the injected mass to 1.4e-16; `completed() = 1` | met |
+| EV2 heat-up: slope over `[0.05, 0.25]` (14 samples); overshoot; the last sample; mass | 2 percent; `1e-3` K; `1e-4` K; 1e-10 | 7.1e-12; `T_p` never above `T_wb` (largest `T_p - T_wb = -5.7e-14` K); `-5.7e-14` K at `d^2/d0^2 = 6.6e-3`; 7.2e-16. First within 0.1 K of `T_wb` at `d^2/d0^2 = 0.704` (the continuous model: 0.709) | met |
+| EV3 no driving force (`Y_s = 0.562707405451523`) | 1e-9; `1e-9 n m0` | `d` unchanged bit for bit, vapour 0, `T_p = 330` exactly | met |
+| EV4 convection (`Re0 = 16.667`, `Nu0 = 4.13267`, `Sh0 = 5.086164`, `T_wb(Re0) = 350.87431484` K, `K_loc = 7.1130557434e-7`) | 2 percent | 5.9e-14 | met |
+| EV5 Jacobian, 8 points | 1e-5 | worst 5.6e-9 (365 K, both Reynolds numbers) | met |
+
+### B. Breakup (`crates/rcfd-particles/tests/breakup_f245.rs`, 8 tests, 0.13 s)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| BU1 (acceptance A2), `We` = 6.1, 12, 60, 1000: one breakup each; age against `arccos(1 - 12/We)/omega0`; child radius against `r0/(4/3 + We/6)`; count; `n d^3`; velocity | one; 2 percent; 2 percent; 1e-12; 1e-14; zero | one each; 1.6e-15, 0, 4.8e-16, 7.8e-15; 1.6e-16, 2.3e-16, 5.8e-16, 1.5e-14; 5.3e-16, 8.6e-16, 1.4e-15, 4.4e-14; 0, 1.3e-16, 1.3e-16, 3.9e-16; zero | met |
+| BU2 `We = 5.9`, 500 steps | no breakup, bits; largest `y` in `[0.9, 1]` | none, `d` and `n` bit for bit; 0.98333168 (`2W = 0.98333333`) | met |
+| BU3 viscous (`1/t_d = 10714.29`, `omega = 10666.56`): age; child radius | 2 percent each | `1.472636231151e-4` s, 0 (equal bits); `r0/r_32 = 2.41893696`, 0 | met |
+| BU3s (record) steps of `1e-5` s | none | one breakup at `2.199283655e-4` s (later than BU3, as predicted; the damped `y` crosses `W = 1` at `2.211e-4` s) | recorded |
+| BU3o overdamped | bit for bit | no breakup, `y = yd = 0` after all 100 steps | met |
+| BU4 `We = 1000`: eq. 12a; eq. 23; eq. 14; `abs(dv . x)`; eq. 16 | 2 %; 2 %; 1e-12; `1e-12 abs(dv)`; 2 % | 0.10 %; 0.80 %; 7.7e-15 (`abs(dv) = 9.7296796796` m/s); 0; 0.30 % | met |
+| BU4 `We = 6.001`: eq. 13; 7/3 | 2 percent each | 0.82 %; 0.0071 % | met |
+
+### C. The spray (in `evaporation_f245.rs`)
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| SP1 (acceptance A1, 160 parcels in 32 cells) vapour against the liquid lost, 300 steps | 1e-10 | worst 3.0e-12 | met |
+| SP2 (acceptance A2) liquid plus vapour against the injected mass, 300 steps | 1e-12 | worst 8.8e-16 | met |
+| SP3 coverage | as stated | all 80 parcels of `a` broke up once (80 events, no `b` parcel broke); 80 `Evaporated` (the `b` parcels), 80 `Escaped` (the `a` children), none active, deposited, stuck or in a film; vapour `1.156465e-5` kg | met |
+
+### D. Refusals, inert paths and defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| RF1, 22 refusals; 2 controls | `Err`; `Ok` | all `Err`, each with its message; `Ok`, `Ok` | met |
+| RF2, 13 refusals; control | `Err`; `Ok` | all `Err`; `Ok` | met |
+| IN1 inert breakup on the RX2 scenario | bit for bit | the 2862 words of the run without equal the leading words of the run with (3743 words); no breakup event | met |
+| DF1 the suites listed, unedited | pass | `rcfd-particles`: all 11 test binaries pass (closed_forms 24 + 3 ignored, lagrangian_ext 13 + 1, wall_film 6, film_gas 18, wall_interaction 8, erosion_presets 2, dispersion_f255 6, reaction_f255 5 + 1); `rcfd-api`: particles_case 6 + 1, particles_ext_case 3, particle_run 9, particles_two_way 14 + 6, wall_film_f253 5 + 3, wall_interaction_f254 6, erosion_presets_f254 6, film_gas_f292 9, dispersion_f255 15 + 1, case_hashes_w48u (H1) 1, baseline_hashes 3 + 1; none edited | met |
+
+### Negative controls
+
+| Id | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| NE1 slope against the classical model's `K` (`T_wb = 370.112264` K, `K = 7.676567e-7`) | `>= 50` percent off | 55.5 percent | held |
+| NE2 slope against `8 rho D B_M/rho_l = 1.088709e-6` | `>= 50` percent off | 68.6 percent | held |
+| NB1 `We = 12` age against the half period | `>= 40` percent off | 50.0 percent | held |
+| NB2 `We = 60` `r0/r_child = 11.3333` against 7/3 | `>= 50` percent off | 385.7 percent | held |
+| NB3 BU3 age against the inviscid time | `>= 20` percent off | 41.7 percent | held |
+
+### Mutations
+
+Each was applied alone by an exact text replacement on a `git archive` copy of 7105ec0a (`w49i-work/f245-mut`, scratch script
+`f245-scratch/mutate.py`, log `w49i-work/f245-mutations.log`), the named test was run once in release, and the file was restored
+and compared byte for byte with the kept copy (equal in all eleven runs).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| ME1 `ln(1 + B_M)` -> `B_M` | EV1 | failed: slope 2.35 percent off; the droplet cooled 17.5 K to the mutated model's own wet bulb (EV1b `1.05e-2 d0^2`, EV1c 17.5 K, EV1d 7.0 percent also miss) |
+| ME2 Bird's factor -> 1 | EV1 | failed: slope 124 percent off |
+| ME3 Clausius-Clapeyron exponent reversed | EV1 | failed: `advance` refused the droplet as above its boiling point |
+| ME4 vapour without `n` | EV1e | failed at the first evaporating step |
+| ME5 the rest not booked at completion | EV1e | failed at the completion step |
+| ME6 `Sh0` with `Pr` | EV4 | failed: 18.7 percent |
+| MB1 count not rescaled | BU1 | failed: count and `n d^3` 92 percent off at `We = 6.1` |
+| MB2 `(6K - 5)/12` | BU1 | failed: child radius 6.0 percent off at `We = 6.1` |
+| MB3 `W` without `C_b` | BU1 | failed: no breakup at `We = 6.1` (the critical value doubles) |
+| MB4 `omega^2` without the damping term | BU3 | failed: age 29.4 percent off |
+| MB5 normal speed without `C_b` | BU4 | failed: `abs(dv)` 100 percent off |
+
+`scripts/limit_audit.py` on the tree: no hit in the two new test files.
+
+### Disclosures
+
+- EV1e and EV2 at the first step: the parcel is released at the end of step 1 and has lost nothing; the relative form is undefined
+  there, and the test requires the vapour and `evaporated()` to be exactly 0 at such a step (they were). Every later step uses the
+  registered relative limits.
+- PR8 stated NE1 and NE2 as `K_classical/K - 1` (+124.5 and +218 percent). The registered measure is relative to the reference
+  of the negative control (`abs(slope - K_ref)/K_ref`), which gives 55.5 and 68.6 percent; both hold their `>= 50` percent limit.
+- ME1 shows that the slope check alone is weakly sensitive to the mass-transfer law: with `B_M` in place of `ln(1 + B_M)` the
+  droplet settles at its own wet bulb, 17.5 K colder, where its evaporation rate is within 2.35 percent of `K` (at the wet bulb the
+  rate is set mostly by the heat reaching the droplet). The temperature check EV1c pins the law (17.5 K against `1e-6` K).
+- RF1 "with a reaction set": the reaction refuses heat transfer, so this call is refused for the missing heat transfer; the
+  reaction-specific refusal is reached by `set_reaction` after `set_evaporation` (also in RF1).
+- `cargo fmt` and clippy were run before the first run: formatting, and a type alias for the refusal lists in the two test files
+  (`clippy::type_complexity`); no logic changed.
+- Not exercised by a test: condensation (`B_M < 0`), evaporation with the random walk, the film, erosion or rough walls; a wall
+  hit in the sub-step of a completion or a breakup; the immediate breakup of a drop with `y >= 1` (`s = 0`).
+
+### Status
+
+Every registered check of A1 and A2 is met in the library; by the decision rule F-245 is done, with the maintainer's acceptance
+still required (Q1). The roadmap entry is marked done on this branch with that note (the registration's Q1 said "partial until
+then"; the rule of the brief governs). Q2 to Q9 stay open; Q2 (case-tree wiring) is the main one.
