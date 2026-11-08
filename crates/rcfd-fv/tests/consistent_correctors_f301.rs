@@ -644,6 +644,7 @@ fn ma2c_the_moving_step_with_the_consistent_correctors() {
 }
 
 /// The FB coupled run of MA3: 100 steps at `tau/10`, stopped at the first failure. Returns `(failure, history of (t, U), continuity)`.
+#[allow(clippy::type_complexity)]
 fn coupled_run(fb: &Fb, c: &mut Coupled) -> (Option<(usize, String)>, Vec<(f64, f64)>, f64, usize) {
     let dt = fb.forms.tau / 10.0;
     let (mut hist, mut cont, mut p_iters) = (Vec::new(), 0.0f64, 0usize);

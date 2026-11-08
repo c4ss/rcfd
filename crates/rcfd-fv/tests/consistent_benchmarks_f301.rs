@@ -369,6 +369,7 @@ const BDF2: TimeScheme = TimeScheme::Bdf2;
 const EULER: TimeScheme = TimeScheme::ImplicitEuler;
 
 /// The BO rows of ADR 0223: (id, problem, path, scheme, pairs, variable, band).
+#[allow(clippy::type_complexity)]
 fn bo_specs() -> Vec<(&'static str, Prob, Path, TimeScheme, Vec<f64>, bool, (f64, f64))> {
     let b = (1.9, 2.3);
     let e = (0.9, 1.15);
@@ -541,6 +542,7 @@ fn boc_every_run_of_the_option_completes() {
 /// default's (ADR 0223 addendum).
 #[test]
 #[ignore = "known miss of the option (ADR 0223 DC4): the MMS PISO pressure error at dt 0.025 is 1.119 x the default's (limit 1.05); heavy"]
+#[allow(clippy::neg_cmp_op_on_partial_ord)]
 fn dc4_no_harm_on_the_exact_errors_known_miss() {
     let mut bad = Vec::new();
     let mut count = 0;
@@ -592,7 +594,7 @@ fn dc5_no_new_order_miss_known_miss() {
         .filter(|r| !r.in_band(&r.d) && r.in_band(&r.c))
         .map(|r| format!("{} {:?}/{:?} dt={}", r.id, r.cfg.prob, r.cfg.path, r.dt))
         .collect();
-    let o9 = |r: &JointRef| r.as_ref().map_or(false, |(_, o)| o[0] >= 1.9 && o[1] >= 1.9);
+    let o9 = |r: &JointRef| r.as_ref().is_ok_and(|(_, o)| o[0] >= 1.9 && o[1] >= 1.9);
     println!(
         "DC5: rows met by D and missed by C: {lost:?}; rows missed by D and met by C: {gained:?}; O9 D {} C {}",
         o9(&b.o9[0]),
@@ -876,7 +878,7 @@ fn bsc_bsd_the_stability_set_ran_and_the_default_reproduces_adr_0069() {
         .collect();
     let expected = |r: &&BsRun| r.2 == Alg::Pimple2 && r.1 == 100.0 && r.4 == 4.0;
     let bsd = required_d.len() == 88
-        && required_d.iter().filter(|r| !r.7.stable).all(|r| expected(r))
+        && required_d.iter().filter(|r| !r.7.stable).all(&expected)
         && required_d.iter().filter(|r| expected(r)).all(|r| !r.7.stable);
     println!(
         "BSc: {} runs, refused {refused:?}; BSd: D required set {} runs, unstable {unstable_d:?} (ADR 0069: exactly the four PIMPLE-2 \
