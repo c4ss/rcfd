@@ -4,14 +4,17 @@
 //! scheme or Euler / midpoint / RK4, located and tracked across the faces of an unstructured polyhedral mesh, with wall
 //! reflection, trapping and escape, point and surface injection, constant and Rosin-Rammler diameters and VTK output;
 //! a wall film (ADR 0192) with optional gas buoyancy and gas shear (ADR 0206), erosion and rough-wall rebound (ADR 0194),
-//! random-walk dispersion on per-cell fields that a caller may replace every step and a surface reaction (ADR 0208).
+//! random-walk dispersion on per-cell fields that a caller may replace every step and a surface reaction (ADR 0208),
+//! droplet evaporation with the d-squared law and TAB breakup (ADR 0224).
 //!
 //! The crate depends on `rcfd-mesh` only; the fluid velocity and its gradient are inputs ([`Flow`]).
 
+pub mod breakup;
 pub mod coupling;
 pub mod dispersion;
 pub mod drag;
 pub mod erosion;
+pub mod evaporation;
 pub mod film;
 pub mod inject;
 pub mod locate;
@@ -21,6 +24,7 @@ pub mod rough;
 pub mod tracker;
 pub mod vtp;
 
+pub use breakup::{normal_speed, oscillator, sauter_radius, Breakup, BreakupSpec, Oscillator};
 pub use coupling::{Coupling, Thermal};
 pub use dispersion::{drw_msd, taylor_msd, Dispersion};
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
@@ -28,6 +32,7 @@ pub use erosion::{
     dnv_angle_function, erosion_preset, impact_angle, Erosion, ErosionPreset, ErosionSpec, DNV_A, EROSION_PRESETS,
     PRESET_PROVENANCE,
 };
+pub use evaporation::{EvapRates, Evaporation, EvaporationSpec, R_UNIVERSAL};
 pub use film::{
     buoyant_thickness, film_velocity, nusselt_thickness, shear_film_velocity, shear_thickness, Film, FilmGas, FilmSpec,
 };
