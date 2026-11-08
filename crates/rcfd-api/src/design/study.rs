@@ -2,6 +2,7 @@
 //! constraints, concurrent evaluation with a worker limit, and a resumable store. The optimisers of [`super::optim`] and the
 //! samplers of [`super::sampling`] are driven through [`Study`].
 
+use super::cmaes;
 use super::nsga2::{self, Crossover, MoFitness};
 use super::optim::{self, Coefficients, DeOptions, Fitness, InitialSimplex, NmOptions, OptResult, Stop};
 use super::pareto;
@@ -367,6 +368,19 @@ pub enum Method {
         /// The crossover of a crossed pair.
         crossover: Crossover,
     },
+    /// CMA-ES with optional restarts of doubled population (ADR 0222 D3).
+    CmaEs {
+        /// Evaluation budget.
+        budget: usize,
+        /// Population of the first run (default `4 + floor(3 ln d)`).
+        pop: Option<usize>,
+        /// Initial step size as a fraction of each parameter's range.
+        sigma0: f64,
+        /// Restarts, each with the population doubled.
+        restarts: usize,
+        /// Seed.
+        seed: u64,
+    },
 }
 
 /// Outcome of asking for the next candidates.
@@ -666,6 +680,23 @@ impl<'a> Study<'a> {
                 seed,
                 crossover,
             } => self.run_nsga2(*budget, *pop, *seed, *crossover),
+            Method::CmaEs {
+                budget,
+                pop,
+                sigma0,
+                restarts,
+                seed,
+            } => {
+                let opts = cmaes::Options {
+                    max_evals: *budget,
+                    pop: *pop,
+                    sigma0: *sigma0,
+                    restarts: *restarts,
+                    seed: *seed,
+                    x0: self.start_point(),
+                };
+                cmaes::run(&bounds, &opts, &mut |xs| self.fitness_batch(xs))
+            }
         }
     }
 

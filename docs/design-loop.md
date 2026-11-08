@@ -13,7 +13,7 @@ exercised on small laminar cases and on analytic surrogates. The [glossary](glos
 
 ## Not delivered
 
-* CMA-ES (F-260)
+* the real-fan study of F-260 (a multi-objective study on the FAN-01 passage; ADR 0222 question 1)
 * Halton sequences
 * adjoint gradients for turbulent, transient or energy runs
 * adjoint gradients through studies, the service or MCP tools
@@ -121,8 +121,8 @@ service method `design.create_study`) creates it:
 * Methods: `factorial` (`levels` per parameter), `lhs` (Latin hypercube, `n`, `seed`), `sobol` (`n`, up to 10 parameters),
   `nelder_mead` (`budget`, `restarts`, `seed`, and the optional `initial_simplex` and `coefficients` below),
   `differential_evolution` (`budget`, `pop` default `max(10 d, 20)`, `seed`), `nsga2` (`budget` and `pop` required, `pop` even
-  and at least 4, `seed`, and the optional `crossover`, `"sbx"` or `"exchange"`; see Multi-objective). **CMA-ES is not
-  provided** (F-260).
+  and at least 4, `seed`, and the optional `crossover`, `"sbx"` or `"exchange"`; see Multi-objective), `cma_es` (`budget`
+  required, `pop` default `4 + floor(3 ln d)`, `sigma0` default 0.3, `restarts` default 0, `seed`; see CMA-ES below).
 * Nelder-Mead options (ADR 0209, both opt-in; without them the method is unchanged): `initial_simplex = "start"` builds the first
   simplex as MATLAB's `fminsearch` does, `x0 + 0.05 x0_i e_i` (`0.00025 e_i` when `x0_i = 0`), instead of 5 % of each range
   (`"range"`, the default); `coefficients = "adaptive"` uses the dimension-dependent coefficients of Gao and Han (2012): expansion
@@ -169,6 +169,33 @@ the pressure drop over the ramp angle in [0, 12] degrees and the ramp start in [
 at least 1.3 times the inlet velocity", Nelder-Mead from (6 degrees, 0.5), 80 evaluations plus one restart. The result: 77
 evaluations, all converged, and the pressure drop falls from 9.94 to 5.07 (49 %, limit 25 %) at (4.46 degrees, 1.77) with the
 outlet velocity ratio 1.30005.
+
+### CMA-ES
+
+The method `cma_es` (ADR 0222, `design::cmaes`) is the covariance matrix adaptation evolution strategy as N. Hansen's tutorial
+states it (arXiv:1604.00772, 2023: the algorithm of its Fig. 6 with the default parameters of its Table 1, active negative
+weights included). It samples a population around a mean, moves the mean towards the better samples and adapts the step size and
+a full covariance matrix, so it follows curved and badly scaled valleys and, with a large population, the global structure of a
+function with many local minima. It runs in the unit cube of the parameter box (each parameter scaled by its range), starting from
+the parameters' `init` (all of them, else a random point) with the step size `sigma0` (default 0.3 of each range, the tutorial's
+rule). Each generation is one batch of evaluations, so propose, record, resume and `workers` work as for the other methods.
+
+* **The box.** A sample outside the box is not evaluated: it ranks below every evaluated sample, by its distance to the centre of
+  the box (the tutorial's rule (62) for a box). An optimum on a bound is therefore approached from inside only.
+* **Stopping.** A run stops by the tutorial's termination criteria (no effect of an axis or a coordinate, covariance condition
+  above `1e14`, equal or stagnating best values, `TolFun` `1e-12`, `TolX` `1e-12 sigma0`, `TolXUp`) or by the budget.
+* **Restarts.** With `restarts = R`, a run that stopped by a criterion is followed by another one with the population doubled
+  (Auger and Hansen 2005), up to `R` times, all from the same start point (from a new random point when there is none). Use
+  restarts for functions with many local minima; the budget counts every evaluation of every run.
+* `budget` has no default: a budget on a CFD case is a cost decision.
+
+Measured (ADR 0222): on the shifted Rastrigin function in 4 dimensions, from a start three local minima away from the optimum
+in every coordinate, CMA-ES with 9 restarts reaches `f <= 1e-8` within 40 000 evaluations on 20 of 20 seeds (first after 731 to
+28 727 evaluations, median about 6 000), while Nelder-Mead from the same start stops in the local minimum next to it (`f = 35.8`)
+on all 40 runs, with the default and with the ADR 0209 options; without restarts CMA-ES reaches it on 3 of 20 seeds. In 10
+dimensions (100 000 evaluations) 14 of 20 seeds reach it (recorded). The sphere and the ellipsoid of condition `1e6` in 10
+dimensions reach `f <= 1e-10` on every seed within 2 700 and 5 400 evaluations; an optimum on a corner of the box is reached to
+`3e-11` in every parameter.
 
 ### Multi-objective
 
@@ -368,6 +395,7 @@ The code is `crates/rcfd-api/src/design/`:
 | `rng` | SplitMix64-seeded xoshiro256** generator (deterministic, documented) |
 | `sampling` | full factorial, Latin hypercube (seeded), Sobol (dimensions 1 to 10), L2-star discrepancy |
 | `optim` | Nelder-Mead with restarts and the ADR 0209 options, differential evolution (DE/rand/1/bin), Deb's feasibility rules |
+| `cmaes` | CMA-ES with restarts of doubled population (ADR 0222) |
 | `nsga2` | NSGA-II, the multi-objective optimiser (ADR 0209) |
 | `pareto` | fast non-dominated sorting with constrained domination, crowding distance |
 | `store` | JSON-lines evaluation store, exact bit-pattern keys, resume |

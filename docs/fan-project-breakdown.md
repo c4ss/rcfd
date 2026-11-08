@@ -120,7 +120,7 @@ Status key: **exists** (done in the roadmap), **partial**, **missing**. Roadmap 
 | Part | What | Status |
 |---|---|---|
 | H1 | Objective definition: flow at the system operating point over a range of impedances, noise, power, vibration, robustness to tolerances | missing |
-| H2 | Optimisers: Nelder-Mead, DOE exist; CMA-ES and multi-objective are todo | partial (F-095, F-249, F-260) |
+| H2 | Optimisers: Nelder-Mead, DOE, NSGA-II (multi-objective, ADR 0209, ADR 0220) and CMA-ES (ADR 0222) exist; a study on the real fan is todo | partial (F-095, F-249, F-260) |
 | H3 | Surrogate model (for example Gaussian process) fitted to past evaluations to choose the next variant cheaply | missing |
 | H4 | Design ledger: every variant, its parameters, mesh hash, solver version, settings, metrics and verdict, durable and queryable, so progress survives sessions and results can be reproduced | missing |
 | H5 | Assistant tools: create variant, run sweep, fetch metrics, compare, propose next, read history | partial (MCP/assistant layer exists; design-loop tools partial) |

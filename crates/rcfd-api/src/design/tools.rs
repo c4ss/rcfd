@@ -11,6 +11,7 @@
 //! study, the allowance, the store and its signature, the map's table and cache, the result) is the same code.
 
 use super::case_eval::{CaseEvaluator, CaseMapEvaluator, RunLimits};
+use super::cmaes;
 use super::ledger;
 use super::nsga2::Crossover;
 use super::opmap::{self, Axis, MapOptions, MapPoint, OnFailure, PointEvaluator, PointResult};
@@ -201,6 +202,10 @@ fn parse_method(m: &Value) -> Rpc<Method> {
     if kind != "nsga2" && present("crossover") {
         return Err(bad("method.crossover: only nsga2 takes this key"));
     }
+    // ADR 0222 D4: the initial step size belongs to cma_es only
+    if kind != "cma_es" && present("sigma0") {
+        return Err(bad("method.sigma0: only cma_es takes this key"));
+    }
     let choice = |k: &str, allowed: [&str; 2]| -> Rpc<Option<usize>> {
         match m.get(k) {
             None | Some(Value::Null) => Ok(None),
@@ -276,11 +281,56 @@ fn parse_method(m: &Value) -> Rpc<Method> {
                 },
             }
         }
+        "cma_es" => {
+            let budget = match m.get("budget") {
+                None | Some(Value::Null) => return Err(bad("method.budget: cma_es needs a budget (no default)")),
+                Some(v) => v
+                    .as_u64()
+                    .map(|x| x as usize)
+                    .ok_or_else(|| bad("method.budget: expected a non-negative integer"))?,
+            };
+            let pop = match m.get("pop") {
+                None | Some(Value::Null) => None,
+                Some(v) => {
+                    let p = v
+                        .as_u64()
+                        .ok_or_else(|| bad("method.pop: expected a non-negative integer"))?
+                        as usize;
+                    if p < 2 {
+                        return Err(bad(format!(
+                            "method.pop: cma_es needs a population of at least 2, got {p}"
+                        )));
+                    }
+                    Some(p)
+                }
+            };
+            let sigma0 = match m.get("sigma0") {
+                None | Some(Value::Null) => cmaes::SIGMA0,
+                Some(v) => match v.as_f64().filter(|s| s.is_finite() && *s > 0.0) {
+                    Some(s) => s,
+                    None => {
+                        let text = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+                        return Err(bad(format!("method.sigma0: expected a positive number, got {text}")));
+                    }
+                },
+            };
+            Method::CmaEs {
+                budget,
+                pop,
+                sigma0,
+                restarts: usize_of("restarts", 0)?,
+                seed,
+            }
+        }
         "differential_evolution" => Method::Differential {
             budget: usize_of("budget", 500)?,
             pop: match m.get("pop") {
                 None | Some(Value::Null) => None,
-                Some(v) => Some(v.as_u64().ok_or_else(|| bad("method.pop: expected a non-negative integer"))? as usize),
+                Some(v) => Some(
+                    v.as_u64()
+                        .ok_or_else(|| bad("method.pop: expected a non-negative integer"))?
+                        as usize,
+                ),
             },
             seed,
         },
@@ -306,8 +356,8 @@ fn parse_method(m: &Value) -> Rpc<Method> {
         "sobol" => Method::Doe(Doe::Sobol { n: usize_of("n", 0)? }),
         other => {
             return Err(bad(format!(
-                "method.type: '{other}' is not nelder_mead, differential_evolution, nsga2, factorial, lhs or sobol (CMA-ES is not available)"
-            )))
+            "method.type: '{other}' is not nelder_mead, differential_evolution, nsga2, cma_es, factorial, lhs or sobol"
+        )))
         }
     })
 }
@@ -352,6 +402,15 @@ fn method_json(m: &Method) -> Value {
         }
         Method::Differential { budget, pop, seed } => {
             json!({"type": "differential_evolution", "budget": budget, "pop": pop, "seed": seed})
+        }
+        Method::CmaEs {
+            budget,
+            pop,
+            sigma0,
+            restarts,
+            seed,
+        } => {
+            json!({"type": "cma_es", "budget": budget, "pop": pop, "sigma0": sigma0, "restarts": restarts, "seed": seed})
         }
         Method::Doe(Doe::Factorial { levels }) => json!({"type": "factorial", "levels": levels}),
         Method::Doe(Doe::Lhs { n, seed }) => json!({"type": "lhs", "n": n, "seed": seed}),
@@ -497,7 +556,7 @@ pub fn parse_study(v: &Value, base_path: PathBuf, base_fingerprint: String) -> R
         }
     }
     let method = parse_method(v.get("method").ok_or_else(|| {
-        bad("method: missing (nelder_mead, differential_evolution, nsga2, factorial, lhs or sobol)")
+        bad("method: missing (nelder_mead, differential_evolution, nsga2, cma_es, factorial, lhs or sobol)")
     })?)?;
     if let Method::NelderMeadWith {
         coefficients: Coefficients::Adaptive,
@@ -508,6 +567,15 @@ pub fn parse_study(v: &Value, base_path: PathBuf, base_fingerprint: String) -> R
             return Err(bad(
                 "method.coefficients: adaptive needs at least 2 parameters (the shrink 1 - 1/d is 0 for d = 1)",
             ));
+        }
+    }
+    // ADR 0222 D4: the budget must hold the first population, whose default depends on the parameter count
+    if let Method::CmaEs { budget, pop, .. } = &method {
+        let first = pop.unwrap_or_else(|| cmaes::default_lambda(pdefs.len()));
+        if *budget < first {
+            return Err(bad(format!(
+                "method.budget: {budget} is smaller than the population {first}"
+            )));
         }
     }
     let workers = match v.get("workers") {
