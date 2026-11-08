@@ -4,6 +4,13 @@ Status: **REGISTERED 2026-11-08**, written before any code of F-260 and before a
 maintainer. Before this text no rcfd code or test was run for F-260; two papers were read (the reading section below). Results
 go in the addendum at the end.
 
+Summary of the results (addendum 1): the opt-in method `cma_es` reaches `f <= 1e-8` on the shifted Rastrigin function in 4
+dimensions within 40 000 evaluations on 20 of 20 seeds (limit 18 of 20), from a start where every Nelder-Mead run (40, default and
+ADR 0209 options) stops in the local minimum `f = 35.82`; the unimodal, part, study and tool checks are met and every mutation
+fails its test. Without restarts 3 of 20 seeds reach the target; in 10 dimensions 14 of 20 (recorded). The FAN-01 study is not
+attempted (no converged FAN-01 solve, no blade-parameter keys), so F-260 is partial (question 1). Defaults, baselines and goldens
+unchanged.
+
 Parents: [ADR 0067](0067-wave32c-design-loop.md) (the design loop, the store, propose / record, the optimisers' batch interface),
 [ADR 0209](0209-f249-registration-nsga2-studies-nelder-mead-options-and-extended-warm-start.md) (F-249: NSGA-II, the Nelder-Mead
 options, the house rules of the design work) and [ADR 0220](0220-f297-registration-nsga2-per-variable-exchange-and-the-30-parameter-zdt1-check.md)
@@ -335,3 +342,85 @@ The FAN-01 study (reading 2, question 1); R1's repair-and-penalty (63) and resam
 ## Addenda
 
 Results follow in addenda.
+
+### Addendum 1: what was built and the results (2026-11-08)
+
+Commits on `f260-cmaes` (from main 539956da): registration 940caa4; V0b record c785636 (test only, recorded twice on main's code
+with equal values before any code); a128912 (`design::cmaes`, `Method::CmaEs`, the tools' `cma_es`, with `f260_cmaes.rs`: the
+tools come with the study change because `method_json` matches every `Method` variant, as D6 says); 78ca950 (`design_f260.rs`);
+documents and this addendum after it. Every check was run once, in release: the library checks and V0b on a128912's tree, the
+tool checks on 78ca950's. No limit, set-up or test was changed after a run.
+
+Built as registered, with four disclosed differences, none of which changes a check:
+
+* `State` has one more public field than D1 lists, `eig` (the eigenvalues), which ConditionCov reads instead of squaring `D`.
+* The V0b test file was committed (c785636) before `cargo fmt`; a128912 formats it (line breaks only; the recorded values are
+  unchanged and are met after the code).
+* Before the registered run, clippy's `manual_div_ceil` made the median ranks read `lambda.div_ceil(2) - 1` and
+  `(lambda + 1).div_ceil(2) - 1` (the same integers as `floor((lambda + 1)/2) - 1` and `ceil((lambda + 1)/2) - 1`), and the S5
+  closure uses the `optim::Eval` alias.
+* `cmaes.rs` has one unit test that is not in the registration (`refusals_evaluate_nothing`, the library refusals of S5 again).
+
+#### Results
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| K0 | `R_4(o) = 0`, `R_4(x0) = 36`, `R_10(x0) = 90`, `R_4(o + e_1) = 1`, `R_10(o) = 0`, `E(e_10) = 1e6`, `E(e_1) = 1` | `1e-12` | met |
+| K1 | all eight `(n, lambda)` within `1e-14` relative; the positive weights sum to 1 and the negative weights to `-min(alpha)` within `1e-14`. The smallest alpha (recorded): `alpha_mu_eff^-` for (1, 4), (2, 6), (3, 7) and (2, 2); `alpha_mu^-` for (4, 8), (10, 10), (30, 14); `alpha_posdef^-` for (4, 50) | as stated | met |
+| K2 | 20 seeded matrices (sizes 1 to 12): reconstruction at most `5.7e-15 max abs(A)`, orthogonality at most `2.9e-15`, ascending; `[[2, 1], [1, 2]]` gives 1 and 3, `diag(3, 1, 2)` gives 1, 2, 3 with the permuted unit vectors | `1e-12`, `1e-13`, `1e-15` | met |
+| K3 | mean 0.00363, variance 0.99669; `abs(F - Phi)` 2.9e-4, 8.4e-4, 1.7e-3, 1.6e-4, 5e-5 at t = -2, -1, 0, 1, 2; the first 10 draws equal the formula bit for bit | 0.01, 0.01, 0.005 | met |
+| K4 | (a) `h_sigma` 1 and (b) `h_sigma` 0 (set-up held): `m`, `sigma`, `p_sigma`, `p_c`, `C` within `1e-13` of the transcription; `g` 5 | `1e-13` | met |
+| K5 | the 17 cases give the registered reason or `None` | exact | met |
+| **C1** | **20 of 20 seeds reach `f <= 1e-8`** (the best `f` evaluates to 0 in floating point on every seed). The target is first reached in the run with `lambda` 8 (seeds 6, 8, 18), 16 (10), 32 (4, 7, 12, 14, 16, 17, 19), 64 (1, 2, 5, 9, 15, 20), 128 (3) or 256 (11, 13), after 731 to 28 727 evaluations (median 6 029); every seed then spends the budget (39 505 to 39 959 evaluations in 7 runs, `lambda` 8 to 512, the first six runs stopped by TolFun, the last by the budget) | at least 18 of 20 | **met** |
+| N0 | all 40 Nelder-Mead runs (20 seeds, default options and `start` + `adaptive`) end at `f = 35.818405`, the local minimum next to `x0`, after 2443 to 3289 evaluations (every restart converges back to it) | all above `1e-8` | held (set-up) |
+| C1c | best `f` of the 40 000 Latin-hypercube points 8.7728 | above `1e-8` | held (set-up) |
+| C1r | without restarts (one run, `lambda` 8): 3 of 20 seeds (6, 8, 18) reach the target; the others stop by TolFun in local minima with `f` 0.995 to 11.46 | none | recorded |
+| C2 | `R_10`, 100 000 evaluations: CMA-ES 14 of 20 seeds (first success after 46 725 to 85 245 evaluations; the six others end at `f = 0.995`, one basin off in one coordinate); Nelder-Mead 0 of 20 (every run at `f = 89.546`) | none | recorded |
+| U1 | sphere: 20 of 20, `f` 4.1e-16 to 9.4e-15 after 2308 to 2671 evaluations, every run stopped by TolFun | `1e-10` on 20 | met |
+| U2 | ellipsoid (condition `1e6`): 20 of 20, `f` 5.6e-16 to 4.7e-15 after 4631 to 5351 evaluations, every run stopped by TolFun | `1e-10` on 20 | met |
+| U3 | bounded sphere: `f - f*` 1.2e-11 to 7.8e-11, largest `5.12 - x_i` at most 2.9e-11, 2137 to 2908 evaluations, every run stopped by TolX | none | recorded |
+| U4 | Rosenbrock from random starts (the ADR 0067 O1 rule): 20 of 20 within 789 to 799 evaluations (1 or 2 runs) | none | recorded |
+| S1 | 4975 records equal the 4975 points the library asked for, bit for bit; the same best point (`f` 0.995) | exact | met |
+| S2 | seed 4: 1995 records, equal in two runs and with 4 workers; seed 5 (1994 records) differs | exact | met |
+| S3 | 218 proposals, 1995 records equal to the evaluator-driven run | exact | met |
+| S4 | k = 37: the resume evaluated 1958 of 1995, a third launch 0; records equal | exact | met |
+| S5 | the 8 refusals (`no parameters`; `the population must be at least 2, got 1`; `sigma0 must be positive and finite, got 0`, `-0.1`, `NaN`, `inf`; `the evaluation budget 7 is smaller than the population 8`; `parameter 1: the bounds must be finite with lo < hi (got 2, 2)`), nothing evaluated | as stated | met |
+| S6 | no point outside the box in any C, N, U or S run; the sphere run with `max_evals` 1000: 1000 evaluations (1000 counted) in 2 runs, stopped by TolFun and then by `Budget` | exact | met |
+| S7 | every C1 run starts at `x0` bit for bit, with `lambda` 8, 16, ..., 512; without a start point, 4 runs from 4 different points in the box | exact | met |
+| T1 | `study.json` `method` `{"budget":300,"pop":null,"restarts":2,"seed":1,"sigma0":0.3,"type":"cma_es"}`; the two first batches equal; 50 proposals to `complete`, 296 records for 296 distinct candidates; `design_list_study`'s best is record 290, the smallest `f` of `evaluations.jsonl` (0.995, recorded) | as stated | met |
+| T2 | the seven refusals, each -32602 naming its key (`method.budget: cma_es needs a budget (no default)`; `method.pop: cma_es needs a population of at least 2, got 1`; `method.sigma0: expected a positive number, got 0` and `got a`; `method.budget: 5 is smaller than the population 6`; `method.sigma0: only cma_es takes this key`; `method.type: 'cmaes' is not nelder_mead, differential_evolution, nsga2, cma_es, factorial, lhs or sobol`); nothing written; the accepted study written as `{"budget":300,"pop":10,"restarts":0,"seed":1,"sigma0":0.2,"type":"cma_es"}` | as stated | met |
+| V0b | after the code: parsed `0x9f0ff07822512596`, written `0x5a06b394eb85c3a8`, equal to the record | bit-identical | met |
+| V0a, V0c, V0d | `baseline_hashes.rs`, `case_hashes_w48u.rs`, `Cargo.lock` and the goldens unedited (`git diff 539956da` empty for them); no existing test file changed (the modified source files are `design/mod.rs`, `study.rs` and `tools.rs`; three test files and `cmaes.rs` added) | pass | see the gate |
+
+**Predictions.** PC1 met for the count (20 of 20) and falsified in part for the population and the cost: 14 of 20 seeds first
+reached the target with `lambda` 32 to 128 as predicted, but three with 8, one with 16 and two with 256, after 731 to 28 727
+evaluations (predicted 5 000 to 25 000). PC2 met (35.818405 on every run). PC3 met (3 of 20). PC4 met (14 of 20). PC5 met (at most
+2671 and 5351 evaluations). PC6 met (`f - f*` below `1e-10` on every seed).
+
+**A finding on the tutorial.** Page 28 says that "for the default population size lambda, we meet the lower bound `c_mu sum w_j =
+-c_1`". That holds when `alpha_mu^-` is the smallest of the three alphas of (53). K1 shows that with the default population for
+n = 1, 2 and 3 `alpha_mu_eff^-` is the smallest, so there `c_1 + c_mu sum w_j > 0` and (47) keeps a small decay of `C`. rcfd follows
+Table 1 (the minimum of the three), as registered.
+
+#### Mutations
+
+Each applied alone to 78ca950 by the scratch script `w49i-work/f260-mut/apply.py`, its test run once in release, the file restored
+and compared with the commit (`git diff --quiet HEAD -- crates` and no untracked file under `crates`: clean after every one).
+
+| Id | Test | Measured | Result |
+|---|---|---|---|
+| MC1 | U2 | 0 of 20 seeds reach `1e-10`; best `f` 79 to 507 when the 20 000 evaluations run out | fails |
+| MC2 | U1 | 0 of 20; every run stops by TolXUp with `f` 18 to 55 (seed 1: 5 evaluations in 108 generations, the samples leaving the box) | fails |
+| MC3 | C1 (its S7 assertion) | run 1 has `lambda` 8 instead of 16; recorded with a scratch copy of C1 without the S7 assertions: 4 of 20 seeds reach the target with ten runs of `lambda` 8 | fails |
+| MC4 | C1 (its box assertion) | seed 1 asks for `x = -6.738` outside `[-5.12, 5.12]` | fails |
+| MC5 | U1 | 0 of 20; `f` 5.9 to 25 (seed 1 stops by Stagnation) | fails |
+| MC6 | C1 (its S7 assertion) | run 1 of seed 1 starts at a random point | fails |
+| MC7 | K4 (b) | `p_c` -0.6147 against 0.02206 (the transcription's `h_sigma` 0) | fails |
+| MC8 | K4 (a) | `C` entry 1.0249 against 0.9465 | fails |
+| MC9 | K5 | 19 equal best values give EqualFunValues instead of `None` | fails |
+| MC10 | T1 | `study.json` `budget` 100 for 300 | fails |
+| MC11 | V0b | written hash `0x616565bd5555ba40` against the record `0x5a06b394eb85c3a8` | fails |
+
+**Status.** Every registered check is met, the set-up checks (N0, C1c, K4 (b), S7's two runs) hold and every mutation fails its
+test, so clause 1 of the acceptance is met. Clause 2, the FAN-01 study, is not attempted (reading 2). By the decision rule F-260 is
+**partial** in the roadmap, subject to the gate below; question 1 asks whether to split the real-fan study off and call F-260 done.
