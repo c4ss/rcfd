@@ -75,7 +75,7 @@ fn max_diff(a: &[f64], b: &[f64]) -> f64 {
 // ---------------------------------------------------------------------------------------------------------------
 
 /// `physics.nu` of CH (1/395).
-const NU_CH: f64 = 0.0025316455696202532;
+const NU_CH: f64 = 0.002_531_645_569_620_253;
 const SST_LINES: &str = "model = \"k_omega_sst\"\nk_initial = 1.0\nomega_initial = 40.0\n";
 const KE_LINES: &str = "model = \"k_epsilon\"\nk_initial = 1.0\nepsilon_initial = 3.6\n";
 const SA_LINES: &str = "model = \"spalart_allmaras\"\nnutilde_ratio = 40.0\n";
