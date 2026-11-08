@@ -429,3 +429,24 @@ are clean on e5f974e.
    time-order check that starts from a resolved state (for example from the R1 steady state with the drive changed) and run it
    once. Recommendation: (a) now, (b) only if the maintainer wants a case-tree order record for URANS; D1 and D2 already show
    the order of the k and omega time derivative exactly.
+
+### Amendment 4 (2026-11-08, F-300, ADR 0225): S3 from a start that meets the walls, written before its run
+
+From question 6 (b) and ADR 0210 question 5 (b), recommendations taken by the lead (roadmap item F-300 (b)). ADR 0210 probe P2
+ran the S3 runs of this ADR, on the code of record, from the uniform start `(15, 0, 0)` and from `ux = 15 y (2 - y)` (zero on
+both walls, the same centre speed): the uniform start next to walls at rest is an impulsive start, whose solution is not smooth
+in time at `t = 0`, and from it the registered levels are not in the asymptotic range of BDF2 (this addendum's diagnosis: the
+order first rises above 2, then falls back); from the parabola P2 gave `p` 2.0450 / 2.0394 / 2.0306 for `bdf2` and 1.0030 /
+0.9800 / 1.0028 for `euler`. S3 as registered is therefore a defective set-up for a time-order check, and it is re-registered:
+
+- **S3'**: S3 with the initial lines `velocity = [0, 0, 0]` and `velocity_expression_x = "15 [m/s] * (y / 1 [m]) * (2 - y / 1
+  [m])"` in place of `velocity = [15, 0, 0]`; everything else as S3 (CH, `n_outer = 20`, `n_correctors = 2`, the tolerances,
+  `T = 2`, `T/80`, `T/160`, `T/320`, `e_ij`, `p`). Limits unchanged: `bdf2` `p` in [1.7, 2.3], `euler` `p` in [0.8, 1.2], for
+  `ux`, k and omega.
+- **S3'N**: S3N from the same start (`bdf2`, `n_outer = 1`): the smallest `p` `<= 1.3`.
+- Mutations M3 and M5 of this ADR, applied again to the tree of F-300, must make S3' `bdf2` fail (ADR 0225 MB1, MB2).
+
+The tests are in `crates/rcfd-api/tests/f300_transient_rans.rs` (ADR 0225 part B), run once in release. The old
+`s3_bdf2_time_order_known_miss` stays an ignored record with its limit; `s3_euler_time_order` and
+`s3n_one_sweep_per_step_loses_the_order` stay gate tests unchanged (both met from the uniform start). No code changes. Results go
+in the addendum of ADR 0225.
