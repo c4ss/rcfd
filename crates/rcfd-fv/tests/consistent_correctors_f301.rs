@@ -1091,11 +1091,77 @@ fn side_by_side(
     (dev_a, out)
 }
 
-/// ADR 0223 amendment 1, S0p2, SPs, S1p2: the consistent correctors on periodic faces against the default's own trajectory from the
-/// steady state `S0` of SPC.
+/// ADR 0223 amendment 2, S0p3, SPs, S1p3: S-p2 with each pressure taken with its volume mean removed.
 #[test]
 #[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn s_p2_steady_state_on_periodic_faces_against_the_default_branch() {
+fn s_p3_steady_state_on_periodic_faces_without_the_pressure_level() {
+    let dt = 0.002;
+    let mut a = spc_solver(1, fb_settings());
+    for _ in 0..3000 {
+        a.step(dt);
+        assert!(a.diverged.is_none(), "S0p3 run stopped");
+    }
+    let s0 = a.snapshot();
+    let rg = range(&s0.p);
+    let pbc = pressure_bc(&a.geom, &a.u, &a.p);
+    let own = a.geom.mesh.owner();
+    let ni = a.geom.n_internal;
+    let seam = pbc
+        .coupled
+        .iter()
+        .enumerate()
+        .filter_map(|(i, q)| q.map(|q| (s0.p[own[q]] - s0.p[own[ni + i]]).abs()))
+        .fold(0.0f64, f64::max);
+    let p_s0 = mean_removed(&a);
+    let mut s = fb_settings();
+    s.consistent_correctors = true;
+    s.consistent_periodic = true;
+    let mut b = spc_solver(1, s);
+    b.restore(&s0).unwrap();
+    let (mut du_a, mut dp_a) = (0.0f64, 0.0f64);
+    let (mut du, mut dp, mut dp_raw, mut du_s0, mut dp_s0) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    for _ in 0..50 {
+        a.step(dt);
+        b.step(dt);
+        assert!(
+            a.diverged.is_none() && b.diverged.is_none(),
+            "S-p3 stopped: {:?}",
+            b.diverged
+        );
+        let (pa, pb) = (mean_removed(&a), mean_removed(&b));
+        du_a = du_a.max(max_du(&a.u.values, &s0.u));
+        dp_a = dp_a.max(max_dp(&pa, &p_s0));
+        du = du.max(max_du(&b.u.values, &a.u.values));
+        dp = dp.max(max_dp(&pb, &pa));
+        dp_raw = dp_raw.max(max_dp(&b.p.values, &a.p.values));
+        du_s0 = du_s0.max(max_du(&b.u.values, &s0.u));
+        dp_s0 = dp_s0.max(max_dp(&pb, &p_s0));
+    }
+    println!(
+        "S0p3: branch A max|u - u_S0| {:.2e} U0 (limit 2e-11), max|p' - p'_S0| {:.2e} of the range {rg:.4e}; SPs: {:.3e} of the \
+         range (limit >= 1e-2); S1p3: B against A after every step: max|u_B - u_A| {:.2e} U0 (limit 1e-10), max|p'_B - p'_A| {:.2e} \
+         of the range (limit 1e-10; raw pressures {:.2e}); B against S0: {:.2e} U0, {:.2e}",
+        du_a / U0,
+        dp_a / rg,
+        seam / rg,
+        du / U0,
+        dp / rg,
+        dp_raw / rg,
+        du_s0 / U0,
+        dp_s0 / rg
+    );
+    assert!(du_a <= 2e-11 * U0, "S0p3 {du_a}");
+    assert!(seam >= 1e-2 * rg, "SPs {seam}");
+    assert!(du <= 1e-10 * U0, "S1p3 velocity {du}");
+    assert!(dp <= 1e-10 * rg, "S1p3 pressure {dp}");
+}
+
+/// ADR 0223 amendment 1, S0p2, SPs, S1p2: the consistent correctors on periodic faces against the default's own trajectory from the
+/// steady state `S0` of SPC. Defective set-up (ADR 0223 amendment 2): the comparison keeps the pressure level, which the reference
+/// pin leaves undetermined at the solver's tolerance. Kept as the record; corrected by `s_p3_...`.
+#[test]
+#[ignore = "defective set-up: the pressure comparison keeps the undetermined pressure level (ADR 0223 amendment 2)"]
+fn s_p2_steady_state_on_periodic_faces_against_the_default_branch_defective_setup() {
     let dt = 0.002;
     let mut a = spc_solver(1, fb_settings());
     for _ in 0..3000 {
