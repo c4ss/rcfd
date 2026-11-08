@@ -1042,6 +1042,19 @@ pub fn case_schema() -> Schema {
                 .hash_omit_default(),
         )
         .field(
+            "consistent_correctors",
+            Schema::object()
+                .optional()
+                .doc("Consistent (SIMPLEC-type) pressure correctors of the transient piso/pimple solver (ADR 0214, ADR 0223). With enabled = true every pressure corrector uses rAtU = V/(a_P - H1) (H1 the off-diagonal magnitudes of the momentum matrix) with the compensation of the pressure that drove it, so that a converged step is the default one; it removes the instability of two or more correctors across thin cells (a large cell diffusion number: thin gaps, fine wall layers; grid-scale pressure spokes or divergence, ADR 0214, ADR 0154). Also on periodic patches, with body forces and on a dynamic mesh. Not with time_advance = fractional_step, non_orthogonal_correctors > 0, component_diagonal = corrected, lumped components (their face jumps), steady algorithms, compressible, variable density or VOF (located errors). Absent or enabled = false keeps every earlier result bit for bit")
+                .field(
+                    "enabled",
+                    Schema::boolean(false)
+                        .doc("Use the consistent pressure correctors (default false)")
+                        .hash_omit_default(),
+                )
+                .hash_omit_default(),
+        )
+        .field(
             "pseudo_mode",
             Schema::enumeration("off", &["off", "auto", "local", "physical"]).doc(
                 "Pseudo-transient steady solve (SIMPLE/SIMPLEC only): off = plain under-relaxation, auto = one global step factor*L/U_max, local = per-cell step from a pseudo-Courant number, physical = fixed global pseudo time step",

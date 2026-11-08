@@ -1978,6 +1978,12 @@ impl Simulation {
                 }
                 s.corrector_control = Some(c);
             }
+            // ADR 0223 E5: the consistent correctors with their periodic and body-force extensions (validated below)
+            if get_b(case, "solver.consistent_correctors.enabled") {
+                s.consistent_correctors = true;
+                s.consistent_periodic = true;
+                s.consistent_body_force = true;
+            }
             // ADR 0077 part C: one pressure-lag estimate per run (warn by default; read-only); amendment 3: one corrector only,
             // the regime of the ADR 0073 model; not with the adaptive count, which supersedes it (ADR 0156 D5)
             let lag = get_s(case, "solver.pressure_lag_check");
@@ -2280,6 +2286,25 @@ impl Simulation {
             };
             if let Some(w) = why {
                 return Err(diag("solver.corrector_control", format!("adaptive {w}")));
+            }
+        }
+        if get_b(case, "solver.consistent_correctors.enabled") {
+            // ADR 0223 E5: the combinations the consistent correctors refuse (ADR 0214 F0), as located errors
+            let why = if !matches!(&engine, Engine::Transient(_)) || !matches!(alg.as_str(), "piso" | "pimple") {
+                Some("needs the incompressible transient solver: solver.algorithm = \"piso\" or \"pimple\" with constant density, not VOF or compressible")
+            } else if get_s(case, "solver.time_advance") == "fractional_step" {
+                Some("is not available with solver.time_advance = \"fractional_step\" (ADR 0214)")
+            } else if get_i(case, "solver.non_orthogonal_correctors") > 0 {
+                Some("is not available with solver.non_orthogonal_correctors > 0 (ADR 0214)")
+            } else if get_s(case, "solver.component_diagonal") == "corrected" {
+                Some("is not available with solver.component_diagonal = \"corrected\" (ADR 0214)")
+            } else if components.is_some() {
+                Some("is not available with lumped components (their face jumps; ADR 0214)")
+            } else {
+                None
+            };
+            if let Some(w) = why {
+                return Err(diag("solver.consistent_correctors.enabled", format!("true {w}")));
             }
         }
         {

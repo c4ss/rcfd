@@ -110,9 +110,24 @@ pub struct PimpleSettings {
     /// `(rAtU - rAU)_f snGrad(p_prev) |S|`, so that a converged state is that of the default. It removes the over-correction of a
     /// pressure error by about the cell diffusion number that makes two correctors unstable across thin cells (ADR 0214 M1, M2).
     /// Also on the moving-mesh step and in the pressure-lag estimate. Refused (the step stops through the divergence guard) with
-    /// the fractional step, non-orthogonal correctors, the component diagonal, periodic faces, a body force or a face jump.
-    /// Default `false` (bit-identical).
+    /// the fractional step, non-orthogonal correctors, the component diagonal, a face jump, periodic faces unless
+    /// `consistent_periodic`, and a body force unless `consistent_body_force` (ADR 0223). Default `false` (bit-identical).
     pub consistent_correctors: bool,
+    /// With `consistent_correctors`: accept periodic (coupled) pressure faces (ADR 0223 E2). Each coupled face gets the compensation
+    /// `coupled_gamma(interp(rAtU - rAU))_f |S| (p_prev,q - p_prev,o) / span` of the steady SIMPLEC (ADR 0102), and the implicit
+    /// periodic link coefficients of the momentum matrix count in `H1` of their row (ADR 0113 F1), so that a seam cell has the
+    /// `rAtU` of the same cell of the unsplit mesh. Default `false`: periodic faces are refused as in ADR 0214.
+    pub consistent_periodic: bool,
+    /// With `consistent_correctors`: accept body forces (`body_force` and the hook's `source_force`; ADR 0223 E3). The body-force
+    /// term of the face flux keeps `interp(rAU)` except on fixed-velocity, non-periodic boundary faces, where it takes `interp(rAtU)`,
+    /// the coefficient of the pressure equation's Neumann term there; the cell velocity keeps `rAU b`. Default `false`: body forces
+    /// are refused as in ADR 0214. Face jumps stay refused.
+    pub consistent_body_force: bool,
+    /// Make the pressure-lag check (`pressure_lag_check`) and the adaptive corrector count (`corrector_control`) also on a
+    /// moving-mesh step (`step_ale`, `step_ale_with_walls`, `step_sliding`; ADR 0223 E0), on that step's own frozen matrices (the
+    /// moved geometry, the relative flux, the step's wall conditions made homogeneous), exactly as on a fixed mesh. Default `false`:
+    /// a moving-mesh step makes neither (as before).
+    pub moving_mesh_lag: bool,
 }
 
 /// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
@@ -369,8 +384,11 @@ pub enum LagAction {
 /// `D` exceeds a threshold (`D* = 1, 3.33, 4.65, 5.65` for `n_outer = 1..4` with `alpha_u = 0.8`, `alpha_p = 0.5`). The check estimates
 /// the spectral radius `rho` of the linearised pressure-lag map of one step by power iteration with the matrices of the final outer
 /// iteration frozen (velocity error zero at the step start, homogeneous pressure conditions, no carry-over and no body force) and acts
-/// when `rho >= 1`. Settings rule: use `n_correctors >= 2` (a second corrector starts from a projected velocity and removes the lag) or
-/// a smaller step.
+/// when `rho >= 1`, with the corrector count the step uses. Settings rule: use `n_correctors >= 2` or a smaller step. A second corrector
+/// removes the lag of smooth pressure errors (the ADR 0073 model, where it starts from a projected velocity), but on a collocated mesh
+/// not that of short pressure waves across thin cells: the cell update leaves the Rhie-Chow part of such a wave and the next corrector
+/// amplifies it again by about the cell diffusion number (ADR 0214 M1, M2), so a step with two or more correctors can still be unstable
+/// (thin gaps, fine wall layers). The consistent correctors (`PimpleSettings::consistent_correctors`) remove that instability.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LagCheck {
     /// Check at step `start` and then every `every` steps (0 = step `start` only).
@@ -469,7 +487,9 @@ impl Divergence {
         } else if self.quantity == "lag amplification" {
             return format!(
                 "PIMPLE pressure-lag check: the lagged pressure error is amplified by {:.3} per step (>= 1) at step {}, {}{at}; \
-                 with one pressure corrector the run will diverge: use solver.n_correctors >= 2 or a smaller solver.dt",
+                 the run will diverge: use more pressure correctors (solver.n_correctors >= 2 removes the lag of smooth pressure \
+                 errors; across thin cells short pressure waves need more, ADR 0214), the consistent correctors \
+                 (solver.consistent_correctors.enabled, ADR 0214) or a smaller solver.dt",
                 self.value, self.step, self.stage
             );
         } else {
@@ -523,6 +543,9 @@ impl PimpleSettings {
             gradient_momentum: None,
             gradient_pressure: None,
             consistent_correctors: false,
+            consistent_periodic: false,
+            consistent_body_force: false,
+            moving_mesh_lag: false,
         }
     }
 
@@ -809,6 +832,36 @@ impl PimpleSolver {
         s.lag_preflight(dt, iterations)
     }
 
+    /// Pre-run estimate of the pressure-lag amplification of the next step taken on a moving mesh (ADR 0223 E1): a copy of the solver
+    /// with `moving_mesh_lag` on, the adaptive count off and the ADR 0073 check (`Warn`, `iterations` power iterations) at the next
+    /// step takes [`step_ale_with_walls`](Self::step_ale_with_walls) with `new_geom`, `mesh_flux` and `wall_dpdn` and returns that
+    /// step's estimate. The solver itself is not changed; the caller sets the moving walls' velocity conditions on it first, as
+    /// before a real step. `None` for the fractional step, a stopped run, or a step that fails or is stopped.
+    pub fn lag_preflight_moving(
+        &self,
+        dt: f64,
+        iterations: usize,
+        new_geom: Arc<FvGeometry>,
+        mesh_flux: Vec<f64>,
+        wall_dpdn: Vec<f64>,
+    ) -> Option<LagWarning> {
+        if self.settings.fractional.is_some() || self.diverged.is_some() {
+            return None;
+        }
+        let mut s = self.scratch();
+        s.settings.corrector_control = None;
+        s.settings.moving_mesh_lag = true;
+        let at = s.step_no + 1;
+        s.settings.pressure_lag_check = Some(LagCheck {
+            every: 0,
+            start: at,
+            iterations,
+            action: LagAction::Warn,
+        });
+        s.step_ale_with_walls(dt, new_geom, mesh_flux, wall_dpdn).ok()?;
+        s.lag_estimates.iter().find(|w| w.step == at).copied()
+    }
+
     /// Record a trip of the divergence guard and build the record returned for the step.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn trip(
@@ -875,16 +928,17 @@ impl PimpleSolver {
         if s.component_diagonal {
             return Some("component diagonal");
         }
-        if self.body_force.is_some() || self.source_force.is_some() {
+        if (self.body_force.is_some() || self.source_force.is_some()) && !s.consistent_body_force {
             return Some("body force");
         }
         if self.face_jump.is_some() {
             return Some("face jump");
         }
-        if pressure_bc(&self.geom, &self.u, &self.p)
-            .coupled
-            .iter()
-            .any(|c| c.is_some())
+        if !s.consistent_periodic
+            && pressure_bc(&self.geom, &self.u, &self.p)
+                .coupled
+                .iter()
+                .any(|c| c.is_some())
         {
             return Some("periodic faces");
         }
@@ -987,12 +1041,14 @@ impl PimpleSolver {
             vec![0.0; n_int]
         };
 
-        let lag_due = self.ale.is_none()
+        // ADR 0223 E0: on a moving mesh the estimate and the adaptive count only with `moving_mesh_lag`
+        let lag_here = self.ale.is_none() || s.moving_mesh_lag;
+        let lag_due = lag_here
             && s.pressure_lag_check
                 .is_some_and(|c| self.step_no == c.start.max(1) || (c.every > 0 && self.step_no % c.every == 0));
         let mut lag_ctx: Option<LagCtx> = None;
-        // ADR 0156: the adaptive corrector count (not on a moving mesh, where the lag map is not defined)
-        let cc = if self.ale.is_none() { s.corrector_control } else { None };
+        // ADR 0156: the adaptive corrector count (on a moving mesh only with `moving_mesh_lag`, ADR 0223 E0)
+        let cc = if lag_here { s.corrector_control } else { None };
         let n_lo = s.n_correctors.max(1);
         let cc_reason = match &cc {
             Some(c) => {
@@ -1024,7 +1080,8 @@ impl PimpleSolver {
                 }
             }
             if s.consistent_correctors
-                && (self.body_force.is_some() || self.source_force.is_some() || self.face_jump.is_some())
+                && (((self.body_force.is_some() || self.source_force.is_some()) && !s.consistent_body_force)
+                    || self.face_jump.is_some())
             {
                 // ADR 0214 F0: a source the hook supplied for this outer iteration
                 let what = if self.face_jump.is_some() {
@@ -1206,9 +1263,7 @@ impl PimpleSolver {
                     a_p[c] += m.a.diag[c];
                 }
                 if s.consistent_correctors {
-                    for (h, o) in h1.iter_mut().zip(m.a.off_diag_abs_sum()) {
-                        *h += o;
-                    }
+                    add_consistent_h1(&mut h1, &m, &lk, s.consistent_periodic);
                 }
                 diag_k[k] = m.a.diag.clone();
                 mats[k] = Some(m);
@@ -1291,9 +1346,20 @@ impl PimpleSolver {
                 if let Some(bf) = body {
                     // balanced-force face value of the body acceleration, like the pressure gradient
                     let gbf = gamma_bf.as_deref().unwrap_or(&gamma_p);
+                    // ADR 0223 E3 (reached only with `consistent_body_force`): with the consistent correctors the fixed-velocity
+                    // faces take the coefficient of the pressure equation's Neumann term there, interp(rAtU)
+                    let wall_t = gamma_t.as_deref();
                     for f in 0..mesh.n_faces() {
                         if !g.empty[f] {
-                            phi_hby_a[f] += gbf[f] * bf.face[f];
+                            let c = match wall_t {
+                                Some(gt)
+                                    if f >= n_int && pbc.fixed_u[f - n_int] && pbc.coupled[f - n_int].is_none() =>
+                                {
+                                    gt[f]
+                                }
+                                _ => gbf[f],
+                            };
+                            phi_hby_a[f] += c * bf.face[f];
                         }
                     }
                 }
@@ -1553,9 +1619,7 @@ impl PimpleSolver {
                     a_p[c] += m.a.diag[c];
                 }
                 if s.consistent_correctors {
-                    for (h, o) in h1.iter_mut().zip(m.a.off_diag_abs_sum()) {
-                        *h += o;
-                    }
+                    add_consistent_h1(&mut h1, &m, &ctx.links[k], s.consistent_periodic);
                 }
                 diag_k[k] = m.a.diag.clone();
                 used[k] = Some(m);
@@ -1900,6 +1964,20 @@ impl PeriodicLinks {
         h
     }
 }
+/// Add to `h1` the off-diagonal magnitudes of the momentum matrix `m` of one component (ADR 0214 F0) and, with `periodic`, the
+/// magnitudes of its implicit periodic link coefficients in their rows (ADR 0223 E2, ADR 0113 F1's rule). The step and the
+/// pressure-lag map both use it, so the estimate has the step's algebra.
+fn add_consistent_h1(h1: &mut [f64], m: &FvMatrix, links: &PeriodicLinks, periodic: bool) {
+    for (h, o) in h1.iter_mut().zip(m.a.off_diag_abs_sum()) {
+        *h += o;
+    }
+    if periodic {
+        for &(r, _, a) in &links.t {
+            h1[r] += a.abs();
+        }
+    }
+}
+
 /// `rAtU = V/(a_P - H1)` of the consistent correctors (ADR 0214 F0), with the floor of the steady SIMPLEC
 /// (`a_P - H1 >= 1e-3 a_P`); `a_p` and `h1` are the component averages.
 fn consistent_rau(vol: &[f64], a_p: &[f64], h1: &[f64]) -> Vec<f64> {
@@ -1936,6 +2014,22 @@ fn consistent_split(
             continue;
         }
         phi_hby_a[f] += dr_f[f] * vec3::norm(sf[f]) * pbc.coeffs[i].gradient(p_prev[own[f]]);
+    }
+    if pbc.coupled.iter().any(|c| c.is_some()) {
+        // ADR 0223 E2: periodic faces (reached only with `consistent_periodic`), the steady SIMPLEC's form (ADR 0102): the pair
+        // mean of the coefficient and the partner-cell difference over the summed distances, as the pressure equation has them
+        let dr_c = crate::pressure::coupled_gamma(g, pbc, &dr_f);
+        for f in n_int..mesh.n_faces() {
+            let i = f - n_int;
+            let Some(q) = pbc.coupled[i] else {
+                continue;
+            };
+            if g.empty[f] || pbc.fixed_u[i] {
+                continue;
+            }
+            let span = g.dn[i] + g.dn[q - n_int];
+            phi_hby_a[f] += dr_c[f] * vec3::norm(sf[f]) * (p_prev[own[q]] - p_prev[own[f]]) / span;
+        }
     }
     let bv = boundary_values_pbc(g, pbc, p_prev);
     let grad = green_gauss(g, p_prev, &bv, 0);

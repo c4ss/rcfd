@@ -5611,7 +5611,7 @@ fixed by the item's registration ADR before any code.
     piso refused, one ADR with two parts, plugin models refused on pimple, the enhanced wall function accepted and
     documented for wall-resolved meshes.
 
-- [ ] **F-301** PISO consistent correctors: moving-mesh lag estimate, case key and benchmarks
+- [~] **F-301** PISO consistent correctors: moving-mesh lag estimate, case key and benchmarks
   - depends on: F-299
   - acceptance: Every limit is fixed by its registration ADR before any code. (a) The lag estimate of ADR 0073 is defined
     on a moving mesh per step, with the pre-run warning and adaptive correctors connected to it (ADR 0214 question 3);
@@ -5622,6 +5622,16 @@ fixed by the item's registration ADR before any code.
     (question 1: the default stays false until then); defaults bit-identical.
   - note: From ADR 0214 (F-299) questions 1 and 3 to 7, recommendations taken by the lead; question 2: F-299 stays
     partial. Question 5: extend the refused combinations one at a time, each with a steady-state identity check.
+  - note: PARTIAL (ADR 0223, 2026-11-08). Delivered: (a) at library level `PimpleSettings::moving_mesh_lag` (the ADR 0073
+    estimate, the check and the adaptive count on a moving-mesh step, on its own matrices) and `lag_preflight_moving`; on the
+    falling block the moving step's estimate is within 4.3 % of its twin-run radius (3.29 against 3.16), the adaptive count picks
+    8 correctors and passes A1. (b) The optional key `[solver.consistent_correctors] enabled` (no golden or existing test changed,
+    K0), bit-identical to the library option, with located errors; the option extended to periodic faces and body forces, each
+    with a steady identity check; the LagCheck text and Raise message corrected. (c) The benchmark set run with the option: every
+    run stable (the cavity's 88 required and 56 scan runs, the B2 box, K1 and K2 clean), the examples' St and cd within 0.6 %;
+    known misses of the option DC4 (MMS pressure 1.119 x at one dt) and DC5 (an order 0.005 above its band). Defaults
+    bit-identical. Missing: the case-level wiring for dynamic meshes (SV301, adaptive count; Q2) and the periodic pressure
+    identity S1p3 (known miss at the solver floor). Open: the default (Q1, recommended false for now), one flag (Q3), Q5.
 - [ ] **F-302** Periodic seam pair diffusivity: remaining viscosities and the pimple check
   - depends on: F-296, F-294
   - acceptance: Pair diffusivity covers the temperature-dependent properties viscosity and the user-function viscosity;

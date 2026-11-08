@@ -2686,6 +2686,23 @@ per run (measured on a 48 x 48 PISO cavity).
 * `raise`: the run stops (state `diverged`, exit 6).
 * `off`: no estimate.
 
+A second corrector removes the lag of smooth pressure errors, not of short pressure waves across thin cells (ADR 0214): in thin
+gaps and fine wall layers two or more correctors can still be unstable, which the consistent correctors below remove.
+
+## Consistent pressure correctors (`[solver.consistent_correctors]`, ADR 0214, ADR 0223)
+
+The optional table `[solver.consistent_correctors]` has one key, `enabled` (default `false`). With `enabled = true` the transient
+`piso`/`pimple` solver uses SIMPLEC-type pressure correctors (ADR 0214): every corrector takes `rAtU = V/(a_P - H1)`, `H1` the
+off-diagonal magnitudes of the momentum matrix, with the compensation of the pressure that drove it, so a converged step is that of
+the default correctors. They remove the instability of the default correctors across thin cells: there the first corrector
+over-corrects a pressure error by about the cell diffusion number `nu dt / dx^2`, and on the collocated mesh the second does not
+remove what is left for a pressure wave of a few cells (grid-scale pressure spokes at a refined wall layer, ADR 0154; divergence in
+a narrow gap, ADR 0211). They also apply on periodic patches, with body forces (`physics.body_force`, buoyancy, sources) and on a
+dynamic mesh (ADR 0223 E2, E3). Located errors at `solver.consistent_correctors.enabled` with steady algorithms, compressible,
+variable density, VOF, `time_advance = "fractional_step"`, `non_orthogonal_correctors > 0`, `component_diagonal = "corrected"` and
+lumped components (face jumps). The table absent or `enabled = false` leaves every earlier result bit for bit, and neither enters the
+case hash or the written case text. The default stays `false` until the maintainer decides it on the benchmark set of ADR 0223.
+
 ## Least-squares velocity gradient on periodic faces (`solver.periodic_gradient`)
 
 `solver.periodic_gradient` (`face_value` default, `partner_cell`) applies to the steady `simple`/`simplec` momentum
