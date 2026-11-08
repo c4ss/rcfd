@@ -428,3 +428,13 @@ changes to code or tests are the `#[ignore]` of the S3s miss with the report-onl
 Every registered check of ADR 0225 is met except S3s `bdf2`, an ignored known miss with its numbers and a diagnosis; every negative
 control fired and every mutation made its check fail (above). F-300 is **partial** (`[~]`; question 5). Maintainer acceptance is
 still required.
+
+### The gate (queued, 2026-11-08)
+
+The commit to be gated is 04643122 (code, tests and every document of this branch; later commits change only this ADR's text).
+Its git-archive copy is in `w49i-work/gate-f300/src`, with `run.sh` (fmt per package, clippy `--workspace --all-targets -D
+warnings`, `scripts/gate_test.py` with 3 jobs, target `target-f300-gate`, start at 19 GB free) and the 5 s poll wrapper
+`outer2.sh` (from `gate-f291`), started once at 18:34:03 (pid 6193). The lock was held by F-301 until 19:14, then taken by F-245
+(19:14 to 21:12) and by F-320 (from 21:12, which at 21:23 was still waiting for 19 GB of free memory: 13 GB free, the WSL VM
+holding 31.8 GB). This gate had not started when this text was written; its result goes here when it has run. No gate result is
+claimed.
