@@ -622,3 +622,15 @@ Disclosures:
 | --- | --- | --- | --- |
 | D-R record R1 after the code | equal | `af2c9e6bd3e5596d`: equal | met |
 | D-S the existing suites, unedited | pass | in the gate (below) | see the gate |
+
+### The gate (queued, not yet run)
+
+The gate of b1daba6 (this addendum without this section) is set up as registered in `E:/projects/cfd/w49i-work/gate-f134`
+(`git archive` copy in `src`, `run.sh` from `gate-f250/run.sh` with the start threshold 19 GB, `outer2.sh` with the 5 s
+poll of the machine lock, target dir `target-f134-gate`). Its lock waiter has polled since 2026-11-07 19:52 (UTC); the
+lock went to the gates of F-219, F-297 and F-298 in turn, and at 2026-11-08 03:55 a second run of the F-298 gate held it
+while waiting for free memory (7 to 9 GB free; the start threshold is 19 GB). Two waiters of this gate run (a `nohup` copy
+outlived the call that started it); `run.sh` refuses a second run once `finished.txt` exists, so the gate runs once. The
+result (`gate-f134/stages.txt`) and the gate line are to be added here when it ends. Before the gate: `cargo fmt` of
+`rcfd-mesh` and `rcfd-fv` and `cargo clippy -p rcfd-mesh -p rcfd-fv --all-targets -- -D warnings` clean; every test of
+this ADR ran in release as recorded above.
