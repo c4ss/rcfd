@@ -1501,6 +1501,7 @@ Afzalifar et al. 2016 `bcbaa6e78b8f441fc62cb118138dd6c3eb45eed76303aa548687939ea
 | Boltzmann constant `1.380 649 x 10^-23 J/K`, exact | read | NIST CODATA, physics.nist.gov/cgi-bin/cuu/Value?k, 2026-11-07 |
 | Saturation line, liquid density, latent heat, `c_p`, vapour viscosity and conductivity | existing | IAPWS-IF97 and the IAPWS 2008/2011 transport correlations as implemented and verified in `rcfd-core::iapws` (F-111); the saturation equation and region 1 are extrapolated below 273.15 K only in transients (ADR 0217 M3) |
 | Moore nozzle B geometry | not read | stated in GT2016-57598 to be "available in the IWSMP collaboration"; not printed in any source read |
+| F-320 checks (ADR 0226): rates decomposition, dry nucleation box, frozen sound speed, HLLC upwinding | no new data | the reference values are ADR 0217's M1 table (the F-221 prototype) and first principles (isentropic derivative of the M2 equation of state, the upwind branch of HLLC, Toro ch. 10); no new source was read |
 
 ## F-245 droplet evaporation and TAB breakup (ADR 0224)
 
