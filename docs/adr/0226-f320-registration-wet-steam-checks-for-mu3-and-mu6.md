@@ -193,3 +193,60 @@ below); the status it gives is reported as a recommendation.
   allows to miss in part, and the second case already gives partial with V1 missed.
 - **Q2. The new checks in F-221's set.** They are registered here as members of K' for F-221's rule. Recommendation: keep them
   there for any later F-221 work (F-316 to F-319 rerun them).
+
+## Addendum 1: results (2026-11-08; the registered text above is unchanged)
+
+Code: `crates/rcfd-fv/tests/wetsteam_f320.rs` (new; the eight checks), committed as 253d25c7 on top of the registration
+8b1be78e before any run. No library file, existing test file, case key, hash table or golden was touched. The checks ran once
+(release, `--test-threads=1 --nocapture`, log outside the repository `E:/projects/cfd/w49i-work/f320-checks.log`); the mutations
+ran once on a `git archive` copy of 253d25c7 (`E:/projects/cfd/w49i-work/f320-mut`, scripts in `f320-scratch`, log
+`f320-mutations.log`).
+
+### Checks on the unmutated code
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| R1 `dy/dt` vs the M1 decomposition | 5e-6 relative | 1.97e-8, 6.84e-10, 6.71e-10 at states 1, 2, 3 (state 1: 1.2074962185e-2 against 1.2074962422e-2 /s) | met |
+| R1 `dn/dt` vs `J` | 1e-6 relative | 2.06e-8, 3.16e-8, 8.10e-8 | met |
+| R1 returned `T`, `p` | 1e-12 relative | 0 and at most 2.2e-16 | met |
+| L2 `y` vs the ODE without `rates` | 1e-6 relative | 7.9e-13, 9.2e-13, 1.2e-12 at 2.5e-7, 5e-7, 1e-6 s (`y` = 3.0187e-9, 6.0375e-9, 1.2075e-8) | met |
+| L2 `n` | 1e-6 relative | 4.4e-14, 4.4e-14, 4.0e-14 (`n` = 5.08e15, 1.02e16, 2.03e16 /kg) | met |
+| L2 cell spread / clips | 1e-12 / 0 | 0 / 0 | met |
+| L2 relevance `z >= 0.99 y` | 0.99 | `z/y` = 1.0000000312, 1.0000001431, 1.0000007756 (the growth term is slightly negative: `r*` rises with the latent heat released) | met |
+| A1 `sound_speed` vs the EOS derivative | 1e-7 relative | 2.5e-13, 4.3e-14, 6.9e-14, 6.4e-13, 2.2e-13 at `y` = 0, 0.02, 0.05, 0.1, 0.2 (vapour value +0, +0.646, +1.556, +2.932, +5.259 percent) | met |
+| A2 `max_dt` vs the bound with the EOS `c` | 1e-7 relative | 2.1e-13, 3.7e-14, 6.0e-14, 5.5e-13, 1.8e-13 | met |
+| U1 HLLC = upwind physical flux | bit for bit | bit for bit at (a), (b), (c) | met |
+| U2 upstream departure, frozen Mach 1.015 | 1e-12 | 2.2e-16 (downstream 2.0e-3; `t` = 1.689e-4 s, 100 steps) | met |
+| NC3 subsonic pairs differ from the upwind flux | > 1e-9 | 1.83e-5, 1.82e-5, 2.22e-4 | met |
+| NC4 upstream departure, frozen Mach 0.985 | > 1e-10 | 2.02e-4 | met |
+
+### Mutations (the registered command, once each)
+
+`cargo test` stops at the first failing test binary, so where an F-221 check already failed the F-320 target did not run (MU1,
+MU2, MU4, MU5); the registered criterion (at least one fast check fails) does not depend on it.
+
+| Mutation | Fast checks that failed | Verdict |
+| --- | --- | --- |
+| MU1 `phi = 0` | M1, E1, L1b (F-320 target not reached) | caught |
+| MU2 `(1 - r*/r)` dropped | M1, E1 (F-320 target not reached) | caught |
+| MU3 nucleated-mass term dropped | F-221 checks: none. **R1** (state 1: `dy/dt` 0 against 1.2075e-2 /s), **L2** (`y` 0 against 3.019e-9 at 2.5e-7 s) | **caught** |
+| MU4 `q(y) = 0` | C1, C1b, E1, L1b (F-320 target not reached) | caught |
+| MU5 source also into the mixture density | C1, C1b, L1b (F-320 target not reached) | caught |
+| MU6 `gamma_v` at both sites | F-221 checks: none. **A1** (`y` 0.02: 410.862 against 408.225 m/s), **A2** (2.7922e-7 against 2.8077e-7 s), **U1** ((a): mass flux 63.93239 against the upwind 63.93337), **U2** (upstream departure 8.94e-5) | **caught** |
+| MU6a the `hllc` site only | U1, U2 (upstream 9.01e-5); A1, A2 pass | caught |
+| MU6b the `sound_speed` site only | A1, A2; U1, U2 pass | caught |
+
+Every prediction that was evaluated held. The ten F-221 fast checks gave the same verdicts for MU1-MU6 as in ADR 0217.
+
+### Status by the decision rules
+
+**F-320:** R1, L2, A1, A2, U1, U2, NC3, NC4 met; MU3 caught by R1 and L2, MU6 by A1, A2, U1 and U2; MU6a and MU6b each caught
+by their own checks; MU1, MU2, MU4, MU5 still caught. With the gate passing (B1, below), F-320 is **done** (`[x]`) by its rule;
+maintainer acceptance still required.
+
+**F-221 (recommendation; its roadmap entry is not changed on this branch):** K' met (ADR 0217's K as its addendum and gate
+line record, plus the eight checks above); every mutation MU1-MU6 caught by the fast checks of K'; F missed only in part (S1n on
+the coarse 230 x 10 run, 8.18e-6 at its cap; S2, N1, Q1, G1g, NC1, NC2 met); V1 (a) and (b) met (worst -4.932 percent, onset
++1.90 percent). By the registered reading of the unwritten case (Q1), **F-221 partial** (`[~]`), with the remaining part named as
+ADR 0217 Q11 does: case keys (F-316), real-gas vapour (F-317), viscous terms (F-318); polydispersion (F-319) and the coarse-grid
+unsteadiness (ADR 0217 Q10) also open; done stays the maintainer's call.

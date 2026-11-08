@@ -2639,8 +2639,8 @@
     "deps": [
       "F-221"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "New registered checks make mutations MU3 (nucleated-mass term dropped) and MU6 (sound speed in the wave-speed estimates) fail; the F-221 decision rule is applied again and F-221 becomes partial.",
-    "note": "From ADR 0217 question 9, recommendation taken. MU3 and MU6 survived in F-221."
+    "note": "From ADR 0217 question 9, recommendation taken. MU3 and MU6 survived in F-221. DONE (ADR 0226, 2026-11-08, branch f320-wetsteam-checks, not merged). Test code only (crates/rcfd-fv/tests/wetsteam_f320.rs; no library change, no case key, hashes and goldens untouched). Eight registered fast checks, all met: R1 rates() at the three M1 states against the prototype's decomposition J (4/3) pi r*^3 rho_l + 3 y (dr/dt)/r (worst 2e-8 against 5e-6); L2 a dry box at 285 K, 12 kPa against an ODE written without rates() (y within 1.2e-12 against 1e-6, the liquid is nucleated mass to more than 99.99 percent); A1 the frozen sound speed equals the isentropic derivative of the equation of state (6e-13 against 1e-7); A2 the time step uses it (5e-13); U1 frozen-supersonic face pairs take the upwind flux bit for bit; U2 a supersonic Riemann problem at frozen Mach 1.015 sends nothing upstream (2.2e-16 against 1e-12); negative controls NC3, NC4 (subsonic: 1.8e-5 to 2.2e-4 off the upwind flux, 2.0e-4 upstream). Mutations: MU3 caught by R1 and L2, MU6 by A1, A2, U1, U2 (upstream 8.9e-5); each MU6 site alone (MU6a HLLC, MU6b time step) caught by its own checks; MU1, MU2, MU4, MU5 still caught. The ADR 0217 rule applied again with these checks in its correctness set: every mutation caught, K met, F missed only in part (the coarse run's S1n), V1 met, so F-221 is partial by the rule (recommendation; F-221's entry is the lead's to change). Open: ADR 0226 Q1 (the rule does not write out the case \"F missed in part, V1 met\"; read as partial), Q2 (the new checks stay in F-221's set)."
   }
 ]
