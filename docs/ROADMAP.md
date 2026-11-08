@@ -5670,10 +5670,26 @@ fixed by the item's registration ADR before any code.
   - depends on: F-247, F-259
   - acceptance: dynamic_mesh.deformation = remeshing runs a compressible case from the CLI; the tetrahedral generator and h0 in an optional table so existing case hashes are unchanged.
   - note: From ADR 0215 question 1, recommendation taken.
-- [ ] **F-306** Tetrahedral mesher panic on a thin box (tetmesh neighbour link)
+- [x] **F-306** Tetrahedral mesher panic on a thin box (tetmesh neighbour link)
   - depends on: F-247
   - acceptance: tetrahedralize of box_surface([0,0,0],[1,0.1,0.1],[10,1,1]) at size 0.035 and quality_sweeps 3 returns a mesh or a located error instead of panicking at tetmesh.rs:386.
   - note: Found during F-247 (ADR 0215 question 7); recommendation taken: a new item.
+    - DONE (ADR 0228, the registration of F-306, 2026-11-08, branch f306-tetmesh-thin-box, not merged): every registered
+      check is met; the acceptance is still the maintainer's (ADR 0228 Q1).
+      - Cause: `try_edge_removal` accepted a ring triangle whenever the edge's two ends lay on opposite sides of it, so a
+        triangle folded across a reflex corner of the ring passed; its new cells overlapped the cells outside the ring, and
+        a later `replace` read the broken neighbour link. The same defect returned `Ok` with overlapping cells for
+        neighbouring inputs, also with default options (a plate panics with default options; an STL candidate of ADR 0107
+        overlaps).
+      - Fix: a ring triangle is accepted only in the ring's turning sense (`od == -s`, `oe == s`, with the ring's sign
+        checked on every ring edge), as F-247's remesher already does. No option, no new field.
+      - The acceptance input returns a valid mesh (1427 cells: every cell positive, volume equal to the enclosed volume to
+        1e-12, `to_mesh` Ok); so do the twelve other inputs of the registered sweep that fold on main and the STL input. The
+        118 fold-free inputs (111 boxes and closed shapes, 7 STL candidates) are bit-identical to fingerprints recorded on
+        main (Windows); the existing suites pass. Three mutations failed their checks. Three opt-in quality-pass outputs
+        that were valid on main after a fold (size 0.0333, sweeps 1 to 3) change.
+      - Open: ADR 0228 Q1 (acceptance), Q2 (the invariant `expect`s), Q3 (an output validity check inside
+        `tetrahedralize`, recommended as a follow-up), Q4 (unconditional fix), Q5, Q6 (Linux records).
 - [ ] **F-307** Immersed solids in the case tree: optional immersed_solids table
   - depends on: F-219
   - acceptance: A case file with an optional immersed_solids table runs the F-219 forcing from the CLI; the penalty warns below 1e3 times the largest fluid diagonal; the schema golden edit is registered and approved by the maintainer.

@@ -5,6 +5,13 @@ maintainer. Before this text, existing code of main 9f95fb12 was run in scratch 
 the panic and to locate its cause; one of them ran a copy of `tetmesh.rs` with print-only instrumentation (listed under "Runs
 before this registration"). No code of F-306 existed. Results go in the addendum at the end.
 
+Summary of the results (addendum 1): the panic came from a folded edge removal (a ring triangle accepted with the wrong
+orientation, whose new cells overlap the cells outside the ring); the same defect made main return overlapping meshes for
+neighbouring inputs, including with default options. With the ring triangle accepted only in the ring's turning sense, the
+acceptance input returns a valid mesh of 1427 cells, so do the twelve other folded inputs of the sweep and an STL input, and the
+118 fold-free inputs (111 boxes and closed shapes, 7 STL candidates) give the fingerprints recorded on main bit for bit. Three
+mutations failed their checks; no amendment. By the rule F-306 is done, the acceptance still the maintainer's (Q1).
+
 Parents: [ADR 0215](0215-f247-registration-local-remeshing-on-unstructured-tetrahedral-meshes.md) (F-247: the panic was seen
 while choosing its initial mesh M0; question 7), [ADR 0030](0030-wave19b-meshing.md) (F-132: `tetmesh::tetrahedralize`, its
 flips and edge removal), [ADR 0104](0104-wave41d-tet-sliver-removal.md) (the opt-in quality pass `quality_sweeps`),
@@ -270,3 +277,77 @@ quality pass.
   cell count for `(0.1, 0.02, 0.2)`. Nothing to edit; noted.
 - **Q6. Linux records.** N1 and N1s assert their fingerprints on Windows only. Recommendation: record the Linux values at the next
   Linux gate (ADR 0137's procedure); the box inputs probably agree, which is not proven.
+
+## Addendum 1: results (2026-11-08)
+
+Commits on `f306-tetmesh-thin-box`: the registration `5e9bb059`; the record commit `fb62d0c3` (the two test files with the N1
+and N1s fingerprints, the library of main); the fix `501904db` (`crates/rcfd-mesh/src/tetmesh.rs`, `try_edge_removal`: the
+ring-sign check and the triangle test `od != -s || oe != s`, 11 lines added, 2 removed, as registered). No amendment.
+
+The record: N1 and N1s were written to print their fingerprints, run once on the library of main (at the registration commit
+plus the two uncommitted test files; 111 and 7 lines), the printed values pasted as `RECORD` and the length checks made strict,
+then committed as `fb62d0c3`. The 97 box inputs of N1 have the cell and point counts of the scratch sweep of run 3 (every one
+compared), and the seven N1s counts are those printed by the `w42c` smoke on main.
+
+### N2, the record commit (`fb62d0c3`, library of main; each new test run once, release)
+
+| Check | Registered | Measured | Held |
+| --- | --- | --- | --- |
+| R1 F11 | fails by the panic at `tetmesh.rs:386` | panic at `crates
+cfd-mesh\src	etmesh.rs:386:71`, payload `neighbour link` | yes |
+| R2 F2, F3, F4, F12, F13 | panic | each panics at `tetmesh.rs:386:71`, `neighbour link` | yes |
+| R2 F1, F5, F9, F10 | fail V | each `Ok` and fails V(b): cell volume relative `+8.546e-3`, `+1.433e-3`, `+4.828e-3`, `+1.584e-2` | yes |
+| R2 F6, F7, F8 | pass | pass: 1216, 1349, 1481 cells, hashes `82bc728685c0a641`, `665317d2b2c1ada1`, `fd73b3a06f7f7472` (printed by a re-run of these three for identity only) | yes |
+| R3 F14 | fails V | `Ok`, 16868 cells, fails V(b): `3.123769031020213e1` against `3.123540678950145e1`, `+7.311e-5` | yes |
+| N1, N1s | pass | pass (111 and 7 inputs) | yes |
+
+NC1 held: V rejected all five overlapping outputs of main (F1, F5, F9, F10, F14), each by (b), without a panic.
+
+### Results at the fix (`501904db`; each new test run once, release, 30.6 s and 8.2 s)
+
+| Check | Limit | Measured | Status |
+| --- | --- | --- | --- |
+| R1 F11 (acceptance) | `Ok` and V | `Ok`, 1427 cells, 323 points, V holds (report: 222 interior Steiner points, 399 flips, 506 moves) | met |
+| R2 F1 | `Ok` and V | 3206 cells, V holds | met |
+| R2 F2, F3, F4 | `Ok` and V | 3486, 3941, 4485 cells, V holds | met |
+| R2 F5 | `Ok` and V | 1156 cells, V holds | met |
+| R2 F6, F7, F8 | `Ok` and V | 1204, 1354, 1468 cells (hashes `2d3ca7189bac0af7`, `1fb9fcdc40f95c94`, `6e90359a20d929c4`: changed, as disclosed), V holds | met |
+| R2 F9, F10 | `Ok` and V | 1125, 1333 cells, V holds | met |
+| R2 F12, F13 (plate) | `Ok` and V | 11292, 13383 cells, V holds | met |
+| R3 F14 (STL, default options) | `Ok` and V | 17134 cells, 5050 points, V holds; `bad_left` 2 (main: 482) | met |
+| N1 (111 fold-free inputs) | fingerprint equal to the record (Windows); V | all 111 equal; V holds for all | met |
+| N1s (7 fold-free STL inputs) | fingerprint or error text equal (Windows); V | all 7 equal (the `(0.12, 0.025, 0.25)` error text unchanged); V holds for the six meshes | met |
+| N3 existing suites | pass | run locally before the gate at `501904db`, release: `rcfd-mesh` lib (64 passed, 1 ignored), `tetmesh` (10, 1 ignored), `polydual` (3); `rcfd-io` `w41d_tet_quality` (10, 2 ignored), `w42c_tet_default_eval` (2, 2 ignored), `stl_cylinder_in_box` (2, 3 ignored); `rcfd-fv` `remesh_f247` (2, 195.7 s), `w19b_meshing_solve` (2); the gate: see the gate section | met locally |
+
+Predictions: PR1 and PR2 held. PR3 held: F6 to F8 changed; F11 has 1427 cells, 6.6 percent above F10's 1339 on main. PR4 held
+(about 39 s of test time in all).
+
+### Mutations (scratch copy `w49i-work/f306-scratch/mut`, a `git archive` of `501904db`, release)
+
+Each applied alone by an exact text replacement (`f306-scratch/mutate.py`), `tetmesh_fold_f306` run once, the file restored and
+its SHA-256 checked against the kept copy (`3510599f...92d1`, equal after every mutation).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 (main's triangle test, no ring check) | R1 | failed: R1 panics (`neighbour link`); R2 fails on the ten inputs that fail on main, F6 to F8 pass; N1 passes (it is main) |
+| MU2 (signs swapped) | N1 | failed: all six N1 tests, 102 of the 111 fingerprints differ (8 outputs also fail V(c), a cell of floating-point volume `-5.6e-22`) |
+| MU3 (main's triangle test, ring check kept) | R1 | failed: R1 returns `Ok` with overlapping cells (V(b), `+4.481e-3`); ten R2 tests fail |
+
+Probe P1 (ring check removed, triangle test kept): all 19 tests pass, and every R output has the same hash as with the fix: the
+ring check did not fire on any input, as predicted (it guards only a mesh that is already broken).
+
+### Disclosures
+
+- The F6 to F8 fingerprints of main were printed by a second run of those three tests at the record commit (the first N2 run
+  was without `--nocapture`); the computation is deterministic and the run decides nothing.
+- `w42c_tet_default_eval::s0_smoke_finer_candidates` (ignored, prints only, not edited) now prints 17134 cells for `(0.1, 0.02,
+  0.2)` where main printed 16868 (Q5).
+- N1 and N1s assert their fingerprints on Windows only; on other platforms they print the record lines and check V (Q6).
+- The scratch instrumentation (`instrument.py`) and the sweep crates are in `w49i-work/f306-scratch`, not committed.
+
+### Status
+
+Every registered check is met: the acceptance input returns a valid mesh (R1), the twelve other folded inputs of the sweep and
+the STL input do as well (R2, R3), and the 118 fold-free inputs are bit-identical (N1, N1s). By the decision rule F-306 is done,
+with the maintainer's acceptance still required (Q1). Q2 to Q6 stay open; Q3 (an output check inside `tetrahedralize`) is the
+one with a recommended follow-up.
