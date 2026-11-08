@@ -642,6 +642,11 @@ fn dc7_the_bdf2_cylinder_meets_k1b_k2b_k4_with_the_option() {
 type BxRun = (&'static str, bool, f64, bool, usize, f64, f64, f64);
 
 fn bx_run(example: &'static str, keyed: bool) -> BxRun {
+    bx_run_from(example, keyed, 50.0)
+}
+
+/// [`bx_run`] with the window from `t_from` (ADR 0223 amendment 3: 40).
+fn bx_run_from(example: &'static str, keyed: bool, t_from: f64) -> BxRun {
     let mut case = parse(&repo_file(&format!(
         "example-projects/wind-tunnel/cases/{example}.toml"
     )));
@@ -659,7 +664,7 @@ fn bx_run(example: &'static str, keyed: bool) -> BxRun {
         let vals = sim.step_report_values();
         let get = |n: &str| vals.iter().find(|(k, _)| k == n).map(|(_, v)| *v);
         if let (Some(l), Some(d)) = (get("cl"), get("cd")) {
-            if sim.time() >= 50.0 {
+            if sim.time() >= t_from {
                 t.push(sim.time());
                 cl.push(l);
                 cd.push(d);
@@ -685,7 +690,7 @@ fn bx_run(example: &'static str, keyed: bool) -> BxRun {
         t0.elapsed().as_secs_f64(),
     );
     println!(
-        "BX {example} {}: t = {:.4}, stopped {}, {k} crossings of cl after t = 50, St {st:.5}, mean cd {cd_mean:.5}, {:.0} s",
+        "BX {example} {} (window from t = {t_from}): t = {:.4}, stopped {}, {k} crossings of cl, St {st:.5}, mean cd {cd_mean:.5}, {:.0} s",
         if keyed { "C (key)" } else { "D" },
         r.2,
         r.3,
@@ -696,7 +701,17 @@ fn bx_run(example: &'static str, keyed: bool) -> BxRun {
 
 fn bx() -> &'static Vec<BxRun> {
     static BX: OnceLock<Vec<BxRun>> = OnceLock::new();
-    BX.get_or_init(|| {
+    BX.get_or_init(|| bx_all(50.0))
+}
+
+/// BX2 of ADR 0223 amendment 3: the window from t = 40.
+fn bx2() -> &'static Vec<BxRun> {
+    static BX2: OnceLock<Vec<BxRun>> = OnceLock::new();
+    BX2.get_or_init(|| bx_all(40.0))
+}
+
+fn bx_all(t_from: f64) -> Vec<BxRun> {
+    {
         let jobs: Vec<(&'static str, bool)> = vec![
             ("cylinder-re100", false),
             ("cylinder-re100", true),
@@ -708,7 +723,7 @@ fn bx() -> &'static Vec<BxRun> {
             for (e, k) in jobs {
                 let out = &out;
                 sc.spawn(move || {
-                    let r = bx_run(e, k);
+                    let r = bx_run_from(e, k, t_from);
                     out.lock().unwrap().push(r);
                 });
             }
@@ -716,25 +731,47 @@ fn bx() -> &'static Vec<BxRun> {
         let mut v = out.into_inner().unwrap();
         v.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
         v
-    })
+    }
 }
 
-/// ADR 0223 BXc: every BX run reaches t = 80 with at least 5 upward crossings of cl after t = 50.
+/// ADR 0223 BXc as registered: every BX run reaches t = 80 with at least 5 upward crossings of cl after t = 50. Defective set-up
+/// (ADR 0223 amendment 3): the Re 100 example has 4 crossings in that window in both arms. Corrected by `bxc2_...`.
 #[test]
-#[ignore = "heavy (ADR 0223 BX: four 1280-step runs of the examples)"]
-fn bxc_the_studio_examples_ran_with_and_without_the_key() {
-    let runs = bx();
+#[ignore = "defective set-up: the window t >= 50 holds 4 crossings of the Re 100 example in both arms (ADR 0223 amendment 3)"]
+fn bxc_the_studio_examples_ran_with_and_without_the_key_defective_setup() {
+    bxc_check(bx());
+}
+
+/// ADR 0223 amendment 3, BXc2: BXc with the window from t = 40.
+#[test]
+#[ignore = "heavy (ADR 0223 BX2: four 1280-step runs of the examples)"]
+fn bxc2_the_studio_examples_ran_with_and_without_the_key() {
+    bxc_check(bx2());
+}
+
+fn bxc_check(runs: &[BxRun]) {
     for r in runs {
         assert!(!r.3 && r.2 >= 80.0 - 1e-9 && r.4 >= 5, "BXc {r:?}");
     }
     assert_eq!(runs.len(), 4, "BXc runs");
 }
 
-/// ADR 0223 DC8 (default-decision criterion): the key changes the examples' St and mean cd by at most 1 %.
+/// ADR 0223 DC8 as registered (default-decision criterion): the key changes the examples' St and mean cd by at most 1 %. Not
+/// evaluable for Re 100 (ADR 0223 amendment 3); corrected by `dc8b_...`.
 #[test]
-#[ignore = "heavy (ADR 0223 BX: four 1280-step runs of the examples)"]
-fn dc8_the_key_does_not_change_the_examples_answers() {
-    let runs = bx();
+#[ignore = "defective set-up: not evaluable for the Re 100 example in the window t >= 50 (ADR 0223 amendment 3)"]
+fn dc8_the_key_does_not_change_the_examples_answers_defective_setup() {
+    dc8_check(bx());
+}
+
+/// ADR 0223 amendment 3, DC8b (default-decision criterion): DC8 with the window from t = 40.
+#[test]
+#[ignore = "heavy (ADR 0223 BX2: four 1280-step runs of the examples)"]
+fn dc8b_the_key_does_not_change_the_examples_answers() {
+    dc8_check(bx2());
+}
+
+fn dc8_check(runs: &[BxRun]) {
     for e in ["cylinder-re100", "cylinder-re200"] {
         let d = runs.iter().find(|r| r.0 == e && !r.1).unwrap();
         let c = runs.iter().find(|r| r.0 == e && r.1).unwrap();
