@@ -110,8 +110,8 @@ pub struct PimpleSettings {
     /// `(rAtU - rAU)_f snGrad(p_prev) |S|`, so that a converged state is that of the default. It removes the over-correction of a
     /// pressure error by about the cell diffusion number that makes two correctors unstable across thin cells (ADR 0214 M1, M2).
     /// Also on the moving-mesh step and in the pressure-lag estimate. Refused (the step stops through the divergence guard) with
-    /// the fractional step, non-orthogonal correctors, the component diagonal, periodic faces, a body force or a face jump.
-    /// Default `false` (bit-identical).
+    /// the fractional step, non-orthogonal correctors, the component diagonal, a face jump, periodic faces unless
+    /// `consistent_periodic`, and a body force unless `consistent_body_force` (ADR 0223). Default `false` (bit-identical).
     pub consistent_correctors: bool,
     /// With `consistent_correctors`: accept periodic (coupled) pressure faces (ADR 0223 E2). Each coupled face gets the compensation
     /// `coupled_gamma(interp(rAtU - rAU))_f |S| (p_prev,q - p_prev,o) / span` of the steady SIMPLEC (ADR 0102), and the implicit
