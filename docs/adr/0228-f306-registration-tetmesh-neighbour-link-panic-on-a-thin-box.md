@@ -351,3 +351,12 @@ Every registered check is met: the acceptance input returns a valid mesh (R1), t
 the STL input do as well (R2, R3), and the 118 fold-free inputs are bit-identical (N1, N1s). By the decision rule F-306 is done,
 with the maintainer's acceptance still required (Q1). Q2 to Q6 stay open; Q3 (an output check inside `tetrahedralize`) is the
 one with a recommended follow-up.
+
+### The gate
+
+The gate of `b380f0d5` ran on a `git archive` copy (`w49i-work/gate-f306`, `scripts/gate_test.py`, 3 jobs, target dir
+`target-f306-gate`), started 2026-11-08T23:57:02 under the machine lock, finished 2026-11-09T01:46:22 (wall 5694.8 s for the
+tests; lowest free memory 7 GB): fmt per package 0, `clippy --workspace --all-targets -D warnings` 0, tests 3355 passed,
+0 failed, 934 ignored (3355 test processes in 633 binaries; largest time over limit 0.365). No known flaky test failed, so
+nothing was re-run. The 21 new tests of `tetmesh_fold_f306` and `tet_fold_f306` passed in it, and so did the existing suites of
+N3, which is met. The branch head differs from the gated commit by this section only.
