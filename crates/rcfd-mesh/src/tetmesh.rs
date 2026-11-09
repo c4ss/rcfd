@@ -447,7 +447,8 @@ impl Del {
 
     /// Edge removal around `(d, e)`: when 3 to 7 interior tetrahedra share the edge, re-triangulate the ring polygon
     /// (dynamic programming over triangulations, maximising the worst volume quality) and replace the ring by two
-    /// tetrahedra per polygon triangle. The 3-2 flip is the case of three.
+    /// tetrahedra per polygon triangle. The 3-2 flip is the case of three. A triangle is used only in the orientation of the
+    /// ring's turning sense, so the new tetrahedra fill the ring and nothing outside it (ADR 0228).
     fn try_edge_removal(&mut self, d: usize, e: usize) -> bool {
         let ring: Vec<usize> = self
             .tets_around(d)
@@ -494,12 +495,20 @@ impl Del {
             return false;
         }
         let (pd, pe_) = (self.pts[d], self.pts[e]);
+        // turning sense of the ring about (d, e): one non-zero sign for every ring edge when the ring's cells are positive
+        let s = orient3d(pd, pe_, self.pts[poly[0]], self.pts[poly[1]]);
+        if s == 0 || (1..n).any(|i| orient3d(pd, pe_, self.pts[poly[i]], self.pts[poly[(i + 1) % n]]) != s) {
+            return false;
+        }
         let tri_tets = |me: &Del, i: usize, j: usize, k: usize| -> Option<([usize; 4], [usize; 4], f64)> {
             let (a, b, c) = (poly[i], poly[j], poly[k]);
             let (pa, pb, pc) = (me.pts[a], me.pts[b], me.pts[c]);
             let od = orient3d(pa, pb, pc, pd);
             let oe = orient3d(pa, pb, pc, pe_);
-            if od == 0 || oe == 0 || od == oe {
+            // a triangle (i < j < k in ring order) of a valid triangulation has d on its side -s and e on its side s; one with
+            // the signs the other way round is folded across a reflex corner of the ring, and its cells would overlap the
+            // cells outside the ring (ADR 0228)
+            if od != -s || oe != s {
                 return None;
             }
             let t1 = if od > 0 { [a, b, c, d] } else { [a, c, b, d] };

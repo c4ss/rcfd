@@ -1524,3 +1524,12 @@ arXiv:2201.02818v1 `52c7b9dd554ccd34d2150a68fbdb5717710a5bf25ada3ed1495283993c1a
 | Molar gas constant `R = 8.314 462 618... J/(mol K)` (exact), Avogadro constant `6.022 140 76 x 10^23 /mol` (exact) | read | NIST CODATA 2022, physics.nist.gov/cgi-bin/cuu/Value?r and ?na, read 2026-11-08; rcfd uses `R = N_A k = 8.31446261815324` with `k` of the F-221 row |
 | Abramzon-Sirignano film correction, Langmuir-Knudsen non-equilibrium, Miller, Harstad and Bellan (1998), Godsave and Spalding (1953), Taylor (1963), Reitz and Diwakar (1987) | not read | named in the sources above; not used (ADR 0224 Q6) |
 | Measured droplet lifetimes, product drop sizes or breakup times | not used | no comparison attempted (F-252) |
+
+## F-306 the folded edge removal of the tetrahedral mesher (ADR 0228)
+
+No source was read for F-306. The cause and the fix are derived on the code of `crates/rcfd-mesh/src/tetmesh.rs`.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Edge removal: a ring of cells around an interior edge `(d, e)` replaced by the cells `(a, b, c, d)` and `(a, b, c, e)` of each triangle of a triangulation of the ring polygon; it is valid when every triangle, taken in the ring's turning order, has `d` on the side `-s` and `e` on the side `s` of its plane (`s = orient3d(d, e, poly[0], poly[1])`), and the old test (`d`, `e` on opposite sides) also passes triangles folded across a reflex corner | derived | ADR 0228 "The cause"; the same rule as F-247's `cand_removal` (ADR 0215 M3, M4) |
+| Edge removal and its dynamic-programming triangulation (Shewchuk's topological improvement of tetrahedral meshes; Klincsek's polygon triangulation) | from memory | NOT read; the existing code's choice of triangulation is unchanged |
