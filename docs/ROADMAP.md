@@ -5674,7 +5674,7 @@ fixed by the item's registration ADR before any code.
   - depends on: F-247
   - acceptance: tetrahedralize of box_surface([0,0,0],[1,0.1,0.1],[10,1,1]) at size 0.035 and quality_sweeps 3 returns a mesh or a located error instead of panicking at tetmesh.rs:386.
   - note: Found during F-247 (ADR 0215 question 7); recommendation taken: a new item.
-    - DONE (ADR 0228, the registration of F-306, 2026-11-08, branch f306-tetmesh-thin-box, not merged): every registered
+    - DONE (ADR 0228, the registration of F-306, 2026-11-08, branch f306-tetmesh-thin-box, merged 2026-11-09): every registered
       check is met; the acceptance is still the maintainer's (ADR 0228 Q1).
       - Cause: `try_edge_removal` accepted a ring triangle whenever the edge's two ends lay on opposite sides of it, so a
         triangle folded across a reflex corner of the ring passed; its new cells overlapped the cells outside the ring, and
@@ -5772,3 +5772,11 @@ fixed by the item's registration ADR before any code.
   - depends on: F-245
   - acceptance: Vapour mass, heat and momentum from evaporating and breaking-up parcels are returned to the gas, conserved to 1e-10 relative; the evaporation and breakup models may be used with the particle exchange record.
   - note: From ADR 0224 question 3, recommendation taken: a separate item before F-252. Case-tree wiring (optional particles.evaporation and particles.breakup tables, question 2) goes with F-252.
+- [ ] **F-324** Tet mesher: output validity check inside tetrahedralize
+  - depends on: F-306
+  - acceptance: tetrahedralize checks its output (every cell positive, volume equal to the enclosed volume) and returns a located error instead of an overlapping Ok; the F-306 sweep inputs still give identical meshes.
+  - note: From ADR 0228 question 3, recommendation taken: a small follow-up item.
+- [ ] **F-325** Tet mesher: Linux fingerprint records for the F-306 checks
+  - depends on: F-306
+  - acceptance: Fingerprints for the 118 fold-free inputs of the F-306 sweep are recorded on Linux by the ADR 0137 procedure at the next Linux gate, and the F-306 N1 checks compare them.
+  - note: From ADR 0228 question 6, recommendation taken. Needs a Linux gate run.
