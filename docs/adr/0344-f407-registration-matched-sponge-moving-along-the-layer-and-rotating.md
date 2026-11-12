@@ -362,3 +362,41 @@ A mutation that no check catches is reported as surviving.
   API with the maintainer's approval (it changes the bits of the F-341 frame, which its tests record); not taken here.
 - Q2. A layer fixed in space for a motion with a normal component or a rotation (ADR 0265 Q1): the rates re-evaluated and
   the memories transported. Recommendation: only when a case needs it.
+
+## Amendment 1 (2026-11-12): the set-up of G3 was defective; a corrected check G3b, registered before its run
+
+Written after the first run of the fast tests (code 52c47760, log kept in the scratch folder) and before any run of the
+check registered here. The registered text above is unchanged.
+
+What this amendment needs from that run (the full table comes in addendum 1): G3m and G3s missed their limit, every other
+fast check met it. G3m `q` `8.92e-3`, G3s `q`, `r`, `m` `8.92e-3` each, against `1e-12`; the drift of the state `2.2e-15`
+(met); the control G3c `0.0625` (held, as estimated). The test is kept as the ignored record
+`g3_lab_memory_transport_against_the_closed_form_setup_defect`, its limits intact.
+
+### Diagnosis
+
+The registration excluded only the first and last columns, where the Green-Gauss sum has no boundary face and the
+gradient of a linear field is half the true one. It missed that this error does not stay there: the transport is a central
+difference, `dq_i/dt = V (q_{i+1} - q_{i-1}) / (2 dx)`, so the lag of the boundary column enters the gradient of its
+neighbour, and so on inwards. For the semi-discrete system the influence at `n` cells from the end after the time `t` is
+of the size of the Bessel function `J_n(V t / dx)` (here `V t / dx = 1`). A scratch model (`g3_model.py`, Python, no rcfd
+code: 16 columns, `dx = 0.1`, SSP-RK3 with `dt = 0.01`, 50 steps, the gradient halved in the end columns, nothing else)
+gives, over the cells off the end columns, exactly `8.922e-3`, the measured value; per column from the end
+`2.4e-2, 6.4e-3, 1.1e-3, 1.4e-4, 1.5e-5, 1.2e-6, 8.9e-8, 5.3e-9`. The transport term is therefore implemented as derived
+(DR4), and the check was defective in the region it compared. This is the limit L1 closure, seen at a domain boundary.
+
+### The corrected check
+
+**G3b**: set-up G3 with the grid `box_2d(64, 4, 6.4, 0.4)` (the same cell size 0.1) and everything else unchanged (rates,
+reference, conditions, motion `(0.2, 0, 0)`, 50 steps of 0.01, the memories at `t = 0`, the closed forms, the scales
+`1.6 beta`, `1.6 beta t_end`, `1.6 gamma_m`); compared in the cells whose centre at `t = 0` is at least 14 cells from either
+end (`1.4 <= x <= 5.0`). Limits unchanged: G3m, G3s `<= 1e-12` each, the drift `<= 1e-12`; G3c `>= 0.05`. Estimate: the
+same scratch model on 64 columns gives `1.0e-14` there (`J_14(1)` is about `7e-16`, times the boundary lag; the rest is
+round-off); G3c `0.0625`. **Disclosed: the model was run after the failed run, to diagnose it; its value for the corrected
+check was seen before this amendment. The solver has not been run on G3b.**
+
+The new test `g3b_lab_memory_transport_against_the_closed_form` is run once.
+
+### Decision rule
+
+Unchanged, with G3b in the place of G3 among the fast checks; the status proposal names the record and the amendment.
