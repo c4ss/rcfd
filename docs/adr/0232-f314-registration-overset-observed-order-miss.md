@@ -311,3 +311,40 @@ correction is the same for every step size up to the motion, and of the size `Q 
 
 H6a and H6b are decided on SMc with the deciding numbers of amendment 1, unchanged. SMc is run once. Prediction (mine):
 F7c near `1e-13`; the numbers of H6a and H6b within a few percent of those SM printed.
+
+## Amendment 3 (2026-11-12, written after the runs of SMc and of H8a to H8c and before any further run)
+
+SMc ran once (45 s): F7c `1.1e-13`, F8c `6.41e-4`, F9c `1.9e-7`, all met; H6a and H6b are confirmed by their deciding
+numbers (addendum 1). The test of H8a to H8c ran once (780 s):
+
+| Id | Deciding number | Measured (levels 2 to 3) | Verdict |
+| --- | --- | --- | --- |
+| H8a | at rest, order of the calculated maximum `< 1.7` | `1.336` (`2.504e-4`, `1.457e-4`; levels 1 to 2: `1.889`) | confirmed |
+| H8b | moving, spatial part and time part each `>= 1.7` | `1.834` and `2.038` (levels 1 to 2: `1.982`, `2.049`) | confirmed |
+| H8c | moving, window maximum over the calculated cells `>= 1.7` | `1.478` | ruled out |
+
+So the moving calculated maximum is the sum of two parts that each keep an order above 1.7, the end time is not an unlucky
+sample, and the component held at rest loses more order between levels 2 and 3 than the moving one. At rest the largest
+truncation over the component fringe keeps its order (`1.707e-3`, `4.619e-4`, `2.046e-4`: 1.89 and 2.01), but the root
+mean square of the error of the calculated component cells is `3.22e-4`, `9.37e-5`, `6.93e-5`: over `h^2` it is `3.2e-4`,
+`3.7e-4`, `6.2e-4` (levels 1, 2, 3), a coefficient that jumps at level 3 instead of an error that stops falling.
+
+What differs between the levels at rest, read from the set-up: the component is not turned (`angle = 0`), so its grid is
+parallel to the background grid, and every fringe cell along one side falls at the same height in its donor row. That
+height (the phase of the fringe in its donor cells) is fixed by the corner of the component in units of the background
+cell, `(pi/2 - 0.3 - 0.6) / (pi / (40 L)) = 8.541 L`: its fractional part is 0.54, 0.08 and 0.62 at levels 1, 2 and 3, and
+those of the other sides differ likewise. The truncation of the hand arithmetic is zero at a donor centre and largest at
+a donor corner, so its mean along a side, which is the boundary data error of the component, has a coefficient that
+changes from level to level by a factor of the order of two.
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H9 | the loss of order at rest (H8a) is the level-dependent phase of the fringe in its donor cells (a coefficient of the second-order truncation that differs between the levels), not a loss of order of the coupling | set-up **RL**: as the run at rest, but with the phase locked: the component has the half width `7.5 H` and the hole the half width `3.1 H` (`H = pi/40`, the background cell of level 1), its corner lies on the background node `(9 H, 9 H)` (pose: no rotation, translation `(16.5 H, 16.5 H)`), so its cells are 3/4 of the background cells and every fringe centre falls at the same place of its donor cell at every level; levels 1, 2, 3 with `200 L` steps; the orders of the calculated maximum and of the root mean square of the calculated component cells, levels 2 to 3 | confirmed: both `>= 1.7`; ruled out: the calculated maximum `< 1.7` (then the static coupling loses order on these levels and the cause stays open) |
+
+Printed with it (kinematic, no limit): `kappa_L`, the root mean square of the truncation over the component fringe over
+`h_B^2`, for the registered rest pose and for RL at levels 1 to 3 (prediction: it varies by more than 20 percent between
+the levels at the registered pose and by less than 5 percent in RL).
+
+Test `a3_rest_with_the_fringe_phase_locked` (ignored, slow, run once). The run helper takes the composite and the pose as
+arguments since this amendment; the registered runs are unchanged. Prediction (mine): H9 confirmed, with orders between
+1.8 and 2.1. The decision rule is unchanged.
