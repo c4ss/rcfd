@@ -1,16 +1,21 @@
 # Co-simulation with a structural solver: the participant protocol (F-139; ADR 0256)
 
 rcfd can exchange the displacement of a wall and the fluid force on it with a structural solver, step by step, and iterate
-the two to agreement within each time step. Status: a library interface, in-process (`rcfd_fv::cosim`). There is no network
-transport, no case key and no command-line or MCP tool yet, and the only structural participant in the repository is a mock
-(a wall of sprung nodes). The decision record and the measured checks are in
-`docs/adr/0256-f139-registration-cosimulation-participant.md`.
+the two to agreement within each time step. Status: a library interface (`rcfd_fv::cosim`) whose calls can also be sent
+over the solver service (`rcfd_api::cosim_service`, below), so a participant can run in another process. There is no case
+key and no command-line or MCP tool yet, and the only structural participant in the repository is a mock (a wall of sprung
+nodes). The decision records and the measured checks are in
+`docs/adr/0256-f139-registration-cosimulation-participant.md` (the protocol) and
+`docs/adr/0345-f360-registration-cosimulation-over-the-service.md` (the transport).
+
+**Protocol version: `rcfd-cosim/1`** (the calls of this page as carried by the solver service; see
+[Versions](#versions)).
 
 This page specifies the protocol: who sends what, in which units and on which mesh, how a coupling step runs, when it is
 converged, and what happens when a participant fails. It is for people who want to connect a structural solver or write a
-transport for the calls. For the moving mesh the fluid side runs on see [dynamic-mesh.md](dynamic-mesh.md); for the one-way
-export of loads to a structural deck see [interchange-formats.md](interchange-formats.md); for the JSON-RPC service that a
-transport could build on see [service-protocol.md](service-protocol.md).
+participant in another program. For the moving mesh the fluid side runs on see [dynamic-mesh.md](dynamic-mesh.md); for the
+one-way export of loads to a structural deck see [interchange-formats.md](interchange-formats.md); for the JSON-RPC service
+that carries the calls see [service-protocol.md](service-protocol.md).
 
 ## Participants and coupler
 
@@ -144,6 +149,91 @@ After an error both participants are at the start of the step, bit for bit, and 
 settings, a non-positive `dt`, a map that does not fit the participants and participants at different times are refused
 before anything is touched.
 
+## Over the solver service (`rcfd-cosim/1`)
+
+The calls above can be sent to a participant in another process through the JSON-RPC service
+([service-protocol.md](service-protocol.md), version 1.1; ADR 0345). Opt-in: nothing is hosted unless a program asks.
+
+**Hosting.** The program that owns a participant hands it to a `Service` and lets the service listen:
+
+```rust
+use rcfd_api::service::{Service, ServiceConfig};
+
+let service = Service::new(ServiceConfig::default());
+service.host_structure("structure", move || Ok(Box::new(sprung_wall)))?;   // or host_fluid("fluid", ...)
+let server = service.serve_tcp("127.0.0.1:0")?;                            // server.addr is the address
+```
+
+The closure builds the participant on a thread of its own, where every call for it is applied, one at a time in the order
+the requests arrive (so a participant need not be `Send`; `FlowWall` is not). `rcfd serve` hosts no participant.
+
+**Driving.** `rcfd_api::cosim_service::RemoteStructure` and `RemoteFluid` implement the traits `Structure` and `Fluid` by
+sending each call as one request, so the coupler is the same `cosim::coupled_step`, with one or both participants remote:
+
+```rust
+use rcfd_api::cosim_service::{RemoteSettings, RemoteStructure};
+
+let mut structure = RemoteStructure::connect(address, "structure", RemoteSettings::default())?;
+let step = coupled_step(&mut fluid, &mut structure, &map, dt, &settings)?;
+```
+
+**Methods.** One JSON object per line (JSON-RPC 2.0), one reply per request. `participant` is the name the participant is
+hosted under, `lease` the number that `cosim.open` returned.
+
+| Method | Parameters | Result |
+| --- | --- | --- |
+| `cosim.list` | | `{protocol, participants: [{participant, kind, name}]}` |
+| `cosim.open` | `participant` | `{protocol, lease, kind, name, time}` |
+| `cosim.describe` | `participant`, `lease` | a structure: `{kind, name, nodes}`; a fluid: `{kind, name, points, faces}` |
+| `cosim.time` | `participant`, `lease` | `{time}` |
+| `cosim.checkpoint` | `participant`, `lease` | `{time}` |
+| `cosim.restore` | `participant`, `lease` | `{time}` |
+| `cosim.forces` | `participant`, `lease` (a fluid) | `{forces, time}` |
+| `cosim.advance` | `participant`, `lease`, `dt` and, for a structure, `forces`; for a fluid, `displacements` | a structure: `{displacements, time}`; a fluid: `{forces, time}` |
+
+`nodes`, `points`, `forces` and `displacements` are arrays of `[x, y, z]`, `faces` an array of arrays of point indices
+(from 0, into `points`), `time` and `dt` numbers; units and conventions as above. `kind` is `fluid` or `structure`; `name`
+is the participant's own name, the one a coupling error carries. `protocol` is `rcfd-cosim/1`. For example:
+
+```text
+{"jsonrpc":"2.0","id":7,"method":"cosim.advance","params":{"participant":"structure","lease":1,"dt":0.01,"forces":[[0.012,0,0],[0.024,0,0]]}}
+{"jsonrpc":"2.0","id":7,"result":{"displacements":[[0.0029,0,0],[0.0026,0,0]],"time":0.01}}
+```
+
+**Numbers.** A real number is a JSON number. rcfd writes the shortest decimal text that reads back as the same binary64
+value and reads with a correctly rounding parser, so every finite value crosses bit for bit, and a run with a participant
+in another process gives the same bits as the in-process run (ADR 0345). A participant written with another JSON library
+keeps this only if that library round-trips binary64. JSON has no text for a non-finite number: a participant that
+returns one is answered with the error 1005.
+
+**Errors** (codes of the service): `-32602` a missing or malformed parameter; `1006` no participant of that name; `1002` a
+lease that is not the current one, or a call that does not belong to the participant's kind (`cosim.forces` to a
+structure); `1005` the participant returned an error, `error.message` being its message unchanged. After a failed
+`advance` the service does not restore the participant; the coupler does.
+
+**The lease.** `cosim.open` returns a number that grows with every `open` of that participant, and every other call must
+carry the current one. The participant's state and its checkpoint live in the service, not in the connection, so a new
+connection finds both; the lease makes sure that a request of an old connection, still waiting in a buffer, is refused
+rather than applied after the participant has been restored over the new one. It also means one coupler per participant:
+a second `open` takes the participant over.
+
+**A dropped connection.** A proxy whose call meets an input-output error, an end of stream, a time-out
+(`RemoteSettings::call_timeout`, default 120 s) or a reply that does not answer the request marks its connection as lost
+and returns an error naming the method and the address. From then on every call fails at once, except `restore`, which
+connects again once (`connect_timeout`, default 5 s), takes a new lease and restores the participant. Since the coupler
+answers a failed call inside the iteration with `restore` on both participants, a connection dropped in the middle of a
+step ends the step with the usual located error and both participants at the start of the step, whether the lost request
+was never received, was applied, or is still being computed (the `restore` waits behind it):
+
+```text
+co-simulation: 'structure' at t = 0, iteration 2: the connection to 127.0.0.1:52144 was lost during cosim.advance: the service closed the connection
+```
+
+The caller may then step again over the new connection. If the connection drops between two steps, the next step fails
+before its iteration (iteration 0) with nothing advanced and nothing to restore; `reconnect()` on the proxy opens a new
+connection. If the participant's process is gone, the reconnection fails and the error says so ("... and the restore
+failed: could not connect to ..."); the participant that is still there is restored.
+
 ## Why relaxation is needed, and how to choose it
 
 An incompressible fluid answers a wall acceleration at once with a pressure proportional to it: the fluid acts on the
@@ -202,7 +292,10 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
 
 ## Limits and gaps
 
-* In-process only. A transport (the calls above over the JSON-RPC service) is not written.
+* Over the service: one coupler per participant; no authentication or encryption (use the loopback interface or a trusted
+  network); participants are hosted by a program, not built from a case, and `rcfd serve` hosts none; the structure's
+  `describe` carries nodes, not elements; a call that outlasts the time-out counts as a lost connection; a participant
+  process that died is not restarted.
 * One wall and two participants. No simultaneous update of several participants.
 * The structure in the repository is a mock: lumped nodes on springs, one direction of motion, an explicit integrator.
   No structural solver has been connected.
@@ -216,8 +309,18 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
   condition; a zero-gradient velocity condition leaves their flux free.
 * Tested for a wall moving along its normal with rectangular faces. Heat transfer across the interface is not exchanged.
 
+## Versions
+
+* `rcfd-cosim/1` (ADR 0345, with service protocol 1.1): the calls describe, time, checkpoint, restore, forces and advance
+  of ADR 0256 as the methods `cosim.describe`, `cosim.time`, `cosim.checkpoint`, `cosim.restore`, `cosim.forces` and
+  `cosim.advance`, with `cosim.list` and `cosim.open` (the lease). Before it the calls existed in-process only
+  (`rcfd_fv::cosim`, ADR 0256), unversioned; the in-process traits are unchanged.
+
+A change that an existing participant or coupler would not understand (a renamed member, another unit or sign, a call
+with another meaning) gets a new identifier `rcfd-cosim/2`; an added method or an added member of a reply does not.
+
 ## Where to go next
 
 * [dynamic-mesh.md](dynamic-mesh.md): the moving-mesh step and the rigid-body coupling.
 * [interchange-formats.md](interchange-formats.md): the one-way export of pressure, temperature and heat-flux loads.
-* [service-protocol.md](service-protocol.md): the solver service a transport would extend.
+* [service-protocol.md](service-protocol.md): the solver service that carries the calls.

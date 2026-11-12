@@ -1,6 +1,7 @@
 //! Solver service: JSON-RPC 2.0 over newline-delimited streams (TCP or
 //! stdio) with sessions, run control, monitors, field access, rendering and
-//! an event log (F-085). Protocol version 1; see `docs/service-protocol.md`.
+//! an event log (F-085). Protocol version 1.1 (identifier `rcfd-service/1`); see `docs/service-protocol.md`. Version 1.1
+//! added the co-simulation methods `cosim.*` ([`crate::cosim_service`], F-360).
 //!
 //! The same [`Service`] object can be driven in-process through
 //! [`Service::call`], which is how the MCP server uses it.
@@ -26,6 +27,10 @@ use std::time::{Duration, Instant};
 /// Protocol identifier reported by `service.info`.
 pub const PROTOCOL: &str = "rcfd-service/1";
 
+/// Version of the service protocol reported by `service.info` (`protocol_version`). The identifier [`PROTOCOL`] names the
+/// major version; 1.1 added the `cosim.*` methods and changed no earlier one (ADR 0345).
+pub const PROTOCOL_VERSION: &str = "1.1";
+
 /// JSON-RPC error codes used by the service.
 pub mod code {
     /// Invalid JSON.
@@ -44,6 +49,10 @@ pub mod code {
     pub const VALIDATION: i64 = 1003;
     /// A configured limit was exceeded or a path left the sandbox.
     pub const LIMIT: i64 = 1004;
+    /// A hosted co-simulation participant returned an error; the message is the participant's.
+    pub const PARTICIPANT: i64 = 1005;
+    /// No hosted co-simulation participant of that name.
+    pub const NO_PARTICIPANT: i64 = 1006;
     /// Anything else.
     pub const INTERNAL: i64 = -32000;
 }
@@ -254,6 +263,8 @@ pub struct Service {
     sessions: Mutex<HashMap<String, Arc<Session>>>,
     next: AtomicU64,
     events: Arc<EventLog>,
+    /// Hosted co-simulation participants (F-360); empty unless the embedding program hosts one.
+    pub(crate) cosim: crate::cosim_service::Hosts,
 }
 
 fn s_param<'a>(p: &'a Value, key: &str) -> Rpc<&'a str> {
@@ -302,6 +313,7 @@ impl Service {
                 inner: Mutex::new((0, VecDeque::new())),
                 cv: Condvar::new(),
             }),
+            cosim: crate::cosim_service::Hosts::default(),
         })
     }
 
@@ -389,6 +401,8 @@ impl Service {
                 "name": "rcfd",
                 "version": env!("CARGO_PKG_VERSION"),
                 "protocol": PROTOCOL,
+                "protocol_version": PROTOCOL_VERSION,
+                "cosim": crate::cosim_service::COSIM_PROTOCOL,
                 "methods": METHODS,
                 "limits": {"max_cells": self.cfg.max_cells, "max_steps_per_call": self.cfg.max_steps_per_call, "max_run_seconds": self.cfg.max_run_seconds},
                 "sandbox_root": self.cfg.root.as_ref().map(|r| r.display().to_string()),
@@ -1054,6 +1068,7 @@ impl Service {
                 runctl::summarize_stream(&text).map_err(RpcError::params)
             }
             m if m.starts_with("design.") => crate::design::tools::call(self, m, p),
+            m if m.starts_with("cosim.") => crate::cosim_service::call(self, m, p),
             other => Err(RpcError::new(
                 code::METHOD_NOT_FOUND,
                 format!("unknown method '{other}'"),
@@ -1743,7 +1758,10 @@ impl Service {
                 })),
             };
             if let Some(r) = resp {
-                writeln!(writer, "{r}")?;
+                // one buffer, one write (ADR 0345 amendment 1): the same bytes as `writeln!`, not in small pieces
+                let mut text = r.to_string();
+                text.push('\n');
+                writer.write_all(text.as_bytes())?;
                 writer.flush()?;
             }
         }
@@ -1762,6 +1780,8 @@ impl Service {
                     break;
                 }
                 if let Ok(stream) = conn {
+                    // replies are whole lines: send them at once (ADR 0345 amendment 1)
+                    let _ = stream.set_nodelay(true);
                     let svc = svc.clone();
                     std::thread::spawn(move || {
                         if let Ok(r) = stream.try_clone() {
@@ -1880,6 +1900,15 @@ pub const METHODS: &[&str] = &[
     "design.ledger_query",
     "design.ledger_export",
     "design.ledger_rerun_check",
+    // protocol 1.1 (F-360, ADR 0345)
+    "cosim.list",
+    "cosim.open",
+    "cosim.describe",
+    "cosim.time",
+    "cosim.checkpoint",
+    "cosim.restore",
+    "cosim.forces",
+    "cosim.advance",
 ];
 
 /// Minimal blocking client for the line protocol (tests, CLI, scripts).

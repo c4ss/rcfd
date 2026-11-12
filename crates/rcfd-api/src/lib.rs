@@ -6,6 +6,7 @@ pub mod chain;
 pub mod chemistry;
 pub mod cht;
 pub mod comp;
+pub mod cosim_service;
 pub mod decomp;
 pub mod design;
 pub mod dynmesh;
