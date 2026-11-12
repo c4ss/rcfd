@@ -633,8 +633,10 @@ fn a1_random_points_lie_in_exactly_one_cell() {
 
 // ---- T1, T3, T4 ---------------------------------------------------------------------------------------------------------------
 
-/// ADR 0260 T1 and T3 on P1 and P2, T4 on P2: points on shared faces.
+/// ADR 0260 T1 and T3 on P1 and P2, T4 on P2: points on shared faces. The registered form; kept as an ignored record by
+/// amendment 1: its T3 on P2 counted 1176 of 2023 mesh points, exactly the lattice points that belong to no cell of P2.
 #[test]
+#[ignore = "record of ADR 0260 amendment 1: T3 P2 1176 of 2023, the mesh points of no cell; see t_points_on_shared_faces_amended"]
 fn t_points_on_shared_faces() {
     let mut c = Checks::new();
     for (name, pr) in [("P1", p1()), ("P2", p2())] {
@@ -694,6 +696,123 @@ fn t_points_on_shared_faces() {
             &format!("T3 {name}: mesh points located in a cell that does not have them"),
             wrong,
             n,
+        );
+        // T4
+        if name == "P2" {
+            let mut g = Lcg(SEED);
+            let n = 20_000;
+            let n2 = pr.n_base();
+            let kk = pr.z.len() - 1;
+            let (mut stray, mut differ) = (0, 0);
+            for _ in 0..n {
+                let block = ((g.next() * (n2 / 3) as f64) as usize).min(n2 / 3 - 1);
+                let cb = 3 * block + 1 + usize::from(g.next() >= 0.5);
+                let k = 1 + ((g.next() * (kk - 1) as f64) as usize).min(kk - 2);
+                let t = pr.tris[cb][0];
+                let (mut r1, mut r2) = (g.next(), g.next());
+                if r1 + r2 > 1.0 {
+                    (r1, r2) = (1.0 - r1, 1.0 - r2);
+                }
+                let (p0, p1, p2) = (pr.base[t[0]], pr.base[t[1]], pr.base[t[2]]);
+                let y = [
+                    p0[0] + r1 * (p1[0] - p0[0]) + r2 * (p2[0] - p0[0]),
+                    p0[1] + r1 * (p1[1] - p0[1]) + r2 * (p2[1] - p0[1]),
+                    pr.z[k],
+                ];
+                let x = affine(y);
+                let allowed = [(k - 1) * n2 + cb, k * n2 + cb];
+                let cells = loc.containing_cells(mesh, x);
+                stray += usize::from(cells.is_empty() || cells.iter().any(|q| !allowed.contains(q)));
+                differ += usize::from(loc.locate(mesh, x) != loc.locate_brute_force(mesh, x));
+            }
+            c.none(
+                "T4 P2: notch points on a layer plane accepted by another cell than the two prisms of the notch, or by none",
+                stray,
+                n,
+            );
+            c.none(
+                "T4 P2: notch points located otherwise than by the full search",
+                differ,
+                n,
+            );
+        }
+    }
+    c.finish();
+}
+
+/// ADR 0260 amendment 1: T1, T3' and T3o on P1 and P2, T4 on P2. T3' asks the located cell of a mesh point to have the
+/// point only for the points of at least one cell; T3o asks the located cell of every other interior mesh point to contain
+/// it by the reference.
+#[test]
+fn t_points_on_shared_faces_amended() {
+    let mut c = Checks::new();
+    for (name, pr) in [("P1", p1()), ("P2", p2())] {
+        let mesh = &pr.mesh;
+        let loc = CellLocator::new(mesh, 0..mesh.n_cells());
+        // T1
+        let (mut differ, mut refused) = (0, 0);
+        let ni = mesh.n_internal_faces();
+        for f in 0..ni {
+            let x = mesh.face_centres()[f];
+            let a = loc.locate(mesh, x);
+            differ += usize::from(a != loc.locate_brute_force(mesh, x));
+            refused += usize::from(!a.is_some_and(|k| pr.contains(k, x)));
+        }
+        c.none(
+            &format!("T1 {name}: face centres located otherwise than by the full search"),
+            differ,
+            ni,
+        );
+        c.none(
+            &format!("T1 {name}: face centres whose cell is refused by the reference"),
+            refused,
+            ni,
+        );
+        // T3', T3o
+        let mut around = vec![Vec::new(); mesh.n_points()];
+        for k in 0..mesh.n_cells() {
+            for q in cell_points(mesh, k) {
+                around[q].push(k);
+            }
+        }
+        let (mut differ, mut wrong, mut n, mut orphan_refused, mut n_orphan) = (0, 0, 0, 0, 0);
+        let eps = 1e-9;
+        for (q, cells) in around.iter().enumerate() {
+            let x = mesh.points()[q];
+            let y = affine_inverse(x);
+            if y[0] < eps
+                || y[1] < eps
+                || y[0] > pr.side - eps
+                || y[1] > pr.side - eps
+                || y[2] < eps
+                || y[2] > pr.height() - eps
+            {
+                continue;
+            }
+            let a = loc.locate(mesh, x);
+            differ += usize::from(a != loc.locate_brute_force(mesh, x));
+            if cells.is_empty() {
+                n_orphan += 1;
+                orphan_refused += usize::from(!a.is_some_and(|k| pr.contains(k, x)));
+            } else {
+                n += 1;
+                wrong += usize::from(!a.is_some_and(|k| cells.contains(&k)));
+            }
+        }
+        c.none(
+            &format!("T3' {name}: interior mesh points located otherwise than by the full search"),
+            differ,
+            n + n_orphan,
+        );
+        c.none(
+            &format!("T3' {name}: mesh points of cells located in a cell that does not have them"),
+            wrong,
+            n,
+        );
+        c.none(
+            &format!("T3o {name}: mesh points of no cell whose located cell is refused by the reference"),
+            orphan_refused,
+            n_orphan,
         );
         // T4
         if name == "P2" {
