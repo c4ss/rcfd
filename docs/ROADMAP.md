@@ -5886,8 +5886,8 @@ fixed by the item's registration ADR before any code.
     each rejected and located. Cost: 10.3 percent of an event. Four registered mutations failed their checks. Library
     only; RemeshChange gains the field check. Open: ADR 0236 Q2 (checking new() and motions), Q6 (V2 and V3 not decisive
     in the piston).
-- [ ] **F-330** Compressible impedance boundary and sponge layer: case-schema wiring
-  - depends on: F-243, F-331
+- [ ] **F-330** Compressible impedance boundary, sponge layer and mass-spring-damper wall: case-schema wiring
+  - depends on: F-243, F-331, F-332
   - acceptance: `compressible_bc = "impedance"` with `impedance_value` runs the ADR 0233 tube from a case file with R
     within 1e-2 of the closed form for z/(rho c) = 1/3, 1, 3; located validate errors for a negative impedance and a
     non-positive pressure; every existing case file's settings hash and written text unchanged after the registered
@@ -5896,6 +5896,9 @@ fixed by the item's registration ADR before any code.
     reflection below 1 percent; located validate errors for a non-positive thickness, a reflection outside (0, 1) and
     the matched form with a moving reference; every existing case file's settings hash and written text unchanged after
     the registered normalisation of the new keys at their defaults. max_dt takes the sponge rate into account.
+    Mass-spring-damper wall (ADR 0243): a case file selects the wall on a patch (mass, stiffness, damping); the M2 check
+    of ADR 0243 runs from a case file within 2 percent in magnitude and phase; one oblique angle is checked against its
+    closed form; a wall together with a sponge layer runs (the two step paths merged).
   - note: From ADR 0233 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
     THE USER before merge: the new key needs an edit of the registered hash test case_hashes_w48u.rs.
 - [~] **F-331** Sponge layer for the compressible solver
@@ -5926,11 +5929,32 @@ fixed by the item's registration ADR before any code.
     isolated pulse at 60 degrees, memory decay and damping along the layer, `max_dt`, moving meshes). Follow-ups
     (recommendation taken on the maintainer's standing instruction of 2026-11-11): the wiring goes with F-330; F-340
     (memory decay, damping along the layer, corners); F-341 (moving meshes).
-- [ ] **F-332** Frequency-dependent wall impedance (time-domain model)
+- [~] **F-332** Frequency-dependent wall impedance (time-domain model)
   - depends on: F-243
   - acceptance: The reflection coefficient of a mass-spring-damper wall matches the closed form in magnitude and phase
     within 2 percent at three frequencies around the resonance.
-  - note: From ADR 0233, proposed follow-up, taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0233, proposed follow-up, taken on the maintainer's standing instruction of 2026-11-11. The job of
+    2026-11-12 (ADR 0243): the acceptance text is MET IN THE LIBRARY, not from a case file. Built: `MsdWall { p, r, m, k
+    }` (rcfd-fv compressible_bc.rs; `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`,
+    `msd_dt_limit`), a locally reacting mass-spring-damper wall with the impedance Z(omega) = r + i(omega m - k/omega):
+    displacement and velocity per face, advanced with the solver's Runge-Kutta stages; the face keeps the outgoing
+    Riemann invariant of ADR 0233 and takes the wall velocity; m = 0 is the algebraic form and m = k = 0 is
+    `CompBc::Impedance` bit for bit; the wall's step limit 0.8 min(2m/(r + rho c), (r + rho c)/k) is part of `max_dt`
+    and a larger step is refused. Registered checks, all met at the first run, no amendment: a tone at 0.8, 1 and 1.25
+    times the resonance frequency, complex reflection coefficient by a least-squares split into incident and reflected
+    wave at 400 probes: magnitude within 2.9e-4 (limit 2e-2), phase within 2.4e-4 rad (limit 1.93e-2 rad, the strictest
+    reading of 2 percent) of (Z - rho c)/(Z + rho c) = 0.797 at -55.3 degrees, 1/3 at 180 degrees, 0.797 at +55.3
+    degrees; the same measurement on walls with a known real reflection (impedance rho c/2 and rigid) within 1.3e-4 and
+    5e-5 rad; a wall without damper reflects with magnitude 1 within 2.8e-3; free decay of the wall with the radiation
+    damping rho c within 1.2e-6; a light mass and a stiff spring at a third and a sixth of the CFL step stable and
+    within 4.3e-5 of their limits; 1400 steps bit-identical with the impedance wall at m = k = 0; a cleared wall and the
+    existing compressible tests (F-258 bit records, ADR 0233, ADR 0237) bit-identical and unedited. Eight mutations
+    caught. Not done: case-schema wiring (a new key needs an approved edit of case_hashes_w48u.rs; this is why the
+    status is partial). Limits: one degree of freedom per face, no coupling between faces, no multi-pole fit of a
+    measured impedance; the mesh face does not move (transpiration velocity; mass crosses the face and returns); normal
+    incidence only checked; not together with a sponge, not on moving meshes; gas at rest, Cartesian grids, verification
+    against closed forms only. The wiring (with one oblique angle and the wall together with a sponge, ADR 0243
+    questions 1 to 3, recommendations taken on the maintainer's standing instruction of 2026-11-11) goes with F-330.
 - [ ] **F-333** Acoustic wave-equation solver and modal export
   - depends on: F-243, F-331
   - acceptance: A duct mode propagates with the closed-form axial wavenumber within 1 percent; a sponge layer ends the

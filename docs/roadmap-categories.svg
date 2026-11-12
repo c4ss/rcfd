@@ -60,8 +60,8 @@
   <text x="24" y="136" class="row">Compressible flow and acoustics</text>
   <g clip-path="url(#c3)">
     <rect x="262" y="125" width="80.0" height="14" fill="var(--done)"/>
-    <rect x="342.0" y="125" width="80.0" height="14" fill="url(#h)"/>
-    <rect x="422.0" y="125" width="200.0" height="14" fill="var(--todo)"/>
+    <rect x="342.0" y="125" width="100.0" height="14" fill="url(#h)"/>
+    <rect x="442.0" y="125" width="180.0" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="136" class="num">4 of 18 done</text>
   <text x="24" y="166" class="row">Multiphase and particles</text>
