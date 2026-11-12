@@ -165,3 +165,128 @@ a change of a default and is not taken here (Q1).
 - **Q1. Default.** Options: (a) a new method beside `force_moment`; (b) change `force_moment`. (b) changes numbers that existing
   tests print and that ADR 0218 recorded, so it is not taken. Recommendation (a) now; (b) is the maintainer's to decide with the
   results.
+
+## Amendment 1 (2026-11-12): the diagnosis, the design and its checks
+
+Written after the diagnostic run and before any library code of F-337 and any run of a registered check. The diagnostic is the
+ignored test `diag_first_order_torque` of `crates/rcfd-fv/tests/immersed_force_order_f337.rs` (commit a6aec16d; it uses the public
+fields of the forcing and of the solver only; no library change), run once in release on that commit.
+
+### The measurements (CC, second-order forcing, SIMPLEC converged in 102 and 340 iterations; exact moment -4.18879)
+
+| | N 48 | N 96 | order | Verdict by the registered number |
+| --- | --- | --- | --- | --- |
+| `force_moment` (old), `dE` | -4.12171, 6.708e-2 (1.601 %) | -4.15767, 3.112e-2 (0.743 %) | 1.11 | the known first order |
+| H1 `M_cc` (every term at the centre of its cell) | -4.18431, error 4.478e-3 (0.107 %); `dE/3` 2.236e-2 | -4.18766, error 1.132e-3 (0.027 %); `dE/3` 1.037e-2 | 1.98 | **holds** |
+| H2 `T_w`, solved field (one-sided wall difference at the crossing) | -4.18116, error 7.63e-3 (0.182 %); `dE/2` 3.35e-2 | -4.18442, error 4.37e-3 (0.104 %); `dE/2` 1.56e-2 | 0.80 | does not hold |
+| H2 `T_w`, exact field | -4.15167, error 3.71e-2 (0.886 %) | -4.16891, error 1.99e-2 (0.475 %) | 0.90 | (information) |
+| H3 `T_p` (staircase face pressure) | -3.16e-3 (0.075 % of T); `dE/2` 3.35e-2 | -3.30e-3 (0.079 %); `dE/2` 1.56e-2 | none | does not hold |
+| H4 `Q` (exact traction at the crossings, face areas) | -4.20322, error 1.44e-2 (0.344 %) | -4.19391, error 5.12e-3 (0.122 %) | 1.50 | does not hold |
+| H5 `T_q` (momentum removed with the mass source) | 3.8e-6 | 5.7e-7 | | does not hold |
+| forcing of ADR 0218: old; cell arms | 1.151 %; 0.302 % | 0.447 %; 0.243 % | 1.36; 0.31 | (the comparison of H5) |
+
+The force on the inner cylinder (exact 0) is 5.5e-10 and 1.3e-10 per unit depth.
+
+**The cause.** H1: the first-order error of the torque is the arm of the forcing terms. `force_moment` applies the
+modification term of a first fluid cell at the crossing; the moment of the forcing is the angular-momentum balance of the cells
+only when every term is applied at the centre of its cell. The difference of the two is the term written in the registration,
+`-rho k_f (1 - theta) h n_f x v_c` per face: 1.49 and 0.72 percent of T measured (the estimate written beforehand was 1.3 and
+0.67). The other four are not the cause:
+
+- H2. The exact-field number confirms that the one-sided difference of the exact profile is first order (0.89, 0.48 percent).
+  The solved field does not have that error at that size (0.18, 0.10 percent), as expected from conservation, but `T_w` is still
+  first order: a surface-stress evaluation with this difference would not meet the acceptance either.
+- H3. The staircase face pressure has a moment that does not go down with the mesh (0.08 percent of T at both N) although the
+  exact pressure has none: the face pressure of a fluid-solid face is in error (ADR 0234 D4 says so of the pressure gradient of
+  the first fluid cells). It does not reach the moment of the forcing, because the same face pressure enters the two cells of the
+  face with opposite signs and equal arms. This is why the evaluation below stays with the forcing and does not integrate
+  stresses on the staircase.
+- H4. The quadrature at the crossings has the predicted order 1.5 (1.495 measured): with exact stresses it would sit on the
+  acceptance limit.
+- H5. Negligible; and the forcing of ADR 0218, which has no flux of ADR 0234 D1, has the same first-order arm error. With the
+  cell arms its torque error is 0.30 and 0.24 percent: what is left there is the first-order velocity field of that forcing.
+
+Disclosure: `M_cc` is the quantity the new evaluation returns, so the diagnostic has already measured, from the test side, the
+numbers that the acceptance check A1 will measure through the library (error 1.07e-3 and 2.70e-4 of T, order 1.98). A1's limit
+was fixed in the registration before that measurement; its registered run through the new method is made once.
+
+The sign in the registration's row H4 was loose: the traction of the fluid on the body through `f` is `-mu A_f dv/dn` with `n`
+from the fluid centre to the solid centre (what the diagnostic computes).
+
+### Design
+
+**D1. The moment of the forcing with cell arms (derived).** New method
+`ImmersedForcing::force_moment_second_order(body, u, rho, x_ref) -> (force, moment)`:
+
+    dF_t = rho V_c (coeff_t u_c - source_t),   F = sum_t dF_t,   M = sum_t (x_c(t) - x_ref) x dF_t,
+
+over the terms `t` of the body, `x_c(t)` the centre of the cell of the term (the solid cell of a solid-cell term, the fluid cell
+of a modification term). The force is the sum `force_moment` forms, in the same order (bit-identical). `force_moment` is not
+changed. The forcing stores the cell centres (a private field beside the private volumes; nothing public changes).
+
+Derivation. Let `R` be the solid cells of the body and the fluid cells that carry its modification terms. In a steady state the
+momentum equation of a cell `c` of `R` reads `sum_{f of c} g_{c,f} = dF_c`, where `g_{c,f}` is the force of the neighbour on
+`c` through the face `f` as the solver discretises it (pressure `-p_f S_out`, viscous `k_f (u_nb - u_c)`, convection
+`-rho phi_out u_f`) and `dF_c` the sum of the terms of the cell (the modification is a term of the cell, so the face fluxes are
+the regular ones and `g_{c,f} = -g_{nb,f}` on every internal face). Then
+
+    sum_c (x_c - x_ref) x dF_c = sum_c sum_f (x_f - x_ref) x g_{c,f} - sum_c sum_f (x_f - x_c) x g_{c,f}.
+
+The first sum telescopes to the outer faces of `R` (the faces between a cell of `R` and a fluid cell outside it): the moment
+about `x_ref` of the discrete pressure, viscous (Laplacian form) and momentum fluxes on a closed surface of regular fluid faces.
+In the second sum, on an orthogonal mesh `x_f - x_c` is along the face normal, so the pressure part vanishes; the viscous part is
+`(x_f - x_c) x k_f (u_nb - u_c) = mu A_f n_out x (u_f - u_c)` with `u_f` the linear face value, and its sum over the faces of a
+cell is `mu sum_f A_f n_out x u_f` (the sum of `A_f n_out` over a closed cell is zero), the discrete integral of `mu curl u`
+over the cell, which telescopes to `mu sum_{outer f} A_f n_out x u_f`; the convective part is, per cell,
+`-rho sum_f abs(x_f - x_c) A_f n x u_f (u_f . n)`, which for a smooth field is `-rho V (u x u) = 0` up to a term of order
+`h^2 V`. So, up to that term,
+
+    sum_t (x_c(t) - x_ref) x dF_t = sum_{outer f} (x_f - x_ref) x g_f - mu sum_{outer f} A_f n_out x u_f.
+
+The last sum is the part of the stress that the Laplacian form leaves out: for a divergence-free field on a closed surface
+`integral x x (grad u^T n) dS = -integral n x u dS` (Stokes' theorem on the closed surface applied to `x_j u_l`; it needs
+`div u = 0` on the surface only). The right-hand side is therefore the midpoint rule, on regular faces in the fluid, of the
+moment of the full traction `-p n + mu (grad u + grad u^T) n` and of the momentum flux on a closed surface around the body, which
+in a steady flow is the moment of the fluid on the body. Its error is that of the velocity and pressure on regular fluid faces
+one cell from the surface. The same argument without the arms is the known statement for the force (ADR 0218 V2).
+
+With the arm of a modification term at the crossing instead, the moment changes by `(x_G - x_c) x dF_t`, first order (above).
+Nothing in the argument uses the flux of ADR 0234; with the forcing of ADR 0218 the evaluation is as accurate as that forcing's
+velocity field.
+
+**D2. What stays.** The force: `force_moment`'s, to the bit; A2 is therefore expected at the numbers of ADR 0234 (-0.306 and
++2.534 percent), and what A2 adds is that the new method returns them. No solver file is touched (no hunk in `simple.rs` or
+`pimple.rs`).
+
+**D3. Name and placement (taken on the maintainer's standing instruction of 2026-11-11, take the recommendation; Q1, Q2).** A new
+method beside `force_moment`, not a flag of the settings and not a change of `force_moment`.
+
+### Checks added by this amendment (limits fixed before the code)
+
+| Id | Check | Limit | Estimate behind it |
+| --- | --- | --- | --- |
+| U1 | the force of the new method against that of `force_moment`: CC N 24 (`build` and `build_second_order`, both bodies) and DFG M1, the pseudo-random field of the probe | bit-identical | D1 |
+| U2 | the moment of the new method against the sum formed in the test from the public terms and the cell centres of the mesh, the same fields | `<= 1e-12` of the norm of the moment | the same sum |
+| U3 | transfer of the reference point: `M(x1) - M(x2) - (x2 - x1) x F`, `x1 = (0.3, -0.2, 0.1)`, `x2 = (-1.1, 0.7, 0.4)`, the same fields | `<= 1e-10` of the norm of `M(x1)` | round-off of sums of a few hundred terms |
+| U4 | a forcing with `modified = false` (CC N 24): new against old, force and moment | bit-identical | a solid-cell term is applied at its cell centre by both |
+| V1 (the derivation) | CC at N 48, second, converged: the z moment of the new method against `M_out`, the right-hand side of D1 formed in the test on the outer faces of `R` of the inner body from the solved `u`, `p`, `phi` (viscous `k_f (u_nb - u_c)`, pressure `-p_f S_out` and convection `-phi_out u_f` with the means of the two cells as face values, and `-mu A_f n_out x u_f`) | `abs(M_new - M_out) <= 2e-3 T` | only the convective arm term differs: `rho V u^2` times a factor of order `h^2` over an area of about 0.9, about 1e-4 T at N 48 |
+
+Printed, no limit: `M_out` at N 96; `M_out` against the exact moment.
+
+### Mutations (scratch, not committed; the procedure of the registration)
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MU1 | new method: the arm of a term is its `point` (the crossing for a modification term) | A1, and U2 |
+| MU2 | `force_moment`: the arm is the cell centre | N1 |
+| MU3 | new method: the arm is the cell centre without `x_ref` subtracted | U3 |
+| MU4 | new method: the modification terms are left out of the force and the moment | U1 |
+| MU5 | new method: the solid-cell terms are left out of the moment | U2, and A1 |
+| MU6 | the stored cell centres are those of the mesh shifted by one cell (`centres[c] = cc[(c + 1) % n]`) | U2 |
+
+The decision rule of the registration is unchanged; "the unit checks of the amendment" are U1 to U4 and V1.
+
+### Questions added
+
+- **Q2. Name.** `force_moment_second_order` (taken) or a flag on `force_moment`. A flag would change the signature every caller
+  uses. Recommendation: the separate method.
