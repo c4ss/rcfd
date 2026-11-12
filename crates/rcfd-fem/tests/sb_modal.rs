@@ -808,6 +808,158 @@ fn t1_amended_tet10_cantilever_heavy() {
     ch.finish();
 }
 
+// ADR 0284 amendment 2: C5, element mass matrices against closed forms.
+
+/// A polynomial in the barycentric coordinates `L_0..L_3`: (exponents, coefficient).
+type Bary = Vec<([u32; 4], f64)>;
+
+fn bary_mul(a: &Bary, b: &Bary) -> Bary {
+    let mut out = Vec::new();
+    for (ea, ca) in a {
+        for (eb, cb) in b {
+            out.push(([ea[0] + eb[0], ea[1] + eb[1], ea[2] + eb[2], ea[3] + eb[3]], ca * cb));
+        }
+    }
+    out
+}
+
+fn factorial(n: u32) -> f64 {
+    (1..=n).map(f64::from).product()
+}
+
+/// `int_T p dV` by `int L^a = 6 V a! b! c! d! / (a + b + c + d + 3)!`.
+fn bary_integral(p: &Bary, volume: f64) -> f64 {
+    p.iter()
+        .map(|(e, c)| {
+            let num: f64 = e.iter().map(|&k| factorial(k)).product();
+            c * 6.0 * volume * num / factorial(e.iter().sum::<u32>() + 3)
+        })
+        .sum()
+}
+
+fn unit(i: usize) -> [u32; 4] {
+    let mut e = [0; 4];
+    e[i] = 1;
+    e
+}
+
+/// The shape functions of a straight Tet4 or Tet10 in barycentric coordinates (ADR 0271 node order).
+fn bary_shapes(kind: ElementKind) -> Vec<Bary> {
+    let mut out: Vec<Bary> = Vec::new();
+    match kind {
+        ElementKind::Tet4 => {
+            for i in 0..4 {
+                out.push(vec![(unit(i), 1.0)]);
+            }
+        }
+        _ => {
+            for i in 0..4 {
+                let mut sq = [0; 4];
+                sq[i] = 2;
+                out.push(vec![(sq, 2.0), (unit(i), -1.0)]);
+            }
+            for [i, j] in rcfd_fem::mesh::TET_EDGES {
+                let mut e = [0; 4];
+                e[i] = 1;
+                e[j] = 1;
+                out.push(vec![(e, 4.0)]);
+            }
+        }
+    }
+    out
+}
+
+/// Largest entry difference of an element mass matrix against the scalar closed form `m_ab` on the component blocks,
+/// relative to the largest entry.
+fn element_mass_error(mh: &rcfd_fem::element::ElementMatrix, m: &[Vec<f64>]) -> f64 {
+    let n = m.len();
+    let mut worst: f64 = 0.0;
+    let mut big: f64 = 0.0;
+    for a in 0..n {
+        for b in 0..n {
+            for i in 0..3 {
+                for j in 0..3 {
+                    let exact = if i == j { m[a][b] } else { 0.0 };
+                    big = big.max(exact.abs());
+                    worst = worst.max((mh.get(3 * a + i, 3 * b + j) - exact).abs());
+                }
+            }
+        }
+    }
+    worst / big
+}
+
+#[test]
+fn c5_element_mass_closed_forms() {
+    let mut ch = Checks::new();
+    let v: [Vec3; 4] = [[0.1, 0.2, 0.0], [1.3, 0.1, 0.2], [0.2, 1.1, -0.1], [0.3, 0.4, 0.9]];
+    let d = |k: usize| [v[k][0] - v[0][0], v[k][1] - v[0][1], v[k][2] - v[0][2]];
+    let (a, b, c) = (d(1), d(2), d(3));
+    let volume = (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
+        + a[2] * (b[0] * c[1] - b[1] * c[0]))
+        / 6.0;
+    for kind in [ElementKind::Tet4, ElementKind::Tet10] {
+        let mut coords: Vec<Vec3> = v.to_vec();
+        if kind == ElementKind::Tet10 {
+            for [i, j] in rcfd_fem::mesh::TET_EDGES {
+                coords.push([
+                    0.5 * (v[i][0] + v[j][0]),
+                    0.5 * (v[i][1] + v[j][1]),
+                    0.5 * (v[i][2] + v[j][2]),
+                ]);
+            }
+        }
+        let shapes = bary_shapes(kind);
+        let exact: Vec<Vec<f64>> = shapes
+            .iter()
+            .map(|na| {
+                shapes
+                    .iter()
+                    .map(|nb| RHO * bary_integral(&bary_mul(na, nb), volume))
+                    .collect()
+            })
+            .collect();
+        let mh = rcfd_fem::mass::element_mass(element_for(kind), &coords, RHO).unwrap();
+        ch.at_most(
+            &format!("C5 {} element mass against the barycentric closed form", kind.name()),
+            element_mass_error(&mh, &exact),
+            1e-13,
+        );
+    }
+    let lo = [0.1, -0.2, 0.3];
+    let h = [0.4, 0.3, 0.25];
+    let refs = ElementKind::Hex8.reference_nodes();
+    let coords: Vec<Vec3> = refs
+        .iter()
+        .map(|s| {
+            [
+                lo[0] + 0.5 * (1.0 + s[0]) * h[0],
+                lo[1] + 0.5 * (1.0 + s[1]) * h[1],
+                lo[2] + 0.5 * (1.0 + s[2]) * h[2],
+            ]
+        })
+        .collect();
+    let exact: Vec<Vec<f64>> = refs
+        .iter()
+        .map(|sa| {
+            refs.iter()
+                .map(|sb| {
+                    RHO * (0..3)
+                        .map(|k| h[k] / 6.0 * if sa[k] == sb[k] { 2.0 } else { 1.0 })
+                        .product::<f64>()
+                })
+                .collect()
+        })
+        .collect();
+    let mh = rcfd_fem::mass::element_mass(element_for(ElementKind::Hex8), &coords, RHO).unwrap();
+    ch.at_most(
+        "C5 Hex8 element mass against the tensor-product closed form",
+        element_mass_error(&mh, &exact),
+        1e-13,
+    );
+    ch.finish();
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // X1: refusals.
 
