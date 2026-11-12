@@ -402,3 +402,162 @@ iterate that can run. The registration should have done this multiplication; it 
 The other checks were gone through for the same defect: C1 with `w = 1` and cap 8 displaces the piston by `0.009 L0`
 (fine); C4 applies `w = 1` once per step before Aitken's factor takes over (one multiplication by 1.977); L1, L2, L5
 expect the failure and catch it. Nothing else is changed.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-fv/src/fsi.rs` (new, 338 lines): `Relaxation`, `Relaxer`, `relaxation_from_added_mass`, `StrongCoupling`
+  (with `validate` and `aitken`), `BodyCoupling`, `CouplingStep`, `strong_step`, as designed in S1. `lib.rs` gains the line
+  `pub mod fsi;`. Nothing else in the library is changed: **no line of `pimple.rs` or `pimple/moving.rs` is touched**, nor
+  of `sixdof.rs`, `ale.rs`, `rcfd-api` or the case schema. Nothing in the library calls the new module.
+- `crates/rcfd-fv/tests/strong_fsi_f251.rs` (new): 17 tests, one of them the ignored record of amendment 1.
+
+### Checks
+
+Every test was run once (`cargo test --release -p rcfd-fv --test strong_fsi_f251 -- --include-ignored --nocapture
+--test-threads=1`, 67 s), on commit 300c6a9a.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| S0 (c5) mass ratio; fluid-free shift | `>= 1`; `>= 0.08` | 4; 1.2361 | met |
+| S1 (c1) `omega_m/omega`, strong, `T/100` | `abs(. - 1) <= 0.02` | `1.005081` (11 crossings) | met |
+| S2 (c4) `T/200` against `T/100` | `<= 0.005` | `1.72e-5` (`1.005063`) | met |
+| S3 (c2) largest ratio of successive same-side turning points; crossings | `<= 1 + 1e-3`; `>= 11` | `0.92452` (`T/100`), `0.96141` (`T/200`); 11 and 11 (12 maxima, 12 minima each) | met |
+| L1 (c3) loose, `T/100`: first step with `abs(x) >= 10 X` | `<= 60` | step 28 (the run ended at step 34, the piston through the outlet at `x = 1.75 L0`) | met |
+| L2 (c3) loose, `T/200` | `<= 60` | step 31 (ended at step 40, the piston at `4.5e4`) | met |
+| L3 (c3, D3) loose: growth per step, `C_8` to `C_20` | `[1.30, 1.50]` | `1.3931` (`T/100`), `1.3870` (`T/200`) | met |
+| SN1 (negative control) fluid force off | `abs(. - 1) >= 0.08` | `2.236061` (`sqrt(5) = 2.236068`) | held |
+| S4 converged every step; iterations largest, mean; largest last residual | all; `<= 8`, `<= 5`; `<= 1e-8` | all; 4 and `3.009` (`T/100`: 1140 steps of 3, 10 of 4), 4 and `3.004` (`T/200`); `9.95e-9`, `9.05e-9` | met |
+| S5 (set-up) continuity; GCL; `max abs(x)`; cyclic patches | `<= 1e-10`; `<= 1e-12 mean(V)`; `<= X (1 + 1e-9)`; none | `3.90e-15`, `3.51e-15`; `6.32e-16`, `6.20e-16`; `X` exactly; none | held |
+| C1 (D5) gain `(1 - r_{k+1}/r_k)/w`, `w = 0.25, 0.5, 1` | every value in `[2.90, 3.00]` | `2.95223` for every `k` and `w` (`2.95233` at most, `w = 1`, `k = 5`); residual ratios `0.26194`, `-0.47612`, `-1.95223` | met |
+| C2 as registered (cap 20) | not converged; `>= 1e4` | did not finish: the mesh move failed at iteration 16 (cell 0 with a non-positive volume); amendment 1 expected 15 | ignored record |
+| C2b (amendment 1; negative control) `Fixed(1)`, cap 10 | not converged; `abs(r_10)/abs(r_1) >= 200` | not converged; `412.4` | held |
+| C3 (D5) `Fixed(2M/(2M + m_a))` | converged; `<= 8` iterations | converged in 6 (residuals `1, 4.6e-2, 7.5e-4, 1.2e-5, 1.9e-7, 3.0e-9`) | met |
+| C4 (D6) Aitken from 1: converged; iterations; `max abs(x - x(S1))` | all; `<= 8`, `<= 6`; `<= 1e-5 X` | all; 4 and `3.503`; `2.04e-8 X` | met |
+| R1 restart: values differing in `u`, `p`, `phi`, `x`, `v`, time | 0 | 0 (step 37 took 3 iterations) | met |
+| H1 factor; Aitken on the affine map; `Fixed(0.25)` | `1e-15`; `<= 1e-12`; `0.25` to `1e-12` | `1/3` and 1 to the last bit; `6.1e-16`; `0.250000000000000` | met |
+| P0 (model) loose 1.9; loose 2.1; growth at 4; converged scheme | `<= 1`; before step 1150; `[1.38, 1.42]`; `[0.92, 0.93]` | `0.82486`; step 374; `1.4029`, `1.3962`; `0.92467` | met |
+| L4 (D3) loose, `mu = 1.5`: finishes; largest turning ratio; `omega_m/omega` | yes; `<= 1 + 1e-3`; `abs(. - 1) <= 0.02` | 1150 steps; `0.83871`; `1.003304` | met |
+| L5 (D3) loose, `mu = 3`: first step with `abs(x) >= 10 X` | `<= 120` | step 44 (ended at step 56) | met |
+| Q1 `max_iterations = 1` against the D7 loop, 100 steps | bit-identical | 0 values differ after any step; 100 history entries each | met |
+| A1 (`mu = 0.2`) frequency strong against loose; each against `omega`; iterations | `<= 1e-3`; `<= 0.02`; converged, `<= 8` | `1.97e-4`; `1.001307` (loose, the value of ADR 0211) and `1.001110`; converged, 3 | met |
+| A2 turning ratios; `D(T/100)`; `D(T/200)/D(T/100)` | loose `[0.945, 0.960]`, strong `[0.975, 0.992]`; `<= 0.25`; `[0.45, 0.65]` | `0.95299`, `0.98400`; `0.1721`; `0.5551` | met |
+| X1 (`mu = 20`) `omega_m/omega`; turning ratio; converged; iterations | `<= 0.02`; `<= 1 + 1e-3`; all; `<= 8`, `<= 5` | `1.005968`; `0.91052`; all; 4 and `3.252` | met |
+| E1 refusals | 8 errors, state untouched | 8 errors, each with a located message; bits of `u`, `p`, `phi`, `x`, `v`, time, the geometry pointer and the history length unchanged; the next step converges | met |
+| B1 defaults | suites pass unedited; only the named files differ | `ale_flows` 5, `ale_gcl` 4, `sixdof` 7, `sixdof_coupled` 2, `sixdof_flow_f244` 8 passed, 0 failed (release); `git diff main` shows `fsi.rs`, `lib.rs` (+1 line), the test file, this ADR | met |
+
+Against the predictions: every one is inside its limit and close to the number written down (S3 `0.92452` against `0.925`;
+L1 step 28 against 27; C4 mean `3.50` against `3.9`; A2 `0.1721` and `0.5551` against `0.17` and `0.56`). Two are off by more
+than the last digit, both the same way: S1 `1.0051` against `1.0045` and C1 `2.952` against `2.955 to 2.977`. Both say the
+discrete added mass of this column is about **1.25 percent below `rho A L0`** (`delta = 0.011` was fitted to ADR 0211's
+numbers): the gain gives `mu_eff/2 = 1.9522` against the model's `1.9768` (`-1.24` percent), S1 gives `-1.27` percent, X1
+(`1.005968`) `-1.25` percent. It is a property of the existing flow step and force evaluation, the same at mass ratios 0.2,
+4 and 20, it does not fall with `dt` (S2), and it is not diagnosed here (Q4).
+
+What the runs show about the design:
+
+- **The loose loop's threshold is 2, as D3 derived, not 1.** In the flow it is stable at 1.5 (turning points fall by 16
+  percent a period; L4) and diverges at 3 (L5) and at 4 (L1, L2); its growth per step at 4 is `1.39` at both steps (L3;
+  `sqrt(2)` times the `L/L0` and spring factors), so halving the step does not help, it only halves the time to failure.
+- **The sub-iteration's gain is `1 + mu/2`** (C1: `2.952`, the same to five digits for three factors), so the fixed factor
+  converges for `w < 0.68` and diverges at 1 (C2b: `1.95^9 = 412`), and the factor from the added mass contracts by `0.016
+  to 0.046` per iteration (C3). Aitken finds `0.3387 = 1/2.952` at its second update from either start (S4, C4).
+- **Cost**: 3 flow solves per step (3.0 at ratio 4, 3.25 at 20, 3.0 at 0.2) at a tolerance of `1e-8`.
+- **The converged scheme damps** by the lag of `dt/2` (7.5 percent a period at `T/100`, 3.9 at `T/200`, as D4 predicts),
+  a third of the loose loop's lag at ratios where both run (A2: 1.6 against 4.7 percent a period at ratio 0.2).
+
+### Mutations
+
+Each was applied alone to `fsi.rs` of 300c6a9a by an exact text replacement that had to occur once (a scratch script), the
+whole new test file was run once (not only the named tests), and the file was restored and compared byte for byte with the
+kept copy (equal in all eight).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 velocity field and conditions not restored | R1 | R1 failed: 637 values differ. Also S4 (iterations), C4 (mean 9.9 iterations), A1 (strong frequency `0.99842`), X1 |
+| MU2 body state not restored | R1 | R1 failed (the run stops with a mesh error). Also S1, C1, C2b, C3, C4, A1, X1, E1 |
+| MU3 flow snapshot not restored | R1 | R1 failed: 641 values differ. Also S1 (`2.127`), C1 (gain `10.5`), C2b, C3, C4, A1, X1, E1 |
+| MU4 geometry not restored | R1 | R1 failed: 644 values differ. Also S1 (`2.173`), C1 (gain `6.95`), C3, C4, A1, X1, E1 |
+| MU5 Aitken factor with the wrong sign | C4 | C4 failed: the first step leaves the mesh at iteration 15. Also H1 (`abs(r_3)/abs(r_1) = 4`), S1, R1, A1, X1, E1 |
+| MU6 the update ignores the factor | C1, S4 | C1 failed: gain `11.8`; the test of S1 and S4 failed: step 1 leaves the mesh at iteration 16. Also C3, C4, R1, A1 (10 iterations), X1, E1 |
+| MU7 convergence test met at the first iterate | S3 or S1, S4 | the test of S1 to S4 failed: the run stops at step 34 with a mesh error, the step at which the loose run of L1 ends; its assertions were not reached. Also C1, C2b, C4, R1, A2 (strong turning ratio `0.95299`, the loose value), X1, E1 |
+| MU8 `relaxation_from_added_mass = M/(M + m)` | H1, C3 | H1 failed: `0.2`; C3 failed: not converged in 20 iterations. Nothing else failed (Aitken recovers from the worse start) |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### Deviations and disclosures
+
+- Amendment 1 (C2) was written and committed before any run, from arithmetic; the registered C2 was then run once as the
+  record and failed at iteration 16 where the amendment expected 15.
+- Order: registration (582ffefe), amendment 1 (c60d0b5e), code (300c6a9a; formatted, linted and compiled before it was
+  committed; one format-string compile error was fixed before the first run), every new test once, the B1 suites once, the
+  mutations.
+- The mutation runs ran the whole test file rather than only the named tests; the run of MU4 took 803 s because every
+  step ran to the cap.
+- MU7 was written as "met at the first iterate" (`|| k == 1`), which is the loose coupling.
+- The limit of S4 on the last residual cannot fail apart from `converged` (it is the same test); it is kept as
+  registered.
+- The 1.25 percent deficit of the discrete added mass (under Checks) was not investigated by any run.
+
+### Not run
+
+`cargo test -p rcfd-api --release --test baseline_hashes` (no solver file is changed: one new module and one `pub mod`
+line; registered as not planned); the whole-workspace suite and the gate (the lead's); Newmark with the sub-iteration; a
+rotating body or any moment in a flow; any case-tree run (there is no key).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Both before the runs
+and again after the mutations, on the restored tree (`git status` clean).
+
+### Decision by the registered rule
+
+Every acceptance check is met (S0 to S3, L1 to L3), SN1 holds, the coupling checks are met (S4, S5, C1, C2b in the place
+of C2 by amendment 1, C3, C4, R1, H1, P0), Q1, A1, A2, L4, L5, X1, E1 and B1 are met, and every mutation failed its named
+tests: **done** by the rule, proposed as such; the acceptance stays the maintainer's. What "done" covers: a library
+function and its tests. Selecting the strong coupling from a case file is not delivered (Q2).
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The "ratio of at least 1" of the acceptance.** The D7 loop is stable up to a ratio of 2 (derived in D3; in the
+  flow it is stable at 1.5 and diverges at 3), so at exactly 1 the clause "the explicit coupling grows or diverges" is
+  false. The case was run at 4. Options: (a) reword the acceptance to "at a ratio of 4, above the threshold of 2 of the
+  loose loop"; (b) leave the text, with this ADR as the reading. Recommendation (a).
+- **Q2. The case key (the remaining step).** Nothing selects the strong coupling from a case file. It needs keys in
+  `dynamic_mesh.six_dof` (for instance `coupling = "loose" | "strong"`, default `loose`; `coupling_relaxation = "aitken" |
+  "fixed"`; `coupling_added_mass` or `coupling_factor`; `coupling_tolerance`; `coupling_force_scale`;
+  `coupling_max_iterations`) and the driver loop of `rcfd-api` calling `strong_step`. Options: (a) a follow-up item; (b)
+  leave it a library function. Recommendation (a), the item below; it changes no default.
+- **Q3. At the cap.** The library keeps the step and returns `converged = false`. Options for the case driver: (a) stop the
+  run with a located error; (b) warn and go on. Recommendation (a) as the default of the driver, with (b) as a key; the
+  library stays as it is.
+- **Q4. The discrete added mass is 1.25 percent low.** Seen as `+0.1` percent of frequency in ADR 0211 and `+0.5` percent
+  here, the same deficit at ratios 0.2, 4 and 20. Hypothesis (not tested): the wall-pressure extrapolation of
+  `patch_force_moment` on a fixed-flux wall. A change there would move the numbers of every existing body-force result, so
+  it is not taken. Options: (a) a follow-up item that first diagnoses it and offers the fix as an opt-in; (b) leave it
+  (inside every limit so far). Recommendation (a).
+- **Q5. The Aitken factor is not carried to the next time step.** Carrying it would start each step at `0.3387` and save
+  perhaps one solve in three at ratio 20. Options: (a) leave; (b) add an optional carried state. Recommendation (a) until a
+  case needs it.
+- **Q6. The half in `2M/(2M + m_a)`** belongs to RK4 with a constant force. Newmark, or a second-order flow step, has
+  another constant. Options: (a) leave the helper documented for this pairing; (b) derive and test the Newmark constant
+  when Newmark is first combined with the sub-iteration. Recommendation (a) now, (b) with that work.
+
+### For the lead: roadmap entries
+
+Proposed status of F-251: **done** (`[x]`), acceptance still the maintainer's.
+
+Note text for F-251:
+
+> Split from F-244 on 2026-10-22 (user decision). Size L. Needed for light structures; not on the first fan path. DONE (ADR 0250, registered 2026-11-12 before the code, branch f251-strong-fsi, not merged): opt-in library function rcfd_fv::fsi::strong_step (new module, nothing calls it; pimple.rs, pimple/moving.rs, sixdof.rs, ale.rs, rcfd-api and the case schema untouched; the loose coupling of ADR 0033 D7 is unchanged and with max_iterations = 1 the strong step equals it bit for bit). Within a time step it iterates on the fluid force and moment held over the body step, each iterate restarting body and flow from t_n, with a fixed or an Aitken relaxation; the Aitken start and the best fixed factor come from an added-mass estimate, 2M/(2M + m_a) (the added-mass term of the body equation written as a relaxation; the half belongs to RK4 with a constant force and a wall velocity taken from the displacement). Derived and measured: the loose loop as built is unstable above a mass ratio of 2, not 1, with a growth of sqrt(ratio/2) per step whatever the time step (flow: stable at 1.5, diverges at 3 and 4; growth 1.39 per step at ratio 4 for T/100 and T/200); the gain of the sub-iteration is 1 + ratio/2 (measured 2.952 at ratio 4), so a fixed factor converges below 4/(2 + ratio). Acceptance case, the spring-mounted piston of ADR 0211 at ratio 4 (M = 0.01, 11.5 periods): omega_m/omega 1.005081 at T/100 (limit 2 %), dt halving 1.7e-5 (limit 0.5 %), successive same-side turning points fall by 7.5 % a period at T/100 and 3.9 % at T/200 and never grow (lag of dt/2 of the end-of-step force), the loose coupling passes 10 X at step 28 (T/100) and 31 (T/200) and ends with the piston through the outlet; 3.0 flow solves per step at a tolerance of 1e-8, never more than 4 (cap 20). Also met: ratio 20 (1.005968, 3.25 solves per step), agreement with the loose coupling at ratio 0.2 (frequency within 2.0e-4, the trajectory difference halves with dt), the restart of an iterate bit-exact, refusals leave flow and body untouched, the existing sixdof, sixdof_coupled, sixdof_flow_f244, ale_flows and ale_gcl suites pass unedited; eight library mutations each failed their tests. Amendment 1 (before any run): the unrelaxed-iteration control was registered with a cap it cannot reach and was replaced by one with cap 10. Not delivered: selecting the coupling from a case file (no key; follow-up item), Newmark with the sub-iteration, a rotating body in a flow. Found, not fixed: the discrete added mass of the column is 1.25 % below rho A L0 at every ratio (the +0.1 % of ADR 0211, +0.5 % here); follow-up item. Open: ADR 0250 Q1 (reword "ratio of at least 1" to 4), Q2 (case key), Q3 (stop or warn at the cap), Q4 (added-mass deficit), Q5, Q6.
+
+Follow-up items (numbers for the lead to assign).
+
+First item. Title: Strong body-flow coupling selectable from the case tree. Deps: F-251. Acceptance:
+
+> A case with dynamic_mesh.six_dof.coupling = "strong" (default "loose") and its relaxation, added-mass estimate, tolerance, force scale and iteration cap as keys runs the spring-mounted piston at a mass ratio of 4 through the case driver and reproduces ADR 0250 S1 to S3 (omega within 2 percent, no growth of same-side turning points over 10 periods, dt halving within 0.5 percent), the same case with coupling = "loose" stops with a located error or grows; a step that reaches the cap stops the run with a located message unless a key says to continue; every static check of the new keys is located; with the default every existing case hash is bit-identical.
+
+Second item. Title: Wall pressure of the body force on a fixed-flux moving wall (the 1.25 percent added-mass deficit). Deps: F-251, F-244. Acceptance:
+
+> The cause of the discrete added mass of the piston column lying 1.25 percent below rho A L0 (ADR 0250 C1 and S1, ADR 0211 B1) is identified by a test that separates the wall-pressure extrapolation of patch_force_moment from the pressure of the flow step; if it is the extrapolation, an opt-in evaluation that uses the prescribed pressure gradient of the wall brings the sub-iteration gain at ratio 4 within 0.2 percent of the 2.977 of the model and omega_m/omega within 0.1 percent of 1 on the 20-cell column, and the convergence of the deficit with the cell size is shown on 20, 40 and 80 cells; the default force evaluation is unchanged unless the maintainer approves the change with its effect on the existing hashes listed.
