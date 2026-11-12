@@ -169,3 +169,11 @@ Deviations and notes:
   release profile.
 - `cargo clippy -p rcfd-runner -p rcfd-studio --all-targets -- -D warnings`: clean. `cargo fmt --check` for the whole
   workspace cannot run on this machine (os error 206); the two packages were checked by name.
+
+## Gate (2026-11-12)
+
+Gate of main f88a18cd (this ADR, F-323, F-324, F-243, F-328, F-329 and F-327 merged) on a git-archive copy, Windows, while three
+other builds loaded the machine: fmt per package ok, clippy `-D warnings` clean, release tests 3416 passed, 2 failed, 943
+ignored. The two failures are timing assertions: `vof_dambreak_amg::a4_dam_break_with_amg` ("A4 wall time") and
+`live_preview_j::j3c_the_frame_asked_for_comes_when_the_debounce_ends` (its control on the first frame). Each passed when run
+alone on main afterwards (A4 once, j3c twice). Not a clean gate; the Ubuntu gate has not run.
