@@ -1,0 +1,33 @@
+title = "Lid-driven cavity, Re 100, adapted (ADR 0242's run A through the case tree, F-342, ADR 0262)"
+
+# 24 x 24 base, two adaptation steps refining 40 percent of the cells by |grad U| h, finest cells those of a 96 x 96 mesh.
+# ADR 0242 measured 2799 cells and a centreline difference of 0.0023 of the lid speed to the uniform 96 x 96 solution.
+
+[mesh]
+generator = "cavity_2d"
+nx = 24
+ny = 24
+lx = 1.0
+ly = 1.0
+
+[mesh.adapt]
+cycles = 2
+max_level = 2
+refine_fraction = 0.4
+indicator = "velocity_gradient"
+
+[physics]
+nu = 0.01
+
+[boundaries.lid]
+velocity = "fixed"
+velocity_value = [1.0, 0.0, 0.0]
+
+[boundaries.walls]
+velocity = "fixed"
+
+[solver]
+algorithm = "simplec"
+convection = "linear_upwind"
+non_orthogonal_correctors = 1
+simplec_non_orthogonal_compensation = true

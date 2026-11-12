@@ -209,7 +209,8 @@ fn compile_t(case: &Case, path: &str, dim: Dimension) -> Result<Option<Compiled>
 
 /// Static checks of the `dynamic_mesh` section.
 pub fn check(case: &Case) -> Vec<Diagnostic> {
-    let mut out = Vec::new();
+    // F-342, ADR 0262 D5: the static checks of [mesh.adapt] (empty without the table), with the other mesh-changing tables
+    let mut out = crate::sim::adapt_check(case);
     // ADR 0257 D5 N2: the cross-section belongs to the generator box_3d (checked with or without a moving mesh)
     let section = get_s(case, SECTION);
     if !section.is_empty()

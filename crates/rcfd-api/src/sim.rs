@@ -49,8 +49,11 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod adapt;
 mod restart;
 mod warm;
+
+pub(crate) use adapt::{check as adapt_check, schema as adapt_schema};
 
 pub use warm::{TurbWarm, WarmState};
 
@@ -1257,13 +1260,24 @@ pub struct Simulation {
     limit_s: (bool, f64, f64),
     /// Cells clipped by the solution limits so far (counted per cell and step).
     clipped: usize,
+    /// The adaptive steady loop of `[mesh.adapt]` (F-342, ADR 0262); `None` without the table.
+    adapt: Option<adapt::AdaptState>,
 }
 
 impl Simulation {
     /// Build mesh, fields and solver from a validated case.
     pub fn new(case: &Case) -> std::result::Result<Self, Vec<Diagnostic>> {
+        // F-342, ADR 0262 D2, D3: with [mesh.adapt] the run starts on the base lattice and adapts at its first step
+        if adapt::present(case) {
+            return adapt::new_adaptive(case);
+        }
         let mesh = build_mesh(case)?;
         let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).map_err(|e| diag("mesh", e.to_string()))?);
+        Self::from_geometry(case, geom)
+    }
+
+    /// The simulation of `case` on the geometry `geom`: the whole of [`Simulation::new`] after the mesh (ADR 0262 D3).
+    pub(crate) fn from_geometry(case: &Case, geom: Arc<FvGeometry>) -> std::result::Result<Self, Vec<Diagnostic>> {
         let uinit = get_v(case, "initial.velocity", [0.0; 3]);
         let mut u = VectorField::uniform("U", &geom, uinit);
         let mut p = ScalarField::uniform("p", &geom, get_f(case, "initial.pressure"));
@@ -2489,6 +2503,7 @@ impl Simulation {
             limit_t,
             limit_s,
             clipped: 0,
+            adapt: None,
         };
         if let Some(sc) = &mut sim.scalars {
             let ctx = StepCtx {
@@ -2767,6 +2782,18 @@ impl Simulation {
             Engine::Steady(s) => Some(s),
             _ => None,
         }
+    }
+
+    /// The solves of a `[mesh.adapt]` run (F-342, ADR 0262): one record per solve after the run, empty before it; `None`
+    /// without the table.
+    pub fn adaptive_cycles(&self) -> Option<&[rcfd_fv::adaptive::CycleRecord]> {
+        self.adapt.as_ref().map(|a| a.cycles.as_slice())
+    }
+
+    /// The final lattice of a `[mesh.adapt]` run (ADR 0262), `None` before the run or without the table; the mesh of the
+    /// simulation is its `to_mesh`.
+    pub fn adaptive_lattice(&self) -> Option<&rcfd_mesh::adapt::AmrMesh> {
+        self.adapt.as_ref().and_then(|a| a.lattice.as_ref())
     }
 
     /// The PISO/PIMPLE solver of a transient incompressible run (diagnostics and tests), if that is the engine.
@@ -3405,6 +3432,10 @@ impl Simulation {
 
     /// Advance one iteration (steady) or time step (transient) and record monitors.
     pub fn step(&mut self) -> StepSummary {
+        // F-342, ADR 0262 D3: the first step of a case with [mesh.adapt] is the whole adaptive loop
+        if self.adapt_pending() {
+            return self.step_adaptive();
+        }
         self.time_snap = None;
         // ADR 0160 D1: the step is one of `fixed_step`'s (fixed solver.dt or the legacy Courant controller)
         let mut fixed_end = false;
@@ -4934,7 +4965,8 @@ impl Simulation {
     /// Whether [`save_checkpoint`](Self::save_checkpoint) works for this run (steady SIMPLE/SIMPLEC,
     /// laminar, with or without the energy equation).
     pub fn supports_checkpoint(&self) -> bool {
-        matches!(self.engine, Engine::Steady(_)) && self.turb.is_none()
+        // ADR 0262 D4: a checkpoint of an adapted mesh cannot be loaded on the base lattice
+        matches!(self.engine, Engine::Steady(_)) && self.turb.is_none() && self.adapt.is_none()
     }
 
     /// Write a restart file (F-121 `continue-from`): velocity, pressure, face flux, temperature

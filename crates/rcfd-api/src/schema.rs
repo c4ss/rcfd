@@ -294,7 +294,9 @@ pub fn case_schema() -> Schema {
                     Schema::enumeration("box", &["box", "rectangles", "triangles"])
                         .doc("Cells of the box_3d mesh: box = the hexahedra of the uniform box (default, ADR 0191); rectangles = the same hexahedra as the extruded layer stack orders them (needed for dynamic_mesh.deformation = \"layering\" with piso / pimple); triangles = every rectangle of the y-z cross-section cut into two triangles, 2 ny nz prisms per layer (ADR 0213). rectangles and triangles need nx >= 2. Patches xmin, xmax, ymin, ymax, zmin, zmax in all three"),
                 ),
-        );
+        )
+        // F-342, ADR 0262 D1: an optional table, absent from every case that does not write it
+        .field("adapt", crate::sim::adapt_schema());
 
     let physics = Schema::object()
         .doc("Fluid properties")
