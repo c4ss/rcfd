@@ -367,3 +367,142 @@ By the rule written in amendment 1 the 650-step out-of-process run took more tha
 
 This is a rule about test duration applied as written; whether the three acceptance tests should run in the gate on a
 machine where they take some ten seconds is left to the lead (addendum, questions).
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-api/src/cosim_service.rs` (new): the hosting (`Service::host_fluid`, `Service::host_structure`,
+  `Service::unhost`; one thread per hosted participant, the lease kept on that thread), the eight methods `cosim.list`,
+  `cosim.open`, `cosim.describe`, `cosim.time`, `cosim.checkpoint`, `cosim.restore`, `cosim.forces`, `cosim.advance`, and
+  the proxies `RemoteStructure` and `RemoteFluid` with `RemoteSettings`. `lib.rs` gains `pub mod cosim_service;`.
+- `crates/rcfd-api/src/service.rs` (lines of the final file): 3-4 (module text), 30-33 (`PROTOCOL_VERSION = "1.1"`), 52-55
+  (codes 1005, 1006), 266-267 and 316 (the field of `Service`), 404-405 (`protocol_version` and `cosim` in `service.info`),
+  1071 (the `cosim.*` arm of `Service::call`), 1761-1764 (`serve_stream` writes a reply with one call), 1783-1784
+  (`serve_tcp` sets `TCP_NODELAY`), 1903-1911 (eight names appended to `METHODS`).
+- `crates/rcfd-api/tests/cosim_service_f360.rs` (new): 18 tests (13 run by default in release, 4 ignored heavy records,
+  1 ignored helper that is the participant process).
+- `docs/cosimulation-protocol.md` (the section "Over the solver service", the version line and the section "Versions")
+  and `docs/service-protocol.md` (version 1.1, the codes, the methods).
+- Not edited: anything in `rcfd-fv`, the case schema, the CLI, `rcfd-mcp`, any existing test, any hash table or golden.
+  No new crate; `Cargo.lock` unchanged; no unsafe code.
+
+### Checks
+
+Run 1: commit 6e8561fb, `cargo test --release -p rcfd-api --test cosim_service_f360 -- --test-threads=1 --nocapture`, every
+registered check once, 16 passed, 280 s. Run 2: commit 828566d1 (after the change of amendment 1), the same command, 17
+passed, 255 s, every number below identical to run 1 except the times and the ports. Run 3: commit 62ea46e0 (the test
+file of amendment 2), 13 passed and 5 ignored, 90 s, the numbers of the tests it runs identical again.
+
+| Check | Limit | Measured (run 1) | Verdict |
+| --- | --- | --- | --- |
+| S0 (set-up) the reference is the run of ADR 0256 | within `2e-6` of 0.998618 and 1.011453; 10; 13, 210, 343, 84 | `0.998618428`, `1.011452964`; 10; 13, 210, 343, 84 | held |
+| P1 (c1) version and methods | `rcfd-service/1`; `1.1`; `rcfd-cosim/1`; 69 methods, the first 61 unchanged, the last eight of D3; `cosim.list` | as registered; both participants listed with kind and name | met |
+| P2 (c1) the six calls over TCP against the in-process participant, a structure and a fluid | 0 bits differ; the second `advance` equals the first | 0 of 291 values | met |
+| P3 (c1) refusals | -32601, 1006, -32602, 1002 (0 bits), 1002, 1005 (the participant's message), -32602, -32602, 1005, 1005 | the same codes; "sprung wall: 5 forces for 6 nodes" and "sprung wall: restore without a checkpoint" unchanged; 0 bits of the structure differ after the `advance` of the superseded lease | met |
+| A1r (c2) the structure in another process, 650 steps | all converged; `<= 16`, `<= 12`; `<= 1e-8`; another process | all 650; 10 and `8.766` (7: 13, 8: 210, 9: 343, 10: 84); `9.995e-9`; child 112584, parent 65640 | met |
+| A2r (c2) frequencies | `abs(. - 1) <= 0.005`; `<= 0.03`; `>= 6`, `>= 11` | `0.998618`; `1.011453`; 6 and 12 | met |
+| D (c3) displacements against the in-process run, 650 steps, six nodes | `<= 1e-12 X`; 0 steps with another count | exactly 0; 0; also 0 of the 650 last test quantities differ in their bits | met |
+| D2 (c3) both participants remote, 100 steps | `<= 1e-12 X`; 0 | exactly 0; 0 | met |
+| F1 (c4) an error of the out-of-process structure | `structure`, time 0, iteration 2, "injected failure"; 0 bits; 0; the next step is that of the reference | as registered; 0 bits of the fluid differ; the time of the structure 0; the next step converged in 9 iterations with 0 bits differing | met |
+| F2 (c4) an error of the hosted fluid | `fluid`, time 0, iteration 2, the message; 0; 0 | as registered ("injected failure of the mesh motion"); 0 and 0 bits | met |
+| F3 (c5) connection dropped in the step, process alive: (a) cut before, (b) cut after, (c) the fluid, cut after | the participant, time 0, iteration 2, "connection"; 0 bits both; 1 reconnection; the next step is that of the reference | all three: "the connection to 127.0.0.1:port was lost during cosim.advance: the service closed the connection"; 0 and 0 bits; 1 reconnection (lease 2); the next step 9 iterations, 0 bits differ | met |
+| F4 (c5) connection dropped between two steps | `structure`, iteration 0, "connection"; 0 bits; after `reconnect()` the second step is that of the reference | "... was lost during cosim.checkpoint ..." at `t = 0.01`, iteration 0; 0 and 0 bits; the second step 9 iterations, 0 bits differ | met |
+| F5 (c5) the process of the participant killed | `structure`, time 0, iteration 2, "connection" and "restore failed"; 0 bits; `<= 30 s` | "... forcibly closed by the remote host (os error 10054); and the restore failed: could not connect to ...: ... actively refused it (os error 10061)"; 0 bits of the fluid differ; `2.09 s` | met |
+| V (c6) the documents | version and methods named | yes | met |
+| NC1 (control of D) springs times `1 + 1e-9` | `>= 1e-10 X` | `4.15e-9 X` (`8.3e-12` m) | held |
+| NC2 (control of F3) connections the relay accepted | 2 each | 2 and 2 | held |
+| T1 (amendment 1) 2000 `cosim.time` calls, time per call | `<= 1 ms` | on the code of run 1: `1.99 ms` (the control: missed, as expected); after the change `0.048 ms` (run 2), `0.053 ms` (run 3) | met |
+| B1 (c7) existing suites, release, unedited, on the final library | all pass; the named files | `service` unit tests 11; `service_tcp` 2; `service_base_dir_w48j` 1; `sv301_service_w48z` 5; `physics_service` 1; `workflow` 5; `particle_run` 9; `baseline_hashes` 3 (1 ignored); `case_hashes_w48u` 1; `w48v_case_hashes` 0 (its one test is ignored in the tree); `rcfd-cli` `cli` 8; `rcfd-mcp` library 18 (1 ignored); 0 failed anywhere. The diff against b8b98cbf touches `service.rs`, `lib.rs` (+1), `cosim_service.rs`, the test file, this ADR and the two protocol pages | met |
+
+Against the predictions: D and D2 exactly 0, as predicted; F5 2.1 s (predicted two to five); the histogram of S0 is
+reproduced by this build. Nothing missed.
+
+### Deviations and disclosures
+
+- **Amendment 1** (after run 1): the first transport wrote each line in pieces and cost 2 ms per call. One write per line
+  and `TCP_NODELAY` on the accepted sockets of the service brought it to 0.05 ms. Two of the three edits are in the path
+  of every service method (`serve_stream`, `serve_tcp`); they change no byte on the wire, and B1 was run after them.
+  `service::Client` (used by `rcfd call` and the existing tests) still writes its request in pieces; not touched.
+- The control of T1 on the old code was started twice (the first output was cut off by the filter of the command); both
+  missed.
+- **Amendment 2**: the 650-step runs take two to three minutes on this machine today because of its load (the in-process
+  run 67 s to 190 s where ADR 0256 measured about 10 s; the diagnosis shows no cost of the transport). By the rule of
+  amendment 1 `a1r`, `a2r`, `d` and `s0` are ignored heavy records, run twice by me (runs 1 and 2, identical). The fast
+  tests read a 100-step reference. A scratch timing test was run for the diagnosis and not committed.
+- The mutations were applied to a scratch copy of the tree (`git archive` of 62ea46e0, its own target directory), as the
+  house rules ask, not to the worktree as the registration said. MU5 replaces the message by a text that still contains
+  its length (to compile without a warning); it no longer contains the words of the participant.
+- Not in the design list of the registration and added: `Service::unhost`, and the accessors `reconnects`, `lease`,
+  `is_connected` of the proxies.
+- F3 (b) and (c) cut the connection after the service has finished the `advance`; a cut while the `advance` is still
+  being computed (the `restore` waiting behind it, the stale request refused by the lease) is covered by the design and by
+  the superseded lease of P3, not by a test of its own.
+- The check that the first 61 names of `METHODS` are unchanged looks at the count, the first and the 61st name.
+
+### Mutations
+
+Each applied alone to the scratch copy by an exact replacement that occurred once; the test file run once without the
+ignored records, and for MU3, MU4 and MU7 also the named record; the file restored and compared byte for byte (identical
+in all seven).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `restore` does not reconnect | F3 | F3 (a, b) and F3 (c) failed (nothing else) |
+| MU2 the lease is not compared | P3 | P3 failed (nothing else) |
+| MU3 `cosim.restore` does not restore | P2, A1r or D | P2 and A1r failed; also D2, F1 to F4, NC1, P3 |
+| MU4 the time of the `advance` reply is not taken | A1r | A1r failed; also D2, F1 to F5, NC1 |
+| MU5 the message of the participant replaced | F1, P3 | F1 and P3 failed; also F2 |
+| MU6 `cosim.open` issues no new lease | P3 | P3 failed (nothing else) |
+| MU7 forces sent in reverse node order | D | D failed; also D2, F1, F3, F4 |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead runs them). `crates/rcfd-fv` is untouched, so its suites were not run. A
+call that outlasts the time-out; a connection cut while the `advance` is being computed; a participant written with
+another JSON library; more than one coupler; a network other than the loopback interface.
+
+### After the tests
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets --release -- -D warnings`: clean (before
+run 1, after the change of amendment 1, and on the final tree).
+
+### Decision by the registered rule
+
+P1 to P3, A1r, A2r, D, D2, F1 to F5, V, B1 and T1 are met, S0 holds, NC1 and NC2 hold, and every mutation failed its named
+tests: **done** by the rule, proposed as such; the acceptance stays with the maintainer. What "done" covers: the calls
+served for participants that a program hosts, the proxies, the mock structure in a second process on the loopback
+interface. The clause "under a new protocol version" is met as version 1.1 with the identifier `rcfd-service/1` kept
+(question 1). Three of the acceptance tests are ignored records (question 2).
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The identifier.** Options: (a) as built: `rcfd-service/1` kept, `protocol_version` 1.1, `rcfd-cosim/1` for the
+  calls; (b) `rcfd-service/2`: edits the assertions of `service_tcp.rs` line 32 and `cli.rs` lines 202 and 220 and the
+  comment of `clients/claude-panel/hooks/register.tsx`, and tells every existing client that something incompatible
+  happened, which is not so. Recommendation (a). Option (b) needs the maintainer: it edits existing tests.
+- **Q2. The ignored acceptance records** (`a1r`, `a2r`, `d`, `s0`). Options: (a) leave them ignored: D2 (100 steps, both
+  remote, bit for bit) and the in-process A1 and A2 of `cosim_f139` stay in the gate; (b) run them in the gate: about 20 s
+  more on a free machine, two to five minutes on a loaded one. Recommendation (a).
+- **Q3. Participants from a case, hosted by `rcfd serve`.** Not built: a case key (schema golden) and a CLI change.
+  Options: (a) a follow-up item (below); (b) leave hosting to embedding programs. Recommendation (a).
+- **Q4. `service::Client` writes its request in pieces** (2 ms per call measured for the same pattern in the proxy).
+  Options: (a) one write, as the proxy (three lines; it changes the timing of `rcfd call`, no byte); (b) leave.
+  Recommendation (a), with the item of Q3.
+- **Q5. The elements of the structure in `describe`** (the builders of ADR 0263 take them; the `Structure` trait has
+  none). Options: (a) with the item of Q3, an optional `elements` member and a trait method with a default; (b) leave.
+  Recommendation (a).
+
+### For the lead: roadmap entries
+
+Proposed status of F-360: **done** (`[x]`), acceptance still with the maintainer.
+
+Note text for F-360:
+
+> DONE pending acceptance (ADR 0345, 2026-11-12; registered before the code, two amendments). The calls of docs/cosimulation-protocol.md are served by the JSON-RPC service for participants that the embedding program hosts (rcfd_api::cosim_service: Service::host_fluid, host_structure, each participant on its own thread so it need not be Send; rcfd serve hosts none; no case key, CLI or MCP change): methods cosim.list, cosim.open, cosim.describe, cosim.time, cosim.checkpoint, cosim.restore, cosim.forces, cosim.advance, plain JSON numbers that cross bit for bit (serde_json float_roundtrip), error codes 1005 (the participant error, its own message) and 1006 (no such participant). Service protocol 1.1: the identifier rcfd-service/1 is kept (the pinned tests are unedited), service.info gains protocol_version 1.1 and cosim rcfd-cosim/1; both protocol pages are versioned. The coupler is the unchanged cosim::coupled_step driven with the proxies RemoteStructure and RemoteFluid (TCP). A lease per participant (cosim.open) refuses requests left over from an old connection; a proxy whose connection is lost fails at once except restore, which reconnects once and restores the participant, so a dropped connection ends the step with the located error and both sides at the start of the step. Measured on the model problem of ADR 0256 with the mock structure in a second process: every one of 650 steps converged, 7 to 10 iterations (mean 8.766), omega_m/omega 0.998618 and 1.011453, and the displacements of every node at every step equal to the in-process run bit for bit (limit 1e-12 X), also with both participants remote (100 steps); a participant error (structure in the other process, fluid hosted) and a dropped connection (cut before the request, after the reply, between steps, fluid or structure) each give an error naming participant, time and iteration with 0 bits of either state changed and the next step equal to the reference; a killed participant process gives the located error in 2.1 s with the fluid restored and the failed reconnection reported; refusals with their codes; a control with springs stiffer by 1e-9 is seen (4e-9 X). Amendment 1: the first transport cost 2 ms per call (lines written in pieces), now 0.05 ms (one write per line, TCP_NODELAY on accepted connections; no byte changes). Amendment 2: the 650-step out-of-process tests are ignored heavy records (minutes on the loaded machine; run twice, identical), the gate runs the 100-step both-remote comparison and the failure tests. Existing service, CLI and MCP suites and the case hashes pass unedited; seven mutations each failed their tests. Not delivered: participants built from a case or hosted by rcfd serve, structural elements in describe, authentication, a test of a call outlasting the time-out. Open: ADR 0345 Q1 to Q5.
+
+Follow-up item (number for the lead to assign). Title: Co-simulation participants from the case, hosted by rcfd serve. Deps: F-360. Acceptance:
+
+> A case key names a moving wall patch as a co-simulation fluid participant and rcfd serve hosts it under protocol rcfd-cosim/1; a structural participant in its own process (the mock of ADR 0345) and the coupler of rcfd_fv::cosim drive it over TCP and reproduce ADR 0256 A1 and A2 with the displacements of the in-process run to 1e-12; describe of a structure may carry its elements so that the map builders of ADR 0263 run on the side of the coupler; service::Client writes a request with one call; without the key every case hash is unchanged and the schema, CLI help and MCP goldens change only by the approved additions.
