@@ -2,6 +2,10 @@
 //!
 //! The record is conservative by construction: per integration sub-step the carrier receives exactly the momentum and the
 //! total energy the particle gained from it. The tracker never reads the sources, so the particles are unchanged by recording.
+//!
+//! With [`crate::Tracker::enable_droplet_exchange`] the record also holds what evaporating parcels give to the carrier (the
+//! vapour mass with its momentum, kinetic energy and enthalpy) and what breakup gives to the parcels without a carrier
+//! counterpart (ADR 0230 D2 to D6).
 
 use rcfd_core::vec3::Vec3;
 
@@ -39,6 +43,35 @@ pub struct Coupling {
     pub energy_heat: Vec<f64>,
     /// Momentum given to the particles by walls (reflections) [N s].
     pub wall_impulse: Vec3,
+    /// Kinetic energy given to the particles by walls (reflections) [J] (ADR 0230 D6).
+    pub wall_energy: f64,
+    /// Momentum given to the particles by gravity with buoyancy [N s]: the sum of `m g_eff h` (ADR 0230 D6).
+    pub gravity_impulse: Vec3,
+    /// Work of gravity with buoyancy on the particles [J]: the sum of `m g_eff . (x1 - x0)` (ADR 0230 D6).
+    pub gravity_work: f64,
+    /// Vapour mass given to the carrier per cell [kg] (negative: condensation) (ADR 0230 D3).
+    pub vapour_mass: Vec<f64>,
+    /// Momentum carried by that vapour per cell [N s]: `dm v1`.
+    pub vapour_impulse: Vec<Vec3>,
+    /// Kinetic energy carried by that vapour per cell [J]: `dm v1^2/2`.
+    pub vapour_kinetic: Vec<f64>,
+    /// Enthalpy carried by that vapour per cell [J]: `dm (c_l T1 + L_v)`, the liquid at 0 K being the datum (ADR 0230 D4).
+    pub vapour_enthalpy: Vec<f64>,
+    /// Momentum given to the parcels by breakup (the normal velocity) without a carrier counterpart [N s] (ADR 0230 D5).
+    pub breakup_impulse: Vec3,
+    /// Kinetic energy given to the parcels by breakup without a carrier counterpart [J] (ADR 0230 D5).
+    pub breakup_energy: f64,
+}
+
+/// Per-cell sources of a record with the droplet terms (ADR 0230 D7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropletSources {
+    /// Vapour mass source [kg/(m^3 s)].
+    pub mass: Vec<f64>,
+    /// Momentum source [N/m^3]: drag plus the momentum of the vapour.
+    pub momentum: Vec<Vec3>,
+    /// Total-energy source [W/m^3]: mechanical, heat, and the kinetic energy and enthalpy of the vapour.
+    pub energy: Vec<f64>,
 }
 
 impl Coupling {
@@ -49,6 +82,15 @@ impl Coupling {
             energy_mech: vec![0.0; n],
             energy_heat: vec![0.0; n],
             wall_impulse: [0.0; 3],
+            wall_energy: 0.0,
+            gravity_impulse: [0.0; 3],
+            gravity_work: 0.0,
+            vapour_mass: vec![0.0; n],
+            vapour_impulse: vec![[0.0; 3]; n],
+            vapour_kinetic: vec![0.0; n],
+            vapour_enthalpy: vec![0.0; n],
+            breakup_impulse: [0.0; 3],
+            breakup_energy: 0.0,
         }
     }
 
@@ -58,6 +100,15 @@ impl Coupling {
         self.energy_mech.iter_mut().for_each(|x| *x = 0.0);
         self.energy_heat.iter_mut().for_each(|x| *x = 0.0);
         self.wall_impulse = [0.0; 3];
+        self.wall_energy = 0.0;
+        self.gravity_impulse = [0.0; 3];
+        self.gravity_work = 0.0;
+        self.vapour_mass.fill(0.0);
+        self.vapour_impulse.fill([0.0; 3]);
+        self.vapour_kinetic.fill(0.0);
+        self.vapour_enthalpy.fill(0.0);
+        self.breakup_impulse = [0.0; 3];
+        self.breakup_energy = 0.0;
     }
 
     /// Sources over an exchange interval `dt` for cell volumes `vol`: momentum [N/m^3] and total energy [W/m^3] (mechanical + heat).
@@ -71,5 +122,25 @@ impl Coupling {
             se[c] = (self.energy_mech[c] + self.energy_heat[c]) * f;
         }
         (sm, se)
+    }
+
+    /// Sources over an exchange interval `dt` for cell volumes `vol`, with the droplet terms (ADR 0230 D7).
+    pub fn droplet_sources(&self, vol: &[f64], dt: f64) -> DropletSources {
+        let n = self.impulse.len();
+        let mut out = DropletSources {
+            mass: vec![0.0; n],
+            momentum: vec![[0.0; 3]; n],
+            energy: vec![0.0; n],
+        };
+        for c in 0..n {
+            let f = 1.0 / (vol[c] * dt);
+            out.mass[c] = self.vapour_mass[c] * f;
+            for k in 0..3 {
+                out.momentum[c][k] = (self.impulse[c][k] + self.vapour_impulse[c][k]) * f;
+            }
+            out.energy[c] =
+                (self.energy_mech[c] + self.energy_heat[c] + self.vapour_kinetic[c] + self.vapour_enthalpy[c]) * f;
+        }
+        out
     }
 }

@@ -5,7 +5,8 @@
 //! reflection, trapping and escape, point and surface injection, constant and Rosin-Rammler diameters and VTK output;
 //! a wall film (ADR 0192) with optional gas buoyancy and gas shear (ADR 0206), erosion and rough-wall rebound (ADR 0194),
 //! random-walk dispersion on per-cell fields that a caller may replace every step and a surface reaction (ADR 0208),
-//! droplet evaporation with the d-squared law and TAB breakup (ADR 0224).
+//! droplet evaporation with the d-squared law and TAB breakup (ADR 0224), their mass, heat and momentum in the exchange
+//! record (ADR 0230).
 //!
 //! The crate depends on `rcfd-mesh` only; the fluid velocity and its gradient are inputs ([`Flow`]).
 
@@ -25,7 +26,7 @@ pub mod tracker;
 pub mod vtp;
 
 pub use breakup::{normal_speed, oscillator, sauter_radius, Breakup, BreakupSpec, Oscillator};
-pub use coupling::{Coupling, Thermal};
+pub use coupling::{Coupling, DropletSources, Thermal};
 pub use dispersion::{drw_msd, taylor_msd, Dispersion};
 pub use drag::{drag_factor, step_particle, DragLaw, Fluid, Scheme};
 pub use erosion::{

@@ -27,9 +27,10 @@ rcfd does not deliver:
 * surface reactions in the case tree, a reaction rate that depends on temperature or film diffusion, the heat of
   reaction, the reaction together with heat transfer or the exchange record, parcels that burn out completely (F-255,
   ADR 0208; the reaction is a library model)
-* evaporation and breakup in the case tree, the vapour, heat and momentum of evaporating or breaking parcels fed to the
-  carrier, either model with the exchange record, boiling, multicomponent droplets, temperature-dependent properties, the
-  chi-squared product-size distribution of the TAB source, other breakup models (F-245, ADR 0224; the two are library models)
+* evaporation and breakup in the case tree, the droplet terms of the exchange record fed to a flow solver of rcfd (the
+  record is a library interface, F-323, ADR 0230; the wiring goes with F-252), boiling, multicomponent droplets,
+  temperature-dependent properties, the chi-squared product-size distribution of the TAB source, other breakup models (F-245,
+  ADR 0224; the two are library models)
 * in the wall film (F-253, see "Wall film" below): splash and rebound at impact, film separation and dripping,
   evaporation and heat transfer of the film, any effect of the film on the flow, the film with two-way coupling or heat
   transfer; with the gas drives of F-292, counter-current films, turbulent or wall-function shear, and the shear on
@@ -196,7 +197,7 @@ droplet at its wet bulb in still gas follows the d-squared law `d^2 = d0^2 - K t
 a droplet that reaches `min_diameter` is `State::Evaporated` and its rest is booked as vapour. The carrier is not changed:
 `Evaporation::source()` books the vapour mass per cell (`evaporated()` in total). A droplet at its boiling point at the carrier
 pressure is an error. Evaporation replaces the heat step of ADR 0057 for every parcel and is refused with the surface reaction and
-the exchange record.
+with the exchange record of `enable_coupling` (accepted with `enable_droplet_exchange`, below).
 
 **Breakup.** `Tracker::set_breakup(BreakupSpec::tab(sigma, mu_l, seed))` adds the TAB method of O'Rourke and Amsden (1987): a
 forced damped oscillator for the distortion `y` with the source's constants `C_F = 1/3`, `C_k = 8`, `C_d = 5`, `C_b = 1/2`,
@@ -204,12 +205,42 @@ forced damped oscillator for the distortion `y` with the source's constants `C_F
 breaks when `y` reaches 1, at the time the undamped oscillation of its state gives (the sub-step is cut there); the product drops
 take the Sauter mean radius of the source's energy relation, the parcel count follows the liquid mass (`n d^3` unchanged), and the
 parcel gains the normal velocity `C_v C_b r dy/dt` in a random direction normal to the relative velocity. `distortion(i)` and
-`breakups(i)` read the state. Breakup is refused with the surface reaction and the exchange record.
+`breakups(i)` read the state. Breakup is refused with the surface reaction and with the exchange record of `enable_coupling`
+(accepted with `enable_droplet_exchange`, below).
 
 ADR 0224 checks the d-squared slope (to 1e-15, limit 2 percent), the vapour against the liquid lost (to 3e-12 in a spray of 160
 parcels, limit 1e-10), the breakup time and product size from rest against their closed forms at Weber numbers 6.1 to 1000 (to
 1.5e-14, limit 2 percent), the source's limits (its eqs. 12a, 13, 16, 23) and the liquid mass through breakup to round-off. There
 are no case keys yet (ADR 0224 Q2).
+
+### Droplet terms of the exchange record (F-323, ADR 0230; library only)
+
+`Tracker::enable_droplet_exchange()` starts the exchange record of ADR 0057 with the droplet terms; with it `advance` accepts
+evaporation and breakup (`enable_coupling()` is unchanged and still refuses them, because a caller that reads only the fields of
+ADR 0057 would drop the vapour terms). The record stays an observation: the parcels are the same bit for bit. A sub-step is
+booked as: the motion and the temperature step with the mass `m0` of its start, then the mass `dm` that evaporated leaves as
+vapour with the velocity `v1` and the temperature `T1` of its end. In the start cell the carrier receives
+
+* the drag as before, with `m0`: `impulse`, `energy_mech`;
+* the heat `energy_heat -= m0 c_l (T1 - T0) + dm L_v` (the sensible heat the liquid gained plus the latent heat of what
+  evaporated; first-order consistent with the model's `Q`, and exact in the balance);
+* the vapour: `vapour_mass += dm`, `vapour_impulse += dm v1`, `vapour_kinetic += dm v1^2/2`,
+  `vapour_enthalpy += dm (c_l T1 + L_v)` (datum: the liquid at 0 K; for a liquid datum `T_ref` subtract `c_l T_ref` times
+  `vapour_mass`).
+
+The record also holds the terms that have no carrier counterpart, so that the balances can be closed: `gravity_impulse`,
+`gravity_work`, `wall_impulse`, `wall_energy`, and `breakup_impulse`, `breakup_energy` (the normal velocity of a TAB breakup
+changes the parcel's momentum and kinetic energy; the source conserves momentum "on the average", and neither is charged to the
+gas). `Coupling::droplet_sources(volumes, dt)` returns the per-cell vapour mass [kg/(m^3 s)], momentum (drag plus vapour)
+[N/m^3] and total-energy [W/m^3] sources. A caller closes the loop by feeding them to its equations and giving the tracker the
+new carrier temperature (`thermal_mut`) and vapour fraction (`set_evaporation_vapour`).
+
+ADR 0230 checks the three balances (liquid plus vapour mass; parcel momentum plus the carrier's, less gravity, walls and
+breakup; parcel kinetic and thermal energy plus the carrier's) at every step of single droplets and of the spray of ADR 0224
+(160 parcels, evaporation and breakup: residuals at most 2.7e-15 of the largest term, limit 1e-10), the heat a droplet at its wet
+bulb draws from the gas against `L_v` times its mass (5.3e-16), and a closed box in which the test's own carrier receives the
+vapour and the heat until the evaporation stops at the adiabatic saturation temperature (within 3e-12 K of the closed form). No
+flow solver of rcfd consumes the record yet.
 
 ## Wall film (F-253, ADR 0192)
 
