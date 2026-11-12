@@ -133,8 +133,16 @@ by default, the value at the periodic face; `pair` gives it the internal-face ru
 momentum face viscosity, the viscosity of its explicit momentum source, and the stress and epsilon diffusivities, with the normal
 stress of each owner on its own face. `smagorinsky`, `wale`, `mixing_length`: the momentum face viscosity. A laminar run with a
 `rheology` law: the law's face viscosity, `(w mu_P + (1 - w) mu_Q) / rho` before its relaxation. `pair` is a located error with a
-laminar run without a viscosity law and with a `plugin` model. The temperature-dependent `properties` viscosity and a
-user-function viscosity keep their face values.
+laminar run without a viscosity law and with a `plugin` model.
+
+ADR 0227 adds the other laminar face viscosities. A temperature-dependent `properties.viscosity` law takes
+`mu(w T_P + (1 - w) T_Q) / rho` on both faces of a pair; by default each face already takes the law at its periodic face
+temperature, the same value up to rounding, so `pair` changes its last bits on graded seams only. A user-function viscosity
+(`udf.<name>.viscosity`) takes on both faces the module's value at the centre of the pair's face of lower index, with the
+temperature and speed interpolated across the seam, and the module is called once per pair; a periodic case needs a function that
+is periodic in position. `pair` on a laminar run is accepted with any of the three laws (`rheology`, `properties.viscosity`, a
+user-function viscosity) and a located error without one. On `pimple`, k-epsilon and Spalart-Allmaras use the paired values in
+the sweep of every outer iteration.
 
 Wall treatment: automatic.
 
@@ -1267,7 +1275,9 @@ Not covered: variable density, mixture-averaged or multicomponent diffusion (a c
 * `sutherland`: `reference_value`, `reference_temperature`, `sutherland_constant`; value times (T/T_ref)^1.5 (T_ref+S)/(T+S)
 
 The three keys need `energy.enabled` and a steady SIMPLE/SIMPLEC run. The viscosity enters through the face viscosity
-`mu(T_f)/rho` (the path of `rheology`, with which and with a turbulence model or a user-function viscosity it is rejected).
+`mu(T_f)/rho` (the path of `rheology`, with which and with a turbulence model or a user-function viscosity it is rejected); on a
+periodic seam `turbulence.periodic_seam.diffusivity = "pair"` gives both faces of a pair one value (ADR 0227, see `k_omega_sst`
+above).
 Conductivity and specific heat give the energy-equation diffusivity `k(T_f)/(rho cp(T_f))`, and `heat_flow` reports use the
 law at the wall temperature. The density stays constant. No property data is shipped: the constants are inputs (the material
 library F-111 provides sourced data).

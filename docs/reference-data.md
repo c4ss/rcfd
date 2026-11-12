@@ -1575,3 +1575,12 @@ No source was read for F-306. The cause and the fix are derived on the code of `
 |---|---|---|
 | Edge removal: a ring of cells around an interior edge `(d, e)` replaced by the cells `(a, b, c, d)` and `(a, b, c, e)` of each triangle of a triangulation of the ring polygon; it is valid when every triangle, taken in the ring's turning order, has `d` on the side `-s` and `e` on the side `s` of its plane (`s = orient3d(d, e, poly[0], poly[1])`), and the old test (`d`, `e` on opposite sides) also passes triangles folded across a reflex corner | derived | ADR 0228 "The cause"; the same rule as F-247's `cand_removal` (ADR 0215 M3, M4) |
 | Edge removal and its dynamic-programming triangulation (Shewchuk's topological improvement of tetrahedral meshes; Klincsek's polygon triangulation) | from memory | NOT read; the existing code's choice of triangulation is unchanged |
+## F-302 periodic seam pair diffusivity: the property and user-function viscosities (ADR 0227)
+
+Nothing was read for ADR 0227. The rule is the flux balance of a pair of finite-volume faces, derived in ADR 0205 D1, applied to the
+face formulas the code already uses on internal faces (`crates/rcfd-api/src/properties.rs`, the user-function face loop of F-122).
+
+| Item | Status | Source |
+|---|---|---|
+| Both faces of a periodic pair take one diffusivity, the internal-face formula with the pair's weight `w = dn_g / (dn_f + dn_g)`: `mu(w T_P + (1 - w) T_Q) / rho` for a property law, the module at the centre of the pair's face of lower index with `w T_P + (1 - w) T_Q` and `w abs(u_P) + (1 - w) abs(u_Q)` for a user function | derived | ADR 0205 D1, ADR 0212 D1, ADR 0227 D1 (the face of lower index is a choice of ADR 0227, question 1) |
+| The property viscosity is already one value per pair by default, up to rounding (the periodic face temperature is the same interpolation) | derived | ADR 0227 item 2 (code read), checked by F2p, G2p and T4p |

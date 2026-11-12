@@ -28,7 +28,8 @@
 //! is limited by fuel (instructions), linear memory is capped, and results must be finite.
 
 use crate::case::{Case, Diagnostic};
-use rcfd_core::vec3::Vec3;
+use rcfd_core::vec3::{self, Vec3};
+use rcfd_fv::{FvGeometry, PeriodicPair};
 use std::collections::BTreeMap;
 use wasmi::core::F64;
 use wasmi::{Config, Engine, Linker, Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc};
@@ -381,6 +382,63 @@ impl Udf {
         self.account(before);
         finite(&self.name, "monitor", v)
     }
+}
+
+/// The kinematic viscosity of every face from the module's `kinematic_viscosity` export (F-122), as the steady engine uses it:
+/// at the face centre with the face-interpolated temperature and speed `w a_o + (1 - w) a_n` on an internal face and the owner's
+/// own values on a boundary face; `temp` the cell temperatures (0 without the energy equation), `u` the cell velocities.
+///
+/// With `pairs` (`turbulence.periodic_seam.diffusivity = "pair"`, F-302, ADR 0227 D1) both faces of every periodic pair take
+/// one value, the internal-face formula across the seam: the module at the centre of face `f` (the face of the lower index) with
+/// `w T_P + (1 - w) T_Q` and `w |u_P| + (1 - w) |u_Q|`; the module is called once per pair. The first error stops the loop.
+pub fn face_viscosity(
+    udf: &mut Udf,
+    geom: &FvGeometry,
+    u: &[Vec3],
+    temp: Option<&[f64]>,
+    pairs: Option<&[PeriodicPair]>,
+) -> Result<Vec<f64>, String> {
+    let g = geom;
+    let fc = g.mesh.face_centres();
+    let own = g.mesh.owner();
+    // ADR 0227 D1: the pair of every seam face, and whether it is the face f of the pair
+    let seam: Option<Vec<Option<(usize, bool)>>> = pairs.map(|ps| {
+        let mut s = vec![None; g.mesh.n_faces()];
+        for (k, p) in ps.iter().enumerate() {
+            s[p.f] = Some((k, true));
+            s[p.g] = Some((k, false));
+        }
+        s
+    });
+    let mut nu = Vec::with_capacity(g.mesh.n_faces());
+    for f in 0..g.mesh.n_faces() {
+        if let (Some(s), Some(ps)) = (&seam, pairs) {
+            match s[f] {
+                // f < g: the value of face f is already there
+                Some((k, false)) => {
+                    nu.push(nu[ps[k].f]);
+                    continue;
+                }
+                Some((k, true)) => {
+                    let p = ps[k];
+                    let (a, b) = (own[p.f], own[p.g]);
+                    let blend = |x: f64, y: f64| p.w * x + (1.0 - p.w) * y;
+                    let speed = blend(vec3::norm(u[a]), vec3::norm(u[b]));
+                    let temperature = temp.map_or(0.0, |t| blend(t[a], t[b]));
+                    nu.push(udf.kinematic_viscosity(fc[p.f], 0.0, temperature, speed)?);
+                    continue;
+                }
+                None => {}
+            }
+        }
+        let (o, w) = (own[f], if f < g.n_internal { g.weights[f] } else { 1.0 });
+        let n = if f < g.n_internal { g.mesh.neighbour()[f] } else { o };
+        let blend = |a: f64, b: f64| w * a + (1.0 - w) * b;
+        let speed = blend(vec3::norm(u[o]), vec3::norm(u[n]));
+        let temperature = temp.map_or(0.0, |t| blend(t[o], t[n]));
+        nu.push(udf.kinematic_viscosity(fc[f], 0.0, temperature, speed)?);
+    }
+    Ok(nu)
 }
 
 /// Modules of a case: `udf.<name>` entries loaded and instantiated, plus one diagnostic per entry

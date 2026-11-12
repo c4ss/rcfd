@@ -5721,12 +5721,24 @@ fixed by the item's registration ADR before any code.
     known misses of the option DC4 (MMS pressure 1.119 x at one dt) and DC5 (an order 0.005 above its band). Defaults
     bit-identical. Missing: the case-level wiring for dynamic meshes (SV301, adaptive count; Q2) and the periodic pressure
     identity S1p3 (known miss at the solver floor). Open: the default (Q1, recommended false for now), one flag (Q3), Q5.
-- [ ] **F-302** Periodic seam pair diffusivity: remaining viscosities and the pimple check
+- [x] **F-302** Periodic seam pair diffusivity: remaining viscosities and the pimple check
   - depends on: F-296, F-294
   - acceptance: Pair diffusivity covers the temperature-dependent properties viscosity and the user-function viscosity;
     a case-tree check of k-epsilon and Spalart-Allmaras with pair on pimple.
   - note: From ADR 0212 questions 1 and 4, recommendations taken by the lead. RSM on a rotational seam only if RSM ever
     runs there.
+    - BUILT (ADR 0227, the registration of F-302, 2026-11-08, branch f302-pair-diffusivity, not merged): every
+      registered check is met. turbulence.periodic_seam.diffusivity = "pair" is now accepted on a laminar run with a
+      temperature-dependent properties.viscosity law or a user-function viscosity (R1''): both faces of a pair take mu(w
+      T_P + (1 - w) T_Q) / rho, or the module's value at the centre of the pair's face of lower index with the
+      temperature and speed interpolated across the seam (one call per pair). Finding: the property viscosity is already
+      one value per pair by default, up to rounding (0 to 5.6e-16), so pair changes its last bits on graded seams only.
+      The user-function budgets close to 4.5e-16 with pair and miss by 1.2e-4 to 1.3e-3 with owner. On pimple, k-epsilon
+      and SA with pair give one momentum face viscosity per pair to the bit (owner 5.2e-3 to 1.6e-2), the laminar rule
+      holds across the seam, and the transient k and nuTilda sweep budgets close to 3.1e-15 (owner 1.4e-4 to 3.5e-2).
+      The cases of the ignored F-294 S1 run again in ADR 0227 S1t. Defaults bit-identical. Open: ADR 0227 Q1 to Q5 (the
+      position of a user function on a pair, the energy diffusivity on a seam, pair for the property law, the F-294
+      record, one call per pair).
 - [ ] **F-303** Sliding interface in the case tree: rotor-stator generator, simulation loop and a non-axisymmetric check
   - depends on: F-250
   - acceptance: A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).

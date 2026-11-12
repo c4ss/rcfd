@@ -148,6 +148,11 @@ pub fn enabled(case: &Case) -> bool {
     NAMES.iter().any(|n| law(case, n).is_some())
 }
 
+/// Is the viscosity temperature-dependent (`properties.viscosity.law` other than `constant`)?
+pub fn viscosity_enabled(case: &Case) -> bool {
+    law(case, "viscosity").is_some()
+}
+
 /// Settings checks.
 pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
@@ -265,6 +270,9 @@ pub struct Properties {
     rho: f64,
     k0: f64,
     cp0: f64,
+    /// The periodic pairs with `turbulence.periodic_seam.diffusivity = "pair"` (F-302, ADR 0227 D1); `None`: each face of a pair
+    /// takes the viscosity at its own face temperature.
+    seam: Option<Vec<rcfd_fv::PeriodicPair>>,
 }
 
 /// Linear face interpolation of a cell field, boundary values on boundary faces.
@@ -293,7 +301,14 @@ impl Properties {
             rho: gf(case, "physics.rho"),
             k0: gf(case, "physics.conductivity"),
             cp0: gf(case, "physics.cp"),
+            seam: None,
         })
+    }
+
+    /// One viscosity per periodic pair (F-302, ADR 0227 D1): with `Some(pairs)` both faces of every pair take
+    /// `mu(w T_P + (1 - w) T_Q) / rho`; `None` (the default) gives each face the viscosity at its own face temperature.
+    pub fn set_seam_pairs(&mut self, pairs: Option<Vec<rcfd_fv::PeriodicPair>>) {
+        self.seam = pairs;
     }
 
     /// Does the viscosity depend on temperature?
@@ -306,10 +321,21 @@ impl Properties {
         self.k.is_some() || self.cp.is_some()
     }
 
-    /// Kinematic viscosity at every face.
+    /// Kinematic viscosity at every face; one value per periodic pair when the pairs are set ([`Properties::set_seam_pairs`]).
     pub fn nu_faces(&self, geom: &FvGeometry, t: &ScalarField) -> Option<Vec<f64>> {
         let mu = self.mu.as_ref()?;
-        Some(face_values(geom, t).iter().map(|&tf| mu.eval(tf) / self.rho).collect())
+        let mut nu: Vec<f64> = face_values(geom, t).iter().map(|&tf| mu.eval(tf) / self.rho).collect();
+        if let Some(pairs) = &self.seam {
+            // ADR 0227 D1: the internal-face formula across the seam, written on both faces
+            let own = geom.mesh.owner();
+            for p in pairs {
+                let tf = p.w * t.values[own[p.f]] + (1.0 - p.w) * t.values[own[p.g]];
+                let v = mu.eval(tf) / self.rho;
+                nu[p.f] = v;
+                nu[p.g] = v;
+            }
+        }
+        Some(nu)
     }
 
     /// Thermal diffusivity `k / (rho cp)` at every face.

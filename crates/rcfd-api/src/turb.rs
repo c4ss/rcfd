@@ -626,26 +626,40 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
 /// The key of the periodic-seam diffusivity (F-295, ADR 0205 D3).
 pub const PERIODIC_SEAM_KEY: &str = "turbulence.periodic_seam.diffusivity";
 
-/// ADR 0212 R1' (replaces ADR 0205 R1): `turbulence.periodic_seam.diffusivity = "pair"` is available with the built-in turbulence
-/// models and on a laminar run with a viscosity law (`rheology`); not on a laminar run without one (nothing to pair) and not with a
-/// plugin model (it owns its diffusivities).
+/// ADR 0212 R1' (replaces ADR 0205 R1) with ADR 0227 R1'': `turbulence.periodic_seam.diffusivity = "pair"` is available with the
+/// built-in turbulence models and on a laminar run with a viscosity law (`rheology`), a temperature-dependent property viscosity
+/// (`properties.viscosity`) or a user-function viscosity (`udf.<name>.viscosity`); not on a laminar run without one of them
+/// (nothing to pair) and not with a plugin model (it owns its diffusivities).
 fn check_periodic_seam(case: &Case, out: &mut Vec<Diagnostic>) {
     if get_s(case, PERIODIC_SEAM_KEY) == "owner" {
         return;
     }
     let model = get_s(case, "turbulence.model");
+    let udf_viscosity = || {
+        case.tree.names("udf").unwrap_or_default().iter().any(|n| {
+            case.tree
+                .get(&format!("udf.{n}.viscosity"))
+                .ok()
+                .and_then(|v| v.as_bool())
+                == Some(true)
+        })
+    };
     let why = match model.as_str() {
         "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "smagorinsky" | "wale" | "mixing_length" | "rsm" => return,
-        "laminar" if crate::rheology::enabled(case) => return,
+        "laminar"
+            if crate::rheology::enabled(case) || crate::properties::viscosity_enabled(case) || udf_viscosity() =>
+        {
+            return
+        }
         "laminar" => {
-            "a laminar run without a viscosity law (rheology.model or rheology.shift) has no diffusivity to pair"
+            "a laminar run without a viscosity law (rheology.model or rheology.shift), a property viscosity law (properties.viscosity.law) or a user-function viscosity (udf.<name>.viscosity) has no diffusivity to pair"
         }
         _ => "a plugin model owns its diffusivities",
     };
     out.push(diag(
         PERIODIC_SEAM_KEY,
         format!(
-            "periodic_seam.diffusivity = \"{}\" is available with turbulence.model = k_epsilon, k_omega_sst, spalart_allmaras, smagorinsky, wale, mixing_length or rsm, and on a laminar run with a viscosity law (rheology) (ADR 0212), not with \"{model}\": {why}",
+            "periodic_seam.diffusivity = \"{}\" is available with turbulence.model = k_epsilon, k_omega_sst, spalart_allmaras, smagorinsky, wale, mixing_length or rsm, and on a laminar run with a viscosity law (rheology), a temperature-dependent property viscosity (properties.viscosity) or a user-function viscosity (udf.<name>.viscosity) (ADR 0212, ADR 0227), not with \"{model}\": {why}",
             get_s(case, PERIODIC_SEAM_KEY)
         ),
     ));
