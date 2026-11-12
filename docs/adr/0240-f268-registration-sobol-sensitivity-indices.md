@@ -314,3 +314,99 @@ C7, not of the library. C7 stays as it is (it passed and remains a check of the 
   with a reason; `n_rows_used` equals `N` minus the rows with at least one non-ok entry; every index finite; summary ok), plus the
   set-up condition that at least one row has `A` and `B` ok and an `A_B^(i)` entry not ok (so the case MU6 mishandles occurs).
 - Then MU6 is run once more against the final commit; it must make C7b fail.
+
+## Addendum 1: results (2026-11-12)
+
+Runs: release profile, `cargo test -p rcfd-api --release --lib design::sensitivity -- --nocapture --test-threads 1`, worktree
+`w49i-work/f268`, Windows. First run at dc6d749d; the corrected C1/C3 test (amendment 1) at its commit; C7b (amendment 2) at
+a9760923. Run time of the sensitivity tests: 4.6 s (PR3 met).
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 S1, S2, S3 | `\|z\| <= 4` against `SE_p` | z +1.754, -0.654, +0.678 (est 0.327238, 0.438092, 0.005016) | yes |
+| C1 ST1, ST2, ST3 | `\|z\| <= 4` | z +2.410, -0.409, -0.012 (est 0.586022, 0.440204, 0.243643) | yes |
+| C1 SE ratio | in `[0.75, 1.33]` | 0.961 to 1.060 | yes |
+| C1 dummy | S4, ST4 and their SEs exactly 0 | all 0 | yes |
+| C2 S1, S2, S3 | `\|z\| <= 4` | z +1.630, +0.319, -0.716 | yes |
+| C2 ST1, ST2, ST3 | `\|z\| <= 4` | z +0.700, -0.565, +0.322 | yes |
+| C2 SE ratio | in `[0.75, 1.33]` | 0.862 (ST2) to 1.042 | yes |
+| C2 dummy | exactly 0 | all 0 | yes |
+| C2 mean, variance | error `<= 0.0688`; `<= 0.25` | 1.927374 (error 0.0012); 4.844389 (error 0.0077) | yes |
+| C3 | `ST3 - S3 >= 0.2`; `ST1 - S1 >= 0.18` | 0.23863; 0.25878 | yes |
+| C4 coverage at 1.96 SE (400 runs) | `>= 0.90` each | S1 0.9500, ST1 0.9550, S2 0.9425, ST2 0.9550, S3 0.9200, ST3 0.9625 | yes |
+| C5 | bytes and bits equal for 1 and 4 workers; prefix of 512 rows | 3 922 031 bytes both, results equal by bits, prefix equal | yes |
+| C6 | 384 evaluations, 385 entries, `A_B` structure, summary bits | as registered | yes |
+| C7 | counts and reasons | 488 failed evaluations in 151 rows, 1897 rows used of 2048, indices finite, summary ok | yes |
+| C7b (amendment 2) | as C7, and at least one mixed row | 874 failed in 411 rows, 140 mixed rows, 1637 rows used | yes |
+| C8 | six located refusals, changing metrics refused, nothing written | as registered (texts in the test output) | yes |
+| NC1 S2, ST2, ST3 | `\|z\| > 4` against `a = 6` | +10.58, +13.32, -9.27 | yes |
+| NC1 ST1 | `\|z\| > 4` | **3.87** | **no**: known miss, the ignored `c1_c3_nc1_ishigami_against_closed_forms_known_miss` |
+| NC1 S1 | reported | -3.74 | (no limit) |
+| NC2 | `SRC_2^2 < 0.01` | 5.04e-6 (SRC 0.433, -0.002, 0.017, -0.006; R^2 0.188) | yes |
+| NC3 coverage at 0.98 SE | `<= 0.80` each | 0.645 to 0.7125 | yes |
+| NC4 | another seed gives other bytes | different | yes |
+
+PR1 met (largest `|z|` 2.41). PR2 met except S3 (0.920, below the predicted 0.93 to 0.96, inside the limit).
+
+**NC1 ST1 diagnosis.** The ST1 estimate lies 2.41 `SE_p` above the exact 0.557589, which is the direction of the `a = 6` value
+0.631739. The registered margin was `(0.631739 - 0.557589) / 0.0118 = 6.3 SE`, so a draw of 2.4 SE towards it leaves 3.87. The
+chance of that was about `P(z > 2.3) = 1 %`, which I did not compute when I registered the control: the control's margin was too
+small. The estimator is not at fault (C1 holds for ST1, and C4's ST1 coverage is 0.955). The limit is kept and the miss recorded.
+
+### Mutations (scratch `w49i-work/f268-scratch`, a `git archive`, own target, release; the file restored and compared byte for byte)
+
+| Id | Caught by |
+| --- | --- |
+| MU1 (`A_B^(i)` equal to `A`) | C1 (S1 z -41.3), C2 (z -81.6), C4 (coverage 0), C6 (structure) |
+| MU2 (multiplier `a - m`) | C1 (S1 est -0.582, z -117.8), C2, C4 |
+| MU3 (no factor 1/2) | C1 (ST1 est 1.172, z +52.1), C2, C4 |
+| MU4 (`B` equal to `A`) | C1 (z -41.3), C2, C4 |
+| MU5 (`SE / sqrt(2n)`) | C1 (S1 SE ratio 0.749 against 0.75, barely), C2 (ratio 0.705), C4 (coverage 0.8525) |
+| MU6 (rows filtered on `A` and `B` only) | at d938ef76: **not caught**, every test passed (amendment 2); at a9760923: C7b fails |
+
+### Format and lint
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets --release -- -D warnings`: clean at the final
+commit. Its first pass found a complex return type and a negated float comparison in `sensitivity.rs`; fixed by a type alias and
+`v.is_nan() || v <= 0.0` (same behaviour; the sensitivity tests printed the same numbers afterwards).
+
+### Deviations and what was not run
+
+- The first run's output was cut by my own `tail` filter, so the same deterministic suite was run a second time at the same commit
+  to read the numbers (the visible part of the first output equals the second). A third run followed the clippy fix. No result was
+  chosen between runs; they are identical.
+- C1, C3 and NC1 were one test, and the panic at NC1 ST1 hid NC1 ST3 and S1 from it. Their values came from C1's printed estimates
+  (amendment 1), and the corrected test then asserted them.
+- The whole `design::` library test set (60 tests, U1 to U8 and the ledger tests among them) passed at the final code. No other
+  crate is touched, so no other suite was run. The whole-workspace suite and the gate were not run (instructed).
+
+### Decision by the registered rule
+
+**Partial (Sobol part).** C1 to C8, C7b, NC2 and NC3 are met, and every mutation makes a check fail (MU6 only after amendment 2).
+But the NC1 control on ST1 did not hold (`|z| = 3.87`), which the rule counts as "a control not caught", and MU6 needed a corrected
+test. The library capability itself meets every closed-form, coverage, determinism and structure limit. F-268 as a whole stays
+partial in any case: uncertainty bands on the reduced-order model and automatic ledger logging are not attempted, and the
+evaluators are analytic.
+
+### Remaining questions
+
+- **Q4. Does the NC1 ST1 miss hold the Sobol part at partial?** (a) keep partial, as the rule says; (b) the maintainer accepts the
+  Sobol part as met, since the miss is in a control's margin, not in the estimator, and the other three controls hold by more than
+  9 SE. Recommendation: (b), as a decision by the maintainer in person; the rule as written gives (a).
+- **Q2 (open, changes a golden).** A service method and MCP tool for Sobol indices of a named evaluator (`fan_rom_eval`) would
+  change the MCP tools-list goldens. Options: (a) library only; (b) a registered follow-up with the golden edit. Recommendation: (b)
+  once the reduced-order fan evaluator is the target of a real sensitivity study, together with the same tool for `uq::run`.
+- **Q5. Stopping rule on the index SE.** Options: (a) fixed `N` (now); (b) double `N` until every SE is below a target (the prefix
+  property makes the doubling exact). Recommendation: (a) until a costly evaluator needs it.
+
+### For the lead: roadmap entries
+
+Proposed status of F-268: **partial** (unchanged). New note text:
+
+> Wave 46D (ADR 0121); Sobol indices ADR 0240 (2026-11-12, branch f268-sobol-indices, not merged). Size M. Every model is a stated proxy until checked against measured fan data, which does not exist yet. BUILT (ADR 0240): the opt-in library function design::sensitivity::run gives first-order and total Sobol indices of independent inputs (the uq distributions) with delta-method standard errors, on the A, B, A_B^(i) Monte Carlo design (Saltelli 2002) at N (d + 2) evaluations, with the centred Saltelli et al. (2010) first-order and the Jansen (1999) total estimators; rows with a failed evaluation are dropped and counted; every evaluation and a sobol_summary can go to the ledger; bit-identical for any worker count. Met: Ishigami (N 16384) and a linear function with mixed distributions within 4 SE of the closed forms (largest z 2.41), a dummy input exactly zero, delta-method coverage 0.920 to 0.963 at 1.96 SE (400 runs, limit 0.90), the interaction ST3 - S3 = 0.239 seen where SRC gives SRC_2^2 = 5e-6; six mutations caught (one after a corrected check). Known miss: the NC1 control on ST1 (|z| 3.87 against the a = 6 value, limit 4; the estimator meets its own limit). Not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, an MCP tool for uq or Sobol studies (changes the tools-list goldens). Open: ADR 0240 Q2, Q4, Q5.
+
+Optional follow-up item, if the lead wants the tool exposure as its own entry:
+
+> Proposed item "MCP tools for tolerance and Sobol studies of a named evaluator", deps F-268. Acceptance: "design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the reduced-order fan evaluator first) inside the sandbox, with the ledger, and the MCP tools-list goldens are updated by a registered edit."
