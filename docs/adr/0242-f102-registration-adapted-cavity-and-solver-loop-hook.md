@@ -245,8 +245,8 @@ No limit, set-up or test was changed after it, and no amendment was needed.
 | H4 | as registered | all assertions | yes |
 
 Recorded, not counted: `D(U48) = 0.00302` (2304 cells), `G(U48) = 0.00874`, `G(C) = 0.01300`, `G(Ainv) = 0.01329`; A's
-cycles refined 231 and 510 cells (balance added none beyond the marks in the counts printed: `refined` includes the balance
-splits), none ignored at the maximum level; times C 0.2 s, F 77.9 s, U48 1.9 s, A 2.2 s, Ainv 1.1 s.
+cycles marked 231 and 508 cells (`ceil(0.4 N)`) and split 231 and 510 (`refined` includes the balance splits: 0 and 2), none
+ignored at the maximum level; times C 0.2 s, F 77.9 s, U48 1.9 s, A 2.2 s, Ainv 1.1 s.
 
 Against the predictions: PR1 met. PR2: `D(A)` 0.0023, below the predicted 0.004 to 0.008, and `D(A)/D(C)` 0.14, below 0.2 to 0.4;
 `D(C)` (0.016) was smaller than the paper estimate (0.02 to 0.03). PR3 met (0.0166 > 0.015). PR4 roughly: the adapted mesh
