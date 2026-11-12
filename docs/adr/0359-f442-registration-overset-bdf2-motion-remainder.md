@@ -189,3 +189,51 @@ made in person; none changes a default.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the runs of the registration and before any further run or code)
+
+The test file was committed compiled and not run (`9bb0bff3`); then the fast tests (S2, the F0 record) and the four ignored
+tests (S0, H1, H2, H1a with H3) ran once, release, four test threads (logs `f442-scratch/fast-base.log`, `diag.log`). No
+limit or deciding number above is changed.
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| S0 (set-up) | `[2.0e-5, 2.1e-5]`; `[2.40, 2.50]` | `2.0571e-5`; `2.4542` (cell 6455, component, `(1.668, 0.969)`: the run of ADR 0245 A2 to five digits) | held |
+| S1 | `<= 1e-9` | `2.7e-12` (largest over every run) | met |
+| S2 (set-up of B) | `<= 1e-12` | `2.2e-15` at `tg_pose(0.3)`, `2.0e-15` at `tg_pose(0)` | met |
+| F0 record | printed | `0x3deeab3cfda1d8d0 0x4758f6c215970201 0xc931bf9474a97f49 0xac84b084267029d0` | recorded |
+| H1 the donor switches | confirmed `b <= 6.2e-6` and ratio `>= 4`; ruled out `b >= 1.44e-5` | `b = 9.92e-6`, ratio `1.845` (`d_400 = 5.38e-6`); the maximum moves to the background cell 3309 at `(1.158, 1.630)`, `(-0.27, 0.27)` in the component frame: the calculated ring just outside the background fringe of the hole | **undecided** |
+| H1a the same at level 1 | confirmed `<= 1.6e-5` and ratio `>= 4`; ruled out `>= 3.6e-5` | `1.12e-5`, ratio `3.52`; maximum in the background cell 774 at `(1.139, 1.532)`, next to the hole | **undecided** (the size is met, the ratio not) |
+| H2 the kind changes | confirmed: without a hole with B ratio `>= 4` and `max <= 0.3 b = 2.98e-6`; ruled out `>= 0.7 b` | without a hole with B: `1.03e-6`, ratio `3.37` | **undecided** (the size is met, the ratio not) |
+| H3 the outer loop | confirmed `>= 5.2e-6`; ruled out `<= 5.2e-7` | `6.6e-8` | **ruled out** |
+
+Printed: without a hole and with the library's stencils TG_2 gives `2.0201e-5` at a ratio of `2.428` **in the same cell 6455**
+as S0: taking the hole away (no background fringe, no hole, no kind change: 0 against 503 kind changes per run) changes the
+remainder by two percent. With B and without a hole it is `1.03e-6`: B takes it down by a factor `19.6`. TG_1 without a hole
+with B: `3.2e-6`, ratio `4.34`. Donor switches per run of TG_2 (library stencils' donors): `2565`, `2596`, `2612` with the
+hole, `1990` to `2014` without (the component's outer fringe alone); the count estimated in the registration was 2400.
+
+**Reading.** None of H1, H1a, H2 is confirmed by its registered number: the remainder of TG_2 is the sum of two parts and the
+registration had a deciding number for one part at a time. The printed numbers say what the two parts are, and they are
+registered as hypotheses here, with deciding numbers, before their runs:
+
+- the part at the largest cell (component cell 6455, next to the component's outer fringe) is made by the donor switches of
+  the component's outer fringe: it is there with and without a hole (`2.057e-5`, `2.020e-5`) and B removes it (`1.03e-6`
+  without a hole);
+- the part B leaves with a hole (`9.92e-6`, ratio `1.85`) sits in the background ring next to the hole, where cells change kind.
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H4 | the remainder at the component cells is made by the donor switches of the component's outer fringe | TG_2 with the hole, B on the component's fringe cells only (the background fringe keeps the library's stencil), 200, 400, 800 steps: `k = max abs(d_200)` over the component cells, and the same over the background cells (printed) | confirmed: `k <= 6.2e-6` (0.3 of S0's `2.057e-5`, which is at a component cell); ruled out: `k >= 1.44e-5` |
+| H5 | the part that B leaves is made by the background cells changing kind | the run of H1 again (deterministic: TG_2, hole, B on every fringe cell), the cells split: **near**, the cells calculated at the end that are within two face layers of a cell whose kind changed in any step of the run, and **far**, every other calculated cell: `n = max abs(d_200)` over near, `f` over far | confirmed: `n >= 5 f`; ruled out: `n <= 2 f` |
+
+H5 is measured on the run of H1, repeated deterministically (the same code path; the numbers `n` and `f` were not printed by
+the first run). Printed for both: the ratios to `d_400`; the run with B on the background fringe only (the complement of H4).
+
+**No library opt-in is built in this item** (O2 not taken). The reason, with its number: B, the most continuous stencil
+these meshes allow, already gives D2 `1.845` on TG_2 (H1), because the part it does not touch (H5) is an event of a
+cell's kind, which no stencil removes (L2); an opt-in of the stencil alone would miss A2 by construction. A2, A2b, A2c and
+the opt-in's mutations are therefore not run; F0 and B1 still are (the tree is unchanged outside the new test file, so F0 is
+the check that the library is the base tree's). The decision rule is not changed; the addendum applies it.
+
+Predictions (mine): H4 confirmed (`k` near `1e-6`); H5 confirmed.
