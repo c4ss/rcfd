@@ -445,3 +445,110 @@ accepted. The rule is defective; the set-up of E1 is not. So:
 - Mutation MU7 (added): the amended threshold back to the absolute test (`d > 0`): E1b must fail.
 - The decision by the registered rule is therefore at best **partial** (E1 missed, not a defective set-up); the addendum
   reports E1b as the evidence for the amended rule.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-fv/src/cosim/mapping.rs` (new): `interface_rows`, `MapMethod::{Projection { correct_offset }, RadialBasis
+  { support }}`, `Unmapped::{Refuse, Nearest}`, `MapSettings` (`projection`, `radial_basis`, `validate`), `MapReport`,
+  `Rows`; the nearest-point search of D4, the offset correction of D5 (3 x 3 cyclic Jacobi), the radial basis of D6 (dense
+  Cholesky, Schur complement, power and inverse iteration for the condition estimate), the policy of D7; the pivot rule of
+  amendment 1.
+- `crates/rcfd-fv/src/cosim.rs`: `mod mapping;` and one `pub use` line (lines 39 to 40), `InterfaceMap::build` (lines 123
+  to 135); nothing else changed.
+- `crates/rcfd-fv/tests/cosim_f362.rs` (new): 13 tests, one of them the ignored known miss of E1.
+- `docs/cosimulation-protocol.md`: the subsection "Weights built from the two interface meshes" and the limits line.
+- Not edited: `fsi.rs`, the participants, the traits, `coupled_step`, any existing test, hash table or golden. No new
+  crate, no unsafe code.
+
+### Checks
+
+Registered run once on commit 8061d17a (`cargo test --release -p rcfd-fv --test cosim_f362 -- --test-threads=1
+--nocapture`, 121 s, log `f362-scratch/run1.log`); E1b once on the amended code (`--exact`, `f362-scratch/run_e1b.log`).
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| R1 rigid translation, rotation, both; BP and BC, projection and radial basis (12 cases) | `<= 1e-12` | `2.3e-16` to `1.3e-15` (smallest weights: BP projection 0, BP radial `-0.148`, BC projection `-0.021`, BC radial `-0.132`) | met |
+| R2 row sums; coordinates; report defect (four maps) | `<= 1e-13` each | at most `1.8e-15`; `1.5e-15`; `1.5e-15` | met |
+| C1, C2, C3 resultant, moment, work (four maps, 3 seeds) | `<= 1e-12` | at most `1.0e-16`, `1.1e-16`, `1.4e-16` | met |
+| U1 refuse (both methods) | an error naming wall point 0, `0.024`, `0.008` | "wall point 0 at [...] lies 0.024 from the structure, more than max_distance 0.008" | met |
+| U2 nearest: outside list; rigid motion against the nearest points; translation at the points | the six; `<= 1e-12` | the six; at most `9.1e-16`; met | met |
+| U3 resultant; moment defect against the prediction; the predicted defect | `<= 1e-12`; `<= 1e-12`; `>= 1e-6` | `7.6e-17`; `7.3e-17`; `9.94e-4` | met; control held |
+| F0 every step converged; the piecewise-linear run against ADR 0256 | all; `1e-6` | all 650 in each of the three runs; `+4.3e-7`, `-3.6e-8` (0.998618, 1.011453) | held |
+| F1 projection against piecewise linear, Q0, Q1 | `<= 1e-3` | `+1.4e-15`, `0` (iterations max 10, mean 8.766, as the reference) | met |
+| F1 radial basis against piecewise linear, Q0, Q1 | `<= 1e-3` | `-5.164e-4`, `+1.880e-4` (0.998102, 1.011641; iterations max 11, mean 9.257) | met |
+| P1 projection rows on CWs against `piecewise_linear_rows`; defect | `1e-15`; `0.05` within `1e-15` | `1.1e-16`; `0.05000000000000001` | met |
+| G1 BC distances against the closed form; BP | `<= 1e-15` m | `9.9e-18` (largest `9.598e-4`); `2.0e-17` | met |
+| K1 condition estimate: model, BP, BC | within 5 %, `<= 1.0001` x | `8.2083`, `85.196`, `69.858` against `8.208`, `85.20`, `69.86` | met |
+| E1 (registered) | an `Err` each | nine of ten refused; **coincident nodes accepted** | **missed** (known miss, amendment 1) |
+| E1b (amendment 1) | an `Err` each, the coincident case naming the radial-basis matrix | all ten refused; "the radial-basis matrix is not positive definite (coincident structural nodes?)" | met |
+| N1 plain projection on BC: rotation; moment | `>= 1e-4`; `>= 1e-5` | `4.98e-3`; `1.04e-4` (resultant `6e-17`, work `2e-17`) | held |
+| D0 `cosim_f139`, `cosim_f361` (release, unedited); baseline hashes; files | all pass; the named files | 18 passed, 1 ignored; 9 passed; 3 passed, 1 ignored; the diff against main touches `cosim.rs`, `cosim/mapping.rs`, the test file, this ADR and `docs/cosimulation-protocol.md` | met |
+
+Against the predictions: all inside; F1 of the radial basis came out at `-5.16e-4` against the model's `-5.13e-4`. The
+record of E1 on the registered code (a scratch test on a copy of 8061d17a, `f362-scratch/twin.log`): with node 5
+duplicated the build returned rows with a condition estimate of `1.4e32`, largest weight `1.0002`, row sums within
+`1.3e-15`, i.e. a singular kernel factorised through a rounding-level pivot.
+
+### Mutations
+
+Each alone by an exact replacement on a `git archive` copy of the final tree, `cosim_f362` run once, the file restored and
+compared byte for byte (identical every time; `f362-scratch/mutations.log`).
+
+| Id | Must fail | Failed |
+| --- | --- | --- |
+| MU1 no offset correction | R1 (BC projection), R2 | R1, R2, C |
+| MU2 no polynomial part | R1 (radial basis) | R1, R2, C, U2/U3, K1, F0/F1 |
+| MU3 constant polynomial only | R1, C2 | R1, R2, C, U2/U3, F0/F1 |
+| MU4 refuse never refuses | U1 | U1 |
+| MU5a (radial basis) an outside point evaluated at `x_p` | U2 | U2/U3 |
+| MU5b (projection) an outside point corrected | U2 | U2/U3 |
+| MU6 no edge fallback in the triangle | G1 or U2 | U1, U2/U3 |
+| MU7 (amendment 1) the absolute pivot test | E1b | E1b |
+
+MU5 was registered as one mutation; it needs one replacement per method, so it ran as MU5a and MU5b (disclosed).
+`scripts/limit_audit.py` on the test file: 0 hits.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean (one finding, a
+complex type, fixed before the registered run by the alias `Rows`). Not run: the whole-workspace suite (the lead's gate).
+
+### Deviations and disclosures
+
+- Amendment 1 (the pivot rule) came after the registered run; E1 counts as missed by the rule.
+- A scripted edit wrote CRLF line ends into two source files before the code commit; git normalised them on commit and
+  the working copy was converted back to LF.
+- Order: registration (556c8314), code (8061d17a), the registered run, amendment 1 (62884f9e), the amended code and E1b,
+  E1b once, D0, the mutations.
+
+### Decision by the registered rule
+
+Every acceptance check (R1, R2, C1 to C3, U1 to U3, F1) is met, F0 and the controls held, P1, G1, K1 and D0 are met and
+every mutation was caught, but **E1 was missed** on the registered code (an absolute pivot test let a singular kernel
+through), and that is not a defective set-up. By the rule: **partial**. The amended rule passes E1b, and MU7 shows that
+E1b can fail.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Should the `Structure` trait give its elements** (a default method `elements()`, empty by default) so that
+  `describe` carries them? Options: (a) add it with the transport item; (b) keep them a caller argument.
+  Recommendation (a), together with the transport (ADR 0256 Q1), since only a transport needs them in the call.
+- **Q2. Does amendment 1 close E1?** Options: (a) mark F-362 done on the maintainer's review of E1b; (b) keep it partial.
+  Recommendation (a): the defect was the threshold, not the design, and the fix is derived and shown to be tested by MU7.
+- **Q3. Large interfaces.** The brute-force search and the dense radial-basis rows limit this to a few thousand nodes.
+  Options: (a) a follow-up for a spatial search and a sparse factorisation of the compact support; (b) leave it until a
+  case needs it. Recommendation (b).
+
+### For the lead: roadmap entries
+
+Proposed status of F-362: **partial** (`[~]`).
+
+Note text for F-362:
+
+> PARTIAL (ADR 0263, 2026-11-12; registered before the code, one amendment after the registered run). Opt-in cosim::interface_rows and InterfaceMap::build build the weights from the structure's nodes and elements (points, segments, triangles, quadrilaterals) and the fluid's wall points alone; nothing calls them. Derived: scalar weights reproduce every rigid motion iff each row sums to 1 and reproduces the point's coordinates; the transpose then conserves resultant and moment, and conserves work for any weights. Nearest-element projection with an offset correction on the ring of elements (exact on a curved wall; plain barycentric selectable); radial basis with Wendland's C2 function of support 3 h and a degree-1 polynomial in the nodes' own directions, dense Cholesky with a Schur complement, condition estimate (8 to 85 here). Policy: a wall point farther than max_distance is refused (the default; the message names point and distance) or moves with its nearest structural point (Unmapped::Nearest). Measured on a planar and a cylindrical wall with non-matching meshes: rigid translation and rotation to 1.3e-15, resultant, moment and work to 1.4e-16 (both methods); without the correction the cylinder loses 5e-3 of the rotation and 1e-4 of the moment; outside points follow their nearest points to 9e-16 and the moment changes exactly as predicted. Model problem of ADR 0256: the projection gives the piecewise-linear rows to 1e-16 and the same frequencies (1.4e-15); the radial basis shifts them by -5.2e-4 and +1.9e-4 (limit 1e-3). cosim_f139, cosim_f361 and the baseline hashes pass unedited; eight mutations caught. Partial because the registered check E1 accepted two coincident nodes with the radial basis (an absolute pivot test); amendment 1 refuses pivots below 2 n eps a_jj, and E1b passes with it. Protocol option in docs/cosimulation-protocol.md. Open: ADR 0263 Q1 to Q3.
+
+Sentence to append to the note of F-139:
+
+> Geometric and radial-basis mapping with an unmapped-point policy: F-362 (ADR 0263, 2026-11-12).
