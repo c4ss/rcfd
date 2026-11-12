@@ -44,6 +44,7 @@ pub mod sliding;
 pub mod smoothing;
 pub mod solidification;
 pub mod sources;
+pub mod sponge;
 pub mod stepctl;
 pub mod thermal_bc;
 pub mod varden;

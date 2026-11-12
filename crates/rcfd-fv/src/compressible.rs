@@ -11,6 +11,7 @@ use crate::compressible_bc::{self, TotalInlet};
 use crate::convection::TvdLimiter;
 use crate::geometry::FvGeometry;
 pub use crate::riemann::{to_prim, Cons, Gas, Prim, RiemannSolver};
+use crate::sponge::{self, Sponge};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
 use rcfd_mesh::motion::{cell_swept_sum, swept_volumes};
@@ -110,6 +111,10 @@ pub struct CompressibleSolver {
     pub steps: usize,
     /// The step count after the last [`Self::step_ale`] and the normal mesh speed of every face in it (F-258, ADR 0207 M2).
     ale_speeds: Option<(usize, Vec<f64>)>,
+    /// The opt-in sponge layer (F-331, ADR 0237); `None` by default.
+    sponge: Option<Sponge>,
+    /// The memory `Q` of the matched sponge form, one value per cell while a sponge is set.
+    sponge_q: Vec<f64>,
 }
 
 impl CompressibleSolver {
@@ -146,6 +151,8 @@ impl CompressibleSolver {
             time: 0.0,
             steps: 0,
             ale_speeds: None,
+            sponge: None,
+            sponge_q: Vec::new(),
         })
     }
 
@@ -170,6 +177,45 @@ impl CompressibleSolver {
         }
         self.bcs[i] = bc;
         Ok(())
+    }
+
+    /// Set or clear the sponge layer (F-331, ADR 0237; [`crate::sponge`]). The sponge is checked against the mesh
+    /// ([`Sponge::validate`]) and its memory starts at zero. Without a sponge [`Self::step`] is unchanged. While a sponge
+    /// is set, [`Self::step_ale`] and [`Self::replace_mesh`] return an error, and [`Self::max_dt`] does not know the
+    /// sponge: `rate dt` must stay well below 2.5.
+    pub fn set_sponge(&mut self, sponge: Option<Sponge>) -> Result<()> {
+        if let Some(s) = &sponge {
+            s.validate(self.u.len())?;
+        }
+        self.sponge_q = match &sponge {
+            Some(_) => vec![0.0; self.u.len()],
+            None => Vec::new(),
+        };
+        self.sponge = sponge;
+        Ok(())
+    }
+
+    /// The sponge layer, if one is set.
+    pub fn sponge(&self) -> Option<&Sponge> {
+        self.sponge.as_ref()
+    }
+
+    /// Set the memory `Q` of the matched sponge form (ADR 0237 amendment 1), for a restart or for a start from a state in
+    /// which a wave is already inside the layer: one finite value per cell; an error without a sponge.
+    pub fn set_sponge_memory(&mut self, q: &[f64]) -> Result<()> {
+        if self.sponge.is_none() || q.len() != self.u.len() || q.iter().any(|x| !x.is_finite()) {
+            return Err(Error::InvalidValue {
+                path: "sponge".into(),
+                reason: "the sponge memory needs a sponge and one finite value per cell".into(),
+            });
+        }
+        self.sponge_q = q.to_vec();
+        Ok(())
+    }
+
+    /// The memory `Q` (time integral of `p - p_ref`) of the matched sponge form per cell; empty without a sponge.
+    pub fn sponge_memory(&self) -> &[f64] {
+        &self.sponge_q
     }
 
     /// Primitive state of every cell.
@@ -503,6 +549,11 @@ impl CompressibleSolver {
     /// a moving face is evaluated in the frame of the face ([`characteristic_face_state`], F-258, ADR 0207 M3). The step
     /// keeps its `w_n` for [`Self::mesh_speeds`] and [`Self::max_dt_ale`].
     pub fn step_ale(&mut self, new_geom: FvGeometry, dt: f64) -> Result<()> {
+        if self.sponge.is_some() {
+            return Err(Error::Numerical(
+                "step_ale: the sponge layer is not built for moving meshes (ADR 0237 D5); clear it first".into(),
+            ));
+        }
         let old = &self.geom.mesh;
         if new_geom.mesh.n_points() != old.n_points() || new_geom.mesh.n_cells() != old.n_cells() {
             return Err(Error::Numerical(
@@ -553,6 +604,12 @@ impl CompressibleSolver {
     /// Replace the mesh (any topology) and the conserved state, e.g. after a layer change (ADR 0090 D3). The mesh speeds of
     /// the last ALE step are dropped ([`Self::mesh_speeds`]).
     pub fn replace_mesh(&mut self, geom: FvGeometry, u: Vec<Cons>) -> Result<()> {
+        if self.sponge.is_some() {
+            return Err(Error::Numerical(
+                "replace_mesh: the sponge layer holds one rate per cell of the old mesh (ADR 0237 D5); clear it first"
+                    .into(),
+            ));
+        }
         if u.len() != geom.n_cells() || geom.mesh.patches().len() != self.bcs.len() {
             return Err(Error::Numerical(
                 "replace_mesh: one state per cell and the same patches are required".into(),
@@ -567,6 +624,9 @@ impl CompressibleSolver {
 
     /// Advance one step of size `dt`.
     pub fn step(&mut self, dt: f64) -> Result<()> {
+        if self.sponge.is_some() {
+            return self.step_sponged(dt);
+        }
         let n = self.u.len();
         let axpy = |a: f64, x: &[Cons], b: f64, y: &[Cons], c: f64, r: &[Cons]| -> Vec<Cons> {
             (0..n)
@@ -594,6 +654,63 @@ impl CompressibleSolver {
                 self.u = axpy(1.0 / 3.0, &u0, 2.0 / 3.0, &u2, 2.0 / 3.0 * dt, &r2);
             }
         }
+        self.time += dt;
+        self.steps += 1;
+        Ok(())
+    }
+
+    /// [`Self::step`] with a sponge layer (F-331, ADR 0237 D2): the sponge source joins the residual of every stage and
+    /// the memory `Q` of the matched form is advanced with the same stage weights as the state.
+    fn step_sponged(&mut self, dt: f64) -> Result<()> {
+        let Some(sp) = self.sponge.as_ref() else {
+            return Err(Error::Numerical("step_sponged: no sponge is set".into()));
+        };
+        let n = self.u.len();
+        let rhs = |u: &[Cons], q: &[f64]| -> Result<(Vec<Cons>, Vec<f64>)> {
+            let mut r = self.residual(u)?;
+            let qd = sponge::add_source(&self.geom, self.gas, sp, u, q, &mut r);
+            Ok((r, qd))
+        };
+        let axpy = |a: f64, x: &[Cons], b: f64, y: &[Cons], c: f64, r: &[Cons]| -> Vec<Cons> {
+            (0..n)
+                .map(|i| std::array::from_fn(|k| a * x[i][k] + b * y[i][k] + c * r[i][k]))
+                .collect()
+        };
+        let axpy_q = |a: f64, x: &[f64], b: f64, y: &[f64], c: f64, r: &[f64]| -> Vec<f64> {
+            (0..n).map(|i| a * x[i] + b * y[i] + c * r[i]).collect()
+        };
+        let (u0, q0) = (&self.u, &self.sponge_q);
+        let (u_new, q_new) = match self.settings.rk {
+            RkScheme::Euler => {
+                let (r, qd) = rhs(u0, q0)?;
+                (axpy(1.0, u0, 0.0, u0, dt, &r), axpy_q(1.0, q0, 0.0, q0, dt, &qd))
+            }
+            RkScheme::Rk2 => {
+                let (r0, qd0) = rhs(u0, q0)?;
+                let (u1, q1) = (axpy(1.0, u0, 0.0, u0, dt, &r0), axpy_q(1.0, q0, 0.0, q0, dt, &qd0));
+                let (r1, qd1) = rhs(&u1, &q1)?;
+                (
+                    axpy(0.5, u0, 0.5, &u1, 0.5 * dt, &r1),
+                    axpy_q(0.5, q0, 0.5, &q1, 0.5 * dt, &qd1),
+                )
+            }
+            RkScheme::Rk3 => {
+                let (r0, qd0) = rhs(u0, q0)?;
+                let (u1, q1) = (axpy(1.0, u0, 0.0, u0, dt, &r0), axpy_q(1.0, q0, 0.0, q0, dt, &qd0));
+                let (r1, qd1) = rhs(&u1, &q1)?;
+                let (u2, q2) = (
+                    axpy(0.75, u0, 0.25, &u1, 0.25 * dt, &r1),
+                    axpy_q(0.75, q0, 0.25, &q1, 0.25 * dt, &qd1),
+                );
+                let (r2, qd2) = rhs(&u2, &q2)?;
+                (
+                    axpy(1.0 / 3.0, u0, 2.0 / 3.0, &u2, 2.0 / 3.0 * dt, &r2),
+                    axpy_q(1.0 / 3.0, q0, 2.0 / 3.0, &q2, 2.0 / 3.0 * dt, &qd2),
+                )
+            }
+        };
+        self.u = u_new;
+        self.sponge_q = q_new;
         self.time += dt;
         self.steps += 1;
         Ok(())
