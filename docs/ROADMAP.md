@@ -8254,7 +8254,8 @@ fixed by the item's registration ADR before any code.
     of 1e5 samples takes 127 ms against 100 ms (a 12 MB reply, most of the time on the service's side). R3 (WebAssembly)
     not run: it needs `unsafe` exports or `wasm-bindgen`. The rcfd-studio control, offscreen: 12.7 ms per snapshot, 73
     per s, first picture 1.25 s. The registered rule has no outcome for a miss of P3 alone, so viability is the
-    maintainer's decision; questions QA1 to QA5 of addendum 1.
+    maintainer's decision; questions QA1 to QA5 of addendum 1. P3 is met after F-456 (ADR 0353, 2026-11-12): median 82.6
+    ms against 100; viability remains the maintainer's decision.
 - [ ] **F-448** Electron Studio to parity with rcfd-studio
   - depends on: F-447
   - acceptance: An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity
@@ -8264,7 +8265,8 @@ fixed by the item's registration ADR before any code.
   - note: ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447. ADR 0350
     addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2)
     for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before
-    the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route).
+    the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route). F-456 (ADR 0353): the
+    history is fetched once, then `since` increments at 0.3 ms; QA1 is answered.
 - [ ] **F-449** Retire rcfd-studio and rcfd-gui
   - depends on: F-448
   - acceptance: After F-448 passes and the maintainer has used the new shell and approved, rcfd-studio and the frozen
@@ -8317,13 +8319,24 @@ fixed by the item's registration ADR before any code.
     of the refinement step is recorded.
   - note: From ADR 0277 remaining question 1, recommendation taken on the maintainer's standing instruction of
     2026-11-11 (the Tet10 cantilever of L/h 10 had a direct-solve relative residual of 6.7e-11).
-- [ ] **F-456** monitors.get at 1e5 samples: build only what is asked for
+- [x] **F-456** monitors.get at 1e5 samples: build only what is asked for
   - depends on: F-447
   - acceptance: `monitors.get {names, since}` applies `names` and `since` before the document is built, with replies
     equal to today's byte for byte for every existing test; P3 of ADR 0350 measured again as registered (4 series of 1e5
     samples, request to parsed object in the renderer) with the 100 ms limit unchanged, and an increment of 100 samples
     at 1e5 stored in at most 2 ms; a miss is recorded, not tuned.
-  - note:  From ADR 0350 addendum 1 QA1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0350 addendum 1 QA1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0353, 2026-11-12. `monitors.get {names, since}` selects the series and the samples before the document is built
+    (`MonitorStore::to_json_filtered`), and on the line protocol the reply is written straight into the reply line
+    without a JSON tree (`write_json_filtered`, `serve_stream`); `Service::call` still returns a `Value`. Replies are
+    equal to the unchanged code byte for byte: 0 differing of 3000 stores (E1) and of 594 requests through the call and
+    through the wire (E2, E3), including NaN and infinities, escapes, ties, an unsorted series, error and notification
+    cases, four series of 1e5 samples (E3b), and the hash of the old tree's lines reproduced; the existing tests of
+    `rcfd-api`, `rcfd-post`, `rcfd-mcp`, `rcfd-assistant` and `rcfd-gui` pass unedited, no hash or golden moved. P3 of
+    ADR 0350 measured again as registered (Electron 45.1.0, 4 series of 1e5 samples, 12.0 MB): median 82.6 ms against
+    100 (the control on the unchanged server, same day: 151.4 ms, 1.4 ms above the registered band of the control). An
+    increment of 100 samples at 1e5: fetched in a median of 0.30 ms (control 21.1 ms), stored (800 pushes) in a median
+    of 1.17 ms, limit 2 ms. Eight mutations caught. Done pending the maintainer's acceptance.
 - [ ] **F-457** Scale-aware convergence test of the subspace eigensolver
   - depends on: F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run.
