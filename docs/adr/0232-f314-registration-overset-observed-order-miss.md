@@ -4,6 +4,14 @@ Status: **REGISTERED 2026-11-12**, written before any code of F-314 and before a
 maintainer. Before this text nothing was compiled or run: the code and the logs listed under "What was read" were read, and
 the hand arithmetic under "Arithmetic before this registration" was done on paper. Results go in the addendum at the end.
 
+Summary of the results (addendum 1): a diagnosis, tests only, no library change. T1c (1.618) is the truncation of the linear
+donor interpolation at one component fringe cell (0.81 to 1.05 of the largest error), a second-order error sampled at one
+pose. T1 (0.747) and T2 at level 2 (3.31) are a first-order time error of the moving-mesh PISO step of the library (the
+lagged convecting flux), not of the overset coupling: a single moving mesh without donors shows 0.83 of it and three outer
+iterations leave 0.153 of it. New and open: the largest error of the calculated cells converges at 1.580 between levels 2
+and 3 (limit 1.7), and at rest with the fringe phase locked the calculated component cells carry a first-order term of the
+coefficient 1.0e-4. Four amendments. By the rule F-314 is partial: the three recorded misses are explained, none is removed.
+
 Parents: [ADR 0219](0219-f134-registration-overset-coupling-of-a-moving-component-mesh.md) (F-134: the overset coupling, its
 checks T1, T2, T1c, amendments 1 and 2, addendum 1 and question Q5), [ADR 0033](0033-wave20b-dynamic-mesh.md) (the ALE step),
 [ADR 0129](0129-test-time-limit-jobs5-measurement-limit-audit.md) (test time limits, `limit_audit.py`),
@@ -373,3 +381,197 @@ Test `a4_first_order_term_of_the_component_at_rest` (ignored, slow, run once; it
 deterministic). Prediction (mine): H10 ruled out (the run at rest of the registered pose changed by `1.2e-5` at most
 between 200 and 800 steps at level 2); H11 uncertain. Whatever the result, the first-order term goes into the addendum as a
 finding with its number, and its removal is not part of this registration.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendments 1 to 4; none was changed. Release
+builds on Windows, the library of main 0d250c75 unchanged: this branch adds one test file and this ADR, and `git diff
+0d250c75 -- crates/*/src` is empty, so no default and no pinned result can have moved. The registration is `a4b7a526`; the
+tests as registered `696dd71d`; amendments 1 to 4 and their tests are the eight commits after it, each amendment committed
+before its runs. Each registered run was made once. The logs are in `E:/projects/cfd/w49i-work` (`f314-g.log`,
+`f314-f3.log`, `f314-n5.log`, `f314-h6.log`, `f314-sm.log`, `f314-smc.log`, `f314-a1.log`, `f314-a3.log`, `f314-a4.log`,
+`f314-MU1.log`, `f314-MU2.log`, `f314-final.log`).
+
+### What the diagnosis found, in short
+
+1. **T1c (1.618 against 1.7)** is the truncation of the linear donor interpolation at one component fringe cell. At the
+   cell of the largest error the truncation of the exact field explains `1.05`, `0.84` and `0.81` of the error at levels 1,
+   2 and 3. The interpolation itself is of second order (1.995 and 1.986 as a supremum over 200 poses); the pointwise
+   maximum at one pose is a sample of it whose two-level order ranges from 1.49 to 2.24 over the poses. With a third level
+   the same measure gives 1.773 (levels 2 to 3); the root mean square gives 1.988 and 1.955 and the window maximum 1.950
+   and 1.827.
+2. **T1 (0.747) and T2 at level 2 (3.31)** are a first-order time error of `5.99e-4` at `dt = 0.0025` (level 2), as ADR
+   0219 amendment 2 said, but its source is not the one named there. It belongs to the moving-mesh step of the library and
+   not to the overset coupling: a single moving mesh without any donor shows 0.83 of it with the same dependence on the
+   speed (2.26 against 2.29). 85 percent of it is the lagged convecting flux of the single outer iteration (three outer
+   iterations leave 0.153 of it); the rest behaves like the backward Euler truncation along the cell paths.
+3. **New, not removed:** the largest error of the calculated cells loses order between levels 2 and 3 (F3: 1.580 against
+   1.7). With the component at rest and the phase of the fringe locked between the levels, the calculated component cells
+   carry a first-order term, root mean square `5.4e-5 (h/H)^2 + 1.0e-4 (h/H)`. It is not a time error (the half step
+   changes it by 0.9 percent) and it is not confined to the cells next to the fringe (the interior has the same order,
+   1.165). Its source is open.
+
+### Hypotheses
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| H1 fringe truncation is the T1c error | fringe cell and `s_I >= 0.5` at levels 1 and 2 | component fringe cell at every level; `s_I` `1.046`, `0.838` (level 3: `0.805`); there `abs(I)` `1.147e-3`, `2.944e-4`, `1.394e-4` and `abs(D)` `2.14e-4`, `5.7e-5`, `4.0e-5` | **confirmed** |
+| H2 one pose cannot resolve 1.7 from 2 | at least 10 percent of 200 poses below 1.7 and median at least 1.8 (ruled out: under 2 percent) | 13 of 200 (6.5 percent) below 1.7; smallest 1.493, median 1.920, largest 2.241; end pose 1.918 | neither (between the two thresholds) |
+| H3 donor search or weights lose the order | G1 and G2 met | met | **ruled out** |
+| H4 fringe layer or operators next to it | F3 missed and the cell adjacent at levels 2 and 3 (ruled out: F3 met) | F3 missed at levels 2 to 3; the cell is not adjacent | neither |
+| H5 the offset `delta` | `b_L <= 0.25 e_L` and F3 met | `b_L / e_L` `0.085`, `0.062`, `0.021`; F3 missed | open by the rule (the bound itself is small) |
+| H6 backward Euler along the paths, not a donor lag | F5, F6, component cell, `abs(rho / rho_BE - 1) <= 0.25` | F5 `3.061`, F6 `0.027`, component calculated cell; `rho = 2.292`, `rho_BE = 4.783` (root mean square `3.700`) | **ruled out** as worded (amendment 1) |
+| H6a the time error belongs to the moving-mesh step of the library | SMc `max abs(d_200)` within a factor 2 of `4.49e-4` and `rho_SM` within 25 percent of 2.292 | `3.726e-4` (0.829 of it); `rho_SM = 2.258` | **confirmed** |
+| H6b its linear part is the lagged convecting flux | `q <= 0.7` and `rho` nearer to 3.70 than to 2 | `q = 0.153`; `rho = 3.877` with three outer iterations | **confirmed** |
+| H7 norm or reference of the check | F2 and F4 met while T1c is missed at the same runs | F2 and F4 met (both pairs); T1c measure 1.618 | **confirmed**: the pointwise maximum at one pose is the weak part |
+| H8a static coupling loses order (F3 miss) | at rest, calculated maximum, levels 2 to 3 `< 1.7` | `1.336` | **confirmed** |
+| H8b moving: spatial and time part each of second order | each `>= 1.7`, levels 2 to 3 | `1.834`, `2.038` | **confirmed** |
+| H8c unlucky end time | window maximum over the calculated cells `>= 1.7` | `1.478` | **ruled out** |
+| H9 the loss at rest is the phase of the fringe | RL: calculated maximum and component root mean square `>= 1.7` | `1.730`; `1.166` | neither |
+| H10 the first-order term is a time error | RL level 3, half step: at most 0.7 (ruled out: at least 0.9) | `1.0085` | **ruled out** |
+| H11 the first-order term sits next to the fringe | rings from 4 on `>= 1.7` (ruled out: `< 1.5`) | `1.165` (rings 1 and 2: `1.289`) | **ruled out** |
+
+Numbers for T1 and T2 at level 2 (H6a): time error at `dt = 0.0025` on level 2 `(4/3) max abs(d_200) = 5.99e-4`, largest
+in a component calculated cell at `(1.09, 1.40)`; by class `max abs(d_200)` is `4.49e-4` (CC), `3.76e-4` (BF), `3.37e-4`
+(BC), `1.42e-4` (CF). The error of TG_2 is `6.43e-4` with 200 steps, `3.83e-4` with 400 and `3.51e-4` with 800, against
+`2 e(TGB_2) = 3.88e-4`: T2 at level 2 holds from about `dt = 0.00125` down. T1 needs `e(TG_2) <= 3.32e-4`, below the
+`3.51e-4` that is left without any time error, so T1 needs both causes removed.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| G1 stencils, levels 1, 2, 4, 200 poses | five cells; donor contains the centre; weights in `[-0.05, 1 + 1e-12]` | all five cells; all contained; weights in `[-0.0357, 0.99998]` | met |
+| G2 order of `I_sup` | `>= 1.8` each | `1.995` (levels 1 to 2), `1.986` (2 to 4); `I_sup` `1.826e-3`, `4.579e-4`, `1.156e-4` | met |
+| G3 (negative control) donor cell only | `<= 1.3` each | `0.991`, `0.998` | held |
+| F1 fringe identity, levels 1, 2, 3 | `<= 1e-12` | `0` (exact) | met |
+| F2 root mean square, levels 1 to 2, 2 to 3 | `>= 1.7` | `1.988`, `1.955` (`5.534e-4`, `1.395e-4`, `6.316e-5`) | met |
+| F3 calculated maximum, levels 1 to 2 | `>= 1.7` | `2.059` (`8.734e-4`, `2.096e-4`) | met |
+| F3 calculated maximum, levels 2 to 3 | `>= 1.7` | `1.580` (`2.096e-4`, `1.104e-4`) | **missed** (known-miss test) |
+| F4 window maximum, levels 1 to 2, 2 to 3 | `>= 1.7` | `1.950`, `1.827` (`1.445e-3`, `3.739e-4`, `1.783e-4`) | met |
+| F5 `R` | `[2.5, 3.5]` | `3.061` | met |
+| F6 (control) at rest over moving | `<= 0.2` | `0.027` (`1.23e-5` against `4.49e-4`) | held |
+| N5 (negative control) root mean square | `<= 1.3` | `1.463` | **did not hold** (known-miss test; below the 1.7 of F2) |
+| N5 calculated maximum, window maximum | `<= 1.3` each | `-0.137`, `0.962` | held |
+| F7 SM continuity (exact boundary velocity) | `<= 1e-9` | `3.07e-5` | **missed**: defective set-up (amendment 2, known-miss test) |
+| F7c SMc continuity | `<= 1e-9` | `1.1e-13` | met |
+| F8, F8c largest error of SM, SMc | `<= 1e-3` | `6.409e-4`, `6.409e-4` | met |
+| F9c (set-up) correction of SMc | `<= 1e-5` | `1.9e-7` | held |
+| T1, T2 at level 2, T1c of ADR 0219 | `>= 1.7`, `<= 2`, `>= 1.7` | not changed: `0.747`, `3.31`, `1.618` (the runs of this file reproduce `1.0785e-3`, `6.4257e-4`, `3.5142e-4` to every printed digit) | missed, as recorded |
+
+Printed, no limit. Levels 1, 2, 3 moving, `dt` proportional to `h^2`: largest error `1.0785e-3`, `3.514e-4`, `1.712e-4`
+(the T1c measure: 1.618, 1.773), always in a component fringe cell. Largest and root-mean-square error by class:
+
+| Level | CF | CC | BF | BC |
+| --- | --- | --- | --- | --- |
+| 1 | `1.079e-3` / `5.68e-4` | `8.73e-4` / `4.83e-4` | `8.94e-4` / `6.11e-4` | `7.68e-4` / `5.60e-4` |
+| 2 | `3.51e-4` / `1.45e-4` | `2.10e-4` / `1.22e-4` | `2.27e-4` / `1.53e-4` | `2.05e-4` / `1.42e-4` |
+| 3 | `1.71e-4` / `6.67e-5` | `1.10e-4` / `5.88e-5` | `1.22e-4` / `7.13e-5` | `1.00e-4` / `6.37e-5` |
+
+Component fringe: `max abs(I)` `1.340e-3`, `3.545e-4`, `1.544e-4` (orders 1.918, 2.049); `max abs(D)` `5.57e-4`,
+`1.54e-4`, `7.21e-5` (1.855, 1.872). `max abs(delta)` `2.87e-3`, `1.38e-3`, `3.37e-4`. Moving, spatial part of the
+calculated maximum (extrapolated to `dt = 0`) `7.70e-4`, `1.949e-4`, `9.27e-5`, in a background cell away from the
+component; time part `6.07e-4`, `1.468e-4`, `6.42e-5`, in a component calculated cell. At rest (registered pose, `200 L`
+steps): largest error `1.496e-3`, `3.513e-4`, `2.104e-4` (2.091, 1.264); calculated maximum `9.27e-4`, `2.504e-4`,
+`1.457e-4`; root mean square of the calculated component cells `3.22e-4`, `9.37e-5`, `6.93e-5`. RL: largest error
+`9.25e-4`, `2.532e-4`, `1.226e-4` (1.870, 1.788); calculated maximum `8.76e-4`, `2.346e-4`, `1.163e-4` (1.901, 1.730);
+root mean square `5.25e-4`, `1.340e-4`, `6.20e-5` (1.971, 1.898); calculated component cells `1.549e-4`, `6.39e-5`,
+`3.98e-5` (1.277, 1.166), by ring nearly flat (level 3: `3.64e-5` in ring 1, `3.55e-5` in ring 6, `4.08e-5` from ring 4
+on). Kinematic: the largest second difference along the component cell paths `1.707` (full speed), `0.357` (half), `0.031`
+(at rest). Run times: kinematic 10 s; levels 1, 2, 3 2.5 s, 56 s, 459 s; the time-error test 263 s; SMc 45 s; the test of
+amendment 1 780 s; RL 147 s; amendment 4 607 s (the machine was shared with three other builds).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `c356bba2` (`E:/projects/cfd/w49i-work/f314-mut`, own target directory) by
+`f314-mut-mutate.py` (an exact replacement that must occur once), the named test run once, the file restored and compared
+byte for byte (equal in both). The test file gained the tests of amendments 3 and 4 after that copy; the two tests used
+and the library are the same in the final tree.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 inverse-distance weights | G2 | failed: orders `0.995` and `0.998` |
+| MU2 fringe velocities not set after the corrector | F1 | failed: identity `5.88e-3`, `2.99e-3` (and F2 `0.547`, F3 `0.642`, F4 `1.299`) |
+
+`scripts/limit_audit.py`: one hit in the new file, class (iii), `n5_root_mean_square_control_known_miss`: it asserts its
+`<=` through `Checks::at_most`, which the scanner does not see; a false positive. The tests `a1_...`, `a3_...` and `a4_...`
+print the numbers of H8 to H11 and assert nothing about them (their hypotheses are decided here); this is by design and
+they are ignored.
+
+### Deviations and disclosures
+
+- Before each run the tests were compiled without running, laid out by rustfmt and linted. Nothing was run before the
+  registration.
+- N5 (root mean square) and H6 were predicted wrongly by me; both are reported as they fell.
+- SM was a defective set-up as registered (F7); the numbers it printed were not used, and SMc repeated them to four
+  digits.
+- H6a compares a single mesh with exact boundary data to the component of an overset run, which is tied to the
+  background instead; the sizes agree to 17 percent and the dependence on the speed to 1.5 percent.
+- Deterministic runs were repeated where two tests share them (levels 1 and 2 with 200 and 800 steps, RL); every repeat
+  printed the same digits.
+
+### Not run
+
+- The existing F-134 tests and the rest of `rcfd-fv`: the library is unchanged; the lead runs the gate. The whole test
+  file `overset_f314.rs` without the ignored tests ran once on the final tree: 4 passed, 8 ignored, 99 s.
+- No flow level above 3, no cylinder case (TR), no run with a corrective: none is registered.
+- A higher-order donor interpolation, outer iterations on the overset path and a second-order time scheme were not built
+  (see the questions).
+
+### After the tests
+
+`cargo fmt --check` clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean (the only crate touched, tests
+only).
+
+### Decision by the registered rule
+
+**Partial.** Branch (a) does not apply (T1, T2 at level 2 and T1c are unchanged). Under branch (b) each of the three
+misses has a confirmed cause with a number (T1c: H1; T1 and T2 at level 2: H6a with H6b, under reading 3), the mutations
+failed their checks and G3 held; but F3 at levels 2 to 3 is missed, the root-mean-square part of N5 did not hold at its
+limit, and H9 is undecided. So the rule gives partial, not done. Said plainly: the three recorded misses are explained
+and none of them is removed, no library code was changed, and the diagnosis found a first-order term of the calculated
+component cells whose source is not known.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Does naming a cause that is not the donor interpolation meet the acceptance (reading 3)?** For T1 and T2 at
+  level 2 the cause is the lagged convecting flux of the moving-mesh PISO step. Options: (a) yes, the acceptance asks
+  for the cause with a number; (b) no, those two stay open under F-314. Recommendation (a), taken on the maintainer's
+  standing instruction of 2026-11-11 (take the recommendation); not a decision the maintainer made in person.
+- **Q2. The status of F-314.** Options: (a) partial, as the rule gives, with the follow-ups below; (b) done, on the
+  second branch of the acceptance alone (the three causes are named), the new findings moving to follow-up items.
+  Recommendation (a): the rule was registered before the runs. Taken on the standing instruction; (b) is the
+  maintainer's to choose.
+- **Q3. The first-order term of the calculated component cells.** Options: (a) a follow-up item that finds its source
+  (candidates not yet tested: the pressure and `HbyA` coupling of two grids of different cell size at the fringe, the
+  start from interpolated fields, the closed-domain offset); (b) leave it recorded: it is below the background error up
+  to level 3 and would pass it near level 6. Recommendation (a).
+- **Q4. The time error of the moving cells.** Options: (a) a follow-up item that allows outer iterations on the overset
+  path (refused today, ADR 0219 S2), opt-in, and reruns T1 and T2 at level 2 with them; (b) a flux predictor for the
+  convecting flux on a moving mesh, opt-in, in the library step; (c) nothing: use a smaller step. Recommendation (a): the
+  library step already has the outer loop and SMc measured its effect (0.153). This would not change a default.
+- **Q5. A donor interpolation of higher order (ADR 0219 Q5 option (c)).** It would remove the fringe truncation that
+  sets the pointwise maximum (H1). Options: (a) a follow-up item, opt-in; (b) not now: the root mean square and the
+  window maximum already converge at 1.83 to 1.99. Recommendation (b) until Q3 is answered, because the first-order term
+  would then set the order anyway.
+- **Q6. The order check of the overset coupling.** Options: (a) take F2 (root mean square, three levels) and F4 (window
+  maximum) of this ADR as the gate-run order checks and keep T1, T2 at level 2, T1c and F3 as known misses; (b) keep only
+  the F-134 checks. Recommendation (a); the gate-run test of this file already asserts F1 to F4 at levels 1 to 2.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited on this branch.
+
+**F-314**, proposed status: `partial`. Proposed note:
+
+> From ADR 0219 question 4 (Q5 in that ADR's numbering), recommendation taken; the known-miss tests stay as recorded. ADR 0232 (registration of F-314, 2026-11-12, branch f314-overset-order): PARTIAL, a diagnosis, tests only, no library change. Named with numbers: T1c (1.618) is the truncation of the linear donor interpolation at one component fringe cell (it explains 1.05, 0.84 and 0.81 of the largest error at levels 1, 2, 3); the interpolation is of second order (1.995, 1.986 over 200 poses) and the pointwise maximum at one pose samples it with two-level orders from 1.49 to 2.24; on three levels the root mean square converges at 1.988 and 1.955 and the window maximum at 1.950 and 1.827. T1 (0.747) and T2 at level 2 (3.31) are a first-order time error of 5.99e-4 at dt 0.0025 that belongs to the moving-mesh PISO step of the library, not to the overset coupling: a single moving mesh without donors shows 0.83 of it, and three outer iterations leave 0.153 of it (the lagged convecting flux). Missed in the diagnosis: the largest error of the calculated cells converges at 1.580 between levels 2 and 3 (limit 1.7); with the component at rest and the fringe phase locked the calculated component cells carry a first-order term, root mean square 5.4e-5 (h/H)^2 + 1.0e-4 (h/H), that is neither a time error nor confined to the cells next to the fringe; its source is open. One negative control (root mean square with the donor cell only, 1.463 against 1.3) did not hold at its limit. None of the three recorded misses is removed.
+
+**F-134**, status unchanged (`partial`). In its note, replace the sentence that starts "Known misses:" by:
+
+> Known misses, diagnosed by ADR 0232 (F-314): the Taylor-Green observed order, 0.75 as registered and the fine-level ratio 3.31 (limit 2): a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux; 5.99e-4 at the registered step on level 2), not of the overset coupling; and 1.62 with dt proportional to h^2 (limit 1.7): the truncation of the linear donor interpolation at one component fringe cell, a second-order error sampled at one pose (the root mean square converges at 1.99 and 1.96 on three levels). Found there and open: a first-order term of the calculated component cells with the coefficient 1.0e-4.
+
+Proposed follow-up items (numbers are the lead's):
+
+- **Overset: the first-order error term of the calculated component cells.** Depends on F-314. Acceptance: "Set-up RL of ADR 0232 (component at rest, fringe phase locked) on levels 1 to 4: the root mean square of the error of the calculated component cells converges at order 1.7 or more between successive levels, or the ADR names the source of the first-order term (coefficient 1.0e-4) with a number."
+- **Overset: outer iterations on the overset path.** Depends on F-134. Acceptance: "OversetSolver accepts n_outer above 1 as an opt-in (defaults bit-identical, Q0 of ADR 0219 still bit for bit); with three outer iterations the time error of TG_2 at dt 0.0025 (max abs(d_200) of ADR 0232, 4.49e-4) falls below 1.2e-4 and T2 at level 2 of ADR 0219 holds at the registered step, or the ADR names why not with a number."
+- **Overset: donor interpolation of higher order (optional, after the first item).** Depends on F-134. Acceptance: "An opt-in donor interpolation that reproduces quadratic fields; with it the largest error over the calculated and fringe cells of TG_L converges at order 1.7 or more on levels 1 to 3 with dt proportional to h^2, the uniform-flow check U1 of ADR 0219 holds, and the default stencils and results are bit-identical."
