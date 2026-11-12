@@ -7,7 +7,7 @@
 //! SSP-RK schemes; Darwish and Moukalled, Int. J. Heat Mass Transfer 46 (2003) 599-611 for
 //! the unstructured TVD reconstruction.
 
-use crate::compressible_bc::{self, TotalInlet};
+use crate::compressible_bc::{self, MsdWall, TotalInlet};
 use crate::convection::TvdLimiter;
 use crate::geometry::FvGeometry;
 pub use crate::riemann::{to_prim, Cons, Gas, Prim, RiemannSolver};
@@ -115,6 +115,19 @@ pub struct CompressibleSolver {
     sponge: Option<Sponge>,
     /// The memory `Q` of the matched sponge form, one value per cell while a sponge is set.
     sponge_q: Vec<f64>,
+    /// The opt-in mass-spring-damper walls and their state (F-332, ADR 0243); `None` by default.
+    msd: Option<MsdState>,
+}
+
+/// The mass-spring-damper walls of a solver (F-332, ADR 0243 D1, D2).
+#[derive(Debug, Clone)]
+struct MsdState {
+    /// The wall of every mesh patch, if it has one.
+    walls: Vec<Option<MsdWall>>,
+    /// Displacement of the wall along the outward normal, per boundary face (index `face - n_internal`).
+    xi: Vec<f64>,
+    /// Velocity of the wall, per boundary face; not used by a wall without mass.
+    v: Vec<f64>,
 }
 
 impl CompressibleSolver {
@@ -153,6 +166,7 @@ impl CompressibleSolver {
             ale_speeds: None,
             sponge: None,
             sponge_q: Vec::new(),
+            msd: None,
         })
     }
 
@@ -184,6 +198,12 @@ impl CompressibleSolver {
     /// is set, [`Self::step_ale`] and [`Self::replace_mesh`] return an error, and [`Self::max_dt`] does not know the
     /// sponge: `rate dt` must stay well below 2.5.
     pub fn set_sponge(&mut self, sponge: Option<Sponge>) -> Result<()> {
+        if sponge.is_some() && self.msd.is_some() {
+            return Err(Error::Numerical(
+                "set_sponge: a sponge together with a mass-spring-damper wall is not built (ADR 0243 D6); clear the wall first"
+                    .into(),
+            ));
+        }
         if let Some(s) = &sponge {
             s.validate(self.u.len())?;
         }
@@ -218,13 +238,186 @@ impl CompressibleSolver {
         &self.sponge_q
     }
 
+    /// Index of the patch `patch`.
+    fn patch_index(&self, patch: &str) -> Result<usize> {
+        self.geom
+            .mesh
+            .patches()
+            .iter()
+            .position(|p| p.name == patch)
+            .ok_or_else(|| Error::PathNotFound(format!("patch {patch}")))
+    }
+
+    /// Set or clear the mass-spring-damper wall of a patch (F-332, ADR 0243; [`MsdWall`]). While a wall is set it
+    /// replaces the patch's [`CompBc`]; its state (displacement and velocity per face) starts at zero and is advanced with
+    /// the Runge-Kutta stages of [`Self::step`]. Without any wall [`Self::step`] and [`Self::max_dt`] are unchanged. With
+    /// a wall, [`Self::max_dt`] is also limited by [`Self::msd_dt_limit`], [`Self::step`] refuses a larger step, and
+    /// [`Self::step_ale`], [`Self::replace_mesh`] and [`Self::set_sponge`] return an error. An error for an unknown patch,
+    /// an invalid wall ([`MsdWall::validate`]) or while a sponge is set.
+    pub fn set_msd_wall(&mut self, patch: &str, wall: Option<MsdWall>) -> Result<()> {
+        let i = self.patch_index(patch)?;
+        if let Some(w) = &wall {
+            w.validate().map_err(|e| match e {
+                Error::InvalidValue { reason, .. } => Error::InvalidValue {
+                    path: format!("patch {patch}"),
+                    reason,
+                },
+                other => other,
+            })?;
+            if self.sponge.is_some() {
+                return Err(Error::Numerical(
+                    "set_msd_wall: a mass-spring-damper wall together with a sponge is not built (ADR 0243 D6); clear the sponge first"
+                        .into(),
+                ));
+            }
+        }
+        if wall.is_none() && self.msd.is_none() {
+            return Ok(());
+        }
+        let mesh = &self.geom.mesh;
+        let (n_patches, n_bnd, n_int) = (
+            mesh.patches().len(),
+            mesh.n_faces() - self.geom.n_internal,
+            self.geom.n_internal,
+        );
+        let faces = mesh.patches()[i].faces();
+        let st = self.msd.get_or_insert_with(|| MsdState {
+            walls: vec![None; n_patches],
+            xi: vec![0.0; n_bnd],
+            v: vec![0.0; n_bnd],
+        });
+        st.walls[i] = wall;
+        for f in faces {
+            st.xi[f - n_int] = 0.0;
+            st.v[f - n_int] = 0.0;
+        }
+        if st.walls.iter().all(|w| w.is_none()) {
+            self.msd = None;
+        }
+        Ok(())
+    }
+
+    /// The mass-spring-damper wall of a patch, if it has one.
+    pub fn msd_wall(&self, patch: &str) -> Option<MsdWall> {
+        let i = self.patch_index(patch).ok()?;
+        self.msd.as_ref().and_then(|st| st.walls[i])
+    }
+
+    /// The state `[xi, v]` (displacement along the outward normal, velocity) of the wall of a patch, one pair per face
+    /// in the order of the patch's faces; an error when the patch has no wall. A wall without mass does not use `v`.
+    pub fn msd_wall_state(&self, patch: &str) -> Result<Vec<[f64; 2]>> {
+        let i = self.patch_index(patch)?;
+        match &self.msd {
+            Some(st) if st.walls[i].is_some() => Ok(self.geom.mesh.patches()[i]
+                .faces()
+                .map(|f| [st.xi[f - self.geom.n_internal], st.v[f - self.geom.n_internal]])
+                .collect()),
+            _ => Err(Error::InvalidValue {
+                path: format!("patch {patch}"),
+                reason: "the patch has no mass-spring-damper wall".into(),
+            }),
+        }
+    }
+
+    /// Set the state `[xi, v]` of the wall of a patch (a restart, or a wall released from a displacement): one finite
+    /// pair per face of the patch; an error when the patch has no wall.
+    pub fn set_msd_wall_state(&mut self, patch: &str, state: &[[f64; 2]]) -> Result<()> {
+        let i = self.patch_index(patch)?;
+        let faces = self.geom.mesh.patches()[i].faces();
+        let n_int = self.geom.n_internal;
+        match &mut self.msd {
+            Some(st)
+                if st.walls[i].is_some()
+                    && state.len() == faces.len()
+                    && state.iter().all(|q| q[0].is_finite() && q[1].is_finite()) =>
+            {
+                for (f, q) in faces.zip(state) {
+                    st.xi[f - n_int] = q[0];
+                    st.v[f - n_int] = q[1];
+                }
+                Ok(())
+            }
+            _ => Err(Error::InvalidValue {
+                path: format!("patch {patch}"),
+                reason: "the wall state needs a mass-spring-damper wall on the patch and one finite pair per face"
+                    .into(),
+            }),
+        }
+    }
+
+    /// The largest step for which the explicit integration of every mass-spring-damper wall is stable
+    /// ([`MsdWall::dt_limit`] with `rho a` of the cell at each wall face, ADR 0243 DR5); infinite without a wall.
+    pub fn msd_dt_limit(&self) -> f64 {
+        let Some(st) = &self.msd else {
+            return f64::INFINITY;
+        };
+        let mesh = &self.geom.mesh;
+        let own = mesh.owner();
+        let mut lim = f64::INFINITY;
+        for (pi, patch) in mesh.patches().iter().enumerate() {
+            let Some(wall) = &st.walls[pi] else { continue };
+            for f in patch.faces() {
+                if self.geom.empty[f] {
+                    continue;
+                }
+                let q = to_prim(self.gas, &self.u[own[f]]);
+                lim = lim.min(wall.dt_limit(q.rho * q.sound_speed(self.gas)));
+            }
+        }
+        lim
+    }
+
+    /// The face states of the mass-spring-damper walls for the state `u` and the wall state `(xi, v)`, per boundary face
+    /// (`None` on a face without a wall), and the rates of `xi` and `v` (ADR 0243 DR2, DR3).
+    #[allow(clippy::type_complexity)]
+    fn msd_faces(&self, u: &[Cons], xi: &[f64], v: &[f64]) -> Result<(Vec<Option<Prim>>, Vec<f64>, Vec<f64>)> {
+        let mesh = &self.geom.mesh;
+        let n_int = self.geom.n_internal;
+        let n_bnd = mesh.n_faces() - n_int;
+        let mut faces = vec![None; n_bnd];
+        let (mut xd, mut vd) = (vec![0.0; n_bnd], vec![0.0; n_bnd]);
+        let Some(st) = &self.msd else {
+            return Ok((faces, xd, vd));
+        };
+        let own = mesh.owner();
+        let sf = mesh.face_area_vectors();
+        for (pi, patch) in mesh.patches().iter().enumerate() {
+            let Some(wall) = &st.walls[pi] else { continue };
+            for f in patch.faces() {
+                if self.geom.empty[f] {
+                    continue;
+                }
+                let q = to_prim(self.gas, &u[own[f]]);
+                if !(q.rho > 0.0 && q.p > 0.0) {
+                    return Err(Error::Numerical(
+                        "non-positive density or pressure in compressible solver".into(),
+                    ));
+                }
+                let b = f - n_int;
+                let r = wall
+                    .rates(self.gas, &q, vec3::unit(sf[f]), xi[b], v[b])
+                    .ok_or_else(|| {
+                        Error::Numerical(format!(
+                            "mass-spring-damper wall of patch {}: the displacement {} takes the reference pressure to zero or below",
+                            patch.name, xi[b]
+                        ))
+                    })?;
+                faces[b] = Some(r.face);
+                xd[b] = r.xi_dot;
+                vd[b] = r.v_dot;
+            }
+        }
+        Ok((faces, xd, vd))
+    }
+
     /// Primitive state of every cell.
     pub fn primitives(&self) -> Vec<Prim> {
         self.u.iter().map(|c| to_prim(self.gas, c)).collect()
     }
 
     /// Largest stable explicit step for the current state (`cfl` times the
-    /// cell-wise limit `V / (sum_f (|u.n| + a)|S| / 2)`).
+    /// cell-wise limit `V / (sum_f (|u.n| + a)|S| / 2)`); while a mass-spring-damper wall is set, not above
+    /// [`Self::msd_dt_limit`].
     pub fn max_dt(&self) -> f64 {
         let mesh = &self.geom.mesh;
         let (own, nei) = (mesh.owner(), mesh.neighbour());
@@ -244,10 +437,16 @@ impl CompressibleSolver {
             }
         }
         let vol = mesh.cell_volumes();
-        (0..mesh.n_cells())
+        let dt = (0..mesh.n_cells())
             .map(|c| 2.0 * vol[c] / sum[c])
             .fold(f64::INFINITY, f64::min)
-            * self.settings.cfl
+            * self.settings.cfl;
+        // F-332 (ADR 0243 D5): a mass-spring-damper wall limits the step as well
+        if self.msd.is_some() {
+            dt.min(self.msd_dt_limit())
+        } else {
+            dt
+        }
     }
 
     /// Largest stable explicit step on a moving mesh (F-258, ADR 0207 M1): [`Self::max_dt`] with the signal speed of a face
@@ -360,7 +559,12 @@ impl CompressibleSolver {
 
     /// Residual `-(1/V) sum_f F_f S_f` for the state `u`.
     fn residual(&self, u: &[Cons]) -> Result<Vec<Cons>> {
-        let mut res = self.flux_sum(u, None)?;
+        self.residual_walled(u, None)
+    }
+
+    /// [`Self::residual`] with the face states of the mass-spring-damper walls (`None`: no wall).
+    fn residual_walled(&self, u: &[Cons], wall: Option<&[Option<Prim>]>) -> Result<Vec<Cons>> {
+        let mut res = self.flux_sum(u, None, wall)?;
         let vol = self.geom.mesh.cell_volumes();
         for (r, v) in res.iter_mut().zip(vol) {
             for x in r.iter_mut() {
@@ -384,8 +588,9 @@ impl CompressibleSolver {
         lab_flux(self.settings.solver.flux(self.gas, &rel(l), &rel(r), n), v)
     }
 
-    /// Undivided residual `-sum_f F_f |S_f|`; `wn` (per face, ALE only) is the normal mesh speed.
-    fn flux_sum(&self, u: &[Cons], wn: Option<&[f64]>) -> Result<Vec<Cons>> {
+    /// Undivided residual `-sum_f F_f |S_f|`; `wn` (per face, ALE only) is the normal mesh speed; `wall` (per boundary
+    /// face, F-332 only) is the face state of a mass-spring-damper wall, which replaces the patch's condition.
+    fn flux_sum(&self, u: &[Cons], wn: Option<&[f64]>, wall: Option<&[Option<Prim>]>) -> Result<Vec<Cons>> {
         let mesh = &self.geom.mesh;
         let n_cells = mesh.n_cells();
         let (own, nei) = (mesh.owner(), mesh.neighbour());
@@ -436,7 +641,10 @@ impl CompressibleSolver {
             ghost[f - n_int] = g;
             let pr = &prim[own[f]];
             // F-258 (ADR 0207 M3): a characteristic condition on a moving face is evaluated in the frame of the face
-            let fs = if vn != 0.0 {
+            let fs = if let Some(q) = wall.and_then(|w| w[f - n_int]) {
+                // F-332 (ADR 0243 D3): the face of a mass-spring-damper wall
+                Some(q)
+            } else if vn != 0.0 {
                 characteristic_face_state(gas, &self.bcs[pi], pr, n, vn)
             } else {
                 self.face_state(pi, pr, n)
@@ -549,6 +757,12 @@ impl CompressibleSolver {
     /// a moving face is evaluated in the frame of the face ([`characteristic_face_state`], F-258, ADR 0207 M3). The step
     /// keeps its `w_n` for [`Self::mesh_speeds`] and [`Self::max_dt_ale`].
     pub fn step_ale(&mut self, new_geom: FvGeometry, dt: f64) -> Result<()> {
+        if self.msd.is_some() {
+            return Err(Error::Numerical(
+                "step_ale: the mass-spring-damper wall is not built for moving meshes (ADR 0243 D6); clear it first"
+                    .into(),
+            ));
+        }
         if self.sponge.is_some() {
             return Err(Error::Numerical(
                 "step_ale: the sponge layer is not built for moving meshes (ADR 0237 D5); clear it first".into(),
@@ -574,7 +788,7 @@ impl CompressibleSolver {
         // SSP-RK stage (V U)_s = a (V U)^n + b ((V U)_prev + dt R(U_prev)); the same combination applied to dV/dt = dv/dt
         // gives the stage volume V^n + c dv
         let stage = |vu_prev: &[Cons], u_prev: &[Cons], a: f64, b: f64, c: f64| -> Result<(Vec<Cons>, Vec<Cons>)> {
-            let r = self.flux_sum(u_prev, Some(&wn))?;
+            let r = self.flux_sum(u_prev, Some(&wn), None)?;
             let vu: Vec<Cons> = (0..n)
                 .map(|i| std::array::from_fn(|k| a * vu0[i][k] + b * (vu_prev[i][k] + dt * r[i][k])))
                 .collect();
@@ -604,6 +818,12 @@ impl CompressibleSolver {
     /// Replace the mesh (any topology) and the conserved state, e.g. after a layer change (ADR 0090 D3). The mesh speeds of
     /// the last ALE step are dropped ([`Self::mesh_speeds`]).
     pub fn replace_mesh(&mut self, geom: FvGeometry, u: Vec<Cons>) -> Result<()> {
+        if self.msd.is_some() {
+            return Err(Error::Numerical(
+                "replace_mesh: the mass-spring-damper wall holds its state per face of the old mesh (ADR 0243 D6); clear it first"
+                    .into(),
+            ));
+        }
         if self.sponge.is_some() {
             return Err(Error::Numerical(
                 "replace_mesh: the sponge layer holds one rate per cell of the old mesh (ADR 0237 D5); clear it first"
@@ -626,6 +846,9 @@ impl CompressibleSolver {
     pub fn step(&mut self, dt: f64) -> Result<()> {
         if self.sponge.is_some() {
             return self.step_sponged(dt);
+        }
+        if self.msd.is_some() {
+            return self.step_walled(dt);
         }
         let n = self.u.len();
         let axpy = |a: f64, x: &[Cons], b: f64, y: &[Cons], c: f64, r: &[Cons]| -> Vec<Cons> {
@@ -711,6 +934,88 @@ impl CompressibleSolver {
         };
         self.u = u_new;
         self.sponge_q = q_new;
+        self.time += dt;
+        self.steps += 1;
+        Ok(())
+    }
+
+    /// [`Self::step`] with mass-spring-damper walls (F-332, ADR 0243 DR4): the wall faces take the face state of the
+    /// stage's wall state, and the wall state `(xi, v)` is advanced with the same stage weights as the conserved state.
+    /// A step above [`Self::msd_dt_limit`] is refused.
+    fn step_walled(&mut self, dt: f64) -> Result<()> {
+        let Some(st) = self.msd.as_ref() else {
+            return Err(Error::Numerical("step_walled: no wall is set".into()));
+        };
+        let lim = self.msd_dt_limit();
+        if dt > lim * (1.0 + 1e-12) {
+            return Err(Error::Numerical(format!(
+                "step: the step {dt} is above the stability limit {lim} of the mass-spring-damper wall (ADR 0243 D5); use max_dt()"
+            )));
+        }
+        let n = self.u.len();
+        let nb = st.xi.len();
+        let rhs = |u: &[Cons], xi: &[f64], v: &[f64]| -> Result<(Vec<Cons>, Vec<f64>, Vec<f64>)> {
+            let (faces, xd, vd) = self.msd_faces(u, xi, v)?;
+            Ok((self.residual_walled(u, Some(&faces))?, xd, vd))
+        };
+        let axpy = |a: f64, x: &[Cons], b: f64, y: &[Cons], c: f64, r: &[Cons]| -> Vec<Cons> {
+            (0..n)
+                .map(|i| std::array::from_fn(|k| a * x[i][k] + b * y[i][k] + c * r[i][k]))
+                .collect()
+        };
+        let axpy_w = |a: f64, x: &[f64], b: f64, y: &[f64], c: f64, r: &[f64]| -> Vec<f64> {
+            (0..nb).map(|i| a * x[i] + b * y[i] + c * r[i]).collect()
+        };
+        let (u0, x0, v0) = (&self.u, &st.xi, &st.v);
+        let (u_new, x_new, v_new) = match self.settings.rk {
+            RkScheme::Euler => {
+                let (r, xd, vd) = rhs(u0, x0, v0)?;
+                (
+                    axpy(1.0, u0, 0.0, u0, dt, &r),
+                    axpy_w(1.0, x0, 0.0, x0, dt, &xd),
+                    axpy_w(1.0, v0, 0.0, v0, dt, &vd),
+                )
+            }
+            RkScheme::Rk2 => {
+                let (r0, xd0, vd0) = rhs(u0, x0, v0)?;
+                let (u1, x1, v1) = (
+                    axpy(1.0, u0, 0.0, u0, dt, &r0),
+                    axpy_w(1.0, x0, 0.0, x0, dt, &xd0),
+                    axpy_w(1.0, v0, 0.0, v0, dt, &vd0),
+                );
+                let (r1, xd1, vd1) = rhs(&u1, &x1, &v1)?;
+                (
+                    axpy(0.5, u0, 0.5, &u1, 0.5 * dt, &r1),
+                    axpy_w(0.5, x0, 0.5, &x1, 0.5 * dt, &xd1),
+                    axpy_w(0.5, v0, 0.5, &v1, 0.5 * dt, &vd1),
+                )
+            }
+            RkScheme::Rk3 => {
+                let (r0, xd0, vd0) = rhs(u0, x0, v0)?;
+                let (u1, x1, v1) = (
+                    axpy(1.0, u0, 0.0, u0, dt, &r0),
+                    axpy_w(1.0, x0, 0.0, x0, dt, &xd0),
+                    axpy_w(1.0, v0, 0.0, v0, dt, &vd0),
+                );
+                let (r1, xd1, vd1) = rhs(&u1, &x1, &v1)?;
+                let (u2, x2, v2) = (
+                    axpy(0.75, u0, 0.25, &u1, 0.25 * dt, &r1),
+                    axpy_w(0.75, x0, 0.25, &x1, 0.25 * dt, &xd1),
+                    axpy_w(0.75, v0, 0.25, &v1, 0.25 * dt, &vd1),
+                );
+                let (r2, xd2, vd2) = rhs(&u2, &x2, &v2)?;
+                (
+                    axpy(1.0 / 3.0, u0, 2.0 / 3.0, &u2, 2.0 / 3.0 * dt, &r2),
+                    axpy_w(1.0 / 3.0, x0, 2.0 / 3.0, &x2, 2.0 / 3.0 * dt, &xd2),
+                    axpy_w(1.0 / 3.0, v0, 2.0 / 3.0, &v2, 2.0 / 3.0 * dt, &vd2),
+                )
+            }
+        };
+        self.u = u_new;
+        if let Some(st) = self.msd.as_mut() {
+            st.xi = x_new;
+            st.v = v_new;
+        }
         self.time += dt;
         self.steps += 1;
         Ok(())
