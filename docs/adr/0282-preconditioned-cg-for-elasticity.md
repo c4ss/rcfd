@@ -323,6 +323,46 @@ missed (IC 85 iterations, block Jacobi 156, ratio 0.5449 against 0.5) and the ne
    counts (M9 must still fail A3 there, with the ratio moving to about 1).
 
 The decision rule is unchanged: with A3 missed it gives **partial**.
+## Amendment 2 (2026-11-12, written and committed before the corrected run)
+
+**What happened.** The registered heavy run H1 (code e8e8b82a, log `w49i-work/f381-scratch/run-h1.log`, made once, 61 s)
+did not converge with either preconditioner: block Jacobi stopped after 6530 iterations and 3 restarts with a true residual of
+1.42e-3 against the target 1.215e-5 (relative 1.17e-8 against 1e-10), IC(0) after 2540 iterations and 3 restarts at 9.16e-4
+(relative 7.5e-9). Both had converged on their recursive residual each time. H1 is **missed**; the test is kept as the
+ignored record `h1_heavy_cantilever_known_miss` (renamed, body unchanged, the numbers in its ignore text).
+
+**Diagnosis (a defect of D5, not of the set-up).** Arithmetic 7 estimated the floor of the *best attainable* residual, one
+rounding of `x`: `c eps ||A|| ||x|| / ||b|| ~ 1.5e-11`. CG's update `x <- x + alpha p` rounds `x` at every step by `~ eps |x|`,
+and these roundings are not seen by the recursive residual: after k steps the gap between the true and the recursive residual
+is of order `eps ||A|| ||x|| sqrt(k)` to `k` times that (the accumulated rounding of the iterate; Greenbaum's analysis of
+the attainable accuracy of CG, from memory). With `k ~ 5000` this is a factor 70 to 5000 above the one-rounding floor:
+1e-9 to 1e-7, which brackets the measured 1.2e-8 and 7.5e-9. The registered restart (D5) restarts `cg` on the same iterate
+`x`, so each restarted run accumulates the same kind of rounding again and cannot get below that gap.
+
+**Corrected design D5' (registered now).** A restart becomes a step of iterative refinement with CG as the inner solver:
+with `r_j = b - A x_j` (true residual), solve `A delta = r_j` by `cg` from `delta = 0` with the same preconditioner,
+`tol_abs = target`, `tol_rel = 0` and the remaining budget, then `x_{j+1} = x_j + delta` (one element-wise addition). The
+inner iterate has the size of the correction, `||delta|| ~ ||A^{-1} r_j||`, so its per-step roundings are `eps |delta|`, a
+factor `||delta|| / ||x|| ~ 1e-8` smaller, and `x` is rounded once per refinement step: the residual after the step is the
+inner residual (`<= target` on its recursive estimate, true within `eps ||A|| ||delta|| k`, negligible) plus `c eps ||A||
+||x||`, the floor of arithmetic 7, `~ 1.5e-11` relative for the heavy case. The first run is unchanged (`cg` on `x` from 0):
+where no restart was needed (the fast case, all checks of the registered run that did not restart) the results are the same
+bits; the limit of 3 restarts is kept. This is classical iterative refinement (Wilkinson), and the same idea as the group
+update of van der Vorst and Ye's residual replacement (SIAM J. Sci. Comput. 22 (2000) 835, from memory); it is derived here
+from the rounding argument above.
+
+**Corrected test.** `h1b_heavy_cantilever` (`#[ignore]`, heavy, run once): the body of H1 unchanged (same model, both
+preconditioners, tolerance 1e-10, 60 000 iterations), limit relative residual `<= 1e-10` each and `>= 1e5` unknowns.
+Estimate: the floor `~ 1.5e-11` (margin 7); the iteration count rises by the inner solves (an inner reduction of about 1e-3
+costs a few thousand more iterations for block Jacobi), within the cap.
+
+**What else it touches.** In the registered fast run no restart occurred in A1, A2, A3, A4, A6, B1, L5 (the counts printed
+0 restarts), so their numbers stand and the guard of amendment 1 must reproduce them. The record X1 of the slender case had
+one restart for each preconditioner; its run-1 numbers stay recorded as made with D5 and the run with D5' is printed by the
+same test and recorded beside them (X1 has no limit). Mutation M7 (no restart) is now registered against H1b as well
+("must fail H1b, else recorded"); it is run on the heavy test once only if time allows, else recorded as not run.
+
+The decision rule is unchanged: H1b met and A3 missed gives **partial** (A3); H1b missed as well gives partial with both.
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
