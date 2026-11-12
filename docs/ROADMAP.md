@@ -7209,7 +7209,7 @@ fixed by the item's registration ADR before any code.
     (sb_loads) assert the thermal refusal and fail by construction: the lead deletes both blocks (ADR 0281 remaining
     question 1, checked on a scratch copy as X3, X4). On merging, the lead removed the two now-obsolete refusal checks
     (ADR 0275 E3 in sb_static, ADR 0276 X1 in sb_loads), as ADR 0281 recommended.
-- [ ] **F-381** Iterative route for larger models: CG with block Jacobi and incomplete Cholesky on the stiffness matrix
+- [~] **F-381** Iterative route for larger models: CG with block Jacobi and incomplete Cholesky on the stiffness matrix
   - depends on: F-374, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. CG on the stiffness matrix with (a)
     3 x 3 block Jacobi and (b) incomplete Cholesky with zero fill on CSR and a diagonal shift on breakdown, selectable
@@ -7218,12 +7218,24 @@ fixed by the item's registration ADR before any code.
     relative, incomplete Cholesky needs at most half the iterations of block Jacobi, and the iteration count and the
     solution are bit-identical for 1 and 8 threads; a breakdown is reported with the shift used, never as a non-finite
     result. The default solver and its results are unchanged bit for bit.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0282; the registration is written
-    by the implementation agent before any code. ADR 0275 (2026-11-12): solve::StaticSolver (non-exhaustive) has Direct
-    (default) and ConjugateGradient { tolerance, max_iterations } with Jacobi; StaticOptions (non-exhaustive) carries
-    the solver and the assembly thread count. ADR 0277 (2026-11-12): the direct solve left a relative residual of
-    6.7e-11 on a Tet10 cantilever of 10 x 2 x 2 cells (L/h = 10), against 1e-16 to 1e-13 on stockier models; record the
-    residual of the direct and iterative routes against the slenderness.
+  - note: Structural solver, basic tier (plan ADR 0270). ADR 0282, 2026-11-12: rcfd_linalg::precond (appended, no
+    re-export) BlockJacobi (Cholesky of each diagonal block of a given partition) and IncompleteCholesky (L D L^T with
+    zero fill on the lower CSR triangle; on a pivot not above 1e-10 of its diagonal the factorisation restarts with A +
+    alpha diag(A), alpha <- max(2 alpha, 1e-3), which terminates by diagonal dominance; every breakdown recorded with
+    shift, row and pivot; IcOptions, PrecondError). rcfd_fem::solve: StaticSolver::PreconditionedCg { preconditioner:
+    CgPreconditioner::{BlockJacobi, IncompleteCholesky(IcOptions)}, tolerance, max_iterations } on the true relative
+    residual with up to three iterative-refinement steps, node_blocks, solve_static_report with SolveReport (iterations,
+    restarts, shift, breakdowns by node and component), a shifted factor named in SolverStats ("cg-ic0, shift ... after
+    k breakdown(s)"), non-finite iterates refused. Hex8 cantilever 32 x 6 x 6 (4704 unknowns): relative residual 9.6e-11
+    (block Jacobi, 156 iterations) and 9.5e-11 (IC, 85), within 3.3e-13 of the direct solution (limit 1e-7), iterations
+    and solutions bit-identical for 1 and 8 threads; IC needs 0.545 of block Jacobi's iterations against the limit 0.5:
+    missed (0.535 on the heavy case, 0.705 at L/h = 10.7; the low bending modes set the count). Heavy 96 x 18 x 18 (103
+    968 unknowns): 7.6e-11 and 7.2e-11 (limit 1e-10), 477 and 255 iterations (amendment 4; two earlier heavy runs were
+    on a 24 m beam by a test-helper defect). A Kershaw-type matrix breaks down at row 3 with pivot -5 and is factored
+    with shift 0.256 after 9 breakdowns, pivots within 5.9e-17 of the closed form; forced breakdowns on the cantilever
+    are reported with shift 2.048 and solved to 7.9e-11. Default and CG-Jacobi results bit-identical to main, baseline
+    hashes pass; ten mutations caught (M6 after amendment 3). Partial by the registered rule; done is the maintainer's
+    call.
 - [x] **F-382** Eigensolver for K x = lambda M x: dense Jacobi and subspace iteration on the direct factorisation
   - depends on: F-373
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a dense symmetric
@@ -7326,7 +7338,9 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0287; the registration is written
     by the implementation agent before any code. ADR 0278 (2026-11-12): a solid run writes its result with
     rcfd_post::solid_output::write_solid_vtu(path, model, result); a multi-material model is refused by the nodal
-    average (per-set output is an open question of ADR 0278).
+    average (per-set output is an open question of ADR 0278). ADR 0282 (2026-11-12): the static solve's iterative route
+    is StaticSolver::PreconditionedCg with CgPreconditioner::BlockJacobi or
+    CgPreconditioner::IncompleteCholesky(IcOptions::default()); a case-file key for it maps onto these.
 - [ ] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
@@ -8326,7 +8340,11 @@ fixed by the item's registration ADR before any code.
     is at most 1e-14 on every one of them and the strain energy equals half the work of the loads within 1e-12; the cost
     of the refinement step is recorded.
   - note: From ADR 0277 remaining question 1, recommendation taken on the maintainer's standing instruction of
-    2026-11-11 (the Tet10 cantilever of L/h 10 had a direct-solve relative residual of 6.7e-11).
+    2026-11-11 (the Tet10 cantilever of L/h 10 had a direct-solve relative residual of 6.7e-11). ADR 0282 (2026-11-12):
+    on Hex8 cantilevers the direct solve's relative residual sits at the evaluation floor eps |||A| |x||| / ||b||
+    (6.5e-12 against a floor of 1.3e-11 at L/h = 5.3, 7.1e-11 against 1.4e-10 at L/h = 10.7), so iterative refinement
+    cannot lower the computed residual there; a backward-error statistic relative to |||A| |x||| + ||b|| would separate
+    the two.
 - [x] **F-456** monitors.get at 1e5 samples: build only what is asked for
   - depends on: F-447
   - acceptance: `monitors.get {names, since}` applies `names` and `since` before the document is built, with replies
@@ -8369,3 +8387,13 @@ fixed by the item's registration ADR before any code.
     Hex8 and >= 2.7 for Tet10, the energy-norm order >= 0.9 and >= 1.8, both errors fall monotonically; a mutation of
     the Hex8 stiffness rule to one point is caught by these checks.
   - note: From ADR 0279 addendum 1 (2026-11-12), Q2 recommendation.
+- [ ] **F-460** Incomplete Cholesky at half the block-Jacobi iterations on the elastic cantilever: ordering and one level of fill
+  - depends on: F-381
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Beside IC(0) in the natural order,
+    an incomplete Cholesky with one level of fill and IC(0) after a node-wise reverse Cuthill-McKee ordering, both with
+    the shift strategy of ADR 0282, selectable in StaticSolver::PreconditionedCg: on the fast Hex8 cantilever of ADR
+    0282 (32 x 6 x 6, 4704 unknowns) at least one of them reaches the relative residual 1e-10 in at most half the
+    iterations of block Jacobi (156), agrees with the direct solution within 1e-7 and is bit-identical for 1 and 8
+    threads; the iteration counts at L/h = 5.3 and 10.7 and on the 103 968-unknown case are recorded; IC(0) in the
+    natural order and every default are unchanged bit for bit.
+  - note: From ADR 0282 addendum 1 (2026-11-12), Q1 recommendation.
