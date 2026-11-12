@@ -615,6 +615,7 @@ impl Structure for FailSecond {
 }
 
 #[test]
+#[ignore = "record of ADR 0286 amendment 1: the set-up never reaches iteration 2 (the step starts at the fixed point); corrected by f2b"]
 fn f2_failing_solve_in_the_second_iteration() {
     let mut checks = Checks::new();
     let (mut fluid, mut s, map) = setup();
@@ -638,6 +639,37 @@ fn f2_failing_solve_in_the_second_iteration() {
         fluid.bits() == fb && solid_bits(&wrapped.inner) == sb,
         "both states bit-equal to before the step",
     );
+    checks.finish();
+}
+
+/// ADR 0286 amendment 1: as F2, with the mock's F0 doubled before the failing step so that it does not start at its fixed
+/// point and reaches iteration 2.
+#[test]
+fn f2b_failing_solve_in_the_second_iteration_after_a_load_step() {
+    let mut checks = Checks::new();
+    let (mut fluid, mut s, map) = setup();
+    let settings = with_tolerance(CouplingSettings::aitken(0.5));
+    coupled_step(&mut fluid, &mut s, &map, DT, &settings).unwrap();
+    fluid.f0 = 2.0 * F0;
+    let (fb, sb) = (fluid.bits(), solid_bits(&s));
+    let mut wrapped = FailSecond { inner: s, calls: 0 };
+    match coupled_step(&mut fluid, &mut wrapped, &map, DT, &settings) {
+        Err(e) => {
+            println!("  F2b: {e}");
+            checks.holds(
+                "F2b located",
+                e.participant == "solid" && e.iteration == 2 && e.message.contains("cg-jacobi"),
+                "participant solid, iteration 2, the solver's text",
+            );
+        }
+        Ok(_) => checks.holds("F2b located", false, "the step fails"),
+    }
+    checks.holds(
+        "F2b restored",
+        fluid.bits() == fb && solid_bits(&wrapped.inner) == sb,
+        "both states bit-equal to before the step",
+    );
+    checks.holds("F2b reached", wrapped.calls >= 2, "the solid advanced twice in the step");
     checks.finish();
 }
 
