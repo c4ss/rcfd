@@ -13,6 +13,10 @@
 //!            f^{k+1} = f^k + w_k r^k                           (w_k fixed or Aitken's)
 //! ```
 //!
+//! or, opt-in, the least-squares (interface quasi-Newton) update of ADR 0261 (`Relaxation::LeastSquares`): after the
+//! relaxed first update, `f^{k+1} = ft^k + W c` with `c = argmin |V c + r^k|`, `V` and `W` the differences of the residuals
+//! and of the outputs within the step (newest first, nearly dependent columns filtered out, nothing kept across steps).
+//!
 //! `H` takes nodal displacements to the flow's wall points (rows summing to 1: consistent), `B = P H` to the wall faces (`P`
 //! the mean over a face's points), and the forces go back with the transpose `B^T`, so that the work and the resultant are
 //! the same on both meshes. The fixed-point map has the slopes `-lambda_j/2`, `lambda_j` the added-mass to structural-mass
@@ -235,7 +239,7 @@ pub enum AtCap {
 /// Settings of the coupled iteration.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CouplingSettings {
-    /// Relaxation of the nodal force (one factor for all components).
+    /// Relaxation of the nodal force (one factor for all components), or the least-squares update (ADR 0261).
     pub relaxation: Relaxation,
     /// Converged when `|r|/max(|ft|, force_scale) <= tolerance` (Euclidean norms over all nodes and components).
     pub tolerance: f64,
@@ -259,6 +263,15 @@ impl CouplingSettings {
         }
     }
 
+    /// The least-squares update (ADR 0261) with the relaxed first update `initial` and the column filter `1e-2`, tolerance
+    /// `1e-8`, no floor, at most 20 iterations, stop at the cap.
+    pub fn least_squares(initial: f64) -> Self {
+        CouplingSettings {
+            relaxation: Relaxation::LeastSquares { initial, filter: 1e-2 },
+            ..Self::aitken(initial)
+        }
+    }
+
     /// Check the settings; the message names the offending one.
     pub fn validate(&self) -> Result<(), String> {
         let factor = |w: f64, what: &str| {
@@ -275,6 +288,14 @@ impl CouplingSettings {
                 if !(max.is_finite() && max >= initial) {
                     return Err(format!(
                         "the Aitken cap must be finite and at least the initial factor, got {max}"
+                    ));
+                }
+            }
+            Relaxation::LeastSquares { initial, filter } => {
+                factor(initial, "the initial factor of the least-squares update")?;
+                if !(filter.is_finite() && filter > 0.0 && filter < 1.0) {
+                    return Err(format!(
+                        "the column filter of the least-squares update must lie in (0, 1), got {filter}"
                     ));
                 }
             }
@@ -331,8 +352,11 @@ pub struct CoupledStep {
     pub residuals: Vec<f64>,
     /// The norm of the force residual of every iteration [N].
     pub residual_norms: Vec<f64>,
-    /// The relaxation factor applied after every iteration but the last.
+    /// The relaxation factor applied after every iteration but the last (for the least-squares update: `initial` for a
+    /// relaxed update, 1 for a least-squares one).
     pub factors: Vec<f64>,
+    /// The number of difference columns of every update (0 for a relaxed update and for the fixed and Aitken factors).
+    pub columns: Vec<usize>,
     /// Nodal forces held over the step in the last iterate [N].
     pub node_forces: Vec<Vec3>,
     /// Nodal displacements at the end of the step [m].
@@ -353,6 +377,7 @@ impl SliceRelaxer {
         let omega = match relaxation {
             Relaxation::Fixed(w) => w,
             Relaxation::Aitken { initial, .. } => initial,
+            Relaxation::LeastSquares { initial, .. } => initial,
         };
         SliceRelaxer {
             relaxation,
@@ -381,6 +406,108 @@ impl SliceRelaxer {
         }
         self.omega
     }
+}
+
+/// The least-squares update of ADR 0261 within one coupling step: the previous residual and output, and the difference
+/// columns `V` (residuals) and `W` (outputs), newest first.
+#[derive(Default)]
+struct LeastSquaresUpdate {
+    previous: Option<(Vec<f64>, Vec<f64>)>,
+    v: Vec<Vec<f64>>,
+    w: Vec<Vec<f64>>,
+}
+
+impl LeastSquaresUpdate {
+    /// The next input from the input `f`, the output `ft` and the residual `r = ft - f` of the current iteration, and the
+    /// number of columns used (0: the relaxed update `f + initial r`).
+    fn update(&mut self, f: &[f64], ft: &[f64], r: &[f64], initial: f64, filter: f64) -> (Vec<f64>, usize) {
+        let relaxed = || f.iter().zip(r).map(|(a, b)| a + initial * b).collect::<Vec<f64>>();
+        let Some((r_prev, ft_prev)) = self.previous.replace((r.to_vec(), ft.to_vec())) else {
+            return (relaxed(), 0);
+        };
+        self.v.insert(0, r.iter().zip(&r_prev).map(|(a, b)| a - b).collect());
+        self.w.insert(0, ft.iter().zip(&ft_prev).map(|(a, b)| a - b).collect());
+        let (c, kept) = least_squares(&self.v, r, filter);
+        // filtered columns are dropped for the rest of the step
+        let keep = |columns: &mut Vec<Vec<f64>>| {
+            *columns = kept.iter().map(|&j| std::mem::take(&mut columns[j])).collect();
+        };
+        keep(&mut self.v);
+        keep(&mut self.w);
+        if kept.is_empty() || !c.iter().all(|x| x.is_finite()) {
+            return (relaxed(), 0);
+        }
+        let mut next = ft.to_vec();
+        for (cj, wj) in c.iter().zip(&self.w) {
+            for (x, y) in next.iter_mut().zip(wj) {
+                *x += cj * y;
+            }
+        }
+        if !next.iter().all(|x| x.is_finite()) {
+            return (relaxed(), 0);
+        }
+        (next, kept.len())
+    }
+}
+
+/// `x <- (I - 2 h h^T) x` for a unit vector `h`.
+fn reflect(h: &[f64], x: &mut [f64]) {
+    let d = 2.0 * h.iter().zip(x.iter()).map(|(a, b)| a * b).sum::<f64>();
+    for (xi, hi) in x.iter_mut().zip(h) {
+        *xi -= d * hi;
+    }
+}
+
+/// `c = argmin |V c + r|` over the columns of `v` that pass the filter (ADR 0261 D5), by Householder QR with the columns in
+/// the given order: a column is dropped when its part outside the kept columns before it is below `filter` times its norm,
+/// when it is zero or not finite, or when every row is used. Returns the coefficients of the kept columns and their
+/// indices; every pivot is at least `filter` times its column's norm.
+fn least_squares(v: &[Vec<f64>], r: &[f64], filter: f64) -> (Vec<f64>, Vec<usize>) {
+    let m = r.len();
+    let mut reflectors: Vec<(usize, Vec<f64>)> = Vec::new();
+    let mut upper: Vec<Vec<f64>> = Vec::new();
+    let mut kept = Vec::new();
+    for (j, column) in v.iter().enumerate() {
+        let row = reflectors.len();
+        let length = norm(column);
+        if row >= m || !(length.is_finite() && length > 0.0) {
+            continue;
+        }
+        let mut a = column.clone();
+        for (k, h) in &reflectors {
+            reflect(h, &mut a[*k..]);
+        }
+        let s = norm(&a[row..]);
+        if s.is_nan() || s < filter * length {
+            continue;
+        }
+        let alpha = if a[row] >= 0.0 { -s } else { s };
+        let mut h = a[row..].to_vec();
+        h[0] -= alpha;
+        let hn = norm(&h);
+        for x in &mut h {
+            *x /= hn;
+        }
+        a.truncate(row + 1);
+        a[row] = alpha;
+        upper.push(a);
+        reflectors.push((row, h));
+        kept.push(j);
+    }
+    let mut b: Vec<f64> = r.iter().map(|x| -x).collect();
+    for (k, h) in &reflectors {
+        reflect(h, &mut b[*k..]);
+    }
+    let n = kept.len();
+    let mut c = vec![0.0; n];
+    for i in (0..n).rev() {
+        let mut s = b[i];
+        for j in i + 1..n {
+            s -= upper[j][i] * c[j];
+        }
+        c[i] = s / upper[i][i];
+    }
+    (c, kept)
 }
 
 fn norm(v: &[f64]) -> f64 {
@@ -481,12 +608,14 @@ pub fn coupled_step(
             .map_err(|e| fail(&fluid_name, 0, e))?;
         let mut f = map.forces_to_nodes(&start).map_err(|e| fail("coupler", 0, e))?;
         let mut relaxer = SliceRelaxer::new(settings.relaxation);
+        let mut least = LeastSquaresUpdate::default();
         let mut out = CoupledStep {
             iterations: 0,
             converged: false,
             residuals: Vec::new(),
             residual_norms: Vec::new(),
             factors: Vec::new(),
+            columns: Vec::new(),
             node_forces: f.clone(),
             node_displacements: Vec::new(),
             face_forces: Vec::new(),
@@ -528,8 +657,18 @@ pub fn coupled_step(
             if k == settings.max_iterations {
                 break;
             }
+            if let Relaxation::LeastSquares { initial, filter } = settings.relaxation {
+                let (next, columns) = least.update(&flat(&f), &flat(&ft), &r, initial, filter);
+                out.factors.push(if columns == 0 { initial } else { 1.0 });
+                out.columns.push(columns);
+                for (fi, x) in f.iter_mut().zip(next.chunks_exact(3)) {
+                    *fi = [x[0], x[1], x[2]];
+                }
+                continue;
+            }
             let w = relaxer.factor(&r);
             out.factors.push(w);
+            out.columns.push(0);
             for (fi, ri) in f.iter_mut().zip(r.chunks_exact(3)) {
                 *fi = vec3::add(*fi, vec3::scale([ri[0], ri[1], ri[2]], w));
             }

@@ -117,6 +117,11 @@ a constant force, a flow step whose wall velocity is the displacement over the s
 * a fixed factor converges when `w < 2/(1 + ratio/2)` for the largest ratio. `fsi::relaxation_from_added_mass(M, m_a) =
   2M/(2M + m_a)` removes the heaviest mode in one iteration and is a safe start;
 * Aitken's factor started from that value adapts to the other modes.
+* Opt-in, `fsi::Relaxation::LeastSquares { initial, filter }` (`CouplingSettings::least_squares(initial)`) replaces the
+  factor by the least-squares quasi-Newton update of ADR 0261: after a first update relaxed with `initial`, the next force
+  is the flow's force corrected by the combination of the step's earlier output differences whose residual differences
+  best cancel the current residual (a difference column nearly dependent on newer ones, below `filter` of its norm, is
+  dropped; nothing is carried from one step to the next; `fsi::strong_step` refuses it).
 
 Measured on the model problem of ADR 0256 (a sprung wall with six nodes at the end of a channel, mass ratios 4 and 0.5
 for its two lowest modes, tolerance `1e-8`): Aitken 7 to 10 iterations per step (mean 8.8); the fixed factor 1/3 takes 30;
@@ -163,7 +168,7 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
 * The structure in the repository is a mock: lumped nodes on springs, one direction of motion, an explicit integrator.
   No structural solver has been connected.
 * Mapping by given weights only: no geometric search, no radial-basis functions.
-* Fixed and Aitken relaxation only: no quasi-Newton update, no ramping of the load, no extrapolated predictor (the
+* Fixed, Aitken and least-squares updates only (no reuse of earlier steps): no ramping of the load, no extrapolated predictor (the
   predictor is the flow's force at the start of the step).
 * The fluid side is the incompressible PISO/PIMPLE step with implicit Euler on a moving mesh, with its limits
   ([dynamic-mesh.md](dynamic-mesh.md)). Side walls that a transverse flow must not cross need the `Symmetry` velocity
