@@ -148,3 +148,32 @@ impl CsrMatrix {
         CsrMatrix::from_triplets(self.n, t)
     }
 }
+
+/// Reverse Cuthill-McKee by blocks (ADR 0357 D4): [`rcm_order`] of the graph whose vertices are the blocks of consecutive
+/// rows given by `block_ptr` (`0 = p_0 < p_1 < ... = n`, as for `BlockJacobi::new`), two blocks adjacent where a stored
+/// entry couples them; returns the row order, each block's rows consecutive and ascending.
+pub fn block_rcm_order(a: &CsrMatrix, block_ptr: &[usize]) -> Vec<usize> {
+    let nb = block_ptr.len().saturating_sub(1);
+    let mut block_of = vec![0usize; a.n];
+    for (b, w) in block_ptr.windows(2).enumerate() {
+        for r in w[0]..w[1] {
+            block_of[r] = b;
+        }
+    }
+    let (mut lower, mut upper) = (Vec::new(), Vec::new());
+    for r in 0..a.n {
+        for k in a.row_ptr[r]..a.row_ptr[r + 1] {
+            let (b, c) = (block_of[r], block_of[a.col[k]]);
+            if b < c {
+                lower.push(b);
+                upper.push(c);
+            }
+        }
+    }
+    let blocks = rcm_order(nb, &lower, &upper);
+    let mut order = Vec::with_capacity(a.n);
+    for b in blocks {
+        order.extend(block_ptr[b]..block_ptr[b + 1]);
+    }
+    order
+}

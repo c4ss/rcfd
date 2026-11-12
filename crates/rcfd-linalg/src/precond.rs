@@ -684,6 +684,192 @@ impl Preconditioner for IncompleteCholesky {
     }
 }
 
+/// The strictly lower pattern (row pointers, sorted columns) of the incomplete Cholesky factor of `a` with fill up to
+/// `level` (ADR 0357 D1): the stored entries of the lower triangle have level 0; eliminating `k` gives `(i, j)`, `i, j >
+/// k`, the level `lev(i, k) + lev(k, j) + 1`, the minimum over `k` is kept, and positions of level `<= level` are kept
+/// (ILU(p) of Watts 1981, Saad section 10.3.3, on the symmetric pattern). `level = 0` is the stored lower pattern.
+pub fn ic_fill_pattern(a: &CsrMatrix, level: usize) -> (Vec<usize>, Vec<usize>) {
+    let n = a.n;
+    let mut row_ptr = Vec::with_capacity(n + 1);
+    row_ptr.push(0);
+    let mut col = Vec::new();
+    // Per column k: the finished rows j > k with (j, k) in the pattern, ascending j, with their level.
+    let mut below: Vec<Vec<(usize, usize)>> = vec![Vec::new(); n];
+    let mut lev = vec![usize::MAX; n];
+    let mut set = std::collections::BTreeSet::new();
+    for i in 0..n {
+        for p in a.row_ptr[i]..a.row_ptr[i + 1] {
+            let k = a.col[p];
+            if k < i {
+                lev[k] = 0;
+                set.insert(k);
+            }
+        }
+        let mut next = set.first().copied();
+        while let Some(k) = next {
+            let lk = lev[k];
+            for &(j, ljk) in &below[k] {
+                let cand = lk + ljk + 1;
+                if cand <= level {
+                    if lev[j] == usize::MAX {
+                        set.insert(j);
+                    }
+                    lev[j] = lev[j].min(cand);
+                }
+            }
+            next = set.range(k + 1..).next().copied();
+        }
+        for &k in &set {
+            col.push(k);
+            below[k].push((i, lev[k]));
+            lev[k] = usize::MAX;
+        }
+        set.clear();
+        row_ptr.push(col.len());
+    }
+    (row_ptr, col)
+}
+
+impl IncompleteCholesky {
+    /// Incomplete Cholesky with fill up to `level` ([`ic_fill_pattern`]) and the shift strategy of [`IncompleteCholesky::new`]
+    /// (ADR 0357 D2). The refusals are those of `new`; `level = 0` gives the factor of `new` bit for bit.
+    pub fn with_fill(a: &CsrMatrix, level: usize, options: &IcOptions) -> Result<Self, PrecondError> {
+        if a.n != a.ncols {
+            return Err(PrecondError::NotSquare {
+                rows: a.n,
+                cols: a.ncols,
+            });
+        }
+        let n = a.n;
+        let mut diag = vec![0.0; n];
+        for i in 0..n {
+            let mut has_diag = false;
+            for k in a.row_ptr[i]..a.row_ptr[i + 1] {
+                let j = a.col[k];
+                if !a.val[k].is_finite() {
+                    return Err(PrecondError::NonFinite { row: i, col: j });
+                }
+                if j == i {
+                    has_diag = true;
+                    diag[i] = a.val[k];
+                }
+            }
+            if !has_diag {
+                return Err(PrecondError::MissingDiagonal { row: i });
+            }
+            if diag[i] <= 0.0 {
+                return Err(PrecondError::NonPositiveDiagonal { row: i, value: diag[i] });
+            }
+        }
+        let (row_ptr, col) = ic_fill_pattern(a, level);
+        // The stored values at the positions of `a`, zero at the fill positions.
+        let mut low = vec![0.0; col.len()];
+        for i in 0..n {
+            let mut p = row_ptr[i];
+            for k in a.row_ptr[i]..a.row_ptr[i + 1] {
+                let j = a.col[k];
+                if j >= i {
+                    break;
+                }
+                while col[p] < j {
+                    p += 1;
+                }
+                low[p] = a.val[k];
+            }
+        }
+        let mut breakdowns = Vec::new();
+        let mut shift = options.initial_shift;
+        let mut marker = vec![usize::MAX; n];
+        let mut l = vec![0.0; low.len()];
+        let mut d = vec![0.0; n];
+        for attempt in 0..options.max_attempts {
+            match ic_attempt(
+                n,
+                &row_ptr,
+                &col,
+                &low,
+                &diag,
+                shift,
+                options.pivot_tolerance,
+                &mut marker,
+                &mut l,
+                &mut d,
+            ) {
+                Ok(()) => {
+                    return Ok(IncompleteCholesky {
+                        n,
+                        row_ptr,
+                        col,
+                        l,
+                        inv_d: d.iter().map(|v| 1.0 / v).collect(),
+                        d,
+                        shift,
+                        attempts: attempt + 1,
+                        breakdowns,
+                    })
+                }
+                Err((row, pivot)) => {
+                    breakdowns.push(IcBreakdown {
+                        shift,
+                        row,
+                        pivot,
+                        diagonal: (1.0 + shift) * diag[row],
+                    });
+                    if attempt + 1 < options.max_attempts {
+                        shift = (2.0 * shift).max(options.shift_step);
+                    }
+                }
+            }
+        }
+        Err(PrecondError::NoShift {
+            attempts: options.max_attempts,
+            last_shift: shift,
+            breakdowns,
+        })
+    }
+
+    /// Stored entries of the strictly lower factor.
+    pub fn fill_entries(&self) -> usize {
+        self.col.len()
+    }
+}
+
+/// A preconditioner of a symmetrically permuted matrix used for the original one (ADR 0357 D3): with `B = P A P^T`,
+/// `B[i][j] = A[order[i]][order[j]]` (as [`CsrMatrix::permute_symmetric`]) and `inner ~ B`, applies `P^T inner^-1 P`.
+#[derive(Debug, Clone)]
+pub struct Permuted<P> {
+    order: Vec<usize>,
+    inner: P,
+}
+
+impl<P: Preconditioner> Permuted<P> {
+    /// Wrap `inner`, a preconditioner of the matrix permuted by `order`.
+    pub fn new(order: Vec<usize>, inner: P) -> Self {
+        Permuted { order, inner }
+    }
+
+    /// The ordering (`order[i]` is the original row at position `i`).
+    pub fn order(&self) -> &[usize] {
+        &self.order
+    }
+
+    /// The preconditioner of the permuted matrix.
+    pub fn inner(&self) -> &P {
+        &self.inner
+    }
+}
+
+impl<P: Preconditioner> Preconditioner for Permuted<P> {
+    fn apply(&self, r: &[f64], z: &mut [f64]) {
+        let rp: Vec<f64> = self.order.iter().map(|&o| r[o]).collect();
+        let mut zp = vec![0.0; rp.len()];
+        self.inner.apply(&rp, &mut zp);
+        for (i, &o) in self.order.iter().enumerate() {
+            z[o] = zp[i];
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
