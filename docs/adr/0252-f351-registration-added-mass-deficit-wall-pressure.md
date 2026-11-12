@@ -438,3 +438,92 @@ Correction: the search starts from the target `1/(4N)`. No limit, set-up or refe
 ignored records (`..._defective_record`, which pass the old start value) and are replaced by
 `g1c_to_g6c_k1c_k2c_...` and `g2q_g3q_...`, the same checks under the same ids' limits (G1b to G6b, K1b, K2b, G2p, G3p).
 N3b is not run again.
+
+## Amendment 3 (2026-11-12, after the corrected diagnosis, before any library change): the cause, and the corrective design
+
+**The corrected diagnosis, run once** (`--test added_mass_f351 g`, on the commit of amendment 2a; the filter `g` also
+matched `n3b_...` (the letter in "unconverged"), which therefore ran a second time against the statement of amendment 2a,
+with the identical number):
+
+| Check | Limit | Measured, `N = 20`; `40`; `80` | |
+| --- | --- | --- | --- |
+| G1b `r_alg - 0.5` (DPc) | `abs <= 1e-12` | `-1.1e-16`; `-1.1e-16`; `-1.1e-16` | met |
+| G2b `d_ext` (DPc) | within 0.5 percent of `1/(4N)` | `1.2505506e-2` (`+0.044` percent); `6.2528055e-3` (`+0.045`); `3.1264215e-3` (`+0.045`) | met |
+| G3b `d_flow_old` (DPc) | `abs <= 2e-5` | `2.086e-6`; `1.593e-6`; `9.03e-7` | met |
+| K1b `d_tot_old` of `patch_force_moment` (DPc) | within 1 percent of `1/(4N)` | `1.2509688e-2` (`+0.078`); `6.2578233e-3` (`+0.125`); `3.1293414e-3` (`+0.139`) | met |
+| K2b orders at step 12 | `[0.98, 1.02]` | `0.999313`, `0.999802` | met |
+| G5b rebuilt force against `nu = 0` | `<= 1e-12` | `0`; `0`; `0` | met |
+| G6b viscous part (DPc) | `<= 1e-4` | `7.47e-6`; `6.10e-6`; `3.34e-6` | met |
+| G2p, G3p (DP, 20 cells, steps 3 to 12) | within 0.5 percent of `1/80`; `abs <= 1e-4` | `1.2505851e-2` (`+0.047` percent); `7.063e-6` | met |
+| N3b (control) | `abs >= 5e-4` | `9.2211e-4` | held |
+
+**Verdict on the hypotheses.**
+
+- **H1 holds**: the deficit is made by the wall-pressure extrapolation of `patch_force_moment`. Its least-squares
+  gradient in the wall cell is exactly half of the pressure difference quotient of the first two cells (`r_alg = 0.5` to
+  rounding, G1b), because the fit sees the pressure field's stored zero-gradient wall value with the weight of the
+  neighbour; the wall pressure is therefore low by a quarter cell: `d_ext = 1/(4N)` within 0.05 percent on 20, 40 and 80
+  cells, and the force of `patch_force_moment` is low by `1/(4N)` within 0.14 percent, first order in the cell size
+  (orders `0.9993`, `0.9998`).
+- **H2 is ruled out as the cause**: the pressure of the converged flow step is the acceleration times the column of the
+  old mesh within `2.1e-6` (G3b; against a deficit of `1.25e-2`). Two properties of the flow step were found that are not
+  the deficit: its pressure belongs to the old column (first order in `dt`, changing sign with `w a`, amendment 1); and
+  with the registered two correctors the non-iterated step leaves a viscous splitting error (up to `9.2e-4` at the second
+  step on 80 cells, `7.1e-6` on 20 cells past the start).
+- **H3** ruled out (G1b: the factor is `1/2`, not `0`, `2/3` or `4/5`). **H4** ruled out as the cause (G6b: the viscous
+  part is at most `7.5e-6` of the force, 0.06 percent of the deficit). **H5** ruled out (G7).
+
+So the default wall pressure of `patch_force_moment` is **first order in the wall-cell size on a wall whose pressure
+condition during the step (the prescribed gradient) is not the stored condition of the pressure field**: the relative
+error of the force of the piston column is `1/(4N)`, 1.25 percent on 20 cells.
+
+**The corrective design (clause c2), registered before its code.**
+
+*Derivation.* `n` the outward unit normal of the wall face, `d = x_f - x_c` from the centre of the wall cell to the face
+centre. Taylor at the cell centre: `p_f = p_c + grad p . d + O(|d|^2)`. Split `grad p . d = (n . grad p)(d . n) + (the
+tangential part) . d`. On a fixed-flux wall the normal part is known: the step prescribed `n . grad p = g = -n . (u_b,new
+- u_b,old)/dt` (the normal momentum equation at the wall) and its pressure equation used the wall value `p_c + dn g`. The
+tangential part is taken from the cell gradient, `(grad p)_c . d - ((grad p)_c . n)(d . n)`. Hence
+
+    p_f = p_c + (grad p)_c . d + (g - (grad p)_c . n)(d . n).
+
+Where `d` is along `n` this is `p_c + dn g`, the wall value the step's pressure equation itself used. Its error is `p_nn
+dn^2/2` (expand `p` along the normal from the wall: `p_c = p_f - g dn + p_nn dn^2/2`), second order, against `(1 - r) g
+dn` of the default. On a skewed wall cell the tangential part still carries the cell gradient, which the stored wall
+value contaminates through the off-diagonal terms of the fit: a limit, not tested here.
+
+*Library* (`crates/rcfd-fv/src/sixdof.rs`, `crates/rcfd-fv/src/fsi.rs`; no line of `pimple.rs` or `pimple/moving.rs`; nothing
+in `rcfd-api`; no case key; nothing existing calls the new functions):
+
+- `sixdof::patch_force_moment_wall_gradient(geom, u, p, rho, nu, patches, x_ref, wall_dpdn)`: `wall_dpdn` is the vector of
+  `ale::set_follow_conditions` (one entry per boundary face, NaN = none). On the faces with a finite entry the face
+  pressure is the formula above; on the others, and in the viscous part, it is `patch_force_moment`. A vector of another
+  length is an error. The body of `patch_force_moment` moves into a private function that both call; without a vector it
+  carries out the same operations in the same order.
+- `fsi::WallPressure::{Extrapolated, PrescribedGradient}` and `fsi::strong_step_with(flow, body, dt, coupling, strong,
+  wall_pressure, wall_dpdn: &mut Vec<f64>, points)`: `strong_step` with the force evaluation chosen. With
+  `PrescribedGradient` the force after the flow step of an iterate is evaluated with the vector that this flow step was
+  given, and the predictor (the force of the flow at `t_n`) with the vector in `wall_dpdn`, which is the one of the
+  previous step; an empty `wall_dpdn` (the first step) makes the predictor use the default extrapolation, which is the
+  same for a fluid at rest. After a successful step `wall_dpdn` holds the vector of the last iterate (in both modes); a
+  failed step leaves it as it was; a non-empty vector of the wrong length is an error. `strong_step` becomes
+  `strong_step_with(.., Extrapolated, a scratch vector, ..)`: the same operations in the same order.
+
+*Changes to the registered checks that the design forces* (no limit of an acceptance check is changed):
+
+- **N2 cannot be built as registered**: the opt-in entry takes its gradient from its own flow step, not from the caller.
+  It is replaced by **N2b**: the run of A2 through the same entry point with `WallPressure::Extrapolated`: `omega_m/omega
+  - 1 >= 4e-3` (model `5.081e-3`): the check A2 fails without the corrected evaluation. It is the 20-cell run of K4.
+- **MU6's check, W1**: SPm, `mu = 4`, corrected, the first 5 steps: after every step `wall_dpdn` has one entry per boundary
+  face, NaN off the piston, and on the piston faces equals `(w_n - w_{n-1})/dt`, `w_n = (x_n - x_{n-1})/dt` of the body
+  positions (`w_0 = 0`), within `1e-9` relative.
+- **U4** (refusal): `patch_force_moment_wall_gradient` with a vector one entry short is an error; `strong_step_with` with
+  a non-empty vector one entry short is an error and leaves the body state and the flow time unchanged.
+- **B2** as registered (`strong_step` against `strong_step_with(Extrapolated)`, 40 steps, bit-identical).
+
+A1 to A5, K3b, K4, K4c, K5, K5c, N1b, U1 to U3, B1, B3, B4 and MU1 to MU6 stand. The gradient handed to the corrected
+function in N1b and K3b is the vector of the DP step (N1b: with the piston entries set to zero).
+
+*Predictions (mine, before the code):* A1 `2.9749` to `2.9770`; A2 `1.00004`; A4 `0.99996`, `1.00007`; A5 `1.00026`; K3b
+`1e-5` to `2e-5`; K4 `1.005081`, `1.00255`, `1.00129` (80 cells perhaps off by the splitting error); K5 `1.00004`; U1
+`2.00` and `1.00`. The check I trust least is K4 on 80 cells.
