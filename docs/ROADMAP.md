@@ -6449,7 +6449,25 @@ fixed by the item's registration ADR before any code.
     tiling of a cell that it cannot merge further (valid mesh; slabs return to the base), and the fast layer test on an
     8 x 8 base (cell Peclet 10) had no converged solution on its first directional mesh (replaced by a 16 x 16 base).
     Open: a box merge for 3-D coarsening (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups:
-    F-438 (case key), F-439 (three-dimensional box merge).
+    F-438 (case key), F-439 (three-dimensional box merge). PARTIAL (ADR 0267, 2026-11-12):
+    rcfd_mesh::adapt::aniso::AnisoMesh, a second lattice with one refinement level per axis (AxisLeaf, AxisMark; AmrMesh
+    untouched): faces are the intersections of the sides of two leaves, with the corners of all face rectangles in the
+    vertex set, so cells are closed for any tiling by dyadic boxes; optional balance of one level per refined axis
+    across every face (at most 2 faces per side in a slab, 4 in 3-D); the existing Transfer and transfer_field. Random
+    directional marks on a graded 3-D box, a slab and a box refined along two of three axes give valid closed meshes
+    (validate, closure and volume to 1e-13) and linear fields transfer to 4.4e-16; on isotropic marks the mesh, the
+    transfer and the adaptive loop equal AmrMesh's bit for bit. Directional criterion in rcfd_fv::adaptive
+    (axis_variations, directional_axes with theta = 1/2, directional_target_marks, run_adaptive_simple_directional and
+    _target). On the ADR 0247 suction layer the directional run has error 0.00298 with 1547 cells against the isotropic
+    0.01159 with 3841 (limit: at most 1920 cells); held at the isotropic finest size it reaches 0.01158 with 960 cells;
+    with the axis choice inverted 1.18. ADR 0054, 0242 and 0247 tests pass unedited (the heavy ones included); ten
+    mutations each failed their tests. Partial by the rule because two registered supporting checks missed and were
+    corrected under amendments: pair coarsening in 3-D can leave a five-box tiling of a cell that it cannot merge
+    further (valid mesh; slabs return to the base), and the fast layer test on an 8 x 8 base (cell Peclet 10) had no
+    converged solution on its first directional mesh (replaced by a 16 x 16 base). Open: a box merge for 3-D coarsening
+    (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups: F-438 (case key), F-439
+    (three-dimensional box merge). The box merge is delivered by F-439 (ADR 0341, 2026-11-12): repeated all-axes box
+    coarsening returns any state, the five-box tiling included, to the base.
 - [ ] **F-349** Overset: the response to the truncation of the background-fringe interpolation
   - depends on: F-334
   - acceptance: The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a
@@ -7787,15 +7805,26 @@ fixed by the item's registration ADR before any code.
     should be named in the stop reason (ADR 0267 amendment 2). Changes the schema golden. From ADR 0267 R5,
     recommendation taken on the maintainer's standing instruction of 2026-11-11. The agent reports that the keys change
     the schema golden; check the optional-table route of ADR 0257 and 0266 first, else it needs the maintainer.
-- [ ] **F-439** Directional lattice: coarsening in three dimensions by a box merge
+- [x] **F-439** Directional lattice: coarsening in three dimensions by a box merge
   - depends on: F-348
   - acceptance: On a lattice with three refined axes, repeated all-axes coarsening returns every state made by splits
     and merges, including the five-box tiling of ADR 0267 amendment 1, to the base with sum V q conserved; slab results
     and the isotropic AmrMesh paths stay bit for bit.
-  - note: TODO (from ADR 0267 R2 and amendment 1): pair merges along one axis can leave a tiling of a cell with no two
-    buddies; merge all leaves inside a dyadic box when every one is marked. Needed before the adaptive loop can coarsen
-    on the directional lattice (ADR 0267 R4). From ADR 0267 R2, recommendation taken on the maintainer's standing
-    instruction of 2026-11-11.
+  - note: DONE pending acceptance, merged 2026-11-12. DONE (ADR 0341, 2026-11-12):
+    rcfd_mesh::adapt::aniso::AnisoMesh::adapt_with(marks, balance, Coarsening::Box), opt-in: for each cell marked
+    coarsen along axes C, the smallest dyadic ancestor box (levels lowered only along C) that is exactly tiled by leaves
+    of the mesh, each marked along every axis on which it is coarsened, is merged into one leaf with the levels of the
+    box; with balance the merge is accepted only if the new leaf stays within one level of its face neighbours along
+    every refined axis; the transfer is the existing Merged source (volume-weighted mean, so sum V q is conserved and
+    linear fields stay exact). Under all-axes marks the base cell is always an admissible ancestor, so every call merges
+    at least once and repeated all-axes coarsening without balance returns any tiling to the base. The five-box tiling
+    of ADR 0267 amendment 1 goes to one cell in one call; 26 states on two 3-D lattices (G6's 146 cells, the pair-stuck
+    state, 24 random sequences of splits, pair merges and box merges, 6 of them pair-stuck) return to the base in at
+    most 6 calls with sum V q to 1e-13 and linear fields to 1e-12; single-axis marks give the pair merges; consent and
+    balance refuse the registered cases. adapt (Coarsening::Pair) is unchanged: equal to adapt_with(.., Pair) bit for
+    bit, the ADR 0267 tests (G6b in the slab among them, the G6 known miss unchanged) and the AmrMesh tests pass
+    unedited. Six mutations caught. With balance the return to the base is not derived (one recorded run reached it).
+    Follow-up: F-441.
 - [ ] **F-440** Corrected wall-force reports on moving walls in the case tree (opt-in)
   - depends on: F-358
   - acceptance: An opt-in key makes the force, moment and force-coefficient reports of a moving-mesh case take the wall
@@ -7804,3 +7833,10 @@ fixed by the item's registration ADR before any code.
     most 1e-4; without the key every report value is bit-identical; registered before the run.
   - note: From ADR 0269 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     case tree's force reports are low by 1/(2N) on moving walls.
+- [ ] **F-441** Directional lattice: coarsening inside the directional adaptive loop
+  - depends on: F-439
+  - acceptance: On the ADR 0267 suction layer, a directional loop that also box-coarsens cells whose per-axis variation
+    is below a registered fraction of the largest reaches the error E(D) = 0.00298 of ADR 0267's run D with fewer than
+    its 1547 cells and fewer leaves split along x than its 704; runs that do not ask for coarsening are bit for bit
+    unchanged.
+  - note: From ADR 0341, recommendation taken on the maintainer's standing instruction of 2026-11-11.
