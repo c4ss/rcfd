@@ -13,6 +13,11 @@
 //! donor cell and the calculated cells that share a point with it, with the weights of the weighted least-squares
 //! quadratic ([`quadratic_weights`]). A fringe cell whose neighbourhood cannot carry a quadratic keeps the linear stencil
 //! and is listed in [`Connectivity::fallbacks`]. Without the opt-in nothing changes.
+//!
+//! Cells with non-planar faces (F-352, ADR 0253): the plane of M3 for each face leaves slivers between the cells along
+//! their edges. A cell with a face whose points leave the face's plane by more than the locator's tolerance is tested as
+//! the polyhedron of the triangles about its face centres ([`triangulated_margin`]); the cells of a face share those
+//! triangles, so they tile the mesh. A cell whose faces are planar is tested as before, bit for bit.
 
 use crate::mesh::{Mesh, PatchKind};
 use crate::motion::{mat_vec, rotation_matrix, Pose};
@@ -153,6 +158,91 @@ pub fn containment_margin(mesh: &Mesh, c: usize, x: Vec3) -> f64 {
     m
 }
 
+/// The warp of face `f` (ADR 0253): the largest distance of its points from the plane through the face centre normal to
+/// the area vector. Zero for a face without area.
+pub fn face_warp(mesh: &Mesh, f: usize) -> f64 {
+    let s = mesh.face_area_vectors()[f];
+    let a = vec3::norm(s);
+    if a < 1e-300 {
+        return 0.0;
+    }
+    let fc = mesh.face_centres()[f];
+    mesh.face_points(f)
+        .iter()
+        .map(|&q| (vec3::dot(s, vec3::sub(mesh.points()[q], fc)) / a).abs())
+        .fold(0.0, f64::max)
+}
+
+/// Distance of `x` from the segment `(p, q)`; exactly zero when `x` is `p` or `q`.
+fn segment_distance(x: Vec3, p: Vec3, q: Vec3) -> f64 {
+    let e = vec3::sub(q, p);
+    let ee = vec3::dot(e, e);
+    let t = if ee > 0.0 {
+        vec3::dot(vec3::sub(x, p), e) / ee
+    } else {
+        0.0
+    };
+    let nearest = if t <= 0.0 {
+        p
+    } else if t >= 1.0 {
+        q
+    } else {
+        vec3::add(p, vec3::scale(e, t))
+    };
+    vec3::norm(vec3::sub(x, nearest))
+}
+
+/// Distance of `x` from the triangle `(a, b, c)` (ADR 0253 G2): the smallest of the distances from the three edges and,
+/// when the foot of the perpendicular on the plane lies in the triangle, of the distance from the plane.
+fn triangle_distance(x: Vec3, a: Vec3, b: Vec3, c: Vec3) -> f64 {
+    let mut d = segment_distance(x, a, b)
+        .min(segment_distance(x, b, c))
+        .min(segment_distance(x, c, a));
+    let n = vec3::cross(vec3::sub(b, a), vec3::sub(c, a));
+    let nn = vec3::norm(n);
+    if nn > 0.0 {
+        let side = |p: Vec3, q: Vec3| vec3::dot(vec3::cross(vec3::sub(q, p), vec3::sub(x, p)), n);
+        if side(a, b) >= 0.0 && side(b, c) >= 0.0 && side(c, a) >= 0.0 {
+            d = d.min((vec3::dot(vec3::sub(x, a), n) / nn).abs());
+        }
+    }
+    d
+}
+
+/// Signed solid angle of the triangle `(a, b, c)` seen from `x` (ADR 0253 G2), in `(-2 pi, 2 pi]`; zero when `x` is one
+/// of its points.
+fn triangle_solid_angle(x: Vec3, a: Vec3, b: Vec3, c: Vec3) -> f64 {
+    let (a, b, c) = (vec3::sub(a, x), vec3::sub(b, x), vec3::sub(c, x));
+    let (la, lb, lc) = (vec3::norm(a), vec3::norm(b), vec3::norm(c));
+    let num = vec3::dot(a, vec3::cross(b, c));
+    let den = la * lb * lc + vec3::dot(a, b) * lc + vec3::dot(b, c) * la + vec3::dot(c, a) * lb;
+    2.0 * num.atan2(den)
+}
+
+/// Signed distance of `x` from the boundary of the triangulated cell `c` of `mesh`, positive inside (ADR 0253 G1, G2).
+/// The cell is the polyhedron bounded by the triangles `(fc_f, p_i, p_{i+1})` of each of its faces (`fc_f` the face
+/// centre, `p_i` the points of the face); the two cells of a face share those triangles, so the cells of a mesh tile it
+/// whether its faces are planar or not. The distance is the smallest distance from the triangles; `x` is inside when the
+/// solid angles of the triangles sum to more than `2 pi` (the winding number is above one half).
+pub fn triangulated_margin(mesh: &Mesh, c: usize, x: Vec3) -> f64 {
+    let (own, fc, pts) = (mesh.owner(), mesh.face_centres(), mesh.points());
+    let (mut d, mut omega) = (f64::INFINITY, 0.0);
+    for &f in mesh.cell_faces(c) {
+        let ids = mesh.face_points(f);
+        let sign = if own[f] == c { 1.0 } else { -1.0 };
+        for i in 0..ids.len() {
+            let (p, q) = (pts[ids[i]], pts[ids[(i + 1) % ids.len()]]);
+            d = d.min(triangle_distance(x, fc[f], p, q));
+            omega += sign * triangle_solid_angle(x, fc[f], p, q);
+        }
+    }
+    if omega > 2.0 * std::f64::consts::PI {
+        d
+    } else {
+        -d
+    }
+}
+
 fn cell_box(mesh: &Mesh, c: usize) -> (Vec3, Vec3) {
     let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
     for &f in mesh.cell_faces(c) {
@@ -170,6 +260,10 @@ fn cell_box(mesh: &Mesh, c: usize) -> (Vec3, Vec3) {
 /// Point location in a range of cells of a mesh (ADR 0219 M3): uniform bins over the bounding box, each cell in every bin
 /// its (slightly widened) bounding box overlaps. A cell contains a point when [`containment_margin`] is at least `-1e-10`
 /// of the cell's box diagonal; of several such cells the one with the largest margin, and of those the lowest index.
+///
+/// A cell with a face whose [`face_warp`] is above that tolerance is *warped* (ADR 0253 G3): its margin is
+/// [`triangulated_margin`] instead, the signed distance from the triangles about its face centres. The flags are set on
+/// the mesh the locator is built on, which is the mesh it must be asked on.
 #[derive(Debug, Clone)]
 pub struct CellLocator {
     cells: Range<usize>,
@@ -179,6 +273,10 @@ pub struct CellLocator {
     n: [usize; 3],
     bins: Vec<Vec<usize>>,
     tol: Vec<f64>,
+    /// Whether each cell of the range is warped (ADR 0253 G3).
+    warped: Vec<bool>,
+    /// The bounding boxes of the cells of the range; empty when no cell is warped.
+    boxes: Vec<(Vec3, Vec3)>,
 }
 
 impl CellLocator {
@@ -214,6 +312,13 @@ impl CellLocator {
                 }
             }
         }
+        // ADR 0253 G3: a cell is warped when one of its faces leaves its plane by more than the cell's tolerance
+        let warped: Vec<bool> = cells
+            .clone()
+            .zip(&tol)
+            .map(|(c, &t)| mesh.cell_faces(c).iter().any(|&f| face_warp(mesh, f) > t))
+            .collect();
+        let boxes = if warped.contains(&true) { boxes } else { Vec::new() };
         CellLocator {
             cells,
             lo,
@@ -222,13 +327,39 @@ impl CellLocator {
             n,
             bins,
             tol,
+            warped,
+            boxes,
         }
+    }
+
+    /// Number of warped cells of the range (ADR 0253 G3): the cells tested by [`triangulated_margin`].
+    pub fn n_warped(&self) -> usize {
+        self.warped.iter().filter(|w| **w).count()
+    }
+
+    /// Every cell of the range that contains `x` under the locator's rule, in increasing order, by a search over all of
+    /// them (for checks).
+    pub fn containing_cells(&self, mesh: &Mesh, x: Vec3) -> Vec<usize> {
+        self.cells
+            .clone()
+            .filter(|&c| self.accepts(mesh, c, x).is_some())
+            .collect()
     }
 
     /// Whether cell `c` (of this locator's range) contains `x` under the locator's rule, and its margin.
     fn accepts(&self, mesh: &Mesh, c: usize, x: Vec3) -> Option<f64> {
+        let k = c - self.cells.start;
+        if self.warped[k] {
+            // ADR 0253 G2: the triangulated cell lies in its box, so a point further outside than the tolerance is refused
+            let (lo, hi) = self.boxes[k];
+            if (0..3).any(|d| !(x[d] >= lo[d] - self.tol[k] && x[d] <= hi[d] + self.tol[k])) {
+                return None;
+            }
+            let m = triangulated_margin(mesh, c, x);
+            return (m >= -self.tol[k]).then_some(m);
+        }
         let m = containment_margin(mesh, c, x);
-        (m >= -self.tol[c - self.cells.start]).then_some(m)
+        (m >= -self.tol[k]).then_some(m)
     }
 
     /// The cell of the range that contains `x` (see the type docs), `None` when there is none.
