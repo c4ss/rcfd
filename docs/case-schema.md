@@ -2402,6 +2402,7 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | `dynamic_mesh.six_dof.coupling.force_scale`, `.moment_scale` | float, 0 | strong: floors of the force (N) and moment (N m) norms in the test (`>= 0`), e.g. the largest spring force |
 | `dynamic_mesh.six_dof.coupling.max_iterations` | int, 20 | strong: cap of the flow solves of one step (`>= 1`) |
 | `dynamic_mesh.six_dof.coupling.at_cap` | `stop` (default), `continue` | strong: a step that reaches the cap stops the run (`dynamic_mesh: step N, t = ...: dynamic_mesh.six_dof.coupling.max_iterations: ...`), or is kept and the run goes on with one warning event (`kind = "coupling_cap"`) |
+| `dynamic_mesh.six_dof.coupling.wall_pressure` | `extrapolated` (default), `prescribed_gradient` | loose or strong (F-358, ADR 0269): the wall pressure of the body force on the following and resting walls: the cell value extrapolated with the cell gradient (`patch_force_moment`; first order there, low by `1/(4N)` on a piston column of `N` cells, ADR 0252), or with the normal part from the fixed-flux pressure gradient of the last step (`patch_force_moment_wall_gradient`) |
 
 Static errors are located at the key:
 
@@ -2443,6 +2444,23 @@ Located static errors (at the key): `scheme = "strong"` with `motion = "prescrib
 `rest_patches` or with `integrator = "newmark"` (at `scheme`); a tolerance that is not positive; a negative
 `force_scale`, `moment_scale` or `added_mass`; `max_iterations < 1`. Every strongly coupled step is recorded
 (`Simulation::coupling_records`: iterations, converged, last test quantity).
+
+The key `wall_pressure` of the same table (F-358, ADR 0269) acts with either scheme, unlike the other keys, which are
+inert under `loose`. The default wall pressure of the body force extrapolates the wall-cell pressure with a
+least-squares gradient that sees the stored zero-gradient wall value, while the step's pressure equation used the
+prescribed gradient `-n . a_wall` of the moving wall: the gradient of the wall cell comes out half and the force is low by
+a quarter cell over the column (1.25 percent of the added mass of a 20-cell piston column, `+0.13` percent in the
+frequency of ADR 0211's spring-mounted piston at a mass ratio of 0.2). `prescribed_gradient` takes the normal part from
+that gradient, which the driver keeps from step to step (`Simulation::dynamic_wall_gradients`):
+
+```toml
+[dynamic_mesh.six_dof.coupling]
+wall_pressure = "prescribed_gradient"
+```
+
+`wall_pressure = "prescribed_gradient"` with `motion = "prescribed"` is refused at the key. The default stays
+`extrapolated` (changing it moves the results of every six-DOF case; ADR 0269 lists them). The force and moment reports
+(`[reports.<n>]`) take the stored face value of the pressure condition and are not changed by the key.
 
 ### Compressible ALE and layering (F-259, ADR 0191, ADR 0257)
 
