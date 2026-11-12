@@ -383,9 +383,23 @@ fn u_pose(t: f64) -> Pose {
 }
 
 fn u_new() -> OversetSolver {
+    u_new_at(u_pose(0.0))
+}
+
+/// The pose of Ut (amendment 2): the component translating along `x` only.
+fn ut_pose(t: f64) -> Pose {
+    Pose {
+        origin: [0.0; 3],
+        axis: [0.0, 0.0, 1.0],
+        angle: 0.0,
+        translation: [0.025 + t, 0.013, 0.0],
+    }
+}
+
+/// The set-up U with the component at `pose`.
+fn u_new_at(pose: Pose) -> OversetSolver {
     let bs = uniform(-2.5, 5.0, 50);
     let ov = box_overset(rectilinear_2d(&bs, &bs, DEPTH).unwrap(), 0.6, 16, 0.25);
-    let pose = u_pose(0.0);
     let geom = geometry_at(&ov, &pose);
     let mut u = VectorField::uniform("U", &geom, U_FLOW);
     for name in ["xmin", "ymin", "ymax"] {
@@ -416,7 +430,12 @@ struct URun {
 
 /// The U run with the options `o` and the steps `dts`; `perturb` multiplies every stencil weight by 1.001 after `prepare`.
 fn u_run(o: Opt, dts: &[f64], perturb: bool) -> URun {
-    let mut s = u_new();
+    u_run_with(o, dts, perturb, &u_pose)
+}
+
+/// [`u_run`] with the motion `pose_at`.
+fn u_run_with(o: Opt, dts: &[f64], perturb: bool, pose_at: &dyn Fn(f64) -> Pose) -> URun {
+    let mut s = u_new_at(pose_at(0.0));
     opt_in(&mut s, o);
     let n = s.geom.n_cells();
     let un = vec3::norm(U_FLOW);
@@ -430,7 +449,7 @@ fn u_run(o: Opt, dts: &[f64], perturb: bool) -> URun {
     let mut t = 0.0;
     for &dt in dts {
         t += dt;
-        let mut st = s.prepare(dt, u_pose(t), &[]).unwrap();
+        let mut st = s.prepare(dt, pose_at(t), &[]).unwrap();
         if perturb {
             for (_, stn) in st.conn.stencils.iter_mut() {
                 stn.weights.iter_mut().for_each(|w| *w *= 1.001);
@@ -485,8 +504,28 @@ fn s_u_registered_set_up_record() {
     c.finish();
 }
 
-/// ADR 0241 amendment 1, Uc: U with `dt = 0.05` for 16 steps, BDF2 and three outer iterations: U1c, U3c and S-Uc.
+/// ADR 0241 amendment 2, Ut: U with the component translating along `x` only, `dt = 0.06` for 10 steps, BDF2 and three
+/// outer iterations: U1t, U3t and S-Ut.
 #[test]
+fn ut_uniform_flow_with_a_translating_component_and_bdf2() {
+    let r = u_run_with(BDF2_3, &[0.06; 10], false, &ut_pose);
+    let mut c = Checks::new();
+    c.at_most("U1t velocity", r.eu, 1e-10);
+    c.at_most("U1t pressure", r.ep, 1e-10);
+    c.at_most("U3t continuity", r.cont, 1e-9);
+    c.at_most("U3t outflow", r.q, 1e-10);
+    c.at_least(
+        "S-Ut (set-up) cells with the implicit Euler row",
+        r.fallback as f64,
+        1.0,
+    );
+    c.finish();
+}
+
+/// ADR 0241 amendment 1, Uc: U with `dt = 0.05` for 16 steps, BDF2 and three outer iterations: U1c, U3c and S-Uc. A
+/// defective set-up (registered run: refused in the first step, a hole cell uncovered); corrected by Ut (amendment 2).
+#[test]
+#[ignore = "record of a defective set-up, ADR 0241 amendment 2: Uc refused in its first step (a hole cell uncovered)"]
 fn uc_uniform_flow_with_a_large_step_and_bdf2() {
     let r = u_run(BDF2_3, &[0.05; 16], false);
     let mut c = Checks::new();
