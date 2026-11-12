@@ -299,6 +299,30 @@ a limit. No crate that builds: **todo**.
   reported as not converged.
 - Nothing in the finite-volume solvers uses the new preconditioners.
 
+## Amendment 1 (2026-11-12, written and committed before the corrected run)
+
+The registered run (code e8e8b82a, log `w49i-work/f381-scratch/run1.log`, made once) ended with `a1_a2_a3_a6_fast_cantilever`
+failing on A3. That test prints every measure before its assertions, so all of A1, A2, A3, A6, N1, N2 were measured: A3 is
+missed (IC 85 iterations, block Jacobi 156, ratio 0.5449 against 0.5) and the negative control N1 failed (2.2e-8, expected
+`> 1e-7`). Every other check of the run was met; the numbers go in the addendum.
+
+1. **A3 is a miss, not a defect of the set-up.** The limit stays 0.5. The test is kept as the ignored record
+   `a1_a2_a3_a6_fast_cantilever_known_miss` (renamed, `#[ignore]` with the measured numbers; its body is unchanged). The
+   cause is diagnosed in the addendum from numbers already measured; nothing is re-run with other parameters to meet it.
+2. **N1 is a defect of the set-up.** A2's measure must be shown able to exceed 1e-7; stopping at a relative residual of 1e-4
+   did not show it, because the residual left at that point lies in the stiff (high) modes, whose displacement is small: the
+   measured error per unit of relative residual was `2.2e-8 / 1e-4 = 2.2e-4`. Corrected control **N1b** (new test
+   `n1b_agreement_measure_is_sensitive`): block Jacobi CG on the fast cantilever stopped at tolerance **1e-1**: A2's measure
+   `> 1e-7`. Estimate: at least `2.2e-4 x 1e-1 = 2e-5` by the ratio just measured, larger in fact because after a handful of
+   iterations the bending mode is not yet resolved; margin above 200. The old N1 stays in the ignored record of item 1.
+3. **Regression guard of the met checks.** Because the record of item 1 is ignored, the met checks A1, A2, A6 and N2 are
+   repeated by a new fast test `a1_a2_a6_fast_cantilever` with the same set-up and the same assertions without A3 and N1.
+   It is deterministic (A4): its printed numbers must equal those of run 1 digit for digit; it is a guard for the mutations
+   and the gate, not a new measurement.
+4. The mutation runs (registered) use `--include-ignored` except `h1_heavy_cantilever`, so that the record of item 1 also
+   counts (M9 must still fail A3 there, with the ratio moving to about 1).
+
+The decision rule is unchanged: with A3 missed it gives **partial**.
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
