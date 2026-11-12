@@ -210,3 +210,96 @@ found once), the tests of the new file and of `adapt_aniso_f348.rs` run once in 
 - **Q3. Consent.** Options: (a) every leaf inside must be marked along every axis on which it is coarsened (D2 rule 2); (b) the
   mark of the leaf that starts the merge suffices. Taken on the same standing instruction: (a), which is the pair rule's "the
   buddy agrees" generalised.
+
+## Addendum 1: results (2026-11-12)
+
+Commits: 90bff8eb (this registration alone), 0e96b706 (the code and the tests). Runs, all in release, target directory in
+`w49i-work/f439-scratch`:
+
+- B checks: `cargo test --release -p rcfd-mesh --test adapt_aniso_box_f439 -- --nocapture --test-threads=1`, once (log
+  `f439-scratch/run_b.log`), on the code that became 0e96b706; the commit differs from the run state by `cargo fmt` only (line
+  breaks in one expression of `box_merges` and in two test helpers).
+- Existing tests, unedited: `rcfd-mesh` `adapt_aniso_f348` (9 passed, 1 ignored) and `adapt` (12 passed); the ignored record
+  `g6_coarsening_returns_to_the_base_known_miss` run once with `--ignored`: it fails as recorded, "round 6: no merge"; `rcfd-fv`
+  `adapt_directional_f348` (5 passed, 7 heavy ignored, not run).
+- No limit was changed; no check missed; no amendment.
+
+### Results
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| B1 (acceptance: the five-box tiling) | 5 cells to 1 at level 0 in one call, `coarsened = 1`, `Merged([0..4])`, `sum V q` to `1e-13`, topology | as registered; integral 0.5815023819026417 to 0.5815023819026416 | yes |
+| B2 (acceptance: every state to the base, `sum V q` conserved) | base within `n - n_base` rounds, strict decrease, topology, `sum V q` `1e-13`, linear field `1e-12` of range, at least one pair-stuck state | all 26 states back to the base: (i) G6's 146 cells in 5 rounds (60, 29, 16, 14, 12); (ii) the pair-stuck 16 cells in 1 round; (iii) 24 random states (6 to 182 cells) in 1 to 6 rounds; 6 of the 26 states are pair-stuck ((ii) and 5 random ones, stuck at 18, 20, 18, 18 and 8 cells) | yes |
+| B3 | single-axis marks: `Box` equals `Pair` (leaves, `Transfer`, report), the five-box tiling, balance on and off | equal | yes |
+| B4 | (a) 2 then 1 cells; (b) 3; (c) 2; (d) 5; (e) 12 with `refined = 1` | as registered | yes |
+| B5 | balance on: 6 cells, no merge; off: 5 cells, the merged leaf at level 0 | as registered | yes |
+| B5b (counted part) | jump `<= 1`, topology, `sum V q` `1e-13` every round | met in every round | yes |
+| B5b (recorded) | | 226, 120, 67, 32, 14, 12: the base reached with balance in 5 rounds | recorded |
+| B6 (acceptance: slab results and the isotropic paths bit for bit) | (a) `adapt` = `adapt_with(.., Pair)` on G1's sequences; (b) the existing tests pass unedited, the known miss unchanged; (c) diff only in `aniso.rs`, the new test file and docs, no pair-code line changed | (a) equal in all 26 rounds; (b) as listed above; (c) `git diff main --stat`: `aniso.rs` (135 added, 35 removed), the new test file, this ADR, `docs/meshing.md`; the 35 removed lines are the transfer construction at the end of `adapt`, re-added unchanged after the coarsening `match`; the pair loop is the old text, now the body of `pair_merges` (it takes and returns the leaf set by value, so not one of its lines changed) | yes |
+
+Recorded: times 0.20 s for the whole file. Against the predictions: P1 met; P2 met (at most 6 rounds; (i) 5); P3 met (B5b reached
+the base); P4 **not met** (5 of 24 random states pair-stuck, not 8 or more).
+
+### Mutations (scratch copy `f439-scratch/mut`, a `git archive` of 0e96b706, target `f439-scratch/target-mut`, release)
+
+Each alone by exact replacement (each pattern found once, `f439-scratch/mutate.py`, logs `f439-scratch/mut_MB*.log`), the tests
+of `adapt_aniso_box_f439` and `adapt_aniso_f348` run once, the file restored and compared afterwards (identical).
+
+| Id | Mutation | Failed tests | Caught by the registered test |
+| --- | --- | --- | --- |
+| MB1 | exact-tiling test dropped | B1, B2, B4, B5b | yes (B1) |
+| MB2 | consent dropped | B4 | yes |
+| MB3 | larger box first | B4 | **no**, caught by B4 instead of B3 |
+| MB4 | `d_t <= l_t - 1` | B1, B2, B3, B4, B5 | yes (B1) |
+| MB5 | balance test skipped in the box branch | B5, B5b | yes (B5) |
+| MB6 | `adapt` routed to the box rule | B2, G6b, G6c | yes (G6c); B6 (a) passed |
+
+Every mutation is caught. Two gaps in my reasoning, not in the coverage: in B3 every leaf has one candidate (a level-1 leaf
+marked along one axis), so the candidate order cannot matter there; B4 (a) catches the order (largest first merges the three
+leaves into the cell in the first call). In B6 (a) G1's random marks coarsen along one axis with probability 0.15, and on
+those states the two rules happen to make the same merges; G6b, G6c and B2 catch the routing.
+
+### Format and lint
+
+`cargo fmt -p rcfd-mesh --check` clean after `cargo fmt` (applied after the registered run, line breaks only);
+`cargo clippy --release -p rcfd-mesh --all-targets -- -D warnings` clean.
+
+### Deviations and what was not run
+
+- D6 says a candidate is rejected at the first leaf found outside it; the code collects the overlap list of the candidate and
+  then tests it (same result, somewhat more work per rejected candidate).
+- MB3 and MB6 were caught by other tests than the ones the registration named (above).
+- Not run: the whole workspace suite (by instruction); the heavy tests of `adapt_directional_f348` (they call `adapt`, whose
+  results B6 shows unchanged); `rcfd-api` tests (`rcfd-api` does not use `AnisoMesh`, and no shared solver file was touched).
+
+### Decision by the registered rule
+
+**done.** B1, B2 and B6 (the three clauses of the acceptance) and the supporting checks B3, B4, B5 and B5b's counted part are
+met at the first run; nothing missed. The rule does not ask for the predictions; P4 missed and changes nothing.
+
+### Remaining questions
+
+- **R1. F-348's status.** ADR 0267 R1 recommended partial "until R2 is settled"; R2 is settled here for the box rule. Options:
+  (a) leave F-348 partial (its G6 and C5 stay missed registered checks by its own rule); (b) mark it done now that its open
+  coarsening point is delivered. Recommendation (a): its rule gave partial and only the maintainer can override it; its note
+  gets one sentence (below).
+- **R2. Return to the base with balance.** Not derived (D4); one run reached it. Options: (a) leave it recorded; (b) a
+  derivation or a counterexample as a follow-up. Recommendation (a) until the loop coarsens with balance (R3).
+- **R3. Coarsening in the directional loop** (ADR 0267 R4 (b)): the box rule makes it possible in 3-D. Options: (a) a
+  follow-up item; (b) leave it. Recommendation (a), item below; it adds a coarsening criterion, so a new parameter, opt-in.
+
+### For the lead: roadmap entries
+
+Proposed status of F-439: **done**. New note:
+
+> DONE (ADR 0341, 2026-11-12): rcfd_mesh::adapt::aniso::AnisoMesh::adapt_with(marks, balance, Coarsening::Box), opt-in: for each cell marked coarsen along axes C, the smallest dyadic ancestor box (levels lowered only along C) that is exactly tiled by leaves of the mesh, each marked along every axis on which it is coarsened, is merged into one leaf with the levels of the box; with balance the merge is accepted only if the new leaf stays within one level of its face neighbours along every refined axis; the transfer is the existing Merged source (volume-weighted mean, so sum V q is conserved and linear fields stay exact). Under all-axes marks the base cell is always an admissible ancestor, so every call merges at least once and repeated all-axes coarsening without balance returns any tiling to the base. The five-box tiling of ADR 0267 amendment 1 goes to one cell in one call; 26 states on two 3-D lattices (G6's 146 cells, the pair-stuck state, 24 random sequences of splits, pair merges and box merges, 6 of them pair-stuck) return to the base in at most 6 calls with sum V q to 1e-13 and linear fields to 1e-12; single-axis marks give the pair merges; consent and balance refuse the registered cases. adapt (Coarsening::Pair) is unchanged: equal to adapt_with(.., Pair) bit for bit, the ADR 0267 tests (G6b in the slab among them, the G6 known miss unchanged) and the AmrMesh tests pass unedited. Six mutations caught. With balance the return to the base is not derived (one recorded run reached it).
+
+Note of F-348 (one sentence added at the end; the rest unchanged):
+
+> PARTIAL (ADR 0267, 2026-11-12): rcfd_mesh::adapt::aniso::AnisoMesh, a second lattice with one refinement level per axis (AxisLeaf, AxisMark; AmrMesh untouched): faces are the intersections of the sides of two leaves, with the corners of all face rectangles in the vertex set, so cells are closed for any tiling by dyadic boxes; optional balance of one level per refined axis across every face (at most 2 faces per side in a slab, 4 in 3-D); the existing Transfer and transfer_field. Random directional marks on a graded 3-D box, a slab and a box refined along two of three axes give valid closed meshes (validate, closure and volume to 1e-13) and linear fields transfer to 4.4e-16; on isotropic marks the mesh, the transfer and the adaptive loop equal AmrMesh's bit for bit. Directional criterion in rcfd_fv::adaptive (axis_variations, directional_axes with theta = 1/2, directional_target_marks, run_adaptive_simple_directional and _target). On the ADR 0247 suction layer the directional run has error 0.00298 with 1547 cells against the isotropic 0.01159 with 3841 (limit: at most 1920 cells); held at the isotropic finest size it reaches 0.01158 with 960 cells; with the axis choice inverted 1.18. ADR 0054, 0242 and 0247 tests pass unedited (the heavy ones included); ten mutations each failed their tests. Partial by the rule because two registered supporting checks missed and were corrected under amendments: pair coarsening in 3-D can leave a five-box tiling of a cell that it cannot merge further (valid mesh; slabs return to the base), and the fast layer test on an 8 x 8 base (cell Peclet 10) had no converged solution on its first directional mesh (replaced by a 16 x 16 base). Open: a box merge for 3-D coarsening (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups: F-438 (case key), F-439 (three-dimensional box merge). The box merge is delivered by F-439 (ADR 0341, 2026-11-12): repeated all-axes box coarsening returns any state, the five-box tiling included, to the base.
+
+Follow-up item: title "Coarsening in the directional adaptive loop", deps F-439, acceptance:
+
+> On the ADR 0267 suction layer, a directional loop that also box-coarsens cells whose per-axis variation is below a registered fraction of the largest reaches the error E(D) = 0.00298 of ADR 0267's run D with fewer than its 1547 cells and fewer leaves split along x than its 704; runs that do not ask for coarsening are bit for bit unchanged.
+
+> TODO (from ADR 0267 R4 (b) and ADR 0341 R3): the box rule of ADR 0341 makes directional coarsening possible in 3-D; needs a coarsening criterion per axis (a new opt-in parameter) and the loop's coarsening step; with balance the return to the base is not derived (ADR 0341 D4).
