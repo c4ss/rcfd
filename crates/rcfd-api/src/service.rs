@@ -265,6 +265,8 @@ pub struct Service {
     events: Arc<EventLog>,
     /// Hosted co-simulation participants (F-360); empty unless the embedding program hosts one.
     pub(crate) cosim: crate::cosim_service::Hosts,
+    /// The bulk data channel (F-447, ADR 0350); off unless the embedding program calls `enable_data`.
+    pub(crate) data: crate::data_service::Channel,
 }
 
 fn s_param<'a>(p: &'a Value, key: &str) -> Rpc<&'a str> {
@@ -314,6 +316,7 @@ impl Service {
                 cv: Condvar::new(),
             }),
             cosim: crate::cosim_service::Hosts::default(),
+            data: crate::data_service::Channel::default(),
         })
     }
 
@@ -397,16 +400,21 @@ impl Service {
         let null = Value::Null;
         let p = if params.is_null() { &null } else { params };
         match method {
-            "service.info" => Ok(json!({
-                "name": "rcfd",
-                "version": env!("CARGO_PKG_VERSION"),
-                "protocol": PROTOCOL,
-                "protocol_version": PROTOCOL_VERSION,
-                "cosim": crate::cosim_service::COSIM_PROTOCOL,
-                "methods": METHODS,
-                "limits": {"max_cells": self.cfg.max_cells, "max_steps_per_call": self.cfg.max_steps_per_call, "max_run_seconds": self.cfg.max_run_seconds},
-                "sandbox_root": self.cfg.root.as_ref().map(|r| r.display().to_string()),
-            })),
+            "service.info" => {
+                let mut info = json!({
+                    "name": "rcfd",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "protocol": PROTOCOL,
+                    "protocol_version": PROTOCOL_VERSION,
+                    "cosim": crate::cosim_service::COSIM_PROTOCOL,
+                    "methods": METHODS,
+                    "limits": {"max_cells": self.cfg.max_cells, "max_steps_per_call": self.cfg.max_steps_per_call, "max_run_seconds": self.cfg.max_run_seconds},
+                    "sandbox_root": self.cfg.root.as_ref().map(|r| r.display().to_string()),
+                });
+                // protocol 1.2 (ADR 0350): only a service whose data methods were switched on reports them
+                crate::data_service::extend_info(self, &mut info);
+                Ok(info)
+            }
             "settings.schema" => Ok(json!({
                 "case": case_schema().to_json_schema(),
                 "monitors": monitor_json_schema(),
@@ -1069,6 +1077,7 @@ impl Service {
             }
             m if m.starts_with("design.") => crate::design::tools::call(self, m, p),
             m if m.starts_with("cosim.") => crate::cosim_service::call(self, m, p),
+            m if m.starts_with("data.") => crate::data_service::call(self, m, p),
             other => Err(RpcError::new(
                 code::METHOD_NOT_FOUND,
                 format!("unknown method '{other}'"),
