@@ -8,6 +8,7 @@
 
 pub mod amg;
 pub mod backend;
+pub mod eigen;
 pub mod matrix;
 pub mod precond;
 pub mod reorder;
