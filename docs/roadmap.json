@@ -4353,7 +4353,7 @@
     ],
     "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The manufactured solution of ADR 0279, case D, on boxes whose interior nodes are moved by a registered seed and amplitude (elements valid at every node): on at least three meshes, each halving h, the observed L2 order over the finest pair is >= 1.8 for Tet4 and Hex8 and >= 2.7 for Tet10, the energy-norm order >= 0.9 and >= 1.8, both errors fall monotonically; a mutation of the Hex8 stiffness rule to one point is caught by these checks.",
-    "note": "From ADR 0279 addendum 1 (2026-11-12), Q2 recommendation. Structural solver, basic tier. ADR 0355, 2026-11-12: the manufactured solution of ADR 0279 (case D) on boxes with interior nodes moved by seed 0xF459_0355, uniform offsets of at most 0.15 h per component for Hex8 and 0.075 h for Tet4 and Tet10 (Tet10 from the moved Tet4, straight edges), validity guaranteed by diagonal dominance (det J >= 1e-3 of the regular value) and measured: minimum det J at the nodes 0.37 (Hex8) to 0.65 (tetrahedra) of the regular value; tests crates/rcfd-fem/tests/sb_mms_distorted.rs only. Tet4 and Hex8 on 4, 8, 16, Tet10 on 2, 4, 8 cells per edge: L2 orders over the finest pair 1.980, 1.993, 2.971 (limits 1.8, 1.8, 2.7), energy orders 0.995, 0.998, 1.951 (0.9, 0.9, 1.8), errors fall monotonically; polynomial fields reproduced on moved meshes to 4e-15; negative control orders below 0.015; heavy record on 6, 12, 24 / 3, 6, 12 (36 501 unknowns, 90 s): 1.990, 1.998, 2.981 and 0.997, 0.999, 1.974. The one-point Hex8 stiffness (which survived ADR 0279 on regular meshes) is caught: L2 order 1.758, energy order 0.729, and the moved-mesh patch test fails at 1.7e-3; four of the other mutations behave as registered (one-point Tet10 refused as singular, the exact field at the regular map caught, an amplitude above the validity bound refused as inverted, the over-integrated Hex8 survives). Done pending the maintainer's acceptance."
+    "note": "From ADR 0279 addendum 1 (2026-11-12), Q2 recommendation. Structural solver, basic tier. ADR 0355, 2026-11-12: the manufactured solution of ADR 0279 (case D) on boxes with interior nodes moved by seed 0xF459_0355, uniform offsets of at most 0.15 h per component for Hex8 and 0.075 h for Tet4 and Tet10 (Tet10 from the moved Tet4, straight edges), validity guaranteed by diagonal dominance (det J >= 1e-3 of the regular value) and measured: minimum det J at the nodes 0.37 (Hex8) to 0.65 (tetrahedra) of the regular value; tests crates/rcfd-fem/tests/sb_mms_distorted.rs only. Tet4 and Hex8 on 4, 8, 16, Tet10 on 2, 4, 8 cells per edge: L2 orders over the finest pair 1.980, 1.993, 2.971 (limits 1.8, 1.8, 2.7), energy orders 0.995, 0.998, 1.951 (0.9, 0.9, 1.8), errors fall monotonically; polynomial fields reproduced on moved meshes to 4e-15; negative control orders below 0.015; heavy record on 6, 12, 24 / 3, 6, 12 (36 501 unknowns, 90 s): 1.990, 1.998, 2.981 and 0.997, 0.999, 1.974. The one-point Hex8 stiffness (which survived ADR 0279 on regular meshes) is caught: L2 order 1.758, energy order 0.729, and the moved-mesh patch test fails at 1.7e-3; four of the other mutations behave as registered (one-point Tet10 refused as singular, the exact field at the regular map caught, an amplitude above the validity bound refused as inverted, the over-integrated Hex8 survives). Done pending the maintainer's acceptance. The moved-mesh patch test of Hex8 that detects the one-point stiffness directly is ADR 0358 (F-461)."
   },
   {
     "id": "F-460",
@@ -4373,9 +4373,9 @@
     "deps": [
       "F-459"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. A linear displacement field on a box of Hex8 whose interior nodes are moved by a registered seed and an amplitude below the validity bound of ADR 0355, all boundary nodes prescribed, no body force: the relative L2 and energy errors are <= 1e-9, and the same test with the stiffness rule mutated to one point gives a relative energy error >= 1e-5.",
-    "note": "From ADR 0355 addendum 1 (2026-11-12), Q1 recommendation."
+    "note": "Structural solver, basic tier. ADR 0358, 2026-11-12: the constant-strain patch test of Hex8 on a unit box with interior nodes moved by seed 0xF461_0358, uniform offsets of at most 0.15 h and 0.05 h per component (validity bound 1/6 of ADR 0355; minimum det J at the nodes 0.389 to 0.95 of the regular value), n = 3, 4, 6 cells per edge, three draws, two linear fields, all boundary nodes prescribed, no body force; tests crates/rcfd-fem/tests/sb_patch_moved.rs only. Over the 36 solves the relative L2 error is at most 3.0e-16 and the relative energy error at most 2.4e-15 (limit 1e-9); the quadratic field is not reproduced (L2 2.3e-3 to 9.1e-3, energy 3.3e-2 to 6.7e-2, so the test can see an error). With the Hex8 stiffness rule mutated to one point (scratch copy) the relative energy error is 6.1e-5 to 6.7e-3 in every solve (limit 1e-5) and the relative L2 error 1.1e-5 to 4.2e-4; the same one-point rule on an unmoved mesh passes at 2e-16, so the error comes from the moves. The 3-point over-integration survives as expected; a 1e-6 offset of one prescribed value and an amplitude above the bound are caught. One check is weak: the check that the mesh is moved has a limit relative to the amplitude and cannot see an unmoved mesh (that mutation was caught only by a rounding artifact of the validity check); the move itself is evidenced by the contrast between the one-point rule on the moved and on the regular mesh. Follow-up proposed below. Partial by the lead's reading of the registered rule: the registered mutation M3 (unmoved mesh) was not caught by its registered check V2 (caught only by a rounding artifact of V1); the agent proposed done; done is the maintainer's call."
   },
   {
     "id": "F-462",
@@ -4398,5 +4398,16 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0286 ran the test once after its amendment 1. With the StaticSolid and the mock fluid of ADR 0286, a coupled step that starts away from its fixed point (the mock's F0 doubled after a converged step) and whose static solve fails in iteration 2 stops with the participant's name and iteration 2, the solver's message, and both participants bit-equal to the start of the step; a step whose solve fails in iteration 3 does the same.",
     "note": "From ADR 0286 addendum (2026-11-12), Q1 recommendation."
+  },
+  {
+    "id": "F-464",
+    "title": "Element tests: the moved-mesh check of the Hex8 patch test measures the stored mesh",
+    "phase": 9,
+    "deps": [
+      "F-461"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. In a new test file, for the moved boxes of ADR 0358 (n = 3, 4, 6; alpha 0.15 and 0.05; three draws), the rms of the offsets read from the stored node coordinates of the moved mesh against the regular builder mesh (interior nodes only, relative to h) is >= 0.3 alpha and the boundary nodes are unchanged bit for bit; the same test on an unmoved mesh (alpha = 0 passed through the same code) fails these checks; the existing tests are not edited.",
+    "note": "From ADR 0358 addendum 1 (2026-11-12), Q1 recommendation."
   }
 ]

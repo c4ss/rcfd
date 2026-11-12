@@ -8438,7 +8438,8 @@ fixed by the item's registration ADR before any code.
     survived ADR 0279 on regular meshes) is caught: L2 order 1.758, energy order 0.729, and the moved-mesh patch test
     fails at 1.7e-3; four of the other mutations behave as registered (one-point Tet10 refused as singular, the exact
     field at the regular map caught, an amplitude above the validity bound refused as inverted, the over-integrated Hex8
-    survives). Done pending the maintainer's acceptance.
+    survives). Done pending the maintainer's acceptance. The moved-mesh patch test of Hex8 that detects the one-point
+    stiffness directly is ADR 0358 (F-461).
 - [ ] **F-460** Incomplete Cholesky at half the block-Jacobi iterations on the elastic cantilever: ordering and one level of fill
   - depends on: F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Beside IC(0) in the natural order,
@@ -8449,13 +8450,28 @@ fixed by the item's registration ADR before any code.
     threads; the iteration counts at L/h = 5.3 and 10.7 and on the 103 968-unknown case are recorded; IC(0) in the
     natural order and every default are unchanged bit for bit.
   - note: From ADR 0282 addendum 1 (2026-11-12), Q1 recommendation.
-- [ ] **F-461** Element tests: the constant-strain patch test of Hex8 on a moved mesh
+- [~] **F-461** Element tests: the constant-strain patch test of Hex8 on a moved mesh
   - depends on: F-459
   - acceptance: Every limit not stated here is registered in the ADR before the run. A linear displacement field on a
     box of Hex8 whose interior nodes are moved by a registered seed and an amplitude below the validity bound of ADR
     0355, all boundary nodes prescribed, no body force: the relative L2 and energy errors are <= 1e-9, and the same test
     with the stiffness rule mutated to one point gives a relative energy error >= 1e-5.
-  - note: From ADR 0355 addendum 1 (2026-11-12), Q1 recommendation.
+  - note: Structural solver, basic tier. ADR 0358, 2026-11-12: the constant-strain patch test of Hex8 on a unit box with
+    interior nodes moved by seed 0xF461_0358, uniform offsets of at most 0.15 h and 0.05 h per component (validity bound
+    1/6 of ADR 0355; minimum det J at the nodes 0.389 to 0.95 of the regular value), n = 3, 4, 6 cells per edge, three
+    draws, two linear fields, all boundary nodes prescribed, no body force; tests
+    crates/rcfd-fem/tests/sb_patch_moved.rs only. Over the 36 solves the relative L2 error is at most 3.0e-16 and the
+    relative energy error at most 2.4e-15 (limit 1e-9); the quadratic field is not reproduced (L2 2.3e-3 to 9.1e-3,
+    energy 3.3e-2 to 6.7e-2, so the test can see an error). With the Hex8 stiffness rule mutated to one point (scratch
+    copy) the relative energy error is 6.1e-5 to 6.7e-3 in every solve (limit 1e-5) and the relative L2 error 1.1e-5 to
+    4.2e-4; the same one-point rule on an unmoved mesh passes at 2e-16, so the error comes from the moves. The 3-point
+    over-integration survives as expected; a 1e-6 offset of one prescribed value and an amplitude above the bound are
+    caught. One check is weak: the check that the mesh is moved has a limit relative to the amplitude and cannot see an
+    unmoved mesh (that mutation was caught only by a rounding artifact of the validity check); the move itself is
+    evidenced by the contrast between the one-point rule on the moved and on the regular mesh. Follow-up proposed below.
+    Partial by the lead's reading of the registered rule: the registered mutation M3 (unmoved mesh) was not caught by
+    its registered check V2 (caught only by a rounding artifact of V1); the agent proposed done; done is the
+    maintainer's call.
 - [ ] **F-462** Scale-aware default of the modal analysis
   - depends on: F-457
   - acceptance: Every limit not stated here is registered in the ADR before the run. ModalOptions::new uses the
@@ -8473,3 +8489,11 @@ fixed by the item's registration ADR before any code.
     stops with the participant's name and iteration 2, the solver's message, and both participants bit-equal to the
     start of the step; a step whose solve fails in iteration 3 does the same.
   - note: From ADR 0286 addendum (2026-11-12), Q1 recommendation.
+- [ ] **F-464** Element tests: the moved-mesh check of the Hex8 patch test measures the stored mesh
+  - depends on: F-461
+  - acceptance: Every limit not stated here is registered in the ADR before the run. In a new test file, for the moved
+    boxes of ADR 0358 (n = 3, 4, 6; alpha 0.15 and 0.05; three draws), the rms of the offsets read from the stored node
+    coordinates of the moved mesh against the regular builder mesh (interior nodes only, relative to h) is >= 0.3 alpha
+    and the boundary nodes are unchanged bit for bit; the same test on an unmoved mesh (alpha = 0 passed through the
+    same code) fails these checks; the existing tests are not edited.
+  - note: From ADR 0358 addendum 1 (2026-11-12), Q1 recommendation.
