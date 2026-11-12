@@ -314,3 +314,133 @@ passing. The mutations fail their checks as estimated above; MU5 is the least ce
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; none was changed and no amendment was made. Release builds on Windows.
+Commits: the registration `e4fca748` (alone, before any code); the D1 record test `68849b03` (run on the unchanged base
+library 2ecb97f6: the fingerprints `0x7ed937a9e05bb338 0xbf99f3bc07e5fdff 0x31509ceb0d028a2f 0xcd2ef9ebd8dc9295
+0xca08f2d7cb22ffe7 0xabcd93b859c1b26e 0xa4894813b5a6f2ed 0x8b2ebdb282e07af2`; disclosed: the record was run twice, the
+first time without `--nocapture`, which hid the print; it is deterministic and the second run printed the values above);
+the library code, the remaining tests and the D1 assertion with those constants `5ad35f2c`, compiled, formatted and
+linted without running. The test file was then run once (`cargo test --release -p rcfd-fv --test overset_f368 --
+--nocapture --test-threads=4`, 47 s for the ten tests). Logs in `E:/projects/cfd/w49i-work/f368-scratch`
+(`f368-run1.log`, `f368-MU1.log` to `f368-MU7.log`, `existing-tests.log`, `baseline-hashes.log`, `d1-before*.log`).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `E(W3o) / E(P3o)` (default interpolation) | `<= 2` | `1.143` (`E(W3o) = 9.9688e-4`, `E(P3o) = 8.7203e-4`) | met |
+| A1d `E(W3o) / E(P3)` (B3 with the default solver) | `<= 2` | `1.143` (`E(P3) = 8.7203e-4`, as ADR 0264) | met |
+| A2 `E(W3qo) / E(P3qo)` (quadratic) | `<= 2` | `1.153` (`E(W3qo) = 1.0053e-3`, `E(P3qo) = 8.7204e-4`) | met |
+| A2d `E(W3qo) / E(P3q)` | `<= 2` | `1.153` (`E(P3q) = 8.7204e-4`) | met |
+| A3 continuity every step: P3o, P3qo, W3o, W3qo | `<= 1e-9` | `1.93e-14`, `1.86e-14`, `1.22e-14`, `1.15e-14` | met |
+| A4 uniform flow U3o: velocity, pressure, continuity | `<= 1e-10`, `<= 1e-10`, `<= 1e-9` | `7.31e-15`, `7.68e-14`, `6.83e-15` | met |
+| A4 uniform flow U3qo | the same | `7.51e-15`, `1.33e-13`, `7.52e-15` | met |
+| D1 the eight fingerprints, base tree against this tree | equal | equal, all eight | met |
+| D2 `baseline_hashes` (release), unedited | passes | 3 passed, 1 ignored (as before) | met |
+| D3 the 14 existing overset test files and the `rcfd-fv` lib tests (release), unedited | pass | all pass (lib 104 passed, 6 ignored; every file ok, its ignored tests left ignored) | met |
+| K1 `T_cont` warped background; component | `<= 1e-10` | `1.35e-14`; `1.13e-14` (default `0.075`) | met |
+| K2 `T_diff` warped background; component | `<= 1e-10` | `3.76e-15`; `3.90e-15` (default `0.025`) | met |
+| K3 `T_conv` warped background; component | `<= 5e-3` | `1.82e-3` (rms `4.1e-4`); `1.71e-3` (rms `4.2e-4`) (default `0.14`) | met |
+| K4 planar background: `T_conv`, `T_diff`, `T_cont` | `<= 1e-10` | `1.73e-14`, `3.90e-15`, `9.11e-15` | met |
+| K4 planar component | `<= 1e-10` | `1.39e-14`, `4.34e-15`, `9.54e-15` | met |
+| K5 pressure face flux of a linear pressure, warped background; component | `<= 1e-10` | `8.03e-15`; `7.48e-15` (without `N_f`: `0.269`; `0.243`) | met |
+| K6 warp seen on B3d; none on B3 | `>= 1e-3`; `<= 1e-12` | `7.45e-2`; `1.13e-14` | met |
+| K7 SBo velocity | `<= 5e-4` | `1.478e-4` (default SB `9.57e-3`) | met |
+| K7p SBo pressure | `<= 1e-3` | `4.69e-5` (default SB `3.14e-2`) | met |
+| U4 (set-up) kind changes P3o, W3o | `>= 20` | `99`, `92` | met |
+| Q1 (set-up) quadratic share P3qo, W3qo | `>= 0.95` | `1.0`, `1.0` | met |
+| K1s stencils reproduce `u_ex`: P3o, P3qo, W3o, W3qo | `<= 1e-12` | `1.30e-15`, `3.33e-15`, `1.39e-15`, `2.78e-15` | met |
+| U5 unconverged solves | printed | `0` in every run | - |
+| N1o (control) P3o with the weights times 1.001 | `>= 3e-4` | `1.85e-3` | held |
+
+On B3 the opt-in equals the default to the printed digits (`E(P3o) = E(P3) = 8.7203e-4`; P-diff below `1e-12`), as derived.
+The refusals (BDF2, prescribed fringe flux, `rhie_chow_step_consistent`) are checked by `refusals_of_the_opt_in`.
+
+Per class (largest over the steps; BC, BF, CC, CF), every largest error at step 40:
+
+| Run | `E` | cell | BC | BF | CC | CF | pressure |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P3o | `8.720e-4` | 16202 (CC) | `2.45e-4` | `1.63e-4` | `8.72e-4` | `2.22e-5` | `4.76e-4` |
+| W3o | `9.969e-4` | 14777 (CC) | `3.40e-4` | `2.23e-4` | `9.97e-4` | `7.79e-5` | `5.52e-4` |
+| W3qo | `1.005e-3` | 14777 (CC) | `3.35e-4` | `2.42e-4` | `1.01e-3` | `8.36e-5` | `5.46e-4` |
+
+Separating runs (printed; the reading of S applies only to a miss, and none occurred): SBo `1.48e-4`, S0o `1.40e-4`, S1o
+`3.11e-4`, PC1o `2.13e-4`; `E_Mo / E(W3o) = 0.31`. So with the opt-in the warped meshes alone carry about a third of the
+error of the overset run on B3d, and the rest is the coupling's, the same planar-coupling excess that P3 shows (ADR 0264
+Q2); the warping adds `1.25e-4` to the overset error (`9.97e-4` against `8.72e-4`).
+
+### Deviations and disclosures
+
+- K3 `1.8e-3` against the estimate `5e-4` (limit `5e-3` met): the second-order remainder is about three times my hand
+  estimate. SBo `1.48e-4` against `3.4e-5` (limit `5e-4` met), consistent with the larger `T_conv`.
+- K6 `0.075` and K5 without `N_f` `0.27` are larger than my estimates (`0.02`, `0.04`): the warp and non-orthogonality of
+  B3d are larger than the hand arithmetic assumed; the corrected values are round-off either way.
+- The ratios (`1.14`, `1.15`) lie inside the predicted `0.9` to `1.6`.
+- The D1 record was run twice before any library change (disclosed above); no other run was repeated.
+
+### Mutations
+
+Applied alone by `f368-scratch/mutate.ps1` (exact replacements, each found once) to a `git archive` copy of `5ad35f2c`
+(`f368-scratch/mut`, own target directory); the test file run once each; `overset.rs` restored and compared with the
+worktree by hash afterwards (equal for all seven).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 warp term out of C1 | K1 | caught: K1 `2.82e-2` (both meshes); also K3 `3.0e-2`, K7 `6.3e-4`, K7p `6.9e-3`; A1 still met (`1.28`) |
+| MU2 sign of `N_f` flipped | K5 | caught: K5 `0.539`, `0.487`; the runs unchanged in size (the exact pressure is constant) |
+| MU3 sign of `q_f` flipped | K3 | caught: K3 `0.184`, `0.166`; also A1 `27.8`, K7 `1.98e-2` |
+| MU4 C3 not applied in the solver | K7 | caught: K7 `2.49e-3`; also A1 `2.86`, A2 `2.86` |
+| MU5 fringe cells keep their own gradient | A1 | caught: A1 `25.7`, A2 `25.7`; also A4 velocity `2.1e-2` (the rigid hole velocities leak into the uniform flow) |
+| MU6 C1 not applied to `phiHbyA` | K7p | caught: K7p `3.10e-2`, K7 `2.40e-2`, A1 `27.6` |
+| MU7 the opt-in on in `new` | D1 | caught: all eight fingerprints differ |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets --release -- -D warnings` clean. Crate touched:
+`rcfd-fv` only (`src/overset.rs`, new `tests/overset_f368.rs`); `docs/dynamic-mesh.md` gained a paragraph on the opt-in.
+The gate's share of the new file: ten tests, about 50 s.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate). No flow with a varying exact pressure (C4 is checked at operator
+level, K5, and by MU2 only there: MU2 leaves the runs unchanged). No second resolution or warp amplitude. Warped boundary
+faces, BDF2, the prescribed fringe flux and `rhie_chow_step_consistent` with the opt-in (refused).
+
+### Decision by the registered rule
+
+**Done** (pending the maintainer's acceptance): A1, A1d, A2, A2d, A3, A4, D1, D2, D3 met; K1 to K7p, U4, Q1, K1s met; N1o
+held; MU1 to MU7 each caught by its registered check; no amendment.
+
+### Remaining questions (each with options and a recommendation)
+
+Recommendations are taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation) as proposals to
+the lead; none is a decision the maintainer made in person.
+
+- **Q1. Make the corrections the default of the overset step?** Options: (a) keep them opt-in; (b) switch the default,
+  which changes results, the hash tables and goldens of any overset case. Recommendation (a): it changes default results,
+  which this item may not decide; listed as open for the maintainer.
+- **Q2. The pressure path with a varying pressure.** C4 is exact at operator level but no run exercises it (MU2 is seen
+  only by K5). Options: (a) record; (b) a follow-up check with a flow whose exact pressure varies on B3d (e.g. a
+  Taylor-Green-type vortex), which would also probe the uncorrected Green-Gauss pressure gradient. Recommendation (b), low
+  priority.
+- **Q3. The rest of the error on B3d is the coupling's** (`E_Mo / E(W3o) = 0.31`), the excess already open as ADR 0264
+  Q2 (the follow-up of F-359 on the planar B3). No new item: that follow-up covers it.
+
+## For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-368**, proposed status: `done`. Proposed note:
+
+> From ADR 0264 Q1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0367, 2026-11-12: DONE (pending acceptance). Opt-in OversetSolver::set_geometry_corrections(true): the face flux of a cell field (the Rhie-Chow flux of HbyA, the refreshed and the initial flux, the ddt_correction interpolation) is the exact flux of a linear field through the mesh's triangulated faces (skewness term plus a warp tensor for non-planar faces, least-squares gradients donor-interpolated in fringe cells), the convected face value carries the same correction, the momentum diffusion the explicit non-orthogonal correction, and phiHbyA the explicit non-orthogonal flux of the pressure (shared by the pressure equation and the flux). With it the linear shear of ADR 0264 on B3d with the component moving has E 9.97e-4 (default stencils) and 1.005e-3 (quadratic) against 8.72e-4 on B3: ratios 1.14 and 1.15 (limit 2; 15.6 without), whether B3 runs with the opt-in or the default; continuity 1.9e-14 or less every step; the uniform flow of ADR 0255 within 7.5e-15 (velocity) and 1.3e-13 (pressure). The corrected operators keep the exact field to round-off in continuity, diffusion and the pressure flux (from 0.075, 0.025, 0.27) and to 1.8e-3 in convection (second order, from 0.14). Defaults bit-identical: eight fingerprints equal before and after, baseline_hashes and the 14 overset test files and the rcfd-fv lib tests pass unedited. Control held; seven mutations caught by their registered checks. Refused with BDF2, a prescribed fringe flux and rhie_chow_step_consistent. Limits: one linear flow (constant pressure), one warp, one resolution; planar boundary faces; the rest of the error on B3d is the coupling's (warped meshes alone 3.1e-4), the open excess of ADR 0264 Q2.
+
+Proposed follow-up item (the number is the lead's):
+
+**Overset: the geometry corrections with a varying pressure on B3d.** Depends on F-368. Acceptance:
+
+> With OversetSolver::set_geometry_corrections on, a three-dimensional flow with a known varying pressure (a decaying vortex or a manufactured solution) on B3 and B3d with the component moving as in ADR 0255: the error of the calculated and fringe cells on B3d at most twice that on B3 with the default and the quadratic donor interpolation, continuity within 1e-9 at every step, with a run that names the share of the uncorrected Green-Gauss pressure gradient.
