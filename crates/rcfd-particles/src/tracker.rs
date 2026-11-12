@@ -1,5 +1,5 @@
 //! Particle state, the tracker and wall interaction (ADR 0028 D3, D5, D6; erosion and rough walls ADR 0194; dispersion
-//! fields and the surface reaction ADR 0208; droplet evaporation and TAB breakup ADR 0224).
+//! fields and the surface reaction ADR 0208; droplet evaporation and TAB breakup ADR 0224; their exchange ADR 0230).
 
 use crate::breakup::{normal_speed, oscillator, sauter_radius, Breakup, BreakupSpec, Oscillator};
 use crate::coupling::{nusselt, tau_thermal, Coupling, Thermal};
@@ -178,6 +178,8 @@ struct Ctx<'a> {
     disp: Option<&'a mut DispCtx>,
     thermal: Option<&'a Thermal>,
     cpl: Option<&'a mut Coupling>,
+    /// Latent heat of the evaporation [J/kg] (for the heat and the vapour enthalpy of the record, ADR 0230 D3).
+    latent: f64,
     film: Option<&'a mut Film>,
     erosion: Option<&'a mut Erosion>,
     rough: Option<&'a mut RoughWall>,
@@ -207,6 +209,8 @@ pub struct Tracker {
     disp: Option<DispCtx>,
     thermal: Option<Thermal>,
     coupling: Option<Coupling>,
+    /// The record was started with the droplet terms (ADR 0230 D1).
+    droplet_exchange: bool,
     film: Option<Film>,
     erosion: Option<Erosion>,
     rough: Option<RoughWall>,
@@ -273,6 +277,7 @@ impl Tracker {
             disp: None,
             thermal: None,
             coupling: None,
+            droplet_exchange: false,
             film: None,
             erosion: None,
             rough: None,
@@ -440,9 +445,20 @@ impl Tracker {
     }
 
     /// Start recording the exchange with the carrier (ADR 0057 D1). Observation only: the particles do not change.
+    /// `advance` refuses evaporation and breakup with this record (use [`Tracker::enable_droplet_exchange`]).
     pub fn enable_coupling(&mut self) {
         let n = self.loc.mesh().n_cells();
         self.coupling = Some(Coupling::new(n));
+        self.droplet_exchange = false;
+    }
+
+    /// Start recording the exchange with the carrier with the droplet terms (ADR 0230 D1): the record of
+    /// [`Tracker::enable_coupling`], and evaporation and breakup are accepted with it; the caller must then also give the
+    /// carrier the vapour fields of the record ([`Coupling::droplet_sources`]). Observation only.
+    pub fn enable_droplet_exchange(&mut self) {
+        let n = self.loc.mesh().n_cells();
+        self.coupling = Some(Coupling::new(n));
+        self.droplet_exchange = true;
     }
 
     /// The recorded exchange.
@@ -736,7 +752,7 @@ impl Tracker {
         if self.reaction.is_some() && self.coupling.is_some() {
             return err("reaction: not available with the exchange record (ADR 0208 S1)");
         }
-        if (self.evaporation.is_some() || self.breakup.is_some()) && self.coupling.is_some() {
+        if (self.evaporation.is_some() || self.breakup.is_some()) && self.coupling.is_some() && !self.droplet_exchange {
             return err("evaporation and breakup: not available with the exchange record (ADR 0224 E8, B5)");
         }
         if let Some(film) = self.film.as_mut() {
@@ -751,6 +767,7 @@ impl Tracker {
                 film.set_gas_state(flow.rho, &tau)?;
             }
         }
+        let latent = self.evaporation.as_ref().map_or(0.0, |e| e.spec().latent_heat);
         let t0 = self.time;
         let t1 = t0 + dt;
         let n_old = self.particles.len();
@@ -763,6 +780,7 @@ impl Tracker {
                 disp: self.disp.as_mut(),
                 thermal: self.thermal.as_ref(),
                 cpl: self.coupling.as_mut(),
+                latent,
                 film: self.film.as_mut(),
                 erosion: self.erosion.as_mut(),
                 rough: self.rough.as_mut(),
@@ -791,6 +809,7 @@ impl Tracker {
                     disp: self.disp.as_mut(),
                     thermal: self.thermal.as_ref(),
                     cpl: self.coupling.as_mut(),
+                    latent,
                     film: self.film.as_mut(),
                     erosion: self.erosion.as_mut(),
                     rough: self.rough.as_mut(),
@@ -901,21 +920,45 @@ fn evaporate(
     h: f64,
     complete: bool,
     mass: &mut f64,
-) {
+) -> f64 {
     aux.tp += h * phi1(r.jac * h) * r.f;
     let c = std::f64::consts::PI * p.rho / 6.0;
     let d0 = p.d;
+    let dm;
     if complete {
-        ev.book(cell, p.parcel * c * d0 * d0 * d0);
+        dm = p.parcel * c * d0 * d0 * d0;
+        ev.book(cell, dm);
         ev.complete();
         p.d = 0.0;
         p.state = State::Evaporated;
     } else {
         let d1 = (d0 * d0 - r.k * h).sqrt();
-        ev.book(cell, p.parcel * c * (d0 * d0 * d0 - d1 * d1 * d1));
+        dm = p.parcel * c * (d0 * d0 * d0 - d1 * d1 * d1);
+        ev.book(cell, dm);
         p.d = d1;
     }
     *mass = p.parcel * p.rho * std::f64::consts::PI * p.d * p.d * p.d / 6.0;
+    dm
+}
+
+/// Book the vapour `dm` [kg] of a sub-step in `cell`: it leaves with the velocity `v1` and the temperature `t1` of the
+/// sub-step's end, the liquid enthalpy being `c_l T` (ADR 0230 D3, D4).
+fn book_vapour(cpl: &mut Coupling, cell: usize, dm: f64, v1: Vec3, t1: f64, c_l: f64, latent: f64) {
+    cpl.vapour_mass[cell] += dm;
+    for k in 0..3 {
+        cpl.vapour_impulse[cell][k] += dm * v1[k];
+    }
+    cpl.vapour_kinetic[cell] += 0.5 * dm * dot(v1, v1);
+    cpl.vapour_enthalpy[cell] += dm * (c_l * t1 + latent);
+}
+
+/// Book a wall reflection of a parcel of mass `m` from `v_hit` to `v_new` (ADR 0057 D1, ADR 0230 D6).
+fn book_wall(cpl: &mut Coupling, m: f64, v_hit: Vec3, v_new: Vec3) {
+    let dj = scale(sub(v_new, v_hit), m);
+    for k in 0..3 {
+        cpl.wall_impulse[k] += dj[k];
+    }
+    cpl.wall_energy += 0.5 * m * (dot(v_new, v_new) - dot(v_hit, v_hit));
 }
 
 /// The TAB breakup at the end of a sub-step of length `s` (the breakup time) with the oscillator of its start and its
@@ -953,6 +996,11 @@ fn book(cpl: &mut Coupling, cell: usize, m: f64, geff: Vec3, x0: Vec3, v0: Vec3,
     let wg = m * dot(geff, sub(x1, x0));
     cpl.energy_mech[cell] -= dke - wg;
     cpl.energy_heat[cell] -= dq;
+    // ADR 0230 D6
+    for k in 0..3 {
+        cpl.gravity_impulse[k] += m * geff[k] * h;
+    }
+    cpl.gravity_work += wg;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1087,15 +1135,26 @@ fn advance_particle(
         match loc.walk(cell0, x0, x1) {
             Walk::Inside(c) => {
                 let mut dq = 0.0;
+                // ADR 0230 D2: the motion and the temperature step act on the mass of the sub-step's start
+                let m0 = mass;
+                let mut vapour = None;
                 if let (Some(ev), Some(r)) = (ctx.evap.as_deref_mut(), evap_rates.as_ref()) {
-                    evaporate(ev, p, aux, cell0, r, h, completes, &mut mass);
+                    let t0 = aux.tp;
+                    let dm = evaporate(ev, p, aux, cell0, r, h, completes, &mut mass);
+                    if let Some(th) = ctx.thermal {
+                        dq = m0 * th.cp_p * (aux.tp - t0) + dm * ctx.latent;
+                        vapour = Some((dm, th.cp_p));
+                    }
                 } else if let Some(th) = ctx.thermal {
                     let (t1, q) = heat_step(th, fl, p, aux.tp, cell0, norm(sub(u_start, v0)), h);
                     aux.tp = t1;
                     dq = q;
                 }
                 if let Some(cpl) = ctx.cpl.as_deref_mut() {
-                    book(cpl, cell0, mass, geff, x0, v0, x1, v1, h, dq);
+                    book(cpl, cell0, m0, geff, x0, v0, x1, v1, h, dq);
+                    if let Some((dm, c_l)) = vapour {
+                        book_vapour(cpl, cell0, dm, v1, aux.tp, c_l, ctx.latent);
+                    }
                 }
                 p.x = x1;
                 p.v = v1;
@@ -1110,7 +1169,16 @@ fn advance_particle(
                 }
                 if let (Some(bu), Some((o, w_rel))) = (ctx.breakup.as_deref_mut(), osc) {
                     if bu_due && p.state == State::Active {
+                        let v_b = p.v;
                         break_up(bu, p, aux, &o, h, w_rel, &mut mass);
+                        if let Some(cpl) = ctx.cpl.as_deref_mut() {
+                            // ADR 0230 D5: no carrier counterpart
+                            let dj = scale(sub(p.v, v_b), mass);
+                            for k in 0..3 {
+                                cpl.breakup_impulse[k] += dj[k];
+                            }
+                            cpl.breakup_energy += 0.5 * mass * (dot(p.v, p.v) - dot(v_b, v_b));
+                        }
                     } else {
                         (aux.y, aux.yd) = o.advance(aux.y, aux.yd, h);
                     }
@@ -1152,15 +1220,25 @@ fn advance_particle(
                 let n = loc.face_normal(face);
                 let (h_hit, x_hit) = (hi, hit_pt);
                 let mut dq = 0.0;
+                let m0 = mass;
+                let mut vapour = None;
                 if let (Some(ev), Some(r)) = (ctx.evap.as_deref_mut(), evap_rates.as_ref()) {
-                    evaporate(ev, p, aux, cell0, r, h_hit, false, &mut mass);
+                    let t0 = aux.tp;
+                    let dm = evaporate(ev, p, aux, cell0, r, h_hit, false, &mut mass);
+                    if let Some(th) = ctx.thermal {
+                        dq = m0 * th.cp_p * (aux.tp - t0) + dm * ctx.latent;
+                        vapour = Some((dm, th.cp_p));
+                    }
                 } else if let Some(th) = ctx.thermal {
                     let (t1, q) = heat_step(th, fl, p, aux.tp, cell0, norm(sub(u_start, v0)), h_hit);
                     aux.tp = t1;
                     dq = q;
                 }
                 if let Some(cpl) = ctx.cpl.as_deref_mut() {
-                    book(cpl, cell0, mass, geff, x0, v0, x_hit, v_hit, h_hit, dq);
+                    book(cpl, cell0, m0, geff, x0, v0, x_hit, v_hit, h_hit, dq);
+                    if let Some((dm, c_l)) = vapour {
+                        book_vapour(cpl, cell0, dm, v_hit, aux.tp, c_l, ctx.latent);
+                    }
                 }
                 p.x = x_hit;
                 p.v = v_hit;
@@ -1183,10 +1261,7 @@ fn advance_particle(
                     WallAction::Reflect(e) => {
                         p.v = reflect(v_hit, n, e);
                         if let Some(cpl) = ctx.cpl.as_deref_mut() {
-                            let dj = scale(sub(p.v, v_hit), mass);
-                            for k in 0..3 {
-                                cpl.wall_impulse[k] += dj[k];
-                            }
+                            book_wall(cpl, mass, v_hit, p.v);
                         }
                         bounces += 1;
                         if bounces > opts.max_bounces {
@@ -1199,10 +1274,7 @@ fn advance_particle(
                             None => reflect(v_hit, n, e),
                         };
                         if let Some(cpl) = ctx.cpl.as_deref_mut() {
-                            let dj = scale(sub(p.v, v_hit), mass);
-                            for k in 0..3 {
-                                cpl.wall_impulse[k] += dj[k];
-                            }
+                            book_wall(cpl, mass, v_hit, p.v);
                         }
                         bounces += 1;
                         if bounces > opts.max_bounces {
