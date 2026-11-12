@@ -943,7 +943,13 @@ impl OversetSolver {
                     }
                 }
             }
-            let gamma_p = face_interpolate(&g, &r_au);
+            // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with
+            let rc = s.rhie_chow_step_consistent;
+            let gamma_p = if rc {
+                crate::pimple::face_consistent::harmonic_face(&g, &r_au)
+            } else {
+                face_interpolate(&g, &r_au)
+            };
             let mut psys: Option<PressureSystem> = None;
 
             // ---- pressure correctors (M6 to M8) ------------------------------------------------------------------
@@ -989,6 +995,34 @@ impl OversetSolver {
                     for f in 0..n_int {
                         phi_hby_a[f] += gamma_p[f] / dt * ale.defect[f];
                     }
+                }
+                if rc {
+                    // ADR 0245 C: the lagged pressure gradient and rAU times it; at a fringe cell the donor interpolants of
+                    // the calculated values (as HbyA, M6), zero at a hole cell
+                    let p_lag = &self.p.values;
+                    let mut x = green_gauss(&g, p_lag, &boundary_values_pbc(&g, &pbc, p_lag), 0);
+                    let mut q: Vec<Vec3> = x.iter().zip(&r_au).map(|(v, r)| vec3::scale(*v, *r)).collect();
+                    if !trivial {
+                        let (cx, cq) = (x.clone(), q.clone());
+                        for (c, stn) in &conn.stencils {
+                            let (mut vx, mut vq) = ([0.0; 3], [0.0; 3]);
+                            for (&k, &w) in stn.cells.iter().zip(&stn.weights) {
+                                for d in 0..3 {
+                                    vx[d] += w * cx[k][d];
+                                    vq[d] += w * cq[k][d];
+                                }
+                            }
+                            x[*c] = vx;
+                            q[*c] = vq;
+                        }
+                        for c in 0..n {
+                            if conn.kind[c] == CellKind::Hole {
+                                x[c] = [0.0; 3];
+                                q[c] = [0.0; 3];
+                            }
+                        }
+                    }
+                    crate::pimple::face_consistent::add_commutator(&g, &gamma_p, &q, &x, &mut phi_hby_a);
                 }
                 ale.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
                 if let Some((f, v)) = first_nonfinite(&phi_hby_a) {

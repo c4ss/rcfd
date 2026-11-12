@@ -7,14 +7,18 @@
 //! Slow tests are ignored: `cargo test --release -p rcfd-fv --test bdf2_remainder_f344 -- --ignored --nocapture`.
 
 use rcfd_core::vec3::{self, Vec3};
+use rcfd_fv::ale::move_mesh;
 use rcfd_fv::bc::FixedValue;
 use rcfd_fv::convection::{face_flux, ConvScheme};
 use rcfd_fv::ddt::TimeScheme;
+use rcfd_fv::overset::{MassMode, OversetCoupling, OversetSolver};
 use rcfd_fv::pimple::{PimpleSettings, PimpleSolver};
 use rcfd_fv::{FvGeometry, Profile, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
-use rcfd_mesh::gen::{box_2d, rectilinear_2d};
-use rcfd_mesh::motion::moved_mesh;
+use rcfd_mesh::gen::{box_2d, cavity_2d, rectilinear_2d};
+use rcfd_mesh::motion::{moved_mesh, Pose};
+use rcfd_mesh::overset::{compose, CellKind, Overset, OversetSpec};
+use rcfd_mesh::Mesh;
 use std::f64::consts::PI;
 use std::sync::Arc;
 
@@ -137,6 +141,8 @@ struct Cfg {
     n_outer: usize,
     n_correctors: usize,
     ddt_correction: bool,
+    /// The corrective C of ADR 0245 amendment 1 (`PimpleSettings::rhie_chow_step_consistent`).
+    consistent: bool,
 }
 
 impl Cfg {
@@ -148,6 +154,7 @@ impl Cfg {
             n_outer: 3,
             n_correctors: 2,
             ddt_correction: true,
+            consistent: false,
         }
     }
 }
@@ -181,6 +188,7 @@ fn run(cfg: &Cfg) -> Out {
     set.n_outer = cfg.n_outer;
     set.n_correctors = cfg.n_correctors;
     set.ddt_correction = cfg.ddt_correction;
+    set.rhie_chow_step_consistent = cfg.consistent;
     let mut s = PimpleSolver::new(geom.clone(), u, p, set);
     let equal = cfg.dts.iter().all(|d| *d == cfg.dts[0]);
     let mut continuity = 0.0f64;
@@ -501,4 +509,301 @@ fn diagnosis_of_the_remainder_at_rest() {
     );
     println!("S1 continuity, every step of the runs of R: {cont:.3e} (limit <= 1e-9)");
     assert!(cont <= 1e-9, "S1: continuity {cont:e}");
+}
+
+// ---- the corrective C of amendment 1 -----------------------------------------------------------------------------------
+
+/// R with the corrective C.
+fn rc(n: usize, steps: usize) -> Cfg {
+    Cfg {
+        consistent: true,
+        ..Cfg::r(n, steps)
+    }
+}
+
+/// ADR 0245 amendment 1: A1, H7, C1, C2, A3 and C4 on the set-up R.
+#[test]
+fn a1_rest_remainder_with_the_consistent_face_coefficient() {
+    let runs: Vec<Out> = [100usize, 200, 400, 800].iter().map(|&n| run(&rc(40, n))).collect();
+    let (d200, d400) = (distance(&runs[1], &runs[3]), distance(&runs[2], &runs[3]));
+    let (near, inner) = defect_distance(&runs[1], &runs[3]);
+    let q200 = (distance(&runs[1], &runs[2]) / distance(&runs[2], &runs[3])).log2();
+    println!(
+        "R with C: max |d_200| {d200:.4e}, max |d_400| {d400:.4e}; delta_100 {:.4e}, delta_200 {:.4e}, delta_400 {:.4e}; q_100 {:.4}",
+        distance(&runs[0], &runs[1]),
+        distance(&runs[1], &runs[2]),
+        distance(&runs[2], &runs[3]),
+        (distance(&runs[0], &runs[1]) / distance(&runs[1], &runs[2])).log2()
+    );
+    let default = run(&Cfg::r(40, 800));
+    let (ec, ed) = (exact_error(&runs[3]), exact_error(&default));
+    println!("R in 800 steps, error against the exact field: with C {ec:.6e}, default {ed:.6e}");
+    let mut c = Checks::new();
+    c.at_least("A1 (acceptance) R with C, max |d_200| / max |d_400|", d200 / d400, 4.0);
+    c.at_most("H7 R with C, max |d_200|", d200, 1.7e-6);
+    c.at_most("C1 R with C, D_200 of the face defect", near.0.max(inner.0), 4e-7);
+    c.at_least("C2 R with C, q_200", q200, 1.7);
+    c.at_most(
+        "A3 (no harm) error against the exact field, C over default",
+        ec / ed,
+        1.05,
+    );
+    c.at_most(
+        "C4 continuity, every step of the runs with C",
+        runs.iter().fold(0.0, |m, o| m.max(o.continuity)),
+        1e-9,
+    );
+    c.finish();
+}
+
+/// The lid-driven cavity of C3 from rest to `t = 20` in steps of `dt`: the cell velocities, the largest change of the
+/// velocity over the last step, the largest continuity.
+fn cavity_run(dt: f64, consistent: bool) -> (Vec<Vec3>, f64, f64) {
+    let geom = Arc::new(FvGeometry::new(Arc::new(cavity_2d(20, 1.0).unwrap())).unwrap());
+    let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
+    u.set_bc(&geom, "lid", Box::new(FixedValue::vector([1.0, 0.0, 0.0])))
+        .unwrap();
+    u.set_bc(&geom, "walls", Box::new(FixedValue::vector([0.0; 3])))
+        .unwrap();
+    let p = ScalarField::uniform("p", &geom, 0.0);
+    let mut set = settings(0.1);
+    set.time_scheme = TimeScheme::Bdf2;
+    set.n_outer = 3;
+    set.rhie_chow_step_consistent = consistent;
+    let mut s = PimpleSolver::new(geom, u, p, set);
+    let steps = (20.0 / dt).round() as usize;
+    let (mut change, mut continuity) = (0.0f64, 0.0f64);
+    for k in 0..steps {
+        let before = s.u.values.clone();
+        let info = s.step(dt);
+        continuity = continuity.max(info.continuity);
+        if k + 1 == steps {
+            change = field_distance(&s.u.values, &before);
+        }
+    }
+    assert!(s.diverged.is_none(), "the cavity run stopped");
+    (s.u.values.clone(), change, continuity)
+}
+
+fn field_distance(a: &[Vec3], b: &[Vec3]) -> f64 {
+    a.iter()
+        .zip(b)
+        .map(|(p, q)| vec3::norm(vec3::sub(*p, *q)))
+        .fold(0.0, f64::max)
+}
+
+/// ADR 0245 amendment 1, C3 and C3n: the steady solution of the cavity does not depend on the step with C, and does
+/// without.
+#[test]
+fn c3_steady_cavity_does_not_depend_on_the_step() {
+    let mut c = Checks::new();
+    let (a, ca, conta) = cavity_run(0.04, true);
+    let (b, cb, contb) = cavity_run(0.01, true);
+    println!("C3 change over the last step: {ca:.3e} (dt 0.04), {cb:.3e} (dt 0.01)");
+    c.at_most(
+        "C3 steady cavity with C, steps 0.04 against 0.01",
+        field_distance(&a, &b),
+        1e-9,
+    );
+    c.at_most("C4 continuity of the cavity runs with C", conta.max(contb), 1e-9);
+    let (a, ca, _) = cavity_run(0.04, false);
+    let (b, cb, _) = cavity_run(0.01, false);
+    println!("C3n change over the last step: {ca:.3e} (dt 0.04), {cb:.3e} (dt 0.01)");
+    c.at_least(
+        "C3n (negative control) steady cavity without C, steps 0.04 against 0.01",
+        field_distance(&a, &b),
+        1e-6,
+    );
+    c.finish();
+}
+
+// ---- the overset step (helpers copied from overset_f338.rs) -------------------------------------------------------------
+
+fn tg_pose(t: f64) -> Pose {
+    Pose {
+        origin: [0.0; 3],
+        axis: [0.0, 0.0, 1.0],
+        angle: t,
+        translation: [PI / 2.0 - 0.3 + 0.5 * t, PI / 2.0 - 0.2 + 0.3 * t, 0.0],
+    }
+}
+
+fn tg_background(level: usize) -> Mesh {
+    let bs = uniform(0.0, PI, 40 * level);
+    rectilinear_2d(&bs, &bs, DEPTH).unwrap()
+}
+
+fn box_overset(bg: Mesh, half: f64, n: usize, hole: f64) -> Overset {
+    let cs = uniform(-half, 2.0 * half, n);
+    let comp = rectilinear_2d(&cs, &cs, DEPTH).unwrap();
+    let composite = compose(&bg, &comp, "c_").unwrap();
+    let spec = OversetSpec {
+        outer_patches: ["c_xmin", "c_xmax", "c_ymin", "c_ymax"].map(String::from).to_vec(),
+        hole: Arc::new(move |x: Vec3| x[0].abs().max(x[1].abs()) < hole),
+    };
+    Overset::new(composite, spec).unwrap()
+}
+
+/// The settings of the item with C: PS, C on; BDF2 and three outer iterations are set on the solver.
+fn settings_c() -> PimpleSettings {
+    let mut set = settings(NU_TG);
+    set.rhie_chow_step_consistent = true;
+    set
+}
+
+/// ADR 0245 amendment 1, E1 and E1n: with every cell calculated on a mesh at rest the overset step with C is the
+/// library's step with C (TGB_1 of ADR 0241 Q0b, 40 steps of 0.0025, BDF2, three outer iterations).
+#[test]
+fn e1_overset_at_rest_equals_the_library_with_the_consistent_coefficient() {
+    let dt = 0.0025;
+    let library = |consistent: bool| -> PimpleSolver {
+        let geom = Arc::new(FvGeometry::new(Arc::new(tg_background(1))).unwrap());
+        let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
+        tg_conditions(&geom, &mut u, 0.0);
+        let p = ScalarField::from_fn("p", &geom, |x| tg_p(x, 0.0));
+        let mut set = settings(NU_TG);
+        set.time_scheme = TimeScheme::Bdf2;
+        set.n_outer = 3;
+        set.rhie_chow_step_consistent = consistent;
+        let mut s = PimpleSolver::new(geom.clone(), u, p, set);
+        for k in 1..=40 {
+            tg_conditions(&geom, &mut s.u, k as f64 * dt);
+            s.step(dt);
+        }
+        s
+    };
+    let a = library(true);
+    let geom = Arc::new(FvGeometry::new(Arc::new(tg_background(1))).unwrap());
+    let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
+    tg_conditions(&geom, &mut u, 0.0);
+    let p = ScalarField::from_fn("p", &geom, |x| tg_p(x, 0.0));
+    let mut b = OversetSolver::new(geom, u, p, settings_c(), MassMode::Conservative, None).unwrap();
+    b.set_time_scheme(TimeScheme::Bdf2).unwrap();
+    b.set_outer_iterations(3, 1.0, 1.0).unwrap();
+    for k in 1..=40 {
+        let st = move_mesh(&b.geom, b.geom.mesh.points().to_vec(), dt).unwrap();
+        tg_conditions(&st.geom, &mut b.u, k as f64 * dt);
+        b.advance_mesh(dt, st, Vec::new()).unwrap();
+    }
+    let du = field_distance(&a.u.values, &b.u.values);
+    let dp =
+        a.p.values
+            .iter()
+            .zip(&b.p.values)
+            .map(|(x, y)| (x - y).abs())
+            .fold(0.0, f64::max);
+    let phi_max = a.phi.iter().map(|x| x.abs()).fold(0.0, f64::max);
+    let dphi = a.phi.iter().zip(&b.phi).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max) / phi_max;
+    println!(
+        "E1 bit for bit: {}",
+        a.u.values == b.u.values && a.p.values == b.p.values && a.phi == b.phi
+    );
+    let mut c = Checks::new();
+    c.at_most("E1 overset at rest against the library, both with C, u", du, 1e-12);
+    c.at_most("E1 p", dp, 1e-12);
+    c.at_most("E1 phi", dphi, 1e-12);
+    c.at_least(
+        "E1n (negative control) the library with C against the library without, u",
+        field_distance(&a.u.values, &library(false).u.values),
+        1e-9,
+    );
+    c.finish();
+}
+
+/// TG_2 of ADR 0219 with BDF2, three outer iterations and C, `steps` steps to `t = 0.5`: the solver, the error `e` of
+/// ADR 0219 over the non-hole cells and the largest continuity.
+fn tg2_run(steps: usize) -> (OversetSolver, f64, f64) {
+    let t0 = std::time::Instant::now();
+    let dt = T_END / steps as f64;
+    let ov = box_overset(tg_background(2), 0.6, 40, 0.25);
+    let pose = tg_pose(0.0);
+    let mesh = moved_mesh(&ov.composite.mesh, ov.composite.points_at(&pose)).unwrap();
+    let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+    let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
+    tg_conditions(&geom, &mut u, 0.0);
+    let p = ScalarField::from_fn("p", &geom, |x| tg_p(x, 0.0));
+    let coupling = Some(OversetCoupling { overset: ov, pose });
+    let mut s = OversetSolver::new(geom, u, p, settings_c(), MassMode::Conservative, coupling).unwrap();
+    s.set_time_scheme(TimeScheme::Bdf2).unwrap();
+    s.set_outer_iterations(3, 1.0, 1.0).unwrap();
+    let mut cont = 0.0f64;
+    for k in 1..=steps {
+        let t = k as f64 * dt;
+        let g = s.geom.clone();
+        tg_conditions(&g, &mut s.u, t);
+        let info = s.step(dt, tg_pose(t), &[]).unwrap();
+        cont = cont.max(info.continuity);
+    }
+    let e = (0..s.geom.n_cells())
+        .filter(|&c| s.conn.kind[c] != CellKind::Hole)
+        .map(|c| vec3::norm(vec3::sub(s.u.values[c], tg_u(s.geom.mesh.cell_centres()[c], T_END))) / decay())
+        .fold(0.0, f64::max);
+    println!(
+        "TG_2 {steps} steps with C ({:.1} s): e {e:.4e}, continuity {cont:.2e}",
+        t0.elapsed().as_secs_f64()
+    );
+    (s, e, cont)
+}
+
+/// The largest difference of the velocities of two runs of TG_2 over the non-hole cells, over the decay, with its cell.
+fn tg2_difference(tag: &str, a: &OversetSolver, b: &OversetSolver) -> f64 {
+    assert!(a.conn.kind == b.conn.kind, "the two runs end at different kinds");
+    let mut best = (0.0, 0);
+    for c in 0..a.geom.n_cells() {
+        if a.conn.kind[c] != CellKind::Hole {
+            let d = vec3::norm(vec3::sub(a.u.values[c], b.u.values[c])) / decay();
+            if d > best.0 {
+                best = (d, c);
+            }
+        }
+    }
+    let x = b.geom.mesh.cell_centres()[best.1];
+    println!(
+        "{tag}: max |d| {:.4e} in cell {} ({:?}, {}) at ({:.3}, {:.3})",
+        best.0,
+        best.1,
+        b.conn.kind[best.1],
+        if best.1 < b.conn.n_background_cells {
+            "background"
+        } else {
+            "component"
+        },
+        x[0],
+        x[1]
+    );
+    best.0
+}
+
+/// The numbers of A2, A2b and A2c: `max |d_200|`, `max |d_400|`, `e` in 800 steps, the largest continuity.
+fn tg2_numbers() -> (f64, f64, f64, f64) {
+    let (a, _, ca) = tg2_run(200);
+    let (b, _, cb) = tg2_run(400);
+    let (r, e, cr) = tg2_run(800);
+    (
+        tg2_difference("TG_2 with C, d_200", &a, &r),
+        tg2_difference("TG_2 with C, d_400", &b, &r),
+        e,
+        ca.max(cb).max(cr),
+    )
+}
+
+/// ADR 0245 amendment 1, A2, A2b and A2c: D2 of ADR 0241 on TG_2 with C.
+#[test]
+#[ignore = "slow (three level-2 overset runs, about 6 minutes): run once for the addendum"]
+fn a2_tg2_ratio_with_the_consistent_face_coefficient() {
+    let (d200, d400, e, cont) = tg2_numbers();
+    let mut c = Checks::new();
+    c.at_least(
+        "A2 (acceptance) TG_2 with C, max |d_200| / max |d_400|",
+        d200 / d400,
+        4.0,
+    );
+    c.at_most("A2b TG_2 with C, max |d_200|", d200, 2.125e-5);
+    c.at_most("A2c continuity of the calculated cells, every step", cont, 1e-9);
+    c.at_most(
+        "A2c e(TG_2) in 800 steps with C over the default's 3.179e-4",
+        e / 3.179e-4,
+        1.05,
+    );
+    c.finish();
 }
