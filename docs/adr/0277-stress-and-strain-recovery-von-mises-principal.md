@@ -419,3 +419,135 @@ registered and is what the test builds. No measurement of R1 or R2 was printed o
 **Correction.** A new test `r1_r2_repeated_roots_57` with the same tensors, measures and limits, asserting the count 57. The
 old test `r1_r2_repeated_roots` stays unedited apart from `#[ignore]` as the record of the defect. R1 and R2 are as
 registered with "54" read as "57"; the decision rule is unchanged. One run of the new test.
+
+## Addendum 1: results (2026-11-12)
+
+Code at commit 2e4d9f2c (after the registration aadce631): `crates/rcfd-fem/src/recover.rs` (the one-line stub filled) and
+`crates/rcfd-fem/tests/sb_recover.rs`; test `r1_r2_repeated_roots_57` of amendment 1 at 731805ad (amendment 87385079);
+`cargo fmt` at 3bc0da6a (formatting only). No other file of the crate, no file outside it. The registered run was made
+once, in release, with `cargo test -p rcfd-fem --release --test sb_recover -- --nocapture --test-threads=1` (8 passed, 1
+failed on the set-up defect of amendment 1; log `w49i-work/f376-scratch/run1.log`); R1 and R2 once after the amendment
+(`run2-r1.log`).
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| P1 routine against Jacobi, 1000 tensors | `<= 1e-12` | 7.1e-16 | yes |
+| P1t bare closed form against Jacobi | `<= 1e-12` | 1.2e-15 | yes |
+| P2 ordered | every tensor | 1000 of 1000 | yes |
+| P3 orthonormal directions | `<= 1e-12` | 8.9e-16 | yes |
+| P4 random rotation | `<= 1e-12` | 1.3e-15 | yes |
+| V1 uniaxial, 300 cases | `<= 1e-14` | 0 | yes |
+| V2 pure shear, 300 cases | `<= 1e-14` | 2.7e-16 | yes |
+| V3 hydrostatic, 100 cases | `<= 1e-14` | 0 | yes |
+| R1 57 repeated-root tensors (amendment 1): finite, ordered, zero tensor exact; orthonormality; values against the exact roots | as stated; `<= 1e-12`; `<= 1e-12` | all finite, ordered, zero exact; 6.7e-16; 1.1e-15 (worst: near-repeated rotated) | yes |
+| S1 patch, points: stress / strain (Tet4; Hex8; Tet10) | `<= 1e-10` | 3.7e-15 / 6.5e-15; 3.7e-15 / 7.2e-15; 1.9e-14 / 3.2e-14 | yes |
+| S2 patch, element means | `<= 1e-10` | 3.7e-15 / 6.5e-15; 2.0e-15 / 3.9e-15; 8.8e-15 / 2.3e-14 | yes |
+| S3 patch, nodal averages (every node has a value) | `<= 1e-10` | 2.2e-15 / 2.6e-15; 5.5e-15 / 9.5e-15; 1.4e-14 / 2.3e-14 | yes |
+| W1 Clapeyron, uniaxial / bending (Tet4; Hex8; Tet10) | `<= 1e-10` | 2.4e-15 / 2.3e-13; 1.3e-15 / 2.6e-12; 1.0e-14 / 1.5e-11 | yes |
+| P5 eigen residual (extension) | `<= 1e-12` | 5.5e-16 (random); 4.1e-16 (repeated roots, record) | yes |
+| R2 bare closed form on the repeated roots (record) | record, estimate `~ 3e-8` | 6.8e-9 | record |
+| V4 rotated uniaxial | `<= 1e-13` | 8.7e-16 | yes |
+| V5 von Mises against the principal values | `<= 1e-12` | 6.5e-16 | yes |
+| W2 uniaxial energy against `sigma^2 V / (2 E)` = 25 J | `<= 1e-10` | 6.1e-15; 2.7e-15; 2.1e-14 | yes |
+| W4 energy against `u^T K u / 2`, uniaxial / bending | `<= 1e-10` | 3.7e-15 / 5.1e-13; 2.1e-15 / 3.9e-12; 1.5e-14 / 1.6e-12 | yes |
+| X1 extrapolation exactness (Tet4 constant; Hex8, Tet10 linear) | `<= 1e-13` | 0; 9.7e-16; 5.4e-16 | yes |
+| X2 nodal average of the linear field | `<= 1e-13` | 5.9e-16; 6.5e-16; 4.3e-16 | yes |
+| X3 volume weighting (Tet4) | `<= 1e-14` | 2.7e-16 | yes |
+| X4 material interface | refused naming node and sets; region; equal materials accepted | "node 1 joins elements of the material sets 'left' and 'right' with different materials; average over one element set at a time"; region and equal materials as stated | yes |
+| X5 Hex8 element means against the centroid value | `<= 1e-13` | 4.3e-16 | yes |
+| A1 `attach` bit for bit | equal | equal for all three | yes |
+| E1 refusals | as stated | as stated | yes |
+| N1 another `D` (`nu = 0.25`) | `> 1e-3` | 0.16 | yes |
+| N2 `W` in place of `W/2` | `> 0.4` | 0.50 | yes |
+| N3 ascending against descending | `> 1e-3` | 0.37 | yes |
+
+Strain energies: uniaxial 25.000 J for all three (closed form 25 J); bending 28.3 J (Tet4, locking), 55.6 J (Hex8), 79.2 J
+(Tet10), against the beam estimate of about 80 J (arithmetic 14).
+
+**Diagnosis of W1 bending, Tet10 (1.5e-11, inside the limit but a hundred times the estimate of arithmetic 13).** A
+diagnostic on the scratch copy (not a registered check; `f376-scratch/tree/crates/rcfd-fem/tests/diag.rs`) printed the
+direct solve's relative residual for that cantilever: 6.7e-11 (ADR 0275's models: 2.4e-16 to 9.5e-14), and `u . (K u - f -
+r) / (f . u) = 1.7e-11`, which is the whole of W1 (W4, the recovery against `u^T K u / 2`, is 1.6e-12). So the miss of the
+estimate lies in the static solve's residual on a slender Tet10 model, not in the recovery; arithmetic 13 took the residual
+from ADR 0275's stockier models. The margin of W1 to its limit on that model is a factor 6.
+
+**Mutations** (scratch copy by `git archive` of 3bc0da6a, own target directory, each alone by exact text replacement,
+`sb_recover` run once, file restored and compared by SHA-256; `f376-scratch/mutate.py`, `mutations.log`, `M*.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 shear products halved in the energy density | W1 (Tet4 bending 0.21; uniaxial has no shear and passes) |
+| M2 von Mises shear coefficient 6 | V2, V5 |
+| M3 plane pair by cross products | R1 (non-finite directions) |
+| M4 values ascending | P1, R1 (ordering) |
+| M5 bare closed-form values | R1 (values against the exact roots) |
+| M6 Hex8 point values copied to the nodes | X1 |
+| M7 plain mean in `nodal_average` | X3 |
+| M8 material-interface test removed | X4 |
+| M9 plain mean in `element_means` | X5 |
+| M10 every point's strain at the rule's first point | W1 (Hex8 bending 0.10) |
+| M11 clamp of `r` removed | R1 (values 0.55 off: `acos` of `r > 1` gives NaN, the cross products are NaN and the fallback axis is taken); caught, so the allowance of the rule was not needed |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings` (debug and release): clean.
+The existing `sb_model` (11), `sb_elements` (8), `sb_static` (9) and `sb_loads` (7) pass unedited (release).
+
+**Deviations.**
+
+1. Amendment 1: the registered total of the repeated-root list was mis-added (54 for 57); the first R1 test stopped at the
+   count before measuring and is kept as an ignored record; the corrected test was registered and committed before its one
+   run. No limit changed.
+2. The W1 number for Tet10 bending exceeds the registration's estimate by a factor 100 (diagnosed above: the static solve's
+   residual); the limit is met.
+3. Not run: the whole workspace (the lead runs the gate) and the baseline hashes (no file outside `rcfd-fem` changed, no
+   shared solver file, no crate depends on `rcfd-fem` yet).
+
+**Decision by the registered rule, as amended: done** (pending the maintainer's acceptance). P1, P1t, P2, P3, P4, V1, V2,
+V3, R1, S1, S2, S3 and W1 are met for every kind and case, N1 to N3 hold, every extension is met, and all eleven mutations
+are caught.
+
+**Remaining questions.**
+
+1. The direct solve leaves a relative residual of 6.7e-11 on a slender Tet10 cantilever (10 x 2 x 2 cells, L/h = 10), close
+   to the 1e-10 of several acceptance clauses that rely on it. Options: (a) one step of iterative refinement in
+   `solve::direct` (`r = b - K u`, solve again, add), opt-in or default; (b) leave it and let ADR 0280 (cantilever, L/h = 20)
+   and ADR 0282 record the residual; (c) a follow-up item to measure the residual against the slenderness. Recommendation: (c)
+   now, with (a) as its likely remedy; a default change of `solve.rs` belongs to its own registration.
+2. Principal directions are not forced into a right-handed frame. Options: (a) leave as is; (b) flip the third direction
+   when `d1 x d2 . d3 < 0`. Recommendation: (a) for the basic tier; a viewer of ADR 0278 needs only the vectors.
+3. Nodal averaging across a material interface is refused. Options: (a) keep the refusal and let callers average per element
+   set; (b) return per-region nodal values (one value per node and region). Recommendation: (a) now, (b) when ADR 0278 meets a
+   multi-material model.
+
+## For the lead: roadmap entries
+
+F-376: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0277, 2026-11-12: rcfd_fem::recover. IntegrationPointField (compute(model, displacement), from_result) with the position, weight w det J, strain B u and stress D eps at every point of each element's stiffness rule; element_means, element_strain_energy and strain_energy (sum w det J eps . sigma / 2); attach puts strain and stress into SolidResult; extrapolation_matrix (a polynomial space fitted to the rule's points: constant for Tet4, linear for Tet10, trilinear for Hex8), element_nodal_values and nodal_average (volume-weighted over an element set or all elements; a node joining two different materials is refused naming the node and both sets); tensor_norm, von_mises, principal (values descending with orthonormal directions: the closed trigonometric form for the separated root, its direction by the largest cross product of rows of C - b I, the other two by one exact 2 x 2 Jacobi rotation in the orthogonal plane) and principal_values_trigonometric (the bare closed form). 1000 random tensors (seed 0xF376_0277): routine against rcfd_linalg's Jacobi 7.1e-16 of the norm and the bare closed form 1.2e-15 (limit 1e-12), all ordered, directions orthonormal within 8.9e-16, a random rotation changes the values by 1.3e-15 (limit 1e-12); von Mises uniaxial 0, pure shear 2.7e-16, hydrostatic 0 (limit 1e-14); 57 repeated-root tensors (zero, hydrostatic, uniaxial, double roots, rotated hydrostatic, near-repeated rotated) finite, ordered, orthonormal within 6.7e-16 and within 1.1e-15 of the exact roots (the bare closed form 6.8e-9). Patch test of ADR 0275: stress and strain at the points, element means and nodal averages equal D eps and eps within 3.2e-14 (limit 1e-10). Strain energy equals half the work of the loads within 2.6e-12 (Hex8) and 1.5e-11 (Tet10, the residual of the direct solve on a slender model) for a uniaxial and a bending load (limit 1e-10); uniaxial energy equals sigma^2 V/(2E) within 2.1e-14. Eleven mutations caught.
+
+F-377 (ADR 0278), sentence to append to its note:
+
+> ADR 0277 (2026-11-12): nodal stresses for the VTK output come from recover::IntegrationPointField::from_result(model, result) and recover::nodal_average(model, &field, field.stress(), region) (Option per node, None where the region has no element; refused across a material interface, so a multi-material model is written per element set or with element values); element stress components from field.element_means(field.stress()); recover::von_mises and recover::principal (values descending, directions with the largest-modulus entry positive) per value.
+
+F-378 (ADR 0279), sentence to append to its note:
+
+> ADR 0277 (2026-11-12): recover::IntegrationPointField gives strain and stress only at the stiffness rule's points; an energy-norm error with a rule of higher degree needs Element::strain_at at that rule's points and Material::stress directly.
+
+F-380 (ADR 0281), sentence to append to its note:
+
+> ADR 0277 (2026-11-12): the stress at a point is computed in recover::IntegrationPointField::compute by Material::stress(eps, &PointContext::default(), &[]); the thermal strain enters there (sigma = D (eps - eps_th)), and the strain energy of a thermally loaded model then needs its own definition.
+
+F-381 (ADR 0282), sentence to append to its note:
+
+> ADR 0277 (2026-11-12): the direct solve left a relative residual of 6.7e-11 on a Tet10 cantilever of 10 x 2 x 2 cells (L/h = 10), against 1e-16 to 1e-13 on stockier models; record the residual of the direct and iterative routes against the slenderness.
+
+F-432 (ADR 0335), sentence to append to its note:
+
+> ADR 0277 (2026-11-12): recover::IntegrationPointField carries per element the positions, weights w det J, strain and stress of the stiffness rule's points (offsets, points_of(e)); recover::nodal_average is the averaged nodal stress to compare against.
+
+Follow-up item proposed (remaining question 1):
+
+- title: Residual of the direct static solve on slender models, and iterative refinement
+- deps: F-374, F-376
+- acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The relative residual of the default direct static solve is recorded for Tet4, Hex8 and Tet10 cantilevers of slenderness 5, 10, 20 and 40 at registered meshes; with one step of iterative refinement (opt-in, the default bit-identical) the relative residual is at most 1e-14 on every one of them and the strain energy equals half the work of the loads within 1e-12; the cost of the refinement step is recorded.
