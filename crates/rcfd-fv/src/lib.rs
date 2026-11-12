@@ -2,6 +2,7 @@
 //! boundary conditions, gradients, convection and diffusion operators,
 //! time integration and the pressure-velocity coupled solvers.
 
+pub mod acoustic_wave;
 pub mod actuator;
 pub mod adaptive;
 pub mod ale;

@@ -5,6 +5,7 @@ pub mod checkpoint;
 pub mod compare;
 pub mod convergence;
 pub mod derived;
+pub mod duct_modes;
 pub mod fan_rom;
 pub mod fwh;
 pub mod glb_check;
