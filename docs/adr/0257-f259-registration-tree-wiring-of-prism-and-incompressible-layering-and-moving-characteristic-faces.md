@@ -260,3 +260,157 @@ turbulence, energy, body forces, sources, velocity expressions or lumped compone
 compressible solver (F-244); the Studio's and the workspace's generator lists (F-293); restart of a moving-mesh run;
 characteristic conditions through the tree with fluxes other than HLLC or with a smoothing motion beyond the 5 steps of
 L2; everything in the roadmap's out-of-scope list.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+969a3006, the code and tests 22b214ea, the documents 593f8b42. Each registered check ran once, on the code of 22b214ea
+before its commit; the runs are deterministic and none was repeated to change a result. Every check met its limit, the
+set-up checks and the control held, and every mutation made its tests fail.
+
+**Built as registered** (D1 to D6), with the deviations listed below.
+
+- `crates/rcfd-api/src/schema.rs`: the optional table `[mesh.box_3d]` with `section`.
+- `crates/rcfd-api/src/dynmesh.rs`: the optional table `[dynamic_mesh.compressible]` with `time_step`; `extruded_stack`
+  (the stack of a section, shared by the generator and the layering); the static checks N2, N4, N5; E5 removed from
+  `check_compressible`; `Layers` holds either stack (`Stack`); `step_layered` (D3), called by `DynMesh::step` when the
+  case is layered; `mesh_speed_step`.
+- `crates/rcfd-api/src/comp.rs`: `advance_moving` takes `max_dt_ale()` when the case asks for it, `max_dt()` otherwise.
+  `advance` is not edited.
+- `crates/rcfd-api/src/sim.rs`: `box_3d` builds the extruded stack's mesh for a section other than `"box"`; the build
+  check N6.
+- Tests: `crates/rcfd-api/tests/tree_wiring_f259.rs` (9) and `crates/rcfd-cli/tests/tree_wiring_f259.rs` (2). In
+  `crates/rcfd-api/tests/layering_ale_f259.rs` the test `l_located_errors` got an `#[ignore]` attribute with the reason and
+  is otherwise unchanged (the registered record of ADR 0191's three E5 inputs). No other existing test was edited.
+- Documents: `docs/case-schema.md` and `docs/dynamic-mesh.md` (prose and table rows; no TOML block added or edited).
+- Not changed: `rcfd-fv`, `rcfd-mesh`, `rcfd-cli` sources, `baseline_hashes.rs`, the hash tables, the goldens, the roadmap
+  files.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K0 (gate of the keys) | all pass, no file edited | `case_hashes_w48u` 1, `baseline_hashes` 3 (1 ignored as before), `w48v_adaptive_correctors` 5 (4 ignored as before), `rules_w19c` 8 (1 ignored as before), `mesh_transform_w48u` 13, `physics_schema` 11; `cli` 8; `default_f1` 2, `project_list_f270` 1: all passed, no file edited | held |
+| S1 | no table written without being set; written and hashed when set | absent without, present with, for the three pairs; settings hashes `9503f25daf18dad1` against `e82d6fb75106660a` (`time_step`) and `51506ef16ad6e526` (`section`), `2c3bd4afe787f20c` against `96f735b360a6b94a` | met |
+| S2 | equal bits | `time_step = "absolute"` against no table: every bit of the final state, the time and the step count (625) equal | met |
+| D0 | pass | `layering_ale_f259` (rcfd-api) 7 passed with `l_located_errors` ignored: K1, A-eq, A-1, B-eq, C-eq, R1 and D0's three hashes; `layering_ale_f259` (rcfd-cli) 2; `dynamic_mesh` 5 (1 ignored as before); `inverse_volume_f290` 6; `compressible_bc_case` 3; `far_field_w49f` 5; `exp_rot_pab` 6; `consistent_correctors_case_f301` 4 (8 ignored as before) | met |
+| K2 (set-up) | equal | T-P `470a7a64f6d474e9` for both, 320 cells; T-I `6fe98faaf60e754c` for both, 80 cells; every point's bits and the six patch names equal | held |
+| U-eq | equality `1e-12` | 70 steps; differences rho 0, p 0, u 0 (the same bits); the end time equal | met |
+| U-gcl | `<= 1e-12` | `8.62e-15` | met |
+| U-set (set-up) | `>= 50` steps; `>= 0.02` each | 70 steps; `0.534`, `0.534`, `0.597`, `0.597` on `xmin`, `xmax`, `ymin`, `ymax` | held |
+| DT-eq | equality `1e-12` | 613 steps, 8 cells at the end; differences 0 | met |
+| DT-n (negative control) | step counts differ by `>= 0.2` percent | 613 with the mesh-speed step, 625 without: 1.92 percent | held |
+| DT-m | `<= 1e-12` | `3.49e-14` | met |
+| P-eq | equality `1e-12` | 12 099 steps, 320 cells at the end; differences 0 | met |
+| P-2 | `abs <= 2e-2` | `3.416e-5` | met |
+| P-4 | `<= 1e-12` | `6.95e-13` | met |
+| P-6 | each `>= 5` | 24 removals, 24 additions, no other change of the cell count | met |
+| I-eq | equality `1e-12` | 120 steps, 52 cells at the end; differences u 0, p 0, phi 0 | met |
+| I-1 | `<= 1e-9` | `3.30e-15` | met |
+| I-3 | `<= 1e-13` | `8.88e-16` | met |
+| I-4 (set-up) | `>= 5` removals | 7 | held |
+| X-eq | equality `1e-12` | 120 steps, 108 cells at the end; differences 0 | met |
+| X-4 (set-up) | `>= 5` additions | 7 | held |
+| L2 | as stated | N1 to N6 each at the registered path (an unknown key inside a table: `mesh.box_3d.sections`, `dynamic_mesh.compressible.step`); ADR 0191's inputs for E1 to E4 and E6 to E13 each at their path; its three E5 inputs and its E5 control: no diagnostic and 5 steps each without a failure; the set-ups: none | met |
+| R2 | as stated | `dynamic_mesh: step 1, t = 5.000000e-3: mesh error: layering: piston at 0.09999999999999998 is not beyond the last static plane 0.75` | met |
+| X3 (CLI) | relative `<= 1e-12` | exit 0, 808 steps, 16 cells at the end; `rho_total` 0.009999999999999561, `p_mean` 3.6085026153909086, `p_max` 3.7010107814443045 from `monitors.csv`, equal to the in-process run (difference 0) | met |
+| X4 (CLI) | exit 3, the path named | exit 3 for both; `line 46: mesh.box_3d.section: ...` and `line 46: dynamic_mesh.compressible.time_step: ...` | met |
+
+Printed, no limit: T-X's largest continuity `3.47e-15` and volume error `6.66e-16`. The mesh-speed step saves 12 of 625
+steps on P-X (the arithmetic before the registration expected 1 to 4 percent). The prism piston through the tree takes
+12 099 steps; ADR 0213's library loop on its own schedule (landing on `T`) took 12 100.
+
+### Mutations
+
+Each was applied alone, by an exact text replacement that checks that the replaced text occurs once, to a scratch copy of
+the tree of 22b214ea (`w49i-work/f259-scratch/mut`, its own target directory), the named tests were run once, and the
+files were restored and compared byte for byte with the kept copies (equal each time). After the last one the unmutated
+copy passed all 9 tests.
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | `advance_moving` ignores `time_step` | DT-eq (and DT-n) | failed: DT-eq, 625 steps in the tree against the library's 613 (the test stops there; with 625 steps DT-n would be 0) |
+| M2 | the incompressible piston at the start time of the step | I-eq | failed: the cell counts differ from step 35 on (the tree's first removal one step later than the library's) |
+| M3 | a merged cell takes the pressure of its first source | I-eq | failed: u `1.15e-6`, p `6.31e-7` (phi `5.8e-16`; I-1, I-3 and I-4 held) |
+| M4 | `section = "triangles"` builds the rectangles' mesh | K2, P-eq | K2 failed: 160 cells against 320, hash `104e5d22acdcd303` against `470a7a64f6d474e9`; P-eq failed: 9191 steps against 12 099 |
+| M5 | the E5 refusal put back | U-eq, L2 | U-eq failed: the tree refuses T-U (static diagnostics); L2 failed: T-U gives diagnostics at the four `boundaries.<patch>.compressible_bc` |
+
+`scripts/limit_audit.py` reports no hit in the two new test files.
+
+### fmt and clippy
+
+`cargo fmt -p rcfd-api --check` and `cargo fmt -p rcfd-cli --check`: clean. `cargo clippy -p rcfd-api -p rcfd-cli
+--all-targets -- -D warnings`: clean.
+
+### Deviations and disclosures
+
+- **One located error more than registered.** Layering with `piso` / `pimple` and `motion = "six_dof"` gives a diagnostic
+  at `dynamic_mesh.motion` (the piston of a layer stack is driven by `displacement_expression_x`; without the check a body
+  would have left the piston at rest). No test asserts it.
+- N6's list in the code also names a body force; on the transient incompressible path the tree sets none at build time,
+  so that entry cannot fire today.
+- L2 holds one input more than registered (E8 with incompressible layering: `moving_patches = ["xmin"]`), and its
+  "no diagnostic" controls also cover T-Da and ADR 0191's P-T, P-B and P-C.
+- K0 ran on the complete code (the tables, the driver and the checks), not on the tables alone.
+- Before the registered runs the code was built and the new test files were compiled without running (one format string
+  of a `println!` was corrected) and laid out by rustfmt. No test ran before its registered run. Clippy ran after the runs
+  and asked for no change.
+- The documents were edited after K0; `case_hashes_w48u` was run again after that edit and passed (prose only, no TOML
+  block).
+- Beyond the registration, run once and passed: `rcfd-api` `registers`, `sgs_tree`, `turb_models` (they read the case
+  schema).
+- The library run of T-I and T-X takes the solver settings and the initial fields with their conditions from the tree's
+  solver before its first step, as registered; the equality therefore covers the mesh, the motion, the step and the
+  layer events, not the mapping of the solver keys.
+
+### Not run
+
+The whole workspace suite and the gate (the lead runs it). The Studio and GUI tests (`rcfd-studio` `editor_b5`,
+`correctors_x`, `rcfd-gui` `logic`, which ADR 0223's K0 ran): their crates were not built here; by reading, neither
+schema model looks at optional tables in a special way, and ADR 0155 and ADR 0223 added optional tables with those tests
+unedited. `rcfd-mcp` `tool_list_f275` (not in this K0; the goldens hold no case-schema key). Characteristic conditions
+through the tree with a smoothing motion or a layered piston beyond the 5 steps of L2.
+
+### Decision by the registered rule
+
+K0, S1, S2 and D0 held; U-eq, DT-eq, P-eq, I-eq and X-eq, L2, X3 and X4 are met; the set-up checks and DT-n held; every
+mutation failed its tests. By the rule the acceptance of F-259 is met for all the library work it names, and F-259 is
+proposed **done**, pending the maintainer's acceptance.
+
+### Remaining questions
+
+- **Q1. The time step of moving compressible tree runs (ADR 0207 Q2).** Options: (a) keep the absolute step as the
+  default, the mesh-speed step by `[dynamic_mesh.compressible] time_step = "mesh_speed"` (as built); (b) make the
+  mesh-speed step the default: it changes the bits of every moving compressible tree run (625 to 613 steps on P-X) and
+  needs the maintainer's lift of the bit-identical default for that path and a registered edit of ADR 0191's library
+  loops. Recommendation: (b), as ADR 0207 recommends, in a registration of its own; not taken here because it changes
+  default results.
+- **Q2. Layer thresholds as keys (ADR 0191 Q1, not asked).** Options: (a) fixed at 0.4 and 1.6 (as built); (b) two keys in
+  an optional table. Recommendation: (a) until a case needs other thresholds.
+- **Q3. One section value for both hexahedral meshes.** `"box"` and `"rectangles"` give the same cells in two face
+  orders, because ADR 0191's cases must keep their bits on `box_mesh`. Options: (a) keep both (as built); (b) let
+  compressible layering on `"box"` use the extruded stack too, which changes the bits of ADR 0191's piston runs.
+  Recommendation: (a).
+- **Q4. `box_3d` and its sections in the Studio and the workspace's start plan** (ADR 0191 Q4, F-293): the cell estimate
+  of `"triangles"` is `2 nx ny nz`. Recommendation: add it with F-293.
+- **Q5. Status.** Options: (a) done; (b) partial until Q1 is decided. Recommendation: (a): the acceptance names the
+  wiring, located errors, tree equal to library and bit-identical defaults, all met; Q1 is a default decision outside it.
+
+### For the lead: roadmap entries
+
+**F-259**, proposed status: done (pending the maintainer's acceptance). New note (the whole note; up to "H1 unedited." it
+is the present one):
+
+> Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S. PARTIAL (ADR 0191, the registration of F-259, 2026-11-05): a transient compressible run (solver.algorithm = compressible) moves its mesh under a prescribed dynamic_mesh motion with rigid or smoothing deformation (the ALE step of ADR 0090), and dynamic_mesh.deformation = layering runs ADR 0090's planar layer stack of a piston on the new generator mesh.generator = box_3d (thresholds 0.4 and 1.6 of lx / nx, no key); no new key, defaults and the incompressible checks unchanged; invalid settings give located errors (E1 to E13; E8 and E2 also through rcfd validate, E8 with its line number), and a piston driven through the last static plane stops the run with a dynamic_mesh: message; ADR 0090's piston P (9191 steps, 24 removals and 24 additions), a smoothed piston with a static pressure outlet and a rigidly moving uniform flow give the same bits through the tree as through library calls (limit 1e-12), and rcfd run gives the reports of the in-process run; ADR 0090's limits hold on the tree run (p V^gamma 1.5e-5 at full compression and 3.4e-5 after the stroke against 2e-2, mass drift 5.4e-13 against 1e-12); fixed-mesh compressible runs are bit-identical to main (D0), baseline hashes and H1 unedited. Open after ADR 0191: the wiring of F-257 and F-258, layer thresholds as keys (Q1), the Studio's cell estimate for box_3d (Q4, F-293). USER DECISION 2026-11-06 (ADR 0191 decision record): stays PARTIAL (Q3, not closed yet); inverse-volume smoothing is the new item F-290 (Q2 (b)); box_3d in the Studio's lists follows the maintainer's Studio worktree (Q4 (a), F-293); Q1 was not asked. The SV202 message observed in addendum 1 is recorded under F-240. DONE pending acceptance (ADR 0257, 2026-11-12; ADR 0207 Q1 (a) and ADR 0213 Q1 (a) taken on the maintainer's standing instruction of 2026-11-11): the tree runs the library work of F-257 and F-258. Characteristic compressible conditions may be on patches that move (ADR 0191's refusal E5 lifted; its test L is an ignored record, the new test L2 asserts the new behaviour); the optional table [mesh.box_3d] section = "box" (default), "rectangles" or "triangles" builds box_3d as the extruded layer stack, so layering runs on prism layers and, with piso / pimple, on the incompressible path (velocity, pressure and face flux remapped at every layer change); the optional table [dynamic_mesh.compressible] time_step = "mesh_speed" takes the mesh-speed step (default "absolute", the step of ADR 0191). Both tables are optional tables: a case that does not write them keeps its text, hash and results (H1, baseline hashes and the goldens unedited; ADR 0191's runs and D0 hashes unchanged; time_step = "absolute" equals no table bit for bit). Tree runs equal library runs with the same bits (limit 1e-12): a uniform flow with total inlet, pressure outlet, far field and non-reflecting outlet on moving faces (70 steps, uniform to 8.6e-15), the Mach 0.2 piston with the mesh-speed step (613 steps against 625), ADR 0090's piston on prisms (12 099 steps, 24 removals and 24 additions, p V^gamma 3.4e-5 against 2e-2, mass drift 7.0e-13 against 1e-12), ADR 0213's piston channel on the piso path with 7 removals (continuity 3.3e-15, volume 8.9e-16) and with 7 additions; rcfd run gives the reports of the in-process run and rcfd validate locates the errors of both tables; located errors N1 to N6 and ADR 0191's E1 to E4 and E6 to E13 hold; five mutations each failed their tests. Open: the mesh-speed step as the default (ADR 0207 Q2 (b), changes the bits of moving compressible runs: the maintainer's call), layer thresholds as keys (ADR 0191 Q1), box_3d sections in the Studio's lists (F-293).
+
+**F-258**: its note's sentence that the tree does not use the library yet should read:
+
+> The case tree uses it since ADR 0257 (2026-11-12, F-259): characteristic conditions on moving patches are accepted, and the mesh-speed step is the opt-in [dynamic_mesh.compressible] time_step = "mesh_speed"; Q1 (a) is taken on the maintainer's standing instruction, Q2 (the mesh-speed step as the default of moving tree runs) stays open.
+
+**F-257**: its note's sentence that the tree does not use the library yet should read:
+
+> The case tree uses it since ADR 0257 (2026-11-12, F-259): [mesh.box_3d] section = "rectangles" or "triangles" builds the extruded stack, and dynamic_mesh.deformation = "layering" runs on it with the compressible solver and with piso / pimple; Q1 (a) is taken on the maintainer's standing instruction.
+
+**Follow-up item (proposed)**: title "Mesh-speed time step as the default of moving compressible tree runs"; deps F-259, F-258; acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. Needs the maintainer's lift of the bit-identical default for moving compressible tree runs (ADR 0207 Q2 (b)). The moving compressible step of the case tree takes max_dt_ale() by default, with [dynamic_mesh.compressible] time_step = "absolute" restoring the step of ADR 0191; the library loops of ADR 0191's equality tests are restated by a registered edit (the old tests kept as ignored records); a tree run equals the library run to 1e-12 for both values; fixed-mesh compressible runs and incompressible runs are bit-identical (baseline hashes and ADR 0191's D0 unchanged); the CFL number of the piston cell of the Mach 0.2 piston stays within the registered bound of the set value over the stroke.
