@@ -6128,8 +6128,8 @@ fixed by the item's registration ADR before any code.
     1.003; a cut-off mode decays 1.7e-3 off the closed form; a synthetic rectangular field (five modes both ways and a
     cut-off one) through DFT, fit, split and JSON recovered within 4e-15 and a circular section with two truncated modes
     within 1.3e-4 (limit 1e-2). Eight mutations caught. Limits: medium at rest, linear, no impedance wall, not coupled
-    to a CFD run (the source is a driven boundary); the solver was checked in two-dimensional channels only (circular
-    modes in the export only); one planar layer; no case key or CLI (ADR 0351 question 1).
+    to a CFD run (the source is a driven boundary); the solver was checked in two-dimensional channels here; circular
+    ducts on an O-grid under F-453 (ADR 0366, 2026-11-12); one planar layer; no case key or CLI (ADR 0351 question 1).
 - [x] **F-328** SV202's fuller text: what the solvers do with a case without boundary conditions
   - depends on: F-240
   - acceptance: For the compressible solver SV202 states that every patch is a slip wall and an outlet is extrapolated.
@@ -8422,12 +8422,28 @@ fixed by the item's registration ADR before any code.
     a closed-form duct field sampled into that file within 1 percent; a series that does not cover a whole number of
     periods is refused.
   - note: From ADR 0351 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-453** Circular and three-dimensional ducts through the wave solver
+- [~] **F-453** Circular and three-dimensional ducts through the wave solver
   - depends on: F-333
   - acceptance: A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate
     with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in
     the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.
-  - note: From ADR 0351 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: PARTIAL, ADR 0366, 2026-11-12. Library only. The acceptance clauses are met; two registered checks missed and
+    one registered mutation escaped its registered check, so the item is partial by Rule I. Built: rcfd-mesh
+    `circular_duct_ogrid` (an O-grid of a circular duct: an n x n core and four n x n/2 ring blocks, extruded along z;
+    patches wall, inlet, outlet), and tests that drive the duct through the F-333 `AcousticWaveSolver` and measure it
+    with `duct_modes`. Radius 0.06 m, each mode at cos theta = 0.8, matched layer one axial wavelength thick before a
+    rigid end. The spinning mode (1, 0) at 2768 Hz on n = 16 (110 k cells) has an axial wavenumber 2.58e-3 below the
+    closed form corrected for the 64-sided polygon (the correction is the equal-area radius, first-order Hadamard,
+    -4.5e-4; 3.03e-3 below the circle's form); the layer reflects 3.6e-5. The radial mode (0, 1) at 5760 Hz on n = 32
+    (424 k cells) is 2.56e-3 below (correction -1.1e-4); reflection 6.5e-5. Both match a Fourier analysis of the scheme
+    within about 5 percent. The Bessel zeros are computed in the test from the power series and agree with the library
+    within 1.1e-14. Coarse covering runs met their limits, and the rigid end without a layer reflects 0.9995. Missed:
+    the counter-rotating (-1, 0) content of the spinning runs is 1.2e-5 against a registered 1e-6 (estimate
+    "round-off"). Diagnosed (amendment 1): the solver commutes with the grid's rotation to 1e-15, and the content falls
+    in a longer run, so it is left over from the start-up ramp of the drive. Mutation MU3 (wall given the open flux)
+    escaped the registered conservation check U8, whose initial field has a zero boundary mean; four duct checks caught
+    it. Limits: two modes at one frequency each, one O-grid topology, no rectangular 3-D duct, one planar layer, medium
+    at rest; no case key or CLI (ADR 0351 question 1, F-451).
 - [~] **F-454** Fractional step: a step-consistent face flux for the projection
   - depends on: F-443
   - acceptance: The steady lid-driven cavity of ADR 0245 C3 with solver.time_advance = "fractional_step" (8.7e-2 between
@@ -8717,3 +8733,8 @@ fixed by the item's registration ADR before any code.
     interpolation, continuity within 1e-9 at every step, with a run that names the share of the uncorrected Green-Gauss
     pressure gradient.
   - note: From ADR 0367 question 2; low priority.
+- [ ] **F-473** Conservation check of the wave solver with a non-zero boundary mean
+  - depends on: F-453
+  - acceptance: On the closed circular O-grid duct, an initial pressure with a non-zero mean on every patch keeps sum p
+    V to 1e-12 over 100 steps with every patch a wall, and changes it by more than 1e-3 when one patch is open.
+  - note: From ADR 0366 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
