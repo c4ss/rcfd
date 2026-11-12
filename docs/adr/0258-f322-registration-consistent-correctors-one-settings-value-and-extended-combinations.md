@@ -383,3 +383,134 @@ set-ups are implicit Euler); three-dimensional meshes (the set-ups are two-dimen
   velocity part as ADR 0223 Q6 recommends.
 
 Recommendations are given in the addendum with the results.
+
+## Addendum 1: results (2026-11-12)
+
+Nothing above this line was changed after a run. No amendment was needed: every registered run was made once and no set-up was
+defective.
+
+### What was built
+
+All in `crates/rcfd-fv/src/pimple.rs` (`pimple/moving.rs` is unchanged: the moving-mesh step goes through `step_with`, where
+the refusals act):
+
+- V1: `ConsistentCorrectors` (six flags, `all()`), the field `PimpleSettings::consistent`, `consistent_flags()` (the value OR-ed
+  with the three older fields) and `set_consistent()` (stores the value and writes the older fields). The older fields are kept.
+- V2: `ConsistentContext`, `ConsistentRefusal` (13 variants; `stage`, `flag`, `setting`, `reason`, `message`, `from_stage`,
+  `ALL`, `Display`), `ConsistentCorrectors::conflicts` and `validate`. `consistent_conflict` and the per-outer check of hook
+  sources go through them; `Divergence::message` appends the located part to the unchanged sentence of ADR 0214.
+- X1: `consistent_non_orth` (the internal-face term in `phiHbyA`, the fixed-pressure boundary term in the flux divergence of the
+  pressure equation only), in the step and in `lag_map`. X2: the refusal lifted under the flag, no new term. X3: the jump-face
+  compensation with `interp(rAtU)` and the cell term with `gradient_fix`.
+
+Lines changed in `pimple.rs`, in the numbering of this tree (new file): 126-130 (the field), 138-421 (the new types), 779-784
+(the message), 848 and 853-872 (default and the two methods), 1239-1268 (`consistent_context`, `consistent_conflict`), 1293 and
+1300 (the refusal before any work), 1331-1332 (`cf`), 1407-1423 (the per-outer check), 1489, 1593-1594, 1665 (`cf` in place of
+the older fields), 1720-1721 and 1725-1740 (X1 and the cell term of X3 after `consistent_split`), 1752-1762 (the jump face),
+1769-1777 (`phi_eq`, `phi_solve`), 1802-1805 (the two `solve_pressure` calls take `phi_solve`), 1967, 1989, 2011-2012, 2025,
+2047-2052 (`lag_map`), 2441-2484 (`consistent_non_orth`). In the numbering of main 2e0eefd0, near `gamma_p` (old line 1341) and
+the pressure solve: old 1344 (the `r_t` line), insertions after old 1398, 1401, 1412 and 1418, and old 1443-1446 (the argument
+`&phi_hby_a` of `solve_pressure` and `solve_pressure_src` became `phi_solve`). The line of `gamma_p` itself and the
+`gradient_pressure` branch of the solve are untouched.
+
+### Checks
+
+Release profile, target directory `w49i-work/target-f322`, code of commit f63ff42a. Each run made once.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| V1 | exact | pass | yes |
+| V2 | exact, 13 rows, order | pass | yes |
+| R3 | every row through the solver, located message, state unchanged | 16 cases (13 rows; rows 9, 10, 11 also from the hook), all as registered | yes |
+| R4 | accepted combinations, one step, not stopped | 8 cases, none stopped | yes |
+| R1, R2 (existing) | pass, unedited | `r1_refusals_of_the_consistent_correctors`, `r2_refusals_with_the_extension_flags` pass | yes |
+| SNs | `>= 0.4` | 0.5000 | yes |
+| SDs | `>= 1e-6 U0` | 1.838e-1 U0 | yes |
+| SJs | `>= 0.3 R0`, `>= 0.05 R0` | 0.7901 R0, 0.2099 R0 | yes |
+| SE (N, D, J, X) | `>= 1e-6 U0` | 8.94e-3, 7.93e-3, 9.03e-3, 1.04e-2 U0 | yes |
+| S0N, S0D, S0J, S0X | `<= 2e-11 U0` | 3.05e-12, 1.76e-12, 3.02e-12, 1.73e-12 U0 | yes |
+| **S1N** | `1e-10 U0`, `1e-10` of the range | 3.71e-12 U0, 5.05e-11 | yes |
+| **S1D** | the same | 3.75e-12 U0, 3.24e-11 | yes |
+| **S1J** | the same | 2.51e-12 U0, 2.50e-11 | yes |
+| **S1Jh** | the same | 2.51e-12 U0, 2.50e-11 | yes |
+| **S1X** | the same | 2.96e-12 U0, 4.22e-11 | yes |
+| TN | no trip; continuity `<= max(1e-10, 2 x D's)`; `e(dt_2) <= 0.05 U0`; ratio `>= 1.3` | no trip; C 6.85e-3, D 6.75e-3; 2.42e-5 U0; 3.49 | yes |
+| TD | the same | no trip; C 1.59e-13, D 1.00e-13; 7.93e-5 U0; 3.34 | yes |
+| TJ | the same | no trip; C 1.45e-13, D 1.06e-13; 5.56e-6 U0; 5.94 | yes |
+| TI | bit-identical, SBC and SPC, arms (ii) and (iii) against (i) | bit-identical (and (i) differs from the default) | yes |
+| LN | one finite estimate, the step bit-identical | one estimate, rho 0.306; bit-identical | yes |
+| N1 | all pass | `rcfd-fv` lib 100 passed (5 ignored); `ale_flows` 5 (5 ignored); `ale_gcl` 4; `consistent_benchmarks_f301` 0 (9 ignored records); `consistent_correctors_f301` 12 (4 ignored); `consistent_defaults_f301` 6; `overset_f134` 12 (2 ignored); `piso_thin_gap_f299` 18 (2 ignored); `sixdof_coupled` 2 (1 ignored); `sliding_interface_f250` 14 (4 ignored); `w33b_default_bits` 1; `w33b_stability` 2 (9 ignored); `w33b_transient_order` 6 (9 ignored); `w34b_lag` 3 (3 ignored); `w34c_symmetry` 9 (4 ignored); `w48v_corrector_control` 5; 0 failed | yes |
+| N2 | all pass, no file edited | `baseline_hashes` 3 passed (1 ignored); `case_hashes_w48u` 1 passed; `w48v_case_hashes` 0 passed, 1 ignored (its only test is ignored in the tree, so it shows nothing) | yes |
+| N3 | pass | `consistent_correctors_case_f301` 4 passed (8 ignored); `consistent_defaults_case_f301` 3 passed | yes |
+| N4 | bit-identical | bit-identical | yes |
+
+Printed, no limit: the two default arms of the transients differ between `dt_1` and `dt_2` by 3.56e-3 (N), 8.67e-4 (D) and
+5.29e-4 U0 (J), so the option's difference to the default is 5 to 100 times smaller than the default's own step-size error.
+
+### Mutations (scratch copy `w49i-work/f322-scratch/mut`, target `target-f322-mut`, not committed)
+
+| Id | Caught by | Number |
+| --- | --- | --- |
+| MU1 | S1N | 7.95e-2 U0, 2.62e-1 of the range |
+| MU2 | S1N | 3.31e-3 U0, 3.80e-3 of the range |
+| MU3 | S1J, S1Jh | 1.29e-1 U0, 1.85e-1 of the range |
+| MU4 | S1J, S1Jh | 3.00e-1 U0, 1.15e-1 of the range |
+| MU5 | R3 | the moving-mesh row not refused |
+| MU6 | R4 and TI | the periodic box refused |
+| MU7 | R3 | the located part missing |
+| MU8 | R4 and S1D | stopped |
+
+### Deviations and disclosures
+
+- My prediction of the transient ratios (1.7 to 2.2) was wrong: measured 3.3 to 5.9, so the difference between the option and the
+  default falls faster than first order in `dt` on these set-ups. The limit (>= 1.3) is met; the ratio is not explained here.
+- TN's continuity error is 6.8e-3 in both arms: the default's own, from the explicit non-orthogonal pass (the flux uses the
+  gradient of the new pressure, the equation that of the pass's start). The registered limit compares C with D for that reason.
+- X2 has no algebra of its own; S1D and TD check that the existing split holds with the component diagonal, MU8 only that the
+  flag is wired.
+- The N1 list is the registered one; `varden_transient*`, `transient_buoyancy`, `w34b_floor`, `w35a_seam` and the rest of the
+  crate's tests were not run (the lead runs the gate).
+- `cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. No topic document was
+  updated: the one that describes the subject, `docs/case-schema.md`, is another agent's in this round.
+
+### Not run
+
+The whole workspace suite (the gate is the lead's); anything through the case tree with the new flags (no case key yet); the
+extensions with BDF2, in three dimensions, or on the falling-block mesh of ADR 0211.
+
+### Decision by the registered rule
+
+X1, X2 and X3 are **kept** (set-up checks held; S1N, S1D, S1J, S1Jh, TN, TD, TJ met). S1X met, so no combination row is added.
+V1, V2, R3, R4 and N1 to N4 hold: the library half of clauses A, B and C. Clause A's case half is not delivered, so F-322 is
+**partial**.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The older fields.** (a) keep them beside the value; (b) remove them once `sim.rs` sets the value, with an amendment to
+  ADR 0214 and ADR 0223 for the tests that set them. Recommendation: (b), in the case-key step, because two ways to set one flag
+  is one too many; until then (a).
+- **Q2. The case table.** (a) five further boolean keys, `periodic` and `body_force` defaulting to `true` and the three new ones
+  to `false` (every existing case keeps its hash and its result); (b) the three new keys default to `true` as well (`enabled`
+  then means "everything supported"; no existing result changes, because those cases are refused today, but an enabled case with
+  non-orthogonal correctors would start to run instead of failing); (c) keep one key. Recommendation: (a). It needs the schema
+  golden and `docs/case-schema.md`, so the maintainer's approval.
+- **Q3. Periodic faces with the new flags** (rows 4, 7, 11). (a) leave refused; (b) register a periodic identity on the velocity
+  part with the mean-removed pressure against the default's own drift (ADR 0223 Q6). Recommendation: (b) as a follow-up item.
+- **Q4. The transient ratio** above 2: (a) leave; (b) diagnose in the follow-up of Q3. Recommendation: (a), it is on the safe
+  side.
+
+### For the lead: roadmap entries
+
+F-322: status **partial**. Note:
+
+> PARTIAL (ADR 0258, 2026-11-12), the library half. Delivered: one settings value `ConsistentCorrectors` (enabled, periodic, body_force, non_orthogonal, component_diagonal, face_jump) as `PimpleSettings::consistent`, read together with the three older fields, which are kept (`consistent_flags`, `set_consistent`); one validation `ConsistentCorrectors::conflicts` / `validate` returning a located `ConsistentRefusal` (flag, other setting, reason) for each of 13 unsupported combinations, used by the solver before any work and per outer iteration, every earlier refusal kept with its stage and its sentence and the located part appended (R1 of ADR 0214 and R2 of ADR 0223 pass unedited); three combinations extended on fixed meshes without periodic faces, each with a steady identity and a transient check: non-orthogonal correctors (the non-orthogonal part of the compensation as ADR 0050, with the fixed-pressure boundary part in the pressure equation only; S1N 3.7e-12 U0 and 5.1e-11 of the pressure range against 1e-10), the component diagonal (no new term; S1D 3.8e-12, 3.2e-11) and face jumps (S1J and from the hook 2.5e-12, 2.5e-11), all together with a body force (S1X 3.0e-12, 4.2e-11); the option differs from the default in a start-up transient by 2.4e-5, 7.9e-5 and 5.6e-6 U0 at dt 0.001, falling by 3.3 to 5.9 per halving; eight mutations each fail a test. Defaults bit-identical (the rcfd-fv transient files, baseline_hashes, case_hashes_w48u, the F-301 case tests). Missing (why partial): the case table still has only `enabled` (schema golden and docs/case-schema.md: the maintainer's), sim.rs still writes its own located errors instead of calling `conflicts`, overset.rs reads the older field. Still refused: the new flags with periodic faces or on a moving mesh (F-321), non-orthogonal correctors with pressure gradient options, the fractional step.
+
+Follow-up items proposed:
+
+- Title: "Consistent correctors: the case table carries every flag". Deps: F-322. Acceptance:
+
+> `[solver.consistent_correctors]` has the keys enabled, periodic, body_force, non_orthogonal, component_diagonal and face_jump with defaults that leave every existing case's hash and result unchanged; sim.rs sets `PimpleSettings::set_consistent` from it and reports each `ConsistentRefusal` of `ConsistentCorrectors::conflicts` at `solver.consistent_correctors.<flag>`; overset.rs reads `consistent_flags().enabled`; the three older PimpleSettings fields are removed with amendments to ADR 0214 and ADR 0223; the schema golden edit is made only with the maintainer's approval; defaults bit-identical.
+
+- Title: "Consistent correctors: the new combinations with periodic faces". Deps: F-322. Acceptance:
+
+> Non-orthogonal correctors, the component diagonal and face jumps are each accepted with periodic pressure faces under the consistent correctors once a registered periodic steady identity (velocity, and pressure with the mean removed against the default's own drift) is met for it; a combination that misses stays refused with its located message; defaults bit-identical.
