@@ -7810,14 +7810,25 @@ fixed by the item's registration ADR before any code.
     bit, the ADR 0267 tests (G6b in the slab among them, the G6 known miss unchanged) and the AmrMesh tests pass
     unedited. Six mutations caught. With balance the return to the base is not derived (one recorded run reached it).
     Follow-up: F-441.
-- [ ] **F-440** Corrected wall-force reports on moving walls in the case tree (opt-in)
+- [x] **F-440** Corrected wall-force reports on moving walls in the case tree (opt-in)
   - depends on: F-358
   - acceptance: An opt-in key makes the force, moment and force-coefficient reports of a moving-mesh case take the wall
     pressure of the kept fixed-flux gradient (the face pressure of sixdof::patch_force_moment_wall_gradient) on the
     following and resting walls; on the rigid column of ADR 0269 AU1b the report's force deficit falls from 2.5e-2 to at
     most 1e-4; without the key every report value is bit-identical; registered before the run.
-  - note: From ADR 0269 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
-    case tree's force reports are low by 1/(2N) on moving walls.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0269 question 3, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. DONE (ADR 0342, 2026-11-12; registered before the code, one amendment before any
+    run). The optional table [dynamic_mesh.force_reports] with wall_pressure = "prescribed_gradient" (default
+    "boundary_value"; a key per report or in dynamic_mesh would be filled into every case by coerce and need an H1
+    hash-table entry, ADR 0266; the six_dof.coupling table is refused for prescribed motion) makes the force, moment and
+    force-coefficient reports of a moving-mesh case take, on the following and resting walls, the face pressure of
+    sixdof::patch_force_moment_wall_gradient with the kept fixed-flux gradient
+    (Simulation::report_pressure_face_values), bit for bit per face. On the rigid column of ADR 0269 AU1b the report's
+    force deficit falls from 2.5004597e-2 to 4.6e-6 (limit 1e-4); total force, moment and coefficient likewise (4.4e-6,
+    4.4e-6, 4.6e-6), the same with the wall following the mesh. Without the table every report value and the run are
+    bit-identical, and the key does not change the flow. No existing input combines a moving mesh and a force report;
+    with the default flipped no test moves. K0 unedited; five mutations caught, one equivalent. Open, the maintainer's:
+    the default (ADR 0342 Q1, with ADR 0269 Q1).
 - [x] **F-441** Directional lattice: coarsening inside the directional adaptive loop
   - depends on: F-439
   - acceptance: On the ADR 0267 suction layer, a directional loop that also box-coarsens cells whose per-axis variation
