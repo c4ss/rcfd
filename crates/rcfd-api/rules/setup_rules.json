@@ -95,8 +95,8 @@
      "path": "boundaries",
      "message": {"first_of": [
        {"when": {"path": "solver.algorithm", "op": "eq", "value": "compressible"},
-        "message": "no boundary conditions are set: every patch takes the default of the compressible solver (a slip wall)"},
-       {"message": "no boundary conditions are set: every patch takes the default (a fixed no-slip wall)"}]}},
+        "message": "no boundary conditions are set: the compressible solver makes every patch a slip wall, except a patch of kind outlet, which it extrapolates"},
+       {"message": "no boundary conditions are set: this solver refuses the case, since every mesh patch that is not empty or cyclic needs an entry boundaries.<patch>; an entry without keys is a fixed no-slip wall"}]}},
     {"id": "SV203", "name": "report conductivity only used by heat-flow reports", "severity": "info", "category": "materials",
      "each": {"over": "reports"},
      "when": {"all": [{"path": "@.conductivity", "op": "gt", "value": 0}, {"path": "@.type", "op": "ne", "value": "heat_flow"}]},
