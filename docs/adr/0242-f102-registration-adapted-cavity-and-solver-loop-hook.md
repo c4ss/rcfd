@@ -220,3 +220,97 @@ MU5 and MU6 are reported and do not count.
   applied to the velocity; the `_with` entry point takes any other.
 - **Q4. The case-file key** (`mesh.adapt` or a solver section): not taken here; it needs `schema.rs` and `sim.rs` and a new key
   (no default changes, but a schema change is the lead's to schedule). Listed for the lead.
+
+## Addendum 1: results (2026-11-12)
+
+The registered run was made once at 0efc2b48 (the hook and the tests, committed before the run):
+`cargo test --release -p rcfd-fv --test adapt_cavity_f102 -- --include-ignored --nocapture --test-threads=4`, 12 passed, 83.5 s.
+No limit, set-up or test was changed after it, and no amendment was needed.
+
+### Results
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1a (acceptance) | `N_A < 9216` | `N_A = 2799` | yes |
+| C1b | `N_A <= 4608` | 2799 (0.304 `N_F`) | yes |
+| C2 (acceptance) | `D(A) <= 0.01` | `D(A) = 0.00231` | yes |
+| C3 | `D(A) <= 0.5 D(C)` | `D(C) = 0.01624`, `D(A)/D(C) = 0.142` | yes |
+| C4 | `G(A) <= 0.02`, `G(F) <= 0.02` | `G(A) = 0.00916`, `G(F) = 0.00912` | yes |
+| C5 | every solve converged; validate; jump <= 1; level 2 present; cells increase | C 97 it., F 853 it., A cycles 97 / 122 / 188 it., all converged; validate Ok; jump <= 1; levels {0: 338, 1: 449, 2: 2012}; cells 576, 1269, 2799 | yes |
+| NC1 | `D(C) > 0.01` | 0.01624 | yes |
+| NC2 | `D(Ainv) > 0.01` | 0.01662 (2811 cells) | yes |
+| H1 | bit for bit | `u`, `p`, `phi` equal (`==`), 50 iterations each | yes |
+| H2 | `<= 1e-12` of the range | 702 cells; worst 1.1e-15, 1.8e-15, 8.9e-16 (u_x, u_y, p) | yes |
+| H3 | as registered | all assertions | yes |
+| H4 | as registered | all assertions | yes |
+
+Recorded, not counted: `D(U48) = 0.00302` (2304 cells), `G(U48) = 0.00874`, `G(C) = 0.01300`, `G(Ainv) = 0.01329`; A's
+cycles refined 231 and 510 cells (balance added none beyond the marks in the counts printed: `refined` includes the balance
+splits), none ignored at the maximum level; times C 0.2 s, F 77.9 s, U48 1.9 s, A 2.2 s, Ainv 1.1 s.
+
+Against the predictions: PR1 met. PR2: `D(A)` 0.0023, below the predicted 0.004 to 0.008, and `D(A)/D(C)` 0.14, below 0.2 to 0.4;
+`D(C)` (0.016) was smaller than the paper estimate (0.02 to 0.03). PR3 met (0.0166 > 0.015). PR4 roughly: the adapted mesh
+(2799 cells, `D` 0.0023) is better than the uniform 48 x 48 (2304 cells, `D` 0.0030) but not by much, and per cell about even.
+`G(F)` (0.0091) was above the predicted 0.003 to 0.005 and above `G(U48)` (0.0087): the fine-mesh difference to Ghia does not
+fall with the mesh, so at this level it is dominated by something other than our discretisation (Ghia's own error at its 129 x
+129 grid, and the linear sampler at the near-wall rows); this is why C2 compares with the fine solution and not with Ghia.
+
+### Mutations (scratch copy `w49i-work/f102-mut`, a `git archive` of 0efc2b48, target dir `target-f102-mut`, release)
+
+Each applied alone by exact replacement (each pattern found once), the file restored and checked byte for byte afterwards.
+
+| Id | Mutation | Result |
+| --- | --- | --- |
+| MU1 | transferred values not written | H2 fails (caught) |
+| MU2 | smallest indicators marked | H3 fails (caught) |
+| MU3 | `Injection` forced | H2 fails (caught) |
+| MU4 | last solve skipped | H2 fails (caught) |
+| MU5 (reported) | balance ignored | C5 fails at the level-jump assertion (cavity run with `--include-ignored`, filter `c5_`) |
+| MU6 (reported) | indicator never scaled | no H test fails (H tests do not depend on the scaling); the cavity was not run for it |
+
+### Format and lint
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean. Only `rcfd-fv`
+was touched (one line in `lib.rs`, the new `adaptive.rs` and the new test file).
+
+### Deviations and what was not run
+
+- None of the registered set-up was changed. The H tests, though cheap, ran in the same invocation as the heavy tests.
+- Not run: the whole workspace suite (by instruction), the rest of the `rcfd-fv` suite (no existing code path changed; the new
+  module is called by nothing else), the cavity numbers under MU6, the gate on an archive copy.
+
+### Decision by the registered rule
+
+**done**: C1a, C1b, C2, C3, C4, C5, NC1, NC2 and H1 to H4 met; MU1 to MU4 each caught. The acceptance "adapted cavity matches
+fine uniform solution with fewer cells" is met in the library: 2799 cells against 9216, centreline difference 0.0023 of the lid
+speed. The case-file key and the scope items of the old note go to follow-up items.
+
+### Remaining questions
+
+- **R1. The case-file key.** Options: (a) a new optional `adapt` block (cycles, fraction, max level, indicator) on steady
+  incompressible runs of box meshes, absent = today's path bit for bit; (b) keep the loop Rust-only. Recommendation (a), as a
+  follow-up item (it needs `schema.rs` and `sim.rs`, which this branch did not touch).
+- **R2. Adaptation pays little on Re 100.** The uniform 48 x 48 is nearly as close per cell. Options: (a) add a case with a
+  localised feature (Re 1000 corner eddies, or a step) to the follow-up; (b) accept. Recommendation (a), recorded, no limit
+  proposed here.
+- **R3. Scope items of the old note** (target-node-count, edge-length, anisotropic, register-based criteria, merge-based
+  polyhedral conversion, multigrid precoarsening, parallel adaptation). Recommendation: one follow-up item for the criteria and
+  leave the rest in the follow-up's note.
+
+### For the lead: roadmap entries
+
+Proposed status of F-102: **done**. New note:
+
+> DONE (WAVE 28C ADR 0054; ADR 0242): rcfd_mesh::adapt (gradient, Hessian, ZZ and region indicators, dead-band marks, hanging-node quadtree/octree refinement and coarsening with conservative transfer, polydual) and the solver-loop hook rcfd_fv::adaptive (run_adaptive_simple: SIMPLE solve, |grad U| h indicator, fixed-fraction marks, AmrMesh::adapt with balance, linear transfer of U and p, re-solve). Acceptance met in the library (ADR 0242): Re 100 lid-driven cavity, 24 x 24 base with two cycles at fraction 0.4 gives 2799 cells against 9216 of the uniform 96 x 96, centreline difference to the fine solution 0.0023 of the lid speed (limit 0.01; coarse 0.0162, inverted indicator 0.0166), Ghia difference 0.0092 (fine 0.0091). The ADR 0054 diffusion check A4 stays a known miss (3.71). Not delivered (follow-ups): a case-file key; target-node-count, edge-length, anisotropic and register-based criteria; merge-based polyhedral conversion; multigrid precoarsening; parallel and transient adaptation.
+
+Follow-up item 1: title "Case-file key for the adaptive steady loop", deps F-102, acceptance: "An optional adapt block on a
+steady incompressible box-mesh case runs rcfd_fv::adaptive and reproduces the ADR 0242 cavity numbers; cases without the block
+give identical hashes."
+
+> TODO (from ADR 0242): rcfd_fv::adaptive exists in the library only; the key needs crates/rcfd-api/src/schema.rs and sim.rs. Absent key = today's path bit for bit.
+
+Follow-up item 2: title "Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based)",
+deps F-102, acceptance: "Each criterion has a closed-form marking check, and a target-count run lands within 10 percent of its
+target on the ADR 0242 cavity."
+
+> TODO (from the F-102 scope list, ADR 0054 D7 and ADR 0242): criteria not yet built; merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here until split.
