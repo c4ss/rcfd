@@ -454,6 +454,71 @@ fn c7_failed_evaluations_drop_their_rows() {
     assert_eq!(sum.verdict, Verdict::Ok);
 }
 
+/// ADR 0240 amendment 2: failures that depend on two inputs, so that a row can fail in an `A_B^(i)` entry alone.
+#[test]
+fn c7b_failures_of_the_mixed_rows_drop_their_rows() {
+    let f = FnModel {
+        id: "linear_failing_mixed".into(),
+        version: "1".into(),
+        fidelity: Fidelity::Analytic,
+        f: |p: &[Quantity]| {
+            let x: Vec<f64> = p.iter().map(|q| q.value).collect();
+            if x[0] + x[1] > 3.5 {
+                return Outcome {
+                    verdict: Verdict::Diverged,
+                    reason: format!("x1 + x2 = {} above 3.5", x[0] + x[1]),
+                    ..Default::default()
+                };
+            }
+            Outcome::ok(vec![Quantity::new("y", linear(&x), "1")])
+        },
+    };
+    let dir = std::env::temp_dir().join(format!("rcfd_f268_c7b_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let l = Ledger::new(&dir.join("ledger.jsonl"));
+    let res = run(&spec("mixed", lin_params(), 2048, 268_008), &f, Some(&l)).unwrap();
+    let e = l.read().unwrap().entries;
+    let _ = std::fs::remove_dir_all(&dir);
+    let evals: Vec<&Entry> = e.iter().filter(|x| x.kind == "evaluation").collect();
+    assert_eq!(evals.len(), 2048 * 6);
+    let bad: Vec<&&Entry> = evals.iter().filter(|x| x.verdict != Verdict::Ok).collect();
+    assert_eq!(res.n_failed_evaluations, bad.len());
+    assert!(
+        bad.iter().all(|x| !x.reason.trim().is_empty()),
+        "C7b: a failed entry without a reason"
+    );
+    let mut bad_rows: Vec<usize> = bad
+        .iter()
+        .map(|x| x.provenance["row"].as_u64().unwrap() as usize)
+        .collect();
+    bad_rows.sort_unstable();
+    bad_rows.dedup();
+    // rows with A and B ok and an A_B entry not ok (evaluation order: row j occupies 6 j .. 6 j + 5)
+    let mixed = (0..2048)
+        .filter(|&j| {
+            let r = &evals[6 * j..6 * j + 6];
+            r[0].verdict == Verdict::Ok
+                && r[1].verdict == Verdict::Ok
+                && r[2..].iter().any(|x| x.verdict != Verdict::Ok)
+        })
+        .count();
+    eprintln!(
+        "C7b: {} failed evaluations in {} rows ({mixed} rows with A and B ok and an A_B entry failed); {} rows used of {}",
+        bad.len(),
+        bad_rows.len(),
+        res.n_rows_used,
+        res.n_rows
+    );
+    assert!(mixed >= 1, "C7b: the set-up has no mixed failed row");
+    assert_eq!(res.n_rows_used, 2048 - bad_rows.len());
+    for ix in idx(&res) {
+        assert!(ix.first.is_finite() && ix.total.is_finite(), "C7b: {ix:?}");
+        eprintln!("C7b {}: S {:.4} ST {:.4}", ix.param, ix.first, ix.total);
+    }
+    let sum = e.iter().find(|x| x.kind == "sobol_summary").unwrap();
+    assert_eq!(sum.verdict, Verdict::Ok);
+}
+
 // ---------------------------------------------------------------- C8
 
 #[test]
