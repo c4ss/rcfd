@@ -1,11 +1,19 @@
-# rcfd solver service protocol, version 1
+# rcfd solver service protocol, version 1.1
 
 This page specifies the solver service: the transport, the error codes, the session states and every method with its
 parameters. It is for people who write a client for the service or check what a tool of the MCP server does underneath. If
 you use an assistant rather than write a client, the [MCP tool list](mcp-tools.md) is the shorter page; for exit codes, the
 status stream and checkpoints shared with the command line, see [run control](run-control.md).
 
-Identifier: `rcfd-service/1` (returned by `service.info`).
+Identifier: `rcfd-service/1` (returned by `service.info` as `protocol`). The identifier names the major version: a service
+of any version 1.x answers every request of version 1.0 as before. `service.info` also returns `protocol_version` (`"1.1"`)
+and `cosim` (`"rcfd-cosim/1"`, the identifier of the co-simulation calls).
+
+Versions:
+
+- 1.0: everything below except the `cosim.*` methods.
+- 1.1 (ADR 0345): the `cosim.*` methods, the error codes 1005 and 1006, and the members `protocol_version` and `cosim` of
+  the `service.info` reply. No earlier method changed.
 
 Transport: JSON-RPC 2.0, one JSON object per line (newline-delimited), over TCP
 (`rcfd serve --addr 127.0.0.1:7878`) or stdio (`rcfd serve --stdio`). Requests
@@ -29,6 +37,8 @@ its own thread, and connections share sessions.
 | 1002 | operation not allowed in the current run state |
 | 1003 | settings failed validation; `error.data.diagnostics` is a list of `{path, line, message}` |
 | 1004 | limit exceeded or path outside the sandbox root |
+| 1005 | a hosted co-simulation participant returned an error; `error.message` is the participant's message |
+| 1006 | no hosted co-simulation participant of that name |
 | -32000 | internal error |
 
 ## Sessions and run states
@@ -91,8 +101,26 @@ The design ledger (ADR 0121):
 - `design.ledger_export {ledger, out, format?, filters?}`
 - `design.ledger_rerun_check {ledger, index, metrics, verdict?, rtol?, atol?}`
 
+## Co-simulation methods (version 1.1, `rcfd-cosim/1`)
+
+The calls of the [co-simulation protocol](cosimulation-protocol.md) for a participant that the embedding program hosts in
+the service (`Service::host_fluid`, `Service::host_structure`). `rcfd serve` hosts none, so there every one of them but
+`cosim.list` answers 1006. The wire format, the lease and what a dropped connection means are specified in
+[cosimulation-protocol.md](cosimulation-protocol.md#over-the-solver-service-rcfd-cosim1).
+
+- `cosim.list`: `{protocol, participants: [{participant, kind, name}]}`
+- `cosim.open {participant}`: `{protocol, lease, kind, name, time}`; supersedes every earlier lease of the participant
+- `cosim.describe {participant, lease}`: a structure `{kind, name, nodes}`, a fluid `{kind, name, points, faces}`
+- `cosim.time {participant, lease}`, `cosim.checkpoint {participant, lease}`, `cosim.restore {participant, lease}`: `{time}`
+- `cosim.forces {participant, lease}` (a fluid): `{forces, time}`
+- `cosim.advance {participant, lease, dt, forces}` (a structure): `{displacements, time}`;
+  `cosim.advance {participant, lease, dt, displacements}` (a fluid): `{forces, time}`
+
+A call with a lease that is not the current one, and `cosim.forces` to a structure, answer 1002.
+
 ## Where to go next
 
 - [MCP tools](mcp-tools.md): which tool calls which method, and the access class of each.
 - [Case schema](case-schema.md): the dotted settings paths that the settings methods take.
 - [Run control](run-control.md): the headless run, exit codes and workflows behind the run and workflow methods.
+- [Co-simulation protocol](cosimulation-protocol.md): the participant calls that the `cosim.*` methods carry.
