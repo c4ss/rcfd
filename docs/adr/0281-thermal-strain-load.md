@@ -305,6 +305,110 @@ the decision, but the gate fails on them until the lead applies or rejects the p
 4. ADR 0275's E3 and ADR 0276's X1 are not edited; their removal is proposed (finding 1). It is a test edit, not a default,
    golden or hash table, but the house rules forbid editing an existing test, so it is the lead's step.
 
+## Addendum 1: results (2026-11-12)
+
+Commits after the registration 778c177d: c386fcd1 (the test `sb_thermal_bits.rs` with the digests of its run on a
+`git archive` copy of d4bde1e0, `f380-scratch/b1-base.log`, before any library code), 00ab1cbc (the library code and
+`sb_thermal.rs`). Files: `crates/rcfd-fem/src/thermal.rs` (filled), `src/loads.rs` (the Temperature arm in place of the
+wildcard refusal, the private `unsupported` removed, `add_force` `pub(crate)`, documentation), `src/recover.rs` (the private
+field `thermal`, `thermal_strain()`, the thermal branch of `compute` and of `element_strain_energy`, documentation), the two
+test files. No file outside `rcfd-fem`, no shared solver file, golden or hash table; no crate depends on `rcfd-fem` yet, so the
+baseline hashes were not run. The registered run was made once, in release: `cargo test -p rcfd-fem --release --test
+sb_thermal --test sb_thermal_bits -- --nocapture --test-threads=1` (7 + 1 passed, 0.10 s and 0.04 s; log
+`w49i-work/f380-scratch/run1.log`).
+
+| Id | Limit | Measured (Tet4; Hex8; Tet10) | Met |
+| --- | --- | --- | --- |
+| T1a free expansion, `u - alpha dT x` | `<= 1e-10` | 5.3e-15; 9.6e-15; 1.1e-13 | yes |
+| T1b free expansion, max `|sigma|/(E alpha dT)` | `<= 1e-10` | 9.2e-15; 1.1e-14; 1.1e-13 | yes |
+| T2 box on all faces against `-E alpha dT/(1 - 2 nu)` | `<= 1e-10` | 2.0e-16; 4.0e-16; 1.4e-15 | yes |
+| T3 bar `sigma_xx + E alpha dT`; other components | `<= 1e-10` each | 7.7e-15 / 4.6e-15; 2.0e-14 / 9.0e-15; 5.6e-14 / 2.2e-14 | yes |
+| T4a beam curvature against `alpha dT/h` (Tet10) | `<= 1e-2` | 2.8e-12 (6.000000000017e-3 against 6e-3) | yes |
+| T4b beam max `|sigma|/(E alpha dT)` (Tet10) | `<= 1e-2` | 1.6e-12 | yes |
+| B1 digests of 9 models against d4bde1e0 | all equal | 9 of 9 equal | yes |
+| Q1 `sum w B^T sigma` against the reactions | `<= 1e-9` | 1.6e-15; 7.9e-16; 4.0e-15 | yes |
+| S1 energy: box on all faces; bar; free box | `<= 1e-10`; `<= 1e-10`; `<= 1e-18` | 6.7e-16, 4.5e-16, 2.0e-15; 3.2e-16, 1.6e-15, 4.9e-15; 2.7e-30, 3.7e-30, 1.7e-28 | yes |
+| E1 beam nodal field against `u* + w x x` (Tet10) | `<= 1e-9` | 2.7e-12 | yes |
+| E2 bar lateral field; reactions on `xmax` against `-E alpha dT A` | `<= 1e-10` each | 1.8e-13 / 3.9e-16; 1.3e-12 / 7.8e-16; 2.0e-12 / 3.9e-16 | yes |
+| B2 `alpha = 0`; `T = T_ref`: differing bits (load, displacement, reactions); stress points differing by value | 0; 0 | 0 and 0 in all six cases | yes |
+| X1 two temperature fields | `InvalidValue { key: "temperature" }` from load and recovery | "key 'temperature': a model has one temperature field; a second Load::Temperature was given" (both) | yes |
+| X2 thermal load without material | `MaterialUnassigned` | "element 0: has no material" | yes |
+| X3 ADR 0275's E3 block removed (scratch copy) | `sb_static` passes | 9 passed | yes |
+| X4 ADR 0276's X1 block removed (same copy) | `sb_loads` passes | 7 passed | yes |
+| N1 `D eps` without the thermal strain | `> 1e-1` | 2.5 (all three) | holds |
+| N2 box on all faces against the uniaxial `-E alpha dT` | `> 1e-1` | 1.5 (all three) | holds |
+| N3 beam without gradient | `> 0.5` | 1.0 | holds |
+
+Against the estimates: every exactness argument held, to rounding. Tet10 is a decade above Tet4 and Hex8 in T1 and T3 (more
+unknowns, 735 and 1275), still `>= 1e3` below the limits. Relative residuals of the direct solves 4.4e-16 to 2.2e-15.
+
+**Existing tests** (release, `cargo test -p rcfd-fem --release --no-fail-fast`, log `f380-scratch/existing.log`):
+`sb_elements` 8, `sb_model` 11, `sb_modal` 8 (4 ignored records), `sb_recover` 9 (1 ignored record) passed, doc tests pass;
+`sb_static` 8 of 9 (`e1_to_e4_free_node_conflicts_loads_element_errors` **fails** at line 709, the `unwrap_err` of E3 on a
+solve that now succeeds) and `sb_loads` 6 of 7 (`x1_to_x3_refusals` **fails** at line 694, the `unwrap_err` of X1), as
+registered in finding 1. Neither test is edited. With both blocks removed on the scratch copy (X3, X4) both files pass in
+full, E4 and X2, X3 included. B1 shows the other paths of `sb_static`, `sb_loads` and `sb_recover`'s functions unchanged.
+
+**Mutations** (scratch copy by `git archive` of 00ab1cbc, own target directory, each alone by exact text replacement,
+`sb_thermal` run once, the file restored and compared by SHA-256; `f380-scratch/mutate.ps1`, `mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 load sign reversed | T1a, T1b, T3, T4, Q1 (2.0), S1, E1, E2 |
+| M2 recovery without eps_th | T1b (2.5), T2, T3, T4b, Q1 (1.0), S1 |
+| M3 shear thermal strain | T1a (1.5), T2, E1, E2 |
+| M4 no reference | T1a (5.9), T1b, T3, T4b, Q1, S1, B2 |
+| M5 element mean temperature | T4a (0.13), T4b (0.25), E1 |
+| M6 mass rule for the load | Q1, Tet10 only (4.5e-2) |
+| M7 `E eps_th` for `D eps_th` | T1a (0.6), T3, T4, Q1, S1, E2 |
+| M8 second temperature accepted | X1 |
+| M9 energy with the total strain | S1 (all three parts) |
+
+**Deviations.**
+
+1. Arithmetic 2 and 8 overstated the degree of the Hex8 integrand: `T dN_a/dx det J` with a trilinear T on a trilinear map
+   has degree `<= 3` per variable (the cofactor row of the derivative in xi_k has degree 2 in xi_k and 1 in the others, the
+   derivative `dN_a/dxi_k` degree 0 and 1), so `gauss_2` is exact there and the mass rule gives the same load. M6 is
+   therefore an equivalent mutation on Hex8 for a trilinear temperature, and Q1 catches it on Tet10 only (quadratic T
+   against `tet_4`). The registered mutation table asks only that Q1 fail, which it does; no limit is affected.
+2. D1 announced `thermal_strain(...) -> Result<[f64; 6]>`; it cannot fail and returns `[f64; 6]`.
+3. Not run: the whole workspace (the lead runs the gate) and the baseline hashes (no file outside `rcfd-fem`, no dependent
+   crate).
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean.
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). T1a to T4b, B1, Q1 and S1 are met for
+every kind named, N1 to N3 hold, every mutation fails a registered check. The gate fails on ADR 0275's E3 and ADR 0276's X1
+until the lead applies (or rejects) the removals below.
+
+**Remaining questions.**
+
+1. ADR 0275's E3 and ADR 0276's X1 (both assert the thermal refusal). No `Load` variant is unsupported any more. Options:
+   (a) delete the two blocks as checked by X3 and X4 (`sb_static.rs` from `// E3: an unsupported load.` to the line before
+   `// E4:`, 14 lines; `sb_loads.rs` from `// X1: the thermal load stays refused.` to the line before `// X2:`, 12 lines);
+   (b) replace each with the refusal of a second temperature field (`InvalidValue { key: "temperature" }`), which
+   `sb_thermal` X1 already covers; (c) mark the two tests `#[ignore]` as records. Recommendation: (a); it keeps E4, X2 and X3
+   running and duplicates nothing.
+2. `FemError::UnsupportedLoad` has no producer now. Options: (a) keep it for later load kinds (it is public); (b) remove it.
+   Recommendation: (a).
+3. The thermal strain is not stored in `SolidResult` (only in `IntegrationPointField`). Options: (a) as now, the VTK output
+   of ADR 0278 recomputes the field from the result; (b) a field of `SolidResult`. Recommendation: (a) until a consumer needs
+   it.
+
+## For the lead: roadmap entries
+
+F-380: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0281, 2026-11-12: rcfd_fem::thermal: the one temperature field of a model (Load::Temperature { nodal, reference }; a second one refused naming the key 'temperature'), the isotropic thermal strain alpha (T - T_ref) (1, 1, 1, 0, 0, 0) from the nodal differences T_b - T_ref interpolated with the element's own functions, and the element load sum w B^T D eps_th on the stiffness rule (element_thermal_load); loads::nodal_load_vector adds it (the last UnsupportedLoad arm removed); recover::IntegrationPointField gives sigma = D (eps - eps_th) at the same points, keeps the thermal strain per point (thermal_strain()) and its strain energy is the elastic energy 1/2 sum w (eps - eps_th) . sigma. nu = 0.3, alpha dT = 6e-4, boxes with moved interior nodes, Tet4, Hex8, Tet10: free expansion under a 3-2-1 support u = alpha dT x within 1.1e-13 and stresses within 1.1e-13 E alpha dT (limits 1e-10); box with rollers on all faces -E alpha dT/(1 - 2 nu) within 1.4e-15; bar held at both ends with free sides sigma_xx = -E alpha dT within 5.6e-14, its lateral field and reactions within 2.0e-12; free Tet10 beam with a linear temperature through the thickness: curvature alpha dT/h within 2.8e-12 (limit 1e-2) and stresses 1.6e-12 E alpha dT (limit 1e-2); recovered stress in discrete equilibrium with the reactions for random nodal temperatures within 4.0e-15; elastic energies within 4.9e-15 of the closed forms. A model without temperature is bit-identical to d4bde1e0: FNV digests of load vector, displacement, reactions, residual and the recovered field of nine models (nodal force, all mechanical loads, a bar; three kinds) equal (test sb_thermal_bits). Nine mutations caught. ADR 0275's E3 (sb_static) and ADR 0276's X1 (sb_loads) assert the thermal refusal and fail by construction: the lead deletes both blocks (ADR 0281 remaining question 1, checked on a scratch copy as X3, X4).
+
+F-384 (ADR 0285), sentence to append to its note:
+
+> ADR 0281 (2026-11-12): the TEMP values of the deck map to Load::temperature(nodal, reference) with one value per solid node (a model takes one temperature field; a second is refused); the expansion coefficient comes from Material::isotropic_elastic.
+
+F-377 (ADR 0278), sentence to append to its note:
+
+> ADR 0281 (2026-11-12): with a temperature load, IntegrationPointField::from_result already gives the thermal stress D (eps - eps_th) and field.strain() stays the total strain B u; the thermal strain per point is field.thermal_strain() (None without temperature).
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
