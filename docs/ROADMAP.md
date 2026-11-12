@@ -6449,25 +6449,8 @@ fixed by the item's registration ADR before any code.
     tiling of a cell that it cannot merge further (valid mesh; slabs return to the base), and the fast layer test on an
     8 x 8 base (cell Peclet 10) had no converged solution on its first directional mesh (replaced by a 16 x 16 base).
     Open: a box merge for 3-D coarsening (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups:
-    F-438 (case key), F-439 (three-dimensional box merge). PARTIAL (ADR 0267, 2026-11-12):
-    rcfd_mesh::adapt::aniso::AnisoMesh, a second lattice with one refinement level per axis (AxisLeaf, AxisMark; AmrMesh
-    untouched): faces are the intersections of the sides of two leaves, with the corners of all face rectangles in the
-    vertex set, so cells are closed for any tiling by dyadic boxes; optional balance of one level per refined axis
-    across every face (at most 2 faces per side in a slab, 4 in 3-D); the existing Transfer and transfer_field. Random
-    directional marks on a graded 3-D box, a slab and a box refined along two of three axes give valid closed meshes
-    (validate, closure and volume to 1e-13) and linear fields transfer to 4.4e-16; on isotropic marks the mesh, the
-    transfer and the adaptive loop equal AmrMesh's bit for bit. Directional criterion in rcfd_fv::adaptive
-    (axis_variations, directional_axes with theta = 1/2, directional_target_marks, run_adaptive_simple_directional and
-    _target). On the ADR 0247 suction layer the directional run has error 0.00298 with 1547 cells against the isotropic
-    0.01159 with 3841 (limit: at most 1920 cells); held at the isotropic finest size it reaches 0.01158 with 960 cells;
-    with the axis choice inverted 1.18. ADR 0054, 0242 and 0247 tests pass unedited (the heavy ones included); ten
-    mutations each failed their tests. Partial by the rule because two registered supporting checks missed and were
-    corrected under amendments: pair coarsening in 3-D can leave a five-box tiling of a cell that it cannot merge
-    further (valid mesh; slabs return to the base), and the fast layer test on an 8 x 8 base (cell Peclet 10) had no
-    converged solution on its first directional mesh (replaced by a 16 x 16 base). Open: a box merge for 3-D coarsening
-    (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups: F-438 (case key), F-439
-    (three-dimensional box merge). The box merge is delivered by F-439 (ADR 0341, 2026-11-12): repeated all-axes box
-    coarsening returns any state, the five-box tiling included, to the base.
+    F-438 (case key), F-439 (three-dimensional box merge). The box merge is delivered by F-439 (ADR 0341, 2026-11-12):
+    repeated all-axes box coarsening returns any state, the five-box tiling included, to the base.
 - [ ] **F-349** Overset: the response to the truncation of the background-fringe interpolation
   - depends on: F-334
   - acceptance: The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a
