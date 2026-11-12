@@ -112,9 +112,12 @@ fn sd(x: &[f64]) -> f64 {
     (x.iter().map(|v| (v - m) * (v - m)).sum::<f64>() / (n - 1.0)).sqrt()
 }
 
+/// (mean, variance, per input (S, SE of S, ST, SE of ST)), the result of [`estimate`].
+pub type Estimates = (f64, f64, Vec<(f64, f64, f64, f64)>);
+
 /// Estimates from `a = f(A)`, `b = f(B)` and `c[i] = f(A_B^(i))` over the same usable rows: (mean, variance, per input
 /// (S, SE of S, ST, SE of ST)). Fewer than 2 rows or a zero variance give NaN indices.
-pub fn estimate(a: &[f64], b: &[f64], c: &[Vec<f64>]) -> (f64, f64, Vec<(f64, f64, f64, f64)>) {
+pub fn estimate(a: &[f64], b: &[f64], c: &[Vec<f64>]) -> Estimates {
     let n = a.len();
     let nan = (f64::NAN, f64::NAN, f64::NAN, f64::NAN);
     if n == 0 {
@@ -128,14 +131,18 @@ pub fn estimate(a: &[f64], b: &[f64], c: &[Vec<f64>]) -> (f64, f64, Vec<(f64, f6
         .map(|(&x, &y)| ((x - m) * (x - m) + (y - m) * (y - m)) / 2.0)
         .collect();
     let v = w.iter().sum::<f64>() / nf;
-    if n < 2 || !(v > 0.0) {
+    if n < 2 || v.is_nan() || v <= 0.0 {
         return (m, v, vec![nan; c.len()]);
     }
     // the ratio u-bar / v and its delta-method SE: psi_j = (u_j - u-bar - r (w_j - v)) / v
     let ratio = |u: &[f64]| -> (f64, f64) {
         let ub = u.iter().sum::<f64>() / nf;
         let r = ub / v;
-        let psi: Vec<f64> = u.iter().zip(&w).map(|(&uj, &wj)| (uj - ub - r * (wj - v)) / v).collect();
+        let psi: Vec<f64> = u
+            .iter()
+            .zip(&w)
+            .map(|(&uj, &wj)| (uj - ub - r * (wj - v)) / v)
+            .collect();
         (r, sd(&psi) / nf.sqrt())
     };
     let idx = c
@@ -163,7 +170,11 @@ pub fn run(spec: &SobolSpec, model: &dyn Model, ledger: Option<&Ledger>) -> Resu
         let u: Vec<f64> = (0..2 * d)
             .map(|_| ((rng.next_u64() >> 11) as f64 + 0.5) / (1u64 << 53) as f64)
             .collect();
-        let x: Vec<f64> = u.iter().enumerate().map(|(k, &u)| spec.params[k % d].dist.inv_cdf(u)).collect();
+        let x: Vec<f64> = u
+            .iter()
+            .enumerate()
+            .map(|(k, &u)| spec.params[k % d].dist.inv_cdf(u))
+            .collect();
         let (xa, xb) = (x[..d].to_vec(), x[d..].to_vec());
         pts.push(xa.clone());
         pts.push(xb.clone());
@@ -292,11 +303,20 @@ pub fn result_json(spec: &SobolSpec, res: &SobolResult) -> Value {
 fn summary_entry(spec: &SobolSpec, model: &dyn Model, res: &SobolResult) -> Entry {
     let mut metrics = Vec::new();
     for m in &res.metrics {
-        let vunit = if m.unit == "1" { "1".to_string() } else { format!("({})^2", m.unit) };
+        let vunit = if m.unit == "1" {
+            "1".to_string()
+        } else {
+            format!("({})^2", m.unit)
+        };
         metrics.push(Quantity::new(&format!("{}.mean", m.name), m.mean, &m.unit));
         metrics.push(Quantity::new(&format!("{}.variance", m.name), m.variance, &vunit));
         for i in &m.indices {
-            for (k, v) in [("S", i.first), ("S_se", i.first_se), ("ST", i.total), ("ST_se", i.total_se)] {
+            for (k, v) in [
+                ("S", i.first),
+                ("S_se", i.first_se),
+                ("ST", i.total),
+                ("ST_se", i.total_se),
+            ] {
                 metrics.push(Quantity::new(&format!("{}.{k}.{}", m.name, i.param), v, "1"));
             }
         }

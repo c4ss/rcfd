@@ -126,7 +126,11 @@ fn closed_form(tag: &str, res: &SobolResult, s: [f64; 4], st: [f64; 4], se: ([f6
             );
             zmax = zmax.max(z.abs());
             assert!(z.abs() <= K, "{tag} {what}{}: |z| = {} > {K}", i + 1, z.abs());
-            assert!((0.75..=1.33).contains(&ratio), "{tag} {what}{}: SE ratio {ratio}", i + 1);
+            assert!(
+                (0.75..=1.33).contains(&ratio),
+                "{tag} {what}{}: SE ratio {ratio}",
+                i + 1
+            );
         }
     }
     let dummy = &idx(res)[3];
@@ -134,8 +138,14 @@ fn closed_form(tag: &str, res: &SobolResult, s: [f64; 4], st: [f64; 4], se: ([f6
         "{tag} dummy: S {:e} ST {:e} SEs {:e} {:e}",
         dummy.first, dummy.total, dummy.first_se, dummy.total_se
     );
-    assert!(dummy.first == 0.0 && dummy.total == 0.0, "{tag}: dummy indices {dummy:?}");
-    assert!(dummy.first_se == 0.0 && dummy.total_se == 0.0, "{tag}: dummy SEs {dummy:?}");
+    assert!(
+        dummy.first == 0.0 && dummy.total == 0.0,
+        "{tag}: dummy indices {dummy:?}"
+    );
+    assert!(
+        dummy.first_se == 0.0 && dummy.total_se == 0.0,
+        "{tag}: dummy SEs {dummy:?}"
+    );
     zmax
 }
 
@@ -173,7 +183,11 @@ fn c1_c3_nc1_ishigami_against_closed_forms_known_miss() {
     ] {
         let z = (est - wrong) / sep;
         eprintln!("NC1 {what}: est {est:.6} wrong {wrong:.6} z {z:+.2}");
-        assert!(z.abs() > K, "NC1 {what}: the wrong closed form was not rejected (|z| = {})", z.abs());
+        assert!(
+            z.abs() > K,
+            "NC1 {what}: the wrong closed form was not rejected (|z| = {})",
+            z.abs()
+        );
     }
     eprintln!(
         "NC1 S1 (reported only): est {:.6} wrong {:.6} z {:+.2}",
@@ -213,7 +227,11 @@ fn c1_c3_ishigami_against_closed_forms() {
         let z = (est - wrong) / sep;
         eprintln!("NC1 {what}: est {est:.6} wrong {wrong:.6} z {z:+.2} (asserted: {asserted})");
         if asserted {
-            assert!(z.abs() > K, "NC1 {what}: the wrong closed form was not rejected (|z| = {})", z.abs());
+            assert!(
+                z.abs() > K,
+                "NC1 {what}: the wrong closed form was not rejected (|z| = {})",
+                z.abs()
+            );
         }
     }
 }
@@ -222,7 +240,12 @@ fn c1_c3_ishigami_against_closed_forms() {
 
 #[test]
 fn c2_linear_additive_with_a_dummy() {
-    let res = run(&spec("lin", lin_params(), 16_384, 268_002), &model("linear", linear), None).unwrap();
+    let res = run(
+        &spec("lin", lin_params(), 16_384, 268_002),
+        &model("linear", linear),
+        None,
+    )
+    .unwrap();
     let t = lin_terms();
     let v: f64 = t.iter().sum();
     let s = [t[0] / v, t[1] / v, t[2] / v, 0.0];
@@ -235,7 +258,11 @@ fn c2_linear_additive_with_a_dummy() {
         "C2 mean {:.6} (exact {mean:.6}), variance {:.6} (exact {v:.6})",
         m.mean, m.variance
     );
-    assert!((m.mean - mean).abs() <= K * (v / (2.0 * 16_384.0)).sqrt(), "C2 mean {}", m.mean);
+    assert!(
+        (m.mean - mean).abs() <= K * (v / (2.0 * 16_384.0)).sqrt(),
+        "C2 mean {}",
+        m.mean
+    );
     assert!((m.variance - v).abs() <= 0.25, "C2 variance {}", m.variance);
 }
 
@@ -306,7 +333,10 @@ fn c5_nc4_determinism_and_prefix() {
     eprintln!("C5: {} bytes (1 worker), {} bytes (4 workers)", b1.len(), b4.len());
     assert!(b1 == b4, "C5: ledger bytes differ between 1 and 4 workers");
     assert_eq!(bits(&r1), bits(&r4), "C5: results differ between 1 and 4 workers");
-    assert_eq!((r1.n_rows, r1.n_rows_used, r1.n_evaluations), (r4.n_rows, r4.n_rows_used, r4.n_evaluations));
+    assert_eq!(
+        (r1.n_rows, r1.n_rows_used, r1.n_evaluations),
+        (r4.n_rows, r4.n_rows_used, r4.n_evaluations)
+    );
     let (bo, _, _) = ledger_run("other", 1024, 268_004, 1);
     assert!(bo != b1, "NC4: another seed gave the same bytes");
     let (_, _, e512) = ledger_run("half", 512, 268_003, 1);
@@ -335,7 +365,11 @@ fn c6_design_structure_cost_and_summary() {
     let sum: Vec<&Entry> = e.iter().filter(|x| x.kind == "sobol_summary").collect();
     assert_eq!(sum.len(), 1);
     assert_eq!(sum[0].verdict, Verdict::Ok);
-    let find = |v: String| e.iter().find(|x| x.variant == v).unwrap_or_else(|| panic!("C6: no entry {v}"));
+    let find = |v: String| {
+        e.iter()
+            .find(|x| x.variant == v)
+            .unwrap_or_else(|| panic!("C6: no entry {v}"))
+    };
     for j in 0..64 {
         let a = find(format!("det#{j}.A"));
         let b = find(format!("det#{j}.B"));
@@ -343,7 +377,12 @@ fn c6_design_structure_cost_and_summary() {
             let ab = find(format!("det#{j}.AB{}", i + 1));
             for k in 0..4 {
                 let want = if k == i { &b.params[k] } else { &a.params[k] };
-                assert_eq!(ab.params[k].value.to_bits(), want.value.to_bits(), "C6: row {j} AB{} param {k}", i + 1);
+                assert_eq!(
+                    ab.params[k].value.to_bits(),
+                    want.value.to_bits(),
+                    "C6: row {j} AB{} param {k}",
+                    i + 1
+                );
             }
         }
     }
@@ -388,7 +427,10 @@ fn c7_failed_evaluations_drop_their_rows() {
     let evals: Vec<&Entry> = e.iter().filter(|x| x.kind == "evaluation").collect();
     let bad: Vec<&&Entry> = evals.iter().filter(|x| x.verdict != Verdict::Ok).collect();
     assert_eq!(res.n_failed_evaluations, bad.len());
-    assert!(bad.iter().all(|x| !x.reason.trim().is_empty()), "C7: a failed entry without a reason");
+    assert!(
+        bad.iter().all(|x| !x.reason.trim().is_empty()),
+        "C7: a failed entry without a reason"
+    );
     let mut bad_rows: Vec<usize> = bad
         .iter()
         .map(|x| x.provenance["row"].as_u64().unwrap() as usize)
