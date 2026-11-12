@@ -276,3 +276,46 @@ between 1.6 and 1.9 with the cosine near `-0.9`; I do not know whether `R` reach
 
 The decision rule is unchanged. A confirmed H12 names the source (the second branch of the acceptance) with the numbers of
 the two parts; T stays missed on the library's stencils.
+
+## Amendment 2 (2026-11-12, written after the runs of amendment 1 and before any further run; the last diagnostic of this registration)
+
+The three tests of amendment 1 ran once each (323 s, 926 s, 1180 s). **TQ is met**: with the nine-cell stencils on both
+fringes `e_Q` is `3.2411e-4`, `8.5532e-5`, `3.9022e-5`, `2.2269e-5`, orders `1.922`, `1.935`, `1.950`. The response `R =
+u_base - u_Qcb` is `4.3758e-4`, `1.3537e-4`, `7.1102e-5`, `4.2366e-5`: orders **`1.693`, `1.588`, `1.800`**; its cosine with
+the error of the `Qcb` run is `-0.961`, `-0.931`, `-0.900`, `-0.884`. By its rule **H12 is undecided**: `R` does not reach
+1.7 on two of the three pairs and is not below 1.5 on the last two. What the numbers do say:
+
+- `e_L^2 = e_Q^2 + R^2 + 2 cos e_Q R` reproduces `e_L` to four digits at every level, so the error with the library
+  stencils is the sum of the two parts, and they cancel to 88 to 96 percent. `R` is the larger one (1.35 to 1.90 times
+  `e_Q`).
+- `R L^2` is `4.376e-4`, `5.415e-4`, `6.399e-4`, `6.779e-4`. Its increments from level to level are `1.04e-4`, `0.98e-4`,
+  `0.38e-4`: the coefficient `1.0e-4` of ADR 0232 is the first-order part of `R` on the levels 1 to 3, and it falls at
+  level 4.
+- by fringe (levels 1 to 3): the response to the truncation at the component fringe, `R_c = u_base - u_Qc`, is
+  `4.0455e-4`, `1.1765e-4`, `5.9108e-5` (orders `1.782`, `1.698`); the response to the truncation at the background fringe,
+  `R_b = u_base - u_Qb`, is `4.8742e-5`, `2.1922e-5`, `1.4073e-5` (orders **`1.153`, `1.093`**), `4.9e-5`, `4.4e-5`,
+  `4.2e-5` times `1 / L`. `R_b` is of first order on these levels. Its mean vector hardly falls (`(4.7e-6, -1.27e-5)`,
+  `(5.8e-6, -8.8e-6)`, `(4.8e-6, -7.1e-6)`), it is flat over the rings, and between `t = 0.25` and `0.5` it doubles
+  (`7.5e-6` to `1.41e-5` at level 3) while `R_c` grows by a fifth.
+
+So the term sits in the response of the calculated component cells to the truncation of the linear interpolation, most
+clearly in the part that starts at the background fringe, travels through the background cells of the overlap and enters
+the component through its own fringe. Why a second-order truncation gives a first-order response there is not known. Two
+measurements are registered; no further diagnostic is added after them. `beta^ = 9 R_3 - 4 R_2` is the first-order
+coefficient of a response on the levels 2 and 3 (`3.90e-5` for `R_b`, `9.85e-5` for `R`).
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H13 | the first-order part of `R_b` is made by the transient Rhie-Chow term of the step (the memory `D_new = theta D + R` of the arithmetic before the registration, which makes the flux of a face follow a change of the fringe velocity with a coefficient proportional to `h / nu`) | RL at levels 1 to 3 with `ddt_correction` off (a setting of the library, not refused on the overset path), with the library stencils, `Qb` and `Qcb`: `R_b` and `R` of these runs, their orders and `beta^` | confirmed: `beta^` of `R_b` at most `0.25` of `3.90e-5` and the order of `R_b` between levels 2 and 3 at least 1.7; ruled out: `beta^` at least `0.75` of it; otherwise mixed |
+| H14 | `R_b` at `t = 0.5` is a signal that is still arriving (it has to cross the overlap), so its size at a fixed time is not the size of a settled error | RL at levels 1 and 2 run on to `t = 1` (`400 L` steps) with the library stencils, `Qb` and `Qcb`: `R_b` at `t = 0.5`, `0.75`, `1` | still arriving: `R_b(1) / R_b(0.5) >= 1.5` at level 2; settled: `<= 1.1`; otherwise in between |
+
+Printed with them, no limit: `e` of every run and its orders (whether the order of the error with the library stencils
+changes without the transient term), every response at the five times, the errors and responses of the long run at
+`t = 0.75` and `1`.
+
+Tests `a2_without_the_transient_rhie_chow_term` and `a2_run_on_to_t_1` (ignored, slow, run once each). The run helper
+takes the end time and the setting since this amendment; the registered runs are unchanged. Prediction (mine): H14 "still
+arriving" (the doubling between `0.25` and `0.5`); H13 uncertain: the memory is the one place where I found a factor `1 /
+h` on paper, but I could not derive the first-order response from it.
+
+The decision rule is unchanged.

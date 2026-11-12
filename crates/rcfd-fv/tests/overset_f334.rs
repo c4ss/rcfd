@@ -318,6 +318,10 @@ struct Cfg {
     pin_last: bool,
     /// The velocity of the component's outer patches is a fixed value zero instead of zero gradient (Hc).
     fixed_outer: bool,
+    /// The transient Rhie-Chow term of the library (`PimpleSettings::ddt_correction`; amendment 2 switches it off).
+    ddt_correction: bool,
+    /// End time (amendment 2 runs to `t = 1`); `steps` steps reach it.
+    end: f64,
 }
 
 impl Cfg {
@@ -328,6 +332,8 @@ impl Cfg {
             stencils: Stencils::Linear,
             pin_last: false,
             fixed_outer: false,
+            ddt_correction: true,
+            end: T_END,
         }
     }
 }
@@ -350,6 +356,8 @@ struct Run {
 
 /// Times at which a run keeps its velocity field (amendment 1); every one is a whole number of steps at every level.
 const SNAP_TIMES: [f64; 5] = [0.0025, 0.025, 0.125, 0.25, 0.5];
+/// Further times of a run that goes on to `t = 1` (amendment 2).
+const LATE_TIMES: [f64; 2] = [0.75, 1.0];
 
 fn eps(s: &OversetSolver, c: usize, t: f64, amp: f64) -> f64 {
     vec3::norm(vec3::sub(s.u.values[c], tg_u(s.geom.mesh.cell_centres()[c], t, amp))) / (amp * (-2.0 * NU_TG * t).exp())
@@ -358,7 +366,7 @@ fn eps(s: &OversetSolver, c: usize, t: f64, amp: f64) -> f64 {
 /// A Taylor-Green run on the composite `ov` held at `pose`, to `t = 0.5`.
 fn run(ov: Overset, pose: Pose, cfg: &Cfg) -> Run {
     let t0 = Instant::now();
-    let dt = T_END / cfg.steps as f64;
+    let dt = cfg.end / cfg.steps as f64;
     let grids = Grids::new(&ov);
     let geom = Arc::new(FvGeometry::new(Arc::new(mesh_at(&ov, &pose))).unwrap());
     let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0, cfg.amp));
@@ -371,6 +379,7 @@ fn run(ov: Overset, pose: Pose, cfg: &Cfg) -> Run {
     }
     let p = ScalarField::from_fn("p", &geom, |x| tg_p(x, 0.0, cfg.amp));
     let mut st = settings();
+    st.ddt_correction = cfg.ddt_correction;
     if cfg.pin_last {
         st.p_ref = (grids.nb - 1, 0.0);
     }
@@ -400,7 +409,11 @@ fn run(ov: Overset, pose: Pose, cfg: &Cfg) -> Run {
         cont = cont.max(info.continuity);
         delta_max = delta_max.max(info.delta.abs());
         delta_sum += info.delta.abs();
-        if SNAP_TIMES.iter().any(|ts| (ts - t).abs() < 0.25 * dt) {
+        if SNAP_TIMES
+            .iter()
+            .chain(&LATE_TIMES)
+            .any(|ts| (ts - t).abs() < 0.25 * dt)
+        {
             snaps.push(s.u.values.clone());
         }
     }
@@ -1139,5 +1152,110 @@ fn a1_response_level_3() {
 fn a1_response_level_4() {
     let mut c = Checks::new();
     a1_level(4, &A1_ALL[2..], &mut c);
+    c.finish();
+}
+
+// ---- amendment 2: the first-order part of the response ------------------------------------------------------------------------
+
+/// Root mean square over the calculated component cells of the difference of snapshot `k` of two runs (over the decay
+/// factor of the time `t`), and of the error of the first run at that time.
+fn snapshot_response(a: &Run, b: &Run, k: usize, t: f64) -> (f64, f64) {
+    let s = &a.s;
+    let nb = s.conn.n_background_cells;
+    let vol = s.geom.mesh.cell_volumes();
+    let centres = s.geom.mesh.cell_centres();
+    let scale = (-2.0 * NU_TG * t).exp();
+    let (mut sum, mut err, mut vsum) = (0.0, 0.0, 0.0);
+    for c in nb..s.geom.n_cells() {
+        if s.conn.kind[c] == CellKind::Calculated {
+            let d = vec3::sub(a.snaps[k][c], b.snaps[k][c]);
+            let e = vec3::sub(a.snaps[k][c], tg_u(centres[c], t, 1.0));
+            sum += vol[c] * vec3::dot(d, d);
+            err += vol[c] * vec3::dot(e, e);
+            vsum += vol[c];
+        }
+    }
+    ((sum / vsum).sqrt() / scale, (err / vsum).sqrt() / scale)
+}
+
+/// ADR 0246 amendment 2, H13: RL at levels 1 to 3 without the transient Rhie-Chow term, with the library stencils and
+/// with the nine-cell stencils on the background fringe and on both fringes (printed numbers; decided in the ADR).
+#[test]
+#[ignore = "slow (RL at levels 1 to 3 in three variants, ADR 0246 amendment 2, about twenty minutes): run once"]
+fn a2_without_the_transient_rhie_chow_term() {
+    let mut c = Checks::new();
+    let mut rows = Vec::new();
+    for l in [1usize, 2, 3] {
+        let base = rl(l, l, |cfg| cfg.ddt_correction = false);
+        report(&format!("A2 N RL level {l}"), &base);
+        c.at_most(&format!("C1 A2 N level {l} continuity"), base.cont, 1e-9);
+        let mut r = [0.0; 2];
+        let mut e = [0.0; 2];
+        for (k, (tag, cf, bf)) in [("Qb", false, true), ("Qcb", true, true)].into_iter().enumerate() {
+            let v = rl(l, l, |cfg| {
+                cfg.ddt_correction = false;
+                cfg.stencils = Stencils::Quadratic { cf, bf };
+            });
+            c.at_most(&format!("C1 A2 N {tag} level {l} continuity"), v.cont, 1e-9);
+            e[k] = cc_error(&v, false).0;
+            r[k] = response(&format!("A2 N level {l}: R of {tag}"), &base, &v);
+        }
+        println!(
+            "A2 N level {l}: RESULT e_base {:.6e} e_Qb {:.6e} e_Qcb {:.6e} R_b {:.6e} R_cb {:.6e}",
+            cc_error(&base, false).0,
+            e[0],
+            e[1],
+            r[0],
+            r[1]
+        );
+        rows.push((cc_error(&base, false).0, e[1], r[0], r[1]));
+    }
+    for (a, b, k) in [(0usize, 1usize, 2.0f64), (1, 2, 1.5)] {
+        println!(
+            "A2 N levels {} to {}: order of e_base {:.4}, of e_Qcb {:.4}, of R_b {:.4}, of R_cb {:.4}",
+            a + 1,
+            b + 1,
+            order(rows[a].0, rows[b].0, k),
+            order(rows[a].1, rows[b].1, k),
+            order(rows[a].2, rows[b].2, k),
+            order(rows[a].3, rows[b].3, k)
+        );
+    }
+    println!(
+        "A2 N: beta^ = 9 R_3 - 4 R_2: of R_b {:.4e}, of R_cb {:.4e}",
+        9.0 * rows[2].2 - 4.0 * rows[1].2,
+        9.0 * rows[2].3 - 4.0 * rows[1].3
+    );
+    c.finish();
+}
+
+/// ADR 0246 amendment 2: RL at levels 1 and 2 run on to `t = 1` (printed numbers: whether the response keeps growing).
+#[test]
+#[ignore = "slow (RL at levels 1 and 2 to t = 1 in three variants, ADR 0246 amendment 2, minutes): run once"]
+fn a2_run_on_to_t_1() {
+    let mut c = Checks::new();
+    for l in [1usize, 2] {
+        let long = |cf: bool, bf: bool| {
+            rl(l, l, |cfg| {
+                cfg.end = 1.0;
+                cfg.steps *= 2;
+                if cf || bf {
+                    cfg.stencils = Stencils::Quadratic { cf, bf };
+                }
+            })
+        };
+        let base = long(false, false);
+        let qb = long(false, true);
+        let qcb = long(true, true);
+        for r in [&base, &qb, &qcb] {
+            c.at_most(&format!("C1 A2 long level {l} continuity"), r.cont, 1e-9);
+        }
+        for (k, t) in SNAP_TIMES.iter().chain(&LATE_TIMES).enumerate() {
+            let (rb, eb) = snapshot_response(&base, &qb, k, *t);
+            let (rcb, _) = snapshot_response(&base, &qcb, k, *t);
+            let (_, eq) = snapshot_response(&qcb, &base, k, *t);
+            println!("A2 long level {l} t = {t}: e_base {eb:.4e}, e_Qcb {eq:.4e}, R_b {rb:.4e}, R_cb {rcb:.4e}");
+        }
+    }
     c.finish();
 }
