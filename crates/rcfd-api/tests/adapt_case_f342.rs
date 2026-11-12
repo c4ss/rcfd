@@ -313,6 +313,7 @@ fn differ(a: &Tree, b: &Tree) -> bool {
 // ------------------------------------------------------------------------------------------------ S1
 
 #[test]
+#[ignore = "record (ADR 0262 amendment 1): defective set-up, the substring `adapt` is in T-S's title; corrected by s1b"]
 fn s1_a_case_without_the_table_keeps_its_text_hash_and_mesh() {
     let without = T_S.replace("[mesh.adapt]\n", "");
     assert_ne!(without, T_S);
@@ -326,6 +327,35 @@ fn s1_a_case_without_the_table_keeps_its_text_hash_and_mesh() {
     assert!(c1.to_toml().contains("adapt") && c1.to_json_string().contains("adapt"));
     println!(
         "S1: settings hash without {:016x}, with {:016x}",
+        c0.tree.content_hash(),
+        c1.tree.content_hash()
+    );
+    assert_ne!(c0.tree.content_hash(), c1.tree.content_hash());
+}
+
+/// S1b (ADR 0262 amendment 1): S1 with the table looked for as a table, not as a substring.
+#[test]
+fn s1b_a_case_without_the_table_keeps_its_text_hash_and_mesh() {
+    let without = T_S.replace("[mesh.adapt]\n", "");
+    assert_ne!(without, T_S);
+    let c0 = Case::parse_toml(&without).unwrap();
+    let c1 = Case::parse_toml(T_S).unwrap();
+    let has_line = |t: &str| t.lines().any(|l| l.trim() == "[mesh.adapt]");
+    let json_has = |t: &str| {
+        let v: serde_json::Value = serde_json::from_str(t).unwrap();
+        v["mesh"].get("adapt").is_some()
+    };
+    assert!(c0.tree.to_json().pointer("/mesh/adapt").is_none(), "S1b data");
+    assert!(!has_line(&c0.to_toml()), "S1b toml");
+    assert!(!json_has(&c0.to_json_string()), "S1b json");
+    assert_eq!(c0.get("mesh.adapt.cycles").unwrap(), serde_json::json!(2));
+    let sim = Simulation::new(&c0).unwrap();
+    assert_eq!(sim.geom.mesh.content_hash(), build_mesh(&c0).unwrap().content_hash());
+    assert!(sim.adaptive_cycles().is_none());
+    assert!(c1.tree.to_json().pointer("/mesh/adapt").is_some(), "S1b data with");
+    assert!(has_line(&c1.to_toml()), "S1b toml with");
+    println!(
+        "S1b: settings hash without {:016x}, with {:016x}",
         c0.tree.content_hash(),
         c1.tree.content_hash()
     );
