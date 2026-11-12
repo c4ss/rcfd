@@ -707,11 +707,10 @@ fn e4_check_only_adds_the_rules_array() {
 // ---------------------------------------------------------------------------------------------
 // ADR 0196 C: SV202's message names the default of the solver; a message chosen by condition
 
-/// SV202's text for the compressible solver (ADR 0196 C).
-const SV202_SLIP: &str =
-    "no boundary conditions are set: every patch takes the default of the compressible solver (a slip wall)";
-/// SV202's text for every other solver, as before ADR 0196.
-const SV202_NO_SLIP: &str = "no boundary conditions are set: every patch takes the default (a fixed no-slip wall)";
+/// SV202's text for the compressible solver (ADR 0196 C; the fuller text of ADR 0235 A, registered edit E5).
+const SV202_SLIP: &str = "no boundary conditions are set: the compressible solver makes every patch a slip wall, except a patch of kind outlet, which it extrapolates";
+/// SV202's text for every other solver (ADR 0196 C; the fuller text of ADR 0235 A, registered edit E5).
+const SV202_NO_SLIP: &str = "no boundary conditions are set: this solver refuses the case, since every mesh patch that is not empty or cyclic needs an entry boundaries.<patch>; an entry without keys is a fixed no-slip wall";
 
 #[test]
 fn e5_sv202_names_the_default_of_the_solver_adr0196() {
@@ -812,4 +811,63 @@ fn e4b_message_first_of_is_validated_strictly_adr0196() {
         assert!(e.contains("message"), "{what}: {e}");
     }
     eprintln!("E4b (ADR 0196 C2): a valid first_of message per condition with {{name}}; 9 malformed shapes refused");
+}
+
+// ---------------------------------------------------------------------------------------------
+// ADR 0235 A (F-328): SV202's fuller text through `check_only`, and the two claims of the text checked on the code
+
+/// A `box_2d` mesh without `[boundaries]` (ADR 0235 A2).
+const NO_BC_MESH: &str = r#"title = "sv202 fuller text"
+[mesh]
+generator = "box_2d"
+nx = 10
+ny = 2
+lx = 1.0
+ly = 0.1
+"#;
+
+#[test]
+fn e6_sv202_fuller_text_through_check_only_adr0235() {
+    let parse = |t: &str| Case::parse_toml(t).unwrap_or_else(|e| panic!("{e:?}"));
+    // A2a: the compressible solver: accepted, SV202 with the slip text
+    let comp = parse(&format!(
+        "{NO_BC_MESH}[solver]\nalgorithm = \"compressible\"\nend_time = 0.001\n"
+    ));
+    let (code, ev) = rcfd_api::runctl::check_only(&comp);
+    let rules = ev["rules"].as_array().expect("rules array");
+    eprintln!("A2a: exit {code}, rules {rules:?}");
+    assert_eq!(code, 0, "{ev}");
+    assert_eq!(rules.len(), 1, "{ev}");
+    assert_eq!(rules[0]["id"], "SV202", "{ev}");
+    assert_eq!(rules[0]["message"], SV202_SLIP, "{ev}");
+    // A2b: the default algorithm refuses the case, one diagnostic per mesh patch that is not empty
+    let (code, ev) = rcfd_api::runctl::check_only(&parse(NO_BC_MESH));
+    let diags = ev["diagnostics"].as_array().expect("diagnostics array");
+    eprintln!("A2b: exit {code}, rules {}, diagnostics {diags:?}", ev["rules"]);
+    assert_eq!(code, 3, "{ev}");
+    assert!(ev["rules"].as_array().is_some_and(|r| r.is_empty()), "{ev}");
+    assert_eq!(diags.len(), 4, "{ev}");
+    for (d, p) in diags.iter().zip(["xmin", "xmax", "ymin", "ymax"]) {
+        assert_eq!(d["path"], format!("boundaries.{p}"), "{ev}");
+        assert_eq!(
+            d["message"],
+            format!("no boundary condition for mesh patch '{p}'"),
+            "{ev}"
+        );
+    }
+    // A2c: entries without keys are accepted, and SV202 does not fire
+    let empty = parse(&format!(
+        "{NO_BC_MESH}[boundaries.xmin]\n[boundaries.xmax]\n[boundaries.ymin]\n[boundaries.ymax]\n"
+    ));
+    let (code, ev) = rcfd_api::runctl::check_only(&empty);
+    eprintln!(
+        "A2c: exit {code}, rules {}, diagnostics {}",
+        ev["rules"], ev["diagnostics"]
+    );
+    assert_eq!(code, 0, "{ev}");
+    assert!(ev["diagnostics"].as_array().is_some_and(|d| d.is_empty()), "{ev}");
+    assert!(
+        !ev["rules"].as_array().unwrap().iter().any(|r| r["id"] == "SV202"),
+        "{ev}"
+    );
 }

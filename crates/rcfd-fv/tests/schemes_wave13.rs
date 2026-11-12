@@ -438,8 +438,12 @@ fn t1_temporal_order() {
     }
 }
 
+/// Record of T2 as first written (ADR 0016): when plain BDF2 overshoots less than 0.02 it prints "vacuous" and returns, so it
+/// passes without the bounded scheme being examined (ADR 0235 C). Superseded by `t2b_bounded_time_scheme_square_wave`; kept
+/// unchanged as the record.
 #[test]
-fn t2_bounded_time_scheme_square_wave() {
+#[ignore = "ADR 0235 C: passes when plain BDF2 overshoots less than 0.02 (vacuous); superseded by t2b_bounded_time_scheme_square_wave"]
+fn t2_bounded_time_scheme_square_wave_setup_defect() {
     let run = |t| wave(ConvScheme::Upwind, t, 100, 2.0, 0.8, 1);
     let over = |v: &[f64]| {
         let (h, l) = excursion(v);
@@ -451,5 +455,23 @@ fn t2_bounded_time_scheme_square_wave() {
         println!("T2 vacuous: plain BDF2 overshoot below the 0.02 registered threshold");
         return;
     }
+    assert!(obd <= 0.25 * ob2 && obd <= 0.02, "bounded {obd:e} vs plain {ob2:e}");
+}
+
+/// T2 corrected (ADR 0235 C): the registered precondition "the test has teeth" (plain BDF2 overshoots by at least 0.02) is an
+/// assertion, so the vacuous case fails instead of passing; the set-up and the limits are those of ADR 0016.
+#[test]
+fn t2b_bounded_time_scheme_square_wave() {
+    let run = |t| wave(ConvScheme::Upwind, t, 100, 2.0, 0.8, 1);
+    let over = |v: &[f64]| {
+        let (h, l) = excursion(v);
+        h.max(l).max(0.0)
+    };
+    let (ob2, obd) = (over(&run(TimeScheme::Bdf2)), over(&run(TimeScheme::Bdf2Bounded)));
+    println!("T2b: overshoot BDF2 {ob2:.4e}, bounded BDF2 {obd:.4e}");
+    assert!(
+        ob2 >= 0.02,
+        "T2b has no teeth: plain BDF2 overshoot {ob2:e} below the registered 0.02"
+    );
     assert!(obd <= 0.25 * ob2 && obd <= 0.02, "bounded {obd:e} vs plain {ob2:e}");
 }

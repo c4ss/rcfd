@@ -43,6 +43,9 @@ Options:
 * `--stop-on-failure` ends after the first failed point.
 * `--no-retry` disables the cold retry.
 * `--max-steps n` caps one run.
+* `--warm-start extended` restarts each point from the previous one with the extended warm start (ADR 0209 D4: velocity,
+  pressure, the temperature and the k-epsilon or k-omega SST fields, steady SIMPLE and SIMPLEC only; ADR 0235 B). The default,
+  `--warm-start flow`, carries velocity and pressure only and runs a case with energy or turbulence cold.
 * `--json` prints the table.
 
 The exit code is 0 when all points converged, 5 otherwise, 2 for usage errors and 3 for an invalid axis path or value.
