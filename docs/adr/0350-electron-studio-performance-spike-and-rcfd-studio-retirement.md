@@ -150,3 +150,135 @@ Electron Studio to parity (depends on F-447 and the maintainer's go-ahead), F-44
 - **Q1:** (a), run the spike, asked for by the maintainer in person on 2026-11-12 ("can we do that now?").
 - **Q2** (a), **Q3** (a), **Q4** (the `data.*` methods on the spike's branch only) and **Q5** (a, Electron): taken by the lead on
   the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## Amendment 1: protocol (2026-11-12, written before any code of F-447 and before any measurement)
+
+No limit of section 3 changes. This amendment fixes how each number is taken. Read beforehand (disclosed):
+`docs/service-protocol.md`, `crates/rcfd-api/src/service.rs`, `fieldstore.rs`, `crates/rcfd-tsstore/src/lib.rs`,
+`crates/rcfd-io/src/container.rs` (mesh frame layout), `crates/rcfd-studio/tests/vp/mod.rs`, `viewport_store.rs`,
+`frame_cost_b7.rs`, ADR 0345 (how `cosim.*` became protocol 1.1). No timing was taken beforehand. Machine facts read
+beforehand: Ryzen 7 9800X3D (8 cores), 93.6 GB RAM, GeForce RTX 5080 on a 1920 x 1080 display at 239 Hz and a Radeon integrated
+adapter on a 60 Hz display, Node 22.19.0, npm 11.12.0; the processor showed 100 percent load from other building agents at the
+time of reading, so the load is noted with every timing run.
+
+### A1.1 Rust side
+
+- **`data.*`, identifier `rcfd-data/1`, protocol 1.2, opt-in per service instance.** An existing test asserts
+  `protocol_version == "1.1"` and 69 methods for a default service (`cosim_service_f360.rs`), and house rule 3 forbids its
+  edit. So the family is switched on by the embedding program (`Service::enable_data`); a service that does not call it
+  answers `service.info` with exactly the bytes of today and `data.*` with -32601. A service with it on reports
+  `protocol_version` `"1.2"`, the member `data` (`"rcfd-data/1"`) and the `data.*` names after the existing ones in `methods`.
+  `rcfd serve` does not switch it on (a flag would change the CLI help golden); that step is left for the maintainer.
+- Methods: `data.info` (`{protocol, port, unix_ns}`: the data port and the service's clock, for P2), `data.open {path}`
+  (snapshots and fields of the store in the sandboxed folder `path`), `data.field {path, snapshot, field}` and
+  `data.surface {path}` (the boundary faces of the stored mesh, fan-triangulated: points `f32`, triangle corners `u32`, the
+  owner cell of each triangle `u32`). The last two return `{ticket, sections: [{name, dtype, count}]}`. The bytes are prepared
+  at the call from `rcfd_tsstore::Reader` (`read_field` cast to `f32`; `mesh`) and wait under the ticket (at most 8 tickets;
+  the oldest is dropped). The client holds one second TCP connection to `port` (loopback, `TCP_NODELAY`), writes the ticket
+  as 8 bytes little-endian and reads, per section, `u64` little-endian byte length then the raw little-endian values. A
+  ticket is used once. No cache of field or surface bytes on the Rust side; a store's `Reader` is opened per call.
+- The spike's server is an example of `rcfd-api` (`examples/f447_bench.rs serve`): `Service::new`, `enable_data`,
+  `serve_tcp`, the same calls `rcfd serve` makes. For P2 it also runs one thread that long-polls `events.poll` in process
+  and writes `(seq, unix_ns)` of every event to a file: the event log carries no time stamp, and adding one would change an
+  existing method. That thread wakes on the same condition variable as every poller, so its stamp is later than the emit by
+  microseconds, which shortens the measured latency by that much (accepted against a 20 ms limit, stated in the results).
+  Deviation from section 2 ("driving the existing `rcfd serve`"): for the two reasons above.
+- R3 is checked first by `rustup target list --installed` and by whether the reader could export functions: recorded as not
+  run if the target is not installed or an export needs `wasm-bindgen` or `unsafe` (`#[no_mangle]`, raw pointers).
+
+### A1.2 Data sets (generator `examples/f447_bench.rs gen`, output in the scratch folder, not committed)
+
+- Boxes `box_3d` with unit lengths: 50 x 50 x 40 (1e5 cells), 100 x 100 x 100 (1e6), 200 x 200 x 100 (4e6). Lid-driven:
+  `ymax` moves with (1, 0, 0), the other five patches are fixed walls, `nu` 0.01, `simplec`, `upwind`, steady,
+  `output.store_interval = 1`, `output.store_fields = ["p", "ux", "uy", "uz"]` (one scalar, one vector as its three
+  components: the store holds scalars only), `output.store_precision = "f32"` (so a 1e6-cell scalar is 4 MB, as P4 states),
+  20 steps through `runctl::drive` (the existing run path), which gives 20 snapshots (steps 1 to 20). If a step yields a
+  non-finite field the run is not repaired; it is reported.
+- The run path writes raw blocks only (`WriteOptions::default()`). The deflated store of each size is a copy written by the
+  generator with `rcfd_tsstore::Writer` and `Codec::ShuffleDeflate` from the values `Reader::read_field` returns, same block
+  size (65536), same steps and times.
+- Reference for P12: per store size, snapshot and field, the bytes of `Reader::read_field(..)` cast to `f32`, little-endian,
+  written by the generator to `ref/<size>/<snapshot>-<field>.f32`, from the raw store; the generator also asserts that the
+  deflated store gives the same bits.
+- Surface of the 1e6 case: its 6e4 boundary quadrilaterals (1.2e5 triangles). Triangle soup: the sheet
+  z = 0.25 sin(3 pi x) cos(3 pi y) over the unit square, 1000 x 500 quadrilaterals each cut in two, 1e6 triangles with three
+  own corners each (3e6 vertices), per-vertex scalar z; made by the same formula in the bench (JavaScript) and in the
+  Studio control (Rust). Deviation from "made by existing code": the soup is a formula, not an iso-surface of a run.
+- A project folder around the stores (`runs/<id>/fields/store.rts`) for P10 and the control.
+- P11 transcript: 1e4 lines of JSON in the Claude Code transcript form (alternating user and assistant entries, text of 40 to
+  1200 characters from a fixed linear congruential generator), written by the bench, read by Node from the file.
+
+### A1.3 Electron side
+
+- `bench/electron/`: Electron 45.1.0 exactly (published 2026-10-27, 16 days before today; 45.2.x and 45.3.x are younger
+  than two weeks), no other package, lock file committed, plain JavaScript (no compile step; deviation from "a TypeScript
+  reader": the same code a TypeScript compiler would emit, with one dependency less). No UI framework.
+- Arrangement, the one a product would use and the only one judged: the main process does all I/O (the two TCP
+  connections, file reads, `zlib.inflateRawSync`); the renderer is sandboxed and context-isolated and talks to the main
+  process over one `MessagePort` (handed over by the preload script), so a field crosses one structured-clone hop. Electron
+  cannot transfer an `ArrayBuffer` from the main process without a copy; the copy is part of every time below.
+- R1 as in A1.1. R2: a reader of the ADR 0124 format in the main process (footer index, snapshot directory, frame-head
+  checksums and the payload checksum of every DATA block verified with FNV-1a 64 as the Rust reader does, raw and
+  shuffle-deflate blocks, `f32` and `f64` precision), returning `Float32Array` bytes; for P7 it reads the mesh frame's
+  metadata, the points and the boundary part of the face arrays by seeks (the mesh frame's payload checksum, 195 MB, is
+  not verified in R2: stated as a limit). R0: `field.slice {name: "p", max_points: n_cells}` on a live session of the
+  1e6 box after `run.initialize` and one `run.step`, the `values` array turned into a `Float32Array`.
+- Window: one visible window, 1280 x 800 content, on the primary display; WebGPU with `powerPreference:
+  "high-performance"`; the adapter name is recorded. If no window or adapter can be had, the check is recorded as not run.
+- Clock: `performance.now()` in the renderer for intervals. Percentiles: p50 the median, p99 the value at rank
+  ceil(0.99 n) of the sorted sample. A check with one limit and no percentile is judged on the median unless stated; the
+  maximum is reported too.
+
+### A1.4 How each check is taken (each registered run is made once; warm-up counts are fixed here)
+
+- **P1:** in the main process, one persistent connection with `setNoDelay`; 50 warm-up calls, then 1000 `service.info` and
+  1000 `run.status` (a ready session of the 1e5 box), each timed from write to parsed reply. Both must meet both limits.
+- **P2:** a session of the 1e5 box, `run.start`; the renderer long-polls `events.poll {after, timeout_ms: 1000}` through
+  the port; for each `iteration` event the latency is the renderer's receive time minus the server's stamp of that `seq`.
+  The two clocks are joined by 200 `data.info` round trips from the renderer (offset from the round trip with the smallest
+  duration, error at most half of it, reported). Sample: the first 300 iteration events or what 120 s give (at least 50,
+  else not run).
+- **P3:** a session of a 4 x 4 x 4 box stepped 1e5 times (`run.step`, steady; if the run stops early the count is reported
+  and the check is judged only if 1e5 samples exist); `monitors.get {names}` of 4 series; the main process passes the reply
+  line to the renderer as a string, which parses it; from the renderer's request to the parsed object; 20 repeats, judged
+  on the median.
+- **P4:** 1e6 box, field `p`, snapshot i mod 20 for repeat i; from the renderer's request to `queue.writeBuffer` into an
+  existing vertex buffer followed by `queue.onSubmittedWorkDone()`; 20 warm-up and 200 timed repeats per route and store
+  codec (R1 raw, R1 deflated, R2 raw, R2 deflated), R0 20 repeats. A route meets P4 on the raw store (what the run path
+  writes); the deflated result is reported with its own met or not met.
+- **P5:** 1e6 box, raw store: 10 passes over the 20 snapshots in order; per snapshot: request, write to the GPU buffer
+  that colours the 1e6 case's surface, draw, wait for the next animation frame. Rate = 200 / total time; the frame length
+  is the time from one snapshot's request to the next one's. Both routes; a pass before as warm-up.
+- **P6:** the same at 4e6 cells, 5 passes (100 snapshots).
+- **P7:** from the renderer's "open" (`data.open` or the reader's open) through surface and field `p` of snapshot 19 to
+  the first animation frame after the draw was submitted and `onSubmittedWorkDone` resolved; a new renderer state each
+  time (buffers and pipeline for the surface built inside the timed part; the device exists before); 5 repeats per route,
+  judged on the median, the first reported separately.
+- **P8:** the soup with a viridis colour map in the fragment shader, depth test, one draw call, the camera orbiting one
+  turn per 600 frames; 120 warm-up frames, 1200 timed frame intervals of `requestAnimationFrame`. Taken twice: with vertical
+  sync as the window has it (the p99 frame length is judged there, and the display's rate is reported), and with
+  `--disable-frame-rate-limit --disable-gpu-vsync` (the frames per second are judged there: on a 60 Hz display the first
+  run can only show the display's rate, which may read 59.9). In the second run each frame waits for
+  `onSubmittedWorkDone` so that the count is of finished frames.
+- **P9:** after loading the 20 snapshots of `p` of the 1e6 box as 20 `Float32Array`s and 20 GPU buffers: the renderer
+  process's private bytes from `process.getProcessMemoryInfo()`; the GPU process's working set from `app.getAppMetrics()` is
+  reported beside it (not judged: the limit names the renderer process).
+- **P10:** packaged by hand (Electron's `dist` copied to the scratch folder, the app in `resources/app`; no packaging
+  package). A launcher script takes the time from `spawn` to the renderer's report that the run list (read by the main
+  process from the project folder) is in the document and one animation frame has passed. 10 starts, judged on the median;
+  the first start and the maximum reported. A true cold start (after a reboot) cannot be taken by an agent: stated.
+- **P11:** a hand-written virtualised list (fixed row height, only visible rows in the document); the list scrolled from
+  top to bottom in 1200 animation frames, frame intervals as in P8's first run.
+- **P12:** for the 1e5 and 1e6 boxes, all 20 snapshots, all four fields, routes R1 and R2, raw and deflated: the renderer
+  counts differing bits (XOR and population count over `Uint32Array` views) against the reference files; for the 4e6 box
+  field `p` only. **NC2:** the same count after the harness rotates the bytes of block 3 of one received field by one.
+- **NC1:** from P4's R0 line.
+- **Control C (rcfd-studio, release, measured first):** an added test file `crates/rcfd-studio/tests/f447_control.rs`
+  (ignored heavy record, existing code untouched), on the first adapter of `rcfd_render::adapters()` whose name holds
+  "RTX" (else the first), offscreen at 1280 x 800: C7 `select_run` to the first prepared image (5 repeats), C4
+  `show_snapshot` to the prepared image with the device polled until idle (200 repeats), C5 as P5 (10 passes), C6 as P6,
+  C8 `orbit` and `prepare` of the soup shown as a surface (1200 frames). The control has no window, no egui pass and no
+  presentation: it is the Studio's data and draw path only, stated wherever C is compared. P1 to P3 and P9 to P12: C is
+  "in process" or "none".
+- Mutations (scratch copy): M1 `data.field` reads snapshot + 1; M2 the data channel drops the last 4 bytes of a section;
+  M3 the JavaScript reader's unshuffle uses the wrong stride. Each must be caught by a Rust test of `data.*` or by P12.
