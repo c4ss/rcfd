@@ -331,6 +331,112 @@ the gate fails on it until the lead applies or rejects the replacement.
 4. ADR 0275's E3 is not edited; its replacement is proposed (finding 1). It is a test edit, not a default, golden or hash
    table, but the house rules forbid editing an existing test, so it is the lead's step.
 
+## Addendum 1: results (2026-11-12)
+
+Code at commit f2b29d0c (after the registration 56780530): `crates/rcfd-fem/src/loads.rs` (the refusals of traction,
+pressure, gravity, centrifugal and nodal body force replaced; `face_shape_functions`, `face_rule`, `body_force_loads` added;
+the nodal-force arm unchanged in its arithmetic, moved from a closure into the private `add_force`) and
+`crates/rcfd-fem/tests/sb_loads.rs`. No other file; no shared solver file, golden or hash table. The registered run was made
+once, in release, with `cargo test -p rcfd-fem --release --test sb_loads -- --nocapture --test-threads=1` (7 passed, 0.18 s;
+log `w49i-work/f375-scratch/run1.log`).
+
+| Id | Limit | Measured (Tet4; Hex8; Tet10) | Met |
+| --- | --- | --- | --- |
+| R1 closed-surface pressure, force / (p A); moment / (p A L) | `<= 1e-12` each | 1.5e-17 / 3.2e-18; 1.6e-17 / 7.0e-18; 4.4e-17 / 1.3e-17 | yes |
+| R2 pressure on `xmax` against `-p A e_x` | `<= 1e-12` | 2.9e-16; 1.7e-16; 5.2e-17 | yes |
+| R3 traction against `t A` | `<= 1e-12` | 4.2e-16; 3.7e-16; 4.2e-16 | yes |
+| R4 gravity against `rho V g` | `<= 1e-12` | 5.9e-16; 5.9e-16; 9.8e-16 | yes |
+| R5 centrifugal against `rho omega^2 V r_c`, vector; magnitude | `<= 1e-12` each | 1.6e-16 / 1.6e-16; 1.6e-16 / 0; 7.0e-16 / 8.2e-16 | yes |
+| R6 nodal linear field against `V b0` | `<= 1e-12` | 2.1e-16; 3.7e-16; 6.3e-16 | yes |
+| D1 traction per node against the closed forms | `<= 1e-13` | 3.0e-16; 3.0e-16; 9.1e-16 | yes |
+| D2 pressure per node against the closed forms | `<= 1e-13` | 4.4e-16; 4.4e-16; 8.7e-16 | yes |
+| D3 Tet4 centrifugal per node against the closed form | `<= 1e-13` | 8.1e-16 | yes |
+| C1 hanging bar Tet10 `[8, 2, 2]`, max nodal error / u(L) | `<= 1e-9` | 8.7e-13 (tip 2.2e-14) | yes |
+| C2 hanging bar tip `[8, 2, 2]`, Tet4; Hex8 | `<= 1e-2` | 2.0e-5; 2.1e-15 | yes |
+| C3 rotating bar tip, Tet10 `[8, 2, 2]`; Hex8 `[16, 2, 2]` | `<= 1e-2` | 3.0e-6; 1.1e-15 | yes |
+| C4 ring mid-surface `u_r` against `rho omega^2 R^3/E` | `<= 2e-2` | 3.3e-3; 2.0e-3; 8.5e-6 | yes |
+| B1 nodal `rho g` against gravity | `<= 1e-14` | 4.2e-16; 2.1e-16; 2.3e-16 | yes |
+| B2 function helper against centrifugal | `<= 1e-14` | 0; 0; 0 | yes |
+| B3 function helper against nodal linear field | `<= 1e-13` | 3.3e-16; 1.8e-16; 2.5e-16 | yes |
+| E1 rotating bar Tet4 `[16, 2, 2]` | `<= 1e-2` | 5.0e-6 | yes |
+| E2 ring `max |u_theta|`; `max |u_z|` / exact | `<= 1e-2` each | 3.1e-4 / 3.0e-5; 2.0e-11 / 1.2e-15; 3.6e-6 / 3.8e-8 | yes |
+| X1 temperature refused | `UnsupportedLoad { "Temperature", "ADR 0281" }` | "load Temperature is not supported by the static solve yet (it is added by ADR 0281)" | yes |
+| X2 gravity without material | `MaterialUnassigned` | "element 0: has no material"; a pressure without material accepted | yes |
+| X3 NaN body force; face of 5 nodes | refused | "element 0: key 'body force': [NaN, 0.0, 0.0] at [...] is not finite"; "key 'face nodes': a face of 5 nodes ..." | yes |
+| X4 ADR 0275's E3 replaced (scratch copy) | passes | `sb_static` 9 passed (`mutations.log`) | yes |
+| N1 lumped gravity, Tet10 | `> 1e-4` | 0.45 | yes |
+| N2 centrifugal against the unprojected distance | `> 1e-3` | 0.74 (all three) | yes |
+| N3 ring inner surface against its own radius, Hex8 | `> 1e-2` | 2.9e-2 | yes |
+
+Against the estimates: the exactness arguments held (Hex8 hanging and rotating bar, Tet10 hanging bar to rounding). The
+Tet4 hanging tip (2.0e-5) and Tet10 rotating tip (3.0e-6) are one to three decades below the estimates `4e-4` and `2e-3`,
+which were bounds. The ring matched the chord estimate: Hex8 `-0.20` percent (estimated `-0.24`), Tet4 `-0.17` to `-0.33`
+percent, Tet10 with curved edges `8.5e-6`. Ring unknowns 243, 243, 1290; bar unknowns 216 to 1200; relative residuals of
+the direct solves 3.6e-14 to 1.8e-11.
+
+**Existing tests** (release): `sb_model` 11 passed, `sb_elements` 8 passed, the doc tests pass, `sb_static` 8 of 9 passed:
+`e1_to_e4_free_node_conflicts_loads_element_errors` **fails** at line 707 (`unwrap_err` on a solve that now succeeds), as
+registered in finding 1: its E3 asserts that gravity is refused. The test is not edited. With the replacement of X4 applied
+on the scratch copy the whole of `sb_static` passes (E1, E2, E3 with the temperature load, E4).
+
+**Mutations** (scratch copy by `git archive` of f2b29d0c, own target directory, each alone by exact text replacement,
+`sb_loads` run once, the file restored and compared by SHA-256; `f375-scratch/mutate.py`, `mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 pressure sign | R2 (2.0), D2 (2.0), three kinds |
+| M2 Tri6 corner functions `L_i` | D1, D2 (3.0), R2, R3 (1.0), Tet10 |
+| M3 no axial projection | R5, D3, B2 (and N2 then fails, as it should) |
+| M4 axis not normalised | R5 (5.9), D3, B2 |
+| M5 stiffness rule for body loads | D3 (7.7e-3) |
+| M6 no density | R4, B1, C1, C2 |
+| M7 nodal value instead of the interpolated field | B3, R6 |
+| M8 no collapse Jacobian | D1, D2, R1 moment, R2, R3 (tetrahedra) |
+| M9 temperature skipped | X1 |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean.
+
+**Deviations.**
+
+1. ADR 0275's E3 fails by construction (finding 1); not edited. The replacement is the lead's step.
+2. The nodal-force arm of `nodal_load_vector` moved from a closure into the function `add_force`; the additions are the
+   same in the same order, so a nodal-force-only model gives the same bits (`sb_static`'s U and R checks pass, and its
+   R3 compares the load vector with one built in the test: 0).
+3. Not run: the whole workspace (the lead runs the gate) and the baseline hashes (no file outside `rcfd-fem` changed and no
+   crate depends on `rcfd-fem` yet).
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). R1 to R6, D1 to D3, C1 to C4 and B1 to B3
+are met for every kind named, N1 to N3 hold, every mutation fails a registered check. The gate fails on ADR 0275's E3 until
+the lead applies (or rejects) the replacement below.
+
+**Remaining questions.**
+
+1. ADR 0275's E3. Options: (a) the lead applies the two-line replacement checked as X4 (`Load::temperature(vec![350.0;
+   m3.mesh().nodes().len()], 293.15)` and `load: "Temperature"`); ADR 0281 must then replace it again, with whatever load is
+   still unsupported, or drop it; (b) mark the test `#[ignore]` as a record of ADR 0275; (c) delete E3. Recommendation: (a),
+   which keeps E4 running and E3's purpose (nothing is ignored) until ADR 0281.
+2. Pressure varying over a surface (fluid loads): options (a) per-node forces from ADR 0286 as now; (b) a `Load` variant
+   with face or nodal pressures. Recommendation: (a) for the basic tier; `face_shape_functions` and `face_rule` are public
+   for it.
+
+## For the lead: roadmap entries
+
+F-375: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0276, 2026-11-12: rcfd_fem::loads::nodal_load_vector now adds the consistent nodal loads of a uniform traction and a uniform pressure (positive pressing on the solid) on surface sets, by the face functions of Tri3, Quad4 and Tri6 (face_shape_functions) and a 3 x 3 Gauss rule on quadrilaterals and a 9-point collapsed Gauss rule on triangles (face_rule; pressure exact on every face, traction on flat faces), and of gravity, the centrifugal load rho omega^2 r_perp about an axis through a point and a nodal body force field, by each element's mass rule (exact on Tet4, trilinear Hex8 and straight Tet10); body_force_loads gives the load of a body force given by a function as per-node forces; Load::Temperature stays refused (ADR 0281). Resultants on a box with moved interior nodes, Tet4, Hex8, Tet10: closed-surface pressure force and moment within 4.4e-17 and 1.3e-17 (limit 1e-12 p A, p A L), traction t A, gravity rho V g, centrifugal rho omega^2 V r_c about an oblique axis and a linear body force field within 9.8e-16 (limit 1e-12); per-node loads against the closed forms within 9.1e-16. Closed forms with nu = 0: hanging bar Tet10 nodal error 8.7e-13 (limit 1e-9), tip Hex8 2.1e-15 and Tet4 2.0e-5 at 8 elements (limit 1e-2); rotating bar tip Tet10 3.0e-6 at 8 and Hex8 1.1e-15 at 16 elements (limit 1e-2); thin rotating ring (t/R = 0.02, quarter ring by a mapped box with symmetry rollers) mid-surface radial displacement within 3.3e-3, 2.0e-3, 8.5e-6 (limit 2e-2). Nine mutations caught. ADR 0275's test E3 (gravity refused) fails by construction and needs the lead's two-line replacement (ADR 0276 remaining question 1).
+
+F-380 (ADR 0281), sentence to append to its note:
+
+> ADR 0276 (2026-11-12): in loads.rs only the Load::Temperature arm (other => unsupported) remains for ADR 0281; body loads are sums over Element::integration_points with the mass rule (private helpers add_body_load and element_body_load can carry the thermal load integrand); if the lead applied ADR 0276's replacement of ADR 0275's E3, that check asserts the temperature refusal and must be replaced or dropped by ADR 0281.
+
+F-378 (ADR 0279), sentence to append to its note:
+
+> ADR 0276 (2026-11-12): rcfd_fem::loads::body_force_loads(model, |x| b(x)) returns the consistent load of a body force given by a function as one NodalForceAt per node, for solve_static_with; tractions on box faces via Load::traction (exact on flat faces).
+
+F-385 (ADR 0286), sentence to append to its note:
+
+> ADR 0276 (2026-11-12): loads::face_shape_functions and loads::face_rule (Tri3, Quad4, Tri6 in the local face orders of ADR 0271) are public for nodal loads of face forces or pressures given per face or node.
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
