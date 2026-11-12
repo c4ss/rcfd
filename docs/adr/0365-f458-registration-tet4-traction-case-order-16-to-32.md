@@ -146,3 +146,77 @@ not caught by the check registered for it, or caught only after a post-run amend
 - The registration is made after G2 (disclosed above); the limits are the lead's acceptance text.
 - Direct solver only; the iterative solver of ADR 0357 is not exercised here.
 - Peak memory is estimated, not measured, unless the addendum says otherwise.
+
+## Addendum 1: results (2026-11-12)
+
+Runs, each once, release profile, at commit 4d7a76a1 (the test file as committed before any run), on the shared machine: the
+fast file (`cargo test -p rcfd-fem --release --test sb_mms_tet4_traction -- --nocapture`, 0.11 s, log
+`w49i-work/f458-scratch/fast.log`); the heavy record (`-- --ignored h2 --nocapture`, 81.2 s, log `heavy.log`; the peak working
+set of the process, sampled every 2 s from outside, was **1.82 GB**, file `peak.txt`; free RAM before: 21.3 GB); the
+mutations MU1 to MU4 on the archive copy `w49i-work/f458-scratch/mut` of 4d7a76a1 (a named constant changed with a one-line
+replacement, the heavy test run once, the file restored; logs `MU1.log` to `MU4.log`). The solver is the default direct one.
+No amendment was made; nothing above this addendum was changed after a run. Only the new test file was added; `sb_mms.rs`,
+every library file, golden and hash table are untouched.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| S1 free unknowns | 1 536; 12 288; 98 304 | 1 536; 12 288; 98 304 | yes |
+| S2 solver | default (direct) | `StaticOptions::default()` | yes |
+| R1 L2 error against ADR 0279 | relative difference `<= 5e-3` | n = 8: 2.7309e-2 (2.5e-5); n = 16: 7.8835e-3 (5.8e-5) | yes |
+| A1 L2 order 16 -> 32 | `>= 1.8` | **1.9176** (e = 7.8835e-3 -> 2.0866e-3) | yes |
+| A2 energy order 16 -> 32 | `>= 0.9` | **0.9912** (2.4912e-1 -> 1.2533e-1) | yes |
+| A3 monotone fall, n = 8, 16, 32 | strict, both errors | L2 2.731e-2, 7.883e-3, 2.087e-3; energy 4.897e-1, 2.491e-1, 1.253e-1 | yes |
+| T1 wall time | `<= 1 800 s` | 81.2 s (n = 32: 80.0 s) | yes |
+| F1 fast monotone fall, 2, 4, 8 | strict | L2 2.620e-1, 8.690e-2, 2.731e-2; energy 1.708, 9.405e-1, 4.897e-1 | yes |
+| F2 fast L2 order 4 -> 8 | `>= 1.5` | 1.6699 | yes |
+| F3 fast energy order 4 -> 8 | `>= 0.85` | 0.9415 | yes |
+
+Orders printed: 8 -> 16 L2 1.7925, energy 0.9750 (the ADR 0279 values to all printed digits); 16 -> 32 L2 1.9176, energy 0.9912
+(the diagnostic G2 to all printed digits). The run reproduced the diagnostic; R1 differences of 3e-5 to 6e-5 are the printing
+precision of ADR 0279. The L2 order over the three pairs 2 -> 4, 4 -> 8, 8 -> 16, 16 -> 32 is 1.59, 1.67, 1.79, 1.92.
+
+Estimates against measured: the order and error estimates agree; the **time estimate was high**: 81 s against 150 to 200 s
+(the 150 s of the diagnostic was measured with other agents loading the machine; ADR 0279 estimated 700 s by the `8^(7/3)`
+scaling); the memory estimate 0.5 to 2.5 GB agrees with the sampled peak 1.82 GB. F3 estimated 0.95, measured 0.9415.
+
+### Mutations (scratch copy of 4d7a76a1, each run once, heavy test)
+
+| Id | Result | Caught by |
+|---|---|---|
+| MU1 `TRACTION_SCALE = 1.1` | caught as registered | A1 (0.0193) and A2 (0.2559); R1 also fails (2.9, 11.6); A3 met (errors 1.068e-1, 9.909e-2, 9.777e-2 still fall) |
+| MU2 `LAMBDA_SIGN = -1` | caught as registered | A1 (-0.0045) and A2 (-0.0013); R1 and A3 also fail |
+| MU3 traction on `zmax` omitted | caught as registered | A1 (-0.0259) and A2 (-0.0060); R1 and A3 also fail |
+| MU4 `LEVELS = [4, 8, 16]` | caught as registered | A1 only: 1.7925 `<` 1.8; A2 0.9750 and A3 met (R1 met, it is the same data) |
+
+### Deviations and what was not run
+
+- None in the checks or mutations. The time estimate was off (81 s against 150 to 200 s), recorded; the limit 1 800 s was met
+  by a wide margin.
+- Not run: Hex8 and Tet10, other fields or boxes, the iterative solver of ADR 0357, a finer pair (64 cells per edge would be
+  786 432 unknowns, not attempted), a fit of the asymptotic constant.
+- `cargo fmt -p rcfd-fem --check` passed; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` passed. Only the new test
+  file was run (no line of an existing file changed; `baseline_hashes` not needed).
+
+### Decision by the registered rule
+
+**done**: S1, R1, A1 to A3, T1, F1 to F3 met, and MU1 to MU4 caught by the check registered for each, without an amendment.
+The registration knew G2's outcome (disclosed), so the result is a regression record of a value seen before, not an
+independent prediction; it fixes the order 1.92 as a floor-protected check from now on.
+
+### Remaining questions
+
+1. **Is the pre-asymptotic trend itself a check?** The orders 1.59, 1.67, 1.79, 1.92 rise toward 2 but only the last pair is
+   registered. Options: (a) leave; (b) register that the order rises over the pairs 8 -> 16 and 16 -> 32 (a trend check, cheap
+   because the data exist in this run). Recommendation: (a); the acceptance asks for the last pair and the rise is printed.
+2. **Roadmap note on F-378.** ADR 0279 stays partial for its own A1-T Tet4 clause (limit kept). Options: (a) a sentence in the
+   F-378 note that the clause is covered one level finer by F-458; (b) leave it. Recommendation: (a), text below.
+
+### For the lead: roadmap entries
+
+Proposed status of F-458: done pending acceptance.
+
+> F-458 (ADR 0365, 2026-11-12): done pending acceptance. New ignored heavy test sb_mms_tet4_traction.rs runs the manufactured solution and case T of ADR 0279 with Tet4 on 8, 16, 32 cells per edge (98 304 unknowns at the finest, direct solver, 81 s, peak about 1.8 GB): L2 order of the pair 16 -> 32 is 1.9176 (limit 1.8), energy order 0.9912 (limit 0.9), both errors fall monotonically (L2 2.731e-2, 7.883e-3, 2.087e-3). Registered with the disclosure that ADR 0279 ran this pair once as a diagnostic (the same 1.9176), so the result is a regression record, not an independent prediction; the run reproduced the ADR 0279 errors at n = 8 and 16 to 6e-5. Four mutations (traction scaled 1.1, lambda term of the body force reversed, zmax traction omitted, the previous pair 8 -> 16 with order 1.7925) each caught by the registered order checks. A fast test covers the same path on 2, 4, 8. Tests only, sb_mms.rs unedited.
+
+> F-378 note addition: the Tet4 case T L2 clause that missed on the pair 8 -> 16 (1.7925) is met one level finer, 1.9176 on 16 -> 32, by F-458 (ADR 0365, 2026-11-12); the limit of F-378 is unchanged and its status stays partial.
