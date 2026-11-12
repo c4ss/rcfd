@@ -196,6 +196,53 @@ fn c2_permuted_copy() {
     solve_and_check("C2 P", &p, &bp);
 }
 
+/// C2b (amendment 1): P in its scrambled input order, a non-monotone envelope.
+#[test]
+fn c2b_non_monotone_envelope() {
+    let a = lap7(12);
+    let perm = shuffled(a.n, SEED_PERM);
+    let p = a.permute_symmetric(&perm);
+    let ba = rhs(a.n, 0);
+    let bp: Vec<f64> = perm.iter().map(|&o| ba[o]).collect();
+    let f = SkylineLdlt::factor_with(&p, &natural()).expect("factorises");
+    let monotone = (1..p.n).all(|i| f.first_column(i - 1) <= f.first_column(i));
+    assert!(!monotone, "control: the envelope is not monotone");
+    let x = f.solve(&bp);
+    let res = rel_res(&p, &x, &bp);
+    let agree = rel_diff(&x, &cg_ref(&p, &bp));
+    println!(
+        "C2b: envelope {} residual {res:.3e} agreement with cg {agree:.3e}",
+        f.envelope_size()
+    );
+    assert!(res <= 1e-12, "C2b: relative residual {res:e}");
+    assert!(agree <= 1e-9, "C2b: agreement with cg {agree:e}");
+}
+
+/// C6b (amendment 1): the zero pivot under the `NonZero` rule.
+#[test]
+fn c6b_zero_pivot_nonzero_rule() {
+    let a = path_laplacian(50);
+    let e = SkylineLdlt::factor_with(
+        &a,
+        &SkylineOptions {
+            ordering: SkylineOrdering::Natural,
+            pivots: PivotRule::NonZero,
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    println!("C6b: {e}");
+    match e {
+        SkylineError::Pivot {
+            row, position, pivot, ..
+        } => {
+            assert_eq!((row, position), (49, 49));
+            assert_eq!(pivot, 0.0);
+        }
+        other => panic!("expected a pivot error, got {other:?}"),
+    }
+}
+
 #[test]
 fn c3_kronecker() {
     let k = kron3(&lap7(12));
