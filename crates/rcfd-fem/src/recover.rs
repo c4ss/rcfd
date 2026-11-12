@@ -196,7 +196,9 @@ fn fit_basis(kind: ElementKind, xi: [f64; 3]) -> Vec<f64> {
 /// Inverse of a small dense matrix by Gauss-Jordan elimination with partial pivoting.
 fn invert(mut a: Vec<Vec<f64>>) -> Vec<Vec<f64>> {
     let n = a.len();
-    let mut inv: Vec<Vec<f64>> = (0..n).map(|i| (0..n).map(|j| f64::from(u8::from(i == j))).collect()).collect();
+    let mut inv: Vec<Vec<f64>> = (0..n)
+        .map(|i| (0..n).map(|j| f64::from(u8::from(i == j))).collect())
+        .collect();
     for col in 0..n {
         let mut piv = col;
         for r in col + 1..n {
@@ -427,11 +429,7 @@ fn shifted(s: &[f64; 6]) -> Form {
     }
     let a = s.map(|v| v / m);
     let q = (a[0] + a[1] + a[2]) / 3.0;
-    let b = [
-        [a[0] - q, a[3], a[5]],
-        [a[3], a[1] - q, a[4]],
-        [a[5], a[4], a[2] - q],
-    ];
+    let b = [[a[0] - q, a[3], a[5]], [a[3], a[1] - q, a[4]], [a[5], a[4], a[2] - q]];
     let p2 = (b[0][0] * b[0][0]
         + b[1][1] * b[1][1]
         + b[2][2] * b[2][2]
@@ -542,7 +540,11 @@ pub fn principal(s: &[f64; 6]) -> Principal {
             best_norm = nc;
         }
     }
-    let e = if best_norm > 0.0 { best.map(|x| x / best_norm) } else { AXES[0] };
+    let e = if best_norm > 0.0 {
+        best.map(|x| x / best_norm)
+    } else {
+        AXES[0]
+    };
     // The coordinate axis of smallest |e_k| (first such) for the frame of the orthogonal plane.
     let mut k = 0;
     for j in 1..3 {
@@ -570,11 +572,7 @@ pub fn principal(s: &[f64; 6]) -> Principal {
     };
     let wp: Vec3 = [0, 1, 2].map(|i| cs * u[i] - sn * v[i]);
     let wq: Vec3 = [0, 1, 2].map(|i| sn * u[i] + cs * v[i]);
-    let mut pairs = [
-        (dot(e, matvec(c, e)), e),
-        (m11 - tt * m12, wp),
-        (m22 + tt * m12, wq),
-    ];
+    let mut pairs = [(dot(e, matvec(c, e)), e), (m11 - tt * m12, wp), (m22 + tt * m12, wq)];
     pairs.sort_by(|a, b| b.0.total_cmp(&a.0));
     Principal {
         values: pairs.map(|(mu, _)| t.m * (t.q + t.p * mu)),

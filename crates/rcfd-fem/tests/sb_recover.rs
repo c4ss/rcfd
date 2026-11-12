@@ -69,9 +69,21 @@ impl Rng {
         };
         let [w, x, y, z] = q;
         [
-            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - w * z), 2.0 * (x * z + w * y)],
-            [2.0 * (x * y + w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - w * x)],
-            [2.0 * (x * z - w * y), 2.0 * (y * z + w * x), 1.0 - 2.0 * (x * x + y * y)],
+            [
+                1.0 - 2.0 * (y * y + z * z),
+                2.0 * (x * y - w * z),
+                2.0 * (x * z + w * y),
+            ],
+            [
+                2.0 * (x * y + w * z),
+                1.0 - 2.0 * (x * x + z * z),
+                2.0 * (y * z - w * x),
+            ],
+            [
+                2.0 * (x * z - w * y),
+                2.0 * (y * z + w * x),
+                1.0 - 2.0 * (x * x + y * y),
+            ],
         ]
     }
 }
@@ -149,7 +161,8 @@ fn residual(s: &[f64; 6], l: f64, d: Vec3) -> f64 {
 fn p1_to_p5_v5_random_tensors_and_n3() {
     let mut tensors = Rng::new(1);
     let mut rotations = Rng::new(2);
-    let (mut p1, mut p1t, mut p3, mut p4, mut p5, mut v5, mut n3) = (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, f64::INFINITY);
+    let (mut p1, mut p1t, mut p3, mut p4, mut p5, mut v5, mut n3) =
+        (0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64, f64::INFINITY);
     let mut ordered = 0;
     for _ in 0..1000 {
         let s = tensors.tensor();
@@ -480,12 +493,25 @@ fn linear_field(x: Vec3) -> Vec3 {
 
 fn exact_strain() -> [f64; 6] {
     let a = FIELD_A;
-    [a[0][0], a[1][1], a[2][2], a[0][1] + a[1][0], a[1][2] + a[2][1], a[2][0] + a[0][2]]
+    [
+        a[0][0],
+        a[1][1],
+        a[2][2],
+        a[0][1] + a[1][0],
+        a[1][2] + a[2][1],
+        a[2][0] + a[0][2],
+    ]
 }
 
 /// The patch test of ADR 0275 (its meshes, field and boundary values), solved.
 fn patch(kind: ElementKind) -> (SolidModel, SolidResult) {
-    let mesh = box_of(kind, P_ORIGIN, P_LENGTHS, P_DIV, Some((PATCH_SEED, 10 + kind_index(kind))));
+    let mesh = box_of(
+        kind,
+        P_ORIGIN,
+        P_LENGTHS,
+        P_DIV,
+        Some((PATCH_SEED, 10 + kind_index(kind))),
+    );
     let mut pres = Vec::new();
     for &n in &boundary_nodes(&mesh) {
         for (k, &uk) in linear_field(mesh.nodes()[n]).iter().enumerate() {
@@ -651,7 +677,13 @@ fn g_field(x: Vec3) -> [f64; 6] {
 }
 
 fn x_mesh(kind: ElementKind) -> SolidModel {
-    model_of(box_of(kind, P_ORIGIN, P_LENGTHS, P_DIV, Some((SEED, 10 + kind_index(kind)))))
+    model_of(box_of(
+        kind,
+        P_ORIGIN,
+        P_LENGTHS,
+        P_DIV,
+        Some((SEED, 10 + kind_index(kind))),
+    ))
 }
 
 fn zero_field(model: &SolidModel) -> IntegrationPointField {
@@ -685,7 +717,10 @@ fn x1_x2_x5_extrapolation_and_means() {
         for (node, v) in avg.iter().enumerate() {
             x2 = x2.max(max_rel6(&v.unwrap(), &g(mesh.nodes()[node]), gmax));
         }
-        let mut line = format!("{}: X1 extrapolation {x1:.3e} (limit 1e-13); X2 nodal average {x2:.3e} (limit 1e-13)", kind.name());
+        let mut line = format!(
+            "{}: X1 extrapolation {x1:.3e} (limit 1e-13); X2 nodal average {x2:.3e} (limit 1e-13)",
+            kind.name()
+        );
         if kind == ElementKind::Hex8 {
             let means = field.element_means(&values).unwrap();
             let el = element_for(kind);
@@ -767,7 +802,10 @@ fn x4_material_interface() {
     };
     println!("X4 refusal: {msg}");
     assert!(matches!(refused, Err(FemError::InvalidValue { .. })), "X4 refused");
-    assert!(msg.contains("node 1 ") && msg.contains("'left'") && msg.contains("'right'"), "X4 message");
+    assert!(
+        msg.contains("node 1 ") && msg.contains("'left'") && msg.contains("'right'"),
+        "X4 message"
+    );
     let left = nodal_average(&model, &field, field.stress(), Some("left")).unwrap();
     let mesh = model.mesh();
     for (node, v) in left.iter().enumerate() {
@@ -786,16 +824,37 @@ fn e1_refusals() {
     let model = x_mesh(ElementKind::Hex8);
     let n = model.dof_map().n_equations();
     let r = IntegrationPointField::compute(&model, &vec![0.0; n - 1]);
-    assert!(matches!(r, Err(FemError::FieldLength { key: "displacement", .. })), "E1 displacement");
+    assert!(
+        matches!(
+            r,
+            Err(FemError::FieldLength {
+                key: "displacement",
+                ..
+            })
+        ),
+        "E1 displacement"
+    );
     let field = zero_field(&model);
     let short = vec![[0.0; 6]; field.n_points() - 1];
-    assert!(matches!(field.element_means(&short), Err(FemError::FieldLength { key: "values", .. })), "E1 means");
     assert!(
-        matches!(nodal_average(&model, &field, &short, None), Err(FemError::FieldLength { key: "values", .. })),
+        matches!(
+            field.element_means(&short),
+            Err(FemError::FieldLength { key: "values", .. })
+        ),
+        "E1 means"
+    );
+    assert!(
+        matches!(
+            nodal_average(&model, &field, &short, None),
+            Err(FemError::FieldLength { key: "values", .. })
+        ),
         "E1 average"
     );
     assert!(
-        matches!(nodal_average(&model, &field, field.stress(), Some("nowhere")), Err(FemError::UnknownSet { .. })),
+        matches!(
+            nodal_average(&model, &field, field.stress(), Some("nowhere")),
+            Err(FemError::UnknownSet { .. })
+        ),
         "E1 region"
     );
     println!("E1 refusals: displacement length, values length (means, average), unknown region");
