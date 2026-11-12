@@ -24,7 +24,7 @@ use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
 use crate::gradient::{green_gauss, least_squares, least_squares_partner};
 use crate::pressure::{
-    boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure_parts,
+    boundary_hby_a, boundary_values_pbc, corrected_flux, face_interpolate, pressure_bc, solve_pressure_parts_src,
     PressureBc, PressureControls,
 };
 use crate::pressure_interp::{BodyForceWeighting, PressureInterpolation};
@@ -1171,6 +1171,13 @@ impl SimpleSolver {
         // HbyA at boundary faces: prescribed velocity or owner value
         let hb = boundary_hby_a(&g, &pbc, ub_mass, &hby_a0);
         let mut phi_hby_a = face_flux(&g, &hby_a0, &hb);
+        // ADR 0234 D1 to D3: the flux of the fluid-solid faces at the surface crossing, the volume source of the solid cells
+        let ib_src = self.immersed.as_ref().and_then(|ib| {
+            let plain = bfw.is_none()
+                && self.gradient_pressure.is_none()
+                && !(self.implicit_non_orth_pressure && s.non_orth_correctors > 0);
+            ib.reconstruct_face_flux(&hby_a0, &mut phi_hby_a, plain)
+        });
         if let Some(bf) = &body {
             let mut r_au_f = face_interpolate(&g, &r_au);
             if self.coupled_body_pair_mean {
@@ -1268,7 +1275,16 @@ impl SimpleSolver {
                 );
                 (r, it, None)
             }
-            (None, None) => solve_pressure_parts(&g, &gamma_p, &pbc, &phi_hby_a, &mut p_new, &controls, want_parts),
+            (None, None) => solve_pressure_parts_src(
+                &g,
+                &gamma_p,
+                &pbc,
+                &phi_hby_a,
+                &mut p_new,
+                &controls,
+                want_parts,
+                ib_src.as_deref(),
+            ),
             (Some(w), None) => {
                 // ADR 0193 V2-c: the non-orthogonal correction gradient of the pressure equation
                 let grad = |p: &[f64]| Self::bfw_least_squares(&g, &pbc, w, p);
