@@ -5250,11 +5250,21 @@ Added after the static feature-gap review; wording is product-independent. Phase
   - note: Wave 48 in docs/ui-restart-plan.md. Size L.
 - [~] **F-268** Design ledger and tolerance study driver
   - depends on: F-249
-  - acceptance: Every design variant is recorded in a ledger with its inputs, solver version and results, and a tolerance study driver samples manufacturing spread and reports output spread against registered limits (ADR 0121).
-  - note: Wave 46D (ADR 0121). Size M. Every model is a stated proxy until checked against measured fan data, which does
-    not exist yet.
-    - Not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, Sobol sensitivity
-      indices.
+  - acceptance: Every design variant is recorded in a ledger with its inputs, solver version and results, and a
+    tolerance study driver samples manufacturing spread and reports output spread against registered limits (ADR 0121).
+  - note: Wave 46D (ADR 0121); Sobol indices ADR 0240 (merged 2026-11-12). Size M. Every model is a stated proxy until
+    checked against measured fan data, which does not exist yet. BUILT (ADR 0240): the opt-in library function
+    design::sensitivity::run gives first-order and total Sobol indices of independent inputs (the uq distributions) with
+    delta-method standard errors, on the A, B, A_B^(i) Monte Carlo design (Saltelli 2002) at N (d + 2) evaluations, with
+    the centred Saltelli et al. (2010) first-order and the Jansen (1999) total estimators; rows with a failed evaluation
+    are dropped and counted; every evaluation and a sobol_summary can go to the ledger; bit-identical for any worker
+    count. Met: Ishigami (N 16384) and a linear function with mixed distributions within 4 SE of the closed forms
+    (largest z 2.41), a dummy input exactly zero, delta-method coverage 0.920 to 0.963 at 1.96 SE (400 runs, limit
+    0.90), the interaction ST3 - S3 = 0.239 seen where SRC gives SRC_2^2 = 5e-6; six mutations caught (one after a
+    corrected check). Known miss: the NC1 control on ST1 (|z| 3.87 against the a = 6 value, limit 4; the estimator meets
+    its own limit). Not done: uncertainty bands on the reduced-order model, automatic ledger logging from runs, an MCP
+    tool for uq or Sobol studies (changes the tools-list goldens). Open: ADR 0240 Q2, Q4, Q5. Follow-up for the tool
+    exposure (ADR 0240 Q2, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-339.
 - [~] **F-269** Test gate speed and strictness
   - depends on: F-106
   - acceptance: The full gate runs each test in its own process from a small pool with a per-test time limit, prints the
@@ -5979,3 +5989,10 @@ fixed by the item's registration ADR before any code.
     is run with it as a new check against its limit 1.7, or the ADR names why not with a number.
   - note: From ADR 0238 questions 3 and 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     T1c with three outer iterations was observed at 1.80 (unregistered).
+- [ ] **F-339** MCP tools for tolerance and Sobol studies of a named evaluator
+  - depends on: F-268
+  - acceptance: design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the
+    reduced-order fan evaluator first) inside the sandbox, with the ledger, and the MCP tools-list goldens are updated
+    by a registered edit.
+  - note: From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
+    THE USER before merge: it edits the MCP tools-list goldens.
