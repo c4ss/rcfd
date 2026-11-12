@@ -140,8 +140,16 @@ pub struct PimpleSettings {
     /// correctors (their compensation takes `interp(rAtU) - Gamma` face by face, ADR 0352 D1), on `step_ale` and
     /// `step_ale_with_walls` (ADR 0352 D2) and in `OversetSolver`; `step_sliding` and the fractional step keep the default step
     /// (in the fractional step the face coefficient is uniform and the option would change nothing, ADR 0352 D5); coupled
-    /// faces, face jumps and the immersed-solid flux are left as they are. Default `false` (bit-identical).
+    /// faces, face jumps and the immersed-solid flux are left as they are. Default `false` (bit-identical). For the fractional
+    /// step see [`PimpleSettings::fractional_step_consistent`].
     pub rhie_chow_step_consistent: bool,
+    /// The fractional step's intermediate flux with a carried face defect (ADR 0356): on internal faces
+    /// `interp(u*) . S + Gamma R(p^n) + (Gamma / dt)(c1 d^n - c2 d^{n-1})` in place of `interp(u*) . S + dte R(p^n)`, with
+    /// `Gamma` the harmonic face value of `V / a_P` of the predictor and `d = phi - interp(u) . S`, so that a steady state has
+    /// the face defect `R(p) / interp(a)` with no step size in it. Acts in the incremental form only (the Chorin form carries
+    /// the step in its cell equations, ADR 0356 D3); the Poisson solve, the projection and boundary faces are unchanged. Not
+    /// read by the PISO/PIMPLE step. Default `false` (bit-identical).
+    pub fractional_step_consistent: bool,
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -857,6 +865,7 @@ impl PimpleSettings {
             consistent: ConsistentCorrectors::default(),
             moving_mesh_lag: false,
             rhie_chow_step_consistent: false,
+            fractional_step_consistent: false,
         }
     }
 
