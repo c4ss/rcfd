@@ -6670,7 +6670,10 @@ fixed by the item's registration ADR before any code.
     Missing (why partial): T with the bounded forcing (D/40) stopped at step 2951 by the divergence guard, with pressure
     NaN in the pressure solve at the inlet corner cell, so the decrease on the T family with the bounded form is not
     formed; not diagnosed (library work). Open: ADR 0268 Q5 (the stop), Q6 (quote the D/80 values as the validation), Q7
-    (status).
+    (status). ADR 0363 (2026-11-12, F-466): the stop of T with the bounded form was a breakdown of the
+    AMG-preconditioned pressure CG at step 2951 (r^T z < 0, finite inputs); with the opt-in pressure_ic_fallback T runs
+    to t = 8, max C_D +0.216 and max C_L +1.687 percent, so A2-T-2 is met (0.216 to 0.136, 1.687 to 0.175) and the
+    forcing order on T moves the extrema by -0.60 and -0.89 point.
 - [~] **F-355** Second-order immersed forcing: transient PISO at Re 100
   - depends on: F-309
   - acceptance: DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number
@@ -6705,7 +6708,10 @@ fixed by the item's registration ADR before any code.
     dimensions, PIMPLE outer iterations, SIMPLE with under-relaxation. Follow-ups: F-363 (the single corrector), F-364
     (the bounded form as build_second_order; needs the maintainer). ADR 0268 (2026-11-12, F-354):
     `build_second_order_bounded` ran 2D-2 to t = 8 on T2 and M3 (D/80, within 0.43 percent of FeatFlow) but stopped on T
-    (D/40, dt 1e-3) at step 2951, with pressure NaN in the pressure solve at the inlet corner cell; not diagnosed.
+    (D/40, dt 1e-3) at step 2951, with pressure NaN in the pressure solve at the inlet corner cell; not diagnosed. ADR
+    0363 (2026-11-12, F-466): the stop of build_second_order_bounded on T (ADR 0268) is not a stop of the forcing but of
+    the AMG-preconditioned pressure CG (r^T z < 0 at step 2951); with the opt-in PimpleSettings::pressure_ic_fallback
+    the run reaches t = 8.
 - [x] **F-356** Overset: donor search on non-convex cells with planar faces
   - depends on: F-352
   - acceptance: On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the
@@ -8667,15 +8673,29 @@ fixed by the item's registration ADR before any code.
     converged 3-iteration step that uses those restores, not by the registered failing-step checks. Not covered: a fluid
     failing before it takes its state, the fluid's time check, bad force arrays, a failing restore, iterations beyond 3,
     a flow solver.
-- [ ] **F-466** Bounded second-order immersed forcing: the stop of DFG 2D-2 on T.
+- [x] **F-466** Bounded second-order immersed forcing: the stop of DFG 2D-2 on T.
   - depends on: F-354, F-355
   - acceptance: The stop of DFG 2D-2 on the T mesh with `build_second_order_bounded` (ADR 0268 R1: step 2951, pressure
     NaN in the pressure solve, inlet corner cell) is located by a registered measurement (the step reproduced from a
     restart, the linear solve and the source of the solid cells examined), and either the run reaches t = 8 and its max
     C_D and max C_L decide the decrease from T to T2 of ADR 0268 (A2-T-2), or the configuration is refused with a
     located message.
-  - note: From ADR 0268 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
-    same forcing runs 8000 steps on M2 (ADR 0254) and 16 000 steps on T2 and M3 (ADR 0268); `build` runs on T.
+  - note: DONE pending acceptance (ADR 0363, 2026-11-12). From ADR 0268 question 5. The stop of DFG 2D-2 on T with
+    build_second_order_bounded (dt 1e-3) was reproduced from t = 0 (the printed coefficients and the message of ADR 0268
+    R1 exactly) and from a state written to disk at step 2900 (the same stop, every Courant number bit-equal); the flow
+    is healthy one step before (Courant 1.136, max |u| 0.995 of step 2000). Located by an opt-in capture of the pressure
+    systems (PimpleSolver::pressure_capture, replayed bit for bit with pressure::pressure_system_src) and a read-only
+    AMG trace: in corrector 1 of step 2951 the inputs are finite, the matrix is a symmetric M-matrix and the volume
+    source of the solid cells is finite and balanced (sum 1e-15 of its maximum, the same size as at steps 2949 and
+    2950), but the AMG-preconditioned CG has r^T z < 0 from its first iteration, stagnates and overflows (beta not
+    finite at iteration 801), so the whole pressure is NaN; cell 0 at the inlet corner is only the first index of an
+    all-NaN vector. Incomplete-Cholesky CG solves the same system in 448 iterations. The stop is a breakdown of the
+    linear solver, not of the forcing. Delivered (opt-in, defaults bit-identical, baseline_hashes pass):
+    PimpleSettings::pressure_ic_fallback repeats a non-finite pressure solve with IC-CG from the same start and records
+    it in PimpleSolver::pressure_fallbacks. With it T runs to t = 8 with one repeat in 5050 steps (S2 held, 7
+    crossings): max C_D 3.22695 (+0.216 percent), max C_L 1.00253 (+1.687 percent), St 0.30144 (-0.146 percent), so
+    A2-T-2 of ADR 0268 is met (0.216 to 0.136, 1.687 to 0.175). Nine mutations caught. Open (ADR 0363 Q4 to Q6): why the
+    AMG hierarchy loses definiteness on this system, making the repeat the default, a guard on rz <= 0 inside cg.
 - [ ] **F-467** Consistent correctors: fold the periodic opt-in into the flags
   - depends on: F-367
   - acceptance: ConsistentCorrectors::all() with periodic accepts non-orthogonal correctors, the component diagonal and
@@ -8724,7 +8744,9 @@ fixed by the item's registration ADR before any code.
     rcfd-linalg, rcfd-fv and rcfd-api tests and the baseline hashes are run, and any changed hash is reported to the
     maintainer, not re-recorded.
   - note: From ADR 0305 question 1 (the same ordering defect was fixed in amg_elastic by its amendment 1). NEEDS THE
-    USER if the fix moves any fluid result or registered hash: the hash is reported, never re-recorded.
+    USER if the fix moves any fluid result or registered hash: the hash is reported, never re-recorded. Possibly
+    related: ADR 0363 (F-466) found the AMG-preconditioned pressure CG losing definiteness (r^T z < 0) on the immersed T
+    system; F-474 should check this defect first.
 - [ ] **F-472** Overset: the geometry corrections with a varying pressure on B3d
   - depends on: F-368
   - acceptance: With OversetSolver::set_geometry_corrections on, a three-dimensional flow with a known varying pressure
@@ -8738,3 +8760,14 @@ fixed by the item's registration ADR before any code.
   - acceptance: On the closed circular O-grid duct, an initial pressure with a non-zero mean on every patch keeps sum p
     V to 1e-12 over 100 steps with every patch a wall, and changes it by more than 1e-3 when one patch is open.
   - note: From ADR 0366 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-474** AMG pressure preconditioner: loss of definiteness on the immersed T system
+  - depends on: F-466
+  - acceptance: On the pressure system of ADR 0363 (T, bounded immersed forcing, step 2951 corrector 1, rebuilt from the
+    state of step 2950 and the opt-in capture) the cause of r^T M^-1 r < 0 of the smoothed-aggregation AMG is located by
+    a registered measurement (per level, the Rayleigh quotient of the cycle, the smoothed prolongator and the coarse
+    operators against a higher-precision product), and either the AMG is repaired so that AMG-CG converges on that
+    system with every registered hash unchanged, or the breakdown is detected inside cg (rz <= 0) and reported with a
+    located message.
+  - note: From ADR 0363 question 4, recommendation (a), with Q6 (an r^T z <= 0 guard in cg) folded in. Check first
+    whether the coarsest dense LU ordering defect of F-471 (ADR 0305 question 1) is the cause. Any change to a default
+    path needs the hash check; a moved hash is reported, never re-recorded.
