@@ -17,7 +17,9 @@ pub struct DofMap {
 impl DofMap {
     /// `per_node` unknowns at each of `n_nodes` nodes, numbered node by node.
     pub fn uniform(n_nodes: usize, per_node: usize) -> DofMap {
-        DofMap { offsets: (0..=n_nodes).map(|n| n * per_node).collect() }
+        DofMap {
+            offsets: (0..=n_nodes).map(|n| n * per_node).collect(),
+        }
     }
 
     /// The given number of unknowns at each node, numbered node by node.
@@ -117,7 +119,12 @@ impl Material {
                 reason: "expansion coefficient must be finite",
             });
         }
-        Ok(Material::IsotropicElastic { e, nu, density, expansion })
+        Ok(Material::IsotropicElastic {
+            e,
+            nu,
+            density,
+            expansion,
+        })
     }
 
     /// Young's modulus.
@@ -165,7 +172,11 @@ pub enum Constraint {
 impl Constraint {
     /// A prescribed displacement component on a node set.
     pub fn displacement(set: &str, component: usize, value: f64) -> Constraint {
-        Constraint::Displacement { set: set.to_string(), component, value }
+        Constraint::Displacement {
+            set: set.to_string(),
+            component,
+            value,
+        }
     }
 }
 
@@ -232,15 +243,24 @@ pub enum Load {
 impl Load {
     /// The same force on each node of a node set.
     pub fn nodal_force(set: &str, force: Vec3) -> Load {
-        Load::NodalForce { set: set.to_string(), force }
+        Load::NodalForce {
+            set: set.to_string(),
+            force,
+        }
     }
     /// A uniform traction on a surface set.
     pub fn traction(set: &str, traction: Vec3) -> Load {
-        Load::Traction { set: set.to_string(), traction }
+        Load::Traction {
+            set: set.to_string(),
+            traction,
+        }
     }
     /// A uniform pressure on a surface set (positive pressing on the solid).
     pub fn pressure(set: &str, pressure: f64) -> Load {
-        Load::Pressure { set: set.to_string(), pressure }
+        Load::Pressure {
+            set: set.to_string(),
+            pressure,
+        }
     }
     /// Gravity on the whole model.
     pub fn gravity(acceleration: Vec3) -> Load {
@@ -264,7 +284,10 @@ fn finite_vec(key: &'static str, v: Vec3) -> Result<()> {
     if v.iter().all(|c| c.is_finite()) {
         Ok(())
     } else {
-        Err(FemError::InvalidValue { key, reason: format!("{v:?} is not finite") })
+        Err(FemError::InvalidValue {
+            key,
+            reason: format!("{v:?} is not finite"),
+        })
     }
 }
 
@@ -272,7 +295,10 @@ fn finite(key: &'static str, v: f64) -> Result<()> {
     if v.is_finite() {
         Ok(())
     } else {
-        Err(FemError::InvalidValue { key, reason: format!("{v} is not finite") })
+        Err(FemError::InvalidValue {
+            key,
+            reason: format!("{v} is not finite"),
+        })
     }
 }
 
@@ -288,7 +314,12 @@ pub struct SolidModel {
 impl SolidModel {
     /// A model on a mesh, with no material, constraint or load yet.
     pub fn new(mesh: SolidMesh) -> SolidModel {
-        SolidModel { mesh, materials: Vec::new(), constraints: Vec::new(), loads: Vec::new() }
+        SolidModel {
+            mesh,
+            materials: Vec::new(),
+            constraints: Vec::new(),
+            loads: Vec::new(),
+        }
     }
 
     /// The mesh.
@@ -321,7 +352,10 @@ impl SolidModel {
         if exists {
             Ok(())
         } else {
-            Err(FemError::UnknownSet { kind, name: name.to_string() })
+            Err(FemError::UnknownSet {
+                kind,
+                name: name.to_string(),
+            })
         }
     }
 
@@ -376,14 +410,21 @@ impl SolidModel {
             Load::Centrifugal { axis, origin, omega } => {
                 finite_vec("axis", *axis)?;
                 if axis.iter().all(|&c| c == 0.0) {
-                    return Err(FemError::InvalidValue { key: "axis", reason: "the axis is the zero vector".into() });
+                    return Err(FemError::InvalidValue {
+                        key: "axis",
+                        reason: "the axis is the zero vector".into(),
+                    });
                 }
                 finite_vec("origin", *origin)?;
                 finite("omega", *omega)?;
             }
             Load::BodyForceNodal { values } => {
                 if values.len() != n {
-                    return Err(FemError::FieldLength { key: "values", expected: n, found: values.len() });
+                    return Err(FemError::FieldLength {
+                        key: "values",
+                        expected: n,
+                        found: values.len(),
+                    });
                 }
                 for v in values {
                     finite_vec("values", *v)?;
@@ -391,7 +432,11 @@ impl SolidModel {
             }
             Load::Temperature { nodal, reference } => {
                 if nodal.len() != n {
-                    return Err(FemError::FieldLength { key: "nodal", expected: n, found: nodal.len() });
+                    return Err(FemError::FieldLength {
+                        key: "nodal",
+                        expected: n,
+                        found: nodal.len(),
+                    });
                 }
                 for &t in nodal {
                     finite("nodal", t)?;
@@ -456,7 +501,12 @@ pub struct SolverStats {
 impl SolverStats {
     /// Statistics of a solve by the named solver.
     pub fn new(solver: &str, unknowns: usize, iterations: usize, relative_residual: f64) -> SolverStats {
-        SolverStats { solver: solver.to_string(), unknowns, iterations, relative_residual }
+        SolverStats {
+            solver: solver.to_string(),
+            unknowns,
+            iterations,
+            relative_residual,
+        }
     }
     /// Solver name.
     pub fn solver(&self) -> &str {
@@ -541,10 +591,18 @@ impl SolidResult {
         }
         let np = *offsets.last().expect("non-empty");
         if strain.len() != np {
-            return Err(FemError::FieldLength { key: "strain", expected: np, found: strain.len() });
+            return Err(FemError::FieldLength {
+                key: "strain",
+                expected: np,
+                found: strain.len(),
+            });
         }
         if stress.len() != np {
-            return Err(FemError::FieldLength { key: "stress", expected: np, found: stress.len() });
+            return Err(FemError::FieldLength {
+                key: "stress",
+                expected: np,
+                found: stress.len(),
+            });
         }
         self.ip_offsets = offsets;
         self.strain = strain;

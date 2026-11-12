@@ -94,14 +94,20 @@ fn geometry(mesh: &SolidMesh, n: usize, label: &str, elements: usize, boundary: 
                 let corners = mesh.element_kind(members[0].element).face_corners();
                 let a = &mesh.face_nodes(members[0])[..corners];
                 let b = &mesh.face_nodes(members[1])[..corners];
-                assert!(opposite_cycle(a, b), "{label} n={n}: shared face {key:?} not oppositely oriented");
+                assert!(
+                    opposite_cycle(a, b),
+                    "{label} n={n}: shared face {key:?} not oppositely oriented"
+                );
                 assert_ne!(members[0].element, members[1].element);
             }
             k => panic!("{label} n={n}: face {key:?} has {k} members"),
         }
     }
     assert_eq!(ones.len(), boundary, "{label} n={n}: boundary faces");
-    assert_eq!(ones, boundary_keys, "{label} n={n}: faces with one element are the six face sets");
+    assert_eq!(
+        ones, boundary_keys,
+        "{label} n={n}: faces with one element are the six face sets"
+    );
     assert_eq!(twos, interior, "{label} n={n}: interior faces");
     println!(
         "{label} n={n}: elements {elements}, nodes {}, min det J {min_j:.6e}, volume error {vol_err:.3e}, \
@@ -147,7 +153,11 @@ fn q_quadratic_upgrade() {
         }
         let (quad, mids) = upgrade_to_tet10(&lin).expect("upgrade");
         let n_lin = lin.nodes().len();
-        assert_eq!(distinct.len(), edges_closed_form(n), "n={n}: edges counted vs closed form");
+        assert_eq!(
+            distinct.len(),
+            edges_closed_form(n),
+            "n={n}: edges counted vs closed form"
+        );
         assert_eq!(quad.nodes().len(), n_lin + edges_closed_form(n), "n={n}: Tet10 nodes");
         assert_eq!(quad.nodes().len(), n_lin + distinct.len());
         assert_eq!(mids.len(), edges_closed_form(n));
@@ -193,8 +203,18 @@ fn q_quadratic_upgrade() {
 fn q4_upgrade_refuses_hexahedra() {
     let m = hex_box(ORIGIN, LENGTHS, [1, 1, 1]).expect("hex box");
     let e = upgrade_to_tet10(&m).unwrap_err();
-    assert_eq!(e, FemError::UnsupportedKind { block: 0, kind: "Hex8", operation: "upgrade_to_tet10" });
-    assert!(e.to_string().contains("block 0") && e.to_string().contains("Hex8"), "{e}");
+    assert_eq!(
+        e,
+        FemError::UnsupportedKind {
+            block: 0,
+            kind: "Hex8",
+            operation: "upgrade_to_tet10"
+        }
+    );
+    assert!(
+        e.to_string().contains("block 0") && e.to_string().contains("Hex8"),
+        "{e}"
+    );
 }
 
 fn connectivity(m: &SolidMesh) -> Vec<usize> {
@@ -240,7 +260,13 @@ fn r2_repeated_node() {
     c[3 * 4 + 3] = c[3 * 4];
     let mut m = SolidMesh::new(t.nodes().to_vec()).expect("nodes");
     let e = m.add_block(ElementKind::Tet4, c.clone()).unwrap_err();
-    assert_eq!(e, FemError::RepeatedNode { element: 3, node: c[12] });
+    assert_eq!(
+        e,
+        FemError::RepeatedNode {
+            element: 3,
+            node: c[12]
+        }
+    );
     assert!(e.to_string().contains("element 3"), "{e}");
     println!("R2: {e}");
 }
@@ -254,7 +280,13 @@ fn r3_empty_sets() {
         (m.add_surface_set("empty_set", vec![]).unwrap_err(), SetKind::Surface),
     ];
     for (e, kind) in cases {
-        assert_eq!(e, FemError::EmptySet { kind, name: "empty_set".into() });
+        assert_eq!(
+            e,
+            FemError::EmptySet {
+                kind,
+                name: "empty_set".into()
+            }
+        );
         assert!(e.to_string().contains("'empty_set'"), "{e}");
         println!("R3: {e}");
     }
@@ -297,12 +329,32 @@ fn r6_other_refusals_and_a_valid_model() {
     // Node out of range.
     let mut c = connectivity(&h);
     c[7] = 99;
-    let e = SolidMesh::new(nodes.clone()).unwrap().add_block(ElementKind::Hex8, c).unwrap_err();
-    assert_eq!(e, FemError::NodeOutOfRange { element: 0, node: 99, n_nodes: 8 });
+    let e = SolidMesh::new(nodes.clone())
+        .unwrap()
+        .add_block(ElementKind::Hex8, c)
+        .unwrap_err();
+    assert_eq!(
+        e,
+        FemError::NodeOutOfRange {
+            element: 0,
+            node: 99,
+            n_nodes: 8
+        }
+    );
     assert!(e.to_string().contains("element 0"));
     // Connectivity of wrong length.
-    let e = SolidMesh::new(nodes.clone()).unwrap().add_block(ElementKind::Hex8, vec![0, 1, 2]).unwrap_err();
-    assert_eq!(e, FemError::ConnectivityLength { block: 0, len: 3, nodes_per_element: 8 });
+    let e = SolidMesh::new(nodes.clone())
+        .unwrap()
+        .add_block(ElementKind::Hex8, vec![0, 1, 2])
+        .unwrap_err();
+    assert_eq!(
+        e,
+        FemError::ConnectivityLength {
+            block: 0,
+            len: 3,
+            nodes_per_element: 8
+        }
+    );
     assert!(e.to_string().contains("block 0"));
     // Non-finite node.
     let mut bad = nodes.clone();
@@ -311,9 +363,24 @@ fn r6_other_refusals_and_a_valid_model() {
     // Duplicate set name; face index out of range.
     let mut m = h.clone();
     let e = m.add_node_set("xmin", vec![0]).unwrap_err();
-    assert_eq!(e, FemError::DuplicateSet { kind: SetKind::Node, name: "xmin".into() });
-    let e = m.add_surface_set("f", vec![FaceRef { element: 0, face: 6 }]).unwrap_err();
-    assert_eq!(e, FemError::FaceOutOfRange { set: "f".into(), element: 0, face: 6 });
+    assert_eq!(
+        e,
+        FemError::DuplicateSet {
+            kind: SetKind::Node,
+            name: "xmin".into()
+        }
+    );
+    let e = m
+        .add_surface_set("f", vec![FaceRef { element: 0, face: 6 }])
+        .unwrap_err();
+    assert_eq!(
+        e,
+        FemError::FaceOutOfRange {
+            set: "f".into(),
+            element: 0,
+            face: 6
+        }
+    );
     assert!(e.to_string().contains("element 0") && e.to_string().contains("'f'"));
     // Negative density.
     let e = Material::isotropic_elastic(1.0, 0.3, -1.0, 0.0).unwrap_err();
@@ -322,37 +389,93 @@ fn r6_other_refusals_and_a_valid_model() {
     // Material on an unknown element set.
     let mut model = SolidModel::new(hex_box(ORIGIN, LENGTHS, [2, 2, 2]).unwrap());
     let e = model.add_material("nowhere", steel()).unwrap_err();
-    assert_eq!(e, FemError::UnknownSet { kind: SetKind::Element, name: "nowhere".into() });
+    assert_eq!(
+        e,
+        FemError::UnknownSet {
+            kind: SetKind::Element,
+            name: "nowhere".into()
+        }
+    );
     assert!(e.to_string().contains("'nowhere'"));
     // Element without material, element with two.
-    assert_eq!(model.validate().unwrap_err(), FemError::MaterialUnassigned { element: 0 });
+    assert_eq!(
+        model.validate().unwrap_err(),
+        FemError::MaterialUnassigned { element: 0 }
+    );
     let mut m2 = hex_box(ORIGIN, LENGTHS, [2, 2, 2]).unwrap();
     m2.add_element_set("half", vec![3, 4]).unwrap();
     let mut model2 = SolidModel::new(m2);
     model2.add_material("all", steel()).unwrap();
     model2.add_material("half", steel()).unwrap();
     let e = model2.validate().unwrap_err();
-    assert_eq!(e, FemError::MaterialOverlap { element: 3, first: "all".into(), second: "half".into() });
+    assert_eq!(
+        e,
+        FemError::MaterialOverlap {
+            element: 3,
+            first: "all".into(),
+            second: "half".into()
+        }
+    );
     assert!(e.to_string().contains("element 3"));
     assert!(model2.material_of(3).is_none() && model2.material_of(0).is_some());
     // Constraint component 3.
-    let e = model.add_constraint(Constraint::displacement("xmin", 3, 0.0)).unwrap_err();
-    assert!(matches!(e, FemError::ComponentOutOfRange { component: 3, available: 3, .. }), "{e:?}");
+    let e = model
+        .add_constraint(Constraint::displacement("xmin", 3, 0.0))
+        .unwrap_err();
+    assert!(
+        matches!(
+            e,
+            FemError::ComponentOutOfRange {
+                component: 3,
+                available: 3,
+                ..
+            }
+        ),
+        "{e:?}"
+    );
     assert!(e.to_string().contains("'xmin'") && e.to_string().contains("node"));
     // Nodal force on an unknown set; zero axis; temperature of wrong length.
     let e = model.add_load(Load::nodal_force("tip", [1.0, 0.0, 0.0])).unwrap_err();
-    assert_eq!(e, FemError::UnknownSet { kind: SetKind::Node, name: "tip".into() });
-    let e = model.add_load(Load::centrifugal([0.0; 3], [0.0; 3], 100.0)).unwrap_err();
+    assert_eq!(
+        e,
+        FemError::UnknownSet {
+            kind: SetKind::Node,
+            name: "tip".into()
+        }
+    );
+    let e = model
+        .add_load(Load::centrifugal([0.0; 3], [0.0; 3], 100.0))
+        .unwrap_err();
     assert!(matches!(e, FemError::InvalidValue { key: "axis", .. }));
     assert!(e.to_string().contains("'axis'"));
     let e = model.add_load(Load::temperature(vec![300.0; 5], 293.0)).unwrap_err();
-    assert_eq!(e, FemError::FieldLength { key: "nodal", expected: 27, found: 5 });
+    assert_eq!(
+        e,
+        FemError::FieldLength {
+            key: "nodal",
+            expected: 27,
+            found: 5
+        }
+    );
     // A traction on a node set name that is not a surface set.
     let e = model.add_load(Load::traction("all", [0.0, 0.0, 1.0])).unwrap_err();
-    assert_eq!(e, FemError::UnknownSet { kind: SetKind::Surface, name: "all".into() });
+    assert_eq!(
+        e,
+        FemError::UnknownSet {
+            kind: SetKind::Surface,
+            name: "all".into()
+        }
+    );
     // SolidResult of wrong length.
     let e = SolidResult::new(DofMap::uniform(27, 3), vec![0.0; 80]).unwrap_err();
-    assert_eq!(e, FemError::FieldLength { key: "displacement", expected: 81, found: 80 });
+    assert_eq!(
+        e,
+        FemError::FieldLength {
+            key: "displacement",
+            expected: 81,
+            found: 80
+        }
+    );
 
     // Control: a valid model with every load kind.
     model.add_material("all", steel()).unwrap();
@@ -364,8 +487,12 @@ fn r6_other_refusals_and_a_valid_model() {
     model.add_load(Load::traction("zmax", [0.0, 0.0, -1e5])).unwrap();
     model.add_load(Load::pressure("ymin", 2e5)).unwrap();
     model.add_load(Load::gravity([0.0, 0.0, -9.81])).unwrap();
-    model.add_load(Load::centrifugal([0.0, 0.0, 1.0], [0.0; 3], 300.0)).unwrap();
-    model.add_load(Load::body_force_nodal(vec![[0.0, 1.0, 0.0]; 27])).unwrap();
+    model
+        .add_load(Load::centrifugal([0.0, 0.0, 1.0], [0.0; 3], 300.0))
+        .unwrap();
+    model
+        .add_load(Load::body_force_nodal(vec![[0.0, 1.0, 0.0]; 27]))
+        .unwrap();
     model.add_load(Load::temperature(vec![350.0; 27], 293.15)).unwrap();
     model.validate().expect("valid model");
     assert_eq!(model.loads().len(), 7);
@@ -409,10 +536,16 @@ fn d1_dof_map() {
     assert_eq!(d.equation(4, 0), None);
     assert_eq!(d.n_equations(), 12);
     let m = DofMap::from_counts(&[3, 6, 3]);
-    assert_eq!([m.equation(0, 0), m.equation(1, 0), m.equation(2, 0)], [Some(0), Some(3), Some(9)]);
+    assert_eq!(
+        [m.equation(0, 0), m.equation(1, 0), m.equation(2, 0)],
+        [Some(0), Some(3), Some(9)]
+    );
     assert_eq!(m.n_equations(), 12);
     assert_eq!(m.node_component(5), Some((1, 2)));
     assert_eq!(m.node_component(12), None);
     assert_eq!(m.components(1), 6);
-    assert_eq!(DofMap::for_mesh(&hex_box(ORIGIN, LENGTHS, [1, 1, 1]).unwrap()), DofMap::uniform(8, 3));
+    assert_eq!(
+        DofMap::for_mesh(&hex_box(ORIGIN, LENGTHS, [1, 1, 1]).unwrap()),
+        DofMap::uniform(8, 3)
+    );
 }

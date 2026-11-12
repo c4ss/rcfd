@@ -47,11 +47,35 @@ const TET_REF: [[f64; 3]; 10] = [
 ];
 /// Local edges of a tetrahedron; edge `k` carries the mid-edge node `4 + k` of a Tet10.
 pub const TET_EDGES: [[usize; 2]; 6] = [[0, 1], [1, 2], [0, 2], [0, 3], [1, 3], [2, 3]];
-const HEX_EDGES: [[usize; 2]; 12] =
-    [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
-const HEX_FACES: [&[usize]; 6] = [&[0, 3, 2, 1], &[4, 5, 6, 7], &[0, 1, 5, 4], &[1, 2, 6, 5], &[2, 3, 7, 6], &[3, 0, 4, 7]];
+const HEX_EDGES: [[usize; 2]; 12] = [
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 0],
+    [4, 5],
+    [5, 6],
+    [6, 7],
+    [7, 4],
+    [0, 4],
+    [1, 5],
+    [2, 6],
+    [3, 7],
+];
+const HEX_FACES: [&[usize]; 6] = [
+    &[0, 3, 2, 1],
+    &[4, 5, 6, 7],
+    &[0, 1, 5, 4],
+    &[1, 2, 6, 5],
+    &[2, 3, 7, 6],
+    &[3, 0, 4, 7],
+];
 const TET4_FACES: [&[usize]; 4] = [&[0, 2, 1], &[0, 1, 3], &[1, 2, 3], &[0, 3, 2]];
-const TET10_FACES: [&[usize]; 4] = [&[0, 2, 1, 6, 5, 4], &[0, 1, 3, 4, 8, 7], &[1, 2, 3, 5, 9, 8], &[0, 3, 2, 7, 9, 6]];
+const TET10_FACES: [&[usize]; 4] = [
+    &[0, 2, 1, 6, 5, 4],
+    &[0, 1, 3, 4, 8, 7],
+    &[1, 2, 3, 5, 9, 8],
+    &[0, 3, 2, 7, 9, 6],
+];
 
 impl ElementKind {
     /// Name of the kind.
@@ -126,7 +150,11 @@ impl ElementKind {
                 .iter()
                 .map(|a| {
                     let f = [1.0 + xi[0] * a[0], 1.0 + xi[1] * a[1], 1.0 + xi[2] * a[2]];
-                    [a[0] * f[1] * f[2] / 8.0, f[0] * a[1] * f[2] / 8.0, f[0] * f[1] * a[2] / 8.0]
+                    [
+                        a[0] * f[1] * f[2] / 8.0,
+                        f[0] * a[1] * f[2] / 8.0,
+                        f[0] * f[1] * a[2] / 8.0,
+                    ]
                 })
                 .collect(),
             ElementKind::Tet4 => vec![[-1.0, -1.0, -1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -200,7 +228,8 @@ pub struct SolidMesh {
 }
 
 fn det3(c0: Vec3, c1: Vec3, c2: Vec3) -> f64 {
-    c0[0] * (c1[1] * c2[2] - c1[2] * c2[1]) - c1[0] * (c0[1] * c2[2] - c0[2] * c2[1]) + c2[0] * (c0[1] * c1[2] - c0[2] * c1[1])
+    c0[0] * (c1[1] * c2[2] - c1[2] * c2[1]) - c1[0] * (c0[1] * c2[2] - c0[2] * c2[1])
+        + c2[0] * (c0[1] * c1[2] - c0[2] * c1[1])
 }
 
 const G: f64 = 0.577_350_269_189_625_8; // 1/sqrt(3)
@@ -241,13 +270,21 @@ impl SolidMesh {
             return Err(FemError::EmptyBlock { block });
         }
         if connectivity.len() % npe != 0 {
-            return Err(FemError::ConnectivityLength { block, len: connectivity.len(), nodes_per_element: npe });
+            return Err(FemError::ConnectivityLength {
+                block,
+                len: connectivity.len(),
+                nodes_per_element: npe,
+            });
         }
         for (local, conn) in connectivity.chunks(npe).enumerate() {
             let element = self.n_elements + local;
             for &node in conn {
                 if node >= self.nodes.len() {
-                    return Err(FemError::NodeOutOfRange { element, node, n_nodes: self.nodes.len() });
+                    return Err(FemError::NodeOutOfRange {
+                        element,
+                        node,
+                        n_nodes: self.nodes.len(),
+                    });
                 }
             }
             for (i, &a) in conn.iter().enumerate() {
@@ -256,8 +293,12 @@ impl SolidMesh {
                 }
             }
             for (local_node, &jacobian) in self.jacobians_of(kind, conn).iter().enumerate() {
-                if !(jacobian > 0.0) {
-                    return Err(FemError::InvertedElement { element, local_node, jacobian });
+                if jacobian.is_nan() || jacobian <= 0.0 {
+                    return Err(FemError::InvertedElement {
+                        element,
+                        local_node,
+                        jacobian,
+                    });
                 }
             }
         }
@@ -273,22 +314,36 @@ impl SolidMesh {
             return Err(FemError::EmptySetName { kind });
         }
         if exists {
-            return Err(FemError::DuplicateSet { kind, name: name.to_string() });
+            return Err(FemError::DuplicateSet {
+                kind,
+                name: name.to_string(),
+            });
         }
         Ok(())
     }
 
     fn check_members(kind: SetKind, name: &str, members: &[usize], bound: usize) -> Result<()> {
         if members.is_empty() {
-            return Err(FemError::EmptySet { kind, name: name.to_string() });
+            return Err(FemError::EmptySet {
+                kind,
+                name: name.to_string(),
+            });
         }
         let mut seen = BTreeSet::new();
         for &m in members {
             if m >= bound {
-                return Err(FemError::SetMemberOutOfRange { kind, name: name.to_string(), member: m });
+                return Err(FemError::SetMemberOutOfRange {
+                    kind,
+                    name: name.to_string(),
+                    member: m,
+                });
             }
             if !seen.insert(m) {
-                return Err(FemError::DuplicateSetMember { kind, name: name.to_string(), member: m });
+                return Err(FemError::DuplicateSetMember {
+                    kind,
+                    name: name.to_string(),
+                    member: m,
+                });
             }
         }
         Ok(())
@@ -315,18 +370,33 @@ impl SolidMesh {
         let kind = SetKind::Surface;
         Self::check_name(kind, name, self.surface_sets.contains_key(name))?;
         if faces.is_empty() {
-            return Err(FemError::EmptySet { kind, name: name.to_string() });
+            return Err(FemError::EmptySet {
+                kind,
+                name: name.to_string(),
+            });
         }
         let mut seen = BTreeSet::new();
         for f in &faces {
             if f.element >= self.n_elements {
-                return Err(FemError::SetMemberOutOfRange { kind, name: name.to_string(), member: f.element });
+                return Err(FemError::SetMemberOutOfRange {
+                    kind,
+                    name: name.to_string(),
+                    member: f.element,
+                });
             }
             if f.face >= self.element_kind(f.element).n_faces() {
-                return Err(FemError::FaceOutOfRange { set: name.to_string(), element: f.element, face: f.face });
+                return Err(FemError::FaceOutOfRange {
+                    set: name.to_string(),
+                    element: f.element,
+                    face: f.face,
+                });
             }
             if !seen.insert(*f) {
-                return Err(FemError::DuplicateSetMember { kind, name: name.to_string(), member: f.element });
+                return Err(FemError::DuplicateSetMember {
+                    kind,
+                    name: name.to_string(),
+                    member: f.element,
+                });
             }
         }
         self.surface_sets.insert(name.to_string(), faces);
@@ -407,7 +477,10 @@ impl SolidMesh {
     }
 
     fn jacobians_of(&self, kind: ElementKind, conn: &[usize]) -> Vec<f64> {
-        kind.reference_nodes().iter().map(|&xi| self.jacobian_at(kind, conn, xi)).collect()
+        kind.reference_nodes()
+            .iter()
+            .map(|&xi| self.jacobian_at(kind, conn, xi))
+            .collect()
     }
 
     /// `det J` at every node of an element, in its node order.
@@ -445,7 +518,10 @@ impl SolidMesh {
     /// Global nodes of a face, in the local face order.
     pub fn face_nodes(&self, f: FaceRef) -> Vec<usize> {
         let conn = self.element_nodes(f.element);
-        self.element_kind(f.element).faces()[f.face].iter().map(|&l| conn[l]).collect()
+        self.element_kind(f.element).faces()[f.face]
+            .iter()
+            .map(|&l| conn[l])
+            .collect()
     }
 
     // Quadrature points of the face map: weights and tangent vectors (x_u, x_v).
@@ -510,7 +586,10 @@ impl SolidMesh {
 
     /// Area of a face (exact for planar Tri3, planar parallelogram Quad4 and straight-sided Tri6 faces).
     pub fn face_area(&self, f: FaceRef) -> f64 {
-        self.face_tangents(f).into_iter().map(|(w, xu, xv)| w * rcfd_core::vec3::norm(cross(xu, xv))).sum()
+        self.face_tangents(f)
+            .into_iter()
+            .map(|(w, xu, xv)| w * rcfd_core::vec3::norm(cross(xu, xv)))
+            .sum()
     }
 
     /// Area vector of a face, the integral of `x_u x x_v`: its direction is the outward normal of the element.
@@ -527,9 +606,10 @@ impl SolidMesh {
 
     /// Nodes of the faces of a surface set, sorted and unique.
     pub fn surface_set_nodes(&self, name: &str) -> Result<Vec<usize>> {
-        let faces = self
-            .surface_set(name)
-            .ok_or_else(|| FemError::UnknownSet { kind: SetKind::Surface, name: name.to_string() })?;
+        let faces = self.surface_set(name).ok_or_else(|| FemError::UnknownSet {
+            kind: SetKind::Surface,
+            name: name.to_string(),
+        })?;
         let mut s = BTreeSet::new();
         for &f in faces {
             s.extend(self.face_nodes(f));

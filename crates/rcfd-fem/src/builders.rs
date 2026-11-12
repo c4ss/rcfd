@@ -40,13 +40,22 @@ impl Grid {
 
 fn box_nodes(origin: Vec3, lengths: Vec3, divisions: [usize; 3]) -> Result<(Grid, Vec<Vec3>)> {
     if origin.iter().any(|c| !c.is_finite()) {
-        return Err(FemError::InvalidValue { key: "origin", reason: format!("{origin:?} is not finite") });
+        return Err(FemError::InvalidValue {
+            key: "origin",
+            reason: format!("{origin:?} is not finite"),
+        });
     }
     if lengths.iter().any(|&l| !(l > 0.0 && l.is_finite())) {
-        return Err(FemError::InvalidValue { key: "lengths", reason: format!("{lengths:?}: each must be positive") });
+        return Err(FemError::InvalidValue {
+            key: "lengths",
+            reason: format!("{lengths:?}: each must be positive"),
+        });
     }
-    if divisions.iter().any(|&d| d == 0) {
-        return Err(FemError::InvalidValue { key: "divisions", reason: format!("{divisions:?}: each must be >= 1") });
+    if divisions.contains(&0) {
+        return Err(FemError::InvalidValue {
+            key: "divisions",
+            reason: format!("{divisions:?}: each must be >= 1"),
+        });
     }
     let g = Grid { n: divisions };
     let [nx, ny, nz] = divisions;
@@ -110,9 +119,16 @@ pub fn hex_box(origin: Vec3, lengths: Vec3, divisions: [usize; 3]) -> Result<Sol
                 for i in 0..nx {
                     let c = [i, j, k];
                     let axis = f / 2;
-                    let on = if f % 2 == 0 { c[axis] == 0 } else { c[axis] == divisions[axis] - 1 };
+                    let on = if f % 2 == 0 {
+                        c[axis] == 0
+                    } else {
+                        c[axis] == divisions[axis] - 1
+                    };
                     if on {
-                        faces.push(FaceRef { element: i + nx * (j + ny * k), face: local[f] });
+                        faces.push(FaceRef {
+                            element: i + nx * (j + ny * k),
+                            face: local[f],
+                        });
                     }
                 }
             }
@@ -193,7 +209,11 @@ pub struct MidEdgeNode {
 pub fn upgrade_to_tet10(mesh: &SolidMesh) -> Result<(SolidMesh, Vec<MidEdgeNode>)> {
     for (block, b) in mesh.blocks().iter().enumerate() {
         if b.kind() != ElementKind::Tet4 {
-            return Err(FemError::UnsupportedKind { block, kind: b.kind().name(), operation: "upgrade_to_tet10" });
+            return Err(FemError::UnsupportedKind {
+                block,
+                kind: b.kind().name(),
+                operation: "upgrade_to_tet10",
+            });
         }
     }
     let mut nodes = mesh.nodes().to_vec();
@@ -210,7 +230,10 @@ pub fn upgrade_to_tet10(mesh: &SolidMesh) -> Result<(SolidMesh, Vec<MidEdgeNode>
                 let node = *edge_index.entry(key).or_insert_with(|| {
                     let (pa, pc) = (nodes[key.0], nodes[key.1]);
                     nodes.push([0.5 * (pa[0] + pc[0]), 0.5 * (pa[1] + pc[1]), 0.5 * (pa[2] + pc[2])]);
-                    mids.push(MidEdgeNode { node: nodes.len() - 1, ends: [key.0, key.1] });
+                    mids.push(MidEdgeNode {
+                        node: nodes.len() - 1,
+                        ends: [key.0, key.1],
+                    });
                     nodes.len() - 1
                 });
                 conn10.push(node);
@@ -226,7 +249,11 @@ pub fn upgrade_to_tet10(mesh: &SolidMesh) -> Result<(SolidMesh, Vec<MidEdgeNode>
         let set = mesh.node_set(name).expect("listed");
         let members: BTreeSet<usize> = set.iter().copied().collect();
         let mut v = set.to_vec();
-        v.extend(mids.iter().filter(|m| members.contains(&m.ends[0]) && members.contains(&m.ends[1])).map(|m| m.node));
+        v.extend(
+            mids.iter()
+                .filter(|m| members.contains(&m.ends[0]) && members.contains(&m.ends[1]))
+                .map(|m| m.node),
+        );
         out.add_node_set(name, v)?;
     }
     for name in mesh.element_set_names() {

@@ -195,16 +195,30 @@ impl fmt::Display for FemError {
         match self {
             NonFiniteNode { node } => write!(f, "node {node}: coordinate is not finite"),
             EmptyBlock { block } => write!(f, "block {block}: has no element"),
-            ConnectivityLength { block, len, nodes_per_element } => write!(
+            ConnectivityLength {
+                block,
+                len,
+                nodes_per_element,
+            } => write!(
                 f,
                 "block {block}: connectivity length {len} is not a multiple of {nodes_per_element} nodes per element"
             ),
             NodeOutOfRange { element, node, n_nodes } => {
-                write!(f, "element {element}: node {node} does not exist (the mesh has {n_nodes} nodes)")
+                write!(
+                    f,
+                    "element {element}: node {node} does not exist (the mesh has {n_nodes} nodes)"
+                )
             }
             RepeatedNode { element, node } => write!(f, "element {element}: node {node} appears twice"),
-            InvertedElement { element, local_node, jacobian } => {
-                write!(f, "element {element}: inverted (det J = {jacobian:e} at local node {local_node})")
+            InvertedElement {
+                element,
+                local_node,
+                jacobian,
+            } => {
+                write!(
+                    f,
+                    "element {element}: inverted (det J = {jacobian:e} at local node {local_node})"
+                )
             }
             EmptySetName { kind } => write!(f, "{kind} with an empty name"),
             DuplicateSet { kind, name } => write!(f, "{kind} '{name}' is defined twice"),
@@ -220,9 +234,17 @@ impl fmt::Display for FemError {
             InvalidMaterial { key, value, reason } => write!(f, "material key '{key}' = {value}: {reason}"),
             MaterialUnassigned { element } => write!(f, "element {element}: has no material"),
             MaterialOverlap { element, first, second } => {
-                write!(f, "element {element}: has a material from element set '{first}' and from '{second}'")
+                write!(
+                    f,
+                    "element {element}: has a material from element set '{first}' and from '{second}'"
+                )
             }
-            ComponentOutOfRange { set, node, component, available } => write!(
+            ComponentOutOfRange {
+                set,
+                node,
+                component,
+                available,
+            } => write!(
                 f,
                 "node set '{set}': node {node} has {available} components, component {component} does not exist"
             ),
@@ -242,9 +264,12 @@ impl std::error::Error for FemError {}
 impl From<FemError> for rcfd_core::Error {
     fn from(e: FemError) -> Self {
         match &e {
-            FemError::InvalidMaterial { key, .. } | FemError::InvalidValue { key, .. } | FemError::FieldLength { key, .. } => {
-                rcfd_core::Error::InvalidValue { path: (*key).to_string(), reason: e.to_string() }
-            }
+            FemError::InvalidMaterial { key, .. }
+            | FemError::InvalidValue { key, .. }
+            | FemError::FieldLength { key, .. } => rcfd_core::Error::InvalidValue {
+                path: (*key).to_string(),
+                reason: e.to_string(),
+            },
             _ => rcfd_core::Error::Mesh(e.to_string()),
         }
     }
