@@ -2134,6 +2134,31 @@ set and `erosion.n` not (at `erosion.n`) or the reverse (at `erosion.k`), or a w
 unknown `erosion.material` (when the case is read); a rough patch that sticks or escapes, or reflects with restitution 0;
 `rough_wall.angle_std` outside `(0, 30]`; (when the mesh is built) an unknown patch or one that is not a wall.
 
+Droplet evaporation and breakup (F-326, ADR 0348; `docs/particles.md`, "Droplet feedback in the transient two-way path").
+`particles.evaporation` and `particles.breakup` are optional tables: absent, they are not in the case data and change nothing.
+They are available with `particles.two_way` and `piso` or `pimple`; evaporation also needs `particles.heat_transfer`. The
+liquid is `particles.density` with the specific heat `particles.particle_cp`; the gas properties are those of `physics`.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `evaporation.enabled` | `false` | evaporation of the parcels (ADR 0224: quasi-steady film model with Bird's correction); the vapour is a source of the named species, the vapour and drag momentum a body acceleration, the sensible heat a source of the temperature equation |
+| `evaporation.species` | `""` | the transported species (`species.<name>`, not the balance species) that receives the vapour; required |
+| `evaporation.latent_heat`, `boiling_temperature` | `-1`, `-1` | `L_v` [J/kg] and `T_b` [K] at `boiling_pressure`; must be set (> 0) |
+| `evaporation.boiling_pressure`, `pressure` | `101325`, `101325` | [Pa] |
+| `evaporation.vapour_molar_mass`, `gas_molar_mass` | `-1`, `-1` | `W_f`, `W_b` [kg/mol]; must be set (> 0) |
+| `evaporation.diffusivity`, `vapour_cp` | `-1`, `-1` | `D_m` [m^2/s], `c_p,vap` [J/(kg K)]; must be set (> 0) |
+| `evaporation.min_diameter`, `max_step_fraction` | `1e-7`, `0.1` | the diameter [m] below which a droplet counts as evaporated; the largest sub-step as a fraction of the thermal time, in `(0, 1]` |
+| `breakup.enabled` | `false` | TAB breakup (O'Rourke and Amsden 1987, ADR 0224) |
+| `breakup.surface_tension`, `liquid_viscosity` | `-1`, `-1` | `sigma` [N/m] (> 0) and `mu_l` [Pa s] (>= 0); must be set |
+| `breakup.c_f`, `c_k`, `c_d`, `c_b`, `k`, `c_v` | `1/3`, `8`, `5`, `1/2`, `10/3`, `1` | the TAB constants |
+| `breakup.seed` | `1` | seed of the normal-velocity directions |
+
+Located errors: either table enabled without `particles.enabled`, without `particles.two_way`, or with a steady algorithm;
+evaporation without `particles.heat_transfer`; `evaporation.species` empty, not a species, or the balance species; a
+required number unset or not positive, `max_step_fraction` outside `(0, 1]`; `breakup.surface_tension` unset,
+`breakup.liquid_viscosity` negative, a TAB constant out of range (at `particles.breakup`). At run time a vapour fraction at or
+above 1 stops the run.
+
 Run path (F-056, ADR 0037 D1). With `particles.enabled`, `Simulation::new` builds the tracker on the simulation mesh, so an unknown
 patch, an injection point outside the mesh or a bad `particles.walls.<n>` is a located error of `Simulation::new`, `rcfd run
 --check-only` (exit 3) and `rcfd validate`. `particles` with `dynamic_mesh.enabled` is refused (located at `dynamic_mesh.enabled`

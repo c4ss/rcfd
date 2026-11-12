@@ -210,8 +210,8 @@ parcel gains the normal velocity `C_v C_b r dy/dt` in a random direction normal 
 
 ADR 0224 checks the d-squared slope (to 1e-15, limit 2 percent), the vapour against the liquid lost (to 3e-12 in a spray of 160
 parcels, limit 1e-10), the breakup time and product size from rest against their closed forms at Weber numbers 6.1 to 1000 (to
-1.5e-14, limit 2 percent), the source's limits (its eqs. 12a, 13, 16, 23) and the liquid mass through breakup to round-off. There
-are no case keys yet (ADR 0224 Q2).
+1.5e-14, limit 2 percent), the source's limits (its eqs. 12a, 13, 16, 23) and the liquid mass through breakup to round-off. The
+case keys came with F-326 (below).
 
 ### Droplet terms of the exchange record (F-323, ADR 0230; library only)
 
@@ -239,8 +239,37 @@ ADR 0230 checks the three balances (liquid plus vapour mass; parcel momentum plu
 breakup; parcel kinetic and thermal energy plus the carrier's) at every step of single droplets and of the spray of ADR 0224
 (160 parcels, evaporation and breakup: residuals at most 2.7e-15 of the largest term, limit 1e-10), the heat a droplet at its wet
 bulb draws from the gas against `L_v` times its mass (5.3e-16), and a closed box in which the test's own carrier receives the
-vapour and the heat until the evaporation stops at the adiabatic saturation temperature (within 3e-12 K of the closed form). No
-flow solver of rcfd consumes the record yet.
+vapour and the heat until the evaporation stops at the adiabatic saturation temperature (within 3e-12 K of the closed form).
+
+### Droplet feedback in the transient two-way path (F-326, ADR 0348)
+
+The case tables `[particles.evaporation]` and `[particles.breakup]` (`docs/case-schema.md`) switch the two models on in the
+run path. They need `particles.two_way` and a transient algorithm (`piso`, `pimple`); evaporation also needs
+`particles.heat_transfer` (so the energy equation) and a transported species (`species.<name>`, not the balance species)
+named by `particles.evaporation.species`. The tracker then records with `enable_droplet_exchange()`, and before every flow
+step of length `dt` it is advanced on the old time level of the velocity, the temperature and the vapour species (the vapour
+fraction clamped below at 0). Of `droplet_sources(volumes, dt)` the carrier receives
+
+* the vapour mass as the source `S_Y = mass/rho` of the species;
+* the momentum (drag plus vapour) as the body acceleration `momentum/rho` (the path of ADR 0059);
+* of the energy, the sensible part `Q_T = energy_heat + vapour_enthalpy - vapour_mass (c_l T^n + L_v)` as the source
+  `Q_T/(rho c_p V dt)` of the temperature equation: the gas pays the heating of the liquid and the latent heat, and brings the
+  vapour from the droplet temperature to its own.
+
+The rest of the energy source is kept in the ledger `TransientCoupling::droplets` (`DropletLedger`): the mechanical part
+`energy_mech + vapour_kinetic` (not fed into the temperature, as for the heat transfer of ADR 0059) and the enthalpy of the
+arrived vapour at the carrier temperature `vapour_mass (c_l T^n + L_v)`. The carrier stays constant-density and
+constant-property: the vapour is not a source of the continuity equation and its heat capacity is not in the temperature
+equation (a dilute vapour). The normal momentum of a TAB breakup stays without a carrier counterpart (ADR 0230 D5). The steady
+two-way path and one-way tracking refuse the tables.
+
+ADR 0348 checks a closed adiabatic box of hot gas (16 cells) in which ten parcels of 0.2 mm drops at 60 m/s break up and
+evaporate: at every step, liquid plus carrier vapour mass, parcel momentum plus the delivered momentum (less gravity, walls and
+breakup), and parcel energy plus the carrier's thermal inventory and the two ledgers, are conserved to 1.8e-15, 5.8e-16 and
+6.7e-13 of the largest term (limit 1e-10), with piso and with pimple; the species and the temperature equations receive the
+step's vapour and heat to round-off; the tracker holds the carrier temperature and vapour fraction of the step bit for bit; a
+case without the tables, or with them disabled, is unchanged bit for bit. `particle_report.json` gains `counts.evaporated`,
+`mass_by_state.evaporated` and a `droplets` object only with the tables.
 
 ## Wall film (F-253, ADR 0192)
 

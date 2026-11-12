@@ -4050,7 +4050,13 @@ impl Simulation {
                         // ADR 0059 D2: the particles first, over this step, on the field of the old time level
                         let temp = self.energy.as_ref().map(|e| e.solver.t.values.as_slice());
                         // ADR 0208 D2: and on the turbulence fields of the old time level
-                        let refreshed = pr.refresh_dispersion(&self.case, self.turb.as_ref());
+                        let mut refreshed = pr.refresh_dispersion(&self.case, self.turb.as_ref());
+                        if let Some(name) = pr.vapour_species() {
+                            // ADR 0348 D3: and on the vapour species of the old time level
+                            if let Some(y) = self.scalars.as_ref().and_then(|sc| sc.field(name)) {
+                                refreshed = refreshed.and_then(|()| pr.set_carrier_vapour(&y));
+                            }
+                        }
                         if let Err(e) = refreshed.and_then(|()| pr.pre_step(&self.case, &self.geom, &s.u, temp, dt)) {
                             let e = format!("particle tracking: {e}");
                             reason_override = Some(e.clone());
@@ -4230,6 +4236,10 @@ impl Simulation {
                     }
                 }
                 if let Some(sc) = &mut self.scalars {
+                    if let Some((name, src)) = self.particles.as_ref().and_then(|p| p.vapour_source()) {
+                        // ADR 0348 D4: the vapour of the parcels over this step
+                        sc.set_particle_source(name, src.to_vec());
+                    }
                     let sctx = StepCtx {
                         zone: self.zone_sources.as_ref(),
                         temperature: self.energy.as_ref().map(|e| e.solver.t.values.as_slice()),
