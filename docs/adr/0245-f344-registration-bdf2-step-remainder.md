@@ -374,3 +374,40 @@ same term); if the fringe cells make a step-dependent part of their own, A2 is m
 rule.
 
 The decision rule is unchanged.
+
+## Amendment 2 (2026-11-12, written after the runs of amendment 1 and before any further run)
+
+The opt-in and its tests were committed checked and not run (`36c40e8b`), then A1, C3, E1 and A2 ran once. All numbers
+are in addendum 1. Met: A1 (`5.019`), H7 (`8.41e-10`), C1, C2, A3, C3, C3n, C4, E1 (bit for bit), E1n, A2b, A2c. Not met:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| A2 (acceptance) | `>= 4` | `2.454` (`max abs(d_200) = 2.057e-5`, `max abs(d_400) = 8.38e-6`, both in the calculated component cell at `(1.668, 0.969)`, the cell of ADR 0241 D2) |
+
+The limit stays; A2 becomes an ignored `*_known_miss` test with the limit intact, and the test of A2 keeps the checks
+that held. On the single mesh at rest C takes the remainder from `5.13e-6` to `8.4e-10`; on TG_2 it takes it from
+`2.125e-5` to `2.057e-5`, three percent. So the remainder of TG_2 is, to 97 percent, **not** the term of this item: ADR
+0241 suggested that it was the same term and did not show it; it is not. MC5 (its check is A2) is not run and counts as
+not caught.
+
+**The miss of A2: hypotheses, fixed before their runs.** Both measurements take BDF2, three outer iterations and C.
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H9 | on a single moving mesh with every cell calculated the remainder (ADR 0241 M1, M2: `3.96e-6`, ratio `2.28`) is the term of this item, and C removes it there as at rest | SMc of ADR 0241 through `OversetSolver::advance_mesh` (the helper of `overset_f338.rs`, copied) with C in 200, 400, 800 steps: `max abs(d_200)` and the ratio | confirmed: `max abs(d_200) <= 1.3e-6` and the ratio `>= 4`; ruled out: `max abs(d_200) >= 2.8e-6` |
+| H10 | the remainder of the coupled meshes is made by the motion through the coupling (cells changing kind, the donor stencils changing with the pose), not by the coupling as such | TG_1 of ADR 0219 (level 1, the coupled meshes) with C in 100, 200, 400 steps (the step sizes `0.005`, `0.0025`, `0.00125`; differences to the run in 400), once with the component moving (`tg_pose(t)`) and once with it held at `tg_pose(0)` (a coupled run at rest: the same meshes, holes and fringe, no change of kind): `m = max abs(d_100)` moving, `r = max abs(d_100)` at rest, over the non-hole cells | confirmed: `r <= 0.1 m`; ruled out: `r >= 0.5 m` |
+
+Level 1 and not level 2 for H10: six runs of level 2 take half an hour under the present load; the hypothesis is about
+the mechanism, and the remainder of level 1 is measured by the same runs. Printed: the ratios `max abs(d_100) / max
+abs(d_200)` of both, the cell and the kind of each maximum.
+
+Reading fixed here. If H9 is confirmed, the moving-mesh terms carry no step-dependent term of their own and what is left
+on TG_2 belongs to the coupling. If H10 is confirmed, it is made where cells change kind or donors as the component
+moves, an event per cell and step whose size does not fall with `dt` as a truncation does; if H10 is ruled out, it is
+made by the coupling at rest (the interpolated rows of the fringe). Either way no corrective for it is built in this
+item: it is a follow-up. None of this moves the limit of A2.
+
+Test: `a2_diagnosis_of_the_coupled_remainder` (ignored, printed, asserts nothing about its numbers). Predictions (mine):
+H9 confirmed; H10 confirmed, less sure. By the decision rule the opt-in exists and A2 is missed: **partial**, unless
+the lead reads the second way of the acceptance (a spatial term with its order in `h`, measured by H8) as meeting the
+item; the addendum says which numbers bear on that.
