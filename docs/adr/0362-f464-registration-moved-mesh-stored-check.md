@@ -134,3 +134,75 @@ not caught by the check registered for it, or caught only after a post-run amend
 - The regular mesh is the builder's; a bug common to the builder and the checker's use of it would not be seen.
 - Moves of boundary nodes are only checked as unchanged; no check that the face node sets are preserved in the stored mesh.
 - The checker reads coordinates; it does not read element Jacobians (ADR 0358 V1 does).
+
+## Addendum 1: results (2026-11-12)
+
+Runs, each once, release profile, on the shared machine, at commit 566df5f7 (the test file as committed before any run): the
+file `cargo test -p rcfd-fem --release --test sb_patch_moved_stored -- --nocapture --test-threads=1` (0.02 s, log
+`w49i-work/f464-scratch/run1.log`, 3 passed); the mutations MU1 to MU9 on the archive copy `w49i-work/f464-scratch/mut` of
+566df5f7 by `mutate.py` (each applied, the file run once, the file restored; logs `MU1.log` to `MU9.log`). No amendment was
+made; nothing above this addendum was changed after a run. Only the new test file was added; no library file, golden or hash
+table was touched and `sb_patch_moved.rs` is unedited.
+
+### Checks
+
+| Check | Limit | Measured (18 meshes) | Met |
+|---|---|---|---|
+| S0 node count equal; interior count | equal; `(n-1)^3` | 64 to 343 nodes equal; 8 to 125 interior, all equal | yes |
+| S1 boundary nodes differing in bits | `== 0` | 0 on all 18 | yes |
+| S2 rms interior offset / h | `>= 0.3 alpha` | 0.534 alpha to 0.634 alpha (absolute 0.0267 to 0.0951) | yes |
+| S2b the same, absolute | `>= 1e-3` | 0.0267 to 0.0951 | yes |
+| S3 largest offset / h | `<= alpha (1 + 1e-9)` | 0.0471 to 0.1499 (largest 0.99907 alpha) | yes |
+| S4 min over nodes of the node's largest offset component / h | `>= 1e-5` | 3.92e-3 to 8.38e-2 | yes |
+| S5 differing block connectivities | `== 0` | 0 on all 18 | yes |
+| C1 unmoved mesh against registered alpha: S2, S2b, S4 miss; S0, S1, S3, S5 met | all 18 | S2, S2b, S4 read 0 and miss on all 18; the other four met | yes |
+| C2 unmoved, expected 0: S2b and S4 miss | all 18 | both read 0 and miss on all 18; S2 met trivially (0 >= 0) | yes |
+
+Estimates against measured: S2 0.534 to 0.634 alpha, as in ADR 0358 V2 (estimate 0.53 to 0.64); S2b inside; S4 3.9e-3 against
+the estimated 5e-3 to 0.07 (just below the estimated range, 390 times above the limit).
+
+### Mutations (scratch copy of 566df5f7, each run once)
+
+| Id | Result | Caught by (misses in `s_stored_mesh_of_the_moved_boxes`, 18 meshes each) |
+|---|---|---|
+| MU1 | caught as registered | S2, S2b, S4 on all 18 meshes (clause c5 through the real test) |
+| MU2 | caught as registered | S2, S2b, S4 on all 18 |
+| MU3 | caught as registered | S1 on all 18 (only S1) |
+| MU4 | caught as registered | S1 on all 18 (only S1; the controls C1, C2 also fail because they share the code) |
+| MU5 | caught as registered | S2, S2b and S4 on all 18 |
+| MU6 | caught as registered by S4 | S4 on all 18; S2 survived on all 18 (rms 0.346 to 0.419 alpha, above 0.3 alpha), which is the registered expectation of survival |
+| MU7 | caught as registered | S3 on all 18 (only S3) |
+| MU8 | caught as registered | S5 on all 18 (only S5; the controls also fail) |
+| MU9 | caught as registered | C1 fails (its assertion): S2, S2b, S4 met on a moved mesh |
+
+### Deviations and what was not run
+
+- None in the checks or mutations. MU4 and MU8 also fail the two control tests, because the controls use the same builder code;
+  not a deviation, recorded.
+- The probe of arithmetic 4 for S4 was too optimistic at its low end (3.9e-3 against 5e-3); the limit 1e-5 is untouched.
+- Not run: tetrahedra, moves of boundary nodes, other seeds or amplitudes, solves on the moved meshes (those are ADR 0358).
+- `cargo fmt -p rcfd-fem --check` passed; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` passed. The whole test file
+  was the only test run (new tests; no line of an existing file changed).
+
+### Decision by the registered rule
+
+**done**: S0 to S5 met on all 18 meshes, C1 and C2 as registered on all 18, and MU1 to MU9 caught by the check registered for
+each, without an amendment.
+
+### Remaining questions
+
+1. **The solves of ADR 0358 do not consume this check.** `sb_patch_moved.rs` still uses its own V2; the stored-mesh check is a
+   separate file and does not prove the P1/P2 solves ran on the meshes it checks (same generator, same seed, same code, but not
+   the same objects). Options: (a) leave (the two files copy the same `moved` and tag); (b) a follow-up that runs one solve
+   inside the new file on the checked mesh object. Recommendation: (a); the first-order evidence already exists (M1 against M6
+   of ADR 0358).
+2. **F-461 / F-459 notes.** ADR 0358 remaining question 1 is closed by this item; recommendation: one sentence in the F-461
+   note.
+
+### For the lead: roadmap entries
+
+Proposed status of F-464: done pending acceptance.
+
+> F-464 (ADR 0362, 2026-11-12): done pending acceptance. New test file sb_patch_moved_stored.rs reads the node coordinates stored in the 18 moved Hex8 boxes of ADR 0358 against the regular builder mesh: interior rms offset 0.534 to 0.634 alpha (limit 0.3 alpha, and an absolute 1e-3), every interior node moved (min node maximum 3.9e-3 h against 1e-5), largest offset at most alpha, boundary nodes unchanged bit for bit (0 differing), connectivity unchanged. The same code on an unmoved mesh (alpha = 0) fails the rms and node-moved checks on all 18 meshes, also with the expected amplitude set to 0 (absolute floors). Nine mutations (unmoved mesh through the real test, stored nodes unmoved, boundary moved, one boundary node moved by 1e-12, offsets scaled 1e-4 and 1.1, every second node unmoved, connectivity rotated, control built moved) each caught by the check registered for it. Tests only, ADR 0358 tests unedited.
+
+> F-461 note addition: the remaining question 1 of ADR 0358 (V2 cannot see an unmoved mesh) is closed by F-464 (ADR 0362, 2026-11-12).
