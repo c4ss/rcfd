@@ -11,7 +11,7 @@ use crate::compressible_bc::{self, MsdWall, TotalInlet};
 use crate::convection::TvdLimiter;
 use crate::geometry::FvGeometry;
 pub use crate::riemann::{to_prim, Cons, Gas, Prim, RiemannSolver};
-use crate::sponge::{self, MatchedOptions, Sponge, SpongeForm, SpongeMemories};
+use crate::sponge::{self, MatchedOptions, Sponge, SpongeForm, SpongeFrame, SpongeMemories};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
 use rcfd_mesh::motion::{cell_swept_sum, swept_volumes};
@@ -120,6 +120,8 @@ pub struct CompressibleSolver {
     sponge_r: Vec<f64>,
     sponge_m: Vec<Vec3>,
     sponge_rate2: Vec<f64>,
+    /// The frame of the sponge on a moving mesh (F-341, ADR 0265 E1); `StaticMesh` by default.
+    sponge_frame: SpongeFrame,
     /// The opt-in mass-spring-damper walls and their state (F-332, ADR 0243); `None` by default.
     msd: Option<MsdState>,
 }
@@ -174,6 +176,7 @@ impl CompressibleSolver {
             sponge_r: Vec::new(),
             sponge_m: Vec::new(),
             sponge_rate2: Vec::new(),
+            sponge_frame: SpongeFrame::StaticMesh,
             msd: None,
         })
     }
@@ -203,7 +206,8 @@ impl CompressibleSolver {
 
     /// Set or clear the sponge layer (F-331, ADR 0237; [`crate::sponge`]). The sponge is checked against the mesh
     /// ([`Sponge::validate`]) and its memory starts at zero. Without a sponge [`Self::step`] is unchanged. While a sponge
-    /// is set, [`Self::step_ale`] and [`Self::replace_mesh`] return an error, and [`Self::max_dt`] does not know the
+    /// is set, [`Self::replace_mesh`] returns an error, [`Self::step_ale`] returns one unless the sponge is attached to the
+    /// mesh ([`Self::set_sponge_frame`], F-341, ADR 0265), and [`Self::max_dt`] does not know the
     /// sponge: `rate dt` must stay well below 2.5.
     pub fn set_sponge(&mut self, sponge: Option<Sponge>) -> Result<()> {
         if sponge.is_some() && self.msd.is_some() {
@@ -280,6 +284,19 @@ impl CompressibleSolver {
     /// The sponge layer, if one is set.
     pub fn sponge(&self) -> Option<&Sponge> {
         self.sponge.as_ref()
+    }
+
+    /// Set the frame of the sponge on a moving mesh (F-341, ADR 0265 E1). With [`SpongeFrame::StaticMesh`] (the default)
+    /// [`Self::step_ale`] refuses a sponge; with [`SpongeFrame::AttachedToMesh`] it takes the sponged ALE step, the rates
+    /// and the memories moving with the cells. The setting is kept across [`Self::set_sponge`]. [`Self::replace_mesh`]
+    /// refuses a sponge in either frame.
+    pub fn set_sponge_frame(&mut self, frame: SpongeFrame) {
+        self.sponge_frame = frame;
+    }
+
+    /// The frame of the sponge on a moving mesh.
+    pub fn sponge_frame(&self) -> SpongeFrame {
+        self.sponge_frame
     }
 
     /// Set the memory `Q` of the matched sponge form (ADR 0237 amendment 1), for a restart or for a start from a state in
@@ -826,8 +843,13 @@ impl CompressibleSolver {
             ));
         }
         if self.sponge.is_some() {
+            if self.sponge_frame == SpongeFrame::AttachedToMesh {
+                return self.step_ale_sponged(new_geom, dt);
+            }
             return Err(Error::Numerical(
-                "step_ale: the sponge layer is not built for moving meshes (ADR 0237 D5); clear it first".into(),
+                "step_ale: the sponge layer is not built for moving meshes in its default frame (ADR 0237 D5); clear it, \
+                 or attach it to the mesh with set_sponge_frame (ADR 0265)"
+                    .into(),
             ));
         }
         let old = &self.geom.mesh;
@@ -877,6 +899,117 @@ impl CompressibleSolver {
         Ok(())
     }
 
+    /// [`Self::step_ale`] with a sponge attached to the mesh (F-341, ADR 0265 E2): the geometric statements of `step_ale`;
+    /// every stage adds `V_p S(U_p, Q_p)` to the undivided residual of the cells in the layer, with `V_p = V^n + c_p dv` the
+    /// volume of the stage state `U_p` (DR4), and the memories advance per cell with the stage weights of the state (DR3).
+    /// Cells outside the layer are not touched, so a sponge whose rates are all zero gives the bits of `step_ale`.
+    fn step_ale_sponged(&mut self, new_geom: FvGeometry, dt: f64) -> Result<()> {
+        let Some(sp) = self.sponge.clone() else {
+            return Err(Error::Numerical("step_ale_sponged: no sponge is set".into()));
+        };
+        let old = &self.geom.mesh;
+        if new_geom.mesh.n_points() != old.n_points() || new_geom.mesh.n_cells() != old.n_cells() {
+            return Err(Error::Numerical(
+                "step_ale: the moved mesh must keep the topology".into(),
+            ));
+        }
+        let w = swept_volumes(old, new_geom.mesh.points());
+        let v0 = old.cell_volumes().to_vec();
+        let dv = cell_swept_sum(old, &w);
+        self.geom = new_geom;
+        self.ls_inv = ls_inverse(&self.geom);
+        let sf = self.geom.mesh.face_area_vectors();
+        let wn: Vec<f64> = (0..w.len())
+            .map(|f| w[f] / (dt * vec3::norm(sf[f]).max(1e-300)))
+            .collect();
+        let n = self.u.len();
+        let shifted = match sp.form {
+            SpongeForm::MatchedShifted(o) => Some(o),
+            _ => None,
+        };
+        let rate2 = &self.sponge_rate2;
+        let active: Vec<bool> = (0..n)
+            .map(|c| sp.rate[c] > 0.0 || (shifted.is_some() && rate2[c] > 0.0))
+            .collect();
+        let vu0: Vec<Cons> = (0..n).map(|i| self.u[i].map(|x| x * v0[i])).collect();
+        let m0 = SpongeMemories {
+            q: self.sponge_q.clone(),
+            r: self.sponge_r.clone(),
+            m: self.sponge_m.clone(),
+        };
+        // the stage of `step_ale` with the source at the volume of the stage state (`c_prev`: the `c` of the stage that
+        // produced `u_prev`, 0 for the state of the start of the step) and the memories advanced with the same weights
+        type StageOut = (Vec<Cons>, Vec<Cons>, SpongeMemories);
+        let stage = |vu_prev: &[Cons],
+                     u_prev: &[Cons],
+                     m_prev: &SpongeMemories,
+                     c_prev: f64,
+                     a: f64,
+                     b: f64,
+                     c: f64|
+         -> Result<StageOut> {
+            let mut r = self.flux_sum(u_prev, Some(&wn), None)?;
+            let mut s = vec![[0.0; 5]; n];
+            let d = match &shifted {
+                Some(o) => sponge::add_source_shifted(&self.geom, self.gas, &sp, o, rate2, u_prev, m_prev, &mut s),
+                None => SpongeMemories {
+                    q: sponge::add_source(&self.geom, self.gas, &sp, u_prev, &m_prev.q, &mut s),
+                    r: Vec::new(),
+                    m: Vec::new(),
+                },
+            };
+            for i in 0..n {
+                if active[i] {
+                    let vp = v0[i] + c_prev * dv[i];
+                    for k in 0..5 {
+                        r[i][k] += vp * s[i][k];
+                    }
+                }
+            }
+            let vu: Vec<Cons> = (0..n)
+                .map(|i| std::array::from_fn(|k| a * vu0[i][k] + b * (vu_prev[i][k] + dt * r[i][k])))
+                .collect();
+            let u = (0..n).map(|i| vu[i].map(|x| x / (v0[i] + c * dv[i]))).collect();
+            let adv = |x0: &[f64], xp: &[f64], xd: &[f64]| -> Vec<f64> {
+                (0..x0.len()).map(|i| a * x0[i] + b * (xp[i] + dt * xd[i])).collect()
+            };
+            let mem = SpongeMemories {
+                q: adv(&m0.q, &m_prev.q, &d.q),
+                r: adv(&m0.r, &m_prev.r, &d.r),
+                m: (0..m0.m.len())
+                    .map(|i| std::array::from_fn(|k| a * m0.m[i][k] + b * (m_prev.m[i][k] + dt * d.m[i][k])))
+                    .collect(),
+            };
+            Ok((vu, u, mem))
+        };
+        let u0 = self.u.clone();
+        let (u_new, m_new) = match self.settings.rk {
+            RkScheme::Euler => {
+                let (_, u1, m1) = stage(&vu0, &u0, &m0, 0.0, 0.0, 1.0, 1.0)?;
+                (u1, m1)
+            }
+            RkScheme::Rk2 => {
+                let (vu1, u1, m1) = stage(&vu0, &u0, &m0, 0.0, 0.0, 1.0, 1.0)?;
+                let (_, u2, m2) = stage(&vu1, &u1, &m1, 1.0, 0.5, 0.5, 1.0)?;
+                (u2, m2)
+            }
+            RkScheme::Rk3 => {
+                let (vu1, u1, m1) = stage(&vu0, &u0, &m0, 0.0, 0.0, 1.0, 1.0)?;
+                let (vu2, u2, m2) = stage(&vu1, &u1, &m1, 1.0, 0.75, 0.25, 0.5)?;
+                let (_, u3, m3) = stage(&vu2, &u2, &m2, 0.5, 1.0 / 3.0, 2.0 / 3.0, 1.0)?;
+                (u3, m3)
+            }
+        };
+        self.u = u_new;
+        self.sponge_q = m_new.q;
+        self.sponge_r = m_new.r;
+        self.sponge_m = m_new.m;
+        self.time += dt;
+        self.steps += 1;
+        self.ale_speeds = Some((self.steps, wn));
+        Ok(())
+    }
+
     /// Replace the mesh (any topology) and the conserved state, e.g. after a layer change (ADR 0090 D3). The mesh speeds of
     /// the last ALE step are dropped ([`Self::mesh_speeds`]).
     pub fn replace_mesh(&mut self, geom: FvGeometry, u: Vec<Cons>) -> Result<()> {
@@ -888,7 +1021,8 @@ impl CompressibleSolver {
         }
         if self.sponge.is_some() {
             return Err(Error::Numerical(
-                "replace_mesh: the sponge layer holds one rate per cell of the old mesh (ADR 0237 D5); clear it first"
+                "replace_mesh: the sponge layer holds one rate and its memories per cell of the old mesh (ADR 0237 D5, \
+                 ADR 0265 DR7); clear it, replace the mesh, set a sponge built on the new mesh and its mapped memories"
                     .into(),
             ));
         }

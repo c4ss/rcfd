@@ -66,6 +66,19 @@ pub struct SpongeMemories {
     pub m: Vec<Vec3>,
 }
 
+/// The frame of a sponge when the mesh moves (F-341, ADR 0265). The reference state is a lab-frame state in either
+/// frame (ADR 0265 DR1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SpongeFrame {
+    /// The sponge is for a mesh that does not move: `CompressibleSolver::step_ale` refuses it (ADR 0237 D5). The default.
+    #[default]
+    StaticMesh,
+    /// The rates and the memories belong to the cells and move with them (ADR 0265 DR2, DR3): the memory of a cell is the
+    /// time integral of `p - p_ref` along the path of the cell, and the source enters the ALE step at the stage volume
+    /// (DR4). The matched forms are matched only at normal incidence on a moving mesh (DR5).
+    AttachedToMesh,
+}
+
 /// A sponge: the reference state, one damping rate [1/s] per cell (zero outside the layer) and the form.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sponge {

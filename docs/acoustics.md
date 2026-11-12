@@ -273,7 +273,8 @@ Limits:
   tangential momentum without bound.
 * The plain form at oblique incidence needs a thickness of many wavelengths (for 1 percent of a Gaussian pulse at 60
   degrees about 175 pulse widths).
-* Not on moving meshes: `step_ale` and `replace_mesh` return an error while a sponge is set.
+* On moving meshes only when attached to the mesh (section "The sponge on a moving mesh" below); `replace_mesh`
+  returns an error while a sponge is set.
 * An isolated pulse at 60 degrees was not run in ADR 0237; ADR 0248 ran it (next section).
 
 ### The shifted matched form, corners, damping along the layer (F-340, ADR 0248; library only)
@@ -314,8 +315,34 @@ What it does not do:
   enough to remove it within one or two periods reflects far more than 1 percent at 45 and 60 degrees. Start with a
   quiet layer or set the memories.
 * Three layers meeting in a corner of a three-dimensional box are not built.
-* As before: reference at rest, explicit source, not on moving meshes, not together with a mass-spring-damper wall,
-  Cartesian grids only checked.
+* As before: reference at rest, explicit source, not together with a mass-spring-damper wall, Cartesian grids only
+  checked; on moving meshes only attached to the mesh (next section).
+
+### The sponge on a moving mesh (F-341, ADR 0265; library only)
+
+By default `step_ale` refuses a sponge, as before. `CompressibleSolver::set_sponge_frame(SpongeFrame::AttachedToMesh)`
+attaches it to the mesh: the rates (of both layers of a corner) and the memories belong to the cells and move with them,
+and `step_ale` adds the source at the volume of each Runge-Kutta stage, so the damping is consistent with the geometric
+conservation law of the ALE step. The setting is kept across `set_sponge`. Every check with its limit and measured value
+is in [ADR 0265](adr/0265-f341-registration-sponge-layer-on-moving-meshes.md).
+
+* The reference state is a lab-frame state (the gas far away, for example at rest), whatever the mesh does; the matched
+  forms need it at rest in the lab.
+* The memory of a cell is the time integral of `p - p_ref` along the path of the cell; it does not cross faces.
+* `replace_mesh` still refuses a sponge: the solver has no map from the old cells to the new ones, and a matched layer
+  restarted with zero memory under a wave rings (ADR 0237). Clear the sponge, replace the mesh, set a sponge built on the
+  new mesh and, if a wave is inside the layer, its memories mapped by the caller (`set_sponge_memory`,
+  `set_sponge_memories`).
+* Checked: a uniform state equal to the reference stays within `3.3e-15` on the deforming set-up of ADR 0207 in all
+  three forms; the tube of ADR 0237 with both grids translating at Mach 0.2 reflects `9.6e-7` (plain and matched, in front
+  of the Thompson boundary and in front of a pressure release that alone reflects fully) and `9.8e-7` (shifted form); a
+  uniform offset decays as `exp(-rate t)` within `3.1e-7` while the cells change their volume by 16 percent; a sponge with
+  all rates zero gives the bits of `step_ale` without a sponge.
+* Limits: the layer is attached, not fixed in space (a layer that should stay while cells slide or rotate through it is
+  not built); the matched forms are derived for a medium at rest in the frame of the layer, so on a moving mesh they are
+  matched at normal incidence only (oblique incidence and a mesh moving along the layer are not checked; a mean flow
+  along a matched layer can make it unstable); their `normal` does not rotate with a rotating mesh; one-dimensional and
+  two-dimensional checks only.
 
 ## Reference: code locations, input format and command line
 
