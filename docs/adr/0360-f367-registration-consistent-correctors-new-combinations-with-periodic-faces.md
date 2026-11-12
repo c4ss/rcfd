@@ -321,3 +321,125 @@ SFPX2, SPsPX2, S1PX2; all with the limits of the registration. SDs, SEPD and SEP
 registered run (9.61e-3, 1.02e-3, 3.60e-3 U0); they are not repeated. TPD was met and is not repeated. The registered tests stay
 as the ignored records `s1pd_..._defective_setup` and `s1px_..._defective_setup`; their bodies are unchanged. Mutations: MU6 must
 fail S1PD2 (in place of S1PD); MU1 is counted on any of S1PN, S1PD2, S1PJ.
+
+## Addendum 1: results (2026-11-12)
+
+Nothing above this line was changed after a run, except amendment 1, which was written and committed (2c24ad35) after the first
+run and before the corrected run.
+
+### What was built
+
+All in `crates/rcfd-fv/src/pimple.rs`; no numerical line is added or edited (the derivation shows none is needed):
+
+- `PimpleSettings::consistent_periodic_extensions: bool` (default `false`), D1.
+- `ConsistentRefusal::PERIODIC_EXTENSIONS` (rows 4, 7, 11, all three kept by the rule), `ConsistentCorrectors::conflicts_extended`
+  and `validate_extended` (D2); `conflicts` and `validate` unchanged.
+- The two refusal points of `step_with` call the extended validation with the opt-in.
+- `reason()` of rows 4, 7, 11 names the opt-in (D3); the docs of the three flags say where periodic faces are accepted.
+
+Lines (numbering of the final tree; main 2ad9dcb9 in brackets): 132-135 (new field; after old 131), 172-173, 176, 179-180 (flag
+docs; old 168, 171, 174), 264-287 (the two methods; after old 257), 360-367 (`PERIODIC_EXTENSIONS`; after old 329), 442-447
+(`reason`; old 404), 909 (the constructor; after old 865), 1331-1337 (`consistent_conflict`; old 1287), 1482 (the per-outer check;
+old 1432).
+
+### Checks
+
+Release profile, target `w49i-work/f367-scratch/target`. First run on c99407a4 (log `f367-scratch/run1.log`), the corrected run
+of amendment 1 on b25b43d4 (`run2.log`), NE and NH on b25b43d4. Each run made once.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| SNs | `>= 0.4` | 0.5000 | yes |
+| SDs | `>= 1e-6 U0` | 9.61e-3 U0 | yes |
+| SJs | `>= 0.3 R0`, `>= 0.01 R0` | 0.886 R0, 0.114 R0 | yes |
+| SEPN, SEPD, SEPJ, SEPX | `>= 1e-6 U0` | 1.02e-3, 1.02e-3, 1.89e-3, 3.60e-3 U0 | yes |
+| S0PN, SFPN, SPsPN | `2e-11 U0`; `1e-8 rg`; `>= 1e-2 rg` | 2.00e-12 U0; 4.79e-11; 0.192 | yes |
+| **S1PN** | `1e-10 U0`; `max(1e-10, 2 dA_p) rg` = 1.00e-10 | 1.46e-12 U0; 7.06e-11 | yes |
+| S0PJ, SFPJ, SPsPJ | as above | 1.58e-12 U0; 4.46e-11; 0.0573 | yes |
+| **S1PJ**, **S1PJh** | `1e-10 U0`; 1.00e-10 | 2.09e-12 U0, 4.17e-11 (both) | yes |
+| S0PD, SFPD (registered) | `2e-11 U0`; `1e-8 rg` | 1.11e-7 U0; 1.13e-8 | **no**: defective set-up (amendment 1) |
+| S1PD (registered) | | 3.61e-12 U0; 7.36e-10 (limit 2.25e-8) | not counted |
+| S0PX (registered) | `2e-11 U0` | 5.96e-8 U0 (SFPX 2.91e-9 met) | **no**: defective set-up (amendment 1) |
+| S1PX (registered) | | 6.04e-12 U0; 5.48e-11 (limit 5.82e-9) | not counted |
+| S0PD2, SFPD2, SPsPD2 (amendment 1) | as registered | 2.23e-12 U0; 5.56e-10; 0.152 | yes |
+| **S1PD2** | `1e-10 U0`; `2 dA_p` = 1.11e-9 | 3.92e-12 U0; 5.22e-10 | yes |
+| S0PX2, SFPX2, SPsPX2 (amendment 1) | as registered | 1.56e-12 U0; 7.54e-12; 0.0342 | yes |
+| **S1PX2** | `1e-10 U0`; 1.00e-10 | 1.35e-12 U0; 1.15e-11 | yes |
+| TPN, TPD, TPJ | no trip, finite; `e(dt_2) <= 0.05 U0` | 2.43e-6, 2.30e-6, 2.08e-5 U0 | yes |
+| RP1, RP2, RP3, RP4 | as registered | pass (RP4: 768 contexts and flag sets) | yes |
+| NF | F1 to F7 equal to 2ad9dcb9's | equal (all seven) | yes |
+| NO | bit-identical | bit-identical | yes |
+| NE | all pass | `--lib` 104 (6 ignored); `ale_flows` 5; `ale_gcl` 4; `bdf2_remainder_f344` 4; `consistent_correctors_f301` 12; `consistent_defaults_f301` 6; `consistent_extensions_f322` 8; `consistent_value_f322` 5; `piso_thin_gap_f299` 18; `seam_no_harm_f344` 6; `sliding_interface_f250` 14; `step_consistent_paths_f443` 5; `w33b_default_bits` 1; `w33b_transient_order` 6; `w34b_lag` 3; `w48v_corrector_control` 5; 0 failed | yes |
+| NH | pass, no file edited | `baseline_hashes` 3 (1 ignored), `case_hashes_w48u` 1 | yes |
+
+Printed, no limit: P0 (E2 alone on PC) reproduces ADR 0223's S1p3 exactly (velocity 1.65e-12 U0; mean-removed pressure 2.49e-10
+rg against `dA_p` 3.32e-10, so within this item's limit 6.64e-10, as predicted). Ratio `dBA_p / dA_p`: PN 1.48, PJ 0.94, PD2
+0.94, PX2 1.53 (each below the factor 2 of the limit; PN and PX2 are under the `1e-10 rg` floor in any case). T ratios
+`e(dt_1)/e(dt_2)` 4.55, 4.52, 5.34 (ADR 0258 saw 3.3 to 5.9; not explained here either). TPN continuity: C 4.0e-5, D 2.6e-4 (the
+default's explicit non-orthogonal pass, as ADR 0258 TN).
+
+### Mutations (scratch copy `f367-scratch/mut`, target `f367-scratch/target-mut`, script `f367-scratch/mutate.py`; not committed)
+
+| Id | Caught by | Number |
+| --- | --- | --- |
+| MU1 E2's coupled term dropped | S1PN, S1PJ (as registered); S1PD2, S1PX2 | 1.42e-3, 2.81e-3, 7.9e-4, 7.7e-4 U0 |
+| MU2 X1's internal term dropped | S1PN; S1PX2 | 3.15e-3, 2.98e-2 U0 |
+| MU3 X1's term also on coupled faces | S1PN; S1PX2 | 1.24e-3, 1.36e-3 U0 |
+| MU4 X3's `(Gt - G)(R phi* - r)` dropped | S1PJ (the test stops there, so S1PJh is not reached); TPJ; S1PX2 | 0.124 U0; `e(dt_2)` 0.065 U0; 0.123 U0 |
+| MU5 X3's cell term dropped | S1PJ; TPJ; S1PX2 | 0.378 U0; 0.221 U0; 0.334 U0 |
+| MU6 seam cells skip the cell term | S1PN, S1PJ (as registered); S1PD2, S1PX2 | 1.30e-2, 1.85e-2, 6.9e-3, 1.4e-2 U0 |
+| MU7 per-outer check ignores the opt-in | RP2 (the static jump too: the per-outer check runs for every jump), S1PJ (SE stopped), TPJ, S1PX2 | stopped |
+| MU8 the opt-in also lifts row 5 | RP3 | not refused |
+| MU9 rows lifted without the opt-in | RP1 | not refused |
+
+Every mutation is caught by a check of the registered table that needed no amendment (MU1 and MU6 by S1PN and S1PJ); none needed
+amendment 1 to be caught.
+
+### Deviations and disclosures
+
+- PD and PX: the registered set-up checks S0PD, SFPD and S0PX missed (the 3000 steps were derived for two walls; with a symmetry
+  plane the start-up decays four times slower, amendment 1). Their identities were met only in the corrected runs S-PD2 and
+  S-PX2. The S1 numbers of the defective runs were also within their limits, but are not counted.
+- No numerical code was added: the three combinations were refused only for want of a registered identity.
+- `cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean. No topic document
+  describes the consistent correctors outside the ADRs and the roadmap; none updated.
+- Existing tests: none edited, none fails. The two existing tests that would fail if the rows were accepted under the flags alone
+  (`consistent_value_f322::v2_the_validation_names_flag_setting_and_reason`,
+  `consistent_value_f322::r3_every_refusal_through_the_solver_is_located`) pass, because acceptance needs the opt-in (D1).
+
+### Not run
+
+The whole workspace suite (the gate is the lead's); the case tree (no key for the new flags); rotational periodicity, BDF2, three
+dimensions, the pressure-lag estimate with these combinations.
+
+### Decision by the registered rule
+
+All three combinations are **accepted** (kept in `PERIODIC_EXTENSIONS`): PN and PJ (with PJh) as registered; PD as corrected by
+amendment 1; PX (all three together) met as corrected. RP1 to RP4, NF, NO, NE, NH hold; every mutation is caught by a registered
+check. The registered rule's "done" clause holds item by item, but the lead's Rule I counts a missed registered check as making
+the item partial, and the set-up checks S0PD, SFPD and S0PX are registered checks that missed (the identities of PD and PX were
+met only after a post-run amendment). Proposed status: **partial**.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The opt-in.** (a) keep `consistent_periodic_extensions` as a separate setting; (b) fold it into the flags, so that
+  `ConsistentCorrectors::all()` accepts rows 4, 7, 11, which needs the lead to retire the assertions of rows 4, 7, 11 in
+  `consistent_value_f322::v2_the_validation_names_flag_setting_and_reason` and
+  `consistent_value_f322::r3_every_refusal_through_the_solver_is_located` (an amendment to ADR 0258). Recommendation: (b), in the
+  case-table follow-up of ADR 0258, so that one value carries every flag; until then (a).
+- **Q2. Status.** (a) partial by Rule I (PD and PX met only after amendment 1); (b) done, the amendment having changed only the
+  length of a set-up run, derived from the decay rate. Recommendation: (a); a later item may re-register PD and PX with the
+  8000-step start as a fresh registration if a clean done is wanted.
+- **Q3. The transient ratio** above 2 (4.5 to 5.3): (a) leave; (b) diagnose. Recommendation: (a), as ADR 0258 Q4.
+
+## For the lead: roadmap entries
+
+F-367: status **partial**. Note:
+
+> PARTIAL (ADR 0360, 2026-11-12). From ADR 0258 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The consistent correctors accept non-orthogonal correctors, the component diagonal and face jumps with periodic pressure faces under the opt-in PimpleSettings::consistent_periodic_extensions (default false; ConsistentRefusal::PERIODIC_EXTENSIONS, ConsistentCorrectors::conflicts_extended / validate_extended; conflicts and validate unchanged, so ADR 0258's V2 and R3 pass unedited). No numerical term is added: the default has no non-orthogonal part on a coupled face and face jumps act on internal faces only, so the compensations of X1, X2, X3 and E2 together already cover every face. Periodic steady identity on ADR 0223's periodic channel (velocity 1e-10 U0; mean-removed pressure against max(1e-10, 2x the default's own drift) of the range): non-orthogonal correctors on a 26.6-degree shear 1.5e-12 U0 and 7.1e-11; face jumps 2.1e-12 and 4.2e-11 (also from the hook); the component diagonal 3.9e-12 and 5.2e-10 (drift 5.6e-10); all three together 1.4e-12 and 1.2e-11; ADR 0223's E2 alone passes the same limit (2.5e-10 against 6.6e-10). Transients differ from the default by 2e-6 to 2e-5 U0 at dt 0.001. The other rows stay refused with their located messages (moving mesh, gradient options, periodic faces without the periodic flag). Nine mutations caught. Defaults bit-identical (seven fingerprints recorded on 2ad9dcb9, the rcfd-fv transient suites, baseline_hashes, case_hashes_w48u). Why partial: the registered set-up checks of the component-diagonal and all-together channels missed (3000 steps do not reach a steady state with a symmetry plane, whose start-up decays at nu (pi/2H)^2); their identities were met only after amendment 1 (8000 steps). The opt-in is not yet folded into ConsistentCorrectors (ADR 0360 Q1) and there is no case key.
+
+Follow-up proposed (Q1; it may be merged into the case-table item proposed by ADR 0258):
+
+- Title: "Consistent correctors: fold the periodic opt-in into the flags". Deps: F-367. Acceptance:
+
+> ConsistentCorrectors::all() with periodic accepts non-orthogonal correctors, the component diagonal and face jumps with periodic pressure faces without PimpleSettings::consistent_periodic_extensions, which is removed; the assertions of rows 4, 7 and 11 in consistent_value_f322 v2 and r3 are retired by an amendment to ADR 0258 approved by the lead; ADR 0360's identities pass unchanged; defaults bit-identical.
