@@ -301,3 +301,16 @@ S1 `(0.327238 - 0.3556493) / 0.0076 = -3.74`). This is a missed limit of a contr
   registered limits, and the NC1 limits on S2, ST2 and ST3 (registered, unchanged); NC1 on ST1 and S1 are printed, not asserted (ST1
   is the recorded miss). It reproduces the first run's numbers (deterministic seed), which the addendum checks.
 - Nothing else changes: no limit, seed or sample size.
+
+## Amendment 2 (2026-11-12, after the mutation runs, before any run of C7b)
+
+MU6 (a row dropped only when its `A` or `B` evaluation fails) did not make any test fail: C7 passed under it. Diagnosis (from the
+set-up, no further run): C7's failures depend on `x2` alone, and every `A_B^(i)` row takes `x2` from `A` (i != 2) or from `B`
+(i = 2), so whenever `A_j` and `B_j` succeed all of row `j` succeeds; C7 cannot see the rows that MU6 keeps. A defective set-up of
+C7, not of the library. C7 stays as it is (it passed and remains a check of the reporting); a corrected check is added:
+
+- **C7b** (`c7b_failures_of_the_mixed_rows_drop_their_rows`): the linear model of C2 returning `diverged` with a reason when
+  `x1 + x2 > 3.5` (inputs of C2, `N = 2048`, seed 268008, ledger). Limits as C7 (failed count equals the non-ok ledger entries, each
+  with a reason; `n_rows_used` equals `N` minus the rows with at least one non-ok entry; every index finite; summary ok), plus the
+  set-up condition that at least one row has `A` and `B` ok and an `A_B^(i)` entry not ok (so the case MU6 mishandles occurs).
+- Then MU6 is run once more against the final commit; it must make C7b fail.
