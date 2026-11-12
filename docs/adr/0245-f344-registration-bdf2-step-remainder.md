@@ -764,3 +764,111 @@ crate; `cargo test -p rcfd-api --release --test baseline_hashes --test case_hash
 and `immersed_solid_f219.rs` in full (its non-ignored tests, including the two long cylinder runs addendum 1 left
 unfinished; started on `10171174`, whose library files differ from the final tree only by the move of the fringe branch
 into a function, which no immersed-solid run calls). Limit: pass. The ignored tests of those files are not run.
+
+## Addendum 2: results of amendment 3 (2026-11-12)
+
+Measured against the limits of amendment 3 (`d2ab14cd`), committed before any of its runs; none was changed. Release, Windows,
+the target directory of this worktree; a full gate of another job was running on the machine throughout (the immersed-solid
+file could not be run alone). Each registered run was made once. Logs in `E:/projects/cfd/w49i-work/f344-scratch`:
+`s2a-immersed.log`, `s3-unit.log`, `s3-seam.log`, `mc5.log`, `s2c-fv.log`, `s2c-api.log`.
+
+Commits after addendum 1: `aa325442` (the merge of main `2fa39daf`), `10171174` (the gate reads `cf.enabled`), `d2ab14cd`
+(amendment 3), `42a22117` (the fringe branch moved into `face_consistent::overset_lagged_gradient`; G1, P0;
+`seam_no_harm_f344.rs`; compiled and linted, not run), `b306c62b` (R2b as a known miss).
+
+### Step 1: the merge
+
+No textual conflict (amendment 3). The conflict of meaning (the gate read only the older field of the consistent correctors)
+is fixed in `10171174`. The F-344 hunks against main, numbering of the final tree: `pimple.rs` line 37 (the module), 137 to
+142 (the field), 857 (its default), 1670 to 1676 (the gate and the face coefficient, in place of main's line 1662), 1705 to
+1708 (the call after the carry-over); `overset.rs` 965 to 971 (the face coefficient, in place of main's line 965) and 1018 to
+1030 (the added flux, through `overset_lagged_gradient`). F-322's code is not touched. With the opt-in off the step is
+main's statement for statement; the B rows below hold.
+
+### Step 2
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| `immersed_solid_f219.rs`, all 11 non-ignored tests (tree `10171174`) | pass | 11 passed, 2 ignored (the V1 known miss and its diagnosis), 2333 s | met |
+| of those: `a1_a2_two_d_one_drag_and_lift_on_m3` | pass | passed: `C_D` 5.57833680 (error 0.0215 %), `C_L` 1.06899517e-2 (0.6686 %), orders 2.350 and 1.957 over M1 to M3 | met |
+| of those: `a3_two_d_two_strouhal_number` | pass | passed: St 0.30073 (-0.382 % of 0.30188), 7 crossings, `C_D` mean 3.2135 | met |
+| G1 the fringe branch against its formula | `<= 1e-14` of the largest value | `x`: 0 of 4.438; `q`: 2.2e-16 of 7.189 | met |
+| G1n own value against the donor interpolant at the fringe cells | `>= 1e-3` of the largest value | `x` 0.475, `q` 0.721 | held |
+| G1t trivial connectivity | bit for bit | equal | met |
+| MC5 (the donor assignments removed) | G1 must fail | G1 failed: differences 0.475 and 0.721 | caught |
+
+B rows on the merged tree (`b306c62b`), the non-ignored tests, each passed: unit tests of `rcfd-fv` 102 (5 ignored; G1 and
+P0 among them); `bdf2_remainder_f344` 4 (S0, A1, C3, E1; 4 ignored); `consistent_value_f322` 5; `consistent_extensions_f322`
+8; `w33b_default_bits` 1; `w33b_transient_order` 6; `w34b_lag` 3; `w34c_symmetry` 9; `w48v_corrector_control` 5;
+`consistent_correctors_f301` 12; `consistent_defaults_f301` 6; `piso_thin_gap_f299` 18; `ale_flows` 5; `ale_gcl` 4;
+`overset_f134` 12; `overset_f134_records` 1; `overset_f314` 4; `overset_f334` 3; `overset_f335` 5; `overset_f335_records`
+4; `overset_f336` 5; `overset_f338` 9; `overset_f353` 1; `overset_f357` 5. `rcfd-api`: `baseline_hashes` 3 (1 ignored),
+`case_hashes_w48u` 1, `consistent_defaults_case_f301` 3. No failure.
+
+### Step 3: ADR 0076's seam rows with the opt-in
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| P0 coupled faces, periodic box (32 coupled faces) and rotational sector (16) | bit for bit | face coefficient, coupled coefficient and flux equal on every boundary face | met |
+| P0n internal faces | `>= 1e-6` relative | `0.36`; the flux of all 112 internal faces changed | held |
+| S3 (set-up) TG-S default, `dt = 0.05` | velocity `[2.09e-3, 2.11e-3]`, pressure `[8.20e-3, 8.23e-3]` | `2.1011e-3`, `8.2130e-3` | held |
+| N1s TG-S PISO, C over default, velocity; pressure | `<= 1.05` | dt 0.05: 0.9902; 1.0018. dt 0.025: 0.9927; 1.0012. dt 0.0125: 0.9957; 1.0006 | met (6 of 6) |
+| R4s SWIRL PISO, velocity; pressure | `<= 1.05` | 1.0001; 1.0002. 1.0002; 1.0001. 1.0002; 1.0001 | met |
+| R4s SECT-M PISO, velocity; pressure | `<= 1.05` | 1.0026; 0.9703. 0.9997; 0.9788. 0.9994; 0.9858 | met (12 of 12 with SWIRL) |
+| R4b SECT-M PIMPLE-4, velocity; pressure | `<= 1.05` | 0.9979; 0.9751. 0.9984; 0.9805. 0.9990; 0.9864 | met (6 of 6) |
+| S4 (set-up) SECT-M PIMPLE-4 default order | `[0.52, 0.56]` | `0.538` (errors 6.5924e-4, 4.5413e-4) | held |
+| **R2b** SECT-M PIMPLE-4 order with C | `[1.9, 2.3]` | **`0.578`** (errors 2.4881e-4, 1.6669e-4) | **missed** (known-miss test) |
+| R2bn the fine-pair errors, C over default | `<= 1.05` | `0.377`, `0.367` | met |
+
+Printed: the largest change of the cell velocity by C is of the same size next to a seam and elsewhere (TG-S `2.9e-5`
+against `5.8e-5` at `dt = 0.05`; SECT-M `1.8e-3` against `1.8e-3`): C acts through the internal faces everywhere, as
+derived, and not through the seam. SECT-M PIMPLE-4 with C and `coupled_body_pair_mean` together: order `0.463`.
+
+**Reading.** Every no-harm row of ADR 0076 that removed F-G holds with this opt-in: the TG-S pressure rows of N1, where F-G
+gave 1.0952 and 1.0521, are 1.0018 and 1.0012; R4 on SECT-M, where F-G gave 1.0651, is at most 1.0026. P0 shows, bit for
+bit, that the opt-in does not act on periodic or rotationally periodic faces. R2b is missed as predicted in amendment 3: the
+SECT-M PIMPLE-4 floor stays (0.578 against the default's 0.538), because it is made at the rotational seam (ADR 0076 Y5,
+ADR 0080 B-R2b), where the opt-in does not act; the opt-in still cuts the fine-pair errors to 0.37 of the default's. The
+opt-in together with the pair mean of ADR 0080 does not lift it either (0.463), so the seam floor needs the seam terms of
+F-G (ADR 0076 Y5 reached 2.02 only with them), which this opt-in leaves out by design (O2).
+
+**Said plainly.** By the brief's instruction a miss of any of the step-3 rows means the merge should wait. R2b is missed.
+It is an acceptance row of F-G that the default also misses, not a no-harm row, and every no-harm row is met; whether that
+miss holds the merge is the maintainer's call and is not decided here.
+
+### Not run, deviations
+
+- The immersed-solid file ran on `10171174`, before the fringe branch moved into a function (no immersed-solid test calls
+  it); everything else ran on `b306c62b`.
+- A2 (TG_2) and the other ignored tests of the F-344 file were not run again; the move of the fringe branch is checked by
+  G1 and E1, not by a repeat of A2.
+- The machine was not idle (a gate of another job ran throughout).
+- Q2 of addendum 1 (an opt-in of a kind ADR 0076 removed) is answered by the decision record below; Q1, Q3 to Q6 stand.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean.
+
+### Decision by the registered rule
+
+Unchanged: **partial**. A1 met, A2 missed (2.454 against 4 on TG_2); the defaults are bit for bit on the merged tree; all
+eight mutations of the corrective are now caught (MC5 by G1).
+
+## Decision record (2026-11-12)
+
+The maintainer decided in person on 2026-11-12 to merge F-344 as an opt-in (`PimpleSettings::rhie_chow_step_consistent`),
+limited to internal faces, not as the default. ADR 0076 stands as the record of F-G's removal and is not edited. The
+reasons: the dependence of the default face flux on the step size is real and measured (addendum 1: `5.13e-6` at a ratio of
+`2.30` on the mesh at rest, `3.7e-4` in the steady cavity); the opt-in is off by default; it does not act on periodic seams,
+shown by the step-3 checks (P0 bit for bit, and ADR 0076's no-harm rows N1 on TG-S and R4 on the sector met).
+
+## For the lead: roadmap entries (addendum 2)
+
+No roadmap file was edited. **F-344**, proposed status: `partial` (A2 on TG_2 stays missed). Proposed note (it replaces the
+note of addendum 1):
+
+> From ADR 0241 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0245, 2026-11-12: PARTIAL. Named: the remainder of the BDF2 step at rest is the step-size dependence of the converged face flux where the momentum diagonal differs across a face (the commutator C(G p) of ADR 0073 and the step dependence of interp(rAU)), largest next to fixed-velocity boundaries. Built, opt-in, internal faces only, merged as an opt-in by the maintainer's decision in person of 2026-11-12 (not the default): PimpleSettings::rhie_chow_step_consistent (the harmonic face value of rAU and the commutator of the lagged pressure gradient, in PimpleSolver::step at rest and in the overset step); defaults bit for bit on the tree merged with main (F-322 included). Met: at rest the ratio 2.30 -> 5.02 (limit 4), the steady cavity the same to 2.4e-13 for two steps (3.7e-4 by default). Missed: D2 on TG_2, 2.454 (limit 4): the remainder of the moving coupled meshes is another term (with the component at rest 1.3e-7, ratio 4.98). ADR 0076's seam rows with the opt-in: bit-inert on periodic and rotational faces (operator level), no-harm met (TG-S N1 at most 1.0018, R4 at most 1.0026, PIMPLE-4 rows at most 0.999); R2b on SECT-M missed as predicted, 0.578 (default 0.538): the seam floor of ADR 0076, which the opt-in does not touch. Eight mutations caught (the fringe branch of the overset change by a direct check of its formula). Its body-force path is exercised by the SECT-M runs. Follow-ups proposed (ADR 0245 questions 1 and 3).
+
+The F-338 note and the two follow-up items of addendum 1 stand as written there; in the first follow-up's note, the
+sentence "The fringe branch of the F-344 opt-in in overset.rs has no failing mutation yet (ADR 0245 MC5)." should be dropped
+(MC5 is now caught by G1).
