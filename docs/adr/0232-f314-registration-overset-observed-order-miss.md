@@ -214,3 +214,74 @@ levels 2 to 3 may again fall below 1.7 or rise above 2: it is a single-pose samp
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the registered runs of G, F, N5 and H6 and before any further run)
+
+The registered tests were committed (`overset_f314.rs`, compiled, formatted and linted without running) and then run once
+each, release, on the library of main 0d250c75: the kinematic test (9.8 s), the three-level test (518 s), N5 (68 s) and the
+time-error test (263 s). All numbers are in addendum 1. Met: G1, G2, G3, F1 (three levels), F2 and F4 (both pairs), F3 at
+levels 1 to 2, F5, F6, and the calculated-maximum and window-maximum parts of N5. Three results need this amendment:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| F3, levels 2 to 3 | `>= 1.7` | `1.580` (calculated maximum `2.096e-4` at level 2, `1.104e-4` at level 3, both in a component calculated cell near `(1.10, 1.33)` that is not adjacent to the fringe) |
+| N5, root mean square (negative control of F2) | `<= 1.3` | `1.463` |
+| H6, speed test | `abs(rho / rho_BE - 1) <= 0.25` | `rho = 2.292`, `rho_BE = 4.783` (root mean square `3.700`): `0.52`; `abs(rho / 2 - 1) = 0.146` |
+
+**N5 (root mean square).** With the donor cell alone the order of the root mean square is `1.463`, not below `1.3`: my
+prediction of the control was wrong (the first-order error is concentrated in the fringe cells, and the root mean square
+over all cells is dominated by the calculated cells, whose error also carries a second-order part). The control did not
+hold at its registered limit and is kept as the ignored test `n5_root_mean_square_control_known_miss` with the limit intact.
+No corrected control is run: the measured `1.463` lies below the limit `1.7` of F2, so the run shows that F2 fails for a
+first-order interpolation; this is reported as that reading and not as a pass of N5.
+
+**F3 at levels 2 to 3** is kept as the ignored test `f3_calculated_maximum_levels_2_to_3_known_miss` with the limit intact.
+By the registered rules H4 is neither confirmed (the cell is not adjacent to the fringe) nor ruled out, and H5 stays open
+(`b_L` is `0.085`, `0.062`, `0.021` of the error, under `0.25`, but F3 is missed). The miss is diagnosed by the measurements
+below. What is known before them: the time-error test puts a first-order time error into the same component cells at
+level 2 (`max abs(d_200) = 4.49e-4`, `max abs(d_400) = 1.47e-4` at `dt = 0.0025` and `0.00125`, so about `1.5e-4` at the
+`dt = 6.25e-4` of the level-2 run), of the size of the whole calculated maximum there (`2.1e-4`). With `dt` proportional to
+`h^2` that part is of second order, so the calculated maximum is the sum of two second-order parts of similar size.
+
+| Id | Hypothesis for the F3 miss | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H8a | the static overset coupling (interpolation, `delta`) loses the order of the solved field | the component held at `tg_pose(0)`, levels 1, 2, 3 with `200 L` steps: the order of the calculated maximum, levels 2 to 3 | confirmed: `< 1.7`; ruled out: `>= 1.7` |
+| H8b | the calculated maximum of the moving run is the sum of a spatial and a time part that are each of second order; the 1.58 is their mix on three levels | moving, levels 1, 2, 3, each with `100 L^2` and `200 L^2` steps: the spatial part, the error of the field `2 u_(200 L^2) - u_(100 L^2)` (extrapolated to `dt = 0`), and the time part `u_(100 L^2) - u_(200 L^2)`; the order of the largest spatial part and of the largest time part over the calculated cells, levels 2 to 3 | confirmed: both `>= 1.7`; ruled out: either `< 1.7` (then that part is named with its order) |
+| H8c | the end time is an unlucky sample of a calculated maximum that fluctuates with the pose | the window maximum (steps with `t` in `[0.25, 0.5]`) of the largest error over the calculated cells, levels 2 to 3 | confirmed: `>= 1.7`; ruled out: `< 1.7` |
+
+**H6.** By its registered rule H6 as worded is ruled out: the time error is first order in `dt` (F5: `R = 3.06`), induced by
+the motion (F6: `0.027` at rest) and largest in a component calculated cell, but it grows with the speed by `2.29`, close to
+linear, not by the `4.78` (`3.70` in the root mean square) of the backward Euler truncation along the cell paths. A fit of
+`a s + b s^2` to the two speeds gives about two thirds linear at full speed. The code read named no lag of the donor set.
+One lag that is linear in the speed exists in the step itself, with or without overset: the convecting flux of the momentum
+predictor is the flux of the old time, taken through the faces at their old position and orientation (PISO, one outer
+iteration: `phi_conv = phi_old - mesh flux`), which on a face that moves and turns differs from the flux at the new
+position by about `dt [(w . grad) u . S + u . (Omega x S)]`. New hypotheses, decided on a single moving mesh without any
+overset coupling:
+
+Set-up **SM**: the component mesh of level 2 alone (`rectilinear_2d` 40 x 40 on `[-0.6, 0.6]^2`, depth 0.1) moved rigidly
+by `tg_pose(s t)` (`s = 1` or `1/2`) with the library step `PimpleSolver::step_ale_with_walls` (`ale::move_mesh`, no wall
+gradient), the settings PS, the exact velocity at the new time at the face centres of its four sides, `p` zero gradient with
+the pin at cell 0, start from the exact fields, to `t = 0.5` in 200 and in 800 steps; `d_200` as before, over all cells.
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H6a | the first-order time error of the moving cells belongs to the ALE step of the library on a moving mesh, not to the overset coupling (a mesh without donors shows it too) | SM, `s = 1` and `1/2`, one outer iteration: `max abs(d_200)` and `rho_SM` | confirmed: `max abs(d_200)` of SM within a factor 2 of the overset value `4.49e-4` and `abs(rho_SM / 2.292 - 1) <= 0.25`; ruled out: `max abs(d_200)` of SM under a quarter of the overset value |
+| H6b | its part that is linear in the speed is the lagged convecting flux of the single outer iteration | SM, `s = 1`, with three outer iterations (`n_outer = 3`, no under-relaxation): `q = max abs(d_200)` with three over that with one; and `rho` with three outer iterations at `s = 1` and `1/2` | confirmed: `q <= 0.7` and `rho` nearer to `rho_BE` (root mean square, `3.70`) than to 2; ruled out: `q >= 0.9` |
+
+Checks with limits (new): **F7** SM, every step of every run: the continuity reported by the library `<= 1e-9`. **F8** SM
+with one outer iteration and 800 steps at `s = 1`: the largest error `max eps_c` at `t = 0.5` `<= 1e-3` (the set-up is a
+sound Taylor-Green run: the overset run of level 2 has `3.5e-4`).
+
+Tests: the gate-run test of levels 1 and 2 is unchanged. The three-level test keeps F1, F2 and F4 and prints F3. New:
+`f3_calculated_maximum_levels_2_to_3_known_miss` and `n5_root_mean_square_control_known_miss` (ignored, limits intact),
+`a1_f3_miss_spatial_and_time_parts` (ignored, slow; H8a to H8c; it repeats the level runs, which are deterministic) and
+`sm_single_moving_mesh_time_error` (H6a, H6b, F7, F8). The window maximum over the calculated cells is added to the run
+record; nothing else of the registered runs changes. Each new run is made once.
+
+Predictions (mine): H8a ruled out (at rest the order is near 2); H8b confirmed; H8c uncertain. H6a confirmed; H6b
+confirmed with `q` near 0.4 to 0.6. If SM fails to run soundly (the exact velocity on a closed moving boundary is not
+discretely free of net flux), this is reported and H6a and H6b stay open.
+
+The decision rule is unchanged. Under it F3 at levels 2 to 3 is a missed check of this registration, and T1 and T2 at
+level 2 need H6a (the cause named and confirmed in place of H6) to count as named.
