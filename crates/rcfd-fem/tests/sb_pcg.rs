@@ -682,3 +682,28 @@ fn a1_a2_a6_fast_cantilever() {
     println!("guard N2 ratio {r2:.4}");
     assert!(r2 > 0.5, "N2");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Amendment 3: B2.
+
+#[test]
+fn b2_node_blocks_with_partial_constraints() {
+    let model = cantilever(FAST);
+    let dofs = model.dof_map();
+    let held = [(0usize, 0usize), (5, 1), (5, 2), (9, 1)];
+    let free: Vec<usize> = (0..dofs.n_equations())
+        .filter(|&q| !held.contains(&dofs.node_component(q).unwrap()))
+        .collect();
+    let ptr = node_blocks(&free, &dofs);
+    let sizes: Vec<usize> = ptr.windows(2).map(|w| w[1] - w[0]).collect();
+    println!("B2 {} blocks, first sizes {:?}", sizes.len(), &sizes[..11]);
+    assert_eq!(sizes.len(), 1617);
+    assert_eq!(&sizes[..11], &[2, 3, 3, 3, 3, 1, 3, 3, 3, 2, 3]);
+    assert!(sizes[11..].iter().all(|&s| s == 3));
+    for w in ptr.windows(2) {
+        let n0 = dofs.node_component(free[w[0]]).unwrap().0;
+        assert!(free[w[0]..w[1]]
+            .iter()
+            .all(|&q| dofs.node_component(q).unwrap().0 == n0));
+    }
+}
