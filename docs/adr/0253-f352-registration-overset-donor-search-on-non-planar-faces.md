@@ -438,3 +438,138 @@ hundred points of each kind. I am least sure of N2 (the estimate is crude) and o
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; none was changed and no amendment was needed. Release builds on Windows.
+Commits: the registration `55d0747f` (alone, before any code); the library change and the test file, compiled, formatted
+and linted without running, `d9764394`. The new test file was then run once (`cargo test --release -p rcfd-mesh --test
+overset_f352 -- --nocapture --test-threads=1`, 43 s). The logs are in `E:/projects/cfd/w49i-work/f352-scratch`
+(`f352-run1.log`, `f352-a4a-mesh.log`, `f352-a5-fv.log`, `f352-MW1.log` to `f352-MW6.log`, `f352-mutations.log`).
+
+### What was built
+
+- `rcfd_mesh::overset`: `face_warp(mesh, f)`; `triangulated_margin(mesh, c, x)`, the signed distance of a point from the
+  polyhedron of the triangles about the face centres of a cell (the distance from the triangles, the sign from the
+  winding number); `CellLocator` flags each cell at construction as warped (a face with a warp above `1e-10` of the cell's
+  box diagonal) or flat, tests a warped cell by `triangulated_margin` after a bounding-box shortcut and a flat cell by
+  `containment_margin` exactly as before; `CellLocator::n_warped()` and `CellLocator::containing_cells()`.
+  `containment_margin`, `locate`, `locate_brute_force`, `Overset` and `connectivity` are textually unchanged. One crate
+  touched (`rcfd-mesh`); nothing of `rcfd-fv`.
+- Tests: `crates/rcfd-mesh/tests/overset_f352.rs` (4 tests, all in the gate, 43 s together).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 B3d, default and quadratic: `connectivity`; stencils against fringe cells; `locate`, `locate_brute_force`, first stencil cell | `Ok`; equal; `0` differ | `Ok` in both modes; 1069 stencils for 1069 fringe cells (53 background, 1016 component); `0` of 1069 differ | met |
+| A1r the donor contains the centre by the reference | `0` | `0` of 1069 in both modes | met |
+| A2 B3d default stencils: `abs(sum w - 1)`; linear field | `<= 1e-12`; `<= 1e-11` | `7.8e-16`; `3.2e-16` | met |
+| A3 B3d quadratic: `abs(sum w - 1)`; `q3`; linear field; share not fallbacks; admissible | `<= 1e-12`; `<= 1e-11`; `<= 1e-11`; `>= 0.95`; exact | `2.0e-15`; `9.2e-16`; `8.1e-16`; `1.0` (no fallback, 27 cells in every stencil, `Lambda` 1.579); `0` inadmissible | met |
+| A4a unit tests of `rcfd_mesh::overset`; `crates/rcfd-mesh/tests/overset_f336.rs` | pass, unedited | K1 to K5 and the pose test pass; `overset_f336` 6 passed, 1 ignored (the B3d record, not run) | met |
+| A4b warped cells on the planar set-ups | `0` each | `0` on RL (1, 2, 4), TG_1, TG_2, TG_4, U, TR, DC, FB, B3, B3s | met |
+| A4c donors on planar meshes against the rule of M3 | `0` differ | `0` of 104, 204, 20207, 6301, 776, 204, 1067, 1071 (RL 1, RL 2, TG_1, U, TR, DC, B3, B3s); the K2 points of TR: `0` of 2000 in each part (2000 and 1212 inside) | met |
+| A4d default stencils on planar meshes against stencils built from the rule of M3 | bit for bit | equal on all eight set-ups (the same counts) | met |
+| A5 existing overset tests of `rcfd-fv` | pass, unedited | `overset_f134` 12, `overset_f134_records` 1, `overset_f314` 4, `overset_f334` 3, `overset_f335` 5, `overset_f335_records` 4, `overset_f336` 5, `overset_f338` 9: all passed (Q0, R1, R2, R2' among them) | met |
+| S1 background of B3d, 200000 points: cells that accept each point | none `0`; two or more `0` | `0`; `0` | met |
+| S2 component, 50000 points | the same | `0`; `0` | met |
+| S3 `locate` against the full search; the located cell against the reference | `0`; `0` | `0` and `0` of 200000; `0` and `0` of 50000 | met |
+| S4 set-up: smallest tetrahedron about a cell centre; share of warped cells | `> 0`; `>= 0.99` | `2.33e-5` (a cell has `1e-3`); `1.0` in both parts (13824 and 2744) | met |
+| S5 cell centres located in their own cell | every cell | `0` of 16568 wrong | met |
+| T1 face centres of the background | the owner, as the full search | `0` of 39744 wrong | met |
+| T2 interior mesh points | the lowest-numbered cell around the point | `0` of 12167 wrong | met |
+| T3 20000 points on shared triangles | one of the two cells, as the full search | `0` wrong (10135 went to the owner) | met |
+| C1 mean number of cell boxes that contain a point | `<= 3.0` | `1.624` (estimate `1.64`) | met |
+| C2 time of `connectivity`, B3d over B3 | `<= 20` | `1.82` (`3.24 ms` and `5.88 ms`) | met |
+| N1 (control) the rule of M3 on the fringe centres of B3d | no cell for 16035 at `(2.009494, 1.010188, 1.499172)`; `>= 1` | none for 16035, at that centre; 2 fringe centres without a cell (16035 and 16245) | held |
+| N2 (control) the rule of M3 on the points of S1 | `>= 20` in no cell; `>= 20` in two or more | `116`; `114` (estimate `120` each) | held |
+
+Printed, no limit: the warp of B3d is at most `0.142` and on average `0.030` of the cell size; the default stencils of
+B3d have 7 cells, `Lambda` 1.715; `CellLocator::new` for the background takes `3.2 ms` on B3 and `6.1 ms` on B3d; `locate`
+takes `4.5` microseconds for each point in the background of B3d and `2.3` in the component. With the present rule
+`5.8e-4` of the points lie in no cell and `5.7e-4` in two, against the estimate of `6e-4` each from the derivation.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `d9764394` (`f352-scratch/mut`, own target directory) by `mutate.py` (exact
+replacements that must occur once), the new test file run once, the file restored and compared byte for byte (equal in
+all six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MW1 no cell flagged warped | A1 and S1 | failed: A1 "no donor for the component fringe cell 16035 at (2.009494, 1.010188, 1.499172)", the text of the record; S1 116 and 114; S2 32 and 23; S4 |
+| MW2 the neighbour draws the triangles about the first point of the face | S1 or S3 | failed: S1 3439 and 3456; S3 5180; A1 (no donor for cell 14990); T1 19802 |
+| MW3 the solid angle not reversed for the neighbour | S1 | failed: S1 172927 and 10556; S5 16458; A1; T3 |
+| MW4 `locate`: of equal margins the last cell | T1 or T2 | failed: T1 39744 of 39744, T2 12167 of 12167, T3 62; and A4c on RL level 1 (2 donors) and TR (1 donor): ties occur on the planar set-ups too |
+| MW5 every cell flagged warped | A4b | failed: A4b on all twelve set-ups; and A4c and A4d on TR, where one donor of 776 differs from the rule of M3 |
+| MW6 the box of a warped cell shrunk by 5 percent | S1 | failed: S1 9384 in no cell; S2 2327; A1; T1 to T3 |
+
+MW5 answers the question that was not taken: with the triangulated test for every cell, one donor of TR (at a tie) is
+another cell than today. Using it everywhere would change a result on a planar mesh.
+
+`scripts/limit_audit.py` on the new test file: no hit.
+
+### Deviations and disclosures
+
+- The unchanged tree was compiled once before the registration was committed (stated in its status line); nothing ran.
+- The new test file ran a second time as part of `cargo test --release -p rcfd-mesh` (the run for A4a); it is
+  deterministic and passed again. The numbers above are those of the first run.
+- In `a_b3d_every_fringe_centre_has_its_donor` the timing of C2 unwraps a second `connectivity` of B3d. When A1 fails
+  (MW1, MW2, MW3, MW6) the test therefore stops there with a panic after printing the missed A1 lines, not at the end
+  with the list. The failure is still a failure of the test; the test was left as committed.
+- A1r, S3 and S4 use a reference that needs cells star-shaped about their centres; S4 shows that B3d is such a mesh. The
+  library code does not need it.
+- My predictions held; N1 found two fringe centres without a cell (I expected one to three), N2 116 and 114.
+
+### Not run
+
+- The whole workspace test suite (not asked for; the lead runs the gate). Run: all of `rcfd-mesh` in release (24 test
+  binaries, 253 passed, 0 failed, 50 ignored) and the eight overset test files of `rcfd-fv` in release.
+- The ignored record `p_three_dimensions` of ADR 0251 (it is a record and stays one), and the ignored slow tests and
+  records of the earlier overset files.
+- No flow run on a warped overset mesh; no polyhedral or tetrahedral warped mesh; no second pose of B3d.
+
+### After the tests
+
+`cargo fmt -p rcfd-mesh --check` clean. `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Done.** A1 to A5 are met, S1 to S5, T1 to T3, C1 and C2 are met, the controls N1 and N2 held and the six mutations
+failed their checks. Said plainly: the result is kinematic and on one family of warped meshes; the planar meshes are
+bit-identical because their cells do not reach the new test at all.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The triangulated test for every cell** (also for flat ones). For: one rule; it would repair the search on
+  non-convex cells with planar faces, where the plane test of M3 is not exact either. Against: MW5 shows that one donor
+  of TR changes at a tie, so the records R2 could change; the test costs about twice the time. Options: (a) keep the plane
+  test for flat cells; (b) switch. **Not taken: it would change a default result; open, for the maintainer.** My
+  recommendation is (a).
+- **Q2. Non-convex cells with planar faces.** Options: (a) leave as a stated limit of M3; (b) a follow-up item that sends
+  a cell to the triangulated test when one of its points lies outside the plane of one of its faces by more than the
+  tolerance (convex planar cells would still not reach it, so planar convex meshes stay bit-identical). Recommendation
+  (b), as a small follow-up (text below), when a mesh with such cells is used with overset. Taken on the maintainer's
+  standing instruction of 2026-11-11 (take the recommendation) as a proposal to the lead; not a decision the maintainer
+  made in person.
+- **Q3. A flow run on a warped three-dimensional overset mesh.** Options: (a) none until a case needs it; (b) a follow-up
+  (the uniform flow U1 on B3d). Recommendation (b): it is cheap and is the first three-dimensional flow check of the
+  overset path. Taken on the standing instruction as a proposal.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-352**, proposed status: `done`. Proposed note:
+
+> From ADR 0251 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0253, 2026-11-12: DONE. Derived: one plane for each face leaves no gap across a face but a sliver along every edge at which the planes of the four faces do not meet in one line, a gap or an overlap with equal chance, of cross-section at most (w_F + w_F')(w_G + w_G') for the warps w of the faces, second order in the warp; on B3d (warp up to 0.142 of the cell size) the estimate was 6e-4 of the volume each and 116 and 114 of 200000 random points were measured in no cell and in two. Built in rcfd_mesh::overset: a cell with a face warped beyond the locator's tolerance (1e-10 of its box diagonal) is tested as the polyhedron of the triangles about its face centres, the same triangles from both sides of a face (triangulated_margin: the distance from the triangles, signed by the winding number, behind a bounding-box shortcut); a cell with planar faces keeps the plane test of ADR 0219 M3 unchanged; a point on a shared triangle goes to the lowest-numbered cell. Met: on B3d all 1069 fringe centres get a donor equal to the full search and confirmed by an independent tetrahedral test, the linear stencils reproduce a linear field to 3e-16 and the quadratic stencils q3 to 9e-16 with no fallback; 250000 random points in the two warped parts each lie in exactly one cell; 39744 face centres and 12167 mesh points go to the lowest-numbered cell; on the planar set-ups (RL, TG_L, U, TR, DC, FB, B3, B3s) no cell is warped and the donors and default stencils equal those built from the rule of M3 bit for bit; K2, K4, D1, Q0 and the records R2 pass unedited. Cost: a search takes 4.5 microseconds on B3d, the connectivity 1.8 times that of B3. The present rule finds no cell for the fringe cells 16035 (as recorded) and 16245. Six mutations caught. Limits: kinematic only, one family of warped meshes; non-convex cells with planar faces keep the plane test. Open for the maintainer: whether every cell should use the triangulated test (it changes one donor of TR at a tie, ADR 0253 Q1).
+
+Proposed follow-up items (the numbers are the lead's):
+
+**Overset: donor search on non-convex cells with planar faces.** Depends on F-352. Acceptance:
+
+> On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the mesh lies in exactly one cell of the locator and the located cell agrees with a full search and with an independent containment test; on meshes of convex cells with planar faces the donors and stencils are bit-identical to those of today (the checks A4 of ADR 0253).
+
+**Overset: uniform flow on a warped three-dimensional overset mesh.** Depends on F-352. Acceptance:
+
+> The uniform-flow check U1 of ADR 0219 on the set-up B3d of ADR 0251 with the component moving: velocity and pressure within 1e-10, continuity of the calculated cells within 1e-9 at every step, with the default and with the quadratic donor interpolation.
