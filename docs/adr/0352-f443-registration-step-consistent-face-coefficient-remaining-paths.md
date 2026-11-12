@@ -314,3 +314,161 @@ maintainer made in person; none changes a default.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above (`1f9f393f`); none was changed. The code and the tests were committed compiled and
+not run (`db22e388`); every registered run was then made once, release, Windows, this worktree's target directory (K1, K2, B1 and
+B2 ran as four processes at the same time; B1 and B2 are `#[ignore]` heavy records and were started with `--ignored`). Logs in
+`E:/projects/cfd/w49i-work/f443-scratch` (`p1.log`, `h1_.log`, `f1_.log`, `s1_.log`, `k1_.log`, `k2_.log`, `b1_.log`, `b2_.log`,
+`t.log`, `k0-api.log`, `k0-mcp.log`, `e0.log`, `f443-MM*.log`, `mut-summary.log`).
+
+**Said plainly.** C now acts with the consistent correctors and on `step_ale` / `step_ale_with_walls`, and with a body force; on
+each of these paths the steady solution is the same for two step sizes to `1e-13` to `5e-13` (relative `2e-14` to `4e-14` for
+the buoyant cavity), where the same runs without C differ by `3.1e-4` to `3.75e-4` (relative `6.0e-5` in the buoyant cavity). A
+hydrostatic column stays at rest to `2e-14` and, started from zero pressure, reaches rest to `1.6e-12`. The case tree has the key
+`[solver.rhie_chow] step_consistent`, an optional table: no hash table, golden or existing case text moved. Every check met,
+every control held, every mutation caught; the defaults are bit for bit.
+
+### What was built
+
+- `crates/rcfd-fv/src/pimple.rs` (final numbering): 139 to 143 (the field's documentation); 1672 to 1674 (the gate is
+  `s.rhie_chow_step_consistent`, in place of main's line 1671); 1744 to 1754 (the face differences `dr_c` with C and the
+  consistent correctors, passed to `consistent_split` and `consistent_non_orth`, in place of main's lines 1742 and 1745); 2073
+  and 2076 (the pressure-lag map passes `None`); 2416 to 2438 and 2482 to 2501 (the `Option<&[f64]>` argument `dr_face` of
+  `consistent_split` and `consistent_non_orth`; `None` computes `face_interpolate(rAtU - rAU)` as before).
+- `crates/rcfd-fv/src/pimple/face_consistent.rs`: `consistent_face_difference` (68 to 74), the unit test P1 (258 to 298).
+- `crates/rcfd-fv/src/pimple/moving.rs`: `step_sliding` clears the flag for its step and restores it (241 to 245).
+- `crates/rcfd-api/src/schema.rs` 1071 to 1084 (the optional table `solver.rhie_chow`); `sim.rs` 2008 to 2009 (the key read
+  into the transient settings), 2367 to 2381 (its located errors). `docs/case-schema.md`: a prose section.
+- Tests: `crates/rcfd-fv/tests/step_consistent_paths_f443.rs` (K1, K2, H1, F1, S1 gate-run; B1, B2 ignored, heavy);
+  `crates/rcfd-api/tests/rhie_chow_case_f443.rs` (T1 to T4). No existing test, ignored record, hash table or golden was edited;
+  `overset.rs` is not touched.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| **K1** CAV with C and CC, `0.04` against `0.01` | `<= 1e-9` | `4.67e-13` (change over the last step `1.1e-16`, `9.5e-14`) | met |
+| K1n (control) CAV with CC without C | `>= 1e-6` | `3.750e-4` | held |
+| K1c C with CC against C alone, `dt = 0.01` | `<= 1e-9` | `9.24e-14` | met |
+| K1d continuity | `<= 1e-9` | `2.76e-12` | met |
+| **K2** CAVT with C (`step_ale_with_walls`), `0.04` against `0.01`, `u - V` | `<= 1e-9` | `2.20e-13` (change `2.2e-13`, `4.8e-13`) | met |
+| K2n (control) CAVT without C | `>= 1e-6` | `3.062e-4` | held |
+| K2c CAVT against CAVE, both C, Euler, `0.01` | `<= 1e-9` | `3.45e-13` | met |
+| K2d continuity | `<= 1e-9` | `4.73e-12` | met |
+| **H1a** COL-0 with C, speed after step 100 | `<= 1e-10` | `1.63e-12` | met |
+| **H1b** COL-H with C, speed over every step | `<= 1e-10` | `2.10e-14` | met |
+| **H1c** COL-0, COL-H with C and CC | `<= 1e-10` each | `2.80e-13`; `2.09e-14` | met |
+| **B1** BUO with C, `0.004` against `0.001`, relative | `<= 1e-9` | `2.06e-14` (absolute `7.7e-14`, largest speed `3.7095`, temperature `5.3e-15`, change `4.4e-16`, `2.9e-14`) | met |
+| B1n (control) BUO without C | `>= 1e-6` | `5.955e-5` (absolute `2.21e-4`, temperature `1.98e-7`) | held |
+| **B2** BUO with C and CC | `<= 1e-9` | `3.96e-14` (absolute `1.47e-13`) | met |
+| B3 continuity of B1, B2 | `<= 1e-9` | `2.88e-12`; `3.16e-12` | met |
+| F1 fractional step, flag on against off, 100 steps | bit for bit | equal | met |
+| F0 (printed) fractional step's steady cavity, `0.04` against `0.01` | none | `8.69e-2` | printed |
+| S1 `step_sliding` flag on against off, three steps; flag after | bit for bit; set | equal each step; set | met |
+| P1 periodic box (32 coupled faces), sector (16) | bit for bit | boundary and coupled values equal | met |
+| P1n internal faces | `>= 1e-6` relative | `0.524`; `0.530` | held |
+| T1 the key sets the option, nothing else; acts | equal; differ | flag set, other settings equal; `p`, `ux`, `uy` differ after 16 steps | met |
+| T2 located errors (steady, fractional step, low Mach, lumped) | an error at the key | at `solver.rhie_chow.step_consistent`, each | met |
+| T3 hash, text | equal; differ; not named | `6ac54a8827aedab0` without and with `false`, `9d1cd84220b96c9b` with `true`; TOML and JSON do not name it | met |
+| T4 dynamic mesh with the key | builds, runs, differs | yes | met |
+| K0 `rcfd-api` `baseline_hashes` 3 (1 ignored), `case_hashes_w48u` 1, `w48v_case_hashes` (its one test is ignored), `physics_schema` 11, `rules_w19c` 8 (1 ignored), `consistent_correctors_case_f301` 4 (8 ignored), `consistent_defaults_case_f301` 3; `rcfd-mcp` `default_f1` 2 | pass | all passed, no file edited | met |
+| E0 `rcfd-fv` (non-ignored): `--lib` 104 (6 ignored; P1, G1, P0 among them), `ale_flows` 5, `ale_gcl` 4, `bdf2_remainder_f344` 4, `consistent_correctors_f301` 12, `consistent_defaults_f301` 6, `consistent_extensions_f322` 8, `consistent_value_f322` 5, `fractional_step` 13, `overset_f134` 12, `overset_f338` 9, `overset_f445` 9, `piso_thin_gap_f299` 18, `seam_no_harm_f344` 6, `sliding_interface_f250` 14, `transient_buoyancy` 3, `w33b_default_bits` 1, `w33b_transient_order` 6, `w34b_lag` 3, `w48v_corrector_control` 5 | pass | all passed | met |
+
+Printed: COL without C: `1.87e-12` after step 100 from `p = 0`, `2.25e-14` over every step from the hydrostatic pressure (the
+default keeps the column at rest too, as D3 says). CAVT with C and CC: `7.3e-13` between the step sizes, `1.1e-13` against C
+alone. Run times (four processes at once): K1 62 s, K2 83 s, B1 137 s, B2 88 s; H1, F1, S1 under 3 s.
+
+**Why not, with the numbers (a7).** The fractional step: C would change nothing there (its face coefficient is uniform; F1 bit
+for bit), and its own steady cavity differs by `8.69e-2` between `dt = 0.04` and `0.01`: a defect `dt R(p)` of first order and no
+carry-over, a different term from the one C removes (D5). Coupled faces: P1 shows the consistent compensation with C bit for bit
+the default's on every periodic and rotational face; the seam floor stays ADR 0076's (R2b `0.578` with C, ADR 0245 addendum 2).
+`step_sliding`: keeps the default step (S1); the remapped old defect on faces that change is not covered by D2's derivation.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `db22e388` (`f443-scratch/mut`, its own target directory) by `f443-mut-run.py` (an exact
+replacement that occurs once), the named test run once, the file restored and compared byte for byte.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MM1 the face differences not passed (`None`) | K1 | failed: K1 `3.81e-4`, K1c `3.65e-4` |
+| MM2 the gate keeps `!cf.enabled` | K1 | failed: K1 `3.75e-4`, K1c `8.24e-4` |
+| MM3 the gate keeps `self.ale.is_none()` | K2 | failed: K2 `3.06e-4`, K2c `9.56e-4` |
+| MM4 the body term not subtracted in `add_lagged_gradient` | H1b | failed: `9.59e-5` (H1a, H1c the same) |
+| MM5 the internal body-force face term with `face_interpolate(rAU)` | H1b | failed: `9.59e-5` |
+| MM6 `step_sliding` does not clear the flag | S1 | failed: not bit for bit |
+| MM7 `sim.rs` does not read the key | T1 | failed: the flag is not set |
+| MM8 `consistent_face_difference` gives 0 on boundary faces | P1 | failed |
+
+Deviation in MM8: the function sees only face arrays, so the mutation zeroes the last quarter of the faces (on P1's meshes
+these are boundary faces: empty and coupled) instead of "boundary faces" exactly. MM1 is larger than D1 estimated (`3.8e-4`
+against a guessed `1e-6` to `1e-5`): with the linear coefficient in the converged pressure term the steady defect carries the
+whole ratio `interp(rAU) / Gamma`, which is the default's dependence again. MM4 and MM5 give the same number: both leave
+`(Gamma - interp(rAU)) b . S` on the internal faces, with opposite signs. `scripts/limit_audit.py` on the two new test files:
+0 hits.
+
+### Deviations and disclosures
+
+- The rcfd-fv tests of E0 ran in one `cargo test` process with the default test threads while the mutation runs built and ran in
+  the scratch copy; nothing was re-run.
+- B1 and B2 are ignored heavy records (registered); H1 is the fast test of the body-force path of C and K1 of the consistent path.
+- D3's guess of four steps to rest from `p = 0` was not measured; only the registered number after step 100 was.
+
+### Not run
+
+The whole workspace suite, the gate, Linux; `rcfd-cli`'s tests; the ignored tests of every file named; the immersed-solid file
+(`immersed_solid_f219`: C is not reached there with the flag off, and no line it runs changed except the gate, whose conjunction
+with the flag off is false as before).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check`, `cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-fv -p rcfd-api --all-targets --
+-D warnings`: clean.
+
+### Decision by the registered rule
+
+**Done.** K1, K1c, K2, K2c, H1a to H1c, B1, B2 and the continuity rows met; T1 to T4 and K0 met; E0 passed; F1, S1, P1 met; the
+controls held; all eight mutations failed their checks. The key needed no hash-table or golden edit (ADR 0266 read 6 confirmed
+by K0 and T3).
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. C by default** (ADR 0245 Q5, unchanged): it would change every transient result. Open for the maintainer; not taken.
+  What this item adds: C is now defined on every path the case tree's transient incompressible runs take except lumped
+  components.
+- **Q2. The fractional step's own step dependence** (`8.69e-2` in the steady cavity between `dt = 0.04` and `0.01`). (a) a
+  follow-up item that registers a step-consistent face flux for the projection (a carried defect, as the PISO step has); (b)
+  leave it: the fractional step is a non-iterative step for transients, not for steady states. Recommendation (a), proposed
+  below; the number is large against the PISO step's `3.7e-4`.
+- **Q3. `step_sliding` with C.** (a) a follow-up when a sliding case needs a step-independent steady state, with a C3 check
+  on the sliding pair; (b) not now. Recommendation (b).
+- **Q4. The key with lumped components (O4).** (a) keep the located error; (b) derive and check C on jump faces. Recommendation
+  (a) until a lumped case needs it.
+- **Q5. The pressure-lag estimate with C** (L4): it reads the default face coefficient. (a) leave; (b) pass the coefficient.
+  Recommendation (a): the estimate is a stability guide, and C changes the coefficient by the ratio of a harmonic to a linear
+  mean (at most `0.53` relative on P1's strongly varying test field, about `1e-4` on the meshes run here).
+
+Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation), not decisions the maintainer made in
+person: O1 to O4 of the registration.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited. **F-443**, proposed status: `done`. Proposed note:
+
+> From ADR 0245 question 3, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11. ADR 0352, 2026-11-12: DONE. PimpleSettings::rhie_chow_step_consistent (ADR 0245's harmonic face coefficient and lagged-gradient commutator) now acts with the consistent correctors (their compensation takes interp(rAtU) - Gamma face by face, so a converged step is C's) and on step_ale / step_ale_with_walls (the gate's moving-mesh and consistent exclusions dropped); step_sliding keeps the default step (bit for bit) and the fractional step is unchanged (its face coefficient is uniform, so C would change nothing; bit for bit). Defaults bit for bit (the rcfd-fv suites touching the changed lines and baseline_hashes, case_hashes_w48u unedited). C3 of ADR 0245 on each path: consistent correctors 4.7e-13 between dt 0.04 and 0.01 (3.75e-4 without C), translating cavity through step_ale_with_walls 2.2e-13 (3.06e-4 without), buoyant cavity at Ra 1e3 2.1e-14 relative between dt 0.004 and 0.001 (6.0e-5 without), 4.0e-14 with the consistent correctors too; a hydrostatic column stays at rest to 2.1e-14 and reaches rest from zero pressure to 1.6e-12 (limit 1e-10). Why not on the other paths: the fractional step's own steady cavity differs by 8.7e-2 between the two steps (a first-order defect dt R(p) without a carry-over, not C's term); coupled faces bit-inert (P1), seam floor of ADR 0076 unchanged. Case key: the optional table [solver.rhie_chow] step_consistent (default false; absent from every case's text and hash), located errors with steady, compressible, variable-density and VOF runs, the fractional step and lumped components; acts on the tree's dynamic mesh. Eight mutations caught. Follow-up proposed for the fractional step (ADR 0352 Q2).
+
+**F-344**: in its note, the sentence "The opt-in does not act with the consistent correctors, on the library's moving-mesh steps, in the fractional step, on coupled faces; no case-tree key." of addendum 1 (if still present) should read:
+
+> Since ADR 0352 (F-443) the opt-in also acts with the consistent correctors and on step_ale / step_ale_with_walls and has the case key [solver.rhie_chow] step_consistent; step_sliding, the fractional step and coupled faces keep the default.
+
+Proposed follow-up item (the number is the lead's):
+
+- **Fractional step: a step-consistent face flux for the projection.** Depends on F-443. Acceptance:
+
+> The steady lid-driven cavity of ADR 0245 C3 with solver.time_advance = "fractional_step" (8.7e-2 between dt = 0.04 and 0.01, ADR 0352 F0) is traced to its face term with a number, and either made the same to 1e-9 for the two step sizes by an opt-in (defaults bit-identical) or the ADR names why not with a number.
+
+  Note:
+
+> From ADR 0352 question 2, recommendation (a); proposed by the F-443 addendum, not yet taken. The fractional step's face flux interp(u*).S + dt (interp(grad p^n).S - snGrad(p^n)|S|) has no carried defect, so its steady face defect is dt R(p).
