@@ -6279,7 +6279,8 @@ fixed by the item's registration ADR before any code.
     level 1. Two set-up checks were defective and corrected by amendments; six mutations caught. Not delivered: BDF2 for
     the library's moving-mesh step and the follow conditions of a moving wall (they keep the two-level values), the
     case-tree wiring. Follow-ups (ADR 0241 questions 1, 4 and 5, recommendation taken on the maintainer's standing
-    instruction of 2026-11-11): F-344, F-345.
+    instruction of 2026-11-11): F-344, F-345. ADR 0359 names the coupled remainder: donor switches of the fringe
+    stencils (2.06e-5 -> 1.2e-6 with a pose-continuous stencil) and kind changes next to the hole (9.9e-6, ratio 1.85).
 - [ ] **F-339** MCP tools for tolerance and Sobol studies of a named evaluator
   - depends on: F-268
   - acceptance: design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the
@@ -6417,14 +6418,15 @@ fixed by the item's registration ADR before any code.
     value of rAU and the commutator of the lagged pressure gradient, in PimpleSolver::step at rest and in the overset
     step); defaults bit for bit on the tree merged with main (F-322 included). Met: at rest the ratio 2.30 -> 5.02
     (limit 4), the steady cavity the same to 2.4e-13 for two steps (3.7e-4 by default). Missed: D2 on TG_2, 2.454 (limit
-    4): the remainder of the moving coupled meshes is another term (with the component at rest 1.3e-7, ratio 4.98). ADR
-    0076's seam rows with the opt-in: bit-inert on periodic and rotational faces (operator level), no-harm met (TG-S N1
-    at most 1.0018, R4 at most 1.0026, PIMPLE-4 rows at most 0.999); R2b on SECT-M missed as predicted, 0.578 (default
-    0.538): the seam floor of ADR 0076, which the opt-in does not touch. Eight mutations caught (the fringe branch of
-    the overset change by a direct check of its formula). Its body-force path is exercised by the SECT-M runs.
-    Follow-ups proposed (ADR 0245 questions 1 and 3). Since ADR 0352 (F-443) the opt-in also acts with the consistent
-    correctors and on step_ale / step_ale_with_walls and has the case key [solver.rhie_chow] step_consistent;
-    step_sliding, the fractional step and coupled faces keep the default.
+    4): the remainder of the moving coupled meshes is another term (named in ADR 0359: the donor switches of the
+    component's outer fringe and the background cells changing kind next to the hole) (with the component at rest
+    1.3e-7, ratio 4.98). ADR 0076's seam rows with the opt-in: bit-inert on periodic and rotational faces (operator
+    level), no-harm met (TG-S N1 at most 1.0018, R4 at most 1.0026, PIMPLE-4 rows at most 0.999); R2b on SECT-M missed
+    as predicted, 0.578 (default 0.538): the seam floor of ADR 0076, which the opt-in does not touch. Eight mutations
+    caught (the fringe branch of the overset change by a direct check of its formula). Its body-force path is exercised
+    by the SECT-M runs. Follow-ups proposed (ADR 0245 questions 1 and 3). Since ADR 0352 (F-443) the opt-in also acts
+    with the consistent correctors and on step_ale / step_ale_with_walls and has the case key [solver.rhie_chow]
+    step_consistent; step_sliding, the fractional step and coupled faces keep the default.
 - [ ] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
   - depends on: F-338, F-322
   - acceptance: PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow
@@ -8230,17 +8232,29 @@ fixed by the item's registration ADR before any code.
     and 0242 tests pass unedited (the F-348 heavy layer runs included). Six mutations caught. Not removed: x splits
     outside the layer, where the variations are at the solver tolerance and the ratio carries no information (251 of the
     413).
-- [ ] **F-442** Overset BDF2: the step-size-dependent remainder made by the motion through the coupling
+- [~] **F-442** Overset BDF2: the step-size-dependent remainder made by the motion through the coupling
   - depends on: F-344
   - acceptance: The remainder of TG_2 with BDF2, three outer iterations and rhie_chow_step_consistent (max abs(d_200)
     2.057e-5 with the ratio 2.454 to max abs(d_400), ADR 0245 A2; 1.3e-7 with the ratio 4.98 on the coupled meshes of
     level 1 at rest against 5.2e-5 moving, ADR 0245 H10) is traced to a named event or term of the moving coupling with
     a number, and either removed as an opt-in (defaults bit-identical; D2 of ADR 0241 at least 4 on TG_2) or the ADR
     names why not with a number.
-  - note: From ADR 0245 question 1, recommendation (a); proposed by the F-344 addendum, not yet taken. Candidates not
-    measured: a cell changing kind, a donor stencil changing with the pose, the refresh of the fringe values before the
-    step, the flux of the faces without a calculated cell. The coupled meshes at rest are a clean reference (ratio
-    4.98).
+  - note: From ADR 0245 question 1, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11.
+    ADR 0359, 2026-11-12: PARTIAL. Named, with numbers: the remainder of TG_2 with BDF2, three outer iterations and
+    rhie_chow_step_consistent (2.057e-5, ratio 2.454, reproduced to five digits) is made by two events of the moving
+    coupling, both at moments fixed by the motion and not by the step (first-order events). (1) The donor switch of the
+    component's outer fringe: the library's stencil is chosen by the cell of the other part that contains the fringe
+    centre, so the interpolant jumps when the centre crosses a face of that part (about 2600 switches per run); with a
+    pose-continuous bilinear stencil on the component's fringe (test side) the component cells fall from 2.06e-5 to
+    1.16e-6, ratio 2.45 -> 4.15. (2) The background cells changing kind next to the hole (275 cells, 503 changes per
+    run): with every stencil continuous 9.92e-6 remains at a ratio of 1.845, 8.8 times larger within two cells of a kind
+    change than elsewhere. Ruled out: the outer loop under motion (6.6e-8). Why no opt-in: a stencil removes event 1 but
+    not event 2, so the most continuous stencil gives D2 1.845 on TG_2 (limit 4); no library code was built, the
+    defaults are untouched (fingerprints of the default and the BDF2 overset runs and of the linear and quadratic
+    connectivities equal to the base tree; baseline_hashes passes). Partial by the registered rule: the events were
+    confirmed by hypotheses of an amendment after the first runs (the registered H1 and H2 fell between their limits).
+    Both parts are below the spatial error of TG_2 (3.2e-4) by a factor 15. Follow-ups proposed (ADR 0359 questions 1
+    and 2), not taken.
 - [x] **F-443** Transient step: the step-consistent face coefficient on the remaining paths
   - depends on: F-344
   - acceptance: rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls
@@ -8599,3 +8613,14 @@ fixed by the item's registration ADR before any code.
     approved by the lead; ADR 0360's identities pass unchanged; defaults bit-identical.
   - note: From ADR 0360 question 1. NEEDS THE USER: it retires assertions of existing tests (consistent_value_f322 v2
     and r3, rows 4, 7, 11) by an amendment to ADR 0258, which is the maintainer's to approve.
+- [ ] **F-468** Overset: a pose-continuous donor stencil (opt-in)
+  - depends on: F-442
+  - acceptance: A DonorInterpolation variant whose fringe values are a continuous function of the pose on any mesh where
+    no candidate cell changes kind (defaults bit-identical: the four F0 fingerprints of ADR 0359 unchanged), exact for
+    linear fields to 1e-12, its interpolant across every face of a uniform mesh continuous to 1e-9 where the linear
+    stencil jumps by at least 1e-4; on TG_2 of ADR 0359 the component cells' max abs(d_200) at most 2e-6 with the ratio
+    at least 4, and e(TG_2) in 800 steps at most that of the linear stencil (3.186e-4); or the ADR names why not with a
+    number.
+  - note: From ADR 0359 question 1, recommendation (a), not yet taken. The test-side bilinear stencil of ADR 0359
+    (rectangular meshes only) gives 1.16e-6 at a ratio of 4.15 on the component cells and lowers e(TG_2) from 3.19e-4 to
+    2.84e-4. It does not lift D2 of TG_2 to 4: the kind changes next to the hole stay (ADR 0359 H5).
