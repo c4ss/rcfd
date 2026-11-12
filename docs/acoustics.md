@@ -28,7 +28,9 @@ For every check with its limit and measured value read [ADR 0066](adr/0066-wave3
   only as good as the sampled surface pressure).
 * A steady RANS run gives no tonal pressure history.
 
-F-243 remains partial: an acoustic impedance boundary, quiet boundary and acoustic wave solver are not part of this wave.
+An acoustic impedance boundary, quiet boundary and acoustic wave solver are not part of this wave. The impedance and
+quiet boundaries were added later as library code (section "Impedance and quiet boundaries of the compressible solver");
+the wave solver does not exist.
 
 ## FW-H solver
 
@@ -125,6 +127,47 @@ comparison on a held-out second data set, with a reported error band. Until then
   of an observer sphere of radius R in the far field (`sound_power_sphere`). Exact for a monopole at any R; the
   intensity p^2/(rho0 c0) assumption needs the far field for dipoles (dipole check in the far field only).
 * Output: `Report::to_json` (`rcfd-spectrum` v1), `bands_csv`, `narrowband_csv`.
+
+## Impedance and quiet boundaries of the compressible solver (F-243, ADR 0233; library only)
+
+The density-based compressible solver (`rcfd-fv` `compressible.rs`) has an acoustic wall with a real specific impedance and
+two quiet (non-reflecting) boundaries. They are reachable from Rust (`CompressibleSolver::set_bc`), not yet from a case file,
+the CLI or the MCP tools. Every check with its limit and measured value is in
+[ADR 0233](adr/0233-f243-registration-impedance-and-quiet-boundary.md).
+
+| Boundary | What it imposes | Reflection of a plane wave at the angle theta from the normal |
+|---|---|---|
+| `CompBc::Impedance { p, z }` | `p_face - p = z u_n` (`u_n` relative to the face), `z` in Pa s/m, real, `>= 0` | `(z cos(theta) - rho c)/(z cos(theta) + rho c)` |
+| `CompBc::Impedance { p, z: rho c }` (matched; quiet) | the incoming characteristic of the ambient state; holds the pressure `p` | `(cos(theta) - 1)/(cos(theta) + 1)` |
+| `CompBc::NonReflecting { p, sigma: 0.0 }` (Thompson; quiet) | nothing: the face takes the interior state; does not hold a pressure | `(1 - cos(theta))/(1 + cos(theta))` |
+| `CompBc::Slip` | rigid wall | `+1` |
+| `CompBc::PressureOutlet { p }` (the same as `z = 0`) | the pressure `p` | `-1` at normal incidence |
+
+`rho c` is the density times the sound speed of the ambient gas (about 413 Pa s/m for air at 20 degrees C); the caller
+supplies it. The face state keeps the entropy, the tangential velocity and the outgoing Riemann invariant of the interior
+cell and solves the impedance relation with the exact simple-wave relations, so it is not limited to small amplitudes.
+
+What was checked (closed forms, Cartesian grids, gas at rest):
+
+* a pulse in a tube for `z/(rho c)` = 0, 1/3, 1, 3, 19: the reflection coefficient is within 1.2e-3 of
+  `(z - rho c)/(z + rho c)` (limit 1e-2);
+* both quiet boundaries reflect a pulse at normal incidence by less than 1e-4 (limit 1 percent);
+* a tone in a tube: the standing-wave ratio is 3 within 0.2 percent for `z = 3 rho c` and `z = rho c/3`, with the pressure
+  maximum at the stiff wall and the minimum at the soft one;
+* a uniform overpressure in a tube closed by two matched walls returns to the ambient pressure; with two Thompson
+  boundaries it stays;
+* plane pulses at 30 and 45 degrees: the three formulas of the table within 0.015 (limit 0.03).
+
+Limits:
+
+* The impedance is real and independent of frequency. Liners and resonators (complex, frequency-dependent impedance) need a
+  time-domain model with memory, which is not built.
+* Both quiet boundaries are quiet only near normal incidence: they reflect 7 percent of a wave arriving at 30 degrees and
+  17 percent at 45 degrees (below 1 percent only within 11 degrees of the normal). There is no sponge layer and no
+  multi-dimensional non-reflecting condition.
+* The matched wall is matched for the `rho c` it is given; a mean flow through the boundary or a different local state
+  changes the match.
+* No wave-equation solver and no modal export exist.
 
 ## Reference: code locations, input format and command line
 
