@@ -11,6 +11,11 @@
 //! Outer iterations (F-335, ADR 0238) are an opt-in of the solver, [`OversetSolver::set_outer_iterations`]: the PISO pass
 //! is then repeated within the step on the kinds, donors and weights of the new pose, each pass with the convecting flux
 //! and the pressure of the pass before it, as `PimpleSolver::step` does for `n_outer > 1`.
+//!
+//! BDF2 (F-338, ADR 0241) is an opt-in of the solver too, [`OversetSolver::set_time_scheme`]: the three-level backward
+//! difference of `V u` on the moving cells with the mesh flux `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the
+//! last two steps (the geometric conservation law of the three-level scheme), the first step an implicit Euler step, and
+//! one implicit Euler row for a cell whose old-old value is a hole value.
 
 use crate::ale::{move_mesh, set_follow_conditions, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -127,6 +132,81 @@ pub struct OversetSolver {
     step_no: usize,
     /// Set by [`OversetSolver::set_outer_iterations`]: `settings.n_outer` above 1 is accepted (ADR 0238 D1).
     outer_opt_in: bool,
+    /// Set by [`OversetSolver::set_time_scheme`]: `settings.time_scheme = Bdf2` is accepted (ADR 0241 D1).
+    bdf2_opt_in: bool,
+    /// The old-old level, kept while BDF2 is on (`None` before the first step with it).
+    bdf2: Option<Bdf2History>,
+    /// Calculated cells of the last step that took the implicit Euler row for their hole history (ADR 0241 D3).
+    euler_fallback: usize,
+}
+
+/// What a BDF2 step needs of the time before the old one (ADR 0241 D3). The values follow the cells and faces.
+#[derive(Debug, Clone)]
+struct Bdf2History {
+    /// Cell velocity at the old-old time (a solved value, a fringe interpolant or, in a hole cell, the rigid velocity).
+    u: Vec<Vec3>,
+    /// Cell volumes at the old-old time.
+    vol: Vec<f64>,
+    /// Whether the cell was a hole at the old-old time.
+    hole: Vec<bool>,
+    /// Face flux at the old-old time.
+    phi: Vec<f64>,
+    /// Whether that flux was a flux of the fluid: an internal face that kept its flux, a boundary face of a calculated cell.
+    flux_ok: Vec<bool>,
+    /// Rhie-Chow defect `phi - (u)_f . S` of the internal faces at the old-old time, zero where the flux was not kept.
+    defect: Vec<f64>,
+    /// Mesh flux `W_f / dt` of the last step.
+    mesh_flux: Vec<f64>,
+    /// Size of the last step.
+    dt: f64,
+}
+
+/// The old level as the step after this one needs it (the part of [`Bdf2History`] that is known before the step).
+struct OldLevel {
+    hole: Vec<bool>,
+    phi: Vec<f64>,
+    flux_ok: Vec<bool>,
+    defect: Vec<f64>,
+}
+
+/// The three-level data of one BDF2 step (ADR 0241 D2 to D4).
+struct Bdf2Step {
+    /// Weights of `(c0 V u - c1 V^n u^n + c2 V^{n-1} u^{n-1}) / dt` (those of `ddt::add_ddt`).
+    c0: f64,
+    c1: f64,
+    c2: f64,
+    /// Whether the cell takes the BDF2 row (it was not a hole at either old time); otherwise the implicit Euler row.
+    full: Vec<bool>,
+    /// Velocity and volume at the old-old time.
+    u_older: Vec<Vec3>,
+    vol_older: Vec<f64>,
+    /// Convecting flux (before the mesh flux is taken off) and cell values of the first outer iteration: extrapolated in
+    /// time where both old values are fluid values, the current ones elsewhere.
+    phi_first: Vec<f64>,
+    u_first: Vec<Vec3>,
+}
+
+impl Bdf2Step {
+    /// The transient term of component `k`: for a BDF2 cell the expressions of `ddt::add_ddt` with the new volume and the
+    /// correction that puts the old and the old-old volume back (zero on a mesh at rest); for the other cells the
+    /// implicit Euler row with the old volume.
+    fn add_ddt(&self, mut m: FvMatrix, vol: &[f64], vol_old: &[f64], dt: f64, u_old: &[f64], k: usize) -> FvMatrix {
+        for i in 0..vol.len() {
+            if self.full[i] {
+                let older = self.u_older[i][k];
+                m.a.diag[i] += vol[i] * self.c0 / dt;
+                m.b[i] += vol[i] / dt * (self.c1 * u_old[i] - self.c2 * older);
+                let old_part = (vol_old[i] - vol[i]) * (self.c1 * u_old[i]);
+                let older_part = (self.vol_older[i] - vol[i]) * (self.c2 * older);
+                m.b[i] += (old_part - older_part) / dt;
+            } else {
+                m.a.diag[i] += vol[i] / dt;
+                m.b[i] += vol[i] / dt * u_old[i];
+                m.b[i] += (vol_old[i] - vol[i]) / dt * u_old[i];
+            }
+        }
+        m
+    }
 }
 
 /// Whether `a` is an under-relaxation factor the outer iterations accept.
@@ -134,9 +214,12 @@ fn factor_ok(a: f64) -> bool {
     a > 0.0 && a <= 1.0
 }
 
-fn refusal(s: &PimpleSettings, geom: &FvGeometry, outer_opt_in: bool) -> Option<&'static str> {
-    if s.time_scheme != TimeScheme::ImplicitEuler {
-        return Some("overset: the implicit Euler time scheme only");
+fn refusal(s: &PimpleSettings, geom: &FvGeometry, outer_opt_in: bool, bdf2_opt_in: bool) -> Option<&'static str> {
+    match s.time_scheme {
+        TimeScheme::ImplicitEuler => {}
+        TimeScheme::Bdf2 if bdf2_opt_in => {}
+        _ if bdf2_opt_in => return Some("overset: the implicit Euler or the BDF2 time scheme only"),
+        _ => return Some("overset: the implicit Euler time scheme only"),
     }
     if !outer_opt_in {
         if s.n_outer != 1 {
@@ -252,7 +335,8 @@ fn solve_csr(a: &CsrMatrix, b: &[f64], x: &mut [f64], ctl: &SolveControl) -> Sol
 impl OversetSolver {
     /// Create a solver at `t = 0` on `geom` (with a coupling: the composite mesh at `coupling.pose`). With a coupling the
     /// fringe cells get their interpolated velocity and pressure; the initial flux is then interpolated from `u`, as
-    /// `PimpleSolver::new`. Refused (`Err`): a time scheme other than implicit Euler, `n_outer != 1` (outer iterations are
+    /// `PimpleSolver::new`. Refused (`Err`): a time scheme other than implicit Euler (BDF2 is switched on afterwards, by
+    /// [`set_time_scheme`](Self::set_time_scheme)), `n_outer != 1` (outer iterations are
     /// switched on afterwards, by [`set_outer_iterations`](Self::set_outer_iterations)), no corrector,
     /// non-orthogonal correctors, a convection scheme other than upwind, central or blended, the component diagonal, AMG
     /// pressure, a linear device other than the CPU, the fractional step, the full viscous stress, the lag check, the
@@ -266,7 +350,7 @@ impl OversetSolver {
         mass: MassMode,
         coupling: Option<OversetCoupling>,
     ) -> Result<Self, String> {
-        if let Some(r) = refusal(&settings, &geom, false) {
+        if let Some(r) = refusal(&settings, &geom, false, false) {
             return Err(r.into());
         }
         let n = geom.n_cells();
@@ -315,7 +399,36 @@ impl OversetSolver {
             delta: 0.0,
             step_no: 0,
             outer_opt_in: false,
+            bdf2_opt_in: false,
+            bdf2: None,
+            euler_fallback: 0,
         })
+    }
+
+    /// Choose the time scheme (F-338, ADR 0241 D1). `TimeScheme::Bdf2` opts in to the three-level scheme: the next step
+    /// is still an implicit Euler step (there is no old-old level yet), every later one a BDF2 step with the weights of
+    /// the two step sizes; the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, and
+    /// a cell that was a hole two steps back takes the implicit Euler row once. `TimeScheme::ImplicitEuler` returns to the
+    /// solver that did not opt in (the history is dropped). Sets `settings.time_scheme`. Refused, leaving the solver
+    /// unchanged: every other scheme.
+    pub fn set_time_scheme(&mut self, scheme: TimeScheme) -> Result<(), String> {
+        match scheme {
+            TimeScheme::Bdf2 => self.bdf2_opt_in = true,
+            TimeScheme::ImplicitEuler => {
+                self.bdf2_opt_in = false;
+                self.bdf2 = None;
+                self.euler_fallback = 0;
+            }
+            _ => return Err("overset: the implicit Euler or the BDF2 time scheme only".into()),
+        }
+        self.settings.time_scheme = scheme;
+        Ok(())
+    }
+
+    /// The number of calculated cells that took the implicit Euler row in the last step because they were a hole two
+    /// steps back (ADR 0241 D3); zero without BDF2 and on its first step.
+    pub fn euler_fallback_cells(&self) -> usize {
+        self.euler_fallback
     }
 
     /// Opt in to outer iterations (F-335, ADR 0238 D1): from the next step on every step takes `n_outer` passes of the
@@ -329,7 +442,7 @@ impl OversetSolver {
         s.n_outer = n_outer;
         s.alpha_u = alpha_u;
         s.alpha_p = alpha_p;
-        if let Some(r) = refusal(&s, &self.geom, true) {
+        if let Some(r) = refusal(&s, &self.geom, true, self.bdf2_opt_in) {
             return Err(r.into());
         }
         self.settings = s;
@@ -397,12 +510,13 @@ impl OversetSolver {
         )
     }
 
-    /// Advance one implicit-Euler PISO step of size `dt` onto the prepared step `st` (ADR 0219 M5 to M9). Fails, leaving
+    /// Advance one PISO step of size `dt` (implicit Euler; BDF2 after [`set_time_scheme`](Self::set_time_scheme)) onto
+    /// the prepared step `st` (ADR 0219 M5 to M9). Fails, leaving
     /// `u`, `p`, `phi` and the time unchanged, for a step that does not fit the solver (cell or face counts, sizes), a
     /// refused setting (`settings.n_outer` above 1 without the opt-in among them), a cell that was a hole and is now calculated ("uncovered"), and a closed domain whose reference cell
     /// is not calculated; fails during the step for a non-finite state or a Courant number above the divergence limit.
     pub fn advance(&mut self, dt: f64, st: OversetStep) -> Result<OversetInfo, String> {
-        if let Some(r) = refusal(&self.settings, &st.geom, self.outer_opt_in) {
+        if let Some(r) = refusal(&self.settings, &st.geom, self.outer_opt_in, self.bdf2_opt_in) {
             return Err(r.into());
         }
         let old = self.geom.clone();
@@ -493,6 +607,34 @@ impl OversetSolver {
         };
         let u_old: Vec<Vec3> = self.u.values.clone();
         let n_changed = (0..n).filter(|&c| conn_old.kind[c] != conn.kind[c]).count();
+        // ADR 0241 D3: with BDF2 on, the old level as the next step needs it (taken before the refresh M9)
+        let bdf_on = self.bdf2_opt_in && s.time_scheme == TimeScheme::Bdf2;
+        let level = bdf_on.then(|| {
+            let own = old.mesh.owner();
+            let defect = if s.ddt_correction {
+                let zero_b = vec![[0.0; 3]; old.mesh.n_boundary_faces()];
+                let fo = face_flux(&old, &u_old, &zero_b);
+                (0..n_int)
+                    .map(|f| if kept[f] { self.phi[f] - fo[f] } else { 0.0 })
+                    .collect()
+            } else {
+                vec![0.0; n_int]
+            };
+            OldLevel {
+                hole: conn_old.kind.iter().map(|k| *k == CellKind::Hole).collect(),
+                phi: self.phi.clone(),
+                flux_ok: (0..old.mesh.n_faces())
+                    .map(|f| {
+                        if f < n_int {
+                            kept[f]
+                        } else {
+                            conn_old.kind[own[f]] == CellKind::Calculated
+                        }
+                    })
+                    .collect(),
+                defect,
+            }
+        });
         self.geom = new_geom;
         if let (Some(cp), Some(pz)) = (self.coupling.as_mut(), pose) {
             cp.pose = pz;
@@ -536,6 +678,72 @@ impl OversetSolver {
                 }
             }
         }
+        // ADR 0241 D2 to D4: the three-level data of a BDF2 step (none on its first step, which is an implicit Euler step)
+        let mut step_flux: Option<Vec<f64>> = None;
+        let mut defect = defect;
+        let bdf: Option<Bdf2Step> = match (&level, self.bdf2.take()) {
+            (Some(lv), Some(h)) => {
+                let r = dt / h.dt;
+                let (c0, c1, c2) = ((1.0 + 2.0 * r) / (1.0 + r), 1.0 + r, r * r / (1.0 + r));
+                let full: Vec<bool> = (0..n)
+                    .map(|c| !h.hole[c] && conn_old.kind[c] != CellKind::Hole)
+                    .collect();
+                // the mesh flux whose sum over a cell is (c0 V^{n+1} - c1 V^n + c2 V^{n-1}) / dt
+                step_flux = Some(mesh_flux.clone());
+                for (m1, m0) in mesh_flux.iter_mut().zip(&h.mesh_flux) {
+                    *m1 = c0 * *m1 - c2 / r * m0;
+                }
+                if s.ddt_correction {
+                    let vol_new = g.mesh.cell_volumes();
+                    let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+                    for f in 0..n_int {
+                        let (o, nn) = (own[f], nei[f]);
+                        if full[o] && full[nn] {
+                            let w = g.weights[f];
+                            let r00 = w * h.vol[o] / vol_new[o] + (1.0 - w) * h.vol[nn] / vol_new[nn];
+                            let mut d = c1 * defect[f];
+                            d -= c2 * (r00 * h.defect[f]);
+                            defect[f] = d;
+                        }
+                    }
+                }
+                let e = c1 - 1.0;
+                let phi_first: Vec<f64> = (0..self.phi.len())
+                    .map(|f| {
+                        if lv.flux_ok[f] && h.flux_ok[f] {
+                            (1.0 + e) * lv.phi[f] - e * h.phi[f]
+                        } else {
+                            self.phi[f]
+                        }
+                    })
+                    .collect();
+                let u_first: Vec<Vec3> = (0..n)
+                    .map(|c| {
+                        if full[c] {
+                            [0, 1, 2].map(|k| (1.0 + e) * u_old[c][k] - e * h.u[c][k])
+                        } else {
+                            self.u.values[c]
+                        }
+                    })
+                    .collect();
+                Some(Bdf2Step {
+                    c0,
+                    c1,
+                    c2,
+                    full,
+                    u_older: h.u,
+                    vol_older: h.vol,
+                    phi_first,
+                    u_first,
+                })
+            }
+            _ => None,
+        };
+        self.euler_fallback = bdf.as_ref().map_or(0, |b| {
+            (0..n)
+                .filter(|&c| conn.kind[c] == CellKind::Calculated && !b.full[c])
+                .count()
+        });
         let ale = AleStep {
             mesh_flux,
             vol_old,
@@ -543,7 +751,20 @@ impl OversetSolver {
             wall_dpdn,
         };
         let (p_iters, unconverged, delta, hole_flux) =
-            self.piso(dt, &s, &ale, &conn, &u_old, &hole_velocity, trivial)?;
+            self.piso(dt, &s, &ale, bdf.as_ref(), &conn, &u_old, &hole_velocity, trivial)?;
+        if let Some(lv) = level {
+            let AleStep { mesh_flux, vol_old, .. } = ale;
+            self.bdf2 = Some(Bdf2History {
+                u: u_old,
+                vol: vol_old,
+                hole: lv.hole,
+                phi: lv.phi,
+                flux_ok: lv.flux_ok,
+                defect: lv.defect,
+                mesh_flux: step_flux.unwrap_or(mesh_flux),
+                dt,
+            });
+        }
         self.delta = delta;
         self.step_no += 1;
         let courant = max_courant(&g, &self.phi, dt);
@@ -615,6 +836,7 @@ impl OversetSolver {
         dt: f64,
         s: &PimpleSettings,
         ale: &AleStep,
+        bdf: Option<&Bdf2Step>,
         conn: &Connectivity,
         u_old: &[Vec3],
         hole_velocity: &[Vec3],
@@ -656,7 +878,12 @@ impl OversetSolver {
             let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
             let mut a_p = vec![0.0; n];
             let u_iter: Vec<Vec3> = self.u.values.clone();
-            let phi_conv = ale.relative_flux(&self.phi);
+            // ADR 0241 D4: the first outer iteration of a BDF2 step takes the flux and the cell values extrapolated in time
+            let first = if outer == 0 { bdf } else { None };
+            let phi_conv = match first {
+                Some(b) => ale.relative_flux(&b.phi_first),
+                None => ale.relative_flux(&self.phi),
+            };
             for k in 0..3 {
                 if !g.active[k] {
                     continue;
@@ -664,11 +891,19 @@ impl OversetSolver {
                 let cells: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
                 let bc = self.u.boundary_coeffs(&g, k);
                 let bv: Vec<f64> = ub.iter().map(|v| v[k]).collect();
-                let mut m = convection(&g, &phi_conv, &cells, &bc, s.convection, None);
-                m.add(&laplacian_opt(&g, &gamma_nu, &bc, None, &cells, &bv, None));
+                let first_cells: Option<Vec<f64>> = first.map(|b| b.u_first.iter().map(|v| v[k]).collect());
+                let conv_cells: &[f64] = first_cells.as_deref().unwrap_or(&cells);
+                let mut m = convection(&g, &phi_conv, conv_cells, &bc, s.convection, None);
+                m.add(&laplacian_opt(&g, &gamma_nu, &bc, None, conv_cells, &bv, None));
                 let u_old_k: Vec<f64> = u_old.iter().map(|v| v[k]).collect();
-                let mut m = add_ddt(TimeScheme::ImplicitEuler, m, &vol, dt, &History::new(u_old_k.clone()));
-                ale.fix_ddt(&mut m, &vol, &u_old_k, dt);
+                let mut m = match bdf {
+                    None => {
+                        let mut m = add_ddt(TimeScheme::ImplicitEuler, m, &vol, dt, &History::new(u_old_k.clone()));
+                        ale.fix_ddt(&mut m, &vol, &u_old_k, dt);
+                        m
+                    }
+                    Some(b) => b.add_ddt(m, &vol, &ale.vol_old, dt, &u_old_k, k),
+                };
                 if alpha_u < 1.0 {
                     m.relax(alpha_u, &cells);
                 }
