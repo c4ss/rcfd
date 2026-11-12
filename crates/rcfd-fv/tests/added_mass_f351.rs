@@ -1335,3 +1335,54 @@ fn w1_the_carried_vector_is_the_gradient_of_the_last_step() {
     println!("W1: 5 steps, piston entries against (w_n - w_(n-1))/dt: {worst_rel:.3e} (limit 1e-9); the others NaN");
     assert!(worst_rel <= 1e-9, "W1 {worst_rel}");
 }
+
+/// ADR 0252 amendment 4, A1s: the gain of the sub-iteration with the corrected force at the third step of a run (a moving
+/// flow, a carried wall gradient), where the force of an iterate must be evaluated with the gradient of that iterate's own
+/// flow step and not with the carried one (the mutation MU4b, which A1 on the first step cannot see).
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn a1s_the_gain_at_a_later_step_is_the_model_gain() {
+    let mu = 4.0;
+    let sp = Sp::new(20);
+    let mut all = Vec::new();
+    for w in [0.25, 0.5] {
+        let mut flow = sp.flow_with(sp_settings());
+        let mut body = body(mu);
+        let mut walls = Vec::new();
+        for _ in 0..2 {
+            let info = step_with(
+                &sp,
+                &mut flow,
+                &mut body,
+                &registered(mu),
+                WallPressure::PrescribedGradient,
+                &mut walls,
+            )
+            .unwrap();
+            assert!(info.converged, "A1s set-up");
+        }
+        let settings = StrongCoupling {
+            relaxation: Relaxation::Fixed(w),
+            tolerance: 1e-300,
+            force_scale: stiffness(mu) * SP_X,
+            moment_scale: 0.0,
+            max_iterations: 6,
+        };
+        let info = step_with(
+            &sp,
+            &mut flow,
+            &mut body,
+            &settings,
+            WallPressure::PrescribedGradient,
+            &mut walls,
+        )
+        .unwrap();
+        let r: Vec<f64> = info.force_residuals.iter().map(|v| v[0]).collect();
+        let gains: Vec<f64> = (1..=3).map(|k| (1.0 - r[k] / r[k - 1]) / w).collect();
+        println!("A1s step 3, w = {w}: residuals {r:?}, gains {gains:.5?} (limit [2.971046, 2.982954])");
+        all.extend(gains);
+    }
+    for g in all {
+        assert!((2.971046..=2.982954).contains(&g), "A1s gain {g}");
+    }
+}

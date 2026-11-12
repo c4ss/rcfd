@@ -527,3 +527,20 @@ function in N1b and K3b is the vector of the DP step (N1b: with the piston entri
 *Predictions (mine, before the code):* A1 `2.9749` to `2.9770`; A2 `1.00004`; A4 `0.99996`, `1.00007`; A5 `1.00026`; K3b
 `1e-5` to `2e-5`; K4 `1.005081`, `1.00255`, `1.00129` (80 cells perhaps off by the splitting error); K5 `1.00004`; U1
 `2.00` and `1.00`. The check I trust least is K4 on 80 cells.
+
+## Amendment 4 (2026-11-12, after the mutation runs, before the run of the check it adds)
+
+The mutations MU1 to MU6 failed their named checks (addendum). **MU4b, a variant added during the mutation runs, was not
+caught**: the force of an iterate evaluated with the carried vector of the previous step whenever one exists (and with
+the iterate's own vector on the first step). All 14 active tests passed with it. Reason: A1 measures the gain on the
+first step, where the carried vector is empty; in a run the two vectors differ by the change of the wall acceleration
+over one step, which moves the wall pressure by `(g - g_prev) dn`, about `omega dt/(2N)` of it and in quadrature, too
+little for the frequency limits. But the sub-iteration is then wrong in kind: the force no longer answers the iterate's
+acceleration through the wall term, so its gain falls to `1 + 1.977 (1 - 1/(2N)) = 2.928`.
+
+**A1s (added check, limit fixed now):** SPm, `mu = 4`, 20 cells, corrected: two converged steps with the registered
+settings, then the third step with `Fixed(w)`, `w = 0.25, 0.5`, cap 6, tolerance `1e-300`: the gain `(1 - r_{k+1}/r_k)/w`,
+`k = 1..3`, in the window of A1, `[2.971046, 2.982954]`. Predicted `2.977` (the column is `2e-4` longer than at the
+start); with MU4b `2.928`. `w = 1` is left out: from a moving state its residuals are near rounding after a few
+iterations only if the iteration converges, and it does not. After A1s is run once on the unchanged library, MU4b is
+applied again and A1s must fail.
