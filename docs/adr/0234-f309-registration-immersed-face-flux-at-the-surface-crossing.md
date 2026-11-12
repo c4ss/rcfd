@@ -233,3 +233,147 @@ cuboid are not run. Turbulence wall treatment at the surface is not addressed.
   SIMPLE, when `pimple.rs` is free. Recommendation (b) with the case key.
 - **Q4. The continuity measure.** Options: (a) leave it and document it; (b) subtract the sources. Recommendation (b) with the
   case key (it touches the reporting of both solvers).
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above. No limit was changed, no amendment was needed, and no registered run was repeated.
+Release builds on Windows. The registration is c26acfdc; the library and the registered tests are c68c3665, committed before
+their first run; every registered run was made once on that commit (one invocation of the test file, one thread). This
+addendum's commit changes no code.
+
+**Built.** `crates/rcfd-fv/src/immersed.rs`: `FluxFace`, the field `ImmersedForcing::flux_faces` (empty from `build`),
+`ImmersedForcing::build_second_order`, `ImmersedForcing::reconstruct_face_flux` (D1 to D3, the panic of D7).
+`crates/rcfd-fv/src/simple.rs`: the import of `solve_pressure_parts_src` in place of `solve_pressure_parts` (line 27), one
+statement after the interpolated `phiHbyA` (lines 1174 to 1180), the plain pressure solve with the source (lines 1278 to 1287).
+`crates/rcfd-fv/src/pimple.rs`: one statement after the `ddt` flux correction (lines 1346 to 1350) and the plain pressure solve of
+the correctors with the source (lines 1418 to 1423, one line replaced by six). `crates/rcfd-fv/tests/immersed_second_order_f309.rs`
+(new). `docs/reference-data.md` (a section for F-309). No case-schema key, golden, hash table or existing test file was touched;
+`sim.rs` and `schema.rs` were not touched.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (acceptance) CC second: `e(96)` | `<= 1e-2` | `4.243e-4` (`e` 6.121e-3, 1.611e-3, 4.243e-4 at N 24, 48, 96) | met |
+| A1 (acceptance) CC second: order 48 to 96 | `>= 1.5` | **1.925** (24 to 48: 1.926) | **met** |
+| S1 CC convergence, six runs | `max_du <= 1e-10` within 20 000 | second 103, 102, 340 iterations; first 105, 106, 338 | held |
+| C1 (negative control) CC first: order | `< 1.5` | 1.023 (`e` 8.293e-3, 3.202e-3, 1.576e-3, the numbers of ADR 0218) | held |
+| V1 `e_second(96)/e_first(96)` | `<= 0.75` | 0.269 | met |
+| V2 `eps_first(96)/eps_second(96)` | `>= 3` | 39.0 (`eps` second 1.903e-3, 4.737e-4, 1.612e-4; first 3.079e-2, 1.598e-2, 6.286e-3) | met |
+| V3 PISO at N 48: steady; `e`; `eps` | `<= 1e-9`; `<= 1.2 e_SIMPLEC`; `<= 1.5 eps_SIMPLEC` | 1.5e-12; 1.61055e-3 against 1.61066e-3; 4.764e-4 against 4.737e-4 | met |
+| V4 DFG 2D-1 second: convergence rule on M1, M2; `C_D`, `C_L` on M2 | within the caps 4000; within 5 percent | 470 and 750 iterations; `C_D` 5.56246 (-0.306 percent), `C_L` 0.0108880 (+2.534 percent) | met |
+| U1 reconstruction of the exact field | max at N 96 `<= 2e-3`; rms(48)/rms(96) `>= 3` | 3.24e-4 (1.17e-3 at N 48); 3.889 | met |
+| U2 net flux per body; sum of the sources; fluid cells; other faces | `<= 1e-12 A_b`; `<= 1e-12 sum A_b`; 0; bit-identical | -6.0e-18 and 9.5e-17 (areas 0.4, 0.8); -9.7e-17; 0; bit-identical (120 flux faces) | met |
+| U3 the forcing of `build` | no flux faces; `None`, untouched; equal coefficients | as required | met |
+| N1 defaults: state hashes | `3b49c4ed4863d1b6`, `9fff50792adb6d4a` | `3b49c4ed4863d1b6`, `9fff50792adb6d4a` | met |
+| B1 `modified = false` | `Err` naming `modified` | "... needs the modified forcing (settings.modified = true)" | met |
+| R1 gradient options of the pressure equation, SIMPLE and PIMPLE | panic naming `ADR 0234` | both | met |
+
+Printed, no limit. CC second on N 192: `e` 1.034e-4, order 96 to 192 2.037 (`eps` 2.79e-5, order 2.53), 1223 iterations. Parts of
+`e` at N 96: second radial 1.08e-4, azimuthal 4.10e-4; first radial 1.17e-3, azimuthal 1.05e-3 (the wall-normal error of the
+forcing of ADR 0218 is ten times smaller with the flux of D1). Largest `abs(p)` over the fluid cells: first 0.26, 0.50, 0.62
+(N 24, 48, 96), second 0.14, 0.13, 0.19 (0.11 at N 192), with the solid cells next to the fluid at the same size in the second
+(0.14, 0.13, 0.19): the order-1 pressure jump derived above for the forcing of ADR 0218 is in its numbers and gone in the
+second. (The solid-cell value is printed as 0 for the first forcing, which has no flux-face list; it was not measured there.)
+2D-1 on M1 second: `C_D` 5.51738 (-1.11 percent), `C_L` 0.0114183 (+7.53 percent); ADR 0218 measured 5.52887 and 0.0117566 on M1,
+5.57022 (-0.17 percent) and 0.0109084 (+2.73 percent) on M2.
+
+**The torque is still first order (measured, printed; not a registered check).** The inner torque from the reaction of the
+forcing (`force_moment`), exact 4.18879: second 4.04376, 4.12171, 4.15767, 4.17239 (N 24 to 192; errors 3.46, 1.60, 0.74, 0.39
+percent, halving per refinement); first 4.07749, 4.14059, 4.17006 (2.66, 1.15, 0.45 percent). The velocity field is second
+order with the new treatment; the force and moment are not, and on these meshes they are no better than before (2D-1 on M2:
+`C_D` -0.31 percent against -0.17, `C_L` +2.53 against +2.73). `force_moment` sums the forcing terms, which now also hold the
+momentum carried into the solid cells by the flux of D1, and takes the wall stress from the one-sided difference between the
+crossing and the first fluid centre. Q5.
+
+### Mutations
+
+Applied one at a time to c68c3665 by `w49i-work/f309-scratch/mutate.py` (an exact text replacement checked to occur once), the
+named tests run once in release, the file restored and compared byte for byte with the kept copy (equal after each of the eight).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `phiHbyA_f` not replaced, source returned | A1 or V2 | failed: the N 48 and N 96 runs diverged (S1; `e`, `eps` NaN, so A1, V1 and V2 fail) |
+| MU2 source returned as zeros | A1 or V2 | failed: the N 48 and N 96 runs diverged (S1, A1, V1, V2) |
+| MU3 `t_f/theta_e -> t_f` | A1 or V2, and U1 | failed: A1 order 0.710, V1 ratio 1.96, V2 ratio 0.84; U1 max 1.37e-2, rms ratio 2.42 |
+| MU4 no net-flux correction | U2 | failed: net -3.2e-2 and 0.17, sum of the sources -0.14 |
+| MU5 SIMPLE: source not passed | A1 or V2 | failed: as MU2 |
+| MU6 PIMPLE: statement removed | V3 | failed: `e` 3.195e-3 (the number of ADR 0218 V3), `eps` 1.598e-2 |
+| MU7 PIMPLE: source not passed | V3 | failed: `e` 1.125e-2, `eps` 1.305e-2 |
+| MU8 `modified = false` not refused | B1 | failed: `unwrap_err` on an `Ok` |
+
+`scripts/limit_audit.py`: 0 hits.
+
+### Tools
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. `cargo test --release -p
+rcfd-fv --test immersed_second_order_f309`: 9 passed, 1 ignored (the printed N 192 run, run once with `--ignored`); in the debug
+profile 5 passed, 5 ignored (the heavy ones). The existing `immersed_solid_f219.rs`, unedited, run once in release on the final tree: 11 passed, 2 ignored (its known
+miss and its diagnostic), with the numbers of ADR 0218 (M3 `C_D` 5.57833680, `C_L` 0.0106899517, `St` 0.30073, V1 `e` 8.2929e-3,
+3.2018e-3, 1.5761e-3) and the M1 state hash `8d13ea8c24b75cd0` that ADR 0218 recorded: a second measurement of N1.
+
+### Deviations and disclosures
+
+- The expectation written with the mutations was wrong for MU1, MU2 and MU5: I expected about the numbers of the forcing of
+  ADR 0218; the SIMPLEC iteration diverges instead on N 48 and N 96 (in PISO, MU7, it stays bounded with `e` seven times
+  larger). The flux of D1 without the source of D2 is not a usable scheme; the two are applied by one call and cannot be used
+  apart through the library.
+- The registration says the solid-cell pressure is printed for every run; for the first forcing it is not available (above).
+- Before the first run only the build, `cargo fmt` and `cargo clippy` were run on the code; clippy asked for the comparisons of
+  the A1 test to be written through a helper (`le`), which was done before the commit and the run. The first build warned of an import left unused in
+  `simple.rs`, which was corrected. Nothing was tuned: the library of c68c3665 is the first version that was run.
+- Not run: the workspace test suite and the gate (the lead's); the 2D-2 case, M3 and the Strouhal number with the second-order
+  forcing; a non-uniform mesh at the surface in CC; the sphere and the cuboid; BDF2; more than one non-orthogonal corrector.
+
+### Decision by the registered rule
+
+A1 met with S1 and C1 held; V1 to V4, U1 to U3, N1, B1 and R1 met; each of the eight mutations failed a test it must fail.
+**F-309 is done by the rule**, in the library, pending the maintainer's acceptance. "Done" does not include: a case key or a
+Studio control (Q2), the treatment as the default (Q1), the force and moment (Q5), and the limits of the registration.
+
+### Remaining questions
+
+- **Q1. Default** (as registered). Options: (a) keep the opt-in; (b) make the flux of D1 to D3 part of the modified forcing, so
+  that `build` gives it. (b) changes the numbers of every present immersed run (ADR 0218's A1 to A3 would be measured again; on
+  M2 the drag moves from -0.17 to -0.31 percent). Recommendation: (a) until Q5 is settled, then (b) with a new registration.
+- **Q2. Case key** (as registered; ADR 0218 Q2). Recommendation: one follow-up item for the key `immersed_solids` with a field
+  for this treatment, with the schema-golden edit approved.
+- **Q3. The refusal as a panic** (as registered). Recommendation: (b) the divergence guard in PIMPLE and a located stop in
+  SIMPLE, in the item of Q2.
+- **Q4. The continuity measure** (as registered). Recommendation: (b) subtract the sources, in the item of Q2.
+- **Q5 (added). The force and moment are first order.** Options: (a) a follow-up item: the force from the stress at the crossing
+  (the pressure extended to the surface and the wall gradient of the extension, integrated over the flux faces) or the reaction
+  with the momentum flux of D1 taken out, registered with the CC torque as its check; (b) leave it. Recommendation (a).
+- **Q6 (added). The corrector-count estimate** (`pick_correctors`, ADR 0156) solves its trial pressure without D1 to D3.
+  Options: (a) refuse corrector control with the flux faces; (b) pass the reconstruction to the trial; (c) leave it (the estimate
+  only chooses a count). Recommendation (b), when `pimple.rs` is free.
+
+### For the lead: roadmap entries
+
+**F-309: proposed status `done`** (pending acceptance). Proposed note (replacing the present one):
+
+> DONE in the library (ADR 0234, 2026-11-12), pending acceptance. From ADR 0218 question 6. Delivered: rcfd-fv immersed.rs,
+> `ImmersedForcing::build_second_order` (opt-in; `build`, the forcing of ADR 0218, is unchanged and bit-identical, state hashes
+> checked): the flux of every fluid-solid face is that of the linear extension of the fluid profile through the no-slip value at
+> the surface crossing, the net flux of each body is that of its rigid velocity, and the solid cells get the volume source that
+> releases their continuity (`reconstruct_face_flux`; one statement and the source of the plain pressure solve in SimpleSolver and
+> PimpleSolver). Measured (limits registered before the code): circular Couette, the F-219 V1 check, error 6.12e-3, 1.61e-3,
+> 4.24e-4 at N 24, 48, 96, observed order 1.925 (limit 1.5; 2.04 from 96 to 192) against 1.023 of the forcing of ADR 0218, error
+> at N 96 3.7 times smaller; face-flux error 39 times smaller; PISO equal to SIMPLEC to 1e-4; DFG 2D-1 on M2 C_D -0.31 %, C_L
+> +2.53 %; eight mutations caught. Cause of the first order of ADR 0218 (derived and seen in the numbers): the continuity of a
+> solid cell pins the flux of its fluid-solid face to the rigid velocity, a face velocity error of order h with a pressure jump
+> of order 1. Not included: a case key or Studio control (schema golden); not the default; plain pressure path only (gradient
+> options, body-force-weighted and implicit non-orthogonal pressure panic); the force and moment from the forcing stay first
+> order (CC torque error 1.60 %, 0.74 %, 0.39 % at N 48, 96, 192); the continuity measure holds the solid-cell sources; the
+> limits of F-219 (no moving bodies, momentum only, not in the coupled solver, the fractional step or on moving meshes).
+
+**Proposed follow-up items:**
+
+1. *Immersed solid: second-order force and moment.* Deps: F-309. Acceptance: "The torque on the immersed rotating cylinder of
+   circular Couette flow (the CC set-up of ADR 0218, second-order forcing) reaches an observed order of 1.5 between N 48 and 96,
+   and the DFG 2D-1 drag and lift on M2 are within 1 percent and 3 percent of the FeatFlow values." Note: from ADR 0234 Q5.
+2. *Immersed solids in the case tree.* Deps: F-219, F-309. Acceptance: "A case key `immersed_solids` (shape, inverted, velocity,
+   omega, origin, penalty, modified, second_order) runs the DFG 2D-1 case from a case file within 5 percent; a case without the
+   key hashes as before; the second-order treatment with an unsupported pressure option is refused with a located diagnostic;
+   the continuity residual excludes the solid-cell sources." Note: from ADR 0218 Q2, Q3 and ADR 0234 Q2 to Q4, Q6; needs the
+   schema-golden edit approved.
