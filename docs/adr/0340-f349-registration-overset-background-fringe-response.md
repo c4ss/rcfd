@@ -279,3 +279,218 @@ A further mutation: **MU5**, the test's `kink`: the defect without the face-inte
 alone); must fail HK.
 
 The decision rule is unchanged.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendment 1; none was changed. Release builds on
+Windows; the library is that of main a5db938b, unchanged: this work adds one test file and this ADR, and `git diff a5db938b
+-- crates/*/src` is empty, so no default and no pinned result can have moved. Commits: the registration `71796963` (alone,
+before any code); the tests as registered `a1b1d772` (compiled, formatted and linted without running); amendment 1 with
+its tests `846325bb`, before their runs; the known-miss renames `37a3cad8`. Each registered run was made once (the
+deterministic run of RL at level 1 is shared by several tests and printed the same digits each time). Logs:
+`E:/projects/cfd/w49i-work/f349-scratch` (`f349-fast.log`, `f349-l_long_run_*.log`, `f349-f_finer_level_*.log`,
+`f349-d_half_*.log`, `f349-e_equal_*.log`, `f349-s_spacings_apart.log`, `f349-a1-fast.log`, `f349-hk_level_2.log`,
+`f349-MU1.log` to `f349-MU5.log`).
+
+### What the diagnosis found, in short
+
+1. **No clause of the order check is met.** `R_b` at `t = 0.5` on levels 1 to 5 is `4.996e-5`, `2.177e-5`, `1.412e-5`,
+   `8.917e-6`, `6.425e-6`: orders `1.198`, `1.068`, `1.598`, `1.469`. Run on to `t = 3` (levels 1 to 3): `1.403e-4`,
+   `5.250e-5`, `3.376e-5`, orders `1.418`, `1.089`; `R_b` is still growing there (by 6 percent from `t = 2.5`). Half the
+   time step changes `R_b` by `0.9`, `0.7`, `0.7` percent.
+2. **The source itself is of second order but alternates.** The truncation of the background fringe has `kappa_b =
+   0.0685`, `0.0781`, `0.0621`, `0.0693`, `0.0638` on levels 1 to 5: the reflection of the fringe phase between odd and even
+   levels is not a symmetry (amendment 1). Between levels of the same parity the truncation converges at `2.09`, `1.95`,
+   `2.17`, and `R_b` at `1.150` (1 to 3), `1.288` (2 to 4), `1.542` (3 to 5). The response per unit of truncation,
+   `R_b / rms(tau_b)`, is `0.210`, `0.321`, `0.590`, `0.593`, `0.726`: **it grows with the refinement.**
+3. **On a set-up without the alternation and without the modulation along the ring the order is 1.0.** RE (equal
+   spacings, both fringes at one fixed fraction of their donor cells, truncation orders `1.995`, `1.956`): `R_b =
+   6.428e-5`, `3.251e-5`, `2.154e-5`, orders **`0.983`, `1.015`**; `R_b / rms(tau_b) = 0.168`, `0.339`, `0.497`,
+   proportional to the level with no sign of levelling off (`1 / ratio = 5.95`, `2.95`, `2.01`).
+4. **Where the order is lost: the fringe velocity is imposed softly, at both fringes.** `a_c`, the share of a change of
+   the normal velocity of a fringe cell that the calculated cell across the face follows, at the background fringe of RL
+   at `t = 0.5`: `0.51`, `0.66`, `0.76`, `0.79`, `0.83` (levels 1 to 5); at `t = 0.025`: `0.10`, `0.24`, `0.37`, `0.42`,
+   `0.51`; at `t = 3`: `0.63`, `0.76`, `0.85` (levels 1 to 3). At the component fringe at `t = 0.5`: `0.34`, `0.64`, `0.73`,
+   `0.79`, `0.83`. On RE along the path at `t = 0.5`: the truncation converges at `1.995`, `1.956`; the calculated
+   background cells next to the ring at `1.451`, `1.485`; the component fringe cells at `1.604`, `1.398`; the calculated
+   component cells at `0.983`, `1.015`. Each of the two fringes costs about half an order on these levels.
+5. **The term is named and measured (HK, confirmed).** The flux of a face between a calculated and a fringe cell is the
+   flux of the pressure equation with the interpolated fringe pressure; it differs from the face-interpolated velocity by
+   the defect `D`, held by a pressure jump `dJ = -(16 nu / (3 h)) D`. Face by face on the background fringe of RE the
+   coefficient is `0.9986` (level 1) and `1.0162` (level 2) of that, correlation `0.995` and `0.999`. The coupling of the
+   normal velocity across a fringe face is a resistance proportional to `nu / h`, not an identity: a mismatch of second
+   order is carried by a pressure of first order next to the fringe, and the interior follows the fringe only as fast as
+   that pressure moves it.
+6. **Not shown:** the order that `R_b` reaches once `a_c` is close to one. The saturation of `R_b / rms(tau_b)` is not
+   visible up to level 5 at `t = 0.5` or up to level 3 at `t = 3`, and I have no formula that gives `R_b` from the
+   resistance: the estimate "order = 2 minus the sum of `1 - a_c` over the two fringes" gives `1.13`, `1.43` on RE where
+   `0.98`, `1.02` is measured.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (D) half the step, orders of `R_b`, levels 1 to 2, 2 to 3 | `>= 1.7` | `1.201`, `1.068` (`5.0402e-5`, `2.1928e-5`, `1.4223e-5`) | **missed** (known-miss test) |
+| A1 (E) RE, orders of `R_b`, levels 1 to 2, 2 to 3 | `>= 1.7` | `0.983`, `1.015` | **missed** (known-miss test) |
+| A1, the transient Rhie-Chow term off | `>= 1.7` | `1.763`, `1.398` (ADR 0246, not run again) | missed on the second pair |
+| A2 orders of `R_b` at `t = 0.5`, levels 3 to 4, 4 to 5 | `>= 1.7` | `1.598`, `1.469` | **missed** (record test) |
+| A3 orders of `R_b` at `t = 3`, levels 1 to 2, 2 to 3 | `>= 1.7` | `1.418`, `1.089` | **missed** (known-miss test, record test) |
+| C1 continuity, every step of every overset run | `<= 1e-9` | largest `1.0e-13` | met |
+| C2 unconverged linear solves | `0` | `0` in every run | met |
+| QL `R_b(L, 0.5)` against ADR 0246, levels 1, 2, 3 | within 5 percent | `2.5`, `0.7`, `0.3` percent | held |
+| QS the substitution | exact | no component stencil changed, every background fringe stencil nine calculated component cells with the linear donor first, no fallback, in every run and on RL levels 1 to 5 and RE levels 1 to 3 | held |
+| NL orders of `R_b` at `t = 0.5`, levels 1 to 2, 2 to 3 | `<= 1.5` | `1.198`, `1.068` | held |
+| K (i) linear truncation of the background fringe, levels 2 to 3, 3 to 4, 4 to 5 | `>= 1.8` | `2.565`, `1.621`, `2.371` | **missed** between levels 3 and 4 (known-miss test; amendment 1) |
+| K (ii) quadratic truncation, same pairs | `>= 2.7` | `3.108`, `2.916`, `3.075` | met |
+| K (iii) the quadratic field | `<= 1e-11` | largest `1.1e-15` | met |
+| K' (i) linear truncation within the parity families, 1 to 3, 3 to 5, 2 to 4 (amendment 1) | `>= 1.8` | `2.089`, `1.948`, `2.173` | met |
+| HK kink relation on RE, levels 1, 2 (amendment 1) | `0.6 <= k <= 1.4`, correlation `>= 0.8` | `0.9986`, `1.0162`; `0.9952`, `0.9988` | met |
+
+### Hypotheses
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| HT settled second order | confirmed: A3 met; ruled out: both orders at `t = 3` below 1.5 | `1.418`, `1.089`; `G_L = 2.81`, `2.41`, `2.39` | **ruled out** |
+| HF not yet asymptotic | confirmed: A2 met; ruled out: both below 1.5 | `1.598`, `1.469` | **undecided** by the rule; within the parity families the order rises, `1.150`, `1.288`, `1.542` |
+| Hdt a time-step term | ruled out: `abs(rho_dt - 1) <= 0.10` at three levels | `1.009`, `1.007`, `1.007` | **ruled out** |
+| Hmod unequal spacings, modulation along the ring | confirmed: both orders on RE at least 1.7; ruled out: both below 1.5 | `0.983`, `1.015` | **ruled out** |
+| Hsp which spacing | background: `x <= -0.5`, `y >= 1.5`; component: `abs(x) <= 0.5`, `y <= 1.5` | `y_1 = 0.962`, `y_2 = 1.688`, `x_1 = -0.117`, `x_2 = -0.324` (`R_b(1,2) = 2.565e-5`, `R_b(2,1) = 5.417e-5`, `R_b(2,4) = 6.757e-6`, `R_b(4,2) = 2.726e-5`) | **mixed**. Refining the background alone *raises* `R_b` (by 8 and 25 percent) although the truncation is that of the unchanged component; `a_c` at the background fringe goes with the background level whatever the component (`0.51`, `0.50` at level 1; `0.66`, `0.67`, `0.70` at level 2; `0.77` at level 4). Within the families: `0.991` (B2), `1.925` (C2) |
+| HK the kink relation (amendment 1) | confirmed: `0.6 <= k <= 1.4`, correlation `>= 0.8` on RE at both levels | `0.9986`, `1.0162`; `0.9952`, `0.9988` | **confirmed** |
+
+Printed, no limit. HK elsewhere: on the component fringe of RE `1.029`, `1.045` (correlation `0.997`, `0.999`); on RL,
+where the spacings differ, `1.439`, `1.383` on the background fringe and `0.820`, `0.795` on the component fringe
+(correlation `0.997` and above): the relation is as sharp, the coefficient is not the one derived for equal `rAU` (it is
+close to `1.08` times the ratio of the receiving to the donor spacing; not derived). `R_b` at `t = 0.5, 0.75, 1, 1.5, 2,
+2.5, 3`: level 1 `4.996e-5`, `7.111e-5`, `8.670e-5`, `1.076e-4`, `1.215e-4`, `1.319e-4`, `1.403e-4`; level 2 `2.177e-5`,
+`2.897e-5`, `3.413e-5`, `4.116e-5`, `4.594e-5`, `4.957e-5`, `5.250e-5`; level 3 `1.412e-5`, `1.871e-5`, `2.204e-5`,
+`2.659e-5`, `2.965e-5`, `3.194e-5`, `3.376e-5`. The order between levels 1 and 2 is `3.28`, `2.60`, `2.47` at `t =
+0.0025`, `0.025`, `0.125` and `1.31` at `0.25`: at level 1 the mean of `d` over the calculated component cells changes
+sign between `t = 0.125` and `0.5` (`(-1.76e-5, 2.35e-5)` to `(4.6e-6, -1.26e-5)`), an early part and a later part of
+opposite sign. RL at level 1, `t = 0.5`, root mean square of `d`: BF `2.86e-4`, calculated background cells `1.23e-4`
+(`rho < 5 H`), `1.27e-4` (overlap), `8.6e-5`, `3.7e-5` (outside), CF `1.12e-4`, CC `5.0e-5`; at level 5 `1.58e-5`,
+`1.09e-5`, `7.7e-6`, `5.0e-6`, `2.0e-6`, `6.6e-6`, `6.4e-6`. The change of the pressure jump at the background fringe faces
+(root mean square) `2.86e-4`, `9.8e-5`, `5.2e-5`, `3.4e-5`, `2.3e-5` at levels 1 to 5: first order, as the kink relation
+says. Run times (three processes at once on a shared machine at full load): L 1771 s (levels 1, 2) and 6288 s (level 3);
+F 2382 s and 7256 s; D 2613 s; E 1097 s; S 4284 s; HK 566 s.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `37a3cad8` (`f349-scratch/mut`, own target directory) by `mutate.py` (an exact
+replacement that must occur once), the named tests run once, the file restored and compared byte for byte (equal in all
+five). The commits after `37a3cad8` add one ignored record test without a flow run and this addendum.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the offset `delta` not applied | C1 | failed: continuity `4.5e-3`, `2.8e-3` (and QL `0.17`) |
+| MU2 the linear stencil whatever the mode | QS and K (ii) | failed: 28 to 124 background stencils not quadratic; K (ii) `2.565`, `1.621`, `2.371`; QL `1.0` |
+| MU3 the substitution on the component fringe | QS | failed: 76 component stencils changed, 28 background stencils linear |
+| MU4 `R_b` without the decay factor | QL | failed: `7.3` percent |
+| MU5 (amendment 1) the defect without the face-interpolated velocity | HK | failed: coefficient `-0.177`, correlation `-0.777` |
+
+`scripts/limit_audit.py` on the new file: no hit.
+
+### Deviations and disclosures
+
+- The registration treated the reflection of the fringe phase as a symmetry (from ADR 0246) and K (i) missed for it. The
+  orders of `R_b` between successive levels of RL, here and in ADR 0246, carry the alternation of the source; the
+  acceptance's numbers `1.153`, `1.093` are such orders. RE and the parity families do not.
+- The numbers of K' were known from K before K' was registered; the estimate for HK was made from printed numbers of E.
+  Both are said in amendment 1.
+- Amendment 1 was written while D, S and F at level 5 were still running; their numbers were not known then, except
+  `R_b` of the first five pairs of S, which I had looked at (they are not used in the amendment).
+- The pairs 2 to 3 (A3, NL) and 3 to 4, 4 to 5 (A2) are formed from the printed numbers of different test processes and
+  recorded in `a_orders_between_test_processes_known_miss`, as registered.
+- My predictions: A2 missed, Hdt ruled out, the controls met: right. K met: wrong. For A3, Hmod and Hsp I had none that
+  I trusted; the model of a settling time proportional to `h` that I leaned on is ruled out as the whole explanation (the
+  response does not settle at second order by `t = 3`), although `a_c` does rise faster on the finer levels.
+- The long run times of the three heaviest records (level 3 to `t = 3`, level 5, `RL(4,2)`) are those of a loaded machine.
+
+### Not run
+
+- Level 4 at `t = 3`, levels above 5, RE above level 3: not registered (hours each).
+- No library switch that imposes the fringe flux exists, so clause 1 could not be tested by removing the term; the term
+  is identified by its relation (HK), not by its removal.
+- Outer iterations, BDF2 and the number of correctors as switches: with `rho_dt = 1.007` a splitting or time error is
+  excluded, and they were not run.
+- The existing overset suites and the rest of `rcfd-fv`: the library is unchanged; the lead runs the gate. The new file
+  without the ignored tests ran on the tree of amendment 1: 3 passed, 9 ignored, 59 s.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean (the only crate
+touched, tests only).
+
+### Decision by the registered rule
+
+**Partial.** No clause is met in the registered sense: A1, A2 and A3 are missed, and the strong form of clause 3 asks for
+a scaling that reproduces the measured `R_b`, which I do not have. The term is located by decided hypotheses with their
+numbers: a time-step term, a late settling at second order and the unequal spacings are ruled out; on the exactly locked
+set-up the order is `0.98`, `1.02`; the cause named and confirmed is the soft imposition of the normal fringe velocity
+(HK: `dJ = -(16 nu / (3 h)) D` to `0.2` and `1.6` percent), which lets the calculated cells follow their fringe by `0.5` to
+`0.83` only and makes the response per unit of truncation grow with the refinement. Said plainly: why `R_b` is below 1.7
+is named with numbers; at which level or time it would reach 1.7 is not shown, and whether removing the resistance
+restores the order is a conjecture that needs the library switch below.
+
+### The library switch the diagnosis points at (not built)
+
+Today (ADR 0219 M6 to M8) the flux of a face `f` between a calculated cell `C` and a fringe cell `F` comes from the
+pressure equation, with `p_F` a Dirichlet value. The interpolated velocity of `F` enters that flux only through `HbyA_F`,
+and the difference to `(u)_f . S` relaxes as `D_new = theta D + R`, which is the resistance of HK.
+
+Switch (opt-in, default off, defaults bit-identical): **the flux of a calculated-fringe face is prescribed**, `phi_f =
+(u^I)_f . S_f + q A_f`, where `u^I_F` is the interpolated fringe velocity of the new time level, `(u^I)_f` its face
+interpolation with `u_C`, and `q` one number per closed fringe ring. In the pressure equation such a face is a fixed-flux
+(zero-coefficient) face, as a wall with a given flux is: the row of `C` loses the coefficient of `p_F` and gains the source
+`-phi_f`. Then `D` on these faces is zero by construction and the continuity of `C` imposes the interpolated normal
+velocity at once (`a_c = 1` up to the interpolation). What follows from it, to be designed in the follow-up:
+
+- compatibility: the calculated cells of each part enclosed by fixed-flux faces need a net flux of zero; `q` (the mean
+  normal velocity defect of the interpolated velocity over the ring, `-1.6e-5` to `-2.0e-8` on RL by ADR 0246) restores
+  it and takes the place of the pressure offset `delta`;
+- the pressure of each part is then fixed up to a constant by its own equation: one reference per part, or the level
+  taken from the interpolated fringe pressure in the mean;
+- because `u^I_F` depends on the donors' new velocity, the prescription is lagged within a corrector or needs the
+  corrector loop to converge; the existing outer iterations can carry it;
+- the interpolated fringe pressure is still needed for the pressure gradient of `C`.
+
+The switch belongs in `rcfd_fv::overset` (`piso`, `overset_pressure`), which another item holds now. Whether it restores
+the order is the acceptance of the follow-up, not a result of this ADR.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The status of F-349.** Options: (a) partial, as the rule gives; (b) done on the third clause (why not is named
+  with numbers). Recommendation (a): the order at which `R_b` settles is not shown and the cause is confirmed by its
+  relation, not by its removal. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation);
+  not a decision the maintainer made in person, and (b) is the maintainer's to choose.
+- **Q2. The prescribed-flux fringe face as an opt-in.** Options: (a) a follow-up item (text below), after the held work on
+  `overset.rs` has landed; (b) leave it: the quadratic donor interpolation of F-336 removes the truncation that the
+  response answers to, whatever the response's order. Recommendation (a) at low priority: the soft coupling acts on every
+  difference between the two parts, not only on the truncation (it is a candidate for the excess of F-369). Taken on the
+  standing instruction as a proposal to the lead.
+- **Q3. The order checks of RL between successive levels.** The background fringe of RL alternates between odd and even
+  levels (a factor `1.26` in the source). Options: (a) keep the existing records as they are and use RE, or the parity
+  families of RL, for new order checks of the coupling; (b) redefine RL. Recommendation (a): existing tests and records
+  are not edited. Taken on the standing instruction.
+- **Q4. F-369.** Its acceptance asks for the shares of the fringe pressure, the mass offset and the flux of the faces that
+  change kind. Option: add the coefficient `a_c` and the kink relation of this ADR to its measurements. Recommendation:
+  yes, as a note on F-369 (text below); its acceptance is unchanged.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-349**, proposed status: `partial`. Proposed note:
+
+> From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0340, 2026-11-12: PARTIAL, a diagnosis, tests only, no library change. No clause of the order check is met. R_b (the library's quadratic donor interpolation of F-336 on the background fringe against the default stencils; within 2.5 percent of ADR 0246) is 4.996e-5, 2.177e-5, 1.412e-5, 8.917e-6, 6.425e-6 at t = 0.5 on levels 1 to 5, orders 1.198, 1.068, 1.598, 1.469; run on to t = 3 on levels 1 to 3 it is 1.403e-4, 5.250e-5, 3.376e-5, orders 1.418, 1.089, and still growing; half the time step changes it by under 1 percent. Found on the way: the truncation of the background fringe of RL alternates between odd and even levels (coefficient 0.0685, 0.0781, 0.0621, 0.0693, 0.0638; the reflection of the fringe phase is not a symmetry), so orders between successive levels of RL carry a factor 1.26; within the parity families R_b has 1.150, 1.288, 1.542. On a set-up locked exactly, with equal spacings and no modulation along the ring (RE), the truncation converges at 1.995, 1.956 and R_b at 0.983, 1.015: the response per unit of truncation is proportional to the level (0.168, 0.339, 0.497) with no levelling off. Ruled out with numbers: a time-step or splitting term, a late settling at second order, the unequal spacings and the modulation. Named and confirmed: the normal velocity of a fringe cell is imposed softly. The flux of a face between a calculated and a fringe cell is that of the pressure equation with the interpolated fringe pressure and differs from the face-interpolated velocity by a defect D held by a pressure jump dJ = -(16 nu / 3 h) D (measured face by face on RE: 0.9986, 1.0162 of that, correlation 0.995, 0.999), a resistance proportional to nu / h. The calculated cell across a fringe face follows a change of the normal fringe velocity by 0.51, 0.66, 0.76, 0.79, 0.83 at the background fringe (levels 1 to 5, t = 0.5; 0.10 to 0.51 at t = 0.025) and by 0.34 to 0.83 at the component fringe; each fringe costs about half an order on these levels. Refining the background alone raises R_b. Not shown: the level or time at which R_b reaches 1.7, and a formula for R_b from the resistance. One registered kinematic check missed (the truncation order between levels 3 and 4, 1.621 against 1.8, the alternation) and is kept as a known miss. Controls held, five mutations caught. Follow-up (ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11): an opt-in that prescribes the flux of the calculated-fringe faces from the interpolated velocity.
+
+**F-334**, status unchanged (`partial`). In its note, replace the sentence "Open: why the response to a second-order truncation stays below second order." by:
+
+> Traced by ADR 0340 (F-349): the normal velocity of a fringe cell is imposed on the calculated cells through a resistance proportional to nu / h (a flux defect held by a pressure jump dJ = -(16 nu / 3 h) D), so the response per unit of truncation grows with the refinement; the truncation of the background fringe of RL also alternates between odd and even levels.
+
+**F-369**, status unchanged. Add to its note:
+
+> ADR 0340 (F-349) found that the fringe velocity is imposed softly on the calculated cells (the following coefficient a_c of 0.5 to 0.83 and the kink relation dJ = -(16 nu / 3 h) D at the fringe faces); both are candidates for the measurements of this item.
+
+Proposed follow-up item (the number is the lead's): **Overset: prescribed flux on the faces between calculated and fringe cells.** Depends on F-349 and F-344. Acceptance:
+
+> An opt-in of the overset step under which the flux of a face between a calculated and a fringe cell is the face interpolation of the interpolated fringe velocity plus one correction per closed fringe ring that makes the net flux of each enclosed part zero (ADR 0340, the switch described there): on RE of ADR 0340 at levels 1 to 3 the following coefficient a_c at both fringes is at least 0.9 at t = 0.025 and the order of R_b at t = 0.5 is at least 1.7 on both pairs, on RL the order of R_b is at least 1.7 within the parity families (levels 1 to 3 and 2 to 4), continuity of the calculated cells and the mass of the domain hold to 1e-9, the uniform-flow check U1 of ADR 0219 holds, and without the opt-in every overset result is bit-identical; or the ADR shows with a number why the prescribed flux is not admissible.

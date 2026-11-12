@@ -932,6 +932,42 @@ fn f_finer_level_5() {
     c.finish();
 }
 
+// ---- the orders between levels that ran in different test processes ----------------------------------------------------------
+
+/// ADR 0340 addendum 1: the orders of A2, A3 and NL that are formed from the printed `R_b` of different test processes
+/// (`RESULT` lines of L at levels 2 and 3 and of F at levels 4 and 5, quoted here). NL holds (1.068); A3 between levels 2
+/// and 3 at `t = 3` is 1.089 and A2 is 1.598 (levels 3 to 4) and 1.469 (levels 4 to 5) against the limit 1.7: a record of
+/// the misses with the limits intact, no flow run.
+#[test]
+#[ignore = "known miss, ADR 0340: A3 levels 2 to 3 at t = 3 1.089, A2 levels 3 to 4 1.598 and 4 to 5 1.469 (limit 1.7); a record of printed numbers"]
+fn a_orders_between_test_processes_known_miss() {
+    let mut c = Checks::new();
+    // R_b(L, 0.5), levels 2 to 5, and R_b(L, 3), levels 2 and 3
+    let half = [2.177289e-5, 1.412190e-5, 8.916794e-6, 6.425132e-6];
+    let three = [5.249931e-5, 3.376422e-5];
+    c.at_most(
+        "NL order of R_b at t = 0.5, levels 2 to 3",
+        order(half[0], half[1], 1.5),
+        1.5,
+    );
+    c.at_least(
+        "A3 order of R_b at t = 3, levels 2 to 3",
+        order(three[0], three[1], 1.5),
+        1.7,
+    );
+    c.at_least(
+        "A2 order of R_b at t = 0.5, levels 3 to 4",
+        order(half[1], half[2], 4.0 / 3.0),
+        1.7,
+    );
+    c.at_least(
+        "A2 order of R_b at t = 0.5, levels 4 to 5",
+        order(half[2], half[3], 1.25),
+        1.7,
+    );
+    c.finish();
+}
+
 // ---- D: half the time step ---------------------------------------------------------------------------------------------------
 
 /// ADR 0340 D: RL at levels 1, 2, 3 with `400 L` steps; A1 for this switch (`rho_dt` is formed in the ADR against L). Run
