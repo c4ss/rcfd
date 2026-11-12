@@ -183,3 +183,81 @@ diagnosis shows that a clause check rests on a defect. **todo**: the test file d
 - The bit comparison covers fluid time and wall displacement and solid time, displacement, interface forces; the checkpoint
   slots and `f0` are not compared.
 - The message check compares the mock's own text written in this file, not the text of a library error.
+
+## Addendum 1: results (2026-11-12)
+
+Registered run: commit 2dcd4bd3 (the test file; an earlier commit a84fde78 of the same file differed only by a type alias added for clippy's `type_complexity`, no check or limit changed, both before any run), `cargo test --release -p rcfd-post --test sb_solid_coupling_fail_fluid -- --nocapture --test-threads=1`, log `w49i-work/f465-scratch/registered_run.log`, run once: 5 passed, 0.10 s. The later all-targets `cargo test --release -p rcfd-post` ran this file a second time with the same result; nothing was picked from it. Release profile throughout.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| P1a healthy step, Aitken | converged, `== 3` | converged, 3 | yes |
+| P1b test quantity 1 against 15 | `<= 1e-6` relative | 7.0e-14 | yes |
+| P1c test quantity 2 against 0.375/1.025 | `<= 1e-6` relative | 1.5e-14 | yes |
+| P1d test quantity 3 | `<= 1e-10` | 5.8e-16 | yes |
+| P1e advances of structure and fluid | both 3 | 3, 3 | yes |
+| P1f both states change | both differ | differ | yes |
+| P4a to P4f (least squares) | as P1 | identical numbers to P1 | yes |
+| F2a, F3a, G2a, G3a participant `fluid`, iteration n | exactly | as stated | yes |
+| F2b, F3b, G2b, G3b message equals the mock's text with entry time `t0` | string equal | equal, no appended restore text | yes |
+| F2c, F3c, G2c, G3c error time | 0 bits | 0 | yes |
+| F2d, F3d, G2d, G3d structure and fluid advanced n times | `== n` each | n, n | yes |
+| F2e, F3e, G2e, G3e both states bit-equal to the start | 0 bits | 0 | yes |
+| F2f, F3f, G2f, G3f states were off the start at the failure | both differ | differ | yes |
+| F2g, F3g, G2g, G3g retry reproduces the control | 0 bits | 0 | yes |
+| N1 failure at the 4th fluid advance never reached | Ok, 3 iterations, 3 advances each, bit-equal | as stated | yes |
+
+The reachability argument holds as measured (15, 0.366, 5.8e-16, three advances each); the Aitken and least-squares trajectories coincide bit for bit, as in ADR 0361. Example failing error: `co-simulation: 'fluid' at t = 0.001, iteration 3: linear wall: injected failure at advance 3, entered at t = 0.001`.
+
+### Mutations (scratch copy `w49i-work/f465-scratch/mut` of 2dcd4bd3, script `mutate.py`, log `mutations.log`, each run once)
+
+| Id | Change | Result |
+|---|---|---|
+| M9 | error arm: structure restore skipped | caught: F2e, F3e, G2e, G3e (and F2g to G3g) |
+| M11 | error arm: fluid restore skipped | caught: F2e, F3e, G2e, G3e (and F2g to G3g) |
+| M15 | error arm: both skipped | caught: F2e, F3e, G2e, G3e (and F2g to G3g) |
+| M16 | fluid restore skipped at every `k > 1` | caught only by a panic in the set-up (see below): all 5 tests fail in `start()`; F2b and F3a were not reached |
+| M17 | structure restore skipped at every `k > 1` | same, set-up panic (`solid`, iteration 2) |
+| M18 | fluid restore skipped for `k > 2` | same, set-up panic (`fluid`, iteration 3) |
+| M19 | structure restore skipped for `k > 2` | same, set-up panic (`solid`, iteration 3) |
+| M20 | fluid error iteration `k + 1` | caught: F2a, F3a, G2a, G3a |
+| M21 | iteration `k - 1` | caught: F2a, F3a, G2a, G3a |
+| M22 | participant `coupler` | caught: F2a, F3a, G2a, G3a |
+| M23 | message dropped | caught: F2b, F3b, G2b, G3b |
+| M24 | mock restore without the wall displacement | caught: F2e, F2g, F3e, F3g, G2e, G2g, G3e, G3g |
+| M25 | mock restore without the time | set-up panic (the converged first step stops on the time check), as M16 |
+| M26 | wrapper switches one call early | caught: F2a, F2d, F3a, F3d, G2a, G2d, G3a, G3d |
+
+**Defect of the set-up found by the run.** The start state (`start()`) is itself a converged coupled step of three iterations, so it uses the coupler's restores at the start of iterations 2 and 3. Any mutation of those restores (M16 to M19) or of the mock's restore (M25) makes `start()` fail with an `unwrap` panic in every test, before P1 or any failing-step check runs. These five mutations are therefore detected (every test of the file fails) but not by the checks registered for them (F2b, F3a, G3b, P1 and so on). The registration expected the failing-step checks to see them; they cannot. By Rule I this is a registered mutation not caught by its registered check: **the status is partial**. The limits are not changed. The mutations that the acceptance names for the error arm (M9, M11, M15) are caught by the registered checks.
+
+### Other checks run
+
+- `cargo test --release -p rcfd-post`, all targets, existing tests unedited: every suite passed (log `post_all.log`); `sb_solid_coupling` 11 passed, 1 ignored; `sb_solid_coupling_fail` 3 passed; the new file 5 passed.
+- `cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets --release -- -D warnings`: clean.
+- Defaults: tests only; no library, shared solver file, golden or hash table touched; `baseline_hashes` not run (rule 3).
+
+### Not run
+
+A fluid failing before it takes its state, the fluid's time check, wrong-size or non-finite fluid forces, a failing `restore`, iterations beyond 3, a flow solver. A corrected set-up for M16 to M19 and M25 (below).
+
+### Decision by the registered rule
+
+**partial.** All checks met and M9, M11, M15, M20 to M24, M26 caught by registered checks, but M16, M17, M18, M19 (the start-of-iteration restores, a clause of the acceptance) and M25 were caught only by the set-up panic, not by a registered check.
+
+### Remaining questions
+
+1. **Isolate the set-up from the mutations of the start-of-iteration restores.** Options: (a) leave it, accepting that a test-file-wide failure is a detection; (b) a follow-up item whose start state is built without a restore at `k > 1` (for example a loose-coupling first step, `max_iterations = 1` with `AtCap::Keep`, so that the coupler's iterations 2 and 3 first occur in the checked step), with its arithmetic registered beforehand, so that F2b, F3a, G3a, G3b and P1 are the catching checks. Recommendation: (b), a small item; (a) does not meet the acceptance as registered. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): listed as a follow-up item below.
+2. **M9, M11 and M15 are also caught by g.** The registered catchers (e) already catch them. No action.
+
+### For the lead: roadmap entries
+
+F-465: proposed status **partial**. Note:
+
+> Structural solver, basic tier. ADR 0364, 2026-11-12: tests only, crates/rcfd-post/tests/sb_solid_coupling_fail_fluid.rs. With the StaticSolid and the mock fluid of ADR 0286 and the start of ADR 0361 (a converged step, then F0 doubled), a mock fluid whose advance takes its new state and then returns an error in its 2nd and its 3rd call (Aitken and least squares) stops the step with participant 'fluid', that iteration number, the mock's message (entered at the start time) and the start time, after n advances of the structure and of the fluid; fluid and solid state (time, displacement, forces) bit-equal to the start of the step, with a check that both were off the start at the failure; the retry with a healthy fluid reproduces the healthy step bit for bit; the control reaches iteration 3 as derived (15 to 7e-14, 0.36585 to 1.5e-14, 5.8e-16) and a failure at the 4th call is never reached. The coupler's restores at the error, the equivalent mutants M9 and M11 of ADR 0361, are caught: skipping the structure's, the fluid's or both fails the bit-equality checks; a wrong iteration, participant or message and a wrong mock restore are caught by the registered checks. Partial: the mutations that skip the restores at the start of an iteration (fluid or structure, from iteration 2 or from iteration 3) and a mock restore without the time were caught only by a panic in the set-up, which is itself a converged 3-iteration step that uses those restores, not by the registered failing-step checks. Not covered: a fluid failing before it takes its state, the fluid's time check, bad force arrays, a failing restore, iterations beyond 3, a flow solver.
+
+Follow-up item (id by the lead):
+
+1. Title: "Coupled step: failing-participant checks with a start state that does not use the restores at the start of an iteration". Deps: F-465.
+
+> Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock fluid of ADR 0286, a start state reached without any coupler iteration beyond the first (a loose-coupling first step, then F0 doubled), registered with its arithmetic, a mock fluid failing in iteration 2 and in iteration 3 stops the step with the fluid's name, the iteration number and its message and both participants bit-equal to the start; mutations that skip the coupler's restore of the fluid or of the structure at the start of iteration 2 or of iteration 3 (ADR 0364 M16 to M19) and the mock's restore of the time (M25) are each caught by a failing-step or control check, not by a panic in the set-up.
