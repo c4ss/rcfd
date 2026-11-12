@@ -347,3 +347,59 @@ A mutation that no check catches is reported as surviving.
   rotating region inside the layer).
 - Q2. The frame setting in the case schema, with the sponge's wiring (F-331 question 1). Recommendation: with that wiring,
   as a key `frame = "mesh"` beside the layer, default "static" (refused on moving meshes); not taken here (approval).
+
+## Amendment 1 (2026-11-12): the control NCr of clause 2 missed its limit; a corrected control NCr2, registered before its run
+
+Written after the first run of every registered check (code 337018bb, log kept in the scratch folder) and before any run
+of the check registered here. The registered text above is unchanged.
+
+What this amendment needs from that run (the full table comes in addendum 1): every check met its limit except the
+control NCr: `R = 0.8642` against `>= 0.9`. In the same run T0m, T0mr and T0pr measured `9.617e-7` and T0sr `9.829e-7`
+against `1e-2`. The T0 test is kept as the ignored record `t0_tube_on_a_translating_mesh_known_miss` (commit ddb3d449), its
+limits intact.
+
+### Diagnosis
+
+The estimate of NCr took the moving pressure outlet of ADR 0207 SN (`1.000`, a step wave) and the static rigid wall of ADR
+0237 NC0 (`0.933`, this pulse) as guides. It missed one thing that the derivation DR6 itself implies: on the translating
+mesh the reflected pulse is narrower. At the face the boundary holds `p_r(t) = -p_i(t)`; the incident pulse passes the
+face (in the mesh frame) at 1.2 and the reflected one leaves at 0.8, so the reflected pulse has `0.8/1.2 = 2/3` of the
+incident width: 5.3 cells per width `w` instead of 8. The limited MUSCL scheme lowers the peak of a narrower pulse more over
+the same distance, and the measure of ADR 0237 is a ratio of peaks. The linear reflection is full (`|R| = 1`, DR6); what
+the measure sees is the peak loss of a narrower pulse.
+
+A scratch diagnostic (a copy of the tree in the scratch folder, a test file that is not committed; not a registered check)
+ran the NCr set-up without sponge three times, with the measure of ADR 0237 and, besides it, the ratio of the time
+integrals at the probe `|sum (p_test - p_ref) dt| / sum (p_ref - p0) dt` over the whole run:
+
+| run | `R` (peak ratio) | incident peak / eps | reflected peak / eps | time-integral ratio |
+|---|---|---|---|---|
+| `V = -0.2`, `dx = 0.005` (NCr) | 0.8642 | 0.9064 | 0.7833 | 0.9995 |
+| `V = 0`, `dx = 0.005` | 0.9336 | 0.9065 | 0.8463 | 0.9996 |
+| `V = -0.2`, `dx = 0.0025` | 0.9479 | 0.9652 | 0.9150 | 1.0001 |
+
+At rest the release end gives the 0.93 of ADR 0237 NC0; on the finer grid the peak ratio rises from 0.86 to 0.95; the time
+integral, which a conservative scheme does not lose to dissipation (the spatial integral of a separated simple wave is
+conserved, and the time integral at a point is that integral over the speed: `int p_r dx / 0.8 = int p_i dx / 1.2`), is
+1 to `5e-4` in all three. The diagnosis is confirmed: the release end reflects fully, the peak measure of the control is
+lowered by the dissipation of the narrowed pulse. This is a defect of the control's limit, not of the sponge, and not of
+the T0 checks (their measure is the registered one of ADR 0237, and with a sponge the reflected signal is below `1e-6`).
+
+### The corrected control
+
+**NCr2**: the run NCr (no sponge, `PressureOutlet { p0 }` behind, set-up T unchanged), measured by the time-integral ratio
+`J = |sum over the steps of (p_test - p_ref) dt| / sum over the steps of (p_ref - p0) dt` at the probe over the whole run
+(the incident pulse has passed the probe by `t = 0.5`, the reflected one by `t = 1.2`, and nothing else reaches it before
+1.6). Limit `J >= 0.9` (the registered limit of NCr). Estimate: 1 within `1e-3` (the derivation above). **Disclosed: the
+value of this measure on this run was seen in the scratch diagnostic (0.9995) before this amendment was written; NCr2 is
+therefore not a blind check.** It is registered so that the control of clause 2 is stated by a measure that the set-up can
+meet; the peak measure NCr stays in the record with its miss.
+
+The new test `t0b_tube_on_a_translating_mesh` repeats the deterministic T0 run once (the same code, grids, steps and
+measure; the four T0 values must reproduce the first run's digits) and adds `J` for every run; it asserts T0m, T0mr, T0pr,
+T0sr `<= 1e-2` and NCr2 `>= 0.9`.
+
+### Decision rule (replaces "and NCr held" in the first bullet of the registered rule; the rest stands)
+
+- Clause 2 is met when T0m, T0mr, T0pr and T0sr meet 1 percent and NCr2 holds. The status proposal states that NCr2 was not
+  blind and that NCr is kept as a known miss.
