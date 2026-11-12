@@ -341,3 +341,13 @@ with three outer iterations, which are deterministic, and adds the run in 400 st
 helper takes the speed of the motion since this amendment; the registered runs are unchanged. Predictions (mine): H12
 ruled out (`c` near 1), H13 confirmed, H14 confirmed with `rho_3` between 3 and 4.5, H15 confirmed. The decision rule is
 unchanged.
+
+## Amendment 2 (2026-11-12, written before any mutation ran)
+
+MO1 was registered as "must fail D1". D1 is missed without any mutation (amendment 1), so a failure of D1 under MO1 would
+show nothing: the plan is defective and is corrected here, before any mutation is applied. **MO1 must fail T2o-a** (met
+without the mutation at `1.862`; the slow test of the acceptance is run once on the mutated copy), and `max abs(d_200(3))`
+of that run is reported beside it (expected to return to about the `4.49e-4` of one outer iteration). MO2, MO3 and MO4
+are unchanged. The mutations are applied to a `git archive` copy of `3a2711f7` (the commit of the tests of amendment 1; the
+library is the one of `844357b0`) by `E:/projects/cfd/w49i-work/f335-mut-mutate.py`; MO1 and MO3 take two exact
+replacements each (a declaration before the loop and its use), each of which must occur once.
