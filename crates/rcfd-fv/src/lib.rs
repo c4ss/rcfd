@@ -17,6 +17,7 @@ pub mod diffusion;
 pub mod electric;
 pub mod energy;
 pub mod field;
+pub mod fsi;
 pub mod fvmatrix;
 pub mod geometry;
 pub mod gradient;
