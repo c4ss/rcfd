@@ -202,3 +202,88 @@ mutations. The whole-workspace test suite and the gate are not run on this branc
 ## Addenda
 
 Results follow.
+
+### Addendum 1: results (2026-11-12)
+
+Commits on `f328-small-followups` (from main bf3376b1): registration 52db06e5; A ebc51ad5; B 05a623a6; C de016bab; documents
+9d11f328; rustfmt of the new tests (layout only, no assertion changed) 6d413564. Each registered test was committed before its
+first run and run once in release, at de016bab (the documents and layout commits change no tested code):
+`cargo test --release -p rcfd-api --test rules_w19c`; `-p rcfd-cli --test map_warm_f329 --test map_w32c --test cli -- --nocapture
+--test-threads=1`; `-p rcfd-fv --test schemes_wave13 -- --nocapture --test-threads=1`; the record of C2 by name with `--ignored`.
+No limit, case or test set-up was changed after a run; no amendment was needed.
+
+| Id | Measured | Limit | Result |
+|---|---|---|---|
+| A1 | E5 (edited constants) passed: default, `simple`, `simplec`, `coupled`, `piso`, `pimple` give the no-slip text, `compressible` the slip text, each byte for byte, count 1; no SV202 with a boundary entry | exact | met |
+| A2a | `check_only`, compressible `box_2d` without boundaries: exit 0, `rules` one entry, SV202, the A0 compressible text | as stated | met |
+| A2b | default algorithm: exit 3, `rules` empty, 4 diagnostics `no boundary condition for mesh patch '<p>'` at `boundaries.<p>` for xmin, xmax, ymin, ymax | as stated | met |
+| A2c | four entries without keys: exit 0, 0 diagnostics, no SV202 | as stated | met |
+| A3 | E1 to E4 and E4b passed unedited (8 passed, 1 ignored: the existing `e2_..._known_miss`) | pass | met |
+| B1 | default map (630 + 1520 bytes) byte-identical to `CaseMapEvaluator` through `run_and_write`; `--warm-start flow` byte-identical to the default | exact | met |
+| B2 | `--warm-start extended`: exit 0, 3 points converged, points 1 and 2 `warm`, point 0 equal to the default's; largest relative difference to `--cold` 5.67e-9 (`dp`, point 1); iterations warm 61 and 60 against cold 89 and 88 | `REL_WARM` 1e-4 | met |
+| B2x | the extended map byte-identical to `ExtendedMapEvaluator` through `run_and_write` | exact | met |
+| B2n | default map restarts `cold, cold, cold` | not `warm` for points 1, 2 | met |
+| B3 | `bogus`: exit 2, `error: --warm-start takes flow or extended, got 'bogus'`; no value: exit 2, `error: --warm-start needs a value: flow or extended`; no out folder in either case | as stated | met |
+| B4 | `rcfd --help` contains `[--warm-start flow|extended]` | as stated | met |
+| B5 | `map_w32c` 2 passed, `cli` 8 passed, both unedited | pass | met |
+| C1 | `t2b`: over(BDF2) 2.4667e-2, over(Bdf2Bounded) 1.1564e-9 | >= 0.02; <= 0.25 over(BDF2) and <= 0.02 | met |
+| C2 | the record is ignored in the default run; by name with `--ignored` it passes, with the same two numbers | recorded | recorded |
+| C3 | the other tests of `schemes_wave13.rs`: 7 passed (with `t2b`), 6 ignored (5 existing records and known misses, plus the T2 record) | pass | met |
+
+**Mutations** (scratch, each applied alone to the tree of 6d413564, the named tests run once, the file restored and compared
+byte for byte with the commit: identical every time; `git status` clean afterwards):
+
+| Id | Measured | Result |
+|---|---|---|
+| MA1 | E5 failed (`compressible` got the no-slip text); E6 failed at A2a | fails, as registered |
+| MA2 | E5 failed (`default` got the slip text); E6 failed at A2a | fails, as registered |
+| MB1 | the B1/B2 test failed at B2 (point 1 restart `cold`, want `warm`); B3 and B4 passed | fails, as registered |
+| MB2 | failed at B1 (`the default map differs from CaseMapEvaluator's`) | fails, as registered |
+| MB3 | B3 failed (`bogus`: exit 0, empty stderr); B1/B2 and B4 passed | fails, as registered |
+| MC1 | applied as: the `Bdf2` arm matches `None` for the older level, so it always takes its implicit-Euler fallback (the registered effect). over(BDF2) 0: `t2b` failed ("no teeth"); the record **passed**, printing "T2 vacuous" | fails, and the record's vacuity is shown |
+| MC2 | applied as: `theta` shadowed by 1 after its computation. over(Bdf2Bounded) = over(BDF2) = 2.4667e-2: `t2b` and the record failed | fails, as registered |
+
+**fmt and clippy.** `cargo fmt -p rcfd-api --check`, `-p rcfd-cli`, `-p rcfd-fv`: the first check flagged only the new test code.
+After `cargo fmt -p` (6d413564, layout only) all three exit 0. `cargo clippy -p rcfd-api -p rcfd-cli -p rcfd-fv --all-targets
+--release -- -D warnings`: no warning.
+
+**Deviations.** (1) The A tests were run without `--nocapture`, so their printed lines were not kept. Every A limit is an exact
+assertion, so the pass is the measurement. (2) MC1 and MC2 were written differently from their wording (see above) but have the
+registered effect. (3) The extra layout commit 6d413564 is not in the commit plan.
+
+**Not run.** The whole-workspace test suite and the gate (by this ADR's rule). `baseline_hashes.rs` and `case_hashes_w48u.rs`
+are unedited, and no solver or case code changed: the diff against bf3376b1 touches `setup_rules.json`, `cmd_map.rs`, the `map`
+usage line of `main.rs`, three test files, two documents and this ADR. No MCP or CLI golden holds the changed texts; none was
+edited.
+
+**Decisions by the rules.** A: every check met and both mutations caught, so F-328 is proposed done. B: B1 and B5 met (defaults
+bit-identical), the rest met, three mutations caught, so F-329 is proposed done. C: C1 met, both mutations caught by `t2b`, and
+MC1 left the record green, so the F-269 item "a vacuous pass in the schemes_wave13 T2 test" is proposed resolved.
+
+**Remaining questions** (for the maintainer).
+
+1. **The extended warm start as the map default** (ADR 0209 Q7 (b)). Not taken: it changes the map rows of energy and turbulence
+   cases (here 5.7e-9 relative on HE, with about a third fewer iterations) and needs the bit-identity rule lifted. Options: (a)
+   keep the flag only; (b) make `extended` the default of `rcfd map` (and later of the design tools, with Q7 (a) and its golden
+   edits). Recommendation: (b) once the maintainer lifts the rule for maps; (a) until then.
+2. **The design tools** (ADR 0209 Q7 (a)). `design_run_operating_map` and chained study conditions do not get the option, because
+   their descriptors are in the tools-list goldens. Options: (a) leave them as they are; (b) a registered golden edit that adds
+   `warm_start`. Recommendation: (b), together with ADR 0209 Q6's description edit, as one registered golden change.
+
+## For the lead: roadmap entries
+
+- **F-328.** Title: "SV202's fuller text: what the solvers do with a case without boundary conditions". Deps: F-240. Acceptance:
+  "For the compressible solver SV202 states that every patch is a slip wall and an outlet is extrapolated. For every other solver
+  it states that the case is refused unless every mesh patch that is not empty or cyclic has a boundaries entry, and that an entry
+  without keys is a fixed no-slip wall. Each claim is checked through check_only (ADR 0235 A)." Status: done. Note: "ADR 0235 A
+  (ADR 0196 Q1 (b), taken on the maintainer's standing instruction of 2026-11-11): a text change in setup_rules.json, a registered
+  edit of rules_w19c.rs E5 and a new check E6; all checks met, two mutations caught. No golden held the text."
+- **F-329.** Title: "`rcfd map --warm-start extended`: the extended warm start on the command line". Deps: F-249. Acceptance: "With
+  --warm-start extended, a map of an energy or two-equation-turbulence case restarts each point warm, and its reports agree with
+  cold runs within REL_WARM 1e-4. Without the flag, or with flow, the map tables are byte-identical to before (ADR 0235 B)."
+  Status: done. Note: "ADR 0235 B (ADR 0209 Q7 (c)): HE map warm against cold 5.7e-9, 61 and 60 iterations against 89 and 88;
+  defaults byte-identical; three mutations caught. Open: the extended start as the map default (Q7 (b)) and in the design tools
+  (Q7 (a), a golden edit)."
+- **F-269 note change.** Remove "a vacuous pass in the schemes_wave13 T2 test (it should fail the vacuous case);" from the open
+  items and add: "The T2 vacuous pass is closed by ADR 0235 C: t2b asserts the registered precondition over(BDF2) >= 0.02
+  (measured 2.467e-2, bounded 1.16e-9); the old T2 stays as an ignored setup_defect record."
