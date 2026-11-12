@@ -5,6 +5,8 @@
 //!   their sides, and every face loop contains all lattice vertices on its edges, so every cell is closed for any tiling.
 //! * [`AnisoMesh::adapt`] refines and coarsens, with an optional balance per axis (face neighbours differ by at most one level
 //!   along every refined axis), and returns the [`Transfer`] of the isotropic lattice, used by [`super::transfer_field`].
+//! * [`AnisoMesh::adapt_with`] with [`Coarsening::Box`] (F-439, ADR 0341) coarsens by box merges, which return any state,
+//!   in three dimensions as well, to the base under repeated all-axes coarsening; [`AnisoMesh::adapt`] keeps the pair rule.
 //!
 //! [`super::AmrMesh`] is not changed by this module; on isotropic states both types build the same mesh bit for bit.
 
@@ -58,6 +60,16 @@ impl AxisMark {
             coarsen: axes,
         }
     }
+}
+
+/// Coarsening rule of [`AnisoMesh::adapt_with`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Coarsening {
+    /// Merge a leaf with its buddy along one axis (the rule of [`AnisoMesh::adapt`], ADR 0267 D3).
+    #[default]
+    Pair,
+    /// Merge all leaves that exactly tile the smallest admissible dyadic ancestor box of a marked leaf (ADR 0341).
+    Box,
 }
 
 /// The leaves as a set, with the level triples present (for point location).
@@ -385,6 +397,20 @@ impl AnisoMesh {
     /// `coarsen` along `t` too and (with `balance`) the merged leaf stays within one level of its face neighbours; one merge
     /// per cell and call, axes tried in the order x, y, z.
     pub fn adapt(&self, marks: &[AxisMark], balance: bool) -> Result<(AnisoMesh, Transfer, AdaptReport)> {
+        self.adapt_with(marks, balance, Coarsening::Pair)
+    }
+
+    /// As [`AnisoMesh::adapt`], with the coarsening rule chosen: [`Coarsening::Pair`] is the rule of `adapt`;
+    /// [`Coarsening::Box`] (F-439, ADR 0341) merges, for each cell marked `coarsen` along axes `C`, the smallest dyadic
+    /// ancestor box (levels lowered only along `C`) that is exactly tiled by leaves of this mesh which all agree (each is
+    /// marked `coarsen` along every axis on which it is coarsened) and, with `balance`, stays within one level of its face
+    /// neighbours. Repeated all-axes box coarsening without balance returns any state to the base.
+    pub fn adapt_with(
+        &self,
+        marks: &[AxisMark],
+        balance: bool,
+        coarsening: Coarsening,
+    ) -> Result<(AnisoMesh, Transfer, AdaptReport)> {
         if marks.len() != self.leaves.len() {
             return err(format!(
                 "AnisoMesh::adapt: marks has {} entries, the mesh has {} cells",
@@ -454,6 +480,114 @@ impl AnisoMesh {
                 }
             }
         }
+        let cur = match coarsening {
+            Coarsening::Pair => self.pair_merges(marks, balance, cur, &mut rep),
+            Coarsening::Box => self.box_merges(marks, balance, cur, &mut rep),
+        };
+        let mut next = AnisoMesh {
+            base: self.base,
+            axis_x: self.axis_x.clone(),
+            refine: self.refine,
+            max_level: self.max_level,
+            patches: self.patches.clone(),
+            leaves: vec![],
+            index: HashMap::new(),
+            set: LeafSet::default(),
+        };
+        next.set_leaves(cur.set.into_iter().collect());
+        let mut sources = Vec::with_capacity(next.leaves.len());
+        for n in &next.leaves {
+            if let Some(&i) = self.index.get(n) {
+                sources.push(Source::Same(i));
+                continue;
+            }
+            let (lo, hi) = (next.lo(n), next.hi(n));
+            let Some(old) = self.locate(&self.set, lo) else {
+                return err("AnisoMesh::adapt: internal error, a new cell outside the old mesh");
+            };
+            let (ol, oh) = (self.lo(&old), self.hi(&old));
+            if (0..3).all(|a| ol[a] <= lo[a] && hi[a] <= oh[a]) {
+                sources.push(Source::Descendant(self.index[&old]));
+            } else {
+                let mut idx: Vec<usize> = self
+                    .overlapping(&self.set, lo, hi)
+                    .iter()
+                    .map(|k| self.index[k])
+                    .collect();
+                idx.sort_unstable();
+                sources.push(Source::Merged(idx));
+            }
+        }
+        Ok((next, Transfer { sources }, rep))
+    }
+
+    /// The box merges of [`Coarsening::Box`] (ADR 0341 D2), applied to `cur` after the refinement.
+    fn box_merges(&self, marks: &[AxisMark], balance: bool, mut cur: LeafSet, rep: &mut AdaptReport) -> LeafSet {
+        for (l, m) in self.leaves.iter().zip(marks) {
+            if m.refine.contains(&true) || !cur.contains(l) {
+                continue;
+            }
+            let axes = [0, 1, 2].map(|t| m.coarsen[t] && self.refine[t] && l.levels[t] > 0);
+            if !axes.contains(&true) {
+                continue;
+            }
+            // candidates d (0 <= d_t <= levels_t on the marked axes, d != 0): smaller sum first, then larger d first
+            let range = [0, 1, 2].map(|t| if axes[t] { l.levels[t] } else { 0 });
+            let mut cands: Vec<[u8; 3]> = Vec::new();
+            for dx in 0..=range[0] {
+                for dy in 0..=range[1] {
+                    for dz in 0..=range[2] {
+                        if dx + dy + dz > 0 {
+                            cands.push([dx, dy, dz]);
+                        }
+                    }
+                }
+            }
+            cands.sort_by(|a, b| {
+                let (sa, sb) = (a.iter().sum::<u8>(), b.iter().sum::<u8>());
+                sa.cmp(&sb).then(b.cmp(a))
+            });
+            for d in cands {
+                let parent = AxisLeaf {
+                    levels: [0, 1, 2].map(|t| l.levels[t] - d[t]),
+                    ijk: [0, 1, 2].map(|t| l.ijk[t] >> d[t]),
+                };
+                let (plo, phi) = (self.lo(&parent), self.hi(&parent));
+                let inside = self.overlapping(&cur, plo, phi);
+                let admissible = inside.iter().all(|n| {
+                    let (nl, nh) = (self.lo(n), self.hi(n));
+                    if !(0..3).all(|a| plo[a] <= nl[a] && nh[a] <= phi[a]) {
+                        return false; // meets the box from outside: not exactly tiled
+                    }
+                    let Some(&j) = self.index.get(n) else {
+                        return false; // made in this call
+                    };
+                    let mj = &marks[j];
+                    !mj.refine.contains(&true) && (0..3).all(|t| n.levels[t] <= parent.levels[t] || mj.coarsen[t])
+                });
+                if !admissible {
+                    continue;
+                }
+                for n in &inside {
+                    cur.remove(n);
+                }
+                cur.insert(parent);
+                if balance && !self.balanced(&cur, &parent) {
+                    cur.remove(&parent);
+                    for n in &inside {
+                        cur.insert(*n);
+                    }
+                    continue;
+                }
+                rep.coarsened += 1;
+                break;
+            }
+        }
+        cur
+    }
+
+    /// The pair merges of [`Coarsening::Pair`] (ADR 0267 D3), applied to `cur` after the refinement.
+    fn pair_merges(&self, marks: &[AxisMark], balance: bool, mut cur: LeafSet, rep: &mut AdaptReport) -> LeafSet {
         // coarsening: pairs of buddies along one axis
         let mut used: HashSet<AxisLeaf> = HashSet::new();
         for (l, m) in self.leaves.iter().zip(marks) {
@@ -491,41 +625,7 @@ impl AnisoMesh {
                 break;
             }
         }
-        let mut next = AnisoMesh {
-            base: self.base,
-            axis_x: self.axis_x.clone(),
-            refine: self.refine,
-            max_level: self.max_level,
-            patches: self.patches.clone(),
-            leaves: vec![],
-            index: HashMap::new(),
-            set: LeafSet::default(),
-        };
-        next.set_leaves(cur.set.into_iter().collect());
-        let mut sources = Vec::with_capacity(next.leaves.len());
-        for n in &next.leaves {
-            if let Some(&i) = self.index.get(n) {
-                sources.push(Source::Same(i));
-                continue;
-            }
-            let (lo, hi) = (next.lo(n), next.hi(n));
-            let Some(old) = self.locate(&self.set, lo) else {
-                return err("AnisoMesh::adapt: internal error, a new cell outside the old mesh");
-            };
-            let (ol, oh) = (self.lo(&old), self.hi(&old));
-            if (0..3).all(|a| ol[a] <= lo[a] && hi[a] <= oh[a]) {
-                sources.push(Source::Descendant(self.index[&old]));
-            } else {
-                let mut idx: Vec<usize> = self
-                    .overlapping(&self.set, lo, hi)
-                    .iter()
-                    .map(|k| self.index[k])
-                    .collect();
-                idx.sort_unstable();
-                sources.push(Source::Merged(idx));
-            }
-        }
-        Ok((next, Transfer { sources }, rep))
+        cur
     }
 
     /// Build the polyhedral mesh. Cells are the leaves in [`AnisoMesh::leaves`] order.
