@@ -146,6 +146,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 The section is `dynamic_mesh`; keys, defaults and unset values are in `docs/case-schema.md`. Static errors are located at the
 key; incompatible sections are reported at `dynamic_mesh.enabled`.
 
+The force, moment and force-coefficient reports take the stored face pressure, which on a moving wall is the wall-cell
+value (low by `1/(2N)` on a column of `N` cells accelerated by its wall, ADR 0269). With the optional table
+`[dynamic_mesh.force_reports] wall_pressure = "prescribed_gradient"` (F-440, ADR 0342) they take on the following and
+resting walls the face pressure of `sixdof::patch_force_moment_wall_gradient` with the fixed-flux gradient of the last
+step, which the driver keeps; the run itself does not change. Without the table the reports are as before.
+
 ## Layering and compressible ALE (F-230, ADR 0090; case tree F-259, ADR 0191)
 
 - **Compressible ALE.** `CompressibleSolver::step_ale(new_geom, dt)` advances the explicit density-based solver while the points

@@ -125,6 +125,46 @@ fn coupling_schema() -> Schema {
         )
 }
 
+/// Path of the optional table of the force reports on moving walls (F-440, ADR 0342 D1).
+pub const FORCE_REPORTS: &str = "dynamic_mesh.force_reports";
+
+/// The optional table `[dynamic_mesh.force_reports]` (F-440, ADR 0342 D1).
+fn force_reports_schema() -> Schema {
+    Schema::object()
+        .optional()
+        .doc("Wall pressure of the force, moment and force_coefficient reports on the moving walls (ADR 0342). Absent = the stored face value of the pressure condition")
+        .field(
+            "wall_pressure",
+            Schema::enumeration("boundary_value", &["boundary_value", "prescribed_gradient"])
+                .doc("boundary_value = the stored face value of the pressure condition (the wall-cell value on a zero-gradient wall; low by 1/(2N) on an accelerated column of N cells, ADR 0269); prescribed_gradient = on the following and resting walls the face pressure of rcfd_fv::sixdof::patch_force_moment_wall_gradient with the fixed-flux pressure gradient of the last step (ADR 0252, 0342)"),
+        )
+}
+
+/// True when the case asks for the corrected wall pressure of the force reports (ADR 0342 D1; no without the table).
+fn report_wall_gradient(case: &Case) -> bool {
+    get_s(case, &format!("{FORCE_REPORTS}.wall_pressure")) == "prescribed_gradient"
+}
+
+/// ADR 0342 D3: the layered step keeps no wall gradient, and the compressible run has no following or resting walls.
+fn check_force_reports(case: &Case, out: &mut Vec<Diagnostic>) {
+    if !report_wall_gradient(case) {
+        return;
+    }
+    let key = format!("{FORCE_REPORTS}.wall_pressure");
+    if get_s(case, "dynamic_mesh.deformation") == "layering" {
+        out.push(d(
+            &key,
+            "the layered piston keeps no wall pressure gradient: use wall_pressure = \"boundary_value\"",
+        ));
+    }
+    if crate::comp::enabled(case) {
+        out.push(d(
+            &key,
+            "the compressible solver has no following or resting walls and no force reports: use wall_pressure = \"boundary_value\"",
+        ));
+    }
+}
+
 /// True when the case writes the table `[dynamic_mesh.six_dof.coupling]`.
 fn written(case: &Case) -> bool {
     case.tree.to_json().pointer("/dynamic_mesh/six_dof/coupling").is_some()
@@ -282,6 +322,8 @@ pub fn schema() -> Schema {
                         .doc("Stable step of a moving compressible run: absolute = from |u.n| + c (default, ADR 0191 W4); mesh_speed = from |u.n - w_n| + c with the normal mesh speed w_n of the last step (ADR 0207 M1, M2; the absolute step on the first step and on the step after a layer event)"),
                 ),
         )
+        // F-440, ADR 0342 D1: an optional table, absent from every case that does not write it
+        .field("force_reports", force_reports_schema())
 }
 
 /// True when the section is enabled.
@@ -460,6 +502,8 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     }
     // F-350, ADR 0266 D3 (nothing without the table)
     check_coupling(case, &mut out);
+    // F-440, ADR 0342 D3 (nothing without the key)
+    check_force_reports(case, &mut out);
     let conflict = |what: &str| {
         d(
             "dynamic_mesh.enabled",
@@ -735,6 +779,8 @@ pub struct DynMesh {
     wall_pressure: WallPressure,
     /// The fixed-flux pressure gradient of the walls of the last step (follow and rest walls; empty before the first).
     wall_dpdn: Vec<f64>,
+    /// F-440, ADR 0342 D2: the force reports take the corrected wall pressure with `wall_dpdn`.
+    report_wall_gradient: bool,
 }
 
 /// The strong coupling of a six-DOF body (ADR 0266 D2).
@@ -1062,6 +1108,7 @@ impl DynMesh {
         Ok(Some(DynMesh {
             wall_pressure: wall_pressure(case),
             wall_dpdn: Vec::new(),
+            report_wall_gradient: report_wall_gradient(case),
             strong,
             records: Vec::new(),
             stop: None,
@@ -1319,6 +1366,11 @@ impl DynMesh {
     /// the following and resting walls; empty before the first step and for a layered piston.
     pub fn wall_gradients(&self) -> &[f64] {
         &self.wall_dpdn
+    }
+
+    /// True when `[dynamic_mesh.force_reports] wall_pressure = "prescribed_gradient"` (ADR 0342 D2).
+    pub fn report_wall_gradient(&self) -> bool {
+        self.report_wall_gradient
     }
 
     /// The records of the strongly coupled steps (empty for the loose coupling).

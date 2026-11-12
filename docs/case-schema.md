@@ -2383,6 +2383,7 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | `dynamic_mesh.smoothing.substeps` | int, 1 | reserved; only 1 is accepted |
 | `dynamic_mesh.smoothing.tolerance` | float, 1e-12 | relative tolerance of the displacement solve |
 | `dynamic_mesh.compressible.time_step` | `absolute` (default), `mesh_speed` | optional table `[dynamic_mesh.compressible]` (ADR 0257): the explicit step of a moving compressible run from `abs(u.n) + c`, or from `abs(u.n - w_n) + c` with the normal mesh speed `w_n` of the last step |
+| `dynamic_mesh.force_reports.wall_pressure` | `boundary_value` (default), `prescribed_gradient` | optional table `[dynamic_mesh.force_reports]` (F-440, ADR 0342; absent = `boundary_value`): the face pressure of the `force`, `moment` and `force_coefficient` reports on the following and resting walls: the stored face value of the pressure condition (the wall-cell value; low by `1/(2N)` on an accelerated column of `N` cells, ADR 0269), or the face pressure of `rcfd_fv::sixdof::patch_force_moment_wall_gradient` with the fixed-flux gradient of the last step |
 | `dynamic_mesh.six_dof.mass` | float, 0 | kg, must be > 0 for `motion = six_dof` |
 | `dynamic_mesh.six_dof.inertia` | list, `[]` | 3 principal moments or 6 components `xx yy zz xy xz yz`, kg m^2 |
 | `dynamic_mesh.six_dof.position`, `.velocity`, `.angular_velocity` | list of 3, `[]` | initial centre of mass, velocity, angular velocity |
@@ -2460,7 +2461,27 @@ wall_pressure = "prescribed_gradient"
 
 `wall_pressure = "prescribed_gradient"` with `motion = "prescribed"` is refused at the key. The default stays
 `extrapolated` (changing it moves the results of every six-DOF case; ADR 0269 lists them). The force and moment reports
-(`[reports.<n>]`) take the stored face value of the pressure condition and are not changed by the key.
+(`[reports.<n>]`) take the stored face value of the pressure condition and are not changed by the key; the table
+`[dynamic_mesh.force_reports]` below corrects them.
+
+### Force reports on moving walls (F-440, ADR 0342)
+
+The `force`, `moment` and `force_coefficient` reports take the face pressure of the pressure condition, which on a
+moving wall is the wall-cell value: on a column of `N` cells accelerated by its wall the pressure force is low by
+`1/(2N)` (2.5 percent on 20 cells, ADR 0269 AU1b). The optional table makes them take, on every following and resting
+wall, the face pressure of `patch_force_moment_wall_gradient` with the fixed-flux pressure gradient the step's pressure
+equation used (the vector `Simulation::dynamic_wall_gradients`; `Simulation::report_pressure_face_values` gives the face
+values); on that column the deficit falls to a few `1e-6`. It acts with prescribed and six-DOF motion, for every
+component of the reports; other patches and the viscous part are unchanged, and so is the run itself:
+
+```toml
+[dynamic_mesh.force_reports]
+wall_pressure = "prescribed_gradient"
+```
+
+Before the first step the stored values are used. `prescribed_gradient` with `deformation = "layering"` (the layered
+step keeps no gradient) or with `solver.algorithm = "compressible"` is refused at the key. Without the table, or with
+`wall_pressure = "boundary_value"`, every report is as before; the default is not changed (ADR 0342).
 
 ### Compressible ALE and layering (F-259, ADR 0191, ADR 0257)
 
