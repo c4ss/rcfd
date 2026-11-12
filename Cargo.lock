@@ -2685,6 +2685,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rcfd-fem"
+version = "0.1.0"
+dependencies = [
+ "rcfd-core",
+ "rcfd-linalg",
+ "rcfd-mesh",
+]
+
+[[package]]
 name = "rcfd-fv"
 version = "0.1.0"
 dependencies = [

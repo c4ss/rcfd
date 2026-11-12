@@ -17,6 +17,7 @@ rcfd-reactor -> (no workspace crates; 0D reactor toolkit, stiff ODE integrator)
 rcfd-project -> core   (Studio L1 project folder: run records, atomic files, path safety, poll watcher; ADR 0122)
 rcfd-gpu    -> linalg   (optional CUDA device solvers, cargo feature cuda; the only crate with unsafe code, ADR 0038)
 rcfd-dist   -> core, mesh, linalg   (transport-agnostic distributed-memory layer: communicator, halo exchange, distributed matrix and Krylov solvers; in-process threads transport, no MPI, ADR 0058)
+rcfd-fem    -> core, mesh, linalg   (finite-element structural solver: the solid data model and the structured builders, ADR 0271; plan ADR 0270)
 rcfd-io     -> core, mesh
 rcfd-fv     -> core, mesh, linalg, gpu
 rcfd-particles -> core, mesh   (one-way Lagrangian particle tracking, ADR 0028)
@@ -37,7 +38,7 @@ rcfd-studio -> project, runner, render, tsstore, mesh, claude, api, core   (Stud
 
 ## Layering rules
 
-Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` < `gpu`/`dist`/`runner`/`claude` <
+Lower layers never depend on higher ones (`core` < `mesh`/`linalg`/`project` < `gpu`/`dist`/`runner`/`claude`/`fem` <
 `io`/`fv`/`particles` < `turb`/`post`/`tsstore` < `api`/`render` < `workspace` < `mcp`/`cli` < `assistant` < `gui` <
 `studio`). No crate depends on `studio`, and `studio` does not depend on `gui`, `assistant` or `mcp`. The test
 `crates/rcfd-cli/tests/workspace_graph.rs` checks the graph for acyclicity and conformance.

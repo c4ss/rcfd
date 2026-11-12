@@ -1,0 +1,17 @@
+[package]
+name = "rcfd-fem"
+description = "Finite-element structural solver: solid data model, builders (ADR 0270, 0271)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+# Same closure as rcfd-linalg (rayon 1.12 needs Rust 1.80).
+rust-version = "1.80"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+rcfd-core.workspace = true
+rcfd-mesh.workspace = true
+rcfd-linalg.workspace = true
