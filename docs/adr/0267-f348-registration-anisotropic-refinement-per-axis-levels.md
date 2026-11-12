@@ -380,3 +380,44 @@ five-box tiling of a cell that they cannot merge further (a valid mesh; refineme
 
 Decision rule: unchanged. G6 is a missed registered check, so by the rule the item cannot be **done**; G6b and G6c stand in for it
 in the list of supporting checks.
+
+## Amendment 2 (2026-11-12, written after the registered run of the C, S and H checks and before the run of C5b)
+
+**What happened.** The registered run of `adapt_directional_f348` (once, release, `--include-ignored`, at 22b48cc1) met C1 to C4,
+S0, H1 to H4 and NC-H1 (numbers in the addendum). **C5 failed** after 277 s with the loop's error "adaptive cycle 3:
+edge_length_weighted_indicator: grads[0][0] is not finite": the solution of the second adapted mesh was not finite. The registered
+test stays, unchanged, as the ignored record `c5_directional_layer_loop_fast_known_miss`.
+
+**Diagnosis** (four diagnostic runs with a temporary test file that was not committed; logs `f348-scratch/diag_c5.log`,
+`diag_c5b.log`, `diag_iso.log`, `diag_cycle1.log`; no registered limit involved):
+
+- The 8 x 8 base of C5 has cell Peclet number `V h / nu = 80 / 8 = 10`. Its converged solution (172 iterations) is not a coarse
+  picture of the layer: `u` is -1.86 to -1.96 in the whole wall row where the closed form lies in `[0, 1]` (`E = 1.97`), the
+  overshoot of the unlimited linear-upwind scheme. ADR 0247 and D7 of this ADR use a 16 x 16 base (cell Peclet 5), on which every
+  solve of A, D, Dswap, D960 and D4 converged.
+- From that solution the first directional step (target 74) splits six cells: the two wall-side cells of the first column along
+  both axes and four wall cells (columns 1, 3, 4, 7) along y only, leaving columns 2, 5, 6 of the wall row unsplit. The mesh is
+  valid (`validate` Ok, 74 cells), but SIMPLEC does not converge on it: `|u|` wanders between 10 and 270 for 6375 iterations,
+  from the transferred solution (linear or injection) **and from the case's initial fields**. So neither the transfer nor the
+  starting field is the cause.
+- With the same six cells split along all axes (82 cells) the solve converges in about 290 iterations from all three starts (to
+  an equally wrong solution, `E = 1.58`), and the isotropic loop on the same base converges in every solve (targets 100 and
+  160). With other targets the directional loop on this base also converges (one cycle to 100: 101 cells; two cycles: 80 and
+  107 cells).
+- Conclusion: the set-up of C5 is defective. Its base is outside the range in which the scheme gives a bounded solution, and on
+  such a solution a wall row split along y in alternate columns gives a mesh on which this solver set-up (unlimited linear
+  upwind, SIMPLEC) has no stable iteration. It is a property of the solver on an unresolved layer, shown by the cold start, not
+  an error of the lattice (the mesh is closed and valid, and the same code converges on the registered base); but it is also a
+  real limit of directional refinement that the isotropic split does not share on this base, and it is reported as such in the
+  addendum.
+
+**Corrected check** (new test; C5 stays as the ignored record). Disclosed: this is written with the registered heavy run known;
+in particular D960's first three cycles (321, 398 and 498 cells on the 16 x 16 base) converged in 76, 60 and 47 iterations and
+its final level sums were 387 along x and 3142 along y.
+
+| Id | Check | Limit | Estimate behind the limit |
+| --- | --- | --- | --- |
+| C5b (fast test of the heavy path) | the layer on the registered base: `AnisoMesh` 16 x 16, `[3, 3, 0]`, 3 cycles, `N_T = 400` (scheduled 297, 345, 400), `r = 2`, `theta = 0.5`, `run(20000, 1e-7)` | every solve converged; final `validate` Ok; per-axis jump `<= 1`; `400 <= N <= 440`; cells strictly increase; `sum_c l_y(c) > sum_c l_x(c)`; the largest y level is 3 | the first cycles of D960; the wall row carries the largest indicator in every cycle |
+
+Decision rule: unchanged. C5 is a missed supporting check (defective set-up), so by the rule the item cannot be **done**; C5b
+stands in for it.
