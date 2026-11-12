@@ -16,6 +16,11 @@
 //! The force of the fluid on a body is the reaction of its forcing, `F = rho sum V (coeff u - source)` over the body's terms
 //! ([`ImmersedForcing::force_moment`]). The shapes do not move; the forcing is built once for a mesh.
 //!
+//! **Second-order moment (F-337, ADR 0239; opt-in, [`ImmersedForcing::force_moment_second_order`]).** `force_moment` applies a
+//! modification term at the surface crossing; the moment of the forcing is the angular-momentum balance of the cells, and with
+//! it the moment of the fluid on the body, only when every term is applied at the centre of its cell. The difference is a
+//! first-order error of the moment (not of the force).
+//!
 //! **Second-order treatment (F-309, ADR 0234; opt-in, [`ImmersedForcing::build_second_order`]).** The forcing above closes the
 //! viscous flux of a first fluid cell with the extension of the fluid profile through the surface, but leaves the mass flux of
 //! the face to the solid cell to the continuity of that solid cell, which pins it to the rigid velocity: a face velocity error of
@@ -266,6 +271,8 @@ pub struct ImmersedForcing {
     pub flux_faces: Vec<FluxFace>,
     /// Cell volumes of the mesh the forcing was built for.
     volumes: Vec<f64>,
+    /// Cell centres of the mesh the forcing was built for (ADR 0239).
+    centres: Vec<Vec3>,
 }
 
 impl ImmersedForcing {
@@ -445,6 +452,7 @@ impl ImmersedForcing {
             bodies: out,
             flux_faces,
             volumes: vol.to_vec(),
+            centres: cc.to_vec(),
         })
     }
 
@@ -499,6 +507,8 @@ impl ImmersedForcing {
     /// `F = rho sum_t V_c (coeff_t u_c - source_t)`, `M = sum_t (x_t - x_ref) x dF_t` (ADR 0218 D1). This is the reaction of the
     /// whole forcing: for a body whose solid cells touch the domain boundary it also holds the force of the boundary on those cells
     /// (the boundary pressure and wall terms), so it is the fluid force only for a body that lies inside the domain (ADR 0218 Q5).
+    /// The moment has a first-order error from the arm of the modification terms (the crossing);
+    /// [`ImmersedForcing::force_moment_second_order`] removes it (ADR 0239).
     pub fn force_moment(&self, body: usize, u: &[Vec3], rho: f64, x_ref: Vec3) -> (Vec3, Vec3) {
         let (mut force, mut moment) = (vec3::ZERO, vec3::ZERO);
         for t in &self.bodies[body].terms {
@@ -506,6 +516,25 @@ impl ImmersedForcing {
             let df: Vec3 = [0, 1, 2].map(|k| rho * v * (t.coeff * u[t.cell][k] - t.source[k]));
             force = vec3::add(force, df);
             moment = vec3::add(moment, vec3::cross(vec3::sub(t.point, x_ref), df));
+        }
+        (force, moment)
+    }
+
+    /// Force and moment about `x_ref` of the fluid on body `body` with the moment to the order of the velocity field (F-337,
+    /// ADR 0239 D1): the force of [`ImmersedForcing::force_moment`] (the same sum, bit for bit) and
+    /// `M = sum_t (x_c(t) - x_ref) x dF_t` with every term applied at the centre of its cell (the fluid cell of a modification
+    /// term, not the crossing). In a steady state on an orthogonal mesh this sum is the angular-momentum balance of the solid
+    /// cells and the first fluid cells of the body: the moment of the pressure, of the full viscous stress and of the momentum
+    /// flux on the regular fluid faces that enclose them. The remark of `force_moment` on a body that touches the domain boundary
+    /// applies; the momentum of the forced cells of an unsteady flow is not accounted for.
+    pub fn force_moment_second_order(&self, body: usize, u: &[Vec3], rho: f64, x_ref: Vec3) -> (Vec3, Vec3) {
+        let (mut force, mut moment) = (vec3::ZERO, vec3::ZERO);
+        for t in &self.bodies[body].terms {
+            let v = self.volumes[t.cell];
+            let df: Vec3 = [0, 1, 2].map(|k| rho * v * (t.coeff * u[t.cell][k] - t.source[k]));
+            force = vec3::add(force, df);
+            let arm = vec3::sub(self.centres[t.cell], x_ref);
+            moment = vec3::add(moment, vec3::cross(arm, df));
         }
         (force, moment)
     }
