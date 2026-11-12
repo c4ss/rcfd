@@ -484,8 +484,11 @@ fn k1_the_condition_estimate_matches_the_dense_eigenvalues() {
     }
 }
 
+/// The registered E1 (ADR 0263 amendment 1): the coincident-node case was accepted by the absolute pivot test. Kept with
+/// its limit as the record.
 #[test]
-fn e1_invalid_meshes_and_settings_are_refused() {
+#[ignore = "known miss of E1 (ADR 0263 amendment 1): coincident nodes accepted by the registered pivot test"]
+fn e1_invalid_meshes_and_settings_are_refused_known_miss() {
     let wall = plane_wall(0.0);
     let proj = wall.settings("projection");
     let rbf = wall.settings("radial basis");
@@ -542,6 +545,74 @@ fn e1_invalid_meshes_and_settings_are_refused() {
         match r {
             Err(e) => println!("E1 {name}: {e}"),
             Ok(_) => panic!("E1 {name}: accepted"),
+        }
+    }
+}
+
+/// E1b of ADR 0263 amendment 1: the cases of E1 with the amended pivot test.
+#[test]
+fn e1b_invalid_meshes_and_settings_are_refused_amended() {
+    let wall = plane_wall(0.0);
+    let proj = wall.settings("projection");
+    let rbf = wall.settings("radial basis");
+    let mut nan_node = wall.nodes.clone();
+    nan_node[3][1] = f64::NAN;
+    let mut five = wall.elements.clone();
+    five[0].push(7);
+    let mut out_of_range = wall.elements.clone();
+    out_of_range[2][1] = wall.nodes.len();
+    let mut twin = wall.nodes.clone();
+    twin.push(wall.nodes[5]);
+    let bad = |support: f64, max_distance: f64| MapSettings {
+        method: MapMethod::RadialBasis { support },
+        max_distance,
+        unmapped: Unmapped::Refuse,
+    };
+    let cases: Vec<(&str, Result<_, String>)> = vec![
+        ("no node", interface_rows(&[], &wall.elements, &wall.points, &proj)),
+        (
+            "NaN coordinate",
+            interface_rows(&nan_node, &wall.elements, &wall.points, &proj),
+        ),
+        (
+            "element of five nodes",
+            interface_rows(&wall.nodes, &five, &wall.points, &proj),
+        ),
+        (
+            "index out of range",
+            interface_rows(&wall.nodes, &out_of_range, &wall.points, &proj),
+        ),
+        ("no element", interface_rows(&wall.nodes, &[], &wall.points, &proj)),
+        (
+            "support 0",
+            interface_rows(&wall.nodes, &wall.elements, &wall.points, &bad(0.0, 0.008)),
+        ),
+        (
+            "support NaN",
+            interface_rows(&wall.nodes, &wall.elements, &wall.points, &bad(f64::NAN, 0.008)),
+        ),
+        (
+            "max_distance -1",
+            interface_rows(&wall.nodes, &wall.elements, &wall.points, &bad(0.24, -1.0)),
+        ),
+        (
+            "max_distance NaN",
+            interface_rows(&wall.nodes, &wall.elements, &wall.points, &bad(0.24, f64::NAN)),
+        ),
+        (
+            "coincident nodes",
+            interface_rows(&twin, &wall.elements, &wall.points, &rbf),
+        ),
+    ];
+    for (name, r) in cases {
+        match r {
+            Err(e) => {
+                println!("E1b {name}: {e}");
+                if name == "coincident nodes" {
+                    assert!(e.contains("radial-basis matrix"), "{e}");
+                }
+            }
+            Ok(_) => panic!("E1b {name}: accepted"),
         }
     }
 }

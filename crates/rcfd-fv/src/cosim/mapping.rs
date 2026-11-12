@@ -543,12 +543,13 @@ fn poly(centre: Vec3, axes: &[Vec3], x: Vec3) -> Vec<f64> {
         .collect()
 }
 
-/// Lower Cholesky factor of the symmetric `n x n` matrix `a` (row-major), or `None` at a pivot that is not positive.
+/// Lower Cholesky factor of the symmetric `n x n` matrix `a` (row-major), or `None` at a pivot `d <= 2 n eps a_jj`: one
+/// that rounding cannot tell from zero (ADR 0263 amendment 1).
 fn cholesky(a: &[f64], n: usize) -> Option<Vec<f64>> {
     let mut l = vec![0.0; n * n];
     for j in 0..n {
         let d = a[j * n + j] - (0..j).map(|k| l[j * n + k] * l[j * n + k]).sum::<f64>();
-        if !(d > 0.0 && d.is_finite()) {
+        if !(d > 2.0 * n as f64 * f64::EPSILON * a[j * n + j] && d.is_finite()) {
             return None;
         }
         let ljj = d.sqrt();
