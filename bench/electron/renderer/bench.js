@@ -376,6 +376,39 @@ const checks = {
     return { ms: stats(ms), names, samples, series_parsed: parsed, reply_chars: bytes, state: st.state, iteration: st.iteration };
   },
 
+  /**
+   * F-456 (ADR 0353) I1: an increment of 100 samples of each of four series that hold 1e5. Own session with the same
+   * set-up as p3; `since` is the abscissa of the 101st sample from the end; 20 warm-up requests, then 200 timed, request to
+   * parsed object. I2s: `run.step {count: 100}` once afterwards, wall time, no limit.
+   */
+  async p3i() {
+    const session = await call('session', { n: [4, 4, 4], report: true });
+    const st = await call('rpc', { method: 'run.step', params: { session, count: Q.p3Steps } });
+    const all = await call('rpc', { method: 'monitors.get', params: { session } });
+    const names = Object.keys(all.series).sort().slice(0, 4);
+    const samples = names.map((n) => all.series[n].x.length);
+    const xs = all.series[names[0]].x;
+    const since = xs[xs.length - 101];
+    const warm = Q === FULL ? 20 : 3;
+    const timed = Q === FULL ? 200 : 10;
+    const ms = [];
+    let counts = [];
+    let chars = 0;
+    for (let i = 0; i < warm + timed; i++) {
+      const t = now();
+      const line = await call('rpcRaw', { method: 'monitors.get', params: { session, names, since } });
+      const doc = JSON.parse(line);
+      const dt = now() - t;
+      if (i >= warm) ms.push(dt);
+      counts = names.map((n) => doc.result.series[n].x.length);
+      chars = line.length;
+    }
+    const t1 = now();
+    await call('rpc', { method: 'run.step', params: { session, count: 100 } });
+    const step100_ms = now() - t1;
+    return { ms: stats(ms), names, samples, since, counts_returned: counts, reply_chars: chars, step100_ms, state: st.state };
+  },
+
   async p4() {
     /** @type {Record<string, any>} */
     const out = {};
