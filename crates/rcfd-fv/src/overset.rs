@@ -1018,29 +1018,14 @@ impl OversetSolver {
                 if rc {
                     // ADR 0245 C: the lagged pressure gradient and rAU times it; at a fringe cell the donor interpolants of
                     // the calculated values (as HbyA, M6), zero at a hole cell
-                    let p_lag = &self.p.values;
-                    let mut x = green_gauss(&g, p_lag, &boundary_values_pbc(&g, &pbc, p_lag), 0);
-                    let mut q: Vec<Vec3> = x.iter().zip(&r_au).map(|(v, r)| vec3::scale(*v, *r)).collect();
-                    if !trivial {
-                        let (cx, cq) = (x.clone(), q.clone());
-                        for (c, stn) in &conn.stencils {
-                            let (mut vx, mut vq) = ([0.0; 3], [0.0; 3]);
-                            for (&k, &w) in stn.cells.iter().zip(&stn.weights) {
-                                for d in 0..3 {
-                                    vx[d] += w * cx[k][d];
-                                    vq[d] += w * cq[k][d];
-                                }
-                            }
-                            x[*c] = vx;
-                            q[*c] = vq;
-                        }
-                        for c in 0..n {
-                            if conn.kind[c] == CellKind::Hole {
-                                x[c] = [0.0; 3];
-                                q[c] = [0.0; 3];
-                            }
-                        }
-                    }
+                    let (x, q) = crate::pimple::face_consistent::overset_lagged_gradient(
+                        &g,
+                        &pbc,
+                        &self.p.values,
+                        &r_au,
+                        conn,
+                        trivial,
+                    );
                     crate::pimple::face_consistent::add_commutator(&g, &gamma_p, &q, &x, &mut phi_hby_a);
                 }
                 ale.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
