@@ -238,3 +238,89 @@ MU5 and MU6 are reported and do not count.
 - **Q5. The inner message prefix.** `check_output`'s text starts `tetrahedralize output check:` also when it checks a remesher
   output (wrapped after `remesh output check:`). Options: (a) leave it (F-324's tests match its text); (b) a prefix parameter.
   Taken (a) on the same standing instruction; no result depends on it.
+
+## Addendum 1: results (2026-11-12)
+
+Commits on `f327-remesher-output-check` (from main d1591e54): the registration `3edc6ed9`; the check and its tests `351f6fd9`
+(`crates/rcfd-mesh/src/remesh.rs`: `StepCheck`, `RemeshChange::check`, `TetRemesher::to_tet_mesh`, `TetRemesher::check_output`,
+the step check at the end of `event()` through `run_event`, the test module `tests_f327`; `crates/rcfd-mesh/src/tetmesh.rs`: the
+`pub(crate)` helper `cell_volume_sum`). No other file changed; `Cargo.lock` unchanged; no `unsafe`; no existing test edited;
+`baseline_hashes.rs` and every hash table and golden untouched. No amendment was needed.
+
+All runs in release (`cargo test --release`), Windows, the worktree's own target dir, each once: `cargo test --release -p
+rcfd-mesh --no-fail-fast` (C2, PC1, PC2, NC1 to NC4); `cargo test --release -p rcfd-fv --test remesh_f247` (C1), at the same
+time as the first; then C4 alone (`--ignored --exact remesh::tests_f327::c4_cost_of_the_step_check`).
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 P-T | pass; M0 hash, 1711 cells; the ADR 0215 numbers; no event error | P-T and N2 passed; `aaf8f4c36f6446e4`, 1711 cells, 522 points; A1 `3.692e-6`, A2 `9.447e-6`, 1806 events, operators 435 / 454 / 337 / 5 / 2086, cells 729 and 1860, 55497 steps, smallest mean ratio 0.2407; also B1v to B1e, B2s, B3, L1, R2, N1, N2's `t = 5.199` and the mass drift `3.228e-12` as recorded; all 1806 events passed the step check (P-T's R1). Wall 217.8 s against 193 s recorded (another test binary ran at the same time; not a check) | yes |
+| C2 suites | pass | 22 test binaries and the doctests: 243 passed, 0 failed, 49 ignored (the lib: 70 passed, 2 ignored, U1 to U3 among them; `tetmesh` 10, `polydual` 3, `tetmesh_fold_f306` 19, `tetmesh_check_f324` 9 and every other binary passed) | yes |
+| PC1 | `Ok`, check `Some`, within the bounds | `Ok`, one relocation; (B) difference 0 (bound `5.05e-17`), (D) difference 0 (bound `1.25e-17`) | yes |
+| PC2 | every step `Ok`; at least 5 events | 1200 steps, 572 events, no error; largest `abs(difference) / bound` (B) `9.05e-3`, (D) `4.35e-2` | yes |
+| NC1 dup | `Err`, located, state unchanged | "face [61, 62, 116] at (8.29e-2, 1.72e-2, 8.33e-3) is shared by the cells [530, 541, 542]" (by (B): difference `4.679e-6` against `5.05e-17`); state unchanged | yes |
+| NC2 flip | `Err` naming the cell by its output index | "cell 541 [62, 116, 146, 61] at (8.53e-2, 2.03e-2, 1.54e-2) is not positively oriented" (`k = 541`); state unchanged | yes |
+| NC3 gap | `Err` naming a free face on no plane | work cell 1 removed: "the free face [146, 160, 152] of cell 26 at (6.77e-2, 3.90e-2, 4.90e-2) lies on no plane"; state unchanged | yes |
+| NC4 region | `Err` by (D); difference `1e-5` to `1e-9` | "the cell volumes sum to 3.010000000000000e-3 after the event but to 3.000000000000000e-3 before it ... the event changed the region"; difference `1.000000000000003e-5`, relative `2.4e-15`; state unchanged | yes |
+| C4 cost | at most 25 percent | 572 events: events 1.776 s, check 0.184 s, fraction `0.103` | yes |
+
+Every message starts `remesh output check: an event of OpCounts { .. } touching (lo) to (hi):`, as registered.
+
+Predictions: PR1 held. PR2 (5 to 20 percent) held: 10.3 percent. PR3 held (NC1 by (B) with a face of three cells, NC3 by (C)).
+PR4 held: with V2 and V3 removed (MU6) piston G met no step check error and gave the same numbers (572 events, the same
+ratios), so V1 and V4 alone decided every candidate of that run.
+
+### Mutations (scratch copy `w49i-work/f327-mut`, a `git archive` of `351f6fd9`, target dir `target-f327-mut`, release)
+
+Each applied alone by `w49i-work/f327-mut-tools/mutate.py` (exact text replacement, each pattern found once), the
+`tests_f327` lib tests run once with `--no-fail-fast`, the file restored and its SHA-256 checked against the kept copy
+(`c52dc129...65e1`, equal after every mutation). Two first starts of the script stopped on a Python error before writing the
+file (the checksum was equal afterwards, no test ran) and it was started again from MU1.
+
+| Id | Must | Result | Caught by |
+| --- | --- | --- | --- |
+| MU1 check not called | NC1 to NC4 fail | all four failed ("accepted"), and PC1, PC2 failed (no check carried) | NC1 to NC4 |
+| MU2 (C) removed | NC3 fails | NC3 failed: the gap was then found by (D) ("difference -1.527e-5 ... the event changed the region"), not as a face on no plane; the others passed | NC3 |
+| MU3 (D) removed | NC4 fails | NC4 failed: accepted, (B) difference `-4.3e-19` (the longer box passes (A) to (C)) | NC4 |
+| MU4 commit before the check | state part of NC1 to NC4 fails | all four failed on "state unchanged" (each still returned its located error) | NC1 to NC4 |
+| MU5 bound of (D) 0 (reported) | PC1 or PC2 fails if the sums differ | PC2 failed at `x = 0.567`: an event of one split and one removal whose sums differ by `-8.7e-19`; PC1 passed (its sums equal) | PC2 |
+| MU6 V2, V3 removed (reported) | whether PC2 meets an error | none (see PR4) | not caught |
+
+### Format and lint
+
+`cargo fmt -p rcfd-mesh -- --check`: clean. `cargo clippy -p rcfd-mesh --all-targets -- -D warnings`: clean. `rcfd-fv` was not
+edited (its test ran unchanged in C1).
+
+### Deviations and what was not run
+
+- An error of the registration's paper arithmetic, not of a limit: M_s's volume is `0.3 x 0.1 x 0.1 = 3e-3` (the text said
+  0.03), so NC4's `1e-5` is `3.3e-3` of the volume, not `3.4e-4`; still twelve orders above the bound.
+- C1 ran at the same time as C2 (its wall time is not a check). C4 ran alone.
+- Not run: the whole workspace suite and the gate (the lead runs it); `rcfd-api` and `rcfd-cli` (no path from a case to the
+  remesher, ADR 0215 S3); Linux.
+
+### Decision by the registered rule
+
+C1, C2, PC1, PC2, NC1 to NC4 and C4 met; MU1 to MU4 failed their checks as registered: **done**, with the maintainer's
+acceptance (Q1). The acceptance's parts: every output of a remeshing step passes `TetMesh::check_output` (on the free-face
+surface, with (C) and (D)) or the step returns its located error (NC1 to NC4, the state left as it was); the remesh_f247 record
+(M0's hash) and every P-T number are unchanged (C1).
+
+### Remaining questions
+
+- **Q1. Status.** Options: (a) done; (b) partial until the gate. Recommendation: (a), with the gate line added at merge.
+- **Q2. Where to check.** Taken (a) events only. Options for later: (b) `new()`, (c) after motions. Recommendation: keep (a);
+  callers that move planes can call the public `TetRemesher::check_output()`; (b) only if a caller builds remeshers from meshes
+  not made by `tetrahedralize`.
+- **Q3 to Q5** as registered, taken on the standing instruction; nothing measured argues against them.
+- **Q6. MU6.** V2 and V3 of the operators' validity were not decisive in piston G. Options: (a) leave; (b) a unit test that
+  makes V2 or V3 decisive. Recommendation: (a); the step check now catches what they would let through.
+
+### For the lead: roadmap entries
+
+- **F-327**: status `done`. New note:
+
+  > From ADR 0231 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE (ADR 0236, the registration of F-327, 2026-11-12, branch f327-remesher-output-check): every registered check is met at the first run; the acceptance is still the maintainer's (ADR 0236 Q1). TetRemesher::event (and remesh) ends every event that applied an operator with a step check before committing: TetMesh::check_output on the output with the surface of its free faces (the remesher has no stored surface; its boundary is re-triangulated), every free face exactly on its plane, and the cell volume equal to that of the step's input within a rigorous bound (an event does not change the region); a failure returns a located Error::Mesh ("remesh output check: ...", naming the cell, the face or the volumes, and the event's operators and box) and leaves the mesh as it was. The check only reads: M0's hash aaf8f4c36f6446e4 and every P-T number of ADR 0215 are unchanged, and all 1806 P-T events and the 572 events of a geometric piston pass. A duplicated cell, a negative cell, a missing cell and a valid tiling of a changed region are each rejected and located. Cost: 10.3 percent of an event. Four registered mutations failed their checks. Library only; RemeshChange gains the field check. Open: ADR 0236 Q2 (checking new() and motions), Q6 (V2 and V3 not decisive in the piston).
+
+- No follow-up item proposed.
