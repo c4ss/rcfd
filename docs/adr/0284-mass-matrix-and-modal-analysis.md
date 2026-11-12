@@ -481,6 +481,111 @@ against it):
 
 C5 is an extension check (it does not enter the done set), recorded with the mutation that motivated it.
 
+## Addendum 1: results (2026-11-12)
+
+Code: `crates/rcfd-fem/src/mass.rs` and `modal.rs` (the two stubs filled), `crates/rcfd-fem/tests/sb_modal.rs` (new); no other
+file of the crate or the workspace changed (`git diff adede15c --stat`: these three and this ADR). Commits: 56a14dd6
+(registration), 4e77518d (amendment 1), 98e08497 (code and tests as in run 1), 3338f958 (amended tests, `tolerance` builder,
+rustfmt), ef712b1e (amendment 2), 20c905e3 (C5), and this addendum. Runs, each once, release, `--nocapture --test-threads=1`,
+logs in `w49i-work/f383-scratch`: run 1, the fast tests (`run1.log`); run 2, the amended fast tests S1, T2 (`run2_amended_fast.log`);
+run 3, the heavy T1 (`run3_t1_heavy.log`, 2.9 s); run 4, C5 (`run4_c5.log`). Confirmation runs of the whole crate test set
+(`cargo test -p rcfd-fem --release`, `crate_tests.log` after amendment 1, `crate_tests_final.log` on the final tree): every
+test passes (`sb_elements` 8, `sb_loads` 7, `sb_model` 11, `sb_static` 9 unedited; `sb_modal` 8 passed, 4 ignored); no
+registered number changed between them.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 translation block / m (Tet4, Hex8, Tet10) | `<= 1e-12` | 1.2e-16, 2.4e-16, 6.0e-16 | yes |
+| C2 centre and translation-rotation block | `<= 1e-12` | 2.3e-16, 3.5e-16, 5.4e-16 | yes |
+| C3 inertia about the origin; `mass_properties` mass, centre, inertia about the centre | `<= 1e-12` each | 4.2e-16, 3.1e-16, 7.3e-16; mass `<= 6.0e-16`, centre `<= 8.6e-16`, inertia 3.3e-15, 3.4e-15, 3.9e-15 | yes |
+| C4 `max |M - M^T|`; 1 and 8 threads | `= 0`; equal | 0 (all kinds); bit for bit | yes |
+| C5 (amendment 2) element mass against closed forms (Tet4, Tet10, Hex8) | `<= 1e-13` | 4.5e-16, 8.0e-16, 1.4e-15 | yes |
+| N1 Tet4 with `tet_1`: C3 error | `> 1e-6` | 7.3e-3 | holds |
+| F1 `max |f_1..6| / f_7` (Tet4, Hex8, Tet10); M-orthonormality | `<= 1e-6`; `<= 1e-9` | 3.2e-8, 3.4e-8, 6.5e-8 (`f_7` = 2171.7, 1492.5, 1354.4 Hz); 8.9e-16, 4.4e-16, 4.4e-16 | yes |
+| F2 non-rigid part of modes 1 to 6 | `<= 1e-8` | 6.8e-16, 8.1e-16, 2.5e-15 | yes |
+| F3 Hex8 `0 < sigma < 0.1 lambda_7` | as stated | `sigma / lambda_7 = 2.77e-3` (12 iterations; Tet4 16, Tet10 14; Sturm 7 = 7 in each) | yes |
+| N2 Hex8 `sigma = 0` | `Err` | refused: pivot -7.6e-5 at row 14 fails the positive test | holds |
+| B1 Hex8 32: `f_1, f_2, f_3`; M-orthonormality | `<= 5e-3`; `<= 1e-9` | 1.004e-4, 9.038e-4, 2.512e-3 (as arithmetic 4); 4.4e-16 | yes |
+| B2 observed order of `f_1`: 16 -> 32; 8 -> 16 | `>= 1.8` | 2.0001; 2.0005 | yes |
+| B3 Hex8 8, 16, 32 against the discrete closed form | `<= 1e-9` | `<= 2.2e-14` | yes |
+| B4 Tet4 32; Tet10 8: errors; lower bound; `e(Tet4) - e(Hex8)` | `<= 5e-3`; `>= -1e-12`; `<= 1e-9` | Tet4 9.09e-5, 7.89e-4, 2.04e-3; Tet10 6.19e-7, 4.94e-5, 3.70e-4; all positive; -9.5e-6, -1.15e-4, -4.76e-4 | yes |
+| B5 the first three modes axial (every mesh) | as stated | modes 1 to 4 all axial (`a_x >= 0.99988`) | yes |
+| T1 Tet10 80 x 4 x 4 (amended, heavy record): first pair against `f_1^ref`; second pair against `f_2^ref`; M-orthonormality | `<= 1e-2`; `<= 2.5e-2`; `<= 1e-9` | 2.68e-3, 2.72e-3; 2.89e-3, 2.94e-3; 6.0e-15 (38 880 unknowns, 7 iterations, 2.7 s) | yes |
+| T1b the same against `f_n^EB` | `<= 1e-2`; `<= 2.5e-2` | 6.8e-4, 7.2e-4; 1.076e-2, 1.071e-2 | yes |
+| T2 Tet10 40 x 2 x 2 (amended): against `f^ref`; M-orthonormality | `<= 3e-2`; `<= 6e-2`; `<= 1e-9` | 3.60e-3, 3.81e-3; 3.91e-3, 4.21e-3; 4.2e-15 | yes |
+| S1 Hex8 40 x 2 x 2 (amended): pair splits; M-orthonormality | `<= 1e-6`; `<= 1e-6`; `<= 1e-9` | 3.98e-11; 1.02e-12; 1.1e-15 | yes |
+| S1, T2 first runs (records) | | `NotConverged` at the residual floor (amendment 1) | not reached |
+| D1 Hex8 bar 16, 1 and 8 threads | bit for bit | equal (27 iterations each) | yes |
+| X1 refusals | as stated | `modes` 0 and 10 000 of 20; non-zero `u_x` names node 0; density 0 names node 0 component 1 | yes |
+| E1 existing tests | pass unedited | pass; no existing file edited | yes |
+
+Records. Tet10 cantilever against `f^ref` (first pair, second pair, the larger member): 20 x 1 x 1: 8.65e-3, 1.09e-2; 40 x 2 x
+2: 3.81e-3, 4.21e-3; 80 x 4 x 4: 2.72e-3, 2.94e-3. The error halves from 20 to 40 and then levels off near 0.25 percent: what
+remains is the 3-D solid against Timoshenko's beam (clamp with Poisson restraint, section warping), estimated at `<~ 0.3`
+percent in D6. The Kuhn split separates the bending pair by 1.1e-3, 2.1e-4, 4.1e-5 (first pair) as `h` halves; the modes are
+the diagonal bending directions (`e_y = e_z = 0.306`, the EB fraction 0.613 shared), as D6 expected. Hex8 40 x 2 x 2 (full
+integration) is 7.0 and 7.2 percent stiff against `f^ref` (shear locking; not limited, B-bar is ADR 0293). Measured
+effective mass fractions of the bending modes (Tet10 80 x 4 x 4): 0.612, 0.189, 0.0655 against EB 0.613, 0.188, 0.0647. The
+residual floor of the lowest cantilever pair (amendment 1) is confirmed by the amended runs: they stopped after 7 iterations
+with residuals up to 2.1e-8 (Hex8), 4.6e-8 (Tet10 40) and 9.7e-8 (Tet10 80) below the tolerance 1e-7.
+
+**Mutations** (`f383-scratch/mutate.py`, `mutations.log`; `git archive` copies of 3338f958 and, for the re-run after amendment
+2, of 20c905e3, own target directory, each mutation alone by exact text replacement, file restored and compared by SHA-256):
+
+| Id | Caught by |
+| --- | --- |
+| M1 weight `w` without `det J` | C1 (36.5 relative, Tet4), C2, C3 |
+| M2 every component pair | C1 (1.0), C2, C3 |
+| M3 `rho = 1` | C1 (0.9999), C2, C3 |
+| M4 Hex8 mass with `gauss_2` | C3 Hex8 (3.3e-8 about the origin, 1.9e-7 about the centre) |
+| M5 frequency without `2 pi` | B3, B1 (factor 2 pi) |
+| M6 shift always `Value(0)` | F1: the free box's modal analysis refused (`unwrap` of the error) |
+| M7 prescribed entries 1 | B1 M-orthonormality (56) |
+| M8 Tet10 mass with `tet_4` | **survived** B4 (the registered test); caught by C5 after amendment 2 (2.7e-1) |
+| M9 shift always `Auto` (informative) | survived B1 to B5, S1, T2: `Auto` accepts `sigma = 0` on these constrained models |
+
+M1 and M3 were run a second time on the 20c905e3 copy together with M8 (same verdicts). The diagnostic run of the M8 mutant
+quoted in amendment 2 is not a registered result. `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings`: clean.
+
+**Deviations.** Amendment 1 (the cantilever tolerance, a set-up defect: the residual floor of the eigensolver was not estimated)
+and amendment 2 (check C5 after the surviving mutation M8). The heavy T1 took 2.9 s, far below the two minutes of the house
+rule, but stays `#[ignore]` as registered (T2 covers its code path). Nothing else was skipped. The whole workspace was not
+tested (the lead runs the gate); no shared solver file was changed.
+
+**Decision by the registered rule: partial.** Every clause of the acceptance is met (C1 to C3 for the three kinds, F1 for
+the three kinds, B1, B2, T1 with T1b, S1, M-orthonormality on every run, E1), and M1 to M7 are caught; but M8 survived every
+registered test and is caught only by C5, added by amendment 2 after the mutation run. The rule makes that partial (the same
+situation as ADR 0275's M10). What would close it: the maintainer's acceptance of amendment 2's C5 as the check that sees the
+mass rule.
+
+**Remaining questions.**
+
+1. Status. Options: (a) partial as the rule says, closed by accepting amendment 2; (b) done now, since the acceptance is fully
+   met and C5 catches M8. Recommendation: (a), as for F-374.
+2. The default residual tolerance of `ModalOptions` (1e-10) fails on slender models (amendment 1: the floor `c eps
+   lambda_max / lambda_1`, 2.7e-9 for the 40 x 2 x 2 cantilever; a fan blade is slender). Options: (a) keep 1e-10 and the
+   `tolerance` builder, documented; (b) make the modal default 1e-7, as the cantilever runs used; (c) a scale-aware test in
+   `rcfd_linalg::eigen` that measures the residual against an estimate of `||A|| ||x||` instead of `||A x||`, so that the
+   floor no longer depends on the spectrum (a follow-up item below). Recommendation: (c), with (a) until it exists; (b) changes
+   the results of runs already registered here.
+3. The heavy T1 runs in 3 s. Options: (a) keep it ignored as registered; (b) let the lead make it a regular test. Recommendation:
+   (a): it allocates about 150 MB of envelope, and T2 covers the path.
+
+## For the lead: roadmap entries
+
+F-383: proposed status **partial**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0284, 2026-11-12: rcfd_fem::mass::consistent (consistent mass by the mass rules of ADR 0273, tet_4, gauss_3, tet_14, through assemble_with; exactly symmetric, bit-identical for 1 and 8 threads), element_mass, rigid_motions and mass_properties from r^T M r; rcfd_fem::modal::modal_analysis (zero constraints by symmetric elimination, lowest_eigenpairs of ADR 0283 with sigma = 0 when the constraints hold every rigid motion and Shift::Auto for a free body; massless unknowns and non-zero constraints refused; modes M-orthonormal over the full DofMap). Box with moved interior nodes: mass, centre and inertia from rigid motions within 7.3e-16 (Tet4, Hex8, Tet10; limit 1e-12), about the centre within 3.9e-15. Free box: six rigid frequencies at most 6.5e-8 of the seventh (limit 1e-6). Fixed-free bar, nu = 0, Hex8 32 x 1 x 1: f_1..3 within 1.0e-4, 9.0e-4, 2.5e-3 (limit 5e-3), equal to the discrete 1-D chain within 2.2e-14, observed order of f_1 2.0001; Tet4 and Tet10 below their 1-D chain bounds. Cantilever L/b = 20, Tet10 80 x 4 x 4: first and second bending within 2.7e-3 and 2.9e-3 of Euler-Bernoulli less the exact Timoshenko correction (0.199 and 1.361 percent, kappa 5/6; the draft's 0.15 and 0.9 used beta_n^2 for the cantilever's J_n), within 7.2e-4 and 1.08e-2 of pure Euler-Bernoulli (limits 1 and 2.5 percent); symmetric Hex8 mesh: bending planes equal within 4.0e-11 (limit 1e-6); mode shapes M-orthonormal within 6.0e-15 (limit 1e-9). Amendment 1: slender models need ModalOptions::tolerance(1e-7) (residual floor of the eigensolver, c eps lambda_max/lambda_1); amendment 2: check C5 of the element mass matrices against closed forms added after mutation M8 (Tet10 mass with a degree-2 rule) survived the registered checks; eight of nine mutations caught by the registered tests, M8 by C5. Partial by the rule until the maintainer accepts amendment 2.
+
+F-387 (ADR 0288), sentence to append to its note:
+
+> ADR 0284 (2026-11-12): rcfd_fem::modal::modal_analysis gives the modes at rest; a slender blade needs ModalOptions::new(m).tolerance(1e-7) or so (the residual floor of lowest_eigenpairs is about c eps lambda_max/lambda_1, 2.7e-9 for a 40 x 2 x 2 Tet10 cantilever of L/b = 20), and modes are best identified by effective mass fractions from mass::rigid_motions, as sb_modal does.
+
+Follow-up item (new; number by the lead): title "Scale-aware convergence test of the subspace eigensolver", deps F-382, F-383. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. rcfd_linalg::eigen::lowest_eigenpairs gains a residual test relative to an estimate of ||A|| ||x|| (for example from the factorisation or a few power steps), selectable without changing the existing default; the 40 x 2 x 2 Tet10 cantilever of ADR 0284 then converges with the scale-aware tolerance 1e-12 in at most 20 iterations, its first two bending frequencies agree with the runs of ADR 0284 amendment 1 within 1e-10 relative, and every check of ADR 0283 still passes with the default unchanged.
+
 ## The planned stub, as written
 
 > # ADR 0284: Mass matrix and linear modal analysis of a solid model
