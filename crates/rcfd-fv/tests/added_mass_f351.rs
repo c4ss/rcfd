@@ -103,8 +103,8 @@ impl Sp {
         Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap())
     }
 
-    /// Fluid at rest on the mesh with the piston at `X`.
-    fn flow(&self) -> PimpleSolver {
+    /// Fluid at rest on the mesh with the piston at `X`, with the solver settings given.
+    fn flow_with(&self, settings: PimpleSettings) -> PimpleSolver {
         let geom = self.geom_at(SP_X);
         let mut u = VectorField::uniform("U", &geom, vec3::ZERO);
         for name in ["ymin", "ymax", "zmin", "zmax"] {
@@ -112,7 +112,7 @@ impl Sp {
         }
         let mut p = ScalarField::uniform("p", &geom, 0.0);
         p.set_bc(&geom, "xmax", Box::new(FixedValue::scalar(0.0))).unwrap();
-        PimpleSolver::new(geom, u, p, sp_settings())
+        PimpleSolver::new(geom, u, p, settings)
     }
 }
 
@@ -134,6 +134,8 @@ struct DpState {
     walls: Vec<f64>,
     /// Piston position after the step.
     x_p: f64,
+    /// Piston position before the step.
+    x_old: f64,
     /// `(w_new - w_old)/dt` of the prescribed positions.
     accel: f64,
 }
@@ -141,9 +143,13 @@ struct DpState {
 /// DP: the piston at `X cos(2 pi t_n)`, `dt = 0.01`, `steps` steps from rest; `with_walls = false` takes the flow step without
 /// the wall gradient (the control N3).
 fn dp_run(sp: &Sp, steps: usize, with_walls: bool) -> Vec<DpState> {
-    let dt = 0.01;
+    dp_run_with(sp, steps, 0.01, sp_settings(), with_walls)
+}
+
+/// [`dp_run`] with the step size and the solver settings given.
+fn dp_run_with(sp: &Sp, steps: usize, dt: f64, settings: PimpleSettings, with_walls: bool) -> Vec<DpState> {
     let patches = piston();
-    let mut flow = sp.flow();
+    let mut flow = sp.flow_with(settings);
     let x_at = |n: usize| SP_X * (TAU * n as f64 * dt).cos();
     let mut w_old = 0.0;
     let mut out = Vec::new();
@@ -166,6 +172,7 @@ fn dp_run(sp: &Sp, steps: usize, with_walls: bool) -> Vec<DpState> {
             p: flow.p.clone(),
             walls,
             x_p,
+            x_old: x_at(n - 1),
             accel: (w_new - w_old) / dt,
         });
         w_old = w_new;
@@ -285,9 +292,14 @@ fn worst(v: &[f64], target: f64) -> f64 {
 
 /// ADR 0252 G1 to G8: on the prescribed piston the deficit of the force is made by the extrapolation of `patch_force_moment`
 /// (H1), not by the pressure of the flow step (H2), the viscous part (H4) or the reference (H5).
+///
+/// Run once on 784ea04e and missed (ADR 0252 amendment 1), the limits intact: G1 `r` 0.499766 (step 12; 0.500126 at step 2)
+/// against `0.5 +- 1e-6`; G2 `d_ext` 1.250585e-2 against `0.0125 +- 1e-6`; G3 `d_flow` 4.256e-4 against `1e-4`; G4 `d_tot`
+/// 1.292790e-2 against `0.0125 +- 2e-4`; G5 7.229e-6 against `1e-12` (the rebuilt force has no viscous part: a defect of
+/// the check); G6 7.229e-6 against `1e-9`; G8 7.136e-6 against `1e-9`. G7 held (3.0e-14, 6.9e-18, 0, 3.2e-14).
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn g1_to_g8_the_deficit_is_made_by_the_wall_extrapolation() {
+#[ignore = "known miss, kept as the record of the registered run (ADR 0252 amendment 1)"]
+fn g1_to_g8_the_deficit_is_made_by_the_wall_extrapolation_known_miss() {
     let n = 20;
     let sp = Sp::new(n);
     let states = dp_run(&sp, 12, true);
@@ -355,9 +367,13 @@ fn default_deficit(n: usize) -> f64 {
 }
 
 /// ADR 0252 K1, K2: the deficit of the default evaluation is `1/(4N)` on 20, 40 and 80 cells: first order in the cell size.
+///
+/// Run once on 784ea04e and missed (ADR 0252 amendment 1), the limits intact: K1 `d_tot` 1.292790e-2, 6.697305e-3,
+/// 2.330438e-3 against `1/(4N)` within 2 percent (3.4, 7.2 and 25 percent off); K2 orders 0.948836 and 1.522980 against
+/// `[0.95, 1.05]`.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn k1_k2_the_default_deficit_is_first_order_in_the_cell_size() {
+#[ignore = "known miss, kept as the record of the registered run (ADR 0252 amendment 1)"]
+fn k1_k2_the_default_deficit_is_first_order_in_the_cell_size_known_miss() {
     let d: Vec<f64> = [20, 40, 80].iter().map(|&n| default_deficit(n)).collect();
     let orders = [(d[0] / d[1]).log2(), (d[1] / d[2]).log2()];
     println!(
@@ -379,9 +395,13 @@ fn k1_k2_the_default_deficit_is_first_order_in_the_cell_size() {
 
 /// ADR 0252 N3 (control of G3): a flow step taken without the wall gradient has a wrong wall-cell pressure, and `d_flow`
 /// sees it.
+///
+/// Run once on 784ea04e: the control did not hold (ADR 0252 amendment 1): `abs(d_flow)` 1.58e-3 (step 2) to 7.2e-3 (step 12)
+/// against `>= 5e-3` at every step. A defective control: where the flux of the wall is prescribed the cell pressures do
+/// not depend on the wall coefficient of the pressure equation.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn n3_without_the_wall_gradient_the_flow_pressure_is_wrong_and_seen() {
+#[ignore = "defective control, kept as the record of the registered run (ADR 0252 amendment 1)"]
+fn n3_without_the_wall_gradient_the_flow_pressure_is_wrong_and_seen_registered_record() {
     let sp = Sp::new(20);
     let states = dp_run(&sp, 12, false);
     let d: Vec<f64> = states[1..].iter().map(|s| split(&sp, s).d_flow).collect();
@@ -390,4 +410,104 @@ fn n3_without_the_wall_gradient_the_flow_pressure_is_wrong_and_seen() {
         "N3 d_flow without the wall gradient, steps 2 to 12: {d:.4?}; smallest magnitude {smallest:.4e} (limit >= 5e-3)"
     );
     assert!(smallest >= 5e-3, "N3 {smallest}");
+}
+
+// =================================================================================================================
+// Exploration (ADR 0252 amendment 1): prints only, no limit, decides nothing
+// =================================================================================================================
+
+/// One line per step of a DP run: the parts of the deficit against the column of the new and of the old mesh, the pressure
+/// difference of the first two cells against `g dx`, the algebraic gradient ratio, the viscous part and the velocity defect
+/// of the wall cell.
+fn explore(label: &str, n: usize, steps: usize, dt: f64, settings: PimpleSettings, every: usize) {
+    let sp = Sp::new(n);
+    let nu = settings.nu;
+    let states = dp_run_with(&sp, steps, dt, settings, true);
+    println!("X1 {label}: N = {n}, dt = {dt}, nu = {nu}");
+    println!(
+        "X1   step  g           d_tot       d_tot(nu=0) d_ext       d_flow      d_flow_old  s-1         r_alg-0.5   viscous     \
+         u_c/w-1"
+    );
+    for s in &states {
+        if s.step % every != 0 && s.step > 4 {
+            continue;
+        }
+        let geom = &s.geom;
+        let mesh = &geom.mesh;
+        let ni = geom.n_internal;
+        let faces: Vec<usize> = mesh.patch("xmin").unwrap().faces().collect();
+        let f = faces[0];
+        let c = mesh.owner()[f];
+        // the cell behind the wall cell: the neighbour of the wall cell along x
+        let c1 = (0..ni)
+            .filter_map(|i| {
+                let (o, nb) = (mesh.owner()[i], mesh.neighbour()[i]);
+                let other = if o == c {
+                    nb
+                } else if nb == c {
+                    o
+                } else {
+                    return None;
+                };
+                let d = vec3::sub(mesh.cell_centres()[other], mesh.cell_centres()[c]);
+                (d[0].abs() > 10.0 * (d[1].abs() + d[2].abs())).then_some(other)
+            })
+            .next()
+            .unwrap();
+        let g = s.walls[f - ni];
+        let pb = s.p.boundary_values(geom);
+        let grad = least_squares(geom, &s.p.values, &pb);
+        let sf = mesh.face_area_vectors()[f];
+        let nrm = vec3::scale(sf, 1.0 / vec3::norm(sf));
+        let d = vec3::sub(mesh.face_centres()[f], mesh.cell_centres()[c]);
+        let (pc, p1) = (s.p.values[c], s.p.values[c1]);
+        let dxc = (mesh.cell_centres()[c1][0] - mesh.cell_centres()[c][0]).abs();
+        let pf = pc + vec3::dot(grad[c], d);
+        let l = SP_L0 - s.x_p;
+        let dx = l / n as f64;
+        let l_old = SP_L0 - s.x_old;
+        let force = |nu: f64| {
+            patch_force_moment(geom, &s.u, &s.p, RHO, nu, &piston(), vec3::ZERO)
+                .unwrap()
+                .0[0]
+        };
+        let (fx, fx0) = (force(SP_NU), force(0.0));
+        let w = (s.x_p - s.x_old) / dt;
+        println!(
+            "X1   {:4}  {:+.4e} {:+.4e} {:+.4e} {:+.4e} {:+.4e} {:+.4e} {:+.4e} {:+.4e} {:+.4e} {:+.4e}",
+            s.step,
+            g,
+            deficit(s, fx),
+            deficit(s, fx0),
+            (pc + g * dx / 2.0 - pf) / (g * l),
+            1.0 - pc / (g * (l - dx / 2.0)),
+            1.0 - pc / (g * (l_old - l_old / n as f64 / 2.0)),
+            (pc - p1) / (g * dxc) - 1.0,
+            vec3::dot(grad[c], nrm) * dxc / (pc - p1) - 0.5,
+            (fx - fx0) / fx0,
+            s.u.values[c][0] / w - 1.0,
+        );
+    }
+}
+
+/// ADR 0252 amendment 1, X1: exploration of the flow-step part of the deficit (cell count, step size, correctors, outer
+/// iterations, viscosity). Prints only.
+#[test]
+#[ignore = "exploration, prints only (ADR 0252 amendment 1)"]
+fn x1_exploration_of_the_flow_step_part_prints_only() {
+    for n in [20, 40, 80] {
+        explore("base", n, 30, 0.01, sp_settings(), 3);
+    }
+    for n in [20, 80] {
+        explore("half step", n, 60, 0.005, sp_settings(), 6);
+    }
+    let mut four = sp_settings();
+    four.n_correctors = 4;
+    explore("four correctors", 80, 30, 0.01, four, 3);
+    let mut outer = sp_settings();
+    outer.n_outer = 4;
+    explore("four outer iterations", 80, 30, 0.01, outer, 3);
+    let mut inviscid = sp_settings();
+    inviscid.nu = 0.0;
+    explore("nu = 0 in the flow", 80, 30, 0.01, inviscid, 3);
 }

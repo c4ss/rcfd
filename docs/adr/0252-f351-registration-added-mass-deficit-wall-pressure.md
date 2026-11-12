@@ -292,3 +292,78 @@ a skewed wall cell still uses the cell gradient, which is not tested here. One d
 the unit checks. Implicit Euler flow, RK4 body. No case-tree wiring, no `rcfd-api` change. The pressure of a wall that
 does not move with a prescribed flux (a fixed wall with the default zero-gradient condition) is outside: there the default
 extrapolation and the pressure equation use the same wall value.
+
+## Amendment 1 (2026-11-12, after the one run of the diagnosis tests, before any library change and before any further run)
+
+**The run.** `cargo test --release -p rcfd-fv --test added_mass_f351 -- --nocapture --test-threads=1` on 784ea04e (test code
+only), once. All three tests failed their registered limits:
+
+| Check | Limit | Measured (worst of steps 2 to 12, DP, `N = 20`) | |
+| --- | --- | --- | --- |
+| G1 `r` | `0.5 +- 1e-6` | `0.499766` (step 12), `0.500126` (step 2) | missed |
+| G2 `d_ext` | `0.0125 +- 1e-6` | `1.250585e-2`; over the steps `1.249686e-2` to `1.250585e-2` | missed (by `5.9e-6`) |
+| G3 `d_flow` | `abs <= 1e-4` | `4.256e-4` (step 12); `1.19e-5` at step 2, rising by about `3.8e-5` a step | missed |
+| G4 `d_tot` | `0.0125 +- 2e-4` | `1.292790e-2` (step 12); `1.250822e-2` at step 2 | missed (by `4.3e-4`) |
+| G5 rebuilt force | `<= 1e-12` | `7.229e-6` | missed (a defect of the check, below) |
+| G6 viscous part | `<= 1e-9` | `7.229e-6` (step 12); `2.7e-7` at step 2 | missed |
+| G7 `g`; area; length; spread | `1e-9`; `1e-12`; `1e-12`; `1e-9` | `3.0e-14`; `6.9e-18`; `0`; `3.2e-14` | held |
+| G8 identity | `<= 1e-9` | `7.136e-6` | missed (it is G6's viscous part) |
+| K1 `d_tot`, `N = 20, 40, 80` | within 2 percent of `1/(4N)` | `1.292790e-2`, `6.697305e-3`, `2.330438e-3` (3.4, 7.2, 25 percent off) | missed |
+| K2 orders | `[0.95, 1.05]` | `0.948836`, `1.522980` | missed |
+| N3 `abs(d_flow)` without the wall gradient | `>= 5e-3` at every step | `1.58e-3` (step 2) to `7.2e-3` (step 12) | the control did not hold |
+
+The three tests stay in the file as ignored records, the limits intact and the numbers in their comments
+(`g1_to_g8_..._known_miss`, `k1_k2_..._known_miss`, `n3_..._registered_record`). Nothing was re-run.
+
+**What the run shows, against the registered hypotheses.**
+
+- The mechanism of H1 is there: at every step the wall-cell gradient is `0.4998` to `0.5001` of the prescribed one and
+  the extrapolation part is `0.012497` to `0.012506`, within `6e-6` of `1/80`; it carries 96.7 (step 12) to 99.9 (step 2)
+  percent of `d_tot`.
+- H1 **as registered** ("the flow-step pressure is exact", `1e-6`, `1e-4`) is not confirmed: the flow part is `1.2e-5`
+  to `4.3e-4` and grows with the piston's speed. H2 as registered (`>= 5e-3`) is not confirmed either. The registered
+  text for this case applies: both contribute, shares as above.
+- H4: the viscous part is `2.7e-7` to `7.2e-6` of the force, neither below `1e-9` nor above `1e-3`: present, 0.06
+  percent of the deficit at most.
+- H5 is ruled out (G7).
+
+**Diagnosis of the misses from the numbers of this run (no new run).**
+
+1. *The flow part is the column of the old mesh.* With `w` the wall velocity of the step, `d_flow` is `-w dt/(L - dx/2)`
+   to within `4e-6` at the steps worked by hand (3, 4 and 12: `9.80e-5` against `1.018e-4`, `1.387e-4` against `1.420e-4`,
+   `4.256e-4` against `4.292e-4`): the pressure of the implicit Euler moving-mesh step is the acceleration times the
+   column length **before** the step. That follows from its momentum balance, `(V1 u1 - V0 u0)/dt + sum_f (phi_f - m_f)
+   u_f = -V1 grad p`: for a plug the convective sum is `-u1 (V1 - V0)/dt` (the geometric conservation law), which leaves
+   `V0 (u1 - u0)/dt`: the mass of the old volume is accelerated. This is an `O(dt)` property of the flow step in phase
+   with `w a`, which changes sign four times a period and so is not a deficit of the added mass in the mean; the
+   registration's reference `rho A L_new g` did not allow for it, and its premise "if the flow step is exact the cell
+   values are `a (L - x_i)`" was wrong at the level of `X/L0` times `omega dt`. At step 2 the same subtraction leaves
+   `-4.9e-5`: a start-up effect (step 1 starts the wall from rest).
+2. *G1, G2.* `r` is, by the algebra of the fit, exactly half of `(p_0 - p_1)/(g dx)`; it deviates from `0.5` by what the
+   pressure difference of the first two cells deviates from `g dx` (`2.3e-4` at most). The registered `r` mixes the
+   property of the extrapolation (the factor `1/2`) with the flow field; the limit `1e-6` assumed the field exact.
+3. *G5.* The check compared the rebuilt pressure force with the force of `patch_force_moment` at `nu = 0.01`, which
+   contains the viscous part: its number equals G6's to six digits (`7.229399e-6`, `7.229e-6`). The rebuilt `p_f` should
+   have been compared with the force at `nu = 0`. A defect of the check.
+4. *N3.* A defective control by construction: where the wall flux is prescribed the pressure equation of the wall cell
+   has the same flux whatever the wall coefficient, so the cell pressures barely depend on the gradient handed to the
+   step; only the wall value does. N3 cannot show that G3 can fail.
+5. *K1 at `N = 40` and `80`* (`+7` and `-25` percent off `1/(4N)`) is **not understood** from this run: the test printed
+   only the worst step. A flow part that the old-column term does not explain must be `-8e-4` at some step on 80 cells.
+   Guess (not tested): the start-up effect of item 1, larger on a finer mesh (the wall-normal viscous term, `nu dt/dx^2`
+   is 0.04 on 20 cells and 0.64 on 80, with two non-iterated correctors).
+
+**X1, an exploration registered here, before it is run: prints only, no limit, it decides nothing.** Purpose: to see the
+flow part per step so that the corrected set-up and its limits can be written down before the corrected run. The test
+`x1_exploration_of_the_flow_step_part_prints_only` (ignored, run once by name) prints per step of DP: `g`; `d_tot` with
+`nu = 0.01` and `nu = 0` in the force; `d_ext`; `d_flow` against the new column and `d_flow_old` against the old one
+(`1 - p_c/(g (L_old - dx_old/2))`); `s - 1`, `s = (p_0 - p_1)/(g dx)`; `r_alg - 0.5`, `r_alg = (grad p)_c . n dx/(p_0 -
+p_1)`; the viscous part; `u_c/w - 1` of the wall cell. Runs: `N = 20, 40, 80` at `dt = 0.01`, 30 steps; `N = 20, 80` at
+`dt = 0.005`, 60 steps; `N = 80` with four correctors, with four outer iterations, and with `nu = 0` in the flow. What it
+is expected to show (guesses, written before the run): `r_alg - 0.5` at rounding everywhere; `d_flow_old` a few `1e-6`
+after the first steps on 20 cells; a start-up part that grows with `N`, falls with more correctors or outer iterations
+and vanishes with `nu = 0`.
+
+The corrected diagnosis checks and the corrective design follow in amendment 2, after X1 and before any corrected run.
+The acceptance checks A1 to A5, K4, K5, the unit checks U1 to U3, the defaults B1 to B4, N1, N2 and the mutations stand
+as registered; K1 to K3 (on DP) are re-registered by amendment 2 with the reference corrected.
