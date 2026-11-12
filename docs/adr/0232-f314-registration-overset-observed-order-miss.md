@@ -285,3 +285,29 @@ discretely free of net flux), this is reported and H6a and H6b stay open.
 
 The decision rule is unchanged. Under it F3 at levels 2 to 3 is a missed check of this registration, and T1 and T2 at
 level 2 need H6a (the cause named and confirmed in place of H6) to count as named.
+
+## Amendment 2 (2026-11-12, written after the run of SM and before any corrected run; the run of H8a to H8c has not started)
+
+SM ran once (57 s). F8 met (`6.41e-4`). **F7 missed: the largest continuity is `3.07e-5` against `1e-9`.** This is the
+defect that amendment 1 named beforehand: the exact velocity at the face centres of the four moving sides has a net flux
+that is not zero (midpoint rule on a closed boundary; the imbalance is `3.07e-5` of the largest face area, `9e-8` in flux
+units, `2e-7` of `U` times the boundary area), the pressure equation of the closed mesh is then not consistent, and the soft
+pin takes the defect in the pin cell. As amendment 1 says, the set-up is defective and H6a and H6b are not decided on it.
+The numbers it printed are disclosed here and are not used for the decision: `max abs(d_200)` `3.726e-4` with one outer
+iteration (`0.829` of the overset value), `rho_SM = 2.258`, `q = 0.153`, `rho` with three outer iterations `3.877`.
+
+F7 stays as registered in the ignored test `sm_exact_boundary_velocity_known_miss` (limit intact).
+
+Corrected set-up **SMc**, registered here before it runs: SM with the boundary velocity made discretely free of net flux.
+After the exact velocities `v_f` of the boundary faces of the four sides are set on the new geometry, with `Q = sum_f v_f .
+S_f` and `A = sum_f abs(S_f)` over those faces, every one gets `v_f - (Q / A) n_f` (`n_f` the outward unit normal). The
+correction is the same for every step size up to the motion, and of the size `Q / A` (about `2e-7`). Nothing else changes.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| F7c | SMc, every step of every run: the continuity reported by the library | `<= 1e-9` |
+| F8c | SMc, one outer iteration, 800 steps, `s = 1`: the largest error at `t = 0.5` | `<= 1e-3` |
+| F9c (set-up) | SMc: the largest `abs(Q) / A` over the steps of every run (the size of the correction) | `<= 1e-5` |
+
+H6a and H6b are decided on SMc with the deciding numbers of amendment 1, unchanged. SMc is run once. Prediction (mine):
+F7c near `1e-13`; the numbers of H6a and H6b within a few percent of those SM printed.
