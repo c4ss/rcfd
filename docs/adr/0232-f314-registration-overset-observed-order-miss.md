@@ -348,3 +348,28 @@ the levels at the registered pose and by less than 5 percent in RL).
 Test `a3_rest_with_the_fringe_phase_locked` (ignored, slow, run once). The run helper takes the composite and the pose as
 arguments since this amendment; the registered runs are unchanged. Prediction (mine): H9 confirmed, with orders between
 1.8 and 2.1. The decision rule is unchanged.
+
+## Amendment 4 (2026-11-12, written after the run of RL and before any further run; the last diagnostic of this registration)
+
+RL ran once (147 s). `kappa_L` is `0.128`, `0.120`, `0.145` at the registered rest pose (a spread of 20 percent) and
+`0.0887`, `0.0891`, `0.0892` in RL (under 1 percent): the phase is locked. With it locked the order of the calculated
+maximum at levels 2 to 3 is `1.730` (at the registered rest pose `1.336`), of the largest error `1.788` (`1.264`), of the root
+mean square `1.898` (`1.727`). But the root mean square over the calculated component cells is `1.549e-4`, `6.39e-5`,
+`3.98e-5`: orders `1.277` and `1.166`. **H9 is neither confirmed nor ruled out** by its rule (the calculated maximum is at
+`1.730`, above 1.7; the component root mean square is below it).
+
+The three RL numbers fit `a (h/H)^2 + b (h/H)` with `a = 5.42e-5`, `b = 1.007e-4` from levels 1 and 2; that fit gives
+`3.96e-5` at level 3 against the measured `3.98e-5`. So with the phase locked the error of the calculated component cells
+has a clean first-order term of the coefficient `1.0e-4` beside its second-order term; it lies under the second-order
+error of the background (`5.6e-4`, `1.41e-4`, `6.5e-5` in the root mean square) up to level 3. Two candidates are tested
+before this registration closes; no further diagnostic is added after them.
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H10 | the first-order term is a time error: the runs at rest take `200 L` steps, so `dt` is proportional to `h` | RL at level 3 with 1200 steps against the 600 steps of the run above: the root mean square over the calculated component cells | confirmed: the value with 1200 steps is at most 0.7 of that with 600; ruled out: at least 0.9 of it |
+| H11 | the first-order term sits in the calculated component cells next to the fringe (the operators there see the interpolated values), not in the interior | RL, levels 1 to 3 (`200 L` steps): the calculated component cells by ring (ring 1 has a fringe face neighbour, ring `n + 1` a face neighbour in ring `n`); the root mean square of the error over rings 1 and 2 and over the rings from 4 on, and their orders at levels 2 to 3 | confirmed: the order over the rings from 4 on is `>= 1.7` and that over rings 1 and 2 is below it; ruled out: the order over the rings from 4 on is `< 1.5` (the term fills the interior) |
+
+Test `a4_first_order_term_of_the_component_at_rest` (ignored, slow, run once; it repeats the three RL runs, which are
+deterministic). Prediction (mine): H10 ruled out (the run at rest of the registered pose changed by `1.2e-5` at most
+between 200 and 800 steps at level 2); H11 uncertain. Whatever the result, the first-order term goes into the addendum as a
+finding with its number, and its removal is not part of this registration.
