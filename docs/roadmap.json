@@ -3695,9 +3695,9 @@
     "deps": [
       "F-341"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "An isolated plane pulse at 30 and 45 degrees through a matched layer attached to a mesh translating along the layer at Mach 0.2 reflects less than 1 percent and stays bounded over 20 transit times of the layer, or the reflection and any instability are measured and documented; a plain layer on a rotating mesh reflects a normal pulse less than 1 percent.",
-    "note": "From ADR 0265 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+    "note": "From ADR 0265 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0344, 2026-11-12: the acceptance text is MET IN THE LIBRARY with a new opt-in frame. Derived: the F-341 attached memory, the integral of p - p_ref along each cell's path, makes a matched layer unstable for grazing waves when the mesh moves along the layer, with growth rate M/(2(1-M)) times the layer rate. A column along a uniform layer at Mach 0.2 grew 6 times by t = 1.5, where at rest it stays at 0.30. Built (rcfd-fv): `sponge::SpongeFrame::AttachedWithLabMemory`, with the rates attached to the cells and the memories of the matched forms taken in the lab frame (each cell's memory gains w_c.grad Q), which on a mesh translating along a planar layer is the matched layer at rest. Measured: a plane pulse with a smooth envelope along its front (the solver has no periodic condition, and the moving boundaries exclude a mirror wall), through the layer of ADR 0237 on grids translating along it at Mach 0.2, reflects 1.6e-4 at 30 degrees and 3.5e-4 at 45 degrees (2.7e-4 and 3.6e-4 at rest; limit 1e-2) and stays bounded over 20 transit times of the layer (largest amplitude the incident peak). The F-341 frame reflects 7.2e-3 and 3.2e-2 in the same runs. It did not blow up within 20 transit times there, although the one-dimensional check shows the instability. A plain radial layer on a rotating O-grid, Mach 0.2 at the layer, reflects 2.8e-3 of an outgoing cylindrical pulse, as at rest; the plain form reflects about w/(8r) of a cylindrical pulse, which comes from the geometry. The transport matches a closed form to 1.9e-13. The frame gives the bits of the F-341 frame for the plain form and without motion. The F-341, F-331 and F-340 tests, the F-258 bit records and baseline_hashes pass unedited, and five mutations were caught. One amendment: the first closed-form check excluded too few boundary cells (8.9e-3); it was diagnosed and replaced on a longer grid. Limits: the lab memory is derived for translation along a planar layer; matched forms on rotating meshes are not built; library only; two-dimensional checks. STATUS recorded PARTIAL by the lead: the registered check G3 missed (a defect of its set-up, 8.92e-3 against 1e-12) and passed only as G3b after amendment 1, which is not blind to the scratch model that explained the miss; done is the maintainer's call."
   },
   {
     "id": "F-408",
@@ -4199,5 +4199,16 @@
     "status": "todo",
     "acceptance": "An opt-in of the overset step under which the flux of a face between a calculated and a fringe cell is the face interpolation of the interpolated fringe velocity plus one correction per closed fringe ring that makes the net flux of each enclosed part zero (ADR 0340, the switch described there): on RE of ADR 0340 at levels 1 to 3 the following coefficient a_c at both fringes is at least 0.9 at t = 0.025 and the order of R_b at t = 0.5 is at least 1.7 on both pairs, on RL the order of R_b is at least 1.7 within the parity families (levels 1 to 3 and 2 to 4), continuity of the calculated cells and the mass of the domain hold to 1e-9, the uniform-flow check U1 of ADR 0219 holds, and without the opt-in every overset result is bit-identical; or the ADR shows with a number why the prescribed flux is not admissible.",
     "note": "From ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+  },
+  {
+    "id": "F-446",
+    "title": "Lab-frame memory as the behaviour of the attached matched sponge",
+    "phase": 9,
+    "deps": [
+      "F-407"
+    ],
+    "status": "todo",
+    "acceptance": "With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the lab frame (ADR 0344); the F-341 matched records are re-recorded once with that approval, the plain form and every run without motion stay bit-identical, and the ADR 0344 checks pass unchanged.",
+    "note": "NEEDS THE USER: it changes the results of the F-341 matched forms (re-recording their records)."
   }
 ]
