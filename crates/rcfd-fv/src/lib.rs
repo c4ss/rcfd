@@ -3,6 +3,7 @@
 //! time integration and the pressure-velocity coupled solvers.
 
 pub mod actuator;
+pub mod adaptive;
 pub mod ale;
 pub mod bc;
 pub mod cavitation;
