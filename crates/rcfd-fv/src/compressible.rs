@@ -11,7 +11,7 @@ use crate::compressible_bc::{self, MsdWall, TotalInlet};
 use crate::convection::TvdLimiter;
 use crate::geometry::FvGeometry;
 pub use crate::riemann::{to_prim, Cons, Gas, Prim, RiemannSolver};
-use crate::sponge::{self, Sponge};
+use crate::sponge::{self, MatchedOptions, Sponge, SpongeForm, SpongeMemories};
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_core::{Error, Result};
 use rcfd_mesh::motion::{cell_swept_sum, swept_volumes};
@@ -115,6 +115,11 @@ pub struct CompressibleSolver {
     sponge: Option<Sponge>,
     /// The memory `Q` of the matched sponge form, one value per cell while a sponge is set.
     sponge_q: Vec<f64>,
+    /// The further memories of the shifted matched form (F-340, ADR 0248): `r`, the momentum memory and the rates of
+    /// the second layer; empty unless that form is set.
+    sponge_r: Vec<f64>,
+    sponge_m: Vec<Vec3>,
+    sponge_rate2: Vec<f64>,
     /// The opt-in mass-spring-damper walls and their state (F-332, ADR 0243); `None` by default.
     msd: Option<MsdState>,
 }
@@ -166,6 +171,9 @@ impl CompressibleSolver {
             ale_speeds: None,
             sponge: None,
             sponge_q: Vec::new(),
+            sponge_r: Vec::new(),
+            sponge_m: Vec::new(),
+            sponge_rate2: Vec::new(),
             msd: None,
         })
     }
@@ -207,11 +215,65 @@ impl CompressibleSolver {
         if let Some(s) = &sponge {
             s.validate(self.u.len())?;
         }
+        // F-340 (ADR 0248): the shifted matched form carries two more memories and the rates of its second layer
+        let shifted = match &sponge {
+            Some(s) if matches!(s.form, SpongeForm::MatchedShifted(_)) => Some(s.second_rates(&self.geom)?),
+            _ => None,
+        };
         self.sponge_q = match &sponge {
             Some(_) => vec![0.0; self.u.len()],
             None => Vec::new(),
         };
+        match shifted {
+            Some(rate2) => {
+                self.sponge_r = vec![0.0; self.u.len()];
+                self.sponge_m = vec![[0.0; 3]; self.u.len()];
+                self.sponge_rate2 = rate2;
+            }
+            None => {
+                self.sponge_r = Vec::new();
+                self.sponge_m = Vec::new();
+                self.sponge_rate2 = Vec::new();
+            }
+        }
         self.sponge = sponge;
+        Ok(())
+    }
+
+    /// The memories of the shifted matched form (F-340, ADR 0248): `q`, `r` and the momentum memory per cell. For the
+    /// other forms `r` and `m` are empty and `q` is [`Self::sponge_memory`].
+    pub fn sponge_memories(&self) -> SpongeMemories {
+        SpongeMemories {
+            q: self.sponge_q.clone(),
+            r: self.sponge_r.clone(),
+            m: self.sponge_m.clone(),
+        }
+    }
+
+    /// Set the memories of the shifted matched form (for a restart, or for a start with a wave already inside the
+    /// layer): one finite value per cell in each; an error unless that form is set.
+    pub fn set_sponge_memories(&mut self, mem: &SpongeMemories) -> Result<()> {
+        let n = self.u.len();
+        let shifted = matches!(
+            self.sponge.as_ref().map(|s| s.form),
+            Some(SpongeForm::MatchedShifted(_))
+        );
+        let ok = shifted
+            && mem.q.len() == n
+            && mem.r.len() == n
+            && mem.m.len() == n
+            && mem.q.iter().chain(&mem.r).all(|x| x.is_finite())
+            && mem.m.iter().flatten().all(|x| x.is_finite());
+        if !ok {
+            return Err(Error::InvalidValue {
+                path: "sponge".into(),
+                reason: "the sponge memories need the shifted matched form and one finite value per cell in each"
+                    .into(),
+            });
+        }
+        self.sponge_q = mem.q.clone();
+        self.sponge_r = mem.r.clone();
+        self.sponge_m = mem.m.clone();
         Ok(())
     }
 
@@ -888,6 +950,9 @@ impl CompressibleSolver {
         let Some(sp) = self.sponge.as_ref() else {
             return Err(Error::Numerical("step_sponged: no sponge is set".into()));
         };
+        if let SpongeForm::MatchedShifted(opts) = sp.form {
+            return self.step_sponged_shifted(dt, opts);
+        }
         let n = self.u.len();
         let rhs = |u: &[Cons], q: &[f64]| -> Result<(Vec<Cons>, Vec<f64>)> {
             let mut r = self.residual(u)?;
@@ -934,6 +999,80 @@ impl CompressibleSolver {
         };
         self.u = u_new;
         self.sponge_q = q_new;
+        self.time += dt;
+        self.steps += 1;
+        Ok(())
+    }
+
+    /// [`Self::step`] with the shifted matched sponge form (F-340, ADR 0248 E2): the source of DR14 joins the residual of
+    /// every stage and the memories `q`, `r` and the momentum memory advance with the stage weights of the state. With
+    /// one layer and without shift and damping along the layer this is `step_sponged` of the matched form, operation
+    /// for operation, on the state and on `q`.
+    fn step_sponged_shifted(&mut self, dt: f64, opts: MatchedOptions) -> Result<()> {
+        let Some(sp) = self.sponge.as_ref() else {
+            return Err(Error::Numerical("step_sponged_shifted: no sponge is set".into()));
+        };
+        let n = self.u.len();
+        let rhs = |u: &[Cons], mem: &SpongeMemories| -> Result<(Vec<Cons>, SpongeMemories)> {
+            let mut r = self.residual(u)?;
+            let d = sponge::add_source_shifted(&self.geom, self.gas, sp, &opts, &self.sponge_rate2, u, mem, &mut r);
+            Ok((r, d))
+        };
+        let axpy = |a: f64, x: &[Cons], b: f64, y: &[Cons], c: f64, r: &[Cons]| -> Vec<Cons> {
+            (0..n)
+                .map(|i| std::array::from_fn(|k| a * x[i][k] + b * y[i][k] + c * r[i][k]))
+                .collect()
+        };
+        let axpy_q = |a: f64, x: &[f64], b: f64, y: &[f64], c: f64, r: &[f64]| -> Vec<f64> {
+            (0..n).map(|i| a * x[i] + b * y[i] + c * r[i]).collect()
+        };
+        let axpy_m =
+            |a: f64, x: &SpongeMemories, b: f64, y: &SpongeMemories, c: f64, r: &SpongeMemories| SpongeMemories {
+                q: axpy_q(a, &x.q, b, &y.q, c, &r.q),
+                r: axpy_q(a, &x.r, b, &y.r, c, &r.r),
+                m: (0..n)
+                    .map(|i| std::array::from_fn(|k| a * x.m[i][k] + b * y.m[i][k] + c * r.m[i][k]))
+                    .collect(),
+            };
+        let u0 = &self.u;
+        let m0 = SpongeMemories {
+            q: self.sponge_q.clone(),
+            r: self.sponge_r.clone(),
+            m: self.sponge_m.clone(),
+        };
+        let (u_new, m_new) = match self.settings.rk {
+            RkScheme::Euler => {
+                let (r, d) = rhs(u0, &m0)?;
+                (axpy(1.0, u0, 0.0, u0, dt, &r), axpy_m(1.0, &m0, 0.0, &m0, dt, &d))
+            }
+            RkScheme::Rk2 => {
+                let (r0, d0) = rhs(u0, &m0)?;
+                let (u1, m1) = (axpy(1.0, u0, 0.0, u0, dt, &r0), axpy_m(1.0, &m0, 0.0, &m0, dt, &d0));
+                let (r1, d1) = rhs(&u1, &m1)?;
+                (
+                    axpy(0.5, u0, 0.5, &u1, 0.5 * dt, &r1),
+                    axpy_m(0.5, &m0, 0.5, &m1, 0.5 * dt, &d1),
+                )
+            }
+            RkScheme::Rk3 => {
+                let (r0, d0) = rhs(u0, &m0)?;
+                let (u1, m1) = (axpy(1.0, u0, 0.0, u0, dt, &r0), axpy_m(1.0, &m0, 0.0, &m0, dt, &d0));
+                let (r1, d1) = rhs(&u1, &m1)?;
+                let (u2, m2) = (
+                    axpy(0.75, u0, 0.25, &u1, 0.25 * dt, &r1),
+                    axpy_m(0.75, &m0, 0.25, &m1, 0.25 * dt, &d1),
+                );
+                let (r2, d2) = rhs(&u2, &m2)?;
+                (
+                    axpy(1.0 / 3.0, u0, 2.0 / 3.0, &u2, 2.0 / 3.0 * dt, &r2),
+                    axpy_m(1.0 / 3.0, &m0, 2.0 / 3.0, &m2, 2.0 / 3.0 * dt, &d2),
+                )
+            }
+        };
+        self.u = u_new;
+        self.sponge_q = m_new.q;
+        self.sponge_r = m_new.r;
+        self.sponge_m = m_new.m;
         self.time += dt;
         self.steps += 1;
         Ok(())
