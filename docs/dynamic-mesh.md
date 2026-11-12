@@ -146,11 +146,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 The section is `dynamic_mesh`; keys, defaults and unset values are in `docs/case-schema.md`. Static errors are located at the
 key; incompatible sections are reported at `dynamic_mesh.enabled`.
 
-The force, moment and force-coefficient reports take the stored face pressure, which on a moving wall is the wall-cell
-value (low by `1/(2N)` on a column of `N` cells accelerated by its wall, ADR 0269). With the optional table
-`[dynamic_mesh.force_reports] wall_pressure = "prescribed_gradient"` (F-440, ADR 0342) they take on the following and
-resting walls the face pressure of `sixdof::patch_force_moment_wall_gradient` with the fixed-flux gradient of the last
-step, which the driver keeps; the run itself does not change. Without the table the reports are as before.
+The force, moment and force-coefficient reports take, on the following and resting walls, the face pressure of
+`sixdof::patch_force_moment_wall_gradient` with the fixed-flux gradient of the last step, which the driver keeps; the run
+itself does not change (F-440, ADR 0342; the default since ADR 0346). The stored face pressure, which on a moving wall is
+the wall-cell value (low by `1/(2N)` on a column of `N` cells accelerated by its wall, ADR 0269), is
+`[dynamic_mesh.force_reports] wall_pressure = "boundary_value"`, the default before ADR 0346; layered and compressible
+runs keep it. The body force of a six-DOF body takes the same corrected wall pressure by default
+(`[dynamic_mesh.six_dof.coupling] wall_pressure`, ADR 0269, 0346); `"extrapolated"` is the old one.
 
 ## Layering and compressible ALE (F-230, ADR 0090; case tree F-259, ADR 0191)
 

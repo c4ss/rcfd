@@ -348,7 +348,8 @@ fn omega_ratio(dt: f64, x: &[f64]) -> (f64, usize) {
 
 // ---- T0, Z0, Z1 ----
 
-/// ADR 0269 T0: without the table the texts hold no `wall_pressure` and the key reads `extrapolated`; with it they do.
+/// ADR 0269 T0: without the table the texts hold no `wall_pressure` and the key reads its default (`prescribed_gradient`
+/// since ADR 0346, `extrapolated` before); with it they do.
 #[test]
 fn t0_a_case_without_the_table_keeps_its_text() {
     let without = parse(&piston(0.2, 0.01, ""));
@@ -365,17 +366,18 @@ fn t0_a_case_without_the_table_keeps_its_text() {
         .to_json()
         .pointer("/dynamic_mesh/six_dof/coupling")
         .is_none());
-    assert_eq!(without.get(KEY).unwrap(), "extrapolated");
+    assert_eq!(without.get(KEY).unwrap(), "prescribed_gradient");
     assert_eq!(with.get(KEY).unwrap(), "prescribed_gradient");
     assert!(with.to_toml().contains("wall_pressure = \"prescribed_gradient\""));
     assert!(with.to_json_string().contains("\"wall_pressure\""));
     assert_ne!(without.tree.content_hash(), with.tree.content_hash());
 }
 
-/// ADR 0269 Z0: a table with only `wall_pressure = "extrapolated"` equals no table, bit for bit (loose).
+/// ADR 0269 Z0: a table with only the default value of `wall_pressure` equals no table, bit for bit (loose). ADR 0346:
+/// the default is `prescribed_gradient` (the old statement, `extrapolated`, is ADR 0346 X1 against the old tree).
 #[test]
 fn z0_extrapolated_key_equals_no_table_loose() {
-    let table = "[dynamic_mesh.six_dof.coupling]\nwall_pressure = \"extrapolated\"\n";
+    let table = PRESCRIBED;
     let a = tree_run(&parse(&piston(0.2, 0.01, "")), 100);
     let b = tree_run(&parse(&piston(0.2, 0.01, table)), 100);
     println!(
@@ -385,7 +387,8 @@ fn z0_extrapolated_key_equals_no_table_loose() {
     assert_eq!(first_difference(&a.bits, &b.bits), None);
 }
 
-/// ADR 0269 Z1: ADR 0266's strong table with `wall_pressure = "extrapolated"` equals the table without it.
+/// ADR 0269 Z1: ADR 0266's strong table with the default value of `wall_pressure` equals the table without it (ADR 0346:
+/// `prescribed_gradient`; `extrapolated` before).
 #[test]
 fn z1_extrapolated_key_equals_the_strong_table_without_it() {
     let mu = 4.0;
@@ -394,7 +397,7 @@ fn z1_extrapolated_key_equals_the_strong_table_without_it() {
         &parse(&piston(
             mu,
             0.01,
-            &strong_table(mu, "wall_pressure = \"extrapolated\"\n"),
+            &strong_table(mu, "wall_pressure = \"prescribed_gradient\"\n"),
         )),
         40,
     );
@@ -495,7 +498,8 @@ fn sp_run(table: &str) -> (f64, usize, f64) {
 #[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
 fn a1_a3_spring_mounted_piston_at_mass_ratio_0_2() {
     let (w1, n1, g1) = sp_run(PRESCRIBED);
-    let (w2, n2, g2) = sp_run("");
+    // ADR 0346: the control is the old wall pressure, written (it was the default, no table, before ADR 0346)
+    let (w2, n2, g2) = sp_run("[dynamic_mesh.six_dof.coupling]\nwall_pressure = \"extrapolated\"\n");
     println!(
         "A1: with the key omega_m/omega = {w1:.6} ({n1} crossings, largest turning ratio {g1:.5}); limit |. - 1| <= 5e-4"
     );
