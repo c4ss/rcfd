@@ -6599,13 +6599,25 @@ fixed by the item's registration ADR before any code.
     with a located error and both sides restored; the protocol document is versioned; existing service tests and case
     hashes are unchanged.
   - note: From ADR 0256 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-361** Quasi-Newton acceleration of the coupled iteration
+- [x] **F-361** Quasi-Newton acceleration of the coupled iteration
   - depends on: F-139
   - acceptance: A least-squares (quasi-Newton) update of the nodal force from the residual history of the step, opt-in
     beside the fixed and Aitken factors, converges the model problem of ADR 0256 to 1e-8 in at most 7 iterations per
     step and 6 or fewer on average (Aitken: 8.8), gives the same frequencies within 1e-6, and with one rigid node needs
     no more iterations than Aitken; registered before the run with the plain fixed point as the diverging control.
-  - note: From ADR 0256 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: DONE pending acceptance (ADR 0261, 2026-11-12; registered before the code, no amendment). Opt-in
+    fsi::Relaxation::LeastSquares { initial, filter } (CouplingSettings::least_squares) in cosim::coupled_step: after a
+    first update relaxed with initial, the next nodal force is the flow's force plus the combination of the step's
+    output differences whose residual differences best cancel the current residual (interface quasi-Newton with a
+    least-squares inverse Jacobian), solved by Householder QR newest column first with a filter that drops a column
+    whose part outside the newer ones is below 1e-2 of its norm (no vanishing pivot); no reuse across steps;
+    fsi::strong_step refuses it. Derived: on a linear map it is GMRES plus one pass, exact at iteration d + 2. Measured
+    on the model problem of ADR 0256 (6 nodes, 16 faces, tolerance 1e-8): every one of 650 steps converged, at most 7
+    iterations (one step), mean 5.980 (Aitken 8.766, histogram identical to ADR 0256), frequencies equal to Aitken's
+    within 3.1e-10; one rigid node (SPm1): the same 301 iterations as Aitken, the same count in every step, positions
+    bit-identical; the plain fixed point diverges (510.85 in 10). Mock affine and cubic fluids check the termination
+    count and the equality with Aitken's secant. Existing suites cosim_f139, strong_fsi_f251, added_mass_f351 and the
+    baseline hashes pass unedited; four mutations caught. Open: ADR 0261 Q1 to Q3.
 - [ ] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
   - depends on: F-139
   - acceptance: InterfaceMap weights are built from the two interface meshes alone (nearest-element projection and a
