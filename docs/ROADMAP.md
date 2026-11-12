@@ -5823,11 +5823,23 @@ fixed by the item's registration ADR before any code.
     absent); a case without them is bit-identical.
   - note: From ADR 0230 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11 (a
     separate item, checked by conservation without a data set).
-- [ ] **F-327** F-247 remesher: run the tet output check on its outputs
+- [x] **F-327** F-247 remesher: run the tet output check on its outputs
   - depends on: F-247, F-324
   - acceptance: TetRemesher's output meshes pass TetMesh::check_output after every remeshing step, or the step returns
     its located error; the remesh_f247 hashes stay unchanged.
-  - note: From ADR 0231 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0231 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE
+    (ADR 0236, the registration of F-327, 2026-11-12, merged 2026-11-12): every registered check is met at the first
+    run; the acceptance is still the maintainer's (ADR 0236 Q1). TetRemesher::event (and remesh) ends every event that
+    applied an operator with a step check before committing: TetMesh::check_output on the output with the surface of its
+    free faces (the remesher has no stored surface; its boundary is re-triangulated), every free face exactly on its
+    plane, and the cell volume equal to that of the step's input within a rigorous bound (an event does not change the
+    region); a failure returns a located Error::Mesh ("remesh output check: ...", naming the cell, the face or the
+    volumes, and the event's operators and box) and leaves the mesh as it was. The check only reads: M0's hash
+    aaf8f4c36f6446e4 and every P-T number of ADR 0215 are unchanged, and all 1806 P-T events and the 572 events of a
+    geometric piston pass. A duplicated cell, a negative cell, a missing cell and a valid tiling of a changed region are
+    each rejected and located. Cost: 10.3 percent of an event. Four registered mutations failed their checks. Library
+    only; RemeshChange gains the field check. Open: ADR 0236 Q2 (checking new() and motions), Q6 (V2 and V3 not decisive
+    in the piston).
 - [ ] **F-330** Compressible impedance boundary: case-schema wiring
   - depends on: F-243
   - acceptance: `compressible_bc = "impedance"` with `impedance_value` runs the ADR 0233 tube from a case file with R
