@@ -180,3 +180,91 @@ One geometry, translation only; the moment floor is exercised only as the compan
 rest patches, no extrapolated wall pressure in the new tests (ADR 0266's R1 and R2 keep it). Nothing here changes the
 library's or the driver's lines; whether the driver should warn when a force floor is written with `moment_scale = 0` on
 a body whose moment is proportional to its force (where the force floor is inert) is a question, not done here.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-api/tests/strong_coupling_force_floor_f437.rs` (new, 2 tests: F1 with B1, B2; G with GB). Test-only:
+  no line of `rcfd-fv`, `dynmesh.rs`, `sim.rs`, the schema, the documents of the key, `baseline_hashes.rs`, the hash
+  tables or the goldens changed, so every default is bit-identical by construction.
+
+### Checks
+
+Run once, `cargo test -p rcfd-api --release --test strong_coupling_force_floor_f437 -- --nocapture --test-threads=1`
+(1.8 s), on commit 71951e16.
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| F1 (a1, a2) | bit-identical; equal; equal bits; all converged; `<= 20` | 0 of 60 steps differ in bits, iteration counts or the test quantity of the last iteration; 3 iterations every step (tree and library); all converged | met |
+| B1 (a2) | `e_k = norm(r_F,k)/s_F` bit for bit at every iteration | 0 of 180 iterations differ | met |
+| B2 | largest `norm(F + r_F)/s_F` `<= 0.1`; `norm(r_F)` of step 1's last iterate `> 0` | `8.83e-3` (step 2); `5.75e-10` N | met |
+| G (control) | as F1 | 0 of 60 steps differ in bits, counts or test quantities; 4 iterations at step 1, 3 after; all converged | met |
+| GB (control) | smallest `norm(F + r_F)/s_F'` `>= 1e3` | `1.56e7` (step 25) | met |
+
+Against the predictions: F1's counts are 3 every step, not 2 to 3; the floor removes only step 1's fourth iteration
+(G, the unfloored control, has 4 at step 1 and 3 after; ADR 0266 E1 had 4 at steps 1 and 25 with the old wall
+pressure). So with this tolerance the floor sets *the value* of every test quantity (B1) and decides the outcome of
+step 1's third test, not the iteration count of every step; the tree-against-library test catches an unread floor
+through the test quantity it now compares, and through step 1's count and bits. B2 is `8.8e-3`, below the estimate
+`0.024` (the bound `2.4 k X` at step 1 was loose: the largest `|F_t|` at a last iterate is `0.88 k X`, about the column's
+`0.8 k X`). GB `1.56e7` against the estimate `5e6`.
+
+### Mutations
+
+Each applied alone to `crates/rcfd-api/src/dynmesh.rs` of a `git archive` copy of 71951e16 in
+`w49i-work/f437-scratch/copy` by an exact replacement that had to occur once (`f437-scratch/mutate.py`), the new file's
+two tests run once (release), the file restored and compared byte for byte with the kept copy and with the worktree's
+file (equal both times).
+
+| Id | Must fail | Must pass | Result |
+| --- | --- | --- | --- |
+| MF1 `force_scale: 0.0` in the driver (a3) | F1 | G | F1 failed at step 1 (bits, iterations 4 against 3, test quantity); G passed (the negative control: equal with and without the mutation) |
+| MF2 `moment_scale: 0.0` in the driver | F1 | (G printed only) | F1 failed at step 1 (bits, counts, test quantity). G also failed, on the test quantity only (from step 1; bits and counts equal): the prediction that G passes under MF2 was wrong. With `moment_scale = 0` the moment term `norm(r_M)/norm(M_t)` is the unfloored force ratio up to rounding, and `max` picks it when its last bits are larger, so the recorded number differs while every decision is the same. This is the diagnosis of ADR 0266 MU5 seen directly; not a registered check of G |
+
+### Deviations and disclosures
+
+- No registered limit was missed; nothing was re-run. The MF2 outcome of G was a prediction, not a limit.
+- The diagnosis of ADR 0266 MU5 in the arithmetic (by reading) was not run on ADR 0266's settings; MF2's G result
+  supports it.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's). No existing test was run: no existing line changed. No run of the
+binding floor over the full 11.5 periods (not registered; the 60-step test covers the code path).
+
+### After the tests
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets --release -- -D warnings`: clean.
+
+### Decision by the registered rule
+
+F1, B1, B2, G and GB are met, MF1 fails F1 and passes G, MF2 fails F1: **done**. Every clause of the acceptance is met:
+(a1) F1 bit-identical; (a2) the floor sets every test quantity of every step (B1: 180 of 180 iterations are
+`|r_F|/s_F`, with `|F_t| <= 0.0088 s_F`); (a3) F1 fails when the driver does not read `force_scale` (MF1), while the
+non-binding control does not; (a4) registered in commit 316417b7 before the test existed. The acceptance stays the
+maintainer's.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. F-350's status.** ADR 0266 was partial only because MU5 passed its named test; F1 is now a named test that
+  catches it. Options: (a) F-350 done with this item; (b) leave F-350 partial and count the closure here only.
+  Recommendation (a).
+- **Q2. A force floor with no moment floor is inert on a body whose moment is proportional to its force** (a force on a
+  fixed arm from the centre of mass: the moment ratio equals the unfloored force ratio). Options: (a) a located warning
+  when `force_scale > 0` and `moment_scale = 0`; (b) a sentence in `docs/case-schema.md` beside the keys; (c) leave.
+  Recommendation (b) now (no default changes), (a) only if a case is seen to be confused by it.
+
+### For the lead: roadmap entries
+
+Proposed status of F-437: **done** (pending the maintainer's acceptance).
+
+Note text for F-437:
+
+> From ADR 0266 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE (ADR 0349, 2026-11-12; registered before the code, test-only, no library or driver line changed): crates/rcfd-api/tests/strong_coupling_force_floor_f437.rs runs the spring-mounted piston of ADR 0266 at mass ratio 4 through the case driver with force_scale = moment_scale = 100 k X and the default wall pressure (prescribed_gradient), against strong_step_with(PrescribedGradient) with a carried vector: 60 steps bit-identical in the flow, the body, the iteration counts and, new against ADR 0266 E1, the test quantity of every step; at all 180 iterations the test quantity is |r_F|/force_scale bit for bit (the largest force is 0.0088 of the floor). The driver mutated to ignore force_scale fails it at step 1 (bits, 4 iterations against 3, test quantity); the same case with force_scale = 1e-9 k X (the floor never binds; the smallest force is 1.6e7 times it) is equal with and without that mutation. Why ADR 0266 E1 could not catch it: with moment_scale = 0 the moment term of the test is the unfloored force ratio (the piston's moment is a fixed arm times its force), so a force floor alone is inert on that case; the moment floor is written with it here. Open: ADR 0349 Q1 (F-350's status), Q2 (a force floor without a moment floor).
+
+Note text for F-350 (replacing its sentence that begins "Partial by the registered rule"):
+
+> The one mutation of ADR 0266 that passed its named test (force_scale not read; the floor k X was inert in E1 because moment_scale = 0 makes the moment term the unfloored force ratio) is caught by the binding-floor test of ADR 0349 (F-437, 2026-11-12); proposed done by ADR 0349 Q1.
+
+No follow-up items.
