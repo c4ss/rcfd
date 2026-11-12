@@ -36,6 +36,9 @@ use rcfd_mesh::motion::patch_points;
 use rcfd_mesh::Mesh;
 use std::sync::Arc;
 
+mod mapping;
+pub use mapping::{interface_rows, MapMethod, MapReport, MapSettings, Rows, Unmapped};
+
 /// What every participant of a coupled step answers.
 pub trait Participant {
     /// Name used in error messages.
@@ -115,6 +118,20 @@ impl InterfaceMap {
             n_nodes,
             face_points,
         })
+    }
+
+    /// The map built from the two interface meshes (ADR 0263): the structure's `nodes` and `elements` (1 to 4 node
+    /// indices each), the fluid's wall `points` and the points of every wall face, with the weights of
+    /// [`interface_rows`]. Returns the map and the builder's report.
+    pub fn build(
+        nodes: &[Vec3],
+        elements: &[Vec<usize>],
+        points: &[Vec3],
+        face_points: Vec<Vec<usize>>,
+        settings: &MapSettings,
+    ) -> Result<(Self, MapReport), String> {
+        let (rows, report) = interface_rows(nodes, elements, points, settings)?;
+        Ok((InterfaceMap::new(rows, nodes.len(), face_points)?, report))
     }
 
     /// Number of structural nodes.
