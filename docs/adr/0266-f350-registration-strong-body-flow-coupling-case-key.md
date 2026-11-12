@@ -277,3 +277,116 @@ than registered); the registration should have read where `coerce` reports an un
   MU6.
 
 Every other registered check was run once in the same run (results in the addendum); none is re-run.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-api/src/dynmesh.rs`: the optional table `[dynamic_mesh.six_dof.coupling]` (D1) in the schema of
+  `six_dof`; `check_coupling` (D3), called by `check` and by `DynMesh::from_case`; `StrongDrive`, `CouplingRecord`,
+  `body_points` (the operations of `new_points` for a given body) and `DynMesh::step_strong`, entered from the top of
+  `DynMesh::step` only when a `StrongDrive` exists (D2); `take_stop`, `take_cap_warning`, `coupling_records`. The
+  integrator of `from_case` is computed once before the struct (the same expression); no other existing line changed.
+- `crates/rcfd-api/src/sim.rs`: three additions only: `Simulation::coupling_records`; in `take_runtime_warnings` the
+  warning of the first capped step; in the transient step's `dynmesh` branch, after a successful step, the stop message
+  of a capped step becomes the run's failure (`failure_message(step, time, ..)`).
+- `crates/rcfd-api/tests/strong_coupling_case_f350.rs` (new, 10 tests, one an ignored record); `docs/case-schema.md`
+  (rows and a new section with a new TOML block; no existing block edited).
+- Not changed: `rcfd-fv` (no line of `fsi.rs`, `sixdof.rs`, `pimple.rs`, `pimple/*.rs`, `overset.rs`), `schema.rs`,
+  `comp.rs`, `rcfd-cli`, `rcfd-mcp`, `baseline_hashes.rs`, the hash tables, the goldens.
+
+### Checks
+
+The new file was run once (`cargo test --release -p rcfd-api --test strong_coupling_case_f350 -- --include-ignored
+--nocapture --test-threads=1`, 19 s), on commit 35fb46e3; Nb once after amendment 1 (378e1b55).
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| K0 | all pass, no file edited | `rcfd-api` `case_hashes_w48u` 1, `baseline_hashes` 3 (1 ignored as before), `w48v_adaptive_correctors` 5 (4 ignored as before), `rules_w19c` 8 (1 ignored as before), `mesh_transform_w48u` 13, `physics_schema` 11, `tree_wiring_f259` 9, `layering_ale_f259` 7 (1 ignored as before), `registers` 7, `dynamic_mesh` 5 (1 ignored as before), `exp_rot_pab` 6, `adapt_case_f342` 6 (2 ignored as before); `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `project_list_f270` 1: all passed (after the code and the documentation edit) | held |
+| T0 | as stated | no `coupling` in either text without the table, no `/dynamic_mesh/six_dof/coupling` in the data, `scheme` reads `"loose"`; with it present; settings hash `bc4183e61156fb51` against `a01e90f843607d36` | met |
+| Z | bit-identical | 0 of 100 steps differ; no coupling records in either run | met |
+| E1 (tree = library, Aitken) | bit-identical; converged | 0 of 60 steps differ; iterations equal (3 a step, 4 at steps 1 and 25); all converged | met |
+| E2 (fixed, non-default keys) | bit-identical; converged; `<= 20` | 0 of 40 steps differ; iterations equal, 11 to 14 (registered estimate 12 to 13); all converged | met |
+| S1 (a2) | `abs(. - 1) <= 0.02` | `1.005081` (11 crossings) | met |
+| S2 (a2) | `<= 0.005` | `1.717e-5` (`1.005063`) | met |
+| S3 (a2) | `<= 1 + 1e-3`; `>= 11` | `0.92452` (T/100), `0.96141` (T/200); 11 and 11 (12 maxima, 12 minima each) | met |
+| S4 | all; `<= 8`; `<= 5` | all converged; largest 4 and 4; mean 3.009 and 3.004 (1140 steps of 3 and 10 of 4; 2290 and 10) | met |
+| R1 | `<= 1e-5` each | `4.2e-7`, `3.3e-7` (the rounding of ADR 0250's printed digits) | met |
+| R2 | `<= 1e-4` each | `4.7e-6`, `1.6e-7` | met |
+| L (a3) | `<= 60`; a stop located | `10 X` at step 28 (T/100) and 31 (T/200); stopped at steps 34 and 40 with `dynamic_mesh: step 34, t = 3.400000e-1: mesh error: cell 0 has non-positive volume ...` (and step 40); the case without the table as `scheme = "loose"` (step 28, stop 34). ADR 0250 L1, L2: 28, 31; 34, 40 | met |
+| C1 (a4) | as stated | stops at step 1: `dynamic_mesh: step 1, t = 1.000000e-2: dynamic_mesh.six_dof.coupling.max_iterations: the strong coupling did not converge in 1 iterations (test quantity 1.000e0, tolerance 1.000e-8); raise max_iterations, check added_mass and force_scale, or set at_cap = "continue"`; one record, not converged | met |
+| C2 (a4) | bit-identical; 100 records none converged; one warning | 0 of 100 steps differ from the case without the table; 100 records, 0 converged; one warning event of kind `coupling_cap` | met |
+| N (registered) | each at its path | 11 of 13 cases checked at their path, then the unknown key at `dynamic_mesh.six_dof.coupling.factor`, not at the table; the loop stopped there (amendment 1) | ignored record |
+| Nb (amendment 1) | each at its path; disabled none | all 13 cases at their paths (`rest_patches` also gives the existing `dynamic_mesh.rest_patches` error); the valid case none; the disabled section none | met |
+
+The tree run is ADR 0250's run: every number of S1 to S4 and L equals ADR 0250's to its printed digits.
+
+### Mutations
+
+Each applied alone to `dynmesh.rs` of a `git archive` copy of 378e1b55 in `w49i-work/f350-scratch/copy` by an exact
+replacement that had to occur once (a scratch script), the named tests run once, the file restored and compared byte
+for byte (equal in all six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 driver ignores `scheme` | E1, C1 | E1 failed; C1 failed (no stop) |
+| MU2 `at_cap` ignored | C1 | C1 failed (the run did not stop) |
+| MU3 factor `M/(M + m')` | E1, E2 | E1 and E2 failed (bits and iterations differ) |
+| MU4 `tolerance` not read | E2 | E2 failed |
+| MU5 `force_scale` not read | E1 | **E1 passed: not caught by its named test.** Two extra diagnostic runs (not registered checks): E2 fails under MU5 (its floor `0.5 k X` changes the iteration counts), and the S1 test gives the same numbers as without the mutation. With ADR 0250's settings the floor `k X` does not decide any convergence test of the first 60 steps of SPm (nor, by S4's identical histograms, of the whole run): the test is relative to the end-of-step force, and where that force is small the residual is too. E1 was the wrong named test |
+| MU6 the check of a positive tolerance removed | Nb | Nb failed (the tolerance 0 was then refused by `StrongCoupling::validate` at the table, not at the key) |
+
+### Deviations and disclosures
+
+- Amendment 1 (N) was written and committed after N's run and before Nb's; N stays as an ignored record.
+- `from_case` also runs `check_coupling` whenever the table is written, so a `Simulation::new` without
+  `semantic_errors` refuses the same settings at the same paths (decided while coding; D2 named only
+  `StrongCoupling::validate`, which also runs).
+- The extra MU5 runs are diagnostics, not checks; nothing registered was re-run. The S1 test under MU5 took 133 s against
+  19 s for the whole file in the registered run: the machine was loaded by other builds. In debug the heavy test is
+  ignored (`cfg_attr(debug_assertions, ignore)`); E1, E2 and C2 cover its code path fast.
+- clippy was run in the release profile before the runs and in the default profile after the mutations; both clean.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's); `rcfd validate` / `rcfd run` on a strong case (no CLI test was
+registered; the static checks are those `semantic_errors` returns); a rotating body or a moment in a flow; Newmark with
+the strong step (refused); `strong_step_with` (F-358).
+
+### After the tests
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean (release before
+the runs, default profile after the mutations, on the restored tree).
+
+### Decision by the registered rule
+
+Every acceptance check is met (S1 to S3, L, C1, C2, Nb in N's place by amendment 1), K0, T0, Z, E1, E2, R1, R2 and S4
+are met, and five of six mutations failed their named tests. MU5 did not fail its named test (E1), though E2 catches it:
+by the rule ("or a mutation is not caught") **partial**, proposed as such. Every clause of the acceptance is met; what is
+missing is a registered check that catches an unread force floor through the test named for it.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The status** (MU5). Options: (a) partial now, and a small follow-up registers a twin of E1 whose floor binds (for
+  instance `force_scale = 100 k X`, where the floor decides every test) and closes it; (b) the maintainer counts E2's
+  failure under MU5 and calls it done. Recommendation (a).
+- **Q2. The key name.** The acceptance writes `dynamic_mesh.six_dof.coupling = "strong"`; the case writes
+  `[dynamic_mesh.six_dof.coupling] scheme = "strong"` (read 6: a plain key in `six_dof` needs an entry in H1's
+  `DEFAULT_KEYS`, a hash-table edit). Options: (a) keep the sub-table and reword the acceptance; (b) the maintainer
+  approves the `DEFAULT_KEYS` edit and the key becomes `six_dof.coupling` with the settings beside it. Recommendation (a).
+- **Q3. Strong with Newmark** is refused (T3). Options: (a) leave until the factor is derived for Newmark (ADR 0250 Q6
+  (b)); (b) allow it with Aitken, which does not need the exact factor. Recommendation (a).
+- **Q4. Rest patches with the strong step** are refused (N2): `strong_step` sets the following walls only. Options: (a)
+  leave; (b) a library change in `fsi.rs` to take the rest conditions too. Recommendation (a) until a case needs it.
+
+### For the lead: roadmap entries
+
+Proposed status of F-350: **partial**.
+
+Note text for F-350:
+
+> From ADR 0250 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. PARTIAL (ADR 0266, 2026-11-12; registered before the code, one amendment): the optional table [dynamic_mesh.six_dof.coupling] (absent from every case that does not write it; a key inside the existing table six_dof would need an entry in the H1 hash table, so the acceptance's coupling = "strong" is written scheme = "strong" in that table) selects the strong coupling of rcfd_fv::fsi::strong_step in the case driver; keys scheme (loose default, strong), relaxation (aitken default, fixed), added_mass (the factor 2M/(2M + m')), tolerance, force_scale, moment_scale, max_iterations, at_cap (stop default, continue). Tree runs equal strong_step called directly bit for bit (60 steps with ADR 0250's settings, 40 with a fixed factor and every key away from its default). The spring-mounted piston of ADR 0250 at mass ratio 4 through the case driver gives ADR 0250's numbers to their printed digits: omega_m/omega 1.005081 at T/100 (limit 2 %), dt halving 1.7e-5 (limit 0.5 %), largest ratio of same-side turning points 0.92452 and 0.96141 over 11 crossings (never grows), 3.0 flow solves a step; with scheme = "loose" (or no table) it passes 10 X at step 28 (T/100) and 31 (T/200) and stops at steps 34 and 40 with a located mesh error. A step at the cap stops the run with "dynamic_mesh: step N, t = ...: dynamic_mesh.six_dof.coupling.max_iterations: ..."; with at_cap = "continue" the run goes on with one warning event, and the cap 1 equals the loose run bit for bit. Every static check of the new keys is located at its key (strong with a prescribed motion, rest patches or Newmark; tolerance, scales, added mass, cap; unknown values and keys). Without the table nothing changes: baseline hashes, case_hashes_w48u, the K0 tests of ADR 0257 and 0262 and the dynamic_mesh tree tests pass unedited; a table with scheme = "loose" equals no table bit for bit. Partial by the registered rule: one of six mutations (force_scale not read) passed its named test (the floor k X never binds on this case; the fixed-factor test catches it). Open: ADR 0266 Q1 (status), Q2 (the key name), Q3 (Newmark), Q4 (rest patches). The wall pressure of the body force stays the default extrapolation (F-358).
+
+Follow-up item (number for the lead to assign). Title: A binding force-floor check for the strong-coupling case key. Deps: F-350. Acceptance:
+
+> A tree-against-library equality test of the strong coupling whose force_scale decides the convergence test of every step (for instance force_scale = 100 k X on the piston of ADR 0266) is bit-identical, and fails when the driver does not read force_scale; registered before the run.
