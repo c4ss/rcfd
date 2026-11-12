@@ -16,6 +16,12 @@
 //! difference of `V u` on the moving cells with the mesh flux `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the
 //! last two steps (the geometric conservation law of the three-level scheme), the first step an implicit Euler step, and
 //! one implicit Euler row for a cell whose old-old value is a hole value.
+//!
+//! A donor interpolation that reproduces quadratic fields (F-336, ADR 0251) is an opt-in of the coupling's
+//! `rcfd_mesh::overset::Overset`, `set_donor_interpolation(DonorInterpolation::Quadratic)`, made before the solver is
+//! built: the solver takes its stencils from there. [`OversetInfo::n_fallback`] counts the fringe cells that kept the
+//! linear stencil, and a step whose interpolated `rAU` is not positive in a fringe cell is refused (the weights can be
+//! negative and nothing is clipped).
 
 use crate::ale::{move_mesh, set_follow_conditions, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -34,7 +40,7 @@ use crate::pressure::{
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::{bicgstab, gmres, Amg, AmgSettings, CsrMatrix, Ilu0, LinearDevice, SolveControl, SolveStats};
 use rcfd_mesh::motion::Pose;
-use rcfd_mesh::overset::{pose_inverse_apply, CellKind, Connectivity, Overset};
+use rcfd_mesh::overset::{pose_inverse_apply, CellKind, Connectivity, DonorInterpolation, Overset};
 use std::sync::Arc;
 
 /// How the pressure of the background fringe cells is coupled (ADR 0219 M7).
@@ -95,6 +101,9 @@ pub struct OversetInfo {
     pub n_fringe_component: usize,
     /// Number of cells whose kind changed in this step.
     pub n_changed: usize,
+    /// Number of fringe cells that kept the linear stencil although the quadratic donor interpolation was asked for
+    /// (ADR 0251 D4); zero without that opt-in.
+    pub n_fallback: usize,
     /// Offset of the background fringe pressures (zero in the interpolated mode).
     pub delta: f64,
     /// Net flux out of the calculated background cells into the background fringe cells after the step.
@@ -798,6 +807,7 @@ impl OversetSolver {
             n_fringe_background: conn.n_fringe_background(),
             n_fringe_component: conn.n_fringe_component(),
             n_changed,
+            n_fallback: conn.n_fallback(),
             delta,
             hole_flux,
             p_iters,
@@ -940,6 +950,15 @@ impl OversetSolver {
                 for c in 0..n {
                     if conn.kind[c] == CellKind::Hole {
                         r_au[c] = dt;
+                    }
+                }
+                // ADR 0251 D5: the quadratic weights can be negative and nothing is clipped
+                if conn.interpolation == DonorInterpolation::Quadratic {
+                    if let Some((c, _)) = conn.stencils.iter().find(|(c, _)| r_au[*c].is_nan() || r_au[*c] <= 0.0) {
+                        return Err(format!(
+                            "overset: the interpolated rAU of the fringe cell {c} is not positive ({:e})",
+                            r_au[*c]
+                        ));
                     }
                 }
             }

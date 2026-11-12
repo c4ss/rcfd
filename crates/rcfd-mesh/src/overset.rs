@@ -7,6 +7,12 @@
 //! hole are fringe. Every fringe cell gets a stencil (M3, M4): the cell of the other part that contains its centre (found
 //! by [`CellLocator`]) and that cell's calculated face neighbours, with weights that reproduce linear fields exactly
 //! ([`linear_weights`]). The flow solver is `rcfd_fv::overset`.
+//!
+//! A donor interpolation that reproduces quadratic fields (F-336, ADR 0251) is an opt-in,
+//! [`Overset::set_donor_interpolation`] with [`DonorInterpolation::Quadratic`]: the stencil of a fringe cell is then the
+//! donor cell and the calculated cells that share a point with it, with the weights of the weighted least-squares
+//! quadratic ([`quadratic_weights`]). A fringe cell whose neighbourhood cannot carry a quadratic keeps the linear stencil
+//! and is listed in [`Connectivity::fallbacks`]. Without the opt-in nothing changes.
 
 use crate::mesh::{Mesh, PatchKind};
 use crate::motion::{mat_vec, rotation_matrix, Pose};
@@ -326,6 +332,137 @@ pub fn linear_weights(centres: &[Vec3], x: Vec3, dims: [bool; 3]) -> Result<Vec<
         .collect())
 }
 
+/// Which interpolation the stencils of the fringe cells carry (ADR 0251 D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DonorInterpolation {
+    /// The donor cell and its calculated face neighbours, exact for linear fields (ADR 0219 M4). The default.
+    #[default]
+    Linear,
+    /// The donor cell and the calculated cells that share a point with it, exact for quadratic fields (ADR 0251 D2, D3);
+    /// the linear stencil where that neighbourhood cannot carry a quadratic (D4).
+    Quadratic,
+}
+
+/// The largest `sum |w_k|` that [`quadratic_weights`] accepts (ADR 0251 D3, R3).
+pub const QUADRATIC_MAX_ABS_SUM: f64 = 4.0;
+
+/// Interpolation weights of the stencil points `centres` at the point `x` that reproduce every polynomial of total degree
+/// two in the solved directions `dims` (ADR 0251 D3): the minimum of `sum w_k^2 / omega_k` under `sum w_k a_k = e_0`, where
+/// `a_k` are the monomials `1, s_i, s_i s_j` of the scaled offsets `s_k = (x_k - x) / h` (`h^2` the mean of `|x_k - x|^2`)
+/// and `omega_k = 1/(|s_k|^2 + 1e-6)`, the weight of [`linear_weights`]. These are the weights with which the weighted
+/// least-squares quadratic through the stencil values gives its value at `x`. Solved by a Householder QR factorisation
+/// with column pivoting of the rows `sqrt(omega_k) a_k`, taken in the order of decreasing `omega_k`. The weights sum to
+/// one and can be negative. Fails for fewer points than monomials (6 for two solved directions, 10 for three), for a
+/// rank-deficient stencil (a diagonal entry of `R` at most `1e-10` of the largest) and for `sum |w_k|` above
+/// [`QUADRATIC_MAX_ABS_SUM`].
+pub fn quadratic_weights(centres: &[Vec3], x: Vec3, dims: [bool; 3]) -> Result<Vec<f64>> {
+    let act: Vec<usize> = (0..3).filter(|&d| dims[d]).collect();
+    let nd = act.len();
+    let m = 1 + nd + nd * (nd + 1) / 2;
+    let n = centres.len();
+    if n < m {
+        return err(format!(
+            "overset quadratic weights: {n} stencil points for {m} monomials"
+        ));
+    }
+    let r: Vec<Vec<f64>> = centres
+        .iter()
+        .map(|c| act.iter().map(|&d| c[d] - x[d]).collect())
+        .collect();
+    let h2 = r.iter().map(|v| v.iter().map(|a| a * a).sum::<f64>()).sum::<f64>() / n as f64;
+    if h2.is_nan() || h2 <= 0.0 {
+        return err("overset quadratic weights: the stencil points coincide with the point");
+    }
+    let h = h2.sqrt();
+    let s: Vec<Vec<f64>> = r.iter().map(|v| v.iter().map(|a| a / h).collect()).collect();
+    let om: Vec<f64> = s
+        .iter()
+        .map(|v| 1.0 / (v.iter().map(|a| a * a).sum::<f64>() + 1e-6))
+        .collect();
+    // rows of very different size first (a stable sort, so the order is fixed by the input)
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| om[b].total_cmp(&om[a]));
+    let mut b: Vec<Vec<f64>> = order
+        .iter()
+        .map(|&k| {
+            let q = om[k].sqrt();
+            let mut a = Vec::with_capacity(m);
+            a.push(q);
+            a.extend(s[k].iter().map(|v| q * v));
+            for i in 0..nd {
+                for j in i..nd {
+                    a.push(q * s[k][i] * s[k][j]);
+                }
+            }
+            a
+        })
+        .collect();
+    // B P = Q R: Householder reflections `I - 2 v v^T / (v . v)`, the column of the largest remaining norm first
+    let mut perm: Vec<usize> = (0..m).collect();
+    let mut reflectors: Vec<(Vec<f64>, f64)> = Vec::with_capacity(m);
+    for j in 0..m {
+        let norms: Vec<f64> = (j..m).map(|c| (j..n).map(|i| b[i][c] * b[i][c]).sum::<f64>()).collect();
+        let piv = j
+            + (0..norms.len())
+                .max_by(|&p, &q| norms[p].total_cmp(&norms[q]))
+                .unwrap_or(0);
+        if piv != j {
+            for row in b.iter_mut() {
+                row.swap(j, piv);
+            }
+            perm.swap(j, piv);
+        }
+        let alpha = norms[piv - j].sqrt();
+        let beta = if b[j][j] >= 0.0 { -alpha } else { alpha };
+        let mut v: Vec<f64> = (j..n).map(|i| b[i][j]).collect();
+        v[0] -= beta;
+        let vv: f64 = v.iter().map(|a| a * a).sum();
+        if vv > 0.0 {
+            for c in j..m {
+                let f = 2.0 * (j..n).map(|i| v[i - j] * b[i][c]).sum::<f64>() / vv;
+                for i in j..n {
+                    b[i][c] -= f * v[i - j];
+                }
+            }
+        }
+        reflectors.push((v, vv));
+    }
+    let (mut dmin, mut dmax) = (f64::INFINITY, 0.0f64);
+    for (j, row) in b.iter().enumerate().take(m) {
+        dmin = dmin.min(row[j].abs());
+        dmax = dmax.max(row[j].abs());
+    }
+    if dmin.is_nan() || dmin <= 1e-10 * dmax {
+        return err("overset quadratic weights: rank-deficient stencil");
+    }
+    // B^T v = e_0 with the smallest |v|: R^T y = P^T e_0, v = Q (y, 0)
+    let mut z = vec![0.0; n];
+    for j in 0..m {
+        let g = if perm[j] == 0 { 1.0 } else { 0.0 };
+        let known: f64 = (0..j).map(|i| b[i][j] * z[i]).sum();
+        z[j] = (g - known) / b[j][j];
+    }
+    for (j, (v, vv)) in reflectors.iter().enumerate().rev() {
+        if *vv > 0.0 {
+            let f = 2.0 * (j..n).map(|i| v[i - j] * z[i]).sum::<f64>() / vv;
+            for i in j..n {
+                z[i] -= f * v[i - j];
+            }
+        }
+    }
+    let mut w = vec![0.0; n];
+    for (i, &k) in order.iter().enumerate() {
+        w[k] = om[k].sqrt() * z[i];
+    }
+    let abs_sum: f64 = w.iter().map(|a| a.abs()).sum();
+    if !abs_sum.is_finite() || abs_sum > QUADRATIC_MAX_ABS_SUM {
+        return err(format!(
+            "overset quadratic weights: sum |w| = {abs_sum:.3} above {QUADRATIC_MAX_ABS_SUM} (a one-sided stencil)"
+        ));
+    }
+    Ok(w)
+}
+
 /// Kind of a cell at one pose (ADR 0219 M2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CellKind {
@@ -337,12 +474,13 @@ pub enum CellKind {
     Hole,
 }
 
-/// Interpolation stencil of a fringe cell: the donor cell (first) and its calculated face neighbours, with the weights.
+/// Interpolation stencil of a fringe cell: the donor cell (first) and its calculated face neighbours, with the weights
+/// (with [`DonorInterpolation::Quadratic`]: the donor cell and the calculated cells that share a point with it).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stencil {
     /// Cells of the other part (the donor first).
     pub cells: Vec<usize>,
-    /// Weights (`sum = 1`, linear fields exact).
+    /// Weights (`sum = 1`, linear fields exact; with [`DonorInterpolation::Quadratic`] quadratic fields too).
     pub weights: Vec<f64>,
 }
 
@@ -355,6 +493,11 @@ pub struct Connectivity {
     pub stencils: Vec<(usize, Stencil)>,
     /// Number of background cells (the background cells are `0..n_background_cells`).
     pub n_background_cells: usize,
+    /// The interpolation the stencils were built with.
+    pub interpolation: DonorInterpolation,
+    /// With [`DonorInterpolation::Quadratic`]: the fringe cells that carry the linear stencil because their donor's
+    /// neighbourhood cannot carry a quadratic (ADR 0251 D4), in increasing cell order. Empty with `Linear`.
+    pub fallbacks: Vec<usize>,
 }
 
 impl Connectivity {
@@ -364,7 +507,14 @@ impl Connectivity {
             kind: vec![CellKind::Calculated; n],
             stencils: Vec::new(),
             n_background_cells: n,
+            interpolation: DonorInterpolation::Linear,
+            fallbacks: Vec::new(),
         }
+    }
+
+    /// Number of fringe cells that fell back to the linear stencil (zero with [`DonorInterpolation::Linear`]).
+    pub fn n_fallback(&self) -> usize {
+        self.fallbacks.len()
     }
 
     /// No fringe and no hole cell.
@@ -427,6 +577,9 @@ pub struct Overset {
     neighbours: Vec<Vec<usize>>,
     /// Solved directions (false for the direction normal to the empty patches of a 2-D mesh).
     pub dims: [bool; 3],
+    interpolation: DonorInterpolation,
+    /// The cells around every point; built when `Quadratic` is first set, empty before.
+    point_cells: Vec<Vec<usize>>,
 }
 
 impl Overset {
@@ -481,7 +634,59 @@ impl Overset {
             outer_fringe,
             neighbours,
             dims,
+            interpolation: DonorInterpolation::Linear,
+            point_cells: Vec::new(),
         })
+    }
+
+    /// Choose the donor interpolation of every later [`connectivity`](Self::connectivity) (F-336, ADR 0251 D1). The
+    /// default is [`DonorInterpolation::Linear`]; `Quadratic` is the opt-in and builds, once, the table of the cells
+    /// around every point.
+    pub fn set_donor_interpolation(&mut self, interpolation: DonorInterpolation) {
+        if interpolation == DonorInterpolation::Quadratic && self.point_cells.is_empty() {
+            let mesh = &self.composite.mesh;
+            let mut point_cells = vec![Vec::new(); mesh.n_points()];
+            for c in 0..mesh.n_cells() {
+                for q in Self::cell_points(mesh, c) {
+                    point_cells[q].push(c);
+                }
+            }
+            self.point_cells = point_cells;
+        }
+        self.interpolation = interpolation;
+    }
+
+    /// The donor interpolation in use.
+    pub fn donor_interpolation(&self) -> DonorInterpolation {
+        self.interpolation
+    }
+
+    /// The points of cell `c`, sorted, each once.
+    fn cell_points(mesh: &Mesh, c: usize) -> Vec<usize> {
+        let mut pts: Vec<usize> = mesh
+            .cell_faces(c)
+            .iter()
+            .flat_map(|&f| mesh.face_points(f).iter().copied())
+            .collect();
+        pts.sort_unstable();
+        pts.dedup();
+        pts
+    }
+
+    /// The cells that share at least one point with cell `c` (without `c`), in increasing order (ADR 0251 D2). Empty
+    /// before [`DonorInterpolation::Quadratic`] was first set.
+    pub fn point_neighbours(&self, c: usize) -> Vec<usize> {
+        if self.point_cells.is_empty() {
+            return Vec::new();
+        }
+        let mut out: Vec<usize> = Self::cell_points(&self.composite.mesh, c)
+            .into_iter()
+            .flat_map(|q| self.point_cells[q].iter().copied())
+            .filter(|&k| k != c)
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
     }
 
     /// Face neighbours of cell `c`.
@@ -526,6 +731,7 @@ impl Overset {
         }
         let ref_centres = reference.cell_centres();
         let mut stencils = Vec::new();
+        let mut fallbacks = Vec::new();
         for c in 0..n {
             if kind[c] != CellKind::Fringe {
                 continue;
@@ -552,6 +758,21 @@ impl Overset {
             if kind[d] != CellKind::Calculated {
                 return fail(&format!("its donor cell {d} is not a calculated cell"));
             }
+            if self.interpolation == DonorInterpolation::Quadratic {
+                // ADR 0251 D2, D3: the donor and the calculated cells around its points; D4: else the stencil below
+                let mut cells = vec![d];
+                cells.extend(
+                    self.point_neighbours(d)
+                        .into_iter()
+                        .filter(|&q| kind[q] == CellKind::Calculated),
+                );
+                let pts: Vec<Vec3> = cells.iter().map(|&q| ref_centres[q]).collect();
+                if let Ok(weights) = quadratic_weights(&pts, x, self.dims) {
+                    stencils.push((c, Stencil { cells, weights }));
+                    continue;
+                }
+                fallbacks.push(c);
+            }
             let mut cells = vec![d];
             cells.extend(
                 self.neighbours[d]
@@ -570,6 +791,8 @@ impl Overset {
             kind,
             stencils,
             n_background_cells: nb,
+            interpolation: self.interpolation,
+            fallbacks,
         })
     }
 }
