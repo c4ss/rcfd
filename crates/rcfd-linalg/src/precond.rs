@@ -247,6 +247,443 @@ impl Preconditioner for Chebyshev {
     }
 }
 
+/// Refusal of a preconditioner of ADR 0282 (block Jacobi, incomplete Cholesky).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum PrecondError {
+    /// The matrix is not square.
+    NotSquare {
+        /// Rows.
+        rows: usize,
+        /// Columns.
+        cols: usize,
+    },
+    /// A row has no stored diagonal entry.
+    MissingDiagonal {
+        /// The row.
+        row: usize,
+    },
+    /// A diagonal entry is not positive.
+    NonPositiveDiagonal {
+        /// The row.
+        row: usize,
+        /// Its value.
+        value: f64,
+    },
+    /// A stored value is not finite.
+    NonFinite {
+        /// Its row.
+        row: usize,
+        /// Its column.
+        col: usize,
+    },
+    /// The block partition is not `0 = p_0 < p_1 < ... = n`.
+    InvalidBlocks {
+        /// What is wrong.
+        reason: String,
+    },
+    /// A diagonal block is not positive definite (Cholesky pivot not positive and finite).
+    BlockNotPositive {
+        /// The block.
+        block: usize,
+        /// The global row of the failing pivot.
+        row: usize,
+        /// The pivot.
+        pivot: f64,
+    },
+    /// No shift within the allowed attempts gave positive pivots.
+    NoShift {
+        /// Attempts made.
+        attempts: usize,
+        /// The last shift tried.
+        last_shift: f64,
+        /// Every breakdown, in order.
+        breakdowns: Vec<IcBreakdown>,
+    },
+}
+
+impl std::fmt::Display for PrecondError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrecondError::NotSquare { rows, cols } => write!(f, "the matrix is not square ({rows} x {cols})"),
+            PrecondError::MissingDiagonal { row } => write!(f, "row {row} has no stored diagonal entry"),
+            PrecondError::NonPositiveDiagonal { row, value } => {
+                write!(f, "row {row}: diagonal {value:e} is not positive")
+            }
+            PrecondError::NonFinite { row, col } => write!(f, "entry ({row}, {col}) is not finite"),
+            PrecondError::InvalidBlocks { reason } => write!(f, "invalid block partition: {reason}"),
+            PrecondError::BlockNotPositive { block, row, pivot } => write!(
+                f,
+                "diagonal block {block} is not positive definite (pivot {pivot:e} at row {row})"
+            ),
+            PrecondError::NoShift {
+                attempts,
+                last_shift,
+                breakdowns,
+            } => {
+                write!(
+                    f,
+                    "incomplete Cholesky broke down in all {attempts} attempts (last shift {last_shift:e}"
+                )?;
+                if let Some(b) = breakdowns.last() {
+                    write!(f, ", pivot {:e} at row {}", b.pivot, b.row)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl std::error::Error for PrecondError {}
+
+/// Block Jacobi: the inverse of the diagonal blocks of a CSR matrix, each factored by Cholesky (ADR 0282 D2).
+#[derive(Debug, Clone)]
+pub struct BlockJacobi {
+    block_ptr: Vec<usize>,
+    /// Per block, the lower Cholesky factor, dense row-major, at `offset[b]`.
+    factor: Vec<f64>,
+    offset: Vec<usize>,
+}
+
+impl BlockJacobi {
+    /// Blocks of `size` consecutive rows (the last one shorter).
+    pub fn uniform(a: &CsrMatrix, size: usize) -> Result<Self, PrecondError> {
+        if size == 0 {
+            return Err(PrecondError::InvalidBlocks {
+                reason: "block size 0".to_string(),
+            });
+        }
+        let mut ptr: Vec<usize> = (0..a.n).step_by(size).collect();
+        ptr.push(a.n);
+        BlockJacobi::new(a, &ptr)
+    }
+
+    /// Blocks given by `block_ptr` (`block_ptr[0] = 0`, strictly increasing, last entry `n`).
+    pub fn new(a: &CsrMatrix, block_ptr: &[usize]) -> Result<Self, PrecondError> {
+        if a.n != a.ncols {
+            return Err(PrecondError::NotSquare {
+                rows: a.n,
+                cols: a.ncols,
+            });
+        }
+        let n = a.n;
+        if block_ptr.first() != Some(&0) || block_ptr.last() != Some(&n) || (n > 0 && block_ptr.len() < 2) {
+            return Err(PrecondError::InvalidBlocks {
+                reason: format!("must start at 0 and end at {n}"),
+            });
+        }
+        if let Some(w) = block_ptr.windows(2).find(|w| w[1] <= w[0]) {
+            return Err(PrecondError::InvalidBlocks {
+                reason: format!("not strictly increasing at {} -> {}", w[0], w[1]),
+            });
+        }
+        let mut factor = Vec::new();
+        let mut offset = Vec::with_capacity(block_ptr.len());
+        for (b, w) in block_ptr.windows(2).enumerate() {
+            let (lo, hi) = (w[0], w[1]);
+            let m = hi - lo;
+            let mut c = vec![0.0; m * m];
+            for i in lo..hi {
+                for k in a.row_ptr[i]..a.row_ptr[i + 1] {
+                    let j = a.col[k];
+                    if !a.val[k].is_finite() {
+                        return Err(PrecondError::NonFinite { row: i, col: j });
+                    }
+                    if (lo..hi).contains(&j) {
+                        c[(i - lo) * m + (j - lo)] = a.val[k];
+                    }
+                }
+            }
+            // Cholesky in place on the lower triangle: C C^T = B.
+            for i in 0..m {
+                for j in 0..=i {
+                    let mut s = c[i * m + j];
+                    for k in 0..j {
+                        s -= c[i * m + k] * c[j * m + k];
+                    }
+                    if i == j {
+                        if !(s > 0.0 && s.is_finite()) {
+                            return Err(PrecondError::BlockNotPositive {
+                                block: b,
+                                row: lo + i,
+                                pivot: s,
+                            });
+                        }
+                        c[i * m + i] = s.sqrt();
+                    } else {
+                        c[i * m + j] = s / c[j * m + j];
+                    }
+                }
+            }
+            offset.push(factor.len());
+            factor.extend_from_slice(&c);
+        }
+        Ok(BlockJacobi {
+            block_ptr: block_ptr.to_vec(),
+            factor,
+            offset,
+        })
+    }
+
+    /// Number of blocks.
+    pub fn n_blocks(&self) -> usize {
+        self.block_ptr.len().saturating_sub(1)
+    }
+}
+
+impl Preconditioner for BlockJacobi {
+    fn apply(&self, r: &[f64], z: &mut [f64]) {
+        for (b, w) in self.block_ptr.windows(2).enumerate() {
+            let (lo, m) = (w[0], w[1] - w[0]);
+            let c = &self.factor[self.offset[b]..self.offset[b] + m * m];
+            for i in 0..m {
+                let mut s = r[lo + i];
+                for k in 0..i {
+                    s -= c[i * m + k] * z[lo + k];
+                }
+                z[lo + i] = s / c[i * m + i];
+            }
+            for i in (0..m).rev() {
+                let mut s = z[lo + i];
+                for k in i + 1..m {
+                    s -= c[k * m + i] * z[lo + k];
+                }
+                z[lo + i] = s / c[i * m + i];
+            }
+        }
+    }
+}
+
+/// Options of the shifted incomplete Cholesky factorisation (ADR 0282 D3).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IcOptions {
+    /// Shift of the first attempt (the diagonal is `(1 + shift) a_ii`).
+    pub initial_shift: f64,
+    /// The first non-zero shift after a breakdown; each later breakdown doubles the shift.
+    pub shift_step: f64,
+    /// A pivot `d_i` is a breakdown unless `d_i > pivot_tolerance (1 + shift) a_ii`.
+    pub pivot_tolerance: f64,
+    /// Attempts before the factorisation is refused.
+    pub max_attempts: usize,
+}
+
+impl Default for IcOptions {
+    fn default() -> Self {
+        IcOptions {
+            initial_shift: 0.0,
+            shift_step: 1e-3,
+            pivot_tolerance: 1e-10,
+            max_attempts: 64,
+        }
+    }
+}
+
+/// One failed attempt of the incomplete Cholesky factorisation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct IcBreakdown {
+    /// The shift of the attempt.
+    pub shift: f64,
+    /// The row of the failing pivot.
+    pub row: usize,
+    /// The pivot.
+    pub pivot: f64,
+    /// The shifted diagonal `(1 + shift) a_ii` of that row.
+    pub diagonal: f64,
+}
+
+/// Incomplete Cholesky `L D L^T` with zero fill on the lower triangle of a symmetric CSR matrix, with the diagonal shift
+/// `A + alpha diag(A)` raised on breakdown (ADR 0282 D3; Meijerink and van der Vorst 1977, Manteuffel 1980).
+#[derive(Debug, Clone)]
+pub struct IncompleteCholesky {
+    n: usize,
+    /// Strictly lower part of `L` (unit diagonal not stored), rows with sorted columns.
+    row_ptr: Vec<usize>,
+    col: Vec<usize>,
+    l: Vec<f64>,
+    inv_d: Vec<f64>,
+    d: Vec<f64>,
+    shift: f64,
+    attempts: usize,
+    breakdowns: Vec<IcBreakdown>,
+}
+
+impl IncompleteCholesky {
+    /// Factorise; see [`IcOptions`].
+    pub fn new(a: &CsrMatrix, options: &IcOptions) -> Result<Self, PrecondError> {
+        if a.n != a.ncols {
+            return Err(PrecondError::NotSquare {
+                rows: a.n,
+                cols: a.ncols,
+            });
+        }
+        let n = a.n;
+        let mut row_ptr = Vec::with_capacity(n + 1);
+        row_ptr.push(0);
+        let mut col = Vec::new();
+        let mut low = Vec::new();
+        let mut diag = vec![0.0; n];
+        for i in 0..n {
+            let mut has_diag = false;
+            for k in a.row_ptr[i]..a.row_ptr[i + 1] {
+                let j = a.col[k];
+                if !a.val[k].is_finite() {
+                    return Err(PrecondError::NonFinite { row: i, col: j });
+                }
+                if j < i {
+                    col.push(j);
+                    low.push(a.val[k]);
+                } else if j == i {
+                    has_diag = true;
+                    diag[i] = a.val[k];
+                }
+            }
+            if !has_diag {
+                return Err(PrecondError::MissingDiagonal { row: i });
+            }
+            if diag[i] <= 0.0 {
+                return Err(PrecondError::NonPositiveDiagonal { row: i, value: diag[i] });
+            }
+            row_ptr.push(col.len());
+        }
+        let mut breakdowns = Vec::new();
+        let mut shift = options.initial_shift;
+        let mut marker = vec![usize::MAX; n];
+        let mut l = vec![0.0; low.len()];
+        let mut d = vec![0.0; n];
+        for attempt in 0..options.max_attempts {
+            match ic_attempt(
+                n,
+                &row_ptr,
+                &col,
+                &low,
+                &diag,
+                shift,
+                options.pivot_tolerance,
+                &mut marker,
+                &mut l,
+                &mut d,
+            ) {
+                Ok(()) => {
+                    return Ok(IncompleteCholesky {
+                        n,
+                        row_ptr,
+                        col,
+                        l,
+                        inv_d: d.iter().map(|v| 1.0 / v).collect(),
+                        d,
+                        shift,
+                        attempts: attempt + 1,
+                        breakdowns,
+                    })
+                }
+                Err((row, pivot)) => {
+                    breakdowns.push(IcBreakdown {
+                        shift,
+                        row,
+                        pivot,
+                        diagonal: (1.0 + shift) * diag[row],
+                    });
+                    if attempt + 1 < options.max_attempts {
+                        shift = (2.0 * shift).max(options.shift_step);
+                    }
+                }
+            }
+        }
+        Err(PrecondError::NoShift {
+            attempts: options.max_attempts,
+            last_shift: shift,
+            breakdowns,
+        })
+    }
+
+    /// The shift `alpha` of the factor (`L D L^T ~ A + alpha diag(A)`).
+    pub fn shift(&self) -> f64 {
+        self.shift
+    }
+
+    /// Attempts made (1 when the first one succeeded).
+    pub fn attempts(&self) -> usize {
+        self.attempts
+    }
+
+    /// The failed attempts, in order.
+    pub fn breakdowns(&self) -> &[IcBreakdown] {
+        &self.breakdowns
+    }
+
+    /// The pivots `d_i`.
+    pub fn pivots(&self) -> &[f64] {
+        &self.d
+    }
+}
+
+/// One attempt with the given shift; on breakdown the row and the pivot.
+#[allow(clippy::too_many_arguments)]
+fn ic_attempt(
+    n: usize,
+    row_ptr: &[usize],
+    col: &[usize],
+    low: &[f64],
+    diag: &[f64],
+    shift: f64,
+    tol: f64,
+    marker: &mut [usize],
+    l: &mut [f64],
+    d: &mut [f64],
+) -> Result<(), (usize, f64)> {
+    for i in 0..n {
+        let (lo, hi) = (row_ptr[i], row_ptr[i + 1]);
+        for p in lo..hi {
+            marker[col[p]] = p;
+        }
+        let mut di = (1.0 + shift) * diag[i];
+        let dshift = di;
+        for p in lo..hi {
+            let k = col[p];
+            let mut s = low[p];
+            for q in row_ptr[k]..row_ptr[k + 1] {
+                let j = col[q];
+                let mp = marker[j];
+                if mp != usize::MAX && mp < p {
+                    s -= l[mp] * d[j] * l[q];
+                }
+            }
+            let lik = s / d[k];
+            l[p] = lik;
+            di -= lik * lik * d[k];
+        }
+        for p in lo..hi {
+            marker[col[p]] = usize::MAX;
+        }
+        if di.is_nan() || di <= tol * dshift {
+            return Err((i, di));
+        }
+        d[i] = di;
+    }
+    Ok(())
+}
+
+impl Preconditioner for IncompleteCholesky {
+    fn apply(&self, r: &[f64], z: &mut [f64]) {
+        for i in 0..self.n {
+            let mut s = r[i];
+            for p in self.row_ptr[i]..self.row_ptr[i + 1] {
+                s -= self.l[p] * z[self.col[p]];
+            }
+            z[i] = s;
+        }
+        for i in 0..self.n {
+            z[i] *= self.inv_d[i];
+        }
+        for i in (0..self.n).rev() {
+            let xi = z[i];
+            for p in self.row_ptr[i]..self.row_ptr[i + 1] {
+                z[self.col[p]] -= self.l[p] * xi;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
