@@ -2672,9 +2672,9 @@
     "deps": [
       "F-245"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Vapour mass, heat and momentum from evaporating and breaking-up parcels are returned to the gas, conserved to 1e-10 relative; the evaporation and breakup models may be used with the particle exchange record.",
-    "note": "From ADR 0224 question 3, recommendation taken: a separate item before F-252. Case-tree wiring (optional particles.evaporation and particles.breakup tables, question 2) goes with F-252."
+    "note": "From ADR 0224 question 3, recommendation taken: a separate item before F-252. DONE (ADR 0230, the registration of F-323, 2026-11-12, merged 2026-11-12): every registered check is met in the library (rcfd-particles, no case key); the acceptance is still the maintainer's. `Tracker::enable_droplet_exchange()` starts the exchange record of ADR 0057 with the droplet terms, and `advance` then accepts evaporation and breakup (`enable_coupling()` is unchanged and still refuses them). Per sub-step the carrier receives in the start cell the drag with the mass of the start, the heat `m0 c_l (T1 - T0) + dm L_v`, and the vapour `dm` with its momentum `dm v1`, kinetic energy and enthalpy `dm (c_l T1 + L_v)`; gravity, wall and breakup terms are booked so that the balances close; `Coupling::droplet_sources` gives the per-cell mass, momentum and energy sources. Mass, momentum and energy balances at every step: single droplets to 6.9e-16, the spray of ADR 0224 (160 parcels, evaporation and TAB breakup, 300 steps) to 8.8e-16, 2.7e-15 and 1.5e-15 (limit 1e-10); a droplet at its wet bulb draws `L_v` times its mass from the gas to 5.3e-16; the heat of a sub-step is first-order consistent with the model's `Q` (ratio 1.9996); a closed box whose carrier receives the vapour and the heat stops evaporating within 3e-12 K of the adiabatic saturation temperature (limit 1e-6 K). Three negative controls held, seven mutations made their checks fail, no amendment; the record is an observation (fingerprints equal) and the record of ADR 0057 is unchanged bit for bit (the particle suites of rcfd-particles and rcfd-api, H1, baseline hashes). Not in it: no flow solver of rcfd consumes the record; the normal momentum of a TAB breakup is booked as a residual without a carrier counterpart (the source conserves it on the average; 1.45e-3 of the drag impulse in the spray). Open: ADR 0230 Q1 (one method or two), Q2 (breakup momentum), Q3 (enthalpy datum, constant latent heat), Q5 (where the solver wiring goes). Case-tree wiring (optional particles.evaporation and particles.breakup tables, ADR 0224 question 2) goes with F-252. Q5: the recommendation (a separate item) taken on the maintainer's standing instruction of 2026-11-11: F-326."
   },
   {
     "id": "F-324",
@@ -2697,5 +2697,16 @@
     "status": "todo",
     "acceptance": "Fingerprints for the 118 fold-free inputs of the F-306 sweep are recorded on Linux by the ADR 0137 procedure at the next Linux gate, and the F-306 N1 checks compare them.",
     "note": "From ADR 0228 question 6, recommendation taken. Needs a Linux gate run."
+  },
+  {
+    "id": "F-326",
+    "title": "Droplet feedback in the transient two-way path",
+    "phase": 9,
+    "deps": [
+      "F-323"
+    ],
+    "status": "todo",
+    "acceptance": "With the droplet exchange on, the transient two-way particle path gives the carrier the vapour mass (a species source), the momentum and the energy sources of Coupling::droplet_sources, and the tracker reads the carrier temperature and vapour fraction of the step; gas plus liquid mass, momentum and energy of a closed case are conserved to 1e-10 relative per step; optional particles.evaporation and particles.breakup tables (hash-omitted when absent); a case without them is bit-identical.",
+    "note": "From ADR 0230 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11 (a separate item, checked by conservation without a data set)."
   }
 ]
