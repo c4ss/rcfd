@@ -450,6 +450,37 @@ the `NotConverged` above), and `t1_tet10_cantilever_heavy`, not run (by the same
 helper `run_cantilever` keeps its behaviour (it calls the new `run_cantilever_with` with `ModalOptions::new(6)`). The library
 default for users is a remaining question for the addendum (a slender model fails at `1e-10`).
 
+## Amendment 2 (2026-11-12, written after the mutation runs and before any run of the added check)
+
+**What happened.** After the corrected runs (all registered checks met, addendum) the mutations were run on a `git archive`
+copy of the tree at 3338f958 (`f383-scratch/mutate.py`, `mutations.log`). M1 to M7 were caught. **M8** (Tet10 mass with
+`tet_4`, degree 2) **survived** B4: a diagnostic run of the mutant (not a registered result) gave the Tet10 bar errors 1.11e-6,
+8.84e-5, 6.56e-4 against 6.19e-7, 4.94e-5, 3.70e-4 with `tet_14`, all within 5e-3 and above the lower bound. The registration
+expected the under-integrated mass to be singular; it is not (the assembled `M` stays positive definite), and its error is of
+the order of the discretisation error, so no frequency limit of the acceptance can see it. C1 to C3 cannot either: rigid
+motions need only degree 2. M9 (informative) also survived: `Shift::Auto` accepts `sigma = 0` for the bar and the cantilevers.
+
+**Diagnosis.** No registered check tests the element mass matrix itself beyond its rigid-body moments; a mass rule of too low
+a degree for the non-rigid part is invisible to the checks as registered. By the decision rule this is an uncaught mutation:
+the result is **partial** whatever the added check gives.
+
+**Added check C5** (new test `c5_element_mass_closed_forms`, run once after this amendment is committed, and M8 re-run once
+against it):
+
+- Tet4 and Tet10 on one straight-sided tetrahedron with vertices (0.1, 0.2, 0.0), (1.3, 0.1, 0.2), (0.2, 1.1, -0.1), (0.3, 0.4,
+  0.9) (mid-edge nodes at the midpoints, node order of ADR 0271): `element_mass` against the exact `rho int N_a N_b dV`, written
+  in barycentric coordinates (Tet4 `N_a = L_a`; Tet10 `L_i (2 L_i - 1)` at the corners and `4 L_i L_j` on the edges
+  `TET_EDGES`), expanded into monomials and integrated by `int_T L_1^a L_2^b L_3^c L_4^d dV = 6 V a! b! c! d! / (a + b + c + d +
+  3)!` (the reference-tetrahedron integral of `xi^a eta^b zeta^c (1 - xi - eta - zeta)^d` by three Beta integrals, times the
+  Jacobian `6 V` of the affine map; derived, not recalled as a table);
+- Hex8 on the rectangular element `[0.1, 0.5] x [-0.2, 0.1] x [0.3, 0.55]`: `M_ab = rho prod_k (h_k / 6)(2 if the reference
+  signs of `a` and `b` agree in direction `k`, else 1)` (the tensor product of the 1-D linear mass);
+- on the three diagonal component blocks, zero on the off-diagonal ones; limit `max |M_h - M| / max |M| <= 1e-13` (rounding of
+  at most 27 terms per entry, `~1e-16`). Expected under M8: the degree-2 rule misses the degree-4 integrand by `O(1e-2)` of
+  the entries (ADR 0273 N1: `tet_4` misses degree 3 by 3.6e-4 of a monomial; the quartic products of `L` are larger).
+
+C5 is an extension check (it does not enter the done set), recorded with the mutation that motivated it.
+
 ## The planned stub, as written
 
 > # ADR 0284: Mass matrix and linear modal analysis of a solid model
