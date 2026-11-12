@@ -7010,7 +7010,7 @@ fixed by the item's registration ADR before any code.
     in natural order, 34.9 s and 452 MB in RCM order. Measured rate 4.6e9 multiply-adds per second: reach about 1e5
     unknowns in minutes, memory not the limit. Nine mutations caught (two after amendment 1). Existing rcfd-linalg tests
     unedited and passing.
-- [ ] **F-374** Assembly, displacement constraints, nodal forces and the linear static solve; patch test
+- [~] **F-374** Assembly, displacement constraints, nodal forces and the linear static solve; patch test
   - depends on: F-370, F-372, F-373, F-025
   - acceptance: Every limit not stated here is registered in the ADR before the run. The stiffness of a SolidModel is
     assembled into a CsrMatrix deterministically (bit-identical for 1 and 8 threads) and is symmetric within 1e-13 of
@@ -7021,12 +7021,25 @@ fixed by the item's registration ADR before any code.
     F L/(E A) and lateral contraction nu times the axial strain within 1e-10. The reactions balance the applied forces
     and their moment within 1e-10; a model that leaves a rigid-body motion free is refused with a message saying so, a
     constraint on a missing node with its id.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0275; the registration is written
-    by the implementation agent before any code. ADR 0274 (2026-11-12) measured that on a box numbered lexicographically
-    the natural order factorises 6 x faster than RCM (27-point node graph); ADR 0274 recommends
-    rcfd_linalg::skyline::SkylineOrdering::SmallerEnvelope for the static solve. ADR 0273 (2026-11-12):
-    element_for(kind).stiffness(coords, &material.elasticity_matrix()?) gives the dense element stiffness (node-major
-    unknowns, three per node); its errors name the key but not the element, which the assembly adds.
+  - note: Structural solver, basic tier (plan ADR 0270). ADR 0275, 2026-11-12: rcfd_fem::assemble (pattern from node
+    adjacency, element matrices by std threads in batches and a sequential scatter in element order, so bit-identical
+    for any thread count; stiffness, stiffness_with(threads) and the generic hook assemble_with, which locates element
+    errors as FemError::Element); rcfd_fem::constraint (Prescribed per node and component from Constraint::Displacement
+    and per-node lists, missing node or component refused with its id, conflicting values refused; free rigid-body
+    motions refused per connected part from the 6 x 6 Gram matrix of the rigid modes at the prescribed components,
+    threshold 1e-10 lambda_max; symmetric elimination by removal, reduce and ReducedSystem::expand; reactions K u - f);
+    rcfd_fem::loads::nodal_load_vector (nodal forces from the model and per node, every other load refused by name);
+    rcfd_fem::solve (solve_static and solve_static_with, SkylineLdlt by default with a pivot test d <= 1e-10 a_ii for
+    mechanisms, CG with Jacobi as the alternative). Stiffness symmetric within 2.1e-16 (limit 1e-13), bit-identical for
+    1 and 8 threads; patch test on boxes with interior nodes displaced (seed 0xF374_0275) and a linear field with six
+    non-zero strains: interior error 4.4e-16, 6.1e-16, 1.2e-15 for Tet4, Hex8, Tet10 (limit 1e-10); uniaxial tension by
+    nodal forces on a 3-2-1 support: elongation within 1.1e-13 and lateral contraction within 6.4e-12 (limit 1e-10);
+    reactions balance forces and moments within 2.4e-15 (limit 1e-10); free rigid-body motions (a roller plane, a 3-2-1
+    set less one, collinear supports, a disjoint part) refused with the count and an example motion, a constraint on a
+    missing node with its id, a hinge mechanism refused by the pivot test. Twelve mutations, eleven caught (M10 after
+    amendment 1), M6 survives as the rule allows. STATUS recorded PARTIAL by the lead: mutation M10 (nodal force keeps
+    only x) survived the registered run (R1 balanced against the library's own load vector) and is caught only by R3,
+    added by amendment 1 after that run; done is the maintainer's call.
 - [ ] **F-375** Surface and body loads: traction, pressure, gravity, centrifugal load of a rotating part, body force field
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Consistent nodal loads for surface
@@ -7041,7 +7054,9 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0276; the registration is written
     by the implementation agent before any code. ADR 0273 (2026-11-12): body loads are sums over
     Element::integration_points (N and w det J at each point); the face functions of Tri3, Quad4 and Tri6 are not in the
-    element library.
+    element library. ADR 0275 (2026-11-12): the static solve takes its right-hand side from
+    rcfd_fem::loads::nodal_load_vector(model, extra), which today refuses every load but NodalForce with
+    FemError::UnsupportedLoad naming it; ADR 0276 replaces those refusals in loads.rs only.
 - [ ] **F-376** Stress and strain recovery: integration-point, element and nodal values; von Mises and principal stresses
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Strain and stress at integration
@@ -7056,7 +7071,8 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0277; the registration is written
     by the implementation agent before any code. ADR 0273 (2026-11-12): Element::strain_at(coords, u, xi) gives B u at a
     point; the integration points are stiffness_rule().points(); Material::stress(strain, &PointContext::default(), &[])
-    gives stress and tangent.
+    gives stress and tangent. ADR 0275 (2026-11-12): solve_static returns a SolidResult with displacement, reactions and
+    SolverStats but no integration-point values; recovery adds them from the displacement and assemble::element_dofs.
 - [ ] **F-377** VTK output of a solid result: finite-element cells with point and cell data
   - depends on: F-376, F-070
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-io gains a writer of an
@@ -7104,7 +7120,8 @@ fixed by the item's registration ADR before any code.
     alpha dT/h within 1 percent and stresses below 1 percent of E alpha dT (Tet10); a model without temperature is
     bit-identical to the same model before this change.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0281; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0275 (2026-11-12): Load::Temperature is refused by
+    loads::nodal_load_vector with UnsupportedLoad (package ADR 0281); the thermal load replaces that arm.
 - [ ] **F-381** Iterative route for larger models: CG with block Jacobi and incomplete Cholesky on the stiffness matrix
   - depends on: F-374, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. CG on the stiffness matrix with (a)
@@ -7115,7 +7132,9 @@ fixed by the item's registration ADR before any code.
     solution are bit-identical for 1 and 8 threads; a breakdown is reported with the shift used, never as a non-finite
     result. The default solver and its results are unchanged bit for bit.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0282; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0275 (2026-11-12): solve::StaticSolver (non-exhaustive) has Direct
+    (default) and ConjugateGradient { tolerance, max_iterations } with Jacobi; StaticOptions (non-exhaustive) carries
+    the solver and the assembly thread count.
 - [x] **F-382** Eigensolver for K x = lambda M x: dense Jacobi and subspace iteration on the direct factorisation
   - depends on: F-373
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a dense symmetric
@@ -7160,7 +7179,9 @@ fixed by the item's registration ADR before any code.
     modes) and generalized_eigen_dense for references up to about 1000 unknowns (22.6 s at 900). ADR 0273 (2026-11-12):
     Element::mass_rule() proposes tet_4 (Tet4), gauss_3 (Hex8) and tet_14 (Tet10, degree 5), exact for straight-sided
     tetrahedra and every trilinear hexahedron; the consistent mass is the sum of rho N^T N w det J over
-    Element::integration_points.
+    Element::integration_points. ADR 0275 (2026-11-12): assemble::assemble_with(model, threads, |ctx| element matrix)
+    assembles any per-element matrix on the stiffness pattern in element order (bit-identical for any thread count); the
+    mass matrix can use it directly.
 - [ ] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
   - depends on: F-371, F-377, F-380, F-237
   - acceptance: Every limit not stated here is registered in the ADR before the run. A surface set of a solid mesh is
@@ -7217,14 +7238,16 @@ fixed by the item's registration ADR before any code.
   - depends on: F-370, F-372, F-374, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, element kinds,
     property data, constraint and support data and the three defaulted element entry points of ADR 0290 section 2 exist
-    in rcfd-fem and rcfd-post; every test of the basic tier (the sb_ files of rcfd-fem, rcfd-linalg, rcfd-io,
-    rcfd-post and rcfd-api) compiles and passes unedited, and a registered set of basic models (patch test, cantilever,
-    bar modes) gives displacements, stresses and frequencies with the same bits as before the change; the generic
-    assembly hook called with the element stiffness reproduces assemble::stiffness bit for bit for 1 and 8 threads; each
-    new element kind, formulation, constraint and support variant is refused by the static solve with an error naming
-    the variant and the set, never ignored; the baseline hashes are unchanged.
+    in rcfd-fem and rcfd-post; every test of the basic tier (the sb_ files of rcfd-fem, rcfd-linalg, rcfd-io, rcfd-post
+    and rcfd-api) compiles and passes unedited, and a registered set of basic models (patch test, cantilever, bar modes)
+    gives displacements, stresses and frequencies with the same bits as before the change; the generic assembly hook
+    called with the element stiffness reproduces assemble::stiffness bit for bit for 1 and 8 threads; each new element
+    kind, formulation, constraint and support variant is refused by the static solve with an error naming the variant
+    and the set, never ignored; the baseline hashes are unchanged.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size S. Stub ADR 0291; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0275 (2026-11-12): a generic assembly hook exists as
+    assemble::assemble_with; per-node prescribed values and forces are arguments of solve::solve_static_with, not model
+    fields.
 - [ ] **F-389** Quadratic hexahedron (Hex20) with its face loads, mass and the quadratic upgrade of a hexahedron box
   - depends on: F-388, F-372, F-374, F-375, F-376, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Hex20 on the reference element and
@@ -7298,7 +7321,9 @@ fixed by the item's registration ADR before any code.
     block on a foundation k_f under pressure p settles by p/k_f within 1e-10. A redundant constraint is dropped with a
     report, a contradictory one and a chain that closes on itself are refused naming the constraints.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0296; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0275 (2026-11-12): constraint::reduce(k, f, prescribed)
+    returns a ReducedSystem (principal submatrix K_FF, f_F - K_FP g, expand); the rigid-body check
+    constraint::check_rigid_body_motions works on prescribed equations only and needs extending for linear constraints.
 - [ ] **F-394** Cyclic symmetry: one sector of a rotor for statics and for modal analysis by harmonic index
   - depends on: F-393, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Equivalence: for a ring and for a
