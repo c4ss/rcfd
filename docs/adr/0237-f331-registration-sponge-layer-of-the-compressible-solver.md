@@ -441,3 +441,157 @@ The measure's code steps the reference run and the test runs in two threads (the
   their limits, NC30, NC45, NC60 hold and every mutation is caught. If X1 and X45 meet the limit and an A..b check misses,
   the acceptance is "met for isolated pulses at 0, 30 and 45 degrees, not shown at 60 degrees" and the status is partial
   with that miss named. MU2 is run against A45b instead of A45.
+
+## Addendum 1: results (2026-11-12; the registered text and amendment 1 above are unchanged)
+
+Commits: registration 24c995a9; library and tests 4dddc106; amendment 1 1bb8ce23 (before the corrected runs); its code
+01c92c04. Every run was made in the **release** profile. No limit was changed. Three registered checks (A30, A45, A60 in
+set-up D) missed their limit; amendment 1 diagnosed the set-up as defective and registered corrected checks, which were
+then run once. The three old tests are kept as ignored `*_setup_defect` records with their numbers.
+
+### Checks
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| S1 | peak rate; `sum rate dx` against `(c/2) ln(1/R0)`; rate in front; last cell | `1e-6`; `1e-3`; zero; `1e-12` | 103.616329 (`2.8e-7`); `1.56e-4`; zero; `2.1e-15` | yes |
+| S2 | refusals (layer, rates, reference, matched form with a velocity or a bad normal, `step_ale`, `replace_mesh`); clearing accepted | error / ok | as required | yes |
+| F1 | matched source on a prescribed field, 36 interior cells | `1e-12` | `1.27e-15` | yes |
+| U1p | uniform reference with a flow, plain layer, 200 steps: drift | `1e-12` | `1.02e-16` | yes |
+| U1m | uniform reference at rest, matched layer: drift; memory | `1e-12` each | 0; 0 | yes |
+| U2p | uniform offset, plain: decay against `exp(-2 t)`; momentum | `1e-5`; `1e-12` | `6.84e-7`; 0 | yes |
+| U2m | the same, matched; memory against the trapezoid sum | `1e-5`; `1e-4` | `6.84e-7`; `3.30e-5` | yes |
+| A0 | normal incidence, matched, Thompson behind | `R <= 1e-2` | `9.23e-7` | yes |
+| A0s | normal incidence, matched, rigid wall behind | `R <= 1e-2` | `1.08e-6` (`R0 = 1e-6`) | yes |
+| P0 | normal incidence, plain, rigid wall behind | `R <= 1e-2` | `1.08e-6` | yes |
+| NC0 | rigid wall, no sponge | `R >= 0.9` | 0.933 | held |
+| B1 | the existing compressible tests, unedited (`--lib compressible` 12 passed, 1 ignored; `compressible_bc` 2 passed, 4 ignored; `compressible_ale_f258` 8; `compressible_ale_f258_records` 4, the F-258 bit records; `impedance_f243` 7 passed, 2 ignored) | pass | pass, at 4dddc106 and again at 01c92c04 | yes |
+| B2 | no sponge / set and cleared / zero-rate plain / zero-rate matched, 1200 cells, 30 steps | bit-identical | bit-identical; the registered layer changes 1200 of 1200 cells | yes |
+| X1 | one isolated pulse, 30 degrees, half space, matched | `R <= 1e-2` | `2.37e-5` | yes |
+| A30 | set-up D (registered), 30 degrees, matched | `R <= 1e-2` | `3.85e-2` | **no: set-up defect (amendment 1)** |
+| A45 | set-up D, 45 degrees | `R <= 1e-2` | `6.18e-2` | **no: set-up defect** |
+| A60 | set-up D, 60 degrees | `R <= 1e-2` | `8.70e-2` | **no: set-up defect** |
+| NC30, NC45, NC60 | set-up D without sponge (Thompson alone) | `[0.04, 0.10]`, `[0.12, 0.21]`, `[0.25, 0.40]` | 0.0814, 0.1962, 0.3720 | held |
+| NCP45 | set-up D, plain form, 45 degrees | `R >= 0.05` | 0.1502 | held |
+| A30b | set-up D2 (amendment 1), 30 degrees, matched | `R <= 1e-2` | `1.16e-4` | yes |
+| A45b | set-up D2, 45 degrees | `R <= 1e-2` | `2.78e-4` | yes |
+| A60b | set-up D2, 60 degrees | `R <= 1e-2` | `1.24e-3` | yes |
+| X45 | one isolated pulse, 45 degrees, half space, matched (amendment 1) | `R <= 1e-2` | `1.45e-4` | yes |
+
+Commands: `cargo test --release -p rcfd-fv --lib sponge` (S1, S2, F1); `cargo test --release -p rcfd-fv --test sponge_f331`
+(A0, A0s, P0, NC0, U1, U2, S2, B2; 2.3 s); `... --test sponge_f331 -- --ignored` (the heavy ones: the first four in 993 s
+with 4 threads; A30b, A45b, A60b and X45 in 2509 s with 4 threads, X45 being the long one).
+
+What the numbers say. At normal incidence the layer in front of a rigid wall returns `1.08e-6`, the designed `R0 =
+1e-6`. With a consistent start the matched layer returns `1e-4` to `1e-3` of an oblique train where the Thompson boundary
+alone returns 8, 20 and 37 percent; the 60 degree value is four times the steady value of DR7 (`3.3e-4`), within the
+expectation of amendment 1. The isolated pulses return `2.4e-5` (30 degrees) and `1.4e-4` (45 degrees). The no-sponge controls are 12 to 14 percent above `(1 -
+cos)/(1 + cos)`; the cause was not investigated (they are inside their registered intervals). NCP45, 0.150, is above the model's 0.116: the plain form is not a quiet layer at 45 degrees.
+
+### The miss of A30, A45, A60 and its diagnosis
+
+Recorded in amendment 1, written before the corrected runs: set-up D starts a wave train inside the matched layer with
+the layer's memory at zero. The corrected runs confirm the diagnosis: with the layer started in its own steady state
+(DR8) and nothing else changed, the same grids, layer, probes and windows give `1.2e-4`, `2.8e-4`, `1.2e-3` instead of
+`3.8e-2`, `6.2e-2`, `8.7e-2`. The registration's estimate of the start-up time `t_s` was wrong for the matched form: the
+transverse standing waves of a rigid duct are not damped by it and do not leave. This is kept as a limit of the feature,
+not only of the test.
+
+### Mutations (scratch copies in a separate target directory; the registered commands, once each)
+
+| id | mutation | caught by |
+|---|---|---|
+| MU1 | sign of the relaxation | F1 (`2.5`), U1p (`1.1e-4`), U2 (`5.6e1`), A0, A0s, P0 (`1e22` and more) |
+| MU2 | tangential force dropped | F1 (`1.0`); A45b: `R = 0.101` (limit `1e-2`). The fast reflection and uniform checks pass, as expected |
+| MU3 | tangential momentum damped as well | F1 (`0.28`) only |
+| MU4 | reference ignored (inert layer) | F1, U2p (`6.5`), A0s and P0 (0.933, the rigid wall) |
+| MU5 | exponent ignored (linear profile) | S1 (`sum rate dx` off by 0.50) only; A0 passes with it (`1.3e-6`) |
+| MU6 | memory not advanced | U2m (memory 0) only |
+
+No mutation survived. Three are caught by one check each (MU3, MU5, MU6). After the mutations `git diff --quiet --
+crates` holds.
+
+### fmt and clippy
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean.
+`cargo check -p rcfd-api --tests`: compiles; its tests were not run.
+
+### Deviations and disclosures
+
+- **The form of the layer.** The item is called "sponge layer". The registration's arithmetic showed beforehand that the
+  classical (plain) sponge cannot meet 1 percent at 45 and 60 degrees in a practical thickness, so the acceptance is met
+  by the matched form (a perfectly matched layer). The plain form is built as well and is the one to use in a flow.
+- **Pulse trains.** At 60 degrees the acceptance is checked with a periodic train of pulses without mean in a rigid duct
+  (A60b), not with an isolated pulse; at 30 and 45 degrees with both.
+- **Start in the layer's steady state.** A30b to A60b start the layer in the closed-form state DR8. They show the
+  reflection of the steady train; they do not show the start-up of a layer that is switched on under a wave, which the
+  set-up D records show to be bad in a rigid duct (4 to 9 percent, ringing).
+- **A diagnostic run that is not a registered check:** A45 of set-up D once more with a history of the difference
+  (scratch code, removed). Its numbers are in amendment 1. It was made after the registered run and before the amendment.
+- **Fast checks run more than once.** The measure's code was changed after the first run (the reference run steps in a
+  second thread). The fast checks were run once more, unmutated, on the final code 01c92c04: every number of the table is
+  reproduced to the digits shown. B1 was run at 4dddc106 and again at 01c92c04.
+- **Shared scratch directory.** The scratch script of the mutations was overwritten by another job's file of the same
+  name between MU2 and MU3; the first attempt at MU3 to MU6 applied nothing and ran nothing. They were then run from a
+  private copy. No file of the repository was affected.
+- F1 and the layer part of S2 are unit tests in `sponge.rs`; the solver part of S2 is in `sponge_f331.rs`.
+- `cargo fmt -p rcfd-fv` was applied before the first run of each test file version; the whole-workspace form fails on
+  this machine (os error 206).
+- The papers are cited from memory; none was opened. Every formula used is derived in this ADR.
+- `docs/reference-data.md` was not edited.
+
+### Not run
+
+The whole workspace test suite; the tests of `rcfd-api` and of every other crate; the debug profile; an isolated pulse
+at 60 degrees (about 2 million cells over 4200 steps); angles above 60 degrees; a mean flow through the layer; the plain
+form at oblique incidence beyond NCP45; a layer on a non-Cartesian grid or in three dimensions; long runs (the memory `Q`
+over many transit times); two layers meeting at a corner.
+
+### Decision by the registered rule (as amended)
+
+- **Acceptance met in the library.** A0 (`9.2e-7`), A30b, A45b, A60b (`1.2e-4`, `2.8e-4`, `1.2e-3`), X1 (`2.4e-5`) and X45
+  (`1.4e-4`) meet 1 percent; B1 and B2 hold (a solver without a sponge is bit-identical; the F-258 bit records and the ADR
+  0233 tests pass unedited); U, F and S meet their limits; NC30, NC45 and NC60 hold; all six mutations are caught.
+- The registered checks A30, A45, A60 (set-up D) missed their limit. By amendment 1 they are a defective set-up, replaced
+  by A30b to A60b, and are kept as ignored records. They are not counted as met.
+- **Proposed status: partial**, by the rule: the sponge cannot be selected from a case file (D6; the wiring needs an
+  approved edit of a registered hash test and was not part of this job).
+
+### Remaining questions (options and recommendation)
+
+1. **Case-schema wiring.** (a) keys on a boundary patch (`sponge_thickness`, 0 = none; `sponge_form` = `plain` or
+   `matched`; `sponge_reflection`, default `1e-6`; the layer lies in front of the patch with the patch normal, the
+   reference is the case's ambient state), plus the normalisation of the new keys at their defaults in the registered
+   hash test, as F-330 needs for the impedance; (b) a separate list of layers given by plane and thickness; (c) stay
+   library-only. Recommendation: (a). Not taken: it needs approval.
+2. **60 degrees with an isolated pulse.** (a) accept A60b together with X1 and X45; (b) run the half-space set-up at 60
+   degrees once (about 3 hours of one core pair). Recommendation: (a) now, (b) as a check inside the follow-up item below.
+3. **The matched form's two weaknesses** (no damping of waves along the layer; memory without decay). (a) leave them as
+   documented limits; (b) a follow-up that adds a decay of the memory (the frequency-shifted form) and a small plain
+   damping of the tangential momentum inside the layer, with the set-up D record as its check. Recommendation: (b), before
+   the matched form is used in a long run of a ducted fan. It changes only the opt-in layer, no default.
+4. **`max_dt` and the sponge.** (a) leave it to the caller (`rate_max dt` well below 2.5); (b) let `max_dt` include the
+   rate when a sponge is set. Recommendation: (b) together with the wiring; it changes no run without a sponge.
+5. **Moving meshes.** `step_ale` refuses a sponge. Recommendation: a follow-up only when a case needs it.
+
+### For the lead: roadmap entries
+
+**F-331, proposed status: `partial`.** Proposed note text:
+
+> From ADR 0233 question 4. The job of 2026-11-12 (ADR 0237). The acceptance text is MET IN THE LIBRARY, not from a case file. Built: an opt-in sponge layer of the compressible solver (rcfd-fv sponge.rs, `CompressibleSolver::set_sponge`), in two forms: `Plain` (every conserved variable relaxes to a reference state) and `Matched` (a perfectly matched layer of linear acoustics about a state at rest: mass, energy and normal momentum relax, the tangential momentum is forced through one scalar of memory per cell); polynomial profile, peak rate from the wanted two-way attenuation (`rate_max_for_reflection`). The registration showed beforehand that the plain form cannot reach 1 percent at 45 and 60 degrees in a practical thickness (175 pulse widths at 60 degrees), so the acceptance is met by the matched form. Measured (limit 1 percent, layer of 40 cells, largest difference to a run on an extended grid against the incident peak): normal incidence 9.2e-7 in front of the Thompson boundary and 1.1e-6 in front of a rigid wall; one isolated plane pulse 2.4e-5 at 30 degrees and 1.4e-4 at 45 degrees; pulse trains in a rigid duct 1.2e-4, 2.8e-4, 1.2e-3 at 30, 45, 60 degrees (the Thompson boundary alone 0.081, 0.196, 0.372; the plain form at 45 degrees 0.150). Without a sponge the solver is bit-identical (the F-258 bit records and the ADR 0233 tests pass unedited; a set-and-cleared sponge and a zero-rate sponge give the same bits). Six mutations caught. One amendment: the first oblique set-up (a wave train started inside the layer with zero memory) measured 3.8e-2, 6.2e-2, 8.7e-2 and was diagnosed as a defective set-up before the corrected runs; its tests are kept as ignored records. Not done: case-schema wiring (a new key needs an approved edit of a registered hash test; this is why the status is partial). Limits: the matched form is one planar layer with a reference at rest, does not damp waves along the layer (a transient inside the layer leaves transverse standing waves in a rigid duct, the 4 to 9 percent of the first set-up) and has a memory without decay; the plain form is quiet only near normal incidence; 60 degrees is checked with pulse trains, not with an isolated pulse; explicit source (`rate dt` well below 2.5, `max_dt` does not know it); not on moving meshes; Cartesian grids, gas at rest. Open questions in ADR 0237 addendum 1 (wiring, an isolated pulse at 60 degrees, memory decay and damping along the layer, `max_dt`, moving meshes).
+
+Proposed follow-up items (numbers for the lead to assign):
+
+- **Case-schema wiring of the sponge layer.** Deps: F-331. Size S. Acceptance: "A case file selects a sponge layer in front
+  of a boundary patch (thickness, form, target reflection); the ADR 0237 tube check runs from a case file with a reflection
+  below 1 percent; located validate errors for a non-positive thickness, a reflection outside (0, 1) and the matched form
+  with a moving reference; every existing case file's settings hash and written text unchanged after the registered
+  normalisation of the new keys at their defaults."
+- **Matched sponge layer: memory decay, damping along the layer, corners.** Deps: F-331. Size M. Acceptance: "The set-up D
+  record of ADR 0237 (a wave train started inside the layer with zero memory in a rigid duct) falls below 1 percent within
+  its registered window; a constant pressure offset with a gradient along the layer gives a bounded tangential momentum
+  over 100 transit times of the layer; a pulse leaving through the corner of two layers reflects less than 1 percent; an
+  isolated plane pulse at 60 degrees reflects less than 1 percent; the checks A0, A30b, A45b, A60b, X1 and X45 of ADR 0237
+  still meet 1 percent."
+- **Sponge layer on moving meshes.** Deps: F-331, F-258. Size S. Acceptance: "With a sponge, a uniform reference state
+  stays to round-off under `step_ale` on a deforming mesh; the ADR 0237 tube check on a uniformly translating mesh
+  reflects less than 1 percent; without a sponge `step_ale` is bit-identical."

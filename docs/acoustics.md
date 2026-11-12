@@ -163,11 +163,61 @@ Limits:
 * The impedance is real and independent of frequency. Liners and resonators (complex, frequency-dependent impedance) need a
   time-domain model with memory, which is not built.
 * Both quiet boundaries are quiet only near normal incidence: they reflect 7 percent of a wave arriving at 30 degrees and
-  17 percent at 45 degrees (below 1 percent only within 11 degrees of the normal). There is no sponge layer and no
-  multi-dimensional non-reflecting condition.
+  17 percent at 45 degrees (below 1 percent only within 11 degrees of the normal). For oblique waves put a sponge layer
+  in front of the boundary (next section). There is no multi-dimensional non-reflecting condition.
 * The matched wall is matched for the `rho c` it is given; a mean flow through the boundary or a different local state
   changes the match.
 * No wave-equation solver and no modal export exist.
+
+## Sponge layer of the compressible solver (F-331, ADR 0237; library only)
+
+A sponge layer is a band of cells in front of a boundary in which the solution is driven back to a reference state, so
+that waves are absorbed before they reach the boundary. It is opt-in (`CompressibleSolver::set_sponge`, `rcfd-fv`
+`sponge.rs`); without it the solver produces the same bits as before. It is reachable from Rust, not yet from a case
+file. Every check with its limit and measured value is in
+[ADR 0237](adr/0237-f331-registration-sponge-layer-of-the-compressible-solver.md).
+
+| Form | What it does | Reflection of a plane wave at the angle theta |
+|---|---|---|
+| `SpongeForm::Plain` | every conserved variable relaxes to the reference: `S = -rate (U - U_ref)` | none at normal incidence; the long-wave part of an oblique wave is reflected by up to `(cos - 1)/(cos + 1)`, as by the matched wall |
+| `SpongeForm::Matched { normal }` | mass, energy and the momentum along `normal` relax; the tangential momentum is not damped but forced by `-rate grad_t Q`, `dQ/dt = p - p_ref` (a perfectly matched layer of linear acoustics about a state at rest) | the reflection of the boundary behind the layer times `R0^cos(theta)` |
+
+How to size a layer: choose the thickness `L` (40 cells in the checks; the layer has to be resolved, not to span a
+wavelength), the exponent 2 and the two-way attenuation `R0` at normal incidence, and take the peak rate from
+`rate_max_for_reflection(L, c, R0, 2.0)` = `3 c ln(1/R0)/(2 L)`. `SpongeLayer` holds the plane, the thickness and the
+profile `rate_max (d/L)^2`; `Sponge::planar(geom, reference, &layer, matched)` builds the rates. With `R0 = 1e-6` the
+matched form leaves `1e-3` of a wave at 60 degrees even in front of a rigid wall. Keep `rate_max dt` well below 2.5 (the
+source is explicit and `max_dt` does not know it; the checks run at 0.10).
+
+Which form: the plain form for a flow that leaves through the layer (it damps vortices as well, and its reference may
+have a velocity) and for waves near normal incidence; the matched form for sound arriving obliquely on a medium at rest.
+
+What was checked (Cartesian grids, gas at rest, `R` = largest difference to a run on an extended grid against the
+incident peak; limit 1 percent):
+
+* normal incidence, a pulse in a tube: `9e-7` in front of the Thompson boundary, `1.1e-6` in front of a rigid wall, in
+  both forms (the rigid wall alone: 0.93);
+* one isolated plane pulse above a rigid wall, matched form: `2.4e-5` at 30 degrees, `1.4e-4` at 45 degrees;
+* trains of plane pulses in a rigid duct, matched form, started in the layer's own steady state: `1.2e-4`, `2.8e-4`,
+  `1.2e-3` at 30, 45 and 60 degrees (without the layer the Thompson boundary reflects 0.081, 0.196, 0.372; the plain
+  form at 45 degrees 0.150);
+* a uniform state equal to the reference does not drift (`1e-16`); a uniform offset decays as `exp(-rate t)` within
+  `7e-7`.
+
+Limits:
+
+* The matched form is one planar layer with a reference at rest, derived from linear acoustics. There is no treatment of
+  a corner where two layers would meet and none for a mean flow through the layer.
+* The matched form does not damp waves that travel along the layer. In a duct with rigid walls a transient inside the
+  layer (for example a start with a wave already in the layer and the memory `Q` at zero) leaves transverse standing
+  waves behind that ring for a long time: 4 to 9 percent of the wave in the first, defective set-up of the checks. Start
+  with a quiet layer, or set the memory with `set_sponge_memory`.
+* The memory `Q` has no decay: a pressure that stays away from the reference with a gradient along the layer drives the
+  tangential momentum without bound.
+* The plain form at oblique incidence needs a thickness of many wavelengths (for 1 percent of a Gaussian pulse at 60
+  degrees about 175 pulse widths).
+* Not on moving meshes: `step_ale` and `replace_mesh` return an error while a sponge is set.
+* An isolated pulse at 60 degrees was not run (about two million cells); 60 degrees is checked with pulse trains.
 
 ## Reference: code locations, input format and command line
 
@@ -181,6 +231,8 @@ Limits:
 | Proxies (Proudman, Curle, trailing edge) | `crates/rcfd-post/src/noise_proxies.rs` |
 | Surface-series reader, builder, adapter from `surfaces::Surface` | `crates/rcfd-post/src/surface_series.rs` |
 | CLI | `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) |
+| Impedance and quiet boundaries of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`impedance_wall`), `CompBc::Impedance` |
+| Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory` |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 
