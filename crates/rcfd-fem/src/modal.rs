@@ -12,7 +12,7 @@ use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, 
 use crate::error::{FemError, Result};
 use crate::mass::consistent_with;
 use crate::model::{DofMap, SolidModel};
-use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SturmCheck, SubspaceOptions};
+use rcfd_linalg::eigen::{lowest_eigenpairs, ResidualTest, Shift, SturmCheck, SubspaceOptions};
 
 /// Options of a modal analysis.
 #[derive(Debug, Clone, PartialEq)]
@@ -25,6 +25,8 @@ pub struct ModalOptions {
     pub shift: Option<Shift>,
     /// Residual tolerance of each pair (ADR 0283 D6).
     pub tolerance: f64,
+    /// Residual measure of the tolerance (default [`ResidualTest::Relative`]; ADR 0354).
+    pub residual_test: ResidualTest,
     /// Iteration cap of the subspace iteration.
     pub max_iterations: usize,
     /// Subspace size (`None`: the eigensolver's default `max(2 m, m + 8)`).
@@ -41,6 +43,7 @@ impl ModalOptions {
             modes,
             shift: None,
             tolerance: d.tolerance,
+            residual_test: d.residual_test,
             max_iterations: d.max_iterations,
             subspace_size: None,
             threads: None,
@@ -55,6 +58,12 @@ impl ModalOptions {
     /// lowest pair cannot fall below about `c eps lambda_max / lambda_1` (ADR 0283 D6, ADR 0284 amendment 1).
     pub fn tolerance(mut self, tolerance: f64) -> ModalOptions {
         self.tolerance = tolerance;
+        self
+    }
+    /// The same options with a residual measure: [`ResidualTest::Backward`] measures each pair against `(||A|| + |mu|
+    /// ||M||) ||x||`, so that a slender model converges at a tolerance near 1e-12 (ADR 0354).
+    pub fn residual_test(mut self, test: ResidualTest) -> ModalOptions {
+        self.residual_test = test;
         self
     }
     /// The same options with a thread count for the assembly.
@@ -157,6 +166,7 @@ pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &M
     let opts = SubspaceOptions {
         shift,
         tolerance: options.tolerance,
+        residual_test: options.residual_test,
         max_iterations: options.max_iterations,
         subspace_size: options.subspace_size,
         ..SubspaceOptions::default()
