@@ -62,6 +62,53 @@ pub struct TransientCoupling {
     pub exchanged: Vec3,
     /// Heat delivered to the carrier so far, `sum rho cp V q h` [J].
     pub delivered_heat: f64,
+    /// The droplet terms (evaporation or breakup tables, ADR 0348 D6); `None` on the path of ADR 0059.
+    pub droplets: Option<DropletLedger>,
+    /// The vapour source of the species of the current step [1/s] (evaporation only, ADR 0348 D4).
+    vapour_src: Option<Vec<f64>>,
+}
+
+/// What the carrier received from the droplet terms of the record, summed from the start (ADR 0348 D6). In droplet mode the
+/// carrier receives over a flow step `dt` the sources `droplet_sources(vol, dt)` of the step's record: the mass to the vapour
+/// species, the momentum as the body acceleration, and of the energy the sensible part
+/// `Q_T = energy_heat + vapour_enthalpy - vapour_mass (c_l T^n + L_v)` to the temperature equation; the mechanical part and
+/// the enthalpy of the arrived vapour at the carrier temperature are kept here.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct DropletLedger {
+    /// The record's vapour mass [kg].
+    pub vapour_record: f64,
+    /// Vapour mass given to the species, `sum rho V S_Y dt` [kg].
+    pub vapour_delivered: f64,
+    /// The record's total energy `sum (energy_mech + energy_heat + vapour_kinetic + vapour_enthalpy)` [J].
+    pub energy_record: f64,
+    /// The sensible heat `sum Q_T` [J] (what the temperature equation receives, before the normalisation).
+    pub heat_record: f64,
+    /// The record's `sum energy_heat` [J] (the heat drawn from the gas, without the vapour terms).
+    pub heat_raw: f64,
+    /// The enthalpy of the arrived vapour at the carrier temperature `sum vapour_mass (c_l T^n + L_v)` [J] (`H_v`).
+    pub vapour_held: f64,
+    /// The mechanical energy `sum (energy_mech + vapour_kinetic)` [J] (`K`; not fed into the temperature, as ADR 0059).
+    pub mechanical: f64,
+    /// Gravity impulse on the parcels (with buoyancy) [N s].
+    pub gravity_impulse: Vec3,
+    /// Work of gravity on the parcels [J].
+    pub gravity_work: f64,
+    /// Momentum given to the parcels by walls [N s].
+    pub wall_impulse: Vec3,
+    /// Kinetic energy given to the parcels by walls [J].
+    pub wall_energy: f64,
+    /// Momentum given to the parcels by breakup without a carrier counterpart [N s].
+    pub breakup_impulse: Vec3,
+    /// Kinetic energy given to the parcels by breakup without a carrier counterpart [J].
+    pub breakup_energy: f64,
+    /// The last step: the record's vapour mass [kg].
+    pub last_vapour: f64,
+    /// The last step: the sum over the cells of the absolute vapour mass [kg].
+    pub last_vapour_abs: f64,
+    /// The last step: `sum Q_T` [J].
+    pub last_heat: f64,
+    /// The last step: the sum over the cells of `abs(Q_T)` [J].
+    pub last_heat_abs: f64,
 }
 
 /// Particle state of a running simulation.
@@ -79,6 +126,8 @@ pub struct ParticleRun {
     two_way: Option<TransientCoupling>,
     /// The erosion constants when they use a preset (ADR 0197 P6); `None` without erosion or without a preset.
     erosion_preset: Option<particles::ErosionConstants>,
+    /// The species that receives the vapour (evaporation table, ADR 0348); `None` without evaporation.
+    vapour_species: Option<String>,
 }
 
 fn io_err(e: std::io::Error, what: &str) -> String {
@@ -137,8 +186,14 @@ impl ParticleRun {
         let get = |p: &str| case.tree.get(p).ok();
         let int = |p: &str, d: i64| get(p).and_then(|v| v.as_i64()).unwrap_or(d);
         let mut tracker = tracker;
+        let droplets = particles::droplet_exchange(case);
         let two_way = particles::two_way(case).then(|| {
-            tracker.enable_coupling();
+            if droplets {
+                // ADR 0348 D3: the record with the droplet terms
+                tracker.enable_droplet_exchange();
+            } else {
+                tracker.enable_coupling();
+            }
             TransientCoupling {
                 heat: particles::heat_transfer(case),
                 rho: get("physics.rho").and_then(|v| v.as_f64()).unwrap_or(1.0),
@@ -148,6 +203,8 @@ impl ParticleRun {
                 delivered: [0.0; 3],
                 exchanged: [0.0; 3],
                 delivered_heat: 0.0,
+                droplets: droplets.then(DropletLedger::default),
+                vapour_src: None,
             }
         });
         ParticleRun {
@@ -166,7 +223,35 @@ impl ParticleRun {
             erosion_preset: particles::erosion(case)
                 .then(|| particles::erosion_constants(case))
                 .filter(|c| c.preset.is_some()),
+            vapour_species: particles::evaporation(case).then(|| particles::vapour_species(case)),
         }
+    }
+
+    /// The species that receives the vapour (evaporation only, ADR 0348).
+    pub fn vapour_species(&self) -> Option<&str> {
+        self.vapour_species.as_deref()
+    }
+
+    /// The vapour source [1/s] of the species for the flow step in progress (evaporation only, ADR 0348 D4).
+    pub fn vapour_source(&self) -> Option<(&str, &[f64])> {
+        let name = self.vapour_species.as_deref()?;
+        let src = self.two_way.as_ref()?.vapour_src.as_deref()?;
+        Some((name, src))
+    }
+
+    /// Give the tracker the carrier's vapour mass fraction of the step (the old time level), clamped below at 0 (ADR 0348
+    /// D3, T5); a value at or above 1 is an error. Nothing without evaporation.
+    pub fn set_carrier_vapour(&mut self, y: &[f64]) -> Result<(), String> {
+        if self.vapour_species.is_none() {
+            return Ok(());
+        }
+        if let Some((c, v)) = y.iter().enumerate().find(|(_, v)| !(**v < 1.0)) {
+            return Err(format!(
+                "particles.evaporation.species: the vapour mass fraction of cell {c} is {v}, not below 1 (ADR 0348)"
+            ));
+        }
+        let seen: Vec<f64> = y.iter().map(|v| v.max(0.0)).collect();
+        self.tracker.set_evaporation_vapour(&seen).map_err(|e| e.to_string())
     }
 
     /// Is the two-way coupling active?
@@ -203,6 +288,10 @@ impl ParticleRun {
         let Some(tw) = &mut self.two_way else { return Ok(()) };
         tw.force = None;
         tw.heat_src = None;
+        if self.vapour_species.is_some() {
+            // ADR 0348 D4: the species source of every step is set (zero when nothing is exchanged)
+            tw.vapour_src = Some(vec![0.0; geom.n_cells()]);
+        }
         if !(self.tracker.time < self.end * (1.0 - 1e-12)) || !(dt > 0.0) {
             return Ok(());
         }
@@ -218,6 +307,9 @@ impl ParticleRun {
         }
         let fd = particles::flow_data_from(case, geom, u);
         self.advance_step(&fd.flow(), h)?;
+        if self.two_way.as_ref().is_some_and(|t| t.droplets.is_some()) {
+            return self.deliver_droplets(geom, dt);
+        }
         let tw = self.two_way.as_mut().expect("two-way");
         let cpl = self.tracker.coupling().ok_or("the coupling record is missing")?;
         let vol = geom.mesh.cell_volumes();
@@ -245,6 +337,86 @@ impl ParticleRun {
             }
             tw.heat_src = Some(q);
         }
+        Ok(())
+    }
+
+    /// Droplet mode (ADR 0348 D4): convert the record of the step into the sources of the flow step of length `dt`.
+    fn deliver_droplets(&mut self, geom: &FvGeometry, dt: f64) -> Result<(), String> {
+        let latent = self.tracker.evaporation().map_or(0.0, |e| e.spec().latent_heat);
+        let (c_l, t_n): (f64, Option<&[f64]>) = match self.tracker.thermal() {
+            Some(th) => (th.cp_p, Some(th.t_fluid.as_slice())),
+            None => (0.0, None),
+        };
+        let cpl = self.tracker.coupling().ok_or("the coupling record is missing")?;
+        let tw = self.two_way.as_mut().expect("two-way");
+        let vol = geom.mesh.cell_volumes();
+        let n = vol.len();
+        let src = cpl.droplet_sources(vol, dt);
+        let led = tw.droplets.as_mut().expect("droplet mode");
+        let mut cells = Vec::with_capacity(n);
+        let mut any = false;
+        for c in 0..n {
+            let a = [
+                src.momentum[c][0] / tw.rho,
+                src.momentum[c][1] / tw.rho,
+                src.momentum[c][2] / tw.rho,
+            ];
+            any |= a != [0.0; 3];
+            for k in 0..3 {
+                tw.exchanged[k] += cpl.impulse[c][k] + cpl.vapour_impulse[c][k];
+                tw.delivered[k] += tw.rho * vol[c] * a[k] * dt;
+            }
+            cells.push(a);
+        }
+        if any {
+            tw.force = Some(BodyForce::from_cells(geom, cells));
+        }
+        let (mut lv, mut lv_abs) = (0.0, 0.0);
+        if let Some(ys) = tw.vapour_src.as_mut() {
+            for c in 0..n {
+                ys[c] = src.mass[c] / tw.rho;
+                led.vapour_delivered += tw.rho * vol[c] * ys[c] * dt;
+                lv += cpl.vapour_mass[c];
+                lv_abs += cpl.vapour_mass[c].abs();
+            }
+        }
+        led.vapour_record += lv;
+        led.last_vapour = lv;
+        led.last_vapour_abs = lv_abs;
+        // the enthalpy of the arrived vapour at the carrier temperature of the step, h_v(T^n) = c_l T^n + L_v (ADR 0230 D4)
+        let held: Vec<f64> = (0..n)
+            .map(|c| t_n.map_or(0.0, |t| cpl.vapour_mass[c] * (c_l * t[c] + latent)))
+            .collect();
+        for c in 0..n {
+            led.energy_record +=
+                cpl.energy_mech[c] + cpl.energy_heat[c] + cpl.vapour_kinetic[c] + cpl.vapour_enthalpy[c];
+            led.mechanical += cpl.energy_mech[c] + cpl.vapour_kinetic[c];
+            led.heat_raw += cpl.energy_heat[c];
+            led.vapour_held += held[c];
+        }
+        let (mut lq, mut lq_abs) = (0.0, 0.0);
+        if tw.heat {
+            let mut q = vec![0.0; n];
+            for c in 0..n {
+                let qt = cpl.energy_heat[c] + cpl.vapour_enthalpy[c] - held[c];
+                lq += qt;
+                lq_abs += qt.abs();
+                q[c] = qt / (tw.rho * tw.cp * vol[c] * dt);
+                tw.delivered_heat += tw.rho * tw.cp * vol[c] * q[c] * dt;
+            }
+            tw.heat_src = Some(q);
+        }
+        led.heat_record += lq;
+        led.last_heat = lq;
+        led.last_heat_abs = lq_abs;
+        for k in 0..3 {
+            led.gravity_impulse[k] += cpl.gravity_impulse[k];
+            led.wall_impulse[k] += cpl.wall_impulse[k];
+            led.breakup_impulse[k] += cpl.breakup_impulse[k];
+        }
+        led.gravity_work += cpl.gravity_work;
+        led.wall_energy += cpl.wall_energy;
+        led.breakup_energy += cpl.breakup_energy;
         Ok(())
     }
 
@@ -346,7 +518,8 @@ impl ParticleRun {
     /// The report: counts, mean diameter and mass by state.
     pub fn report(&self, with_tracks: bool) -> Value {
         let ps = &self.tracker.particles;
-        let mut mass = [0.0f64; 5];
+        // six states (ADR 0348 D7: a parcel can be `Evaporated` with the evaporation table)
+        let mut mass = [0.0f64; 6];
         let mut dsum = 0.0;
         for p in ps {
             mass[p.state as usize] += p.parcel * p.rho * std::f64::consts::PI * p.d.powi(3) / 6.0;
@@ -368,6 +541,22 @@ impl ParticleRun {
             },
             "steps": self.steps,
         });
+        if let Some(ev) = t.evaporation() {
+            // ADR 0348 D7: only with the evaporation table
+            v["counts"]["evaporated"] = json!(t.count(State::Evaporated));
+            v["mass_by_state"]["evaporated"] = json!(mass[5]);
+            v["droplets"] = json!({
+                "evaporated": ev.evaporated(),
+                "completed": ev.completed(),
+            });
+        }
+        if let Some(bu) = t.breakup() {
+            // ADR 0348 D7: only with the breakup table
+            if !v["droplets"].is_object() {
+                v["droplets"] = json!({});
+            }
+            v["droplets"]["breakup_events"] = json!(bu.events());
+        }
         if let Some(f) = t.film() {
             // ADR 0192 S3: only when the film is on, so a run without it writes the report it always wrote
             v["counts"]["film"] = json!(t.count(State::Film));

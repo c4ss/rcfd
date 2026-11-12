@@ -384,6 +384,9 @@ struct Entry {
     chem: Option<(Vec<f64>, Vec<f64>)>,
     /// User-function source per cell (`source_udf`, F-239), replaced every steady iteration.
     udf: Option<Vec<f64>>,
+    /// Vapour source of evaporating parcels per cell [1/s] (ADR 0348 D4), replaced every transient step; `None` without
+    /// the droplet feedback.
+    particle: Option<Vec<f64>>,
 }
 
 /// Configured scalars and species.
@@ -558,6 +561,7 @@ fn make(
         alg,
         chem: None,
         udf: None,
+        particle: None,
     }
 }
 
@@ -578,7 +582,7 @@ fn refresh(e: &mut Entry, ctx: &StepCtx) {
     let n = geom.n_cells();
     let cc = geom.mesh.cell_centres();
     let zone: Option<ZoneTerms> = ctx.zone.and_then(|z| z.terms(Some(&e.name), ctx.time));
-    if e.src_expr.is_some() || zone.is_some() || e.chem.is_some() || e.udf.is_some() {
+    if e.src_expr.is_some() || zone.is_some() || e.chem.is_some() || e.udf.is_some() || e.particle.is_some() {
         let mut s = vec![e.base_source; n];
         if let Some(c) = &e.src_expr {
             for i in 0..n {
@@ -586,6 +590,11 @@ fn refresh(e: &mut Entry, ctx: &StepCtx) {
             }
         }
         if let Some(u) = &e.udf {
+            for i in 0..n {
+                s[i] += u[i];
+            }
+        }
+        if let Some(u) = &e.particle {
             for i in 0..n {
                 s[i] += u[i];
             }
@@ -785,6 +794,18 @@ impl ScalarState {
     pub fn set_udf_source(&mut self, name: &str, source: Vec<f64>) {
         if let Some(e) = self.passive.iter_mut().find(|e| e.name == name) {
             e.udf = Some(source);
+        }
+    }
+
+    /// Vapour source [1/s] per cell of a transported species from evaporating parcels (ADR 0348 D4), replaced every
+    /// transient step. Returns false when `name` is not a transported species.
+    pub fn set_particle_source(&mut self, name: &str, source: Vec<f64>) -> bool {
+        match self.species.iter_mut().find(|e| e.name == name) {
+            Some(e) => {
+                e.particle = Some(source);
+                true
+            }
+            None => false,
         }
     }
 

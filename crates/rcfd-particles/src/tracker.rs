@@ -444,6 +444,11 @@ impl Tracker {
         self.thermal.as_mut()
     }
 
+    /// The heat-transfer data, if on (read only; ADR 0348 D3).
+    pub fn thermal(&self) -> Option<&Thermal> {
+        self.thermal.as_ref()
+    }
+
     /// Start recording the exchange with the carrier (ADR 0057 D1). Observation only: the particles do not change.
     /// `advance` refuses evaporation and breakup with this record (use [`Tracker::enable_droplet_exchange`]).
     pub fn enable_coupling(&mut self) {

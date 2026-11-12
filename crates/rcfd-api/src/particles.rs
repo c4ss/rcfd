@@ -241,6 +241,8 @@ pub fn schema() -> Schema {
         )
         .field("seed", Schema::int(1).at_least(0.0).doc("Seed of the roughness random numbers; a run is reproducible bit for bit"))
         .hash_omit_default();
+    let evaporation = evaporation_schema();
+    let breakup = breakup_schema();
     Schema::object()
         .doc("One-way coupled Lagrangian particle tracking (ADR 0028). Point particles with drag, gravity and buoyancy on a frozen or transient flow field; no effect on the flow")
         .field("enabled", Schema::boolean(false).doc("Enable the particle section"))
@@ -307,6 +309,213 @@ pub fn schema() -> Schema {
         .field("erosion", erosion)
         .field("rough_wall", rough_wall)
         .field("dispersion_from_model", dispersion_from_model)
+        .field("evaporation", evaporation)
+        .field("breakup", breakup)
+}
+
+/// Schema of the optional table `particles.evaporation` (ADR 0348 D1).
+fn evaporation_schema() -> Schema {
+    let req = |what: &str| Schema::float(UNSET).doc(&format!("{what}; must be set (> 0), -1 = unset"));
+    Schema::object()
+        .optional()
+        .doc("Droplet evaporation with its feedback to the carrier (ADR 0224 E1 to E8, ADR 0230, ADR 0348): the quasi-steady film model with Bird's correction; the vapour is a source of the transported species named by `species`, the vapour and drag momentum a body acceleration, the sensible heat a source of the temperature equation. Transient two-way coupling with heat transfer only (particles.two_way, particles.heat_transfer, piso or pimple). The liquid is particles.density with the specific heat particles.particle_cp; the gas properties are those of physics. Absent = no evaporation")
+        .field("enabled", Schema::boolean(false).doc("Evaporate the parcels"))
+        .field(
+            "species",
+            Schema::string("").doc("Name of the transported species (species.<name>, not the balance species) that receives the vapour (required)"),
+        )
+        .field("latent_heat", req("Latent heat of vaporisation L_v [J/kg]"))
+        .field("boiling_temperature", req("Boiling temperature T_b [K] at boiling_pressure"))
+        .field("boiling_pressure", Schema::float(101325.0).doc("Pressure [Pa] at which the liquid boils at boiling_temperature (> 0)"))
+        .field("pressure", Schema::float(101325.0).doc("Carrier pressure [Pa] of the evaporation model (> 0)"))
+        .field("vapour_molar_mass", req("Vapour molar mass W_f [kg/mol]"))
+        .field("gas_molar_mass", req("Molar mass of the carrier gas W_b [kg/mol]"))
+        .field("diffusivity", req("Vapour diffusivity in the carrier D_m [m^2/s]"))
+        .field("vapour_cp", req("Vapour specific heat c_p,vap [J/(kg K)]"))
+        .field("min_diameter", Schema::float(1e-7).doc("Diameter [m] at which a droplet counts as evaporated (> 0)"))
+        .field(
+            "max_step_fraction",
+            Schema::float(0.1).doc("Largest evaporation sub-step as a fraction of the droplet's thermal time, in (0, 1]"),
+        )
+        .hash_omit_default()
+}
+
+/// Schema of the optional table `particles.breakup` (ADR 0348 D1).
+fn breakup_schema() -> Schema {
+    let c = |v: f64, what: &str| Schema::float(v).doc(what);
+    Schema::object()
+        .optional()
+        .doc("TAB droplet breakup (ADR 0224 B1 to B6, O'Rourke and Amsden 1987) with its momentum given to the carrier (ADR 0230, ADR 0348); the normal velocity of a breakup has no carrier counterpart (ADR 0230 D5). Transient two-way coupling only (particles.two_way, piso or pimple). Absent = no breakup")
+        .field("enabled", Schema::boolean(false).doc("Break up the parcels"))
+        .field("surface_tension", c(UNSET, "Surface tension sigma [N/m]; must be set (> 0), -1 = unset"))
+        .field("liquid_viscosity", c(UNSET, "Liquid dynamic viscosity mu_l [Pa s]; must be set (>= 0), -1 = unset"))
+        .field("c_f", c(1.0 / 3.0, "Forcing constant C_F (> 0)"))
+        .field("c_k", c(8.0, "Spring constant C_k (> 0)"))
+        .field("c_d", c(5.0, "Damping constant C_d (>= 0)"))
+        .field("c_b", c(0.5, "Breakup amplitude constant C_b (> 0)"))
+        .field("k", c(10.0 / 3.0, "Ratio K of the energy in all modes to the energy of the fundamental mode (>= 5/6)"))
+        .field("c_v", c(1.0, "Normal-velocity constant C_v (>= 0)"))
+        .field("seed", Schema::int(1).at_least(0.0).doc("Seed of the normal-velocity directions"))
+        .hash_omit_default()
+}
+
+/// Is droplet evaporation requested (ADR 0348)?
+pub fn evaporation(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.evaporation.enabled")
+}
+
+/// Is droplet breakup requested (ADR 0348)?
+pub fn breakup(case: &Case) -> bool {
+    enabled(case) && gb(case, "particles.breakup.enabled")
+}
+
+/// Is the record with the droplet terms needed (evaporation or breakup, ADR 0348 D3)?
+pub fn droplet_exchange(case: &Case) -> bool {
+    evaporation(case) || breakup(case)
+}
+
+/// The name of the species that receives the vapour (ADR 0348 D1).
+pub fn vapour_species(case: &Case) -> String {
+    gs(case, "particles.evaporation.species")
+}
+
+/// The evaporation spec of the case table (ADR 0348 D1).
+pub fn evaporation_spec(case: &Case) -> rcfd_particles::EvaporationSpec {
+    let p = |k: &str| gf(case, &format!("particles.evaporation.{k}"));
+    rcfd_particles::EvaporationSpec {
+        latent_heat: p("latent_heat"),
+        boiling_temperature: p("boiling_temperature"),
+        boiling_pressure: p("boiling_pressure"),
+        pressure: p("pressure"),
+        vapour_molar_mass: p("vapour_molar_mass"),
+        gas_molar_mass: p("gas_molar_mass"),
+        diffusivity: p("diffusivity"),
+        vapour_cp: p("vapour_cp"),
+        min_diameter: p("min_diameter"),
+        max_step_fraction: p("max_step_fraction"),
+    }
+}
+
+/// The breakup spec of the case table (ADR 0348 D1).
+pub fn breakup_spec(case: &Case) -> rcfd_particles::BreakupSpec {
+    let p = |k: &str| gf(case, &format!("particles.breakup.{k}"));
+    rcfd_particles::BreakupSpec {
+        surface_tension: p("surface_tension"),
+        liquid_viscosity: p("liquid_viscosity"),
+        c_f: p("c_f"),
+        c_k: p("c_k"),
+        c_d: p("c_d"),
+        c_b: p("c_b"),
+        k: p("k"),
+        c_v: p("c_v"),
+        seed: gi(case, "particles.breakup.seed").max(0) as u64,
+    }
+}
+
+/// Located errors of the droplet tables (ADR 0348 D2, S1 to S6; with particles.enabled).
+fn check_droplets(case: &Case, out: &mut Vec<Diagnostic>) {
+    let evap = gb(case, "particles.evaporation.enabled");
+    let bu = gb(case, "particles.breakup.enabled");
+    let alg = gs(case, "solver.algorithm");
+    let transient = matches!(alg.as_str(), "piso" | "pimple");
+    for (on, key) in [
+        (evap, "particles.evaporation.enabled"),
+        (bu, "particles.breakup.enabled"),
+    ] {
+        if !on {
+            continue;
+        }
+        if !gb(case, "particles.two_way") {
+            out.push(d(
+                key,
+                "the droplet models need particles.two_way = true (their vapour, momentum and heat are given to the carrier; ADR 0348)",
+            ));
+        }
+        if !transient {
+            out.push(d(
+                key,
+                format!("the droplet models are available with the transient two-way coupling (piso, pimple), not \"{alg}\" (ADR 0348)"),
+            ));
+        }
+    }
+    if evap {
+        if !gb(case, "particles.heat_transfer") {
+            out.push(d(
+                "particles.evaporation.enabled",
+                "evaporation needs particles.heat_transfer = true (ADR 0224 E8, ADR 0348)",
+            ));
+        }
+        let name = vapour_species(case);
+        let species = case.tree.names("species").unwrap_or_default();
+        let balance = crate::scalars::balance_of(case);
+        if name.is_empty() {
+            out.push(d(
+                "particles.evaporation.species",
+                "evaporation needs the name of the transported species that receives the vapour (species.<name>)",
+            ));
+        } else if !species.contains(&name) {
+            out.push(d(
+                "particles.evaporation.species",
+                format!(
+                    "'{name}' is not a species (species.<name>; species: {})",
+                    species.join(", ")
+                ),
+            ));
+        } else if name == balance {
+            out.push(d(
+                "particles.evaporation.species",
+                format!(
+                    "'{name}' is the balance species (closed by difference); the vapour needs a transported species"
+                ),
+            ));
+        }
+        let p = |k: &str| format!("particles.evaporation.{k}");
+        for k in [
+            "latent_heat",
+            "boiling_temperature",
+            "boiling_pressure",
+            "pressure",
+            "vapour_molar_mass",
+            "gas_molar_mass",
+            "diffusivity",
+            "vapour_cp",
+            "min_diameter",
+        ] {
+            let v = gf(case, &p(k));
+            if !(v.is_finite() && v > 0.0) {
+                out.push(d(p(k), format!("{k} must be set and positive; -1 means unset")));
+            }
+        }
+        let f = gf(case, &p("max_step_fraction"));
+        if !(f > 0.0 && f <= 1.0) {
+            out.push(d(p("max_step_fraction"), "max_step_fraction must be in (0, 1]"));
+        }
+    }
+    if bu {
+        let p = |k: &str| format!("particles.breakup.{k}");
+        let s = gf(case, &p("surface_tension"));
+        let mu = gf(case, &p("liquid_viscosity"));
+        let mut ok = true;
+        if !(s.is_finite() && s > 0.0) {
+            out.push(d(
+                p("surface_tension"),
+                "surface_tension must be set and positive; -1 means unset",
+            ));
+            ok = false;
+        }
+        if !(mu.is_finite() && mu >= 0.0) {
+            out.push(d(
+                p("liquid_viscosity"),
+                "liquid_viscosity must be set and not negative; -1 means unset",
+            ));
+            ok = false;
+        }
+        if ok {
+            if let Err(e) = breakup_spec(case).validate() {
+                out.push(d("particles.breakup", e.to_string()));
+            }
+        }
+    }
 }
 
 /// Does the random walk take `k` and `epsilon` from the turbulence model (ADR 0208 D2, amendment 2)?
@@ -814,9 +1023,18 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
                 ));
             }
         }
+        for k in ["evaporation", "breakup"] {
+            if gb(case, &format!("particles.{k}.enabled")) {
+                out.push(d(
+                    format!("particles.{k}.enabled"),
+                    "needs particles.enabled = true (ADR 0348)",
+                ));
+            }
+        }
         return out;
     }
     check_coupling(case, &mut out);
+    check_droplets(case, &mut out);
     check_film(case, &mut out);
     check_erosion(case, &mut out);
     check_rough_wall(case, &mut out);
@@ -1205,6 +1423,20 @@ pub fn build_tracker(case: &Case, sim: &Simulation) -> std::result::Result<Track
             t_fluid,
         })
         .map_err(|e| vec![d("particles.heat_transfer", e.to_string())])?;
+    }
+    if evaporation(case) {
+        // ADR 0348 D3: the seen vapour fraction starts from the species' initial cells, clamped below at 0
+        let name = vapour_species(case);
+        let y = sim
+            .field(&name)
+            .map_err(|e| vec![d("particles.evaporation.species", format!("vapour species: {e}"))])?;
+        let y: Vec<f64> = y.iter().map(|v| v.max(0.0)).collect();
+        tr.set_evaporation(evaporation_spec(case), y)
+            .map_err(|e| vec![d("particles.evaporation.enabled", e.to_string())])?;
+    }
+    if breakup(case) {
+        tr.set_breakup(breakup_spec(case))
+            .map_err(|e| vec![d("particles.breakup", e.to_string())])?;
     }
     if film(case) {
         let spec = rcfd_particles::FilmSpec {
