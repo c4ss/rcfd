@@ -7086,7 +7086,7 @@ fixed by the item's registration ADR before any code.
     mutations caught. ADR 0275's test E3 (gravity refused) fails by construction and needs the lead's two-line
     replacement (ADR 0276 remaining question 1). The lead applied the E3 replacement of ADR 0275's sb_static test
     (gravity -> temperature as the unsupported load) on merging, as ADR 0276 recommended (X4).
-- [ ] **F-376** Stress and strain recovery: integration-point, element and nodal values; von Mises and principal stresses
+- [~] **F-376** Stress and strain recovery: integration-point, element and nodal values; von Mises and principal stresses
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Strain and stress at integration
     points, element means and nodal averages; von Mises stress, principal stresses with directions, strain energy. For
@@ -7097,11 +7097,27 @@ fixed by the item's registration ADR before any code.
     tensor with repeated roots gives finite values. On the patch test of the static solve every recovered stress equals
     D eps within 1e-10; the strain energy equals half the work of the loads within 1e-10 for a uniaxial and a bending
     load.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0277; the registration is written
-    by the implementation agent before any code. ADR 0273 (2026-11-12): Element::strain_at(coords, u, xi) gives B u at a
-    point; the integration points are stiffness_rule().points(); Material::stress(strain, &PointContext::default(), &[])
-    gives stress and tangent. ADR 0275 (2026-11-12): solve_static returns a SolidResult with displacement, reactions and
-    SolverStats but no integration-point values; recovery adds them from the displacement and assemble::element_dofs.
+  - note: Structural solver, basic tier (plan ADR 0270). ADR 0277, 2026-11-12: rcfd_fem::recover. IntegrationPointField
+    (compute(model, displacement), from_result) with the position, weight w det J, strain B u and stress D eps at every
+    point of each element's stiffness rule; element_means, element_strain_energy and strain_energy (sum w det J eps .
+    sigma / 2); attach puts strain and stress into SolidResult; extrapolation_matrix (a polynomial space fitted to the
+    rule's points: constant for Tet4, linear for Tet10, trilinear for Hex8), element_nodal_values and nodal_average
+    (volume-weighted over an element set or all elements; a node joining two different materials is refused naming the
+    node and both sets); tensor_norm, von_mises, principal (values descending with orthonormal directions: the closed
+    trigonometric form for the separated root, its direction by the largest cross product of rows of C - b I, the other
+    two by one exact 2 x 2 Jacobi rotation in the orthogonal plane) and principal_values_trigonometric (the bare closed
+    form). 1000 random tensors (seed 0xF376_0277): routine against rcfd_linalg's Jacobi 7.1e-16 of the norm and the bare
+    closed form 1.2e-15 (limit 1e-12), all ordered, directions orthonormal within 8.9e-16, a random rotation changes the
+    values by 1.3e-15 (limit 1e-12); von Mises uniaxial 0, pure shear 2.7e-16, hydrostatic 0 (limit 1e-14); 57
+    repeated-root tensors (zero, hydrostatic, uniaxial, double roots, rotated hydrostatic, near-repeated rotated)
+    finite, ordered, orthonormal within 6.7e-16 and within 1.1e-15 of the exact roots (the bare closed form 6.8e-9).
+    Patch test of ADR 0275: stress and strain at the points, element means and nodal averages equal D eps and eps within
+    3.2e-14 (limit 1e-10). Strain energy equals half the work of the loads within 2.6e-12 (Hex8) and 1.5e-11 (Tet10, the
+    residual of the direct solve on a slender model) for a uniaxial and a bending load (limit 1e-10); uniaxial energy
+    equals sigma^2 V/(2E) within 2.1e-14. Eleven mutations caught. STATUS recorded PARTIAL by the lead: the registered
+    R1 test stopped at its count assertion (the registration listed 54 repeated-root tensors for a list of 57) and
+    passed only as the corrected test of amendment 1, written after that run; no limit changed; done is the maintainer's
+    call.
 - [ ] **F-377** VTK output of a solid result: finite-element cells with point and cell data
   - depends on: F-376, F-070
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-io gains a writer of an
@@ -7114,7 +7130,12 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0278; the registration is written
     by the implementation agent before any code. ADR 0271 (2026-11-12) recalls the Hex8 and Tet10 node orders as VTK's
     (cell types 12 and 24) without a check; confirm them from the public file-format document and map in the writer if
-    one differs.
+    one differs. ADR 0277 (2026-11-12): nodal stresses for the VTK output come from
+    recover::IntegrationPointField::from_result(model, result) and recover::nodal_average(model, &field, field.stress(),
+    region) (Option per node, None where the region has no element; refused across a material interface, so a
+    multi-material model is written per element set or with element values); element stress components from
+    field.element_means(field.stress()); recover::von_mises and recover::principal (values descending, directions with
+    the largest-modulus entry positive) per value.
 - [ ] **F-378** Verification by a manufactured solution: observed order of displacement and stress for the three elements
   - depends on: F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Manufactured solution: a smooth
@@ -7127,7 +7148,9 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0279; the registration is written
     by the implementation agent before any code. ADR 0276 (2026-11-12): rcfd_fem::loads::body_force_loads(model, |x|
     b(x)) returns the consistent load of a body force given by a function as one NodalForceAt per node, for
-    solve_static_with; tractions on box faces via Load::traction (exact on flat faces).
+    solve_static_with; tractions on box faces via Load::traction (exact on flat faces). ADR 0277 (2026-11-12):
+    recover::IntegrationPointField gives strain and stress only at the stiffness rule's points; an energy-norm error
+    with a rule of higher degree needs Element::strain_at at that rule's points and Material::stress directly.
 - [ ] **F-379** Closed-form benchmarks: cantilever bending and the thick-walled cylinder under pressure
   - depends on: F-371, F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever of slenderness L/h = 20
@@ -7156,7 +7179,10 @@ fixed by the item's registration ADR before any code.
     (2026-11-12): in loads.rs only the Load::Temperature arm (other => unsupported) remains for ADR 0281; body loads are
     sums over Element::integration_points with the mass rule (private helpers add_body_load and element_body_load can
     carry the thermal load integrand); if the lead applied ADR 0276's replacement of ADR 0275's E3, that check asserts
-    the temperature refusal and must be replaced or dropped by ADR 0281.
+    the temperature refusal and must be replaced or dropped by ADR 0281. ADR 0277 (2026-11-12): the stress at a point is
+    computed in recover::IntegrationPointField::compute by Material::stress(eps, &PointContext::default(), &[]); the
+    thermal strain enters there (sigma = D (eps - eps_th)), and the strain energy of a thermally loaded model then needs
+    its own definition.
 - [ ] **F-381** Iterative route for larger models: CG with block Jacobi and incomplete Cholesky on the stiffness matrix
   - depends on: F-374, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. CG on the stiffness matrix with (a)
@@ -7169,7 +7195,9 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0282; the registration is written
     by the implementation agent before any code. ADR 0275 (2026-11-12): solve::StaticSolver (non-exhaustive) has Direct
     (default) and ConjugateGradient { tolerance, max_iterations } with Jacobi; StaticOptions (non-exhaustive) carries
-    the solver and the assembly thread count.
+    the solver and the assembly thread count. ADR 0277 (2026-11-12): the direct solve left a relative residual of
+    6.7e-11 on a Tet10 cantilever of 10 x 2 x 2 cells (L/h = 10), against 1e-16 to 1e-13 on stockier models; record the
+    residual of the direct and iterative routes against the slenderness.
 - [x] **F-382** Eigensolver for K x = lambda M x: dense Jacobi and subspace iteration on the direct factorisation
   - depends on: F-373
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a dense symmetric
@@ -7926,7 +7954,9 @@ fixed by the item's registration ADR before any code.
     take the patch of the nearest interior node by the registered rule; the result is bit-identical for 1 and 8 threads;
     a patch with too few points is reported, not solved.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0335; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0277 (2026-11-12): recover::IntegrationPointField carries
+    per element the positions, weights w det J, strain and stress of the stiffness rule's points (offsets,
+    points_of(e)); recover::nodal_average is the averaged nodal stress to compare against.
 - [ ] **F-433** Elasticity solves on the ranks of rcfd-dist and on the CUDA device
   - depends on: F-016, F-101, F-374, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Ranks: with one rank the iteration
@@ -8227,3 +8257,12 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0352 question 2, recommendation (a); proposed by the F-443 addendum, not yet taken. The fractional
     step's face flux interp(u*).S + dt (interp(grad p^n).S - snGrad(p^n)|S|) has no carried defect, so its steady face
     defect is dt R(p).
+- [ ] **F-455** Residual of the direct static solve on slender models, and iterative refinement
+  - depends on: F-374, F-376
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The relative residual of the
+    default direct static solve is recorded for Tet4, Hex8 and Tet10 cantilevers of slenderness 5, 10, 20 and 40 at
+    registered meshes; with one step of iterative refinement (opt-in, the default bit-identical) the relative residual
+    is at most 1e-14 on every one of them and the strain energy equals half the work of the loads within 1e-12; the cost
+    of the refinement step is recorded.
+  - note: From ADR 0277 remaining question 1, recommendation taken on the maintainer's standing instruction of
+    2026-11-11 (the Tet10 cantilever of L/h 10 had a direct-solve relative residual of 6.7e-11).
