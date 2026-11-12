@@ -141,6 +141,18 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   exact Taylor-Green solution is 1.6 to 1.8 times that of the default coupling; with the quadratic donor interpolation
   1.04 to 1.14 times. The variant that keeps the interpolated fringe pressure in that gradient
   (`FringeFlux::Prescribed`) is unstable and is kept for its record tests only.
+- **Skewness and non-orthogonal corrections (F-368, ADR 0367).** `OversetSolver::set_geometry_corrections(true)` makes
+  the face flux of a cell field (the Rhie-Chow flux of `HbyA`, the refreshed and the initial flux, the interpolation of
+  the `ddt_correction` defect) the exact flux of a linear field through the mesh's triangulated faces (a skewness term
+  `G_f s_f . S_f` plus a warp term `G_f : W_f` for non-planar faces, with least-squares cell gradients, donor-interpolated
+  in the fringe cells), adds the same correction to the convected face value, the explicit non-orthogonal correction to
+  the momentum diffusion, and the explicit non-orthogonal flux of the pressure to `phiHbyA` (shared by the pressure
+  equation and the corrected flux, so continuity stays exact). A solver that does not call it runs as before, bit for
+  bit; it is refused with BDF2, a prescribed fringe flux and `rhie_chow_step_consistent`. On the warped B3d with the
+  component moving, the linear shear of ADR 0264 has an error `9.97e-4` (default stencils) and `1.005e-3` (quadratic),
+  1.14 and 1.15 times that on the planar B3 (without the corrections `1.36e-2`, 15.6 times); the corrected operators
+  keep the exact field to round-off in continuity and diffusion and to `1.8e-3` per unit volume in convection (second
+  order, from `0.14`). The rest of the error on B3d is the coupling's (the warped meshes alone carry `3.1e-4`).
 - **BDF2 (F-338, ADR 0241).** `OversetSolver::set_time_scheme(TimeScheme::Bdf2)` switches the three-level scheme on; a
   solver that does not call it runs as before, bit for bit. The time term is the backward difference of `V u` of the
   moving cell, and the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, so that a
