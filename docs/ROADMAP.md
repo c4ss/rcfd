@@ -6727,7 +6727,12 @@ fixed by the item's registration ADR before any code.
     check AU1 missed (a defect of the case text) and passed only as AU1b after amendment; done is the maintainer's call.
     The default flip (Q1) waits for the maintainer's approval of the listed changes. ACCEPTED AS DONE by the maintainer
     in person on 2026-11-12 (the amended check). Default flip (Q1) approved by the maintainer in person on 2026-11-12,
-    together with ADR 0342 Q1 (F-440); to be applied.
+    together with ADR 0342 Q1 (F-440). Default flip applied (ADR 0346, 2026-11-12): without the key the body force takes
+    prescribed_gradient in both schemes; wall_pressure = "extrapolated" gives the old bits (digests equal to the old
+    tree's); no registered hash moved; the predicted moves measured: SP 1.001307 -> 1.000264, ADR 0266's strong piston
+    1.005081 -> 1.000042 (turning 0.92469), T4 x 0.506503 at 92 steps, ADR 0266 L stop 34 -> 35; ADR 0266 E1, E2 now
+    compare with strong_step_with(PrescribedGradient), its R1, R2 and ADR 0269 A2 write the old value; a coupling table
+    that leaves the key out now writes wall_pressure = "prescribed_gradient".
 - [~] **F-359** Overset: a non-uniform closed-form flow on a warped three-dimensional overset mesh
   - depends on: F-357
   - acceptance: A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a
@@ -7911,7 +7916,11 @@ fixed by the item's registration ADR before any code.
     bit-identical, and the key does not change the flow. No existing input combines a moving mesh and a force report;
     with the default flipped no test moves. K0 unedited; five mutations caught, one equivalent. Open, the maintainer's:
     the default (ADR 0342 Q1, with ADR 0269 Q1). Default flip approved by the maintainer in person on 2026-11-12,
-    together with F-358's; to be applied.
+    together with F-358's. Default flip applied (ADR 0346, 2026-11-12): without the table the force, moment and
+    force-coefficient reports on moving walls take prescribed_gradient (the column's fp deficit 2.5004597e-2 ->
+    4.597e-6), except with layering or the compressible solver, which keep the stored values silently (only a written
+    table is refused there); wall_pressure = "boundary_value" gives the old bits; no registered hash moved; ADR 0342's
+    T0, Z0 to Z2, E3, A1c and F1 controls now write boundary_value.
 - [x] **F-441** Directional lattice: coarsening inside the directional adaptive loop
   - depends on: F-439
   - acceptance: On the ADR 0267 suction layer, a directional loop that also box-coarsens cells whose per-axis variation
