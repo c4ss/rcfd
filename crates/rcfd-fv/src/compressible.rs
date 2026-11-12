@@ -200,6 +200,19 @@ impl CompressibleSolver {
         self.sponge.as_ref()
     }
 
+    /// Set the memory `Q` of the matched sponge form (ADR 0237 amendment 1), for a restart or for a start from a state in
+    /// which a wave is already inside the layer: one finite value per cell; an error without a sponge.
+    pub fn set_sponge_memory(&mut self, q: &[f64]) -> Result<()> {
+        if self.sponge.is_none() || q.len() != self.u.len() || q.iter().any(|x| !x.is_finite()) {
+            return Err(Error::InvalidValue {
+                path: "sponge".into(),
+                reason: "the sponge memory needs a sponge and one finite value per cell".into(),
+            });
+        }
+        self.sponge_q = q.to_vec();
+        Ok(())
+    }
+
     /// The memory `Q` (time integral of `p - p_ref`) of the matched sponge form per cell; empty without a sponge.
     pub fn sponge_memory(&self) -> &[f64] {
         &self.sponge_q

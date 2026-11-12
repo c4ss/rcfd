@@ -124,10 +124,14 @@ fn reflection(
     let mut den = 0.0f64;
     while reference.time < t_end {
         let dt = tests.iter().map(|s| s.max_dt()).fold(reference.max_dt(), f64::min);
-        reference.step(dt).unwrap();
-        for s in tests.iter_mut() {
-            s.step(dt).unwrap();
-        }
+        // the reference run and the test runs advance in two threads (the same arithmetic)
+        std::thread::scope(|scope| {
+            let r = scope.spawn(|| reference.step(dt));
+            for s in tests.iter_mut() {
+                s.step(dt).unwrap();
+            }
+            r.join().unwrap().unwrap();
+        });
         let t = reference.time;
         if t < t_start || t > t_window_end {
             continue;
@@ -276,10 +280,12 @@ fn duct(d: &Duct, forms: &[Form]) -> Vec<f64> {
     reflection(&mut tests, &mut reference, &probes, d.t_s, d.t_end, d.t_end)
 }
 
-/// A30 and NC30 of ADR 0237.
+/// A30 and NC30 of ADR 0237, the registered set-up D: an ignored record. Measured at 4dddc106: A30 `R = 3.848e-2`
+/// against the limit `1e-2` (missed), NC30 `R = 0.08139` (held). Amendment 1 of ADR 0237: the set-up is defective (the train
+/// starts inside the matched layer with zero memory); the corrected check is [`a30b_oblique_train_30_degrees`].
 #[test]
-#[ignore = "heavy: three duct runs of 50 000 to 85 000 cells; run in the release profile"]
-fn a30_oblique_train_30_degrees() {
+#[ignore = "setup_defect record (ADR 0237 amendment 1): A30 measured 3.848e-2 against 1e-2; superseded by a30b"]
+fn a30_oblique_train_30_degrees_setup_defect() {
     let r = duct(&D30, &[Form::Matched, Form::None]);
     println!(
         "A30 matched: R = {:.3e} (limit {LIMIT:e}); NC30 no sponge: R = {:.5} ([0.04, 0.10])",
@@ -289,10 +295,12 @@ fn a30_oblique_train_30_degrees() {
     assert!((0.04..=0.10).contains(&r[1]), "NC30 {}", r[1]);
 }
 
-/// A45, NC45 and NCP45 of ADR 0237.
+/// A45, NC45 and NCP45 of ADR 0237, the registered set-up D: an ignored record. Measured at 4dddc106: A45 `R = 6.179e-2`
+/// against the limit `1e-2` (missed), NC45 `R = 0.19623` (held), NCP45 `R = 0.15024` (held). Amendment 1: set-up defect;
+/// the corrected check is [`a45b_oblique_train_45_degrees`].
 #[test]
-#[ignore = "heavy: four duct runs of 39 000 to 67 000 cells; run in the release profile"]
-fn a45_oblique_train_45_degrees() {
+#[ignore = "setup_defect record (ADR 0237 amendment 1): A45 measured 6.179e-2 against 1e-2; superseded by a45b"]
+fn a45_oblique_train_45_degrees_setup_defect() {
     let r = duct(&D45, &[Form::Matched, Form::None, Form::Plain]);
     println!(
         "A45 matched: R = {:.3e} (limit {LIMIT:e}); NC45 no sponge: R = {:.5} ([0.12, 0.21]); NCP45 plain: R = {:.5} (>= 0.05)",
@@ -303,10 +311,12 @@ fn a45_oblique_train_45_degrees() {
     assert!(r[2] >= 0.05, "NCP45 {}", r[2]);
 }
 
-/// A60 and NC60 of ADR 0237.
+/// A60 and NC60 of ADR 0237, the registered set-up D: an ignored record. Measured at 4dddc106: A60 `R = 8.699e-2`
+/// against the limit `1e-2` (missed), NC60 `R = 0.37196` (held). Amendment 1: set-up defect; the corrected check is
+/// [`a60b_oblique_train_60_degrees`].
 #[test]
-#[ignore = "heavy: three duct runs of 40 000 to 71 000 cells; run in the release profile"]
-fn a60_oblique_train_60_degrees() {
+#[ignore = "setup_defect record (ADR 0237 amendment 1): A60 measured 8.699e-2 against 1e-2; superseded by a60b"]
+fn a60_oblique_train_60_degrees_setup_defect() {
     let r = duct(&D60, &[Form::Matched, Form::None]);
     println!(
         "A60 matched: R = {:.3e} (limit {LIMIT:e}); NC60 no sponge: R = {:.5} ([0.25, 0.40])",
@@ -314,6 +324,160 @@ fn a60_oblique_train_60_degrees() {
     );
     assert!(r[0] <= LIMIT, "A60 {}", r[0]);
     assert!((0.25..=0.40).contains(&r[1]), "NC60 {}", r[1]);
+}
+
+/// The antiderivative with zero mean of the periodic, zero-mean train profile, on the reduced coordinate `r` in
+/// `[-lam/2, lam/2]`: Simpson's rule with 256 intervals for the Gaussian, minus `mean r`.
+fn train_antiderivative(r: f64, mean: f64) -> f64 {
+    let n = 256;
+    let h = r / n as f64;
+    let mut sum = gauss(0.0) + gauss(r);
+    for i in 1..n {
+        sum += if i % 2 == 1 { 4.0 } else { 2.0 } * gauss(i as f64 * h);
+    }
+    sum * h / 3.0 - mean * r
+}
+
+/// DR8 of ADR 0237 (amendment 1) at `t = 0`: the linear state of the train of set-up D at the point `x` and the memory
+/// `Q` there. `layer_front` is the front of the registered matched layer, or `None` for a run without a layer (then the
+/// state is the plain train and `Q = 0`).
+fn train_in_layer(x: [f64; 3], theta: f64, h: f64, layer_front: Option<f64>) -> (Prim, f64) {
+    let (c, s) = (theta.cos(), theta.sin());
+    let lam = 2.0 * h * s;
+    let mean = W * std::f64::consts::PI.sqrt() / lam;
+    // attenuation and rate at the depth of the point
+    let (att, rate) = match layer_front {
+        Some(front) if x[0] > front => {
+            let rate_max = rate_max_for_reflection(LAYER, 1.0, R0, EXPONENT).unwrap();
+            let d = (x[0] - front).min(LAYER);
+            let integral = rate_max * LAYER / (EXPONENT + 1.0) * (d / LAYER).powf(EXPONENT + 1.0);
+            ((-c * integral).exp(), rate_max * (d / LAYER).powf(EXPONENT))
+        }
+        _ => (1.0, 0.0),
+    };
+    let (mut p, mut q, mut v) = (0.0, 0.0, 0.0);
+    for sign in [1.0, -1.0] {
+        let xi = x[0] * c + sign * x[1] * s;
+        let r = xi - lam * (xi / lam).round();
+        let g = (-1..=1).map(|m| gauss(r - m as f64 * lam)).sum::<f64>() - mean;
+        let p_fam = EPS * att * g;
+        let q_fam = -EPS * att * train_antiderivative(r, mean);
+        p += p_fam;
+        q += q_fam;
+        v += sign * s * (p_fam + rate * q_fam);
+    }
+    // rho0 = c = 1
+    let state = Prim {
+        rho: 1.0 + p,
+        u: [c * p, v, 0.0],
+        p: P0 + p,
+    };
+    (state, if rate > 0.0 { q } else { 0.0 })
+}
+
+/// Set-up D2 of ADR 0237 (amendment 1): set-up D with the matched layer started in the state of DR8 (the attenuated train
+/// and its memory) and every run started from the linear relations. The measure of the matched form.
+fn duct2(d: &Duct) -> f64 {
+    let th = d.theta_deg.to_radians();
+    let make = |nx: usize, front: Option<f64>| {
+        let mut s = solver(nx, d.ny, nx as f64 * DX, d.h, |x| train_in_layer(x, th, d.h, front).0);
+        s.set_bc("ymin", CompBc::Slip).unwrap();
+        s.set_bc("ymax", CompBc::Slip).unwrap();
+        s.set_bc("xmin", CompBc::Fixed(ambient())).unwrap();
+        s.set_bc("xmax", THOMPSON).unwrap();
+        s
+    };
+    assert!((d.nx as f64 * DX - (d.x_i + LAYER)).abs() < 1e-9);
+    let mut test = make(d.nx, Some(d.x_i));
+    apply(&mut test, Form::Matched, d.x_i);
+    let memory: Vec<f64> = {
+        let cc = test.geom.mesh.cell_centres();
+        let rate = &test.sponge().unwrap().rate;
+        (0..cc.len())
+            .map(|c| {
+                if rate[c] > 0.0 {
+                    train_in_layer(cc[c], th, d.h, Some(d.x_i)).1
+                } else {
+                    0.0
+                }
+            })
+            .collect()
+    };
+    test.set_sponge_memory(&memory).unwrap();
+    let mut reference = make(d.nx_ref, None);
+    let x_probe = d.x_i - 0.1025;
+    let probes = vec![column(&test, x_probe), column(&reference, x_probe)];
+    assert_eq!(probes[0].len(), d.ny);
+    let mut tests = vec![test];
+    reflection(&mut tests, &mut reference, &probes, d.t_s, d.t_end, d.t_end)[0]
+}
+
+/// A30b of ADR 0237 (amendment 1).
+#[test]
+#[ignore = "heavy: two duct runs of 50 000 and 85 000 cells; run in the release profile"]
+fn a30b_oblique_train_30_degrees() {
+    let r = duct2(&D30);
+    println!("A30b matched, set-up D2: R = {r:.3e} (limit {LIMIT:e})");
+    assert!(r <= LIMIT, "A30b {r}");
+}
+
+/// A45b of ADR 0237 (amendment 1).
+#[test]
+#[ignore = "heavy: two duct runs of 39 000 and 67 000 cells; run in the release profile"]
+fn a45b_oblique_train_45_degrees() {
+    let r = duct2(&D45);
+    println!("A45b matched, set-up D2: R = {r:.3e} (limit {LIMIT:e})");
+    assert!(r <= LIMIT, "A45b {r}");
+}
+
+/// A60b of ADR 0237 (amendment 1).
+#[test]
+#[ignore = "heavy: two duct runs of 40 000 and 71 000 cells; run in the release profile"]
+fn a60b_oblique_train_60_degrees() {
+    let r = duct2(&D60);
+    println!("A60b matched, set-up D2: R = {r:.3e} (limit {LIMIT:e})");
+    assert!(r <= LIMIT, "A60b {r}");
+}
+
+/// The set-up of X45 (ADR 0237 amendment 1; the set-up of X1 with its numbers as arguments): one isolated plane pulse at
+/// `theta_deg` and its mirror image in a half space above a rigid wall, matched layer with its front at `x_i`; the probe
+/// is the wall cell 0.1 in front of the layer.
+fn half_space(theta_deg: f64, xi0: f64, x_i: f64, nx: usize, nx_ref: usize, ny: usize, t_end: f64) -> f64 {
+    let th = theta_deg.to_radians();
+    let (c, s) = (th.cos(), th.sin());
+    let init = move |x: [f64; 3]| {
+        superpose(&[
+            (EPS * gauss(x[0] * c + x[1] * s - xi0), [c, s, 0.0]),
+            (EPS * gauss(x[0] * c - x[1] * s - xi0), [c, -s, 0.0]),
+        ])
+    };
+    let make = |nx: usize| {
+        let mut sv = solver(nx, ny, nx as f64 * DX, ny as f64 * DX, init);
+        sv.set_bc("ymin", CompBc::Slip).unwrap();
+        sv.set_bc("ymax", CompBc::Extrapolate).unwrap();
+        sv.set_bc("xmin", CompBc::Extrapolate).unwrap();
+        sv.set_bc("xmax", THOMPSON).unwrap();
+        sv
+    };
+    assert!((nx as f64 * DX - (x_i + LAYER)).abs() < 1e-9);
+    let mut tests = vec![make(nx)];
+    apply(&mut tests[0], Form::Matched, x_i);
+    let mut reference = make(nx_ref);
+    let x_probe = x_i - 0.1025;
+    let probes = vec![
+        vec![column(&tests[0], x_probe)[0]],
+        vec![column(&reference, x_probe)[0]],
+    ];
+    reflection(&mut tests, &mut reference, &probes, 0.0, f64::INFINITY, t_end)[0]
+}
+
+/// X45 of ADR 0237 (amendment 1): one isolated plane pulse at 45 degrees in a half space.
+#[test]
+#[ignore = "heavy: two runs of 390 000 and 660 000 cells, about an hour; run in the release profile"]
+fn x45_isolated_oblique_pulse_45_degrees() {
+    let r = half_space(45.0, 0.2243, 3.35, 710, 1200, 550, 2.70);
+    println!("X45 matched, isolated pulse at 45 degrees: R = {r:.3e} (limit {LIMIT:e})");
+    assert!(r <= LIMIT, "X45 {r}");
 }
 
 /// X1 of ADR 0237: one isolated plane pulse at 30 degrees and its mirror image in a half space above a rigid wall.
