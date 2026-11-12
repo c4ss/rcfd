@@ -213,3 +213,18 @@ the check, and does not count in the rule.
 - **Q3. Reference volume.** The check compares with the output surface (rigorous), not with `diagnose(input).enclosed_volume`
   (as V does, with a fixed `1e-12`). Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the
   output surface. It changes no default result: both references agree on every accepted output, which C1 shows.
+
+## Amendment 1 (2026-11-12, before any test code and before any run)
+
+A defect of the set-up found while writing the tests: C4 asks both "no `Ok` that fails V" and "every input returns `Ok`", while
+MU1 requires C4 to *pass* with the fold re-introduced, where five inputs panic and five return the check's error. The two halves
+are split, limits unchanged:
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| C4a K1 | F1 to F13 (`tetmesh_check_f324`), F14 (`tet_check_f324`): no outcome is an `Ok` that fails V (a located error or a panic is not an overlapping `Ok`) | none |
+| C4b | the same inputs | every one returns `Ok` |
+
+MU1 must: C4a passes, C4b fails (and the R2 and R3 texts as registered). MU2 must: C4a fails. The decision rule reads C4 as C4a
+and C4b. To keep the run time of one pass, C4a, C4b, C6 and the C7 print share one computation of the 13 (and 1) outcomes per test
+process (`OnceLock`); the gate's one process per test computes it once per test.
