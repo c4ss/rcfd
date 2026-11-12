@@ -139,7 +139,11 @@ fn threads_bit_identical(model: &SolidModel, p: &CgPreconditioner) -> (usize, us
         let o = pcg(p.clone(), TOL, 20_000).threads(t);
         runs.push(pool.install(|| solve_static(model, &o).unwrap()));
     }
-    (iterations(&runs[0]), iterations(&runs[1]), bit_equal(&runs[0], &runs[1]))
+    (
+        iterations(&runs[0]),
+        iterations(&runs[1]),
+        bit_equal(&runs[0], &runs[1]),
+    )
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -160,11 +164,7 @@ fn a_fast_cantilever_fill_and_ordering() {
     let (i0, ri0, t) = run(&model, &pcg(ic0(), TOL, 20_000));
     print("X1 fast IC0", &i0, &ri0, t);
     let it_bj = iterations(&bj);
-    println!(
-        "A0 BJ {} (expected 156), IC0 {} (expected 85)",
-        it_bj,
-        iterations(&i0)
-    );
+    println!("A0 BJ {} (expected 156), IC0 {} (expected 85)", it_bj, iterations(&i0));
 
     let mut meets = Vec::new();
     let mut sols = Vec::new();
@@ -187,9 +187,7 @@ fn a_fast_cantilever_fill_and_ordering() {
         let a2 = e <= 1e-7;
         let a3 = ratio <= 0.5;
         let a4 = n1 == n8 && same && n1 == iterations(&r);
-        println!(
-            "{tag}: A1 {res:.3e} <= 1e-10 {a1}; A2 {e:.3e} <= 1e-7 {a2}; A3 {ratio:.4} <= 0.5 {a3}; A4 {a4}"
-        );
+        println!("{tag}: A1 {res:.3e} <= 1e-10 {a1}; A2 {e:.3e} <= 1e-7 {a2}; A3 {ratio:.4} <= 0.5 {a3}; A4 {a4}");
         meets.push((tag, a1 && a2 && a3 && a4));
         sols.push((tag, r));
     }
@@ -235,7 +233,10 @@ fn f1_f2_forced_breakdowns() {
             let q = dofs.equation(*n, *c).unwrap();
             let want = (1.0 + bd.shift) * kd[q];
             if want.to_bits() != bd.diagonal.to_bits() {
-                println!("F2 {tag}: node {n} component {c}: diagonal {:e} against {want:e}", bd.diagonal);
+                println!(
+                    "F2 {tag}: node {n} component {c}: diagonal {:e} against {want:e}",
+                    bd.diagonal
+                );
                 f2 = false;
             }
         }
@@ -255,7 +256,10 @@ fn f1_f2_forced_breakdowns() {
 fn s1_level_zero_natural_is_ic0() {
     let model = fast();
     let (a, ra, _) = run(&model, &pcg(ic0(), TOL, 20_000));
-    let (b, rb, _) = run(&model, &pcg(fill(0, IcOrdering::Natural, IcOptions::default()), TOL, 20_000));
+    let (b, rb, _) = run(
+        &model,
+        &pcg(fill(0, IcOrdering::Natural, IcOptions::default()), TOL, 20_000),
+    );
     let same = iterations(&a) == iterations(&b) && bit_equal(&a, &b);
     println!(
         "S1 IC0 '{}' {} iterations, level 0 natural '{}' {} iterations, bit-equal {same}",
@@ -308,7 +312,10 @@ fn p1_fill_pattern_of_the_cantilever() {
         stored.len(),
         got0 == stored
     );
-    println!("N2 level 0 and level 1 patterns equal: {} (expected false)", got0 == got1);
+    println!(
+        "N2 level 0 and level 1 patterns equal: {} (expected false)",
+        got0 == got1
+    );
     assert_eq!(count1, got1.len(), "P1 no duplicates");
     assert!(got1 == want1 && got0 == stored, "P1");
     assert!(got0 != got1, "N2");
