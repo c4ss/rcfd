@@ -359,3 +359,96 @@ miss of the code.
 
 The two tests stopped by it stay as ignored records (`*_a2`, renamed `*_setup_defect2`); C5 of amendment 2 met its limits and
 stays as it is. The corrected tests are new functions; the run is made once.
+
+## Addendum 1: results (2026-11-12)
+
+Release builds on Windows. Registration c0a50c58; amendment 1 eb7b29bf (before any run); code and tests d9f7f943 (committed
+before their first run); first run `w49i-work/f326-scratch/run1.log`; amendment 2 e524592a and its tests 47edd4c0, run
+`run2.log`; amendment 3 f04d22cb and its tests 81d883c9, run `run3.log` (the run whose numbers are below, except C5). Each run
+was made once; no limit was changed. The new file has 11 tests (6 run, 5 ignored records), 0.8 s in total.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 IM at every step (A3.1: steps with a parcel) | 1e-10 | worst 1.8e-15 | yes |
+| C1b species against the step's vapour (A2.2: error over `1e-8 S + 1e-13 rho sum V`) | 1 | worst 1.6e-5 | yes |
+| C2 IP at every step; delivered momentum against the record | 1e-10; 1e-12 | 5.8e-16; 2.3e-16 | yes |
+| C3 IE at every step | 1e-10 | worst 6.7e-13 | yes |
+| C3b temperature against the step's `Q_T` (A2.2, error over the bound) | 1 | worst 8.0e-4 (step 1, the round-off of amendment 2) | yes |
+| SR split of the energy source; vapour to the species | 1e-12 each | 3.7e-15; 1.3e-15 | yes |
+| R1 tracker `t_fluid` and vapour fraction against `T^n`, `max(Y^n, 0)` | bit for bit | equal at all 500 steps | yes |
+| CV breakup events; vapour; `H_v/E_inj`; no failure | >= 1; > 0; >= 1e-3 | 10; `1.4455e-7` kg (0.986 of the injected liquid); 2.51; none | yes |
+| C4 pimple, 100 steps: IM, IP, IE | 1e-10 each | 3.0e-16, 4.3e-16, 5.8e-13 | yes |
+| C5 breakup alone, 200 steps: IP; events; vapour | 1e-10; >= 1; zero | 2.4e-16; 10; 0 (run of amendment 2, A2.1) | yes |
+| Z1 tables disabled against absent, 100 steps: u, p, phi, T, fingerprint | bit for bit | equal (10 parcels, the gas moving) | yes |
+| Z2a (amendment 1) texts and hash | as stated | no table in either text without, both with; hashes differ | yes |
+| S located errors S1 to S7 (17 texts) and the inert controls | as stated | all located, none left with the tables disabled | yes |
+| K0 suites, unedited | pass | rcfd-api baseline_hashes 3+1 ignored, case_hashes_w48u 1, particles_two_way 14+6, particle_run 9, particles_case 6+1, particles_ext_case 3, scalars 2, dispersion_f255 15+1, wall_interaction_f254 6, erosion_presets_f254 6, rules_w19c 8+1 (the last three and H1 again after the docs edit); every rcfd-particles test binary (droplet_exchange_f323 10, breakup_f245 8, lagrangian_ext 13+1, closed_forms 24+3, ...); rcfd-cli cli 8; rcfd-mcp default_f1 2; 0 failed | yes |
+| NC1 IE without `H_v` | >= 1e-3 | 1.0 | held |
+| NC2 IM without the carrier vapour | >= 1e-3 | 0.986 | held |
+| NC3 IE with `energy_heat` alone | >= 1e-3 | 0.444 | held |
+
+CB at the end (500 steps): 10 parcels, 8 active and 2 evaporated; IE terms [liquid, carrier heat, `H_v`, `K`, gravity, wall,
+breakup, injected] = [1.60e-3, -0.1727, 0.2840, 2.46e-4, -1.6e-10, -1.74e-5, 4.4e-8, 0.1132] J; the vapour fraction in
+[-9.7e-4, 0.112]; the coolest cell 682.3 K. The evaporation went further than estimated (98.6 percent of the liquid), so
+`H_v/E_inj` is above 1 (the datum is the liquid at 0 K).
+
+### Mutations
+
+Each alone on the `git archive` copy of 81d883c9 (`w49i-work/f326-scratch/mut`, script `mutate.py`, log `mutations.log`),
+its test run once in release; every file restored and equal byte for byte.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MF1 species source not added | C1 | failed in CB at C1b, step 11 (error over the bound 1.1e7; C1b precedes C1 in the step) |
+| MF2 `Q_T = energy_heat` | C3 | failed: C3 IE 8.3e-4 at step 11 |
+| MF3 vapour fraction not given | R1 | failed: R1 vapour fraction at step 12 |
+| MF4 momentum without the vapour | C2 | failed: C2 delivered 0.33 at step 11 |
+| MF5 `enable_coupling` with the tables | C1 (the run fails) | failed: step 1, "evaporation and breakup: not available with the exchange record" |
+| MF6 S4 removed | S | failed: `particles.evaporation.species` not located |
+
+### Tools
+
+`cargo fmt -p rcfd-api --check`, `cargo fmt -p rcfd-particles --check`: clean. `cargo clippy --release -p rcfd-api -p
+rcfd-particles --all-targets -- -D warnings`: clean. The whole workspace suite was not run (the lead's gate).
+
+### Deviations and disclosures
+
+- Two of the three amendments followed runs: amendment 2 after the first run stopped CB, C4 and C5 at step 1 (0/0 before
+  the first injection; a round-off floor used as a denominator), amendment 3 after the second stopped CB and C4 at step 1
+  (the carrier's round-off inventory as the only non-zero term). Both were defects of the relative measures before any
+  parcel exists, not of the code; no limit number changed. The stopped tests are kept as ignored `*_setup_defect` and
+  `*_setup_defect2` records. The test bodies were moved into `cb_run`, `c4_run`, `c5_run` with flags; the first-run logic is
+  kept under the old flags.
+- C5's numbers are from the run of amendment 2 (it passed there; A3.1 does not change it).
+- The vapour species undershoots to -9.7e-4 (deferred-correction convection near the evaporating parcels); the tracker sees
+  it clamped at 0 (T5). The inventory identity is unaffected (conservative scheme).
+- The shared solver file `sim.rs` has two insertions (new-file lines 4053 to 4059 and 4239 to 4242); `baseline_hashes` passes.
+
+### Decision by the registered rule
+
+Every check (as amended) met its limit, the three negative controls held, the six mutations failed their tests: **done by
+the rule**, pending the maintainer's acceptance. No hash table, golden or existing test was edited; the tables needed no
+`DEFAULT_KEYS` entry.
+
+### Remaining questions
+
+- **Q1. The steady two-way path with the tables.** (a) keep them refused (as built); (b) a vapour species in the fixed point of
+  ADR 0059. Recommendation: (a) until a case needs it.
+- **Q2. The vapour as a mass source of the carrier.** (a) dilute, constant density (as built); (b) a variable-density carrier
+  (F-252). Recommendation: (b) with F-252.
+- **Q3. One record method or two** (ADR 0230 Q1). (a) keep both; (b) merge and retire RF1/RF2 of ADR 0224.
+  Recommendation: (a): the steady path and API callers still use `enable_coupling`.
+- **Q4. Species undershoot.** (a) clamp what the tracker sees (as built); (b) a bounded scheme for the vapour species when the
+  table is on. Recommendation: (a); (b) changes a solver default of the species. Open (it would change a default).
+
+### For the lead: roadmap entries
+
+**F-326: proposed status `done`.** Proposed note:
+
+> From ADR 0230 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11 (a separate item, checked by conservation without a data set). DONE (ADR 0348, 2026-11-12; registered before the code, three amendments, two of them after runs that stopped at step 1 on the relative measures before the first injection, no limit changed): optional tables [particles.evaporation] (the film-model data of ADR 0224 and the transported species that receives the vapour) and [particles.breakup] (TAB constants), absent from every case that does not write them; transient two-way only (piso, pimple; evaporation also needs heat_transfer). The tracker records with enable_droplet_exchange and reads T and the vapour fraction of the old time level (bit for bit); over each flow step the carrier receives the mass of Coupling::droplet_sources as the species source, its momentum as the body acceleration, and of its energy the sensible part energy_heat + vapour_enthalpy - vapour_mass (c_l T + L_v) in the temperature equation, the mechanical part and the enthalpy of the arrived vapour kept in a ledger. A closed adiabatic box (16 cells, 10 parcels breaking up and evaporating 98.6 percent of their mass) conserves gas plus liquid mass, momentum and energy at every step to 1.8e-15, 5.8e-16 and 6.7e-13 of the largest term (limit 1e-10), with pimple too (5.8e-13); three negative controls held, six mutations caught. A case without the tables or with them disabled is bit-identical (baseline hashes, case_hashes_w48u, the particle suites). Not in it: the steady path, a variable-density carrier (the vapour is not a continuity source), the breakup's normal momentum (a residual, ADR 0230 D5). Open: ADR 0348 Q1 to Q4.
+
+**F-323: proposed note change** (replace its last sentence "Case-tree wiring (optional particles.evaporation and particles.breakup tables, ADR 0224 question 2) goes with F-252." with):
+
+> Case-tree wiring of the transient two-way path (optional particles.evaporation and particles.breakup tables) done by F-326 (ADR 0348, 2026-11-12); the comparison with data stays with F-252.
