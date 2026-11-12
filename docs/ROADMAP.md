@@ -3326,10 +3326,12 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     1.63 and the order as registered is 1.67 (still missed: what is left is spatial); and 1.62 with dt proportional to
     h^2 (limit 1.7), 1.66 with BDF2 and three outer iterations: the truncation of the linear donor interpolation at one
     component fringe cell, a second-order error sampled at one pose (the root mean square converges at 1.99 and 1.96 on
-    three levels), free of time error with BDF2. Found there and open: a first-order term of the calculated component
-    cells with the coefficient 1.0e-4. Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1); several
-    components, a moving background, hole cutting from the wall geometry, non-orthogonal correctors, turbulence (Q2 to
-    Q5).
+    three levels), free of time error with BDF2. Found there and traced by ADR 0246 (F-334) to the truncation of the
+    linear donor interpolation: with the component at rest the root mean square of the calculated component cells
+    converges at 1.277, 1.166, 1.626 on levels 1 to 4 and at 1.922, 1.935, 1.950 with a third-order interpolation
+    supplied by the test; the mechanism is open. Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1);
+    several components, a moving background, hole cutting from the wall geometry, non-orthogonal correctors, turbulence
+    (Q2 to Q5).
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
   - depends on: F-110, F-029
   - acceptance: Planar contraction and Poiseuille start-up compare with analytic Oldroyd-B solutions
@@ -5980,12 +5982,30 @@ fixed by the item's registration ADR before any code.
     instruction of 2026-11-11): HE map warm against cold 5.7e-9, 61 and 60 iterations against 89 and 88; defaults
     byte-identical; three mutations caught. Open: the extended start as the map default (Q7 (b)) and in the design tools
     (Q7 (a), a golden edit).
-- [ ] **F-334** Overset: the first-order error term of the calculated component cells
+- [~] **F-334** Overset: the first-order error term of the calculated component cells
   - depends on: F-314
   - acceptance: Set-up RL of ADR 0232 (component at rest, fringe phase locked) on levels 1 to 4: the root mean square of
     the error of the calculated component cells converges at order 1.7 or more between successive levels, or the ADR
     names the source of the first-order term (coefficient 1.0e-4) with a number.
-  - note: From ADR 0232 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0232 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0246 (registration of F-334, 2026-11-12, merged 2026-11-12): PARTIAL, a diagnosis, tests only, no library change.
+    The order check is missed: RL on levels 1 to 4 gives 1.549e-4, 6.39e-5, 3.98e-5, 2.49e-5 in the root mean square of
+    the calculated component cells, orders 1.277, 1.166, 1.626 (limit 1.7); the fit of ADR 0232 predicted 2.86e-5 at
+    level 4. The source is named: the truncation of the linear donor interpolation. With stencils exact for biquadratic
+    fields on both fringes (nine cells, test code) the error is 3.24e-4, 8.55e-5, 3.90e-5, 2.23e-5, orders 1.922, 1.935,
+    1.950, and equals the error of the background alone. The error with the library stencils is the sum of that part and
+    of the response to the truncation, which is 1.35 to 1.90 times larger, opposed to it (cosine -0.96 to -0.88) and
+    converges at 1.693, 1.588, 1.800; they cancel to 88 to 96 percent, so the library stencils give the smaller error at
+    levels 1 and 2 and the lower order. The coefficient 1.0e-4 is the increment per level of that response times L^2
+    (1.04e-4, 0.98e-4, then 0.38e-4). Its part from the background fringe is of first order on levels 1 to 3 (4.9e-5,
+    2.2e-5, 1.41e-5: 1.153, 1.093) and still growing at t = 0.5; the part from the component fringe converges at 1.782,
+    1.698. Ruled out with numbers: a time error, the single-mesh solution, the outer boundary of the component, the
+    reference cell, the interpolated pressure and the convection (the error is linear in the amplitude to 0.07 percent),
+    a mass defect, the flux at the fringe faces, the transient Rhie-Chow term; with coincident meshes the coupling gives
+    the background alone to 7e-9. Open: why the response to a second-order truncation stays below second order. Controls
+    held, four mutations caught. Follow-ups (ADR 0246 questions 2 and 4, recommendations taken on the maintainer's
+    standing instruction of 2026-11-11): F-336 with RL added to its acceptance, and F-349 on the response to the
+    background fringe.
 - [~] **F-335** Overset: outer iterations on the overset path
   - depends on: F-134
   - acceptance: OversetSolver accepts n_outer above 1 as an opt-in (defaults bit-identical, Q0 of ADR 0219 still bit for
@@ -6014,7 +6034,9 @@ fixed by the item's registration ADR before any code.
   - depends on: F-134, F-334
   - acceptance: An opt-in donor interpolation that reproduces quadratic fields; with it the largest error over the
     calculated and fringe cells of TG_L converges at order 1.7 or more on levels 1 to 3 with dt proportional to h^2, the
-    uniform-flow check U1 of ADR 0219 holds, and the default stencils and results are bit-identical.
+    root mean square of the error of the calculated component cells of RL of ADR 0232 converges at order 1.7 or more on
+    levels 1 to 4 (ADR 0246 TQ: 1.922, 1.935, 1.950 with test-supplied stencils), the uniform-flow check U1 of ADR 0219
+    holds, and the default stencils and results are bit-identical.
   - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Optional, after F-334.
 - [x] **F-337** Immersed solid: second-order force and moment
@@ -6163,3 +6185,11 @@ fixed by the item's registration ADR before any code.
     for bit.
   - note: From ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. A Leaf has one
     level for every axis, so this is a second lattice type in rcfd_mesh::adapt.
+- [ ] **F-349** Overset: the response to the truncation of the background-fringe interpolation
+  - depends on: F-334
+  - acceptance: The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a
+    third-order interpolation on the background fringe: 4.87e-5, 2.19e-5, 1.41e-5 at levels 1 to 3, orders 1.153 and
+    1.093) is traced to a named term of the coupled step by a switch that brings its order to 1.7 or more on levels 1 to
+    4, or is shown to reach order 1.7 on finer levels or at a later time, or the ADR names why not with a number.
+  - note: From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
+    priority.
