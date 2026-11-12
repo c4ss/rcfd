@@ -363,3 +363,170 @@ A mutation that survives every check is reported as such and diagnosed.
   series, the integral of `J_m^2`), from memory; each is checked numerically (B1 to B3) rather than trusted.
 
 No vendor code or documentation was used.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Registration 59eab488; library and tests 4a020cf8 (one commit, after the registration). Every run below was made once, in
+the **release** profile (`cargo test --release -p rcfd-fv --test acoustic_wave_f333`, `cargo test --release -p rcfd-post
+--lib duct_modes`, `cargo test --release -p rcfd-post --test duct_modes_f333`). No limit was changed, no amendment was
+needed, there is no `*_known_miss` test because no limit was missed, and no test is ignored: the longest run (E1) took
+under 50 s with six tests in parallel, so no registered run counts as heavy and S1c is an ordinary fast test.
+
+### What was built
+
+- `crates/rcfd-fv/src/acoustic_wave.rs` (new): `AcousticWaveSolver` (DR1 to DR4), `Medium`, `WaveBc` (`Wall`, `Open`,
+  `Driven`), `WaveSponge` / `WaveSpongeForm` (`Plain`, `Matched`), `WaveSponge::from_layer` on `sponge::SpongeLayer`,
+  `max_dt`, `pressure_integral`, `energy`, `gradient`.
+- `crates/rcfd-post/src/duct_modes.rs` (new): `C64`, `bessel_j`, `bessel_jp`, `bessel_jp_zeros`, `DuctShape`, `Mode`,
+  `ModeBasis` (`new`, `below`, `eval`), `axial_wavenumber`, `decompose_section`, `HarmonicDft`, `split_axial`, `fit_axial`,
+  `fit_exponential`, `ModalExport` (`section`, `axial`, `to_json`, `to_json_string`, `from_json`, `from_json_str`); unit
+  tests B1 to B3, J1.
+- `crates/rcfd-fv/src/lib.rs` line 5 and `crates/rcfd-post/src/lib.rs` line 8: one `pub mod` line each. No other existing
+  line changed.
+- Tests: `crates/rcfd-fv/tests/acoustic_wave_f333.rs` (U1 to U7), `crates/rcfd-post/tests/duct_modes_f333.rs` (S1, S1c,
+  P1, M1, NC1, W1, E1, X1, X2).
+- `docs/acoustics.md`: a section "Acoustic wave solver and duct modes", two rows of the module table, and the two sentences
+  of "Limits of the whole chain" that said the wave solver did not exist.
+
+### Checks
+
+| id | quantity | limit | measured | met |
+|---|---|---|---|---|
+| K1 | S1: `kr/kz_cf - 1`, mode 1 | `<= 1e-2` | `-1.855e-3` (`kr = 34.8418`, `kz_cf = 34.9066 1/m`) | yes |
+| K1b | S1: amplitude loss per axial wavelength | `<= 1e-2` | `2.28e-3` | yes |
+| S1 | S1: `R`, matched layer before a rigid end | `< 1e-2` | `8.99e-5` | yes |
+| X1 | X1: worst recovery error of 16 axial amplitudes through DFT, fit, split, JSON | `<= 1e-2` | `4.17e-15` | yes |
+| X2 | X2: worst recovery error of 8 section amplitudes with two truncated modes, through JSON | `<= 1e-2` | `1.35e-4` | yes |
+| K0 | P1: `kr/k - 1`, plane wave | `<= 1e-2` | `-2.179e-3` | yes |
+| P1 | P1: `R`, plain layer, normal incidence | `< 1e-2` | `9.77e-7` | yes |
+| S1c | S1c: `kr/kz_cf - 1`; `R` | `<= 3e-2`; `< 1e-2` | `-7.140e-3`; `4.23e-4` | yes |
+| M1 | M1: `|R - 1/9|`, open end | `<= 2e-2` | `R = 0.1092`, difference `1.9e-3` | yes |
+| NC1 | NC1: `R`, rigid end, no layer | `>= 0.9` | `1.003` | yes (held) |
+| W1k | W1: `kr/kz_cf - 1`, warped mesh | `<= 1e-2` | `-1.926e-3` | yes |
+| W1s | W1: `R`, warped mesh | `< 1e-2` | `7.91e-5` | yes |
+| E1 | E1: `alpha/alpha_cf - 1`, cut-off mode 2 | `<= 1e-2` | `+1.658e-3` (`28.991` against `28.943 1/m`) | yes |
+| U1 | relative change of `sum p V`, closed warped box, 200 steps | `<= 1e-12` | `6.5e-15` | yes |
+| U2 | factored gradient against `gradient::least_squares` | `<= 1e-12` relative | `0` (bit for bit) | yes |
+| U3 | `p` against `p0 G^n`, plain and matched; `u` | `<= 1e-12`; exactly 0 | `1.04e-14` both; `0` | yes |
+| U4 | refusals | an error each | all refused; a valid step accepted | yes |
+| U5 | largest `|p|` after a pulse left through `Open` | `<= 1e-2` | `4.0e-11` | yes |
+| U6 | pulse peak against `x0 + c t` | `<= 1 dx` | `0.12 dx` | yes |
+| U7 | rest stays at rest | bit for bit | yes | yes |
+| B1 | Bessel integral against the series | `<= 1e-12` | `2.0e-14` | yes |
+| B2 | `|J'_m(j'_mn)|`; increasing; Bessel residual | `<= 1e-12` | `1.6e-14`; yes; `5.5e-8` (difference quotient, test limit `1e-6`) | yes |
+| B3 | area mean of `|psi|^2` against 1, 5 rectangular and 22 circular modes | `<= 1e-5` | `5.3e-6` | yes |
+| J1 | JSON round trip bit for bit, both kinds; six malformed inputs name the field | as stated | yes | yes |
+
+Other numbers of the runs (not checks): the modes not driven stay below `4e-15` of the driven one on the Cartesian grids
+and at `1.7e-3` on the warped grid; the two-wave fit's RMS residual is `3.1e-5` (S1) of an amplitude of 0.98;
+`rate_max dt = 0.121` at the deepest cell centre (registered 0.124 for the profile's end); X2's section residual `7.1e-2`
+is the two truncated modes.
+
+What the numbers say: the measured K1 (`-1.855e-3`), K1b (`2.28e-3`), K0 (`-2.179e-3`) and S1c (`-7.140e-3`) are model M1's
+predictions to three digits (`-1.854e-3`, `2.28e-3`, `-2.179e-3`, `-7.139e-3`), so the wall treatment, the driven boundary
+and the fit add nothing visible to the interior dispersion of the scheme; the wavenumber error is second order and the
+1 percent clause is met with a margin of 5 at 32 cells across. The evanescent rate came out better than M1's estimate
+(`1.7e-3` against `2.9e-3`): M1 models a periodic transverse direction, the run has walls and a short fit range; not
+diagnosed further. The layer reflects `9e-5`, 5.6 times its differential `R0^0.8 = 1.6e-5`, the size ADR 0237 found for the
+compressible matched layer; it is the discrete layer. M1 (0.1092 against 0.1111) validates the measurement of `R` on a
+reflection of known size; NC1 shows it sees a full one.
+
+### Mutations
+
+Once each, on a `git archive` copy of 4a020cf8 (`w49i-work/f333-scratch/tree`, own target directory; script `mutate.py`,
+not committed), running the three F-333 test targets with `--no-fail-fast`. An unmutated control run of the copy first
+(MU0): all 20 tests pass with the numbers above to every printed digit, which also confirms that the committed (formatted)
+bytes give the results recorded here.
+
+| id | mutation | caught by | against the expectation |
+|---|---|---|---|
+| MU1 | upwind terms of the internal-face flux dropped (central flux) | U5 only (`1.081e-2` against `1e-2`) | caught, **narrowly and not where expected**: no odd-even mode appears in the duct runs, which all pass; the loss per wavelength falls from `2.3e-3` to `3.5e-5` and K1 is unchanged (`-1.855e-3`). Diagnosis: with the linear reconstruction the upwind terms act on the face jump `pL - pR`, which is `O(theta^3)` for a smooth field, so they set only the small dissipation; a smoothly driven field does not excite the checkerboard mode they suppress. The duct checks have no lower limit on the loss, so they cannot see the change |
+| MU2 | matched form: tangential force removed | S1 (`R = 3.85e-2`), S1c (`3.87e-2`), W1s (`3.85e-2`) | as expected; P1 (plain form) and the runs without a layer pass |
+| MU3 | `Wall` treated as `Open` | U1 (`1.0`), U3, U5, U6, S1, S1c, P1, M1, NC1, W1, E1 (`-0.41`) | as expected, and wider (the fits of the duct runs leave their brackets) |
+| MU4 | reconstruction removed (first order) | S1, S1c, P1, M1, NC1, W1: the fitted `ki` reaches the end of its bracket (`0.05 kz`), a failed fit by the registered rule (DR9), before K1b is read | caught; the registered route was K1b. U1 to U7 and E1 (`+8.7e-4`) pass: E1's decay is set by the cut-off, not by the dissipation |
+| MU5 | `sqrt(eps_m eps_n)` dropped | B3 (`0.75`) only | caught, but **X1 does not see it**: X1 builds its synthetic field with the library's own mode shapes, so a wrong normalisation is consistent between field and fit; only the amplitudes in the file change scale (`|plus|` of S1 1.39 instead of 0.98). B3 is the check of the normalisation |
+| MU6 | plus wave with `e^{+i kz x}` | X1 and every duct run (the two-wave system is singular, `fit_axial` and `split_axial` return an error) | as expected |
+| MU7 | circular modes on the zeros of `J_m` | B2 (`0.52`), B3, J1, X2 | as expected |
+| MU8 | DFT normalisation `1/N` | X1 (`0.50`) | as expected; the duct runs pass because K, R and E are ratios |
+
+No mutation survived. After the mutations the copy's sources equal the worktree's (`diff -r --strip-trailing-cr`).
+
+### fmt, clippy, baseline hashes
+
+`cargo fmt -p rcfd-fv --check` and `cargo fmt -p rcfd-post --check`: clean (after `cargo fmt -p` reformatted the four new
+files before the commit). `cargo clippy --release -p rcfd-fv -p rcfd-post --all-targets -- -D warnings`: clean (after two
+`manual_range_contains` rewrites in the duct test, before the commit). `cargo test -p rcfd-api --release --test
+baseline_hashes`: 3 passed, 1 ignored, as before; the file was not edited.
+
+### Deviations and disclosures
+
+- The checks were run on the source before `cargo fmt` and the two clippy rewrites (`x >= lo && x <= hi` to
+  `(lo..=hi).contains(&x)`); the committed bytes were then run once as the mutation control MU0 with identical numbers.
+- W1: the fixed step is `1.09` times `max_dt(0.48)` on the warped mesh (multi-dimensional number 0.52); the registration
+  fixed the step from the Cartesian grid. It ran stably; recorded, not a check.
+- E1: the amplitude over the fit range fell from 0.41 to `1.3e-2` (registered: from 1 to `e^{-3.47}`; the ratio is the
+  same, the start is lower because the driven face does not impose the evanescent field exactly).
+- X2 labels: the registration names the modes in the traditional way (radial count from 1 for `m != 0`, from 0 for `m = 0`);
+  the library counts from 0 for every `m`. The physical modes are the same: `(4, 1)` of the text is the library's `(4, 0)`,
+  `(+-1, 1)` is `(+-1, 0)`, `(0, 1)` and `(0, 2)` agree. The test asserts the library's basis of 8 modes and that both extra
+  modes are cut off.
+- B2: the registration gives no number for the Bessel-equation residual; the test uses `1e-6` for a second difference
+  with step `1e-4` (measured `5.5e-8`). B3 came out at `5.3e-6` against an estimate of `~1e-6` and a limit of `1e-5`; the
+  estimate did not take the worst mode (the midpoint error grows with `|psi(R)|^2`, about `1/(1 - m^2/j^2)`); not diagnosed
+  further.
+- In the duct runs the test sets the solver time to `(step + 1) dt` after each step so that the DFT samples are uniform;
+  the solver's own `t0 + dt` differs by rounding only.
+- The books and papers are cited from memory; each formula used is derived in DR1 to DR9 and the Bessel results are
+  checked numerically. No vendor code or documentation was used.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate); tests of other crates apart from `baseline_hashes`; the other
+tests of `rcfd-fv` and `rcfd-post` (no existing line of either crate changed except one `pub mod` line each); the debug
+profile; a three-dimensional or circular duct through the solver; a mean flow; frequencies other than the one registered.
+
+### Decision by the registered rule
+
+K1, K1b, S1, X1 and X2 meet their limits; U1 to U7, B1 to B3 and J1 pass; NC1 holds; the baseline hashes are unchanged;
+every mutation is caught (MU1, MU4 and MU5 by other checks than expected, each diagnosed above). **done**, library only
+(D3). K0, P1, S1c, M1, W1k, W1s and E1 also meet their limits.
+
+### Remaining questions (options and recommendation)
+
+1. **Wiring.** (a) a case section `[acoustics.wave]` (patches to `wall`/`open`/`driven` with a mode, frequency and
+   amplitude; an optional `sponge` table) and a CLI `rcfd duct-modes` that writes the export from a run; (b) the CLI only,
+   reading a saved field; (c) stay library-only. Recommendation: (b) first (no case key or hash-table edit; its help text
+   needs approval of the CLI golden), (a) when a fan case needs it. Not taken: both change goldens.
+2. **Coupling to CFD.** (a) drive the wave solver from a sampled CFD surface (the `rcfd-surface-series` files of the FW-H
+   chain) as a driven boundary; (b) a hybrid source term from an incompressible run; (c) none. Recommendation: (a), the
+   smallest step, as a follow-up item.
+3. **Circular and three-dimensional ducts through the solver.** A circular duct on straight-sided cells has polygonal
+   cut-offs; the check needs a grid fine enough that the polygon's cut-off error is inside the budget, estimated first.
+   Recommendation: a follow-up item on an O-grid duct.
+4. **A lower limit on the loss per wavelength** would have caught MU1 in the duct runs. Recommendation: none now (U5
+   catches it; the checkerboard mode is a robustness matter, not an accuracy one); note it for the wiring item.
+
+### For the lead: roadmap entries
+
+**F-333, proposed status: `done`.** Proposed note text:
+
+> ADR 0351, 2026-11-12. The acceptance text is MET IN THE LIBRARY, not from a case file. Built: rcfd-fv `acoustic_wave.rs` (`AcousticWaveSolver`), the linear acoustic equations about a medium at rest on any FV mesh: exact linear Riemann flux, unlimited least-squares reconstruction, SSP-RK3; boundaries `Wall`, `Open` (characteristic), `Driven` (a ghost state for an entering wave); sponge `WaveSponge` plain or matched (the ADR 0237 layer in the linear unknowns) on `SpongeLayer`. rcfd-post `duct_modes.rs`: hard-walled rectangular and circular duct modes (Bessel functions and zeros of J' computed), `axial_wavenumber`, `HarmonicDft`, weighted least-squares section fit, axial split into the two directions (closed-form or fitted kz), modal power, the `rcfd-duct-modes` v1 JSON export with located read errors. Registered checks, all met at the first run, no amendment: a 0.12 m channel, 32 cells across, mode 1 at cos theta = 0.8 (2361 Hz): axial wavenumber 1.86e-3 below the closed form sqrt(k^2 - k_mn^2) (limit 1e-2; a Fourier analysis of the scheme predicted -1.854e-3), loss 2.3e-3 per wavelength (limit 1e-2); a 40-cell matched layer before a rigid end reflects 9.0e-5 (limit 1e-2; 7.9e-5 on a sheared mesh); a plain layer 9.8e-7 of the plane wave; the open end 0.109 against 1/9; the rigid end without a layer 1.003; a cut-off mode decays 1.7e-3 off the closed form; a synthetic rectangular field (five modes both ways and a cut-off one) through DFT, fit, split and JSON recovered within 4e-15 and a circular section with two truncated modes within 1.3e-4 (limit 1e-2). Eight mutations caught. Limits: medium at rest, linear, no impedance wall, not coupled to a CFD run (the source is a driven boundary); the solver was checked in two-dimensional channels only (circular modes in the export only); one planar layer; no case key or CLI (ADR 0351 question 1).
+
+**F-243, note:** in its text, replace "Not built: wave-equation solver with sponge layers, modal export, quadrupole volume
+term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling." by:
+
+> Not built: quadrupole volume term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling. The wave-equation solver with sponge layers and the modal export were built under F-333 (ADR 0351, 2026-11-12, library only).
+
+Proposed follow-up items (numbers for the lead to assign):
+
+- **`rcfd duct-modes` command.** Deps: F-333. Size S. Acceptance:
+
+> rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.
+
+- **Wave solver driven by a sampled CFD surface.** Deps: F-333. Size M. Acceptance:
+
+> A driven boundary built from an rcfd-surface-series file reproduces, in a duct, the modal amplitudes of a closed-form duct field sampled into that file within 1 percent; a series that does not cover a whole number of periods is refused.
+
+- **Circular and three-dimensional ducts through the wave solver.** Deps: F-333. Size M. Acceptance:
+
+> A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.
