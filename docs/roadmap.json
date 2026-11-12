@@ -2662,9 +2662,9 @@
     "deps": [
       "F-301"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "The optional table carries all consistent-corrector flags in one place with a located refusal for each unsupported combination; defaults bit-identical.",
-    "note": "From ADR 0223 questions 3 and 4, recommendation taken."
+    "note": "PARTIAL (ADR 0258, 2026-11-12), the library half. Delivered: one settings value `ConsistentCorrectors` (enabled, periodic, body_force, non_orthogonal, component_diagonal, face_jump) as `PimpleSettings::consistent`, read together with the three older fields, which are kept (`consistent_flags`, `set_consistent`); one validation `ConsistentCorrectors::conflicts` / `validate` returning a located `ConsistentRefusal` (flag, other setting, reason) for each of 13 unsupported combinations, used by the solver before any work and per outer iteration, every earlier refusal kept with its stage and its sentence and the located part appended (R1 of ADR 0214 and R2 of ADR 0223 pass unedited); three combinations extended on fixed meshes without periodic faces, each with a steady identity and a transient check: non-orthogonal correctors (the non-orthogonal part of the compensation as ADR 0050, with the fixed-pressure boundary part in the pressure equation only; S1N 3.7e-12 U0 and 5.1e-11 of the pressure range against 1e-10), the component diagonal (no new term; S1D 3.8e-12, 3.2e-11) and face jumps (S1J and from the hook 2.5e-12, 2.5e-11), all together with a body force (S1X 3.0e-12, 4.2e-11); the option differs from the default in a start-up transient by 2.4e-5, 7.9e-5 and 5.6e-6 U0 at dt 0.001, falling by 3.3 to 5.9 per halving; eight mutations each fail a test. Defaults bit-identical (the rcfd-fv transient files, baseline_hashes, case_hashes_w48u, the F-301 case tests). Missing (why partial): the case table still has only `enabled` (schema golden and docs/case-schema.md: the maintainer's), sim.rs still writes its own located errors instead of calling `conflicts`, overset.rs reads the older field. Still refused: the new flags with periodic faces or on a moving mesh (F-321), non-orthogonal correctors with pressure gradient options, the fractional step. Follow-ups: F-366 (the case table; needs the maintainer for the schema golden), F-367 (periodic faces)."
   },
   {
     "id": "F-323",
@@ -3149,5 +3149,27 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. Needs the maintainer's lift of the bit-identical default for moving compressible tree runs (ADR 0207 Q2 (b)). The moving compressible step of the case tree takes max_dt_ale() by default, with [dynamic_mesh.compressible] time_step = \"absolute\" restoring the step of ADR 0191; the library loops of ADR 0191's equality tests are restated by a registered edit (the old tests kept as ignored records); a tree run equals the library run to 1e-12 for both values; fixed-mesh compressible runs and incompressible runs are bit-identical (baseline hashes and ADR 0191's D0 unchanged); the CFL number of the piston cell of the Mach 0.2 piston stays within the registered bound of the set value over the stroke.",
     "note": "From ADR 0257 question 1 (ADR 0207 Q2 (b)). NEEDS THE USER: it changes the bits of existing moving compressible runs."
+  },
+  {
+    "id": "F-366",
+    "title": "Consistent correctors: the case table carries every flag",
+    "phase": 9,
+    "deps": [
+      "F-322"
+    ],
+    "status": "todo",
+    "acceptance": "`[solver.consistent_correctors]` has the keys enabled, periodic, body_force, non_orthogonal, component_diagonal and face_jump with defaults that leave every existing case's hash and result unchanged; sim.rs sets `PimpleSettings::set_consistent` from it and reports each `ConsistentRefusal` of `ConsistentCorrectors::conflicts` at `solver.consistent_correctors.<flag>`; overset.rs reads `consistent_flags().enabled`; the three older PimpleSettings fields are removed with amendments to ADR 0214 and ADR 0223; the schema golden edit is made only with the maintainer's approval; defaults bit-identical.",
+    "note": "The remaining half of F-322 (ADR 0258). NEEDS THE USER before merge: the schema golden edit."
+  },
+  {
+    "id": "F-367",
+    "title": "Consistent correctors: the new combinations with periodic faces",
+    "phase": 9,
+    "deps": [
+      "F-322"
+    ],
+    "status": "todo",
+    "acceptance": "Non-orthogonal correctors, the component diagonal and face jumps are each accepted with periodic pressure faces under the consistent correctors once a registered periodic steady identity (velocity, and pressure with the mean removed against the default's own drift) is met for it; a combination that misses stays refused with its located message; defaults bit-identical.",
+    "note": "From ADR 0258 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
   }
 ]
