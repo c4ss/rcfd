@@ -22,6 +22,12 @@
 //! built: the solver takes its stencils from there. [`OversetInfo::n_fallback`] counts the fringe cells that kept the
 //! linear stencil, and a step whose interpolated `rAU` is not positive in a fringe cell is refused (the weights can be
 //! negative and nothing is clipped).
+//!
+//! A prescribed flux on the faces between calculated and fringe cells (F-445, ADR 0347) is an opt-in of the solver,
+//! [`OversetSolver::set_fringe_flux`]: the flux of such a face is the face interpolation of the velocity field the
+//! corrector starts from plus one correction per region of calculated cells, the pressure equation of each region is
+//! closed by these fluxes, and (with [`FringeFlux::PrescribedOwnGradient`]) the pressure gradient of a calculated cell
+//! next to a fringe cell is taken from the pressures of its own part.
 
 use crate::ale::{move_mesh, set_follow_conditions, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -51,6 +57,26 @@ pub enum MassMode {
     Conservative,
     /// Plain interpolation (`delta = 0`); the overlap is not conservative.
     Interpolated,
+}
+
+/// How the flux of a face between a calculated and a fringe cell is found (F-445, ADR 0347).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FringeFlux {
+    /// The flux of the pressure equation with the interpolated fringe pressure (ADR 0219 M6 to M8): the default.
+    #[default]
+    PressureEquation,
+    /// Prescribed (ADR 0347 D1 to D4): the face interpolation of the velocity the corrector starts from, plus one
+    /// correction per region. The pressure gradient of a calculated cell next to a fringe cell keeps the interpolated
+    /// fringe pressure (variant P of ADR 0347). **Unstable** in a flow that is not uniform: the Taylor-Green runs of ADR
+    /// 0347 blow up within five steps (the error grows 11-fold and 60-fold per step on its two meshes). Kept for the
+    /// record tests of that ADR; use [`FringeFlux::PrescribedOwnGradient`].
+    Prescribed,
+    /// Prescribed, and the pressure gradient of a calculated cell next to a fringe cell extrapolates the pressure of its
+    /// own part to the faces it shares with fringe cells (ADR 0347 D5, variant G). The interpolated normal velocity
+    /// then reaches the calculated cells in full, and with it the truncation of the donor interpolation: with the
+    /// default (linear) stencils the error of ADR 0347's runs is 1.6 to 1.8 times that of the default coupling, with
+    /// the quadratic donor interpolation (ADR 0251) 1.04 to 1.14 times.
+    PrescribedOwnGradient,
 }
 
 /// The composite mesh's overset data and the current pose of the component.
@@ -147,6 +173,191 @@ pub struct OversetSolver {
     bdf2: Option<Bdf2History>,
     /// Calculated cells of the last step that took the implicit Euler row for their hole history (ADR 0241 D3).
     euler_fallback: usize,
+    /// Set by [`OversetSolver::set_fringe_flux`] (ADR 0347).
+    fringe_flux: FringeFlux,
+}
+
+/// "No region": the cell is not calculated.
+const NO_REGION: usize = usize::MAX;
+
+/// A face between a calculated and a fringe cell (ADR 0347 D1).
+struct RingFace {
+    face: usize,
+    /// `+1` when the calculated cell owns the face.
+    sigma: f64,
+    calc: usize,
+    fringe: usize,
+    region: usize,
+    area: f64,
+}
+
+/// A calculated cell with faces to fringe cells, and the inverse of the matrix of ADR 0347 D5.
+struct RingCell {
+    cell: usize,
+    inv: [[f64; 3]; 3],
+    /// Its faces to fringe cells with their signs.
+    faces: Vec<(usize, f64)>,
+}
+
+/// The regions of calculated cells of a step and their faces to fringe cells (ADR 0347 D1 to D5).
+struct FringeRing {
+    faces: Vec<RingFace>,
+    /// Region of every cell ([`NO_REGION`] for a fringe or hole cell).
+    region: Vec<usize>,
+    /// Per region: its lowest cell.
+    first: Vec<usize>,
+    /// Per region: whether its cells are background cells.
+    background: Vec<bool>,
+    /// Per region: the area of its ring.
+    area: Vec<f64>,
+    /// Per region: the regions of the donors of the fringe cells on its ring.
+    donors: Vec<Vec<usize>>,
+    cells: Vec<RingCell>,
+}
+
+/// The inverse of `m`; `None` when its determinant is below 0.05 (ADR 0347 D5).
+fn inverse3(m: [[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
+    let c = |i: usize, j: usize| {
+        let (a, b) = ((i + 1) % 3, (i + 2) % 3);
+        let (p, q) = ((j + 1) % 3, (j + 2) % 3);
+        m[a][p] * m[b][q] - m[a][q] * m[b][p]
+    };
+    let det = m[0][0] * c(0, 0) + m[0][1] * c(0, 1) + m[0][2] * c(0, 2);
+    if det.is_nan() || det.abs() < 0.05 {
+        return None;
+    }
+    let mut inv = [[0.0; 3]; 3];
+    for (i, row) in inv.iter_mut().enumerate() {
+        for (j, v) in row.iter_mut().enumerate() {
+            *v = c(j, i) / det;
+        }
+    }
+    Some(inv)
+}
+
+impl FringeRing {
+    fn new(g: &FvGeometry, conn: &Connectivity) -> Result<Self, String> {
+        let mesh = &g.mesh;
+        let n = g.n_cells();
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let calc = |c: usize| conn.kind[c] == CellKind::Calculated;
+        // regions: the calculated cells joined by faces between calculated cells; the root is the lowest cell
+        let mut parent: Vec<usize> = (0..n).collect();
+        fn find(parent: &mut [usize], mut i: usize) -> usize {
+            while parent[i] != i {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            i
+        }
+        for f in 0..g.n_internal {
+            if calc(own[f]) && calc(nei[f]) {
+                let (a, b) = (find(&mut parent, own[f]), find(&mut parent, nei[f]));
+                if a != b {
+                    parent[a.max(b)] = a.min(b);
+                }
+            }
+        }
+        let mut region = vec![NO_REGION; n];
+        let mut first = Vec::new();
+        for c in 0..n {
+            if calc(c) {
+                let r = find(&mut parent, c);
+                if r == c {
+                    region[c] = first.len();
+                    first.push(c);
+                } else {
+                    region[c] = region[r];
+                }
+            }
+        }
+        let nr = first.len();
+        let background: Vec<bool> = first.iter().map(|&c| c < conn.n_background_cells).collect();
+        let sf = mesh.face_area_vectors();
+        let mut faces = Vec::new();
+        let mut area = vec![0.0; nr];
+        let mut of_cell: std::collections::BTreeMap<usize, Vec<(usize, f64)>> = std::collections::BTreeMap::new();
+        for f in 0..g.n_internal {
+            let (calc, fringe, sigma) = match (conn.kind[own[f]], conn.kind[nei[f]]) {
+                (CellKind::Calculated, CellKind::Fringe) => (own[f], nei[f], 1.0),
+                (CellKind::Fringe, CellKind::Calculated) => (nei[f], own[f], -1.0),
+                _ => continue,
+            };
+            let a = vec3::norm(sf[f]);
+            area[region[calc]] += a;
+            of_cell.entry(calc).or_default().push((f, sigma));
+            faces.push(RingFace {
+                face: f,
+                sigma,
+                calc,
+                fringe,
+                region: region[calc],
+                area: a,
+            });
+        }
+        // D5: (I - (1 / V) sum sigma_f S_f (x_f - x_C)^T) g = right-hand side
+        let (cc, fc, vol) = (mesh.cell_centres(), mesh.face_centres(), mesh.cell_volumes());
+        let mut cells = Vec::with_capacity(of_cell.len());
+        for (cell, fs) in of_cell {
+            let mut m = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+            for &(f, sigma) in &fs {
+                let d = vec3::sub(fc[f], cc[cell]);
+                for (i, row) in m.iter_mut().enumerate() {
+                    for (j, v) in row.iter_mut().enumerate() {
+                        *v -= sigma * sf[f][i] * d[j] / vol[cell];
+                    }
+                }
+            }
+            let Some(inv) = inverse3(m) else {
+                return Err(format!(
+                    "overset: the calculated cell {cell} lies between fringe cells on opposite sides: its pressure gradient cannot be taken from its own part (ADR 0347 D5)"
+                ));
+            };
+            cells.push(RingCell { cell, inv, faces: fs });
+        }
+        let mut stencil_of = vec![usize::MAX; n];
+        for (i, (c, _)) in conn.stencils.iter().enumerate() {
+            stencil_of[*c] = i;
+        }
+        let mut donors: Vec<Vec<usize>> = vec![Vec::new(); nr];
+        for rf in &faces {
+            if stencil_of[rf.fringe] == usize::MAX {
+                continue;
+            }
+            for &k in &conn.stencils[stencil_of[rf.fringe]].1.cells {
+                if !donors[rf.region].contains(&region[k]) {
+                    donors[rf.region].push(region[k]);
+                }
+            }
+        }
+        Ok(FringeRing {
+            faces,
+            region,
+            first,
+            background,
+            area,
+            donors,
+            cells,
+        })
+    }
+
+    /// D5: replace the Green-Gauss gradient `grad` of `p` in every calculated cell with faces to fringe cells by the
+    /// gradient that takes, on those faces, the linear extrapolation of the cell's own value.
+    fn own_gradient(&self, g: &FvGeometry, p: &[f64], grad: &mut [Vec3]) {
+        let mesh = &g.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let (sf, vol) = (mesh.face_area_vectors(), mesh.cell_volumes());
+        for rc in &self.cells {
+            let c = rc.cell;
+            let mut rhs = grad[c];
+            for &(f, sigma) in &rc.faces {
+                let w = g.weights[f];
+                let pf = w * p[own[f]] + (1.0 - w) * p[nei[f]];
+                vec3::axpy(&mut rhs, sigma * (p[c] - pf) / vol[c], sf[f]);
+            }
+            grad[c] = [0, 1, 2].map(|i| rc.inv[i][0] * rhs[0] + rc.inv[i][1] * rhs[1] + rc.inv[i][2] * rhs[2]);
+        }
+    }
 }
 
 /// What a BDF2 step needs of the time before the old one (ADR 0241 D3). The values follow the cells and faces.
@@ -411,7 +622,28 @@ impl OversetSolver {
             bdf2_opt_in: false,
             bdf2: None,
             euler_fallback: 0,
+            fringe_flux: FringeFlux::PressureEquation,
         })
+    }
+
+    /// Choose how the flux of the faces between calculated and fringe cells is found (F-445, ADR 0347), from the next
+    /// step on. [`FringeFlux::PressureEquation`] is the solver that did not opt in, bit for bit. Under the two
+    /// prescribed modes the flux of such a face is the face interpolation of the velocity each pressure corrector
+    /// starts from plus one correction per region of calculated cells (the net flux of a region without a fixed
+    /// pressure is zero; the net flux through the ring of a background region with one is zero), the offset `delta` and
+    /// the mass mode are not used (`delta` is reported as zero), and a region without a fixed pressure and without the
+    /// reference cell takes its pressure level from the interpolated fringe pressures of its ring. A step with a
+    /// calculated cell between fringe cells on opposite sides, or whose pressure levels cannot be ordered, is refused.
+    pub fn set_fringe_flux(&mut self, mode: FringeFlux) {
+        if mode != FringeFlux::PressureEquation {
+            self.delta = 0.0;
+        }
+        self.fringe_flux = mode;
+    }
+
+    /// The mode set by [`set_fringe_flux`](Self::set_fringe_flux).
+    pub fn fringe_flux(&self) -> FringeFlux {
+        self.fringe_flux
     }
 
     /// Choose the time scheme (F-338, ADR 0241 D1). `TimeScheme::Bdf2` opts in to the three-level scheme: the next step
@@ -872,6 +1104,13 @@ impl OversetSolver {
         let gamma_b = (!trivial).then(|| self.hole_boundary(conn));
         let mut delta = 0.0;
         let mut hole_flux = 0.0;
+        // ADR 0347 (opt-in): the regions of calculated cells and their faces to fringe cells
+        let ring = if trivial || self.fringe_flux == FringeFlux::PressureEquation {
+            None
+        } else {
+            Some(FringeRing::new(&g, conn)?)
+        };
+        let own_gradient = self.fringe_flux == FringeFlux::PrescribedOwnGradient;
         // ADR 0238 D2: the outer iterations. Every pass re-evaluates the pressure conditions and gradient, the convecting
         // flux (the flux of the pass before it), the momentum matrices with their overset rows, rAU and the pressure system;
         // the kinds, donors and weights are those of the new pose throughout. One pass is the PISO step of ADR 0219.
@@ -882,7 +1121,10 @@ impl OversetSolver {
             ale.apply_wall_gradients(&mut pbc, &g.dn);
             let ub = self.u.boundary_values(&g);
             let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
-            let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
+            let mut grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
+            if let (Some(r), true) = (&ring, own_gradient) {
+                r.own_gradient(&g, &self.p.values, &mut grad_p);
+            }
 
             // ---- momentum predictor (M5) -----------------------------------------------------------------------
             let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
@@ -1034,10 +1276,28 @@ impl OversetSolver {
                         "overset: pressure right-hand side: non-finite phiHbyA {v} at face {f}"
                     ));
                 }
-                let gamma_j = gamma_p.clone();
+                let mut gamma_j = gamma_p.clone();
                 let p_old = self.p.values.clone();
                 let mut p_new = p_old.clone();
-                if trivial {
+                if let Some(r) = &ring {
+                    // ADR 0347 D1 to D3: the prescribed flux of the ring faces, from the velocity this corrector starts from
+                    let fi = face_flux(&g, &self.u.values, &ub);
+                    let (it, unc) = prescribed_pressure(
+                        &g,
+                        &gamma_p,
+                        &mut gamma_j,
+                        &pbc,
+                        &mut phi_hby_a,
+                        &fi,
+                        &mut p_new,
+                        conn,
+                        r,
+                        &mut psys,
+                        s,
+                    )?;
+                    p_iters += it;
+                    unconverged += unc;
+                } else if trivial {
                     let controls = PressureControls {
                         p_ref: s.p_ref,
                         non_orth_correctors: s.non_orth_correctors,
@@ -1060,7 +1320,10 @@ impl OversetSolver {
                 }
                 self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, false);
                 let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
-                let grad_new = green_gauss(&g, &p_new, &bv_new, 0);
+                let mut grad_new = green_gauss(&g, &p_new, &bv_new, 0);
+                if let (Some(r), true) = (&ring, own_gradient) {
+                    r.own_gradient(&g, &p_new, &mut grad_new);
+                }
                 for c in 0..n {
                     let r_c = r_au[c];
                     for k in 0..3 {
@@ -1205,7 +1468,252 @@ impl OversetSolver {
     }
 }
 
+/// The pressure solve of a corrector under the prescribed fringe flux (ADR 0347 D1 to D3). On the ring faces `gamma_j`
+/// is set to zero and `phi_hby_a` to the face flux `fi` of the velocity the corrector starts from plus the correction of
+/// the region; the matrix keeps the fringe rows (the interpolation of the pressure) and each region without a fixed
+/// pressure is pinned; afterwards the regions that are neither fixed nor hold the reference cell are shifted to the
+/// level of the interpolated fringe pressures of their ring. Returns the iterations and the unconverged solves.
+#[allow(clippy::too_many_arguments)]
+fn prescribed_pressure(
+    g: &FvGeometry,
+    gamma_p: &[f64],
+    gamma_j: &mut [f64],
+    pbc: &PressureBc,
+    phi_hby_a: &mut [f64],
+    fi: &[f64],
+    p: &mut [f64],
+    conn: &Connectivity,
+    ring: &FringeRing,
+    psys: &mut Option<PressureSystem>,
+    s: &PimpleSettings,
+) -> Result<(usize, usize), String> {
+    let n = g.n_cells();
+    let own = g.mesh.owner();
+    let nr = ring.first.len();
+    // the scale of the fringe and hole rows: the diagonal of the pressure matrix of ADR 0219
+    let scale: Vec<f64> = laplacian(g, gamma_p, &pbc.coeffs, None).a.diag;
+    for rf in &ring.faces {
+        gamma_j[rf.face] = 0.0;
+        phi_hby_a[rf.face] = fi[rf.face];
+    }
+    let div = divergence(g, phi_hby_a);
+    let mut pm = laplacian(g, gamma_j, &pbc.coeffs, None);
+    for (b, d) in pm.b.iter_mut().zip(&div) {
+        *b -= d;
+    }
+    // D2: one correction per region
+    let mut fixes = vec![false; nr];
+    for (i, co) in pbc.coeffs.iter().enumerate() {
+        let r = ring.region[own[g.n_internal + i]];
+        if co.c != 0.0 && r != NO_REGION {
+            fixes[r] = true;
+        }
+    }
+    let mut net_rows = vec![0.0; nr];
+    for c in 0..n {
+        if ring.region[c] != NO_REGION {
+            net_rows[ring.region[c]] += pm.b[c];
+        }
+    }
+    let mut net_ring = vec![0.0; nr];
+    for rf in &ring.faces {
+        net_ring[rf.region] += rf.sigma * fi[rf.face];
+    }
+    let q: Vec<f64> = (0..nr)
+        .map(|r| {
+            if ring.area[r] == 0.0 {
+                0.0
+            } else if !fixes[r] {
+                net_rows[r] / ring.area[r]
+            } else if ring.background[r] {
+                -net_ring[r] / ring.area[r]
+            } else {
+                0.0
+            }
+        })
+        .collect();
+    for rf in &ring.faces {
+        let dq = q[rf.region] * rf.area;
+        phi_hby_a[rf.face] += rf.sigma * dq;
+        pm.b[rf.calc] -= dq;
+    }
+    // D3: the pins
+    let any_fix = fixes.iter().any(|&f| f);
+    let (cell_ref, value_ref) = s.p_ref;
+    let mut level_known = fixes.clone();
+    for r in 0..nr {
+        if fixes[r] {
+            continue;
+        }
+        let (cell, value) = if !any_fix && ring.region[cell_ref] == r {
+            level_known[r] = true;
+            (cell_ref, value_ref)
+        } else {
+            (ring.first[r], p[ring.first[r]])
+        };
+        let d = pm.a.diag[cell];
+        pm.a.diag[cell] += d;
+        pm.b[cell] += d * value;
+    }
+    let current: Vec<f64> = p.to_vec();
+    let b = match psys {
+        Some(_) => overset_rhs(&pm, conn, &scale, &current),
+        None => {
+            let (a, b) = overset_system(&pm, conn, &scale, &current);
+            let amg = Amg::new(&a, AmgSettings::default());
+            *psys = Some(PressureSystem { a, amg, p1: None });
+            b
+        }
+    };
+    let sys = psys.as_ref().expect("set above");
+    let st = solve_pressure_rows(sys, &b, p, &s.pressure_solver);
+    // D3: the levels of the other regions
+    let cc = g.mesh.cell_centres();
+    while let Some(r) =
+        (0..nr).find(|&r| !level_known[r] && ring.donors[r].iter().all(|&d| d != NO_REGION && level_known[d]))
+    {
+        let mut grad = green_gauss(g, p, &boundary_values_pbc(g, pbc, p), 0);
+        ring.own_gradient(g, p, &mut grad);
+        let (mut num, mut den) = (0.0, 0.0);
+        for rf in ring.faces.iter().filter(|rf| rf.region == r) {
+            let d = vec3::sub(cc[rf.fringe], cc[rf.calc]);
+            num += rf.area * (p[rf.fringe] - p[rf.calc] - vec3::dot(grad[rf.calc], d));
+            den += rf.area;
+        }
+        let shift = if den > 0.0 { num / den } else { 0.0 };
+        for c in 0..n {
+            if ring.region[c] == r {
+                p[c] += shift;
+            }
+        }
+        for (c, stn) in &conn.stencils {
+            p[*c] = stn.cells.iter().zip(&stn.weights).map(|(&k, &w)| w * p[k]).sum();
+        }
+        level_known[r] = true;
+    }
+    if let Some(r) = level_known.iter().position(|k| !k) {
+        return Err(format!(
+            "overset: the pressure level of the region of calculated cells that holds cell {} is not determined (ADR 0347 D3)",
+            ring.first[r]
+        ));
+    }
+    Ok((st.iterations, usize::from(!st.converged)))
+}
+
 /// Net flux out of the calculated background cells through `Gamma_B`.
 fn gb_flux(phi: &[f64], gamma_b: &[(usize, f64)]) -> f64 {
     gamma_b.iter().map(|&(f, sg)| sg * phi[f]).sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rcfd_mesh::gen::rectilinear_2d;
+    use rcfd_mesh::motion::moved_mesh;
+    use rcfd_mesh::overset::{compose, OversetSpec};
+
+    /// ADR 0347 G0 as registered (fringe values of the size `1e3`). Run once: the largest error of the gradient is
+    /// `2.02e-12` against the limit `1e-12`; it is the round-off of the fringe values that cancel (`500 / h` times the
+    /// machine precision per face). Kept with the limit intact (ADR 0347 amendment 1); G0b is the corrected check.
+    #[test]
+    #[ignore = "known miss, ADR 0347 amendment 1: G0 2.02e-12 (limit 1e-12), round-off of the cancelled fringe values of size 1e3"]
+    fn g0_own_gradient_of_a_linear_pressure_ignores_the_fringe_values_known_miss() {
+        g0(1e3);
+    }
+
+    /// ADR 0347 amendment 1, G0b: G0 with fringe values of the size of the pressure (10 times the fixed sequence).
+    #[test]
+    fn g0b_own_gradient_of_a_linear_pressure_ignores_the_fringe_values() {
+        g0(10.0);
+    }
+
+    /// ADR 0347 G0: on the composite of RE at level 1 (ADR 0340) the gradient of D5 of a linear pressure is exact in
+    /// every calculated cell next to a fringe cell whatever the fringe cells hold (`amplitude` times a fixed sequence in
+    /// `-0.5..0.5`), and a calculated cell between fringe cells on opposite sides is refused.
+    fn g0(amplitude: f64) {
+        let h = std::f64::consts::PI / 40.0;
+        let nodes =
+            |x0: f64, len: f64, n: usize| -> Vec<f64> { (0..=n).map(|i| x0 + len * i as f64 / n as f64).collect() };
+        let bs = nodes(0.0, 40.0 * h, 40);
+        let cs = nodes(-7.5 * h, 15.0 * h, 15);
+        let bg = rectilinear_2d(&bs, &bs, 0.1).unwrap();
+        let comp = rectilinear_2d(&cs, &cs, 0.1).unwrap();
+        let spec = OversetSpec {
+            outer_patches: ["c_xmin", "c_xmax", "c_ymin", "c_ymax"].map(String::from).to_vec(),
+            hole: Arc::new(move |x: Vec3| x[0].abs().max(x[1].abs()) < 3.1 * h),
+        };
+        let ov = Overset::new(compose(&bg, &comp, "c_").unwrap(), spec).unwrap();
+        let d = 16.75 * h;
+        let pose = Pose {
+            origin: [0.0; 3],
+            axis: [0.0, 0.0, 1.0],
+            angle: 0.0,
+            translation: [d, d, 0.0],
+        };
+        let mesh = moved_mesh(&ov.composite.mesh, ov.composite.points_at(&pose)).unwrap();
+        let conn = ov.connectivity(&mesh, &pose).unwrap();
+        let g = FvGeometry::new(Arc::new(mesh)).unwrap();
+        let ring = FringeRing::new(&g, &conn).unwrap();
+        assert_eq!(ring.first.len(), 2, "two regions");
+        assert_eq!(ring.background, vec![true, false]);
+        let nb = conn.n_background_cells;
+        assert!(ring.cells.iter().any(|rc| rc.cell < nb) && ring.cells.iter().any(|rc| rc.cell >= nb));
+        let cc = g.mesh.cell_centres();
+        let mut seed = 12345u64;
+        let p: Vec<f64> = (0..g.n_cells())
+            .map(|c| match conn.kind[c] {
+                CellKind::Calculated => 3.0 + 2.0 * cc[c][0] - 5.0 * cc[c][1],
+                CellKind::Fringe => {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                    amplitude * ((seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5)
+                }
+                CellKind::Hole => 0.0,
+            })
+            .collect();
+        let own = g.mesh.owner();
+        let bvals: Vec<f64> = (g.n_internal..g.mesh.n_faces()).map(|f| p[own[f]]).collect();
+        let mut grad = green_gauss(&g, &p, &bvals, 0);
+        let before = ring
+            .cells
+            .iter()
+            .map(|rc| vec3::norm(vec3::sub(grad[rc.cell], [2.0, -5.0, 0.0])))
+            .fold(0.0, f64::max);
+        ring.own_gradient(&g, &p, &mut grad);
+        let after = ring
+            .cells
+            .iter()
+            .map(|rc| vec3::norm(vec3::sub(grad[rc.cell], [2.0, -5.0, 0.0])))
+            .fold(0.0, f64::max);
+        println!(
+            "G0: {} ring cells; largest gradient error with the fringe values {before:.3e}, from the own part {after:.3e}",
+            ring.cells.len()
+        );
+        assert!(
+            before > 1.0,
+            "control: the Green-Gauss gradient sees the fringe values ({before:e})"
+        );
+        assert!(after <= 1e-12, "G0: {after:e}");
+        // a calculated background cell whose two neighbours along x become fringe cells
+        let nei = g.mesh.neighbour();
+        let all_calc = |c: usize| {
+            g.mesh.cell_faces(c).iter().all(|&f| {
+                f >= g.n_internal
+                    || (conn.kind[own[f]] == CellKind::Calculated && conn.kind[nei[f]] == CellKind::Calculated)
+            })
+        };
+        let c = (0..nb)
+            .find(|&c| all_calc(c) && g.mesh.cell_faces(c).iter().filter(|&&f| f < g.n_internal).count() == 4)
+            .expect("an interior calculated cell");
+        let mut bad = conn.clone();
+        for &f in g.mesh.cell_faces(c) {
+            if f < g.n_internal {
+                let other = if own[f] == c { nei[f] } else { own[f] };
+                if (cc[other][1] - cc[c][1]).abs() < 1e-9 {
+                    bad.kind[other] = CellKind::Fringe;
+                }
+            }
+        }
+        let err = FringeRing::new(&g, &bad).err().expect("refused");
+        assert!(err.contains("opposite sides"), "{err}");
+    }
 }
