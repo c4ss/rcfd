@@ -8,7 +8,8 @@
 //! for prism layers and for layering on the piso / pimple path. F-350 (ADR 0266): the optional table
 //! `[dynamic_mesh.six_dof.coupling]` selects the strong body-flow coupling of `rcfd_fv::fsi::strong_step`. F-358 (ADR 0269):
 //! its key `wall_pressure` selects the wall pressure of the body force (`rcfd_fv::sixdof::patch_force_moment_wall_gradient`
-//! with the fixed-flux gradient vector of the last step, which the driver keeps).
+//! with the fixed-flux gradient vector of the last step, which the driver keeps). ADR 0346: that key and the one of
+//! `[dynamic_mesh.force_reports]` (F-440, ADR 0342) default to `prescribed_gradient`.
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s, get_v};
@@ -117,11 +118,11 @@ fn coupling_schema() -> Schema {
             Schema::enumeration("stop", &["stop", "continue"])
                 .doc("strong: a step that reaches max_iterations without converging stops the run with a located message (stop), or is kept and the run goes on with one warning (continue)"),
         )
-        // F-358, ADR 0269 D1: acts with either scheme
+        // F-358, ADR 0269 D1: acts with either scheme; default prescribed_gradient since ADR 0346 (ADR 0269 Q1)
         .field(
             "wall_pressure",
-            Schema::enumeration("extrapolated", &["extrapolated", "prescribed_gradient"])
-                .doc("Wall pressure of the body force on the following (and resting) walls, loose or strong: extrapolated = the cell value plus the cell gradient (patch_force_moment; first order there, low by 1/(4N) on a piston column of N cells, ADR 0252); prescribed_gradient = the normal part of the extrapolation from the fixed-flux pressure gradient of the last step (patch_force_moment_wall_gradient, ADR 0252, 0269)"),
+            Schema::enumeration("prescribed_gradient", &["extrapolated", "prescribed_gradient"])
+                .doc("Wall pressure of the body force on the following (and resting) walls, loose or strong: prescribed_gradient (default, ADR 0346) = the normal part of the extrapolation from the fixed-flux pressure gradient of the last step (patch_force_moment_wall_gradient, ADR 0252, 0269); extrapolated = the cell value plus the cell gradient (patch_force_moment; first order there, low by 1/(4N) on a piston column of N cells, ADR 0252; the default before ADR 0346)"),
         )
 }
 
@@ -132,22 +133,32 @@ pub const FORCE_REPORTS: &str = "dynamic_mesh.force_reports";
 fn force_reports_schema() -> Schema {
     Schema::object()
         .optional()
-        .doc("Wall pressure of the force, moment and force_coefficient reports on the moving walls (ADR 0342). Absent = the stored face value of the pressure condition")
+        .doc("Wall pressure of the force, moment and force_coefficient reports on the moving walls (ADR 0342). Absent = prescribed_gradient (ADR 0346), except with layering or the compressible solver, where it is boundary_value")
         .field(
             "wall_pressure",
-            Schema::enumeration("boundary_value", &["boundary_value", "prescribed_gradient"])
-                .doc("boundary_value = the stored face value of the pressure condition (the wall-cell value on a zero-gradient wall; low by 1/(2N) on an accelerated column of N cells, ADR 0269); prescribed_gradient = on the following and resting walls the face pressure of rcfd_fv::sixdof::patch_force_moment_wall_gradient with the fixed-flux pressure gradient of the last step (ADR 0252, 0342)"),
+            Schema::enumeration("prescribed_gradient", &["boundary_value", "prescribed_gradient"])
+                .doc("prescribed_gradient (default, ADR 0346) = on the following and resting walls the face pressure of rcfd_fv::sixdof::patch_force_moment_wall_gradient with the fixed-flux pressure gradient of the last step (ADR 0252, 0342); boundary_value = the stored face value of the pressure condition (the wall-cell value on a zero-gradient wall; low by 1/(2N) on an accelerated column of N cells, ADR 0269; the default before ADR 0346)"),
         )
 }
 
-/// True when the case asks for the corrected wall pressure of the force reports (ADR 0342 D1; no without the table).
+/// True when the case writes the table `[dynamic_mesh.force_reports]`.
+fn force_reports_written(case: &Case) -> bool {
+    case.tree.to_json().pointer("/dynamic_mesh/force_reports").is_some()
+}
+
+/// True when the force reports take the corrected wall pressure (ADR 0342 D1). ADR 0346 D2: without the table the
+/// default `prescribed_gradient` applies except where it is refused (layering, the compressible solver), which keep the
+/// stored values silently.
 fn report_wall_gradient(case: &Case) -> bool {
     get_s(case, &format!("{FORCE_REPORTS}.wall_pressure")) == "prescribed_gradient"
+        && (force_reports_written(case)
+            || (get_s(case, "dynamic_mesh.deformation") != "layering" && !crate::comp::enabled(case)))
 }
 
 /// ADR 0342 D3: the layered step keeps no wall gradient, and the compressible run has no following or resting walls.
+/// Only a written table is refused (ADR 0346 D2: the default of an absent table falls back silently).
 fn check_force_reports(case: &Case, out: &mut Vec<Diagnostic>) {
-    if !report_wall_gradient(case) {
+    if !force_reports_written(case) || get_s(case, &format!("{FORCE_REPORTS}.wall_pressure")) != "prescribed_gradient" {
         return;
     }
     let key = format!("{FORCE_REPORTS}.wall_pressure");
@@ -170,7 +181,8 @@ fn written(case: &Case) -> bool {
     case.tree.to_json().pointer("/dynamic_mesh/six_dof/coupling").is_some()
 }
 
-/// The wall pressure of the body force (ADR 0269 D1; `extrapolated` without the table).
+/// The wall pressure of the body force (ADR 0269 D1; `prescribed_gradient` without the key since ADR 0346; with a
+/// motion other than `six_dof` there is no body force and the key has no effect).
 fn wall_pressure(case: &Case) -> WallPressure {
     if get_s(case, &format!("{COUPLING}.wall_pressure")) == "prescribed_gradient" {
         WallPressure::PrescribedGradient

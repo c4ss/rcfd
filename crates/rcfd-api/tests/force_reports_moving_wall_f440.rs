@@ -197,7 +197,7 @@ fn worst(wall: &str, table: &str, about: f64) -> [f64; 4] {
         let d = deficits(&s, &r);
         println!(
             "{wall} {} step {n}: g {:.6e}; deficits cf {:.7e}, fp {:.7e}, ft {:.7e}, my {:.7e}",
-            if table.is_empty() { "no table" } else { "key" },
+            if table == PRESCRIBED { "key" } else { "boundary_value" },
             exact_force(&s).1,
             d[0],
             d[1],
@@ -226,20 +226,22 @@ fn t0_a_case_without_the_table_keeps_its_text() {
     );
     assert!(!tw.contains("force_reports") && !jw.contains("force_reports"));
     assert!(without.tree.to_json().pointer("/dynamic_mesh/force_reports").is_none());
-    assert_eq!(without.get(KEY).unwrap(), "boundary_value");
+    // ADR 0346: the default is `prescribed_gradient` (`boundary_value` before)
+    assert_eq!(without.get(KEY).unwrap(), "prescribed_gradient");
     assert_eq!(with.get(KEY).unwrap(), "prescribed_gradient");
     assert!(with.to_toml().contains("wall_pressure = \"prescribed_gradient\""));
     assert!(with.to_json_string().contains("\"force_reports\""));
     assert_ne!(without.tree.content_hash(), with.tree.content_hash());
 }
 
-/// ADR 0342 Z0, Z1, Z2: without the key every report is the old formula bit for bit; a table with the default equals no
-/// table; the key does not change the flow.
+/// ADR 0342 Z0, Z1, Z2: with `boundary_value` every report is the old formula bit for bit; a table with the default equals
+/// no table; the key does not change the flow. ADR 0346: the default is `prescribed_gradient`, so Z0 takes the written
+/// `boundary_value` (s0), Z1 compares no table (s1) with the written default (s2), and Z2 the flow of s0 with s2.
 #[test]
 fn z0_z1_z2_without_the_key_nothing_changes() {
-    let case0 = parse(&column("rest", ""));
+    let case0 = parse(&column("rest", STORED));
     let mut s0 = Simulation::new(&case0).unwrap();
-    let mut s1 = Simulation::new(&parse(&column("rest", STORED))).unwrap();
+    let mut s1 = Simulation::new(&parse(&column("rest", ""))).unwrap();
     let mut s2 = Simulation::new(&parse(&column("rest", PRESCRIBED))).unwrap();
     let (mut z0, mut z1, mut z2) = (0, 0, 0);
     for n in 0..=12 {
@@ -254,7 +256,7 @@ fn z0_z1_z2_without_the_key_nothing_changes() {
             z0 += 1;
             println!("Z0 differs at step {n}");
         }
-        if bits(&r0) != bits(&reports(&s1)) || flow_bits(&s0) != flow_bits(&s1) {
+        if bits(&reports(&s1)) != bits(&reports(&s2)) || flow_bits(&s1) != flow_bits(&s2) {
             z1 += 1;
             println!("Z1 differs at step {n}");
         }
@@ -275,7 +277,8 @@ fn z0_z1_z2_without_the_key_nothing_changes() {
 #[test]
 fn e1_e2_e3_the_report_takes_the_corrected_face_pressure() {
     let mut s = Simulation::new(&parse(&column("rest", PRESCRIBED))).unwrap();
-    let mut s0 = Simulation::new(&parse(&column("rest", ""))).unwrap();
+    // ADR 0346: the control is the written `boundary_value` (no table before ADR 0346)
+    let mut s0 = Simulation::new(&parse(&column("rest", STORED))).unwrap();
     let wall = vec!["xmin".to_string()];
     let (mut e1, mut e2, mut e3) = (0usize, 0.0f64, 0usize);
     for n in 1..=12 {
@@ -331,7 +334,8 @@ fn e1_e2_e3_the_report_takes_the_corrected_face_pressure() {
 #[test]
 fn a1_a4_the_resting_wall_of_au1b() {
     let key = worst("rest", PRESCRIBED, 0.0);
-    let def = worst("rest", "", 1.0 / 40.0);
+    // ADR 0346: the control is the written `boundary_value` (no table before ADR 0346)
+    let def = worst("rest", STORED, 1.0 / 40.0);
     println!(
         "A rest, key: worst cf {:.3e}, fp {:.3e}, ft {:.3e}, my {:.3e}; no table: cf {:.7e}, fp {:.7e}, ft {:.7e}, my {:.7e}",
         key[0], key[1], key[2], key[3], def[0], def[1], def[2], def[3]
@@ -353,7 +357,8 @@ fn a1_a4_the_resting_wall_of_au1b() {
 #[test]
 fn f1_the_following_wall() {
     let key = worst("follow", PRESCRIBED, 0.0);
-    let def = worst("follow", "", 1.0 / 40.0);
+    // ADR 0346: the control is the written `boundary_value` (no table before ADR 0346)
+    let def = worst("follow", STORED, 1.0 / 40.0);
     println!(
         "F1 follow, key: worst cf {:.3e}, fp {:.3e}, ft {:.3e}, my {:.3e}; no table: fp {:.7e}",
         key[0], key[1], key[2], key[3], def[1]

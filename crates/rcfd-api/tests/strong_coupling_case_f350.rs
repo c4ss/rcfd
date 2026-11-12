@@ -8,7 +8,9 @@
 use rcfd_api::case::Case;
 use rcfd_api::sim::Simulation;
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_fv::fsi::{relaxation_from_added_mass, strong_step, BodyCoupling, Relaxation, StrongCoupling};
+use rcfd_fv::fsi::{
+    relaxation_from_added_mass, strong_step_with, BodyCoupling, Relaxation, StrongCoupling, WallPressure,
+};
 use rcfd_fv::sixdof::{Body, BodySpec, BodyState, Integrator};
 use rcfd_fv::smoothing::{smooth_displacement, PatchClass, SmoothingMethod};
 use rcfd_fv::FvGeometry;
@@ -198,7 +200,9 @@ fn tree_run(case: &Case, steps: usize) -> (Vec<Bits>, Vec<usize>, bool) {
 }
 
 /// The library run on the flow solver of a second `Simulation` of the same case: the body, the points, the coupling
-/// and the settings built here from the case's numbers (ADR 0266 E1, E2).
+/// and the settings built here from the case's numbers (ADR 0266 E1, E2). ADR 0346: the case's default wall pressure is
+/// `prescribed_gradient`, so the library side is `strong_step_with(PrescribedGradient)` with a vector carried here from
+/// empty (it was `strong_step`, the extrapolated wall pressure, before the default flip).
 fn library_run(case: &Case, mu: f64, settings: &StrongCoupling, steps: usize) -> (Vec<Bits>, Vec<usize>, bool) {
     let mut sim = Simulation::new(case).unwrap();
     let dt = case.get("solver.dt").unwrap().as_f64().unwrap();
@@ -247,9 +251,19 @@ fn library_run(case: &Case, mu: f64, settings: &StrongCoupling, steps: usize) ->
     let mut out = Vec::new();
     let mut iters = Vec::new();
     let mut conv = true;
+    let mut carried: Vec<f64> = Vec::new();
     for n in 1..=steps {
-        let st =
-            strong_step(flow, &mut body, dt, &cpl, settings, &mut points).unwrap_or_else(|e| panic!("step {n}: {e}"));
+        let st = strong_step_with(
+            flow,
+            &mut body,
+            dt,
+            &cpl,
+            settings,
+            WallPressure::PrescribedGradient,
+            &mut carried,
+            &mut points,
+        )
+        .unwrap_or_else(|e| panic!("step {n}: {e}"));
         iters.push(st.iterations);
         conv &= st.converged;
         out.push(bits_of(flow, &body));
@@ -390,7 +404,10 @@ struct Run {
 
 fn strong_case_run(mu: f64, per_period: usize) -> Run {
     let dt = 1.0 / per_period as f64;
-    let case = parse(&piston(mu, dt, &registered_table(mu)));
+    // ADR 0346: R1, R2 reproduce ADR 0250's runs, which have the extrapolated wall pressure, so the old value is written
+    // (it was the default before ADR 0346)
+    let table = format!("{}wall_pressure = \"extrapolated\"\n", registered_table(mu));
+    let case = parse(&piston(mu, dt, &table));
     let mut s = Simulation::new(&case).unwrap();
     let steps = (11.5 * per_period as f64).round() as usize;
     let mut run = Run {
