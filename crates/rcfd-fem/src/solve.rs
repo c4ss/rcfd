@@ -279,7 +279,18 @@ fn preconditioned_cg(
             tol_rel: 0.0,
             max_iter: max_iterations - used,
         };
-        let s = cg(a, b, &mut x, m.as_ref(), &control);
+        let s = if report.restarts == 0 {
+            cg(a, b, &mut x, m.as_ref(), &control)
+        } else {
+            // ADR 0282 amendment 2 (D5'): a restart is a step of iterative refinement; the correction of the true
+            // residual `r` is iterated from zero, so its roundings are those of the correction, and `x` is rounded once.
+            let mut delta = vec![0.0; b.len()];
+            let s = cg(a, &r, &mut delta, m.as_ref(), &control);
+            for (xi, di) in x.iter_mut().zip(&delta) {
+                *xi += di;
+            }
+            s
+        };
         used += s.iterations;
         if !s.final_residual.is_finite() || x.iter().any(|v| !v.is_finite()) {
             return Err(FemError::Solver {
