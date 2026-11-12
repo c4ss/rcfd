@@ -7343,7 +7343,8 @@ fixed by the item's registration ADR before any code.
     restored bit for bit. Partial: the registered failing-solve check in iteration 2 was not reached on its registered
     run (the step after a converged one starts at the fixed point); the corrected test, registered by amendment 1 before
     its run, met it. Nine of nine mutations caught. Tet10 interfaces get no force on mid-edge nodes (open ADR 0286 Q2).
-    Partial by the registered rule; done is the maintainer's call.
+    Partial by the registered rule; done is the maintainer's call. The follow-up F-463 (ADR 0361, 2026-11-12) registers
+    the failing solve in iterations 2 and 3 and meets it.
 - [ ] **F-386** A solid case file of its own and the library entry that runs it
   - depends on: F-371, F-377, F-381, F-383, F-013, F-080
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case file (TOML of its own:
@@ -8499,14 +8500,29 @@ fixed by the item's registration ADR before any code.
     ADR 0283 default of lowest_eigenpairs stays the relative test.
   - note: From ADR 0354 addendum 1 (2026-11-12), Q1 recommendation; changes the default of ModalOptions, so the start is
     the maintainer's call.
-- [ ] **F-463** Static solid participant: the failing solve in a later iteration as a registered check
+- [x] **F-463** Static solid participant: the failing solve in a later iteration as a registered check
   - depends on: F-385
   - acceptance: Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0286 ran
     the test once after its amendment 1. With the StaticSolid and the mock fluid of ADR 0286, a coupled step that starts
     away from its fixed point (the mock's F0 doubled after a converged step) and whose static solve fails in iteration 2
     stops with the participant's name and iteration 2, the solver's message, and both participants bit-equal to the
     start of the step; a step whose solve fails in iteration 3 does the same.
-  - note: From ADR 0286 addendum (2026-11-12), Q1 recommendation.
+  - note: From ADR 0286 addendum (2026-11-12), Q1 recommendation. Structural solver, basic tier. ADR 0361, 2026-11-12:
+    tests only, crates/rcfd-post/tests/sb_solid_coupling_fail.rs (ADR 0286's test file is not edited; the single run of
+    ADR 0286's corrected F2b after its amendment 1 is disclosed). With the StaticSolid and the mock fluid of ADR 0286
+    (k_f 1.5 k_s, Aitken and least squares, tolerance 1e-10), a converged step then the mock's F0 doubled: worked out by
+    hand before the run that the healthy step takes exactly 3 iterations (test quantities 15, 0.366, then rounding) from
+    the start f = 1.4 F0, so iteration 3 exists; measured 15 to 7e-14, 0.36585 to 1.5e-14, 5.8e-16, three solid
+    advances, u = 2 u* to 1.9e-15. A wrapper switches the solid to a failing CG (one iteration) at its n-th advance: for
+    n = 2 and n = 3 the step stops with participant 'solid', iteration n, the solver's text (solver cg-jacobi: not
+    converged in 1 iterations), the error's time the start time, n advances, and fluid and solid state (time,
+    displacement, forces) bit-equal to the start of the step; the same step run again with the healthy solver reproduces
+    the control bit for bit. A failure switched at the 4th advance is never reached. Twelve of twelve mutations
+    registered as caught were caught (restore without displacement, forces, time on the solid and on the mock fluid,
+    participant name dropped, solver text dropped, iteration reported k+1 and k-1, coupler restore removed, wrapper off
+    by one); the two registered equivalent mutants (the coupler's restore at the error, redundant for a structure
+    failure) survived. Not covered: a failing fluid or time check in a later iteration, iterations beyond 3, a flow
+    solver (open ADR 0361 Q1). Done pending the maintainer's acceptance.
 - [ ] **F-464** Element tests: the moved-mesh check of the Hex8 patch test measures the stored mesh
   - depends on: F-461
   - acceptance: Every limit not stated here is registered in the ADR before the run. In a new test file, for the moved
@@ -8515,3 +8531,12 @@ fixed by the item's registration ADR before any code.
     and the boundary nodes are unchanged bit for bit; the same test on an unmoved mesh (alpha = 0 passed through the
     same code) fails these checks; the existing tests are not edited.
   - note: From ADR 0358 addendum 1 (2026-11-12), Q1 recommendation.
+- [ ] **F-465** Coupled step: a failing fluid in a later iteration as a registered check
+  - depends on: F-463
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock
+    fluid of ADR 0286 and the start of ADR 0361 (a converged step, then F0 doubled), a mock fluid whose advance returns
+    an error in iteration 2, and in iteration 3, stops the step with the fluid's name, that iteration number and its
+    message, and both participants bit-equal to the start of the step; mutations that skip the coupler's restore of the
+    fluid or of the structure at the error, or at the start of an iteration, are each caught by at least one check (the
+    pair of restores that ADR 0361 M9 and M11 could not observe).
+  - note: From ADR 0361 addendum 1 (2026-11-12), Q1 recommendation.
