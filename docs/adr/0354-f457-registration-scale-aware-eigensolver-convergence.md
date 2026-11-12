@@ -217,3 +217,112 @@ after a post-run amendment (Rule I): **partial**, with the miss named. No conver
 3. Reading 1 (the logged amendment-1 frequencies are the reference, copied here) and reading 3 (convergence through
    `modal_analysis`).
 4. `ModalOptions` gains the selection (D3), so that a modal user can ask for it; its default is unchanged.
+
+## Addendum 1: results (2026-11-12)
+
+Code: `crates/rcfd-linalg/src/eigen.rs` (`ResidualTest`, `SubspaceOptions::residual_test`, `inf_norm`, the residual of step 6
+by the selected measure; doc comments), `crates/rcfd-fem/src/modal.rs` (`ModalOptions::residual_test` and its builder,
+passed through), new tests `crates/rcfd-linalg/tests/sb_eigen_scale.rs` and `crates/rcfd-fem/tests/sb_modal_scale.rs`; no
+other file changed (`git diff 910fbe22 --stat`: these four and this ADR; `solve.rs`, `lib.rs`, the goldens and the hash tables
+untouched). Commits: 17f35a2d (registration), 95986036 (code and tests, rustfmt and clippy clean, before any run), and this
+addendum. Registered runs, each once, release, `--nocapture --test-threads=1`, logs in `w49i-work/f457-scratch`: run 1
+`sb_modal_scale` (`run1_modal_scale.log`), run 2 `sb_eigen_scale` (`run2_eigen_scale.log`). Then E0 `cargo test -p
+rcfd-linalg --release` (`e0_linalg.log`), E1 `cargo test -p rcfd-fem --release` (`e1_fem.log`; both also re-ran the two new
+test files as part of the crate sets, all passing), E2 `cargo test -p rcfd-api --release --test baseline_hashes`
+(`e2_baseline_hashes.log`).
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 Tet10 40 x 2 x 2, `Backward` 1e-12: `Ok`; iterations; M-orthonormality; Sturm | `Ok`; `<= 20`; `<= 1e-9`; equal | `Ok`; **7**; 4.2e-15; 6 = 6 (backward residuals 3.0e-17, 2.7e-17, 3.0e-17, 2.7e-17, 1.3e-13, 1.5e-13; 0.18 s) | yes |
+| C2 four bending frequencies against amendment 1 | `<= 1e-10` each | 0, 0, 0, 0 (bit for bit; see below) | yes |
+| D0 default test 1e-7 on this tree against the logged amendment-1 frequencies; 7 iterations | `==` | equal bit for bit, all six; 7 | yes |
+| E0 `rcfd-linalg` tests unedited (with `sb_eigen` E1 to E17) | pass | pass (`sb_eigen` 15 passed; unit 19 + 1 ignored; `sb_direct` 16 + 2 ignored; `amg_contrast` 2; `reorder` 2) | yes |
+| E1 `rcfd-fem` tests unedited | pass | pass (`sb_modal` 8 + 4 ignored, `sb_elements` 8, `sb_loads` 7, `sb_mms` 7 + 5 ignored, `sb_model` 11, `sb_recover` 9 + 1, `sb_static` 9, `sb_thermal` 7, `sb_thermal_bits` 1) | yes |
+| E2 `baseline_hashes` | pass | 3 passed, 1 ignored | yes |
+| L1 reported against recomputed backward errors (N, T) | `<= 1e-12` relative | 7.6e-16 (N, 37 iterations), 2.6e-16 (T) | yes |
+| L2 T: backward eigenvalues; M-orth.; iterations against default; default within E5 | `<= 1e-10`; `<= 1e-10`; `<=`; as E5 | 4.0e-15; 4.4e-16; 17 against 17; default 4.0e-15, 4.4e-16, 17 iterations, shift 0, Sturm 10 = 10 | yes |
+| L3 Q = T^2: `Ok`; iterations; eigenvalues; M-orth. (extension) | `Ok`; `<= 40`; `<= 1e-6`; `<= 1e-10` | `Ok`; 7; 1.07e-9; 8.9e-16. Record: the default test `NotConverged` after 200 iterations, lowest pair at 2.77e-8 (its floor) | yes |
+| H1 Hex8 40 x 2 x 2 `Backward` 1e-12: iterations; frequencies against amendment 1; splits (extension) | `<= 20`; `<= 1e-10`; `<= 1e-6` | 7; 0, 0, 0, 0; 3.98e-11, 1.02e-12 | yes |
+| X1 defaults `Relative`; cap 3 with `Backward` | as stated | as stated (`NotConverged`, 3 iterations, tolerance 1e-12, 10 residuals 2.0e-10 to 1.8e-4) | yes |
+
+**C2 reads as met, and why it is exactly 0.** The backward run stopped at iteration 7, the same iteration as the amendment-1
+run. The residual test only reads the iterates, so both runs computed the same iterates and C2 compares identical numbers. D4
+said this before the run ("if the backward run stops at iteration 7 ... the difference is exactly 0"), but D4 expected 5 to 6
+iterations. The clause would also have been met at any other stopping iteration: G1 (record) gives the four frequencies of
+converged runs stopping at iterations 4, 5, 6 (default test at 1e-3, 1e-4, 1e-5; 1e-6 also stops at 6) and 8 (`Backward` at
+1e-13 and 1e-14), and all deviate from the amendment-1 values by at most **1.8e-15**, about 5e4 times below the limit.
+
+**Where the estimates were wrong.**
+- *Iterations* (7, against an estimate of 5 to 6). The scale factor `F = ||A||_inf ||x|| / ||M x||` is about 6e12. It follows
+  from the third pair at iteration 7: default-measure residual 4.6e-8 against backward 1.5e-13, and `mu_6 = 1.9e7`. That puts
+  `F` inside the registered range. The rate of the third pair was also as estimated: its default-measure residual fell 3.3e-4,
+  1.8e-5, 9.1e-7, 4.6e-8 over iterations 4 to 7, a factor of about 0.05 per iteration. The estimate missed the start: before
+  iteration 4 the residual is far above 1, and arithmetic 5 counted from 1.
+- *Noise* (estimated 5e-11 to 4e-10 for the first pair, measured at most 1.8e-15 across iterations). The Hex8 split of 4e-11
+  that the estimate was scaled from does not come from iteration rounding. It is fixed by the factor and the assembly, and so
+  it is common to every iteration count: the H1 run reproduces it to the last bit at a different tolerance. The noise that
+  differs between iterations is that of the solves and the Rayleigh-Ritz step on vectors that have already converged, which
+  is near `eps`. D4 had named this possibility as the lower end. The registered estimate was pessimistic, the limit was the
+  acceptance's, and nothing was changed.
+
+**Mutations** (`f457-scratch/mutate.py`, `mutations.log`; `git archive` copy of 95986036, own target directory, each mutation
+alone by exact text replacement, `sb_eigen_scale` and `sb_modal_scale` run once, file restored and SHA-256 equal):
+
+| Id | Caught by |
+| --- | --- |
+| MS1 `Backward` = `||r|| / ||A x||` | L1 (387 relative), L2 (iterations 20 > 17), L3 and C1, H1 (`NotConverged` at 1e-12) |
+| MS2 `|mu| ||M||` dropped | L1 |
+| MS3 `||A||_inf` by `max |a_ii|` | L1 |
+| MS4 `||x||` dropped | L1 |
+| MS5 `Backward` on the first pair only | L2 (eigenvalue error 1.0e-5), L3 (5.3e-5) |
+| MS6 default `Backward` | D0 (frequencies differ, 3 iterations), L2, X1 |
+| MS7 `modal_analysis` drops `residual_test` | C1, H1 (`NotConverged`) |
+
+Every mutation was caught by a registered test of the done set. No amendment was written. A side observation from MS6:
+`Backward` at the loose tolerances 1e-3 and 1e-4 stops the cantilever so early that the Sturm check reports a missed
+eigenvalue (`SturmMismatch`, 7 against 6). That is the safe failure that D3 describes, an error rather than a wrong result.
+
+`cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem
+--all-targets -- -D warnings`: clean.
+
+**Deviations.** None from the registered checks, limits or runs. The confirmation runs of the crate test sets (E0, E1)
+re-executed the two new test files, as the crate sets include them. The whole workspace was not tested (the lead runs the
+gate).
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). C1, C2, D0, E0, E1, E2, L1 and L2 are met,
+the extensions L3, H1 and X1 are met, and every mutation MS1 to MS7 was caught by a registered test without a post-run
+amendment, so Rule I does not apply. One caveat goes with this. C2 is met because the iterates are identical (both runs
+stopped at iteration 7), not because two independent computations agree. G1 shows that the clause holds with a wide margin
+at every nearby stopping iteration, but G1 is a record and not a limit.
+
+**Remaining questions.**
+
+1. Whether `ModalOptions::new` should default to `Backward` with tolerance 1e-12. A slender model, such as a fan blade, then
+   converges without a hand-tuned tolerance. This changes the results of the registered runs of ADR 0284, so it is not taken
+   here. Options: (a) keep `Relative` 1e-10 and document `residual_test(ResidualTest::Backward)` for slender models; (b) make
+   `Backward` 1e-12 the modal default in a separate registered item, with a new set of expected values for `sb_modal`.
+   Recommendation: (b), as its own item after F-387 has used (a).
+2. Accuracy when few modes are wanted (Limits, first item). With `m = 2` on a slender model the backward test can stop
+   while the second pair still has a default-measure residual near `1e-12 F / mu_2`. Options: (a) document it; (b) let the
+   modal layer ask for at least `m + 4` pairs internally. Recommendation: (a) now, and (b) only if a modal user needs fewer
+   than six modes.
+3. ADR 0284 remaining question 2 (the slender-model tolerance). This item is its option (c). Recommendation: close that
+   question by reference to this ADR.
+
+### For the lead: roadmap entries
+
+F-457: proposed status **done** (pending the maintainer's acceptance). Note:
+
+> Scale-aware convergence test of the subspace eigensolver (follow-up of F-383). ADR 0354, 2026-11-12: rcfd_linalg::eigen::ResidualTest { Relative (default, the test of ADR 0283 D6, the same operations and bits), Backward } selected by SubspaceOptions::residual_test and ModalOptions::residual_test; Backward measures each pair by its normwise backward error ||A x - mu M x|| / ((||A||_inf + |mu| ||M||_inf) ||x||) (the pair is exact for a pencil within that relative distance; rounding floor about c eps whatever lambda_max/lambda_1). Tet10 40 x 2 x 2 cantilever of ADR 0284 at the scale-aware tolerance 1e-12: converged in 7 iterations (limit 20), Sturm 6 = 6, M-orthonormality 4.2e-15; its first two bending pairs equal the amendment-1 run bit for bit (limit 1e-10; both runs stop at iteration 7, and runs stopping at iterations 4 to 8 deviate by at most 1.8e-15); the default test on this tree reproduces the amendment-1 frequencies bit for bit; every ADR 0283 check (sb_eigen), every rcfd-fem test and baseline_hashes pass unedited. Extensions: Hex8 40 x 2 x 2 converges in 7 iterations, equal to amendment 1; T^2 (kappa 2.7e8) converges in 7 iterations within 1.1e-9 of the closed form where the default test stops at its floor 2.8e-8 after 200. Seven mutations, all caught by registered tests.
+
+F-383, sentence to append to its note:
+
+> ADR 0354 (2026-11-12): the slender-model tolerance of amendment 1 is answered by ModalOptions::new(m).tolerance(1e-12).residual_test(ResidualTest::Backward), which converges for the 40 x 2 x 2 Tet10 cantilever in 7 iterations with the same frequencies.
+
+F-387 (ADR 0288), sentence to append to its note:
+
+> ADR 0354 (2026-11-12): for a slender blade use ModalOptions::new(m).tolerance(1e-12).residual_test(rcfd_linalg::eigen::ResidualTest::Backward) instead of a hand-set relative tolerance; the default stays the relative test of ADR 0283.
+
+Follow-up item (new; number by the lead): title "Scale-aware default of the modal analysis", deps F-457. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. ModalOptions::new uses the backward-error test of ADR 0354 at tolerance 1e-12 by default; every registered check of ADR 0284 is re-run with the new default and meets its limit (the frequencies of the bar, free box and cantilever within 1e-10 relative of the ADR 0284 runs, the free-box rigid ratio below 1e-6), the slender cantilever runs need no tolerance override, and the ADR 0283 default of lowest_eigenpairs stays the relative test.
