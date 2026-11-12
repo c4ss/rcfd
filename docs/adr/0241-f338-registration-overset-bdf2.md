@@ -400,3 +400,67 @@ maintainer made in person, and each is listed again in the addendum. None change
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the registered runs of Q, G, U, M, R2e, L1b, E and D and before any further run)
+
+The library change and the tests were committed compiled and not run (`2d2c3709`), then every registered check of the new
+file ran once, release. All numbers are in addendum 1. Met: Q0b (bit for bit, one and three outer iterations), Q0bn, G1,
+G1v, G1n, U1b, U3b, U1b1, U3b1, U1v, N2b, R2e, E8 to E10, L1b, M0 (`5.697e-5`), M1 (`3.96e-6`), M3, S2 (`1.6897e-4`,
+`3.001`), **D1** (`2.125e-5` against `1.2e-4`), T2b (`1.634`), T3b. Not met:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| D2 (acceptance) | `>= 4` | `2.456` (`max abs(d_200) = 2.125e-5`, `max abs(d_400) = 8.65e-6`, both in a calculated component cell at `(1.67, 0.97)`) |
+| T1c-b (acceptance) | `>= 1.7` | `1.664` (`e(TG_1) = 1.0076e-3` in 200 steps, `e(TG_2) = 3.179e-4` in 800 steps) |
+| M2 | `>= 4` | `2.282` (SMc, every cell calculated: `max abs(d_200) = 3.96e-6`, `max abs(d_400) = 1.73e-6`) |
+| S-U (set-up) | `>= 1` | `0` |
+| S-D (set-up) | `>= 1` | `0` |
+
+The limits stay. D2, T1c-b and M2 become ignored `*_known_miss` tests with the limits intact; the tests of U, M and D keep
+the checks that held.
+
+**S-U and S-D: a defective set-up, corrected here.** No cell took the implicit Euler row in any run. I had not worked out
+how long a cell stays a fringe cell: a background cell of size `h` leaves the fringe layer about `h / v` after it left the
+hole, `0.09` time units in U (`h = 0.1`, `v` about 1.1) against a step of `0.01`, and `0.07` in TG_2 against `0.0025`. The
+history "hole, fringe, calculated" in three consecutive times needs a step of about half that time or more. So the rule
+of D3 does not act in the acceptance runs at all (S-D as a requirement was wrong; its number, 0, is reported and nothing
+of D depends on the rule), and the set-up U as registered does not exercise it. Corrected set-up **Uc**: U with `dt =
+0.05` for 16 steps (the component moves about half a background cell per step), BDF2 and three outer iterations.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| U1c | Uc, every step, over the non-hole cells: `max abs(u_c - U) / abs(U)`, `max abs(p_c) / abs(U)^2` | `<= 1e-10` each |
+| U3c | Uc: the continuity of the calculated cells; the outflow error | `<= 1e-9`; `<= 1e-10` |
+| S-Uc (set-up) | Uc: the sum over the steps of `euler_fallback_cells()` | `>= 1` |
+
+If a step of Uc is refused as uncovered, the set-up is defective again and is corrected by a further amendment. **MB3 must
+fail U1c** (not U1b, where the rule does not act). The registered S-U and S-D stay as ignored record tests.
+
+**The misses of D2 and M2: hypotheses, fixed before their runs.** The remainder is small (D: `0.126` of the implicit Euler
+remainder; SMc: `0.069`) and falls more slowly than first order between the two pairs of runs; a ratio below 3 of two
+maxima is what a first-order term and a second-order term of opposite sign give, or a term that the step does not
+control. It appears on the single moving mesh with every cell calculated (M2), so it is not made by the overset coupling.
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H16 | the remainder belongs to the library's BDF2 step on a mesh at rest too (it is not made by the moving-mesh terms of D2) | the mesh of SMc at rest at `tg_pose(0)`, the conditions of SMc, `PimpleSolver::step` with BDF2 and three outer iterations in 200, 400 and 800 steps: `R_rest = max abs(d_200) / max abs(d_400)`, and `max abs(d_200)` | confirmed: `R_rest < 3.5`; ruled out: `R_rest >= 4` |
+| H17 | the remainder is left by the start (the implicit Euler first step and the first projection of the initial field), not by the steps after it | SMc, BDF2, three outer iterations: 160 steps of `0.000625` to `t = 0.1` in every run, then to `t = 0.5` in 160, 320 and 640 steps: `R_start = max abs(d'_160) / max abs(d'_320)` (differences to the run with 640) | confirmed: `R_start >= 4`; ruled out: `R_start < 3.5` |
+| H18 | the remainder is what two correctors and three outer iterations leave of the pressure-velocity coupling | SMc, BDF2, (a) four correctors and three outer iterations, (b) two correctors and six outer iterations: the ratio `max abs(d_200) / max abs(d_400)` of each | confirmed: either ratio `>= 4`; ruled out: both `< 3.5` |
+
+Reading fixed here. If H16 is confirmed and H17 and H18 are ruled out, the cause is located: a term of the library's BDF2
+PISO step itself, present at rest, smaller than `max abs(d_200)` of SMc; what it is stays open and is a follow-up. If H16
+is ruled out, the moving-mesh terms of this item carry a term of lower order and the item has a defect to find. If H17 is
+confirmed, the cause is the start and the number is `R_start`. Between the deciding numbers a hypothesis is undecided.
+None of this moves the limit of D2.
+
+**The miss of T1c-b: hypothesis.**
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H19 | with BDF2 the errors of both levels are free of time error, so `1.664` is the spatial order of the pointwise maximum between levels 1 and 2 (ADR 0232: the donor interpolation sampled at one pose); the `1.80` observed in ADR 0238 was the time error of TG_1 in 200 steps (`e = 1.1056e-3` there) | TG_1 with BDF2 and three outer iterations in 800 steps: `s_1 = abs(e_800 / e_200 - 1)`; from the registered runs `s_2 = abs(3.1698e-4 / 3.1791e-4 - 1) = 0.003` | confirmed: `s_1 <= 0.01`; ruled out: `s_1 > 0.03` |
+
+Tests of this amendment (in `overset_f338.rs`): `uc_uniform_flow_with_a_large_step_and_bdf2`,
+`a1_remainder_of_bdf2_on_the_single_mesh` (prints H16 to H18), `a1_level_1_error_is_free_of_time_error` (prints H19);
+the last two assert nothing about their numbers (decided here). Predictions (mine): Uc holds with a few tens of cells;
+H16 confirmed; H17 ruled out or undecided; H18 ruled out; H19 confirmed. The decision rule is unchanged: with D2 and
+T1c-b missed it gives **partial**.
