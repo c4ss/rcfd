@@ -7311,7 +7311,7 @@ fixed by the item's registration ADR before any code.
     ADR 0281 (2026-11-12): the TEMP values of the deck map to Load::temperature(nodal, reference) with one value per
     solid node (a model takes one temperature field; a second is refused); the expansion coefficient comes from
     Material::isotropic_elastic.
-- [ ] **F-385** One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
+- [~] **F-385** One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
   - depends on: F-374, F-377, F-139
   - acceptance: Every limit not stated here is registered in the ADR before the run. Fluid face forces on a wall are
     mapped to the nodes of a solid surface set by a given InterfaceMap and solved statically: resultant force, moment
@@ -7322,11 +7322,26 @@ fixed by the item's registration ADR before any code.
     wall displacement (stiffness k_f), coupled_step converges to u = F0/(k_s + k_f) within 1e-8 with the Aitken and with
     the least-squares update; a failing solve stops the step with the participant's name and both sides restored. No
     flow solver is coupled.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0286; the registration is written
-    by the implementation agent before any code. ADR 0276 (2026-11-12): loads::face_shape_functions and loads::face_rule
-    (Tri3, Quad4, Tri6 in the local face orders of ADR 0271) are public for nodal loads of face forces or pressures
-    given per face or node. ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and the stub module
-    rcfd_post::solid_coupling.
+  - note: Structural solver, basic tier (plan ADR 0270). ADR 0286, 2026-11-12: rcfd_post::solid_coupling. SolidInterface
+    takes the nodes of a surface set of a rcfd_fem model (ascending) and the corners of its faces as interface elements
+    (build_map is InterfaceMap::build on them); face_forces_to_nodes and solve_face_forces map the fluid's face forces
+    with a given InterfaceMap (forces_to_nodes, the transpose) and solve statically with the model's own constraints;
+    StaticSolid implements cosim::Structure (advance a static solve, the state time, displacement and forces of the last
+    advance; checkpoint and restore bit for bit; a failed solve leaves the state unchanged). No mass: for mock fluids
+    and quasi-static use only (the added-mass ratio against an incompressible flow is unbounded); no flow solver is
+    coupled. Checks on a Hex8 bar 4 x 1 x 1 m (8 x 2 x 2, E 2e11, nu 0.3, rollers): resultant, moment and work equal the
+    fluid side's to 1.1e-16 (limit 1e-12) for a matching and a 3:2 wall, uniform and random face forces, Hex8 and Tet4;
+    matching wall under uniform pressure: uniaxial closed form to 4.4e-15 (limit 1e-10), mapped loads equal to
+    Load::pressure's to 1.2e-16; 3:2 wall: consistent-weighted mean face displacement to 4.2e-15 (exact by Betti, limit
+    1e-10), largest error on the loaded face 0.131 p L/E (limit 0.25 from a half-space estimate 0.05 to 0.11; control >=
+    0.005), at x <= L/2 2.3e-4 (limit 0.01, Saint-Venant). With a test-only mock fluid of stiffness 1.5 k_s,
+    coupled_step converges in 3 iterations to u = F0/(k_s + k_f) within 1.9e-15 (limit 1e-8) with Aitken and with the
+    least-squares update; the plain fixed point fails at the cap. A failing solve (CG capped at one iteration) stops the
+    step naming the participant 'solid' in iteration 1 and, after a load step (amendment 1), in iteration 2, both sides
+    restored bit for bit. Partial: the registered failing-solve check in iteration 2 was not reached on its registered
+    run (the step after a converged one starts at the fixed point); the corrected test, registered by amendment 1 before
+    its run, met it. Nine of nine mutations caught. Tet10 interfaces get no force on mid-edge nodes (open ADR 0286 Q2).
+    Partial by the registered rule; done is the maintainer's call.
 - [ ] **F-386** A solid case file of its own and the library entry that runs it
   - depends on: F-371, F-377, F-381, F-383, F-013, F-080
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case file (TOML of its own:
@@ -8441,3 +8456,11 @@ fixed by the item's registration ADR before any code.
     ADR 0283 default of lowest_eigenpairs stays the relative test.
   - note: From ADR 0354 addendum 1 (2026-11-12), Q1 recommendation; changes the default of ModalOptions, so the start is
     the maintainer's call.
+- [ ] **F-463** Static solid participant: the failing solve in a later iteration as a registered check
+  - depends on: F-385
+  - acceptance: Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0286 ran
+    the test once after its amendment 1. With the StaticSolid and the mock fluid of ADR 0286, a coupled step that starts
+    away from its fixed point (the mock's F0 doubled after a converged step) and whose static solve fails in iteration 2
+    stops with the participant's name and iteration 2, the solver's message, and both participants bit-equal to the
+    start of the step; a step whose solve fails in iteration 3 does the same.
+  - note: From ADR 0286 addendum (2026-11-12), Q1 recommendation.
