@@ -416,3 +416,32 @@ warped quadrilateral is approximated by its two triangles); scalar weights only 
 shell or beam: a line or a flat structure cannot reproduce the rotation of points off it, D5); no consistent (mass-matrix)
 or mortar map; no time dependence of the map (it is built once on the reference configurations); no transport. The model
 problem is the only flow run.
+
+## Amendment 1 (2026-11-12, after the registered run of commit 8061d17a, before any other run)
+
+**E1 missed on one case: two coincident structural nodes with the radial basis were accepted.** Every other case of E1
+and every other registered check was met in that run (the numbers go in the addendum). Diagnosis by reading and by a
+scratch replay (`f362-scratch/diag_e1.py`, the Cholesky of `mapping.rs` with plain sequential sums on the BP nodes with
+node 5 appended): the registered refusal rule of D6, "a pivot `<= 0`", is an absolute test on a computed quantity. With two
+equal rows of `Phi` the exact pivot of the second is 0, but the computed one is `a_jj - sum_k l_jk^2` after `j` rounded
+products and is of size `j eps a_jj` with either sign; the replay (its kernel values computed by numpy, not bit for bit
+those of the test) happened to give exactly `0.0` and refused, the test's arithmetic gave a positive rounding residue and
+accepted. The rule is defective; the set-up of E1 is not. So:
+
+- The registered test stays in the file as `e1_invalid_meshes_and_settings_are_refused_known_miss`, ignored, unchanged
+  (its limit, "an `Err` each", intact); the miss counts against the decision rule as registered (**E1 missed**).
+- **Amended rule (D6').** A pivot is refused when `d <= 2 n eps a_jj` (`n` the order of the matrix, `eps` the machine
+  epsilon, `a_jj` the diagonal entry), in both factorisations (`Phi` and `S`). Derivation: the computed pivot of a
+  rounding-level (singular) column differs from 0 by at most about `j eps a_jj <= n eps a_jj` (each of the `j` products
+  `l_jk^2 <= a_jj` carries a relative rounding of `eps`, and so does the sum), so the factor 2 puts every such pivot below
+  the threshold; a pivot of a positive definite matrix is at least its smallest eigenvalue, so a matrix is refused only if
+  `lambda_min <= 2 n eps a_jj`, i.e. `kappa(Phi) >~ 1/(2 n eps)` (`2.8e13` for `n = 81`), where the reproduction would be
+  off by `kappa eps`, about `1e-2`, in any case. On every set-up of this registration the smallest pivot is at least
+  `lambda_min(Phi) >= 0.055` (arithmetic), eleven decades above the threshold (`2 x 81 x 2.2e-16 = 3.6e-14`), so the
+  amended code computes the same bits on them as the registered one; only the refusal predicate changes.
+- **E1b (new, run once on the amended code):** the ten cases of E1 unchanged, each must return an `Err`; the
+  coincident-node case's message must name the radial-basis matrix. Run alone (`--exact`); the registered checks are not
+  re-run on the amended code except through the mutation runs, whose results are not counted as registered runs.
+- Mutation MU7 (added): the amended threshold back to the absolute test (`d > 0`): E1b must fail.
+- The decision by the registered rule is therefore at best **partial** (E1 missed, not a defective set-up); the addendum
+  reports E1b as the evidence for the amended rule.
