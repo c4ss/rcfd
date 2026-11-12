@@ -6727,7 +6727,7 @@ fixed by the item's registration ADR before any code.
     (weights times 1.001: 1.85e-3) held; three mutations caught. No library change. Limits: one flow, one warp, one
     motion, 40 steps; B3's own error is 4 times that of the planar component alone (not diagnosed). Follow-ups: F-368,
     F-369.
-- [ ] **F-360** Co-simulation protocol over the solver service
+- [x] **F-360** Co-simulation protocol over the solver service
   - depends on: F-139, F-085
   - acceptance: The calls of docs/cosimulation-protocol.md (describe, time, checkpoint, restore, forces, advance) are
     served by the JSON-RPC service under a new protocol version; an out-of-process mock structural participant driven
@@ -6735,7 +6735,31 @@ fixed by the item's registration ADR before any code.
     the same displacements as the in-process run to 1e-12; a dropped connection or a participant error stops the step
     with a located error and both sides restored; the protocol document is versioned; existing service tests and case
     hashes are unchanged.
-  - note: From ADR 0256 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: Merged 2026-11-12. DONE pending acceptance (ADR 0345, 2026-11-12; registered before the code, two amendments).
+    The calls of docs/cosimulation-protocol.md are served by the JSON-RPC service for participants that the embedding
+    program hosts (rcfd_api::cosim_service: Service::host_fluid, host_structure, each participant on its own thread so
+    it need not be Send; rcfd serve hosts none; no case key, CLI or MCP change): methods cosim.list, cosim.open,
+    cosim.describe, cosim.time, cosim.checkpoint, cosim.restore, cosim.forces, cosim.advance, plain JSON numbers that
+    cross bit for bit (serde_json float_roundtrip), error codes 1005 (the participant error, its own message) and 1006
+    (no such participant). Service protocol 1.1: the identifier rcfd-service/1 is kept (the pinned tests are unedited),
+    service.info gains protocol_version 1.1 and cosim rcfd-cosim/1; both protocol pages are versioned. The coupler is
+    the unchanged cosim::coupled_step driven with the proxies RemoteStructure and RemoteFluid (TCP). A lease per
+    participant (cosim.open) refuses requests left over from an old connection; a proxy whose connection is lost fails
+    at once except restore, which reconnects once and restores the participant, so a dropped connection ends the step
+    with the located error and both sides at the start of the step. Measured on the model problem of ADR 0256 with the
+    mock structure in a second process: every one of 650 steps converged, 7 to 10 iterations (mean 8.766), omega_m/omega
+    0.998618 and 1.011453, and the displacements of every node at every step equal to the in-process run bit for bit
+    (limit 1e-12 X), also with both participants remote (100 steps); a participant error (structure in the other
+    process, fluid hosted) and a dropped connection (cut before the request, after the reply, between steps, fluid or
+    structure) each give an error naming participant, time and iteration with 0 bits of either state changed and the
+    next step equal to the reference; a killed participant process gives the located error in 2.1 s with the fluid
+    restored and the failed reconnection reported; refusals with their codes; a control with springs stiffer by 1e-9 is
+    seen (4e-9 X). Amendment 1: the first transport cost 2 ms per call (lines written in pieces), now 0.05 ms (one write
+    per line, TCP_NODELAY on accepted connections; no byte changes). Amendment 2: the 650-step out-of-process tests are
+    ignored heavy records (minutes on the loaded machine; run twice, identical), the gate runs the 100-step both-remote
+    comparison and the failure tests. Existing service, CLI and MCP suites and the case hashes pass unedited; seven
+    mutations each failed their tests. Not delivered: participants built from a case or hosted by rcfd serve, structural
+    elements in describe, authentication, a test of a call outlasting the time-out. Open: ADR 0345 Q1 to Q5.
 - [x] **F-361** Quasi-Newton acceleration of the coupled iteration
   - depends on: F-139
   - acceptance: A least-squares (quasi-Newton) update of the nodal force from the residual history of the step, opt-in
@@ -7884,3 +7908,12 @@ fixed by the item's registration ADR before any code.
     holds on each path, or the ADR names why not with a number.
   - note: From ADR 0245 question 3, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed
     by the F-344 addendum, not yet taken. Periodic seams (ADR 0073 R3, ADR 0076) are not part of it.
+- [ ] **F-444** Co-simulation participants from the case, hosted by rcfd serve
+  - depends on: F-360
+  - acceptance: A case key names a moving wall patch as a co-simulation fluid participant and rcfd serve hosts it under
+    protocol rcfd-cosim/1; a structural participant in its own process (the mock of ADR 0345) and the coupler of
+    rcfd_fv::cosim drive it over TCP and reproduce ADR 0256 A1 and A2 with the displacements of the in-process run to
+    1e-12; describe of a structure may carry its elements so that the map builders of ADR 0263 run on the side of the
+    coupler; service::Client writes a request with one call; without the key every case hash is unchanged and the
+    schema, CLI help and MCP goldens change only by the approved additions.
+  - note: From ADR 0345 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.

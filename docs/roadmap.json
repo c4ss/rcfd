@@ -3090,9 +3090,9 @@
       "F-139",
       "F-085"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "The calls of docs/cosimulation-protocol.md (describe, time, checkpoint, restore, forces, advance) are served by the JSON-RPC service under a new protocol version; an out-of-process mock structural participant driven over TCP reproduces ADR 0256 A1 and A2 (every step converged, omega_m/omega within 0.5 percent and 3 percent) and the same displacements as the in-process run to 1e-12; a dropped connection or a participant error stops the step with a located error and both sides restored; the protocol document is versioned; existing service tests and case hashes are unchanged.",
-    "note": "From ADR 0256 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+    "note": "Merged 2026-11-12. DONE pending acceptance (ADR 0345, 2026-11-12; registered before the code, two amendments). The calls of docs/cosimulation-protocol.md are served by the JSON-RPC service for participants that the embedding program hosts (rcfd_api::cosim_service: Service::host_fluid, host_structure, each participant on its own thread so it need not be Send; rcfd serve hosts none; no case key, CLI or MCP change): methods cosim.list, cosim.open, cosim.describe, cosim.time, cosim.checkpoint, cosim.restore, cosim.forces, cosim.advance, plain JSON numbers that cross bit for bit (serde_json float_roundtrip), error codes 1005 (the participant error, its own message) and 1006 (no such participant). Service protocol 1.1: the identifier rcfd-service/1 is kept (the pinned tests are unedited), service.info gains protocol_version 1.1 and cosim rcfd-cosim/1; both protocol pages are versioned. The coupler is the unchanged cosim::coupled_step driven with the proxies RemoteStructure and RemoteFluid (TCP). A lease per participant (cosim.open) refuses requests left over from an old connection; a proxy whose connection is lost fails at once except restore, which reconnects once and restores the participant, so a dropped connection ends the step with the located error and both sides at the start of the step. Measured on the model problem of ADR 0256 with the mock structure in a second process: every one of 650 steps converged, 7 to 10 iterations (mean 8.766), omega_m/omega 0.998618 and 1.011453, and the displacements of every node at every step equal to the in-process run bit for bit (limit 1e-12 X), also with both participants remote (100 steps); a participant error (structure in the other process, fluid hosted) and a dropped connection (cut before the request, after the reply, between steps, fluid or structure) each give an error naming participant, time and iteration with 0 bits of either state changed and the next step equal to the reference; a killed participant process gives the located error in 2.1 s with the fluid restored and the failed reconnection reported; refusals with their codes; a control with springs stiffer by 1e-9 is seen (4e-9 X). Amendment 1: the first transport cost 2 ms per call (lines written in pieces), now 0.05 ms (one write per line, TCP_NODELAY on accepted connections; no byte changes). Amendment 2: the 650-step out-of-process tests are ignored heavy records (minutes on the loaded machine; run twice, identical), the gate runs the 100-step both-remote comparison and the failure tests. Existing service, CLI and MCP suites and the case hashes pass unedited; seven mutations each failed their tests. Not delivered: participants built from a case or hosted by rcfd serve, structural elements in describe, authentication, a test of a call outlasting the time-out. Open: ADR 0345 Q1 to Q5."
   },
   {
     "id": "F-361",
@@ -4176,5 +4176,16 @@
     "status": "todo",
     "acceptance": "rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls (defaults bit-identical); with a body force a hydrostatic column stays at rest to 1e-10 and the steady solution of a buoyant cavity is the same to 1e-9 for two step sizes; the case tree has a key for it; the check C3 of ADR 0245 holds on each path, or the ADR names why not with a number.",
     "note": "From ADR 0245 question 3, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed by the F-344 addendum, not yet taken. Periodic seams (ADR 0073 R3, ADR 0076) are not part of it."
+  },
+  {
+    "id": "F-444",
+    "title": "Co-simulation participants from the case, hosted by rcfd serve",
+    "phase": 9,
+    "deps": [
+      "F-360"
+    ],
+    "status": "todo",
+    "acceptance": "A case key names a moving wall patch as a co-simulation fluid participant and rcfd serve hosts it under protocol rcfd-cosim/1; a structural participant in its own process (the mock of ADR 0345) and the coupler of rcfd_fv::cosim drive it over TCP and reproduce ADR 0256 A1 and A2 with the displacements of the in-process run to 1e-12; describe of a structure may carry its elements so that the map builders of ADR 0263 run on the side of the coupler; service::Client writes a request with one call; without the key every case hash is unchanged and the schema, CLI help and MCP goldens change only by the approved additions.",
+    "note": "From ADR 0345 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
   }
 ]
