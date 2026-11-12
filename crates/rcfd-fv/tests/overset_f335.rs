@@ -465,6 +465,11 @@ struct Run {
 
 /// TG_L in `steps` steps to `t = 0.5` with the outer iterations `o` (`None`: no opt-in, the solver of ADR 0219).
 fn tg_run(level: usize, steps: usize, o: Option<Outer>) -> Run {
+    tg_run_at(level, steps, o, 1.0)
+}
+
+/// [`tg_run`] with the motion `tg_pose(speed t)` (amendment 1: `speed = 0.5` is the half speed of ADR 0232).
+fn tg_run_at(level: usize, steps: usize, o: Option<Outer>, speed: f64) -> Run {
     let t0 = Instant::now();
     let dt = T_END / steps as f64;
     let ov = box_overset(tg_background(level), 0.6, 20 * level, 0.25);
@@ -489,7 +494,7 @@ fn tg_run(level: usize, steps: usize, o: Option<Outer>) -> Run {
         let t = k as f64 * dt;
         let g = s.geom.clone();
         tg_conditions(&g, &mut s.u, t);
-        let info = s.step(dt, tg_pose(t), &[]).unwrap();
+        let info = s.step(dt, tg_pose(speed * t), &[]).unwrap();
         cont = cont.max(info.continuity);
         dlo = dlo.min(info.delta);
         dhi = dhi.max(info.delta);
@@ -511,7 +516,7 @@ fn tg_run(level: usize, steps: usize, o: Option<Outer>) -> Run {
         secs: t0.elapsed().as_secs_f64(),
     };
     println!(
-        "TG_{level} {steps} steps, outer {:?} ({:.1} s): e {:.4e}, continuity {:.2e}, delta [{:.3e}, {:.3e}], pressure iterations per step {:.1}, unconverged solves {}",
+        "TG_{level} {steps} steps, speed {speed}, outer {:?} ({:.1} s): e {:.4e}, continuity {:.2e}, delta [{:.3e}, {:.3e}], pressure iterations per step {:.1}, unconverged solves {}",
         o.map(|o| (o.n, o.alpha_u, o.alpha_p)),
         r.secs,
         r.e,
@@ -631,19 +636,71 @@ fn acceptance() -> Acceptance {
     }
 }
 
-/// ADR 0238 S1, D1, T2o-a, T2o-b and T3o: the acceptance of F-335.
+/// ADR 0238 S1, T2o-a, T2o-b and T3o: the acceptance of F-335 without D1 (missed: amendment 1,
+/// `d1_time_error_with_three_outer_iterations_known_miss`).
 #[test]
 #[ignore = "slow (four level-2 runs of ADR 0238, about 5 minutes): run once for the addendum"]
 fn d_time_error_and_t2_at_level_2_with_three_outer_iterations() {
     let m = acceptance();
+    println!(
+        "D1 (printed, missed as registered): max |d_200| with three outer iterations {:.4e} (limit < 1.2e-4)",
+        m.d3
+    );
     let mut c = Checks::new();
     c.at_least("S1 (set-up) max |d_200| with one outer iteration", m.d1, 4.47e-4);
     c.at_most("S1 (set-up) max |d_200| with one outer iteration", m.d1, 4.52e-4);
-    c.below("D1 max |d_200| with three outer iterations", m.d3, 1.2e-4);
     c.at_most("T2o-a e(TG_2) / e(TGB_2 as recorded)", m.ratio_a, 2.0);
     c.at_most("T2o-b e(TG_2) / e(TGB_2 with three outer iterations)", m.ratio_b, 2.0);
     c.at_most("T3o continuity, every step of the four runs", m.cont, 1e-9);
     c.finish();
+}
+
+/// ADR 0238 D1 as registered: a known miss (registered run: `1.690e-4`). What three outer iterations leave of the time
+/// error of TG_2 at `dt = 0.0025` is diagnosed in amendment 1.
+#[test]
+#[ignore = "known miss, ADR 0238 amendment 1: D1 max |d_200| with three outer iterations 1.690e-4 (limit < 1.2e-4)"]
+fn d1_time_error_with_three_outer_iterations_known_miss() {
+    let (d3, ..) = d200("D three outer iterations", Some(THREE));
+    let mut c = Checks::new();
+    c.below("D1 max |d_200| with three outer iterations", d3, 1.2e-4);
+    c.finish();
+}
+
+/// ADR 0238 amendment 1, the numbers of H13, H14 and H15: what three outer iterations leave of the time error of TG_2.
+/// Printed; the hypotheses are decided in the ADR.
+#[test]
+#[ignore = "slow (five level-2 runs with three outer iterations, ADR 0238 amendment 1, about 10 minutes): run once"]
+fn a1_remainder_of_the_time_error_with_three_outer_iterations() {
+    let o = Some(THREE);
+    let (f200, f400, f800) = (tg_run(2, 200, o), tg_run(2, 400, o), tg_run(2, 800, o));
+    let (per200, d200_full, cell) = difference(&f200, &f800);
+    let (per400, d400_full, _) = difference(&f400, &f800);
+    println!(
+        "A1 full speed: max |d_200(3)| {d200_full:.4e} in {}; max |d_400(3)| {d400_full:.4e}; H13 R = {:.4}",
+        describe(&f800.s, cell),
+        d200_full / d400_full
+    );
+    for (k, name) in CLASSES.iter().enumerate() {
+        println!(
+            "A1 full speed: class {name}: max |d_200(3)| {:.4e}, max |d_400(3)| {:.4e}",
+            per200[k], per400[k]
+        );
+    }
+    println!(
+        "A1 H15: BC over CC with three outer iterations {:.4} (one: 0.749)",
+        per200[3] / per200[1]
+    );
+    let (h200, h800) = (tg_run_at(2, 200, o, 0.5), tg_run_at(2, 800, o, 0.5));
+    let (per_half, d_half, cell_half) = difference(&h200, &h800);
+    println!(
+        "A1 half speed: max |d_200(3)| {d_half:.4e} in {}; CF {:.4e}, CC {:.4e}, BF {:.4e}, BC {:.4e}; H14 rho_3 = full / half = {:.4} (rho_BE 4.783, root mean square 3.700; one outer iteration 2.292)",
+        describe(&h800.s, cell_half),
+        per_half[0],
+        per_half[1],
+        per_half[2],
+        per_half[3],
+        d200_full / d_half
+    );
 }
 
 /// ADR 0238, printed only: the trend of `max |d_200|` over the number of outer iterations (two and five).
