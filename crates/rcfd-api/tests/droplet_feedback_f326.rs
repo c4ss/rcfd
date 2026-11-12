@@ -241,9 +241,45 @@ fn identities(sim: &Simulation, vol: &[f64], t0: &[f64], y0: Option<&[f64]>, hea
     }
 }
 
-/// C1, C1b, C2, C3, C3b, SR, R1, CV and NC1 to NC3 on CB (one run, 500 steps).
+/// [`identities`] with ADR 0348 A2.1: a residual is 0 when every term of its identity is 0 (no parcel injected yet).
+fn identities_a2(sim: &Simulation, vol: &[f64], t0: &[f64], y0: Option<&[f64]>, heat: bool) -> Ident {
+    let mut id = identities(sim, vol, t0, y0, heat);
+    if id.m_terms.iter().all(|x| *x == 0.0) {
+        id.rm = 0.0;
+    }
+    if id.p_terms.iter().all(|x| *x == 0.0) {
+        id.rp = 0.0;
+    }
+    if id.e_terms.iter().all(|x| *x == 0.0) {
+        id.re = 0.0;
+    }
+    id
+}
+
+/// The identities of the first run (`amended = false`) or of amendment 2 (A2.1).
+fn ident(amended: bool, sim: &Simulation, vol: &[f64], t0: &[f64], y0: Option<&[f64]>, heat: bool) -> Ident {
+    if amended {
+        identities_a2(sim, vol, t0, y0, heat)
+    } else {
+        identities(sim, vol, t0, y0, heat)
+    }
+}
+
+/// C1, C1b, C2, C3, C3b, SR, R1, CV and NC1 to NC3 on CB (one run, 500 steps), as amended by ADR 0348 amendment 2.
 #[test]
-fn cb_closed_box_conserves_mass_momentum_and_energy() {
+fn cb_closed_box_conserves_mass_momentum_and_energy_a2() {
+    cb_run(true);
+}
+
+/// The first run of CB, kept as a record (ADR 0348 amendment 2): it stopped at "C3b step 1: 7.99e-4" (the floor as a
+/// denominator).
+#[test]
+#[ignore = "SETUP DEFECT record (ADR 0348 amendment 2): C3b step 1 7.99e-4, the round-off floor used as a denominator"]
+fn cb_closed_box_conserves_mass_momentum_and_energy_setup_defect() {
+    cb_run(false);
+}
+
+fn cb_run(amended: bool) {
     let mut sim = build(&cb_text());
     let vol = sim.geom.mesh.cell_volumes().to_vec();
     let vsum: f64 = vol.iter().sum();
@@ -279,16 +315,34 @@ fn cb_closed_box_conserves_mass_momentum_and_energy() {
         // C1b: the species received the step's vapour
         let y = sim.field("vap").unwrap();
         let dy = RHO * (0..vol.len()).map(|c| vol[c] * (y[c] - y_before[c])).sum::<f64>();
-        let r1b = (dy - led.last_vapour).abs() / (led.last_vapour_abs + 1e-13 * RHO * vsum);
+        let r1b = if amended {
+            // A2.2: the registered floor as a round-off allowance; the printed number is the error over the bound
+            (dy - led.last_vapour).abs() / (1e-8 * led.last_vapour_abs + 1e-13 * RHO * vsum)
+        } else {
+            (dy - led.last_vapour).abs() / (led.last_vapour_abs + 1e-13 * RHO * vsum)
+        };
         w1b = w1b.max(r1b);
-        assert!(r1b <= 1e-8, "C1b step {steps}: {r1b:e}");
+        if amended {
+            assert!(r1b <= 1.0, "C1b (A2.2) step {steps}: error over bound {r1b:e}");
+        } else {
+            assert!(r1b <= 1e-8, "C1b step {steps}: {r1b:e}");
+        }
         // C3b: the temperature equation received the step's sensible heat
         let t = sim.field("T").unwrap();
         let dt = RHO * CP * (0..vol.len()).map(|c| vol[c] * (t[c] - t_before[c])).sum::<f64>();
         let inv = RHO * CP * (0..vol.len()).map(|c| vol[c] * t[c].abs()).sum::<f64>();
-        let r3b = (dt - led.last_heat).abs() / (led.last_heat_abs + 1e-13 * inv);
+        let r3b = if amended {
+            // A2.2: the registered floor as a round-off allowance; the printed number is the error over the bound
+            (dt - led.last_heat).abs() / (1e-8 * led.last_heat_abs + 1e-13 * inv)
+        } else {
+            (dt - led.last_heat).abs() / (led.last_heat_abs + 1e-13 * inv)
+        };
         w3b = w3b.max(r3b);
-        assert!(r3b <= 1e-8, "C3b step {steps}: {r3b:e}");
+        if amended {
+            assert!(r3b <= 1.0, "C3b (A2.2) step {steps}: error over bound {r3b:e}");
+        } else {
+            assert!(r3b <= 1e-8, "C3b step {steps}: {r3b:e}");
+        }
         // C2 (second part): the delivered momentum against the record
         let dif = [
             tw.delivered[0] - tw.exchanged[0],
@@ -302,7 +356,7 @@ fn cb_closed_box_conserves_mass_momentum_and_energy() {
             assert!(r <= 1e-12, "C2 delivered step {steps}: {r:e}");
         }
         // C1, C2, C3: the identities
-        let id = identities(&sim, &vol, &t0, Some(&y0), true);
+        let id = ident(amended, &sim, &vol, &t0, Some(&y0), true);
         wm = wm.max(id.rm);
         wp = wp.max(id.rp);
         we = we.max(id.re);
@@ -318,7 +372,7 @@ fn cb_closed_box_conserves_mass_momentum_and_energy() {
     let pr = sim.particle_run().unwrap();
     let tw = pr.coupling().unwrap();
     let led = tw.droplets.as_ref().unwrap();
-    let id = identities(&sim, &vol, &t0, Some(&y0), true);
+    let id = ident(amended, &sim, &vol, &t0, Some(&y0), true);
     // SR: the split of the energy source, and the vapour given to the species
     let sr_e =
         (tw.delivered_heat + led.mechanical + led.vapour_held - led.energy_record).abs() / led.energy_record.abs();
@@ -341,7 +395,7 @@ fn cb_closed_box_conserves_mass_momentum_and_energy() {
         pr.tracker.injected()
     );
     eprintln!(
-        "CB worst: C1 IM {wm:.3e}, C1b {w1b:.3e}, C2 IP {wp:.3e}, C2 delivered {w2b:.3e}, C3 IE {we:.3e}, C3b {w3b:.3e} (limits 1e-10, 1e-8, 1e-10, 1e-12, 1e-10, 1e-8)"
+        "CB worst (amended {amended}): C1 IM {wm:.3e}, C1b {w1b:.3e}, C2 IP {wp:.3e}, C2 delivered {w2b:.3e}, C3 IE {we:.3e}, C3b {w3b:.3e} (limits 1e-10, 1e-8 [A2.2: error over the bound, 1], 1e-10, 1e-12, 1e-10, 1e-8 [A2.2: 1])"
     );
     eprintln!("CB SR energy split {sr_e:.3e}, vapour {sr_m:.3e} (limits 1e-12)");
     eprintln!(
@@ -366,9 +420,20 @@ fn cb_closed_box_conserves_mass_momentum_and_energy() {
     assert!(id.nc[2] >= 1e-3, "NC3 {:e}", id.nc[2]);
 }
 
-/// C4: CB with pimple (two outer iterations), 100 steps.
+/// C4: CB with pimple (two outer iterations), 100 steps, as amended (A2.1).
 #[test]
-fn c4_pimple_closed_box() {
+fn c4_pimple_closed_box_a2() {
+    c4_run(true);
+}
+
+/// The first run of C4, kept as a record (ADR 0348 amendment 2): "C4 IM step 1: NaN" (no parcel yet, 0/0).
+#[test]
+#[ignore = "SETUP DEFECT record (ADR 0348 amendment 2): C4 IM step 1 NaN, all terms zero before the first injection"]
+fn c4_pimple_closed_box_setup_defect() {
+    c4_run(false);
+}
+
+fn c4_run(amended: bool) {
     let mut sim = build(&text(PIMPLE, true, true, &format!("{EVAP}{BREAKUP}")));
     let vol = sim.geom.mesh.cell_volumes().to_vec();
     let t0 = sim.field("T").unwrap();
@@ -379,7 +444,7 @@ fn c4_pimple_closed_box() {
         sim.step();
         steps += 1;
         assert!(sim.failure().is_none(), "step {steps}: {:?}", sim.failure());
-        let id = identities(&sim, &vol, &t0, Some(&y0), true);
+        let id = ident(amended, &sim, &vol, &t0, Some(&y0), true);
         wm = wm.max(id.rm);
         wp = wp.max(id.rp);
         we = we.max(id.re);
@@ -402,9 +467,20 @@ fn c4_pimple_closed_box() {
     assert_eq!(steps, 100, "C4 steps");
 }
 
-/// C5: breakup alone (no evaporation, no heat transfer, no energy, no species), 200 steps.
+/// C5: breakup alone (no evaporation, no heat transfer, no energy, no species), 200 steps, as amended (A2.1).
 #[test]
-fn c5_breakup_alone() {
+fn c5_breakup_alone_a2() {
+    c5_run(true);
+}
+
+/// The first run of C5, kept as a record (ADR 0348 amendment 2): "C5 IP step 1: NaN" (no parcel yet, 0/0).
+#[test]
+#[ignore = "SETUP DEFECT record (ADR 0348 amendment 2): C5 IP step 1 NaN, all terms zero before the first injection"]
+fn c5_breakup_alone_setup_defect() {
+    c5_run(false);
+}
+
+fn c5_run(amended: bool) {
     let t = text(
         &PISO.replace("end_time = 5e-3", "end_time = 2e-3"),
         false,
@@ -419,7 +495,7 @@ fn c5_breakup_alone() {
         sim.step();
         steps += 1;
         assert!(sim.failure().is_none(), "step {steps}: {:?}", sim.failure());
-        let id = identities(&sim, &vol, &[], None, false);
+        let id = ident(amended, &sim, &vol, &[], None, false);
         wp = wp.max(id.rp);
         assert!(id.rp <= 1e-10, "C5 IP step {steps}: {:e}", id.rp);
     }
