@@ -426,9 +426,11 @@ fn assert_same_mesh(a: &Mesh, b: &Mesh, what: &str) {
     }
 }
 
+type IsoCase = (&'static str, [Vec<f64>; 3], [bool; 3], u8, [(String, PatchKind); 6]);
+
 #[test]
 fn g5_isotropic_marks_give_the_isotropic_lattice_bit_for_bit() {
-    let cases: [(&str, [Vec<f64>; 3], [bool; 3], u8, [(String, PatchKind); 6]); 2] = [
+    let cases: [IsoCase; 2] = [
         (
             "slab",
             [uniform(6), uniform(5), vec![0.0, 0.1]],
@@ -612,10 +614,10 @@ fn g6c_the_stuck_tiling_is_a_valid_mesh_and_a_fixed_point_of_pair_coarsening() {
         .filter(|s| matches!(s, rcfd_mesh::adapt::Source::Merged(k) if k.len() == 2))
         .count();
     assert_eq!(merged, 3);
-    let (again, _, rep) = stuck.adapt(&vec![AxisMark::coarsen([true; 3]); 5], false).unwrap();
+    let (again, _, rep) = stuck.adapt(&[AxisMark::coarsen([true; 3]); 5], false).unwrap();
     assert_eq!((again.n_cells(), rep.coarsened), (5, 0));
     assert_eq!(again.leaves(), stuck.leaves());
-    let (back, _, _) = stuck.adapt(&vec![AxisMark::refine([true; 3]); 5], false).unwrap();
+    let (back, _, _) = stuck.adapt(&[AxisMark::refine([true; 3]); 5], false).unwrap();
     assert_eq!(back.leaves(), octants.leaves());
     check_topology(&back.to_mesh().unwrap(), 1.0, "G6c octants");
 }
