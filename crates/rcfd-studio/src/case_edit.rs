@@ -75,6 +75,9 @@ pub struct CaseEditor {
     /// Current settings tree (from the service).
     pub settings: Value,
     saved: Value,
+    /// The settings whose bytes the save in flight carries ([`CaseEditor::begin_save`]): what [`CaseEditor::saved`]
+    /// takes as saved, so that an edit made while the save is in flight stays an unsaved edit.
+    sent: Option<Value>,
     /// Hash of the bytes the settings were loaded from or last saved as.
     pub base_hash: String,
     conflict: Option<Option<Vec<u8>>>,
@@ -147,6 +150,7 @@ impl CaseEditor {
             rel: rel.to_string(),
             settings: Value::Null,
             saved: Value::Null,
+            sent: None,
             base_hash: hash_bytes(bytes),
             conflict: None,
             field_errors: BTreeMap::new(),
@@ -327,10 +331,19 @@ impl CaseEditor {
         .into_bytes())
     }
 
-    /// The worker wrote the file; `hash` is the new base.
+    /// The bytes of [`CaseEditor::to_bytes`] were handed to the worker: a save is in flight, and the settings those
+    /// bytes hold are kept for [`CaseEditor::saved`]. Call it right after `to_bytes`, before any other edit.
+    pub fn begin_save(&mut self) {
+        self.saving = true;
+        self.sent = Some(self.settings.clone());
+    }
+
+    /// The worker wrote the file; `hash` is the new base. The settings saved are those the written bytes hold (the ones
+    /// of [`CaseEditor::begin_save`]; the current ones when the save was not begun through it): an edit made while the
+    /// save was in flight is not in the file and stays unsaved.
     pub fn saved(&mut self, hash: String) {
         self.saving = false;
-        self.saved = self.settings.clone();
+        self.saved = self.sent.take().unwrap_or_else(|| self.settings.clone());
         self.base_hash = hash;
         self.conflict = None;
     }
@@ -338,6 +351,7 @@ impl CaseEditor {
     /// The worker refused the save: the file has another hash.
     pub fn save_conflict(&mut self, disk: Option<Vec<u8>>) {
         self.saving = false;
+        self.sent = None;
         self.conflict = Some(disk);
     }
 
@@ -379,6 +393,7 @@ impl CaseEditor {
         let old = std::mem::replace(&mut self.session, session);
         let _ = self.svc.call("session.close", &json!({ "session": old }));
         self.base_hash = hash_bytes(bytes);
+        self.sent = None;
         self.conflict = None;
         self.field_errors.clear();
         self.diagnostics.clear();
@@ -387,6 +402,12 @@ impl CaseEditor {
         self.refresh();
         self.saved = self.settings.clone();
         Ok(())
+    }
+
+    /// The worker could not do the save (a busy edit lock, an I/O error): nothing was written.
+    pub fn save_failed(&mut self) {
+        self.saving = false;
+        self.sent = None;
     }
 
     /// Resolve a conflict by taking the version on disk (the edits are dropped).

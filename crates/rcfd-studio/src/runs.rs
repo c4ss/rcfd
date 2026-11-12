@@ -112,6 +112,9 @@ pub struct RunsView {
     pub config: Option<Result<Config, String>>,
     /// The start dialog's plan, once made.
     pub plan: Option<Result<StartPlan, String>>,
+    /// The case and the hash of the case bytes [`RunsView::plan`] was made from (`None`: no plan, or its case was not
+    /// read).
+    pub plan_text: Option<(String, String)>,
     /// Events of the shown run.
     pub events: Vec<rcfd_project::records::RunEvent>,
     /// Last lines of the shown run's `log.txt`.

@@ -86,6 +86,8 @@ pub struct StartDialog {
     pub case: String,
     /// The case whose plan was asked for.
     pub asked: Option<String>,
+    /// When that plan was asked for: a change of the case on disk reported after it asks again.
+    pub asked_at: Option<std::time::Instant>,
     /// `path=value` overrides, one per line.
     pub overrides: String,
     /// Memory need in MB as typed (empty: estimated by the runner).
@@ -797,8 +799,19 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
                         ui.selectable_value(&mut d.case, c.clone(), c);
                     }
                 });
+            // the case changed on disk after its plan was asked for (a save in the case editor, the chat, another
+            // program): the plan is of the text before, so it is asked for again
+            let changed = st.project.as_ref().is_some_and(|p| {
+                p.changes
+                    .iter()
+                    .any(|(t, c)| *c == d.case && d.asked_at.is_some_and(|a| *t > a))
+            });
+            if changed {
+                d.asked = None;
+            }
             if !d.case.is_empty() && d.asked.as_deref() != Some(d.case.as_str()) {
                 d.asked = Some(d.case.clone());
+                d.asked_at = Some(std::time::Instant::now());
                 if let Err(m) = st.plan_start(&d.case) {
                     st.say(m);
                 }
@@ -877,7 +890,7 @@ fn start_dialog(ctx: &egui::Context, st: &mut Studio, us: &mut UiState) {
             }
             if start {
                 if let Some(Ok(plan)) = st.runs.plan.clone() {
-                    match st.start_run(plan) {
+                    match st.start_planned(plan) {
                         Ok(()) => done = true,
                         Err(m) => st.say(m),
                     }
