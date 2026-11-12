@@ -7202,6 +7202,8 @@ fixed by the item's registration ADR before any code.
     six caught; the body load on the stiffness rule (registered as may survive) and the one-point Hex8 stiffness survive
     (regular meshes hold the hourglass modes; the element tests catch it). Partial by the registered rule; done is the
     maintainer's call. The one-point Hex8 stiffness that survived here is caught on moved meshes by ADR 0355 (F-459).
+    The Tet4 case T L2 clause that missed on the pair 8 -> 16 (1.7925) is met one level finer, 1.9176 on 16 -> 32, by
+    F-458 (ADR 0365, 2026-11-12); the limit of F-378 is unchanged and its status stays partial.
 - [ ] **F-379** Closed-form benchmarks: cantilever bending and the thick-walled cylinder under pressure
   - depends on: F-371, F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever of slenderness L/h = 20
@@ -8464,13 +8466,21 @@ fixed by the item's registration ADR before any code.
     baseline_hashes pass unedited. Extensions: Hex8 40 x 2 x 2 converges in 7 iterations, equal to amendment 1; T^2
     (kappa 2.7e8) converges in 7 iterations within 1.1e-9 of the closed form where the default test stops at its floor
     2.8e-8 after 200. Seven mutations, all caught by registered tests. Done pending the maintainer's acceptance.
-- [ ] **F-458** Manufactured solution: the Tet4 traction-case L2 order on the pair 16 -> 32 as a registered check
+- [x] **F-458** Manufactured solution: the Tet4 traction-case L2 order on the pair 16 -> 32 as a registered check
   - depends on: F-378
   - acceptance: Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0279 ran
     this pair once as a diagnostic (L2 order 1.9176). The manufactured solution and case T of ADR 0279 with Tet4 on 8,
     16, 32 cells per edge (98 304 unknowns, direct solver, an ignored heavy record): the L2 order over the pair 16 -> 32
     is >= 1.8 and the energy order >= 0.9, both errors fall monotonically.
-  - note: From ADR 0279 addendum 1 (2026-11-12), Q1 recommendation.
+  - note: From ADR 0279 addendum 1 (2026-11-12), Q1 recommendation. F-458 (ADR 0365, 2026-11-12): done pending
+    acceptance. New ignored heavy test sb_mms_tet4_traction.rs runs the manufactured solution and case T of ADR 0279
+    with Tet4 on 8, 16, 32 cells per edge (98 304 unknowns at the finest, direct solver, 81 s, peak about 1.8 GB): L2
+    order of the pair 16 -> 32 is 1.9176 (limit 1.8), energy order 0.9912 (limit 0.9), both errors fall monotonically
+    (L2 2.731e-2, 7.883e-3, 2.087e-3). Registered with the disclosure that ADR 0279 ran this pair once as a diagnostic
+    (the same 1.9176), so the result is a regression record, not an independent prediction; the run reproduced the ADR
+    0279 errors at n = 8 and 16 to 6e-5. Four mutations (traction scaled 1.1, lambda term of the body force reversed,
+    zmax traction omitted, the previous pair 8 -> 16 with order 1.7925) each caught by the registered order checks. A
+    fast test covers the same path on 2, 4, 8. Tests only, sb_mms.rs unedited.
 - [x] **F-459** Manufactured solution on distorted meshes: orders of Tet4, Hex8, Tet10 with moved interior nodes, and the Hex8 stiffness rule
   - depends on: F-378
   - acceptance: Every limit not stated here is registered in the ADR before the run. The manufactured solution of ADR
