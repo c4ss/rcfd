@@ -3329,9 +3329,13 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     three levels), free of time error with BDF2. Found there and traced by ADR 0246 (F-334) to the truncation of the
     linear donor interpolation: with the component at rest the root mean square of the calculated component cells
     converges at 1.277, 1.166, 1.626 on levels 1 to 4 and at 1.922, 1.935, 1.950 with a third-order interpolation
-    supplied by the test; the mechanism is open. Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1);
-    several components, a moving background, hole cutting from the wall geometry, non-orthogonal correctors, turbulence
-    (Q2 to Q5).
+    supplied by the test; the mechanism is open. With the opt-in quadratic donor interpolation of F-336 (ADR 0251) the
+    Taylor-Green order with dt proportional to h^2 is 1.993 and 2.000 on levels 1 to 3 and the calculated component
+    cells at rest converge at 1.916, 1.924, 1.952 on levels 1 to 4; T1c stays a recorded miss of the default linear
+    stencils (1.618). Found by ADR 0251: the donor search (ADR 0219 M3) finds no donor for a point in the sliver between
+    two cells that share a non-planar face. Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1); several
+    components, a moving background, hole cutting from the wall geometry, non-orthogonal correctors, turbulence (Q2 to
+    Q5).
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
   - depends on: F-110, F-029
   - acceptance: Planar contraction and Poiseuille start-up compare with analytic Oldroyd-B solutions
@@ -6057,15 +6061,36 @@ fixed by the item's registration ADR before any code.
     0232. Four mutations caught. Cost: 2.6 times the wall time on TG_2. Not delivered: the case-tree wiring; a
     second-order time scheme on the overset path (follow-up). Follow-up (ADR 0238 questions 3 and 4, recommendation
     taken on the maintainer's standing instruction of 2026-11-11): F-338.
-- [ ] **F-336** Overset: donor interpolation of higher order
+- [x] **F-336** Overset: donor interpolation of higher order
   - depends on: F-134, F-334
   - acceptance: An opt-in donor interpolation that reproduces quadratic fields; with it the largest error over the
     calculated and fringe cells of TG_L converges at order 1.7 or more on levels 1 to 3 with dt proportional to h^2, the
     root mean square of the error of the calculated component cells of RL of ADR 0232 converges at order 1.7 or more on
     levels 1 to 4 (ADR 0246 TQ: 1.922, 1.935, 1.950 with test-supplied stencils), the uniform-flow check U1 of ADR 0219
     holds, and the default stencils and results are bit-identical.
-  - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    Optional, after F-334.
+  - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0251 (registration of F-336, 2026-11-12, merged 2026-11-12): DONE pending acceptance. Built: an opt-in of
+    rcfd_mesh::overset, Overset::set_donor_interpolation(DonorInterpolation::Quadratic): the stencil of a fringe cell is
+    the donor and the calculated cells that share a point with it (9 on quadrilaterals, 27 on hexahedra; a fringe or
+    hole cell is never a donor), with the weights of the weighted least-squares quadratic (the minimum of sum w^2/omega
+    under the reproduction of the 6 monomials in 2-D, 10 in 3-D, by a pivoted Householder QR). The weights sum to one,
+    can be negative (smallest -0.067, sum of absolute values 1.40 on a whole block) and are not clipped; a stencil with
+    fewer cells than monomials, of deficient rank or with a sum of absolute values above 4 keeps the linear stencil and
+    is listed (Connectivity::fallbacks, OversetInfo::n_fallback), and a step whose interpolated rAU is not positive is
+    refused. Met: quadratics are reproduced to 1e-15 on Cartesian, distorted, O-grid and sheared 3-D donor meshes; the
+    truncation converges at 3.00; TG_L with dt proportional to h^2 converges at 1.993 and 2.000 on levels 1 to 3
+    (largest error 7.68e-4, 1.93e-4, 8.58e-5, now in a background cell at the domain boundary; 1.0785e-3, 3.514e-4,
+    1.712e-4 with the linear stencils); the calculated component cells of RL converge at 1.916, 1.924, 1.952 on levels 1
+    to 4 (3.20e-4, 8.48e-5, 3.89e-5, 2.22e-5); the uniform flow holds to 1.1e-14; coincident meshes give the background
+    alone to 6e-12; no fallback and no unconverged solve on the registered set-ups; without the opt-in the stencils are
+    those of ADR 0219 bit for bit, Q0 and the records R2 hold. Said plainly: on the two coarsest levels of RL the
+    calculated component cells have 2.07 and 1.33 times the error of the linear stencils (the cancellation of ADR 0246),
+    0.98 and 0.89 at levels 3 and 4. Limits: a donor next to a wall or to its own fringe ring falls back to the linear
+    stencil; no flow run of the cylinder case or in 3-D with the opt-in. Six mutations caught. Found on the way: the
+    donor search of F-134 finds no donor in cells with non-planar faces. Open for the maintainer: whether the opt-in
+    should become the default (ADR 0251 Q1). Follow-ups (ADR 0251 questions 2 and 5, recommendation taken on the
+    maintainer's standing instruction of 2026-11-11): F-352, F-353. Open: question 1 (the quadratic interpolation as the
+    default changes a default).
 - [x] **F-337** Immersed solid: second-order force and moment
   - depends on: F-309
   - acceptance: The torque on the immersed rotating cylinder of circular Couette flow (the CC set-up of ADR 0218,
@@ -6240,3 +6265,17 @@ fixed by the item's registration ADR before any code.
     size is shown on 20, 40 and 80 cells; the default force evaluation is unchanged unless the maintainer approves the
     change with its effect on the existing hashes listed.
   - note: From ADR 0250 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-352** Overset: donor search on cells with non-planar faces
+  - depends on: F-134
+  - acceptance: On the set-up B3d of ADR 0251 (two hexahedral parts whose interior points are displaced by up to 0.15 of
+    the cell size in all three directions) every fringe centre gets a donor that agrees with a full search, the linear
+    and the quadratic stencils reproduce linear and quadratic fields to 1e-11, and on meshes with planar faces the
+    donors and stencils are bit-identical to those of today (the unit tests K2 and K4 of ADR 0219 and D1 of ADR 0251).
+  - note: From ADR 0251 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-353** Overset: the moving cylinder with the quadratic donor interpolation
+  - depends on: F-336
+  - acceptance: The set-up TR of ADR 0219 run with DonorInterpolation::Quadratic: mass of the domain and continuity
+    within 1e-9, no fallback or the count reported, drag within 5 percent of the body-fitted run at every step from t =
+    2 to t = 8 and the difference to the linear-stencil run reported; the ADR recommends for or against making the
+    quadratic interpolation the default.
+  - note: From ADR 0251 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
