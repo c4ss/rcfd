@@ -1947,9 +1947,9 @@
     "deps": [
       "F-244"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "A spring-mounted piston driving a fluid column at an added-mass to body-mass ratio of at least 1 oscillates at omega = sqrt(k/(M + rho A L0)) within 2 percent, the amplitude at successive same-side turning points never grows (ratio <= 1 + 1e-3) over at least 10 periods, and the explicit coupling of ADR 0033 D7 grows or diverges on the same case (registered before the run); halving dt changes the frequency by <= 0.5 percent",
-    "note": "Split from F-244 on 2026-10-22 (user decision). Acceptance text proposed by the lead; refine when scheduled. Size L. Needed for light structures; not on the first fan path."
+    "note": "Split from F-244 on 2026-10-22 (user decision). Size L. Needed for light structures; not on the first fan path. DONE (ADR 0250, registered 2026-11-12 before the code, merged 2026-11-12, not merged): opt-in library function rcfd_fv::fsi::strong_step (new module, nothing calls it; pimple.rs, pimple/moving.rs, sixdof.rs, ale.rs, rcfd-api and the case schema untouched; the loose coupling of ADR 0033 D7 is unchanged and with max_iterations = 1 the strong step equals it bit for bit). Within a time step it iterates on the fluid force and moment held over the body step, each iterate restarting body and flow from t_n, with a fixed or an Aitken relaxation; the Aitken start and the best fixed factor come from an added-mass estimate, 2M/(2M + m_a) (the added-mass term of the body equation written as a relaxation; the half belongs to RK4 with a constant force and a wall velocity taken from the displacement). Derived and measured: the loose loop as built is unstable above a mass ratio of 2, not 1, with a growth of sqrt(ratio/2) per step whatever the time step (flow: stable at 1.5, diverges at 3 and 4; growth 1.39 per step at ratio 4 for T/100 and T/200); the gain of the sub-iteration is 1 + ratio/2 (measured 2.952 at ratio 4), so a fixed factor converges below 4/(2 + ratio). Acceptance case, the spring-mounted piston of ADR 0211 at ratio 4 (M = 0.01, 11.5 periods): omega_m/omega 1.005081 at T/100 (limit 2 %), dt halving 1.7e-5 (limit 0.5 %), successive same-side turning points fall by 7.5 % a period at T/100 and 3.9 % at T/200 and never grow (lag of dt/2 of the end-of-step force), the loose coupling passes 10 X at step 28 (T/100) and 31 (T/200) and ends with the piston through the outlet; 3.0 flow solves per step at a tolerance of 1e-8, never more than 4 (cap 20). Also met: ratio 20 (1.005968, 3.25 solves per step), agreement with the loose coupling at ratio 0.2 (frequency within 2.0e-4, the trajectory difference halves with dt), the restart of an iterate bit-exact, refusals leave flow and body untouched, the existing sixdof, sixdof_coupled, sixdof_flow_f244, ale_flows and ale_gcl suites pass unedited; eight library mutations each failed their tests. Amendment 1 (before any run): the unrelaxed-iteration control was registered with a cap it cannot reach and was replaced by one with cap 10. Not delivered: selecting the coupling from a case file (no key; follow-up item), Newmark with the sub-iteration, a rotating body in a flow. Found, not fixed: the discrete added mass of the column is 1.25 % below rho A L0 at every ratio (the +0.1 % of ADR 0211, +0.5 % here); follow-up item. Open: ADR 0250 Q1 (reword \"ratio of at least 1\" to 4), Q2 (case key), Q3 (stop or warn at the cap), Q4 (added-mass deficit), Q5, Q6. Follow-ups (recommendation taken on the maintainer's standing instruction of 2026-11-11): F-350 (case key; Q2, Q3), F-351 (the added-mass deficit; Q4)."
   },
   {
     "id": "F-252",
@@ -2969,5 +2969,28 @@
     "status": "todo",
     "acceptance": "The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a third-order interpolation on the background fringe: 4.87e-5, 2.19e-5, 1.41e-5 at levels 1 to 3, orders 1.153 and 1.093) is traced to a named term of the coupled step by a switch that brings its order to 1.7 or more on levels 1 to 4, or is shown to reach order 1.7 on finer levels or at a later time, or the ADR names why not with a number.",
     "note": "From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low priority."
+  },
+  {
+    "id": "F-350",
+    "title": "Strong body-flow coupling selectable from the case tree",
+    "phase": 9,
+    "deps": [
+      "F-251"
+    ],
+    "status": "todo",
+    "acceptance": "A case with dynamic_mesh.six_dof.coupling = \"strong\" (default \"loose\") and its relaxation, added-mass estimate, tolerance, force scale and iteration cap as keys runs the spring-mounted piston at a mass ratio of 4 through the case driver and reproduces ADR 0250 S1 to S3 (omega within 2 percent, no growth of same-side turning points over 10 periods, dt halving within 0.5 percent), the same case with coupling = \"loose\" stops with a located error or grows; a step that reaches the cap stops the run with a located message unless a key says to continue; every static check of the new keys is located; with the default every existing case hash is bit-identical.",
+    "note": "From ADR 0250 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Needs crates/rcfd-api/src/schema.rs and sim.rs."
+  },
+  {
+    "id": "F-351",
+    "title": "Wall pressure of the body force on a fixed-flux moving wall (the 1.25 percent added-mass deficit)",
+    "phase": 9,
+    "deps": [
+      "F-251",
+      "F-244"
+    ],
+    "status": "todo",
+    "acceptance": "The cause of the discrete added mass of the piston column lying 1.25 percent below rho A L0 (ADR 0250 C1 and S1, ADR 0211 B1) is identified by a test that separates the wall-pressure extrapolation of patch_force_moment from the pressure of the flow step; if it is the extrapolation, an opt-in evaluation that uses the prescribed pressure gradient of the wall brings the sub-iteration gain at ratio 4 within 0.2 percent of the 2.977 of the model and omega_m/omega within 0.1 percent of 1 on the 20-cell column, and the convergence of the deficit with the cell size is shown on 20, 40 and 80 cells; the default force evaluation is unchanged unless the maintainer approves the change with its effect on the existing hashes listed.",
+    "note": "From ADR 0250 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11."
   }
 ]
