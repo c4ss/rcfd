@@ -869,10 +869,12 @@ fn long(l: usize) -> Case {
     }
 }
 
-/// ADR 0340 L at levels 1 and 2: `R_b` run on to `t = 3`; QL, NL and A3 on the first pair of levels.
+/// ADR 0340 L at levels 1 and 2: `R_b` run on to `t = 3`; QL, NL and A3 on the first pair of levels. Run once (1771 s):
+/// C1, C2, QS, QL (2.5 and 0.7 percent) and NL (1.198) met; A3 missed, the order of `R_b` at `t = 3` between levels 1
+/// and 2 is 1.418 (`1.4028e-4`, `5.2499e-5`) against the limit 1.7. Kept with the limit intact (ADR 0340 addendum 1).
 #[test]
-#[ignore = "slow (RL at levels 1 and 2 to t = 3, base and Qb, ADR 0340 L, about a quarter of an hour): run once"]
-fn l_long_run_levels_1_and_2() {
+#[ignore = "known miss, ADR 0340: A3 order of R_b at t = 3 between levels 1 and 2 is 1.418 (limit 1.7); slow"]
+fn l_long_run_levels_1_and_2_known_miss() {
     let mut c = Checks::new();
     let r1 = pair("L RL level 1", &long(1), &LONG_TIMES, &mut c);
     let r2 = pair("L RL level 2", &long(2), &LONG_TIMES, &mut c);
@@ -932,10 +934,12 @@ fn f_finer_level_5() {
 
 // ---- D: half the time step ---------------------------------------------------------------------------------------------------
 
-/// ADR 0340 D: RL at levels 1, 2, 3 with `400 L` steps; A1 for this switch (`rho_dt` is formed in the ADR against L).
+/// ADR 0340 D: RL at levels 1, 2, 3 with `400 L` steps; A1 for this switch (`rho_dt` is formed in the ADR against L). Run
+/// once (2613 s): C1, C2 and QS met; A1 missed, the orders of `R_b` at `t = 0.5` with half the step are 1.201 and 1.068
+/// (`5.0402e-5`, `2.1928e-5`, `1.4223e-5`) against the limit 1.7. Kept with the limit intact (ADR 0340 addendum 1).
 #[test]
-#[ignore = "slow (RL at levels 1 to 3 with half the step, base and Qb, ADR 0340 D, about half an hour): run once"]
-fn d_half_time_step_levels_1_to_3() {
+#[ignore = "known miss, ADR 0340: A1 (D) orders of R_b with half the step 1.201, 1.068 (limit 1.7); slow"]
+fn d_half_time_step_levels_1_to_3_known_miss() {
     let mut c = Checks::new();
     let r: Vec<f64> = (1..=3usize)
         .map(|l| {
@@ -961,10 +965,12 @@ fn d_half_time_step_levels_1_to_3() {
 
 // ---- E: equal spacings, no modulation along the ring -------------------------------------------------------------------------
 
-/// ADR 0340 E: RE at levels 1, 2, 3; A1 for this switch.
+/// ADR 0340 E: RE at levels 1, 2, 3; A1 for this switch. Run once (1097 s): C1, C2 and QS met; A1 missed, the orders of
+/// `R_b` at `t = 0.5` are 0.983 and 1.015 (`6.4279e-5`, `3.2510e-5`, `2.1540e-5`) against the limit 1.7. Kept with the
+/// limit intact (ADR 0340 addendum 1).
 #[test]
-#[ignore = "slow (RE at levels 1 to 3, base and Qb, ADR 0340 E, about a quarter of an hour): run once"]
-fn e_equal_spacings_levels_1_to_3() {
+#[ignore = "known miss, ADR 0340: A1 (E) orders of R_b on RE 0.983, 1.015 (limit 1.7); slow"]
+fn e_equal_spacings_levels_1_to_3_known_miss() {
     let mut c = Checks::new();
     let r: Vec<f64> = (1..=3usize)
         .map(|l| pair(&format!("E RE level {l}"), &re(l), &TIMES, &mut c)[4])
