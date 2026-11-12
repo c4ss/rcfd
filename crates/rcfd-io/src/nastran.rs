@@ -349,3 +349,147 @@ impl Deck {
 fn err(line: usize, msg: &str) -> Error {
     Error::Io(format!("load deck: line {line}: {msg}"))
 }
+
+/// Shell heat-flux load of the repository's own card `RCFDQ,SID,EID,Q` (F-237, ADR 0244 D2): heat flux `q` per unit area
+/// [W/m^2], uniform over the `CQUAD4` or `CTRIA3` element `eid`, positive from the fluid into the structure. It is not a
+/// vendor card; no third-party solver reads it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeatFlux {
+    /// Load set id.
+    pub sid: i64,
+    /// Element id.
+    pub eid: i64,
+    /// Heat flux [W/m^2].
+    pub q: f64,
+}
+
+const HEAT_CARD: &str = "RCFDQ";
+
+fn is_heat_card(line: &str) -> bool {
+    let t = line.trim();
+    let name = t.split(',').next().unwrap_or("").trim();
+    name.eq_ignore_ascii_case(HEAT_CARD)
+}
+
+/// Write `deck` followed by one `RCFDQ` card per heat-flux load, before `ENDDATA` (ADR 0244 D3). With `heat` empty the text
+/// is byte-identical to [`Deck::to_string_checked`].
+pub fn write_with_heat_flux(deck: &Deck, heat: &[HeatFlux]) -> Result<String> {
+    let mut o = deck.to_string_checked()?;
+    if heat.is_empty() {
+        return Ok(o);
+    }
+    let bad = |m: String| Error::Io(format!("load deck: {m}"));
+    let shells: HashSet<i64> = deck
+        .elements
+        .iter()
+        .filter(|e| e.kind != ElemKind::Hexa8)
+        .map(|e| e.id)
+        .collect();
+    let mut seen = HashSet::new();
+    for h in heat {
+        if h.sid <= 0 {
+            return Err(bad(format!(
+                "{HEAT_CARD} on element {}: set id {} is not positive",
+                h.eid, h.sid
+            )));
+        }
+        if !shells.contains(&h.eid) {
+            return Err(bad(format!(
+                "{HEAT_CARD} references element {} which is not a CQUAD4 or CTRIA3 of the deck",
+                h.eid
+            )));
+        }
+        if !h.q.is_finite() {
+            return Err(bad(format!(
+                "{HEAT_CARD} on element {} has a non-finite heat flux",
+                h.eid
+            )));
+        }
+        if !seen.insert((h.sid, h.eid)) {
+            return Err(bad(format!(
+                "{HEAT_CARD} set {} element {} is given twice",
+                h.sid, h.eid
+            )));
+        }
+    }
+    let end = "ENDDATA\n";
+    debug_assert!(o.ends_with(end));
+    o.truncate(o.len() - end.len());
+    for h in heat {
+        let _ = writeln!(o, "{HEAT_CARD},{},{},{}", h.sid, h.eid, real(h.q));
+    }
+    o.push_str(end);
+    Ok(o)
+}
+
+/// Parse a deck written by [`write_with_heat_flux`]: the `RCFDQ` lines are set aside (every other line keeps its number and
+/// goes to [`Deck::parse`] unchanged), then parsed with `line N` errors.
+pub fn parse_with_heat_flux(text: &str) -> Result<(Deck, Vec<HeatFlux>)> {
+    let mut rest = String::with_capacity(text.len());
+    let mut cards: Vec<(usize, &str)> = Vec::new();
+    let mut end_line: Option<usize> = None;
+    for (i, raw) in text.lines().enumerate() {
+        let t = raw.trim();
+        if end_line.is_none() && t.to_ascii_uppercase().starts_with("ENDDATA") {
+            end_line = Some(i + 1);
+        }
+        if is_heat_card(t) {
+            if end_line.is_some() {
+                return Err(err(i + 1, &format!("{HEAT_CARD} card after ENDDATA")));
+            }
+            cards.push((i + 1, t));
+            rest.push_str("$\n");
+        } else {
+            rest.push_str(raw);
+            rest.push('\n');
+        }
+    }
+    let deck = Deck::parse(&rest)?;
+    let kinds: std::collections::HashMap<i64, ElemKind> = deck.elements.iter().map(|e| (e.id, e.kind)).collect();
+    let mut seen = HashSet::new();
+    let mut heat = Vec::with_capacity(cards.len());
+    for (ln, card) in cards {
+        let f: Vec<&str> = card.split(',').map(|s| s.trim()).collect();
+        let field = |k: usize, what: &str| -> Result<&str> {
+            f.get(k)
+                .copied()
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| err(ln, &format!("{HEAT_CARD} card: missing {what}")))
+        };
+        let int = |k: usize, what: &str| -> Result<i64> {
+            let s = field(k, what)?;
+            s.parse::<i64>()
+                .map_err(|_| err(ln, &format!("{HEAT_CARD} card: {what} '{s}' is not an integer")))
+        };
+        let sid = int(1, "SID")?;
+        if sid <= 0 {
+            return Err(err(ln, &format!("{HEAT_CARD} card: SID {sid} is not positive")));
+        }
+        let eid = int(2, "EID")?;
+        let qs = field(3, "Q")?;
+        let q = qs
+            .parse::<f64>()
+            .map_err(|_| err(ln, &format!("{HEAT_CARD} card: Q '{qs}' is not a number")))?;
+        if !q.is_finite() {
+            return Err(err(ln, &format!("{HEAT_CARD} card: Q is not finite")));
+        }
+        if f.len() > 4 {
+            return Err(err(ln, &format!("{HEAT_CARD} card: too many fields")));
+        }
+        match kinds.get(&eid) {
+            None => return Err(err(ln, &format!("{HEAT_CARD} references undefined element {eid}"))),
+            Some(ElemKind::Hexa8) => {
+                return Err(err(
+                    ln,
+                    &format!("{HEAT_CARD} element {eid} is a CHEXA, not a CQUAD4 or CTRIA3 shell"),
+                ))
+            }
+            Some(_) => {}
+        }
+        if !seen.insert((sid, eid)) {
+            return Err(err(ln, &format!("{HEAT_CARD} set {sid} element {eid} is given twice")));
+        }
+        heat.push(HeatFlux { sid, eid, q });
+    }
+    Ok((deck, heat))
+}
