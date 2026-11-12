@@ -7118,7 +7118,7 @@ fixed by the item's registration ADR before any code.
     R1 test stopped at its count assertion (the registration listed 54 repeated-root tensors for a list of 57) and
     passed only as the corrected test of amendment 1, written after that run; no limit changed; done is the maintainer's
     call.
-- [ ] **F-377** VTK output of a solid result: finite-element cells with point and cell data
+- [x] **F-377** VTK output of a solid result: finite-element cells with point and cell data
   - depends on: F-376, F-070
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-io gains a writer of an
     unstructured grid of finite elements from plain arrays (VTK cell types 10, 12 and 24, point data and cell data); the
@@ -7127,15 +7127,22 @@ fixed by the item's registration ADR before any code.
     A test parses the file back: counts, offsets and cell types are consistent, every value has the bits that were
     written, and a box under uniform strain read back has displacement eps x at every node within 1e-15; a field of the
     wrong length is refused by name.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0278; the registration is written
-    by the implementation agent before any code. ADR 0271 (2026-11-12) recalls the Hex8 and Tet10 node orders as VTK's
-    (cell types 12 and 24) without a check; confirm them from the public file-format document and map in the writer if
-    one differs. ADR 0277 (2026-11-12): nodal stresses for the VTK output come from
-    recover::IntegrationPointField::from_result(model, result) and recover::nodal_average(model, &field, field.stress(),
-    region) (Option per node, None where the region has no element; refused across a material interface, so a
-    multi-material model is written per element set or with element values); element stress components from
-    field.element_means(field.stress()); recover::von_mises and recover::principal (values descending, directions with
-    the largest-modulus entry positive) per value.
+  - note: DONE pending acceptance, merged 2026-11-12. Structural solver, basic tier (plan ADR 0270). ADR 0278,
+    2026-11-12: rcfd_io::vtk gains fe_vtu_string and write_fe_vtu, an XML .vtu (ASCII, shortest round-trip floats, the
+    existing writer's layout) of finite-element cells from plain arrays (FeCellBlock with VTK_TETRA 10, VTK_HEXAHEDRON
+    12, VTK_QUADRATIC_TETRA 24; FeArray point and cell data of any component count), refusing an unknown type, a broken
+    connectivity and an array of the wrong length, without components or with a bad name, each naming the array or key;
+    the existing writers are unchanged (211 lines inserted before the test module, none changed) and their tests pass.
+    rcfd_post::solid_output (rcfd-post now depends on rcfd-fem) writes a SolidResult: point arrays displacement,
+    nodal-averaged stress, von_mises, principal_stress and principal_direction_1..3 of that tensor, reaction; cell array
+    stress (element means); solid_fields exposes the arrays. Node orders of Tet4, Hex8 and Tet10 confirmed identical to
+    VTK's from the vtkTetra, vtkHexahedron, vtkQuadraticHexahedron and vtkQuadraticTetra class documentation (no mapping
+    needed; vtk_from_fem keeps the identity table); the type numbers are recalled. Tests parse the files back: counts,
+    offsets and types consistent; every value bit-equal; a 2 x 2 x 2 box under uniform strain has displacement eps x at
+    every node within 8.7e-19 (limit 1e-15) for Hex8, Tet4 and Tet10; documented node orders hold on the files (Tet10
+    midpoints exact, Hex8 edges within 9.3e-17 L); stresses equal D eps within 1.5e-15; wrong-length arrays refused by
+    name (and a result of another mesh as displacement). Eleven mutations caught. Not checked in a viewer (the
+    maintainer's visual check).
 - [ ] **F-378** Verification by a manufactured solution: observed order of displacement and stress for the three elements
   - depends on: F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Manufactured solution: a smooth
@@ -7265,7 +7272,8 @@ fixed by the item's registration ADR before any code.
     reactions equal the fluid's integrated force within 0.1 percent (the F-237 limit); TEMP of a uniform temperature
     gives the free expansion alpha dT r within 1e-6.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0285; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and
+    the stub module rcfd_post::solid_loads; the solid result's VTK output is rcfd_post::solid_output::write_solid_vtu.
 - [ ] **F-385** One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
   - depends on: F-374, F-377, F-139
   - acceptance: Every limit not stated here is registered in the ADR before the run. Fluid face forces on a wall are
@@ -7280,7 +7288,8 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0286; the registration is written
     by the implementation agent before any code. ADR 0276 (2026-11-12): loads::face_shape_functions and loads::face_rule
     (Tri3, Quad4, Tri6 in the local face orders of ADR 0271) are public for nodal loads of face forces or pressures
-    given per face or node.
+    given per face or node. ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and the stub module
+    rcfd_post::solid_coupling.
 - [ ] **F-386** A solid case file of its own and the library entry that runs it
   - depends on: F-371, F-377, F-381, F-383, F-013, F-080
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case file (TOML of its own:
@@ -7293,7 +7302,9 @@ fixed by the item's registration ADR before any code.
     flow case key, CLI help text, MCP tool list, hash table or golden changes (the existing schema, CLI and tool-list
     tests pass unedited).
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0287; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0278 (2026-11-12): a solid run writes its result with
+    rcfd_post::solid_output::write_solid_vtu(path, model, result); a multi-material model is refused by the nodal
+    average (per-set output is an open question of ADR 0278).
 - [ ] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
