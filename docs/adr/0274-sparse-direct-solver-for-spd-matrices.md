@@ -310,3 +310,23 @@ A: **todo**.
 - No parallel factorisation; no supernodes or blocking; no out-of-core storage.
 - No complex, unsymmetric or rectangular matrices; no update or downdate of a factor.
 - The memory figure is the factor's arrays plus the peak working set of a test process; allocator overhead is not separated.
+
+## Amendment 1 (2026-11-12, written and committed before the runs it registers)
+
+The registered fast checks C1 to C13 were run once (all met; the numbers go in the addendum) and the mutations M1 to M9 were run
+once on a scratch copy. Two mutations survived, and both are gaps of the test set, not of the code:
+
+- **M2** (`lo = f_i` instead of `max(f_i, f_j)`) passed C1 to C3. Diagnosis: on every matrix of C1 to C3 the envelope is
+  monotone (`f_j <= f_i` for `j < i`): true of a breadth-first (Cuthill-McKee type) order and of the lexicographic order of a
+  grid, so `max(f_i, f_j) = f_i` and the mutant is equivalent there. It is not equivalent for a non-monotone envelope, which
+  the default RCM never produced in these checks but a `Given` or `Natural` order of a scrambled matrix does.
+- **M9** (`NonZero` refuses nothing) passed C6: C6 has no `NonZero` case, contrary to what the mutation table assumed.
+
+Added checks (new tests; C1 to C13 and their limits are unchanged):
+
+| Id | Check | Limit | Estimate behind it |
+| --- | --- | --- | --- |
+| C2b | P factorised with `Natural` (its scrambled input order, a non-monotone envelope of 1 098 246 as printed by C4): relative residual; agreement with cg; and the envelope is not monotone (some `j < i` with `f_j > f_i`) | `<= 1e-12`; `<= 1e-9`; not monotone (control) | as C1 with `w <= 1727`: `sqrt(1727) u 10 ~ 5e-14`; agreement as C1 |
+| C6b | path Laplacian of 50 nodes, `Natural`, `NonZero`: `Pivot { row: 49, position: 49, pivot: 0.0 }` | as stated | exact arithmetic as C6 |
+
+M2 is then rerun against C2b and M9 against C6b, once each.
