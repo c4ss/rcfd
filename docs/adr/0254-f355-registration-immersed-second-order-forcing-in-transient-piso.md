@@ -392,3 +392,42 @@ The refusal is a sufficient condition, not a stability criterion (two measured s
 `c0` is that of Euler for Crank-Nicolson and the bounded BDF2. The image form needs a fluid cell behind the first fluid cell
 on the same line; a fluid gap one cell wide falls back to first order at that face. Non-orthogonal meshes are not checked.
 SIMPLE with under-relaxation below 1 and a large weight is not examined (the checks of ADR 0234 ran SIMPLEC with 1.0).
+
+## Amendment 2 (2026-11-12): two missed limits, their records and two further measurements
+
+Written after the first run of D9, P, UB1 to UB3, RF, CC-A1, CC-V3, D0' and SB on the library of 68392e71 (one invocation
+each, `f355-scratch/run_b.log`, `run_sb.log`), while the run A was in progress, and before the runs registered here. No limit
+is changed and no library code is changed by this amendment.
+
+**Missed: D9, the size.** After the first step of R the face with the largest flux velocity has the weight 38.99 (limit
+`>= 5`: held) and `abs(v_f) = 2.49` (limit `>= 4.5`: **missed**); "late" after 200 steps: 0.187 (limit `<= 1.5`: held; 0.182
+after its first step). The fluid cell of that face holds `abs(u) = 0.095`: after one step the cells with a small `theta` are
+already slow, and the flux velocity on the worst face is 1.7 times the inflow maximum, 13 times that of the developed field,
+not the "tens of times" the amendment 1 text claims for the first step. The largest difference between the flux velocity and
+the extension of the cell velocity is 6.1 (0.029 in "late"): the flux is the extension of `HbyA_c`, which at the start differs
+from the cell velocity by the pressure-gradient part, and that difference is what the weight multiplies. The growth to the
+stop happens over steps 2 to 5 (`m_n` 11.9, 732, 4.0e4, 2.3e5). The test is split: `d9_located_cause` keeps the two limits that
+held, `d9_flux_velocity_after_the_first_step_known_miss` (ignored) keeps the limit 4.5 with the measured 2.49. By the rule of
+amendment 1 the cause is therefore **not confirmed in the registered form**; D10 below measures where the growth sits, and
+does not replace D9 in the decision rule.
+
+**Missed: SB, one of its twelve runs.** Bounded runs R and nine of the ten variants (largest `abs(u)` 2.09 to 2.26, as the
+first-order controls) and CC with `dt = 2.5e-5` (0.496); with **one corrector** (`n_correctors = 1`) it stops at step 34 by
+the Courant guard (2.4e7; the first-order control ran; `build_second_order` stopped at step 11). The test is split:
+`sb_bounded_runs_the_variants_that_stopped` keeps the eleven runs that held, `sb_bounded_with_one_corrector_known_miss`
+(ignored) keeps the limit with the measured step 34. D11 below is its diagnosis.
+
+### Measurements registered now
+
+| Id | Measurement | Decides |
+| --- | --- | --- |
+| D10 | R with `build_second_order` (the check off), after each of the steps 1 to 5: the flux face with the largest `abs(v_f)`, its weight. Bounded on R, the same after each of the steps 1 to 5 and after step 200 | **the growth sits on the large-weight faces** if the weight is `>= 5` at each of the five steps and `abs(v_f) >= 45` (30 times the inflow maximum) at step 3; **the bounded form removes it** if its largest `abs(v_f)` is `<= 3` (twice the inflow maximum) at each of the six instants. Known beforehand: `m_3 = 732` (a cell velocity, not a flux velocity) |
+| D11 | R with one corrector, at most 200 steps, three runs: (a) `build_second_order` with `theta_min = 0.5` (every weight at most 1, the flux velocity an interpolation); (b) `build_second_order` with `theta_min = 0.25` (weights up to 2: the flux velocity up to the reflection `-HbyA_c`, no image face); (c) bounded with `theta_min = 0.1` (image faces with `a <= 0.3`) | (a) runs and (b) stops: a reflection of magnitude up to 1 on the fluid-solid faces is not survived by PISO with a single corrector, whatever the stencil (the bounded form then needs two correctors, as does D1 with `w = 2`). (a) stops: the reconstructed flux with the source needs a second corrector at Re 100 as such. (a) and (b) run: the image stencil is the cause. (c) is printed |
+
+Hand estimate behind D11 (disclosed): with one corrector the cell velocity is corrected with the gradient of a pressure that
+was solved for the fluxes of the predictor's `HbyA`, and the flux of the next step's flux faces is built from the `HbyA` of a
+velocity that was never made consistent with them; a second corrector repeats the reconstruction on the corrected velocity.
+The reflection returns the full wall-normal part of `HbyA_c`, so an error of the single corrector is returned at full size.
+No number is predicted.
+
+The decision rule is unchanged: with D9 and one run of SB missed the item is at most **partial** by the rule, whatever A gives.
