@@ -591,7 +591,11 @@ const GAMMA_M: f64 = 2e-3;
 
 /// Set-up G3 of ADR 0344: returns the solver after 50 steps of `dt = 0.01` translating at `(0.2, 0, 0)`.
 fn g3_run(form: SpongeForm, frame: SpongeFrame) -> (CompressibleSolver, Mesh) {
-    let mesh0 = box_2d(16, 8, 1.6, 0.8, false, false).unwrap();
+    g3_run_on(box_2d(16, 8, 1.6, 0.8, false, false).unwrap(), form, frame)
+}
+
+/// Set-up G3 on the grid `mesh0` (G3b of ADR 0344 amendment 1 uses a longer grid).
+fn g3_run_on(mesh0: Mesh, form: SpongeForm, frame: SpongeFrame) -> (CompressibleSolver, Mesh) {
     let mut s = CompressibleSolver::new(geom(mesh0.clone()), AIR, CompSettings::default(), |_| ambient()).unwrap();
     for p in ["xmin", "xmax", "ymin", "ymax"] {
         s.set_bc(p, CompBc::Fixed(ambient())).unwrap();
@@ -640,9 +644,13 @@ fn g3_interior(mesh0: &Mesh) -> Vec<usize> {
 }
 
 /// G3m, G3s and G3c of ADR 0344: the memories of the lab frame on a mesh translating normal to the layer against the
-/// closed form; the attached memory as the control.
+/// closed form; the attached memory as the control. Ignored record: measured at 52c47760 G3m `q` 8.92e-3, G3s `q`, `r`,
+/// `m` 8.92e-3 against 1e-12 (missed), the drift 2.2e-15 and G3c 0.0625 (held). Amendment 1 of ADR 0344: the set-up is
+/// defective (the half gradient of the end columns is carried inwards); the corrected check is
+/// [`g3b_lab_memory_transport_against_the_closed_form`].
 #[test]
-fn g3_lab_memory_transport_against_the_closed_form() {
+#[ignore = "setup_defect record (ADR 0344 amendment 1): G3m and G3s measured 8.92e-3 against 1e-12; superseded by g3b"]
+fn g3_lab_memory_transport_against_the_closed_form_setup_defect() {
     let shifted = SpongeForm::MatchedShifted(MatchedOptions {
         normal: [1.0, 0.0, 0.0],
         shift: 0.0,
@@ -673,6 +681,52 @@ fn g3_lab_memory_transport_against_the_closed_form() {
     let (dm, ds) = (drift(&sm), drift(&ss));
     println!(
         "G3 t = {:.2}: G3m q {g3m:.2e}, drift {dm:.2e}; G3s q {g3q:.2e}, r {g3r:.2e}, m {g3mm:.2e}, drift {ds:.2e} (limit {ROUND_OFF:e} each); G3c attached q {g3c:.4} (>= 0.05)",
+        sm.time
+    );
+    assert!(g3m <= ROUND_OFF && dm <= ROUND_OFF, "G3m {g3m} {dm}");
+    assert!(
+        g3q <= ROUND_OFF && g3r <= ROUND_OFF && g3mm <= ROUND_OFF && ds <= ROUND_OFF,
+        "G3s {g3q} {g3r} {g3mm} {ds}"
+    );
+    assert!(g3c >= 0.05, "G3c {g3c}");
+}
+
+/// G3b of ADR 0344 amendment 1: set-up G3 on `box_2d(64, 4, 6.4, 0.4)`, compared in the cells at least 14 cells from
+/// either end (`1.4 <= x <= 5.0` at `t = 0`); the limits of G3.
+#[test]
+fn g3b_lab_memory_transport_against_the_closed_form() {
+    let shifted = SpongeForm::MatchedShifted(MatchedOptions {
+        normal: [1.0, 0.0, 0.0],
+        shift: 0.0,
+        along: 0.0,
+        second: None,
+    });
+    let grid = || box_2d(64, 4, 6.4, 0.4, false, false).unwrap();
+    let check = |s: &CompressibleSolver, mesh0: &Mesh| -> (f64, f64, f64) {
+        let c0 = mesh0.cell_centres();
+        let cc = s.geom.mesh.cell_centres();
+        let mem = s.sponge_memories();
+        let t = s.time;
+        let (mut eq, mut er, mut em) = (0.0f64, 0.0f64, 0.0f64);
+        for c in (0..cc.len()).filter(|&c| c0[c][0] >= 1.4 && c0[c][0] <= 5.0) {
+            eq = eq.max((mem.q[c] - BETA * cc[c][0]).abs() / (1.6 * BETA));
+            if !mem.r.is_empty() {
+                er = er.max((mem.r[c] - BETA * cc[c][0] * t).abs() / (1.6 * BETA * t));
+                let want = [GAMMA_M * cc[c][0], 0.0, 0.0];
+                em = em.max(vec3::norm(vec3::sub(mem.m[c], want)) / (1.6 * GAMMA_M));
+            }
+        }
+        (eq, er, em)
+    };
+    let (sm, mesh0) = g3_run_on(grid(), MATCHED_X, SpongeFrame::AttachedWithLabMemory);
+    let (g3m, _, _) = check(&sm, &mesh0);
+    let (ss, _) = g3_run_on(grid(), shifted, SpongeFrame::AttachedWithLabMemory);
+    let (g3q, g3r, g3mm) = check(&ss, &mesh0);
+    let (sc, _) = g3_run_on(grid(), MATCHED_X, SpongeFrame::AttachedToMesh);
+    let (g3c, _, _) = check(&sc, &mesh0);
+    let (dm, ds) = (drift(&sm), drift(&ss));
+    println!(
+        "G3b t = {:.2}: G3m q {g3m:.2e}, drift {dm:.2e}; G3s q {g3q:.2e}, r {g3r:.2e}, m {g3mm:.2e}, drift {ds:.2e} (limit {ROUND_OFF:e} each); G3c attached q {g3c:.4} (>= 0.05)",
         sm.time
     );
     assert!(g3m <= ROUND_OFF && dm <= ROUND_OFF, "G3m {g3m} {dm}");
