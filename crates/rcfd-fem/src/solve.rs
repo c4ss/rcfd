@@ -19,6 +19,8 @@ use rcfd_linalg::{cg, CsrMatrix, Jacobi, Preconditioner, SolveControl};
 // ADR 0357 (F-460): fill levels and the node-wise ordering of the incomplete Cholesky.
 use rcfd_linalg::precond::Permuted;
 use rcfd_linalg::reorder::block_rcm_order;
+// ADR 0305 (F-402): smoothed-aggregation multigrid with the rigid-body modes.
+use rcfd_linalg::amg_elastic::{rigid_body_modes, ElasticAmg, ElasticAmgSettings};
 
 /// Relative pivot threshold of the direct solve: a pivot `d_i <= PIVOT_TOLERANCE a_ii` is refused (ADR 0275 arithmetic 4).
 pub const PIVOT_TOLERANCE: f64 = 1e-10;
@@ -66,6 +68,9 @@ pub enum CgPreconditioner {
         /// The ordering of the factor.
         ordering: IcOrdering,
     },
+    /// One V-cycle of smoothed-aggregation multigrid with the six rigid-body modes of the free nodes as near-null space
+    /// (ADR 0305).
+    SmoothedAggregation(ElasticAmgSettings),
 }
 
 /// The ordering of the incomplete Cholesky factor of [`CgPreconditioner::IncompleteCholeskyFill`] (ADR 0357).
@@ -190,6 +195,7 @@ pub fn solve_static_report(
                 &sys.rhs,
                 sys.free(),
                 &dofs,
+                model.mesh().nodes(),
                 preconditioner,
                 *tolerance,
                 *max_iterations,
@@ -224,6 +230,10 @@ fn solver_name(s: &StaticSolver) -> &'static str {
             preconditioner: CgPreconditioner::IncompleteCholeskyFill { level, ordering, .. },
             ..
         } => ic_fill_name(*level, *ordering),
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::SmoothedAggregation(_),
+            ..
+        } => "cg-amg-rbm",
     }
 }
 
@@ -242,6 +252,26 @@ pub fn node_blocks(free: &[usize], dofs: &DofMap) -> Vec<usize> {
         ptr.push(free.len());
     }
     ptr
+}
+
+/// The multigrid of [`CgPreconditioner::SmoothedAggregation`] for the reduced stiffness `a` (ADR 0305 D7): the node
+/// blocks of the free equations and the six rigid-body modes of their nodes, from the coordinates `nodes`.
+pub fn smoothed_aggregation(
+    a: &CsrMatrix,
+    free: &[usize],
+    dofs: &DofMap,
+    nodes: &[rcfd_core::vec3::Vec3],
+    settings: &ElasticAmgSettings,
+) -> std::result::Result<ElasticAmg, rcfd_linalg::amg_elastic::ElasticAmgError> {
+    let (points, components): (Vec<[f64; 3]>, Vec<usize>) = free
+        .iter()
+        .map(|&q| {
+            let (n, c) = dofs.node_component(q).expect("free equation exists");
+            (nodes[n], c)
+        })
+        .unzip();
+    let modes = rigid_body_modes(&points, &components);
+    ElasticAmg::new(a, &node_blocks(free, dofs), &modes, settings)
 }
 
 fn precond_reason(e: &PrecondError, free: &[usize], dofs: &DofMap) -> String {
@@ -266,6 +296,7 @@ fn preconditioned_cg(
     b: &[f64],
     free: &[usize],
     dofs: &DofMap,
+    nodes: &[rcfd_core::vec3::Vec3],
     preconditioner: &CgPreconditioner,
     tolerance: f64,
     max_iterations: usize,
@@ -353,6 +384,13 @@ fn preconditioned_cg(
                 Some(o) => Box::new(Permuted::new(o, ic)),
                 None => Box::new(ic),
             }
+        }
+        CgPreconditioner::SmoothedAggregation(settings) => {
+            let amg = smoothed_aggregation(a, free, dofs, nodes, settings).map_err(|e| FemError::Solver {
+                solver,
+                reason: e.to_string(),
+            })?;
+            Box::new(amg)
         }
     };
     let target = tolerance * norm2(b);
