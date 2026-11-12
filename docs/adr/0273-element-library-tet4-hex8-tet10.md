@@ -353,3 +353,109 @@ test, never taken on trust.
 
 A tetrahedral rule recalled with wrong weights (the monomial check catches it); the rank check on a badly shaped element;
 node-order convention of Tet10 differing from the mid-edge upgrade of ADR 0271.
+
+## Addendum 1: results (2026-11-12)
+
+Code at commit 4c806df0 (after the registration cd1cdc8e): `crates/rcfd-fem/src/element.rs`, `quadrature.rs`, `material.rs`
+(the three stubs filled) and `crates/rcfd-fem/tests/sb_elements.rs`; no other file. The constants of `tet_14` were solved first
+by `f372-scratch/tet14.py` (Newton on the six invariant equations from the recalled start values; converged in one step to a
+residual of 2.8e-17; all points inside, all weights positive; constants agree with the recalled ones to the eight to ten digits
+recalled), so the Newton rule is used, not the fallback. The registered run was made once, in release, with `cargo test -p
+rcfd-fem --release --test sb_elements -- --nocapture --test-threads=1` (8 passed). Log: `w49i-work/f372-scratch/run1.log`.
+Numbers are maxima over all elements (reference, 10 distorted; Tet10 also 5 straight-sided) and their 100 points.
+
+| Id | Limit | Measured (Tet4; Hex8; Tet10) | Met |
+| --- | --- | --- | --- |
+| A1 `|sum N - 1|` | `<= 1e-14` | 0; 2.2e-16; 2.2e-16 | yes |
+| A2 sum of derivatives, reference (absolute) / distorted (relative) | `<= 1e-14` | 0 / 9.0e-17; 1.1e-16 / 4.6e-16; 0 / 7.0e-16 | yes |
+| A3 central differences, reference / distorted | `<= 1e-7` | 6.6e-12 / 6.8e-12; 1.1e-11 / 4.9e-12; 2.2e-11 / 7.1e-11 | yes |
+| A4 monomials (rule: points, degree, count) | `<= 1e-13` | tet_1 (1, 1, 4) 0; tet_4 (4, 2, 10) 6.9e-18; tet_14 (14, 5, 56) 8.3e-17; gauss_1 (1, 1, 8) 0; gauss_2 (8, 3, 64) 8.9e-16; gauss_3 (27, 5, 216) 1.8e-15 | yes |
+| A5 symmetry | `<= 1e-13` | 1.5e-16; 1.3e-16; 1.9e-16 | yes |
+| A6 rigid-body force | `<= 1e-11` | 6.2e-17; 4.1e-17; 3.6e-17 | yes |
+| A7 rank (threshold `1e-9 lambda_max`) | `n - 6` | 6 on all 11; 18 on all 11; 24 on all 16; max `lambda_6/lambda_max` 1.3e-16, 1.2e-16, 1.5e-16; min `lambda_7/lambda_max` 9.1e-2, 4.3e-2, 1.4e-3 | yes |
+| A8 strain energy of the six unit strains | `<= 1e-12` | 7.4e-16; 4.5e-16; 5.8e-16 | yes |
+| A9 uniaxial stress, `nu` = 0, 0.3, 0.45, -0.5 | `<= 1e-14` | 0, 7.5e-17, 6.0e-16, 0 | yes |
+| A10 shear | `<= 1e-14` | 0 for all four `nu` | yes |
+| E1 Kronecker property | `<= 1e-15` | 0; 0; 0 | yes |
+| E2 linear reproduction | `<= 1e-13` | 3.3e-16; 6.7e-16; 9.2e-16 | yes |
+| E3 `strain_at` of the unit strains | `<= 1e-12` | 3.3e-16; 6.7e-16; 9.2e-16 | yes |
+| E4 `D S = I` | `<= 1e-13` | 1.1e-16, 2.2e-16, 4.4e-16, 1.1e-16 | yes |
+| E5 refusals | as stated | `coordinates`, `displacement`, `jacobian` ("det J = -1e0 at the point (0.25, 0.25, 0.25) of a Tet4 element"), `state` | yes |
+| E6 curved Tet10, `|V_rule - V_exact| / V_exact` | record | 1.2e-5 | record |
+| N1 error at degree `d + 1` | `> 1e-6` | tet_1 6.3e-3; tet_4 3.6e-4; tet_14 1.4e-5; gauss_1 2.7; gauss_2 0.71; gauss_3 0.18 | yes |
+| N2 rank with reduced rules | 6 | Hex8 with gauss_1: 6; Tet10 with tet_1: 6 | yes |
+| N3 A6 measure of a unit strain | `> 1e-3` | 0.33; 0.46; 0.12 | yes |
+
+The rounding estimates of arithmetic 5 and 6 were pessimistic by one to two decades (for example A2 distorted 7.0e-16 against
+the estimated worst 1.2e-14; A9 at `nu = 0.45` 6.0e-16 against 7e-15). The rank gap is at least 13 decades below and 6 above
+the threshold.
+
+**Mutations** (scratch copy by `git archive` of 4c806df0, own target directory, each alone by exact text replacement, `sb_elements`
+run once, file restored and compared by SHA-256; `f372-scratch/mutate.py`, `mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 `tet_4` with `a = 0.14` | A4 (tet_4) |
+| M2 a `tet_14` weight 7.091e-3 -> 7.092e-3 | A4 (tet_14) |
+| M3 `sqrt(3/5)` -> 0.7746 | A4 (gauss_3) |
+| M4 yz row with `g_x` at the y column | A6 (all three kinds), A7 (Tet10, rank 23), A8 and E3 |
+| M5 shear diagonal `2 mu` | A10, E4 |
+| M6 `lambda` with `(1 - nu)` | A9 (all `nu` but 0), E4 |
+| M7 `J^{-1}` instead of `J^{-T}` | A3 (distorted), A6, A7 (Hex8 rank 21), A8, E3; A2 is blind to it (the sum of the wrong gradients is still zero), as the registration allowed ("A2 or A3") |
+| M8 Tet10 mid-edge loop with edges 1 and 2 swapped | A3 (Tet10), E1 (Tet10) |
+| M9 Tet10 stiffness by `tet_1` | A7 (rank 6) |
+| M10 Hex8 stiffness by `gauss_1` | A7 (rank 6) |
+| M11 Hex8 shape functions over 4 | A1, A3, E1 (Hex8) |
+| M12 stiffness without `det J` | A8 (all three kinds) |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings` (debug and release): clean. The
+existing `sb_model` (ADR 0271) passes unedited (11 passed, release).
+
+**Deviations.**
+
+1. M12 was applied in the stiffness sum (`ip.weight / ip.geometry.det_j`) and not in `integration_points`: there it would also
+   change the volume `V` of A8, which is taken from the same points, and the mutation would cancel. This is the registered
+   mutation ("stiffness without the factor det J") at the only place where it is a stiffness defect.
+2. The 14-point rule's start values were recalled correctly; the registration's check by hand (sum of weights 0.1666664) is
+   consistent with the solved weights (sum 1/6 to rounding).
+3. Not run: the whole workspace (the lead runs the gate), the baseline hashes (no file outside `rcfd-fem` changed and no
+   shared solver file was touched).
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). A1 to A10 are met on every element and every
+rule, N1 to N3 hold, every mutation M1 to M12 fails a registered check; the extensions E1 to E5 are met and E6 is recorded.
+
+**Remaining questions.**
+
+1. Where the intermediate tier's `geometric_stiffness`, `internal_force` and `tangent` go. Options: (a) provided methods of
+   `Element` that refuse by default, added by ADR 0291 (as planned); (b) a second trait `NonlinearElement: Element`. Recommendation:
+   (a); adding provided methods breaks no implementer.
+2. The mass rules (D3: `tet_4`, `gauss_3`, `tet_14`). Options: (a) ADR 0284 takes them (exact for straight-sided tetrahedra
+   and every trilinear hexahedron); (b) ADR 0284 chooses again. Recommendation: (a); on curved Tet10 no fixed rule is exact
+   (the integrand has degree 7), and E6 shows the 4-point stiffness rule's volume error there is 1.2e-5 at mid-edge offsets of
+   0.03, which ADR 0279 should keep in mind for its error norms.
+3. Errors of the element routines carry no element index (D4, open point 4). Options: (a) the assembly of ADR 0275 maps them
+   to the element; (b) add an element index to the trait's arguments. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-372: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0273, 2026-11-12: rcfd_fem::element with the Element trait (shape functions, derivatives from ElementKind::shape_gradients of ADR 0271, the isoparametric point with J, det J and physical gradients, integration points with w det J, stiffness with its own or a given rule computed in both triangles, strain at a point; refusals by key: coordinates, displacement, jacobian) for Tet4 (1 point), Hex8 (2 x 2 x 2 Gauss) and Tet10 (4 points), element_for(kind); rcfd_fem::quadrature with tet_1, tet_4, tet_14 (degree 5, positive weights, constants by Newton on the invariant moment equations) and Gauss 1 to 3 on the cube; rcfd_fem::material with the isotropic D and the constitutive call stress(strain, point context, state) returning stress and tangent. On the reference elements and 10 randomly distorted ones of each kind (Tet10: 10 curved and 5 straight-sided; seed 0xF372_0273): partition of unity within 2.2e-16 and derivative sums within 7.0e-16 (limit 1e-14), central differences within 7.1e-11 (limit 1e-7), every monomial up to each rule's degree within 1.8e-15 (limit 1e-13, and each rule misses degree d + 1), stiffness symmetric within 1.9e-16 (limit 1e-13), rigid-body force within 6.2e-17 relative (limit 1e-11), rank n - 6 by rcfd_linalg::eigen with the threshold 1e-9 lambda_max (rigid modes at 1.5e-16, the seventh at 1.4e-3 or more), strain energy of the six unit strains within 7.4e-16 (limit 1e-12); D gives E eps in uniaxial stress within 6.0e-16 and G gamma in shear exactly (nu = 0, 0.3, 0.45, -0.5; limit 1e-14). Twelve mutations caught.
+
+F-374 (ADR 0275), sentence to append to its note:
+
+> ADR 0273 (2026-11-12): element_for(kind).stiffness(coords, &material.elasticity_matrix()?) gives the dense element stiffness (node-major unknowns, three per node); its errors name the key but not the element, which the assembly adds.
+
+F-375 (ADR 0276), sentence to append to its note:
+
+> ADR 0273 (2026-11-12): body loads are sums over Element::integration_points (N and w det J at each point); the face functions of Tri3, Quad4 and Tri6 are not in the element library.
+
+F-376 (ADR 0277), sentence to append to its note:
+
+> ADR 0273 (2026-11-12): Element::strain_at(coords, u, xi) gives B u at a point; the integration points are stiffness_rule().points(); Material::stress(strain, &PointContext::default(), &[]) gives stress and tangent.
+
+F-383 (ADR 0284), sentence to append to its note:
+
+> ADR 0273 (2026-11-12): Element::mass_rule() proposes tet_4 (Tet4), gauss_3 (Hex8) and tet_14 (Tet10, degree 5), exact for straight-sided tetrahedra and every trilinear hexahedron; the consistent mass is the sum of rho N^T N w det J over Element::integration_points.
+
+No follow-up items.
