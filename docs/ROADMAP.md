@@ -6235,14 +6235,15 @@ fixed by the item's registration ADR before any code.
     turning component (1.4e-14). Met (acceptance): max abs(d_200) of TG_2 at dt 0.0025 with three outer iterations falls
     from 1.69e-4 to 2.1e-5 (limit 1.2e-4). Missed (acceptance): its ratio to max abs(d_400) is 2.46 (limit 4): located,
     not explained: the library's own BDF2 step on a single mesh at rest leaves 5.1e-6 with the ratio 2.30, independent
-    of the start, the correctors and the outer iterations; that the five times larger remainder on the coupled meshes is
-    the same term is not shown. Missed (acceptance): T1c of ADR 0219 with BDF2 is 1.664 (limit 1.7): with BDF2 the error
-    of both levels is free of time error (0.2 and 0.3 percent between 200 and 800 steps), so this is the spatial order
-    of the pointwise maximum diagnosed by ADR 0232; the 1.80 observed in ADR 0238 was time error at level 1. Two set-up
-    checks were defective and corrected by amendments; six mutations caught. Not delivered: BDF2 for the library's
-    moving-mesh step and the follow conditions of a moving wall (they keep the two-level values), the case-tree wiring.
-    Follow-ups (ADR 0241 questions 1, 4 and 5, recommendation taken on the maintainer's standing instruction of
-    2026-11-11): F-344, F-345.
+    of the start, the correctors and the outer iterations; the five times larger remainder on the coupled meshes is not
+    that term (ADR 0245: with the at-rest term removed by an opt-in it is 2.06e-5 at a ratio of 2.45; it is made by the
+    motion of the component through the coupling). Missed (acceptance): T1c of ADR 0219 with BDF2 is 1.664 (limit 1.7):
+    with BDF2 the error of both levels is free of time error (0.2 and 0.3 percent between 200 and 800 steps), so this is
+    the spatial order of the pointwise maximum diagnosed by ADR 0232; the 1.80 observed in ADR 0238 was time error at
+    level 1. Two set-up checks were defective and corrected by amendments; six mutations caught. Not delivered: BDF2 for
+    the library's moving-mesh step and the follow conditions of a moving wall (they keep the two-level values), the
+    case-tree wiring. Follow-ups (ADR 0241 questions 1, 4 and 5, recommendation taken on the maintainer's standing
+    instruction of 2026-11-11): F-344, F-345.
 - [ ] **F-339** MCP tools for tolerance and Sobol studies of a named evaluator
   - depends on: F-268
   - acceptance: design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the
@@ -6363,24 +6364,28 @@ fixed by the item's registration ADR before any code.
     marking = "target_count", indicator = "edge_length", register and register_use. The anisotropic criterion is
     delivered by F-348 (ADR 0267, 2026-11-12): a second lattice with per-axis levels and a directional criterion; on
     this suction layer 1547 cells give error 0.00298.
-- [ ] **F-344** BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step
+- [~] **F-344** BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step
   - depends on: F-338
   - acceptance: The remainder of PimpleSolver::step with BDF2 and three outer iterations on a mesh at rest (max
     abs(d_200) 5.13e-6 with the ratio 2.30 to max abs(d_400) on the mesh of SMc, ADR 0241 H16) is traced to a named term
     of the step with a number, and either removed as an opt-in (defaults bit-identical; the ratio at least 4 at rest and
     D2 of ADR 0241 at least 4 on TG_2) or shown to be a spatial term with its order in h, or the ADR names why not with
     a number.
-  - note: From ADR 0241 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
-    library's own BDF2 step on a mesh at rest converges in the step size at a ratio of 2.30 where second order gives 4.
-    Candidates not measured: the transient Rhie-Chow term, the boundary faces. WORK ON A BRANCH, NOT MERGED
-    (2026-11-12): ADR 0245 on branch f344-bdf2-remainder (tip 455f4c5a). Cause named with numbers: the converged face
-    flux depends on dt wherever the momentum diagonal differs across a face (ADR 0073's commutator C(G p) plus
-    interp(rAU)), largest at fixed-velocity boundary cells; it follows a dt/(c0 + a dt) and falls with h at order 1.8 to
-    1.9; the default step carries it. An opt-in on the branch removes it at rest (ratio 5.02, limit 4) and leaves the
-    TG_2 ratio at 2.45 (missed; that remainder is made by the motion through the coupling, not the same term). HELD FOR
-    THE MAINTAINER: the opt-in is of the kind (F-G of ADR 0073) that the registered rule of ADR 0076 removed from the
-    code; whether it is wanted back is the maintainer's decision (ADR 0245 O2). Also unfinished on the branch: two long
-    immersed-cylinder tests of the existing suite did not complete under load, and one mutation was not run.
+  - note: Merged as an opt-in on the maintainer's decision in person of 2026-11-12. From ADR 0241 question 1,
+    recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0245, 2026-11-12: PARTIAL. Named:
+    the remainder of the BDF2 step at rest is the step-size dependence of the converged face flux where the momentum
+    diagonal differs across a face (the commutator C(G p) of ADR 0073 and the step dependence of interp(rAU)), largest
+    next to fixed-velocity boundaries. Built, opt-in, internal faces only, merged as an opt-in by the maintainer's
+    decision in person of 2026-11-12 (not the default): PimpleSettings::rhie_chow_step_consistent (the harmonic face
+    value of rAU and the commutator of the lagged pressure gradient, in PimpleSolver::step at rest and in the overset
+    step); defaults bit for bit on the tree merged with main (F-322 included). Met: at rest the ratio 2.30 -> 5.02
+    (limit 4), the steady cavity the same to 2.4e-13 for two steps (3.7e-4 by default). Missed: D2 on TG_2, 2.454 (limit
+    4): the remainder of the moving coupled meshes is another term (with the component at rest 1.3e-7, ratio 4.98). ADR
+    0076's seam rows with the opt-in: bit-inert on periodic and rotational faces (operator level), no-harm met (TG-S N1
+    at most 1.0018, R4 at most 1.0026, PIMPLE-4 rows at most 0.999); R2b on SECT-M missed as predicted, 0.578 (default
+    0.538): the seam floor of ADR 0076, which the opt-in does not touch. Eight mutations caught (the fringe branch of
+    the overset change by a direct check of its formula). Its body-force path is exercised by the SECT-M runs.
+    Follow-ups proposed (ADR 0245 questions 1 and 3).
 - [ ] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
   - depends on: F-338, F-322
   - acceptance: PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow
@@ -7852,3 +7857,22 @@ fixed by the item's registration ADR before any code.
     and 0242 tests pass unedited (the F-348 heavy layer runs included). Six mutations caught. Not removed: x splits
     outside the layer, where the variations are at the solver tolerance and the ratio carries no information (251 of the
     413).
+- [ ] **F-442** Overset BDF2: the step-size-dependent remainder made by the motion through the coupling
+  - depends on: F-344
+  - acceptance: The remainder of TG_2 with BDF2, three outer iterations and rhie_chow_step_consistent (max abs(d_200)
+    2.057e-5 with the ratio 2.454 to max abs(d_400), ADR 0245 A2; 1.3e-7 with the ratio 4.98 on the coupled meshes of
+    level 1 at rest against 5.2e-5 moving, ADR 0245 H10) is traced to a named event or term of the moving coupling with
+    a number, and either removed as an opt-in (defaults bit-identical; D2 of ADR 0241 at least 4 on TG_2) or the ADR
+    names why not with a number.
+  - note: From ADR 0245 question 1, recommendation (a); proposed by the F-344 addendum, not yet taken. Candidates not
+    measured: a cell changing kind, a donor stencil changing with the pose, the refresh of the fringe values before the
+    step, the flux of the faces without a calculated cell. The coupled meshes at rest are a clean reference (ratio
+    4.98).
+- [ ] **F-443** Transient step: the step-consistent face coefficient on the remaining paths
+  - depends on: F-344
+  - acceptance: rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls
+    (defaults bit-identical); with a body force a hydrostatic column stays at rest to 1e-10 and the steady solution of a
+    buoyant cavity is the same to 1e-9 for two step sizes; the case tree has a key for it; the check C3 of ADR 0245
+    holds on each path, or the ADR names why not with a number.
+  - note: From ADR 0245 question 3, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed
+    by the F-344 addendum, not yet taken. Periodic seams (ADR 0073 R3, ADR 0076) are not part of it.
