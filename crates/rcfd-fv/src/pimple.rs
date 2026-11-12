@@ -129,6 +129,10 @@ pub struct PimpleSettings {
     /// combinations (`non_orthogonal`, `component_diagonal`, `face_jump`) exist only here. Default: every flag `false`
     /// (bit-identical). Set it with [`PimpleSettings::set_consistent`], which also writes the three fields above.
     pub consistent: ConsistentCorrectors,
+    /// With the consistent correctors: accept the combinations of `ConsistentRefusal::PERIODIC_EXTENSIONS` (non-orthogonal
+    /// correctors, the component diagonal, face jumps, each with periodic pressure faces), whose periodic steady identity is met
+    /// (ADR 0360). They need no term beyond the extension's own and E2's. Default `false`: refused as in ADR 0258.
+    pub consistent_periodic_extensions: bool,
     /// Make the pressure-lag check (`pressure_lag_check`) and the adaptive corrector count (`corrector_control`) also on a
     /// moving-mesh step (`step_ale`, `step_ale_with_walls`, `step_sliding`; ADR 0223 E0), on that step's own frozen matrices (the
     /// moved geometry, the relative flux, the step's wall conditions made homogeneous), exactly as on a fixed mesh. Default `false`:
@@ -165,13 +169,15 @@ pub struct ConsistentCorrectors {
     pub body_force: bool,
     /// Accept non-orthogonal correctors (`PimpleSettings::non_orth_correctors > 0`; ADR 0258 X1): the compensation of the old
     /// pressure also carries the explicit non-orthogonal part, `(rAtU - rAU)_f k_f . grad(p_prev)_f`, as the steady SIMPLEC of
-    /// ADR 0050. Fixed meshes without pressure gradient options and without periodic faces.
+    /// ADR 0050. Fixed meshes without pressure gradient options; with periodic faces only with
+    /// `PimpleSettings::consistent_periodic_extensions` (ADR 0360).
     pub non_orthogonal: bool,
     /// Accept the component diagonal (`PimpleSettings::component_diagonal`; ADR 0258 X2); `rAtU` keeps the component averages.
-    /// Fixed meshes without periodic faces.
+    /// Fixed meshes; with periodic faces only with `PimpleSettings::consistent_periodic_extensions` (ADR 0360).
     pub component_diagonal: bool,
     /// Accept face jumps (`PimpleSolver::face_jump` and the hook's; ADR 0258 X3): a jump face compensates the old pressure
-    /// difference less the old total rise and takes `interp(rAtU)` in its resistance factor. Fixed meshes without periodic faces.
+    /// difference less the old total rise and takes `interp(rAtU)` in its resistance factor. Fixed meshes; with periodic faces
+    /// only with `PimpleSettings::consistent_periodic_extensions` (ADR 0360).
     pub face_jump: bool,
 }
 
@@ -255,6 +261,30 @@ impl ConsistentCorrectors {
             None => Ok(()),
         }
     }
+
+    /// [`conflicts`](Self::conflicts) with, when `periodic_extensions` (`PimpleSettings::consistent_periodic_extensions`), the
+    /// refusals of [`ConsistentRefusal::PERIODIC_EXTENSIONS`] removed, the order of the others kept (ADR 0360 D2). The solver
+    /// refuses through it.
+    pub fn conflicts_extended(&self, ctx: &ConsistentContext, periodic_extensions: bool) -> Vec<ConsistentRefusal> {
+        let mut out = self.conflicts(ctx);
+        if periodic_extensions {
+            out.retain(|r| !ConsistentRefusal::PERIODIC_EXTENSIONS.contains(r));
+        }
+        out
+    }
+
+    /// `Ok` when the flags are supported with the settings of `ctx`, else the first conflict of
+    /// [`conflicts_extended`](Self::conflicts_extended).
+    pub fn validate_extended(
+        &self,
+        ctx: &ConsistentContext,
+        periodic_extensions: bool,
+    ) -> Result<(), ConsistentRefusal> {
+        match self.conflicts_extended(ctx, periodic_extensions).first() {
+            Some(r) => Err(*r),
+            None => Ok(()),
+        }
+    }
 }
 
 /// The settings a set of consistent-corrector flags is validated against (ADR 0258 V2).
@@ -325,6 +355,14 @@ impl ConsistentRefusal {
         ConsistentRefusal::FaceJumpPeriodic,
         ConsistentRefusal::FaceJumpMovingMesh,
         ConsistentRefusal::PeriodicFaces,
+    ];
+
+    /// The combinations with periodic faces whose periodic steady identity is met (ADR 0360), accepted with
+    /// `PimpleSettings::consistent_periodic_extensions`.
+    pub const PERIODIC_EXTENSIONS: &'static [ConsistentRefusal] = &[
+        ConsistentRefusal::NonOrthogonalPeriodic,
+        ConsistentRefusal::ComponentDiagonalPeriodic,
+        ConsistentRefusal::FaceJumpPeriodic,
     ];
 
     /// The conflicting setting as the divergence record names it (`Divergence::stage`).
@@ -401,7 +439,12 @@ impl ConsistentRefusal {
             R::FaceJump => "the flag is not set; it adds the compensation of the jump faces",
             R::PeriodicFaces => "the flag is not set; it adds the compensation of the periodic faces",
             R::NonOrthogonalPeriodic | R::ComponentDiagonalPeriodic | R::FaceJumpPeriodic => {
-                "no steady identity is registered for this extension with periodic faces"
+                if Self::PERIODIC_EXTENSIONS.contains(self) {
+                    "accepted only with PimpleSettings::consistent_periodic_extensions, its periodic steady identity is met \
+                     (ADR 0360)"
+                } else {
+                    "its periodic steady identity was missed (ADR 0360)"
+                }
             }
             R::NonOrthogonalMovingMesh | R::ComponentDiagonalMovingMesh | R::FaceJumpMovingMesh => {
                 "the extension is not defined on a moving mesh (roadmap item F-321)"
@@ -863,6 +906,7 @@ impl PimpleSettings {
             consistent_periodic: false,
             consistent_body_force: false,
             consistent: ConsistentCorrectors::default(),
+            consistent_periodic_extensions: false,
             moving_mesh_lag: false,
             rhie_chow_step_consistent: false,
             fractional_step_consistent: false,
@@ -1284,7 +1328,13 @@ impl PimpleSolver {
     /// supplies are checked again in every outer iteration.
     fn consistent_conflict(&self) -> Option<ConsistentRefusal> {
         let flags = self.settings.consistent_flags();
-        flags.validate(&self.consistent_context(&flags)).err()
+        // ADR 0360 D2: with the opt-in, the combinations with periodic faces whose identity is met are accepted
+        flags
+            .validate_extended(
+                &self.consistent_context(&flags),
+                self.settings.consistent_periodic_extensions,
+            )
+            .err()
     }
 
     /// First cell with a non-finite velocity component.
@@ -1429,7 +1479,7 @@ impl PimpleSolver {
                 && (self.body_force.is_some() || self.source_force.is_some() || self.face_jump.is_some())
             {
                 use ConsistentRefusal as R;
-                let found = cf.conflicts(&self.consistent_context(&cf));
+                let found = cf.conflicts_extended(&self.consistent_context(&cf), s.consistent_periodic_extensions);
                 let is_jump = |r: &&R| matches!(r, R::FaceJump | R::FaceJumpPeriodic | R::FaceJumpMovingMesh);
                 found
                     .iter()
