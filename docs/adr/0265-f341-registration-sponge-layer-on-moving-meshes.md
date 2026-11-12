@@ -403,3 +403,99 @@ T0sr `<= 1e-2` and NCr2 `>= 0.9`.
 
 - Clause 2 is met when T0m, T0mr, T0pr and T0sr meet 1 percent and NCr2 holds. The status proposal states that NCr2 was not
   blind and that NCr is kept as a known miss.
+
+## Addendum 1: results (2026-11-12; the registered text and amendment 1 above are unchanged)
+
+Commits: registration 581fbac8; library and tests 337018bb; the T0 record ddb3d449; amendment 1 ebfe6cb8 (before the
+corrected run); its test 350b589a; documentation c482a7d2. Every run in the **release** profile. No limit was changed.
+
+### Checks
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| U1p | uniform reference with a flow, plain, set-up U of ADR 0207 to `t = 2`: drift after every step | `1e-12` | `3.15e-15` (136 steps) | yes |
+| U1m | the same at rest, matched: drift; memory | `1e-12` each | `3.33e-15`; `7.3e-16` | yes |
+| U1s | shifted with a corner: drift; `q`, `r`, `m` | `1e-12` each | `2.78e-15`; `6.0e-16`, `2.5e-16`, `6.3e-16` | yes |
+| U1g | steps; largest `abs(w_n)` on xmin, xmax, ymin, ymax | `>= 100`; `>= 0.02` | 136, 121, 121; 0.123, 0.348, 0.198, 0.399 | held |
+| T0m | tube translating at -0.2, matched, Thompson behind | `R <= 1e-2` | `9.617e-7` | yes |
+| T0mr | matched, pressure release behind | `R <= 1e-2` | `9.617e-7` | yes |
+| T0pr | plain, pressure release | `R <= 1e-2` | `9.617e-7` | yes |
+| T0sr | shifted, pressure release | `R <= 1e-2` | `9.829e-7` | yes |
+| NCr | no sponge, pressure release (peak measure) | `R >= 0.9` | 0.8642 | **no: known miss (amendment 1)** |
+| NCr2 | the same run, time-integral ratio (amendment 1; not blind) | `J >= 0.9` | 0.99951 | held |
+| B1 | existing tests unedited: `--lib compressible sponge` 24 passed, 1 ignored; `compressible_bc` 2 (4 ignored), `compressible_ale_f258` 8, `compressible_ale_f258_records` 4 (the F-258 bit records), `impedance_f243` 7 (2), `sponge_f331` 5 (8), `sponge_f340` 5 (12), `msd_wall_f332` 7 (11), `ale_gcl` 4, `ale_flows` 5 (5); `rcfd-api --test baseline_hashes` 3 passed, 1 ignored | pass | pass | yes |
+| B2 | 30 steps of `step_ale` on set-up U with characteristic conditions: nothing / set and cleared / frame only / zero-rate plain, matched, shifted | bit-identical (state, mesh speeds) | bit-identical; the control layer changes 96 of 96 cells | yes |
+| G1p | uniform offset, rate 2, deforming mesh (cell volumes 1.05e-4 to 1.45e-4, undeformed 1.25e-4): decay against `exp(-2 t)` | `1e-5` | `1.88e-7` | yes |
+| G1m | the same, matched: decay; memory against the trapezoid sum | `1e-5`; `1e-4` | `3.12e-7`; `8.30e-6` | yes |
+| G1u | momentum, plain and matched | `1e-8` | `6.5e-12`, `2.0e-11` | yes |
+| G2s | shifted, deforming against static: mass, energy, `q`, `r` | `1e-5` each | `1.22e-7`, `1.00e-7`, `8.8e-9`, `4.2e-9` | yes |
+| S4 | default frame and refusals, attached step, `replace_mesh` refused in both frames, frame kept, explicit replacement, topology, wall | as stated | as stated | yes |
+
+Commands: `cargo test --release -p rcfd-fv --test sponge_f341` (first run: everything met except NCr, 8 s; the corrected
+`t0b` once after amendment 1, 8 s, its four T0 values the digits of the first run); B1 as listed. The G1 print in the test
+calls the undeformed volume "2.5e-3"; it is `1.25e-4` (wrong text in a print, not in a check). The scratch model of the
+registration was within a factor of 2 to 6 of G1p (`2e-7` to `1.1e-6` predicted).
+
+### Mutations (a `git archive` copy at 350b589a in the scratch folder with its own target directory; once each)
+
+| id | mutation | caught by |
+|---|---|---|
+| MV1 | source at `V^n` in every stage | G1p (`3.6e-4`), G1u (`8.8e-8`), G2s (`8.6e-4`) |
+| MV2 | factor `V_p` dropped | every sponged test (a non-positive pressure ends G1, G2, T0b, U1, the B2 control) |
+| MV3 | memories not advanced | G1m (memory 1.0), G2s (`q`, `r` 1.0) |
+| MV4 | source dropped | G1p (6.4), G2s, T0mr, T0pr, T0sr (0.864), the B2 control; T0m passes (`5.2e-7`, the Thompson end alone) |
+| MV5 | frame ignored | S4a; `sponge_f331` S2 (cargo stopped there, so `sponge_f340` S3 was not reached) |
+| MV6 | `r` not advanced | G2s (`r` 1.0) only |
+| MV7 | sign of the source | G1p, G2s, U1p (drift `1.4e-4`), T0b, the B2 control |
+
+No mutation survived. MV6 is caught by one check only. After the mutations the copy's `compressible.rs` equals the
+committed one.
+
+### fmt and clippy
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean.
+
+### Deviations and disclosures
+
+- NCr missed. Amendment 1 diagnosed it with a scratch diagnostic run after the registered run and before the amendment.
+  NCr2's value was seen in that diagnostic, so NCr2 is not a blind check.
+- `t0b` repeats the deterministic T0 run and gives the same numbers to the printed digits. Nothing was re-run to pick a
+  result.
+- The tests of ADR 0237 and 0248 were not edited. The new behaviour sits behind `set_sponge_frame` because those tests
+  assert the refusal.
+- Shared solver file `compressible.rs` changed at these lines of the branch: 14, 125-126, 181, 209-210, 289-301, 846-848,
+  850-852, 902-1012, 1024-1025. `sponge.rs`: 69-81.
+
+### Not run
+
+The whole workspace suite; other crates' tests except `baseline_hashes`; the debug profile; oblique incidence on a moving
+mesh; a mesh moving along a matched layer; rotation; three dimensions; long runs.
+
+### Decision by the registered rule (as amended)
+
+Clause 1 is met: U1p, U1m and U1s are at `3e-15` with U1g held. Clause 2 is met: T0 is `9.6e-7` to `9.8e-7` with NCr2 held,
+and NCr is a known miss of the peak measure, diagnosed. Clause 3 is met: B1 and B2 hold. G1, G2 and S4 are met, and every
+mutation was caught. **Proposed status: done**, with the disclosure that amendment 1 replaced the control of clause 2 and
+the replacement was not blind. The sponge itself stays library-only (F-331 partial).
+
+### Remaining questions (options and recommendation)
+
+1. **The control of clause 2.** (a) accept NCr2 with its disclosure; (b) count NCr's miss and call the item partial;
+   (c) a blind control on a finer grid. Recommendation: (a). The acceptance text is met by the registered measure, and
+   amendment 1 shows three ways that the end reflects fully, which is what the control was for.
+2. **A layer fixed in space** (Q1). Recommendation: only when a case needs it.
+3. **The matched forms with a mesh moving along the layer or rotating** (L2, L3). (a) leave them as limits; (b) an oblique
+   check and a tangential-motion check. Recommendation: (b) before a matched layer is used on a rotor mesh; use the plain
+   form until then.
+4. **Wiring of the frame** (Q2). Recommendation: together with F-331's wiring.
+
+### For the lead: roadmap entries
+
+**F-341, proposed status: `done`.** Proposed note text:
+
+> From ADR 0237 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0265, 2026-11-12: the acceptance text is MET IN THE LIBRARY. Built (rcfd-fv, opt-in): `sponge::SpongeFrame { StaticMesh (default: step_ale refuses a sponge, as before), AttachedToMesh }` and `CompressibleSolver::set_sponge_frame`. When attached, the rates (of both layers of a corner) and the memories belong to the cells and move with them; the reference stays a lab-frame state; the memory of a cell is the time integral of p - p_ref along its path; and `step_ale` adds the source at the volume of each Runge-Kutta stage, which keeps the damping consistent with the geometric conservation law (a uniform offset decays as exp(-rate t) for any deformation). `replace_mesh` still refuses a sponge, because the solver has no map from old to new cells and a matched layer reset under a wave rings: clear it, replace the mesh, then set a new sponge and the caller's mapped memories. Measured: a uniform reference state on the deforming set-up U of ADR 0207 stays within 3.3e-15 over 121 to 136 steps in the plain, matched and shifted-corner forms (limit 1e-12); the ADR 0237 tube with both grids translating at Mach 0.2 reflects 9.6e-7 (plain and matched, Thompson end and pressure-release end) and 9.8e-7 (shifted) against 1e-2; on a mesh whose cells change volume by 16 percent a uniform offset decays within 3.1e-7 of exp(-2 t), the memory is within 8.3e-6 of its integral, and the shifted form is within 1.2e-7 of the static step. `step_ale` is bit-identical without a sponge, with a sponge set and cleared, with the frame setting alone and with zero-rate sponges; the F-258 bit records, the ADR 0233, 0237, 0243 and 0248 tests and baseline_hashes pass unedited. Seven mutations caught. One amendment: the control without sponge (pressure release, peak measure) gave 0.864 against 0.9. It was diagnosed as the peak loss of a pulse that the reflection on the moving mesh narrows to 2/3, and replaced by the time-integral ratio, 0.9995 (that value was seen in the diagnostic before the amendment; disclosed). Limits: attached frame only (no layer fixed in space); on a moving mesh the matched forms are matched at normal incidence only, because the medium moves relative to the layer (oblique incidence, motion along the layer and rotation not checked); library only, like the sponge itself; two-dimensional checks.
+
+Proposed follow-up (number for the lead to assign): **Matched sponge on a mesh moving along the layer or rotating.**
+Deps: F-341. Size S. Acceptance:
+
+> An isolated plane pulse at 30 and 45 degrees through a matched layer attached to a mesh translating along the layer at Mach 0.2 reflects less than 1 percent and stays bounded over 20 transit times of the layer, or the reflection and any instability are measured and documented; a plain layer on a rotating mesh reflects a normal pulse less than 1 percent.
