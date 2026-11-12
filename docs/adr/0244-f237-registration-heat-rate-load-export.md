@@ -202,3 +202,93 @@ Planned mutations (applied to a scratch copy one at a time, the relevant tests r
   energy-equation solve; the conservation it shows is that of the export, the solver's own energy balance is out of scope.
 - Only tensor-product parametrised surfaces (plane, cylinder), as ADR 0051.
 - No case key, no CLI or MCP surface.
+
+## Addendum 1: results
+
+Written after the single registered run (`cargo test --release -p rcfd-io --test f237_heat_deck` and
+`cargo test --release -p rcfd-post --test f237_heat_rate`, both `--nocapture --test-threads=1`, at ce3705bb). No limit above was
+changed; no test was re-run to pick a result.
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| H1 (acceptance, heat rate) tube 96 x 24 -> 64 x 20, consistent, after write and parse | rel <= 1e-3 | 2.2311e-4 (fluid 7.2243734870e3 W, deck 7.2227616610e3 W) | yes |
+| H2 tube, conservative, after write and parse | rel <= 1e-12 | 2.518e-15 | yes |
+| H3 uniform, consistent, worst element | <= 4 eps (8.88e-16) | 0 | yes |
+| H3b uniform, conservative, worst element | <= 1e-3 | 2.2316e-4 | yes |
+| H4(a) per-face `wall_heat_flux` sum vs `conductive_heat_flow` (395.98203956 W) | rel <= 1e-12 | 0 | yes |
+| H4(b) conservative round trip vs `conductive_heat_flow` | rel <= 1e-12 | 5.742e-14 | yes |
+| H4(c) consistent round trip vs `conductive_heat_flow` | rel <= 1e-3 | 2.2311e-4 | yes |
+| H5 plane 5 x 7 / 13 x 11, both mappings | rel <= 1e-12 | 2.538e-16 / 1.269e-16 (both mappings) | yes |
+| H6 bit-exact round trip of 5 `RCFDQ` cards; empty heat list byte-identical | exact | exact, byte-identical | yes |
+| H7 (acceptance, force) same tube deck, `|dF|/S` | <= 1e-3 | 1.552e-4 | yes |
+| H8 located errors (9 reader cases incl. CHEXA, 3 writer cases) | `line N` / item named | all as registered | yes |
+| NC1 wrong-radius shell (0.045) | must exceed 1e-3 | 1.0020e-1 | held |
+| NC2 half-length shell, conservative | must exceed 1e-3 | 5.3261e-1 | held |
+| NC3 `Deck::parse` on an `RCFDQ` deck | `unknown card 'RCFDQ'` | `line 12: unknown card 'RCFDQ'` | held |
+| NC4 one digit of one `Q` changed | 1 card differs, rel > 0 | 1 card, 5.797e-3 | held |
+
+The estimates were met as derived: H1, H4(c) and H3b sit on the chord-ratio numbers `1 - k_64/k_96 = 2.2311e-4` and
+`k_96/k_64 - 1 = 2.2316e-4` to the printed digits; NC1 (`1 - 0.9 k_64/k_96 = 0.1002`) and NC2 (0.533) on theirs.
+
+Deviation: H4(b) is 5.7e-14, about 20 times the estimated 1e-15 rounding (and the 2.5e-15 of H2); within its limit by a factor
+17. Not diagnosed further; the likely source is summation order (`conductive_heat_flow` and the deck sum add the terms in
+different orders and groupings), not the mapping (MU1 moves this number to 0.44).
+
+Mutations (applied one at a time to a `git archive` copy of ce3705bb in the scratch folder with its own target directory; the
+unmutated copy passed first; each mutation reverted after its run):
+
+| Mutation | Caught by |
+| --- | --- |
+| MU1 conservative mapping without `|t|/|s|` | H2 (0.444), H3b, H4(b), H5 conservative |
+| MU2 `deck_heat_rate` skips one card | H1 (1.25e-3), H2, H4(b), H4(c), H5 |
+| MU3 `Q` written with `{:.6e}` | H6, NC4, H2 (1.8e-9), H4(b) (3.0e-8) |
+| MU4 `wall_heat_flux` sign flipped | H4(a) (2.0) |
+| MU5 reader swaps `SID` and `EID` | H6, H1, H2, H4, H5 |
+
+Also run: `cargo test --release -p rcfd-io -p rcfd-post` (every test of both touched crates): 273 passed, 0 failed, 25 ignored
+(existing ignored records). `cargo fmt -p rcfd-io --check` and `cargo fmt -p rcfd-post --check`: clean.
+`cargo clippy --release -p rcfd-io -p rcfd-post --all-targets -- -D warnings`: clean (one `neg_cmp_op_on_partial_ord` lint was
+fixed before the code commit, before any run).
+
+Not run: the workspace test suite (by instruction); `crates/rcfd-api/tests/baseline_hashes.rs` (no solver path, no default and no
+existing writer changed: the edits to existing files are new items appended to `nastran.rs` and `structural.rs`, one `use` line,
+and the format document); any third-party solver.
+
+Defaults: `Deck::to_string_checked` and `Deck::parse` are untouched; H6 shows `write_with_heat_flux(d, &[])` is byte-identical to
+`to_string_checked`, NC3 that the old reader still rejects the new card. The new output is opt-in.
+
+**Decision by the registered rule: done for the heat-rate part** (H1 to H8 met, NC1 to NC4 held, MU1 to MU5 caught). The first
+clause of the acceptance is now met in both parts (force 1.55e-4 S, heat rate 2.23e-4 relative, against 0.1 percent, after a
+round trip through the repository's reader). The roadmap item stays **partial**: the public CGNS round trip (second clause) is not
+met and case-tree wiring is not delivered.
+
+### Remaining questions
+
+1. Vendor heat-flux card. Options: (a) keep `RCFDQ` as the repository's card; (b) place a specification of a vendor heat-flux
+   card (fields, sign, the surface heat-transfer element it needs) from an open, citable source in the repository, then write that
+   card beside `RCFDQ`; (c) export the heat flux to an open finite-element input format with a published specification.
+   Recommendation: (b) once a citable open specification is in the repository, (a) until then. Not taken here: it needs a
+   specification the repository does not have.
+2. Default mapping for heat flux once it is wired into a case: consistent (uniform fields exact, heat rate off by the tessellation
+   area ratio) or conservative (heat rate exact, uniform fields off by the same ratio). Recommendation: conservative, since the
+   heat rate is what the acceptance and an energy balance need. Not taken: it is a case default.
+3. Case-tree wiring of the load export (pressure, temperature, heat flux) needs `sim.rs`/`schema.rs`, a new case key and the
+   CLI/MCP goldens: the remaining step, not done on this branch.
+4. The `nastran_deck` conformance case of `rcfd-io::registry` does not exercise `RCFDQ`. Options: extend that case (changes an
+   existing conformance case) or add a separate entry. Recommendation: extend it in the wiring step; not done here because it
+   edits existing behaviour.
+
+## For the lead: roadmap entries
+
+Proposed status of F-237: **partial** (unchanged).
+
+New note text for F-237:
+
+> Priority P3. Size M. Area: io. WAVE 27C (ADR 0051) and ADR 0244, PARTIAL. Not delivered: public CGNS round trip (acceptance NOT met), case-tree wiring, third-party solver acceptance (not testable), deck card layouts partly unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified), vendor heat-flux card (no specification in the repository). Format names stay in the format registry documentation, not in this item. rcfd-io registry (12 supported formats each with a conformance case, CGNS and HDF5 registered NotSupported). Nastran-style free-field deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located errors) plus the repository's own shell heat-flux card RCFDQ,SID,EID,Q (ADR 0244; opt-in writer and reader, old reader unchanged). rcfd-post structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap plus linear recovery, wall heat flux from the temperature boundary condition mapped consistently or conservatively in heat rate. Measured: Uniform pressure exact (0 vs 4 eps). Tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met for force). Tube heat rate after round trip 2.23e-4 consistent, 2.5e-15 conservative (limit 1e-3; acceptance 0.1 percent met for heat rate); conservative export against conductive_heat_flow 5.7e-14. Plane force 2.5e-16, plane heat rate 2.5e-16. Moments within limits. Linear temperature exact to 2.4e-14 on 3 structural meshes.
+
+Follow-up item (proposed; id at the lead's choice). Title: "Vendor heat-flux card for the structural load deck from a cited open
+specification". Deps: F-237. Acceptance: "A specification of the card (fields, sign, required surface elements) from an open
+source is placed in the repository; the deck writes it beside RCFDQ; the tube heat rate after a round trip through the repository
+reader matches the fluid heat rate to 0.1 percent". Note:
+
+> Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux card layout is specified in the repository, so none was written.
