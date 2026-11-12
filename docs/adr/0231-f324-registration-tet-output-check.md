@@ -243,3 +243,102 @@ difference as the printed cell volume minus the printed enclosed volume, both pr
 cell's volume to `1e-9` relative). The old tests stay as ignored records (`#[ignore]` with the reason and the measured numbers).
 Each corrected test is run once. The other tests of the first run (C3b, C3d, C3e, C4a, C4b, C6, C7) are not re-run for this; their
 results stand from the first run.
+
+## Addendum 1: results (2026-11-12)
+
+Commits on `f324-tet-output-check` (from main 0d250c75): the registration `d72d3383`; amendment 1 `20e6aec9`; the check and its
+tests `e8a4789c` (`crates/rcfd-mesh/src/tetmesh.rs`: `TetMesh::check_output`, `OutputCheck`, the call at the end of
+`tetrahedralize`; the new test files `crates/rcfd-mesh/tests/tetmesh_check_f324.rs` and `crates/rcfd-io/tests/tet_check_f324.rs`);
+amendment 2 `ccfbb6c6`; the corrected tests `3893ab15`. No other file changed; `Cargo.lock` unchanged; no existing test edited.
+
+All runs in release (`cargo test --release`; the F-306 checks were registered in release and the remesh test needs it), Windows,
+the worktree's own target dir. `cargo test --release -p rcfd-mesh` was run once: it stopped after `tetmesh_check_f324` failed (C3a,
+C3c, amendment 2), so `tetmesh_fold_f306` and the doctests, which had not run, were then run once each on their own. The `rcfd-io`
+and `rcfd-fv` tests named in C1 and C2 were run once each by `--test`.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 F-306 tests | all pass | `tetmesh_fold_f306` 19 passed (R1, R2 x 12, N1 x 6: all 111 fingerprints equal); `tet_fold_f306` 2 passed (R3; N1s: 7 records equal, the `(0.12, 0.025, 0.25)` error text unchanged) | yes |
+| C2 existing suites | pass | `rcfd-mesh` lib 64 passed, 1 ignored (the `remesh` unit tests are in it), `tetmesh` 10 / 1 ignored, `polydual` 3, every other `rcfd-mesh` test binary passed; `rcfd-io` `w41d_tet_quality` 10 / 2 ignored (W0 fingerprints), `w42c_tet_default_eval` 2 / 2 ignored, `stl_cylinder_in_box` 2 / 3 ignored; `rcfd-fv` `w19b_meshing_solve` 2, `remesh_f247` 2 (198.3 s, M0 hash `aaf8f4c36f6446e4`, 1711 cells) | yes |
+| C3a NC-dup | `Err`, located, diff = cell 0 to `1e-9` | first run: `Err`, located ("face [2, 6, 26] at (-8.33e-1, -1.67e-1, -6.67e-1) is shared by the cells [0, 43, 108]"), but the four-digit difference `4.167e-2` failed the `1e-9` comparison: set-up defect, amendment 2, kept as an ignored record | set-up defect |
+| C3a2 (amendment 2) | as C3a | `Err`, same location; difference `4.1666666666666075e-2` against `4.1666666666666664e-2`, relative `1.42e-14` | yes |
+| C3b NC-flip | `Err` naming cell `k` | "cell 54 [10, 9, 38, 30] at (8.75e-1, -6.25e-1, -2.5e-1) is not positively oriented" (`k = 54`) | yes |
+| C3c NC-gap | `Err`, located, diff = minus the cell to `1e-9` | first run: located ("the face [25, 41, 45] ... of cell 52 is free but is not a surface triangle"), four-digit difference: set-up defect, ignored record | set-up defect |
+| C3c2 (amendment 2) | as C3c | `Err`, same location; difference `-4.166666666666696e-2` against `-4.1666666666666664e-2`, relative `7.16e-15` | yes |
+| C3d NC-surf | `Err` naming the triangle, no panic | "surface triangle 3 [26, 50, 2] refers to a vertex that is in no cell" | yes |
+| C3e PC | `Ok` offset, scaled `1e-6`, `1e6` | `Ok` for all three: diff `0` in each, B `6.106e-14`, `6.106e-32`, `6.106e4` (the `1e-6` line of the registered run was interleaved with another test's output; its numbers are those printed by the MU1 run, whose check code is the final one) | yes |
+| C4a K1 | no `Ok` failing V | none of F1 to F13, none for F14 | yes |
+| C4b | every input `Ok` | all 14 `Ok` | yes |
+| C5 cost | at most 5 percent | F12: check 0.216 ms against `tetrahedralize` 0.238 s, fraction `9.1e-4`; F14: 0.423 ms against 9.447 s, fraction `4.5e-5` (the `tetrahedralize` time includes its own call of the check) | yes |
+| C6 R-fp | equal to ADR 0228 | all 13 cell counts, F11's 323 points, the F6 to F8 hashes; F14 17134 cells, 5050 points | yes |
+| C7 margin | recorded | `diff / B`: 0 on 23 of the 28 printed outputs (14 closed shapes, 13 folded inputs, F14); `1.64e-2` (icosphere(1, 2), three outputs), `1.58e-2` (icosphere size 0.25), `1.15e-2` (F6); B is `7.6e-15` to `5.3e-14` of the volume on the closed shapes | recorded |
+
+Predictions: PR1 and PR2 held. PR3 (`diff / B < 1e-2`) missed narrowly: `1.64e-2` on the icosphere; a prediction, not a limit, and
+still sixty times inside the bound. PR4: the ratio on the overlapping outputs under MU1 was `3.1e8` (F14) to `5.6e11` (F1), above
+`1e6`, held; the localisation found a face of more than two cells only on F1 (`[597, 1322, 1400, 2124]`); on F5, F9, F10 and F14
+it found two cells on the same side of a face first, so that half missed.
+
+### Mutations (scratch copy `w49i-work/f324-scratch`, a `git archive` of `3893ab15`, its own target dir, release)
+
+Each applied alone by `w49i-work/f324-scratch-tools/mutate.py` (exact text replacement, each pattern found exactly once), the named
+tests run once with `--no-fail-fast`, the file restored and its SHA-256 checked against the kept copy (`09ac2faf...fe78`, equal
+after every mutation).
+
+| Id | Must | Result | Caught by |
+| --- | --- | --- | --- |
+| MU1 (F-306 fold back) | C4a passes, C4b fails, the five overlapping outputs of main become located check errors | C4a passed in both files; C4b and C6 failed; R2 F1, F5, F9, F10 and R3 F14 failed with "located error instead of a mesh: ... tetrahedralize output check: ... the cells overlap; face ..." (differences `8.546e-5`, `1.433e-5`, `4.828e-5`, `1.584e-4` against B about `1.5e-16`; F14 `2.284e-3` against `7.4e-12`: the excesses V measured on main in ADR 0228); R1, R2 F2 to F4, F12, F13 panicked (`neighbour link`); F6 to F8 `Ok` and valid with main's hashes `82bc728685c0a641`, `665317d2b2c1ada1`, `fd73b3a06f7f7472` (ADR 0228 N2: the check changed nothing it accepted); N1, N1s passed | as registered (R2, R3, C4b) |
+| MU2 (MU1, no check call) | C4a fails | `c4a_k1_no_folded_input_returns_an_overlapping_ok` and `c4a_k1_f14_no_overlapping_ok` failed | C4a |
+| MU3 (no volume test) | C3a2, C3c2 fail | both failed | C3a2, C3c2 |
+| MU4 (no orientation test) | C3b fails | failed: the volume test still rejected the mesh ("the cells leave a gap; face [9, 10, 30] ... has the cells 54 and 68 on the same side") but did not name the cell as negative | C3b |
+| MU5 (B = 0) | an N1 test fails | 4 of 6 N1 tests failed: 11 of the 111 fold-free outputs rejected (A20 1, A40 1, B 5, C 4) | N1 |
+
+### Format and lint
+
+`cargo fmt -p rcfd-mesh -p rcfd-io -- --check`: clean (`cargo fmt --all -- --check` cannot start on this Windows machine, "the
+filename or extension is too long"; the gate runs fmt per package). `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` and
+`cargo clippy -p rcfd-io --all-targets -- -D warnings`: clean.
+
+### Deviations and what was not run
+
+- Amendment 2 (a set-up defect of C3a and C3c, corrected before the corrected run; the old tests stay as ignored records).
+- Not run: the whole workspace suite and the gate (the lead runs it); `rcfd-api` (no path from a case to the mesher, so no hash can
+  change); Linux (fingerprints stay Windows-only, F-325).
+- The C3e number for the `1e-6` scaling is from the MU1 run (identical check code), as said in the table.
+
+### Decision by the registered rule
+
+C1, C2, C3 (C3a and C3c by their amendment 2 corrections C3a2 and C3c2, the other three directly), C4a, C4b and C6 are met, MU1 to
+MU4 failed their checks as registered, C5 is met: **done**, with the maintainer's acceptance (Q1). The acceptance's parts: every
+cell positive (a) and volume equal to the enclosed volume (b) are checked inside `tetrahedralize`; an overlapping output becomes a
+located error (MU1); the F-306 sweep inputs give identical meshes (C1, C6).
+
+### Remaining questions
+
+- **Q1. Status.** Options: (a) done; (b) partial until the gate. Recommendation: (a), with the gate line added at merge.
+- **Q2. Face pairing on every run; other producers.** The localisation pass found a defect on every overlapping output; its cost
+  was not measured (it runs only on failure). Options: (a) leave as is; (b) a follow-up that runs the face-pairing test on every
+  output and measures its cost (it would catch overlaps below B, which no input of the sweep has); (c) call `check_output` on the
+  F-247 remesher's outputs, which do not pass through `tetrahedralize`. Recommendation: (a) now, (b) only if a sub-B overlap is ever
+  seen; (c) as a small follow-up item.
+- **Q3. The panics.** Under MU1 six inputs still panic before the check can run (ADR 0228 Q2). Options: (a) keep the invariant
+  panics; (b) turn them into located errors. Recommendation: (a); no known input reaches them at main.
+- **Q4. The ignored records.** `c3a_` and `c3c_` stay ignored under amendment 2. Recommendation: keep them.
+
+### For the lead: roadmap entries
+
+- **F-324**: status `done`. New note: "From ADR 0228 question 3, recommendation taken: a small follow-up item. DONE (ADR 0231, the
+  registration of F-324, 2026-11-12, branch f324-tet-output-check): every registered check is met after amendment 2 (a set-up
+  defect of two control tests, corrected before the corrected run); the acceptance is still the maintainer's (ADR 0231 Q1).
+  tetrahedralize ends with TetMesh::check_output: every cell positive by the exact orient3d, and the cell volumes equal to the
+  volume enclosed by the output surface within a rigorous rounding bound (Shewchuk's orient3d error bound per simplex, Neumaier
+  summation; about 1e-14 of the volume), else a located Error::Mesh naming the cell, or the first face shared by more than two
+  cells, with two cells on one side, or free but not on the surface. It reads the mesh only: the 111 + 7 fold-free F-306
+  fingerprints, the R outputs and the existing suites are unchanged; with the F-306 fold put back (MU1) the five overlapping Ok
+  outputs of main become located errors and no overlapping Ok remains. Cost: below 0.1 percent of the mesher's time (F12, F14).
+  Four registered mutations failed their checks. Open: ADR 0231 Q2 (face pairing on every run; the F-247 remesher's outputs), Q3
+  (the neighbour-link panics)."
+- Proposed follow-up (Q2 (c)): title "F-247 remesher: run the tet output check on its outputs"; acceptance: "TetRemesher's output
+  meshes pass TetMesh::check_output after every remeshing step, or the step returns its located error; the remesh_f247 hashes stay
+  unchanged."
