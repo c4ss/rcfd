@@ -544,3 +544,186 @@ settings, then the third step with `Fixed(w)`, `w = 0.25, 0.5`, cap 6, tolerance
 start); with MU4b `2.928`. `w = 1` is left out: from a moving state its residuals are near rounding after a few
 iterations only if the iteration converges, and it does not. After A1s is run once on the unchanged library, MU4b is
 applied again and A1s must fail.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-fv/src/sixdof.rs`: `patch_force_moment_wall_gradient` (new, public) and the private `force_moment` that it
+  and `patch_force_moment` call. The only line of the old body that changed is the face pressure, now `let d = x_f - x_c;
+  let mut pf = p_c + grad . d;` followed by the opt-in term under `if let Some(g)`: without a vector the operations and
+  their order are those of before.
+- `crates/rcfd-fv/src/fsi.rs`: `WallPressure`, `strong_step_with` (new, public); `strong_step` is now a call of
+  `strong_step_with(.., WallPressure::Extrapolated, &mut Vec::new(), ..)`.
+- `crates/rcfd-fv/tests/added_mass_f351.rs` (new): 21 tests, 15 active, 5 ignored records (the registered diagnosis that
+  missed, the defective control, the two tests with the defective search) and the ignored exploration.
+- **No line of `pimple.rs` or `pimple/moving.rs` is touched**, nor of `ale.rs`, `gradient.rs`, `rcfd-api`, the case schema,
+  `overset.rs`, `sponge.rs`, `immersed.rs`, `compressible.rs` or any existing test. Nothing in the library or the case
+  driver calls the new functions.
+
+### Hypotheses
+
+| Hypothesis | Measurement | Verdict |
+| --- | --- | --- |
+| H1 the wall-pressure extrapolation of `patch_force_moment` | `r_alg = 0.5` to `1.1e-16`; `d_ext = 1/(4N)` within 0.045 percent and the force low by `1/(4N)` within 0.14 percent on 20, 40, 80 cells (DPc); with the prescribed gradient the deficit is `2.7e-6` and the coupled frequency is the model's to six digits | **holds** (in the form of amendment 2: the registered form assumed a flow-step pressure exact against the new column and missed, amendment 1) |
+| H2 the pressure of the flow step | `d_flow_old` `2.1e-6`, `1.6e-6`, `9.0e-7` on 20, 40, 80 cells with the step converged; `7.1e-6` on 20 cells with the registered two correctors past the start | ruled out as the cause. Found beside it: the pressure of the Euler moving-mesh step is the acceleration times the column of the **old** mesh (`d_flow` against the new column up to `4.3e-4`, in phase with `w a`); the non-iterated step has a viscous splitting error that grows with the cell count (`9.2e-4` at the second step on 80 cells) |
+| H3 another extrapolation (zero gradient, another weight) | the factor is `1/2`, not `0`, `2/3` or `4/5` | ruled out |
+| H4 the viscous part of the force | at most `7.5e-6` of the force (DPc), 0.06 percent of the deficit | ruled out as the cause (the registered `1e-9` was missed: the part exists) |
+| H5 the reference (acceleration, area, length) | `3.0e-14`, `6.9e-18`, `0`, spread `3.2e-14` | ruled out |
+
+**The cause, in one sentence.** `patch_force_moment` extrapolates the wall-cell pressure with a least-squares gradient
+(weights `1/d^2`) that takes the pressure field's stored wall value, a zero gradient, as a data point with the weight of
+the neighbour cell; on a wall whose flux is prescribed the step's pressure equation used the gradient `-n . a_wall`
+instead, so the gradient of the wall cell comes out exactly half and the wall pressure a quarter cell short: the force is
+low by `1/(4N)`, **first order in the cell size**, 1.25 percent on the 20-cell column, at every mass ratio and every time
+step.
+
+### Checks
+
+Runs, each once unless stated: the registered diagnosis (784ea04e, 3 tests, all missed, amendment 1); the exploration X1
+(a2617baa, prints only); the corrected diagnosis (7d36f5b4, stopped by a defect of the test code, amendment 2a; then on
+b5db0329, met; N3b ran in both); the corrected evaluation (42999467, 11 tests, 114 s); A1s (the commit of
+amendment 4, once).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| G1 to G6, G8 (registered diagnosis, reference the new column) | see amendment 1 | `r` 0.499766; `d_ext` 1.250585e-2; `d_flow` 4.256e-4; `d_tot` 1.292790e-2; G5, G6 7.229e-6; G8 7.136e-6 | **missed**, kept as `..._known_miss`; the reference was defective (amendment 1), replaced by G1b to G6b |
+| G7 (H5) | `1e-9`; `1e-12`; `1e-12`; `1e-9` | `3.0e-14`; `6.9e-18`; `0`; `3.2e-14` | yes |
+| K1, K2 (registered, new column, worst step from step 2) | 2 percent of `1/(4N)`; `[0.95, 1.05]` | 3.4, 7.2, 25 percent off; `0.9488`, `1.5230` | **missed**, kept as `..._known_miss`; replaced by K1b, K2b |
+| N3 (registered control) | `abs(d_flow) >= 5e-3` | `1.58e-3` to `7.2e-3` | **did not hold**: defective by construction (amendment 1), replaced by N3b |
+| G1b `r_alg - 0.5`, DPc, 20; 40; 80 cells | `abs <= 1e-12` | `-1.1e-16` each | yes |
+| G2b `d_ext` | within 0.5 percent of `1/(4N)` | `1.2505506e-2`; `6.2528055e-3`; `3.1264215e-3` (`+0.044`, `+0.045`, `+0.045` percent) | yes |
+| G3b `d_flow_old` | `abs <= 2e-5` | `2.086e-6`; `1.593e-6`; `9.03e-7` | yes |
+| K1b (c5) `d_tot_old` of the default | within 1 percent of `1/(4N)` | `1.2509688e-2`; `6.2578233e-3`; `3.1293414e-3` (`+0.078`, `+0.125`, `+0.139` percent) | yes |
+| K2b (c5) orders of the default deficit | `[0.98, 1.02]` | `0.999313`, `0.999802` | yes |
+| G5b rebuilt force | `<= 1e-12` | `0` | yes |
+| G6b viscous part | `<= 1e-4` | `7.47e-6`; `6.10e-6`; `3.34e-6` | yes |
+| G2p, G3p (registered PISO settings, 20 cells) | 0.5 percent of `1/80`; `abs <= 1e-4` | `1.2505851e-2`; `7.063e-6` | yes |
+| N3b (control of G3b) | `abs >= 5e-4` | `9.2211e-4` | held |
+| K3b (c5) corrected, DPc, 20; 40; 80 cells; DP 20 cells | `abs <= 5e-5`; `<= 1e-4` | `-2.656e-6`; `2.400e-6`; `1.611e-6`; `-3.586e-6` | yes |
+| N1b (control of K3b) zero gradient | within 2 percent of `0.025` | `2.500941e-2` | held |
+| **A1 (c3)** gain, corrected, `w = 0.25, 0.5, 1`, `k = 1..5` | within 0.2 percent of 2.977: `[2.971046, 2.982954]` | `2.97693` (every `k`, `w = 0.25`, `0.5`); `2.97693` to `2.97698` (`w = 1`): `-0.002` percent of 2.977 | yes |
+| A1s (amendment 4) gain at the third step, `w = 0.25, 0.5`, `k = 1..3` | `[2.971046, 2.982954]` | `2.97715` | yes |
+| **A2 (c4)** `omega_m/omega`, corrected, `mu = 4`, 20 cells | `abs(. - 1) <= 1e-3`; `>= 11` crossings | `1.000042`; 11 | yes |
+| A3 converged; iterations; largest turning ratio | all; `<= 8`, `<= 5`; `<= 1.001` | all; 4, `3.001`; `0.92469` | yes |
+| A4 corrected, `mu = 20`; `mu = 0.2` | `abs(. - 1) <= 1e-3` | `0.999963`; `1.000068` | yes |
+| A5 corrected, one iteration (the loose loop), `mu = 0.2` | `abs(. - 1) <= 1e-3` | `1.000264` | yes |
+| K4 (c5) default, coupled, 20; 40; 80 cells | `[1.0049, 1.0052]`; `[1.0024, 1.0027]`; `[1.0012, 1.0014]` | `1.005081`; `1.002552`; `1.001294` | yes |
+| N2b (control of A2) default through the same entry | `>= 4e-3` above 1 | `5.081e-3` | held |
+| K5 (c5) corrected, coupled, 40; 80 cells | `abs(. - 1) <= 1e-3` | `1.000042`; `1.000042` | yes |
+| K4c, K5c (80 cells, four outer iterations) | `[1.0012, 1.0014]`; `abs(. - 1) <= 1e-3` | `1.001294`; `1.000042` | yes |
+| U1 order on a static box, corrected; default | `[1.8, 2.2]`; `[0.8, 1.2]` | `1.9998`, `1.9999` (errors `3.12e-4`, `7.81e-5`, `1.95e-5`); `0.9755`, `0.9878` (`9.06e-3`, `4.61e-3`, `2.32e-3`) | yes |
+| U2 linear field: corrected error; default deficit against `1/(4N)` | `1e-12`; `1e-12` | `2.3e-16` to `3.5e-16`; equal to 12 digits | yes |
+| U3 no finite entry | bit-identical to `patch_force_moment` | 6 components identical; a finite entry changes them | yes |
+| U4 refusals | errors, state unchanged | "167 wall gradients for 168 boundary faces" from both; body, time and vector unchanged | yes |
+| W1 the carried vector | piston entries within `1e-9` of `(w_n - w_{n-1})/dt`, the others NaN | `3.2e-14`; NaN | yes |
+| B1 the diff | as stated | one line of the old body of `patch_force_moment` rewritten as two with the same operations (above); `strong_step` reduced to a call; `pimple.rs`, `pimple/moving.rs` untouched | yes |
+| B2 `strong_step` against `strong_step_with(Extrapolated)`, 40 steps | bit-identical | 0 values differ | yes |
+| B3 existing suites, release, unedited | all pass | `sixdof` 7, `sixdof_coupled` 2, `sixdof_flow_f244` 8, `strong_fsi_f251` 16 passed, 0 failed; `strong_fsi_f251` prints the numbers of ADR 0250 (S1 `1.005081`, `1.005063`; C1 `2.95223`) | yes |
+| B4 `baseline_hashes` | passes | 3 passed, 0 failed, 1 ignored (the file unedited) | yes |
+
+The model of the registration (the exact added mass, `delta = 0`) is reproduced by the flow with the corrected force to
+every printed digit: `1.000042` (`mu = 4`, on 20, 40 and 80 cells), `0.999963` (`mu = 20`), `1.000068` (`mu = 0.2`),
+`1.000264` (loose, `mu = 0.2`: the `+1.0e-3` that ADR 0211 could not explain is gone, what is left is its coupling lag),
+gain `2.97693`. With the default force the flow reproduces the model with `delta = 1/(4N)` to every printed digit on 20,
+40 and 80 cells. The viscous splitting error of the non-iterated step does not move the frequency (K4 and K5 against
+K4c and K5c: identical to six digits).
+
+### Mutations
+
+Each applied alone to the library of 42999467 by an exact replacement that had to occur once (`f351-scratch/mutate.py`),
+the 14 active tests of the new file run once, the file restored and compared byte for byte with the kept copy.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the gradient term dropped | K3b, A1, A2, U1, U2 | all failed: K3b `1.2510e-2`, A1 gain `2.95223`, A2 `1.005081`, U2 `0.0125` (U1 shares its test). Also A4, K5, K5c, U3 |
+| MU2 the sign of the prescribed gradient reversed | K3b, U2 | failed: K3b `5.002e-2`, U2 `0.05`. Also A1 (`2.878`), A2 (`1.020667`), A4, K5, K5c |
+| MU3 the normal part of the cell gradient not removed | K3b, U2 | failed: K3b `-1.2503e-2`, U2 `0.0125`. Also A1 (`3.00166`), A2 (`0.995078`), A4, K5, K5c |
+| MU4 the force of an iterate with the carried vector | A1 | failed, but through an error and not through the gain: on the first step the carried vector is empty and is refused. The same error fails A2, A4, K5, K5c, W1 |
+| MU4b (added) the carried vector when there is one, else the iterate's | (none registered) | **not caught** by the 14 tests. Amendment 4 added A1s (gain at the third step, `2.97715`, in the window); with MU4b A1s fails, gain `2.92772` |
+| MU5 `strong_step` selects the corrected wall pressure | B2 | failed; nothing else |
+| MU6 the carried vector not updated | W1 | failed (the length at step 1). Also A5 (`1.001307`: the loose loop falls back to the default predictor) |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### Deviations and disclosures
+
+- **The registered diagnosis missed its limits** (amendment 1). Its reference force, `rho A L g` with the column of the
+  new mesh, was wrong for the discrete step, and its premise that the flow-step pressure is exactly linear was wrong at
+  the level of `4e-4`. The reference was changed to the old column by amendment 2 **after** a run and after an
+  exploration whose numbers were seen; the corrected limits were written with those numbers known (they are quoted in
+  amendment 2). What makes the corrected reference more than a fit: it follows from the momentum balance of the step,
+  and on the three meshes with a converged step it leaves `2e-6`.
+- The registered control N3 was defective by construction; N3b replaces it.
+- The first run of the corrected diagnosis stopped on a defect of my test code (amendment 2a).
+- N3b ran twice (the name filter of the second run matched it); the number is the same.
+- N2 could not be built as registered and was replaced by N2b in amendment 3, before the code.
+- The acceptance checks A1 to A5, K4, K5 and the unit checks kept the limits of the first registration; none was changed.
+- One format-string compile error per test stage was fixed before the runs; no test was edited after its run except to
+  turn it into an ignored record.
+- MU4 as registered fails A1 through an error of the first step (an empty vector), not through the gain; MU4b was added
+  to see the mutation in a run that goes on.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's); `ale_flows`, `ale_gcl` (no line of `ale.rs` or the flow step is
+changed); a skewed or curved wall; a rotating body or any moment in a flow; any case-tree run (there is no key and
+`rcfd-api/src/dynmesh.rs` still calls `patch_force_moment`). 
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Both on the
+restored tree after the mutations (`git status` clean).
+
+### Decision by the registered rule
+
+The cause is identified and it is the extrapolation; the opt-in is delivered; A1 and A2 are met with the limits of the
+first registration; the convergence is shown on 20, 40 and 80 cells (K1b, K2b, K3b, K4, K5); U1 to U4, A3 to A5, W1, B1 to
+B3 are met and B4; N1b, N2b and N3b hold; the six registered mutations failed their checks, and the added MU4b, which no test caught at first, is caught by the check A1s that amendment 4 added. By the rule as amended this is **done**, proposed as such; the
+acceptance stays the maintainer's.
+
+The reading against it, stated plainly: the rule names G1 to G8, K1 to K3 and N3, and those were missed or defective as
+first registered; they count as met only through amendments 2 and 2a, written after runs. If the lead holds that a
+diagnosis whose first reference was wrong cannot be "done", the status is **partial** with nothing left to build: the
+numbers would not change.
+
+What "done" covers: a library function and its tests. The default force evaluation is unchanged and is first order on
+a fixed-flux wall; the case driver still uses it (Q1, Q2).
+
+### Remaining questions (each with options and a recommendation)
+
+- **Q1. The default wall pressure of the body force is first order on a fixed-flux wall** (low by a quarter of the
+  wall-cell size over the column length: 1.25 percent of the added mass on 20 cells, `+0.5` percent of frequency at a
+  mass ratio of 4, `+0.1` percent at 0.2). Changing it changes every result that uses a body force on a moving wall, so
+  it is **not taken**: it is the maintainer's. Options: (a) keep the default, opt-in only; (b) make the prescribed
+  gradient the default of `strong_step` and of the case driver, with the hashes it moves listed first; (c) change
+  `patch_force_moment` itself to take the gradient when the caller has one. Recommendation: (b), after the follow-up
+  item below has wired the driver and listed the hashes.
+- **Q2. The case driver.** `rcfd-api/src/dynmesh.rs` calls `patch_force_moment` and drops the vector of
+  `set_follow_conditions`. Options: (a) a follow-up item: a key that selects the wall pressure, default unchanged; (b)
+  leave it a library function. Recommendation (a).
+- **Q3. Other walls with the same mismatch.** The same half gradient arises wherever the pressure equation of a step
+  uses a wall condition that the pressure field does not store: the walls of `ale::set_rest_conditions`, the rotating
+  walls of the sliding step, and any force evaluated by `patch_force_moment` on such a wall. Not examined here. Options:
+  (a) a short audit item (which callers evaluate a wall force after a step with a prescribed wall gradient, and what the
+  error is on one case each); (b) leave. Recommendation (a), together with the test on a skewed wall cell that this item
+  did not make.
+- **Q4. The two properties of the flow step found on the way** (pressure of the old column, first order in `dt`; viscous
+  splitting error of the non-iterated step growing as `nu dt/dx^2`). Neither moves the frequency here. Options: (a)
+  record them (this ADR) and leave; (b) an item on the old-column term. Recommendation (a).
+- **Q5. ADR 0250's model has `L0 - x_{n+1}` in the fluid force**; the flow has the old column. The difference is below
+  the printed digits of every check. Options: (a) leave; (b) correct the comment of the model in a later edit of that
+  test file. Recommendation (a).
+
+### For the lead: roadmap entries
+
+Proposed status of F-351: **done** (`[x]`), acceptance still the maintainer's (see "Decision" for the reading that makes
+it partial).
+
+Note text for F-351:
+
+> From ADR 0250 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE (ADR 0252, 2026-11-12; registered before the code, four amendments). Cause, measured: the wall-pressure extrapolation of patch_force_moment. Its least-squares gradient (weights 1/d^2) takes the stored zero-gradient wall value of the pressure field as a data point with the weight of the neighbour cell, while the pressure equation of the moving-mesh step used the prescribed gradient -n . a_wall; the gradient of the wall cell is therefore exactly half (0.5 to 1e-16) and the wall pressure a quarter cell short: the force is low by 1/(4N), first order in the cell size (prescribed piston, flow step converged: 1.2510e-2, 6.258e-3, 3.129e-3 on 20, 40, 80 cells, orders 0.9993 and 0.9998), 1.25 percent on the 20-cell column at every mass ratio. The pressure of the flow step carries none of it (2e-6 with the step converged, 7e-6 with the registered two correctors). Delivered, opt-in, nothing calls it: sixdof::patch_force_moment_wall_gradient (the normal part of the cell-gradient extrapolation replaced by the gradient of ale::set_follow_conditions, p_c + dn g on an orthogonal wall cell, second order) and fsi::strong_step_with with fsi::WallPressure, which carries that gradient from step to step. With it: gain of the sub-iteration at ratio 4 2.97693 (model 2.977, limit 0.2 percent); omega_m/omega 1.000042 at ratio 4 on 20, 40 and 80 cells (limit 0.1 percent; 1.005081, 1.002552, 1.001294 with the default), 0.999963 at ratio 20, 1.000068 at 0.2, 1.000264 for the loose loop at 0.2 (1.001307 before: the unexplained +1.0e-3 of ADR 0211 was this deficit); deficit of the force 3e-6 on 20, 40, 80 cells. Every number equals the piston model with the exact added mass to six digits. Unchanged: patch_force_moment and strong_step (bit-identical over 40 steps; the sixdof, sixdof_coupled, sixdof_flow_f244 and strong_fsi_f251 suites pass unedited; baseline_hashes 3 passed, 0 failed, 1 ignored (the file unedited)); pimple.rs, pimple/moving.rs, rcfd-api and the case schema untouched. Seven library mutations: six failed their checks; one added variant passed every test and a check (the gain at the third step of a run) was added by amendment and catches it. Disclosed: the first registered diagnosis missed its limits because its reference was the column of the new mesh; the pressure of the implicit Euler moving-mesh step is the acceleration times the column of the old mesh (first order in dt, not a mean deficit), and the reference was corrected by amendment after an exploration; the missed tests are kept as ignored records. Also found: the non-iterated step leaves a viscous splitting error that grows with the cell count and does not move the frequency. Not delivered: the case driver (rcfd-api dynmesh) still uses the default evaluation; a skewed wall cell and a moment in a flow are not tested. Open, the maintainer's: whether the prescribed gradient becomes the default (ADR 0252 Q1; not taken, it moves existing results), the case key (Q2), the audit of other walls with a prescribed gradient (Q3).
+
+Follow-up item (number for the lead to assign). Title: Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided. Deps: F-351, F-350. Acceptance:
+
+> A case key of dynamic_mesh.six_dof selects the wall pressure of the body force ("extrapolated", the default, or "prescribed_gradient"), the case driver keeps the vector of ale::set_follow_conditions and hands it to sixdof::patch_force_moment_wall_gradient, and the spring-mounted piston of ADR 0211 run through the case driver at a mass ratio of 0.2 gives omega_m/omega within 0.05 percent of 1 with the key against 1.0013 without; the existing cases whose hashes would move if the prescribed gradient became the default are listed with the size of the change, for the maintainer's decision on the default; the callers that evaluate a wall force after a step with a prescribed wall gradient (ale::set_rest_conditions, the sliding step) are listed with the measured error on one case each, and the corrected evaluation is checked on a wall cell whose centre does not lie on the face normal; with the default every existing case hash is bit-identical.
