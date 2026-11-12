@@ -769,3 +769,37 @@ fn e5_hinge_mechanism_is_refused_by_the_pivot_test() {
         other => panic!("E5: expected SingularStiffness, got {other:?}"),
     }
 }
+
+// ------------------------------------------------------------------------------------------- amendment 1: check R3
+
+#[test]
+fn r3_balance_against_independent_loads() {
+    let centre = [0.5 * R_LENGTHS[0], 0.5 * R_LENGTHS[1], 0.5 * R_LENGTHS[2]];
+    let diag = (R_LENGTHS.iter().map(|l| l * l).sum::<f64>()).sqrt();
+    for kind in KINDS {
+        let (model, forces) = reaction_case(kind);
+        let n = model.mesh().nodes().len();
+        let mut f_test = vec![0.0; 3 * n];
+        for &node in model.mesh().node_set("zmax").unwrap() {
+            for (k, v) in [100.0, -200.0, 300.0].into_iter().enumerate() {
+                f_test[3 * node + k] += v;
+            }
+        }
+        for p in &forces {
+            for k in 0..3 {
+                f_test[3 * p.node + k] += p.force[k];
+            }
+        }
+        let f_lib = nodal_load_vector(&model, &forces).unwrap();
+        let fmax = f_test.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+        let dev = f_lib.iter().zip(&f_test).fold(0.0f64, |m, (a, b)| m.max((a - b).abs())) / fmax;
+        let res = solve_static_with(&model, &[], &forces, &StaticOptions::default()).unwrap();
+        let (bf, bm) = balance(&res, model.mesh(), &f_test, centre, diag, true);
+        println!(
+            "R3 {kind:?}: load vector against the test's {dev:.3e} (limit 1e-15); balance with the test's loads: force {bf:.3e} \
+             moment {bm:.3e} (limit 1e-10)"
+        );
+        assert!(dev <= 1e-15, "R3a {kind:?}: {dev:e}");
+        assert!(bf <= 1e-10 && bm <= 1e-10, "R3b {kind:?}: {bf:e} {bm:e}");
+    }
+}
