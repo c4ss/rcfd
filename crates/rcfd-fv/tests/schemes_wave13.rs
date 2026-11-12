@@ -469,6 +469,9 @@ fn t2b_bounded_time_scheme_square_wave() {
     };
     let (ob2, obd) = (over(&run(TimeScheme::Bdf2)), over(&run(TimeScheme::Bdf2Bounded)));
     println!("T2b: overshoot BDF2 {ob2:.4e}, bounded BDF2 {obd:.4e}");
-    assert!(ob2 >= 0.02, "T2b has no teeth: plain BDF2 overshoot {ob2:e} below the registered 0.02");
+    assert!(
+        ob2 >= 0.02,
+        "T2b has no teeth: plain BDF2 overshoot {ob2:e} below the registered 0.02"
+    );
     assert!(obd <= 0.25 * ob2 && obd <= 0.02, "bounded {obd:e} vs plain {ob2:e}");
 }

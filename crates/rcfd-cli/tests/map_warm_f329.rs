@@ -69,7 +69,9 @@ fn rcfd(args: &[&str]) -> Output {
 }
 
 fn tmp(name: &str) -> PathBuf {
-    let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("map_warm_f329").join(name);
+    let d = PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("map_warm_f329")
+        .join(name);
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).unwrap();
     d
@@ -91,7 +93,14 @@ fn cli_map(dir: &Path, out: &str, extra: &[&str]) -> (i32, (String, String)) {
     let case = dir.join("he.toml");
     std::fs::write(&case, HE).unwrap();
     let out = dir.join(out);
-    let mut args = vec!["map", case.to_str().unwrap(), "--axis", AXIS, "--out", out.to_str().unwrap()];
+    let mut args = vec![
+        "map",
+        case.to_str().unwrap(),
+        "--axis",
+        AXIS,
+        "--out",
+        out.to_str().unwrap(),
+    ];
     args.extend_from_slice(extra);
     args.push("--quiet");
     let o = rcfd(&args);
@@ -125,17 +134,26 @@ fn b1_b2_default_rows_unchanged_and_extended_rows_warm() {
     let (_, flow) = cli_map(&d, "flow", &["--warm-start", "flow"]);
     let lib_flow = lib_map(
         &d.join("lib_flow"),
-        &CaseMapEvaluator { base: he(), limits: RunLimits::default() },
+        &CaseMapEvaluator {
+            base: he(),
+            limits: RunLimits::default(),
+        },
     );
     eprintln!("B1: default map {} + {} bytes", default.0.len(), default.1.len());
-    assert!(default == lib_flow, "B1: the default map differs from CaseMapEvaluator's");
+    assert!(
+        default == lib_flow,
+        "B1: the default map differs from CaseMapEvaluator's"
+    );
     assert!(default == flow, "B1: --warm-start flow differs from the default");
     // B2n: the default map does not warm-start HE (it has an energy equation)
     let dp = points(&default.1);
     let restarts: Vec<_> = dp.iter().map(|p| p["restart"].as_str().unwrap().to_string()).collect();
     eprintln!("B2n: default restarts {restarts:?}");
     assert_eq!(dp.len(), 3);
-    assert!(dp[1]["restart"] != "warm" && dp[2]["restart"] != "warm", "B2n: {restarts:?}");
+    assert!(
+        dp[1]["restart"] != "warm" && dp[2]["restart"] != "warm",
+        "B2n: {restarts:?}"
+    );
     // B2: the extended map
     let (_, ext) = cli_map(&d, "extended", &["--warm-start", "extended"]);
     let (_, cold) = cli_map(&d, "cold", &["--cold"]);
@@ -148,12 +166,23 @@ fn b1_b2_default_rows_unchanged_and_extended_rows_warm() {
     assert_eq!(ep[0], dp[0], "B2: point 0 differs from the default map's");
     let mut worst: f64 = 0.0;
     for i in 1..3 {
-        let (w, c) = (ep[i]["metrics"].as_object().unwrap(), cp[i]["metrics"].as_object().unwrap());
+        let (w, c) = (
+            ep[i]["metrics"].as_object().unwrap(),
+            cp[i]["metrics"].as_object().unwrap(),
+        );
         assert!(!w.is_empty());
-        assert_eq!(w.keys().collect::<Vec<_>>(), c.keys().collect::<Vec<_>>(), "B2: point {i}");
+        assert_eq!(
+            w.keys().collect::<Vec<_>>(),
+            c.keys().collect::<Vec<_>>(),
+            "B2: point {i}"
+        );
         for (k, a) in w {
             let (a, b) = (a.as_f64().unwrap(), c[k].as_f64().unwrap());
-            let rel = if a == b { 0.0 } else { (a - b).abs() / a.abs().max(b.abs()) };
+            let rel = if a == b {
+                0.0
+            } else {
+                (a - b).abs() / a.abs().max(b.abs())
+            };
             eprintln!(
                 "B2: point {i} {k} warm {a:e} cold {b:e} rel {rel:.3e}; iterations warm {} cold {}",
                 ep[i]["iterations"], cp[i]["iterations"]
@@ -166,9 +195,15 @@ fn b1_b2_default_rows_unchanged_and_extended_rows_warm() {
     // B2x: the extended map is the ExtendedMapEvaluator map, byte for byte
     let lib_ext = lib_map(
         &d.join("lib_ext"),
-        &ExtendedMapEvaluator { base: he(), limits: RunLimits::default() },
+        &ExtendedMapEvaluator {
+            base: he(),
+            limits: RunLimits::default(),
+        },
     );
-    assert!(ext == lib_ext, "B2x: the extended map differs from ExtendedMapEvaluator's");
+    assert!(
+        ext == lib_ext,
+        "B2x: the extended map differs from ExtendedMapEvaluator's"
+    );
 }
 
 #[test]

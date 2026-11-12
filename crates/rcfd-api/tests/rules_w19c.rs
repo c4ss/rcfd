@@ -849,14 +849,21 @@ fn e6_sv202_fuller_text_through_check_only_adr0235() {
     assert_eq!(diags.len(), 4, "{ev}");
     for (d, p) in diags.iter().zip(["xmin", "xmax", "ymin", "ymax"]) {
         assert_eq!(d["path"], format!("boundaries.{p}"), "{ev}");
-        assert_eq!(d["message"], format!("no boundary condition for mesh patch '{p}'"), "{ev}");
+        assert_eq!(
+            d["message"],
+            format!("no boundary condition for mesh patch '{p}'"),
+            "{ev}"
+        );
     }
     // A2c: entries without keys are accepted, and SV202 does not fire
     let empty = parse(&format!(
         "{NO_BC_MESH}[boundaries.xmin]\n[boundaries.xmax]\n[boundaries.ymin]\n[boundaries.ymax]\n"
     ));
     let (code, ev) = rcfd_api::runctl::check_only(&empty);
-    eprintln!("A2c: exit {code}, rules {}, diagnostics {}", ev["rules"], ev["diagnostics"]);
+    eprintln!(
+        "A2c: exit {code}, rules {}, diagnostics {}",
+        ev["rules"], ev["diagnostics"]
+    );
     assert_eq!(code, 0, "{ev}");
     assert!(ev["diagnostics"].as_array().is_some_and(|d| d.is_empty()), "{ev}");
     assert!(
