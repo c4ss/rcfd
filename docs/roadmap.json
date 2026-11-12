@@ -3000,9 +3000,9 @@
     "deps": [
       "F-134"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "On the set-up B3d of ADR 0251 (two hexahedral parts whose interior points are displaced by up to 0.15 of the cell size in all three directions) every fringe centre gets a donor that agrees with a full search, the linear and the quadratic stencils reproduce linear and quadratic fields to 1e-11, and on meshes with planar faces the donors and stencils are bit-identical to those of today (the unit tests K2 and K4 of ADR 0219 and D1 of ADR 0251).",
-    "note": "From ADR 0251 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+    "note": "DONE pending acceptance, merged 2026-11-12. From ADR 0251 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0253, 2026-11-12: DONE. Derived: one plane for each face leaves no gap across a face but a sliver along every edge at which the planes of the four faces do not meet in one line, a gap or an overlap with equal chance, of cross-section at most (w_F + w_F')(w_G + w_G') for the warps w of the faces, second order in the warp; on B3d (warp up to 0.142 of the cell size) the estimate was 6e-4 of the volume each and 116 and 114 of 200000 random points were measured in no cell and in two. Built in rcfd_mesh::overset: a cell with a face warped beyond the locator's tolerance (1e-10 of its box diagonal) is tested as the polyhedron of the triangles about its face centres, the same triangles from both sides of a face (triangulated_margin: the distance from the triangles, signed by the winding number, behind a bounding-box shortcut); a cell with planar faces keeps the plane test of ADR 0219 M3 unchanged; a point on a shared triangle goes to the lowest-numbered cell. Met: on B3d all 1069 fringe centres get a donor equal to the full search and confirmed by an independent tetrahedral test, the linear stencils reproduce a linear field to 3e-16 and the quadratic stencils q3 to 9e-16 with no fallback; 250000 random points in the two warped parts each lie in exactly one cell; 39744 face centres and 12167 mesh points go to the lowest-numbered cell; on the planar set-ups (RL, TG_L, U, TR, DC, FB, B3, B3s) no cell is warped and the donors and default stencils equal those built from the rule of M3 bit for bit; K2, K4, D1, Q0 and the records R2 pass unedited. Cost: a search takes 4.5 microseconds on B3d, the connectivity 1.8 times that of B3. The present rule finds no cell for the fringe cells 16035 (as recorded) and 16245. Six mutations caught. Limits: kinematic only, one family of warped meshes; non-convex cells with planar faces keep the plane test. Open for the maintainer: whether every cell should use the triangulated test (it changes one donor of TR at a tie, ADR 0253 Q1). Follow-ups (ADR 0253 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-356, F-357. Open: question 1 (the triangulated test for every cell changes one donor at a tie)."
   },
   {
     "id": "F-353",
@@ -3036,5 +3036,27 @@
     "status": "todo",
     "acceptance": "DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number within 1 percent of the first-order forcing on the same mesh, or the cause of the stop at step 6 is diagnosed by a registered measurement and the configuration is refused with a located message.",
     "note": "From ADR 0249 question 6, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0249's printed run of 2D-2 on M2 with the second-order forcing (PISO, BDF2, linear upwind, AMG pressure, dt 0.001) stopped at step 6 through the divergence guard (Courant 1.1e7); the forcing had been run in PISO only on circular Couette flow (ADR 0234 V3)."
+  },
+  {
+    "id": "F-356",
+    "title": "Overset: donor search on non-convex cells with planar faces",
+    "phase": 9,
+    "deps": [
+      "F-352"
+    ],
+    "status": "todo",
+    "acceptance": "On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the mesh lies in exactly one cell of the locator and the located cell agrees with a full search and with an independent containment test; on meshes of convex cells with planar faces the donors and stencils are bit-identical to those of today (the checks A4 of ADR 0253).",
+    "note": "From ADR 0253 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+  },
+  {
+    "id": "F-357",
+    "title": "Overset: uniform flow on a warped three-dimensional overset mesh",
+    "phase": 9,
+    "deps": [
+      "F-352"
+    ],
+    "status": "todo",
+    "acceptance": "The uniform-flow check U1 of ADR 0219 on the set-up B3d of ADR 0251 with the component moving: velocity and pressure within 1e-10, continuity of the calculated cells within 1e-9 at every step, with the default and with the quadratic donor interpolation.",
+    "note": "From ADR 0253 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
   }
 ]
