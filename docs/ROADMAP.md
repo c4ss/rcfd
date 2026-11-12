@@ -8587,7 +8587,7 @@ fixed by the item's registration ADR before any code.
     moved by 1e-12, offsets scaled 1e-4 and 1.1, every second node unmoved, connectivity rotated, control built moved)
     each caught by the check registered for it. Tests only, ADR 0358 tests unedited. Done pending the maintainer's
     acceptance.
-- [ ] **F-465** Coupled step: a failing fluid in a later iteration as a registered check
+- [~] **F-465** Coupled step: a failing fluid in a later iteration as a registered check
   - depends on: F-463
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock
     fluid of ADR 0286 and the start of ADR 0361 (a converged step, then F0 doubled), a mock fluid whose advance returns
@@ -8595,7 +8595,22 @@ fixed by the item's registration ADR before any code.
     message, and both participants bit-equal to the start of the step; mutations that skip the coupler's restore of the
     fluid or of the structure at the error, or at the start of an iteration, are each caught by at least one check (the
     pair of restores that ADR 0361 M9 and M11 could not observe).
-  - note: From ADR 0361 addendum 1 (2026-11-12), Q1 recommendation.
+  - note: From ADR 0361 addendum 1 (2026-11-12), Q1 recommendation. Structural solver, basic tier. ADR 0364, 2026-11-12:
+    tests only, crates/rcfd-post/tests/sb_solid_coupling_fail_fluid.rs. With the StaticSolid and the mock fluid of ADR
+    0286 and the start of ADR 0361 (a converged step, then F0 doubled), a mock fluid whose advance takes its new state
+    and then returns an error in its 2nd and its 3rd call (Aitken and least squares) stops the step with participant
+    'fluid', that iteration number, the mock's message (entered at the start time) and the start time, after n advances
+    of the structure and of the fluid; fluid and solid state (time, displacement, forces) bit-equal to the start of the
+    step, with a check that both were off the start at the failure; the retry with a healthy fluid reproduces the
+    healthy step bit for bit; the control reaches iteration 3 as derived (15 to 7e-14, 0.36585 to 1.5e-14, 5.8e-16) and
+    a failure at the 4th call is never reached. The coupler's restores at the error, the equivalent mutants M9 and M11
+    of ADR 0361, are caught: skipping the structure's, the fluid's or both fails the bit-equality checks; a wrong
+    iteration, participant or message and a wrong mock restore are caught by the registered checks. Partial: the
+    mutations that skip the restores at the start of an iteration (fluid or structure, from iteration 2 or from
+    iteration 3) and a mock restore without the time were caught only by a panic in the set-up, which is itself a
+    converged 3-iteration step that uses those restores, not by the registered failing-step checks. Not covered: a fluid
+    failing before it takes its state, the fluid's time check, bad force arrays, a failing restore, iterations beyond 3,
+    a flow solver.
 - [ ] **F-466** Bounded second-order immersed forcing: the stop of DFG 2D-2 on T.
   - depends on: F-354, F-355
   - acceptance: The stop of DFG 2D-2 on the T mesh with `build_second_order_bounded` (ADR 0268 R1: step 2951, pressure
@@ -8624,3 +8639,14 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0359 question 1, recommendation (a), not yet taken. The test-side bilinear stencil of ADR 0359
     (rectangular meshes only) gives 1.16e-6 at a ratio of 4.15 on the component cells and lowers e(TG_2) from 3.19e-4 to
     2.84e-4. It does not lift D2 of TG_2 to 4: the kind changes next to the hole stay (ADR 0359 H5).
+- [ ] **F-469** Coupled step: failing-participant checks with a start state that does not use the restores at the start of an iteration
+  - depends on: F-465
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock
+    fluid of ADR 0286, a start state reached without any coupler iteration beyond the first (a loose-coupling first
+    step, then F0 doubled), registered with its arithmetic, a mock fluid failing in iteration 2 and in iteration 3 stops
+    the step with the fluid's name, the iteration number and its message and both participants bit-equal to the start;
+    mutations that skip the coupler's restore of the fluid or of the structure at the start of iteration 2 or of
+    iteration 3 (ADR 0364 M16 to M19) and the mock's restore of the time (M25) are each caught by a failing-step or
+    control check, not by a panic in the set-up.
+  - note: From ADR 0364 question 1, recommendation (b). Low priority: test isolation only; the mutations it targets are
+    already caught by a set-up panic.
