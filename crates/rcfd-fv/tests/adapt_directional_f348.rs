@@ -426,8 +426,13 @@ fn strictly_increasing(cycles: &[CycleRecord]) -> bool {
 
 // ------------------------------------------------------------------------------------------------ C5: the fast layer run
 
+/// The registered C5, unchanged. FAILED at its one run after 277 s: "adaptive cycle 3: edge_length_weighted_indicator:
+/// grads[0][0] is not finite". Its 8 x 8 base is at cell Peclet 10, where the unlimited linear-upwind solution is unbounded
+/// (`u` about -1.9 in the wall row) and SIMPLEC does not converge on the first directional mesh even from the initial fields
+/// (ADR 0267 amendment 2; the corrected check is C5b below).
 #[test]
-fn c5_directional_layer_loop_fast() {
+#[ignore = "known miss, defective set-up (ADR 0267 amendment 2): record of the registered C5; about 5 minutes"]
+fn c5_directional_layer_loop_fast_known_miss() {
     let set = adaptive_settings(3, MAX_ITER);
     let run = run_adaptive_simple_directional_target(layer_dir(8, [3, 3]), layer_setup, &set, 100, 2.0, 0.5).unwrap();
     print_records("C5", &run.cycles);
@@ -444,6 +449,32 @@ fn c5_directional_layer_loop_fast() {
     );
     assert!(jump.iter().all(|&j| j <= 1), "jump {jump:?}");
     assert!((100..=110).contains(&n), "N = {n}");
+    assert!(strictly_increasing(&run.cycles));
+    assert!(sums[1] > sums[0], "level sums {sums:?}");
+    assert_eq!(run.amr.leaves().iter().map(|l| l.levels[1]).max(), Some(3));
+}
+
+// ------------------------------------------------------------------------------------------------ C5b (amendment 2)
+
+#[test]
+fn c5b_directional_layer_loop_fast() {
+    let set = adaptive_settings(3, MAX_ITER);
+    let run = run_adaptive_simple_directional_target(layer_dir(16, [3, 3]), layer_setup, &set, 400, 2.0, 0.5).unwrap();
+    print_records("C5b", &run.cycles);
+    let mesh = &run.solver.geom.mesh;
+    mesh.validate().unwrap();
+    let jump = max_axis_level_jump(&run.amr, mesh);
+    let n = run.amr.n_cells();
+    let sums = level_sums(&run.amr);
+    println!(
+        "F-348 C5b: {n} cells, jump {jump:?}, x levels {:?}, y levels {:?}, level sums {sums:?}, E {:.4e}",
+        axis_histogram(&run.amr, 0),
+        axis_histogram(&run.amr, 1),
+        layer_error(&run.solver)
+    );
+    assert!(run.cycles.iter().all(|c| c.converged), "a solve did not converge");
+    assert!(jump.iter().all(|&j| j <= 1), "jump {jump:?}");
+    assert!((400..=440).contains(&n), "N = {n}");
     assert!(strictly_increasing(&run.cycles));
     assert!(sums[1] > sums[0], "level sums {sums:?}");
     assert_eq!(run.amr.leaves().iter().map(|l| l.levels[1]).max(), Some(3));
