@@ -8,7 +8,8 @@ use rcfd_fem::builders::hex_box;
 use rcfd_fem::solve::StaticOptions;
 use rcfd_fem::{Constraint, Material, SolidMesh, SolidModel};
 use rcfd_fv::cosim::{
-    coupled_step, CoupledStep, CouplingSettings, Fluid, InterfaceMap, MapSettings, Participant, Structure,
+    coupled_step, CoupledStep, CouplingError, CouplingSettings, Fluid, InterfaceMap, MapSettings, Participant,
+    Structure,
 };
 use rcfd_post::solid_coupling::{SolidInterface, StaticSolid};
 
@@ -351,16 +352,16 @@ fn residual_bits(step: &CoupledStep) -> Vec<u64> {
     step.residuals.iter().map(|x| x.to_bits()).collect()
 }
 
-/// The healthy step from the start state with the two transparent wrappers; the step as a result, no panic.
-fn healthy(
-    settings: &CouplingSettings,
-) -> (
-    Result<CoupledStep, rcfd_fv::cosim::CouplingError>,
+type Healthy = (
+    Result<CoupledStep, CouplingError>,
     FailFluid,
     CountSolid,
     (u64, Vec<u64>),
     Bits,
-) {
+);
+
+/// The healthy step from the start state with the two transparent wrappers; the step as a result, no panic.
+fn healthy(settings: &CouplingSettings) -> Healthy {
     let (fluid, s, map) = start(settings);
     let (fb, sb) = (fluid.bits(), solid_bits(&s));
     let mut ff = FailFluid::new(fluid, usize::MAX);
