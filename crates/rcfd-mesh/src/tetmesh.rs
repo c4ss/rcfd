@@ -1173,12 +1173,181 @@ pub fn tetrahedralize(surface: &TriSurface, opt: &TetOptions) -> Result<TetMesh>
             tags.push(ctx.s.tags[i]);
         }
     }
-    Ok(TetMesh {
+    let m = TetMesh {
         points: points.clone(),
         cells,
         surface: TriSurface { points, tris, tags },
         report: ctx.rep,
-    })
+    };
+    m.check_output()?;
+    Ok(m)
+}
+
+/// The numbers measured by [`TetMesh::check_output`] on an accepted mesh.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OutputCheck {
+    /// Sum of the cell volumes.
+    pub cell_volume: f64,
+    /// Volume enclosed by the boundary surface (divergence theorem about the centre of the bounding box).
+    pub enclosed_volume: f64,
+    /// `cell_volume - enclosed_volume`.
+    pub difference: f64,
+    /// Rounding bound on the difference of a mesh that fills its surface exactly once (ADR 0231).
+    pub bound: f64,
+}
+
+/// Determinant of `(b - a, c - a, d - a)` evaluated as `predicates::orient3d` does, and its permanent (Shewchuk 1997).
+fn det_perm(a: Vec3, b: Vec3, c: Vec3, d: Vec3) -> (f64, f64) {
+    let (bx, by, bz) = (b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    let (cx, cy, cz) = (c[0] - a[0], c[1] - a[1], c[2] - a[2]);
+    let (dx, dy, dz) = (d[0] - a[0], d[1] - a[1], d[2] - a[2]);
+    let det = bx * (cy * dz - cz * dy) - by * (cx * dz - cz * dx) + bz * (cx * dy - cy * dx);
+    let perm = bx.abs() * ((cy * dz).abs() + (cz * dy).abs())
+        + by.abs() * ((cx * dz).abs() + (cz * dx).abs())
+        + bz.abs() * ((cx * dy).abs() + (cy * dx).abs());
+    (det, perm)
+}
+
+/// Neumaier's compensated sum (running sum, compensation).
+fn neumaier(acc: &mut (f64, f64), x: f64) {
+    let t = acc.0 + x;
+    if acc.0.abs() >= x.abs() {
+        acc.1 += (acc.0 - t) + x;
+    } else {
+        acc.1 += (x - t) + acc.0;
+    }
+    acc.0 = t;
+}
+
+fn centroid(p: &[Vec3]) -> Vec3 {
+    let mut c = [0.0; 3];
+    for &q in p {
+        c = add(c, q);
+    }
+    scale(c, 1.0 / p.len() as f64)
+}
+
+impl TetMesh {
+    /// Output validity check of [`tetrahedralize`] (ADR 0231): (a) every cell is positively oriented (exact `orient3d`); (b) the
+    /// cell volumes sum to the volume enclosed by the boundary surface within a rigorous rounding bound (Shewchuk's
+    /// `orient3d` error bound per simplex, Neumaier summation), so a mesh that fills its surface exactly once always passes and
+    /// overlapping or missing cells fail. Reads the mesh only. The error names the first defect found.
+    pub fn check_output(&self) -> Result<OutputCheck> {
+        let pts = &self.points;
+        let n = pts.len();
+        for (i, c) in self.cells.iter().enumerate() {
+            if c.iter().any(|&v| v >= n) {
+                return merr(format!(
+                    "tetrahedralize output check: cell {i} {c:?} refers to a vertex outside the {n} points"
+                ));
+            }
+            if orient3d(pts[c[0]], pts[c[1]], pts[c[2]], pts[c[3]]) <= 0 {
+                let x = centroid(&c.map(|v| pts[v]));
+                return merr(format!(
+                    "tetrahedralize output check: cell {i} {c:?} at ({:.6e}, {:.6e}, {:.6e}) is not positively oriented",
+                    x[0], x[1], x[2]
+                ));
+            }
+        }
+        for (k, t) in self.surface.tris.iter().enumerate() {
+            if t.iter().any(|&v| v >= n) {
+                return merr(format!(
+                    "tetrahedralize output check: surface triangle {k} {t:?} refers to a vertex that is in no cell"
+                ));
+            }
+        }
+        let mut lo = [f64::INFINITY; 3];
+        let mut hi = [f64::NEG_INFINITY; 3];
+        for p in pts {
+            for d in 0..3 {
+                lo[d] = lo[d].min(p[d]);
+                hi[d] = hi[d].max(p[d]);
+            }
+        }
+        let ctr = if n == 0 { [0.0; 3] } else { scale(add(lo, hi), 0.5) };
+        let (mut sc, mut ss) = ((0.0, 0.0), (0.0, 0.0));
+        let mut perm_sum = 0.0;
+        for c in &self.cells {
+            let (det, perm) = det_perm(pts[c[0]], pts[c[1]], pts[c[2]], pts[c[3]]);
+            neumaier(&mut sc, det / 6.0);
+            perm_sum += perm;
+        }
+        for t in &self.surface.tris {
+            let (det, perm) = det_perm(ctr, pts[t[0]], pts[t[1]], pts[t[2]]);
+            neumaier(&mut ss, det / 6.0);
+            perm_sum += perm;
+        }
+        let (cell_volume, enclosed_volume) = (sc.0 + sc.1, ss.0 + ss.1);
+        let difference = cell_volume - enclosed_volume;
+        let bound = 8.0 * f64::EPSILON * perm_sum / 6.0;
+        if difference.is_nan() || difference.abs() > bound {
+            return merr(format!(
+                "tetrahedralize output check: the cell volumes sum to {cell_volume:.15e} but the boundary encloses \
+                 {enclosed_volume:.15e} (difference {difference:.3e}, rounding bound {bound:.3e}): the cells {}; {}",
+                if difference > 0.0 { "overlap" } else { "leave a gap" },
+                self.locate_cover_defect()
+            ));
+        }
+        Ok(OutputCheck {
+            cell_volume,
+            enclosed_volume,
+            difference,
+            bound,
+        })
+    }
+
+    /// The first local defect of the cell cover (failing path of [`TetMesh::check_output`] only).
+    fn locate_cover_defect(&self) -> String {
+        let pts = &self.points;
+        let at = |k: &[usize; 3]| {
+            let x = centroid(&k.map(|v| pts[v]));
+            format!("({:.6e}, {:.6e}, {:.6e})", x[0], x[1], x[2])
+        };
+        // face key -> cells holding it, with the parity of the outward loop against the sorted key
+        let mut faces: BTreeMap<[usize; 3], Vec<(usize, bool)>> = BTreeMap::new();
+        for (ci, c) in self.cells.iter().enumerate() {
+            for f in FACE.iter() {
+                let l = [c[f[0]], c[f[1]], c[f[2]]];
+                let key = sorted3(l[0], l[1], l[2]);
+                let r = l.iter().position(|&v| v == key[0]).unwrap_or(0);
+                faces.entry(key).or_default().push((ci, l[(r + 1) % 3] == key[1]));
+            }
+        }
+        for (k, v) in &faces {
+            if v.len() > 2 {
+                let cs: Vec<usize> = v.iter().map(|x| x.0).collect();
+                return format!("face {k:?} at {} is shared by the cells {cs:?}", at(k));
+            }
+            if v.len() == 2 && v[0].1 == v[1].1 {
+                return format!(
+                    "face {k:?} at {} has the cells {} and {} on the same side",
+                    at(k),
+                    v[0].0,
+                    v[1].0
+                );
+            }
+        }
+        let surf: HashSet<[usize; 3]> = self.surface.tris.iter().map(|t| sorted3(t[0], t[1], t[2])).collect();
+        for (k, v) in &faces {
+            if v.len() == 1 && !surf.contains(k) {
+                return format!(
+                    "the face {k:?} at {} of cell {} is free but is not a surface triangle",
+                    at(k),
+                    v[0].0
+                );
+            }
+        }
+        for (i, t) in self.surface.tris.iter().enumerate() {
+            let k = sorted3(t[0], t[1], t[2]);
+            if faces.get(&k).map(|v| v.len()) != Some(1) {
+                return format!(
+                    "the surface triangle {i} {t:?} at {} is not a free face of exactly one cell",
+                    at(&k)
+                );
+            }
+        }
+        "no local defect found (the cells cover the region more than once)".to_string()
+    }
 }
 
 fn is_bad(p: &[Vec3; 4], opt: &TetOptions) -> bool {
