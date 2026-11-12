@@ -398,3 +398,43 @@ few neighbourhoods with seven or eight cells, no fallback.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the one run of the kinematic checks and before any corrected run)
+
+The library change and the tests were committed (`24e4e971`, compiled, formatted and linted without running) and the
+kinematic file was then run once (`cargo test --release -p rcfd-mesh --test overset_f336`, 26 s). Five of its six tests
+passed; all numbers are in addendum 1. The sixth, `p_three_dimensions`, met every check on B3 (1067 stencils of 27 cells,
+`q3` to `1.09e-15`, no fallback, `Lambda = 1.558`) and then stopped on **B3d** before any stencil was built:
+
+`overset: no donor for the component fringe cell 16035 at (2.009494, 1.010188, 1.499172): the point lies in no cell of
+the other part`.
+
+The point lies well inside the background box. The interior points of B3d are displaced in all three directions, so the
+faces of its cells are not planar, and `containment_margin` of ADR 0219 M3 measures the distance to the plane through each
+face's centre with the face's mean normal: between two cells that share a warped face there is a sliver that neither
+cell's planes contain (the registration said that M3 is stated for planar faces and that the donors of B3d would be
+checked; it did not expect that a donor would be missing). The failure is in the donor search of F-134, before the
+interpolation of this item is reached, and it does not depend on the opt-in. **B3d is a defective set-up for the checks
+P1, P4 and P5**: nothing of F-336 was measured on it. The test stays as an ignored record with its registered body; it is
+not run again. The finding itself (the donor search has gaps on cells with non-planar faces) is reported in the addendum
+with a proposed follow-up.
+
+Corrected set-up **B3s**, a distorted hexahedral donor mesh whose faces are planar: the background is a `box_mesh` of
+`28^3` cells of size `0.1`, the component one of `14^3`; in each, every interior coordinate plane is displaced along its
+normal by a pseudo-random amount of up to `0.15` of the cell size (so the cells differ in size) and the mesh is then
+sheared about its centre, `x += a (y - m) + b (z - m)`, `y += c (z - m)`, with `(a, b, c) = (-0.08, 0.05, 0.1)` for the
+background and `(0.1, 0.05, 0.08)` for the component (so the cells are not orthogonal and the two parts are distorted
+differently); the hole is `max abs(x_ref - centre) < 0.15`, the component is turned by `0.3` about `(1, 2, 3)` and its
+centre lies at `(1.43, 1.42, 1.39)`.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| P1 on B3s | `abs(sum_k w_k - 1)` of every Q stencil | `<= 1e-12` |
+| P4 on B3s | `q3` at every fringe centre from its Q stencil, over `max abs(q3)` | `<= 1e-11` |
+| P5 on B3s | every stencil cell calculated and of the other part, the donor first, no cell twice | exact |
+| B3s (set-up) | the largest over the smallest cell volume | `>= 1.3` |
+
+Printed, no limit: the sizes of the stencils, the fallbacks, `Lambda`, the donors against a full search, the smallest
+containment margin. The fallbacks of B3s are printed and not limited, as those of B3d were. The new test
+`p_three_dimensions_planar_faces` also repeats B3 (the same deterministic run) so that B3 keeps a test that is not
+ignored. The decision rule is unchanged; P4 is decided on B3 and B3s.
