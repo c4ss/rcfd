@@ -6422,7 +6422,9 @@ fixed by the item's registration ADR before any code.
     at most 1.0018, R4 at most 1.0026, PIMPLE-4 rows at most 0.999); R2b on SECT-M missed as predicted, 0.578 (default
     0.538): the seam floor of ADR 0076, which the opt-in does not touch. Eight mutations caught (the fringe branch of
     the overset change by a direct check of its formula). Its body-force path is exercised by the SECT-M runs.
-    Follow-ups proposed (ADR 0245 questions 1 and 3).
+    Follow-ups proposed (ADR 0245 questions 1 and 3). Since ADR 0352 (F-443) the opt-in also acts with the consistent
+    correctors and on step_ale / step_ale_with_walls and has the case key [solver.rhie_chow] step_consistent;
+    step_sliding, the fractional step and coupled faces keep the default.
 - [ ] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
   - depends on: F-338, F-322
   - acceptance: PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow
@@ -8093,14 +8095,29 @@ fixed by the item's registration ADR before any code.
     measured: a cell changing kind, a donor stencil changing with the pose, the refresh of the fringe values before the
     step, the flux of the faces without a calculated cell. The coupled meshes at rest are a clean reference (ratio
     4.98).
-- [ ] **F-443** Transient step: the step-consistent face coefficient on the remaining paths
+- [x] **F-443** Transient step: the step-consistent face coefficient on the remaining paths
   - depends on: F-344
   - acceptance: rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls
     (defaults bit-identical); with a body force a hydrostatic column stays at rest to 1e-10 and the steady solution of a
     buoyant cavity is the same to 1e-9 for two step sizes; the case tree has a key for it; the check C3 of ADR 0245
     holds on each path, or the ADR names why not with a number.
-  - note: From ADR 0245 question 3, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed
-    by the F-344 addendum, not yet taken. Periodic seams (ADR 0073 R3, ADR 0076) are not part of it.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0245 question 3, recommendation (a), taken on the
+    maintainer's standing instruction of 2026-11-11. ADR 0352, 2026-11-12: DONE.
+    PimpleSettings::rhie_chow_step_consistent (ADR 0245's harmonic face coefficient and lagged-gradient commutator) now
+    acts with the consistent correctors (their compensation takes interp(rAtU) - Gamma face by face, so a converged step
+    is C's) and on step_ale / step_ale_with_walls (the gate's moving-mesh and consistent exclusions dropped);
+    step_sliding keeps the default step (bit for bit) and the fractional step is unchanged (its face coefficient is
+    uniform, so C would change nothing; bit for bit). Defaults bit for bit (the rcfd-fv suites touching the changed
+    lines and baseline_hashes, case_hashes_w48u unedited). C3 of ADR 0245 on each path: consistent correctors 4.7e-13
+    between dt 0.04 and 0.01 (3.75e-4 without C), translating cavity through step_ale_with_walls 2.2e-13 (3.06e-4
+    without), buoyant cavity at Ra 1e3 2.1e-14 relative between dt 0.004 and 0.001 (6.0e-5 without), 4.0e-14 with the
+    consistent correctors too; a hydrostatic column stays at rest to 2.1e-14 and reaches rest from zero pressure to
+    1.6e-12 (limit 1e-10). Why not on the other paths: the fractional step's own steady cavity differs by 8.7e-2 between
+    the two steps (a first-order defect dt R(p) without a carry-over, not C's term); coupled faces bit-inert (P1), seam
+    floor of ADR 0076 unchanged. Case key: the optional table [solver.rhie_chow] step_consistent (default false; absent
+    from every case's text and hash), located errors with steady, compressible, variable-density and VOF runs, the
+    fractional step and lumped components; acts on the tree's dynamic mesh. Eight mutations caught. Follow-up proposed
+    for the fractional step (ADR 0352 Q2).
 - [ ] **F-444** Co-simulation participants from the case, hosted by rcfd serve
   - depends on: F-360
   - acceptance: A case key names a moving wall patch as a co-simulation fluid participant and rcfd serve hosts it under
@@ -8202,3 +8219,11 @@ fixed by the item's registration ADR before any code.
     with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in
     the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.
   - note: From ADR 0351 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-454** Fractional step: a step-consistent face flux for the projection
+  - depends on: F-443
+  - acceptance: The steady lid-driven cavity of ADR 0245 C3 with solver.time_advance = "fractional_step" (8.7e-2 between
+    dt = 0.04 and 0.01, ADR 0352 F0) is traced to its face term with a number, and either made the same to 1e-9 for the
+    two step sizes by an opt-in (defaults bit-identical) or the ADR names why not with a number.
+  - note: From ADR 0352 question 2, recommendation (a); proposed by the F-443 addendum, not yet taken. The fractional
+    step's face flux interp(u*).S + dt (interp(grad p^n).S - snGrad(p^n)|S|) has no carried defect, so its steady face
+    defect is dt R(p).
