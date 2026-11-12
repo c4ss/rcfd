@@ -1009,7 +1009,7 @@ fn h2_restart_capture_analysis() {
     }
     // M6: the system and the preconditioner
     let a = &pm.a;
-    let diag_bad = a.diag.iter().filter(|d| !(**d > 0.0)).count();
+    let diag_bad = a.diag.iter().filter(|d| d.is_nan() || **d <= 0.0).count();
     let off_pos = a.lower.iter().chain(&a.upper).filter(|v| **v > 0.0).count();
     let asym = a
         .lower
@@ -1046,8 +1046,7 @@ fn h2_restart_capture_analysis() {
     // the healthy solve one step before, for comparison
     if let Some(good) = caps
         .iter()
-        .filter(|c| c.step + 1 == bad.step && c.corrector == bad.corrector)
-        .last()
+        .rfind(|c| c.step + 1 == bad.step && c.corrector == bad.corrector)
     {
         let pg = system_of(&geom, good);
         let ag = Amg::new(&pg.a.to_csr(), AmgSettings::default());
