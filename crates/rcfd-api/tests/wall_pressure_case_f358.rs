@@ -832,6 +832,62 @@ n_outer = 4",
     }
 }
 
+/// ADR 0269 amendment 2, AU1b: AU1 with the box starting at rest at the case's mesh (the registered expression jumped by
+/// `X` in the first step).
+#[test]
+fn au1b_wall_at_rest_on_a_rigid_column_starting_at_rest() {
+    let text = rest_column().replace(
+        "displacement_expression_x = \"0.01 [m] * cos(2 * pi * t / 1 [s])\"",
+        "displacement_expression_x = \"0.01 [m] * (cos(2 * pi * t / 1 [s]) - 1)\"",
+    );
+    assert!(text.contains("- 1)"));
+    let case = parse(&text);
+    let mut s = Simulation::new(&case).unwrap();
+    let wall = vec!["xmin".to_string()];
+    let (mut wd, mut wc, mut wr): (f64, f64, f64) = (1.0 / 80.0, 0.0, 1.0 / 40.0);
+    for n in 1..=12 {
+        s.step();
+        assert!(s.failure().is_none(), "step {n}: {:?}", s.failure());
+        if n < 3 {
+            continue;
+        }
+        let dpdn = s.dynamic_wall_gradients().to_vec();
+        let pfv = s.pressure_face_values();
+        let fl = s.pimple_solver().unwrap();
+        let g = fl.geom.clone();
+        let ni = g.n_internal;
+        let (mut area, mut gsum, mut k) = (0.0, 0.0, 0.0);
+        for f in g.mesh.patch("xmin").unwrap().faces() {
+            area += vec3::norm(g.mesh.face_area_vectors()[f]);
+            gsum += dpdn[f - ni];
+            k += 1.0;
+        }
+        let gm = gsum / k;
+        let exact = -gm * 1.0 * area;
+        let (fd, _) = patch_force_moment(&g, &fl.u, &fl.p, 1.0, 0.01, &wall, vec3::ZERO).unwrap();
+        let (fc, _) = patch_force_moment_wall_gradient(&g, &fl.u, &fl.p, 1.0, 0.01, &wall, vec3::ZERO, &dpdn).unwrap();
+        let (fr, _) =
+            rcfd_post::integrals::wall_force_and_moment(&g, "xmin", &fl.u, &pfv, 0.01, 1.0, vec3::ZERO).unwrap();
+        let (dd, dc, dr) = (1.0 - fd[0] / exact, 1.0 - fc[0] / exact, 1.0 - fr.pressure[0] / exact);
+        println!("AU1b step {n}: g = {gm:.6e}; deficit default {dd:.7e}, corrected {dc:.3e}, report {dr:.7e}");
+        if (dd - 1.0 / 80.0).abs() > (wd - 1.0 / 80.0).abs() {
+            wd = dd;
+        }
+        if dc.abs() > wc.abs() {
+            wc = dc;
+        }
+        if (dr - 1.0 / 40.0).abs() > (wr - 1.0 / 40.0).abs() {
+            wr = dr;
+        }
+    }
+    println!(
+        "AU1b: worst default {wd:.7e} (within 1 % of 1.25e-2), corrected {wc:.3e} (1e-4), report {wr:.7e} (within 1 % of 2.5e-2)"
+    );
+    assert!(rel(wd, 1.0 / 80.0) <= 0.01, "{wd}");
+    assert!(wc.abs() <= 1e-4, "{wc}");
+    assert!(rel(wr, 1.0 / 40.0) <= 0.01, "{wr}");
+}
+
 // ---- AU2: the rotor wall of the sliding step (ADR 0216 RR) ----
 
 const RI: f64 = 1.0;

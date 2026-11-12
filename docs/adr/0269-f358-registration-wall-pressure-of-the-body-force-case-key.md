@@ -307,3 +307,26 @@ What it is expected to show (guesses, written before the run): a non-plug start-
 converged step removes; the viscous part responsible for most of the residual.
 
 A corrected AU1 follows in amendment 2, after X1 and before any corrected run.
+
+## Amendment 2 (2026-11-12, after the exploration X1, before the corrected run)
+
+**X1, run once** (`... --test wall_pressure_case_f358 x1_rest -- --ignored --nocapture`, on 466415f9; the full print is in
+`w49i-work/f358-scratch/run2-x1.log`, not committed). It carries no limit and decides nothing; what it showed:
+
+- **The set-up was defective.** The prescribed displacement of the case driver is measured from the case's mesh, and
+  the registered expression `0.01 [m] * cos(2 pi t)` is `X` at `t = 0`: the box jumps by `X cos(2 pi dt) = 0.00998` in
+  the first step (a mesh speed of about 1 m/s, `1.6e1` times `2 pi X`), then stops in the second. The prescribed gradient
+  is `+99.8` and `-100.4` in steps 1 and 2 against `-0.39` afterwards. The registration's arithmetic took a box starting
+  at rest; the text did not. My error in the case text.
+- With the registered PISO settings that jump leaves a slowly decaying difference between the fluid and the box
+  (`9.4e-2` of `2 pi X` at step 2, `1.2e-2` at step 20) and a viscous part of `1e-3` of the force: the start-up part and
+  the non-plug flow of amendment 1.
+- With the flow step converged (`pimple`, `n_outer = 4`) the jump leaves nothing from step 2 on: fluid and box agree to
+  `7e-8`, and the pressure-only deficits are `1.250000e-2` (default), `3e-9` to `4e-9` (corrected) and `2.500000e-2`
+  (report), exactly the arithmetic of the registration.
+
+**AU1b (replaces AU1 in the decision rule).** AU1 with one change: `displacement_expression_x = "0.01 [m] * (cos(2 * pi
+* t / 1 [s]) - 1)"`, so the box starts at rest at the case's mesh. Everything else as registered (PISO, steps 3 to 12,
+the worst step, the forces with `nu = 0.01`, the three limits: default within 1 percent of `1/(4N)`, `abs(corrected) <=
+1e-4`, report within 1 percent of `1/(2N)`). Expected: ADR 0252's DP numbers on 20 cells (default `1.2506e-2`,
+corrected a few `1e-6`, report `2.50e-2`). X1 is not run again.
