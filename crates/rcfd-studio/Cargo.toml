@@ -39,7 +39,7 @@ egui = "0.36.2"
 egui_dock = { version = "0.21.1", features = ["serde"] }
 egui_plot = "0.37.0"
 # Same version as rcfd-gui: already locked and reviewed; no egui coupling.
-rfd = "=0.15.4"
+rfd = "=0.18.0"
 
 # Not a new crate: the version and back ends of rcfd-render (ADR 0125), so egui-wgpu and the render core share one wgpu.
 [dependencies.wgpu]
