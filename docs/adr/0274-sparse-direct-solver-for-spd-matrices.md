@@ -330,3 +330,97 @@ Added checks (new tests; C1 to C13 and their limits are unchanged):
 | C6b | path Laplacian of 50 nodes, `Natural`, `NonZero`: `Pivot { row: 49, position: 49, pivot: 0.0 }` | as stated | exact arithmetic as C6 |
 
 M2 is then rerun against C2b and M9 against C6b, once each.
+
+## Addendum 1: results (2026-11-12)
+
+Code at the commits after the registration: `crates/rcfd-linalg/src/skyline.rs` (new), one line `pub mod skyline;` in
+`crates/rcfd-linalg/src/lib.rs`, `crates/rcfd-linalg/tests/sb_direct.rs` (new). Every run below was made once, in release, with
+`cargo test -p rcfd-linalg --release` (the crate's whole test set: unit tests 19 passed and 1 ignored as before, `amg_contrast`
+2, `reorder` 2, `sb_direct` 14, then the 2 checks of amendment 1) and the ignored heavy records run singly through the test
+binary under a PowerShell poll of the process's peak working set (every 0.2 s). Logs in `w49i-work/f373-scratch`.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C1 A: residual; agreement with cg; cg converged | `<= 1e-12`; `<= 1e-9`; yes | 7.45e-16; 8.27e-14; 68 iterations | yes |
+| C2 P: the same | the same | 7.93e-16; 8.27e-14; 68 iterations | yes |
+| C2b P, `Natural` (amendment 1): the same; envelope not monotone | the same; not monotone | 1.27e-15; 8.27e-14; envelope 1 098 246, not monotone | yes |
+| C3 K: the same | the same | 1.21e-15; 1.06e-13; 130 iterations | yes |
+| C4 `E_nat`; P's RCM envelope `<= 1.2 E_nat`; A's and P's `<= U` | `= 229 691`; `<= 275 629`; `<= 271 986` | 229 691; 141 867 (0.618 `E_nat`); A 141 867, P 141 867 | yes |
+| C4k K: `E_nat`; RCM envelope | `= 2 072 403`; `<= 2 458 294` | 2 072 403; 1 281 987 | yes |
+| C5 four right-hand sides on one factor; repeat bit-identical; factor unchanged | `<= 1e-12`; equal; equal | 1.21e-15, 1.10e-15, 1.30e-15, 1.23e-15; equal; equal | yes |
+| C6 path, `Natural`: row 49, position 49, pivot 0; RCM: position 49, `row = order[49]`, pivot 0 | as stated | as stated (RCM: row 0; threshold 8.9e-16) | yes |
+| C6b path, `Natural`, `NonZero` (amendment 1) | row 49, position 49, pivot 0 | as stated | yes |
+| C7 `a_777,777 = -1`: row 777, pivot < 0; `diag(1, 2, -3, 4)`: row 2, pivot -3; A - 3I: `order[position] = row`, pivot `<=` threshold | as stated | row 777 (position 733), pivot -1.66; row 2, -3; row 1581 (position 12), pivot -1.38 | yes |
+| C8 `a_5,6 = -1 + 1e-9`: (5, 6); extra `a_0,100`: (0, 100); `1e-15` tolerated | as stated | as stated | yes |
+| C9 NaN (3, 3); +inf (10, 11); 2 x 3; repeated index | as stated | as stated | yes |
+| C10 1 and 8 threads: order, envelope, pivots, solution | bit for bit | equal (1 281 987 envelope values) | yes |
+| C11 inertia: diag; `sigma_1 = 0.259835`; `sigma_2 = 1.193060` | (1, 3); (1, 1727); (32, 1696) | (1, 3); (1, 1727); (32, 1696) | yes |
+| C12 existing tests unedited pass; only `lib.rs` (+1 line) and new files | as stated | as stated (`git diff` against the merge base: 4 files, `lib.rs` 1 insertion) | yes |
+| C13 P's solution against A's permuted | `<= 1e-10` | 6.41e-16 | yes |
+| H1 30^3: envelope; residual; total time; bytes; peak | `<= 26 702 997`; `<= 1e-12`; `<= 300 s`; recorded | 13 546 161 (estimate 13 371 756), widest row 690; 2.40e-15; order + factor 0.79 s, solve 0.016 s, total 0.82 s; factor 109.2 MB; peak working set 113.8 MiB | yes |
+| H2 natural: envelope; residual; time; bytes | `= 36 780 723`; `<= 1e-12`; `<= 600 s`; recorded | 36 780 723, widest 1391; 1.90e-15; order + factor 5.59 s, solve 0.048 s; 295.1 MB | yes |
+| H2 RCM: envelope; residual; time; bytes | `<= 124 510 132`; `<= 1e-12`; `<= 600 s`; recorded | 56 386 899 (estimate 66 079 205), widest 3785; 2.30e-15; order + factor 34.9 s, solve 0.085 s; 452.0 MB; peak working set of the H2 process 469.7 MiB | yes |
+| R1 singular Neumann 12^3 (record) | none | refused at position 1727 (row 0): pivot -1.6e-14 against threshold 5.3e-15 | record |
+| R2 envelopes of A and P (record) | none | 141 867 and 141 867, ratio 1.000 | record |
+
+R1's threshold is smaller than the registration's estimate (1.4e-13) because the last row of the RCM order (the root corner)
+has a width of 3, not about 108; the singular matrix was refused all the same, by a negative rounding-level pivot.
+
+**Mutations** (scratch copy, `git archive` of the tree, own target directory, each alone, file restored and compared):
+
+| Id | Caught by |
+| --- | --- |
+| M1 default `Natural` | C4 |
+| M2 `lo = f_i` | survived C1 to C3 (equivalent on their monotone envelopes, amendment 1); caught by C2b (slice bound panic) |
+| M3 `d_i < 0` | C6 |
+| M4 no symmetry scan | C8 |
+| M5 no finite scan | C9 |
+| M6 rows not scaled | C1, C2, C3 |
+| M7 permutation of the solution inverted | C1, C2, C3 |
+| M8 thread-count chunked forward dot | C10 |
+| M9 `NonZero` refuses nothing | survived C6 (no `NonZero` case, amendment 1); caught by C6b |
+
+`cargo fmt -p rcfd-linalg --check`: clean. `cargo clippy -p rcfd-linalg --all-targets -- -D warnings`: clean.
+
+**Deviations.** Amendment 1 (two checks added for two surviving mutations, registered and committed before their runs). The
+peak working set of H1 comes from a 0.2 s poll of a 0.83 s process and may under-read; H2's (41 s) is reliable. No check was
+skipped.
+
+**Measured reach on this machine.** The factorisation ran at about 4.6e9 multiply-adds per second (H2 natural: the exact cost
+`sum w_i^2 / 2 = 2.55e10` in 5.59 s), above the 1e9 to 3e9 assumed. With that rate the arithmetic of the registration gives, for
+cube-shaped models with three unknowns per node in the better of the two orders: 1e4 unknowns 0.06 GB and under 1 s; 3e4
+unknowns 0.35 GB and about 7 s; 1e5 unknowns 2.6 GB and about 2 minutes. Memory is not the limit (26 GB free); time is, growing
+like `N^(7/3)` for cubes. ADR 0270's figure (2.8e4 unknowns, 0.3 GB) is confirmed for the natural order of a box (0.295 GB).
+RCM from a corner gives 1.53 x the natural envelope and 6.2 x the time on the 27-point cube (shells as levels, D2), while on the
+7-point cube it gives 0.58 x the natural envelope. Slender models (cantilevers, blades) are cheaper than cubes of the same size.
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). C1 to C10, C12 and H1 are met, and so are the
+extensions C2b, C4k, C6b, C11, C13 and H2; every mutation fails a registered test (M2 and M9 only through the checks of amendment
+1, which were written for them).
+
+**Remaining questions.**
+
+1. Ordering of the structural static solve (ADR 0275). Options: (a) the default RCM; (b) `SkylineOrdering::SmallerEnvelope`
+   (RCM or the input order, whichever is smaller: one extra envelope count, `O(nnz)`); (c) a node-level RCM expanded to the
+   three unknowns. Recommendation: (b) in ADR 0275, since a structured box builder numbers its nodes lexicographically and H2
+   shows that order 6 x faster than RCM there; (c) is not shown to help and is left out. This ADR's default stays RCM, as the
+   acceptance states.
+2. A parallel factorisation. Options: (a) none (now); (b) parallel dots within a row in fixed chunks (bit-identical for any
+   thread count if the chunking is fixed). Recommendation: (a): at the plan's sizes the factor takes seconds; revisit if the
+   blade model of ADR 0288 takes more than a minute.
+
+## For the lead: roadmap entries
+
+F-373: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0274, 2026-11-12: rcfd_linalg::skyline, envelope L D L^T after reverse Cuthill-McKee (the existing rcm_order unchanged), factor once and solve many, located refusals (non-square, non-finite entry, unsymmetric pair, zero or negative or numerically zero pivot with row and position), the NonZero rule and inertia() for ADR 0283, orderings Rcm (default), Natural, Given and SmallerEnvelope. 7-point Laplacian 12^3, a permuted copy and its Kronecker product with a 3 x 3 SPD block: relative residual 7.4e-16 to 1.3e-15 (limit 1e-12), agreement with cg 8.3e-14 to 1.1e-13 (limit 1e-9); the permuted matrix's envelope 141 867 = 0.618 of the natural order's 229 691 (limit 1.2), within the derived level-structure bound 271 986; bit-identical for 1 and 8 threads; inertia of shifted Laplacians as the closed form. Heavy records: 30^3 Laplacian factor 0.79 s, 109 MB; the Hex8 20^3 box sparsity (27 783 unknowns) 5.6 s and 295 MB in natural order, 34.9 s and 452 MB in RCM order. Measured rate 4.6e9 multiply-adds per second: reach about 1e5 unknowns in minutes, memory not the limit. Nine mutations caught (two after amendment 1). Existing rcfd-linalg tests unedited and passing.
+
+F-374 (ADR 0275), sentence to append to its note:
+
+> ADR 0274 (2026-11-12) measured that on a box numbered lexicographically the natural order factorises 6 x faster than RCM (27-point node graph); ADR 0274 recommends rcfd_linalg::skyline::SkylineOrdering::SmallerEnvelope for the static solve.
+
+F-382 (ADR 0283), sentence to append to its note:
+
+> ADR 0274 (2026-11-12) provides PivotRule::NonZero and SkylineLdlt::inertia() (counts of negative and positive pivots) for the eigenvalue count, checked on shifted 12^3 Laplacians (1 and 32 eigenvalues below the shift); rcfd-linalg/src/lib.rs already has the skyline line, and ADR 0283 adds its own.
+
+No follow-up items.
