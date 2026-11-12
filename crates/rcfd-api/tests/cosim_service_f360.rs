@@ -328,33 +328,40 @@ fn run_cw(fluid: &mut dyn Fluid, structure: &mut dyn Structure, map: &InterfaceM
     run
 }
 
-/// The in-process run of CWs in this build: the reference of D.
+fn in_process_run(steps: usize) -> Run {
+    let ch = cw_channel();
+    let mut fluid = cw_fluid(&ch, motion(&ch));
+    let mut structure = cw_structure();
+    let map = cw_map(&ch, &fluid);
+    let started = Instant::now();
+    let run = run_cw(&mut fluid, &mut structure, &map, steps);
+    println!(
+        "reference: ended '{}', {} steps in {:.1} s, iterations max {} mean {:.3}, histogram {:?}",
+        run.ended,
+        run.iterations.len(),
+        started.elapsed().as_secs_f64(),
+        run.max_iterations(),
+        run.mean_iterations(),
+        run.histogram()
+    );
+    run
+}
+
+/// The in-process run of CWs in this build, 650 steps: the reference of D (heavy records only).
+fn reference_long() -> &'static Run {
+    static RUN: OnceLock<Run> = OnceLock::new();
+    RUN.get_or_init(|| in_process_run(CW_STEPS))
+}
+
+/// The first 100 steps of the in-process run of CWs (ADR 0345 amendment 2): the reference of the fast tests.
 fn reference() -> &'static Run {
     static RUN: OnceLock<Run> = OnceLock::new();
-    RUN.get_or_init(|| {
-        let ch = cw_channel();
-        let mut fluid = cw_fluid(&ch, motion(&ch));
-        let mut structure = cw_structure();
-        let map = cw_map(&ch, &fluid);
-        let started = Instant::now();
-        let run = run_cw(&mut fluid, &mut structure, &map, CW_STEPS);
-        println!(
-            "reference: ended '{}', {} steps in {:.1} s, iterations max {} mean {:.3}, histogram {:?}",
-            run.ended,
-            run.iterations.len(),
-            started.elapsed().as_secs_f64(),
-            run.max_iterations(),
-            run.mean_iterations(),
-            run.histogram()
-        );
-        run
-    })
+    RUN.get_or_init(|| in_process_run(100))
 }
 
 /// `max abs(q - q_reference)` over the steps of `run` and the nodes, the steps whose iteration count differs, and the
 /// last test quantities whose bits differ.
-fn against_reference(run: &Run) -> (f64, usize, usize) {
-    let r = reference();
+fn against_reference(run: &Run, r: &Run) -> (f64, usize, usize) {
     let n = run.iterations.len();
     assert!(n <= r.iterations.len());
     let mut worst: f64 = 0.0;
@@ -762,9 +769,9 @@ fn relay(upstream: SocketAddr, method: &'static str, nth: usize, cut: Cut) -> Re
 // ---- S0, P1 to P3 ----------------------------------------------------------------------------------------------------
 
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+#[ignore = "heavy record (ADR 0345 amendment 2): the 650-step reference; run in runs 1 and 2"]
 fn s0_the_reference_is_the_run_of_adr_0256() {
-    let run = reference();
+    let run = reference_long();
     let ((r0, n0), (r1, n1)) = run.frequencies();
     println!(
         "S0: omega_m/omega Q0 {r0:.9} ({n0} crossings), Q1 {r1:.9} ({n1} crossings); iterations max {}, histogram {:?}",
@@ -1129,7 +1136,7 @@ fn remote_run() -> &'static (Run, u32) {
 }
 
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+#[ignore = "heavy record (ADR 0345 amendment 2): 650 steps out of process; run in runs 1 and 2"]
 fn a1r_out_of_process_every_step_converges() {
     let (run, pid) = remote_run();
     println!(
@@ -1149,7 +1156,7 @@ fn a1r_out_of_process_every_step_converges() {
 }
 
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+#[ignore = "heavy record (ADR 0345 amendment 2): 650 steps out of process; run in runs 1 and 2"]
 fn a2r_out_of_process_the_two_modes_oscillate_at_the_closed_form() {
     let ((r0, n0), (r1, n1)) = remote_run().0.frequencies();
     println!("A2r: omega_m/omega: Q0 {r0:.6} ({n0} crossings), Q1 {r1:.6} ({n1} crossings)");
@@ -1159,11 +1166,11 @@ fn a2r_out_of_process_the_two_modes_oscillate_at_the_closed_form() {
 }
 
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+#[ignore = "heavy record (ADR 0345 amendment 2): 650 steps out of process; run in runs 1 and 2"]
 fn d_out_of_process_displacements_are_those_of_the_in_process_run() {
     let run = &remote_run().0;
     assert_eq!(run.iterations.len(), CW_STEPS);
-    let (worst, counts, last) = against_reference(run);
+    let (worst, counts, last) = against_reference(run, reference_long());
     println!(
         "D: max |q_remote - q_in_process| = {worst:e} m ({:e} X); {counts} steps with another iteration count; {last} last test quantities differ in their bits",
         worst / CW_X
@@ -1182,7 +1189,7 @@ fn d2_both_participants_remote() {
     let mut structure = RemoteStructure::connect(child.address, "structure", remote_settings()).unwrap();
     let map = cw_map(&ch, &fluid);
     let run = run_cw(&mut fluid, &mut structure, &map, 100);
-    let (worst, counts, last) = against_reference(&run);
+    let (worst, counts, last) = against_reference(&run, reference());
     println!(
         "D2: ended '{}', {} steps; max |q - q_in_process| = {worst:e} m ({:e} X); {counts} steps with another count; {last} last test quantities differ",
         run.ended,
@@ -1205,7 +1212,7 @@ fn nc1_a_structure_stiffer_by_1e_9_is_seen() {
     let mut structure = RemoteStructure::connect(child.address, "structure", remote_settings()).unwrap();
     let map = cw_map(&ch, &fluid);
     let run = run_cw(&mut fluid, &mut structure, &map, 100);
-    let (worst, counts, _) = against_reference(&run);
+    let (worst, counts, _) = against_reference(&run, reference());
     println!(
         "NC1: ended '{}'; max |q - q_in_process| = {worst:e} m ({:e} X); {counts} steps with another count",
         run.ended,
