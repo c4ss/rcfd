@@ -2,11 +2,11 @@
 //! values, each restarting from the previous converged solution, with a metrics table.
 
 use super::{cmd_w19c, flag, load_case, opt, parse_opt, positionals, usage_error, FAIL, INVALID, OK};
-use rcfd_api::design::case_eval::{CaseMapEvaluator, RunLimits};
+use rcfd_api::design::case_eval::{CaseMapEvaluator, ExtendedMapEvaluator, RunLimits};
 use rcfd_api::design::opmap::{self, MapOptions, OnFailure, PointStatus};
 use std::path::PathBuf;
 
-const VALUE_OPTS: &[&str] = &["--axis", "--out", "--max-steps", "--set"];
+const VALUE_OPTS: &[&str] = &["--axis", "--out", "--max-steps", "--set", "--warm-start"];
 
 /// Exit code when some point did not converge.
 const NOT_CONVERGED: u8 = 5;
@@ -27,11 +27,20 @@ fn opt_all<'a>(args: &'a [String], name: &str) -> Vec<&'a str> {
 }
 
 /// `rcfd map <case> --axis path=v1,v2,... [--axis path=start:stop:count]... [--out dir] [--cold] [--stop-on-failure]
-/// [--no-retry] [--serpentine] [--max-steps n] [--json] [--quiet] [--set path=json]...`
+/// [--no-retry] [--serpentine] [--max-steps n] [--warm-start flow|extended] [--json] [--quiet] [--set path=json]...`
+///
+/// `--warm-start extended` (ADR 0235 B, F-329) chains the points with the extended warm start of ADR 0209 D4 (temperature and
+/// the k-epsilon / k-omega SST fields as well); without it, or with `flow`, the map runs exactly as before.
 pub fn cmd_map(args: &[String]) -> u8 {
     let pos = positionals(args, VALUE_OPTS);
     let [path] = pos[..] else {
         return usage_error("map takes exactly one case file");
+    };
+    let extended = match opt(args, "--warm-start") {
+        None if flag(args, "--warm-start") => return usage_error("--warm-start needs a value: flow or extended"),
+        None | Some("flow") => false,
+        Some("extended") => true,
+        Some(v) => return usage_error(&format!("--warm-start takes flow or extended, got '{v}'")),
     };
     let max_steps = match parse_opt::<usize>(args, "--max-steps") {
         Ok(v) => v,
@@ -74,18 +83,20 @@ pub fn cmd_map(args: &[String]) -> u8 {
         cold: flag(args, "--cold"),
         out_dir: Some(out_dir.clone()),
     };
-    let ev = CaseMapEvaluator {
-        base: case,
-        limits: RunLimits {
-            max_steps,
-            ..RunLimits::default()
-        },
+    let limits = RunLimits {
+        max_steps,
+        ..RunLimits::default()
     };
     let quiet = flag(args, "--quiet") || flag(args, "--json");
     if !quiet {
         eprintln!("map: {} points, tables in {}", points.len(), out_dir.display());
     }
-    let out = match opmap::run_and_write(&points, &ev, &opts) {
+    let run = if extended {
+        opmap::run_and_write(&points, &ExtendedMapEvaluator { base: case, limits }, &opts)
+    } else {
+        opmap::run_and_write(&points, &CaseMapEvaluator { base: case, limits }, &opts)
+    };
+    let out = match run {
         Ok(o) => o,
         Err(e) => {
             eprintln!("error: {e}");
