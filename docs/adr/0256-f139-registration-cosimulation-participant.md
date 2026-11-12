@@ -445,3 +445,150 @@ two-dimensional flow breaks): the outlet (`p = 0`, zero-gradient velocity: the c
 by `exp(-kappa_1 L) = 4e-4` there); the mesh smoothing (the sides are `Slip`, the wall points move along x only, which is
 in the plane of every side); the wall itself (`set_follow_conditions` gives it no tangential velocity: a no-slip wall,
 estimated in P3). Nothing else is changed.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-fv/src/cosim.rs` (new) as designed in S1: the traits `Participant`, `Structure`, `Fluid`; `InterfaceMap` and
+  `piecewise_linear_rows`; `CouplingSettings`, `AtCap`, `CouplingError`, `CoupledStep`, `coupled_step`; the fluid
+  participant `FlowWall`; the mock structural participant `SprungWall`. `lib.rs` gains `pub mod cosim;`. Nothing in the
+  library calls the module.
+- `crates/rcfd-fv/src/sixdof.rs`: `patch_face_forces` (S2). The face loop of `force_moment` became the private
+  `face_loads` with a visitor; `force_moment` accumulates through it in the same order.
+- `crates/rcfd-fv/tests/cosim_f139.rs` (new): 19 tests, one of them the ignored record of amendment 1.
+- `docs/cosimulation-protocol.md` (new, clause c4), linked from `docs/dynamic-mesh.md`, `docs/interchange-formats.md` and
+  `docs/index.md`.
+- Not edited: `pimple.rs`, `pimple/moving.rs`, `fsi.rs`, `ale.rs`, `immersed.rs`, `overset.rs`, `rcfd-api`, the case schema,
+  any existing test, any hash table or golden file. No new crate; `Cargo.lock` unchanged; no unsafe code.
+
+### Checks
+
+Every registered check was run once, on commit 971c4838 (`cargo test --release -p rcfd-fv --test cosim_f139 --
+--test-threads=1 --nocapture`, 31 s; set-up CWs of amendment 1).
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (c3) every step converged; iterations largest, mean; largest last test quantity | all; `<= 16`, `<= 12`; `<= 1e-8` | all 650; 10 and `8.766` (7: 13, 8: 210, 9: 343, 10: 84); `9.995e-9` | met |
+| A2 (closed form) `omega_m/omega_0` of `Q_0`; `omega_m/omega_1` of `Q_1`; crossings | `abs(. - 1) <= 0.005`; `<= 0.03`; `>= 6`, `>= 11` | `0.998618`; `1.011453`; 6 and 12 | met |
+| A3 against the discrete model | within `3e-3` of 0.998625; within `5e-3` of 1.011470 | `-6.6e-6`; `-1.7e-5` | met |
+| A4 largest ratio of successive same-side turning points, `Q_0`, `Q_1` | `<= 1 + 1e-3` | `0.92599`; `0.94994` | met |
+| A5 spread of the initial displacement; largest spread of the force per length over `k X Lz` | `X` within `1e-12`; `>= 0.1` | `X` exactly; `0.445` | met |
+| SN1 (negative control) fluid force off | `abs(. - 1) >= 0.08` | `2.236061` | held |
+| S5 (set-up) continuity; smallest volume ratio; end times | `<= 1e-10`; `>= 0.9`; `6.5` within `1e-9` | `1.4e-14`; `0.99902`; `6.5 - 9.4e-14` both | held |
+| M1 row sums; uniform; linear | `1e-15` each | `0`; `1.9e-16`; `2.2e-16` (27 points, 48 weights) | met |
+| M2 resultant; work | `<= 1e-13` each | `1.1e-16`; `0` (both `-1.083058646959385`) | met |
+| M3 in the run: work on the two meshes; swept volume against `S_x` times the mean displacement | `<= 1e-10` each | `5.4e-16`; `1.7e-14` | met |
+| MN1 (negative control) averaging force map | relative `>= 0.1` | `2.44` against `16` (`0.85`) | held |
+| R1 values differing after `restore`; after the repeated step 38 | 0; 0 | 0 of 5887 (fluid) and 0 of 13 (structure); 0, 0 and 0 in the step record (step 38 took 10 iterations) | met |
+| E1 (a) to (g) | located errors, state as before; (f) kept | (a) `structure`, iteration 2; (b) `fluid`, 2; (c) `structure`, 1 (time `0.005` reported); (d) `structure`, 1; (e) `coupler`, 5; all at `t = 0` with no value changed; (f) kept, not converged, 5; (g) five errors of the `coupler` at iteration 0; after (a) the next step converged in 9 | met |
+| Q1 one rigid segment against `strong_step_with(PrescribedGradient)`, 100 steps | `<= 1e-8 X`; `<= 1e-8 omega X`; `<= 2` steps; `<= 1e-6` | `1.1e-16` (`1.1e-14 X`); `6.8e-17`; 0 steps; `1.1e-14` | met |
+| N1 (negative control) `Fixed(1)`, cap 10 | not converged; `>= 200` | not converged; `510.9` (`1.9997` per iteration) | held |
+| N2 (negative control) loose coupling: first step with `abs(Q_0) >= 10 X` | `<= 60` | step 27 | held |
+| C3 `Fixed(1/3)` | converged; `<= 45` | converged in 30 | met |
+| B1 existing suites; baseline hashes; files | all pass; the named files | `sixdof` 7, `sixdof_coupled` 2, `sixdof_flow_f244` 8, `strong_fsi_f251` 16, `added_mass_f351` 15, `f237_heat_rate` 6, `w27c_structural` 4 passed, 0 failed (release, unedited); `baseline_hashes` 3 passed, 0 failed, 1 ignored; the diff against cddd5989 touches `lib.rs` (+1), `sixdof.rs`, `cosim.rs`, the test file, this ADR, the new page and three link lines (`dynamic-mesh.md`, `interchange-formats.md`, `index.md`; the third file is one more than registered) | met |
+| B2 face loads summed in face order against the two resultants (force and moment), CWs and SPm1 after 5 steps | bit-identical | 0 values differ in all four comparisons | met |
+| A2 on the registered set-up CW (record of amendment 1) | A2's limits | `0.995570` (6 crossings); `0.977323` (11 crossings): inside A2's limits | ignored record |
+
+Against the predictions: every one is inside its limit. A3, the check trusted least, came out at `7e-6` and `2e-5`: the
+flow step reproduces the discrete model (five-point Laplace pressure, prescribed wall gradient, lumped nodes, RK4) far
+better than the `1e-3` estimated for viscosity, the convective term and the PISO splitting. So the `+1.1` percent of mode
+1 against the closed form is the six-node structure and its lumping, and the `-0.14` percent of mode 0 is the
+non-matching quadrature of the transposed map, as the arithmetic said. Aitken's factor goes to about `0.81` and `0.97`
+after the first two updates (the light modes) and ends near `1/3` again.
+
+### Deviations and disclosures
+
+- **Amendment 1** (the side walls of CW) was found by reading and committed before any run. Its expectation for the
+  record was wrong on both counts: with zero-gradient sides mode 1 came out *lower* (`0.977`, more inertia, not less) and
+  mode 0 moved too (`0.99557` against `0.99862`). The record is inside A2's wide limits: **A2 alone would not have shown
+  the defective set-up**; A3 would have (`-3.4e-2` against `5e-3`, and `-3.05e-3` against `3e-3`). What the open sides do
+  to the flow was not diagnosed.
+- **MU11 as registered cannot be applied**: `patch_face_forces` and `patch_force_moment` share one face loop, so the
+  viscous part cannot be left out of one alone. It was replaced by MU11b (`patch_face_forces` returns the loads in
+  reverse order). Disclosed.
+- The registered command had `--include-ignored`; amendment 1 changed it (the record is run separately).
+- Order: registration (5eec11da), amendment 1 (c6569617), code (971c4838; formatted and linted before the commit, two
+  clippy findings fixed before any run), every check once, the record once, the B1 suites once, the mutations.
+- The limit of A1 on the last test quantity cannot fail apart from `converged` (the same test), as in ADR 0250.
+- G4 (work equals pressure-volume work) is tested only for a wall moving along x with rectangular faces.
+- The nodal force that is iterated has three components per node; the mock uses only the one along its direction. The
+  other two (pressure on the slightly tilted faces, about 1 percent) are part of the residual norm.
+
+### Mutations
+
+Each applied alone by an exact replacement that occurred once, the whole new test file run once, the file restored and
+compared byte for byte (identical in all eleven).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 geometry not restored | R1 | R1 failed; also A1 to A3, A5, S5, M3, C3, E1, Q1, B2 |
+| MU2 velocity field not restored | R1 | R1 failed; also A1 to A3, E1, Q1 |
+| MU3 structure restore does nothing | R1 | R1 failed; also A1 to A3, A5, S5, M3, C3, E1, N1, Q1, B2 |
+| MU4 averaging force map | M2 | M2 failed; also A2, A3, M3, N1, N2, Q1 |
+| MU5 Aitken sign | A1 | A1 failed; also A2, A3, A5, S5, M3, R1, E1, Q1, B2 |
+| MU6 converged at the first iterate | A4 or A2 | A4 and A2 failed; also A1, A3, S5, M3, N1, R1, E1, Q1 |
+| MU7 no restore after a failure | E1 | E1 failed (nothing else) |
+| MU8 default extrapolation in place of the prescribed gradient | A3, Q1 | A3 and Q1 failed; also A2 |
+| MU9 weights 0.5 and 0.5 | M1 | M1 failed; also A3 |
+| MU10 times not checked | E1 | E1 failed (nothing else) |
+| MU11b face loads in reverse order (in place of MU11) | B2 | B2 failed; also A1 to A4, S5, M3, C3 |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's). A run with the default wall pressure (the model's 1.00366 is quoted
+only). A refined mesh or a halved time step in the flow (the model's rows only). Any transport, case-tree or CLI run
+(none exists).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Both before the runs
+and again after the mutations on the restored tree (only documentation uncommitted).
+
+### Decision by the registered rule
+
+A1, A2, A4, A5 are met, SN1 and S5 hold, the protocol document exists and is linked, M1 to M3, R1, E1, Q1, C3, B1, B2 and
+A3 are met, MN1, N1, N2 hold, and every mutation failed its named tests (MU11 replaced by MU11b, disclosed): **done** by
+the rule, proposed as such; the acceptance stays the maintainer's. What "done" covers: an in-process library interface,
+a mock structure and the protocol page. No transport and no real structural solver.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. A transport for the protocol.** Options: (a) a follow-up item that carries the calls over F-085's JSON-RPC service
+  (new methods, a versioned protocol change); (b) leave it in-process. Recommendation (a), as its own item: it needs new
+  service methods and their documentation.
+- **Q2. Quasi-Newton acceleration.** Aitken needs 8.8 iterations a step here, each a flow solve. Options: (a) a follow-up
+  item (a least-squares update from the residual history, at most seven iterations on this model); (b) leave.
+  Recommendation (a).
+- **Q3. The rest of the roadmap note's scope** (geometric search and radial-basis mapping, unmapped-value policy,
+  ramping, extrapolated predictor, several participants). Options: (a) follow-up items; (b) keep them in F-139's note.
+  Recommendation (a); the mapping item is written out below, the others are left to the lead.
+- **Q4. Zero-gradient velocity on a side wall leaves its flux free** (amendment 1). It is what ADR 0250 and ADR 0252 use
+  for the plug, where it is harmless. Options: (a) a sentence in `docs/dynamic-mesh.md` (the new page already has it);
+  (b) nothing. Recommendation (a).
+- **Q5. `docs/dynamic-mesh.md` still says "No strong coupling or added-mass stabilisation"**, which F-251 delivered in the
+  library. Not edited here (outside the item). Recommendation: correct it.
+
+### For the lead: roadmap entries
+
+Proposed status of F-139: **done** (`[x]`), acceptance still the maintainer's.
+
+Note text for F-139:
+
+> P4 (long-term). DONE pending acceptance (ADR 0256, 2026-11-12; registered before the code, one amendment before any run). In-process library interface rcfd_fv::cosim, opt-in, nothing calls it; no transport, case key, CLI or MCP tool. Protocol (docs/cosimulation-protocol.md): a fluid and a structural participant answer describe, time, checkpoint, restore, forces and advance with plain arrays in SI units (face forces of the fluid on the wall in newtons, displacements from the reference configuration in metres); the coupler owns the mapping (weights from structural nodes to wall points, rows summing to 1, consistent; forces back by the transpose through the face means, conservative in resultant and work) and iterates within a coupling step on the nodal force with a fixed or an Aitken factor until the force residual is below tolerance times max(force, floor); at the cap it restores and stops, or keeps the iterate by a setting; a failing participant (error, wrong length, non-finite value, wrong time) stops the step with an error naming participant, time and iteration, both restored bit for bit. Fluid participant FlowWall (moving-mesh PISO step, per-face loads from the new sixdof::patch_face_forces, wall pressure from the prescribed gradient of ADR 0252); mock structural participant SprungWall (lumped sprung nodes, RK4). Model problem: a sprung wall of six nodes closing a channel of 20 x 8 x 2 cells whose 16 wall faces do not match the nodes, cosine modes with omega_j^2 = k/(m + rho tanh(kappa_j L)/kappa_j), mass ratios 4 and 0.51. Measured: every one of 650 steps converged, 7 to 10 iterations (mean 8.8, tolerance 1e-8); omega_m/omega 0.998618 (mode 0, limit 0.5 %) and 1.011453 (mode 1, limit 3 %), within 7e-6 and 2e-5 of the discrete model computed before the code (the 1.1 % of mode 1 is the six-node structure); turning points never grow (0.926, 0.950 per period); resultant and work equal on the two meshes to 1e-16, in the run to 5e-16, swept volume to 2e-14; a repeated step restores both participants and repeats bit for bit; with one rigid node the result equals fsi::strong_step_with to 1e-16; controls: the plain fixed point multiplies the residual by 2.0 per iteration (511 in 10), the loose coupling passes 10 X at step 27, the fixed added-mass factor 1/3 takes 30 iterations, an averaging force map loses 85 % of the resultant. Defaults bit-identical (patch_force_moment sums the same face loads in the same order; sixdof, sixdof_coupled, sixdof_flow_f244, strong_fsi_f251, added_mass_f351, f237_heat_rate, w27c_structural pass unedited; baseline hashes 3 passed). Eleven mutations each failed their tests. Amendment 1: the registered set-up had zero-gradient side walls, which leave the side flux free for a transverse flow; Symmetry on the two sides replaced it before any run (the record: mode 1 at 0.977). Not delivered, from the merged-review scope: a transport, a real structural solver, geometric or radial-basis mapping, unmapped-value policy, ramping, quasi-Newton stabilisation, extrapolated step initialisation, several participants; functional-mock-up import stays in F-242. Open: ADR 0256 Q1 to Q5.
+
+Follow-up items (numbers for the lead to assign).
+
+First item. Title: Co-simulation protocol over the solver service. Deps: F-139, F-085. Acceptance:
+
+> The calls of docs/cosimulation-protocol.md (describe, time, checkpoint, restore, forces, advance) are served by the JSON-RPC service under a new protocol version; an out-of-process mock structural participant driven over TCP reproduces ADR 0256 A1 and A2 (every step converged, omega_m/omega within 0.5 percent and 3 percent) and the same displacements as the in-process run to 1e-12; a dropped connection or a participant error stops the step with a located error and both sides restored; the protocol document is versioned; existing service tests and case hashes are unchanged.
+
+Second item. Title: Quasi-Newton acceleration of the coupled iteration. Deps: F-139. Acceptance:
+
+> A least-squares (quasi-Newton) update of the nodal force from the residual history of the step, opt-in beside the fixed and Aitken factors, converges the model problem of ADR 0256 to 1e-8 in at most 7 iterations per step and 6 or fewer on average (Aitken: 8.8), gives the same frequencies within 1e-6, and with one rigid node needs no more iterations than Aitken; registered before the run with the plain fixed point as the diverging control.
+
+Third item. Title: Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy. Deps: F-139. Acceptance:
+
+> InterfaceMap weights are built from the two interface meshes alone (nearest-element projection and a radial-basis interpolation) for a planar and a cylindrical wall with non-matching meshes; rigid translation and rotation are reproduced to 1e-12, resultant force, moment and work are conserved to 1e-12 by the transposed map, a wall point outside the structure is refused or mapped by a stated policy, and the model problem of ADR 0256 gives the same frequencies within 1e-3 with the built weights.
