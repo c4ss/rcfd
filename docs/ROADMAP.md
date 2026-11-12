@@ -6293,13 +6293,35 @@ fixed by the item's registration ADR before any code.
     in three dimensions). Open: the default shift in the F-330 wiring (a default; ADR 0248 question 2). The clause-1
     follow-up (a plain damping zone behind a thicker layer) is proposed in ADR 0248 only for when a ducted case shows
     the ringing; no item added.
-- [ ] **F-341** Sponge layer on moving meshes
+- [~] **F-341** Sponge layer on moving meshes
   - depends on: F-331, F-258
   - acceptance: With a sponge, a uniform reference state stays to round-off under `step_ale` on a deforming mesh; the
     ADR 0237 tube check on a uniformly translating mesh reflects less than 1 percent; without a sponge `step_ale` is
     bit-identical.
-  - note: From ADR 0237 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. Only
-    when a case needs it.
+  - note: From ADR 0237 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0265, 2026-11-12: the acceptance text is MET IN THE LIBRARY. Built (rcfd-fv, opt-in): `sponge::SpongeFrame {
+    StaticMesh (default: step_ale refuses a sponge, as before), AttachedToMesh }` and
+    `CompressibleSolver::set_sponge_frame`. When attached, the rates (of both layers of a corner) and the memories
+    belong to the cells and move with them; the reference stays a lab-frame state; the memory of a cell is the time
+    integral of p - p_ref along its path; and `step_ale` adds the source at the volume of each Runge-Kutta stage, which
+    keeps the damping consistent with the geometric conservation law (a uniform offset decays as exp(-rate t) for any
+    deformation). `replace_mesh` still refuses a sponge, because the solver has no map from old to new cells and a
+    matched layer reset under a wave rings: clear it, replace the mesh, then set a new sponge and the caller's mapped
+    memories. Measured: a uniform reference state on the deforming set-up U of ADR 0207 stays within 3.3e-15 over 121 to
+    136 steps in the plain, matched and shifted-corner forms (limit 1e-12); the ADR 0237 tube with both grids
+    translating at Mach 0.2 reflects 9.6e-7 (plain and matched, Thompson end and pressure-release end) and 9.8e-7
+    (shifted) against 1e-2; on a mesh whose cells change volume by 16 percent a uniform offset decays within 3.1e-7 of
+    exp(-2 t), the memory is within 8.3e-6 of its integral, and the shifted form is within 1.2e-7 of the static step.
+    `step_ale` is bit-identical without a sponge, with a sponge set and cleared, with the frame setting alone and with
+    zero-rate sponges; the F-258 bit records, the ADR 0233, 0237, 0243 and 0248 tests and baseline_hashes pass unedited.
+    Seven mutations caught. One amendment: the control without sponge (pressure release, peak measure) gave 0.864
+    against 0.9. It was diagnosed as the peak loss of a pulse that the reflection on the moving mesh narrows to 2/3, and
+    replaced by the time-integral ratio, 0.9995 (that value was seen in the diagnostic before the amendment; disclosed).
+    Limits: attached frame only (no layer fixed in space); on a moving mesh the matched forms are matched at normal
+    incidence only, because the medium moves relative to the layer (oblique incidence, motion along the layer and
+    rotation not checked); library only, like the sponge itself; two-dimensional checks. STATUS recorded PARTIAL by the
+    lead: the no-sponge control NCr missed its registered limit (0.864 against 0.9) and its replacement NCr2 was
+    registered after a diagnostic had shown its value, so it is not blind; done is the maintainer's call (ADR 0265 Q1).
 - [x] **F-342** Case-file key for the adaptive steady loop
   - depends on: F-102
   - acceptance: An optional adapt block on a steady incompressible box-mesh case runs rcfd_fv::adaptive and reproduces
@@ -7240,3 +7262,10 @@ fixed by the item's registration ADR before any code.
     measured blade.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0309; the registration is
     written by the implementation agent before any code.
+- [ ] **F-407** Matched sponge on a mesh moving along the layer or rotating
+  - depends on: F-341
+  - acceptance: An isolated plane pulse at 30 and 45 degrees through a matched layer attached to a mesh translating
+    along the layer at Mach 0.2 reflects less than 1 percent and stays bounded over 20 transit times of the layer, or
+    the reflection and any instability are measured and documented; a plain layer on a rotating mesh reflects a normal
+    pulse less than 1 percent.
+  - note: From ADR 0265 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
