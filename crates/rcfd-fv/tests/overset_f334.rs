@@ -1259,3 +1259,17 @@ fn a2_run_on_to_t_1() {
     }
     c.finish();
 }
+
+// ---- the gate-run check -----------------------------------------------------------------------------------------------------
+
+/// ADR 0246 C1 and C2 on RL at level 1 (the run of T and of the switches at that level, which is deterministic; it is the
+/// check that the mutation MU1 must fail).
+#[test]
+fn c_rl_level_1_continuity_and_start() {
+    let mut c = Checks::new();
+    let r = rl(1, 1, |_| {});
+    c.at_most("C1 RL level 1 continuity", r.cont, 1e-9);
+    c.at_most("C2 level 1: error of the calculated cells at t = 0", r.t0_error, 1e-14);
+    println!("RL level 1: CC rms {:.4e} (ADR 0246: 1.5486e-4)", cc_error(&r, false).0);
+    c.finish();
+}
