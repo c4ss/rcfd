@@ -790,12 +790,16 @@ fn build_untransformed_mesh(case: &Case) -> std::result::Result<Mesh, Vec<Diagno
         }
         "axial_fan_sector" => crate::fan_case::build(case),
         // F-259, ADR 0191 W3: the uniform six-patch box of `rcfd_mesh::gen::box_mesh`, the mesh of a layered piston
-        "box_3d" => gen::box_mesh(
-            [nx, ny, get_i(case, "mesh.nz").max(1) as usize],
-            [lx, ly, get_f(case, "mesh.lz")],
-            [Grading::Uniform; 3],
-        )
-        .map_err(me),
+        // ADR 0257 D2: with `[mesh.box_3d] section = "rectangles"` or `"triangles"`, the mesh of the extruded layer stack
+        "box_3d" => match crate::dynmesh::extruded_stack(case)? {
+            Some(stack) => stack.mesh().map_err(me),
+            None => gen::box_mesh(
+                [nx, ny, get_i(case, "mesh.nz").max(1) as usize],
+                [lx, ly, get_f(case, "mesh.lz")],
+                [Grading::Uniform; 3],
+            )
+            .map_err(me),
+        },
         "cylinder_ogrid" => {
             let g = if (grading - 1.0).abs() < 1e-12 {
                 Grading::Uniform
@@ -2266,6 +2270,23 @@ impl Simulation {
                 "dynamic_mesh.enabled",
                 "needs a transient incompressible run (solver.algorithm = piso or pimple)",
             ));
+        }
+        if dynmesh.as_ref().is_some_and(|d| d.layered()) && matches!(engine, Engine::Transient(_)) {
+            // ADR 0257 D5 N6: a layer event changes the cell and face counts; these objects are sized to the mesh
+            let sized = [
+                (!expr_bcs.is_empty(), "a velocity expression on a patch"),
+                (catalogue.is_some(), "a boundary-condition catalogue entry"),
+                (components.is_some(), "lumped components"),
+                (!marangoni.is_empty(), "a Marangoni stress"),
+                (!udfs.is_empty(), "user functions"),
+                (base_body.is_some(), "a body force"),
+            ];
+            if let Some((_, what)) = sized.iter().find(|(on, _)| *on) {
+                return Err(diag(
+                    "dynamic_mesh.deformation",
+                    format!("layering with piso / pimple is not available with {what} (sized to the mesh, which a layer event replaces; ADR 0257)"),
+                ));
+            }
         }
         if get_s(case, "solver.time_advance") == "fractional_step" {
             let why = if !matches!(&engine, Engine::Transient(_)) || alg != "piso" {
