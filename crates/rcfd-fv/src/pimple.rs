@@ -27,7 +27,7 @@ use crate::gradient::{green_gauss, least_squares};
 use crate::lumped::FaceJump;
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, coupled_gamma, divergence, face_interpolate, pressure_bc,
-    solve_pressure, PressureControls,
+    solve_pressure, PressureBc, PressureControls,
 };
 use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
@@ -154,6 +154,11 @@ pub struct PimpleSettings {
     /// the step in its cell equations, ADR 0356 D3); the Poisson solve, the projection and boundary faces are unchanged. Not
     /// read by the PISO/PIMPLE step. Default `false` (bit-identical).
     pub fractional_step_consistent: bool,
+    /// F-466 (ADR 0363 amendment 1): a pressure solve of the plain pressure path (`gradient_pressure = None`) that returns a
+    /// non-finite pressure is repeated from the same start pressure with incomplete-Cholesky CG (`amg_pressure` off for that
+    /// solve); each repeat is recorded in `PimpleSolver::pressure_fallbacks`. Acts only on a non-finite pressure, so a run
+    /// whose solves are finite is unchanged. Default `false` (bit-identical).
+    pub pressure_ic_fallback: bool,
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -910,6 +915,7 @@ impl PimpleSettings {
             moving_mesh_lag: false,
             rhie_chow_step_consistent: false,
             fractional_step_consistent: false,
+            pressure_ic_fallback: false,
         }
     }
 
@@ -1099,6 +1105,43 @@ pub struct PimpleSolver {
     pub lag_warnings: Vec<LagWarning>,
     /// State and record of the adaptive corrector count (ADR 0156); empty while `settings.corrector_control` is `None`.
     pub correctors: CorrectorRecord,
+    /// Diagnostic capture of the pressure systems (F-466, ADR 0363 D1): when `Some`, every pressure solve of the plain pressure
+    /// path (`gradient_pressure = None`) appends its inputs and its result, before the divergence guard looks at them. `None`
+    /// (default) leaves the solver unchanged.
+    pub pressure_capture: Option<Vec<PressureCapture>>,
+    /// The pressure solves repeated with incomplete-Cholesky CG by `PimpleSettings::pressure_ic_fallback` (F-466, ADR 0363
+    /// amendment 1): (step, outer iteration, corrector). Empty while the setting is off.
+    pub pressure_fallbacks: Vec<(usize, usize, usize)>,
+}
+
+/// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
+/// [`crate::pressure::pressure_system_src`] the system can be assembled again and replayed from `p0`.
+#[derive(Debug, Clone)]
+pub struct PressureCapture {
+    /// Step number (1-based).
+    pub step: usize,
+    /// Outer iteration (0-based).
+    pub outer: usize,
+    /// Pressure corrector (0-based).
+    pub corrector: usize,
+    /// Face coefficient of the pressure Laplacian (with the face jumps applied).
+    pub gamma: Vec<f64>,
+    /// Pressure boundary data.
+    pub bc: PressureBc,
+    /// Flux whose divergence is the right-hand side.
+    pub phi: Vec<f64>,
+    /// Volume source of the solid cells of the second-order immersed face flux (ADR 0234 D3); `None` without flux faces.
+    pub src: Option<Vec<f64>>,
+    /// Controls of the solve.
+    pub controls: PressureControls,
+    /// Start pressure of the solve.
+    pub p0: Vec<f64>,
+    /// Pressure returned by the solve.
+    pub p: Vec<f64>,
+    /// Normalised initial residual returned by the solve.
+    pub res0: f64,
+    /// Linear iterations of the solve.
+    pub iters: usize,
 }
 
 /// The count chosen by one search of the adaptive corrector control.
@@ -1142,6 +1185,8 @@ impl PimpleSolver {
             lag_estimates: Vec::new(),
             lag_warnings: Vec::new(),
             correctors: CorrectorRecord::default(),
+            pressure_capture: None,
+            pressure_fallbacks: Vec::new(),
         }
     }
 
@@ -1171,6 +1216,8 @@ impl PimpleSolver {
             lag_estimates: Vec::new(),
             lag_warnings: Vec::new(),
             correctors: CorrectorRecord::default(),
+            pressure_capture: None,
+            pressure_fallbacks: Vec::new(),
         }
     }
 
@@ -1908,6 +1955,36 @@ impl PimpleSolver {
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
+                }
+                if let (Some(cap), None) = (self.pressure_capture.as_mut(), s.gradient_pressure) {
+                    // F-466, ADR 0363 D1: the diagnostic capture (opt-in), before the guard
+                    cap.push(PressureCapture {
+                        step: self.step_no,
+                        outer,
+                        corrector: corr,
+                        gamma: gamma_j.clone(),
+                        bc: pbc.clone(),
+                        phi: phi_solve.to_vec(),
+                        src: ib_src.clone(),
+                        controls,
+                        p0: p_old.clone(),
+                        p: p_new.clone(),
+                        res0: r0,
+                        iters: it,
+                    });
+                }
+                if s.pressure_ic_fallback && s.gradient_pressure.is_none() && first_nonfinite(&p_new).is_some() {
+                    // F-466, ADR 0363 amendment 1 (opt-in): repeat a non-finite solve with incomplete-Cholesky CG
+                    let ic = PressureControls { amg: false, ..controls };
+                    p_new = p_old.clone();
+                    let (_, it_ic) = match &ib_src {
+                        None => solve_pressure(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &ic),
+                        Some(q) => {
+                            crate::pressure::solve_pressure_src(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &ic, q)
+                        }
+                    };
+                    p_iters += it_ic;
+                    self.pressure_fallbacks.push((self.step_no, outer, corr));
                 }
                 if let Some((c, v)) = first_nonfinite(&p_new) {
                     return self.trip(

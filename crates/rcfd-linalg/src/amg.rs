@@ -386,6 +386,94 @@ impl Amg {
         self.cycle(0, b, x);
     }
 
+    /// Number of unknowns of every level, finest first (diagnostic, F-466 ADR 0363 D3).
+    pub fn level_sizes(&self) -> Vec<usize> {
+        self.levels.iter().map(|l| l.a.n).collect()
+    }
+
+    /// Smallest diagonal entry of every level's operator, finest first (diagnostic, ADR 0363 D3).
+    pub fn level_min_diagonals(&self) -> Vec<f64> {
+        self.levels
+            .iter()
+            .map(|l| l.diag_pos.iter().map(|&k| l.a.val[k]).fold(f64::INFINITY, f64::min))
+            .collect()
+    }
+
+    /// The pivots of the dense LU of the coarsest level (diagnostic, ADR 0363 D3): the smallest and the largest absolute
+    /// pivot and the number of pivots that the `1e-300` guard replaced. `None` when the coarsest level is above 2000 unknowns
+    /// (it is then smoothed, not factorised).
+    pub fn coarse_pivots(&self) -> Option<(f64, f64, usize)> {
+        let last = &self.levels.last()?.a;
+        if last.n > 2000 {
+            return None;
+        }
+        let lu = &self.coarse_lu;
+        let piv: Vec<f64> = (0..lu.n).map(|k| lu.lu[k * lu.n + k]).collect();
+        let lo = piv.iter().map(|p| p.abs()).fold(f64::INFINITY, f64::min);
+        let hi = piv.iter().map(|p| p.abs()).fold(0.0, f64::max);
+        Some((lo, hi, piv.iter().filter(|&&p| p == 1e-300).count()))
+    }
+
+    /// [`Preconditioner::apply`] by the same operations, returning the first level and stage after which a value of the level's
+    /// vectors is not finite (`None` if none is). Diagnostic, ADR 0363 D3; the result `z` is the same bits as `apply`'s.
+    pub fn apply_traced(&self, r: &[f64], z: &mut [f64]) -> Option<(usize, &'static str)> {
+        z.iter_mut().for_each(|v| *v = 0.0);
+        let mut first = None;
+        self.cycle_traced(0, r, z, &mut first);
+        first
+    }
+
+    fn cycle_traced(&self, l: usize, b: &[f64], x: &mut [f64], first: &mut Option<(usize, &'static str)>) {
+        let note = |v: &[f64], stage: &'static str, first: &mut Option<(usize, &'static str)>| {
+            if first.is_none() && v.iter().any(|x| !x.is_finite()) {
+                *first = Some((l, stage));
+            }
+        };
+        let lev = &self.levels[l];
+        let n = lev.a.n;
+        let (Some(p), Some(r)) = (&lev.p, &lev.r) else {
+            if n <= 2000 {
+                self.coarse_lu.solve(b, x);
+                note(x, "coarse solve", first);
+            } else {
+                x.iter_mut().for_each(|v| *v = 0.0);
+                for _ in 0..20 {
+                    gauss_seidel(&lev.a, &lev.diag_pos, b, x, true);
+                    gauss_seidel(&lev.a, &lev.diag_pos, b, x, false);
+                }
+                note(x, "coarse smoothing", first);
+            }
+            return;
+        };
+        for _ in 0..self.settings.pre_sweeps {
+            gauss_seidel(&lev.a, &lev.diag_pos, b, x, true);
+        }
+        note(x, "pre-smoothing", first);
+        let mut res = vec![0.0; n];
+        lev.a.residual(b, x, &mut res);
+        let nc = p.ncols;
+        let mut rc = vec![0.0; nc];
+        r.matvec(&res, &mut rc);
+        note(&rc, "restriction", first);
+        let mut xc = vec![0.0; nc];
+        let visits = if l + 2 < self.levels.len() {
+            self.settings.cycle_index.max(1)
+        } else {
+            1
+        };
+        for _ in 0..visits {
+            self.cycle_traced(l + 1, &rc, &mut xc, first);
+        }
+        let mut corr = vec![0.0; n];
+        p.matvec(&xc, &mut corr);
+        x.iter_mut().zip(&corr).for_each(|(xi, c)| *xi += c);
+        note(x, "prolongation", first);
+        for _ in 0..self.settings.post_sweeps {
+            gauss_seidel(&lev.a, &lev.diag_pos, b, x, false);
+        }
+        note(x, "post-smoothing", first);
+    }
+
     /// Use AMG as a stand-alone solver (repeated V-cycles).
     pub fn solve(&self, b: &[f64], x: &mut [f64], ctl: &SolveControl) -> SolveStats {
         let a = &self.levels[0].a;
