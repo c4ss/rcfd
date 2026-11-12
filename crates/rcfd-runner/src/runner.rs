@@ -11,7 +11,8 @@ use crate::store::{event_kind, extra, state_event, FsStore, RunStore};
 use crate::sys;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -66,6 +67,9 @@ impl Default for Config {
 pub fn dot_dir(project: &Path) -> PathBuf {
     project.join(".rcfd")
 }
+
+/// Folder of the solvers' liveness files under [`dot_dir`], one per launched run, named by the run id (ADR 0229 D3).
+pub const ALIVE_DIR: &str = "alive";
 
 /// `<project>/.rcfd/runner-config.json`.
 pub fn config_path(project: &Path) -> PathBuf {
@@ -137,6 +141,8 @@ struct Active {
     next_probe: Instant,
     /// Consecutive missed liveness probes (adopted solvers).
     misses: u8,
+    /// An append of the last drain failed (logged once; the chunk is read again, ADR 0229 D5).
+    append_failed: bool,
 }
 
 struct Pending {
@@ -157,6 +163,12 @@ struct Runner<S: RunStore = FsStore> {
     solver: PathBuf,
     /// Liveness probe of adopted solvers (`sys::pid_alive`; tests script it).
     probe: fn(u32, &str) -> bool,
+    /// The liveness file's answer (`sys::held`, ADR 0229 D3; tests script it).
+    held: fn(&Path) -> Option<bool>,
+    /// The forced kill of a solver by its pid (`sys::kill`; tests record it).
+    kill: fn(u32) -> bool,
+    /// Status writes that failed, the latest per run: written again on every tick until they succeed (ADR 0229 D4).
+    unwritten: RefCell<BTreeMap<String, RunStatus>>,
     known: HashSet<String>,
     pending: Vec<Pending>,
     active: Vec<Active>,
@@ -189,7 +201,6 @@ pub fn serve(project: &Path) -> Result<i32, String> {
     let poll = Duration::from_millis(r.cfg.poll_ms);
     loop {
         if dot.join("shutdown").exists() {
-            let _ = std::fs::remove_file(dot.join("shutdown"));
             break;
         }
         r.scan();
@@ -202,6 +213,8 @@ pub fn serve(project: &Path) -> Result<i32, String> {
     log(&format!("runner {} shut down cleanly", std::process::id()));
     let _ = std::fs::remove_file(dot.join("runner.json"));
     drop(lock);
+    // after the lock: while this runner held it, the request told a start to wait for it (ADR 0229 D2)
+    let _ = std::fs::remove_file(dot.join("shutdown"));
     Ok(0)
 }
 
@@ -275,6 +288,9 @@ impl<S: RunStore> Runner<S> {
             store,
             solver: cfg.solver(),
             probe: sys::pid_alive,
+            held: sys::held,
+            kill: sys::kill,
+            unwritten: RefCell::new(BTreeMap::new()),
             cfg,
             cfg_src,
             known: HashSet::new(),
@@ -292,9 +308,48 @@ impl<S: RunStore> Runner<S> {
         self.dir(id).join(name).exists()
     }
 
+    /// The liveness file of run `id` (ADR 0229 D3): under `.rcfd/`, which the project watcher does not read.
+    fn alive(&self, id: &str) -> PathBuf {
+        dot_dir(self.store.project()).join(ALIVE_DIR).join(id)
+    }
+
+    /// Write `status.json` of run `id`; a write that fails is kept and written again on every tick
+    /// ([`Runner::retry_status`]), a later write for the run replacing it (ADR 0229 D4). Logged once per failure.
+    fn put_status(&self, id: &str, st: &RunStatus) {
+        let mut kept = self.unwritten.borrow_mut();
+        match self.store.write_status(id, st) {
+            Ok(()) => {
+                if kept.remove(id).is_some() {
+                    log(&format!("status of run {id}: written, after a write that failed"));
+                }
+            }
+            Err(e) => {
+                if kept.insert(id.to_string(), st.clone()).is_none() {
+                    log(&format!("status of run {id}: {e}; the write is repeated on every tick"));
+                }
+            }
+        }
+    }
+
+    /// Write again the statuses whose last write failed.
+    fn retry_status(&self) {
+        let kept: Vec<(String, RunStatus)> = self
+            .unwritten
+            .borrow()
+            .iter()
+            .map(|(id, st)| (id.clone(), st.clone()))
+            .collect();
+        for (id, st) in kept {
+            if self.store.write_status(&id, &st).is_ok() {
+                self.unwritten.borrow_mut().remove(&id);
+                log(&format!("status of run {id}: written, after a write that failed"));
+            }
+        }
+    }
+
     fn set_state(&self, id: &str, st: &RunStatus, why: &str) {
         let from = self.store.read_status(id).ok().map(|s| s.state);
-        note("status", self.store.write_status(id, st));
+        self.put_status(id, st);
         let mut ev = state_event(from, st.state, why);
         if let Some(p) = st.pid {
             ev["pid"] = json!(p);
@@ -438,6 +493,7 @@ impl<S: RunStore> Runner<S> {
             killed_for_cancel: false,
             next_probe: Instant::now(),
             misses: 0,
+            append_failed: false,
         });
     }
 
@@ -713,9 +769,14 @@ impl<S: RunStore> Runner<S> {
         let log = OpenOptions::new().create(true).append(true).open(dir.join("log.txt"));
         cmd.stdout(log.map_or_else(|_| Stdio::null(), Stdio::from));
         sys::no_window(&mut cmd);
+        // ADR 0229 D3: the solver holds its liveness file as its standard input for as long as it lives (Windows; the
+        // null device stays where the file cannot be made)
+        if let Ok(f) = sys::alive_file(&self.alive(&id)) {
+            cmd.stdin(Stdio::from(f));
+        }
         match cmd.spawn() {
             Ok(mut child) => {
-                drop(cmd); // the runner keeps no handle on log.txt
+                drop(cmd); // the runner keeps no handle on log.txt or on the liveness file
                 self.launch_seq += 1;
                 let pid = child.id();
                 let mut st = RunStatus::new(RunState::Running);
@@ -768,6 +829,7 @@ impl<S: RunStore> Runner<S> {
                     killed_for_cancel: false,
                     next_probe: Instant::now(),
                     misses: 0,
+                    append_failed: false,
                 });
             }
             Err(e) => {
@@ -802,20 +864,23 @@ impl<S: RunStore> Runner<S> {
             }
             return false;
         };
-        a.offset += end as u64 + 1;
-        let mut moved = false;
+        // ADR 0229 D5: a cursor moves only after its append. The step and the time after the chunk's residual lines,
+        // `max_seq` after each solver event (the first failed one stops the forwarding of the later ones), the offset
+        // only when every append succeeded; a chunk read again skips what was written, by step and by `seq`.
+        let next = a.offset + end as u64 + 1;
+        let (mut step, mut time) = (a.step, a.time);
         let mut residuals = Vec::new();
+        let mut failed: Option<(&str, std::io::Error)> = None;
         for line in String::from_utf8_lossy(&buf[..end]).lines() {
             let Ok(v) = serde_json::from_str::<Value>(line) else {
                 continue;
             };
             if v["event"] == "iteration" {
                 let idx = v["index"].as_u64().unwrap_or(0);
-                if idx > a.step {
+                if idx > step {
                     residuals.push(residual_line(&v, idx));
-                    a.step = idx;
-                    a.time = v["time"].as_f64().unwrap_or(a.time);
-                    moved = true;
+                    step = idx;
+                    time = v["time"].as_f64().unwrap_or(time);
                 }
                 continue;
             }
@@ -823,16 +888,43 @@ impl<S: RunStore> Runner<S> {
                 a.finish = Some(v.clone());
             }
             let seq = v["seq"].as_u64().unwrap_or(0);
-            if seq > a.max_seq {
-                a.max_seq = seq;
-                note(
-                    "event",
-                    self.store
-                        .append_event(&a.id, event_line("solver", json!({"solver_seq": seq, "solver": v}))),
-                );
+            if seq > a.max_seq && failed.is_none() {
+                match self
+                    .store
+                    .append_event(&a.id, event_line("solver", json!({"solver_seq": seq, "solver": v})))
+                {
+                    Ok(()) => a.max_seq = seq,
+                    Err(e) => failed = Some(("event", e)),
+                }
             }
         }
-        note("residuals", self.store.append_residuals(&a.id, &residuals));
+        let mut moved = false;
+        match self.store.append_residuals(&a.id, &residuals) {
+            Ok(()) => {
+                moved = step > a.step;
+                a.step = step;
+                a.time = time;
+            }
+            Err(e) => failed = failed.or(Some(("residuals", e))),
+        }
+        match failed {
+            None => {
+                if a.append_failed {
+                    log(&format!("run {}: the solver stream is forwarded again", a.id));
+                }
+                a.append_failed = false;
+                a.offset = next;
+            }
+            Some((what, e)) => {
+                if !a.append_failed {
+                    log(&format!(
+                        "run {}: {what}: {e}; the solver stream is read again from byte {} on every tick",
+                        a.id, a.offset
+                    ));
+                }
+                a.append_failed = true;
+            }
+        }
         moved
     }
 
@@ -845,6 +937,7 @@ impl<S: RunStore> Runner<S> {
     }
 
     fn tick_active(&mut self) {
+        self.retry_status();
         let active = std::mem::take(&mut self.active);
         let mut keep = Vec::new();
         for mut a in active {
@@ -857,8 +950,13 @@ impl<S: RunStore> Runner<S> {
                 },
                 None if Instant::now() >= a.next_probe => {
                     a.next_probe = Instant::now() + Duration::from_millis(self.cfg.adopt_probe_ms);
-                    let name = self.solver.file_stem().map_or("rcfd".into(), |s| s.to_string_lossy());
-                    a.misses = next_misses(a.misses, (self.probe)(a.pid, &name));
+                    // ADR 0229 D3: the liveness file answers for the solver itself; a run without one is probed by
+                    // its pid and name, as before
+                    let alive = (self.held)(&self.alive(&a.id)).unwrap_or_else(|| {
+                        let name = self.solver.file_stem().map_or("rcfd".into(), |s| s.to_string_lossy());
+                        (self.probe)(a.pid, &name)
+                    });
+                    a.misses = next_misses(a.misses, alive);
                     (a.misses >= 2).then_some(None)
                 }
                 None => None,
@@ -897,8 +995,15 @@ impl<S: RunStore> Runner<S> {
                                 .append_event(&a.id, event_line("cancel_requested", json!({}))),
                         );
                     }
-                    Some(t) if t.elapsed() > grace && !a.killed_for_cancel => {
-                        a.killed_for_cancel = sys::kill(a.pid);
+                    // ADR 0229 D3: an adopted solver is killed by its pid only while its liveness file does not say
+                    // that it is gone (a pid that the system gave to another process is not killed); the probe ends
+                    // such a run
+                    Some(t)
+                        if t.elapsed() > grace
+                            && !a.killed_for_cancel
+                            && (a.child.is_some() || (self.held)(&self.alive(&a.id)) != Some(false)) =>
+                    {
+                        a.killed_for_cancel = (self.kill)(a.pid);
                         note(
                             "event",
                             self.store.append_event(
@@ -911,7 +1016,7 @@ impl<S: RunStore> Runner<S> {
                 }
             }
             if dirty {
-                note("status", self.store.write_status(&a.id, &Self::status_of(&a)));
+                self.put_status(&a.id, &Self::status_of(&a));
             }
             keep.push(a);
         }
@@ -992,9 +1097,12 @@ impl<S: RunStore> Runner<S> {
         note("metrics", self.store.write_metrics(&a.id, &metrics));
         self.set_state(&a.id, &st, &reason);
         self.clear_requests(&a.id);
+        // the solver is gone: its liveness file is free (best effort; an empty file is left when it is not yet)
+        let _ = std::fs::remove_file(self.alive(&a.id));
     }
 
     fn shutdown(&mut self) {
+        self.retry_status();
         for p in &mut self.pending {
             if let Some(mut c) = p.check.take() {
                 let _ = c.kill();
@@ -1288,6 +1396,332 @@ mod tests {
         assert_eq!(st1.state, RunState::Failed);
         assert!(st1.reason.unwrap_or_default().contains("status.json"));
         std::thread::sleep(Duration::from_millis(200));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---------------------------------------------------------------- ADR 0229
+
+    /// A store whose writes fail a set number of times (ADR 0229 W1-W3): terminal status writes, residual appends and
+    /// appends of forwarded solver events.
+    struct Flaky {
+        fs: FsStore,
+        terminal_status: std::cell::Cell<u32>,
+        residuals: std::cell::Cell<u32>,
+        solver_events: std::cell::Cell<u32>,
+    }
+
+    impl Flaky {
+        fn new(fs: &FsStore) -> Flaky {
+            Flaky {
+                fs: fs.clone(),
+                terminal_status: Default::default(),
+                residuals: Default::default(),
+                solver_events: Default::default(),
+            }
+        }
+
+        fn fail(left: &std::cell::Cell<u32>) -> io::Result<()> {
+            if left.get() > 0 {
+                left.set(left.get() - 1);
+                return Err(io::Error::other("injected write failure"));
+            }
+            Ok(())
+        }
+    }
+
+    impl RunStore for Flaky {
+        fn project(&self) -> &Path {
+            self.fs.project()
+        }
+        fn list_runs(&self) -> io::Result<Vec<String>> {
+            self.fs.list_runs()
+        }
+        fn create_run(&self, case: &Path, settings: &RunSettings, v: Option<String>) -> io::Result<String> {
+            self.fs.create_run(case, settings, v)
+        }
+        fn read_record(&self, id: &str) -> io::Result<RunRecord> {
+            self.fs.read_record(id)
+        }
+        fn read_status(&self, id: &str) -> io::Result<RunStatus> {
+            self.fs.read_status(id)
+        }
+        fn write_status(&self, id: &str, status: &RunStatus) -> io::Result<()> {
+            if status.state.is_terminal() {
+                Flaky::fail(&self.terminal_status)?;
+            }
+            self.fs.write_status(id, status)
+        }
+        fn append_event(&self, id: &str, event: Value) -> io::Result<()> {
+            if event_kind(&event) == Some("solver") {
+                Flaky::fail(&self.solver_events)?;
+            }
+            self.fs.append_event(id, event)
+        }
+        fn append_residual(&self, id: &str, line: &Value) -> io::Result<()> {
+            self.append_residuals(id, std::slice::from_ref(line))
+        }
+        fn append_residuals(&self, id: &str, lines: &[Value]) -> io::Result<()> {
+            if !lines.is_empty() {
+                Flaky::fail(&self.residuals)?;
+            }
+            self.fs.append_residuals(id, lines)
+        }
+        fn write_metrics(&self, id: &str, metrics: &Value) -> io::Result<()> {
+            self.fs.write_metrics(id, metrics)
+        }
+    }
+
+    thread_local! {
+        /// The liveness file's answer where the platform has none (`sys::held` is `None` off Windows).
+        static HELD: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+        /// The pids the kill function was called with on this test thread.
+        static KILLED: std::cell::RefCell<Vec<u32>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    /// The real liveness file's answer; where the platform gives none, the scripted one.
+    fn held_or_scripted(p: &Path) -> Option<bool> {
+        sys::held(p).or_else(|| HELD.with(|h| h.get()).filter(|_| p.exists()))
+    }
+
+    fn recorded_kill(pid: u32) -> bool {
+        KILLED.with(|k| k.borrow_mut().push(pid));
+        true
+    }
+
+    const ADOPTED_PID: u32 = u32::MAX - 7; // never probed or killed for real: both are scripted
+
+    /// A project with one run left `running` with [`ADOPTED_PID`] by an earlier runner.
+    fn adopted(tag: &str) -> (PathBuf, FsStore, String) {
+        let dir = project(tag);
+        let fs = FsStore::new(&dir);
+        let settings = RunSettings {
+            mem_mb: Some(10),
+            ..RunSettings::default()
+        };
+        let id = fs.create_run(&dir.join("cases/cavity.toml"), &settings, None).unwrap();
+        let mut st = RunStatus::new(RunState::Running);
+        st.pid = Some(ADOPTED_PID);
+        fs.write_status(&id, &st).unwrap();
+        (dir, fs, id)
+    }
+
+    fn events_of(fs: &FsStore, id: &str) -> Vec<Value> {
+        std::fs::read_to_string(fs.run_dir(id).join("events.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .collect()
+    }
+
+    fn residual_steps(fs: &FsStore, id: &str) -> Vec<u64> {
+        std::fs::read_to_string(fs.run_dir(id).join("residuals.jsonl"))
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter_map(|v| v["step"].as_u64())
+            .collect()
+    }
+
+    /// ADR 0229 I2: an adopted run whose liveness file is not held is not killed by its pid when the cancel grace has
+    /// passed, although the pid probe says alive (a recycled pid); it ends as found not running. Control: the same run
+    /// without a liveness file is killed once, by its pid.
+    #[test]
+    fn i2_a_cancel_does_not_kill_a_pid_whose_liveness_file_is_free() {
+        let outcome = |with_file: bool| {
+            let (dir, fs, id) = adopted(if with_file { "i2-file" } else { "i2-legacy" });
+            std::fs::write(fs.run_dir(&id).join(extra::CANCEL), b"").unwrap();
+            if with_file {
+                let alive = dot_dir(&dir).join(ALIVE_DIR).join(&id);
+                std::fs::create_dir_all(alive.parent().unwrap()).unwrap();
+                std::fs::write(&alive, b"").unwrap(); // present, held by nobody
+            }
+            HELD.with(|h| h.set(Some(false)));
+            KILLED.with(|k| k.borrow_mut().clear());
+            let mut r = runner(fs.clone());
+            r.cfg.cancel_grace_ms = 0;
+            r.cfg.adopt_probe_ms = 60_000; // one probe at adoption, the next when the test says
+            r.probe = scripted; // alive: the pid belongs to some process named like the solver
+            r.held = held_or_scripted;
+            r.kill = recorded_kill;
+            r.scan();
+            r.tick_active(); // the first probe; the cancel request is seen
+            std::thread::sleep(Duration::from_millis(5));
+            r.tick_active(); // the grace (0) has passed
+            let killed = KILLED.with(|k| k.borrow().clone());
+            for _ in 0..2 {
+                if let Some(a) = r.active.first_mut() {
+                    a.next_probe = Instant::now();
+                }
+                r.tick_active();
+            }
+            let st = fs.read_status(&id).unwrap();
+            let kill_events = events_of(&fs, &id)
+                .iter()
+                .filter(|v| event_kind(v) == Some("killed"))
+                .count();
+            let _ = std::fs::remove_dir_all(&dir);
+            (killed, st.state, st.reason.unwrap_or_default(), kill_events)
+        };
+        let (killed, state, reason, kill_events) = outcome(true);
+        let (c_killed, c_state, _, c_kill_events) = outcome(false);
+        eprintln!(
+            "I2: kill calls {killed:?}, state {state:?}, killed events {kill_events}, reason: {reason}; control (no liveness \
+             file): kill calls {c_killed:?}, state {c_state:?}, killed events {c_kill_events}"
+        );
+        assert!(
+            killed.is_empty(),
+            "a pid whose liveness file is free was killed: {killed:?}"
+        );
+        assert_eq!(state, RunState::Failed);
+        assert!(reason.contains("found not running"), "{reason}");
+        assert_eq!(kill_events, 0);
+        assert_eq!(c_killed, [ADOPTED_PID], "control: the run without a liveness file");
+    }
+
+    /// ADR 0229 I3: while the liveness file is held, the pid probe is not consulted, so a process listing that fails
+    /// does not end the run.
+    #[test]
+    fn i3_a_held_liveness_file_keeps_the_run_whatever_the_pid_probe_says() {
+        let (dir, fs, id) = adopted("i3");
+        let alive = dot_dir(&dir).join(ALIVE_DIR).join(&id);
+        // Windows: held for real, as a solver holds it; elsewhere the answer is scripted for the file that is there
+        let holder = sys::alive_file(&alive);
+        if holder.is_err() {
+            std::fs::create_dir_all(alive.parent().unwrap()).unwrap();
+            std::fs::write(&alive, b"").unwrap();
+        }
+        HELD.with(|h| h.set(Some(true)));
+        let mut r = runner(fs.clone());
+        r.probe = scripted;
+        r.held = held_or_scripted;
+        r.scan();
+        PROBE.with(|q| q.borrow_mut().extend([false; 4]));
+        for _ in 0..4 {
+            r.tick_active();
+        }
+        let left = PROBE.with(|q| q.borrow().len());
+        let state = fs.read_status(&id).unwrap().state;
+        PROBE.with(|q| q.borrow_mut().clear());
+        eprintln!(
+            "I3: state after 4 ticks {state:?}, scripted pid-probe answers left {left} of 4 (file held for real: {})",
+            holder.is_ok()
+        );
+        assert_eq!(state, RunState::Running);
+        assert_eq!(left, 4, "the pid probe was consulted");
+        assert_eq!(r.active.len(), 1);
+        drop(holder);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// ADR 0229 W1: a terminal status write that fails is written again on the following ticks; the state event is
+    /// written once.
+    #[test]
+    fn w1_a_failed_terminal_status_write_is_repeated_until_it_succeeds() {
+        let (dir, fs, id) = adopted("w1");
+        let store = Flaky::new(&fs);
+        store.terminal_status.set(2);
+        let mut r = runner(store);
+        r.probe = scripted;
+        PROBE.with(|q| q.borrow_mut().extend([false, false]));
+        r.scan();
+        r.tick_active();
+        r.tick_active(); // the second missed probe: finalized, the status write fails
+        let at_end = fs.read_status(&id).unwrap().state;
+        r.tick_active(); // repeated, fails again
+        let after_1 = fs.read_status(&id).unwrap().state;
+        r.tick_active(); // repeated, written
+        let after_2 = fs.read_status(&id).unwrap().state;
+        let kept = r.unwritten.borrow().len();
+        let terminal_events = events_of(&fs, &id)
+            .iter()
+            .filter(|v| event_kind(v) == Some("state") && v["to"] == "failed")
+            .count();
+        eprintln!(
+            "W1: status at the finalizing tick {at_end:?}, one tick later {after_1:?}, two ticks later {after_2:?}; \
+             kept writes left {kept}; terminal state events {terminal_events}"
+        );
+        assert_eq!(
+            at_end,
+            RunState::Running,
+            "set-up: the injected failure did not take effect"
+        );
+        assert_eq!(after_1, RunState::Running);
+        assert_eq!(after_2, RunState::Failed);
+        assert_eq!(kept, 0);
+        assert_eq!(terminal_events, 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The stream of W2 and W3: a solver event, 5 iterations, a solver event.
+    fn write_stream(fs: &FsStore, id: &str) {
+        let mut text = String::from("{\"event\":\"warning\",\"seq\":1,\"message\":\"first\"}\n");
+        for i in 1..=5 {
+            text.push_str(&format!(
+                "{{\"event\":\"iteration\",\"index\":{i},\"time\":{i}.0,\"res_u\":1e-3,\"res_p\":1e-3,\"continuity\":1e-3}}\n"
+            ));
+        }
+        text.push_str("{\"event\":\"warning\",\"seq\":2,\"message\":\"second\"}\n");
+        std::fs::write(fs.run_dir(id).join(extra::SOLVER_STREAM), text).unwrap();
+    }
+
+    fn solver_seqs(fs: &FsStore, id: &str) -> Vec<u64> {
+        events_of(fs, id)
+            .iter()
+            .filter(|v| event_kind(v) == Some("solver"))
+            .filter_map(|v| v["solver_seq"].as_u64())
+            .collect()
+    }
+
+    /// ADR 0229 W2: a failed residual append leaves the offset where it was; the chunk is read again and every
+    /// residual line and solver event is in its file exactly once.
+    #[test]
+    fn w2_a_failed_residual_append_loses_no_line_and_doubles_none() {
+        let (dir, fs, id) = adopted("w2");
+        write_stream(&fs, &id);
+        let store = Flaky::new(&fs);
+        store.residuals.set(1);
+        let mut r = runner(store);
+        r.probe = scripted; // alive
+        r.scan();
+        r.tick_active();
+        let (steps_1, offset_1) = (residual_steps(&fs, &id), r.active[0].offset);
+        r.tick_active();
+        let (steps_2, offset_2, seqs) = (residual_steps(&fs, &id), r.active[0].offset, solver_seqs(&fs, &id));
+        eprintln!(
+            "W2: after tick 1 residual steps {steps_1:?}, offset {offset_1}; after tick 2 steps {steps_2:?}, offset \
+             {offset_2}, solver events {seqs:?}"
+        );
+        assert!(steps_1.is_empty(), "{steps_1:?}");
+        assert_eq!(offset_1, 0);
+        assert_eq!(steps_2, [1, 2, 3, 4, 5]);
+        assert_eq!(seqs, [1, 2]);
+        assert!(offset_2 > 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// ADR 0229 W3: a failed solver-event append leaves the offset where it was; the residual lines written in that
+    /// tick are not written again, and the events arrive in stream order.
+    #[test]
+    fn w3_a_failed_event_append_loses_no_event_and_doubles_no_residual() {
+        let (dir, fs, id) = adopted("w3");
+        write_stream(&fs, &id);
+        let store = Flaky::new(&fs);
+        store.solver_events.set(1);
+        let mut r = runner(store);
+        r.probe = scripted; // alive
+        r.scan();
+        r.tick_active();
+        let (steps_1, offset_1, seqs_1) = (residual_steps(&fs, &id), r.active[0].offset, solver_seqs(&fs, &id));
+        r.tick_active();
+        let (steps_2, seqs_2) = (residual_steps(&fs, &id), solver_seqs(&fs, &id));
+        eprintln!(
+            "W3: after tick 1 residual steps {steps_1:?}, offset {offset_1}, solver events {seqs_1:?}; after tick 2 steps \
+             {steps_2:?}, solver events {seqs_2:?}"
+        );
+        assert_eq!(steps_1, [1, 2, 3, 4, 5]);
+        assert_eq!(offset_1, 0);
+        assert_eq!(steps_2, [1, 2, 3, 4, 5]);
+        assert_eq!(seqs_2, [1, 2]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

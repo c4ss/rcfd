@@ -272,17 +272,25 @@ fn unix_takeover(path: &Path) {
     }
 }
 
+/// Open `path` for reading with every sharing mode (read, write, delete): the open fails with error 32 exactly while
+/// another handle holds the file without sharing, and two such opens do not exclude each other (ADR 0229 D1).
+#[cfg(windows)]
+fn open_shared(path: &Path) -> io::Result<File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    OpenOptions::new().read(true).share_mode(7).open(path)
+}
+
 /// Is a live runner holding the lock at `path`? The processes this process started and that have exited are reaped
-/// first ([`reap_started`]).
+/// first ([`reap_started`]). Windows: the probe shares the file, so that two probes at the same moment do not read each
+/// other as a runner (ADR 0229 D1).
 pub fn lock_held(path: &Path) -> bool {
     reap_started();
     #[cfg(windows)]
     {
-        use std::os::windows::fs::OpenOptionsExt;
         if !path.exists() {
             return false;
         }
-        match OpenOptions::new().read(true).share_mode(0).open(path) {
+        match open_shared(path) {
             Ok(_) => false,
             Err(e) => e.raw_os_error() == Some(32),
         }
@@ -296,8 +304,143 @@ pub fn lock_held(path: &Path) -> bool {
     }
 }
 
+/// The liveness file of a solver about to be launched (ADR 0229 D3): `path` opened (created with its folder) without
+/// sharing. Handed to the solver as its standard input and kept by nobody else, it stays open, unshared, exactly as
+/// long as that process lives, whatever its pid. Windows only: elsewhere an `Unsupported` error (no file is made).
+pub fn alive_file(path: &Path) -> io::Result<File> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .share_mode(0)
+            .open(path)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no liveness file on this platform",
+        ))
+    }
+}
+
+/// Does a process hold the liveness file at `path` ([`alive_file`])? `Some(true)`: held, its solver lives;
+/// `Some(false)`: the file is there and nobody holds it, the solver is gone; `None`: no such file (a run launched
+/// without one), or the file cannot be asked (the caller falls back to [`pid_alive`]).
+pub fn held(path: &Path) -> Option<bool> {
+    #[cfg(windows)]
+    {
+        if !path.exists() {
+            return None;
+        }
+        match open_shared(path) {
+            Ok(_) => Some(false),
+            Err(e) if e.raw_os_error() == Some(32) => Some(true),
+            Err(_) => None,
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    /// ADR 0229 P1, P2: a probe in flight (a shared read handle) does not read as a runner; an unshared holder does.
+    /// Control: the probe before D1 (an unshared open) fails with error 32 against the probe in flight.
+    #[cfg(windows)]
+    #[test]
+    fn p1_p2_two_lock_probes_do_not_read_each_other_as_a_runner() {
+        use super::*;
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = std::env::temp_dir().join(format!("rcfd_sys_p1_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let lock = dir.join("runner.lock");
+        std::fs::write(&lock, b"").unwrap();
+        let in_flight = open_shared(&lock).unwrap();
+        let p1 = lock_held(&lock);
+        let before = OpenOptions::new().read(true).share_mode(0).open(&lock);
+        let control = before.as_ref().err().and_then(|e| e.raw_os_error());
+        drop(before);
+        drop(in_flight);
+        let runner = acquire_lock(&lock).unwrap().expect("the lock is free");
+        let p2 = lock_held(&lock);
+        drop(runner);
+        let free = lock_held(&lock);
+        eprintln!("P1: held with a probe in flight {p1} (control: the unshared probe's error {control:?}); P2: held under a runner {p2}, after it {free}");
+        assert!(!p1, "P1: a probe in flight read as a runner");
+        assert_eq!(control, Some(32), "control: the unshared probe did not collide");
+        assert!(p2, "P2: a held lock read as free");
+        assert!(!free);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Helper of I1, not a check: sleeps while `RCFD_I1_SLEEP_MS` is set (the test starts this test binary with it).
+    #[test]
+    #[ignore = "helper process of I1"]
+    fn i1_helper_sleeps() {
+        if let Some(ms) = std::env::var("RCFD_I1_SLEEP_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+        {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
+
+    /// ADR 0229 I1: the liveness file is held while the process that got it as its standard input lives, and free
+    /// within 5 s of its exit; a path without a file answers `None`.
+    #[cfg(windows)]
+    #[test]
+    fn i1_the_liveness_file_is_held_exactly_while_its_process_lives() {
+        use super::*;
+        use std::time::Instant;
+        let dir = std::env::temp_dir().join(format!("rcfd_sys_i1_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("alive").join("run-x");
+        let none = held(&path);
+        let file = alive_file(&path).unwrap();
+        let (mut cmd, _) = console(std::env::current_exe().unwrap(), 0);
+        cmd.args(["--exact", "sys::tests::i1_helper_sleeps", "--ignored", "--nocapture"])
+            .env("RCFD_I1_SLEEP_MS", "1000")
+            .stdin(Stdio::from(file))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = cmd.spawn().unwrap();
+        drop(cmd); // as the runner does: no handle of the file stays here
+        let while_alive = held(&path);
+        let t0 = Instant::now();
+        let status = child.wait().unwrap();
+        let lived = t0.elapsed();
+        let mut after = held(&path);
+        while after != Some(false) && t0.elapsed() < lived + Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(20));
+            after = held(&path);
+        }
+        eprintln!(
+            "I1: no file {none:?}; while the child lived {while_alive:?}; the child lived {lived:?} (exit {status}); after it {after:?}, {:?} after its exit",
+            t0.elapsed() - lived
+        );
+        assert_eq!(none, None);
+        assert_eq!(while_alive, Some(true), "the file was not held while its process lived");
+        assert!(
+            status.success() && lived >= Duration::from_millis(900),
+            "set-up: the helper did not sleep"
+        );
+        assert_eq!(after, Some(false), "the file stayed held after its process ended");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// ADR 0128 finding 17 (a, b): every console program the runner and its client start is built with
     /// `CREATE_NO_WINDOW`; the runner start keeps `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`. ADR 0143: the PowerShell
     /// launcher went with its route.

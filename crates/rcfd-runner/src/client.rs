@@ -47,6 +47,36 @@ fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 
+/// What a start finds of the lock's holder (ADR 0229 D2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Holder {
+    /// A runner holds the lock and was not asked to shut down: it scans again.
+    Alive,
+    /// Nobody holds the lock: a runner is started.
+    Gone,
+    /// The runner was asked to shut down and still held the lock when the wait ended.
+    Stuck,
+}
+
+/// Look at the lock (`held`) and the shutdown request (`asked`) every 20 ms until the holder is settled, at most
+/// `limit`: a runner that holds the lock while a shutdown request is pending will not scan again, so a start waits
+/// for it to let go instead of taking it as alive (ADR 0229 D2).
+pub(crate) fn wait_out_shutdown(held: impl Fn() -> bool, asked: impl Fn() -> bool, limit: Duration) -> Holder {
+    let t0 = Instant::now();
+    loop {
+        if !held() {
+            return Holder::Gone;
+        }
+        if !asked() {
+            return Holder::Alive;
+        }
+        if t0.elapsed() >= limit {
+            return Holder::Stuck;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
 impl Client {
     /// A client of `project` that starts runners from `runner_exe`.
     pub fn new(project: impl Into<PathBuf>, runner_exe: impl Into<PathBuf>) -> Self {
@@ -100,11 +130,24 @@ impl Client {
     /// its exit code and the end of its output. The started process is reaped when it exits (`sys::keep_started`).
     // shortcut (Windows): the direct start hands the runner the caller's inheritable handles, whatever its output
     // (ADR 0146 I1-I3).
+    ///
+    /// A runner that holds the lock while a shutdown request is pending is waited for (at most 10 s), and another is
+    /// started once it has let go: it would not scan a run queued just now (ADR 0229 D2).
     pub fn ensure_runner_pid(&self) -> Result<Option<u32>, String> {
-        if self.runner_running() {
-            return Ok(None);
-        }
         let dot = dot_dir(self.project());
+        let request = dot.join("shutdown");
+        match wait_out_shutdown(|| self.runner_running(), || request.exists(), Duration::from_secs(10)) {
+            Holder::Alive => return Ok(None),
+            Holder::Gone => {}
+            Holder::Stuck => {
+                return Err(format!(
+                    "the runner was asked to shut down ({}) and still holds the project's lock after 10 s; no other \
+                     runner was started (see {})",
+                    request.display(),
+                    dot.join("runner.log").display()
+                ))
+            }
+        }
         std::fs::create_dir_all(&dot).map_err(err)?;
         let project = std::env::current_dir().map_err(err)?.join(self.project());
         let args = ["serve".into(), "--project".into(), project.display().to_string()];
@@ -370,4 +413,80 @@ pub fn state_name(state: RunState) -> String {
         .ok()
         .and_then(|v| v.as_str().map(String::from))
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    /// ADR 0229 S1: the wait of a start as a function of the lock and the shutdown request.
+    #[test]
+    fn s1_a_start_waits_out_a_runner_that_was_asked_to_shut_down() {
+        let looks = Cell::new(0u32);
+        let look = || {
+            looks.set(looks.get() + 1);
+            looks.get()
+        };
+        let ten = Duration::from_secs(10);
+        // held, no request: alive at the first look
+        let a = wait_out_shutdown(|| look() >= 1, || false, ten);
+        let a_looks = looks.replace(0);
+        // held with a request for 3 looks, then free
+        let b = wait_out_shutdown(|| look() <= 3, || true, ten);
+        let b_looks = looks.replace(0);
+        // held, the request gone after 2 looks
+        let c = wait_out_shutdown(|| true, || look() <= 2, ten);
+        let c_looks = looks.replace(0);
+        // held with a request throughout
+        let t0 = Instant::now();
+        let d = wait_out_shutdown(|| true, || true, Duration::from_millis(100));
+        let d_took = t0.elapsed();
+        eprintln!(
+            "S1: {a:?} after {a_looks} look(s); {b:?} after {b_looks}; {c:?} after {c_looks}; {d:?} after {d_took:?}"
+        );
+        assert_eq!((a, a_looks), (Holder::Alive, 1));
+        assert_eq!((b, b_looks), (Holder::Gone, 4));
+        assert_eq!((c, c_looks), (Holder::Alive, 3));
+        assert_eq!(d, Holder::Stuck);
+        assert!(d_took >= Duration::from_millis(100), "{d_took:?}");
+    }
+
+    /// ADR 0229 S2: with the lock held and a shutdown request pending, `ensure_runner` waits for the lock and then goes
+    /// on to start a runner (here a program that does not exist, so the start's error says so). Control: without the
+    /// request, the held lock answers `Ok` at once.
+    #[cfg(windows)]
+    #[test]
+    fn s2_ensure_runner_starts_one_after_the_exiting_runner_let_go() {
+        let dir = std::env::temp_dir().join(format!("rcfd_client_s2_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let dot = dot_dir(&dir);
+        std::fs::create_dir_all(&dot).unwrap();
+        let missing = dir.join("no-such-runner.exe");
+        let client = Client::new(&dir, &missing).with_output(RunnerOutput::Null);
+        let lock = sys::acquire_lock(&dot.join("runner.lock"))
+            .unwrap()
+            .expect("the lock is free");
+        // control: held, no request
+        let t0 = Instant::now();
+        let control = client.ensure_runner_pid();
+        let control_took = t0.elapsed();
+        // the check: held, a request pending, the lock freed after 300 ms
+        std::fs::write(dot.join("shutdown"), b"").unwrap();
+        let freer = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(lock);
+        });
+        let t0 = Instant::now();
+        let got = client.ensure_runner_pid();
+        let took = t0.elapsed();
+        freer.join().unwrap();
+        eprintln!("S2: control {control:?} in {control_took:?}; with the request pending {got:?} in {took:?}");
+        assert_eq!(control, Ok(None));
+        assert!(control_took < Duration::from_millis(200), "{control_took:?}");
+        let e = got.expect_err("a runner that does not exist was started");
+        assert!(e.contains("cannot start") && e.contains("no-such-runner"), "{e}");
+        assert!(took >= Duration::from_millis(300), "{took:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
