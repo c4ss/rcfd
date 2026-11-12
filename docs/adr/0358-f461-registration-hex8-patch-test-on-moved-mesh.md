@@ -177,3 +177,88 @@ post-run amendment. **todo**: the test file does not build.
 
 F-461, title "Element tests: the constant-strain patch test of Hex8 on a moved mesh", deps F-459; the acceptance quoted under
 "What F-461 asks".
+
+## Addendum 1: results (2026-11-12)
+
+Runs, each once, release profile, on the shared machine, at commit 358152f1 (the test file as committed before any run): the
+file `cargo test -p rcfd-fem --release --test sb_patch_moved -- --nocapture --test-threads=1` (0.28 s, log
+`w49i-work/f461-scratch/run1.log`); the mutations M1 to M7 on the archive copy `w49i-work/f461-scratch/mut` of 358152f1 by
+`runmut.sh` (each applied, the file run once, the file restored; logs `M1.log` to `M7.log`). One correction of the test file was
+made before the first run and is in the committed file: the copied body-force helper indexes the Hessian as `q[k][i][k]` (as in
+ADR 0355); it is zero for the linear fields, so it matters only for N1. No amendment was needed; nothing above this addendum
+was changed after a run.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| P1 relative L2 error, 36 solves (n 3, 4, 6; alpha 0.15, 0.05; 3 draws; fields A, B) | `<= 1e-9` | maximum 2.96e-16 | yes |
+| P2 relative energy error, same 36 solves | `<= 1e-9` | minimum 5.5e-16, maximum 2.36e-15 | yes |
+| V1 min `det J / regular`, 18 meshes | `>= (1 - 6 alpha)^3` (1.0e-3, 0.343) | alpha 0.15: 0.389 to 0.69; alpha 0.05: 0.782 to 0.95 | yes |
+| V1 largest offset / h | `<= alpha` | met on all 18 | yes |
+| V2 rms interior offset component / h | `>= 0.3 alpha` | 0.534 alpha to 0.634 alpha | yes |
+| N1 quadratic field, relative L2 / energy, 18 meshes | `>= 1e-3` | L2 2.26e-3 to 9.14e-3; energy 3.30e-2 to 6.69e-2 | yes |
+| M1 one-point Hex8 rule (library mutation), relative energy error, 36 solves | `>= 1e-5` | 6.05e-5 to 6.71e-3 (alpha 0.15: 5.45e-4 to 6.71e-3; alpha 0.05: 6.05e-5 to 7.36e-4) | yes |
+
+Estimates against measured: P1/P2 inside the estimate; V1 inside; V2 0.53 to 0.63 alpha against 0.45 to 0.7; N1 L2 low end
+2.3e-3 against estimated 3e-3 to 3e-2 (just below the estimated range, 2.3 times above the limit); M1 low end **6.05e-5 against
+the estimated 2e-4 to 5e-3** (below the estimated range at the smallest amplitude and coarsest mesh, field B, 6 times above the
+limit; the spread of the error with the random draw was underestimated for `n = 3`). The one-point relative L2 error was
+1.09e-5 to 4.24e-4 (no limit).
+
+### Mutations (scratch copy of 358152f1, each run once)
+
+| Id | Change | Result | Caught by |
+|---|---|---|---|
+| M1 | Hex8 stiffness `gauss_2` -> `gauss_1` | **caught** | P1 and P2 fail in all 36 solves; measured relative energy error 6.05e-5 to 6.71e-3 (clause c8, all `>= 1e-5`); V1, V2, N1 unaffected |
+| M2 | Hex8 stiffness `gauss_2` -> `gauss_3` | survived (as registered) | all tests pass (P1 about 2e-16) |
+| M3 | `ALPHAS` = 0 (mesh not moved) | caught, **but not by V2 as registered** | V1 at `alpha = 0` fails by rounding (`min det J / regular` prints 1.0000 against a bound computed as 1.0, misses at `n = 6`); V2's limit `0.3 alpha` is 0 at `alpha = 0`, so V2 is met (0 >= 0). P1, P2, N1 met |
+| M4 | amplitude 0.15 -> 0.4 | caught | `add_block` refuses the inverted element (unwrap panic at the mesh build, all three tests) |
+| M5 | prescribed value of node 0, component 0, +1e-6 | caught | P1 (1.5e-8 to 5.3e-8) and P2 (1.8e-7 to 2.8e-7) fail in all 36 solves |
+| M6 | `gauss_1` and `ALPHAS` = 0 | as registered in the P checks | P1, P2 met (about 2e-16): the one-point rule passes the patch test on a regular mesh, so the M1 error comes from the moves; the run still fails V1 by the same rounding as M3 |
+| M7 | N1 field replaced by the linear field A | caught | N1 fails (relative error 1.7e-16 against `>= 1e-3`) |
+
+### Deviations and what was not run
+
+- **M3 deviates from its registration.** It was registered as caught by V2 (rms offset 0 < 0.3 alpha). V2's limit is relative to
+  `alpha`, so at `alpha = 0` it is 0 and cannot fail; the run is failed only by a floating-point artifact of V1 at `alpha = 0`
+  (not a real detection). Diagnosis: a flaw of V2 as written (an absolute floor would have been needed, and V2 measures the
+  generator's draws, not the stored mesh), not of the acceptance checks P1, P2 (c6, c7) or M1 (c8). That the real runs use
+  moved meshes is shown independently by M1 versus M6: the same mutated rule fails by 6e-5 to 7e-3 on the moved meshes and
+  passes at 2e-16 on the regular ones. No amendment was made; a corrected V2 is a follow-up (below).
+- The M1 low end (6.05e-5) is below its estimated range (arithmetic 3); the limit was met with a factor 6.
+- Not run: tetrahedra, boundary-node moves, other seeds or amplitudes, a box that is not the unit cube.
+- No library file was edited; no golden or hash table touched; the files of the branch are the ADR and the new test file.
+- `cargo fmt -p rcfd-fem --check` passed; `cargo clippy -p rcfd-fem --all-targets -- -D warnings` passed.
+
+### Decision by the registered rule
+
+**done**: P1, P2, V1, V2, N1 met on every configuration, and M1 caught with the relative energy error `>= 1e-5` in all 36
+solves, without an amendment. M2 survived and M4, M5, M7 were caught as registered; M3 and M6 deviate (V2 cannot detect an
+unmoved mesh, recorded and diagnosed above), which by the rule does not alone block done.
+
+### Remaining questions
+
+1. **V2's relative limit cannot see an unmoved mesh (M3).** Options: (a) a follow-up that adds an absolute floor and measures
+   the stored mesh nodes instead of the draws (a new test; the registered limits stay); (b) leave it, since M1 versus M6
+   already show the meshes are moved. Recommendation: (a), small, as a follow-up item, not applied here.
+2. **The mutation is a scratch-copy library edit, not an in-test switch.** The one-point rule cannot be selected from a test
+   without a library change. Options: (a) leave (the record is in this ADR); (b) an in-test assembler of the Hex8 stiffness with
+   a selectable rule through `Element::point`. Recommendation: (a).
+3. **F-459's note** can say that its remaining question 1(b) is closed by this item; recommendation: yes, one sentence.
+
+### For the lead: roadmap entries
+
+F-461: proposed status **done**. Note:
+
+> Structural solver, basic tier. ADR 0358, 2026-11-12: the constant-strain patch test of Hex8 on a unit box with interior nodes moved by seed 0xF461_0358, uniform offsets of at most 0.15 h and 0.05 h per component (validity bound 1/6 of ADR 0355; minimum det J at the nodes 0.389 to 0.95 of the regular value), n = 3, 4, 6 cells per edge, three draws, two linear fields, all boundary nodes prescribed, no body force; tests crates/rcfd-fem/tests/sb_patch_moved.rs only. Over the 36 solves the relative L2 error is at most 3.0e-16 and the relative energy error at most 2.4e-15 (limit 1e-9); the quadratic field is not reproduced (L2 2.3e-3 to 9.1e-3, energy 3.3e-2 to 6.7e-2, so the test can see an error). With the Hex8 stiffness rule mutated to one point (scratch copy) the relative energy error is 6.1e-5 to 6.7e-3 in every solve (limit 1e-5) and the relative L2 error 1.1e-5 to 4.2e-4; the same one-point rule on an unmoved mesh passes at 2e-16, so the error comes from the moves. The 3-point over-integration survives as expected; a 1e-6 offset of one prescribed value and an amplitude above the bound are caught. One check is weak: the check that the mesh is moved has a limit relative to the amplitude and cannot see an unmoved mesh (that mutation was caught only by a rounding artifact of the validity check); the move itself is evidenced by the contrast between the one-point rule on the moved and on the regular mesh. Follow-up proposed below.
+
+F-459: suggested addition to its note (one sentence at the end):
+
+> The moved-mesh patch test of Hex8 that detects the one-point stiffness directly is ADR 0358 (F-461).
+
+Follow-up item (id by the lead):
+
+1. Title: "Element tests: the moved-mesh check of the Hex8 patch test measures the stored mesh". Deps: F-461.
+
+> Every limit not stated here is registered in the ADR before the run. In a new test file, for the moved boxes of ADR 0358 (n = 3, 4, 6; alpha 0.15 and 0.05; three draws), the rms of the offsets read from the stored node coordinates of the moved mesh against the regular builder mesh (interior nodes only, relative to h) is >= 0.3 alpha and the boundary nodes are unchanged bit for bit; the same test on an unmoved mesh (alpha = 0 passed through the same code) fails these checks; the existing tests are not edited.
