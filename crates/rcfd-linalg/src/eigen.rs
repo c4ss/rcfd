@@ -5,7 +5,9 @@
 //! * [`lowest_eigenpairs`]: the lowest eigenpairs of the sparse pencil `K x = lambda M x` (`K` symmetric, `M` symmetric
 //!   positive definite) by subspace iteration on the envelope factor of `K + sigma M` ([`crate::skyline`]) with a
 //!   Rayleigh-Ritz step (D3 to D7), verified by a Sturm count: [`count_below`] counts the eigenvalues below a value from
-//!   the signs of `D` in `K - s M = L D L^T` (Sylvester's law of inertia, D8).
+//!   the signs of `D` in `K - s M = L D L^T` (Sylvester's law of inertia, D8). The convergence test is the relative
+//!   residual of D6 by default, or on request ([`ResidualTest::Backward`]) the normwise backward error of ADR 0354, whose
+//!   rounding floor does not grow with `lambda_max / lambda_1`.
 //!
 //! Everything is sequential with a fixed operation order except the row-parallel [`CsrMatrix::matvec`], whose rows are
 //! summed sequentially, so the results are bit-identical for any number of threads.
@@ -97,7 +99,8 @@ pub enum EigenError {
         iterations: usize,
         /// Tolerance of the residual test.
         tolerance: f64,
-        /// Residuals `||A x - mu M x|| / ||A x||` of the wanted pairs at the last iteration.
+        /// Residuals of the wanted pairs at the last iteration, in the measure of [`SubspaceOptions::residual_test`]
+        /// (default `||A x - mu M x|| / ||A x||`).
         residuals: Vec<f64>,
     },
     /// The cluster containing the m-th Ritz value fills the subspace.
@@ -457,13 +460,28 @@ pub enum Shift {
     Value(f64),
 }
 
+/// Residual measure of the convergence test of [`lowest_eigenpairs`] (ADR 0283 D6, ADR 0354 D1 to D3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ResidualTest {
+    /// `||A x - mu M x|| / ||A x||` (ADR 0283 D6). Its rounding floor is about `c eps ||A|| / mu`, which a slender model
+    /// with a large `lambda_max / lambda_1` may not reach below the tolerance.
+    #[default]
+    Relative,
+    /// The normwise backward error `||A x - mu M x|| / ((||A||_inf + |mu| ||M||_inf) ||x||)` (ADR 0354 D1, D2): the pair
+    /// is exact for a pencil within that relative distance of `(A, M)`. Its floor is about `c eps` whatever the spectrum.
+    Backward,
+}
+
 /// Options of [`lowest_eigenpairs`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct SubspaceOptions {
     /// Shift of the factorisation.
     pub shift: Shift,
-    /// Residual tolerance `tau` of the convergence test `||A x - mu M x|| / ||A x|| <= tau`.
+    /// Residual tolerance `tau` of the convergence test `residual <= tau`, the residual measured by `residual_test`
+    /// (default `||A x - mu M x|| / ||A x||`).
     pub tolerance: f64,
+    /// Residual measure of the convergence test (default [`ResidualTest::Relative`]).
+    pub residual_test: ResidualTest,
     /// Iteration cap.
     pub max_iterations: usize,
     /// Subspace size `q` (`None`: `min(n, max(2 m, m + 8))`).
@@ -479,6 +497,7 @@ impl Default for SubspaceOptions {
         SubspaceOptions {
             shift: Shift::Auto,
             tolerance: 1e-10,
+            residual_test: ResidualTest::Relative,
             max_iterations: 200,
             subspace_size: None,
             ordering: SkylineOrdering::Rcm,
@@ -505,7 +524,8 @@ pub struct GeneralizedEigen {
     pub values: Vec<f64>,
     /// M-orthonormal eigenvectors, `vectors[j]` belongs to `values[j]`.
     pub vectors: Vec<Vec<f64>>,
-    /// Residuals `||A x - mu M x|| / ||A x||` of the returned pairs.
+    /// Residuals of the returned pairs in the measure of [`SubspaceOptions::residual_test`] (default `||A x - mu M x|| /
+    /// ||A x||`).
     pub residuals: Vec<f64>,
     /// Iterations made.
     pub iterations: usize,
@@ -672,6 +692,18 @@ fn lcg(s: &mut u64) -> u64 {
     *s
 }
 
+/// `||a||_inf = max_i sum_j |a_ij|`, rows in order (ADR 0354 D2; for a symmetric matrix an upper bound of `||a||_2`).
+fn inf_norm(a: &CsrMatrix) -> f64 {
+    (0..a.n).fold(0.0f64, |w, r| {
+        w.max(
+            a.val[a.row_ptr[r]..a.row_ptr[r + 1]]
+                .iter()
+                .map(|v| v.abs())
+                .sum::<f64>(),
+        )
+    })
+}
+
 fn matvec(a: &CsrMatrix, x: &[f64]) -> Vec<f64> {
     let mut y = vec![0.0; a.n];
     a.matvec(x, &mut y);
@@ -729,6 +761,11 @@ pub fn lowest_eigenpairs(
         }
     };
     let (fac, a, sigma) = factor_shifted(k, m, opts.shift, &opts.ordering)?;
+    // ADR 0354 D2: the norms of the backward error, computed only when it is asked for.
+    let scale = match opts.residual_test {
+        ResidualTest::Relative => None,
+        ResidualTest::Backward => Some((inf_norm(&a), inf_norm(m))),
+    };
     let mut mx: Vec<Vec<f64>> = x.iter().map(|c| matvec(m, c)).collect();
     let mut last_res = Vec::new();
     for it in 1..=opts.max_iterations {
@@ -789,7 +826,10 @@ pub fn lowest_eigenpairs(
             .map(|j| {
                 let ax = matvec(&a, &x[j]);
                 let r: Vec<f64> = ax.iter().zip(&mx[j]).map(|(p, v)| p - mu[j] * v).collect();
-                norm(&r) / norm(&ax)
+                match scale {
+                    None => norm(&r) / norm(&ax),
+                    Some((na, nm)) => norm(&r) / ((na + mu[j].abs() * nm) * norm(&x[j])),
+                }
             })
             .collect();
         let mut mp = count;
