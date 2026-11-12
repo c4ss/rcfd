@@ -245,3 +245,106 @@ to a fringe-calculated pair; the moving hole should give some every step).
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; none was changed and no amendment was needed. Release builds on Windows.
+Commits: the registration `5397d77b` (alone, before any code); the test file, compiled, formatted and linted without
+running, `70ea4687`. The test file was then run once (`cargo test --release -p rcfd-fv --test overset_f357 --
+--nocapture --test-threads=1`, 31 s for the five tests). No library code was changed: every check was met, so there was
+nothing to diagnose. The logs are in `E:/projects/cfd/w49i-work/f357-scratch` (`f357-run1.log`, `f357-MU1.log` to
+`f357-MU3.log`).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 W3 (B3d moving, default), velocity, every step | `<= 1e-10` | `7.67e-15` | met |
+| A1 W3, pressure, every step | `<= 1e-10` | `1.01e-13` | met |
+| A1c W3, continuity of the calculated cells, every step | `<= 1e-9` | `6.37e-15` | met |
+| A2 W3q (B3d moving, quadratic), velocity | `<= 1e-10` | `7.33e-15` | met |
+| A2 W3q, pressure | `<= 1e-10` | `1.07e-13` | met |
+| A2c W3q, continuity | `<= 1e-9` | `4.98e-15` | met |
+| A2s (set-up) W3q, share of quadratic stencils, every step | `>= 0.95` | `1.0`; fallback count `0` in every step; 42722 stencils over the 40 steps | met |
+| U2 GCL of the component cells (W3; W3q) | `<= 1e-12` | `6.11e-16`; `6.11e-16` | met |
+| U3 outflow error (W3; W3q) | `<= 1e-10` | `8.94e-15`; `9.56e-15` | met |
+| U4 (set-up) kind changes over the steps (W3) | `>= 20` | `92` (estimate about 50) | met |
+| U5 unconverged linear solves | printed | `0` in every run | - |
+| S0 warped component alone at rest: velocity, pressure, continuity | `<= 1e-10`, `<= 1e-10`, `<= 1e-9` | `6.44e-15`, `0`, `3.77e-15` | met |
+| S1 warped component alone moving: velocity, pressure, continuity, GCL | as S0; GCL `<= 1e-12` | `3.94e-15`, `0`, `2.47e-15`, `6.11e-16` | met |
+| SB warped background alone at rest | as S0 | `6.66e-15`, `0`, `3.01e-15` | met |
+| SP planar B3 overset moving: velocity, pressure, continuity, GCL | as S1 | `5.08e-15`, `7.90e-14`, `6.59e-15`, `5.93e-16` (99 kind changes) | met |
+| N1 (control) weights times 1.001: velocity deviation | `>= 1e-6` | `1.30e-3` | held |
+| N2 (control) mesh flux of the component perturbed: velocity deviation | `>= 1e-8` | `1.03e-6` (GCL residual `3.1e-7`, estimate `3e-7`) | held |
+
+Run times: W3 5.4 s, W3q 6.4 s, P3 4.5 s, the single meshes 0.4 to 1.4 s.
+
+The separating checks were not needed for a diagnosis (nothing missed). They show that the warped single mesh, at rest
+and moving, keeps a uniform flow to the same `1e-14` as the warped overset step and the planar set-ups, and that the
+overset coupling adds a pressure level of `1e-13` on B3d as it does on the planar B3 (`7.9e-14`) and on U (`6.2e-13`).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `70ea4687` (`f357-scratch/mut`, own target directory) by `mutate.py` (exact
+replacements that must occur once), the test file run once, the file restored and compared byte for byte with the
+worktree (equal for all three).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the area vector of a polygon takes the direction of its first fan triangle | A1 or S0 | failed: every test on a warped mesh stops at the construction of B3d with `Mesh("cell 0: face area vectors do not sum to zero")`, before any flow; SP on the planar B3 met (`5.2e-15`), as expected. Caught by the library's mesh validation inside the registered tests, not by the uniform-flow numbers |
+| MU2 the first quadratic weight increased by `1e-6` | A2 | failed: A2 velocity `1.31e-6`, pressure `7.90e-6`; A1 (default) unchanged at `7.67e-15` |
+| MU3 the M9 refresh of the flux of the faces that do not keep their flux skipped (the "fringe refresh") | A1 or A2 | failed: A1 velocity `3.08e-2`, pressure `6.40e-2`; A2 the same; SP `2.81e-2`; the single meshes unchanged |
+
+`scripts/limit_audit.py` on the new test file: no hit.
+
+### Deviations and disclosures
+
+- MU1 did not reach the flow: the mesh validation refuses the mutated geometry of B3d. I had predicted a failure of U1
+  near `1e-4`. It counts as caught by the registered tests, but the sensitivity of U1 itself to a geometric
+  non-conservation on the warped mesh is shown by the control N2 instead (a GCL residual of `3.1e-7` gives a velocity
+  deviation of `1.0e-6`).
+- The other predictions held in size: N1 `1.3e-3` (predicted near `1e-4`), N2 `1.0e-6` (predicted near `1e-7`), MU2 near
+  `1e-6`, MU3 `3e-2`, U4 92 (predicted 30 to 150).
+- The negative control suggested in the brief (skipping the fringe refresh) cannot be applied from a test; it was run as
+  the mutation MU3, as registered.
+
+### Not run
+
+- The whole workspace test suite (not asked for; the lead runs the gate). No library file was changed, so the existing
+  overset and moving-mesh tests were not re-run.
+- No non-uniform flow on the warped overset mesh (no 3-D Taylor-Green or order check); no second motion; no BDF2 or outer
+  iterations on B3d.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean (after `rustfmt` of the new file before its commit). `cargo clippy -p rcfd-fv
+--all-targets -- -D warnings` clean. Only `rcfd-fv` (a new test file) touched.
+
+### Decision by the registered rule
+
+**Done.** A1, A1c, A2, A2c are met; U2, U3, S0, S1, SB, SP are met; A2s and U4 are met; the controls N1 and N2 held and
+the three mutations were caught (MU1 by the mesh validation, disclosed above). Said plainly: a uniform flow is exact by
+construction when the area vectors close, the GCL holds and the weights sum to one; this result shows those identities
+hold to round-off on the warped moving overset mesh, not that a non-uniform flow is accurate there.
+
+### Remaining questions (each with options and a recommendation)
+
+- **Q1. A non-uniform flow on the warped 3-D overset mesh.** Options: (a) none until a case needs it; (b) a follow-up: a
+  3-D closed-form flow on B3 and B3d with the component moving, the error of B3d within a factor of the planar B3.
+  Recommendation (b), as a small follow-up (text below): it is the check that would see the face geometry and the
+  non-orthogonality of the warped cells, which a uniform flow cannot. Taken on the maintainer's standing instruction of
+  2026-11-11 (take the recommendation) as a proposal to the lead; not a decision the maintainer made in person.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-357**, proposed status: `done`. Proposed note:
+
+> From ADR 0253 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0255, 2026-11-12: DONE. The uniform flow U = (1, 0.5, 0.25) through B3d (two hexahedral parts with interior points displaced by up to 0.15 h, face warp up to 0.142 h) with the component turning by 0.1 rad and translating by 0.087 over 40 steps of 0.005, the hole and fringe rebuilt every step (92 kind changes): velocity 7.7e-15 and 7.3e-15, pressure 1.0e-13 and 1.1e-13, continuity of the calculated cells 6.4e-15 and 5.0e-15 at every step with the default and the quadratic donor interpolation (no fallback), GCL 6.1e-16, outflow 9e-15. Separating checks met: the warped component alone at rest and moving and the warped background alone keep the uniform state to 7e-15, the planar B3 with the same motion to 5e-15 and 7.9e-14. Controls held (weights times 1.001: 1.3e-3; a GCL residual of 3.1e-7 in the mesh flux: 1.0e-6). Mutations caught: a quadratic weight off by 1e-6 (1.3e-6), the M9 flux refresh skipped (3.1e-2); a non-closing face area vector is refused by the mesh validation before the flow. No library change. Limits: a uniform flow only; it shows the identities (closed area vectors, GCL, weights summing to one) on a warped moving overset mesh, not the accuracy of a non-uniform flow there.
+
+Proposed follow-up item (the number is the lead's):
+
+**Overset: a non-uniform closed-form flow on a warped three-dimensional overset mesh.** Depends on F-357. Acceptance:
+
+> A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a decaying three-dimensional vortex with a known solution) on the set-ups B3 and B3d of ADR 0251 with the component moving as in ADR 0255: the error of the calculated and fringe cells on B3d at most twice that on B3, with the default and with the quadratic donor interpolation, and continuity of the calculated cells within 1e-9 at every step.
