@@ -241,3 +241,92 @@ build.
 
 F-459, title "Manufactured solution on distorted meshes: orders of Tet4, Hex8, Tet10 with moved interior nodes, and the Hex8
 stiffness rule", deps F-378; the acceptance quoted under "What F-459 asks".
+
+## Addendum 1: results (2026-11-12)
+
+Runs, each once, release profile, on the shared machine, at commit 30e7b53c (the test file as committed before any run): the
+fast file `cargo test -p rcfd-fem --release --test sb_mms_distorted -- --nocapture --test-threads=1` (7.4 s for the file, log
+`w49i-work/f459-scratch/run1_fast.log`); the heavy record H1 (`-- --ignored h1`, 90.4 s, `run1_h1.log`); the mutations M1 to
+M5 on the archive copy `w49i-work/f459-scratch/mut` of 30e7b53c by `mutate.py` (each applied, the fast file run once, the file
+restored; log `mutations.log`). No amendment was needed; nothing above this addendum was changed after a run.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| J1 min `det J / det J_regular` at every node, Tet4 (4, 8, 16; 6, 12, 24) | `>= 1e-3` | 0.795, 0.685, 0.654; 0.703, 0.698, 0.666 | yes |
+| J1 Hex8 (same meshes) | `>= 1e-3` | 0.622, 0.432, 0.374; 0.483, 0.402, 0.369 | yes |
+| J1 Tet10 (2, 4, 8; 3, 6, 12) | `>= 1e-3` | 0.903, 0.795, 0.685; 0.723, 0.703, 0.698 | yes |
+| J1 largest offset / h | `<= alpha` | at most 0.14999 (Hex8, 0.15), 0.07499 (tetrahedra, 0.075) | yes |
+| A1 L2 order, finest pair, Tet4 / Hex8 / Tet10 | `>= 1.8 / 1.8 / 2.7` | 1.9798 / 1.9933 / 2.9705 | yes |
+| A2 energy order, finest pair | `>= 0.9 / 0.9 / 1.8` | 0.9945 / 0.9984 / 1.9511 | yes |
+| A3 monotone fall, both norms | decreasing | L2 Tet4 8.78e-2, 2.32e-2, 5.87e-3; Hex8 6.04e-2, 1.59e-2, 3.99e-3; Tet10 4.00e-2, 5.19e-3, 6.62e-4 (energy likewise) | yes |
+| M1 one-point Hex8 caught by A1 to A3 | caught | A1 Hex8 **1.7577**, A2 Hex8 **0.7292** (both missed under the mutation) | yes |
+| J2 Hex8 min `det J` at the 125 error points / regular | `> 0` | 0.642, 0.483, 0.430; 0.524, 0.466, 0.421 | yes |
+| X3 polynomial fields on moved meshes, relative L2 / energy | `<= 1e-9` | 1.8e-16 to 4.0e-16 / 1.1e-15 to 3.9e-15 | yes |
+| N1 lambda term reversed, L2 / energy order, Tet4 / Hex8 / Tet10 | `< 0.5` | -0.0015 / 0.0001; 0.0145 / 0.0060; -0.0010 / -0.0052 | yes |
+| H1 (6, 12, 24 / 3, 6, 12) L2 order | as A1 | 1.9895 / 1.9981 / 2.9812 | yes |
+| H1 energy order | as A2 | 0.9973 / 0.9994 / 1.9738 | yes |
+| H1 monotone fall | decreasing | yes for all three | yes |
+| H1 total wall time | `<= 1800 s` | 90.4 s (Hex8 73.9 s, Tet4 9.2 s, Tet10 7.3 s; largest solve 36 501 unknowns) | yes |
+
+Relative errors at the finest fast mesh: L2 6.95e-3 (Tet4), 4.72e-3 (Hex8), 7.84e-4 (Tet10); energy 7.80e-2, 5.79e-2,
+1.17e-2, against ADR 0279's regular meshes 6.9e-3, 4.5e-3, 7.7e-4 and 7.7e-2, 5.7e-2, 1.2e-2: the moves raise the constants
+by 0 to 5 percent. RMS node move (all nodes, boundary and mid-edge included) 0.03 to 0.13 h. The measured minima of J1 (0.37
+to 0.90) are far above the guaranteed bound, as estimated (0.3 to 0.6; Tet10 at its coarse meshes higher, few moved nodes).
+Wall time of the fast file 7.4 s (largest test, Tet4, 3.0 s).
+
+### Mutations (scratch copy of 30e7b53c, each run once)
+
+| Id | Change | Caught | By |
+|---|---|---|---|
+| M1 | Hex8 stiffness `gauss_2` -> `gauss_1` | **yes** | A1 Hex8 (L2 order 1.7577; pair 4 -> 8 1.8832), A2 Hex8 (energy order 0.7292; 0.9066), and X3 Hex8 (relative L2 1.9e-4, energy 1.7e-3) |
+| M2 | Tet10 stiffness `tet_4` -> `tet_1` | yes | the solve refused: `SingularStiffness` (node 13, pivot 0) in the Tet10 order test and in X3 |
+| M3 | exact field at the regular map's point | yes | A1 Tet4 (1.7282), A1 Hex8 (1.2982), A1 and A2 Tet10 (0.5487, 1.5529); X3 unaffected (a polynomial field's error is not evaluated this way in X3, which calls the unmutated path) |
+| M4 | Tet4 amplitude 0.075 -> 0.3 | yes | `add_block` refuses an inverted element (element 6951 of Tet4 n = 16, `det J = -4.7e-6`) in J1 and in the Tet4 order test; the Tet10 meshes (n <= 8 at 0.3) stayed valid and met their limits |
+| M5 | Hex8 stiffness `gauss_2` -> `gauss_3` | survived (registered as expected to survive) | every limit met; Hex8 orders 1.9931, 0.9984 |
+
+**M1 against arithmetic 5.** The one-point Hex8 is caught by the acceptance checks, as estimated, and by the patch test X3 as
+derived (constant-strain reproduction fails at a relative energy error 1.7e-3, against 1e-15 for `gauss_2`). The sizes: the
+L2 miss is narrow (1.7577 against 1.8, within the estimated range 1.0 to 1.7 at its upper end) and the energy miss clear
+(0.7292 against 0.9, in the range 0 to 0.85). The one-point errors are below the full rule's at n = 4 and 8 (L2 4.46e-2,
+1.21e-2) and the floor shows at 16 (energy 2.41e-1 against 1.87e-1): the order falls from pair to pair (energy 0.907, then
+0.729), so on finer meshes the miss widens; on the registered meshes the catch rests mainly on A2.
+
+### Deviations and what was not run
+
+- None of the registration was changed. M3's note: as registered it changes only where the exact field is evaluated in the
+  order tests; X3 does not use that call.
+- Not run: case T on moved meshes, curved Tet10, a near-incompressible material (Limits).
+- No library file was edited; no golden or hash table touched; the files of the branch are the ADR and the new test file.
+
+### Decision by the registered rule
+
+**done**: J1 and A1 to A3 met for all three elements; M1 caught by the Hex8 test of A1 to A3 (A1 and A2 missed under the
+mutation) without any amendment; M2 to M4 caught, M5 survived as expected; every extension (J2, X3, N1, H1) met.
+
+### Remaining questions
+
+1. **The margin of the M1 catch.** The L2 catch is narrow (1.7577 against 1.8); the energy catch (0.7292 against 0.9) carries
+   it. Options: (a) leave it (the registered checks catch it, and the energy floor grows with refinement); (b) a follow-up that
+   adds the moved-mesh patch test X3 for Hex8 to the element tests of ADR 0273 as the direct check of the rule (caught at
+   1.7e-3 against 1e-9, a margin of six orders). Recommendation: (b), small; it makes the rule's check independent of a
+   convergence study.
+2. **ADR 0279's note on M5.** ADR 0279 recorded the one-point Hex8 as surviving its regular-mesh checks; this ADR closes that
+   gap. Options: (a) mention it in the note of F-378; (b) leave F-378's note as is. Recommendation: (a), one sentence.
+
+### For the lead: roadmap entries
+
+F-459: proposed status **done**. Note:
+
+> Structural solver, basic tier. ADR 0355, 2026-11-12: the manufactured solution of ADR 0279 (case D) on boxes with interior nodes moved by seed 0xF459_0355, uniform offsets of at most 0.15 h per component for Hex8 and 0.075 h for Tet4 and Tet10 (Tet10 from the moved Tet4, straight edges), validity guaranteed by diagonal dominance (det J >= 1e-3 of the regular value) and measured: minimum det J at the nodes 0.37 (Hex8) to 0.65 (tetrahedra) of the regular value; tests crates/rcfd-fem/tests/sb_mms_distorted.rs only. Tet4 and Hex8 on 4, 8, 16, Tet10 on 2, 4, 8 cells per edge: L2 orders over the finest pair 1.980, 1.993, 2.971 (limits 1.8, 1.8, 2.7), energy orders 0.995, 0.998, 1.951 (0.9, 0.9, 1.8), errors fall monotonically; polynomial fields reproduced on moved meshes to 4e-15; negative control orders below 0.015; heavy record on 6, 12, 24 / 3, 6, 12 (36 501 unknowns, 90 s): 1.990, 1.998, 2.981 and 0.997, 0.999, 1.974. The one-point Hex8 stiffness (which survived ADR 0279 on regular meshes) is caught: L2 order 1.758, energy order 0.729, and the moved-mesh patch test fails at 1.7e-3; four of the other mutations behave as registered (one-point Tet10 refused as singular, the exact field at the regular map caught, an amplitude above the validity bound refused as inverted, the over-integrated Hex8 survives).
+
+F-378: suggested addition to its note (one sentence at the end):
+
+> The one-point Hex8 stiffness that survived here is caught on moved meshes by ADR 0355 (F-459).
+
+Follow-up item (id by the lead):
+
+1. Title: "Element tests: the constant-strain patch test of Hex8 on a moved mesh". Deps: F-459.
+
+> Every limit not stated here is registered in the ADR before the run. A linear displacement field on a box of Hex8 whose interior nodes are moved by a registered seed and an amplitude below the validity bound of ADR 0355, all boundary nodes prescribed, no body force: the relative L2 and energy errors are <= 1e-9, and the same test with the stiffness rule mutated to one point gives a relative energy error >= 1e-5.
