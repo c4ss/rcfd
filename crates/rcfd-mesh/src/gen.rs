@@ -972,6 +972,134 @@ pub fn warp(mesh: &Mesh, map: impl Fn(Vec3) -> Vec3) -> Result<Mesh> {
     Mesh::from_topology(topo)
 }
 
+/// O-grid ("butterfly") mesh of a circular duct of radius `radius` along `z`, `0 <= z <= length` (F-453, ADR 0366 D1):
+/// a Cartesian core square `[-a, a]^2`, `a = core * radius`, of `n x n` cells and four ring blocks of `n` (around) x `n_r`
+/// (radial) cells between the core's boundary and the circle, extruded in `n_z` uniform layers. The `4 n` points of the
+/// core's boundary, counter-clockwise from the corner `(a, -a)`, are joined by straight lines to the points of the circle at
+/// the angles `-pi/4 + 2 pi q / (4 n)`; the ring points divide each line uniformly. The section is the inscribed polygon of
+/// `4 n` sides; every face is planar. Patches: `wall` (the chords, [`PatchKind::Wall`]), `inlet` (`z = 0`,
+/// [`PatchKind::Inlet`]), `outlet` (`z = length`, [`PatchKind::Outlet`]). Needs `n >= 2`, `n_r >= 1`, `n_z >= 1`, a finite
+/// positive radius and length and `0 < core < 1/sqrt(2)` (the core's corner inside the circle).
+pub fn circular_duct_ogrid(n: usize, n_r: usize, n_z: usize, radius: f64, core: f64, length: f64) -> Result<Mesh> {
+    let pos = |v: f64| v.is_finite() && v > 0.0;
+    if n < 2
+        || n_r < 1
+        || n_z < 1
+        || !pos(radius)
+        || !pos(length)
+        || !(core > 0.0 && core < std::f64::consts::FRAC_1_SQRT_2)
+    {
+        return Err(Error::Mesh(format!(
+            "circular_duct_ogrid needs n >= 2, n_r >= 1, n_z >= 1, a finite radius and length > 0 and 0 < core < 1/sqrt(2); \
+             got n = {n}, n_r = {n_r}, n_z = {n_z}, radius = {radius}, core = {core}, length = {length}"
+        )));
+    }
+    let a = core * radius;
+    let nb = 4 * n;
+    // Planar points: the core grid (i, j), then the ring layers l = 1..=n_r of the 4 n boundary points each.
+    let core_id = |i: usize, j: usize| i + (n + 1) * j;
+    // The core point (i, j) of the boundary loop index q (counter-clockwise from the corner (a, -a)).
+    let loop_ij = |q: usize| -> (usize, usize) {
+        let q = q % nb;
+        match q / n {
+            0 => (n, q),
+            1 => (n - (q - n), n),
+            2 => (0, n - (q - 2 * n)),
+            _ => (q - 3 * n, 0),
+        }
+    };
+    let ring_id = |q: usize, l: usize| -> usize {
+        if l == 0 {
+            let (i, j) = loop_ij(q);
+            core_id(i, j)
+        } else {
+            (n + 1) * (n + 1) + (l - 1) * nb + q % nb
+        }
+    };
+    let n_plane = (n + 1) * (n + 1) + n_r * nb;
+    let mut plane: Vec<[f64; 2]> = Vec::with_capacity(n_plane);
+    for j in 0..=n {
+        for i in 0..=n {
+            plane.push([-a + 2.0 * a * i as f64 / n as f64, -a + 2.0 * a * j as f64 / n as f64]);
+        }
+    }
+    for l in 1..=n_r {
+        let t = l as f64 / n_r as f64;
+        for q in 0..nb {
+            let (i, j) = loop_ij(q);
+            let pc = plane[core_id(i, j)];
+            let phi = -std::f64::consts::FRAC_PI_4 + 2.0 * std::f64::consts::PI * q as f64 / nb as f64;
+            let po = [radius * phi.cos(), radius * phi.sin()];
+            plane.push([(1.0 - t) * pc[0] + t * po[0], (1.0 - t) * pc[1] + t * po[1]]);
+        }
+    }
+    let zs = axis_coords(n_z, length, Grading::Uniform)?;
+    let mut points = Vec::with_capacity(n_plane * (n_z + 1));
+    for &z in &zs {
+        for p in &plane {
+            points.push([p[0], p[1], z]);
+        }
+    }
+    let pid = |planar: usize, k: usize| planar + n_plane * k;
+    let (mut cells, mut wall, mut inlet, mut outlet) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for k in 0..n_z {
+        for j in 0..n {
+            for i in 0..n {
+                let mut p = [0usize; 8];
+                for (c, pc) in p.iter_mut().enumerate() {
+                    *pc = pid(core_id(i + (c & 1), j + ((c >> 1) & 1)), k + (c >> 2));
+                }
+                let faces = hex_faces(p);
+                if k == 0 {
+                    inlet.push(faces[4].clone());
+                }
+                if k + 1 == n_z {
+                    outlet.push(faces[5].clone());
+                }
+                cells.push(faces);
+            }
+        }
+        for q in 0..nb {
+            for l in 0..n_r {
+                // Hexahedron axes: radial (l), around (q), z.
+                let mut p = [0usize; 8];
+                for (c, pc) in p.iter_mut().enumerate() {
+                    *pc = pid(ring_id(q + ((c >> 1) & 1), l + (c & 1)), k + (c >> 2));
+                }
+                let faces = hex_faces(p);
+                if l + 1 == n_r {
+                    wall.push(faces[1].clone());
+                }
+                if k == 0 {
+                    inlet.push(faces[4].clone());
+                }
+                if k + 1 == n_z {
+                    outlet.push(faces[5].clone());
+                }
+                cells.push(faces);
+            }
+        }
+    }
+    let specs = vec![
+        BoundarySpec {
+            name: "wall".into(),
+            kind: PatchKind::Wall,
+            faces: wall,
+        },
+        BoundarySpec {
+            name: "inlet".into(),
+            kind: PatchKind::Inlet,
+            faces: inlet,
+        },
+        BoundarySpec {
+            name: "outlet".into(),
+            kind: PatchKind::Outlet,
+            faces: outlet,
+        },
+    ];
+    Mesh::from_cell_faces(points, &cells, &specs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
