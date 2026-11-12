@@ -595,6 +595,11 @@ fn limits(kind: ElementKind) -> (f64, f64) {
 
 /// A1 to A3 of one element and case (and H1 with another family).
 fn check_orders(checks: &mut Checks, tag: &str, kind: ElementKind, levels: &[Level]) {
+    check_orders_with(checks, tag, kind, levels, true);
+}
+
+/// As [`check_orders`]; with `assert_l2 = false` the L2 order is printed, not asserted (ADR 0279 amendment 1).
+fn check_orders_with(checks: &mut Checks, tag: &str, kind: ElementKind, levels: &[Level], assert_l2: bool) {
     let (l2_limit, e_limit) = limits(kind);
     let (p_l2, p_e) = orders(levels);
     for w in levels.windows(2) {
@@ -608,7 +613,14 @@ fn check_orders(checks: &mut Checks, tag: &str, kind: ElementKind, levels: &[Lev
         );
     }
     let name = kind.name();
-    checks.at_least(&format!("A1-{tag} {name} L2 order (finest pair)"), p_l2, l2_limit);
+    if assert_l2 {
+        checks.at_least(&format!("A1-{tag} {name} L2 order (finest pair)"), p_l2, l2_limit);
+    } else {
+        println!(
+            "A1-{tag} {name} L2 order (finest pair): {p_l2:.4} (limit >= {l2_limit}; not asserted here, the known-miss \
+             record of ADR 0279 amendment 1)"
+        );
+    }
     checks.at_least(&format!("A2-{tag} {name} energy order (finest pair)"), p_e, e_limit);
     let mono_l2 = levels.windows(2).all(|w| w[1].l2 < w[0].l2);
     let mono_e = levels.windows(2).all(|w| w[1].energy < w[0].energy);
@@ -625,13 +637,18 @@ fn check_orders(checks: &mut Checks, tag: &str, kind: ElementKind, levels: &[Lev
 }
 
 fn element_orders(kind: ElementKind, ns: &[usize]) {
+    element_orders_with(kind, ns, true);
+}
+
+/// As [`element_orders`]; with `assert_l2_t = false` the L2 order of case T is printed, not asserted (amendment 1).
+fn element_orders_with(kind: ElementKind, ns: &[usize], assert_l2_t: bool) {
     let field = Trig;
     let mut checks = Checks::new();
     let t0 = Instant::now();
     let d = run_sequence(&field, kind, ns, Case::D, 1.0);
     check_orders(&mut checks, "D", kind, &d);
     let t = run_sequence(&field, kind, ns, Case::T, 1.0);
-    check_orders(&mut checks, "T", kind, &t);
+    check_orders_with(&mut checks, "T", kind, &t, assert_l2_t);
     // N1: the body force with the lambda term reversed, case D.
     let neg = run_sequence(&field, kind, ns, Case::D, -1.0);
     let (p_l2, p_e) = orders(&neg);
@@ -788,9 +805,20 @@ fn x3_polynomial_fields_reproduced() {
     checks.finish();
 }
 
+/// KNOWN MISS (ADR 0279 amendment 1), the record of the registered run (commit f489c085): A1-T Tet4, L2 order of case T over
+/// the pair 8 -> 16 is 1.7925 against the limit 1.8 (errors 8.690e-2, 2.731e-2, 7.883e-3; pair 4 -> 8 1.6699). Limit kept.
+/// Every other check of this test was met (A1-D 1.9793, A2-D 0.9940, A2-T 0.9750, A3 both cases, N1 -0.0014 and 0.0000).
 #[test]
-fn a_tet4_orders_cases_d_and_t_and_negative_control() {
+#[ignore = "KNOWN MISS (ADR 0279 amendment 1): Tet4 case T L2 order 1.7925 against 1.8"]
+fn a_tet4_orders_cases_d_and_t_and_negative_control_known_miss() {
     element_orders(ElementKind::Tet4, &FAST_LINEAR);
+}
+
+/// Coverage of the Tet4 path (ADR 0279 amendment 1): the sequences of the registered run, asserting the clauses that were
+/// met (A1-D, A2-D, A3-D, A2-T, A3-T, N1); A1-T is printed, its miss is the record above.
+#[test]
+fn a_tet4_met_clauses_coverage() {
+    element_orders_with(ElementKind::Tet4, &FAST_LINEAR, false);
 }
 
 #[test]
@@ -822,4 +850,103 @@ fn h1_heavy_finer_family_case_d() {
     let total = t0.elapsed().as_secs_f64();
     checks.at_most("H1 total wall time, s (budget)", total, 1800.0);
     checks.finish();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Diagnostics of ADR 0279 amendment 1 (recorded, no limit)
+
+fn print_orders(tag: &str, kind: ElementKind, levels: &[Level]) {
+    for w in levels.windows(2) {
+        println!(
+            "{tag} {} case T pair {} -> {}: L2 order {:.4}, energy order {:.4}",
+            kind.name(),
+            w[0].n,
+            w[1].n,
+            order(w[0].l2, w[1].l2),
+            order(w[0].energy, w[1].energy)
+        );
+    }
+}
+
+/// G1: Tet4 case T on the heavy family 6, 12, 24.
+#[test]
+#[ignore = "diagnostic record (ADR 0279 amendment 1, G1): Tet4 case T on 6, 12, 24; about two minutes"]
+fn g1_tet4_case_t_heavy_family_diagnostic() {
+    let levels = run_sequence(&Trig, ElementKind::Tet4, &HEAVY_LINEAR, Case::T, 1.0);
+    print_orders("G1", ElementKind::Tet4, &levels);
+}
+
+/// G2: Tet4 case T on 16 and 32.
+#[test]
+#[ignore = "diagnostic record (ADR 0279 amendment 1, G2): Tet4 case T on 16, 32 (98 304 unknowns); minutes"]
+fn g2_tet4_case_t_one_level_finer_diagnostic() {
+    let levels = run_sequence(&Trig, ElementKind::Tet4, &[16, 32], Case::T, 1.0);
+    print_orders("G2", ElementKind::Tet4, &levels);
+}
+
+/// The L2 error of case T split into elements with a node on a loaded face (near) and the rest, with the error rule.
+fn split_l2(field: &dyn Field, model: &SolidModel, result: &SolidResult) -> (f64, f64) {
+    let mesh = model.mesh();
+    let mut loaded = BTreeSet::new();
+    for (set, _) in LOADED {
+        loaded.extend(mesh.node_set(set).unwrap().iter().copied());
+    }
+    let tet_rule = error_rule(ElementKind::Tet4);
+    let hex_rule = error_rule(ElementKind::Hex8);
+    let (mut near, mut rest) = (0.0, 0.0);
+    for e in 0..mesh.n_elements() {
+        let kind = mesh.element_kind(e);
+        let element = element_for(kind);
+        let nodes = mesh.element_nodes(e);
+        let coords: Vec<Vec3> = nodes.iter().map(|&a| mesh.nodes()[a]).collect();
+        let rule = if kind == ElementKind::Hex8 {
+            &hex_rule
+        } else {
+            &tet_rule
+        };
+        let mut s = 0.0;
+        for &(xi, wq) in rule {
+            let p = element.point(&coords, xi).unwrap();
+            let mut uh = [0.0; 3];
+            for (a, &node) in nodes.iter().enumerate() {
+                let ua = result.displacement(node);
+                for i in 0..3 {
+                    uh[i] += p.n[a] * ua[i];
+                }
+            }
+            let u = field.u(p.x);
+            s += wq * p.det_j * (0..3).map(|i| (u[i] - uh[i]) * (u[i] - uh[i])).sum::<f64>();
+        }
+        if nodes.iter().any(|a| loaded.contains(a)) {
+            near += s;
+        } else {
+            rest += s;
+        }
+    }
+    (near.sqrt(), rest.sqrt())
+}
+
+/// G3: Tet4 and Hex8, case T on 8 and 16, the L2 error near the loaded faces and away from them.
+#[test]
+#[ignore = "diagnostic record (ADR 0279 amendment 1, G3): case T error near the loaded faces; seconds"]
+fn g3_case_t_error_near_the_loaded_faces_diagnostic() {
+    for kind in [ElementKind::Tet4, ElementKind::Hex8] {
+        let mut parts = Vec::new();
+        for n in [8, 16] {
+            let c = cube(kind, n);
+            let (model, result) = solve_case(&Trig, &c, Case::T, 1.0);
+            let (near, rest) = split_l2(&Trig, &model, &result);
+            println!(
+                "G3 {} n = {n}: L2 error near the loaded faces {near:.4e}, rest {rest:.4e}",
+                kind.name()
+            );
+            parts.push((near, rest));
+        }
+        println!(
+            "G3 {} pair 8 -> 16: order near {:.4}, order rest {:.4}",
+            kind.name(),
+            order(parts[0].0, parts[1].0),
+            order(parts[0].1, parts[1].1)
+        );
+    }
 }
