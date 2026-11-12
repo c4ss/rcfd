@@ -1,0 +1,14 @@
+{
+  "name": "rcfd-electron-spike",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Measurement spike of ADR 0350 (F-447): an Electron process over the rcfd service. Not a product.",
+  "license": "AGPL-3.0-only",
+  "main": "main.js",
+  "scripts": {
+    "bench": "node run.js"
+  },
+  "devDependencies": {
+    "electron": "45.1.0"
+  }
+}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+    <title>rcfd Electron spike (ADR 0350)</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #101418; color: #d7dde4; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; }
+      canvas { position: absolute; inset: 0; width: 1280px; height: 800px; }
+      #status { position: absolute; left: 8px; top: 6px; z-index: 2; background: #101418cc; padding: 2px 6px; }
+      #runs { position: absolute; inset: 0; padding: 32px 16px; display: none; }
+      #runs li { padding: 2px 0; }
+      #list { position: absolute; inset: 0; overflow-y: scroll; display: none; background: #101418; }
+      #list .row { position: absolute; left: 0; right: 0; height: 56px; padding: 6px 12px; box-sizing: border-box; overflow: hidden; border-bottom: 1px solid #252b33; }
+      #list .role { color: #7fb4ff; font-weight: 600; margin-right: 8px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view" width="1280" height="800"></canvas>
+    <div id="status">starting</div>
+    <ul id="runs"></ul>
+    <div id="list"><div id="spacer"></div></div>
+    <script src="bench.js"></script>
+  </body>
+</html>
