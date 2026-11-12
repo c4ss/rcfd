@@ -5766,7 +5766,9 @@ fixed by the item's registration ADR before any code.
     solver, the fractional step or on moving meshes). Follow-ups (ADR 0234 questions 2 to 6, recommendations taken on
     the maintainer's standing instruction of 2026-11-11): F-337 (second-order force and moment); the case key, the guard
     refusals, the continuity measure and the corrector trial solve go with F-307. Open: question 1 (the second-order
-    forcing as the default changes existing numbers).
+    forcing as the default changes existing numbers). FOUND LATER (ADR 0249, 2026-11-12): the second-order forcing
+    stopped at step 6 of DFG 2D-2 on M2 in PISO with BDF2 (divergence guard, Courant 1.1e7); it had been run in PISO
+    only on circular Couette flow. Not diagnosed: F-355.
 - [ ] **F-310** NSGA-II: exchange crossover as the default for new studies, and the tool description
   - depends on: F-297
   - acceptance: create_study writes crossover = exchange into new nsga2 studies while old studies keep sbx; the design_create_study description names nsga2 and crossover; both goldens updated by a registered edit.
@@ -6214,13 +6216,35 @@ fixed by the item's registration ADR before any code.
     ADR names why not with a number.
   - note: From ADR 0241 questions 4 and 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     After the rework of the corrector flags in pimple.rs (F-322).
-- [ ] **F-346** Immersed solid: force and moment in unsteady flow
+- [~] **F-346** Immersed solid: force and moment in unsteady flow
   - depends on: F-337
   - acceptance: The force and moment of an immersed solid subtract the rate of change of the momentum and angular
     momentum of its forced cells; DFG 2D-2 maximum drag and lift on M2 are within 1.5 percent of the FeatFlow level-6
     values, and a steady case returns the values of F-337 to round-off.
-  - note: From ADR 0239 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
-    priority.
+  - note: PARTIAL (ADR 0249, 2026-11-12), in the library. From ADR 0239 question 3. The premise did not survive the
+    derivation, written before any code: the reaction of the forcing is the discrete force on the staircase surface of
+    the solid cells minus the storage of those cells, so for a body at rest it already is the force in unsteady flow,
+    and the storage of the first fluid cells is fluid momentum that must not be removed; the storage that is not fluid
+    momentum is that of the solid cells of a body whose rigid velocity changes in time. Delivered: rcfd-fv immersed.rs,
+    `ImmersedForcing::force_moment_unsteady` (opt-in: the pair of `force_moment_second_order` plus the rate of change of
+    the momentum and angular momentum held by the solid cells; `force_moment` and `force_moment_second_order` unchanged,
+    hashes checked) and `immersed::velocity_rate` (the solvers' Euler and variable-step BDF2 difference; the caller
+    keeps the older fields, no hunk in pimple.rs). Measured (limits registered before the code; three defective set-ups
+    of the registration corrected by amendment 1 before their runs): the moment on a cylinder accelerated in a fixed
+    outer one within 0.167 and 0.078 percent of the closed form at N 48 and 96 (limit 0.5; the reaction alone 4.3
+    percent, the literal reading with the first fluid cells 1.8 and 0.9 percent); the force on an accelerated plate
+    within 0.056 and 0.014 percent (limit 1; the reaction alone 42.8 percent, the literal reading 5.1 and 2.6 percent);
+    a steady case returns F-337 exactly (2D-1 on M2 5.56246454, 0.0108880492; Couette by PISO); DFG 2D-2 against the
+    recorded FeatFlow level-6 values, on M2 max C_D +0.261 %, max C_L -0.161 % (limit 1.5 %: met, but the old evaluation
+    gives the same numbers, the two differ by 1.9e-6), on T (the mesh of ADR 0218) max C_D +0.815 %, max C_L +2.580 %
+    (KNOWN MISS, predicted in the registration: not a storage term; the mean drag is +0.79 % and the steady 2D-1 lift on
+    M2 +2.7 %; the two D/40 meshes differ by 2.7 points in the lift, so the M2 agreement is not shown to be
+    convergence); nine mutations caught. Missing (why partial): the lift of 2D-2 on T; the unsteady evaluation as a
+    default or behind a case key (open); the slivers between the staircase and the surface for an accelerating body;
+    Crank-Nicolson and bounded BDF2 rates; moving shapes. Found on the way: 2D-2 on M2 with the second-order forcing of
+    F-309 stops in PISO at step 6 (Courant 1.1e7), not diagnosed. Open: ADR 0249 Q1 (reword the first clause to the
+    solid cells), Q2 (the 2D-2 clause: M2 as written, or replaced by the closed forms), Q3 (default). Follow-ups: F-354,
+    F-355.
 - [ ] **F-347** Vendor heat-flux card for the structural load deck from a cited open specification
   - depends on: F-237
   - acceptance: A specification of the card (fields, sign, required surface elements) from an open source is placed in
@@ -6279,3 +6303,21 @@ fixed by the item's registration ADR before any code.
     2 to t = 8 and the difference to the linear-stencil run reported; the ADR recommends for or against making the
     quadratic interpolation the default.
   - note: From ADR 0251 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-354** Immersed solid: DFG 2D-2 force extrema, mesh and time-step convergence
+  - depends on: F-346
+  - acceptance: DFG 2D-2 with the immersed cylinder is run on the T mesh and on T refined once (D/80, half the time
+    step) and on M2 and M3; the maximum drag and lift on the finest mesh are within 1.5 percent of the FeatFlow level-6
+    values and the error decreases from D/40 to D/80 on both families, or the part that does not converge (mesh of the
+    wake, forcing order, outlet condition, time step) is identified by a registered measurement.
+  - note: From ADR 0249 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0249 measured the 2D-2 lift maximum at +2.58 percent on T and -0.16 percent on M2 (both D/40 at the cylinder, the
+    same forcing terms), and showed that the cause is not the evaluation of the force. Low priority.
+- [ ] **F-355** Second-order immersed forcing: transient PISO at Re 100
+  - depends on: F-309
+  - acceptance: DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number
+    within 1 percent of the first-order forcing on the same mesh, or the cause of the stop at step 6 is diagnosed by a
+    registered measurement and the configuration is refused with a located message.
+  - note: From ADR 0249 question 6, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0249's printed run of 2D-2 on M2 with the second-order forcing (PISO, BDF2, linear upwind, AMG pressure, dt 0.001)
+    stopped at step 6 through the divergence guard (Courant 1.1e7); the forcing had been run in PISO only on circular
+    Couette flow (ADR 0234 V3).
