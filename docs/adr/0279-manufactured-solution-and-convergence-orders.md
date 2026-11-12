@@ -291,6 +291,128 @@ change the decision, which by the registered rule is partial):
 Under H_dual the G1 and G2 orders would stay near or below 1.8 instead of rising. G3 tells whether the slow part sits at the
 loaded faces. Whatever the outcome, A1-T Tet4 stays a miss of the registered limit.
 
+## Addendum 1: results (2026-11-12)
+
+Runs, each once, release profile, on the shared machine: the registered fast run of `sb_mms` (commit f489c085, 17.2 s wall
+for the whole file, log `w49i-work/f378-scratch/run1_fast.log`); the heavy record H1 (same commit, 108.5 s,
+`run1_h1.log`); after amendment 1 (commits 75ce6739, 5fa6edd0) the fast file again with the coverage test (`run2_*.log`, every
+printed number equal to the registered run's) and the diagnostics G1 to G3 once (`run3_diagnostics.log`, 167.5 s).
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| F2 body force against central differences | `<= 1e-6` | 1.47e-8 | yes |
+| A1-D L2 order, finest pair, Tet4 / Hex8 / Tet10 | `>= 1.8 / 1.8 / 2.7` | 1.9793 / 1.9994 / 2.9824 | yes |
+| A2-D energy order, Tet4 / Hex8 / Tet10 | `>= 0.9 / 0.9 / 1.8` | 0.9940 / 0.9993 / 1.9560 | yes |
+| A3-D monotone fall, both norms, all three | decreasing | L2 Tet4 8.74e-2, 2.29e-2, 5.80e-3; Hex8 6.04e-2, 1.52e-2, 3.79e-3; Tet10 4.00e-2, 5.16e-3, 6.53e-4 (energy likewise) | yes |
+| A1-T L2 order, Tet4 / Hex8 / Tet10 | `>= 1.8 / 1.8 / 2.7` | **1.7925** / 1.9972 / 2.9718 | **no (Tet4)** / yes / yes |
+| A2-T energy order, Tet4 / Hex8 / Tet10 | `>= 0.9 / 0.9 / 1.8` | 0.9750 / 0.9971 / 1.9190 | yes |
+| A3-T monotone fall, all three | decreasing | L2 Tet4 8.69e-2, 2.73e-2, 7.88e-3; Hex8 7.45e-2, 1.88e-2, 4.70e-3; Tet10 3.77e-2, 5.08e-3, 6.47e-4 | yes |
+| N1 lambda term reversed, L2 / energy order, Tet4 | `< 0.5` | -0.0014 / 0.0000 | yes |
+| N1 Hex8 | `< 0.5` | 0.0145 / 0.0059 | yes |
+| N1 Tet10 | `< 0.5` | -0.0010 / -0.0052 | yes |
+| F1 gradient against central differences | `<= 1e-6` | 1.65e-8 | yes |
+| X1 traction helper against `Load::traction` | `<= 1e-14` | 0 (bit-equal) for all three | yes |
+| X2 error rules, tet degree 7 / cube degree 9 | `<= 1e-14` | 1.7e-17 / 1.8e-15 | yes |
+| X3 polynomial field in the space, D and T | `<= 1e-9` | 1.4e-16 to 1.6e-15 | yes |
+| H1 Tet4 / Hex8 / Tet10 (6, 12, 24 and 3, 6, 12), case D: L2 order | as A1 | 1.9901 / 1.9998 / 2.9894 | yes |
+| H1 energy order | as A2 | 0.9973 / 0.9997 / 1.9775 | yes |
+| H1 monotone fall | decreasing | yes for all | yes |
+| H1 total wall time | `<= 1800 s` | 108.5 s (largest solve 36 501 unknowns; Hex8 90.7 s, Tet4 8.7 s, Tet10 8.2 s) | yes |
+
+Relative errors at the finest fast mesh, case D: L2 6.9e-3 (Tet4), 4.5e-3 (Hex8), 7.7e-4 (Tet10); energy 7.7e-2, 5.7e-2,
+1.2e-2. Negative control: relative L2 error about 0.46 on every mesh. Wall times: the fast file 17.2 s (Tet4 test 15.2 s,
+Hex8 12.4 s, Tet10 5.0 s, solves of 1.0e4 to 1.2e4 unknowns in 1.3 to 5.5 s); every fast test is far below two minutes.
+
+### Diagnostics of amendment 1 (recorded)
+
+| Id | Measured | Prediction under H_pre | Agrees |
+|---|---|---|---|
+| G1 Tet4 case T, 6, 12, 24 | L2 orders 1.7312, then **1.8741**; energy 0.9638, 0.9861 | rising, 12 -> 24 in [1.80, 2.0] | yes |
+| G2 Tet4 case T, 16 -> 32 (98 304 unknowns, 150 s) | L2 order **1.9176**, energy 0.9912 | in [1.85, 2.0] | yes |
+| G3 error near the loaded faces, 8 -> 16 | Tet4: near 1.8137, rest 1.7744; Hex8: near 2.5079, rest 1.8955 | Tet4 near part slower; Hex8 both near 2 | **no** |
+
+**Diagnosis of the miss A1-T Tet4.** The observed L2 order of Tet4 in case T rises with refinement, 1.67, 1.79, 1.92 on the
+pairs 4 -> 8, 8 -> 16, 16 -> 32 (and 1.73, 1.87 on the other family): the asymptotic order is 2 and the registered meshes
+(finest pair 8 -> 16) are pre-asymptotic for this element and this case. H_dual (a lower asymptotic order) is not supported:
+it would not rise toward 2. H_defect is not supported: X1 and X3 hold to the bit and to 1e-16, and Hex8 and Tet10 meet their
+limits on the same loads. G3 refutes the second half of H_pre: the slow part is not at the loaded faces; both parts of the
+Tet4 error are slow (1.81 and 1.77), so it is a global pre-asymptotic effect of the Kuhn tetrahedra with free faces (case D's
+Tet4 order on the same meshes is 1.98). My estimate of arithmetic 5 (correction `(k h)^2/12`) was too small for Tet4 in case
+T: the measured deficit of 0.21 in order at `k h = 0.39` means a relative correction of about 15 percent there. The limit
+stays; the record is `a_tet4_orders_cases_d_and_t_and_negative_control_known_miss`.
+
+### Mutations (scratch copy `w49i-work/f378-scratch/mut` of 5fa6edd0, script `mutate.py`, log `mutations.log`)
+
+| Id | Caught | By |
+|---|---|---|
+| M1 `mu Laplace u` with `2 mu` | yes | F2 (2.98e-1), X3 Tet10, A1/A2/A3 of every element and case (orders near 0) |
+| M2 `t = -sigma n` | yes | X3 case T (all three), A1-T/A2-T/A3-T of every element |
+| M3 Tet10 mid-edge boundary values from the corners | yes | X3 Tet10, A1 Tet10 (2.08 D, 2.07 T), A2 Tet10 (1.54, 1.60) |
+| M4 body loads by the stiffness rule | **survived** (registered as may survive) | every limit met |
+| M5 Hex8 stiffness rule `gauss_1` | **survived** (expected to be caught) | every limit met: Hex8 L2 orders 2.0057 (D), 2.0611 (T); the element test `sb_elements` a5_a6_a7 fails |
+| M6 body force from `nu = 0.25` | yes | F2 (1.01e-1), X3 Tet10, A1/A2 of every element |
+
+**M5.** My expectation (hourglass modes giving a refused singular stiffness or an error floor) was wrong for these meshes: on
+a regular box with at least three faces fully held the hourglass patterns of the one-point hexahedron are held by the
+prescribed nodes, the stiffness stays positive definite above the pivot threshold, and the smooth loads hardly excite the
+near-hourglass modes; the one-point element is consistent and converges at the same orders on regular meshes. A
+manufactured solution on a regular mesh therefore cannot tell the Hex8 stiffness rule; ADR 0273's element tests (rank `n - 6`)
+do. This is a gap in this test's coverage, not a defect of the library.
+
+The M5 survival was checked once more by `check_m5.py` (mutation applied, the changed line printed, Hex8 numbers shown as
+above; restored afterwards), because a first manual check by PowerShell had resolved a relative path against the process
+directory: it wrote the mutated `crates/rcfd-fem/src/element.rs` into the **main checkout** `E:\projects\cfd\rcfd` and
+restored it about 10 s and 5 s later (content identical to before, `git status` clean there; only the file's modification
+time changed). A build in the main checkout inside those seconds would have seen the mutation; I know of none. Reported to
+the lead.
+
+### Deviations and what was not run
+
+- The registered file layout gained, by amendment 1, the ignored record, the coverage test and three ignored diagnostics.
+- The pre-asymptotic estimate of arithmetic 5 was wrong for Tet4 in case T (above).
+- M5 was expected to be caught and survived.
+- Not run: one refinement beyond H1 for case D (not needed); case T in the heavy family for Hex8 and Tet10 (not registered).
+- No library file was edited; `src/solve.rs` was not touched; ADR 0282 was not used.
+
+### Decision by the registered rule
+
+**partial**: the acceptance check A1-T for Tet4 missed its limit (1.7925 against 1.8), and mutation M5 (other than M4) was
+not caught although the test covers the Hex8 path. Every other acceptance clause, the negative control, all extensions and
+the heavy record were met.
+
+### Remaining questions
+
+1. **The Tet4 traction-case order.** Options: (a) a follow-up item that registers the pair 16 -> 32 for Tet4 case T as a
+   check (heavy record, 150 s, measured here 1.9176 as a diagnostic, so it would be registered with that knowledge, which
+   must be disclosed); (b) a follow-up with a smoother field (lower wavenumbers) registered before its run; (c) accept the
+   partial as the record. Recommendation: (a), with the disclosure; it measures the same quantity one level finer and is
+   cheap.
+2. **The Hex8 stiffness rule is not seen by this test.** Options: (a) a follow-up: the same manufactured solution on a
+   box with randomly moved interior nodes (registered seed), where the one-point rule's hourglass modes are not held and
+   the full-integration Hex8 is not exact, with limits registered from an estimate; (b) leave it to ADR 0273's element tests.
+   Recommendation: (a); distorted meshes are also missing from this verification (Limits).
+3. **A function-valued traction in the library.** Options: (a) add `loads::traction_loads(model, set, |x| t(x))` beside
+   `body_force_loads`, opt-in (the helper of this test, which X1 shows equal to the uniform path); (b) keep it test code.
+   Recommendation: (a) as a small follow-up when a second user appears (ADR 0335's error estimate will need it).
+
+### For the lead: roadmap entries
+
+F-378: proposed status **partial**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0279, 2026-11-12: manufactured solution on the unit cube (u_i = prod_j sin(k_ij x_j + phi_ij), k up to pi, nu = 0.3), body force from the analytic second derivatives, checked against central differences of the stress within 1.5e-8 (limit 1e-6); case D all faces prescribed, case T tractions sigma n on xmax, ymax, zmax by a test-side face integral (equal to Load::traction to the bit for a uniform traction); errors with 125-point rules of degree 7 (tet) and 9 per variable (hex); tests crates/rcfd-fem/tests/sb_mms.rs only. Tet4 and Hex8 on 4, 8, 16, Tet10 on 2, 4, 8 cells per edge: L2 orders over the finest pair, case D 1.979, 1.999, 2.982, case T 1.7925 (Tet4, MISSED, limit 1.8), 1.997, 2.972; energy orders D 0.994, 0.999, 1.956, T 0.975, 0.997, 1.919; all errors fall monotonically; negative control (lambda term reversed) orders -0.005 to 0.015 (limit < 0.5). Heavy record on 6, 12, 24 / 3, 6, 12 (case D, 36 501 unknowns, 108 s): 1.990, 2.000, 2.989 and 0.997, 1.000, 1.978. The Tet4 case T miss is pre-asymptotic by diagnosis (orders 1.67, 1.79, 1.92 on successive pairs, 16 -> 32 run as a diagnostic), kept as a known-miss record with the limit. Mutations: four of six caught; the body load on the stiffness rule (registered as may survive) and the one-point Hex8 stiffness survive (regular meshes hold the hourglass modes; the element tests catch it).
+
+Follow-up items (ids by the lead):
+
+1. Title: "Manufactured solution: the Tet4 traction-case L2 order on the pair 16 -> 32 as a registered check". Deps: F-378.
+
+> Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0279 ran this pair once as a diagnostic (L2 order 1.9176). The manufactured solution and case T of ADR 0279 with Tet4 on 8, 16, 32 cells per edge (98 304 unknowns, direct solver, an ignored heavy record): the L2 order over the pair 16 -> 32 is >= 1.8 and the energy order >= 0.9, both errors fall monotonically.
+
+2. Title: "Manufactured solution on distorted meshes: orders of Tet4, Hex8, Tet10 with moved interior nodes, and the Hex8 stiffness rule". Deps: F-378.
+
+> Every limit not stated here is registered in the ADR before the run. The manufactured solution of ADR 0279, case D, on boxes whose interior nodes are moved by a registered seed and amplitude (elements valid at every node): on at least three meshes, each halving h, the observed L2 order over the finest pair is >= 1.8 for Tet4 and Hex8 and >= 2.7 for Tet10, the energy-norm order >= 0.9 and >= 1.8, both errors fall monotonically; a mutation of the Hex8 stiffness rule to one point is caught by these checks.
+
 ## The planned stub, as written
 
 # ADR 0279: Verification by a manufactured solution: observed order of displacement and stress for the three elements
