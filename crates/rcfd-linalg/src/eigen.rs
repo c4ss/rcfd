@@ -365,7 +365,11 @@ fn jacobi(mut a: Vec<f64>, n: usize) -> Result<DenseEigen, EigenError> {
             v
         })
         .collect();
-    Ok(DenseEigen { values, vectors, sweeps })
+    Ok(DenseEigen {
+        values,
+        vectors,
+        sweeps,
+    })
 }
 
 /// All eigenpairs of the dense symmetric `n x n` matrix `a` (row-major) by cyclic Jacobi rotations (ADR 0283 D1).
@@ -382,7 +386,7 @@ fn generalized_unchecked(k: &[f64], m: &[f64], n: usize) -> Result<DenseEigen, E
     let mut l = vec![0.0; n * n];
     for j in 0..n {
         let s = m[j * n + j] - dot4(&l[j * n..j * n + j], &l[j * n..j * n + j]);
-        if !(s > (j + 1) as f64 * eps * m[j * n + j].abs()) || !s.is_finite() {
+        if s.is_nan() || s <= (j + 1) as f64 * eps * m[j * n + j].abs() || s.is_infinite() {
             return Err(EigenError::MassNotPositiveDefinite { row: j, pivot: s });
         }
         let ljj = s.sqrt();
@@ -700,7 +704,10 @@ pub fn lowest_eigenpairs(
                     reason: format!("{} columns for a subspace of {q}", cols.len()),
                 });
             }
-            if let Some(j) = cols.iter().position(|c| c.len() != n || c.iter().any(|v| !v.is_finite())) {
+            if let Some(j) = cols
+                .iter()
+                .position(|c| c.len() != n || c.iter().any(|v| !v.is_finite()))
+            {
                 return Err(EigenError::BadStart {
                     reason: format!("column {j} has a wrong length or a non-finite entry"),
                 });
@@ -731,7 +738,7 @@ pub fn lowest_eigenpairs(
         let mut yb: Vec<Vec<f64>> = xb.iter().map(|c| matvec(m, c)).collect();
         for j in 0..q {
             let nm = dot4(&xb[j], &yb[j]);
-            if !(nm > 0.0 && nm.is_finite()) {
+            if nm.is_nan() || nm <= 0.0 || nm.is_infinite() {
                 return Err(EigenError::RankDeficient { iteration: it });
             }
             let inv = 1.0 / nm.sqrt();

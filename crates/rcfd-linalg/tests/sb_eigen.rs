@@ -196,7 +196,12 @@ fn max_rel(a: &[f64], b: &[f64]) -> f64 {
 
 fn dense_checks(name: &str, a: &[f64], n: usize, exact: &[f64], norm_a: f64) -> (f64, f64, f64, usize) {
     let e = symmetric_eigen(a, n).expect("dense");
-    let err = e.values.iter().zip(exact).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max);
+    let err = e
+        .values
+        .iter()
+        .zip(exact)
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0, f64::max);
     let mut orth = 0.0f64;
     for i in 0..n {
         for j in 0..n {
@@ -242,9 +247,18 @@ fn e3_dense_generalized_consistent_mass_bar() {
     let (k, m, lam) = bar(n);
     let e = generalized_eigen_dense(&dense(&k), &dense(&m), n).expect("dense pencil");
     let lmax = lam[n - 1];
-    let err = e.values.iter().zip(&lam).map(|(x, y)| (x - y).abs()).fold(0.0, f64::max) / lmax;
+    let err = e
+        .values
+        .iter()
+        .zip(&lam)
+        .map(|(x, y)| (x - y).abs())
+        .fold(0.0, f64::max)
+        / lmax;
     let orth = m_orth(&m, &e.vectors);
-    println!("E3: max |error| / lambda_max {err:.3e} (lambda_max {lmax:.6e}), M-orthonormality {orth:.3e}, sweeps {}", e.sweeps);
+    println!(
+        "E3: max |error| / lambda_max {err:.3e} (lambda_max {lmax:.6e}), M-orthonormality {orth:.3e}, sweeps {}",
+        e.sweeps
+    );
     assert!(err <= 1e-12, "E3 eigenvalues {err:e}");
     assert!(orth <= 1e-12, "E3 M-orthonormality {orth:e}");
 }
@@ -258,7 +272,10 @@ fn e4_dense_refusals() {
     }
     let mut long = a.clone();
     long.push(0.0);
-    assert!(matches!(symmetric_eigen(&long, n), Err(EigenError::DimensionMismatch { .. })));
+    assert!(matches!(
+        symmetric_eigen(&long, n),
+        Err(EigenError::DimensionMismatch { .. })
+    ));
     let mut bad = a.clone();
     bad[3 * n + 5] = f64::NAN;
     assert_eq!(
@@ -431,7 +448,11 @@ fn check_free_chain(name: &str, r: &GeneralizedEigen, k: &CsrMatrix, m: &CsrMatr
     }
     let (a0, _, m0) = residual_parts(k, m, r.values[0], &r.vectors[0]);
     let kx0 = mv(k, &r.vectors[0]);
-    let ax0: Vec<f64> = kx0.iter().zip(mv(m, &r.vectors[0])).map(|(a, b)| a + r.shift * b).collect();
+    let ax0: Vec<f64> = kx0
+        .iter()
+        .zip(mv(m, &r.vectors[0]))
+        .map(|(a, b)| a + r.shift * b)
+        .collect();
     let res0 = a0 / nrm(&ax0);
     let orth = m_orth(m, &r.vectors);
     let s = 0.5 * (r.values[0] + r.values[1]);
@@ -574,7 +595,12 @@ fn e15_bit_identical_for_1_and_8_threads() {
         v.push(r.iterations as u64);
         v
     };
-    println!("E15: {} words compared, iterations {} and {}", bits(&a).len(), a.iterations, b.iterations);
+    println!(
+        "E15: {} words compared, iterations {} and {}",
+        bits(&a).len(),
+        a.iterations,
+        b.iterations
+    );
     assert_eq!(bits(&a), bits(&b), "E15");
 }
 
@@ -583,8 +609,14 @@ fn e17_sparse_refusals() {
     let k = second_difference(10);
     let m = identity(10);
     let o = SubspaceOptions::default();
-    assert!(matches!(lowest_eigenpairs(&k, &m, 0, &o), Err(EigenError::BadCount { .. })));
-    assert!(matches!(lowest_eigenpairs(&k, &m, 10, &o), Err(EigenError::BadCount { .. })));
+    assert!(matches!(
+        lowest_eigenpairs(&k, &m, 0, &o),
+        Err(EigenError::BadCount { .. })
+    ));
+    assert!(matches!(
+        lowest_eigenpairs(&k, &m, 10, &o),
+        Err(EigenError::BadCount { .. })
+    ));
     assert!(matches!(
         lowest_eigenpairs(&k, &identity(11), 3, &o),
         Err(EigenError::DimensionMismatch { .. })
