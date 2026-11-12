@@ -265,10 +265,18 @@ fn ident(amended: bool, sim: &Simulation, vol: &[f64], t0: &[f64], y0: Option<&[
     }
 }
 
-/// C1, C1b, C2, C3, C3b, SR, R1, CV and NC1 to NC3 on CB (one run, 500 steps), as amended by ADR 0348 amendment 2.
+/// C1, C1b, C2, C3, C3b, SR, R1, CV and NC1 to NC3 on CB (one run, 500 steps), as amended by ADR 0348 amendments 2 and 3.
 #[test]
-fn cb_closed_box_conserves_mass_momentum_and_energy_a2() {
-    cb_run(true);
+fn cb_closed_box_conserves_mass_momentum_and_energy_a3() {
+    cb_run(true, true);
+}
+
+/// The run of amendment 2, kept as a record (ADR 0348 amendment 3): "C3 IE step 1: 1e0" (before the first parcel the only
+/// non-zero term is the round-off of the carrier inventory).
+#[test]
+#[ignore = "SETUP DEFECT record (ADR 0348 amendment 3): C3 IE step 1 = 1, the round-off of the carrier inventory over itself"]
+fn cb_closed_box_conserves_mass_momentum_and_energy_setup_defect2() {
+    cb_run(true, false);
 }
 
 /// The first run of CB, kept as a record (ADR 0348 amendment 2): it stopped at "C3b step 1: 7.99e-4" (the floor as a
@@ -276,10 +284,11 @@ fn cb_closed_box_conserves_mass_momentum_and_energy_a2() {
 #[test]
 #[ignore = "SETUP DEFECT record (ADR 0348 amendment 2): C3b step 1 7.99e-4, the round-off floor used as a denominator"]
 fn cb_closed_box_conserves_mass_momentum_and_energy_setup_defect() {
-    cb_run(false);
+    cb_run(false, false);
 }
 
-fn cb_run(amended: bool) {
+/// `amended`: A2.1 and A2.2; `injected_only`: A3.1 (the identities once a parcel is injected).
+fn cb_run(amended: bool, injected_only: bool) {
     let mut sim = build(&cb_text());
     let vol = sim.geom.mesh.cell_volumes().to_vec();
     let vsum: f64 = vol.iter().sum();
@@ -356,13 +365,15 @@ fn cb_run(amended: bool) {
             assert!(r <= 1e-12, "C2 delivered step {steps}: {r:e}");
         }
         // C1, C2, C3: the identities
-        let id = ident(amended, &sim, &vol, &t0, Some(&y0), true);
-        wm = wm.max(id.rm);
-        wp = wp.max(id.rp);
-        we = we.max(id.re);
-        assert!(id.rm <= 1e-10, "C1 IM step {steps}: {:e}", id.rm);
-        assert!(id.rp <= 1e-10, "C2 IP step {steps}: {:e}", id.rp);
-        assert!(id.re <= 1e-10, "C3 IE step {steps}: {:e}", id.re);
+        if !injected_only || sim.particle_run().unwrap().tracker.injected() > 0 {
+            let id = ident(amended, &sim, &vol, &t0, Some(&y0), true);
+            wm = wm.max(id.rm);
+            wp = wp.max(id.rp);
+            we = we.max(id.re);
+            assert!(id.rm <= 1e-10, "C1 IM step {steps}: {:e}", id.rm);
+            assert!(id.rp <= 1e-10, "C2 IP step {steps}: {:e}", id.rp);
+            assert!(id.re <= 1e-10, "C3 IE step {steps}: {:e}", id.re);
+        }
         for c in 0..vol.len() {
             y_min = y_min.min(y[c]);
             y_max = y_max.max(y[c]);
@@ -420,20 +431,27 @@ fn cb_run(amended: bool) {
     assert!(id.nc[2] >= 1e-3, "NC3 {:e}", id.nc[2]);
 }
 
-/// C4: CB with pimple (two outer iterations), 100 steps, as amended (A2.1).
+/// C4: CB with pimple (two outer iterations), 100 steps, as amended (A2.1, A3.1).
 #[test]
-fn c4_pimple_closed_box_a2() {
-    c4_run(true);
+fn c4_pimple_closed_box_a3() {
+    c4_run(true, true);
+}
+
+/// The run of amendment 2, kept as a record (ADR 0348 amendment 3): "C4 IE step 1: 1e0".
+#[test]
+#[ignore = "SETUP DEFECT record (ADR 0348 amendment 3): C4 IE step 1 = 1, the round-off of the carrier inventory over itself"]
+fn c4_pimple_closed_box_setup_defect2() {
+    c4_run(true, false);
 }
 
 /// The first run of C4, kept as a record (ADR 0348 amendment 2): "C4 IM step 1: NaN" (no parcel yet, 0/0).
 #[test]
 #[ignore = "SETUP DEFECT record (ADR 0348 amendment 2): C4 IM step 1 NaN, all terms zero before the first injection"]
 fn c4_pimple_closed_box_setup_defect() {
-    c4_run(false);
+    c4_run(false, false);
 }
 
-fn c4_run(amended: bool) {
+fn c4_run(amended: bool, injected_only: bool) {
     let mut sim = build(&text(PIMPLE, true, true, &format!("{EVAP}{BREAKUP}")));
     let vol = sim.geom.mesh.cell_volumes().to_vec();
     let t0 = sim.field("T").unwrap();
@@ -444,6 +462,9 @@ fn c4_run(amended: bool) {
         sim.step();
         steps += 1;
         assert!(sim.failure().is_none(), "step {steps}: {:?}", sim.failure());
+        if injected_only && sim.particle_run().unwrap().tracker.injected() == 0 {
+            continue;
+        }
         let id = ident(amended, &sim, &vol, &t0, Some(&y0), true);
         wm = wm.max(id.rm);
         wp = wp.max(id.rp);
