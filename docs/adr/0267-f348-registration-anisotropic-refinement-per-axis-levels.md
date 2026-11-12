@@ -340,3 +340,43 @@ mutations.
   Taken on the same standing instruction.
 - **Q4. The case key.** Not taken here (it changes the schema golden and `rcfd-api`, which this item must not touch): listed in
   the addendum for a follow-up.
+
+## Amendment 1 (2026-11-12, written after the first run of the G checks and before the run of G6b and G6c)
+
+**What happened.** The G checks were run once (`cargo test --release -p rcfd-mesh --test adapt_aniso_f348`): G1, G1b, G2, G3, G4,
+G5 and G7 passed; **G6 missed**: on lattice (a) (3-D), 146 cells went 82, 51, 35, 26, 20, 16 in six rounds of all-axes
+coarsening and the seventh round merged nothing, with 16 cells left instead of 12. The registered test stays, unchanged, as the
+ignored record `g6_coarsening_returns_to_the_base_known_miss`.
+
+**Diagnosis** (one diagnostic run that repeated G6's sequence and printed the leaves of the stuck state; no limit involved). Eleven
+base cells are whole; the twelfth is tiled by five leaves: two octants at opposite corners and three half-slabs, one along each
+axis (levels (1,1,0), (0,1,1), (1,0,1) and two (1,1,1)). No two of the five are buddies, so no pair merge applies. The cause is
+the derivation of D3, not the code: the sentence "any state has at least one pair of buddies (the children of the last split of
+any history that leads to it)" assumed that every state has a history of splits. That is true of the states made by splits, but
+pair merges can leave the set of split-reachable tilings in three dimensions: starting from the eight octants of a cell, merging
+one pair along x, one along y and one along z (each a legal merge of two buddies) gives the five-box tiling above, which has no
+plane that cuts the cell in two and so cannot be made by splits. In two dimensions this cannot happen (derivation, first
+principles; the fault-line property of dyadic tilings of the square, known from Lagarias, Spencer and Vinson, "Counting dyadic
+equipartitions of the unit square", cited from memory, the argument is given here): a dyadic interval that contains the
+mid-point of the cell in its interior is the whole cell extent, so a leaf that crosses the vertical mid-line has the full width
+and a leaf that crosses the horizontal mid-line has the full height; two such leaves would overlap, so unless the cell is one
+leaf at least one mid-line is crossed by no leaf and cuts the tiling in two; by induction every tiling of a slab cell is made by
+splits, its last split gives a pair of buddies, and every round of all-axes coarsening merges at least one pair. In three
+dimensions a full-x leaf, a full-y leaf and a full-z leaf can avoid each other pairwise, which is the stuck tiling.
+
+**What it means.** The stuck tiling is a valid tiling by dyadic boxes: D2's closure derivation assumes nothing else, and point
+location, the neighbour search, the balance and the transfer do not use a split history. So meshes stay valid; what is lost is
+the guarantee that directional coarsening in 3-D can always undo a refinement. D3's sentence is replaced by: "in a slab (two
+refined axes) repeated all-axes coarsening without balance returns to the base; with three refined axes pair merges can leave a
+five-box tiling of a cell that they cannot merge further (a valid mesh; refinement still works on it)". The loop of
+`rcfd_fv::adaptive` does not coarsen. Nothing in the code is changed by this amendment.
+
+**Corrected checks** (new tests; G6 stays as the ignored record):
+
+| Id | Check | Limit | Estimate behind the limit |
+| --- | --- | --- | --- |
+| G6b | coarsening in a slab: lattice (b) (5 x 4, `[3, 3, 0]`) after 3 rounds of refinement marks (probability 0.5, random non-empty axis sets, balance off, the generator seed of G6), then all-axes coarsen marks repeated, balance off | the base (20 cells, all levels 0) is reached within `n - 20` rounds; the cell count decreases in every round until then; `check_topology` and `sum V q` of a random field within `1e-13` relative in every round | exact (the fault-line argument above); the number of rounds is recorded |
+| G6c | the stuck tiling is a valid mesh and a fixed point of pair coarsening: one base cell `[0, 1]^3`, `max_level = [1, 1, 1]`, split into octants, then the three merges above (the octant pairs at (y = 1, z = 0) along x, at (z = 1, x = 0) along y, at (x = 1, y = 0) along z) | 5 cells, 3 merges; `check_topology` Ok with volume 1; all-axes coarsen marks then merge nothing (5 cells, the same leaves); all-axes refine marks then give the 8 octants again | exact |
+
+Decision rule: unchanged. G6 is a missed registered check, so by the rule the item cannot be **done**; G6b and G6c stand in for it
+in the list of supporting checks.
