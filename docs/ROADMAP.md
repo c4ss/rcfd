@@ -5893,20 +5893,46 @@ fixed by the item's registration ADR before any code.
     each rejected and located. Cost: 10.3 percent of an event. Four registered mutations failed their checks. Library
     only; RemeshChange gains the field check. Open: ADR 0236 Q2 (checking new() and motions), Q6 (V2 and V3 not decisive
     in the piston).
-- [ ] **F-330** Compressible impedance boundary: case-schema wiring
-  - depends on: F-243
+- [ ] **F-330** Compressible impedance boundary and sponge layer: case-schema wiring
+  - depends on: F-243, F-331
   - acceptance: `compressible_bc = "impedance"` with `impedance_value` runs the ADR 0233 tube from a case file with R
     within 1e-2 of the closed form for z/(rho c) = 1/3, 1, 3; located validate errors for a negative impedance and a
     non-positive pressure; every existing case file's settings hash and written text unchanged after the registered
-    normalisation of the new key at its default.
+    normalisation of the new key at its default. Sponge layer (ADR 0237): A case file selects a sponge layer in front of
+    a boundary patch (thickness, form, target reflection); the ADR 0237 tube check runs from a case file with a
+    reflection below 1 percent; located validate errors for a non-positive thickness, a reflection outside (0, 1) and
+    the matched form with a moving reference; every existing case file's settings hash and written text unchanged after
+    the registered normalisation of the new keys at their defaults. max_dt takes the sponge rate into account.
   - note: From ADR 0233 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
     THE USER before merge: the new key needs an edit of the registered hash test case_hashes_w48u.rs.
-- [ ] **F-331** Sponge layer for the compressible solver
+- [~] **F-331** Sponge layer for the compressible solver
   - depends on: F-243
   - acceptance: A plane pulse leaving through a sponge layer at 0, 30, 45 and 60 degrees reflects less than 1 percent; a
     case without a sponge is bit-identical.
-  - note: From ADR 0233 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Both
-    quiet boundaries reflect 7 percent at 30 degrees and 17 percent at 45 degrees.
+  - note: From ADR 0233 question 4. The job of 2026-11-12 (ADR 0237). The acceptance text is MET IN THE LIBRARY, not
+    from a case file. Built: an opt-in sponge layer of the compressible solver (rcfd-fv sponge.rs,
+    `CompressibleSolver::set_sponge`), in two forms: `Plain` (every conserved variable relaxes to a reference state) and
+    `Matched` (a perfectly matched layer of linear acoustics about a state at rest: mass, energy and normal momentum
+    relax, the tangential momentum is forced through one scalar of memory per cell); polynomial profile, peak rate from
+    the wanted two-way attenuation (`rate_max_for_reflection`). The registration showed beforehand that the plain form
+    cannot reach 1 percent at 45 and 60 degrees in a practical thickness (175 pulse widths at 60 degrees), so the
+    acceptance is met by the matched form. Measured (limit 1 percent, layer of 40 cells, largest difference to a run on
+    an extended grid against the incident peak): normal incidence 9.2e-7 in front of the Thompson boundary and 1.1e-6 in
+    front of a rigid wall; one isolated plane pulse 2.4e-5 at 30 degrees and 1.4e-4 at 45 degrees; pulse trains in a
+    rigid duct 1.2e-4, 2.8e-4, 1.2e-3 at 30, 45, 60 degrees (the Thompson boundary alone 0.081, 0.196, 0.372; the plain
+    form at 45 degrees 0.150). Without a sponge the solver is bit-identical (the F-258 bit records and the ADR 0233
+    tests pass unedited; a set-and-cleared sponge and a zero-rate sponge give the same bits). Six mutations caught. One
+    amendment: the first oblique set-up (a wave train started inside the layer with zero memory) measured 3.8e-2,
+    6.2e-2, 8.7e-2 and was diagnosed as a defective set-up before the corrected runs; its tests are kept as ignored
+    records. Not done: case-schema wiring (a new key needs an approved edit of a registered hash test; this is why the
+    status is partial). Limits: the matched form is one planar layer with a reference at rest, does not damp waves along
+    the layer (a transient inside the layer leaves transverse standing waves in a rigid duct, the 4 to 9 percent of the
+    first set-up) and has a memory without decay; the plain form is quiet only near normal incidence; 60 degrees is
+    checked with pulse trains, not with an isolated pulse; explicit source (`rate dt` well below 2.5, `max_dt` does not
+    know it); not on moving meshes; Cartesian grids, gas at rest. Open questions in ADR 0237 addendum 1 (wiring, an
+    isolated pulse at 60 degrees, memory decay and damping along the layer, `max_dt`, moving meshes). Follow-ups
+    (recommendation taken on the maintainer's standing instruction of 2026-11-11): the wiring goes with F-330; F-340
+    (memory decay, damping along the layer, corners); F-341 (moving meshes).
 - [ ] **F-332** Frequency-dependent wall impedance (time-domain model)
   - depends on: F-243
   - acceptance: The reflection coefficient of a mass-spring-damper wall matches the closed form in magnitude and phase
@@ -5996,3 +6022,18 @@ fixed by the item's registration ADR before any code.
     by a registered edit.
   - note: From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
     THE USER before merge: it edits the MCP tools-list goldens.
+- [ ] **F-340** Matched sponge layer: memory decay, damping along the layer, corners
+  - depends on: F-331
+  - acceptance: The set-up D record of ADR 0237 (a wave train started inside the layer with zero memory in a rigid duct)
+    falls below 1 percent within its registered window; a constant pressure offset with a gradient along the layer gives
+    a bounded tangential momentum over 100 transit times of the layer; a pulse leaving through the corner of two layers
+    reflects less than 1 percent; an isolated plane pulse at 60 degrees reflects less than 1 percent; the checks A0,
+    A30b, A45b, A60b, X1 and X45 of ADR 0237 still meet 1 percent.
+  - note: From ADR 0237 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-341** Sponge layer on moving meshes
+  - depends on: F-331, F-258
+  - acceptance: With a sponge, a uniform reference state stays to round-off under `step_ale` on a deforming mesh; the
+    ADR 0237 tube check on a uniformly translating mesh reflects less than 1 percent; without a sponge `step_ale` is
+    bit-identical.
+  - note: From ADR 0237 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. Only
+    when a case needs it.
