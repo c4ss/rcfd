@@ -6149,7 +6149,7 @@ fixed by the item's registration ADR before any code.
     by a registered edit.
   - note: From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
     THE USER before merge: it edits the MCP tools-list goldens.
-- [ ] **F-340** Matched sponge layer: memory decay, damping along the layer, corners
+- [~] **F-340** Matched sponge layer: memory decay, damping along the layer, corners
   - depends on: F-331
   - acceptance: The set-up D record of ADR 0237 (a wave train started inside the layer with zero memory in a rigid duct)
     falls below 1 percent within its registered window; a constant pressure offset with a gradient along the layer gives
@@ -6157,6 +6157,41 @@ fixed by the item's registration ADR before any code.
     reflects less than 1 percent; an isolated plane pulse at 60 degrees reflects less than 1 percent; the checks A0,
     A30b, A45b, A60b, X1 and X45 of ADR 0237 still meet 1 percent.
   - note: From ADR 0237 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    The job of 2026-11-12 (ADR 0248): four of the five clauses are MET IN THE LIBRARY, clause 1 is MISSED with a
+    diagnosis that the registration gave before the runs. Built (rcfd-fv sponge.rs, opt-in, `Plain` and `Matched`
+    untouched): `SpongeForm::MatchedShifted(MatchedOptions { normal, shift, along, second })`, the matched layer as a
+    complex coordinate stretching with (i) a complex frequency shift `shift` (the memories decay: under a held pressure
+    the memory and the force along the layer saturate at p'/a instead of growing; below omega ~ a the layer does not
+    absorb and it leaves a static offset alone), (ii) a second planar layer with an orthogonal normal for a corner
+    (`Sponge::corner`: the same memory, one product term, the force of each layer on the momentum along the other's
+    normal; a second memory for an edge in three dimensions), (iii) a damping of the momentum along the layer `along` (a
+    mismatch with a measured price); `Sponge::planar_shifted`, `CompressibleSolver::sponge_memories` and
+    `set_sponge_memories`. Measured with shift 0.25/s (0.05 c/L) and along 0 on the 40-cell layer of ADR 0237 (limit 1
+    percent, largest difference to a run on an extended grid against the incident peak): an isolated plane pulse at 60
+    degrees 8.1e-4 (the form of ADR 0237 in the same run 8.0e-4; 705 000 and 770 000 cells, the set-up of X45 with tails
+    of 3.5 pulse widths and a reference grid shortened by a causality argument that a model confirmed to 12 digits); a
+    quarter of a cylindrical pulse through two layers and their corner 5.3e-5 (no sponge 0.058, one layer 0.029); the
+    checks of ADR 0237 repeated with the shift: A0 9.4e-7 (1.2e-6 in front of a rigid wall), A30b, A45b, A60b 3.1e-4,
+    3.6e-4, 1.3e-3, X1 2.3e-5, X45 1.4e-4; a closed box with a pressure offset varying along the layer over 100 transit
+    times: momentum along the layer at most 3.0 delta/c and not growing (the form of ADR 0237 in the same run 3.2 and
+    not growing either: in a run neither form grows, the difference is under a held pressure, checked by algebra to
+    4e-6). Without the options the new form produces the bits of `Matched`; the existing compressible, F-258, ADR 0233,
+    ADR 0237 and ADR 0243 tests pass unedited. Eight mutations caught. MISSED, clause 1: the set-up D record (a wave
+    train started inside the layer with zero memory in a rigid duct) stays at 3.7e-2, 6.1e-2, 8.6e-2 at 30, 45, 60
+    degrees with the shift (3.8e-2, 6.2e-2, 8.7e-2 without) and at 2.2e-2, 3.6e-2, 4.2e-2 with along = 0.05, against
+    1e-2; kept as three ignored known_miss records. Diagnosis (ADR 0248 DR12, a scratch model predicted the five numbers
+    within 20 percent before the runs): the ringing sits at the cut-off frequencies of the duct; a field that does not
+    vary across the layer solves the equations of every matched layer, so no matched layer damps it; a damping along the
+    layer is a mismatch that reflects about 1.3 along of a pulse at 60 degrees whatever its frequency (along = 0.05
+    measured 4.4e-2 of the steady train at 60 degrees), and the strength needed to remove the ringing within the
+    registered window costs far more than 1 percent. Not a parameter that could be tuned at this thickness. Limits:
+    linear acoustics about a state at rest; one layer or two orthogonal ones (no corner of three layers; the
+    three-dimensional edge is checked by algebra only); explicit source; not on moving meshes; not with a
+    mass-spring-damper wall; library only (the wiring goes with F-330); Cartesian grids. Open questions in ADR 0248
+    addendum 1 (what to do with clause 1; a default for the shift in the wiring; whether to keep `along`; a corner run
+    in three dimensions). Open: the default shift in the F-330 wiring (a default; ADR 0248 question 2). The clause-1
+    follow-up (a plain damping zone behind a thicker layer) is proposed in ADR 0248 only for when a ducted case shows
+    the ringing; no item added.
 - [ ] **F-341** Sponge layer on moving meshes
   - depends on: F-331, F-258
   - acceptance: With a sponge, a uniform reference state stays to round-off under `step_ale` on a deforming mesh; the
