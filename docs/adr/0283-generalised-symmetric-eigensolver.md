@@ -394,3 +394,86 @@ or an uncaught mutation (after the test is checked to cover it): **partial**, wi
 2. A cluster crossing m: the solver converges and verifies the whole cluster but returns m pairs, as asked (D6, D8).
 3. `q = max(2 m, m + 8)` instead of Bathe and Wilson's `min(2 m, m + 8)` (D7).
 4. `Shift::Auto` with the pivot-ratio floor `1e-8` (D3).
+
+## Addendum 1: results (2026-11-12)
+
+Code at the commits after the registration: `crates/rcfd-linalg/src/eigen.rs` (new), one line `pub mod eigen;` in
+`crates/rcfd-linalg/src/lib.rs`, `crates/rcfd-linalg/tests/sb_eigen.rs` (new). The registered run was made once, in release,
+with `cargo test -p rcfd-linalg --release -- --nocapture --test-threads=1` (the crate's whole test set: unit tests 19 passed and
+1 ignored as before, `amg_contrast` 2, `reorder` 2, `sb_direct` 16 passed and 2 ignored as before, `sb_eigen` 15 passed). Log:
+`w49i-work/f382-scratch/run1.log`. A following commit only reformatted (rustfmt) and wrote two negated float comparisons
+out for clippy (`!(x > t)` as `x.is_nan() || x <= t`, the same truth table); `sb_eigen` was run once more on that final tree
+as a confirmation, not as a registered run (`confirm_final_tree.log`): every printed number is identical.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| E1 dense T (200): eigenvalue error; orthogonality; residual | `<= 1e-12`; `<= 1e-12`; `<= 4e-12` | 1.16e-14; 6.17e-14; 1.51e-14 (13 sweeps) | yes |
+| E2 dense 12 x 12 Laplacian: the same | `<= 1e-12`; `<= 1e-12`; `<= 8e-12` | 1.24e-14; 4.31e-14; 1.54e-14 (11 sweeps) | yes |
+| E3 dense pencil B: error / `lambda_max`; M-orthonormality | `<= 1e-12`; `<= 1e-12` | 3.00e-15; 6.53e-14 (13 sweeps) | yes |
+| E4 dense refusals; `[[0,1],[1,0]]` control | as stated | as stated (M pivot -1 at row 2); `-1, 1` exactly | yes |
+| E5 T m = 10: eigenvalues; residual; M-orth.; Sturm; shift; iterations | `<= 1e-10`; `<= 1e-8`; `<= 1e-10`; 10 = 10; 0; `<= 34` | 4.0e-15; 6.0e-11; 4.4e-16; 10 = 10 at 0.026933; 0; 17 (q = 20) | yes |
+| E6 T counts: midpoint; `theta_10 (1 - 1e-6)`; closed-form midpoints | 9; 9; `j` | 9; 9; `j` for j = 1..10 | yes |
+| E7 L m = 11: eigenvalues with multiplicity; pair split; residual; M-orth.; Sturm; count; iterations | `<= 1e-10`; `<= 1e-10`; `<= 1e-8`; `<= 1e-10`; 11 = 11; 10; `<= 68` | 8.1e-16; 6.4e-16; 6.7e-11; 1.8e-15; 11 = 11; 10; 35 (q = 22) | yes |
+| E8 L m = 9 (cluster crossing m): eigenvalues; Sturm; residual; M-orth. | `<= 1e-10`; 10 = 10; `<= 1e-8`; `<= 1e-10` | 5.4e-16; 10 = 10; 4.4e-13; 1.6e-15 (45 iterations) | yes |
+| E9 N m = 11 against dense (n = 900); residual; M-orth.; dense control; dense time | `<= 1e-9`; `<= 1e-8`; `<= 1e-10`; `<= 1e-10`; recorded | 1.5e-12; 6.8e-11; 1.1e-15; 2.2e-12; 22.6 s (13 sweeps); 36 iterations | yes |
+| E10 F `sigma = 0.01`: `lambda_0 / lambda_1`; `lambda_1..4`; residual; zero-mode residual; M-orth.; count; `sigma = 0` refused | `<= 1e-9`; `<= 1e-10`; `<= 1e-8`; `<= 1e-8`; `<= 1e-10`; 1; refused | 2.1e-13; 2.0e-13; 8.3e-11; 2.7e-14; 4.4e-16; 1; refused (pivot 0 at position 99) (13 iterations) | yes |
+| E11 F `Shift::Auto`: shift; the limits of E10 | `1e-4 x 1.98`; as E10 | 1.98e-4; 1.3e-13, 1.2e-13, 3.9e-11, 1.1e-12, 3.3e-16, 1 (11 iterations) | yes |
+| E12 cap: `NotConverged`, 3 iterations, 10 residuals, all stated | as stated | as stated (residuals 3.3e-6 to 3.6e-2 printed) | yes |
+| E13 S deficient start: `SturmMismatch` 9 vs 5; default start | as stated; `<= 1e-10`, 5 = 5 | counted 9, expected 5 at 0.11459; 7.7e-15, 5 = 5 | yes |
+| E14 B m = 10: eigenvalues; residual; M-orth. | `<= 1e-10`; `<= 1e-8`; `<= 1e-10` | 5.0e-14; 4.8e-11; 4.4e-16 (17 iterations) | yes |
+| E15 N in pools of 1 and 8 threads | bit for bit | equal (9923 words, 36 iterations each) | yes |
+| E16 existing tests unedited pass; diff | as stated | as stated (`git diff` against the merge base: 4 files, `lib.rs` 1 insertion) | yes |
+| E17 sparse refusals | as stated | as stated | yes |
+
+The relative eigenvalue errors of the subspace results (4e-15 to 2e-13) are far below the registered estimate of the
+rounding floor (`c eps kappa`, 3.6e-12 for T): the estimate bounds the worst case; the Ritz value of a smooth mode is a
+Rayleigh quotient, whose rounding error is far below `eps ||K|| / lambda`. Iteration counts matched the rate estimates of D6
+(T 17 against 16.6, L 35 against 34, L m = 9 45 against 44.6, F 13 against 13.0, B 17 against 16.4).
+
+**Mutations** (scratch copy by `git archive` of the final tree, own target directory, each alone by exact text replacement,
+file restored and compared by SHA-256; `f382-scratch/mutate.py`, `mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 Jacobi sign of `b_kq` | E1 (error 5e81), E2 |
+| M2 rotation test `1e-6` | E1 (1.9e-9), E2 (7.5e-10) |
+| M3 `lambda = mu` | E10 (`lambda_0 / lambda_1 = 0.91`) |
+| M4 Sturm check skipped | E13 (returned `Ok` with block-1 modes only) |
+| M5 count of positive pivots | E5: the solver's own Sturm check refused (`SturmMismatch` counted 190, expected 10) before E6 ran |
+| M6 convergence of the first pair only | E5 (eigenvalue error 6.6e-7 after 5 iterations) |
+| M7 `q = m + 1` | E5 (63 iterations against the limit 34; the rate estimate was 63) |
+| M8 no cluster extension | E8 (Sturm 9 = 9 at a shift between the two numerically equal members, instead of 10) |
+| M9 `M_r = I` | E5 (`NotConverged` after 200 iterations, residuals about 1) |
+
+For M5 and M9 the error variant was read from a second, diagnostic run of the mutant (the first log kept only the panic of
+`expect`); no registered result depends on it. `cargo fmt -p rcfd-linalg --check`: clean. `cargo clippy -p rcfd-linalg
+--all-targets -- -D warnings`: clean after the lint commit above (the first clippy run flagged `neg_cmp_op_on_partial_ord`).
+
+**Deviations.** None from the registered checks or limits. The confirmation run and the diagnostic mutant runs are disclosed
+above. The whole workspace was not tested (the lead runs the gate); no shared solver file was changed.
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). E1, E2, E4 to E7, E9, E10, E12, E13 and E16
+are met, and so are the extensions E3, E8, E11, E14, E15 and E17; every mutation fails a registered test.
+
+**Remaining questions.**
+
+1. Shift for a free body in ADR 0284. Options: (a) `Shift::Auto` (measured on the free chain: `sigma = 1e-4 rho`, 11
+   iterations against 13 with a hand-picked 0.01); (b) a shift from the expected first frequency. Recommendation: (a), with
+   m >= 7 requested for a free body so that the Sturm check covers the six rigid modes.
+2. The default subspace size (D7, larger than Bathe and Wilson's). Options: (a) keep `max(2 m, m + 8)`; (b) `min(2 m, m + 8)`.
+   Recommendation: (a); on T, q = m + 1 took 63 iterations against 17, and the 3-D estimate favours `2 m`.
+3. The residual of a zero mode (open point 1) is checked against `||(K + sigma M) x||`. Options: (a) keep; (b) an absolute
+   test scaled by `||K||`. Recommendation: (a); for rigid modes ADR 0284's "six frequencies below 1e-6 of the seventh" is the
+   meaningful test, as E10 is here.
+
+## For the lead: roadmap entries
+
+F-382: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0283, 2026-11-12: rcfd_linalg::eigen: dense symmetric eigensolver by cyclic Jacobi with the relative rotation test (symmetric_eigen; generalized_eigen_dense by Cholesky reduction), and lowest_eigenpairs of K x = lambda M x by subspace iteration on the envelope factor of K + sigma M (ADR 0274) with a Rayleigh-Ritz step, q = max(2m, m+8) start vectors, a residual test per pair (1e-10 on the shifted operator), clusters crossing m completed, an automatic or given shift, and a Sturm count from the signs of D of K - s M (count_below, Sylvester's law of inertia) that verifies no eigenvalue was missed. Tridiagonal (2, -1) n = 200: lowest 10 within 4.0e-15 relative (limit 1e-10); 5-point 30 x 30: four doubled eigenvalues with their multiplicity, within 8.1e-16, M-orthonormal within 1.8e-15 (limit 1e-10); with a non-uniform diagonal M against the dense solver within 1.5e-12 (limit 1e-9); residuals at most 8.3e-11 (limit 1e-8); free chain with sigma > 0: zero eigenvalue 2.1e-13 of the first non-zero one (limit 1e-9); counts below the m-th eigenvalue m - 1; the cap is an error stating the residuals; a deliberately deficient start is caught by the count (9 eigenvalues below the shift, 5 found). Consistent-mass bar within 5.0e-14 of the closed form; bit-identical for 1 and 8 threads; dense reference of 900 unknowns in 22.6 s. Nine mutations caught. Existing rcfd-linalg tests unedited and passing.
+
+F-383 (ADR 0284), sentence to append to its note:
+
+> ADR 0283 (2026-11-12) provides rcfd_linalg::eigen::lowest_eigenpairs (Shift::Auto handles a singular K; request m >= 7 for a free body so that the Sturm check covers the six rigid modes) and generalized_eigen_dense for references up to about 1000 unknowns (22.6 s at 900).
+
+No follow-up items.
