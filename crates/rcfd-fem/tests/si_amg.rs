@@ -814,8 +814,8 @@ fn h2b_slender20_hex8_at_1e8() {
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0305 amendment 2, H3b): Tet10 cantilever of slenderness 20, 121 680 unknowns, against the Hex8 count, to 1e-8"]
-fn h3b_slender20_tet10_at_1e8() {
+#[ignore = "known miss (ADR 0305 amendment 2, H3b, run once): Tet10 cantilever of slenderness 20, 121 680 unknowns, to 1e-8; limit: Tet10 AMG <= 2 x Hex8 AMG; measured: 79 against 2 x 15 = 30 (1 restart, residual 9.31e-9, floor estimate 8.64e-9; coarse level 2220 of 121 680 unknowns, operator complexity 1.033); Tet10 IC(0) 1971 (AMG / IC0 0.040)"]
+fn h3b_slender20_tet10_at_1e8_known_miss() {
     let amg = || {
         pcg_tol(
             CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),

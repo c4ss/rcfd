@@ -342,6 +342,138 @@ comparison does not favour either. Each corrected test is run once (logs `run-h2
 registered decision rule H2 and H3 missed in their registered runs, so the proposed status is **partial** (as for amendment 1)
 unless the maintainer accepts the corrected set-up.
 
+## Addendum 1: results (2026-11-12)
+
+Code: registration 9ed97790; library and tests d23479b3 (`crates/rcfd-linalg/src/amg_elastic.rs` new;
+`crates/rcfd-linalg/src/lib.rs` one line, new line 10; `crates/rcfd-fem/src/solve.rs` lines inserted only, no existing line
+changed: new lines 22-23 (`use`), 71-73 (variant), 198 (the call passes `model.mesh().nodes()`), 233-236 (`solver_name` arm),
+257-276 (`pub fn smoothed_aggregation`), 299 (parameter `nodes`), 388-394 (`preconditioned_cg` arm); tests
+`crates/rcfd-linalg/tests/si_amg_elastic.rs`, `crates/rcfd-fem/tests/si_amg.rs`); amendment 1 c2c3dee9 (the dense
+coarsest solve); amendment 2 52e26574 (H2b, H3b); the known-miss renames after the runs. Release profile throughout. Logs in
+`w49i-work/f402-scratch`: `run1-*.log` (run 1, code d23479b3), `run2-*.log` (corrected run, c2c3dee9), `run-h1_*.log` to
+`run-h4_*.log` (heavy, c2c3dee9), `run-h2b.log`, `run-h3b.log` (52e26574), `run-d1-branch.log`, `run-d1-main.log` (same file
+on a `git archive` of bc57e402, own target), `run-d2-*.log`, `run-d3-baseline.log`, `mutations.log`; diagnosis probes in
+`f402-scratch/diag`.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| Q1 kept columns / defect | 3, 5, 5, 6, 2 / `<= 1e-12` | 3, 5, 5, 6, 2 / `<= 2.3e-16` | yes |
+| Q2 rigid / rank | `<= 1e-14` / pivot ratio `> 1e-6` | 1.05e-16 / 0.44 | yes |
+| B1 every level (fast: cubes 11, 23, fast cantilever, P1; heavy: H1, H2, H3b, and H4, X1 slender recorded) | `<= 1e-12` | largest 1.05e-15 (Tet10 level 0), all others `<= 7.0e-16` | yes |
+| B2 smoothed `P`, rows away from the clamp | `<= 1e-10` | 3.3e-16 (cube 11, 4320 of 4752 rows), 3.0e-16 (cube 23) | yes |
+| G1 Galerkin | `<= 1e-12` | 0 (cube 11 level 0; cube 23 levels 0, 1) | yes |
+| S1 smoothed prolongator | `<= 1e-10` | `<= 4.4e-16` | yes |
+| S2 symmetry, cube 11 / fast cantilever | `<= 1e-10`, positive | run 1: 4.4e-17 / **1.422e-4** (miss, amendment 1); run 2: 4.4e-17 / 7.2e-17, positive | **run 1 no**, run 2 yes |
+| AG1 cube 11 level 0 | no singleton | 64 aggregates (estimate 64), sizes 8 to 48 | yes |
+| C-small cube 11 / 23 | `Ok`, `<= 1e-10`, `<= 39` | 16 its (8.4e-11) / 17 its (5.9e-11) | yes |
+| A1 cube 11 against direct | `<= 1e-7` | 4.1e-12 | yes |
+| TH 1 and 8 threads, cubes 11 / 23 | equal, bit-equal | 16 / 16, 17 / 17, bit-equal | yes |
+| OC | `<= 1.5` | cube 11 1.112, cube 23 1.134, cube 46 1.155, fast 1.179, slender 1.184, P1 1.115, heavy cantilever 1.164, slenderness 20 Hex8 1.169, Tet10 1.033 | yes |
+| P1 partial blocks | `Ok`, `<= 1e-10`, `<= 1e-7`, B1 | 396 blocks with fewer than 3 unknowns; 16 its, 5.1e-11, 1.5e-11 from direct | yes |
+| H1 cube 46 (304 842) | `<= 39`, growth `<= 1.5`, `<= 1e-10` | 20 its, growth 20 / 16 = **1.25**, 5.2e-11, 4 levels, setup 2.1 s, solve 11.1 s | yes |
+| H2 slenderness 20 Hex8 at 1e-10 | both `Ok` at 1e-10, `<= it_IC0 / 5` | **neither reaches 1e-10**: AMG stops at 1.42e-9 (30 its, 3 restarts), IC(0) at 1.43e-9 (2545 its) | **no** (`h2_slender20_hex8_known_miss`) |
+| H3 Tet10 at 1e-10 | `<= 2 x` Hex8 | not reached (the Hex8 reference solve stopped as in H2) | **no** (`h3_slender20_tet10_known_miss`) |
+| H2b (amendment 2) at 1e-8 | `<= it_IC0 / 5` | AMG **15** against IC(0) 887 / 5 = 177.4 (ratio 0.017); residuals 6.7e-9 / 6.8e-9; floor estimate 3.6e-9 | yes |
+| H3b (amendment 2) at 1e-8 | Tet10 `<= 2 x 15 = 30` | **79** (1 restart, 9.3e-9, floor estimate 8.6e-9); Tet10 IC(0) 1971 (AMG / IC(0) 0.040, recorded) | **no** (`h3b_slender20_tet10_at_1e8_known_miss`) |
+| X1 / H4 records | record | fast 32 x 6 x 6: **15** (BJ 156, IC0 85, IC1 58); slender 64 x 6 x 6: **22** (292, 206, 132); heavy 96 x 18 x 18: **17** (477, 255, 171), 2.8 s | recorded |
+| N1 translations only | `>= 1e-3` | 8.35e-2; its CG count 29 against 16 with the six modes | yes |
+| N2 smoothed `P`, all rows | `>= 1e-6` | 6.1e-2 / 4.1e-2 | yes |
+| N3 AMG against IC(0) | not bit-equal | not equal (IC(0) on cube 11: 46 its) | yes |
+| D1 hashes | equal, = ADR 0357 | direct `21c39eb0c554d5a4`, CG-Jacobi (162) `4035e2fb5d4197f5`, BJ (156) `d21ed14c8761bfec`, IC0 (85) `0a30d9ef9a8a932a` on the branch and on bc57e402 | yes |
+| D2 existing tests | pass | `rcfd-linalg` lib 19 (+1 ignored) and every test file; `rcfd-fem` every test file (ignored records not run); `rcfd-fv` lib 104 passed (6 ignored) | yes |
+| D3 baseline_hashes | pass | 3 passed, 1 ignored | yes |
+| D4 scalar AMG files | empty diff | empty | yes |
+
+**Diagnosis of the misses.**
+
+1. S2 in run 1: a defect of the new code (the dense coarsest solve), found by S2 and fixed by amendment 1; the counts of the
+   cubes were the same in both runs (their coarsest factorisations interchanged no rows).
+2. H2 and H3 at 1e-10: the rounding floor of the residual (amendment 2); the floor estimate printed in H2b is 3.6e-9 at the
+   AMG solution, consistent with the stall of both solvers at 1.4e-9 (the estimate is an upper bound of the summed
+   roundings).
+3. H3b, Tet10: 79 iterations against 30. Two causes are visible in the record, neither was tuned: (a) **coarsening too
+   aggressive**: with `theta = 0` a pass-1 seed takes every node of every element around it; Tet10 nodes couple to all nodes
+   of their elements, and the corner nodes, numbered first, become the seeds: the first coarse level has 2220 unknowns (370
+   aggregates of about 110 nodes) against 12 000 for the Hex8 mesh with the same nodes (about 20 nodes per aggregate);
+   operator complexity 1.033 against 1.169; the six modes per aggregate then represent too little of the smooth error for
+   one sweep of block Gauss-Seidel; (b) the Tet10 floor estimate 8.6e-9 is within 14 percent of the tolerance 1e-8, so the
+   last iterations and the restart work at the floor. Even so the multigrid needs 0.040 of IC(0)'s iterations on that mesh.
+
+**Mutations** (scratch `git archive` of c2c3dee9 in `f402-scratch/mut`, own target; `mutate.py`, `mutations.log`; each
+alone, the fast tests of `si_amg_elastic` and `si_amg`, files restored and compared by SHA-256, all restored):
+
+| Id | Registered | Caught by |
+| --- | --- | --- |
+| M1 rotations dropped in `smoothed_aggregation` | B1 | B1 (cube 11 level 0 8.35e-2, cube 23, fast cantilever, P1) |
+| M2 rotation about `z` with the wrong sign | B1, Q2 | Q2 (1.14), Q1 (two nodes keep 6), B1 (4.5e-2) |
+| M3 no prolongator smoothing | S1 | S1 (0.349; the test stopped at the earlier N2 assertion, N2 3.5e-16 < 1e-6) |
+| M4 post-smoother forward | S2 | S2 (1.1e-3 cube, 2.7e-5 cantilever), and the cube solves failed (CG with a non-symmetric preconditioner) |
+| M5 coarse operator `P_t^T A P` | G1, S2 | **G1** (0.337); S2 held (4.8e-18): `P_t^T A P = P_t^T A P_t - omega P_t^T A D^{-1} A P_t` is symmetric, so S2 cannot see it (recorded) |
+| M6 no column dropped | Q1 | Q1 (two nodes keep 6, defect 0.57) |
+| M7 pass 2 skipped | AG1 | AG1 (singletons), P1 (OC) |
+| M8 coarse correction not added | C-small | C-small (68 and 132 iterations) |
+
+Every mutation was caught by a registered check in its registered run; no mutation needed an amendment. M5 was caught by one
+of its two registered checks.
+
+`cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem
+--all-targets --release -- -D warnings`: clean.
+
+**Deviations.**
+
+1. Amendment 1 (a code defect found by S2 in run 1) and amendment 2 (a defective tolerance for the slenderness-20 case), each
+   committed before its corrected run; the old runs are kept as records.
+2. S1 was registered for "level 0 and 1" of cube 11; cube 11 has two levels, so S1 and G1 were also run on cube 23 (levels 0
+   and 1) in the same test.
+3. D2 ran `cargo test -p rcfd-fem --release` and `cargo test -p rcfd-linalg --release` over the whole crates, which ran the new
+   fast tests a third time (same code as run 2, same numbers); the registered numbers are those of `run2-*.log`.
+4. The D runs and the mutation runs overlapped in time with the heavy records (separate target for the mutations); only the
+   recorded times are affected.
+5. Not run: the whole workspace (the lead runs the gate); a direct solve of the heavy cases (not part of the item).
+
+**Decision by the registered rule: partial.** The cube clauses hold (counts 16, 17, 20; growth 1.25; residual `<= 1e-10`;
+1.5 operator complexity met everywhere; direct agreement 4.1e-12; 1 and 8 threads bit-identical), B1 holds on every level
+of every hierarchy, the scalar AMG is untouched and every default is hash-identical, and every mutation was caught. But (Rule
+I) registered checks missed in their registered runs: S2 in run 1 (fixed by amendment 1), H2 and H3 at 1e-10 (the residual
+floor; amendment 2), and H3b after the amendment (Tet10 79 against 30). The Hex8 slenderness-20 clause holds at the corrected
+tolerance (15 against IC(0) 887).
+
+**Remaining questions.**
+
+1. The scalar AMG's dense coarse LU (`amg.rs`, `DenseLu::solve`) has the same interleaved interchange order as the defect of
+   amendment 1: wherever its coarsest factorisation swaps rows, the coarse solve is inexact. Options: (a) a follow-up item
+   that fixes it and reruns the fluid gate, reporting (not re-recording) any changed hash; (b) leave it and add a test that
+   documents when interchanges occur on the fluid cases; (c) replace it by a dense Cholesky for symmetric coarse operators.
+   Recommendation: (a), with (b) as its first check, because a fix may change fluid results bit for bit.
+2. Tet10 clause (c5). Options: (a) a follow-up item for quadratic elements: a registered strength threshold or an aggregate
+   size bound so that Tet10 coarsens like Hex8 (about 20 nodes per aggregate), checked against the same 2 x 15 limit; (b)
+   accept the Tet10 record (79, 0.040 of IC(0)). Recommendation: (a).
+3. The tolerance of the cantilever clause. Options: (a) state the comparison at 1e-8 (amendment 2) in the acceptance; (b)
+   measure the residual against the floor (`tolerance = max(1e-10, c x floor estimate)`). Recommendation: (a), simpler and
+   the same for every solver.
+4. Selection from a case file: through F-386 (note below). Recommendation: map an iterative key onto
+   `CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default())`.
+
+## For the lead: roadmap entries
+
+F-402: proposed status **partial**. Note:
+
+> Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). ADR 0305, 2026-11-12: rcfd_linalg::amg_elastic (new, beside the untouched scalar AMG): smoothed aggregation on the node-block graph (theta 0), tentative prolongator by a local QR of the six rigid-body modes per aggregate with a registered drop rule (1e-10), prolongator smoothed by damped block Jacobi (4/3 over the spectral radius), Galerkin coarse operators, V(1,1) cycle with forward / backward block Gauss-Seidel and a dense LU on the coarsest level; rcfd_fem::solve::CgPreconditioner::SmoothedAggregation and solve::smoothed_aggregation (the modes from the node coordinates). Rigid-body modes in the range of the tentative prolongator on every level to 1.1e-15; operator complexity 1.03 to 1.18. Clamped Hex8 cube: 16, 17 and 20 iterations to 1e-10 at 4752, 39 744 and 304 842 unknowns (growth 1.25), 4.1e-12 from the direct solve, bit-identical for 1 and 8 threads. ADR 0282 cantilevers: 15 (BJ 156, IC0 85, IC1 58), 22 (292, 206, 132) and 17 (477, 255, 171) iterations. Partial by Rule I: the dense coarsest solve applied row interchanges in the wrong order (found by the symmetry check, fixed by amendment 1); on the slenderness-20 cantilever (121 680 unknowns) 1e-10 is below the rounding floor of the residual (both solvers stop at 1.4e-9; amendment 2 compares at 1e-8): Hex8 AMG 15 against IC(0) 887 (met), Tet10 AMG 79 against the limit 2 x 15 = 30 (missed; the first coarse level is 5 times coarser than on Hex8; Tet10 IC(0) 1971). Defaults and the scalar AMG hash-identical; baseline hashes pass; eight mutations caught. Follow-ups: Tet10 aggregation, the scalar AMG's coarse LU.
+
+Follow-up item (new), title "Elasticity multigrid on quadratic tetrahedra: aggregation that coarsens Tet10 like Hex8", deps
+F-402:
+
+> Every limit not stated here is registered in the ADR before the run. In rcfd_linalg::amg_elastic, an opt-in aggregation rule for meshes of quadratic elements (a registered strength threshold or an aggregate size bound, derived before the run) such that on the Tet10 cantilever of slenderness 20 of ADR 0305 (tet_box 120 x 6 x 6 upgraded, 121 680 unknowns) the first coarse level has between 1/15 and 1/6 of the fine unknowns, CG with one V-cycle reaches 1e-8 in at most twice the Hex8 count of ADR 0305 H2b (15), operator complexity <= 1.5, the rigid-body modes in the range of the tentative prolongator to 1e-12 on every level; every count and bit of ADR 0305 with the default settings unchanged.
+
+Follow-up item (new), title "Scalar AMG coarsest dense LU: row interchanges applied before the forward substitution", deps
+none:
+
+> Every limit not stated here is registered in the ADR before the run. A test shows whether the coarsest dense LU of rcfd_linalg::amg (DenseLu) interchanges rows on each fluid case of the baseline set and records where; DenseLu::solve applies every interchange before the forward substitution (as rcfd_linalg::amg_elastic after ADR 0305 amendment 1) so that a coarsest matrix that needs interchanges is solved to a relative residual of 1e-12; the rcfd-linalg, rcfd-fv and rcfd-api tests and the baseline hashes are run, and any changed hash is reported to the maintainer, not re-recorded.
+
+F-386 (solid case file), sentence to append to its note:
+
+> ADR 0305 (2026-11-12): for large solid models the iterative choice with the fewest iterations is CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()) (15 to 22 iterations on the ADR 0282 cantilevers against 58 to 132 for IC(1)); a case-file key for the iterative route should be able to select it.
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the intermediate-tier plan, [ADR
