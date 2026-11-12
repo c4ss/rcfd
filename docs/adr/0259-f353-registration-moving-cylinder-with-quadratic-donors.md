@@ -229,3 +229,142 @@ A1a, A1b, A2 met (A2 near `6e-3`); no fallback; L0 held to every printed digit; 
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; none was changed and no amendment was needed. Release build on Windows,
+the library of main 2e0eefd0 unchanged (`git diff 2e0eefd0 -- crates/*/src` is empty: this item adds one test file and
+this ADR). Commits: the registration `80aac579` (alone, before any code); the tests `00b06238`, compiled, formatted and
+linted before their run. Each registered run was made once: the fast test (10 s), then the heavy record (288 s: TR-L
+125.9 s and TR-Q 130.3 s in their `step` calls, stepped alternately; BF 23.9 s). Logs in
+`E:/projects/cfd/w49i-work/f353-scratch` (`f353-fast.log`, `f353-heavy.log` with the whole series, `series.csv`,
+`f353-MT1.log` to `f353-MT3.log`, `mut-run.log`).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1a TR-Q continuity, 400 steps | `<= 1e-9` | `5.6e-17` (TR-L `8.1e-17`) | met |
+| A1b TR-Q `abs(Q_out) / (U D L)`, 400 steps | `<= 1e-9` | `9.4e-15` (TR-L `7.5e-15`) | met |
+| A2 TR-Q drag against BF, every step of `[2, 8]` | `<= 5e-2` | `5.857e-3` (largest at step 399; TR-L `6.2485e-3`, step 399) | met |
+| A3 fallbacks | reported | `0` at the construction and at every step; 156 stencils of 9 cells after every step | reported: none |
+| A4 difference to TR-L | reported | below | reported |
+| L0 (set-up) TR-L and BF against ADR 0219 | `<= 5e-6` each; `<= 5e-8` | `C_D` within `4.9e-6` at all eight points (the five printed decimals reproduced); A2 of TR-L `6.24854e-3`, `3.8e-8` from `6.2485e-3` | held |
+| X1 holes inside the body | exact | every step | met |
+| X2 fringe and hole counts | exact | every step | met |
+| X3 kinds equal to TR-L; kind changes | exact; `>= 500` | equal after every step; 6300 | met |
+| X4 unconverged solves | `0`, `0`; BF `< 3000` | TR-Q `0`, TR-L `0`; BF at most 310 pressure iterations | met |
+| X5 the mode after every step | exact | quadratic | met |
+| NQ (negative control) largest `abs(d)`, 400 steps | `>= 1e-9` | `1.67e-3` | held |
+| G1 continuity, 10 steps | `<= 1e-9` | `3.6e-17` | met |
+| G2 outflow, 10 steps | `<= 1e-9` | `3.0e-15` | met |
+| G3 fallbacks, 10 steps | `0` | `0` | met |
+| G4 mode and nine-cell stencils, every step | exact | holds | met |
+| G5 (negative control) largest `abs(u_Q - u_L)` after 10 steps | `>= 1e-12` | `9.0e-5` | held |
+
+### The difference to the linear-stencil run (A4)
+
+| `t` | `C_D` BF | `C_D` TR-L | `C_D` TR-Q | `e_L` | `e_Q` | `d` |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2 | 2.00311 | 2.00050 | 1.99964 | `1.305e-3` | `1.735e-3` | `-4.30e-4` |
+| 4 | 1.82666 | 1.82257 | 1.82208 | `2.241e-3` | `2.508e-3` | `-2.67e-4` |
+| 6 | 1.72919 | 1.72278 | 1.72244 | `3.702e-3` | `3.904e-3` | `-2.03e-4` |
+| 8 | 1.67390 | 1.66752 | 1.66670 | `3.814e-3` | `4.304e-3` | `-4.92e-4` |
+
+Over the window: mean `C_D` 1.79334 (BF), 1.78769 (L), 1.78730 (Q); mean `e_L` `3.210e-3`, mean `e_Q` `3.422e-3`; largest
+`e_L` `6.25e-3`, largest `e_Q` `5.86e-3` (both at step 399); largest `abs(d)` `1.61e-3` (step 104), mean `d` `-2.13e-4`;
+`e_Q > e_L` at 178 of the 301 steps, `e_Q > e_L + 1e-4` at 164; the largest `e_Q - e_L` `+1.61e-3` at step 104. The excess
+is spread over the whole window: in each block of 50 steps 20 to 35 steps are worse by more than the margin, and the mean
+`e_Q` is above the mean `e_L` in every block, by `1.7e-4` to `3.4e-4`. `delta / (U^2/2)` lies in `[-1.36e-3, 6.79e-3]`
+with Q against `[-1.99e-3, 7.45e-3]` with L; 62.3 against 59.7 pressure iterations per step.
+
+Reading (a post-hoc look at the recorded series, disclosed; no further run, nothing decided by it). The drag of both TR
+runs oscillates from step to step about a smooth curve (the cylinder crosses one background cell every five steps, and
+the hole and the fringe change with it); BF does not. Against a centred five-step mean the root mean square of that
+oscillation is `1.80e-3` in `C_D` with L and `0.98e-3` with Q (largest `5.6e-3` and `3.7e-3`; BF `7e-6`): the quadratic
+stencils halve it, which is why the largest `e_Q` is below the largest `e_L`. The mean offset from BF is `-3.21e-3` with L
+and `-3.42e-3` with Q: both runs lie below BF, and Q lowers the drag a little further, so at most steps it is further
+from BF. ADR 0219 traced the offset to the outer mesh (it grows as the wake moves onto the background); the quadratic
+interpolation does not touch that part, and on these meshes its small shift of the mean goes the wrong way, as the
+removal of the truncation raised the coarse-mesh error of RL in ADR 0246 and ADR 0251.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `00b06238` (`f353-scratch/mut`, own target directory) by `mutate.py` (an exact
+replacement that must occur once), the fast test run once, the file restored and compared byte for byte (equal in all
+three).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MT1 the opt-in call removed in the test | G4, G5 | failed: G4 missed, G5 `0` |
+| MT2 the mass offset not applied | G2 | failed: outflow `2.45e-6` of `U D L` |
+| MT3 every quadratic stencil refused | G3 | failed: 156 fallbacks (and G4, G5 `0`) |
+
+`scripts/limit_audit.py`: no hit in `overset_f353.rs`.
+
+### The rule of the recommendation
+
+| Id | Condition | Measured | Holds |
+| --- | --- | --- | --- |
+| R1 | A1a, A1b, A2 met with TR-Q | met | yes |
+| R2 | no fallback | `0` | yes |
+| R3 | `e_Q(n) <= e_L(n) + 1e-4` at every step | missed at 164 of 301 steps (worst `+1.61e-3`) | **no** |
+| R4 | mean `e_Q <=` mean `e_L` | `3.422e-3` against `3.210e-3` | **no** |
+| R5 | time ratio `<= 1.5` | `1.034` | yes |
+| R6 | no unconverged solve | `0` | yes |
+
+**Recommendation by the rule: against** making `DonorInterpolation::Quadratic` the default (keep `Linear`). The quadratic
+interpolation meets the acceptance of F-134 on the cylinder, without fallback, at 3 percent more time, and halves the
+step-to-step drag oscillation, but its drag is further from the body-fitted run than that of the linear stencils at more
+than half of the steps and on average. This is the rule's result on the case the acceptance names; the change of a
+default stays the maintainer's decision.
+
+### Deviations and disclosures
+
+- The unchanged tree was compiled once before the registration was committed (stated in its status line).
+- The heavy test took 288 s, less than the six minutes in its ignore reason.
+- The oscillation and mean-offset numbers of the reading were computed afterwards from the printed series
+  (`series.csv`); they are not registered checks and did not enter the rule.
+- My predictions that held: no fallback, L0 to every printed digit, A2 near `6e-3`, cost 1.0 to 1.3 (1.034), the lean to
+  "against". Wrong: `abs(d)` reaches `1.61e-3`, above the `1e-3` I expected.
+
+### Not run
+
+- No combined run with outer iterations or BDF2; no refinement of TR; no 3-D flow with Q (none registered).
+- The existing overset suites and the rest of `rcfd-fv` (no library change; the lead runs the gate).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean (the only crate
+touched, tests only).
+
+### Decision by the registered rule
+
+**Done.** A1a, A1b and A2 are met with the quadratic interpolation, the fallback count (zero) and the difference to the
+linear-stencil run are reported, L0, X1 to X5, NQ and G1 to G5 held, the three mutations failed the fast test, and the
+recommendation (against) follows from the rule fixed before the run.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The default (ADR 0251 Q1, ADR 0246 Q3).** Options: (a) keep `Linear` as the default; (b) switch to `Quadratic`
+  (changes the records R2 of ADR 0238 and the numbers of the existing overset tests). Recommendation (a), by the rule.
+  **Not taken: open, for the maintainer.**
+- **Q2. The step-to-step drag oscillation of the overset runs** (rms `1.8e-3` of `C_D` with L, `1.0e-3` with Q, BF
+  `7e-6`), from the hole and fringe changing as the body crosses background cells. Options: (a) a follow-up item that
+  measures it against the background cell size and the time step; (b) leave it recorded here. Recommendation (b): it
+  stays far inside the 5 percent of the acceptance, and no item needs it now. Taken on the maintainer's standing
+  instruction of 2026-11-11 (take the recommendation); not a decision the maintainer made in person.
+- **Q3. The heavy record in the gate.** It is ignored (288 s); the fast test (10 s) runs in the gate. Options: (a) as
+  is; (b) un-ignore. Recommendation (a), taken on the standing instruction.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-353**, proposed status: `done`. Proposed note:
+
+> From ADR 0251 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0259, 2026-11-12: DONE (tests and ADR only, no library change). The set-up TR of ADR 0219 with DonorInterpolation::Quadratic over 400 steps: continuity 5.6e-17, net outflow 9.4e-15 of U D L, no fallback (156 stencils of nine cells at every step), no unconverged solve, drag within 5.86e-3 of the body-fitted run at every step from t = 2 to t = 8 (linear stencils 6.25e-3; the linear run and the body-fitted run reproduce ADR 0219 to every printed digit). Against the linear run: C_D lower by 2.1e-4 on average (largest 1.6e-3), mean drag error 3.42e-3 against 3.21e-3, worse by more than 1e-4 at 164 of 301 steps; the step-to-step drag oscillation as the body crosses background cells halves (rms 0.98e-3 against 1.80e-3 of C_D); time 1.03 times. By the rule fixed before the run the ADR recommends against making the quadratic interpolation the default; the default stays the maintainer's decision (ADR 0259 Q1). Three mutations caught by the fast test.
+
+**F-336**, status unchanged. In its note, replace "no flow run of the cylinder case or in 3-D with the opt-in" by:
+
+> no flow run in 3-D with the opt-in; the cylinder case TR with it is F-353 (ADR 0259: acceptance met, no fallback, mean drag error 3.42e-3 against 3.21e-3 of the linear stencils, recommendation against the default)
