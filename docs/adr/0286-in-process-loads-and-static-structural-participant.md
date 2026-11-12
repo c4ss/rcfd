@@ -286,6 +286,104 @@ succeeds (structure and fluid advance), and the switched solve fails in iteratio
 as the ignored record `f2_failing_solve_in_the_second_iteration`. Mutations are run after the corrected run, on the
 corrected test set; M4 and M7 named F2 among their catchers, which now means F2b.
 
+## Addendum 1: results (2026-11-12)
+
+Registered run: commit 6f7122f7, `cargo test --release -p rcfd-post --test sb_solid_coupling -- --nocapture
+--test-threads=1`, log `w49i-work/f385-scratch/registered_run.log`, run once. Corrected run of F2b (amendment 1): commit
+6b0008b7, log `corrected_run.log`, run once. Release profile throughout; the whole file takes 0.07 s.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| B1 matching, uniform: resultant / moment / work | `<= 1e-12` each | 0 / 0 / 0 | yes |
+| B2 3:2, uniform | `<= 1e-12` each | 0 / 2.0e-17 / 0 | yes |
+| B3 3:2, random forces, Hex8 | `<= 1e-12` each | 2.9e-17 / 1.4e-17 / 0 | yes |
+| B4 3:2, random forces, Tet4 | `<= 1e-12` each | 6.6e-17 / 5.8e-17 / 1.1e-16 | yes |
+| U1 matching, uniaxial closed form, every node and the interface displacements | `<= 1e-10` | 4.4e-15 | yes |
+| U2a 3:2, consistent-weighted mean of `u_x` on `xmax` | `<= 1e-10` | 4.2e-15 | yes |
+| U2b 3:2, largest error on `xmax` / `p L/E` | `<= 0.25` | 0.131 (free corner `(L, W, W)`; node `(L, 0, 0)` 0.105) | yes |
+| U2c 3:2, largest error at `x <= L/2` / `p L/E` | `<= 0.01` | 2.26e-4 | yes |
+| U2d control: U2b's quantity | `>= 0.005` | 0.131 | yes |
+| S1 restore bit for bit; repeat from the checkpoint; second restore | 0 bits | 0 bits | yes |
+| S2 advance bit-equal to `solve_static_with`; time `t0 + dt` | bit-equal | bit-equal (two advances) | yes |
+| C1 Aitken: converged; `|u - u*|/u*` | converged, `<= 1e-8` | converged, 1.9e-15 | yes |
+| C2 least squares: converged; `|u - u*|/u*` | converged, `<= 1e-8` | converged, 1.9e-15 | yes |
+| C3 control, fixed factor 1: fails at the cap (`coupler`) | fails | fails at iteration 20, test quantity 1.67 | yes |
+| F1 failing solve, iteration 1: `solid`, iteration 1, solver text; both restored | as stated | as stated (`solver cg-jacobi: not converged in 1 iterations`) | yes |
+| F2 (registered set-up) failing solve in iteration 2 | as stated | **not reached**: the step converged in iteration 1 (amendment 1) | **no** |
+| F2b (amendment 1) failing solve in iteration 2 after a load step: `solid`, iteration 2; both restored; two advances | as stated | as stated | yes |
+| F3 failing solve, wrong count, `dt = 0`: error naming `solid`, state unchanged; `name()` the given name | as stated | as stated | yes |
+| X1 mapped against consistent `Load::pressure` loads (matching) | `<= 1e-14` | 1.2e-16 | yes |
+| X2 iterations of C1 / C2 | `<= 6` | 3 / 3 (residuals 3.0, 0.60, 4.4e-16, as arithmetic 8) | yes |
+
+U2b lies above the estimate's high end (0.131 against 0.05 to 0.11) and within its limit: the free corner `(L, W, W)` is
+about 2.4 times as flexible as the mirrored corner `(L, 0, 0)` (0.105, itself twice the half-space estimate 0.055), against
+the factor 2 assumed. The decay to `x <= L/2` is a factor 580 (estimate 67): the coarse mesh is no slower than the strip.
+
+### Mutations (scratch copy `w49i-work/f385-scratch/mut` of b2f0f086, script `mutate.py`, log `mutations.log`)
+
+| Id | Change | Caught by |
+|---|---|---|
+| M1 | force of node `i` on node `i + 1` | B1 to B4 (moment, work), U1, X1, S2, C1, C2 |
+| M2 | z component dropped | B3, B4, S2 |
+| M3 | y and z of the interface displacements swapped | U1, B3 and B4 (work), S2 |
+| M4 | restore without the displacement | S1, F2b |
+| M5 | time not advanced | S2, C1, C2, C3, F1, F2b (the coupler's time check) |
+| M6 | time advanced before the solve | F3 |
+| M7 | the first checkpoint kept | F1, F2b (not S1, which checkpoints once) |
+| M8 | half the forces | S2, C1, C2 |
+| M9 | `name()` returns `structure` | F1, F2b, F3 |
+
+Nine of nine caught; each by at least one test that the amendment did not touch (M4 by S1, M7 by F1).
+
+### Other checks run
+
+- `cargo test --release -p rcfd-post`, all targets, existing tests unedited: every suite passed (log
+  `rcfd_post_tests.log`); `sb_solid_coupling` 11 passed, 1 ignored (the F2 record).
+- `cargo fmt -p rcfd-post --check`: clean (after `cargo fmt -p rcfd-post`, commit b2f0f086, whitespace only).
+- `cargo clippy -p rcfd-post --all-targets --release -- -D warnings`: clean.
+- Defaults: no shared solver file, golden or hash table changed; the stub module had no item and nothing calls the new one.
+  `baseline_hashes` was not run (rule 3 asks for it only when a shared solver file changes).
+
+### Deviations and what was not run
+
+- F2 as registered did not test what it was meant to (amendment 1); F2b, registered by the amendment before its run, did.
+- The stub's `nu = 0` was replaced by `nu = 0.3` with rollers (registered, arithmetic 8); `k_s = E A/L` holds for both.
+- No flow solver, no transport, no Tet10 interface (registered limits).
+
+### Decision by the registered rule
+
+**partial.** Every clause c1 to c7 is met by a test, and every mutation is caught by a test that was registered before the
+run; but the registered check F2 missed on its registered run (a set-up defect, corrected by amendment 1 after the run), and
+Rule I makes a missed registered check partial.
+
+### Remaining questions
+
+1. **F2.** Options: (a) accept F2b, registered by amendment 1 before its run, as the check of clause c6 and mark done; (b)
+   keep partial and register F2b's test as a check of a small follow-up item (below). Recommendation: (b), by the rule as it
+   is written; (a) is the lead's call if Rule I is read as covering misses of the method, not of the set-up.
+2. **Tet10 interfaces.** The projection map uses the face corners, so a Tri6 face's mid-edge nodes get no force and the
+   mapped load of a uniform pressure is not the consistent quadratic one. Options: (a) leave it to the intermediate tier's
+   dynamic participant (with quadratic interface elements in the map, a change of `rcfd-fv`); (b) refuse Tet10 surface sets
+   in `SolidInterface::new` now. Recommendation: (a), and a sentence in the documentation (done in this ADR's limits);
+   refusing would hide a usable (consistent, conservative) though not optimal route.
+3. **The participant over the service.** `cosim_service::Service::host_structure` takes a closure that builds any
+   `Structure` (`Box<dyn Structure>`), so `StaticSolid` can be hosted without new library code; no test does it. Recommendation: none now; the intermediate tier's participant is the one
+   worth serving.
+
+### For the lead: roadmap entries
+
+F-385: proposed status **partial**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0286, 2026-11-12: rcfd_post::solid_coupling. SolidInterface takes the nodes of a surface set of a rcfd_fem model (ascending) and the corners of its faces as interface elements (build_map is InterfaceMap::build on them); face_forces_to_nodes and solve_face_forces map the fluid's face forces with a given InterfaceMap (forces_to_nodes, the transpose) and solve statically with the model's own constraints; StaticSolid implements cosim::Structure (advance a static solve, the state time, displacement and forces of the last advance; checkpoint and restore bit for bit; a failed solve leaves the state unchanged). No mass: for mock fluids and quasi-static use only (the added-mass ratio against an incompressible flow is unbounded); no flow solver is coupled. Checks on a Hex8 bar 4 x 1 x 1 m (8 x 2 x 2, E 2e11, nu 0.3, rollers): resultant, moment and work equal the fluid side's to 1.1e-16 (limit 1e-12) for a matching and a 3:2 wall, uniform and random face forces, Hex8 and Tet4; matching wall under uniform pressure: uniaxial closed form to 4.4e-15 (limit 1e-10), mapped loads equal to Load::pressure's to 1.2e-16; 3:2 wall: consistent-weighted mean face displacement to 4.2e-15 (exact by Betti, limit 1e-10), largest error on the loaded face 0.131 p L/E (limit 0.25 from a half-space estimate 0.05 to 0.11; control >= 0.005), at x <= L/2 2.3e-4 (limit 0.01, Saint-Venant). With a test-only mock fluid of stiffness 1.5 k_s, coupled_step converges in 3 iterations to u = F0/(k_s + k_f) within 1.9e-15 (limit 1e-8) with Aitken and with the least-squares update; the plain fixed point fails at the cap. A failing solve (CG capped at one iteration) stops the step naming the participant 'solid' in iteration 1 and, after a load step (amendment 1), in iteration 2, both sides restored bit for bit. Partial: the registered failing-solve check in iteration 2 was not reached on its registered run (the step after a converged one starts at the fixed point); the corrected test, registered by amendment 1 before its run, met it. Nine of nine mutations caught. Tet10 interfaces get no force on mid-edge nodes (open ADR 0286 Q2).
+
+Follow-up item (id by the lead):
+
+1. Title: "Static solid participant: the failing solve in a later iteration as a registered check". Deps: F-385.
+
+> Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0286 ran the test once after its amendment 1. With the StaticSolid and the mock fluid of ADR 0286, a coupled step that starts away from its fixed point (the mock's F0 doubled after a converged step) and whose static solve fails in iteration 2 stops with the participant's name and iteration 2, the solver's message, and both participants bit-equal to the start of the step; a step whose solve fails in iteration 3 does the same.
+
 ## The planned stub, as written
 
 # ADR 0286: One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
