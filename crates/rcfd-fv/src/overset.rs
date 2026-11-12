@@ -28,6 +28,13 @@
 //! corrector starts from plus one correction per region of calculated cells, the pressure equation of each region is
 //! closed by these fluxes, and (with [`FringeFlux::PrescribedOwnGradient`]) the pressure gradient of a calculated cell
 //! next to a fringe cell is taken from the pressures of its own part.
+//!
+//! Skewness and non-orthogonal corrections (F-368, ADR 0367) are an opt-in of the solver,
+//! [`OversetSolver::set_geometry_corrections`]: the face flux of a cell field (the Rhie-Chow flux of `HbyA`, the refreshed
+//! and the initial flux, the interpolation of the `ddt_correction` defect) is the exact flux of a linear field through the
+//! mesh's triangulated faces, the convected face value carries the same correction, the momentum diffusion carries the
+//! library's explicit non-orthogonal correction and the pressure equation and its flux the same explicit non-orthogonal
+//! flux; see [`GeometryCorrections`].
 
 use crate::ale::{move_mesh, set_follow_conditions, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -36,7 +43,7 @@ use crate::diffusion::{laplacian, laplacian_opt, uniform_gamma};
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
-use crate::gradient::green_gauss;
+use crate::gradient::{green_gauss, least_squares};
 use crate::pimple::moving::AleStep;
 use crate::pimple::PimpleSettings;
 use crate::pressure::{
@@ -175,6 +182,11 @@ pub struct OversetSolver {
     euler_fallback: usize,
     /// Set by [`OversetSolver::set_fringe_flux`] (ADR 0347).
     fringe_flux: FringeFlux,
+    /// Set by [`OversetSolver::set_geometry_corrections`] (ADR 0367).
+    corrections: bool,
+    /// With the corrections on: the corrected face interpolation of the velocity at the end of the last step, on its
+    /// geometry (the interpolation of the next step's `ddt_correction` defect).
+    corrected_old_flux: Option<Vec<f64>>,
 }
 
 /// "No region": the cell is not calculated.
@@ -357,6 +369,184 @@ impl FringeRing {
             }
             grad[c] = [0, 1, 2].map(|i| rc.inv[i][0] * rhs[0] + rc.inv[i][1] * rhs[1] + rc.inv[i][2] * rhs[2]);
         }
+    }
+}
+
+/// The face geometry of the opt-in skewness and non-orthogonal corrections (F-368, ADR 0367), per internal face `f` with
+/// owner `o` and neighbour `n`: the skewness vector `s_f = x_f - (w x_o + (1 - w) x_n)`, the non-orthogonal part `k_f = S_f
+/// - d_f |S_f|^2 / (S_f . d_f)` (as `diffusion::laplacian`) and the warp tensor `W_f[j][i] = sum_t (c_t - x_f)_j (S_t)_i`
+/// over the triangles `t` of the face as `rcfd_mesh` builds its geometry (edge `a b` and the vertex mean `e`: centroid
+/// `c_t`, area vector `S_t`); `W_f` vanishes on a planar face. Public so that a check can apply each correction alone.
+#[derive(Debug, Clone)]
+pub struct GeometryCorrections {
+    /// `s_f` of every internal face.
+    pub skew: Vec<Vec3>,
+    /// `k_f` of every internal face.
+    pub non_orth: Vec<Vec3>,
+    /// `W_f` of every internal face, indexed `[j][i]` (position component `j`, area component `i`).
+    pub warp: Vec<[[f64; 3]; 3]>,
+}
+
+impl GeometryCorrections {
+    /// The face geometry of `g`.
+    pub fn new(g: &FvGeometry) -> Self {
+        let mesh = &g.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let (cc, cf, sf) = (mesh.cell_centres(), mesh.face_centres(), mesh.face_area_vectors());
+        let pts = mesh.points();
+        let mut skew = Vec::with_capacity(g.n_internal);
+        let mut non_orth = Vec::with_capacity(g.n_internal);
+        let mut warp = Vec::with_capacity(g.n_internal);
+        for f in 0..g.n_internal {
+            let w = g.weights[f];
+            let xp = vec3::add(vec3::scale(cc[own[f]], w), vec3::scale(cc[nei[f]], 1.0 - w));
+            skew.push(vec3::sub(cf[f], xp));
+            let d = g.delta[f];
+            let delta = vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d));
+            non_orth.push(vec3::sub(sf[f], delta));
+            let ids = mesh.face_points(f);
+            let np = ids.len();
+            let mut t = [[0.0; 3]; 3];
+            if np > 3 {
+                let mut e = vec3::ZERO;
+                for &i in ids {
+                    e = vec3::add(e, pts[i]);
+                }
+                e = vec3::scale(e, 1.0 / np as f64);
+                for i in 0..np {
+                    let (a, b) = (pts[ids[i]], pts[ids[(i + 1) % np]]);
+                    let c = vec3::scale(vec3::add(vec3::add(a, b), e), 1.0 / 3.0);
+                    let st = vec3::scale(vec3::cross(vec3::sub(b, a), vec3::sub(e, a)), 0.5);
+                    let r = vec3::sub(c, cf[f]);
+                    for (j, row) in t.iter_mut().enumerate() {
+                        for (k, v) in row.iter_mut().enumerate() {
+                            *v += r[j] * st[k];
+                        }
+                    }
+                }
+            }
+            warp.push(t);
+        }
+        GeometryCorrections { skew, non_orth, warp }
+    }
+
+    /// The cell gradients of the corrections: the weighted least-squares gradient of `cells` with the boundary values
+    /// `bvals`; with a connectivity that is not trivial, the donor interpolation of those gradients in a fringe cell and
+    /// zero in a hole cell (ADR 0367 G).
+    pub fn gradients(g: &FvGeometry, cells: &[f64], bvals: &[f64], conn: Option<&Connectivity>) -> Vec<Vec3> {
+        let ls = least_squares(g, cells, bvals);
+        let Some(conn) = conn.filter(|c| !c.is_trivial()) else {
+            return ls;
+        };
+        let mut out = ls.clone();
+        for (c, st) in &conn.stencils {
+            let mut v = [0.0; 3];
+            for (&k, &w) in st.cells.iter().zip(&st.weights) {
+                vec3::axpy(&mut v, w, ls[k]);
+            }
+            out[*c] = v;
+        }
+        for (c, o) in out.iter_mut().enumerate() {
+            if conn.kind[c] == CellKind::Hole {
+                *o = [0.0; 3];
+            }
+        }
+        out
+    }
+
+    /// [`gradients`](Self::gradients) of the three components of a cell vector field with its boundary values.
+    pub fn vector_gradients(g: &FvGeometry, v: &[Vec3], bv: &[Vec3], conn: Option<&Connectivity>) -> [Vec<Vec3>; 3] {
+        [0, 1, 2].map(|k| {
+            let cells: Vec<f64> = v.iter().map(|x| x[k]).collect();
+            let b: Vec<f64> = bv.iter().map(|x| x[k]).collect();
+            Self::gradients(g, &cells, &b, conn)
+        })
+    }
+
+    fn face_gradient(g: &FvGeometry, grad: &[Vec3], f: usize) -> Vec3 {
+        let (o, n) = (g.mesh.owner()[f], g.mesh.neighbour()[f]);
+        let w = g.weights[f];
+        [0, 1, 2].map(|i| w * grad[o][i] + (1.0 - w) * grad[n][i])
+    }
+
+    /// C1 (ADR 0367): adds to the flux `phi` of every internal face the correction `sum_ij G_f,ij (s_f,j S_f,i +
+    /// W_f[j][i])`, `G_f,ij` the face gradient of component `i` (`grads[i]`) along `j`: the plain face flux becomes the
+    /// exact flux of a linear field through the triangulated face.
+    pub fn add_flux_correction(&self, g: &FvGeometry, grads: &[Vec<Vec3>; 3], phi: &mut [f64]) {
+        let sf = g.mesh.face_area_vectors();
+        for f in 0..g.n_internal {
+            let (s, wt) = (self.skew[f], &self.warp[f]);
+            let mut c = 0.0;
+            for (i, gr) in grads.iter().enumerate() {
+                if !g.active[i] {
+                    continue;
+                }
+                let gi = Self::face_gradient(g, gr, f);
+                for j in 0..3 {
+                    c += gi[j] * (s[j] * sf[f][i] + wt[j][i]);
+                }
+            }
+            phi[f] += c;
+        }
+    }
+
+    /// The face flux of the cell vector field `v` (boundary values `bv`) with C1, the gradients of
+    /// [`vector_gradients`](Self::vector_gradients) under `conn`.
+    pub fn face_flux(&self, g: &FvGeometry, v: &[Vec3], bv: &[Vec3], conn: Option<&Connectivity>) -> Vec<f64> {
+        let mut phi = face_flux(g, v, bv);
+        let grads = Self::vector_gradients(g, v, bv, conn);
+        self.add_flux_correction(g, &grads, &mut phi);
+        phi
+    }
+
+    /// C2 (ADR 0367): the deferred correction of the convected face value of every internal face, `beta [F_f (g_f . s_f) +
+    /// g_f . (W_f (v_f' - m_f))]`, with `flux` the convecting flux `F`, `grad` the cell gradients of the convected
+    /// component, `u` the cell velocities (`v_f'` their face interpolation) and `face_velocity` the face-centre velocity
+    /// `m_f` of a moving mesh (`None`: at rest).
+    pub fn convection_correction(
+        &self,
+        g: &FvGeometry,
+        flux: &[f64],
+        u: &[Vec3],
+        face_velocity: Option<&[Vec3]>,
+        grad: &[Vec3],
+        beta: f64,
+    ) -> Vec<f64> {
+        let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+        (0..g.n_internal)
+            .map(|f| {
+                if beta == 0.0 {
+                    return 0.0;
+                }
+                let gf = Self::face_gradient(g, grad, f);
+                let w = g.weights[f];
+                let mut v = [0, 1, 2].map(|i| w * u[own[f]][i] + (1.0 - w) * u[nei[f]][i]);
+                if let Some(m) = face_velocity {
+                    v = vec3::sub(v, m[f]);
+                }
+                let wt = &self.warp[f];
+                let wv = [0, 1, 2].map(|j| wt[j][0] * v[0] + wt[j][1] * v[1] + wt[j][2] * v[2]);
+                beta * (flux[f] * vec3::dot(gf, self.skew[f]) + vec3::dot(gf, wv))
+            })
+            .collect()
+    }
+
+    /// Adds the convective face corrections `q` (from [`convection_correction`](Self::convection_correction)) to the
+    /// right-hand side of `m`: `-q_f` to the owner, `+q_f` to the neighbour.
+    pub fn add_convection_correction(g: &FvGeometry, q: &[f64], m: &mut FvMatrix) {
+        let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+        for (f, &qf) in q.iter().enumerate() {
+            m.b[own[f]] -= qf;
+            m.b[nei[f]] += qf;
+        }
+    }
+
+    /// C4 (ADR 0367): the explicit non-orthogonal flux `gamma_f k_f . g_f` of every internal face, `grad` the cell
+    /// gradients of the pressure.
+    pub fn non_orth_flux(&self, g: &FvGeometry, gamma: &[f64], grad: &[Vec3]) -> Vec<f64> {
+        (0..g.n_internal)
+            .map(|f| gamma[f] * vec3::dot(self.non_orth[f], Self::face_gradient(g, grad, f)))
+            .collect()
     }
 }
 
@@ -623,7 +813,35 @@ impl OversetSolver {
             bdf2: None,
             euler_fallback: 0,
             fringe_flux: FringeFlux::PressureEquation,
+            corrections: false,
+            corrected_old_flux: None,
         })
+    }
+
+    /// Switch the skewness and non-orthogonal corrections of the step on or off (F-368, ADR 0367), from the next step on.
+    /// With them on: the face flux of a cell vector field (the Rhie-Chow flux of `HbyA`, the flux of the faces that do not
+    /// keep their flux, the interpolation of the old velocity in the `ddt_correction` defect) carries the correction C1 of
+    /// [`GeometryCorrections`], the convected face value the correction C2, the momentum diffusion the explicit
+    /// non-orthogonal correction of `diffusion::laplacian` with the gradients of the corrections (C3), and `phiHbyA` loses
+    /// the explicit non-orthogonal flux of the pressure each corrector starts from, which the pressure equation and the
+    /// corrected flux then share (C4). Switched on before the first step, the initial flux of the internal faces is
+    /// rebuilt with C1. Off (the default) is the solver that did not opt in, bit for bit. A step with the corrections on
+    /// is refused together with BDF2, a prescribed fringe flux or `rhie_chow_step_consistent`.
+    pub fn set_geometry_corrections(&mut self, on: bool) {
+        self.corrections = on;
+        self.corrected_old_flux = None;
+        if on && self.step_no == 0 {
+            let g = self.geom.clone();
+            let bu = self.u.boundary_values(&g);
+            let conn = (!self.conn.is_trivial()).then_some(&self.conn);
+            let phi = GeometryCorrections::new(&g).face_flux(&g, &self.u.values, &bu, conn);
+            self.phi[..g.n_internal].copy_from_slice(&phi[..g.n_internal]);
+        }
+    }
+
+    /// Whether the corrections of [`set_geometry_corrections`](Self::set_geometry_corrections) are on.
+    pub fn geometry_corrections(&self) -> bool {
+        self.corrections
     }
 
     /// Choose how the flux of the faces between calculated and fringe cells is found (F-445, ADR 0347), from the next
@@ -760,6 +978,13 @@ impl OversetSolver {
         if let Some(r) = refusal(&self.settings, &st.geom, self.outer_opt_in, self.bdf2_opt_in) {
             return Err(r.into());
         }
+        if self.corrections
+            && ((self.bdf2_opt_in && self.settings.time_scheme == TimeScheme::Bdf2)
+                || self.fringe_flux != FringeFlux::PressureEquation
+                || self.settings.rhie_chow_step_consistent)
+        {
+            return Err("overset: the geometry corrections (ADR 0367) with BDF2, a prescribed fringe flux or rhie_chow_step_consistent are not supported".into());
+        }
         let old = self.geom.clone();
         let n = old.n_cells();
         if st.geom.n_cells() != n
@@ -830,7 +1055,19 @@ impl OversetSolver {
             let vol_new = new_geom.mesh.cell_volumes();
             let zero_b = vec![[0.0; 3]; old.mesh.n_boundary_faces()];
             let uold: Vec<Vec3> = self.u.values.clone();
-            let fo = face_flux(&old, &uold, &zero_b);
+            let fo = if self.corrections {
+                // ADR 0367 C1: the interpolation phiHbyA uses (stored at the end of the last step, on its geometry)
+                match self.corrected_old_flux.take() {
+                    Some(fo) if fo.len() == old.mesh.n_faces() => fo,
+                    _ => {
+                        let bu = self.u.boundary_values(&old);
+                        let c = (!conn_old.is_trivial()).then_some(&conn_old);
+                        GeometryCorrections::new(&old).face_flux(&old, &uold, &bu, c)
+                    }
+                }
+            } else {
+                face_flux(&old, &uold, &zero_b)
+            };
             let (own, nei) = (new_geom.mesh.owner(), new_geom.mesh.neighbour());
             (0..n_int)
                 .map(|f| {
@@ -882,6 +1119,14 @@ impl OversetSolver {
         }
         let g = self.geom.clone();
         let active = g.active;
+        // ADR 0367: the face geometry of the corrections on the new mesh and the velocity of the face centres
+        let corr: Option<(GeometryCorrections, Vec<Vec3>)> = self.corrections.then(|| {
+            let (cf0, cf1) = (old.mesh.face_centres(), g.mesh.face_centres());
+            let m = (0..g.n_internal)
+                .map(|f| vec3::scale(vec3::sub(cf1[f], cf0[f]), 1.0 / dt))
+                .collect();
+            (GeometryCorrections::new(&g), m)
+        });
         if !trivial {
             // M9: the fringe cells from their new donors (calculated now, so defined), the hole cells the rigid velocity,
             // and the faces that do not keep their flux the face interpolation of that velocity on the new geometry
@@ -912,7 +1157,11 @@ impl OversetSolver {
                 }
             }
             let zero_b = vec![[0.0; 3]; g.mesh.n_boundary_faces()];
-            let fi = face_flux(&g, &self.u.values, &zero_b);
+            let fi = match &corr {
+                // ADR 0367 C1
+                Some((gc, _)) => gc.face_flux(&g, &self.u.values, &self.u.boundary_values(&g), Some(&conn)),
+                None => face_flux(&g, &self.u.values, &zero_b),
+            };
             for f in 0..n_int {
                 if !kept[f] {
                     self.phi[f] = fi[f];
@@ -991,8 +1240,23 @@ impl OversetSolver {
             defect,
             wall_dpdn,
         };
-        let (p_iters, unconverged, delta, hole_flux) =
-            self.piso(dt, &s, &ale, bdf.as_ref(), &conn, &u_old, &hole_velocity, trivial)?;
+        let corr_ref = corr.as_ref().map(|(gc, m)| (gc, m.as_slice()));
+        let (p_iters, unconverged, delta, hole_flux) = self.piso(
+            dt,
+            &s,
+            &ale,
+            bdf.as_ref(),
+            &conn,
+            &u_old,
+            &hole_velocity,
+            trivial,
+            corr_ref,
+        )?;
+        if let Some((gc, _)) = &corr {
+            let bu = self.u.boundary_values(&g);
+            let c = (!trivial).then_some(&conn);
+            self.corrected_old_flux = Some(gc.face_flux(&g, &self.u.values, &bu, c));
+        }
         if let Some(lv) = level {
             let AleStep { mesh_flux, vol_old, .. } = ale;
             self.bdf2 = Some(Bdf2History {
@@ -1083,8 +1347,16 @@ impl OversetSolver {
         u_old: &[Vec3],
         hole_velocity: &[Vec3],
         trivial: bool,
+        geo_corr: Option<(&GeometryCorrections, &[Vec3])>,
     ) -> Result<(usize, usize, f64, f64), String> {
         let g = self.geom.clone();
+        // ADR 0367: the connectivity the gradients of the corrections interpolate the fringe cells with
+        let corr_conn = (!trivial).then_some(conn);
+        let beta = match s.convection {
+            ConvScheme::Central => 1.0,
+            ConvScheme::Blended(b) => b,
+            _ => 0.0,
+        };
         let mesh = &g.mesh;
         let n = g.n_cells();
         let n_int = g.n_internal;
@@ -1146,7 +1418,16 @@ impl OversetSolver {
                 let first_cells: Option<Vec<f64>> = first.map(|b| b.u_first.iter().map(|v| v[k]).collect());
                 let conv_cells: &[f64] = first_cells.as_deref().unwrap_or(&cells);
                 let mut m = convection(&g, &phi_conv, conv_cells, &bc, s.convection, None);
-                m.add(&laplacian_opt(&g, &gamma_nu, &bc, None, conv_cells, &bv, None));
+                match geo_corr {
+                    None => m.add(&laplacian_opt(&g, &gamma_nu, &bc, None, conv_cells, &bv, None)),
+                    Some((gc, face_velocity)) => {
+                        // ADR 0367 C2 and C3
+                        let grad = GeometryCorrections::gradients(&g, conv_cells, &bv, corr_conn);
+                        let q = gc.convection_correction(&g, &phi_conv, &u_iter, Some(face_velocity), &grad, beta);
+                        GeometryCorrections::add_convection_correction(&g, &q, &mut m);
+                        m.add(&laplacian(&g, &gamma_nu, &bc, Some(&grad)));
+                    }
+                }
                 let u_old_k: Vec<f64> = u_old.iter().map(|v| v[k]).collect();
                 let mut m = match bdf {
                     None => {
@@ -1252,6 +1533,17 @@ impl OversetSolver {
                 }
                 let hb = boundary_hby_a(&g, &pbc, &ub, &hby_a);
                 let mut phi_hby_a = face_flux(&g, &hby_a, &hb);
+                if let Some((gc, _)) = geo_corr {
+                    // ADR 0367 C1 (the Rhie-Chow flux of HbyA) and C4 (the non-orthogonal flux of the pressure this
+                    // corrector starts from, shared by the pressure equation and the corrected flux)
+                    let gh = GeometryCorrections::vector_gradients(&g, &hby_a, &hb, corr_conn);
+                    gc.add_flux_correction(&g, &gh, &mut phi_hby_a);
+                    let bvp = boundary_values_pbc(&g, &pbc, &self.p.values);
+                    let gp = GeometryCorrections::gradients(&g, &self.p.values, &bvp, corr_conn);
+                    for (f, nf) in gc.non_orth_flux(&g, &gamma_p, &gp).into_iter().enumerate() {
+                        phi_hby_a[f] -= nf;
+                    }
+                }
                 if s.ddt_correction {
                     for f in 0..n_int {
                         phi_hby_a[f] += gamma_p[f] / dt * ale.defect[f];
