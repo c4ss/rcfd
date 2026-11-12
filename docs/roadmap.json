@@ -3078,9 +3078,9 @@
     "deps": [
       "F-357"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a decaying three-dimensional vortex with a known solution) on the set-ups B3 and B3d of ADR 0251 with the component moving as in ADR 0255: the error of the calculated and fringe cells on B3d at most twice that on B3, with the default and with the quadratic donor interpolation, and continuity of the calculated cells within 1e-9 at every step.",
-    "note": "From ADR 0255, recommendation taken on the maintainer's standing instruction of 2026-11-11. A uniform flow cannot see the warped face geometry or the non-orthogonality."
+    "note": "From ADR 0255, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0264, 2026-11-12: PARTIAL. The linear shear u = U0 + 0.5 a (b . (x - x0)) with a = (1, 2, 1)/sqrt(6), b = (0, 1, -2)/sqrt(5), U0 = (1, 0.5, 0.25) (an exact steady Navier-Stokes solution with zero pressure for every viscosity, all six background patches Dirichlet) on B3 and B3d with the component moving as in ADR 0255, 40 steps: continuity of the calculated cells 1.9e-14 or less at every step with the default and the quadratic donor interpolation (met), the stencils reproduce the field to 3e-15, the planar operators keep it to 2e-14 (K2, K3); the error of the calculated and fringe cells 1.36e-2 on B3d against 8.7e-4 on B3, ratio 15.6 with either interpolation, against the limit 2 (missed, kept as ignored known-miss records). Diagnosed by measurement: the single warped mesh, not the coupling. The warped parts alone have 9.6e-3 (background at rest) and 1.21e-2 (component moving), 0.89 of the overset error, and the worst cell of the overset run is the worst cell of the warped component alone; the discrete operators leave a residual of the exact field of 0.14 (convection, skewness of the central face value), 0.025 (diffusion without the non-orthogonal correction) and 0.075 per second (continuity) on the warped cells, zero on the planar ones. Control (weights times 1.001: 1.85e-3) held; three mutations caught. No library change. Limits: one flow, one warp, one motion, 40 steps; B3's own error is 4 times that of the planar component alone (not diagnosed). Follow-ups: F-368, F-369."
   },
   {
     "id": "F-360",
@@ -3171,5 +3171,27 @@
     "status": "todo",
     "acceptance": "Non-orthogonal correctors, the component diagonal and face jumps are each accepted with periodic pressure faces under the consistent correctors once a registered periodic steady identity (velocity, and pressure with the mean removed against the default's own drift) is met for it; a combination that misses stays refused with its located message; defaults bit-identical.",
     "note": "From ADR 0258 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+  },
+  {
+    "id": "F-368",
+    "title": "Overset: opt-in skewness and non-orthogonal corrections in the overset step",
+    "phase": 9,
+    "deps": [
+      "F-359"
+    ],
+    "status": "todo",
+    "acceptance": "An opt-in of the overset step that adds the explicit non-orthogonal correction to the momentum diffusion and the pressure Laplacian and a skewness correction to the central face value and the Rhie-Chow face flux; with it the linear shear of ADR 0264 on B3d with the component moving has an error of the calculated and fringe cells at most twice that on B3 with the default and with the quadratic donor interpolation, continuity of the calculated cells within 1e-9 at every step, the uniform flow of ADR 0255 within 1e-10, and the defaults bit-identical.",
+    "note": "From ADR 0264 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. On warped cells the overset step leaves a residual for an exact linear field (convection 0.14, diffusion 0.025); the single warped mesh, not the coupling, carries 0.89 of the error."
+  },
+  {
+    "id": "F-369",
+    "title": "Overset: the coupling's share of the error of a linear field on the planar B3",
+    "phase": 9,
+    "deps": [
+      "F-359"
+    ],
+    "status": "todo",
+    "acceptance": "On the planar B3 with the linear shear of ADR 0264 (error 8.7e-4 against 2.1e-4 for the planar component alone moving), the share of the fringe pressure, of the mass offset and of the flux of the faces that change kind measured separately, each by a run that removes it, with the cause of the excess named or the excess shown to be the time error of the turning mesh.",
+    "note": "From ADR 0264 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low priority."
   }
 ]
