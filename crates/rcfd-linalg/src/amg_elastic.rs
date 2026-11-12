@@ -228,8 +228,12 @@ impl DenseLu {
     fn solve(&self, b: &[f64], x: &mut [f64]) {
         let n = self.n;
         x.copy_from_slice(b);
+        // ADR 0305 amendment 1: the factorisation swaps whole rows (the multipliers move with them), so every
+        // interchange is applied before the forward substitution.
         for k in 0..n {
             x.swap(k, self.piv[k]);
+        }
+        for k in 0..n {
             for i in k + 1..n {
                 x[i] -= self.lu[i * n + k] * x[k];
             }

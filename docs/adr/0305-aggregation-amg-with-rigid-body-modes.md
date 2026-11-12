@@ -291,6 +291,31 @@ D3 or D4 (a default or the scalar AMG changed): **todo** until repaired. No crat
 - The coarsest solve is dense (order `<= 6000`); larger coarsest levels are refused.
 - No case-file key: the selection is through the API only (`StaticSolver::PreconditionedCg`), as for ADR 0357.
 
+## Amendment 1 (2026-11-12, after the first registered run of the fast tests, before the corrected run)
+
+**What happened.** Code d23479b3. Run 1 (logs `f402-scratch/run1-si_amg_elastic.log`, `run1-si_amg.log`), each test once:
+`si_amg_elastic` Q1 and Q2 passed; in `si_amg` the tests `cubes_solve`, `hierarchy_cubes` and `n1_translations_only` passed
+and `x1_cantilevers_and_p1` **failed at S2 on the fast cantilever: asymmetry 1.422e-4 against the limit 1e-10** (cube 11:
+4.4e-17). That test stopped at the assertion, so the slender record of X1 and P1 did not run. The numbers of run 1 are recorded
+in addendum 1 and are not replaced.
+
+**Diagnosis** (scratch copy `f402-scratch/diag`, probes `diag.rs`, `diag2.rs`, no file of the branch used): the asymmetry is
+the same with no smoothing sweeps (1.9e-4, so it is the coarse correction `P A_c^{-1} P^T`), `A_c` itself is symmetric to
+4.7e-16 and its condition number is only 1.4e4, but the dense coarse solve has the residual `|b - A_c x| / |b| = 0.17` on the
+fast cantilever (2.7e-15 on cube 11). Cause: `DenseLu::new` swaps whole rows (the stored multipliers move with them, as in
+`P A = L U`), while `DenseLu::solve` applies interchange `k` and then eliminates column `k` in turn; that order is correct only
+if the multipliers were not moved by later swaps, i.e. only when no row interchange happens. On cube 11 no interchange
+happened; on the cantilever's coarsest level (rotational unknowns) some did. Fix: apply all interchanges to `x` first, then
+the unit lower and the upper substitution (verified in the scratch copy: residual 1.7e-13, S2 7.2e-17).
+
+**Amendment.** (1) The fix above in `amg_elastic.rs` (`DenseLu::solve` only). (2) The corrected run: every fast test of
+`si_amg_elastic` and `si_amg` is run once more on the corrected code (logs `run2-*.log`); the heavy records H1 to H4, the D
+checks and the mutations use the corrected code. No limit, no test and no setting is changed. (3) The same interleaved solve is
+in the scalar AMG's `DenseLu` (`crates/rcfd-linalg/src/amg.rs`); it is **not** changed here (add, don't alter; it would
+change fluid results wherever its coarsest factorisation interchanges rows); it is listed as an open question. (4) By the
+registered decision rule a check missed in a registered run (S2 in run 1), so the proposed status is **partial** unless the
+maintainer accepts this amendment; addendum 1 reports both runs.
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the intermediate-tier plan, [ADR
