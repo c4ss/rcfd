@@ -6659,7 +6659,7 @@ fixed by the item's registration ADR before any code.
     before the flow. No library change. Limits: a uniform flow only; it shows the identities (closed area vectors, GCL,
     weights summing to one) on a warped moving overset mesh, not the accuracy of a non-uniform flow there. Follow-up
     (recommendation taken on the maintainer's standing instruction of 2026-11-11): F-359.
-- [ ] **F-358** Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided
+- [~] **F-358** Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided
   - depends on: F-351, F-350
   - acceptance: A case key of dynamic_mesh.six_dof selects the wall pressure of the body force ("extrapolated", the
     default, or "prescribed_gradient"), the case driver keeps the vector of ale::set_follow_conditions and hands it to
@@ -6671,9 +6671,29 @@ fixed by the item's registration ADR before any code.
     the corrected evaluation is checked on a wall cell whose centre does not lie on the face normal; with the default
     every existing case hash is bit-identical.
   - note: From ADR 0252 questions 1 to 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    The default wall pressure on a wall with a prescribed gradient is first order: the least-squares gradient counts the
-    stored zero-gradient wall value as a data point, so the wall-cell gradient is exactly half and the force is low by
-    1/(4N) of the column (1.25 percent at 20 cells). The default is the maintainer's decision.
+    DONE (ADR 0269, 2026-11-12; registered before the code, two amendments). The key wall_pressure ("extrapolated"
+    default, "prescribed_gradient") in the optional table [dynamic_mesh.six_dof.coupling] (a plain key of six_dof would
+    need an H1 hash-table entry, ADR 0266; the coupling table holds it because the strong step takes it beside the
+    coupling settings) selects the wall pressure of the body force in both schemes: the case driver keeps the fixed-flux
+    gradient vector of ale::set_follow_conditions (merged with set_rest_conditions) from step to step
+    (Simulation::dynamic_wall_gradients) and hands it to sixdof::patch_force_moment_wall_gradient (loose) or
+    fsi::strong_step_with (strong). Tree runs equal strong_step_with called directly bit for bit (loose 100 steps as one
+    iteration, strong 60 steps); the kept vector equals (w_n - w_(n-1))/dt to 1e-15. The spring-mounted piston of ADR
+    0211 at mass ratio 0.2 through the driver: omega_m/omega 1.000264 with the key (limit 0.05 percent), 1.001307
+    without; at ratio 4 strong 1.000042 (1.005081 without). Corrected evaluation off the face normal: exact for linear
+    fields and second order on a uniformly sheared wall cell; on a cell whose neighbour does not lie along the wall face
+    first order with 1/19 of the error (default 9/19), as derived. Callers listed with one measurement each: rest walls
+    of a rigid column low by 1.2505e-2 (4e-6 corrected); the tree's force reports low by 1/(2N) = 2.5e-2 on a moving
+    wall; the rotor wall of the sliding step misses 0.41 g dn (0.06 corrected); cosim already defaults to the prescribed
+    gradient. Listing for the default: no registered hash moves (baseline_hashes and case_hashes_w48u hold no six-DOF
+    case); with the default flipped the six-DOF results move (T4 -5e-4, ADR 0266's piston -5.0e-3 in frequency, SP
+    -1.0e-3) and ADR 0266's R1, R2, E1, E2 fail. Without the table nothing changes (K0 unedited; a table with
+    "extrapolated" equals no table bit for bit). Six mutations, all caught. Disclosed: the rest-wall check missed as
+    registered because its case text jumped by X in the first step; corrected by amendment before the corrected run, the
+    miss kept as a record. Open, the maintainer's: the default (ADR 0269 Q1), the table (Q2), the force reports on
+    moving walls (Q3), the sliding step (Q4), skewed walls (Q5). STATUS recorded PARTIAL by the lead: the registered
+    check AU1 missed (a defect of the case text) and passed only as AU1b after amendment; done is the maintainer's call.
+    The default flip (Q1) waits for the maintainer's approval of the listed changes.
 - [~] **F-359** Overset: a non-uniform closed-form flow on a warped three-dimensional overset mesh
   - depends on: F-357
   - acceptance: A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a
@@ -7776,3 +7796,11 @@ fixed by the item's registration ADR before any code.
     buddies; merge all leaves inside a dyadic box when every one is marked. Needed before the adaptive loop can coarsen
     on the directional lattice (ADR 0267 R4). From ADR 0267 R2, recommendation taken on the maintainer's standing
     instruction of 2026-11-11.
+- [ ] **F-440** Corrected wall-force reports on moving walls in the case tree (opt-in)
+  - depends on: F-358
+  - acceptance: An opt-in key makes the force, moment and force-coefficient reports of a moving-mesh case take the wall
+    pressure of the kept fixed-flux gradient (the face pressure of sixdof::patch_force_moment_wall_gradient) on the
+    following and resting walls; on the rigid column of ADR 0269 AU1b the report's force deficit falls from 2.5e-2 to at
+    most 1e-4; without the key every report value is bit-identical; registered before the run.
+  - note: From ADR 0269 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
+    case tree's force reports are low by 1/(2N) on moving walls.
