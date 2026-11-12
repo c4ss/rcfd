@@ -7,6 +7,7 @@
 //! therefore bit-identical for any number of threads.
 
 pub mod amg;
+pub mod amg_elastic;
 pub mod backend;
 pub mod eigen;
 pub mod matrix;
