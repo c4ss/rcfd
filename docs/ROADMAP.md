@@ -7225,7 +7225,7 @@ fixed by the item's registration ADR before any code.
     rcfd-linalg tests unedited and passing. ADR 0274 (2026-11-12) provides PivotRule::NonZero and SkylineLdlt::inertia()
     (counts of negative and positive pivots) for the eigenvalue count, checked on shifted 12^3 Laplacians (1 and 32
     eigenvalues below the shift); rcfd-linalg/src/lib.rs already has the skyline line, and ADR 0283 adds its own.
-- [ ] **F-383** Mass matrix and linear modal analysis of a solid model
+- [~] **F-383** Mass matrix and linear modal analysis of a solid model
   - depends on: F-374, F-382
   - acceptance: Every limit not stated here is registered in the ADR before the run. Consistent mass matrix for Tet4,
     Hex8 and Tet10: for a box, the total mass, the centre of mass and the inertia tensor obtained from rigid motions r^T
@@ -7236,15 +7236,23 @@ fixed by the item's registration ADR before any code.
     (4.6941) within 2.5 percent with Tet10, the Euler-Bernoulli value less the shear and rotary-inertia correction
     estimated in the registration (0.15 and 0.9 percent); on a symmetric Hex8 mesh the two bending planes give the same
     frequency within 1e-6 relative; mode shapes are M-orthonormal within 1e-9.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0284; the registration is written
-    by the implementation agent before any code. ADR 0283 (2026-11-12) provides rcfd_linalg::eigen::lowest_eigenpairs
-    (Shift::Auto handles a singular K; request m >= 7 for a free body so that the Sturm check covers the six rigid
-    modes) and generalized_eigen_dense for references up to about 1000 unknowns (22.6 s at 900). ADR 0273 (2026-11-12):
-    Element::mass_rule() proposes tet_4 (Tet4), gauss_3 (Hex8) and tet_14 (Tet10, degree 5), exact for straight-sided
-    tetrahedra and every trilinear hexahedron; the consistent mass is the sum of rho N^T N w det J over
-    Element::integration_points. ADR 0275 (2026-11-12): assemble::assemble_with(model, threads, |ctx| element matrix)
-    assembles any per-element matrix on the stiffness pattern in element order (bit-identical for any thread count); the
-    mass matrix can use it directly.
+  - note: Structural solver, basic tier (plan ADR 0270). ADR 0284, 2026-11-12: rcfd_fem::mass::consistent (consistent
+    mass by the mass rules of ADR 0273, tet_4, gauss_3, tet_14, through assemble_with; exactly symmetric, bit-identical
+    for 1 and 8 threads), element_mass, rigid_motions and mass_properties from r^T M r; rcfd_fem::modal::modal_analysis
+    (zero constraints by symmetric elimination, lowest_eigenpairs of ADR 0283 with sigma = 0 when the constraints hold
+    every rigid motion and Shift::Auto for a free body; massless unknowns and non-zero constraints refused; modes
+    M-orthonormal over the full DofMap). Box with moved interior nodes: mass, centre and inertia from rigid motions
+    within 7.3e-16 (Tet4, Hex8, Tet10; limit 1e-12), about the centre within 3.9e-15. Free box: six rigid frequencies at
+    most 6.5e-8 of the seventh (limit 1e-6). Fixed-free bar, nu = 0, Hex8 32 x 1 x 1: f_1..3 within 1.0e-4, 9.0e-4,
+    2.5e-3 (limit 5e-3), equal to the discrete 1-D chain within 2.2e-14, observed order of f_1 2.0001; Tet4 and Tet10
+    below their 1-D chain bounds. Cantilever L/b = 20, Tet10 80 x 4 x 4: first and second bending within 2.7e-3 and
+    2.9e-3 of Euler-Bernoulli less the exact Timoshenko correction (0.199 and 1.361 percent, kappa 5/6; the draft's 0.15
+    and 0.9 used beta_n^2 for the cantilever's J_n), within 7.2e-4 and 1.08e-2 of pure Euler-Bernoulli (limits 1 and 2.5
+    percent); symmetric Hex8 mesh: bending planes equal within 4.0e-11 (limit 1e-6); mode shapes M-orthonormal within
+    6.0e-15 (limit 1e-9). Amendment 1: slender models need ModalOptions::tolerance(1e-7) (residual floor of the
+    eigensolver, c eps lambda_max/lambda_1); amendment 2: check C5 of the element mass matrices against closed forms
+    added after mutation M8 (Tet10 mass with a degree-2 rule) survived the registered checks; eight of nine mutations
+    caught by the registered tests, M8 by C5. Partial by the rule until the maintainer accepts amendment 2.
 - [ ] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
   - depends on: F-371, F-377, F-380, F-237
   - acceptance: Every limit not stated here is registered in the ADR before the run. A surface set of a solid mesh is
@@ -7298,7 +7306,10 @@ fixed by the item's registration ADR before any code.
     nu^2), with a 1 percent margin on each side. The page docs/structural-solver.md states the scope, the limits and
     that nothing is validated against a measured blade.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0288; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0284 (2026-11-12): rcfd_fem::modal::modal_analysis gives the modes
+    at rest; a slender blade needs ModalOptions::new(m).tolerance(1e-7) or so (the residual floor of lowest_eigenpairs
+    is about c eps lambda_max/lambda_1, 2.7e-9 for a 40 x 2 x 2 Tet10 cantilever of L/b = 20), and modes are best
+    identified by effective mass fractions from mass::rigid_motions, as sb_modal does.
 - [ ] **F-388** Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
   - depends on: F-370, F-372, F-374, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, element kinds,
@@ -8288,3 +8299,12 @@ fixed by the item's registration ADR before any code.
     samples, request to parsed object in the renderer) with the 100 ms limit unchanged, and an increment of 100 samples
     at 1e5 stored in at most 2 ms; a miss is recorded, not tuned.
   - note:  From ADR 0350 addendum 1 QA1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-457** Scale-aware convergence test of the subspace eigensolver
+  - depends on: F-382, F-383
+  - acceptance: Every limit not stated here is registered in the ADR before the run.
+    rcfd_linalg::eigen::lowest_eigenpairs gains a residual test relative to an estimate of ||A|| ||x|| (for example from
+    the factorisation or a few power steps), selectable without changing the existing default; the 40 x 2 x 2 Tet10
+    cantilever of ADR 0284 then converges with the scale-aware tolerance 1e-12 in at most 20 iterations, its first two
+    bending frequencies agree with the runs of ADR 0284 amendment 1 within 1e-10 relative, and every check of ADR 0283
+    still passes with the default unchanged.
+  - note: From ADR 0284 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
