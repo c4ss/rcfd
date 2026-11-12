@@ -235,7 +235,11 @@ fn box_gram(origin: Vec3, l: Vec3, rho: f64) -> ([[f64; 6]; 6], f64, Vec3, [[f64
         for k in 0..3 {
             let mut ek = [0.0; 3];
             ek[k] = 1.0;
-            let cr = [ek[1] * c[2] - ek[2] * c[1], ek[2] * c[0] - ek[0] * c[2], ek[0] * c[1] - ek[1] * c[0]];
+            let cr = [
+                ek[1] * c[2] - ek[2] * c[1],
+                ek[2] * c[0] - ek[0] * c[2],
+                ek[0] * c[1] - ek[1] * c[0],
+            ];
             g[i][3 + k] = m * cr[i];
             g[3 + k][i] = m * cr[i];
         }
@@ -280,7 +284,11 @@ fn gram_errors(g: &[[f64; 6]; 6], gc: &[[f64; 6]; 6], m: f64, c: Vec3) -> (f64, 
         }
     }
     let imax = max_abs((3..6).flat_map(|i| (3..6).map(move |j| (i, j))).map(|(i, j)| gc[i][j]));
-    let c3 = max_abs((3..6).flat_map(|i| (3..6).map(move |j| (i, j))).map(|(i, j)| g[i][j] - gc[i][j])) / imax;
+    let c3 = max_abs(
+        (3..6)
+            .flat_map(|i| (3..6).map(move |j| (i, j)))
+            .map(|(i, j)| g[i][j] - gc[i][j]),
+    ) / imax;
     (c1, c2, c3)
 }
 
@@ -312,7 +320,11 @@ fn c1_to_c4_box_mass_properties_and_n1() {
         ch.at_most(&format!("C2 {k} centre and translation-rotation block"), c2, 1e-12);
         ch.at_most(&format!("C3 {k} inertia about the origin"), c3, 1e-12);
         let p = mass_properties(&model, &m).unwrap();
-        ch.at_most(&format!("C3 {k} mass_properties mass"), (p.mass - m_exact).abs() / m_exact, 1e-12);
+        ch.at_most(
+            &format!("C3 {k} mass_properties mass"),
+            (p.mass - m_exact).abs() / m_exact,
+            1e-12,
+        );
         let cn = cc.sqrt();
         ch.at_most(
             &format!("C3 {k} mass_properties centre"),
@@ -321,7 +333,11 @@ fn c1_to_c4_box_mass_properties_and_n1() {
         );
         ch.at_most(
             &format!("C3 {k} mass_properties inertia about the centre"),
-            max_abs((0..3).flat_map(|i| (0..3).map(move |j| (i, j))).map(|(i, j)| p.inertia[i][j] - ic[i][j])) / icmax,
+            max_abs(
+                (0..3)
+                    .flat_map(|i| (0..3).map(move |j| (i, j)))
+                    .map(|(i, j)| p.inertia[i][j] - ic[i][j]),
+            ) / icmax,
             1e-12,
         );
         // C4: exact symmetry, and bit-identical for 1 and 8 threads.
@@ -408,7 +424,11 @@ fn f1_to_f3_free_box_and_n2() {
         let ratio = max_abs(r.frequencies[..6].iter().copied()) / f7;
         ch.at_most(&format!("F1 {k} max |f_1..6| / f_7"), ratio, 1e-6);
         let m = consistent(&model).unwrap();
-        ch.at_most(&format!("F1 {k} M-orthonormality"), m_orthonormality(&m, &r.modes), 1e-9);
+        ch.at_most(
+            &format!("F1 {k} M-orthonormality"),
+            m_orthonormality(&m, &r.modes),
+            1e-9,
+        );
         // F2: the six lowest modes span the rigid motions.
         let rig = rigid_motions(&model, mass_properties(&model, &m).unwrap().centre);
         let g = gram(&m, &rig);
@@ -425,7 +445,11 @@ fn f1_to_f3_free_box_and_n2() {
                 .collect();
             worst = worst.max(dot(&d, &mv(&m, &d)).max(0.0).sqrt());
         }
-        ch.at_most(&format!("F2 {k} M-norm of the non-rigid part of modes 1..6"), worst, 1e-8);
+        ch.at_most(
+            &format!("F2 {k} M-norm of the non-rigid part of modes 1..6"),
+            worst,
+            1e-8,
+        );
         if kind == ElementKind::Hex8 {
             let lambda7 = r.eigenvalues[6];
             println!("F3 Hex8 sigma / lambda_7 = {:.4e}", r.shift / lambda7);
@@ -435,7 +459,10 @@ fn f1_to_f3_free_box_and_n2() {
                 &format!("sigma {:e}, lambda_7 {:e}", r.shift, lambda7),
             );
             let n2 = modal_analysis(&model, &ModalOptions::new(7).shift(Shift::Value(0.0)));
-            println!("N2 Hex8 sigma = 0: {n2:?}", n2 = n2.as_ref().map(|r| r.frequencies.clone()));
+            println!(
+                "N2 Hex8 sigma = 0: {n2:?}",
+                n2 = n2.as_ref().map(|r| r.frequencies.clone())
+            );
             ch.holds(
                 "N2 Hex8 sigma = 0 refused",
                 matches!(n2, Err(FemError::Solver { .. })),
@@ -494,7 +521,11 @@ fn run_bar(ch: &mut Checks, kind: ElementKind, n: usize) -> [f64; 3] {
     let r = modal_analysis(&model, &ModalOptions::new(4)).unwrap();
     print_run(&name, &r);
     let m = consistent(&model).unwrap();
-    ch.at_most(&format!("{name} M-orthonormality"), m_orthonormality(&m, &r.modes), 1e-9);
+    ch.at_most(
+        &format!("{name} M-orthonormality"),
+        m_orthonormality(&m, &r.modes),
+        1e-9,
+    );
     let ax = axial_fractions(&model, &m, &r);
     println!("{name} axial fractions {ax:?}");
     let axial: Vec<usize> = (0..ax.len()).filter(|&i| ax[i] >= 0.99).collect();
@@ -591,14 +622,29 @@ fn f_ref(n: usize) -> f64 {
 
 /// Runs a cantilever; returns the frequencies of the first two bending pairs `[[f_1a, f_1b], [f_2a, f_2b]]`.
 fn run_cantilever(ch: &mut Checks, kind: ElementKind, nx: usize, ny: usize) -> [[f64; 2]; 2] {
+    run_cantilever_with(ch, kind, nx, ny, &ModalOptions::new(6))
+}
+
+/// [`run_cantilever`] with given options (ADR 0284 amendment 1).
+fn run_cantilever_with(
+    ch: &mut Checks,
+    kind: ElementKind,
+    nx: usize,
+    ny: usize,
+    options: &ModalOptions,
+) -> [[f64; 2]; 2] {
     let name = format!("CANT {} {nx}x{ny}x{ny}", kind.name());
     let model = cantilever(kind, nx, ny);
     let t0 = std::time::Instant::now();
-    let r = modal_analysis(&model, &ModalOptions::new(6)).unwrap();
+    let r = modal_analysis(&model, options).unwrap();
     println!("{name}: modal analysis {:.2} s", t0.elapsed().as_secs_f64());
     print_run(&name, &r);
     let m = consistent(&model).unwrap();
-    ch.at_most(&format!("{name} M-orthonormality"), m_orthonormality(&m, &r.modes), 1e-9);
+    ch.at_most(
+        &format!("{name} M-orthonormality"),
+        m_orthonormality(&m, &r.modes),
+        1e-9,
+    );
     let rig = rigid_motions(&model, [0.0; 3]);
     let mass = dot(&rig[0], &mv(&m, &rig[0]));
     let mut bending = Vec::new();
@@ -614,7 +660,10 @@ fn run_cantilever(ch: &mut Checks, kind: ElementKind, nx: usize, ny: usize) -> [
         }
     }
     println!("{name} bending modes {bending:?}");
-    assert!(bending.len() >= 4, "{name}: fewer than four bending modes among six: {bending:?}");
+    assert!(
+        bending.len() >= 4,
+        "{name}: fewer than four bending modes among six: {bending:?}"
+    );
     let f = |j: usize| r.frequencies[bending[j]];
     let out = [[f(0), f(1)], [f(2), f(3)]];
     for (p, pair) in out.iter().enumerate() {
@@ -636,15 +685,25 @@ fn run_cantilever(ch: &mut Checks, kind: ElementKind, nx: usize, ny: usize) -> [
 }
 
 #[test]
+#[ignore = "record of the first run (ADR 0284 amendment 1): NotConverged at the residual floor, lowest pair 2.60e-10 against 1e-10"]
 fn s1_symmetric_hex8_cantilever_bending_planes() {
     let mut ch = Checks::new();
     let p = run_cantilever(&mut ch, ElementKind::Hex8, 40, 2);
-    ch.at_most("S1 Hex8 40x2x2 first pair |f_a - f_b| / f_a", ((p[0][1] - p[0][0]) / p[0][0]).abs(), 1e-6);
-    ch.at_most("S1 Hex8 40x2x2 second pair |f_a - f_b| / f_a", ((p[1][1] - p[1][0]) / p[1][0]).abs(), 1e-6);
+    ch.at_most(
+        "S1 Hex8 40x2x2 first pair |f_a - f_b| / f_a",
+        ((p[0][1] - p[0][0]) / p[0][0]).abs(),
+        1e-6,
+    );
+    ch.at_most(
+        "S1 Hex8 40x2x2 second pair |f_a - f_b| / f_a",
+        ((p[1][1] - p[1][0]) / p[1][0]).abs(),
+        1e-6,
+    );
     ch.finish();
 }
 
 #[test]
+#[ignore = "record of the first run (ADR 0284 amendment 1): NotConverged at the residual floor, lowest pair 2.66e-9 against 1e-10"]
 fn t2_tet10_cantilever_covering() {
     let mut ch = Checks::new();
     let p = run_cantilever(&mut ch, ElementKind::Tet10, 40, 2);
@@ -661,12 +720,77 @@ fn t2_tet10_cantilever_covering() {
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0284 T1): Tet10 cantilever 80 x 4 x 4, about 39 000 unknowns"]
+#[ignore = "record (ADR 0284 amendment 1): not run, superseded by t1_amended_tet10_cantilever_heavy (tolerance 1e-10 below the residual floor)"]
 fn t1_tet10_cantilever_heavy() {
     let mut ch = Checks::new();
     let coarse = run_cantilever(&mut ch, ElementKind::Tet10, 20, 1);
     println!("T1 record 20x1x1: {coarse:?}");
     let p = run_cantilever(&mut ch, ElementKind::Tet10, 80, 4);
+    for (n, limit) in [(0, 1e-2), (1, 2.5e-2)] {
+        for (s, f) in p[n].iter().enumerate() {
+            ch.at_most(
+                &format!("T1 Tet10 80x4x4 bending {} member {s} against f_ref", n + 1),
+                (f / f_ref(n) - 1.0).abs(),
+                limit,
+            );
+            ch.at_most(
+                &format!("T1b Tet10 80x4x4 bending {} member {s} against f_EB", n + 1),
+                (f / f_eb(n) - 1.0).abs(),
+                limit,
+            );
+        }
+    }
+    ch.finish();
+}
+
+// ADR 0284 amendment 1: the same checks with the tolerance 1e-7 above the residual floor.
+
+/// The residual tolerance of the corrected cantilever runs (ADR 0284 amendment 1).
+const CANT_TOLERANCE: f64 = 1e-7;
+
+#[test]
+fn s1_amended_symmetric_hex8_cantilever_bending_planes() {
+    let mut ch = Checks::new();
+    let opts = ModalOptions::new(6).tolerance(CANT_TOLERANCE);
+    let p = run_cantilever_with(&mut ch, ElementKind::Hex8, 40, 2, &opts);
+    ch.at_most(
+        "S1 Hex8 40x2x2 first pair |f_a - f_b| / f_a",
+        ((p[0][1] - p[0][0]) / p[0][0]).abs(),
+        1e-6,
+    );
+    ch.at_most(
+        "S1 Hex8 40x2x2 second pair |f_a - f_b| / f_a",
+        ((p[1][1] - p[1][0]) / p[1][0]).abs(),
+        1e-6,
+    );
+    ch.finish();
+}
+
+#[test]
+fn t2_amended_tet10_cantilever_covering() {
+    let mut ch = Checks::new();
+    let opts = ModalOptions::new(6).tolerance(CANT_TOLERANCE);
+    let p = run_cantilever_with(&mut ch, ElementKind::Tet10, 40, 2, &opts);
+    for (n, limit) in [(0, 3e-2), (1, 6e-2)] {
+        for (s, f) in p[n].iter().enumerate() {
+            ch.at_most(
+                &format!("T2 Tet10 40x2x2 bending {} member {s} against f_ref", n + 1),
+                (f / f_ref(n) - 1.0).abs(),
+                limit,
+            );
+        }
+    }
+    ch.finish();
+}
+
+#[test]
+#[ignore = "heavy record (ADR 0284 T1, amendment 1): Tet10 cantilever 80 x 4 x 4, about 39 000 unknowns"]
+fn t1_amended_tet10_cantilever_heavy() {
+    let mut ch = Checks::new();
+    let opts = ModalOptions::new(6).tolerance(CANT_TOLERANCE);
+    let coarse = run_cantilever_with(&mut ch, ElementKind::Tet10, 20, 1, &opts);
+    println!("T1 record 20x1x1: {coarse:?}");
+    let p = run_cantilever_with(&mut ch, ElementKind::Tet10, 80, 4, &opts);
     for (n, limit) in [(0, 1e-2), (1, 2.5e-2)] {
         for (s, f) in p[n].iter().enumerate() {
             ch.at_most(
@@ -703,7 +827,11 @@ fn x1_refusals() {
     ch.holds("X1 modes = 0", matches!(&a, Some(("modes", _))), "InvalidValue modes");
     let b = invalid_key(modal_analysis(&model, &ModalOptions::new(10_000)));
     println!("X1 modes 10000: {b:?}");
-    ch.holds("X1 modes >= unknowns", matches!(&b, Some(("modes", _))), "InvalidValue modes");
+    ch.holds(
+        "X1 modes >= unknowns",
+        matches!(&b, Some(("modes", _))),
+        "InvalidValue modes",
+    );
     let moved = {
         let mut m = SolidModel::new(model.mesh().clone());
         m.add_material("all", Material::isotropic_elastic(E_MOD, 0.0, RHO, 0.0).unwrap())
@@ -721,7 +849,9 @@ fn x1_refusals() {
         "InvalidValue constraint naming the node",
     );
     let mut massless = model_of(moved.mesh().clone(), 0.0, 0.0);
-    massless.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
+    massless
+        .add_constraint(Constraint::displacement("xmin", 0, 0.0))
+        .unwrap();
     let d = invalid_key(modal_analysis(&massless, &ModalOptions::new(2)));
     println!("X1 density 0: {d:?}");
     ch.holds(

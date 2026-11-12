@@ -145,9 +145,5 @@ pub fn mass_properties(model: &SolidModel, m: &CsrMatrix) -> Result<MassProperti
             inertia[j][i] = v;
         }
     }
-    Ok(MassProperties {
-        mass,
-        centre,
-        inertia,
-    })
+    Ok(MassProperties { mass, centre, inertia })
 }

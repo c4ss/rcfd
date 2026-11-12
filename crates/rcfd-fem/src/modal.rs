@@ -51,6 +51,12 @@ impl ModalOptions {
         self.shift = Some(shift);
         self
     }
+    /// The same options with a residual tolerance. A slender model needs more than the default 1e-10: the residual of the
+    /// lowest pair cannot fall below about `c eps lambda_max / lambda_1` (ADR 0283 D6, ADR 0284 amendment 1).
+    pub fn tolerance(mut self, tolerance: f64) -> ModalOptions {
+        self.tolerance = tolerance;
+        self
+    }
     /// The same options with a thread count for the assembly.
     pub fn threads(mut self, threads: usize) -> ModalOptions {
         self.threads = Some(threads);
