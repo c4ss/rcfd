@@ -2021,30 +2021,20 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
           the pressure Poisson solve of the segregated algorithms is.
     - DONE (audit 2026-10-21, docs/audit/partials-group-*.md): acceptance text as written is met by passing tests; scope
       beyond the acceptance text, and the caveats in the audit file, are not claimed.
-- [~] **F-102** Adaptive mesh refinement/adaption criteria and polyhedral conversion
+- [x] **F-102** Adaptive mesh refinement/adaption criteria and polyhedral conversion
   - depends on: F-010, F-028
   - acceptance: Adapted cavity matches fine uniform solution with fewer cells
-  - note: PARTIAL (WAVE 28C, ADR 0054): delivered in the library only. The acceptance on a lid-driven cavity is not run,
-    and the registered adapted-within-3x-of-fine check missed (3.71, limit intact).
-    - SCOPE (merged review): list solution-variation, target node count, edge-length weighting, hanging-node,
-      polyhedral, anisotropic, register-based and geometry-based criteria, plus precoarsening for multigrid.
-    - WAVE 28C (ADR 0054, docs/meshing.md): PARTIAL.
-      - Delivered (library only):
-        - rcfd_mesh::adapt with gradient, curvature, ZZ-type and region/geometry indicators, thresholds with dead-band
-          hysteresis and level limits, a conforming hanging-node octree/quadtree refinement and coarsening operator with
-          injection or linear transfer (linear fields exact to 6.7e-16, conservative, face level jump <= 1 with
-          balance).
-        - rcfd_mesh::polydual::tet_to_polydual (closed polyhedra, volume and patch areas exact to ~1e-15).
-      - A manufactured tanh-front diffusion solve on an adapted mesh beats the coarse mesh with fewer cells than the
-        fine one, but the registered adapted-within-3x-of-fine check missed (3.71, ignored
-        a4_adapted_vs_fine_known_miss, limit intact); a wider-band set-up registered afterwards passes.
-      - NOT delivered:
-        - The acceptance on a lid-driven cavity (not run).
-        - A case-file or solver-loop hook.
-        - Target-node-count, edge-length-weighted, anisotropic and register-based criteria.
-        - Merge-based polyhedral conversion.
-        - Precoarsening for multigrid.
-        - Parallel adaptation.
+  - note: DONE pending acceptance, merged 2026-11-12 (WAVE 28C ADR 0054; ADR 0242): rcfd_mesh::adapt (gradient, Hessian,
+    ZZ and region indicators, dead-band marks, hanging-node quadtree/octree refinement and coarsening with conservative
+    transfer, polydual) and the solver-loop hook rcfd_fv::adaptive (run_adaptive_simple: SIMPLE solve, |grad U| h
+    indicator, fixed-fraction marks, AmrMesh::adapt with balance, linear transfer of U and p, re-solve). Acceptance met
+    in the library (ADR 0242): Re 100 lid-driven cavity, 24 x 24 base with two cycles at fraction 0.4 gives 2799 cells
+    against 9216 of the uniform 96 x 96, centreline difference to the fine solution 0.0023 of the lid speed (limit 0.01;
+    coarse 0.0162, inverted indicator 0.0166), Ghia difference 0.0092 (fine 0.0091). The ADR 0054 diffusion check A4
+    stays a known miss (3.71). Not delivered (follow-ups): a case-file key; target-node-count, edge-length, anisotropic
+    and register-based criteria; merge-based polyhedral conversion; multigrid precoarsening; parallel and transient
+    adaptation. On this flow adaptation gains little: a uniform 48 x 48 mesh (2304 cells) reaches 0.0030. Follow-ups
+    (ADR 0242 R1 to R3, recommendations taken on the maintainer's standing instruction of 2026-11-11): F-342, F-343.
 - [~] **F-103** CGNS/EnSight export and read-only HDF5 interoperability using public specs
   - depends on: F-015
   - acceptance: Exports open in third-party viewers
@@ -6037,3 +6027,18 @@ fixed by the item's registration ADR before any code.
     bit-identical.
   - note: From ADR 0237 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. Only
     when a case needs it.
+- [ ] **F-342** Case-file key for the adaptive steady loop
+  - depends on: F-102
+  - acceptance: An optional adapt block on a steady incompressible box-mesh case runs rcfd_fv::adaptive and reproduces
+    the ADR 0242 cavity numbers; cases without the block give identical hashes.
+  - note: From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    rcfd_fv::adaptive exists in the library only; the key needs crates/rcfd-api/src/schema.rs and sim.rs. Absent key =
+    today's path bit for bit.
+- [ ] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
+  - depends on: F-102
+  - acceptance: Each criterion has a closed-form marking check, and a target-count run lands within 10 percent of its
+    target on the ADR 0242 cavity; on a case with a localised feature the adapted mesh reaches the fine solution's error
+    with at most half the cells of the uniform mesh that reaches it.
+  - note: From ADR 0242 R2 and R3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Criteria
+    not yet built; merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here
+    until split.
