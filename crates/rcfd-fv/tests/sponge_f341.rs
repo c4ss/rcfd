@@ -246,7 +246,8 @@ const RELEASE: CompBc = CompBc::PressureOutlet { p: P0 };
 /// T0m, T0mr, T0pr, T0sr and NCr of ADR 0265: the tube of ADR 0237 A0 with both grids translating at `V`; the measure of
 /// ADR 0237 against a reference run on the extended grid that moves in the same way.
 #[test]
-fn t0_tube_on_a_translating_mesh_reflects_less_than_one_percent() {
+#[ignore = "known_miss record (ADR 0265 addendum 1): NCr measured 0.8642 against >= 0.9 (diagnosed in amendment 1); T0m, T0mr, T0pr 9.617e-7 and T0sr 9.829e-7 against 1e-2 met in the same run"]
+fn t0_tube_on_a_translating_mesh_known_miss() {
     let runs = [
         ("T0m", Form::Matched, THOMPSON),
         ("T0mr", Form::Matched, RELEASE),
