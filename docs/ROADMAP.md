@@ -6360,7 +6360,9 @@ fixed by the item's registration ADR before any code.
     Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new
     options join F-342's case key (R3). Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing
     instruction of 2026-11-11): F-348; the new options are case keys since ADR 0262 (2026-11-12, F-342): [mesh.adapt]
-    marking = "target_count", indicator = "edge_length", register and register_use.
+    marking = "target_count", indicator = "edge_length", register and register_use. The anisotropic criterion is
+    delivered by F-348 (ADR 0267, 2026-11-12): a second lattice with per-axis levels and a directional criterion; on
+    this suction layer 1547 cells give error 0.00298.
 - [ ] **F-344** BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step
   - depends on: F-338
   - acceptance: The remainder of PimpleSolver::step with BDF2 and three outer iterations on a mesh at rest (max
@@ -6425,14 +6427,29 @@ fixed by the item's registration ADR before any code.
   - note: Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux
     card layout is specified in the repository, so none was written. NEEDS THE USER: an open specification of the card
     has to be placed in the repository first (clean-room rule).
-- [ ] **F-348** Anisotropic (directional) refinement: a lattice with per-axis levels
+- [~] **F-348** Anisotropic (directional) refinement: a lattice with per-axis levels
   - depends on: F-343
   - acceptance: A lattice with per-axis refinement levels gives valid closed meshes for random directional marks
     (validate, closure, volume) and transfers linear fields exactly; on the ADR 0247 suction layer a directional run
     reaches the isotropic adapted error E(A) with at most half of its 3841 cells; the isotropic AmrMesh paths stay bit
     for bit.
-  - note: From ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. A Leaf has one
-    level for every axis, so this is a second lattice type in rcfd_mesh::adapt.
+  - note: PARTIAL (ADR 0267, 2026-11-12): rcfd_mesh::adapt::aniso::AnisoMesh, a second lattice with one refinement level
+    per axis (AxisLeaf, AxisMark; AmrMesh untouched): faces are the intersections of the sides of two leaves, with the
+    corners of all face rectangles in the vertex set, so cells are closed for any tiling by dyadic boxes; optional
+    balance of one level per refined axis across every face (at most 2 faces per side in a slab, 4 in 3-D); the existing
+    Transfer and transfer_field. Random directional marks on a graded 3-D box, a slab and a box refined along two of
+    three axes give valid closed meshes (validate, closure and volume to 1e-13) and linear fields transfer to 4.4e-16;
+    on isotropic marks the mesh, the transfer and the adaptive loop equal AmrMesh's bit for bit. Directional criterion
+    in rcfd_fv::adaptive (axis_variations, directional_axes with theta = 1/2, directional_target_marks,
+    run_adaptive_simple_directional and _target). On the ADR 0247 suction layer the directional run has error 0.00298
+    with 1547 cells against the isotropic 0.01159 with 3841 (limit: at most 1920 cells); held at the isotropic finest
+    size it reaches 0.01158 with 960 cells; with the axis choice inverted 1.18. ADR 0054, 0242 and 0247 tests pass
+    unedited (the heavy ones included); ten mutations each failed their tests. Partial by the rule because two
+    registered supporting checks missed and were corrected under amendments: pair coarsening in 3-D can leave a five-box
+    tiling of a cell that it cannot merge further (valid mesh; slabs return to the base), and the fast layer test on an
+    8 x 8 base (cell Peclet 10) had no converged solution on its first directional mesh (replaced by a 16 x 16 base).
+    Open: a box merge for 3-D coarsening (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups:
+    F-438 (case key), F-439 (three-dimensional box merge).
 - [ ] **F-349** Overset: the response to the truncation of the background-fringe interpolation
   - depends on: F-334
   - acceptance: The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a
@@ -7740,3 +7757,22 @@ fixed by the item's registration ADR before any code.
     test of every step (for instance force_scale = 100 k X on the piston of ADR 0266) is bit-identical, and fails when
     the driver does not read force_scale; registered before the run.
   - note: From ADR 0266 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-438** Directional lattice in the case key [mesh.adapt]
+  - depends on: F-348, F-342
+  - acceptance: With lattice = "directional" in [mesh.adapt] a steady box-mesh case runs the directional loop and equals
+    the library run bit for bit on the ADR 0267 suction layer (1547 cells, error 0.00298); options the directional
+    lattice does not take are located errors; cases without the key give identical hashes.
+  - note: TODO (from ADR 0267 R5): keys lattice, axis_ratio (theta) and per-axis finest levels; fixed_fraction and
+    register on the directional lattice need small additions to rcfd_fv::adaptive; a cycle whose solve does not converge
+    should be named in the stop reason (ADR 0267 amendment 2). Changes the schema golden. From ADR 0267 R5,
+    recommendation taken on the maintainer's standing instruction of 2026-11-11. The agent reports that the keys change
+    the schema golden; check the optional-table route of ADR 0257 and 0266 first, else it needs the maintainer.
+- [ ] **F-439** Directional lattice: coarsening in three dimensions by a box merge
+  - depends on: F-348
+  - acceptance: On a lattice with three refined axes, repeated all-axes coarsening returns every state made by splits
+    and merges, including the five-box tiling of ADR 0267 amendment 1, to the base with sum V q conserved; slab results
+    and the isotropic AmrMesh paths stay bit for bit.
+  - note: TODO (from ADR 0267 R2 and amendment 1): pair merges along one axis can leave a tiling of a cell with no two
+    buddies; merge all leaves inside a dyadic box when every one is marked. Needed before the adaptive loop can coarsen
+    on the directional lattice (ADR 0267 R4). From ADR 0267 R2, recommendation taken on the maintainer's standing
+    instruction of 2026-11-11.
