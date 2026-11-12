@@ -3330,10 +3330,12 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     uniform to 1.4e-14; the Taylor-Green error stays within 1.82 times that of the background alone. Known misses,
     diagnosed by ADR 0232 (F-314): the Taylor-Green observed order, 0.75 as registered and the fine-level ratio 3.31
     (limit 2): a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux; 5.99e-4 at
-    the registered step on level 2), not of the overset coupling; and 1.62 with dt proportional to h^2 (limit 1.7): the
-    truncation of the linear donor interpolation at one component fringe cell, a second-order error sampled at one pose
-    (the root mean square converges at 1.99 and 1.96 on three levels). Found there and open: a first-order term of the
-    calculated component cells with the coefficient 1.0e-4. Not delivered: the case-tree, CLI and Studio wiring (ADR
+    the registered step on level 2), not of the overset coupling; with three an opt-in since F-335 (ADR 0238), the
+    fine-level ratio is 1.86 and holds, and the order as registered is 1.61 (still missed; the rest of the time error,
+    2.25e-4, is the implicit Euler truncation on the moving cells); and 1.62 with dt proportional to h^2 (limit 1.7):
+    the truncation of the linear donor interpolation at one component fringe cell, a second-order error sampled at one
+    pose (the root mean square converges at 1.99 and 1.96 on three levels). Found there and open: a first-order term of
+    the calculated component cells with the coefficient 1.0e-4. Not delivered: the case-tree, CLI and Studio wiring (ADR
     0219 Q1); several components, a moving background, hole cutting from the wall geometry, BDF2, outer iterations,
     non-orthogonal correctors, turbulence (Q2 to Q5).
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
@@ -5931,12 +5933,30 @@ fixed by the item's registration ADR before any code.
     the error of the calculated component cells converges at order 1.7 or more between successive levels, or the ADR
     names the source of the first-order term (coefficient 1.0e-4) with a number.
   - note: From ADR 0232 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-335** Overset: outer iterations on the overset path
+- [~] **F-335** Overset: outer iterations on the overset path
   - depends on: F-134
   - acceptance: OversetSolver accepts n_outer above 1 as an opt-in (defaults bit-identical, Q0 of ADR 0219 still bit for
     bit); with three outer iterations the time error of TG_2 at dt 0.0025 (max abs(d_200) of ADR 0232, 4.49e-4) falls
     below 1.2e-4 and T2 at level 2 of ADR 0219 holds at the registered step, or the ADR names why not with a number.
-  - note: From ADR 0232 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0232 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0238 (registration of F-335, 2026-11-12, merged 2026-11-12): PARTIAL as recorded by the lead: the registered rule
+    reads done through the acceptance's "or names why not" clause (one acceptance number missed, its cause named); done
+    is left to the maintainer (ADR 0238 Q1). Built: OversetSolver::set_outer_iterations(n_outer, alpha_u, alpha_p), an
+    opt-in of the solver (OversetSolver::new still refuses n_outer above 1, so no existing test is edited); every outer
+    iteration repeats the PISO pass on the kinds, donors and weights of the new pose with the convecting flux and
+    pressure of the pass before it, the pressure system of both meshes rebuilt per pass, under-relaxation as the
+    library. Defaults bit for bit: Q0 of ADR 0219 (hash af2c9e6bd3e5596d), three records of overset runs taken before
+    the change (U, TG_1, TR), the existing overset suites unedited; with every cell calculated three outer iterations
+    equal the library's ALE step bit for bit, with and without relaxation; a uniform flow stays uniform to 1.0e-14. Met
+    (acceptance): T2 at level 2 of ADR 0219 holds at the registered step with three outer iterations, 1.862 against 2
+    (3.31 with one). Missed (acceptance): the time error of TG_2 at dt 0.0025, max abs(d_200), falls from 4.49e-4 to
+    1.69e-4, not below 1.2e-4. Named with numbers: the rest is converged in the outer iterations (1.69e-4 with five),
+    first order in the step (ratio 3.00) and grows with the speed as the second derivative along the cell paths (3.97
+    for a factor two): the truncation of the implicit Euler scheme on the moving cells, which outer iterations do not
+    remove; the lagged flux was 0.62 of the time error on the coupled meshes, not the 0.85 of the single mesh of ADR
+    0232. Four mutations caught. Cost: 2.6 times the wall time on TG_2. Not delivered: the case-tree wiring; a
+    second-order time scheme on the overset path (follow-up). Follow-up (ADR 0238 questions 3 and 4, recommendation
+    taken on the maintainer's standing instruction of 2026-11-11): F-338.
 - [ ] **F-336** Overset: donor interpolation of higher order
   - depends on: F-134, F-334
   - acceptance: An opt-in donor interpolation that reproduces quadratic fields; with it the largest error over the
@@ -5951,3 +5971,11 @@ fixed by the item's registration ADR before any code.
     within 1 percent and 3 percent of the FeatFlow values.
   - note: From ADR 0234 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     torque error is 1.60, 0.74 and 0.39 percent at N 48, 96, 192 with either forcing.
+- [ ] **F-338** Overset: a second-order time scheme on the overset path (BDF2, opt-in)
+  - depends on: F-335
+  - acceptance: OversetSolver accepts BDF2 as an opt-in (defaults bit-identical, Q0 of ADR 0219 and the records R2 of
+    ADR 0238 still bit for bit); with it and three outer iterations max abs(d_200) of TG_2 at dt 0.0025 (1.69e-4 in ADR
+    0238) falls below 1.2e-4 and its ratio to max abs(d_400) is at least 4 (second order gives 5), and T1c of ADR 0219
+    is run with it as a new check against its limit 1.7, or the ADR names why not with a number.
+  - note: From ADR 0238 questions 3 and 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    T1c with three outer iterations was observed at 1.80 (unregistered).
