@@ -494,3 +494,203 @@ stays as an ignored record. Corrected set-up **Ut**, by arithmetic and not by tr
 **MB3 must fail U1t.** Test `ut_uniform_flow_with_a_translating_component_and_bdf2`; Uc stays as
 `uc_uniform_flow_with_a_large_step_and_bdf2`, ignored. Prediction (mine): U1t near `1e-13`, S-Ut five cells or a small
 multiple of five.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendments 1 and 2; none was changed. Release
+builds on Windows (`cargo test --release -p rcfd-fv --test ...`, one test thread). The registration is `8cd6cc40`; the
+library change and the tests, compiled and not run, `2d2c3709`; amendment 1 `170ca1a6` and its tests `12deb7ff`; amendment
+2 `353b8429` and its test `fab84ec5`. Each amendment was committed before its runs and each registered run was made once.
+The logs are in `E:/projects/cfd/w49i-work` (`f338-fast.log`, `f338-d.log`, `f338-ds.log`, `f338-a1.log`, `f338-MB*.log`,
+`f338-final.log`).
+
+**Said plainly: this ends in a miss.** The opt-in is built, the defaults are bit for bit, and the time error of TG_2 at
+`dt = 0.0025` falls from `1.69e-4` to `2.1e-5`, far below `1.2e-4`. But two of the three acceptance numbers are missed:
+the ratio to `d_400` is `2.46` against 4, and T1c with BDF2 is `1.664` against `1.7`. Both have a diagnosis with a number;
+the first is located, not explained.
+
+### What was built
+
+- `crates/rcfd-fv/src/overset.rs` (the only library file changed): `OversetSolver::set_time_scheme(scheme)`,
+  `OversetSolver::euler_fallback_cells()`, the private history `Bdf2History` and step data `Bdf2Step`, `refusal` with the
+  mark, and in `advance` and `piso` the branches of D2 to D5. `OversetInfo` and every existing signature are unchanged.
+  **`pimple.rs` and `pimple/moving.rs`: no line touched** (`AleStep` is used as it is: its `mesh_flux` and `defect` are
+  filled with the three-level values). `ale.rs`, `ddt.rs`, `immersed.rs`, `compressible*.rs`, `rcfd-api`: not touched.
+- Tests: `crates/rcfd-fv/tests/overset_f338.rs` (9 gate-run tests, 9 ignored: the slow acceptance test, three known
+  misses, three records of defective set-ups, two diagnosis tests). No existing test was edited.
+- `docs/dynamic-mesh.md`: the overset prose.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| Q0 (existing test, unedited) | `<= 1e-12`; bit for bit; hash | `0`, `0`, `0`; bit for bit; `af2c9e6bd3e5596d` | met |
+| R2 (existing tests, unedited): R2a, R2b, R2c, R2' | pass | `7aa14d1e2e2da052`, `75ac2daf13879872`, `fddb420dc287502a`; 4 passed | met |
+| R2e U and TG_1 after `set_time_scheme(ImplicitEuler)`, directly and after BDF2 | equal to R2a, R2b | equal (all four) | met |
+| D-S existing suites, unedited | pass | `overset_f134` 12 passed (2 ignored), `overset_f134_records` 1, `overset_f314` 4 (8 ignored), `overset_f335` 5 (4 ignored) | met |
+| E1 (existing test, unedited) | pass | `new` with BDF2 refused | met |
+| Q0b mesh at rest against the library's BDF2, one and three outer iterations | `<= 1e-12` each | `0`, `0`, `0` both; bit for bit | met |
+| Q0bn (negative control) library BDF2 against overset implicit Euler | `>= 1e-8` | `2.35e-6` | held |
+| G1 deforming mesh: velocity, pressure | `<= 1e-10` each | `3.06e-15`, `1.73e-15` | met |
+| G1v the same, steps alternating | `<= 1e-10` each | `6.32e-15`, `3.59e-15` | met |
+| G1n (negative control) mesh flux times 1.01 | `>= 1e-6` | `1.52e-3` | held |
+| U1b velocity, pressure | `<= 1e-10` each | `1.37e-14`, `1.03e-12` | met |
+| U3b continuity, outflow | `<= 1e-9`, `<= 1e-10` | `2.17e-14`, `2.0e-15` | met |
+| U1b1, U3b1 (one outer iteration) | the same | `1.26e-14`, `9.58e-13`; `2.10e-14`, `2.9e-15` | met |
+| U1v steps alternating | `<= 1e-10` each | `1.34e-14`, `2.02e-12` | met |
+| S-U (set-up) cells with the Euler row in U | `>= 1` | `0` | **defective set-up** (amendment 1; record test) |
+| Uc (amendment 1) | | refused in its first step (a hole cell uncovered) | **defective set-up** (amendment 2; record test) |
+| U1t (amendment 2) velocity, pressure | `<= 1e-10` each | `5.32e-15`, `4.22e-14` | met |
+| U3t continuity, outflow | `<= 1e-9`, `<= 1e-10` | `6.9e-15`, `3.1e-15` | met |
+| S-Ut (set-up) cells with the Euler row | `>= 1` | `10` | held |
+| N2b (negative control) weights times 1.001 | `>= 1e-6` | `1.66e-3` | held |
+| M0 (set-up) SMc implicit Euler `max abs(d_200)` | in `[5.5e-5, 5.9e-5]` | `5.697e-5` (ratio `2.998`) | held |
+| M1 SMc BDF2 `max abs(d_200)` | `<= 1.5e-5` | `3.96e-6` | met |
+| **M2** SMc BDF2 `d_200 / d_400` | `>= 4` | `2.282` (`1.73e-6`) | **missed** (known-miss test) |
+| M3 continuity, the six runs | `<= 1e-9` | `2.8e-12` | met |
+| S2 (set-up) implicit Euler, three outer iterations | in `[1.68e-4, 1.70e-4]`; in `[2.9, 3.1]` | `1.6897e-4`; `3.001` | held |
+| **D1 (acceptance)** BDF2 `max abs(d_200)` | `< 1.2e-4` | `2.125e-5` | **met** |
+| **D2 (acceptance)** BDF2 `d_200 / d_400` | `>= 4` | `2.456` (`8.65e-6`) | **missed** (known-miss test) |
+| **T1c-b (acceptance)** | `>= 1.7` | `1.664` (`1.0076e-3`, `3.179e-4`) | **missed** (known-miss test) |
+| T2b `e(TG_2) / e(TGB_2)` in 200 steps | `<= 2` | `1.634` (`3.170e-4` over `1.939e-4`) | met |
+| T3b continuity, the BDF2 runs | `<= 1e-9` | `5.9e-14` | met |
+| S-D (set-up) cells with the Euler row in TG_2 | `>= 1` | `0` | **defective set-up** (amendment 1; record test) |
+| L1b TG_1: ratio, continuity | `<= 2`; `<= 1e-9` | `1.312`; `3.0e-14` | met |
+| E8 the bounded BDF2, Crank-Nicolson | `Err`, settings unchanged | both | met |
+| E9 BDF2 without the opt-in | `Err`, state unchanged | "the implicit Euler time scheme only" | met |
+| E10 BDF2, two outer iterations, three steps | `Ok` | ok | met |
+
+Printed, no limit. `max abs(d_200)` and `max abs(d_400)` with BDF2 by class: CF `2.18e-6` / `8.4e-7`, CC `2.125e-5` /
+`8.65e-6`, BF `2.95e-6` / `1.06e-6`, BC `1.353e-5` / `5.75e-6`; the largest in a calculated component cell at `(1.67,
+0.97)`. `e(TG_2)` with BDF2 in 200, 400, 800 steps: `3.170e-4`, `3.174e-4`, `3.179e-4` (implicit Euler with three outer
+iterations: `3.611e-4`, `3.239e-4`, `3.167e-4`). T1 of ADR 0219 at `dt = 0.0025` with BDF2 and three outer iterations:
+`1.668` (limit 1.7, not checked, missed). BDF2 with one outer iteration: `max abs(d_200) = 3.46e-5` (largest in a
+background cell). No cell took the implicit Euler row in any Taylor-Green run. `delta` of TG_2 in 200 steps `[2.3e-4,
+8.7e-4]`. No linear solve failed to converge. Pressure iterations per step 137.1 (implicit Euler with three outer
+iterations 138.7); the run times were taken under load (other runs at the same time) and show no extra cost of BDF2.
+
+### The misses: hypotheses of amendment 1
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| H16 the remainder belongs to the library's BDF2 step at rest | `R_rest < 3.5` (ruled out: `>= 4`) | `R_rest = 2.296` (`max abs(d_200) = 5.13e-6`, `d_400 = 2.23e-6`) | **confirmed** |
+| H17 the remainder is left by the start | `R_start >= 4` (ruled out: `< 3.5`) | `R_start = 2.282` (`3.9596e-6`, `1.7349e-6`) | **ruled out** |
+| H18 two correctors and three outer iterations leave it | either ratio `>= 4` (ruled out: both `< 3.5`) | `2.282` with four correctors, `2.282` with six outer iterations (`3.9596e-6`, `1.7349e-6` both) | **ruled out** |
+| H19 T1c-b is the spatial order of the maximum | `s_1 <= 0.01` (ruled out: `> 0.03`) | `s_1 = 0.0017` (`e(TG_1)`: `1.0076e-3` in 200 steps, `1.0059e-3` in 800); `s_2 = 0.003` | **confirmed** |
+
+**Why D2 (and M2) are missed.** By the reading fixed in amendment 1 the cause is located, not named: the library's own
+BDF2 step on a mesh at rest (`PimpleSolver::step`, three outer iterations, the mesh and conditions of SMc) leaves `max
+abs(d_200) = 5.13e-6` with the ratio `2.30`, more than the `3.96e-6` and `2.28` of the same mesh moving through
+`OversetSolver` with this item's terms. So the moving-mesh terms of D2 to D4 do not make it. The runs of H17 and H18 give
+the registered numbers of M to five digits: with a common start over the first fifth of the time, with four correctors
+and with six outer iterations the differences are `3.9596e-6` and `1.7349e-6` each time. So it is not left by the start,
+it is not a remainder of the pressure-velocity iteration, and the first fifth of the run leaves no trace in it: it
+behaves as a function of the current step size, not as an accumulated time error. Which term of the step carries it
+(the transient Rhie-Chow term and the boundary faces are the candidates; neither was measured) is open. On the coupled
+meshes the remainder is five times larger (`2.125e-5`, ratio `2.46`, largest in the calculated cells of both meshes and
+small in the fringe cells); that it is the same term there is suggested by the ratio and **not shown**. The second-order
+part of the scheme is shown only indirectly: by the equality with the library at rest (Q0b), the conservation law on a
+deforming mesh (G1) and the fall of the error by a factor 8 (TG_2) and 14 (SMc) against implicit Euler.
+
+**Why T1c-b is missed.** With BDF2 the error of both levels no longer depends on the step (`0.17` percent at level 1,
+`0.3` percent at level 2 between 200 and 800 steps), so `log2(1.0076e-3 / 3.179e-4) = 1.664` is the order of the largest
+spatial error between the two meshes, the quantity ADR 0232 diagnosed (the donor interpolation at one fringe cell,
+sampled at one pose, two-level orders from 1.49 to 2.24). The `1.80` observed in ADR 0238 with implicit Euler and three
+outer iterations was not a better spatial order: `e(TG_1)` in 200 steps carried a time error there (`1.1056e-3` against
+`1.0076e-3` now). A second-order time scheme cannot bring T1c to 1.7; the number is `1.664`.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `fab84ec5` (`E:/projects/cfd/w49i-work/f338-mut`, its own target directory) by
+`f338-mut-run.py` (an exact replacement that occurs once), the named test run once, the file restored and compared byte
+for byte (equal in all six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MB1 the mesh flux of the step alone | G1 | failed: velocity `4.8e-1`, pressure `1.46` (G1v `9.6e-1`) |
+| MB2 no correction of the old-old volume | G1 | failed: `1.6e-1`, `4.4` |
+| MB3 the hole history ignored | U1t (amendment 2) | failed: `1.6e-1`, `1.3e-1` (and S-Ut reads 0) |
+| MB4 the old-old velocity one level too new | Q0b | failed: `2.9e-3`, `7.3e-2`, `2.9e-3`, not bit for bit |
+| MB5 no extrapolation on the first outer iteration | Q0b | failed: `3.2e-6` with one outer iteration, `4.4e-10` with three |
+| MB6 no old-old part of the Rhie-Chow defect | Q0b | failed: `2.9e-2`, `3.2`, `4.8e-3` |
+
+`scripts/limit_audit.py` on `overset_f338.rs`: 0 hits. The tests `a1_*` print and assert nothing about their numbers
+(decided here); by design, and ignored.
+
+### Deviations and disclosures
+
+- The brief asked for a check against "the library's BDF2 moving-mesh step". The library has none (it refuses BDF2 on a
+  moving mesh), found while reading and recorded in the registration; Q0b (rest), G1 and M1 stand in for it (O3).
+- My predictions of M2 and D2 (4 to 5.5; 3 to 5) and of T1c-b (about 1.8) were wrong; H16 to H19 went as predicted.
+- S-U and S-D were registered without working out how long a cell stays in the fringe; both read 0. The first
+  correction (Uc) was refused by the solver in its first step; the second (Ut) was derived by arithmetic and held. The
+  rule of D3 therefore acts in no Taylor-Green run; it is exercised by Ut only (10 cells) and guarded by MB3.
+- The run helper of SMc takes a list of step sizes since amendment 1; for equal steps it computes the same times as
+  before, and the diagnosis runs reproduced the registered numbers of M to five digits.
+- After the last test edit the gate-run tests of the new file ran once more on the final tree (`f338-final.log`: 9
+  passed, 9 ignored). The known-miss and record tests were not run again after they were split off.
+- The unchanged tree was compiled once before the registration (disclosed in the status line).
+
+### Not run
+
+- The whole workspace suite, the gate, `baseline_hashes` and the `rcfd-api` tests: the lead runs the gate. The change is
+  confined to `rcfd-fv/src/overset.rs`, which nothing outside the overset tests uses.
+- The other `rcfd-fv` tests; the ignored slow tests of ADR 0219, ADR 0232 and ADR 0238; TR with BDF2 (L1, L2); level 3;
+  the remainder on the coupled meshes at rest; Linux (the records assert on Windows only, ADR 0137).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Partial.** The opt-in is built and the preconditions hold (Q0, R2, R2e, the existing suites, E1); D1 is met; D2 and
+T1c-b, two of the three acceptance numbers, are missed. T1c-b has its cause named with a number (H19). D2 has its cause
+located with a number (H16: the library's BDF2 step at rest, `5.13e-6`, ratio `2.30`) but not explained, and its identity
+on the coupled meshes is not shown. M2 is missed for the same located cause. The controls held after two corrections of
+a set-up, and the six mutations failed their checks.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The remainder of the library's BDF2 step.** (a) a follow-up item that finds which term of `PimpleSolver::step`
+  with BDF2 depends on the step size at rest and what order it has in `h` (it concerns every BDF2 run of the library,
+  not only overset); (b) leave it: at `5e-6` on this mesh it is below the spatial error by a factor 60. Recommendation
+  (a); proposed below, not taken here (a new item is the lead's).
+- **Q2. T1c of ADR 0219.** (a) keep it as a recorded known miss whose cause is spatial (ADR 0232), now confirmed free of
+  time error at `1.664`; (b) replace its measure by the root mean square, which ADR 0232 found at 1.99. Recommendation
+  (a); (b) belongs to F-336 if anywhere. Taken on the maintainer's standing instruction of 2026-11-11 (take the
+  recommendation), not a decision the maintainer made in person.
+- **Q3. Where the opt-in lives (O1).** (a) `PimpleSettings::time_scheme` accepted by `OversetSolver::new` (one clause of
+  the existing test E1 of ADR 0219 removed); (b) the method, as built. Recommendation (b) now, (a) with the case-tree
+  wiring. Taken on the standing instruction.
+- **Q4. BDF2 for the library's own moving-mesh step** (`step_ale_with_walls`), so that a body-fitted run and an overset
+  run can use the same scheme and Q0 has a BDF2 form. (a) a follow-up item, reusing D2 of this ADR (the mesh flux, the
+  volume corrections, the defect); (b) not now. Recommendation (a), after the rework of the corrector flags in
+  `pimple.rs`. Not taken here.
+- **Q5. The follow conditions of a moving wall with BDF2 (L2).** (a) a three-level wall velocity and acceleration in
+  `ale::set_follow_conditions` when the scheme is BDF2; (b) leave the two-level values. Recommendation (a) together with
+  Q4; until then a BDF2 overset run with an accelerating wall keeps a first-order term at the wall, which is not
+  measured here.
+- **Q6. BDF2 by default on the overset path.** It would change a default; not taken. Open for the maintainer.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited on this branch.
+
+**F-338**, proposed status: `partial`. Proposed note:
+
+> From ADR 0238 questions 3 and 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0241 (registration of F-338, 2026-11-12, branch f338-overset-bdf2): PARTIAL, one of three acceptance numbers met. Built: OversetSolver::set_time_scheme(Bdf2), an opt-in of the solver (OversetSolver::new still refuses BDF2, so no existing test is edited): the three-level backward difference of V u on the moving cells, the mesh flux (c0 W - c2 W_old) / dt of the swept volumes of the last two steps (the geometric conservation law of the three-level scheme), the first step an implicit Euler step, one implicit Euler row for a cell that was a hole two steps back, the first outer iteration extrapolated as the library does; only crates/rcfd-fv/src/overset.rs changed. Defaults bit for bit: Q0 of ADR 0219 (hash af2c9e6bd3e5596d), the records R2 of ADR 0238, the existing overset suites unedited. With every cell calculated on a mesh at rest the step equals the library's BDF2 step bit for bit; the library has no BDF2 on a moving mesh, so the moving terms are checked by a uniform flow on a deforming mesh (3e-15) and through a moving, turning component (1.4e-14). Met (acceptance): max abs(d_200) of TG_2 at dt 0.0025 with three outer iterations falls from 1.69e-4 to 2.1e-5 (limit 1.2e-4). Missed (acceptance): its ratio to max abs(d_400) is 2.46 (limit 4): located, not explained: the library's own BDF2 step on a single mesh at rest leaves 5.1e-6 with the ratio 2.30, independent of the start, the correctors and the outer iterations; that the five times larger remainder on the coupled meshes is the same term is not shown. Missed (acceptance): T1c of ADR 0219 with BDF2 is 1.664 (limit 1.7): with BDF2 the error of both levels is free of time error (0.2 and 0.3 percent between 200 and 800 steps), so this is the spatial order of the pointwise maximum diagnosed by ADR 0232; the 1.80 observed in ADR 0238 was time error at level 1. Two set-up checks were defective and corrected by amendments; six mutations caught. Not delivered: BDF2 for the library's moving-mesh step and the follow conditions of a moving wall (they keep the two-level values), the case-tree wiring. Follow-up proposed (ADR 0241 question 1).
+
+**F-134**, status unchanged (`partial`). In its note, replace the sentence that starts "Known misses, diagnosed by ADR 0232 (F-314):" (up to "(the root mean square converges at 1.99 and 1.96 on three levels).") by the following, and in the last sentence ("Not delivered: ...") delete the words "BDF2, " (and "outer iterations, " if still there):
+
+> Known misses, diagnosed by ADR 0232 (F-314): the Taylor-Green observed order, 0.75 as registered and the fine-level ratio 3.31 (limit 2): a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux; 5.99e-4 at the registered step on level 2), not of the overset coupling; with three outer iterations, an opt-in since F-335 (ADR 0238), the fine-level ratio is 1.86 and holds and the order as registered is 1.61; with BDF2 as well, an opt-in since F-338 (ADR 0241), the time error is 2.1e-5 in the difference of 200 and 800 steps, the fine-level ratio is 1.63 and the order as registered is 1.67 (still missed: what is left is spatial); and 1.62 with dt proportional to h^2 (limit 1.7), 1.66 with BDF2 and three outer iterations: the truncation of the linear donor interpolation at one component fringe cell, a second-order error sampled at one pose (the root mean square converges at 1.99 and 1.96 on three levels), free of time error with BDF2.
+
+Proposed follow-up items (the numbers are the lead's):
+
+- **BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step.** Depends on F-338. Acceptance: "The remainder of PimpleSolver::step with BDF2 and three outer iterations on a mesh at rest (max abs(d_200) 5.13e-6 with the ratio 2.30 to max abs(d_400) on the mesh of SMc, ADR 0241 H16) is traced to a named term of the step with a number, and either removed as an opt-in (defaults bit-identical; the ratio at least 4 at rest and D2 of ADR 0241 at least 4 on TG_2) or shown to be a spatial term with its order in h, or the ADR names why not with a number." Note:
+
+> From ADR 0241 question 1, recommendation (a); proposed by the F-338 addendum, not yet taken. Candidates not measured: the transient Rhie-Chow term, the boundary faces.
+
+- **BDF2 for the library's moving-mesh step and the follow conditions of a moving wall.** Depends on F-338. Acceptance: "PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow stays uniform to 1e-10 on the deforming meshes of ADR 0033 G2; with every cell calculated OversetSolver with BDF2 equals it to 1e-12 on BF of ADR 0219; the wall velocity and acceleration of set_follow_conditions are three-level with BDF2 and the time error of the cylinder case TR falls at a ratio of at least 4 between two step sizes, or the ADR names why not with a number." Note:
+
+> From ADR 0241 questions 4 and 5, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed by the F-338 addendum, not yet taken.

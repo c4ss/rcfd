@@ -23,8 +23,8 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
   background mesh (`rcfd_mesh::overset`, `rcfd_fv::overset::OversetSolver`), PISO with implicit Euler and upwind, central
-  or blended convection, no non-orthogonal correctors; outer iterations as an opt-in of the solver (F-335, ADR 0238). The
-  tree does not use it yet (ADR 0219 Q1); no second component, no moving background.
+  or blended convection, no non-orthogonal correctors; outer iterations (F-335, ADR 0238) and BDF2 (F-338, ADR 0241) as
+  opt-ins of the solver. The tree does not use it yet (ADR 0219 Q1); no second component, no moving background.
 * Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
   stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
   use them yet (the wiring is open under F-259, ADR 0213 Q1).
@@ -114,8 +114,19 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   bring it from `4.49e-4` to `1.69e-4` and the overset error from 3.31 to 1.86 times that of the background alone. More
   passes do not lower it further (`1.69e-4` with five): the rest is the truncation of the implicit Euler scheme along the
   paths of the moving cells.
+- **BDF2 (F-338, ADR 0241).** `OversetSolver::set_time_scheme(TimeScheme::Bdf2)` switches the three-level scheme on; a
+  solver that does not call it runs as before, bit for bit. The time term is the backward difference of `V u` of the
+  moving cell, and the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, so that a
+  uniform flow stays uniform on a deforming mesh (to `3e-15`). The first step is an implicit Euler step; a cell that was a
+  hole two steps back takes the implicit Euler row once (its old-old value is not a fluid value). On a mesh at rest with
+  every cell calculated the step is `PimpleSolver::step` with BDF2, bit for bit; the library's own moving-mesh step has
+  no BDF2. In the Taylor-Green set-up on the finer mesh at `dt = 0.0025` with three passes the time error falls from
+  `1.69e-4` to `2.1e-5`. What is left does not fall with the square of the step (ratio 2.46 between 200 and 400 steps,
+  second order gives 5); the library's BDF2 step shows the same on a single mesh at rest (ratio 2.30), independent of
+  the start, the correctors and the passes; its source is open. The follow conditions of a moving wall are those of the
+  two-level step. The bounded BDF2 and Crank-Nicolson are refused.
 - **Not available:** a second component, a moving background, hole cutting from the wall geometry, more than linear
-  interpolation, BDF2, non-orthogonal correctors, linear-upwind convection, turbulence, energy and the case tree.
+  interpolation, non-orthogonal correctors, linear-upwind convection, turbulence, energy and the case tree.
 
 ## Case tree
 
