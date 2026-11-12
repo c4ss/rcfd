@@ -31,8 +31,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 * Compressible runs in the case tree: no characteristic boundary condition on a moving face, and a time step without the
   mesh speed. The library has both since F-258 (ADR 0207); the tree does not use them yet (the wiring is open under F-259,
   ADR 0207 Q1 and Q2). No six-DOF body (F-244).
-* No strong coupling or added-mass stabilisation. The explicit coupling needs a body that is not much lighter than the displaced
-  fluid; the checks use a fluid-to-body mass ratio of 0.2.
+* No strong coupling or added-mass stabilisation in the case tree. The explicit (loose) coupling of the case driver needs a
+  body that is not much lighter than the displaced fluid: it is derived and measured unstable above an added-mass to body-mass
+  ratio of 2 (ADR 0250), and the checks use a ratio of 0.2. The library has a sub-iterated strong coupling since F-251
+  (`rcfd_fv::fsi::strong_step`, ADR 0250) and a participant interface since F-139 (`rcfd_fv::cosim`, ADR 0256); the tree does
+  not use them yet (F-350).
+* A side wall with a zero-gradient pressure leaves its flux free for a transverse flow; a coupled wall problem that is meant
+  to be one-dimensional needs symmetry sides (ADR 0256 amendment 1).
 * A time-step limit of the default PISO step found by F-244 (ADR 0211 amendment 1) and located by F-299 (ADR 0214): across a
   narrow gap the step grows unstable above a diffusion number `nu dt/dx^2` of about 3 to 4 across the finest cells (16 cells
   across the gap, two correctors), on a fixed mesh as on a moving one. The first corrector over-corrects a pressure error by
