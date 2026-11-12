@@ -5,7 +5,8 @@
 //! compressible run (the ALE step of ADR 0090), and `deformation = "layering"` runs ADR 0090's planar layer stack of a
 //! piston. ADR 0257 (the rest of F-259): characteristic conditions on moving faces (F-258, ADR 0207), the opt-in mesh-speed
 //! step `[dynamic_mesh.compressible] time_step`, and the extruded layer stack of `[mesh.box_3d] section` (F-257, ADR 0213)
-//! for prism layers and for layering on the piso / pimple path.
+//! for prism layers and for layering on the piso / pimple path. F-350 (ADR 0266): the optional table
+//! `[dynamic_mesh.six_dof.coupling]` selects the strong body-flow coupling of `rcfd_fv::fsi::strong_step`.
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s, get_v};
@@ -15,6 +16,7 @@ use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::ale::{move_mesh, set_follow_conditions, set_rest_conditions};
 use rcfd_fv::compressible::{CompressibleSolver, Cons};
+use rcfd_fv::fsi::{relaxation_from_added_mass, strong_step, BodyCoupling, Relaxation, StrongCoupling};
 use rcfd_fv::pimple::{PimpleSolver, StepInfo};
 use rcfd_fv::sixdof::{patch_force_moment, quat_from_axis_angle, Body, BodySpec, BodyState, Integrator, Rotation};
 use rcfd_fv::smoothing::{smooth_displacement, PatchClass, SmoothingMethod};
@@ -80,6 +82,94 @@ fn d(path: &str, message: impl Into<String>) -> Diagnostic {
     }
 }
 
+/// Path of the optional table of the body-flow coupling (ADR 0266 D1).
+pub const COUPLING: &str = "dynamic_mesh.six_dof.coupling";
+
+/// The optional table `[dynamic_mesh.six_dof.coupling]` (F-350, ADR 0266 D1).
+fn coupling_schema() -> Schema {
+    Schema::object()
+        .optional()
+        .doc("Coupling of the six-DOF body with the flow (ADR 0266). Absent = the loose explicit coupling of ADR 0033 D7")
+        .field(
+            "scheme",
+            Schema::enumeration("loose", &["loose", "strong"])
+                .doc("loose: the flow force at the start of the step drives the body (ADR 0033 D7; unstable above an added-mass to body-mass ratio of about 2, ADR 0250 D3); strong: every step iterates body, mesh and flow on the force held over the step until it is converged (rcfd_fv::fsi::strong_step, ADR 0250)"),
+        )
+        .field(
+            "relaxation",
+            Schema::enumeration("aitken", &["aitken", "fixed"])
+                .doc("strong: Aitken's dynamic factor (started from the factor of added_mass every step, capped at 2) or that fixed factor"),
+        )
+        .field("added_mass", Schema::float(0.0).doc("strong: estimate m' of the added mass [kg] (>= 0); the fixed factor, or the Aitken start, is 2M/(2M + m') (ADR 0250 D5); 0 gives 1"))
+        .field("tolerance", Schema::float(1e-8).doc("strong: converged when |F_new - F|/max(|F_new|, force_scale) and the same for the moment are at most this (> 0)"))
+        .field("force_scale", Schema::float(0.0).doc("strong: floor of the force norm in the convergence test [N] (>= 0), e.g. the largest spring force"))
+        .field("moment_scale", Schema::float(0.0).doc("strong: floor of the moment norm in the convergence test [N m] (>= 0)"))
+        .field("max_iterations", Schema::int(20).doc("strong: cap of the flow solves of one step (>= 1)"))
+        .field(
+            "at_cap",
+            Schema::enumeration("stop", &["stop", "continue"])
+                .doc("strong: a step that reaches max_iterations without converging stops the run with a located message (stop), or is kept and the run goes on with one warning (continue)"),
+        )
+}
+
+/// True when the case writes the table `[dynamic_mesh.six_dof.coupling]`.
+fn written(case: &Case) -> bool {
+    case.tree.to_json().pointer("/dynamic_mesh/six_dof/coupling").is_some()
+}
+
+/// True when the case asks for the strong coupling (ADR 0266 D1).
+fn is_strong(case: &Case) -> bool {
+    get_s(case, &format!("{COUPLING}.scheme")) == "strong"
+}
+
+/// ADR 0266 D3: the static checks of `[dynamic_mesh.six_dof.coupling]` (the section is enabled).
+fn check_coupling(case: &Case, out: &mut Vec<Diagnostic>) {
+    if !written(case) {
+        return;
+    }
+    let key = |k: &str| format!("{COUPLING}.{k}");
+    if is_strong(case) {
+        if get_s(case, "dynamic_mesh.motion") != "six_dof" {
+            out.push(d(
+                &key("scheme"),
+                "the strong coupling belongs to motion = \"six_dof\" (a prescribed motion has no body to couple)",
+            ));
+        }
+        if !strings(case, "dynamic_mesh.rest_patches").is_empty() {
+            out.push(d(
+                &key("scheme"),
+                "the strong coupling sets the following walls only: remove rest_patches or use scheme = \"loose\"",
+            ));
+        }
+        if get_s(case, "dynamic_mesh.six_dof.integrator") == "newmark" {
+            out.push(d(
+                &key("scheme"),
+                "the strong coupling is derived and tested for integrator = \"rk4\" only (ADR 0250 Q6); use rk4",
+            ));
+        }
+    }
+    let tol = get_f(case, &key("tolerance"));
+    if !(tol.is_finite() && tol > 0.0) {
+        out.push(d(
+            &key("tolerance"),
+            format!("the tolerance must be positive, got {tol}"),
+        ));
+    }
+    for k in ["force_scale", "moment_scale", "added_mass"] {
+        let v = get_f(case, &key(k));
+        if !(v.is_finite() && v >= 0.0) {
+            out.push(d(&key(k), format!("must be finite and not negative, got {v}")));
+        }
+    }
+    let n = get_i(case, &key("max_iterations"));
+    if n < 1 {
+        out.push(d(
+            &key("max_iterations"),
+            format!("at least one iteration is needed, got {n}"),
+        ));
+    }
+}
+
 /// Schema of the `dynamic_mesh` section (all keys inert while `enabled = false`).
 pub fn schema() -> Schema {
     let lst = |doc: &'static str| Schema::list(Schema::string("")).doc(doc);
@@ -123,7 +213,9 @@ pub fn schema() -> Schema {
         .field(
             "integrator",
             Schema::enumeration("rk4", &["rk4", "newmark"]).doc("Body integrator: rk4 or newmark (average acceleration; not for free rotation)"),
-        );
+        )
+        // F-350, ADR 0266 D1: an optional table, absent from every case that does not write it
+        .field("coupling", coupling_schema());
     Schema::object()
         .doc("Dynamic mesh for incompressible piso / pimple runs (ADR 0033): prescribed rigid motion or a six-degree-of-freedom body; implicit Euler only, no turbulence / energy / scalars / particles / sources / restart. Transient compressible runs (ADR 0191): prescribed motion with rigid, smoothing or layering deformation")
         .field("enabled", Schema::boolean(false).doc("Move the mesh during the run"))
@@ -337,6 +429,8 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
             ));
         }
     }
+    // F-350, ADR 0266 D3 (nothing without the table)
+    check_coupling(case, &mut out);
     let conflict = |what: &str| {
         d(
             "dynamic_mesh.enabled",
@@ -600,6 +694,63 @@ pub struct DynMesh {
     layers: Option<Layers>,
     /// ADR 0257 D4: the moving compressible step takes the mesh-speed step `max_dt_ale()`.
     mesh_speed_step: bool,
+    /// F-350, ADR 0266 D2: the strong coupling of the body (`scheme = "strong"`).
+    strong: Option<StrongDrive>,
+    /// The record of every strongly coupled step.
+    records: Vec<CouplingRecord>,
+    /// The located message of a step that reached the cap with `at_cap = "stop"`, until the run takes it.
+    stop: Option<String>,
+    /// The warning of the first step that reached the cap with `at_cap = "continue"`, until the run takes it.
+    cap_warning: Option<serde_json::Value>,
+}
+
+/// The strong coupling of a six-DOF body (ADR 0266 D2).
+struct StrongDrive {
+    coupling: BodyCoupling,
+    settings: StrongCoupling,
+    stop_at_cap: bool,
+}
+
+/// One strongly coupled step of the case driver (ADR 0266 D2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CouplingRecord {
+    /// Flow solves of the step.
+    pub iterations: usize,
+    /// Whether the convergence test was met.
+    pub converged: bool,
+    /// The test quantity of the last iteration.
+    pub residual: f64,
+}
+
+/// The points of a rigid or smoothed motion for the pose of `body` (ADR 0266 D2): the operations of
+/// [`DynMesh::new_points`] for a body, with the body handed in (the strong step moves a trial body).
+#[allow(clippy::too_many_arguments)]
+fn body_points(
+    mesh0: &Mesh,
+    geom0: &FvGeometry,
+    rigid: bool,
+    moving: &[String],
+    classes: &[PatchClass],
+    method: SmoothingMethod,
+    control: &SolveControl,
+    body: &Body,
+) -> Result<Vec<Vec3>, String> {
+    let p0 = mesh0.points();
+    Ok(if rigid {
+        p0.iter().map(|&p| body.map_point(p)).collect()
+    } else {
+        let mut presc = vec![vec3::ZERO; p0.len()];
+        for n in moving {
+            for q in patch_points(mesh0, n).unwrap_or_default() {
+                presc[q] = vec3::sub(body.map_point(p0[q]), p0[q]);
+            }
+        }
+        let sm = smooth_displacement(geom0, classes, &presc, method, control)?;
+        p0.iter()
+            .zip(&sm.displacement)
+            .map(|(p, dd)| vec3::add(*p, *dd))
+            .collect()
+    })
 }
 
 impl DynMesh {
@@ -834,7 +985,52 @@ impl DynMesh {
         } else {
             None
         };
+        let integrator = if get_s(case, "dynamic_mesh.six_dof.integrator") == "newmark" {
+            Integrator::Newmark
+        } else {
+            Integrator::Rk4
+        };
+        // F-350, ADR 0266 D2: the strong coupling of the body (the static checks N1 to N7 first; none without the table)
+        let mut errs = Vec::new();
+        check_coupling(case, &mut errs);
+        if !errs.is_empty() {
+            return Err(errs);
+        }
+        let strong = match &drive {
+            Drive::Body(b, patches) if is_strong(case) => {
+                let key = |k: &str| format!("{COUPLING}.{k}");
+                let w = relaxation_from_added_mass(b.spec.mass, get_f(case, &key("added_mass")));
+                let settings = StrongCoupling {
+                    relaxation: if get_s(case, &key("relaxation")) == "fixed" {
+                        Relaxation::Fixed(w)
+                    } else {
+                        Relaxation::Aitken { initial: w, max: 2.0 }
+                    },
+                    tolerance: get_f(case, &key("tolerance")),
+                    force_scale: get_f(case, &key("force_scale")),
+                    moment_scale: get_f(case, &key("moment_scale")),
+                    max_iterations: get_i(case, &key("max_iterations")).max(0) as usize,
+                };
+                settings.validate().map_err(|e| vec![d(COUPLING, e)])?;
+                Some(StrongDrive {
+                    coupling: BodyCoupling {
+                        rho: get_f(case, "physics.rho"),
+                        nu: get_f(case, "physics.nu"),
+                        force_patches: patches.clone(),
+                        follow_patches: follow.clone(),
+                        integrator,
+                    },
+                    settings,
+                    stop_at_cap: get_s(case, &key("at_cap")) != "continue",
+                })
+            }
+            _ => None,
+        };
         Ok(Some(DynMesh {
+            strong,
+            records: Vec::new(),
+            stop: None,
+            cap_warning: None,
             mesh0: (*geom.mesh).clone(),
             geom0: FvGeometry::new(geom.mesh.clone()).map_err(|e| vec![d("dynamic_mesh", e.to_string())])?,
             drive,
@@ -849,11 +1045,7 @@ impl DynMesh {
                 tol_rel: tol.max(1e-14),
                 max_iter: 5000,
             },
-            integrator: if get_s(case, "dynamic_mesh.six_dof.integrator") == "newmark" {
-                Integrator::Newmark
-            } else {
-                Integrator::Rk4
-            },
+            integrator,
             rho: get_f(case, "physics.rho"),
             nu: get_f(case, "physics.nu"),
             layers,
@@ -982,6 +1174,9 @@ impl DynMesh {
         if self.layers.is_some() {
             return self.step_layered(s, dt);
         }
+        if self.strong.is_some() {
+            return self.step_strong(s, dt);
+        }
         let t_new = s.time + dt;
         if let Drive::Body(b, patches) = &mut self.drive {
             let fm = patch_force_moment(&s.geom, &s.u, &s.p, self.rho, self.nu, patches, b.state.x)?;
@@ -1001,6 +1196,67 @@ impl DynMesh {
             }
         }
         s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls)
+    }
+
+    /// One strongly coupled step (F-350, ADR 0266 D2): `rcfd_fv::fsi::strong_step` with the points of the trial body. A
+    /// step that reaches the cap is kept; with `at_cap = "stop"` it leaves the located message [`DynMesh::take_stop`].
+    fn step_strong(&mut self, s: &mut PimpleSolver, dt: f64) -> Result<StepInfo, String> {
+        let (Some(sd), Drive::Body(b, _)) = (&self.strong, &mut self.drive) else {
+            return Err("the strong coupling needs motion = \"six_dof\"".into());
+        };
+        let (mesh0, geom0, rigid, moving, classes, method, control) = (
+            &self.mesh0,
+            &self.geom0,
+            self.rigid,
+            &self.moving,
+            &self.classes,
+            self.method,
+            &self.control,
+        );
+        let mut points = |body: &Body| body_points(mesh0, geom0, rigid, moving, classes, method, control, body);
+        let step = strong_step(s, b, dt, &sd.coupling, &sd.settings, &mut points)?;
+        let residual = step.residuals.last().copied().unwrap_or(0.0);
+        self.records.push(CouplingRecord {
+            iterations: step.iterations,
+            converged: step.converged,
+            residual,
+        });
+        if !step.converged {
+            let what = format!(
+                "the strong coupling did not converge in {} iterations (test quantity {residual:.3e}, tolerance {:.3e})",
+                step.iterations, sd.settings.tolerance
+            );
+            if sd.stop_at_cap {
+                self.stop = Some(format!(
+                    "{COUPLING}.max_iterations: {what}; raise max_iterations, check added_mass and force_scale, or set at_cap = \"continue\""
+                ));
+            } else if self.cap_warning.is_none() && !self.records[..self.records.len() - 1].iter().any(|r| !r.converged)
+            {
+                self.cap_warning = Some(serde_json::json!({
+                    "message": format!(
+                        "{COUPLING}: at step {}, {what}; the step is kept and the run goes on (at_cap = \"continue\")",
+                        self.records.len()
+                    ),
+                    "kind": "coupling_cap", "step": self.records.len(), "iterations": step.iterations, "residual": residual,
+                }));
+            }
+        }
+        Ok(step.flow)
+    }
+
+    /// The located message of a strongly coupled step that reached the cap with `at_cap = "stop"` (ADR 0266 D2).
+    pub(crate) fn take_stop(&mut self) -> Option<String> {
+        self.stop.take()
+    }
+
+    /// The warning of the first capped step with `at_cap = "continue"` (ADR 0266 D2), once.
+    pub(crate) fn take_cap_warning(&mut self) -> Option<serde_json::Value> {
+        self.cap_warning.take()
+    }
+
+    /// The records of the strongly coupled steps (empty for the loose coupling).
+    pub fn coupling_records(&self) -> &[CouplingRecord] {
+        &self.records
     }
 
     /// True for `deformation = "layering"`.

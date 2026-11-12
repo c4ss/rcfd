@@ -2395,6 +2395,13 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | `dynamic_mesh.six_dof.gravity` | bool, false | weight from `physics.gravity` |
 | `dynamic_mesh.six_dof.force_patches` | list of strings, `[]` | patches the flow force is integrated on (empty = moving patches) |
 | `dynamic_mesh.six_dof.integrator` | `rk4` (default), `newmark` | body integrator (`newmark` not for free rotation) |
+| `dynamic_mesh.six_dof.coupling.scheme` | `loose` (default), `strong` | optional table `[dynamic_mesh.six_dof.coupling]` (F-350, ADR 0266; absent = `loose`): the flow force at the start of the step drives the body (ADR 0033 D7), or every step iterates body, mesh and flow until the force held over the step is converged (`rcfd_fv::fsi::strong_step`, ADR 0250) |
+| `dynamic_mesh.six_dof.coupling.relaxation` | `aitken` (default), `fixed` | strong: Aitken's factor, started every step from the factor of `added_mass` and capped at 2, or that factor fixed |
+| `dynamic_mesh.six_dof.coupling.added_mass` | float, 0 | strong: estimate `m'` of the added mass in kg (`>= 0`); the factor is `2M/(2M + m')` (ADR 0250 D5); 0 gives 1 |
+| `dynamic_mesh.six_dof.coupling.tolerance` | float, 1e-8 | strong: converged when `abs(F_new - F)/max(abs(F_new), force_scale)` and the same for the moment are at most this (`> 0`) |
+| `dynamic_mesh.six_dof.coupling.force_scale`, `.moment_scale` | float, 0 | strong: floors of the force (N) and moment (N m) norms in the test (`>= 0`), e.g. the largest spring force |
+| `dynamic_mesh.six_dof.coupling.max_iterations` | int, 20 | strong: cap of the flow solves of one step (`>= 1`) |
+| `dynamic_mesh.six_dof.coupling.at_cap` | `stop` (default), `continue` | strong: a step that reaches the cap stops the run (`dynamic_mesh: step N, t = ...: dynamic_mesh.six_dof.coupling.max_iterations: ...`), or is kept and the run goes on with one warning event (`kind = "coupling_cap"`) |
 
 Static errors are located at the key:
 
@@ -2412,6 +2419,30 @@ Combinations that are not implemented are reported at `dynamic_mesh.enabled`:
 * turbulence, energy, scalars, particles, momentum sources, rheology, statistics, restart
 
 A mesh that becomes invalid stops the run: `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
+
+### Strong body-flow coupling (F-350, ADR 0266)
+
+The loose coupling is unstable when the added mass of the fluid exceeds about twice the body's mass (ADR 0250 D3: a
+growth of `sqrt(m_a/(2M))` per step whatever the time step). The optional table `[dynamic_mesh.six_dof.coupling]` with
+`scheme = "strong"` runs the sub-iterated step of ADR 0250 instead; a good `added_mass` is the fluid mass the body must
+push (for a piston driving a column of length `L` and cross-section `A`, `rho A L`), and a good `force_scale` the largest
+spring or weight force. Without the table, or with `scheme = "loose"`, nothing changes. The spring-mounted piston of
+ADR 0250 at an added-mass ratio of 4:
+
+```toml
+[dynamic_mesh.six_dof.coupling]
+scheme = "strong"
+relaxation = "aitken"
+added_mass = 0.04
+tolerance = 1e-8
+force_scale = 0.019739208802178716
+max_iterations = 20
+```
+
+Located static errors (at the key): `scheme = "strong"` with `motion = "prescribed"`, with
+`rest_patches` or with `integrator = "newmark"` (at `scheme`); a tolerance that is not positive; a negative
+`force_scale`, `moment_scale` or `added_mass`; `max_iterations < 1`. Every strongly coupled step is recorded
+(`Simulation::coupling_records`: iterations, converged, last test quantity).
 
 ### Compressible ALE and layering (F-259, ADR 0191, ADR 0257)
 

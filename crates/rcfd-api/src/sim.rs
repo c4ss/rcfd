@@ -2866,6 +2866,12 @@ impl Simulation {
         self.dynmesh.as_ref().and_then(|d| d.body())
     }
 
+    /// The records of the strongly coupled steps of a six-DOF run (`[dynamic_mesh.six_dof.coupling] scheme = "strong"`,
+    /// ADR 0266); empty otherwise.
+    pub fn coupling_records(&self) -> &[crate::dynmesh::CouplingRecord] {
+        self.dynmesh.as_ref().map_or(&[], |d| d.coupling_records())
+    }
+
     /// Set when the run stopped because a user function failed (trap, fuel, bad value).
     pub fn failure(&self) -> Option<&str> {
         self.failure.as_deref()
@@ -2968,6 +2974,10 @@ impl Simulation {
     /// run (ADR 0145 D4), then the pressure-lag warnings of the transient solver (ADR 0077 part C).
     pub fn take_runtime_warnings(&mut self) -> Vec<serde_json::Value> {
         let mut out = std::mem::take(&mut self.landing_warnings);
+        // F-350, ADR 0266 D2: the first strongly coupled step kept at its cap (at_cap = "continue")
+        if let Some(w) = self.dynmesh.as_mut().and_then(|d| d.take_cap_warning()) {
+            out.push(w);
+        }
         let Engine::Transient(s) = &self.engine else {
             return out;
         };
@@ -4130,6 +4140,10 @@ impl Simulation {
                     Some(dm) => match dm.step(s, dt) {
                         Ok(i) => {
                             self.geom = s.geom.clone();
+                            // F-350, ADR 0266 D2: a strongly coupled step at its cap with at_cap = "stop" ends the run
+                            if let Some(e) = dm.take_stop() {
+                                udf_error = Some(crate::dynmesh::failure_message(s.history.len(), s.time, &e));
+                            }
                             i
                         }
                         Err(e) => {
