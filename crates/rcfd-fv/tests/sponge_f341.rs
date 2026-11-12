@@ -610,3 +610,58 @@ fn s4_frame_setting_and_refusals() {
     assert!(s.set_msd_wall("xmax", Some(wall)).is_err(), "S4d wall with a sponge");
     println!("S4: default frame refuses (3 forms), attached accepted, replace_mesh refused in both frames, frame kept, explicit replacement works, topology and wall refused");
 }
+
+/// T0m, T0mr, T0pr, T0sr and NCr2 of ADR 0265 amendment 1: the deterministic run of the T0 record once more, with the
+/// time-integral ratio `J` at the probe as the measure of the control (NCr2) beside the registered peak measure.
+#[test]
+fn t0b_tube_on_a_translating_mesh() {
+    let runs = [
+        ("T0m", Form::Matched, THOMPSON),
+        ("T0mr", Form::Matched, RELEASE),
+        ("T0pr", Form::Plain, RELEASE),
+        ("T0sr", Form::Shifted, RELEASE),
+        ("NCr", Form::None, RELEASE),
+    ];
+    let mut tests: Vec<Tube> = runs.iter().map(|&(_, f, b)| tube(240, 1.2, f, b)).collect();
+    let mut reference = tube(600, 3.0, Form::None, THOMPSON);
+    let mut num = vec![0.0f64; tests.len()];
+    let mut int = vec![0.0f64; tests.len()];
+    let (mut den, mut int_ref) = (0.0f64, 0.0f64);
+    while reference.s.time < 1.6 {
+        let dt = tests
+            .iter()
+            .map(|t| t.s.max_dt_ale())
+            .fold(reference.s.max_dt_ale(), f64::min);
+        let t_new = reference.s.time + dt;
+        for t in tests.iter_mut().chain(std::iter::once(&mut reference)) {
+            let g = moved(&t.mesh0, |p| vec3::add(p, vec3::scale(V, t_new)));
+            t.s.step_ale(g, dt).unwrap();
+        }
+        let p_ref = pressure(&reference.s, reference.probe);
+        den = den.max(p_ref - P0);
+        int_ref += (p_ref - P0) * dt;
+        for (i, t) in tests.iter().enumerate() {
+            let p = pressure(&t.s, t.probe);
+            assert!(p.is_finite(), "{} not finite", runs[i].0);
+            num[i] = num[i].max((p - p_ref).abs());
+            int[i] += (p - p_ref) * dt;
+        }
+    }
+    println!(
+        "T0b {} steps to t = {:.4}; incident peak at the probe / eps = {:.5}",
+        reference.s.steps,
+        reference.s.time,
+        den / EPS
+    );
+    let r: Vec<f64> = num.iter().map(|n| n / den).collect();
+    let j: Vec<f64> = int.iter().map(|x| (x / int_ref).abs()).collect();
+    for (i, (name, form, _)) in runs.iter().enumerate() {
+        println!("  {name} ({form:?}): R = {:.3e}, J = {:.4e}", r[i], j[i]);
+    }
+    println!("  limits: R <= {LIMIT:e} for T0m, T0mr, T0pr, T0sr; NCr2: J >= 0.9 for NCr");
+    assert!(r[0] <= LIMIT, "T0m {}", r[0]);
+    assert!(r[1] <= LIMIT, "T0mr {}", r[1]);
+    assert!(r[2] <= LIMIT, "T0pr {}", r[2]);
+    assert!(r[3] <= LIMIT, "T0sr {}", r[3]);
+    assert!(j[4] >= 0.9, "NCr2 {}", j[4]);
+}
