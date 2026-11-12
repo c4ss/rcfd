@@ -376,6 +376,36 @@ same partition. B1 is kept unedited (it passed).
 | B2 | c1, D2 | `node_blocks` with the `DofMap` of the fast cantilever and the free list of all equations except (node 0, component 0), (node 5, components 1 and 2), (node 9, component 1): block sizes `2, 3, 3, 3, 3, 1, 3, 3, 3, 2, 3, ...` (1617 blocks), every block one node's | as stated | finding 4 |
 
 M6 must fail B2. The decision rule is unchanged, with B2 beside B1.
+## Amendment 4 (2026-11-12, written and committed before the corrected run)
+
+**What happened.** The heavy test H1b of amendment 2 (code 6406bee9, log `w49i-work/f381-scratch/run-h1b.log`, made once,
+172 s) did not converge either: true residual 2.35e-4 (block Jacobi, 6782 iterations) and 2.36e-4 (IC, 2358 iterations)
+after 3 refinement steps, relative 1.9e-9 against 1e-10, the same for both preconditioners.
+
+**Diagnosis: a defect of the set-up of H1 and H1b.** A scratch diagnosis (not a registered check; scratch file
+`w49i-work/f381-scratch/mut/crates/rcfd-fem/tests/diag_floor.rs`, log `diag.log`) solved the reduced systems by IC-CG to a
+recursive residual of 1e-12 and evaluated the residual in working precision, with compensated sums and products, and the
+componentwise bound `eps || |A| |x| ||_2 / ||b||_2` of its evaluation. It showed the heavy model's tip deflection to be 0.121
+m against 4.5e-3 m for the fast one: the test helper `cantilever(div)` sets the length to `8 nx / 32` m (meant for the
+slender record X1, `[64, 6, 6]`, L = 16 m), so H1 and H1b ran a **24 m** beam (L/h = 16, cells 0.25 x 0.083 x 0.083 m)
+instead of the registered `[0, 8] x [0, 1.5]^2` box with cubes of 1/12 m (arithmetic 6). On that model the bound is 5.0e-9 and
+the compensated residual of the CG iterate 9.9e-9: its floor is above 1e-10 whatever the iteration, which H1 and H1b measured.
+The same diagnosis gives for the fast case bound 1.28e-11 (residual of the iterate 8.5e-12) and for the slender record
+1.41e-10 (1.50e-10): the attainable residual is about the componentwise bound, a better estimate than arithmetic 7's
+`||A|| ||x||`, which ignored that `|A| |x|` sums about four diagonals' worth of absolute row entries.
+
+**Estimate for the registered heavy model.** From the fast case's bound 1.28e-11: `|A| |x|` per row scales with the cell
+size (x 1/3), `sqrt(N)` with `sqrt(103968/4704) = 4.7`, `||b||_2 = F / sqrt(m)` with `1 / (19/7)`: bound `~ 1.28e-11 x 4.7
+x 2.71 / 3 = 5.4e-11`, a margin of about 2 to the limit 1e-10. With D5' the residual reached is about the bound (fast and
+slender cases above).
+
+**Corrected test.** `h1c_heavy_cantilever` (`#[ignore]`, heavy, run once): the box `[0, 8] x [0, 1.5] x [0, 1.5]` m with
+divisions `[96, 18, 18]` (103 968 unknowns), otherwise H1's body (both preconditioners, tolerance 1e-10, 60 000
+iterations, D5'); limit relative residual `<= 1e-10` each and `>= 1e5` unknowns. H1 and H1b stay as ignored records (H1b
+renamed `h1b_heavy_cantilever_wrong_geometry_record`, body unchanged). The fast, slender and other checks use the
+geometry registered for them and are not affected.
+
+The decision rule is unchanged (A3 missed: **partial**).
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
