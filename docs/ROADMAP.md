@@ -8123,8 +8123,8 @@ fixed by the item's registration ADR before any code.
     data.* method family of protocol 1.2, R2 a TypeScript reader of store.rts, R3 a WebAssembly reader if it needs no
     new crate) is recorded; the negative controls NC1 and NC2 hold; the decision of ADR 0350 section 4 (viable, viable
     with conditions, not viable) is stated with the numbers; no existing service method, golden or hash changes.
-  - note: ADR 0350 (2026-11-12), asked for by the maintainer. NEEDS THE USER: questions Q1 to Q5 of ADR 0350 (run the
-    spike, where the JavaScript lives, no native addon, the data.* methods, Electron over Tauri).
+  - note: ADR 0350 (2026-11-12), asked for by the maintainer. Q1 (run the spike) answered by the maintainer in person on
+    2026-11-12; Q2 to Q5 taken with the recommendations (ADR 0350 decision record).
 - [ ] **F-448** Electron Studio to parity with rcfd-studio
   - depends on: F-447
   - acceptance: An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity

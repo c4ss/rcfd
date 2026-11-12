@@ -144,3 +144,9 @@ can be wrong and look right" rule of the plan, §5 limit 2).
 Three items in the category "Studio desktop app" (added by the lead on 2026-11-12): F-447 the spike (this ADR), F-448 an
 Electron Studio to parity (depends on F-447 and the maintainer's go-ahead), F-449 retiring `rcfd-studio` and `rcfd-gui`
 (depends on F-448; needs the maintainer).
+
+## Decision record (2026-11-12)
+
+- **Q1:** (a), run the spike, asked for by the maintainer in person on 2026-11-12 ("can we do that now?").
+- **Q2** (a), **Q3** (a), **Q4** (the `data.*` methods on the spike's branch only) and **Q5** (a, Electron): taken by the lead on
+  the maintainer's standing instruction of 2026-11-11 (take the recommendation).

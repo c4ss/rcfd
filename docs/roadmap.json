@@ -4218,7 +4218,7 @@
     "deps": [],
     "status": "todo",
     "acceptance": "The checks P1 to P12 of ADR 0350 are run once as registered on the maintainer's machine, with the rcfd-studio control column measured first; each bulk route (R0 JSON baseline, R1 binary side channel under an opt-in data.* method family of protocol 1.2, R2 a TypeScript reader of store.rts, R3 a WebAssembly reader if it needs no new crate) is recorded; the negative controls NC1 and NC2 hold; the decision of ADR 0350 section 4 (viable, viable with conditions, not viable) is stated with the numbers; no existing service method, golden or hash changes.",
-    "note": "ADR 0350 (2026-11-12), asked for by the maintainer. NEEDS THE USER: questions Q1 to Q5 of ADR 0350 (run the spike, where the JavaScript lives, no native addon, the data.* methods, Electron over Tauri)."
+    "note": "ADR 0350 (2026-11-12), asked for by the maintainer. Q1 (run the spike) answered by the maintainer in person on 2026-11-12; Q2 to Q5 taken with the recommendations (ADR 0350 decision record)."
   },
   {
     "id": "F-448",
