@@ -6937,7 +6937,7 @@ fixed by the item's registration ADR before any code.
     by the implementation agent before any code. ADR 0271 (2026-11-12): upgrade_to_tet10 returns the list of mid-edge
     nodes with their ends (for the projection); a moved mesh is rebuilt through SolidMesh::new and add_block, which
     re-validate det J at every node; box surface and node sets are named xmin to zmax as the rcfd_mesh::gen patches.
-- [ ] **F-372** Element library: linear tetrahedron, trilinear hexahedron, quadratic tetrahedron; isotropic elasticity matrix
+- [x] **F-372** Element library: linear tetrahedron, trilinear hexahedron, quadratic tetrahedron; isotropic elasticity matrix
   - depends on: F-370
   - acceptance: Every limit not stated here is registered in the ADR before the run. For Tet4, Hex8 (2 x 2 x 2 Gauss)
     and Tet10, on the reference element and on randomly distorted ones (registered seed): the shape functions sum to 1
@@ -6946,11 +6946,21 @@ fixed by the item's registration ADR before any code.
     element stiffness is symmetric within 1e-13 of its norm, gives no force for the six rigid-body motions within 1e-11
     relative and has rank n - 6; each of the six unit strain states gives the strain energy V/2 eps:D:eps within 1e-12
     relative; D gives stress E eps in uniaxial stress and G gamma in shear within 1e-14.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0273; the registration is written
-    by the implementation agent before any code. ADR 0271 (2026-11-12) fixes the node orders and local faces of Tet4,
-    Hex8 and Tet10 (rcfd_fem::mesh, TET_EDGES: mid-edge nodes 4 to 9 on edges 01, 12, 02, 03, 13, 23) and provides
-    ElementKind::shape_gradients for the geometry; Material::isotropic_elastic holds the validated e, nu, density,
-    expansion.
+  - note: DONE pending acceptance, merged 2026-11-12. Structural solver, basic tier (plan ADR 0270). ADR 0273,
+    2026-11-12: rcfd_fem::element with the Element trait (shape functions, derivatives from ElementKind::shape_gradients
+    of ADR 0271, the isoparametric point with J, det J and physical gradients, integration points with w det J,
+    stiffness with its own or a given rule computed in both triangles, strain at a point; refusals by key: coordinates,
+    displacement, jacobian) for Tet4 (1 point), Hex8 (2 x 2 x 2 Gauss) and Tet10 (4 points), element_for(kind);
+    rcfd_fem::quadrature with tet_1, tet_4, tet_14 (degree 5, positive weights, constants by Newton on the invariant
+    moment equations) and Gauss 1 to 3 on the cube; rcfd_fem::material with the isotropic D and the constitutive call
+    stress(strain, point context, state) returning stress and tangent. On the reference elements and 10 randomly
+    distorted ones of each kind (Tet10: 10 curved and 5 straight-sided; seed 0xF372_0273): partition of unity within
+    2.2e-16 and derivative sums within 7.0e-16 (limit 1e-14), central differences within 7.1e-11 (limit 1e-7), every
+    monomial up to each rule's degree within 1.8e-15 (limit 1e-13, and each rule misses degree d + 1), stiffness
+    symmetric within 1.9e-16 (limit 1e-13), rigid-body force within 6.2e-17 relative (limit 1e-11), rank n - 6 by
+    rcfd_linalg::eigen with the threshold 1e-9 lambda_max (rigid modes at 1.5e-16, the seventh at 1.4e-3 or more),
+    strain energy of the six unit strains within 7.4e-16 (limit 1e-12); D gives E eps in uniaxial stress within 6.0e-16
+    and G gamma in shear exactly (nu = 0, 0.3, 0.45, -0.5; limit 1e-14). Twelve mutations caught.
 - [x] **F-373** Sparse direct solver for symmetric positive definite matrices (envelope L D L^T after reverse Cuthill-McKee)
   - depends on: F-025, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a direct
@@ -6987,7 +6997,9 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0275; the registration is written
     by the implementation agent before any code. ADR 0274 (2026-11-12) measured that on a box numbered lexicographically
     the natural order factorises 6 x faster than RCM (27-point node graph); ADR 0274 recommends
-    rcfd_linalg::skyline::SkylineOrdering::SmallerEnvelope for the static solve.
+    rcfd_linalg::skyline::SkylineOrdering::SmallerEnvelope for the static solve. ADR 0273 (2026-11-12):
+    element_for(kind).stiffness(coords, &material.elasticity_matrix()?) gives the dense element stiffness (node-major
+    unknowns, three per node); its errors name the key but not the element, which the assembly adds.
 - [ ] **F-375** Surface and body loads: traction, pressure, gravity, centrifugal load of a rotating part, body force field
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Consistent nodal loads for surface
@@ -7000,7 +7012,9 @@ fixed by the item's registration ADR before any code.
     displacement rho omega^2 L^3/(3 E) within 1 percent (Tet10 at 8, Hex8 at 16 elements along); thin rotating ring
     (thickness/radius 0.02): radial displacement rho omega^2 r^3/E within 2 percent.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0276; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0273 (2026-11-12): body loads are sums over
+    Element::integration_points (N and w det J at each point); the face functions of Tri3, Quad4 and Tri6 are not in the
+    element library.
 - [ ] **F-376** Stress and strain recovery: integration-point, element and nodal values; von Mises and principal stresses
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Strain and stress at integration
@@ -7013,7 +7027,9 @@ fixed by the item's registration ADR before any code.
     D eps within 1e-10; the strain energy equals half the work of the loads within 1e-10 for a uniaxial and a bending
     load.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0277; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0273 (2026-11-12): Element::strain_at(coords, u, xi) gives B u at a
+    point; the integration points are stiffness_rule().points(); Material::stress(strain, &PointContext::default(), &[])
+    gives stress and tangent.
 - [ ] **F-377** VTK output of a solid result: finite-element cells with point and cell data
   - depends on: F-376, F-070
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-io gains a writer of an
@@ -7114,7 +7130,10 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0284; the registration is written
     by the implementation agent before any code. ADR 0283 (2026-11-12) provides rcfd_linalg::eigen::lowest_eigenpairs
     (Shift::Auto handles a singular K; request m >= 7 for a free body so that the Sturm check covers the six rigid
-    modes) and generalized_eigen_dense for references up to about 1000 unknowns (22.6 s at 900).
+    modes) and generalized_eigen_dense for references up to about 1000 unknowns (22.6 s at 900). ADR 0273 (2026-11-12):
+    Element::mass_rule() proposes tet_4 (Tet4), gauss_3 (Hex8) and tet_14 (Tet10, degree 5), exact for straight-sided
+    tetrahedra and every trilinear hexahedron; the consistent mass is the sum of rho N^T N w det J over
+    Element::integration_points.
 - [ ] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
   - depends on: F-371, F-377, F-380, F-237
   - acceptance: Every limit not stated here is registered in the ADR before the run. A surface set of a solid mesh is
