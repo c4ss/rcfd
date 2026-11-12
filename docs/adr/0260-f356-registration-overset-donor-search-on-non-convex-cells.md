@@ -464,3 +464,28 @@ order of its points), which is why it names three checks.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the registered run of the four tests and before any corrected run)
+
+The registered run (`cargo test --release -p rcfd-mesh --test overset_f356 -- --nocapture --test-threads=1`, once, log
+`f356-scratch/f356-run1.log`) met every check except one: **T3 on P2, 1176 of 2023 mesh points "located in a cell that
+does not have them"**. Diagnosis, by arithmetic on the construction (no further run): P2 puts every lattice point of the
+base into the mesh's point list, but the base polygons use the lattice point `(i, j)` only when `i mod 3` and `j mod 3`
+are both in `{0, 1}` (the points `(0,0), (1,0), (0,1), (1,1)` of a block and their copies at `3`). Of the `17 x 17 = 289`
+interior lattice points of a layer, `11 x 11 = 121` are used (`i` in `1..17` with `i mod 3` in `{0, 1}`: 11 values), so
+`168` points of each of the 7 interior layers belong to **no cell**: `168 x 7 = 1176`, the measured number exactly. For a
+point of no cell the registered condition ("the located cell has the point among its points") cannot hold for any cell;
+the check is ill-posed for those points, a defect of the set-up of the check and not of the locator (the same points were
+located as by the full search: `0` differ). P1 uses every lattice point (its T3 met, 900 of 900).
+
+Correction (limits unchanged):
+
+- **T3'** (P1, P2): the condition "the located cell has the point among its points" over the mesh points that belong to
+  at least one cell; limit `0`. `locate` against `locate_brute_force` over all interior mesh points as before; limit `0`.
+- **T3o** (P2, new): the interior mesh points that belong to no cell (1176) are points of the domain lying on cell
+  boundaries (the lattice points along the arms of the L-shapes); the located cell must contain each of them by the
+  reference; limit `0` refused.
+
+The registered test `t_points_on_shared_faces` stays as an ignored record with the measured number; the new test
+`t_points_on_shared_faces_amended` holds T1, T3', T3o and T4 (T1 and T4 are the same deterministic computations as in the
+registered run, where they met). Nothing else changes.
