@@ -10,9 +10,12 @@ use crate::assemble::stiffness_with;
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reactions, reduce, Prescribed};
 use crate::error::{FemError, Result};
 use crate::loads::{nodal_load_vector, NodalForceAt};
+use crate::model::DofMap;
 use crate::model::{SolidModel, SolidResult, SolverStats};
+use rcfd_linalg::precond::{BlockJacobi, IcBreakdown, IcOptions, IncompleteCholesky, PrecondError};
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
-use rcfd_linalg::{cg, CsrMatrix, Jacobi, SolveControl};
+use rcfd_linalg::vecops::norm2;
+use rcfd_linalg::{cg, CsrMatrix, Jacobi, Preconditioner, SolveControl};
 
 /// Relative pivot threshold of the direct solve: a pivot `d_i <= PIVOT_TOLERANCE a_ii` is refused (ADR 0275 arithmetic 4).
 pub const PIVOT_TOLERANCE: f64 = 1e-10;
@@ -31,7 +34,47 @@ pub enum StaticSolver {
         /// Iteration cap.
         max_iterations: usize,
     },
+    /// Conjugate gradients with block Jacobi or incomplete Cholesky (ADR 0282), to a true relative residual
+    /// `|b - K u| <= tolerance |b|`.
+    PreconditionedCg {
+        /// The preconditioner.
+        preconditioner: CgPreconditioner,
+        /// Relative residual tolerance (checked on the true residual).
+        tolerance: f64,
+        /// Iteration cap (summed over restarts).
+        max_iterations: usize,
+    },
 }
+
+/// The preconditioner of [`StaticSolver::PreconditionedCg`] (ADR 0282).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum CgPreconditioner {
+    /// The inverse of each node's block of free components (3 x 3 where no component is prescribed).
+    BlockJacobi,
+    /// Incomplete Cholesky with zero fill, the diagonal shifted on breakdown.
+    IncompleteCholesky(IcOptions),
+}
+
+/// What a static solve did, beside its result (ADR 0282 D4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SolveReport {
+    /// The solver name, as in [`SolverStats`].
+    pub solver: String,
+    /// Iterations (0 for the direct solve), summed over restarts.
+    pub iterations: usize,
+    /// Restarts of CG from the true residual.
+    pub restarts: usize,
+    /// The relative residual `|b_F - K_FF u_F| / |b_F|`.
+    pub relative_residual: f64,
+    /// The shift of the incomplete Cholesky factor, if one was used.
+    pub shift: Option<f64>,
+    /// The breakdowns of the incomplete Cholesky factorisation, with the node and component of the failing row.
+    pub breakdowns: Vec<(usize, usize, IcBreakdown)>,
+}
+
+/// Restarts of the preconditioned CG from the true residual (ADR 0282 D5).
+pub const MAX_RESTARTS: usize = 3;
 
 /// Options of the static solve.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -67,6 +110,16 @@ pub fn solve_static_with(
     forces: &[NodalForceAt],
     options: &StaticOptions,
 ) -> Result<SolidResult> {
+    solve_static_report(model, prescribed, forces, options).map(|(r, _)| r)
+}
+
+/// As [`solve_static_with`], also returning what the solver did (iterations, restarts, shift and breakdowns).
+pub fn solve_static_report(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    forces: &[NodalForceAt],
+    options: &StaticOptions,
+) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
     let dofs = model.dof_map();
     let f = nodal_load_vector(model, forces)?;
@@ -75,32 +128,192 @@ pub fn solve_static_with(
     let k = stiffness_with(model, options.threads)?;
     let sys = reduce(&k, &f, &fixed)?;
     let nf = sys.free().len();
-    let (u_free, name, iterations) = if nf == 0 {
-        (Vec::new(), solver_name(&options.solver), 0)
+    let mut report = SolveReport {
+        solver: solver_name(&options.solver).to_string(),
+        iterations: 0,
+        restarts: 0,
+        relative_residual: 0.0,
+        shift: None,
+        breakdowns: Vec::new(),
+    };
+    let (u_free, iterations) = if nf == 0 {
+        (Vec::new(), 0)
     } else {
         match &options.solver {
-            StaticSolver::Direct => (direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, "skyline-ldlt", 0),
+            StaticSolver::Direct => (direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
             StaticSolver::ConjugateGradient {
                 tolerance,
                 max_iterations,
-            } => {
-                let (u, it) = conjugate_gradient(&sys.matrix, &sys.rhs, *tolerance, *max_iterations)?;
-                (u, "cg-jacobi", it)
-            }
+            } => conjugate_gradient(&sys.matrix, &sys.rhs, *tolerance, *max_iterations)?,
+            StaticSolver::PreconditionedCg {
+                preconditioner,
+                tolerance,
+                max_iterations,
+            } => preconditioned_cg(
+                &sys.matrix,
+                &sys.rhs,
+                sys.free(),
+                &dofs,
+                preconditioner,
+                *tolerance,
+                *max_iterations,
+                &mut report,
+            )?,
         }
     };
     let relative_residual = residual_norm(&sys.matrix, &sys.rhs, &u_free);
+    report.iterations = iterations;
+    report.relative_residual = relative_residual;
     let u = sys.expand(&u_free);
     let r = reactions(&k, &u, &f, &fixed);
-    Ok(SolidResult::new(dofs, u)?
+    let result = SolidResult::new(dofs, u)?
         .with_reactions(r)?
-        .with_stats(SolverStats::new(name, nf, iterations, relative_residual)))
+        .with_stats(SolverStats::new(&report.solver, nf, iterations, relative_residual));
+    Ok((result, report))
 }
 
 fn solver_name(s: &StaticSolver) -> &'static str {
     match s {
         StaticSolver::Direct => "skyline-ldlt",
         StaticSolver::ConjugateGradient { .. } => "cg-jacobi",
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::BlockJacobi,
+            ..
+        } => "cg-block-jacobi",
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::IncompleteCholesky(_),
+            ..
+        } => "cg-ic0",
+    }
+}
+
+/// The block partition of the reduced rows by node: `block_ptr` with one block per run of consecutive free equations of
+/// the same node (ADR 0282 D2).
+pub fn node_blocks(free: &[usize], dofs: &DofMap) -> Vec<usize> {
+    let mut ptr = vec![0];
+    for r in 1..free.len() {
+        let a = dofs.node_component(free[r - 1]).map(|(n, _)| n);
+        let b = dofs.node_component(free[r]).map(|(n, _)| n);
+        if a != b {
+            ptr.push(r);
+        }
+    }
+    if !free.is_empty() {
+        ptr.push(free.len());
+    }
+    ptr
+}
+
+fn precond_reason(e: &PrecondError, free: &[usize], dofs: &DofMap) -> String {
+    let at = |row: usize| match free.get(row).and_then(|&q| dofs.node_component(q)) {
+        Some((n, c)) => format!(" (node {n} component {c})"),
+        None => String::new(),
+    };
+    let row = match e {
+        PrecondError::MissingDiagonal { row }
+        | PrecondError::NonPositiveDiagonal { row, .. }
+        | PrecondError::NonFinite { row, .. }
+        | PrecondError::BlockNotPositive { row, .. } => Some(*row),
+        PrecondError::NoShift { breakdowns, .. } => breakdowns.last().map(|b| b.row),
+        _ => None,
+    };
+    format!("{e}{}", row.map_or(String::new(), at))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn preconditioned_cg(
+    a: &CsrMatrix,
+    b: &[f64],
+    free: &[usize],
+    dofs: &DofMap,
+    preconditioner: &CgPreconditioner,
+    tolerance: f64,
+    max_iterations: usize,
+    report: &mut SolveReport,
+) -> Result<(Vec<f64>, usize)> {
+    let solver = solver_name(&StaticSolver::PreconditionedCg {
+        preconditioner: preconditioner.clone(),
+        tolerance,
+        max_iterations,
+    });
+    let m: Box<dyn Preconditioner> = match preconditioner {
+        CgPreconditioner::BlockJacobi => {
+            Box::new(
+                BlockJacobi::new(a, &node_blocks(free, dofs)).map_err(|e| FemError::Solver {
+                    solver,
+                    reason: precond_reason(&e, free, dofs),
+                })?,
+            )
+        }
+        CgPreconditioner::IncompleteCholesky(o) => {
+            let ic = IncompleteCholesky::new(a, o).map_err(|e| FemError::Solver {
+                solver,
+                reason: precond_reason(&e, free, dofs),
+            })?;
+            report.shift = Some(ic.shift());
+            report.breakdowns = ic
+                .breakdowns()
+                .iter()
+                .map(|bd| {
+                    let (n, c) = dofs.node_component(free[bd.row]).expect("free equation exists");
+                    (n, c, *bd)
+                })
+                .collect();
+            if !ic.breakdowns().is_empty() {
+                report.solver = format!(
+                    "cg-ic0, shift {:e} after {} breakdown(s)",
+                    ic.shift(),
+                    ic.breakdowns().len()
+                );
+            }
+            Box::new(ic)
+        }
+    };
+    let target = tolerance * norm2(b);
+    let mut x = vec![0.0; b.len()];
+    let mut used = 0;
+    let mut r = vec![0.0; b.len()];
+    loop {
+        let control = SolveControl {
+            tol_abs: target,
+            tol_rel: 0.0,
+            max_iter: max_iterations - used,
+        };
+        let s = if report.restarts == 0 {
+            cg(a, b, &mut x, m.as_ref(), &control)
+        } else {
+            // ADR 0282 amendment 2 (D5'): a restart is a step of iterative refinement; the correction of the true
+            // residual `r` is iterated from zero, so its roundings are those of the correction, and `x` is rounded once.
+            let mut delta = vec![0.0; b.len()];
+            let s = cg(a, &r, &mut delta, m.as_ref(), &control);
+            for (xi, di) in x.iter_mut().zip(&delta) {
+                *xi += di;
+            }
+            s
+        };
+        used += s.iterations;
+        if !s.final_residual.is_finite() || x.iter().any(|v| !v.is_finite()) {
+            return Err(FemError::Solver {
+                solver,
+                reason: format!("non-finite iterate after {used} iterations"),
+            });
+        }
+        a.residual(b, &x, &mut r);
+        let true_res = norm2(&r);
+        if true_res <= target {
+            return Ok((x, used));
+        }
+        if !s.converged || report.restarts == MAX_RESTARTS || used >= max_iterations {
+            return Err(FemError::Solver {
+                solver,
+                reason: format!(
+                    "not converged in {used} iterations and {} restart(s) (true residual {:e}, target {:e} = \
+                     {tolerance:e} relative)",
+                    report.restarts, true_res, target
+                ),
+            });
+        }
+        report.restarts += 1;
     }
 }
 

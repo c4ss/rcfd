@@ -2688,6 +2688,7 @@ dependencies = [
 name = "rcfd-fem"
 version = "0.1.0"
 dependencies = [
+ "rayon",
  "rcfd-core",
  "rcfd-linalg",
  "rcfd-mesh",
