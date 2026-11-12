@@ -344,6 +344,26 @@ is in [ADR 0265](adr/0265-f341-registration-sponge-layer-on-moving-meshes.md).
   along a matched layer can make it unstable); their `normal` does not rotate with a rotating mesh; one-dimensional and
   two-dimensional checks only.
 
+### A mesh moving along a matched layer, and a rotating mesh (F-407, ADR 0344; library only)
+
+With `AttachedToMesh` the memory of a matched layer is the integral of `p - p_ref` along the path of each cell. When the
+mesh moves along the layer, that memory makes the layer unstable for waves grazing along it. Linear theory gives the
+growth rate `rate M / (2 (1 - M))` when the rate is small against the wave number (ADR 0344 DR2). The one-dimensional
+check grew a grazing pulse to 6 times its amplitude by `t = 1.5`, where the same column at rest stays at 0.30.
+
+`SpongeFrame::AttachedWithLabMemory` keeps the rates attached to the cells but gives the matched forms the memories of the
+lab frame: each cell's memory gains `w_c . grad Q` (and likewise `r` and `m` of the shifted form), `w_c` being the
+velocity of the cell centre over the step. On a mesh translating along a planar layer this is exactly the matched layer at
+rest. The plain form has no memory, so both attached frames give it the same bits, and so does a cell that does not move.
+
+* Checked: the transport term against a closed form to `1.9e-13`. A uniform reference state stays within `3.5e-15` on
+  the deforming set-up of ADR 0207. The grazing column stays bounded (0.31 against 0.30 at rest). On a rotating O-grid
+  (Mach 0.2 at the layer), a plain radial layer reflects `2.8e-3` of an outgoing cylindrical pulse, the same as at rest.
+  The plain form reflects about `w/(8 r)` of a cylindrical pulse of width `w` at radius `r`; that comes from the geometry,
+  not from the rotation. The plane-pulse results at 30 and 45 degrees are in ADR 0344 addendum 1.
+* Limits: the lab memory is derived for a translation along a planar layer. With a normal component of the motion, or
+  with a rotation, the attached rates move through the lab, and the matched forms on a rotating mesh are still not built.
+
 ## Reference: code locations, input format and command line
 
 ### Modules and entry points

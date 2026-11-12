@@ -400,3 +400,115 @@ The new test `g3b_lab_memory_transport_against_the_closed_form` is run once.
 ### Decision rule
 
 Unchanged, with G3b in the place of G3 among the fast checks; the status proposal names the record and the amendment.
+
+## Addendum 1: results (2026-11-12; the registered text and amendment 1 above are unchanged)
+
+Commits: registration e99d282f; library and tests 52c47760; amendment 1 45830496 (before the corrected run); the G3
+record and G3b 3721f80e; documentation and this addendum after. Every run in the **release** profile. No limit was changed.
+
+### Checks
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| LR30 | limited plane pulse, 30 degrees, mesh translating along the layer at Mach 0.2, lab memory: `R` | `<= 1e-2` | `1.648e-4` | yes |
+| LR45 | the same at 45 degrees | `<= 1e-2` | `3.511e-4` | yes |
+| LB30 | run L to `t = 4.0` (20 `L/c`): largest `B` | `<= 1.5`, finite | 0.9983 (the incident peak); `B(4.0) = 5.8e-3` | yes |
+| LB45 | the same at 45 degrees | `<= 1.5`, finite | 0.9983; `B(4.0) = 8.1e-3` | yes |
+| SR30, SR45 | the same pulse at rest, matched, `step` | `<= 1e-2` | `2.657e-4`, `3.638e-4` | yes |
+| NC30, NC45 | no sponge, Thompson, moving (the measure's control) | `[0.03, 0.12]`, `[0.08, 0.25]` | 0.0884, 0.2044 | held |
+| AR30, AR45 | the F-341 frame `AttachedToMesh`: `R` | record | `7.249e-3`, `3.167e-2` | documented (above 1 percent at 45 degrees) |
+| AB30, AB45 | the F-341 frame: largest `B`; `B(4.0)` | record; predicted `B > 1.5` or a failed step | 0.9983, 0.9983 (the incident peak); `B(4.0)` `1.26e-2`, `3.70e-2` (2.2 and 4.6 times L's); no failed step | prediction **missed** (see deviations) |
+| RR | plain radial layer, rotating O-grid, Mach 0.2 at the layer: `R` | `<= 1e-2` | `2.824e-3` | yes |
+| RS | the same at rest | `<= 1e-2` | `2.822e-3` | yes |
+| NCR | no sponge, pressure release, rotating | `>= 0.5` | 0.8530 | held |
+| I1a | column along the layer, attached: `B` at `t = 1.5` | `>= 5` | 6.043 (model 21.3) | yes |
+| I1l | the same, lab memory: largest `B` over `[0.5, 1.5]` | `<= 0.5` | 0.3088 (model 0.34) | yes |
+| I1s | at rest: largest `B`; `abs(B_l - B_s)` at `t = 1.5` | `<= 0.5`; `<= 0.05` | 0.3025; `1.08e-2` | yes |
+| G3m, G3s | closed form, end columns excluded (registered set-up) | `<= 1e-12` | `8.92e-3` each (drift `2.2e-15`) | **no: setup_defect record (amendment 1)** |
+| G3b | the corrected set-up (amendment 1): `q` (matched), `q`, `r`, `m` (shifted); drift | `<= 1e-12` each | `1.91e-13`; `1.91e-13`, `8.62e-14`, `5.69e-14`; `2.55e-15` | yes |
+| G3c | control, attached | `>= 0.05` | 0.0625 (registered set-up and G3b) | held |
+| U1L | uniform reference on the deforming set-up U, lab memory, matched; shifted corner | `<= 1e-12` | drift `3.52e-15`, `q` `7.3e-16` (121 steps); drift `2.78e-15`, `q`, `r`, `m` `5.9e-16`, `2.6e-16`, `6.3e-16` | yes |
+| U2r | uniform reference, plain radial layer, rotating O-grid (largest `abs(w_n)` 0.160), 100 steps | `<= 1e-12` | `1.02e-13` | yes |
+| B3a | plain layer, set-up U, lab against attached frame | bit-identical | bit-identical | yes |
+| B3b | no motion, matched and shifted, lab against attached frame | bit-identical | bit-identical (the state evolves) | yes |
+| B1 | `--lib sponge` 7, `--lib compressible` 17 (1 ignored); `sponge_f341` 6 (1), `sponge_f331` 5 (8), `sponge_f340` 5 (12), `compressible_ale_f258` 8, `compressible_ale_f258_records` 4, `ale_gcl` 4, `compressible_bc` 2 (4); `rcfd-api --test baseline_hashes` 3 (1) | pass | pass | yes |
+| S5 | the frame setting | as stated | as stated | yes |
+
+Commands: `cargo test --release -p rcfd-fv --test sponge_f407` (the fast tests, 20 s; first run at 52c47760, then G3b
+alone once at 3721f80e); `... -- --ignored x30_ x45_ r_plain` once at 3721f80e (5787 s, three tests in parallel, the
+rotation test about 10 min). B1 as listed.
+
+### Mutations (a `git archive` copy at 3721f80e in the scratch folder with its own target directory; once each)
+
+| id | mutation | caught by |
+|---|---|---|
+| ML1 | transport dropped | G3b (`6.25e-2`), I1l (`B = 6.08`, the lab run grows like the attached one) |
+| ML2 | sign of the transport | G3b (`0.125`), I1 (the lab run stopped) |
+| ML3 | transport of `q` only (shifted form) | G3b (`r` `3.1e-2`, `m` `6.3e-2`) only |
+| ML4 | cell velocity halved | G3b (`3.1e-2`), I1l (`B = 1.16`) |
+| ML5 | `step_ale` refuses the lab frame | S5, U1L, B3a, B3b, G3b, I1 |
+
+No mutation survived. ML3 is caught by one check only. After the mutations the copy's sources equal the archived ones.
+
+### fmt and clippy
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean.
+
+### Deviations and disclosures
+
+- G3 missed (8.92e-3 against 1e-12). Amendment 1 diagnosed it with a scratch model (which reproduced 8.922e-3 exactly) and
+  registered G3b before its run. The model's value for G3b was seen before the run, so G3b is not blind with respect to
+  the model. It is blind with respect to the solver.
+- **The prediction AB missed.** The attached frame did not blow up in set-up X in 20 transit times. It reflects 44 times
+  (30 degrees) and 90 times (45 degrees) more than the lab memory, which is above 1 percent at 45 degrees, and it leaves 2.2
+  and 4.6 times more residual at `t = 4`. The instability of DR2 is real where its premises hold: I1a, the uniform layer
+  with `k_x = 0` exactly, grew 6 times by `t = 1.5`. Likely cause (not verified by a further run): the fastest growth
+  needs a rate comparable to the tangential wave number (about 0.05 `k` at `sigma ~ k`, so `k ~ 100` at the deepest rates)
+  and a mode that stays grazing. In set-up X the rate varies across 40 cells of the layer, so such a mode is not guided.
+  It refracts out of the deep layer into its weak front and into the interior, and at 12 cells per wavelength the scheme
+  damps it. The growth does not have the time or the room it needs. The record says the attached matched layer is
+  mismatched and above the limit at 45 degrees. The instability is shown in one dimension, but not shown to grow in this
+  set-up within 20 transit times. A longer run, or a thicker layer with a uniform deep part, would decide it; neither was
+  run.
+- I1a met its limit with little margin: 6.04 against 5 (the model gave 21.3). The scheme damps the growing short waves
+  more than the factor-4 allowance foresaw.
+- The X run's step was about 0.0009 (1705 steps to 1.55), half the 0.00167 assumed in the cost estimate. The cost was 5787
+  s wall, not the estimated 35 to 40 min.
+
+### Not run
+
+The whole workspace suite; other crates' tests except `baseline_hashes`; the debug profile; the motion along `-y`; 20
+transit times read as `2L/c` (`t = 8`); matched forms on a rotating mesh; a motion with a normal component with the lab
+memory; three dimensions.
+
+### Decision by the registered rule (as amended)
+
+Clause 1 is met: LR30 and LR45 are `1.6e-4` and `3.5e-4` against `1e-2`, and LB30 and LB45 hold (the largest `B` is the
+incident peak), with SR and NC held. The acceptance is met with the new opt-in frame `AttachedWithLabMemory`. The F-341
+frame is measured and documented: `7.2e-3` and `3.2e-2`, with the instability shown in one dimension. Clause 2 is met: RR
+`2.8e-3` with RS and NCR held. The fast checks are met, with G3 replaced by G3b through amendment 1. B1 and B3 hold, and
+every mutation was caught. **Proposed status: done.** The disclosures: G3 was replaced by an amended check; the predicted
+blow-up of the attached frame in set-up X did not happen (a record, which does not enter the rule); clause 1 is met by a
+limited plane pulse (reading 2).
+
+### Remaining questions (options and recommendation)
+
+1. **The attached memory of the matched forms** (Q1). (a) Make the lab memory the behaviour of `AttachedToMesh` for the
+   matched forms; (b) keep both; (c) let `AttachedToMesh` refuse a matched form. Recommendation: (a), with the
+   maintainer's approval, because it changes the bits of the F-341 frame's matched runs, which the F-341 tests record. Until
+   then, document the frame (done in the rustdoc and `docs/acoustics.md`).
+2. **Whether the attached frame blows up in a realistic layer.** (a) Leave it as documented; (b) run set-up X longer or
+   with a uniform deep part. Recommendation: (a) if question 1 is taken as (a), otherwise (b).
+3. **Layer fixed in space for normal motion or rotation** (Q2). Recommendation: only when a case needs it.
+4. **Wiring of the frame in the case schema** (ADR 0265 Q2). Recommendation: together with F-331's wiring.
+
+### For the lead: roadmap entries
+
+**F-407, proposed status: `done`.** Proposed note text:
+
+> From ADR 0265 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0344, 2026-11-12: the acceptance text is MET IN THE LIBRARY with a new opt-in frame. Derived: the F-341 attached memory, the integral of p - p_ref along each cell's path, makes a matched layer unstable for grazing waves when the mesh moves along the layer, with growth rate M/(2(1-M)) times the layer rate. A column along a uniform layer at Mach 0.2 grew 6 times by t = 1.5, where at rest it stays at 0.30. Built (rcfd-fv): `sponge::SpongeFrame::AttachedWithLabMemory`, with the rates attached to the cells and the memories of the matched forms taken in the lab frame (each cell's memory gains w_c.grad Q), which on a mesh translating along a planar layer is the matched layer at rest. Measured: a plane pulse with a smooth envelope along its front (the solver has no periodic condition, and the moving boundaries exclude a mirror wall), through the layer of ADR 0237 on grids translating along it at Mach 0.2, reflects 1.6e-4 at 30 degrees and 3.5e-4 at 45 degrees (2.7e-4 and 3.6e-4 at rest; limit 1e-2) and stays bounded over 20 transit times of the layer (largest amplitude the incident peak). The F-341 frame reflects 7.2e-3 and 3.2e-2 in the same runs. It did not blow up within 20 transit times there, although the one-dimensional check shows the instability. A plain radial layer on a rotating O-grid, Mach 0.2 at the layer, reflects 2.8e-3 of an outgoing cylindrical pulse, as at rest; the plain form reflects about w/(8r) of a cylindrical pulse, which comes from the geometry. The transport matches a closed form to 1.9e-13. The frame gives the bits of the F-341 frame for the plain form and without motion. The F-341, F-331 and F-340 tests, the F-258 bit records and baseline_hashes pass unedited, and five mutations were caught. One amendment: the first closed-form check excluded too few boundary cells (8.9e-3); it was diagnosed and replaced on a longer grid. Limits: the lab memory is derived for translation along a planar layer; matched forms on rotating meshes are not built; library only; two-dimensional checks.
+
+Proposed follow-up (number for the lead to assign): **Lab-frame memory as the behaviour of the attached matched sponge.**
+Deps: F-407. Size S. Acceptance:
+
+> With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the lab frame (ADR 0344); the F-341 matched records are re-recorded once with that approval, the plain form and every run without motion stay bit-identical, and the ADR 0344 checks pass unchanged.
