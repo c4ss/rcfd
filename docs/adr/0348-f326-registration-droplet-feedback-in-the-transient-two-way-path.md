@@ -318,3 +318,28 @@ has no key `evaporation` or `breakup`; with them both texts have them and `conte
 registered. No other check changes.
 
 NC3 needs the record's `sum energy_heat`, which D6 did not list: the ledger gains `heat_raw` (that sum). No limit changes.
+
+## Amendment 2 (2026-11-12, after the first registered run, before any corrected run)
+
+The first run (code d9f7f943, `w49i-work/f326-scratch/run1.log`) passed Z1, Z2a and S and stopped CB, C4 and C5 at step 1:
+
+- **C4, C5: "IM step 1: NaN", "IP step 1: NaN".** No parcel is injected in the first step (`floor(1e4 x 1e-5) = 0`), every
+  term of the identities is zero and the test divided zero by zero. ADR 0230's convention (its test's `identities`: the
+  residual is 0 when the largest term is 0) was meant and not written. A defect of the test code.
+- **CB: "C3b step 1: 7.99e-4".** With no source, the carrier's thermal inventory moved by `5.6e-16` J (round-off of the
+  temperature solve), against the floor `1e-13 rho c_p sum V T = 7.0e-13` J that the registration put in the denominator;
+  with the limit `1e-8` on top, the floor allowed `7e-21` J. The registration's own estimate (round-off of order `1e-15` J
+  against a floor of `7e-13` J) shows the floor was meant as an absolute allowance for round-off, not as a denominator; as
+  written it can only pass with a source. A defect of the set-up (my registration), not a miss of the code. C1b has the same
+  form (it did not fail: the vapour fraction is exactly 0 until the first evaporation).
+
+Corrections (numbers unchanged):
+
+- **A2.1** The residual of IM, IP, IE is 0 when every term of the identity is 0 (C1, C2, C3, C4, C5, ADR 0230's convention).
+- **A2.2** C1b reads `abs(rho sum V (Y^{n+1} - Y^n) - vapour_mass) <= 1e-8 sum abs(vapour_mass) + 1e-13 rho sum V`; C3b reads
+  `abs(rho c_p sum V (T^{n+1} - T^n) - sum Q_T) <= 1e-8 sum abs(Q_T) + 1e-13 rho c_p sum V abs(T)`. The relative limit and the
+  allowance are the registered numbers. Estimate of the allowance's use: the round-off of the solve, about `1e-15` J against
+  `7e-13` J (the measured `5.6e-16` J at step 1, seen in the first run, is consistent with it).
+
+The three tests of the first run stay in the file as ignored records (`*_setup_defect`) with their measured numbers; the
+corrected tests are new functions. Nothing else changes; the corrected run is made once.
