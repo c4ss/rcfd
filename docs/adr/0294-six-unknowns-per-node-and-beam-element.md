@@ -38,9 +38,9 @@ Theory of Matrix Structural Analysis, 1968; from memory, re-derived from the bea
 
 ## Files
 
-`crates/rcfd-solid/src/beam.rs`, and the generalisation in `model.rs` (`DofMap`), `assemble.rs`, `constraint.rs`, `loads.rs`,
+`crates/rcfd-fem/src/beam.rs`, and the generalisation in `model.rs` (`DofMap`), `assemble.rs`, `constraint.rs`, `loads.rs`,
 `mass.rs`, `recover.rs`; `crates/rcfd-post/src/solid_output.rs` (rotations as point data, line cells);
-`crates/rcfd-solid/tests/si_beam.rs`.
+`crates/rcfd-fem/tests/si_beam.rs`.
 
 ## What could make it miss
 

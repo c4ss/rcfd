@@ -38,7 +38,7 @@ identity J = -dPi/da. Method: Li, Shih and Needleman, Eng. Fract. Mech. 21 (1985
 
 ## Files
 
-`crates/rcfd-solid/src/fracture.rs` (with the slit builder), `crates/rcfd-solid/tests/sa_fracture.rs`.
+`crates/rcfd-fem/src/fracture.rs` (with the slit builder), `crates/rcfd-fem/tests/sa_fracture.rs`.
 
 ## What could make it miss
 

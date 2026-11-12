@@ -37,7 +37,7 @@ Closed forms only for the limits: resultant of the centrifugal body force, Clape
 
 ## Files
 
-`crates/rcfd-solid/tests/sb_fan_blade.rs` (or `crates/rcfd-api/tests/` if the Gmsh or tetrahedral-mesher route needs `rcfd-io`),
+`crates/rcfd-fem/tests/sb_fan_blade.rs` (or `crates/rcfd-api/tests/` if the Gmsh or tetrahedral-mesher route needs `rcfd-io`),
 `docs/structural-solver.md`, a short section in `docs/fan-project-breakdown.md` (E5 status text).
 
 ## What could make it miss

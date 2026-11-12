@@ -38,7 +38,7 @@ memory; derivable from the spectral expansion of the inverse of K).
 
 ## Files
 
-`crates/rcfd-solid/src/harmonic.rs`, `crates/rcfd-solid/tests/si_harmonic.rs`.
+`crates/rcfd-fem/src/harmonic.rs`, `crates/rcfd-fem/tests/si_harmonic.rs`.
 
 ## What could make it miss
 

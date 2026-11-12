@@ -36,7 +36,7 @@ Rigid-body inertia of a box.
 
 ## Files
 
-`crates/rcfd-solid/src/{mass.rs, modal.rs}`, `crates/rcfd-solid/tests/sb_modal.rs`.
+`crates/rcfd-fem/src/{mass.rs, modal.rs}`, `crates/rcfd-fem/tests/sb_modal.rs`.
 
 ## What could make it miss
 

@@ -15,7 +15,7 @@ file here with status PLANNED; the registration with its limits is written by th
 It is for the maintainer (section 5 first), for the lead who enters the roadmap items (section 7), and for the planner of the
 advanced tier (sections 1.3 and 2.5).
 
-**The basic tier is a plan, not code.** Every statement here about `rcfd-solid` is a statement about what ADR 0270 says it will
+**The basic tier is a plan, not code.** Every statement here about `rcfd-fem` is a statement about what ADR 0270 says it will
 be. Section 2.4 lists what this tier needs from it; two of those points are requests to the basic tier's implementers and are
 cheap only if they are made before ADR 0271 is written.
 
@@ -155,17 +155,17 @@ Everything stays in the crates of ADR 0270 section 2.1. The graph is unchanged:
 
 ```text
 rcfd-linalg  gains: eigen.rs (one function, buckling form), amg_elastic.rs (new)
-rcfd-solid   gains: twelve modules (section 2.2); additions to mesh.rs, model.rs, element.rs, assemble.rs, constraint.rs
+rcfd-fem   gains: twelve modules (section 2.2); additions to mesh.rs, model.rs, element.rs, assemble.rs, constraint.rs
 rcfd-post    gains: solid_dynamic.rs, solid_fsi.rs (the participant and the coupling helper); additions to solid_output.rs
 rcfd-api     gains: solid_coupled.rs; additions to solid_case.rs and (one optional table) schema.rs
 rcfd-cli, rcfd-mcp: only ADR 0308, only with the maintainer's approval
 ```
 
 Decision M5 of ADR 0270 asked this planner to reconsider a coupling crate. I recommend against it (N4): the glue is two files,
-`rcfd-post` already depends on `rcfd-fv`, `rcfd-io` and `rcfd-solid`, and a new crate costs another approved line of
+`rcfd-post` already depends on `rcfd-fv`, `rcfd-io` and `rcfd-fem`, and a new crate costs another approved line of
 `workspace_graph.rs` for no separation that a module does not give.
 
-### 2.2 New modules of `rcfd-solid`
+### 2.2 New modules of `rcfd-fem`
 
 Declared once by ADR 0291 as stubs, so that no later package edits `lib.rs`:
 
@@ -280,7 +280,7 @@ registration fixes every limit before its code. SI-n is the placeholder id of th
 ### ADR 0291 (SI-1): Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
 
 **Goal.** Prepare the shared files once, so that every later package of the tier fills a file of its own and no two packages of a
-wave edit the same file. Declare the new modules of `rcfd-solid` (section 2.2 of ADR 0290) and of `rcfd-post` as stubs; add the
+wave edit the same file. Declare the new modules of `rcfd-fem` (section 2.2 of ADR 0290) and of `rcfd-post` as stubs; add the
 element kinds `Hex20`, `Beam2` and `Shell4` and the per-block property data (Hex8 formulation, beam section, shell thickness); add
 the constraint and support data (linear constraint, rigid set, cyclic pair, elastic support); give the `Element` trait the
 defaulted entry points `geometric_stiffness`, `internal_force` and `tangent`; add one generic assembly hook that turns a
@@ -290,7 +290,7 @@ refused with a message naming it until its package lands. No numerics.
 **Dependencies.** none in this list; roadmap items: F-370, F-372, F-374, F-377.
 
 **Acceptance (draft).** The modules, element kinds, property data, constraint and support data and the three defaulted element
-entry points of ADR 0290 section 2 exist in rcfd-solid and rcfd-post; every test of the basic tier (the sb_ files of rcfd-solid,
+entry points of ADR 0290 section 2 exist in rcfd-fem and rcfd-post; every test of the basic tier (the sb_ files of rcfd-fem,
 rcfd-linalg, rcfd-io, rcfd-post and rcfd-api) compiles and passes unedited, and a registered set of basic models (patch test,
 cantilever, bar modes) gives displacements, stresses and frequencies with the same bits as before the change; the generic assembly
 hook called with the element stiffness reproduces assemble::stiffness bit for bit for 1 and 8 threads; each new element kind,
@@ -300,11 +300,11 @@ ignored; the baseline hashes are unchanged.
 **Checked against.** No physics: the reference is the basic tier itself (bit identity) and the refusals. The model for a
 declare-once scaffold is ADR 0271.
 
-**Files.** `crates/rcfd-solid/src/{lib.rs, mesh.rs, model.rs, element.rs, assemble.rs}` (additions only), one-line stubs of
+**Files.** `crates/rcfd-fem/src/{lib.rs, mesh.rs, model.rs, element.rs, assemble.rs}` (additions only), one-line stubs of
 `hex20.rs`, `hex8x.rs`, `beam.rs`, `shell.rs`, `mpc.rs`, `cyclic.rs`, `geometric.rs`, `buckling.rs`, `rotating.rs`,
 `nonlinear.rs`, `transient.rs`, `harmonic.rs`; `crates/rcfd-post/src/lib.rs` (two `pub mod` lines), stubs `solid_dynamic.rs`,
 `solid_fsi.rs`, the kind-to-cell-type mapping in `solid_output.rs`; `crates/rcfd-io/src/vtk.rs` only if the finite-element writer
-of ADR 0278 restricts the cell types; `crates/rcfd-solid/tests/si_scaffold.rs`.
+of ADR 0278 restricts the cell types; `crates/rcfd-fem/tests/si_scaffold.rs`.
 
 **Size.** S. **What could make it miss.** The basic tier's types are not written yet. If its tests build `SolidModel` or the
 element blocks by struct literals, a new field breaks them and house rule 2 forbids editing them: the new data then go into a side
@@ -336,8 +336,8 @@ integrals over the cube; the consistent load of a quadratic serendipity face (de
 functions over the square). Method: Zienkiewicz and Taylor, The Finite Element Method, vol. 1 (serendipity family; from memory,
 the functions are checked by the partition and derivative tests).
 
-**Files.** `crates/rcfd-solid/src/hex20.rs` (the element, its rule, its face functions and the upgrade builder),
-`crates/rcfd-solid/tests/si_hex20.rs`.
+**Files.** `crates/rcfd-fem/src/hex20.rs` (the element, its rule, its face functions and the upgrade builder),
+`crates/rcfd-fem/tests/si_hex20.rs`.
 
 **Size.** S. **What could make it miss.** The negative corner load of a quadratic face surprises a reader and any code that
 assumes positive nodal weights. Node order against VTK type 25 (the mid-edge order; to be confirmed from the public VTK format
@@ -368,7 +368,7 @@ Wilson, Taylor, Doherty and Ghaboussi (1973) and Taylor, Beresford and Wilson, I
 (incompatible modes and the patch-test correction); Simo and Rifai, Int. J. Numer. Meth. Engng 29 (1990) 1595 (the enhanced-strain
 view).
 
-**Files.** `crates/rcfd-solid/src/hex8x.rs`, `crates/rcfd-solid/tests/si_hex8x.rs`.
+**Files.** `crates/rcfd-fem/src/hex8x.rs`, `crates/rcfd-fem/tests/si_hex8x.rs`.
 
 **Size.** M. **What could make it miss.** The 3 percent at nu = 0.3 is a draft (the transverse strain in bending is only partly
 relieved by the modes). The control numbers are estimates. The two formulations are not combined in this package. Mass uses the
@@ -399,9 +399,9 @@ only, derivable in a few lines); the pinned-pinned frequencies. Method: the exac
 beam (Przemieniecki, Theory of Matrix Structural Analysis, 1968; from memory, re-derived from the beam equations in the
 registration).
 
-**Files.** `crates/rcfd-solid/src/beam.rs`, and the generalisation in `model.rs` (`DofMap`), `assemble.rs`, `constraint.rs`,
+**Files.** `crates/rcfd-fem/src/beam.rs`, and the generalisation in `model.rs` (`DofMap`), `assemble.rs`, `constraint.rs`,
 `loads.rs`, `mass.rs`, `recover.rs`; `crates/rcfd-post/src/solid_output.rs` (rotations as point data, line cells);
-`crates/rcfd-solid/tests/si_beam.rs`.
+`crates/rcfd-fem/tests/si_beam.rs`.
 
 **Size.** M. **What could make it miss.** It edits many basic files, so it runs alone among packages that touch them (wave 3). ADR
 0270 promises that no code outside `DofMap` assumes three unknowns per node; if that did not hold, this package finds out and
@@ -434,7 +434,7 @@ Bathe and Dvorkin, Int. J. Numer. Meth. Engng 21 (1985) 367 (the assumed shear s
 (MacNeal and Harder, Finite Elem. Anal. Des. 1 (1985) 3) is public but its values are not in the repository; it is not used
 (decision N7).
 
-**Files.** `crates/rcfd-solid/src/shell.rs`, `crates/rcfd-solid/tests/si_shell.rs`.
+**Files.** `crates/rcfd-fem/src/shell.rs`, `crates/rcfd-fem/tests/si_shell.rs`.
 
 **Size.** M. **What could make it miss.** At the upper end of M; if it must be split: statics first, then mass and warped facets.
 The drilling stiffness is a fiction with a tuning constant (registered from an estimate, not searched). Membrane locking of a
@@ -466,8 +466,8 @@ naming the constraints.
 master-slave elimination written as a congruence transformation (Cook, Malkus, Plesha and Witt, Concepts and Applications of
 Finite Element Analysis, the chapter on constraints; from memory); derivable from the principle of virtual work.
 
-**Files.** `crates/rcfd-solid/src/mpc.rs`, `crates/rcfd-solid/src/constraint.rs` (the dispatch to the transformation),
-`crates/rcfd-solid/tests/si_mpc.rs`.
+**Files.** `crates/rcfd-fem/src/mpc.rs`, `crates/rcfd-fem/src/constraint.rs` (the dispatch to the transformation),
+`crates/rcfd-fem/tests/si_mpc.rs`.
 
 **Size.** M. **What could make it miss.** `T^T K T` fills the matrix where a rigid set couples many nodes (the direct solver's
 envelope grows; reported, not hidden). Choosing the eliminated unknown of each constraint so that chains resolve; detecting
@@ -498,7 +498,7 @@ structure: Thomas, Int. J. Numer. Meth. Engng 14 (1979) 81, from memory; derivab
 Closed forms: the inextensional ring frequencies (Hoppe; Timoshenko, Vibration Problems in Engineering; re-derived by Rayleigh's
 method in the registration) and the rotating annular disc in plane stress (Timoshenko and Goodier; re-derived).
 
-**Files.** `crates/rcfd-solid/src/cyclic.rs`, `crates/rcfd-solid/tests/si_cyclic.rs`.
+**Files.** `crates/rcfd-fem/src/cyclic.rs`, `crates/rcfd-fem/tests/si_cyclic.rs`.
 
 **Size.** M. **What could make it miss.** The doubled real problem has every eigenvalue twice: the subspace must be large enough
 and the pairs must be recognised, not reported as two modes. Nodes on the axis belong to both boundaries (refused in this package;
@@ -529,8 +529,8 @@ force, omega_n^2 = (n pi/L)^4 E I/(rho A) + (n pi/L)^2 T/(rho A) (derivable from
 geometric stiffness is the second variation of the Green-Lagrange strain energy at fixed stress (Bathe, Finite Element Procedures,
 the total Lagrangian formulation; Zienkiewicz and Taylor, vol. 2; from memory, derived in the registration).
 
-**Files.** `crates/rcfd-solid/src/{geometric.rs, buckling.rs}`, `crates/rcfd-linalg/src/eigen.rs` (appended function),
-`crates/rcfd-solid/tests/si_geometric.rs`, `crates/rcfd-linalg/tests/si_buckling_eigen.rs`.
+**Files.** `crates/rcfd-fem/src/{geometric.rs, buckling.rs}`, `crates/rcfd-linalg/src/eigen.rs` (appended function),
+`crates/rcfd-fem/tests/si_geometric.rs`, `crates/rcfd-linalg/tests/si_buckling_eigen.rs`.
 
 **Size.** M. **What could make it miss.** Knife-edge supports on a solid mesh need nodes on the neutral axis and leave a local
 stress concentration. The frequency-difference check is built to cancel the discretisation error of the unstressed beam; if the
@@ -564,7 +564,7 @@ Omega^2 at rest is the Rayleigh quotient of the added stiffness); Southwell's lo
 with the flapping frequency Omega of a rotating string clamped on the axis (Legendre's equation). Southwell and Gough, British ARC
 R&M 766 (1921), from memory.
 
-**Files.** `crates/rcfd-solid/src/rotating.rs`, `crates/rcfd-solid/tests/si_rotating.rs`.
+**Files.** `crates/rcfd-fem/src/rotating.rs`, `crates/rcfd-fem/tests/si_rotating.rs`.
 
 **Size.** M. **What could make it miss.** Without the Coriolis term the frequencies of modes that move in the plane of rotation
 are approximate; for a blade on a stiff hub the error is small, for a disc it is not, and the package cannot measure it. The
@@ -596,7 +596,7 @@ Green-Lagrange strain under rotation; the elastica (Bisshopp and Drucker, Q. App
 numbers are computed in the registration from the ordinary differential equation, not taken from the paper). Method: Bathe, Finite
 Element Procedures, chapter 6 (total Lagrangian formulation), from memory, derived in the registration.
 
-**Files.** `crates/rcfd-solid/src/nonlinear.rs`, `crates/rcfd-solid/tests/si_nonlinear.rs`.
+**Files.** `crates/rcfd-fem/src/nonlinear.rs`, `crates/rcfd-fem/tests/si_nonlinear.rs`.
 
 **Size.** M. **What could make it miss.** The elastica compares a 3-D solid with small but finite strain (1 percent at this
 slenderness) against an inextensible rod: the 2 percent is a draft. Tet4 locks and is only checked on the uniform states. Follower
@@ -626,7 +626,7 @@ method, from tan(omega_h dt/2) = omega dt/2 (derivable). Methods, from memory: N
 Chung and Hulbert, J. Appl. Mech. 60 (1993) 371 (the parameters in terms of the spectral radius are re-derived or checked by the
 decay test, not taken on trust).
 
-**Files.** `crates/rcfd-solid/src/transient.rs`, `crates/rcfd-solid/tests/si_transient.rs`.
+**Files.** `crates/rcfd-fem/src/transient.rs`, `crates/rcfd-fem/tests/si_transient.rs`.
 
 **Size.** M. **What could make it miss.** Starting accelerations need a solve with M; a constrained model must do it on the
 reduced system. The decay test at omega dt = 1e3 needs a mode that is isolated in the discrete model (a two-unknown model is
@@ -655,7 +655,7 @@ signal with three harmonics: amplitudes and phases within 1e-12; a record that i
 Fourier sum. Method: mode superposition with the mode-acceleration (static) correction (Craig and Kurdila, Fundamentals of
 Structural Dynamics; from memory; derivable from the spectral expansion of the inverse of K).
 
-**Files.** `crates/rcfd-solid/src/harmonic.rs`, `crates/rcfd-solid/tests/si_harmonic.rs`.
+**Files.** `crates/rcfd-fem/src/harmonic.rs`, `crates/rcfd-fem/tests/si_harmonic.rs`.
 
 **Size.** M. **What could make it miss.** Modal damping is an input: no number for a moulded plastic blade is in the repository,
 so every response level scales with an assumed ratio. A direct (full) harmonic solve and damped or complex modes are not included
@@ -748,8 +748,8 @@ and Brezina, Computing 56 (1996) 179 (smoothed aggregation with a near-null spac
 translations and x cross e_i (first principles).
 
 **Files.** `crates/rcfd-linalg/src/amg_elastic.rs` (new), `crates/rcfd-linalg/src/lib.rs` (one `pub mod` line),
-`crates/rcfd-solid/src/solve.rs` (the solver choice and the modes from the coordinates),
-`crates/rcfd-linalg/tests/si_amg_elastic.rs`, `crates/rcfd-solid/tests/si_amg.rs`.
+`crates/rcfd-fem/src/solve.rs` (the solver choice and the modes from the coordinates),
+`crates/rcfd-linalg/tests/si_amg_elastic.rs`, `crates/rcfd-fem/tests/si_amg.rs`.
 
 **Size.** M. **What could make it miss.** Every iteration bound is a draft; none is derived. Constrained unknowns break the block
 structure (the reduced matrix has nodes with fewer than three unknowns). Aggregates with too few nodes cannot carry six modes (the
@@ -905,7 +905,7 @@ waves 1 to 5 are merged.
 
 | Wave | Packages in parallel | Files, by package |
 |---|---|---|
-| 1 | 0291, 0305 | 0291: `rcfd-solid` `lib.rs`, `mesh.rs`, `model.rs`, `element.rs`, `assemble.rs`, stubs; `rcfd-post` `lib.rs`, `solid_output.rs`. 0305: `rcfd-linalg` `amg_elastic.rs`, `lib.rs`; `rcfd-solid` `solve.rs` |
+| 1 | 0291, 0305 | 0291: `rcfd-fem` `lib.rs`, `mesh.rs`, `model.rs`, `element.rs`, `assemble.rs`, stubs; `rcfd-post` `lib.rs`, `solid_output.rs`. 0305: `rcfd-linalg` `amg_elastic.rs`, `lib.rs`; `rcfd-fem` `solve.rs` |
 | 2 | 0292, 0293, 0296, 0298, 0301, 0302 | `hex20.rs`; `hex8x.rs`; `mpc.rs`, `constraint.rs`; `geometric.rs`, `buckling.rs`, `rcfd-linalg` `eigen.rs`; `transient.rs`; `harmonic.rs` |
 | 3 | 0294, 0297, 0299, 0300, 0303 | `beam.rs` with `model.rs`, `assemble.rs`, `constraint.rs`, `loads.rs`, `mass.rs`, `recover.rs`, `rcfd-post` `solid_output.rs`; `cyclic.rs`; `rotating.rs`; `nonlinear.rs`; `rcfd-post` `solid_dynamic.rs` |
 | 4 | 0295, 0304, 0306 | `shell.rs`; `rcfd-post` `solid_fsi.rs`, `docs/cosimulation-protocol.md`; `rcfd-api` `solid_case.rs`, `docs/structural-solver.md` |
@@ -1006,7 +1006,7 @@ Each acceptance and each note below is one quoted paragraph on a single line.
 - title: Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
 - acceptance:
 
-> Every limit not stated here is registered in the ADR before the run. The modules, element kinds, property data, constraint and support data and the three defaulted element entry points of ADR 0290 section 2 exist in rcfd-solid and rcfd-post; every test of the basic tier (the sb_ files of rcfd-solid, rcfd-linalg, rcfd-io, rcfd-post and rcfd-api) compiles and passes unedited, and a registered set of basic models (patch test, cantilever, bar modes) gives displacements, stresses and frequencies with the same bits as before the change; the generic assembly hook called with the element stiffness reproduces assemble::stiffness bit for bit for 1 and 8 threads; each new element kind, formulation, constraint and support variant is refused by the static solve with an error naming the variant and the set, never ignored; the baseline hashes are unchanged.
+> Every limit not stated here is registered in the ADR before the run. The modules, element kinds, property data, constraint and support data and the three defaulted element entry points of ADR 0290 section 2 exist in rcfd-fem and rcfd-post; every test of the basic tier (the sb_ files of rcfd-fem, rcfd-linalg, rcfd-io, rcfd-post and rcfd-api) compiles and passes unedited, and a registered set of basic models (patch test, cantilever, bar modes) gives displacements, stresses and frequencies with the same bits as before the change; the generic assembly hook called with the element stiffness reproduces assemble::stiffness bit for bit for 1 and 8 threads; each new element kind, formulation, constraint and support variant is refused by the static solve with an error naming the variant and the set, never ignored; the baseline hashes are unchanged.
 
 - note:
 

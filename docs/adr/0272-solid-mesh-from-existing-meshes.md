@@ -33,10 +33,10 @@ Closed forms: volume of a box and of an annulus sector, `pi (b^2 - a^2) h / 4`. 
 
 ## Files
 
-`crates/rcfd-solid/src/convert.rs`, `crates/rcfd-solid/tests/sb_convert.rs`.
+`crates/rcfd-fem/src/convert.rs`, `crates/rcfd-fem/tests/sb_convert.rs`.
 
 ## What could make it miss
 
 Recovering the hexahedron node order from face lists on warped cells; the orientation convention of `TetMesh`; quadratic
 elements inverted by a projection on a coarse curved mesh (must be refused, not repaired). The Gmsh route is exercised only in
-ADR 0287, because `rcfd-solid` does not depend on `rcfd-io`.
+ADR 0287, because `rcfd-fem` does not depend on `rcfd-io`.

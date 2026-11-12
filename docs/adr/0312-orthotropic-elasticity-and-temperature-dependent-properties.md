@@ -41,8 +41,8 @@ compatibility in the registration); the bar with a varying modulus (one integral
 
 ## Files
 
-`crates/rcfd-solid/src/mat_ortho.rs`, `crates/rcfd-solid/src/mat_table.rs`, `crates/rcfd-solid/tests/sa_ortho.rs`,
-`crates/rcfd-solid/tests/sa_mat_table.rs`.
+`crates/rcfd-fem/src/mat_ortho.rs`, `crates/rcfd-fem/src/mat_table.rs`, `crates/rcfd-fem/tests/sa_ortho.rs`,
+`crates/rcfd-fem/tests/sa_mat_table.rs`.
 
 ## What could make it miss
 

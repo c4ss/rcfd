@@ -37,7 +37,7 @@ rectangle. Method: Simo and Taylor, Comput. Meth. Appl. Mech. Engng 48 (1985) 10
 
 ## Files
 
-`crates/rcfd-solid/src/mat_j2.rs`, `crates/rcfd-solid/tests/sa_j2.rs`.
+`crates/rcfd-fem/src/mat_j2.rs`, `crates/rcfd-fem/tests/sa_j2.rs`.
 
 ## What could make it miss
 

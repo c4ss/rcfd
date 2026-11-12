@@ -34,12 +34,11 @@ Open decisions for the user:
 - whether to add structural/FSI coupling for the material dimension;
 - which published fan case to target for validation if several are available.
 
-### Deferred by decision (2026-10-18)
+### Structural solver: started (2026-11-12)
 
-Structural coupling (the material dimension: stiffness, mass, damping, blade deformation, FSI) is to be added to
-`docs/roadmap.json` only after the full assistant-driven fan workflow (waves 32 to 34) exists. Until then it stays in the backlog
-(`docs/product-suites.md` S-01 and the FSI row of `docs/parity-matrix.md`) and the open decision above is answered: geometry,
-size and speed only.
+Deferred by decision on 2026-10-18 until the assistant-driven fan workflow existed. On 2026-11-12 the maintainer approved the
+structural plans (ADR 0270 basic tier, ADR 0290 intermediate, ADR 0310 advanced; crate `rcfd-fem`, ADR 0270 decision record);
+the items are F-370 to F-436 in `docs/roadmap.json`, category "Structural solver".
 
 ## Known limits that shape the plan
 

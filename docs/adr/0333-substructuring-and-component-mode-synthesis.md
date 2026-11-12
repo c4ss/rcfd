@@ -35,7 +35,7 @@ principles). Guyan, AIAA J. 3 (1965) 380; Craig and Bampton, AIAA J. 6 (1968) 13
 
 ## Files
 
-`crates/rcfd-solid/src/cms.rs`, `crates/rcfd-solid/tests/sa_cms.rs`.
+`crates/rcfd-fem/src/cms.rs`, `crates/rcfd-fem/tests/sa_cms.rs`.
 
 ## What could make it miss
 

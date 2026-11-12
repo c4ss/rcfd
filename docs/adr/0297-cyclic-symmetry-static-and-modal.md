@@ -38,7 +38,7 @@ registration) and the rotating annular disc in plane stress (Timoshenko and Good
 
 ## Files
 
-`crates/rcfd-solid/src/cyclic.rs`, `crates/rcfd-solid/tests/si_cyclic.rs`.
+`crates/rcfd-fem/src/cyclic.rs`, `crates/rcfd-fem/tests/si_cyclic.rs`.
 
 ## What could make it miss
 

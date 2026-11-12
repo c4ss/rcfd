@@ -125,13 +125,13 @@ exists, but its verification is not) and cyclic symmetry (needed early for a fan
 
 ### 2.1 Where the code lives
 
-A new crate **`rcfd-solid`**, depending on `rcfd-core`, `rcfd-mesh` and `rcfd-linalg` only. It sits in layer 2 of
+A new crate **`rcfd-fem`**, depending on `rcfd-core`, `rcfd-mesh` and `rcfd-linalg` only. It sits in layer 2 of
 `docs/architecture.md` (beside `rcfd-gpu`, `rcfd-dist`), below `rcfd-io`, `rcfd-fv` and `rcfd-post`:
 
 ```text
 rcfd-core
 rcfd-mesh, rcfd-linalg            (linalg gains: skyline.rs, eigen.rs, two preconditioners in precond.rs)
-rcfd-solid  -> core, mesh, linalg (new; no io, no fv)
+rcfd-fem  -> core, mesh, linalg (new; no io, no fv)
 rcfd-io     -> core, mesh         (vtk.rs gains a finite-element writer from plain arrays; no dependency on solid)
 rcfd-fv     -> ...                (unchanged; cosim traits stay here)
 rcfd-post   -> ..., solid         (new dependency: solid_output.rs, solid_loads.rs, solid_coupling.rs)
@@ -149,7 +149,7 @@ The graph stays acyclic. Reasons for this place:
   side can use them, and they are tested on matrices with closed-form answers there.
 
 Alternatives considered: (a) modules inside `rcfd-fv` (no new crate, no edit of the graph test; rejected: it puts a finite
-element solver into the finite-volume crate and every later tier with it); (b) `rcfd-solid` above `rcfd-io` and `rcfd-fv` in
+element solver into the finite-volume crate and every later tier with it); (b) `rcfd-fem` above `rcfd-io` and `rcfd-fv` in
 layer 4 (it could then write files and implement `cosim::Structure` itself; rejected: `rcfd-post` could no longer depend on it
 and the coupling glue would have to move to `rcfd-api`); (c) a separate coupling crate for the glue (cleaner, deferred: decision
 M5, natural when the intermediate tier adds the dynamic participant).
@@ -166,7 +166,7 @@ M5, natural when the intermediate tier adds the dynamic participant).
 * Determinism as in `rcfd-linalg`: results are bit-identical for any thread count; assembly order is fixed by element index.
 * Every refusal is an error with the element, node, set or key it concerns; nothing is repaired silently.
 
-### 2.3 Modules of `rcfd-solid`
+### 2.3 Modules of `rcfd-fem`
 
 Declared once by ADR 0271 (as stubs where the content comes later), so that no later ADR edits `lib.rs`:
 
@@ -237,7 +237,7 @@ implementation agent's registration fixes every limit before its code.
 
 | ADR | Package | Title | Size | Depends on |
 |---|---|---|---|---|
-| [0271](0271-rcfd-solid-crate-and-solid-data-model.md) | SB-1 | Crate rcfd-solid: the data model of a solid model and the structured builders | M | F-001, F-010, F-012 |
+| [0271](0271-rcfd-fem-crate-and-solid-data-model.md) | SB-1 | Crate rcfd-fem: the data model of a solid model and the structured builders | M | F-001, F-010, F-012 |
 | [0272](0272-solid-mesh-from-existing-meshes.md) | SB-2 | Solid mesh from the existing meshes: polyhedral mesh, tetrahedral mesher output, patches as surface sets, curved edges | M | 0271, F-010, F-012, F-132 |
 | [0273](0273-element-library-tet4-hex8-tet10.md) | SB-3 | Element library: linear tetrahedron, trilinear hexahedron, quadratic tetrahedron; isotropic elasticity matrix | M | 0271 |
 | [0274](0274-sparse-direct-solver-for-spd-matrices.md) | SB-4 | Sparse direct solver for symmetric positive definite matrices (envelope L D L^T after reverse Cuthill-McKee) | M | F-025, F-026 |
@@ -256,9 +256,9 @@ implementation agent's registration fixes every limit before its code.
 | [0287](0287-solid-case-file-and-library-run-entry.md) | SB-17 | A solid case file of its own and the library entry that runs it | M | 0272, 0278, 0282, 0284, F-013, F-080 |
 | [0288](0288-fan-blade-static-and-modal-demonstration.md) | SB-18 | Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page | M | 0272, 0276, 0277, 0284, 0287, F-132 |
 
-### ADR 0271 (SB-1): Crate rcfd-solid: the data model of a solid model and the structured builders
+### ADR 0271 (SB-1): Crate rcfd-fem: the data model of a solid model and the structured builders
 
-**Goal.** Create the crate `rcfd-solid` (depends on `rcfd-core`, `rcfd-mesh`, `rcfd-linalg` only) with the data model that the
+**Goal.** Create the crate `rcfd-fem` (depends on `rcfd-core`, `rcfd-mesh`, `rcfd-linalg` only) with the data model that the
 whole tier shares, as validated data without any solver: `SolidMesh` (nodes, element blocks of kind Tet4, Hex8, Tet10, node,
 element and surface sets), `DofMap`, `Material` (isotropic linear elastic), `Constraint`, `Load`, `SolidModel`, `SolidResult`.
 Add the builders that need nothing else: a box of hexahedra, the same box in tetrahedra (six per hexahedron, conforming), and
@@ -267,7 +267,7 @@ the upgrade of linear to quadratic tetrahedra by mid-edge nodes. `lib.rs` declar
 
 **Dependencies.** none in this list; existing roadmap items: F-001, F-010, F-012.
 
-**Acceptance (draft).** A new crate rcfd-solid (dependencies rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model;
+**Acceptance (draft).** A new crate rcfd-fem (dependencies rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model;
 the workspace graph test passes with the one registered line for the new crate, the architecture page lists it, and nothing
 existing changes (baseline hashes unchanged). On a box of n^3 hexahedra and on its six-tetrahedra split, for n = 1, 2, 5 with
 unequal edge lengths: every element has a positive Jacobian at every node, the element volumes sum to the box volume within
@@ -280,8 +280,8 @@ refused with an error naming the element or the key.
 published benchmark.
 
 **Files.** `Cargo.toml` (members, workspace.dependencies), `Cargo.lock` (the new workspace member only),
-`crates/rcfd-solid/Cargo.toml`, `crates/rcfd-solid/src/{lib.rs, mesh.rs, model.rs, builders.rs}` and one-line stubs of the other
-modules, `crates/rcfd-solid/tests/sb_model.rs`, `docs/architecture.md`, and ONE line of the existing test
+`crates/rcfd-fem/Cargo.toml`, `crates/rcfd-fem/src/{lib.rs, mesh.rs, model.rs, builders.rs}` and one-line stubs of the other
+modules, `crates/rcfd-fem/tests/sb_model.rs`, `docs/architecture.md`, and ONE line of the existing test
 `crates/rcfd-cli/tests/workspace_graph.rs` (the layer of the new crate; needs the maintainer, decision M1).
 
 **Size.** M. **What could make it miss.** The edit of the existing graph test is not approved (the crate then panics that test).
@@ -307,11 +307,11 @@ tetrahedra falls at an observed order of at least 3 under refinement.
 
 **Checked against.** Closed forms: volume of a box and of an annulus sector, `pi (b^2 - a^2) h / 4`. No published benchmark.
 
-**Files.** `crates/rcfd-solid/src/convert.rs`, `crates/rcfd-solid/tests/sb_convert.rs`.
+**Files.** `crates/rcfd-fem/src/convert.rs`, `crates/rcfd-fem/tests/sb_convert.rs`.
 
 **Size.** M. **What could make it miss.** Recovering the hexahedron node order from face lists on warped cells; the orientation
 convention of `TetMesh`; quadratic elements inverted by a projection on a coarse curved mesh (must be refused, not repaired).
-The Gmsh route is exercised only in ADR 0287, because `rcfd-solid` does not depend on `rcfd-io`.
+The Gmsh route is exercised only in ADR 0287, because `rcfd-fem` does not depend on `rcfd-io`.
 
 ### ADR 0273 (SB-3): Element library: linear tetrahedron, trilinear hexahedron, quadratic tetrahedron; isotropic elasticity matrix
 
@@ -334,7 +334,7 @@ relative; D gives stress E eps in uniaxial stress and G gamma in shear within 1e
 Element Method (1987); Zienkiewicz and Taylor, The Finite Element Method, vol. 1. Quadrature points and weights are derived or
 checked by the monomial test, never taken on trust.
 
-**Files.** `crates/rcfd-solid/src/{element.rs, quadrature.rs, material.rs}`, `crates/rcfd-solid/tests/sb_elements.rs`.
+**Files.** `crates/rcfd-fem/src/{element.rs, quadrature.rs, material.rs}`, `crates/rcfd-fem/tests/sb_elements.rs`.
 
 **Size.** M. **What could make it miss.** A tetrahedral rule recalled with wrong weights (the monomial check catches it); the
 rank check on a badly shaped element; node-order convention of Tet10 differing from the mid-edge upgrade of ADR 0271.
@@ -387,8 +387,8 @@ with its id.
 **Checked against.** Closed forms: a linear displacement field is an exact solution for any conforming element (the patch test,
 Irons; Taylor, Simo, Zienkiewicz and Chan, Int. J. Numer. Meth. Engng 22 (1986) 39, from memory); uniaxial Hooke's law.
 
-**Files.** `crates/rcfd-solid/src/{assemble.rs, constraint.rs, solve.rs, loads.rs}` (in `loads.rs` the nodal force only),
-`crates/rcfd-solid/tests/sb_static.rs`.
+**Files.** `crates/rcfd-fem/src/{assemble.rs, constraint.rs, solve.rs, loads.rs}` (in `loads.rs` the nodal force only),
+`crates/rcfd-fem/tests/sb_static.rs`.
 
 **Size.** M. **What could make it miss.** Detecting an under-constrained model from a small pivot alone is fragile (a threshold
 registered from the stiffness scale is needed); the patch-test limit of 1e-10 on Tet10 with a direct solve of a moderately
@@ -415,7 +415,7 @@ displacement rho omega^2 r^3/E within 2 percent.
 **Checked against.** Closed forms, all derivable in a few lines: 1-D equilibrium `d sigma/dx + b = 0` with `b = rho g` and `b =
 rho omega^2 r`; the thin-ring hoop stress `rho omega^2 r^2` (membrane equilibrium).
 
-**Files.** `crates/rcfd-solid/src/loads.rs`, `crates/rcfd-solid/tests/sb_loads.rs`.
+**Files.** `crates/rcfd-fem/src/loads.rs`, `crates/rcfd-fem/tests/sb_loads.rs`.
 
 **Size.** M. **What could make it miss.** The consistent load of a uniform pressure on a quadratic triangle is zero at the
 corners and one third at each mid-edge node: correct, but a resultant-only check would not catch a wrong distribution, hence the
@@ -441,7 +441,7 @@ tensor with repeated roots gives finite values. On the patch test of the static 
 **Checked against.** Closed forms: invariants of a symmetric 3 x 3 tensor; Clapeyron's theorem (strain energy = half the work of
 the loads in linear elasticity).
 
-**Files.** `crates/rcfd-solid/src/recover.rs`, `crates/rcfd-solid/tests/sb_recover.rs`.
+**Files.** `crates/rcfd-fem/src/recover.rs`, `crates/rcfd-fem/tests/sb_recover.rs`.
 
 **Size.** S. **What could make it miss.** Loss of accuracy of the trigonometric form near repeated roots; nodal averaging across
 a material interface (basic tier: one material per averaging region, otherwise refused). Superconvergent patch recovery and
@@ -452,7 +452,7 @@ error estimation are intermediate.
 **Goal.** The existing `.vtu` writer writes the polyhedral finite-volume mesh with cell data only. Add, beside it and without
 changing it, a writer of finite-element cells from plain arrays (so `rcfd-io` needs no new dependency), and in `rcfd-post` the
 function that writes a `SolidResult`: displacement, nodal von Mises and principal stresses, element stress components,
-reactions. This ADR also adds the `rcfd-solid` dependency of `rcfd-post` and declares its three new modules, so that ADRs 0285
+reactions. This ADR also adds the `rcfd-fem` dependency of `rcfd-post` and declares its three new modules, so that ADRs 0285
 and 0286 touch only their own file.
 
 **Dependencies.** ADR 0277; existing roadmap items: F-070.
@@ -494,7 +494,7 @@ lambda term reversed gives an order below 0.5.
 Engineering, 1998; from memory); a-priori estimates of the finite element method: order p + 1 in L2 and p in the energy norm for
 complete polynomials of degree p (Strang and Fix, An Analysis of the Finite Element Method, 1973).
 
-**Files.** `crates/rcfd-solid/tests/sb_mms.rs` only.
+**Files.** `crates/rcfd-fem/tests/sb_mms.rs` only.
 
 **Size.** M. **What could make it miss.** Meshes small enough for the direct solver (about 1.5e4 unknowns per run) may still be
 pre-asymptotic for Tet10; the error norms need a quadrature of higher degree than the stiffness, or the measured order is
@@ -522,7 +522,7 @@ percent at this slenderness). Cylinder (Lame; Timoshenko and Goodier, Theory of 
 = A + B/r^2`, `A = p a^2/(b^2 - a^2)`, `B = A b^2`, and in plane strain `u_r = (1 + nu)/E ((1 - 2 nu) A r + B/r)`; derivable in
 a few lines, to be re-derived in the registration. No NAFEMS value is used (their target values are not in the repository).
 
-**Files.** `crates/rcfd-solid/tests/sb_closed_forms.rs` only.
+**Files.** `crates/rcfd-fem/tests/sb_closed_forms.rs` only.
 
 **Size.** M. **What could make it miss.** The Hex8 limit of 5 percent is a draft: full integration locks in shear and the number
 depends on the element aspect ratio; the implementer registers it from an estimate. The clamp is not the beam-theory support
@@ -546,8 +546,8 @@ bit-identical to the same model before this change.
 **Checked against.** Closed forms from Hooke's law with thermal strain (Timoshenko and Goodier, Theory of Elasticity, the
 chapter on thermal stress; each derivable in a few lines).
 
-**Files.** `crates/rcfd-solid/src/thermal.rs`, small hooks in `loads.rs` and `recover.rs`,
-`crates/rcfd-solid/tests/sb_thermal.rs`.
+**Files.** `crates/rcfd-fem/src/thermal.rs`, small hooks in `loads.rs` and `recover.rs`,
+`crates/rcfd-fem/tests/sb_thermal.rs`.
 
 **Size.** S. **What could make it miss.** It edits `loads.rs` and `recover.rs`, so it cannot run beside ADR 0276 or 0277.
 Temperature-dependent `E` and `alpha` are not included (intermediate).
@@ -570,8 +570,8 @@ result. The default solver and its results are unchanged bit for bit.
 **Checked against.** The reference is the direct solution. Methods: Meijerink and van der Vorst, Math. Comp. 31 (1977) 148
 (incomplete Cholesky); Manteuffel, Math. Comp. 34 (1980) 473 (the shifted factorisation); both cited from memory.
 
-**Files.** `crates/rcfd-linalg/src/precond.rs` (appended types, no re-export in `lib.rs`), `crates/rcfd-solid/src/solve.rs`,
-`crates/rcfd-solid/tests/sb_pcg.rs`.
+**Files.** `crates/rcfd-linalg/src/precond.rs` (appended types, no re-export in `lib.rs`), `crates/rcfd-fem/src/solve.rs`,
+`crates/rcfd-fem/tests/sb_pcg.rs`.
 
 **Size.** M. **What could make it miss.** The factor of two over block Jacobi is a draft, not a derivation; on slender bodies CG
 converges slowly whatever the one-level preconditioner. The real answer (aggregation AMG with the rigid-body modes as near-null
@@ -629,7 +629,7 @@ Euler-Bernoulli cantilever, roots of `cos x cosh x + 1 = 0` (1.8751, 4.6941, 7.8
 line of arithmetic); the correction for shear and rotary inertia from Timoshenko beam theory (Timoshenko, Phil. Mag. 41 (1921)
 744; from memory). Rigid-body inertia of a box.
 
-**Files.** `crates/rcfd-solid/src/{mass.rs, modal.rs}`, `crates/rcfd-solid/tests/sb_modal.rs`.
+**Files.** `crates/rcfd-fem/src/{mass.rs, modal.rs}`, `crates/rcfd-fem/tests/sb_modal.rs`.
 
 **Size.** M. **What could make it miss.** Size: 3-D solid elements on a slender beam need many unknowns for the second mode
 within the direct solver's reach. Torsional and bending modes interleave, so modes must be identified by shape, not by index.
@@ -739,7 +739,7 @@ against a measured blade.
 beam and wide-plate (cylindrical bending, `E/(1 - nu^2)`) bounds of the first bending frequency. No reference value exists for
 the blade itself (docs/fan-project-breakdown.md, part G).
 
-**Files.** `crates/rcfd-solid/tests/sb_fan_blade.rs` (or `crates/rcfd-api/tests/` if the Gmsh or tetrahedral-mesher route needs
+**Files.** `crates/rcfd-fem/tests/sb_fan_blade.rs` (or `crates/rcfd-api/tests/` if the Gmsh or tetrahedral-mesher route needs
 `rcfd-io`), `docs/structural-solver.md`, a short section in `docs/fan-project-breakdown.md` (E5 status text).
 
 **Size.** M. **What could make it miss.** The tetrahedral mesher on a thin twisted blade (quality known misses of F-132; slivers
@@ -781,7 +781,7 @@ Notes on the table:
   `precond.rs` without a re-export, so it does not touch `lib.rs`.
 * 0279 and 0280 are tests only. If one of them finds a defect in a library file, it records the miss and reports it; the fix is
   a separate change by the lead's choice, so that the two can run beside 0281, which edits `loads.rs` and `recover.rs`.
-* 0286 depends on 0278 only for the files: 0278 adds the `rcfd-solid` dependency of `rcfd-post` and declares its three modules.
+* 0286 depends on 0278 only for the files: 0278 adds the `rcfd-fem` dependency of `rcfd-post` and declares its three modules.
 * Each package adds its own test file (`sb_*.rs`); none edits another's.
 * The machine is shared: waves 2, 4 and 5 are three or four builds at once. The heavy records (0274, 0282) should not run at the
   same time as each other.
@@ -847,10 +847,10 @@ Each acceptance and each note below is one quoted paragraph on a single line.
 
 **SB-1** (ADR 0271), status todo, deps: F-001, F-010, F-012
 
-- title: Crate rcfd-solid: the data model of a solid model and the structured builders
+- title: Crate rcfd-fem: the data model of a solid model and the structured builders
 - acceptance:
 
-> Every limit not stated here is registered in the ADR before the run. A new crate rcfd-solid (dependencies rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model; the workspace graph test passes with the one registered line for the new crate, the architecture page lists it, and nothing existing changes (baseline hashes unchanged). On a box of n^3 hexahedra and on its six-tetrahedra split, for n = 1, 2, 5 with unequal edge lengths: every element has a positive Jacobian at every node, the element volumes sum to the box volume within 1e-12 relative, the area of each of the six face sets equals the box face within 1e-12, and every interior face is shared by exactly two elements; the quadratic upgrade has (nodes + edges) nodes and each mid-edge node is the mean of its two ends within 1e-15; an inverted element, a node repeated in an element, an empty set, E <= 0 and a Poisson ratio outside (-1, 0.5) are each refused with an error naming the element or the key.
+> Every limit not stated here is registered in the ADR before the run. A new crate rcfd-fem (dependencies rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model; the workspace graph test passes with the one registered line for the new crate, the architecture page lists it, and nothing existing changes (baseline hashes unchanged). On a box of n^3 hexahedra and on its six-tetrahedra split, for n = 1, 2, 5 with unequal edge lengths: every element has a positive Jacobian at every node, the element volumes sum to the box volume within 1e-12 relative, the area of each of the six face sets equals the box face within 1e-12, and every interior face is shared by exactly two elements; the quadratic upgrade has (nodes + edges) nodes and each mid-edge node is the mean of its two ends within 1e-15; an inverted element, a node repeated in an element, an empty set, E <= 0 and a Poisson ratio outside (-1, 0.5) are each refused with an error naming the element or the key.
 
 - note:
 
@@ -1046,3 +1046,18 @@ Each acceptance and each note below is one quoted paragraph on a single line.
 ## Lead's note (2026-11-12): roadmap ids
 
 The entries were added to docs/roadmap.json with these ids: SB-1 = F-370, SB-2 = F-371, SB-3 = F-372, SB-4 = F-373, SB-5 = F-374, SB-6 = F-375, SB-7 = F-376, SB-8 = F-377, SB-9 = F-378, SB-10 = F-379, SB-11 = F-380, SB-12 = F-381, SB-13 = F-382, SB-14 = F-383, SB-15 = F-384, SB-16 = F-385, SB-17 = F-386, SB-18 = F-387. The category "Structural solver" (family Solver) is in scripts/roadmap_progress.py.
+
+## Decision record (2026-11-12)
+
+Answered by the maintainer in person on 2026-11-12:
+
+* **M1:** (a). The one line for the new crate in `crates/rcfd-cli/tests/workspace_graph.rs` is approved, as was done for
+  `rcfd-workspace` (ADR 0173).
+* **M2:** the crate is named `rcfd-fem` (layer 2). The plan, its stubs (0271 to 0339) and the roadmap entries were renamed from
+  `rcfd-solid` to `rcfd-fem` in the same commit; the text of M1 and M2 above keeps the name as it was proposed. ADR 0271's file
+  was renamed to `0271-rcfd-fem-crate-and-solid-data-model.md`.
+
+Taken by the lead on the maintainer's standing instruction of 2026-11-11 (take the recommendation), none of them changing a
+default, a golden or a hash table: **M3** (a) (a solid case file run by a library function; no CLI subcommand or MCP tool in this
+tier), **M4** (a), **M5** (a), **M6** (the category "Structural solver", phase 9; already applied). **M7:** with M1 and M2 answered
+the deferral is lifted; `docs/milestone-fan.md` and `docs/roadmap-overview.md` were edited in the same commit.

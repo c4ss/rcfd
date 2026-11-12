@@ -38,7 +38,7 @@ not taken on trust).
 
 ## Files
 
-`crates/rcfd-solid/src/transient.rs`, `crates/rcfd-solid/tests/si_transient.rs`.
+`crates/rcfd-fem/src/transient.rs`, `crates/rcfd-fem/tests/si_transient.rs`.
 
 ## What could make it miss
 

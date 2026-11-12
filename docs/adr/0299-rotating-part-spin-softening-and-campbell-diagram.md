@@ -41,7 +41,7 @@ from memory.
 
 ## Files
 
-`crates/rcfd-solid/src/rotating.rs`, `crates/rcfd-solid/tests/si_rotating.rs`.
+`crates/rcfd-fem/src/rotating.rs`, `crates/rcfd-fem/tests/si_rotating.rs`.
 
 ## What could make it miss
 

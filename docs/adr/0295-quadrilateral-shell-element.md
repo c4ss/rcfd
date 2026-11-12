@@ -40,7 +40,7 @@ Finite Elem. Anal. Des. 1 (1985) 3) is public but its values are not in the repo
 
 ## Files
 
-`crates/rcfd-solid/src/shell.rs`, `crates/rcfd-solid/tests/si_shell.rs`.
+`crates/rcfd-fem/src/shell.rs`, `crates/rcfd-fem/tests/si_shell.rs`.
 
 ## What could make it miss
 

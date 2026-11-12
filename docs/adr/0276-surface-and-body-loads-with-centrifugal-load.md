@@ -35,7 +35,7 @@ thin-ring hoop stress `rho omega^2 r^2` (membrane equilibrium).
 
 ## Files
 
-`crates/rcfd-solid/src/loads.rs`, `crates/rcfd-solid/tests/sb_loads.rs`.
+`crates/rcfd-fem/src/loads.rs`, `crates/rcfd-fem/tests/sb_loads.rs`.
 
 ## What could make it miss
 

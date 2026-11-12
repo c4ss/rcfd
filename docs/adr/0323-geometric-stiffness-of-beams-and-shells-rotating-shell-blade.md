@@ -36,8 +36,8 @@ perturbation slope of ADR 0299. The solid model is the reference of the equivale
 
 ## Files
 
-`crates/rcfd-solid/src/geometric_struct.rs`, `crates/rcfd-solid/src/rotating.rs` (only if its softening mass assumes solid
-elements), `crates/rcfd-solid/tests/sa_geometric_struct.rs`.
+`crates/rcfd-fem/src/geometric_struct.rs`, `crates/rcfd-fem/src/rotating.rs` (only if its softening mass assumes solid
+elements), `crates/rcfd-fem/tests/sa_geometric_struct.rs`.
 
 ## What could make it miss
 

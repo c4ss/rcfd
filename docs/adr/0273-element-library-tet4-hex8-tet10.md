@@ -36,7 +36,7 @@ test, never taken on trust.
 
 ## Files
 
-`crates/rcfd-solid/src/{element.rs, quadrature.rs, material.rs}`, `crates/rcfd-solid/tests/sb_elements.rs`.
+`crates/rcfd-fem/src/{element.rs, quadrature.rs, material.rs}`, `crates/rcfd-fem/tests/sb_elements.rs`.
 
 ## What could make it miss
 

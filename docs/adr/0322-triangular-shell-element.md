@@ -36,7 +36,7 @@ re-derived and checked by the patch and isotropy tests).
 
 ## Files
 
-`crates/rcfd-solid/src/shell3.rs`, `crates/rcfd-solid/tests/sa_shell3.rs`.
+`crates/rcfd-fem/src/shell3.rs`, `crates/rcfd-fem/tests/sa_shell3.rs`.
 
 ## What could make it miss
 

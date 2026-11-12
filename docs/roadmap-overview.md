@@ -36,7 +36,7 @@ Of the 190 roadmap items, 95 are done, 63 are partly done and 32 have not starte
 ## What does not work yet
 
 - FAN-01, the reference fan case, stalls. The steady rotating-frame solve of the reference fan does not reach the expected operating point. Several suspected causes have each been ruled out as the single cause, and the diagnosis is open. See [the fan milestone](milestone-fan.md).
-- There is no structural solver. Stress and strain pictures, and blade deformation, need one, and it has not been started.
+- There is no structural solver yet. Stress and strain pictures, and blade deformation, need one; its plan was approved on 2026-11-12 (crate `rcfd-fem`, ADR 0270, 0290 and 0310) and two of its pieces exist (a direct SPD solver and an eigensolver).
 - Sliding-mesh transient solves, needed for rotor-stator interaction and broadband noise, are not available.
 - The desktop app is being rebuilt. The old interface is frozen. The new one is described below and does not have a window yet.
 
@@ -63,7 +63,7 @@ A full test run takes over an hour. We are adding per-test time limits and a bet
 1. The workspace layer of ADR 0173 (F-270 to F-275), in the order the ADR sets out.
 2. Close the FAN-01 diagnosis, or choose a different reference case for the rotating machinery path.
 3. Studio shell and plugin, then 3D rendering of fields and animation.
-4. A structural solver, so stress and strain can be shown. This is waiting on a decision.
+4. A structural solver, so stress and strain can be shown. Approved on 2026-11-12 and started (ADR 0270, 0290 and 0310).
 5. Noise and vibration predictions from a converged fan solution.
 6. Validation of the fan models against measured data from a real small fan.
 

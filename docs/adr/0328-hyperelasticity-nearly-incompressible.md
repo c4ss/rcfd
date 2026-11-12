@@ -37,7 +37,7 @@ three-field mean-dilatation element (Simo, Taylor and Pister, Comput. Meth. Appl
 
 ## Files
 
-`crates/rcfd-solid/src/mat_hyper.rs`, `crates/rcfd-solid/src/nonlinear_md.rs`, `crates/rcfd-solid/tests/sa_hyper.rs`.
+`crates/rcfd-fem/src/mat_hyper.rs`, `crates/rcfd-fem/src/nonlinear_md.rs`, `crates/rcfd-fem/tests/sa_hyper.rs`.
 
 ## What could make it miss
 

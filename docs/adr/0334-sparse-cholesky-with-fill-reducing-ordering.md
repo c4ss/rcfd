@@ -36,8 +36,8 @@ Direct Methods for Sparse Linear Systems (from memory; the algorithm is checked 
 
 ## Files
 
-`crates/rcfd-linalg/src/sparse_chol.rs`, `crates/rcfd-solid/src/solve.rs` (the choice),
-`crates/rcfd-linalg/tests/sa_sparse_chol.rs`, `crates/rcfd-solid/tests/sa_sparse_solve.rs`.
+`crates/rcfd-linalg/src/sparse_chol.rs`, `crates/rcfd-fem/src/solve.rs` (the choice),
+`crates/rcfd-linalg/tests/sa_sparse_chol.rs`, `crates/rcfd-fem/tests/sa_sparse_solve.rs`.
 
 ## What could make it miss
 

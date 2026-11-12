@@ -34,7 +34,7 @@ elasticity).
 
 ## Files
 
-`crates/rcfd-solid/src/recover.rs`, `crates/rcfd-solid/tests/sb_recover.rs`.
+`crates/rcfd-fem/src/recover.rs`, `crates/rcfd-fem/tests/sb_recover.rs`.
 
 ## What could make it miss
 

@@ -34,7 +34,7 @@ Engng 33 (1992) 1331 and 1365 (from memory; the effectivity is measured, not ass
 
 ## Files
 
-`crates/rcfd-solid/src/estimate.rs`, `crates/rcfd-solid/tests/sa_estimate.rs`.
+`crates/rcfd-fem/src/estimate.rs`, `crates/rcfd-fem/tests/sa_estimate.rs`.
 
 ## What could make it miss
 

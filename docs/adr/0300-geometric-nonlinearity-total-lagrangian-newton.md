@@ -40,7 +40,7 @@ Procedures, chapter 6 (total Lagrangian formulation), from memory, derived in th
 
 ## Files
 
-`crates/rcfd-solid/src/nonlinear.rs`, `crates/rcfd-solid/tests/si_nonlinear.rs`.
+`crates/rcfd-fem/src/nonlinear.rs`, `crates/rcfd-fem/tests/si_nonlinear.rs`.
 
 ## What could make it miss
 

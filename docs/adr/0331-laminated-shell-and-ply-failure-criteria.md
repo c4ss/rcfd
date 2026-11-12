@@ -37,7 +37,7 @@ Compos. Mater. 5 (1971) 58).
 
 ## Files
 
-`crates/rcfd-solid/src/laminate.rs`, `crates/rcfd-solid/tests/sa_laminate.rs`.
+`crates/rcfd-fem/src/laminate.rs`, `crates/rcfd-fem/tests/sa_laminate.rs`.
 
 ## What could make it miss
 

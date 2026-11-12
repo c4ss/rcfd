@@ -10,7 +10,7 @@ Work package SA-7 of the structural solver, advanced tier. Size M.
 
 Everything with a skew or damping matrix needs eigenvalues that the symmetric solver of ADR 0283 cannot give. Add to `rcfd-linalg`
 the eigenvalues and vectors of a dense real general matrix (balancing, Hessenberg reduction, shifted QR), and on it the quadratic
-problem (lambda^2 M + lambda (C + G) + K) x = 0 projected on a set of undamped modes (2m by 2m). In `rcfd-solid`: damped modes
+problem (lambda^2 M + lambda (C + G) + K) x = 0 projected on a set of undamped modes (2m by 2m). In `rcfd-fem`: damped modes
 with Rayleigh damping, discrete dampers and loss factors, giving decay rates, damped frequencies, damping ratios and complex
 shapes. The gyroscopic packages (ADR 0318, 0319) use the same routine.
 
@@ -38,8 +38,8 @@ Loan, Matrix Computations, chapter 7; from memory; checked by the residual test,
 
 ## Files
 
-`crates/rcfd-linalg/src/eigen_general.rs`, `crates/rcfd-solid/src/damped.rs`, `crates/rcfd-linalg/tests/sa_eigen_general.rs`,
-`crates/rcfd-solid/tests/sa_damped.rs`.
+`crates/rcfd-linalg/src/eigen_general.rs`, `crates/rcfd-fem/src/damped.rs`, `crates/rcfd-linalg/tests/sa_eigen_general.rs`,
+`crates/rcfd-fem/tests/sa_damped.rs`.
 
 ## What could make it miss
 

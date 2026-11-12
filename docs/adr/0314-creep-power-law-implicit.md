@@ -36,7 +36,7 @@ Closed forms: uniaxial integrals of the creep law; stationary creep of a cylinde
 
 ## Files
 
-`crates/rcfd-solid/src/mat_creep.rs`, `crates/rcfd-solid/tests/sa_creep.rs`.
+`crates/rcfd-fem/src/mat_creep.rs`, `crates/rcfd-fem/tests/sa_creep.rs`.
 
 ## What could make it miss
 

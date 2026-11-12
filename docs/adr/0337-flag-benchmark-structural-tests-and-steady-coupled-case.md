@@ -38,7 +38,7 @@ incompressible flow, in Fluid-Structure Interaction, Lecture Notes in Computatio
 
 ## Files
 
-`docs/reference-data.md` (rows, after approval), `crates/rcfd-solid/tests/sa_flag_csm.rs`,
+`docs/reference-data.md` (rows, after approval), `crates/rcfd-fem/tests/sa_flag_csm.rs`,
 `crates/rcfd-post/tests/sa_flag_fsi1.rs`, a case folder under `cases/` for the channel mesh.
 
 ## What could make it miss

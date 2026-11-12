@@ -40,8 +40,8 @@ symmetric systems, from memory).
 
 ## Files
 
-`crates/rcfd-linalg/src/cskyline.rs`, `crates/rcfd-solid/src/harmonic_direct.rs`, `crates/rcfd-linalg/tests/sa_cskyline.rs`,
-`crates/rcfd-solid/tests/sa_harmonic_direct.rs`.
+`crates/rcfd-linalg/src/cskyline.rs`, `crates/rcfd-fem/src/harmonic_direct.rs`, `crates/rcfd-linalg/tests/sa_cskyline.rs`,
+`crates/rcfd-fem/tests/sa_harmonic_direct.rs`.
 
 ## What could make it miss
 

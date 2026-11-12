@@ -41,7 +41,7 @@ checked on constructed histories; the standard that prints a worked example (AST
 
 ## Files
 
-`crates/rcfd-solid/src/fatigue.rs`, `crates/rcfd-solid/tests/sa_fatigue.rs`.
+`crates/rcfd-fem/src/fatigue.rs`, `crates/rcfd-fem/tests/sa_fatigue.rs`.
 
 ## What could make it miss
 

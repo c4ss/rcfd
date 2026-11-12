@@ -35,8 +35,8 @@ Zienkiewicz and Chan, Int. J. Numer. Meth. Engng 22 (1986) 39, from memory); uni
 
 ## Files
 
-`crates/rcfd-solid/src/{assemble.rs, constraint.rs, solve.rs, loads.rs}` (in `loads.rs` the nodal force only),
-`crates/rcfd-solid/tests/sb_static.rs`.
+`crates/rcfd-fem/src/{assemble.rs, constraint.rs, solve.rs, loads.rs}` (in `loads.rs` the nodal force only),
+`crates/rcfd-fem/tests/sb_static.rs`.
 
 ## What could make it miss
 

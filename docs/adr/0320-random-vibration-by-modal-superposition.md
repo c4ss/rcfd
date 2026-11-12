@@ -37,7 +37,7 @@ quadratic form of the stress covariance (first principles).
 
 ## Files
 
-`crates/rcfd-solid/src/random.rs`, `crates/rcfd-solid/tests/sa_random.rs`.
+`crates/rcfd-fem/src/random.rs`, `crates/rcfd-fem/tests/sa_random.rs`.
 
 ## What could make it miss
 

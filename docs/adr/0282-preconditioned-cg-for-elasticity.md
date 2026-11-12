@@ -32,8 +32,8 @@ Manteuffel, Math. Comp. 34 (1980) 473 (the shifted factorisation); both cited fr
 
 ## Files
 
-`crates/rcfd-linalg/src/precond.rs` (appended types, no re-export in `lib.rs`), `crates/rcfd-solid/src/solve.rs`,
-`crates/rcfd-solid/tests/sb_pcg.rs`.
+`crates/rcfd-linalg/src/precond.rs` (appended types, no re-export in `lib.rs`), `crates/rcfd-fem/src/solve.rs`,
+`crates/rcfd-fem/tests/sb_pcg.rs`.
 
 ## What could make it miss
 

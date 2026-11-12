@@ -39,8 +39,8 @@ pressure (Hibbitt, 1979); all from memory, derived in the registration.
 
 ## Files
 
-`crates/rcfd-solid/src/follower.rs`, `crates/rcfd-solid/src/arclength.rs`, `crates/rcfd-solid/tests/sa_follower.rs`,
-`crates/rcfd-solid/tests/sa_arclength.rs`.
+`crates/rcfd-fem/src/follower.rs`, `crates/rcfd-fem/src/arclength.rs`, `crates/rcfd-fem/tests/sa_follower.rs`,
+`crates/rcfd-fem/tests/sa_arclength.rs`.
 
 ## What could make it miss
 

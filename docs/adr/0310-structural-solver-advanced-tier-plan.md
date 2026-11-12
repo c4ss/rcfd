@@ -7,7 +7,7 @@ maintainer's; everything else is a proposal that the implementation agents' regi
 The structural solver is planned in three tiers. The basic tier is [ADR 0270](0270-structural-solver-basic-tier-plan.md) (linear
 statics and modes at rest, roadmap items F-370 to F-387), the intermediate tier is [ADR
 0290](0290-structural-solver-intermediate-tier-plan.md) (rotating blades, elements that bend, dynamics, the first two-way
-coupling, F-388 to F-406). Both are plans: no line of `rcfd-solid` exists. This document plans the advanced tier on top of them as
+coupling, F-388 to F-406). Both are plans: no line of `rcfd-fem` exists. This document plans the advanced tier on top of them as
 twenty-nine ADRs, 0311 to 0339, each one work package for a single implementation agent, each with a stub file here with status
 PLANNED; the registration with its limits is written by the implementation agent before any code (`AGENT_RULES.md` rule 1).
 
@@ -47,7 +47,7 @@ Rules and parents:
   0252, 0256 and 0261 (ADR 0290's findings on them are taken over); ADR 0263 (not on main); function bodies anywhere;
   `rcfd-mesh::partition` beyond two constructor signatures; the service protocol. Nothing was built or run.
 * **Findings that shape the plan:**
-  1. Nothing of the two earlier tiers exists as code. Every file name of `rcfd-solid` below is read from two plans; the scaffold
+  1. Nothing of the two earlier tiers exists as code. Every file name of `rcfd-fem` below is read from two plans; the scaffold
      package (ADR 0311) is where a mismatch surfaces first.
   2. The repository holds no material datum of a polymer (stiffness against temperature, relaxation, creep, stress-life curve,
      damping) and no fibre-orientation field; `docs/fan-project-breakdown.md` limit 1 says the same of every measured fan
@@ -59,7 +59,7 @@ Rules and parents:
   4. `rcfd-post::rotordyn` is a rigid rotor on two isotropic bearings written in complex coordinates. A flexible rotor is a new
      model beside it; the join is a conversion and a stiff-shaft limit check, not an edit of that file.
   5. `rcfd-dist` has in-process ranks only (MPI is F-100, todo) and builds its decomposition from a finite-volume mesh; `rcfd-gpu`
-     runs CG with Jacobi or Chebyshev on a CSR matrix. Both can take a stiffness matrix as they are. `rcfd-solid` is planned in
+     runs CG with Jacobi or Chebyshev on a CSR matrix. Both can take a stiffness matrix as they are. `rcfd-fem` is planned in
      layer 2 beside them, so the glue must sit above: in `rcfd-api`, which already depends on `rcfd-gpu`.
   6. The impermeable FW-H surface of `rcfd-post::fwh` needs the surface pressure of the sound field, which a structural solve does
      not have. The radiated sound of a housing is therefore planned as equivalent radiated power and the Rayleigh integral, not
@@ -165,7 +165,7 @@ verify it, so that a later item can be written from it. The first two are the on
 ```text
 rcfd-linalg  gains: complex.rs, cskyline.rs (complex symmetric L D L^T), eigen_general.rs (general real eigenproblem,
                     projected quadratic problem), sparse_chol.rs (ordering and sparse L D L^T)
-rcfd-solid   gains: twenty-four modules (section 2.2); additions to model.rs, material.rs, mesh.rs, element.rs, shell.rs,
+rcfd-fem   gains: twenty-four modules (section 2.2); additions to model.rs, material.rs, mesh.rs, element.rs, shell.rs,
                     nonlinear.rs (scaffold only), cyclic.rs (0329), rotating.rs (0323, if needed), solve.rs (0334)
 rcfd-post    gains: solid_acoustic.rs, solid_aerodamp.rs, solid_rotor.rs
 rcfd-api     gains: solid_parallel.rs and the dependency on rcfd-dist (0336); additions to solid_case.rs (0338)
@@ -186,27 +186,27 @@ adds its own line and runs alone on that file).
 | `rcfd-linalg` | `cskyline` | complex symmetric factorisation on the envelope | 0315 |
 | `rcfd-linalg` | `eigen_general` | dense general eigenproblem; quadratic problem on a subspace | 0317 |
 | `rcfd-linalg` | `sparse_chol` | minimum degree, elimination tree, sparse L D L^T with inertia | 0334 |
-| `rcfd-solid` | `mat_ortho`, `mat_table` | orthotropic elasticity and axes; properties against temperature | 0312 |
-| `rcfd-solid` | `mat_visco` | Prony series, shift, complex modulus | 0313 |
-| `rcfd-solid` | `mat_creep` | power-law creep | 0314 |
-| `rcfd-solid` | `harmonic_direct` | direct harmonic solve, loss factors, dampers, base motion | 0315 |
-| `rcfd-solid` | `fatigue` | stress-life, corrections, counting, damage | 0316 |
-| `rcfd-solid` | `damped` | damped and complex modes | 0317 |
-| `rcfd-solid` | `gyro` | gyroscopic matrix in the rotating frame, split Campbell table | 0318 |
-| `rcfd-solid` | `rotor` | shaft, discs, bearings, whirl, unbalance response | 0319 |
-| `rcfd-solid` | `random` | spectral response, root-mean-square stress, spectral moments | 0320 |
-| `rcfd-solid` | `shell3` | three-node shell | 0322 |
-| `rcfd-solid` | `geometric_struct` | geometric stiffness of beams and shells | 0323 |
-| `rcfd-solid` | `mat_j2` | J2 plasticity | 0325 |
-| `rcfd-solid` | `nl_transient` | nonlinear time integration | 0326 |
-| `rcfd-solid` | `follower`, `arclength` | follower pressure; continuation | 0327 |
-| `rcfd-solid` | `mat_hyper`, `nonlinear_md` | hyperelastic energies; mean-dilatation element | 0328 |
-| `rcfd-solid` | `tie` | node-to-surface search, ties, joints | 0329 |
-| `rcfd-solid` | `contact` | frictionless contact | 0330 |
-| `rcfd-solid` | `laminate` | layup stiffness, ply stresses, failure indices | 0331 |
-| `rcfd-solid` | `fracture` | domain integral, stress intensity, growth life | 0332 |
-| `rcfd-solid` | `cms` | condensation and component modes | 0333 |
-| `rcfd-solid` | `estimate` | patch recovery and error estimate | 0335 |
+| `rcfd-fem` | `mat_ortho`, `mat_table` | orthotropic elasticity and axes; properties against temperature | 0312 |
+| `rcfd-fem` | `mat_visco` | Prony series, shift, complex modulus | 0313 |
+| `rcfd-fem` | `mat_creep` | power-law creep | 0314 |
+| `rcfd-fem` | `harmonic_direct` | direct harmonic solve, loss factors, dampers, base motion | 0315 |
+| `rcfd-fem` | `fatigue` | stress-life, corrections, counting, damage | 0316 |
+| `rcfd-fem` | `damped` | damped and complex modes | 0317 |
+| `rcfd-fem` | `gyro` | gyroscopic matrix in the rotating frame, split Campbell table | 0318 |
+| `rcfd-fem` | `rotor` | shaft, discs, bearings, whirl, unbalance response | 0319 |
+| `rcfd-fem` | `random` | spectral response, root-mean-square stress, spectral moments | 0320 |
+| `rcfd-fem` | `shell3` | three-node shell | 0322 |
+| `rcfd-fem` | `geometric_struct` | geometric stiffness of beams and shells | 0323 |
+| `rcfd-fem` | `mat_j2` | J2 plasticity | 0325 |
+| `rcfd-fem` | `nl_transient` | nonlinear time integration | 0326 |
+| `rcfd-fem` | `follower`, `arclength` | follower pressure; continuation | 0327 |
+| `rcfd-fem` | `mat_hyper`, `nonlinear_md` | hyperelastic energies; mean-dilatation element | 0328 |
+| `rcfd-fem` | `tie` | node-to-surface search, ties, joints | 0329 |
+| `rcfd-fem` | `contact` | frictionless contact | 0330 |
+| `rcfd-fem` | `laminate` | layup stiffness, ply stresses, failure indices | 0331 |
+| `rcfd-fem` | `fracture` | domain integral, stress intensity, growth life | 0332 |
+| `rcfd-fem` | `cms` | condensation and component modes | 0333 |
+| `rcfd-fem` | `estimate` | patch recovery and error estimate | 0335 |
 | `rcfd-post` | `solid_acoustic` | equivalent radiated power, Rayleigh integral | 0321 |
 | `rcfd-post` | `solid_aerodamp` | prescribed modal motion of the wall, work per cycle | 0324 |
 | `rcfd-post` | `solid_rotor` | conversion to and from `rotordyn`, discs from a solid model | 0319 |
@@ -314,7 +314,7 @@ unless said otherwise; every recalled constant is marked for recomputation.
 ### ADR 0311 (SA-1): Scaffold of the advanced tier: module layout, material variants with a point context and a state layout, extension points of the Newton driver
 
 **Goal.** Prepare the shared files once, so that every later package of the tier fills a file of its own. Declare the new modules
-of `rcfd-solid`, `rcfd-linalg` and `rcfd-post` (ADR 0310 section 2.2) as stubs. Add the material variants (orthotropic, tabulated,
+of `rcfd-fem`, `rcfd-linalg` and `rcfd-post` (ADR 0310 section 2.2) as stubs. Add the material variants (orthotropic, tabulated,
 viscoelastic, creep, J2, hyperelastic) as data that is refused until its package lands; give the constitutive call a point context
 (temperature, time increment, material axes at the point) and each material a declared state size per integration point, with
 commit and roll-back unchanged from ADR 0300. Add the element kind `Shell3`, the shell property variant with a layup, and one
@@ -337,10 +337,10 @@ a/a = 1 within 1e-15 on a registered sample and prints and parses losslessly; th
 **Checked against.** No physics: the reference is the two earlier tiers (bit identity) and the refusals. The models for a
 declare-once scaffold are ADR 0271 and ADR 0291.
 
-**Files.** `crates/rcfd-solid/src/{lib.rs, model.rs, material.rs, mesh.rs, element.rs, shell.rs, nonlinear.rs}` (additions only),
+**Files.** `crates/rcfd-fem/src/{lib.rs, model.rs, material.rs, mesh.rs, element.rs, shell.rs, nonlinear.rs}` (additions only),
 one-line stubs of the modules of ADR 0310 section 2.2; `crates/rcfd-linalg/src/lib.rs` (four `pub mod` lines), `complex.rs`, stubs
 `cskyline.rs`, `eigen_general.rs`, `sparse_chol.rs`; `crates/rcfd-post/src/lib.rs` (three `pub mod` lines), stubs
-`solid_acoustic.rs`, `solid_aerodamp.rs`, `solid_rotor.rs`; `crates/rcfd-solid/tests/sa_scaffold.rs`.
+`solid_acoustic.rs`, `solid_aerodamp.rs`, `solid_rotor.rs`; `crates/rcfd-fem/tests/sa_scaffold.rs`.
 
 **Size.** M. **What could make it miss.** The earlier tiers are plans. If the constitutive call of ADR 0273 has a fixed argument
 list and the tests call it directly, the context goes into a second entry point with a forwarding default (ADR 0310 section 2.4,
@@ -374,8 +374,8 @@ temperature outside a table is refused with the element and the temperature.
 Materials, from memory); the polar-orthotropic tube (Lekhnitskii, Theory of Elasticity of an Anisotropic Body; re-derived from
 equilibrium and compatibility in the registration); the bar with a varying modulus (one integral).
 
-**Files.** `crates/rcfd-solid/src/mat_ortho.rs`, `crates/rcfd-solid/src/mat_table.rs`, `crates/rcfd-solid/tests/sa_ortho.rs`,
-`crates/rcfd-solid/tests/sa_mat_table.rs`.
+**Files.** `crates/rcfd-fem/src/mat_ortho.rs`, `crates/rcfd-fem/src/mat_table.rs`, `crates/rcfd-fem/tests/sa_ortho.rs`,
+`crates/rcfd-fem/tests/sa_mat_table.rs`.
 
 **Size.** M. **What could make it miss.** If the element routines of the basic tier evaluate the material once per element,
 properties that vary inside an element need the routine opened (the scaffold's point context is meant to prevent that). The
@@ -406,7 +406,7 @@ recursive update is the exact integral of the hereditary law for piecewise-linea
 Numer. Meth. Engng 2 (1970) 45; Simo and Hughes, Computational Inelasticity, chapter 10; from memory, derived in the
 registration).
 
-**Files.** `crates/rcfd-solid/src/mat_visco.rs`, `crates/rcfd-solid/tests/sa_visco.rs`.
+**Files.** `crates/rcfd-fem/src/mat_visco.rs`, `crates/rcfd-fem/tests/sa_visco.rs`.
 
 **Size.** M. **What could make it miss.** With a fixed step the effective stiffness is constant, so the linear integrator of ADR
 0301 can carry the history as a load; if its interface cannot take a history force the dynamic clause runs through the nonlinear
@@ -435,7 +435,7 @@ error with the element.
 elasticity with exponent 1/n (Bailey; Finnie and Heller, Creep of Engineering Materials; from memory, re-derived in the
 registration and equal to Lame at n = 1); the rotating bar by one integral.
 
-**Files.** `crates/rcfd-solid/src/mat_creep.rs`, `crates/rcfd-solid/tests/sa_creep.rs`.
+**Files.** `crates/rcfd-fem/src/mat_creep.rs`, `crates/rcfd-fem/tests/sa_creep.rs`.
 
 **Size.** S. **What could make it miss.** The redistribution time of the cylinder is an estimate (ratio of elastic strain to creep
 rate). Primary creep of polymers is often better fitted by other laws; only this one is offered. No creep constant of any polymer
@@ -467,8 +467,8 @@ threads.
 because the damping makes the imaginary part definite: argued in the registration; Higham, Accuracy and Stability of Numerical
 Algorithms, on complex symmetric systems, from memory).
 
-**Files.** `crates/rcfd-linalg/src/cskyline.rs`, `crates/rcfd-solid/src/harmonic_direct.rs`,
-`crates/rcfd-linalg/tests/sa_cskyline.rs`, `crates/rcfd-solid/tests/sa_harmonic_direct.rs`.
+**Files.** `crates/rcfd-linalg/src/cskyline.rs`, `crates/rcfd-fem/src/harmonic_direct.rs`,
+`crates/rcfd-linalg/tests/sa_cskyline.rs`, `crates/rcfd-fem/tests/sa_harmonic_direct.rs`.
 
 **Size.** M. **What could make it miss.** Without pivoting an undamped system close to a resonance loses digits: the refusal
 threshold is a registered estimate. One factorisation per frequency: a sweep of a large model is slow (recorded). Constraints by
@@ -502,7 +502,7 @@ defined in the registration by the closing of hysteresis loops (Matsuishi and En
 (1982) 31; from memory) and checked on constructed histories; the standard that prints a worked example (ASTM E1049) is paid and
 is not used.
 
-**Files.** `crates/rcfd-solid/src/fatigue.rs`, `crates/rcfd-solid/tests/sa_fatigue.rs`.
+**Files.** `crates/rcfd-fem/src/fatigue.rs`, `crates/rcfd-fem/tests/sa_fatigue.rs`.
 
 **Size.** M. **What could make it miss.** No stress-life curve of any polymer is in the repository, and such curves depend on
 temperature, frequency and fibre direction: every life is as good as its input (decision A1). Non-proportional multiaxial loading
@@ -513,7 +513,7 @@ temperature, frequency and fibre direction: every life is as good as its input (
 
 **Goal.** Everything with a skew or damping matrix needs eigenvalues that the symmetric solver of ADR 0283 cannot give. Add to
 `rcfd-linalg` the eigenvalues and vectors of a dense real general matrix (balancing, Hessenberg reduction, shifted QR), and on it
-the quadratic problem (lambda^2 M + lambda (C + G) + K) x = 0 projected on a set of undamped modes (2m by 2m). In `rcfd-solid`:
+the quadratic problem (lambda^2 M + lambda (C + G) + K) x = 0 projected on a set of undamped modes (2m by 2m). In `rcfd-fem`:
 damped modes with Rayleigh damping, discrete dampers and loss factors, giving decay rates, damped frequencies, damping ratios and
 complex shapes. The gyroscopic packages (ADR 0318, 0319) use the same routine.
 
@@ -533,8 +533,8 @@ pairs are reported once.
 with the condition E A u_x = -c u_t, giving tanh(lambda L/c0) = -A sqrt(E rho)/c). Method: Francis's QR iteration on a Hessenberg
 matrix (Golub and Van Loan, Matrix Computations, chapter 7; from memory; checked by the residual test, not taken on trust).
 
-**Files.** `crates/rcfd-linalg/src/eigen_general.rs`, `crates/rcfd-solid/src/damped.rs`,
-`crates/rcfd-linalg/tests/sa_eigen_general.rs`, `crates/rcfd-solid/tests/sa_damped.rs`.
+**Files.** `crates/rcfd-linalg/src/eigen_general.rs`, `crates/rcfd-fem/src/damped.rs`,
+`crates/rcfd-linalg/tests/sa_eigen_general.rs`, `crates/rcfd-fem/tests/sa_damped.rs`.
 
 **Size.** M. **What could make it miss.** A boundary dashpot converges slowly in undamped modes (the 2 percent is a draft;
 residual vectors may be needed). The QR iteration has known hard cases; the test matrices are registered, not chosen after a run.
@@ -563,7 +563,7 @@ ring (Bryan, Proc. Camb. Phil. Soc. 7 (1890) 101; recalled as the factor 4 n/(n^
 ring's kinetic energy in the rotating frame). The matrix follows from the relative-acceleration term 2 Omega x v (first
 principles).
 
-**Files.** `crates/rcfd-solid/src/gyro.rs`, `crates/rcfd-solid/tests/sa_gyro.rs`.
+**Files.** `crates/rcfd-fem/src/gyro.rs`, `crates/rcfd-fem/tests/sa_gyro.rs`.
 
 **Size.** M. **What could make it miss.** The ring needs the full 360 degree model: cyclic symmetry with the Coriolis term
 (complex sector problem with a skew part) is not included, so a bladed disc gets the term only as a full rotor. Bryan's factor is
@@ -594,7 +594,7 @@ percent. Forward and backward are labelled by the sense of the orbit; an unstabl
 its kinetic energy); the overhung disc (Stodola; two-unknown flexibility model). The repository's rigid model (ADR 0120) is the
 reference of the stiff-shaft limit. Element matrices: Nelson and McVaugh, J. Eng. Ind. 98 (1976) 593 (from memory; re-derived).
 
-**Files.** `crates/rcfd-solid/src/rotor.rs`, `crates/rcfd-post/src/solid_rotor.rs`, `crates/rcfd-solid/tests/sa_rotor.rs`,
+**Files.** `crates/rcfd-fem/src/rotor.rs`, `crates/rcfd-post/src/solid_rotor.rs`, `crates/rcfd-fem/tests/sa_rotor.rs`,
 `crates/rcfd-post/tests/sa_solid_rotor.rs`.
 
 **Size.** M. **What could make it miss.** Only the head of `rotordyn.rs` was read (rigid rotor, isotropic bearings, complex
@@ -625,7 +625,7 @@ frequency list is refused with the entry.
 Vibration in Mechanical Systems; Miles, J. Aeronaut. Sci. 21 (1954) 753; from memory, derived). The root-mean-square von Mises
 stress as a quadratic form of the stress covariance (first principles).
 
-**Files.** `crates/rcfd-solid/src/random.rs`, `crates/rcfd-solid/tests/sa_random.rs`.
+**Files.** `crates/rcfd-fem/src/random.rs`, `crates/rcfd-fem/tests/sa_random.rs`.
 
 **Size.** S. **What could make it miss.** No force spectrum of the fan exists (broadband loads need a scale-resolving flow run);
 the package is machinery. Response spectra (shock) are not included (ADR 0310, not planned).
@@ -680,7 +680,7 @@ the registered limit is refused with the element.
 the three-node element with mixed interpolation of the shear strain (Lee and Bathe, Comput. Struct. 82 (2004) 945; from memory;
 the tying is re-derived and checked by the patch and isotropy tests).
 
-**Files.** `crates/rcfd-solid/src/shell3.rs`, `crates/rcfd-solid/tests/sa_shell3.rs`.
+**Files.** `crates/rcfd-fem/src/shell3.rs`, `crates/rcfd-fem/tests/sa_shell3.rs`.
 
 **Size.** M. **What could make it miss.** Triangles converge more slowly than quadrilaterals: every percentage is a draft. The
 assumed-strain triangle is recalled, not derived here; if it shows a spurious mode the fallback is the discrete-Kirchhoff triangle
@@ -707,8 +707,8 @@ that of the solid model of F-396 (Hex20) within 2 percent at the registered spee
 plate (Timoshenko and Gere, Theory of Elastic Stability; derivable from the Navier series with in-plane forces); the flap-lag
 identity and the perturbation slope of ADR 0299. The solid model is the reference of the equivalence.
 
-**Files.** `crates/rcfd-solid/src/geometric_struct.rs`, `crates/rcfd-solid/src/rotating.rs` (only if its softening mass assumes
-solid elements), `crates/rcfd-solid/tests/sa_geometric_struct.rs`.
+**Files.** `crates/rcfd-fem/src/geometric_struct.rs`, `crates/rcfd-fem/src/rotating.rs` (only if its softening mass assumes
+solid elements), `crates/rcfd-fem/tests/sa_geometric_struct.rs`.
 
 **Size.** M. **What could make it miss.** At the upper end of M; split: beams first, shells second. The equivalence compares two
 discretisations of a thin plate, both with their own error: the 2 percent is a draft. Large untwist is not covered (ADR 0327 gives
@@ -767,7 +767,7 @@ Mathematical Theory of Plasticity, 1950, chapter 5; from memory, re-derived from
 elastic-plastic moment of a rectangle. Method: Simo and Taylor, Comput. Meth. Appl. Mech. Engng 48 (1985) 101; Simo and Hughes,
 Computational Inelasticity (from memory; the tangent is checked by differences).
 
-**Files.** `crates/rcfd-solid/src/mat_j2.rs`, `crates/rcfd-solid/tests/sa_j2.rs`.
+**Files.** `crates/rcfd-fem/src/mat_j2.rs`, `crates/rcfd-fem/tests/sa_j2.rs`.
 
 **Size.** M. **What could make it miss.** Isochoric plastic flow locks fully integrated elements: the checks use Hex20, and
 whether the B-bar element of ADR 0293 is offered to the nonlinear driver is not known. Small strains only (the measure of the
@@ -795,7 +795,7 @@ material state included. A step that does not converge after the registered halv
 of a free body; the one-unknown oscillator with the St. Venant-Kirchhoff bar force (energy integral). Methods as ADR 0300 and ADR
 0301.
 
-**Files.** `crates/rcfd-solid/src/nl_transient.rs`, `crates/rcfd-solid/tests/sa_nl_transient.rs`.
+**Files.** `crates/rcfd-fem/src/nl_transient.rs`, `crates/rcfd-fem/tests/sa_nl_transient.rs`.
 
 **Size.** M. **What could make it miss.** The trapezoidal rule does not conserve energy in nonlinear problems and can blow up at
 large steps: the 1e-3 is a draft tied to the registered step. A pin on a solid mesh is a line of constrained nodes. No
@@ -826,8 +826,8 @@ under constant-direction pressure (Timoshenko and Gere; the two factors 3 and 4 
 with Green-Lagrange strain (one line). Methods: Riks, Int. J. Solids Struct. 15 (1979) 529; Crisfield, Comput. Struct. 13 (1981)
 55; the load stiffness of a pressure (Hibbitt, 1979); all from memory, derived in the registration.
 
-**Files.** `crates/rcfd-solid/src/follower.rs`, `crates/rcfd-solid/src/arclength.rs`, `crates/rcfd-solid/tests/sa_follower.rs`,
-`crates/rcfd-solid/tests/sa_arclength.rs`.
+**Files.** `crates/rcfd-fem/src/follower.rs`, `crates/rcfd-fem/src/arclength.rs`, `crates/rcfd-fem/tests/sa_follower.rs`,
+`crates/rcfd-fem/tests/sa_arclength.rs`.
 
 **Size.** M. **What could make it miss.** At the upper end of M; split: arc-length as its own S package. The load stiffness is
 unsymmetric on a free edge; the symmetric part is used and the registration must say when that is exact. The two buckling factors
@@ -857,7 +857,7 @@ Green and Zerna, Theoretical Elasticity; Ogden, Non-linear Elastic Deformations;
 Method: the three-field mean-dilatation element (Simo, Taylor and Pister, Comput. Meth. Appl. Mech. Engng 51 (1985) 177; from
 memory).
 
-**Files.** `crates/rcfd-solid/src/mat_hyper.rs`, `crates/rcfd-solid/src/nonlinear_md.rs`, `crates/rcfd-solid/tests/sa_hyper.rs`.
+**Files.** `crates/rcfd-fem/src/mat_hyper.rs`, `crates/rcfd-fem/src/nonlinear_md.rs`, `crates/rcfd-fem/tests/sa_hyper.rs`.
 
 **Size.** M. **What could make it miss.** If the driver of ADR 0300 fixes the element's internal force to the standard
 displacement form, the mean-dilatation element needs its own element routine (the scaffold's entry points allow it). Tetrahedra
@@ -887,7 +887,7 @@ at index 2 its axis nodes are held.
 solid disc in plane stress (Timoshenko and Goodier), the beam frequency. That a one-pass tie fails the patch test is known (Taylor
 and Papadopoulos, 1991, from memory); the limit is registered from an estimate of the gap error.
 
-**Files.** `crates/rcfd-solid/src/tie.rs`, `crates/rcfd-solid/src/cyclic.rs` (additions), `crates/rcfd-solid/tests/sa_tie.rs`.
+**Files.** `crates/rcfd-fem/src/tie.rs`, `crates/rcfd-fem/src/cyclic.rs` (additions), `crates/rcfd-fem/tests/sa_tie.rs`.
 
 **Size.** M. **What could make it miss.** At the upper end of M; split: ties first, joints and cyclic extensions second. Curved
 interfaces leave gaps and overlaps that a mortar method would treat properly; mortar ties are not planned. Many constraints fill
@@ -916,7 +916,7 @@ memory; derivable); the shrink fit from Lame's cylinder (one line, re-derived in
 augmentation of the multipliers (Simo and Laursen, Comput. Struct. 42 (1992) 97; Wriggers, Computational Contact Mechanics; from
 memory).
 
-**Files.** `crates/rcfd-solid/src/contact.rs`, `crates/rcfd-solid/tests/sa_contact.rs`.
+**Files.** `crates/rcfd-fem/src/contact.rs`, `crates/rcfd-fem/tests/sa_contact.rs`.
 
 **Size.** M. **What could make it miss.** Hertz with node-to-surface contact converges slowly and quadratic elements give uneven
 nodal contact forces: the percentages are drafts and the check uses linear hexahedra. Friction, self-contact and contact in
@@ -945,7 +945,7 @@ or an unknown material is refused with the ply.
 of Laminated Composite Plates and Shells, for the Navier solution; from memory, all derivable); the criteria are algebraic
 definitions (Tsai and Wu, J. Compos. Mater. 5 (1971) 58).
 
-**Files.** `crates/rcfd-solid/src/laminate.rs`, `crates/rcfd-solid/tests/sa_laminate.rs`.
+**Files.** `crates/rcfd-fem/src/laminate.rs`, `crates/rcfd-fem/tests/sa_laminate.rs`.
 
 **Size.** M. **What could make it miss.** The transverse shear stiffness of a layup needs a correction factor that depends on the
 layup (registered rule; thin plates in the checks). No interlaminar stress, no delamination, no progressive failure. Strengths and
@@ -975,7 +975,7 @@ approximation whose error at this ratio is below the limit: stated and bounded i
 (Sneddon, 1946), the identity J = -dPi/da. Method: Li, Shih and Needleman, Eng. Fract. Mech. 21 (1985) 405; Shih, Moran and
 Nakamura, Int. J. Fract. 30 (1986) 79 (from memory; checked by path independence and the energy difference).
 
-**Files.** `crates/rcfd-solid/src/fracture.rs` (with the slit builder), `crates/rcfd-solid/tests/sa_fracture.rs`.
+**Files.** `crates/rcfd-fem/src/fracture.rs` (with the slit builder), `crates/rcfd-fem/tests/sa_fracture.rs`.
 
 **Size.** M. **What could make it miss.** The mesh validation of the basic tier may refuse coincident nodes, which a slit needs.
 Curved fronts, mixed-mode separation, crack growth with remeshing and elastic-plastic fracture are not planned. Toughness and
@@ -1002,7 +1002,7 @@ and a mode count above the interior size are refused.
 **Checked against.** The full model is the reference. The reduction is a Rayleigh-Ritz transformation, so the frequencies are
 upper bounds (first principles). Guyan, AIAA J. 3 (1965) 380; Craig and Bampton, AIAA J. 6 (1968) 1313 (from memory).
 
-**Files.** `crates/rcfd-solid/src/cms.rs`, `crates/rcfd-solid/tests/sa_cms.rs`.
+**Files.** `crates/rcfd-fem/src/cms.rs`, `crates/rcfd-fem/tests/sa_cms.rs`.
 
 **Size.** M. **What could make it miss.** The reduced matrices are dense in the interface unknowns: a large interface defeats the
 purpose (reported). Free-interface methods, reduction with damping or gyroscopic terms and mistuning studies on reduced blades are
@@ -1030,8 +1030,8 @@ Computer Solution of Large Sparse Positive Definite Systems (minimum degree, eli
 (1985) 141; Davis, Direct Methods for Sparse Linear Systems (from memory; the algorithm is checked by the residual and the fill
 count).
 
-**Files.** `crates/rcfd-linalg/src/sparse_chol.rs`, `crates/rcfd-solid/src/solve.rs` (the choice),
-`crates/rcfd-linalg/tests/sa_sparse_chol.rs`, `crates/rcfd-solid/tests/sa_sparse_solve.rs`.
+**Files.** `crates/rcfd-linalg/src/sparse_chol.rs`, `crates/rcfd-fem/src/solve.rs` (the choice),
+`crates/rcfd-linalg/tests/sa_sparse_chol.rs`, `crates/rcfd-fem/tests/sa_sparse_solve.rs`.
 
 **Size.** M. **What could make it miss.** A plain minimum degree without supernodes is slow beyond about 1e6 unknowns and its fill
 is worse than nested dissection: the factor-of-two clause is a draft. If the eigensolver of ADR 0283 is written against the
@@ -1057,7 +1057,7 @@ reported, not solved.
 **Checked against.** The manufactured solution of ADR 0279 (true error known) and Kirsch's hole. Method: Zienkiewicz and Zhu, Int.
 J. Numer. Meth. Engng 33 (1992) 1331 and 1365 (from memory; the effectivity is measured, not assumed).
 
-**Files.** `crates/rcfd-solid/src/estimate.rs`, `crates/rcfd-solid/tests/sa_estimate.rs`.
+**Files.** `crates/rcfd-fem/src/estimate.rs`, `crates/rcfd-fem/tests/sa_estimate.rs`.
 
 **Size.** S. **What could make it miss.** Superconvergence of the patch recovery is not guaranteed on tetrahedra: the effectivity
 band is a draft. Shells and beams are not covered. Adaptation is not planned (ADR 0310).
@@ -1114,7 +1114,7 @@ unsteady cases FSI2 and FSI3 are not run.
 and laminar incompressible flow, in Fluid-Structure Interaction, Lecture Notes in Computational Science and Engineering 53,
 Springer (2006) 371; public as a report of TU Dortmund. Not read for this plan; the values are not quoted here on purpose.
 
-**Files.** `docs/reference-data.md` (rows, after approval), `crates/rcfd-solid/tests/sa_flag_csm.rs`,
+**Files.** `docs/reference-data.md` (rows, after approval), `crates/rcfd-fem/tests/sa_flag_csm.rs`,
 `crates/rcfd-post/tests/sa_flag_fsi1.rs`, a case folder under `cases/` for the channel mesh.
 
 **Size.** M. **What could make it miss.** The riskiest package of the tier. A two-dimensional body-fitted mesh of the cylinder
@@ -1219,11 +1219,11 @@ merged; 0322, 0329 and 0331 need F-392 (the shell, wave 4 there), 0324 and 0337 
 
 | Wave | Packages in parallel | Files, by package |
 |---|---|---|
-| 1 | 0311, 0336 | 0311: `rcfd-solid` `lib.rs`, `model.rs`, `material.rs`, `mesh.rs`, `element.rs`, `shell.rs`, `nonlinear.rs`, stubs; `rcfd-linalg` `lib.rs`, `complex.rs`, stubs; `rcfd-post` `lib.rs`, stubs. 0336: `rcfd-api` `Cargo.toml`, `lib.rs`, `solid_parallel.rs` |
+| 1 | 0311, 0336 | 0311: `rcfd-fem` `lib.rs`, `model.rs`, `material.rs`, `mesh.rs`, `element.rs`, `shell.rs`, `nonlinear.rs`, stubs; `rcfd-linalg` `lib.rs`, `complex.rs`, stubs; `rcfd-post` `lib.rs`, stubs. 0336: `rcfd-api` `Cargo.toml`, `lib.rs`, `solid_parallel.rs` |
 | 2 | 0312, 0313, 0314, 0315, 0316, 0317 | `mat_ortho.rs`, `mat_table.rs`; `mat_visco.rs`; `mat_creep.rs`; `rcfd-linalg` `cskyline.rs`, `harmonic_direct.rs`; `fatigue.rs`; `rcfd-linalg` `eigen_general.rs`, `damped.rs` |
 | 3 | 0318, 0319, 0320, 0321, 0322, 0324 | `gyro.rs`; `rotor.rs`, `rcfd-post` `solid_rotor.rs`; `random.rs`; `rcfd-post` `solid_acoustic.rs`; `shell3.rs`; `rcfd-post` `solid_aerodamp.rs` |
 | 4 | 0323, 0325, 0326, 0329, 0331, 0338 | `geometric_struct.rs`, `rotating.rs`; `mat_j2.rs`; `nl_transient.rs`; `tie.rs`, `cyclic.rs`; `laminate.rs`; `rcfd-api` `solid_case.rs`, `docs/structural-solver.md` |
-| 5 | 0327, 0328, 0330, 0332, 0333, 0334, 0339 | `follower.rs`, `arclength.rs`; `mat_hyper.rs`, `nonlinear_md.rs`; `contact.rs`; `fracture.rs`; `cms.rs`; `rcfd-linalg` `sparse_chol.rs`, `rcfd-solid` `solve.rs`; test file, `docs/structural-solver.md`, `docs/fan-project-breakdown.md` |
+| 5 | 0327, 0328, 0330, 0332, 0333, 0334, 0339 | `follower.rs`, `arclength.rs`; `mat_hyper.rs`, `nonlinear_md.rs`; `contact.rs`; `fracture.rs`; `cms.rs`; `rcfd-linalg` `sparse_chol.rs`, `rcfd-fem` `solve.rs`; test file, `docs/structural-solver.md`, `docs/fan-project-breakdown.md` |
 | 6 | 0335, 0337 (once approved) | `estimate.rs`; `docs/reference-data.md`, test files, a case folder |
 
 Notes on the table:
@@ -1232,7 +1232,7 @@ Notes on the table:
   0316, 0317 and 0312 in wave 2; 0318 and 0321 in wave 3; 0338 in wave 4; 0339 in wave 5.
 * 0325, 0327, 0328, 0332, 0333, 0334 and 0335 depend only on the scaffold and the earlier tiers; they are placed late by priority,
   not by dependency, and any of them can move forward into a free slot. 0335 in particular is small and independent.
-* 0334 edits `rcfd-solid/src/solve.rs`, which ADR 0305 (F-402) also edits: F-402 is a dependency for that reason only.
+* 0334 edits `rcfd-fem/src/solve.rs`, which ADR 0305 (F-402) also edits: F-402 is a dependency for that reason only.
 * 0338 and 0339 both write to `docs/structural-solver.md`, in different waves.
 * 0331 gives Shell3 a layup only if 0322 is merged when it starts; 0338 takes the packages that are merged when it starts.
 * Each package adds its own test files (`sa_*.rs`); none edits another's, or an `sb_` or `si_` file.
@@ -1259,7 +1259,7 @@ Each with options and a recommendation. None is taken here.
   result keeps its bits; (b) the default above a size threshold once 0334 is accepted, which changes the bits of large solid
   results (no hash table covers them today). Recommendation: (a), and (b) as a later decision with numbers.
 * **A5. Where the parallel glue lives.** Options: (a) `rcfd-api` gains a dependency on `rcfd-dist` and a module `solid_parallel`,
-  library only; (b) `rcfd-solid` depends on `rcfd-dist` and `rcfd-gpu` (same layer: the graph test may refuse it); (c) keys in the
+  library only; (b) `rcfd-fem` depends on `rcfd-dist` and `rcfd-gpu` (same layer: the graph test may refuse it); (c) keys in the
   solid case file as well. Recommendation: (a) now; (c) after the first measured numbers.
 * **A6. The cuts of section 1.3, group B.** Twenty-nine numbers were available. Options: (a) as proposed; (b) swap in explicit
   dynamics (S) or frictional contact (M) for hyperelasticity (0328) or fracture (0332), which have the least fan use among the

@@ -35,7 +35,7 @@ one-unknown oscillator with the St. Venant-Kirchhoff bar force (energy integral)
 
 ## Files
 
-`crates/rcfd-solid/src/nl_transient.rs`, `crates/rcfd-solid/tests/sa_nl_transient.rs`.
+`crates/rcfd-fem/src/nl_transient.rs`, `crates/rcfd-fem/tests/sa_nl_transient.rs`.
 
 ## What could make it miss
 

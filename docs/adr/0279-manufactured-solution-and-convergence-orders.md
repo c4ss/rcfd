@@ -33,7 +33,7 @@ degree p (Strang and Fix, An Analysis of the Finite Element Method, 1973).
 
 ## Files
 
-`crates/rcfd-solid/tests/sb_mms.rs` only.
+`crates/rcfd-fem/tests/sb_mms.rs` only.
 
 ## What could make it miss
 

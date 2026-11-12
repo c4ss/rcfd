@@ -38,7 +38,7 @@ stress (Timoshenko and Goodier), the beam frequency. That a one-pass tie fails t
 
 ## Files
 
-`crates/rcfd-solid/src/tie.rs`, `crates/rcfd-solid/src/cyclic.rs` (additions), `crates/rcfd-solid/tests/sa_tie.rs`.
+`crates/rcfd-fem/src/tie.rs`, `crates/rcfd-fem/src/cyclic.rs` (additions), `crates/rcfd-fem/tests/sa_tie.rs`.
 
 ## What could make it miss
 

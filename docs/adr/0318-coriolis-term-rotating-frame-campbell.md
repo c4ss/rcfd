@@ -37,7 +37,7 @@ in the rotating frame). The matrix follows from the relative-acceleration term 2
 
 ## Files
 
-`crates/rcfd-solid/src/gyro.rs`, `crates/rcfd-solid/tests/sa_gyro.rs`.
+`crates/rcfd-fem/src/gyro.rs`, `crates/rcfd-fem/tests/sa_gyro.rs`.
 
 ## What could make it miss
 

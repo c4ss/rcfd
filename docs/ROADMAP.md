@@ -6294,7 +6294,7 @@ fixed by the item's registration ADR before any code.
     in three dimensions). Open: the default shift in the F-330 wiring (a default; ADR 0248 question 2). The clause-1
     follow-up (a plain damping zone behind a thicker layer) is proposed in ADR 0248 only for when a ducted case shows
     the ringing; no item added.
-- [~] **F-341** Sponge layer on moving meshes
+- [x] **F-341** Sponge layer on moving meshes
   - depends on: F-331, F-258
   - acceptance: With a sponge, a uniform reference state stays to round-off under `step_ale` on a deforming mesh; the
     ADR 0237 tube check on a uniformly translating mesh reflects less than 1 percent; without a sponge `step_ale` is
@@ -6323,6 +6323,7 @@ fixed by the item's registration ADR before any code.
     rotation not checked); library only, like the sponge itself; two-dimensional checks. STATUS recorded PARTIAL by the
     lead: the no-sponge control NCr missed its registered limit (0.864 against 0.9) and its replacement NCr2 was
     registered after a diagnostic had shown its value, so it is not blind; done is the maintainer's call (ADR 0265 Q1).
+    ACCEPTED AS DONE by the maintainer in person on 2026-11-12 (the amended check).
 - [x] **F-342** Case-file key for the adaptive steady loop
   - depends on: F-102
   - acceptance: An optional adapt block on a steady incompressible box-mesh case runs rcfd_fv::adaptive and reproduces
@@ -6492,7 +6493,9 @@ fixed by the item's registration ADR before any code.
     dynamic_mesh tree tests pass unedited; a table with scheme = "loose" equals no table bit for bit. Partial by the
     registered rule: one of six mutations (force_scale not read) passed its named test (the floor k X never binds on
     this case; the fixed-factor test catches it). Open: ADR 0266 Q1 (status), Q2 (the key name), Q3 (Newmark), Q4 (rest
-    patches). The wall pressure of the body force stays the default extrapolation (F-358). Follow-up: F-437.
+    patches). The wall pressure of the body force stays the default extrapolation (F-358). Follow-up: F-437. The key
+    naming (Q2: scheme = "strong" in the table [dynamic_mesh.six_dof.coupling]) accepted by the maintainer in person on
+    2026-11-12.
 - [x] **F-351** Wall pressure of the body force on a fixed-flux moving wall (the 1.25 percent added-mass deficit)
   - depends on: F-251, F-244
   - acceptance: The cause of the discrete added mass of the piston column lying 1.25 percent below rho A L0 (ADR 0250 C1
@@ -6665,7 +6668,7 @@ fixed by the item's registration ADR before any code.
     before the flow. No library change. Limits: a uniform flow only; it shows the identities (closed area vectors, GCL,
     weights summing to one) on a warped moving overset mesh, not the accuracy of a non-uniform flow there. Follow-up
     (recommendation taken on the maintainer's standing instruction of 2026-11-11): F-359.
-- [~] **F-358** Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided
+- [x] **F-358** Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided
   - depends on: F-351, F-350
   - acceptance: A case key of dynamic_mesh.six_dof selects the wall pressure of the body force ("extrapolated", the
     default, or "prescribed_gradient"), the case driver keeps the vector of ale::set_follow_conditions and hands it to
@@ -6699,7 +6702,9 @@ fixed by the item's registration ADR before any code.
     miss kept as a record. Open, the maintainer's: the default (ADR 0269 Q1), the table (Q2), the force reports on
     moving walls (Q3), the sliding step (Q4), skewed walls (Q5). STATUS recorded PARTIAL by the lead: the registered
     check AU1 missed (a defect of the case text) and passed only as AU1b after amendment; done is the maintainer's call.
-    The default flip (Q1) waits for the maintainer's approval of the listed changes.
+    The default flip (Q1) waits for the maintainer's approval of the listed changes. ACCEPTED AS DONE by the maintainer
+    in person on 2026-11-12 (the amended check). Default flip (Q1) approved by the maintainer in person on 2026-11-12,
+    together with ADR 0342 Q1 (F-440); to be applied.
 - [~] **F-359** Overset: a non-uniform closed-form flow on a warped three-dimensional overset mesh
   - depends on: F-357
   - acceptance: A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a
@@ -6750,7 +6755,7 @@ fixed by the item's registration ADR before any code.
     bit-identical; the plain fixed point diverges (510.85 in 10). Mock affine and cubic fluids check the termination
     count and the equality with Aitken's secant. Existing suites cosim_f139, strong_fsi_f251, added_mass_f351 and the
     baseline hashes pass unedited; four mutations caught. Open: ADR 0261 Q1 to Q3.
-- [~] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
+- [x] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
   - depends on: F-139
   - acceptance: InterfaceMap weights are built from the two interface meshes alone (nearest-element projection and a
     radial-basis interpolation) for a planar and a cylindrical wall with non-matching meshes; rigid translation and
@@ -6773,7 +6778,8 @@ fixed by the item's registration ADR before any code.
     frequencies (1.4e-15); the radial basis shifts them by -5.2e-4 and +1.9e-4 (limit 1e-3). cosim_f139, cosim_f361 and
     the baseline hashes pass unedited; eight mutations caught. Partial because the registered check E1 accepted two
     coincident nodes with the radial basis (an absolute pivot test); amendment 1 refuses pivots below 2 n eps a_jj, and
-    E1b passes with it. Protocol option in docs/cosimulation-protocol.md. Open: ADR 0263 Q1 to Q3.
+    E1b passes with it. Protocol option in docs/cosimulation-protocol.md. Open: ADR 0263 Q1 to Q3. ACCEPTED AS DONE by
+    the maintainer in person on 2026-11-12 (the amended check).
 - [ ] **F-363** Second-order immersed forcing: the single PISO corrector
   - depends on: F-355
   - acceptance: The stop of DFG 2D-2 on M2 with one PISO corrector and a second-order immersed flux face of weight above
@@ -6836,19 +6842,20 @@ fixed by the item's registration ADR before any code.
     time error of the turning mesh.
   - note: From ADR 0264 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
-- [ ] **F-370** Crate rcfd-solid: the data model of a solid model and the structured builders
+- [ ] **F-370** Crate rcfd-fem: the data model of a solid model and the structured builders
   - depends on: F-001, F-010, F-012
-  - acceptance: Every limit not stated here is registered in the ADR before the run. A new crate rcfd-solid
-    (dependencies rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model; the workspace graph test passes
-    with the one registered line for the new crate, the architecture page lists it, and nothing existing changes
-    (baseline hashes unchanged). On a box of n^3 hexahedra and on its six-tetrahedra split, for n = 1, 2, 5 with unequal
-    edge lengths: every element has a positive Jacobian at every node, the element volumes sum to the box volume within
-    1e-12 relative, the area of each of the six face sets equals the box face within 1e-12, and every interior face is
-    shared by exactly two elements; the quadratic upgrade has (nodes + edges) nodes and each mid-edge node is the mean
-    of its two ends within 1e-15; an inverted element, a node repeated in an element, an empty set, E <= 0 and a Poisson
-    ratio outside (-1, 0.5) are each refused with an error naming the element or the key.
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A new crate rcfd-fem (dependencies
+    rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model; the workspace graph test passes with the one
+    registered line for the new crate, the architecture page lists it, and nothing existing changes (baseline hashes
+    unchanged). On a box of n^3 hexahedra and on its six-tetrahedra split, for n = 1, 2, 5 with unequal edge lengths:
+    every element has a positive Jacobian at every node, the element volumes sum to the box volume within 1e-12
+    relative, the area of each of the six face sets equals the box face within 1e-12, and every interior face is shared
+    by exactly two elements; the quadratic upgrade has (nodes + edges) nodes and each mid-edge node is the mean of its
+    two ends within 1e-15; an inverted element, a node repeated in an element, an empty set, E <= 0 and a Poisson ratio
+    outside (-1, 0.5) are each refused with an error naming the element or the key.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0271; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. Unblocked 2026-11-12: the maintainer approved ADR 0270 M1 (the
+    workspace_graph.rs line) and named the crate rcfd-fem (M2).
 - [ ] **F-371** Solid mesh from the existing meshes: polyhedral mesh, tetrahedral mesher output, patches as surface sets, curved edges
   - depends on: F-370, F-010, F-012, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. A SolidMesh built from box_mesh
@@ -7090,7 +7097,7 @@ fixed by the item's registration ADR before any code.
   - depends on: F-370, F-372, F-374, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, element kinds,
     property data, constraint and support data and the three defaulted element entry points of ADR 0290 section 2 exist
-    in rcfd-solid and rcfd-post; every test of the basic tier (the sb_ files of rcfd-solid, rcfd-linalg, rcfd-io,
+    in rcfd-fem and rcfd-post; every test of the basic tier (the sb_ files of rcfd-fem, rcfd-linalg, rcfd-io,
     rcfd-post and rcfd-api) compiles and passes unedited, and a registered set of basic models (patch test, cantilever,
     bar modes) gives displacements, stresses and frequencies with the same bits as before the change; the generic
     assembly hook called with the element stiffness reproduces assemble::stiffness bit for bit for 1 and 8 threads; each
@@ -7833,7 +7840,8 @@ fixed by the item's registration ADR before any code.
     4.4e-6, 4.6e-6), the same with the wall following the mesh. Without the table every report value and the run are
     bit-identical, and the key does not change the flow. No existing input combines a moving mesh and a force report;
     with the default flipped no test moves. K0 unedited; five mutations caught, one equivalent. Open, the maintainer's:
-    the default (ADR 0342 Q1, with ADR 0269 Q1).
+    the default (ADR 0342 Q1, with ADR 0269 Q1). Default flip approved by the maintainer in person on 2026-11-12,
+    together with F-358's; to be applied.
 - [x] **F-441** Directional lattice: coarsening inside the directional adaptive loop
   - depends on: F-439
   - acceptance: On the ADR 0267 suction layer, a directional loop that also box-coarsens cells whose per-axis variation

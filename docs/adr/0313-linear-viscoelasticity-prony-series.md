@@ -37,7 +37,7 @@ Simo and Hughes, Computational Inelasticity, chapter 10; from memory, derived in
 
 ## Files
 
-`crates/rcfd-solid/src/mat_visco.rs`, `crates/rcfd-solid/tests/sa_visco.rs`.
+`crates/rcfd-fem/src/mat_visco.rs`, `crates/rcfd-fem/tests/sa_visco.rs`.
 
 ## What could make it miss
 

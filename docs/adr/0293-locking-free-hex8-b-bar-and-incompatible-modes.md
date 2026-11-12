@@ -39,7 +39,7 @@ patch-test correction); Simo and Rifai, Int. J. Numer. Meth. Engng 29 (1990) 159
 
 ## Files
 
-`crates/rcfd-solid/src/hex8x.rs`, `crates/rcfd-solid/tests/si_hex8x.rs`.
+`crates/rcfd-fem/src/hex8x.rs`, `crates/rcfd-fem/tests/si_hex8x.rs`.
 
 ## What could make it miss
 

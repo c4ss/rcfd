@@ -11,7 +11,7 @@ Work package SB-8 of the structural solver, basic tier. Size S.
 The existing `.vtu` writer writes the polyhedral finite-volume mesh with cell data only. Add, beside it and without changing it,
 a writer of finite-element cells from plain arrays (so `rcfd-io` needs no new dependency), and in `rcfd-post` the function that
 writes a `SolidResult`: displacement, nodal von Mises and principal stresses, element stress components, reactions. This ADR
-also adds the `rcfd-solid` dependency of `rcfd-post` and declares its three new modules, so that ADRs 0285 and 0286 touch only
+also adds the `rcfd-fem` dependency of `rcfd-post` and declares its three new modules, so that ADRs 0285 and 0286 touch only
 their own file.
 
 ## Dependencies

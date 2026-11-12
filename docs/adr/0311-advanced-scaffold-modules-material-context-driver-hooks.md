@@ -9,7 +9,7 @@ Work package SA-1 of the structural solver, advanced tier. Size M.
 ## Goal
 
 Prepare the shared files once, so that every later package of the tier fills a file of its own. Declare the new modules of
-`rcfd-solid`, `rcfd-linalg` and `rcfd-post` (ADR 0310 section 2.2) as stubs. Add the material variants (orthotropic, tabulated,
+`rcfd-fem`, `rcfd-linalg` and `rcfd-post` (ADR 0310 section 2.2) as stubs. Add the material variants (orthotropic, tabulated,
 viscoelastic, creep, J2, hyperelastic) as data that is refused until its package lands; give the constitutive call a point context
 (temperature, time increment, material axes at the point) and each material a declared state size per integration point, with
 commit and roll-back unchanged from ADR 0300. Add the element kind `Shell3`, the shell property variant with a layup, and one
@@ -41,10 +41,10 @@ No physics: the reference is the two earlier tiers (bit identity) and the refusa
 
 ## Files
 
-`crates/rcfd-solid/src/{lib.rs, model.rs, material.rs, mesh.rs, element.rs, shell.rs, nonlinear.rs}` (additions only), one-line
+`crates/rcfd-fem/src/{lib.rs, model.rs, material.rs, mesh.rs, element.rs, shell.rs, nonlinear.rs}` (additions only), one-line
 stubs of the modules of ADR 0310 section 2.2; `crates/rcfd-linalg/src/lib.rs` (four `pub mod` lines), `complex.rs`, stubs
 `cskyline.rs`, `eigen_general.rs`, `sparse_chol.rs`; `crates/rcfd-post/src/lib.rs` (three `pub mod` lines), stubs
-`solid_acoustic.rs`, `solid_aerodamp.rs`, `solid_rotor.rs`; `crates/rcfd-solid/tests/sa_scaffold.rs`.
+`solid_acoustic.rs`, `solid_aerodamp.rs`, `solid_rotor.rs`; `crates/rcfd-fem/tests/sa_scaffold.rs`.
 
 ## What could make it miss
 

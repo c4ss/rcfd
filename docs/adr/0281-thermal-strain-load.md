@@ -32,7 +32,7 @@ each derivable in a few lines).
 
 ## Files
 
-`crates/rcfd-solid/src/thermal.rs`, small hooks in `loads.rs` and `recover.rs`, `crates/rcfd-solid/tests/sb_thermal.rs`.
+`crates/rcfd-fem/src/thermal.rs`, small hooks in `loads.rs` and `recover.rs`, `crates/rcfd-fem/tests/sb_thermal.rs`.
 
 ## What could make it miss
 

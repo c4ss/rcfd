@@ -38,8 +38,8 @@ the partition and derivative tests).
 
 ## Files
 
-`crates/rcfd-solid/src/hex20.rs` (the element, its rule, its face functions and the upgrade builder),
-`crates/rcfd-solid/tests/si_hex20.rs`.
+`crates/rcfd-fem/src/hex20.rs` (the element, its rule, its face functions and the upgrade builder),
+`crates/rcfd-fem/tests/si_hex20.rs`.
 
 ## What could make it miss
 

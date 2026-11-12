@@ -9,7 +9,7 @@ Work package SI-1 of the structural solver, intermediate tier. Size S.
 ## Goal
 
 Prepare the shared files once, so that every later package of the tier fills a file of its own and no two packages of a wave edit
-the same file. Declare the new modules of `rcfd-solid` (section 2.2 of ADR 0290) and of `rcfd-post` as stubs; add the element
+the same file. Declare the new modules of `rcfd-fem` (section 2.2 of ADR 0290) and of `rcfd-post` as stubs; add the element
 kinds `Hex20`, `Beam2` and `Shell4` and the per-block property data (Hex8 formulation, beam section, shell thickness); add the
 constraint and support data (linear constraint, rigid set, cyclic pair, elastic support); give the `Element` trait the defaulted
 entry points `geometric_stiffness`, `internal_force` and `tangent`; add one generic assembly hook that turns a per-element
@@ -23,8 +23,8 @@ none in this list; roadmap items (SI ids are this tier's packages, ADR 0290 sect
 ## Acceptance (draft, in the roadmap's form)
 
 Every limit not stated here is registered in the ADR before the run. The modules, element kinds, property data, constraint and
-support data and the three defaulted element entry points of ADR 0290 section 2 exist in rcfd-solid and rcfd-post; every test of
-the basic tier (the sb_ files of rcfd-solid, rcfd-linalg, rcfd-io, rcfd-post and rcfd-api) compiles and passes unedited, and a
+support data and the three defaulted element entry points of ADR 0290 section 2 exist in rcfd-fem and rcfd-post; every test of
+the basic tier (the sb_ files of rcfd-fem, rcfd-linalg, rcfd-io, rcfd-post and rcfd-api) compiles and passes unedited, and a
 registered set of basic models (patch test, cantilever, bar modes) gives displacements, stresses and frequencies with the same
 bits as before the change; the generic assembly hook called with the element stiffness reproduces assemble::stiffness bit for bit
 for 1 and 8 threads; each new element kind, formulation, constraint and support variant is refused by the static solve with an
@@ -37,11 +37,11 @@ No physics: the reference is the basic tier itself (bit identity) and the refusa
 
 ## Files
 
-`crates/rcfd-solid/src/{lib.rs, mesh.rs, model.rs, element.rs, assemble.rs}` (additions only), one-line stubs of `hex20.rs`,
+`crates/rcfd-fem/src/{lib.rs, mesh.rs, model.rs, element.rs, assemble.rs}` (additions only), one-line stubs of `hex20.rs`,
 `hex8x.rs`, `beam.rs`, `shell.rs`, `mpc.rs`, `cyclic.rs`, `geometric.rs`, `buckling.rs`, `rotating.rs`, `nonlinear.rs`,
 `transient.rs`, `harmonic.rs`; `crates/rcfd-post/src/lib.rs` (two `pub mod` lines), stubs `solid_dynamic.rs`, `solid_fsi.rs`, the
 kind-to-cell-type mapping in `solid_output.rs`; `crates/rcfd-io/src/vtk.rs` only if the finite-element writer of ADR 0278
-restricts the cell types; `crates/rcfd-solid/tests/si_scaffold.rs`.
+restricts the cell types; `crates/rcfd-fem/tests/si_scaffold.rs`.
 
 ## What could make it miss
 

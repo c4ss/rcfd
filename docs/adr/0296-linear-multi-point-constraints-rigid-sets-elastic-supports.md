@@ -39,8 +39,8 @@ Analysis, the chapter on constraints; from memory); derivable from the principle
 
 ## Files
 
-`crates/rcfd-solid/src/mpc.rs`, `crates/rcfd-solid/src/constraint.rs` (the dispatch to the transformation),
-`crates/rcfd-solid/tests/si_mpc.rs`.
+`crates/rcfd-fem/src/mpc.rs`, `crates/rcfd-fem/src/constraint.rs` (the dispatch to the transformation),
+`crates/rcfd-fem/tests/si_mpc.rs`.
 
 ## What could make it miss
 

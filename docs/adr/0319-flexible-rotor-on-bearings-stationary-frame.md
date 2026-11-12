@@ -39,7 +39,7 @@ stiff-shaft limit. Element matrices: Nelson and McVaugh, J. Eng. Ind. 98 (1976) 
 
 ## Files
 
-`crates/rcfd-solid/src/rotor.rs`, `crates/rcfd-post/src/solid_rotor.rs`, `crates/rcfd-solid/tests/sa_rotor.rs`,
+`crates/rcfd-fem/src/rotor.rs`, `crates/rcfd-post/src/solid_rotor.rs`, `crates/rcfd-fem/tests/sa_rotor.rs`,
 `crates/rcfd-post/tests/sa_solid_rotor.rs`.
 
 ## What could make it miss

@@ -38,8 +38,8 @@ formulation; Zienkiewicz and Taylor, vol. 2; from memory, derived in the registr
 
 ## Files
 
-`crates/rcfd-solid/src/{geometric.rs, buckling.rs}`, `crates/rcfd-linalg/src/eigen.rs` (appended function),
-`crates/rcfd-solid/tests/si_geometric.rs`, `crates/rcfd-linalg/tests/si_buckling_eigen.rs`.
+`crates/rcfd-fem/src/{geometric.rs, buckling.rs}`, `crates/rcfd-linalg/src/eigen.rs` (appended function),
+`crates/rcfd-fem/tests/si_geometric.rs`, `crates/rcfd-linalg/tests/si_buckling_eigen.rs`.
 
 ## What could make it miss
 

@@ -37,7 +37,7 @@ shrink fit from Lame's cylinder (one line, re-derived in the registration). Meth
 
 ## Files
 
-`crates/rcfd-solid/src/contact.rs`, `crates/rcfd-solid/tests/sa_contact.rs`.
+`crates/rcfd-fem/src/contact.rs`, `crates/rcfd-fem/tests/sa_contact.rs`.
 
 ## What could make it miss
 

@@ -38,8 +38,8 @@ cross e_i (first principles).
 ## Files
 
 `crates/rcfd-linalg/src/amg_elastic.rs` (new), `crates/rcfd-linalg/src/lib.rs` (one `pub mod` line),
-`crates/rcfd-solid/src/solve.rs` (the solver choice and the modes from the coordinates),
-`crates/rcfd-linalg/tests/si_amg_elastic.rs`, `crates/rcfd-solid/tests/si_amg.rs`.
+`crates/rcfd-fem/src/solve.rs` (the solver choice and the modes from the coordinates),
+`crates/rcfd-linalg/tests/si_amg_elastic.rs`, `crates/rcfd-fem/tests/si_amg.rs`.
 
 ## What could make it miss
 

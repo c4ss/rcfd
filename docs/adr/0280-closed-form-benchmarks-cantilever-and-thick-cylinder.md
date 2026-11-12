@@ -36,7 +36,7 @@ to be re-derived in the registration. No NAFEMS value is used (their target valu
 
 ## Files
 
-`crates/rcfd-solid/tests/sb_closed_forms.rs` only.
+`crates/rcfd-fem/tests/sb_closed_forms.rs` only.
 
 ## What could make it miss
 
