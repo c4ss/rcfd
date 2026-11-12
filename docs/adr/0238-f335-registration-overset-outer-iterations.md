@@ -351,3 +351,175 @@ of that run is reported beside it (expected to return to about the `4.49e-4` of 
 are unchanged. The mutations are applied to a `git archive` copy of `3a2711f7` (the commit of the tests of amendment 1; the
 library is the one of `844357b0`) by `E:/projects/cfd/w49i-work/f335-mut-mutate.py`; MO1 and MO3 take two exact
 replacements each (a declaration before the loop and its use), each of which must occur once.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendments 1 and 2; none was changed. Release
+builds on Windows (`cargo test --release -p rcfd-fv --test ...`, one test thread). The registration is `dac9fe62`; the
+records R2 on the unchanged library `9efe7ffe`; the library change and the tests, compiled and not run, `844357b0`;
+amendment 1 `ec2c83f7` and its tests `3a2711f7`; amendment 2 `9ddd48b5`. Each amendment was committed before its runs,
+and each registered run was made once. The logs are in `E:/projects/cfd/w49i-work` (`f335-records1.log`,
+`f335-records2.log`, `f335-r2.log`, `f335-fast.log`, `f335-ds.log`, `f335-d.log`, `f335-trend.log`, `f335-a1.log`,
+`f335-MO*.log`, `f335-final.log`).
+
+### What was built
+
+- `crates/rcfd-fv/src/overset.rs` (the only library file changed): `OversetSolver::set_outer_iterations(n_outer,
+  alpha_u, alpha_p)`, the private mark `outer_opt_in`, `refusal` with that mark, and the outer loop in `piso` as designed
+  in D2 (the body of `piso` indented into the loop; the convergence counter written inline instead of through a closure;
+  the under-relaxation of the momentum matrix and the factor of the pressure update added). `OversetInfo` and every
+  existing signature are unchanged. `pimple.rs`, `pimple/moving.rs`, `ale.rs`, `immersed.rs`, `compressible*.rs` and
+  `rcfd-api`: not touched (no line).
+- Tests: `crates/rcfd-fv/tests/overset_f335_records.rs` (R2, R2'), `crates/rcfd-fv/tests/overset_f335.rs` (5 gate-run
+  tests, 4 ignored: the slow acceptance test, the D1 known miss, the remainder test of amendment 1, the trend). No
+  existing test was edited.
+- `docs/dynamic-mesh.md`: prose of the overset section.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| Q0 (existing test, unedited) | `<= 1e-12`; bit for bit; hash R1 | `0`, `0`, `0`; bit for bit; `af2c9e6bd3e5596d` | met |
+| R2 no opt-in, after the code: U 80 steps, TG_1 200 steps, TR 20 steps | equal to the records | `7aa14d1e2e2da052`, `75ac2daf13879872`, `fddb420dc287502a`: equal | met |
+| R2' after `set_outer_iterations(1, 1, 1)` | equal to R2 | equal (all three) | met |
+| D-S existing suites, unedited | pass | `overset_f134` 12 passed (2 ignored known misses), `overset_f134_records` 1, `overset_f314` 4 (8 ignored) | met |
+| E1 (existing test, unedited) | pass | `new` with `n_outer = 2` refused | met |
+| Q0o three outer iterations against the library | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| Q0r relaxed (0.8, 0.5) against the library | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| Q0n (negative control) library with three against overset with one | `>= 1e-8` | `5.82e-3` | held |
+| U1o velocity, pressure | `<= 1e-10` each | `1.03e-14`, `4.96e-13` | met |
+| U3o continuity, outflow | `<= 1e-9`, `<= 1e-10` | `1.65e-14`, `3.8e-15` | met |
+| U1r velocity, pressure | `<= 1e-10` each | `1.03e-14`, `1.09e-12` | met |
+| U3r continuity, outflow | `<= 1e-9`, `<= 1e-10` | `1.94e-14`, `4.7e-15` | met |
+| N2o (negative control) weights times 1.001 | `>= 1e-6` | `1.61e-3` | held |
+| S1 (set-up, negative control) `max abs(d_200(1))` | in `[4.47e-4, 4.52e-4]` | `4.4936e-4` | held |
+| **D1 (acceptance)** `max abs(d_200(3))` | `< 1.2e-4` | `1.690e-4` | **missed** (known-miss test; cause named, amendment 1 and below) |
+| T2o-a (acceptance) `e(TG_2) / e(TGB_2)` as recorded | `<= 2` | `1.862` (`3.611e-4` over `1.939e-4`) | met |
+| T2o-b (acceptance) the same, TGB_2 with three outer iterations | `<= 2` | `1.862` | met |
+| T3o continuity, the four TG_2 runs | `<= 1e-9` | `6.1e-14` | met |
+| L1 TG_1 with three outer iterations: ratio, continuity | `<= 2`; `<= 1e-9` | `1.439`; `2.6e-14` | met |
+| L1r TG_1 relaxed: ratio, continuity | `<= 2`; `<= 1e-9` | `1.436`; `3.8e-14` | met |
+| E4 refusals of `set_outer_iterations` (six) | `Err`, settings unchanged | all six | met |
+| E5 `n_outer = 3` without the opt-in | `Err`, state unchanged | "one outer iteration (PISO) only" | met |
+| E6 `alpha_u = 0` on an opted-in solver | `Err`, state unchanged | refused | met |
+| E7 two outer iterations, one step of U | `Ok` | ok | met |
+
+Printed, no limit. `max abs(d_200)` by class, one and three outer iterations: CF `1.420e-4` / `8.03e-5`, CC `4.494e-4` /
+`1.690e-4`, BF `3.761e-4` / `1.639e-4`, BC `3.367e-4` / `1.481e-4`; the largest in a calculated component cell at
+`(1.09, 1.40)` and at `(1.27, 1.20)`. `e(TG_2)` in 200 steps `6.426e-4` (one) and `3.611e-4` (three); in 800 steps
+`3.514e-4` and `3.167e-4`; in 400 steps with three `3.239e-4`. `e(TGB_2)` in 200 steps `1.9393e-4` (one) and `1.9390e-4`
+(three). T1 of ADR 0219 with three outer iterations at `dt = 0.0025`: `1.614` (`1.1056e-3`, `3.611e-4`; limit 1.7, not
+checked, missed as expected, reading 4). `delta` of TG_2 with three: `[3.0e-4, 8.7e-4]`. No linear solve of any run failed
+to converge. Cost of TG_2 in 200 steps: 46.8 pressure iterations per step and 17.7 s with one outer iteration, 138.7 and
+46 s with three. Trend (printed only): `max abs(d_200)` is `4.494e-4`, `1.788e-4`, `1.690e-4`, `1.690e-4` with 1, 2, 3
+and 5 outer iterations.
+
+An observation outside the registered checks (no claim rests on it): the two runs TG_1 in 200 steps and TG_2 in 800 steps
+with three outer iterations (`dt` proportional to `h^2`, the set-up of T1c of ADR 0219) give `log2(1.1056e-3 / 3.167e-4) =
+1.80`, against the recorded `1.618` with one. T1c was not registered here and its known-miss test is unchanged.
+
+### The D1 miss: hypotheses of amendment 1
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| H12 three iterations have not converged the step | `c = d_200(5) / d_200(3) <= 0.8` (ruled out: `>= 0.9`) | `c = 1.0004` (`1.6903e-4` over `1.6897e-4`) | **ruled out** |
+| H13 the remainder is a first-order time error | `R = d_200(3) / d_400(3)` in `[2.5, 3.5]` | `R = 3.001` (`1.690e-4`, `5.63e-5`) | **confirmed** |
+| H14 it is the backward Euler truncation along the paths of the moving cells | `rho_3 >= 2.85` | `rho_3 = 3.975` (half speed `4.25e-5`; `rho_BE` `4.78`, root mean square `3.70`; with one iteration `2.29`) | **confirmed** |
+| H15 the background carries it in full measure | BC over CC `>= 0.7` | `0.877` (one iteration: `0.749`) | **confirmed** |
+
+**Why D1 is missed, with the number.** Outer iterations remove the lagged convecting flux and nothing else. On the
+coupled meshes that lag was `0.624` of the time error, not the `0.847` of the single moving mesh of ADR 0232, from which
+the limit `1.2e-4` was taken. What is left, `max abs(d_200) = 1.690e-4` (`0.376` of `4.494e-4`; a time error of `(4/3)
+1.690e-4 = 2.25e-4` at `dt = 0.0025` against `5.99e-4` before), is converged in the outer iterations (two give `1.79e-4`,
+three and five `1.690e-4`), is of first order in the step (`R = 3.00`) and grows with the speed of the component by
+`3.97` for a factor two, as the second derivative along the cell paths does (`3.70` to `4.78`) and not as a lag (2): it is
+the truncation of the implicit Euler scheme on the moving cells. It is three times the `5.7e-5` of the single mesh with
+exact boundary data; H15 shows that the background cells, which do not move, carry `0.88` of it, so on the coupled meshes
+it is passed across the fringe both ways (the mechanism of that exchange was not measured further). No number of outer
+iterations brings D1 under `1.2e-4`; a time scheme of second order on the overset path would be needed (BDF2 is refused
+there).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `3a2711f7` (`E:/projects/cfd/w49i-work/f335-mut`, own target directory) by
+`f335-mut-mutate.py`, the named tests run once, the file restored and compared byte for byte (equal in all four).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MO1 the convecting flux of every outer iteration is that of the start of the step | T2o-a (amendment 2) | failed: `3.291` (T2o-b `3.292`); `max abs(d_200(3))` back at `4.245e-4` |
+| MO2 no under-relaxation of the momentum matrices | Q0r | failed: `1.87e-2`, `8.33e-2`, `2.73e-2`, not bit for bit (Q0o stays equal) |
+| MO3 the pressure system of the first outer iteration kept | L1 (continuity) or U3o | failed in L1: continuity `7.85e-8` (L1r `1.75e-4`); U3o does not catch it (a uniform flow) |
+| MO4 the loop runs `n_outer + 1` times | Q0 (hash R1) and R2 | both failed: Q0 `7.05e-3`, hash `f1ed2b5246da3252`; all three records and R2' differ |
+
+`scripts/limit_audit.py`: one hit in the new files, class (iii), `n2o_uniform_flow_negative_control_perturbed_weights`:
+it asserts its `>=` through `Checks::at_least`, which the scanner does not see; a false positive. The tests `a1_...` and
+`d_trend_...` print and assert nothing about their numbers (decided here); by design, and ignored.
+
+### Deviations and disclosures
+
+- My prediction of D1 was wrong (amendment 1). The other predictions held (T2o `1.862`, L1 `1.44`, the equalities).
+- MO1 as registered named a check that is missed without it; corrected by amendment 2 before any mutation ran.
+- The trend run (two and five outer iterations) was registered as printed only and was already running when D1 missed;
+  amendment 1 made its ratio the deciding number of H12 and was committed before its log was read.
+- The two runs of TG_2 with three outer iterations were repeated by the test of amendment 1 and by the mutation copy
+  (deterministic; the same digits). After the last test edit the gate-run tests of both new files ran once more on the
+  final tree (`f335-final.log`: 5 passed and 4 ignored; 4 passed).
+- The record test was the only run before the library change (twice, equal), as registered.
+
+### Not run
+
+- The whole workspace suite, the gate, `baseline_hashes` and the `rcfd-api` tests: the lead runs the gate. The change is
+  confined to `rcfd-fv/src/overset.rs`, which nothing outside the overset tests uses.
+- The other `rcfd-fv` tests; the ignored slow tests of ADR 0219 and ADR 0232; TR with outer iterations; level 3.
+- Linux: the records assert on Windows only and print elsewhere (ADR 0137).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Done, by branch (b), with one acceptance number missed.** Said plainly: the opt-in is built, the defaults are bit for
+bit (Q0, R2, R2', the existing suites), T2 at level 2 of ADR 0219 holds at the registered step (`1.862` against 2), and
+the time error falls from `4.49e-4` to `1.69e-4`, which is **not** below the `1.2e-4` of the acceptance. That miss has a
+cause confirmed by the deciding numbers registered in amendment 1 (H12 ruled out, H13 and H14 confirmed), every other
+check is met, the controls held and the four mutations failed their checks, so branch (b) of the rule and the second
+branch of the acceptance ("or the ADR names why not with a number") apply. Whether that is done or partial on the
+roadmap is the maintainer's (Q1).
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The status of F-335.** (a) done pending acceptance, as the registered rule gives (the limit `1.2e-4` is missed
+  and the cause is named with its number); (b) partial until a second-order time scheme brings the time error under
+  `1.2e-4`. Recommendation (a), with the follow-up of Q3; taken on the maintainer's standing instruction of 2026-11-11
+  (take the recommendation), not a decision the maintainer made in person.
+- **Q2. Where the opt-in lives (O1).** (a) `PimpleSettings::n_outer` accepted by `OversetSolver::new` (one clause of the
+  existing test E1 of ADR 0219 removed); (b) the method `set_outer_iterations`, as built (no existing test edited).
+  Recommendation (b) now; (a) with the case-tree wiring of ADR 0219 Q1, where the solver settings of a case would carry
+  `n_outer`. Taken on the standing instruction.
+- **Q3. The remaining time error of the moving cells.** (a) a follow-up item: a second-order time scheme (BDF2) on the
+  overset path, opt-in; (b) leave it: with three outer iterations T2 holds at the registered step. Recommendation (a).
+  Not taken here (a new item is the lead's).
+- **Q4. T1 and T1c of ADR 0219 with outer iterations.** T1 at `dt = 0.0025` stays missed (`1.614`); the unregistered
+  observation above suggests T1c may hold with three outer iterations (`1.80`). (a) register that check in the follow-up
+  of Q3 or in F-336; (b) leave the known misses as they are. Recommendation (a).
+- **Q5. Outer iterations by default on the overset path.** It would change a default; not taken. Open for the maintainer
+  (the cost is a factor 2.6 in wall time on TG_2).
+
+### For the lead: roadmap entries
+
+No roadmap file was edited on this branch.
+
+**F-335**, proposed status: `done` (pending acceptance; `partial` if the maintainer chooses Q1 (b)). Proposed note:
+
+> From ADR 0232 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0238 (registration of F-335, 2026-11-12, branch f335-overset-outer-iterations): DONE by the registered rule with one acceptance number missed and its cause named. Built: OversetSolver::set_outer_iterations(n_outer, alpha_u, alpha_p), an opt-in of the solver (OversetSolver::new still refuses n_outer above 1, so no existing test is edited); every outer iteration repeats the PISO pass on the kinds, donors and weights of the new pose with the convecting flux and pressure of the pass before it, the pressure system of both meshes rebuilt per pass, under-relaxation as the library. Defaults bit for bit: Q0 of ADR 0219 (hash af2c9e6bd3e5596d), three records of overset runs taken before the change (U, TG_1, TR), the existing overset suites unedited; with every cell calculated three outer iterations equal the library's ALE step bit for bit, with and without relaxation; a uniform flow stays uniform to 1.0e-14. Met (acceptance): T2 at level 2 of ADR 0219 holds at the registered step with three outer iterations, 1.862 against 2 (3.31 with one). Missed (acceptance): the time error of TG_2 at dt 0.0025, max abs(d_200), falls from 4.49e-4 to 1.69e-4, not below 1.2e-4. Named with numbers: the rest is converged in the outer iterations (1.69e-4 with five), first order in the step (ratio 3.00) and grows with the speed as the second derivative along the cell paths (3.97 for a factor two): the truncation of the implicit Euler scheme on the moving cells, which outer iterations do not remove; the lagged flux was 0.62 of the time error on the coupled meshes, not the 0.85 of the single mesh of ADR 0232. Four mutations caught. Cost: 2.6 times the wall time on TG_2. Not delivered: the case-tree wiring; a second-order time scheme on the overset path (follow-up).
+
+**F-134**, status unchanged (`partial`). In its note, replace the sentence that starts "Known misses, diagnosed by ADR 0232 (F-314):" (up to "sampled at one pose (the root mean square converges at 1.99 and 1.96 on three levels).") by the following, and in the last sentence ("Not delivered: ...") delete the words "outer iterations, ":
+
+> Known misses, diagnosed by ADR 0232 (F-314): the Taylor-Green observed order, 0.75 as registered and the fine-level ratio 3.31 (limit 2): a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux; 5.99e-4 at the registered step on level 2), not of the overset coupling; with three outer iterations, an opt-in since F-335 (ADR 0238), the fine-level ratio is 1.86 and holds, and the order as registered is 1.61 (still missed; the rest of the time error, 2.25e-4, is the implicit Euler truncation on the moving cells); and 1.62 with dt proportional to h^2 (limit 1.7): the truncation of the linear donor interpolation at one component fringe cell, a second-order error sampled at one pose (the root mean square converges at 1.99 and 1.96 on three levels).
+
+Proposed follow-up item (the number is the lead's):
+
+- **Overset: a second-order time scheme on the overset path (BDF2, opt-in).** Depends on F-335. Acceptance: "OversetSolver accepts BDF2 as an opt-in (defaults bit-identical, Q0 of ADR 0219 and the records R2 of ADR 0238 still bit for bit); with it and three outer iterations max abs(d_200) of TG_2 at dt 0.0025 (1.69e-4 in ADR 0238) falls below 1.2e-4 and its ratio to max abs(d_400) is at least 4 (second order gives 5), and T1c of ADR 0219 is run with it as a new check against its limit 1.7, or the ADR names why not with a number." Note:
+
+> From ADR 0238 questions 3 and 4, recommendation (a); proposed by the F-335 addendum, not yet taken.
