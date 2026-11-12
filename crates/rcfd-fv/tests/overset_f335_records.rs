@@ -292,3 +292,18 @@ fn r2b_taylor_green_level_1_record() {
 fn r2c_moving_cylinder_record() {
     check("R2c", &tr_hash(|_| {}), R2C);
 }
+
+// ---- R2' (added with the library change of F-335; the records above are unchanged) -----------------------------------
+
+/// The opt-in with one outer iteration: the step must be the PISO step of a solver that did not opt in.
+fn one(s: &mut OversetSolver) {
+    s.set_outer_iterations(1, 1.0, 1.0).unwrap();
+}
+
+/// R2': the three runs after `set_outer_iterations(1, 1.0, 1.0)` give the records R2.
+#[test]
+fn r2_prime_opted_in_with_one_outer_iteration_gives_the_records() {
+    check("R2'a", &u_hash(one), R2A);
+    check("R2'b", &tg_hash(one), R2B);
+    check("R2'c", &tr_hash(one), R2C);
+}

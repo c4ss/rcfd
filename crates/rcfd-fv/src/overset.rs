@@ -7,6 +7,10 @@
 //! cells are fixed, and in the conservative mass mode one offset `delta` of the background fringe pressures makes the net
 //! flux into the hole region zero (M7), so the mass of the domain is conserved. With every cell calculated the step is the
 //! library's ALE step (check Q0).
+//!
+//! Outer iterations (F-335, ADR 0238) are an opt-in of the solver, [`OversetSolver::set_outer_iterations`]: the PISO pass
+//! is then repeated within the step on the kinds, donors and weights of the new pose, each pass with the convecting flux
+//! and the pressure of the pass before it, as `PimpleSolver::step` does for `n_outer > 1`.
 
 use crate::ale::{move_mesh, set_follow_conditions, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -121,14 +125,27 @@ pub struct OversetSolver {
     /// The last offset of the background fringe pressures.
     pub delta: f64,
     step_no: usize,
+    /// Set by [`OversetSolver::set_outer_iterations`]: `settings.n_outer` above 1 is accepted (ADR 0238 D1).
+    outer_opt_in: bool,
 }
 
-fn refusal(s: &PimpleSettings, geom: &FvGeometry) -> Option<&'static str> {
+/// Whether `a` is an under-relaxation factor the outer iterations accept.
+fn factor_ok(a: f64) -> bool {
+    a > 0.0 && a <= 1.0
+}
+
+fn refusal(s: &PimpleSettings, geom: &FvGeometry, outer_opt_in: bool) -> Option<&'static str> {
     if s.time_scheme != TimeScheme::ImplicitEuler {
         return Some("overset: the implicit Euler time scheme only");
     }
-    if s.n_outer != 1 {
-        return Some("overset: one outer iteration (PISO) only");
+    if !outer_opt_in {
+        if s.n_outer != 1 {
+            return Some("overset: one outer iteration (PISO) only");
+        }
+    } else if s.n_outer == 0 {
+        return Some("overset: at least one outer iteration");
+    } else if !factor_ok(s.alpha_u) || !factor_ok(s.alpha_p) {
+        return Some("overset: the under-relaxation factors of the outer iterations must lie in (0, 1]");
     }
     if s.n_correctors == 0 {
         return Some("overset: at least one pressure corrector");
@@ -235,7 +252,8 @@ fn solve_csr(a: &CsrMatrix, b: &[f64], x: &mut [f64], ctl: &SolveControl) -> Sol
 impl OversetSolver {
     /// Create a solver at `t = 0` on `geom` (with a coupling: the composite mesh at `coupling.pose`). With a coupling the
     /// fringe cells get their interpolated velocity and pressure; the initial flux is then interpolated from `u`, as
-    /// `PimpleSolver::new`. Refused (`Err`): a time scheme other than implicit Euler, `n_outer != 1`, no corrector,
+    /// `PimpleSolver::new`. Refused (`Err`): a time scheme other than implicit Euler, `n_outer != 1` (outer iterations are
+    /// switched on afterwards, by [`set_outer_iterations`](Self::set_outer_iterations)), no corrector,
     /// non-orthogonal correctors, a convection scheme other than upwind, central or blended, the component diagonal, AMG
     /// pressure, a linear device other than the CPU, the fractional step, the full viscous stress, the lag check, the
     /// adaptive correctors, the limiter, the gradient options, the consistent correctors, the pair mean, periodic patches,
@@ -248,7 +266,7 @@ impl OversetSolver {
         mass: MassMode,
         coupling: Option<OversetCoupling>,
     ) -> Result<Self, String> {
-        if let Some(r) = refusal(&settings, &geom) {
+        if let Some(r) = refusal(&settings, &geom, false) {
             return Err(r.into());
         }
         let n = geom.n_cells();
@@ -296,7 +314,27 @@ impl OversetSolver {
             conn,
             delta: 0.0,
             step_no: 0,
+            outer_opt_in: false,
         })
+    }
+
+    /// Opt in to outer iterations (F-335, ADR 0238 D1): from the next step on every step takes `n_outer` passes of the
+    /// PISO step on the new pose, each with the convecting flux and the pressure of the pass before it, as
+    /// `PimpleSolver::step` does. `alpha_u` and `alpha_p` are the under-relaxation factors of the momentum matrices and of
+    /// the pressure on every pass but the last (1 = none). Sets `settings.n_outer`, `settings.alpha_u` and
+    /// `settings.alpha_p`. With `n_outer = 1` the step is the PISO step of a solver that did not opt in, bit for bit.
+    /// Refused, leaving the solver unchanged: `n_outer = 0` and a factor outside `(0, 1]`.
+    pub fn set_outer_iterations(&mut self, n_outer: usize, alpha_u: f64, alpha_p: f64) -> Result<(), String> {
+        let mut s = self.settings.clone();
+        s.n_outer = n_outer;
+        s.alpha_u = alpha_u;
+        s.alpha_p = alpha_p;
+        if let Some(r) = refusal(&s, &self.geom, true) {
+            return Err(r.into());
+        }
+        self.settings = s;
+        self.outer_opt_in = true;
+        Ok(())
     }
 
     /// Move the component to `pose` over a step of size `dt` (ADR 0219 M10): the moved composite mesh and its mesh flux
@@ -361,10 +399,10 @@ impl OversetSolver {
 
     /// Advance one implicit-Euler PISO step of size `dt` onto the prepared step `st` (ADR 0219 M5 to M9). Fails, leaving
     /// `u`, `p`, `phi` and the time unchanged, for a step that does not fit the solver (cell or face counts, sizes), a
-    /// refused setting, a cell that was a hole and is now calculated ("uncovered"), and a closed domain whose reference cell
+    /// refused setting (`settings.n_outer` above 1 without the opt-in among them), a cell that was a hole and is now calculated ("uncovered"), and a closed domain whose reference cell
     /// is not calculated; fails during the step for a non-finite state or a Courant number above the divergence limit.
     pub fn advance(&mut self, dt: f64, st: OversetStep) -> Result<OversetInfo, String> {
-        if let Some(r) = refusal(&self.settings, &st.geom) {
+        if let Some(r) = refusal(&self.settings, &st.geom, self.outer_opt_in) {
             return Err(r.into());
         }
         let old = self.geom.clone();
@@ -591,11 +629,6 @@ impl OversetSolver {
         let n_active = g.active.iter().filter(|&&a| a).count() as f64;
         let mut p_iters = 0;
         let mut unconverged = 0;
-        let mut count = |st: &SolveStats| {
-            if !st.converged {
-                unconverged += 1;
-            }
-        };
         let hole_rows = |k: usize| -> Vec<f64> {
             if trivial {
                 Vec::new()
@@ -603,196 +636,206 @@ impl OversetSolver {
                 hole_velocity.iter().map(|v| v[k]).collect()
             }
         };
-        let mut pbc = pressure_bc(&g, &self.u, &self.p);
-        ale.apply_wall_gradients(&mut pbc, &g.dn);
-        let ub = self.u.boundary_values(&g);
-        let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
-        let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
-
-        // ---- momentum predictor (M5) ---------------------------------------------------------------------------
-        let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
-        let mut a_p = vec![0.0; n];
-        let u_iter: Vec<Vec3> = self.u.values.clone();
-        let phi_conv = ale.relative_flux(&self.phi);
         let scale_u: Vec<f64> = vol.iter().map(|v| v / dt).collect();
-        for k in 0..3 {
-            if !g.active[k] {
-                continue;
-            }
-            let cells: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
-            let bc = self.u.boundary_coeffs(&g, k);
-            let bv: Vec<f64> = ub.iter().map(|v| v[k]).collect();
-            let mut m = convection(&g, &phi_conv, &cells, &bc, s.convection, None);
-            m.add(&laplacian_opt(&g, &gamma_nu, &bc, None, &cells, &bv, None));
-            let u_old_k: Vec<f64> = u_old.iter().map(|v| v[k]).collect();
-            let mut m = add_ddt(TimeScheme::ImplicitEuler, m, &vol, dt, &History::new(u_old_k.clone()));
-            ale.fix_ddt(&mut m, &vol, &u_old_k, dt);
-            let mut sys = m.clone();
-            for c in 0..n {
-                sys.b[c] -= vol[c] * grad_p[c][k];
-            }
-            let mut x = cells;
-            if trivial {
-                count(&sys.solve(&mut x, &s.momentum_solver));
-            } else {
-                let (a, b) = overset_system(&sys, conn, &scale_u, &hole_rows(k));
-                count(&solve_csr(&a, &b, &mut x, &s.momentum_solver));
-            }
-            for c in 0..n {
-                self.u.values[c][k] = x[c];
-                a_p[c] += m.a.diag[c];
-            }
-            mats[k] = Some(m);
-        }
-        if let Some(c) = self.u.values.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
-            return Err(format!("overset: momentum predictor: non-finite velocity in cell {c}"));
-        }
-        for a in a_p.iter_mut() {
-            *a /= n_active;
-        }
-        let mut r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
-        if !trivial {
-            // M6: interpolated rAU of the fringe cells, dt for the hole cells (no calculated row uses them)
-            let calc = r_au.clone();
-            for (c, stn) in &conn.stencils {
-                r_au[*c] = stn.cells.iter().zip(&stn.weights).map(|(&k, &w)| w * calc[k]).sum();
-            }
-            for c in 0..n {
-                if conn.kind[c] == CellKind::Hole {
-                    r_au[c] = dt;
-                }
-            }
-        }
-        let gamma_p = face_interpolate(&g, &r_au);
         let gamma_b = (!trivial).then(|| self.hole_boundary(conn));
-        let mut psys: Option<PressureSystem> = None;
         let mut delta = 0.0;
         let mut hole_flux = 0.0;
+        // ADR 0238 D2: the outer iterations. Every pass re-evaluates the pressure conditions and gradient, the convecting
+        // flux (the flux of the pass before it), the momentum matrices with their overset rows, rAU and the pressure system;
+        // the kinds, donors and weights are those of the new pose throughout. One pass is the PISO step of ADR 0219.
+        for outer in 0..s.n_outer {
+            let last = outer + 1 == s.n_outer;
+            let (alpha_u, alpha_p) = if last { (1.0, 1.0) } else { (s.alpha_u, s.alpha_p) };
+            let mut pbc = pressure_bc(&g, &self.u, &self.p);
+            ale.apply_wall_gradients(&mut pbc, &g.dn);
+            let ub = self.u.boundary_values(&g);
+            let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
+            let grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
 
-        // ---- pressure correctors (M6 to M8) ----------------------------------------------------------------------
-        for _corr in 0..s.n_correctors {
-            let mut hby_a = vec![[0.0; 3]; n];
+            // ---- momentum predictor (M5) -----------------------------------------------------------------------
+            let mut mats: Vec<Option<FvMatrix>> = vec![None, None, None];
+            let mut a_p = vec![0.0; n];
+            let u_iter: Vec<Vec3> = self.u.values.clone();
+            let phi_conv = ale.relative_flux(&self.phi);
             for k in 0..3 {
-                if let Some(m) = &mats[k] {
-                    let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
-                    let h = m.a.h_operator(&cells, &m.b);
-                    for c in 0..n {
-                        hby_a[c][k] = h[c] / a_p[c];
-                    }
+                if !g.active[k] {
+                    continue;
                 }
+                let cells: Vec<f64> = u_iter.iter().map(|v| v[k]).collect();
+                let bc = self.u.boundary_coeffs(&g, k);
+                let bv: Vec<f64> = ub.iter().map(|v| v[k]).collect();
+                let mut m = convection(&g, &phi_conv, &cells, &bc, s.convection, None);
+                m.add(&laplacian_opt(&g, &gamma_nu, &bc, None, &cells, &bv, None));
+                let u_old_k: Vec<f64> = u_old.iter().map(|v| v[k]).collect();
+                let mut m = add_ddt(TimeScheme::ImplicitEuler, m, &vol, dt, &History::new(u_old_k.clone()));
+                ale.fix_ddt(&mut m, &vol, &u_old_k, dt);
+                if alpha_u < 1.0 {
+                    m.relax(alpha_u, &cells);
+                }
+                let mut sys = m.clone();
+                for c in 0..n {
+                    sys.b[c] -= vol[c] * grad_p[c][k];
+                }
+                let mut x = cells;
+                if trivial {
+                    unconverged += usize::from(!sys.solve(&mut x, &s.momentum_solver).converged);
+                } else {
+                    let (a, b) = overset_system(&sys, conn, &scale_u, &hole_rows(k));
+                    unconverged += usize::from(!solve_csr(&a, &b, &mut x, &s.momentum_solver).converged);
+                }
+                for c in 0..n {
+                    self.u.values[c][k] = x[c];
+                    a_p[c] += m.a.diag[c];
+                }
+                mats[k] = Some(m);
             }
+            if let Some(c) = self.u.values.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
+                return Err(format!("overset: momentum predictor: non-finite velocity in cell {c}"));
+            }
+            for a in a_p.iter_mut() {
+                *a /= n_active;
+            }
+            let mut r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             if !trivial {
-                let calc = hby_a.clone();
+                // M6: interpolated rAU of the fringe cells, dt for the hole cells (no calculated row uses them)
+                let calc = r_au.clone();
                 for (c, stn) in &conn.stencils {
-                    let mut v = [0.0; 3];
-                    for (&k, &w) in stn.cells.iter().zip(&stn.weights) {
-                        for d in 0..3 {
-                            v[d] += w * calc[k][d];
-                        }
-                    }
-                    for d in 0..3 {
-                        if g.active[d] {
-                            hby_a[*c][d] = v[d];
-                        }
-                    }
+                    r_au[*c] = stn.cells.iter().zip(&stn.weights).map(|(&k, &w)| w * calc[k]).sum();
                 }
                 for c in 0..n {
                     if conn.kind[c] == CellKind::Hole {
+                        r_au[c] = dt;
+                    }
+                }
+            }
+            let gamma_p = face_interpolate(&g, &r_au);
+            let mut psys: Option<PressureSystem> = None;
+
+            // ---- pressure correctors (M6 to M8) ------------------------------------------------------------------
+            for corr in 0..s.n_correctors {
+                let mut hby_a = vec![[0.0; 3]; n];
+                for k in 0..3 {
+                    if let Some(m) = &mats[k] {
+                        let cells: Vec<f64> = self.u.values.iter().map(|v| v[k]).collect();
+                        let h = m.a.h_operator(&cells, &m.b);
+                        for c in 0..n {
+                            hby_a[c][k] = h[c] / a_p[c];
+                        }
+                    }
+                }
+                if !trivial {
+                    let calc = hby_a.clone();
+                    for (c, stn) in &conn.stencils {
+                        let mut v = [0.0; 3];
+                        for (&k, &w) in stn.cells.iter().zip(&stn.weights) {
+                            for d in 0..3 {
+                                v[d] += w * calc[k][d];
+                            }
+                        }
                         for d in 0..3 {
                             if g.active[d] {
-                                hby_a[c][d] = hole_velocity[c][d];
+                                hby_a[*c][d] = v[d];
+                            }
+                        }
+                    }
+                    for c in 0..n {
+                        if conn.kind[c] == CellKind::Hole {
+                            for d in 0..3 {
+                                if g.active[d] {
+                                    hby_a[c][d] = hole_velocity[c][d];
+                                }
                             }
                         }
                     }
                 }
-            }
-            let hb = boundary_hby_a(&g, &pbc, &ub, &hby_a);
-            let mut phi_hby_a = face_flux(&g, &hby_a, &hb);
-            if s.ddt_correction {
-                for f in 0..n_int {
-                    phi_hby_a[f] += gamma_p[f] / dt * ale.defect[f];
-                }
-            }
-            ale.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
-            if let Some((f, v)) = first_nonfinite(&phi_hby_a) {
-                return Err(format!(
-                    "overset: pressure right-hand side: non-finite phiHbyA {v} at face {f}"
-                ));
-            }
-            let gamma_j = gamma_p.clone();
-            let p_old = self.p.values.clone();
-            let mut p_new = p_old.clone();
-            if trivial {
-                let controls = PressureControls {
-                    p_ref: s.p_ref,
-                    non_orth_correctors: s.non_orth_correctors,
-                    solver: s.pressure_solver,
-                    amg: s.amg_pressure,
-                    linear: s.linear,
-                };
-                let (_r0, it) = solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls);
-                p_iters += it;
-            } else {
-                let gb = gamma_b.as_deref().unwrap_or(&[]);
-                let (it, unc, d) =
-                    self.overset_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, conn, gb, &mut psys, s)?;
-                p_iters += it;
-                unconverged += unc;
-                delta = d;
-            }
-            if let Some((c, v)) = first_nonfinite(&p_new) {
-                return Err(format!("overset: pressure solve: non-finite pressure {v} in cell {c}"));
-            }
-            self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, false);
-            let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
-            let grad_new = green_gauss(&g, &p_new, &bv_new, 0);
-            for c in 0..n {
-                let r_c = r_au[c];
-                for k in 0..3 {
-                    if g.active[k] {
-                        let bforce = 0.0;
-                        self.u.values[c][k] = hby_a[c][k] + bforce - r_c * grad_new[c][k];
+                let hb = boundary_hby_a(&g, &pbc, &ub, &hby_a);
+                let mut phi_hby_a = face_flux(&g, &hby_a, &hb);
+                if s.ddt_correction {
+                    for f in 0..n_int {
+                        phi_hby_a[f] += gamma_p[f] / dt * ale.defect[f];
                     }
                 }
-            }
-            if !trivial {
-                // M8: the fringe and hole velocities, and the flux of the faces without a calculated cell
-                for (c, stn) in &conn.stencils {
-                    let mut v = [0.0; 3];
-                    for (&k, &w) in stn.cells.iter().zip(&stn.weights) {
-                        for d in 0..3 {
-                            v[d] += w * self.u.values[k][d];
-                        }
-                    }
-                    for d in 0..3 {
-                        if g.active[d] {
-                            self.u.values[*c][d] = v[d];
-                        }
-                    }
+                ale.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
+                if let Some((f, v)) = first_nonfinite(&phi_hby_a) {
+                    return Err(format!(
+                        "overset: pressure right-hand side: non-finite phiHbyA {v} at face {f}"
+                    ));
                 }
+                let gamma_j = gamma_p.clone();
+                let p_old = self.p.values.clone();
+                let mut p_new = p_old.clone();
+                if trivial {
+                    let controls = PressureControls {
+                        p_ref: s.p_ref,
+                        non_orth_correctors: s.non_orth_correctors,
+                        solver: s.pressure_solver,
+                        amg: s.amg_pressure,
+                        linear: s.linear,
+                    };
+                    let (_r0, it) = solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls);
+                    p_iters += it;
+                } else {
+                    let gb = gamma_b.as_deref().unwrap_or(&[]);
+                    let (it, unc, d) =
+                        self.overset_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, conn, gb, &mut psys, s)?;
+                    p_iters += it;
+                    unconverged += unc;
+                    delta = d;
+                }
+                if let Some((c, v)) = first_nonfinite(&p_new) {
+                    return Err(format!("overset: pressure solve: non-finite pressure {v} in cell {c}"));
+                }
+                self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, false);
+                let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
+                let grad_new = green_gauss(&g, &p_new, &bv_new, 0);
                 for c in 0..n {
-                    if conn.kind[c] == CellKind::Hole {
-                        self.u.values[c] = hole_velocity[c];
+                    let r_c = r_au[c];
+                    for k in 0..3 {
+                        if g.active[k] {
+                            let bforce = 0.0;
+                            self.u.values[c][k] = hby_a[c][k] + bforce - r_c * grad_new[c][k];
+                        }
                     }
                 }
-                let ubn = self.u.boundary_values(&g);
-                let fi = face_flux(&g, &self.u.values, &ubn);
-                let (own, nei) = (mesh.owner(), mesh.neighbour());
-                for f in 0..mesh.n_faces() {
-                    let has_calc = conn.kind[own[f]] == CellKind::Calculated
-                        || (f < n_int && conn.kind[nei[f]] == CellKind::Calculated);
-                    if !has_calc {
-                        self.phi[f] = fi[f];
+                if !trivial {
+                    // M8: the fringe and hole velocities, and the flux of the faces without a calculated cell
+                    for (c, stn) in &conn.stencils {
+                        let mut v = [0.0; 3];
+                        for (&k, &w) in stn.cells.iter().zip(&stn.weights) {
+                            for d in 0..3 {
+                                v[d] += w * self.u.values[k][d];
+                            }
+                        }
+                        for d in 0..3 {
+                            if g.active[d] {
+                                self.u.values[*c][d] = v[d];
+                            }
+                        }
                     }
+                    for c in 0..n {
+                        if conn.kind[c] == CellKind::Hole {
+                            self.u.values[c] = hole_velocity[c];
+                        }
+                    }
+                    let ubn = self.u.boundary_values(&g);
+                    let fi = face_flux(&g, &self.u.values, &ubn);
+                    let (own, nei) = (mesh.owner(), mesh.neighbour());
+                    for f in 0..mesh.n_faces() {
+                        let has_calc = conn.kind[own[f]] == CellKind::Calculated
+                            || (f < n_int && conn.kind[nei[f]] == CellKind::Calculated);
+                        if !has_calc {
+                            self.phi[f] = fi[f];
+                        }
+                    }
+                    hole_flux = gb_flux(&self.phi, gamma_b.as_deref().unwrap_or(&[]));
                 }
-                hole_flux = gb_flux(&self.phi, gamma_b.as_deref().unwrap_or(&[]));
-            }
-            if let Some(c) = self.u.values.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
-                return Err(format!("overset: velocity correction: non-finite velocity in cell {c}"));
-            }
-            let a = 1.0;
-            for c in 0..n {
-                self.p.values[c] = p_old[c] + a * (p_new[c] - p_old[c]);
+                if let Some(c) = self.u.values.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
+                    return Err(format!("overset: velocity correction: non-finite velocity in cell {c}"));
+                }
+                let a = if corr + 1 == s.n_correctors { alpha_p } else { 1.0 };
+                for c in 0..n {
+                    self.p.values[c] = p_old[c] + a * (p_new[c] - p_old[c]);
+                }
             }
         }
         Ok((p_iters, unconverged, delta, hole_flux))
