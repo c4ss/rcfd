@@ -701,12 +701,20 @@ fn e1_to_e4_free_node_conflicts_loads_element_errors() {
     let e = solve_static_with(&m2, &diff, &[], &StaticOptions::default()).unwrap_err();
     println!("E2: {e}");
     assert!(matches!(e, FemError::ConflictingConstraint { node: nn, component: 0, .. } if nn == node));
-    // E3: an unsupported load.
+    // E3: an unsupported load. Gravity until ADR 0276 (F-375) built it; since then the thermal load, which ADR 0281
+    // builds (edited by the lead on 2026-11-12, ADR 0276 remaining question 1, check X4).
     let mut m3 = m2.clone();
-    m3.add_load(Load::gravity([0.0, 0.0, -9.81])).unwrap();
+    m3.add_load(Load::temperature(vec![350.0; m3.mesh().nodes().len()], 293.15))
+        .unwrap();
     let e = solve_static(&m3, &StaticOptions::default()).unwrap_err();
     println!("E3: {e}");
-    assert!(matches!(e, FemError::UnsupportedLoad { load: "Gravity", .. }));
+    assert!(matches!(
+        e,
+        FemError::UnsupportedLoad {
+            load: "Temperature",
+            ..
+        }
+    ));
     // E4: an element error located by the assembly.
     let m4 = model_of(hex_box([0.0; 3], [1.0, 1.0, 1.0], [3, 2, 2]).unwrap());
     let e = assemble_with(&m4, Some(2), |ctx| {

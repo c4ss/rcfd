@@ -7040,7 +7040,7 @@ fixed by the item's registration ADR before any code.
     amendment 1), M6 survives as the rule allows. STATUS recorded PARTIAL by the lead: mutation M10 (nodal force keeps
     only x) survived the registered run (R1 balanced against the library's own load vector) and is caught only by R3,
     added by amendment 1 after that run; done is the maintainer's call.
-- [ ] **F-375** Surface and body loads: traction, pressure, gravity, centrifugal load of a rotating part, body force field
+- [x] **F-375** Surface and body loads: traction, pressure, gravity, centrifugal load of a rotating part, body force field
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Consistent nodal loads for surface
     traction, pressure (positive pressing on the solid), gravity, the centrifugal load rho omega^2 r_perp about a given
@@ -7051,12 +7051,23 @@ fixed by the item's registration ADR before any code.
     and Tet4 tip displacement within 1 percent at 8 elements along; rotating radial bar clamped on the axis: tip
     displacement rho omega^2 L^3/(3 E) within 1 percent (Tet10 at 8, Hex8 at 16 elements along); thin rotating ring
     (thickness/radius 0.02): radial displacement rho omega^2 r^3/E within 2 percent.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0276; the registration is written
-    by the implementation agent before any code. ADR 0273 (2026-11-12): body loads are sums over
-    Element::integration_points (N and w det J at each point); the face functions of Tri3, Quad4 and Tri6 are not in the
-    element library. ADR 0275 (2026-11-12): the static solve takes its right-hand side from
-    rcfd_fem::loads::nodal_load_vector(model, extra), which today refuses every load but NodalForce with
-    FemError::UnsupportedLoad naming it; ADR 0276 replaces those refusals in loads.rs only.
+  - note: DONE pending acceptance, merged 2026-11-12. Structural solver, basic tier (plan ADR 0270). ADR 0276,
+    2026-11-12: rcfd_fem::loads::nodal_load_vector now adds the consistent nodal loads of a uniform traction and a
+    uniform pressure (positive pressing on the solid) on surface sets, by the face functions of Tri3, Quad4 and Tri6
+    (face_shape_functions) and a 3 x 3 Gauss rule on quadrilaterals and a 9-point collapsed Gauss rule on triangles
+    (face_rule; pressure exact on every face, traction on flat faces), and of gravity, the centrifugal load rho omega^2
+    r_perp about an axis through a point and a nodal body force field, by each element's mass rule (exact on Tet4,
+    trilinear Hex8 and straight Tet10); body_force_loads gives the load of a body force given by a function as per-node
+    forces; Load::Temperature stays refused (ADR 0281). Resultants on a box with moved interior nodes, Tet4, Hex8,
+    Tet10: closed-surface pressure force and moment within 4.4e-17 and 1.3e-17 (limit 1e-12 p A, p A L), traction t A,
+    gravity rho V g, centrifugal rho omega^2 V r_c about an oblique axis and a linear body force field within 9.8e-16
+    (limit 1e-12); per-node loads against the closed forms within 9.1e-16. Closed forms with nu = 0: hanging bar Tet10
+    nodal error 8.7e-13 (limit 1e-9), tip Hex8 2.1e-15 and Tet4 2.0e-5 at 8 elements (limit 1e-2); rotating bar tip
+    Tet10 3.0e-6 at 8 and Hex8 1.1e-15 at 16 elements (limit 1e-2); thin rotating ring (t/R = 0.02, quarter ring by a
+    mapped box with symmetry rollers) mid-surface radial displacement within 3.3e-3, 2.0e-3, 8.5e-6 (limit 2e-2). Nine
+    mutations caught. ADR 0275's test E3 (gravity refused) fails by construction and needs the lead's two-line
+    replacement (ADR 0276 remaining question 1). The lead applied the E3 replacement of ADR 0275's sb_static test
+    (gravity -> temperature as the unsupported load) on merging, as ADR 0276 recommended (X4).
 - [ ] **F-376** Stress and strain recovery: integration-point, element and nodal values; von Mises and principal stresses
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Strain and stress at integration
@@ -7096,7 +7107,9 @@ fixed by the item's registration ADR before any code.
     error is >= 0.9 and >= 1.8, and both errors fall monotonically. Negative control: a body force with the sign of the
     lambda term reversed gives an order below 0.5.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0279; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0276 (2026-11-12): rcfd_fem::loads::body_force_loads(model, |x|
+    b(x)) returns the consistent load of a body force given by a function as one NodalForceAt per node, for
+    solve_static_with; tractions on box faces via Load::traction (exact on flat faces).
 - [ ] **F-379** Closed-form benchmarks: cantilever bending and the thick-walled cylinder under pressure
   - depends on: F-371, F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever of slenderness L/h = 20
@@ -7121,7 +7134,11 @@ fixed by the item's registration ADR before any code.
     bit-identical to the same model before this change.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0281; the registration is written
     by the implementation agent before any code. ADR 0275 (2026-11-12): Load::Temperature is refused by
-    loads::nodal_load_vector with UnsupportedLoad (package ADR 0281); the thermal load replaces that arm.
+    loads::nodal_load_vector with UnsupportedLoad (package ADR 0281); the thermal load replaces that arm. ADR 0276
+    (2026-11-12): in loads.rs only the Load::Temperature arm (other => unsupported) remains for ADR 0281; body loads are
+    sums over Element::integration_points with the mass rule (private helpers add_body_load and element_body_load can
+    carry the thermal load integrand); if the lead applied ADR 0276's replacement of ADR 0275's E3, that check asserts
+    the temperature refusal and must be replaced or dropped by ADR 0281.
 - [ ] **F-381** Iterative route for larger models: CG with block Jacobi and incomplete Cholesky on the stiffness matrix
   - depends on: F-374, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. CG on the stiffness matrix with (a)
@@ -7207,7 +7224,9 @@ fixed by the item's registration ADR before any code.
     the least-squares update; a failing solve stops the step with the participant's name and both sides restored. No
     flow solver is coupled.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0286; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0276 (2026-11-12): loads::face_shape_functions and loads::face_rule
+    (Tri3, Quad4, Tri6 in the local face orders of ADR 0271) are public for nodal loads of face forces or pressures
+    given per face or node.
 - [ ] **F-386** A solid case file of its own and the library entry that runs it
   - depends on: F-371, F-377, F-381, F-383, F-013, F-080
   - acceptance: Every limit not stated here is registered in the ADR before the run. A solid case file (TOML of its own:
