@@ -400,3 +400,121 @@ check).
 | R3 | c8, c9 | block R1, three kinds: the applied load vector built in the test, independently of `loads.rs` (the force `(100, -200, 300)` at every node of the node set `zmax`, then the per-node forces), (a) against `nodal_load_vector`: `max |f_lib - f_test| / max |f_test|`; (b) the balance of R1 with `f_test` in place of `f_lib` | (a) `<= 1e-15`; (b) `<= 1e-10` each | (a) the same additions in the same order: 0; (b) as R1 |
 
 Mutation M10 must fail R3. The decision rule is unchanged, with R3 added to the acceptance checks of clauses c8 and c9.
+
+## Addendum 1: results (2026-11-12)
+
+Code at commit e8e2a495 (after the registration 0354a0d2): `crates/rcfd-fem/src/assemble.rs`, `constraint.rs`, `solve.rs`,
+`loads.rs` (the four stubs filled), `error.rs` (nine variants and their display arms appended, nothing else changed) and
+`crates/rcfd-fem/tests/sb_static.rs`; test R3 of amendment 1 at 441a46d3 (amendment ae68cb4e). No other file. The registered
+run was made once, in release, with `cargo test -p rcfd-fem --release --test sb_static -- --nocapture --test-threads=1` (8
+passed; log `w49i-work/f374-scratch/run1.log`); R3 once after its amendment (`run2-r3.log`).
+
+| Id | Limit | Measured (Tet4; Hex8; Tet10) | Met |
+| --- | --- | --- | --- |
+| S1 symmetry, patch / uniaxial / reaction stiffness | `<= 1e-13` | 5.1e-17 / 1.3e-17 / 0; 5.9e-17 / 6.0e-17 / 7.5e-17; 6.6e-17 / 2.1e-16 / 9.1e-17 | yes |
+| D1 1 and 8 threads, patch stiffness (240, 240, 1323 unknowns; 7218, 11700, 88911 entries) | bit-equal | bit-equal for all three | yes |
+| P1 patch, interior error / max field (12, 12, 175 interior nodes) | `<= 1e-10` | 4.4e-16; 6.1e-16; 1.2e-15 | yes |
+| P2 prescribed values in the result | bit-equal | bit-equal for all three | yes |
+| U1 elongation `F L/(E A)` | `<= 1e-10` | 8.7e-15; 2.8e-14; 1.1e-13; U3 (model path, Hex8 4 x 1 x 1) 9.8e-15 | yes |
+| U2 lateral contraction, y / z | `<= 1e-10` | 1.6e-13 / 1.5e-13; 6.4e-13 / 2.0e-12; 3.2e-12 / 6.4e-12; U3 3.0e-13 / 7.5e-13 | yes |
+| R1 balance with the reactions, force / moment | `<= 1e-10` each | 2.4e-15 / 6.8e-16; 7.0e-16 / 2.2e-16; 1.9e-15 / 1.0e-15 | yes |
+| R2 patch reactions, force / moment | `<= 1e-10` each | 8.9e-16 / 3.7e-17; 2.2e-16 / 6.2e-17; 1.2e-15 / 2.2e-16 | yes |
+| R3 (amendment 1) load vector against the test's / balance with the test's loads | `<= 1e-15` / `<= 1e-10` | 0 / as R1 for all three | yes |
+| F1 `u_x = 0` on `xmin` only | refused, count 3 | refused, 3, "the model leaves a rigid-body motion free: the part containing node 0 (63 nodes) has 3 unconstrained rigid-body motion(s), e.g. translation (0, 1, 0) ..." | yes |
+| F2 3-2-1 without P3 | refused, count 1 | refused, 1 (rotation about z with the translation that keeps P1 and P2 fixed) | yes |
+| F3 three collinear supports | refused, count 1 | refused, 1 (rotation about x) | yes |
+| F4 two disjoint boxes | refused, part 27, count 6 | refused, part of node 27 (27 nodes), 6 | yes |
+| F5 missing node / component / force node | refused with the id | "constraint on node 70: the node does not exist (the mesh has 63 nodes)"; "constraint on node 0 component 3: the node has 3 components"; "nodal force on node 70: ..." | yes |
+| E1 node of no element | `FreeNode`; held: solved | "node 12 belongs to no element and its component 0 is not prescribed: a free motion"; held: solved, its values exact | yes |
+| E2 repeated / conflicting constraint | accepted / refused | accepted; "node 0 component 0 is prescribed twice with different values (0e0 and 1e-3)" | yes |
+| E3 gravity | refused by name | "load Gravity is not supported by the static solve yet (it is added by ADR 0276)" | yes |
+| E4 element error | "element 5: ..." | "element 5: key 'test': forced failure" | yes |
+| E5 hinge | `SingularStiffness` | refused at node 8 component 2, pivot -6.9e-5 = -1.5e-15 of its diagonal 4.7e10 (by the skyline's own positive-pivot test) | yes |
+| E6 CG-Jacobi against direct (Hex8 uniaxial) | `<= 1e-7` | 6.1e-14, 142 iterations | yes |
+| E7 full solve, 1 and 8 threads (Tet10 R1, 840 unknowns) | bit-equal | displacements and reactions bit-equal | yes |
+| E8 Gram ratio `lambda_min/lambda_max` of the accepted models | record (`> 1e-10`) | patch 0.34, 0.34, 0.31; uniaxial 7.5e-3 (all three) | record |
+| N1 quadratic boundary values | `> 1e-6` | 7.9e-2; 1.0e-1; 9.8e-2 | yes |
+| N2 loads alone | `> 1e-3` | 0.30; 0.21; 0.38 | yes |
+
+The rounding estimates were pessimistic by one to three decades (P1 Tet10 1.2e-15 against the estimated 2e-12; U2 Tet10
+6.4e-12 against the estimated 1e-13 typical and 2e-10 worst: the point supports do cost digits, as estimated, but stay a
+factor 15 inside the limit). The relative residuals of the direct solves were 2.4e-16 to 9.5e-14.
+
+**Mutations** (scratch copy by `git archive` of e8e2a495, own target directory, each alone by exact text replacement,
+`sb_static` run once, file restored and compared by SHA-256; `f374-scratch/mutate.py`, `mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 components reversed in `element_dofs` | P1, U1/U2, R1 |
+| M2 `- K_FP g` left out | P1 |
+| M3 reactions `K u` without `- f` | R1 |
+| M4 Gram of the translations only | F1 (count 2 instead of 3); F2 and F3 sit in the same test function after F1 and were not reached |
+| M5 one part for all nodes | F4 (got `SingularStiffness` at node 30 instead of the rigid-body refusal) |
+| M6 `tau_P` test removed | **survived**: E5 is refused by the skyline's own test (negative pivot), as the rule allows; pivot recorded above |
+| M7 conflicting value accepted | E2 |
+| M8 missing-node tests removed | F5 (a `MissingComponent` instead of `MissingNode`) |
+| M9 per-worker matrices summed in worker order | D1 (and E4: the mutated path loses the element index) |
+| M10 nodal force x component only | **survived the registered tests**; caught by R3 of amendment 1 (re-run once after the amendment) |
+| M11 pattern columns descending | panics in `scatter` (P1, U, R1, S1, E1, E5) |
+| M12 `tau_G = 1` | P1, U, R1, F1, E1, E5 (every model refused) |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings` (debug and release): clean.
+The existing `sb_model` (11) and `sb_elements` (8) pass unedited (release).
+
+**Deviations.**
+
+1. Amendment 1: R1 used the library's load vector, so M10 survived the registered run; R3 (load vector built in the test)
+   was registered and committed before its run and catches M10. R1 is unedited.
+2. M4 is caught by F1's count, not by F2 or F3 as registered: the three are one test function and F1 comes first. The
+   mutation is caught by a registered refusal check either way.
+3. `error.rs` gained variants (D7), as registered; it is not in the stub's file list.
+4. Not run: the whole workspace (the lead runs the gate) and the baseline hashes (no file outside `rcfd-fem` changed, no
+   shared solver file, no crate depends on `rcfd-fem` yet).
+
+**Decision by the registered rule, as amended: done** (pending the maintainer's acceptance). S1, D1, P1, P2, U1, U2, R1, R2,
+R3 and F1 to F5 are met for every kind, N1 and N2 hold, every mutation fails a registered check except M6, which survives in
+the way the rule allows. Without amendment 1 the rule would give partial (M10 uncaught); the lead may weigh that.
+
+**Remaining questions.**
+
+1. The pivot backstop `tau_P` was not exercised: on the hinge the skyline refused first. Options: (a) keep it (it costs a loop
+   over the pivots and guards against a garbage positive pivot); (b) drop it and rely on the skyline's test. Recommendation:
+   (a); a garbage pivot can be positive, and the bound of arithmetic 4 gives it a meaning.
+2. Where the per-node constraints and forces live. Options: (a) arguments of `solve_static_with`, as now; (b) fields of
+   `SolidModel` added by ADR 0291 (F-388). Recommendation: (a) for the basic tier; ADR 0291 may add (b) and pass them through.
+3. The generic hook `assemble_with` exists now. Options: (a) ADR 0291 re-uses it as its "generic assembly hook"; (b) it adds
+   another. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-374: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0275, 2026-11-12: rcfd_fem::assemble (pattern from node adjacency, element matrices by std threads in batches and a sequential scatter in element order, so bit-identical for any thread count; stiffness, stiffness_with(threads) and the generic hook assemble_with, which locates element errors as FemError::Element); rcfd_fem::constraint (Prescribed per node and component from Constraint::Displacement and per-node lists, missing node or component refused with its id, conflicting values refused; free rigid-body motions refused per connected part from the 6 x 6 Gram matrix of the rigid modes at the prescribed components, threshold 1e-10 lambda_max; symmetric elimination by removal, reduce and ReducedSystem::expand; reactions K u - f); rcfd_fem::loads::nodal_load_vector (nodal forces from the model and per node, every other load refused by name); rcfd_fem::solve (solve_static and solve_static_with, SkylineLdlt by default with a pivot test d <= 1e-10 a_ii for mechanisms, CG with Jacobi as the alternative). Stiffness symmetric within 2.1e-16 (limit 1e-13), bit-identical for 1 and 8 threads; patch test on boxes with interior nodes displaced (seed 0xF374_0275) and a linear field with six non-zero strains: interior error 4.4e-16, 6.1e-16, 1.2e-15 for Tet4, Hex8, Tet10 (limit 1e-10); uniaxial tension by nodal forces on a 3-2-1 support: elongation within 1.1e-13 and lateral contraction within 6.4e-12 (limit 1e-10); reactions balance forces and moments within 2.4e-15 (limit 1e-10); free rigid-body motions (a roller plane, a 3-2-1 set less one, collinear supports, a disjoint part) refused with the count and an example motion, a constraint on a missing node with its id, a hinge mechanism refused by the pivot test. Twelve mutations, eleven caught (M10 after amendment 1), M6 survives as the rule allows.
+
+F-375 (ADR 0276), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): the static solve takes its right-hand side from rcfd_fem::loads::nodal_load_vector(model, extra), which today refuses every load but NodalForce with FemError::UnsupportedLoad naming it; ADR 0276 replaces those refusals in loads.rs only.
+
+F-376 (ADR 0277), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): solve_static returns a SolidResult with displacement, reactions and SolverStats but no integration-point values; recovery adds them from the displacement and assemble::element_dofs.
+
+F-380 (ADR 0281), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): Load::Temperature is refused by loads::nodal_load_vector with UnsupportedLoad (package ADR 0281); the thermal load replaces that arm.
+
+F-381 (ADR 0282), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): solve::StaticSolver (non-exhaustive) has Direct (default) and ConjugateGradient { tolerance, max_iterations } with Jacobi; StaticOptions (non-exhaustive) carries the solver and the assembly thread count.
+
+F-383 (ADR 0284), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): assemble::assemble_with(model, threads, |ctx| element matrix) assembles any per-element matrix on the stiffness pattern in element order (bit-identical for any thread count); the mass matrix can use it directly.
+
+F-388 (ADR 0291), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): a generic assembly hook exists as assemble::assemble_with; per-node prescribed values and forces are arguments of solve::solve_static_with, not model fields.
+
+F-393 (ADR 0296), sentence to append to its note:
+
+> ADR 0275 (2026-11-12): constraint::reduce(k, f, prescribed) returns a ReducedSystem (principal submatrix K_FF, f_F - K_FP g, expand); the rigid-body check constraint::check_rigid_body_motions works on prescribed equations only and needs extending for linear constraints.
