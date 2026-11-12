@@ -137,7 +137,7 @@ struct Annulus {
     force: f64,
 }
 
-fn annulus(n: usize, forcing: Forcing) -> Annulus {
+fn annulus(n: usize, forcing: Forcing, outer_rotates: bool) -> Annulus {
     let (alpha, dt, steps) = (1.0, 0.0025, 200usize);
     let (geom, u, p) = cc_mesh(n);
     let dz = 2.4 / n as f64;
@@ -155,7 +155,13 @@ fn annulus(n: usize, forcing: Forcing) -> Annulus {
     let t0 = Instant::now();
     for k in 1..=steps {
         let om = alpha * k as f64 * dt;
-        let ib = build(&geom, &cc_bodies(om, om), 1e8, 1.0, forcing);
+        let ib = build(
+            &geom,
+            &cc_bodies(om, if outer_rotates { om } else { 0.0 }),
+            1e8,
+            1.0,
+            forcing,
+        );
         s.immersed = Some(ib.clone());
         s.step(dt);
         assert!(s.diverged.is_none(), "X1 N {n}: stopped at step {k}: {:?}", s.diverged);
@@ -180,18 +186,106 @@ fn annulus(n: usize, forcing: Forcing) -> Annulus {
         }
         older = Some(std::mem::replace(&mut u_old, s.u.values.clone()));
     }
+    if !outer_rotates {
+        // printed: the velocity error in the annulus against alpha t f(r) + w(r) of amendment 1
+        let (t, cc) = (steps as f64 * dt, geom.mesh.cell_centres());
+        let (ca, cb, c, d) = inner_cylinder_constants();
+        let mut e = 0.0f64;
+        for (x, v) in cc.iter().zip(&s.u.values) {
+            let (dx, dy) = (x[0] - CC_C[0], x[1] - CC_C[1]);
+            let r = (dx * dx + dy * dy).sqrt();
+            if r > R1 && r < R2 {
+                let ut = alpha * t * (ca * r + cb / r)
+                    + alpha * (ca * r * r * r / 8.0 + 0.5 * cb * r * r.ln())
+                    + c * r
+                    + d / r;
+                e = e.max(vec3::norm(vec3::sub(*v, [-ut * dy / r, ut * dx / r, 0.0])));
+            }
+        }
+        println!("X1b N {n} {forcing:?}: largest velocity error in the annulus {e:.3e}");
+    }
     println!("X1 N {n} {forcing:?}: {:.1} s", t0.elapsed().as_secs_f64());
     out
 }
 
-/// ADR 0249 X1, X1c, X1l, S-X1.
+/// Amendment 1, X1b: `A`, `B` of the Couette profile of unit angular velocity and `C`, `D` of `w` (`alpha = nu = 1`).
+fn inner_cylinder_constants() -> (f64, f64, f64, f64) {
+    let a = -R1 * R1 / (R2 * R2 - R1 * R1);
+    let b = R1 * R1 * R2 * R2 / (R2 * R2 - R1 * R1);
+    let wp = |r: f64| a * r * r * r / 8.0 + 0.5 * b * r * r.ln();
+    let det = R1 / R2 - R2 / R1;
+    let c = (-wp(R1) / R2 + wp(R2) / R1) / det;
+    let d = (-R1 * wp(R2) + R2 * wp(R1)) / det;
+    (a, b, c, d)
+}
+
+/// Amendment 1, X1b: the moment per unit depth of the fluid on the inner cylinder accelerated with `alpha = 1` in the fixed
+/// outer one, after the transients: `-4 pi B t + 2 pi R1^2 ((A R1^2/4 + B/2) - 2 D/R1^2)`.
+fn inner_cylinder_moment(t: f64) -> f64 {
+    let (a, b, _, d) = inner_cylinder_constants();
+    let pi = std::f64::consts::PI;
+    -4.0 * pi * b * t + 2.0 * pi * R1 * R1 * ((a * R1 * R1 / 4.0 + b / 2.0) - 2.0 * d / (R1 * R1))
+}
+
+/// ADR 0249 amendment 1: X1b, X1cb, X1lb, S-X1b (the corrected X1: the inner cylinder accelerated in a fixed outer one).
 #[test]
 #[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn x1b_accelerated_inner_cylinder_moment() {
+    let (exact, exact150) = (inner_cylinder_moment(0.5), inner_cylinder_moment(0.375));
+    println!("X1b: closed form {exact:.6} at t 0.5, {exact150:.6} at t 0.375");
+    assert!((exact + 2.218_329).abs() <= 1e-6 && (exact150 + 1.694_730).abs() <= 1e-6);
+    let mut fails = Vec::new();
+    for (n, lit_limit) in [(48usize, 0.01), (96, 0.005)] {
+        let a = annulus(n, Forcing::Second, false);
+        let err = |m: f64| (m - exact).abs() / exact.abs();
+        let (e_new, e_rea, e_lit) = (err(a.m[0]), err(a.m[1]), err(a.m[2]));
+        let e150 = (a.m150 - exact150).abs() / exact150.abs();
+        println!(
+            "X1b N {n}: exact {exact:.6}; new {:.6} (error {:.4} %), reaction {:.6} ({:.3} %), literal {:.6} ({:.3} %); S-X1b step \
+             150 new {:.6} (error {:.4} %); force {:.3e}",
+            a.m[0],
+            100.0 * e_new,
+            a.m[1],
+            100.0 * e_rea,
+            a.m[2],
+            100.0 * e_lit,
+            a.m150,
+            100.0 * e150,
+            a.force
+        );
+        if e150.is_nan() || e150 > 0.005 {
+            fails.push(format!("S-X1b N {n}: error at step 150 {e150:.5}"));
+        }
+        if e_new.is_nan() || e_new > 0.005 {
+            fails.push(format!("X1b N {n}: error {e_new:.5}"));
+        }
+        if e_rea.is_nan() || e_rea < 0.03 {
+            fails.push(format!("X1cb N {n} (negative control) did not fire: {e_rea:.5}"));
+        }
+        if e_lit.is_nan() || e_lit < lit_limit {
+            fails.push(format!("X1lb N {n} (negative control) did not fire: {e_lit:.5}"));
+        }
+    }
+    let b = annulus(48, Forcing::First, false);
+    println!(
+        "printed: X1b N 48 with build: new {:.6} ({:+.4} %), reaction {:.6}, literal {:.6}",
+        b.m[0],
+        100.0 * (b.m[0] - exact) / exact.abs(),
+        b.m[1],
+        b.m[2]
+    );
+    assert!(fails.is_empty(), "{fails:#?}");
+}
+
+/// ADR 0249 X1, X1c, X1l, S-X1 as registered: a defective set-up (the rotating outer solid reaches the box walls at rest;
+/// amendment 1). Kept as a record.
+#[test]
+#[ignore = "defective set-up (ADR 0249 amendment 1), kept as a record; replaced by the test of the same name with b"]
 fn x1_accelerated_annulus_moment() {
     let exact = -0.5 * std::f64::consts::PI * R1 * R1 * (R2 * R2 - R1 * R1);
     let mut fails = Vec::new();
     for (n, lit_limit) in [(48usize, 0.08), (96, 0.04)] {
-        let a = annulus(n, Forcing::Second);
+        let a = annulus(n, Forcing::Second, true);
         let err = |m: f64| (m - exact).abs() / exact.abs();
         let (e_new, e_rea, e_lit) = (err(a.m[0]), err(a.m[1]), err(a.m[2]));
         let drift = (a.m[0] - a.m150).abs() / a.m[0].abs();
@@ -219,7 +313,7 @@ fn x1_accelerated_annulus_moment() {
             fails.push(format!("X1l N {n} (negative control) did not fire: {e_lit:.5}"));
         }
     }
-    let b = annulus(48, Forcing::First);
+    let b = annulus(48, Forcing::First, true);
     println!(
         "printed: X1 N 48 with build: new {:.6} ({:+.4} %), reaction {:.6}, literal {:.6}",
         b.m[0],
@@ -243,13 +337,17 @@ struct Plate {
     uy: f64,
 }
 
-fn plate(n: usize, forcing: Forcing) -> Plate {
+fn plate(n: usize, forcing: Forcing, corrected: bool) -> Plate {
     let (a, dt, steps, nx) = (1.0, 0.0025, 200usize, 8usize);
     let geom = Arc::new(FvGeometry::new(Arc::new(box_2d(nx, n, 1.0, 1.0, false, false).unwrap())).unwrap());
     let dz = geom.mesh.cell_volumes()[0] * (nx * n) as f64;
     let mut u = VectorField::uniform("U", &geom, [0.0; 3]);
     u.set_bc(&geom, "ymax", Box::new(FixedValue::vector([0.0; 3]))).unwrap();
-    u.set_bc(&geom, "ymin", Box::new(Symmetry)).unwrap();
+    if corrected {
+        u.set_bc(&geom, "ymin", Box::new(ZeroGradient)).unwrap();
+    } else {
+        u.set_bc(&geom, "ymin", Box::new(Symmetry)).unwrap();
+    }
     let mut p = ScalarField::uniform("p", &geom, 0.0);
     for w in ["xmin", "xmax"] {
         u.set_bc(&geom, w, Box::new(ZeroGradient)).unwrap();
@@ -269,6 +367,12 @@ fn plate(n: usize, forcing: Forcing) -> Plate {
     let mut st = PimpleSettings::piso(1.0);
     st.time_scheme = TimeScheme::ImplicitEuler;
     st.convection = ConvScheme::Central;
+    if corrected {
+        st.momentum_solver.tol_abs = 1e-20;
+        st.momentum_solver.tol_rel = 1e-14;
+        st.pressure_solver.tol_abs = 1e-20;
+        st.pressure_solver.tol_rel = 1e-14;
+    }
     let mut s = PimpleSolver::new(geom.clone(), u, p, st);
     let mut u_old = s.u.values.clone();
     let mut out = Plate {
@@ -308,14 +412,26 @@ fn plate(n: usize, forcing: Forcing) -> Plate {
     out
 }
 
-/// ADR 0249 X2, X2c, X2l, S-X2.
+/// ADR 0249 X2, X2c, X2l, S-X2 as registered: a defective set-up (the symmetry plane under the plate acts as a wall in the
+/// PISO kernel; the solver tolerances break the x uniformity; amendment 1). Kept as a record.
+#[test]
+#[ignore = "defective set-up (ADR 0249 amendment 1), kept as a record; replaced by the test of the same name with b"]
+fn x2_accelerated_plate_force() {
+    x2_checks(false);
+}
+
+/// ADR 0249 amendment 1: X2b, X2cb, X2lb, S-X2b (the corrected X2: zero gradient under the plate, tight solver tolerances).
 #[test]
 #[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn x2_accelerated_plate_force() {
+fn x2b_accelerated_plate_force() {
+    x2_checks(true);
+}
+
+fn x2_checks(corrected: bool) {
     let exact = -(1.0 + 0.5 / 3.0);
     let mut fails = Vec::new();
     for (n, lit_limit) in [(16usize, 0.025), (32, 0.012)] {
-        let r = plate(n, Forcing::Second);
+        let r = plate(n, Forcing::Second, corrected);
         let err = |f: f64| (f - exact).abs() / exact.abs();
         let (e_new, e_rea, e_lit) = (err(r.fx[0]), err(r.fx[1]), err(r.fx[2]));
         println!(
@@ -344,7 +460,7 @@ fn x2_accelerated_plate_force() {
             fails.push(format!("X2l N {n} (negative control) did not fire: {e_lit:.5}"));
         }
     }
-    let b = plate(16, Forcing::First);
+    let b = plate(16, Forcing::First, corrected);
     println!(
         "printed: X2 N 16 with build: new {:.6}, reaction {:.6}, literal {:.6}",
         b.fx[0], b.fx[1], b.fx[2]
@@ -993,12 +1109,26 @@ fn unit_forcings() -> Vec<(&'static str, Arc<FvGeometry>, ImmersedForcing)> {
 /// ADR 0249 U1 to U3: the new evaluation is the reaction plus the storage of the solid cells; with a zero rate it is the
 /// reaction; the reference point transfers.
 #[test]
+#[ignore = "defective set-up (ADR 0249 amendment 1), kept as a record; replaced by the test of the same name with b"]
 fn u1_u2_u3_storage_of_the_solid_cells() {
+    u1_checks(1.0, 1e-6);
+}
+
+/// ADR 0249 amendment 1: U1b to U3b (the rate field times 1e6, so that the storage is of the size of the reaction).
+#[test]
+fn u1b_u2b_u3b_storage_of_the_solid_cells() {
+    u1_checks(1e6, 1e-4);
+}
+
+fn u1_checks(rate_scale: f64, guard: f64) {
     let rho = 1.3;
     let mut bodies = 0;
     for (name, geom, ib) in unit_forcings() {
         let u = random_field(geom.n_cells(), 0x0346);
-        let dudt = random_field(geom.n_cells(), 0x0347);
+        let dudt: Vec<Vec3> = random_field(geom.n_cells(), 0x0347)
+            .iter()
+            .map(|v| vec3::scale(*v, rate_scale))
+            .collect();
         let zero = vec![vec3::ZERO; geom.n_cells()];
         for b in 0..ib.bodies.len() {
             bodies += 1;
@@ -1031,7 +1161,7 @@ fn u1_u2_u3_storage_of_the_solid_cells() {
                 "{name} body {b}: too few solid cells"
             );
             assert!(
-                vec3::norm(sf) > 1e-6 * vec3::norm(f) && vec3::norm(sm) > 1e-6 * vec3::norm(m),
+                vec3::norm(sf) > guard * vec3::norm(f) && vec3::norm(sm) > guard * vec3::norm(m),
                 "{name} body {b}: the storage is not visible in the sum"
             );
             assert!(d1f <= 1e-12 && d1m <= 1e-12, "U1 {name} body {b}: {d1f:.3e} {d1m:.3e}");
