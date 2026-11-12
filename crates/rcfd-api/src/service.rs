@@ -1752,7 +1752,9 @@ impl Service {
     /// `Some(bytes)` (empty for a notification), `None` for any other request or an error, which take `handle_request`
     /// (ADR 0353). The bytes are those of `handle_request`'s response printed by `to_string()` plus a newline.
     fn monitors_get_line(self: &Arc<Self>, req: &Value) -> Option<Vec<u8>> {
-        if req.get("jsonrpc") != Some(&json!("2.0")) || req.get("method").and_then(Value::as_str) != Some("monitors.get") {
+        if req.get("jsonrpc") != Some(&json!("2.0"))
+            || req.get("method").and_then(Value::as_str) != Some("monitors.get")
+        {
             return None;
         }
         let null = Value::Null;
@@ -1768,9 +1770,13 @@ impl Service {
         out.extend_from_slice(b"{\"id\":");
         out.extend_from_slice(id.to_string().as_bytes());
         out.extend_from_slice(b",\"jsonrpc\":\"2.0\",\"result\":");
-        lock(&sim).monitors.write_json_filtered(&mut out, names.as_deref(), since);
-        out.extend_from_slice(b"}
-");
+        lock(&sim)
+            .monitors
+            .write_json_filtered(&mut out, names.as_deref(), since);
+        out.extend_from_slice(
+            b"}
+",
+        );
         Some(out)
     }
 

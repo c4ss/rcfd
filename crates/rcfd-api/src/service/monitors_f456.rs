@@ -13,7 +13,10 @@ use rcfd_post::monitors::MonitorStore;
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0 >> 11
     }
     fn below(&mut self, n: u64) -> u64 {
@@ -34,7 +37,7 @@ const SPECIAL: [f64; 10] = [
     1e308,
     -1e308,
     1.0 / 3.0,
-    123456789.123456789,
+    123_456_789.123_456_79,
 ];
 
 fn y_value(g: &mut Lcg) -> f64 {
@@ -249,9 +252,13 @@ fn f456_e2_e3_replies_equal_the_old_algorithm_byte_for_byte() {
         n_ok += 1;
     }
     // the error paths and the notification: the same bytes as before (covered by the hash), and the right kind
-    for (i, params) in [json!({}), json!({"session": "nope"}), json!({"session": 7, "names": ["res_u"]})]
-        .iter()
-        .enumerate()
+    for (i, params) in [
+        json!({}),
+        json!({"session": "nope"}),
+        json!({"session": 7, "names": ["res_u"]}),
+    ]
+    .iter()
+    .enumerate()
     {
         let req = json!({"jsonrpc": "2.0", "id": 900 + i, "method": "monitors.get", "params": params});
         let line = wire(&svc, &req);
@@ -277,7 +284,10 @@ fn f456_e2_e3_replies_equal_the_old_algorithm_byte_for_byte() {
     assert_eq!(out.iter().filter(|b| **b == b'\n').count(), 2);
     fnv1a(&mut h, &out);
     println!("F456 E3 hash {h:#018x}; {n_ok} requests, {n_empty_series} with no series");
-    assert!(n_empty_series > 5, "the request set must reach the empty-selection case");
+    assert!(
+        n_empty_series > 5,
+        "the request set must reach the empty-selection case"
+    );
     assert_eq!(h, E3H, "the lines differ from the lines of the tree before the change");
 }
 
@@ -300,7 +310,10 @@ fn f456_n1_n2_the_comparison_sees_a_difference() {
         }
         doc
     };
-    let differ = reqs.iter().filter(|p| wrong_ref(p).to_string() != reference(&store, p).to_string()).count();
+    let differ = reqs
+        .iter()
+        .filter(|p| wrong_ref(p) != reference(&store, p))
+        .count();
     assert!(differ > 0, "N1: a reference with x >= since must differ somewhere");
     let line = result_line(&json!(1), &reference(&store, &reqs[2]));
     let mut bad = line.clone();
@@ -322,7 +335,11 @@ fn f456_e3b_four_series_of_1e5_samples_through_the_wire() {
     let copy = st.clone();
     let (svc, id) = session_with(st);
     let names = json!(["res_p", "res_u", "res_v", "res_w"]);
-    for p in [json!({"names": names}), json!({"names": names, "since": 99_900}), json!({"since": 0.5})] {
+    for p in [
+        json!({"names": names}),
+        json!({"names": names, "since": 99_900}),
+        json!({"since": 0.5}),
+    ] {
         let expected = reference(&copy, &p);
         let rid = json!(77);
         let req = json!({"jsonrpc": "2.0", "id": rid, "method": "monitors.get", "params": with_session(&p, &id)});

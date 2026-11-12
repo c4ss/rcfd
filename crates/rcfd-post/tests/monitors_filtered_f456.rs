@@ -8,7 +8,10 @@ use std::time::Instant;
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0 >> 11
     }
     fn below(&mut self, n: u64) -> u64 {
@@ -29,7 +32,7 @@ const SPECIAL: [f64; 10] = [
     1e308,
     -1e308,
     1.0 / 3.0,
-    123456789.123456789,
+    123_456_789.123_456_79,
 ];
 
 fn y_value(g: &mut Lcg) -> f64 {
@@ -40,7 +43,16 @@ fn y_value(g: &mut Lcg) -> f64 {
     }
 }
 
-const POOL: [&str; 8] = ["res_u", "res_p", "a\"b\\c\n\t", "\u{fc}n\u{ef}", "", "force x", "zz", "\u{1f600}\u{7f}"];
+const POOL: [&str; 8] = [
+    "res_u",
+    "res_p",
+    "a\"b\\c\n\t",
+    "\u{fc}n\u{ef}",
+    "",
+    "force x",
+    "zz",
+    "\u{1f600}\u{7f}",
+];
 
 fn random_store(g: &mut Lcg) -> MonitorStore {
     let mut st = MonitorStore::new(["iteration", "time", "t \"x\"\n"][g.below(3) as usize]);
@@ -70,7 +82,7 @@ fn random_store(g: &mut Lcg) -> MonitorStore {
 fn reference(store: &MonitorStore, names: Option<&[&str]>, since: Option<f64>) -> Value {
     let mut doc = store.to_json();
     if let (Some(series), true) = (doc["series"].as_object_mut(), names.is_some() || since.is_some()) {
-        series.retain(|k, _| names.is_none_or(|n| n.contains(&k.as_str())));
+        series.retain(|k, _| names.map_or(true, |n| n.contains(&k.as_str())));
         if let Some(after) = since {
             for (k, v) in series.iter_mut() {
                 if let Some(sl) = store.since(k, after) {
@@ -114,10 +126,18 @@ fn f456_e1_filtered_documents_equal_the_old_algorithm() {
         assert_eq!(got.to_string(), expected.to_string(), "case {case}: text of the Value");
         let mut bytes = Vec::new();
         st.write_json_filtered(&mut bytes, names, since);
-        assert_eq!(String::from_utf8(bytes).unwrap(), expected.to_string(), "case {case}: written text");
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            expected.to_string(),
+            "case {case}: written text"
+        );
         distinct_sizes.insert(expected.to_string().len());
     }
-    assert!(distinct_sizes.len() > 1000, "the cases must differ: {}", distinct_sizes.len());
+    assert!(
+        distinct_sizes.len() > 1000,
+        "the cases must differ: {}",
+        distinct_sizes.len()
+    );
     // to_json is unchanged
     let st = random_store(&mut Lcg(7));
     assert_eq!(st.to_json(), st.to_json_filtered(None, None));

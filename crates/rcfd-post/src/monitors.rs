@@ -106,7 +106,7 @@ impl MonitorStore {
     ) -> impl Iterator<Item = (&'a str, &'a str, &'a [f64], &'a [f64])> {
         self.series
             .iter()
-            .filter(move |(k, _)| names.is_none_or(|n| n.contains(&k.as_str())))
+            .filter(move |(k, _)| names.map_or(true, |n| n.contains(&k.as_str())))
             .map(move |(k, s)| {
                 let start = since.map_or(0, |after| s.x.partition_point(|&v| v <= after));
                 (k.as_str(), s.unit.as_str(), &s.x[start..], &s.y[start..])
