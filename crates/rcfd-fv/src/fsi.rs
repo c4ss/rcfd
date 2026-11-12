@@ -32,6 +32,16 @@ pub enum Relaxation {
         /// Cap of the magnitude of the factor, `>= initial`.
         max: f64,
     },
+    /// The least-squares (interface quasi-Newton) update of ADR 0261 from the differences of the residuals and outputs of the
+    /// step, available in [`crate::cosim::coupled_step`] only: [`StrongCoupling::validate`] rejects it, and [`Relaxer`]
+    /// treats it as the fixed factor `initial`.
+    LeastSquares {
+        /// Factor of the relaxed first update of a step (and of any update without a usable column), `0 < initial < 2`.
+        initial: f64,
+        /// Column filter: a difference column is dropped when its part outside the newer columns is below `filter` times
+        /// its norm, `0 < filter < 1`.
+        filter: f64,
+    },
 }
 
 /// The factor of [`Relaxation`] for one sequence of 3-vector residuals.
@@ -48,6 +58,7 @@ impl Relaxer {
         let omega = match relaxation {
             Relaxation::Fixed(w) => w,
             Relaxation::Aitken { initial, .. } => initial,
+            Relaxation::LeastSquares { initial, .. } => initial,
         };
         Relaxer {
             relaxation,
@@ -128,6 +139,9 @@ impl StrongCoupling {
                         "strong coupling: the Aitken cap must be finite and at least the initial factor, got {max}"
                     ));
                 }
+            }
+            Relaxation::LeastSquares { .. } => {
+                return Err("strong coupling: the least-squares update is available in cosim::coupled_step only".into())
             }
         }
         if !(self.tolerance.is_finite() && self.tolerance > 0.0) {
