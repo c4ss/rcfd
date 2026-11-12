@@ -6531,12 +6531,13 @@ fixed by the item's registration ADR before any code.
     and the cap 1 equals the loose run bit for bit. Every static check of the new keys is located at its key (strong
     with a prescribed motion, rest patches or Newmark; tolerance, scales, added mass, cap; unknown values and keys).
     Without the table nothing changes: baseline hashes, case_hashes_w48u, the K0 tests of ADR 0257 and 0262 and the
-    dynamic_mesh tree tests pass unedited; a table with scheme = "loose" equals no table bit for bit. Partial by the
-    registered rule: one of six mutations (force_scale not read) passed its named test (the floor k X never binds on
-    this case; the fixed-factor test catches it). Open: ADR 0266 Q1 (status), Q2 (the key name), Q3 (Newmark), Q4 (rest
-    patches). The wall pressure of the body force stays the default extrapolation (F-358). Follow-up: F-437. The key
-    naming (Q2: scheme = "strong" in the table [dynamic_mesh.six_dof.coupling]) accepted by the maintainer in person on
-    2026-11-12.
+    dynamic_mesh tree tests pass unedited; a table with scheme = "loose" equals no table bit for bit. The one mutation
+    of ADR 0266 that passed its named test (force_scale not read; the floor k X was inert in E1 because moment_scale = 0
+    makes the moment term the unfloored force ratio) is caught by the binding-floor test of ADR 0349 (F-437,
+    2026-11-12); proposed done by ADR 0349 Q1. Done is the maintainer's call (ADR 0349 Q1 recommends done). Open: ADR
+    0266 Q1 (status), Q2 (the key name), Q3 (Newmark), Q4 (rest patches). The wall pressure of the body force stays the
+    default extrapolation (F-358). Follow-up: F-437. The key naming (Q2: scheme = "strong" in the table
+    [dynamic_mesh.six_dof.coupling]) accepted by the maintainer in person on 2026-11-12.
 - [x] **F-351** Wall pressure of the body force on a fixed-flux moving wall (the 1.25 percent added-mass deficit)
   - depends on: F-251, F-244
   - acceptance: The cause of the discrete added mass of the piston column lying 1.25 percent below rho A L0 (ADR 0250 C1
@@ -7916,12 +7917,24 @@ fixed by the item's registration ADR before any code.
     creep growth or sound level is validated against a measurement.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0339; the registration is
     written by the implementation agent before any code.
-- [ ] **F-437** Strong coupling in the case tree: a case whose force floor decides the convergence test
+- [x] **F-437** Strong coupling in the case tree: a case whose force floor decides the convergence test
   - depends on: F-350
   - acceptance: A tree-against-library equality test of the strong coupling whose force_scale decides the convergence
     test of every step (for instance force_scale = 100 k X on the piston of ADR 0266) is bit-identical, and fails when
     the driver does not read force_scale; registered before the run.
-  - note: From ADR 0266 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0266 question 1, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. DONE (ADR 0349, 2026-11-12; registered before the code, test-only, no library or
+    driver line changed): crates/rcfd-api/tests/strong_coupling_force_floor_f437.rs runs the spring-mounted piston of
+    ADR 0266 at mass ratio 4 through the case driver with force_scale = moment_scale = 100 k X and the default wall
+    pressure (prescribed_gradient), against strong_step_with(PrescribedGradient) with a carried vector: 60 steps
+    bit-identical in the flow, the body, the iteration counts and, new against ADR 0266 E1, the test quantity of every
+    step; at all 180 iterations the test quantity is |r_F|/force_scale bit for bit (the largest force is 0.0088 of the
+    floor). The driver mutated to ignore force_scale fails it at step 1 (bits, 4 iterations against 3, test quantity);
+    the same case with force_scale = 1e-9 k X (the floor never binds; the smallest force is 1.6e7 times it) is equal
+    with and without that mutation. Why ADR 0266 E1 could not catch it: with moment_scale = 0 the moment term of the
+    test is the unfloored force ratio (the piston's moment is a fixed arm times its force), so a force floor alone is
+    inert on that case; the moment floor is written with it here. Open: ADR 0349 Q1 (F-350's status), Q2 (a force floor
+    without a moment floor).
 - [ ] **F-438** Directional lattice in the case key [mesh.adapt]
   - depends on: F-348, F-342
   - acceptance: With lattice = "directional" in [mesh.adapt] a steady box-mesh case runs the directional loop and equals
