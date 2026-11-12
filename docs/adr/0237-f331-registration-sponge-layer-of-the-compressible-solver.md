@@ -346,3 +346,98 @@ used is derived above from the linear acoustic equations. No vendor code or docu
   Recommendation: a follow-up item after the results.
 - Q-B. Whether pulse trains are accepted as "a plane pulse" at 45 and 60 degrees. Recommendation: yes, with X1 as the
   isolated-pulse check at 30 degrees; the alternative is a run of about a million cells per angle.
+
+## Amendment 1 (2026-11-12): set-up D is defective; corrected set-up D2 and one more isolated pulse, registered before their runs
+
+Written after the first runs of every registered check (code 4dddc106) and before any run of the checks registered here.
+The registered text above is unchanged. The full results table comes in Addendum 1; what this amendment needs from it:
+
+- Fast checks: all met (A0 `9.2e-7`, A0s and P0 `1.08e-6`, NC0 0.933, U, F, S, B).
+- X1 (isolated pulse, 30 degrees, matched form): `R = 2.37e-5`, limit `1e-2`: met.
+- A30, A45, A60 (set-up D): `R = 3.85e-2`, `6.18e-2`, `8.70e-2`: **the limit `1e-2` is missed at all three angles.**
+- NC30, NC45, NC60: 0.0814, 0.1962, 0.3720 (held); NCP45 (plain form): 0.1502 (held).
+
+No limit is changed. The three D tests stay in the test file as ignored records (`*_setup_defect`), with the numbers.
+
+### Diagnosis
+
+The same layer, the same code and the same angle give `2.4e-5` for an isolated pulse (X1) and `3.8e-2` in set-up D. The
+difference is the set-up, in one point that the registration got wrong. Set-up D starts with the wave train already
+inside the layer, undamped, while the memory `Q` of the matched form starts at zero. That is not a state the layer's
+equations can be in: `Q` is the time integral of the pressure that has passed, so under a wave that "has always been
+there" it is not zero. The registration treated this start as a transient that leaves through the probe column within
+`t_s` (an estimate made for a wave that only has to travel out). It does not leave:
+
+- A scratch diagnostic (A45 once more with the history of the difference in five columns; not a registered check, not
+  committed) shows no decay over the whole run: the largest difference per 0.1 of time at the probe column is 0.062 at `t =
+  0.4`, 0.063 at `t = 0.9`, 0.062 at `t = 1.3`, with minima near 0.021 between. The spacing of the maxima, about 0.5, is
+  not a period of the incident train (0.6435 and its fractions); it is close to `H/c = 0.455`, the period of the second
+  transverse standing wave of the duct. The difference at the end has a transverse structure (`+0.017` in the lower half
+  of the column, `-0.055` at the upper wall).
+- This is what the equations give. The matched form attenuates by `R0^cos(theta)` (DR4): a wave travelling along the
+  layer (`theta = 90` degrees) is not damped at all. In a duct with rigid walls such waves are the transverse standing
+  waves at the cut-off frequencies `n pi c/H`; they have no group velocity along the duct, so they do not leave, and the
+  matched layer does not remove them. The inconsistent start excites them, and they then radiate into the probe column
+  for the rest of the run. (The plain form damps them: NCP45 shows the plain form's own reflection.)
+
+So the measured 4 to 9 percent is read as the ringing started by an initial state that violates the layer's equations,
+not as the reflection of an incoming wave. The diagnostic supports this reading (no decay, a period that is not the
+train's); it does not prove it, and the corrected run below is the test of it. This is a defect of the set-up. It is also
+a real property of the matched form that the registration did not list, and it goes into the limits: **waves along the
+layer are not damped by the matched form; in a rigid duct a transient in the layer leaves transverse standing waves
+behind.**
+
+### DR8. The state of a wave train inside the matched layer (closed form)
+
+For any waveform `G` and the two families `xi+- = x cos +- y sin` the following satisfies the four equations of DR4
+exactly (verified by substitution, by hand), with `I(x)` the integral of the rate from the front to `x`, `A(x) =
+exp(-cos(theta) I(x)/c)` and `calG` the antiderivative of `G` with zero mean:
+
+    p'   = eps A [G(xi+ - c t) + G(xi- - c t)]
+    Q    = -(eps A / c) [calG(xi+ - c t) + calG(xi- - c t)]
+    u'   = cos(theta) p' / (rho0 c)
+    v'   = sin(theta) [(p'+ + rate Q+) - (p'- + rate Q-)] / (rho0 c)
+    rho' = p' / c^2
+
+(the incident wave, attenuated without distortion; `p'+-`, `Q+-` the parts of the two families). In front of the layer
+`A = 1`, `rate = 0` and this is the train.
+
+### The corrected checks
+
+**Set-up D2** = set-up D with these changes and no other (grids, boundaries, layer, probe column, window `t_s <= t <= T`
+and the measure are those of the table of set-up D):
+
+1. The initial state of the run with the matched layer is DR8 at `t = 0` in every cell, and its memory is set to the `Q`
+   of DR8 in the cells with a positive rate. `calG` is computed with Simpson's rule (256 intervals).
+2. Every run starts from the linear relations of DR8 (not from finite-amplitude simple waves), so that the reference run
+   and the test run have the same state in front of the layer. With `eps = 1e-4 p0` the two differ by `1e-4` relative.
+3. Only the matched form is run. NC30, NC45, NC60 and NCP45 held in the registered run and are not run again.
+
+This needs one addition to the library: `CompressibleSolver::set_sponge_memory` (set `Q`; a restart of a run with a
+matched sponge needs it as well).
+
+| id | run | limit | estimate |
+|---|---|---|---|
+| A30b, A45b, A60b | set-up D2, matched form, Thompson behind | `R <= 0.01` each | steady state by DR7 `4.6e-7`, `9.8e-6`, `3.3e-4`; left over: the difference between DR8 and the solver's own steady state in the layer (the scheme's error at 8 cells per pulse width, a few percent of the attenuated wave), part of which starts the same ringing. Not computable beforehand; expected below `5e-3` |
+
+**X45: one isolated pulse at 45 degrees in a half space** (the set-up of X1, which has no second wall and therefore no
+standing wave; heavy). Test `box_2d(710, 550, 3.55, 2.75)`, reference `box_2d(1200, 550, 6.0, 2.75)`; `ymin` `Slip`, `ymax`
+and `xmin` `Extrapolate`, `xmax` Thompson; initial field `eps [g(x cos + y sin - xi0) + g(x cos - y sin - xi0)]` as simple
+waves, `xi0 = 0.2243` (`= 3.35 cos - 2.1445`); layer front `X_i = 3.35`, matched form, memory zero (the pulse is outside
+the layer); probe: the cell with centre `(3.2475, 0.0025)`; run until `t >= 2.70`, window: all steps. Timing: the peak
+reaches the layer front at the wall at `t = 2.1445`; the reflection from the end of the layer with a tail of `5 w` has
+passed the probe at `t = 2.698`; at `t = 0` the pulse is `5.0 w` in front of the layer at `y = 2.75`; `ymax` is 2.7475 from
+the probe, `xmin` 3.2475, the reference's end 2.7525. The part of the upward family that would lie at `x < 0` is not in
+the domain; it is produced by the reflection of the downward family at the wall, and what the cut at `xmin` sends cannot
+reach the probe in time. Limit `R <= 0.01`. Estimate: DR7 `9.8e-6` plus the scheme; X1 measured `2.4e-5`.
+
+An isolated pulse at 60 degrees is not registered: about 2 million cells over 4200 steps.
+
+The measure's code steps the reference run and the test runs in two threads (the same arithmetic).
+
+### Decision rule (replaces the first bullet of the registered rule; the rest stands)
+
+- **Acceptance met in the library** when A0, A30b, A45b, A60b, X1 and X45 meet 1 percent, B1 and B2 hold, U, F, S meet
+  their limits, NC30, NC45, NC60 hold and every mutation is caught. If X1 and X45 meet the limit and an A..b check misses,
+  the acceptance is "met for isolated pulses at 0, 30 and 45 degrees, not shown at 60 degrees" and the status is partial
+  with that miss named. MU2 is run against A45b instead of A45.
