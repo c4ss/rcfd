@@ -2,7 +2,8 @@
 //!
 //! * [`IntegrationPointField`]: strain `B u` and stress `D eps` at every point of each element's stiffness rule, with the
 //!   point's position and weight `w det J`, element by element in element order (D1); element means and the strain energy
-//!   `sum w det J eps . sigma / 2` (D2); [`attach`] stores strain and stress in a [`SolidResult`].
+//!   `sum w det J eps . sigma / 2` (D2); [`attach`] stores strain and stress in a [`SolidResult`]. With a temperature field
+//!   (ADR 0281) the stress is `D (eps - eps_th)`, the thermal strain is kept per point and the energy is the elastic one.
 //! * Nodal values (D3): per element by extrapolation from the points with a polynomial fitted to them
 //!   ([`extrapolation_matrix`], [`element_nodal_values`]), then averaged over the elements of a region weighted by element
 //!   volume ([`nodal_average`]); averaging across a material interface is refused.
@@ -18,6 +19,7 @@ use crate::error::{FemError, Result, SetKind};
 use crate::material::PointContext;
 use crate::mesh::ElementKind;
 use crate::model::{SolidModel, SolidResult};
+use crate::thermal;
 use rcfd_core::vec3::{cross, dot, norm, Vec3};
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -30,6 +32,7 @@ pub struct IntegrationPointField {
     weights: Vec<f64>,
     strain: Vec<[f64; 6]>,
     stress: Vec<[f64; 6]>,
+    thermal: Option<Vec<[f64; 6]>>,
 }
 
 impl IntegrationPointField {
@@ -53,9 +56,14 @@ impl IntegrationPointField {
             weights: Vec::new(),
             strain: Vec::new(),
             stress: Vec::new(),
+            thermal: None,
         };
         field.offsets.push(0);
         let context = PointContext::default();
+        let temperature = thermal::temperature_field(model)?;
+        let delta_t: Option<Vec<f64>> =
+            temperature.map(|(nodal, reference)| nodal.iter().map(|t| t - reference).collect());
+        let mut thermal_strains: Vec<[f64; 6]> = Vec::new();
         for e in 0..ne {
             let located = |source: FemError| FemError::Element {
                 element: e,
@@ -67,15 +75,28 @@ impl IntegrationPointField {
             let ue: Vec<f64> = element_dofs(&dofs, nodes).iter().map(|&q| displacement[q]).collect();
             let material = &model.materials()[materials[e]].1;
             let rule = element.stiffness_rule();
+            let dte: Option<Vec<f64>> = delta_t.as_ref().map(|d| nodes.iter().map(|&n| d[n]).collect());
             for ip in element.integration_points(&coords, rule).map_err(located)? {
                 let eps = element.strain_at(&coords, &ue, ip.geometry.xi).map_err(located)?;
-                let (sigma, _) = material.stress(&eps, &context, &[]).map_err(located)?;
+                let (sigma, _) = match &dte {
+                    None => material.stress(&eps, &context, &[]).map_err(located)?,
+                    Some(dte) => {
+                        let dt = thermal::point_temperature_change(&ip.geometry.n, dte);
+                        let eth = thermal::thermal_strain(material, dt);
+                        let elastic: [f64; 6] = std::array::from_fn(|k| eps[k] - eth[k]);
+                        thermal_strains.push(eth);
+                        material.stress(&elastic, &context, &[]).map_err(located)?
+                    }
+                };
                 field.positions.push(ip.geometry.x);
                 field.weights.push(ip.weight);
                 field.strain.push(eps);
                 field.stress.push(sigma);
             }
             field.offsets.push(field.weights.len());
+        }
+        if delta_t.is_some() {
+            field.thermal = Some(thermal_strains);
         }
         Ok(field)
     }
@@ -101,9 +122,13 @@ impl IntegrationPointField {
     pub fn strain(&self) -> &[[f64; 6]] {
         &self.strain
     }
-    /// Stress at every point.
+    /// Stress at every point (`D (eps - eps_th)` when the model has a temperature field).
     pub fn stress(&self) -> &[[f64; 6]] {
         &self.stress
+    }
+    /// Thermal strain at every point (ADR 0281), `None` when the model has no temperature field.
+    pub fn thermal_strain(&self) -> Option<&[[f64; 6]]> {
+        self.thermal.as_deref()
     }
     /// Number of points.
     pub fn n_points(&self) -> usize {
@@ -152,15 +177,28 @@ impl IntegrationPointField {
             .collect())
     }
 
-    /// Strain energy of each element, `sum w det J eps . sigma / 2`.
+    /// Strain energy of each element, `sum w det J eps . sigma / 2`; with a temperature field the elastic energy `sum w det
+    /// J (eps - eps_th) . sigma / 2` (ADR 0281 D3).
     pub fn element_strain_energy(&self) -> Vec<f64> {
-        (0..self.n_elements())
-            .map(|e| {
-                self.points_of(e)
-                    .map(|q| self.weights[q] * energy_density(&self.strain[q], &self.stress[q]))
-                    .sum()
-            })
-            .collect()
+        match &self.thermal {
+            None => (0..self.n_elements())
+                .map(|e| {
+                    self.points_of(e)
+                        .map(|q| self.weights[q] * energy_density(&self.strain[q], &self.stress[q]))
+                        .sum()
+                })
+                .collect(),
+            Some(th) => (0..self.n_elements())
+                .map(|e| {
+                    self.points_of(e)
+                        .map(|q| {
+                            let elastic: [f64; 6] = std::array::from_fn(|k| self.strain[q][k] - th[q][k]);
+                            self.weights[q] * energy_density(&elastic, &self.stress[q])
+                        })
+                        .sum()
+                })
+                .collect(),
+        }
     }
 
     /// Strain energy of the model, the sum of the element energies in element order.
