@@ -266,3 +266,44 @@ One geometry for the coupled runs (the piston column, translation only, the mome
 static evaluation on two sheared meshes, not a coupled run; a general unstructured wall cell is not tested. The sliding
 step is measured on rigid rotation only (the wall moves tangentially; its prescribed gradient is the centripetal one).
 The Studio's and GUI's editors are not touched (they read the schema). No case file in `cases/`.
+
+## Amendment 1 (2026-11-12, after the one run of the registered tests, before any further run)
+
+**The run.** `cargo test --release -p rcfd-api --test wall_pressure_case_f358 -- --nocapture --test-threads=1` on
+fc193d15, once (54 s): 10 passed, 1 failed, 1 ignored (the record L, not run). **AU1 missed all three of its limits**:
+
+| Step | `g` | default | corrected | report |
+| --- | --- | --- | --- | --- |
+| 3 | `-0.3915` | `4.083e-2` | `2.617e-2` | `4.963e-2` |
+| 4 | `-0.3877` | `1.501e-2` | `2.254e-3` | `2.584e-2` |
+| 6 | `-0.3753` | `1.323e-2` | `5.09e-4` | `2.429e-2` |
+| 8 | `-0.3571` | `1.290e-2` | `2.03e-4` | `2.414e-2` |
+| 12 | `-0.3041` | `1.290e-2` | `2.47e-4` | `2.437e-2` |
+
+Limits: default within 1 percent of `1.25e-2`, corrected `<= 1e-4`, report within 1 percent of `2.5e-2`. The other
+checks of that run are in the addendum; none is re-run.
+
+**What the numbers show (no new run).** (1) A start-up part, common to the three evaluations and decaying over about
+six steps (`2.6e-2` at step 3 in the corrected deficit, `5e-4` at step 6). (2) Past it, a residual of about `2e-4` in
+the corrected deficit and `+3.7e-4` above `1/(4N)` in the default's. (3) The registration's identity "report minus
+corrected `= dx/(2L) = 0.025`" fails by `1.1e-3` at step 8 (`2.414e-2 - 2.03e-4 = 2.39e-2`): the report is the pressure
+part only, while the default and the corrected forces carry the viscous part (`nu = 0.01`), so the viscous part is about
+`1e-3` of the force, against `7e-6` on ADR 0252's piston. A viscous normal stress of that size means the fluid next to
+the resting wall does not move with it: the flow is not the plug the registration assumed. The registration's premise
+(the fluid moves as a plug with the box, the column's pressure is `a (L - x_rel)`) is therefore unverified, and the
+first-step start-up was not allowed for in the window "steps 3 to 12" (copied from ADR 0252's DP, where it was small).
+Not understood from this run: why a rigid box with a resting wall carries a non-plug flow.
+
+- **AU1 (registered form)** stays in the file as `au1_wall_at_rest_on_a_rigid_column_known_miss`, ignored, limits
+  intact, the numbers in its comment.
+
+**X1, an exploration registered here, before it is run: prints only, no limit, it decides nothing.**
+`x1_rest_column_exploration_prints_only` (ignored, run once by name), 20 steps of the AU1 case and of the same case with
+`algorithm = "pimple"`, `n_outer = 4` (the flow step converged), per step: the box velocity `w_n = (x(t_n) -
+x(t_{n-1}))/dt` of the expression; the largest `abs(u_x - w_n)/max abs(w)` over the cells and the same over the wall
+cells; the deficits of the default and the corrected evaluation **with the pressure part only** (`nu = 0` in the force)
+and the report's; the viscous part of the force over the force; `s = (p_0 - p_1)/(g dx)` of the first row of cells.
+What it is expected to show (guesses, written before the run): a non-plug start-up from the first step that the
+converged step removes; the viscous part responsible for most of the residual.
+
+A corrected AU1 follows in amendment 2, after X1 and before any corrected run.
