@@ -11,6 +11,7 @@ pub mod backend;
 pub mod matrix;
 pub mod precond;
 pub mod reorder;
+pub mod skyline;
 pub mod solvers;
 pub mod vecops;
 
