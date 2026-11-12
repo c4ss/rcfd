@@ -157,6 +157,13 @@ only, with no case key.
   (conservative; exact for linear fields with `Linear`). Coarsening merges a leaf with its buddy along one axis per call. In a
   slab repeated coarsening returns to the base; with three refined axes pair merges can leave a five-box tiling of a cell that
   they cannot merge further (a valid mesh, ADR 0267 amendment 1).
+* Box merge (F-439, ADR 0341, opt-in): `AnisoMesh::adapt_with(&marks, balance, Coarsening::Box)` merges, for each cell marked
+  `coarsen` along axes `C`, the smallest dyadic ancestor box (levels lowered only along `C`) that is exactly tiled by leaves
+  of the mesh, every one of them marked along each axis on which it is coarsened (and, with balance, kept within one level of
+  its face neighbours). The base cell is always an admissible ancestor under all-axes marks, so every call merges something
+  and repeated all-axes coarsening without balance returns any tiling (the five-box one included) to the base, with
+  `sum V q` conserved and linear fields kept exact. Measured: 26 states on two 3-D lattices back to the base in at most 6
+  calls; with balance the return is not derived (one recorded run reached the base). `adapt` (`Coarsening::Pair`) is unchanged.
 * Criterion (`rcfd_fv::adaptive`): `axis_variations` gives `E_a = |dU/dx_a| h_a` per axis; `directional_axes` splits the axes
   with `E_a >= theta max_b E_b` (`theta = 1/2` keeps the per-axis variations within a factor two);
   `directional_target_marks` ranks cells by the edge-length-weighted indicator and counts `2^|S| - 1` new cells per split;
