@@ -3436,13 +3436,41 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     aerodamping versus nodal diameter, generalised-force outputs, interblade phase angle and phase-shifted methods.
     Acceptance addition: an oscillating flat-plate cascade gives aerodynamic damping versus interblade phase angle
     within 10 percent of published curves.
-- [ ] **F-139** Multiphysics co-simulation participant interface (data transfer, coupling time steps) for external structural solvers
+- [x] **F-139** Multiphysics co-simulation participant interface (data transfer, coupling time steps) for external structural solvers
   - depends on: F-085, F-063
-  - acceptance: A mock structural participant exchanges wall displacement/force with rcfd and converges a coupled iteration; the protocol is documented
-  - note: P4 (long-term). Gap: multi-physics system coupling and intrinsic FSI options. SCOPE (merged review): add
-    conservative and profile-preserving mapping, RBF mapping, unmapped-value policy, ramping, relaxation, quasi-Newton
-    stabilisation, extrapolated step initialisation and simultaneous multi-participant update; functional-mock-up import
-    in F-242.
+  - acceptance: A mock structural participant exchanges wall displacement/force with rcfd and converges a coupled
+    iteration; the protocol is documented
+  - note: P4 (long-term). DONE pending acceptance (ADR 0256, 2026-11-12; registered before the code, one amendment
+    before any run). In-process library interface rcfd_fv::cosim, opt-in, nothing calls it; no transport, case key, CLI
+    or MCP tool. Protocol (docs/cosimulation-protocol.md): a fluid and a structural participant answer describe, time,
+    checkpoint, restore, forces and advance with plain arrays in SI units (face forces of the fluid on the wall in
+    newtons, displacements from the reference configuration in metres); the coupler owns the mapping (weights from
+    structural nodes to wall points, rows summing to 1, consistent; forces back by the transpose through the face means,
+    conservative in resultant and work) and iterates within a coupling step on the nodal force with a fixed or an Aitken
+    factor until the force residual is below tolerance times max(force, floor); at the cap it restores and stops, or
+    keeps the iterate by a setting; a failing participant (error, wrong length, non-finite value, wrong time) stops the
+    step with an error naming participant, time and iteration, both restored bit for bit. Fluid participant FlowWall
+    (moving-mesh PISO step, per-face loads from the new sixdof::patch_face_forces, wall pressure from the prescribed
+    gradient of ADR 0252); mock structural participant SprungWall (lumped sprung nodes, RK4). Model problem: a sprung
+    wall of six nodes closing a channel of 20 x 8 x 2 cells whose 16 wall faces do not match the nodes, cosine modes
+    with omega_j^2 = k/(m + rho tanh(kappa_j L)/kappa_j), mass ratios 4 and 0.51. Measured: every one of 650 steps
+    converged, 7 to 10 iterations (mean 8.8, tolerance 1e-8); omega_m/omega 0.998618 (mode 0, limit 0.5 %) and 1.011453
+    (mode 1, limit 3 %), within 7e-6 and 2e-5 of the discrete model computed before the code (the 1.1 % of mode 1 is the
+    six-node structure); turning points never grow (0.926, 0.950 per period); resultant and work equal on the two meshes
+    to 1e-16, in the run to 5e-16, swept volume to 2e-14; a repeated step restores both participants and repeats bit for
+    bit; with one rigid node the result equals fsi::strong_step_with to 1e-16; controls: the plain fixed point
+    multiplies the residual by 2.0 per iteration (511 in 10), the loose coupling passes 10 X at step 27, the fixed
+    added-mass factor 1/3 takes 30 iterations, an averaging force map loses 85 % of the resultant. Defaults
+    bit-identical (patch_force_moment sums the same face loads in the same order; sixdof, sixdof_coupled,
+    sixdof_flow_f244, strong_fsi_f251, added_mass_f351, f237_heat_rate, w27c_structural pass unedited; baseline hashes 3
+    passed). Eleven mutations each failed their tests. Amendment 1: the registered set-up had zero-gradient side walls,
+    which leave the side flux free for a transverse flow; Symmetry on the two sides replaced it before any run (the
+    record: mode 1 at 0.977). Not delivered, from the merged-review scope: a transport, a real structural solver,
+    geometric or radial-basis mapping, unmapped-value policy, ramping, quasi-Newton stabilisation, extrapolated step
+    initialisation, several participants; functional-mock-up import stays in F-242. Open: ADR 0256 Q1 to Q5. Follow-ups
+    (ADR 0256 questions 1 to 3, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-360,
+    F-361, F-362. To correct: docs/dynamic-mesh.md still says there is no strong coupling (stale since F-251) and lacks
+    a sentence on zero-gradient side walls (ADR 0256 Q4, Q5).
 
 ## Revision additions (F-200 to F-243)
 
@@ -6456,3 +6484,27 @@ fixed by the item's registration ADR before any code.
     step.
   - note: From ADR 0255, recommendation taken on the maintainer's standing instruction of 2026-11-11. A uniform flow
     cannot see the warped face geometry or the non-orthogonality.
+- [ ] **F-360** Co-simulation protocol over the solver service
+  - depends on: F-139, F-085
+  - acceptance: The calls of docs/cosimulation-protocol.md (describe, time, checkpoint, restore, forces, advance) are
+    served by the JSON-RPC service under a new protocol version; an out-of-process mock structural participant driven
+    over TCP reproduces ADR 0256 A1 and A2 (every step converged, omega_m/omega within 0.5 percent and 3 percent) and
+    the same displacements as the in-process run to 1e-12; a dropped connection or a participant error stops the step
+    with a located error and both sides restored; the protocol document is versioned; existing service tests and case
+    hashes are unchanged.
+  - note: From ADR 0256 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-361** Quasi-Newton acceleration of the coupled iteration
+  - depends on: F-139
+  - acceptance: A least-squares (quasi-Newton) update of the nodal force from the residual history of the step, opt-in
+    beside the fixed and Aitken factors, converges the model problem of ADR 0256 to 1e-8 in at most 7 iterations per
+    step and 6 or fewer on average (Aitken: 8.8), gives the same frequencies within 1e-6, and with one rigid node needs
+    no more iterations than Aitken; registered before the run with the plain fixed point as the diverging control.
+  - note: From ADR 0256 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
+  - depends on: F-139
+  - acceptance: InterfaceMap weights are built from the two interface meshes alone (nearest-element projection and a
+    radial-basis interpolation) for a planar and a cylindrical wall with non-matching meshes; rigid translation and
+    rotation are reproduced to 1e-12, resultant force, moment and work are conserved to 1e-12 by the transposed map, a
+    wall point outside the structure is refused or mapped by a stated policy, and the model problem of ADR 0256 gives
+    the same frequencies within 1e-3 with the built weights.
+  - note: From ADR 0256 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
