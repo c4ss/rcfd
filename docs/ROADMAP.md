@@ -6926,13 +6926,29 @@ fixed by the item's registration ADR before any code.
     `consistent_flags().enabled`; the three older PimpleSettings fields are removed with amendments to ADR 0214 and ADR
     0223; the schema golden edit is made only with the maintainer's approval; defaults bit-identical.
   - note: The remaining half of F-322 (ADR 0258). NEEDS THE USER before merge: the schema golden edit.
-- [ ] **F-367** Consistent correctors: the new combinations with periodic faces
+- [~] **F-367** Consistent correctors: the new combinations with periodic faces
   - depends on: F-322
   - acceptance: Non-orthogonal correctors, the component diagonal and face jumps are each accepted with periodic
     pressure faces under the consistent correctors once a registered periodic steady identity (velocity, and pressure
     with the mean removed against the default's own drift) is met for it; a combination that misses stays refused with
     its located message; defaults bit-identical.
-  - note: From ADR 0258 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: PARTIAL (ADR 0360, 2026-11-12). From ADR 0258 question 3, recommendation taken on the maintainer's standing
+    instruction of 2026-11-11. The consistent correctors accept non-orthogonal correctors, the component diagonal and
+    face jumps with periodic pressure faces under the opt-in PimpleSettings::consistent_periodic_extensions (default
+    false; ConsistentRefusal::PERIODIC_EXTENSIONS, ConsistentCorrectors::conflicts_extended / validate_extended;
+    conflicts and validate unchanged, so ADR 0258's V2 and R3 pass unedited). No numerical term is added: the default
+    has no non-orthogonal part on a coupled face and face jumps act on internal faces only, so the compensations of X1,
+    X2, X3 and E2 together already cover every face. Periodic steady identity on ADR 0223's periodic channel (velocity
+    1e-10 U0; mean-removed pressure against max(1e-10, 2x the default's own drift) of the range): non-orthogonal
+    correctors on a 26.6-degree shear 1.5e-12 U0 and 7.1e-11; face jumps 2.1e-12 and 4.2e-11 (also from the hook); the
+    component diagonal 3.9e-12 and 5.2e-10 (drift 5.6e-10); all three together 1.4e-12 and 1.2e-11; ADR 0223's E2 alone
+    passes the same limit (2.5e-10 against 6.6e-10). Transients differ from the default by 2e-6 to 2e-5 U0 at dt 0.001.
+    The other rows stay refused with their located messages (moving mesh, gradient options, periodic faces without the
+    periodic flag). Nine mutations caught. Defaults bit-identical (seven fingerprints recorded on 2ad9dcb9, the rcfd-fv
+    transient suites, baseline_hashes, case_hashes_w48u). Why partial: the registered set-up checks of the
+    component-diagonal and all-together channels missed (3000 steps do not reach a steady state with a symmetry plane,
+    whose start-up decays at nu (pi/2H)^2); their identities were met only after amendment 1 (8000 steps). The opt-in is
+    not yet folded into ConsistentCorrectors (ADR 0360 Q1) and there is no case key.
 - [ ] **F-368** Overset: opt-in skewness and non-orthogonal corrections in the overset step
   - depends on: F-359
   - acceptance: An opt-in of the overset step that adds the explicit non-orthogonal correction to the momentum diffusion
@@ -8575,3 +8591,11 @@ fixed by the item's registration ADR before any code.
     located message.
   - note: From ADR 0268 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     same forcing runs 8000 steps on M2 (ADR 0254) and 16 000 steps on T2 and M3 (ADR 0268); `build` runs on T.
+- [ ] **F-467** Consistent correctors: fold the periodic opt-in into the flags
+  - depends on: F-367
+  - acceptance: ConsistentCorrectors::all() with periodic accepts non-orthogonal correctors, the component diagonal and
+    face jumps with periodic pressure faces without PimpleSettings::consistent_periodic_extensions, which is removed;
+    the assertions of rows 4, 7 and 11 in consistent_value_f322 v2 and r3 are retired by an amendment to ADR 0258
+    approved by the lead; ADR 0360's identities pass unchanged; defaults bit-identical.
+  - note: From ADR 0360 question 1. NEEDS THE USER: it retires assertions of existing tests (consistent_value_f322 v2
+    and r3, rows 4, 7, 11) by an amendment to ADR 0258, which is the maintainer's to approve.
