@@ -253,3 +253,121 @@ S1, D1, D2 or D3 (a default changed): **todo** until repaired. No crate that bui
   preconditioner only.
 - The pattern and the factorisation are sequential; for the heavy case the IC(1) factorisation is a few seconds.
 - Only the elastic Hex8 cantilever of ADR 0282 is measured; no Tet10 and no thermal stiffness.
+
+## Addendum 1: results (2026-11-12)
+
+Code: registration 524fe154; library and tests c15dc076 (`crates/rcfd-linalg/src/precond.rs`: `ic_fill_pattern`,
+`IncompleteCholesky::with_fill`, `fill_entries`, `Permuted` inserted before the test module, no existing line changed;
+`crates/rcfd-linalg/src/reorder.rs`: `block_rcm_order` appended; `crates/rcfd-fem/src/solve.rs`: two `use` lines, the variant
+`CgPreconditioner::IncompleteCholeskyFill`, `IcOrdering`, `ic_fill_name`, one arm in `solver_name` and one in
+`preconditioned_cg`, no existing line edited; tests `crates/rcfd-linalg/tests/ic_fill.rs`,
+`crates/rcfd-fem/tests/sb_pcg_fill.rs`, `crates/rcfd-fem/tests/sb_pcg_fill_defaults.rs`); 6248dff6 rustfmt of `sb_pcg_fill.rs`
+(layout only, after the runs). Release profile throughout. Runs, each made once, logs in `w49i-work/f460-scratch`:
+`run1-ic_fill.log`, `run1-sb_pcg_fill.log` (fast tests), `run-h1.log` (heavy), `run-d1-branch.log` and `run-d1-main.log`
+(D1, the same file on a `git archive` of main 0a226bda with its own target), `run-d2-*.log`, `run-d3-baseline.log`,
+`mutations.log`. No amendment was needed.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A0 BJ and IC0 iterations (fast) | 156 and 85 | 156 and 85 | yes |
+| A1 relative residual, IC1 / RCM0 | `<= 1e-10` | 5.39e-11 / 4.22e-11 (0 refinement steps, no breakdown) | yes / yes |
+| A2 against direct, IC1 / RCM0 | `<= 1e-7` | 2.41e-13 / 5.30e-13 | yes / yes |
+| A3 iterations / BJ, IC1 / RCM0 | `<= 0.5` (78) | **58 / 156 = 0.372** / 82 / 156 = 0.526 | **yes** / no (recorded; RCM0 does not carry C3) |
+| A4 1 and 8 threads, IC1 / RCM0 | bit-equal | 58 / 58, 82 / 82, every displacement bit-equal | yes / yes |
+| C3 one variant meets A1 to A4 | one | IC1 | **yes** |
+| F1 forced breakdowns (tolerance 0.9) | as stated | IC1 "cg-ic1, shift 2.048e0 after 12 breakdown(s)", 235 iterations, 7.74e-11, 3.2e-13 from direct; RCM0 "cg-ic0-rcm, shift 1.024e0 after 11 breakdown(s)", 194 iterations, 6.08e-11, 4.9e-13; all finite | yes |
+| F2 breakdown diagonal `(1 + shift) K_qq` | bit-equal | every breakdown of both (first RCM0 breakdown at node 1616, the free-end corner, component 1) | yes |
+| S1 `{0, Natural}` against the existing IC0 | equal | 85 / 85 iterations, bit-equal | yes |
+| D1 hashes, branch and main 0a226bda | equal | direct `21c39eb0c554d5a4`, CG-Jacobi (162) `4035e2fb5d4197f5`, BJ (156) `d21ed14c8761bfec`, IC0 (85) `0a30d9ef9a8a932a` on both | yes |
+| D2 existing tests unedited | pass | `rcfd-fem` all test files (sb_pcg 13 passed, its 5 ignored records not run), `rcfd-linalg` lib 19 and all test files, `rcfd-fv` lib 104 | yes |
+| D3 baseline_hashes | pass | 3 passed, 1 ignored (as on main) | yes |
+| P1 level-1 pattern of the fast `K_FF` | equal to the closed form | 317 751 entries, equal; level 0: 150 351, equal to the stored lower pattern (both as arithmetic 2) | yes |
+| R1 node RCM | as stated, `< 257` | permutation, nodes contiguous and ascending, node bandwidth **140** (estimate `<= 217`); starts at node 1567 (free-end corner) | yes |
+| P2 IC(1) of K4 | `<= 1e-14` | no breakdown, shift 0, pivots 3.7e-17 from `(3, 5/3, 3/5, 1/3)`, `M^{-1} A x` 5.6e-16 | yes |
+| P3 permuted full pattern | `<= 1e-12` | 7.4e-17 | yes |
+| P4 high levels, refusals | as stated | K4 level 3 = level 1 (5 entries), A6 level 5 the full 15, the four refusals identical | yes |
+| L2 level 0 = `new` | bit-equal | K4 (9 breakdowns, shift 0.256) and five-point 12 x 10 | yes |
+| N1 IC1, RCM0 against IC0 | not bit-equal | not equal, both | yes |
+| N2 level 0 against level 1 pattern | not equal | not equal | yes |
+| N3 natural node bandwidth | 257 | 257 | yes |
+
+**Records X1 and H1** (clause c4; iterations with refinement steps in brackets, ratio to BJ):
+
+| Case | BJ | IC0 | IC1 | RCM0 | RCM1 |
+| --- | --- | --- | --- | --- | --- |
+| fast, L/h 5.3, 4704 unknowns | 156 (0), 1 | 85 (0), 0.545 | **58** (0), **0.372** | 82 (0), 0.526 | 57 (0), 0.365 |
+| slender, L/h 10.7, 9408 | 292 (1), 1 | 206 (1), 0.705 | 132 (1), 0.452 | 196 (2), 0.671 | 133 (1), 0.455 |
+| heavy, 103 968 | 477 (1), 1 | 255 (1), 0.535 | 171 (1), 0.359 | 250 (1), 0.524 | 160 (0), 0.335 |
+
+Strict-lower factor entries: fast 150 351 (level 0), 317 751 (IC1), 292 767 (RCM1); slender 303 951, 647 607, 596 415. Heavy
+times (whole solve with assembly, machine shared with other builds): BJ 1.7 s, IC0 7.2 s, IC1 10.7 s, RCM0 6.0 s, RCM1 10.5
+s; fast 0.08 to 0.15 s each. Relative residuals of every run between 4.2e-11 and 9.7e-11; no default IC broke down on any
+case. Direct solve: 6.5e-12 (fast), 7.1e-11 (slender), as in ADR 0282.
+
+**Diagnosis.** One level of fill does what arithmetic 4 expected and a little more: 0.68 of IC(0)'s count on the fast case
+(estimate 0.70 to 0.85), 0.64 on the slender, 0.67 on the heavy one, at 2.1 times the factor entries. RCM alone changes IC(0)
+by 2 to 5 percent (as recalled in arithmetic 4); with fill it saves 8 percent of the entries for the same counts as natural
+IC(1). The ratio to block Jacobi still rises with slenderness (0.37 to 0.45 from L/h 5.3 to 10.7): the low bending modes
+remain the limit.
+
+**Mutations** (scratch `git archive` of c15dc076, own target; `mutate.py`, `mutations.log`; each alone, fast tests of
+`ic_fill` and `sb_pcg_fill`, files restored and compared by SHA-256; the unmutated copy passes):
+
+| Id | Registered | Caught by |
+| --- | --- | --- |
+| M1 level `l_k + l_jk` | P1 | P1, S1, L2 (level 0 then fills too) |
+| M2 no fill | P1, P2 | P1, P2, C3 (IC1 = IC0) |
+| M3 fill initialised with the diagonal | P2 | P2, C3 |
+| M4 scatter without the order | P3, A1 or A2 | P3, the fast test, F1 |
+| M5 RCM returns the identity | R1 | R1, N1 (RCM0 = IC0) |
+| M6 RCM arm factors the unpermuted matrix | A1 or A2 (RCM0), N1 | **F2** (the RCM0 count rose to 1003; A1, A2, N1 held: the mismatched preconditioner is still SPD, so CG converges) |
+| M7 breakdown rows without the order | F2 | F2 |
+| M8 level ignored | N1 | N1, C3 |
+| M9 no shift in `with_fill` | F1 | F1 (`NoShift`), L2 |
+
+Every mutation is caught by a registered check in the registered run. M6 was caught by a different check than predicted
+(recorded above); no amendment was made.
+
+`cargo fmt -p rcfd-linalg --check` and `cargo fmt -p rcfd-fem --check`: clean (after 6248dff6, which only re-laid
+`sb_pcg_fill.rs`). `cargo clippy -p rcfd-linalg -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+
+**Deviations.**
+
+1. D2 ran `cargo test -p rcfd-fem --release` over the whole crate. That ran the new fast tests of `sb_pcg_fill` and
+   `sb_pcg_fill_defaults` a second time (deterministic, same code, passed). The registered numbers are those of
+   `run1-sb_pcg_fill.log`.
+2. M6 was predicted to fail A1, A2 or N1 and failed F2 instead (see the table).
+3. The formatting commit came after the runs and after the mutation copy was taken (layout only).
+4. Not run: the whole workspace (the lead runs the gate); a direct solve of the heavy case (not part of the item).
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). C3 holds by IC1: 58 iterations against the
+limit 78, residual 5.4e-11, 2.4e-13 from the direct solution, bit-identical for 1 and 8 threads. F1 and F2 hold for both
+variants. S1, D1, D2, D3, A0, P1 to P4, L2, R1 and N1 to N3 hold. X1 and H1 were run and recorded. Every mutation was caught
+without an amendment, so Rule I does not apply. RCM0 missed A3 (0.526); that is recorded and, by the rule, does not on its own
+make the item partial.
+
+**Remaining questions.**
+
+1. Which IC to recommend for the solid iterative route. Options: (a) keep `IncompleteCholesky` (IC0) as the documented
+   choice; (b) document `IncompleteCholeskyFill { level: 1, ordering: Natural }` as the recommended iterative choice (about
+   1.5 times IC0's time per iteration, two thirds of its iterations, twice its memory); (c) change a default.
+   Recommendation: (b), through the case-file key of F-386 (note below). (c) is not needed, since the default is the direct
+   solver.
+2. M6 showed that a mis-permuted factor still gives a correct solution, only slowly. Options: (a) leave it (F2 catches it);
+   (b) add a fast guard on RCM0's count (82). Recommendation: (a). The count is recorded here and F2 is in the suite.
+3. Slenderness: even IC1 drifts towards 0.45 at L/h = 10.7. Options: (a) a level-2 record; (b) leave the iteration target to
+   AMG with rigid-body modes (ADR 0305). Recommendation: (b).
+
+## For the lead: roadmap entries
+
+F-460: proposed status **done** (pending the maintainer's acceptance). Note:
+
+> From ADR 0282 addendum 1 (2026-11-12), Q1 recommendation. ADR 0357, 2026-11-12: rcfd_linalg::precond (appended) ic_fill_pattern (level-of-fill pattern of IC(p) on the lower CSR triangle), IncompleteCholesky::with_fill (the factor on that pattern with ADR 0282's shift A + alpha diag(A); level 0 equals IncompleteCholesky::new bit for bit) and Permuted (the preconditioner of P A P^T applied to A); rcfd_linalg::reorder::block_rcm_order (reverse Cuthill-McKee of the block graph, the rows of a block kept together); rcfd_fem::solve::CgPreconditioner::IncompleteCholeskyFill { options, level, ordering: IcOrdering::{Natural, NodeReverseCuthillMcKee} }, breakdowns mapped through the ordering to node and component. Fast Hex8 cantilever 32 x 6 x 6 (4704 unknowns): IC(1) needs 58 iterations against block Jacobi's 156 (ratio 0.372, limit 0.5), relative residual 5.4e-11, 2.4e-13 from the direct solution, bit-identical for 1 and 8 threads; IC(0) after node RCM 82 (0.526, recorded), IC(1) after RCM 57. Ratios to block Jacobi at L/h = 10.7: IC(0) 0.705, IC(1) 0.452, RCM IC(0) 0.671, RCM IC(1) 0.455; heavy case, 103 968 unknowns: 477 (block Jacobi), 255, 171, 250, 160 iterations. Forced breakdowns are reported with shift 2.048 (IC(1)) and 1.024 (RCM) and solved to 7.7e-11 and 6.1e-11. IC(0) in the natural order, block Jacobi, CG-Jacobi and the direct default are hash-identical to main; baseline hashes pass; nine mutations caught. Done pending the maintainer's acceptance.
+
+F-386 (solid case file), sentence to append to its note:
+
+> ADR 0357 (2026-11-12): the recommended iterative choice is CgPreconditioner::IncompleteCholeskyFill { options: IcOptions::default(), level: 1, ordering: IcOrdering::Natural } (two thirds of IC(0)'s iterations at twice its memory); a case-file key for the iterative route should map onto it and onto the ordering.
+
+F-381, sentence to append to its note:
+
+> ADR 0357 (2026-11-12, F-460): with one level of fill, incomplete Cholesky needs 0.372 of block Jacobi's iterations on the fast cantilever (58 against 156), so IC(1) meets the half-iterations target of this item; IC(0) itself is unchanged.
