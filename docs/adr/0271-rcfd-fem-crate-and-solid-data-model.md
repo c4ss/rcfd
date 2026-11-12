@@ -371,3 +371,108 @@ file.
 ### Request from the intermediate-tier plan (ADR 0290, 2026-11-12)
 
 The intermediate tier adds fields to the model data (ADR 0290, scaffold ADR 0291). Build models in this ADR's tests through constructors, not struct literals, so that a later field does not break them.
+
+## Addendum 1: results (2026-11-12)
+
+Code at the commits after the registration: the new crate `crates/rcfd-fem` (`Cargo.toml`; `src/lib.rs`, `error.rs`,
+`mesh.rs`, `model.rs`, `builders.rs`; one-line stubs `convert.rs`, `element.rs`, `quadrature.rs`, `material.rs`,
+`assemble.rs`, `constraint.rs`, `solve.rs`, `loads.rs`, `recover.rs`, `thermal.rs`, `mass.rs`, `modal.rs`; `tests/sb_model.rs`),
+and in existing files only: `Cargo.toml` (the member line and the `[workspace.dependencies]` line), `Cargo.lock` (the new
+package, 9 lines), `crates/rcfd-cli/tests/workspace_graph.rs` (the line `"rcfd-fem" => 2,`), `docs/architecture.md` (the
+graph line and `fem` in the layer-2 list). The registered run was made once, in release, with `cargo test -p rcfd-fem --release
+-- --nocapture --test-threads=1` (`sb_model` 11 passed). Log: `w49i-work/f370-scratch/run1.log`. A following commit only
+reformatted (rustfmt) and wrote two expressions out for clippy (`divisions.contains(&0)`; the Jacobian refusal `!(j > 0.0)` as
+`j.is_nan() || j <= 0.0`, the same truth table); `sb_model` was run once more on that final tree as a confirmation, not as a
+registered run (`confirm_final_tree.log`): every printed number is identical.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| G1 workspace graph (release) | 4 pass | 4 passed (`graph.log`) | yes |
+| G2 `cargo tree -p rcfd-fem -e normal --depth 1` | core, mesh, linalg only | rcfd-core, rcfd-linalg, rcfd-mesh (`tree.log`) | yes |
+| G3 baseline hashes (release, unedited) | pass | 3 passed, 1 ignored as before (`baseline_hashes.log`) | yes |
+| G4 diff against the merge base | listed files only | `Cargo.toml` +2, `Cargo.lock` +9 (the new package), `workspace_graph.rs` +1, `architecture.md` +2 -1, this ADR, the new crate | yes |
+| G5 lints, no unsafe | as stated | `[lints] workspace = true`; no `unsafe` in the crate; M10 refused by the compiler | yes |
+| K1 min det J (hex n = 1, 2, 5; tet n = 1, 2, 5) | `> 0` | 2.389e-1, 2.986e-2, 1.911e-3; 1.911, 2.389e-1, 1.529e-2 (= `h_x h_y h_z / 8` and `h_x h_y h_z`) | yes |
+| K2 volume, relative | `<= 1e-12` | hex 1.2e-16, 1.2e-16, 1.4e-15; tet 1.2e-16, 4.6e-16, 1.9e-15 | yes |
+| K3 face-set areas, relative (max of six); face counts | `<= 1e-12`; `n^2`, `2 n^2` | hex 4.9e-16, 6.5e-16, 3.3e-16; tet 0, 1.6e-16, 7.6e-16; counts as stated | yes |
+| K3b outward normals | `<= 1e-14` | hex up to 4.0e-16; tet 0 | yes |
+| K4 face incidence: boundary = six sets, interior shared by two, opposite orientation | as stated | hex boundary 6, 24, 150, interior 0, 12, 300; tet boundary 12, 48, 300, interior 6, 72, 1350 (closed forms) | yes |
+| K5 counts | as stated | nodes 8, 27, 216; elements `n^3`, `6 n^3` | yes |
+| Q1 Tet10 nodes = nodes + edges | closed form and counted | 27 = 8 + 19, 125 = 27 + 98, 1331 = 216 + 1115; counted edges equal the closed form | yes |
+| Q2 mid-edge node against the mean of its ends | `<= 1e-15` | 0 (all three) | yes |
+| Q3 Tet10 geometry (K1 to K4) | as K1 to K4 | min det J as tet; volume 4.6e-16, 8.1e-16, 1.7e-15; areas up to 4.9e-16; normals up to 4.2e-15; incidence as tet | yes |
+| Q4 upgrade of Hex8 refused | block 0, Hex8 | as stated | yes |
+| R1 inverted element | element named | tet "element 5: inverted (det J = -2.39e-1 at local node 0)"; hex element 0; Tet10 element 0 (det J = -5.73 at local node 1) | yes |
+| R2 repeated node | element 3 | "element 3: node 0 appears twice" | yes |
+| R3 empty sets | `'empty_set'` named | node, element and surface set each refused naming it | yes |
+| R4 `e` = 0, -1, NaN, inf | key `e` | all four refused naming `'e'`; `e = 1e-300` accepted | yes |
+| R5 `nu` = -1, 0.5, -1.5, 0.7, NaN | key `nu` | all five refused naming `'nu'`; -0.999, 0, 0.499 accepted | yes |
+| R6 other refusals; valid model | as stated | as stated; the valid model with every load kind validates | yes |
+| D1 `DofMap` | as stated | as stated | yes |
+
+**Mutations** (scratch copy by `git archive` of the final tree, own target directory, each alone by exact text replacement,
+`sb_model` run once, file restored and compared by SHA-256; `f370-scratch/mutate.py`, `mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| M1 Kuhn swap removed | K1: `tet_box` refuses its own odd tetrahedra (also Q1, R1, R2, whose fixtures use `tet_box`) |
+| M2 Hex8 face 5 inward | K3b (the normal check fails first, before K4 is reached) |
+| M3 Jacobian refusal `j < -1e300` | R1 |
+| M4 repeated-node check removed | R2 (`InvertedElement { element: 3, jacobian: 0 }` instead of `RepeatedNode`) |
+| M5 `nu <= 0.5` | R5 |
+| M6 edge key unsorted | Q1 (143 nodes instead of 125 at n = 2) |
+| M7 mid-edge nodes 5 and 6 swapped | Q2 |
+| M8 centroid weight -3/4 | Q3 (Tet10 volume) |
+| M9 empty-set checks removed | R3 |
+| M10 an `unsafe` block in `lib.rs` | G5: "error: usage of an `unsafe` block", the crate does not compile |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets -- -D warnings` (debug and release): clean after
+the lint commit above (the first clippy run flagged `manual_contains` and `neg_cmp_op_on_partial_ord`).
+
+**Deviations.**
+
+1. Arithmetic 1 of the registration evaluated `E(5)` wrongly as 1205 (and the Tet10 node count as 1421). The registered closed
+   form `3 n (n+1)^2 + 3 n^2 (n+1) + n^3` gives `540 + 450 + 125 = 1115` and 1331 nodes; the test evaluates the formula and
+   also counts the edges independently, and both agree with the upgrade. The limit (equality with the closed form) is
+   unchanged; only the hand-written value was wrong.
+2. M3 is applied to the expression of the final tree (`jacobian.is_nan() || jacobian <= 0.0`), the registered `det <= 0`.
+   M7 "local edges 5 and 6" is read as the edges that carry the mid-edge nodes 5 and 6 (entries 1 and 2 of `TET_EDGES`).
+3. Q3 carries one assertion beyond the registered table: on the Tet10 boxes the node sets of the six faces equal the nodes of
+   their surface sets (the both-ends rule of D4 is exact on the Kuhn boxes). It passed.
+4. The whole workspace was not tested (the lead runs the gate); no shared solver file was changed; G1 and G3 were run in
+   release on this branch.
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). G1 to G5, K1 to K5, Q1, Q2 and R1 to R5 are
+met for every box and n, and so are the extensions K3b, Q3, Q4, R6 and D1; every mutation fails a registered check.
+
+**Remaining questions.**
+
+1. Node orders of Hex8 and Tet10 (D2) are recalled as VTK's. Options: (a) ADR 0278 confirms them from the public VTK document
+   and, if one differs, maps in the writer; (b) change the order here now. Recommendation: (a); the element library (ADR 0273)
+   should take the order of D2 as fixed.
+2. Moving nodes (ADR 0272's projection of mid-edge nodes onto a curved surface). There is no mutating node API; a moved mesh is
+   rebuilt through `SolidMesh::new` and `add_block`, so the validation (det J at every node) runs again. Options: (a) keep it
+   so; (b) add `SolidMesh::with_nodes(nodes)` that re-validates every block. Recommendation: (a) for the basic tier; (b) is a
+   few lines if ADR 0272 finds the rebuild awkward, and is an addition, not an edit of existing behaviour.
+3. Density 0 is accepted (open point 5). Options: (a) keep, the mass matrix of ADR 0284 refuses a model with zero mass; (b)
+   refuse here. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+F-370: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0271, 2026-11-12: the crate rcfd-fem in layer 2 (rcfd-core, rcfd-mesh, rcfd-linalg only; the one approved line of workspace_graph.rs, the architecture page) with the solid data model as validated data through constructors (private fields, non-exhaustive enums and variants): SolidMesh with Tet4, Hex8, Tet10 blocks in the VTK node order (to be confirmed by ADR 0278), outward local faces, node, element and surface sets, and refusals naming the element, node, block, set or key (node out of range, node repeated, det J <= 0 at any node, empty or duplicate sets); DofMap (the only place that knows the unknowns per node), Material (isotropic elastic: e > 0, nu in (-1, 0.5), density >= 0), Constraint, Load (plain data on named sets: nodal force, traction, pressure, gravity, centrifugal, nodal body force, temperature), SolidModel, SolidResult; the builders hex_box, tet_box (Kuhn six-tetrahedra split) and upgrade_to_tet10; the module stubs of the tier. On boxes of 1, 8 and 125 hexahedra and their 6, 48 and 750 tetrahedra (edges 1.3, 0.7, 2.1): det J > 0 at every node, volume within 1.9e-15 relative (limit 1e-12), each face set's area within 7.6e-16 (limit 1e-12), outward normals, boundary faces exactly the six sets and interior faces shared by two oppositely oriented elements; the quadratic upgrade has 27, 125, 1331 nodes (nodes plus edges, counted and closed form) with every mid-edge node at the mean of its ends exactly (limit 1e-15) and passes the same geometry checks; inverted elements, a repeated node, empty sets, E <= 0 and nu outside (-1, 0.5) are refused naming the element or the key. Baseline hashes unchanged; ten mutations caught.
+
+F-371 (ADR 0272), sentence to append to its note:
+
+> ADR 0271 (2026-11-12): upgrade_to_tet10 returns the list of mid-edge nodes with their ends (for the projection); a moved mesh is rebuilt through SolidMesh::new and add_block, which re-validate det J at every node; box surface and node sets are named xmin to zmax as the rcfd_mesh::gen patches.
+
+F-372 (ADR 0273), sentence to append to its note:
+
+> ADR 0271 (2026-11-12) fixes the node orders and local faces of Tet4, Hex8 and Tet10 (rcfd_fem::mesh, TET_EDGES: mid-edge nodes 4 to 9 on edges 01, 12, 02, 03, 13, 23) and provides ElementKind::shape_gradients for the geometry; Material::isotropic_elastic holds the validated e, nu, density, expansion.
+
+F-377 (ADR 0278), sentence to append to its note:
+
+> ADR 0271 (2026-11-12) recalls the Hex8 and Tet10 node orders as VTK's (cell types 12 and 24) without a check; confirm them from the public file-format document and map in the writer if one differs.
+
+No follow-up items.
