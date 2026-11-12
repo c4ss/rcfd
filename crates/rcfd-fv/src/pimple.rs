@@ -1668,7 +1668,7 @@ impl PimpleSolver {
             }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with
-            let rc = s.rhie_chow_step_consistent && !s.consistent_correctors && self.ale.is_none();
+            let rc = s.rhie_chow_step_consistent && !cf.enabled && self.ale.is_none();
             let gamma_p = if rc {
                 face_consistent::harmonic_face(&g, &r_au)
             } else {
