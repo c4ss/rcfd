@@ -6863,7 +6863,9 @@ fixed by the item's registration ADR before any code.
     and their moment within 1e-10; a model that leaves a rigid-body motion free is refused with a message saying so, a
     constraint on a missing node with its id.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0275; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0274 (2026-11-12) measured that on a box numbered lexicographically
+    the natural order factorises 6 x faster than RCM (27-point node graph); ADR 0274 recommends
+    rcfd_linalg::skyline::SkylineOrdering::SmallerEnvelope for the static solve.
 - [ ] **F-375** Surface and body loads: traction, pressure, gravity, centrifugal load of a rotating part, body force field
   - depends on: F-374
   - acceptance: Every limit not stated here is registered in the ADR before the run. Consistent nodal loads for surface
@@ -6947,7 +6949,7 @@ fixed by the item's registration ADR before any code.
     result. The default solver and its results are unchanged bit for bit.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0282; the registration is written
     by the implementation agent before any code.
-- [ ] **F-382** Eigensolver for K x = lambda M x: dense Jacobi and subspace iteration on the direct factorisation
+- [x] **F-382** Eigensolver for K x = lambda M x: dense Jacobi and subspace iteration on the direct factorisation
   - depends on: F-373
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a dense symmetric
     eigensolver and the lowest m eigenpairs of K x = lambda M x (K symmetric, M symmetric positive definite) by subspace
@@ -6958,8 +6960,22 @@ fixed by the item's registration ADR before any code.
     1e-9; residual |K x - lambda M x| <= 1e-8 |K x| for every returned pair; a singular K (free chain) with sigma > 0
     returns its zero eigenvalue below 1e-9 of the first non-zero one; the count below the m-th eigenvalue equals m - 1;
     no convergence within the cap is an error stating the residuals.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0283; the registration is written
-    by the implementation agent before any code.
+  - note: DONE pending acceptance, merged 2026-11-12. Structural solver, basic tier (plan ADR 0270). ADR 0283,
+    2026-11-12: rcfd_linalg::eigen: dense symmetric eigensolver by cyclic Jacobi with the relative rotation test
+    (symmetric_eigen; generalized_eigen_dense by Cholesky reduction), and lowest_eigenpairs of K x = lambda M x by
+    subspace iteration on the envelope factor of K + sigma M (ADR 0274) with a Rayleigh-Ritz step, q = max(2m, m+8)
+    start vectors, a residual test per pair (1e-10 on the shifted operator), clusters crossing m completed, an automatic
+    or given shift, and a Sturm count from the signs of D of K - s M (count_below, Sylvester's law of inertia) that
+    verifies no eigenvalue was missed. Tridiagonal (2, -1) n = 200: lowest 10 within 4.0e-15 relative (limit 1e-10);
+    5-point 30 x 30: four doubled eigenvalues with their multiplicity, within 8.1e-16, M-orthonormal within 1.8e-15
+    (limit 1e-10); with a non-uniform diagonal M against the dense solver within 1.5e-12 (limit 1e-9); residuals at most
+    8.3e-11 (limit 1e-8); free chain with sigma > 0: zero eigenvalue 2.1e-13 of the first non-zero one (limit 1e-9);
+    counts below the m-th eigenvalue m - 1; the cap is an error stating the residuals; a deliberately deficient start is
+    caught by the count (9 eigenvalues below the shift, 5 found). Consistent-mass bar within 5.0e-14 of the closed form;
+    bit-identical for 1 and 8 threads; dense reference of 900 unknowns in 22.6 s. Nine mutations caught. Existing
+    rcfd-linalg tests unedited and passing. ADR 0274 (2026-11-12) provides PivotRule::NonZero and SkylineLdlt::inertia()
+    (counts of negative and positive pivots) for the eigenvalue count, checked on shifted 12^3 Laplacians (1 and 32
+    eigenvalues below the shift); rcfd-linalg/src/lib.rs already has the skyline line, and ADR 0283 adds its own.
 - [ ] **F-383** Mass matrix and linear modal analysis of a solid model
   - depends on: F-374, F-382
   - acceptance: Every limit not stated here is registered in the ADR before the run. Consistent mass matrix for Tet4,
@@ -6972,7 +6988,9 @@ fixed by the item's registration ADR before any code.
     estimated in the registration (0.15 and 0.9 percent); on a symmetric Hex8 mesh the two bending planes give the same
     frequency within 1e-6 relative; mode shapes are M-orthonormal within 1e-9.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0284; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0283 (2026-11-12) provides rcfd_linalg::eigen::lowest_eigenpairs
+    (Shift::Auto handles a singular K; request m >= 7 for a free body so that the Sturm check covers the six rigid
+    modes) and generalized_eigen_dense for references up to about 1000 unknowns (22.6 s at 900).
 - [ ] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
   - depends on: F-371, F-377, F-380, F-237
   - acceptance: Every limit not stated here is registered in the ADR before the run. A surface set of a solid mesh is
