@@ -5971,9 +5971,10 @@ fixed by the item's registration ADR before any code.
     suites of rcfd-particles and rcfd-api, H1, baseline hashes). Not in it: no flow solver of rcfd consumes the record;
     the normal momentum of a TAB breakup is booked as a residual without a carrier counterpart (the source conserves it
     on the average; 1.45e-3 of the drag impulse in the spray). Open: ADR 0230 Q1 (one method or two), Q2 (breakup
-    momentum), Q3 (enthalpy datum, constant latent heat), Q5 (where the solver wiring goes). Case-tree wiring (optional
-    particles.evaporation and particles.breakup tables, ADR 0224 question 2) goes with F-252. Q5: the recommendation (a
-    separate item) taken on the maintainer's standing instruction of 2026-11-11: F-326.
+    momentum), Q3 (enthalpy datum, constant latent heat), Q5 (where the solver wiring goes). Case-tree wiring of the
+    transient two-way path (optional particles.evaporation and particles.breakup tables) done by F-326 (ADR 0348,
+    2026-11-12); the comparison with data stays with F-252. Q5: the recommendation (a separate item) taken on the
+    maintainer's standing instruction of 2026-11-11: F-326.
 - [x] **F-324** Tet mesher: output validity check inside tetrahedralize
   - depends on: F-306
   - acceptance: tetrahedralize checks its output (every cell positive, volume equal to the enclosed volume) and returns
@@ -5994,7 +5995,7 @@ fixed by the item's registration ADR before any code.
   - depends on: F-306
   - acceptance: Fingerprints for the 118 fold-free inputs of the F-306 sweep are recorded on Linux by the ADR 0137 procedure at the next Linux gate, and the F-306 N1 checks compare them.
   - note: From ADR 0228 question 6, recommendation taken. Needs a Linux gate run.
-- [ ] **F-326** Droplet feedback in the transient two-way path
+- [~] **F-326** Droplet feedback in the transient two-way path
   - depends on: F-323
   - acceptance: With the droplet exchange on, the transient two-way particle path gives the carrier the vapour mass (a
     species source), the momentum and the energy sources of Coupling::droplet_sources, and the tracker reads the carrier
@@ -6002,7 +6003,24 @@ fixed by the item's registration ADR before any code.
     conserved to 1e-10 relative per step; optional particles.evaporation and particles.breakup tables (hash-omitted when
     absent); a case without them is bit-identical.
   - note: From ADR 0230 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11 (a
-    separate item, checked by conservation without a data set).
+    separate item, checked by conservation without a data set). DONE (ADR 0348, 2026-11-12; registered before the code,
+    three amendments, two of them after runs that stopped at step 1 on the relative measures before the first injection,
+    no limit changed): optional tables [particles.evaporation] (the film-model data of ADR 0224 and the transported
+    species that receives the vapour) and [particles.breakup] (TAB constants), absent from every case that does not
+    write them; transient two-way only (piso, pimple; evaporation also needs heat_transfer). The tracker records with
+    enable_droplet_exchange and reads T and the vapour fraction of the old time level (bit for bit); over each flow step
+    the carrier receives the mass of Coupling::droplet_sources as the species source, its momentum as the body
+    acceleration, and of its energy the sensible part energy_heat + vapour_enthalpy - vapour_mass (c_l T + L_v) in the
+    temperature equation, the mechanical part and the enthalpy of the arrived vapour kept in a ledger. A closed
+    adiabatic box (16 cells, 10 parcels breaking up and evaporating 98.6 percent of their mass) conserves gas plus
+    liquid mass, momentum and energy at every step to 1.8e-15, 5.8e-16 and 6.7e-13 of the largest term (limit 1e-10),
+    with pimple too (5.8e-13); three negative controls held, six mutations caught. A case without the tables or with
+    them disabled is bit-identical (baseline hashes, case_hashes_w48u, the particle suites). Not in it: the steady path,
+    a variable-density carrier (the vapour is not a continuity source), the breakup's normal momentum (a residual, ADR
+    0230 D5). Open: ADR 0348 Q1 to Q4. STATUS recorded PARTIAL by the lead: two registered measures (the per-step
+    identities before the first parcel) stopped at step 1 on set-up defects and passed only after amendments 2 and 3,
+    written after those runs (no limit changed; the stopped tests kept as *_setup_defect records); done is the
+    maintainer's call.
 - [x] **F-327** F-247 remesher: run the tet output check on its outputs
   - depends on: F-247, F-324
   - acceptance: TetRemesher's output meshes pass TetMesh::check_output after every remeshing step, or the step returns
