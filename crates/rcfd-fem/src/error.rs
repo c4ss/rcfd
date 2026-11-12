@@ -187,6 +187,87 @@ pub enum FemError {
         /// The operation.
         operation: &'static str,
     },
+    /// An error of the element routines, located at the element by the assembly (ADR 0275 D1, D7).
+    Element {
+        /// Global element index.
+        element: usize,
+        /// The error of the element routine.
+        source: Box<FemError>,
+    },
+    /// A per-node constraint or load names a node that does not exist (ADR 0275 D3, D4).
+    MissingNode {
+        /// What names the node (`constraint`, `nodal force`).
+        role: &'static str,
+        /// The node given.
+        node: usize,
+        /// Number of nodes of the mesh.
+        n_nodes: usize,
+    },
+    /// A per-node constraint or load names a component the node does not have.
+    MissingComponent {
+        /// What names the component.
+        role: &'static str,
+        /// The node.
+        node: usize,
+        /// The component given.
+        component: usize,
+        /// Components the node has.
+        available: usize,
+    },
+    /// One unknown is prescribed twice with different values.
+    ConflictingConstraint {
+        /// The node.
+        node: usize,
+        /// The component.
+        component: usize,
+        /// The first value.
+        first: f64,
+        /// The second value.
+        second: f64,
+    },
+    /// The constraints leave a rigid-body motion of a connected part free (ADR 0275 D5).
+    RigidBodyMotionFree {
+        /// The smallest node of the part.
+        part_node: usize,
+        /// Number of nodes of the part.
+        part_nodes: usize,
+        /// Number of free rigid-body motions.
+        count: usize,
+        /// One free motion, described.
+        motion: String,
+    },
+    /// A node of no element has a component that is not prescribed.
+    FreeNode {
+        /// The node.
+        node: usize,
+        /// The component.
+        component: usize,
+    },
+    /// The reduced stiffness has a pivot that fails the test of the static solve (ADR 0275 D6).
+    SingularStiffness {
+        /// Node of the unknown.
+        node: usize,
+        /// Component of the unknown.
+        component: usize,
+        /// The pivot.
+        pivot: f64,
+        /// The diagonal of the reduced matrix at that unknown.
+        diagonal: f64,
+    },
+    /// A linear solver failed.
+    Solver {
+        /// The solver.
+        solver: &'static str,
+        /// Why.
+        reason: String,
+    },
+    /// A load variant the static solve does not support yet.
+    UnsupportedLoad {
+        /// The variant.
+        load: &'static str,
+        /// The work package that adds it.
+        package: &'static str,
+    },
 }
 
 impl fmt::Display for FemError {
@@ -255,6 +336,62 @@ impl fmt::Display for FemError {
             UnsupportedKind { block, kind, operation } => {
                 write!(f, "block {block}: element kind {kind} is not supported by {operation}")
             }
+            Element { element, source } => write!(f, "element {element}: {source}"),
+            MissingNode { role, node, n_nodes } => {
+                write!(
+                    f,
+                    "{role} on node {node}: the node does not exist (the mesh has {n_nodes} nodes)"
+                )
+            }
+            MissingComponent {
+                role,
+                node,
+                component,
+                available,
+            } => write!(
+                f,
+                "{role} on node {node} component {component}: the node has {available} components"
+            ),
+            ConflictingConstraint {
+                node,
+                component,
+                first,
+                second,
+            } => write!(
+                f,
+                "node {node} component {component} is prescribed twice with different values ({first:e} and {second:e})"
+            ),
+            RigidBodyMotionFree {
+                part_node,
+                part_nodes,
+                count,
+                motion,
+            } => write!(
+                f,
+                "the model leaves a rigid-body motion free: the part containing node {part_node} ({part_nodes} nodes) \
+                 has {count} unconstrained rigid-body motion(s), e.g. {motion}; prescribe displacements that hold it"
+            ),
+            FreeNode { node, component } => write!(
+                f,
+                "node {node} belongs to no element and its component {component} is not prescribed: a free motion"
+            ),
+            SingularStiffness {
+                node,
+                component,
+                pivot,
+                diagonal,
+            } => write!(
+                f,
+                "the reduced stiffness is singular at node {node} component {component} (pivot {pivot:e}, {:e} of its \
+                 diagonal {diagonal:e}): a mechanism or rigid-body motion is free, or the model is too ill-conditioned \
+                 for the direct solver",
+                pivot / diagonal
+            ),
+            Solver { solver, reason } => write!(f, "solver {solver}: {reason}"),
+            UnsupportedLoad { load, package } => write!(
+                f,
+                "load {load} is not supported by the static solve yet (it is added by {package})"
+            ),
         }
     }
 }
