@@ -337,3 +337,33 @@ gives. The reference run prints its wall-clock time from now on (a print). If th
 takes more than about two minutes, `a1r`, `a2r` and `d` become ignored heavy records and D2 (100 steps, both participants
 remote) with F1 stays as the fast test of the same path. Mutations and B1 are made on the changed code. The decision
 rule gains: T1 met, for **done**.
+
+## Amendment 2 (2026-11-12, after run 2 and a timing diagnosis, before any further run)
+
+T1's control on the code of run 1 missed as expected (1.99 ms per call; it was started twice because the first output was
+cut off by the filter of the command, about 2.1 ms from the total time), the change of amendment 1 was made (commit
+828566d1), and T1 then gave 0.048 ms. Run 2 met every check with the same numbers as run 1. But the out-of-process run
+still took 154.3 s, and the in-process reference, timed for the first time, 66.8 s.
+
+**Diagnosis** (a scratch test, not committed: 60 steps of CWs, timed, in the order in-process, structure in a child
+process, structure in a thread of the test process behind TCP, in-process; twice): 17.59, 15.53, 16.76, 17.83 s and
+17.34, 14.39, 19.46, 29.28 s. So after the change a remote structure costs nothing measurable (60 steps make about 1050
+requests, 0.05 s at T1's rate), and the 0.29 s per step is the flow itself on a machine that other builds share: ADR
+0256's whole file, three such runs and more, took 31 s. The 154 s against 66.8 s of run 2 is the load at the two moments,
+not the transport.
+
+By the rule written in amendment 1 the 650-step out-of-process run took more than two minutes, so:
+
+- `a1r`, `a2r`, `d` and `s0` (which needs the 650-step reference) become **ignored heavy records**, their limits and code
+  unchanged. They were run in run 1 and in run 2 (the library is not changed after run 2) and are not run again, except
+  where a mutation names them.
+- the fast tests of the same path: D2 (100 steps, both participants remote, against the reference bit for bit), NC1, F1
+  to F5. So that these do not need the 650-step reference, the test file gets a second reference of 100 steps (the same
+  code; the first 100 steps of the long one, as D2 of runs 1 and 2 showed: 0 values differ), and D2, NC1 and the "next
+  step" comparisons of F1, F3 and F4 read that one. No limit changes.
+- **Run 3**: the file without the ignored records, once, as the confirmation of the changed test file.
+- Mutations: each is run on the file without the ignored records; MU3, MU4 and MU7, which name A1r or D, also with the
+  ignored records.
+
+This is a rule about test duration applied as written; whether the three acceptance tests should run in the gate on a
+machine where they take some ten seconds is left to the lead (addendum, questions).
