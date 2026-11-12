@@ -8199,21 +8199,36 @@ fixed by the item's registration ADR before any code.
     lab frame (ADR 0344); the F-341 matched records are re-recorded once with that approval, the plain form and every
     run without motion stay bit-identical, and the ADR 0344 checks pass unchanged.
   - note: NEEDS THE USER: it changes the results of the F-341 matched forms (re-recording their records).
-- [ ] **F-447** Electron over the rcfd APIs: performance spike (control, live events, field transfer, scrubbing, WebGPU draw)
+- [~] **F-447** Electron over the rcfd APIs: performance spike (control, live events, field transfer, scrubbing, WebGPU draw)
   - acceptance: The checks P1 to P12 of ADR 0350 are run once as registered on the maintainer's machine, with the
     rcfd-studio control column measured first; each bulk route (R0 JSON baseline, R1 binary side channel under an opt-in
     data.* method family of protocol 1.2, R2 a TypeScript reader of store.rts, R3 a WebAssembly reader if it needs no
     new crate) is recorded; the negative controls NC1 and NC2 hold; the decision of ADR 0350 section 4 (viable, viable
     with conditions, not viable) is stated with the numbers; no existing service method, golden or hash changes.
   - note: ADR 0350 (2026-11-12), asked for by the maintainer. Q1 (run the spike) answered by the maintainer in person on
-    2026-11-12; Q2 to Q5 taken with the recommendations (ADR 0350 decision record).
+    2026-11-12; Q2 to Q5 taken with the recommendations (ADR 0350 decision record). ADR 0350, 2026-11-12. The Electron
+    spike ran once on the maintainer's machine (Electron 45.1.0, RTX 5080, 60 Hz display, load 0.3 to 0.6). Bulk data is
+    fast enough and exact by both routes: R1 (the opt-in `data.*` methods, `rcfd-data/1`, service protocol 1.2, raw
+    `f32` on a second TCP connection) loads a 1e6-cell scalar to a GPU buffer in p50 25.9 ms, p99 57.7 ms; R2 (a reader
+    of `store.rts` in Node) in p50 14.2 ms, p99 22.4 ms; JSON (R0) takes 552 ms. Scrubbing 30.8 and 60.1 snapshots per s
+    at 1e6 cells, 10.5 and 17.8 at 4e6; first picture of the 1e6 surface 1.15 s (R1, first opening 1.58 s) and 0.06 s
+    (R2); 1e6 triangles at 332 frames per s without a rate limit and p99 16.9 ms per frame with vertical sync; cold
+    start median 0.38 s (one start of ten took 6.7 s); renderer memory 112 MB with 20 snapshots; 0 differing bits in
+    672e6 values; service round trip p50 0.06 ms; event latency p99 under 2.1 ms. Missed: P3, `monitors.get` of 4 series
+    of 1e5 samples takes 127 ms against 100 ms (a 12 MB reply, most of the time on the service's side). R3 (WebAssembly)
+    not run: it needs `unsafe` exports or `wasm-bindgen`. The rcfd-studio control, offscreen: 12.7 ms per snapshot, 73
+    per s, first picture 1.25 s. The registered rule has no outcome for a miss of P3 alone, so viability is the
+    maintainer's decision; questions QA1 to QA5 of addendum 1.
 - [ ] **F-448** Electron Studio to parity with rcfd-studio
   - depends on: F-447
   - acceptance: An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity
     check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since),
     automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot;
     its field values equal the Rust reader's bit for bit; rcfd-studio is frozen while it is built.
-  - note: ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447.
+  - note: ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447. ADR 0350
+    addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2)
+    for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before
+    the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route).
 - [ ] **F-449** Retire rcfd-studio and rcfd-gui
   - depends on: F-448
   - acceptance: After F-448 passes and the maintainer has used the new shell and approved, rcfd-studio and the frozen
@@ -8266,3 +8281,10 @@ fixed by the item's registration ADR before any code.
     of the refinement step is recorded.
   - note: From ADR 0277 remaining question 1, recommendation taken on the maintainer's standing instruction of
     2026-11-11 (the Tet10 cantilever of L/h 10 had a direct-solve relative residual of 6.7e-11).
+- [ ] **F-456** monitors.get at 1e5 samples: build only what is asked for
+  - depends on: F-447
+  - acceptance: `monitors.get {names, since}` applies `names` and `since` before the document is built, with replies
+    equal to today's byte for byte for every existing test; P3 of ADR 0350 measured again as registered (4 series of 1e5
+    samples, request to parsed object in the renderer) with the 100 ms limit unchanged, and an increment of 100 samples
+    at 1e5 stored in at most 2 ms; a miss is recorded, not tuned.
+  - note:  From ADR 0350 addendum 1 QA1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
