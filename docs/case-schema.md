@@ -481,6 +481,14 @@ when `nx = ny` and `lx = ly`. Before wave 11 it silently built an `nx` x `nx` ca
 `dynamic_mesh.deformation = "layering"` and can also be used on its own. The Studio gives no cell estimate for it yet
 (ADR 0191 Q4).
 
+The optional table `[mesh.box_3d]` (ADR 0257) has one key, `section`, the cells of the box: `"box"` (default) is the
+uniform box above; `"rectangles"` gives the same hexahedra in the face order of the extruded layer stack
+(`rcfd_mesh::layering::ExtrudedStack`, ADR 0213), which layering with `piso` / `pimple` needs; `"triangles"` cuts every
+rectangle of the y-z cross-section into two triangles, so each of the `nx` layers holds `2 ny nz` prisms. The patches are
+the same six for all three. `"rectangles"` and `"triangles"` need `nx >= 2` (`mesh.nx`), and the table belongs to
+`box_3d` only (`mesh.box_3d.section` with another generator or a mesh file). A case that does not write the table keeps
+its text, its hash and its mesh.
+
 Options a generator does not apply are rejected with a located diagnostic instead of being ignored:
 
 - `mesh.wall_layers` (`box_2d` and `channel_2d` only)
@@ -2325,7 +2333,7 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | --- | --- | --- |
 | `dynamic_mesh.enabled` | bool, false | move the mesh |
 | `dynamic_mesh.motion` | `prescribed` (default), `six_dof` | source of the motion of the moving patches |
-| `dynamic_mesh.deformation` | `rigid` (default), `smoothing`, `layering` | all points follow, or the interior is smoothed, or (compressible only) the layer next to the piston `xmax` deforms and layers are removed and added |
+| `dynamic_mesh.deformation` | `rigid` (default), `smoothing`, `layering` | all points follow, or the interior is smoothed, or the layer next to the piston `xmax` of a `box_3d` mesh deforms and layers are removed and added (compressible; `piso` / `pimple` with `mesh.box_3d.section = "rectangles"` or `"triangles"`) |
 | `dynamic_mesh.moving_patches` | list of strings, `[]` | patches that carry the motion (required, except for a rigid prescribed motion, ADR 0183 P-B) |
 | `dynamic_mesh.follow_patches` | list of strings, `[]` | patches whose velocity is the mesh velocity (empty = the moving patches); their `velocity` must stay `"fixed"` and their `velocity_value` only sets the initial flux |
 | `dynamic_mesh.fixed_patches` | list of strings, `[]` | smoothing: patches whose points do not move; all other non-moving patches slide in their plane |
@@ -2337,6 +2345,7 @@ since F-259 (ADR 0191) in transient compressible runs (below); see `docs/dynamic
 | `dynamic_mesh.smoothing.exponent` | float, 1 | exponent of the inverse-distance or inverse-volume diffusivity (0 to 10) |
 | `dynamic_mesh.smoothing.substeps` | int, 1 | reserved; only 1 is accepted |
 | `dynamic_mesh.smoothing.tolerance` | float, 1e-12 | relative tolerance of the displacement solve |
+| `dynamic_mesh.compressible.time_step` | `absolute` (default), `mesh_speed` | optional table `[dynamic_mesh.compressible]` (ADR 0257): the explicit step of a moving compressible run from `abs(u.n) + c`, or from `abs(u.n - w_n) + c` with the normal mesh speed `w_n` of the last step |
 | `dynamic_mesh.six_dof.mass` | float, 0 | kg, must be > 0 for `motion = six_dof` |
 | `dynamic_mesh.six_dof.inertia` | list, `[]` | 3 principal moments or 6 components `xx yy zz xy xz yz`, kg m^2 |
 | `dynamic_mesh.six_dof.position`, `.velocity`, `.angular_velocity` | list of 3, `[]` | initial centre of mass, velocity, angular velocity |
@@ -2367,7 +2376,7 @@ Combinations that are not implemented are reported at `dynamic_mesh.enabled`:
 
 A mesh that becomes invalid stops the run: `dynamic_mesh: step N, t = ...: mesh error: cell i has non-positive volume ...`.
 
-### Compressible ALE and layering (F-259, ADR 0191)
+### Compressible ALE and layering (F-259, ADR 0191, ADR 0257)
 
 With `solver.algorithm = "compressible"` and `compressible.mode = "transient"`, `dynamic_mesh` moves the mesh of the
 explicit density-based solver with the ALE step of ADR 0090. The motion is prescribed (`displacement_expression_*`,
@@ -2378,28 +2387,49 @@ speed itself, so `follow_patches` and `rest_patches` stay empty.
 piston is the patch `xmax` (`moving_patches = ["xmax"]`) at `x = lx + d_x(t)` from `displacement_expression_x`. Only the
 layer next to the piston deforms. It is merged with its neighbour when its height falls below 0.4 `lx / nx` and split into
 `lx / nx` plus the rest above 1.6 `lx / nx` (ADR 0090's registered thresholds, no key). Cell totals of mass, momentum and
-energy are carried through every change exactly, and the cell count of the run changes with the layers.
+energy are carried through every change exactly, and the cell count of the run changes with the layers. With
+`[mesh.box_3d] section = "triangles"` the layers are prisms (ADR 0213), with the same piston and thresholds.
 
-The time step is the explicit step of the current mesh with the absolute velocity (`|u.n| + c`); the mesh speed does not
-enter it, so keep the piston well below the speed of sound. The library's mesh-speed step (`max_dt_ale`, F-258,
-ADR 0207) is not used by the case tree yet.
+By default the time step is the explicit step of the current mesh with the absolute velocity (`|u.n| + c`); the mesh
+speed does not enter it, so keep the piston well below the speed of sound. The optional table
+`[dynamic_mesh.compressible]` with `time_step = "mesh_speed"` (ADR 0257) takes the mesh-speed step of F-258 (ADR 0207)
+instead: the signal speed `|u.n - w_n| + c` relative to each face, with the normal mesh speeds `w_n` of the last step (the
+absolute step on the first step and on the step after a layer change). The default is unchanged because the other step
+changes the bits of every moving compressible run (ADR 0207 Q2 is open).
+
+Characteristic conditions (`total_inlet`, `pressure_outlet`, `nonreflecting`, `farfield`) may be on patches that move
+(ADR 0257; refused until then). They are evaluated in the frame of the moving face (ADR 0207): the switches read the
+normal velocity relative to the face, and the far field's free stream and the total inlet's total conditions and
+direction are lab-frame data.
 
 Located errors (the path in brackets):
 
 * `compressible.mode = "steady"` (`dynamic_mesh.enabled`)
 * `motion = "six_dof"` (`dynamic_mesh.motion`; six-DOF coupling of the compressible solver is F-244)
 * a non-empty `follow_patches` or `rest_patches` (that key)
-* a characteristic `compressible_bc` (`total_inlet`, `pressure_outlet`, `nonreflecting`, `farfield`) on a patch that moves:
-  every patch under `rigid`, a patch not in `fixed_patches` under `smoothing`, every patch except `xmin` under `layering`
-  (`boundaries.<patch>.compressible_bc`; the library evaluates them on moving faces since F-258, ADR 0207, but the case
-  tree does not wire that yet)
-* layering with `piso` / `pimple` (`dynamic_mesh.deformation`; the library has it since F-257, ADR 0213, but the case
-  tree does not wire it yet), with a mesh file (`mesh.source`) or another
+* `time_step = "mesh_speed"` with a solver other than `compressible` (`dynamic_mesh.compressible.time_step`)
+* layering with a mesh file (`mesh.source`) or another
   generator (`mesh.generator`), with `moving_patches` other than `["xmax"]`, with a y or z displacement or a rotation (that
   key), with `mesh.nx < 2`, with `fixed_patches`, or with `mesh.transform` (`mesh.transform.rotate_z_deg`)
 
 A piston driven through the last static plane stops the run: `dynamic_mesh: step N, t = ...: mesh error: layering: piston at
 ... is not beyond the last static plane ...`.
+
+### Layering with `piso` / `pimple` (F-259, ADR 0257)
+
+`deformation = "layering"` also runs on the incompressible transient path (F-257, ADR 0213), on a `box_3d` mesh with
+`[mesh.box_3d] section = "rectangles"` or `"triangles"`. The piston is `xmax` (`moving_patches = ["xmax"]`, its velocity
+condition `"fixed"`, as for every following patch) at `x = lx + d_x(t)`. Each step moves the piston plane, takes the ALE
+step of ADR 0033 and then checks the piston layer against the thresholds 0.4 and 1.6 of `lx / nx`. A layer change carries
+the velocity and the pressure over by cell volume and the face flux so that the discrete continuity holds on the new mesh
+(ADR 0213 M3, M4). The other rules of the incompressible moving mesh apply (implicit Euler, no turbulence, energy,
+scalars, particles, sources, restart).
+
+Located errors: layering with `piso` / `pimple` and `section = "box"` or no table, or with an algorithm other than
+`compressible`, `piso` and `pimple` (`dynamic_mesh.deformation`); `motion = "six_dof"` (`dynamic_mesh.motion`); a velocity
+expression on a patch, a boundary-condition catalogue entry, lumped components, a Marangoni stress or user functions, which
+are sized to the mesh that a layer change replaces (`dynamic_mesh.deformation`); and the layering errors of the list
+above.
 
 ## Wave 21B: `regions` (F-216, ADR 0036)
 

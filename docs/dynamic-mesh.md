@@ -25,12 +25,12 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   background mesh (`rcfd_mesh::overset`, `rcfd_fv::overset::OversetSolver`), PISO with implicit Euler and upwind, central
   or blended convection, no non-orthogonal correctors; outer iterations (F-335, ADR 0238) and BDF2 (F-338, ADR 0241) as
   opt-ins of the solver. The tree does not use it yet (ADR 0219 Q1); no second component, no moving background.
-* Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
-  stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
-  use them yet (the wiring is open under F-259, ADR 0213 Q1).
-* Compressible runs in the case tree: no characteristic boundary condition on a moving face, and a time step without the
-  mesh speed. The library has both since F-258 (ADR 0207); the tree does not use them yet (the wiring is open under F-259,
-  ADR 0207 Q1 and Q2). No six-DOF body (F-244).
+* Layering in the case tree on a `box_3d` stack with one piston (`xmax`), for the compressible solver and, with
+  `[mesh.box_3d] section = "rectangles"` or `"triangles"`, for PISO/PIMPLE and for prism layers (ADR 0257). The library
+  stacks prisms over any planar cross-section (F-257, ADR 0213); the tree offers the two rectangular ones.
+* Compressible runs in the case tree: the time step leaves out the mesh speed unless
+  `[dynamic_mesh.compressible] time_step = "mesh_speed"` asks for it (ADR 0257; the default is ADR 0207 Q2, open). No
+  six-DOF body (F-244).
 * No strong coupling or added-mass stabilisation in the case tree. The explicit (loose) coupling of the case driver needs a
   body that is not much lighter than the displaced fluid: it is derived and measured unstable above an added-mass to body-mass
   ratio of 2 (ADR 0250), and the checks use a ratio of 0.2. The library has a sub-iterated strong coupling since F-251
@@ -144,7 +144,7 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   move (same topology). The fluxes are computed in the frame of the moving face, and a moving slip wall mirrors relative to the
   wall. A uniform state stays uniform to round-off. In the case tree: `solver.algorithm = "compressible"`,
   `compressible.mode = "transient"` and a prescribed `dynamic_mesh` motion with `deformation = "rigid"` or `"smoothing"`.
-- **Characteristic conditions on moving faces and the mesh-speed step (F-258, ADR 0207; library only).** On a moving
+- **Characteristic conditions on moving faces and the mesh-speed step (F-258, ADR 0207; in the case tree since ADR 0257).** On a moving
   face, `step_ale` evaluates the total inlet, the pressure outlet, the non-reflecting outlet and the far field in the
   frame of the face (`compressible::characteristic_face_state`): the switches read the normal velocity relative to the
   face, the far field's free stream and the total inlet's total conditions are lab-frame data, and the flux is
@@ -152,8 +152,10 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   simple wave leaves through an outlet moving at Mach 0.2 with a reflection of 4.6e-4 (far field) and 3.8e-4
   (non-reflecting, `sigma = 0`) of its pressure jump, where a fixed-pressure outlet reflects all of it.
   `max_dt_moving(wn)` is the explicit step with the signal speed `|u.n - w_n| + c` relative to each face, and
-  `max_dt_ale()` takes the face speeds of the last ALE step (`mesh_speeds()`). `max_dt()` stays the absolute step. The
-  case tree does not use this yet: it refuses a characteristic condition on a patch that moves and steps with `max_dt()`.
+  `max_dt_ale()` takes the face speeds of the last ALE step (`mesh_speeds()`). `max_dt()` stays the absolute step. In
+  the case tree a characteristic `compressible_bc` may be on a patch that moves, and
+  `[dynamic_mesh.compressible] time_step = "mesh_speed"` selects `max_dt_ale()`; without that table the tree steps with
+  `max_dt()` as before.
 - **Layering.** `rcfd_mesh::layering::LayerStack` is a planar layer stack along x whose last plane is a piston. Only the layer
   next to the piston deforms. Below `a_min h0` it merges with its neighbour; above `a_max h0` it splits into `h0` plus the rest
   (`1 + a_min <= a_max` is required). Every change returns a cell source map, `remap` carries cell totals over exactly, and
@@ -162,7 +164,7 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   `a_max = 1.6`. The example below is ADR 0090's piston P as a case, with the compressible keys at their defaults (HLLC, van
   Leer, SSP-RK3, CFL 0.4): 9191 steps, 24 removals and 24 additions, and `p_bar V^gamma` back within 3.4e-5 of its start
   after the stroke.
-- **Prism layers and layering on the PISO/PIMPLE path (F-257, ADR 0213; library only).**
+- **Prism layers and layering on the PISO/PIMPLE path (F-257, ADR 0213; in the case tree since ADR 0257).**
   `rcfd_mesh::layering::ExtrudedStack` stacks prisms over the cells of a planar cross-section `Section` (for example
   `Section::rect_triangles`, rectangles cut into triangles) with the piston, the thresholds and the cell source map of
   `LayerStack`. ADR 0090's piston on triangular prisms meets ADR 0090's limits (`p_bar V^gamma` within 1.5e-5 and 3.4e-5,
@@ -173,17 +175,20 @@ key; incompatible sections are reported at `dynamic_mesh.enabled`.
   velocity, pressure and flux. On ADR 0033's piston channel (mirrored: the piston is `xmax`) with 7 removals, every step
   keeps the continuity within 3.1e-15 and the outlet flux within 1.3e-14 of the piston's swept flux, and each event
   conserves the volume to 2.2e-16. The piston can only be the last plane, and `replace_mesh` refuses BDF2, a face
-  viscosity, body forces, sources and jumps.
+  viscosity, body forces, sources and jumps. In the case tree: `[mesh.box_3d] section = "triangles"` (prisms) or
+  `"rectangles"` (the hexahedra of the extruded stack) on a `box_3d` mesh, with `deformation = "layering"` for the
+  compressible solver or for `piso` / `pimple`.
 - **The tree equals the library.** Run through the case tree, the piston and the moving-mesh checks of ADR 0191 give the same
-  bits as the same set-ups driven by library calls, and `rcfd run` gives the same reports.
+  bits as the same set-ups driven by library calls, and `rcfd run` gives the same reports. ADR 0257 checks the same for
+  the prism piston, the piston channel of ADR 0213 on the PISO path (removals and additions), a uniform flow with the four
+  characteristic conditions on moving faces and the mesh-speed step.
 - **Stiffness.** The smoothing method `SmoothingMethod::InverseVolume(k)` uses the diffusivity `1/V^k`, so small cells deform less.
   In the case tree it is `dynamic_mesh.smoothing.method = "inverse_volume"` with `k = smoothing.exponent` (F-290, ADR 0203),
   on the incompressible and the compressible moving paths; `V` is the volume of the initial mesh, from which the displacement
   is solved. On ADR 0033's piston with cells 8 times smaller at the ends it keeps the smallest cell at 0.945 of its initial
   volume where the Laplacian keeps 0.75, and lowers the largest aspect ratio from 9.3 to 7.4.
-- **Not available:** non-planar layers, more than one moving layered boundary, and, in the case tree,
-  prism layers, layering with PISO/PIMPLE, characteristic boundary conditions on moving faces and a time step that
-  includes the mesh speed (library only, above).
+- **Not available:** non-planar layers, more than one moving layered boundary, a piston at the first plane, and, in the
+  case tree, a cross-section other than the two rectangular ones and layer thresholds other than 0.4 and 1.6.
 
 ```toml
 # ADR 0090's piston P: a closed box compressed to 0.4 of its length and re-expanded (peak piston Mach 0.05)
