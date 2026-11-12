@@ -566,9 +566,11 @@ fn c2_continue_at_the_cap_of_one_is_the_loose_step() {
 
 // ---- N ----
 
-/// ADR 0266 N (a5): every static check of the new keys is located at its key.
+/// ADR 0266 N (a5) as registered: its expected path of an unknown key (the table) was wrong; kept as the record of its
+/// run (ADR 0266 amendment 1: the parser locates the key itself).
 #[test]
-fn n_static_checks_are_located() {
+#[ignore = "registered record: ADR 0266 amendment 1 (the unknown key is located at its own path); Nb replaces it"]
+fn n_static_checks_are_located_registered_record() {
     let mu = 4.0;
     let strong = |extra: &str| format!("{}{extra}\n", registered_table(mu));
     let valid = piston(mu, 0.01, &strong(""));
@@ -608,6 +610,65 @@ fn n_static_checks_are_located() {
             key("relaxation"),
         ),
         (piston(mu, 0.01, &strong("factor = 0.5")), COUPLING.to_string()),
+    ];
+    let fs = format!("force_scale = {:?}", stiffness(mu) * X);
+    let mut cases = cases;
+    cases.push((valid.replace(&fs, "force_scale = -1.0"), key("force_scale")));
+    for (text, path) in &cases {
+        assert_ne!(text, &valid, "the variant for {path} did not change the text");
+        let p = paths(text);
+        println!("N {path}: {p:?}");
+        assert!(p.iter().any(|x| x == path), "{path}: got {p:?}");
+    }
+    // the section disabled: the table is inert
+    let off = valid
+        .replace("enabled = true", "enabled = false")
+        .replace("tolerance = 1e-8", "tolerance = 0.0");
+    assert!(paths(&off).is_empty(), "{:?}", paths(&off));
+}
+
+/// ADR 0266 Nb (a5, amendment 1): every static check of the new keys is located at its key; an unknown key at its own path.
+#[test]
+fn nb_static_checks_are_located() {
+    let mu = 4.0;
+    let strong = |extra: &str| format!("{}{extra}\n", registered_table(mu));
+    let valid = piston(mu, 0.01, &strong(""));
+    assert!(paths(&valid).is_empty(), "{:?}", paths(&valid));
+    let key = |k: &str| format!("{COUPLING}.{k}");
+    let cases: Vec<(String, String)> = vec![
+        (
+            valid.replace("motion = \"six_dof\"", "motion = \"prescribed\""),
+            key("scheme"),
+        ),
+        (
+            piston_with(mu, 0.01, "rest_patches = [\"ymin\"]", "", &strong("")),
+            key("scheme"),
+        ),
+        (
+            piston_with(mu, 0.01, "", "integrator = \"newmark\"", &strong("")),
+            key("scheme"),
+        ),
+        (valid.replace("tolerance = 1e-8", "tolerance = 0.0"), key("tolerance")),
+        (valid.replace("tolerance = 1e-8", "tolerance = -1.0"), key("tolerance")),
+        (piston(mu, 0.01, &strong("moment_scale = -1.0")), key("moment_scale")),
+        (piston(mu, 0.01, &strong("at_cap = \"warn\"")), key("at_cap")),
+        (
+            valid.replace("added_mass = 0.04", "added_mass = -1.0"),
+            key("added_mass"),
+        ),
+        (
+            valid.replace("max_iterations = 20", "max_iterations = 0"),
+            key("max_iterations"),
+        ),
+        (
+            valid.replace("scheme = \"strong\"", "scheme = \"implicit\""),
+            key("scheme"),
+        ),
+        (
+            valid.replace("relaxation = \"aitken\"", "relaxation = \"secant\""),
+            key("relaxation"),
+        ),
+        (piston(mu, 0.01, &strong("factor = 0.5")), key("factor")),
     ];
     let fs = format!("force_scale = {:?}", stiffness(mu) * X);
     let mut cases = cases;
