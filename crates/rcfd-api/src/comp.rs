@@ -459,14 +459,20 @@ impl CompState {
         }
     }
 
-    /// [`Self::advance`] on a moving mesh (F-259, ADR 0191 W4): the step `dt` of the current mesh, clipped as there; the ALE
+    /// [`Self::advance`] on a moving mesh (F-259, ADR 0191 W4): the step `dt` of the current mesh (the mesh-speed step with
+    /// `[dynamic_mesh.compressible] time_step = "mesh_speed"`, ADR 0257 D4), clipped as there; the ALE
     /// step to the mesh of `dm` at the end of the step; the step's changes before a layer event; the layer event of a layered
     /// piston; the shadow fields rebuilt when the cell count changed. `Err` is a failure of the mesh motion, already worded
     /// as the run's `dynamic_mesh:` message; a failure of the solver is the `error` of the result, as in [`Self::advance`].
     pub fn advance_moving(&mut self, t_end: Option<f64>, dm: &mut DynMesh) -> Result<Advance, String> {
         let gas = self.solver.gas;
         let before = self.solver.u.clone();
-        let mut dt = self.solver.max_dt();
+        // ADR 0257 D4: the mesh-speed step of ADR 0207 M1 and M2 only when the case asks for it
+        let mut dt = if dm.mesh_speed_step() {
+            self.solver.max_dt_ale()
+        } else {
+            self.solver.max_dt()
+        };
         if let Some(te) = t_end {
             dt = dt.min((te - self.solver.time).max(1e-300));
         }

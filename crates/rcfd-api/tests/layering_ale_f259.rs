@@ -565,6 +565,7 @@ fn c_rigid_motion_keeps_uniform_flow_and_equals_the_library_run() {
 
 /// L of ADR 0191: E1 to E13 give a diagnostic at the registered path; the three set-ups give none.
 #[test]
+#[ignore = "record of ADR 0191 L: its three E5 inputs assert the refusal of a characteristic condition on a moving patch, which ADR 0257 D1 lifts (ADR 0207 Q1 (a)); the new behaviour and the other inputs are asserted by l2_located_errors of tree_wiring_f259.rs"]
 fn l_located_errors() {
     let has = |text: String, path: &str| {
         let p = paths(&text);

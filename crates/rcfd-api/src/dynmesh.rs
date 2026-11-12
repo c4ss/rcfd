@@ -3,7 +3,9 @@
 //! Laplacian / inverse-distance / inverse-volume (F-290, ADR 0203) smoothing. F-259 (ADR 0191): a prescribed motion also
 //! moves the mesh of a transient
 //! compressible run (the ALE step of ADR 0090), and `deformation = "layering"` runs ADR 0090's planar layer stack of a
-//! piston (compressible only).
+//! piston. ADR 0257 (the rest of F-259): characteristic conditions on moving faces (F-258, ADR 0207), the opt-in mesh-speed
+//! step `[dynamic_mesh.compressible] time_step`, and the extruded layer stack of `[mesh.box_3d] section` (F-257, ADR 0213)
+//! for prism layers and for layering on the piso / pimple path.
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s, get_v};
@@ -18,7 +20,7 @@ use rcfd_fv::sixdof::{patch_force_moment, quat_from_axis_angle, Body, BodySpec, 
 use rcfd_fv::smoothing::{smooth_displacement, PatchClass, SmoothingMethod};
 use rcfd_fv::FvGeometry;
 use rcfd_linalg::SolveControl;
-use rcfd_mesh::layering::{remap, LayerStack};
+use rcfd_mesh::layering::{remap, remap_face_flux, ExtrudedStack, LayerChange, LayerStack, Section};
 use rcfd_mesh::motion::{mat_vec, moved_mesh, patch_points, rotation_matrix};
 use rcfd_mesh::Mesh;
 use serde_json::Value;
@@ -29,8 +31,46 @@ pub const LAYER_REMOVAL_RATIO: f64 = 0.4;
 /// Addition threshold of the layer stack, ADR 0090 D3's registered value (ADR 0191 W2, Q1: no key).
 pub const LAYER_ADDITION_RATIO: f64 = 1.6;
 
-/// Compressible conditions that `step_ale` refuses on a face that moves (ADR 0090 D2; moving characteristic faces are F-258).
-const CHARACTERISTIC_BCS: [&str; 4] = ["total_inlet", "pressure_outlet", "nonreflecting", "farfield"];
+/// Path of the cross-section of `box_3d` (ADR 0257 D2).
+pub const SECTION: &str = "mesh.box_3d.section";
+/// Path of the step choice of a moving compressible run (ADR 0257 D4).
+pub const TIME_STEP: &str = "dynamic_mesh.compressible.time_step";
+
+/// The extruded layer stack of a `box_3d` case whose `mesh.box_3d.section` is `rectangles` or `triangles` (ADR 0257 D2);
+/// `None` for `box`, the uniform box of ADR 0191.
+pub(crate) fn extruded_stack(case: &Case) -> Result<Option<ExtrudedStack>, Vec<Diagnostic>> {
+    let section = get_s(case, SECTION);
+    if section != "rectangles" && section != "triangles" {
+        return Ok(None);
+    }
+    let n = get_i(case, "mesh.nx");
+    if n < 2 {
+        return Err(vec![d(
+            "mesh.nx",
+            format!("mesh.box_3d.section = \"{section}\" needs at least 2 layers (mesh.nx >= 2)"),
+        )]);
+    }
+    let cross = [
+        get_i(case, "mesh.ny").max(1) as usize,
+        get_i(case, "mesh.nz").max(1) as usize,
+    ];
+    let size = [get_f(case, "mesh.ly"), get_f(case, "mesh.lz")];
+    let sec = if section == "triangles" {
+        Section::rect_triangles(cross, size)
+    } else {
+        Section::rect(cross, size)
+    }
+    .map_err(|e| vec![d(SECTION, e.to_string())])?;
+    ExtrudedStack::uniform(
+        sec,
+        n as usize,
+        get_f(case, "mesh.lx"),
+        LAYER_REMOVAL_RATIO,
+        LAYER_ADDITION_RATIO,
+    )
+    .map(Some)
+    .map_err(|e| vec![d("mesh.nx", e.to_string())])
+}
 
 fn d(path: &str, message: impl Into<String>) -> Diagnostic {
     Diagnostic {
@@ -109,6 +149,18 @@ pub fn schema() -> Schema {
         .field("rotation_axis", nums("Rotation axis (empty = z)"))
         .field("smoothing", smoothing)
         .field("six_dof", six)
+        // F-259, ADR 0257 D4: an optional table, absent from every case that does not write it
+        .field(
+            "compressible",
+            Schema::object()
+                .optional()
+                .doc("Options of a moving mesh with solver.algorithm = \"compressible\" (ADR 0257). Absent = the step of ADR 0191")
+                .field(
+                    "time_step",
+                    Schema::enumeration("absolute", &["absolute", "mesh_speed"])
+                        .doc("Stable step of a moving compressible run: absolute = from |u.n| + c (default, ADR 0191 W4); mesh_speed = from |u.n - w_n| + c with the normal mesh speed w_n of the last step (ADR 0207 M1, M2; the absolute step on the first step and on the step after a layer event)"),
+                ),
+        )
 }
 
 /// True when the section is enabled.
@@ -158,6 +210,17 @@ fn compile_t(case: &Case, path: &str, dim: Dimension) -> Result<Option<Compiled>
 /// Static checks of the `dynamic_mesh` section.
 pub fn check(case: &Case) -> Vec<Diagnostic> {
     let mut out = Vec::new();
+    // ADR 0257 D5 N2: the cross-section belongs to the generator box_3d (checked with or without a moving mesh)
+    let section = get_s(case, SECTION);
+    if !section.is_empty()
+        && section != "box"
+        && (get_s(case, "mesh.source") == "file" || get_s(case, "mesh.generator") != "box_3d")
+    {
+        out.push(d(
+            SECTION,
+            format!("section = \"{section}\" belongs to mesh.generator = \"box_3d\"; remove the table [mesh.box_3d] or use that generator"),
+        ));
+    }
     if !enabled(case) {
         return out;
     }
@@ -296,6 +359,13 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
         if get_b(case, "energy.enabled") {
             out.push(conflict("the energy equation"));
         }
+        // ADR 0257 D5 N5
+        if get_s(case, TIME_STEP) == "mesh_speed" {
+            out.push(d(
+                TIME_STEP,
+                "the mesh-speed step is the explicit step of the compressible solver (solver.algorithm = \"compressible\"); piso / pimple take solver.dt",
+            ));
+        }
     }
     if get_b(case, "statistics.enabled") {
         out.push(conflict("statistics"));
@@ -317,7 +387,7 @@ pub fn check(case: &Case) -> Vec<Diagnostic> {
     out
 }
 
-/// ADR 0191 W5 E1 to E3 and E5: a moving mesh with the compressible solver (E4 is checked with `rest_patches` above).
+/// ADR 0191 W5 E1 to E3: a moving mesh with the compressible solver (E4 is checked with `rest_patches` above).
 fn check_compressible(case: &Case, out: &mut Vec<Diagnostic>) {
     if get_s(case, "compressible.mode") == "steady" {
         out.push(d(
@@ -337,37 +407,30 @@ fn check_compressible(case: &Case, out: &mut Vec<Diagnostic>) {
             "following patches belong to piso / pimple; with the compressible solver a slip wall that moves with the mesh carries the mesh speed itself (ADR 0090 D2)",
         ));
     }
-    // E5: step_ale refuses a characteristic condition on a face whose swept volume is not exactly 0, which a patch that
-    // slides or stretches in its plane gets from round-off; only a patch whose points never move may have one
-    let deformation = get_s(case, "dynamic_mesh.deformation");
-    let fixed = strings(case, "dynamic_mesh.fixed_patches");
-    for n in case.tree.names("boundaries").unwrap_or_default() {
-        let key = format!("boundaries.{n}.compressible_bc");
-        let bc = get_s(case, &key);
-        if !CHARACTERISTIC_BCS.contains(&bc.as_str()) {
-            continue;
-        }
-        let static_hint = match deformation.as_str() {
-            "smoothing" if fixed.contains(&n) => continue,
-            "smoothing" => "list the patch in dynamic_mesh.fixed_patches so that its points stay put",
-            "layering" if n == "xmin" => continue,
-            "layering" => "under layering only xmin stays put",
-            _ => "under rigid deformation every patch moves",
-        };
-        out.push(d(
-            &key,
-            format!("compressible_bc = \"{bc}\" on a patch that moves with the mesh is not available (characteristic conditions on moving faces are F-258); use slip, extrapolate or fixed, or keep the patch static: {static_hint}"),
-        ));
-    }
+    // E5 of ADR 0191 (a characteristic condition on a patch that can move) is lifted by ADR 0257 D1: `step_ale` evaluates
+    // those conditions in the frame of the moving face since F-258 (ADR 0207 M3)
 }
 
-/// ADR 0191 W5 E6 to E12: `deformation = "layering"`.
+/// ADR 0191 W5 E6 to E12 and ADR 0257 D5 N4: `deformation = "layering"`.
 fn check_layering(case: &Case, compressible: bool, out: &mut Vec<Diagnostic>) {
     if !compressible {
-        out.push(d(
-            "dynamic_mesh.deformation",
-            "layering is available with solver.algorithm = \"compressible\" only; layering on the incompressible piso / pimple path is F-257",
-        ));
+        if !matches!(get_s(case, "solver.algorithm").as_str(), "piso" | "pimple") {
+            out.push(d(
+                "dynamic_mesh.deformation",
+                "layering is available with solver.algorithm = \"compressible\", \"piso\" or \"pimple\"",
+            ));
+        } else if !matches!(get_s(case, SECTION).as_str(), "rectangles" | "triangles") {
+            out.push(d(
+                "dynamic_mesh.deformation",
+                "layering with piso / pimple needs the extruded layer stack (F-257, ADR 0213): set [mesh.box_3d] section = \"rectangles\" or \"triangles\"",
+            ));
+        }
+        if get_s(case, "dynamic_mesh.motion") == "six_dof" {
+            out.push(d(
+                "dynamic_mesh.motion",
+                "layering moves the piston by displacement_expression_x: use motion = \"prescribed\"",
+            ));
+        }
     }
     if get_s(case, "mesh.source") == "file" {
         out.push(d(
@@ -428,9 +491,38 @@ enum Drive {
     Body(Box<Body>, Vec<String>),
 }
 
-/// The layer stack of `deformation = "layering"` (ADR 0191 W2): ADR 0090's planar stack along x with the piston `xmax`.
+/// The two layer stacks of the library behind one piston: ADR 0090's box stack and ADR 0213's extruded stack.
+enum Stack {
+    Box(LayerStack),
+    Extruded(ExtrudedStack),
+}
+
+impl Stack {
+    fn set_piston(&mut self, x: f64) -> Result<(), String> {
+        match self {
+            Stack::Box(s) => s.set_piston(x),
+            Stack::Extruded(s) => s.set_piston(x),
+        }
+        .map_err(|e| e.to_string())
+    }
+    fn mesh(&self) -> Result<Mesh, String> {
+        match self {
+            Stack::Box(s) => s.mesh(),
+            Stack::Extruded(s) => s.mesh(),
+        }
+        .map_err(|e| e.to_string())
+    }
+    fn adjust(&mut self) -> Option<LayerChange> {
+        match self {
+            Stack::Box(s) => s.adjust(),
+            Stack::Extruded(s) => s.adjust(),
+        }
+    }
+}
+
+/// The layer stack of `deformation = "layering"` (ADR 0191 W2, ADR 0257 D2): a planar stack along x with the piston `xmax`.
 struct Layers {
-    stack: LayerStack,
+    stack: Stack,
     /// Initial piston position (`mesh.lx`); the piston is at `x0 + d_x(t)`.
     x0: f64,
 }
@@ -443,8 +535,19 @@ impl Layers {
             return Err(vec![d("mesh.nx", "layering needs at least 2 layers (mesh.nx >= 2)")]);
         }
         let x0 = get_f(case, "mesh.lx");
-        let stack = LayerStack::uniform(
-            n as usize,
+        let stack = match extruded_stack(case)? {
+            Some(st) => Stack::Extruded(st),
+            None => Stack::Box(Self::box_stack(case, n as usize, x0)?),
+        };
+        let m = stack.mesh().map_err(|e| vec![d("mesh.generator", e)])?;
+        Self::same_mesh(&m, mesh)?;
+        Ok(Layers { stack, x0 })
+    }
+
+    /// ADR 0090's box stack with ADR 0191's thresholds.
+    fn box_stack(case: &Case, n: usize, x0: f64) -> Result<LayerStack, Vec<Diagnostic>> {
+        LayerStack::uniform(
+            n,
             x0,
             [
                 get_i(case, "mesh.ny").max(1) as usize,
@@ -454,11 +557,14 @@ impl Layers {
             LAYER_REMOVAL_RATIO,
             LAYER_ADDITION_RATIO,
         )
-        .map_err(|e| vec![d("mesh.nx", e.to_string())])?;
-        let m = stack.mesh().map_err(|e| vec![d("mesh.generator", e.to_string())])?;
+        .map_err(|e| vec![d("mesh.nx", e.to_string())])
+    }
+
+    /// The stack's mesh `m` is the case's mesh, bit for bit (ADR 0191 W3).
+    fn same_mesh(m: &Mesh, mesh: &Mesh) -> Result<(), Vec<Diagnostic>> {
         let names = |m: &Mesh| m.patches().iter().map(|p| p.name.clone()).collect::<Vec<_>>();
         let same = m.content_hash() == mesh.content_hash()
-            && names(&m) == names(mesh)
+            && names(m) == names(mesh)
             && m.points().len() == mesh.points().len()
             && m.points()
                 .iter()
@@ -470,7 +576,7 @@ impl Layers {
                 "layering needs the mesh of mesh.generator = \"box_3d\" unchanged (no mesh.transform): the case's mesh is not the layer stack's (ADR 0191 W3)",
             )]);
         }
-        Ok(Layers { stack, x0 })
+        Ok(())
     }
 }
 
@@ -489,8 +595,10 @@ pub struct DynMesh {
     integrator: Integrator,
     rho: f64,
     nu: f64,
-    /// The layer stack of `deformation = "layering"` (compressible runs only, ADR 0191).
+    /// The layer stack of `deformation = "layering"` (ADR 0191; with piso / pimple the extruded stack, ADR 0257 D3).
     layers: Option<Layers>,
+    /// ADR 0257 D4: the moving compressible step takes the mesh-speed step `max_dt_ale()`.
+    mesh_speed_step: bool,
 }
 
 impl DynMesh {
@@ -538,10 +646,15 @@ impl DynMesh {
             if !rest.is_empty() {
                 errs.push(d("dynamic_mesh.rest_patches", "walls at rest belong to piso / pimple"));
             }
-        } else if layering {
+        } else if layering && !matches!(get_s(case, SECTION).as_str(), "rectangles" | "triangles") {
             errs.push(d(
                 "dynamic_mesh.deformation",
-                "layering is available with solver.algorithm = \"compressible\" only (F-257)",
+                "layering with piso / pimple needs [mesh.box_3d] section = \"rectangles\" or \"triangles\" (F-257, ADR 0213)",
+            ));
+        } else if layering && get_s(case, "dynamic_mesh.motion") == "six_dof" {
+            errs.push(d(
+                "dynamic_mesh.motion",
+                "layering moves the piston by displacement_expression_x: use motion = \"prescribed\"",
             ));
         }
         if follow.is_empty() && !compressible {
@@ -743,6 +856,7 @@ impl DynMesh {
             rho: get_f(case, "physics.rho"),
             nu: get_f(case, "physics.nu"),
             layers,
+            mesh_speed_step: compressible && get_s(case, TIME_STEP) == "mesh_speed",
         }))
     }
 
@@ -787,16 +901,26 @@ impl DynMesh {
         })
     }
 
+    /// The prescribed x displacement at `t` (the piston of a layer stack sits at `lx` plus it).
+    fn piston_displacement(&self, t: f64) -> f64 {
+        match &self.drive {
+            Drive::Prescribed { disp, .. } => disp[0].as_ref().map_or(0.0, |c| c.eval(&[0.0, 0.0, 0.0, t])),
+            Drive::Body(..) => 0.0,
+        }
+    }
+
+    /// ADR 0257 D4: true when `[dynamic_mesh.compressible] time_step = "mesh_speed"` asks for the mesh-speed step.
+    pub(crate) fn mesh_speed_step(&self) -> bool {
+        self.mesh_speed_step
+    }
+
     /// The geometry at `t_new` of a compressible run's mesh (ADR 0191 W4): the moved points of a rigid or smoothed motion
     /// on the initial topology, or the layer stack with its piston at `lx + d_x(t_new)`.
     pub(crate) fn compressible_geometry(&mut self, t_new: f64) -> Result<FvGeometry, String> {
-        let dx = match &self.drive {
-            Drive::Prescribed { disp, .. } => disp[0].as_ref().map_or(0.0, |c| c.eval(&[0.0, 0.0, 0.0, t_new])),
-            Drive::Body(..) => 0.0,
-        };
+        let dx = self.piston_displacement(t_new);
         let mesh = if let Some(l) = self.layers.as_mut() {
-            l.stack.set_piston(l.x0 + dx).map_err(|e| e.to_string())?;
-            l.stack.mesh().map_err(|e| e.to_string())?
+            l.stack.set_piston(l.x0 + dx)?;
+            l.stack.mesh()?
         } else {
             moved_mesh(&self.mesh0, self.new_points(t_new)?).map_err(|e| e.to_string())?
         };
@@ -812,14 +936,51 @@ impl DynMesh {
         let Some(change) = l.stack.adjust() else {
             return Ok(None);
         };
-        let mesh = l.stack.mesh().map_err(|e| e.to_string())?;
+        let mesh = l.stack.mesh()?;
         let g = FvGeometry::new(Arc::new(mesh)).map_err(|e| e.to_string())?;
         let u = remap(&change, &s.u, s.geom.mesh.cell_volumes(), g.mesh.cell_volumes());
         Ok(Some((g, u)))
     }
 
+    /// One step of a layered piston on the piso / pimple path (ADR 0257 D3, the loop of ADR 0213): the piston at its
+    /// position at the end of the step, the ALE step onto the stack's points, then the layer check; on an event the new
+    /// mesh, the volume-weighted remap of `u` and `p`, the face-flux map of ADR 0213 M3 and `replace_mesh`.
+    fn step_layered(&mut self, s: &mut PimpleSolver, dt: f64) -> Result<StepInfo, String> {
+        let dx = self.piston_displacement(s.time + dt);
+        let Some(Layers {
+            stack: Stack::Extruded(stack),
+            x0,
+        }) = self.layers.as_mut()
+        else {
+            return Err("layering with piso / pimple needs the extruded layer stack (mesh.box_3d.section)".into());
+        };
+        stack.set_piston(*x0 + dx).map_err(|e| e.to_string())?;
+        let st = move_mesh(&s.geom, stack.points(), dt)?;
+        let old = s.geom.mesh.clone();
+        let walls = set_follow_conditions(&mut s.u, &st, &old, &self.follow, dt)?;
+        let info = s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls)?;
+        if let Some(change) = stack.adjust() {
+            let old = s.geom.clone();
+            let mesh = stack.mesh().map_err(|e| e.to_string())?;
+            let sources = stack
+                .face_sources(&change, &old.mesh, &mesh)
+                .map_err(|e| e.to_string())?;
+            let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).map_err(|e| e.to_string())?);
+            let (vo, vn) = (old.mesh.cell_volumes(), geom.mesh.cell_volumes());
+            let u = remap(&change, &s.u.values, vo, vn);
+            let p1: Vec<[f64; 1]> = s.p.values.iter().map(|x| [*x]).collect();
+            let p: Vec<f64> = remap(&change, &p1, vo, vn).into_iter().map(|x| x[0]).collect();
+            let phi = remap_face_flux(&sources, &s.phi, &geom.mesh);
+            s.replace_mesh(geom, u, p, phi)?;
+        }
+        Ok(info)
+    }
+
     /// Advance the flow one step with the mesh moved to its position at the end of the step.
     pub fn step(&mut self, s: &mut PimpleSolver, dt: f64) -> Result<StepInfo, String> {
+        if self.layers.is_some() {
+            return self.step_layered(s, dt);
+        }
         let t_new = s.time + dt;
         if let Drive::Body(b, patches) = &mut self.drive {
             let fm = patch_force_moment(&s.geom, &s.u, &s.p, self.rho, self.nu, patches, b.state.x)?;
@@ -839,6 +1000,11 @@ impl DynMesh {
             }
         }
         s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls)
+    }
+
+    /// True for `deformation = "layering"`.
+    pub(crate) fn layered(&self) -> bool {
+        self.layers.is_some()
     }
 
     /// The body of a six-degree-of-freedom run.
