@@ -416,6 +416,40 @@ the miss named. No modal result at all: **todo**.
    the stub's 0.15 and 0.9 percent, for the reason in D6; both the corrected and the pure EB references are checked.
 5. A non-zero prescribed displacement is refused by the modal analysis (D2).
 
+## Amendment 1 (2026-11-12, written after the first run of the fast tests and before any corrected run)
+
+**What happened.** The registered run of the fast tests (`cargo test -p rcfd-fem --release --test sb_modal -- --nocapture
+--test-threads=1`, log `f383-scratch/run1.log`, run once) passed C1 to C4, N1, F1 to F3, N2, B1 to B5, D1 and X1, and the two
+cantilever tests did not reach their checks: `modal_analysis` returned `Solver { lowest_eigenpairs: NotConverged }` after 200
+iterations. Residuals of the six wanted pairs at the cap: Hex8 40 x 2 x 2 (S1) 2.60e-10, 1.96e-10, 7.4e-12, 5.9e-12, 1.0e-12,
+7.6e-13; Tet10 40 x 2 x 2 (T2) 2.66e-9, 2.51e-9, 7.2e-11, 6.3e-11, 9.1e-12, 8.2e-12, against the tolerance 1e-10. T1 was not
+run (ignored).
+
+**Diagnosis.** Only the first bending pair misses, by a factor 2.6 (Hex8) and 27 (Tet10), and the other pairs are far below the
+tolerance: the iteration has converged and the residual of the lowest pair sits at its rounding floor. ADR 0283 D6 states that
+floor as `rho_i ~ c eps ||A|| / mu_i` (the backward error of the solve seen relative to `||A x_i|| ~ mu_i ||M x_i||`); with
+`sigma = 0` it is `c eps lambda_max / lambda_1`. The registration did not estimate it for the slender cantilever, where the
+ratio is large: Hex8 with cubes of `h = 0.025` has `lambda_max <= 36 (3 lambda_L + 2 mu) / (rho h^2) = 3.7e12` (arithmetic 6's
+bound) and `lambda_1 = (2 pi f_1)^2 ~ 6.6e4` (EB), a ratio `~6e7`, so `eps x ratio = 1.2e-8` and the measured 2.6e-10 means
+`c ~ 0.02`; Tet10 on the same cells has a `lambda_max` about ten times larger (arithmetic 6's factor), and its floor is ten
+times higher (2.7e-9), as the formula says. The bar and the free box have ratios below 1e5 and converged under 1e-10. This is
+a defect of the set-up (the tolerance passed to the eigensolver), not of a limit: no frequency, split or orthonormality was
+measured.
+
+**Correction.** `ModalOptions` gains the builder `tolerance(t)` (new code; the default stays `1e-10`, with which the passed
+runs were made). The corrected tests `s1_amended_symmetric_hex8_cantilever_bending_planes`, `t2_amended_tet10_cantilever_covering`
+and `t1_amended_tet10_cantilever_heavy` (ignored, heavy) make the same checks with the same limits (S1, T2, T1, T1b) and pass
+`tolerance = 1e-7` to the eigensolver. The value: the floor scales with `lambda_max / lambda_1`, `lambda_max ~ h^-2` and
+`lambda_1` fixed, so Tet10 80 x 4 x 4 should sit at `4 x 2.7e-9 = 1.1e-8`; `1e-7` leaves a margin of 9 there, 38 for Tet10 40
+x 2 x 2 and 380 for Hex8. Effect on the checked quantities: the eigenvalue error of a converged pair is second order,
+`<~ tau^2 lambda_i / (lambda_j - lambda_i)` relative (ADR 0283 D6): `<~ 1e-14 / 37` for the first pair, far below the
+frequency limits (1e-2) and the split limit (1e-6); the split of a cluster resolved by Rayleigh-Ritz is of the same order;
+M-orthonormality comes from the Rayleigh-Ritz step, not from `tau`; the Sturm check still runs. The first runs stay as
+ignored records: `s1_symmetric_hex8_cantilever_bending_planes` and `t2_tet10_cantilever_covering` (`#[ignore]`, their result
+the `NotConverged` above), and `t1_tet10_cantilever_heavy`, not run (by the same floor it would stop near 1.1e-8). The shared
+helper `run_cantilever` keeps its behaviour (it calls the new `run_cantilever_with` with `ModalOptions::new(6)`). The library
+default for users is a remaining question for the addendum (a slender model fails at `1e-10`).
+
 ## The planned stub, as written
 
 > # ADR 0284: Mass matrix and linear modal analysis of a solid model
