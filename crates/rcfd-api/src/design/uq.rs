@@ -460,7 +460,9 @@ pub fn linear_fit(x: &[Vec<f64>], y: &[f64]) -> Option<(Vec<f64>, f64)> {
     Some((b, if ss_tot > 0.0 { 1.0 - ss_res / ss_tot } else { f64::NAN }))
 }
 
-fn evaluate_guarded(model: &dyn Model, params: &[Quantity]) -> Outcome {
+/// Evaluate one variant with the panic guard: a panic or a non-finite metric becomes `diverged` with a reason, and a
+/// non-`ok` verdict without a reason gets one (also used by [`super::sensitivity`]).
+pub(crate) fn evaluate_guarded(model: &dyn Model, params: &[Quantity]) -> Outcome {
     let mut out = match catch_unwind(AssertUnwindSafe(|| model.evaluate(params))) {
         Ok(o) => o,
         Err(p) => Outcome {

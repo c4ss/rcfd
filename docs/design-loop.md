@@ -389,6 +389,16 @@ a summary are written to the ledger. The same seed gives a byte-identical ledger
 verified on analytic functions (closed-form means, variances, quantiles and SRC); no fan evaluator is attached yet and there is no
 MCP tool for it.
 
+## Sobol sensitivity indices (ADR 0240, library only)
+
+The function `design::sensitivity::run(spec, model, ledger)` estimates the first-order index `S_i` and the total index `ST_i` of
+every independent input (the distributions of `uq`) for every metric. It evaluates two Monte Carlo matrices `A` and `B` of `N` rows
+and, for each input `i`, `A` with column `i` from `B`: `N (d + 2)` evaluations. The first-order estimator is the centred form of
+Saltelli et al. (2010), the total estimator Jansen's (1999); each comes with a delta-method standard error. Unlike SRC it sees
+interactions (`ST_i - S_i`) and non-monotone effects; an input the model does not read gets exactly zero. A row with a failed
+evaluation is dropped as a whole. Every evaluation and a `sobol_summary` entry can be written to the ledger; the result does not
+depend on the worker count. It is opt-in, verified on the Ishigami function and a linear function, and has no MCP tool.
+
 ## Code map
 
 The code is `crates/rcfd-api/src/design/`:
@@ -408,6 +418,7 @@ The code is `crates/rcfd-api/src/design/`:
 | `tools` | the `design.*` service methods behind the MCP tools |
 | `ledger` | design ledger across studies (ADR 0121): entries with units, verdicts, tiers, queries, export, re-run check |
 | `uq` | tolerance / uncertainty study driver (ADR 0121): distributions, MC and replicated LHS, stopping rule, statistics, SRC |
+| `sensitivity` | first-order and total Sobol indices with standard errors (ADR 0240) |
 
 ## Where to go next
 
