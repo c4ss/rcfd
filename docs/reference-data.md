@@ -1485,6 +1485,15 @@ Opt-in (`ImmersedForcing::build_second_order_bounded`); `build` and `build_secon
 | Ghost-cell extrapolation near a boundary point close to a grid node has large weights of alternating sign and can destabilise the update; remedy: a stencil with bounded weights through an image point in the fluid (Tseng and Ferziger, J. Comput. Phys. 192 (2003) 593-623; Mittal et al., J. Comput. Phys. 227 (2008) 4825-4852) | cited from memory, not read for this work | the formula used (the wall value reflected through the value at the image point of the face, `2 u_G - ((1 - a) HbyA_c + a HbyA_d)`, error `xi_f^2 u''` plus the linear interpolation) is derived in ADR 0254 amendment 1; measured on circular Couette: order 1.947, face-flux reconstruction error 7.99e-4 at N 96 with ratio 3.86 |
 | DFG 2D-2 level-6 values | read | as the F-219 row above (`St` 0.30188, max `C_D` 3.2200, max `C_L` 0.9859); measured on M2 with the bounded form in ADR 0254 addendum 1: 0.30112, 3.20930, 0.97593 |
 
+## F-354 immersed solid: DFG 2D-2 force extrema under refinement (ADR 0268)
+
+Measurement only; no library code.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| DFG 2D-2 level-6 values | read | as the F-219 row above (max `C_D` 3.2200, max `C_L` 0.9859, `St` 0.30188); measured on the D/80 meshes in ADR 0268 addendum 1: T2 `build` 3.22876, 0.98911, 0.30158; T2 bounded 3.22439, 0.98762, 0.30175; M3 `build` 3.22460, 0.98311, 0.30151; M3 bounded 3.22024, 0.98167, 0.30168 |
+| Upstream decay of an outlet disturbance in a channel, about `exp(-pi x/H)` | derived | used only to read the outlet measurement P5 of ADR 0268 (no change to six digits when the outlet moves from 2.2 to 4.4) |
+
 ## F-297 NSGA-II crossover: the operator read against the papers (ADR 0220, docs/design-loop.md)
 
 Read 2026-11-07 for the registration of ADR 0220, before any code. No source listing of any optimisation code was opened (the web
