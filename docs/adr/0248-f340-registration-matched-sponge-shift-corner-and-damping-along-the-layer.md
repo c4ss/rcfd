@@ -481,3 +481,168 @@ used is derived above from the linear acoustic equations. No vendor code or docu
   zone behind an attenuation of `1e-3` at 60 degrees. Recommendation in the addendum, with the measured numbers.
 - Q-B. A default for `shift` when the layer is wired to a case file (F-330). Not taken here: it would be a default.
   Recommendation: `0.05 c/L`, to be confirmed with the results.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Commits: registration 4ee9cd0a; library and tests 3760d184; this addendum with the three `*_known_miss` records and
+`docs/acoustics.md`. Every run was made in the **release** profile, each registered heavy run once. No limit was changed
+and no amendment was needed. The three checks of clause 1 missed their limit at all three angles, as the registration
+expected (DR12); they are kept as ignored `*_known_miss` records with the limit intact.
+
+### Checks
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| **Clause 1** | | | | |
+| D30s, D45s, D60s | set-up D of ADR 0237 (train started inside the layer, memory zero), K1 | `R <= 1e-2` each | `3.73e-2`, `6.09e-2`, `8.64e-2` (M4 expected 0.033, 0.052, 0.071; the F-331 form measured 0.0385, 0.0618, 0.0870) | **no (known miss)** |
+| D30d, D45d, D60d | the same, K2 (`along = 0.05`) | `R <= 1e-2` each | `2.24e-2`, `3.62e-2`, `4.21e-2` (M4 expected 0.019, 0.032, 0.036) | **no (known miss)** |
+| (printed) | the last 0.2 of the window: K1; K2 | none | `3.6e-2`, `5.7e-2`, `4.0e-2`; `2.0e-2`, `2.3e-2`, `3.0e-2` | - |
+| **Clause 2** | | | | |
+| Z1 | closed box, offset `delta (1 + 0.5 cos(pi y/H))`, 100 transit times, K1: largest `c |m_t|/delta` in the layer per quarter | largest `<= 6`; last `<= 1.05` first | 3.00, 2.98, 2.81, 2.72 (M4 3.07, 3.07, 2.98, 2.97); mean offset left 0.0088 (M4 0.008) | yes |
+| Z1o | the same, the F-331 form (reported; expected to hold) | as Z1 | 3.20, 3.12, 2.87, 2.77; mean offset left `-4e-6` | held |
+| F4 | held pressure, K1: memory against `(p'/a)(1 - e^{-a t})` at `t = 20`; force along the layer against its bound; control, F-331 form: memory against `p' t` | `1e-3`; `1e-3`; `1e-9` | `4.2e-6`; `4.2e-6`; `4.7e-13` | yes |
+| **Clause 3** | | | | |
+| C1 | quarter of a cylindrical pulse through two layers and their corner, K1 | `R <= 1e-2` | `5.30e-5` (M4 `1.8e-6`; the solver's scheme as expected) | yes |
+| NCC1 | no sponge | `R >= 0.04` | 0.0577 | held |
+| NCC2 | one layer only | `R >= 0.02` | 0.0287 | held |
+| **Clause 4** | | | | |
+| X60 | one isolated plane pulse at 60 degrees, K1 | `R <= 1e-2` | `8.13e-4` (M3 `5.2e-4`, M4 `4.9e-4`) | yes |
+| X60o | the same run, the F-331 form (reported) | `R <= 1e-2` | `8.02e-4` (M4 `4.6e-4`) | held |
+| **Clause 5** | | | | |
+| A0c | tube, K1, Thompson behind | `R <= 1e-2` | `9.37e-7` (F-331 form `9.23e-7`) | yes |
+| A0sc | tube, K1, rigid wall behind | `R <= 1e-2` | `1.18e-6` (F-331 form `1.08e-6`) | yes |
+| A30c, A45c, A60c | set-up D2, K1 | `R <= 1e-2` each | `3.12e-4`, `3.65e-4`, `1.28e-3` (F-331 form `1.16e-4`, `2.78e-4`, `1.24e-3`) | yes |
+| X1c | isolated pulse at 30 degrees, K1 | `R <= 1e-2` | `2.29e-5` (F-331 form `2.37e-5`) | yes |
+| X45c | isolated pulse at 45 degrees, K1 | `R <= 1e-2` | `1.43e-4` (F-331 form `1.45e-4`) | yes |
+| NCB60 | set-up D2 at 60 degrees, K2: the price of the damping along the layer | `R >= 1e-2` | `4.43e-2` (M3 `2.7e-2`) | held |
+| **Algebra, refusals, bits** | | | | |
+| S3 | refusals of the new variant (options, second layer, reference, memories, `step_ale`, `replace_mesh`, `set_msd_wall`); clearing accepted | error / ok | as required | yes |
+| F2 | DR14 with one layer on a prescribed field, 36 interior cells | `1e-12` | `1.58e-15` | yes |
+| F3 | DR14 with two layers in three dimensions, 27 interior cells | `1e-12` | `1.43e-15` | yes |
+| U3 | uniform reference in two layers and their corner, 200 steps: drift; memories | `1e-12`; zero | 0; 0 | yes |
+| U4 | uniform offset, rate 2, shift 0.5: pressure, density; memory; momentum | `1e-5`; `1e-4`; `1e-12` | `4.1e-7`, `3.6e-7`; `1.5e-7`; 0 | yes |
+| B3 (i) | existing tests unedited: `--lib compressible` 17 passed, 1 ignored; `--lib sponge` (S1, S2, F1 of ADR 0237 among 7); `compressible_bc` 2 passed, 4 ignored; `compressible_ale_f258` 8; `compressible_ale_f258_records` 4 (the bit records); `impedance_f243` 7 passed, 2 ignored; `sponge_f331` 5 passed, 8 ignored; `msd_wall_f332` 7 passed, 11 ignored | pass | pass | yes |
+| B3 (ii) | `MatchedShifted` without shift, damping and second layer against `Matched`, 1200 cells, 30 steps, state and memory | bit-identical | bit-identical; K1 changes 1200 of 1200 cells | yes |
+
+Commands: `cargo test --release -p rcfd-fv --lib sponge` (F2, F3, F4, the layer part of S3; with S1, S2, F1 of ADR 0237);
+`cargo test --release -p rcfd-fv --test sponge_f340` (A0c, U3, U4, S3, B3; about 2 s); the heavy ones from the test
+binary with `--ignored`, in two batches at the same time (`x60 x45c x1c`: 5079 s, one thread per run; the nine others
+in 1060 s with three test threads).
+
+What the numbers say. The frequency shift costs nothing measurable at the registered value: every check of ADR 0237
+is repeated within a factor of three of its old value (the trains at 30 and 45 degrees rise from `1.2e-4` and `2.8e-4` to
+`3.1e-4` and `3.6e-4`: the start of set-up D2 is the steady state of the unshifted layer, off by `a/omega`, as
+registered). Two layers and their corner return `5e-5` of a cylindrical pulse where the Thompson boundaries return 5.8
+percent and one layer 2.9 percent. The model M4 predicted set-up D within 20 percent again, for K1 and for K2.
+
+### Clause 1: the miss and its diagnosis
+
+The diagnosis is DR12, written before the runs; the runs agree with it in each point that they test:
+
+- The shift alone changes nothing in set-up D (`3.73e-2`, `6.09e-2`, `8.64e-2` against `3.85e-2`, `6.18e-2`, `8.70e-2` of
+  the F-331 form). The ringing is not a matter of the memory that never decays; it sits at the cut-off frequencies of the
+  duct, where a field that does not vary across the layer solves the equations of every matched layer.
+- The damping along the layer lowers it (K2: `2.2e-2`, `3.6e-2`, `4.2e-2`) and does not reach the limit, and it has the
+  registered price: the steady train at 60 degrees returns `4.4e-2` with it (NCB60) against `1.3e-3` without. At 60
+  degrees the K2 value of set-up D is that price, not the ringing.
+- No value of `along` meets 1 percent at the three angles in M4 (table of DR12), and M4 has now predicted five set-up D
+  runs of the solver within 20 percent.
+
+This is a limit of a matched layer of this thickness in a rigid duct, not a defect of the set-up and not a parameter
+that was chosen badly. The clause as written is not met. Nothing was tuned after the run.
+
+### Clause 2: what was shown
+
+Z1 holds, and so does the F-331 form in the same run (Z1o), as DR13 expected: in a run the fluid moves until the
+pressure gradient along the layer is gone, and neither form grows. The difference the shift makes is in F4 (under a held
+pressure the memory and the force saturate at `p'/a`; without the shift they grow linearly) and in what happens to the
+uniform part of the offset: the F-331 form removes it, the shifted form leaves `0.9` percent at `t = 20` because the layer
+then acts as a large volume at zero frequency (DR11). The clause is met; the statement of ADR 0237 that the F-331 form
+"drives the tangential momentum without bound" is true for a held pressure only.
+
+### Mutations (a `git archive` copy in the scratch folder with its own target directory; the registered commands, once each)
+
+| id | mutation | caught by |
+|---|---|---|
+| MV1 | memory without decay | F2 (`1.3`), F3 (`41`), F4 (`4.0`), U4 (`0.13`, `0.15`, `0.38`) |
+| MV2 | mass and energy relax with `p'` | F2 (`13`), F3 (`0.25`), U4 (`0.50`, `0.59`) |
+| MV3 | momentum memory not advanced | F2 (`1.0`) only; A0c rises to `4.7e-3` and stays below its limit |
+| MV4 | product term dropped | F3 (`1.1`); C1: `R = 2.2e-2` (limit `1e-2`) |
+| MV5 | cross forces exchanged | F3 (`0.35`); C1: `R = 0.26` |
+| MV6 | damping along the layer on the normal momentum as well | F2 (`7.0e-2`), F3 (`2.0e-2`) |
+| MV7 | `R` not advanced | F2 (`1.0`), F3 (`1.0`: it compares the returned `R_t` as well, other than registered) |
+| MV8 | single-layer force without the projection | B3 (bits differ), A0c (`R = 0.21`). **Not by F2, other than registered**: the gradient of the prescribed `Q` of F2 has no component along the normal |
+
+No mutation survived. MV3 is caught by one check. The unmutated copy was run first with the same commands (all pass,
+the numbers of the table). After the mutations the copy equals the committed file (`cmp`), and the worktree was never
+mutated.
+
+### fmt, clippy, other crates
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean (one
+`too_many_arguments` allowance on the new source routine and one on a test helper). `cargo check -p rcfd-api --tests`:
+compiles; its tests were not run.
+
+### Deviations and disclosures
+
+- **A model search before the registration.** The layer variants and the two parameter values were chosen with the
+  scratch models M3 and M4 before the registration, as its disclosure says; no solver run preceded it.
+- **A misstatement in the registration.** DR13 and the Z1 table call the measured quantity `rho0 c |m_t|/delta` once and
+  `c |m_t|/delta` once; `m_t` is the momentum, so the second is right and is what the test computes.
+- **A0sc.** The registration's estimate for the rigid wall behind the shifted layer was `9.2e-5` (M3, the part below
+  `omega = a` returning); measured `1.2e-6`. The run ends at `t = 1.6`; the slow part has not returned by then. The
+  estimate was for a longer window than the check has.
+- **Fast checks run more than once.** The unit tests of `--lib sponge` ran a second time inside B3 (i), and the fast
+  checks ran once more, unmutated, on the mutation copy, and the fast tests of `sponge_f340` once more on the final tree
+  (after the three clause 1 tests were renamed to records); every number was reproduced to the digits shown.
+- **The first start of the mutation runs applied nothing**: the scratch script had a syntax error and stopped before
+  any cargo command. It was corrected, each mutation was applied once to check that it changes the file, and the runs
+  were then made. No file of the repository was affected.
+- **The reduced margins of X60** (tails of 3.5 widths, the reference grid 0.6 behind the layer front) are DR15,
+  registered beforehand; M4 gives the same number with the conservative reference length.
+- F2, F3, F4 and the layer part of S3 are unit tests in `sponge.rs` (a second test module; the module of ADR 0237 is
+  unchanged); the rest is in `sponge_f340.rs`. No existing test file was edited.
+- The papers are cited from memory; none was opened. Every formula used is derived in this ADR.
+
+### Not run
+
+The whole workspace test suite; the tests of `rcfd-api` and of every other crate; the debug profile; a corner in three
+dimensions as a run (F3 checks its algebra); three layers; angles above 60 degrees; a mean flow; a layer on a
+non-Cartesian grid; values of `shift` other than 0.25 in a run of the solver (the cost at other values is M3's).
+
+### Decision by the registered rule
+
+- Clauses 2, 3, 4 and 5 are met with K1 (the isolated pulse at 60 degrees `8.1e-4`, in full size); B3, S3, F2, F3, U3, U4 hold; NCC1, NCC2 and NCB60 hold; all
+  eight mutations are caught.
+- Clause 1 is missed with K1 and with K2, with the diagnosis of DR12.
+- **Proposed status: partial**, by the second bullet of the rule (the outcome the registration expected).
+
+### Remaining questions (options and recommendation)
+
+1. **Clause 1.** (a) keep it and leave F-340 partial for good; (b) close F-340 on clauses 2 to 5 and replace clause 1 by
+   a follow-up that asks for what a layer can do: a zone of plain damping behind a matched layer strong enough to hide
+   it (an attenuation of `1e-3` at 60 degrees before the zone starts, which needs about twice the rate integral of the
+   D7 layer, so about 80 cells), with the set-up D record as its check over a window of several cut-off periods instead
+   of the one that starts 0.1 after the first transit; (c) drop the clause: start with a quiet layer or set the
+   memories. Recommendation: (b), and only if a ducted case shows the ringing in practice; until then (c) is what
+   `docs/acoustics.md` tells the user.
+2. **A default for `shift` in the case-file wiring (F-330).** (a) zero (the form of ADR 0237); (b) `0.05 c/L`.
+   Recommendation: (b): it cost nothing in any check and bounds the memory. Not taken here: it is a default.
+3. **Whether `along` should stay in the library.** It does not meet clause 1 and costs 4 percent at 60 degrees at 0.05.
+   (a) keep it as a documented option; (b) remove it. Recommendation: (a): it is the cheap remedy for a duct at near
+   normal incidence (its price falls as `tan sin/cos`), and its price is measured.
+4. **The corner in three dimensions.** Built and checked by algebra only. Recommendation: a run when a case needs it.
+
+### For the lead: roadmap entries
+
+**F-340, proposed status: `partial`.** Proposed note text:
+
+> From ADR 0237 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The job of 2026-11-12 (ADR 0248): four of the five clauses are MET IN THE LIBRARY, clause 1 is MISSED with a diagnosis that the registration gave before the runs. Built (rcfd-fv sponge.rs, opt-in, `Plain` and `Matched` untouched): `SpongeForm::MatchedShifted(MatchedOptions { normal, shift, along, second })`, the matched layer as a complex coordinate stretching with (i) a complex frequency shift `shift` (the memories decay: under a held pressure the memory and the force along the layer saturate at p'/a instead of growing; below omega ~ a the layer does not absorb and it leaves a static offset alone), (ii) a second planar layer with an orthogonal normal for a corner (`Sponge::corner`: the same memory, one product term, the force of each layer on the momentum along the other's normal; a second memory for an edge in three dimensions), (iii) a damping of the momentum along the layer `along` (a mismatch with a measured price); `Sponge::planar_shifted`, `CompressibleSolver::sponge_memories` and `set_sponge_memories`. Measured with shift 0.25/s (0.05 c/L) and along 0 on the 40-cell layer of ADR 0237 (limit 1 percent, largest difference to a run on an extended grid against the incident peak): an isolated plane pulse at 60 degrees 8.1e-4 (the form of ADR 0237 in the same run 8.0e-4; 705 000 and 770 000 cells, the set-up of X45 with tails of 3.5 pulse widths and a reference grid shortened by a causality argument that a model confirmed to 12 digits); a quarter of a cylindrical pulse through two layers and their corner 5.3e-5 (no sponge 0.058, one layer 0.029); the checks of ADR 0237 repeated with the shift: A0 9.4e-7 (1.2e-6 in front of a rigid wall), A30b, A45b, A60b 3.1e-4, 3.6e-4, 1.3e-3, X1 2.3e-5, X45 1.4e-4; a closed box with a pressure offset varying along the layer over 100 transit times: momentum along the layer at most 3.0 delta/c and not growing (the form of ADR 0237 in the same run 3.2 and not growing either: in a run neither form grows, the difference is under a held pressure, checked by algebra to 4e-6). Without the options the new form produces the bits of `Matched`; the existing compressible, F-258, ADR 0233, ADR 0237 and ADR 0243 tests pass unedited. Eight mutations caught. MISSED, clause 1: the set-up D record (a wave train started inside the layer with zero memory in a rigid duct) stays at 3.7e-2, 6.1e-2, 8.6e-2 at 30, 45, 60 degrees with the shift (3.8e-2, 6.2e-2, 8.7e-2 without) and at 2.2e-2, 3.6e-2, 4.2e-2 with along = 0.05, against 1e-2; kept as three ignored known_miss records. Diagnosis (ADR 0248 DR12, a scratch model predicted the five numbers within 20 percent before the runs): the ringing sits at the cut-off frequencies of the duct; a field that does not vary across the layer solves the equations of every matched layer, so no matched layer damps it; a damping along the layer is a mismatch that reflects about 1.3 along of a pulse at 60 degrees whatever its frequency (along = 0.05 measured 4.4e-2 of the steady train at 60 degrees), and the strength needed to remove the ringing within the registered window costs far more than 1 percent. Not a parameter that could be tuned at this thickness. Limits: linear acoustics about a state at rest; one layer or two orthogonal ones (no corner of three layers; the three-dimensional edge is checked by algebra only); explicit source; not on moving meshes; not with a mass-spring-damper wall; library only (the wiring goes with F-330); Cartesian grids. Open questions in ADR 0248 addendum 1 (what to do with clause 1; a default for the shift in the wiring; whether to keep `along`; a corner run in three dimensions).
+
+Proposed follow-up item (number for the lead to assign), only if question 1 is answered with (b):
+
+- **Matched sponge layer: ring-down of a rigid duct.** Deps: F-340. Size M. Acceptance: "With a zone of plain damping
+  behind a matched layer, the set-up D record of ADR 0237 (a wave train started inside the layer with zero memory in a
+  rigid duct) falls below 1 percent within 5 periods of the lowest transverse mode at 30, 45 and 60 degrees; an isolated
+  plane pulse at 60 degrees and the trains of set-up D2 still reflect less than 1 percent; the thickness and the rates
+  are fixed from a derivation before the runs."

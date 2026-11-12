@@ -372,24 +372,33 @@ fn clause_1(name: &str, d: &Duct) {
     assert!(r[1].0 <= LIMIT, "D{name}d {}", r[1].0);
 }
 
-/// D30s and D30d of ADR 0248 (clause 1 of F-340).
+/// D30s and D30d of ADR 0248 (clause 1 of F-340): a known miss, kept as an ignored record with the limit intact.
+/// Measured at 3760d184: D30s (K1) `R = 3.732e-2`, D30d (K2) `R = 2.236e-2` against the limit `1e-2`. The registration
+/// expected the miss (ADR 0248 DR12): the ringing sits at the cut-off frequencies of the duct, which no matched layer
+/// damps, and a damping along the layer that removes it costs more than 1 percent of oblique reflection.
 #[test]
-#[ignore = "heavy: three duct runs of 50 000, 50 000 and 85 000 cells; run in the release profile"]
-fn d30_setup_d_record_30_degrees() {
+#[ignore = "known_miss record (ADR 0248 addendum 1): D30s measured 3.732e-2, D30d 2.236e-2 against 1e-2"]
+fn d30_setup_d_record_30_degrees_known_miss() {
     clause_1("30", &D30);
 }
 
-/// D45s and D45d of ADR 0248 (clause 1 of F-340).
+/// D45s and D45d of ADR 0248 (clause 1 of F-340): a known miss, kept as an ignored record with the limit intact.
+/// Measured at 3760d184: D45s (K1) `R = 6.090e-2`, D45d (K2) `R = 3.620e-2` against the limit `1e-2`. The registration
+/// expected the miss (ADR 0248 DR12): the ringing sits at the cut-off frequencies of the duct, which no matched layer
+/// damps, and a damping along the layer that removes it costs more than 1 percent of oblique reflection.
 #[test]
-#[ignore = "heavy: three duct runs of 39 000, 39 000 and 67 000 cells; run in the release profile"]
-fn d45_setup_d_record_45_degrees() {
+#[ignore = "known_miss record (ADR 0248 addendum 1): D45s measured 6.090e-2, D45d 3.620e-2 against 1e-2"]
+fn d45_setup_d_record_45_degrees_known_miss() {
     clause_1("45", &D45);
 }
 
-/// D60s and D60d of ADR 0248 (clause 1 of F-340).
+/// D60s and D60d of ADR 0248 (clause 1 of F-340): a known miss, kept as an ignored record with the limit intact.
+/// Measured at 3760d184: D60s (K1) `R = 8.644e-2`, D60d (K2) `R = 4.208e-2` against the limit `1e-2`. The registration
+/// expected the miss (ADR 0248 DR12): the ringing sits at the cut-off frequencies of the duct, which no matched layer
+/// damps, and a damping along the layer that removes it costs more than 1 percent of oblique reflection.
 #[test]
-#[ignore = "heavy: three duct runs of 40 000, 40 000 and 71 000 cells; run in the release profile"]
-fn d60_setup_d_record_60_degrees() {
+#[ignore = "known_miss record (ADR 0248 addendum 1): D60s measured 8.644e-2, D60d 4.208e-2 against 1e-2"]
+fn d60_setup_d_record_60_degrees_known_miss() {
     clause_1("60", &D60);
 }
 
