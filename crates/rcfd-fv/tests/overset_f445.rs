@@ -399,7 +399,7 @@ fn run(case: &Case, qb: bool, mode: FringeFlux, times: &[f64]) -> Run {
         );
         err_hist.push(velocity_error(&s, t).0);
         let umax = s.u.values.iter().map(|v| vec3::norm(*v)).fold(0.0, f64::max);
-        if !(umax <= 10.0) {
+        if umax.is_nan() || umax > 10.0 {
             failed = Some((k, format!("max abs(u) = {umax:e}")));
             break;
         }
@@ -1030,7 +1030,7 @@ fn a_rl_levels_1_to_3() {
     c.finish();
 }
 
-/// ADR 0347 A3 on RL at level 4 under G.
+/// ADR 0347 A3 on RL at level 4 under G. Run once (952 s): `R_b(0.5)` `2.370320e-5`; C1 to C3 and QS met.
 #[test]
 #[ignore = "slow (RL at level 4 under G, base and Qb, ADR 0347, about forty minutes): run once"]
 fn a_rl_level_4() {
@@ -1132,13 +1132,16 @@ fn x_run(alter: impl Fn(&mut OversetSolver)) -> (f64, usize, f64) {
     (cont, unconverged, velocity_error(&s, 40.0 * dt).1)
 }
 
+/// A change of a solver before its run.
+type Alter = Box<dyn Fn(&mut OversetSolver)>;
+
 /// ADR 0347 X (smoke): G together with `rhie_chow_step_consistent`, with BDF2 and with two outer iterations.
 #[test]
 fn x_g_with_the_other_opt_ins() {
     let mut c = Checks::new();
     let (cont, unconverged, alone) = x_run(|_| {});
     println!("X G alone: continuity {cont:.3e}, {unconverged} unconverged, rms velocity error {alone:.6e}");
-    let variants: [(&str, Box<dyn Fn(&mut OversetSolver)>); 3] = [
+    let variants: [(&str, Alter); 3] = [
         (
             "rhie_chow_step_consistent",
             Box::new(|s| s.settings.rhie_chow_step_consistent = true),
@@ -1218,5 +1221,20 @@ fn ht_quadratic_donors_on_both_fringes() {
             g_quad / g_lin
         );
     }
+    c.finish();
+}
+
+// ---- the order between levels that ran in different test processes ----------------------------------------------------------
+
+/// ADR 0347 addendum 1: A3 between levels 2 and 4 of RL, formed from the printed `R_b(0.5)` of `a_rl_levels_1_to_3`
+/// (`1.033285e-4`) and of `a_rl_level_4` (`2.370320e-5`): 2.124. A record of printed numbers, no flow run.
+#[test]
+fn a3_order_between_test_processes() {
+    let mut c = Checks::new();
+    c.at_least(
+        "A3 order of R_b at t = 0.5 on RL, levels 2 to 4",
+        order(1.033285e-4, 2.370320e-5, 2.0),
+        1.7,
+    );
     c.finish();
 }

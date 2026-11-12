@@ -127,6 +127,20 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   bring it from `4.49e-4` to `1.69e-4` and the overset error from 3.31 to 1.86 times that of the background alone. More
   passes do not lower it further (`1.69e-4` with five): the rest is the truncation of the implicit Euler scheme along the
   paths of the moving cells.
+- **Prescribed flux on the fringe faces (F-445, ADR 0347).** `OversetSolver::set_fringe_flux(
+  FringeFlux::PrescribedOwnGradient)` replaces the flux of every face between a calculated and a fringe cell by the face
+  interpolation of the velocity each pressure corrector starts from, plus one correction per region of calculated cells
+  that makes its net flux zero (it takes the place of the offset of the background fringe pressures); the pressure
+  gradient of a calculated cell next to a fringe cell is then taken from its own part, and the pressures of the two parts
+  are tied only by their levels. A solver that does not call it runs as before, bit for bit. The coupling of the normal
+  velocity is then an identity (the flux follows the face value of the two cell velocities to `1e-4`), continuity and
+  the mass of the domain hold to `5e-13`, a uniform flow through a moving, turning component stays uniform to `4e-15`,
+  and the response to the truncation of the background fringe converges at orders 1.96 and 1.79 (2.70 and 2.12 within
+  the parity families of the second set-up) where the default coupling has 0.98 and 1.02. The price on the meshes tried:
+  the interpolation error reaches the calculated cells in full, so with the default linear stencils the error against the
+  exact Taylor-Green solution is 1.6 to 1.8 times that of the default coupling; with the quadratic donor interpolation
+  1.04 to 1.14 times. The variant that keeps the interpolated fringe pressure in that gradient
+  (`FringeFlux::Prescribed`) is unstable and is kept for its record tests only.
 - **BDF2 (F-338, ADR 0241).** `OversetSolver::set_time_scheme(TimeScheme::Bdf2)` switches the three-level scheme on; a
   solver that does not call it runs as before, bit for bit. The time term is the backward difference of `V u` of the
   moving cell, and the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, so that a

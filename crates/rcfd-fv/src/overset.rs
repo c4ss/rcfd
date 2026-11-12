@@ -67,10 +67,15 @@ pub enum FringeFlux {
     PressureEquation,
     /// Prescribed (ADR 0347 D1 to D4): the face interpolation of the velocity the corrector starts from, plus one
     /// correction per region. The pressure gradient of a calculated cell next to a fringe cell keeps the interpolated
-    /// fringe pressure (variant P of ADR 0347; see its addendum before using it).
+    /// fringe pressure (variant P of ADR 0347). **Unstable** in a flow that is not uniform: the Taylor-Green runs of ADR
+    /// 0347 blow up within five steps (the error grows 11-fold and 60-fold per step on its two meshes). Kept for the
+    /// record tests of that ADR; use [`FringeFlux::PrescribedOwnGradient`].
     Prescribed,
     /// Prescribed, and the pressure gradient of a calculated cell next to a fringe cell extrapolates the pressure of its
-    /// own part to the faces it shares with fringe cells (ADR 0347 D5, variant G).
+    /// own part to the faces it shares with fringe cells (ADR 0347 D5, variant G). The interpolated normal velocity
+    /// then reaches the calculated cells in full, and with it the truncation of the donor interpolation: with the
+    /// default (linear) stencils the error of ADR 0347's runs is 1.6 to 1.8 times that of the default coupling, with
+    /// the quadratic donor interpolation (ADR 0251) 1.04 to 1.14 times.
     PrescribedOwnGradient,
 }
 
