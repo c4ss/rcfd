@@ -10,6 +10,9 @@
 //!
 //! The face flux of the intermediate field is the collocated form `interp(u*).S + dt (interp(grad p^n).S - snGrad(p^n)|S|)`
 //! (the pressure force carried by the cell velocity is replaced by the compact face gradient; incremental form only).
+//! Its steady face defect is `dt R(p)`, so a steady state depends on the step; with the opt-in
+//! `PimpleSettings::fractional_step_consistent` (ADR 0356) the internal faces take `Gamma R(p^n) + (Gamma / dt) K` with the
+//! harmonic face value `Gamma` of `V / a_P` and the carried old defects `K`, and a steady state does not depend on the step.
 //! Child module of `pimple`: it reads the private history of the solver.
 
 use super::{ddt_history_weights, PimpleSolver, StepInfo};
@@ -56,6 +59,28 @@ fn homogeneous(bc: &PressureBc) -> PressureBc {
 }
 
 impl PimpleSolver {
+    /// The carried old-level face defects `c1 (phi^n - interp(u^n) . S) - c2 (phi^{n-1} - interp(u^{n-1}) . S)` of the internal
+    /// faces (ADR 0356 D2; the same expression as the transient Rhie-Chow carry-over of the PISO step).
+    fn carried_defect(&self, c1: f64, c2: f64) -> Vec<f64> {
+        let g = &self.geom;
+        let (n, n_int) = (g.n_cells(), g.n_internal);
+        let zero_b = vec![[0.0; 3]; g.mesh.n_boundary_faces()];
+        let uold: Vec<Vec3> = (0..n).map(|c| [0, 1, 2].map(|k| self.hist_u[k].old[c])).collect();
+        let fo = face_flux(g, &uold, &zero_b);
+        let mut d: Vec<f64> = (0..n_int).map(|f| c1 * (self.phi_hist.old[f] - fo[f])).collect();
+        if c2 != 0.0 {
+            let older: Vec<Vec3> = (0..n)
+                .map(|c| [0, 1, 2].map(|k| self.hist_u[k].older.as_ref().map_or(self.hist_u[k].old[c], |o| o[c])))
+                .collect();
+            let fol = face_flux(g, &older, &zero_b);
+            let phi_older = self.phi_hist.older.as_ref().unwrap_or(&self.phi_hist.old);
+            for f in 0..n_int {
+                d[f] -= c2 * (phi_older[f] - fol[f]);
+            }
+        }
+        d
+    }
+
     /// One non-iterative fractional step of size `dt` (see the module documentation).
     pub(crate) fn step_fractional(&mut self, dt: f64) -> StepInfo {
         let fs = self.settings.fractional.unwrap_or_default();
@@ -91,6 +116,9 @@ impl PimpleSolver {
             grad_p.clone()
         };
         let own = mesh.owner();
+        // ADR 0356 (opt-in, incremental form only): the intermediate flux with the carried face defect
+        let sc = s.fractional_step_consistent && fs.incremental;
+        let mut a_p = if sc { vec![0.0; n] } else { Vec::new() };
 
         // ---- momentum predictor -------------------------------------------
         let u_old: Vec<Vec3> = self.u.values.clone();
@@ -167,6 +195,11 @@ impl PimpleSolver {
                     sys.b[c] -= vol[c] * grad_p[c][k];
                 }
             }
+            if sc {
+                for (a, d) in a_p.iter_mut().zip(&sys.a.diag) {
+                    *a += d;
+                }
+            }
             res_u = res_u.max(normalised_residual(&sys, &cells));
             let mut x = cells;
             sys.solve(&mut x, &s.momentum_solver);
@@ -179,6 +212,17 @@ impl PimpleSolver {
         let ustar = self.u.values.clone();
         let hb = boundary_hby_a(&g, &pbc, &ub_phys, &ustar);
         let mut phi_star = face_flux(&g, &ustar, &hb);
+        // ADR 0356 D2: Gamma = harmonic face value of V / a_P, K = c1 d^n - c2 d^{n-1} on internal faces
+        let (gamma_sc, carried) = if sc {
+            let n_active = g.active.iter().filter(|&&a| a).count() as f64;
+            let r_au: Vec<f64> = (0..n).map(|c| vol[c] / (a_p[c] / n_active)).collect();
+            (
+                super::face_consistent::harmonic_face(&g, &r_au),
+                self.carried_defect(c1, c2),
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
         if fs.incremental {
             let p = &self.p.values;
             let nei = mesh.neighbour();
@@ -189,7 +233,12 @@ impl PimpleSolver {
                 if f < n_int {
                     let w = g.weights[f];
                     let gf = [0, 1, 2].map(|i| w * grad_p[own[f]][i] + (1.0 - w) * grad_p[nei[f]][i]);
-                    phi_star[f] += dte * (vec3::dot(gf, sf[f]) - g.lap_coeff[f] * (p[nei[f]] - p[own[f]]));
+                    if sc {
+                        phi_star[f] += gamma_sc[f] * (vec3::dot(gf, sf[f]) - g.lap_coeff[f] * (p[nei[f]] - p[own[f]]))
+                            + gamma_sc[f] / dt * carried[f];
+                    } else {
+                        phi_star[f] += dte * (vec3::dot(gf, sf[f]) - g.lap_coeff[f] * (p[nei[f]] - p[own[f]]));
+                    }
                 } else {
                     let i = f - n_int;
                     if let Some(gp) = pbc.coupled[i] {
