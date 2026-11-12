@@ -338,3 +338,120 @@ The anisotropic criterion is not built (D5), so **done** is not reachable by thi
 - **Q4. Anisotropic adaptation.** Not taken here (D5): a redesign of `rcfd_mesh::adapt` (per-axis levels); proposed as a
   follow-up item. No default is affected.
 - **Q5. Status of F-343.** By the rule (partial at best), with the maintainer's acceptance.
+
+## Addendum 1: results (2026-11-12)
+
+The registered run was made once at 758efe60 (the code and the tests, committed before the run):
+`cargo test --release -p rcfd-fv --test adapt_criteria_f343 -- --include-ignored --nocapture --test-threads=4`, 19 passed,
+0 failed, 170.8 s (3 min 31 s with the build). K6: `cargo test --release -p rcfd-fv --test adapt_cavity_f102` (the file
+unedited), H1 to H4 passed, the eight heavy tests ignored as registered. No limit, set-up or test was changed after the run, and no
+amendment was needed.
+
+### Results
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| T1 (acceptance) | `|N - 2304| <= 230.4` | `N = 2307` (+0.13 percent) | yes |
+| T2 | `|N - 4608| <= 460.8` | `N = 4611` (+0.07 percent) | yes |
+| T3 | converged, validate, jump <= 1, cells increase | T1 576 / 1152 / 2307 cells, 97 / 111 / 157 it.; T2 576 / 1629 / 4611, 97 / 149 / 273 it.; F and U48 converged; all sound | yes |
+| K1 | exact | all assertions (counts 160, 163, 163, 163; 3-D 106; schedules) | yes |
+| K2 extents | `1e-14` | all | yes |
+| K2 constant gradients | `1e-13` relative | all, `r = 0, 1, 2, 3.5` | yes |
+| K2 velocity | `1e-9` relative | worst 5.2e-16, 4.3e-16, 4.1e-16, 5.7e-16 | yes |
+| K2 marks | ratio 2 to `1e-9`; 16 marks all level 0; `r = 1` equals the scaled indicator to `1e-12` | all | yes |
+| K3 | exact | all assertions | yes |
+| K3b | refined leaves at `y > 0.5`; `N > 144` | 666 cells, levels {0: 90, 1: 96, 2: 480}, none refined below | yes |
+| K0 | `|G|_F h_c` to `1e-9`, ratio 2 | all | yes |
+| K0b | same leaves; unscaled different | 702 = 702 leaves equal; unscaled 708 | yes |
+| K5 | bit for bit | leaves, records, `u`, `p`, `phi` equal | yes |
+| K6 | ADR 0242 H1 to H4 pass unedited | 4 passed | yes |
+| L1 (acceptance) | `E(A) <= E(F)` | `E(A) = 0.01159`, `E(F) = 0.04386` (ratio 0.264) | yes |
+| L2 (acceptance) | `N_A <= 8192` | 3841 (0.234 `N_F`) | yes |
+| L3 | `|N_A - 3840| <= 384` | 3841 | yes |
+| L4 | every solve converged, validate, jump <= 1, level 4 present, cells increase | A 89 / 79 / 60 / 56 / 63 / 64 it., all converged; cells 256, 442, 757, 1300, 2236, 3841; levels {0: 185, 1: 165, 2: 220, 3: 275, 4: 2996}; F 236 it., U90 132 it., converged | yes |
+| L5 (strict reading) | `N_A <= 4140` and L1 | 3841, L1 met | yes |
+| NC-L1 | `E(U90) > E(F)` | 0.08456 > 0.04386 (ratio 1.93; 8100 cells) | holds |
+| NC-L2 | `E(Ainv) > E(F)` | 1.203 (3844 cells) | holds |
+| NC-L3 | `E(U32) > E(U64) > E(U90) > E(F)` | 0.4921 > 0.1564 > 0.0846 > 0.0439 | holds |
+
+Recorded, not counted: cavity `D(T1) = 0.00395` (2307 cells), `D(T2) = 0.00087` (4611 cells), `D(U48) = 0.00302` (2304 cells);
+times F 71.7 s, U48 3.5 s, T1 3.4 s, T2 12.5 s. Layer: observed orders (in `h`) 1.654 (32 to 64), 1.803 (64 to 90), 1.864 (90 to
+128); `E(A1) = 0.01160` with 3841 cells (`E(A1)/E(A) = 1.0011`); level histograms Ainv {0: 193, 1: 146, 2: 117, 3: 508, 4: 2880},
+A1 {0: 194, 1: 129, 2: 186, 3: 436, 4: 2896}; times U32 0.9 s, U64 2.9 s, U90 13.2 s, F 49.0 s, A 3.7 s, Ainv 4.0 s, A1 5.9 s.
+Splits of the last cycle: T1 385 (= `ceil((2304 - 1152)/3)`, no balance split), T2 994 (993 marked, one balance split), A 535
+(= `ceil((3840 - 2236)/3)`, none).
+
+Against the predictions: PR1 met (both targets within 0.13 percent). PR2 met (`E(F) = 0.044` inside 0.01 to 0.05, near the top;
+`E(U90)/E(F) = 1.93`). PR3: L1, L2, L3, L5 met, `N_A = 3841`; `E(A)/E(F) = 0.26` is below the predicted 0.4 to 0.9: the budget
+went mostly to the finest level (2996 of 3841 cells at level 4), so the layer is resolved at `h_F / 2` and the error falls by about
+the factor 4 of a second-order scheme; the paper model over-weighted the coarse levels. PR4 nominally met but empty: `r = 1` and
+`r = 2` give the same error to 0.1 percent; on this layer the level bands are not what limits the error. PR5 not met in the
+predicted sense: at the same cell count as U48 the target-count cavity mesh is somewhat worse (`D = 0.0040` against 0.0030); at
+4611 cells it is 3.5 times better than U48, consistent with ADR 0242's finding that the Re 100 cavity gains little.
+
+### Mutations (scratch copy `w49i-work/f343-scratch/mut`, a `git archive` of 758efe60, target dir `f343-scratch/target-mut`, release)
+
+Each applied alone by exact replacement (each pattern found once); the file restored and checked byte for byte afterwards (and
+against `git show 758efe60:crates/rcfd-fv/src/adaptive.rs` at the end). Only the K tests were run (the heavy tests ignored, as
+registered).
+
+| Id | Mutation | Failed tests | Caught |
+| --- | --- | --- | --- |
+| MU1 | divide by `children` | K1, K2 marks | yes |
+| MU2 | linear schedule | K1 | yes |
+| MU3 | edge lengths of x and y swapped | K2 closed form | yes |
+| MU4 | exponent ignored | K2 closed form | yes |
+| MU5 | `and` computes `or` | K3 | yes |
+| MU6 (ADR 0242's) | indicator never scaled | K0, K0b, K2 marks | yes |
+| MU6b | `run_adaptive_simple` passes `false` | K0b, K5 | yes |
+| MU7 | `restrict_marks` a no-op | K3, K3b | yes |
+| MU8 | the marker ignored | K0b, K3b | yes |
+
+### Format and lint
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean (run on the code of
+758efe60 before its commit; no code changed since). Only `rcfd-fv` was touched (`src/adaptive.rs`, new
+`tests/adapt_criteria_f343.rs`).
+
+### Deviations and what was not run
+
+- `Register::not` of D4 is named `Register::complement` (a method named `not` trips clippy's `should_implement_trait`); same
+  behaviour, checked by K3.
+- `target_count_marks` uses a new private `mark_largest` that repeats the ranking of `fixed_fraction_marks` instead of sharing it,
+  so `fixed_fraction_marks` is untouched.
+- Not run: the whole workspace suite (by instruction); the rest of the `rcfd-fv` suite (no other file changed; the only shared
+  path, `run_adaptive_simple_with`, is covered by K5 and K6); the ADR 0242 heavy cavity tests (their path changes only by the
+  refactor covered by K5 and H1 to H4); the heavy tests under mutation; a gate on an archive copy; clippy in the debug profile.
+- Anisotropic refinement: not built (D5), as registered.
+
+### Decision by the registered rule
+
+**partial**: K0 to K6 and T1 to T3 met, no negative control failing, MU1 to MU8 caught, and the layer acceptance met (L1 to L5:
+3841 cells, 0.23 of the uniform 128 x 128, with 0.26 of its error; the uniform 90 x 90 with 8100 cells misses it by a factor 1.9).
+The rule does not allow done because the anisotropic criterion is not delivered: the present lattice keeps one level per leaf for
+every axis, so a directional split needs a redesign of `rcfd_mesh::adapt` (D5).
+
+### Remaining questions
+
+- **R1. Anisotropic adaptation.** Options: (a) a follow-up item for a second lattice type with per-axis levels (new public type,
+  `AmrMesh` untouched), its face search, per-axis balance and transfer, and a directional criterion from the per-axis variations
+  of D3; (b) extend `Leaf` with per-axis levels (changes a public type and every path of `AmrMesh`); (c) drop the criterion.
+  Recommendation (a): no default changes, and the suction layer is its natural check (it varies in `y` only).
+- **R2. The exponent of the edge-length weighting.** `r = 1` and `r = 2` gave the same layer error. Options: (a) keep `r` free and
+  document `1 + d/2` as the `L2` choice; (b) fix `r = 1`. Recommendation (a); no default is involved (the criterion is opt-in).
+- **R3. A case key for the new criteria.** It belongs with F-342 (`schema.rs`, `sim.rs`). Options: (a) add the target count,
+  exponent and register options to F-342's adapt block when it is built, absent = today's path; (b) keep them Rust-only.
+  Recommendation (a).
+
+### For the lead: roadmap entries
+
+Proposed status of F-343: **partial**. New note:
+
+> PARTIAL (ADR 0247): opt-in criteria in rcfd_fv::adaptive with closed-form marking checks: target cell count (target_count_marks, geometric target_schedule, run_adaptive_simple_target), edge-length weighting (cell_extents, edge_length_weighted_indicator, velocity_edge_length_indicator with exponent r), registers (Register from mask, region indicator, field range or levels, with and, or, complement and face-neighbour growth; register_marks, restrict_marks) and the loop with any marks (run_adaptive_simple_marked; run_adaptive_simple and _with unchanged bit for bit). Target-count runs on the ADR 0242 cavity land at 2307 for 2304 and 4611 for 4608 (limit 10 percent). Suction-layer case (Couette flow with transpiration, R = 80, closed form): the adapted mesh (16 x 16 base, five target-count cycles, 3841 cells) has error 0.0116 against 0.0439 for the uniform 128 x 128 (16384 cells); the uniform 90 x 90 (8100 cells) misses it (0.0846); the inverted indicator gives 1.20. ADR 0242's surviving MU6 is now caught. Not delivered: anisotropic (directional) refinement, which needs per-axis levels in the lattice (follow-up); merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here until split.
+
+Follow-up item: title "Anisotropic (directional) adaptation on a per-axis-level lattice", deps F-343, acceptance: "A lattice with
+per-axis refinement levels gives valid closed meshes for random directional marks (validate, closure, volume) and transfers linear
+fields exactly; on the ADR 0247 suction layer a directional run reaches the isotropic adapted error E(A) with at most half of its
+3841 cells; the isotropic AmrMesh paths stay bit for bit."
+
+> TODO (from ADR 0247 D5 and R1): AmrMesh keeps one level per leaf for every axis, so a split along one axis needs a second lattice type (per-axis levels, face search, per-axis balance, transfer) and a directional criterion from the per-axis variations (dU/dx_a) h_a of edge_length_weighted_indicator. No default changes.
