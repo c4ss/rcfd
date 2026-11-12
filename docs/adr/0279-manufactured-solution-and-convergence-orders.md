@@ -256,6 +256,41 @@ file does not build.
 - The traction helper is test code; a function-valued traction in the library is not added (a follow-up if the maintainer
   wants one for later verification work).
 
+## Amendment 1 (2026-11-12, after the registered fast run, before any diagnostic code or run): the miss A1-T Tet4
+
+The registered fast run (commit f489c085, `cargo test -p rcfd-fem --release --test sb_mms`, once) met every check except
+**A1-T Tet4**: the L2 order of case T over the finest pair 8 -> 16 is **1.7925** against the limit 1.8 (errors 8.690e-2,
+2.731e-2, 7.883e-3; pair 4 -> 8 order 1.6699). Its energy order 0.9750 (limit 0.9) and the monotone fall were met, and
+Tet4 case D gave 1.9793 and 0.9940. The limit stays. Nothing of the registration above is changed.
+
+**Records.** The test `a_tet4_orders_cases_d_and_t_and_negative_control` is renamed
+`a_tet4_orders_cases_d_and_t_and_negative_control_known_miss` and ignored, its body unchanged, with the measured numbers in its
+comment. So that the Tet4 path keeps a fast test, a new test `a_tet4_met_clauses_coverage` runs the same three sequences and
+asserts the clauses that were met (A1-D, A2-D, A3-D, A2-T, A3-T, N1 for Tet4) with the same limits, and prints A1-T without
+asserting it. It is coverage, not a new registered run: the code is deterministic, so its numbers are those of the registered
+run bit for bit (it is checked that they print identically to the log of the registered run).
+
+**Hypotheses.** (H_pre) pre-asymptotic: the order rises from 1.67 to 1.79 between the two pairs, and the Kuhn tetrahedra
+are a coarser approximation than the hexahedra on the same nodes (Tet4 errors 1.3 to 1.7 times Hex8's); the free faces, where
+the Kuhn split's diagonals all lean the same way, would carry the slow part. (H_dual) a lower asymptotic L2 order from the
+duality argument: the dual problem with clamped and free faces meeting at the right-angled edges (`xmin` and `ymax`, and so
+on) is less regular than `H^2`, so the Aubin-Nitsche bound gives an L2 order below 2. Against H_dual: Hex8 on the same case
+gives 1.9972 and Tet10 2.9718, so a property of the problem alone would show there too; it is not excluded for Tet4 alone.
+(H_defect) a defect in the traction path: argued against by X1 (helper equal to `Load::traction` to the bit) and X3 (linear
+field with its constant traction reproduced to 2.5e-16 by Tet4), but those see only constant tractions.
+
+**Diagnostics** (registered here, each run once, ignored tests named `g*_..._diagnostic`; recorded, no limit, they cannot
+change the decision, which by the registered rule is partial):
+
+| Id | Run | Recorded | Prediction under H_pre |
+|---|---|---|---|
+| G1 | Tet4, case T, the heavy family `n = 6, 12, 24` | L2 and energy orders of both pairs | order 12 -> 24 above that of 6 -> 12 and in [1.80, 2.0] |
+| G2 | Tet4, case T, `n = 16, 32` (98 304 free unknowns; estimate 10 to 15 min, 2.5 GB, from the measured 5.5 s at 12 288 unknowns times `8^(7/3)`) | L2 and energy order of the pair 16 -> 32 | L2 order in [1.85, 2.0], above 1.7925 |
+| G3 | Tet4 and Hex8, case T, `n = 8, 16` | the L2 error split into elements with at least one node on `xmax`, `ymax` or `zmax` (near-face part) and the rest; the order of each part | the near-face part of Tet4 has the lower order; Hex8's two parts are both near 2 |
+
+Under H_dual the G1 and G2 orders would stay near or below 1.8 instead of rising. G3 tells whether the slow part sits at the
+loaded faces. Whatever the outcome, A1-T Tet4 stays a miss of the registered limit.
+
 ## The planned stub, as written
 
 # ADR 0279: Verification by a manufactured solution: observed order of displacement and stress for the three elements
