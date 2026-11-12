@@ -300,3 +300,44 @@ maintainer made in person, and each is listed again in the addendum. None change
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the registered runs of B, Q, U, E, L1 and D and before any further run)
+
+The records R2 were taken on the unchanged library (`9efe7ffe`, run twice, equal), the library change and the tests were
+committed compiled and not run (`844357b0`), and then every registered check ran once, release. All numbers are in
+addendum 1. Met: Q0 (bit for bit, hash R1), R2, R2', D-S, E1, Q0o and Q0r (bit for bit), Q0n, U1o, U3o, U1r, U3r, N2o, E4
+to E7, L1, L1r, S1 (`4.4936e-4`), T2o-a (`1.862`), T2o-b (`1.862`), T3o. One check is missed:
+
+| Id | Limit | Measured |
+| --- | --- | --- |
+| D1 (acceptance) | `< 1.2e-4` | `1.690e-4` (`0.376` of the `4.4936e-4` with one outer iteration; largest in a calculated component cell at `(1.27, 1.20)`; by class CF `8.03e-5`, CC `1.690e-4`, BF `1.639e-4`, BC `1.481e-4`) |
+
+D1 stays as registered in the ignored test `d1_time_error_with_three_outer_iterations_known_miss` (limit intact); the slow
+test of the acceptance keeps S1, T2o-a, T2o-b and T3o. My prediction of D1 (`7e-5` to `1.0e-4`) was wrong: it applied the
+fraction `0.153` that ADR 0232 measured on a single moving mesh with exact boundary data (SMc) to the coupled meshes.
+There three outer iterations left `5.7e-5` (`0.153 * 3.726e-4`); here they leave `1.69e-4`, three times as much, and
+nearly as much in the background cells (which do not move) as in the component cells.
+
+The trend test with two and five outer iterations (registered as printed only) was started with the other runs; its log
+has not been read when this amendment is written and committed. Hypotheses for the miss, each with its measurement and
+deciding number, fixed here:
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H12 | three outer iterations have not converged the step: more iterations would remove more | the trend run: `c = max abs(d_200(5)) / max abs(d_200(3))` | confirmed: `c <= 0.8`; ruled out: `c >= 0.9` (the remainder is not a lag that outer iterations remove) |
+| H13 | the remainder is a first-order time error | TG_2 with three outer iterations in 200, 400 and 800 steps: `R = max abs(d_200(3)) / max abs(d_400(3))` over the non-hole cells (first order gives 3) | confirmed: `R` in `[2.5, 3.5]`; ruled out: outside |
+| H14 | the remainder is the backward Euler truncation along the paths of the moving cells (ADR 0232 H6, there ruled out for the whole error with one iteration, and found for the remainder of SMc: `rho = 3.88`) | the same at half speed (`tg_pose(t/2)`, three outer iterations, 200 and 800 steps): `rho_3 = max abs(d_200(3))` at full speed over that at half speed, against the kinematic `rho_BE` of ADR 0232 (`4.783` as a maximum, `3.700` as a root mean square) and against 2 (a lag linear in the speed) | confirmed: `rho_3 >= 2.85` (nearer to `3.70` than to 2); ruled out: `rho_3 < 2.85` |
+| H15 | the remainder is larger than on a single mesh because the two meshes exchange it: the background cells carry it though they do not move | from the runs of H13: `max abs(d_200(3))` over the background calculated cells (BC) against that over the component calculated cells (CC), and the same ratio with one outer iteration (`3.367e-4 / 4.494e-4 = 0.749`) | confirmed: BC over CC `>= 0.7` with three outer iterations (the background carries the remainder in full measure); ruled out: `< 0.5` |
+
+Reading fixed here. If H12 is ruled out and H13 and H14 are confirmed, the cause of the D1 miss is named: what three
+outer iterations leave is the first-order truncation of the implicit Euler scheme along the paths of the moving cells,
+which no number of outer iterations removes, and the number is `max abs(d_200(3)) = 1.69e-4` with `c`, `R` and `rho_3`
+beside it. If H12 is confirmed, the cause is the number of iterations and `d_200(5)` is reported against the limit (it is
+not a registered check and the limit of D1 is not moved to it). Otherwise the cause stays open and the rule gives partial.
+H15 does not decide the cause; it explains the difference to SMc.
+
+Test `a1_remainder_of_the_time_error_with_three_outer_iterations` (ignored, slow, run once; it repeats the two runs of D
+with three outer iterations, which are deterministic, and adds the run in 400 steps and the two at half speed). The run
+helper takes the speed of the motion since this amendment; the registered runs are unchanged. Predictions (mine): H12
+ruled out (`c` near 1), H13 confirmed, H14 confirmed with `rho_3` between 3 and 4.5, H15 confirmed. The decision rule is
+unchanged.
