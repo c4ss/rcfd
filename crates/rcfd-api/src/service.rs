@@ -1758,7 +1758,10 @@ impl Service {
                 })),
             };
             if let Some(r) = resp {
-                writeln!(writer, "{r}")?;
+                // one buffer, one write (ADR 0345 amendment 1): the same bytes as `writeln!`, not in small pieces
+                let mut text = r.to_string();
+                text.push('\n');
+                writer.write_all(text.as_bytes())?;
                 writer.flush()?;
             }
         }
@@ -1777,6 +1780,8 @@ impl Service {
                     break;
                 }
                 if let Ok(stream) = conn {
+                    // replies are whole lines: send them at once (ADR 0345 amendment 1)
+                    let _ = stream.set_nodelay(true);
                     let svc = svc.clone();
                     std::thread::spawn(move || {
                         if let Ok(r) = stream.try_clone() {

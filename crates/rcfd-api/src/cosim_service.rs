@@ -436,7 +436,10 @@ impl Link {
         self.next += 1;
         let request = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
         let mut exchange = || -> Result<Value, String> {
-            writeln!(writer, "{request}").map_err(|e| e.to_string())?;
+            // one buffer, one write: the formatter would hand the socket the text in many small pieces
+            let mut line = request.to_string();
+            line.push('\n');
+            writer.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
             writer.flush().map_err(|e| e.to_string())?;
             let mut line = String::new();
             if reader.read_line(&mut line).map_err(|e| e.to_string())? == 0 {

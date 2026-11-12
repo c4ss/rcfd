@@ -336,11 +336,13 @@ fn reference() -> &'static Run {
         let mut fluid = cw_fluid(&ch, motion(&ch));
         let mut structure = cw_structure();
         let map = cw_map(&ch, &fluid);
+        let started = Instant::now();
         let run = run_cw(&mut fluid, &mut structure, &map, CW_STEPS);
         println!(
-            "reference: ended '{}', {} steps, iterations max {} mean {:.3}, histogram {:?}",
+            "reference: ended '{}', {} steps in {:.1} s, iterations max {} mean {:.3}, histogram {:?}",
             run.ended,
             run.iterations.len(),
+            started.elapsed().as_secs_f64(),
             run.max_iterations(),
             run.mean_iterations(),
             run.histogram()
@@ -1439,6 +1441,23 @@ fn f5_a_participant_process_that_dies_is_located_and_the_fluid_is_restored() {
     assert!(e.message.contains("restore failed"));
     assert_eq!(moved, 0);
     assert!(elapsed <= 30.0);
+}
+
+// ---- T1 (amendment 1): the cost of a call --------------------------------------------------------------------------
+
+#[test]
+#[cfg_attr(debug_assertions, ignore = "timing: run in release")]
+fn t1_a_call_over_the_loopback_interface_takes_less_than_a_millisecond() {
+    let (_svc, address, _) = structure_service();
+    let structure = RemoteStructure::connect(address, "structure", remote_settings()).unwrap();
+    let calls = 2000;
+    let started = Instant::now();
+    for _ in 0..calls {
+        assert_eq!(structure.query_time().unwrap(), 0.0);
+    }
+    let mean = started.elapsed().as_secs_f64() / calls as f64;
+    println!("T1: {calls} calls of cosim.time, {:.4} ms each", mean * 1e3);
+    assert!(mean <= 1e-3);
 }
 
 // ---- V: the documents ------------------------------------------------------------------------------------------------
