@@ -7145,7 +7145,7 @@ fixed by the item's registration ADR before any code.
     maintainer's visual check). ADR 0281 (2026-11-12): with a temperature load, IntegrationPointField::from_result
     already gives the thermal stress D (eps - eps_th) and field.strain() stays the total strain B u; the thermal strain
     per point is field.thermal_strain() (None without temperature).
-- [ ] **F-378** Verification by a manufactured solution: observed order of displacement and stress for the three elements
+- [~] **F-378** Verification by a manufactured solution: observed order of displacement and stress for the three elements
   - depends on: F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Manufactured solution: a smooth
     trigonometric displacement field on the unit cube with nu = 0.3, the body force from the analytic divergence of the
@@ -7154,12 +7154,20 @@ fixed by the item's registration ADR before any code.
     error over the finest pair is >= 1.8 for Tet4 and Hex8 and >= 2.7 for Tet10, the observed order of the energy-norm
     error is >= 0.9 and >= 1.8, and both errors fall monotonically. Negative control: a body force with the sign of the
     lambda term reversed gives an order below 0.5.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0279; the registration is written
-    by the implementation agent before any code. ADR 0276 (2026-11-12): rcfd_fem::loads::body_force_loads(model, |x|
-    b(x)) returns the consistent load of a body force given by a function as one NodalForceAt per node, for
-    solve_static_with; tractions on box faces via Load::traction (exact on flat faces). ADR 0277 (2026-11-12):
-    recover::IntegrationPointField gives strain and stress only at the stiffness rule's points; an energy-norm error
-    with a rule of higher degree needs Element::strain_at at that rule's points and Material::stress directly.
+  - note: Structural solver, basic tier (plan ADR 0270). ADR 0279, 2026-11-12: manufactured solution on the unit cube
+    (u_i = prod_j sin(k_ij x_j + phi_ij), k up to pi, nu = 0.3), body force from the analytic second derivatives,
+    checked against central differences of the stress within 1.5e-8 (limit 1e-6); case D all faces prescribed, case T
+    tractions sigma n on xmax, ymax, zmax by a test-side face integral (equal to Load::traction to the bit for a uniform
+    traction); errors with 125-point rules of degree 7 (tet) and 9 per variable (hex); tests
+    crates/rcfd-fem/tests/sb_mms.rs only. Tet4 and Hex8 on 4, 8, 16, Tet10 on 2, 4, 8 cells per edge: L2 orders over the
+    finest pair, case D 1.979, 1.999, 2.982, case T 1.7925 (Tet4, MISSED, limit 1.8), 1.997, 2.972; energy orders D
+    0.994, 0.999, 1.956, T 0.975, 0.997, 1.919; all errors fall monotonically; negative control (lambda term reversed)
+    orders -0.005 to 0.015 (limit < 0.5). Heavy record on 6, 12, 24 / 3, 6, 12 (case D, 36 501 unknowns, 108 s): 1.990,
+    2.000, 2.989 and 0.997, 1.000, 1.978. The Tet4 case T miss is pre-asymptotic by diagnosis (orders 1.67, 1.79, 1.92
+    on successive pairs, 16 -> 32 run as a diagnostic), kept as a known-miss record with the limit. Mutations: four of
+    six caught; the body load on the stiffness rule (registered as may survive) and the one-point Hex8 stiffness survive
+    (regular meshes hold the hourglass modes; the element tests catch it). Partial by the registered rule; done is the
+    maintainer's call.
 - [ ] **F-379** Closed-form benchmarks: cantilever bending and the thick-walled cylinder under pressure
   - depends on: F-371, F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever of slenderness L/h = 20
@@ -8346,3 +8354,18 @@ fixed by the item's registration ADR before any code.
     bending frequencies agree with the runs of ADR 0284 amendment 1 within 1e-10 relative, and every check of ADR 0283
     still passes with the default unchanged.
   - note: From ADR 0284 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-458** Manufactured solution: the Tet4 traction-case L2 order on the pair 16 -> 32 as a registered check
+  - depends on: F-378
+  - acceptance: Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0279 ran
+    this pair once as a diagnostic (L2 order 1.9176). The manufactured solution and case T of ADR 0279 with Tet4 on 8,
+    16, 32 cells per edge (98 304 unknowns, direct solver, an ignored heavy record): the L2 order over the pair 16 -> 32
+    is >= 1.8 and the energy order >= 0.9, both errors fall monotonically.
+  - note: From ADR 0279 addendum 1 (2026-11-12), Q1 recommendation.
+- [ ] **F-459** Manufactured solution on distorted meshes: orders of Tet4, Hex8, Tet10 with moved interior nodes, and the Hex8 stiffness rule
+  - depends on: F-378
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The manufactured solution of ADR
+    0279, case D, on boxes whose interior nodes are moved by a registered seed and amplitude (elements valid at every
+    node): on at least three meshes, each halving h, the observed L2 order over the finest pair is >= 1.8 for Tet4 and
+    Hex8 and >= 2.7 for Tet10, the energy-norm order >= 0.9 and >= 1.8, both errors fall monotonically; a mutation of
+    the Hex8 stiffness rule to one point is caught by these checks.
+  - note: From ADR 0279 addendum 1 (2026-11-12), Q2 recommendation.
