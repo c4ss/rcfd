@@ -6,8 +6,12 @@
 //! F-343 (ADR 0247) adds opt-in criteria: target cell count ([`target_count_marks`], [`target_schedule`],
 //! [`run_adaptive_simple_target`]), edge-length weighting ([`edge_length_weighted_indicator`],
 //! [`velocity_edge_length_indicator`]), registers ([`Register`], [`register_marks`], [`restrict_marks`]) and the loop with any
-//! marks ([`run_adaptive_simple_marked`]). Anisotropic (directional) refinement is not available: [`AmrMesh`] keeps one level per
-//! leaf for every axis.
+//! marks ([`run_adaptive_simple_marked`]). [`AmrMesh`] keeps one level per leaf for every axis.
+//!
+//! F-348 (ADR 0267) adds directional refinement on the second lattice [`AnisoMesh`] (one level per axis), opt-in: the per-axis
+//! variations ([`axis_variations`], [`velocity_axis_variations`]), the choice of the split axes ([`directional_axes`]), target
+//! marks with a split size per cell ([`directional_target_marks`]) and the loop ([`run_adaptive_simple_directional`],
+//! [`run_adaptive_simple_directional_target`]). The functions above are not changed by it.
 
 use crate::field::{ScalarField, VectorField};
 use crate::geometry::FvGeometry;
@@ -15,6 +19,7 @@ use crate::gradient::least_squares;
 use crate::simple::{SimpleSettings, SimpleSolver};
 use rcfd_core::vec3::Vec3;
 use rcfd_core::{Error, Result};
+use rcfd_mesh::adapt::aniso::{AnisoMesh, AxisMark};
 use rcfd_mesh::adapt::{cell_lengths, transfer_field, AmrMesh, Mark, RefineTransfer};
 use rcfd_mesh::Mesh;
 use std::sync::Arc;
@@ -605,4 +610,251 @@ pub fn restrict_marks(marks: &[Mark], register: &Register) -> Result<Vec<Mark>> 
         .zip(&register.cells)
         .map(|(&m, &r)| if r { m } else { Mark::Keep })
         .collect())
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// F-348 (ADR 0267): directional refinement
+// -------------------------------------------------------------------------------------------------------------------
+
+/// Result of [`run_adaptive_simple_directional`].
+pub struct DirectionalRun {
+    /// The final lattice; `solver`'s mesh is its [`AnisoMesh::to_mesh`].
+    pub amr: AnisoMesh,
+    /// The solver of the last solve.
+    pub solver: SimpleSolver,
+    /// One record per solve.
+    pub cycles: Vec<CycleRecord>,
+}
+
+/// Per-axis variation (ADR 0267 D5): `E_{c,a} = (sum_k g_k[c][a]^2)^(1/2) h_{c,a}` on the active axes (zero elsewhere), `g_k`
+/// the gradient of field component `k` and `h_{c,a}` the [`cell_extents`]: the first-order change of the field across the cell
+/// along its edge of axis `a`.
+pub fn axis_variations(mesh: &Mesh, grads: &[Vec<Vec3>], axes: [bool; 3]) -> Result<Vec<Vec3>> {
+    let n = mesh.n_cells();
+    if !axes.contains(&true) {
+        return Err(Error::Other("axis_variations: no active axis".into()));
+    }
+    for (k, g) in grads.iter().enumerate() {
+        if g.len() != n {
+            return Err(Error::Other(format!(
+                "axis_variations: grads[{k}] has {} entries, the mesh has {n} cells",
+                g.len()
+            )));
+        }
+        if let Some(c) = g.iter().position(|v| v.iter().any(|x| !x.is_finite())) {
+            return Err(Error::Other(format!("axis_variations: grads[{k}][{c}] is not finite")));
+        }
+    }
+    let ext = cell_extents(mesh);
+    Ok((0..n)
+        .map(|c| {
+            let mut e = [0.0; 3];
+            for a in 0..3 {
+                if !axes[a] {
+                    continue;
+                }
+                let sq: f64 = grads.iter().map(|g| g[c][a] * g[c][a]).sum();
+                e[a] = sq.sqrt() * ext[c][a];
+            }
+            e
+        })
+        .collect())
+}
+
+/// [`axis_variations`] of the velocity, the gradient of each component being the least-squares gradient with the boundary
+/// values of `U` (as in [`velocity_edge_length_indicator`]).
+pub fn velocity_axis_variations(solver: &SimpleSolver, axes: [bool; 3]) -> Result<Vec<Vec3>> {
+    let g = &solver.geom;
+    let n = g.n_cells();
+    if solver.u.values.len() != n {
+        return Err(Error::Other(format!(
+            "velocity_axis_variations: U has {} cells, the mesh {n}",
+            solver.u.values.len()
+        )));
+    }
+    let bu = solver.u.boundary_values(g);
+    let grads: Vec<Vec<Vec3>> = (0..3)
+        .map(|k| {
+            let cells: Vec<f64> = solver.u.values.iter().map(|v| v[k]).collect();
+            let bv: Vec<f64> = bu.iter().map(|v| v[k]).collect();
+            least_squares(g, &cells, &bv)
+        })
+        .collect();
+    axis_variations(&g.mesh, &grads, axes)
+}
+
+/// The axes along which a cell is split (ADR 0267 D5): axis `a` when it is active, below its `max_level` and its variation is
+/// at least `theta` times the largest variation over the active axes. `theta = 1/2` keeps the per-axis variations within a
+/// factor two of each other. With no variation at all every eligible axis is returned; if every axis that passes the test is
+/// at its `max_level` none is. `theta` must be finite and in `(0, 1]`.
+pub fn directional_axes(
+    variation: Vec3,
+    levels: [u8; 3],
+    max_level: [u8; 3],
+    axes: [bool; 3],
+    theta: f64,
+) -> Result<[bool; 3]> {
+    if !(theta.is_finite() && theta > 0.0 && theta <= 1.0) {
+        return Err(Error::Other(format!(
+            "directional_axes: theta must be finite and in (0, 1], got {theta}"
+        )));
+    }
+    if variation.iter().any(|v| !v.is_finite() || *v < 0.0) {
+        return Err(Error::Other(
+            "directional_axes: the variations must be finite and non-negative".into(),
+        ));
+    }
+    let top = (0..3).filter(|&a| axes[a]).map(|a| variation[a]).fold(0.0, f64::max);
+    Ok([0, 1, 2].map(|a| axes[a] && levels[a] < max_level[a] && variation[a] >= theta * top))
+}
+
+/// Directional target-count marks (ADR 0267 D5): cells are taken in the order of decreasing `indicator` (ties to the lower
+/// index), each split along its [`directional_axes`] (cells with no axis to split are skipped), until the planned count `n +
+/// sum (2^|S| - 1)` reaches `n_target`. Without balance the adapted mesh has between `n_target` and `n_target + 2^d - 2` cells
+/// whenever enough cells are eligible.
+pub fn directional_target_marks(
+    indicator: &[f64],
+    variations: &[Vec3],
+    levels: &[[u8; 3]],
+    max_level: [u8; 3],
+    axes: [bool; 3],
+    n_target: usize,
+    theta: f64,
+) -> Result<Vec<AxisMark>> {
+    let n = indicator.len();
+    if variations.len() != n || levels.len() != n {
+        return Err(Error::Other(format!(
+            "directional_target_marks: indicator has {n} entries, variations {} and levels {}",
+            variations.len(),
+            levels.len()
+        )));
+    }
+    if let Some(i) = indicator.iter().position(|v| !v.is_finite()) {
+        return Err(Error::Other(format!(
+            "directional_target_marks: indicator[{i}] is not finite"
+        )));
+    }
+    let mut split = Vec::with_capacity(n);
+    for c in 0..n {
+        split.push(directional_axes(variations[c], levels[c], max_level, axes, theta)?);
+    }
+    let mut order: Vec<usize> = (0..n).filter(|&c| split[c].contains(&true)).collect();
+    order.sort_by(|&a, &b| indicator[b].total_cmp(&indicator[a]).then(a.cmp(&b)));
+    let mut marks = vec![AxisMark::KEEP; n];
+    let mut planned = n;
+    for c in order {
+        if planned >= n_target {
+            break;
+        }
+        marks[c] = AxisMark::refine(split[c]);
+        planned += (1usize << split[c].iter().filter(|&&s| s).count()) - 1;
+    }
+    Ok(marks)
+}
+
+/// The adaptation loop on the directional lattice: [`run_adaptive_simple_marked`] with an [`AnisoMesh`] and [`AxisMark`]s.
+/// Every cycle `k >= 1` takes its marks from `marker(last solver, current lattice, k)` (one mark per cell), adapts with
+/// `settings.balance`, transfers `U` and `p` with `settings.transfer`, calls `setup` on the new mesh and solves.
+/// `settings.refine_fraction` and `settings.scale_by_length` are not used.
+pub fn run_adaptive_simple_directional<F, M>(
+    amr: AnisoMesh,
+    mut setup: F,
+    settings: &AdaptiveSettings,
+    mut marker: M,
+) -> Result<DirectionalRun>
+where
+    F: FnMut(&Arc<FvGeometry>) -> Result<(VectorField, ScalarField, SimpleSettings)>,
+    M: FnMut(&SimpleSolver, &AnisoMesh, usize) -> Result<Vec<AxisMark>>,
+{
+    let axes = amr.refined_axes();
+    let mut amr = amr;
+    let mut records = Vec::with_capacity(settings.cycles + 1);
+    let mesh = in_cycle(0, amr.to_mesh())?;
+    let geom = Arc::new(in_cycle(0, FvGeometry::new(Arc::new(mesh)))?);
+    let (u, p, s) = in_cycle(0, setup(&geom))?;
+    let mut solver = SimpleSolver::new(geom, u, p, s);
+    let sum = solver.run(settings.max_iter, settings.tol);
+    records.push(CycleRecord {
+        cells: solver.geom.n_cells(),
+        iterations: sum.iterations,
+        converged: sum.converged,
+        refined: 0,
+        ignored_at_max_level: 0,
+    });
+    for k in 1..=settings.cycles {
+        let marks = in_cycle(k, marker(&solver, &amr, k))?;
+        let (next, tr, rep) = in_cycle(k, amr.adapt(&marks, settings.balance))?;
+        let mesh: Mesh = in_cycle(k, next.to_mesh())?;
+        let old: &Mesh = &solver.geom.mesh;
+        let mode = settings.transfer;
+        let mut moved: [Vec<f64>; 4] = [vec![], vec![], vec![], vec![]];
+        for (c, m) in moved.iter_mut().enumerate().take(3) {
+            let comp: Vec<f64> = solver.u.values.iter().map(|v| v[c]).collect();
+            *m = in_cycle(k, transfer_field(old, &mesh, &tr, &comp, mode, axes))?;
+        }
+        moved[3] = in_cycle(k, transfer_field(old, &mesh, &tr, &solver.p.values, mode, axes))?;
+        let geom = Arc::new(in_cycle(k, FvGeometry::new(Arc::new(mesh)))?);
+        let (mut u, mut p, s) = in_cycle(k, setup(&geom))?;
+        if u.values.len() != geom.n_cells() || p.values.len() != geom.n_cells() {
+            return Err(Error::Other(format!(
+                "adaptive cycle {k}: setup returned fields of the wrong size"
+            )));
+        }
+        for (c, v) in u.values.iter_mut().enumerate() {
+            *v = [moved[0][c], moved[1][c], moved[2][c]];
+        }
+        p.values.clone_from(&moved[3]);
+        amr = next;
+        solver = SimpleSolver::new(geom, u, p, s);
+        let sum = solver.run(settings.max_iter, settings.tol);
+        records.push(CycleRecord {
+            cells: solver.geom.n_cells(),
+            iterations: sum.iterations,
+            converged: sum.converged,
+            refined: rep.refined,
+            ignored_at_max_level: rep.ignored_at_max_level,
+        });
+    }
+    Ok(DirectionalRun {
+        amr,
+        solver,
+        cycles: records,
+    })
+}
+
+/// The directional loop with target-count marks (ADR 0267 D5): cycle `k` aims at [`target_schedule`]`(N_0, n_target,
+/// settings.cycles, k)`, ranks the cells by [`velocity_edge_length_indicator`] with exponent `r` and splits each marked cell
+/// along its [`directional_axes`] of [`velocity_axis_variations`] with `theta`.
+pub fn run_adaptive_simple_directional_target<F>(
+    amr: AnisoMesh,
+    setup: F,
+    settings: &AdaptiveSettings,
+    n_target: usize,
+    r: f64,
+    theta: f64,
+) -> Result<DirectionalRun>
+where
+    F: FnMut(&Arc<FvGeometry>) -> Result<(VectorField, ScalarField, SimpleSettings)>,
+{
+    let n0 = amr.n_cells();
+    let cycles = settings.cycles;
+    let axes = amr.refined_axes();
+    run_adaptive_simple_directional(
+        amr,
+        setup,
+        settings,
+        move |solver: &SimpleSolver, amr: &AnisoMesh, k: usize| {
+            let eta = velocity_edge_length_indicator(solver, axes, r)?;
+            let var = velocity_axis_variations(solver, axes)?;
+            directional_target_marks(
+                &eta,
+                &var,
+                &amr.levels(),
+                amr.max_levels(),
+                axes,
+                target_schedule(n0, n_target, cycles, k),
+                theta,
+            )
+        },
+    )
 }

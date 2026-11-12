@@ -7,6 +7,9 @@
 //! * Criteria on a cell field: [`gradient_indicator`], [`hessian_indicator`], [`zz_indicator`], [`region_indicator`]; marks
 //!   with a dead band and level limits from [`MarkSpec`]; [`combine_marks`].
 //! * [`AmrMesh::adapt`] refines/coarsens and returns a [`Transfer`]; [`transfer_field`] moves a cell field conservatively.
+//! * [`aniso::AnisoMesh`] (F-348, ADR 0267): a second lattice with one level per axis, for directional refinement.
+
+pub mod aniso;
 
 use crate::mesh::{Mesh, PatchKind};
 use crate::octree::SurfaceIndex;
