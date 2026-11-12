@@ -235,3 +235,103 @@ loose and strong steps on the mesh of the step, and a mesh-changing step keeps n
 tree. It stays in the table and is run once as registered; its result is recorded. The decision rule's "every mutation
 caught" is read as "every mutation that is not equivalent caught", MU6 counted as equivalent if it survives. No check,
 limit or other mutation is changed.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-api/src/dynmesh.rs`: the optional table `[dynamic_mesh.force_reports]` with the key `wall_pressure`
+  (`boundary_value` default, `prescribed_gradient`) in the schema of `dynamic_mesh` (D1); `check_force_reports`, called by
+  `check` (D3); `DynMesh::report_wall_gradient`.
+- `crates/rcfd-api/src/sim.rs`: `Simulation::report_pressure_face_values` (D2); the two wall closures of `eval_report`
+  call it in place of `pressure_face_values`.
+- `docs/case-schema.md`: the row of the key, one sentence of ADR 0269's paragraph extended, a new section with a new TOML
+  block (no existing block edited). `docs/dynamic-mesh.md`: one paragraph.
+- `crates/rcfd-api/tests/force_reports_moving_wall_f440.rs` (new): 6 tests, all active, about 0.7 s in release; nothing
+  heavy, so no ignored record.
+- Not changed: `rcfd-fv`, `rcfd-post`, `schema.rs`, `comp.rs`, `rcfd-cli`, `rcfd-mcp`, `baseline_hashes.rs`, the hash
+  tables, the goldens, every existing test.
+
+### Checks
+
+Runs, each once: the new file on 7fe28ee9 (`cargo test --release -p rcfd-api --test force_reports_moving_wall_f440 --
+--nocapture --test-threads=1`, 6 passed in 0.73 s; the log is `w49i-work/f440-scratch/run1.log`, not committed); K0 on
+7fe28ee9 in release; the mutations and LS on a `git archive` copy of 7fe28ee9 (its test file replaced by the formatted
+one of c18cda2f, which differs only by `cargo fmt`).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K0 (c4) | all pass, no file edited | `rcfd-api`: `adapt_case_f342` 6 (2 ignored), `baseline_hashes` 3 (1 ignored), `case_hashes_w48u` 1, `dynamic_mesh` 5 (1 ignored), `exp_rot_pab` 6, `force_effective_w49a` 4, `layering_ale_f259` 7 (1 ignored), `mesh_transform_w48u` 13, `physics_schema` 11, `registers` 7, `rules_w19c` 8 (1 ignored), `strong_coupling_case_f350` 9 (1 ignored), `tree_wiring_f259` 9, `w48v_adaptive_correctors` 5 (4 ignored), `wall_pressure_case_f358` 11 (3 ignored), `workflow` 5; `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `project_list_f270` 1; all passed, the ignored as before | yes |
+| T0 (c1, c4) | as stated | no `force_reports` in either text without the table, `get` reads `boundary_value`; with the table present; settings hash `d9b06e9617131355` against `09caf29135c09c6e` | yes |
+| Z0 (c4) | bit-identical, 13 x 5 | 0 of 13 evaluations differ | yes |
+| Z1 (c4) | bit-identical | 0 of 13 differ (reports and flow); step 0 with the key equals no table | yes |
+| Z2 | bit-identical | 0 of 13 differ | yes |
+| E1 (c2) | bit-identical | 0 differing values over 12 steps (wall faces, 3 components; every other boundary face) | yes |
+| E2 (c2) | `<= 1e-14` | `0` (bit for bit, as derived) | yes |
+| E3 | bit-identical | 0 of 12 steps differ | yes |
+| **A1 (c3)** | `abs <= 1e-4` | **`4.597e-6`** | yes |
+| A1c (control) | within `1e-8` of `2.500460e-2`, `> 1e-4` | `2.5004597e-2` | yes |
+| A2 (total) | `abs <= 1e-4` | `4.369e-6` | yes |
+| A3 (moment) | `abs <= 1e-4`; no table 1 % of `2.5e-2` | `4.369e-6`; `2.5004369e-2` | yes |
+| A4 (coefficient) | `abs <= 1e-4`; no table 1 % of `2.5e-2` | `4.597e-6`; `2.5004597e-2` | yes |
+| F1 (following wall) | `abs <= 1e-4` each; no table 1 % | `cf`, `fp` `4.597e-6`, `ft`, `my` `4.369e-6`; `2.5004597e-2` (the resting wall's numbers to the printed digits; at step 3 `1.2753401e-6` against `1.2753400e-6`) | yes |
+| N (D3) | as stated | bogus: the key only; layering and compressible: the key among the diagnostics; valid and disabled: none | yes |
+| LS | printed | with the default flipped: `baseline_hashes` 3, `case_hashes_w48u` 1, `dynamic_mesh` 5, `strong_coupling_case_f350` 9, `wall_pressure_case_f358` 11, `force_effective_w49a` 4, `workflow` 5: all pass | run |
+
+The moment's deficit equals the total force's to the printed digits (the uniform wall pressure of the derivation). The
+total's `4.369e-6` is ADR 0269 AU1b's corrected body force (`4.37e-6`): the two now share the face pressure and differ
+only in the viscous formula, which is small here.
+
+### Mutations
+
+Each applied alone to the copy by an exact replacement that had to occur once (`f440-scratch/mutate.py`), the named tests
+run once, the file restored and compared byte for byte (equal each time).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the reports ignore the key | E1, A1 | both failed |
+| MU2 the normal correction dropped | E1, A1 | both failed |
+| MU3 the default flipped | Z0 | failed |
+| MU4 the finite-entry filter removed | E1, E3 | the test of E1 to E3 failed (at E1, its first assertion) |
+| MU5 the static check removed | N | failed |
+| MU6 the length guard removed | Z1 | **survived**: equivalent, as amendment 1 found by reading before any run |
+
+### Deviations and disclosures
+
+- Amendment 1 (before any run): MU6 is an equivalent mutation; the decision rule counts it as such. It survived.
+- E1 compares a zero area component as a value (`0.0 == -0.0`), not as bits: the sign of a zero product can differ
+  between `S_k pf` and `rho (S_k pf - 0 t)`; every non-zero component is compared bit for bit. Written in the test before
+  the run.
+- `cargo fmt` reformatted the new test file after the run (c18cda2f, no change of code).
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's); the debug profile of the new file; a six-DOF body, a smoothed or
+rotating moving wall with the key (the vector is kept by the same lines, ADR 0269 W1); `rcfd run` on a case with the key.
+
+### After the tests
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy --release -p rcfd-api --all-targets -- -D warnings`: clean.
+
+### Decision by the registered rule
+
+K0, T0, Z0 to Z2, E1 to E3, A1, A1c, A2 to A4, F1 and N are met; LS ran and is listed; MU1 to MU5 failed their named tests
+and MU6 is equivalent (amendment 1). **done**, proposed as such; the default stays `boundary_value` (the maintainer's).
+
+### Remaining questions (each with options and a recommendation)
+
+- **Q1. The default.** No existing input combines a moving mesh and a force report (read 7) and LS moves no test, so a
+  flip would change only what new cases report. Options: (a) keep `boundary_value`; (b) flip to `prescribed_gradient`
+  together with ADR 0269 Q1. Recommendation (b) once the maintainer approves. Not taken (it changes a default result).
+- **Q2. The granularity.** Options: (a) one table for the case (built); (b) an optional sub-table per report.
+  Recommendation (a).
+- **Q3. `boundary_field("p")`** (area averages and integrals of `p` on a moving wall) keeps the stored value. Options: (a)
+  leave (the acceptance names force reports); (b) extend the key to it. Recommendation (a) until it is needed.
+
+### For the lead: roadmap entries
+
+Proposed status of F-440: **done** (the default the maintainer's).
+
+Note text for F-440:
+
+> From ADR 0269 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE (ADR 0342, 2026-11-12; registered before the code, one amendment before any run). The optional table [dynamic_mesh.force_reports] with wall_pressure = "prescribed_gradient" (default "boundary_value"; a key per report or in dynamic_mesh would be filled into every case by coerce and need an H1 hash-table entry, ADR 0266; the six_dof.coupling table is refused for prescribed motion) makes the force, moment and force-coefficient reports of a moving-mesh case take, on the following and resting walls, the face pressure of sixdof::patch_force_moment_wall_gradient with the kept fixed-flux gradient (Simulation::report_pressure_face_values), bit for bit per face. On the rigid column of ADR 0269 AU1b the report's force deficit falls from 2.5004597e-2 to 4.6e-6 (limit 1e-4); total force, moment and coefficient likewise (4.4e-6, 4.4e-6, 4.6e-6), the same with the wall following the mesh. Without the table every report value and the run are bit-identical, and the key does not change the flow. No existing input combines a moving mesh and a force report; with the default flipped no test moves. K0 unedited; five mutations caught, one equivalent. Open, the maintainer's: the default (ADR 0342 Q1, with ADR 0269 Q1).
