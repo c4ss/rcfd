@@ -343,3 +343,19 @@ Corrections (numbers unchanged):
 
 The three tests of the first run stay in the file as ignored records (`*_setup_defect`) with their measured numbers; the
 corrected tests are new functions. Nothing else changes; the corrected run is made once.
+
+## Amendment 3 (2026-11-12, after the corrected run of amendment 2, before any further run)
+
+The corrected run (47edd4c0, `w49i-work/f326-scratch/run2.log`) passed C5 (worst IP `2.4e-16`, 10 breakup events, no
+vapour) and stopped CB and CBp at step 1 with "IE step 1: 1e0". Before the first parcel is injected (the first nine steps),
+the only non-zero term of IE is the round-off of the carrier's thermal inventory (the `5.6e-16` J of amendment 2), so the
+residual divided by the largest term is that term over itself, 1, whatever the size of the round-off. The same defect as
+A2.1 in another form: a relative residual is meaningless while the identity holds no parcel. A defect of the set-up, not a
+miss of the code.
+
+- **A3.1** IM, IP and IE (C1, C2, C3, C4, C5) are evaluated at the end of every step with at least one parcel injected
+  (`injected() > 0`), with A2.1 kept. Before the first injection the carrier's inventories are checked by C1b and C3b with
+  the round-off allowance of A2.2 (that is, at every step, as registered). Limits unchanged.
+
+The two tests stopped by it stay as ignored records (`*_a2`, renamed `*_setup_defect2`); C5 of amendment 2 met its limits and
+stays as it is. The corrected tests are new functions; the run is made once.
