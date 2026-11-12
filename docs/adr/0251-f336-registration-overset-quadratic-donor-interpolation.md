@@ -462,3 +462,184 @@ stencils of seven or eight cells and 104 fallbacks there, with no inadmissible c
 The two lines are added to the test `p9_fallback_is_the_linear_stencil_and_is_listed`; its other checks and its run are
 unchanged (the same deterministic connectivity). MQ3 must fail "P5 FB". The other mutations are unchanged. The decision
 rule is unchanged.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above and in amendments 1 and 2; none was changed. Release builds on Windows.
+Commits: the registration `67f0b269` (alone, before any code); the library change and the tests, compiled, formatted and
+linted without running, `24e4e971`; amendment 1 with its test `d9659a0a` and amendment 2 with its two lines `b92553ce`,
+each before its run. Each registered run was made once (deterministic runs that two tests share were repeated and printed
+the same digits). The logs are in `E:/projects/cfd/w49i-work/f336-scratch` (`f336-mesh.log`, `f336-mesh-a1.log`,
+`f336-flow-fast.log`, `f336-a1.log`, `f336-a2.log`, `f336-d2d3.log`, `f336-d3-meshlib.log`, `f336-MQ1.log` to
+`f336-MQ6.log`).
+
+### What was built
+
+- `rcfd_mesh::overset`: `DonorInterpolation { Linear, Quadratic }`, `Overset::set_donor_interpolation`,
+  `Overset::donor_interpolation`, `Overset::point_neighbours`, `quadratic_weights`, `QUADRATIC_MAX_ABS_SUM`, and the fields
+  `interpolation` and `fallbacks` of `Connectivity` with `n_fallback()`. `linear_weights` and the linear branch of
+  `connectivity` are textually unchanged.
+- `rcfd_fv::overset`: `OversetInfo::n_fallback` and the refusal of a step whose interpolated `rAU` is not positive in a
+  fringe cell, made only when the connectivity was built with `Quadratic`.
+- Tests: `crates/rcfd-mesh/tests/overset_f336.rs` (6 run, 1 ignored record), `crates/rcfd-fv/tests/overset_f336.rs` (5
+  run in the gate, 2 ignored slow).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 TG_L with Q, largest error of the non-hole cells, levels 1 to 3 | orders `>= 1.7` | `1.993`, `2.000` (`7.6831e-4`, `1.9299e-4`, `8.5791e-5`) | met |
+| A2 RL with Q, root mean square over CC, levels 1 to 4 | orders `>= 1.7` | `1.916`, `1.924`, `1.952` (`3.1985e-4`, `8.4778e-5`, `3.8855e-5`, `2.2159e-5`) | met |
+| A3 U with Q: velocity, pressure; continuity; outflow | `<= 1e-10` each; `<= 1e-9`; `<= 1e-10` | `1.08e-14`, `5.2e-13`; `2.3e-14`; `3.6e-15` | met |
+| D1 default stencils against M4 built in the test (RL 1 and 2, TG_1 200 poses, U 80 poses, TR 5 poses), also after switching on and off | equal bit for bit, no fallback listed | equal: 104, 204, 20207, 6301, 776 stencils | met |
+| D2 Q0 of ADR 0219; R2 and R2' of ADR 0238 | bit for bit | Q0 bit for bit, hash `af2c9e6bd3e5596d` (R1); `7aa14d1e2e2da052`, `75ac2daf13879872`, `fddb420dc287502a`, R2' equal | met |
+| D3 the existing overset tests | pass, unedited | `overset_f134` 12, `overset_f134_records` 1, `overset_f314` 4, `overset_f334` 3, `overset_f335` 5, `overset_f335_records` 4, `overset_f338` 9, unit tests of `rcfd_mesh::overset` 6: all passed | met |
+| P1 `abs(sum w - 1)`, every Q stencil | `<= 1e-12` | largest `2.2e-15` (B3s) | met |
+| P2 `q2` on RL, TG_L (levels 1, 2, 4), U | `<= 1e-11` | largest `7.3e-16` | met |
+| P3 `q2` on DC and TR | `<= 1e-11`, `<= 1e-10` | `4.4e-16`, `2.0e-17` | met |
+| P4 `q3` in 3-D | `<= 1e-11` | B3 `1.09e-15`; B3s (amendment 1) `8.5e-16`; B3d: defective set-up, not measured | met on B3 and B3s |
+| P5 admissible donors | exact | no inadmissible cell, no wrong donor on RL, TG_L, U, DC, TR, B3, B3s, FB (amendment 2) | met |
+| P6 size and fallbacks | 9 cells on RL and TG_L; `0` fallbacks on RL, TG_L, U, TR, DC, B3 | 9 everywhere (27 in B3); `0` fallbacks; no stencil with fewer cells than a whole block, U included; B3s `0` | met |
+| P7 `Lambda`, smallest weight on RL and TG_L | `<= 2.5`; `>= -0.5` | `1.3253`, `-0.0508` (RL); `1.3985`, `-0.0672` (TG_L). Printed: U `1.398`, DC `1.404`, TR `1.415`, B3 `1.558`, B3s `1.630`, FB `2.352` and `-0.429` (its stencils of seven and eight cells) | met |
+| P8 order of the truncation, levels 1, 2, 4 | `>= 2.7` (four numbers) | RL `3.002`, `3.001` (`5.53e-5`, `6.90e-6`, `8.62e-7`); TG_L `2.994`, `3.000` (`7.36e-5`, `9.25e-6`, `1.16e-6`) | met |
+| P9 fallback (FB) | `>= 8` in each part; equal to M4; others `<= 1e-11`; list sorted; fallbacks `>= 1e-5` | 48 background and 56 component fallbacks; equal bit for bit; 20 others, `3.7e-16`; sorted and counted; `2.97e-4` | met |
+| P10 refusals | `Err` three times; six points `<= 1e-11` | R1 "5 stencil points for 6 monomials"; R2 "rank-deficient stencil"; R3 "sum abs(w) = 23.500 above 4"; met | met |
+| C1 continuity, every overset run of the flow file | `<= 1e-9` | largest `8.1e-14` | met |
+| C2 `n_fallback` of every Q run | `0` | `0` in every step of every run | met |
+| CM (control) coincident meshes with Q, levels 1, 2 | `<= 1e-6` | `5.9e-12`, `5.6e-13` (with M4, ADR 0246: `7.2e-9`, `2.7e-9`) | held |
+| NL (negative control) RL with the default stencils, levels 1 to 2 | order `<= 1.5` | `1.277` (`1.5486e-4`, `6.3902e-5`, the digits of ADR 0246) | held |
+| NK (negative control) truncation order of the default stencils on RL | `<= 2.3` | `1.996`, `1.998` (`1.013e-3`, `2.54e-4`, `6.36e-5`) | held |
+| E1 a non-positive interpolated `rAU` | `Err` naming `rAU` | "overset: the interpolated rAU of the fringe cell 493 is not positive (-1.88e-3)" | met |
+
+Printed, no limit.
+
+- **Coarse levels.** On RL the error of the calculated component cells with Q is `2.07` times the error with the default
+  stencils at level 1, `1.33` times at level 2, `0.98` at level 3 and `0.89` at level 4, as ADR 0246 found with the product
+  stencils (Q gives `0.987`, `0.991`, `0.996`, `0.995` of those). The default stencils are the more accurate ones for this
+  class on the two coarse levels, through the cancellation that ADR 0246 describes, and have the lower order (`1.277`,
+  `1.166`, `1.626` against `1.916`, `1.924`, `1.952`). On the other classes of RL Q is the better one already at level 1:
+  the largest error of the non-hole cells is `7.68e-4` against `9.25e-4`, `1.93e-4` against `2.53e-4` at level 2.
+- **TG_L.** The largest error with Q lies in a calculated background cell next to the outer boundary of the domain at
+  every level (the error of the background alone, ADR 0219: `7.68e-4`, `1.93e-4`), no longer in a component fringe cell:
+  `7.68e-4`, `1.93e-4`, `8.58e-5` against `1.0785e-3`, `3.514e-4`, `1.712e-4` with the default stencils. Per class at levels
+  1, 2, 3 (largest): CF `5.46e-4`, `1.25e-4`, `5.50e-5`; CC `6.03e-4`, `1.34e-4`, `5.94e-5`; BF `5.69e-4`, `1.25e-4`,
+  `5.17e-5`; BC `7.68e-4`, `1.93e-4`, `8.58e-5`. Root mean square of the non-hole cells `5.263e-4`, `1.304e-4`, `5.784e-5`
+  (orders `2.013`, `2.005`); the calculated maximum is the overall maximum (`1.993`, `1.999`; with the default stencils F3
+  of ADR 0232 has `2.059`, `1.580`).
+- RL per class with Q, largest / root mean square: level 1 CF `5.73e-4` / `4.10e-4`, CC `5.46e-4` / `3.20e-4`, BF
+  `4.31e-4` / `2.99e-4`, BC `7.68e-4` / `5.42e-4`; level 4 CF `3.66e-5` / `2.75e-5`, CC `3.68e-5` / `2.22e-5`, BF `2.62e-5`
+  / `1.80e-5`, BC `4.84e-5` / `3.38e-5`. Largest `abs(delta)` `1.28e-4`, `2.74e-5`, `1.72e-5`, `1.18e-5` (with the default
+  stencils `9.7e-4`, `2.7e-4` at levels 1 and 2).
+- Unconverged linear solves: none in any run. The weights at the corner of a donor cell of a nine-cell block are `0.481`
+  on the donor, `0.276` on the two nearest, `0.166` on the diagonal one and `-0.007` to `-0.067` on the five others.
+- **Cost.** `connectivity` of RL at level 4 (32000 cells, 412 fringe cells): `4.8 ms` with the default, `8.5 ms` with Q;
+  the table of the cells around the points, once, `30 ms`. Run times, three processes at once on a shared machine: RL
+  with Q `15`, `110`, `338`, `463 s` at levels 1 to 4; in one process RL level 2 took `89 s` with Q and `74 s` with the
+  default, level 1 `10.4 s` and `9.6 s`. TG_L with Q `15`, `218`, `631 s`.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `b92553ce` (`f336-scratch/mut`, own target directory) by `mutate.py` (exact
+replacements that must occur once), the named test run once, the file restored and compared byte for byte (equal in all
+six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MQ1 the monomial `s_1 s_2` left out | P2 | failed: `q2` `1.2e-5` to `6.0e-5` on every set-up (and P8: `2.34`, `2.01`, `2.02`, `2.02`) |
+| MQ2 inverse-distance weights | P8 (and P2) | failed: orders `1.001`, `0.999`, `1.007`, `1.002`; `q2` `9e-4` to `4e-3` |
+| MQ3 the neighbourhood whatever the kind | P5 (on FB, amendment 2) | failed: "P5 FB" missed, and P9 (i): no fallback |
+| MQ4 a fallback not recorded | P9 | failed: (i) `0` fallbacks, (iii) `2.97e-4`, (v) `0` |
+| MQ5 the Q branch whatever the mode | D1 | failed on all five set-ups |
+| MQ6 the check of the interpolated `rAU` removed | E1 | failed: the step returned `Ok` with `rAU = -1.9e-3` in the fringe cell (continuity `6e-15`, `delta = -0.40`): without the check the solver runs on silently |
+
+`scripts/limit_audit.py`: one hit in the new files, class (iii) on `a2_rl_levels_1_and_2_and_the_linear_control` (a test
+named "control" without a negated assertion). Read: its negative assertion is `Checks::at_most("NL ...", order, 1.5)`,
+which the scanner does not see as one. No change.
+
+### Deviations and disclosures
+
+- The unchanged tree was compiled once before the registration was committed (stated in its status line); nothing ran.
+- Four set-up details of the registration (the size and place of B3, the definition of FB, the scope of P7, the wording
+  of the estimate of P10) were corrected in the registration file before it was committed, from arithmetic only.
+- **B3d** (amendment 1): a defective set-up. Its faces are not planar and the donor search of ADR 0219 M3 found no donor
+  for one fringe centre, so no connectivity was built. The registered test is kept as an ignored record; the corrected
+  set-up B3s (planar faces, non-uniform, sheared) was registered before its run and met P1, P4, P5. What is not shown
+  therefore: the interpolation on a 3-D donor mesh with warped faces. The weights do not depend on the faces (only on the
+  cell centres), so I expect nothing new there, but it is not measured.
+- **P5 and MQ3** (amendment 2): on the registered set-ups every neighbourhood is whole, so P5 could not fail there; P5 was
+  added on FB before any mutation was applied.
+- My predictions that were wrong: U has no neighbourhood with fewer than nine cells (I expected a few); the second pair of
+  A1 is `2.000`, not "between 1.6 and 1.9"; CM is `6e-12`, three orders below the `1e-8` I expected and below M4.
+- A2 is asserted on the four levels in one ignored test (`a2_rl_levels_1_to_4`, 928 s) and on the levels 1 and 2 in a
+  gate test; A1 likewise (`a1_tg_levels_1_to_3`, 865 s). The gate tests of the flow file take about nine minutes together
+  on the loaded machine (`a1_tg_levels_1_and_2` 232 s, `a2_...` 185 s, CM about 70 s), above the two minutes the registration
+  names for a test that is not ignored; they were left as registered. A question for the lead below.
+- The cost is reported from one loaded machine and has no limit, as registered.
+
+### Not run
+
+- The whole workspace test suite (not asked for; the lead runs the gate). Of `rcfd-fv` and `rcfd-mesh` only the overset
+  tests and the unit tests of `rcfd_mesh::overset`.
+- No flow run of the cylinder case TR with Q, no 3-D flow run, no run of Q together with outer iterations or BDF2: none is
+  registered. TR with Q was checked kinematically only (776 stencils, whole, exact).
+- The ignored slow tests and known-miss records of the earlier overset files.
+
+### After the tests
+
+`cargo fmt -p rcfd-mesh --check` and `cargo fmt -p rcfd-fv --check` clean. `cargo clippy -p rcfd-mesh -p rcfd-fv
+--all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Done.** A1 (`1.993`, `2.000`), A2 (`1.916`, `1.924`, `1.952`), A3, D1, D2 and D3 are met; P1 to P10, C1, C2 and E1 are
+met (P4 on B3 and the corrected B3s); the controls CM, NL and NK held; the six mutations failed their checks. Two set-up
+defects of my registration were corrected by amendments committed before their runs (B3d, the reach of P5); neither
+touches a limit. Said plainly: the order is restored by removing the truncation of the linear interpolation, and the
+error of the calculated component cells on the two coarsest levels of RL is larger with the opt-in than without it
+(factors `2.07` and `1.33`); the mechanism of F-349 is not explained by this item.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Should `Quadratic` become the default?** It would change a default and every overset record (R2). For: the order
+  (`1.9` to `2.0` against `1.2` to `1.6`), the largest error (lower at every level of TG_L and RL), the coincident-mesh
+  control. Against: the root mean square of the calculated component cells of RL is `2.07` and `1.33` times larger at
+  levels 1 and 2; a wider overlap is needed (one whole ring of calculated cells around the donor); no flow run of the
+  cylinder case exists with it. Options: (a) keep `Linear` as the default; (b) switch after a cylinder run. **Not taken:
+  open, for the maintainer.** My recommendation is (a) until (b)'s run exists.
+- **Q2. The donor search on cells with non-planar faces** (found by B3d; it belongs to F-134, not to this item). Options:
+  (a) a follow-up item (text below); (b) record it as a limit of F-134. Recommendation (a): general 3-D hexahedral and
+  polyhedral meshes have warped faces, and the failure is a hard "no donor". Taken on the maintainer's standing
+  instruction of 2026-11-11 (take the recommendation) as a proposal to the lead; not a decision the maintainer made in
+  person.
+- **Q3. A donor next to a wall or to its own fringe ring falls back to the linear stencil.** Options: (a) leave it (the
+  count is reported; the overlap can be widened); (b) a follow-up for a one-sided or wider neighbourhood. Recommendation
+  (a) until a set-up needs it. Taken on the standing instruction.
+- **Q4. The order check of the coupling in the gate.** Options: (a) keep the gate tests `a1_tg_levels_1_and_2` and
+  `a2_rl_levels_1_and_2_and_the_linear_control` (about seven minutes on a loaded machine); (b) ignore them as slow and
+  keep the kinematic file, A3, CM and E1 in the gate. Recommendation (b) if the gate time matters; it is the lead's to
+  choose, and I left the tests as registered.
+- **Q5. A flow run of the cylinder case TR with the opt-in** (drag against the body-fitted run, as A2 of ADR 0219).
+  Options: (a) a follow-up item (text below); (b) none. Recommendation (a), it is also what Q1 needs. Taken on the
+  standing instruction as a proposal.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited on this branch.
+
+**F-336**, proposed status: `done`. Proposed note:
+
+> From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0251 (registration of F-336, 2026-11-12, branch f336-overset-quadratic-donors): DONE. Built: an opt-in of rcfd_mesh::overset, Overset::set_donor_interpolation(DonorInterpolation::Quadratic): the stencil of a fringe cell is the donor and the calculated cells that share a point with it (9 on quadrilaterals, 27 on hexahedra; a fringe or hole cell is never a donor), with the weights of the weighted least-squares quadratic (the minimum of sum w^2/omega under the reproduction of the 6 monomials in 2-D, 10 in 3-D, by a pivoted Householder QR). The weights sum to one, can be negative (smallest -0.067, sum of absolute values 1.40 on a whole block) and are not clipped; a stencil with fewer cells than monomials, of deficient rank or with a sum of absolute values above 4 keeps the linear stencil and is listed (Connectivity::fallbacks, OversetInfo::n_fallback), and a step whose interpolated rAU is not positive is refused. Met: quadratics are reproduced to 1e-15 on Cartesian, distorted, O-grid and sheared 3-D donor meshes; the truncation converges at 3.00; TG_L with dt proportional to h^2 converges at 1.993 and 2.000 on levels 1 to 3 (largest error 7.68e-4, 1.93e-4, 8.58e-5, now in a background cell at the domain boundary; 1.0785e-3, 3.514e-4, 1.712e-4 with the linear stencils); the calculated component cells of RL converge at 1.916, 1.924, 1.952 on levels 1 to 4 (3.20e-4, 8.48e-5, 3.89e-5, 2.22e-5); the uniform flow holds to 1.1e-14; coincident meshes give the background alone to 6e-12; no fallback and no unconverged solve on the registered set-ups; without the opt-in the stencils are those of ADR 0219 bit for bit, Q0 and the records R2 hold. Said plainly: on the two coarsest levels of RL the calculated component cells have 2.07 and 1.33 times the error of the linear stencils (the cancellation of ADR 0246), 0.98 and 0.89 at levels 3 and 4. Limits: a donor next to a wall or to its own fringe ring falls back to the linear stencil; no flow run of the cylinder case or in 3-D with the opt-in. Six mutations caught. Found on the way: the donor search of F-134 finds no donor in cells with non-planar faces. Open for the maintainer: whether the opt-in should become the default (ADR 0251 Q1).
+
+**F-134**, status unchanged (`partial`). In its note, after the sentence that ends "the mechanism is open.", add:
+
+> With the opt-in quadratic donor interpolation of F-336 (ADR 0251) the Taylor-Green order with dt proportional to h^2 is 1.993 and 2.000 on levels 1 to 3 and the calculated component cells at rest converge at 1.916, 1.924, 1.952 on levels 1 to 4; T1c stays a recorded miss of the default linear stencils (1.618). Found by ADR 0251: the donor search (ADR 0219 M3) finds no donor for a point in the sliver between two cells that share a non-planar face.
+
+Proposed follow-up items (the numbers are the lead's):
+
+**Overset: donor search on cells with non-planar faces.** Depends on F-134. Acceptance:
+
+> On the set-up B3d of ADR 0251 (two hexahedral parts whose interior points are displaced by up to 0.15 of the cell size in all three directions) every fringe centre gets a donor that agrees with a full search, the linear and the quadratic stencils reproduce linear and quadratic fields to 1e-11, and on meshes with planar faces the donors and stencils are bit-identical to those of today (the unit tests K2 and K4 of ADR 0219 and D1 of ADR 0251).
+
+**Overset: the moving cylinder with the quadratic donor interpolation.** Depends on F-336. Acceptance:
+
+> The set-up TR of ADR 0219 run with DonorInterpolation::Quadratic: mass of the domain and continuity within 1e-9, no fallback or the count reported, drag within 5 percent of the body-fitted run at every step from t = 2 to t = 8 and the difference to the linear-stencil run reported; the ADR recommends for or against making the quadratic interpolation the default.
