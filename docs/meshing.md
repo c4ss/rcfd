@@ -140,6 +140,31 @@ distribution. The 2:1 face balance is optional and measured with `max_face_level
 * Solver use: the adapted mesh is a general polyhedral `Mesh`, so FV solves run on it; non-orthogonal correction needs deferred
   iterations (ADR 0054 addendum 1).
 
+## Directional refinement: a lattice with per-axis levels (F-348, ADR 0267)
+
+`rcfd_mesh::adapt::aniso::AnisoMesh` is a second lattice type beside `AmrMesh` (which is unchanged): a leaf `AxisLeaf` has one
+refinement level per axis, so a cell can be split along x only, y only, or any set of axes (`AxisMark::refine(axes)`). Library
+only, with no case key.
+
+* Faces: the face between two leaves is the intersection of their sides. With different levels along the two tangential axes
+  that rectangle can be a proper part of both sides (four faces around a point that is a corner of no leaf); the vertex set is
+  the corners of all leaves and of all face rectangles, and every loop contains all vertices on its edges, so every cell is
+  closed for any tiling by dyadic boxes. On isotropic states `AnisoMesh::to_mesh` returns the mesh of `AmrMesh::to_mesh` bit for
+  bit (`AnisoMesh::from_amr` converts).
+* Balance (optional): face neighbours differ by at most one level along every refined axis, normal and tangential; a side then
+  carries at most 2 faces in a slab and 4 in 3-D. `max_axis_level_jump` measures it per axis.
+* `AnisoMesh::adapt(&marks, balance)` returns the `Transfer` of `AmrMesh`, so `transfer_field` moves fields unchanged
+  (conservative; exact for linear fields with `Linear`). Coarsening merges a leaf with its buddy along one axis per call. In a
+  slab repeated coarsening returns to the base; with three refined axes pair merges can leave a five-box tiling of a cell that
+  they cannot merge further (a valid mesh, ADR 0267 amendment 1).
+* Criterion (`rcfd_fv::adaptive`): `axis_variations` gives `E_a = |dU/dx_a| h_a` per axis; `directional_axes` splits the axes
+  with `E_a >= theta max_b E_b` (`theta = 1/2` keeps the per-axis variations within a factor two);
+  `directional_target_marks` ranks cells by the edge-length-weighted indicator and counts `2^|S| - 1` new cells per split;
+  `run_adaptive_simple_directional` and `run_adaptive_simple_directional_target` are the adaptive SIMPLE loop on this lattice.
+* Measured on the suction layer of ADR 0247 (`R = 80`, 16 x 16 base): the directional run with 1547 cells has error 0.00298;
+  the isotropic adapted mesh has 0.01159 with 3841 cells; a directional run held at the isotropic run's finest size reaches
+  0.01158 with 960 cells. With the axis choice inverted the error is 1.18.
+
 ## Turbomachinery post-processing (F-123, ADR 0054, status partial)
 
 `rcfd_post::turbo` is library only and works in a cylindrical frame `TurboAxis` (origin, axis, theta reference). Its checks are

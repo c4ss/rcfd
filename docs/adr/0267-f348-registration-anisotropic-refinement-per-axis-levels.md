@@ -421,3 +421,164 @@ its final level sums were 387 along x and 3142 along y.
 
 Decision rule: unchanged. C5 is a missed supporting check (defective set-up), so by the rule the item cannot be **done**; C5b
 stands in for it.
+
+## Addendum 1: results (2026-11-12)
+
+Commits: d06e3ed0 (this registration alone), a583aadb (amendment 1), 22b48cc1 (the code and the tests), 1dbee299 (amendment 2),
+96a963da (C5b), b764e603 (lint fixes in the lattice tests). Runs, all in release:
+
+- G checks: `cargo test --release -p rcfd-mesh --test adapt_aniso_f348`, once, on the code that became 22b48cc1 (run before
+  that commit; the commit differs from the run state by `cargo fmt` only); G6b and G6c once after amendment 1; the whole file
+  again at b764e603 after the lint fixes (9 passed, 1 ignored).
+- C, S, H checks: `cargo test --release -p rcfd-fv --test adapt_directional_f348 -- --include-ignored --nocapture
+  --test-threads=4`, once, at 22b48cc1 (10 passed, C5 failed, 277 s); C5b once after amendment 2 (2.5 s).
+- No limit was changed after a run. Two registered checks missed (G6, C5); each has its amendment above, written and committed
+  before the corrected check was run, and each registered test is kept unchanged as an ignored record.
+
+### Results
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| G1 (acceptance) | validate, face counts, no duplicate face, volume `1e-13`, closure `1e-13`, jump `<= 1` with balance | all 26 rounds of the six sequences; cells (a) 12 to 226 (balance) and 162 (no balance, jumps 2, 2, 2), (b) 20 to 254 and 179 (jumps 3, 3), (c) 12 to 117 and 77 (jumps 2 along x, 3 along z); with balance every jump 1 | yes |
+| G1b | 4 cells, 6 internal faces (4 in the plane, equal areas), 21 points, validate | all | yes |
+| G2 | exact counts and levels | 17, 17, 19, 16 cells; ignored 1; the y-only split at the x maximum | yes |
+| G3 | 65, 67, 70 with balance (jump 1); 65, 66, 67 without (jump 3) | as registered | yes |
+| G4 (acceptance) | linear field within `1e-12` of its range; `sum V q` within `1e-13` | worst linear error 4.4e-16 (both lattices, every round); integrals conserved in both modes; merges 25 and 14 on (a), 26 and 13 on (b) | yes |
+| G5 (acceptance) | same leaves, `Transfer` and mesh bit for bit | slab 60, 147, 330 cells (balance) and 60, 120, 228 (none); box 47, 208, 369 and 47, 173, 236; `from_amr` equal | yes |
+| G6 | the base within `n - 12` rounds on the 3-D lattice (a) | 146 cells to 82, 51, 35, 26, 20, 16; the seventh round merged nothing (16 cells) | **no** (amendment 1) |
+| G6b (amendment 1) | the slab returns to its base within `n - 20` rounds | 105 cells back to 20 in 6 rounds, integrals conserved | yes |
+| G6c (amendment 1) | the stuck tiling: 5 cells, valid, no further merge, refinement restores the octants | all | yes |
+| G7 | located errors | all | yes |
+| C1 | `E_x = sqrt(5) h_x`, `E_y = 5 h_y` to `1e-13`; velocity form to `1e-9`; children | constant gradients exact to `1e-13`; velocity form worst 4.4e-16 | yes |
+| C2 | exact axis choices and errors | all | yes |
+| C3 | exact marks; 108, 111, 107, 100, 100 cells | all | yes |
+| C4 | records, `u`, `p`, `phi`, points equal | equal (`==`) | yes |
+| C5 | fast layer run on an 8 x 8 base | failed: "adaptive cycle 3: ... grads[0][0] is not finite" after 277 s | **no** (defective set-up, amendment 2) |
+| C5b (amendment 2) | converged; validate; jump `<= 1`; `400 <= N <= 440`; `sum l_y > sum l_x`; y level 3 | 256, 297, 347, 402 cells in 89, 77, 68, 65 iterations, all converged; level sums 77 (x) and 414 (y); y levels {0: 226, 1: 42, 2: 30, 3: 104}; `E = 0.0438` | yes |
+| S0 | `N_A = 3841`, `|E(A) - 0.01159| <= 1e-5` | 3841; `E(A) = 0.0115860` | yes |
+| H1 (acceptance) | `E(D) <= E(A)` | `E(D) = 0.0029752`, `E(A) = 0.0115860` (ratio 0.257) | yes |
+| H2 (acceptance) | `N_D <= 1920` | 1547 (0.403 `N_A`) | yes |
+| H3 | `|N_D - 1536| <= 153.6` | 1547 | yes |
+| H4 | converged, validate, jump `<= 1`, cells increase, y level 5 present | 256, 345, 465, 630, 853, 1142, 1547 cells in 89, 76, 60, 47, 50, 115, 71 iterations, all converged; jump 1, 1; 748 leaves at y level 5 | yes |
+| NC-H1 | `E(Dswap) > E(A)` | 1.176 (1740 cells) | holds |
+| K-iso (acceptance) | no code line removed; the existing tests pass unedited | `git diff main` of `adapt.rs`: 3 lines added, none removed; of `adaptive.rs`: two doc lines of the module text replaced, one `use` line and the new items added, no code line removed. `rcfd-mesh` `tests/adapt.rs` 12 passed; `rcfd-fv` `adapt_cavity_f102` 12 passed and `adapt_criteria_f343` 19 passed, both with `--include-ignored` (`N_A = 3841`, `E(A) = 1.15860e-2`, `E(F) = 4.38555e-2`, as ADR 0247); `amr_diag` 1 passed; `amr_solve` 2 passed | yes |
+
+Recorded, not counted. D: x levels {0: 843, 1: 360, 2: 227, 3: 109, 4: 8}, y levels {0: 164, 1: 213, 2: 110, 3: 146, 4: 166,
+5: 748}; 704 leaves (45.5 percent) have `l_x > 0`, 418 of them at `x < 1/8`, the farthest at `x = 0.484` and down to `y = 0.344`.
+D960 (`N_T = 960`, level 5): 973 cells, `E = 0.0029759`, 247 leaves with `l_x > 0`. D4 (`N_T = 960`, level 4, A's finest size): 960
+cells, `E = 0.0115845`, that is A's error with a quarter of A's cells. Dswap: 1740 cells, x levels up to 5 (912 leaves), y levels
+at most 4. Times: A 2.6 s, D 2.0 s, Dswap 17.0 s, D960 1.5 s, D4 1.0 s. C5b's 402 cells have the error of ADR 0247's uniform
+128 x 128 (0.0439 with 16384 cells).
+
+Against the predictions: P1 not met (G6 missed; the others met at the first run). P2 met (`N_D = 1547`, ratio 0.257, at the low
+end of the band). P3 **not met**: 45 percent of D's leaves are split along x, as far as mid-channel. They come from the early
+cycles, as D7 warned: on the 16 x 16 and the first adapted meshes the layer is not resolved, the discrete solution differs from
+the inlet profile over several columns and the criterion follows it; the loop does not coarsen, so those cells stay. D960 shows
+what is needed for the same error: 973 cells. P4 met (1.18). P5 met (`E(D4) / E(A) = 0.9999` with 0.25 of the cells;
+`E(D960) < E(A)`). `E(D)` and `E(D960)` agree to four digits: the error is that of the `h_y = 1/512` band (estimate 0.0033).
+
+### Mutations (scratch copy `w49i-work/f348-scratch/mut`, a `git archive` of b764e603, target dir `f348-scratch/target-mut`, release)
+
+Each applied alone by exact replacement (each pattern found once; `f348-scratch/mutate.py`), the files restored and compared with
+the worktree afterwards (identical). M1 to M5: the lattice tests; M6 to M10: the non-ignored tests of
+`adapt_directional_f348` (C1 to C4 and C5b; C5 is ignored since amendment 2, so M9 is judged by C5b).
+
+| Id | Mutation | Failed tests | Caught |
+| --- | --- | --- | --- |
+| M1 | face-rectangle corners not added to the vertex set | G1b, G1, G4 | yes |
+| M2 | balance on the normal axis only | G3, G1, G5 | yes |
+| M3 | every refinable axis split whatever the mark | G2, G3, G1b | yes |
+| M4 | `overlapping` without recursion | G1, G1b, G2, G4, G5, G6b, G6c | yes |
+| M5 | a merged cell's sources truncated to one | G4, G6b, G6c | yes |
+| M6 | edge lengths of x and y exchanged in `axis_variations` | C1 | yes |
+| M7 | `theta` ignored | C2, C3, C5b | yes |
+| M8 | one added cell counted per marked cell | C3 | yes |
+| M9 | the loop turns every mark into an all-axes mark | C5b | yes |
+| M10 | the loop transfers by injection | C4 | yes |
+
+### Format and lint
+
+`cargo fmt -p rcfd-mesh --check` and `cargo fmt -p rcfd-fv --check` clean; `cargo clippy --release -p rcfd-mesh -p rcfd-fv
+--all-targets -- -D warnings` clean at b764e603 (the first clippy run found three lints in the new lattice test file, a complex
+type and two needless vectors, fixed in b764e603 without changing what the tests do).
+
+### Deviations and what was not run
+
+- The registered sentence of D3 on coarsening is wrong in three dimensions and is replaced by amendment 1.
+- The G checks were first run on the uncommitted code (committed afterwards as 22b48cc1 after `cargo fmt`); the fv checks were
+  run on the commit.
+- Beyond the registered text: G5 also compares the `AdaptReport`s; G4 also asserts that each round refined or merged something;
+  `directional_axes` also refuses negative or non-finite variations.
+- Diagnostic runs (not registered, temporary uncommitted test files, logs in the scratch folder): one for G6 (the leaves of the
+  stuck state) and four for C5 (amendment 2).
+- `amr_solve` was run with `--include-ignored` by mistake of the command line: its ignored record
+  `a4_adapted_vs_fine_known_miss` (ADR 0054) fails by design, as its name says; the two ordinary tests passed.
+- Not run: the whole workspace suite (by instruction); the rest of the `rcfd-mesh` and `rcfd-fv` suites; the heavy tests under
+  mutation; a gate on an archive copy; clippy in the debug profile. `rcfd-api` is not touched; its `baseline_hashes` (3 passed, 1 ignored)
+  and `adapt_case_f342` (6 passed, 2 heavy ignored) tests were run as a precaution, in release, and pass.
+
+### What the `[mesh.adapt]` key would need (not built here)
+
+The loop is reachable from Rust only. To reach it from a case (ADR 0262's table), without changing any case that does not ask:
+
+- a key `lattice = "isotropic" | "directional"`, default `"isotropic"` (today's path, `AmrMesh`, untouched);
+- with `"directional"`: `AnisoMesh::new` on the generator's coordinates with per-axis finest levels (`max_level` for every
+  refined axis, or a new optional `max_level_axes = [lx, ly, lz]`); `marking = "target_count"` mapped to
+  `run_adaptive_simple_directional_target(amr, setup, settings, target_cells, edge_length_exponent, axis_ratio)` with a new
+  key `axis_ratio` (`theta`, default 0.5, in (0, 1]); `indicator` must be `"edge_length"`;
+- not available on the directional lattice and to be refused with a located error until built: `marking = "fixed_fraction"`
+  (needs a fixed-fraction form of `directional_target_marks`) and `register` (needs `restrict_marks` and `register_marks` for
+  `AxisMark`; a few lines each);
+- in `sim.rs` the pending run and `Simulation::adaptive_cycles` take either lattice (`CycleRecord` is shared);
+- the stop reason should say when a solve of a cycle did not converge (amendment 2 shows it can happen on an unresolved base);
+- new keys change the schema golden and `docs/case-schema.md`: that step needs the maintainer's approval.
+
+### Decision by the registered rule
+
+**partial.** Every clause of the acceptance is met: valid closed meshes for random directional marks (G1, G1b), linear fields
+transferred exactly (G4), the directional run reaches `E(A)` with 1547 of 3841 cells (H1, H2; 0.26 of the error with 0.40 of the
+cells), the isotropic paths bit for bit (G5, C4, K-iso), NC-H1 holds and all ten mutations are caught. The rule does not allow
+**done** because two registered checks missed: G6 (my derivation of D3 assumed a split history; in 3-D pair merges can leave a
+five-box tiling that they cannot undo; corrected by G6b and G6c) and C5 (a defective set-up: an 8 x 8 base at cell Peclet 10;
+corrected by C5b). Neither is a clause of the acceptance; both are recorded as ignored known misses with their diagnosis.
+
+### Remaining questions
+
+- **R1. Status.** Options: (a) partial, as the rule gives, until R2 is settled; (b) done, since every acceptance clause is met
+  and both misses were of supporting checks, corrected under amendments. Recommendation (a) by the house rule; (b) is the
+  maintainer's to give.
+- **R2. Directional coarsening in three dimensions.** Pair merges can leave a tiling they cannot merge further. Options: (a) a
+  box merge: all leaves inside a dyadic box merge into it when every one of them is marked (no history needed, undoes the
+  five-box tiling); (b) keep a split history per base cell and merge only what a split made (changes what the type stores); (c)
+  leave it (the loop does not coarsen). Recommendation (a), as a follow-up item; no default is involved.
+- **R3. Directional refinement of an unresolved layer.** On the 8 x 8 base the first directional mesh has no converged SIMPLEC
+  solution with unlimited linear upwind, where the isotropic split has one (amendment 2). Options: (a) document it (done here
+  and in `docs/meshing.md`); (b) when the case key is built, stop the loop with a located message when a cycle's solve does not
+  converge; (c) look for the cause in the solver (the limiter, the face interpolation at faces between columns of different y
+  level). Recommendation (a) now and (b) with the key; (c) only if a resolved case shows it.
+- **R4. Cells spent along x in the early cycles** (45 percent of D's leaves). Options: (a) leave it (the acceptance is met with
+  margin); (b) coarsening in the loop (needs R2 for 3-D); (c) a floor on the variation below which an axis is not split (a new
+  parameter of the criterion). Recommendation (a) now, (b) later; no default is involved.
+- **R5. The case key.** As listed above; it changes the schema golden. Recommendation: a follow-up item.
+
+### For the lead: roadmap entries
+
+Proposed status of F-348: **partial**. New note:
+
+> PARTIAL (ADR 0267, 2026-11-12): rcfd_mesh::adapt::aniso::AnisoMesh, a second lattice with one refinement level per axis (AxisLeaf, AxisMark; AmrMesh untouched): faces are the intersections of the sides of two leaves, with the corners of all face rectangles in the vertex set, so cells are closed for any tiling by dyadic boxes; optional balance of one level per refined axis across every face (at most 2 faces per side in a slab, 4 in 3-D); the existing Transfer and transfer_field. Random directional marks on a graded 3-D box, a slab and a box refined along two of three axes give valid closed meshes (validate, closure and volume to 1e-13) and linear fields transfer to 4.4e-16; on isotropic marks the mesh, the transfer and the adaptive loop equal AmrMesh's bit for bit. Directional criterion in rcfd_fv::adaptive (axis_variations, directional_axes with theta = 1/2, directional_target_marks, run_adaptive_simple_directional and _target). On the ADR 0247 suction layer the directional run has error 0.00298 with 1547 cells against the isotropic 0.01159 with 3841 (limit: at most 1920 cells); held at the isotropic finest size it reaches 0.01158 with 960 cells; with the axis choice inverted 1.18. ADR 0054, 0242 and 0247 tests pass unedited (the heavy ones included); ten mutations each failed their tests. Partial by the rule because two registered supporting checks missed and were corrected under amendments: pair coarsening in 3-D can leave a five-box tiling of a cell that it cannot merge further (valid mesh; slabs return to the base), and the fast layer test on an 8 x 8 base (cell Peclet 10) had no converged solution on its first directional mesh (replaced by a 16 x 16 base). Open: a box merge for 3-D coarsening (R2), the case key (R5), cells spent along x in early cycles (R4).
+
+Note of F-343 (one sentence added at the end; the rest unchanged):
+
+> PARTIAL (ADR 0247): opt-in criteria in rcfd_fv::adaptive with closed-form marking checks: target cell count (target_count_marks, geometric target_schedule, run_adaptive_simple_target), edge-length weighting (cell_extents, edge_length_weighted_indicator, velocity_edge_length_indicator with exponent r), registers (Register from mask, region indicator, field range or levels, with and, or, complement and face-neighbour growth; register_marks, restrict_marks) and the loop with any marks (run_adaptive_simple_marked; run_adaptive_simple and _with unchanged bit for bit). Target-count runs on the ADR 0242 cavity land at 2307 for 2304 and 4611 for 4608 (limit 10 percent). Suction-layer case (Couette flow with transpiration, R = 80, closed form): the adapted mesh (16 x 16 base, five target-count cycles, 3841 cells) has error 0.0116 against 0.0439 for the uniform 128 x 128 (16384 cells); the uniform 90 x 90 (8100 cells) misses it (0.0846); the inverted indicator gives 1.20. ADR 0242's surviving MU6 is now caught. Not delivered: anisotropic (directional) refinement, which needs per-axis levels in the lattice (follow-up); merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here until split. Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new options join F-342's case key (R3). Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new options are case keys since ADR 0262 (2026-11-12, F-342): [mesh.adapt] marking = "target_count", indicator = "edge_length", register and register_use. The anisotropic criterion is delivered by F-348 (ADR 0267, 2026-11-12): a second lattice with per-axis levels and a directional criterion; on this suction layer 1547 cells give error 0.00298.
+
+Follow-up item 1: title "Case key for directional adaptation ([mesh.adapt] lattice = directional)", deps F-348 and F-342, acceptance:
+
+> With lattice = "directional" in [mesh.adapt] a steady box-mesh case runs the directional loop and equals the library run bit for bit on the ADR 0267 suction layer (1547 cells, error 0.00298); options the directional lattice does not take are located errors; cases without the key give identical hashes.
+
+> TODO (from ADR 0267 R5): keys lattice, axis_ratio (theta) and per-axis finest levels; fixed_fraction and register on the directional lattice need small additions to rcfd_fv::adaptive; a cycle whose solve does not converge should be named in the stop reason (ADR 0267 amendment 2). Changes the schema golden.
+
+Follow-up item 2: title "Directional coarsening that always undoes a refinement in three dimensions (box merge)", deps F-348, acceptance:
+
+> On a lattice with three refined axes, repeated all-axes coarsening returns every state made by splits and merges, including the five-box tiling of ADR 0267 amendment 1, to the base with sum V q conserved; slab results and the isotropic AmrMesh paths stay bit for bit.
+
+> TODO (from ADR 0267 R2 and amendment 1): pair merges along one axis can leave a tiling of a cell with no two buddies; merge all leaves inside a dyadic box when every one is marked. Needed before the adaptive loop can coarsen on the directional lattice (ADR 0267 R4).
