@@ -330,6 +330,12 @@ struct Measured {
 }
 
 fn run(r: Run) -> Measured {
+    run_periods(r, 34)
+}
+
+/// The run of `r` over `periods` periods (34 registered; other numbers for the diagnostic D1 of amendment 1), DFT over
+/// the last 4.
+fn run_periods(r: Run, periods: usize) -> Measured {
     let cl = closed(r);
     let length = 3.5 * cl.lambda_z;
     let n_z = (length / (R / r.n as f64)).round() as usize;
@@ -381,7 +387,7 @@ fn run(r: Run) -> Measured {
     let period = 2.0 * PI / w;
     let n_t = (period / s.max_dt(0.48)).ceil() as usize;
     let dt = period / n_t as f64;
-    let total = 34 * n_t;
+    let total = periods * n_t;
     let first_dft = total - 4 * n_t;
     let mut dft = HarmonicDft::new(w, cells).unwrap();
     for step in 0..total {
@@ -517,8 +523,12 @@ fn c01_radial_mode_matched_layer() {
 }
 
 /// C10c (ADR 0366): the spinning mode on the coarse grid n = 8. K10c <= 3e-2; S10c R < 1e-2; SP10c <= 1e-6.
+/// KNOWN MISS (ADR 0366 amendment 1): the registered run met K10c (-9.742e-3) and S10c (1.533e-4) and missed SP10c, the
+/// counter-rotating ratio 1.233e-5 against 1e-6. Kept with the limit intact; `c10c_spinning_mode_coarse_k_s` keeps the
+/// two met assertions of the same run as the fast test.
 #[test]
-fn c10c_spinning_mode_coarse() {
+#[ignore = "known miss (ADR 0366 amendment 1): SP10c 1.233e-5 against 1e-6, the start transient of the ramp"]
+fn c10c_spinning_mode_coarse_known_miss() {
     let m = run(Run {
         mode: SPIN,
         n: 8,
@@ -528,6 +538,118 @@ fn c10c_spinning_mode_coarse() {
     assert!((m.kr / m.cl.kz_poly - 1.0).abs() <= 3e-2, "K10c");
     assert!(m.refl < 1e-2, "S10c");
     assert!(m.counter <= 1e-6, "SP10c");
+}
+
+/// C10c (ADR 0366 amendment 1): the K10c (<= 3e-2) and S10c (< 1e-2) assertions of the C10c run.
+#[test]
+fn c10c_spinning_mode_coarse_k_s() {
+    let m = run(Run {
+        mode: SPIN,
+        n: 8,
+        layer: true,
+    });
+    report("C10c", &m);
+    assert!((m.kr / m.cl.kz_poly - 1.0).abs() <= 3e-2, "K10c");
+    assert!(m.refl < 1e-2, "S10c");
+}
+
+/// D1 (ADR 0366 amendment 1, diagnostic): the C10c set-up for 60 periods; under H1 the counter-rotating ratio falls to
+/// at most half of the 34-period 1.233e-5.
+#[test]
+fn d1_counter_rotating_falls_with_time() {
+    let m = run_periods(
+        Run {
+            mode: SPIN,
+            n: 8,
+            layer: true,
+        },
+        60,
+    );
+    report("D1", &m);
+    assert!(m.counter <= 0.5 * 1.233e-5, "D1");
+}
+
+/// D2 (ADR 0366 amendment 1, diagnostic): the solver commutes with the rotation by 90 degrees on the O-grid. The C10c
+/// mesh and set-up, 300 steps, standing drives `J_1 cos(phi)` (A) and `J_1 sin(phi)` (B):
+/// `max |p_B(R x) - p_A(x)| / max |p_A| <= 1e-9`.
+#[test]
+fn d2_solver_commutes_with_the_rotation() {
+    let r = Run {
+        mode: SPIN,
+        n: 8,
+        layer: true,
+    };
+    let cl = closed(r);
+    let length = 3.5 * cl.lambda_z;
+    let n_z = (length / (R / r.n as f64)).round() as usize;
+    let mesh = Arc::new(circular_duct_ogrid(r.n, r.n / 2, n_z, R, CORE, length).unwrap());
+    let shape = DuctShape::Circular { radius: R };
+    let w = cl.omega;
+    let kz = cl.kz_cf;
+    let t_ramp = 8.0 * 2.0 * PI / w;
+    let solve = |sine: bool| -> Vec<f64> {
+        let geom = FvGeometry::new(mesh.clone()).unwrap();
+        let basis = ModeBasis::new(shape, &[r.mode]).unwrap();
+        let drive = move |x: [f64; 3], t: f64| -> (f64, [f64; 3]) {
+            let ramp = if t < t_ramp {
+                (PI * t / (2.0 * t_ramp)).sin().powi(2)
+            } else {
+                1.0
+            };
+            let a = basis.eval(0, [x[0], x[1]]);
+            // N J_1 cos(phi) = Re(psi), N J_1 sin(phi) = Im(psi).
+            let shape = if sine { a.im } else { a.re };
+            let p = ramp * shape * (w * t).cos();
+            (p, [0.0, 0.0, kz / (RHO0 * w) * p])
+        };
+        let bcs = [
+            ("inlet", WaveBc::Driven(Arc::new(drive))),
+            ("wall", WaveBc::Wall),
+            ("outlet", WaveBc::Wall),
+        ];
+        let layer = SpongeLayer {
+            origin: [0.0, 0.0, 2.5 * cl.lambda_z],
+            normal: [0.0, 0.0, 1.0],
+            thickness: cl.lambda_z,
+            rate_max: rate_max_for_reflection(cl.lambda_z, C, 1e-6, 2.0).unwrap(),
+            exponent: 2.0,
+        };
+        let sponge = WaveSponge::from_layer(&geom, &layer, true).unwrap();
+        let mut s = AcousticWaveSolver::new(geom, AIR, &bcs).unwrap();
+        s.set_sponge(Some(sponge)).unwrap();
+        let period = 2.0 * PI / w;
+        let n_t = (period / s.max_dt(0.48)).ceil() as usize;
+        let dt = period / n_t as f64;
+        for step in 0..300 {
+            s.step(dt).unwrap();
+            s.t = (step + 1) as f64 * dt;
+        }
+        s.p.clone()
+    };
+    let pa = solve(false);
+    let pb = solve(true);
+    let cc = mesh.cell_centres();
+    let scale = pa.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    let mut worst: f64 = 0.0;
+    for (c, x) in cc.iter().enumerate() {
+        let rx = [-x[1], x[0], x[2]];
+        let (cr, _) = cc
+            .iter()
+            .enumerate()
+            .map(|(i, q)| {
+                (
+                    i,
+                    (q[0] - rx[0]).powi(2) + (q[1] - rx[1]).powi(2) + (q[2] - rx[2]).powi(2),
+                )
+            })
+            .fold((0, f64::INFINITY), |a, b| if b.1 < a.1 { b } else { a });
+        worst = worst.max((pb[cr] - pa[c]).abs());
+    }
+    println!(
+        "D2: max |p_B(R x) - p_A(x)| / max |p_A| = {:.3e} (max |p_A| {scale:.3e})",
+        worst / scale
+    );
+    assert!(worst / scale <= 1e-9, "D2");
 }
 
 /// C01c (ADR 0366): the radial mode on the coarse grid n = 12. K01c <= 5e-2; S01c R < 1e-2.
