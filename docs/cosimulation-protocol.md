@@ -61,8 +61,47 @@ The meshes need not match. The coupler holds weights `H` from the nodes to the w
   F_f . d_f` for any displacement, to rounding (a conservative map).
 
 `cosim::piecewise_linear_rows` builds `H` for nodes on a line with a linear displacement between them; with one node the
-wall is a rigid segment. Any other weights can be passed to `InterfaceMap::new`. A geometric search and radial-basis
-weights are not in the library.
+wall is a rigid segment. Any other weights can be passed to `InterfaceMap::new`.
+
+### Weights built from the two interface meshes (F-362; ADR 0263)
+
+Opt-in, `cosim::InterfaceMap::build(nodes, elements, points, face_points, &settings)` (or `cosim::interface_rows` for the
+rows alone) builds `H` from the structure's interface mesh (its nodes and **elements**: 1 to 4 node indices each, a point,
+a segment, a triangle or a quadrilateral, which is split into two triangles) and the fluid's (wall points and faces). For a
+transport this means that `describe` of the structure also returns its elements; in the library the caller passes them
+(the `Structure` trait is unchanged). Two methods, `cosim::MapMethod`:
+
+* **nearest-element projection** (`MapSettings::projection(max_distance)`): a wall point gets the barycentric weights of
+  its nearest point on the nearest structural element. On a curved wall the two meshes are different facetted surfaces and
+  a wall point lies off the structural facets (by up to the sagitta `h^2/(8 r)`); the default offset correction then adds
+  the smallest correction on the ring of elements around the nearest one that makes the row reproduce the point's own
+  coordinates. Some weights become slightly negative. `Projection { correct_offset: false }` keeps the plain weights
+  (non-negative, one element), which reproduce translation but not rotation on a curved wall;
+* **radial-basis interpolation** (`MapSettings::radial_basis(support, max_distance)`): Wendland's compactly supported
+  function `(1 - r/rho)^4 (4 r/rho + 1)` with a polynomial of degree 1 in the directions the nodes span (on a planar
+  structure the two in-plane ones, on a line one), solved densely by Cholesky factorisations (no linear-algebra crate). A
+  support of three times the longest element edge is the documented choice; the report gives an estimate of the condition
+  number of the kernel matrix (about 10 to 100 at that support). Rows are dense (one weight per node): meant for interface
+  meshes of up to a few thousand nodes.
+
+Why the polynomial and the correction: a rigid motion displaces a point by an affine function of its position, and a map
+with one weight per (point, node) reproduces every affine function, so every rigid translation and rotation, exactly when
+each row sums to 1 **and** reproduces the point's coordinates (`sum_i H_pi x_i = x_p`). The same two properties make the
+transposed force map conserve the resultant and the moment (about any point, with each face force acting at the mean of
+its points); the work is conserved by the transpose for any weights. Measured (ADR 0263) on a planar and a cylindrical
+wall with non-matching meshes: rigid motion and the balances to `1e-15` or better with both methods; without the offset
+correction the cylinder's rotation is off by `5e-3` and the moment by `1e-4`.
+
+**Unmapped points.** A wall point farther than `max_distance` (metres, no default: above the largest gap between the two
+discretisations of one surface, below the distance to another wall) from the structure is outside it. With
+`Unmapped::Refuse` (the default) the build fails with a message naming the point, its coordinates and its distance; with
+`Unmapped::Nearest` the point moves with its nearest structural point (translation and resultant still exact, the moment
+changes by the force on such points times their offset). `cosim::MapReport` lists every point's distance, the outside
+points, the largest coordinate defect (non-zero only where the structure cannot represent a point's offset, for example a
+line of nodes and wall points beside it) and the condition estimate.
+
+On the model problem of ADR 0256 the projection gives the piecewise-linear rows (to `1e-16`) and the same frequencies;
+the radial basis shifts them by `-5.2e-4` (mode 0) and `+1.9e-4` (mode 1): its displacement between the nodes is smoother.
 
 ## One coupling step
 
@@ -167,7 +206,9 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
 * One wall and two participants. No simultaneous update of several participants.
 * The structure in the repository is a mock: lumped nodes on springs, one direction of motion, an explicit integrator.
   No structural solver has been connected.
-* Mapping by given weights only: no geometric search, no radial-basis functions.
+* Mapping by given weights or by the builders of ADR 0263 (brute-force nearest-element search, dense radial-basis
+  rows): no sparse or partitioned radial basis for large meshes, no rotational degrees of freedom of shells or beams, no
+  mortar or mass-matrix map; the map is built once on the reference configurations.
 * Fixed, Aitken and least-squares updates only (no reuse of earlier steps): no ramping of the load, no extrapolated predictor (the
   predictor is the flow's force at the start of the step).
 * The fluid side is the incompressible PISO/PIMPLE step with implicit Euler on a moving mesh, with its limits
