@@ -1640,4 +1640,6 @@ Each acceptance and each note below is one quoted paragraph on a single line.
 
 > Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0339; the registration is written by the implementation agent before any code.
 
+## Lead's note (2026-11-12): roadmap ids
 
+The entries were added to docs/roadmap.json with these ids: SA-1 = F-408, SA-2 = F-409, SA-3 = F-410, SA-4 = F-411, SA-5 = F-412, SA-6 = F-413, SA-7 = F-414, SA-8 = F-415, SA-9 = F-416, SA-10 = F-417, SA-11 = F-418, SA-12 = F-419, SA-13 = F-420, SA-14 = F-421, SA-15 = F-422, SA-16 = F-423, SA-17 = F-424, SA-18 = F-425, SA-19 = F-426, SA-20 = F-427, SA-21 = F-428, SA-22 = F-429, SA-23 = F-430, SA-24 = F-431, SA-25 = F-432, SA-26 = F-433, SA-27 = F-434, SA-28 = F-435, SA-29 = F-436, in the category "Structural solver".

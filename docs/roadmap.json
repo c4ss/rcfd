@@ -3698,5 +3698,405 @@
     "status": "todo",
     "acceptance": "An isolated plane pulse at 30 and 45 degrees through a matched layer attached to a mesh translating along the layer at Mach 0.2 reflects less than 1 percent and stays bounded over 20 transit times of the layer, or the reflection and any instability are measured and documented; a plain layer on a rotating mesh reflects a normal pulse less than 1 percent.",
     "note": "From ADR 0265 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+  },
+  {
+    "id": "F-408",
+    "title": "Scaffold of the advanced tier: module layout, material variants with a point context and a state layout, extension points of the Newton driver",
+    "phase": 9,
+    "deps": [
+      "F-372",
+      "F-388",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The modules, material variants, point context, state layout, element kind, layup property, section-stiffness hook and the two driver extension points of ADR 0310 section 2 exist; every test of the basic and intermediate tiers (the sb_ and si_ files) compiles and passes unedited, and a registered set of models (patch test, cantilever, bar modes, the elastica of F-397, the free vibration of F-398, a Shell4 plate) gives displacements, stresses, frequencies and histories with the same bits as before the change; with an empty contribution list and no step hook the Newton driver takes the same iterations with the same residuals bit for bit; the default point context (no temperature, no time increment, global axes) reproduces the isotropic stress and tangent bit for bit; each new material variant, the element kind Shell3 and the layup property are refused by every solve with an error naming the variant and the set, never ignored; the complex type satisfies (a b) conj(b) = a |b|^2 and a/a = 1 within 1e-15 on a registered sample and prints and parses losslessly; the baseline hashes are unchanged.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0311; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-409",
+    "title": "Orthotropic elasticity with material axes, orthotropic expansion, and temperature-dependent properties from tables",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-372",
+      "F-374",
+      "F-376",
+      "F-380"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Orthotropy: with isotropic constants the elasticity matrix equals the isotropic one within 1e-13 relative; constants that are not positive definite are refused naming the constant. Off-axis tension of a block with the material axes turned by 15, 30, 45 and 60 degrees about z: axial strain sigma/E_x with 1/E_x = c^4/E1 + s^4/E2 + (1/G12 - 2 nu12/E1) s^2 c^2 and the shear-extension ratio from the rotated compliance within 1e-10; rotating the model and the axes together leaves the strain energy unchanged within 1e-12. Cantilever of slenderness 20 with E1 along the span and E2 = E1/10: tip deflection P L^3/(3 E1 I) + P L/(kappa G13 A) within 1 percent. Free heating gives the strains alpha_i dT in material axes with zero stress, full restraint the stress -D alpha dT, both within 1e-10. Cylindrical axes: a tube b/a = 2 with E_theta/E_r = 4 under internal pressure in plane stress has the bore hoop stress of the polar-orthotropic closed form (powers r^(k-1) and r^(-k-1), k = sqrt(E_theta/E_r), derived in the registration) within 1 percent. Tables: a bar whose temperature and so its modulus vary linearly from E0 to E1 along it stretches under an end force by F L ln(E1/E0)/(A (E1 - E0)) within 0.1 percent with 20 elements; with alpha = a0 + a1 T the free expansion is a0 (T - Tref) + a1 (T^2 - Tref^2)/2 within 1e-10; a constant table gives the bits of the constant material; a temperature outside a table is refused with the element and the temperature.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0312; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-410",
+    "title": "Linear viscoelasticity: Prony series in time, complex modulus in frequency, time-temperature shift",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-397",
+      "F-398"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Relaxation of one element after a strain step: sigma(t) = eps0 (E_inf + sum E_i exp(-t/tau_i)) within 1e-10 at every step end for three branches. Creep of the standard solid under constant stress: eps(t) = sigma0 (1/E_inf - (1/E_inf - 1/E_0) exp(-t/tau_c)), tau_c = tau E_0/E_inf, within 0.1 percent at 20 steps per tau with observed order >= 1.9. The complex modulus function returns E' = E_inf + sum E_i w^2 tau_i^2/(1 + w^2 tau_i^2) and E'' = sum E_i w tau_i/(1 + w^2 tau_i^2) within 1e-13, and a strain cycled in time dissipates pi eps0^2 E'' per cycle and volume within 1 percent at 200 steps per cycle. Shift: the relaxation curve at a temperature with shift factor a_T equals the reference curve at t/a_T within 1e-10. Free vibration of a bar of the standard solid with a loss factor near 0.05 at its first frequency: logarithmic decrement pi E''/E' within 3 percent. A material without branches gives the bits of the elastic one; the internal stresses are saved and restored bit for bit with the integrator state; a non-positive relaxation time or modulus is refused with the key.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0313; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-411",
+    "title": "Creep: power law with time hardening, implicit integration with a consistent tangent",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The tangent agrees with central differences within 1e-6. Uniaxial constant stress: creep strain A sigma^n t within 1e-8 for m = 0 and A sigma^n t^(m+1)/(m+1) within 0.1 percent for m = -0.5. Relaxation at fixed strain, n = 3 and 5: sigma(t) = (sigma0^(1-n) + (n - 1) E A t)^(1/(1-n)) within 0.5 percent at the registered step count, observed order >= 0.9. Thick cylinder b/a = 2 in plane strain under internal pressure, n = 4: the stress starts at Lame within 1 percent and tends to the stationary field sigma_r = -p ((b/r)^(2/n) - 1)/((b/a)^(2/n) - 1), sigma_theta = p ((2 - n)/n (b/r)^(2/n) + 1)/((b/a)^(2/n) - 1) within 2 percent after the registered redistribution time. Radial bar clamped on the axis of rotation, n = 3: the tip creeps at the rate A times the integral of (rho Omega^2 (L^2 - r^2)/2)^n over the length within 0.5 percent (the stress is statically determinate). A step whose creep-strain increment exceeds the registered limit is halved; a non-converged local iteration is an error with the element.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0314; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-412",
+    "title": "Direct harmonic solve: complex symmetric factorisation, structural (hysteretic) damping, discrete dampers, base excitation",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-373",
+      "F-374",
+      "F-383",
+      "F-399"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. rcfd-linalg: a random complex symmetric diagonally dominant matrix of order 200 is solved to a residual of 1e-12 relative; a real matrix gives the real factorisation's solution within 1e-13; a pivot below the registered threshold is refused with the equation. Fixed-free bar, nu = 0, loss factor 0.02, tip force: tip response F tan(k L)/(E* A k) with E* = E (1 + i eta) and k = w sqrt(rho/E*), amplitude and phase within 0.5 percent at 0.5, 1.0 and 1.5 times the first frequency. With Rayleigh damping the direct solve equals the mode superposition of F-399 with all modes within 1e-8 on a small model. Tip dashpot c on the same bar: response F/(E A k cot(k L) + i w c) within 0.5 percent, and with c = A sqrt(E rho) the amplitude is F |sin(k L)|/(E A k) (no resonance) within 0.5 percent at five frequencies. Base motion of the clamped end, undamped: tip amplitude 1/cos(k L) of the base within 0.5 percent at half the first frequency. A table of modulus against frequency reproduces the constant-modulus result when constant (1e-12). An undamped solve at a resonance is refused with the frequency; results are bit-identical for 1 and 8 threads.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0315; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-413",
+    "title": "High-cycle fatigue: stress-life curves, mean-stress corrections, harmonic and counted histories, linear damage",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-376",
+      "F-399"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Curves and corrections reproduce N = (sigma_a/sigma_f)^(1/b)/2, sigma_a/(1 - sigma_m/sigma_u) (Goodman), sigma_a/(1 - (sigma_m/sigma_u)^2) (Gerber) and Soderberg within 1e-12; a mean stress at or above the strength is refused. Harmonic amplitude: for a normal and a shear component 90 degrees out of phase the von Mises amplitude equals the closed-form maximum over the phase within 1e-10. Cantilever with a static and a harmonic tip force: the largest damage lies on the root surface and the life there equals the hand value from 6 P L/(b h^2) within the registered factor that a 2 percent stress error allows. Plate with a small circular hole (radius/width 0.05) under remote harmonic tension: stress amplitude at the hole edge within 3 percent of 3 sigma (Kirsch) and the life the Basquin life of that stress. Counting: n cycles of constant amplitude give n cycles of that range; a large cycle carrying m small ripples gives 1 and m; a periodic history started at its maximum closes with no residual; a history and its mirror image give the same counts; two load blocks give n1/N1 + n2/N2 within 1e-12. Narrow band: the damage rate nu0 (sqrt(2) s)^m Gamma(1 + m/2)/C within 1e-12 as a function, and the counted damage of a synthesised narrow-band history (registered seed, 1e5 cycles) within 5 percent of it.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0316; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-414",
+    "title": "Damped and complex modes: a dense eigensolver for general real matrices and the quadratic eigenproblem on a modal subspace",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-382",
+      "F-383"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. rcfd-linalg: the companion matrix of a polynomial with registered real and complex roots returns them within 1e-10; a random matrix of order 50 has residuals |A v - lambda v| <= 1e-10 |A|; a symmetric matrix reproduces the Jacobi values of F-382 within 1e-10; a Jordan block is returned with its eigenvalue within 1e-6 and a report, not a failure; no convergence within the registered sweeps is an error. One oscillator: lambda = -zeta w +/- i w sqrt(1 - zeta^2) within 1e-12. Rayleigh damping a M + b K on a solid model: every mode has the ratio (a/w_j + b w_j)/2 within 1e-8. Skew coupling: a two-unknown system with G = g [[0, 1], [-1, 0]] has the closed-form split frequencies within 1e-12. Fixed-free bar with a tip dashpot c below A sqrt(E rho): lambda_j = (c0/L) (-atanh(c/(A sqrt(E rho))) + i (2 j - 1) pi/2), the first three within 2 percent on 40 modes; at c above that value no oscillating root is returned and the result says so. Damping ratios are -Re(lambda)/|lambda|; conjugate pairs are reported once.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0317; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-415",
+    "title": "Coriolis term of a rotating part: gyroscopic matrix in the rotating frame and the Campbell table with split modes",
+    "phase": 9,
+    "deps": [
+      "F-414",
+      "F-396"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. G is skew within 1e-13 of its norm and x^T G x = 0 within 1e-12. Without the option the table has the bits of F-396; with it at zero speed the frequencies equal those of F-396 within 1e-10. A mass on isotropic springs in the plane of rotation (two unknowns): frequencies |w0 - Omega| and w0 + Omega within 1e-10; the same as a stiff block on elastic supports within 1e-3. Thin ring spinning about its axis (thickness/radius 0.05, nu = 0, full model): the two travelling waves of in-plane mode n differ in frequency by 4 n Omega/(n^2 + 1) within 2 percent for n = 2 and 3 at Omega = 0.1 w_2. Radial beam of square section: the flap frequency equals that of F-396 within 1e-6 relative and the lag frequency moves by the registered second-order estimate within 20 percent of that estimate. Crossings of split modes are tracked without exchange (modal assurance on the complex shapes above 0.9). A speed at which an eigenvalue has a positive real part is reported as unstable with the speed.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0318; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-416",
+    "title": "Flexible rotor on bearings in the stationary frame: whirl, critical speeds, unbalance response, joined to the rigid-rotor model",
+    "phase": 9,
+    "deps": [
+      "F-414",
+      "F-391",
+      "F-393"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. At zero speed the frequencies equal those of the beam model of F-391 within 1e-10. Disc on a light shaft between two bearings: critical speed sqrt(k/m) and unbalance amplitude e r^2/sqrt((1 - r^2)^2 + (2 zeta r)^2) within 1e-3 at r = 0.5, 1 and 2. In the stiff-shaft limit the critical speeds and the response equal rotordyn::critical_speeds and rotordyn::response for the same rotor within 1e-6. Uniform shaft on pins with rotary inertia, 20 elements: forward and backward whirl of modes 1 and 2 equal the roots of E I k^4 - rho A w^2 - rho I k^2 w^2 +/- 2 rho I k^2 Omega w = 0, k = n pi/L, within 0.5 percent at three speeds. Overhung disc on a massless cantilever shaft: the four whirl speeds equal the roots of the two-unknown closed form (derived in the registration) within 0.5 percent. Anisotropic bearings split the critical speed into sqrt(kx/m) and sqrt(ky/m) within 1e-3. A cross-coupled stiffness k_c on a damped disc is stable below c w_n and unstable above, the threshold within 1 percent. Forward and backward are labelled by the sense of the orbit; an unstable speed is reported, never dropped.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0319; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-417",
+    "title": "Random vibration: response to force and base-acceleration spectra by modal superposition, root-mean-square stress",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-399"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. One mode under a flat one-sided force spectrum G: mean-square displacement (pi/2) f_n Q G/k^2 with Q = 1/(2 zeta), and under a flat base acceleration spectrum the mean-square absolute acceleration (pi/2) f_n Q G (for Q well above 1; the exact integral is computed in the registration), both within 0.5 percent at zeta = 0.02 on the registered grid, observed convergence under grid refinement; zero-crossing rate f_n within 1 percent. Two well separated modes: the mean square is the sum within 1 percent. A band-limited spectrum equals the numerical integral registered beforehand within 1e-6. For a uniaxial stress state the root-mean-square von Mises stress equals the root-mean-square stress within 1e-10. Two fully correlated patterns equal one summed pattern within 1e-12; uncorrelated ones add in mean square. A spectrum with a negative value or a non-increasing frequency list is refused with the entry.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0320; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-418",
+    "title": "Radiated sound of a vibrating surface: equivalent radiated power and the Rayleigh integral of a baffled plane",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-136",
+      "F-399"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Equivalent radiated power: a rigid piston gives rho c S v^2/2 within 1e-12 and a plate mode sin sin gives rho c A v0^2/8 within 0.5 percent. Rayleigh integral of a circular piston of radius a: on-axis pressure 2 rho c v |sin(k (sqrt(z^2 + a^2) - z)/2)| within 1 percent for z from a to 20 a at k a = 2 and 10 with faces of a tenth of a wavelength; far-field directivity |2 J1(k a sin theta)/(k a sin theta)| within 1 percent; radiated power over the equivalent radiated power equal to 1 - J1(2 k a)/(k a) within 1 percent at k a = 0.5, 2 and 10, and at k a = 0.1 the power rho c k^2 (S v)^2/(4 pi) within 2 percent. Levels: 1e-12 W gives 0 dB and the third-octave sums equal the narrow-band total within 1e-10. A surface that is not plane within the registered tolerance is refused by the Rayleigh integral with its deviation; the equivalent radiated power accepts any surface and its report says that it assumes a radiation efficiency of one.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0321; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-419",
+    "title": "Three-node shell element (flat facet, assumed shear strain) for triangulated surfaces",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-391",
+      "F-392"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Membrane patch test and constant-curvature bending patch test on an irregular flat mesh, and on a mesh mixing Shell3 and Shell4, within 1e-8. Simply supported square plate under uniform load, 32 x 32 squares each cut in two, nu = 0.3: centre deflection within 2 percent of the Navier series at thickness/side 0.01 and within 3 percent at 0.001, and within 1 percent of each other for the two diagonal directions. Cantilever strip, nu = 0: tip deflection within 1 percent. Pinched ring strip, 32 elements per quarter: loaded diameter within 3 percent of (pi/4 - 2/pi) P R^3/(E I). Cylinder under internal pressure: radial displacement p R^2/(E t) within 1 percent. First frequency of the simply supported plate within 2 percent. A free plate has six zero frequencies below 1e-6 of the seventh; a single element has exactly six zero eigenvalues; a triangle with an angle below the registered limit is refused with the element.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0322; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-420",
+    "title": "Stress stiffening of beams and shells: buckling, pre-stressed modes and the Campbell table of a shell blade",
+    "phase": 9,
+    "deps": [
+      "F-419",
+      "F-391",
+      "F-392",
+      "F-395",
+      "F-396"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Beam: Euler loads pi^2 E I/L^2 (pinned) and pi^2 E I/(4 L^2) (clamped-free) with the registered shear correction within 0.1 percent at 8 elements; under tension w_n^2 = (n pi/L)^4 E I/(rho A) + (n pi/L)^2 T/(rho A) within 0.5 percent for n = 1, 2. Rotating radial beam of square section: w_flap^2 - w_lag^2 = Omega^2 within 1e-6 Omega^2 and the stiffening slope equal to the Rayleigh quotient of F-396 within 1 percent. Shell: a simply supported square plate buckles at 4 pi^2 D/a^2 per width in one direction and at 2 pi^2 D/a^2 under equal compression in both, within 2 percent at 16 x 16 Shell4 and 4 percent at 32 x 32 x 2 Shell3; a stretched strip has the tension frequencies above within 1 percent. Equivalence: a flat plate strip twisted by 30 degrees, thickness/chord 0.02, clamped at the root and rotating: the Campbell table of the first four modes as a shell equals that of the solid model of F-396 (Hex20) within 2 percent at the registered speeds. Models of solid elements only keep their bits.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0323; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-421",
+    "title": "Aerodynamic damping and added mass of a mode by prescribed motion of the wall (energy method)",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-362",
+      "F-383",
+      "F-400",
+      "F-401"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Force harmonics: for a synthetic force history with known in-phase and quadrature parts the extraction returns them within 1e-10, and the work per cycle equals pi q0 times the quadrature part within 1e-10. Piston on a column of incompressible fluid with an open end (the case of F-401): added mass rho_f A L_f within 2 percent and a damping ratio below the registered viscous and time-step estimate. Piston driving a plane channel of gap h and length L_f: force per piston velocity equal to A times the oscillating-channel impedance i w rho L_f/(1 - tanh(kappa)/kappa), kappa = (h/2) sqrt(i w/nu), real and imaginary parts within 3 percent at Womersley numbers 1 and 5 after the registered extrapolation in the time step, and the low-frequency limit 12 mu L_f/h^2 within 3 percent. The damping ratio of the bar on the open column from this method and from the decay of the coupled run of F-401 are both recorded. A history that has not become periodic within the registered tolerance is refused with the cycle-to-cycle change.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0324; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-422",
+    "title": "J2 plasticity with isotropic and kinematic hardening: radial return and consistent tangent",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-389",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The tangent agrees with central differences within 1e-6 in the elastic and in the plastic branch. Uniaxial bar, bilinear: the stress follows sigma_y + (E H/(E + H)) (eps - sigma_y/E) within 1e-10 in one step and in 100; on reversal the bar yields again at -sigma_max with isotropic and at sigma_max - 2 sigma_y with kinematic hardening within 1e-10. Thick sphere b/a = 2, perfectly plastic, internal pressure: the pressure at plastic radius c equals 2 sigma_y ln(c/a) + (2 sigma_y/3)(1 - c^3/b^3) within 1 percent at c = 1.25 a and 1.5 a, the solve converges at 0.98 of the limit pressure 2 sigma_y ln(b/a), and the residual hoop stress at the bore after unloading equals the closed form within 2 percent. Beam of rectangular section in pure bending: M/M_y = 1.5 - 0.5 (kappa_y/kappa)^2 within 1 percent up to kappa = 5 kappa_y. The last three residuals of each step show an order >= 1.8; a halved step restores the state bit for bit; a non-positive yield stress and a softening curve are refused with the key.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0325; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-423",
+    "title": "Nonlinear transient dynamics: Newton iteration inside the Newmark and generalised-alpha step",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-397",
+      "F-398"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. At a load factor of 1e-6 the history equals the linear one of F-398 within 1e-9 relative. A stiff slender bar pinned at one end and released from the horizontal under gravity swings with the period 2 pi sqrt(2 L/(3 g)) (2/pi) K(sin 45 degrees) (factor 1.1803, recomputed in the registration) within 1 percent, the total energy constant within 1e-3 of its swing over five periods at the registered step. A free spinning elastic bar keeps its linear momentum within 1e-10 and its angular momentum within 1e-6 relative over ten turns. Large axial oscillation of a bar element with nu = 0 from the stretch 1.2: period equal to the quadrature of the energy integral (computed in the registration) within 0.5 percent. With the spectral radius 1 the generalised-alpha result equals Newmark within 1e-10. A run split by save and restore has the bits of the unsplit run, with a material state included. A step that does not converge after the registered halvings is an error with the time.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0326; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-424",
+    "title": "Follower pressure, arc-length continuation, and modes about a nonlinear equilibrium",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-395",
+      "F-396",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Follower pressure: the load stiffness agrees with central differences of the load within 1e-6. Thin ring (thickness/radius 0.02, nu = 0) under internal pressure up to the stretch 1.5: p = E t (lambda^2 - 1)/(2 R) within 1 percent, the dead pressure on the same mesh being the registered control (off by the factor lambda). Linear buckling of the ring under external pressure with the load stiffness: 3 E I/R^3 within 2 percent; without it the registered control 4 E I/R^3 within 3 percent. Arc-length: a two-bar truss of solid bars (nu = 0, height h, bar length L0) is followed to the apex displacement 2.2 h with P = E A (h - w)(2 h w - w^2)/L0^3 within 1e-6 at the registered points and the limit load 2 E A h^3/(3 sqrt(3) L0^3) within 0.5 percent, load control failing at the first limit point (control). Modes about a state: a clamped-clamped beam stretched by an end displacement has the tension frequencies of F-395 within 1 percent, and at a small stretch the tangent modes equal the linear pre-stressed modes within 1e-4; for the rotating radial beam at 0.2 w_0 they equal F-396 within 1e-4, and the difference at higher speed is recorded.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0327; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-425",
+    "title": "Hyperelastic materials (neo-Hookean, Mooney-Rivlin) with a mean-dilatation element for near incompressibility",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-390",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The tangent agrees with central differences within 1e-6; a rotation of the deformed state leaves the energy unchanged within 1e-10; at a strain of 1e-6 the stress equals linear elasticity with the same shear and bulk modulus within 1e-6 relative. With bulk/shear = 1e4: uniaxial nominal stress mu (lambda - lambda^-2) (neo-Hookean) and 2 (C1 + C2/lambda)(lambda - lambda^-2) (Mooney-Rivlin) for stretches 0.7 to 3, equibiaxial mu (lambda - lambda^-5), simple shear tau = mu gamma with the normal stress difference mu gamma^2, each within 0.1 percent after the registered compressibility correction. Thick spherical shell B/A = 2, neo-Hookean, inflated to the inner stretch 1.5: pressure (mu/2) ((1/l_b^4 + 4/l_b) - (1/l_a^4 + 4/l_a)) with l_b^3 = 1 + (A/B)^3 (l_a^3 - 1) (recomputed by quadrature in the registration) within 1 percent with the mean-dilatation element, the standard Hex8 on the same mesh being the registered locking control. A non-positive modulus is refused; an inverted element is an error with the element.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0328; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-426",
+    "title": "Tied non-matching meshes, shell and beam joints to solids, non-matching cyclic boundaries and nodes on the axis",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-391",
+      "F-392",
+      "F-393",
+      "F-394"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. With matching meshes the tied model equals the merged one within 1e-10. Flat non-matching interfaces 2:3 and 3:5 under uniaxial stress: far-end displacement within 0.1 percent and interface stress within the registered 3 percent (a one-sided node-to-surface tie does not pass the patch test exactly), the error falling with an observed order >= 1 under refinement. A cantilever cut in two and tied 2:3 (Tet10 to Hex20): tip deflection within 1 percent of the closed form. The constraint forces of a tie have zero resultant and moment within 1e-10. A node farther from every face than the registered tolerance is refused with its id. Joints: a beam continuing a solid bar and a shell continuing a solid plate give the tip deflection of the one-piece cantilever within 1 and 2 percent. Cyclic: the ring sector of F-394 with a 2:3 boundary has its frequencies within 0.5 percent of the matching sector; a solid disc with nodes on the axis, spinning (index 0): centre stress (3 + nu) rho Omega^2 b^2/8 within 1 percent; a rod on the axis at index 1 has the bending frequency of the beam within 1 percent, and at index 2 its axis nodes are held.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0329; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-427",
+    "title": "Frictionless contact: node-to-surface with an augmented Lagrangian, rigid and deformable targets, interference fits",
+    "phase": 9,
+    "deps": [
+      "F-426",
+      "F-397"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A bar pushed against a rigid stop across a gap g: the piecewise-linear force-displacement closed form within 1e-8, the penetration after augmentation below 1e-8 L. Two stacked blocks with matching meshes under pressure p: uniform stress and contact pressure p within 1e-8; pulled apart they separate with no tensile contact force (every multiplier >= 0). Elastic sphere on a rigid plane: contact radius (3 F R/(4 E*))^(1/3), peak pressure 3 F/(2 pi a^2) and approach a^2/R within 5, 5 and 3 percent at a/R = 0.1 with at least ten nodes across the contact radius. Interference fit of a ring (outer radius b) on a solid shaft (radius a) of the same material with radial interference d, plane stress: contact pressure E d (b^2 - a^2)/(2 a b^2) within 2 percent, and the hoop stress of the ring that of Lame under that pressure within 2 percent. The contact tangent agrees with central differences within 1e-6 in a fixed active set; the last residuals of a step with a settled active set show an order >= 1.8; an active set that cycles beyond the registered count is an error with the nodes.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0330; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-428",
+    "title": "Laminated shell: layup stiffness, ply stresses and failure indices",
+    "phase": 9,
+    "deps": [
+      "F-409",
+      "F-392"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. One isotropic ply gives the bits of the Shell4 of F-392. Layup stiffness: a symmetric layup has no coupling (|B| <= 1e-12 |A| t); [0/90]s has A11 = A22 = t (Q11 + Q22)/2; [0/+60/-60]s and [0/45/-45/90]s have A11 = A22, A66 = (A11 - A12)/2 and A16 = A26 = 0, all within 1e-12 relative. Simply supported square plate of a cross-ply symmetric layup under a sinusoidal load: centre deflection q0 a^4/(pi^4 (D11 + 2 (D12 + 2 D66) + D22)) within 1 percent at thickness/side 0.01 with 16 x 16 elements. Unsymmetric [0/90] strip heated uniformly: curvature equal to the closed form of the two-ply laminate (solved by hand in the registration) within 0.5 percent with zero resultants. Off-axis coupon at 15, 30, 45 and 60 degrees: ply stresses sigma c^2, sigma s^2 and -sigma s c within 1e-10, Tsai-Hill failure stress (c^4/X^2 + (1/S^2 - 1/X^2) s^2 c^2 + s^4/Y^2)^(-1/2) within 1e-10, and Tsai-Wu equal to the tensile and compressive strengths on the axes within 1e-12. A layup with a non-positive thickness or an unknown material is refused with the ply.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0331; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-429",
+    "title": "Fracture parameters: J-integral by the domain form, stress intensity factor, crack-growth life",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-374",
+      "F-376",
+      "F-389"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Centre crack of half-length a in a plate of half-width W = 10 a under tension, plane strain (one layer, held in z), Hex20: K_I from J within 2 percent of sigma sqrt(pi a) sqrt(sec(pi a/(2 W))), the values of rings 2 to 4 within 1 percent of each other, and J equal to the change of potential energy between two models with half-lengths a +/- 0.02 a within 2 percent. K_I from the opening displacement within 5 percent. Penny-shaped crack of radius a in a cylinder of radius 10 a under tension (heavy record): K_I = 2 sigma sqrt(a/pi) within 3 percent, uniform along the front within 2 percent. Under pure shear loading of the centre crack the mode-I factor from the opening is zero within 1e-8 of the tension value. Growth: the cycles from a0 to a1 by the Paris law with K = d sigma sqrt(pi a) equal the closed-form integral for m = 3 and the logarithm for m = 2 within 1e-6. A front that is not straight within the registered tolerance and a ring that reaches the boundary are refused.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0332; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-430",
+    "title": "Substructuring: static condensation and fixed-interface component mode synthesis (Craig-Bampton)",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-382",
+      "F-383",
+      "F-393"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Statics: the condensed model gives the retained displacements and, after recovery, the interior ones and the stresses of the full model within 1e-10. Keeping every fixed-interface mode reproduces all frequencies of the full model within 1e-8 (small model). A bar of two substructures with five modes each: the first three frequencies of the assembly within 0.1 percent of the full model and not below it (1e-10), the error falling monotonically with the number of modes. The reduced matrices are symmetric within 1e-13 and the reduced mass is positive definite; a free substructure keeps six zero frequencies below 1e-6 of the seventh. Harmonic response of the assembly equals the full model within 1 percent up to half the lowest omitted fixed-interface frequency. A reduced part written to its file and read back gives the same bits. An interface set with no nodes and a mode count above the interior size are refused.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0333; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-431",
+    "title": "Sparse L D L^T with a fill-reducing ordering, and its use by the static, buckling and modal solves",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-373",
+      "F-374",
+      "F-382",
+      "F-402"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Five-point grid 100 x 100 and seven-point grid 30^3: residual below 1e-12 relative, and on the 30^3 grid at most half the factor entries of the envelope after reverse Cuthill-McKee (both counts recorded). On a solid model the solution equals the envelope solver's within 1e-10 and the modal frequencies through either factorisation agree within 1e-9. Inertia: for the tridiagonal (2, -1) of order 200 and three shifts the number of negative pivots of K - s I equals the number of eigenvalues 4 sin^2(j pi/(2 (n + 1))) below s. A matrix that is not positive definite is reported with the equation when positive definiteness was requested. Factor and solution are bit-identical for 1 and 8 threads. Heavy record: a clamped cube of about 3e5 unknowns is solved, time and memory recorded beside the envelope's estimate. The default solver's results keep their bits.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0334; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-432",
+    "title": "Stress recovery by element patches and an energy-norm error estimate",
+    "phase": 9,
+    "deps": [
+      "F-408",
+      "F-376",
+      "F-378"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. A linear displacement field gives the exact stress and a zero estimate within 1e-10. On the manufactured solution of F-378 for Hex8, Tet10 and Hex20: the effectivity index (estimate over true error in the energy norm) lies in [0.8, 1.2] on the three finest meshes and its distance from 1 does not grow under refinement; the recovered stress of Hex8 converges in L2 at an observed order >= 1.7 where the raw stress shows >= 0.9. Plate with a small circular hole under tension: the recovered peak stress is within 2 percent of 3 sigma on the mesh on which the averaged nodal stress of F-376 is recorded, and the tenth of the elements with the largest indicator contains the elements at the hole edge. Boundary and corner nodes take the patch of the nearest interior node by the registered rule; the result is bit-identical for 1 and 8 threads; a patch with too few points is reported, not solved.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size S. Stub ADR 0335; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-433",
+    "title": "Elasticity solves on the ranks of rcfd-dist and on the CUDA device",
+    "phase": 9,
+    "deps": [
+      "F-016",
+      "F-101",
+      "F-374",
+      "F-381"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Ranks: with one rank the iteration counts and the solution have the bits of the serial CG of F-381 with the same preconditioner; with 2, 4 and 8 ranks the solution of a clamped cube (about 4e4 unknowns) and of a cantilever of Tet10 equals the serial one within 1e-8 relative at a residual of 1e-10, in at most twice the iterations of one rank (counts recorded); repeated runs with the same rank count give the same bits; the three unknowns of a node are never split; a rank that fails or times out ends the solve with a located error. Scaling is recorded, not asserted. Device: with a usable device the device CG equals the CPU CG with the same preconditioner within 1e-9 on a cube of at least 3e5 unknowns, times recorded; `auto` below the threshold runs on the CPU; without a device `cuda` is a located error and `auto` falls back with the reason recorded, and the device clauses are reported as not run. The default solver's results and the baseline hashes are unchanged.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0336; the registration is written by the implementation agent before any code. rcfd-api gains a dependency on rcfd-dist (decision A5 of ADR 0310)."
+  },
+  {
+    "id": "F-434",
+    "title": "Public coupled benchmark (the elastic flag behind a cylinder): structural tests CSM1 to CSM3 and the steady coupled case FSI1 (needs the maintainer: reference values)",
+    "phase": 9,
+    "deps": [
+      "F-423",
+      "F-385",
+      "F-397",
+      "F-401"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. NEEDS THE MAINTAINER'S APPROVAL to record the published values in docs/reference-data.md before it starts; no limit below uses a value recalled from memory. Structure alone (plane strain, one element thick): the tip displacement of CSM1 and CSM2 within 1 percent of the published values, both components; CSM3 (released under gravity, undamped): mean, amplitude and frequency of both tip components within 2 percent, on two meshes with the change recorded. Flow alone with a rigid flag (CFD1): drag within 2 percent and lift within 10 percent of the published values (gate; if it misses, the coupled case is not run and the item is partial). Coupled steady case FSI1: drag within 2 percent, tip displacement in x within 5 percent and in y within 10 percent, lift within 10 percent, with the coupling converged to 1e-6 in the final state and the iteration counts recorded. The unsteady cases FSI2 and FSI3 are not run.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0337; the registration is written by the implementation agent before any code. Blocked until the maintainer approves recording the published values of the benchmark in docs/reference-data.md (decision A2 of ADR 0310); nothing depends on it."
+  },
+  {
+    "id": "F-435",
+    "title": "Solid case file: the materials, analyses and results of the advanced tier",
+    "phase": 9,
+    "deps": [
+      "F-409",
+      "F-410",
+      "F-411",
+      "F-412",
+      "F-413",
+      "F-415",
+      "F-417",
+      "F-418",
+      "F-403"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Each new analysis run from a file gives the bits of the same model run by library calls (limit 1e-12, expected identical), and one closed-form check of each library package passes from files: the off-axis block (ADR 0312), the relaxation curve (ADR 0313), the rotating creeping bar (ADR 0314), the bar with a loss factor (ADR 0315), the cantilever life (ADR 0316), the plane oscillator's split (ADR 0318), the single-mode mean square (ADR 0320), the piston's equivalent radiated power (ADR 0321). An unknown key, a material that lacks a required constant, a fatigue request without a mean or an alternating case, a table that is not increasing and an analysis that names a missing set are each refused with the key and the line. Every solid case file of the tests of the earlier tiers gives the same report and the same .vtu bytes as before. No flow case key, CLI help text, MCP tool list, hash table or golden changes (the existing schema, CLI and tool-list tests pass unedited).",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0338; the registration is written by the implementation agent before any code."
+  },
+  {
+    "id": "F-436",
+    "title": "Demonstration on the 120 mm fan: a polymer blade (orthotropy, temperature, creep, fatigue at a Campbell crossing) and the radiated power of the frame",
+    "phase": 9,
+    "deps": [
+      "F-409",
+      "F-411",
+      "F-412",
+      "F-413",
+      "F-415",
+      "F-418",
+      "F-435",
+      "F-406"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. Blade from solid case files. With isotropic constants and no temperature the Campbell table has the bits of F-406. A uniform temperature at which the table gives 0.8 E scales every frequency at rest by sqrt(0.8) within 1e-8. For the orthotropic blade the change of each squared frequency at rest for a 1 percent change of E1 equals the Rayleigh-quotient sensitivity within 1 percent. With the Coriolis term the first four frequencies at the maximum speed differ from those without by less than the registered bound, both recorded. Creep at the maximum speed over the registered time: tip growth monotone, its initial rate within the registered factor of the one-dimensional estimate, change between two meshes below 5 percent. Fatigue at a registered crossing: the safety-factor field is written, the largest alternating stress changes by less than 10 percent between two meshes and lies in the same region, and doubling the pressure harmonic changes the Goodman factor as the formula says within 1e-8. Frame: the equivalent radiated power spectrum at the rotation and blade-passing frequencies is written and equals (rho c/2) sum A |v_n|^2 recomputed from the output within 1e-10. The page docs/structural-solver.md lists every assumed input and states that no material datum, life, creep growth or sound level is validated against a measurement.",
+    "note": "Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0339; the registration is written by the implementation agent before any code."
   }
 ]
