@@ -295,3 +295,144 @@ does not leave) is consistent with H1. H1 says the counter-rotating content is t
 
 If D1 holds and D2 holds, the miss is diagnosed as the start transient and SP10 measures the ramp, not the grid. If D2
 fails, the grid or the solver breaks the symmetry. The decision by Rule I is **partial** in either case (SP10c missed).
+
+## Addendum 1: results (2026-11-12; the registered text and amendment 1 above are unchanged)
+
+Registration a4fc99e5; library and tests 4005c4dc (every registered run used this commit); amendment 1 47e06588; its
+diagnostics d77d8525. Every run was made once, in **release**: the fast tests with `cargo test --release -p rcfd-post --test
+circular_duct_f453`; the heavy C10 and C01 from a copy of the test executable of 4005c4dc (`--ignored --exact`, the two
+at the same time, 1164 s and 3759 s). One disclosed repetition: when I ran the diagnostics D1 and D2, the filter `d`
+matched every test, so the fast tests ran a second time. Every printed number came out the same, digit for digit
+(`f453-scratch/run_fast.log`, `run_diag.log`). The mutation control MU0 on a `git archive` copy gave the same numbers a
+third time.
+
+### What was built
+
+- `crates/rcfd-mesh/src/gen.rs` lines 975 to 1102 (new, appended after `warp`): `circular_duct_ogrid` (D1). No existing
+  line of the file or the crate changed.
+- `crates/rcfd-post/tests/circular_duct_f453.rs` (new): BZ, G1, G1d, G2, U8, P, C10, C01, C10c, C01c, NC10c, D1, D2.
+- `docs/acoustics.md`: a subsection "Circular ducts through the wave solver".
+- No change in `rcfd-fv` or `rcfd-post/src`.
+
+### Checks
+
+| id | quantity | limit | measured | met |
+|---|---|---|---|---|
+| K10 | C10: `kr / k_z,poly - 1`, spinning `(1, 0)`, n = 16 | `<= 1e-2` | `-2.583e-3` (`kr = 40.7910`, `k_z,poly = 40.8967 1/m`) | yes |
+| K01 | C01: `kr / k_z,poly - 1`, radial `(0, 1)`, n = 32 | `<= 1e-2` | `-2.561e-3` (`84.9214` against `85.1394 1/m`) | yes |
+| S10 | C10: `R` at the layer front | `< 1e-2` | `3.58e-5` | yes |
+| S01 | C01: `R` at the layer front | `< 1e-2` | `6.45e-5` | yes |
+| P | polygonal correction against its first-order estimate (n = 16, 32, 8, 12) | `<= 1e-2` | `1.35e-3`, `3.38e-4`, `5.43e-3`, `2.41e-3` | yes |
+| SP10 | C10: counter-rotating ratio | `<= 1e-6` | `1.264e-5` | **no** (`c10_spinning_mode_matched_layer_known_miss`) |
+| K10c | C10c: `kr / k_z,poly - 1` | `<= 3e-2` | `-9.742e-3` | yes |
+| S10c | C10c: `R` | `< 1e-2` | `1.53e-4` | yes |
+| SP10c | C10c: counter-rotating ratio | `<= 1e-6` | `1.233e-5` | **no** (`c10c_spinning_mode_coarse_known_miss`) |
+| K01c | C01c: `kr / k_z,poly - 1` | `<= 5e-2` | `-1.634e-2` | yes |
+| S01c | C01c: `R` | `< 1e-2` | `5.22e-4` | yes |
+| NC10c | NC10c: `R` at the rigid end | `>= 0.9` | `0.9995` | yes (held) |
+| BZ | zeros against the library; residual; `J_m` against the library | `1e-10`; `1e-12`; `1e-11` | `1.07e-14`; `4.8e-15`; `7.1e-14` | yes |
+| G1 | counts, volumes, areas (n = 8 and 16) | exact; `> 0`; `1e-12` | exact; `1.8e-7 m3` minimum; `2.4e-14` worst | yes |
+| G1d | rotation and mirror of the cell centres | `<= 1e-12 R` | `9.5e-16 R` | yes |
+| G2 | refusals | an error each | all refused, the valid one accepted | yes |
+| U8 | closed O-grid, change of `sum p V` | `<= 1e-12` | `2.2e-16` | yes |
+| D1 (amendment 1) | C10c over 60 periods: counter-rotating ratio | `<= 6.2e-6` | `4.71e-6` | yes |
+| D2 (amendment 1) | solver and rotation commute | `<= 1e-9` | `9.9e-16` | yes |
+
+Recorded, no limit: against the circle's uncorrected closed form, `-3.035e-3` (C10), `-2.674e-3` (C01), `-1.154e-2`
+(C10c), `-1.713e-2` (C01c). Loss per axial wavelength `3.25e-3` (C10, M2 `3.6e-3`), `3.80e-3` (C01, M2 `4.1e-3`),
+`2.41e-2` (C10c), `6.36e-2` (C01c). Other modes at most `1.3e-4` (C10), `9.5e-4` (C01), `6.4e-3` (C01c) of the driven
+one. Fit residuals `2.7e-5`, `2.9e-5`. Steps per period from the registered rule: 288 (C10), 294 (C01), 132 (C10c), 101
+(C01c), more than the estimates (253, 244, 127, 92), because the O-grid's smallest cells near the core's corners are
+smaller than I estimated. `rate_max dt` 0.056, 0.055, 0.120, 0.153. Cost about `1.1 us` per cell and step.
+
+What the numbers say: K10 and K01 are M2's Cartesian estimates (`-2.2e-3` to `-2.5e-3`; `-2.4e-3` to `-2.7e-3`) to within
+about 5 percent. So the O-grid's skewed cells add almost nothing to the dispersion, and the factor of 2 I assumed was not
+needed. The polygonal correction (`-4.5e-4`, `-1.1e-4`) is a sixth and a twentieth of the measured error. The layer
+reflects less than ADR 0351's channel layer did (`3.6e-5` and `6.5e-5` against `9e-5`).
+
+### The SP misses (diagnosed)
+
+SP10c and SP10 miss by the same amount on both grids (`1.23e-5`, `1.26e-5`). D2 shows that the discrete solver commutes
+with the grid's rotation to `1e-15`. D1 shows that the counter-rotating content falls when the run is longer (`4.7e-6` at
+60 periods). Hypothesis H1 holds: the content comes from the start-up ramp of the drive, which breaks the
+rotation-and-quarter-period invariance. Neither the grid nor the solver breaks it. My estimate ("round-off") left out the
+ramp. The check measures how far the start-up transient has decayed. That residue (`~1e-5`) is a thousandth of the 1
+percent budget of the acceptance, and the spinning mode does propagate as one spinning mode.
+
+### Mutations
+
+Once each, on a `git archive` copy of d77d8525 (`f453-scratch/tree`, own target directory; script `mutate.py`, not
+committed), running the non-ignored tests of `circular_duct_f453` (MU5 also its known-miss test). Control MU0: all pass,
+with the same numbers.
+
+| id | mutation | registered check | result |
+|---|---|---|---|
+| MU1 | circle at `0.98 R` | G1 | caught: volume `3.96e-2`, wall `2.0e-2` off. K10c moves to `-2.14e-2`, still inside its `3e-2` |
+| MU2 | matched layer without the tangential force | S10c or S01c | caught: S10c `2.40e-2`, S01c `2.38e-2` (D1 also fails) |
+| MU3 | `Wall` given the `Open` flux | U8 | **not caught by U8** (`3.3e-16`). Caught by NC10c, C10c, C01c and D1: the axial fits leave their brackets. Diagnosis: U8's initial field `(1 + x/R + 0.5 y/R) cos(pi z/L)` sums to zero over the wall by symmetry (the `cos` averages to zero along the duct), and its values on the inlet and outlet are equal and opposite. The open flux, which is linear in the boundary values, therefore cancels over the boundary to round-off, and `sum p V` does not change. A field with a non-zero boundary mean would have caught it (ADR 0351 U1 did) |
+| MU4 | the test's `J'_m` replaced by `(J_{m-1} + J_{m+1})/2` | BZ | caught, by not finishing: for `m = 0` the mutated derivative is zero everywhere, so the scan in `jp_zero` never finds a sign change. BZ, P and C01c hung and the test executable was stopped after 600 s. The spinning-mode runs failed their fits (the mutated `j'_{1,0}` is the zero of `J_1`, 3.83) |
+| MU5 | standing drive in place of the spinning one | SP10c | measured `1.000` against `1.23e-5` unmutated. SP10c fails, but it fails without the mutation too, so it does not tell the two apart. D1 also fails |
+| MU6 | ring joined clockwise | G1 | caught: the mesh is refused ("a directed edge appears twice"). Every mesh test and every run fails |
+
+After the mutations, the copy's `gen.rs` and `acoustic_wave.rs` have the same hashes as the worktree's.
+
+### Existing tests, fmt, clippy, baseline hashes
+
+`cargo test --release -p rcfd-mesh`: 273 passed, 0 failed, every target. `cargo test --release -p rcfd-post`: 220
+passed, 0 failed, every target (this includes the F-453 fast tests, with the same numbers). `cargo test --release -p
+rcfd-api --test baseline_hashes`: 3 passed, 1 ignored, as before. The file was not edited. `cargo fmt -p rcfd-mesh --check`
+and `cargo fmt -p rcfd-post --check`: clean. `cargo clippy --release -p rcfd-mesh -p rcfd-post --all-targets -- -D
+warnings`: clean.
+
+### Deviations and disclosures
+
+- After each SP miss I renamed the failing test to `*_known_miss` (ignored, limit intact). The checks of the same run
+  that were met moved to a `*_k_s` test: the fast one for C10c, and an ignored heavy one for C10. C10's `*_k_s` was not
+  run separately, because its numbers are those of the registered run.
+- `run` became `run_periods(r, 34)` so that D1 could run 60 periods. The registered tests are unchanged in behaviour, as
+  the repeated fast run shows.
+- Steps per period were above the estimates (see above). The rule was registered, so the numbers follow from it.
+- The heavy runs took 19 and 63 minutes against the estimates of 14 and 53 (more steps, `1.1 us` per cell and step).
+- Textbook results (the modes, Hadamard's formula) are cited from memory and derived in DR1 to DR3. The zeros are
+  computed in the test. No vendor code or documentation was used.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate); other crates apart from `baseline_hashes`; the debug profile;
+other modes, frequencies or O-grid topologies; a rectangular three-dimensional duct; the mutations against the heavy runs.
+
+### Decision by the registered rule (Rule I)
+
+**partial.** The acceptance clauses are met: K10 `-2.58e-3`, K01 `-2.56e-3` (limit `1e-2` after the polygonal
+correction, P met), S10 `3.6e-5`, S01 `6.5e-5` (limit `1e-2`). But two registered checks missed (SP10, SP10c, diagnosed
+above), and MU3 was not caught by its registered check U8 (it was caught by four duct checks). Either alone makes the
+item partial by Rule I.
+
+### Remaining questions (options and recommendation)
+
+1. **SP checks.** (a) A follow-up that registers the counter-rotating ratio with a limit set from the start-up transient
+   (for example `<= 1e-4` at 34 periods, or `<= 1e-6` after a longer or smoother ramp, estimated first); (b) drop the
+   check, since D2 tests the symmetry directly; (c) leave it as the known miss. Recommendation: (c) now, and (a) only if
+   a later item needs a clean counter-rotating amplitude (a fan's modal content). D2 already tests the property the
+   check was meant to show.
+2. **U8's blind spot.** (a) A follow-up conservation test on the O-grid with a field of non-zero boundary mean; (b) none,
+   because the duct runs catch the mutation. Recommendation: (a), small. It belongs with the next item that touches the
+   wave solver's boundaries.
+3. **Wiring** (ADR 0351 question 1): still open. A case key or CLI changes goldens, and F-451 needs the maintainer.
+
+## For the lead: roadmap entries
+
+**F-453, proposed status: `partial`.** Proposed note text:
+
+> PARTIAL, ADR 0366, 2026-11-12. Library only. The acceptance clauses are met; two registered checks missed and one registered mutation escaped its registered check, so the item is partial by Rule I. Built: rcfd-mesh `circular_duct_ogrid` (an O-grid of a circular duct: an n x n core and four n x n/2 ring blocks, extruded along z; patches wall, inlet, outlet), and tests that drive the duct through the F-333 `AcousticWaveSolver` and measure it with `duct_modes`. Radius 0.06 m, each mode at cos theta = 0.8, matched layer one axial wavelength thick before a rigid end. The spinning mode (1, 0) at 2768 Hz on n = 16 (110 k cells) has an axial wavenumber 2.58e-3 below the closed form corrected for the 64-sided polygon (the correction is the equal-area radius, first-order Hadamard, -4.5e-4; 3.03e-3 below the circle's form); the layer reflects 3.6e-5. The radial mode (0, 1) at 5760 Hz on n = 32 (424 k cells) is 2.56e-3 below (correction -1.1e-4); reflection 6.5e-5. Both match a Fourier analysis of the scheme within about 5 percent. The Bessel zeros are computed in the test from the power series and agree with the library within 1.1e-14. Coarse covering runs met their limits, and the rigid end without a layer reflects 0.9995. Missed: the counter-rotating (-1, 0) content of the spinning runs is 1.2e-5 against a registered 1e-6 (estimate "round-off"). Diagnosed (amendment 1): the solver commutes with the grid's rotation to 1e-15, and the content falls in a longer run, so it is left over from the start-up ramp of the drive. Mutation MU3 (wall given the open flux) escaped the registered conservation check U8, whose initial field has a zero boundary mean; four duct checks caught it. Limits: two modes at one frequency each, one O-grid topology, no rectangular 3-D duct, one planar layer, medium at rest; no case key or CLI (ADR 0351 question 1, F-451).
+
+**F-333, note:** in its text, replace "the solver was checked in two-dimensional channels only (circular modes in the
+export only)" by:
+
+> the solver was checked in two-dimensional channels here; circular ducts on an O-grid under F-453 (ADR 0366, 2026-11-12)
+
+Proposed follow-up item (number for the lead to assign):
+
+- **Conservation check of the wave solver with a non-zero boundary mean.** Deps: F-453. Size S. Acceptance:
+
+> On the closed circular O-grid duct, an initial pressure with a non-zero mean on every patch keeps sum p V to 1e-12 over 100 steps with every patch a wall, and changes it by more than 1e-3 when one patch is open.

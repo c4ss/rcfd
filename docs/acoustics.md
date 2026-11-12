@@ -426,6 +426,30 @@ Limits: no mean flow, linear only, no impedance wall; the solver checks are two-
 modes of a rectangular duct); circular ducts are checked in the modal analysis only; one planar layer, no corner; not
 reachable from a case file or the CLI.
 
+### Circular ducts through the wave solver (F-453, ADR 0366; library only)
+
+`rcfd_mesh::gen::circular_duct_ogrid(n, n_r, n_z, radius, core, length)` meshes a circular duct along `z` with the usual
+O-grid: an `n x n` Cartesian core of half-side `core * radius` and four ring blocks of `n x n_r` cells out to the circle
+(patches `wall`, `inlet`, `outlet`). The section is the inscribed polygon of `4 n` sides. Its cut-offs are those of the
+circle of equal area to first order, so `k_cut,poly = j'_mn sqrt(pi / A_N)`, `A_N = (N/2) R^2 sin(2 pi/N)`. At 64 sides
+that moves the axial wavenumber by `-4.5e-4` relative to the circle's closed form; at 128 sides by `-1.1e-4`.
+
+What was checked (radius 0.06 m, each mode at `cos theta = 0.8`, a matched layer one axial wavelength thick in front of a
+rigid end):
+
+* the spinning mode `(1, 0)` at 2768 Hz on `n = 16` (110 k cells): axial wavenumber `0.26` percent below the
+  polygon-corrected closed form (`0.30` percent below the circle's), and the layer reflects `3.6e-5`;
+* the radial mode `(0, 1)` at 5760 Hz on `n = 32` (424 k cells): axial wavenumber `0.26` percent below the
+  polygon-corrected closed form (`0.27` percent below the circle's), and the layer reflects `6.5e-5`. Both modes lose
+  about `0.35` percent of their amplitude per axial wavelength;
+* the Bessel zeros come from a power series in the test and agree with the library's integral form within `1.1e-14`;
+* the solver commutes with the grid's rotation by 90 degrees to `1e-15`. The counter-rotating mode `(-1, 0)` still
+  shows `1.2e-5` of the driven one, left over from the start-up ramp of the drive (a slower start or a longer run
+  makes it smaller). The registered limit was `1e-6`, so this check is recorded as a known miss.
+
+Limits: two modes at one frequency each; one O-grid topology; no rectangular three-dimensional duct; one planar layer;
+not reachable from a case file or the CLI.
+
 ## Reference: code locations, input format and command line
 
 ### Modules and entry points

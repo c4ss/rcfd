@@ -493,9 +493,12 @@ const RADIAL: Mode = Mode { m: 0, n: 1 };
 
 /// C10 (ADR 0366, heavy record): the spinning mode (1, 0), n = 16, matched layer. K10 |kr/k_z,poly - 1| <= 1e-2; S10
 /// R < 1e-2; SP10 counter-rotating <= 1e-6.
+/// KNOWN MISS (ADR 0366 addendum 1): the registered run met K10 (-2.583e-3) and S10 (3.583e-5) and missed SP10, the
+/// counter-rotating ratio 1.264e-5 against 1e-6 (the start transient of the ramp, amendment 1 H1). Kept with the limit
+/// intact; `c10_spinning_mode_matched_layer_k_s` holds the two met assertions.
 #[test]
-#[ignore = "heavy record (ADR 0366 C10, about 15 minutes in release); C10c covers the code path"]
-fn c10_spinning_mode_matched_layer() {
+#[ignore = "known miss and heavy record (ADR 0366 C10, about 20 minutes in release): SP10 1.264e-5 against 1e-6"]
+fn c10_spinning_mode_matched_layer_known_miss() {
     let m = run(Run {
         mode: SPIN,
         n: 16,
@@ -505,6 +508,21 @@ fn c10_spinning_mode_matched_layer() {
     assert!((m.kr / m.cl.kz_poly - 1.0).abs() <= 1e-2, "K10");
     assert!(m.refl < 1e-2, "S10");
     assert!(m.counter <= 1e-6, "SP10");
+}
+
+/// C10 (ADR 0366 addendum 1, heavy record): the K10 (<= 1e-2) and S10 (< 1e-2) assertions of the C10 run. Not run as a
+/// separate run: the registered run of `c10_spinning_mode_matched_layer_known_miss` gave both numbers.
+#[test]
+#[ignore = "heavy record (ADR 0366 C10, about 20 minutes in release); C10c covers the code path"]
+fn c10_spinning_mode_matched_layer_k_s() {
+    let m = run(Run {
+        mode: SPIN,
+        n: 16,
+        layer: true,
+    });
+    report("C10", &m);
+    assert!((m.kr / m.cl.kz_poly - 1.0).abs() <= 1e-2, "K10");
+    assert!(m.refl < 1e-2, "S10");
 }
 
 /// C01 (ADR 0366, heavy record): the radial mode (0, 1), n = 32, matched layer. K01 |kr/k_z,poly - 1| <= 1e-2; S01
