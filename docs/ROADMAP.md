@@ -6505,7 +6505,11 @@ fixed by the item's registration ADR before any code.
     R_b reaches 1.7, and a formula for R_b from the resistance. One registered kinematic check missed (the truncation
     order between levels 3 and 4, 1.621 against 1.8, the alternation) and is kept as a known miss. Controls held, five
     mutations caught. Follow-up (ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of
-    2026-11-11): an opt-in that prescribes the flux of the calculated-fringe faces from the interpolated velocity.
+    2026-11-11): an opt-in that prescribes the flux of the calculated-fringe faces from the interpolated velocity. ADR
+    0347 (F-445), 2026-11-12: with the flux of the fringe faces prescribed and the pressure gradient of the neighbouring
+    calculated cells taken from their own part, the order of R_b is 1.962, 1.789 on RE and 2.704, 2.124 within the
+    parity families of RL: removing the soft imposition named here restores the order. The response is then larger on
+    the levels run (R_b 9.0 to 3.3 times), because the interpolation error is handed on in full.
 - [~] **F-350** Strong body-flow coupling selectable from the case tree
   - depends on: F-251
   - acceptance: A case with dynamic_mesh.six_dof.coupling = "strong" (default "loose") and its relaxation, added-mass
@@ -6914,7 +6918,11 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0264 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority. ADR 0340 (F-349) found that the fringe velocity is imposed softly on the calculated cells (the following
     coefficient a_c of 0.5 to 0.83 and the kink relation dJ = -(16 nu / 3 h) D at the fringe faces); both are candidates
-    for the measurements of this item.
+    for the measurements of this item. ADR 0347 (F-445), 2026-11-12: the following coefficient a_c carries the decay of
+    the response over one cell (0.60 at once on a coarse mesh even when the flux is imposed exactly); where the hardness
+    of the imposition is meant, measure the flux defect or abs(a_m - (1 + a_c) / 2). The opt-in
+    OversetSolver::set_fringe_flux(PrescribedOwnGradient) removes the defect and is available as a switch for this
+    item's measurements; it has no accuracy check with a moving component yet.
 - [x] **F-370** Crate rcfd-fem: the data model of a solid model and the structured builders
   - depends on: F-001, F-010, F-012
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new crate rcfd-fem (dependencies
@@ -8042,7 +8050,7 @@ fixed by the item's registration ADR before any code.
     coupler; service::Client writes a request with one call; without the key every case hash is unchanged and the
     schema, CLI help and MCP goldens change only by the approved additions.
   - note: From ADR 0345 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-445** Overset: prescribed flux on the faces between calculated and fringe cells
+- [~] **F-445** Overset: prescribed flux on the faces between calculated and fringe cells
   - depends on: F-349, F-344
   - acceptance: An opt-in of the overset step under which the flux of a face between a calculated and a fringe cell is
     the face interpolation of the interpolated fringe velocity plus one correction per closed fringe ring that makes the
@@ -8052,7 +8060,32 @@ fixed by the item's registration ADR before any code.
     continuity of the calculated cells and the mass of the domain hold to 1e-9, the uniform-flow check U1 of ADR 0219
     holds, and without the opt-in every overset result is bit-identical; or the ADR shows with a number why the
     prescribed flux is not admissible.
-  - note: From ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0347, 2026-11-12: PARTIAL. Built as an opt-in of the overset solver, OversetSolver::set_fringe_flux, default off,
+    every result without it bit-identical (state hashes of two runs equal to those of the library before,
+    baseline_hashes and the twelve existing overset test files pass unedited). The flux of a face between a calculated
+    and a fringe cell is the face interpolation of the velocity each pressure corrector starts from plus one correction
+    per region of calculated cells that makes its net flux zero (it replaces the offset of the background fringe
+    pressures). The switch as ADR 0340 words it (variant P, the interpolated fringe pressure left in the Green-Gauss
+    gradient of the calculated cells next to the fringe) is not admissible: the Taylor-Green run on RE blows up at step
+    5 (level 1) and step 3 (level 2), the error growing 11-fold and 60-fold per step, as predicted before the run from
+    the pressure mismatch of the two parts (growth with the refinement). With that gradient taken from the own part
+    (variant G, FringeFlux::PrescribedOwnGradient) it is stable: continuity 4.5e-13, flux through the hole ring 1.9e-14,
+    U1 3.6e-15, a uniformly accelerating flow exact to 2e-15, the flux of a ring face equal to the mean of the two cell
+    velocities to 4e-4. Order of R_b at t = 0.5 on RE 1.962, 1.789 (default coupling 0.983, 1.015); on RL within the
+    parity families 2.704 (levels 1 to 3) and 2.124 (2 to 4); the response per unit of truncation is 1.51, 1.54, 1.65 at
+    levels 1 to 3 (default 0.168, 0.339, 0.497). Missed: a_c at t = 0.025 is 0.598, 0.856, 0.931 at the background
+    fringe and 0.867, 1.037, 1.053 at the component fringe against 0.9 (levels 1 and 2 miss); diagnosed as the decay of
+    the answer of the calculated cells over one cell (the dipole estimate made before the run gave 0.65 at level 1), not
+    a softness of the imposition; it rises to 0.906, 0.968, 0.989 by t = 0.5. Found on the way, registered checks missed
+    and kept as known misses: under G the interpolation error reaches the calculated cells in full, so the velocity
+    error against the exact solution on RE is 1.77, 1.64, 1.62 times that of the default coupling (limit 1.5) and R_b
+    itself is 9.0, 4.6, 3.3 times the default's; with the quadratic donor interpolation of F-336 on both fringes the
+    error of G falls to 0.63, 0.60, 0.56 of that and is 1.145, 1.056, 1.035 times the default's (hypothesis confirmed by
+    its registered numbers). Not a candidate for a default. One unit check missed by round-off of its own test values
+    (2.0e-12 against 1e-12) and was corrected by an amendment before the corrected run. Seven mutations caught. Not
+    covered: accuracy with a moving component, RL at level 5, the combination with the other overset opt-ins beyond a
+    smoke check.
 - [ ] **F-446** Lab-frame memory as the behaviour of the attached matched sponge
   - depends on: F-407
   - acceptance: With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the
@@ -8081,3 +8114,13 @@ fixed by the item's registration ADR before any code.
     crates/rcfd-cli/tests/workspace_graph.rs are removed with the maintainer's approval; every other crate and test is
     unchanged and the gate passes.
   - note: ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test.
+- [ ] **F-450** Overset: the prescribed fringe flux with a moving component
+  - depends on: F-445, F-336
+  - acceptance: With OversetSolver::set_fringe_flux(PrescribedOwnGradient) and the quadratic donor interpolation of
+    F-336, the Taylor-Green set-up of ADR 0219 with the moving, turning component (levels 1 and 2, the corrected time
+    step of its amendment 2) is run against the default coupling with the same stencils: the largest velocity error over
+    the calculated and fringe cells is at most 1.2 times that of the default coupling at both levels, continuity and the
+    outflow balance hold to 1e-9 in every step, and no step is refused for a calculated cell between fringe cells on
+    opposite sides; or the ADR names with a number what the moving fringe adds (the lag of the prescribed flux on the
+    faces that change kind is the first candidate).
+  - note: From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
