@@ -6414,12 +6414,24 @@ fixed by the item's registration ADR before any code.
     containment test; on meshes of convex cells with planar faces the donors and stencils are bit-identical to those of
     today (the checks A4 of ADR 0253).
   - note: From ADR 0253 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-357** Overset: uniform flow on a warped three-dimensional overset mesh
+- [x] **F-357** Overset: uniform flow on a warped three-dimensional overset mesh
   - depends on: F-352
   - acceptance: The uniform-flow check U1 of ADR 0219 on the set-up B3d of ADR 0251 with the component moving: velocity
     and pressure within 1e-10, continuity of the calculated cells within 1e-9 at every step, with the default and with
     the quadratic donor interpolation.
-  - note: From ADR 0253 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0253 question 3, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. ADR 0255, 2026-11-12: DONE. The uniform flow U = (1, 0.5, 0.25) through B3d (two
+    hexahedral parts with interior points displaced by up to 0.15 h, face warp up to 0.142 h) with the component turning
+    by 0.1 rad and translating by 0.087 over 40 steps of 0.005, the hole and fringe rebuilt every step (92 kind
+    changes): velocity 7.7e-15 and 7.3e-15, pressure 1.0e-13 and 1.1e-13, continuity of the calculated cells 6.4e-15 and
+    5.0e-15 at every step with the default and the quadratic donor interpolation (no fallback), GCL 6.1e-16, outflow
+    9e-15. Separating checks met: the warped component alone at rest and moving and the warped background alone keep the
+    uniform state to 7e-15, the planar B3 with the same motion to 5e-15 and 7.9e-14. Controls held (weights times 1.001:
+    1.3e-3; a GCL residual of 3.1e-7 in the mesh flux: 1.0e-6). Mutations caught: a quadratic weight off by 1e-6
+    (1.3e-6), the M9 flux refresh skipped (3.1e-2); a non-closing face area vector is refused by the mesh validation
+    before the flow. No library change. Limits: a uniform flow only; it shows the identities (closed area vectors, GCL,
+    weights summing to one) on a warped moving overset mesh, not the accuracy of a non-uniform flow there. Follow-up
+    (recommendation taken on the maintainer's standing instruction of 2026-11-11): F-359.
 - [ ] **F-358** Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided
   - depends on: F-351, F-350
   - acceptance: A case key of dynamic_mesh.six_dof selects the wall pressure of the body force ("extrapolated", the
@@ -6435,3 +6447,12 @@ fixed by the item's registration ADR before any code.
     The default wall pressure on a wall with a prescribed gradient is first order: the least-squares gradient counts the
     stored zero-gradient wall value as a data point, so the wall-cell gradient is exactly half and the force is low by
     1/(4N) of the column (1.25 percent at 20 cells). The default is the maintainer's decision.
+- [ ] **F-359** Overset: a non-uniform closed-form flow on a warped three-dimensional overset mesh
+  - depends on: F-357
+  - acceptance: A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a
+    decaying three-dimensional vortex with a known solution) on the set-ups B3 and B3d of ADR 0251 with the component
+    moving as in ADR 0255: the error of the calculated and fringe cells on B3d at most twice that on B3, with the
+    default and with the quadratic donor interpolation, and continuity of the calculated cells within 1e-9 at every
+    step.
+  - note: From ADR 0255, recommendation taken on the maintainer's standing instruction of 2026-11-11. A uniform flow
+    cannot see the warped face geometry or the non-orthogonality.
