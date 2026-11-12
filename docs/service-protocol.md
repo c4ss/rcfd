@@ -67,7 +67,7 @@ All session methods take `session`.
 - `settings.get {path?}`, `settings.set {path, value}`, `settings.remove {path}` (delete a named entry such as `boundaries.lid`; journaled), `settings.validate`
 - `mesh.check`: quality report and patch list
 - `run.initialize | start {max_steps?} | pause | resume | stop | step {count?} | status | wait {timeout_ms?}`
-- `monitors.get {names?, since?}` (JSON format `rcfd-monitors` v1), `reports.get`
+- `monitors.get {names?, since?}` (JSON format `rcfd-monitors` v1; `names` and `since` are applied before the document is built and on the line protocol the reply is written without an intermediate JSON tree, so the last 100 samples of four series at 1e5 samples cost 0.3 ms instead of 21 ms, ADR 0353; the bytes of the reply did not change), `reports.get`
 - `report.export {format: html|csv|json, path?}`
 - `field.stats {name}`, `field.slice {name, max_points?}`, `field.export_vtk {dir?, name?}`
 - `render.png {field?, width?, vectors?, path?}`: returns `data_base64`

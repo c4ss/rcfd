@@ -98,6 +98,60 @@ impl MonitorStore {
         json!({"format": "rcfd-monitors", "version": 1, "x_label": self.x_label, "series": m})
     }
 
+    /// The samples of series `name` kept by `since` (all when `None`), as slices of the stored vectors.
+    fn selected<'a>(
+        &'a self,
+        names: Option<&'a [&str]>,
+        since: Option<f64>,
+    ) -> impl Iterator<Item = (&'a str, &'a str, &'a [f64], &'a [f64])> {
+        self.series
+            .iter()
+            .filter(move |(k, _)| names.map_or(true, |n| n.contains(&k.as_str())))
+            .map(move |(k, s)| {
+                let start = since.map_or(0, |after| s.x.partition_point(|&v| v <= after));
+                (k.as_str(), s.unit.as_str(), &s.x[start..], &s.y[start..])
+            })
+    }
+
+    /// The document of [`MonitorStore::to_json`] restricted to the series in `names` (all when `None`) and, when `since` is
+    /// given, to the samples with `x > since` of each (as [`MonitorStore::since`]). Only the kept samples are copied (F-456).
+    pub fn to_json_filtered(&self, names: Option<&[&str]>, since: Option<f64>) -> Value {
+        let mut m = serde_json::Map::new();
+        for (k, unit, x, y) in self.selected(names, since) {
+            m.insert(k.to_string(), json!({"unit": unit, "x": x, "y": y}));
+        }
+        json!({"format": "rcfd-monitors", "version": 1, "x_label": self.x_label, "series": m})
+    }
+
+    /// The text of `to_json_filtered(names, since).to_string()` written into `out` without building the `Value` (F-456).
+    /// Keys are in sorted order, numbers as `serde_json` formats them (a non-finite number as `null`).
+    pub fn write_json_filtered(&self, out: &mut Vec<u8>, names: Option<&[&str]>, since: Option<f64>) {
+        // writing into a Vec cannot fail and a string or a slice of numbers always serialises
+        fn text(out: &mut Vec<u8>, v: &str) {
+            let _ = serde_json::to_writer(&mut *out, v);
+        }
+        fn numbers(out: &mut Vec<u8>, v: &[f64]) {
+            let _ = serde_json::to_writer(&mut *out, v);
+        }
+        out.extend_from_slice(b"{\"format\":\"rcfd-monitors\",\"series\":{");
+        for (i, (k, unit, x, y)) in self.selected(names, since).enumerate() {
+            if i > 0 {
+                out.push(b',');
+            }
+            text(out, k);
+            out.extend_from_slice(b":{\"unit\":");
+            text(out, unit);
+            out.extend_from_slice(b",\"x\":");
+            numbers(out, x);
+            out.extend_from_slice(b",\"y\":");
+            numbers(out, y);
+            out.push(b'}');
+        }
+        out.extend_from_slice(b"},\"version\":1,\"x_label\":");
+        text(out, &self.x_label);
+        out.push(b'}');
+    }
+
     /// Parse the documented JSON format.
     pub fn from_json(v: &Value) -> Result<Self> {
         let bad = |m: &str| Error::Io(format!("monitor json: {m}"));
