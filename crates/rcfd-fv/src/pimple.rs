@@ -150,6 +150,11 @@ pub struct PimpleSettings {
     /// the step in its cell equations, ADR 0356 D3); the Poisson solve, the projection and boundary faces are unchanged. Not
     /// read by the PISO/PIMPLE step. Default `false` (bit-identical).
     pub fractional_step_consistent: bool,
+    /// F-466 (ADR 0363 amendment 1): a pressure solve of the plain pressure path (`gradient_pressure = None`) that returns a
+    /// non-finite pressure is repeated from the same start pressure with incomplete-Cholesky CG (`amg_pressure` off for that
+    /// solve); each repeat is recorded in `PimpleSolver::pressure_fallbacks`. Acts only on a non-finite pressure, so a run
+    /// whose solves are finite is unchanged. Default `false` (bit-identical).
+    pub pressure_ic_fallback: bool,
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -866,6 +871,7 @@ impl PimpleSettings {
             moving_mesh_lag: false,
             rhie_chow_step_consistent: false,
             fractional_step_consistent: false,
+            pressure_ic_fallback: false,
         }
     }
 
@@ -1059,6 +1065,9 @@ pub struct PimpleSolver {
     /// path (`gradient_pressure = None`) appends its inputs and its result, before the divergence guard looks at them. `None`
     /// (default) leaves the solver unchanged.
     pub pressure_capture: Option<Vec<PressureCapture>>,
+    /// The pressure solves repeated with incomplete-Cholesky CG by `PimpleSettings::pressure_ic_fallback` (F-466, ADR 0363
+    /// amendment 1): (step, outer iteration, corrector). Empty while the setting is off.
+    pub pressure_fallbacks: Vec<(usize, usize, usize)>,
 }
 
 /// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
@@ -1133,6 +1142,7 @@ impl PimpleSolver {
             lag_warnings: Vec::new(),
             correctors: CorrectorRecord::default(),
             pressure_capture: None,
+            pressure_fallbacks: Vec::new(),
         }
     }
 
@@ -1163,6 +1173,7 @@ impl PimpleSolver {
             lag_warnings: Vec::new(),
             correctors: CorrectorRecord::default(),
             pressure_capture: None,
+            pressure_fallbacks: Vec::new(),
         }
     }
 
@@ -1911,6 +1922,19 @@ impl PimpleSolver {
                         res0: r0,
                         iters: it,
                     });
+                }
+                if s.pressure_ic_fallback && s.gradient_pressure.is_none() && first_nonfinite(&p_new).is_some() {
+                    // F-466, ADR 0363 amendment 1 (opt-in): repeat a non-finite solve with incomplete-Cholesky CG
+                    let ic = PressureControls { amg: false, ..controls };
+                    p_new = p_old.clone();
+                    let (_, it_ic) = match &ib_src {
+                        None => solve_pressure(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &ic),
+                        Some(q) => {
+                            crate::pressure::solve_pressure_src(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &ic, q)
+                        }
+                    };
+                    p_iters += it_ic;
+                    self.pressure_fallbacks.push((self.step_no, outer, corr));
                 }
                 if let Some((c, v)) = first_nonfinite(&p_new) {
                     return self.trip(

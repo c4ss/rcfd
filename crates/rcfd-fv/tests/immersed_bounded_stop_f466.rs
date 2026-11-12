@@ -1064,3 +1064,100 @@ fn h2_restart_capture_analysis() {
     assert_eq!(msg, R1_MESSAGE, "M2: stop message");
     assert_eq!(courant_diff, 0, "M2: Courant numbers differ from H1");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Amendment 1: the opt-in incomplete-Cholesky repeat of a non-finite pressure solve (S7, H3a, H3)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// ADR 0363 amendment 1 S7: with `pressure_ic_fallback` on, a run whose solves are finite is the default bit for bit.
+#[test]
+fn s7_fallback_is_neutral_on_finite_solves() {
+    let (_, _, mut on) = solver(MeshId::M2, Forcing::Bounded);
+    on.settings.pressure_ic_fallback = true;
+    let (_, _, mut off) = solver(MeshId::M2, Forcing::Bounded);
+    for _ in 0..3 {
+        on.step(1e-3);
+        off.step(1e-3);
+    }
+    assert!(on.diverged.is_none() && off.diverged.is_none());
+    assert_eq!(state_diff(&on, &off), 0, "S7: the option changed a finite run");
+    assert!(
+        on.pressure_fallbacks.is_empty(),
+        "S7: repeats {:?}",
+        on.pressure_fallbacks
+    );
+}
+
+/// T with the bounded forcing restored from H1's state of step 2950, with the option on.
+fn restored_2950_with_fallback() -> (Arc<FvGeometry>, ImmersedForcing, PimpleSolver) {
+    let dir = f466_dir();
+    let (geom, ib, mut s) = solver(MeshId::T, Forcing::Bounded);
+    s.settings.pressure_ic_fallback = true;
+    s.restore(&read_state(&dir.join("state_2950.bin"))).unwrap();
+    (geom, ib, s)
+}
+
+/// ADR 0363 amendment 1 H3a: from the state of step 2950 with the option, step 2951 does not stop and is repeated once, at
+/// corrector 1.
+#[test]
+#[ignore = "needs H1's files (ADR 0363 H3a, seconds); run in release with --ignored and F466_DIR set"]
+fn h3a_fallback_at_step_2951() {
+    let (geom, _, mut s) = restored_2950_with_fallback();
+    s.step(1e-3);
+    if let Some(d) = &s.diverged {
+        panic!("H3a: stopped: {}", d.message(Some(geom.mesh.cell_centres())));
+    }
+    println!("H3a: repeats {:?}", s.pressure_fallbacks);
+    assert_eq!(s.pressure_fallbacks, vec![(2951, 0, 1)], "H3a: repeats");
+    assert_eq!(nonfinite(&s.p.values), 0, "H3a: pressure");
+}
+
+/// ADR 0363 amendment 1 H3: from the state of step 2950 with the option to t = 8; S2 of ADR 0268 and A2-T-2.
+#[test]
+#[ignore = "heavy record (ADR 0363 H3, 0.5 to 2.5 h; needs H1's files); run once in release with --ignored and F466_DIR set"]
+fn h3_t_bounded_to_t8_with_fallback() {
+    let dt = 1e-3;
+    let (geom, ib, mut s) = restored_2950_with_fallback();
+    let t0 = Instant::now();
+    let (mut ts, mut cds, mut cls) = (Vec::new(), Vec::new(), Vec::new());
+    for n in 2951..=8000 {
+        let info = s.step(dt);
+        if let Some(d) = &s.diverged {
+            panic!("H3: stopped at step {n}: {}", d.message(Some(geom.mesh.cell_centres())));
+        }
+        let (cd, cl) = coefficients(&ib, &s);
+        ts.push(n as f64 * dt);
+        cds.push(cd);
+        cls.push(cl);
+        if n % 1000 == 0 {
+            println!(
+                "H3 t {:.3}: C_D {cd:.5} C_L {cl:+.5}; Co {:.3}; repeats so far {} ({:.0} s)",
+                n as f64 * dt,
+                info.courant,
+                s.pressure_fallbacks.len(),
+                t0.elapsed().as_secs_f64()
+            );
+        }
+    }
+    println!(
+        "H3: repeats {} at {:?}",
+        s.pressure_fallbacks.len(),
+        s.pressure_fallbacks
+    );
+    let (nc, st, ps, ms, amp, cd, cl) = window(&ts, &cds, &cls);
+    let e = |a: f64, r: f64| 100.0 * (a - r) / r.abs();
+    let (ed, el) = (e(cd, CD_MAX_REF), e(cl, CL_MAX_REF));
+    let (ed2, el2) = (e(T2_BOUNDED.0, CD_MAX_REF), e(T2_BOUNDED.1, CL_MAX_REF));
+    println!(
+        "RECORD H3 T bounded dt 1e-3 (IC repeat): {nc} crossings, St {st:.5} ({:+.3} %), period spread {ps:.3e}, C_L max \
+         spread {ms:.3e}, amplitude {amp:.4}; C_D max {cd:.5} ({ed:+.3} %); C_L max {cl:.5} ({el:+.3} %); A2-T-2 drag \
+         {ed:.3} -> {ed2:.3}: {}; lift {el:.3} -> {el2:.3}: {}",
+        e(st, ST_REF),
+        ed2.abs() < ed.abs(),
+        el2.abs() < el.abs()
+    );
+    assert!(nc >= 6, "S2 H3: {nc} crossings");
+    assert!(ps <= 1e-2, "S2 H3: period spread {ps:e}");
+    assert!(ms <= 2e-2, "S2 H3: maximum spread {ms:e}");
+    assert!(amp >= 1.0, "S2 H3: amplitude {amp}");
+}
