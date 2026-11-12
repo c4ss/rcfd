@@ -137,7 +137,11 @@ fn reports_by_the_old_formula(s: &Simulation, case: &Case) -> Vec<f64> {
             let (f, m) =
                 rcfd_post::integrals::wall_force_and_moment(&s.geom, &r.patch, s.velocity(), &pf, 0.01, 1.0, r.origin)
                     .unwrap();
-            let pick = if r.component == "pressure" { f.pressure } else { f.total() };
+            let pick = if r.component == "pressure" {
+                f.pressure
+            } else {
+                f.total()
+            };
             let v = match r.kind {
                 ReportKind::Force => vec3::dot(pick, vec3::unit(r.direction)),
                 ReportKind::ForceCoefficient => {
@@ -305,15 +309,17 @@ fn e1_e2_e3_the_report_takes_the_corrected_face_pressure() {
                 e1 += 1;
             }
         }
-        let (fc, _) =
-            patch_force_moment_wall_gradient(g, &fl.u, &fl.p, 1.0, 0.0, &wall, vec3::ZERO, &kept).unwrap();
+        let (fc, _) = patch_force_moment_wall_gradient(g, &fl.u, &fl.p, 1.0, 0.0, &wall, vec3::ZERO, &kept).unwrap();
         let r = reports(&s);
         let rel = (r[2] - fc[0]).abs() / fc[0].abs();
         e2 = e2.max(rel);
         if r[1].to_bits() != reports(&s0)[1].to_bits() {
             e3 += 1;
         }
-        println!("E step {n}: fp {:.9e}, corrected pressure force {:.9e}, relative {rel:.2e}", r[2], fc[0]);
+        println!(
+            "E step {n}: fp {:.9e}, corrected pressure force {:.9e}, relative {rel:.2e}",
+            r[2], fc[0]
+        );
     }
     println!("E1 {e1} differing values; E2 largest relative {e2:.2e}; E3 {e3} steps differ");
     assert_eq!(e1, 0);
