@@ -65,17 +65,6 @@ impl Checks {
             self.0.push(format!("{id}: {value:e} > {limit:e}"));
         }
     }
-    /// `value >= limit`.
-    fn at_least(&mut self, id: &str, value: f64, limit: f64) {
-        let ok = value >= limit;
-        println!(
-            "{id}: {value:.4e} (limit >= {limit:.3e}) {}",
-            if ok { "met" } else { "MISSED" }
-        );
-        if !ok {
-            self.0.push(format!("{id}: {value:e} < {limit:e}"));
-        }
-    }
     /// `lo <= value <= hi`.
     fn within(&mut self, id: &str, value: f64, lo: f64, hi: f64) {
         let ok = (lo..=hi).contains(&value);
@@ -478,7 +467,10 @@ fn f0_fingerprints() -> [u64; 4] {
     ov.set_donor_interpolation(DonorInterpolation::Quadratic);
     let d = conn_fingerprint(&ov.connectivity(&moved, &pose).unwrap());
     let f = [a, b, c, d];
-    println!("F0 fingerprints: {:#018x} {:#018x} {:#018x} {:#018x}", f[0], f[1], f[2], f[3]);
+    println!(
+        "F0 fingerprints: {:#018x} {:#018x} {:#018x} {:#018x}",
+        f[0], f[1], f[2], f[3]
+    );
     f
 }
 
@@ -486,6 +478,19 @@ fn f0_fingerprints() -> [u64; 4] {
 #[test]
 fn f0_defaults_fingerprint_printed() {
     f0_fingerprints();
+}
+
+/// ADR 0359 F0: the fingerprints printed by `f0_defaults_fingerprint_printed` on the tree before any library change of
+/// F-442 (commit 9bb0bff3, log `f442-scratch/fast-base.log`); the final tree must give the same.
+#[test]
+fn f0_defaults_fingerprint_equals_the_base_tree() {
+    let base: [u64; 4] = [
+        0x3dee_ab3c_fda1_d8d0,
+        0x4758_f6c2_1597_0201,
+        0xc931_bf94_74a9_7f49,
+        0xac84_b084_2670_29d0,
+    ];
+    assert_eq!(f0_fingerprints(), base, "F0: a default result changed");
 }
 
 // ---- S0 and the diagnosis ------------------------------------------------------------------------------------------
@@ -522,7 +527,10 @@ fn h1_tg2_with_the_bilinear_stencil() {
 #[ignore = "diagnosis (six level-2 overset runs, about 12 minutes): run once"]
 fn h2_tg2_without_a_hole() {
     let (d200, d400, _, c1) = series("H2 TG_2 without a hole, C and B", 2, false, true);
-    println!("H2 without a hole with B: max |d_200| {d200:.4e}, ratio {:.4}", d200 / d400);
+    println!(
+        "H2 without a hole with B: max |d_200| {d200:.4e}, ratio {:.4}",
+        d200 / d400
+    );
     let (e200, e400, _, c2) = series("H2 TG_2 without a hole, C, library stencils", 2, false, false);
     println!(
         "H2 without a hole, library stencils: max |d_200| {e200:.4e}, ratio {:.4}",
@@ -540,7 +548,10 @@ fn h1a_h3_level_1() {
     let (d100, d200, _, c1) = series("H1a TG_1 with C and B", 1, true, true);
     println!("H1a: max |d_100| {d100:.4e}, ratio {:.4}", d100 / d200);
     let (f100, f200, _, c2) = series("TG_1 without a hole, C and B (printed)", 1, false, true);
-    println!("TG_1 without a hole with B: max |d_100| {f100:.4e}, ratio {:.4}", f100 / f200);
+    println!(
+        "TG_1 without a hole with B: max |d_100| {f100:.4e}, ratio {:.4}",
+        f100 / f200
+    );
     let cfg = |n_outer| Cfg {
         level: 1,
         steps: 100,
@@ -552,10 +563,148 @@ fn h1a_h3_level_1() {
     let e_out = difference("H3 TG_1 three against six outer iterations, 100 steps", &r3.s, &r6.s);
     println!("H3: e_out {e_out:.4e}");
     let mut c = Checks::new();
-    c.at_most(
-        "S1 continuity",
-        c1.max(c2).max(r3.continuity).max(r6.continuity),
-        1e-9,
+    c.at_most("S1 continuity", c1.max(c2).max(r3.continuity).max(r6.continuity), 1e-9);
+    c.finish();
+}
+
+// ---- amendment 1: H4 and H5 ----------------------------------------------------------------------------------------
+
+/// A run of TG_2 (hole, C, three outer iterations) with B on the background fringe cells (`b_bg`) and on the component
+/// fringe cells (`b_comp`), and every cell whose kind changed in some step.
+struct Run2 {
+    s: OversetSolver,
+    continuity: f64,
+    changed_cells: Vec<bool>,
+}
+
+fn run2(steps: usize, b_bg: bool, b_comp: bool) -> Run2 {
+    let t0 = std::time::Instant::now();
+    let dt = T_END / steps as f64;
+    let ov = tg_overset(2, true);
+    let parts = Parts::new(&ov, 2);
+    let pose = tg_pose(0.0);
+    let mesh = moved_mesh(&ov.composite.mesh, ov.composite.points_at(&pose)).unwrap();
+    let geom = Arc::new(FvGeometry::new(Arc::new(mesh)).unwrap());
+    let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
+    tg_conditions(&geom, &mut u, 0.0);
+    let p = ScalarField::from_fn("p", &geom, |x| tg_p(x, 0.0));
+    let coupling = Some(OversetCoupling { overset: ov, pose });
+    let mut set = settings(NU_TG);
+    set.rhie_chow_step_consistent = true;
+    let mut s = OversetSolver::new(geom, u, p, set, MassMode::Conservative, coupling).unwrap();
+    s.set_time_scheme(TimeScheme::Bdf2).unwrap();
+    s.set_outer_iterations(3, 1.0, 1.0).unwrap();
+    let mut continuity = 0.0f64;
+    let mut changed_cells = vec![false; s.geom.n_cells()];
+    for k in 1..=steps {
+        let t = k as f64 * dt;
+        let g = s.geom.clone();
+        tg_conditions(&g, &mut s.u, t);
+        let pz = tg_pose(t);
+        let mut st = s.prepare(dt, pz, &[]).unwrap();
+        for (c, ch) in changed_cells.iter_mut().enumerate() {
+            *ch |= st.conn.kind[c] != s.conn.kind[c];
+        }
+        if b_bg || b_comp {
+            let centres = st.geom.mesh.cell_centres().to_vec();
+            let mut b = st.conn.clone();
+            parts.apply(&mut b, &centres, &pz);
+            for ((c, own), (_, bil)) in st.conn.stencils.iter_mut().zip(b.stencils) {
+                if (*c < parts.nb && b_bg) || (*c >= parts.nb && b_comp) {
+                    *own = bil;
+                }
+            }
+        }
+        let info = s.advance(dt, st).unwrap();
+        continuity = continuity.max(info.continuity);
+    }
+    println!(
+        "TG_2 {steps} steps, B on the background fringe {b_bg}, on the component fringe {b_comp} ({:.1} s): continuity {continuity:.2e}",
+        t0.elapsed().as_secs_f64()
     );
+    Run2 {
+        s,
+        continuity,
+        changed_cells,
+    }
+}
+
+/// The largest difference over the decay over the non-hole cells that `pick` selects.
+fn difference_where(a: &OversetSolver, b: &OversetSolver, pick: impl Fn(usize) -> bool) -> f64 {
+    assert!(a.conn.kind == b.conn.kind, "the two runs end at different kinds");
+    (0..a.geom.n_cells())
+        .filter(|&c| a.conn.kind[c] != CellKind::Hole && pick(c))
+        .map(|c| vec3::norm(vec3::sub(a.u.values[c], b.u.values[c])) / decay())
+        .fold(0.0, f64::max)
+}
+
+/// ADR 0359 amendment 1, H4 (printed; decided in the ADR) and S1: B on the component's fringe only, and (printed) on the
+/// background fringe only.
+#[test]
+#[ignore = "diagnosis of amendment 1 (six level-2 overset runs, about 12 minutes): run once"]
+fn h4_tg2_bilinear_on_one_fringe() {
+    let mut cont = 0.0f64;
+    for (b_bg, b_comp, tag) in [
+        (false, true, "H4 B on the component fringe only"),
+        (true, false, "B on the background fringe only (printed)"),
+    ] {
+        let (a, b, r) = (
+            run2(200, b_bg, b_comp),
+            run2(400, b_bg, b_comp),
+            run2(800, b_bg, b_comp),
+        );
+        let nb = a.s.conn.n_background_cells;
+        let k200 = difference_where(&a.s, &r.s, |c| c >= nb);
+        let k400 = difference_where(&b.s, &r.s, |c| c >= nb);
+        let g200 = difference_where(&a.s, &r.s, |c| c < nb);
+        let g400 = difference_where(&b.s, &r.s, |c| c < nb);
+        println!(
+            "{tag}: component cells max |d_200| {k200:.4e}, ratio {:.4}; background cells max |d_200| {g200:.4e}, ratio {:.4}",
+            k200 / k400,
+            g200 / g400
+        );
+        cont = cont.max(a.continuity).max(b.continuity).max(r.continuity);
+    }
+    let mut c = Checks::new();
+    c.at_most("S1 continuity", cont, 1e-9);
+    c.finish();
+}
+
+/// ADR 0359 amendment 1, H5 (printed; decided in the ADR) and S1: the runs of H1 with the cells split by their distance to
+/// the cells that changed kind.
+#[test]
+#[ignore = "diagnosis of amendment 1 (three level-2 overset runs, about 6 minutes): run once"]
+fn h5_tg2_bilinear_near_the_kind_changes() {
+    let (a, b, r) = (run2(200, true, true), run2(400, true, true), run2(800, true, true));
+    let changed: Vec<bool> = (0..a.changed_cells.len())
+        .map(|c| a.changed_cells[c] || b.changed_cells[c] || r.changed_cells[c])
+        .collect();
+    let mesh = &r.s.geom.mesh;
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let mut near = changed.clone();
+    for _ in 0..2 {
+        let mut next = near.clone();
+        for f in 0..mesh.n_internal_faces() {
+            if near[own[f]] || near[nei[f]] {
+                next[own[f]] = true;
+                next[nei[f]] = true;
+            }
+        }
+        near = next;
+    }
+    let calc = |c: usize| r.s.conn.kind[c] == CellKind::Calculated;
+    let n200 = difference_where(&a.s, &r.s, |c| calc(c) && near[c]);
+    let f200 = difference_where(&a.s, &r.s, |c| calc(c) && !near[c]);
+    let n400 = difference_where(&b.s, &r.s, |c| calc(c) && near[c]);
+    let f400 = difference_where(&b.s, &r.s, |c| calc(c) && !near[c]);
+    println!(
+        "H5: {} cells changed kind; near max |d_200| {n200:.4e} (ratio {:.4}), far {f200:.4e} (ratio {:.4}); n / f = {:.3}",
+        changed.iter().filter(|&&x| x).count(),
+        n200 / n400,
+        f200 / f400,
+        n200 / f200
+    );
+    let mut c = Checks::new();
+    c.at_most("S1 continuity", a.continuity.max(b.continuity).max(r.continuity), 1e-9);
     c.finish();
 }
