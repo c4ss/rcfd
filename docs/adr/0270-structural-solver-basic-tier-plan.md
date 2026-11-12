@@ -1043,3 +1043,6 @@ Each acceptance and each note below is one quoted paragraph on a single line.
 
 > Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0288; the registration is written by the implementation agent before any code.
 
+## Lead's note (2026-11-12): roadmap ids
+
+The entries were added to docs/roadmap.json with these ids: SB-1 = F-370, SB-2 = F-371, SB-3 = F-372, SB-4 = F-373, SB-5 = F-374, SB-6 = F-375, SB-7 = F-376, SB-8 = F-377, SB-9 = F-378, SB-10 = F-379, SB-11 = F-380, SB-12 = F-381, SB-13 = F-382, SB-14 = F-383, SB-15 = F-384, SB-16 = F-385, SB-17 = F-386, SB-18 = F-387. The category "Structural solver" (family Solver) is in scripts/roadmap_progress.py.

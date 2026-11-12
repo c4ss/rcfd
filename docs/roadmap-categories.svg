@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 746 614" width="746" role="img" aria-labelledby="t d">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 746 644" width="746" role="img" aria-labelledby="t d">
   <title id="t">Roadmap progress by area</title>
-  <desc id="d">Done, partly done and not started roadmap items in each of 14 areas. Numerics and solvers: 27 of 39 done; Turbulence: 7 of 16 done; Heat, materials and chemistry: 13 of 25 done; Compressible flow and acoustics: 4 of 18 done; Multiphase and particles: 4 of 16 done; Moving meshes, rotors and coupling: 19 of 54 done; Parallel and GPU: 2 of 4 done; Meshing and mesh formats: 15 of 27 done; Post-processing and output: 9 of 11 done; Design studies and optimisation: 3 of 10 done; Command line, Python and API: 13 of 16 done; Claude and the MCP server: 8 of 21 done; Studio desktop app: 5 of 12 done; Quality, docs and validation: 1 of 7 done.</desc>
+  <desc id="d">Done, partly done and not started roadmap items in each of 15 areas. Numerics and solvers: 27 of 39 done; Turbulence: 7 of 16 done; Heat, materials and chemistry: 13 of 25 done; Compressible flow and acoustics: 4 of 18 done; Multiphase and particles: 4 of 16 done; Moving meshes, rotors and coupling: 19 of 54 done; Structural solver: 0 of 18 done; Parallel and GPU: 2 of 4 done; Meshing and mesh formats: 15 of 27 done; Post-processing and output: 9 of 11 done; Design studies and optimisation: 3 of 10 done; Command line, Python and API: 13 of 16 done; Claude and the MCP server: 8 of 21 done; Studio desktop app: 5 of 12 done; Quality, docs and validation: 1 of 7 done.</desc>
   <style>
     :root { --ink:#1f2328; --mute:#59636e; --done:#1a7f4b; --part:#d4a72c; --todo:#d0d7de; --bg:#ffffff; }
     @media (prefers-color-scheme: dark) {
@@ -14,7 +14,7 @@
     .num { font-size: 13px; fill: var(--mute); }
     .fam { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; fill: var(--mute); }
   </style>
-  <rect width="746" height="614" fill="var(--bg)"/>
+  <rect width="746" height="644" fill="var(--bg)"/>
   <defs>
     <pattern id="h" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <rect width="8" height="8" fill="var(--part)"/>
@@ -27,13 +27,14 @@
     <clipPath id="c4"><rect x="262" y="155" width="360" height="14" rx="3"/></clipPath>
     <clipPath id="c5"><rect x="262" y="185" width="360" height="14" rx="3"/></clipPath>
     <clipPath id="c6"><rect x="262" y="215" width="360" height="14" rx="3"/></clipPath>
-    <clipPath id="c7"><rect x="262" y="281" width="360" height="14" rx="3"/></clipPath>
+    <clipPath id="c7"><rect x="262" y="245" width="360" height="14" rx="3"/></clipPath>
     <clipPath id="c8"><rect x="262" y="311" width="360" height="14" rx="3"/></clipPath>
     <clipPath id="c9"><rect x="262" y="341" width="360" height="14" rx="3"/></clipPath>
-    <clipPath id="c10"><rect x="262" y="407" width="360" height="14" rx="3"/></clipPath>
+    <clipPath id="c10"><rect x="262" y="371" width="360" height="14" rx="3"/></clipPath>
     <clipPath id="c11"><rect x="262" y="437" width="360" height="14" rx="3"/></clipPath>
     <clipPath id="c12"><rect x="262" y="467" width="360" height="14" rx="3"/></clipPath>
-    <clipPath id="c13"><rect x="262" y="533" width="360" height="14" rx="3"/></clipPath>
+    <clipPath id="c13"><rect x="262" y="497" width="360" height="14" rx="3"/></clipPath>
+    <clipPath id="c14"><rect x="262" y="563" width="360" height="14" rx="3"/></clipPath>
   </defs>
   <text x="24" y="24" class="fam">THE SOLVER</text>
   <text x="24" y="46" class="row">Numerics and solvers</text>
@@ -78,64 +79,71 @@
     <rect x="482.0" y="185" width="140.0" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="196" class="num">19 of 54 done</text>
-  <text x="24" y="226" class="row">Parallel and GPU</text>
+  <text x="24" y="226" class="row">Structural solver</text>
   <g clip-path="url(#c6)">
-    <rect x="262" y="215" width="180.0" height="14" fill="var(--done)"/>
-    <rect x="442.0" y="215" width="90.0" height="14" fill="url(#h)"/>
-    <rect x="532.0" y="215" width="90.0" height="14" fill="var(--todo)"/>
+    <rect x="262" y="215" width="0.0" height="14" fill="var(--done)"/>
+    <rect x="262.0" y="215" width="0.0" height="14" fill="url(#h)"/>
+    <rect x="262.0" y="215" width="360.0" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="226" class="num">2 of 4 done</text>
-  <text x="24" y="270" class="fam">MESHES, RESULTS AND DESIGN</text>
-  <text x="24" y="292" class="row">Meshing and mesh formats</text>
+  <text x="636" y="226" class="num">0 of 18 done</text>
+  <text x="24" y="256" class="row">Parallel and GPU</text>
   <g clip-path="url(#c7)">
-    <rect x="262" y="281" width="200.0" height="14" fill="var(--done)"/>
-    <rect x="462.0" y="281" width="120.0" height="14" fill="url(#h)"/>
-    <rect x="582.0" y="281" width="40.0" height="14" fill="var(--todo)"/>
+    <rect x="262" y="245" width="180.0" height="14" fill="var(--done)"/>
+    <rect x="442.0" y="245" width="90.0" height="14" fill="url(#h)"/>
+    <rect x="532.0" y="245" width="90.0" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="292" class="num">15 of 27 done</text>
-  <text x="24" y="322" class="row">Post-processing and output</text>
+  <text x="636" y="256" class="num">2 of 4 done</text>
+  <text x="24" y="300" class="fam">MESHES, RESULTS AND DESIGN</text>
+  <text x="24" y="322" class="row">Meshing and mesh formats</text>
   <g clip-path="url(#c8)">
-    <rect x="262" y="311" width="294.5" height="14" fill="var(--done)"/>
-    <rect x="556.5" y="311" width="65.5" height="14" fill="url(#h)"/>
-    <rect x="622.0" y="311" width="-0.0" height="14" fill="var(--todo)"/>
+    <rect x="262" y="311" width="200.0" height="14" fill="var(--done)"/>
+    <rect x="462.0" y="311" width="120.0" height="14" fill="url(#h)"/>
+    <rect x="582.0" y="311" width="40.0" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="322" class="num">9 of 11 done</text>
-  <text x="24" y="352" class="row">Design studies and optimisation</text>
+  <text x="636" y="322" class="num">15 of 27 done</text>
+  <text x="24" y="352" class="row">Post-processing and output</text>
   <g clip-path="url(#c9)">
-    <rect x="262" y="341" width="108.0" height="14" fill="var(--done)"/>
-    <rect x="370.0" y="341" width="144.0" height="14" fill="url(#h)"/>
-    <rect x="514.0" y="341" width="108.0" height="14" fill="var(--todo)"/>
+    <rect x="262" y="341" width="294.5" height="14" fill="var(--done)"/>
+    <rect x="556.5" y="341" width="65.5" height="14" fill="url(#h)"/>
+    <rect x="622.0" y="341" width="-0.0" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="352" class="num">3 of 10 done</text>
-  <text x="24" y="396" class="fam">HOW YOU USE IT</text>
-  <text x="24" y="418" class="row">Command line, Python and API</text>
+  <text x="636" y="352" class="num">9 of 11 done</text>
+  <text x="24" y="382" class="row">Design studies and optimisation</text>
   <g clip-path="url(#c10)">
-    <rect x="262" y="407" width="292.5" height="14" fill="var(--done)"/>
-    <rect x="554.5" y="407" width="45.0" height="14" fill="url(#h)"/>
-    <rect x="599.5" y="407" width="22.5" height="14" fill="var(--todo)"/>
+    <rect x="262" y="371" width="108.0" height="14" fill="var(--done)"/>
+    <rect x="370.0" y="371" width="144.0" height="14" fill="url(#h)"/>
+    <rect x="514.0" y="371" width="108.0" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="418" class="num">13 of 16 done</text>
-  <text x="24" y="448" class="row">Claude and the MCP server</text>
+  <text x="636" y="382" class="num">3 of 10 done</text>
+  <text x="24" y="426" class="fam">HOW YOU USE IT</text>
+  <text x="24" y="448" class="row">Command line, Python and API</text>
   <g clip-path="url(#c11)">
-    <rect x="262" y="437" width="137.1" height="14" fill="var(--done)"/>
-    <rect x="399.1" y="437" width="205.7" height="14" fill="url(#h)"/>
-    <rect x="604.9" y="437" width="17.1" height="14" fill="var(--todo)"/>
+    <rect x="262" y="437" width="292.5" height="14" fill="var(--done)"/>
+    <rect x="554.5" y="437" width="45.0" height="14" fill="url(#h)"/>
+    <rect x="599.5" y="437" width="22.5" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="448" class="num">8 of 21 done</text>
-  <text x="24" y="478" class="row">Studio desktop app</text>
+  <text x="636" y="448" class="num">13 of 16 done</text>
+  <text x="24" y="478" class="row">Claude and the MCP server</text>
   <g clip-path="url(#c12)">
-    <rect x="262" y="467" width="150.0" height="14" fill="var(--done)"/>
-    <rect x="412.0" y="467" width="120.0" height="14" fill="url(#h)"/>
-    <rect x="532.0" y="467" width="90.0" height="14" fill="var(--todo)"/>
+    <rect x="262" y="467" width="137.1" height="14" fill="var(--done)"/>
+    <rect x="399.1" y="467" width="205.7" height="14" fill="url(#h)"/>
+    <rect x="604.9" y="467" width="17.1" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="478" class="num">5 of 12 done</text>
-  <text x="24" y="522" class="fam">THE PROJECT</text>
-  <text x="24" y="544" class="row">Quality, docs and validation</text>
+  <text x="636" y="478" class="num">8 of 21 done</text>
+  <text x="24" y="508" class="row">Studio desktop app</text>
   <g clip-path="url(#c13)">
-    <rect x="262" y="533" width="51.4" height="14" fill="var(--done)"/>
-    <rect x="313.4" y="533" width="308.6" height="14" fill="url(#h)"/>
-    <rect x="622.0" y="533" width="0.0" height="14" fill="var(--todo)"/>
+    <rect x="262" y="497" width="150.0" height="14" fill="var(--done)"/>
+    <rect x="412.0" y="497" width="120.0" height="14" fill="url(#h)"/>
+    <rect x="532.0" y="497" width="90.0" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="544" class="num">1 of 7 done</text>
-  <text x="24" y="588" class="num">Each bar is scaled to its own item count: green is done, hatched is partly done, grey is not started.</text>
+  <text x="636" y="508" class="num">5 of 12 done</text>
+  <text x="24" y="552" class="fam">THE PROJECT</text>
+  <text x="24" y="574" class="row">Quality, docs and validation</text>
+  <g clip-path="url(#c14)">
+    <rect x="262" y="563" width="51.4" height="14" fill="var(--done)"/>
+    <rect x="313.4" y="563" width="308.6" height="14" fill="url(#h)"/>
+    <rect x="622.0" y="563" width="0.0" height="14" fill="var(--todo)"/>
+  </g>
+  <text x="636" y="574" class="num">1 of 7 done</text>
+  <text x="24" y="618" class="num">Each bar is scaled to its own item count: green is done, hatched is partly done, grey is not started.</text>
 </svg>
