@@ -1068,6 +1068,20 @@ pub fn case_schema() -> Schema {
                 )
                 .hash_omit_default(),
         )
+        // F-443, ADR 0352 T: an optional table, absent from every case that does not write it
+        .field(
+            "rhie_chow",
+            Schema::object()
+                .optional()
+                .doc("Face flux of the transient piso/pimple solver (ADR 0245, ADR 0352). With step_consistent = true the pressure term of the face flux takes the harmonic face value of rAU = V/a_P and the commutator of the lagged pressure gradient (less the body force) is added on internal faces, so that the converged face flux depends on the step size only through the time scheme: a steady solution is then the same for every dt (the default's differs, by 3.7e-4 of the lid velocity in ADR 0245's cavity between dt = 0.04 and 0.01). Acts with the consistent correctors, with body forces and on a dynamic mesh; coupled (periodic) faces are left as they are. Not with time_advance = fractional_step (its face coefficient is uniform: no effect), lumped components (their face jumps), steady algorithms, compressible, variable density or VOF (located errors). Absent or step_consistent = false keeps every earlier result bit for bit")
+                .field(
+                    "step_consistent",
+                    Schema::boolean(false)
+                        .doc("Use the step-consistent face coefficient (default false)")
+                        .hash_omit_default(),
+                )
+                .hash_omit_default(),
+        )
         .field(
             "pseudo_mode",
             Schema::enumeration("off", &["off", "auto", "local", "physical"]).doc(

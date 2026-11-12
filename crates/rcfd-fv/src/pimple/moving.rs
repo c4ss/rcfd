@@ -238,7 +238,11 @@ impl PimpleSolver {
             defect,
             wall_dpdn,
         });
+        // ADR 0352 D2: the step-consistent face coefficient is not defined across a sliding interface; this step keeps the
+        // default one
+        let rc = std::mem::replace(&mut self.settings.rhie_chow_step_consistent, false);
         let info = self.step(dt);
+        self.settings.rhie_chow_step_consistent = rc;
         self.ale = None;
         Ok(info)
     }

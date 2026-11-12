@@ -65,6 +65,13 @@ pub(crate) fn add_lagged_gradient(
     add_commutator(geom, gamma, &q, &x, phi_hby_a);
 }
 
+/// The face coefficient of the consistent correctors' compensation with the step-consistent coefficient (ADR 0352 D1):
+/// `gamma_t - gamma_p` on every face, `gamma_t = interp(rAtU)`, `gamma_p` the harmonic face value of `rAU`. On a boundary
+/// face both are the owner's values, so the result there is `rAtU_o - rAU_o`, the value `face_interpolate(rAtU - rAU)` has.
+pub(crate) fn consistent_face_difference(gamma_t: &[f64], gamma_p: &[f64]) -> Vec<f64> {
+    gamma_t.iter().zip(gamma_p).map(|(t, a)| t - a).collect()
+}
+
 /// The cell quantities of [`add_commutator`] in the overset step (ADR 0245 amendment 1, "The overset step"): `x = grad(p_lag)`
 /// and `q = rAU x` of the calculated cells; at a fringe cell the donor interpolants of the calculated values (with the
 /// stencil weights that give its `HbyA`), zero at a hole cell. With a trivial connectivity the cell values everywhere.
@@ -246,6 +253,47 @@ mod tests {
             );
             assert!(same_boundary && same_coupled && same_flux, "P0 {label}");
             assert!(inner >= 1e-6, "P0n {label}: {inner:e}");
+        }
+    }
+
+    /// ADR 0352 P1, P1n: the compensation coefficient of the consistent correctors with the step-consistent coefficient is
+    /// the default's on every boundary and coupled face, bit for bit, and differs on internal faces.
+    #[test]
+    fn p1_the_consistent_compensation_is_the_default_on_boundary_and_coupled_faces() {
+        let meshes = [
+            ("periodic box", box_2d(8, 8, 1.0, 1.0, true, true).unwrap()),
+            (
+                "rotational sector",
+                annulus_sector(8, 8, 0.5, 1.0, std::f64::consts::FRAC_PI_3, Grading::Uniform, 0.1).unwrap(),
+            ),
+        ];
+        for (label, mesh) in meshes {
+            let g = geometry(mesh);
+            let (n, n_int) = (g.n_cells(), g.n_internal);
+            let n_faces = g.mesh.n_faces();
+            let u = VectorField::uniform("U", &g, [0.0; 3]);
+            let p = ScalarField::from_fn("p", &g, pressure_of);
+            let pbc = pressure_bc(&g, &u, &p);
+            let n_coupled = pbc.coupled.iter().filter(|c| c.is_some()).count();
+            assert!(n_coupled > 0, "{label}: no coupled face");
+            let r_au: Vec<f64> = (0..n).map(|c| 0.02 * (1.0 + 0.3 * ((c * 7) % 11) as f64)).collect();
+            let r_t: Vec<f64> = (0..n).map(|c| 1.3 * r_au[c] * (1.0 + 0.1 * (c as f64).sin())).collect();
+            let dr: Vec<f64> = r_t.iter().zip(&r_au).map(|(t, a)| t - a).collect();
+            let default = face_interpolate(&g, &dr);
+            let mine = consistent_face_difference(&face_interpolate(&g, &r_t), &harmonic_face(&g, &r_au));
+            let same_boundary = (n_int..n_faces).all(|f| mine[f].to_bits() == default[f].to_bits());
+            let (cm, cd) = (coupled_gamma(&g, &pbc, &mine), coupled_gamma(&g, &pbc, &default));
+            let same_coupled = (n_int..n_faces).all(|f| cm[f].to_bits() == cd[f].to_bits());
+            let scale = default.iter().fold(0.0f64, |a, b| a.max(b.abs()));
+            let inner = (0..n_int)
+                .map(|f| (mine[f] - default[f]).abs() / scale)
+                .fold(0.0, f64::max);
+            println!(
+                "P1 {label}: {n_coupled} coupled faces; boundary values bit-equal {same_boundary}, coupled values bit-equal \
+                 {same_coupled}; P1n largest relative internal difference {inner:.3e}"
+            );
+            assert!(same_boundary && same_coupled, "P1 {label}");
+            assert!(inner >= 1e-6, "P1n {label}: {inner:e}");
         }
     }
 }
