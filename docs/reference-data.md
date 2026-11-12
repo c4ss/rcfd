@@ -1584,3 +1584,10 @@ face formulas the code already uses on internal faces (`crates/rcfd-api/src/prop
 |---|---|---|
 | Both faces of a periodic pair take one diffusivity, the internal-face formula with the pair's weight `w = dn_g / (dn_f + dn_g)`: `mu(w T_P + (1 - w) T_Q) / rho` for a property law, the module at the centre of the pair's face of lower index with `w T_P + (1 - w) T_Q` and `w abs(u_P) + (1 - w) abs(u_Q)` for a user function | derived | ADR 0205 D1, ADR 0212 D1, ADR 0227 D1 (the face of lower index is a choice of ADR 0227, question 1) |
 | The property viscosity is already one value per pair by default, up to rounding (the periodic face temperature is the same interpolation) | derived | ADR 0227 item 2 (code read), checked by F2p, G2p and T4p |
+
+## F-300 transient RANS follow-ups (ADR 0225)
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Spalding (1961) law of the wall `y+ = u+ + (1/E)[exp(kappa u+) - 1 - kappa u+ - (kappa u+)^2/2 - (kappa u+)^3/6]`, used for the k-based wall eddy viscosity `nu (y*/u+ - 1)` of the opt-in `wall_nut_law = spalding` (`WallConstants::nut_wall_from_k_spalding`) and its inverse `SpaldingLaw::u_plus` | existing | the row "Spalding (1961) law of the wall" above (standard cubic form, two secondary sources, original paper not read); no new source was read for F-300 |
+| The standard k-based wall eddy viscosity `nu (y* kappa/ln(E y*) - 1)` above `y*_lam` and 0 below, written as `nu (y*/u+ - 1)` with `u+ = min(y*, ln(E y*)/kappa)`; its slope jump `0.0684 nu` at `y*_lam = 11.53` | derived | from the existing `WallConstants::nut_wall_from_k` (Launder and Spalding 1974 as recorded above, not read) |

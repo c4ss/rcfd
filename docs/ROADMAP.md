@@ -5688,7 +5688,7 @@ fixed by the item's registration ADR before any code.
     under the library opt-in `PimpleSettings::consistent_correctors` (SIMPLEC-type correctors, defaults bit-identical): F-244's
     registered tau/10 set-up passes with it (A1c: U(10 tau)/U_t 1.00548). Open: the default path (the known miss of F-244
     still fails by construction; ADR 0214 Q1), a refusal on the moving-mesh default path (Q3), a case key (Q4).
-- [ ] **F-300** Transient RANS follow-ups from F-294
+- [~] **F-300** Transient RANS follow-ups from F-294
   - depends on: F-294
   - acceptance: Every limit is fixed by its registration ADR before any code. (a) `rcfd_turb::supports_transient` says
     which models run transient on pimple (k-epsilon, SA without DES, SST), checked by a test against what the case tree
@@ -5699,6 +5699,19 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0210 (F-294) questions 3, 5 and 7, recommendations taken by the lead. Questions 1, 2, 4 and 6: keep
     piso refused, one ADR with two parts, plugin models refused on pimple, the enhanced wall function accepted and
     documented for wall-resolved meshes.
+    - PARTIAL (ADR 0225, 2026-11-08, branch f300-transient-rans, not merged): every registered check is met except one, a
+      known miss. (a) supports_transient is true for k_epsilon, k_omega_sst and spalart_allmaras (every DES mode) as well as
+      the subgrid models, mixing_length and rsm, false for plug-ins; for every registry key it agrees with what the case tree
+      accepts on pimple (T1; main's answer disagrees for exactly the three RANS models), and its doc's piso statement holds
+      (T1p). ADR 0210 S1 is restored as S1c with the pair case accepted (ADR 0212 R1'); the old S1 stays an ignored record.
+      (b) ADR 0199 amendment 4: S3' (SST from ux = 15 y (2 - y)) meets, BDF2 p 2.0450 / 2.0394 / 2.0306, Euler 1.0030 /
+      0.9800 / 1.0028, S3'N fires (0.80); the old S3 stays an ignored record. (c) A library opt-in wall eddy viscosity from
+      Spalding's law without the switch at y*_lam (k-epsilon set_option wall_nut_law = spalding, reached from case-tree
+      tests by Simulation::turbulence_model_mut; no case key): smooth at y*_lam (W1, slope jump 5.8e-4 against 1.0 for the
+      standard law), in the sweep's production and on the wall faces (W2, T3 exact). With it the S3 k-epsilon BDF2 order is
+      still a known miss, p 0.8031 / 1.4814 / 1.4287 (standard law 0.7975 / 1.4910 / 1.5303), and the finer levels repeat
+      the standard law's rise to 1.81 to 1.88, so the kink is not the cause. Defaults bit-identical (V0b 8 of 8). Open:
+      ADR 0225 Q1 to Q6.
 
 - [~] **F-301** PISO consistent correctors: moving-mesh lag estimate, case key and benchmarks
   - depends on: F-299

@@ -107,6 +107,24 @@ impl WallConstants {
             nu * (ystar * self.kappa / (self.e * ystar).ln() - 1.0)
         }
     }
+
+    /// k-based wall eddy viscosity from Spalding's law (F-300, ADR 0225 D4): `nu_t,w = nu (y* / u+ - 1)` with
+    /// `y* = C_mu^(1/4) sqrt(k) y / nu` and `u+` the root of Spalding's law `y+(u+) = y*` with these `kappa` and `E`
+    /// ([`SpaldingLaw::u_plus`]). [`WallConstants::nut_wall_from_k`] is the same expression with the two-branch law
+    /// `u+ = min(y*, ln(E y*) / kappa)`, whose switch at `y*_lam` is a kink; Spalding's single formula has the same two limits and
+    /// no switch. Zero for `y* <= 0`; the `max(0, .)` only removes a round-off sign (`y+(u+) > u+` for `u+ > 0`).
+    pub fn nut_wall_from_k_spalding(&self, nu: f64, k: f64, y: f64) -> f64 {
+        let ystar = self.cmu.powf(0.25) * k.max(0.0).sqrt() * y / nu;
+        let law = SpaldingLaw {
+            kappa: self.kappa,
+            e: self.e,
+        };
+        let up = law.u_plus(ystar);
+        if up <= 0.0 {
+            return 0.0;
+        }
+        (nu * (ystar / up - 1.0)).max(0.0)
+    }
 }
 
 /// Spalding's single-formula law of the wall (J. Appl. Mech. 28 (1961) 455-458), valid from the
@@ -137,6 +155,37 @@ impl SpaldingLaw {
     pub fn dy_du(&self, u_plus: f64) -> f64 {
         let ku = self.kappa * u_plus;
         1.0 + self.kappa / self.e * (ku.exp() - 1.0 - ku - 0.5 * ku * ku)
+    }
+
+    /// `u+` as a function of `y+`, the root of `y_plus(u+) = y+` (F-300, ADR 0225 D4). Bisection on `[0, y+]` (the law is
+    /// increasing and `y+(u+) >= u+`) until the bracket is below `1e-3` of its upper end, then Newton's method from the upper end:
+    /// the law is convex for `u+ >= 0`, so the iterates decrease monotonically to the root; it stops when a step is at most
+    /// `1e-15 u+` (at most 50 steps). Zero for `y+ <= 0`.
+    pub fn u_plus(&self, y_plus: f64) -> f64 {
+        if y_plus.is_nan() || y_plus <= 0.0 {
+            return 0.0;
+        }
+        let (mut lo, mut hi) = (0.0_f64, y_plus);
+        for _ in 0..200 {
+            if hi - lo <= 1e-3 * hi {
+                break;
+            }
+            let mid = 0.5 * (lo + hi);
+            if self.y_plus(mid) > y_plus {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        let mut u = hi;
+        for _ in 0..50 {
+            let step = (self.y_plus(u) - y_plus) / self.dy_du(u);
+            u -= step;
+            if step.abs() <= 1e-15 * u {
+                break;
+            }
+        }
+        u
     }
 
     /// Friction velocity from the tangential speed `u` at distance `y` (bisection on `u_tau`; the

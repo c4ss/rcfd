@@ -561,3 +561,13 @@ the three packages are clean.
 Merging into main (after F-291, ADR 0204) conflicted in the imports of `kepsilon.rs` and `sa.rs` only (F-291's
 `laplacian_opt`/`GradientOptions` next to this change's `add_ddt`/`History`/`TimeScheme`); both are kept. After the
 merge the F-294, F-291, F-286 and F-295 test files of rcfd-turb and rcfd-api pass in release, and clippy is clean.
+
+### Note (2026-11-08, F-300, ADR 0225)
+
+S1 is superseded in one case by ADR 0212 R1' (`turbulence.periodic_seam.diffusivity = "pair"` is accepted with both models), and
+the lead made `s1_scope_of_transient_kepsilon_and_sa` an ignored test at the F-219 merge (50c4a83c). Its cases, with that one
+accepted, are re-registered as S1c of [ADR 0225](0225-f300-registration-transient-rans-follow-ups.md) (part A,
+`crates/rcfd-api/tests/f300_transient_rans.rs`); the old test stays an ignored record, and the reason of its `#[ignore]` now names
+S1c. Question 3 (`supports_transient`) is ADR 0225 part A, question 5 is ADR 0199 amendment 4 (ADR 0225 part B), and question 7
+(b) is ADR 0225 part C, which tests the suspected cause of the S3 k-epsilon BDF2 known miss with a smooth wall eddy viscosity; the
+known miss itself and its limit are not changed.

@@ -256,13 +256,39 @@ impl TurbulenceModel for KEpsilonModel {
         apply_kepsilon(o, &mut self.m);
         Ok(())
     }
-    /// `periodic_diffusivity` = `owner` | `pair` (F-296, ADR 0212 D5); any other option is refused as by every model.
+    /// `periodic_diffusivity` = `owner` | `pair` (F-296, ADR 0212 D5); `wall_nut_law` = `standard` | `spalding` (F-300, ADR 0225
+    /// D4: the law of the wall eddy viscosity of the standard wall function on a smooth wall, [`crate::kepsilon::WallNutLaw`];
+    /// `spalding` is refused with another wall function or a rough wall, where it would do nothing). Any other option is refused
+    /// as by every model.
     fn set_option(&mut self, name: &str, value: &str) -> std::result::Result<(), String> {
-        if name != "periodic_diffusivity" {
-            return Err(format!("the model '{}' has no option '{name}'", self.key()));
+        match name {
+            "periodic_diffusivity" => {
+                let mode = crate::eddy::seam_mode(value)?;
+                self.m.set_periodic_diffusivity(mode).map_err(|e| e.to_string())
+            }
+            "wall_nut_law" => {
+                let law = match value {
+                    "standard" => crate::kepsilon::WallNutLaw::Standard,
+                    "spalding" => crate::kepsilon::WallNutLaw::Spalding,
+                    v => {
+                        return Err(format!(
+                            "'{v}' is not a valid value of the option 'wall_nut_law' (standard or spalding)"
+                        ))
+                    }
+                };
+                if law == crate::kepsilon::WallNutLaw::Spalding
+                    && (self.m.wall_function != crate::kepsilon::WallFunction::Standard || self.m.roughness.is_rough())
+                {
+                    return Err(
+                        "wall_nut_law = spalding acts on the standard wall function on a smooth wall only (ADR 0225)"
+                            .into(),
+                    );
+                }
+                self.m.wall_nut_law = law;
+                Ok(())
+            }
+            _ => Err(format!("the model '{}' has no option '{name}'", self.key())),
         }
-        let mode = crate::eddy::seam_mode(value)?;
-        self.m.set_periodic_diffusivity(mode).map_err(|e| e.to_string())
     }
     fn key(&self) -> &str {
         "k_epsilon"
@@ -787,10 +813,22 @@ pub fn mixing_length_coefficient_table() -> Vec<CoefficientInfo> {
     mixing_length_infos(0.41, 0.09, A_PLUS_ML)
 }
 
-/// Is the built-in model `key` usable with the transient algorithms? The subgrid models are transient only
-/// ([`is_sgs_key`]); the mixing length works in both; the RANS transport models and plug-ins are steady only.
+/// Is the built-in model `key` usable with a transient algorithm of the case tree (`turbulence.model = key` with
+/// `solver.algorithm = "piso"` or `"pimple"`)? (F-300, ADR 0225 D1.)
+///
+/// * `k_epsilon`, `k_omega_sst` and `spalart_allmaras` run transient with `pimple`: one sweep with the time derivative of the
+///   momentum's time scheme at the start of every outer iteration (ADR 0199, ADR 0210); they are refused with `piso`.
+///   `spalart_allmaras` with `turbulence.sa.des = "des"` or `"ddes"` runs with `piso` and `pimple`, with its once-per-step Euler
+///   term (ADR 0032). The answer is per key, so it covers every DES mode.
+/// * `smagorinsky`, `wale` ([`is_sgs_key`]) and `rsm` are transient only (`piso`, `pimple`).
+/// * `mixing_length` runs with the steady and the transient algorithms.
+/// * Any other key (a plug-in's) answers `false`; the case tree refuses `turbulence.model = "plugin"` with the transient
+///   algorithms (ADR 0210 question 4).
 pub fn supports_transient(key: &str) -> bool {
-    matches!(key, "smagorinsky" | "wale" | "mixing_length" | "rsm")
+    matches!(
+        key,
+        "k_epsilon" | "k_omega_sst" | "spalart_allmaras" | "smagorinsky" | "wale" | "mixing_length" | "rsm"
+    )
 }
 
 /// Is `key` a subgrid-scale (large-eddy) model, which is not defined for the steady algorithms?

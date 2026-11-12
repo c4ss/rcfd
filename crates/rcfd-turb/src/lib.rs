@@ -15,7 +15,8 @@ pub use eddy::{
     effective_viscosity, pair_periodic_faces, patch_faces, seam_mode, MixingLength, SeamDiffusivity, SeamPairs,
 };
 pub use kepsilon::{
-    wall_cell_sources, KEpsilon, KEpsilonVariant, WallTreatment, REALIZABLE_A0_DEFAULT, REALIZABLE_A0_ORIGINAL,
+    wall_cell_sources, wall_cell_sources_law, KEpsilon, KEpsilonVariant, WallNutLaw, WallTreatment,
+    REALIZABLE_A0_DEFAULT, REALIZABLE_A0_ORIGINAL,
 };
 pub use les::{AlgebraicSgs, SgsKind};
 pub use model::{
