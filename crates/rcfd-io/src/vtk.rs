@@ -350,6 +350,217 @@ pub fn legacy_vtk_string(mesh: &Mesh, fields: &[VtkField]) -> Result<String> {
     Ok(o)
 }
 
+// ------------------------------------------------------------------------------------------- finite-element cells (F-377)
+
+/// VTK cell type of the linear tetrahedron (4 nodes; the right-hand normal of the base `(0,1,2)` points to node 3).
+pub const VTK_TETRA: u8 = 10;
+/// VTK cell type of the linear hexahedron (8 nodes; base `(0,1,2,3)` with its right-hand normal towards `(4,5,6,7)`, edges
+/// `(0,4), (1,5), (2,6), (3,7)`).
+pub const VTK_HEXAHEDRON: u8 = 12;
+/// VTK cell type of the quadratic tetrahedron (10 nodes; corners 0 to 3, mid-edge nodes 4 to 9 on `(0,1), (1,2), (2,0),
+/// (0,3), (1,3), (2,3)`).
+pub const VTK_QUADRATIC_TETRA: u8 = 24;
+
+/// Number of nodes of a supported finite-element cell type (`None` for any other type).
+pub fn vtk_cell_nodes(cell_type: u8) -> Option<usize> {
+    match cell_type {
+        VTK_TETRA => Some(4),
+        VTK_HEXAHEDRON => Some(8),
+        VTK_QUADRATIC_TETRA => Some(10),
+        _ => None,
+    }
+}
+
+/// Cells of one type, their nodes flat in VTK's node order.
+#[derive(Debug, Clone, Copy)]
+pub struct FeCellBlock<'a> {
+    /// [`VTK_TETRA`], [`VTK_HEXAHEDRON`] or [`VTK_QUADRATIC_TETRA`].
+    pub cell_type: u8,
+    /// Node indices, `vtk_cell_nodes(cell_type)` per cell.
+    pub connectivity: &'a [usize],
+}
+
+/// A named array of point or cell data: `components` values per point or cell, flat and row-major.
+#[derive(Debug, Clone, Copy)]
+pub struct FeArray<'a> {
+    /// Array name (no `<`, `>`, `&`, `"`, `'`).
+    pub name: &'a str,
+    /// Values per point or cell (at least 1).
+    pub components: usize,
+    /// The values, `components * count`.
+    pub values: &'a [f64],
+}
+
+fn fe_invalid(path: &str, reason: String) -> Error {
+    Error::InvalidValue {
+        path: path.to_string(),
+        reason,
+    }
+}
+
+fn check_fe_arrays(section: &str, arrays: &[FeArray], n: usize) -> Result<()> {
+    for (i, a) in arrays.iter().enumerate() {
+        if a.name.is_empty() {
+            return Err(fe_invalid("name", format!("{section} array {i} has an empty name")));
+        }
+        if a.name.chars().any(|c| matches!(c, '<' | '>' | '&' | '"' | '\'')) {
+            return Err(fe_invalid(
+                a.name,
+                format!(
+                    "{section} array name '{}' contains a character not allowed in XML",
+                    a.name
+                ),
+            ));
+        }
+        if arrays[..i].iter().any(|b| b.name == a.name) {
+            return Err(fe_invalid(
+                a.name,
+                format!("{section} array '{}' is given twice", a.name),
+            ));
+        }
+        if a.components == 0 {
+            return Err(fe_invalid(
+                a.name,
+                format!("{section} array '{}' has 0 components", a.name),
+            ));
+        }
+        if a.values.len() != a.components * n {
+            return Err(fe_invalid(
+                a.name,
+                format!(
+                    "{section} array '{}' has {} values, expected {} ({} components x {n})",
+                    a.name,
+                    a.values.len(),
+                    a.components * n,
+                    a.components
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn fe_data_block(out: &mut String, tag: &str, arrays: &[FeArray]) {
+    if arrays.is_empty() {
+        return;
+    }
+    let _ = writeln!(out, "<{tag}>");
+    for a in arrays {
+        data_array(out, "Float64", a.name, a.components, |o| {
+            for x in a.values {
+                let _ = write!(o, "{x:?} ");
+            }
+            o.push('\n');
+        });
+    }
+    let _ = writeln!(out, "</{tag}>");
+}
+
+/// XML unstructured grid (`.vtu`) of finite-element cells from plain arrays: `points`, cell blocks in VTK node order,
+/// point data (one row per point) and cell data (one row per cell, cells numbered block by block). ASCII with the shortest
+/// round-trip formatting, as [`vtu_string`]. Refuses an unknown cell type, a connectivity that is not a whole number of
+/// cells or names a missing point, and an array of the wrong length (named by the array), with no components, or with an
+/// empty, repeated or non-XML name.
+pub fn fe_vtu_string(
+    points: &[Vec3],
+    blocks: &[FeCellBlock],
+    point_data: &[FeArray],
+    cell_data: &[FeArray],
+) -> Result<String> {
+    let mut n_cells = 0usize;
+    for (b, block) in blocks.iter().enumerate() {
+        let npc = vtk_cell_nodes(block.cell_type).ok_or_else(|| {
+            fe_invalid(
+                "cell_type",
+                format!("block {b}: cell type {} is not 10, 12 or 24", block.cell_type),
+            )
+        })?;
+        if block.connectivity.is_empty() || block.connectivity.len() % npc != 0 {
+            return Err(fe_invalid(
+                "connectivity",
+                format!(
+                    "block {b}: {} indices is not a positive multiple of {npc} nodes per cell of type {}",
+                    block.connectivity.len(),
+                    block.cell_type
+                ),
+            ));
+        }
+        for (k, &p) in block.connectivity.iter().enumerate() {
+            if p >= points.len() {
+                return Err(fe_invalid(
+                    "connectivity",
+                    format!(
+                        "block {b}: cell {} names point {p}, the grid has {} points",
+                        k / npc,
+                        points.len()
+                    ),
+                ));
+            }
+        }
+        n_cells += block.connectivity.len() / npc;
+    }
+    check_fe_arrays("point", point_data, points.len())?;
+    check_fe_arrays("cell", cell_data, n_cells)?;
+    let mut o = String::new();
+    o.push_str("<?xml version=\"1.0\"?>\n<VTKFile type=\"UnstructuredGrid\" version=\"1.0\" byte_order=\"LittleEndian\">\n<UnstructuredGrid>\n");
+    let _ = writeln!(
+        o,
+        "<Piece NumberOfPoints=\"{}\" NumberOfCells=\"{n_cells}\">",
+        points.len()
+    );
+    fe_data_block(&mut o, "PointData", point_data);
+    fe_data_block(&mut o, "CellData", cell_data);
+    o.push_str("<Points>\n");
+    data_array(&mut o, "Float64", "Points", 3, |s| {
+        for p in points {
+            let _ = write!(s, "{:?} {:?} {:?} ", p[0], p[1], p[2]);
+        }
+        s.push('\n');
+    });
+    o.push_str("</Points>\n<Cells>\n");
+    data_array(&mut o, "Int64", "connectivity", 1, |s| {
+        for block in blocks {
+            for p in block.connectivity {
+                let _ = write!(s, "{p} ");
+            }
+        }
+        s.push('\n');
+    });
+    data_array(&mut o, "Int64", "offsets", 1, |s| {
+        let mut end = 0usize;
+        for block in blocks {
+            let npc = vtk_cell_nodes(block.cell_type).expect("checked");
+            for _ in 0..block.connectivity.len() / npc {
+                end += npc;
+                let _ = write!(s, "{end} ");
+            }
+        }
+        s.push('\n');
+    });
+    data_array(&mut o, "UInt8", "types", 1, |s| {
+        for block in blocks {
+            let npc = vtk_cell_nodes(block.cell_type).expect("checked");
+            for _ in 0..block.connectivity.len() / npc {
+                let _ = write!(s, "{} ", block.cell_type);
+            }
+        }
+        s.push('\n');
+    });
+    o.push_str("</Cells>\n</Piece>\n</UnstructuredGrid>\n</VTKFile>\n");
+    Ok(o)
+}
+
+/// Write a finite-element `.vtu` file (see [`fe_vtu_string`]).
+pub fn write_fe_vtu(
+    path: impl AsRef<Path>,
+    points: &[Vec3],
+    blocks: &[FeCellBlock],
+    point_data: &[FeArray],
+    cell_data: &[FeArray],
+) -> Result<()> {
+    std::fs::write(path, fe_vtu_string(points, blocks, point_data, cell_data)?).map_err(|e| Error::Io(e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,5 +16,6 @@ rcfd-core.workspace = true
 rcfd-mesh.workspace = true
 rcfd-io.workspace = true
 rcfd-fv.workspace = true
+rcfd-fem.workspace = true
 serde_json.workspace = true
 png.workspace = true
