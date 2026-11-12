@@ -248,3 +248,129 @@ maintainer made in person, and each is listed again in the addendum. None change
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the diagnosis runs of S0 and H1 to H6 and before any code or run of the corrective)
+
+The test file was committed compiled and not run (`0cf3da56`), then `s0_rest_remainder_is_that_of_adr_0241` and
+`diagnosis_of_the_remainder_at_rest` were started once, release. When this amendment was written the 80 by 80 series of
+H8 and the periodic box (both printed only, no decision) were still running in that one process; every number with a
+deciding number was printed. No limit or deciding number is changed.
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| S0 (set-up) | `[5.0e-6, 5.3e-6]`; `[2.2, 2.4]` | `5.1262e-6`; `2.2956` | held |
+| H1 the ratio is an effect of the measure | confirmed `q_400 >= 1.8`; ruled out `<= 1.3` | `q_100 = 0.059`, `q_200 = 0.374`, `q_400 = 0.623` (`delta_N`: `3.01e-6`, `2.89e-6`, `2.23e-6`, `1.45e-6` for `N` = 100 to 800) | **ruled out** |
+| H2 left by the first step | confirmed `R_start >= 4`; ruled out `< 3.5` | `2.2956` (`5.1262e-6`, `2.2331e-6`: the numbers of S0 to five digits) | **ruled out** |
+| H3 left by the outer loop or the correctors | confirmed either `>= 1e-6`; ruled out both `<= 1e-7` | `e_out = 1.46e-11`, `e_corr = 1.46e-11` | **ruled out** |
+| H4 only the pressure | no decision | pressure `q_100 = -0.014`, `q_200 = 0.309`, `q_400 = 0.575` (`delta_N` of the pressure `3.9e-5` to `2.1e-5`): the same behaviour as the velocity | printed |
+| H5 it enters through the face flux | confirmed `D_200 >= 0.5 max abs(d_200)`; ruled out `<= 0.1` | `D_200 = 3.95e-6` against `5.13e-6` (`0.77`); the defect itself is `2.8e-4` | **confirmed** |
+| H6 it is made at the boundary cells | confirmed near `>= 5` inner; ruled out `<= 2` | near `3.95e-6`, inner `3.04e-7`: `12.98` (and `12.99` for `D_400`); the largest `d_200` of the velocity is in a cell of the second layer next to a corner | **confirmed** |
+
+Printed: without the carry-over (`ddt_correction = false`) `max abs(d_200) = 1.29e-4`, ratio `1.91`. The difference between
+consecutive step sizes hardly falls between 100 and 400 steps (order `0.06`, `0.37`) and falls at `0.62` between 400 and
+1600: no power of `dt`, a function that bends where `a dt` passes `c0` (`a dt = 2.2` at 100 steps, `0.28` at 800), as the
+arithmetic before the registration said. A common start over the first fifth of the time changes no digit: the
+remainder is a function of the present step size, not an accumulated error.
+
+So the diagnosis leaves H7, and a corrective is registered.
+
+### The corrective C: a face coefficient the carry-over is consistent with (opt-in)
+
+Derivation (first principles; the idea of a face coefficient built from the face value of the spatial coefficient is
+that of Cubero and Fueyo 2007 and Pascau 2011, recalled from memory, not opened; the subtraction of `C(G p)` is F-G of
+ADR 0073). Notation as above: `a_P` the momentum diagonal, `rAU = V / a_P`, `c0 / dt + a = a_P / V`, so `a` is the
+non-temporal diagonal per volume.
+
+With the outer loop converged the cell velocity is `u = HbyA - rAU G p`. The default flux is `phi = interp(HbyA) . S +
+(gamma / dt) K - gamma snGrad p abs(S)` with `gamma = interp(rAU)` and `K = c1 d^n - c2 d^{n-1}` the carried defects. C
+replaces this, on internal faces, by
+
+`phi = interp(HbyA) . S - interp(rAU G p_lag) . S + Gamma_f interp(G p_lag) . S + (Gamma_f / dt) K - Gamma_f snGrad p abs(S)`,
+
+`Gamma_f = 1 / interp(1 / rAU)` (the harmonic face value of `rAU` with the linear weights; on a boundary face the cell
+value, as now),
+
+where `p_lag` is the pressure the corrector starts from and `G` the Green-Gauss gradient the corrector uses for the
+velocity (with a body force `b`: `G p_lag - b` in both added terms, and the body-force face term takes `Gamma_f` like
+the pressure term). In the code: the face coefficient handed to the carry-over, the pressure equation and the flux
+correction is `Gamma_f` in place of `gamma`, and `[Gamma_f interp(x) - interp(rAU x)] . S` with `x = G p_lag - b` is
+added to `phiHbyA` before the pressure solve. Nothing else changes; the cell velocity is `HbyA - rAU G p` as before.
+
+Converged (`p_lag = p`), `interp(HbyA) - interp(rAU G p) = interp(u)`, so the face defect obeys
+
+`d^{n+1} = Gamma_f R(p) + (Gamma_f / dt)(c1 d^n - c2 d^{n-1})`, `R(p) = interp(G p) . S - snGrad p abs(S)`.
+
+`1 / Gamma_f = interp(a_P / V) = c0 / dt + a_f` with `a_f = interp(a)`, so this is
+
+`(c0 d^{n+1} - c1 d^n + c2 d^{n-1}) / dt + a_f d^{n+1} = R(p^{n+1})`:
+
+the BDF2 formula applied to `d' + a_f d = R(p)`, an equation in which the step size does not appear. Its solution is
+second-order accurate in `dt`, and a steady one is `d = R / a_f` exactly, whatever the step. The default satisfies the
+same statement only where `a` is equal in the two cells of the face. F-G of ADR 0073 (the commutator alone, `gamma`
+kept) leaves `interp(w) / interp(a w)` in the steady defect, which the arithmetic above puts at 1.2 percent over the
+range of `dt` for diagonals of 5 and 4; C leaves none, which is why C and not F-G is built.
+
+The fixed point of the correctors is unchanged in kind (with `p_new = p_lag` the added terms are those of the converged
+formula); the lag `C(G (p_new - p_lag))` of a finite number of correctors is removed by the outer iterations, as every
+other corrector lag.
+
+**The switch.** New field `PimpleSettings::rhie_chow_step_consistent: bool`, default `false`, set by `piso()`; no schema
+key, no `rcfd-api` change. With `false` every statement of the step is the present one (the new expressions sit in
+branches taken only with the field set). It acts in `PimpleSolver::step_with` on a mesh at rest and in `OversetSolver`
+(below). It does not act (the step is the default one, said in the field's documentation) with the consistent
+correctors, on the library's own moving-mesh steps or in the fractional step; coupled (periodic) faces, face jumps and
+the immersed-solid flux reconstruction are left as they are (L1, L2). The helpers (the harmonic face value and the
+added flux) go in a new file `crates/rcfd-fv/src/pimple/face_consistent.rs`, so that the hunk in `pimple.rs` is the
+field, its default, the choice of the face coefficient and one call.
+
+**The overset step** (`overset.rs`, `piso`). The same two changes, with the fringe and hole cells treated as the step
+treats `HbyA` and `rAU` there (M6 of ADR 0219): `Gamma_f` from the `rAU` the step already builds (interpolated at the
+fringe cells, `dt` at the hole cells); the cell quantities `q = rAU G p_lag` and `x = G p_lag` of a fringe cell are the
+donor interpolants of the calculated values (the stencil weights that give its `HbyA`), and zero at a hole cell; the
+added flux is `[Gamma_f interp(x) - interp(q)] . S`. Then `interp(HbyA) - interp(q)` is the face value of the cell
+velocities, fringe cells included (a fringe velocity is the donor interpolant of `HbyA - rAU G p`), so the defect
+equation above holds on every internal face with a calculated cell. With every cell calculated it is the library's
+formula, expression for expression.
+
+### Checks of the corrective (limits fixed here)
+
+R with C is R with `rhie_chow_step_consistent = true`.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| A1 (acceptance) | R with C in 200, 400, 800 steps: `max abs(d_200) / max abs(d_400)` | `>= 4` |
+| H7 | the same runs: `max abs(d_200)` | confirmed `<= 1.7e-6` and A1 met; ruled out `>= 3.6e-6` |
+| C1 | the same runs: `D_200`, the largest change of the face defect over all internal faces | `<= 4e-7` (a tenth of the default's `3.95e-6`) |
+| C2 | R with C in 100, 200, 400, 800 steps: the order between consecutive pairs `q_200` | `>= 1.7` |
+| A3 (no harm) | R in 800 steps: the largest error against the exact field with C over that of the default | `<= 1.05` |
+| C3 | **the steady solution does not depend on the step.** The lid-driven cavity (`cavity_2d(20, 1.0)`, `nu = 0.1`, lid velocity 1, PS, BDF2, three outer iterations) from rest to `t = 20` in steps of `0.04` and of `0.01`, with C: the largest difference of the cell velocities of the two runs; printed: the change of the velocity over the last step of each | `<= 1e-9` |
+| C3n (negative control) | the same two runs without C | `>= 1e-6` |
+| C4 | every step of every run with C: continuity | `<= 1e-9` |
+| E1 | TGB_1 of ADR 0241 Q0b (the level-1 background at rest, 40 steps of `0.0025`, BDF2, three outer iterations) with C: `OversetSolver::advance_mesh` against `PimpleSolver::step`: the largest difference of `u`, `p`, `phi` (over the largest flux) | `<= 1e-12` each |
+| E1n (negative control) | the library with C against the library without, the same run: `u` | `>= 1e-9` |
+| A2 (acceptance) | TG_2 of ADR 0241 (BDF2, three outer iterations, 200, 400, 800 steps) with C: `max abs(d_200) / max abs(d_400)` | `>= 4` |
+| A2b | the same runs: `max abs(d_200)` | `<= 2.125e-5` (the default's, ADR 0241 D1) |
+| A2c | the same runs: continuity of the calculated cells, every step; `e(TG_2)` in 800 steps over the default's `3.179e-4` | `<= 1e-9`; `<= 1.05` |
+| B1 (defaults) | unedited, with the field off: the unit tests of `rcfd-fv` (`--lib`), `w33b_default_bits`, `consistent_defaults_f301`, `piso_thin_gap_f299`, `fractional_step`, `periodic`, `w48v_corrector_control`, `w48ab_dt_trigger`, `overset_f134`, `overset_f134_records`, `overset_f335`, `overset_f335_records`, `overset_f338` (Q0b: the overset step equals the library bit for bit), `ale_gcl`, `immersed_solid_f219` (their non-ignored tests); `cargo test -p rcfd-api --release --test baseline_hashes` | pass |
+
+B2 of the registration is dropped as a separate check: it is S0 run on the final tree (S0's band is the number of the
+tree before the change).
+
+Mutations of the corrective (scratch copy, each alone, the named check must fail):
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MC1 | the added flux is left out (the harmonic coefficient kept) | C3 |
+| MC2 | the face coefficient stays `interp(rAU)` (the added flux kept: F-G of ADR 0073) | C3 |
+| MC3 | the added flux with the opposite sign | C3 |
+| MC4 | the gate inverted in `pimple.rs` (C acts when the field is off) | S0 |
+| MC5 | `overset.rs`: the fringe cells take their own `rAU G p_lag` in place of the donor interpolant | A2 (if A2 is met; otherwise the number is reported and the mutation counts as not caught) |
+| MC6 | `overset.rs`: the added flux left out (the harmonic coefficient kept) | E1 |
+
+Predictions (mine): A1 met, `max abs(d_200)` between `1e-8` and `5e-7`; C1 near `1e-8`; C2 about 2 unless the remainder
+is so small that the linear solves show (`1e-11`); A3 `1.00`; C3 near `1e-12`, C3n near `1e-4`; E1 zero or `1e-15`. A2:
+uncertain. The coupled meshes carry five times the remainder of the single mesh (ADR 0241 did not show that it is the
+same term); if the fringe cells make a step-dependent part of their own, A2 is missed and the item is partial by the
+rule.
+
+The decision rule is unchanged.
