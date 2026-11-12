@@ -744,6 +744,43 @@ about its own axis, else the mesh is refused with a located error at `mesh.trans
   "mesh.transform.rotate_z_deg"`). The example project `example-projects/wind-tunnel` has both forms at 4 and 2 degrees
   (`naca0012-aoa4.toml`, `naca0012-aoa4-rotated.toml`, ...) with their runs.
 
+### Solution-adaptive steady runs (`[mesh.adapt]`, F-342, ADR 0262)
+
+The optional table `[mesh.adapt]` runs the adaptive loop of `rcfd_fv::adaptive` (ADR 0242, criteria of ADR 0247): a
+steady `simple` / `simplec` solve on a lattice of the case's box mesh, then, `cycles` times, an indicator of the solution,
+marks, a refinement with hanging nodes (2:1 balanced), the transfer of the velocity and pressure to the new mesh and a
+new solve. Writing the table (even empty) turns it on; a case that does not write it keeps its text, its hash, its mesh
+and its results. An empty table is ADR 0242's adapted cavity: 2 cycles, level 2, 40 percent of the cells per step by
+`|grad U| h`. `cases/cavity/adapt_re100.toml` is that cavity (24 x 24 base, 2799 cells at the end).
+
+| key | default | meaning |
+| --- | --- | --- |
+| `cycles` | 2 | adaptation steps (`cycles + 1` solves; 0 = one solve on the lattice) |
+| `max_level` | 2 | finest level (1 to 10): a base cell is split at most this often along each refined axis |
+| `marking` | `"fixed_fraction"` | `fixed_fraction`: refine the `ceil(refine_fraction N)` cells with the largest indicator; `target_count`: refine towards `target_cells` on a geometric schedule (ADR 0247 D2) |
+| `refine_fraction` | 0.4 | fraction marked per step (0 to 1) |
+| `target_cells` | 0 | cell count of the last step; needed (> 0) with `target_count` |
+| `indicator` | `"velocity_gradient"` | `velocity_gradient` = the norm of grad U times the cell length h; `velocity_gradient_unscaled` = the norm of grad U; `edge_length` = the variation of `U` along the cell edges weighted by the cell measure to the power `(r - 1) / d` (ADR 0247 D3) |
+| `edge_length_exponent` | 1.0 | `r` of `edge_length` (`1 + d/2` equidistributes the `L2` norm) |
+| `register` | `""` | a register name (`[registers.<n>]`, not of type `field`) that confines or drives the refinement |
+| `register_use` | `"confine"` | `confine`: marks outside the register are dropped; `refine`: every register cell below `max_level` is refined |
+| `balance` | true | 2:1 balance of the refinement |
+| `transfer` | `"linear"` | refined cells take the parent value plus its gradient (`linear`) or the parent value (`injection`) |
+| `max_iterations` | 20000 | iterations per solve |
+| `tolerance` | 1e-7 | a solve stops when the largest velocity change of an iteration is below it and the continuity error below 1e-6 |
+
+The lattice is the mesh of `mesh.generator = "cavity_2d"`, `"box_2d"` or `"box_3d"` (same points and patches, cells in
+the lattice's order; 2-D meshes are refined in x and y, `box_3d` in all three directions). The mesh must be uniform
+(`mesh.source = "generator"`, no `grading`, `wall_layers`, periodic pairs, `[mesh.box_3d] section` other than `"box"` or
+mesh rotation), the flow laminar with constant properties: turbulence, energy, scalars, sources, components, rheology,
+properties, user functions, velocity expressions, catalogue conditions, moving meshes, particles, body forces and the
+steady-solver options that the loop's solver would not carry (`linear_upwind_limiter`, `periodic_gradient`,
+`velocity_correction`, `simplec_boundary_compensation`, `pressure_interpolation`, the pseudo-time keys, `residual_norm`,
+`component_diagonal`, `initial.method` other than `uniform`) are located errors, as are `[convergence.*]` conditions
+(each solve of the loop stops by `tolerance`; `solver.max_iterations` is not used). Reports are evaluated on the final
+mesh. The run is one step for the run-control driver: `rcfd run` writes the final mesh's solution, one monitor row and
+the stop reason with each solve's cells and iterations; the run cannot be checkpointed.
+
 ## `compressible` and `solver.algorithm = "compressible"`
 
 Selecting the algorithm switches to the explicit density-based Euler solver (no viscosity, no heat conduction). Settings:

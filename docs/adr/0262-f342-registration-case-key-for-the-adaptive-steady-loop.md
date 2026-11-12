@@ -292,3 +292,113 @@ ignored record, otherwise unedited): the same as S1 with "contain no `adapt`" re
 `/mesh/adapt` (JSON pointer), `to_toml` has no line `[mesh.adapt]` and `to_json_string`'s value has no `adapt` key under
 `mesh`; and with the table: the data has `/mesh/adapt`, `to_toml` has the line `[mesh.adapt]`, and the settings hash differs.
 The limit (as stated) and every other clause are unchanged. S1b runs once.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows. The registration is
+e3636be2, the code and tests e6ad4616 (committed before any run), amendment 1 4caf2c39, the record of S1 and the test S1b
+2b6f8aea. Each registered check ran once; none was repeated to change a result.
+
+**Built as registered** (D1 to D6):
+
+- `crates/rcfd-api/src/schema.rs`: one field, the optional table `mesh.adapt` (`crate::sim::adapt_schema`).
+- `crates/rcfd-api/src/sim/adapt.rs` (new submodule of `sim`): the schema, `present`, the static check (V3 to V8),
+  `base_lattice` (D2), `settings`, the build-time comparison `not_plain` (D4), `new_adaptive`, the `setup` closure, `run`
+  (D3: `run_adaptive_simple`, `_with`, `_target` or `_marked`), `Simulation::step_adaptive`.
+- `crates/rcfd-api/src/sim.rs`: `mod adapt` and its re-exports; the field `adapt` of `Simulation`; `new` split into the mesh
+  step and `from_geometry` (the old body after the mesh, unchanged); the step hook (first statement of `step`);
+  `supports_checkpoint` false with the table; the accessors `adaptive_cycles` and `adaptive_lattice`.
+- `crates/rcfd-api/src/dynmesh.rs`: `check` starts from `crate::sim::adapt_check(case)` (empty without the table).
+- `cases/cavity/adapt_re100.toml`; `docs/case-schema.md` (a section with a key table, no TOML block).
+- Tests: `crates/rcfd-api/tests/adapt_case_f342.rs` (7 run; S1 kept as an ignored record; R1 ignored as heavy) and
+  `crates/rcfd-cli/tests/adapt_case_f342.rs` (2). No existing test, hash table or golden was edited. `rcfd-fv`,
+  `rcfd-mesh`, the `rcfd-cli` sources and `case.rs` are not changed.
+
+### Results
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K0 | all pass, no file edited | `rcfd-api`: `case_hashes_w48u` 1, `baseline_hashes` 3 (1 ignored as before), `w48v_adaptive_correctors` 5 (4 ignored as before), `rules_w19c` 8 (1 ignored as before), `mesh_transform_w48u` 13, `physics_schema` 11, `tree_wiring_f259` 9, `layering_ale_f259` 7 (1 ignored as before), `registers` 7, `dynamic_mesh` 5 (1 ignored as before); `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `project_list_f270` 1: all passed | held |
+| S1 | as stated | failed at its first assertion: the set-up's title holds "adapted" (amendment 1); kept as an ignored record | defective set-up |
+| S1b | as stated | without the table: no `/mesh/adapt` in the data, no `[mesh.adapt]` line, no `adapt` key in the JSON; defaults read (cycles 2); `Simulation::new`'s mesh equals `build_mesh`'s; with the table: present, settings hash `7d7d5df876207d92` against `6ccf21e4afaf224b` | met |
+| E1 | bit for bit | records, levels, mesh hash, `u`, `p`, `phi` equal; 316 cells | met |
+| E1n | as stated | cells 64, 142, 316; 88, 72, 70 iterations, all converged; level 2 present | held |
+| E2 | bit for bit | T-T 301 cells, T-E 313, T-U 313, T-RC 235, T-RR 112, T-C (box_2d, simple) 142, T-3 (box_3d, 20 iterations per solve, not converged) 176: each equal | met |
+| E2n | each differs from T-S | 301, 313, 313, 235, 112 cells against 316 | held |
+| E2t | within 10 percent of 300 | 301 | held |
+| E2r | `y >= 0.625` | lowest level-1 centre `y = 0.78125` | held |
+| Z | bit for bit | 64 cells, 88 iterations; `u`, `p`, `phi` equal | met |
+| R1a | bit for bit | the case file through the tree against the library on the tree's lattice: records, levels, mesh, fields equal; 2799 cells | met |
+| R1b | as stated | cycle cells 576, 1269, 2799 with 97, 122, 188 iterations (ADR 0242's A the same), all converged; F 853 iterations, converged; dense samples of the tree against ADR 0242's A `9.9e-11` (limit `1e-5`); `D(A) = 0.002311` (ADR 0242's A 0.002311); `G(A) = 0.009159` (A 0.009159, F 0.009119) | met |
+| L | as stated | V1 to V8 (25 inputs) each at its path; the 10 controls (nine set-ups and the case file): no diagnostic | met |
+| X1 | exit 0; relative `<= 1e-12` | exit 0, `solution.vtu` written; `res_u` 9.52099157010459e-6, `res_p` 1.9198313429115884e-5, `continuity` 2.5422756261272994e-8 from `monitors.csv`, equal to the in-process run (difference 0) | met |
+| X2 | exit 3, path named | exit 3 for both: `line 23: solver.algorithm: ...`, `line 11: mesh.adapt.refine_fraction: 1.5 outside [...]` | met |
+
+The 9.9e-11 of R1b is the rounding of the slab depth (1/24 against 0.1): every solve stopped at the same iteration as ADR
+0242's, so the difference is rounding, not the stop rule (the arithmetic allowed up to about 2e-6). R1 took 81 s (F 69 s);
+the tree run 6.4 s.
+
+### Mutations
+
+`git archive` of 2b6f8aea in `w49i-work/f342-scratch/mut`, target `f342-scratch/target`, script `f342-scratch/mutate.py`
+(exact replacement found once, the file restored and compared byte for byte after each).
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | `edge_length` ignored | E2 (T-E) | failed: T-E cycle records |
+| M2 | confinement not applied | E2 (T-RC) | failed: T-RC cycle records |
+| M3 | 2-D lattice 0.1 thick | E1 | failed: E1 mesh hash |
+| M4 | step hook skipped | E1 | failed: 10 plain steps instead of one adaptive step |
+| M5 | algorithm check removed | L | failed: V5 located at `mesh.adapt` (the build-time backstop of D4) instead of `solver.algorithm` |
+| M6 | `target_cells` ignored | E2 (T-T) | failed: T-T cycle records |
+
+### fmt and clippy
+
+`cargo fmt -p rcfd-api --check`, `cargo fmt -p rcfd-cli --check`: clean. `cargo clippy --release -p rcfd-api -p rcfd-cli
+--all-targets -- -D warnings`: clean.
+
+### Deviations and disclosures
+
+- S1's set-up was defective (amendment 1); S1b ran once and met its limit.
+- The box register of the library runs is `rcfd_post::registers::Register::in_box` (the registration said `rcfd_mesh`'s;
+  the tree's `box` register uses `rcfd_post`'s).
+- Equality also compares the mesh content hash; `Simulation::adaptive_lattice` was added to compare the tree's levels.
+- The case file writes `cycles`, `max_level`, `refine_fraction` and `indicator` at their defaults (the registration said T-S
+  at 24 x 24 with an empty table): the same settings.
+- The sampler asks for points at `z = 0` instead of 0.05; its box test looks at x and y only.
+- V8's turbulence input also gives an existing diagnostic (`boundaries.lid.turbulence_length`).
+- `docs/case-schema.md` was edited after K0; `case_hashes_w48u` and `rules_w19c` ran again after it and passed (prose and a
+  key table, no TOML block). The new case file appears in H1 as a new source (printed, not compared), as read 4 said.
+
+### Not run
+
+The whole workspace suite and the gate (the lead runs them); the Studio and GUI tests (`rcfd-studio`, `rcfd-gui`), whose
+schema models were not checked; `rcfd-mcp` `tool_list_f275`.
+
+### Decision by the registered rule
+
+K0, S1 (as S1b) and Z held; E1, E2, R1a, R1b, L, X1 and X2 met; E1n, E2n, E2t and E2r held; every mutation failed its
+test. F-342 is proposed **done**, pending the maintainer's acceptance.
+
+### Remaining questions
+
+- **Q4. Graded and inflated box meshes.** `AmrMesh` takes any coordinate lists, so `box_2d` with `grading` or
+  `wall_layers` could be adapted too. Options: (a) keep them refused (as built); (b) build the lattice from the generator's
+  graded coordinates in a follow-up with its own equality check. Recommendation (b) when a case needs it; no default
+  changes.
+- **Q5. Monitors of the loop.** One monitor row for the whole run. Options: (a) as built; (b) one row per solve, with the
+  cell count as a monitor. Recommendation (a) until the Studio shows adaptive runs.
+
+### For the lead: roadmap entries
+
+**F-342**, proposed status: done (pending the maintainer's acceptance). New note:
+
+> From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE pending acceptance (ADR 0262, 2026-11-12): the optional table [mesh.adapt] (absent from every case that does not write it; an empty table is ADR 0242's loop) runs rcfd_fv::adaptive on a steady laminar simple / simplec case of mesh.generator cavity_2d, box_2d or box_3d (uniform): the lattice takes the generator's coordinates and patches, the first step runs the whole loop and leaves the final mesh and solver; keys cycles, max_level, marking (fixed_fraction / target_count with target_cells), refine_fraction, indicator (velocity_gradient, velocity_gradient_unscaled, edge_length with edge_length_exponent), register and register_use (confine / refine; ADR 0247 R3), balance, transfer, max_iterations, tolerance. Tree runs equal library runs bit for bit on the 8 x 8 cavity (316 cells), with each criterion, on a box_2d channel and on a box_3d cube; the case file cases/cavity/adapt_re100.toml equals the library on its lattice bit for bit and gives ADR 0242's numbers (cells 576, 1269, 2799 with ADR 0242's iteration counts, centreline difference to the 96 x 96 solution 0.002311, Ghia 0.009159; within 9.9e-11 of ADR 0242's run, whose slab is 0.1 thick against the generator's 1/24); models and solver options the loop would drop, non-uniform or file meshes and other algorithms are located errors (also through rcfd validate); rcfd run gives the in-process run's monitors; baseline hashes, case_hashes_w48u and ADR 0257's K0 tests pass unedited; six mutations each failed their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5).
+
+**F-343**: its note's last sentence should read:
+
+> Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new options are case keys since ADR 0262 (2026-11-12, F-342): [mesh.adapt] marking = "target_count", indicator = "edge_length", register and register_use.
+
+**F-102**: in its note, "Not delivered (follow-ups): a case-file key;" should read:
+
+> Not delivered (follow-ups): a case-file key (since ADR 0262, 2026-11-12: [mesh.adapt], F-342);
