@@ -225,3 +225,13 @@ One geometry (the rigid column in pure translation); no rotating wall, no smooth
 (the six-DOF path keeps the vector by the same lines, ADR 0269 W1). A wall cell off the face normal is covered by ADR 0269
 SK1 to SK3 for the same formula, not re-run here. The sliding step keeps no vector in the tree (ADR 0269 Q4) and is not
 covered. The Studio and GUI editors read the schema and are not touched.
+
+## Amendment 1 (2026-11-12, after the code was written, before any run of a check or a mutation)
+
+**MU6 is an equivalent mutation** (seen by reading the code of D2, nothing run). `report_pressure_face_values` loops over
+the entries of the kept vector, so an empty vector (before the first step, or the layered step) corrects no face with or
+without the length guard; the tree never holds a non-empty vector of another length (the vector is written only by the
+loose and strong steps on the mesh of the step, and a mesh-changing step keeps none). No check can catch MU6 through the
+tree. It stays in the table and is run once as registered; its result is recorded. The decision rule's "every mutation
+caught" is read as "every mutation that is not equivalent caught", MU6 counted as equivalent if it survives. No check,
+limit or other mutation is changed.
