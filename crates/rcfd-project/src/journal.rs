@@ -19,8 +19,10 @@ use std::time::{Duration, Instant};
 
 /// Project-relative lock of the journal's append.
 pub const LOCK: &str = ".rcfd/locks/journal.lock";
-/// Longest wait for [`LOCK`] before a line is appended without `seq`.
-pub const LOCK_WAIT: Duration = Duration::from_millis(250);
+/// Longest wait for [`LOCK`] before a line is appended without `seq`. The lock is not fair: a writer that appends in a
+/// loop can retake it before a waiting one wakes (on Windows a 1 ms sleep can last a whole timer tick), so 250 ms let
+/// two busy writers leave lines unnumbered; 2 s, the wait of the edit lock, is the bound now (ADR 0188 addendum 2).
+pub const LOCK_WAIT: Duration = Duration::from_secs(2);
 /// A [`LOCK`] older than this is removed.
 pub const LOCK_STALE: Duration = Duration::from_secs(5);
 /// How much of the journal's end is read to find the last `seq` (the whole file only when this holds none).

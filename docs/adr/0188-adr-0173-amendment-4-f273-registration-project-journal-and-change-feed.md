@@ -394,3 +394,14 @@ record changes no limit, check or result above.
   0195, Decisions needed item 6), and (b) is what main holds.
 * **Q7 (a reader starts at the present).** Not asked. This ADR proceeded on (a); F-275 then built (b), `read_feed {from_seq}`
   (ADR 0195, Decisions needed item 7), and (b) is what main holds.
+
+## Addendum 2 (2026-11-12, the lead): the journal lock's wait
+
+The gate of 2fa39daf (2026-11-12) failed `journal_f273::c3s_two_appenders_without_a_shared_edit_lock_number_every_line_once`
+with 3 of 600 lines unnumbered ("a writer waited longer than the lock's wait"), and the test failed alone in 2 of 3 runs
+(1 line of 600). Cause: the lock of `journal::lock` is not fair. A writer that appends in a loop removes and retakes the lock
+file at once, while the waiting writer sleeps 1 ms between tries, which on Windows can last a whole timer tick; with two busy
+writers one of them could go 250 ms without the lock. Fix: `LOCK_WAIT` raised from 250 ms to 2 s, the wait of the edit lock
+(`atomic::EDIT_LOCK_WAIT`). It stays below `LOCK_STALE` (5 s), so the held-lock test's bound holds. No test was edited; the
+four tests of `journal_f273` then passed in 5 of 5 runs. The lock stays unfair: under heavier contention a line can still be
+appended without `seq`, which the journal's best-effort contract allows.
