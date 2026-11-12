@@ -577,10 +577,12 @@ fn r0_m2_first_control() {
     );
 }
 
-/// ADR 0268 R1: T with the bounded forcing (D/40 of the T family, bounded).
+/// ADR 0268 R1: T with the bounded forcing (D/40 of the T family, bounded). Known miss (addendum 1): the run stopped at step
+/// 2951 (t = 2.951) by the divergence guard, pressure NaN in the pressure solve (cell 0 at the inlet corner), so S2 and the
+/// clause A2-T-2 that needs its numbers are missed; not diagnosed (library behaviour, outside this item).
 #[test]
-#[ignore = "heavy record (ADR 0268 R1, about 0.65 h); run once in release with --ignored"]
-fn r1_t_bounded() {
+#[ignore = "known miss (ADR 0268 R1): T with build_second_order_bounded stops at step 2951, pressure NaN; heavy record, run once in release with --ignored"]
+fn r1_t_bounded_known_miss() {
     record("R1");
 }
 
@@ -795,4 +797,119 @@ fn s7_run_helper_three_steps() {
             o.cls
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// ADR 0268 addendum 1: the registered limits on the measured numbers (max C_D, max C_L of each run, as printed by its record)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// (max `C_D`, max `C_L`) of the runs. T and M2 with `build`: ADR 0249 (M2 re-measured by R0 to all digits); M2 bounded: ADR
+/// 0254; the others: the records of ADR 0268 (commit 07d51775). R1 (T bounded) stopped and has no numbers.
+const T_F: (f64, f64) = (3.24624, 1.01134);
+const T2_F: (f64, f64) = (3.22876, 0.98911);
+const M2_F: (f64, f64) = (3.22841, 0.98432);
+const M3_F: (f64, f64) = (3.22460, 0.98311);
+const T2_B: (f64, f64) = (3.22439, 0.98762);
+const M2_B: (f64, f64) = (3.20930, 0.97593);
+const M3_B: (f64, f64) = (3.22024, 0.98167);
+const T_F_HALF: (f64, f64) = (3.24707, 1.01241);
+const M2_F_HALF: (f64, f64) = (3.22878, 0.98396);
+const TC_F_HALF: (f64, f64) = (3.22734, 0.98606);
+const TE_F: (f64, f64) = (3.24624, 1.01134);
+/// R1: T with the bounded forcing stopped at step 2951 (no numbers).
+const T_B: Option<(f64, f64)> = None;
+
+/// The errors in percent of max `C_D` and max `C_L`.
+fn errs(v: (f64, f64)) -> (f64, f64) {
+    (pct(v.0, CD_MAX_REF), pct(v.1, CL_MAX_REF))
+}
+
+/// ADR 0268 addendum 1: every registered limit that the measured numbers meet (A1 on the four D/80 runs; A2 where met; the part
+/// verdicts P1, P2, P3, P5 as registered). The misses are the two known-miss tests below and `r1_t_bounded_known_miss`.
+#[test]
+fn addendum_registered_limits_met() {
+    for (name, v) in [
+        ("T2 build", T2_F),
+        ("M3 build", M3_F),
+        ("T2 bounded", T2_B),
+        ("M3 bounded", M3_B),
+    ] {
+        assert!(
+            within_limit(v.0, CD_MAX_REF) && within_limit(v.1, CL_MAX_REF),
+            "A1 {name}: {v:?}"
+        );
+    }
+    let d = |a: (f64, f64), b: (f64, f64)| {
+        let (ea, eb) = (errs(a), errs(b));
+        (eb.0 - ea.0, eb.1 - ea.1)
+    };
+    // A2 where met: T family with build (both), M family with build (drag), M family bounded (both)
+    let (t, t2, m2, m3, m2b, m3b) = (errs(T_F), errs(T2_F), errs(M2_F), errs(M3_F), errs(M2_B), errs(M3_B));
+    assert!(decreases(t.0, t2.0) && decreases(t.1, t2.1), "A2-T-1");
+    assert!(decreases(m2.0, m3.0), "A2-M-1 drag");
+    assert!(decreases(m2b.0, m3b.0) && decreases(m2b.1, m3b.1), "A2-M-2");
+    // P1 the time step: ruled out on both families, both coefficients
+    for (a, b) in [(T_F, T_F_HALF), (M2_F, M2_F_HALF)] {
+        let p = d(a, b);
+        assert_eq!(
+            (verdict(p.0), verdict(p.1)),
+            (Verdict::RuledOut, Verdict::RuledOut),
+            "P1 {p:?}"
+        );
+    }
+    // P2 the mesh at the cylinder: identified for the lift, contributes for the drag
+    let p2 = d(T_F_HALF, TC_F_HALF);
+    assert_eq!(
+        (verdict(p2.0), verdict(p2.1)),
+        (Verdict::Contributes, Verdict::Identified),
+        "P2 {p2:?}"
+    );
+    // P3 the outer mesh: Tc to T2 ruled out (drag), contributes (lift); the family difference identified for the lift
+    let p3 = d(TC_F_HALF, T2_F);
+    assert_eq!(
+        (verdict(p3.0), verdict(p3.1)),
+        (Verdict::RuledOut, Verdict::Contributes),
+        "P3 {p3:?}"
+    );
+    let (f40, f80) = (t.1 - m2.1, t2.1 - m3.1);
+    assert!(
+        f40.abs() >= 1.0 && f80.abs() <= f40.abs() / 2.0,
+        "P3 family difference {f40} -> {f80}"
+    );
+    // P4 the forcing order at D/80: ruled out on both families
+    for (a, b) in [(T2_F, T2_B), (M3_F, M3_B)] {
+        let p = d(a, b);
+        assert_eq!(
+            (verdict(p.0), verdict(p.1)),
+            (Verdict::RuledOut, Verdict::RuledOut),
+            "P4 {p:?}"
+        );
+    }
+    // P5 the outlet: ruled out
+    let p5 = d(T_F, TE_F);
+    assert_eq!(
+        (verdict(p5.0), verdict(p5.1)),
+        (Verdict::RuledOut, Verdict::RuledOut),
+        "P5 {p5:?}"
+    );
+}
+
+/// ADR 0268 A2-M-1 (lift), known miss: the error of max `C_L` with `build` on the M family is -0.161 percent on M2 and
+/// -0.283 percent on M3; the limit (a strict decrease) is kept. Accounted for by P2 and P3 (addendum 1): the M2 agreement is
+/// a cancellation between the error of the D/40 mesh at the cylinder and that of the coarse outer mesh.
+#[test]
+#[ignore = "known miss (ADR 0268 A2-M-1): max C_L error -0.161 percent on M2, -0.283 percent on M3, not a decrease"]
+fn a2_m1_lift_decrease_known_miss() {
+    let (m2, m3) = (errs(M2_F), errs(M3_F));
+    assert!(decreases(m2.1, m3.1), "A2-M-1 lift: {:.3} -> {:.3}", m2.1, m3.1);
+}
+
+/// ADR 0268 A2-T-2, known miss: the D/40 run of the T family with the bounded forcing (R1) stopped at step 2951, so the
+/// decrease cannot be formed; the limit is kept and the clause is missed by the registered rule.
+#[test]
+#[ignore = "known miss (ADR 0268 A2-T-2): R1 (T, bounded) stopped at step 2951; no D/40 value"]
+fn a2_t2_bounded_decrease_known_miss() {
+    let t2 = errs(T2_B);
+    let t = errs(T_B.expect("A2-T-2: R1 stopped at step 2951"));
+    assert!(decreases(t.0, t2.0) && decreases(t.1, t2.1));
 }

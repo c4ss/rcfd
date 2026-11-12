@@ -308,3 +308,202 @@ used.
   with `build`, the bounded form printed. Taken on the standing instruction: (a), as the note asks.
 - **Q4. The outlet as a variable.** Options: (a) its distance (Te, no library code); (b) a do-nothing condition (library
   work, outside this item). Taken on the standing instruction: (a); (b) is a possible follow-up if P5 is not ruled out.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above. No limit was changed, no amendment was needed and no registered run was
+repeated. Commits: the registration 12c60d8c; the records and fast checks 07d51775, committed before their first run. Every
+record was run once, from a copy of the test executable built from 07d51775 (`f354-scratch/f354_records.exe`), all ten
+started together at 10:01 UTC as separate processes (`RAYON_NUM_THREADS` 2 for R2 to R5 and R8, 1 for the others; the
+results do not depend on it, `docs/run-control.md`), logs in `f354-scratch/rec_*.log`. Release profile, Windows, the machine
+shared with a gate and other agents. **No library code was written or changed**; the files are the test file, this ADR and a
+section of `docs/reference-data.md`.
+
+### The runs
+
+Errors in percent of the FeatFlow level-6 values (max `C_D` 3.2200, max `C_L` 0.9859, `St` 0.30188). Every completed run held
+S2 (7 crossings each; period spread at most 8.5e-6; maximum spread at most 3.1e-4; amplitude 1.998 to 2.060).
+
+| Run | Mesh, forcing, `dt` | max `C_D` | max `C_L` | min `C_L` | mean `C_D` | `St` | Wall time |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ADR 0249 | T, `build`, 1e-3 | 3.24624 (+0.815) | 1.01134 (+2.580) | -1.04691 (+2.578) | 3.21350 (+0.787) | 0.30073 (-0.382) | |
+| R0 | M2, `build`, 1e-3 | 3.22841 (+0.261) | 0.98432 (-0.161) | -1.01946 (-0.112) | 3.19732 (+0.280) | 0.30041 (-0.486) | 2992 s |
+| ADR 0254 | M2, bounded, 1e-3 | 3.20930 (-0.332) | 0.97593 (-1.011) | -1.01116 (-0.925) | 3.17889 (-0.298) | 0.30112 (-0.250) | |
+| R1 | T, bounded, 1e-3 | **stopped at step 2951** | | | | | 2695 s |
+| R2 | T2, `build`, 5e-4 | 3.22876 (+0.272) | 0.98911 (+0.325) | -1.02393 (+0.326) | 3.19727 (+0.278) | 0.30158 (-0.100) | 25 824 s |
+| R3 | T2, bounded, 5e-4 | 3.22439 (+0.136) | 0.98762 (+0.175) | -1.02254 (+0.190) | 3.19303 (+0.145) | 0.30175 (-0.042) | 25 834 s |
+| R4 | M3, `build`, 5e-4 | 3.22460 (+0.143) | 0.98311 (-0.283) | -1.01780 (-0.274) | 3.19351 (+0.160) | 0.30151 (-0.123) | about 15 600 s |
+| R5 | M3, bounded, 5e-4 | 3.22024 (+0.007) | 0.98167 (-0.429) | -1.01646 (-0.406) | 3.18928 (+0.028) | 0.30168 (-0.065) | about 15 600 s |
+| R6 | M2, `build`, 5e-4 | 3.22878 (+0.273) | 0.98396 (-0.197) | -1.01909 (-0.148) | 3.19774 (+0.293) | 0.30049 (-0.461) | 5418 s |
+| R7 | T, `build`, 5e-4 | 3.24707 (+0.841) | 1.01241 (+2.689) | -1.04800 (+2.685) | 3.21434 (+0.813) | 0.30085 (-0.340) | 12 086 s |
+| R8 | Tc, `build`, 5e-4 | 3.22734 (+0.228) | 0.98606 (+0.016) | -1.02086 (+0.025) | 3.19612 (+0.242) | 0.30166 (-0.073) | about 16 200 s |
+| R9 | Te, `build`, 1e-3 | 3.24624 (+0.815) | 1.01134 (+2.580) | -1.04691 (+2.578) | 3.21350 (+0.787) | 0.30073 (-0.382) | about 8 400 s |
+
+Solid and first fluid cells: 1264 and 116 on the D/40 meshes, 5024 and 228 on the D/80 meshes. The bounded form has 160 flux
+faces with 32 image faces at D/40 and 320 with 96 at D/80, and no fall-back face. Wall times were 1.5 to 4 times the
+single-run estimates of the registration, because ten records ran side by side on a loaded machine; all ten finished within
+7.2 h of wall time.
+
+**R1 stopped.** T with `build_second_order_bounded` ran normally to `t = 2` (`C_D` 3.13571, `C_L` -0.74178, Courant 1.14) and
+stopped at step 2951 by the divergence guard: "pressure is NaN (not finite) at step 2951, outer iteration 1, pressure solve,
+cell 0 at (1.25e-3, 1.25e-3, 5e-3)". Cell 0 is in the corner of the inlet and the wall, far from the body. The same forcing
+ran 8000 steps on M2 (ADR 0254) and 16 000 steps on T2 and on M3 (R3, R5), and `build` runs on T (ADR 0218, 0249) and on Te
+(R9). The NaN appears in the pressure solve, in a corner cell, after 2.95 s of developed flow. That points at the linear solve
+(the AMG pressure solver with the volume source of the solid cells of the bounded form) rather than at the stencil at the
+body, but this was not measured: diagnosing it is library work and was not done (Q5). By the registered rule the stop is a
+measured result: S2 is not held for R1, and the clause A2-T-2, which needs the D/40 numbers of the T family with the bounded
+form, is missed. The record is kept as `r1_t_bounded_known_miss`.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| C0 R0 reproduces ADR 0249 on M2 | 3.22841, 0.98432, 0.30041 | 3.22841, 0.98432, 0.30041 (and the S2 numbers of ADR 0249) | yes |
+| S2 every record | as registered | held on R0 and R2 to R9; R1 stopped | R1 no |
+| S3 to S7 the fast checks | as registered | all met (6.1 s in release) | yes |
+| A1-T-1 T2 `build`: max `C_D`; max `C_L` | `<= 1.5 percent` | +0.272; +0.325 | yes |
+| A1-M-1 M3 `build` | the same | +0.143; -0.283 | yes |
+| A1-T-2 T2 bounded | the same | +0.136; +0.175 | yes |
+| A1-M-2 M3 bounded | the same | +0.007; -0.429 | yes |
+| A2-T-1 T family `build`, drag; lift | `abs(e)` decreases | 0.815 -> 0.272; 2.580 -> 0.325 | yes |
+| A2-M-1 M family `build`, drag | decreases | 0.261 -> 0.143 | yes |
+| A2-M-1 M family `build`, lift | decreases | **0.161 -> 0.283** | **no** (known miss `a2_m1_lift_decrease_known_miss`; the second branch is reached for it, below) |
+| A2-T-2 T family bounded | decreases | **no D/40 value (R1 stopped)**; D/80 0.136, 0.175 | **no** (known misses `a2_t2_bounded_decrease_known_miss`, `r1_t_bounded_known_miss`) |
+| A2-M-2 M family bounded, drag; lift | decreases | 0.332 -> 0.007; 1.011 -> 0.429 | yes |
+
+### The part measurements (points; `build` unless named)
+
+| Id | Part | `d` max `C_D` | `d` max `C_L` | Verdict by the registered numbers |
+| --- | --- | --- | --- | --- |
+| P1 | time step, T family (R7 - T) | +0.026 | +0.109 | ruled out (both) |
+| P1 | time step, M family (R6 - R0) | +0.012 | -0.036 | ruled out (both) |
+| P2 | mesh at the cylinder, T -> Tc at `dt = 5e-4` (R8 - R7) | -0.613 | **-2.673** | drag contributes; **lift identified** |
+| P3 | mesh away from the cylinder, Tc -> T2 (R2 - R8) | +0.044 | +0.309 | drag ruled out; lift contributes |
+| P3 | family difference `e(T) - e(M)`, D/40 -> D/80 | +0.554 -> +0.129 | **+2.741 -> +0.608** | lift **identified** as a discretisation error that shrinks (0.608 <= 1.370); drag contributes (its D/40 difference 0.554 is below the 1.0 the rule asks) |
+| P4 | forcing order (bounded - `build`): M2; T2; M3; T | -0.593; -0.136; -0.136; not formed (R1) | -1.172; -0.150; -0.146; not formed | lift identified at D/40 on M2, ruled out at D/80 on both families |
+| P5 | outlet at 4.4 against 2.2 (R9 - T) | 0.000 | 0.000 | ruled out (both) |
+
+**What the numbers say.**
+
+1. **The +2.58 percent lift of T comes from the mesh at the cylinder, not from the time step, the outlet or the wake.**
+   Refining only the core `[0.12, 0.32] x [0.12, 0.28]` of T (Tc) takes the lift error from +2.689 to +0.016 percent.
+   Refining everything else afterwards (T2) moves it by 0.31 point, halving the time step by 0.11 point, and moving the outlet
+   twice as far leaves it unchanged to six digits.
+2. **The M2 agreement (-0.16 percent) was a cancellation.** T and M2 have the same D/40 core and differ only outside it. Their
+   lift errors differ by 2.74 points at D/40 and by 0.61 point at D/80: on M2 the D/40 error of the core (about +2.6 on T) is
+   offset by the error of the coarser outer mesh. At D/80 the two families agree within 0.61 point in the lift and 0.13 in
+   the drag, and every D/80 extremum is within 0.43 percent of FeatFlow. The M family's lift error at D/80 is -0.28 percent,
+   larger than M2's 0.16, but it is no longer a cancellation. This accounts for the one missed decrease (A2-M-1 lift): by the
+   registered rule the second branch is reached for it, because P2 and the P3 family difference are identified for the lift
+   and P1 and P5 are ruled out for it.
+3. **The forcing order matters at D/40 and not at D/80.** The bounded form moves the extrema by up to 1.17 points on M2 and by
+   at most 0.15 point on T2 and M3. With either forcing the D/80 meshes are within 0.5 percent.
+4. **The outlet result is what the decay of a disturbance in a channel predicts:** about `exp(-pi x/H)` over 2.2 m, of order
+   1e-7. It bounds the effect of the outlet's position, and through item 5 of the registration the effect of the difference
+   between rcfd's zero-gradient condition and the do-nothing condition. It does not test a do-nothing condition itself.
+
+Against the estimates written beforehand:
+
+| Item | Estimate | Measured |
+| --- | --- | --- |
+| 1, T2 `build` lift | +0.65 to +1.3 percent | +0.325 (the error fell by a factor of 8, because most of it was the core anomaly that Tc removes) |
+| 1, T2 `build` drag | +0.20 to +0.41 percent | +0.272 |
+| 2, decrease of the M-family lift with `build` | not predicted | missed |
+| 3, bounded form on the D/80 meshes | inside 1.5 percent | met |
+| 4, time step | below 0.1 point | 0.109 on T (the 0.3 limit for "ruled out" held) |
+| 5, outlet | below 0.1 point | 0.000 |
+
+Not foreseen: the stop of R1. Observed orders from two levels where both errors have the same sign (printed only): `build`
+on the T family 1.58 (drag) and 2.99 (lift); `build` on the M family 0.87 (drag); the bounded form on the M family 1.24
+(lift).
+
+### Mutations
+
+Each was applied alone to the test file of 07d51775 in a scratch copy (`f354-scratch/mutsrc`, `mutate.py`, separate target
+directory), the named fast test was run once in release, and the file was restored and compared byte for byte (equal):
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| MU1 | T2 bisected in x only | S3 | failed: "S3 T2: cell count" |
+| MU2 | Tc core to `x = 0.30` | S3 | failed: "S3 Tc: cell count" |
+| MU3 | R2 with `dt = 1e-3` | S4 | failed: "S4 R2: dt" |
+| MU4 | decrease with `<=` | S6 | failed: `!decreases(0.6, 0.6)` |
+| MU5 | limit `1.5e-4` | S6 | failed: `within_limit(CD_MAX_REF * 1.0149, ...)` |
+| MU6 | St from `n` crossings | S5 | failed: the St assertion |
+| MU7 | bounded built by `build` | S3 | failed: the image-face count assertion |
+
+### Tools
+
+- `cargo fmt -p rcfd-fv --check`: clean.
+- `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean.
+- `cargo test -p rcfd-fv --release --test immersed_dfg_convergence_f354`: 6 passed (S3 to S7 and
+  `addendum_registered_limits_met`) and 12 ignored. The ignored tests are the nine records, `r1_t_bounded_known_miss` and the
+  two known-miss verdict tests, which fail as recorded when run with `--ignored`.
+- No other test file and no library file was touched, so the existing immersed tests and `baseline_hashes` were not run: no
+  line they cover changed.
+- The workspace suite and the gate were not run (the lead runs them).
+
+### Deviations and disclosures
+
+- After the runs the test file was changed as the registration said it would be, and no record was run again:
+  - the record R1 renamed `r1_t_bounded_known_miss`, with a new ignore reason (the body unchanged);
+  - the measured numbers added as constants, with `addendum_registered_limits_met` asserting the registered limits and part
+    verdicts on them;
+  - the two known-miss tests added.
+- The D/40 numbers of T with `build` and of M2 with the bounded form were reused from ADR 0249 and 0254, as registered. R0
+  re-measured M2 with `build` to every printed digit.
+- Not run: the time step, Tc and Te with the bounded form (left out in the registration); any level beyond D/80; a do-nothing
+  outlet condition (rcfd has none).
+
+### Decision by the registered rule
+
+- C0 and S3 to S7 held. Every record was made; R1 stopped.
+- A1 met on all four D/80 runs (both families, both forcings, both coefficients); the largest error is 0.43 percent.
+- A2 met on the T family with `build` and on the M family with the bounded form.
+- On the M family with `build` the lift missed, and the second branch is reached for it: the mesh at the cylinder and the
+  family difference are identified, the time step and the outlet are ruled out.
+- On the T family with the bounded form the clause is missed because its D/40 run stopped, and no part accounts for a stop.
+- Every mutation failed the test it had to fail.
+
+**Partial** by the rule: one clause (A2-T-2) is neither met nor accounted for. Read for the default forcing alone, the
+acceptance is met: the finest meshes are within 1.5 percent, and the part that does not converge (the D/40 mesh at the
+cylinder, cancelled on M2 by its coarse outer mesh) is identified by registered measurements.
+
+### Remaining questions
+
+- **Q1 to Q4** (as registered) were taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation):
+  M3 at `dt = 5e-4`; "the finest mesh" per family; both forcings; the outlet by its distance.
+- **Q5. The stop of R1** (T, bounded, step 2951, pressure NaN in the pressure solve, inlet corner cell). Options: (a) a
+  follow-up item that reproduces the stop from a restart shortly before step 2951 and locates it (the AMG solve, the source
+  of the solid cells, the matrix of that step); (b) record it as a limit of the bounded form. Recommendation (a): it is the
+  only stop of the bounded form with two correctors, and T is the mesh on which the forcing matters most.
+- **Q6. Which 2D-2 numbers to quote as the validation.** Options: (a) the D/80 values (T2 or M3, either forcing: within 0.43
+  percent in max `C_D` and max `C_L`, `St` within 0.13 percent); (b) M2, as before. Recommendation (a), with T2 and
+  `build_second_order_bounded` (+0.136, +0.175, -0.042 percent), and a note that D/40 at the cylinder is not converged for the
+  force extrema (up to 2.7 points of lift). M2's agreement is a cancellation and should not be quoted.
+- **Q7. Status.** Options: (a) partial by the rule (A2-T-2 not decided, R1 stopped); (b) done, reading the acceptance as
+  binding for the default forcing and the bounded form as the note's request. Recommendation (a) until Q5 is settled: the
+  follow-up of Q5 decides A2-T-2 by running R1 again once the stop is understood.
+
+### For the lead: roadmap entries
+
+**F-354: proposed status `partial`.** Proposed note (replacing the present one):
+
+> PARTIAL (ADR 0268, 2026-11-12), measurement only, no library code. From ADR 0249 question 5. DFG 2D-2 with the immersed cylinder was run to t = 8 on T and on T refined once (T2, D/80, dt 5e-4) and on M2 and M3 (M3 also at dt 5e-4), with `build` and with `build_second_order_bounded`, against the FeatFlow level-6 values. On the D/80 meshes max C_D and max C_L are within 0.43 percent with either forcing (T2 build +0.272/+0.325, T2 bounded +0.136/+0.175, M3 build +0.143/-0.283, M3 bounded +0.007/-0.429; St within 0.13 percent). The error decreases from D/40 to D/80 on the T family with build (lift 2.580 to 0.325), on the M family with the bounded form (1.011 to 0.429), and on the M family with build in the drag (0.261 to 0.143) but not in the lift (0.161 to 0.283, a known miss accounted for by the part measurements). Part measurements, each registered with its decision numbers: refining only the core around the cylinder on T takes the lift error from +2.69 to +0.02 percent, so the mesh at the cylinder carries the T anomaly; the rest of the mesh then moves it 0.31 point, halving the time step 0.11 (T) and 0.04 (M2) point, and moving the outlet from x = 2.2 to 4.4 changes nothing to six digits; the T and M families differ by 2.74 points of lift at D/40 and by 0.61 at D/80, so the M2 agreement of ADR 0249 was a cancellation between the D/40 core and the coarse outer mesh; the forcing order moves the extrema by up to 1.17 points at D/40 (M2) and at most 0.15 at D/80. Missing (why partial): T with the bounded forcing (D/40) stopped at step 2951 by the divergence guard, with pressure NaN in the pressure solve at the inlet corner cell, so the decrease on the T family with the bounded form is not formed; not diagnosed (library work). Open: ADR 0268 Q5 (the stop), Q6 (quote the D/80 values as the validation), Q7 (status).
+
+**F-346: no change of status;** proposed addition to its note:
+
+> ADR 0268 (2026-11-12, F-354) located the +2.58 percent lift of T: refining only the mesh around the cylinder to D/80 takes it to +0.02 percent; the -0.16 percent of M2 was a cancellation of that D/40 error by the coarse outer mesh; on the D/80 meshes both forcings are within 0.43 percent.
+
+**F-355: no change of status;** proposed addition to its note:
+
+> ADR 0268 (2026-11-12, F-354): `build_second_order_bounded` ran 2D-2 to t = 8 on T2 and M3 (D/80, within 0.43 percent of FeatFlow) but stopped on T (D/40, dt 1e-3) at step 2951, with pressure NaN in the pressure solve at the inlet corner cell; not diagnosed.
+
+**Proposed follow-up item** (only if Q5 is answered (a)): *Bounded second-order immersed forcing: the stop of DFG 2D-2 on
+T.* Deps: F-354, F-355. Acceptance:
+
+> The stop of DFG 2D-2 on the T mesh with `build_second_order_bounded` (ADR 0268 R1: step 2951, pressure NaN in the pressure solve, inlet corner cell) is located by a registered measurement (the step reproduced from a restart, the linear solve and the source of the solid cells examined), and either the run reaches t = 8 and its max C_D and max C_L decide the decrease from T to T2 of ADR 0268 (A2-T-2), or the configuration is refused with a located message.
+
+Note:
+
+> From ADR 0268 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The same forcing runs 8000 steps on M2 (ADR 0254) and 16 000 steps on T2 and M3 (ADR 0268); `build` runs on T.
