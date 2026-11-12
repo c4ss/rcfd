@@ -8184,19 +8184,19 @@ fixed by the item's registration ADR before any code.
     opposite sides; or the ADR names with a number what the moving fringe adds (the lag of the prescribed flux on the
     faces that change kind is the first candidate).
   - note: From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-451** rcfd duct-modes command.
+- [ ] **F-451** rcfd duct-modes command
   - depends on: F-333
   - acceptance: rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes
     export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section
     outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.
   - note: From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden.
-- [ ] **F-452** Wave solver driven by a sampled CFD surface.
+- [ ] **F-452** Wave solver driven by a sampled CFD surface
   - depends on: F-333
   - acceptance: A driven boundary built from an rcfd-surface-series file reproduces, in a duct, the modal amplitudes of
     a closed-form duct field sampled into that file within 1 percent; a series that does not cover a whole number of
     periods is refused.
   - note: From ADR 0351 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-453** Circular and three-dimensional ducts through the wave solver.
+- [ ] **F-453** Circular and three-dimensional ducts through the wave solver
   - depends on: F-333
   - acceptance: A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate
     with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in

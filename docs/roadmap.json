@@ -4256,7 +4256,7 @@
   },
   {
     "id": "F-451",
-    "title": "rcfd duct-modes command.",
+    "title": "rcfd duct-modes command",
     "phase": 9,
     "deps": [
       "F-333"
@@ -4267,7 +4267,7 @@
   },
   {
     "id": "F-452",
-    "title": "Wave solver driven by a sampled CFD surface.",
+    "title": "Wave solver driven by a sampled CFD surface",
     "phase": 9,
     "deps": [
       "F-333"
@@ -4278,7 +4278,7 @@
   },
   {
     "id": "F-453",
-    "title": "Circular and three-dimensional ducts through the wave solver.",
+    "title": "Circular and three-dimensional ducts through the wave solver",
     "phase": 9,
     "deps": [
       "F-333"
