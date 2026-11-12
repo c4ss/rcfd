@@ -6,8 +6,8 @@
 //! uniform pressure on a surface set (`t = -p n`, positive pressing on the solid, `n` the outward normal), and the
 //! consistent nodal loads `f_a = int N_a b dV` of gravity (`b = rho g`), of the centrifugal load of a rotation at constant
 //! speed (`b = rho omega^2 r_perp`) and of a body force field given at the nodes (interpolated with the element's own
-//! functions), then the per-node forces ([`NodalForceAt`]). The thermal load ([`Load::Temperature`]) is refused naming the
-//! package that adds it (ADR 0281), never ignored.
+//! functions) and the thermal load `int B^T D eps_th dV` of a nodal temperature field ([`Load::Temperature`], ADR 0281,
+//! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]).
 //!
 //! Face integrals use the face functions of Tri3, Quad4 and Tri6 ([`face_shape_functions`]) in the local face orders of
 //! ADR 0271 and the face rules of [`face_rule`]; body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
@@ -38,7 +38,7 @@ impl NodalForceAt {
     }
 }
 
-fn add_force(f: &mut [f64], dofs: &DofMap, node: usize, force: &Vec3) -> Result<()> {
+pub(crate) fn add_force(f: &mut [f64], dofs: &DofMap, node: usize, force: &Vec3) -> Result<()> {
     if node >= dofs.n_nodes() {
         return Err(FemError::MissingNode {
             role: "nodal force",
@@ -65,8 +65,8 @@ fn add_force(f: &mut [f64], dofs: &DofMap, node: usize, force: &Vec3) -> Result<
 }
 
 /// The global load vector of the model's loads and of `extra` per-node forces, one entry per unknown. Refuses a node that
-/// does not exist (naming it), a non-finite force, a body load on an element without material, and the thermal load
-/// (ADR 0281).
+/// does not exist (naming it), a non-finite force, a body or thermal load on an element without material, and a second
+/// temperature field (ADR 0281).
 pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<Vec<f64>> {
     let dofs = model.dof_map();
     let mesh = model.mesh();
@@ -120,7 +120,10 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     Ok(b)
                 })?;
             }
-            other => return Err(unsupported(other)),
+            Load::Temperature { nodal, reference } => {
+                crate::thermal::temperature_field(model)?;
+                crate::thermal::add_thermal_load(&mut f, &dofs, model, nodal, *reference)?;
+            }
         }
     }
     for p in extra {
@@ -338,17 +341,4 @@ pub fn face_rule(n_nodes: usize) -> Result<Vec<([f64; 2], f64)>> {
         n => return Err(face_count_error(n)),
     }
     Ok(out)
-}
-
-fn unsupported(load: &Load) -> FemError {
-    let (load, package) = match load {
-        Load::NodalForce { .. } => ("NodalForce", "ADR 0275"),
-        Load::Traction { .. } => ("Traction", "ADR 0276"),
-        Load::Pressure { .. } => ("Pressure", "ADR 0276"),
-        Load::Gravity { .. } => ("Gravity", "ADR 0276"),
-        Load::Centrifugal { .. } => ("Centrifugal", "ADR 0276"),
-        Load::BodyForceNodal { .. } => ("BodyForceNodal", "ADR 0276"),
-        Load::Temperature { .. } => ("Temperature", "ADR 0281"),
-    };
-    FemError::UnsupportedLoad { load, package }
 }

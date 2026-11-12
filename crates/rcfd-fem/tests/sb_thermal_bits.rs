@@ -201,7 +201,8 @@ fn all_loads(kind: ElementKind) -> u64 {
     m.add_load(Load::traction("ymax", [1e5, -2e5, 3e5])).unwrap();
     m.add_load(Load::pressure("xmax", 2.5e5)).unwrap();
     m.add_load(Load::gravity([0.3, -9.81, 1.2])).unwrap();
-    m.add_load(Load::centrifugal([1.0, 2.0, 2.0], [-0.5, 0.3, 0.1], 300.0)).unwrap();
+    m.add_load(Load::centrifugal([1.0, 2.0, 2.0], [-0.5, 0.3, 0.1], 300.0))
+        .unwrap();
     let values: Vec<Vec3> = m
         .mesh()
         .nodes()
@@ -215,13 +216,23 @@ fn all_loads(kind: ElementKind) -> u64 {
 }
 
 fn bar(kind: ElementKind) -> u64 {
-    let mesh = box_of(kind, [0.0, -0.05, -0.05], [1.0, 0.1, 0.1], [8, 2, 2], Some(20 + kind_index(kind)));
+    let mesh = box_of(
+        kind,
+        [0.0, -0.05, -0.05],
+        [1.0, 0.1, 0.1],
+        [8, 2, 2],
+        Some(20 + kind_index(kind)),
+    );
     let a = node_near(&mesh, [0.0, 0.0, 0.0]);
     let c = node_near(&mesh, [0.0, 0.05, 0.0]);
     let mut m = model_of(mesh);
     m.add_constraint(Constraint::displacement("xmin", 0, 0.0)).unwrap();
     m.add_load(Load::pressure("xmax", 1.0e6)).unwrap();
-    let pres = [Prescribed::new(a, 1, 0.0), Prescribed::new(a, 2, 0.0), Prescribed::new(c, 2, 0.0)];
+    let pres = [
+        Prescribed::new(a, 1, 0.0),
+        Prescribed::new(a, 2, 0.0),
+        Prescribed::new(c, 2, 0.0),
+    ];
     digest_of(&m, &pres, &[])
 }
 
@@ -247,7 +258,10 @@ fn b1_models_without_temperature_keep_their_bits() {
             for ((label, d), (el, ed)) in got.iter().zip(expected.iter()) {
                 assert_eq!(label, el, "model order");
                 let same = d == ed;
-                println!("B1 {label}: {d:#018x} against {ed:#018x}: {}", if same { "equal" } else { "DIFFERENT" });
+                println!(
+                    "B1 {label}: {d:#018x} against {ed:#018x}: {}",
+                    if same { "equal" } else { "DIFFERENT" }
+                );
                 differ += usize::from(!same);
             }
             assert_eq!(differ, 0, "B1: {differ} digests differ from d4bde1e0");
