@@ -316,6 +316,32 @@ change fluid results wherever its coarsest factorisation interchanges rows); it 
 registered decision rule a check missed in a registered run (S2 in run 1), so the proposed status is **partial** unless the
 maintainer accepts this amendment; addendum 1 reports both runs.
 
+## Amendment 2 (2026-11-12, after the heavy runs of H2 and H3, before the corrected run)
+
+**What happened.** Code c2c3dee9, heavy records run once each (logs `run-h1_cube_growth.log` to
+`run-h4_heavy_cantilever_record.log`). H1 and H4 passed. **H2 missed**: on the Hex8 cantilever of slenderness 20 neither solver
+reaches the relative residual 1e-10: the AMG stops after 30 iterations and 3 refinement restarts at the true residual
+`1.1318e-4` (relative 1.42e-9), IC(0) after 2545 iterations and 3 restarts at `1.1400e-4` (1.43e-9); target `7.99e-6`. B1 and
+OC of H2 were measured before the solves (OC 1.1688, B1 2.5e-16 and 2.2e-16) and hold. **H3 missed** by the same cause: its
+first step, the Hex8 AMG solve at 1e-10, failed, so the Tet10 part did not run.
+
+**Diagnosis.** Two different preconditioners stop at the same true residual within 0.7 percent: this is the rounding floor of
+the computed residual `b - K u` (each component carries about `eps (|K| |u|)_i`), not a property of either preconditioner.
+The floor grows with the slenderness and the refinement (ADR 0282 recorded 1.3e-11 at L/h 5.3 and 1.4e-10 at L/h 10.7 on
+coarser meshes); at L/h 20 with elements of 1/12 it is above 1e-10. The acceptance fixes 1e-10 for the cube; this
+registration (reading 4) also used 1e-10 for the cantilever comparison, which is a defective set-up for that case.
+
+**Amendment.** (1) The two tests are kept as ignored records `h2_slender20_hex8_known_miss` and
+`h3_slender20_tet10_known_miss`, limits intact, measured numbers in their ignore reasons. (2) Corrected checks, the same
+models, solvers, caps and limits, with the common tolerance **1e-8** for both solvers of the comparison: H2b `it_AMG <=
+it_IC0 / 5`, both `Ok` with relative residual `<= 1e-8`; H3b `it_AMG,Tet10 <= 2 it_AMG,Hex8` (Hex8 measured again at 1e-8 in
+the same test), `Ok` with `<= 1e-8`, B1 and OC of the Tet10 hierarchy, the Tet10 IC(0) ratio recorded. Each test prints the
+floor estimate `eps |(|K_FF| |u_F|)| / |b_F|` at its AMG solution (record). Disclosed: 1e-8 was chosen after seeing the stall
+at 1.4e-9; it is the smallest power of ten above it with a margin of at least 5, and the same value for both solvers, so the
+comparison does not favour either. Each corrected test is run once (logs `run-h2b.log`, `run-h3b.log`). (3) By the
+registered decision rule H2 and H3 missed in their registered runs, so the proposed status is **partial** (as for amendment 1)
+unless the maintainer accepts the corrected set-up.
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the intermediate-tier plan, [ADR

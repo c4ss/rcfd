@@ -669,8 +669,8 @@ fn h1_cube_growth() {
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0305, H2): Hex8 cantilever of slenderness 20, 240 x 12 x 12, 121 680 unknowns, AMG and IC(0)"]
-fn h2_slender20_hex8() {
+#[ignore = "known miss (ADR 0305, H2, run once): Hex8 cantilever of slenderness 20, 240 x 12 x 12, 121 680 unknowns; limit: both reach 1e-10 and AMG <= IC(0) / 5; measured: neither reaches 1e-10, AMG stops after 30 iterations and 3 restarts at the true relative residual 1.42e-9, IC(0) after 2545 iterations at 1.43e-9 (the rounding floor of the residual, ADR 0305 amendment 2)"]
+fn h2_slender20_hex8_known_miss() {
     let model = slender20_hex();
     let (b1m, oc) = {
         let r = reduced(&model);
@@ -700,8 +700,8 @@ fn h2_slender20_hex8() {
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0305, H3): Tet10 cantilever of slenderness 20 from 120 x 6 x 6, 121 680 unknowns, against the Hex8 count"]
-fn h3_slender20_tet10() {
+#[ignore = "known miss (ADR 0305, H3, run once): Tet10 cantilever of slenderness 20 from 120 x 6 x 6 against the Hex8 count at 1e-10; measured: the Hex8 reference solve stops at the true relative residual 1.42e-9 (as H2), so the Tet10 part did not run (ADR 0305 amendment 2)"]
+fn h3_slender20_tet10_known_miss() {
     let hex = slender20_hex();
     let (h, rh, th) = run(&hex, &amg_options(60_000));
     print("H3 Hex8 AMG", &h, &rh, th);
@@ -750,4 +750,109 @@ fn h4_heavy_cantilever_record() {
         oc <= 1.5
     );
     assert!(oc <= 1.5, "H4 OC");
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// ADR 0305 amendment 2: the slenderness-20 comparisons at the common attainable tolerance 1e-8 (H2b, H3b).
+
+const TOL_SLENDER: f64 = 1e-8;
+
+fn pcg_tol(p: CgPreconditioner, tolerance: f64, max_iterations: usize) -> StaticOptions {
+    StaticOptions::with_solver(StaticSolver::PreconditionedCg {
+        preconditioner: p,
+        tolerance,
+        max_iterations,
+    })
+}
+
+/// The rounding floor estimate `eps |(|K_FF| |u_F|)| / |b_F|` of the true residual at the solution `res`.
+fn floor_estimate(r: &Reduced, res: &SolidResult) -> f64 {
+    let u = res.displacement_values();
+    let uf: Vec<f64> = r.free.iter().map(|&q| u[q].abs()).collect();
+    let mut s = 0.0;
+    for i in 0..r.a.n {
+        let row: f64 = (r.a.row_ptr[i]..r.a.row_ptr[i + 1])
+            .map(|k| r.a.val[k].abs() * uf[r.a.col[k]])
+            .sum();
+        s += row * row;
+    }
+    f64::EPSILON * s.sqrt() / norm2(&r.rhs)
+}
+
+#[test]
+#[ignore = "heavy record (ADR 0305 amendment 2, H2b): Hex8 cantilever of slenderness 20, 121 680 unknowns, AMG and IC(0) to 1e-8"]
+fn h2b_slender20_hex8_at_1e8() {
+    let model = slender20_hex();
+    let r = reduced(&model);
+    let a = try_run(
+        &model,
+        &pcg_tol(
+            CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),
+            TOL_SLENDER,
+            60_000,
+        ),
+    )
+    .expect("H2b AMG");
+    print("H2b AMG", &a.0, &a.1, a.2);
+    let i = try_run(&model, &pcg_tol(ic0(), TOL_SLENDER, 60_000)).expect("H2b IC0");
+    print("H2b IC0", &i.0, &i.1, i.2);
+    let (ia, ii) = (iterations(&a.0), iterations(&i.0));
+    println!(
+        "H2b: AMG {ia} <= IC0 {ii} / 5 = {:.1}: {}; residuals {:.3e} / {:.3e}; floor estimate {:.3e}; AMG against IC0 {:.3e}",
+        ii as f64 / 5.0,
+        ia as f64 <= ii as f64 / 5.0,
+        residual(&a.0),
+        residual(&i.0),
+        floor_estimate(&r, &a.0),
+        rel_diff(&a.0, &i.0)
+    );
+    assert!(
+        residual(&a.0) <= TOL_SLENDER && residual(&i.0) <= TOL_SLENDER,
+        "H2b residual"
+    );
+    assert!(ia as f64 <= ii as f64 / 5.0, "H2b");
+}
+
+#[test]
+#[ignore = "heavy record (ADR 0305 amendment 2, H3b): Tet10 cantilever of slenderness 20, 121 680 unknowns, against the Hex8 count, to 1e-8"]
+fn h3b_slender20_tet10_at_1e8() {
+    let amg = || {
+        pcg_tol(
+            CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()),
+            TOL_SLENDER,
+            60_000,
+        )
+    };
+    let hex = slender20_hex();
+    let h = try_run(&hex, &amg()).expect("H3b Hex8 AMG");
+    print("H3b Hex8 AMG", &h.0, &h.1, h.2);
+    let model = slender20_tet10();
+    let (b1m, oc) = {
+        let r = reduced(&model);
+        hierarchy_checks("H3b slender 20 Tet10", &model, &r)
+    };
+    let r = reduced(&model);
+    let a = try_run(&model, &amg()).expect("H3b Tet10 AMG");
+    print("H3b Tet10 AMG", &a.0, &a.1, a.2);
+    let (it_t, it_h) = (iterations(&a.0), iterations(&h.0));
+    println!(
+        "H3b: Tet10 AMG {it_t} <= 2 x Hex8 AMG {it_h} = {}: {}; residual {:.3e}; floor estimate {:.3e}; OC {oc:.4}; B1 {b1m}",
+        2 * it_h,
+        it_t <= 2 * it_h,
+        residual(&a.0),
+        floor_estimate(&r, &a.0)
+    );
+    match try_run(&model, &pcg_tol(ic0(), TOL_SLENDER, 60_000)) {
+        Some((ri, rep, t)) => {
+            print("H3b Tet10 IC0 (record)", &ri, &rep, t);
+            println!(
+                "H3b record: Tet10 AMG / IC0 = {it_t} / {} = {:.4}",
+                iterations(&ri),
+                it_t as f64 / iterations(&ri) as f64
+            );
+        }
+        None => println!("H3b record: Tet10 IC0 failed"),
+    }
+    assert!(residual(&a.0) <= TOL_SLENDER && it_t <= 2 * it_h, "H3b");
+    assert!(b1m && oc <= 1.5, "H3b B1 / OC");
 }
