@@ -6134,10 +6134,12 @@ fixed by the item's registration ADR before any code.
     1.698. Ruled out with numbers: a time error, the single-mesh solution, the outer boundary of the component, the
     reference cell, the interpolated pressure and the convection (the error is linear in the amplitude to 0.07 percent),
     a mass defect, the flux at the fringe faces, the transient Rhie-Chow term; with coincident meshes the coupling gives
-    the background alone to 7e-9. Open: why the response to a second-order truncation stays below second order. Controls
-    held, four mutations caught. Follow-ups (ADR 0246 questions 2 and 4, recommendations taken on the maintainer's
-    standing instruction of 2026-11-11): F-336 with RL added to its acceptance, and F-349 on the response to the
-    background fringe.
+    the background alone to 7e-9. Traced by ADR 0340 (F-349): the normal velocity of a fringe cell is imposed on the
+    calculated cells through a resistance proportional to nu / h (a flux defect held by a pressure jump dJ = -(16 nu / 3
+    h) D), so the response per unit of truncation grows with the refinement; the truncation of the background fringe of
+    RL also alternates between odd and even levels. Controls held, four mutations caught. Follow-ups (ADR 0246 questions
+    2 and 4, recommendations taken on the maintainer's standing instruction of 2026-11-11): F-336 with RL added to its
+    acceptance, and F-349 on the response to the background fringe.
 - [~] **F-335** Overset: outer iterations on the overset path
   - depends on: F-134
   - acceptance: OversetSolver accepts n_outer above 1 as an opt-in (defaults bit-identical, Q0 of ADR 0219 still bit for
@@ -6457,14 +6459,35 @@ fixed by the item's registration ADR before any code.
     Open: a box merge for 3-D coarsening (R2), the case key (R5), cells spent along x in early cycles (R4). Follow-ups:
     F-438 (case key), F-439 (three-dimensional box merge). The box merge is delivered by F-439 (ADR 0341, 2026-11-12):
     repeated all-axes box coarsening returns any state, the five-box tiling included, to the base.
-- [ ] **F-349** Overset: the response to the truncation of the background-fringe interpolation
+- [~] **F-349** Overset: the response to the truncation of the background-fringe interpolation
   - depends on: F-334
   - acceptance: The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a
     third-order interpolation on the background fringe: 4.87e-5, 2.19e-5, 1.41e-5 at levels 1 to 3, orders 1.153 and
     1.093) is traced to a named term of the coupled step by a switch that brings its order to 1.7 or more on levels 1 to
     4, or is shown to reach order 1.7 on finer levels or at a later time, or the ADR names why not with a number.
-  - note: From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
-    priority.
+  - note: From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0340, 2026-11-12: PARTIAL, a diagnosis, tests only, no library change. No clause of the order check is met. R_b (the
+    library's quadratic donor interpolation of F-336 on the background fringe against the default stencils; within 2.5
+    percent of ADR 0246) is 4.996e-5, 2.177e-5, 1.412e-5, 8.917e-6, 6.425e-6 at t = 0.5 on levels 1 to 5, orders 1.198,
+    1.068, 1.598, 1.469; run on to t = 3 on levels 1 to 3 it is 1.403e-4, 5.250e-5, 3.376e-5, orders 1.418, 1.089, and
+    still growing; half the time step changes it by under 1 percent. Found on the way: the truncation of the background
+    fringe of RL alternates between odd and even levels (coefficient 0.0685, 0.0781, 0.0621, 0.0693, 0.0638; the
+    reflection of the fringe phase is not a symmetry), so orders between successive levels of RL carry a factor 1.26;
+    within the parity families R_b has 1.150, 1.288, 1.542. On a set-up locked exactly, with equal spacings and no
+    modulation along the ring (RE), the truncation converges at 1.995, 1.956 and R_b at 0.983, 1.015: the response per
+    unit of truncation is proportional to the level (0.168, 0.339, 0.497) with no levelling off. Ruled out with numbers:
+    a time-step or splitting term, a late settling at second order, the unequal spacings and the modulation. Named and
+    confirmed: the normal velocity of a fringe cell is imposed softly. The flux of a face between a calculated and a
+    fringe cell is that of the pressure equation with the interpolated fringe pressure and differs from the
+    face-interpolated velocity by a defect D held by a pressure jump dJ = -(16 nu / 3 h) D (measured face by face on RE:
+    0.9986, 1.0162 of that, correlation 0.995, 0.999), a resistance proportional to nu / h. The calculated cell across a
+    fringe face follows a change of the normal fringe velocity by 0.51, 0.66, 0.76, 0.79, 0.83 at the background fringe
+    (levels 1 to 5, t = 0.5; 0.10 to 0.51 at t = 0.025) and by 0.34 to 0.83 at the component fringe; each fringe costs
+    about half an order on these levels. Refining the background alone raises R_b. Not shown: the level or time at which
+    R_b reaches 1.7, and a formula for R_b from the resistance. One registered kinematic check missed (the truncation
+    order between levels 3 and 4, 1.621 against 1.8, the alternation) and is kept as a known miss. Controls held, five
+    mutations caught. Follow-up (ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of
+    2026-11-11): an opt-in that prescribes the flux of the calculated-fringe faces from the interpolated velocity.
 - [~] **F-350** Strong body-flow coupling selectable from the case tree
   - depends on: F-251
   - acceptance: A case with dynamic_mesh.six_dof.coupling = "strong" (default "loose") and its relaxation, added-mass
@@ -6865,7 +6888,9 @@ fixed by the item's registration ADR before any code.
     measured separately, each by a run that removes it, with the cause of the excess named or the excess shown to be the
     time error of the turning mesh.
   - note: From ADR 0264 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
-    priority.
+    priority. ADR 0340 (F-349) found that the fringe velocity is imposed softly on the calculated cells (the following
+    coefficient a_c of 0.5 to 0.83 and the kink relation dJ = -(16 nu / 3 h) D at the fringe faces); both are candidates
+    for the measurements of this item.
 - [ ] **F-370** Crate rcfd-fem: the data model of a solid model and the structured builders
   - depends on: F-001, F-010, F-012
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new crate rcfd-fem (dependencies
@@ -7917,3 +7942,14 @@ fixed by the item's registration ADR before any code.
     coupler; service::Client writes a request with one call; without the key every case hash is unchanged and the
     schema, CLI help and MCP goldens change only by the approved additions.
   - note: From ADR 0345 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-445** Overset: prescribed flux on the faces between calculated and fringe cells
+  - depends on: F-349, F-344
+  - acceptance: An opt-in of the overset step under which the flux of a face between a calculated and a fringe cell is
+    the face interpolation of the interpolated fringe velocity plus one correction per closed fringe ring that makes the
+    net flux of each enclosed part zero (ADR 0340, the switch described there): on RE of ADR 0340 at levels 1 to 3 the
+    following coefficient a_c at both fringes is at least 0.9 at t = 0.025 and the order of R_b at t = 0.5 is at least
+    1.7 on both pairs, on RL the order of R_b is at least 1.7 within the parity families (levels 1 to 3 and 2 to 4),
+    continuity of the calculated cells and the mass of the domain hold to 1e-9, the uniform-flow check U1 of ADR 0219
+    holds, and without the opt-in every overset result is bit-identical; or the ADR shows with a number why the
+    prescribed flux is not admissible.
+  - note: From ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
