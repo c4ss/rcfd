@@ -18,6 +18,12 @@
 //! their edges. A cell with a face whose points leave the face's plane by more than the locator's tolerance is tested as
 //! the polyhedron of the triangles about its face centres ([`triangulated_margin`]); the cells of a face share those
 //! triangles, so they tile the mesh. A cell whose faces are planar is tested as before, bit for bit.
+//!
+//! Non-convex cells with planar faces (F-356, ADR 0260): the planes of M3 enclose only the kernel of a non-convex cell. A
+//! flat cell with a point outside one of its own face planes by more than the locator's tolerance is tested by the
+//! triangles of its faces too; a face whose fan about its centre folds (leaves the face) is triangulated by ear clipping
+//! ([`face_ear_triangles`]), the same from both sides. A convex cell with planar faces has no such point and is tested
+//! as before, bit for bit.
 
 use crate::mesh::{Mesh, PatchKind};
 use crate::motion::{mat_vec, rotation_matrix, Pose};
@@ -243,6 +249,105 @@ pub fn triangulated_margin(mesh: &Mesh, c: usize, x: Vec3) -> f64 {
     }
 }
 
+/// Whether the fan of triangles `(fc, p_i, p_{i+1})` of face `f` about its centre folds (ADR 0260 N2): some triangle has
+/// a non-positive projection on the area vector. A fan that does not fold tiles a planar face exactly; one that folds
+/// covers points outside the face. False for a face without area.
+pub fn face_fan_folds(mesh: &Mesh, f: usize) -> bool {
+    let s = mesh.face_area_vectors()[f];
+    if vec3::norm(s) < 1e-300 {
+        return false;
+    }
+    let (fc, pts, ids) = (mesh.face_centres()[f], mesh.points(), mesh.face_points(f));
+    (0..ids.len()).any(|i| {
+        let (p, q) = (pts[ids[i]], pts[ids[(i + 1) % ids.len()]]);
+        vec3::dot(vec3::cross(vec3::sub(p, fc), vec3::sub(q, fc)), s) <= 0.0
+    })
+}
+
+/// The triangles of face `f` by ear clipping of its point loop projected on the plane normal to its area vector (ADR 0260
+/// N3), as point numbers in the stored orientation: the first point (from the start of the remaining loop) whose
+/// triangle with its two neighbours turns positively (above `1e-12` of the face area) and contains no other point of the
+/// loop is cut off, until three points remain; a degenerate remainder is dropped. For a simple polygon the triangles
+/// tile it. `None` when no ear is found (a loop whose projection is not a simple polygon) or for a face without area.
+pub fn face_ear_triangles(mesh: &Mesh, f: usize) -> Option<Vec<[usize; 3]>> {
+    let s = mesh.face_area_vectors()[f];
+    let ss = vec3::dot(s, s);
+    if ss < 1e-300 {
+        return None;
+    }
+    let pts = mesh.points();
+    let o =
+        |a: usize, b: usize, c: usize| vec3::dot(vec3::cross(vec3::sub(pts[b], pts[a]), vec3::sub(pts[c], pts[a])), s);
+    let eps = 1e-12 * ss;
+    let mut v: Vec<usize> = mesh.face_points(f).to_vec();
+    let mut out = Vec::with_capacity(v.len().saturating_sub(2));
+    while v.len() > 3 {
+        let n = v.len();
+        let ear = (0..n).find(|&i| {
+            let (a, b, c) = (v[(i + n - 1) % n], v[i], v[(i + 1) % n]);
+            o(a, b, c) > eps
+                && !v.iter().any(|&q| {
+                    q != a && q != b && q != c && o(a, b, q) >= -eps && o(b, c, q) >= -eps && o(c, a, q) >= -eps
+                })
+        })?;
+        out.push([v[(ear + n - 1) % n], v[ear], v[(ear + 1) % n]]);
+        v.remove(ear);
+    }
+    if o(v[0], v[1], v[2]) > eps {
+        out.push([v[0], v[1], v[2]]);
+    }
+    Some(out)
+}
+
+/// Whether a cell has a point on the outer side of one of its own face planes by more than `tol` (ADR 0260 N1): exactly
+/// the non-convex cells, for planar faces and `tol` above the round-off.
+fn cell_is_nonconvex(mesh: &Mesh, c: usize, tol: f64) -> bool {
+    let (own, sf, fc, pts) = (
+        mesh.owner(),
+        mesh.face_area_vectors(),
+        mesh.face_centres(),
+        mesh.points(),
+    );
+    let cell_points = Overset::cell_points(mesh, c);
+    mesh.cell_faces(c).iter().any(|&f| {
+        let s = if own[f] == c { sf[f] } else { vec3::scale(sf[f], -1.0) };
+        let a = vec3::norm(s);
+        a >= 1e-300
+            && cell_points
+                .iter()
+                .any(|&q| vec3::dot(s, vec3::sub(pts[q], fc[f])) / a > tol)
+    })
+}
+
+/// [`triangulated_margin`] with the ear triangles `ears[f]` in place of the fan for the faces that have them (ADR 0260 N3).
+/// A face without them is evaluated as in [`triangulated_margin`], in the same order.
+fn ear_margin(mesh: &Mesh, c: usize, x: Vec3, ears: &[Option<Vec<[usize; 3]>>]) -> f64 {
+    let (own, fc, pts) = (mesh.owner(), mesh.face_centres(), mesh.points());
+    let (mut d, mut omega) = (f64::INFINITY, 0.0);
+    for &f in mesh.cell_faces(c) {
+        let sign = if own[f] == c { 1.0 } else { -1.0 };
+        if let Some(tris) = &ears[f] {
+            for &[a, b, q] in tris {
+                let (a, b, q) = (pts[a], pts[b], pts[q]);
+                d = d.min(triangle_distance(x, a, b, q));
+                omega += sign * triangle_solid_angle(x, a, b, q);
+            }
+            continue;
+        }
+        let ids = mesh.face_points(f);
+        for i in 0..ids.len() {
+            let (p, q) = (pts[ids[i]], pts[ids[(i + 1) % ids.len()]]);
+            d = d.min(triangle_distance(x, fc[f], p, q));
+            omega += sign * triangle_solid_angle(x, fc[f], p, q);
+        }
+    }
+    if omega > 2.0 * std::f64::consts::PI {
+        d
+    } else {
+        -d
+    }
+}
+
 fn cell_box(mesh: &Mesh, c: usize) -> (Vec3, Vec3) {
     let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
     for &f in mesh.cell_faces(c) {
@@ -264,6 +369,10 @@ fn cell_box(mesh: &Mesh, c: usize) -> (Vec3, Vec3) {
 /// A cell with a face whose [`face_warp`] is above that tolerance is *warped* (ADR 0253 G3): its margin is
 /// [`triangulated_margin`] instead, the signed distance from the triangles about its face centres. The flags are set on
 /// the mesh the locator is built on, which is the mesh it must be asked on.
+///
+/// A cell that is not warped but has a point on the outer side of one of its face planes by more than the tolerance is
+/// *non-convex* (ADR 0260 N1) and is tested by the triangles of its faces too. A face of a warped or non-convex cell
+/// whose fan about its centre folds ([`face_fan_folds`]) is triangulated by [`face_ear_triangles`] (ADR 0260 N3).
 #[derive(Debug, Clone)]
 pub struct CellLocator {
     cells: Range<usize>,
@@ -275,8 +384,17 @@ pub struct CellLocator {
     tol: Vec<f64>,
     /// Whether each cell of the range is warped (ADR 0253 G3).
     warped: Vec<bool>,
-    /// The bounding boxes of the cells of the range; empty when no cell is warped.
+    /// Whether each cell of the range is flat and non-convex (ADR 0260 N1).
+    nonconvex: Vec<bool>,
+    /// The bounding boxes of the cells of the range; empty when no cell is warped or non-convex.
     boxes: Vec<(Vec3, Vec3)>,
+    /// The ear triangles of each face of the mesh whose fan folds and that belongs to a warped or non-convex cell of the
+    /// range (ADR 0260 N3); empty when there is no such face.
+    ears: Vec<Option<Vec<[usize; 3]>>>,
+    /// Number of faces with ear triangles.
+    n_ear_clipped: usize,
+    /// Number of faces of warped or non-convex cells whose fan folds and for which no ear was found (the fan is kept).
+    n_unsupported: usize,
 }
 
 impl CellLocator {
@@ -318,7 +436,40 @@ impl CellLocator {
             .zip(&tol)
             .map(|(c, &t)| mesh.cell_faces(c).iter().any(|&f| face_warp(mesh, f) > t))
             .collect();
-        let boxes = if warped.contains(&true) { boxes } else { Vec::new() };
+        // ADR 0260 N1: a flat cell is non-convex when one of its points lies outside one of its face planes
+        let nonconvex: Vec<bool> = cells
+            .clone()
+            .zip(&tol)
+            .zip(&warped)
+            .map(|((c, &t), &w)| !w && cell_is_nonconvex(mesh, c, t))
+            .collect();
+        let triangulated = warped.contains(&true) || nonconvex.contains(&true);
+        let boxes = if triangulated { boxes } else { Vec::new() };
+        // ADR 0260 N3: the faces of the triangulated cells whose fan folds are ear-clipped
+        let (mut ears, mut n_ear_clipped, mut n_unsupported) = (Vec::new(), 0, 0);
+        if triangulated {
+            let mut seen = vec![false; mesh.n_faces()];
+            for (k, c) in cells.clone().enumerate() {
+                if !(warped[k] || nonconvex[k]) {
+                    continue;
+                }
+                for &f in mesh.cell_faces(c) {
+                    if std::mem::replace(&mut seen[f], true) || !face_fan_folds(mesh, f) {
+                        continue;
+                    }
+                    match face_ear_triangles(mesh, f) {
+                        Some(tris) => {
+                            if ears.is_empty() {
+                                ears = vec![None; mesh.n_faces()];
+                            }
+                            ears[f] = Some(tris);
+                            n_ear_clipped += 1;
+                        }
+                        None => n_unsupported += 1,
+                    }
+                }
+            }
+        }
         CellLocator {
             cells,
             lo,
@@ -328,13 +479,34 @@ impl CellLocator {
             bins,
             tol,
             warped,
+            nonconvex,
             boxes,
+            ears,
+            n_ear_clipped,
+            n_unsupported,
         }
     }
 
     /// Number of warped cells of the range (ADR 0253 G3): the cells tested by [`triangulated_margin`].
     pub fn n_warped(&self) -> usize {
         self.warped.iter().filter(|w| **w).count()
+    }
+
+    /// Number of flat non-convex cells of the range (ADR 0260 N1): tested by the triangles of their faces.
+    pub fn n_nonconvex(&self) -> usize {
+        self.nonconvex.iter().filter(|w| **w).count()
+    }
+
+    /// Number of faces of the warped and non-convex cells of the range that are triangulated by [`face_ear_triangles`]
+    /// because their fan folds (ADR 0260 N3).
+    pub fn n_ear_clipped(&self) -> usize {
+        self.n_ear_clipped
+    }
+
+    /// Number of faces of the warped and non-convex cells of the range whose fan folds and for which ear clipping found no
+    /// ear; their fan is kept (ADR 0260 N3, a limit).
+    pub fn n_unsupported(&self) -> usize {
+        self.n_unsupported
     }
 
     /// Every cell of the range that contains `x` under the locator's rule, in increasing order, by a search over all of
@@ -349,13 +521,17 @@ impl CellLocator {
     /// Whether cell `c` (of this locator's range) contains `x` under the locator's rule, and its margin.
     fn accepts(&self, mesh: &Mesh, c: usize, x: Vec3) -> Option<f64> {
         let k = c - self.cells.start;
-        if self.warped[k] {
+        if self.warped[k] || self.nonconvex[k] {
             // ADR 0253 G2: the triangulated cell lies in its box, so a point further outside than the tolerance is refused
             let (lo, hi) = self.boxes[k];
             if (0..3).any(|d| !(x[d] >= lo[d] - self.tol[k] && x[d] <= hi[d] + self.tol[k])) {
                 return None;
             }
-            let m = triangulated_margin(mesh, c, x);
+            let m = if self.ears.is_empty() {
+                triangulated_margin(mesh, c, x)
+            } else {
+                ear_margin(mesh, c, x, &self.ears)
+            };
             return (m >= -self.tol[k]).then_some(m);
         }
         let m = containment_margin(mesh, c, x);

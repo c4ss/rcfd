@@ -102,6 +102,14 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 - **Interpolation.** A fringe cell takes its values from the cell of the other part that contains its centre and that
   cell's calculated neighbours, with weights that reproduce linear fields exactly. The fringe rows of the momentum and
   pressure systems are these interpolations, so the coupling is implicit (one system for both meshes).
+- **Donor search on warped and non-convex cells (F-352, ADR 0253; F-356, ADR 0260).** A convex cell with planar faces is
+  tested by the planes of its faces. A cell with a warped face, or a flat cell with a point outside one of its own face
+  planes beyond the locator's tolerance (a non-convex cell), is tested as the polyhedron of the triangles of its faces:
+  the distance from the triangles, signed by the winding number. A face's triangles are the fan about its centre, or, when
+  that fan folds out of the face (an L-shaped face whose centre lies in its notch), the triangles of ear clipping; either
+  way the two cells of a face use the same triangles, so the cells tile the mesh. On meshes of convex cells with planar
+  faces no cell takes the new path and the donors are unchanged, bit for bit. Checked on 100000 random points in each of a
+  mesh of dart prisms and a mesh of L-shaped prisms: every point in exactly one cell.
 - **Mass.** With `MassMode::Conservative` one offset of the background fringe pressures makes the net flux into the hole
   region zero (or, in a closed domain, keeps the reference cell exact). Then every calculated cell keeps its continuity
   and the domain keeps its mass. `MassMode::Interpolated` leaves the overlap non-conservative.
