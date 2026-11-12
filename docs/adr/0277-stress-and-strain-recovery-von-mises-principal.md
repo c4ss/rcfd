@@ -407,3 +407,15 @@ elasticity).
 
 Loss of accuracy of the trigonometric form near repeated roots; nodal averaging across a material interface (basic tier: one
 material per averaging region, otherwise refused). Superconvergent patch recovery and error estimation are intermediate.
+
+## Amendment 1 (2026-11-12, written and committed before the corrected run)
+
+**Defect of the set-up.** The registered run of `sb_recover` (commit 2e4d9f2c, log `w49i-work/f376-scratch/run1.log`) passed
+eight of its nine tests; `r1_r2_repeated_roots` stopped at its first line, `assert_eq!(tensors.len(), 54)`, before any
+measurement: the list of D5 has 1 (a) + 2 (b) + 2 (c) + 2 x 11 (d) + 10 (e) + 2 x 10 (f) = **57** tensors, not 54. The total
+in D5 was mis-added in this registration; the list itself (which tensors, which rotations, the stream tag 4) is as
+registered and is what the test builds. No measurement of R1 or R2 was printed or seen.
+
+**Correction.** A new test `r1_r2_repeated_roots_57` with the same tensors, measures and limits, asserting the count 57. The
+old test `r1_r2_repeated_roots` stays unedited apart from `#[ignore]` as the record of the defect. R1 and R2 are as
+registered with "54" read as "57"; the decision rule is unchanged. One run of the new test.
