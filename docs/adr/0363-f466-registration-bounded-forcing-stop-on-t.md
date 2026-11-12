@@ -243,3 +243,52 @@ trace are not exposed in the case schema.
   `PimpleSolver` in the library. Taken on the standing instruction: (a); (b) is a separate item if wanted.
 - **Q3. "Decide the decrease"** read as "evaluate A2-T-2, met or missed". Options: (a) that reading; (b) F-466 done only if
   A2-T-2 is met. Taken on the standing instruction: (a); the acceptance says "decide".
+
+## Amendment 1 (2026-11-12, after H1 and H2, before any code or run of what it registers)
+
+Written after the registered runs H1 and H2 were made once (their numbers go in the addendum, unchanged), before any code of
+the remedy below. Nothing above this amendment is changed.
+
+**What H1 and H2 found (the class and the branch).** H1 reproduced R1 (the printed coefficients and the message); the class
+G is **sudden** (Courant 1.135993 at step 2950, `max |u|` ratio 0.9946). H2 restarted from the file of step 2900, stopped at
+step 2951 with R1's message and the same Courant numbers. The stopping solve is corrector 1 of step 2951. Its inputs are
+finite (M3: 0, 0, 0, 0). The whole solution is NaN (M4: 53 136 of 53 136 cells, so "cell 0" is the first index, not a
+location). The matrix is a symmetric M-matrix (M6: no diagonal entry that is not positive, no positive off-diagonal, no
+asymmetric pair). Incomplete-Cholesky CG solves the same system from the same start in 448 iterations to 2.5e-14. The traced
+AMG-preconditioned CG (M5) has `r^T z < 0` from its first iteration (-2.0e-9), so in floating point the AMG preconditioner is
+not positive definite on this system. The iteration stagnates and grows until `beta` is not finite at iteration 801
+(overflow, `inf/inf`), and every later iterate is NaN. The preconditioner never returns a non-finite value for a finite
+residual (M5: `None`). This is the registered branch "sudden, inputs finite, IC-CG finite and converged, AMG-CG NaN". The
+NaN is made in `rcfd_linalg::cg`, in the scalar `beta = rz_new/rz` at iteration 801, after the AMG preconditioner lost
+definiteness on the pressure matrix of step 2951.
+
+**The remedy (R).** It is opt-in. A setting `PimpleSettings::pressure_ic_fallback: bool`, default `false`. When it is `true`
+and a pressure solve on the plain path (`gradient_pressure = None`) returns a non-finite pressure, the solve is repeated from
+the same start pressure with incomplete-Cholesky CG: the same controls with `amg = false`, which is `FvMatrix::solve`'s CG
+with `Ic0` for the symmetric pressure matrix. A public counter on the solver records each repeat as (step, outer
+iteration, corrector). If the repeat is also not finite, the guard stops the run as before. With `false`, or while every AMG
+solve is finite, the solver does exactly what it did before. Derivation: CG needs an SPD preconditioner. IC(0) of a
+symmetric M-matrix exists with positive pivots (Meijerink and van der Vorst 1977, cited from memory). Here it is not taken
+from the paper but measured on the system itself (M6: converged). The repeat costs one more solve only where the AMG solve
+has already failed. The capture of D1 keeps recording the failed AMG solve.
+
+**Its checks (fixed now).**
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| S7 (fast) | M2, bounded, 3 steps with `pressure_ic_fallback = true` against `false` | `u`, `p`, `phi` bit-equal; no repeat recorded |
+| H3a (ignored, seconds) | from the file of step 2950 (H1) with the option, one step | no stop; exactly one repeat, at (2951, 0, 1); the pressure finite |
+| H3 (the run to `t = 8`) | from the file of step 2950 with the option, steps 2951 to 8000 (bit-identical to the default until step 2951: the option acts only on a non-finite pressure, and H1 had none before step 2951, because the guard would have stopped it) | no stop; S2 of ADR 0268 (at least 6 crossings, period spread `<= 1e-2`, maximum spread `<= 2e-2`, amplitude `>= 1.0`) held; then A2-T-2 evaluated: `abs(e(T2)) < abs(e(T))` for max `C_D` and for max `C_L` (T2 bounded +0.136, +0.175 percent), met or missed, either deciding |
+
+The number of repeats in H3 and their steps are printed (no limit). A repeat count that grows quickly would say the AMG loses
+definiteness often on T. That is a finding, not a failure of H3.
+
+**Its mutations.**
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MU8 | the repeat uses the AMG controls (`amg` left `true`) | H3a (run on the scratch copy with H1's files) |
+| MU9 | the repeat condition `is_some()` written `is_none()` (the repeat taken after every finite solve) | S7 |
+
+The decision rule above is unchanged. With H3 held, the branch "the run reaches `t = 8` ... so that A2-T-2 is decided" is
+reached.
