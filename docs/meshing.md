@@ -171,6 +171,16 @@ only, with no case key.
 * Measured on the suction layer of ADR 0247 (`R = 80`, 16 x 16 base): the directional run with 1547 cells has error 0.00298;
   the isotropic adapted mesh has 0.01159 with 3841 cells; a directional run held at the isotropic run's finest size reaches
   0.01158 with 960 cells. With the axis choice inverted the error is 1.18.
+* Coarsening in the loop (F-441, ADR 0343, opt-in): `run_adaptive_simple_directional_coarsen_target(.., phi)` marks a cell to
+  coarsen along axis `a` when `E_a < phi max_b E_b` and its level along `a` is above 0 (`directional_coarsen_marks`); each
+  cycle first box-merges (`Coarsening::Box`) and then refines on the coarsened lattice towards the scheduled count
+  (`directional_coarsen_refine_step`, the merged cells ranked by the volume-weighted mean of their children's gradients). A
+  merged cell takes the volume-weighted mean of the values it replaces. `phi <= theta / 4` (`1/8` with `theta = 1/2`) is
+  required: a just-split axis is then not coarsened back and an axis merged by one or two levels is not split again, for an
+  unchanged gradient. `phi = 0` gives the loop without coarsening bit for bit. Measured on the suction layer (6 cycles, target
+  1280): 1292 cells, error 0.0029776, 413 leaves split along x, against 1283 cells, 0.0029752 and 494 without coarsening at
+  the same target (and 704 for the 1547-cell run); 62 merges, all in the last three cycles, no alternation. Marking every cell
+  to coarsen along every axis gives 0.48.
 
 ## Turbomachinery post-processing (F-123, ADR 0054, status partial)
 

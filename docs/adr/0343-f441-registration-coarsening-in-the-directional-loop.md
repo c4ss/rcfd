@@ -284,3 +284,123 @@ run under mutations.
   recorded.
 - **Q4. Coarsen then refine in one cycle, or one `adapt_with` call with both kinds of marks.** Taken on the same standing
   instruction: two calls (D2 gives why).
+
+## Addendum 1: results (2026-11-12)
+
+Commits: 352e355b (this registration alone), f7c720a5 (the code and the tests). Runs, all in release, target directory in
+`w49i-work/f441-scratch`:
+
+- The registered run: `cargo test --release -p rcfd-fv --test adapt_directional_coarsen_f441 -- --include-ignored --nocapture
+  --test-threads=4`, once (log `f441-scratch/run_registered.log`, 35 s), on the code that became f7c720a5; the commit differs
+  from the run state by `cargo fmt` (line breaks) and by the two new `use` lines moved into a group of their own so that `fmt`
+  does not move the existing import line. The ordinary tests were run once more after `fmt` (6 passed, 3.8 s) to show the
+  formatting changed nothing; no limit was looked at again.
+- K2: `adapt_directional_f348` with `--include-ignored --skip c5_directional_layer_loop_fast_known_miss` (11 passed, 64 s),
+  `adapt_criteria_f343` and `adapt_cavity_f102` (ordinary tests: 4 and 8 passed), `rcfd-mesh` `adapt_aniso_f348` (9 passed, 1
+  ignored), `adapt_aniso_box_f439` (7 passed) and `adapt` (12 passed); log `f441-scratch/run_k2.log`.
+- No limit was changed; no check missed; no amendment.
+
+### Results
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| F1 | exact coarsening axes, errors | all cases as registered | yes |
+| F2 | no violation on the 129 x 129 grid; non-vacuous | no violation; 16641 pairs with a split, 2176 with a coarsening | yes |
+| F3 | 8 base cells, 8 merges, `Merged([0, 1, 2])`, merged gradients, 10 cells with base cells 6 and 7 split along y, linear field `1e-12`, `sum V q` `1e-13` | all as registered (merged gradients compared to `1e-14` relative, see deviations) | yes |
+| F4 | `phi` 0.2, NaN, -0.1 refused; the no-op equals `adapt(directional_target_marks(..))` | as registered | yes |
+| K1 (acceptance: runs that do not ask are bit for bit) | (a) records, `u`, `p`, `phi`, leaves, points `==`; (b) no line removed, `aniso.rs` unchanged | (a) equal (601 cells); (b) `git diff main` of `adaptive.rs`: 354 lines added, none removed (one paragraph of module text, two `use` lines in a new group, the new items appended); `aniso.rs` unchanged | yes |
+| K2 (acceptance, same clause) | the existing tests pass unedited | all pass; the F-348 layer tests print `N_D = 1547`, `E(D) = 2.97524e-3`, `E(A) = 1.15860e-2`, `E(D960) = 2.97592e-3` as ADR 0267 | yes |
+| CL | converged, validate, jump `<= 1`, `400 <= N <= 440`, increasing, `sum l_y > sum l_x`, y level 3 | 256, 297, 347, 402 cells, all converged; jump 1, 1; level sums 77, 414; y level 3; **0 merges** in every cycle | yes |
+| S0 | `N_D = 1547`, `abs(E(D) - 0.0029752) <= 1e-7`, 704 | 1547, 0.002975238, 704 | yes |
+| H1 (acceptance) | `E(DC) <= 0.00298` | 0.0029776 (`E(DC) / E(D) = 1.0008`) | yes |
+| H2 (acceptance) | `N_DC < 1547` | 1292 | yes |
+| H3 (acceptance) | `x(DC) < 704` | 413 | yes |
+| H4 | converged, validate, jump `<= 1`, increasing, y level 5, merges `>= 1` | 256, 337, 440, 576, 767, 979, 1292 cells in 48 to 101 iterations, all converged; jump 1, 1; 602 leaves at y level 5; 62 merges (0, 0, 0, 9, 18, 35 per cycle) | yes |
+| H5 | `x(DC) < x(D1280)` | 413 against 494 | yes |
+| H6 | `abs(N_DC - 1280) <= 128` | 1292 | yes |
+| NC-H1 | `E(DCall) > 0.00298` | 0.484 (1271 cells, y levels at most 4, 1171 merges) | holds |
+
+Recorded, not counted. D1280: 1283 cells, `E = 0.0029752`, x levels {0: 789, 1: 261, 2: 158, 3: 75}, 494 leaves with
+`l_x > 0` (320 at `x < 1/8`, 217 at `y < 0.9`). DC: x levels {0: 879, 1: 252, 2: 135, 3: 26}, y levels {0: 176, 1: 154, 2:
+106, 3: 108, 4: 146, 5: 602}, level sums 600 (x) and 4284 (y) against D1280's 802 and 4399; of its 413 x-split leaves 243 are at
+`x < 1/8` and 251 at `y < 0.9`; 0 alternations. DC1536: 1541 cells, `E = 0.0029775`, 630 leaves with `l_x > 0` (D: 704), 90
+merges, 0 alternations. DCall: 72 alternations. Times: D 9.1 s, D1280 4.6 s, DC 4.9 s, DCall 8.4 s, DC1536 6.6 s, CL 2.6 s (four
+test threads in parallel on a shared machine).
+
+Against the predictions: P1 met. P2 met for the counts (1292) and H1 to H6; "`E(DC) <= E(D)` to four digits" **not met**:
+0.002978 against 0.002975 (`E(D1280)` equals `E(D)`, so the coarsening costs `2.4e-6` of error, a factor 1.0008). P3 **not
+met**: `x(DC) / x(D1280) = 0.84`, not 0.5 or less, and the x level sum falls by a quarter (802 to 600). P4 met (0.48). P5 met
+(no alternation).
+
+**Why the coarsening removes fewer x splits than predicted** (from the records; no diagnostic run was made, so this is an
+explanation consistent with them, not a demonstration). The merges start only in cycle 4 (9, 18, 35): in cycles 1 to 3 the
+layer is not resolved, the solution has real x variation where the x splits were made, and the ratio test does not pass there;
+by the time the layer is resolved, the leaves made in cycles 1 to 3 have neighbours split further, and a merge then needs the
+consent of every leaf inside the box (ADR 0341 D2 rule 2, refused when a leaf inside has a y level of its own) and the per-axis
+balance. Of DC's 413 x-split leaves, 251 lie at `y < 0.9`, outside the layer, where both variations are at the level of the
+solver tolerance and the ratio carries no information (the limit stated in the registration, Q1 (b)). CL, on a `[3, 3]` lattice
+with 3 cycles, ends before the layer is resolved, which is why it made no merge.
+
+### Mutations (scratch copy `f441-scratch/mut`, a `git archive` of f7c720a5, target `f441-scratch/target-mut`, release)
+
+Each alone by exact replacement (each pattern found once, `f441-scratch/mutate.py`, logs `f441-scratch/mut_MF*.log`), the
+non-ignored tests of `adapt_directional_coarsen_f441` run once, the file restored and compared afterwards (identical).
+
+| Id | Mutation | Failed tests | Caught by the registered test |
+| --- | --- | --- | --- |
+| MF1 | `<` becomes `<=` | F1, F2 | yes |
+| MF2 | `l_a > 0` dropped | F1 | yes |
+| MF3 | merged gradient from the first source only | F3 | yes |
+| MF4 | stage 1 with `Coarsening::Pair` | F3 | yes |
+| MF5 | `phi <= theta / 4` check dropped | F4 | yes |
+| MF6 | refinement transfer by injection in the coarsening loop | K1 | yes |
+
+Every mutation is caught. Gap: no fast test runs the loop through a cycle that merges (CL made none), so the loop's path with
+two transfers is exercised only by the heavy runs (DC, DC1536 and DCall, all converged) and the step by F3.
+
+### Format and lint
+
+`cargo fmt -p rcfd-fv --check` clean after `cargo fmt` (line breaks in the new code and the new test file);
+`cargo clippy --release -p rcfd-fv --all-targets -- -D warnings` clean. `rcfd-mesh` was not changed.
+
+### Deviations and what was not run
+
+- F3's merged gradients are compared to `1e-14` relative instead of `==`: the volumes come from the mesh with round-off.
+- The new `use` lines sit in a group of their own after the existing imports (so that `fmt` leaves the existing lines alone).
+- `merged_gradients` also refuses a source index outside the old mesh; `directional_coarsen_refine_step` also refuses coarsening
+  marks that ask for a refinement (both located errors, beyond the registered text).
+- Not run: the whole workspace suite (by instruction); the ignored 5-minute record `c5_directional_layer_loop_fast_known_miss`
+  of ADR 0267 (it fails by design and its code path is unchanged); the ignored heavy tests of `adapt_criteria_f343` and
+  `adapt_cavity_f102` (their functions have no changed line); `rcfd-api` `baseline_hashes` (no existing line of `adaptive.rs`
+  changed and `rcfd-api` calls only existing functions); the heavy tests under mutation.
+
+### Decision by the registered rule
+
+**done.** F1 to F4, K1, K2, CL, S0 and H1 to H6 are met at the first run and NC-H1 holds: the coarsening run reaches 0.0029776
+(limit 0.00298) with 1292 cells (fewer than 1547) and 413 x-split leaves (fewer than 704, and fewer than the 494 of the same
+target without coarsening); runs that do not ask for coarsening are unchanged bit for bit. The effect on the x splits is
+smaller than I predicted (P3), for the reasons above, and the error margin to the limit is small (`2.4e-6`).
+
+### Remaining questions
+
+- **R1. Far-field x splits.** The ratio rule cannot see them (251 of DC's 413). Options: (a) leave it; (b) a second, absolute
+  rule: coarsen every axis of a cell whose largest variation is below a fraction of the largest over all cells, with its own
+  derivation of a band against the target ranking; (c) a floor below which no axis is split (ADR 0267 R4 (c)). Recommendation
+  (a) now (the acceptance is met); (b) if a case shows the cost matters.
+- **R2. A fast test that merges inside the loop.** Options: (a) a fast loop test on a set-up that resolves its layer within its
+  cycles (for example 16 x 16, `[3, 3]`, 5 cycles), registered with its own limits; (b) leave it to the heavy runs.
+  Recommendation (a), with the next change to this loop.
+- **R3. The case key.** As ADR 0267 R5: a key `coarsen_ratio` (`phi`, default 0 = off, at most `axis_ratio / 4`) for the
+  directional lattice belongs to F-438; it changes the schema golden. Recommendation: one sentence in F-438's note (below).
+
+### For the lead: roadmap entries
+
+Proposed status of F-441: **done**. New note:
+
+> DONE (ADR 0343, 2026-11-12): rcfd_fv::adaptive, opt-in: directional_coarsen_axes and directional_coarsen_marks mark a cell to coarsen along axis a when its per-axis variation E_a is below phi times the cell's largest and its level along a is above 0; phi <= theta / 4 (1/8 with theta = 1/2) is required, derived so that a just-split axis is not coarsened back and an axis merged by one or two levels is not split again (checked exactly on a 129 x 129 grid of variations). Each cycle of run_adaptive_simple_directional_coarsen_target (and of run_adaptive_simple_directional_coarsening with any coarsening marks) first box-merges with Coarsening::Box and then refines on the coarsened lattice towards the scheduled count (directional_coarsen_refine_step; merged cells ranked by the volume-weighted mean of their children's gradients, merged_gradients); a merged cell takes the volume-weighted mean of the values it replaces, then the refinement transfer of the settings applies. On the ADR 0267 suction layer (16 x 16 base, levels 5, 6 cycles, target 1280) the coarsening run has error 0.0029776 (limit 0.00298) with 1292 cells and 413 leaves split along x, against ADR 0267's run D (1547 cells, 704) and the same target without coarsening (1283 cells, 0.0029752, 494 leaves); 62 merges, no alternation; marking every cell to coarsen along every axis gives 0.48. With phi = 0 the loop equals run_adaptive_simple_directional_target bit for bit; no existing line changed; the ADR 0267, 0341, 0247 and 0242 tests pass unedited (the F-348 heavy layer runs included). Six mutations caught. Not removed: x splits outside the layer, where the variations are at the solver tolerance and the ratio carries no information (251 of the 413).
+
+Note of F-438 (one sentence added at the end of its present note; the rest unchanged):
+
+> The coarsening of F-441 (ADR 0343, 2026-11-12) would add a key coarsen_ratio (phi, default 0 = off, at most axis_ratio / 4).
+
+No new item is proposed.
