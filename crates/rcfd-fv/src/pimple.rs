@@ -27,7 +27,7 @@ use crate::gradient::{green_gauss, least_squares};
 use crate::lumped::FaceJump;
 use crate::pressure::{
     boundary_hby_a, boundary_values_pbc, corrected_flux, coupled_gamma, divergence, face_interpolate, pressure_bc,
-    solve_pressure, PressureControls,
+    solve_pressure, PressureBc, PressureControls,
 };
 use crate::simple::{normalised_residual, BodyForce};
 use rcfd_core::vec3::{self, Vec3};
@@ -1055,6 +1055,40 @@ pub struct PimpleSolver {
     pub lag_warnings: Vec<LagWarning>,
     /// State and record of the adaptive corrector count (ADR 0156); empty while `settings.corrector_control` is `None`.
     pub correctors: CorrectorRecord,
+    /// Diagnostic capture of the pressure systems (F-466, ADR 0363 D1): when `Some`, every pressure solve of the plain pressure
+    /// path (`gradient_pressure = None`) appends its inputs and its result, before the divergence guard looks at them. `None`
+    /// (default) leaves the solver unchanged.
+    pub pressure_capture: Option<Vec<PressureCapture>>,
+}
+
+/// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
+/// [`crate::pressure::pressure_system_src`] the system can be assembled again and replayed from `p0`.
+#[derive(Debug, Clone)]
+pub struct PressureCapture {
+    /// Step number (1-based).
+    pub step: usize,
+    /// Outer iteration (0-based).
+    pub outer: usize,
+    /// Pressure corrector (0-based).
+    pub corrector: usize,
+    /// Face coefficient of the pressure Laplacian (with the face jumps applied).
+    pub gamma: Vec<f64>,
+    /// Pressure boundary data.
+    pub bc: PressureBc,
+    /// Flux whose divergence is the right-hand side.
+    pub phi: Vec<f64>,
+    /// Volume source of the solid cells of the second-order immersed face flux (ADR 0234 D3); `None` without flux faces.
+    pub src: Option<Vec<f64>>,
+    /// Controls of the solve.
+    pub controls: PressureControls,
+    /// Start pressure of the solve.
+    pub p0: Vec<f64>,
+    /// Pressure returned by the solve.
+    pub p: Vec<f64>,
+    /// Normalised initial residual returned by the solve.
+    pub res0: f64,
+    /// Linear iterations of the solve.
+    pub iters: usize,
 }
 
 /// The count chosen by one search of the adaptive corrector control.
@@ -1098,6 +1132,7 @@ impl PimpleSolver {
             lag_estimates: Vec::new(),
             lag_warnings: Vec::new(),
             correctors: CorrectorRecord::default(),
+            pressure_capture: None,
         }
     }
 
@@ -1127,6 +1162,7 @@ impl PimpleSolver {
             lag_estimates: Vec::new(),
             lag_warnings: Vec::new(),
             correctors: CorrectorRecord::default(),
+            pressure_capture: None,
         }
     }
 
@@ -1858,6 +1894,23 @@ impl PimpleSolver {
                 p_iters += it;
                 if corr == 0 {
                     res_p = r0;
+                }
+                if let (Some(cap), None) = (self.pressure_capture.as_mut(), s.gradient_pressure) {
+                    // F-466, ADR 0363 D1: the diagnostic capture (opt-in), before the guard
+                    cap.push(PressureCapture {
+                        step: self.step_no,
+                        outer,
+                        corrector: corr,
+                        gamma: gamma_j.clone(),
+                        bc: pbc.clone(),
+                        phi: phi_solve.to_vec(),
+                        src: ib_src.clone(),
+                        controls,
+                        p0: p_old.clone(),
+                        p: p_new.clone(),
+                        res0: r0,
+                        iters: it,
+                    });
                 }
                 if let Some((c, v)) = first_nonfinite(&p_new) {
                     return self.trip(

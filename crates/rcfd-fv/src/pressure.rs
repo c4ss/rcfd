@@ -478,6 +478,41 @@ fn solve_pressure_inner(
     (res0, iters, parts)
 }
 
+/// The assembled pressure system of the first pass of [`solve_pressure_src`] (`vol_src` given) or [`solve_pressure`]
+/// (`None`), by the same operations in the same order (F-466, ADR 0363 D2: the replay of a captured solve,
+/// [`crate::pimple::PressureCapture`]). `None` where that solve takes another path: non-orthogonal correctors, periodic
+/// coupling. Diagnostic; the solvers do not call it.
+pub fn pressure_system_src(
+    geom: &FvGeometry,
+    gamma_p: &[f64],
+    bc: &PressureBc,
+    phi_hby_a: &[f64],
+    ctl: &PressureControls,
+    vol_src: Option<&[f64]>,
+) -> Option<FvMatrix> {
+    if ctl.non_orth_correctors > 0 || bc.coupled.iter().any(|c| c.is_some()) {
+        return None;
+    }
+    let mut div = divergence(geom, phi_hby_a);
+    if let Some(src) = vol_src {
+        for (d, s) in div.iter_mut().zip(src) {
+            *d -= s;
+        }
+    }
+    let gamma_eff = coupled_gamma(geom, bc, gamma_p);
+    let mut pm = laplacian(geom, &gamma_eff, &bc.coeffs, None);
+    for (b, d) in pm.b.iter_mut().zip(&div) {
+        *b -= d;
+    }
+    if !bc.has_dirichlet() {
+        let (cell, value) = ctl.p_ref;
+        let d = pm.a.diag[cell];
+        pm.a.diag[cell] += d;
+        pm.b[cell] += d * value;
+    }
+    Some(pm)
+}
+
 /// The pressure equation of [`solve_pressure_parts_grad`] with its explicit non-orthogonal part made implicit (ADR 0198, F-285):
 /// `F(p) = A p - b(grad(p)) = 0`, `A` and `b` the assembly of the corrector passes (the compact matrix with the reference-cell pin,
 /// and the right-hand side with the non-orthogonal part of the gradient `grad`, `None` the least-squares gradient), solved from `p`
