@@ -216,3 +216,114 @@ No rotating six-DOF body, no smoothed moving wall with force reports, no layered
 layered and compressible fall-backs are checked statically (R), their run behaviour rests on ADR 0342 read 5 (the layered
 step keeps no vector, the compressible run never steps `DynMesh`) and on the resolution in `report_wall_gradient`. The
 whole-workspace suite and the gate are the lead's.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-api/src/dynmesh.rs` (the only library file changed): the schema default of `wall_pressure` in
+  `coupling_schema` and in `force_reports_schema` is `"prescribed_gradient"` (D1; the value lists unchanged, the docs
+  strings rewritten); `force_reports_written`; `report_wall_gradient(case)` resolves an absent table to `boundary_value`
+  with layering or the compressible solver (D2); `check_force_reports` refuses only a written table (D2); comments.
+- Tests edited as registered (the table "The existing tests that move"): `strong_coupling_case_f350.rs` (`library_run`,
+  `strong_case_run`), `wall_pressure_case_f358.rs` (T0, Z0, Z1, A2), `force_reports_moving_wall_f440.rs` (T0, Z0 to Z2,
+  E3, A1c and the no-table halves of A3, A4, F1; a print label). No other test edited; no ignored record edited.
+- New: `crates/rcfd-api/tests/wall_pressure_defaults_flip.rs` (11 tests: X0 ignored as the record of the old tree, P1 and
+  P2 ignored in debug only; about 28 s in release).
+- `docs/case-schema.md` (two rows, the prose of two sections; no TOML block edited), `docs/dynamic-mesh.md` (one
+  paragraph).
+- Not changed: `rcfd-fv`, `rcfd-post`, `rcfd-core`, `sim.rs`, `baseline_hashes.rs`, `case_hashes_w48u.rs`,
+  `w48v_case_hashes.rs`, every golden.
+
+### Checks
+
+Runs, each once, release: X0 on the unchanged library (b511eb75 plus the new test file only); the new file on the final
+code (28 s); H; E (the three edited files); K (`rcfd-api` 14 files, `rcfd-cli`, `rcfd-mcp`, `rcfd-fv` 6 files); the
+mutations on a `git archive` copy of 39e23af0 (`flip-scratch/mutate.py`, its own target directory).
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| H | all pass, no file edited | `baseline_hashes` 3 passed (1 ignored as before), `case_hashes_w48u` 1 passed, `w48v_case_hashes` 0 passed (its one test is the ignored N3 print tool, as before); no registered hash moved | yes |
+| K | all pass as before | `rcfd-api`: `adapt_case_f342` 6 (2 ignored), `cosim_service_f360` 13 (5), `dynamic_mesh` 5 (1), `exp_rot_pab` 6, `force_effective_w49a` 4, `layering_ale_f259` 7 (1), `mesh_transform_w48u` 13, `physics_schema` 11, `registers` 7, `rules_w19c` 8 (1), `tree_wiring_f259` 9, `w48v_adaptive_correctors` 5 (4), `wall_motion` 10 (5; 1473 s on the loaded machine), `workflow` 5; `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `project_list_f270` 1; `rcfd-fv` `added_mass_f351` 15 (6), `ale_flows` 5 (5), `sixdof` 7 (1), `sixdof_coupled` 2 (1), `sixdof_flow_f244` 8 (1), `strong_fsi_f251` 16 (1): all passed | yes |
+| E, ADR 0266 file | all pass; as predicted | 9 passed (1 ignored record). E1: 0 of 60 differ, iterations equal (4, then 3), converged; E2: 0 of 40 differ, iterations 11 to 14 (largest 14, limit 20), converged; S1 with the written old value: `1.005081`, `1.005063`, turning `0.92452`, `0.96141`, R1 `4.17e-7`, `3.26e-7`, R2 `4.67e-6`, `1.63e-7` (ADR 0266's numbers); T0, Z, C1, C2, Nb pass unedited; L `10 X` at 28 and 31, stops at 35 (T/100, as P4) and **37** (T/200, was 40; not in ADR 0269's listing; within L's limit 60) | yes |
+| E, ADR 0269 file | all pass | 11 passed (3 ignored records): T0 (no-table hash `80133491493e8dde` as before), Z0, Z1 0 differ, E1, E2, W1 (`1.0e-15`), A1 `1.000264`, A2 with the written old value `1.001307`, A4, N, SK, AU1b, AU2 | yes |
+| E, ADR 0342 file | all pass | 6 passed: T0 (no-table hash `d9b06e9617131355` as before), Z0, Z1, Z2 0 of 13; E1 0, E2 0, E3 0; A1 `4.597e-6`, A1c `2.5004597e-2` with the written old value; F1 | yes |
+| D0 | as stated | no key or table in either text; hashes `80133491493e8dde`, `c3f1f3f1fbed789b`, `d9b06e9617131355` equal X0's; both keys read `prescribed_gradient`; the strong table without the key writes `wall_pressure = "prescribed_gradient"` | yes |
+| X0 | printed; pairs equal | digests `be15ac654a67efb0`, `e08d76bbb57fd846`, `0bb5aeca4ff460d8`, `3f8d213a7c317800`, `1adc11edae8afc94`, the same with and without the explicit old value | run |
+| X1 | equal to X0 | all five equal | yes |
+| Y | equal; control differs | all four equal; Y a `120cf8cc298b1244` against X1 a `be15ac654a67efb0` | yes |
+| P1 | within `1e-6` of `1.000264` | `1.0002644` | yes |
+| P2 | `1e-6` of `1.000042`; `1e-5` of `0.92469`; converged | `1.0000416`; `0.924692`; all | yes |
+| P3 | 92; `1e-6` each | 92; `x 0.5065027`, `v 2.2091878`, ratio `0.9994981` | yes |
+| P4 | 28; 35 | 28; 35 | yes |
+| P5 | `1e-9` of `9.524133e-3` | `9.524132952e-3` | yes |
+| P6 | `1e-9` of `4.597e-6`, `4.369e-6` | `4.597041e-6`, `4.368956e-6` | yes |
+| R | as stated | layering: no table = old value (`dynamic_mesh.deformation`, `dynamic_mesh.moving_patches`), the key only with the new value; compressible: no table = old value (`reports.*.type`, `dynamic_mesh.rest_patches`), the key only with the new value; prescribed motion: none = none, the key with the new value | yes |
+
+### Mutations
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 coupling default back | Y, P1, D0 | all three failed |
+| MU2 report default back | Y, P6, D0 | all three failed |
+| MU3 refusal without the written guard | R | failed |
+| MU4 every value read as `PrescribedGradient` | X1 | failed |
+| MU5 reports corrected for every value | X1 | failed |
+| MU6 strong step passes `Extrapolated` | Y, ADR 0266 E1 | E1 failed; **Y passed**: Y b compares two tree runs, and both go through the mutated line, so it cannot see this mutation (an error of the registration's named test, seen after the run). P2 would also see it (not run under the mutation) |
+
+Each file restored and compared byte for byte: equal six times.
+
+### Deviations and disclosures
+
+- **Written case text** (D1): an input that writes a coupling or force-report table without the key now writes
+  `wall_pressure = "prescribed_gradient"` and has another settings hash (for example ADR 0266's strong table: its T0
+  "with" hash is now `9afbea20cf9d3338`). This cannot be avoided while the strong scheme flips; no such input is in a
+  registered hash table, and H passed. Every case without the tables keeps its text and hash (D0).
+- **Previously valid input that is now refused** (D2, question Q1): a written table without the key in a refused
+  context. No input in the repository is of this kind.
+- R's layering and compressible texts are refused for other reasons as well (the column is not a layering or
+  compressible case); R shows that the key adds no diagnostic without the table, not that a valid layered case runs. No
+  layered or compressible run with force reports was stepped.
+- MU6's named test Y b is blind to it (above); it was caught by the other named test.
+- ADR 0266 L at T/200 now stops at step 37 (was 40); not listed by ADR 0269 and not predicted here; the test passes.
+- ADR 0269's ignored record `l_listing_...` was not edited: its label "default" now means the new default.
+- The new test file was formatted by `rustfmt` before the code commit; nothing else.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's); the debug profile; `rcfd run` on a moving-mesh case with reports;
+`w48v_case_hashes`'s ignored print tool.
+
+### After the tests
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy --release -p rcfd-api --all-targets -- -D warnings` (on the
+identical `git archive` copy of 39e23af0): clean.
+
+### Decision by the registered rule
+
+H, K, E, D0, X1, Y, P1 to P6 and R are met, X0 was run once, and every mutation failed at least one of its named tests
+(MU6 through ADR 0266 E1 only). **done**, proposed as such, with the MU6 note; if the lead reads "caught" as "every named
+test fails", the status is partial with nothing left to build.
+
+### Remaining questions (each with options and a recommendation)
+
+- **Q1. A written table without the key in a refused context** (an empty `[dynamic_mesh.force_reports]` with layering or
+  the compressible solver; a coupling table without `wall_pressure` under a prescribed motion) is now refused. Options:
+  (a) keep (the written text says `prescribed_gradient`, and accepting it would refuse the same text when read back);
+  (b) accept silently and resolve to the old value, giving up the refusal of an explicit `prescribed_gradient` there
+  (after `coerce` the two cannot be told apart). Recommendation (a).
+- **Q2. The library defaults** (`fsi::strong_step`, `sixdof::patch_force_moment` on fixed-flux walls; ADR 0269 Q1 (c)).
+  Options: (a) leave; (b) a separate item that flips them, moving the `rcfd-fv` suites by ADR 0252's numbers.
+  Recommendation (a) until a caller outside the case driver needs it.
+
+### For the lead: roadmap entries
+
+No new item. Proposed note additions (appended to the existing notes):
+
+F-358:
+
+> Default flip applied (ADR 0346, 2026-11-12): without the key the body force takes prescribed_gradient in both schemes; wall_pressure = "extrapolated" gives the old bits (digests equal to the old tree's); no registered hash moved; the predicted moves measured: SP 1.001307 -> 1.000264, ADR 0266's strong piston 1.005081 -> 1.000042 (turning 0.92469), T4 x 0.506503 at 92 steps, ADR 0266 L stop 34 -> 35; ADR 0266 E1, E2 now compare with strong_step_with(PrescribedGradient), its R1, R2 and ADR 0269 A2 write the old value; a coupling table that leaves the key out now writes wall_pressure = "prescribed_gradient".
+
+F-440:
+
+> Default flip applied (ADR 0346, 2026-11-12): without the table the force, moment and force-coefficient reports on moving walls take prescribed_gradient (the column's fp deficit 2.5004597e-2 -> 4.597e-6), except with layering or the compressible solver, which keep the stored values silently (only a written table is refused there); wall_pressure = "boundary_value" gives the old bits; no registered hash moved; ADR 0342's T0, Z0 to Z2, E3, A1c and F1 controls now write boundary_value.
