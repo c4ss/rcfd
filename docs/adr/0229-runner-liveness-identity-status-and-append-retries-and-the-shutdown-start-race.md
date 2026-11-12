@@ -177,3 +177,8 @@ other builds loaded the machine: fmt per package ok, clippy `-D warnings` clean,
 ignored. The two failures are timing assertions: `vof_dambreak_amg::a4_dam_break_with_amg` ("A4 wall time") and
 `live_preview_j::j3c_the_frame_asked_for_comes_when_the_debounce_ends` (its control on the first frame). Each passed when run
 alone on main afterwards (A4 once, j3c twice). Not a clean gate; the Ubuntu gate has not run.
+
+Second gate, of main 49fbf1a3 (everything merged up to F-352), on a git-archive copy, Windows, with at most three other
+builds at its start and none at its end: fmt per package ok, clippy `-D warnings` clean, release tests 3548 passed, 0 failed,
+1023 ignored (2 h 28 min). The two timing tests of the first gate passed. Merged after it and not covered: F-351, F-340,
+F-357, F-139, F-355. The Ubuntu gate has not run.
