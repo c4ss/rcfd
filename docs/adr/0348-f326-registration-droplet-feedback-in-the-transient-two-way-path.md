@@ -306,3 +306,15 @@ Taken on the maintainer's standing instruction of 2026-11-11 (take the recommend
 - Q1: the steady two-way path with the tables (a vapour species in the fixed point). Q2: the vapour mass as a source of a
   variable-density continuity equation (with F-252). Q3: one record method or two (ADR 0230 Q1), now that a case path reads
   the vapour terms.
+
+## Amendment 1 (2026-11-12, written before any run of the checks)
+
+Found by reading the schema while writing the code, before the test file existed: `vof.mass_transfer` is a plain
+(non-optional) object of the schema with the key `evaporation_frequency`, so `to_toml` and `to_json_string` of every case
+contain the word `evaporation` whatever `particles` holds. Z2 as written above ("contain neither `evaporation` nor
+`breakup`") would fail on that key alone: a defective set-up. Z2 is replaced by **Z2a**: CB's text without both tables:
+`to_toml` has no line `[particles.evaporation]` or `[particles.breakup]` and the `particles` object of `to_json_string`
+has no key `evaporation` or `breakup`; with them both texts have them and `content_hash` differs. Limit and estimate as
+registered. No other check changes.
+
+NC3 needs the record's `sum energy_heat`, which D6 did not list: the ledger gains `heat_raw` (that sum). No limit changes.
