@@ -4609,6 +4609,43 @@ impl Simulation {
         boundary_values(&self.geom, &pbc.coeffs, &self.pressure().values)
     }
 
+    /// The face pressure of the force, moment and force-coefficient reports (F-440, ADR 0342 D2):
+    /// [`pressure_face_values`](Self::pressure_face_values), except with `[dynamic_mesh.force_reports] wall_pressure =
+    /// "prescribed_gradient"`, where every boundary face with a finite entry of the kept fixed-flux gradient `g`
+    /// ([`dynamic_wall_gradients`](Self::dynamic_wall_gradients), the following and resting walls) takes the face pressure
+    /// of `rcfd_fv::sixdof::patch_force_moment_wall_gradient`, `p_c + G . d + (g - G . n)(d . n)` with the same operations
+    /// (ADR 0252). Before the first step (no vector) the stored values are kept.
+    pub fn report_pressure_face_values(&self) -> Vec<f64> {
+        let mut pf = self.pressure_face_values();
+        let Some(dm) = self.dynmesh.as_ref().filter(|d| d.report_wall_gradient()) else {
+            return pf;
+        };
+        let g = &self.geom;
+        let w = dm.wall_gradients();
+        if w.len() != g.mesh.n_boundary_faces() {
+            return pf;
+        }
+        let p = self.pressure();
+        let grad_p = rcfd_fv::gradient::least_squares(g, &p.values, &p.boundary_values(g));
+        let mesh = &g.mesh;
+        let n_int = g.n_internal;
+        for (i, gw) in w.iter().enumerate() {
+            let f = n_int + i;
+            if !gw.is_finite() || g.empty[f] {
+                continue;
+            }
+            let c = mesh.owner()[f];
+            let s = mesh.face_area_vectors()[f];
+            let area = vec3::norm(s);
+            let n = vec3::scale(s, 1.0 / area.max(1e-300));
+            let d = vec3::sub(mesh.face_centres()[f], mesh.cell_centres()[c]);
+            let mut v = p.values[c] + vec3::dot(grad_p[c], d);
+            v += (gw - vec3::dot(grad_p[c], n)) * vec3::dot(d, n);
+            pf[i] = v;
+        }
+        pf
+    }
+
     /// Minimum, maximum, mean (volume-weighted) and RMS of a field.
     pub fn field_stats(&self, name: &str) -> Result<Value> {
         let f = self.field(name)?;
@@ -4701,6 +4738,7 @@ impl Simulation {
             "total" | "viscous" => self.turb.is_some(),
             _ => false,
         };
+        // F-440, ADR 0342 D2: `pressure_face_values` itself without `[dynamic_mesh.force_reports]`
         let wall = |origin: Vec3| {
             if effective {
                 if let Some(nu_face) = self.momentum_face_viscosity() {
@@ -4708,7 +4746,7 @@ impl Simulation {
                         g,
                         &r.patch,
                         self.velocity(),
-                        &self.pressure_face_values(),
+                        &self.report_pressure_face_values(),
                         &nu_face,
                         self.rho,
                         origin,
@@ -4719,7 +4757,7 @@ impl Simulation {
                 g,
                 &r.patch,
                 self.velocity(),
-                &self.pressure_face_values(),
+                &self.report_pressure_face_values(),
                 self.nu,
                 self.rho,
                 origin,
