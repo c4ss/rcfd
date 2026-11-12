@@ -4448,22 +4448,23 @@ Added after the static feature-gap review; wording is product-independent. Phase
     - The solver does not use partitions or the ordering (a report and a VTK field only); no MCP tool.
 - [~] **F-237** Format registry and one-way structural load export: conformance case per supported format, finite-element deck export of pressure and temperature loads
   - depends on: F-119, F-103, F-072
-  - acceptance: Exported pressure and temperature loads on a tube reproduce the integrated force and heat rate to 0.1 percent after round-trip import; a public CGNS example round trip preserves node count and field values exactly; each listed format has a pass/fail conformance case
-  - note: Priority P3. Size M. Area: io. WAVE 27C (ADR 0051), PARTIAL. Not delivered: public CGNS round trip (acceptance
-    NOT met), heat-rate loads and the heat-rate part of the acceptance, case-tree wiring, third-party solver acceptance
-    (not testable), deck card layouts partly unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified).
-    - Format names stay in the format registry documentation, not in this item.
-    - rcfd-io registry (12 supported formats each with a conformance case, CGNS and HDF5 registered NotSupported).
-    - Nastran-style free-field deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located
-      errors).
-    - rcfd-post structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap
-      plus linear recovery.
-    - Measured:
-      - Uniform pressure exact (0 vs 4 eps).
-      - Tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met for force).
-      - Plane force 2.5e-16.
-      - Moments within limits.
-      - Linear temperature exact to 2.4e-14 on 3 structural meshes.
+  - acceptance: Exported pressure and temperature loads on a tube reproduce the integrated force and heat rate to 0.1
+    percent after round-trip import; a public CGNS example round trip preserves node count and field values exactly;
+    each listed format has a pass/fail conformance case
+  - note: Priority P3. Size M. Area: io. WAVE 27C (ADR 0051) and ADR 0244, PARTIAL. Not delivered: public CGNS round
+    trip (acceptance NOT met), case-tree wiring, third-party solver acceptance (not testable), deck card layouts partly
+    unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified), vendor heat-flux card (no specification in
+    the repository). Format names stay in the format registry documentation, not in this item. rcfd-io registry (12
+    supported formats each with a conformance case, CGNS and HDF5 registered NotSupported). Nastran-style free-field
+    deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located errors) plus the repository's
+    own shell heat-flux card RCFDQ,SID,EID,Q (ADR 0244; opt-in writer and reader, old reader unchanged). rcfd-post
+    structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap plus linear
+    recovery, wall heat flux from the temperature boundary condition mapped consistently or conservatively in heat rate.
+    Measured: Uniform pressure exact (0 vs 4 eps). Tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met
+    for force). Tube heat rate after round trip 2.23e-4 consistent, 2.5e-15 conservative (limit 1e-3; acceptance 0.1
+    percent met for heat rate); conservative export against conductive_heat_flow 5.7e-14. Plane force 2.5e-16, plane
+    heat rate 2.5e-16. Moments within limits. Linear temperature exact to 2.4e-14 on 3 structural meshes. Follow-up:
+    F-347.
 - [x] **F-238** Report, surface and post-object catalogue: standard deviation and facet statistics, weighted and vector fluxes, force projections, iso-clip, rake, sphere and quadric surfaces, offset surfaces, point clouds, instance transforms, case comparison and difference fields
   - depends on: F-071, F-072, F-109
   - acceptance: Integrals over an analytic field on a sphere and box (area, flux, mean, standard deviation) match closed form to mesh-convergence order; the difference of two identical solutions is exactly zero and of two uniform-offset analytic fields equals the offset to machine precision, including across meshes
@@ -6104,3 +6105,11 @@ fixed by the item's registration ADR before any code.
     values, and a steady case returns the values of F-337 to round-off.
   - note: From ADR 0239 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
+- [ ] **F-347** Vendor heat-flux card for the structural load deck from a cited open specification
+  - depends on: F-237
+  - acceptance: A specification of the card (fields, sign, required surface elements) from an open source is placed in
+    the repository; the deck writes it beside RCFDQ; the tube heat rate after a round trip through the repository reader
+    matches the fluid heat rate to 0.1 percent
+  - note: Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux
+    card layout is specified in the repository, so none was written. NEEDS THE USER: an open specification of the card
+    has to be placed in the repository first (clean-room rule).
