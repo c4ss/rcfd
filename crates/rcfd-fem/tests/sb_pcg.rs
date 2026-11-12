@@ -588,8 +588,8 @@ fn h1_heavy_cantilever_known_miss() {
 }
 
 #[test]
-#[ignore = "heavy record (ADR 0282 amendment 2, H1b): Hex8 cantilever 96 x 18 x 18, 103 968 unknowns, restarts by iterative refinement"]
-fn h1b_heavy_cantilever() {
+#[ignore = "record (ADR 0282 amendment 4): H1b on a 24 m beam instead of the registered 8 m box, not converged at 1.9e-9 relative (block Jacobi 6782, IC 2358 iterations, 3 refinement steps)"]
+fn h1b_heavy_cantilever_wrong_geometry_record() {
     let model = cantilever(HEAVY);
     let mut out = Vec::new();
     for p in [CgPreconditioner::BlockJacobi, ic()] {
@@ -705,5 +705,56 @@ fn b2_node_blocks_with_partial_constraints() {
         assert!(free[w[0]..w[1]]
             .iter()
             .all(|&q| dofs.node_component(q).unwrap().0 == n0));
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Amendment 4: H1c, the heavy record on the registered geometry.
+
+fn cantilever_box(lengths: [f64; 3], div: [usize; 3]) -> SolidModel {
+    let mesh = hex_box([0.0; 3], lengths, div).unwrap();
+    let mut m = SolidModel::new(mesh);
+    m.add_material("all", Material::isotropic_elastic(E_MOD, NU, 0.0, 0.0).unwrap())
+        .unwrap();
+    for c in 0..3 {
+        m.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
+    }
+    m.add_load(Load::traction("xmax", [0.0, 0.0, -TRACTION])).unwrap();
+    m
+}
+
+#[test]
+#[ignore = "heavy record (ADR 0282 amendment 4, H1c): Hex8 cantilever [0, 8] x [0, 1.5]^2, 96 x 18 x 18, 103 968 unknowns"]
+fn h1c_heavy_cantilever() {
+    let model = cantilever_box([L, H, H], HEAVY);
+    let mut out = Vec::new();
+    for p in [CgPreconditioner::BlockJacobi, ic()] {
+        let t = Instant::now();
+        match solve_static_report(&model, &[], &[], &pcg(p.clone(), TOL, 60_000)) {
+            Ok((r, rep)) => {
+                print(&format!("H1c heavy {p:?}"), &r, &rep, t.elapsed().as_secs_f64());
+                for (bd_n, bd_c, bd) in &rep.breakdowns {
+                    println!("H1c IC(0) breakdown at node {bd_n} component {bd_c}: {bd:?}");
+                }
+                let umax = r.displacement_values().iter().fold(0.0f64, |s, v| s.max(v.abs()));
+                println!("H1c max |u| {umax:.4e}");
+                out.push(Some((residual(&r), r.stats().unwrap().unknowns(), rep.iterations)));
+            }
+            Err(e) => {
+                println!("H1c heavy {p:?}: error {e}");
+                out.push(None);
+            }
+        }
+    }
+    if let (Some(a), Some(b)) = (out[0], out[1]) {
+        println!(
+            "H1c iteration ratio IC / block Jacobi {:.4} (record)",
+            b.2 as f64 / a.2 as f64
+        );
+    }
+    for o in &out {
+        let (res, n, _) = o.expect("H1c solve");
+        println!("H1c relative residual {res:.3e} (limit 1e-10), {n} unknowns");
+        assert!(res <= 1e-10 && n >= 100_000, "H1c");
     }
 }
