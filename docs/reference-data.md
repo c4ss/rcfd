@@ -1476,6 +1476,15 @@ are unchanged.
 | Plate accelerated with `U = a t` under a wall at rest at distance `d`: `u = a t (1 - eta/d) + (a/nu)(eta^2/2 - eta^3/(6 d) - d eta/3)`, force on the plate per area `-(mu a t/d + rho a d/3)` | derived | ADR 0249 (X2, X2b); measured error 0.056 and 0.014 percent at N 16 and 32, the reaction alone 42.8 percent |
 | DFG 2D-2 level-6 values | read | as the F-219 row above (max `C_D` 3.2200, max `C_L` 0.9859); measured values in ADR 0249 addendum 1 |
 
+## F-355 second-order immersed forcing in transient PISO: bounded weights (ADR 0254)
+
+Opt-in (`ImmersedForcing::build_second_order_bounded`); `build` and `build_second_order` are unchanged.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Ghost-cell extrapolation near a boundary point close to a grid node has large weights of alternating sign and can destabilise the update; remedy: a stencil with bounded weights through an image point in the fluid (Tseng and Ferziger, J. Comput. Phys. 192 (2003) 593-623; Mittal et al., J. Comput. Phys. 227 (2008) 4825-4852) | cited from memory, not read for this work | the formula used (the wall value reflected through the value at the image point of the face, `2 u_G - ((1 - a) HbyA_c + a HbyA_d)`, error `xi_f^2 u''` plus the linear interpolation) is derived in ADR 0254 amendment 1; measured on circular Couette: order 1.947, face-flux reconstruction error 7.99e-4 at N 96 with ratio 3.86 |
+| DFG 2D-2 level-6 values | read | as the F-219 row above (`St` 0.30188, max `C_D` 3.2200, max `C_L` 0.9859); measured on M2 with the bounded form in ADR 0254 addendum 1: 0.30112, 3.20930, 0.97593 |
+
 ## F-297 NSGA-II crossover: the operator read against the papers (ADR 0220, docs/design-loop.md)
 
 Read 2026-11-07 for the registration of ADR 0220, before any code. No source listing of any optimisation code was opened (the web
