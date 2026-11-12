@@ -314,3 +314,30 @@ RE `65f3bb871ad94a6d`, U `7c424f2255adfe35` (log `f445-scratch/b1-base.log`). Th
 committed test compares against these two constants.
 
 The decision rule is unchanged.
+
+## Amendment 2 (2026-11-12, written after the runs of the fast tests, of RE and RL at levels 1 to 3 and of NP, while RL at level 4 was still running, and before any further run)
+
+The registered tests ran once each; the numbers are in addendum 1. What matters here: under G the conservation checks,
+U1, UA, UA2, B1, S1, A2 (`1.962`, `1.789`) and A3 on levels 1 to 3 (`2.704`) are met; A1 is missed at levels 1 and 2
+(`a_c` at `t = 0.025` on `Gamma_B`: `0.598`, `0.856`, `0.931`); S2 is missed at levels 1 and 2; **S3 is missed at every
+level**: the velocity error of G against the exact solution is `1.773`, `1.642`, `1.619` times that of the default
+coupling (`9.52e-4`, `2.29e-4`, `1.06e-4` against `5.37e-4`, `1.40e-4`, `6.57e-5`), and `R_b` under G is `5.77e-4`,
+`1.48e-4`, `7.16e-5`, nine to three times that of the default coupling (`6.43e-5`, `3.25e-5`, `2.15e-5`, ADR 0340). P
+blows up within five steps, as predicted.
+
+The tests that missed are kept as ignored known misses with their limits intact; the checks of the fast level-1 test
+that are met are asserted by a new fast test on the same deterministic runs; the two NP tests get the assertion of their
+registered classification.
+
+New hypothesis for the miss of S3, with its measurement:
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| HT | the excess of the error of G over the default coupling is the truncation of the two fringe interpolations: the prescribed flux hands the interpolated normal velocity to the calculated cells in full (S1: the flux is the face interpolation to `1e-4`), where the default coupling hands on a part of it (`a_c` `0.57` to `0.79` at `t = 0.5`, ADR 0340) and so damps the interpolation error | RE, levels 1 to 3, base runs with the library's quadratic donor interpolation on both fringes (`set_donor_interpolation(Quadratic)`, ADR 0251: third-order truncation), under G and under the default coupling: the root mean square of the velocity error over the calculated cells at `t = 0.5`; `rho_Q = e(G, quadratic) / e(default, quadratic)` and `rho_G = e(G, quadratic) / e(G, linear)` | confirmed: `rho_Q <= 1.15` and `rho_G <= 0.7` at the three levels; ruled out: `rho_Q >= 1.5` at the three levels; otherwise mixed |
+
+Estimate behind the numbers, disclosed: `R_b` under G (the answer to the background fringe truncation alone) is 60 to 67
+percent of the error of G, so removing most of both truncations should take more than 30 percent off; I have no number
+for the default coupling with the quadratic stencils on RE and no trusted prediction for `rho_Q`. Test
+`ht_quadratic_donors_on_both_fringes` (ignored, slow, run once; C1 and C3 asserted on the G runs).
+
+The decision rule is unchanged.

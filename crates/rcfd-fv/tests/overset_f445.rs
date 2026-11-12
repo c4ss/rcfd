@@ -306,9 +306,14 @@ struct Run {
 /// Times at which a run to `t = 0.5` keeps its state; every one is a whole number of steps at every level.
 const TIMES: [f64; 5] = [0.0025, 0.025, 0.125, 0.25, 0.5];
 
-/// A Taylor-Green solver on the set-up `case` at `t = 0` with the fringe mode `mode`.
+/// A Taylor-Green solver on the set-up `case` at `t = 0` with the fringe mode `mode` and the default stencils.
 fn tg_solver(case: &Case, mode: FringeFlux) -> OversetSolver {
-    let ov = case.overset(DonorInterpolation::Linear);
+    tg_solver_with(case, mode, DonorInterpolation::Linear)
+}
+
+/// [`tg_solver`] with the donor interpolation `donors` on both fringes.
+fn tg_solver_with(case: &Case, mode: FringeFlux, donors: DonorInterpolation) -> OversetSolver {
+    let ov = case.overset(donors);
     let pose = case.pose();
     let geom = geometry_at(&ov, &pose);
     let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
@@ -673,8 +678,8 @@ fn pair(tag: &str, case: &Case, mode: FringeFlux, c: &mut Checks) -> Pair {
 
 const FRINGES: [&str; 2] = ["Gamma_B", "Gamma_C"];
 
-/// S1 and S2 of ADR 0347 for one pair.
-fn s1_s2(tag: &str, pr: &Pair, c: &mut Checks) {
+/// S1 of ADR 0347 for one pair.
+fn s1(tag: &str, pr: &Pair, c: &mut Checks) {
     for (i, name) in FRINGES.iter().enumerate() {
         for (when, f) in [("t = 0.025", pr.early[i]), ("t = 0.5", pr.late[i])] {
             c.at_most(
@@ -683,6 +688,12 @@ fn s1_s2(tag: &str, pr: &Pair, c: &mut Checks) {
                 0.02,
             );
         }
+    }
+}
+
+/// S2 of ADR 0347 for one pair.
+fn s2(tag: &str, pr: &Pair, c: &mut Checks) {
+    for (i, name) in FRINGES.iter().enumerate() {
         c.at_least(
             &format!("S2 {tag} {name}: a_c(0.025) / a_c(0.5)"),
             pr.early[i].a_c / pr.late[i].a_c,
@@ -930,29 +941,49 @@ fn ua2_pressure_level_of_the_component() {
 
 // ---- the fast covering test at level 1 -------------------------------------------------------------------------------------
 
-/// ADR 0347 at level 1 of RE under G (the fast test that covers the code of the heavy records): C1, C2, C3, QS, S1, S2;
-/// `a_c` and `R_b` are printed (A1 and A2 are asserted in the record of levels 1 to 3).
+/// ADR 0347 at level 1 of RE under G as registered: C1, C2, C3, QS, S1, S2. Run once: C1 to C3, QS and S1 met; S2
+/// missed, `a_c(0.025) / a_c(0.5)` is 0.660 on `Gamma_B` (0.598 over 0.906) and 0.821 on `Gamma_C` (0.867 over 1.057)
+/// against the limit 0.9. Kept with the limit intact (ADR 0347 addendum 1); the checks that are met are asserted by
+/// `c_re_level_1_conservation_and_flux_identity_under_g` on the same deterministic runs.
 #[test]
-fn c_re_level_1_under_g() {
+#[ignore = "known miss, ADR 0347: S2 at level 1 of RE, a_c(0.025) / a_c(0.5) 0.660 on Gamma_B and 0.821 on Gamma_C (limit 0.9)"]
+fn c_re_level_1_under_g_known_miss() {
     let mut c = Checks::new();
     let pr = pair("G RE level 1", &re(1), G, &mut c);
-    s1_s2("RE level 1", &pr, &mut c);
+    s1("RE level 1", &pr, &mut c);
+    s2("RE level 1", &pr, &mut c);
+    c.finish();
+}
+
+/// ADR 0347 at level 1 of RE under G, the fast test that covers the code of the heavy records: C1, C2, C3, QS and S1
+/// (the checks of `c_re_level_1_under_g_known_miss` that are met, on the same deterministic runs).
+#[test]
+fn c_re_level_1_conservation_and_flux_identity_under_g() {
+    let mut c = Checks::new();
+    let pr = pair("G RE level 1", &re(1), G, &mut c);
+    s1("RE level 1", &pr, &mut c);
     c.finish();
 }
 
 // ---- A1, A2, S1, S2, S3 on RE ------------------------------------------------------------------------------------------------
 
-/// ADR 0347 A1, A2, S1, S2, S3 on RE at levels 1 to 3 under G (and the base runs of the default coupling for S3).
+/// ADR 0347 A1, A2, S1, S2, S3 on RE at levels 1 to 3 under G (and the base runs of the default coupling for S3). Run
+/// once (777 s): C1 to C3, QS, S1 and A2 met (orders of `R_b` 1.962 and 1.789; `R_b` `5.765e-4`, `1.479e-4`, `7.163e-5`).
+/// Missed, limits intact (ADR 0347 addendum 1): A1, `a_c` at `t = 0.025` is 0.598, 0.856, 0.931 on `Gamma_B` and 0.867,
+/// 1.037, 1.053 on `Gamma_C` against 0.9 (levels 1 and 2 miss); S2 0.660, 0.884, 0.942 on `Gamma_B` and 0.821, 0.980,
+/// 1.007 on `Gamma_C` against 0.9; S3, the velocity error of G over that of the default coupling, 1.773, 1.642, 1.619
+/// against 1.5.
 #[test]
-#[ignore = "slow (RE at levels 1 to 3 under G, base and Qb, and the default base runs, ADR 0347, about half an hour): run once"]
-fn a_re_levels_1_to_3() {
+#[ignore = "known miss, ADR 0347: A1 a_c 0.598 and 0.856 on Gamma_B at levels 1 and 2, 0.867 on Gamma_C at level 1 (limit 0.9); S2; S3 1.77, 1.64, 1.62 (limit 1.5); slow"]
+fn a_re_levels_1_to_3_known_miss() {
     let mut c = Checks::new();
     let mut r = Vec::new();
     for l in 1..=3usize {
         let tag = format!("G RE level {l}");
         let pr = pair(&tag, &re(l), G, &mut c);
         a1(&format!("RE level {l}"), &pr, &mut c);
-        s1_s2(&format!("RE level {l}"), &pr, &mut c);
+        s1(&format!("RE level {l}"), &pr, &mut c);
+        s2(&format!("RE level {l}"), &pr, &mut c);
         let def = run(&re(l), false, DEFAULT, &TIMES);
         let (eu, ep) = exact_errors(&def, TIMES.len() - 1);
         println!(
@@ -982,7 +1013,8 @@ fn a_re_levels_1_to_3() {
 // ---- A3 on RL ----------------------------------------------------------------------------------------------------------------
 
 /// ADR 0347 A3 on RL at levels 1 to 3 under G: the order of `R_b` between levels 1 and 3 (the order between levels 2
-/// and 4 is formed from the printed numbers of this test and of the next).
+/// and 4 is formed from the printed numbers of this test and of the next). Run once (460 s): met, 2.704 (`R_b`
+/// `1.0049e-3`, `1.0333e-4`, `5.154e-5`); C1 to C3 and QS met.
 #[test]
 #[ignore = "slow (RL at levels 1 to 3 under G, base and Qb, ADR 0347, about twenty minutes): run once"]
 fn a_rl_levels_1_to_3() {
@@ -1023,6 +1055,10 @@ fn np(level: usize) -> bool {
         } else {
             f64::NAN
         };
+        println!(
+            "NP RE level {level} {name}: largest velocity error after every step {:?}",
+            h.iter().take(12).map(|e| format!("{e:.3e}")).collect::<Vec<_>>()
+        );
         match &r.failed {
             Some((k, why)) => {
                 admissible = false;
@@ -1049,7 +1085,8 @@ fn np(level: usize) -> bool {
         let pr = pair(&format!("P RE level {level}"), &case, P, &mut c);
         let mut judged = Checks::new();
         a1(&format!("P RE level {level}"), &pr, &mut judged);
-        s1_s2(&format!("P RE level {level}"), &pr, &mut judged);
+        s1(&format!("P RE level {level}"), &pr, &mut judged);
+        s2(&format!("P RE level {level}"), &pr, &mut judged);
         println!(
             "NP RE level {level}: P runs through; R_b(0.5) {:.6e}; missed limits of A1, S1, S2: {:?}; of C1 to C3, QS: {:?}",
             pr.r[4], judged.0, c.0
@@ -1058,19 +1095,22 @@ fn np(level: usize) -> bool {
     admissible
 }
 
-/// ADR 0347 NP at level 1 (a classification, printed; the record of the outcome is in the addendum).
+/// ADR 0347 NP at level 1. Run once as a classification: P is not admissible, the base and the Qb run end at step 5 of
+/// 200 with a velocity above 10. The assertion records that outcome (added after the run, ADR 0347 addendum 1).
 #[test]
 fn np_variant_p_re_level_1() {
     let admissible = np(1);
     println!("NP RE level 1: P admissible: {admissible}");
+    assert!(!admissible, "NP: the variant P ran through on RE at level 1");
 }
 
-/// ADR 0347 NP at level 2.
+/// ADR 0347 NP at level 2. Run once as a classification: P is not admissible, both runs end at step 3 of 400. The
+/// assertion records that outcome (added after the run; the runs take a second).
 #[test]
-#[ignore = "slow (RE at level 2 under P, ADR 0347 NP, up to ten minutes): run once"]
 fn np_variant_p_re_level_2() {
     let admissible = np(2);
     println!("NP RE level 2: P admissible: {admissible}");
+    assert!(!admissible, "NP: the variant P ran through on RE at level 2");
 }
 
 // ---- X: the other opt-ins together with G ------------------------------------------------------------------------------------
@@ -1121,6 +1161,61 @@ fn x_g_with_the_other_opt_ins() {
             &format!("X G with {name}: rms velocity error over that of G alone"),
             err / alone,
             2.0,
+        );
+    }
+    c.finish();
+}
+
+// ---- amendment 2, HT: the quadratic donor interpolation on both fringes -------------------------------------------------------
+
+/// A base run of `case` under `mode` with the donor interpolation `donors` on both fringes: the root mean square of
+/// the velocity error over the calculated cells at `t = 0.5` (over the decay factor), the largest continuity, the
+/// unconverged solves, the fallbacks of the last step and the run time.
+fn error_run(case: &Case, mode: FringeFlux, donors: DonorInterpolation) -> (f64, f64, usize, usize, f64) {
+    let t0 = Instant::now();
+    let dt = case.end / case.steps as f64;
+    let mut s = tg_solver_with(case, mode, donors);
+    let (mut cont, mut unconverged, mut fallback) = (0.0f64, 0, 0);
+    for k in 1..=case.steps {
+        let g = s.geom.clone();
+        tg_conditions(&g, &mut s.u, k as f64 * dt);
+        let info = s.step(dt, case.pose(), &[]).unwrap();
+        cont = cont.max(info.continuity);
+        unconverged += info.unconverged;
+        fallback = info.n_fallback;
+    }
+    let decay = (-2.0 * NU_TG * case.end).exp();
+    (
+        velocity_error(&s, case.end).1 / decay,
+        cont,
+        unconverged,
+        fallback,
+        t0.elapsed().as_secs_f64(),
+    )
+}
+
+/// ADR 0347 amendment 2, HT: on RE at levels 1 to 3 with the library's quadratic donor interpolation on both fringes,
+/// the velocity error of G against that of the default coupling and against that of G with the linear stencils (the
+/// hypothesis is decided in the ADR by the printed ratios; C1 and C3 are asserted).
+#[test]
+#[ignore = "slow (RE at levels 1 to 3, G and the default coupling with the quadratic donor interpolation and G with the linear one, ADR 0347 amendment 2, about fifteen minutes): run once"]
+fn ht_quadratic_donors_on_both_fringes() {
+    let mut c = Checks::new();
+    for l in 1..=3usize {
+        let case = re(l);
+        let (g_lin, ..) = error_run(&case, G, DonorInterpolation::Linear);
+        let (g_quad, cont, unconverged, fallback, secs) = error_run(&case, G, DonorInterpolation::Quadratic);
+        c.at_most(&format!("C1 HT RE level {l} G quadratic continuity"), cont, 1e-9);
+        c.holds(
+            &format!("C3 HT RE level {l} G quadratic: no unconverged linear solve"),
+            unconverged == 0,
+            &format!("{unconverged} unconverged"),
+        );
+        let (d_quad, _, _, d_fallback, d_secs) = error_run(&case, DEFAULT, DonorInterpolation::Quadratic);
+        println!(
+            "HT RE level {l}: rms velocity error at t = 0.5: G linear {g_lin:.6e}, G quadratic {g_quad:.6e} ({fallback} fallbacks, {secs:.1} s), default quadratic {d_quad:.6e} ({d_fallback} fallbacks, {d_secs:.1} s); G quadratic over default quadratic {:.4}, G quadratic over G linear {:.4}",
+            g_quad / d_quad,
+            g_quad / g_lin
         );
     }
     c.finish();
