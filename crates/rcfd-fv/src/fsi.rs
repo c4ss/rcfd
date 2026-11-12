@@ -16,7 +16,7 @@
 
 use crate::ale::{move_mesh, set_follow_conditions};
 use crate::pimple::{PimpleSolver, StepInfo};
-use crate::sixdof::{patch_force_moment, Body, Integrator};
+use crate::sixdof::{patch_force_moment, patch_force_moment_wall_gradient, Body, Integrator};
 use rcfd_core::vec3::{self, Vec3};
 
 /// Relaxation of the sub-iteration.
@@ -216,7 +216,59 @@ pub fn strong_step(
     strong: &StrongCoupling,
     points: &mut dyn FnMut(&Body) -> Result<Vec<Vec3>, String>,
 ) -> Result<CouplingStep, String> {
+    strong_step_with(
+        flow,
+        body,
+        dt,
+        coupling,
+        strong,
+        WallPressure::Extrapolated,
+        &mut Vec::new(),
+        points,
+    )
+}
+
+/// How the wall pressure of the body force is evaluated in [`strong_step_with`] (F-351, ADR 0252).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WallPressure {
+    /// The cell value extrapolated with the cell gradient (`sixdof::patch_force_moment`): the default, and what
+    /// [`strong_step`] uses. First order on a fixed-flux wall (low by `1/(4N)` on a piston column of `N` cells).
+    #[default]
+    Extrapolated,
+    /// The prescribed pressure gradient of the fixed-flux wall (`sixdof::patch_force_moment_wall_gradient`).
+    PrescribedGradient,
+}
+
+/// [`strong_step`] with the evaluation of the wall pressure chosen (F-351, ADR 0252; opt-in).
+///
+/// `wall_dpdn` carries the fixed-flux pressure gradient of the walls (the vector of `ale::set_follow_conditions`) from one step
+/// to the next: on entry the one of the flow's last step, or empty when there is none (the first step); after a successful
+/// step the one of the step's last iterate; a failed step leaves it as it was. With [`WallPressure::PrescribedGradient`] the
+/// force of the flow at `t_n` (the predictor) is evaluated with the vector on entry (with the default extrapolation when it
+/// is empty, which is the same for a fluid at rest) and the force after the flow step of an iterate with the vector that
+/// flow step was given. With [`WallPressure::Extrapolated`] this is [`strong_step`], operation for operation.
+///
+/// Fails as [`strong_step`], and for a non-empty `wall_dpdn` that does not have one entry per boundary face.
+#[allow(clippy::too_many_arguments)]
+pub fn strong_step_with(
+    flow: &mut PimpleSolver,
+    body: &mut Body,
+    dt: f64,
+    coupling: &BodyCoupling,
+    strong: &StrongCoupling,
+    wall_pressure: WallPressure,
+    wall_dpdn: &mut Vec<f64>,
+    points: &mut dyn FnMut(&Body) -> Result<Vec<Vec3>, String>,
+) -> Result<CouplingStep, String> {
     strong.validate()?;
+    if !wall_dpdn.is_empty() && wall_dpdn.len() != flow.geom.mesh.n_boundary_faces() {
+        return Err(format!(
+            "strong coupling: {} wall gradients for {} boundary faces",
+            wall_dpdn.len(),
+            flow.geom.mesh.n_boundary_faces()
+        ));
+    }
+    let prescribed = wall_pressure == WallPressure::PrescribedGradient;
     if flow.settings.corrector_control.is_some() {
         return Err("strong coupling: the adaptive corrector count (corrector_control) is not supported".into());
     }
@@ -226,15 +278,29 @@ pub fn strong_step(
     let snap = flow.snapshot();
     let history0 = flow.history.clone();
     let lag0 = (flow.lag_estimates.len(), flow.lag_warnings.len());
-    let (mut f, mut m) = patch_force_moment(
-        &flow.geom,
-        &flow.u,
-        &flow.p,
-        coupling.rho,
-        coupling.nu,
-        &coupling.force_patches,
-        body0.x,
-    )?;
+    let (mut f, mut m) = if prescribed && !wall_dpdn.is_empty() {
+        patch_force_moment_wall_gradient(
+            &flow.geom,
+            &flow.u,
+            &flow.p,
+            coupling.rho,
+            coupling.nu,
+            &coupling.force_patches,
+            body0.x,
+            wall_dpdn,
+        )?
+    } else {
+        patch_force_moment(
+            &flow.geom,
+            &flow.u,
+            &flow.p,
+            coupling.rho,
+            coupling.nu,
+            &coupling.force_patches,
+            body0.x,
+        )?
+    };
+    let mut last_walls: Vec<f64> = Vec::new();
     let mut relax_f = Relaxer::new(strong.relaxation);
     let mut relax_m = Relaxer::new(strong.relaxation);
     let mut out = CouplingStep {
@@ -279,19 +345,33 @@ pub fn strong_step(
             let walls = set_follow_conditions(&mut flow.u, &st, &geom0.mesh, &coupling.follow_patches, dt)?;
             out.min_volume_ratio = st.min_volume_ratio;
             out.mesh_flux = st.mesh_flux.clone();
+            last_walls.clone_from(&walls);
             out.flow = flow.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls)?;
             if !flow.u.values.iter().flatten().all(|x| x.is_finite()) {
                 return Err("strong coupling: non-finite velocity".into());
             }
-            let (ft, mt) = patch_force_moment(
-                &flow.geom,
-                &flow.u,
-                &flow.p,
-                coupling.rho,
-                coupling.nu,
-                &coupling.force_patches,
-                body.state.x,
-            )?;
+            let (ft, mt) = if prescribed {
+                patch_force_moment_wall_gradient(
+                    &flow.geom,
+                    &flow.u,
+                    &flow.p,
+                    coupling.rho,
+                    coupling.nu,
+                    &coupling.force_patches,
+                    body.state.x,
+                    &last_walls,
+                )?
+            } else {
+                patch_force_moment(
+                    &flow.geom,
+                    &flow.u,
+                    &flow.p,
+                    coupling.rho,
+                    coupling.nu,
+                    &coupling.force_patches,
+                    body.state.x,
+                )?
+            };
             if !ft.iter().chain(&mt).all(|x| x.is_finite()) {
                 return Err("strong coupling: non-finite force or moment".into());
             }
@@ -334,5 +414,6 @@ pub fn strong_step(
         body.state = body0;
         return Err(e);
     }
+    *wall_dpdn = last_walls;
     Ok(out)
 }
