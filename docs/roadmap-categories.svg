@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 746 614" width="746" role="img" aria-labelledby="t d">
   <title id="t">Roadmap progress by area</title>
-  <desc id="d">Done, partly done and not started roadmap items in each of 14 areas. Numerics and solvers: 27 of 37 done; Turbulence: 7 of 16 done; Heat, materials and chemistry: 13 of 25 done; Compressible flow and acoustics: 4 of 18 done; Multiphase and particles: 4 of 16 done; Moving meshes, rotors and coupling: 16 of 51 done; Parallel and GPU: 2 of 4 done; Meshing and mesh formats: 15 of 27 done; Post-processing and output: 9 of 11 done; Design studies and optimisation: 3 of 10 done; Command line, Python and API: 13 of 16 done; Claude and the MCP server: 8 of 21 done; Studio desktop app: 5 of 12 done; Quality, docs and validation: 1 of 7 done.</desc>
+  <desc id="d">Done, partly done and not started roadmap items in each of 14 areas. Numerics and solvers: 27 of 37 done; Turbulence: 7 of 16 done; Heat, materials and chemistry: 13 of 25 done; Compressible flow and acoustics: 4 of 18 done; Multiphase and particles: 4 of 16 done; Moving meshes, rotors and coupling: 17 of 51 done; Parallel and GPU: 2 of 4 done; Meshing and mesh formats: 15 of 27 done; Post-processing and output: 9 of 11 done; Design studies and optimisation: 3 of 10 done; Command line, Python and API: 13 of 16 done; Claude and the MCP server: 8 of 21 done; Studio desktop app: 5 of 12 done; Quality, docs and validation: 1 of 7 done.</desc>
   <style>
     :root { --ink:#1f2328; --mute:#59636e; --done:#1a7f4b; --part:#d4a72c; --todo:#d0d7de; --bg:#ffffff; }
     @media (prefers-color-scheme: dark) {
@@ -73,11 +73,11 @@
   <text x="636" y="166" class="num">4 of 16 done</text>
   <text x="24" y="196" class="row">Moving meshes, rotors and coupling</text>
   <g clip-path="url(#c5)">
-    <rect x="262" y="185" width="112.9" height="14" fill="var(--done)"/>
-    <rect x="374.9" y="185" width="91.8" height="14" fill="url(#h)"/>
-    <rect x="466.7" y="185" width="155.3" height="14" fill="var(--todo)"/>
+    <rect x="262" y="185" width="120.0" height="14" fill="var(--done)"/>
+    <rect x="382.0" y="185" width="91.8" height="14" fill="url(#h)"/>
+    <rect x="473.8" y="185" width="148.2" height="14" fill="var(--todo)"/>
   </g>
-  <text x="636" y="196" class="num">16 of 51 done</text>
+  <text x="636" y="196" class="num">17 of 51 done</text>
   <text x="24" y="226" class="row">Parallel and GPU</text>
   <g clip-path="url(#c6)">
     <rect x="262" y="215" width="180.0" height="14" fill="var(--done)"/>

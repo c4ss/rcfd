@@ -6150,7 +6150,9 @@ fixed by the item's registration ADR before any code.
     donor search of F-134 finds no donor in cells with non-planar faces. Open for the maintainer: whether the opt-in
     should become the default (ADR 0251 Q1). Follow-ups (ADR 0251 questions 2 and 5, recommendation taken on the
     maintainer's standing instruction of 2026-11-11): F-352, F-353. Open: question 1 (the quadratic interpolation as the
-    default changes a default).
+    default changes a default). no flow run in 3-D with the opt-in; the cylinder case TR with it is F-353 (ADR 0259:
+    acceptance met, no fallback, mean drag error 3.42e-3 against 3.21e-3 of the linear stencils, recommendation against
+    the default)
 - [x] **F-337** Immersed solid: second-order force and moment
   - depends on: F-309
   - acceptance: The torque on the immersed rotating cylinder of circular Couette flow (the CC set-up of ADR 0218,
@@ -6440,13 +6442,22 @@ fixed by the item's registration ADR before any code.
     should use the triangulated test (it changes one donor of TR at a tie, ADR 0253 Q1). Follow-ups (ADR 0253 questions
     2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-356, F-357. Open: question
     1 (the triangulated test for every cell changes one donor at a tie).
-- [ ] **F-353** Overset: the moving cylinder with the quadratic donor interpolation
+- [x] **F-353** Overset: the moving cylinder with the quadratic donor interpolation
   - depends on: F-336
   - acceptance: The set-up TR of ADR 0219 run with DonorInterpolation::Quadratic: mass of the domain and continuity
     within 1e-9, no fallback or the count reported, drag within 5 percent of the body-fitted run at every step from t =
     2 to t = 8 and the difference to the linear-stencil run reported; the ADR recommends for or against making the
     quadratic interpolation the default.
-  - note: From ADR 0251 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0251 question 5, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. ADR 0259, 2026-11-12: DONE (tests and ADR only, no library change). The set-up
+    TR of ADR 0219 with DonorInterpolation::Quadratic over 400 steps: continuity 5.6e-17, net outflow 9.4e-15 of U D L,
+    no fallback (156 stencils of nine cells at every step), no unconverged solve, drag within 5.86e-3 of the body-fitted
+    run at every step from t = 2 to t = 8 (linear stencils 6.25e-3; the linear run and the body-fitted run reproduce ADR
+    0219 to every printed digit). Against the linear run: C_D lower by 2.1e-4 on average (largest 1.6e-3), mean drag
+    error 3.42e-3 against 3.21e-3, worse by more than 1e-4 at 164 of 301 steps; the step-to-step drag oscillation as the
+    body crosses background cells halves (rms 0.98e-3 against 1.80e-3 of C_D); time 1.03 times. By the rule fixed before
+    the run the ADR recommends against making the quadratic interpolation the default; the default stays the
+    maintainer's decision (ADR 0259 Q1). Three mutations caught by the fast test.
 - [ ] **F-354** Immersed solid: DFG 2D-2 force extrema, mesh and time-step convergence
   - depends on: F-346
   - acceptance: DFG 2D-2 with the immersed cylinder is run on the T mesh and on T refined once (D/80, half the time
