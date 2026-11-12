@@ -21,6 +21,12 @@
 //! it the moment of the fluid on the body, only when every term is applied at the centre of its cell. The difference is a
 //! first-order error of the moment (not of the force).
 //!
+//! **Unsteady flow (F-346, ADR 0249; opt-in, [`ImmersedForcing::force_moment_unsteady`]).** The reaction of the forcing is the
+//! force on the staircase surface of the solid cells minus the rate of change of the momentum those cells hold. For a body at
+//! rest that momentum is zero and the reaction is the force; for a body whose rigid velocity changes in time the solid cells
+//! hold the momentum of a fictitious fluid that fills the body, and its rate of change is added back. The first fluid cells
+//! hold fluid momentum and do not enter.
+//!
 //! **Second-order treatment (F-309, ADR 0234; opt-in, [`ImmersedForcing::build_second_order`]).** The forcing above closes the
 //! viscous flux of a first fluid cell with the extension of the fluid profile through the surface, but leaves the mass flux of
 //! the face to the solid cell to the continuity of that solid cell, which pins it to the rigid velocity: a face velocity error of
@@ -31,6 +37,33 @@
 
 use crate::geometry::FvGeometry;
 use rcfd_core::vec3::{self, Vec3};
+
+/// The rate of change of the cell velocity at the new time level as the transient solvers difference it
+/// ([`crate::ddt::add_ddt`]; F-346, ADR 0249 D2): `(u - u_old)/dt` without `older` (implicit Euler, and the first step of BDF2),
+/// and with `older = Some((u_older, dt_old))` the variable-step BDF2 difference `(c0 u - c1 u_old + c2 u_older)/dt`,
+/// `r = dt/dt_old`, `c0 = (1 + 2r)/(1 + r)`, `c1 = 1 + r`, `c2 = r^2/(1 + r)`. Crank-Nicolson and the bounded BDF2 are not
+/// covered.
+///
+/// # Panics
+/// When the fields differ in length.
+pub fn velocity_rate(u: &[Vec3], u_old: &[Vec3], older: Option<(&[Vec3], f64)>, dt: f64) -> Vec<Vec3> {
+    assert_eq!(u.len(), u_old.len(), "velocity_rate: u and u_old differ in length");
+    match older {
+        None => u
+            .iter()
+            .zip(u_old)
+            .map(|(a, b)| [0, 1, 2].map(|k| (a[k] - b[k]) / dt))
+            .collect(),
+        Some((u_older, dt_old)) => {
+            assert_eq!(u.len(), u_older.len(), "velocity_rate: u and u_older differ in length");
+            let r = dt / dt_old;
+            let (c0, c1, c2) = ((1.0 + 2.0 * r) / (1.0 + r), 1.0 + r, r * r / (1.0 + r));
+            (0..u.len())
+                .map(|i| [0, 1, 2].map(|k| (c0 * u[i][k] - c1 * u_old[i][k] + c2 * u_older[i][k]) / dt))
+                .collect()
+        }
+    }
+}
 
 /// Analytic shape of an immersed body; `signed_distance` is negative inside.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -526,7 +559,7 @@ impl ImmersedForcing {
     /// term, not the crossing). In a steady state on an orthogonal mesh this sum is the angular-momentum balance of the solid
     /// cells and the first fluid cells of the body: the moment of the pressure, of the full viscous stress and of the momentum
     /// flux on the regular fluid faces that enclose them. The remark of `force_moment` on a body that touches the domain boundary
-    /// applies; the momentum of the forced cells of an unsteady flow is not accounted for.
+    /// applies; for a body whose rigid velocity changes in time see [`ImmersedForcing::force_moment_unsteady`] (ADR 0249).
     pub fn force_moment_second_order(&self, body: usize, u: &[Vec3], rho: f64, x_ref: Vec3) -> (Vec3, Vec3) {
         let (mut force, mut moment) = (vec3::ZERO, vec3::ZERO);
         for t in &self.bodies[body].terms {
@@ -535,6 +568,29 @@ impl ImmersedForcing {
             force = vec3::add(force, df);
             let arm = vec3::sub(self.centres[t.cell], x_ref);
             moment = vec3::add(moment, vec3::cross(arm, df));
+        }
+        (force, moment)
+    }
+
+    /// Force and moment about `x_ref` of the fluid on body `body` in unsteady flow (F-346, ADR 0249 D1, D2): the pair of
+    /// [`ImmersedForcing::force_moment_second_order`] plus the rate of change of the momentum and of the angular momentum that
+    /// the solid cells of the body hold, `F += rho sum_s V_s dudt_s`, `M += rho sum_s (x_s - x_ref) x V_s dudt_s`. `dudt` is the
+    /// rate of change of the cell velocity at the time level of `u`, one vector per cell (see [`velocity_rate`]).
+    ///
+    /// The reaction of the forcing is the discrete force on the staircase surface of the solid cells minus the storage of those
+    /// cells; the storage is the momentum of a fictitious fluid inside the body, not fluid momentum, and is added back. The
+    /// modification terms of the first fluid cells are surface forces of the staircase faces and the momentum of those cells is
+    /// fluid momentum, so they do not enter. For a body at rest the result is the reaction (to the size of the solid velocity);
+    /// with `dudt = 0` it is that of `force_moment_second_order`. Not accounted for: the fluid between the staircase and the
+    /// surface (the staircase volume error times the acceleration of the body). The remark of `force_moment` on a body that
+    /// touches the domain boundary applies.
+    pub fn force_moment_unsteady(&self, body: usize, u: &[Vec3], dudt: &[Vec3], rho: f64, x_ref: Vec3) -> (Vec3, Vec3) {
+        let (mut force, mut moment) = self.force_moment_second_order(body, u, rho, x_ref);
+        for &c in &self.bodies[body].solid_cells {
+            let dp = vec3::scale(dudt[c], rho * self.volumes[c]);
+            force = vec3::add(force, dp);
+            let arm = vec3::sub(self.centres[c], x_ref);
+            moment = vec3::add(moment, vec3::cross(arm, dp));
         }
         (force, moment)
     }
