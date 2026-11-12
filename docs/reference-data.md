@@ -1464,6 +1464,18 @@ Opt-in (`ImmersedForcing::force_moment_second_order`); `force_moment` is unchang
 | Circular Couette torque `4 pi mu omega R1^2 R2^2/(R2^2 - R1^2) = 4.18879` as the measure of the order of the moment | derived | as the F-219 row above; measured error 0.396, 0.107, 0.027 percent at N 24, 48, 96 (orders 1.89, 1.98) against 3.46, 1.60, 0.74 percent of `force_moment` |
 | DFG 2D-1 reference values | read | as the F-219 row above; the force is that of `force_moment` (M2, second-order forcing: `C_D` -0.306 percent, `C_L` +2.534 percent) |
 
+## F-346 immersed solid: force and moment in unsteady flow (ADR 0249)
+
+Opt-in (`ImmersedForcing::force_moment_unsteady`, `immersed::velocity_rate`); `force_moment` and `force_moment_second_order`
+are unchanged.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| The force on a body from the momentum balance of a fixed control volume (Batchelor, An Introduction to Fluid Dynamics, 1967, section 3.2), and the hydrodynamic force on a body represented by a volume forcing as the reaction of the forcing plus the rate of change of the momentum of the fictitious fluid inside it (Uhlmann, J. Comput. Phys. 209 (2005) 448-476; Lai and Peskin, J. Comput. Phys. 160 (2000) 705-719; Balaras, Comput. Fluids 33 (2004) 375-404) | from memory | NOT read; ADR 0249 D1 derives on rcfd's discrete momentum equation that the storage to add back is that of the solid cells and that the first fluid cells do not enter |
+| Inner cylinder accelerated with `Omega = alpha t` in a fixed outer one: `u_theta = alpha t (A r + B/r) + w(r)`, `w = (alpha/nu)(A r^3/8 + (B/2) r ln r) + C r + D/r`, moment on the inner cylinder per unit depth `-4 pi mu B alpha t + 2 pi R1^2 mu [(alpha/nu)(A R1^2/4 + B/2) - 2 D/R1^2]` (`-4.188790 t - 0.123934` for `R1 = 0.5`, `R2 = 1`, `alpha = nu = rho = 1`) | derived | ADR 0249 amendment 1 (X1b); measured error 0.167 and 0.078 percent at N 48 and 96, the reaction alone 4.3 and 4.4 percent |
+| Plate accelerated with `U = a t` under a wall at rest at distance `d`: `u = a t (1 - eta/d) + (a/nu)(eta^2/2 - eta^3/(6 d) - d eta/3)`, force on the plate per area `-(mu a t/d + rho a d/3)` | derived | ADR 0249 (X2, X2b); measured error 0.056 and 0.014 percent at N 16 and 32, the reaction alone 42.8 percent |
+| DFG 2D-2 level-6 values | read | as the F-219 row above (max `C_D` 3.2200, max `C_L` 0.9859); measured values in ADR 0249 addendum 1 |
+
 ## F-297 NSGA-II crossover: the operator read against the papers (ADR 0220, docs/design-loop.md)
 
 Read 2026-11-07 for the registration of ADR 0220, before any code. No source listing of any optimisation code was opened (the web

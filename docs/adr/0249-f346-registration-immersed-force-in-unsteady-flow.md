@@ -430,3 +430,211 @@ of the force and of the moment".
 
 The planned mutations name X1, X2 and U1; they are run against X1', X2' and U1'. The decision rule is unchanged, read with the
 corrected tests.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above and in amendment 1. No limit was changed and no registered run was repeated.
+Release builds on Windows. The registration is 95bfa503; the library and the registered tests are 281628f2, committed before
+their first run; amendment 1 is cef326bc and its corrected tests are e3e60ff9, committed before their run. Every registered
+run was made once (one test per process, one thread), from copies of the test executables built from those commits, so that
+the mutations could be compiled while the long runs went on. This addendum's commit changes no library code: it splits the T
+test into its met part and its known miss (no limit changed) and adds a section to `docs/reference-data.md`.
+
+**Built.** `crates/rcfd-fv/src/immersed.rs`: `ImmersedForcing::force_moment_unsteady` (D2), the free function
+`immersed::velocity_rate` (D2), one paragraph of module documentation; in the documentation comment of
+`force_moment_second_order` one sentence was replaced (it said the unsteady momentum is not accounted for; it now points to
+the new method); no statement of `force_moment`, `force_moment_second_order`, `build` or `build_second_order` is changed.
+`crates/rcfd-fv/tests/immersed_unsteady_force_f346.rs` (new). `docs/reference-data.md` (a section for F-346). `pimple.rs`,
+`simple.rs`, `overset.rs`, `sponge.rs`, `compressible.rs`, `compressible_bc.rs`, `rcfd-mesh`, `sim.rs` and `schema.rs` are not
+touched (no hunk); no case-schema key, golden, hash table or existing test file was touched.
+
+### What the item's premise turned out to be
+
+Written in the registration before any run, and confirmed by the runs: the reaction of the forcing is, at every instant, the
+discrete force on the staircase surface of the solid cells minus the storage of the solid cells. For a body at rest that
+storage is zero, so the reaction already is the force in unsteady flow; the storage of the first fluid cells is fluid momentum
+and is not to be removed. The correction that exists is the storage of the solid cells of a body whose rigid velocity changes
+in time (the fictitious fluid inside the body), and that is what was built and checked against two closed forms. On 2D-2 the
+new evaluation differs from the old by 1.9e-6 in `C_L`. The 2.6 percent of ADR 0218 on T is therefore not a missing storage
+term, and this item does not remove it.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A2 (acceptance) 2D-2 on M2, new: max `C_D`; max `C_L` | within 1.5 percent of 3.2200; of 0.9859 | 3.22841 (+0.261 percent); 0.98432 (-0.161 percent) | **met** (the old evaluation gives the same numbers) |
+| A2T 2D-2 on T, new: max `C_D` | within 1.5 percent of 3.2200 | 3.24624 (+0.815 percent) | met |
+| A2T 2D-2 on T, new: max `C_L` | within 1.5 percent of 0.9859 | **1.01134 (+2.580 percent)** | **missed, as registered beforehand** (ignored known miss `a2t_two_d_two_lift_on_t_known_miss`) |
+| S2 the window, T and M2 | at least 6 crossings; periods within 1 percent; maxima within 2 percent; amplitude at least 1 | T: 7, 5.5e-6, 2.1e-4, 2.058; M2: 7, 8.5e-6, 3.1e-4, 2.004 | held |
+| C1 (control) T, old: max `C_L` error | `> 1.5 percent` | 2.580 percent | held |
+| C1r T, old: max `C_D`, max `C_L`, `St` | 3.2462, 1.0113, 0.30073 | 3.24624, 1.01134, 0.30073 | met |
+| D1p new against old over the window, `C_D`; `C_L` | `<= 1e-3` | T: 1.2e-7; 1.9e-6. M2: 1.2e-7; 1.8e-6 | met |
+| A3a steady by iteration (2D-1 on M2, second-order forcing), new with a zero rate against F-337; `C_D`, `C_L` | equal; 5.56246454, 0.0108880492 | every component equal; 5.56246454, 0.0108880492 (M1 470, M2 750 iterations) | **met** |
+| A3b steady by time stepping (CC N 48, PISO), new with the rate of the last step against F-337 | moment `<= 1e-9 T`; force `<= 1e-9` | last step change 1.5e-12; moment difference 0 (both -4.184303583); force 3.6e-16 | **met** |
+| X1' accelerated inner cylinder, new at `t = 0.5`, N 48; N 96 | `<= 0.5 percent` | 0.167 percent (-2.214636 against -2.218329); 0.078 percent (-2.216601) | met |
+| X1c' (control) the reaction alone | `>= 3 percent` | 4.31; 4.40 percent | held |
+| X1l' (control) the literal reading | `>= 1.0`; `>= 0.5 percent` | 1.80; 0.88 percent | held |
+| S-X1' new at step 150 against `M(0.375)` | `<= 0.5 percent` | 0.185; 0.094 percent | held |
+| X2' accelerated plate, new at `t = 0.5`, N 16; N 32 | `<= 1 percent` | 0.056 percent (-1.166016 against -1.166667); 0.014 percent (-1.166504) | met |
+| X2c' (control) the reaction alone | `>= 30 percent` | 42.80; 42.84 percent | held |
+| X2l' (control) the literal reading | `>= 2.5`; `>= 1.2 percent` | 5.08; 2.61 percent | held |
+| S-X2' x variation; `max abs(u_y)` | `<= 1e-9` | 4.9e-13, 2.4e-13 (N 16); 4.7e-12, 2.3e-12 (N 32) | held |
+| U1' storage sums, five body/forcing pairs | `<= 1e-12` | force at most 8.8e-16, moment at most 8.9e-16 | met |
+| U2' zero rate | equal | equal (five pairs) | met |
+| U3' transfer of the reference point | `<= 1e-10` | at most 2.4e-15 | met |
+| U4 cuboid with a rigid rate against the closed form | `<= 1e-12` | force 2.0e-16, moment 3.4e-16 (both forcings) | met |
+| U5 `velocity_rate`: BDF2 on a quadratic with a variable step; Euler | `<= 1e-12`; equal | 1.6e-15; equal | met |
+| N1 `immersed_force_order_f337.rs` unedited on the final library | every test passes; the numbers of ADR 0239 | 5 passed, 2 ignored; the five hashes `5a21ad65f0798915`, `1a364dafdefe88ba`, `5a21ad65f0798915`, `1a364dafdefe88ba`, `ead7c19fe86c3d8b`; A1 order 1.984; A2 5.56246454, 0.0108880492 | met |
+| N2 `immersed_second_order_f309.rs` and `immersed_solid_f219.rs` unedited | every test passes; the recorded numbers | `immersed_second_order_f309.rs`: 9 passed, 1 ignored; CC torque 4.04376, 4.12171, 4.15767, M2 `C_D` 5.56246454, `C_L` 0.0108880492, state hashes `3b49c4ed4863d1b6`, `9fff50792adb6d4a`. `immersed_solid_f219.rs`: 11 passed, 2 ignored; M3 `C_D` 5.57833680, `C_L` 0.0106899517, `St` 0.30073, 2D-2 max `C_D` 3.2462, max `C_L` 1.0113, CC torque 4.07749, 4.14059, 4.17006, V2 1.8e-13 | met |
+| X1, X2, U1 to U3 as registered | | defective set-ups (amendment 1); ignored records | not counted |
+
+The estimates written beforehand against the measurements: X1' 0.17 and 0.08 percent estimated, 0.167 and 0.078 measured; X1c'
+4.5 estimated, 4.31 and 4.40 measured; X1l' about 1.7 and 0.8 estimated, 1.80 and 0.88 measured; X2' 0.15 estimated at N 16,
+0.056 measured (order 2.0 from N 16 to 32); X2c' 42.9 and X2l' 5.0, 2.6 estimated, 42.8 and 5.08, 2.61 measured; D1p about 1e-4
+estimated, 2e-6 measured; the lift on T +2.58 predicted, +2.580 measured. Wrong: the registration expected the lift on M2 to
+miss as well ("probably"); it is inside the limit. Wrong in size: item 3 put the effect of the literal reading on the 2D-2 lift
+at about 1 percent; it is 0.29 percentage points.
+
+Printed, no limit. 2D-2, old and new evaluation (identical to the digits given), FeatFlow level 6 in brackets:
+
+| | max `C_D` (3.2200) | min `C_D` (3.1569) | mean `C_D` (3.1884) | max `C_L` (0.9859) | min `C_L` (-1.0206) | `St` (0.30188) |
+| --- | --- | --- | --- | --- | --- | --- |
+| T, 53 136 cells | 3.24624 (+0.815 %) | 3.18051 (+0.748 %) | 3.21350 (+0.787 %) | 1.01134 (+2.580 %) | -1.04691 (+2.578 %) | 0.30073 (-0.382 %) |
+| M2, 18 304 cells | 3.22841 (+0.261 %) | 3.16591 (+0.285 %) | 3.19732 (+0.280 %) | 0.98432 (-0.161 %) | -1.01946 (-0.112 %) | 0.30041 (-0.486 %) |
+
+The literal reading on 2D-2 (the storage of the 116 first fluid cells added to, or subtracted from, the new evaluation): max
+`C_L` on T 1.01420 (+2.871 percent) or 1.00847 (+2.289 percent), on M2 0.98714 (+0.125) or 0.98156 (-0.440); max `C_D` changes
+by 1e-4. Neither sign brings the lift on T inside 1.5 percent. Moment coefficient `M_z/(q D)` of the cylinder in the window
+(no reference): T between -9.218e-3 and 1.0754e-2, M2 between -8.979e-3 and 1.0514e-2. Largest solid velocity at `t = 8`:
+3.78e-5 (T), 3.76e-5 (M2). X1' with `build` on N 48: -2.223759 (-0.245 percent); largest velocity error in the annulus against
+`alpha t f + w`: 9.7e-4 (N 48), 3.4e-4 (N 96), 3.5e-3 (`build`, N 48); force on the cylinder of X1' (exact 0) 8.4e-6 and 6.6e-7.
+X2' with `build` on N 16: the numbers of `build_second_order` to the digits printed. Run times: T 2234 s, M2 1133 s, each with
+other jobs on the machine.
+
+**The printed run that stopped.** 2D-2 on M2 with `build_second_order` (PISO, BDF2, the settings of the T run) stopped at
+step 6 through the divergence guard (Courant number 1.1e7, continuity NaN). The second-order forcing had been run with PISO only
+on circular Couette flow at Re of order 1 (ADR 0234 V3). Not diagnosed here (it is not this item's code and `pimple.rs` was not
+to be touched); Q6.
+
+### The known miss: the maximum lift on T
+
+Limit 1.5 percent of 0.9859; measured 1.01134, +2.580 percent, the number ADR 0218 printed. Diagnosis, in the order of the
+evidence:
+
+1. It is not a storage term. The registration derived that the reaction is the force on a body at rest; the new evaluation
+   differs from the old by 1.9e-6 in `C_L` (D1p). The closed forms show that the derived evaluation is the force where the
+   storage matters (X1', X2': 0.08 and 0.014 percent) and that removing the storage of the first fluid cells as well is an
+   error of its full size (X1l', X2l'). Applied to T against the derivation, that literal reading changes the lift maximum by
+   0.29 percentage points in either direction; 2.29 percent is the closest it gets.
+2. The mean drag on T is +0.79 percent; a rate of change has no mean over a period. The offset is in the solution.
+3. The same offset is in a steady flow: the lift of 2D-1 on M2 with the same forcing is +2.73 percent (ADR 0218), with the
+   second-order forcing +2.53 percent (ADR 0239).
+4. The two meshes have the same spacing `D/40` at the cylinder and the same forcing terms (1264 solid cells, 116 first fluid
+   cells), and differ away from it (T is uniform to `x = 0.6` and over the height of the channel, M2 is graded outside
+   `[0.12, 0.32] x [0.12, 0.28]`): the lift maximum is +2.58 percent on T and -0.16 percent on M2, the drag maximum +0.82 and
+   +0.26 percent. At `D/40` the force extrema of 2D-2 depend on the mesh away from the body at the level of the limit. The
+   agreement on M2 is therefore not shown to be convergence: no finer mesh was run, and the coarser wake of M2 may offset the
+   error of the layer at the cylinder.
+
+What is established: the cause is not the evaluation of the force. What is not established: which of the mesh at the cylinder,
+the mesh of the wake, the first-order forcing of ADR 0218, the zero-gradient outlet (FeatFlow uses do-nothing) and the time step
+carries the 2.6 percent on T. That needs a mesh and time-step series (Q5), which this item did not register.
+
+### Mutations
+
+Applied one at a time to `immersed.rs` of e3e60ff9 by a scratch script (an exact text replacement checked to occur once), the
+tests U1' to U3', U4, U5, X1', X2' each run once in release, the file restored and compared byte for byte with the kept copy
+(equal after each of the nine).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the storage subtracted | X1, X2, U1 | failed: X1' 8.79 and 8.88 percent; X2' 85.7 percent; U1' 4.8e-2 (also U4) |
+| MU2 the storage left out | X1, X2, U1 | failed: X1' 4.31, 4.40 percent; X2' 42.8 percent; U1', U4 |
+| MU3 the storage over the solid cells and the first fluid cells (the literal reading) | X1, X2, U1 | failed: X1' 1.80 and 0.88 percent; X2' 5.08 and 2.61 percent; U1', U4 |
+| MU4 the moment of the storage left out | X1, U1 | failed: X1' 4.31, 4.40 percent; U1', U4 (X2' passes: it is a force) |
+| MU5 the arm without `x_ref` | U3 | failed: U3' 1.3e-2 printed against 1e-10; the assertion that stopped the test was U1' (moment 2.8e-3), which comes first; U4 |
+| MU6 `rho` left out | U1 | failed: U1' 5.6e-3; U4 |
+| MU7 `c2` with the wrong sign | U5 | failed: U5 error 3.07 of the largest rate 1.95 (also X1', which runs BDF2: 886 percent) |
+| MU8 `r = dt_old/dt` | U5 | failed: U5 0.13 (X1' passes: its step is constant) |
+| MU9 the Euler difference divided by `2 dt` | U5, X2 | failed: U5 (not equal); X2' 21.4 percent |
+
+### Tools
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean (also with `--release`).
+`scripts/limit_audit.py` on the new test file: 0 hits. Tests, release profile, `cargo test --release -p rcfd-fv --test
+immersed_unsteady_force_f346` built once per commit and each test run once from the executable: 8 registered tests passed
+(U1' to U3', U4, U5, X1', X2', A3a, A3b, A2), 1 failed at its first run in the lift on T alone (now split: the met part and the
+ignored known miss), 3 ignored records of amendment 1, 1 ignored printed run.
+
+### Deviations and disclosures
+
+- Three set-ups of the registration were defective (X1, X2, the guard of U1); amendment 1 gives the causes and the corrected
+  tests. The causes are mine: a rotating solid that reaches walls at rest, a boundary under the plate that exerts a force in
+  this solver, a guard stricter than the limit it guarded. The numbers X2' would measure were known before its run (amendment
+  1); those of X1' were not.
+- The split of the T test was made after its run: `a2t_c1_two_d_two_on_t` keeps S2, C1, C1r, D1p and the drag,
+  `a2t_two_d_two_lift_on_t_known_miss` (ignored) keeps the lift with its limit. Neither was run again.
+- One sentence of the documentation comment of `force_moment_second_order` was changed (above).
+- The registration's D3 says the new method adds `+0.0` with a zero rate; A3a and U2' confirm equality of every component.
+- Not run: the workspace test suite and the gate (the lead's); a finer mesh or another time step for 2D-2; 2D-2 with the
+  second-order forcing beyond the stopped run; `velocity_rate` with a variable step inside a solver run (U5 only);
+  Crank-Nicolson and the bounded BDF2; a body with a translational acceleration in an unbounded or external flow (an added-mass
+  case); a plane wall off the grid lines (the first-order sliver term of item 5); non-orthogonal meshes, the sphere, 3-D.
+
+### Decision by the registered rule
+
+X1', X2' met with their set-up checks and controls held; A3a, A3b, U1' to U5, N1, N2 met; C1, C1r, D1p held; every one of the
+nine mutations failed a test it must fail; A2 (M2) met in both coefficients; A2T (T) met in the drag and **missed in the
+lift**. By the rule: **partial**. The miss is the one the registration predicted, kept with its limit, and its cause is not in
+what this item builds.
+
+Read against the acceptance text alone: the 2D-2 clause names M2 and is met there (+0.26 and -0.16 percent), and the steady
+clause is met. But the M2 numbers are those of the evaluation that existed before this item, so that clause, met or missed,
+says nothing about what was delivered; and the first clause is delivered in the derived reading (solid cells), not in the
+literal one (Q1). I do not propose "done" on that basis; the maintainer may (Q2).
+
+### Remaining questions
+
+- **Q1. Which cells** (as registered). Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation):
+  the solid cells. The literal reading is measured wrong against two closed forms (1.8 and 5.1 percent where the derived one
+  has 0.17 and 0.06). Options now: (a) reword the first clause of the acceptance to "adds the rate of change of the momentum
+  and angular momentum held by its solid cells to the reaction of the forcing"; (b) leave the wording. Recommendation (a).
+- **Q2. The 2D-2 clause.** Options: (a) read it on M2 as written: met, F-346 done; (b) keep the registered reading (M2 and T):
+  partial until the lift on T is inside 1.5 percent, which this item cannot bring about; (c) replace the clause by what tests
+  the delivered evaluation ("the moment on a cylinder accelerated in a fixed outer one and the force on an accelerated plate
+  are within 0.5 and 1 percent of their closed forms") and move the 2D-2 accuracy to the follow-up of Q5: then done.
+  Recommendation (c).
+- **Q3. Default** (as registered). Whether a caller gets the unsteady evaluation by default is a change of a default: open,
+  not taken. Recommendation: decide it with the case key of the immersed solids (ADR 0234), where the caller that keeps the
+  velocity history will exist; for a body at rest nothing changes (1.9e-6).
+- **Q4. Where the rate comes from** (as registered). Taken on the standing instruction: the caller passes it. A public
+  accessor of the solver's velocity history can follow with the case key.
+- **Q5. The 2.6 percent of the lift of 2D-2 on T.** Options: (a) a follow-up item: T refined once (`D/80`, half the time step)
+  and the same on the M family, with the outlet as a second variable, to say which part converges; (b) leave it: the Strouhal
+  number and the drag are inside 1 percent. Recommendation (a), low priority; without it the M2 agreement should not be quoted
+  as a validation.
+- **Q6. The second-order forcing stops in PISO on 2D-2** (step 6, Courant 1.1e7). Options: (a) a follow-up item that
+  reproduces it on M1 and diagnoses it (candidates, not checked: the reconstructed flux of ADR 0234 D1 with the BDF2
+  predictor at a cell Reynolds number above 1, the AMG pressure solve with the volume source, the start from a field that does
+  not satisfy the forcing); (b) record it as a limit of F-309. Recommendation (a): F-309 is "done in the library" on a steady
+  low-Reynolds check only, and this is its first transient run at Re 100.
+- **Q7. The slivers** (item 5). For an accelerating body whose surface is a plane off the grid lines the force carries a
+  first-order term (the staircase volume error times the acceleration). Options: (a) correct it with the exact body volume in
+  place of the solid-cell volume when a moving-body item exists (ADR 0218 Q4); (b) leave it. Recommendation (a), with that
+  item, not before.
+
+### For the lead: roadmap entries
+
+**F-346: proposed status `partial`.** Proposed note (replacing the present one):
+
+> PARTIAL (ADR 0249, 2026-11-12), in the library. From ADR 0239 question 3. The premise did not survive the derivation, written before any code: the reaction of the forcing is the discrete force on the staircase surface of the solid cells minus the storage of those cells, so for a body at rest it already is the force in unsteady flow, and the storage of the first fluid cells is fluid momentum that must not be removed; the storage that is not fluid momentum is that of the solid cells of a body whose rigid velocity changes in time. Delivered: rcfd-fv immersed.rs, `ImmersedForcing::force_moment_unsteady` (opt-in: the pair of `force_moment_second_order` plus the rate of change of the momentum and angular momentum held by the solid cells; `force_moment` and `force_moment_second_order` unchanged, hashes checked) and `immersed::velocity_rate` (the solvers' Euler and variable-step BDF2 difference; the caller keeps the older fields, no hunk in pimple.rs). Measured (limits registered before the code; three defective set-ups of the registration corrected by amendment 1 before their runs): the moment on a cylinder accelerated in a fixed outer one within 0.167 and 0.078 percent of the closed form at N 48 and 96 (limit 0.5; the reaction alone 4.3 percent, the literal reading with the first fluid cells 1.8 and 0.9 percent); the force on an accelerated plate within 0.056 and 0.014 percent (limit 1; the reaction alone 42.8 percent, the literal reading 5.1 and 2.6 percent); a steady case returns F-337 exactly (2D-1 on M2 5.56246454, 0.0108880492; Couette by PISO); DFG 2D-2 against the recorded FeatFlow level-6 values, on M2 max C_D +0.261 %, max C_L -0.161 % (limit 1.5 %: met, but the old evaluation gives the same numbers, the two differ by 1.9e-6), on T (the mesh of ADR 0218) max C_D +0.815 %, max C_L +2.580 % (KNOWN MISS, predicted in the registration: not a storage term; the mean drag is +0.79 % and the steady 2D-1 lift on M2 +2.7 %; the two D/40 meshes differ by 2.7 points in the lift, so the M2 agreement is not shown to be convergence); nine mutations caught. Missing (why partial): the lift of 2D-2 on T; the unsteady evaluation as a default or behind a case key (open); the slivers between the staircase and the surface for an accelerating body; Crank-Nicolson and bounded BDF2 rates; moving shapes. Found on the way: 2D-2 on M2 with the second-order forcing of F-309 stops in PISO at step 6 (Courant 1.1e7), not diagnosed. Open: ADR 0249 Q1 (reword the first clause to the solid cells), Q2 (the 2D-2 clause: M2 as written, or replaced by the closed forms), Q3 (default).
+
+**Proposed follow-up items** (only if Q5 and Q6 are answered (a)):
+
+1. *Immersed solid: DFG 2D-2 force extrema, mesh and time-step convergence.* Deps: F-346. Acceptance: "DFG 2D-2 with the immersed cylinder is run on the T mesh and on T refined once (D/80, half the time step) and on M2 and M3; the maximum drag and lift on the finest mesh are within 1.5 percent of the FeatFlow level-6 values and the error decreases from D/40 to D/80 on both families, or the part that does not converge (mesh of the wake, forcing order, outlet condition, time step) is identified by a registered measurement." Note:
+
+> From ADR 0249 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0249 measured the 2D-2 lift maximum at +2.58 percent on T and -0.16 percent on M2 (both D/40 at the cylinder, the same forcing terms), and showed that the cause is not the evaluation of the force. Low priority.
+
+2. *Second-order immersed forcing: transient PISO at Re 100.* Deps: F-309. Acceptance: "DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number within 1 percent of the first-order forcing on the same mesh, or the cause of the stop at step 6 is diagnosed by a registered measurement and the configuration is refused with a located message." Note:
+
+> From ADR 0249 question 6, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0249's printed run of 2D-2 on M2 with the second-order forcing (PISO, BDF2, linear upwind, AMG pressure, dt 0.001) stopped at step 6 through the divergence guard (Courant 1.1e7); the forcing had been run in PISO only on circular Couette flow (ADR 0234 V3).
