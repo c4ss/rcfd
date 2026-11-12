@@ -5796,7 +5796,12 @@ fixed by the item's registration ADR before any code.
     refusals, the continuity measure and the corrector trial solve go with F-307. Open: question 1 (the second-order
     forcing as the default changes existing numbers). FOUND LATER (ADR 0249, 2026-11-12): the second-order forcing
     stopped at step 6 of DFG 2D-2 on M2 in PISO with BDF2 (divergence guard, Courant 1.1e7); it had been run in PISO
-    only on circular Couette flow. Not diagnosed: F-355.
+    only on circular Couette flow. DIAGNOSED (ADR 0254, 2026-11-12, F-355): the linear extension of D1 has a weight of
+    up to 38 where the surface crossing lies close to the fluid cell centre, and at an impulsive start, or with a time
+    step small against h^2/nu (circular Couette with dt 2.5e-5 grows to 281), what it multiplies is not small;
+    `build_second_order` is unchanged and is refused by PimpleSolver with a located message in that range; transient
+    runs use `build_second_order_bounded` (ADR 0254), which keeps the order (1.947 on circular Couette). Open: whether
+    `build_second_order` should build the bounded form (ADR 0254 question 1).
 - [ ] **F-310** NSGA-II: exchange crossover as the default for new studies, and the tool description
   - depends on: F-297
   - acceptance: create_study writes crossover = exchange into new nsga2 studies while old studies keep sbx; the design_create_study description names nsga2 and crossover; both goldens updated by a registered edit.
@@ -6425,16 +6430,42 @@ fixed by the item's registration ADR before any code.
     wake, forcing order, outlet condition, time step) is identified by a registered measurement.
   - note: From ADR 0249 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
     0249 measured the 2D-2 lift maximum at +2.58 percent on T and -0.16 percent on M2 (both D/40 at the cylinder, the
-    same forcing terms), and showed that the cause is not the evaluation of the force. Low priority.
-- [ ] **F-355** Second-order immersed forcing: transient PISO at Re 100
+    same forcing terms), and showed that the cause is not the evaluation of the force. Low priority. ADR 0254
+    (2026-11-12) measured 2D-2 on M2 with `build_second_order_bounded`: max C_D 3.20930 (-0.33 percent), max C_L 0.97593
+    (-1.01 percent), St 0.30112 (-0.25 percent); the convergence runs should be made with both forcings.
+- [~] **F-355** Second-order immersed forcing: transient PISO at Re 100
   - depends on: F-309
   - acceptance: DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number
     within 1 percent of the first-order forcing on the same mesh, or the cause of the stop at step 6 is diagnosed by a
     registered measurement and the configuration is refused with a located message.
-  - note: From ADR 0249 question 6, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
-    0249's printed run of 2D-2 on M2 with the second-order forcing (PISO, BDF2, linear upwind, AMG pressure, dt 0.001)
-    stopped at step 6 through the divergence guard (Courant 1.1e7); the forcing had been run in PISO only on circular
-    Couette flow (ADR 0234 V3).
+  - note: PARTIAL (ADR 0254, 2026-11-12), in the library. From ADR 0249 question 6. The stop was reproduced (step 6,
+    Courant 1.1094e7) and diagnosed by registered variant runs, each with its first-order control: it needs a
+    fluid-solid face whose surface crossing lies close to the fluid cell centre, so that the linear extension of ADR
+    0234 D1 has a weight above 5 (it multiplies the velocity of the first fluid cell relative to the wall by up to 38 on
+    M2), together with the impulsive start; runs with weights of at most 5 (theta_min 0.1, 0.25, 0.5; mesh M1) and a run
+    started from a developed field do not stop, and at each of the five steps the largest flux velocity sits on the face
+    of weight 38.99 (2.49, 23, 1426, 9.2e4, 6.9e5). Ruled out, each by its number: the ddt flux correction, the
+    corrector count, BDF2, the convection scheme, the time step (5e-4 to 8e-3 all stop) and the continuity of the fluid
+    cells (7e-7). A hand estimate of a linear growth criterion (weight times the share of the time term in the diagonal)
+    was refuted by its registered rule. Delivered: rcfd-fv immersed.rs, `ImmersedForcing::build_second_order_bounded`
+    (opt-in): on the faces with a weight above 2 the flux is that of the wall value reflected through the image point of
+    the face in the fluid, interpolated between the first fluid cell and the cell behind it, weights of magnitude at
+    most 1, second order; `build` and `build_second_order` are bit-identical (three hashes, the existing immersed tests,
+    baseline_hashes). With it DFG 2D-2 on M2 runs to t = 8 in PISO with BDF2: Strouhal number 0.30112 against 0.30041 of
+    the first-order forcing (+0.24 percent, limit 1), C_D max -0.33 percent and C_L max -1.01 percent of FeatFlow;
+    circular Couette error 5.91e-3, 1.63e-3, 4.23e-4, order 1.947 (limit 1.5), PISO equal to SIMPLEC to 0.1 percent.
+    `build_second_order` itself is refused by PimpleSolver with a located message where a flux face has a weight above 5
+    and can return more than the time term carries (`flux_growth`; 2D-2 on M2 at step 1, value 2.2; the runs of ADR 0234
+    and 0249 are not refused); the refusal is a sufficient condition, not a stability criterion (time steps of 4e-3 and
+    8e-3 still stop by the Courant guard). Seven mutations caught. Partial by the registered rule because of two known
+    misses: the flux velocity after the first step was registered as at least 4.5 and is 2.49 (the growth builds over
+    steps 2 to 5), and the bounded form with a single PISO corrector stops at step 34 (any flux face that returns the
+    wall-normal velocity at full size does, with one corrector; with two or more it runs). Acceptance: the second branch
+    (diagnosis and located refusal) is met; the first is met with the bounded opt-in, not with `build_second_order` as
+    named. Open (ADR 0254 questions 1 to 3): whether `build_second_order` should build the bounded form (changes
+    recorded numbers of ADR 0234 and 0239), the form of the refusal, the single corrector. Not run: M3, T, three
+    dimensions, PIMPLE outer iterations, SIMPLE with under-relaxation. Follow-ups: F-363 (the single corrector), F-364
+    (the bounded form as build_second_order; needs the maintainer).
 - [ ] **F-356** Overset: donor search on non-convex cells with planar faces
   - depends on: F-352
   - acceptance: On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the
@@ -6508,3 +6539,20 @@ fixed by the item's registration ADR before any code.
     wall point outside the structure is refused or mapped by a stated policy, and the model problem of ADR 0256 gives
     the same frequencies within 1e-3 with the built weights.
   - note: From ADR 0256 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-363** Second-order immersed forcing: the single PISO corrector
+  - depends on: F-355
+  - acceptance: The stop of DFG 2D-2 on M2 with one PISO corrector and a second-order immersed flux face of weight above
+    1 (ADR 0254 D11: step 34 with the bounded form, step 126 with weights up to 2) is explained by a registered
+    measurement, and the setting either runs 200 steps or is refused with a located message; two correctors are
+    unaffected.
+  - note: From ADR 0254 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0254 measured: with one corrector the first-order forcing and the second-order forcing with weights of at most 1
+    run, weights up to 2 stop at step 126, the bounded form at step 34 (theta_min 0.1: step 46); with two or more
+    correctors all of these run. The mechanism is not measured.
+- [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
+  - depends on: F-355
+  - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
+    and the checks of ADR 0234 (A1, V1 to V4) and ADR 0239 are measured again and reported next to the old numbers.
+  - note: NEEDS THE USER. From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded
+    numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the
+    DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs).
