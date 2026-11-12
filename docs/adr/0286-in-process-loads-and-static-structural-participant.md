@@ -268,6 +268,24 @@ test file does not build.
 - The non-matching limit U2b is an order-of-magnitude estimate from continuum formulas cited from memory, not a bound.
 - No transport: the participant is in process; serving it over `cosim_service` is a later item.
 
+## Amendment 1 (2026-11-12, after the registered run, before the corrected run): the set-up of F2 was defective
+
+The registered run (commit 6f7122f7, log `w49i-work/f385-scratch/registered_run.log`) met every check except F2, whose step
+did not fail at all: "the step fails" and "both states bit-equal" both reported missed. Cause, a defect of the set-up, not of
+the code: F2 was registered "as F1", after one converged step. That step ends at the fixed point (C1: `|u - u*|/u* = 1.9e-15`),
+so the next step's first iterate is already the coupled solution, its residual is of rounding size, and the step converges in
+iteration 1; the wrapper's switch to the failing solve before the second advance is never reached. (F1 fails in iteration 1
+and is not affected.)
+
+Corrected test `f2b_failing_solve_in_the_second_iteration_after_a_load_step`: as registered, but between the converged step
+and the failing one the mock fluid's `F0` is doubled (a load step of the test's mock; `F0` is a parameter, not part of the
+state compared). The failing step then starts away from its fixed point (first iterate `f = 2 F0 - 1.5 k_s u* = 1.4 F0`,
+output `2 F0 - 1.5 x 1.4 F0 = -0.1 F0`, residual `1.5 F0`, far above the tolerance), iteration 1
+succeeds (structure and fluid advance), and the switched solve fails in iteration 2. Checks and limits unchanged: participant
+`solid`, iteration 2, the solver's text in the message, both states bit-equal to before the step. The original test stays
+as the ignored record `f2_failing_solve_in_the_second_iteration`. Mutations are run after the corrected run, on the
+corrected test set; M4 and M7 named F2 among their catchers, which now means F2b.
+
 ## The planned stub, as written
 
 # ADR 0286: One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
