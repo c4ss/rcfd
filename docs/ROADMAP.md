@@ -5158,80 +5158,101 @@ Added after the static feature-gap review; wording is product-independent. Phase
       are the new item F-291 (Q4 (b)); Q1 and Q2 were not asked.
 - [x] **F-257** Dynamic mesh: prism layering and incompressible layering
   - depends on: F-230, F-063
-  - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions:
-    - (B1) the same piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event
-      conservation 1e-13, mass drift 1e-12);
-    - (B2) layering in the incompressible PIMPLE path: the ADR 0033 G5 piston channel run long enough for at least 5
-      layer removals keeps per-step continuity <= 1e-9, outlet flux equal to the piston swept flux to 1e-10 per step and
-      volume conserved per layer event to 1e-13.
-    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
-      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
-      moving-mesh path.
-  - note: Split from F-247 on 2026-10-22 (user decision). Size M.
-    - DONE (ADR 0213, the registration of F-257, 2026-11-07, branch f257-prism-layering, not merged): every registered
-      check is met; the acceptance is still the maintainer's (ADR 0213 Q5). Library only.
-      `rcfd_mesh::layering::ExtrudedStack` stacks prisms over a planar cross-section (`Section::rect`,
-      `Section::rect_triangles`) with the piston, thresholds and cell source map of `LayerStack` (one shared event
-      function); `face_sources` and `remap_face_flux` carry the face flux through an event (a merged side face takes the
-      sum of the two old faces, a split one the share of its layer height, the faces of a new plane close the cell below
-      them); `PimpleSolver::replace_mesh` installs the new mesh with the remapped velocity, pressure and flux.
-      - (B1) ADR 0090's piston on 320 triangular prisms: `p V^gamma` 1.53e-5 at T and 3.42e-5 at 2T (limit 2e-2),
-        per-event conservation 6.7e-16 (1e-13), mass drift 6.95e-13 (1e-12), volume 1.1e-15 (1e-13), 24 removals and 24
-        additions.
-      - (B2) ADR 0033 G5b mirrored in x on a layered mesh (the piston is `xmax`), 120 steps with 7 removals: step
-        continuity 3.1e-15 (1e-9), outlet against the piston's swept flux 1.3e-14 (1e-10), volume per event 2.2e-16
-        (1e-13). With the piston pulled out, 7 additions meet the same limits.
-      - The face map's balance and uniform-flow checks hold to 9.1e-16 and 1.6e-16; `replace_mesh` with the same mesh
-        changes no bit. Four mutations each made their check fail. Records L1 and L2 (made on main before the code),
-        ADR 0207's R1 to R4, baseline hashes and H1 unedited. The case tree is not changed (ADR 0191 E6 and E7 stay).
-      - Observed, no limit: the cell velocity next to the piston lags by 4.7e-3 of `a0 t` on the layered channel
-        (2.9e-4 on the smoothed mesh, ADR 0033's known miss of G5 (iii)).
-    - Open (ADR 0213 Q1 to Q5): the case-tree wiring under F-259, the piston end, the flux and the pressure of a split,
-      and the status.
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions: (B1) the same
+    piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event conservation
+    1e-13, mass drift 1e-12); (B2) layering in the incompressible PIMPLE path: the ADR 0033 G5 piston channel run long
+    enough for at least 5 layer removals keeps per-step continuity <= 1e-9, outlet flux equal to the piston swept flux
+    to 1e-10 per step and volume conserved per layer event to 1e-13. Out of scope: sliding interfaces / AMI (F-250),
+    elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer
+    surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - note: Split from F-247 on 2026-10-22 (user decision). Size M. DONE (ADR 0213, the registration of F-257, 2026-11-07,
+    branch f257-prism-layering, not merged): every registered check is met; the acceptance is still the maintainer's
+    (ADR 0213 Q5). Library only. rcfd_mesh::layering::ExtrudedStack stacks prisms over a planar cross-section
+    (Section::rect, Section::rect_triangles) with the piston, thresholds and cell source map of LayerStack (one shared
+    event function); face_sources and remap_face_flux carry the face flux through an event (a merged side face takes the
+    sum of the two old faces, a split one the share of its layer height, the faces of a new plane close the cell below
+    them); PimpleSolver::replace_mesh installs the new mesh with the remapped velocity, pressure and flux. (B1) ADR
+    0090's piston on 320 triangular prisms: p V^gamma 1.53e-5 at T and 3.42e-5 at 2T (limit 2e-2), per-event
+    conservation 6.7e-16 (1e-13), mass drift 6.95e-13 (1e-12), volume 1.1e-15 (1e-13), 24 removals and 24 additions.
+    (B2) ADR 0033 G5b mirrored in x on a layered mesh (the piston is xmax), 120 steps with 7 removals: step continuity
+    3.1e-15 (1e-9), outlet against the piston's swept flux 1.3e-14 (1e-10), volume per event 2.2e-16 (1e-13); with the
+    piston pulled out, 7 additions meet the same limits. The face map's balance and uniform-flow checks hold to 9.1e-16
+    and 1.6e-16; replace_mesh with the same mesh changes no bit; four mutations each made their check fail; records L1
+    and L2, ADR 0207's R1 to R4, baseline hashes and H1 unedited. The case tree is not changed (ADR 0191 E6 and E7
+    stay). Observed, no limit: the cell velocity next to the piston lags by 4.7e-3 of a0 t on the layered channel
+    (2.9e-4 on the smoothed mesh, ADR 0033's known miss of G5 (iii)). Open (ADR 0213 Q1 to Q5): the case-tree wiring
+    under F-259, the piston end, the flux and the pressure of a split, and the status. The case tree uses it since ADR
+    0257 (2026-11-12, F-259): [mesh.box_3d] section = "rectangles" or "triangles" builds the extruded stack, and
+    dynamic_mesh.deformation = "layering" runs on it with the compressible solver and with piso / pimple; Q1 (a) is
+    taken on the maintainer's standing instruction.
 - [x] **F-258** Compressible ALE boundaries and mesh-speed time step
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and
-    time step:
-    - max_dt uses |u.n - w_n| + c (checked against the closed form for a uniform gas on a mesh moving at w to
-      round-off);
-    - uniform flow is preserved to 1e-12 with characteristic boundary faces that move;
-    - a piston-generated simple wave leaving through a moving characteristic outlet reflects with amplitude below the
-      ADR limit.
-    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
-      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
-      moving-mesh path.
-  - note: Split from F-247 on 2026-10-22 (user decision). Size S to M.
-    - PARTIAL (ADR 0207, the registration of F-258, 2026-11-07, branch f258-compressible-ale, not merged): every
-      registered check is met in the library; marking the item done is the maintainer's (ADR 0207 Q5). On a moving face
-      the compressible ALE step evaluates the total inlet, the pressure outlet, the non-reflecting outlet and the far field
-      in the frame of the face (`rcfd_fv::compressible::characteristic_face_state`: lab-frame data, switches on the normal
-      velocity relative to the face, flux F(q).n - w_n U(q)); the new `CompressibleSolver::max_dt_moving` and
-      `max_dt_ale` take the explicit step with |u.n - w_n| + c (`max_dt_ale` with the face speeds of the last ALE step,
-      `mesh_speeds`). The step of a uniform gas on a translating box equals its closed form to 2.8e-15 (limit 1e-12; the
-      absolute step is 25 and 31 percent off); a uniform flow with the four conditions on faces that dilate, rotate and
-      translate stays uniform to 1.9e-14 (limit 1e-12); a piston-generated simple wave leaves through an outlet moving at
-      Mach 0.2 with a reflection of 4.6e-4 of its pressure jump through the far field and 3.8e-4 through the
-      non-reflecting outlet (limit 1e-2; a fixed-pressure outlet reflects 1.0); four mutations each made their check
-      fail. `max_dt()` and every run without a characteristic condition on a moving face are unchanged bit for bit
-      (records R1 to R4 made on main before the code; baseline hashes and H1 unedited). The case tree is not changed: it
-      still refuses a characteristic condition on a patch that moves (ADR 0191 E5) and steps with `max_dt()`.
-    - Open: the case-tree wiring (ADR 0207 Q1, the open part of F-259), the tree's moving step (Q2), a lagged or a
-      predicted mesh speed (Q3), the frame of the total-inlet data (Q4).
+    time step: max_dt uses |u.n - w_n| + c (checked against the closed form for a uniform gas on a mesh moving at w to
+    round-off); uniform flow is preserved to 1e-12 with characteristic boundary faces that move; a piston-generated
+    simple wave leaving through a moving characteristic outlet reflects with amplitude below the ADR limit. Out of
+    scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one
+    moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - note: Split from F-247 on 2026-10-22 (user decision). Size S to M. PARTIAL (ADR 0207, the registration of F-258,
+    2026-11-07, branch f258-compressible-ale, not merged): every registered check is met in the library; marking the
+    item done is the maintainer's (ADR 0207 Q5). On a moving face the compressible ALE step evaluates the total inlet,
+    the pressure outlet, the non-reflecting outlet and the far field in the frame of the face
+    (rcfd_fv::compressible::characteristic_face_state: lab-frame data, switches on the relative normal velocity, flux
+    F(q).n - w_n U(q)); CompressibleSolver::max_dt_moving and max_dt_ale take the step with |u.n - w_n| + c (max_dt_ale
+    with the face speeds of the last ALE step). The step of a uniform gas on a translating box equals its closed form to
+    2.8e-15 (limit 1e-12); a uniform flow with the four conditions on moving faces stays uniform to 1.9e-14 (limit
+    1e-12); a piston-generated simple wave leaves through an outlet moving at Mach 0.2 with a reflection of 4.6e-4 of
+    its pressure jump (far field) and 3.8e-4 (non-reflecting, sigma 0) (limit 1e-2; a fixed-pressure outlet reflects
+    1.0); four mutations each made their check fail; max_dt() and every run without a characteristic condition on a
+    moving face are unchanged bit for bit (R1 to R4, baseline hashes, H1). The case tree is not changed (ADR 0191 E5
+    stays, the tree steps with max_dt()). Open: ADR 0207 Q1 to Q4 (the tree wiring under F-259, the tree's moving step,
+    lagged or predicted mesh speed, the frame of the total-inlet data). The case tree uses it since ADR 0257
+    (2026-11-12, F-259): characteristic conditions on moving patches are accepted, and the mesh-speed step is the opt-in
+    [dynamic_mesh.compressible] time_step = "mesh_speed"; Q1 (a) is taken on the maintainer's standing instruction, Q2
+    (the mesh-speed step as the default of moving tree runs) stays open.
 - [~] **F-259** Case-tree and CLI wiring of layering and compressible ALE
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Case-tree and CLI wiring of
     layering and compressible ALE (incompressible prescribed and six-DOF motion are already in the tree, ADR 0033 D8):
     invalid keys give located errors, a tree run equals the library run to 1e-12, and a case without the keys is
-    bit-identical (baseline hashes unchanged).
-    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
-      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
-      moving-mesh path.
-  - note: Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S.
-    - PARTIAL (ADR 0191, the registration of F-259, 2026-11-05, branch f259-layering-ale-wiring, not merged): a transient compressible run (solver.algorithm = compressible) moves its mesh under a prescribed dynamic_mesh motion with rigid or smoothing deformation (the ALE step of ADR 0090), and dynamic_mesh.deformation = layering runs ADR 0090's planar layer stack of a piston on the new generator mesh.generator = box_3d (thresholds 0.4 and 1.6 of lx / nx, no key); no new key, defaults and the incompressible checks unchanged; invalid settings give located errors (E1 to E13; E8 and E2 also through rcfd validate, E8 with its line number), and a piston driven through the last static plane stops the run with a dynamic_mesh: message; ADR 0090's piston P (9191 steps, 24 removals and 24 additions), a smoothed piston with a static pressure outlet and a rigidly moving uniform flow give the same bits through the tree as through library calls (limit 1e-12), and rcfd run gives the reports of the in-process run; ADR 0090's limits hold on the tree run (p V^gamma 1.5e-5 at full compression and 3.4e-5 after the stroke against 2e-2, mass drift 5.4e-13 against 1e-12); fixed-mesh compressible runs are bit-identical to main (D0), baseline hashes and H1 unedited.
-    - Open: the wiring of F-257 (prism and incompressible layering) and F-258 (characteristic conditions on moving faces, the mesh-speed time step) waits for that library work, and done or partial is the maintainer's call (ADR 0191 Q3); layer thresholds are not keys (Q1); the InverseVolume smoothing stiffness is not in the tree (Q2); the Studio gives no cell estimate for box_3d (Q4).
-    - USER DECISION 2026-11-06 (ADR 0191 decision record): stays PARTIAL (Q3, not closed yet); inverse-volume smoothing
-      is the new item F-290 (Q2 (b)); box_3d in the Studio's lists follows the maintainer's Studio worktree (Q4 (a),
-      F-293); Q1 was not asked. The SV202 message observed in addendum 1 is recorded under F-240.
+    bit-identical (baseline hashes unchanged). Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing
+    (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or
+    energy in the incompressible moving-mesh path.
+  - note: Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S. PARTIAL (ADR 0191, the registration of
+    F-259, 2026-11-05): a transient compressible run (solver.algorithm = compressible) moves its mesh under a prescribed
+    dynamic_mesh motion with rigid or smoothing deformation (the ALE step of ADR 0090), and dynamic_mesh.deformation =
+    layering runs ADR 0090's planar layer stack of a piston on the new generator mesh.generator = box_3d (thresholds 0.4
+    and 1.6 of lx / nx, no key); no new key, defaults and the incompressible checks unchanged; invalid settings give
+    located errors (E1 to E13; E8 and E2 also through rcfd validate, E8 with its line number), and a piston driven
+    through the last static plane stops the run with a dynamic_mesh: message; ADR 0090's piston P (9191 steps, 24
+    removals and 24 additions), a smoothed piston with a static pressure outlet and a rigidly moving uniform flow give
+    the same bits through the tree as through library calls (limit 1e-12), and rcfd run gives the reports of the
+    in-process run; ADR 0090's limits hold on the tree run (p V^gamma 1.5e-5 at full compression and 3.4e-5 after the
+    stroke against 2e-2, mass drift 5.4e-13 against 1e-12); fixed-mesh compressible runs are bit-identical to main (D0),
+    baseline hashes and H1 unedited. Open after ADR 0191: the wiring of F-257 and F-258, layer thresholds as keys (Q1),
+    the Studio's cell estimate for box_3d (Q4, F-293). USER DECISION 2026-11-06 (ADR 0191 decision record): stays
+    PARTIAL (Q3, not closed yet); inverse-volume smoothing is the new item F-290 (Q2 (b)); box_3d in the Studio's lists
+    follows the maintainer's Studio worktree (Q4 (a), F-293); Q1 was not asked. The SV202 message observed in addendum 1
+    is recorded under F-240. DONE pending acceptance (ADR 0257, 2026-11-12; ADR 0207 Q1 (a) and ADR 0213 Q1 (a) taken on
+    the maintainer's standing instruction of 2026-11-11): the tree runs the library work of F-257 and F-258.
+    Characteristic compressible conditions may be on patches that move (ADR 0191's refusal E5 lifted; its test L is an
+    ignored record, the new test L2 asserts the new behaviour); the optional table [mesh.box_3d] section = "box"
+    (default), "rectangles" or "triangles" builds box_3d as the extruded layer stack, so layering runs on prism layers
+    and, with piso / pimple, on the incompressible path (velocity, pressure and face flux remapped at every layer
+    change); the optional table [dynamic_mesh.compressible] time_step = "mesh_speed" takes the mesh-speed step (default
+    "absolute", the step of ADR 0191). Both tables are optional tables: a case that does not write them keeps its text,
+    hash and results (H1, baseline hashes and the goldens unedited; ADR 0191's runs and D0 hashes unchanged; time_step =
+    "absolute" equals no table bit for bit). Tree runs equal library runs with the same bits (limit 1e-12): a uniform
+    flow with total inlet, pressure outlet, far field and non-reflecting outlet on moving faces (70 steps, uniform to
+    8.6e-15), the Mach 0.2 piston with the mesh-speed step (613 steps against 625), ADR 0090's piston on prisms (12 099
+    steps, 24 removals and 24 additions, p V^gamma 3.4e-5 against 2e-2, mass drift 7.0e-13 against 1e-12), ADR 0213's
+    piston channel on the piso path with 7 removals (continuity 3.3e-15, volume 8.9e-16) and with 7 additions; rcfd run
+    gives the reports of the in-process run and rcfd validate locates the errors of both tables; located errors N1 to N6
+    and ADR 0191's E1 to E4 and E6 to E13 hold; five mutations each failed their tests. Open: the mesh-speed step as the
+    default (ADR 0207 Q2 (b), changes the bits of moving compressible runs: the maintainer's call), layer thresholds as
+    keys (ADR 0191 Q1), box_3d sections in the Studio's lists (F-293). STATUS kept PARTIAL by the lead: the maintainer
+    decided on 2026-11-06 that F-259 is not closed yet; with ADR 0257 every registered check of the remainder is met,
+    and closing it stays the maintainer's. Follow-up: F-365.
 - [~] **F-260** Parametric studies: CMA-ES and a real-fan study
   - depends on: F-249, F-126
   - acceptance: CMA-ES reaches the registered target on a multimodal analytic test function from a start where Nelder-Mead does not (limits registered in an ADR); a multi-objective study on the FAN-01 passage over at least two blade parameters, using a converged solver, returns a Pareto set whose members are re-run to confirm their reported objectives within 1 percent
@@ -6592,3 +6613,14 @@ fixed by the item's registration ADR before any code.
   - note: NEEDS THE USER. From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded
     numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the
     DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs).
+- [ ] **F-365** Mesh-speed time step as the default of moving compressible tree runs
+  - depends on: F-259, F-258
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Needs the maintainer's lift of the
+    bit-identical default for moving compressible tree runs (ADR 0207 Q2 (b)). The moving compressible step of the case
+    tree takes max_dt_ale() by default, with [dynamic_mesh.compressible] time_step = "absolute" restoring the step of
+    ADR 0191; the library loops of ADR 0191's equality tests are restated by a registered edit (the old tests kept as
+    ignored records); a tree run equals the library run to 1e-12 for both values; fixed-mesh compressible runs and
+    incompressible runs are bit-identical (baseline hashes and ADR 0191's D0 unchanged); the CFL number of the piston
+    cell of the Mach 0.2 piston stays within the registered bound of the set value over the stroke.
+  - note: From ADR 0257 question 1 (ADR 0207 Q2 (b)). NEEDS THE USER: it changes the bits of existing moving
+    compressible runs.
