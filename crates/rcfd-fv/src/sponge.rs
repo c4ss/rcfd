@@ -75,8 +75,15 @@ pub enum SpongeFrame {
     StaticMesh,
     /// The rates and the memories belong to the cells and move with them (ADR 0265 DR2, DR3): the memory of a cell is the
     /// time integral of `p - p_ref` along the path of the cell, and the source enters the ALE step at the stage volume
-    /// (DR4). The matched forms are matched only at normal incidence on a moving mesh (DR5).
+    /// (DR4). The matched forms are matched only at normal incidence on a moving mesh (DR5); with a mesh velocity along a
+    /// matched layer the attached memory makes the layer unstable for waves grazing along it (growth about
+    /// `rate M / (2 (1 - M))`, ADR 0344 DR2): use [`SpongeFrame::AttachedWithLabMemory`] there.
     AttachedToMesh,
+    /// The rates belong to the cells as in [`SpongeFrame::AttachedToMesh`]; the memories of the matched forms are those of
+    /// the lab frame (F-407, ADR 0344 DR3): the memory of a cell moving with `w_c` gains `w_c . grad Q` (and likewise `r`
+    /// and `m` of the shifted form), so on a mesh translating along a planar layer the layer is the matched layer at rest.
+    /// The plain form has no memory and gives the bits of `AttachedToMesh`; so does a cell that does not move.
+    AttachedWithLabMemory,
 }
 
 /// A sponge: the reference state, one damping rate [1/s] per cell (zero outside the layer) and the form.
@@ -496,6 +503,55 @@ pub(crate) fn add_source_shifted(
         }
     }
     dot
+}
+
+/// The transport of the memories of the matched forms for [`SpongeFrame::AttachedWithLabMemory`] (ADR 0344 DR3, DR4): add
+/// `w_c . grad` of each memory to its time derivative in `dot`, for the cells of the layer (`rate2` the rates of the second
+/// layer, all zero without one). The gradient is the Green-Gauss sum of the matched source on `geom` divided by the cell
+/// volume; a cell with `w_c = 0` is not touched. Nothing is done for the plain form.
+pub(crate) fn add_lab_transport(
+    geom: &FvGeometry,
+    sponge: &Sponge,
+    rate2: &[f64],
+    wc: &[Vec3],
+    mem: &SpongeMemories,
+    dot: &mut SpongeMemories,
+) {
+    let rate = &sponge.rate;
+    let vol = geom.mesh.cell_volumes();
+    let moving = |c: usize| wc[c] != [0.0; 3];
+    let add = |inside: &dyn Fn(usize) -> bool, x: &[f64], xd: &mut [f64]| {
+        let g = layer_gradient_sum(geom, x, inside);
+        for c in 0..x.len() {
+            if inside(c) && moving(c) {
+                xd[c] += vec3::dot(wc[c], g[c]) / vol[c];
+            }
+        }
+    };
+    match sponge.form {
+        SpongeForm::Plain => {}
+        SpongeForm::Matched { .. } => add(&|c| rate[c] > 0.0, &mem.q, &mut dot.q),
+        SpongeForm::MatchedShifted(o) => {
+            let inside = |c: usize| {
+                if o.second.is_some() {
+                    rate[c] + rate2[c] > 0.0
+                } else {
+                    rate[c] > 0.0
+                }
+            };
+            add(&inside, &mem.q, &mut dot.q);
+            add(&inside, &mem.r, &mut dot.r);
+            for k in 0..3 {
+                let x: Vec<f64> = mem.m.iter().map(|v| v[k]).collect();
+                let g = layer_gradient_sum(geom, &x, &inside);
+                for c in 0..x.len() {
+                    if inside(c) && moving(c) {
+                        dot.m[c][k] += vec3::dot(wc[c], g[c]) / vol[c];
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
