@@ -12,6 +12,12 @@
 //! variations ([`axis_variations`], [`velocity_axis_variations`]), the choice of the split axes ([`directional_axes`]), target
 //! marks with a split size per cell ([`directional_target_marks`]) and the loop ([`run_adaptive_simple_directional`],
 //! [`run_adaptive_simple_directional_target`]). The functions above are not changed by it.
+//!
+//! F-441 (ADR 0343) adds box coarsening inside the directional loop, opt-in: an axis whose variation is below `phi` times the
+//! cell's largest is coarsened ([`directional_coarsen_axes`], [`directional_coarsen_marks`], `phi <= theta / 4` for the
+//! hysteresis); each cycle coarsens with [`Coarsening::Box`] and then refines on the coarsened lattice
+//! ([`directional_coarsen_refine_step`], [`merged_gradients`]); the loops are [`run_adaptive_simple_directional_coarsening`]
+//! and [`run_adaptive_simple_directional_coarsen_target`]. Nothing above is changed by it.
 
 use crate::field::{ScalarField, VectorField};
 use crate::geometry::FvGeometry;
@@ -23,6 +29,9 @@ use rcfd_mesh::adapt::aniso::{AnisoMesh, AxisMark};
 use rcfd_mesh::adapt::{cell_lengths, transfer_field, AmrMesh, Mark, RefineTransfer};
 use rcfd_mesh::Mesh;
 use std::sync::Arc;
+
+use rcfd_mesh::adapt::aniso::{AxisLeaf, Coarsening};
+use rcfd_mesh::adapt::{AdaptReport, Source, Transfer};
 
 /// Settings of [`run_adaptive_simple`].
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -856,5 +865,339 @@ where
                 theta,
             )
         },
+    )
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// F-441 (ADR 0343): box coarsening inside the directional loop
+// -------------------------------------------------------------------------------------------------------------------
+
+/// The axes along which a cell is coarsened (ADR 0343 D1): axis `a` when it is active, its level is above 0, the largest
+/// variation `E_max` over the active axes is positive and `E_a < phi E_max`. The axis of `E_max` is never returned. With
+/// `phi <= theta / 4` a just-split axis is not coarsened back and an axis merged by up to two levels is not split again by
+/// [`directional_axes`] (for an unchanged gradient). `phi` must be finite and in `[0, 1/4]`; `phi = 0` coarsens nothing.
+pub fn directional_coarsen_axes(variation: Vec3, levels: [u8; 3], axes: [bool; 3], phi: f64) -> Result<[bool; 3]> {
+    if !(phi.is_finite() && (0.0..=0.25).contains(&phi)) {
+        return Err(Error::Other(format!(
+            "directional_coarsen_axes: phi must be finite and in [0, 1/4], got {phi}"
+        )));
+    }
+    if variation.iter().any(|v| !v.is_finite() || *v < 0.0) {
+        return Err(Error::Other(
+            "directional_coarsen_axes: the variations must be finite and non-negative".into(),
+        ));
+    }
+    let top = (0..3).filter(|&a| axes[a]).map(|a| variation[a]).fold(0.0, f64::max);
+    Ok([0, 1, 2].map(|a| axes[a] && levels[a] > 0 && top > 0.0 && variation[a] < phi * top))
+}
+
+/// Per cell `AxisMark::coarsen(C)` with `C` the [`directional_coarsen_axes`], or [`AxisMark::KEEP`] when `C` is empty.
+pub fn directional_coarsen_marks(
+    variations: &[Vec3],
+    levels: &[[u8; 3]],
+    axes: [bool; 3],
+    phi: f64,
+) -> Result<Vec<AxisMark>> {
+    if variations.len() != levels.len() {
+        return Err(Error::Other(format!(
+            "directional_coarsen_marks: variations has {} entries but levels has {}",
+            variations.len(),
+            levels.len()
+        )));
+    }
+    let mut out = Vec::with_capacity(levels.len());
+    for (v, l) in variations.iter().zip(levels) {
+        let c = directional_coarsen_axes(*v, *l, axes, phi)?;
+        out.push(if c.contains(&true) {
+            AxisMark::coarsen(c)
+        } else {
+            AxisMark::KEEP
+        });
+    }
+    Ok(out)
+}
+
+/// Gradients on an adapted mesh from those of the old mesh (ADR 0343 D2): `Same(i)` and `Descendant(i)` keep cell `i`'s
+/// gradient, `Merged(S)` takes the volume-weighted mean over `S` (volumes of `old`). One list per field component.
+pub fn merged_gradients(old: &Mesh, tr: &Transfer, grads: &[Vec<Vec3>]) -> Result<Vec<Vec<Vec3>>> {
+    let n = old.n_cells();
+    let vol = old.cell_volumes();
+    let outside = |i: usize| Error::Other(format!("merged_gradients: source {i} outside the old mesh"));
+    let mut out = Vec::with_capacity(grads.len());
+    for (k, g) in grads.iter().enumerate() {
+        if g.len() != n {
+            return Err(Error::Other(format!(
+                "merged_gradients: grads[{k}] has {} entries, the old mesh has {n} cells",
+                g.len()
+            )));
+        }
+        let mut m = Vec::with_capacity(tr.sources.len());
+        for s in &tr.sources {
+            m.push(match s {
+                Source::Same(i) | Source::Descendant(i) => *g.get(*i).ok_or_else(|| outside(*i))?,
+                Source::Merged(kids) => {
+                    let (mut sv, mut sg) = (0.0, [0.0; 3]);
+                    for &i in kids {
+                        let gi = g.get(i).ok_or_else(|| outside(i))?;
+                        sv += vol[i];
+                        for a in 0..3 {
+                            sg[a] += vol[i] * gi[a];
+                        }
+                    }
+                    [sg[0] / sv, sg[1] / sv, sg[2] / sv]
+                }
+            });
+        }
+        out.push(m);
+    }
+    Ok(out)
+}
+
+/// One adaptation step of the coarsening loop ([`directional_coarsen_refine_step`]).
+pub struct DirectionalStep {
+    /// The coarsened lattice, its mesh and the transfer to it; `None` when nothing was merged (no coarsen mark, or no merge).
+    pub coarsened: Option<(AnisoMesh, Mesh, Transfer)>,
+    /// Report of the coarsening call (all zero when no coarsen mark was given).
+    pub coarsen_report: AdaptReport,
+    /// The refined lattice.
+    pub next: AnisoMesh,
+    /// Transfer from the coarsened lattice (or from the given one when `coarsened` is `None`) to `next`.
+    pub transfer: Transfer,
+    /// Report of the refinement call.
+    pub report: AdaptReport,
+}
+
+/// Coarsen, then refine on the coarsened lattice (ADR 0343 D2). `coarsen_marks` (coarsening only) are applied with
+/// [`Coarsening::Box`]; the gradients `grads` of the old mesh `mesh` (one list per field component) are carried to the
+/// coarsened mesh by [`merged_gradients`]; the refinement marks are [`directional_target_marks`] of the
+/// [`edge_length_weighted_indicator`] (exponent `r`) and the [`axis_variations`] on the coarsened mesh, aiming at `n_target`
+/// from its cell count. `balance` is used by both calls.
+#[allow(clippy::too_many_arguments)]
+pub fn directional_coarsen_refine_step(
+    amr: &AnisoMesh,
+    mesh: &Mesh,
+    grads: &[Vec<Vec3>],
+    coarsen_marks: &[AxisMark],
+    n_target: usize,
+    r: f64,
+    theta: f64,
+    balance: bool,
+) -> Result<DirectionalStep> {
+    let axes = amr.refined_axes();
+    if coarsen_marks.len() != amr.n_cells() || mesh.n_cells() != amr.n_cells() {
+        return Err(Error::Other(format!(
+            "directional_coarsen_refine_step: coarsen_marks has {} entries and the mesh {} cells, the lattice has {}",
+            coarsen_marks.len(),
+            mesh.n_cells(),
+            amr.n_cells()
+        )));
+    }
+    if let Some(c) = coarsen_marks.iter().position(|m| m.refine.contains(&true)) {
+        return Err(Error::Other(format!(
+            "directional_coarsen_refine_step: coarsen_marks[{c}] asks for a refinement"
+        )));
+    }
+    let asks = coarsen_marks.iter().any(|m| (0..3).any(|a| m.coarsen[a] && axes[a]));
+    let mut coarsened = None;
+    let mut coarsen_report = AdaptReport::default();
+    if asks {
+        let (mid, t1, rep1) = amr.adapt_with(coarsen_marks, balance, Coarsening::Box)?;
+        coarsen_report = rep1;
+        if rep1.coarsened > 0 {
+            let mid_mesh = mid.to_mesh()?;
+            coarsened = Some((mid, mid_mesh, t1));
+        }
+    }
+    let (lat, lmesh, lgrads) = match &coarsened {
+        Some((mid, mid_mesh, t1)) => (mid, mid_mesh, merged_gradients(mesh, t1, grads)?),
+        None => (amr, mesh, grads.to_vec()),
+    };
+    let eta = edge_length_weighted_indicator(lmesh, &lgrads, axes, r)?;
+    let var = axis_variations(lmesh, &lgrads, axes)?;
+    let marks = directional_target_marks(&eta, &var, &lat.levels(), lat.max_levels(), axes, n_target, theta)?;
+    let (next, transfer, report) = lat.adapt(&marks, balance)?;
+    Ok(DirectionalStep {
+        coarsened,
+        coarsen_report,
+        next,
+        transfer,
+        report,
+    })
+}
+
+/// Result of [`run_adaptive_simple_directional_coarsening`].
+pub struct DirectionalCoarseningRun {
+    /// The final lattice; `solver`'s mesh is its [`AnisoMesh::to_mesh`].
+    pub amr: AnisoMesh,
+    /// The solver of the last solve.
+    pub solver: SimpleSolver,
+    /// One record per solve (`refined` and `ignored_at_max_level` of the refinement call).
+    pub cycles: Vec<CycleRecord>,
+    /// Per solve, the merges of the step that made its mesh (0 for the first solve).
+    pub coarsened: Vec<usize>,
+    /// Per solve, the leaves of its lattice.
+    pub leaves: Vec<Vec<AxisLeaf>>,
+}
+
+/// The least-squares gradients of the three components of `U` with its boundary values.
+fn velocity_gradients(solver: &SimpleSolver) -> Result<Vec<Vec<Vec3>>> {
+    let g = &solver.geom;
+    let n = g.n_cells();
+    if solver.u.values.len() != n {
+        return Err(Error::Other(format!(
+            "velocity_gradients: U has {} cells, the mesh {n}",
+            solver.u.values.len()
+        )));
+    }
+    let bu = solver.u.boundary_values(g);
+    Ok((0..3)
+        .map(|k| {
+            let cells: Vec<f64> = solver.u.values.iter().map(|v| v[k]).collect();
+            let bv: Vec<f64> = bu.iter().map(|v| v[k]).collect();
+            least_squares(g, &cells, &bv)
+        })
+        .collect())
+}
+
+/// The directional loop with coarsening (ADR 0343 D2): every cycle `k >= 1` takes the velocity gradients of the last
+/// solution, gives their [`axis_variations`] with the current lattice to `coarsen` for the coarsening marks, makes the
+/// [`directional_coarsen_refine_step`] towards [`target_schedule`]`(N_0, n_target, settings.cycles, k)` (exponent `r`,
+/// `theta`, `settings.balance`), moves `U` and `p` through the coarsening transfer (merged cells: the volume-weighted mean)
+/// and then the refinement transfer (`settings.transfer`), calls `setup` on the new mesh and solves.
+#[allow(clippy::too_many_arguments)]
+pub fn run_adaptive_simple_directional_coarsening<F, C>(
+    amr: AnisoMesh,
+    mut setup: F,
+    settings: &AdaptiveSettings,
+    n_target: usize,
+    r: f64,
+    theta: f64,
+    mut coarsen: C,
+) -> Result<DirectionalCoarseningRun>
+where
+    F: FnMut(&Arc<FvGeometry>) -> Result<(VectorField, ScalarField, SimpleSettings)>,
+    C: FnMut(&[Vec3], &AnisoMesh, usize) -> Result<Vec<AxisMark>>,
+{
+    let n0 = amr.n_cells();
+    let cycles = settings.cycles;
+    let axes = amr.refined_axes();
+    let mut amr = amr;
+    let mut records = Vec::with_capacity(cycles + 1);
+    let mut merges = Vec::with_capacity(cycles + 1);
+    let mut history = Vec::with_capacity(cycles + 1);
+    let mesh = in_cycle(0, amr.to_mesh())?;
+    let geom = Arc::new(in_cycle(0, FvGeometry::new(Arc::new(mesh)))?);
+    let (u, p, s) = in_cycle(0, setup(&geom))?;
+    let mut solver = SimpleSolver::new(geom, u, p, s);
+    let sum = solver.run(settings.max_iter, settings.tol);
+    records.push(CycleRecord {
+        cells: solver.geom.n_cells(),
+        iterations: sum.iterations,
+        converged: sum.converged,
+        refined: 0,
+        ignored_at_max_level: 0,
+    });
+    merges.push(0);
+    history.push(amr.leaves().to_vec());
+    for k in 1..=cycles {
+        let grads = in_cycle(k, velocity_gradients(&solver))?;
+        let var = in_cycle(k, axis_variations(&solver.geom.mesh, &grads, axes))?;
+        let cmarks = in_cycle(k, coarsen(&var, &amr, k))?;
+        let step = in_cycle(
+            k,
+            directional_coarsen_refine_step(
+                &amr,
+                &solver.geom.mesh,
+                &grads,
+                &cmarks,
+                target_schedule(n0, n_target, cycles, k),
+                r,
+                theta,
+                settings.balance,
+            ),
+        )?;
+        let mesh: Mesh = in_cycle(k, step.next.to_mesh())?;
+        let mode = settings.transfer;
+        let mut fields: Vec<Vec<f64>> = (0..3).map(|c| solver.u.values.iter().map(|v| v[c]).collect()).collect();
+        fields.push(solver.p.values.clone());
+        let mut from: &Mesh = &solver.geom.mesh;
+        if let Some((_, mid_mesh, t1)) = &step.coarsened {
+            for f in fields.iter_mut() {
+                *f = in_cycle(k, transfer_field(from, mid_mesh, t1, f, mode, axes))?;
+            }
+            from = mid_mesh;
+        }
+        for f in fields.iter_mut() {
+            *f = in_cycle(k, transfer_field(from, &mesh, &step.transfer, f, mode, axes))?;
+        }
+        let geom = Arc::new(in_cycle(k, FvGeometry::new(Arc::new(mesh)))?);
+        let (mut u, mut p, s) = in_cycle(k, setup(&geom))?;
+        if u.values.len() != geom.n_cells() || p.values.len() != geom.n_cells() {
+            return Err(Error::Other(format!(
+                "adaptive cycle {k}: setup returned fields of the wrong size"
+            )));
+        }
+        for (c, v) in u.values.iter_mut().enumerate() {
+            *v = [fields[0][c], fields[1][c], fields[2][c]];
+        }
+        p.values.clone_from(&fields[3]);
+        merges.push(step.coarsen_report.coarsened);
+        amr = step.next;
+        history.push(amr.leaves().to_vec());
+        solver = SimpleSolver::new(geom, u, p, s);
+        let sum = solver.run(settings.max_iter, settings.tol);
+        records.push(CycleRecord {
+            cells: solver.geom.n_cells(),
+            iterations: sum.iterations,
+            converged: sum.converged,
+            refined: step.report.refined,
+            ignored_at_max_level: step.report.ignored_at_max_level,
+        });
+    }
+    Ok(DirectionalCoarseningRun {
+        amr,
+        solver,
+        cycles: records,
+        coarsened: merges,
+        leaves: history,
+    })
+}
+
+/// The coarsening loop with [`directional_coarsen_marks`] (ADR 0343): `phi` must be finite and in `[0, theta / 4]` (the
+/// hysteresis of ADR 0343 D1); `phi = 0` asks for no coarsening and gives the run of
+/// [`run_adaptive_simple_directional_target`] bit for bit.
+#[allow(clippy::too_many_arguments)]
+pub fn run_adaptive_simple_directional_coarsen_target<F>(
+    amr: AnisoMesh,
+    setup: F,
+    settings: &AdaptiveSettings,
+    n_target: usize,
+    r: f64,
+    theta: f64,
+    phi: f64,
+) -> Result<DirectionalCoarseningRun>
+where
+    F: FnMut(&Arc<FvGeometry>) -> Result<(VectorField, ScalarField, SimpleSettings)>,
+{
+    if !(theta.is_finite() && theta > 0.0 && theta <= 1.0) {
+        return Err(Error::Other(format!(
+            "run_adaptive_simple_directional_coarsen_target: theta must be finite and in (0, 1], got {theta}"
+        )));
+    }
+    if !(phi.is_finite() && phi >= 0.0 && phi <= theta / 4.0) {
+        return Err(Error::Other(format!(
+            "run_adaptive_simple_directional_coarsen_target: phi must be finite and in [0, theta / 4] = [0, {}], got {phi}",
+            theta / 4.0
+        )));
+    }
+    let axes = amr.refined_axes();
+    run_adaptive_simple_directional_coarsening(
+        amr,
+        setup,
+        settings,
+        n_target,
+        r,
+        theta,
+        move |var: &[Vec3], amr: &AnisoMesh, _k: usize| directional_coarsen_marks(var, &amr.levels(), axes, phi),
     )
 }
