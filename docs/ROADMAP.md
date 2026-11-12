@@ -7235,7 +7235,9 @@ fixed by the item's registration ADR before any code.
     with shift 0.256 after 9 breakdowns, pivots within 5.9e-17 of the closed form; forced breakdowns on the cantilever
     are reported with shift 2.048 and solved to 7.9e-11. Default and CG-Jacobi results bit-identical to main, baseline
     hashes pass; ten mutations caught (M6 after amendment 3). Partial by the registered rule; done is the maintainer's
-    call.
+    call. ADR 0357 (2026-11-12, F-460): with one level of fill, incomplete Cholesky needs 0.372 of block Jacobi's
+    iterations on the fast cantilever (58 against 156), so IC(1) meets the half-iterations target of this item; IC(0)
+    itself is unchanged.
 - [x] **F-382** Eigensolver for K x = lambda M x: dense Jacobi and subspace iteration on the direct factorisation
   - depends on: F-373
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a dense symmetric
@@ -7358,7 +7360,10 @@ fixed by the item's registration ADR before any code.
     rcfd_post::solid_output::write_solid_vtu(path, model, result); a multi-material model is refused by the nodal
     average (per-set output is an open question of ADR 0278). ADR 0282 (2026-11-12): the static solve's iterative route
     is StaticSolver::PreconditionedCg with CgPreconditioner::BlockJacobi or
-    CgPreconditioner::IncompleteCholesky(IcOptions::default()); a case-file key for it maps onto these.
+    CgPreconditioner::IncompleteCholesky(IcOptions::default()); a case-file key for it maps onto these. ADR 0357
+    (2026-11-12): the recommended iterative choice is CgPreconditioner::IncompleteCholeskyFill { options:
+    IcOptions::default(), level: 1, ordering: IcOrdering::Natural } (two thirds of IC(0)'s iterations at twice its
+    memory); a case-file key for the iterative route should map onto it and onto the ordering.
 - [ ] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
@@ -8440,7 +8445,7 @@ fixed by the item's registration ADR before any code.
     field at the regular map caught, an amplitude above the validity bound refused as inverted, the over-integrated Hex8
     survives). Done pending the maintainer's acceptance. The moved-mesh patch test of Hex8 that detects the one-point
     stiffness directly is ADR 0358 (F-461).
-- [ ] **F-460** Incomplete Cholesky at half the block-Jacobi iterations on the elastic cantilever: ordering and one level of fill
+- [x] **F-460** Incomplete Cholesky at half the block-Jacobi iterations on the elastic cantilever: ordering and one level of fill
   - depends on: F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Beside IC(0) in the natural order,
     an incomplete Cholesky with one level of fill and IC(0) after a node-wise reverse Cuthill-McKee ordering, both with
@@ -8449,7 +8454,20 @@ fixed by the item's registration ADR before any code.
     iterations of block Jacobi (156), agrees with the direct solution within 1e-7 and is bit-identical for 1 and 8
     threads; the iteration counts at L/h = 5.3 and 10.7 and on the 103 968-unknown case are recorded; IC(0) in the
     natural order and every default are unchanged bit for bit.
-  - note: From ADR 0282 addendum 1 (2026-11-12), Q1 recommendation.
+  - note: From ADR 0282 addendum 1 (2026-11-12), Q1 recommendation. ADR 0357, 2026-11-12: rcfd_linalg::precond
+    (appended) ic_fill_pattern (level-of-fill pattern of IC(p) on the lower CSR triangle), IncompleteCholesky::with_fill
+    (the factor on that pattern with ADR 0282's shift A + alpha diag(A); level 0 equals IncompleteCholesky::new bit for
+    bit) and Permuted (the preconditioner of P A P^T applied to A); rcfd_linalg::reorder::block_rcm_order (reverse
+    Cuthill-McKee of the block graph, the rows of a block kept together);
+    rcfd_fem::solve::CgPreconditioner::IncompleteCholeskyFill { options, level, ordering: IcOrdering::{Natural,
+    NodeReverseCuthillMcKee} }, breakdowns mapped through the ordering to node and component. Fast Hex8 cantilever 32 x
+    6 x 6 (4704 unknowns): IC(1) needs 58 iterations against block Jacobi's 156 (ratio 0.372, limit 0.5), relative
+    residual 5.4e-11, 2.4e-13 from the direct solution, bit-identical for 1 and 8 threads; IC(0) after node RCM 82
+    (0.526, recorded), IC(1) after RCM 57. Ratios to block Jacobi at L/h = 10.7: IC(0) 0.705, IC(1) 0.452, RCM IC(0)
+    0.671, RCM IC(1) 0.455; heavy case, 103 968 unknowns: 477 (block Jacobi), 255, 171, 250, 160 iterations. Forced
+    breakdowns are reported with shift 2.048 (IC(1)) and 1.024 (RCM) and solved to 7.7e-11 and 6.1e-11. IC(0) in the
+    natural order, block Jacobi, CG-Jacobi and the direct default are hash-identical to main; baseline hashes pass; nine
+    mutations caught. Done pending the maintainer's acceptance. Done pending the maintainer's acceptance.
 - [~] **F-461** Element tests: the constant-strain patch test of Hex8 on a moved mesh
   - depends on: F-459
   - acceptance: Every limit not stated here is registered in the ADR before the run. A linear displacement field on a
