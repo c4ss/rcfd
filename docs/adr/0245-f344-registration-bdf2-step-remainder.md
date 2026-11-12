@@ -637,3 +637,130 @@ Proposed follow-up items (the numbers are the lead's):
 - **Transient step: the step-consistent face coefficient on the remaining paths.** Depends on F-344. Acceptance: "rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls (defaults bit-identical); with a body force a hydrostatic column stays at rest to 1e-10 and the steady solution of a buoyant cavity is the same to 1e-9 for two step sizes; the case tree has a key for it; the check C3 of ADR 0245 holds on each path, or the ADR names why not with a number." Note:
 
 > From ADR 0245 question 3, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed by the F-344 addendum, not yet taken. Periodic seams (ADR 0073 R3, ADR 0076) are not part of it.
+
+## Amendment 3 (2026-11-12, after the merge of main and before any run of the checks below)
+
+Written on the lead's brief of 2026-11-12, which asks for three steps before the opt-in is merged: bring the work up to main,
+finish the evidence addendum 1 left open (the two long immersed-solid runs, MC5), and answer ADR 0076's question directly
+(does the opt-in harm the periodic and rotational seams where F-G of ADR 0073 failed?). Nothing above this line is changed;
+no limit of the registration or of amendments 1 and 2 is moved. Each run below is made once.
+
+### The merge of main (done before this amendment; disclosed)
+
+`git merge main` (main `2fa39daf`, merge commit `aa325442`) merged without a textual conflict: F-322 (ADR 0258) changed
+`pimple.rs` around the face coefficient (`ConsistentCorrectors`, `phi_solve`, the X1 and X3 terms), and git placed the
+hunks of F-344 between them. One conflict of meaning was found by reading the merged step: the gate of the opt-in read
+`!s.consistent_correctors`, and after ADR 0258 V1 the consistent correctors can also be asked for through
+`PimpleSettings::consistent` (the step reads them as `cf = s.consistent_flags()`). With `consistent.enabled` set and the
+old field false the opt-in would have acted with the consistent correctors, which its documentation excludes. Commit
+`10171174` makes the gate `s.rhie_chow_step_consistent && !cf.enabled && self.ale.is_none()`. With the opt-in off the
+conjunction is false whatever `cf` is, so the step is the main step statement for statement; checked by the B rows below.
+`overset.rs` refuses the consistent correctors through the older field only; that is ADR 0258's listed item and is not
+touched here.
+
+### G. A check that guards the fringe branch of the overset opt-in (MC5)
+
+Addendum 1: MC5 (the fringe cells take their own `rAU G p_lag` in place of the donor interpolant) had A2 as its check, A2
+is missed, so the branch is guarded by nothing.
+
+Why the obvious run-level check does not guard it. In a uniform flow through a moving component the pressure is uniform,
+so `G p_lag = 0` in every cell and `x = q = 0` at every cell whichever value the fringe branch gives: MC5 changes no bit
+there. A steady overset flow at rest, two step sizes, would catch it in principle (the design makes the defect equation
+hold on every face with a calculated cell), but the overset step at rest carries other step-dependent parts that no check
+has separated (the carry-over of the moving-mesh defect, the fringe rows), so a miss there would not locate the branch.
+
+What the branch must give (amendment 1, "The overset step"): for every cell `c`,
+
+- calculated: `x_c = (G p_lag)_c`, `q_c = rAU_c x_c`;
+- fringe with stencil `(k_j, w_j)`: `x_c = sum_j w_j (G p_lag)_{k_j}`, `q_c = sum_j w_j rAU_{k_j} (G p_lag)_{k_j}`;
+- hole: `x_c = q_c = 0`;
+- with a trivial connectivity: `x = G p_lag`, `q = rAU x` everywhere.
+
+So the check is a direct comparison of the branch with this formula. To make that possible the statements of the branch
+move unchanged (same expressions, same order of summation) from `OversetSolver::piso` into a function
+`face_consistent::overset_lagged_gradient(geom, pbc, p_lag, r_au, conn, trivial) -> (x, q)`, called where the block was.
+Nothing else changes; with the opt-in off it is not called.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| G1 | unit test in `pimple/face_consistent.rs`: `box_2d(8, 8, 1, 1)`, `p = x^2 + 3 x y - y^3` (the Green-Gauss gradient then varies from cell to cell), `rAU_c = 1 + 0.01 c`, a connectivity with two fringe cells (stencils of three cells, weights 0.5, 0.3, 0.2 and 0.6, 0.25, 0.15), one hole cell, the rest calculated: `x` and `q` of `overset_lagged_gradient` against the formula above evaluated in the test from `green_gauss` of the same `p` | largest difference `<= 1e-14` times the largest `abs(x)` (resp. `abs(q)`): rounding only |
+| G1n (negative control, in the same test) | at the two fringe cells the donor interpolant differs from the cell's own value | `>= 1e-3` times the largest `abs(x)` for `x` and for `q` (else the comparison could not tell MC5 from the design) |
+| G1t | the same with `trivial = true` | `x` equal to `G p_lag` and `q` to `rAU x`, bit for bit |
+
+Mutation, run on a `git archive` copy of the final tree after G1 has passed on the tree:
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| MC5 | in `overset_lagged_gradient`, the fringe cells keep their own `x` and `q` (the two assignments of the donor interpolants removed) | G1 |
+
+### P. ADR 0076's seam comparisons with the opt-in
+
+**Derivation: what "inert on coupled faces" can mean here.** The opt-in changes three expressions of the step
+(`face_consistent.rs`): (1) the face coefficient `harmonic_face(rAU)` in place of `face_interpolate(rAU)`: on a boundary
+face, coupled faces included, both return `rAU` of the owner cell, the same expression; (2) the added flux
+`add_commutator`: a loop over `f < n_internal`, so no boundary or coupled face is written; (3) through (1), the carry-over
+of the defect, a loop over internal faces too. The pressure equation's coupled coefficient `coupled_gamma` and the pair
+mean of the body force read `gamma_p` on the two faces of a pair only, which (1) leaves equal. So **for the same cell
+values of `rAU` and `p`, every coefficient and every flux entry of a coupled face is bit for bit the default's** with the
+opt-in on. That is checked directly (P0).
+
+It does not follow that a run on a periodic set-up is unchanged, and the derivation says it is not: the opt-in acts on
+every internal face whose two cells have different `a_P / V`. The implicit part of every convection scheme of the library
+is upwind (`convection.rs`, head of the file), so `a_P` carries the outflow `sum max(phi_f, 0)`, which varies with the
+local speed. On TG-S (`N = 32`, `h = 0.196`, `dt = 0.05`) the time part per volume is `c0 / dt = 30`, the viscous part
+`4 nu / h^2 = 10.4`, the upwind part up to about `2 abs(u) / h = 10`: the diagonal varies by about a quarter from cell to
+cell. On the sector the cell sizes vary with the radius and the walls add their half-distance. So the runs with and without
+the opt-in differ from the first step, at internal faces, and bit equality of the runs is not a valid check. The run-level
+checks are therefore ADR 0076's own ratio limits, and the bit-equality check is at the operator level, where the
+derivation says the opt-in must be inert.
+
+Set-ups (copied, not re-invented): TG-S from `consistent_benchmarks_f301.rs` (ADR 0073's TG-S: `box_2d(32, 32, 2 pi, 2 pi)`
+periodic both ways, the Taylor-Green field shifted by 0.6, `nu = 0.1`, central convection, BDF2, PISO, momentum and
+pressure solves to `1e-12` relative, `1e-14` absolute, `t = 1`); SWIRL and SECT-M from `w35a_seam.rs` (`annulus_sector(16,
+16, 0.5, 1, pi/3, Uniform, 0.1)`, rotational pair `theta_min`/`theta_max`, no-slip walls, `nu = 0.02`, central, BDF2, `t =
+1`, the SECT-M source through the `step_with` hook; `coupled_body_pair_mean` off). The error measures are those files'
+(relative L2 of the cell velocity against the exact field; pressure with the volume means removed). "C" is the same run
+with `rhie_chow_step_consistent = true`, nothing else changed. The new file is
+`crates/rcfd-fv/tests/seam_no_harm_f344.rs`.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| P0 | unit test in `face_consistent.rs`, on `box_2d(8, 8, 1, 1)` periodic both ways and on `annulus_sector(8, 8, 0.5, 1, pi/3, Uniform, 0.1)` (rotational pair), with a varying positive `rAU` and a nonlinear `p`: `harmonic_face` and `face_interpolate` on every boundary face, `coupled_gamma` of both on every coupled face, and the flux of every boundary face after `add_lagged_gradient` (from a given flux) | bit for bit, every face |
+| P0n (negative control, in the same test) | the two face coefficients on the internal faces | differ by `>= 1e-6` relative on some face |
+| S3 (set-up) | TG-S default, `dt = 0.05`: the pressure and velocity errors of ADR 0076 (pressure `8.2130e-3`, final addendum; velocity `1.6869e-3 / 0.8028 = 2.101e-3` from its N1 row) | pressure in `[8.20e-3, 8.23e-3]`; velocity in `[2.09e-3, 2.11e-3]` |
+| N1s (ADR 0076 N1, TG-S rows) | TG-S PISO, `dt = 0.05, 0.025, 0.0125`: the exact velocity error and the exact pressure error of C over those of the default | `<= 1.05` each (6 comparisons) |
+| R4s (ADR 0076 R4) | SWIRL and SECT-M, PISO, `dt = 0.05, 0.025, 0.0125`: velocity and pressure errors of C over the default | `<= 1.05` each (12 comparisons) |
+| S4 (set-up) | SECT-M PIMPLE-4 (`n_outer = 4`, `alpha = 1`) default fine-pair order (0.025, 0.0125, against the same-arm `dt = 1/1280` reference): ADR 0076's `0.538` | in `[0.52, 0.56]` |
+| R2b (ADR 0076 R2b) | the same with C | in `[1.9, 2.3]` |
+| R2bn (no harm, the ratio form of R2b) | the two fine-pair errors against the reference, C over the default | `<= 1.05` each |
+| R4b (ADR 0080 B-R4, its PIMPLE-4 rows) | SECT-M PIMPLE-4, `dt = 0.05, 0.025, 0.0125`: velocity and pressure errors of C over the default | `<= 1.05` each (6 comparisons) |
+
+Printed, no limit: for every pair of runs the largest difference of the cell velocities of C and the default at `t = 1`,
+over the cells next to a seam and over the others; SECT-M PIMPLE-4 with C and `coupled_body_pair_mean` together (the
+order).
+
+**Predictions (mine, before any run), with the reasons.** P0 holds by construction. S3 and S4 hold (the default is
+unchanged since ADR 0076). N1s, R4s, R4b: met, ratios within a few percent of 1: the opt-in changes the internal faces by
+the step dependence it removes, which is small against the spatial error at these steps (on R, A3 was `1.004`). The
+pressure rows of TG-S are the least sure: ADR 0076 found the default's TG-S pressure error lower than TG's because seam
+errors cancel part of the spatial error, and the opt-in changes the internal faces next to the seam without changing the
+seam. **R2b: missed**, order well below 1.9: the SECT-M PIMPLE-4 floor is made at the seam (ADR 0076 Y5: the seam
+body-force coefficient; with F-G's seam terms and that coefficient both fixed the order was `2.02`; ADR 0080 B-R2b: with
+the coefficient fixed alone `0.531`), and the opt-in does not act on the seam (L2). R2bn met.
+
+**Reading, fixed now.** N1s, R4s, R4b and R2bn are the no-harm rows: a miss of any is a finding against the merge, kept as
+an ignored `*_known_miss` test with the limit intact, and the addendum says the merge should wait. R2b is ADR 0076's
+acceptance row for F-G, a row the opt-in is not built to move (L2); a miss there is recorded the same way, as a known miss
+with the limit intact, and reported plainly; it shows that the opt-in leaves the seam floor of ADR 0076 in place. If S3 or
+S4 is missed the set-up differs from ADR 0076's and the rows that depend on it are void, not judged.
+
+### B (repeated on the merged tree)
+
+The checks of B1 (amendment 1), on the merged tree, unedited: the F-344 test file; the F-322 files
+`consistent_value_f322.rs` and `consistent_extensions_f322.rs`; the files that pin default results (`w33b_default_bits`,
+`w33b_transient_order`, `w34b_lag`, `w34c_symmetry`, `w48v_corrector_control`, `consistent_correctors_f301`,
+`consistent_defaults_f301`, `piso_thin_gap_f299`, `ale_flows`, `ale_gcl`, every `overset_*` file); the unit tests of the
+crate; `cargo test -p rcfd-api --release --test baseline_hashes --test case_hashes_w48u --test consistent_defaults_case_f301`;
+and `immersed_solid_f219.rs` in full (its non-ignored tests, including the two long cylinder runs addendum 1 left
+unfinished; started on `10171174`, whose library files differ from the final tree only by the move of the fringe branch
+into a function, which no immersed-solid run calls). Limit: pass. The ignored tests of those files are not run.
