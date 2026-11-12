@@ -5792,10 +5792,22 @@ fixed by the item's registration ADR before any code.
     momentum), Q3 (enthalpy datum, constant latent heat), Q5 (where the solver wiring goes). Case-tree wiring (optional
     particles.evaporation and particles.breakup tables, ADR 0224 question 2) goes with F-252. Q5: the recommendation (a
     separate item) taken on the maintainer's standing instruction of 2026-11-11: F-326.
-- [ ] **F-324** Tet mesher: output validity check inside tetrahedralize
+- [x] **F-324** Tet mesher: output validity check inside tetrahedralize
   - depends on: F-306
-  - acceptance: tetrahedralize checks its output (every cell positive, volume equal to the enclosed volume) and returns a located error instead of an overlapping Ok; the F-306 sweep inputs still give identical meshes.
-  - note: From ADR 0228 question 3, recommendation taken: a small follow-up item.
+  - acceptance: tetrahedralize checks its output (every cell positive, volume equal to the enclosed volume) and returns
+    a located error instead of an overlapping Ok; the F-306 sweep inputs still give identical meshes.
+  - note: From ADR 0228 question 3, recommendation taken: a small follow-up item. DONE (ADR 0231, the registration of
+    F-324, 2026-11-12, merged 2026-11-12): every registered check is met after amendment 2 (a set-up defect of two
+    control tests, corrected before the corrected run); the acceptance is still the maintainer's (ADR 0231 Q1).
+    tetrahedralize ends with TetMesh::check_output: every cell positive by the exact orient3d, and the cell volumes
+    equal to the volume enclosed by the output surface within a rigorous rounding bound (Shewchuk's orient3d error bound
+    per simplex, Neumaier summation; about 1e-14 of the volume), else a located Error::Mesh naming the cell, or the
+    first face shared by more than two cells, with two cells on one side, or free but not on the surface. It reads the
+    mesh only: the 111 + 7 fold-free F-306 fingerprints, the R outputs and the existing suites are unchanged; with the
+    F-306 fold put back (MU1) the five overlapping Ok outputs of main become located errors and no overlapping Ok
+    remains. Cost: below 0.1 percent of the mesher's time (F12, F14). Four registered mutations failed their checks.
+    Open: ADR 0231 Q2 (face pairing on every run; the F-247 remesher's outputs), Q3 (the neighbour-link panics). Q2: the
+    recommendation (the remesher follow-up) taken on the maintainer's standing instruction of 2026-11-11: F-327.
 - [ ] **F-325** Tet mesher: Linux fingerprint records for the F-306 checks
   - depends on: F-306
   - acceptance: Fingerprints for the 118 fold-free inputs of the F-306 sweep are recorded on Linux by the ADR 0137 procedure at the next Linux gate, and the F-306 N1 checks compare them.
@@ -5809,3 +5821,8 @@ fixed by the item's registration ADR before any code.
     absent); a case without them is bit-identical.
   - note: From ADR 0230 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11 (a
     separate item, checked by conservation without a data set).
+- [ ] **F-327** F-247 remesher: run the tet output check on its outputs
+  - depends on: F-247, F-324
+  - acceptance: TetRemesher's output meshes pass TetMesh::check_output after every remeshing step, or the step returns
+    its located error; the remesh_f247 hashes stay unchanged.
+  - note: From ADR 0231 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
