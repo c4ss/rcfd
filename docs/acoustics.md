@@ -274,7 +274,48 @@ Limits:
 * The plain form at oblique incidence needs a thickness of many wavelengths (for 1 percent of a Gaussian pulse at 60
   degrees about 175 pulse widths).
 * Not on moving meshes: `step_ale` and `replace_mesh` return an error while a sponge is set.
-* An isolated pulse at 60 degrees was not run (about two million cells); 60 degrees is checked with pulse trains.
+* An isolated pulse at 60 degrees was not run in ADR 0237; ADR 0248 ran it (next section).
+
+### The shifted matched form, corners, damping along the layer (F-340, ADR 0248; library only)
+
+`SpongeForm::MatchedShifted(MatchedOptions { normal, shift, along, second })` is the matched form with three opt-in
+additions; `Plain` and `Matched` are unchanged, bit for bit. Every check with its limit and measured value is in
+[ADR 0248](adr/0248-f340-registration-matched-sponge-shift-corner-and-damping-along-the-layer.md).
+
+| Option | What it does | What it costs |
+|---|---|---|
+| `shift` = `a` [1/s] (the complex frequency shift) | the memories decay, `dQ/dt = p - p_ref - a Q`: under a pressure that is held the memory and the force along the layer stay bounded (`p'/a`), and a wrong start of the memory is forgotten after a few `1/a` | the attenuation exponent is multiplied by `omega^2/(a^2 + omega^2)`: below `omega ~ a` the layer does not absorb, and it no longer pulls a static pressure to the reference. Keep `a` well below the lowest frequency of interest; the checks use `a = 0.05 c/L` (0.25/s) |
+| `second` (a second planar layer, normal orthogonal to the first) | two layers that overlap in a corner absorb there as well (`Sponge::corner`); the same memory `Q`, one product term in mass and energy, the force of each layer on the momentum along the other's normal | nothing in the equations; one more memory for an edge in three dimensions (built, checked by algebra only) |
+| `along` = `beta` (damping of the momentum along the layer, a fraction of the layer rate) | damps waves that run along the layer | **a mismatch**: it reflects about `1.3 beta` of a pulse arriving at 60 degrees, `0.34 beta` at 45, `0.10 beta` at 30 (model); `beta = 0.05` measured 4.4 percent of a train at 60 degrees. Leave it at zero unless the ringing matters more than the oblique reflection |
+
+`Sponge::planar_shifted(geom, reference, &layer, shift, along)` builds one layer, `Sponge::corner(geom, reference, &layer1,
+&layer2, shift, along)` two. A restart, or a start with a wave already inside the layer, sets the memories with
+`set_sponge_memories` (`q`, `r` and the momentum memory `m`).
+
+What was checked with `shift = 0.25`, `along = 0` on the 40-cell layer (limit 1 percent):
+
+* normal incidence: `9.4e-7` in front of the Thompson boundary, `1.2e-6` in front of a rigid wall;
+* one isolated plane pulse above a rigid wall: `2.3e-5` at 30 degrees, `1.4e-4` at 45 degrees, **`8.1e-4` at 60 degrees** (the
+  matched form of ADR 0237 in the same run: `8.0e-4`);
+* trains in a rigid duct started in the layer's steady state: `3.1e-4`, `3.6e-4`, `1.3e-3` at 30, 45, 60 degrees;
+* a quarter of a cylindrical pulse leaving through two layers and their corner: `5.3e-5` (no sponge: 0.058; one layer
+  only: 0.029);
+* a closed box with a pressure offset that varies along the layer, 100 transit times of the layer: the momentum along
+  the layer stays below `3.0 delta/c` and does not grow (the form of ADR 0237 in the same run: `3.2 delta/c`, no growth
+  either);
+* without the options the shifted form produces the bits of `Matched`.
+
+What it does not do:
+
+* **It does not remove the ringing of a rigid duct.** A wave train started inside the layer with zero memory still
+  leaves 3.7, 6.1 and 8.6 percent at 30, 45 and 60 degrees in the window of the ADR 0237 set-up (2.2, 3.6, 4.2 percent
+  with `along = 0.05`). The ringing sits at the cut-off frequencies of the duct; a field that does not vary across the
+  layer solves the equations of any matched layer, so no matched layer damps it, and a damping along the layer strong
+  enough to remove it within one or two periods reflects far more than 1 percent at 45 and 60 degrees. Start with a
+  quiet layer or set the memories.
+* Three layers meeting in a corner of a three-dimensional box are not built.
+* As before: reference at rest, explicit source, not on moving meshes, not together with a mass-spring-damper wall,
+  Cartesian grids only checked.
 
 ## Reference: code locations, input format and command line
 
@@ -290,7 +331,7 @@ Limits:
 | CLI | `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) |
 | Impedance and quiet boundaries of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`impedance_wall`), `CompBc::Impedance` |
 | Mass-spring-damper wall of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`MsdWall`, `piston_face`), `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`, `msd_dt_limit` |
-| Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory` |
+| Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory`, `sponge_memories`, `set_sponge_memories`; the shifted form: `MatchedOptions`, `Sponge::planar_shifted`, `Sponge::corner` |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 

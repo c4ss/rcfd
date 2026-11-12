@@ -12,6 +12,12 @@
 //! differential equations it reflects nothing at any angle; a wave returns with the reflection of the boundary behind
 //! the layer times `R0^cos(theta)`, `R0` the two-way attenuation at normal incidence.
 //!
+//! [`SpongeForm::MatchedShifted`] (F-340, ADR 0248) is the matched form with three opt-in additions: a complex frequency
+//! shift `a` (the memory decays, `dQ/dt = p - p_ref - a Q`, so the layer stays bounded at zero frequency and no longer
+//! absorbs below `omega ~ a`; ADR 0248 DR11), a second planar layer with an orthogonal normal (a corner, DR9) and a
+//! damping of the momentum along the layer (`along`, a fraction of the layer rate; it is a mismatch and reflects about
+//! `1.3 along` of a pulse arriving at 60 degrees, DR12).
+//!
 //! The source is explicit: `rate dt` must stay well below 2.5 (SSP-RK3).
 
 use crate::geometry::FvGeometry;
@@ -29,6 +35,35 @@ pub enum SpongeForm {
         /// Unit normal of the layer, pointing from the interior into the layer.
         normal: Vec3,
     },
+    /// The matched form with a frequency shift, an optional second layer and an optional damping along the layer
+    /// (F-340, ADR 0248); needs a reference state at rest.
+    MatchedShifted(MatchedOptions),
+}
+
+/// The options of [`SpongeForm::MatchedShifted`] (ADR 0248 E1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MatchedOptions {
+    /// Unit normal of the layer whose rates are [`Sponge::rate`], pointing from the interior into the layer.
+    pub normal: Vec3,
+    /// The frequency shift `a` [1/s], finite and `>= 0`: the decay rate of the memories. Zero is the form without decay.
+    pub shift: f64,
+    /// The damping of the momentum along the layer as a fraction of the layer rate, finite and `>= 0` (zero: none).
+    pub along: f64,
+    /// A second planar layer whose normal is orthogonal to `normal` (a corner of two layers); its rates are evaluated
+    /// at the cell centres when the sponge is set.
+    pub second: Option<SpongeLayer>,
+}
+
+/// The memories of [`SpongeForm::MatchedShifted`], one value per cell: `q` of `p - p_ref`, `r` of `q` and `m` of the
+/// momentum, each with the decay `shift` (ADR 0248 DR11, DR14).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct SpongeMemories {
+    /// `dq/dt = p - p_ref - shift q`.
+    pub q: Vec<f64>,
+    /// `dr/dt = q - shift r`.
+    pub r: Vec<f64>,
+    /// `dm/dt = momentum - shift m`.
+    pub m: Vec<Vec3>,
 }
 
 /// A sponge: the reference state, one damping rate [1/s] per cell (zero outside the layer) and the form.
@@ -150,6 +185,64 @@ impl Sponge {
         Ok(sponge)
     }
 
+    /// The sponge of one planar layer in the shifted matched form (ADR 0248): frequency shift `shift` [1/s] and the
+    /// damping along the layer `along` (a fraction of the rate).
+    pub fn planar_shifted(
+        geom: &FvGeometry,
+        reference: Prim,
+        layer: &SpongeLayer,
+        shift: f64,
+        along: f64,
+    ) -> Result<Self> {
+        let normal = layer.check()?;
+        let sponge = Self {
+            reference,
+            rate: layer.rates(geom)?,
+            form: SpongeForm::MatchedShifted(MatchedOptions {
+                normal,
+                shift,
+                along,
+                second: None,
+            }),
+        };
+        sponge.validate(geom.n_cells())?;
+        Ok(sponge)
+    }
+
+    /// The sponge of two planar layers with orthogonal normals that overlap in a corner, in the shifted matched form
+    /// (ADR 0248 DR9).
+    pub fn corner(
+        geom: &FvGeometry,
+        reference: Prim,
+        first: &SpongeLayer,
+        second: &SpongeLayer,
+        shift: f64,
+        along: f64,
+    ) -> Result<Self> {
+        let normal = first.check()?;
+        let sponge = Self {
+            reference,
+            rate: first.rates(geom)?,
+            form: SpongeForm::MatchedShifted(MatchedOptions {
+                normal,
+                shift,
+                along,
+                second: Some(*second),
+            }),
+        };
+        sponge.validate(geom.n_cells())?;
+        Ok(sponge)
+    }
+
+    /// The rates of the second layer of the shifted form at the cell centres of `geom`; zero in every cell for the
+    /// other forms and without a second layer.
+    pub fn second_rates(&self, geom: &FvGeometry) -> Result<Vec<f64>> {
+        match self.form {
+            SpongeForm::MatchedShifted(MatchedOptions { second: Some(l), .. }) => l.rates(geom),
+            _ => Ok(vec![0.0; geom.n_cells()]),
+        }
+    }
+
     /// Check the sponge against a mesh of `n_cells` cells: one finite rate `>= 0` per cell, a reference with positive
     /// finite density and pressure and a finite velocity; for the matched form a unit normal and a reference at rest.
     pub fn validate(&self, n_cells: usize) -> Result<()> {
@@ -181,6 +274,24 @@ impl Sponge {
             }
             if r.u != [0.0; 3] {
                 return fail("the matched form is derived for a reference state at rest; use the plain form".into());
+            }
+        }
+        if let SpongeForm::MatchedShifted(o) = self.form {
+            let len = vec3::norm(o.normal);
+            if !len.is_finite() || (len - 1.0).abs() > 1e-12 {
+                return fail("the matched form needs a unit normal".into());
+            }
+            if r.u != [0.0; 3] {
+                return fail("the matched form is derived for a reference state at rest; use the plain form".into());
+            }
+            if !(o.shift.is_finite() && o.shift >= 0.0 && o.along.is_finite() && o.along >= 0.0) {
+                return fail("the shift and the damping along the layer must be finite and >= 0".into());
+            }
+            if let Some(l) = o.second {
+                let n2 = l.check()?;
+                if vec3::dot(o.normal, n2).abs() > 1e-12 {
+                    return fail("the normal of the second layer must be orthogonal to the first".into());
+                }
             }
         }
         Ok(())
@@ -244,8 +355,134 @@ pub(crate) fn add_source(
                 }
             }
         }
+        // the shifted form has its own routine, `add_source_shifted`
+        SpongeForm::MatchedShifted(_) => {}
     }
     qdot
+}
+
+/// Green-Gauss sum of `(q_f - q_c) S_f` per cell: the face value is the mean on a face between two cells for which
+/// `inside` holds and the cell's own value elsewhere (ADR 0237 D2).
+fn layer_gradient_sum(geom: &FvGeometry, q: &[f64], inside: &dyn Fn(usize) -> bool) -> Vec<Vec3> {
+    let mesh = &geom.mesh;
+    let (own, nei) = (mesh.owner(), mesh.neighbour());
+    let sf = mesh.face_area_vectors();
+    let mut g = vec![[0.0; 3]; q.len()];
+    for f in 0..geom.n_internal {
+        let (o, nb) = (own[f], nei[f]);
+        if inside(o) && inside(nb) {
+            let h = 0.5 * (q[nb] - q[o]);
+            vec3::axpy(&mut g[o], h, sf[f]);
+            vec3::axpy(&mut g[nb], h, sf[f]);
+        }
+    }
+    g
+}
+
+/// The source of [`SpongeForm::MatchedShifted`] (ADR 0248 DR14): add it for the state `u` with the memories `mem` to
+/// the residual per unit volume `res` and return the time derivatives of the memories (zero outside the layers).
+/// `rate2` holds the rates of the second layer (all zero without one). With one layer, `shift = 0` and `along = 0` the
+/// arithmetic on the state and on `q` is that of [`SpongeForm::Matched`], operation for operation.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn add_source_shifted(
+    geom: &FvGeometry,
+    gas: Gas,
+    sponge: &Sponge,
+    opts: &MatchedOptions,
+    rate2: &[f64],
+    u: &[Cons],
+    mem: &SpongeMemories,
+    res: &mut [Cons],
+) -> SpongeMemories {
+    let rate = &sponge.rate;
+    let n_cells = u.len();
+    let mut dot = SpongeMemories {
+        q: vec![0.0; n_cells],
+        r: vec![0.0; n_cells],
+        m: vec![[0.0; 3]; n_cells],
+    };
+    let uref = sponge.reference.to_cons(gas);
+    let n = opts.normal;
+    let (a, beta) = (opts.shift, opts.along);
+    let c2 = gas.gamma * sponge.reference.p / sponge.reference.rho;
+    let gm1 = gas.gamma - 1.0;
+    let vol = geom.mesh.cell_volumes();
+    let Some(second) = opts.second else {
+        // one layer: the statements of the matched form, plus the terms of the shift and of the damping along the
+        // layer where they are not zero
+        let g = layer_gradient_sum(geom, &mem.q, &|c| rate[c] > 0.0);
+        for c in 0..n_cells {
+            let s = rate[c];
+            if s > 0.0 {
+                let prim = to_prim(gas, &u[c]);
+                let grad = vec3::scale(g[c], 1.0 / vol[c]);
+                let mut force = vec3::scale(vec3::sub(grad, vec3::scale(n, vec3::dot(grad, n))), -s);
+                let m = [u[c][1] - uref[1], u[c][2] - uref[2], u[c][3] - uref[3]];
+                let mut mn = vec3::dot(m, n);
+                if beta != 0.0 {
+                    for i in 0..3 {
+                        force[i] -= beta * s * (m[i] - mn * n[i]);
+                    }
+                }
+                let (mut d_rho, mut d_e, mut d_p) = (u[c][0] - uref[0], u[c][4] - uref[4], prim.p - sponge.reference.p);
+                if a != 0.0 {
+                    mn -= a * vec3::dot(mem.m[c], n);
+                    d_rho -= a * mem.q[c] / c2;
+                    d_e -= a * mem.q[c] / gm1;
+                    d_p -= a * mem.q[c];
+                }
+                res[c][0] -= s * d_rho;
+                for i in 0..3 {
+                    res[c][1 + i] += force[i] - s * mn * n[i];
+                }
+                res[c][4] += vec3::dot(prim.u, force) - s * d_e;
+                dot.q[c] = d_p;
+                dot.r[c] = mem.q[c] - a * mem.r[c];
+                for i in 0..3 {
+                    dot.m[c][i] = m[i] - a * mem.m[c][i];
+                }
+            }
+        }
+        return dot;
+    };
+    // two layers with orthogonal normals (DR9, DR11, DR14); the second normal is valid by `Sponge::validate`
+    let n2 = vec3::scale(second.normal, 1.0 / vec3::norm(second.normal));
+    let e3 = vec3::cross(n, n2);
+    let inside = |c: usize| rate[c] + rate2[c] > 0.0;
+    let gq = layer_gradient_sum(geom, &mem.q, &inside);
+    let gr = layer_gradient_sum(geom, &mem.r, &inside);
+    for c in 0..n_cells {
+        let (s1, s2) = (rate[c], rate2[c]);
+        if s1 + s2 > 0.0 {
+            let prim = to_prim(gas, &u[c]);
+            let grad_q = vec3::scale(gq[c], 1.0 / vol[c]);
+            let grad_r = vec3::scale(gr[c], 1.0 / vol[c]);
+            let m = [u[c][1] - uref[1], u[c][2] - uref[2], u[c][3] - uref[3]];
+            let (m1, m2) = (vec3::dot(m, n), vec3::dot(m, n2));
+            let (q, r) = (mem.q[c], mem.r[c]);
+            let f1 = -s2 * vec3::dot(grad_q, n);
+            let f2 = -s1 * vec3::dot(grad_q, n2);
+            let f3 = -((s1 + s2) * vec3::dot(grad_q, e3) + s1 * s2 * vec3::dot(grad_r, e3));
+            let mut force = [0.0; 3];
+            for i in 0..3 {
+                force[i] =
+                    f1 * n[i] + f2 * n2[i] + f3 * e3[i] - beta * (s1 * (m[i] - m1 * n[i]) + s2 * (m[i] - m2 * n2[i]));
+            }
+            let (mem1, mem2) = (vec3::dot(mem.m[c], n), vec3::dot(mem.m[c], n2));
+            res[c][0] -= (s1 + s2) * (u[c][0] - uref[0] - a * q / c2) + s1 * s2 * (q - a * r) / c2;
+            for i in 0..3 {
+                res[c][1 + i] += force[i] - s1 * (m1 - a * mem1) * n[i] - s2 * (m2 - a * mem2) * n2[i];
+            }
+            res[c][4] +=
+                vec3::dot(prim.u, force) - (s1 + s2) * (u[c][4] - uref[4] - a * q / gm1) - s1 * s2 * (q - a * r) / gm1;
+            dot.q[c] = prim.p - sponge.reference.p - a * q;
+            dot.r[c] = q - a * r;
+            for i in 0..3 {
+                dot.m[c][i] = m[i] - a * mem.m[c][i];
+            }
+        }
+    }
+    dot
 }
 
 #[cfg(test)]
@@ -442,5 +679,307 @@ mod tests {
             }
             assert_eq!(qdot[c], 0.0);
         }
+    }
+}
+
+/// Unit tests of the shifted matched form (F-340, ADR 0248): F2, F3, F4 and the layer part of S3.
+#[cfg(test)]
+mod tests_f340 {
+    use super::*;
+    use rcfd_mesh::gen::{box_2d, box_mesh, Grading};
+    use std::sync::Arc;
+
+    const AIR: Gas = Gas { gamma: 1.4 };
+    const REFERENCE: Prim = Prim {
+        rho: 1.2,
+        u: [0.0; 3],
+        p: 0.9,
+    };
+
+    fn rel(got: f64, want: f64) -> f64 {
+        (got - want).abs() / if want != 0.0 { want.abs() } else { 1.0 }
+    }
+
+    /// F2 of ADR 0248: the source of DR14 with one layer on a prescribed field (the set-up of F1 of ADR 0237 with a
+    /// shift, a damping along the layer and given memories).
+    #[test]
+    fn f2_shifted_source_with_one_layer_on_a_prescribed_field() {
+        let (nx, ny) = (6, 8);
+        let g = FvGeometry::new(Arc::new(box_2d(nx, ny, 0.6, 0.8, false, false).unwrap())).unwrap();
+        let (rate, b, a, beta) = (3.0, 0.7, 0.25, 0.05);
+        let opts = MatchedOptions {
+            normal: [1.0, 0.0, 0.0],
+            shift: a,
+            along: beta,
+            second: None,
+        };
+        let sponge = Sponge {
+            reference: REFERENCE,
+            rate: vec![rate; g.n_cells()],
+            form: SpongeForm::MatchedShifted(opts),
+        };
+        sponge.validate(g.n_cells()).unwrap();
+        let rate2 = sponge.second_rates(&g).unwrap();
+        assert!(rate2.iter().all(|r| *r == 0.0));
+        let state = Prim {
+            rho: 1.3,
+            u: [0.2, -0.15, 0.0],
+            p: 1.1,
+        };
+        let cons = state.to_cons(AIR);
+        let uref = REFERENCE.to_cons(AIR);
+        let u = vec![cons; g.n_cells()];
+        let cc = g.mesh.cell_centres();
+        let (r_mem, m_mem) = (0.4, [0.3, -0.2, 0.0]);
+        let mem = SpongeMemories {
+            q: cc.iter().map(|x| b * x[1]).collect(),
+            r: vec![r_mem; g.n_cells()],
+            m: vec![m_mem; g.n_cells()],
+        };
+        let mut res = vec![[0.0; 5]; g.n_cells()];
+        let dot = add_source_shifted(&g, AIR, &sponge, &opts, &rate2, &u, &mem, &mut res);
+        let c2 = AIR.gamma * REFERENCE.p / REFERENCE.rho;
+        let force_y = -rate * b - beta * rate * cons[2];
+        let (mut worst, mut seen) = (0.0f64, 0);
+        for c in 0..g.n_cells() {
+            if !(cc[c][1] > 0.1 && cc[c][1] < 0.7) {
+                continue;
+            }
+            seen += 1;
+            let q = mem.q[c];
+            let want = [
+                -rate * (cons[0] - uref[0] - a * q / c2),
+                -rate * (cons[1] - a * m_mem[0]),
+                force_y,
+                0.0,
+                -rate * (cons[4] - uref[4] - a * q / 0.4) + state.u[1] * force_y,
+            ];
+            for k in 0..5 {
+                worst = worst.max(rel(res[c][k], want[k]));
+            }
+            worst = worst.max(rel(dot.q[c], state.p - REFERENCE.p - a * q));
+            worst = worst.max(rel(dot.r[c], q - a * r_mem));
+            for i in 0..3 {
+                worst = worst.max(rel(dot.m[c][i], cons[1 + i] - a * m_mem[i]));
+            }
+        }
+        println!("F2 {seen} interior cells: largest deviation {worst:.2e} (limit 1e-12)");
+        assert_eq!(seen, nx * (ny - 2));
+        assert!(worst <= 1e-12, "{worst}");
+    }
+
+    /// F3 of ADR 0248: the source of DR14 with two layers on a three-dimensional grid (uniform rates 3 and 2, normals
+    /// `x` and `y`, `q` and `r` linear in the three coordinates).
+    #[test]
+    fn f3_shifted_source_with_two_layers_on_a_prescribed_field() {
+        let g = FvGeometry::new(Arc::new(
+            box_mesh([5, 5, 5], [1.0, 1.0, 1.0], [Grading::Uniform; 3]).unwrap(),
+        ))
+        .unwrap();
+        let (s1, s2, a, beta) = (3.0, 2.0, 0.25, 0.05);
+        let opts = MatchedOptions {
+            normal: [1.0, 0.0, 0.0],
+            shift: a,
+            along: beta,
+            second: Some(SpongeLayer {
+                origin: [0.0, -10.0, 0.0],
+                normal: [0.0, 3.0, 0.0],
+                thickness: 1.0,
+                rate_max: s2,
+                exponent: 0.0,
+            }),
+        };
+        let sponge = Sponge {
+            reference: REFERENCE,
+            rate: vec![s1; g.n_cells()],
+            form: SpongeForm::MatchedShifted(opts),
+        };
+        sponge.validate(g.n_cells()).unwrap();
+        let rate2 = sponge.second_rates(&g).unwrap();
+        assert!(rate2.iter().all(|r| *r == s2));
+        let state = Prim {
+            rho: 1.3,
+            u: [0.2, -0.15, 0.1],
+            p: 1.1,
+        };
+        let cons = state.to_cons(AIR);
+        let uref = REFERENCE.to_cons(AIR);
+        let u = vec![cons; g.n_cells()];
+        let cc = g.mesh.cell_centres();
+        let (bq, br, m_mem) = ([0.7, -0.4, 0.5], [-0.3, 0.6, 0.2], [0.3, -0.2, 0.15]);
+        let mem = SpongeMemories {
+            q: cc.iter().map(|x| 0.1 + vec3::dot(bq, *x)).collect(),
+            r: cc.iter().map(|x| -0.2 + vec3::dot(br, *x)).collect(),
+            m: vec![m_mem; g.n_cells()],
+        };
+        let mut res = vec![[0.0; 5]; g.n_cells()];
+        let dot = add_source_shifted(&g, AIR, &sponge, &opts, &rate2, &u, &mem, &mut res);
+        let c2 = AIR.gamma * REFERENCE.p / REFERENCE.rho;
+        let force = [
+            -s2 * bq[0] - beta * s2 * cons[1],
+            -s1 * bq[1] - beta * s1 * cons[2],
+            -((s1 + s2) * bq[2] + s1 * s2 * br[2]) - beta * (s1 + s2) * cons[3],
+        ];
+        let (mut worst, mut seen) = (0.0f64, 0);
+        for c in 0..g.n_cells() {
+            if !cc[c].iter().all(|x| *x > 0.2 && *x < 0.8) {
+                continue;
+            }
+            seen += 1;
+            let (q, r) = (mem.q[c], mem.r[c]);
+            let want = [
+                -(s1 + s2) * (cons[0] - uref[0] - a * q / c2) - s1 * s2 * (q - a * r) / c2,
+                force[0] - s1 * (cons[1] - a * m_mem[0]),
+                force[1] - s2 * (cons[2] - a * m_mem[1]),
+                force[2],
+                vec3::dot(state.u, force) - (s1 + s2) * (cons[4] - uref[4] - a * q / 0.4) - s1 * s2 * (q - a * r) / 0.4,
+            ];
+            for k in 0..5 {
+                worst = worst.max(rel(res[c][k], want[k]));
+            }
+            worst = worst.max(rel(dot.q[c], state.p - REFERENCE.p - a * q));
+            worst = worst.max(rel(dot.r[c], q - a * r));
+        }
+        println!("F3 {seen} interior cells: largest deviation {worst:.2e} (limit 1e-12)");
+        assert_eq!(seen, 27);
+        assert!(worst <= 1e-12, "{worst}");
+    }
+
+    /// F4 of ADR 0248 (clause 2 of F-340, the held pressure): with the shift the memory tends to the pressure offset
+    /// over `a` and the force along the layer stays bounded; in the form of ADR 0237 the memory grows linearly.
+    #[test]
+    fn f4_held_pressure_gives_a_bounded_memory_with_the_shift() {
+        let g = FvGeometry::new(Arc::new(box_2d(6, 8, 0.6, 0.8, false, false).unwrap())).unwrap();
+        let (rate, a, d, grad) = (3.0, 0.25, 1e-3, 0.8);
+        let cc = g.mesh.cell_centres();
+        let dp: Vec<f64> = cc.iter().map(|x| d * (1.0 + grad * x[1])).collect();
+        let u: Vec<Cons> = dp
+            .iter()
+            .map(|dp| {
+                Prim {
+                    p: REFERENCE.p + dp,
+                    ..REFERENCE
+                }
+                .to_cons(AIR)
+            })
+            .collect();
+        let opts = MatchedOptions {
+            normal: [1.0, 0.0, 0.0],
+            shift: a,
+            along: 0.0,
+            second: None,
+        };
+        let shifted = Sponge {
+            reference: REFERENCE,
+            rate: vec![rate; g.n_cells()],
+            form: SpongeForm::MatchedShifted(opts),
+        };
+        let old = Sponge {
+            form: SpongeForm::Matched {
+                normal: [1.0, 0.0, 0.0],
+            },
+            ..shifted.clone()
+        };
+        let rate2 = shifted.second_rates(&g).unwrap();
+        let mut mem = SpongeMemories {
+            q: vec![0.0; g.n_cells()],
+            r: vec![0.0; g.n_cells()],
+            m: vec![[0.0; 3]; g.n_cells()],
+        };
+        let mut q_old = vec![0.0; g.n_cells()];
+        let (dt, steps) = (1e-3, 20_000);
+        let mut res = vec![[0.0; 5]; g.n_cells()];
+        for _ in 0..steps {
+            let dot = add_source_shifted(&g, AIR, &shifted, &opts, &rate2, &u, &mem, &mut res);
+            let qd = add_source(&g, AIR, &old, &u, &q_old, &mut res);
+            for c in 0..g.n_cells() {
+                mem.q[c] += dt * dot.q[c];
+                q_old[c] += dt * qd[c];
+            }
+        }
+        let t = dt * steps as f64;
+        let level = 1.0 - (-a * t).exp();
+        let mut res = vec![[0.0; 5]; g.n_cells()];
+        add_source_shifted(&g, AIR, &shifted, &opts, &rate2, &u, &mem, &mut res);
+        let (mut worst_q, mut worst_f, mut worst_old) = (0.0f64, 0.0f64, 0.0f64);
+        for c in 0..g.n_cells() {
+            worst_q = worst_q.max((mem.q[c] * a / dp[c] / level - 1.0).abs());
+            worst_old = worst_old.max((q_old[c] / (dp[c] * t) - 1.0).abs());
+            if cc[c][1] > 0.1 && cc[c][1] < 0.7 {
+                worst_f = worst_f.max((res[c][2] / (-(rate / a) * d * grad * level) - 1.0).abs());
+            }
+        }
+        println!(
+            "F4 t = {t}: shifted memory against its closed form {worst_q:.2e}, force along the layer against its bound {worst_f:.2e} (limit 1e-3 each); form of ADR 0237: memory against offset times t {worst_old:.2e} (1e-9)"
+        );
+        assert!(worst_q <= 1e-3, "{worst_q}");
+        assert!(worst_f <= 1e-3, "{worst_f}");
+        assert!(worst_old <= 1e-9, "{worst_old}");
+    }
+
+    /// S3 of ADR 0248 (the part without a solver): invalid options of the shifted form are refused.
+    #[test]
+    fn s3_invalid_options_of_the_shifted_form_are_refused() {
+        let g = FvGeometry::new(Arc::new(box_2d(8, 4, 1.0, 0.5, false, false).unwrap())).unwrap();
+        let first = SpongeLayer {
+            origin: [0.5, 0.0, 0.0],
+            normal: [1.0, 0.0, 0.0],
+            thickness: 0.5,
+            rate_max: 10.0,
+            exponent: 2.0,
+        };
+        let second = SpongeLayer {
+            origin: [0.0, 0.25, 0.0],
+            normal: [0.0, 2.0, 0.0],
+            ..first
+        };
+        assert!(Sponge::planar_shifted(&g, REFERENCE, &first, 0.25, 0.0).is_ok());
+        assert!(Sponge::planar_shifted(&g, REFERENCE, &first, 0.0, 0.05).is_ok());
+        let corner = Sponge::corner(&g, REFERENCE, &first, &second, 0.25, 0.0).unwrap();
+        let rate2 = corner.second_rates(&g).unwrap();
+        assert_eq!(rate2.iter().filter(|r| **r > 0.0).count(), 16);
+        for bad in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(
+                Sponge::planar_shifted(&g, REFERENCE, &first, bad, 0.0).is_err(),
+                "shift {bad}"
+            );
+            assert!(
+                Sponge::planar_shifted(&g, REFERENCE, &first, 0.25, bad).is_err(),
+                "along {bad}"
+            );
+        }
+        let moving = Prim {
+            u: [0.1, 0.0, 0.0],
+            ..REFERENCE
+        };
+        assert!(Sponge::planar_shifted(&g, moving, &first, 0.25, 0.0).is_err());
+        for bad in [
+            SpongeLayer {
+                normal: [0.0; 3],
+                ..second
+            },
+            SpongeLayer {
+                thickness: 0.0,
+                ..second
+            },
+            SpongeLayer {
+                normal: [1.0, 1.0, 0.0],
+                ..second
+            },
+            SpongeLayer {
+                normal: [1.0, 0.0, 0.0],
+                ..second
+            },
+        ] {
+            assert!(
+                Sponge::corner(&g, REFERENCE, &first, &bad, 0.25, 0.0).is_err(),
+                "{bad:?}"
+            );
+        }
+        let mut skew = corner.clone();
+        if let SpongeForm::MatchedShifted(o) = &mut skew.form {
+            o.normal = [0.5, 0.0, 0.0];
+        }
+        assert!(skew.validate(g.n_cells()).is_err());
     }
 }
