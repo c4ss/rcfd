@@ -6095,14 +6095,24 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     rcfd_fv::adaptive exists in the library only; the key needs crates/rcfd-api/src/schema.rs and sim.rs. Absent key =
     today's path bit for bit.
-- [ ] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
+- [~] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
   - depends on: F-102
   - acceptance: Each criterion has a closed-form marking check, and a target-count run lands within 10 percent of its
     target on the ADR 0242 cavity; on a case with a localised feature the adapted mesh reaches the fine solution's error
     with at most half the cells of the uniform mesh that reaches it.
-  - note: From ADR 0242 R2 and R3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Criteria
-    not yet built; merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here
-    until split.
+  - note: PARTIAL (ADR 0247): opt-in criteria in rcfd_fv::adaptive with closed-form marking checks: target cell count
+    (target_count_marks, geometric target_schedule, run_adaptive_simple_target), edge-length weighting (cell_extents,
+    edge_length_weighted_indicator, velocity_edge_length_indicator with exponent r), registers (Register from mask,
+    region indicator, field range or levels, with and, or, complement and face-neighbour growth; register_marks,
+    restrict_marks) and the loop with any marks (run_adaptive_simple_marked; run_adaptive_simple and _with unchanged bit
+    for bit). Target-count runs on the ADR 0242 cavity land at 2307 for 2304 and 4611 for 4608 (limit 10 percent).
+    Suction-layer case (Couette flow with transpiration, R = 80, closed form): the adapted mesh (16 x 16 base, five
+    target-count cycles, 3841 cells) has error 0.0116 against 0.0439 for the uniform 128 x 128 (16384 cells); the
+    uniform 90 x 90 (8100 cells) misses it (0.0846); the inverted indicator gives 1.20. ADR 0242's surviving MU6 is now
+    caught. Not delivered: anisotropic (directional) refinement, which needs per-axis levels in the lattice (follow-up);
+    merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here until split.
+    Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new
+    options join F-342's case key (R3).
 - [ ] **F-344** BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step
   - depends on: F-338
   - acceptance: The remainder of PimpleSolver::step with BDF2 and three outer iterations on a mesh at rest (max
@@ -6137,3 +6147,11 @@ fixed by the item's registration ADR before any code.
   - note: Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux
     card layout is specified in the repository, so none was written. NEEDS THE USER: an open specification of the card
     has to be placed in the repository first (clean-room rule).
+- [ ] **F-348** Anisotropic (directional) refinement: a lattice with per-axis levels
+  - depends on: F-343
+  - acceptance: A lattice with per-axis refinement levels gives valid closed meshes for random directional marks
+    (validate, closure, volume) and transfers linear fields exactly; on the ADR 0247 suction layer a directional run
+    reaches the isotropic adapted error E(A) with at most half of its 3841 cells; the isotropic AmrMesh paths stay bit
+    for bit.
+  - note: From ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. A Leaf has one
+    level for every axis, so this is a second lattice type in rcfd_mesh::adapt.
