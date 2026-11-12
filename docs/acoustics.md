@@ -23,14 +23,16 @@ For every check with its limit and measured value read [ADR 0066](adr/0066-wave3
 * No quadrupole.
 * No refraction or scattering by the body or casing (free field).
 * The uniform flow is the only mean flow.
-* No installation effects, ducted propagation, or modal content.
+* No installation effects. Ducted propagation and modal content only through the separate wave solver and modal
+  analysis of ADR 0351, which is not coupled to the FW-H chain.
 * Pressure data sampled by the CFD run must resolve the blade-passing frequency and its harmonics (the FW-H result is
   only as good as the sampled surface pressure).
 * A steady RANS run gives no tonal pressure history.
 
 An acoustic impedance boundary, quiet boundary and acoustic wave solver are not part of this wave. The impedance and
 quiet boundaries were added later as library code (section "Impedance and quiet boundaries of the compressible solver");
-the wave solver does not exist.
+a linear acoustic wave solver with sponge layers and the modal analysis of duct fields were added as library code in
+ADR 0351 (section "Acoustic wave solver and duct modes"). None of them is coupled to a CFD run.
 
 ## FW-H solver
 
@@ -364,6 +366,66 @@ rest. The plain form has no memory, so both attached frames give it the same bit
 * Limits: the lab memory is derived for a translation along a planar layer. With a normal component of the motion, or
   with a rotation, the attached rates move through the lab, and the matched forms on a rotating mesh are still not built.
 
+## Acoustic wave solver and duct modes (F-333, ADR 0351; library only)
+
+`rcfd-fv` `acoustic_wave.rs` solves the linear acoustic equations about a medium at rest, `p_t + rho0 c^2 div u = 0`,
+`rho0 u_t + grad p = 0`, on any finite-volume mesh (`AcousticWaveSolver::new(geom, Medium { rho0, c }, &bcs)`). It is the
+small-amplitude limit of the compressible solver about a gas at rest, with two unknowns instead of five, so it carries
+sound along a duct much more cheaply. It is not coupled to a CFD run: the sound enters through a driven boundary. Every
+check with its limit and measured value is in
+[ADR 0351](adr/0351-f333-registration-acoustic-wave-solver-and-modal-export.md).
+
+* Scheme: the exact Riemann flux of the linear system, values reconstructed to the faces with an unlimited least-squares
+  gradient, SSP-RK3 with the step chosen by the caller. `max_dt(cfl)` gives the step for the multi-dimensional number
+  `c dt sum(1/dx)`; the checks run at 0.48.
+* Boundaries per patch: `WaveBc::Wall` (hard wall or symmetry), `WaveBc::Open` (characteristic, ambient outside: quiet
+  at normal incidence, `(1 - cos)/(1 + cos)` at the angle `theta`), `WaveBc::Driven(f)` (a ghost state `f(x, t)`, for
+  a wave entering the domain). Every patch that is not empty must be named. Cyclic patches are refused.
+* Sponge: `WaveSponge::from_layer(geom, &SpongeLayer, matched)` with the profile of the compressible sponge
+  (`rate_max_for_reflection`). The plain form damps `p` and `u`. The matched form damps `p` and the normal velocity
+  and drives the tangential velocity from a memory `Q_t = p`, which makes it reflection-free in the equations at every
+  angle. Keep `rate_max dt` well below 2.5. As with the compressible matched layer, a field that does not vary along
+  the layer's normal (the ringing of a rigid duct at a cut-off frequency) is not damped, so ramp the source.
+
+`rcfd-post` `duct_modes.rs` does the modal analysis of hard-walled ducts:
+
+* Modes: rectangular `sqrt(eps_m eps_n) cos(m pi y/a) cos(n pi z/b)`, `k_mn^2 = (m pi/a)^2 + (n pi/b)^2`; circular
+  `J_m(j'_mn r/R) e^{i m phi}` normalised, `k_mn = j'_mn/R`. In the library the radial index `n` starts at 0 for every
+  `m`: `(1, 0)` is the first spinning mode, `(0, 1)` the first radial mode. Every mode is normalised to an area mean of
+  `|psi|^2` of 1. `axial_wavenumber(k, k_mn)` returns `sqrt(k^2 - k_mn^2)`, or `-i sqrt(k_mn^2 - k^2)` for a cut-off
+  mode. `ModeBasis::below(shape, k)` lists the modes up to `k`. The Bessel functions and the zeros of `J'_m` are
+  computed (Bessel's integral, bisection), not tabulated.
+* `HarmonicDft` turns time series into complex amplitudes at one frequency, exactly when the samples cover a whole
+  number of periods. `decompose_section` is a weighted least-squares fit of a sampled section (use the cell areas as
+  weights). `split_axial` separates one mode's station amplitudes into the waves towards `+x` and `-x` for a given
+  `k_z`. `fit_axial` also fits a complex `k_z` (it is how the checks measured the solver).
+* Export: `ModalExport::section` or `ModalExport::axial` (with the power of each wave, `S |a|^2 Re(k_z)/(2 rho0
+  omega)`), written as JSON by `to_json_string` and read back by `from_json_str`. Errors name the field.
+
+```json
+{"format": "rcfd-duct-modes", "version": 1, "kind": "axial",
+ "duct": {"shape": "circular", "radius": 0.06}, "frequency": 2361.1, "sound_speed": 340.0, "density": 1.2,
+ "x_ref": 0.6, "residual": 3e-5,
+ "modes": [{"m": 1, "n": 0, "k_cut": 30.69, "k_axial": [29.4, 0.0], "plus": [0.98, -0.01], "minus": [1e-4, 2e-5],
+            "power_plus": 1.2e-5, "power_minus": 1.3e-13}]}
+```
+
+What was checked (a 2-D channel of height 0.12 m, 32 cells across, mode 1 at `cos theta = 0.8`, 2361 Hz):
+
+* axial wavenumber `0.19` percent below `sqrt(k^2 - k_1^2)` (the Fourier analysis of the scheme predicted the same);
+  the wave loses `0.23` percent of its amplitude per axial wavelength; the plane wave is `0.22` percent slow;
+* a matched layer of 40 cells (about one wavelength) in front of a rigid end reflects `9e-5` of mode 1, and `8e-5` on a
+  sheared mesh; a plain layer reflects `1e-6` of the plane wave;
+* the open end reflects `0.109` of mode 1 against `1/9` from the closed form; the rigid end without a layer `1.00`;
+* a cut-off mode decays `0.17` percent faster than the closed form (64 cells across);
+* a synthetic field of a rectangular duct (five propagating modes in both directions and one cut-off mode) goes through
+  the DFT, the section fit, the axial split and the JSON file and comes back within `4e-15`; a circular section with
+  two modes outside the fitted basis comes back within `1.3e-4`.
+
+Limits: no mean flow, linear only, no impedance wall; the solver checks are two-dimensional channels (the `(m, 0)`
+modes of a rectangular duct); circular ducts are checked in the modal analysis only; one planar layer, no corner; not
+reachable from a case file or the CLI.
+
 ## Reference: code locations, input format and command line
 
 ### Modules and entry points
@@ -379,6 +441,8 @@ rest. The plain form has no memory, so both attached frames give it the same bit
 | Impedance and quiet boundaries of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`impedance_wall`), `CompBc::Impedance` |
 | Mass-spring-damper wall of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`MsdWall`, `piston_face`), `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`, `msd_dt_limit` |
 | Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory`, `sponge_memories`, `set_sponge_memories`; the shifted form: `MatchedOptions`, `Sponge::planar_shifted`, `Sponge::corner` |
+| Acoustic wave solver (linear, medium at rest) | `crates/rcfd-fv/src/acoustic_wave.rs` (`AcousticWaveSolver`, `Medium`, `WaveBc`, `WaveSponge`, `WaveSpongeForm`) |
+| Duct modes, modal decomposition, axial split, `rcfd-duct-modes` export | `crates/rcfd-post/src/duct_modes.rs` (`ModeBasis`, `axial_wavenumber`, `HarmonicDft`, `decompose_section`, `split_axial`, `fit_axial`, `ModalExport`) |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 
