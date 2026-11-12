@@ -348,3 +348,85 @@ meshes, the sphere, 3-D. A body that touches the domain boundary (ADR 0218 Q5) i
 - **Q5. The 2.6 percent of 2D-2.** If A2/A2T miss as predicted, the candidates are the mesh (`D/40`; the steady lift of 2D-1 on
   M2 has the same +2.7 percent), the first-order forcing of ADR 0218, the zero-gradient outlet in place of do-nothing, and the
   time step. Options and a recommendation go in the addendum with the numbers.
+
+## Amendment 1 (2026-11-12): three defective set-ups (X1, X2, the guard of U1) and their corrected tests
+
+Written after the first runs of X1, X2 and U1 to U5 on 281628f2 (each made once) and before any corrected test was written or
+run. No library code is changed by this amendment. The 2D-2 runs (A2, A2T) were in progress and are not touched.
+
+### What the first runs gave
+
+| Check | Result | Class |
+| --- | --- | --- |
+| U4, U5, A3a, A3b | met (numbers in the addendum) | registered runs, stand |
+| U1 to U3 | U1 2.97e-16 and 1.90e-16, U2 equal, U3 4.8e-16 on the first body; the test then stopped on an assertion that is not a registered limit (a guard written into the test: "the storage is at least 1e-6 of the sum") | defective set-up (the guard) |
+| X1 | S-X1 missed: the moment drifts linearly in time (new -0.2940 at `t = 0.0625`, -0.6034 at 0.375, -0.7199 at 0.5 on N 48; drift 0.16 against 1e-3); errors 144 and 124 percent | defective set-up |
+| X2 | S-X2 missed: x variation 7.7e-7 and 3.9e-6, `u_y` 2.0e-7 and 1.4e-6 against 1e-9; new -9.166 and -17.166 against -1.1667 | defective set-up |
+
+By the registered rule a set-up check that does not hold is a defective set-up: nothing of X1 and X2 counts, the tests stay as
+ignored records, and the corrected tests below are run once after this amendment is committed.
+
+### Diagnosis (a scratch test, `f346-scratch/scratch_f346_diag.rs`, not committed; public fields only)
+
+- **X1.** The outer body is the inverted cylinder, a solid that fills the box outside `r = 1`; the registration made it rotate
+  with the inner one. A rigid rotation of a solid that reaches the box walls is not compatible with walls at rest (the rigid
+  velocity has a normal component at the walls): the penalised cells next to the walls cannot satisfy continuity, and the
+  pressure drives a flow through the annulus. Measured at `t = 0.5` on N 48 (and the same with a constant common rotation
+  `Omega = 0.5`): velocity error in the annulus 0.48 (radial part 0.45) against a wall speed of 0.25 to 0.5; the moment of the
+  reaction of the constant common rotation is -0.47 where a rigid rotation has none. The set-up, not the evaluation, is at
+  fault: the differences new minus reaction (0.0993 = `I_S alpha`, item 4: 0.3371 x 0.2945) and literal minus new (0.0405) are
+  the predicted storages.
+- **X2.** Two defects. (a) The plate reaches `ymin`, a `Symmetry` plane. In the PISO kernel, with its component-averaged
+  diagonal, a symmetry plane acts on the tangential velocity like a wall (known: ADR 0074 amendment 1, ADR 0103; a plug flow
+  between two symmetry planes without any immersed body decays from 0.5 to 0.015 in the 200 steps of X2, and stays 0.5 with
+  zero gradient). The bottom row of solid cells therefore carries a boundary force `-mu U L dz/h` (-8.06 of the -9.17 on N 16;
+  every other solid row carries its storage 0.0625, and the top solid row and the first fluid row together -1.2285, which
+  less the storage of the top row is -1.166): the reaction holds the force of the boundary on the body, ADR 0218 Q5, which the
+  registration had argued away for a symmetry plane. (b) The x variation is that of the tolerances of the linear solvers
+  (`tol_rel` 1e-8 and 1e-7): with `tol_abs` 1e-20 and `tol_rel` 1e-14 for the momentum and the pressure solve the variation is
+  4.9e-13 (N 16) and 4.7e-12 (N 32).
+- **U1.** With `K = 1e8` and a velocity field of order 1 the reaction is 4e7 times the storage of a rate of order 1; the
+  registered limit (1e-12 of the norm) still resolves the storage to 4e-5 of itself, but the guard asked for 1e-6.
+
+Disclosure: the scratch runs that found the defects of X2 are runs of the corrected set-up, so the number X2' will measure on
+N 16 is known to about four digits (-1.1665) before its run; the limits of X2 are those of the registration and are not
+changed. The corrected X1 set-up below was not run in any form before this amendment; its limits are fixed here from the
+estimates given.
+
+### Corrected tests (limits fixed now; each run once)
+
+**X1' (replaces X1): the accelerated inner cylinder in a fixed outer one.** The CC set-up exactly as in ADR 0218 (outer body at
+rest, box walls at rest), the inner cylinder rotating with `Omega(t) = alpha t`, `alpha = 1`, from rest; everything else as X1
+(`piso(1.0)`, BDF2, central, `dt = 0.0025`, 200 steps, the forcing rebuilt before each step with `omega = alpha n dt`,
+`build_second_order`, `N = 48` and `96`). With `f(r) = A r + B/r` the Couette profile of unit angular velocity
+(`A = -R1^2/(R2^2 - R1^2) = -1/3`, `B = R1^2 R2^2/(R2^2 - R1^2) = 1/3`), `u_theta = alpha t f(r) + w(r)` solves the azimuthal
+equation when `alpha f = nu (w'' + w'/r - w/r^2)`, `w(R1) = w(R2) = 0`: `w = (alpha/nu)(A r^3/8 + (B/2) r ln r) + C r + D/r`
+(the operator gives `8 r` on `r^3` and `2/r` on `r ln r`), `C = 0.0135752`, `D = 0.0280915` from the two wall conditions (formed
+in the test from the same formulas). The shear stress `mu r d(u_theta/r)/dr` at `R1` gives the moment of the fluid on the inner
+cylinder per unit depth
+
+    M(t) = -4 pi mu B alpha t + 2 pi R1^2 mu [(alpha/nu)(A R1^2/4 + B/2) - 2 D/R1^2] = -4.188790 t - 0.123934,
+
+-2.218329 at `t = 0.5` and -1.694730 at `t = 0.375`, after transients of `exp(-39 t)`. Linear in time: the time schemes add no
+error.
+
+| Id | Check | Limit | Estimate behind it |
+| --- | --- | --- | --- |
+| X1' | new at `t = 0.5`: `abs(M_new - M)/abs(M)` at N 48 and N 96 | `<= 0.5 percent` each | spatial 0.107 and 0.027 percent of the Couette part (ADR 0239), staircase inertia (item 4) 0.49 and 0.42 percent of 0.2945, that is 0.065 and 0.056 percent of `M`: about 0.17 and 0.08 percent |
+| X1c' (negative control) | the reaction alone | error `>= 3 percent` each | `I_S alpha/abs(M)` = 0.0993/2.2183 = 4.5 percent |
+| X1l' (negative control: the literal reading) | literal | error `>= 1.0 percent` at N 48, `>= 0.5 percent` at N 96 | the first fluid cells accelerate with about `alpha r`: 0.1402 and 0.0647 of 0.2945 over 2.2183 = 1.9 and 0.9 percent, less a tenth for `f(r) < r` |
+| S-X1' (set-up) | new at step 150 against `M(0.375)`; no divergence | error `<= 0.5 percent` | as X1' |
+
+Printed, no limit: N 48 with `build`; the force (exact 0); the velocity error in the annulus against `alpha t f + w`.
+
+**X2' (replaces X2): the accelerated plate.** As X2 with two changes: `ymin` (under the solid) takes `ZeroGradient` for the
+velocity, and the momentum and pressure solvers take `tol_abs = 1e-20`, `tol_rel = 1e-14`. Limits unchanged: X2' error
+`<= 1 percent` at N 16 and 32; X2c' `>= 30 percent`; X2l' `>= 2.5 percent` (N 16), `>= 1.2 percent` (N 32); S-X2' x variation
+and `max abs(u_y)` `<= 1e-9`.
+
+**U1' to U3' (replace U1 to U3).** The same forcings, fields, `rho`, reference points and limits, with the rate field
+multiplied by 1e6 (so that the storage is of the size of the reaction) and the guard "the storage is at least 1e-4 of the norm
+of the force and of the moment".
+
+The planned mutations name X1, X2 and U1; they are run against X1', X2' and U1'. The decision rule is unchanged, read with the
+corrected tests.
