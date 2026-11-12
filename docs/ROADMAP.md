@@ -5992,13 +5992,28 @@ fixed by the item's registration ADR before any code.
     uniform-flow check U1 of ADR 0219 holds, and the default stencils and results are bit-identical.
   - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Optional, after F-334.
-- [ ] **F-337** Immersed solid: second-order force and moment
+- [x] **F-337** Immersed solid: second-order force and moment
   - depends on: F-309
   - acceptance: The torque on the immersed rotating cylinder of circular Couette flow (the CC set-up of ADR 0218,
     second-order forcing) reaches an observed order of 1.5 between N 48 and 96, and the DFG 2D-1 drag and lift on M2 are
     within 1 percent and 3 percent of the FeatFlow values.
-  - note: From ADR 0234 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
-    torque error is 1.60, 0.74 and 0.39 percent at N 48, 96, 192 with either forcing.
+  - note: DONE in the library (ADR 0239, 2026-11-12), pending acceptance. From ADR 0234 question 5. Diagnosis by
+    measurement (five hypotheses registered before any code): the force of the forcing was never first order (it is the
+    momentum balance of the forced cells, its error that of the velocity field); the moment was, because `force_moment`
+    applies the modification term of a first fluid cell at the surface crossing and not at the centre of its cell (1.49
+    and 0.72 percent of the torque at N 48 and 96); the one-sided wall difference, the staircase face pressure, the
+    quadrature at the crossings (order 1.50) and the momentum of the mass-source cells were measured and ruled out.
+    Delivered: rcfd-fv immersed.rs, `ImmersedForcing::force_moment_second_order` (opt-in; `force_moment` unchanged and
+    bit-identical, hashes checked): the same force, and the moment with every term at the centre of its cell, which is
+    the angular-momentum balance of the forced cells, that is the moment of the full traction and momentum flux on the
+    regular fluid faces around them (derived in the ADR; checked against that sum to 1.5e-6 of the torque). Measured
+    (limits registered before the code): circular Couette torque error 0.396, 0.107, 0.027, 0.0069 percent at N 24, 48,
+    96, 192, observed order 1.98 between 48 and 96 (limit 1.5; 1.96 from 96 to 192) against 1.11 of `force_moment`; DFG
+    2D-1 on M2 C_D -0.306 %, C_L +2.534 % (limits 1 % and 3 %; the force is that of `force_moment`, unchanged); six
+    mutations caught. Not included: the new evaluation as the default of `force_moment` (open, a change of a default);
+    unsteady flow (the momentum of the forced cells); any caller outside the tests, a case key; non-orthogonal meshes;
+    the limits of F-219 and F-309. Follow-up (ADR 0239 Q3, recommendation taken on the maintainer's standing instruction
+    of 2026-11-11): F-346. Open: Q1 (the cell arms as the moment of force_moment changes a default).
 - [~] **F-338** Overset: a second-order time scheme on the overset path (BDF2, opt-in)
   - depends on: F-335
   - acceptance: OversetSolver accepts BDF2 as an opt-in (defaults bit-identical, Q0 of ADR 0219 and the records R2 of
@@ -6082,3 +6097,10 @@ fixed by the item's registration ADR before any code.
     ADR names why not with a number.
   - note: From ADR 0241 questions 4 and 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     After the rework of the corrector flags in pimple.rs (F-322).
+- [ ] **F-346** Immersed solid: force and moment in unsteady flow
+  - depends on: F-337
+  - acceptance: The force and moment of an immersed solid subtract the rate of change of the momentum and angular
+    momentum of its forced cells; DFG 2D-2 maximum drag and lift on M2 are within 1.5 percent of the FeatFlow level-6
+    values, and a steady case returns the values of F-337 to round-off.
+  - note: From ADR 0239 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
+    priority.
