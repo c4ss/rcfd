@@ -3315,26 +3315,27 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
         partial tip clearance, curve-file input, y+ check of a converged solution.
 - [~] **F-134** Overset (chimera) mesh coupling
   - depends on: F-063
-  - acceptance: A cylinder moving through a background mesh conserves mass and gives drag within 5 percent of a body-fitted run
-  - note: P4 (long-term). Gap: overset boundary type and methods; extends F-063.
-    - ADR 0219 (registration of F-134, 2026-11-07, branch `f134-overset`, merged 2026-11-08): PARTIAL, library only.
-      - Built: a component mesh moving rigidly over a static background mesh, joined into one composite mesh with the
-        hole cut by a user function, one fringe layer, donor search and weights exact for linear fields
-        (`rcfd_mesh::overset`), and an implicit overset PISO step (`rcfd_fv::overset::OversetSolver`) whose one offset of
-        the background fringe pressures makes the mass of the domain exact.
-      - Met (acceptance): a cylinder at Re 40 moving 7.5 diameters through a Cartesian background keeps the continuity of
-        every calculated cell to 8.1e-17 and the mass of the domain to 7.5e-15 of U D L (limits 1e-9); its drag is within
-        0.62 % of a body-fitted run of the same motion at every step from t = 2 to t = 8 (limit 5 %; mean C_D 1.788
-        against 1.793). Without the offset the domain loses 2.7e-3 of U D L.
-      - Also met: with every cell calculated the overset step gives the library's ALE step bit for bit; a uniform flow
-        through a moving, turning component stays uniform to 1.4e-14; the Taylor-Green error stays within 1.82 times
-        that of the background alone.
-      - Known misses: the Taylor-Green observed order, 0.75 as registered (the time error of the moving cells at the
-        registered step) and 1.62 with dt proportional to h^2 (limit 1.7; the largest error lies in an interpolated cell
-        of the component, the background converges at order 1.98); the fine-level ratio 3.31 as registered (limit 2;
-        1.82 with dt proportional to h^2).
-      - Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1); several components, a moving background, hole
-        cutting from the wall geometry, BDF2, outer iterations, non-orthogonal correctors, turbulence (Q2 to Q5).
+  - acceptance: A cylinder moving through a background mesh conserves mass and gives drag within 5 percent of a
+    body-fitted run
+  - note: P4 (long-term). Gap: overset boundary type and methods; extends F-063. ADR 0219 (registration of F-134,
+    2026-11-07, branch f134-overset, not merged): PARTIAL, library only. Built: a component mesh moving rigidly over a
+    static background mesh, joined into one composite mesh with the hole cut by a user function, one fringe layer, donor
+    search and weights exact for linear fields (rcfd_mesh::overset), and an implicit overset PISO step
+    (rcfd_fv::overset::OversetSolver) whose one offset of the background fringe pressures makes the mass of the domain
+    exact. Met (acceptance): a cylinder at Re 40 moving 7.5 diameters through a Cartesian background keeps the
+    continuity of every calculated cell to 8.1e-17 and the mass of the domain to 7.5e-15 of U D L (limits 1e-9); its
+    drag is within 0.62 % of a body-fitted run of the same motion at every step from t = 2 to t = 8 (limit 5 %; mean C_D
+    1.788 against 1.793). Without the offset the domain loses 2.7e-3 of U D L. Also met: with every cell calculated the
+    overset step gives the library's ALE step bit for bit; a uniform flow through a moving, turning component stays
+    uniform to 1.4e-14; the Taylor-Green error stays within 1.82 times that of the background alone. Known misses,
+    diagnosed by ADR 0232 (F-314): the Taylor-Green observed order, 0.75 as registered and the fine-level ratio 3.31
+    (limit 2): a first-order time error of the library's moving-mesh PISO step (the lagged convecting flux; 5.99e-4 at
+    the registered step on level 2), not of the overset coupling; and 1.62 with dt proportional to h^2 (limit 1.7): the
+    truncation of the linear donor interpolation at one component fringe cell, a second-order error sampled at one pose
+    (the root mean square converges at 1.99 and 1.96 on three levels). Found there and open: a first-order term of the
+    calculated component cells with the coefficient 1.0e-4. Not delivered: the case-tree, CLI and Studio wiring (ADR
+    0219 Q1); several components, a moving background, hole cutting from the wall geometry, BDF2, outer iterations,
+    non-orthogonal correctors, turbulence (Q2 to Q5).
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
   - depends on: F-110, F-029
   - acceptance: Planar contraction and Poiseuille start-up compare with analytic Oldroyd-B solutions
@@ -5720,10 +5721,26 @@ fixed by the item's registration ADR before any code.
   - depends on: F-134
   - acceptance: Two component meshes over a background run in one case; a cell cut by a hole is excluded from the solve; the registered conservation check holds.
   - note: From ADR 0219 questions 2 and 3, recommendation taken.
-- [ ] **F-314** Overset: close the observed-order miss
+- [~] **F-314** Overset: close the observed-order miss
   - depends on: F-134
-  - acceptance: The Taylor-Green order (T1 0.747 against 1.7, T2 level 2 3.31 against 2, T1c 1.618 against 1.7, the F-134 ignored known-miss tests) reaches the registered limits, or the ADR names the donor-interpolation cause with a number.
-  - note: From ADR 0219 question 4, recommendation taken; the known-miss tests stay as recorded.
+  - acceptance: The Taylor-Green order (T1 0.747 against 1.7, T2 level 2 3.31 against 2, T1c 1.618 against 1.7, the
+    F-134 ignored known-miss tests) reaches the registered limits, or the ADR names the donor-interpolation cause with a
+    number.
+  - note: From ADR 0219 question 4 (Q5 in that ADR's numbering), recommendation taken; the known-miss tests stay as
+    recorded. ADR 0232 (registration of F-314, 2026-11-12, merged 2026-11-12): PARTIAL, a diagnosis, tests only, no
+    library change. Named with numbers: T1c (1.618) is the truncation of the linear donor interpolation at one component
+    fringe cell (it explains 1.05, 0.84 and 0.81 of the largest error at levels 1, 2, 3); the interpolation is of second
+    order (1.995, 1.986 over 200 poses) and the pointwise maximum at one pose samples it with two-level orders from 1.49
+    to 2.24; on three levels the root mean square converges at 1.988 and 1.955 and the window maximum at 1.950 and
+    1.827. T1 (0.747) and T2 at level 2 (3.31) are a first-order time error of 5.99e-4 at dt 0.0025 that belongs to the
+    moving-mesh PISO step of the library, not to the overset coupling: a single moving mesh without donors shows 0.83 of
+    it, and three outer iterations leave 0.153 of it (the lagged convecting flux). Missed in the diagnosis: the largest
+    error of the calculated cells converges at 1.580 between levels 2 and 3 (limit 1.7); with the component at rest and
+    the fringe phase locked the calculated component cells carry a first-order term, root mean square 5.4e-5 (h/H)^2 +
+    1.0e-4 (h/H), that is neither a time error nor confined to the cells next to the fringe; its source is open. One
+    negative control (root mean square with the donor cell only, 1.463 against 1.3) did not hold at its limit. None of
+    the three recorded misses is removed. Follow-ups (ADR 0232 questions 3 to 5, recommendations taken on the
+    maintainer's standing instruction of 2026-11-11): F-334, F-335, F-336.
 - [ ] **F-315** Real-fan parametric study with CMA-ES
   - depends on: F-260
   - acceptance: A CMA-ES study over blade parameters of the 120 mm fan converges within a registered budget and beats the baseline pressure rise at the design flow; the study record is reproducible.
@@ -5884,3 +5901,22 @@ fixed by the item's registration ADR before any code.
     instruction of 2026-11-11): HE map warm against cold 5.7e-9, 61 and 60 iterations against 89 and 88; defaults
     byte-identical; three mutations caught. Open: the extended start as the map default (Q7 (b)) and in the design tools
     (Q7 (a), a golden edit).
+- [ ] **F-334** Overset: the first-order error term of the calculated component cells
+  - depends on: F-314
+  - acceptance: Set-up RL of ADR 0232 (component at rest, fringe phase locked) on levels 1 to 4: the root mean square of
+    the error of the calculated component cells converges at order 1.7 or more between successive levels, or the ADR
+    names the source of the first-order term (coefficient 1.0e-4) with a number.
+  - note: From ADR 0232 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-335** Overset: outer iterations on the overset path
+  - depends on: F-134
+  - acceptance: OversetSolver accepts n_outer above 1 as an opt-in (defaults bit-identical, Q0 of ADR 0219 still bit for
+    bit); with three outer iterations the time error of TG_2 at dt 0.0025 (max abs(d_200) of ADR 0232, 4.49e-4) falls
+    below 1.2e-4 and T2 at level 2 of ADR 0219 holds at the registered step, or the ADR names why not with a number.
+  - note: From ADR 0232 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-336** Overset: donor interpolation of higher order
+  - depends on: F-134, F-334
+  - acceptance: An opt-in donor interpolation that reproduces quadratic fields; with it the largest error over the
+    calculated and fringe cells of TG_L converges at order 1.7 or more on levels 1 to 3 with dt proportional to h^2, the
+    uniform-flow check U1 of ADR 0219 holds, and the default stencils and results are bit-identical.
+  - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    Optional, after F-334.
