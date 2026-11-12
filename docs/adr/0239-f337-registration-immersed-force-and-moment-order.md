@@ -290,3 +290,135 @@ The decision rule of the registration is unchanged; "the unit checks of the amen
 
 - **Q2. Name.** `force_moment_second_order` (taken) or a flag on `force_moment`. A flag would change the signature every caller
   uses. Recommendation: the separate method.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above. No limit was changed and no registered run was repeated. Release builds on
+Windows. The registration is 6925f107; the diagnostic test is a6aec16d (run once on that commit); amendment 1 is c75f93b5; the
+library and the registered tests are 1b11face, committed before their first run; every registered run was made once on that
+commit (one invocation of the test file, one thread). This addendum's commit changes no code.
+
+**Built.** `crates/rcfd-fv/src/immersed.rs`: `ImmersedForcing::force_moment_second_order` (D1), the private field `centres`
+(the cell centres, stored by the constructor), two documentation paragraphs; `force_moment` is not edited except for two lines of
+its documentation comment. `crates/rcfd-fv/tests/immersed_force_order_f337.rs` (new: the diagnostic and the registered checks).
+`docs/reference-data.md` (a section for F-337). `simple.rs` and `pimple.rs` are not touched (no hunk); no case-schema key,
+golden, hash table or existing test file was touched; `overset.rs`, `compressible.rs`, `compressible_bc.rs`, `sim.rs` and
+`schema.rs` were not touched.
+
+### Hypotheses
+
+| Id | Hypothesis | Measurement (N 48; N 96) | Verdict |
+| --- | --- | --- | --- |
+| H1 | the arm of the forcing terms (modification terms applied at the crossing) | with cell arms the error is 4.48e-3; 1.13e-3 against `dE/3` 2.24e-2; 1.04e-2 | **holds: the cause** |
+| H2 | the stress evaluation point (one-sided wall difference) | `T_w` error 7.6e-3; 4.4e-3 against `dE/2` 3.4e-2; 1.6e-2 (exact field: 3.7e-2; 2.0e-2) | does not hold; the difference is first order, but it is not what `force_moment` sums |
+| H3 | the pressure of the staircase faces | 3.2e-3; 3.3e-3 against `dE/2` | does not hold (the face pressure is in error, but cancels between the two cells of a face) |
+| H4 | the staircase surface (quadrature at the crossings) | 1.44e-2; 5.1e-3 against `dE/2` (order 1.50) | does not hold |
+| H5 | the momentum of the forced cells (the flux of ADR 0234 D1 and the mass source) | 3.8e-6; 5.7e-7 | does not hold |
+
+The details and the derivation are in amendment 1. In one sentence: the force of the forcing was never first order (it is the
+momentum balance of the cells); the moment was, because a modification term was given the arm of the surface crossing instead of
+the arm of its cell.
+
+### Results
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 (acceptance) CC second, new: order 48 to 96 | `>= 1.5` | **1.984** (`E` 3.959e-3, 1.069e-3, 2.702e-4 at N 24, 48, 96; 24 to 48: 1.889) | **met** |
+| A1b `E_new(96)/E_old(96)` | `<= 0.5` | 0.0364 | met |
+| A2 (acceptance) DFG 2D-1 second, new: convergence rule on M1, M2; `C_D`, `C_L` on M2 | within the caps 4000; within 1 percent; within 3 percent | 470 and 750 iterations; `C_D` 5.56246454 (-0.306 percent); `C_L` 0.0108880492 (+2.534 percent) | **met** |
+| S1 CC convergence, three runs | `max_du <= 1e-10` within 20 000 | 103, 102, 340 iterations | held |
+| C1 (negative control) CC, old: order | `< 1.5` | 1.108 (`dE/T` 3.462e-2, 1.601e-2, 7.430e-3) | held |
+| N1 defaults: `force_moment` hashes | the five of the probe | `5a21ad65f0798915`, `1a364dafdefe88ba`, `5a21ad65f0798915`, `1a364dafdefe88ba`, `ead7c19fe86c3d8b` | met |
+| N2 defaults: the existing files, unedited, on the final tree | every test passes; the recorded forces | `immersed_solid_f219.rs`: 11 passed, 2 ignored (its known miss and its diagnostic), M3 `C_D` 5.57833680, `C_L` 0.0106899517, `St` 0.30073, CC torque 4.07749, 4.14059, 4.17006; `immersed_second_order_f309.rs`: 9 passed, 1 ignored (its printed N 192 run), M2 `C_D` 5.56246454, `C_L` 0.0108880492, CC torque 4.04376, 4.12171, 4.15767, state hashes `3b49c4ed4863d1b6`, `9fff50792adb6d4a` | met |
+| U1 force of new against old, five body/forcing pairs | bit-identical | bit-identical | met |
+| U2 moment of new against the test-side sum | `<= 1e-12` | 0 (five pairs) | met |
+| U3 transfer of the reference point | `<= 1e-10` | 4.5e-16, 4.2e-16, 4.5e-16, 4.2e-16, 3.0e-15 | met |
+| U4 `modified = false`: new against old | bit-identical | bit-identical (both bodies) | met |
+| V1 (the derivation) CC N 48: `abs(M_new - M_out)` | `<= 2e-3 T` | 1.53e-6 T (`M_new` -4.184312, `M_out` -4.184306) | met |
+
+Printed, no limit. CC second on N 192: `E` new 6.949e-5, order 96 to 192 1.959 (old 3.915e-3, order 0.924); 1223 iterations.
+`M_out` at N 96: -4.187658, 2.3e-7 T from `M_new`. The new evaluation with the forcing of ADR 0218 (`build`): `E` 3.058e-3,
+3.025e-3, 2.431e-3 at N 24, 48, 96 (old 2.657e-2, 1.151e-2, 4.472e-3): smaller than the old at every N, but not converging at
+second order, because that forcing's velocity field is first order (ADR 0234). The force on the inner cylinder (exact 0): 9.6e-10,
+5.5e-10, 1.3e-10 per unit depth. 2D-1 on M1 second: `C_D` 5.51738362 (-1.114 percent), `C_L` 0.0114183079 (+7.528 percent), the
+numbers of ADR 0234. The moment coefficient of the 2D-1 cylinder about its axis, `M_z/(q D)` (no reference value): new 1.1094e-3
+on M1 and 9.897e-4 on M2; old 1.0772e-3 and 9.778e-4.
+
+What the acceptance numbers say, plainly. A1 is met by the new evaluation with a margin (1.98 against 1.5, and 1.96 on the next
+refinement). A2 is met, but not by anything F-337 built: the new method returns the force of `force_moment` to the bit, and the
+drag and lift on M2 are the numbers ADR 0234 already measured (-0.306 and +2.534 percent). The diagnosis says why no change of
+the force was made: the force is the momentum balance of the cells and its error is that of the velocity field (M1 to M2 the drag
+error goes from -1.11 to -0.31 percent, the lift error from +7.5 to +2.5 percent). The lift's margin to its limit is 0.47
+percentage points.
+
+### Mutations
+
+Applied one at a time to 1b11face by a scratch script (an exact text replacement checked to occur once), the named tests run
+once in release, the file restored and compared byte for byte with the kept copy (equal after each of the six).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 new: the arm is the term's `point` | A1, and U2 | failed: A1 order 1.108 (A1b ratio 1.000, V1 1.49e-2 T); U2 2.3e-7 |
+| MU2 `force_moment`: the arm is the cell centre | N1 | failed: hashes `3b6396b83298b62e`, `d1cfc1df9076b1bb`, `a62e2c030d3c20ae` |
+| MU3 new: `x_ref` not subtracted | U3 | failed: U3 1.75 printed against 1e-10; the assertion that stopped the test was U2 (0.287), which comes first |
+| MU4 new: the modification terms left out | U1 | failed: the force differs |
+| MU5 new: the solid-cell terms left out of the moment | U2, and A1 | failed: U2 1.0; A1 order -0.145 |
+| MU6 the stored centres shifted by one cell | U2 | failed: U2 0.108 |
+
+### Tools
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean (also with `--release`). `cargo test --release
+-p rcfd-fv --test immersed_force_order_f337`: 5 passed, 2 ignored (the diagnostic, run once on a6aec16d, and the printed N 192
+run, run once with `--ignored`). `scripts/limit_audit.py`: 0 hits on the new test file.
+
+### Deviations and disclosures
+
+- The diagnostic computed, from the test side, the quantity the new method returns, so the numbers of A1 were known (to the
+  digits printed) before the registered run through the library; A1's limit is the registration's, fixed before the diagnostic.
+  This is disclosed in amendment 1 and is the nature of a diagnosis-first item.
+- The estimate written with V1 (about 1e-4 T) was sixty times too large; the measured difference is 1.5e-6 T.
+- Before the first run of the registered checks only the build, `cargo fmt` and `cargo clippy` were run on the code; clippy asked
+  for the negated comparison of C1 to be written through the helper `le`, which was done before the commit and the run. Nothing
+  was tuned: the library of 1b11face is the first version that was run.
+- N2 and the printed N 192 run were made from copies of the test executables built from 1b11face, so that the mutations could be
+  compiled at the same time; the copies are byte-for-byte the cargo outputs.
+- Not run: the workspace test suite and the gate (the lead's); the 2D-2 case and any unsteady force with the new evaluation; the
+  PISO path (the evaluation is a function of the velocity field alone); a non-uniform or non-orthogonal mesh at the surface; the
+  sphere and the cuboid; a cylinder whose axis is not on a mesh line (the CC mesh is symmetric about the axis).
+
+### Decision by the registered rule
+
+A1 and A2 met with S1 and C1 held; A1b, N1, N2, U1 to U4 and V1 met; each of the six mutations failed a test it must fail.
+**F-337 is done by the rule**, in the library, pending the maintainer's acceptance. "Done" does not include: the new evaluation
+as what `force_moment` returns (Q1), a case key or any caller in the solver or the API (the method is called by tests only, as
+`force_moment` is), unsteady flow (Q3), and the limits of the registration.
+
+### Remaining questions
+
+- **Q1. Default** (as registered). Options: (a) keep both methods; (b) make the cell arms the moment of `force_moment` and drop
+  the second method. The moment of `force_moment` is used by no library or application code; the tests of ADR 0218 and ADR 0234
+  print it without a limit (their printed torques would change from 4.12171 to 4.18431 at N 48); no hash depends on it. (b) is a
+  change of a default and is not taken. Recommendation: (b), by the maintainer's decision, with the acceptance of this item:
+  the present moment is in error at first order and has no use that the corrected one does not serve better.
+- **Q2. Name** (as in amendment 1). Taken: the separate method. If Q1 is answered (b) the question is moot.
+- **Q3 (added). Unsteady flow.** The reaction of the forcing is the force on the body only when the momentum of the forced cells
+  is steady; in the 2D-2 case the first fluid cells and the mass-source cells carry a time-dependent momentum that the reaction
+  holds (ADR 0218 measured the 2D-2 force maxima within 2.6 percent with it). Options: (a) a follow-up item that subtracts the
+  rate of change of the momentum (and angular momentum) of the forced cells, checked on 2D-2 against the FeatFlow extrema and on
+  an oscillating case with a closed form; (b) leave it. Recommendation (a), at low priority, after the case key of the immersed
+  solids exists (the item proposed by ADR 0234).
+- **Q4 (added). The lift on M2.** +2.53 percent against the 3 percent of the acceptance: met, with a margin of 0.47 points, by
+  the convergence of the field (M3 with the forcing of ADR 0218 is at +0.67 percent). Nothing to decide; recorded so that the
+  margin is not read as a property of the new evaluation.
+
+### For the lead: roadmap entries
+
+**F-337: proposed status `done`** (pending acceptance). Proposed note (replacing the present one):
+
+> DONE in the library (ADR 0239, 2026-11-12), pending acceptance. From ADR 0234 question 5. Diagnosis by measurement (five hypotheses registered before any code): the force of the forcing was never first order (it is the momentum balance of the forced cells, its error that of the velocity field); the moment was, because `force_moment` applies the modification term of a first fluid cell at the surface crossing and not at the centre of its cell (1.49 and 0.72 percent of the torque at N 48 and 96); the one-sided wall difference, the staircase face pressure, the quadrature at the crossings (order 1.50) and the momentum of the mass-source cells were measured and ruled out. Delivered: rcfd-fv immersed.rs, `ImmersedForcing::force_moment_second_order` (opt-in; `force_moment` unchanged and bit-identical, hashes checked): the same force, and the moment with every term at the centre of its cell, which is the angular-momentum balance of the forced cells, that is the moment of the full traction and momentum flux on the regular fluid faces around them (derived in the ADR; checked against that sum to 1.5e-6 of the torque). Measured (limits registered before the code): circular Couette torque error 0.396, 0.107, 0.027, 0.0069 percent at N 24, 48, 96, 192, observed order 1.98 between 48 and 96 (limit 1.5; 1.96 from 96 to 192) against 1.11 of `force_moment`; DFG 2D-1 on M2 C_D -0.306 %, C_L +2.534 % (limits 1 % and 3 %; the force is that of `force_moment`, unchanged); six mutations caught. Not included: the new evaluation as the default of `force_moment` (open, a change of a default); unsteady flow (the momentum of the forced cells); any caller outside the tests, a case key; non-orthogonal meshes; the limits of F-219 and F-309.
+
+**Proposed follow-up item** (only if Q3 is answered (a)):
+
+1. *Immersed solid: force and moment in unsteady flow.* Deps: F-337, and the case-key item proposed by ADR 0234 if it is made. Acceptance: "The force and moment of an immersed solid subtract the rate of change of the momentum and angular momentum of its forced cells; DFG 2D-2 maximum drag and lift on M2 are within 1.5 percent of the FeatFlow level-6 values, and a steady case returns the values of F-337 to round-off." Note:
+
+> From ADR 0239 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0218 measured the 2D-2 extrema within 2.6 percent with the reaction of the forcing alone.

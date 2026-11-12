@@ -1453,6 +1453,17 @@ Opt-in (`ImmersedForcing::build_second_order`); the forcing of ADR 0218 (`build`
 | A mass source in the cells of the body so that the flow inside the body does not constrain the fluid (Kim, Kim, Choi, J. Comput. Phys. 171 (2001) 132-150) | from memory | NOT read; the source of ADR 0234 D2 (the solid cells' net outflow, passed as the volume source of ADR 0052) and the net-flux correction of D3 are derived there |
 | Circular Couette flow as the measure of the order (the set-up CC of ADR 0218) | derived | as the F-219 row above; measured `e` 6.12e-3, 1.61e-3, 4.24e-4, 1.03e-4 at N 24, 48, 96, 192 (orders 1.93, 1.93, 2.04) against 8.29e-3, 3.20e-3, 1.58e-3 of the forcing of ADR 0218 |
 
+## F-337 immersed solid: second-order moment of the forcing (ADR 0239)
+
+Opt-in (`ImmersedForcing::force_moment_second_order`); `force_moment` is unchanged and stays what a caller gets.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| The force and moment on a body from the momentum and angular-momentum balance of a control volume (Batchelor, An Introduction to Fluid Dynamics, 1967, section 3.2), and the force on an immersed boundary from its forcing and the momentum of the forced cells (Lai and Peskin, J. Comput. Phys. 160 (2000) 705-719; Balaras, Comput. Fluids 33 (2004) 375-404) | from memory | NOT read; the statement of ADR 0239 D1 (the moment of the forcing with every term at the centre of its cell is the moment of the full traction and of the momentum flux on the regular fluid faces around the forced cells) is derived there on rcfd's discrete momentum equation |
+| The identity `integral x x (grad u^T n) dS = -integral n x u dS` for a divergence-free field on a closed surface | derived | ADR 0239 D1 (Stokes' theorem on a closed surface) |
+| Circular Couette torque `4 pi mu omega R1^2 R2^2/(R2^2 - R1^2) = 4.18879` as the measure of the order of the moment | derived | as the F-219 row above; measured error 0.396, 0.107, 0.027 percent at N 24, 48, 96 (orders 1.89, 1.98) against 3.46, 1.60, 0.74 percent of `force_moment` |
+| DFG 2D-1 reference values | read | as the F-219 row above; the force is that of `force_moment` (M2, second-order forcing: `C_D` -0.306 percent, `C_L` +2.534 percent) |
+
 ## F-297 NSGA-II crossover: the operator read against the papers (ADR 0220, docs/design-loop.md)
 
 Read 2026-11-07 for the registration of ADR 0220, before any code. No source listing of any optimisation code was opened (the web
