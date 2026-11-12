@@ -240,3 +240,162 @@ through it.
   with the property work of F-252. Not taken here because it would change a registered model.
 - **Q4. Velocity and temperature of the leaving vapour.** Registered: the end of the sub-step (`v1`, `T1`). Any choice within the
   sub-step is first-order equivalent and conserves equally. Recommendation: keep.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; no limit was changed and no amendment was needed. Release builds on Windows. The
+registration is 218277b5; the code and the tests are f8d8e2dd, committed before their first run (they had been compiled and
+passed through `cargo fmt` and clippy, which run no test). The registered run is the first one:
+`cargo test --release -p rcfd-particles --test droplet_exchange_f323 -- --nocapture --test-threads=1`, log
+`w49i-work/f323-run1.log`, 10 tests, 0.02 s. Every registered check met its limit, the three negative controls held and the
+seven mutations made their checks fail.
+
+### A. Single droplets
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| DX1 (a) `vapour_mass` against the evaporation source | bit for bit | equal at all 75 steps | met |
+| DX1 (b) vapour against the liquid lost | 1e-10 | worst 2.9e-16 | met |
+| DX1 (c) heat from the gas against `L_v` times the vapour | 1e-10 | worst 5.3e-16 (`1.4660765717e-2` J at completion) | met |
+| DX1 (d) vapour enthalpy against `(c_l T_wb + L_v)` times the vapour | 1e-10 | worst 3.0e-16 | met |
+| DX1 (e) IE | 1e-10 | worst 3.1e-16 | met |
+| DX1 (f) the ten fields that must stay zero | zero, bit for bit | zero at every step | met |
+| DX1 completion: vapour against `M0` | 1e-10 | 1.4e-16 (`Evaporated` at step 75, `T_wb = 356.5724920247` K) | met |
+| DX2 IM, IE at every step (83 steps) | 1e-10 each | worst 5.8e-16, 6.9e-16 | met |
+| DX2 heat that warmed the liquid | in `(0, M0 c_l (T_wb - 300)]` | `5.447679e-3` J, 0.955 of the bound `5.702098e-3` J | met |
+| DX3 `abs(e(1e-6))`; `e(2e-6)/e(1e-6)` | 1e-3; `[1.9, 2.1]` | `e = -2.902797e-4`, `-5.804403e-4`; ratio 1.99959 | met (as PR2) |
+| DX4 velocity; vapour momentum; vapour kinetic energy; drag fields; vapour mass per cell; IM, IP, IE; cells with vapour; state | bits; 1e-10; 1e-10; zero bits; bits; 1e-10 each; at least 5; active | equal; 2.6e-14; 2.6e-14; zero; equal in all 8 cells at all 300 steps; 4.3e-16, 4.3e-16, 5.9e-16; 7 cells; active at `x = 0.0648`, `d/d0 = 0.458` | met |
+| SR1 sources against the record, 8 cells | 1e-12; zero where zero | worst 1.8e-16 | met |
+| DX5 IM, IP, IE at every step; wall impulse; wall energy; gravity | 1e-10 each; `> 0`; `< 0`; `> 0` | worst 4.3e-16, 4.1e-16, 5.5e-16; `5.51e-7` N s; `-4.87e-6` J; `4.0e-10` N s | met |
+| BX1 one breakup; impulse against `m v`; its norm against `M0 C_b r0 yd_b`; energy against `m v^2/2`; carrier and vapour fields | one; 1e-12; 1e-10; 1e-12; zero bits | one; 0; 8.0e-15; 1.2e-16; zero | met |
+
+### B. The spray and the closed loop
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| DX6 (acceptance) IM, IP, IE at all 300 steps | 1e-10 each | worst 8.8e-16, 2.7e-15, 1.5e-15 | met |
+| DX6 coverage: breakup events; `abs(breakup_impulse)`; evaporated; escaped | at least 80; `> 0`; at least 1; at least 1 | 80; `8.97e-7` N s; 80; 80 (none active, deposited, stuck or in a film); vapour `1.156465e-5` kg | met |
+| DX7 fingerprint with the record against without | bit for bit | 2917 words equal | met |
+| CL1 mass and enthalpy of gas plus liquid at all 2000 steps | 1e-10 each | worst 6.9e-16, 5.1e-16 | met |
+| CL1 end state against `T_eq = 310.5231755868` K, `Y_i(T_eq) = 0.3415612235` | 1e-6 K; 1e-6 K; 1e-8; liquid left | `T_g - T_eq = 2.7e-12` K, `T_p - T_eq = 9.7e-13` K, `Y_s - Y_eq = -1.1e-14`; active, `d/d0 = 0.895`, `M_v = 2.593720e-7` kg | met (as PR5) |
+
+DX6 terms at the end. IP [N s]: parcels `4.739e-4`, drag `6.184e-4`, vapour `1.447e-4`, gravity `2.47e-6`, wall 0, breakup
+`8.97e-7`, injected 0; the breakup residual is `1.45e-3` of the drag impulse. IE [J]: parcels 20.5436, mechanical `-5.251e-3`,
+heat `-7.53385`, vapour kinetic `1.058e-3`, vapour enthalpy 12.3226, gravity work `1.65e-6`, wall 0, breakup `1.23e-6`,
+injected 25.3282.
+
+### C. Refusals, inert paths, defaults
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| RF3 three refusals of `advance`, the reaction, four accepted combinations (and a control: the reaction without a record is `Ok`) | as stated | all as stated; the refusal message is that of main | met |
+| IN1 the two records without droplet models, 160 parcels, 300 steps | bit for bit; zero bits | the seven fields and the 2082 fingerprint words equal; vapour and breakup fields zero; 17 cells with a drag impulse | met |
+| DF1 `rcfd-particles`, every test binary, unedited | pass | breakup_f245 8, closed_forms 24 + 3 ignored, dispersion_f255 6, erosion_presets 2, evaporation_f245 7, film_gas 18, lagrangian_ext 13 + 1, reaction_f255 5 + 1, wall_film 6, wall_interaction 8 (and droplet_exchange_f323 10): 0 failed | met |
+| DF1 `rcfd-api` | pass | particles_case 6 + 1, particles_ext_case 3, particle_run 9, particles_two_way 14 + 6, baseline_hashes 3 + 1, case_hashes_w48u H1 1: 0 failed; no file of `rcfd-api` edited | met |
+
+### Negative controls
+
+| Id | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| NC1 heat against the vapour enthalpy | at least 50 percent off | 71.0 percent | held |
+| NC2 IP of DX6 without the vapour momentum | at least 1e-3 | 0.234 | held |
+| NC3 equilibrium without the latent heat | at least 10 K | 32.3 K | held |
+
+### Mutations
+
+Each applied alone by an exact text replacement to `tracker.rs` on a `git archive` copy of f8d8e2dd (`w49i-work/f323-mut`,
+script `w49i-work/f323-scratch/mutate.py`, log `w49i-work/f323-mutations.log`), the named test run once in release, the file
+restored and compared byte for byte with the kept copy (equal in all seven); the restored copy then passed all 10 tests.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MX1 vapour momentum with `v0` | DX6 | failed: IP `1.4e-4` at step 1 |
+| MX2 `Q_h` without `dm L_v` | DX1 | failed: (c) 100 percent off at step 2 |
+| MX3 drag impulse with the mass after evaporation | DX6 | failed: IP `1.4e-4` at step 1 |
+| MX4 vapour enthalpy with `T0` | DX2 | failed: IE `6.0e-5` at step 2 |
+| MX5 breakup impulse not booked | BX1 | failed: impulse 100 percent off |
+| MX6 wall energy not booked | DX5 | failed: IE `1.0e-4` at step 26 (the first reflection) |
+| MX7 `vapour_mass` as `0.999 dm` | DX1 | failed: (a) at step 2 |
+
+MX1 and MX3 give nearly the same residual at step 1 (`1.3970096226298e-4` and `1.3970096226253e-4`): they differ by
+`dm g_eff h`, which is small there; they are different replacements at different lines.
+
+### Tools
+
+`cargo fmt --check -p rcfd-particles`: clean. `cargo fmt --check --all` cannot run on this machine ("The filename or extension is
+too long", os error 206); the gate formats per package. `cargo clippy --release -p rcfd-particles --all-targets -- -D warnings`:
+clean. `scripts/limit_audit.py` on the new test file: 0 hits. The whole workspace suite was not run (the gate is the lead's).
+
+### Deviations and disclosures
+
+- The test file was run again after the registered run: once on the restored copy after the mutations and once inside DF1
+  (`cargo test --release -p rcfd-particles`). The runs are deterministic and gave the same pass; the numbers above are those of
+  the first run.
+- No wall is hit in the spray: the wall terms of DX6 and of IN1 are zero, so the wall terms are exercised by DX5 only (one
+  parcel), and for the record of ADR 0057 by `lagrangian_ext` L1b.
+- The scale of IE in DX6 is the thermal energy of the liquid (25 J). The worst relative residual, 1.5e-15, is about `4e-14` J
+  on that scale, which is `4e-11` of the smallest exchange term at the end (the kinetic energy of the vapour, `1.06e-3` J).
+- RF3 gained one control beyond the registered list (the reaction without a record is accepted), so that the refusal is shown to
+  come from the record.
+- PR3 said NC2 "near 0.1 to 0.3": 0.234. PR1 said "below 1e-12": the vapour momentum of DX4 is at 2.6e-14, the rest below 1e-14.
+- Not exercised: the droplet terms together with the film, erosion, rough walls or the random walk; a wall hit in the sub-step
+  of a completion or of a breakup; condensation other than the round-off approach to equilibrium in CL1; parcels `Deposited` or
+  `Stuck` (none occurred).
+- `Coupling` gained public fields. It has no literal construction in the workspace (`Coupling::new` only), and `rcfd-api`
+  builds and passes unedited; an outside caller that builds the struct by a literal would need the new fields.
+
+### Decision by the registered rule
+
+Every check of A, B and C met its limit, the three negative controls held and the seven mutations failed their checks:
+**F-323 is done by the rule**, in the library, pending the maintainer's acceptance. What "done" does not include is stated in
+"Limits": no flow solver of rcfd consumes the record, and the normal momentum of a breakup is booked as a residual, not given to
+the gas (Q2).
+
+### Remaining questions
+
+- **Q1. Opt-in or lifting the refusal.** Options (a) keep `enable_droplet_exchange()` beside `enable_coupling()` (as built);
+  (b) one method, with the two assertions of RF1 and RF2 of ADR 0224 retired. Recommendation: (a) until F-252 makes the
+  `rcfd-api` paths read the vapour terms, then (b).
+- **Q2. The normal momentum of a breakup.** Options (a) residual without a carrier counterpart (as built; `1.45e-3` of the drag
+  impulse in the spray after 80 breakups); (b) charge it to the gas; (c) two opposite parcels per breakup. Recommendation: (a).
+- **Q3. Enthalpy datum and the constant latent heat.** Options (a) keep the liquid datum and let the caller shift it (as built);
+  (b) a temperature-dependent `L_v` in the evaporation model. Recommendation: (a) now, (b) with the property work of F-252. Open:
+  (b) changes the registered model of ADR 0224.
+- **Q4. Velocity and temperature of the leaving vapour.** As built: the end of the sub-step. Recommendation: keep.
+- **Q5. Where the solver wiring goes.** The roadmap note of F-323 puts the case-tree wiring with F-252. Options (a) keep it
+  there; (b) a separate item for "the transient two-way path consumes `droplet_sources`" (a vapour species source, the momentum
+  and energy sources), so that F-252 is only the comparison with data. Recommendation: (b), because F-252 depends on a data set
+  that is not chosen, while the wiring can be checked by conservation alone. Open: it is a scheduling decision of the maintainer.
+
+### For the lead: roadmap entries
+
+**F-323: proposed status `done`.** Proposed note (replacing the present one):
+
+> From ADR 0224 question 3, recommendation taken: a separate item before F-252. DONE (ADR 0230, the registration of F-323,
+> 2026-11-12, branch f323-droplet-feedback): every registered check is met in the library (rcfd-particles, no case key); the
+> acceptance is still the maintainer's. `Tracker::enable_droplet_exchange()` starts the exchange record of ADR 0057 with the
+> droplet terms, and `advance` then accepts evaporation and breakup (`enable_coupling()` is unchanged and still refuses them).
+> Per sub-step the carrier receives in the start cell the drag with the mass of the start, the heat
+> `m0 c_l (T1 - T0) + dm L_v`, and the vapour `dm` with its momentum `dm v1`, kinetic energy and enthalpy `dm (c_l T1 + L_v)`;
+> gravity, wall and breakup terms are booked so that the balances close; `Coupling::droplet_sources` gives the per-cell mass,
+> momentum and energy sources. Mass, momentum and energy balances at every step: single droplets to 6.9e-16, the spray of ADR
+> 0224 (160 parcels, evaporation and TAB breakup, 300 steps) to 8.8e-16, 2.7e-15 and 1.5e-15 (limit 1e-10); a droplet at its
+> wet bulb draws `L_v` times its mass from the gas to 5.3e-16; the heat of a sub-step is first-order consistent with the
+> model's `Q` (ratio 1.9996); a closed box whose carrier receives the vapour and the heat stops evaporating within 3e-12 K of
+> the adiabatic saturation temperature (limit 1e-6 K). Three negative controls held, seven mutations made their checks fail, no
+> amendment; the record is an observation (fingerprints equal) and the record of ADR 0057 is unchanged bit for bit (the particle
+> suites of rcfd-particles and rcfd-api, H1, baseline hashes). Not in it: no flow solver of rcfd consumes the record; the
+> normal momentum of a TAB breakup is booked as a residual without a carrier counterpart (the source conserves it on the
+> average; 1.45e-3 of the drag impulse in the spray). Open: ADR 0230 Q1 (one method or two), Q2 (breakup momentum), Q3
+> (enthalpy datum, constant latent heat), Q5 (where the solver wiring goes). Case-tree wiring (optional particles.evaporation
+> and particles.breakup tables, ADR 0224 question 2) goes with F-252.
+
+**Proposed follow-up item (only if Q5 (b) is taken; otherwise add its acceptance to F-252):**
+
+- Title: "Droplet feedback in the transient two-way path".
+- Deps: F-323.
+- Acceptance: "With the droplet exchange on, the transient two-way particle path gives the carrier the vapour mass (a species
+  source), the momentum and the energy sources of `Coupling::droplet_sources`, and the tracker reads the carrier temperature
+  and vapour fraction of the step; gas plus liquid mass, momentum and energy of a closed case are conserved to 1e-10 relative
+  per step; optional `particles.evaporation` and `particles.breakup` tables (hash-omitted when absent); a case without them is
+  bit-identical."
