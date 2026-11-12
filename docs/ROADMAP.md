@@ -6441,7 +6441,7 @@ fixed by the item's registration ADR before any code.
     4, or is shown to reach order 1.7 on finer levels or at a later time, or the ADR names why not with a number.
   - note: From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
-- [ ] **F-350** Strong body-flow coupling selectable from the case tree
+- [~] **F-350** Strong body-flow coupling selectable from the case tree
   - depends on: F-251
   - acceptance: A case with dynamic_mesh.six_dof.coupling = "strong" (default "loose") and its relaxation, added-mass
     estimate, tolerance, force scale and iteration cap as keys runs the spring-mounted piston at a mass ratio of 4
@@ -6450,7 +6450,26 @@ fixed by the item's registration ADR before any code.
     error or grows; a step that reaches the cap stops the run with a located message unless a key says to continue;
     every static check of the new keys is located; with the default every existing case hash is bit-identical.
   - note: From ADR 0250 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    Needs crates/rcfd-api/src/schema.rs and sim.rs.
+    PARTIAL (ADR 0266, 2026-11-12; registered before the code, one amendment): the optional table
+    [dynamic_mesh.six_dof.coupling] (absent from every case that does not write it; a key inside the existing table
+    six_dof would need an entry in the H1 hash table, so the acceptance's coupling = "strong" is written scheme =
+    "strong" in that table) selects the strong coupling of rcfd_fv::fsi::strong_step in the case driver; keys scheme
+    (loose default, strong), relaxation (aitken default, fixed), added_mass (the factor 2M/(2M + m')), tolerance,
+    force_scale, moment_scale, max_iterations, at_cap (stop default, continue). Tree runs equal strong_step called
+    directly bit for bit (60 steps with ADR 0250's settings, 40 with a fixed factor and every key away from its
+    default). The spring-mounted piston of ADR 0250 at mass ratio 4 through the case driver gives ADR 0250's numbers to
+    their printed digits: omega_m/omega 1.005081 at T/100 (limit 2 %), dt halving 1.7e-5 (limit 0.5 %), largest ratio of
+    same-side turning points 0.92452 and 0.96141 over 11 crossings (never grows), 3.0 flow solves a step; with scheme =
+    "loose" (or no table) it passes 10 X at step 28 (T/100) and 31 (T/200) and stops at steps 34 and 40 with a located
+    mesh error. A step at the cap stops the run with "dynamic_mesh: step N, t = ...:
+    dynamic_mesh.six_dof.coupling.max_iterations: ..."; with at_cap = "continue" the run goes on with one warning event,
+    and the cap 1 equals the loose run bit for bit. Every static check of the new keys is located at its key (strong
+    with a prescribed motion, rest patches or Newmark; tolerance, scales, added mass, cap; unknown values and keys).
+    Without the table nothing changes: baseline hashes, case_hashes_w48u, the K0 tests of ADR 0257 and 0262 and the
+    dynamic_mesh tree tests pass unedited; a table with scheme = "loose" equals no table bit for bit. Partial by the
+    registered rule: one of six mutations (force_scale not read) passed its named test (the floor k X never binds on
+    this case; the fixed-factor test catches it). Open: ADR 0266 Q1 (status), Q2 (the key name), Q3 (Newmark), Q4 (rest
+    patches). The wall pressure of the body force stays the default extrapolation (F-358). Follow-up: F-437.
 - [x] **F-351** Wall pressure of the body force on a fixed-flux moving wall (the 1.25 percent added-mass deficit)
   - depends on: F-251, F-244
   - acceptance: The cause of the discrete added mass of the piston column lying 1.25 percent below rho A L0 (ADR 0250 C1
@@ -7697,3 +7716,9 @@ fixed by the item's registration ADR before any code.
     creep growth or sound level is validated against a measurement.
   - note: Structural solver, advanced tier (plan ADR 0310, 2026-11-12). Size M. Stub ADR 0339; the registration is
     written by the implementation agent before any code.
+- [ ] **F-437** Strong coupling in the case tree: a case whose force floor decides the convergence test
+  - depends on: F-350
+  - acceptance: A tree-against-library equality test of the strong coupling whose force_scale decides the convergence
+    test of every step (for instance force_scale = 100 k X on the piston of ADR 0266) is bit-identical, and fails when
+    the driver does not read force_scale; registered before the run.
+  - note: From ADR 0266 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
