@@ -553,6 +553,108 @@ pub fn patch_force_moment(
     patches: &[String],
     x_ref: Vec3,
 ) -> Result<(Vec3, Vec3), String> {
+    force_moment(geom, u, p, rho, nu, patches, x_ref, None)
+}
+
+/// [`patch_force_moment`] with the wall pressure of the fixed-flux faces taken from their prescribed pressure gradient
+/// (F-351, ADR 0252; opt-in, nothing in the library calls it). `wall_dpdn` is the vector of `ale::set_follow_conditions` for
+/// the flow step that produced `p`: the outward-normal gradient `g = -n . (u_b,new - u_b,old)/dt` per boundary face (index
+/// `f - n_internal`), `NaN` where none is prescribed. On a face with a finite entry
+///
+/// ```text
+/// p_f = p_c + (grad p)_c . d + (g - (grad p)_c . n)(d . n),     d = x_f - x_c,
+/// ```
+///
+/// the Taylor expansion to the wall with the normal part of the cell gradient replaced by the prescribed one; it is
+/// `p_c + dn g`, the wall value the step's pressure equation used, where the cell centre lies on the face normal (error
+/// `p_nn dn^2/2`). The default extrapolation is first order there, because the cell gradient sees the stored wall value of
+/// the pressure field and not the prescribed gradient: on a column of `N` cells accelerated by a piston its force is low by
+/// `1/(4N)`. The other faces and the viscous part are those of [`patch_force_moment`]. Fails for a vector that does not have
+/// one entry per boundary face.
+#[allow(clippy::too_many_arguments)]
+pub fn patch_force_moment_wall_gradient(
+    geom: &FvGeometry,
+    u: &VectorField,
+    p: &ScalarField,
+    rho: f64,
+    nu: f64,
+    patches: &[String],
+    x_ref: Vec3,
+    wall_dpdn: &[f64],
+) -> Result<(Vec3, Vec3), String> {
+    if wall_dpdn.len() != geom.mesh.n_boundary_faces() {
+        return Err(format!(
+            "patch_force_moment_wall_gradient: {} wall gradients for {} boundary faces",
+            wall_dpdn.len(),
+            geom.mesh.n_boundary_faces()
+        ));
+    }
+    force_moment(geom, u, p, rho, nu, patches, x_ref, Some(wall_dpdn))
+}
+
+/// The load of the flow on every wall face of `patches`, in the order of the patches and of their faces (F-139, ADR 0256;
+/// opt-in, nothing in the library calls it but `cosim`): the terms that [`patch_force_moment`] sums, `rho [p_f S_f - nu
+/// ((grad u)_f + (grad u)_f^T) . S_f]`, zero on an empty face. With `wall_dpdn` the wall pressure is that of
+/// [`patch_force_moment_wall_gradient`]. Fails for a vector that does not have one entry per boundary face.
+pub fn patch_face_forces(
+    geom: &FvGeometry,
+    u: &VectorField,
+    p: &ScalarField,
+    rho: f64,
+    nu: f64,
+    patches: &[String],
+    wall_dpdn: Option<&[f64]>,
+) -> Result<Vec<Vec3>, String> {
+    if let Some(w) = wall_dpdn {
+        if w.len() != geom.mesh.n_boundary_faces() {
+            return Err(format!(
+                "patch_face_forces: {} wall gradients for {} boundary faces",
+                w.len(),
+                geom.mesh.n_boundary_faces()
+            ));
+        }
+    }
+    let mut n = 0;
+    for name in patches {
+        n += geom.mesh.patch(name).ok_or_else(|| format!("no patch '{name}'"))?.size;
+    }
+    let mut out = vec![vec3::ZERO; n];
+    face_loads(geom, u, p, rho, nu, patches, wall_dpdn, &mut |k, _, df| out[k] = df)?;
+    Ok(out)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn force_moment(
+    geom: &FvGeometry,
+    u: &VectorField,
+    p: &ScalarField,
+    rho: f64,
+    nu: f64,
+    patches: &[String],
+    x_ref: Vec3,
+    wall_dpdn: Option<&[f64]>,
+) -> Result<(Vec3, Vec3), String> {
+    let (mut force, mut moment) = (vec3::ZERO, vec3::ZERO);
+    face_loads(geom, u, p, rho, nu, patches, wall_dpdn, &mut |_, fc, df| {
+        force = vec3::add(force, df);
+        moment = vec3::add(moment, vec3::cross(vec3::sub(fc, x_ref), df));
+    })?;
+    Ok((force, moment))
+}
+
+/// The loop of [`force_moment`] over the wall faces: `visit(k, face centre, load)` for every face that is not empty, `k` the
+/// position of the face in the list of all faces of `patches`.
+#[allow(clippy::too_many_arguments)]
+fn face_loads(
+    geom: &FvGeometry,
+    u: &VectorField,
+    p: &ScalarField,
+    rho: f64,
+    nu: f64,
+    patches: &[String],
+    wall_dpdn: Option<&[f64]>,
+    visit: &mut dyn FnMut(usize, Vec3, Vec3),
+) -> Result<(), String> {
     let mesh = &geom.mesh;
     let n_int = geom.n_internal;
     let ub = u.boundary_values(geom);
@@ -565,10 +667,11 @@ pub fn patch_force_moment(
         })
         .collect();
     let grad_p = least_squares(geom, &p.values, &pb);
-    let (mut force, mut moment) = (vec3::ZERO, vec3::ZERO);
+    let mut k = 0;
     for name in patches {
         let patch = mesh.patch(name).ok_or_else(|| format!("no patch '{name}'"))?;
         for f in patch.faces() {
+            k += 1;
             if geom.empty[f] {
                 continue;
             }
@@ -578,7 +681,11 @@ pub fn patch_force_moment(
             let n = vec3::scale(s, 1.0 / area.max(1e-300));
             let fc = mesh.face_centres()[f];
             let dn = geom.dn[f - n_int];
-            let pf = p.values[c] + vec3::dot(grad_p[c], vec3::sub(fc, mesh.cell_centres()[c]));
+            let d = vec3::sub(fc, mesh.cell_centres()[c]);
+            let mut pf = p.values[c] + vec3::dot(grad_p[c], d);
+            if let Some(g) = wall_dpdn.map(|w| w[f - n_int]).filter(|g| g.is_finite()) {
+                pf += (g - vec3::dot(grad_p[c], n)) * vec3::dot(d, n);
+            }
             // G[i][j] = d u_i / d x_j at the face
             let mut g = [[0.0; 3]; 3];
             for i in 0..3 {
@@ -594,9 +701,8 @@ pub fn patch_force_moment(
                 df[i] -= nu * tij;
             }
             let df = vec3::scale(df, rho);
-            force = vec3::add(force, df);
-            moment = vec3::add(moment, vec3::cross(vec3::sub(fc, x_ref), df));
+            visit(k - 1, fc, df);
         }
     }
-    Ok((force, moment))
+    Ok(())
 }

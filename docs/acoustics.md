@@ -160,14 +160,71 @@ What was checked (closed forms, Cartesian grids, gas at rest):
 
 Limits:
 
-* The impedance is real and independent of frequency. Liners and resonators (complex, frequency-dependent impedance) need a
-  time-domain model with memory, which is not built.
+* The impedance is real and independent of frequency. A frequency-dependent wall is the mass-spring-damper wall of the
+  next section; liners and resonators with a measured impedance curve are not built.
 * Both quiet boundaries are quiet only near normal incidence: they reflect 7 percent of a wave arriving at 30 degrees and
   17 percent at 45 degrees (below 1 percent only within 11 degrees of the normal). For oblique waves put a sponge layer
   in front of the boundary (next section). There is no multi-dimensional non-reflecting condition.
 * The matched wall is matched for the `rho c` it is given; a mean flow through the boundary or a different local state
   changes the match.
 * No wave-equation solver and no modal export exist.
+
+## Frequency-dependent wall: the mass-spring-damper wall (F-332, ADR 0243; library only)
+
+A wall whose impedance depends on frequency needs memory in the time domain. `MsdWall { p, r, m, k }` (`rcfd-fv`
+`compressible_bc.rs`) is the simplest such wall: per unit area a plate of mass `m` [kg/m^2] on a spring `k` [Pa/m] and a
+damper `r` [Pa s/m], pushed by the gas: `m dv/dt + r v + k xi = p_face - p`, `d xi/dt = v`. For a tone its specific
+impedance is
+
+    Z(omega) = r + i (omega m - k/omega)        (time factor e^{+i omega t}),
+
+and a plane wave at normal incidence is reflected with `(Z - rho c)/(Z + rho c)`, a complex number: below the resonance
+`omega0 = sqrt(k/m)` the wall is a spring, above it a mass, at the resonance it is the damper alone. It is opt-in
+(`CompressibleSolver::set_msd_wall(patch, Some(wall))`, which replaces the patch's `CompBc` while it is set); without it
+the solver produces the same bits as before. It is reachable from Rust, not yet from a case file. Every check with its
+limit and measured value is in [ADR 0243](adr/0243-f332-registration-mass-spring-damper-wall.md).
+
+How it works: every face of the patch carries the displacement `xi` and the velocity `v` of the wall
+(`msd_wall_state`, `set_msd_wall_state`). The face state keeps the entropy, the tangential velocity and the outgoing
+Riemann invariant of the interior cell, as the impedance wall does, and has the normal velocity `v`; its pressure
+drives the wall. `xi` and `v` are advanced with the same Runge-Kutta stages as the flow. With `m = 0` the wall has no
+velocity of its own and the face is the impedance wall with the reference pressure `p + k xi`; with `m = 0` and `k = 0`
+it is `CompBc::Impedance { p, z: r }` bit for bit.
+
+The step: the wall equation is integrated explicitly, so a light mass or a stiff spring limits the step to
+`msd_dt_limit()` = `0.8 min(2m/(r + rho c), (r + rho c)/k)`. `max_dt()` includes this limit while a wall is set, and
+`step(dt)` refuses a larger step. If the limit is far below the CFL step, the mass is too light to matter at the
+resolved frequencies: set `m = 0` (and for a spring too stiff to matter use `CompBc::Slip`).
+
+What was checked (closed forms, tube with `rho c = 1`, wall with `r = 0.5`, `m = 1/pi`, `k = 16 pi`, resonance at the
+wavelength 0.5, 320 to 500 cells per wavelength):
+
+* a tone at 0.8, 1 and 1.25 times the resonance frequency: the measured complex reflection coefficient is within
+  `2.9e-4` in magnitude (relative) and `2.4e-4` rad in phase of the closed form (0.797 at -55.3 degrees, 1/3 at 180
+  degrees, 0.797 at +55.3 degrees); the limit was 2 percent and 0.02 rad. On half the resolution, at the resonance:
+  `4.5e-4` and `1.3e-3` rad;
+* the same measurement (least-squares split of the tone into the incident and the reflected wave at 400 probe cells) on
+  walls with a known real reflection, the impedance wall `z = rho c/2` and the rigid wall: within `1.3e-4` and `5e-5`
+  rad, so the measurement resolves the tolerance; the impedance wall alone misses the closed form of the
+  mass-spring-damper wall by 58 percent and 2.2 rad away from the resonance;
+* the wall without damper reflects with the magnitude 1 within `2.8e-3` at the three frequencies;
+* a wall released from a displacement in a gas at rest follows the damped oscillator with the radiation damping `rho c`
+  within `1.2e-6` of the initial displacement;
+* a light mass and a stiff spring whose step limits are a third and a sixth of the CFL step run stably at
+  `max_dt()` and reflect a pulse like their damper and like a rigid wall (differences `8e-6` and `4e-5`); without the
+  limit both runs fail;
+* `m = 0`, `k = 0` against `CompBc::Impedance`: 1400 steps bit-identical.
+
+Limits:
+
+* One degree of freedom per face and no coupling between faces: no plate bending, no membrane, no cavity, no fit of a
+  measured impedance curve by several poles.
+* The mesh face does not move: the wall velocity is a transpiration velocity (displacements small against the cell size
+  and the wavelength). Mass crosses the face and returns when the wall returns, so the totals of the solver are not
+  conserved to round-off with a wall.
+* Checked at normal incidence only; gas at rest; Cartesian grids.
+* Not together with a sponge layer, and not on moving meshes (`step_ale`, `replace_mesh` and `set_sponge` return an
+  error while a wall is set).
 
 ## Sponge layer of the compressible solver (F-331, ADR 0237; library only)
 
@@ -217,7 +274,48 @@ Limits:
 * The plain form at oblique incidence needs a thickness of many wavelengths (for 1 percent of a Gaussian pulse at 60
   degrees about 175 pulse widths).
 * Not on moving meshes: `step_ale` and `replace_mesh` return an error while a sponge is set.
-* An isolated pulse at 60 degrees was not run (about two million cells); 60 degrees is checked with pulse trains.
+* An isolated pulse at 60 degrees was not run in ADR 0237; ADR 0248 ran it (next section).
+
+### The shifted matched form, corners, damping along the layer (F-340, ADR 0248; library only)
+
+`SpongeForm::MatchedShifted(MatchedOptions { normal, shift, along, second })` is the matched form with three opt-in
+additions; `Plain` and `Matched` are unchanged, bit for bit. Every check with its limit and measured value is in
+[ADR 0248](adr/0248-f340-registration-matched-sponge-shift-corner-and-damping-along-the-layer.md).
+
+| Option | What it does | What it costs |
+|---|---|---|
+| `shift` = `a` [1/s] (the complex frequency shift) | the memories decay, `dQ/dt = p - p_ref - a Q`: under a pressure that is held the memory and the force along the layer stay bounded (`p'/a`), and a wrong start of the memory is forgotten after a few `1/a` | the attenuation exponent is multiplied by `omega^2/(a^2 + omega^2)`: below `omega ~ a` the layer does not absorb, and it no longer pulls a static pressure to the reference. Keep `a` well below the lowest frequency of interest; the checks use `a = 0.05 c/L` (0.25/s) |
+| `second` (a second planar layer, normal orthogonal to the first) | two layers that overlap in a corner absorb there as well (`Sponge::corner`); the same memory `Q`, one product term in mass and energy, the force of each layer on the momentum along the other's normal | nothing in the equations; one more memory for an edge in three dimensions (built, checked by algebra only) |
+| `along` = `beta` (damping of the momentum along the layer, a fraction of the layer rate) | damps waves that run along the layer | **a mismatch**: it reflects about `1.3 beta` of a pulse arriving at 60 degrees, `0.34 beta` at 45, `0.10 beta` at 30 (model); `beta = 0.05` measured 4.4 percent of a train at 60 degrees. Leave it at zero unless the ringing matters more than the oblique reflection |
+
+`Sponge::planar_shifted(geom, reference, &layer, shift, along)` builds one layer, `Sponge::corner(geom, reference, &layer1,
+&layer2, shift, along)` two. A restart, or a start with a wave already inside the layer, sets the memories with
+`set_sponge_memories` (`q`, `r` and the momentum memory `m`).
+
+What was checked with `shift = 0.25`, `along = 0` on the 40-cell layer (limit 1 percent):
+
+* normal incidence: `9.4e-7` in front of the Thompson boundary, `1.2e-6` in front of a rigid wall;
+* one isolated plane pulse above a rigid wall: `2.3e-5` at 30 degrees, `1.4e-4` at 45 degrees, **`8.1e-4` at 60 degrees** (the
+  matched form of ADR 0237 in the same run: `8.0e-4`);
+* trains in a rigid duct started in the layer's steady state: `3.1e-4`, `3.6e-4`, `1.3e-3` at 30, 45, 60 degrees;
+* a quarter of a cylindrical pulse leaving through two layers and their corner: `5.3e-5` (no sponge: 0.058; one layer
+  only: 0.029);
+* a closed box with a pressure offset that varies along the layer, 100 transit times of the layer: the momentum along
+  the layer stays below `3.0 delta/c` and does not grow (the form of ADR 0237 in the same run: `3.2 delta/c`, no growth
+  either);
+* without the options the shifted form produces the bits of `Matched`.
+
+What it does not do:
+
+* **It does not remove the ringing of a rigid duct.** A wave train started inside the layer with zero memory still
+  leaves 3.7, 6.1 and 8.6 percent at 30, 45 and 60 degrees in the window of the ADR 0237 set-up (2.2, 3.6, 4.2 percent
+  with `along = 0.05`). The ringing sits at the cut-off frequencies of the duct; a field that does not vary across the
+  layer solves the equations of any matched layer, so no matched layer damps it, and a damping along the layer strong
+  enough to remove it within one or two periods reflects far more than 1 percent at 45 and 60 degrees. Start with a
+  quiet layer or set the memories.
+* Three layers meeting in a corner of a three-dimensional box are not built.
+* As before: reference at rest, explicit source, not on moving meshes, not together with a mass-spring-damper wall,
+  Cartesian grids only checked.
 
 ## Reference: code locations, input format and command line
 
@@ -232,7 +330,8 @@ Limits:
 | Surface-series reader, builder, adapter from `surfaces::Surface` | `crates/rcfd-post/src/surface_series.rs` |
 | CLI | `rcfd fwh` (`crates/rcfd-cli/src/cmd_fwh.rs`) |
 | Impedance and quiet boundaries of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`impedance_wall`), `CompBc::Impedance` |
-| Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory` |
+| Mass-spring-damper wall of the compressible solver | `crates/rcfd-fv/src/compressible_bc.rs` (`MsdWall`, `piston_face`), `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`, `msd_dt_limit` |
+| Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory`, `sponge_memories`, `set_sponge_memories`; the shifted form: `MatchedOptions`, `Sponge::planar_shifted`, `Sponge::corner` |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 

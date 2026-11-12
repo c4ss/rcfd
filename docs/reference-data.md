@@ -1453,6 +1453,38 @@ Opt-in (`ImmersedForcing::build_second_order`); the forcing of ADR 0218 (`build`
 | A mass source in the cells of the body so that the flow inside the body does not constrain the fluid (Kim, Kim, Choi, J. Comput. Phys. 171 (2001) 132-150) | from memory | NOT read; the source of ADR 0234 D2 (the solid cells' net outflow, passed as the volume source of ADR 0052) and the net-flux correction of D3 are derived there |
 | Circular Couette flow as the measure of the order (the set-up CC of ADR 0218) | derived | as the F-219 row above; measured `e` 6.12e-3, 1.61e-3, 4.24e-4, 1.03e-4 at N 24, 48, 96, 192 (orders 1.93, 1.93, 2.04) against 8.29e-3, 3.20e-3, 1.58e-3 of the forcing of ADR 0218 |
 
+## F-337 immersed solid: second-order moment of the forcing (ADR 0239)
+
+Opt-in (`ImmersedForcing::force_moment_second_order`); `force_moment` is unchanged and stays what a caller gets.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| The force and moment on a body from the momentum and angular-momentum balance of a control volume (Batchelor, An Introduction to Fluid Dynamics, 1967, section 3.2), and the force on an immersed boundary from its forcing and the momentum of the forced cells (Lai and Peskin, J. Comput. Phys. 160 (2000) 705-719; Balaras, Comput. Fluids 33 (2004) 375-404) | from memory | NOT read; the statement of ADR 0239 D1 (the moment of the forcing with every term at the centre of its cell is the moment of the full traction and of the momentum flux on the regular fluid faces around the forced cells) is derived there on rcfd's discrete momentum equation |
+| The identity `integral x x (grad u^T n) dS = -integral n x u dS` for a divergence-free field on a closed surface | derived | ADR 0239 D1 (Stokes' theorem on a closed surface) |
+| Circular Couette torque `4 pi mu omega R1^2 R2^2/(R2^2 - R1^2) = 4.18879` as the measure of the order of the moment | derived | as the F-219 row above; measured error 0.396, 0.107, 0.027 percent at N 24, 48, 96 (orders 1.89, 1.98) against 3.46, 1.60, 0.74 percent of `force_moment` |
+| DFG 2D-1 reference values | read | as the F-219 row above; the force is that of `force_moment` (M2, second-order forcing: `C_D` -0.306 percent, `C_L` +2.534 percent) |
+
+## F-346 immersed solid: force and moment in unsteady flow (ADR 0249)
+
+Opt-in (`ImmersedForcing::force_moment_unsteady`, `immersed::velocity_rate`); `force_moment` and `force_moment_second_order`
+are unchanged.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| The force on a body from the momentum balance of a fixed control volume (Batchelor, An Introduction to Fluid Dynamics, 1967, section 3.2), and the hydrodynamic force on a body represented by a volume forcing as the reaction of the forcing plus the rate of change of the momentum of the fictitious fluid inside it (Uhlmann, J. Comput. Phys. 209 (2005) 448-476; Lai and Peskin, J. Comput. Phys. 160 (2000) 705-719; Balaras, Comput. Fluids 33 (2004) 375-404) | from memory | NOT read; ADR 0249 D1 derives on rcfd's discrete momentum equation that the storage to add back is that of the solid cells and that the first fluid cells do not enter |
+| Inner cylinder accelerated with `Omega = alpha t` in a fixed outer one: `u_theta = alpha t (A r + B/r) + w(r)`, `w = (alpha/nu)(A r^3/8 + (B/2) r ln r) + C r + D/r`, moment on the inner cylinder per unit depth `-4 pi mu B alpha t + 2 pi R1^2 mu [(alpha/nu)(A R1^2/4 + B/2) - 2 D/R1^2]` (`-4.188790 t - 0.123934` for `R1 = 0.5`, `R2 = 1`, `alpha = nu = rho = 1`) | derived | ADR 0249 amendment 1 (X1b); measured error 0.167 and 0.078 percent at N 48 and 96, the reaction alone 4.3 and 4.4 percent |
+| Plate accelerated with `U = a t` under a wall at rest at distance `d`: `u = a t (1 - eta/d) + (a/nu)(eta^2/2 - eta^3/(6 d) - d eta/3)`, force on the plate per area `-(mu a t/d + rho a d/3)` | derived | ADR 0249 (X2, X2b); measured error 0.056 and 0.014 percent at N 16 and 32, the reaction alone 42.8 percent |
+| DFG 2D-2 level-6 values | read | as the F-219 row above (max `C_D` 3.2200, max `C_L` 0.9859); measured values in ADR 0249 addendum 1 |
+
+## F-355 second-order immersed forcing in transient PISO: bounded weights (ADR 0254)
+
+Opt-in (`ImmersedForcing::build_second_order_bounded`); `build` and `build_second_order` are unchanged.
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Ghost-cell extrapolation near a boundary point close to a grid node has large weights of alternating sign and can destabilise the update; remedy: a stencil with bounded weights through an image point in the fluid (Tseng and Ferziger, J. Comput. Phys. 192 (2003) 593-623; Mittal et al., J. Comput. Phys. 227 (2008) 4825-4852) | cited from memory, not read for this work | the formula used (the wall value reflected through the value at the image point of the face, `2 u_G - ((1 - a) HbyA_c + a HbyA_d)`, error `xi_f^2 u''` plus the linear interpolation) is derived in ADR 0254 amendment 1; measured on circular Couette: order 1.947, face-flux reconstruction error 7.99e-4 at N 96 with ratio 3.86 |
+| DFG 2D-2 level-6 values | read | as the F-219 row above (`St` 0.30188, max `C_D` 3.2200, max `C_L` 0.9859); measured on M2 with the bounded form in ADR 0254 addendum 1: 0.30112, 3.20930, 0.97593 |
+
 ## F-297 NSGA-II crossover: the operator read against the papers (ADR 0220, docs/design-loop.md)
 
 Read 2026-11-07 for the registration of ADR 0220, before any code. No source listing of any optimisation code was opened (the web
@@ -1543,3 +1575,19 @@ No source was read for F-306. The cause and the fix are derived on the code of `
 |---|---|---|
 | Edge removal: a ring of cells around an interior edge `(d, e)` replaced by the cells `(a, b, c, d)` and `(a, b, c, e)` of each triangle of a triangulation of the ring polygon; it is valid when every triangle, taken in the ring's turning order, has `d` on the side `-s` and `e` on the side `s` of its plane (`s = orient3d(d, e, poly[0], poly[1])`), and the old test (`d`, `e` on opposite sides) also passes triangles folded across a reflex corner | derived | ADR 0228 "The cause"; the same rule as F-247's `cand_removal` (ADR 0215 M3, M4) |
 | Edge removal and its dynamic-programming triangulation (Shewchuk's topological improvement of tetrahedral meshes; Klincsek's polygon triangulation) | from memory | NOT read; the existing code's choice of triangulation is unchanged |
+## F-302 periodic seam pair diffusivity: the property and user-function viscosities (ADR 0227)
+
+Nothing was read for ADR 0227. The rule is the flux balance of a pair of finite-volume faces, derived in ADR 0205 D1, applied to the
+face formulas the code already uses on internal faces (`crates/rcfd-api/src/properties.rs`, the user-function face loop of F-122).
+
+| Item | Status | Source |
+|---|---|---|
+| Both faces of a periodic pair take one diffusivity, the internal-face formula with the pair's weight `w = dn_g / (dn_f + dn_g)`: `mu(w T_P + (1 - w) T_Q) / rho` for a property law, the module at the centre of the pair's face of lower index with `w T_P + (1 - w) T_Q` and `w abs(u_P) + (1 - w) abs(u_Q)` for a user function | derived | ADR 0205 D1, ADR 0212 D1, ADR 0227 D1 (the face of lower index is a choice of ADR 0227, question 1) |
+| The property viscosity is already one value per pair by default, up to rounding (the periodic face temperature is the same interpolation) | derived | ADR 0227 item 2 (code read), checked by F2p, G2p and T4p |
+
+## F-300 transient RANS follow-ups (ADR 0225)
+
+| Item | Status | What was read (source) |
+|---|---|---|
+| Spalding (1961) law of the wall `y+ = u+ + (1/E)[exp(kappa u+) - 1 - kappa u+ - (kappa u+)^2/2 - (kappa u+)^3/6]`, used for the k-based wall eddy viscosity `nu (y*/u+ - 1)` of the opt-in `wall_nut_law = spalding` (`WallConstants::nut_wall_from_k_spalding`) and its inverse `SpaldingLaw::u_plus` | existing | the row "Spalding (1961) law of the wall" above (standard cubic form, two secondary sources, original paper not read); no new source was read for F-300 |
+| The standard k-based wall eddy viscosity `nu (y* kappa/ln(E y*) - 1)` above `y*_lam` and 0 below, written as `nu (y*/u+ - 1)` with `u+ = min(y*, ln(E y*)/kappa)`; its slope jump `0.0684 nu` at `y*_lam = 11.53` | derived | from the existing `WallConstants::nut_wall_from_k` (Launder and Spalding 1974 as recorded above, not read) |

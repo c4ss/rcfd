@@ -3326,8 +3326,14 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     1.63 and the order as registered is 1.67 (still missed: what is left is spatial); and 1.62 with dt proportional to
     h^2 (limit 1.7), 1.66 with BDF2 and three outer iterations: the truncation of the linear donor interpolation at one
     component fringe cell, a second-order error sampled at one pose (the root mean square converges at 1.99 and 1.96 on
-    three levels), free of time error with BDF2. Found there and open: a first-order term of the calculated component
-    cells with the coefficient 1.0e-4. Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1); several
+    three levels), free of time error with BDF2. Found there and traced by ADR 0246 (F-334) to the truncation of the
+    linear donor interpolation: with the component at rest the root mean square of the calculated component cells
+    converges at 1.277, 1.166, 1.626 on levels 1 to 4 and at 1.922, 1.935, 1.950 with a third-order interpolation
+    supplied by the test; the mechanism is open. With the opt-in quadratic donor interpolation of F-336 (ADR 0251) the
+    Taylor-Green order with dt proportional to h^2 is 1.993 and 2.000 on levels 1 to 3 and the calculated component
+    cells at rest converge at 1.916, 1.924, 1.952 on levels 1 to 4; T1c stays a recorded miss of the default linear
+    stencils (1.618). Found by ADR 0251: the donor search (ADR 0219 M3) finds no donor for a point in the sliver between
+    two cells that share a non-planar face. Not delivered: the case-tree, CLI and Studio wiring (ADR 0219 Q1); several
     components, a moving background, hole cutting from the wall geometry, non-orthogonal correctors, turbulence (Q2 to
     Q5).
 - [~] **F-135** Viscoelastic constitutive models (Oldroyd-B, Giesekus, PTT, FENE-P) with log-conformation stabilisation
@@ -3430,13 +3436,41 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     aerodamping versus nodal diameter, generalised-force outputs, interblade phase angle and phase-shifted methods.
     Acceptance addition: an oscillating flat-plate cascade gives aerodynamic damping versus interblade phase angle
     within 10 percent of published curves.
-- [ ] **F-139** Multiphysics co-simulation participant interface (data transfer, coupling time steps) for external structural solvers
+- [x] **F-139** Multiphysics co-simulation participant interface (data transfer, coupling time steps) for external structural solvers
   - depends on: F-085, F-063
-  - acceptance: A mock structural participant exchanges wall displacement/force with rcfd and converges a coupled iteration; the protocol is documented
-  - note: P4 (long-term). Gap: multi-physics system coupling and intrinsic FSI options. SCOPE (merged review): add
-    conservative and profile-preserving mapping, RBF mapping, unmapped-value policy, ramping, relaxation, quasi-Newton
-    stabilisation, extrapolated step initialisation and simultaneous multi-participant update; functional-mock-up import
-    in F-242.
+  - acceptance: A mock structural participant exchanges wall displacement/force with rcfd and converges a coupled
+    iteration; the protocol is documented
+  - note: P4 (long-term). DONE pending acceptance (ADR 0256, 2026-11-12; registered before the code, one amendment
+    before any run). In-process library interface rcfd_fv::cosim, opt-in, nothing calls it; no transport, case key, CLI
+    or MCP tool. Protocol (docs/cosimulation-protocol.md): a fluid and a structural participant answer describe, time,
+    checkpoint, restore, forces and advance with plain arrays in SI units (face forces of the fluid on the wall in
+    newtons, displacements from the reference configuration in metres); the coupler owns the mapping (weights from
+    structural nodes to wall points, rows summing to 1, consistent; forces back by the transpose through the face means,
+    conservative in resultant and work) and iterates within a coupling step on the nodal force with a fixed or an Aitken
+    factor until the force residual is below tolerance times max(force, floor); at the cap it restores and stops, or
+    keeps the iterate by a setting; a failing participant (error, wrong length, non-finite value, wrong time) stops the
+    step with an error naming participant, time and iteration, both restored bit for bit. Fluid participant FlowWall
+    (moving-mesh PISO step, per-face loads from the new sixdof::patch_face_forces, wall pressure from the prescribed
+    gradient of ADR 0252); mock structural participant SprungWall (lumped sprung nodes, RK4). Model problem: a sprung
+    wall of six nodes closing a channel of 20 x 8 x 2 cells whose 16 wall faces do not match the nodes, cosine modes
+    with omega_j^2 = k/(m + rho tanh(kappa_j L)/kappa_j), mass ratios 4 and 0.51. Measured: every one of 650 steps
+    converged, 7 to 10 iterations (mean 8.8, tolerance 1e-8); omega_m/omega 0.998618 (mode 0, limit 0.5 %) and 1.011453
+    (mode 1, limit 3 %), within 7e-6 and 2e-5 of the discrete model computed before the code (the 1.1 % of mode 1 is the
+    six-node structure); turning points never grow (0.926, 0.950 per period); resultant and work equal on the two meshes
+    to 1e-16, in the run to 5e-16, swept volume to 2e-14; a repeated step restores both participants and repeats bit for
+    bit; with one rigid node the result equals fsi::strong_step_with to 1e-16; controls: the plain fixed point
+    multiplies the residual by 2.0 per iteration (511 in 10), the loose coupling passes 10 X at step 27, the fixed
+    added-mass factor 1/3 takes 30 iterations, an averaging force map loses 85 % of the resultant. Defaults
+    bit-identical (patch_force_moment sums the same face loads in the same order; sixdof, sixdof_coupled,
+    sixdof_flow_f244, strong_fsi_f251, added_mass_f351, f237_heat_rate, w27c_structural pass unedited; baseline hashes 3
+    passed). Eleven mutations each failed their tests. Amendment 1: the registered set-up had zero-gradient side walls,
+    which leave the side flux free for a transverse flow; Symmetry on the two sides replaced it before any run (the
+    record: mode 1 at 0.977). Not delivered, from the merged-review scope: a transport, a real structural solver,
+    geometric or radial-basis mapping, unmapped-value policy, ramping, quasi-Newton stabilisation, extrapolated step
+    initialisation, several participants; functional-mock-up import stays in F-242. Open: ADR 0256 Q1 to Q5. Follow-ups
+    (ADR 0256 questions 1 to 3, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-360,
+    F-361, F-362. To correct: docs/dynamic-mesh.md still says there is no strong coupling (stale since F-251) and lacks
+    a sentence on zero-gradient side walls (ADR 0256 Q4, Q5).
 
 ## Revision additions (F-200 to F-243)
 
@@ -4448,22 +4482,23 @@ Added after the static feature-gap review; wording is product-independent. Phase
     - The solver does not use partitions or the ordering (a report and a VTK field only); no MCP tool.
 - [~] **F-237** Format registry and one-way structural load export: conformance case per supported format, finite-element deck export of pressure and temperature loads
   - depends on: F-119, F-103, F-072
-  - acceptance: Exported pressure and temperature loads on a tube reproduce the integrated force and heat rate to 0.1 percent after round-trip import; a public CGNS example round trip preserves node count and field values exactly; each listed format has a pass/fail conformance case
-  - note: Priority P3. Size M. Area: io. WAVE 27C (ADR 0051), PARTIAL. Not delivered: public CGNS round trip (acceptance
-    NOT met), heat-rate loads and the heat-rate part of the acceptance, case-tree wiring, third-party solver acceptance
-    (not testable), deck card layouts partly unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified).
-    - Format names stay in the format registry documentation, not in this item.
-    - rcfd-io registry (12 supported formats each with a conformance case, CGNS and HDF5 registered NotSupported).
-    - Nastran-style free-field deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located
-      errors).
-    - rcfd-post structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap
-      plus linear recovery.
-    - Measured:
-      - Uniform pressure exact (0 vs 4 eps).
-      - Tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met for force).
-      - Plane force 2.5e-16.
-      - Moments within limits.
-      - Linear temperature exact to 2.4e-14 on 3 structural meshes.
+  - acceptance: Exported pressure and temperature loads on a tube reproduce the integrated force and heat rate to 0.1
+    percent after round-trip import; a public CGNS example round trip preserves node count and field values exactly;
+    each listed format has a pass/fail conformance case
+  - note: Priority P3. Size M. Area: io. WAVE 27C (ADR 0051) and ADR 0244, PARTIAL. Not delivered: public CGNS round
+    trip (acceptance NOT met), case-tree wiring, third-party solver acceptance (not testable), deck card layouts partly
+    unverified (PLOAD4/TEMP read, rest recalled, sign convention unverified), vendor heat-flux card (no specification in
+    the repository). Format names stay in the format registry documentation, not in this item. rcfd-io registry (12
+    supported formats each with a conformance case, CGNS and HDF5 registered NotSupported). Nastran-style free-field
+    deck (GRID, CTRIA3, CQUAD4, CHEXA, PLOAD4, TEMP; bit-exact round trip, line-located errors) plus the repository's
+    own shell heat-flux card RCFDQ,SID,EID,Q (ADR 0244; opt-in writer and reader, old reader unchanged). rcfd-post
+    structural: conservative parameter-space pressure mapping (plane and tube), nodal temperature via remap plus linear
+    recovery, wall heat flux from the temperature boundary condition mapped consistently or conservatively in heat rate.
+    Measured: Uniform pressure exact (0 vs 4 eps). Tube force error 1.6e-4 S (limit 1e-3 S; acceptance 0.1 percent met
+    for force). Tube heat rate after round trip 2.23e-4 consistent, 2.5e-15 conservative (limit 1e-3; acceptance 0.1
+    percent met for heat rate); conservative export against conductive_heat_flow 5.7e-14. Plane force 2.5e-16, plane
+    heat rate 2.5e-16. Moments within limits. Linear temperature exact to 2.4e-14 on 3 structural meshes. Follow-up:
+    F-347.
 - [x] **F-238** Report, surface and post-object catalogue: standard deviation and facet statistics, weighted and vector fluxes, force projections, iso-clip, rake, sphere and quadric surfaces, offset surfaces, point clouds, instance transforms, case comparison and difference fields
   - depends on: F-071, F-072, F-109
   - acceptance: Integrals over an analytic field on a sphere and box (area, flux, mean, standard deviation) match closed form to mesh-convergence order; the difference of two identical solutions is exactly zero and of two uniform-offset analytic fields equals the offset to machine precision, including across meshes
@@ -4973,11 +5008,38 @@ Added after the static feature-gap review; wording is product-independent. Phase
 
 Added after the static feature-gap review; wording is product-independent. Phases follow the phase headings above.
 
-- [ ] **F-251** Strong (implicit) fluid-structure coupling with added-mass stabilisation
+- [x] **F-251** Strong (implicit) fluid-structure coupling with added-mass stabilisation
   - depends on: F-244
-  - acceptance: A spring-mounted piston driving a fluid column at an added-mass to body-mass ratio of at least 1 oscillates at omega = sqrt(k/(M + rho A L0)) within 2 percent, the amplitude at successive same-side turning points never grows (ratio <= 1 + 1e-3) over at least 10 periods, and the explicit coupling of ADR 0033 D7 grows or diverges on the same case (registered before the run); halving dt changes the frequency by <= 0.5 percent
-  - note: Split from F-244 on 2026-10-22 (user decision). Acceptance text proposed by the lead; refine when scheduled.
-    Size L. Needed for light structures; not on the first fan path.
+  - acceptance: A spring-mounted piston driving a fluid column at an added-mass to body-mass ratio of at least 1
+    oscillates at omega = sqrt(k/(M + rho A L0)) within 2 percent, the amplitude at successive same-side turning points
+    never grows (ratio <= 1 + 1e-3) over at least 10 periods, and the explicit coupling of ADR 0033 D7 grows or diverges
+    on the same case (registered before the run); halving dt changes the frequency by <= 0.5 percent
+  - note: Split from F-244 on 2026-10-22 (user decision). Size L. Needed for light structures; not on the first fan
+    path. DONE pending acceptance (ADR 0250, registered 2026-11-12 before the code, merged 2026-11-12): opt-in library
+    function rcfd_fv::fsi::strong_step (new module, nothing calls it; pimple.rs, pimple/moving.rs, sixdof.rs, ale.rs,
+    rcfd-api and the case schema untouched; the loose coupling of ADR 0033 D7 is unchanged and with max_iterations = 1
+    the strong step equals it bit for bit). Within a time step it iterates on the fluid force and moment held over the
+    body step, each iterate restarting body and flow from t_n, with a fixed or an Aitken relaxation; the Aitken start
+    and the best fixed factor come from an added-mass estimate, 2M/(2M + m_a) (the added-mass term of the body equation
+    written as a relaxation; the half belongs to RK4 with a constant force and a wall velocity taken from the
+    displacement). Derived and measured: the loose loop as built is unstable above a mass ratio of 2, not 1, with a
+    growth of sqrt(ratio/2) per step whatever the time step (flow: stable at 1.5, diverges at 3 and 4; growth 1.39 per
+    step at ratio 4 for T/100 and T/200); the gain of the sub-iteration is 1 + ratio/2 (measured 2.952 at ratio 4), so a
+    fixed factor converges below 4/(2 + ratio). Acceptance case, the spring-mounted piston of ADR 0211 at ratio 4 (M =
+    0.01, 11.5 periods): omega_m/omega 1.005081 at T/100 (limit 2 %), dt halving 1.7e-5 (limit 0.5 %), successive
+    same-side turning points fall by 7.5 % a period at T/100 and 3.9 % at T/200 and never grow (lag of dt/2 of the
+    end-of-step force), the loose coupling passes 10 X at step 28 (T/100) and 31 (T/200) and ends with the piston
+    through the outlet; 3.0 flow solves per step at a tolerance of 1e-8, never more than 4 (cap 20). Also met: ratio 20
+    (1.005968, 3.25 solves per step), agreement with the loose coupling at ratio 0.2 (frequency within 2.0e-4, the
+    trajectory difference halves with dt), the restart of an iterate bit-exact, refusals leave flow and body untouched,
+    the existing sixdof, sixdof_coupled, sixdof_flow_f244, ale_flows and ale_gcl suites pass unedited; eight library
+    mutations each failed their tests. Amendment 1 (before any run): the unrelaxed-iteration control was registered with
+    a cap it cannot reach and was replaced by one with cap 10. Not delivered: selecting the coupling from a case file
+    (no key; follow-up item), Newmark with the sub-iteration, a rotating body in a flow. Found, not fixed: the discrete
+    added mass of the column is 1.25 % below rho A L0 at every ratio (the +0.1 % of ADR 0211, +0.5 % here); follow-up
+    item. Open: ADR 0250 Q1 (reword "ratio of at least 1" to 4), Q2 (case key), Q3 (stop or warn at the cap), Q4
+    (added-mass deficit), Q5, Q6. Follow-ups (recommendation taken on the maintainer's standing instruction of
+    2026-11-11): F-350 (case key; Q2, Q3), F-351 (the added-mass deficit; Q4).
 - [ ] **F-252** Spray penetration of a vaporising spray against a public data set
   - depends on: F-245
   - acceptance: liquid and vapour penetration of a constant-volume vaporising spray within 10 percent of a public data set chosen by the user, values read from the source and registered in an ADR before the run. Needs a variable-density carrier with energy, a vapour species and two-way mass and energy exchange; confirm before scheduling.
@@ -5096,80 +5158,101 @@ Added after the static feature-gap review; wording is product-independent. Phase
       are the new item F-291 (Q4 (b)); Q1 and Q2 were not asked.
 - [x] **F-257** Dynamic mesh: prism layering and incompressible layering
   - depends on: F-230, F-063
-  - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions:
-    - (B1) the same piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event
-      conservation 1e-13, mass drift 1e-12);
-    - (B2) layering in the incompressible PIMPLE path: the ADR 0033 G5 piston channel run long enough for at least 5
-      layer removals keeps per-step continuity <= 1e-9, outlet flux equal to the piston swept flux to 1e-10 per step and
-      volume conserved per layer event to 1e-13.
-    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
-      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
-      moving-mesh path.
-  - note: Split from F-247 on 2026-10-22 (user decision). Size M.
-    - DONE (ADR 0213, the registration of F-257, 2026-11-07, branch f257-prism-layering, not merged): every registered
-      check is met; the acceptance is still the maintainer's (ADR 0213 Q5). Library only.
-      `rcfd_mesh::layering::ExtrudedStack` stacks prisms over a planar cross-section (`Section::rect`,
-      `Section::rect_triangles`) with the piston, thresholds and cell source map of `LayerStack` (one shared event
-      function); `face_sources` and `remap_face_flux` carry the face flux through an event (a merged side face takes the
-      sum of the two old faces, a split one the share of its layer height, the faces of a new plane close the cell below
-      them); `PimpleSolver::replace_mesh` installs the new mesh with the remapped velocity, pressure and flux.
-      - (B1) ADR 0090's piston on 320 triangular prisms: `p V^gamma` 1.53e-5 at T and 3.42e-5 at 2T (limit 2e-2),
-        per-event conservation 6.7e-16 (1e-13), mass drift 6.95e-13 (1e-12), volume 1.1e-15 (1e-13), 24 removals and 24
-        additions.
-      - (B2) ADR 0033 G5b mirrored in x on a layered mesh (the piston is `xmax`), 120 steps with 7 removals: step
-        continuity 3.1e-15 (1e-9), outlet against the piston's swept flux 1.3e-14 (1e-10), volume per event 2.2e-16
-        (1e-13). With the piston pulled out, 7 additions meet the same limits.
-      - The face map's balance and uniform-flow checks hold to 9.1e-16 and 1.6e-16; `replace_mesh` with the same mesh
-        changes no bit. Four mutations each made their check fail. Records L1 and L2 (made on main before the code),
-        ADR 0207's R1 to R4, baseline hashes and H1 unedited. The case tree is not changed (ADR 0191 E6 and E7 stay).
-      - Observed, no limit: the cell velocity next to the piston lags by 4.7e-3 of `a0 t` on the layered channel
-        (2.9e-4 on the smoothed mesh, ADR 0033's known miss of G5 (iii)).
-    - Open (ADR 0213 Q1 to Q5): the case-tree wiring under F-259, the piston end, the flux and the pressure of a split,
-      and the status.
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Layering extensions: (B1) the same
+    piston with prism (extruded triangle) layers meets the ADR 0090 limits (p V^gamma 2e-2, per-event conservation
+    1e-13, mass drift 1e-12); (B2) layering in the incompressible PIMPLE path: the ADR 0033 G5 piston channel run long
+    enough for at least 5 layer removals keeps per-step continuity <= 1e-9, outlet flux equal to the piston swept flux
+    to 1e-10 per step and volume conserved per layer event to 1e-13. Out of scope: sliding interfaces / AMI (F-250),
+    elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer
+    surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - note: Split from F-247 on 2026-10-22 (user decision). Size M. DONE (ADR 0213, the registration of F-257, 2026-11-07,
+    branch f257-prism-layering, not merged): every registered check is met; the acceptance is still the maintainer's
+    (ADR 0213 Q5). Library only. rcfd_mesh::layering::ExtrudedStack stacks prisms over a planar cross-section
+    (Section::rect, Section::rect_triangles) with the piston, thresholds and cell source map of LayerStack (one shared
+    event function); face_sources and remap_face_flux carry the face flux through an event (a merged side face takes the
+    sum of the two old faces, a split one the share of its layer height, the faces of a new plane close the cell below
+    them); PimpleSolver::replace_mesh installs the new mesh with the remapped velocity, pressure and flux. (B1) ADR
+    0090's piston on 320 triangular prisms: p V^gamma 1.53e-5 at T and 3.42e-5 at 2T (limit 2e-2), per-event
+    conservation 6.7e-16 (1e-13), mass drift 6.95e-13 (1e-12), volume 1.1e-15 (1e-13), 24 removals and 24 additions.
+    (B2) ADR 0033 G5b mirrored in x on a layered mesh (the piston is xmax), 120 steps with 7 removals: step continuity
+    3.1e-15 (1e-9), outlet against the piston's swept flux 1.3e-14 (1e-10), volume per event 2.2e-16 (1e-13); with the
+    piston pulled out, 7 additions meet the same limits. The face map's balance and uniform-flow checks hold to 9.1e-16
+    and 1.6e-16; replace_mesh with the same mesh changes no bit; four mutations each made their check fail; records L1
+    and L2, ADR 0207's R1 to R4, baseline hashes and H1 unedited. The case tree is not changed (ADR 0191 E6 and E7
+    stay). Observed, no limit: the cell velocity next to the piston lags by 4.7e-3 of a0 t on the layered channel
+    (2.9e-4 on the smoothed mesh, ADR 0033's known miss of G5 (iii)). Open (ADR 0213 Q1 to Q5): the case-tree wiring
+    under F-259, the piston end, the flux and the pressure of a split, and the status. The case tree uses it since ADR
+    0257 (2026-11-12, F-259): [mesh.box_3d] section = "rectangles" or "triangles" builds the extruded stack, and
+    dynamic_mesh.deformation = "layering" runs on it with the compressible solver and with piso / pimple; Q1 (a) is
+    taken on the maintainer's standing instruction.
 - [x] **F-258** Compressible ALE boundaries and mesh-speed time step
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Compressible ALE boundaries and
-    time step:
-    - max_dt uses |u.n - w_n| + c (checked against the closed form for a uniform gas on a mesh moving at w to
-      round-off);
-    - uniform flow is preserved to 1e-12 with characteristic boundary faces that move;
-    - a piston-generated simple wave leaving through a moving characteristic outlet reflects with amplitude below the
-      ADR limit.
-    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
-      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
-      moving-mesh path.
-  - note: Split from F-247 on 2026-10-22 (user decision). Size S to M.
-    - PARTIAL (ADR 0207, the registration of F-258, 2026-11-07, branch f258-compressible-ale, not merged): every
-      registered check is met in the library; marking the item done is the maintainer's (ADR 0207 Q5). On a moving face
-      the compressible ALE step evaluates the total inlet, the pressure outlet, the non-reflecting outlet and the far field
-      in the frame of the face (`rcfd_fv::compressible::characteristic_face_state`: lab-frame data, switches on the normal
-      velocity relative to the face, flux F(q).n - w_n U(q)); the new `CompressibleSolver::max_dt_moving` and
-      `max_dt_ale` take the explicit step with |u.n - w_n| + c (`max_dt_ale` with the face speeds of the last ALE step,
-      `mesh_speeds`). The step of a uniform gas on a translating box equals its closed form to 2.8e-15 (limit 1e-12; the
-      absolute step is 25 and 31 percent off); a uniform flow with the four conditions on faces that dilate, rotate and
-      translate stays uniform to 1.9e-14 (limit 1e-12); a piston-generated simple wave leaves through an outlet moving at
-      Mach 0.2 with a reflection of 4.6e-4 of its pressure jump through the far field and 3.8e-4 through the
-      non-reflecting outlet (limit 1e-2; a fixed-pressure outlet reflects 1.0); four mutations each made their check
-      fail. `max_dt()` and every run without a characteristic condition on a moving face are unchanged bit for bit
-      (records R1 to R4 made on main before the code; baseline hashes and H1 unedited). The case tree is not changed: it
-      still refuses a characteristic condition on a patch that moves (ADR 0191 E5) and steps with `max_dt()`.
-    - Open: the case-tree wiring (ADR 0207 Q1, the open part of F-259), the tree's moving step (Q2), a lagged or a
-      predicted mesh speed (Q3), the frame of the total-inlet data (Q4).
+    time step: max_dt uses |u.n - w_n| + c (checked against the closed form for a uniform gas on a mesh moving at w to
+    round-off); uniform flow is preserved to 1e-12 with characteristic boundary faces that move; a piston-generated
+    simple wave leaving through a moving characteristic outlet reflects with amplitude below the ADR limit. Out of
+    scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more than one
+    moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible moving-mesh path.
+  - note: Split from F-247 on 2026-10-22 (user decision). Size S to M. PARTIAL (ADR 0207, the registration of F-258,
+    2026-11-07, branch f258-compressible-ale, not merged): every registered check is met in the library; marking the
+    item done is the maintainer's (ADR 0207 Q5). On a moving face the compressible ALE step evaluates the total inlet,
+    the pressure outlet, the non-reflecting outlet and the far field in the frame of the face
+    (rcfd_fv::compressible::characteristic_face_state: lab-frame data, switches on the relative normal velocity, flux
+    F(q).n - w_n U(q)); CompressibleSolver::max_dt_moving and max_dt_ale take the step with |u.n - w_n| + c (max_dt_ale
+    with the face speeds of the last ALE step). The step of a uniform gas on a translating box equals its closed form to
+    2.8e-15 (limit 1e-12); a uniform flow with the four conditions on moving faces stays uniform to 1.9e-14 (limit
+    1e-12); a piston-generated simple wave leaves through an outlet moving at Mach 0.2 with a reflection of 4.6e-4 of
+    its pressure jump (far field) and 3.8e-4 (non-reflecting, sigma 0) (limit 1e-2; a fixed-pressure outlet reflects
+    1.0); four mutations each made their check fail; max_dt() and every run without a characteristic condition on a
+    moving face are unchanged bit for bit (R1 to R4, baseline hashes, H1). The case tree is not changed (ADR 0191 E5
+    stays, the tree steps with max_dt()). Open: ADR 0207 Q1 to Q4 (the tree wiring under F-259, the tree's moving step,
+    lagged or predicted mesh speed, the frame of the total-inlet data). The case tree uses it since ADR 0257
+    (2026-11-12, F-259): characteristic conditions on moving patches are accepted, and the mesh-speed step is the opt-in
+    [dynamic_mesh.compressible] time_step = "mesh_speed"; Q1 (a) is taken on the maintainer's standing instruction, Q2
+    (the mesh-speed step as the default of moving tree runs) stays open.
 - [~] **F-259** Case-tree and CLI wiring of layering and compressible ALE
   - depends on: F-230, F-063
   - acceptance: Every limit not stated here is registered in the ADR before the run. Case-tree and CLI wiring of
     layering and compressible ALE (incompressible prescribed and six-DOF motion are already in the tree, ADR 0033 D8):
     invalid keys give located errors, a tree run equals the library run to 1e-12, and a case without the keys is
-    bit-identical (baseline hashes unchanged).
-    - Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing (F-063), six-DOF coupling (F-244), more
-      than one moving layered boundary, non-planar layer surfaces, turbulence or energy in the incompressible
-      moving-mesh path.
-  - note: Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S.
-    - PARTIAL (ADR 0191, the registration of F-259, 2026-11-05, branch f259-layering-ale-wiring, not merged): a transient compressible run (solver.algorithm = compressible) moves its mesh under a prescribed dynamic_mesh motion with rigid or smoothing deformation (the ALE step of ADR 0090), and dynamic_mesh.deformation = layering runs ADR 0090's planar layer stack of a piston on the new generator mesh.generator = box_3d (thresholds 0.4 and 1.6 of lx / nx, no key); no new key, defaults and the incompressible checks unchanged; invalid settings give located errors (E1 to E13; E8 and E2 also through rcfd validate, E8 with its line number), and a piston driven through the last static plane stops the run with a dynamic_mesh: message; ADR 0090's piston P (9191 steps, 24 removals and 24 additions), a smoothed piston with a static pressure outlet and a rigidly moving uniform flow give the same bits through the tree as through library calls (limit 1e-12), and rcfd run gives the reports of the in-process run; ADR 0090's limits hold on the tree run (p V^gamma 1.5e-5 at full compression and 3.4e-5 after the stroke against 2e-2, mass drift 5.4e-13 against 1e-12); fixed-mesh compressible runs are bit-identical to main (D0), baseline hashes and H1 unedited.
-    - Open: the wiring of F-257 (prism and incompressible layering) and F-258 (characteristic conditions on moving faces, the mesh-speed time step) waits for that library work, and done or partial is the maintainer's call (ADR 0191 Q3); layer thresholds are not keys (Q1); the InverseVolume smoothing stiffness is not in the tree (Q2); the Studio gives no cell estimate for box_3d (Q4).
-    - USER DECISION 2026-11-06 (ADR 0191 decision record): stays PARTIAL (Q3, not closed yet); inverse-volume smoothing
-      is the new item F-290 (Q2 (b)); box_3d in the Studio's lists follows the maintainer's Studio worktree (Q4 (a),
-      F-293); Q1 was not asked. The SV202 message observed in addendum 1 is recorded under F-240.
+    bit-identical (baseline hashes unchanged). Out of scope: sliding interfaces / AMI (F-250), elastic-analogy smoothing
+    (F-063), six-DOF coupling (F-244), more than one moving layered boundary, non-planar layer surfaces, turbulence or
+    energy in the incompressible moving-mesh path.
+  - note: Split from F-247 on 2026-10-22 (user decision). Can ship first. Size S. PARTIAL (ADR 0191, the registration of
+    F-259, 2026-11-05): a transient compressible run (solver.algorithm = compressible) moves its mesh under a prescribed
+    dynamic_mesh motion with rigid or smoothing deformation (the ALE step of ADR 0090), and dynamic_mesh.deformation =
+    layering runs ADR 0090's planar layer stack of a piston on the new generator mesh.generator = box_3d (thresholds 0.4
+    and 1.6 of lx / nx, no key); no new key, defaults and the incompressible checks unchanged; invalid settings give
+    located errors (E1 to E13; E8 and E2 also through rcfd validate, E8 with its line number), and a piston driven
+    through the last static plane stops the run with a dynamic_mesh: message; ADR 0090's piston P (9191 steps, 24
+    removals and 24 additions), a smoothed piston with a static pressure outlet and a rigidly moving uniform flow give
+    the same bits through the tree as through library calls (limit 1e-12), and rcfd run gives the reports of the
+    in-process run; ADR 0090's limits hold on the tree run (p V^gamma 1.5e-5 at full compression and 3.4e-5 after the
+    stroke against 2e-2, mass drift 5.4e-13 against 1e-12); fixed-mesh compressible runs are bit-identical to main (D0),
+    baseline hashes and H1 unedited. Open after ADR 0191: the wiring of F-257 and F-258, layer thresholds as keys (Q1),
+    the Studio's cell estimate for box_3d (Q4, F-293). USER DECISION 2026-11-06 (ADR 0191 decision record): stays
+    PARTIAL (Q3, not closed yet); inverse-volume smoothing is the new item F-290 (Q2 (b)); box_3d in the Studio's lists
+    follows the maintainer's Studio worktree (Q4 (a), F-293); Q1 was not asked. The SV202 message observed in addendum 1
+    is recorded under F-240. DONE pending acceptance (ADR 0257, 2026-11-12; ADR 0207 Q1 (a) and ADR 0213 Q1 (a) taken on
+    the maintainer's standing instruction of 2026-11-11): the tree runs the library work of F-257 and F-258.
+    Characteristic compressible conditions may be on patches that move (ADR 0191's refusal E5 lifted; its test L is an
+    ignored record, the new test L2 asserts the new behaviour); the optional table [mesh.box_3d] section = "box"
+    (default), "rectangles" or "triangles" builds box_3d as the extruded layer stack, so layering runs on prism layers
+    and, with piso / pimple, on the incompressible path (velocity, pressure and face flux remapped at every layer
+    change); the optional table [dynamic_mesh.compressible] time_step = "mesh_speed" takes the mesh-speed step (default
+    "absolute", the step of ADR 0191). Both tables are optional tables: a case that does not write them keeps its text,
+    hash and results (H1, baseline hashes and the goldens unedited; ADR 0191's runs and D0 hashes unchanged; time_step =
+    "absolute" equals no table bit for bit). Tree runs equal library runs with the same bits (limit 1e-12): a uniform
+    flow with total inlet, pressure outlet, far field and non-reflecting outlet on moving faces (70 steps, uniform to
+    8.6e-15), the Mach 0.2 piston with the mesh-speed step (613 steps against 625), ADR 0090's piston on prisms (12 099
+    steps, 24 removals and 24 additions, p V^gamma 3.4e-5 against 2e-2, mass drift 7.0e-13 against 1e-12), ADR 0213's
+    piston channel on the piso path with 7 removals (continuity 3.3e-15, volume 8.9e-16) and with 7 additions; rcfd run
+    gives the reports of the in-process run and rcfd validate locates the errors of both tables; located errors N1 to N6
+    and ADR 0191's E1 to E4 and E6 to E13 hold; five mutations each failed their tests. Open: the mesh-speed step as the
+    default (ADR 0207 Q2 (b), changes the bits of moving compressible runs: the maintainer's call), layer thresholds as
+    keys (ADR 0191 Q1), box_3d sections in the Studio's lists (F-293). STATUS kept PARTIAL by the lead: the maintainer
+    decided on 2026-11-06 that F-259 is not closed yet; with ADR 0257 every registered check of the remainder is met,
+    and closing it stays the maintainer's. Follow-up: F-365.
 - [~] **F-260** Parametric studies: CMA-ES and a real-fan study
   - depends on: F-249, F-126
   - acceptance: CMA-ES reaches the registered target on a multimodal analytic test function from a start where Nelder-Mead does not (limits registered in an ADR); a multi-objective study on the FAN-01 passage over at least two blade parameters, using a converged solver, returns a Pareto set whose members are re-run to confirm their reported objectives within 1 percent
@@ -5626,7 +5709,7 @@ fixed by the item's registration ADR before any code.
     under the library opt-in `PimpleSettings::consistent_correctors` (SIMPLEC-type correctors, defaults bit-identical): F-244's
     registered tau/10 set-up passes with it (A1c: U(10 tau)/U_t 1.00548). Open: the default path (the known miss of F-244
     still fails by construction; ADR 0214 Q1), a refusal on the moving-mesh default path (Q3), a case key (Q4).
-- [ ] **F-300** Transient RANS follow-ups from F-294
+- [~] **F-300** Transient RANS follow-ups from F-294
   - depends on: F-294
   - acceptance: Every limit is fixed by its registration ADR before any code. (a) `rcfd_turb::supports_transient` says
     which models run transient on pimple (k-epsilon, SA without DES, SST), checked by a test against what the case tree
@@ -5637,6 +5720,19 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0210 (F-294) questions 3, 5 and 7, recommendations taken by the lead. Questions 1, 2, 4 and 6: keep
     piso refused, one ADR with two parts, plugin models refused on pimple, the enhanced wall function accepted and
     documented for wall-resolved meshes.
+    - PARTIAL (ADR 0225, 2026-11-08, branch f300-transient-rans, not merged): every registered check is met except one, a
+      known miss. (a) supports_transient is true for k_epsilon, k_omega_sst and spalart_allmaras (every DES mode) as well as
+      the subgrid models, mixing_length and rsm, false for plug-ins; for every registry key it agrees with what the case tree
+      accepts on pimple (T1; main's answer disagrees for exactly the three RANS models), and its doc's piso statement holds
+      (T1p). ADR 0210 S1 is restored as S1c with the pair case accepted (ADR 0212 R1'); the old S1 stays an ignored record.
+      (b) ADR 0199 amendment 4: S3' (SST from ux = 15 y (2 - y)) meets, BDF2 p 2.0450 / 2.0394 / 2.0306, Euler 1.0030 /
+      0.9800 / 1.0028, S3'N fires (0.80); the old S3 stays an ignored record. (c) A library opt-in wall eddy viscosity from
+      Spalding's law without the switch at y*_lam (k-epsilon set_option wall_nut_law = spalding, reached from case-tree
+      tests by Simulation::turbulence_model_mut; no case key): smooth at y*_lam (W1, slope jump 5.8e-4 against 1.0 for the
+      standard law), in the sweep's production and on the wall faces (W2, T3 exact). With it the S3 k-epsilon BDF2 order is
+      still a known miss, p 0.8031 / 1.4814 / 1.4287 (standard law 0.7975 / 1.4910 / 1.5303), and the finer levels repeat
+      the standard law's rise to 1.81 to 1.88, so the kink is not the cause. Defaults bit-identical (V0b 8 of 8). Open:
+      ADR 0225 Q1 to Q6.
 
 - [~] **F-301** PISO consistent correctors: moving-mesh lag estimate, case key and benchmarks
   - depends on: F-299
@@ -5659,12 +5755,24 @@ fixed by the item's registration ADR before any code.
     known misses of the option DC4 (MMS pressure 1.119 x at one dt) and DC5 (an order 0.005 above its band). Defaults
     bit-identical. Missing: the case-level wiring for dynamic meshes (SV301, adaptive count; Q2) and the periodic pressure
     identity S1p3 (known miss at the solver floor). Open: the default (Q1, recommended false for now), one flag (Q3), Q5.
-- [ ] **F-302** Periodic seam pair diffusivity: remaining viscosities and the pimple check
+- [x] **F-302** Periodic seam pair diffusivity: remaining viscosities and the pimple check
   - depends on: F-296, F-294
   - acceptance: Pair diffusivity covers the temperature-dependent properties viscosity and the user-function viscosity;
     a case-tree check of k-epsilon and Spalart-Allmaras with pair on pimple.
   - note: From ADR 0212 questions 1 and 4, recommendations taken by the lead. RSM on a rotational seam only if RSM ever
     runs there.
+    - BUILT (ADR 0227, the registration of F-302, 2026-11-08, branch f302-pair-diffusivity, not merged): every
+      registered check is met. turbulence.periodic_seam.diffusivity = "pair" is now accepted on a laminar run with a
+      temperature-dependent properties.viscosity law or a user-function viscosity (R1''): both faces of a pair take mu(w
+      T_P + (1 - w) T_Q) / rho, or the module's value at the centre of the pair's face of lower index with the
+      temperature and speed interpolated across the seam (one call per pair). Finding: the property viscosity is already
+      one value per pair by default, up to rounding (0 to 5.6e-16), so pair changes its last bits on graded seams only.
+      The user-function budgets close to 4.5e-16 with pair and miss by 1.2e-4 to 1.3e-3 with owner. On pimple, k-epsilon
+      and SA with pair give one momentum face viscosity per pair to the bit (owner 5.2e-3 to 1.6e-2), the laminar rule
+      holds across the seam, and the transient k and nuTilda sweep budgets close to 3.1e-15 (owner 1.4e-4 to 3.5e-2).
+      The cases of the ignored F-294 S1 run again in ADR 0227 S1t. Defaults bit-identical. Open: ADR 0227 Q1 to Q5 (the
+      position of a user function on a pair, the energy diffusivity on a seam, pair for the property law, the F-294
+      record, one call per pair).
 - [ ] **F-303** Sliding interface in the case tree: rotor-stator generator, simulation loop and a non-axisymmetric check
   - depends on: F-250
   - acceptance: A case file runs a sliding rotor-stator interface from the CLI; an optional table or hash_omit_default keys carry it; a registered non-axisymmetric flow check sees the rotor mesh flux (ADR 0216 question 7).
@@ -5732,7 +5840,14 @@ fixed by the item's registration ADR before any code.
     solver, the fractional step or on moving meshes). Follow-ups (ADR 0234 questions 2 to 6, recommendations taken on
     the maintainer's standing instruction of 2026-11-11): F-337 (second-order force and moment); the case key, the guard
     refusals, the continuity measure and the corrector trial solve go with F-307. Open: question 1 (the second-order
-    forcing as the default changes existing numbers).
+    forcing as the default changes existing numbers). FOUND LATER (ADR 0249, 2026-11-12): the second-order forcing
+    stopped at step 6 of DFG 2D-2 on M2 in PISO with BDF2 (divergence guard, Courant 1.1e7); it had been run in PISO
+    only on circular Couette flow. DIAGNOSED (ADR 0254, 2026-11-12, F-355): the linear extension of D1 has a weight of
+    up to 38 where the surface crossing lies close to the fluid cell centre, and at an impulsive start, or with a time
+    step small against h^2/nu (circular Couette with dt 2.5e-5 grows to 281), what it multiplies is not small;
+    `build_second_order` is unchanged and is refused by PimpleSolver with a located message in that range; transient
+    runs use `build_second_order_bounded` (ADR 0254), which keeps the order (1.947 on circular Couette). Open: whether
+    `build_second_order` should build the bounded form (ADR 0254 question 1).
 - [ ] **F-310** NSGA-II: exchange crossover as the default for new studies, and the tool description
   - depends on: F-297
   - acceptance: create_study writes crossover = exchange into new nsga2 studies while old studies keep sbx; the design_create_study description names nsga2 and crossover; both goldens updated by a registered edit.
@@ -5811,10 +5926,28 @@ fixed by the item's registration ADR before any code.
   - depends on: F-301
   - acceptance: A moving-mesh case with [solver.consistent_correctors] enabled runs through the case tree and reproduces the library falling-block result; the edit to ADR 0156 A9b and the Studio scope test are made only with the maintainer's approval.
   - note: From ADR 0223 question 2. NEEDS THE USER: it edits a registered check (ADR 0156 A9b) and a Studio scope test.
-- [ ] **F-322** Consistent correctors: fold the flags into one key and extend the refused combinations
+- [~] **F-322** Consistent correctors: fold the flags into one key and extend the refused combinations
   - depends on: F-301
-  - acceptance: The optional table carries all consistent-corrector flags in one place with a located refusal for each unsupported combination; defaults bit-identical.
-  - note: From ADR 0223 questions 3 and 4, recommendation taken.
+  - acceptance: The optional table carries all consistent-corrector flags in one place with a located refusal for each
+    unsupported combination; defaults bit-identical.
+  - note: PARTIAL (ADR 0258, 2026-11-12), the library half. Delivered: one settings value `ConsistentCorrectors`
+    (enabled, periodic, body_force, non_orthogonal, component_diagonal, face_jump) as `PimpleSettings::consistent`, read
+    together with the three older fields, which are kept (`consistent_flags`, `set_consistent`); one validation
+    `ConsistentCorrectors::conflicts` / `validate` returning a located `ConsistentRefusal` (flag, other setting, reason)
+    for each of 13 unsupported combinations, used by the solver before any work and per outer iteration, every earlier
+    refusal kept with its stage and its sentence and the located part appended (R1 of ADR 0214 and R2 of ADR 0223 pass
+    unedited); three combinations extended on fixed meshes without periodic faces, each with a steady identity and a
+    transient check: non-orthogonal correctors (the non-orthogonal part of the compensation as ADR 0050, with the
+    fixed-pressure boundary part in the pressure equation only; S1N 3.7e-12 U0 and 5.1e-11 of the pressure range against
+    1e-10), the component diagonal (no new term; S1D 3.8e-12, 3.2e-11) and face jumps (S1J and from the hook 2.5e-12,
+    2.5e-11), all together with a body force (S1X 3.0e-12, 4.2e-11); the option differs from the default in a start-up
+    transient by 2.4e-5, 7.9e-5 and 5.6e-6 U0 at dt 0.001, falling by 3.3 to 5.9 per halving; eight mutations each fail
+    a test. Defaults bit-identical (the rcfd-fv transient files, baseline_hashes, case_hashes_w48u, the F-301 case
+    tests). Missing (why partial): the case table still has only `enabled` (schema golden and docs/case-schema.md: the
+    maintainer's), sim.rs still writes its own located errors instead of calling `conflicts`, overset.rs reads the older
+    field. Still refused: the new flags with periodic faces or on a moving mesh (F-321), non-orthogonal correctors with
+    pressure gradient options, the fractional step. Follow-ups: F-366 (the case table; needs the maintainer for the
+    schema golden), F-367 (periodic faces).
 - [x] **F-323** Droplet models: feedback to the carrier and use with the exchange record
   - depends on: F-245
   - acceptance: Vapour mass, heat and momentum from evaporating and breaking-up parcels are returned to the gas,
@@ -5885,8 +6018,8 @@ fixed by the item's registration ADR before any code.
     each rejected and located. Cost: 10.3 percent of an event. Four registered mutations failed their checks. Library
     only; RemeshChange gains the field check. Open: ADR 0236 Q2 (checking new() and motions), Q6 (V2 and V3 not decisive
     in the piston).
-- [ ] **F-330** Compressible impedance boundary and sponge layer: case-schema wiring
-  - depends on: F-243, F-331
+- [ ] **F-330** Compressible impedance boundary, sponge layer and mass-spring-damper wall: case-schema wiring
+  - depends on: F-243, F-331, F-332
   - acceptance: `compressible_bc = "impedance"` with `impedance_value` runs the ADR 0233 tube from a case file with R
     within 1e-2 of the closed form for z/(rho c) = 1/3, 1, 3; located validate errors for a negative impedance and a
     non-positive pressure; every existing case file's settings hash and written text unchanged after the registered
@@ -5895,6 +6028,9 @@ fixed by the item's registration ADR before any code.
     reflection below 1 percent; located validate errors for a non-positive thickness, a reflection outside (0, 1) and
     the matched form with a moving reference; every existing case file's settings hash and written text unchanged after
     the registered normalisation of the new keys at their defaults. max_dt takes the sponge rate into account.
+    Mass-spring-damper wall (ADR 0243): a case file selects the wall on a patch (mass, stiffness, damping); the M2 check
+    of ADR 0243 runs from a case file within 2 percent in magnitude and phase; one oblique angle is checked against its
+    closed form; a wall together with a sponge layer runs (the two step paths merged).
   - note: From ADR 0233 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
     THE USER before merge: the new key needs an edit of the registered hash test case_hashes_w48u.rs.
 - [~] **F-331** Sponge layer for the compressible solver
@@ -5925,11 +6061,32 @@ fixed by the item's registration ADR before any code.
     isolated pulse at 60 degrees, memory decay and damping along the layer, `max_dt`, moving meshes). Follow-ups
     (recommendation taken on the maintainer's standing instruction of 2026-11-11): the wiring goes with F-330; F-340
     (memory decay, damping along the layer, corners); F-341 (moving meshes).
-- [ ] **F-332** Frequency-dependent wall impedance (time-domain model)
+- [~] **F-332** Frequency-dependent wall impedance (time-domain model)
   - depends on: F-243
   - acceptance: The reflection coefficient of a mass-spring-damper wall matches the closed form in magnitude and phase
     within 2 percent at three frequencies around the resonance.
-  - note: From ADR 0233, proposed follow-up, taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0233, proposed follow-up, taken on the maintainer's standing instruction of 2026-11-11. The job of
+    2026-11-12 (ADR 0243): the acceptance text is MET IN THE LIBRARY, not from a case file. Built: `MsdWall { p, r, m, k
+    }` (rcfd-fv compressible_bc.rs; `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`,
+    `msd_dt_limit`), a locally reacting mass-spring-damper wall with the impedance Z(omega) = r + i(omega m - k/omega):
+    displacement and velocity per face, advanced with the solver's Runge-Kutta stages; the face keeps the outgoing
+    Riemann invariant of ADR 0233 and takes the wall velocity; m = 0 is the algebraic form and m = k = 0 is
+    `CompBc::Impedance` bit for bit; the wall's step limit 0.8 min(2m/(r + rho c), (r + rho c)/k) is part of `max_dt`
+    and a larger step is refused. Registered checks, all met at the first run, no amendment: a tone at 0.8, 1 and 1.25
+    times the resonance frequency, complex reflection coefficient by a least-squares split into incident and reflected
+    wave at 400 probes: magnitude within 2.9e-4 (limit 2e-2), phase within 2.4e-4 rad (limit 1.93e-2 rad, the strictest
+    reading of 2 percent) of (Z - rho c)/(Z + rho c) = 0.797 at -55.3 degrees, 1/3 at 180 degrees, 0.797 at +55.3
+    degrees; the same measurement on walls with a known real reflection (impedance rho c/2 and rigid) within 1.3e-4 and
+    5e-5 rad; a wall without damper reflects with magnitude 1 within 2.8e-3; free decay of the wall with the radiation
+    damping rho c within 1.2e-6; a light mass and a stiff spring at a third and a sixth of the CFL step stable and
+    within 4.3e-5 of their limits; 1400 steps bit-identical with the impedance wall at m = k = 0; a cleared wall and the
+    existing compressible tests (F-258 bit records, ADR 0233, ADR 0237) bit-identical and unedited. Eight mutations
+    caught. Not done: case-schema wiring (a new key needs an approved edit of case_hashes_w48u.rs; this is why the
+    status is partial). Limits: one degree of freedom per face, no coupling between faces, no multi-pole fit of a
+    measured impedance; the mesh face does not move (transpiration velocity; mass crosses the face and returns); normal
+    incidence only checked; not together with a sponge, not on moving meshes; gas at rest, Cartesian grids, verification
+    against closed forms only. The wiring (with one oblique angle and the wall together with a sponge, ADR 0243
+    questions 1 to 3, recommendations taken on the maintainer's standing instruction of 2026-11-11) goes with F-330.
 - [ ] **F-333** Acoustic wave-equation solver and modal export
   - depends on: F-243, F-331
   - acceptance: A duct mode propagates with the closed-form axial wavenumber within 1 percent; a sponge layer ends the
@@ -5955,12 +6112,30 @@ fixed by the item's registration ADR before any code.
     instruction of 2026-11-11): HE map warm against cold 5.7e-9, 61 and 60 iterations against 89 and 88; defaults
     byte-identical; three mutations caught. Open: the extended start as the map default (Q7 (b)) and in the design tools
     (Q7 (a), a golden edit).
-- [ ] **F-334** Overset: the first-order error term of the calculated component cells
+- [~] **F-334** Overset: the first-order error term of the calculated component cells
   - depends on: F-314
   - acceptance: Set-up RL of ADR 0232 (component at rest, fringe phase locked) on levels 1 to 4: the root mean square of
     the error of the calculated component cells converges at order 1.7 or more between successive levels, or the ADR
     names the source of the first-order term (coefficient 1.0e-4) with a number.
-  - note: From ADR 0232 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0232 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0246 (registration of F-334, 2026-11-12, merged 2026-11-12): PARTIAL, a diagnosis, tests only, no library change.
+    The order check is missed: RL on levels 1 to 4 gives 1.549e-4, 6.39e-5, 3.98e-5, 2.49e-5 in the root mean square of
+    the calculated component cells, orders 1.277, 1.166, 1.626 (limit 1.7); the fit of ADR 0232 predicted 2.86e-5 at
+    level 4. The source is named: the truncation of the linear donor interpolation. With stencils exact for biquadratic
+    fields on both fringes (nine cells, test code) the error is 3.24e-4, 8.55e-5, 3.90e-5, 2.23e-5, orders 1.922, 1.935,
+    1.950, and equals the error of the background alone. The error with the library stencils is the sum of that part and
+    of the response to the truncation, which is 1.35 to 1.90 times larger, opposed to it (cosine -0.96 to -0.88) and
+    converges at 1.693, 1.588, 1.800; they cancel to 88 to 96 percent, so the library stencils give the smaller error at
+    levels 1 and 2 and the lower order. The coefficient 1.0e-4 is the increment per level of that response times L^2
+    (1.04e-4, 0.98e-4, then 0.38e-4). Its part from the background fringe is of first order on levels 1 to 3 (4.9e-5,
+    2.2e-5, 1.41e-5: 1.153, 1.093) and still growing at t = 0.5; the part from the component fringe converges at 1.782,
+    1.698. Ruled out with numbers: a time error, the single-mesh solution, the outer boundary of the component, the
+    reference cell, the interpolated pressure and the convection (the error is linear in the amplitude to 0.07 percent),
+    a mass defect, the flux at the fringe faces, the transient Rhie-Chow term; with coincident meshes the coupling gives
+    the background alone to 7e-9. Open: why the response to a second-order truncation stays below second order. Controls
+    held, four mutations caught. Follow-ups (ADR 0246 questions 2 and 4, recommendations taken on the maintainer's
+    standing instruction of 2026-11-11): F-336 with RL added to its acceptance, and F-349 on the response to the
+    background fringe.
 - [~] **F-335** Overset: outer iterations on the overset path
   - depends on: F-134
   - acceptance: OversetSolver accepts n_outer above 1 as an opt-in (defaults bit-identical, Q0 of ADR 0219 still bit for
@@ -5985,20 +6160,60 @@ fixed by the item's registration ADR before any code.
     0232. Four mutations caught. Cost: 2.6 times the wall time on TG_2. Not delivered: the case-tree wiring; a
     second-order time scheme on the overset path (follow-up). Follow-up (ADR 0238 questions 3 and 4, recommendation
     taken on the maintainer's standing instruction of 2026-11-11): F-338.
-- [ ] **F-336** Overset: donor interpolation of higher order
+- [x] **F-336** Overset: donor interpolation of higher order
   - depends on: F-134, F-334
   - acceptance: An opt-in donor interpolation that reproduces quadratic fields; with it the largest error over the
     calculated and fringe cells of TG_L converges at order 1.7 or more on levels 1 to 3 with dt proportional to h^2, the
-    uniform-flow check U1 of ADR 0219 holds, and the default stencils and results are bit-identical.
-  - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    Optional, after F-334.
-- [ ] **F-337** Immersed solid: second-order force and moment
+    root mean square of the error of the calculated component cells of RL of ADR 0232 converges at order 1.7 or more on
+    levels 1 to 4 (ADR 0246 TQ: 1.922, 1.935, 1.950 with test-supplied stencils), the uniform-flow check U1 of ADR 0219
+    holds, and the default stencils and results are bit-identical.
+  - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0251 (registration of F-336, 2026-11-12, merged 2026-11-12): DONE pending acceptance. Built: an opt-in of
+    rcfd_mesh::overset, Overset::set_donor_interpolation(DonorInterpolation::Quadratic): the stencil of a fringe cell is
+    the donor and the calculated cells that share a point with it (9 on quadrilaterals, 27 on hexahedra; a fringe or
+    hole cell is never a donor), with the weights of the weighted least-squares quadratic (the minimum of sum w^2/omega
+    under the reproduction of the 6 monomials in 2-D, 10 in 3-D, by a pivoted Householder QR). The weights sum to one,
+    can be negative (smallest -0.067, sum of absolute values 1.40 on a whole block) and are not clipped; a stencil with
+    fewer cells than monomials, of deficient rank or with a sum of absolute values above 4 keeps the linear stencil and
+    is listed (Connectivity::fallbacks, OversetInfo::n_fallback), and a step whose interpolated rAU is not positive is
+    refused. Met: quadratics are reproduced to 1e-15 on Cartesian, distorted, O-grid and sheared 3-D donor meshes; the
+    truncation converges at 3.00; TG_L with dt proportional to h^2 converges at 1.993 and 2.000 on levels 1 to 3
+    (largest error 7.68e-4, 1.93e-4, 8.58e-5, now in a background cell at the domain boundary; 1.0785e-3, 3.514e-4,
+    1.712e-4 with the linear stencils); the calculated component cells of RL converge at 1.916, 1.924, 1.952 on levels 1
+    to 4 (3.20e-4, 8.48e-5, 3.89e-5, 2.22e-5); the uniform flow holds to 1.1e-14; coincident meshes give the background
+    alone to 6e-12; no fallback and no unconverged solve on the registered set-ups; without the opt-in the stencils are
+    those of ADR 0219 bit for bit, Q0 and the records R2 hold. Said plainly: on the two coarsest levels of RL the
+    calculated component cells have 2.07 and 1.33 times the error of the linear stencils (the cancellation of ADR 0246),
+    0.98 and 0.89 at levels 3 and 4. Limits: a donor next to a wall or to its own fringe ring falls back to the linear
+    stencil; no flow run of the cylinder case or in 3-D with the opt-in. Six mutations caught. Found on the way: the
+    donor search of F-134 finds no donor in cells with non-planar faces. Open for the maintainer: whether the opt-in
+    should become the default (ADR 0251 Q1). Follow-ups (ADR 0251 questions 2 and 5, recommendation taken on the
+    maintainer's standing instruction of 2026-11-11): F-352, F-353. Open: question 1 (the quadratic interpolation as the
+    default changes a default). no flow run in 3-D with the opt-in; the cylinder case TR with it is F-353 (ADR 0259:
+    acceptance met, no fallback, mean drag error 3.42e-3 against 3.21e-3 of the linear stencils, recommendation against
+    the default)
+- [x] **F-337** Immersed solid: second-order force and moment
   - depends on: F-309
   - acceptance: The torque on the immersed rotating cylinder of circular Couette flow (the CC set-up of ADR 0218,
     second-order forcing) reaches an observed order of 1.5 between N 48 and 96, and the DFG 2D-1 drag and lift on M2 are
     within 1 percent and 3 percent of the FeatFlow values.
-  - note: From ADR 0234 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
-    torque error is 1.60, 0.74 and 0.39 percent at N 48, 96, 192 with either forcing.
+  - note: DONE in the library (ADR 0239, 2026-11-12), pending acceptance. From ADR 0234 question 5. Diagnosis by
+    measurement (five hypotheses registered before any code): the force of the forcing was never first order (it is the
+    momentum balance of the forced cells, its error that of the velocity field); the moment was, because `force_moment`
+    applies the modification term of a first fluid cell at the surface crossing and not at the centre of its cell (1.49
+    and 0.72 percent of the torque at N 48 and 96); the one-sided wall difference, the staircase face pressure, the
+    quadrature at the crossings (order 1.50) and the momentum of the mass-source cells were measured and ruled out.
+    Delivered: rcfd-fv immersed.rs, `ImmersedForcing::force_moment_second_order` (opt-in; `force_moment` unchanged and
+    bit-identical, hashes checked): the same force, and the moment with every term at the centre of its cell, which is
+    the angular-momentum balance of the forced cells, that is the moment of the full traction and momentum flux on the
+    regular fluid faces around them (derived in the ADR; checked against that sum to 1.5e-6 of the torque). Measured
+    (limits registered before the code): circular Couette torque error 0.396, 0.107, 0.027, 0.0069 percent at N 24, 48,
+    96, 192, observed order 1.98 between 48 and 96 (limit 1.5; 1.96 from 96 to 192) against 1.11 of `force_moment`; DFG
+    2D-1 on M2 C_D -0.306 %, C_L +2.534 % (limits 1 % and 3 %; the force is that of `force_moment`, unchanged); six
+    mutations caught. Not included: the new evaluation as the default of `force_moment` (open, a change of a default);
+    unsteady flow (the momentum of the forced cells); any caller outside the tests, a case key; non-orthogonal meshes;
+    the limits of F-219 and F-309. Follow-up (ADR 0239 Q3, recommendation taken on the maintainer's standing instruction
+    of 2026-11-11): F-346. Open: Q1 (the cell arms as the moment of force_moment changes a default).
 - [~] **F-338** Overset: a second-order time scheme on the overset path (BDF2, opt-in)
   - depends on: F-335
   - acceptance: OversetSolver accepts BDF2 as an opt-in (defaults bit-identical, Q0 of ADR 0219 and the records R2 of
@@ -6033,7 +6248,7 @@ fixed by the item's registration ADR before any code.
     by a registered edit.
   - note: From ADR 0240 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. NEEDS
     THE USER before merge: it edits the MCP tools-list goldens.
-- [ ] **F-340** Matched sponge layer: memory decay, damping along the layer, corners
+- [~] **F-340** Matched sponge layer: memory decay, damping along the layer, corners
   - depends on: F-331
   - acceptance: The set-up D record of ADR 0237 (a wave train started inside the layer with zero memory in a rigid duct)
     falls below 1 percent within its registered window; a constant pressure offset with a gradient along the layer gives
@@ -6041,6 +6256,41 @@ fixed by the item's registration ADR before any code.
     reflects less than 1 percent; an isolated plane pulse at 60 degrees reflects less than 1 percent; the checks A0,
     A30b, A45b, A60b, X1 and X45 of ADR 0237 still meet 1 percent.
   - note: From ADR 0237 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    The job of 2026-11-12 (ADR 0248): four of the five clauses are MET IN THE LIBRARY, clause 1 is MISSED with a
+    diagnosis that the registration gave before the runs. Built (rcfd-fv sponge.rs, opt-in, `Plain` and `Matched`
+    untouched): `SpongeForm::MatchedShifted(MatchedOptions { normal, shift, along, second })`, the matched layer as a
+    complex coordinate stretching with (i) a complex frequency shift `shift` (the memories decay: under a held pressure
+    the memory and the force along the layer saturate at p'/a instead of growing; below omega ~ a the layer does not
+    absorb and it leaves a static offset alone), (ii) a second planar layer with an orthogonal normal for a corner
+    (`Sponge::corner`: the same memory, one product term, the force of each layer on the momentum along the other's
+    normal; a second memory for an edge in three dimensions), (iii) a damping of the momentum along the layer `along` (a
+    mismatch with a measured price); `Sponge::planar_shifted`, `CompressibleSolver::sponge_memories` and
+    `set_sponge_memories`. Measured with shift 0.25/s (0.05 c/L) and along 0 on the 40-cell layer of ADR 0237 (limit 1
+    percent, largest difference to a run on an extended grid against the incident peak): an isolated plane pulse at 60
+    degrees 8.1e-4 (the form of ADR 0237 in the same run 8.0e-4; 705 000 and 770 000 cells, the set-up of X45 with tails
+    of 3.5 pulse widths and a reference grid shortened by a causality argument that a model confirmed to 12 digits); a
+    quarter of a cylindrical pulse through two layers and their corner 5.3e-5 (no sponge 0.058, one layer 0.029); the
+    checks of ADR 0237 repeated with the shift: A0 9.4e-7 (1.2e-6 in front of a rigid wall), A30b, A45b, A60b 3.1e-4,
+    3.6e-4, 1.3e-3, X1 2.3e-5, X45 1.4e-4; a closed box with a pressure offset varying along the layer over 100 transit
+    times: momentum along the layer at most 3.0 delta/c and not growing (the form of ADR 0237 in the same run 3.2 and
+    not growing either: in a run neither form grows, the difference is under a held pressure, checked by algebra to
+    4e-6). Without the options the new form produces the bits of `Matched`; the existing compressible, F-258, ADR 0233,
+    ADR 0237 and ADR 0243 tests pass unedited. Eight mutations caught. MISSED, clause 1: the set-up D record (a wave
+    train started inside the layer with zero memory in a rigid duct) stays at 3.7e-2, 6.1e-2, 8.6e-2 at 30, 45, 60
+    degrees with the shift (3.8e-2, 6.2e-2, 8.7e-2 without) and at 2.2e-2, 3.6e-2, 4.2e-2 with along = 0.05, against
+    1e-2; kept as three ignored known_miss records. Diagnosis (ADR 0248 DR12, a scratch model predicted the five numbers
+    within 20 percent before the runs): the ringing sits at the cut-off frequencies of the duct; a field that does not
+    vary across the layer solves the equations of every matched layer, so no matched layer damps it; a damping along the
+    layer is a mismatch that reflects about 1.3 along of a pulse at 60 degrees whatever its frequency (along = 0.05
+    measured 4.4e-2 of the steady train at 60 degrees), and the strength needed to remove the ringing within the
+    registered window costs far more than 1 percent. Not a parameter that could be tuned at this thickness. Limits:
+    linear acoustics about a state at rest; one layer or two orthogonal ones (no corner of three layers; the
+    three-dimensional edge is checked by algebra only); explicit source; not on moving meshes; not with a
+    mass-spring-damper wall; library only (the wiring goes with F-330); Cartesian grids. Open questions in ADR 0248
+    addendum 1 (what to do with clause 1; a default for the shift in the wiring; whether to keep `along`; a corner run
+    in three dimensions). Open: the default shift in the F-330 wiring (a default; ADR 0248 question 2). The clause-1
+    follow-up (a plain damping zone behind a thicker layer) is proposed in ADR 0248 only for when a ducted case shows
+    the ringing; no item added.
 - [ ] **F-341** Sponge layer on moving meshes
   - depends on: F-331, F-258
   - acceptance: With a sponge, a uniform reference state stays to round-off under `step_ale` on a deforming mesh; the
@@ -6055,14 +6305,24 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     rcfd_fv::adaptive exists in the library only; the key needs crates/rcfd-api/src/schema.rs and sim.rs. Absent key =
     today's path bit for bit.
-- [ ] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
+- [~] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
   - depends on: F-102
   - acceptance: Each criterion has a closed-form marking check, and a target-count run lands within 10 percent of its
     target on the ADR 0242 cavity; on a case with a localised feature the adapted mesh reaches the fine solution's error
     with at most half the cells of the uniform mesh that reaches it.
-  - note: From ADR 0242 R2 and R3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Criteria
-    not yet built; merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here
-    until split.
+  - note: PARTIAL (ADR 0247): opt-in criteria in rcfd_fv::adaptive with closed-form marking checks: target cell count
+    (target_count_marks, geometric target_schedule, run_adaptive_simple_target), edge-length weighting (cell_extents,
+    edge_length_weighted_indicator, velocity_edge_length_indicator with exponent r), registers (Register from mask,
+    region indicator, field range or levels, with and, or, complement and face-neighbour growth; register_marks,
+    restrict_marks) and the loop with any marks (run_adaptive_simple_marked; run_adaptive_simple and _with unchanged bit
+    for bit). Target-count runs on the ADR 0242 cavity land at 2307 for 2304 and 4611 for 4608 (limit 10 percent).
+    Suction-layer case (Couette flow with transpiration, R = 80, closed form): the adapted mesh (16 x 16 base, five
+    target-count cycles, 3841 cells) has error 0.0116 against 0.0439 for the uniform 128 x 128 (16384 cells); the
+    uniform 90 x 90 (8100 cells) misses it (0.0846); the inverted indicator gives 1.20. ADR 0242's surviving MU6 is now
+    caught. Not delivered: anisotropic (directional) refinement, which needs per-axis levels in the lattice (follow-up);
+    merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here until split.
+    Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new
+    options join F-342's case key (R3).
 - [ ] **F-344** BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step
   - depends on: F-338
   - acceptance: The remainder of PimpleSolver::step with BDF2 and three outer iterations on a mesh at rest (max
@@ -6072,7 +6332,15 @@ fixed by the item's registration ADR before any code.
     a number.
   - note: From ADR 0241 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     library's own BDF2 step on a mesh at rest converges in the step size at a ratio of 2.30 where second order gives 4.
-    Candidates not measured: the transient Rhie-Chow term, the boundary faces.
+    Candidates not measured: the transient Rhie-Chow term, the boundary faces. WORK ON A BRANCH, NOT MERGED
+    (2026-11-12): ADR 0245 on branch f344-bdf2-remainder (tip 455f4c5a). Cause named with numbers: the converged face
+    flux depends on dt wherever the momentum diagonal differs across a face (ADR 0073's commutator C(G p) plus
+    interp(rAU)), largest at fixed-velocity boundary cells; it follows a dt/(c0 + a dt) and falls with h at order 1.8 to
+    1.9; the default step carries it. An opt-in on the branch removes it at rest (ratio 5.02, limit 4) and leaves the
+    TG_2 ratio at 2.45 (missed; that remainder is made by the motion through the coupling, not the same term). HELD FOR
+    THE MAINTAINER: the opt-in is of the kind (F-G of ADR 0073) that the registered rule of ADR 0076 removed from the
+    code; whether it is wanted back is the maintainer's decision (ADR 0245 O2). Also unfinished on the branch: two long
+    immersed-cylinder tests of the existing suite did not complete under load, and one mutation was not run.
 - [ ] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
   - depends on: F-338, F-322
   - acceptance: PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow
@@ -6082,3 +6350,342 @@ fixed by the item's registration ADR before any code.
     ADR names why not with a number.
   - note: From ADR 0241 questions 4 and 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     After the rework of the corrector flags in pimple.rs (F-322).
+- [~] **F-346** Immersed solid: force and moment in unsteady flow
+  - depends on: F-337
+  - acceptance: The force and moment of an immersed solid subtract the rate of change of the momentum and angular
+    momentum of its forced cells; DFG 2D-2 maximum drag and lift on M2 are within 1.5 percent of the FeatFlow level-6
+    values, and a steady case returns the values of F-337 to round-off.
+  - note: PARTIAL (ADR 0249, 2026-11-12), in the library. From ADR 0239 question 3. The premise did not survive the
+    derivation, written before any code: the reaction of the forcing is the discrete force on the staircase surface of
+    the solid cells minus the storage of those cells, so for a body at rest it already is the force in unsteady flow,
+    and the storage of the first fluid cells is fluid momentum that must not be removed; the storage that is not fluid
+    momentum is that of the solid cells of a body whose rigid velocity changes in time. Delivered: rcfd-fv immersed.rs,
+    `ImmersedForcing::force_moment_unsteady` (opt-in: the pair of `force_moment_second_order` plus the rate of change of
+    the momentum and angular momentum held by the solid cells; `force_moment` and `force_moment_second_order` unchanged,
+    hashes checked) and `immersed::velocity_rate` (the solvers' Euler and variable-step BDF2 difference; the caller
+    keeps the older fields, no hunk in pimple.rs). Measured (limits registered before the code; three defective set-ups
+    of the registration corrected by amendment 1 before their runs): the moment on a cylinder accelerated in a fixed
+    outer one within 0.167 and 0.078 percent of the closed form at N 48 and 96 (limit 0.5; the reaction alone 4.3
+    percent, the literal reading with the first fluid cells 1.8 and 0.9 percent); the force on an accelerated plate
+    within 0.056 and 0.014 percent (limit 1; the reaction alone 42.8 percent, the literal reading 5.1 and 2.6 percent);
+    a steady case returns F-337 exactly (2D-1 on M2 5.56246454, 0.0108880492; Couette by PISO); DFG 2D-2 against the
+    recorded FeatFlow level-6 values, on M2 max C_D +0.261 %, max C_L -0.161 % (limit 1.5 %: met, but the old evaluation
+    gives the same numbers, the two differ by 1.9e-6), on T (the mesh of ADR 0218) max C_D +0.815 %, max C_L +2.580 %
+    (KNOWN MISS, predicted in the registration: not a storage term; the mean drag is +0.79 % and the steady 2D-1 lift on
+    M2 +2.7 %; the two D/40 meshes differ by 2.7 points in the lift, so the M2 agreement is not shown to be
+    convergence); nine mutations caught. Missing (why partial): the lift of 2D-2 on T; the unsteady evaluation as a
+    default or behind a case key (open); the slivers between the staircase and the surface for an accelerating body;
+    Crank-Nicolson and bounded BDF2 rates; moving shapes. Found on the way: 2D-2 on M2 with the second-order forcing of
+    F-309 stops in PISO at step 6 (Courant 1.1e7), not diagnosed. Open: ADR 0249 Q1 (reword the first clause to the
+    solid cells), Q2 (the 2D-2 clause: M2 as written, or replaced by the closed forms), Q3 (default). Follow-ups: F-354,
+    F-355.
+- [ ] **F-347** Vendor heat-flux card for the structural load deck from a cited open specification
+  - depends on: F-237
+  - acceptance: A specification of the card (fields, sign, required surface elements) from an open source is placed in
+    the repository; the deck writes it beside RCFDQ; the tube heat rate after a round trip through the repository reader
+    matches the fluid heat rate to 0.1 percent
+  - note: Priority P3. Size S. Area: io. Opened by ADR 0244: RCFDQ is the repository's own card; no vendor heat-flux
+    card layout is specified in the repository, so none was written. NEEDS THE USER: an open specification of the card
+    has to be placed in the repository first (clean-room rule).
+- [ ] **F-348** Anisotropic (directional) refinement: a lattice with per-axis levels
+  - depends on: F-343
+  - acceptance: A lattice with per-axis refinement levels gives valid closed meshes for random directional marks
+    (validate, closure, volume) and transfers linear fields exactly; on the ADR 0247 suction layer a directional run
+    reaches the isotropic adapted error E(A) with at most half of its 3841 cells; the isotropic AmrMesh paths stay bit
+    for bit.
+  - note: From ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. A Leaf has one
+    level for every axis, so this is a second lattice type in rcfd_mesh::adapt.
+- [ ] **F-349** Overset: the response to the truncation of the background-fringe interpolation
+  - depends on: F-334
+  - acceptance: The response R_b of ADR 0246 (the difference of the RL runs with the library stencils and with a
+    third-order interpolation on the background fringe: 4.87e-5, 2.19e-5, 1.41e-5 at levels 1 to 3, orders 1.153 and
+    1.093) is traced to a named term of the coupled step by a switch that brings its order to 1.7 or more on levels 1 to
+    4, or is shown to reach order 1.7 on finer levels or at a later time, or the ADR names why not with a number.
+  - note: From ADR 0246 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
+    priority.
+- [ ] **F-350** Strong body-flow coupling selectable from the case tree
+  - depends on: F-251
+  - acceptance: A case with dynamic_mesh.six_dof.coupling = "strong" (default "loose") and its relaxation, added-mass
+    estimate, tolerance, force scale and iteration cap as keys runs the spring-mounted piston at a mass ratio of 4
+    through the case driver and reproduces ADR 0250 S1 to S3 (omega within 2 percent, no growth of same-side turning
+    points over 10 periods, dt halving within 0.5 percent), the same case with coupling = "loose" stops with a located
+    error or grows; a step that reaches the cap stops the run with a located message unless a key says to continue;
+    every static check of the new keys is located; with the default every existing case hash is bit-identical.
+  - note: From ADR 0250 questions 2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    Needs crates/rcfd-api/src/schema.rs and sim.rs.
+- [x] **F-351** Wall pressure of the body force on a fixed-flux moving wall (the 1.25 percent added-mass deficit)
+  - depends on: F-251, F-244
+  - acceptance: The cause of the discrete added mass of the piston column lying 1.25 percent below rho A L0 (ADR 0250 C1
+    and S1, ADR 0211 B1) is identified by a test that separates the wall-pressure extrapolation of patch_force_moment
+    from the pressure of the flow step; if it is the extrapolation, an opt-in evaluation that uses the prescribed
+    pressure gradient of the wall brings the sub-iteration gain at ratio 4 within 0.2 percent of the 2.977 of the model
+    and omega_m/omega within 0.1 percent of 1 on the 20-cell column, and the convergence of the deficit with the cell
+    size is shown on 20, 40 and 80 cells; the default force evaluation is unchanged unless the maintainer approves the
+    change with its effect on the existing hashes listed.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0250 question 4, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. DONE (ADR 0252, 2026-11-12; registered before the code, four amendments). Cause,
+    measured: the wall-pressure extrapolation of patch_force_moment. Its least-squares gradient (weights 1/d^2) takes
+    the stored zero-gradient wall value of the pressure field as a data point with the weight of the neighbour cell,
+    while the pressure equation of the moving-mesh step used the prescribed gradient -n . a_wall; the gradient of the
+    wall cell is therefore exactly half (0.5 to 1e-16) and the wall pressure a quarter cell short: the force is low by
+    1/(4N), first order in the cell size (prescribed piston, flow step converged: 1.2510e-2, 6.258e-3, 3.129e-3 on 20,
+    40, 80 cells, orders 0.9993 and 0.9998), 1.25 percent on the 20-cell column at every mass ratio. The pressure of the
+    flow step carries none of it (2e-6 with the step converged, 7e-6 with the registered two correctors). Delivered,
+    opt-in, nothing calls it: sixdof::patch_force_moment_wall_gradient (the normal part of the cell-gradient
+    extrapolation replaced by the gradient of ale::set_follow_conditions, p_c + dn g on an orthogonal wall cell, second
+    order) and fsi::strong_step_with with fsi::WallPressure, which carries that gradient from step to step. With it:
+    gain of the sub-iteration at ratio 4 2.97693 (model 2.977, limit 0.2 percent); omega_m/omega 1.000042 at ratio 4 on
+    20, 40 and 80 cells (limit 0.1 percent; 1.005081, 1.002552, 1.001294 with the default), 0.999963 at ratio 20,
+    1.000068 at 0.2, 1.000264 for the loose loop at 0.2 (1.001307 before: the unexplained +1.0e-3 of ADR 0211 was this
+    deficit); deficit of the force 3e-6 on 20, 40, 80 cells. Every number equals the piston model with the exact added
+    mass to six digits. Unchanged: patch_force_moment and strong_step (bit-identical over 40 steps; the sixdof,
+    sixdof_coupled, sixdof_flow_f244 and strong_fsi_f251 suites pass unedited; baseline_hashes 3 passed, 0 failed, 1
+    ignored (the file unedited)); pimple.rs, pimple/moving.rs, rcfd-api and the case schema untouched. Seven library
+    mutations: six failed their checks; one added variant passed every test and a check (the gain at the third step of a
+    run) was added by amendment and catches it. Disclosed: the first registered diagnosis missed its limits because its
+    reference was the column of the new mesh; the pressure of the implicit Euler moving-mesh step is the acceleration
+    times the column of the old mesh (first order in dt, not a mean deficit), and the reference was corrected by
+    amendment after an exploration; the missed tests are kept as ignored records. Also found: the non-iterated step
+    leaves a viscous splitting error that grows with the cell count and does not move the frequency. Not delivered: the
+    case driver (rcfd-api dynmesh) still uses the default evaluation; a skewed wall cell and a moment in a flow are not
+    tested. Open, the maintainer's: whether the prescribed gradient becomes the default (ADR 0252 Q1; not taken, it
+    moves existing results), the case key (Q2), the audit of other walls with a prescribed gradient (Q3). Note of the
+    lead: the acceptance limits were never changed, but the limits of the diagnosis were corrected by amendment 2 after
+    a run and a prints-only exploration, so they were set with numbers seen. Follow-up (ADR 0252 questions 1 to 3,
+    recommendation taken on the maintainer's standing instruction of 2026-11-11): F-358. Open: question 1 (the
+    prescribed gradient as the default changes existing hashes).
+- [x] **F-352** Overset: donor search on cells with non-planar faces
+  - depends on: F-134
+  - acceptance: On the set-up B3d of ADR 0251 (two hexahedral parts whose interior points are displaced by up to 0.15 of
+    the cell size in all three directions) every fringe centre gets a donor that agrees with a full search, the linear
+    and the quadratic stencils reproduce linear and quadratic fields to 1e-11, and on meshes with planar faces the
+    donors and stencils are bit-identical to those of today (the unit tests K2 and K4 of ADR 0219 and D1 of ADR 0251).
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0251 question 2, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. ADR 0253, 2026-11-12: DONE. Derived: one plane for each face leaves no gap
+    across a face but a sliver along every edge at which the planes of the four faces do not meet in one line, a gap or
+    an overlap with equal chance, of cross-section at most (w_F + w_F')(w_G + w_G') for the warps w of the faces, second
+    order in the warp; on B3d (warp up to 0.142 of the cell size) the estimate was 6e-4 of the volume each and 116 and
+    114 of 200000 random points were measured in no cell and in two. Built in rcfd_mesh::overset: a cell with a face
+    warped beyond the locator's tolerance (1e-10 of its box diagonal) is tested as the polyhedron of the triangles about
+    its face centres, the same triangles from both sides of a face (triangulated_margin: the distance from the
+    triangles, signed by the winding number, behind a bounding-box shortcut); a cell with planar faces keeps the plane
+    test of ADR 0219 M3 unchanged; a point on a shared triangle goes to the lowest-numbered cell. Met: on B3d all 1069
+    fringe centres get a donor equal to the full search and confirmed by an independent tetrahedral test, the linear
+    stencils reproduce a linear field to 3e-16 and the quadratic stencils q3 to 9e-16 with no fallback; 250000 random
+    points in the two warped parts each lie in exactly one cell; 39744 face centres and 12167 mesh points go to the
+    lowest-numbered cell; on the planar set-ups (RL, TG_L, U, TR, DC, FB, B3, B3s) no cell is warped and the donors and
+    default stencils equal those built from the rule of M3 bit for bit; K2, K4, D1, Q0 and the records R2 pass unedited.
+    Cost: a search takes 4.5 microseconds on B3d, the connectivity 1.8 times that of B3. The present rule finds no cell
+    for the fringe cells 16035 (as recorded) and 16245. Six mutations caught. Limits: kinematic only, one family of
+    warped meshes; non-convex cells with planar faces keep the plane test. Open for the maintainer: whether every cell
+    should use the triangulated test (it changes one donor of TR at a tie, ADR 0253 Q1). Follow-ups (ADR 0253 questions
+    2 and 3, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-356, F-357. Open: question
+    1 (the triangulated test for every cell changes one donor at a tie).
+- [x] **F-353** Overset: the moving cylinder with the quadratic donor interpolation
+  - depends on: F-336
+  - acceptance: The set-up TR of ADR 0219 run with DonorInterpolation::Quadratic: mass of the domain and continuity
+    within 1e-9, no fallback or the count reported, drag within 5 percent of the body-fitted run at every step from t =
+    2 to t = 8 and the difference to the linear-stencil run reported; the ADR recommends for or against making the
+    quadratic interpolation the default.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0251 question 5, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. ADR 0259, 2026-11-12: DONE (tests and ADR only, no library change). The set-up
+    TR of ADR 0219 with DonorInterpolation::Quadratic over 400 steps: continuity 5.6e-17, net outflow 9.4e-15 of U D L,
+    no fallback (156 stencils of nine cells at every step), no unconverged solve, drag within 5.86e-3 of the body-fitted
+    run at every step from t = 2 to t = 8 (linear stencils 6.25e-3; the linear run and the body-fitted run reproduce ADR
+    0219 to every printed digit). Against the linear run: C_D lower by 2.1e-4 on average (largest 1.6e-3), mean drag
+    error 3.42e-3 against 3.21e-3, worse by more than 1e-4 at 164 of 301 steps; the step-to-step drag oscillation as the
+    body crosses background cells halves (rms 0.98e-3 against 1.80e-3 of C_D); time 1.03 times. By the rule fixed before
+    the run the ADR recommends against making the quadratic interpolation the default; the default stays the
+    maintainer's decision (ADR 0259 Q1). Three mutations caught by the fast test.
+- [ ] **F-354** Immersed solid: DFG 2D-2 force extrema, mesh and time-step convergence
+  - depends on: F-346
+  - acceptance: DFG 2D-2 with the immersed cylinder is run on the T mesh and on T refined once (D/80, half the time
+    step) and on M2 and M3; the maximum drag and lift on the finest mesh are within 1.5 percent of the FeatFlow level-6
+    values and the error decreases from D/40 to D/80 on both families, or the part that does not converge (mesh of the
+    wake, forcing order, outlet condition, time step) is identified by a registered measurement.
+  - note: From ADR 0249 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0249 measured the 2D-2 lift maximum at +2.58 percent on T and -0.16 percent on M2 (both D/40 at the cylinder, the
+    same forcing terms), and showed that the cause is not the evaluation of the force. Low priority. ADR 0254
+    (2026-11-12) measured 2D-2 on M2 with `build_second_order_bounded`: max C_D 3.20930 (-0.33 percent), max C_L 0.97593
+    (-1.01 percent), St 0.30112 (-0.25 percent); the convergence runs should be made with both forcings.
+- [~] **F-355** Second-order immersed forcing: transient PISO at Re 100
+  - depends on: F-309
+  - acceptance: DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number
+    within 1 percent of the first-order forcing on the same mesh, or the cause of the stop at step 6 is diagnosed by a
+    registered measurement and the configuration is refused with a located message.
+  - note: PARTIAL (ADR 0254, 2026-11-12), in the library. From ADR 0249 question 6. The stop was reproduced (step 6,
+    Courant 1.1094e7) and diagnosed by registered variant runs, each with its first-order control: it needs a
+    fluid-solid face whose surface crossing lies close to the fluid cell centre, so that the linear extension of ADR
+    0234 D1 has a weight above 5 (it multiplies the velocity of the first fluid cell relative to the wall by up to 38 on
+    M2), together with the impulsive start; runs with weights of at most 5 (theta_min 0.1, 0.25, 0.5; mesh M1) and a run
+    started from a developed field do not stop, and at each of the five steps the largest flux velocity sits on the face
+    of weight 38.99 (2.49, 23, 1426, 9.2e4, 6.9e5). Ruled out, each by its number: the ddt flux correction, the
+    corrector count, BDF2, the convection scheme, the time step (5e-4 to 8e-3 all stop) and the continuity of the fluid
+    cells (7e-7). A hand estimate of a linear growth criterion (weight times the share of the time term in the diagonal)
+    was refuted by its registered rule. Delivered: rcfd-fv immersed.rs, `ImmersedForcing::build_second_order_bounded`
+    (opt-in): on the faces with a weight above 2 the flux is that of the wall value reflected through the image point of
+    the face in the fluid, interpolated between the first fluid cell and the cell behind it, weights of magnitude at
+    most 1, second order; `build` and `build_second_order` are bit-identical (three hashes, the existing immersed tests,
+    baseline_hashes). With it DFG 2D-2 on M2 runs to t = 8 in PISO with BDF2: Strouhal number 0.30112 against 0.30041 of
+    the first-order forcing (+0.24 percent, limit 1), C_D max -0.33 percent and C_L max -1.01 percent of FeatFlow;
+    circular Couette error 5.91e-3, 1.63e-3, 4.23e-4, order 1.947 (limit 1.5), PISO equal to SIMPLEC to 0.1 percent.
+    `build_second_order` itself is refused by PimpleSolver with a located message where a flux face has a weight above 5
+    and can return more than the time term carries (`flux_growth`; 2D-2 on M2 at step 1, value 2.2; the runs of ADR 0234
+    and 0249 are not refused); the refusal is a sufficient condition, not a stability criterion (time steps of 4e-3 and
+    8e-3 still stop by the Courant guard). Seven mutations caught. Partial by the registered rule because of two known
+    misses: the flux velocity after the first step was registered as at least 4.5 and is 2.49 (the growth builds over
+    steps 2 to 5), and the bounded form with a single PISO corrector stops at step 34 (any flux face that returns the
+    wall-normal velocity at full size does, with one corrector; with two or more it runs). Acceptance: the second branch
+    (diagnosis and located refusal) is met; the first is met with the bounded opt-in, not with `build_second_order` as
+    named. Open (ADR 0254 questions 1 to 3): whether `build_second_order` should build the bounded form (changes
+    recorded numbers of ADR 0234 and 0239), the form of the refusal, the single corrector. Not run: M3, T, three
+    dimensions, PIMPLE outer iterations, SIMPLE with under-relaxation. Follow-ups: F-363 (the single corrector), F-364
+    (the bounded form as build_second_order; needs the maintainer).
+- [x] **F-356** Overset: donor search on non-convex cells with planar faces
+  - depends on: F-352
+  - acceptance: On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the
+    mesh lies in exactly one cell of the locator and the located cell agrees with a full search and with an independent
+    containment test; on meshes of convex cells with planar faces the donors and stencils are bit-identical to those of
+    today (the checks A4 of ADR 0253).
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0253 question 2, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. ADR 0260, 2026-11-12: DONE. Derived: the planes of M3 enclose only the kernel of
+    a cell, exact for a convex cell with planar faces and refusing points of its own cell for a non-convex one (smallest
+    example a dart prism); a cell is non-convex exactly when one of its points lies outside one of its face planes.
+    Built in rcfd_mesh::overset: a flat cell with a point outside one of its face planes by more than the locator's
+    tolerance (1e-10 of its box diagonal) is tested by the triangles of its faces as a warped cell of ADR 0253; the fan
+    about the face centre keeps the winding number exact but, where it folds out of a non-convex face, its distance is
+    wrong, so such a face is ear-clipped, the same from both sides (face_fan_folds, face_ear_triangles,
+    CellLocator::n_nonconvex, n_ear_clipped, n_unsupported). Met: on a mesh of dart prisms (1125 of 1280 cells
+    non-convex) and one of L-shaped prisms with triangle prisms in their notches (288 non-convex, 324 ear-clipped faces)
+    every one of 100000 random points lies in exactly one cell, agrees with the full search and with an independent
+    containment test in lattice space; face centres, mesh points and 20000 points on layer planes in the notches are
+    located consistently; an overset on the L-mesh gets all 296 donors, linear and quadratic fields reproduced to
+    1.3e-15 and 8.9e-16. The present rule leaves 26305 and 44680 of the points in no cell. On the convex set-ups of ADR
+    0253 no cell is reclassified (largest outward vertex distance 1.5e-4 of the tolerance) and every overset test of
+    rcfd-mesh and rcfd-fv passes unedited; B3d keeps the donors of ADR 0253. Five mutations caught; one ill-posed check
+    corrected by amendment 1. Limits: kinematic only, prism meshes only; a face that cannot be ear-clipped is only
+    counted. Open for the maintainer: whether such faces should be refused (ADR 0260 Q1). Open for the maintainer: ADR
+    0260 Q1 (refuse a face that cannot be ear-clipped or a folded warped face; today they are only counted, and refusing
+    could turn an existing result into an error).
+- [x] **F-357** Overset: uniform flow on a warped three-dimensional overset mesh
+  - depends on: F-352
+  - acceptance: The uniform-flow check U1 of ADR 0219 on the set-up B3d of ADR 0251 with the component moving: velocity
+    and pressure within 1e-10, continuity of the calculated cells within 1e-9 at every step, with the default and with
+    the quadratic donor interpolation.
+  - note: DONE pending acceptance, merged 2026-11-12. From ADR 0253 question 3, recommendation taken on the maintainer's
+    standing instruction of 2026-11-11. ADR 0255, 2026-11-12: DONE. The uniform flow U = (1, 0.5, 0.25) through B3d (two
+    hexahedral parts with interior points displaced by up to 0.15 h, face warp up to 0.142 h) with the component turning
+    by 0.1 rad and translating by 0.087 over 40 steps of 0.005, the hole and fringe rebuilt every step (92 kind
+    changes): velocity 7.7e-15 and 7.3e-15, pressure 1.0e-13 and 1.1e-13, continuity of the calculated cells 6.4e-15 and
+    5.0e-15 at every step with the default and the quadratic donor interpolation (no fallback), GCL 6.1e-16, outflow
+    9e-15. Separating checks met: the warped component alone at rest and moving and the warped background alone keep the
+    uniform state to 7e-15, the planar B3 with the same motion to 5e-15 and 7.9e-14. Controls held (weights times 1.001:
+    1.3e-3; a GCL residual of 3.1e-7 in the mesh flux: 1.0e-6). Mutations caught: a quadratic weight off by 1e-6
+    (1.3e-6), the M9 flux refresh skipped (3.1e-2); a non-closing face area vector is refused by the mesh validation
+    before the flow. No library change. Limits: a uniform flow only; it shows the identities (closed area vectors, GCL,
+    weights summing to one) on a warped moving overset mesh, not the accuracy of a non-uniform flow there. Follow-up
+    (recommendation taken on the maintainer's standing instruction of 2026-11-11): F-359.
+- [ ] **F-358** Wall pressure of the body force from the prescribed gradient, selectable in the case driver, and the default decided
+  - depends on: F-351, F-350
+  - acceptance: A case key of dynamic_mesh.six_dof selects the wall pressure of the body force ("extrapolated", the
+    default, or "prescribed_gradient"), the case driver keeps the vector of ale::set_follow_conditions and hands it to
+    sixdof::patch_force_moment_wall_gradient, and the spring-mounted piston of ADR 0211 run through the case driver at a
+    mass ratio of 0.2 gives omega_m/omega within 0.05 percent of 1 with the key against 1.0013 without; the existing
+    cases whose hashes would move if the prescribed gradient became the default are listed with the size of the change,
+    for the maintainer's decision on the default; the callers that evaluate a wall force after a step with a prescribed
+    wall gradient (ale::set_rest_conditions, the sliding step) are listed with the measured error on one case each, and
+    the corrected evaluation is checked on a wall cell whose centre does not lie on the face normal; with the default
+    every existing case hash is bit-identical.
+  - note: From ADR 0252 questions 1 to 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    The default wall pressure on a wall with a prescribed gradient is first order: the least-squares gradient counts the
+    stored zero-gradient wall value as a data point, so the wall-cell gradient is exactly half and the force is low by
+    1/(4N) of the column (1.25 percent at 20 cells). The default is the maintainer's decision.
+- [ ] **F-359** Overset: a non-uniform closed-form flow on a warped three-dimensional overset mesh
+  - depends on: F-357
+  - acceptance: A three-dimensional closed-form flow (a divergence-free linear field u = A x with its pressure, or a
+    decaying three-dimensional vortex with a known solution) on the set-ups B3 and B3d of ADR 0251 with the component
+    moving as in ADR 0255: the error of the calculated and fringe cells on B3d at most twice that on B3, with the
+    default and with the quadratic donor interpolation, and continuity of the calculated cells within 1e-9 at every
+    step.
+  - note: From ADR 0255, recommendation taken on the maintainer's standing instruction of 2026-11-11. A uniform flow
+    cannot see the warped face geometry or the non-orthogonality.
+- [ ] **F-360** Co-simulation protocol over the solver service
+  - depends on: F-139, F-085
+  - acceptance: The calls of docs/cosimulation-protocol.md (describe, time, checkpoint, restore, forces, advance) are
+    served by the JSON-RPC service under a new protocol version; an out-of-process mock structural participant driven
+    over TCP reproduces ADR 0256 A1 and A2 (every step converged, omega_m/omega within 0.5 percent and 3 percent) and
+    the same displacements as the in-process run to 1e-12; a dropped connection or a participant error stops the step
+    with a located error and both sides restored; the protocol document is versioned; existing service tests and case
+    hashes are unchanged.
+  - note: From ADR 0256 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [x] **F-361** Quasi-Newton acceleration of the coupled iteration
+  - depends on: F-139
+  - acceptance: A least-squares (quasi-Newton) update of the nodal force from the residual history of the step, opt-in
+    beside the fixed and Aitken factors, converges the model problem of ADR 0256 to 1e-8 in at most 7 iterations per
+    step and 6 or fewer on average (Aitken: 8.8), gives the same frequencies within 1e-6, and with one rigid node needs
+    no more iterations than Aitken; registered before the run with the plain fixed point as the diverging control.
+  - note: DONE pending acceptance (ADR 0261, 2026-11-12; registered before the code, no amendment). Opt-in
+    fsi::Relaxation::LeastSquares { initial, filter } (CouplingSettings::least_squares) in cosim::coupled_step: after a
+    first update relaxed with initial, the next nodal force is the flow's force plus the combination of the step's
+    output differences whose residual differences best cancel the current residual (interface quasi-Newton with a
+    least-squares inverse Jacobian), solved by Householder QR newest column first with a filter that drops a column
+    whose part outside the newer ones is below 1e-2 of its norm (no vanishing pivot); no reuse across steps;
+    fsi::strong_step refuses it. Derived: on a linear map it is GMRES plus one pass, exact at iteration d + 2. Measured
+    on the model problem of ADR 0256 (6 nodes, 16 faces, tolerance 1e-8): every one of 650 steps converged, at most 7
+    iterations (one step), mean 5.980 (Aitken 8.766, histogram identical to ADR 0256), frequencies equal to Aitken's
+    within 3.1e-10; one rigid node (SPm1): the same 301 iterations as Aitken, the same count in every step, positions
+    bit-identical; the plain fixed point diverges (510.85 in 10). Mock affine and cubic fluids check the termination
+    count and the equality with Aitken's secant. Existing suites cosim_f139, strong_fsi_f251, added_mass_f351 and the
+    baseline hashes pass unedited; four mutations caught. Open: ADR 0261 Q1 to Q3.
+- [ ] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
+  - depends on: F-139
+  - acceptance: InterfaceMap weights are built from the two interface meshes alone (nearest-element projection and a
+    radial-basis interpolation) for a planar and a cylindrical wall with non-matching meshes; rigid translation and
+    rotation are reproduced to 1e-12, resultant force, moment and work are conserved to 1e-12 by the transposed map, a
+    wall point outside the structure is refused or mapped by a stated policy, and the model problem of ADR 0256 gives
+    the same frequencies within 1e-3 with the built weights.
+  - note: From ADR 0256 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-363** Second-order immersed forcing: the single PISO corrector
+  - depends on: F-355
+  - acceptance: The stop of DFG 2D-2 on M2 with one PISO corrector and a second-order immersed flux face of weight above
+    1 (ADR 0254 D11: step 34 with the bounded form, step 126 with weights up to 2) is explained by a registered
+    measurement, and the setting either runs 200 steps or is refused with a located message; two correctors are
+    unaffected.
+  - note: From ADR 0254 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0254 measured: with one corrector the first-order forcing and the second-order forcing with weights of at most 1
+    run, weights up to 2 stop at step 126, the bounded form at step 34 (theta_min 0.1: step 46); with two or more
+    correctors all of these run. The mechanism is not measured.
+- [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
+  - depends on: F-355
+  - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
+    and the checks of ADR 0234 (A1, V1 to V4) and ADR 0239 are measured again and reported next to the old numbers.
+  - note: NEEDS THE USER. From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded
+    numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the
+    DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs).
+- [ ] **F-365** Mesh-speed time step as the default of moving compressible tree runs
+  - depends on: F-259, F-258
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Needs the maintainer's lift of the
+    bit-identical default for moving compressible tree runs (ADR 0207 Q2 (b)). The moving compressible step of the case
+    tree takes max_dt_ale() by default, with [dynamic_mesh.compressible] time_step = "absolute" restoring the step of
+    ADR 0191; the library loops of ADR 0191's equality tests are restated by a registered edit (the old tests kept as
+    ignored records); a tree run equals the library run to 1e-12 for both values; fixed-mesh compressible runs and
+    incompressible runs are bit-identical (baseline hashes and ADR 0191's D0 unchanged); the CFL number of the piston
+    cell of the Mach 0.2 piston stays within the registered bound of the set value over the stroke.
+  - note: From ADR 0257 question 1 (ADR 0207 Q2 (b)). NEEDS THE USER: it changes the bits of existing moving
+    compressible runs.
+- [ ] **F-366** Consistent correctors: the case table carries every flag
+  - depends on: F-322
+  - acceptance: `[solver.consistent_correctors]` has the keys enabled, periodic, body_force, non_orthogonal,
+    component_diagonal and face_jump with defaults that leave every existing case's hash and result unchanged; sim.rs
+    sets `PimpleSettings::set_consistent` from it and reports each `ConsistentRefusal` of
+    `ConsistentCorrectors::conflicts` at `solver.consistent_correctors.<flag>`; overset.rs reads
+    `consistent_flags().enabled`; the three older PimpleSettings fields are removed with amendments to ADR 0214 and ADR
+    0223; the schema golden edit is made only with the maintainer's approval; defaults bit-identical.
+  - note: The remaining half of F-322 (ADR 0258). NEEDS THE USER before merge: the schema golden edit.
+- [ ] **F-367** Consistent correctors: the new combinations with periodic faces
+  - depends on: F-322
+  - acceptance: Non-orthogonal correctors, the component diagonal and face jumps are each accepted with periodic
+    pressure faces under the consistent correctors once a registered periodic steady identity (velocity, and pressure
+    with the mean removed against the default's own drift) is met for it; a combination that misses stays refused with
+    its located message; defaults bit-identical.
+  - note: From ADR 0258 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.

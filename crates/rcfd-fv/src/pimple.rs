@@ -124,6 +124,11 @@ pub struct PimpleSettings {
     /// the coefficient of the pressure equation's Neumann term there; the cell velocity keeps `rAU b`. Default `false`: body forces
     /// are refused as in ADR 0214. Face jumps stay refused.
     pub consistent_body_force: bool,
+    /// The consistent-corrector flags as one value (ADR 0258 V1): `enabled`, `periodic` and `body_force` are read together with
+    /// the three fields above (either sets the flag, see [`PimpleSettings::consistent_flags`]); the flags of the further
+    /// combinations (`non_orthogonal`, `component_diagonal`, `face_jump`) exist only here. Default: every flag `false`
+    /// (bit-identical). Set it with [`PimpleSettings::set_consistent`], which also writes the three fields above.
+    pub consistent: ConsistentCorrectors,
     /// Make the pressure-lag check (`pressure_lag_check`) and the adaptive corrector count (`corrector_control`) also on a
     /// moving-mesh step (`step_ale`, `step_ale_with_walls`, `step_sliding`; ADR 0223 E0), on that step's own frozen matrices (the
     /// moved geometry, the relative flux, the step's wall conditions made homogeneous), exactly as on a fixed mesh. Default `false`:
@@ -135,6 +140,290 @@ pub struct PimpleSettings {
     /// no effect (the default step) with `consistent_correctors`, on the library's moving-mesh steps and in the fractional step;
     /// coupled faces, face jumps and the immersed-solid flux are left as they are. Default `false` (bit-identical).
     pub rhie_chow_step_consistent: bool,
+}
+
+/// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
+/// (ADR 0214 F0); every other flag accepts one combination the correctors are otherwise refused with. A flag without `enabled`
+/// does nothing. [`ConsistentCorrectors::conflicts`] names the combinations that are not supported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ConsistentCorrectors {
+    /// Use the consistent correctors (as `PimpleSettings::consistent_correctors`, ADR 0214 F0).
+    pub enabled: bool,
+    /// Accept periodic (coupled) pressure faces (as `PimpleSettings::consistent_periodic`, ADR 0223 E2).
+    pub periodic: bool,
+    /// Accept body forces (as `PimpleSettings::consistent_body_force`, ADR 0223 E3).
+    pub body_force: bool,
+    /// Accept non-orthogonal correctors (`PimpleSettings::non_orth_correctors > 0`; ADR 0258 X1): the compensation of the old
+    /// pressure also carries the explicit non-orthogonal part, `(rAtU - rAU)_f k_f . grad(p_prev)_f`, as the steady SIMPLEC of
+    /// ADR 0050. Fixed meshes without pressure gradient options and without periodic faces.
+    pub non_orthogonal: bool,
+    /// Accept the component diagonal (`PimpleSettings::component_diagonal`; ADR 0258 X2); `rAtU` keeps the component averages.
+    /// Fixed meshes without periodic faces.
+    pub component_diagonal: bool,
+    /// Accept face jumps (`PimpleSolver::face_jump` and the hook's; ADR 0258 X3): a jump face compensates the old pressure
+    /// difference less the old total rise and takes `interp(rAtU)` in its resistance factor. Fixed meshes without periodic faces.
+    pub face_jump: bool,
+}
+
+impl ConsistentCorrectors {
+    /// The consistent correctors with every extension this library supports (ADR 0258).
+    pub fn all() -> Self {
+        ConsistentCorrectors {
+            enabled: true,
+            periodic: true,
+            body_force: true,
+            non_orthogonal: true,
+            component_diagonal: true,
+            face_jump: true,
+        }
+    }
+
+    /// Every combination of these flags with the settings of `ctx` that the consistent correctors are not defined with, in the
+    /// order of ADR 0258 V2 (empty without `enabled`).
+    pub fn conflicts(&self, ctx: &ConsistentContext) -> Vec<ConsistentRefusal> {
+        use ConsistentRefusal as R;
+        let mut out = Vec::new();
+        if !self.enabled {
+            return out;
+        }
+        if ctx.fractional {
+            out.push(R::FractionalStep);
+        }
+        if ctx.non_orth_correctors > 0 {
+            if !self.non_orthogonal {
+                out.push(R::NonOrthogonal);
+            } else {
+                if ctx.gradient_pressure {
+                    out.push(R::NonOrthogonalGradientOptions);
+                }
+                if ctx.periodic_faces {
+                    out.push(R::NonOrthogonalPeriodic);
+                }
+                if ctx.moving_mesh {
+                    out.push(R::NonOrthogonalMovingMesh);
+                }
+            }
+        }
+        if ctx.component_diagonal {
+            if !self.component_diagonal {
+                out.push(R::ComponentDiagonal);
+            } else {
+                if ctx.periodic_faces {
+                    out.push(R::ComponentDiagonalPeriodic);
+                }
+                if ctx.moving_mesh {
+                    out.push(R::ComponentDiagonalMovingMesh);
+                }
+            }
+        }
+        if ctx.body_force && !self.body_force {
+            out.push(R::BodyForce);
+        }
+        if ctx.face_jump {
+            if !self.face_jump {
+                out.push(R::FaceJump);
+            } else {
+                if ctx.periodic_faces {
+                    out.push(R::FaceJumpPeriodic);
+                }
+                if ctx.moving_mesh {
+                    out.push(R::FaceJumpMovingMesh);
+                }
+            }
+        }
+        if ctx.periodic_faces && !self.periodic {
+            out.push(R::PeriodicFaces);
+        }
+        out
+    }
+
+    /// `Ok` when the flags are supported with the settings of `ctx`, else the first conflict of
+    /// [`conflicts`](Self::conflicts).
+    pub fn validate(&self, ctx: &ConsistentContext) -> Result<(), ConsistentRefusal> {
+        match self.conflicts(ctx).first() {
+            Some(r) => Err(*r),
+            None => Ok(()),
+        }
+    }
+}
+
+/// The settings a set of consistent-corrector flags is validated against (ADR 0258 V2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ConsistentContext {
+    /// The fractional step is selected (`PimpleSettings::fractional`).
+    pub fractional: bool,
+    /// `PimpleSettings::non_orth_correctors`.
+    pub non_orth_correctors: usize,
+    /// Pressure gradient options are set (`PimpleSettings::gradient_pressure`).
+    pub gradient_pressure: bool,
+    /// `PimpleSettings::component_diagonal`.
+    pub component_diagonal: bool,
+    /// A body force acts (`PimpleSolver::body_force` or the hook's `source_force`).
+    pub body_force: bool,
+    /// A face jump acts (`PimpleSolver::face_jump` or the hook's).
+    pub face_jump: bool,
+    /// The pressure has periodic (coupled) faces.
+    pub periodic_faces: bool,
+    /// The step is taken on a moving mesh (ALE or sliding).
+    pub moving_mesh: bool,
+}
+
+/// One combination the consistent correctors are not defined with (ADR 0258 V2): which flag, with which other setting, and why.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsistentRefusal {
+    /// The fractional step.
+    FractionalStep,
+    /// Non-orthogonal correctors without the flag `non_orthogonal`.
+    NonOrthogonal,
+    /// Non-orthogonal correctors with pressure gradient options.
+    NonOrthogonalGradientOptions,
+    /// Non-orthogonal correctors with periodic faces.
+    NonOrthogonalPeriodic,
+    /// Non-orthogonal correctors on a moving mesh.
+    NonOrthogonalMovingMesh,
+    /// The component diagonal without the flag `component_diagonal`.
+    ComponentDiagonal,
+    /// The component diagonal with periodic faces.
+    ComponentDiagonalPeriodic,
+    /// The component diagonal on a moving mesh.
+    ComponentDiagonalMovingMesh,
+    /// A body force without the flag `body_force`.
+    BodyForce,
+    /// A face jump without the flag `face_jump`.
+    FaceJump,
+    /// A face jump with periodic faces.
+    FaceJumpPeriodic,
+    /// A face jump on a moving mesh.
+    FaceJumpMovingMesh,
+    /// Periodic faces without the flag `periodic`.
+    PeriodicFaces,
+}
+
+impl ConsistentRefusal {
+    /// Every refusal, in the order of [`ConsistentCorrectors::conflicts`].
+    pub const ALL: [ConsistentRefusal; 13] = [
+        ConsistentRefusal::FractionalStep,
+        ConsistentRefusal::NonOrthogonal,
+        ConsistentRefusal::NonOrthogonalGradientOptions,
+        ConsistentRefusal::NonOrthogonalPeriodic,
+        ConsistentRefusal::NonOrthogonalMovingMesh,
+        ConsistentRefusal::ComponentDiagonal,
+        ConsistentRefusal::ComponentDiagonalPeriodic,
+        ConsistentRefusal::ComponentDiagonalMovingMesh,
+        ConsistentRefusal::BodyForce,
+        ConsistentRefusal::FaceJump,
+        ConsistentRefusal::FaceJumpPeriodic,
+        ConsistentRefusal::FaceJumpMovingMesh,
+        ConsistentRefusal::PeriodicFaces,
+    ];
+
+    /// The conflicting setting as the divergence record names it (`Divergence::stage`).
+    pub fn stage(&self) -> &'static str {
+        use ConsistentRefusal as R;
+        match self {
+            R::FractionalStep => "fractional step",
+            R::NonOrthogonal => "non-orthogonal correctors",
+            R::NonOrthogonalGradientOptions => "non-orthogonal correctors with pressure gradient options",
+            R::NonOrthogonalPeriodic => "non-orthogonal correctors with periodic faces",
+            R::NonOrthogonalMovingMesh => "non-orthogonal correctors on a moving mesh",
+            R::ComponentDiagonal => "component diagonal",
+            R::ComponentDiagonalPeriodic => "component diagonal with periodic faces",
+            R::ComponentDiagonalMovingMesh => "component diagonal on a moving mesh",
+            R::BodyForce => "body force",
+            R::FaceJump => "face jump",
+            R::FaceJumpPeriodic => "face jump with periodic faces",
+            R::FaceJumpMovingMesh => "face jump on a moving mesh",
+            R::PeriodicFaces => "periodic faces",
+        }
+    }
+
+    /// The flag of [`ConsistentCorrectors`] the refusal belongs to: the one that is missing, or the one whose combination is
+    /// not supported (`enabled` for the fractional step, which no flag allows).
+    pub fn flag(&self) -> &'static str {
+        use ConsistentRefusal as R;
+        match self {
+            R::FractionalStep => "enabled",
+            R::NonOrthogonal
+            | R::NonOrthogonalGradientOptions
+            | R::NonOrthogonalPeriodic
+            | R::NonOrthogonalMovingMesh => "non_orthogonal",
+            R::ComponentDiagonal | R::ComponentDiagonalPeriodic | R::ComponentDiagonalMovingMesh => {
+                "component_diagonal"
+            }
+            R::BodyForce => "body_force",
+            R::FaceJump | R::FaceJumpPeriodic | R::FaceJumpMovingMesh => "face_jump",
+            R::PeriodicFaces => "periodic",
+        }
+    }
+
+    /// The other setting of the combination, as the library names it.
+    pub fn setting(&self) -> &'static str {
+        use ConsistentRefusal as R;
+        match self {
+            R::FractionalStep => "PimpleSettings::fractional",
+            R::NonOrthogonal => "PimpleSettings::non_orth_correctors > 0",
+            R::NonOrthogonalGradientOptions => "PimpleSettings::gradient_pressure",
+            R::ComponentDiagonal => "PimpleSettings::component_diagonal",
+            R::BodyForce => "PimpleSolver::body_force or the hook's source_force",
+            R::FaceJump => "PimpleSolver::face_jump or the hook's face_jump",
+            R::NonOrthogonalPeriodic | R::ComponentDiagonalPeriodic | R::FaceJumpPeriodic | R::PeriodicFaces => {
+                "periodic pressure faces"
+            }
+            R::NonOrthogonalMovingMesh | R::ComponentDiagonalMovingMesh | R::FaceJumpMovingMesh => {
+                "the moving-mesh step"
+            }
+        }
+    }
+
+    /// Why the combination is refused.
+    pub fn reason(&self) -> &'static str {
+        use ConsistentRefusal as R;
+        match self {
+            R::FractionalStep => "the fractional step has no pressure correctors",
+            R::NonOrthogonal => "the flag is not set; it adds the non-orthogonal part of the compensation",
+            R::NonOrthogonalGradientOptions => {
+                "the non-orthogonal compensation is derived for the plain non-orthogonal flux only"
+            }
+            R::ComponentDiagonal => {
+                "the flag is not set; it accepts the component diagonal with the component-averaged rAtU"
+            }
+            R::BodyForce => "the flag is not set; it accepts body forces",
+            R::FaceJump => "the flag is not set; it adds the compensation of the jump faces",
+            R::PeriodicFaces => "the flag is not set; it adds the compensation of the periodic faces",
+            R::NonOrthogonalPeriodic | R::ComponentDiagonalPeriodic | R::FaceJumpPeriodic => {
+                "no steady identity is registered for this extension with periodic faces"
+            }
+            R::NonOrthogonalMovingMesh | R::ComponentDiagonalMovingMesh | R::FaceJumpMovingMesh => {
+                "the extension is not defined on a moving mesh (roadmap item F-321)"
+            }
+        }
+    }
+
+    /// The located part of the refusal: flag, other setting and reason.
+    pub fn message(&self) -> String {
+        format!(
+            "ConsistentCorrectors::{} with {}: {}; ADR 0258",
+            self.flag(),
+            self.setting(),
+            self.reason()
+        )
+    }
+
+    /// The refusal a divergence record's stage names, if any.
+    pub fn from_stage(stage: &str) -> Option<ConsistentRefusal> {
+        Self::ALL.iter().copied().find(|r| r.stage() == stage)
+    }
+}
+
+impl std::fmt::Display for ConsistentRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the consistent correctors (ADR 0214) are not defined with the {} ({})",
+            self.stage(),
+            self.message()
+        )
+    }
 }
 
 /// Adaptive corrector count of the PISO/PIMPLE loop (ADR 0156 D2-D4).
@@ -486,9 +775,20 @@ impl Divergence {
                 "PIMPLE immersed-solid forcing (ADR 0218) is not defined with the {}: the run is stopped at step {}{outer}",
                 self.stage, self.step
             );
-        } else if self.quantity == "consistent correctors" {
+        } else if self.quantity == "immersed flux weight" {
             return format!(
-                "PIMPLE consistent correctors (ADR 0214) are not defined with the {}: the run is stopped at step {}{outer}",
+                "PIMPLE second-order immersed face flux (ADR 0254): a fluid-solid face extends the velocity of its fluid cell \
+                 through the surface with a weight above 5 and can return {:.3} times what the time term carries (> 1){at}; \
+                 the run is stopped at step {}{outer}: build the forcing with ImmersedForcing::build_second_order_bounded",
+                self.value, self.step
+            );
+        } else if self.quantity == "consistent correctors" {
+            // ADR 0258 V2: the located part (flag, other setting, reason) after the sentence of ADR 0214
+            let located =
+                ConsistentRefusal::from_stage(self.stage).map_or(String::new(), |r| format!(" ({})", r.message()));
+            return format!(
+                "PIMPLE consistent correctors (ADR 0214) are not defined with the {}: the run is stopped at step \
+                 {}{outer}{located}",
                 self.stage, self.step
             );
         } else if self.quantity == "lag amplification" {
@@ -552,9 +852,30 @@ impl PimpleSettings {
             consistent_correctors: false,
             consistent_periodic: false,
             consistent_body_force: false,
+            consistent: ConsistentCorrectors::default(),
             moving_mesh_lag: false,
             rhie_chow_step_consistent: false,
         }
+    }
+
+    /// The consistent-corrector flags in effect (ADR 0258 V1): the value `consistent` with `enabled`, `periodic` and `body_force`
+    /// each also set by its older field (`consistent_correctors`, `consistent_periodic`, `consistent_body_force`).
+    pub fn consistent_flags(&self) -> ConsistentCorrectors {
+        ConsistentCorrectors {
+            enabled: self.consistent.enabled || self.consistent_correctors,
+            periodic: self.consistent.periodic || self.consistent_periodic,
+            body_force: self.consistent.body_force || self.consistent_body_force,
+            ..self.consistent
+        }
+    }
+
+    /// Set every consistent-corrector flag from one value (ADR 0258 V1): stores it and writes the three older fields from it, so
+    /// that [`consistent_flags`](Self::consistent_flags) returns exactly `flags`.
+    pub fn set_consistent(&mut self, flags: ConsistentCorrectors) {
+        self.consistent = flags;
+        self.consistent_correctors = flags.enabled;
+        self.consistent_periodic = flags.periodic;
+        self.consistent_body_force = flags.body_force;
     }
 
     /// PIMPLE defaults: several outer iterations with under-relaxation.
@@ -923,34 +1244,36 @@ impl PimpleSolver {
         None
     }
 
-    /// The first setting the consistent correctors are not defined with (ADR 0214 F0), as the stage of the refusal; the sources
-    /// a hook supplies are checked again in every outer iteration.
-    fn consistent_conflict(&self) -> Option<&'static str> {
+    /// What the consistent-corrector flags are validated against at this step (ADR 0258 V2). The periodic faces are searched only
+    /// when a flag in effect can be refused with them.
+    fn consistent_context(&self, flags: &ConsistentCorrectors) -> ConsistentContext {
         let s = &self.settings;
-        if s.fractional.is_some() {
-            return Some("fractional step");
+        let (non_orth, jump) = (s.non_orth_correctors > 0, self.face_jump.is_some());
+        let periodic_matters = !flags.periodic
+            || (non_orth && flags.non_orthogonal)
+            || (s.component_diagonal && flags.component_diagonal)
+            || (jump && flags.face_jump);
+        ConsistentContext {
+            fractional: s.fractional.is_some(),
+            non_orth_correctors: s.non_orth_correctors,
+            gradient_pressure: s.gradient_pressure.is_some(),
+            component_diagonal: s.component_diagonal,
+            body_force: self.body_force.is_some() || self.source_force.is_some(),
+            face_jump: jump,
+            periodic_faces: periodic_matters
+                && pressure_bc(&self.geom, &self.u, &self.p)
+                    .coupled
+                    .iter()
+                    .any(|c| c.is_some()),
+            moving_mesh: self.ale.is_some(),
         }
-        if s.non_orth_correctors > 0 {
-            return Some("non-orthogonal correctors");
-        }
-        if s.component_diagonal {
-            return Some("component diagonal");
-        }
-        if (self.body_force.is_some() || self.source_force.is_some()) && !s.consistent_body_force {
-            return Some("body force");
-        }
-        if self.face_jump.is_some() {
-            return Some("face jump");
-        }
-        if !s.consistent_periodic
-            && pressure_bc(&self.geom, &self.u, &self.p)
-                .coupled
-                .iter()
-                .any(|c| c.is_some())
-        {
-            return Some("periodic faces");
-        }
-        None
+    }
+
+    /// The first combination the consistent correctors are not defined with (ADR 0214 F0, ADR 0258 V2); the sources a hook
+    /// supplies are checked again in every outer iteration.
+    fn consistent_conflict(&self) -> Option<ConsistentRefusal> {
+        let flags = self.settings.consistent_flags();
+        flags.validate(&self.consistent_context(&flags)).err()
     }
 
     /// First cell with a non-finite velocity component.
@@ -975,14 +1298,14 @@ impl PimpleSolver {
             // the guard has stopped this run (ADR 0067): do no work
             return d.info;
         }
-        if self.settings.consistent_correctors {
+        if self.settings.consistent_flags().enabled {
             // ADR 0214 F0: refuse the combinations the consistent correctors are not defined with, before any work
             if let Some(conflict) = self.consistent_conflict() {
                 self.step_no += 1;
                 return self.trip(
                     dt,
                     None,
-                    conflict,
+                    conflict.stage(),
                     "consistent correctors",
                     None,
                     f64::NAN,
@@ -1013,6 +1336,8 @@ impl PimpleSolver {
         let vol = mesh.cell_volumes().to_vec();
         let sf = mesh.face_area_vectors();
         let s = self.settings.clone();
+        // ADR 0258 V1: the consistent-corrector flags in effect (the value and the older fields)
+        let cf = s.consistent_flags();
         self.step_no += 1;
 
         let mut gamma_nu = match &self.nu_face {
@@ -1087,16 +1412,23 @@ impl PimpleSolver {
                     self.nu_face = Some(nu);
                 }
             }
-            if s.consistent_correctors
-                && (((self.body_force.is_some() || self.source_force.is_some()) && !s.consistent_body_force)
-                    || self.face_jump.is_some())
+            // ADR 0214 F0, ADR 0258 V2: a source the hook supplied for this outer iteration that the flags do not accept (a
+            // face-jump refusal first, as before)
+            let source_conflict = if cf.enabled
+                && (self.body_force.is_some() || self.source_force.is_some() || self.face_jump.is_some())
             {
-                // ADR 0214 F0: a source the hook supplied for this outer iteration
-                let what = if self.face_jump.is_some() {
-                    "face jump"
-                } else {
-                    "body force"
-                };
+                use ConsistentRefusal as R;
+                let found = cf.conflicts(&self.consistent_context(&cf));
+                let is_jump = |r: &&R| matches!(r, R::FaceJump | R::FaceJumpPeriodic | R::FaceJumpMovingMesh);
+                found
+                    .iter()
+                    .find(is_jump)
+                    .or_else(|| found.iter().find(|r| matches!(r, R::BodyForce)))
+                    .map(|r| r.stage())
+            } else {
+                None
+            };
+            if let Some(what) = source_conflict {
                 return self.trip(
                     dt,
                     Some(outer),
@@ -1162,11 +1494,7 @@ impl PimpleSolver {
             ];
             let mut a_p = vec![0.0; n];
             // ADR 0214 F0: the off-diagonal magnitudes of the consistent correctors (empty when the option is off)
-            let mut h1 = if s.consistent_correctors {
-                vec![0.0; n]
-            } else {
-                Vec::new()
-            };
+            let mut h1 = if cf.enabled { vec![0.0; n] } else { Vec::new() };
             let mut diag_k: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             let u_iter: Vec<Vec3> = self.u.values.clone();
             // second-order linearisation: on the first outer iteration of a BDF2 step the
@@ -1270,8 +1598,8 @@ impl PimpleSolver {
                     self.u.values[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
-                if s.consistent_correctors {
-                    add_consistent_h1(&mut h1, &m, &lk, s.consistent_periodic);
+                if cf.enabled {
+                    add_consistent_h1(&mut h1, &m, &lk, cf.periodic);
                 }
                 diag_k[k] = m.a.diag.clone();
                 mats[k] = Some(m);
@@ -1293,6 +1621,23 @@ impl PimpleSolver {
             }
             for h in h1.iter_mut() {
                 *h /= n_active;
+            }
+            // ADR 0254 E2: the unbounded extension of ADR 0234 D1 is refused where it can amplify
+            if let Some((c, v)) = self
+                .immersed
+                .as_ref()
+                .and_then(|ib| ib.flux_growth((c1 - c2) / dt, &a_p))
+            {
+                let res = (res_u, res_p, p_iters);
+                return self.trip(
+                    dt,
+                    Some(outer),
+                    "momentum predictor",
+                    "immersed flux weight",
+                    Some(c),
+                    v,
+                    res,
+                );
             }
             if lag_due && last {
                 lag_ctx = Some(LagCtx {
@@ -1331,7 +1676,7 @@ impl PimpleSolver {
             };
             let gamma_bf = (s.coupled_body_pair_mean && body.is_some()).then(|| coupled_gamma(&g, &pbc, &gamma_p));
             // ADR 0214 F0: rAtU of the consistent correctors and its face values (`None` = the default correctors)
-            let r_t: Option<Vec<f64>> = s.consistent_correctors.then(|| consistent_rau(&vol, &a_p, &h1));
+            let r_t: Option<Vec<f64>> = cf.enabled.then(|| consistent_rau(&vol, &a_p, &h1));
             let gamma_t: Option<Vec<f64>> = r_t.as_ref().map(|r| face_interpolate(&g, r));
 
             // ---- pressure correctors ---------------------------------------
@@ -1390,9 +1735,27 @@ impl PimpleSolver {
                     // the face coefficient of the pressure equation (ADR 0214 F0: interp(rAtU) with the consistent correctors)
                     a.add_wall_flux(&g, &pbc, gamma_t.as_deref().unwrap_or(&gamma_p), &mut phi_hby_a);
                 }
+                // ADR 0258 X1: the fixed-pressure boundary part of the non-orthogonal compensation, for the pressure equation only
+                let mut eq_only: Vec<(usize, f64)> = Vec::new();
                 if let Some(rt) = &r_t {
                     // ADR 0214 F0: the SIMPLEC split of this corrector with the pressure that drove it
                     consistent_split(&g, &pbc, &r_au, rt, &self.p.values, &mut phi_hby_a, &mut hby_a);
+                    if s.non_orth_correctors > 0 {
+                        // ADR 0258 X1 (reached only with `non_orthogonal`): the non-orthogonal part of the compensation
+                        eq_only = consistent_non_orth(&g, &pbc, &r_au, rt, &self.p.values, &mut phi_hby_a);
+                    }
+                    if let Some(j) = &self.face_jump {
+                        // ADR 0258 X3 (reached only with `face_jump`): the cell term with the gradient the predictor used, the
+                        // jump removed from the face interpolation
+                        let fix = j.gradient_fix(&g, &j.totals(&self.phi));
+                        for (c, h) in hby_a.iter_mut().enumerate() {
+                            for k in 0..3 {
+                                if g.active[k] {
+                                    h[k] -= (r_au[c] - rt[c]) * fix[c][k];
+                                }
+                            }
+                        }
+                    }
                 }
                 // pressure jumps: phi (1 + G R) = phiHbyA + G rise - G snGrad p with G = gamma lap, as in the SIMPLE kernel
                 let mut gamma_j = match &gamma_t {
@@ -1404,12 +1767,32 @@ impl PimpleSolver {
                         if g.empty[f] || (j.rise[f] == 0.0 && j.resist[f] == 0.0) {
                             continue;
                         }
+                        if let Some(gt) = &gamma_t {
+                            // ADR 0258 X3: the old driving difference less the old total rise is compensated (the pressure
+                            // part by `consistent_split`), and the face takes interp(rAtU)
+                            let gu = gt[f] * g.lap_coeff[f];
+                            phi_hby_a[f] +=
+                                (gt[f] - gamma_p[f]) * g.lap_coeff[f] * (j.resist[f] * self.phi[f] - j.rise[f]);
+                            let den = 1.0 + gu * j.resist[f];
+                            phi_hby_a[f] = (phi_hby_a[f] + gu * j.rise[f]) / den;
+                            gamma_j[f] = gt[f] / den;
+                            continue;
+                        }
                         let gu = gamma_p[f] * g.lap_coeff[f];
                         let den = 1.0 + gu * j.resist[f];
                         phi_hby_a[f] = (phi_hby_a[f] + gu * j.rise[f]) / den;
                         gamma_j[f] = gamma_p[f] / den;
                     }
                 }
+                // ADR 0258 X1: the flux divergence of the pressure equation (`None`: that of `phi_hby_a`, as before)
+                let phi_eq: Option<Vec<f64>> = (!eq_only.is_empty()).then(|| {
+                    let mut q = phi_hby_a.clone();
+                    for &(f, v) in &eq_only {
+                        q[f] += v;
+                    }
+                    q
+                });
+                let phi_solve: &[f64] = phi_eq.as_deref().unwrap_or(&phi_hby_a);
                 if let Some((f, v)) = first_nonfinite(&phi_hby_a) {
                     let cell = mesh.owner().get(f).copied();
                     return self.trip(
@@ -1434,10 +1817,10 @@ impl PimpleSolver {
                 // ADR 0204 K3: the gradient options of the pressure equation (`None`: as before)
                 let (r0, it) = match s.gradient_pressure {
                     None => match &ib_src {
-                        None => solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls),
-                        Some(q) => crate::pressure::solve_pressure_src(
-                            &g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls, q,
-                        ),
+                        None => solve_pressure(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &controls),
+                        Some(q) => {
+                            crate::pressure::solve_pressure_src(&g, &gamma_j, &pbc, phi_solve, &mut p_new, &controls, q)
+                        }
                     },
                     Some(o) => {
                         let (r, i, _) = crate::pressure::solve_pressure_parts_opt(
@@ -1599,6 +1982,7 @@ impl PimpleSolver {
     fn lag_map(&self, ctx: &LagCtx, n_corr: usize, e: &[f64], pbc_h: &crate::pressure::PressureBc) -> Vec<f64> {
         let g = &self.geom;
         let s = &self.settings;
+        let cf = s.consistent_flags();
         let n = g.n_cells();
         let vol = g.mesh.cell_volumes();
         let n_active = g.active.iter().filter(|&&a| a).count() as f64;
@@ -1620,11 +2004,7 @@ impl PimpleSolver {
             let mut used: Vec<Option<FvMatrix>> = vec![None, None, None];
             let mut a_p = vec![0.0; n];
             // ADR 0214 F0: the off-diagonal magnitudes of the consistent correctors (empty when the option is off)
-            let mut h1 = if s.consistent_correctors {
-                vec![0.0; n]
-            } else {
-                Vec::new()
-            };
+            let mut h1 = if cf.enabled { vec![0.0; n] } else { Vec::new() };
             let mut diag_k: [Vec<f64>; 3] = [Vec::new(), Vec::new(), Vec::new()];
             for k in 0..3 {
                 let Some(m0) = &ctx.mats[k] else {
@@ -1646,8 +2026,8 @@ impl PimpleSolver {
                     u[c][k] = x[c];
                     a_p[c] += m.a.diag[c];
                 }
-                if s.consistent_correctors {
-                    add_consistent_h1(&mut h1, &m, &ctx.links[k], s.consistent_periodic);
+                if cf.enabled {
+                    add_consistent_h1(&mut h1, &m, &ctx.links[k], cf.periodic);
                 }
                 diag_k[k] = m.a.diag.clone();
                 used[k] = Some(m);
@@ -1660,7 +2040,7 @@ impl PimpleSolver {
             }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             // ADR 0214 F0: the consistent correctors' rAtU (`None` = the default correctors)
-            let r_t: Option<Vec<f64>> = s.consistent_correctors.then(|| consistent_rau(vol, &a_p, &h1));
+            let r_t: Option<Vec<f64>> = cf.enabled.then(|| consistent_rau(vol, &a_p, &h1));
             let r_c: &[f64] = r_t.as_deref().unwrap_or(&r_au);
             let gamma = face_interpolate(g, r_c);
             for corr in 0..n_corr {
@@ -1682,6 +2062,12 @@ impl PimpleSolver {
                 let mut phi_h = face_flux(g, &hby_a, &hb);
                 if let Some(rt) = &r_t {
                     consistent_split(g, pbc_h, &r_au, rt, &p, &mut phi_h, &mut hby_a);
+                    if s.non_orth_correctors > 0 {
+                        // ADR 0258 X1: the non-orthogonal part of the compensation, as in the step
+                        for (f, v) in consistent_non_orth(g, pbc_h, &r_au, rt, &p, &mut phi_h) {
+                            phi_h[f] += v;
+                        }
+                    }
                 }
                 let p_old = p.clone();
                 let mut p_new = p_old.clone();
@@ -2068,6 +2454,50 @@ fn consistent_split(
             }
         }
     }
+}
+
+/// The non-orthogonal part of the compensation of one consistent corrector (ADR 0258 X1, as the steady SIMPLEC of ADR 0050) with
+/// the pressure `p_prev` that drove it: adds to `phi_hby_a` on every internal face `(rAtU - rAU)_f k_f . grad(p_prev)_f`, the
+/// explicit non-orthogonal flux of the flux correction (`k_f = S_f - d_f |S_f|^2/(S_f . d_f)`, the least-squares gradient
+/// interpolated with the face weights), and returns, per fixed-pressure boundary face, `(rAtU - rAU)_f k_f . grad(p_prev)_owner`:
+/// the non-orthogonal part the pressure equation has there and the flux correction has not, to be added to the flux divergence
+/// of the pressure equation only. With `p_new = p_prev` the face flux of the corrector is that of the default and the pressure
+/// equation of a pass has the default's solution. Without pressure gradient options and periodic faces.
+fn consistent_non_orth(
+    g: &FvGeometry,
+    pbc: &crate::pressure::PressureBc,
+    r_au: &[f64],
+    r_t: &[f64],
+    p_prev: &[f64],
+    phi_hby_a: &mut [f64],
+) -> Vec<(usize, f64)> {
+    let mesh = &g.mesh;
+    let (own, nei, sf) = (mesh.owner(), mesh.neighbour(), mesh.face_area_vectors());
+    let n_int = g.n_internal;
+    let dr: Vec<f64> = r_t.iter().zip(r_au).map(|(t, a)| t - a).collect();
+    let dr_f = face_interpolate(g, &dr);
+    let gr = least_squares(g, p_prev, &boundary_values_pbc(g, pbc, p_prev));
+    let k_of = |f: usize| {
+        let d = g.delta[f];
+        vec3::sub(sf[f], vec3::scale(d, vec3::dot(sf[f], sf[f]) / vec3::dot(sf[f], d)))
+    };
+    for f in 0..n_int {
+        if g.empty[f] {
+            continue;
+        }
+        let w = g.weights[f];
+        let gf = [0, 1, 2].map(|i| w * gr[own[f]][i] + (1.0 - w) * gr[nei[f]][i]);
+        phi_hby_a[f] += dr_f[f] * vec3::dot(k_of(f), gf);
+    }
+    let mut eq_only = Vec::new();
+    for f in n_int..mesh.n_faces() {
+        let i = f - n_int;
+        if g.empty[f] || pbc.coupled[i].is_some() || pbc.coeffs[i].a != 0.0 {
+            continue;
+        }
+        eq_only.push((f, dr_f[f] * vec3::dot(k_of(f), gr[own[f]])));
+    }
+    eq_only
 }
 
 /// Weights `(c1, c2)` of the old levels in the time derivative

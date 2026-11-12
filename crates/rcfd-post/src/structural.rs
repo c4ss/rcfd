@@ -15,7 +15,7 @@
 
 use crate::remap::{RemapMethod, Remapper};
 use rcfd_core::vec3::{self, Vec3};
-use rcfd_io::nastran::{Deck, ElemKind, Element, Pload4};
+use rcfd_io::nastran::{Deck, ElemKind, Element, HeatFlux, Pload4};
 use rcfd_mesh::Mesh;
 
 /// Rectangle in parameter space.
@@ -496,4 +496,171 @@ pub fn temperature_deck(structure: &Mesh, node_t: &[f64], sid: i64) -> Result<De
         d.temps.push((sid, i as i64 + 1, node_t[i]));
     }
     Ok(d)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Heat-rate loads (F-237, ADR 0244): wall heat flux of the fluid mapped onto shell elements and written as `RCFDQ` cards.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// Heat flux leaving the fluid through each face of `patch` [W/m^2], `q_f = -k dT/dn` with `dT/dn` the outward normal gradient
+/// from the temperature boundary condition: the per-face form of [`crate::integrals::conductive_heat_flow`] (which is
+/// `sum q_f |S_f|`). Positive values heat the structure.
+pub fn wall_heat_flux(
+    geom: &rcfd_fv::FvGeometry,
+    patch: &str,
+    t: &rcfd_fv::ScalarField,
+    k: f64,
+) -> Result<Vec<f64>, String> {
+    let p = geom
+        .mesh
+        .patch(patch)
+        .ok_or_else(|| format!("unknown patch '{patch}'"))?;
+    if !k.is_finite() {
+        return Err("wall_heat_flux: non-finite conductivity".into());
+    }
+    let coeffs = t.boundary_coeffs(geom);
+    let own = geom.mesh.owner();
+    Ok(p.faces()
+        .map(|f| -k * coeffs[f - geom.n_internal].gradient(t.values[own[f]]))
+        .collect())
+}
+
+/// Heat rate `sum q_f |S_f|` [W] of a face heat flux on a patch of the fluid mesh.
+pub fn fluid_heat_rate(mesh: &Mesh, patch: &str, q: &[f64]) -> Result<f64, String> {
+    let faces = patch_faces(mesh, patch, q.len())?;
+    if q.iter().any(|v| !v.is_finite()) {
+        return Err("fluid_heat_rate: the heat flux contains a non-finite value".into());
+    }
+    Ok(faces.zip(q).map(|(f, v)| v * mesh.face_area(f)).sum())
+}
+
+/// Physical areas `|S_f|` of the faces of a patch (in patch order).
+pub fn patch_areas(mesh: &Mesh, patch: &str) -> Result<Vec<f64>, String> {
+    let p = mesh.patch(patch).ok_or_else(|| format!("unknown patch '{patch}'"))?;
+    Ok(p.faces().map(|f| mesh.face_area(f)).collect())
+}
+
+/// Facet areas of the quads of a shell surface.
+pub fn shell_areas(surface: &ShellSurface) -> Vec<f64> {
+    surface
+        .quads
+        .iter()
+        .map(|q| {
+            let (a, _) = quad_geom(&[
+                surface.nodes[q[0]],
+                surface.nodes[q[1]],
+                surface.nodes[q[2]],
+                surface.nodes[q[3]],
+            ]);
+            vec3::norm(a)
+        })
+        .collect()
+}
+
+fn param_area(r: &ParamRect) -> f64 {
+    (r.u[1] - r.u[0]) * (r.v[1] - r.v[0])
+}
+
+/// Conservative mapping of a face heat flux (ADR 0244 D4): the heat rate `q_s A_s` of each source face is split over the
+/// targets in the proportion `|s cap t| / |s| = w_ts |t| / |s|` (`w_ts` the target-normalised weights of [`overlap_weights`]),
+/// and `q_t = Q_t / A_t`. The total heat rate is conserved when the target surface covers every source face.
+pub fn map_heat_flux_conservative(
+    weights: &[Vec<(usize, f64)>],
+    src_rects: &[ParamRect],
+    src_areas: &[f64],
+    tgt_rects: &[ParamRect],
+    tgt_areas: &[f64],
+    q: &[f64],
+) -> Result<Vec<f64>, String> {
+    if src_rects.len() != q.len() || src_areas.len() != q.len() {
+        return Err(format!(
+            "map_heat_flux_conservative: {} source rectangles, {} source areas, {} heat-flux values",
+            src_rects.len(),
+            src_areas.len(),
+            q.len()
+        ));
+    }
+    if tgt_rects.len() != weights.len() || tgt_areas.len() != weights.len() {
+        return Err(format!(
+            "map_heat_flux_conservative: {} weight rows, {} target rectangles, {} target areas",
+            weights.len(),
+            tgt_rects.len(),
+            tgt_areas.len()
+        ));
+    }
+    if q.iter().any(|v| !v.is_finite()) {
+        return Err("map_heat_flux_conservative: the source heat flux contains a non-finite value".into());
+    }
+    let mut out = Vec::with_capacity(weights.len());
+    for (t, row) in weights.iter().enumerate() {
+        let at = tgt_areas[t];
+        if !(at > 0.0 && at.is_finite()) {
+            return Err(format!(
+                "map_heat_flux_conservative: target element {t} has zero or invalid area"
+            ));
+        }
+        let pt = param_area(&tgt_rects[t]);
+        let mut qt = 0.0;
+        for &(s, w) in row {
+            let ps =
+                param_area(src_rects.get(s).ok_or_else(|| {
+                    format!("map_heat_flux_conservative: target element {t} refers to source face {s}")
+                })?);
+            if ps.is_nan() || ps <= 0.0 {
+                return Err(format!(
+                    "map_heat_flux_conservative: source face {s} has zero parameter area"
+                ));
+            }
+            qt += w * (pt / ps) * q[s] * src_areas[s];
+        }
+        out.push(qt / at);
+    }
+    Ok(out)
+}
+
+/// `RCFDQ` heat-flux loads of set `sid` for the elements of a shell surface (element ids from 1, as [`shell_deck`]).
+pub fn shell_heat_flux(surface: &ShellSurface, q: &[f64], sid: i64) -> Result<Vec<HeatFlux>, String> {
+    if q.len() != surface.quads.len() {
+        return Err(format!(
+            "shell_heat_flux: {} element heat fluxes for {} elements",
+            q.len(),
+            surface.quads.len()
+        ));
+    }
+    Ok(q.iter()
+        .enumerate()
+        .map(|(k, &v)| HeatFlux {
+            sid,
+            eid: k as i64 + 1,
+            q: v,
+        })
+        .collect())
+}
+
+/// Heat rate `sum q A_e` [W] of the `RCFDQ` loads of set `sid`, with the element areas from the deck's own grids.
+pub fn deck_heat_rate(deck: &Deck, heat: &[HeatFlux], sid: i64) -> Result<f64, String> {
+    let pos: std::collections::HashMap<i64, Vec3> = deck.grids.iter().cloned().collect();
+    let el: std::collections::HashMap<i64, &Element> = deck.elements.iter().map(|e| (e.id, e)).collect();
+    let mut total = 0.0;
+    for h in heat.iter().filter(|h| h.sid == sid) {
+        let e = el
+            .get(&h.eid)
+            .ok_or_else(|| format!("RCFDQ on missing element {}", h.eid))?;
+        let x: Vec<Vec3> = e
+            .nodes
+            .iter()
+            .map(|n| {
+                pos.get(n)
+                    .copied()
+                    .ok_or_else(|| format!("element {} refers to missing grid {n}", e.id))
+            })
+            .collect::<Result<_, _>>()?;
+        let area = match e.kind {
+            ElemKind::Quad4 => vec3::norm(quad_geom(&[x[0], x[1], x[2], x[3]]).0),
+            ElemKind::Tria3 => 0.5 * vec3::norm(vec3::cross(vec3::sub(x[1], x[0]), vec3::sub(x[2], x[0]))),
+            ElemKind::Hexa8 => return Err(format!("RCFDQ on element {} which is a CHEXA", e.id)),
+        };
+        total += h.q * area;
+    }
+    Ok(total)
 }

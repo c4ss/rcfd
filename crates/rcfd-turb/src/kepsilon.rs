@@ -95,6 +95,18 @@ pub enum WallFunction {
     Enhanced,
 }
 
+/// Law of the wall eddy viscosity of the standard wall function on a smooth wall (F-300, ADR 0225 D4): the wall-face eddy
+/// viscosity and the `nu_t,w` of the wall-cell production. A library option (`set_option("wall_nut_law", ..)` of the model);
+/// no case key selects it. Rough walls and the scalable and enhanced wall functions ignore it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WallNutLaw {
+    /// [`WallConstants::nut_wall_from_k`]: `nu (y* kappa / ln(E y*) - 1)` above `y*_lam` and 0 below (a kink at `y*_lam`).
+    #[default]
+    Standard,
+    /// [`WallConstants::nut_wall_from_k_spalding`]: `nu (y* / u+ - 1)` with `u+` from Spalding's law, without a switch.
+    Spalding,
+}
+
 /// Constants of the two-layer model (Chen and Patel 1988; Jongen 1998 blending), recalled from memory.
 pub const TWO_LAYER_RE_Y: f64 = 200.0;
 const TWO_LAYER_A_MU: f64 = 70.0;
@@ -159,6 +171,25 @@ pub fn wall_cell_sources_ext(
     y: f64,
     u_t: f64,
 ) -> (f64, f64) {
+    wall_cell_sources_law(treatment, wf, rough, in_log, wc, nu, k, y, u_t, WallNutLaw::Standard)
+}
+
+/// [`wall_cell_sources_ext`] with the law of the wall eddy viscosity in the log-law production (F-300, ADR 0225 D4): with
+/// [`WallNutLaw::Spalding`] on a smooth wall with the standard wall function the production takes
+/// [`WallConstants::nut_wall_from_k_spalding`]; rough walls and the scalable function ignore `law`.
+#[allow(clippy::too_many_arguments)]
+pub fn wall_cell_sources_law(
+    treatment: WallTreatment,
+    wf: WallFunction,
+    rough: &Roughness,
+    in_log: &mut bool,
+    wc: &WallConstants,
+    nu: f64,
+    k: f64,
+    y: f64,
+    u_t: f64,
+    law: WallNutLaw,
+) -> (f64, f64) {
     let k = k.max(0.0);
     let c25 = wc.cmu.powf(0.25);
     if wf == WallFunction::Scalable {
@@ -177,6 +208,8 @@ pub fn wall_cell_sources_ext(
     let eps_vis = 2.0 * nu * k / (y * y);
     let nut_w = if rough.is_rough() {
         wc.nut_wall_from_k_rough(nu, k, y, rough)
+    } else if law == WallNutLaw::Spalding {
+        wc.nut_wall_from_k_spalding(nu, k, y)
     } else {
         wc.nut_wall_from_k(nu, k, y)
     };
@@ -269,6 +302,9 @@ pub struct KEpsilon {
     pub wall_function: WallFunction,
     /// Equivalent-sand-grain roughness of all wall patches (default smooth).
     pub roughness: Roughness,
+    /// Law of the wall eddy viscosity of the standard wall function on a smooth wall (default [`WallNutLaw::Standard`]; F-300,
+    /// ADR 0225 D4).
+    pub wall_nut_law: WallNutLaw,
     /// Model constants.
     pub c_mu: f64,
     /// `C1` (standard and RNG).
@@ -350,6 +386,7 @@ impl KEpsilon {
             wall_treatment: WallTreatment::Smooth,
             wall_function: WallFunction::Standard,
             roughness: Roughness::SMOOTH,
+            wall_nut_law: WallNutLaw::Standard,
             c_mu,
             c1,
             c2,
@@ -423,6 +460,9 @@ impl KEpsilon {
             WallFunction::Standard => {
                 if self.roughness.is_rough() {
                     self.wc.nut_wall_from_k_rough(self.nu, k, y, &self.roughness)
+                } else if self.wall_nut_law == WallNutLaw::Spalding {
+                    // F-300 (ADR 0225 D4): the opt-in law without a switch at y*_lam
+                    self.wc.nut_wall_from_k_spalding(self.nu, k, y)
                 } else {
                     self.wc.nut_wall_from_k(self.nu, k, y)
                 }
@@ -562,7 +602,7 @@ impl KEpsilon {
             let (pc, ec) = if self.wall_function == WallFunction::Enhanced {
                 self.enhanced_wall_cell(kv[c], y, u_t, ev[c])
             } else {
-                wall_cell_sources_ext(
+                wall_cell_sources_law(
                     self.wall_treatment,
                     self.wall_function,
                     &self.roughness,
@@ -572,6 +612,7 @@ impl KEpsilon {
                     kv[c],
                     y,
                     u_t,
+                    self.wall_nut_law,
                 )
             };
             prod[c] = pc;

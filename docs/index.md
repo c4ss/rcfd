@@ -49,6 +49,8 @@ Most task steps live in the reference pages below for now.
   library-only.
 * [Mesh quality](mesh-quality.md): check a mesh, read its quality report and edit the mesh.
 * [Dynamic meshes](dynamic-mesh.md): moving meshes and rigid-body dynamics (partial).
+* [Co-simulation protocol](cosimulation-protocol.md): exchanging wall displacement and force with a structural solver
+  (library interface).
 * [Particles](particles.md): one-way coupled Lagrangian particle tracking (partial).
 * [Acoustics](acoustics.md): the fan-noise chain (FW-H solver, tonal estimate, broadband proxies, noise metrics).
 * [Reactor and acoustics](reactor-and-acoustics.md): the reactor and FW-H acoustics commands, their inputs and outputs.

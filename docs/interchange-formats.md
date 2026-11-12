@@ -157,7 +157,16 @@ precision (`{:?}` formatting, so the round trip is bit-exact): `GRID`, `CTRIA3`,
 Verified (pyNastran documentation pages, read): the PLOAD4 and TEMP field layouts. Unverified (recalled): GRID field order,
 element node orders, CHEXA continuation form, free-field syntax in a given solver, and the PLOAD4 sign convention (here a
 positive value is fluid pressure pressing on the structure). No third-party solver has read these decks; acceptance by
-one cannot be tested here and is not claimed. Heat-rate (QBDY) loads are not delivered.
+one cannot be tested here and is not claimed.
+
+Heat-flux loads (F-237, ADR 0244): `RCFDQ,SID,EID,Q`, the repository's own card, not a vendor card: `SID` a positive load set
+id, `EID` a `CQUAD4` or `CTRIA3` defined in the deck, `Q` the heat flux per unit area [W/m^2] uniform over the element (written
+with `{:?}`, bit-exact), positive from the fluid into the structure; at most one card per `(SID, EID)`, placed before `ENDDATA`.
+`nastran::write_with_heat_flux` and `nastran::parse_with_heat_flux` write and read it (`line N` errors); with no heat-flux loads
+the text is byte-identical to `Deck::to_string_checked`, and `Deck::parse` still rejects the card as unknown. No third-party
+solver reads `RCFDQ`; which vendor heat-flux card it corresponds to is open (no specification of one is in the repository).
+`rcfd_post::structural::{wall_heat_flux, map_heat_flux_conservative, shell_heat_flux, deck_heat_rate}` map the fluid wall heat
+flux onto the shells (consistent, or conservative in the heat rate) and sum the imported heat rate.
 
 Point loads (ADR 0120): `FORCE,SID,G,CID,F,N1,N2,N3` and `MOMENT` (same fields, load = F N; written with CID 0 and F 1.0, any
 other CID is refused on read). The field layout is recalled and unverified. `rcfd_post::rotordyn::load_deck` uses them for the
@@ -171,3 +180,5 @@ with 2 pi periodicity) and temperature through `remap` followed by a linear noda
 - [Mesh import](mesh-import.md): reading external mesh files into a case.
 - [Case schema](case-schema.md): the register and initial-patch keys of the case file.
 - [Reference data](reference-data.md): where the public grid sample read above comes from.
+- [Co-simulation protocol](cosimulation-protocol.md): the two-way exchange of wall displacement and force with a structural
+  solver, as opposed to the one-way load deck above.

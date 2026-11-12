@@ -53,7 +53,7 @@ other exports are optional (a role set in the case needs its export).
 | --- | --- | --- |
 | `momentum_source` | `(x, y, z, t, ux, uy, uz: f64, comp: i32) -> f64` | per cell and iteration, three times (`comp` 0, 1, 2); acceleration in m/s^2 at the cell centre with the current velocity |
 | `velocity_profile` | `(x, y, z, t: f64, comp: i32) -> f64` | per boundary face centre, once at build and (transient) every step; velocity component |
-| `kinematic_viscosity` | `(x, y, z, t, temperature, speed: f64) -> f64` | per face and iteration; m^2/s, must be positive; `temperature` is 0 without an energy equation, `speed` is the interpolated velocity magnitude |
+| `kinematic_viscosity` | `(x, y, z, t, temperature, speed: f64) -> f64` | per face and iteration; m^2/s, must be positive; `temperature` is 0 without an energy equation, `speed` is the interpolated velocity magnitude (the owner's on a boundary face); with `turbulence.periodic_seam.diffusivity = "pair"` once per periodic pair, at the centre of its face of lower index with the temperature and speed interpolated across the seam, the value used on both faces (ADR 0227) |
 | `monitor` | `(x, y, z, volume, ux, uy, uz, p, temperature: f64) -> f64` | per cell and iteration; the monitor is the sum of `value * volume` (kinematic pressure `p`) |
 | `temperature_profile` | `(x, y, z, t: f64) -> f64` | per face of a `temperature_udf` patch, once at build; boundary temperature in K |
 | `wall_heat_flux` | `(x, y, z, t: f64) -> f64` | per face of a `heat_flux_udf` patch, once at build; heat flux into the domain in W/m^2 (also wired into the conjugate heat transfer heat-flux path, which is not tested) |

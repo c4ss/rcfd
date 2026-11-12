@@ -9,9 +9,13 @@
 //! analysis is one-dimensional along the face normal (Thompson, J. Comput.
 //! Phys. 68 (1987) 1-24; Poinsot and Lele, J. Comput. Phys. 101 (1992)
 //! 104-129; Blazek, *Computational Fluid Dynamics*, ch. 8).
+//!
+//! [`MsdWall`] is the frequency-dependent wall of F-332 (ADR 0243): a mass-spring-damper wall with its own state per
+//! face, which the solver advances with its Runge-Kutta stages.
 
 use crate::riemann::{Gas, Prim};
 use rcfd_core::vec3::{self, Vec3};
+use rcfd_core::{Error, Result};
 
 /// Subsonic inlet from stagnation conditions.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -153,6 +157,118 @@ pub fn impedance_wall(gas: Gas, p_ref: f64, z: f64, interior: &Prim, n: Vec3) ->
         rho: interior.rho * (p_f / interior.p).powf(1.0 / g),
         u: vec3::add(interior.u, vec3::scale(n, u - un)),
         p: p_f,
+    }
+}
+
+/// Face state of a wall that moves with the normal velocity `v` relative to the face, as a transpiration velocity
+/// (F-332, ADR 0243 DR2): the face keeps the entropy, the tangential velocity and the outgoing invariant
+/// `u_n + 2a/(gamma-1)` of the interior, as [`impedance_wall`] does, and has the normal velocity `v`. For a weak wave the
+/// face pressure is `p_i + rho c (u_n,i - v)`. A supersonic outflow (normal Mach number >= 1) takes the interior state.
+pub fn piston_face(gas: Gas, interior: &Prim, n: Vec3, v: f64) -> Prim {
+    let g = gas.gamma;
+    let a_i = interior.sound_speed(gas);
+    let un = vec3::dot(interior.u, n);
+    if un >= a_i {
+        return *interior;
+    }
+    let a_f = (a_i - 0.5 * (g - 1.0) * (v - un)).max(0.0);
+    let p_f = interior.p * (a_f / a_i).powf(2.0 * g / (g - 1.0));
+    Prim {
+        rho: interior.rho * (p_f / interior.p).powf(1.0 / g),
+        u: vec3::add(interior.u, vec3::scale(n, v - un)),
+        p: p_f,
+    }
+}
+
+/// Safety factor of [`MsdWall::dt_limit`] against the edge of the stability disc (ADR 0243 DR5).
+const MSD_DT_SAFETY: f64 = 0.8;
+
+/// Locally reacting mass-spring-damper wall (F-332, ADR 0243): per unit area a plate of mass `m` on a spring `k` and a
+/// damper `r`, driven by the face pressure: `m dv/dt + r v + k xi = p_face - p`, `d xi/dt = v`, with `xi` the
+/// displacement along the outward normal and the fluid's normal velocity at the face equal to `v`. For a tone
+/// `e^{i omega t}` this is the specific impedance `Z(omega) = r + i (omega m - k/omega)`, and a plane wave at normal
+/// incidence is reflected with `(Z - rho c)/(Z + rho c)`. `m = 0` is the algebraic form, whose face state is
+/// [`impedance_wall`] with the reference pressure `p + k xi`; `m = 0`, `k = 0` is [`impedance_wall`] with `z = r`, bit
+/// for bit. Set on a patch with `CompressibleSolver::set_msd_wall`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MsdWall {
+    /// Reference (ambient) static pressure, at which the wall is at rest with `xi = 0`.
+    pub p: f64,
+    /// Damper [Pa s/m], finite and `>= 0`.
+    pub r: f64,
+    /// Mass per area [kg/m^2], finite and `>= 0`.
+    pub m: f64,
+    /// Spring [Pa/m], finite and `>= 0`.
+    pub k: f64,
+}
+
+/// The face state and the rates of the wall state of one face ([`MsdWall::rates`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MsdRates {
+    /// The boundary face state, whose physical flux the solver uses.
+    pub face: Prim,
+    /// `d xi/dt`.
+    pub xi_dot: f64,
+    /// `dv/dt` (zero for `m = 0`, where the velocity is not a state).
+    pub v_dot: f64,
+}
+
+impl MsdWall {
+    /// An error unless `r`, `m`, `k` are finite and `>= 0` and `p` is finite and positive.
+    pub fn validate(&self) -> Result<()> {
+        let ok = |x: f64| x.is_finite() && x >= 0.0;
+        if ok(self.r) && ok(self.m) && ok(self.k) && self.p.is_finite() && self.p > 0.0 {
+            return Ok(());
+        }
+        Err(Error::InvalidValue {
+            path: "msd_wall".into(),
+            reason: format!(
+                "a mass-spring-damper wall needs finite r, m, k >= 0 and a positive pressure, got r = {}, m = {}, k = {}, p = {}",
+                self.r, self.m, self.k, self.p
+            ),
+        })
+    }
+
+    /// The largest step for which the explicit integration of the wall equation is stable (ADR 0243 DR5), for the
+    /// impedance `z0 = rho a` of the gas at the face: `0.8 min(2m/(r + z0), (r + z0)/k)`, each term only when `m > 0` or
+    /// `k > 0`; infinite for `m = 0`, `k = 0`. With this step both eigenvalues of the wall equation (with the radiation
+    /// damping `z0`) lie in the disc `|1 + dt lambda| <= 1`, which is inside the stability region of the solver's three
+    /// Runge-Kutta schemes.
+    pub fn dt_limit(&self, z0: f64) -> f64 {
+        let d = self.r + z0;
+        let mut lim = f64::INFINITY;
+        if self.m > 0.0 {
+            lim = lim.min(2.0 * self.m / d);
+        }
+        if self.k > 0.0 {
+            lim = lim.min(d / self.k);
+        }
+        MSD_DT_SAFETY * lim
+    }
+
+    /// The face state and the rates of the wall state `(xi, v)` for the interior cell state `interior` and the outward
+    /// unit normal `n` (ADR 0243 DR2, DR3). `m > 0`: the face is [`piston_face`] at `v` and
+    /// `dv/dt = (p_face - p - r v - k xi)/m`, `d xi/dt = v`. `m = 0`: the face is [`impedance_wall`] with the reference
+    /// `p + k xi` and `d xi/dt` is its normal velocity; `v` is not used. `None` when `p + k xi` is not positive (`m = 0`).
+    pub fn rates(&self, gas: Gas, interior: &Prim, n: Vec3, xi: f64, v: f64) -> Option<MsdRates> {
+        if self.m > 0.0 {
+            let face = piston_face(gas, interior, n, v);
+            return Some(MsdRates {
+                face,
+                xi_dot: v,
+                v_dot: (face.p - self.p - self.r * v - self.k * xi) / self.m,
+            });
+        }
+        let p_ref = self.p + self.k * xi;
+        if p_ref.is_nan() || p_ref <= 0.0 {
+            return None;
+        }
+        let face = impedance_wall(gas, p_ref, self.r, interior, n);
+        Some(MsdRates {
+            face,
+            xi_dot: vec3::dot(face.u, n),
+            v_dot: 0.0,
+        })
     }
 }
 
@@ -369,5 +485,220 @@ mod tests {
         let sup = prim(1.2, [1.2, 1.6, 0.1], 0.9);
         assert!(vec3::dot(sup.u, n) > sup.sound_speed(AIR));
         assert_eq!(impedance_wall(AIR, 0.4, 2.0, &sup, n), sup);
+    }
+
+    /// W1 of ADR 0243: the piston face has the wall's normal velocity and keeps the entropy, the outgoing invariant and
+    /// the tangential velocity.
+    #[test]
+    fn f332_w1_piston_face_invariants() {
+        let mut seed = 332;
+        let mut worst = [0.0f64; 4];
+        for _ in 0..20 {
+            let (int, n) = random_state(&mut seed);
+            let a_i = int.sound_speed(AIR);
+            for vr in [-0.3, 0.0, 0.2] {
+                let v = vr * a_i;
+                let f = piston_face(AIR, &int, n, v);
+                let (un_f, un_i) = (vec3::dot(f.u, n), vec3::dot(int.u, n));
+                let e = [
+                    (un_f - v).abs() / a_i,
+                    (f.p / f.rho.powf(1.4) / (int.p / int.rho.powf(1.4)) - 1.0).abs(),
+                    ((un_f + 5.0 * f.sound_speed(AIR)) / (un_i + 5.0 * a_i) - 1.0).abs(),
+                    vec3::norm(vec3::sub(
+                        vec3::sub(f.u, vec3::scale(n, un_f)),
+                        vec3::sub(int.u, vec3::scale(n, un_i)),
+                    )) / a_i,
+                ];
+                for (w, e) in worst.iter_mut().zip(e) {
+                    *w = w.max(e);
+                }
+            }
+        }
+        println!(
+            "W1 worst: normal velocity {:.2e}, entropy {:.2e}, invariant {:.2e}, tangential {:.2e} (1e-12)",
+            worst[0], worst[1], worst[2], worst[3]
+        );
+        assert!(worst.iter().all(|&w| w <= 1e-12), "{worst:?}");
+    }
+
+    /// W2 of ADR 0243: at the normal velocity of the impedance wall the piston face is the impedance wall and a wall
+    /// with that damper is in equilibrium.
+    #[test]
+    fn f332_w2_equilibrium_is_the_impedance_wall() {
+        let mut seed = 3320;
+        let (mut worst_face, mut worst_rate) = (0.0f64, 0.0f64);
+        for _ in 0..20 {
+            let (int, n) = random_state(&mut seed);
+            let p_ref = 0.5 + 0.6 * rnd(&mut seed);
+            let a_i = int.sound_speed(AIR);
+            for zr in [0.1, 1.0, 10.0] {
+                let z = zr * int.rho * a_i;
+                let f = impedance_wall(AIR, p_ref, z, &int, n);
+                let v = vec3::dot(f.u, n);
+                let q = piston_face(AIR, &int, n, v);
+                let d = ((q.rho - f.rho).abs() / f.rho)
+                    .max((q.p - f.p).abs() / f.p)
+                    .max(vec3::norm(vec3::sub(q.u, f.u)) / a_i);
+                worst_face = worst_face.max(d);
+                let wall = MsdWall {
+                    p: p_ref,
+                    r: z,
+                    m: 1.0,
+                    k: 0.0,
+                };
+                let r = wall.rates(AIR, &int, n, 0.0, v).unwrap();
+                worst_rate = worst_rate.max((wall.m * r.v_dot).abs() / int.p);
+            }
+        }
+        println!("W2 worst: face {worst_face:.2e}, rate m dv/dt / p_i {worst_rate:.2e} (1e-12)");
+        assert!(worst_face <= 1e-12 && worst_rate <= 1e-12, "{worst_face} {worst_rate}");
+    }
+
+    /// The wall M of ADR 0243 D8.
+    fn wall_m() -> MsdWall {
+        MsdWall {
+            p: 1.0 / 1.4,
+            r: 0.5,
+            m: 1.0 / std::f64::consts::PI,
+            k: 16.0 * std::f64::consts::PI,
+        }
+    }
+
+    /// W3 of ADR 0243: the linear limit of the rates is `m dv/dt = w+ - (r + rho c) v - k xi`, `d xi/dt = v`.
+    #[test]
+    fn f332_w3_linear_limit_of_the_rates() {
+        let (rho0, p0) = (1.0, 1.0 / 1.4);
+        let n = [1.0, 0.0, 0.0];
+        let wall = wall_m();
+        let (xi, v) = (1e-8, 3e-7);
+        let mut worst = 0.0f64;
+        for (dp, du) in [(1e-6, 1e-6), (1e-6, 0.0), (-0.4e-6, 1e-6)] {
+            let int = prim(rho0 + dp, [du, 0.0, 0.0], p0 + dp);
+            let r = wall.rates(AIR, &int, n, xi, v).unwrap();
+            let lin = (dp + du) - (wall.r + 1.0) * v - wall.k * xi;
+            worst = worst.max((wall.m * r.v_dot - lin).abs());
+            assert_eq!(r.xi_dot, v);
+        }
+        println!("W3 worst deviation of m dv/dt from the linear form: {worst:.2e} (1e-10)");
+        assert!(worst <= 1e-10, "{worst}");
+    }
+
+    /// W4 of ADR 0243: without mass the face satisfies the algebraic wall relation, the displacement follows the face,
+    /// and without mass and spring the face is the impedance wall bit for bit.
+    #[test]
+    fn f332_w4_massless_wall() {
+        let mut seed = 33204;
+        let mut worst = 0.0f64;
+        for _ in 0..20 {
+            let (int, n) = random_state(&mut seed);
+            let p_ref = 0.5 + 0.6 * rnd(&mut seed);
+            let z = (0.2 + 3.0 * rnd(&mut seed)) * int.rho * int.sound_speed(AIR);
+            let xi = 0.02 * (rnd(&mut seed) - 0.5);
+            let wall = MsdWall {
+                p: p_ref,
+                r: z,
+                m: 0.0,
+                k: 2.5,
+            };
+            let r = wall.rates(AIR, &int, n, xi, 123.0).unwrap();
+            let un = vec3::dot(r.face.u, n);
+            worst = worst.max((r.face.p - p_ref - z * un - wall.k * xi).abs() / int.p);
+            assert_eq!(r.xi_dot, un);
+            assert_eq!(r.v_dot, 0.0);
+            let plain = MsdWall { k: 0.0, ..wall };
+            assert_eq!(
+                plain.rates(AIR, &int, n, xi, 123.0).unwrap().face,
+                impedance_wall(AIR, p_ref, z, &int, n)
+            );
+        }
+        println!("W4 worst residual of the algebraic wall relation: {worst:.2e} (1e-12)");
+        assert!(worst <= 1e-12, "{worst}");
+        // a displacement that takes the reference pressure to zero or below is not a state
+        let wall = MsdWall {
+            p: 0.7,
+            r: 1.0,
+            m: 0.0,
+            k: 1.0,
+        };
+        let (int, n) = random_state(&mut seed);
+        assert!(wall.rates(AIR, &int, n, -0.7, 0.0).is_none());
+    }
+
+    /// W5 of ADR 0243: the step limit of the wall equation and the disc it rests on.
+    #[test]
+    fn f332_w5_step_limit() {
+        let w = |r: f64, m: f64, k: f64| MsdWall { p: 1.0, r, m, k };
+        let close15 = |a: f64, b: f64| (a - b).abs() <= 1e-15 * b.abs();
+        assert_eq!(w(0.5, 0.0, 0.0).dt_limit(1.0), f64::INFINITY);
+        assert!(close15(w(0.5, 0.3, 0.0).dt_limit(1.2), 0.8 * 2.0 * 0.3 / 1.7));
+        assert!(close15(w(0.5, 0.0, 40.0).dt_limit(1.2), 0.8 * 1.7 / 40.0));
+        assert!(close15(
+            w(0.5, 0.3, 40.0).dt_limit(1.2),
+            0.8 * (1.7f64 / 40.0).min(0.6 / 1.7)
+        ));
+        assert!(close15(w(0.5, 0.001, 40.0).dt_limit(1.2), 0.8 * 0.002 / 1.7));
+        // |P(z)| <= 1 on the disc |z + 1| <= 1 for forward Euler, SSP-RK2 and SSP-RK3
+        let mul = |a: (f64, f64), b: (f64, f64)| (a.0 * b.0 - a.1 * b.1, a.0 * b.1 + a.1 * b.0);
+        let mut worst = [0.0f64; 3];
+        for i in 0..=200 {
+            for j in 0..360 {
+                let (rad, th) = (i as f64 / 200.0, (j as f64).to_radians());
+                let z = (-1.0 + rad * th.cos(), rad * th.sin());
+                let z2 = mul(z, z);
+                let z3 = mul(z2, z);
+                let p1 = (1.0 + z.0, z.1);
+                let p2 = (p1.0 + 0.5 * z2.0, p1.1 + 0.5 * z2.1);
+                let p3 = (p2.0 + z3.0 / 6.0, p2.1 + z3.1 / 6.0);
+                for (w, p) in worst.iter_mut().zip([p1, p2, p3]) {
+                    *w = w.max(p.0.hypot(p.1));
+                }
+            }
+        }
+        println!(
+            "W5 largest |P| on the disc: Euler {:.15}, RK2 {:.15}, RK3 {:.15}",
+            worst[0], worst[1], worst[2]
+        );
+        assert!(worst.iter().all(|&x| x <= 1.0 + 1e-12), "{worst:?}");
+        // both eigenvalues of [[0, 1], [-k/m, -(r + z0)/m]] (the single one for m = 0) are inside the disc at the limit
+        let mut seed = 33205;
+        let mut worst_eig = 0.0f64;
+        for i in 0..200 {
+            let z0 = 0.5 + rnd(&mut seed);
+            let r = 3.0 * rnd(&mut seed);
+            let m = if i % 5 == 0 {
+                0.0
+            } else {
+                10f64.powf(4.0 * rnd(&mut seed) - 3.0)
+            };
+            let k = if i % 7 == 0 {
+                0.0
+            } else {
+                10f64.powf(6.0 * rnd(&mut seed) - 2.0)
+            };
+            let dt = w(r, m, k).dt_limit(z0) / 0.8;
+            if !dt.is_finite() {
+                continue;
+            }
+            let d = r + z0;
+            let mods: Vec<f64> = if m == 0.0 {
+                vec![(1.0 - dt * k / d).abs()]
+            } else {
+                let a = d / (2.0 * m);
+                let disc = a * a - k / m;
+                if disc >= 0.0 {
+                    vec![
+                        (1.0 - dt * (a + disc.sqrt())).abs(),
+                        (1.0 - dt * (a - disc.sqrt())).abs(),
+                    ]
+                } else {
+                    vec![(1.0 - dt * a).hypot(dt * (-disc).sqrt())]
+                }
+            };
+            for x in mods {
+                worst_eig = worst_eig.max(x);
+            }
+        }
+        println!("W5 largest |1 + dt lambda| at the unscaled limit: {worst_eig:.15}");
+        assert!(worst_eig <= 1.0 + 1e-12, "{worst_eig}");
     }
 }
