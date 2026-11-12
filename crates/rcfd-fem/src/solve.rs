@@ -16,6 +16,9 @@ use rcfd_linalg::precond::{BlockJacobi, IcBreakdown, IcOptions, IncompleteCholes
 use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
 use rcfd_linalg::vecops::norm2;
 use rcfd_linalg::{cg, CsrMatrix, Jacobi, Preconditioner, SolveControl};
+// ADR 0357 (F-460): fill levels and the node-wise ordering of the incomplete Cholesky.
+use rcfd_linalg::precond::Permuted;
+use rcfd_linalg::reorder::block_rcm_order;
 
 /// Relative pivot threshold of the direct solve: a pivot `d_i <= PIVOT_TOLERANCE a_ii` is refused (ADR 0275 arithmetic 4).
 pub const PIVOT_TOLERANCE: f64 = 1e-10;
@@ -54,6 +57,39 @@ pub enum CgPreconditioner {
     BlockJacobi,
     /// Incomplete Cholesky with zero fill, the diagonal shifted on breakdown.
     IncompleteCholesky(IcOptions),
+    /// Incomplete Cholesky with fill up to `level` and an ordering, the shift strategy of `IncompleteCholesky` (ADR 0357).
+    IncompleteCholeskyFill {
+        /// The shift strategy.
+        options: IcOptions,
+        /// The level of fill (0: the pattern of the matrix).
+        level: usize,
+        /// The ordering of the factor.
+        ordering: IcOrdering,
+    },
+}
+
+/// The ordering of the incomplete Cholesky factor of [`CgPreconditioner::IncompleteCholeskyFill`] (ADR 0357).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum IcOrdering {
+    /// The order of the reduced equations.
+    Natural,
+    /// Reverse Cuthill-McKee of the node graph, each node's equations kept together (the CG itself runs in the original
+    /// order; only the preconditioner is permuted).
+    NodeReverseCuthillMcKee,
+}
+
+/// The static solver name of a fill level and an ordering (ADR 0357 D5).
+fn ic_fill_name(level: usize, ordering: IcOrdering) -> &'static str {
+    let rcm = ordering == IcOrdering::NodeReverseCuthillMcKee;
+    match (level, rcm) {
+        (0, false) => "cg-ic0",
+        (1, false) => "cg-ic1",
+        (0, true) => "cg-ic0-rcm",
+        (1, true) => "cg-ic1-rcm",
+        (_, false) => "cg-icp",
+        (_, true) => "cg-icp-rcm",
+    }
 }
 
 /// What a static solve did, beside its result (ADR 0282 D4).
@@ -184,6 +220,10 @@ fn solver_name(s: &StaticSolver) -> &'static str {
             preconditioner: CgPreconditioner::IncompleteCholesky(_),
             ..
         } => "cg-ic0",
+        StaticSolver::PreconditionedCg {
+            preconditioner: CgPreconditioner::IncompleteCholeskyFill { level, ordering, .. },
+            ..
+        } => ic_fill_name(*level, *ordering),
     }
 }
 
@@ -267,6 +307,52 @@ fn preconditioned_cg(
                 );
             }
             Box::new(ic)
+        }
+        CgPreconditioner::IncompleteCholeskyFill {
+            options,
+            level,
+            ordering,
+        } => {
+            // ADR 0357 D5: rows of the factor are mapped to free equations through the ordering.
+            let order = match ordering {
+                IcOrdering::NodeReverseCuthillMcKee => Some(block_rcm_order(a, &node_blocks(free, dofs))),
+                _ => None,
+            };
+            let free_p: Vec<usize> = match &order {
+                Some(o) => o.iter().map(|&r| free[r]).collect(),
+                None => free.to_vec(),
+            };
+            let factored = match &order {
+                Some(o) => IncompleteCholesky::with_fill(&a.permute_symmetric(o), *level, options),
+                None => IncompleteCholesky::with_fill(a, *level, options),
+            };
+            let ic = factored.map_err(|e| FemError::Solver {
+                solver,
+                reason: precond_reason(&e, &free_p, dofs),
+            })?;
+            report.shift = Some(ic.shift());
+            report.breakdowns = ic
+                .breakdowns()
+                .iter()
+                .map(|bd| {
+                    let (n, c) = dofs.node_component(free_p[bd.row]).expect("free equation exists");
+                    (n, c, *bd)
+                })
+                .collect();
+            let suffix = if order.is_some() { "-rcm" } else { "" };
+            report.solver = format!("cg-ic{level}{suffix}");
+            if !ic.breakdowns().is_empty() {
+                report.solver = format!(
+                    "{}, shift {:e} after {} breakdown(s)",
+                    report.solver,
+                    ic.shift(),
+                    ic.breakdowns().len()
+                );
+            }
+            match order {
+                Some(o) => Box::new(Permuted::new(o, ic)),
+                None => Box::new(ic),
+            }
         }
     };
     let target = tolerance * norm2(b);
