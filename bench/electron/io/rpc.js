@@ -94,8 +94,6 @@ class DataClient {
     /** @type {Uint8Array | null} */
     this.body = null;
     this.bodyFill = 0;
-    /** Test hook of mutation M2 (never set by the bench). */
-    this.dropTail = 0;
   }
 
   /** @returns {Promise<void>} */

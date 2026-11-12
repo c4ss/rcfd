@@ -282,3 +282,146 @@ time of reading, so the load is noted with every timing run.
   "in process" or "none".
 - Mutations (scratch copy): M1 `data.field` reads snapshot + 1; M2 the data channel drops the last 4 bytes of a section;
   M3 the JavaScript reader's unshuffle uses the wrong stride. Each must be caught by a Rust test of `data.*` or by P12.
+
+## Addendum 1: results (2026-11-12)
+
+Code: `crates/rcfd-api/src/data_service.rs` (the `data.*` methods), `crates/rcfd-api/examples/f447_bench.rs` (data sets,
+server), `crates/rcfd-api/tests/data_service_f447.rs` (D1 to D6), `crates/rcfd-studio/tests/f447_control.rs` (control),
+`bench/electron/` (the spike). The registered run was made once (`node run.js`, stages A, B, C, P10), after the control.
+Raw results are in the scratch folder (`out/run1/results-A-B-C-P10.json`, `out/control.log`), not committed.
+
+Set-up as found: Electron 45.1.0 (Chromium 156.0.8078.49, Node 24.22.1 inside Electron; the launcher on Node 22.19.0),
+WebGPU adapter vendor `nvidia`, architecture `blackwell` (the RTX 5080; Chromium printed that it ignores `powerPreference`
+on Windows), window content 1280 x 800, visible. The agent's desktop session showed Electron
+one display, 1920 x 1080 at 60 Hz (not the 239 Hz one read beforehand), so every frame-paced number is paced at 60 Hz.
+`performance.now()` in the renderer steps by 0.1 ms. Load (processor busy fraction, all cores): 0.45 before the control,
+0.27 before stage A and 0.64 during it (the bench's own solver sessions included), 0.61 before B, 0.40 before C, 0.49
+before P10; no `cargo`, `rustc` or `link` process was running at the start of any stage.
+
+Data sets: the run path took 20 steps in 4.4 s (1e5), 93.6 s (1e6) and 383.8 s (4e6); 20 snapshots each, no non-finite
+value; raw stores 51.6 MB, 514 MB, 2053 MB; deflated copies 43.2 MB, 418 MB, 1701 MB (16 to 19 percent
+smaller, mesh frame included); the deflated stores read back bit-equal to the raw ones.
+
+### Checks
+
+Times in ms unless stated. "Met" is against the limit of section 3, judged as amendment 1 fixes.
+
+| Id | Limit | Measured (Electron) | Met | C (rcfd-studio, offscreen) |
+|---|---|---|---|---|
+| P1 | p50 <= 0.5, p99 <= 2 | `service.info` p50 0.056, p99 0.272, max 0.933; `run.status` p50 0.038, p99 0.132, max 1.111 (1000 each) | yes | in process |
+| P2 | p99 <= 20 | 300 `iteration` events in 64 s: p50 0.0, p99 0.80, max 0.92, min -0.85, with a clock join that moved by 1.30 ms between the start and the end of the sample; so p99 <= 2.1 at worst | yes | in process |
+| P3 | <= 100 | median 126.6, max 153.1 (20 repeats; 4 series of 1e5 samples; the reply is 12.0 MB) | **no** | in process |
+| P4 R1 | p50 <= 30, p99 <= 60 | raw: p50 25.9, p99 57.7, max 59.8; deflated: p50 31.0, p99 66.1, max 75.1 | raw yes; deflated no | C4: p50 12.7, p99 14.4, max 18.4 (to the prepared image) |
+| P4 R2 | p50 <= 30, p99 <= 60 | raw: p50 14.2, p99 22.4, max 25.8; deflated: p50 24.0, p99 30.9, max 36.1 | raw yes; deflated yes | as above |
+| P4 R0 | recorded | p50 551.7, max 602.8 (20 repeats; a 62.6 MB reply) | recorded | none |
+| P5 | >= 10 per s, no frame > 150 | R1: 30.8 per s, longest frame 61.1; R2: 60.1 per s (the display's rate), longest frame 25.0 | yes (both) | C5: 73.0 per s, longest 17.4 |
+| P6 | >= 3 per s (recorded) | R1: 10.5 per s, longest 134.0; R2: 17.8 per s, longest 71.0 | yes (both) | C6: 32.0 per s, longest 35.6 |
+| P7 | <= 1.5 s | R1: median 1153, first 1580, the five: 1580, 1153, 1099, 1112, 1385; R2: median 55, first 65, max 66 | yes (both, on the median; R1's first opening took 1.58 s) | C7: median 1249, first 1179, max 1635 |
+| P8 | >= 60 per s, p99 frame <= 25 | no rate limit: 332 finished frames per s (p50 3.0, p99 4.2, max 9.0); vertical sync: 60.0 per s, p99 frame 16.9, max 17.0 | yes | C8: p50 0.77, p99 1.13, max 9.9 per frame (no presentation, flat colour) |
+| P9 | <= 500 MB (recorded) | renderer private bytes 112 MB (109,512 KiB; 24 MB before loading); beside it the GPU process's private bytes went from 182 to 319 MB | yes | none |
+| P10 | <= 2.5 s | median 383; first start 1173; the ten: 1173, 385, 6747, 366, 342, 400, 371, 383, 456, 366 | yes on the median; one start took 6.7 s | none |
+| P11 | p99 frame <= 20 (recorded) | p99 16.8, max 17.9 (1200 frames, 1e4 entries, 23 rows in the document) | yes | none |
+| P12 | 0 differing bits | 0 of 672,000,000 values (720 fields: 1e5 and 1e6 all four fields, 4e6 `p`; R1 and R2; raw and deflated); also the 1e6 surface by R1 and by R2: 0 differing bits | yes | none |
+| NC1 | R0 expected > 60 | 551.7 | as expected | |
+| NC2 | must report | 1,046,842 differing bits after the shift (0 before) | as expected | |
+
+Rust tests of `data.*` (release): D1 to D6 pass; `cosim_service_f360` (13), `baseline_hashes` (3) and the service's unit
+tests (11) pass unedited. `cargo fmt -p rcfd-api --check`, `-p rcfd-studio --check` clean;
+`cargo clippy -p rcfd-api -p rcfd-studio --all-targets -- -D warnings` clean.
+
+Mutations: M1 (`data.field` reads snapshot + 1) caught by D3; M2 (the last 4 bytes of a section dropped) caught by D3, D4
+and D5; M3 (the JavaScript reader's unshuffle with the wrong stride) caught by the P12 comparison run in Node on the 1e5
+deflated store (80 of 80 fields differ; 0 unmutated).
+
+### Diagnosis of the misses
+
+- **P3.** The reply is twice the estimate: each of the 4 series carries its abscissa and its ordinate, 8e5 numbers, 12.0 MB
+  (the estimate counted 6 MB). A diagnostic after the run (Node, same server, 20 repeats, not a registered run): the reply
+  reaches Node as a string in a median of 116 ms and `JSON.parse` takes 58 ms there; so most of the time is the service
+  building and printing the document (`Monitors::to_json` copies every sample into a JSON value before it is printed),
+  not the browser. The same diagnostic found that `monitors.get {since}` for the last 100 samples (a 12 kB reply) still
+  takes 25 ms, because the whole document is built before `since` is applied.
+- **P4 R1 deflated** (p50 31.0, p99 66.1): R1 pays the Rust reader's inflate and its decode to `f64` before the cast to
+  `f32`, then the TCP copy. The run path writes raw stores only, so the judged line is R1 raw, which meets with little
+  room (p99 57.7 against 60, at a load of 0.64). Not broken down further.
+- **P7 R1's first opening** (1.58 s; the median meets): `data.surface` decodes and validates the whole stored mesh
+  (`Reader::mesh`), as the Studio does (C7 is the same 1.2 s). R2 reads the points and the boundary part of the face
+  arrays only (55 ms).
+- **P10's third start** (6.7 s): not diagnosed; it was not repeated (a registered run is made once). The other nine
+  starts lie between 342 and 1173 ms.
+
+### Deviations and limits of this run
+
+- P4 writes the field into a storage buffer, not a vertex buffer (the vertex shader looks the value up by owner cell);
+  amendment 1 said "vertex buffer".
+- P3's session carries one force report so that a fourth series exists (the solver gives three residual series); the
+  tolerances are 1e-14 (the schema's lower bound), and the run did not stop before 1e5 steps.
+- The frame-paced checks ran on a 60 Hz display; P5's R2 rate is the display's. The window was shown without taking the
+  focus, with Chromium's occlusion tracking off so that a covering window cannot stop its frames.
+- R2 reads finished stores only (it needs the footer; no scan of a live store) and does not verify the checksum of the
+  mesh frame's payload; it does verify every header, frame head, directory and data block it reads.
+- The control has no window, no egui pass and no presentation, uses Vulkan, and draws the soup in one flat colour (a
+  surface without a run has no field in the Studio); C8 is therefore a lower bound of the Studio's frame time, not its
+  frame rate in a window.
+- P2's latencies carry the clock join's error (0.1 ms from the round trip, 1.30 ms of drift over the sample); the
+  in-process stamp is later than the emit by microseconds.
+- Before the registered run the code was tried with small quantities on the 1e5 box (`--smoke`), and a Node script read
+  all fields through the R2 reader against the references (it printed 8.1 ms per raw and 23.9 ms per deflated 1e6 field).
+  After those trials the following changed: a syntax error, the tolerances (1e-300 was refused), the force report, the
+  window's menu (the content was 826 high), the display record. No quantity or limit changed.
+- The transcript of P11 was not read by `rcfd-claude`'s reader; the list shows role and text only.
+
+### Not run
+
+- **R3** (WebAssembly reader): `rustup target list --installed` gives `x86_64-pc-windows-msvc` only, and an export from
+  `rcfd-tsstore` needs `#[no_mangle]` functions over raw pointers (`unsafe`, which the workspace forbids) or
+  `wasm-bindgen` (a new crate); the reader's file calls would also fail at run time on that target.
+- R1 over a Windows named pipe (TCP only), a `chat.*` method (Node read the file), a true cold start after a reboot, a
+  second machine or operating system, a fan mesh.
+
+### Decision by section 4
+
+- P1, P2, P4, P5, P7, P8, P10 and P12 are met by both bulk routes (R1 on raw stores, R2 on raw and deflated), neither of
+  which needs a new Rust crate. P6, P9 and P11 are met.
+- **P3 is missed**, and P3 is in the list the rule requires for "Electron viable". So the outcome is not "Electron
+  viable". It is not "viable with conditions" either (that outcome names a new crate or a level-of-detail reducer), and
+  not "not viable now" (P4, P5 and P8 are met by both routes). The rule has no outcome for this case; the decision goes
+  to the maintainer. Proposed status of F-447: partial.
+- What the numbers say beside the rule: the bulk boundary is fast enough and exact by either route; the miss is in an
+  existing JSON method whose cost is mostly on the service's side and whose remedy does not touch the shell.
+
+### Remaining questions (options and a recommendation each)
+
+- **QA1, P3.** (a) keep the limit and change the service: apply `since` and `names` before building the document, and let
+  a shell fetch the history once and increments afterwards; (b) carry monitor series over `data.*` as `f64` sections;
+  (c) accept 127 ms for a full history of 1e5 samples. Recommendation: (a), then measure P3 again as registered; (b) only
+  if (a) misses. (a) changes the cost of an existing method, not its reply, so no golden changes.
+- **QA2, the bulk route of phase 2.** (a) R2 for projects on the same machine (about twice as fast as R1 per snapshot
+  here and twenty times at the first picture; no service needed to look at a finished run), with R1 for a service on another machine; (b) R1 only (one reader, in Rust;
+  P4 met with little room); (c) R2 only. Recommendation: (a); R2 then needs the scan of an unfinished store and the mesh
+  checksum before it is more than a spike.
+- **QA3, merging `data.*`.** Q4 said "merged only if the spike is viable". (a) merge it as it is (off by default, no
+  existing reply changes, tests D1 to D6); (b) leave it out until P3 is settled. Recommendation: (a): it is the only
+  route for a remote service and costs nothing when off.
+- **QA4, `rcfd serve`.** Switching `data.*` on from the command line needs a flag, which changes the CLI help golden.
+  (a) add `--data` with phase 2; (b) not now. Recommendation: (a), with the maintainer's approval of the golden edit.
+- **QA5, the first opening by R1** (1.58 s, and C7's 1.2 s): (a) a surface cache next to the store, written by the run
+  path; (b) leave it. Recommendation: (b) until a fan mesh is measured (section 6).
+
+### For the lead: roadmap entries
+
+F-447, proposed status: partial.
+
+> F-447: ADR 0350, 2026-11-12. The Electron spike ran once on the maintainer's machine (Electron 45.1.0, RTX 5080, 60 Hz display, load 0.3 to 0.6). Bulk data is fast enough and exact by both routes: R1 (the opt-in `data.*` methods, `rcfd-data/1`, service protocol 1.2, raw `f32` on a second TCP connection) loads a 1e6-cell scalar to a GPU buffer in p50 25.9 ms, p99 57.7 ms; R2 (a reader of `store.rts` in Node) in p50 14.2 ms, p99 22.4 ms; JSON (R0) takes 552 ms. Scrubbing 30.8 and 60.1 snapshots per s at 1e6 cells, 10.5 and 17.8 at 4e6; first picture of the 1e6 surface 1.15 s (R1, first opening 1.58 s) and 0.06 s (R2); 1e6 triangles at 332 frames per s without a rate limit and p99 16.9 ms per frame with vertical sync; cold start median 0.38 s (one start of ten took 6.7 s); renderer memory 112 MB with 20 snapshots; 0 differing bits in 672e6 values; service round trip p50 0.06 ms; event latency p99 under 2.1 ms. Missed: P3, `monitors.get` of 4 series of 1e5 samples takes 127 ms against 100 ms (a 12 MB reply, most of the time on the service's side). R3 (WebAssembly) not run: it needs `unsafe` exports or `wasm-bindgen`. The rcfd-studio control, offscreen: 12.7 ms per snapshot, 73 per s, first picture 1.25 s. The registered rule has no outcome for a miss of P3 alone, so viability is the maintainer's decision; questions QA1 to QA5 of addendum 1.
+
+F-448, note to add (status unchanged):
+
+> F-448: ADR 0350 addendum 1 (2026-11-12) measured both bulk routes as fast enough; recommended: the Node reader of `store.rts` (R2) for local projects, `data.*` (R1) for a remote service, monitors fetched once and then by increments. Open before the start: the maintainer's go-ahead, QA1 (the cost of `monitors.get`) and QA2 (the route).
+
+F-449: no change.
+
+Follow-up item (number for the lead), category "Studio desktop app", depends on F-447:
+
+> Title: `monitors.get` at 1e5 samples: build only what is asked for.
+
+> Acceptance: `monitors.get {names, since}` applies `names` and `since` before the document is built, with replies equal to today's byte for byte for every existing test; P3 of ADR 0350 measured again as registered (4 series of 1e5 samples, request to parsed object in the renderer) with the 100 ms limit unchanged, and an increment of 100 samples at 1e5 stored in at most 2 ms; a miss is recorded, not tuned.
