@@ -411,3 +411,229 @@ Test: `a2_diagnosis_of_the_coupled_remainder` (ignored, printed, asserts nothing
 H9 confirmed; H10 confirmed, less sure. By the decision rule the opt-in exists and A2 is missed: **partial**, unless
 the lead reads the second way of the acceptance (a spatial term with its order in `h`, measured by H8) as meeting the
 item; the addendum says which numbers bear on that.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendments 1 and 2; none was changed. Release
+builds on Windows (`cargo test --release -p rcfd-fv --test bdf2_remainder_f344 ...`, one test thread). The registration
+is `55c60bcf`; the set-up and the diagnosis test, compiled and not run, `0cf3da56`; amendment 1 `2d8687cd` and the opt-in
+with its tests `36c40e8b`; amendment 2 `537f59eb` and its tests `0436b0d4`. Each amendment was committed before its runs
+and each registered run was made once. The logs are in `E:/projects/cfd/w49i-work/f344-scratch` (`f344-diag.log`,
+`f344-c.log`, `f344-a2.log`, `f344-a2diag.log`, `f344-b1.log`, `f344-b1b.log`, `f344-baseline.log`, `f344-M*.log`,
+`f344-final.log`).
+
+**Said plainly.** The remainder at rest is named, measured and removed by an opt-in; the second number of the
+acceptance's first way is missed. The term is the one ADR 0073 found on the periodic box in wave 34B: the face flux of
+the converged step depends on the step size where the momentum diagonal differs between the two cells of a face, here
+at the cells next to a fixed-velocity boundary. With the opt-in the remainder on the mesh of SMc at rest falls from
+`5.13e-6` to `8.4e-10` and its ratio rises from `2.30` to `5.02`. On TG_2 the same opt-in changes the remainder by three
+percent (`2.057e-5`, ratio `2.454` against the limit 4): the remainder of the coupled meshes is another term, made by
+the motion of the component through the coupling, and it is not removed here.
+
+**The default step.** `PimpleSolver::step` with BDF2 (and with implicit Euler: the formula does not depend on the
+scheme) has, in its converged equations, a face flux that depends on the step size. The dependence is not of first
+order: it follows `a dt / (c0 + a dt)` with `a` of the order `4 nu / h^2`, so between two step sizes it falls at an
+observed order of `0.06` to `0.62` here, and the steady solution of a lid-driven cavity differs by `3.7e-4` (of a lid
+velocity of 1) between steps of `0.04` and `0.01` on 20 by 20 cells. In size it is below the spatial error (`6.2e-4` on
+the mesh of SMc) by a factor 120 at `dt = 0.0025`. Changing the default is the maintainer's decision and is not taken
+here.
+
+### What was built
+
+- `crates/rcfd-fv/src/pimple/face_consistent.rs` (new, 65 lines): `harmonic_face`, `add_commutator`,
+  `add_lagged_gradient`.
+- `crates/rcfd-fv/src/pimple.rs`, 20 lines added, 1 replaced, in five places (line numbers of the final file): line 37
+  (`pub(crate) mod face_consistent;`); lines 132 to 137 (the field `PimpleSettings::rhie_chow_step_consistent` and its
+  documentation, after `moving_mesh_lag`); line 556 (its default `false` in `piso()`); lines 1325 to 1331 (the flag
+  `rc` and the choice of `gamma_p`, in place of the one line `let gamma_p = face_interpolate(&g, &r_au);`); lines 1360
+  to 1363 (the call of `add_lagged_gradient` after the carry-over, inside the corrector loop). Nothing else in
+  `pimple.rs` is touched; the consistent-corrector flags are read once (`!s.consistent_correctors` in line 1326).
+- `crates/rcfd-fv/src/overset.rs`, `piso`: lines 946 to 952 (the choice of `gamma_p`) and 999 to 1026 (the added flux
+  with the donor interpolants at the fringe cells).
+- `crates/rcfd-fv/tests/bdf2_remainder_f344.rs`: 8 tests, 4 gate-run (S0, A1, C3, E1) and 4 ignored (the two diagnosis
+  tests, the slow A2 test, the known miss of A2). No existing test was edited.
+- Not touched: `immersed.rs`, `compressible*.rs`, `rcfd-io`, `rcfd-api` (`sim.rs`, `schema.rs`), `ddt.rs`,
+  `pimple/moving.rs`, the roadmap files.
+
+### Hypotheses
+
+| Id | Deciding number (registered) | Measured | Verdict |
+| --- | --- | --- | --- |
+| H1 (a) the ratio is an effect of the measure | confirmed `q_400 >= 1.8`; ruled out `<= 1.3` | `q_100 = 0.059`, `q_200 = 0.374`, `q_400 = 0.623` | **ruled out** |
+| H2 (c) left by the first step | confirmed `R_start >= 4`; ruled out `< 3.5` | `2.2956`, the numbers of S0 to five digits | **ruled out** |
+| H3 (f, g) left by the outer loop or the correctors | confirmed either `>= 1e-6`; ruled out both `<= 1e-7` | `1.46e-11`, `1.46e-11` | **ruled out** |
+| H4 (d) only the pressure | no decision | the pressure behaves as the velocity (`q` of `-0.01`, `0.31`, `0.58`; `delta_N` `3.9e-5` to `2.1e-5`) | printed |
+| H5 (b) it enters through the face flux | confirmed `D_200 >= 0.5 max abs(d_200)`; ruled out `<= 0.1` | `D_200 = 3.95e-6` (`0.77` of `5.13e-6`) | **confirmed** |
+| H6 (e) it is made at the boundary cells | confirmed near `>= 5` inner; ruled out `<= 2` | `12.98` (near `3.95e-6`, inner `3.04e-7`) | **confirmed** |
+| H7 the term is the commutator and the step dependence of `interp(rAU)` | confirmed `max abs(d_200) <= 1.7e-6` with C and A1 met; ruled out `>= 3.6e-6` | `8.41e-10`, ratio `5.019` | **confirmed** |
+| H8 the order in `h` | no decision | at fixed `dt`: `max abs(d_200)` `7.99e-6`, `5.13e-6`, `1.50e-6` on 20, 40, 80 cells per side (orders `0.64`, `1.77`; ratios to `d_400` `2.72`, `2.30`, `1.84`); at fixed `nu dt / h^2`: `1.75e-5`, `5.13e-6`, `1.38e-6` (orders `1.77`, `1.90`; ratios `2.28`, `2.30`, `2.30`) | printed |
+| H9 (amendment 2) on a single moving mesh C removes the remainder too | confirmed `max abs(d_200) <= 1.3e-6` and ratio `>= 4`; ruled out `>= 2.8e-6` | `2.71e-7` (`3.96e-6` without C in ADR 0241), ratio `5.015` | **confirmed** |
+| H10 (amendment 2) the remainder of the coupled meshes is made by the motion through the coupling | confirmed `r <= 0.1 m`; ruled out `r >= 0.5 m` | `r / m = 0.0024`: level 1 with C, at rest `1.26e-7` (ratio `4.98`), moving `5.18e-5` (ratio `3.95`) | **confirmed** |
+
+**The term, named.** In the converged step the face defect `d = phi - interp(u) . S` obeys
+
+`d^{n+1} = (gamma / dt)(c1 d^n - c2 d^{n-1}) + gamma R(p) + C(G p)`, `C(x) = interp(rAU x) . S - interp(rAU) interp(x) . S`,
+
+and its steady value is `[interp(w G p) . S - interp(w) snGrad p abs(S)] / interp(a w)` with `w = 1 / (c0 + a dt)`: a
+function of `dt` wherever `a`, the non-temporal momentum diagonal per volume, differs between the two cells of the face.
+The term is `C(G p)` together with the step dependence of the face coefficient `gamma = interp(rAU)` (ADR 0073 R2 and
+its amendment 1 named `C(G p)`). Numbers: on R the face defect changes between 200 and 800 steps by `3.95e-6` at the
+faces of the two layers next to a side and by `3.0e-7` elsewhere, and the cell velocity by `5.13e-6`; with the term
+removed, the defect changes by `9.2e-12` and the velocity by `8.4e-10`, which converges at the order `2.01` (`2.7e-9`,
+`6.7e-10`, `1.7e-10` between 100, 200, 400 and 800 steps). Its shape is that of `a dt / (c0 + a dt)`: without the
+carry-over at all (`ddt_correction = false`) the remainder is `1.29e-4`. It does not depend on the start, the
+correctors or the outer iterations (H2, H3), as ADR 0241 measured.
+
+**Its order in `h`.** At a fixed `nu dt / h^2` the remainder falls with `h` at the order `1.77` (20 to 40 cells per
+side) and `1.90` (40 to 80), and its ratio between step sizes stays `2.3`: it is a term of the spatial discretisation,
+close to the form `h^2 F(nu dt / h^2)` with `F` bounded (two refinements; the orders are below 2). At a fixed `dt` the orders are
+`0.64` and `1.77` (the argument of `F` grows by 4 with each refinement). It never becomes a term of first order in
+`dt`: refining `dt` alone at fixed `h` gives observed orders below 1 that rise slowly (`0.06`, `0.37`, `0.62`).
+
+**The periodic box** (printed; 64 by 64 cells, the settings of this item, default step): the differences between
+consecutive step sizes fall at `1.31` and `0.85` (50 to 400 steps), the amplitude of the mode at `2.1` and `2.2`
+(differences `2.05e-6`, `4.76e-7`, `1.00e-7`). The same floor as ADR 0073 A1 found; not run with C (coupled faces are
+not part of C, L2).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| S0 (set-up) R: `max abs(d_200)`; ratio | `[5.0e-6, 5.3e-6]`; `[2.2, 2.4]` | `5.1262e-6`; `2.2956` (before the library change and again on the final tree) | held |
+| S1 continuity, the runs of R | `<= 1e-9` | `8.5e-12` | met |
+| **A1 (acceptance)** R with C: ratio | `>= 4` | `5.019` (`8.41e-10`, `1.68e-10`) | **met** |
+| C1 R with C: change of the face defect `D_200` | `<= 4e-7` | `9.2e-12` | met |
+| C2 R with C: `q_200` | `>= 1.7` | `2.007` (`q_100 = 2.013`) | met |
+| A3 (no harm) error against the exact field, C over default, 800 steps | `<= 1.05` | `1.0039` (`6.2264e-4` over `6.2024e-4`) | met |
+| C3 steady cavity with C, steps `0.04` against `0.01` | `<= 1e-9` | `2.4e-13` (change over the last step `2.1e-13`, `3.9e-17`) | met |
+| C3n (negative control) the same without C | `>= 1e-6` | `3.75e-4` | held |
+| C4 continuity, the runs with C | `<= 1e-9` | `2.6e-12` | met |
+| E1 overset at rest against the library, both with C: `u`, `p`, `phi` | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| E1n (negative control) the library with C against without | `>= 1e-9` | `4.59e-6` | held |
+| **A2 (acceptance)** TG_2 with C: ratio | `>= 4` | `2.454` (`2.057e-5`, `8.38e-6`) | **missed** (known-miss test) |
+| A2b TG_2 with C: `max abs(d_200)` | `<= 2.125e-5` | `2.057e-5` | met |
+| A2c continuity; `e(TG_2)` in 800 steps over `3.179e-4` | `<= 1e-9`; `<= 1.05` | `6.3e-14`; `1.0022` (`3.1859e-4`) | met |
+| B1 (defaults) the existing suites, unedited | pass | unit tests of the crate 91 passed (5 ignored); `ale_gcl` 4; `consistent_defaults_f301` 6; `fractional_step` 13 (3 ignored); `overset_f134` 12 (2 ignored); `overset_f134_records` 1; `overset_f335` 5 (4 ignored); `overset_f335_records` 4; `overset_f338` 9 (9 ignored; Q0b among them); `periodic` 3; `piso_thin_gap_f299` 18 (2 ignored); `w33b_default_bits` 1; `w48ab_dt_trigger` 5; `w48v_corrector_control` 5; `immersed_solid_f219`: 9 of its 11 gate-run tests passed, **the two long cylinder runs (`a1_a2_two_d_one_drag_and_lift_on_m3`, `a3_two_d_two_strouhal_number`) had not finished after two hours under load when this was written** | met, except the two unfinished runs of `immersed_solid_f219` (not shown) |
+| B1 `cargo test -p rcfd-api --release --test baseline_hashes` | pass | 3 passed, 1 ignored | met |
+
+The cavity is the plainest statement of what C does: its steady solution is the same to `2.4e-13` for two step sizes,
+where the default's differs by `3.75e-4`. With the commutator alone and `interp(rAU)` kept (F-G of ADR 0073, mutation
+MC2) the difference is `9.4e-5`: at boundary cells the commutator removes three quarters of the effect and the face
+coefficient the rest, which is why C takes the harmonic face coefficient as well.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `36c40e8b` (`f344-scratch/mut`, its own target directory; the library files of
+the final tree are those of `36c40e8b`, the later commits add tests and text) by `f344-mut-run.py` (an exact replacement
+that occurs once), the named test run once, the file restored and compared byte for byte.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MD1 the old-old part of the carried defect left out | S0 | failed: the run diverges (`max abs(d_200) = 33`) |
+| MD2 the reference run in 400 steps | S0 | failed: `2.89e-6`, ratio infinite |
+| MC1 the added flux left out | C3 | failed: `7.0e-4` |
+| MC2 the face coefficient stays `interp(rAU)` | C3 | failed: `9.4e-5` |
+| MC3 the added flux with the opposite sign | C3 | failed: `1.4e-3` |
+| MC4 the gate inverted in `pimple.rs` | S0 | failed: `8.4e-10`, ratio `5.02` (the opt-in's numbers) |
+| MC5 `overset.rs`: fringe cells take their own `rAU G p_lag` | A2 | **not run, counts as not caught** (A2 is missed; amendment 2) |
+| MC6 `overset.rs`: the added flux left out | E1 | failed: `4.7e-6`, `4.6e-5`, `2.3e-7` |
+
+So the fringe branch of the overset change (the donor interpolants) is guarded by no failing check. `scripts/limit_audit.py`
+on the new test file: 0 hits. The two diagnosis tests print and assert nothing about their numbers (decided here); by
+design, and ignored.
+
+### Deviations and disclosures
+
+- The leading hypothesis was not mine: ADR 0073 had the commutator, measured on the periodic box, and an opt-in for it
+  that ADR 0076 removed. I found that while reading for the registration and wrote it there. What this item adds is the
+  boundary cells (where it is largest), the harmonic face coefficient, and the measurement at rest.
+- The arithmetic before the registration predicted the shape and the place; it is disclosed there. All my predictions
+  held except A2, which I called uncertain.
+- Amendment 1 was written while the 80 by 80 series of H8 and the periodic box, both without a deciding number, were
+  still running in the diagnosis process.
+- B2 of the registration was dropped by amendment 1 (it is S0 on the final tree; run, held).
+- ADR 0241 wrote that the five times larger remainder of the coupled meshes "is suggested ... and not shown" to be the
+  same term. It is not the same term (A2, H10). ADR 0241 is not edited.
+- H10 was measured on level 1, not on level 2 (cost; said in amendment 2). The remainder of level 1 moving falls at a
+  ratio of `3.95` between its step sizes, that of level 2 at `2.45`; why they differ is not diagnosed.
+- The diagnosis test runs R on 40 cells in 200, 400, 800 steps more than once (S0, H1, H8); a deterministic run, the
+  same numbers each time. After the last test edit the gate-run tests of the new file ran once more on the final tree
+  (`f344-final.log`: 4 passed, 4 ignored; the same numbers).
+- The unchanged tree was compiled once before the registration (disclosed in the status line).
+
+### Not run
+
+- The whole workspace suite, the gate, the other `rcfd-api` tests, Linux.
+- MC5. TG_2 at rest and level 2 for H10. The periodic box and the cylinder with C.
+- **Paths of C that no check exercises:** a body force (`G p_lag - b` in `add_lagged_gradient` and the body-force face
+  term with the harmonic coefficient): derived, written, not run by any test; the fringe branch in `overset.rs` (MC5);
+  a non-orthogonal or graded mesh; implicit Euler with C; one outer iteration with C (the corrector lag of C).
+- The two long tests of `immersed_solid_f219` named under B1 did not finish in the time of this job (they started on the
+  tree `36c40e8b`, whose library files are the final ones). The immersed forcing is off in every run of this item and
+  the step with the opt-in off is the default one statement for statement; `n1_immersed_forcing_is_off_by_default`
+  and the other nine passed. The lead's gate covers them.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean.
+
+### Decision by the registered rule
+
+**Partial.** A term is named and confirmed by its registered number (H7: `8.41e-10` against `1.7e-6`, the ratio `5.02`);
+the opt-in is built and the defaults are bit for bit (B1, with two long immersed-solid runs unfinished); A1 is met; **A2 is missed** (`2.454` against 4), and by the
+reading registered before any run ("if the corrective reaches 4 at rest and not on TG_2, that is a miss of the first
+way") that is the clause "the opt-in exists and A1 or A2 is missed". The controls held; seven of eight mutations failed
+their checks and one was not run.
+
+The rule has a second clause that the numbers also fit, and I do not take it: the second way of the acceptance ("shown
+to be a spatial term with its order in h") is measured (H8: order `1.8` to `1.9` at fixed `nu dt / h^2`). Whether that
+alone makes the item done is the lead's reading of the acceptance; I propose partial because the item was opened to
+explain the missed D2 of TG_2, and D2 is still missed, for a cause this item located (H10) and did not name.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The remainder of the coupled meshes in motion** (`2.06e-5` on TG_2, ratio `2.45`; `5.2e-5` on level 1 moving
+  against `1.3e-7` at rest). (a) a follow-up item that finds which event of a moving coupling carries it (a cell
+  changing kind, a donor stencil changing with the pose, the refresh of the fringe values before the step, the flux of
+  the faces without a calculated cell) with the set-ups of H10, where the coupled meshes at rest are a clean reference;
+  (b) leave it: it is below the spatial error of TG_2 (`3.2e-4`) by a factor 15. Recommendation (a); proposed below,
+  not taken here (a new item is the lead's).
+- **Q2. An opt-in of a kind ADR 0076 removed (O2).** (a) keep `rhie_chow_step_consistent` as built: internal faces only,
+  no seam terms, met on every check of its own; (b) remove it again and keep the diagnosis. Recommendation (a): the
+  misses that removed F-G were on periodic and rotational seams and in a no-harm comparison on a seam, none of which C
+  touches. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation), not a decision the
+  maintainer made in person; it is in conflict with the letter of ADR 0076's removal, so it is flagged for the
+  maintainer.
+- **Q3. Where C does not act.** (a) a follow-up that extends it to the consistent correctors and the library's
+  moving-mesh steps, checks the body-force path, and adds the case-tree key; (b) leave C as a library-only opt-in.
+  Recommendation (a), after the rework of the corrector flags in `pimple.rs`. Not taken here.
+- **Q4. Coupled (periodic) faces.** ADR 0073 R3 and ADR 0076 found two further step-dependent terms there; C leaves
+  them. (a) take them up with Q3; (b) not now. Recommendation (b) until a case needs BDF2 across a periodic seam.
+- **Q5. C by default.** It would change every transient result of the library (the steady cavity by `3.7e-4`). It
+  changes a default; not taken. Open for the maintainer. What speaks for it: a steady solution that does not depend on
+  the step; what speaks against: every baseline and record of the transient step changes, and C is not yet defined on
+  all paths (Q3, Q4).
+- **Q6. The text of ADR 0241 and of the note of F-338** on the coupled remainder ("that ... is the same term is not
+  shown"): now shown not to be. (a) correct the roadmap note of F-338 (text below); (b) leave it. Recommendation (a).
+
+### For the lead: roadmap entries
+
+No roadmap file was edited on this branch.
+
+**F-344**, proposed status: `partial`. Proposed note:
+
+> From ADR 0241 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0245 (registration of F-344, 2026-11-12, branch f344-bdf2-remainder): PARTIAL. Named: the remainder at rest is the step-size dependence of the converged face flux that ADR 0073 found on the periodic box (the commutator of rAU with the face interpolation, C(G p), and the step dependence of the face coefficient interp(rAU)): the steady face defect is [interp(w G p).S - interp(w) snGrad p |S|] / interp(a w) with w = 1/(c0 + a dt), a function of dt wherever the momentum diagonal differs between the two cells of a face, largest at the cells next to a fixed-velocity boundary (the face defect changes by 3.95e-6 between 200 and 800 steps there, thirteen times more than inside). It is not of first order in dt: it follows a dt/(c0 + a dt), observed orders 0.06 to 0.62 between consecutive step sizes; at fixed nu dt/h^2 it falls with h at the order 1.8 to 1.9. Ruled out by measurement: the measure, the start, the outer loop and the correctors (1.5e-11). Built: the opt-in PimpleSettings::rhie_chow_step_consistent (default false, defaults bit for bit: the existing suites and baseline_hashes unedited): the harmonic face value of rAU as the face coefficient and the commutator of the lagged pressure gradient added to the flux of internal faces, in PimpleSolver::step on a mesh at rest and in the overset step (new file pimple/face_consistent.rs, 20 lines in pimple.rs); the face defect then obeys a BDF2 equation without the step size. Met: at rest max abs(d_200) falls from 5.13e-6 to 8.4e-10 and the ratio rises from 2.30 to 5.02 (limit 4), the order between consecutive steps is 2.01; the steady lid-driven cavity is the same to 2.4e-13 for steps of 0.04 and 0.01 (3.7e-4 without the opt-in); the error against the exact field is unchanged (1.004); the overset step at rest equals the library bit for bit with it; on the single moving mesh 3.96e-6 falls to 2.7e-7, ratio 5.02. Missed (acceptance): D2 of ADR 0241 on TG_2 with the opt-in is 2.454 (limit 4), max abs(d_200) 2.057e-5 against 2.125e-5 without: the remainder of the coupled meshes is another term; located: with the component held still the coupled meshes of level 1 leave 1.3e-7 at a ratio of 4.98, moving 5.2e-5, so it is made by the motion through the coupling (cells changing kind, donors changing with the pose); not named. Seven mutations caught; the one of the fringe branch of the overset change was not run (its check is the missed one). Not exercised by any check: a body force with the opt-in. The opt-in does not act with the consistent correctors, on the library's moving-mesh steps, in the fractional step, on coupled faces; no case-tree key. Whether the default step should change is open for the maintainer. Follow-ups proposed (ADR 0245 questions 1 and 3).
+
+**F-338**, status unchanged (`partial`). In its note, replace "that the five times larger remainder on the coupled meshes is the same term is not shown" by:
+
+> the five times larger remainder on the coupled meshes is not that term (ADR 0245: with the at-rest term removed by an opt-in it is 2.06e-5 at a ratio of 2.45; it is made by the motion of the component through the coupling)
+
+Proposed follow-up items (the numbers are the lead's):
+
+- **Overset BDF2: the step-size-dependent remainder made by the motion through the coupling.** Depends on F-344. Acceptance: "The remainder of TG_2 with BDF2, three outer iterations and rhie_chow_step_consistent (max abs(d_200) 2.057e-5 with the ratio 2.454 to max abs(d_400), ADR 0245 A2; 1.3e-7 with the ratio 4.98 on the coupled meshes of level 1 at rest against 5.2e-5 moving, ADR 0245 H10) is traced to a named event or term of the moving coupling with a number, and either removed as an opt-in (defaults bit-identical; D2 of ADR 0241 at least 4 on TG_2) or the ADR names why not with a number." Note:
+
+> From ADR 0245 question 1, recommendation (a); proposed by the F-344 addendum, not yet taken. Candidates not measured: a cell changing kind, a donor stencil changing with the pose, the refresh of the fringe values before the step, the flux of the faces without a calculated cell. The coupled meshes at rest are a clean reference (ratio 4.98). The fringe branch of the F-344 opt-in in overset.rs has no failing mutation yet (ADR 0245 MC5).
+
+- **Transient step: the step-consistent face coefficient on the remaining paths.** Depends on F-344. Acceptance: "rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls (defaults bit-identical); with a body force a hydrostatic column stays at rest to 1e-10 and the steady solution of a buoyant cavity is the same to 1e-9 for two step sizes; the case tree has a key for it; the check C3 of ADR 0245 holds on each path, or the ADR names why not with a number." Note:
+
+> From ADR 0245 question 3, recommendation (a), after the rework of the corrector flags in pimple.rs; proposed by the F-344 addendum, not yet taken. Periodic seams (ADR 0073 R3, ADR 0076) are not part of it.
