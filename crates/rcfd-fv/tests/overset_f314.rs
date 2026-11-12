@@ -907,8 +907,10 @@ fn a1_f3_miss_spatial_and_time_parts() {
 
 /// SM of amendment 1: the level-2 component mesh alone, moved by `tg_pose(speed t)` with the library's ALE step and
 /// `n_outer` outer iterations, the exact velocity on its four sides, `steps` steps to `t = 0.5`. Returns the velocities,
-/// the largest error at `t = 0.5` and the largest continuity over the steps.
-fn sm_run(steps: usize, speed: f64, n_outer: usize) -> (Vec<Vec3>, f64, f64) {
+/// the largest error at `t = 0.5`, the largest continuity over the steps and the largest `abs(Q) / A` (below). `corrected`
+/// (SMc of amendment 2) makes the boundary velocity discretely free of net flux: with `Q = sum v_f . S_f` and `A = sum
+/// abs(S_f)` over the faces of the four sides, every face gets `v_f - (Q / A) n_f`.
+fn sm_run(steps: usize, speed: f64, n_outer: usize, corrected: bool) -> (Vec<Vec3>, f64, f64, f64) {
     let dt = T_END / steps as f64;
     let cs = uniform(-0.6, 1.2, 40);
     let mesh0 = rectilinear_2d(&cs, &cs, DEPTH).unwrap();
@@ -923,11 +925,15 @@ fn sm_run(steps: usize, speed: f64, n_outer: usize) -> (Vec<Vec3>, f64, f64) {
     let mut set = settings();
     set.n_outer = n_outer;
     let mut s = PimpleSolver::new(geom, u, p, set);
-    let mut cont = 0.0f64;
+    let (mut cont, mut corr) = (0.0f64, 0.0f64);
     for k in 1..=steps {
         let t = k as f64 * dt;
         let st = move_mesh(&s.geom, points_at(t), dt).unwrap();
-        tg_conditions(&st.geom, &mut s.u, t);
+        if corrected {
+            corr = corr.max(sm_conditions(&st.geom, &mut s.u, t));
+        } else {
+            tg_conditions(&st.geom, &mut s.u, t);
+        }
         let info = s.step_ale_with_walls(dt, st.geom, st.mesh_flux, Vec::new()).unwrap();
         cont = cont.max(info.continuity);
     }
@@ -938,25 +944,52 @@ fn sm_run(steps: usize, speed: f64, n_outer: usize) -> (Vec<Vec3>, f64, f64) {
             .zip(s.geom.mesh.cell_centres())
             .map(|(v, &x)| vec3::norm(vec3::sub(*v, tg_u(x, T_END))) / decay)
             .fold(0.0, f64::max);
-    (s.u.values.clone(), e, cont)
+    (s.u.values.clone(), e, cont, corr)
 }
 
-/// ADR 0232 amendment 1, H6a and H6b with F7 and F8: the time error of a single moving mesh without overset.
-#[test]
-fn sm_single_moving_mesh_time_error() {
+/// The exact velocity at `t` on the four sides of `geom`, less its net flux (SMc of amendment 2). Returns `abs(Q) / A`.
+fn sm_conditions(geom: &FvGeometry, u: &mut VectorField, t: f64) -> f64 {
+    let sides = ["xmin", "xmax", "ymin", "ymax"];
+    let sf = geom.mesh.face_area_vectors();
+    let fc = geom.mesh.face_centres();
+    let (mut q, mut a) = (0.0, 0.0);
+    for name in sides {
+        for f in geom.mesh.patch(name).unwrap().faces() {
+            q += vec3::dot(tg_u(fc[f], t), sf[f]);
+            a += vec3::norm(sf[f]);
+        }
+    }
+    for name in sides {
+        let v: Vec<Vec3> = geom
+            .mesh
+            .patch(name)
+            .unwrap()
+            .faces()
+            .map(|f| vec3::sub(tg_u(fc[f], t), vec3::scale(vec3::unit(sf[f]), q / a)))
+            .collect();
+        u.set_bc(geom, name, Box::new(FixedValue(Profile::PerFace(v)))).unwrap();
+    }
+    q.abs() / a
+}
+
+/// The SM runs of H6a and H6b (one and three outer iterations, full and half speed, 200 and 800 steps each), printed.
+/// Returns the largest continuity, the largest error of the run with one outer iteration and 800 steps at full speed, and
+/// the largest `abs(Q) / A`.
+fn sm_measure(tag: &str, corrected: bool) -> (f64, f64, f64) {
     let decay = (-2.0 * NU_TG * T_END).exp();
-    let mut cont = 0.0f64;
+    let (mut cont, mut corr) = (0.0f64, 0.0f64);
     let mut d200 = |speed: f64, n_outer: usize| -> (f64, f64) {
-        let (a, ea, ca) = sm_run(200, speed, n_outer);
-        let (b, eb, cb) = sm_run(800, speed, n_outer);
+        let (a, ea, ca, qa) = sm_run(200, speed, n_outer, corrected);
+        let (b, eb, cb, qb) = sm_run(800, speed, n_outer, corrected);
         cont = cont.max(ca).max(cb);
+        corr = corr.max(qa).max(qb);
         let d = a
             .iter()
             .zip(&b)
             .map(|(x, y)| vec3::norm(vec3::sub(*x, *y)) / decay)
             .fold(0.0, f64::max);
         println!(
-            "SM speed {speed} n_outer {n_outer}: e with 200 steps {ea:.4e}, with 800 steps {eb:.4e}; max |d_200| {d:.4e}"
+            "{tag} speed {speed} n_outer {n_outer}: e with 200 steps {ea:.4e}, with 800 steps {eb:.4e}; max |d_200| {d:.4e}"
         );
         (d, eb)
     };
@@ -965,17 +998,38 @@ fn sm_single_moving_mesh_time_error() {
     let (full3, _) = d200(1.0, 3);
     let (half3, _) = d200(0.5, 3);
     println!(
-        "SM H6a: max |d_200| {full1:.4e} ({:.3} of the overset value 4.4936e-4); rho_SM {:.4} (overset 2.2924)",
+        "{tag} H6a: max |d_200| {full1:.4e} ({:.3} of the overset value 4.4936e-4); rho_SM {:.4} (overset 2.2924)",
         full1 / 4.4936e-4,
         full1 / half1
     );
     println!(
-        "SM H6b: q = three outer iterations over one {:.4}; rho with three outer iterations {:.4} (rho_BE 4.783, root mean square 3.700)",
+        "{tag} H6b: q = three outer iterations over one {:.4}; rho with three outer iterations {:.4} (rho_BE 4.783, root mean square 3.700)",
         full3 / full1,
         full3 / half3
     );
+    (cont, e800, corr)
+}
+
+/// ADR 0232 amendment 1, SM with the exact boundary velocity: F7 missed (registered run: continuity 3.07e-5; the exact
+/// velocity on the closed moving boundary has a net flux, which the pin cell takes). Corrected by SMc (amendment 2).
+#[test]
+#[ignore = "known miss, ADR 0232 amendment 2: F7 continuity of SM with the exact boundary velocity 3.07e-5 (limit 1e-9)"]
+fn sm_exact_boundary_velocity_known_miss() {
+    let (cont, e800, _) = sm_measure("SM", false);
     let mut c = Checks::new();
     c.at_most("F7 SM continuity, every step of every run", cont, 1e-9);
     c.at_most("F8 SM largest error, one outer iteration, 800 steps", e800, 1e-3);
+    c.finish();
+}
+
+/// ADR 0232 amendment 2, SMc: H6a and H6b with F7c, F8c and F9c: the time error of a single moving mesh without overset,
+/// the boundary velocity free of net flux.
+#[test]
+fn smc_single_moving_mesh_time_error() {
+    let (cont, e800, corr) = sm_measure("SMc", true);
+    let mut c = Checks::new();
+    c.at_most("F7c SMc continuity, every step of every run", cont, 1e-9);
+    c.at_most("F8c SMc largest error, one outer iteration, 800 steps", e800, 1e-3);
+    c.at_most("F9c (set-up) SMc correction |Q| / A", corr, 1e-5);
     c.finish();
 }
