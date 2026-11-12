@@ -424,3 +424,17 @@ cells with `n_outer = 4`, the same windows (`[1.0012, 1.0014]` default; `abs(. -
 on 80 cells and K4c, K5c are met, the miss is the splitting error of the flow step, recorded as a known miss.
 
 The corrective design is registered by amendment 3 after these checks are run.
+
+## Amendment 2a (2026-11-12, after the first run of the corrected diagnosis, before its corrected run)
+
+The run (`--test added_mass_f351`, once, on 7d36f5b4): N3b held (`-9.2211e-4` against `abs >= 5e-4`). The two other tests
+failed at G2b and G2p with `d_ext = 0`, on 20 cells, and the first one stopped there (40 and 80 cells were not reached).
+The zero is **a defect of the test code, not a measurement**: the search for the worst `d_ext` over the faces started
+from 0 and replaces its value only by one farther from `1/(4N)`, which no face value near `1/(4N)` is. Seen before the
+stop, on 20 cells: G1b `-1.1e-16`, G3b `2.086e-6`, K1b `1.2509688e-2` (`+0.078` percent), G5b `0`, G6b `7.472e-6`; G3p
+`7.063e-6`.
+
+Correction: the search starts from the target `1/(4N)`. No limit, set-up or reference is changed. The two tests stay as
+ignored records (`..._defective_record`, which pass the old start value) and are replaced by
+`g1c_to_g6c_k1c_k2c_...` and `g2q_g3q_...`, the same checks under the same ids' limits (G1b to G6b, K1b, K2b, G2p, G3p).
+N3b is not run again.
