@@ -7167,7 +7167,7 @@ fixed by the item's registration ADR before any code.
     on successive pairs, 16 -> 32 run as a diagnostic), kept as a known-miss record with the limit. Mutations: four of
     six caught; the body load on the stiffness rule (registered as may survive) and the one-point Hex8 stiffness survive
     (regular meshes hold the hourglass modes; the element tests catch it). Partial by the registered rule; done is the
-    maintainer's call.
+    maintainer's call. The one-point Hex8 stiffness that survived here is caught on moved meshes by ADR 0355 (F-459).
 - [ ] **F-379** Closed-form benchmarks: cantilever bending and the thick-walled cylinder under pressure
   - depends on: F-371, F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever of slenderness L/h = 20
@@ -8379,14 +8379,26 @@ fixed by the item's registration ADR before any code.
     16, 32 cells per edge (98 304 unknowns, direct solver, an ignored heavy record): the L2 order over the pair 16 -> 32
     is >= 1.8 and the energy order >= 0.9, both errors fall monotonically.
   - note: From ADR 0279 addendum 1 (2026-11-12), Q1 recommendation.
-- [ ] **F-459** Manufactured solution on distorted meshes: orders of Tet4, Hex8, Tet10 with moved interior nodes, and the Hex8 stiffness rule
+- [x] **F-459** Manufactured solution on distorted meshes: orders of Tet4, Hex8, Tet10 with moved interior nodes, and the Hex8 stiffness rule
   - depends on: F-378
   - acceptance: Every limit not stated here is registered in the ADR before the run. The manufactured solution of ADR
     0279, case D, on boxes whose interior nodes are moved by a registered seed and amplitude (elements valid at every
     node): on at least three meshes, each halving h, the observed L2 order over the finest pair is >= 1.8 for Tet4 and
     Hex8 and >= 2.7 for Tet10, the energy-norm order >= 0.9 and >= 1.8, both errors fall monotonically; a mutation of
     the Hex8 stiffness rule to one point is caught by these checks.
-  - note: From ADR 0279 addendum 1 (2026-11-12), Q2 recommendation.
+  - note: From ADR 0279 addendum 1 (2026-11-12), Q2 recommendation. Structural solver, basic tier. ADR 0355, 2026-11-12:
+    the manufactured solution of ADR 0279 (case D) on boxes with interior nodes moved by seed 0xF459_0355, uniform
+    offsets of at most 0.15 h per component for Hex8 and 0.075 h for Tet4 and Tet10 (Tet10 from the moved Tet4, straight
+    edges), validity guaranteed by diagonal dominance (det J >= 1e-3 of the regular value) and measured: minimum det J
+    at the nodes 0.37 (Hex8) to 0.65 (tetrahedra) of the regular value; tests crates/rcfd-fem/tests/sb_mms_distorted.rs
+    only. Tet4 and Hex8 on 4, 8, 16, Tet10 on 2, 4, 8 cells per edge: L2 orders over the finest pair 1.980, 1.993, 2.971
+    (limits 1.8, 1.8, 2.7), energy orders 0.995, 0.998, 1.951 (0.9, 0.9, 1.8), errors fall monotonically; polynomial
+    fields reproduced on moved meshes to 4e-15; negative control orders below 0.015; heavy record on 6, 12, 24 / 3, 6,
+    12 (36 501 unknowns, 90 s): 1.990, 1.998, 2.981 and 0.997, 0.999, 1.974. The one-point Hex8 stiffness (which
+    survived ADR 0279 on regular meshes) is caught: L2 order 1.758, energy order 0.729, and the moved-mesh patch test
+    fails at 1.7e-3; four of the other mutations behave as registered (one-point Tet10 refused as singular, the exact
+    field at the regular map caught, an amplitude above the validity bound refused as inverted, the over-integrated Hex8
+    survives). Done pending the maintainer's acceptance.
 - [ ] **F-460** Incomplete Cholesky at half the block-Jacobi iterations on the elastic cantilever: ordering and one level of fill
   - depends on: F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. Beside IC(0) in the natural order,
@@ -8397,3 +8409,10 @@ fixed by the item's registration ADR before any code.
     threads; the iteration counts at L/h = 5.3 and 10.7 and on the 103 968-unknown case are recorded; IC(0) in the
     natural order and every default are unchanged bit for bit.
   - note: From ADR 0282 addendum 1 (2026-11-12), Q1 recommendation.
+- [ ] **F-461** Element tests: the constant-strain patch test of Hex8 on a moved mesh
+  - depends on: F-459
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A linear displacement field on a
+    box of Hex8 whose interior nodes are moved by a registered seed and an amplitude below the validity bound of ADR
+    0355, all boundary nodes prescribed, no body force: the relative L2 and energy errors are <= 1e-9, and the same test
+    with the stiffness rule mutated to one point gives a relative energy error >= 1e-5.
+  - note: From ADR 0355 addendum 1 (2026-11-12), Q1 recommendation.
