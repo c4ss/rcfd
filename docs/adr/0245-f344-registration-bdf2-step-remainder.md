@@ -571,7 +571,7 @@ design, and ignored.
 - The two long tests of `immersed_solid_f219` named under B1 did not finish in the time of this job (they started on the
   tree `36c40e8b`, whose library files are the final ones). The immersed forcing is off in every run of this item and
   the step with the opt-in off is the default one statement for statement; `n1_immersed_forcing_is_off_by_default`
-  and the other nine passed. The lead's gate covers them.
+  and eight others passed. The lead's gate covers them.
 
 ### After the tests
 
