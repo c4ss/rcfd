@@ -4210,5 +4210,36 @@
     "status": "todo",
     "acceptance": "With the maintainer's approval, the matched forms in SpongeFrame::AttachedToMesh use the memory of the lab frame (ADR 0344); the F-341 matched records are re-recorded once with that approval, the plain form and every run without motion stay bit-identical, and the ADR 0344 checks pass unchanged.",
     "note": "NEEDS THE USER: it changes the results of the F-341 matched forms (re-recording their records)."
+  },
+  {
+    "id": "F-447",
+    "title": "Electron over the rcfd APIs: performance spike (control, live events, field transfer, scrubbing, WebGPU draw)",
+    "phase": 9,
+    "deps": [],
+    "status": "todo",
+    "acceptance": "The checks P1 to P12 of ADR 0350 are run once as registered on the maintainer's machine, with the rcfd-studio control column measured first; each bulk route (R0 JSON baseline, R1 binary side channel under an opt-in data.* method family of protocol 1.2, R2 a TypeScript reader of store.rts, R3 a WebAssembly reader if it needs no new crate) is recorded; the negative controls NC1 and NC2 hold; the decision of ADR 0350 section 4 (viable, viable with conditions, not viable) is stated with the numbers; no existing service method, golden or hash changes.",
+    "note": "ADR 0350 (2026-11-12), asked for by the maintainer. NEEDS THE USER: questions Q1 to Q5 of ADR 0350 (run the spike, where the JavaScript lives, no native addon, the data.* methods, Electron over Tauri)."
+  },
+  {
+    "id": "F-448",
+    "title": "Electron Studio to parity with rcfd-studio",
+    "phase": 9,
+    "deps": [
+      "F-447"
+    ],
+    "status": "todo",
+    "acceptance": "An Electron shell in TypeScript over the service and the bulk route chosen by F-447 passes every parity check of ADR 0350 section 5 (the docs/ui-restart-plan.md section 6 list and the Studio checks added since), automated with Playwright where a check can be automated and by the maintainer's view-and-report where it cannot; its field values equal the Rust reader's bit for bit; rcfd-studio is frozen while it is built.",
+    "note": "ADR 0350 section 5. NEEDS THE USER: starts only on the maintainer's go-ahead after a viable F-447."
+  },
+  {
+    "id": "F-449",
+    "title": "Retire rcfd-studio and rcfd-gui",
+    "phase": 9,
+    "deps": [
+      "F-448"
+    ],
+    "status": "todo",
+    "acceptance": "After F-448 passes and the maintainer has used the new shell and approved, rcfd-studio and the frozen rcfd-gui are removed with their tests, docs that name them are updated, and the two layer lines of crates/rcfd-cli/tests/workspace_graph.rs are removed with the maintainer's approval; every other crate and test is unchanged and the gate passes.",
+    "note": "ADR 0350 section 5. NEEDS THE USER: removal of crates and an edit of an existing test."
   }
 ]
