@@ -479,6 +479,13 @@ impl Divergence {
                 "PIMPLE immersed-solid forcing (ADR 0218) is not defined with the {}: the run is stopped at step {}{outer}",
                 self.stage, self.step
             );
+        } else if self.quantity == "immersed flux weight" {
+            return format!(
+                "PIMPLE second-order immersed face flux (ADR 0254): a fluid-solid face extends the velocity of its fluid cell \
+                 through the surface with a weight above 5 and can return {:.3} times what the time term carries (> 1){at}; \
+                 the run is stopped at step {}{outer}: build the forcing with ImmersedForcing::build_second_order_bounded",
+                self.value, self.step
+            );
         } else if self.quantity == "consistent correctors" {
             return format!(
                 "PIMPLE consistent correctors (ADR 0214) are not defined with the {}: the run is stopped at step {}{outer}",
@@ -1285,6 +1292,23 @@ impl PimpleSolver {
             }
             for h in h1.iter_mut() {
                 *h /= n_active;
+            }
+            // ADR 0254 E2: the unbounded extension of ADR 0234 D1 is refused where it can amplify
+            if let Some((c, v)) = self
+                .immersed
+                .as_ref()
+                .and_then(|ib| ib.flux_growth((c1 - c2) / dt, &a_p))
+            {
+                let res = (res_u, res_p, p_iters);
+                return self.trip(
+                    dt,
+                    Some(outer),
+                    "momentum predictor",
+                    "immersed flux weight",
+                    Some(c),
+                    v,
+                    res,
+                );
             }
             if lag_due && last {
                 lag_ctx = Some(LagCtx {
