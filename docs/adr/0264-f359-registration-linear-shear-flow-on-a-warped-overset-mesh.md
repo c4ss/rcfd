@@ -333,3 +333,172 @@ MU3 fails A3, I do not know by how much (the pressure changes little between cor
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; none was changed and no amendment was needed. Release builds on Windows.
+Commits: the registration `5b0c067a` (alone, before any code); the test file, compiled, formatted and linted without
+running, `076138d8`. The test file was then run once (`cargo test --release -p rcfd-fv --test overset_f359 -- --nocapture
+--test-threads=2`, 53 s for the seven tests, each acceptance run computed once and shared). After the run, A1 and A2 were
+made ignored `*_known_miss` records with their limits intact (`445ac769`). No library file was changed. The logs are in
+`E:/projects/cfd/w49i-work/f359-scratch` (`f359-run1.log`, `f359-MU1.log` to `f359-MU3.log`).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 default interpolation: `E(W3) / E(P3)` | `<= 2` | `15.60` (`E(P3) = 8.7203e-4`, `E(W3) = 1.3603e-2`) | **missed** |
+| A2 quadratic interpolation: `E(W3q) / E(P3q)` | `<= 2` | `15.57` (`E(P3q) = 8.7204e-4`, `E(W3q) = 1.3576e-2`) | **missed** |
+| A3 continuity of the calculated cells, every step: P3, P3q, W3, W3q | `<= 1e-9` | `1.91e-14`, `1.89e-14`, `1.44e-14`, `9.14e-15` | met |
+| K1 the stencils reproduce `u_ex`, every step: P3, P3q, W3, W3q | `<= 1e-12` | `1.30e-15`, `3.33e-15`, `1.39e-15`, `2.78e-15` | met |
+| K2 T on the planar background: `T_conv`, `T_diff`, `T_cont` | `<= 1e-10` | `1.82e-14`, `3.90e-15`, `8.67e-15` | met |
+| K2 T on the planar component at `P(0)` | `<= 1e-10` | `1.39e-14`, `4.34e-15`, `9.54e-15` | met |
+| K3 PB (planar background alone): velocity, pressure, continuity | `<= 1e-10`, `<= 1e-10`, `<= 1e-9` | `8.16e-15`, `3.63e-14`, `6.59e-15` | met |
+| K4 (set-up) net boundary flux of `u_ex`, B3 and B3d backgrounds | `<= 1e-13` | `1.91e-16`, `1.91e-16` | met |
+| U4 (set-up) kind changes, P3 and W3 | `>= 20` | `99`, `92` | met |
+| Q1 (set-up) quadratic share, P3q and W3q | `>= 0.95` | `1.0`, `1.0` (no fallback in any step) | met |
+| U5 unconverged solves | printed | `0` in every run | - |
+| N1 (control) P3 with the weights times 1.001: `E` | `>= 3e-4` | `1.85e-3` | held |
+
+Errors per class (largest over the steps; BC, BF, CC, CF) and where the largest lies; every largest error is at the last
+step (step 40), so the errors were still growing at the end of the run:
+
+| Run | `E` | cell | BC | BF | CC | CF | rms at step 40 | pressure `max abs(p) / abs(U0)^2` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| P3 | `8.720e-4` | 16202 (CC) | `2.45e-4` | `1.63e-4` | `8.72e-4` | `2.22e-5` | `8.13e-5` | `4.76e-4` |
+| P3q | `8.720e-4` | 16202 (CC) | `2.45e-4` | `1.65e-4` | `8.72e-4` | `2.23e-5` | `8.13e-5` | `4.76e-4` |
+| W3 | `1.360e-2` | 14389 (CC) | `9.36e-3` | `4.23e-3` | `1.36e-2` | `5.97e-3` | `2.34e-3` | `3.15e-2` |
+| W3q | `1.358e-2` | 14389 (CC) | `9.41e-3` | `4.51e-3` | `1.36e-2` | `6.87e-3` | `2.35e-3` | `3.15e-2` |
+
+Run times (two tests at once): P3 7.6 s, P3q 10.2 s, W3 13.5 s, W3q 13.7 s, the single meshes 0.8 to 4.9 s, X1 9.1 s,
+X2 8.5 s.
+
+### The separating runs and the diagnosis
+
+| Run | What it is | `E` | largest at | pressure |
+| --- | --- | --- | --- | --- |
+| PB | planar background alone at rest | `8.2e-15` | | `3.6e-14` |
+| PC1 | planar component alone moving | `2.13e-4` | cell 405 | `1.80e-3` |
+| SB | warped background alone at rest | `9.57e-3` | cell 6130 | `3.14e-2` |
+| S0 | warped component alone at rest | `8.38e-3` | cell 565 | `2.98e-2` |
+| S1 | warped component alone moving | `1.21e-2` | cell 565 | `3.09e-2` |
+| X1 | warped background, planar component, overset | `9.27e-3` | cell 6130 (BC) | `3.12e-2` |
+| X2 | planar background, warped component, overset | `1.35e-2` | cell 14389 (CC) | `2.43e-2` |
+
+T on the warped meshes (largest over the cells, root mean square in brackets): background `T_conv = 0.140` (`0.032`),
+`T_diff = 0.0246` (`0.0054`), `T_cont = 0.0751` (`0.0190`); component `0.130` (`0.030`), `0.0245` (`0.0052`), `0.0742`
+(`0.0190`). On the planar meshes all three are below `2e-14`.
+
+The registered rule: `E_M = max(E(SB), E(S1)) = 1.21e-2`; `E_M / E(W3) = 0.889` and `E_M / E(W3q) = 0.891`, both `>= 0.5`,
+and K2 and K3 are met. **By the rule the cause of both misses is the single warped mesh, not the overset coupling.** The
+other numbers say the same thing in more detail:
+
+- The largest error of W3 and W3q lies in cell 14389, which is cell 565 of the component (`14389 - 13824`): the same cell
+  as the largest error of the warped component alone, at rest (S0) and moving (S1). The largest error of X1 lies in
+  background cell 6130, the same cell as in SB. So the overset run's worst cells are those of each warped part alone.
+- X2 (only the component warped) has `1.35e-2`, the same as W3; X1 (only the background warped) has `9.3e-3`, the same as
+  SB. Each part carries its own error into the overset run, unchanged by the coupling.
+- On the planar meshes the operators are exact for F (K2: `1e-14`, K3: `8e-15`). On the warped meshes the convective face
+  value (skewness) is the largest inexact operator, `T_conv` about six times `T_diff` (the missing non-orthogonal
+  correction of the diffusion) at `nu = 0.01`, and the central flux of the exact field leaves a continuity residual
+  `T_cont` that the pressure equation answers with a pressure of about `3e-2 abs(U0)^2`, where the exact pressure is zero.
+  This is the size of the inconsistency predicted under "Why the planar B3 keeps F": first order in the displacement,
+  zeroth order in `h`.
+
+Said plainly: the overset step on the warped mesh is as accurate as the finite-volume step on one warped mesh; both lose
+the exactness for linear fields that they have on the planar mesh, by about `1e-2`, because the overset step (and its
+path without coupling) uses no skewness correction of the face values and no non-orthogonal correction. The factor `2`
+of the acceptance is therefore not a property the coupling can reach on its own: B3 carries only the time error of the
+turning mesh and the small error discussed next.
+
+### Deviations and disclosures
+
+- **`E(B3)` was larger than predicted**: `8.72e-4` against the registered estimate `1e-5` to `2e-4`. The planar component
+  alone moving (PC1) has `2.13e-4`, inside the estimate (the time error of a turning mesh, item 6). The rest comes from the
+  coupling on planar meshes: the largest P3 error lies in a calculated component cell (16202, component cell 2378, the
+  second layer from the component's outer boundary, i.e. next to its fringe), it is the same with both interpolations
+  (both are exact for F, K1), and N1 shows the measure sees fringe defects. Where in the coupling it arises (the fringe
+  pressure, which carries the background's pressure noise into the component; the mass offset; the M9 flux of faces that
+  change kind) was not measured: it is not part of the acceptance and makes the ratio smaller, not larger. Had `E(P3)` been
+  `2e-4` as predicted, the ratio would have been about `68`. Listed as question Q2.
+- Predictions that held in size: `E(W3)` `1.4e-2` (predicted `3e-3` to `3e-2`); the misses of A1 and A2 (predicted, by a
+  factor of `30` to `1000`; measured `15.6`, smaller because of the item above); the separation (predicted: the single
+  warped mesh); T on the warped meshes (predicted `0.08`, `6e-3`, `0.07` as typical values, largest two to three times
+  these; measured largest `0.14`, `0.025`, `0.075`, root mean square `0.032`, `0.0054`, `0.019`); N1 (predicted near
+  `1e-3`, measured `1.85e-3`).
+- The errors were still growing at step 40 in every run; the ratio after 40 steps is what was registered. A longer run was
+  not made (it would be a new run chosen after seeing the result).
+- No library code was changed: the cause is a known property of the operators (they carry no skewness or non-orthogonal
+  correction in the overset path, and the overset solver refuses non-orthogonal correctors), not a defect that a measuring
+  item should repair.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `445ac769` (`f359-scratch/mut`, own target directory) by `mutate.py` (exact
+replacements that must occur once), the test file run once (the two known-miss records stay ignored), the file restored
+and compared byte for byte with the worktree (equal for all three).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the central face value weighted `w + 0.1`, `0.9 - w` | K2 and K3 | failed: K2 `T_conv` `4.08e-2` (background) and `4.34e-2` (component); K3 velocity `8.68e-3`, pressure `3.84e-3`. A3 still met |
+| MU2 `linear_weights` returns the normalised kernel weights | K1 on P3 and W3 | failed: K1 `2.06e-2` (P3) and `2.53e-2` (W3); the quadratic runs unchanged (no fallback) |
+| MU3 the corrected flux built from the pressure before the corrector | A3 | failed: continuity `1.67e-6` (P3, P3q) and `1.05e-4` (W3, W3q) |
+
+`scripts/limit_audit.py` on the new test file: no hit.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean (after `rustfmt` of the new file before its commit). `cargo clippy -p rcfd-fv
+--all-targets --release -- -D warnings` clean. Only `rcfd-fv` (a new test file) touched. What the gate runs of this file:
+the five tests that are not ignored, about 50 s (they compute all four acceptance runs for A3 and K1).
+
+### Not run
+
+- The whole workspace test suite (not asked for; the lead runs the gate). No library file was changed, so no existing test
+  was re-run.
+- The decaying three-dimensional vortex the acceptance also allows (see "Limits"); a second resolution or a second warp
+  amplitude; a run longer than 40 steps; the operators with skewness and non-orthogonal corrections (the overset step has
+  none and refuses the correctors).
+
+### Decision by the registered rule
+
+**Partial.** A3 is met (continuity `<= 1.9e-14` in every step of the four runs), K1 to K4, U4 and Q1 are met, the control
+N1 held and the three mutations were caught; A1 and A2 are missed (ratio `15.6` against `2`) with the cause diagnosed by
+the registered separating checks as the finite-volume operators of a single warped mesh (`E_M / E(W3) = 0.89`, the worst
+cells of the overset runs being those of the warped parts alone), not the overset coupling.
+
+### Remaining questions (each with options and a recommendation)
+
+Each recommendation is taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation) as a
+proposal to the lead; none is a decision the maintainer made in person.
+
+- **Q1. Accuracy of the overset step on warped cells.** Options: (a) accept: B3d is a strong distortion (`0.15 h` random,
+  faces warped up to `0.14 h`) and the error `1.4e-2` of a linear field is the price of operators without corrections;
+  (b) an opt-in for the overset step: the explicit non-orthogonal correction of the momentum diffusion and of the pressure
+  Laplacian (deferred, from the Green-Gauss gradient with skewness passes) and a skewness-corrected central face value,
+  with the acceptance that the linear shear of ADR 0264 on B3d meets A1 and A2 and the defaults stay bit-identical; (c)
+  allow the existing `non_orth_correctors` in the overset solver. Recommendation (b), as a follow-up item (text below):
+  the measurement shows the gap lies in the single-mesh operators of the overset path, so the remedy belongs there; it must
+  be an opt-in because it changes results.
+- **Q2. The planar coupling's share of `E(B3)`.** P3 has `8.7e-4` against `2.1e-4` for the planar component alone; the
+  stencils are exact for F. Options: (a) record only; (b) a small diagnostic item that separates the fringe pressure, the
+  mass offset and the M9 flux by measurement on P3. Recommendation (b), at low priority: the coupling is meant to keep a
+  linear field up to the time error, and this is the one place where it measurably does not.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-359**, proposed status: `partial`. Proposed note:
+
+> From ADR 0255, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0264, 2026-11-12: PARTIAL. The linear shear u = U0 + 0.5 a (b . (x - x0)) with a = (1, 2, 1)/sqrt(6), b = (0, 1, -2)/sqrt(5), U0 = (1, 0.5, 0.25) (an exact steady Navier-Stokes solution with zero pressure for every viscosity, all six background patches Dirichlet) on B3 and B3d with the component moving as in ADR 0255, 40 steps: continuity of the calculated cells 1.9e-14 or less at every step with the default and the quadratic donor interpolation (met), the stencils reproduce the field to 3e-15, the planar operators keep it to 2e-14 (K2, K3); the error of the calculated and fringe cells 1.36e-2 on B3d against 8.7e-4 on B3, ratio 15.6 with either interpolation, against the limit 2 (missed, kept as ignored known-miss records). Diagnosed by measurement: the single warped mesh, not the coupling. The warped parts alone have 9.6e-3 (background at rest) and 1.21e-2 (component moving), 0.89 of the overset error, and the worst cell of the overset run is the worst cell of the warped component alone; the discrete operators leave a residual of the exact field of 0.14 (convection, skewness of the central face value), 0.025 (diffusion without the non-orthogonal correction) and 0.075 per second (continuity) on the warped cells, zero on the planar ones. Control (weights times 1.001: 1.85e-3) held; three mutations caught. No library change. Limits: one flow, one warp, one motion, 40 steps; B3's own error is 4 times that of the planar component alone (not diagnosed).
+
+Proposed follow-up items (the numbers are the lead's):
+
+**Overset: opt-in skewness and non-orthogonal corrections in the overset step.** Depends on F-359. Acceptance:
+
+> An opt-in of the overset step that adds the explicit non-orthogonal correction to the momentum diffusion and the pressure Laplacian and a skewness correction to the central face value and the Rhie-Chow face flux; with it the linear shear of ADR 0264 on B3d with the component moving has an error of the calculated and fringe cells at most twice that on B3 with the default and with the quadratic donor interpolation, continuity of the calculated cells within 1e-9 at every step, the uniform flow of ADR 0255 within 1e-10, and the defaults bit-identical.
+
+**Overset: the coupling's share of the error of a linear field on the planar B3.** Depends on F-359. Acceptance:
+
+> On the planar B3 with the linear shear of ADR 0264 (error 8.7e-4 against 2.1e-4 for the planar component alone moving), the share of the fringe pressure, of the mass offset and of the flux of the faces that change kind measured separately, each by a run that removes it, with the cause of the excess named or the excess shown to be the time error of the turning mesh.
