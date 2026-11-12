@@ -310,10 +310,7 @@ fn f456_n1_n2_the_comparison_sees_a_difference() {
         }
         doc
     };
-    let differ = reqs
-        .iter()
-        .filter(|p| wrong_ref(p) != reference(&store, p))
-        .count();
+    let differ = reqs.iter().filter(|p| wrong_ref(p) != reference(&store, p)).count();
     assert!(differ > 0, "N1: a reference with x >= since must differ somewhere");
     let line = result_line(&json!(1), &reference(&store, &reqs[2]));
     let mut bad = line.clone();
