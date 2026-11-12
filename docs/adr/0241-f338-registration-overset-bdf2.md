@@ -464,3 +464,33 @@ Tests of this amendment (in `overset_f338.rs`): `uc_uniform_flow_with_a_large_st
 the last two assert nothing about their numbers (decided here). Predictions (mine): Uc holds with a few tens of cells;
 H16 confirmed; H17 ruled out or undecided; H18 ruled out; H19 confirmed. The decision rule is unchanged: with D2 and
 T1c-b missed it gives **partial**.
+
+## Amendment 2 (2026-11-12, written after the runs of amendment 1 and before any further run)
+
+The runs of amendment 1 were made once (`12deb7ff`). H16 to H19 are decided in addendum 1 from the numbers printed. **Uc
+was refused in its first step** ("cell 1176 was a hole and is uncovered as a calculated cell in one step"): with the
+component turning, the hole region is a staircase on the background mesh, and a hole cell at a tip of it has all its
+neighbours leave the hole within one step of `0.05`. Uc is a defective set-up (no number of U1c, U3c or S-Uc exists) and
+stays as an ignored record. Corrected set-up **Ut**, by arithmetic and not by trying steps:
+
+- the set-up U (the same meshes, flow `(1, 0.5, 0)`, conditions and settings) with the component translating along `x`
+  only and not turning: pose `translation = (0.025 + t, 0.013, 0)`, angle 0; BDF2 and three outer iterations; `dt = 0.06`,
+  10 steps;
+- the hole `abs(x) < 0.25`, `abs(y) < 0.25` in component coordinates stays aligned with the background (cell size `0.1`,
+  centres at `-2.45 + 0.1 k`). Its trailing edge is at `x = -0.225 + t` and passes the centres of a column of background
+  cells at `t = 0.075, 0.175, 0.275, ...`; a column leaves the hole together, and the column ahead of it `0.1` later, more
+  than one step, so no cell is uncovered in one step. The column that leaves at `0.075` is a hole at `t = 0.06`, a fringe
+  cell at `0.12` and, its neighbour having left at `0.175`, calculated at `0.18`: the history of D3. The offsets `0.025`
+  and `0.013` keep every centre away from an edge at a step time;
+- the rigid velocity of the hole cells is `(1, 0, 0)`, not the flow `(1, 0.5, 0)`, so a row that used a hole value as its
+  old-old level would not keep the flow uniform.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| U1t | Ut, every step, over the non-hole cells: `max abs(u_c - U) / abs(U)`, `max abs(p_c) / abs(U)^2` | `<= 1e-10` each |
+| U3t | Ut: the continuity of the calculated cells; the outflow error | `<= 1e-9`; `<= 1e-10` |
+| S-Ut (set-up) | Ut: the sum over the steps of `euler_fallback_cells()` | `>= 1` |
+
+**MB3 must fail U1t.** Test `ut_uniform_flow_with_a_translating_component_and_bdf2`; Uc stays as
+`uc_uniform_flow_with_a_large_step_and_bdf2`, ignored. Prediction (mine): U1t near `1e-13`, S-Ut five cells or a small
+multiple of five.
