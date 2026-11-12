@@ -3471,7 +3471,8 @@ validation or existing items; P2 = valuable, schedule after P1; P3 = stretch; P4
     initialisation, several participants; functional-mock-up import stays in F-242. Open: ADR 0256 Q1 to Q5. Follow-ups
     (ADR 0256 questions 1 to 3, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-360,
     F-361, F-362. To correct: docs/dynamic-mesh.md still says there is no strong coupling (stale since F-251) and lacks
-    a sentence on zero-gradient side walls (ADR 0256 Q4, Q5).
+    a sentence on zero-gradient side walls (ADR 0256 Q4, Q5). Geometric and radial-basis mapping with an unmapped-point
+    policy: F-362 (ADR 0263, 2026-11-12).
 
 ## Revision additions (F-200 to F-243)
 
@@ -6665,14 +6666,30 @@ fixed by the item's registration ADR before any code.
     bit-identical; the plain fixed point diverges (510.85 in 10). Mock affine and cubic fluids check the termination
     count and the equality with Aitken's secant. Existing suites cosim_f139, strong_fsi_f251, added_mass_f351 and the
     baseline hashes pass unedited; four mutations caught. Open: ADR 0261 Q1 to Q3.
-- [ ] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
+- [~] **F-362** Interface mapping by geometric search and radial-basis functions, with an unmapped-value policy
   - depends on: F-139
   - acceptance: InterfaceMap weights are built from the two interface meshes alone (nearest-element projection and a
     radial-basis interpolation) for a planar and a cylindrical wall with non-matching meshes; rigid translation and
     rotation are reproduced to 1e-12, resultant force, moment and work are conserved to 1e-12 by the transposed map, a
     wall point outside the structure is refused or mapped by a stated policy, and the model problem of ADR 0256 gives
     the same frequencies within 1e-3 with the built weights.
-  - note: From ADR 0256 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: PARTIAL (ADR 0263, 2026-11-12; registered before the code, one amendment after the registered run). Opt-in
+    cosim::interface_rows and InterfaceMap::build build the weights from the structure's nodes and elements (points,
+    segments, triangles, quadrilaterals) and the fluid's wall points alone; nothing calls them. Derived: scalar weights
+    reproduce every rigid motion iff each row sums to 1 and reproduces the point's coordinates; the transpose then
+    conserves resultant and moment, and conserves work for any weights. Nearest-element projection with an offset
+    correction on the ring of elements (exact on a curved wall; plain barycentric selectable); radial basis with
+    Wendland's C2 function of support 3 h and a degree-1 polynomial in the nodes' own directions, dense Cholesky with a
+    Schur complement, condition estimate (8 to 85 here). Policy: a wall point farther than max_distance is refused (the
+    default; the message names point and distance) or moves with its nearest structural point (Unmapped::Nearest).
+    Measured on a planar and a cylindrical wall with non-matching meshes: rigid translation and rotation to 1.3e-15,
+    resultant, moment and work to 1.4e-16 (both methods); without the correction the cylinder loses 5e-3 of the rotation
+    and 1e-4 of the moment; outside points follow their nearest points to 9e-16 and the moment changes exactly as
+    predicted. Model problem of ADR 0256: the projection gives the piecewise-linear rows to 1e-16 and the same
+    frequencies (1.4e-15); the radial basis shifts them by -5.2e-4 and +1.9e-4 (limit 1e-3). cosim_f139, cosim_f361 and
+    the baseline hashes pass unedited; eight mutations caught. Partial because the registered check E1 accepted two
+    coincident nodes with the radial basis (an absolute pivot test); amendment 1 refuses pivots below 2 n eps a_jj, and
+    E1b passes with it. Protocol option in docs/cosimulation-protocol.md. Open: ADR 0263 Q1 to Q3.
 - [ ] **F-363** Second-order immersed forcing: the single PISO corrector
   - depends on: F-355
   - acceptance: The stop of DFG 2D-2 on M2 with one PISO corrector and a second-order immersed flux face of weight above
