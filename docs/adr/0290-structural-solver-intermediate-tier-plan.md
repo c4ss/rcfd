@@ -1209,3 +1209,7 @@ Each acceptance and each note below is one quoted paragraph on a single line.
 - note:
 
 > Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0309; the registration is written by the implementation agent before any code.
+
+## Lead's note (2026-11-12): roadmap ids
+
+The entries were added to docs/roadmap.json with these ids: SI-1 = F-388, SI-2 = F-389, SI-3 = F-390, SI-4 = F-391, SI-5 = F-392, SI-6 = F-393, SI-7 = F-394, SI-8 = F-395, SI-9 = F-396, SI-10 = F-397, SI-11 = F-398, SI-12 = F-399, SI-13 = F-400, SI-14 = F-401, SI-15 = F-402, SI-16 = F-403, SI-17 = F-404, SI-18 = F-405, SI-19 = F-406, in the category "Structural solver".

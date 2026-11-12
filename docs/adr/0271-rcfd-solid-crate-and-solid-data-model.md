@@ -46,3 +46,7 @@ Geometry only: volume and face areas of a box, the edge count of a structured gr
 The edit of the existing graph test is not approved (the crate then panics that test). A data model too narrow for the next
 tier: three unknowns per node hard-coded instead of going through `DofMap`, or loads as closures that cannot be read from a
 file.
+
+## Request from the intermediate-tier plan (ADR 0290, 2026-11-12)
+
+The intermediate tier adds fields to the model data (ADR 0290, scaffold ADR 0291). Build models in this ADR's tests through constructors, not struct literals, so that a later field does not break them.
