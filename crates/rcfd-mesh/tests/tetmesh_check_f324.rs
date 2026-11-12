@@ -312,8 +312,65 @@ fn printed_difference(e: &str) -> f64 {
     s.split(',').next().unwrap().trim().parse().expect("number")
 }
 
+/// The difference as the printed cell volume minus the printed enclosed volume, both with sixteen digits (amendment 2).
+fn printed_volume_difference(e: &str) -> f64 {
+    let num = |after: &str| -> f64 {
+        let s = e.split(after).nth(1).expect("volume in text");
+        s.split_whitespace().next().unwrap().parse().expect("number")
+    };
+    num("the cell volumes sum to ") - num("but the boundary encloses ")
+}
+
+/// C3a2 (amendment 2): C3a with the difference read from the sixteen-digit volumes.
+#[test]
+fn c3a2_duplicated_cell_is_a_located_error() {
+    let mut m = cube_mesh();
+    m.cells.push(m.cells[0]);
+    let e = m.check_output().expect_err("duplicated cell accepted").to_string();
+    eprintln!("C3a2: {e}");
+    assert!(e.contains("tetrahedralize output check:"), "{e}");
+    assert!(
+        e.contains("is shared by the cells") || e.contains("on the same side"),
+        "C3a2: not located: {e}"
+    );
+    let want = signed_vol(&m, m.cells[0]);
+    let got = printed_volume_difference(&e);
+    eprintln!(
+        "C3a2: difference {got:e} against cell 0 {want:e}, relative {:.3e}",
+        (got - want).abs() / want.abs()
+    );
+    assert!(
+        (got - want).abs() <= 1e-9 * want.abs(),
+        "C3a2: difference {got:e} against cell 0 {want:e}"
+    );
+}
+
+/// C3c2 (amendment 2): C3c with the difference read from the sixteen-digit volumes.
+#[test]
+fn c3c2_missing_cell_is_a_located_error() {
+    let mut m = cube_mesh();
+    let last = m.cells.pop().unwrap();
+    let e = m.check_output().expect_err("missing cell accepted").to_string();
+    eprintln!("C3c2: {e}");
+    assert!(
+        e.contains("is free but is not a surface triangle"),
+        "C3c2: not located: {e}"
+    );
+    let want = -signed_vol(&m, last);
+    let got = printed_volume_difference(&e);
+    eprintln!(
+        "C3c2: difference {got:e} against minus the cell {want:e}, relative {:.3e}",
+        (got - want).abs() / want.abs()
+    );
+    assert!(
+        (got - want).abs() <= 1e-9 * want.abs(),
+        "C3c2: difference {got:e} against minus the cell {want:e}"
+    );
+}
+
 /// C3a NC-dup: a duplicated cell is rejected, located at a face of more than two cells or two cells on one side.
 #[test]
+#[ignore = "record, ADR 0231 amendment 2: the four-digit difference 4.167e-2 cannot meet 1e-9 against 4.1666666666666664e-2; corrected by c3a2"]
 fn c3a_duplicated_cell_is_a_located_error() {
     let mut m = cube_mesh();
     m.cells.push(m.cells[0]);
@@ -348,6 +405,7 @@ fn c3b_negative_cell_is_named() {
 
 /// C3c NC-gap: a missing cell is rejected, located at a free face that is not a surface triangle.
 #[test]
+#[ignore = "record, ADR 0231 amendment 2: the four-digit difference -4.167e-2 cannot meet 1e-9 against -4.1666666666666664e-2; corrected by c3c2"]
 fn c3c_missing_cell_is_a_located_error() {
     let mut m = cube_mesh();
     let last = m.cells.pop().unwrap();
