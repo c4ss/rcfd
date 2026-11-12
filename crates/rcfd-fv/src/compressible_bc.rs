@@ -1,7 +1,8 @@
 //! Characteristic boundary conditions of the density-based compressible solver
 //! (ADR 0006): total pressure / total temperature inlet, static-pressure
 //! outlet with subsonic / supersonic switching, partially non-reflecting
-//! outlet and a Riemann-invariant far field.
+//! outlet and a Riemann-invariant far field; and the impedance wall of F-243
+//! (ADR 0233).
 //!
 //! Each condition maps the interior cell state and the outward unit normal to a
 //! boundary *face state*, whose physical flux the solver uses directly. The
@@ -82,6 +83,75 @@ pub fn pressure_outlet(gas: Gas, p_target: f64, sigma: f64, interior: &Prim, n: 
     Prim {
         rho: rho_f,
         u: vec3::add(interior.u, vec3::scale(n, un_f - un)),
+        p: p_f,
+    }
+}
+
+/// Largest number of Newton steps of [`impedance_wall`].
+const IMPEDANCE_ITERATIONS: usize = 100;
+
+/// Face state of a locally reacting wall with the real specific acoustic impedance `z` [Pa s/m], `z >= 0` and finite
+/// (F-243, ADR 0233 DR5): the face keeps the entropy, the tangential velocity and the outgoing invariant
+/// `u_n + 2a/(gamma-1)` of the interior and satisfies `p_f - p_ref = z u_n,f`, with `u_n` the normal velocity relative to
+/// the face. A weak plane wave at normal incidence is reflected with `R = (z - rho c)/(z + rho c)`: `z = 0` is the pressure
+/// outlet ([`pressure_outlet`] with `sigma = 1`, bit for bit), `z = rho c` of the ambient state reflects nothing and holds
+/// `p_ref`, a large `z` approaches a rigid wall. A supersonic outflow (normal Mach number >= 1) takes the interior state.
+pub fn impedance_wall(gas: Gas, p_ref: f64, z: f64, interior: &Prim, n: Vec3) -> Prim {
+    if z == 0.0 {
+        return pressure_outlet(gas, p_ref, 1.0, interior, n);
+    }
+    let g = gas.gamma;
+    let a_i = interior.sound_speed(gas);
+    let un = vec3::dot(interior.u, n);
+    if un >= a_i {
+        return *interior;
+    }
+    let expo = 2.0 * g / (g - 1.0);
+    // sound speed and pressure of the simple wave that brings the normal velocity to `u`
+    let wave = |u: f64| {
+        let a = (a_i - 0.5 * (g - 1.0) * (u - un)).max(0.0);
+        (a, interior.p * (a / a_i).powf(expo))
+    };
+    let resid = |u: f64| p_ref + z * u - wave(u).1;
+    // bracket: the residual grows with u; the upper end is the vacuum speed
+    let mut hi = un + 2.0 * a_i / (g - 1.0);
+    if resid(hi) <= 0.0 {
+        return *interior;
+    }
+    let mut lo = un - a_i;
+    let mut k = 0;
+    while resid(lo) >= 0.0 && k < 64 {
+        k += 1;
+        lo = un - a_i * 2f64.powi(k);
+    }
+    let mut u = (un + (interior.p - p_ref - z * un) / (z + interior.rho * a_i)).clamp(lo, hi);
+    for _ in 0..IMPEDANCE_ITERATIONS {
+        let (a, p) = wave(u);
+        let r = p_ref + z * u - p;
+        if r == 0.0 {
+            break;
+        }
+        if r > 0.0 {
+            hi = u;
+        } else {
+            lo = u;
+        }
+        // d(resid)/du = z + rho_f a_f = z + gamma p_f / a_f
+        let slope = z + if a > 0.0 { g * p / a } else { 0.0 };
+        let mut next = u - r / slope;
+        if !(next > lo && next < hi) {
+            next = 0.5 * (lo + hi);
+        }
+        let step = (next - u).abs();
+        u = next;
+        if step <= 4.0 * f64::EPSILON * (a_i + u.abs()) {
+            break;
+        }
+    }
+    let (_, p_f) = wave(u);
+    Prim {
+        rho: interior.rho * (p_f / interior.p).powf(1.0 / g),
+        u: vec3::add(interior.u, vec3::scale(n, u - un)),
         p: p_f,
     }
 }
@@ -202,5 +272,102 @@ mod tests {
         let f0 = pressure_outlet(AIR, 0.7, 0.0, &int, n);
         assert!(close(f0.p, int.p, 1e-14) && close(f0.rho, int.rho, 1e-14));
         assert!(vec3::norm(vec3::sub(f0.u, int.u)) < 1e-14);
+    }
+
+    /// A pseudo-random subsonic interior state and a unit normal.
+    fn random_state(seed: &mut u64) -> (Prim, Vec3) {
+        let th = 6.0 * rnd(seed);
+        let n = [th.cos(), th.sin(), 0.0];
+        let rho = 0.8 + 0.6 * rnd(seed);
+        let p = 0.5 + 0.6 * rnd(seed);
+        let a = (1.4 * p / rho).sqrt();
+        let un = a * (1.6 * rnd(seed) - 0.8);
+        let ut = a * (rnd(seed) - 0.5);
+        let t = [-n[1], n[0], 0.0];
+        let u = vec3::add(vec3::scale(n, un), vec3::scale(t, ut));
+        (prim(rho, [u[0], u[1], 0.3 * a * (rnd(seed) - 0.5)], p), n)
+    }
+
+    /// A1 of ADR 0233: a zero impedance is the pressure outlet, bit for bit.
+    #[test]
+    fn f243_a1_zero_impedance_is_the_pressure_outlet() {
+        let mut seed = 243;
+        for _ in 0..20 {
+            let (int, n) = random_state(&mut seed);
+            let p_ref = 0.5 + 0.6 * rnd(&mut seed);
+            assert_eq!(
+                impedance_wall(AIR, p_ref, 0.0, &int, n),
+                pressure_outlet(AIR, p_ref, 1.0, &int, n)
+            );
+        }
+    }
+
+    /// A2 of ADR 0233: the impedance relation, the entropy, the outgoing invariant and the tangential velocity.
+    #[test]
+    fn f243_a2_impedance_relation_and_invariants() {
+        let mut seed = 2430;
+        let mut worst = [0.0f64; 4];
+        for _ in 0..20 {
+            let (int, n) = random_state(&mut seed);
+            let p_ref = 0.5 + 0.6 * rnd(&mut seed);
+            let a_i = int.sound_speed(AIR);
+            for zr in [0.1, 1.0, 10.0] {
+                let z = zr * int.rho * a_i;
+                let f = impedance_wall(AIR, p_ref, z, &int, n);
+                let (un_f, un_i) = (vec3::dot(f.u, n), vec3::dot(int.u, n));
+                let e = [
+                    (f.p - p_ref - z * un_f).abs() / int.p,
+                    (f.p / f.rho.powf(1.4) / (int.p / int.rho.powf(1.4)) - 1.0).abs(),
+                    ((un_f + 5.0 * f.sound_speed(AIR)) / (un_i + 5.0 * a_i) - 1.0).abs(),
+                    vec3::norm(vec3::sub(
+                        vec3::sub(f.u, vec3::scale(n, un_f)),
+                        vec3::sub(int.u, vec3::scale(n, un_i)),
+                    )) / a_i,
+                ];
+                for (w, e) in worst.iter_mut().zip(e) {
+                    *w = w.max(e);
+                }
+            }
+        }
+        println!(
+            "A2 worst: relation {:.2e}, entropy {:.2e}, invariant {:.2e}, tangential {:.2e} (1e-12)",
+            worst[0], worst[1], worst[2], worst[3]
+        );
+        assert!(worst.iter().all(|&w| w <= 1e-12), "{worst:?}");
+    }
+
+    /// A3 of ADR 0233: the linear limit is the plane-wave reflection coefficient `(z - rho c)/(z + rho c)`.
+    #[test]
+    fn f243_a3_linear_reflection_coefficient() {
+        let (rho0, p0) = (1.0, 1.0 / 1.4);
+        let n = [1.0, 0.0, 0.0];
+        let mut worst = 0.0f64;
+        for zr in [1.0 / 3.0, 1.0, 3.0, 19.0] {
+            // (p', u_n') in three mixes of size 1e-6; rho' = p'/c^2 (the isentrope to first order)
+            for (dp, du) in [(1e-6, 1e-6), (1e-6, 0.0), (-0.4e-6, 1e-6)] {
+                let int = prim(rho0 + dp, [du, 0.0, 0.0], p0 + dp);
+                let f = impedance_wall(AIR, p0, zr, &int, n);
+                let w_out = dp + du;
+                let w_in = (f.p - p0) - f.u[0];
+                let e = (w_in / w_out - (zr - 1.0) / (zr + 1.0)).abs();
+                worst = worst.max(e);
+            }
+        }
+        println!("A3 worst deviation from the closed form: {worst:.2e} (1e-5)");
+        assert!(worst <= 1e-5, "{worst}");
+    }
+
+    /// A4 and A5 of ADR 0233: a very large impedance stops the normal velocity; a supersonic outflow is left alone.
+    #[test]
+    fn f243_a4_a5_stiff_limit_and_supersonic_outflow() {
+        let n = [0.6, 0.8, 0.0];
+        let int = prim(1.1, [0.3, 0.2, 0.1], 0.8);
+        let f = impedance_wall(AIR, 0.75, 1e12, &int, n);
+        let r = vec3::dot(f.u, n).abs() / int.sound_speed(AIR);
+        println!("A4 normal Mach number at z = 1e12: {r:.2e} (1e-10)");
+        assert!(r <= 1e-10, "{r}");
+        let sup = prim(1.2, [1.2, 1.6, 0.1], 0.9);
+        assert!(vec3::dot(sup.u, n) > sup.sound_speed(AIR));
+        assert_eq!(impedance_wall(AIR, 0.4, 2.0, &sup, n), sup);
     }
 }

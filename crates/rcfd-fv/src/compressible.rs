@@ -43,6 +43,15 @@ pub enum CompBc {
     },
     /// Riemann-invariant far field for the given free-stream state (ADR 0006).
     FarField(Prim),
+    /// Locally reacting wall with a real specific acoustic impedance (F-243, ADR 0233): `p_face - p = z u_n`, with `u_n`
+    /// relative to the face. `z = 0` is [`CompBc::PressureOutlet`]; `z = rho c` of the ambient state is a quiet boundary
+    /// that holds `p`; a rigid wall is [`CompBc::Slip`]. Normal incidence reflects `(z - rho c)/(z + rho c)`.
+    Impedance {
+        /// Ambient (reference) static pressure.
+        p: f64,
+        /// Specific acoustic impedance [Pa s/m], finite and `>= 0`.
+        z: f64,
+    },
 }
 
 /// Time integration scheme.
@@ -149,6 +158,16 @@ impl CompressibleSolver {
             .iter()
             .position(|p| p.name == patch)
             .ok_or_else(|| Error::PathNotFound(format!("patch {patch}")))?;
+        if let CompBc::Impedance { p, z } = bc {
+            if !(z.is_finite() && z >= 0.0 && p.is_finite() && p > 0.0) {
+                return Err(Error::InvalidValue {
+                    path: format!("patch {patch}"),
+                    reason: format!(
+                        "an impedance boundary needs a finite impedance >= 0 and a positive pressure, got z = {z}, p = {p}"
+                    ),
+                });
+            }
+        }
         self.bcs[i] = bc;
         Ok(())
     }
@@ -643,6 +662,7 @@ fn static_face_state(gas: Gas, bc: &CompBc, interior: &Prim, n: Vec3) -> Option<
         CompBc::PressureOutlet { p } => Some(compressible_bc::pressure_outlet(gas, p, 1.0, interior, n)),
         CompBc::NonReflecting { p, sigma } => Some(compressible_bc::pressure_outlet(gas, p, sigma, interior, n)),
         CompBc::FarField(fs) => Some(compressible_bc::far_field(gas, &fs, interior, n)),
+        CompBc::Impedance { p, z } => Some(compressible_bc::impedance_wall(gas, p, z, interior, n)),
         _ => None,
     }
 }
@@ -672,6 +692,7 @@ pub fn characteristic_face_state(gas: Gas, bc: &CompBc, interior: &Prim, n: Vec3
         CompBc::PressureOutlet { p } => back(compressible_bc::pressure_outlet(gas, p, 1.0, &rel(interior), n)),
         CompBc::NonReflecting { p, sigma } => back(compressible_bc::pressure_outlet(gas, p, sigma, &rel(interior), n)),
         CompBc::FarField(fs) => back(compressible_bc::far_field(gas, &rel(&fs), &rel(interior), n)),
+        CompBc::Impedance { p, z } => back(compressible_bc::impedance_wall(gas, p, z, &rel(interior), n)),
         _ => return None,
     })
 }
