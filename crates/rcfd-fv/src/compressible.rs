@@ -288,8 +288,9 @@ impl CompressibleSolver {
 
     /// Set the frame of the sponge on a moving mesh (F-341, ADR 0265 E1). With [`SpongeFrame::StaticMesh`] (the default)
     /// [`Self::step_ale`] refuses a sponge; with [`SpongeFrame::AttachedToMesh`] it takes the sponged ALE step, the rates
-    /// and the memories moving with the cells. The setting is kept across [`Self::set_sponge`]. [`Self::replace_mesh`]
-    /// refuses a sponge in either frame.
+    /// and the memories moving with the cells; with [`SpongeFrame::AttachedWithLabMemory`] (F-407, ADR 0344) the rates move
+    /// with the cells and the memories are those of the lab frame. The setting is kept across [`Self::set_sponge`].
+    /// [`Self::replace_mesh`] refuses a sponge in every frame.
     pub fn set_sponge_frame(&mut self, frame: SpongeFrame) {
         self.sponge_frame = frame;
     }
@@ -843,7 +844,7 @@ impl CompressibleSolver {
             ));
         }
         if self.sponge.is_some() {
-            if self.sponge_frame == SpongeFrame::AttachedToMesh {
+            if self.sponge_frame != SpongeFrame::StaticMesh {
                 return self.step_ale_sponged(new_geom, dt);
             }
             return Err(Error::Numerical(
@@ -916,6 +917,18 @@ impl CompressibleSolver {
         let w = swept_volumes(old, new_geom.mesh.points());
         let v0 = old.cell_volumes().to_vec();
         let dv = cell_swept_sum(old, &w);
+        // F-407 (ADR 0344 DR4): the velocity of each cell centre over the step, for the memories of the lab frame
+        let wc: Option<Vec<Vec3>> =
+            if self.sponge_frame == SpongeFrame::AttachedWithLabMemory && sp.form != SpongeForm::Plain {
+                let (c_old, c_new) = (old.cell_centres(), new_geom.mesh.cell_centres());
+                Some(
+                    (0..c_old.len())
+                        .map(|c| vec3::scale(vec3::sub(c_new[c], c_old[c]), 1.0 / dt))
+                        .collect(),
+                )
+            } else {
+                None
+            };
         self.geom = new_geom;
         self.ls_inv = ls_inverse(&self.geom);
         let sf = self.geom.mesh.face_area_vectors();
@@ -950,7 +963,7 @@ impl CompressibleSolver {
          -> Result<StageOut> {
             let mut r = self.flux_sum(u_prev, Some(&wn), None)?;
             let mut s = vec![[0.0; 5]; n];
-            let d = match &shifted {
+            let mut d = match &shifted {
                 Some(o) => sponge::add_source_shifted(&self.geom, self.gas, &sp, o, rate2, u_prev, m_prev, &mut s),
                 None => SpongeMemories {
                     q: sponge::add_source(&self.geom, self.gas, &sp, u_prev, &m_prev.q, &mut s),
@@ -958,6 +971,9 @@ impl CompressibleSolver {
                     m: Vec::new(),
                 },
             };
+            if let Some(wc) = &wc {
+                sponge::add_lab_transport(&self.geom, &sp, rate2, wc, m_prev, &mut d);
+            }
             for i in 0..n {
                 if active[i] {
                     let vp = v0[i] + c_prev * dv[i];
