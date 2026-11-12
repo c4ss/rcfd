@@ -5694,17 +5694,41 @@ fixed by the item's registration ADR before any code.
       - Open: ADR 0228 Q1 (acceptance), Q2 (the invariant `expect`s), Q3 (an output validity check inside
         `tetrahedralize`, recommended as a follow-up), Q4 (unconditional fix), Q5, Q6 (Linux records).
 - [ ] **F-307** Immersed solids in the case tree: optional immersed_solids table
-  - depends on: F-219
-  - acceptance: A case file with an optional immersed_solids table runs the F-219 forcing from the CLI; the penalty warns below 1e3 times the largest fluid diagonal; the schema golden edit is registered and approved by the maintainer.
-  - note: From ADR 0218 questions 2 and 3, recommendations taken. Needs the maintainer's approval of the schema golden edit before it merges.
+  - depends on: F-219, F-309
+  - acceptance: A case file with an optional immersed_solids table runs the F-219 forcing from the CLI; the penalty
+    warns below 1e3 times the largest fluid diagonal; the schema golden edit is registered and approved by the
+    maintainer.
+  - note: From ADR 0218 questions 2 and 3, recommendations taken. Needs the maintainer's approval of the schema golden
+    edit before it merges. From ADR 0234 questions 2 to 4 and 6 (2026-11-12): the table also carries second_order; the
+    second-order treatment with an unsupported pressure option is refused with a located diagnostic instead of a panic;
+    the continuity residual excludes the solid-cell sources; the corrector trial solve gets the reconstruction.
 - [ ] **F-308** Moving immersed shapes
   - depends on: F-219
   - acceptance: An oscillating cylinder gives the force and the wake against a body-fitted moving-mesh run within a registered limit.
   - note: From ADR 0218 question 4, recommendation taken.
-- [ ] **F-309** Second-order immersed forcing: fluid-solid face flux at the surface crossing
+- [x] **F-309** Second-order immersed forcing: fluid-solid face flux at the surface crossing
   - depends on: F-219
-  - acceptance: Circular Couette flow with an immersed rotating cylinder reaches an observed order of 1.5 (the F-219 V1 check, limit unchanged).
-  - note: From ADR 0218 question 6, recommendation taken. F-219's V1 order was 1.02, an ignored known-miss test.
+  - acceptance: Circular Couette flow with an immersed rotating cylinder reaches an observed order of 1.5 (the F-219 V1
+    check, limit unchanged).
+  - note: DONE in the library (ADR 0234, 2026-11-12), pending acceptance. From ADR 0218 question 6. Delivered: rcfd-fv
+    immersed.rs, `ImmersedForcing::build_second_order` (opt-in; `build`, the forcing of ADR 0218, is unchanged and
+    bit-identical, state hashes checked): the flux of every fluid-solid face is that of the linear extension of the
+    fluid profile through the no-slip value at the surface crossing, the net flux of each body is that of its rigid
+    velocity, and the solid cells get the volume source that releases their continuity (`reconstruct_face_flux`; one
+    statement and the source of the plain pressure solve in SimpleSolver and PimpleSolver). Measured (limits registered
+    before the code): circular Couette, the F-219 V1 check, error 6.12e-3, 1.61e-3, 4.24e-4 at N 24, 48, 96, observed
+    order 1.925 (limit 1.5; 2.04 from 96 to 192) against 1.023 of the forcing of ADR 0218, error at N 96 3.7 times
+    smaller; face-flux error 39 times smaller; PISO equal to SIMPLEC to 1e-4; DFG 2D-1 on M2 C_D -0.31 %, C_L +2.53 %;
+    eight mutations caught. Cause of the first order of ADR 0218 (derived and seen in the numbers): the continuity of a
+    solid cell pins the flux of its fluid-solid face to the rigid velocity, a face velocity error of order h with a
+    pressure jump of order 1. Not included: a case key or Studio control (schema golden); not the default; plain
+    pressure path only (gradient options, body-force-weighted and implicit non-orthogonal pressure panic); the force and
+    moment from the forcing stay first order (CC torque error 1.60 %, 0.74 %, 0.39 % at N 48, 96, 192); the continuity
+    measure holds the solid-cell sources; the limits of F-219 (no moving bodies, momentum only, not in the coupled
+    solver, the fractional step or on moving meshes). Follow-ups (ADR 0234 questions 2 to 6, recommendations taken on
+    the maintainer's standing instruction of 2026-11-11): F-337 (second-order force and moment); the case key, the guard
+    refusals, the continuity measure and the corrector trial solve go with F-307. Open: question 1 (the second-order
+    forcing as the default changes existing numbers).
 - [ ] **F-310** NSGA-II: exchange crossover as the default for new studies, and the tool description
   - depends on: F-297
   - acceptance: create_study writes crossover = exchange into new nsga2 studies while old studies keep sbx; the design_create_study description names nsga2 and crossover; both goldens updated by a registered edit.
@@ -5920,3 +5944,10 @@ fixed by the item's registration ADR before any code.
     uniform-flow check U1 of ADR 0219 holds, and the default stencils and results are bit-identical.
   - note: From ADR 0232 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Optional, after F-334.
+- [ ] **F-337** Immersed solid: second-order force and moment
+  - depends on: F-309
+  - acceptance: The torque on the immersed rotating cylinder of circular Couette flow (the CC set-up of ADR 0218,
+    second-order forcing) reaches an observed order of 1.5 between N 48 and 96, and the DFG 2D-1 drag and lift on M2 are
+    within 1 percent and 3 percent of the FeatFlow values.
+  - note: From ADR 0234 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
+    torque error is 1.60, 0.74 and 0.39 percent at N 48, 96, 192 with either forcing.
