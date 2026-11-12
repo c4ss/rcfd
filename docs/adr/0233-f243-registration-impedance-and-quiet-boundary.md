@@ -324,3 +324,141 @@ cited for the same results, from memory of their content, without equation numbe
   Not taken (it needs approval). Recommendation: approve it as a follow-up item.
 - Q-B. Whether F-243's title parts outside the acceptance text become separate items. Recommendation: yes; proposal with the
   results.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Code at 85f2f22c (library and tests in one commit, after the registration commit 4080ca94). Every run below was made once,
+in the **release** profile (`cargo test --release -p rcfd-fv ...`). No limit was changed, no test was re-run to pick a
+result, and there is no `*_known_miss` test because no limit was missed.
+
+### Checks on the unmutated code
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| A1 | `z = 0` equals the pressure outlet, 20 states | bit for bit | equal | yes |
+| A2 | impedance relation / entropy / invariant / tangential velocity, 60 cases | `1e-12` each | `4.86e-15` / `2.22e-16` / `4.44e-16` / `1.43e-16` | yes |
+| A3 | linear reflection coefficient, 12 cases | `1e-5` | `7.05e-7` | yes |
+| A4 | normal Mach number at `z = 1e12 Z0` | `1e-10` | `5.08e-13` | yes |
+| A5 | supersonic outflow returns the interior | exactly | equal | yes |
+| A6 | moving face: difference to the shifted static state; relation in the face frame; `wn = 0` | `1e-14`; `1e-12`; bit for bit | `0`; `1.04e-16`; equal | yes |
+| A7 | refusals | 6 errors, 2 accepted | 6 errors, 2 accepted | yes |
+| I1 | tube, `z = 0`, `R_cf = -1` | `|R - R_cf| <= 0.01` | `R = -0.998874` (`1.13e-3`) | yes |
+| I2 | tube, `z = Z0/3`, `R_cf = -0.5` | `0.01` | `R = -0.499465` (`5.35e-4`) | yes |
+| I3 = Q2 | tube, matched impedance (quiet) | `|R| <= 0.01` | `R = -2.13e-5` | yes |
+| I4 | tube, `z = 3 Z0`, `R_cf = +0.5` | `0.01` | `R = +0.499454` (`5.46e-4`) | yes |
+| I5 | tube, `z = 19 Z0`, `R_cf = +0.9` | `0.01` | `R = +0.899053` (`9.47e-4`) | yes |
+| Q1 | tube, `NonReflecting sigma = 0` (quiet) | `|R| <= 0.01` | `R = -5.77e-8` | yes |
+| Q3 | pressure anchoring, matched impedance on both ends | `D <= 0.01` | `D = 5.44e-5` | yes |
+| T1 | tone, `z = 3 Z0`: `SWR`; wall cell / largest | `|SWR/3 - 1| <= 0.02`; `>= 0.98` | `3.00577` (+0.19 percent); `0.99992` | yes |
+| T2 | tone, `z = Z0/3`: `SWR`; wall cell / smallest | `|SWR/3 - 1| <= 0.02`; `<= 1.02` | `3.00360` (+0.12 percent); `1.00171` | yes |
+| O0 | rigid wall, `P_rigid/(2 eps)`, 30 / 45 degrees | `[0.90, 1.02]` | `0.93264` / `0.94642` | yes |
+| O1 | `z = 3 Z0`, 30 / 45 degrees, `R_cf = +0.44415 / +0.35925` | `0.03` | `+0.43757` (`6.6e-3`) / `+0.34699` (`1.23e-2`) | yes |
+| O2 | matched impedance, `R_cf = -0.07180 / -0.17157` | `0.03` | `-0.08136` (`9.6e-3`) / `-0.17756` (`6.0e-3`) | yes |
+| O3 | `NonReflecting sigma = 0`, `R_cf = +0.07180 / +0.17157` | `0.03` | `+0.06001` (`1.18e-2`) / `+0.15702` (`1.46e-2`) | yes |
+
+Negative controls: NC1 `Slip` `R = +0.998959` (`>= 0.9`, held: the rigid wall fails the quiet limit by a factor 100); NC2
+`PressureOutlet` `R = -0.998874` (`<= -0.9`, held); NC3 two Thompson boundaries `D = 1.000000` (`>= 0.99`, held); NC4 at 45
+degrees `|R| = 0.178` and `0.157` (`>= 0.10`, held: neither quiet boundary is quiet at oblique incidence).
+
+Defaults: `cargo test --release -p rcfd-fv --lib compressible` 12 passed, 1 ignored; `--test compressible_bc` 2 passed, 4
+ignored; `--test compressible_ale_f258` 8 passed; `--test compressible_ale_f258_records` 4 passed (the bit records). None of
+these files was edited.
+
+Run times (release): the seven fast tests of `impedance_f243.rs` 61.7 s with 4 threads (the five I runs take most of it); the
+two heavy O tests 182.6 s with 2 threads.
+
+What the numbers say: the tube loses 0.11 percent of the peak between the two passes of the probe (the estimate was 0.05 to
+0.35 percent), the same for the rigid wall, the pressure outlet and `z = 0`, so the deviations of I1 to I5 are the grid's, not
+the boundary's. The O deviations (up to `1.46e-2`) are at the size of the estimate (`1.5e-2`); for the small coefficients of
+O2 and O3 they are 8 to 16 percent of the coefficient itself, so O confirms the sign and the size of DR2 and DR3 (the two
+quiet boundaries reflect with opposite signs, as derived), not the third digit.
+
+### Mutations (the registered commands, once each; scratch script, not committed)
+
+| id | mutation | caught by | against the expectation |
+|---|---|---|---|
+| MU1 | `z -> -z` in the relation | A2 (`1.04e1`), A3, A4, A6, Q3 (`D = 1`), T (`SWR = 1.0007`), I (I2, I4, I5: `R = 0`) | as expected; the reversed sign leaves no root in the bracket, so the face falls back to the interior state |
+| MU2 | outgoing invariant dropped (`u_n,f = u_n,i`, `p_f = p_ref + z u_n,i`) | A2 (entropy, invariant), A3, A4, I (the `z = 19 Z0` run stops with a solver error) | caught, but **not as expected**: I1 to I4 keep their limits (`R = +0.499331` at `z = 3 Z0`), T and Q pass |
+| MU3 | `p_ref` replaced by the interior pressure | A1, A2, A3, A6, Q2 (`R = +0.999`), Q3, T, I (all five) | as expected |
+| MU4 | moving-face frame dropped | A6 (`2.53e-1`) only | as expected |
+| MU5 | interior state returned | A1, A2, A3, A4, A6, Q3, T, I | as expected |
+
+No mutation survived. On MU2: the registration predicted `R = (Z - Z0)/(2 Z0)` for it. That was wrong: it ignored that the
+boundary cell feeds back. With the face pressure `p_ref + z u_n` built from the interior velocity, the boundary cell settles
+where its own state satisfies `p' = z u_n'`, which is the right impedance for a weak wave. MU2 is therefore an alternative
+closure that is correct in the linear limit and fails for a stiff wall; for moderate `z` only the algebraic checks A2, A3 and
+A4 separate it from the registered one. This does not change a result; it corrects a statement of the registration.
+
+After the mutations the source files are byte-identical to 85f2f22c (`git diff --quiet -- crates`).
+
+### fmt and clippy
+
+`cargo fmt --check -p rcfd-fv`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean.
+`cargo check -p rcfd-api --tests` (the only other crate that names `CompBc`): compiles; its tests were not run.
+
+### Deviations and disclosures
+
+- A6 and A7 are in `crates/rcfd-fv/tests/impedance_f243.rs`, not among the unit tests of `compressible_bc.rs` as the heading
+  of table A says: they need `characteristic_face_state` and `set_bc` of `compressible.rs`.
+- `cargo fmt -p rcfd-fv` re-wrapped three statements of the test file after the first runs and before the commit. The
+  committed bytes of the unmutated test file were compiled (clippy and the mutation builds), but its checks were not run
+  again on the unmutated library; the change is line breaks only.
+- The workspace-wide `cargo fmt --check` stops on this machine with "The filename or extension is too long (os error 206)"
+  before it checks anything; the per-package form was used.
+- Every test, including the fast ones, was run in release only. In the debug profile the I test would take many minutes.
+- `docs/reference-data.md` was not edited (other branches append to it); the sources are listed above.
+- The books (Pierce, Kinsler et al., Toro) and the papers are cited from memory of their content; none was opened for this
+  job. Every formula used is derived in this ADR.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate); the tests of `rcfd-api` and of every other crate; the debug profile;
+angles other than 0, 30 and 45 degrees; a mean flow through the boundary; a non-Cartesian grid; a moving impedance wall in a
+flow run (A6 checks the face state only).
+
+### Decision by the registered rule
+
+- **Acceptance met** (in the library): I1 to I5, Q1, Q2, Q3, T1, T2 and A1 to A7 meet their limits, NC1 to NC3 hold, the
+  defaults tests pass, every mutation is caught. The O checks and NC4 also meet their limits.
+- **Proposed status: partial**, by the rule: the boundary cannot be selected from a case file (D6, not taken because it needs
+  an approved edit of `case_hashes_w48u.rs`). The title's other parts are a matter for the lead (question 2).
+
+### Remaining questions (options and recommendation)
+
+1. **Case-schema wiring.** (a) `compressible_bc = "impedance"` with a new key `impedance_value` [Pa s/m] and the reference
+   pressure from `pressure_value`, plus the `case_hashes_w48u.rs` normalisation of the new key at its default (as ADR 0163,
+   0190, 0193); (b) no new key, `reflection_value` read as the reflection coefficient (no soft wall, misleading default 0.02);
+   (c) stay library-only. Recommendation: (a). Not taken: it needs approval. That `to_toml` writes the new key for every
+   boundary was read from the test's header, not tried.
+2. **F-243 after the wiring.** (a) mark it done on its acceptance text and move the title's unbuilt parts (wave-equation
+   solver with sponge layers, modal export, quadrupole term, on-the-fly sampling) to items of their own; (b) keep it partial
+   until those exist. Recommendation: (a): the acceptance text names none of them.
+3. **The default `reflection_value = 0.02` of `nonreflecting`** reflects 46 percent of a short pulse (ADR 0006 known miss),
+   while `0` reflects `6e-8` here. (a) leave it; (b) change the default to 0; (c) point users of an open acoustic boundary
+   to the matched impedance once it is wired. (b) would change a default, so this is **open, not taken**. Recommendation:
+   (c); (b) only on the maintainer's decision.
+4. **Oblique incidence.** Both quiet boundaries reflect 7 percent at 30 degrees and 17 percent at 45 degrees. (a) accept as a
+   documented limit; (b) a sponge layer; (c) a multi-dimensional non-reflecting condition (Giles). Recommendation: (a) now,
+   (b) as a follow-up item, since the title already asks for sponge layers.
+
+### For the lead: roadmap entries
+
+**F-243, proposed status: `partial`** (unchanged). Proposed note text:
+
+> Priority P3. Size M. Area: fv,post. WAVE 32B (ADR 0066) and the job of 2026-11-12 (ADR 0233). The acceptance text is MET IN THE LIBRARY, not from a case file. Built in ADR 0233: `CompBc::Impedance { p, z }` (rcfd-fv compressible_bc.rs `impedance_wall`), a locally reacting wall with a real specific impedance on the outgoing Riemann invariant, also on moving faces; the quiet boundaries are the matched impedance `z = rho c` (holds the ambient pressure) and the existing `NonReflecting` with `sigma = 0` (holds nothing). Registered checks, all met at the first run: impedance tube with a pulse for z/(rho c) = 0, 1/3, 1, 3, 19: R within 1.13e-3 of (z - rho c)/(z + rho c) (limit 1e-2); the quiet boundaries reflect 2.1e-5 (matched) and 5.8e-8 (Thompson) of a pulse (limit 1e-2); standing-wave ratio of a tone 3.006 and 3.004 against 3 (limit 2 percent); a uniform overpressure decays to 5.4e-5 with matched walls and stays with Thompson boundaries; oblique plane pulses at 30 and 45 degrees within 1.5e-2 of (z cos - rho c)/(z cos + rho c) and of (1 - cos)/(1 + cos) (limit 3e-2). Five mutations caught. Not done: case-schema wiring (a new key needs an approved edit of case_hashes_w48u.rs; this is why the status is partial). Limits: real, frequency-independent impedance only; both quiet boundaries reflect 7 percent at 30 degrees and 17 percent at 45 degrees; gas at rest, Cartesian grids, verification against closed forms only. Unchanged from wave 32B: FW-H 1A (fwh.rs), Gutin rotor tones (rotor.rs), metrics (acoustics.rs), surface-series reader, `rcfd fwh`, non-validated broadband proxies (noise_proxies.rs), docs/acoustics.md; W5a/W5b known misses (7.7e-2 and 6.7e-2 against 1e-2 and 1e-3). Not built: wave-equation solver with sponge layers, modal export, quadrupole volume term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling.
+
+Proposed follow-up items (numbers for the lead to assign):
+
+- **Case-schema wiring of the impedance boundary.** Acceptance: "`compressible_bc = "impedance"` with `impedance_value` runs
+  the ADR 0233 tube from a case file with R within 1e-2 of the closed form for z/(rho c) = 1/3, 1, 3; located validate errors
+  for a negative impedance and a non-positive pressure; every existing case file's settings hash and written text unchanged
+  after the registered normalisation of the new key at its default." Deps: F-243. Size S.
+- **Sponge layer for the compressible solver.** Acceptance: "A plane pulse leaving through a sponge layer at 0, 30, 45 and 60
+  degrees reflects less than 1 percent; a case without a sponge is bit-identical." Deps: F-243. Size M.
+- **Frequency-dependent wall impedance (time-domain model).** Acceptance: "The reflection coefficient of a mass-spring-damper
+  wall matches the closed form in magnitude and phase within 2 percent at three frequencies around the resonance." Deps:
+  F-243. Size M.
+- **Acoustic wave-equation solver and modal export** (the rest of the F-243 title, if question 2 is answered with (a)).
+  Acceptance: "A duct mode propagates with the closed-form axial wavenumber within 1 percent; a sponge layer ends the duct
+  with less than 1 percent reflection; the modal amplitudes of a synthetic field are exported and recovered within 1 percent."
+  Deps: F-243. Size L.
