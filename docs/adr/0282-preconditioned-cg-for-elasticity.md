@@ -363,6 +363,19 @@ same test and recorded beside them (X1 has no limit). Mutation M7 (no restart) i
 ("must fail H1b, else recorded"); it is run on the heavy test once only if time allows, else recorded as not run.
 
 The decision rule is unchanged: H1b met and A3 missed gives **partial** (A3); H1b missed as well gives partial with both.
+## Amendment 3 (2026-11-12, written and committed before the mutation runs and before the run of B2)
+
+**Defect of the set-up.** Preparing the mutation runs showed that B1 cannot catch M6: on the fast cantilever every node
+outside `xmin` has all three components free, so "blocks of three consecutive reduced rows" and "one block per node" are the
+same partition. B1 is kept unedited (it passed).
+
+**Added check** (new test `b2_node_blocks_with_partial_constraints`; no library change; one run):
+
+| Id | Clause | Check | Limit | Estimate behind it |
+| --- | --- | --- | --- | --- |
+| B2 | c1, D2 | `node_blocks` with the `DofMap` of the fast cantilever and the free list of all equations except (node 0, component 0), (node 5, components 1 and 2), (node 9, component 1): block sizes `2, 3, 3, 3, 3, 1, 3, 3, 3, 2, 3, ...` (1617 blocks), every block one node's | as stated | finding 4 |
+
+M6 must fail B2. The decision rule is unchanged, with B2 beside B1.
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
