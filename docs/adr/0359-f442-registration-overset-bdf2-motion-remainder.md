@@ -237,3 +237,147 @@ the opt-in's mutations are therefore not run; F0 and B1 still are (the tree is u
 the check that the library is the base tree's). The decision rule is not changed; the addendum applies it.
 
 Predictions (mine): H4 confirmed (`k` near `1e-6`); H5 confirmed.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers of the registration (`c2b8a8bc`) and of amendment 1 (`6d83ec18`); none was
+changed. Release, Windows, the target directory of the worktree, other agents building on the machine. Commits: the
+registration `c2b8a8bc`; the tests, compiled and not run, `9bb0bff3`; amendment 1 `6d83ec18`; its tests and the F0 assertion,
+compiled and not run, `cac79913`; this addendum. Each registered run was made once (H5 repeats the deterministic run of H1 to
+split its cells, as amendment 1 says; its largest difference is H1's to all digits, `9.9239e-6`). Logs in
+`E:/projects/cfd/w49i-work/f442-scratch`: `fast-base.log`, `diag.log`, `diag2.log`, `fast-final.log`, `baseline.log`,
+`clippy.log`, `MS1.log`, `MS2.log`.
+
+**Said plainly.** The remainder of TG_2 is made by two events of the moving coupling, both named and measured. (1) **The donor
+switch of the component's outer fringe**: the library's stencil of a fringe cell is chosen by the cell of the other part that
+contains it, so the interpolated value jumps when the fringe centre crosses a face of that part; about 2600 such switches per
+run, each at a moment fixed by the motion and not by the step, a first-order event. It makes the largest difference (component
+cell 6455, `2.057e-5`, ratio `2.45`): with a pose-continuous (bilinear) stencil on the component's fringe alone it falls to
+`1.16e-6` at a ratio of `4.15` over the component cells. (2) **The background cells changing kind next to the hole** (275
+cells change kind in a run, 503 changes): with the switches removed, `9.92e-6` at a ratio of `1.85` remains, nine times larger
+next to those cells than elsewhere. A stencil cannot remove the second event, so no stencil opt-in reaches D2 of 4: the most
+continuous stencil these meshes allow gives `1.845` on TG_2. **No library opt-in was built**; the defaults are untouched (no
+library file changed; F0 equal). By the registered rule the item is **partial**: the events are confirmed by the hypotheses of
+amendment 1, not by H1 or H2 of the registration, whose numbers fell between their limits.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| S0 (set-up) TG_2 with C: `max abs(d_200)`; ratio | `[2.0e-5, 2.1e-5]`; `[2.40, 2.50]` | `2.0571e-5`; `2.4542` | held |
+| S1 continuity, every step of every run | `<= 1e-9` | `2.7e-12` | met |
+| S2 (set-up of B) linear field | `<= 1e-12` | `2.2e-15` | met |
+| F0 (defaults) the four fingerprints, base tree against final tree | equal | equal: `0x3deeab3cfda1d8d0 0x4758f6c215970201 0xc931bf9474a97f49 0xac84b084267029d0` on `9bb0bff3` and on the final tree (`f0_defaults_fingerprint_equals_the_base_tree` passes) | met |
+| A2, A2b, A2c (acceptance, with an opt-in) | `>= 4`; `<= 2.057e-5`; `<= 1.05` | **not run: no opt-in built** (amendment 1, with the number: B gives `1.845`) | not run |
+| B1 (defaults) | pass | no library file changed (against main 8a7d8570 only the ADR and the new test file differ); `overset_motion_f442` 3 passed (6 ignored); `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored | met |
+
+### Hypotheses
+
+| Id | Deciding number | Measured | Verdict |
+| --- | --- | --- | --- |
+| H1 the donor switches, every fringe | confirmed `b <= 6.2e-6` and ratio `>= 4`; ruled out `>= 1.44e-5` | `9.92e-6`, ratio `1.845` | undecided |
+| H1a the same at level 1 | confirmed `<= 1.6e-5` and ratio `>= 4`; ruled out `>= 3.6e-5` | `1.12e-5`, ratio `3.52` | undecided |
+| H2 the kind changes (registration) | confirmed: without a hole with B ratio `>= 4` and `<= 2.98e-6`; ruled out `>= 0.7 b` | `1.03e-6`, ratio `3.37` | undecided |
+| H3 the outer loop under motion | confirmed `>= 5.2e-6`; ruled out `<= 5.2e-7` | `6.6e-8` | **ruled out** |
+| H4 (amendment 1) the component's fringe switches make the remainder at the component cells | confirmed `k <= 6.2e-6`; ruled out `>= 1.44e-5` | `k = 1.158e-6` (ratio `4.146` over the component cells) | **confirmed** |
+| H5 (amendment 1) what B leaves is made by the kind changes | confirmed `n >= 5 f`; ruled out `<= 2 f` | `n = 9.92e-6` (ratio `1.845`), `f = 1.13e-6` (ratio `3.69`), `n / f = 8.79` | **confirmed** |
+
+Printed: B on the background fringe alone leaves the component cells at `2.059e-5` (ratio `2.448`), the background at
+`8.90e-6` (`1.76`): the switches of the background fringe do not make the hole part. Without a hole (no kind change) and with
+the library's stencils, `2.020e-5` at `2.428` in cell 6455; with B `1.03e-6` at `3.37`. The error against the exact field in
+800 steps: `3.186e-4` with the library's stencils, `2.841e-4` with B (B also interpolates better).
+
+**The events, named, with their numbers.**
+
+1. *The donor switch.* `Overset::connectivity` builds a fringe stencil from the cell of the other part that contains the
+   fringe centre and that cell's calculated face neighbours (`linear_weights`). The stencils on either side of a face of the
+   other part are both exact for linear fields, so the interpolant jumps by the difference of their quadratic errors when the
+   centre crosses the face. The jump enters the momentum rows of the calculated neighbours at the first step boundary after
+   it: a lag uniform in `[0, dt)`, an error of first order in `dt` with a phase that is not a smooth function of `dt`, which is
+   why the ratio is `2.45` and not 5 (the arithmetic of the registration; not measured further). Number: the component cells
+   `2.057e-5` with the library's stencils, `1.16e-6` with B on the component's fringe (factor `17.8`), ratio `2.45` to `4.15`.
+2. *The kind change.* A background cell that becomes fringe takes the interpolant in place of its solved value; one that
+   becomes calculated starts its history (and the carried defects of its faces, reset where a face was not kept) from
+   interpolated values. Both are jumps at moments fixed by the motion. Number: with every stencil continuous, `9.92e-6` at a
+   ratio of `1.845`, `8.8` times larger within two cells of a cell that changed kind than elsewhere.
+
+**Why no opt-in removes the remainder (way ii of the acceptance), with the number.** A pose-continuous stencil removes event 1
+(H4), but event 2 is a change of the equation a cell obeys and is discrete whatever the stencil (L2). With B, the most
+continuous stencil on these meshes, D2 is `1.845` (H1) against the limit 4; an opt-in of the stencil alone would miss A2 by
+construction, so none was built. Removing event 2 would need a change of how a cell enters or leaves the calculated set
+within a step, which is not a stencil and is not designed here. Both parts are below the spatial error of TG_2 (`2.06e-5`
+against `3.19e-4`, a factor 15).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `cac79913` (`f442-scratch/mut`, its own target directory) by `f442-scratch/mut.py`
+(an exact replacement that occurs once), the named test run once, the file restored and compared byte for byte.
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| MS1 | the weight `s t` of B replaced by `s` | S2 | failed: `3.18` against `1e-12` (caught) |
+| MS2 | the `p` bits left out of the state fingerprint | F0 | failed: the fingerprints differ (caught) |
+| MO* | the opt-in's mutations | - | none: no opt-in built |
+
+`scripts/limit_audit.py` on the new test file: 0 hits. `cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv
+--all-targets -- -D warnings`: clean.
+
+### Deviations and disclosures
+
+- H1, H1a and H2 ended between their limits: the registration expected one event and there are two, at different cells. The
+  hypotheses that name them (H4, H5) were registered in amendment 1, after the first runs and before their own.
+- H5 is measured on a repeat of the deterministic run of H1 (same code path, same numbers), to split the cells.
+- The initial connectivity of every run is the solver's own (library stencils at `t = 0`), the same in the three runs of a
+  series (L3).
+- The lag argument for why a switch is a first-order event with a scattered ratio is the arithmetic of the registration; it
+  was not measured separately (no run aligned the events with the steps).
+- Predictions: H1 and H1a confirmed (wrong: undecided, because of event 2); H3 ruled out (right); H4, H5 confirmed (right).
+
+### Not run
+
+- A2, A2b, A2c and any mutation of an opt-in (none built). The whole workspace suite, the gate, Linux. The quadratic stencil
+  of ADR 0251 under motion (it has the same switch, one order higher; not measured).
+
+### Decision by the registered rule
+
+**Partial.** S0, S1, S2 held; F0 and B1 met (no library change); MS1 and MS2 caught by their registered checks. Two events are
+named and confirmed with numbers (H4: `1.16e-6` against `6.2e-6`; H5: `n / f = 8.79` against 5), and the ADR names why no
+opt-in removes the remainder with a number (D2 `1.845` with the most continuous stencil, H1). The rule's clause for done
+requires the event to be confirmed by H1 or H2 of the registration; both were undecided, and the confirming hypotheses come
+from an amendment written after a run. That is partial.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. A pose-continuous donor stencil in the library** (removes event 1: the component cells from `2.06e-5` to `1.2e-6`,
+  and the error against the exact field by 11 percent). (a) a follow-up item: a `DonorInterpolation` variant defined on any
+  mesh (for example linear moving least squares over the donor's point neighbours with a compactly supported weight of radius
+  1.5 cell spacings, continuous in the fringe position wherever no candidate cell changes kind), opt-in, defaults bit for bit;
+  (b) leave it. Recommendation (a), at low priority: it improves the spatial error too, but D2 stays below 4 because of event
+  2 (Q2). Not taken (a new item is the lead's).
+- **Q2. The kind changes** (`9.9e-6`, ratio `1.85`). (a) a research item on how a cell enters and leaves the calculated set
+  within a BDF2 step; (b) accept: below the spatial error by a factor 29 at level 2. Recommendation (b) until a case needs the
+  BDF2 order on a moving overset mesh.
+- **Q3. The roadmap notes of F-338 and F-344** on the coupled remainder: now named. Recommendation: the notes below.
+
+## For the lead: roadmap entries
+
+No roadmap file was edited. **F-442**, proposed status: `partial`. Proposed note:
+
+> From ADR 0245 question 1, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11. ADR 0359, 2026-11-12: PARTIAL. Named, with numbers: the remainder of TG_2 with BDF2, three outer iterations and rhie_chow_step_consistent (2.057e-5, ratio 2.454, reproduced to five digits) is made by two events of the moving coupling, both at moments fixed by the motion and not by the step (first-order events). (1) The donor switch of the component's outer fringe: the library's stencil is chosen by the cell of the other part that contains the fringe centre, so the interpolant jumps when the centre crosses a face of that part (about 2600 switches per run); with a pose-continuous bilinear stencil on the component's fringe (test side) the component cells fall from 2.06e-5 to 1.16e-6, ratio 2.45 -> 4.15. (2) The background cells changing kind next to the hole (275 cells, 503 changes per run): with every stencil continuous 9.92e-6 remains at a ratio of 1.845, 8.8 times larger within two cells of a kind change than elsewhere. Ruled out: the outer loop under motion (6.6e-8). Why no opt-in: a stencil removes event 1 but not event 2, so the most continuous stencil gives D2 1.845 on TG_2 (limit 4); no library code was built, the defaults are untouched (fingerprints of the default and the BDF2 overset runs and of the linear and quadratic connectivities equal to the base tree; baseline_hashes passes). Partial by the registered rule: the events were confirmed by hypotheses of an amendment after the first runs (the registered H1 and H2 fell between their limits). Both parts are below the spatial error of TG_2 (3.2e-4) by a factor 15. Follow-ups proposed (ADR 0359 questions 1 and 2), not taken.
+
+**F-344**, status unchanged. In its note, after "the remainder of the moving coupled meshes is another term", add:
+
+> (named in ADR 0359: the donor switches of the component's outer fringe and the background cells changing kind next to the hole)
+
+**F-338**, status unchanged. Append to its note:
+
+> ADR 0359 names the coupled remainder: donor switches of the fringe stencils (2.06e-5 -> 1.2e-6 with a pose-continuous stencil) and kind changes next to the hole (9.9e-6, ratio 1.85).
+
+Proposed follow-up item (optional, ADR 0359 question 1): **Overset: a pose-continuous donor stencil (opt-in).** Depends on
+F-442. Acceptance:
+
+> A DonorInterpolation variant whose fringe values are a continuous function of the pose on any mesh where no candidate cell changes kind (defaults bit-identical: the four F0 fingerprints of ADR 0359 unchanged), exact for linear fields to 1e-12, its interpolant across every face of a uniform mesh continuous to 1e-9 where the linear stencil jumps by at least 1e-4; on TG_2 of ADR 0359 the component cells' max abs(d_200) at most 2e-6 with the ratio at least 4, and e(TG_2) in 800 steps at most that of the linear stencil (3.186e-4); or the ADR names why not with a number.
+
+Note:
+
+> From ADR 0359 question 1, recommendation (a), not yet taken. The test-side bilinear stencil of ADR 0359 (rectangular meshes only) gives 1.16e-6 at a ratio of 4.15 on the component cells and lowers e(TG_2) from 3.19e-4 to 2.84e-4. It does not lift D2 of TG_2 to 4: the kind changes next to the hole stay (ADR 0359 H5).
