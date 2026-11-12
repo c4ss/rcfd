@@ -209,3 +209,110 @@ made in person; none changes a default.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above (`17053005`); none was changed. The library change and the test file were committed
+compiled and not run (`0993aa4c`); every registered run was then made once, release, Windows, this worktree's target directory
+(`fractional_step_consistent_f454`, three test threads, 30 s). D0 "before" ran on a `git archive` copy of main ce0db7d1 with
+the D0 test alone (`f454-scratch/main`). Logs in `E:/projects/cfd/w49i-work/f454-scratch` (`f454-run.log`, `d0-before.log`,
+`e0-fv.log`, `e0-api.log`, `f454-MF*.log`, `mut-summary.log`).
+
+**Said plainly.** The fractional step's `8.7e-2` is its face term: the steady face defect of the default step is `dte R(p)` to
+`6.5e-16` (relative), a pressure smoothing of first order in the step and absent from the cell equations. With the opt-in
+`fractional_step_consistent` (the harmonic face coefficient of `V / a_P` and the carried old face defect in the intermediate
+flux) the two steady cavities agree to `1.5e-13`, and they agree with the PISO step's steady cavity with ADR 0245's C to
+`1.6e-13`: one steady discretisation for both steps. Defaults bit for bit. One registered mutation (MF5) was not caught: it is
+equivalent by construction (below), and by the registered rule that makes the item partial.
+
+### What was built
+
+- `crates/rcfd-fv/src/pimple.rs` (final numbering): 143 to 144 (the documentation of `rhie_chow_step_consistent` points to the
+  new field), 146 to 152 (the field `fractional_step_consistent` and its documentation), 868 (its default `false` in `piso()`).
+  `step_with` is not touched.
+- `crates/rcfd-fv/src/pimple/fractional.rs`: 13 to 15 (module documentation), 62 to 83 (`carried_defect`, the carried old
+  defects, the expression of `step_with`'s `ddt_defect`), 119 to 121 (the gate `sc`), 198 to 202 (the predictor diagonals), 215
+  to 225 (`Gamma` and `K`), 236 to 241 (the internal-face flux with `sc`; the default statement unchanged in the `else`).
+- Test: `crates/rcfd-fv/tests/fractional_step_consistent_f454.rs` (3 gate-run tests, 30 s together). No existing test, hash
+  table, golden or `rcfd-api` file edited.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| S0 FR default, `0.04` against `0.01` | `[8.6e-2, 8.8e-2]` | `8.6856e-2` | held |
+| **T1** steady face defect against `dte R(p)`, relative | `<= 1e-6` each | `4.0e-16` (`0.04`), `6.5e-16` (`0.01`) | met |
+| T1p (printed) `max abs(d) / abs(S)` | none | `0.1984` (`0.04`), `0.1208` (`0.01`), ratio `1.64` | printed |
+| **A1** FR-F, `0.04` against `0.01` | `<= 1e-9` | `1.55e-13` (change over the last step below `1e-15`) | met |
+| A1d continuity | `<= 1e-9` | `2.85e-12` | met |
+| A2 FR-F with the plain boundary | `<= 1e-9` | `1.19e-13` | met |
+| **X1** FR-F against CAVC (PISO with C), `0.01` | `<= 1e-9` | `1.62e-13` | met |
+| X1n (control) FR default against CAVC | `>= 1e-6` | `4.36e-2` | held |
+| D0 fingerprints before (main) and after | equal | fractional `efb9b0f6f209a81b`, PISO `b1c6b772eb162cb4`, both | met |
+| D1 Chorin form, flag on against off, 100 steps | bit for bit | equal | met |
+| D2 PISO step, flag on against off, 50 steps | bit for bit | equal | met |
+| E0 `rcfd-fv` `--lib` 104 (6 ignored), `fractional_step` 13 (3), `step_consistent_paths_f443` 5 (2; F1 among them), `bdf2_remainder_f344` 4 (4), `w33b_default_bits` 1; `rcfd-api` `baseline_hashes` 3 (1) | pass | all passed, none edited | met |
+
+Printed: P1, the Chorin form, `0.04` against `0.01`: `3.71e-2` (D3: its cell equations carry `dte`; F does not act there). FR-B
+(BDF2): default `8.07e-2`, with F `1.09e-13` (stable at both steps; BDF2 is covered by the derivation and measured here, but
+carried no limit). With F the steady defect is `max abs(d) / abs(S) = 0.0805` at both steps, between the default's two values.
+
+**The trace (a1), with the numbers.** In a steady state of the default step the increment is zero, the cell equations contain no
+`dt`, and the face defect is `dte R(p)` (T1 to `6.5e-16`): that is the only place the step enters, so it is the term. Changing it
+alone (A1) takes the difference from `8.69e-2` to `1.5e-13`. D1's prediction of a ratio near 4 for T1p was wrong: the steady
+pressure adapts to the smoothing, so `R(p)` itself is larger at the smaller step (ratio `1.64`, printed only).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `0993aa4c` (`f454-scratch/mut`) by `f454-mut-run.py` (an exact replacement that occurs
+once), the named test run once, the file restored and compared byte for byte.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MF1 the carried defect left out | A1 | failed: A1 `1.33e-2`, X1 `1.88e-2` |
+| MF2 `dte` in place of `Gamma` | A1 | failed: A1 `9.4e-5`, X1 `0.54` |
+| MF3 the linear `face_interpolate(rAU)` | A1 | failed: A1 `7.6e-5`, X1 `2.5e-4` (ADR 0245 MC2 gave `9.4e-5` on the PISO step) |
+| MF4 the gate inverted | S0 | failed: S0 `1.5e-13`, T1 `0.89` |
+| MF5 the gate without `fs.incremental` | D1 | **not caught**: D1 bit for bit |
+
+MF5 is an equivalent mutation: the changed flux sits inside the existing `if fs.incremental` block of the intermediate flux, so in
+the Chorin form `Gamma` and `K` are computed and never used, and no test can see the gate's second conjunct. The registration
+did not see this. By the registered rule a mutation not caught makes the item partial; nothing was amended after the run.
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### Deviations, not run
+
+- E0 ran in one `cargo test` process while the mutation copy built and ran.
+- Not run: the workspace suite, the gate, Linux, ignored tests; `rcfd-api` tests other than `baseline_hashes` (no `rcfd-api` file
+  changed; a new `PimpleSettings` field is set only through `piso()`).
+- `cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean.
+
+### Decision by the registered rule
+
+**Partial.** S0 held, T1, A1, A1d, A2, X1, D0 to D2 and E0 met, X1n held, MF1 to MF4 caught; MF5 not caught (equivalent by
+construction). Every clause of the acceptance is met in its first way: traced (T1), the same to `1.5e-13` by an opt-in, defaults
+bit for bit.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. MF5.** (a) keep partial as the rule says; (b) the lead reads an equivalent mutation as not a miss and takes done.
+  Recommendation (a) by the rule, with the note that every acceptance clause is met; a later item may drop the redundant
+  conjunct or register a mutation that removes the outer `if fs.incremental` (a lead's call).
+- **Q2. A case key.** (a) let `[solver.rhie_chow] step_consistent` with `fractional_step` set the new field (changes ADR 0352's
+  tested located error, T2 there: needs the maintainer); (b) a new optional key for the fractional step; (c) none for now.
+  Recommendation (b) as a follow-up when a case needs it; not taken (it touches the case tree).
+- **Q3. F by default** for the fractional step: changes every fractional-step result and hash. Open for the maintainer; not taken.
+- **Q4. Outlets and periodic faces** keep `dte R` (L2). (a) a follow-up with a C3-type check on a channel with an outlet; (b) not
+  now. Recommendation (b).
+
+Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation), not decisions the maintainer made in
+person: O1 to O3 of the registration.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited. **F-454**, proposed status: `partial` (by the rule: one equivalent mutation not caught; every
+acceptance clause met). Proposed note:
+
+> From ADR 0352 question 2, recommendation (a). ADR 0356, 2026-11-12: PARTIAL by the rule (every acceptance clause met; mutation MF5 equivalent by construction, not caught). The fractional step's 8.69e-2 between dt 0.04 and 0.01 is its face term: in a steady state the increment vanishes, the cell equations carry no step, and the face defect is dte R(p) (measured to 6.5e-16 relative), a first-order pressure smoothing. The opt-in PimpleSettings::fractional_step_consistent (incremental form; default false) takes on internal faces Gamma R(p^n) + (Gamma/dt)(c1 d^n - c2 d^{n-1}) with Gamma the harmonic face value of V/a_P of the predictor, so the steady defect is R(p)/interp(a): the steady cavity is then the same to 1.5e-13 for the two steps (1.2e-13 with the plain boundary, 1.1e-13 with BDF2, printed) and equal to the PISO step's with ADR 0245's C to 1.6e-13 (4.4e-2 without). Defaults bit for bit (fingerprints before and after equal; the rcfd-fv suites touching the changed lines and baseline_hashes unedited). The Chorin form is not changed (its cell equations carry dt; 3.7e-2 printed). No case key; outlets and periodic faces keep dte R. Four of five mutations caught.
+
+**F-443**: no change to its note is needed; its sentence on the fractional step stays true for `rhie_chow_step_consistent`.
