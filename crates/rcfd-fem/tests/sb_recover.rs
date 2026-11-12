@@ -265,10 +265,59 @@ fn repeated_root_tensors() -> Vec<(&'static str, [f64; 6], [f64; 3])> {
     out
 }
 
+/// Record of the defect of ADR 0277 amendment 1: the registered total 54 was mis-added (the list has 57 tensors); this
+/// test stops at the count before any measurement. Replaced by `r1_r2_repeated_roots_57`.
 #[test]
+#[ignore]
 fn r1_r2_repeated_roots() {
     let tensors = repeated_root_tensors();
     assert_eq!(tensors.len(), 54);
+    let (mut orth, mut err, mut res, mut r2) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    let mut all_finite = true;
+    let mut all_ordered = true;
+    let mut zero_exact = true;
+    let mut worst_kind = "";
+    for (name, s, exact) in &tensors {
+        let pr = principal(s);
+        let n = tensor_norm(s).max(f64::MIN_POSITIVE);
+        all_finite &= pr.values.iter().all(|v| v.is_finite()) && pr.directions.iter().flatten().all(|v| v.is_finite());
+        all_ordered &= pr.values[0] >= pr.values[1] && pr.values[1] >= pr.values[2];
+        orth = orth.max(orthonormality(&pr.directions));
+        let e = if tensor_norm(s) == 0.0 {
+            zero_exact &= pr.values == [0.0; 3];
+            0.0
+        } else {
+            max_diff3(&pr.values, exact) / n
+        };
+        if e > err {
+            err = e;
+            worst_kind = name;
+        }
+        for k in 0..3 {
+            res = res.max(residual(s, pr.values[k], pr.directions[k]) / n);
+        }
+        let t = principal_values_trigonometric(s);
+        if tensor_norm(s) > 0.0 {
+            r2 = r2.max(max_diff3(&t, exact) / n);
+        }
+    }
+    println!("R1 finite: {all_finite}, ordered: {all_ordered}, zero tensor exact: {zero_exact}");
+    println!("R1 orthonormality: {orth:.3e} (limit 1e-12)");
+    println!("R1 values against the exact roots: {err:.3e} (limit 1e-12; worst: {worst_kind})");
+    println!("R1 eigen residual (record): {res:.3e}");
+    println!("R2 bare closed form against the exact roots (record): {r2:.3e}");
+    assert!(all_finite, "R1 finite");
+    assert!(all_ordered, "R1 ordered");
+    assert!(zero_exact, "R1 zero");
+    assert!(orth <= 1e-12, "R1 orthonormality");
+    assert!(err <= 1e-12, "R1 values");
+}
+
+/// R1 and R2 as registered, with the count of the list corrected to 57 (ADR 0277 amendment 1).
+#[test]
+fn r1_r2_repeated_roots_57() {
+    let tensors = repeated_root_tensors();
+    assert_eq!(tensors.len(), 57);
     let (mut orth, mut err, mut res, mut r2) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
     let mut all_finite = true;
     let mut all_ordered = true;
