@@ -216,3 +216,179 @@ not run.
 - **Q2. The form of the refusal.** ADR 0234 Q3 recommended the divergence guard over a panic. Taken on the same instruction:
   the located stop of the solver (`diverged`, the mechanism of the refusals of ADR 0218 D4), not a panic, with the smallest
   possible hunk in `pimple.rs`.
+
+## Amendment 1 (2026-11-12): the measured cause, the corrective and the refusal
+
+Written after the diagnosis runs D0 to D8 (tests committed in 475e79d1 before their first run; one invocation, release, one
+test thread, `f355-scratch/diag1.log`) and before any library code of F-355 and any run of the checks registered here. Nothing
+above is changed.
+
+### What D0 to D8 measured
+
+D0 held: R stops at step 6 by the Courant guard, Courant 1.1094e7; the control with `build` runs (largest `abs(u)` 2.21).
+`m_n` of R, steps 1 to 5: 2.63, 11.9, 732, 4.0e4, 2.3e5 (ratios 4.5, 62, 55, 5.8: faster than any linear estimate, a nonlinear
+growth). Every control of every variant ran.
+
+| Id | Variant of R | Verdict (stop step) | `G` | Hypothesis verdict by the registered number |
+| --- | --- | --- | --- | --- |
+| H1 | `ddt_correction = false` | stops (6) | 3.32 | **not the cause** |
+| H2 | `n_correctors` 1, 3, 4 | stops (11), (6), (4) | 3.32 | **the corrector count is not the cause** (more correctors stop earlier) |
+| H3 | implicit Euler | stops (8) | 2.28 | **BDF2 is not necessary** |
+| H4 | R, fluid-cell continuity at the last completed step | 7.3e-7 (limit 1e-4) | | **not the cause**: the pressure equation closes the fluid cells, the large flux is real |
+| H5 | `theta_min` 0.1, 0.25, 0.5 (largest weight 5, 2, 1) | runs, runs, runs | 1.20, 0.49, 0.34 | **the weight is necessary** (the variant part of the registered number). The located part did not hold as written: at the stop the largest velocity is in cell 9926, which is not a first fluid cell (the disturbance has spread); D9 below repairs the measurement |
+| H6 | `Upwind`, `Central` | stops (7), (6) | 3.32 | **not the cause** |
+| H7 | `dt` 5e-4, 2e-3, 4e-3, 8e-3 | stops (6), (6), (6), (5) | 6.11, 1.74, 0.89, 0.45 | **the time step is not the cause**, in either direction |
+| H7 | "late" (300 steps with `build`, then `build_second_order`) | **runs** 200 steps, `m` 0.67 to 0.69 | 3.32 | **the start is necessary**: on a developed field the forcing of ADR 0234 runs |
+| H8 | `nu` 3e-3, 1e-2; M1; CC `dt` 2.5e-3, 2.5e-5 | runs, runs; runs (largest weight 3.77); runs, grows (`max abs(u)` 281 against 0.50) | 1.18, 0.36; 2.09; 0.30, 8.30 | **refuted** by the registered rule: `dt` 4e-3 and 8e-3 stop with `G <= 1`; "late" and M1 run with `G >= 2` |
+
+H8, the hypothesis added in the registration, is refuted as a criterion: the stop is not a linear amplification governed by
+the share of the time term (the measured growth is 5 to 60 per step against `G` between 0.45 and 6, and it does not depend on
+the time step). What the numbers leave: the stop needs a weight above 5 (H5) **and** the state of the impulsive start (H7), and
+nothing else of the list.
+
+### The cause (derived from these numbers; D9 is its registered measurement)
+
+ADR 0234 D1 takes the flux velocity of a fluid-solid face as the linear extension of the fluid profile from the fluid centre
+`x_c` through the no-slip value at the crossing, `U_f = HbyA_c + w (u_G - HbyA_c)`, `w = t_f/theta_e`. Relative to the wall
+this is `-(w - 1)(HbyA_c - u_G)`: the velocity of the first fluid cell relative to the wall, turned round and multiplied by
+`w - 1`, which is `(t_f - theta_e)/theta_e` and reaches 38 on M2 (49 at `theta_min`). The formula is right when the velocity
+of the first fluid cell relative to the wall is of order `theta h du/dn`, that is when the profile between the wall and the
+cell centre is resolved; the product is then of order `h du/dn`. It is wrong by the factor `w - 1` when the cell holds a
+velocity that is not small with `theta`: at the impulsive start of 2D-2 the fluid slips past the cylinder (the layer after one
+step has the thickness `sqrt(nu dt) = 1e-3` against `h = 2.5e-3`), the first fluid cells hold a velocity of 2.6 whatever
+their `theta`, and the faces with a small `theta` get a flux velocity of up to tens of times the inflow velocity, with the
+sign reversed. Continuity then carries that flux into the fluid, the next predictor convects with it, and the run is lost in
+five steps. On the developed field ("late") the first fluid cells have the velocity of a resolved layer (the layer of 2D-2 is
+about `D/sqrt(Re) = 4 h` thick) and the same weights do no harm; with weights of at most 5 (`theta_min = 0.1`, M1) the start
+is survived. In circular Couette flow (ADR 0234 V3) the cell Reynolds number is 0.025 and the wall term dominates the
+diagonal of the first fluid cell, so the cell follows the wall within a step; with a step 100 times smaller it does not, and
+the same forcing grows there too (`max abs(u)` 281). This is the large-weight failure of the ghost-cell extrapolation near a
+node that Tseng and Ferziger describe (cited from memory); ADR 0234 checked it only on a flow in which the first fluid cell is
+slaved to the wall.
+
+**D9 (registered now; run with the library of this amendment, the refusal switched off).** R with `build_second_order`,
+after its first step (which completes): over the flux faces, `v_f = phi_f/abs(S_f)`; the face with the largest `abs(v_f)`,
+its weight, and `abs(u)` of its fluid cell. The same for "late" after its last step. **The cause is confirmed** if in R the
+face with the largest `abs(v_f)` has a weight `>= 5` and `abs(v_f) >= 4.5` (three times the inflow maximum 1.5), and in
+"late" the largest `abs(v_f)` over the flux faces is `<= 1.5`. Otherwise it is not confirmed and the item is at most partial.
+Printed: the largest `abs(v_f - ((1 - w) u_c + w u_G) . n_f)` (the flux against the extension of the cell velocity).
+
+### The corrective (derived): an image point with bounded weights, a further opt-in
+
+Along the line from `x_c` to the solid centre `x_s` (length `L`) let `xi` be the distance from the crossing, positive into
+the solid. The smooth extension of the fluid profile is `u(xi) = u_G + xi u' + xi^2 u''/2 + ...`, so
+
+    u(xi) = 2 u_G - u(-xi) + xi^2 u'' + O(xi^3):
+
+the value at a point behind the surface is the wall value reflected through the value at the image point in the fluid, to
+second order (the reflection of Mittal et al., cited from memory). The face lies at `xi_f = (t_f - theta_e) L`; its image
+lies at the distance `s = (2 theta_e - t_f) L` from `x_c` towards the surface.
+
+- `2 theta_e >= t_f` (`w <= 2`): the image lies between `x_c` and the crossing. Interpolating there linearly between
+  `HbyA_c` and `u_G` gives exactly the formula of ADR 0234 D1 (`2 u_G - HbyA_c - (2 - t_f/theta_e)(u_G - HbyA_c)`), with
+  `abs(1 - w) <= 1`. These faces keep D1, the same expression.
+- `2 theta_e < t_f` (`w > 2`): the image lies behind `x_c`, at the distance `(t_f - 2 theta_e) L` on the far side. With `d`
+  the fluid cell behind `c` on the same line (the neighbour of `c` across an internal non-empty face whose centre direction
+  from `x_c` is opposite to `x_s - x_c`: cosine `<= -0.99`, the most opposite one) and
+  `a = min(1, (t_f - 2 theta_e) L / abs(x_d - x_c))`:
+
+      U_f = 2 u_G - ((1 - a) HbyA_c + a HbyA_d).
+
+  The two forms agree at `2 theta_e = t_f` (`a = 0`, `w = 2`). The weights of `HbyA` are `-(1 - a)` and `-a`: their
+  magnitudes sum to 1 for every `theta`, against `w - 1` up to 49. If `c` has no such fluid neighbour (a domain boundary or a
+  solid cell behind it), `a = 0` and `d = c`: `U_f = 2 u_G - HbyA_c`, the image taken at the cell centre, first order at that
+  face (counted and printed).
+
+Error of the face velocity: the reflection `xi_f^2 abs(u'')`, at most `(t_f h)^2 abs(u'')`, plus the linear interpolation, at
+most `h^2 abs(u'')/8`: second order, with a constant up to `0.25 + 0.125` on a uniform mesh against `0.125` of D1. D2 (the
+source of the solid cells) and D3 (the net flux of a body) are unchanged and apply to the new flux.
+
+**E1. Opt-in (Q1 of the registration).** A new constructor `ImmersedForcing::build_second_order_bounded(geom, bodies,
+settings, gamma)`: `build_second_order` with, on the faces with `2 theta_e < t_f`, the image form. `FluxFace` gets the field
+`image: Option<(usize, f64)>` (the cell `d` and the fraction `a`; `None` on every face of `build_second_order` and on the
+faces with `w <= 2`). `reconstruct_face_flux` evaluates the image form where `image` is set and the unchanged expression of
+D1 elsewhere. `build` and `build_second_order` produce what they produced (the three hashes below).
+
+**E2. The refusal of the unbounded form in the transient solver (Q2 of the registration).** No criterion separates every
+stop from every run without the state of the flow (H8 was refuted). The refusal is a sufficient condition, taken from the
+two measured necessities and from the runs that must not be refused (ADR 0234 V3, largest weight 12.3, which runs because
+the wall term dominates the diagonal): `PimpleSolver` stops the step, before the correctors, when a flux face without an
+image has
+
+    weight > 5   and   (weight - 1) c0 V_c / (dt a_P,c) > 1,
+
+`a_P,c` the momentum diagonal of its fluid cell as assembled in that step (with convection and the forcing), `c0 = c1 - c2`
+of the time scheme (1 for Euler, 3/2 for BDF2 with a constant step). The second number is the largest velocity, in units of
+the velocity the time term carries over from the old level, that the extension can put on the face. Measured before (the
+estimate without convection): R 3.32 (2.28 at its first step), `dt` 5e-4 6.11, CC with `dt` 2.5e-5 8.30, against CC V3 0.30
+and the F-346 runs with `build_second_order` (CC N 48 and 96 at `dt` 2.5e-3 with BDF2, at most `r/2 = 0.75`). The limits 5
+and 1: weights up to 5 were measured to run from the impulsive start; 1 is the value below which the extension cannot return
+more than it is given. Known and accepted: the runs with `dt` 4e-3 and 8e-3 (`G` 0.89, 0.45) are **not** refused and stop by
+the Courant guard as before; "late" and any restart from a developed field **are** refused although they would run (the
+bounded form is the supported path). The stop is a located record (`Divergence`, quantity `immersed flux weight`, the cell,
+the value), with a message naming ADR 0254 and `build_second_order_bounded`. `ImmersedForcing` gets the public field
+`flux_weight_check: bool` (`true` from every constructor); set to `false` the solver does not make the check (used by the
+diagnosis tests so that D0 to D8 stay reproducible, and by D9). SIMPLE has no time term and no check.
+
+Hunks outside `immersed.rs`: `pimple.rs`, one statement after the diagonal is formed and one branch of `Divergence::message`.
+`simple.rs` is not touched.
+
+Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): E1 as a further opt-in rather than a
+change of `build_second_order`; E2 as a located stop rather than a panic; the limits 5 and 1.
+
+### Probes of the existing code (disclosed; a scratch test, deleted, not committed; release, tree 475e79d1, library unchanged)
+
+CC at N 24 with `build_second_order` (`K = 1e8`, `nu = 1`, `theta_min = 1e-2`), FNV-1a over the bits:
+
+- P1 `reconstruct_face_flux` on a pseudo-random `hby_a` (LCG of `immersed_second_order_f309.rs`, seed `0x0355`, values in
+  `[-1, 1]`, two components per cell), hash over `phi` then the source: `1d4b8502a0aeb637`;
+- P2 PISO (`piso(1.0)`, central, Euler), 20 steps of `dt = 0.0025` from rest, hash over `u` then `p`: `36d0549bb0533aa0`;
+- P3 SIMPLEC (`SimpleSettings::new(1.0, Simplec)`, central), 40 iterations from rest: `6d18eb02d60d3a7a`.
+
+### Checks registered now (limits fixed; with those of the registration: A, CC-A1, CC-V3, RF, N1)
+
+"Bounded" is `build_second_order_bounded`. The diagnosis tests D0 to D8 get one line (`flux_weight_check = false` on the
+second-order forcing) and nothing else; they are not run again to obtain a result, except D0 as the check D0' below.
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| D9 | the located cause (above) | as defined above |
+| D0' | D0 on the final tree with the check switched off | stop at step 6, the Courant guard, Courant 1.1094e7 to the five digits printed |
+| P | P1 to P3 on the final tree | the three hashes |
+| UB1 | U1 of ADR 0234 with bounded (`theta_min = 1e-9`, the exact Couette field): `abs(phiHbyA_f/abs(S_f) - u_ext(x_f) . n_f)` over the flux faces | maximum at N 96 `<= 3e-3` (`(0.25 + 0.125) h^2 abs(u'')` with `abs(u'') = 9`: 2.1e-3); rms(48)/rms(96) `>= 3` |
+| UB2 | U2 of ADR 0234 with bounded (CC N 24, pseudo-random `hby_a`, seed `0x0309`): net flux per body; sum of the sources; sources of the fluid cells; other faces | `<= 1e-12 A_b`; `<= 1e-12 sum A_b`; exactly 0; bit-identical |
+| UB3 | structure at CC N 24 and on M2: `coeff`, `source`, `bodies` of bounded equal to `build`; the faces with `weight <= 2` have no image and the weight and wall value of `build_second_order`; every face with `weight > 2` has an image with `0 <= a <= 1`; `build` and `build_second_order` have none | as stated; at least 10 image faces on each mesh; the count of fall-back faces (`d = c`) printed |
+| SB | bounded on R and on every variant that stopped (H1, H2 with 1 and 4 correctors, H3, H6 both, H7 with the four time steps), 200 steps each; CC N 48 PISO with `dt` 2.5e-5, 400 steps | every one "runs" (largest `abs(u) <= 10`; CC: `<= 1`, the first-order control gave 0.50) |
+| A | as registered, the corrected forcing being bounded | no stop; S2 for both runs; `abs(St_bounded/St_first - 1) <= 1e-2` |
+| CC-A1, CC-V3 | as registered, with bounded | as registered |
+| RF | as registered: R with `build_second_order`, one step; in addition bounded on R, one step, and ADR 0234 V3's run (20 steps), F-346's annulus set-up (N 48, BDF2, central, `dt` 2.5e-3, 5 steps) and CC SIMPLEC (5 iterations) with `build_second_order` | R: `diverged` at step 1 with quantity `immersed flux weight`, a cell, value `> 1`, and a message containing "ADR 0254" and "build_second_order_bounded"; none of the others stops |
+
+Printed, no limit: for A the extrema and mean of `C_D`, `C_L` of both runs against FeatFlow, and the Strouhal numbers against
+0.30188; for CC-A1 `e` and `eps` on the three meshes next to the numbers of ADR 0234 (6.121e-3, 1.611e-3, 4.243e-4; order
+1.925), the inner torque; the number of image faces.
+
+**Mutations (the list of the registration, completed).**
+
+| Id | Mutation | Must fail |
+| --- | --- | --- |
+| M1 | the refusal never fires (the comparison `> 1.0` of the growth number made false) | RF |
+| M2 | the refusal fires for every face without an image (both limits removed) | RF (the runs that must not stop) |
+| M3 | bounded builds no image (D1 on every face) | SB |
+| M4 | the fraction `a` from `t_f - theta_e` instead of `t_f - 2 theta_e` | UB1 |
+| M5 | `2 u_G` replaced by `u_G` in the image form | UB1 |
+| M6 | `pimple.rs`: the statement of the refusal removed | RF |
+| M7 | the image form without the far cell (`a = 0` on every image face) | UB1 |
+
+### Decision rule (unchanged), read with this amendment
+
+"One hypothesis confirmed by its registered number" is: H5 and H7 by the variants above, and D9. The first branch needs A, S2,
+CC-A1, CC-V3 with bounded, and RF, P, N1, D0', UB1 to UB3, SB and the mutations; SB or a unit check missed is a known miss
+and the item is partial. The acceptance names `build_second_order`; whether the first branch is reached by a further opt-in
+is a reading, stated in the addendum with the second branch (the diagnosis and the refusal), which is then reached in any case.
+
+### Limits added
+
+The refusal is a sufficient condition, not a stability criterion (two measured stops are outside it). The time-scheme factor
+`c0` is that of Euler for Crank-Nicolson and the bounded BDF2. The image form needs a fluid cell behind the first fluid cell
+on the same line; a fluid gap one cell wide falls back to first order at that face. Non-orthogonal meshes are not checked.
+SIMPLE with under-relaxation below 1 and a large weight is not examined (the checks of ADR 0234 ran SIMPLEC with 1.0).
