@@ -6896,7 +6896,7 @@ fixed by the item's registration ADR before any code.
     priority. ADR 0340 (F-349) found that the fringe velocity is imposed softly on the calculated cells (the following
     coefficient a_c of 0.5 to 0.83 and the kink relation dJ = -(16 nu / 3 h) D at the fringe faces); both are candidates
     for the measurements of this item.
-- [ ] **F-370** Crate rcfd-fem: the data model of a solid model and the structured builders
+- [x] **F-370** Crate rcfd-fem: the data model of a solid model and the structured builders
   - depends on: F-001, F-010, F-012
   - acceptance: Every limit not stated here is registered in the ADR before the run. A new crate rcfd-fem (dependencies
     rcfd-core, rcfd-mesh, rcfd-linalg only) holds the solid data model; the workspace graph test passes with the one
@@ -6907,9 +6907,22 @@ fixed by the item's registration ADR before any code.
     by exactly two elements; the quadratic upgrade has (nodes + edges) nodes and each mid-edge node is the mean of its
     two ends within 1e-15; an inverted element, a node repeated in an element, an empty set, E <= 0 and a Poisson ratio
     outside (-1, 0.5) are each refused with an error naming the element or the key.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0271; the registration is written
-    by the implementation agent before any code. Unblocked 2026-11-12: the maintainer approved ADR 0270 M1 (the
-    workspace_graph.rs line) and named the crate rcfd-fem (M2).
+  - note: DONE pending acceptance, merged 2026-11-12. Structural solver, basic tier (plan ADR 0270). ADR 0271,
+    2026-11-12: the crate rcfd-fem in layer 2 (rcfd-core, rcfd-mesh, rcfd-linalg only; the one approved line of
+    workspace_graph.rs, the architecture page) with the solid data model as validated data through constructors (private
+    fields, non-exhaustive enums and variants): SolidMesh with Tet4, Hex8, Tet10 blocks in the VTK node order (to be
+    confirmed by ADR 0278), outward local faces, node, element and surface sets, and refusals naming the element, node,
+    block, set or key (node out of range, node repeated, det J <= 0 at any node, empty or duplicate sets); DofMap (the
+    only place that knows the unknowns per node), Material (isotropic elastic: e > 0, nu in (-1, 0.5), density >= 0),
+    Constraint, Load (plain data on named sets: nodal force, traction, pressure, gravity, centrifugal, nodal body force,
+    temperature), SolidModel, SolidResult; the builders hex_box, tet_box (Kuhn six-tetrahedra split) and
+    upgrade_to_tet10; the module stubs of the tier. On boxes of 1, 8 and 125 hexahedra and their 6, 48 and 750
+    tetrahedra (edges 1.3, 0.7, 2.1): det J > 0 at every node, volume within 1.9e-15 relative (limit 1e-12), each face
+    set's area within 7.6e-16 (limit 1e-12), outward normals, boundary faces exactly the six sets and interior faces
+    shared by two oppositely oriented elements; the quadratic upgrade has 27, 125, 1331 nodes (nodes plus edges, counted
+    and closed form) with every mid-edge node at the mean of its ends exactly (limit 1e-15) and passes the same geometry
+    checks; inverted elements, a repeated node, empty sets, E <= 0 and nu outside (-1, 0.5) are refused naming the
+    element or the key. Baseline hashes unchanged; ten mutations caught.
 - [ ] **F-371** Solid mesh from the existing meshes: polyhedral mesh, tetrahedral mesher output, patches as surface sets, curved edges
   - depends on: F-370, F-010, F-012, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. A SolidMesh built from box_mesh
@@ -6921,7 +6934,9 @@ fixed by the item's registration ADR before any code.
     the cylinder walls of a quarter annulus the projected nodes lie on their radius within 1e-14 and the volume error of
     the quadratic tetrahedra falls at an observed order of at least 3 under refinement.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0272; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0271 (2026-11-12): upgrade_to_tet10 returns the list of mid-edge
+    nodes with their ends (for the projection); a moved mesh is rebuilt through SolidMesh::new and add_block, which
+    re-validate det J at every node; box surface and node sets are named xmin to zmax as the rcfd_mesh::gen patches.
 - [ ] **F-372** Element library: linear tetrahedron, trilinear hexahedron, quadratic tetrahedron; isotropic elasticity matrix
   - depends on: F-370
   - acceptance: Every limit not stated here is registered in the ADR before the run. For Tet4, Hex8 (2 x 2 x 2 Gauss)
@@ -6932,7 +6947,10 @@ fixed by the item's registration ADR before any code.
     relative and has rank n - 6; each of the six unit strain states gives the strain energy V/2 eps:D:eps within 1e-12
     relative; D gives stress E eps in uniaxial stress and G gamma in shear within 1e-14.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0273; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0271 (2026-11-12) fixes the node orders and local faces of Tet4,
+    Hex8 and Tet10 (rcfd_fem::mesh, TET_EDGES: mid-edge nodes 4 to 9 on edges 01, 12, 02, 03, 13, 23) and provides
+    ElementKind::shape_gradients for the geometry; Material::isotropic_elastic holds the validated e, nu, density,
+    expansion.
 - [x] **F-373** Sparse direct solver for symmetric positive definite matrices (envelope L D L^T after reverse Cuthill-McKee)
   - depends on: F-025, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-linalg gains a direct
@@ -7006,7 +7024,9 @@ fixed by the item's registration ADR before any code.
     written, and a box under uniform strain read back has displacement eps x at every node within 1e-15; a field of the
     wrong length is refused by name.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0278; the registration is written
-    by the implementation agent before any code.
+    by the implementation agent before any code. ADR 0271 (2026-11-12) recalls the Hex8 and Tet10 node orders as VTK's
+    (cell types 12 and 24) without a check; confirm them from the public file-format document and map in the writer if
+    one differs.
 - [ ] **F-378** Verification by a manufactured solution: observed order of displacement and stress for the three elements
   - depends on: F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Manufactured solution: a smooth
