@@ -22,7 +22,7 @@ rcfd-io     -> core, mesh
 rcfd-fv     -> core, mesh, linalg, gpu
 rcfd-particles -> core, mesh   (one-way Lagrangian particle tracking, ADR 0028)
 rcfd-turb   -> core, mesh, fv
-rcfd-post   -> core, mesh
+rcfd-post   -> core, mesh, io, fv, fem   (fem: the VTK output of a solid result and the solid glue modules, ADR 0278)
 rcfd-tsstore -> core, mesh, io   (time-series field store of a run, Studio L3, ADR 0124)
 rcfd-api    -> core, fv, io, particles, tsstore (and the crates above)
 rcfd-workspace -> api, project, runner, tsstore, post, io, mesh   (the project folder's commands, queries and write rule, shared by the MCP server and the Studio; ADR 0173, ADR 0185; io and mesh for the mesh commands, ADR 0187; the project journal's entries and the change feed, ADR 0188)

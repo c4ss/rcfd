@@ -326,3 +326,90 @@ document by the implementer (recalled here, UNVERIFIED).
 
 No reader other than the test's own parser checks the file: that a viewer shows it correctly stays the maintainer's visual
 check. Mid-edge node order of Tet10 differing between the element library and VTK.
+
+## Addendum 1: results (2026-11-12)
+
+Code commit 624db406 (after the registration 4324b930). Each registered test was run once, in release, with
+`cargo test -p rcfd-io --release --test sb_vtk_elements -- --nocapture` and `cargo test -p rcfd-post --release --test
+sb_solid_output -- --nocapture` (logs in `w49i-work/f377-scratch/run_io.log`, `run_post.log`); `cargo fmt` reformatted line
+breaks of the new code and tests after that run (no change of behaviour; `fmt --check` then clean). Nothing was re-run to
+pick a result.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| W1 counts, offsets, types (30 points, 4 cells) | exact | `NumberOfPoints` 30, `NumberOfCells` 4, offsets 4 12 22 30, types 10 12 24 12, connectivity equal | yes |
+| N1 one offset + 1 | reported | "cell 1: offset 13, expected 12" | yes |
+| W2 bits of points, 2 point and 2 cell arrays, special values present | exact | all five bit-equal; all 9 special values present | yes |
+| W3 wrong lengths refused by name | exact | `temperature` (29 of 30), `stress` (25 of 24), `strain` (27 of 24): `path` equal to the name, message names it | yes |
+| W4 other refusals | exact | `cell_type` (42, 13), `connectivity` (9 for type 12; index 30 of 30 points), `zero` (0 components), `name` (empty), `a"b`, `t` (twice) | yes |
+| W5 no existing line of `vtk.rs` changed; rcfd-io tests | 0 deleted; all pass | numstat 211 added, 0 deleted; all rcfd-io tests pass (18 binaries, 0 failed) | yes |
+| P1 arrays, components, bits (file and library) | exact | 8 point arrays and 1 cell array as registered; all 9 bit-equal to `solid_fields`; `solid_fields` bit-equal to the test's assembly from the library calls, three kinds | yes |
+| P2 counts, types, connectivity | exact | Hex8 27 nodes 8 cells type 12, Tet4 27 / 48 type 10, Tet10 125 / 48 type 24; connectivity and point bits equal the mesh's | yes |
+| B1 `max |u_read - eps x|` | `<= 1e-15` | Hex8 0, Tet4 4.3e-19, Tet10 8.7e-19 (relative to max \|u\| = 1.98e-3: 0, 2.2e-16, 4.4e-16); not on the faces: 1, 1, 27 nodes | yes |
+| N3 non-symmetric eps | `> 1e-15` | 8.0e-5 | yes |
+| K1 tetra orientation | all `> 0` | min 6 V = 0.12 (Tet4 and Tet10 corners, 48 cells each) | yes |
+| K2 Tet10 midpoints of the documented pairs | `<= 1e-15` | 0 | yes |
+| N2 positions 5 and 6 swapped | `> 1e-15` | min 0.167 | yes |
+| K3 Hex8 documented edges, vertical edges, base normal | `1e-14 L`, `> 0` | edge length 9.3e-17, vertical 0, min product 0.24 | yes |
+| R1 result of another mesh | `path` "displacement" | "key 'displacement': length 81, expected 375" | yes |
+| E1 von Mises and element stress against `D eps` | `<= 1e-10` | Hex8 5.5e-16 / 2.8e-16, Tet4 2.8e-16 / 5.5e-16, Tet10 1.0e-15 / 1.5e-15 | yes |
+| G1 workspace graph, file unedited | pass | 4 passed | yes |
+| G2 rcfd-fem, rcfd-post, rcfd-io (existing tests unedited), baseline_hashes | pass | all pass; baseline_hashes 3 passed, 1 ignored (as before) | yes |
+
+Mutations (scratch copy `w49i-work/f377-scratch/mut` from `git archive` of 624db406, own target directory, each run once;
+`mutations.txt` and `M*.log` there):
+
+| # | Mutation | Caught by |
+|---|---|---|
+| M1 | offsets as the start of each cell | W1 (and W2, P1, K, E1: the parser refuses the file) |
+| M2 | Tet10 written as type 10 | the writer's own cell-count check refuses the Tet10 file (cell stress 288 values for 120 cells): P1, K, E1 fail |
+| M3 | `NumberOfPoints` = n - 1 | W1 (and every parse) |
+| M4 | `{:.15e}` formatting | W2, P1 file bits |
+| M5 | array length checks removed | W3, W4 |
+| M6 | Tet10 permutation 5 and 6 swapped | K2, P2 |
+| M7 | Hex8 base reversed | K3, P2 |
+| M8 | element stress from the first point | P1 (library bits) |
+| M9 | principal values ascending | P1 (library bits) |
+| M10 | displacement y, x, z | P1 (library bits; B1 not reached) |
+| M11 | reactions from the displacement | P1 (library bits) |
+
+All eleven caught. `cargo fmt -p rcfd-io --check` and `-p rcfd-post --check`: clean. `cargo clippy -p rcfd-io -p rcfd-post
+--all-targets --release -- -D warnings`: clean.
+
+**Deviations.** None from the registered design. `docs/architecture.md`: the line of `rcfd-post` now lists `io, fv, fem`
+(it listed only `core, mesh` before, already out of date for `io` and `fv`). No file of `rcfd-fem` was touched.
+
+**Not run.** No viewer opened the files (registered limit: the maintainer's visual check in ParaView, in particular of the
+type numbers, which are recalled, and the Tet10 order). The whole workspace suite was not run (the lead's gate).
+
+**Decision by the registered rule: done.** Every check of every clause passes and every mutation is caught.
+
+**Remaining questions.**
+
+1. Multi-material models: the nodal average refuses a material interface, so `solid_vtu_string` refuses the whole model.
+   Options: (a) keep; (b) write nodal arrays per element set (one file or one block of arrays per set); (c) write the
+   interface nodes from one side and say so. Recommendation: (b) as a follow-up when the first multi-material case appears
+   (ADR 0288 fan blade is one material).
+2. Size of ASCII files for large models (about 600 bytes per node). Options: (a) keep ASCII; (b) add base64 binary
+   `DataArray`s opt-in. Recommendation: (a) for the basic tier; (b) when a model above 1e5 nodes is written.
+3. The type numbers 10, 12, 24 are recalled, not read from a cited page (the class pages give the orders, not the numbers).
+   Options: (a) the maintainer opens one Hex8 and one Tet10 file in ParaView; (b) cite a document that prints the table.
+   Recommendation: (a), together with the visual check.
+
+## For the lead: roadmap entries
+
+F-377: proposed status **done**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0278, 2026-11-12: rcfd_io::vtk gains fe_vtu_string and write_fe_vtu, an XML .vtu (ASCII, shortest round-trip floats, the existing writer's layout) of finite-element cells from plain arrays (FeCellBlock with VTK_TETRA 10, VTK_HEXAHEDRON 12, VTK_QUADRATIC_TETRA 24; FeArray point and cell data of any component count), refusing an unknown type, a broken connectivity and an array of the wrong length, without components or with a bad name, each naming the array or key; the existing writers are unchanged (211 lines inserted before the test module, none changed) and their tests pass. rcfd_post::solid_output (rcfd-post now depends on rcfd-fem) writes a SolidResult: point arrays displacement, nodal-averaged stress, von_mises, principal_stress and principal_direction_1..3 of that tensor, reaction; cell array stress (element means); solid_fields exposes the arrays. Node orders of Tet4, Hex8 and Tet10 confirmed identical to VTK's from the vtkTetra, vtkHexahedron, vtkQuadraticHexahedron and vtkQuadraticTetra class documentation (no mapping needed; vtk_from_fem keeps the identity table); the type numbers are recalled. Tests parse the files back: counts, offsets and types consistent; every value bit-equal; a 2 x 2 x 2 box under uniform strain has displacement eps x at every node within 8.7e-19 (limit 1e-15) for Hex8, Tet4 and Tet10; documented node orders hold on the files (Tet10 midpoints exact, Hex8 edges within 9.3e-17 L); stresses equal D eps within 1.5e-15; wrong-length arrays refused by name (and a result of another mesh as displacement). Eleven mutations caught. Not checked in a viewer (the maintainer's visual check).
+
+F-384 (ADR 0285), sentence to append to its note:
+
+> ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and the stub module rcfd_post::solid_loads; the solid result's VTK output is rcfd_post::solid_output::write_solid_vtu.
+
+F-385 (ADR 0286), sentence to append to its note:
+
+> ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and the stub module rcfd_post::solid_coupling.
+
+F-386 (ADR 0287), sentence to append to its note:
+
+> ADR 0278 (2026-11-12): a solid run writes its result with rcfd_post::solid_output::write_solid_vtu(path, model, result); a multi-material model is refused by the nodal average (per-set output is an open question of ADR 0278).
