@@ -489,3 +489,127 @@ Correction (limits unchanged):
 The registered test `t_points_on_shared_faces` stays as an ignored record with the measured number; the new test
 `t_points_on_shared_faces_amended` holds T1, T3', T3o and T4 (T1 and T4 are the same deterministic computations as in the
 registered run, where they met). Nothing else changes.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; none was changed. Release builds on Windows. Commits: the registration
+`c5719e83` (alone, before any code); the library change and the test file, compiled, formatted and linted without
+running, `5d1e25ad`; amendment 1 `c87376a9` and its test `b1376e60`. The new test file was run once (`cargo test
+--release -p rcfd-mesh --test overset_f356 -- --nocapture --test-threads=1`, 14 s); after amendment 1 the corrected test
+`t_points_on_shared_faces_amended` was run once (1.2 s). The logs are in `E:/projects/cfd/w49i-work/f356-scratch`
+(`f356-run1.log`, `f356-run2-amended.log`, `f356-a2a-mesh.log`, `f356-a2b-fv.log`, `f356-a2b-f353.log`, `f356-MU1.log` to
+`f356-MU5.log`, `f356-mutations.log`).
+
+### What was built
+
+- `rcfd_mesh::overset`: `face_fan_folds(mesh, f)`; `face_ear_triangles(mesh, f)` (ear clipping of the face's loop in the
+  projection on its area vector); `CellLocator` flags every flat cell that has a point outside one of its own face planes
+  by more than its tolerance as non-convex and tests it, as a warped cell, by the triangles of its faces after the box
+  shortcut; the faces of the triangulated cells whose fan folds are ear-clipped once at construction and used from both
+  sides (a private `ear_margin`: the loop of `triangulated_margin` with the ear triangles in place of the fan for those
+  faces); `CellLocator::n_nonconvex`, `n_ear_clipped`, `n_unsupported`. `containment_margin`, `triangulated_margin`,
+  `face_warp`, `locate`, `locate_brute_force`, `containing_cells`, `Overset` and `connectivity` are textually unchanged;
+  a locator without an ear-clipped face calls `triangulated_margin` as before. One crate touched (`rcfd-mesh`); nothing
+  of `rcfd-fv`.
+- Tests: `crates/rcfd-mesh/tests/overset_f356.rs` (4 tests in the gate, 14 s together; the registered form of the T
+  checks kept as an ignored record).
+- `docs/dynamic-mesh.md`: a paragraph on the donor search on warped and non-convex cells.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 P1, 100000 points: in no cell; in two or more | `0`; `0` | `0`; `0` | met |
+| A1 P2, 100000 points: in no cell; in two or more | `0`; `0` | `0`; `0` | met |
+| A1f P1, P2: the cell against the full search | `0` | `0`, `0` | met |
+| A1r P1, P2: the cell refused by the reference | `0` | `0`, `0` | met |
+| A2a `overset_f352.rs`; unit tests of `rcfd_mesh::overset`; `overset_f336.rs` | pass, unedited | `overset_f352`: 4 passed (`a_b3d_every_fringe_centre_has_its_donor`, `a4_planar_meshes_keep_their_donors_and_stencils`, `s_the_cells_of_a_warped_mesh_tile_it`, `t_points_on_shared_triangles`); K1 to K5 and `pose_inverse_undoes_the_pose`: 6 passed; `overset_f336`: 6 passed, 1 ignored (the record `p_three_dimensions`, not run) | met |
+| A2b the overset test files of `rcfd-fv` | pass, unedited | `overset_f134` 12 passed, 2 ignored; `overset_f134_records` 1; `overset_f314` 4, 8 ignored; `overset_f334` 3, 8 ignored; `overset_f335` 5, 4 ignored; `overset_f335_records` 4; `overset_f336` 5, 2 ignored; `overset_f338` 9, 9 ignored; `overset_f357` 5; and `overset_f353` (from main) 1 passed, 1 ignored; all passed, none failed | met |
+| A4b' non-convex cells of the convex set-ups (RL 1, 2, 4; TG_1, TG_2, TG_4; U; TR; DC; FB; B3; B3s) and of B3d | `0` each | `0` on all thirteen; the largest outward vertex distance over the tolerance `1.54e-4` (TR), between `5.1e-5` and `1.3e-4` on the others (estimate below `1e-3`); B3d (all 16568 cells warped, so no cell of it is a flat cell) `0` | met |
+| A4e B3d: ear-clipped and unsupported faces; fringe donors and 20000 background points against the rule of ADR 0253 | `0`, `0`; `0` | `0`, `0`; `0` of 1069, `0` of 20000 | met |
+| A3 overset on P2, default and quadratic: `connectivity`; donors against the full search and the stencil; donors against the reference; `abs(sum w - 1)`; linear field; `q3` | `Ok`; `0`; `0`; `<= 1e-12`; `<= 1e-11`; `<= 1e-11` | `Ok`, 296 stencils for 296 fringe cells in both modes; `0`; `0`; `4.9e-15`; `1.3e-15`; `8.9e-16`, no fallback | met |
+| S0a P1, P2: `from_face_lists`; warped cells | `Ok`; `0` | `Ok`; `0`, `0` | met |
+| S0b non-convex cells against the reflex base polygons, and the registered numbers | equal; P1 `1125`, P2 `288` | `1125`; `288` | met |
+| S0c ear-clipped faces; unsupported faces | P1 `0`, `0`; P2 `324`, `0` | P1 `0`, `0`; P2 `324`, `0` | met |
+| S0d P2 ear triangles: non-positive orientation or no ear; vector area against `S_f` | `0`; `<= 1e-12` | `0` of 324; `3.2e-16` | met |
+| S0e reference triangles: positive areas; areas against the polygons | `> 0`; `<= 1e-12` | smallest `1.2e-3` (P1), `7.8e-3` (P2); `5.5e-14`, `1.1e-14` | met |
+| T1 P1, P2 face centres: against the full search; refused by the reference | `0`; `0` | `0` of 3424, `0` of 2580; `0`, `0` | met |
+| T3 (registered) P2: mesh points located in a cell that does not have them | `0` | `1176` of 2023, the points of no cell (amendment 1) | defective set-up, kept as an ignored record |
+| T3' P1, P2: interior mesh points against the full search; points of cells located in a cell that does not have them | `0`; `0` | `0` of 900, `0` of 2023; `0` of 900, `0` of 847 | met |
+| T3o P2: mesh points of no cell refused by the reference | `0` | `0` of 1176 | met |
+| T4 P2, 20000 notch points on layer planes: accepted by another cell or by none; against the full search | `0`; `0` | `0`; `0` | met |
+| N1 (control) the rule of M3: points in no cell | P1 `>= 15000`, P2 `>= 30000` | `26305`, `44680` (estimates `26500`, `44600`); in two or more `0`, `0` | held |
+
+Printed, no limit: `CellLocator::new` takes `1.0 ms` (P1) and `1.1 ms` (P2); `locate` takes `6.3` microseconds for each
+point on P1 and `4.5` on P2 (B3d in ADR 0253: `4.5`).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `b1376e60` (`f356-scratch/mut`, own target directory) by `mutate.py` (exact
+replacements that must occur once), the new test file run once, the file restored and compared byte for byte (equal in all
+five).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 no cell flagged non-convex (the present search) | A1 on P1 and P2 | failed: A1 P1 26305 points in no cell, P2 44680 (the numbers of the control N1); S0b, S0c; A3 "no donor for the component fringe cell 865" |
+| MU2 the fold test always false (the fan everywhere) | T4 and S0c | failed: T4 1184 of 20000 notch points accepted by an L-cell (estimate about 1000); S0c 0 ear-clipped faces. A1 met: random points do not see the fold, as derived |
+| MU3 ear-clipped faces: the solid angle not reversed for the neighbour | A1 on P2 | failed: A1 P2 8422 in no cell, 5184 in two; A1r 9742; A3 no donor |
+| MU4 the non-convexity test with the sign reversed | A4b' | failed: A4b' on all twelve convex set-ups (every cell flagged); S0b on P1 (1280) and P2 (864) |
+| MU5 ear clipping without the test of the other points | S0d or A1 or T4 on P2 | failed: S0d `4.0e-2`; T4 118; T3o 6. A1 met |
+
+`scripts/limit_audit.py` on the new test file: no hit.
+
+### Deviations and disclosures
+
+- The registered T3 was ill-posed for P2: the set-up keeps lattice points that belong to no cell (amendment 1, written and
+  committed before the corrected run; the diagnosis is arithmetic, and the measured number equals it exactly). The
+  registered test stays as an ignored record; the corrected test holds T1, T3', T3o and T4, of which T1 and T4 repeat the
+  same deterministic computations as the registered run, with equal numbers.
+- `crates/rcfd-fv/tests/overset_f353.rs` was added to main after this branch was made (F-353, ADR 0259). It was run on
+  the scratch copy of this branch's tree with that file copied in from main (the sources of `rcfd-fv` and `rcfd-mesh` of
+  main differ from this branch's base only in this file and in this item's change): `tr_quadratic_first_ten_steps`
+  passed; its heavy record is ignored and was not run.
+- The predictions held, except that A3 had no fallback at all (I expected a few) and the largest outward vertex ratio on
+  the convex set-ups was `1.5e-4` (I wrote about `1e-4`).
+
+### Not run
+
+- The whole workspace test suite (the lead runs the gate). Run: the overset files of `rcfd-mesh` (the new file, the unit
+  tests of the module, `overset_f336`, `overset_f352`) and the overset files of `rcfd-fv`, release. The other test files
+  of `rcfd-mesh` were not run: `overset.rs` is used only by the overset tests and `rcfd_fv::overset`.
+- The ignored records of the earlier overset files and the heavy record of `overset_f353`.
+- No flow on a non-convex overset mesh; no non-convex cell that is not a prism; no folded warped face.
+
+### After the tests
+
+`cargo fmt -p rcfd-mesh --check` clean. `cargo clippy -p rcfd-mesh --all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Done.** A1, A1f and A1r are met on P1 and P2; A2a, A2b, A4b' and A4e are met; A3, S0, T1, T3' (with T3o) and T4 are met; the control N1 held and the five mutations failed their checks. The registered T3 was a defective set-up corrected by amendment 1 before the corrected run, limits unchanged. Said plainly: the result is kinematic and on prism meshes; the convex meshes are bit-identical because none of their cells reaches the new test.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Refuse what the locator cannot triangulate.** A face of a triangulated cell whose fan folds and for which ear
+  clipping finds no ear (its projection is not a simple polygon) keeps its fan and is only counted (`n_unsupported`); a
+  folded warped face is ear-clipped without a proof that the cell's surface is simple. Options: (a) leave them as counts;
+  (b) refuse them in `Overset::new` with a message naming the face and the cell. **Not taken: (b) could turn a result of
+  today into an error on some mesh; open, for the maintainer.** My recommendation is (b): an error is better than a donor
+  search that may lose points, and no registered set-up has such a face.
+- **Q2. The triangulated test for every cell** (ADR 0253 Q1) stays open as it was; this item does not decide it. With the
+  flag of N1 the triangulated test now covers every cell for which the plane test is wrong, so the reason given for Q1
+  ("it would also repair the search on non-convex cells with planar faces") is gone. My recommendation is to close Q1 as
+  "keep the plane test for convex flat cells".
+- **Q3. A flow on a non-convex overset mesh.** The finite-volume geometry of a cell whose centroid lies outside it (the
+  L-cells of P2) is outside this item. Options: (a) none until a case needs it; (b) the uniform-flow check U1 of ADR 0219
+  on the overset of A3. Recommendation (a): the meshes of the repository that reach the overset are convex. Taken on the
+  maintainer's standing instruction of 2026-11-11 (take the recommendation) as a proposal, not a decision the maintainer
+  made in person.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-356**, proposed status: `done`. Proposed note:
+
+> From ADR 0253 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0260, 2026-11-12: DONE. Derived: the planes of M3 enclose only the kernel of a cell, exact for a convex cell with planar faces and refusing points of its own cell for a non-convex one (smallest example a dart prism); a cell is non-convex exactly when one of its points lies outside one of its face planes. Built in rcfd_mesh::overset: a flat cell with a point outside one of its face planes by more than the locator's tolerance (1e-10 of its box diagonal) is tested by the triangles of its faces as a warped cell of ADR 0253; the fan about the face centre keeps the winding number exact but, where it folds out of a non-convex face, its distance is wrong, so such a face is ear-clipped, the same from both sides (face_fan_folds, face_ear_triangles, CellLocator::n_nonconvex, n_ear_clipped, n_unsupported). Met: on a mesh of dart prisms (1125 of 1280 cells non-convex) and one of L-shaped prisms with triangle prisms in their notches (288 non-convex, 324 ear-clipped faces) every one of 100000 random points lies in exactly one cell, agrees with the full search and with an independent containment test in lattice space; face centres, mesh points and 20000 points on layer planes in the notches are located consistently; an overset on the L-mesh gets all 296 donors, linear and quadratic fields reproduced to 1.3e-15 and 8.9e-16. The present rule leaves 26305 and 44680 of the points in no cell. On the convex set-ups of ADR 0253 no cell is reclassified (largest outward vertex distance 1.5e-4 of the tolerance) and every overset test of rcfd-mesh and rcfd-fv passes unedited; B3d keeps the donors of ADR 0253. Five mutations caught; one ill-posed check corrected by amendment 1. Limits: kinematic only, prism meshes only; a face that cannot be ear-clipped is only counted. Open for the maintainer: whether such faces should be refused (ADR 0260 Q1).
