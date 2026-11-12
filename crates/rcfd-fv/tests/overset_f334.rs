@@ -343,8 +343,13 @@ struct Run {
     t0_error: f64,
     /// Stencil cells that were not calculated, over the steps.
     bad_stencil_cells: usize,
+    /// The velocity at the times `SNAP_TIMES` (amendment 1).
+    snaps: Vec<Vec<Vec3>>,
     secs: f64,
 }
+
+/// Times at which a run keeps its velocity field (amendment 1); every one is a whole number of steps at every level.
+const SNAP_TIMES: [f64; 5] = [0.0025, 0.025, 0.125, 0.25, 0.5];
 
 fn eps(s: &OversetSolver, c: usize, t: f64, amp: f64) -> f64 {
     vec3::norm(vec3::sub(s.u.values[c], tg_u(s.geom.mesh.cell_centres()[c], t, amp))) / (amp * (-2.0 * NU_TG * t).exp())
@@ -383,6 +388,7 @@ fn run(ov: Overset, pose: Pose, cfg: &Cfg) -> Run {
         .map(|c| eps(&s, c, 0.0, cfg.amp))
         .fold(0.0, f64::max);
     let (mut cont, mut delta_max, mut delta_sum, mut bad) = (0.0f64, 0.0f64, 0.0f64, 0usize);
+    let mut snaps = Vec::new();
     for k in 1..=cfg.steps {
         let t = k as f64 * dt;
         let g = s.geom.clone();
@@ -394,6 +400,9 @@ fn run(ov: Overset, pose: Pose, cfg: &Cfg) -> Run {
         cont = cont.max(info.continuity);
         delta_max = delta_max.max(info.delta.abs());
         delta_sum += info.delta.abs();
+        if SNAP_TIMES.iter().any(|ts| (ts - t).abs() < 0.25 * dt) {
+            snaps.push(s.u.values.clone());
+        }
     }
     Run {
         s,
@@ -403,6 +412,7 @@ fn run(ov: Overset, pose: Pose, cfg: &Cfg) -> Run {
         delta_mean: delta_sum / cfg.steps as f64,
         t0_error,
         bad_stencil_cells: bad,
+        snaps,
         secs: t0.elapsed().as_secs_f64(),
     }
 }
@@ -794,10 +804,12 @@ fn cm_coincident_meshes_give_the_background_alone() {
 
 // ---- the acceptance T and the printed numbers ------------------------------------------------------------------------------
 
-/// ADR 0246 T (the acceptance of F-334), C1, and the numbers of Hb.
+/// ADR 0246 T (the acceptance of F-334), C1, and the numbers of Hb. Run once (952 s): C1 met at every level; T missed, the
+/// orders of the root mean square of the calculated component cells are 1.277, 1.166 and 1.626 (`1.5486e-4`, `6.3902e-5`,
+/// `3.9830e-5`, `2.4949e-5` at levels 1 to 4) against the limit 1.7. Kept with the limit intact (ADR 0246 amendment 1).
 #[test]
-#[ignore = "slow (RL at levels 1 to 4, ADR 0246, about ten minutes): run once for the addendum"]
-fn t_rl_levels_1_to_4() {
+#[ignore = "known miss, ADR 0246 amendment 1: T orders of the CC root mean square of RL 1.277, 1.166, 1.626 (limit 1.7); slow"]
+fn t_rl_levels_1_to_4_known_miss() {
     let mut c = Checks::new();
     let mut rows: Vec<(usize, f64, Detail)> = Vec::new();
     for l in [1usize, 2, 3, 4] {
@@ -961,5 +973,171 @@ fn f_families_of_different_levels() {
         bc / (bb + bc),
         (b_b2 + b_c2) / (1.5 * b0)
     );
+    c.finish();
+}
+
+// ---- amendment 1: the response to the truncation of the linear interpolation -------------------------------------------------
+
+/// Ring of every calculated component cell: 1 with a fringe face neighbour, `n + 1` with a face neighbour in ring `n`
+/// (0 for every other cell); as `overset_f314.rs`.
+fn rings(s: &OversetSolver) -> Vec<usize> {
+    let n = s.geom.n_cells();
+    let nb = s.conn.n_background_cells;
+    let ov = &s.coupling.as_ref().unwrap().overset;
+    let calc = |c: usize| c >= nb && s.conn.kind[c] == CellKind::Calculated;
+    let mut ring = vec![0usize; n];
+    let mut front: Vec<usize> = (nb..n)
+        .filter(|&c| calc(c) && ov.neighbours(c).iter().any(|&q| s.conn.kind[q] == CellKind::Fringe))
+        .collect();
+    let mut k = 1;
+    while !front.is_empty() {
+        for &c in &front {
+            ring[c] = k;
+        }
+        let mut next = Vec::new();
+        for &c in &front {
+            for &q in ov.neighbours(c) {
+                if calc(q) && ring[q] == 0 && !next.contains(&q) {
+                    next.push(q);
+                }
+            }
+        }
+        k += 1;
+        front = next;
+    }
+    ring
+}
+
+/// The response `R = u_base - u_variant` of the calculated component cells (amendment 1): its root mean square at every
+/// snapshot time (over the decay factor of that time), and at `t = 0.5` its mean vector, its root mean square over the
+/// rings 1 and 2 and over the rings from 4 on, and its cosine with the error of the variant. Returns the root mean square
+/// at `t = 0.5`.
+fn response(tag: &str, base: &Run, var: &Run) -> f64 {
+    let s = &base.s;
+    let nb = s.conn.n_background_cells;
+    let vol = s.geom.mesh.cell_volumes();
+    let centres = s.geom.mesh.cell_centres();
+    let ring = rings(s);
+    assert_eq!(
+        base.snaps.len(),
+        SNAP_TIMES.len(),
+        "a snapshot time is not a whole number of steps"
+    );
+    assert_eq!(
+        var.snaps.len(),
+        SNAP_TIMES.len(),
+        "a snapshot time is not a whole number of steps"
+    );
+    let mut hist = Vec::new();
+    for (k, t) in SNAP_TIMES.iter().enumerate() {
+        let scale = (-2.0 * NU_TG * t).exp();
+        let (mut sum, mut vsum) = (0.0, 0.0);
+        for c in nb..s.geom.n_cells() {
+            if ring[c] > 0 {
+                let d = vec3::sub(base.snaps[k][c], var.snaps[k][c]);
+                sum += vol[c] * vec3::dot(d, d);
+                vsum += vol[c];
+            }
+        }
+        hist.push((sum / vsum).sqrt() / scale);
+    }
+    let scale = (-2.0 * NU_TG * T_END).exp();
+    let (mut mean, mut vsum) = ([0.0; 3], 0.0);
+    let (mut near, mut inner) = (Acc::default(), Acc::default());
+    let (mut re, mut rr, mut ee) = (0.0, 0.0, 0.0);
+    for c in nb..s.geom.n_cells() {
+        if ring[c] == 0 {
+            continue;
+        }
+        let r = vec3::scale(vec3::sub(s.u.values[c], var.s.u.values[c]), 1.0 / scale);
+        let e = vec3::scale(vec3::sub(var.s.u.values[c], tg_u(centres[c], T_END, 1.0)), 1.0 / scale);
+        mean = vec3::add(mean, vec3::scale(r, vol[c]));
+        vsum += vol[c];
+        re += vol[c] * vec3::dot(r, e);
+        rr += vol[c] * vec3::dot(r, r);
+        ee += vol[c] * vec3::dot(e, e);
+        if ring[c] <= 2 {
+            near.add(vec3::norm(r));
+        } else if ring[c] >= 4 {
+            inner.add(vec3::norm(r));
+        }
+    }
+    println!(
+        "{tag}: rms of R at t = 0.0025, 0.025, 0.125, 0.25, 0.5: {}; mean vector ({:.3e}, {:.3e}); rings 1 and 2 {:.4e}, rings from 4 on {:.4e}; cosine with the error of the variant {:.4}",
+        hist.iter().map(|h| format!("{h:.4e}")).collect::<Vec<_>>().join(", "),
+        mean[0] / vsum,
+        mean[1] / vsum,
+        near.rms(),
+        inner.rms(),
+        re / (rr * ee).sqrt()
+    );
+    hist[4]
+}
+
+/// Amendment 1 at one level: RL with the library stencils and with the nine-cell stencils of `variants`; the errors with
+/// the centre and with the cell mean as the reference, and the responses. Returns the root mean square of the error of
+/// the last variant and of its response.
+fn a1_level(l: usize, variants: &[(&str, bool, bool)], c: &mut Checks) -> (f64, f64) {
+    let base = rl(l, l, |_| {});
+    report(&format!("A1 RL level {l}"), &base);
+    println!(
+        "A1 level {l}: base CC rms {:.4e}, with the cell mean {:.4e}",
+        cc_error(&base, false).0,
+        cc_error(&base, true).0
+    );
+    let mut last = (0.0, 0.0);
+    for &(tag, cf, bf) in variants {
+        let r = rl(l, l, |cfg| cfg.stencils = Stencils::Quadratic { cf, bf });
+        report(&format!("A1 {tag} level {l}"), &r);
+        c.at_most(&format!("C1 A1 {tag} level {l} continuity"), r.cont, 1e-9);
+        c.holds(
+            &format!("A1 {tag} level {l}: every stencil cell calculated"),
+            r.bad_stencil_cells == 0,
+            &format!("{} that are not", r.bad_stencil_cells),
+        );
+        let e = cc_error(&r, false).0;
+        println!(
+            "A1 level {l}: {tag} CC rms {e:.4e}, with the cell mean {:.4e}",
+            cc_error(&r, true).0
+        );
+        last = (e, response(&format!("A1 level {l}: R of {tag}"), &base, &r));
+    }
+    println!("A1 level {l}: RESULT e_Q {:.6e} R {:.6e}", last.0, last.1);
+    last
+}
+
+const A1_ALL: [(&str, bool, bool); 3] = [("Qc", true, false), ("Qb", false, true), ("Qcb", true, true)];
+
+/// ADR 0246 amendment 1, levels 1 and 2: TQ and H12 on the first pair of levels.
+#[test]
+#[ignore = "slow (RL at levels 1 and 2 with three stencil variants, ADR 0246 amendment 1, minutes): run once"]
+fn a1_response_levels_1_and_2() {
+    let mut c = Checks::new();
+    let a = a1_level(1, &A1_ALL, &mut c);
+    let b = a1_level(2, &A1_ALL, &mut c);
+    println!("A1 levels 1 to 2: order of R {:.4}", order(a.1, b.1, 2.0));
+    c.at_least(
+        "TQ order of the CC rms with the nine-cell stencils, levels 1 to 2",
+        order(a.0, b.0, 2.0),
+        1.7,
+    );
+    c.finish();
+}
+
+/// ADR 0246 amendment 1, level 3 (the orders against the levels 2 and 4 are formed in the ADR from the printed numbers).
+#[test]
+#[ignore = "slow (RL at level 3 with three stencil variants, ADR 0246 amendment 1, about fifteen minutes): run once"]
+fn a1_response_level_3() {
+    let mut c = Checks::new();
+    a1_level(3, &A1_ALL, &mut c);
+    c.finish();
+}
+
+/// ADR 0246 amendment 1, level 4 (the nine-cell stencils on both fringes only).
+#[test]
+#[ignore = "slow (RL at level 4 twice, ADR 0246 amendment 1, about half an hour): run once"]
+fn a1_response_level_4() {
+    let mut c = Checks::new();
+    a1_level(4, &A1_ALL[2..], &mut c);
     c.finish();
 }

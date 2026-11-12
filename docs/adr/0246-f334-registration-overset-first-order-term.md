@@ -213,3 +213,66 @@ above).
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the registered runs and before any further run)
+
+The registered tests were committed (`ff117ee5`, compiled, formatted and linted without running) and then run once each,
+release, on the library of main 2c07d031: the kinematic test and CM together (144 s), T (952 s), the switches (617 s) and
+the families (866 s). All numbers are in addendum 1. Met: C1 (every run), C2, K1, K2; CM held (`7.2e-9`, `2.7e-9`); ND held
+(`rho_donor = 170`). Decided by their registered numbers: Ht ruled out (`0.099`, `0.089`), Hs ruled out (`0.175`), Hc ruled
+out (`0`, bit for bit), (a3) ruled out (`rho_pin = 1.0000`), Hn linear (`rho_A = 0.9993`), Hq confirmed (`rho_Qcb = 0.179`;
+`rho_Qc = -0.038`, `rho_Qb = 0.588`, so not attributed to one fringe by the rule), Hf mixed (`s_C = 0.489`, `k = 1.077`).
+Four results need this amendment:
+
+| Id | Limit or deciding number | Measured |
+| --- | --- | --- |
+| T | orders `>= 1.7` | `1.277`, `1.166`, `1.626` (`e_L` `1.5486e-4`, `6.3902e-5`, `3.9830e-5`, `2.4949e-5`) |
+| the fit of ADR 0232 at level 4 | predicted `2.86e-5` | `2.4949e-5`; `b` of the levels 2 and 4 is `7.18e-5`, not `1.007e-4` |
+| Hd | ruled out: `abs(rho_mean - 1) <= 0.1`; confirmed: `rho_mean <= 0.5` | `rho_mean = 0.617`: neither |
+| (a1) | confirmed: Hq confirmed and Hn linear | confirmed by that rule; but the mean normal velocity defect of the interpolated velocity is `-1.6e-5`, `-8.8e-7`, `-1.2e-7`, `-2.0e-8` at levels 1 to 4, far below `e_L` |
+
+**T** is missed and is kept as the ignored test `t_rl_levels_1_to_4_known_miss` with the limit intact. It is not run again.
+
+**The fit.** `e_L L^2` is `1.549e-4`, `2.556e-4`, `3.585e-4`, `3.992e-4`: it grows by `1.01e-4`, `1.03e-4` and then by
+`0.41e-4`. A term `1.0e-4 / L` would keep it growing by `1.0e-4` per level. The model `a / L^2 + b / L` of ADR 0232 does
+not describe level 4, so `b^` (which rests on that model) is a measure of the levels 1 and 2 only, as the limits of this
+registration say.
+
+**(a1).** The rule that I registered for (a1) cannot tell the mass defect from any other path that is linear in the
+velocity; the direct number (the defect itself) is three orders of magnitude below the error. (a1) is reported as
+"confirmed by the letter of the rule, contradicted by the direct number", and is not used to name the source. The flux
+defect `D_CF` (Hb) is `8.6e-5`, `1.5e-5`, `6.2e-6`, `3.1e-6` (orders `2.53`, `2.17`, `2.43`), so the flux and the cell
+velocity agree at the fringe faces at second order: Hb is ruled out by its number.
+
+**What the switches show beyond their deciding numbers.** With the nine-cell stencils on both fringes the error of the
+calculated component cells is *larger* at the levels 1 and 2 (`3.241e-4`, `8.553e-5`, order `1.92`), it is almost a pure
+multiple of the exact velocity (share `0.986`, `0.978`), and it equals the error of the background alone over the same
+region (`3.235e-4`, `8.529e-5`, Hs). With the linear stencils the share is `0.47` to `0.51` and the mean error vector has
+the opposite sign. So the error with the library stencils looks like the sum of two parts of opposite sign: the
+discretisation error that a single mesh has too (an amplitude error, second order), and the response of the calculated
+cells to the truncation of the linear interpolation. `rho_mean = 0.617` fits this: the cell mean differs from the centre
+value by `-h^2 / 12` times the exact velocity, a multiple of the exact velocity again, and it changes `b^` by 38 percent,
+which a first-order term of another shape would not allow.
+
+New hypothesis, with direct measures that do not rest on the model `a / L^2 + b / L`:
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| H12 | there is no first-order term: `u_base - u_ex = (u_Q - u_ex) + R`, where the error with the nine-cell stencils `e_Q` and the response `R = u_base - u_Qcb` (the two runs on the same mesh, cell by cell) are each of second order and of opposite sign, and the low order of `e_L` is their partial cancellation | RL at levels 1 to 4 with the library stencils and with `Qcb` (levels 1 to 3 also with `Qc` and `Qb`): the root mean square over CC of `e_Q` and of `R` at `t = 0.5`, their orders between successive levels, and the cosine of `R` with the error field of the `Qcb` run | confirmed: the orders of `e_Q` (TQ below) and of `R` are at least 1.7 on each of the three pairs and the cosine is at most `-0.5` at every level; ruled out: the order of `R` is below 1.5 on the pairs 2 to 3 and 3 to 4 (then `R` carries the term and is diagnosed further); otherwise undecided |
+
+New check: **TQ**, RL at levels 1 to 4 with the nine-cell stencils on both fringes (`200 L` steps): the orders of the root
+mean square of the error of the calculated component cells between successive levels, limit `>= 1.7` each. The levels run
+in three test processes (1 and 2; 3; 4); the pair 1 to 2 is asserted in its test, the pairs 2 to 3 and 3 to 4 are formed
+in the addendum from the printed numbers, and a pair that misses gets an ignored record test with the numbers.
+
+Printed with it, no limit: the error of every run with the cell mean as the reference; `R` of `Qc` and of `Qb` (levels 1
+to 3); for every `R` its root mean square at `t = 0.0025`, `0.025`, `0.125`, `0.25`, `0.5` (whether it is there after the
+first steps or grows), its mean vector, its root mean square over the rings 1 and 2 and over the rings from 4 on.
+
+Tests: `a1_response_levels_1_and_2`, `a1_response_level_3`, `a1_response_level_4` (ignored, slow, run once each; they
+repeat the RL runs of T, which are deterministic). The run helper keeps the velocity at the five times since this
+amendment; the registered runs are unchanged. Prediction (mine): TQ met with orders near 1.9 to 2.0; the order of `R`
+between 1.6 and 1.9 with the cosine near `-0.9`; I do not know whether `R` reaches 1.7 on every pair.
+
+The decision rule is unchanged. A confirmed H12 names the source (the second branch of the acceptance) with the numbers of
+the two parts; T stays missed on the library's stencils.
