@@ -107,6 +107,17 @@ impl std::fmt::Display for RpcError {
 
 pub(crate) type Rpc<T = Value> = std::result::Result<T, RpcError>;
 
+/// The series names and the lower bound of `monitors.get` (ADR 0353): `names` ignored unless an array, non-string entries
+/// skipped, `since` ignored unless a number.
+fn monitors_selection(p: &Value) -> (Option<Vec<&str>>, Option<f64>) {
+    let since = p.get("since").and_then(Value::as_f64);
+    let names = p
+        .get("names")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect());
+    (names, since)
+}
+
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
@@ -648,23 +659,8 @@ impl Service {
                 let s = self.session(p)?;
                 let sim = self.sim(&s)?;
                 let sim = lock(&sim);
-                let since = p.get("since").and_then(Value::as_f64);
-                let names: Option<Vec<&str>> = p
-                    .get("names")
-                    .and_then(Value::as_array)
-                    .map(|a| a.iter().filter_map(Value::as_str).collect());
-                let mut doc = sim.monitors.to_json();
-                if let (Some(series), true) = (doc["series"].as_object_mut(), names.is_some() || since.is_some()) {
-                    series.retain(|k, _| names.as_ref().is_none_or(|n| n.contains(&k.as_str())));
-                    if let Some(after) = since {
-                        for (k, v) in series.iter_mut() {
-                            if let Some(sl) = sim.monitors.since(k, after) {
-                                *v = json!({"unit": sl.unit, "x": sl.x, "y": sl.y});
-                            }
-                        }
-                    }
-                }
-                Ok(doc)
+                let (names, since) = monitors_selection(p);
+                Ok(sim.monitors.to_json_filtered(names.as_deref(), since))
             }
             "reports.get" => {
                 let s = self.session(p)?;
@@ -1752,6 +1748,32 @@ impl Service {
         })
     }
 
+    /// The reply line of a valid `monitors.get` request that finds its session, built without a `Value` for the document:
+    /// `Some(bytes)` (empty for a notification), `None` for any other request or an error, which take `handle_request`
+    /// (ADR 0353). The bytes are those of `handle_request`'s response printed by `to_string()` plus a newline.
+    fn monitors_get_line(self: &Arc<Self>, req: &Value) -> Option<Vec<u8>> {
+        if req.get("jsonrpc") != Some(&json!("2.0")) || req.get("method").and_then(Value::as_str) != Some("monitors.get") {
+            return None;
+        }
+        let null = Value::Null;
+        let p = req.get("params").unwrap_or(&null);
+        let s = self.session(p).ok()?;
+        let sim = self.sim(&s).ok()?;
+        let Some(id) = req.get("id") else {
+            return Some(Vec::new()); // a notification: no reply, as before
+        };
+        let (names, since) = monitors_selection(p);
+        let mut out = Vec::new();
+        // keys in sorted order, as `Value`'s printer does without `preserve_order`: id, jsonrpc, result
+        out.extend_from_slice(b"{\"id\":");
+        out.extend_from_slice(id.to_string().as_bytes());
+        out.extend_from_slice(b",\"jsonrpc\":\"2.0\",\"result\":");
+        lock(&sim).monitors.write_json_filtered(&mut out, names.as_deref(), since);
+        out.extend_from_slice(b"}
+");
+        Some(out)
+    }
+
     /// Serve one connection: newline-delimited JSON-RPC requests in, responses out.
     pub fn serve_stream(self: &Arc<Self>, reader: impl std::io::Read, mut writer: impl Write) -> std::io::Result<()> {
         for line in BufReader::new(reader).lines() {
@@ -1760,7 +1782,17 @@ impl Service {
                 continue;
             }
             let resp = match serde_json::from_str::<Value>(&line) {
-                Ok(req) => self.handle_request(&req),
+                Ok(req) => {
+                    if let Some(bytes) = self.monitors_get_line(&req) {
+                        // the document is written straight into the reply line, without a `Value` tree (ADR 0353)
+                        if !bytes.is_empty() {
+                            writer.write_all(&bytes)?;
+                            writer.flush()?;
+                        }
+                        continue;
+                    }
+                    self.handle_request(&req)
+                }
                 Err(e) => Some(json!({
                     "jsonrpc": "2.0", "id": null,
                     "error": RpcError::new(code::PARSE, format!("parse error: {e}")).to_json(),
