@@ -406,3 +406,42 @@ weights only: no geometric search, no radial-basis functions, no unmapped-value 
 predictor (the predictor is the flow's force at `t_n`), no quasi-Newton update, no sub-cycling test (the protocol allows a
 participant to sub-cycle; the mock does not). The flow step is implicit Euler (the moving-mesh step has no other). The
 added-mass factor `2M/(2M + m_a)` is that of ADR 0250's pairing. Heat transfer across the interface is not exchanged.
+
+## Amendment 1 (2026-11-12, written while the test file was being written, before any run of any check)
+
+**The set-up CW as registered does not realise the model problem P1: its side walls are open to a transverse flow.** The
+registration copied "the four sides zero-gradient" from the piston of ADR 0250, where the flow is a plug and nothing moves
+toward a side. Reading `crates/rcfd-fv/src/pressure.rs` (`pressure_bc`, `boundary_hby_a`) after the registration and before
+any run: on a patch whose velocity condition is `ZeroGradient` the normal velocity is not prescribed (`fixed_u` is false),
+the pressure condition stays zero-gradient, and the face flux is `HbyA . S` of the owner cell, uncorrected. For the plug
+that flux is zero. For mode 1, whose fluid moves across the channel next to the wall, the sides `ymin` and `ymax` would let
+it through: not the slip walls of P1, and not the closed form's `p_y = 0`. The registration should have read the flux
+treatment of the side condition before reusing it for a flow that is not a plug; it did not. No run showed it.
+
+- **CWs (replaces CW in every check: A1 to A5, S5, SN1, M1 to M3, MN1, R1, E1, N1, N2, C3, B2).** CW with the velocity
+  condition `Symmetry` on `ymin` and `ymax` (zero normal velocity, zero-gradient tangential velocity; the pressure
+  equation then takes a zero normal gradient and the prescribed zero flux there). `zmin` and `zmax` stay `ZeroGradient`
+  as in ADR 0250 (nothing moves along z). Every limit, the model numbers of A3, the settings C3 and the mesh are unchanged:
+  the model of the arithmetic already had impermeable sides.
+- **The known limitation of `Symmetry` with the default averaged diagonal** (ADR 0033 addendum, `docs/dynamic-mesh.md`: the
+  Dirichlet term of the normal component leaks into the tangential ones as a sink `(a_P - a_t) u_t`). Its size here: `a_P -
+  a_x = nu S/(3 dn)` in a side cell, a friction rate `nu/(3 dn dy) = 1e-4/(3 x 0.025 x 0.05) = 0.027/s` in the two of eight
+  cell columns next to `ymin` and `ymax`, `0.007/s` on average against `omega_0 = 6.3/s`: a force in phase with the
+  velocity, `1e-3` of the inertial one, so a damping and no first-order frequency shift. (ADR 0033 met it at `nu = 0.01`,
+  a hundred times larger.) The default diagonal is therefore kept (`component_diagonal = false`), and no limit is widened
+  for it.
+- **The registered CW** (zero-gradient `ymin`, `ymax`) stays in the file as
+  `a2_registered_set_up_zero_gradient_sides_record`, ignored, with A2's limits intact, run once for the record. Expectation:
+  mode 0 as CWs (the plug does not touch the sides); mode 1 with less added mass than the closed form, `omega_m/omega_1`
+  above 1.03 and at most `sqrt((m + rho l_1)/m) = 1.23`.
+- The one-segment set-up SPm1 (Q1, and the second half of B2) is the piston of ADR 0250, a plug: its four sides stay
+  `ZeroGradient`, as registered.
+- The command of "After the code" becomes `cargo test --release -p rcfd-fv --test cosim_f139 -- --test-threads=1
+  --nocapture` (every registered check; the heavy tests are ignored only in a debug build), and the record separately,
+  once, with `--ignored --exact`.
+
+The other points of the set-up were gone through for the same kind of defect (a condition taken from the plug that a
+two-dimensional flow breaks): the outlet (`p = 0`, zero-gradient velocity: the closed form's `p(L) = 0`; mode 1 has decayed
+by `exp(-kappa_1 L) = 4e-4` there); the mesh smoothing (the sides are `Slip`, the wall points move along x only, which is
+in the plane of every side); the wall itself (`set_follow_conditions` gives it no tangential velocity: a no-slip wall,
+estimated in P3). Nothing else is changed.
