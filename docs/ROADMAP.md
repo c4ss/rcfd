@@ -6951,16 +6951,29 @@ fixed by the item's registration ADR before any code.
     component-diagonal and all-together channels missed (3000 steps do not reach a steady state with a symmetry plane,
     whose start-up decays at nu (pi/2H)^2); their identities were met only after amendment 1 (8000 steps). The opt-in is
     not yet folded into ConsistentCorrectors (ADR 0360 Q1) and there is no case key.
-- [ ] **F-368** Overset: opt-in skewness and non-orthogonal corrections in the overset step
+- [x] **F-368** Overset: opt-in skewness and non-orthogonal corrections in the overset step
   - depends on: F-359
   - acceptance: An opt-in of the overset step that adds the explicit non-orthogonal correction to the momentum diffusion
     and the pressure Laplacian and a skewness correction to the central face value and the Rhie-Chow face flux; with it
     the linear shear of ADR 0264 on B3d with the component moving has an error of the calculated and fringe cells at
     most twice that on B3 with the default and with the quadratic donor interpolation, continuity of the calculated
     cells within 1e-9 at every step, the uniform flow of ADR 0255 within 1e-10, and the defaults bit-identical.
-  - note: From ADR 0264 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. On
-    warped cells the overset step leaves a residual for an exact linear field (convection 0.14, diffusion 0.025); the
-    single warped mesh, not the coupling, carries 0.89 of the error.
+  - note: From ADR 0264 Q1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0367,
+    2026-11-12: DONE (pending acceptance). Opt-in OversetSolver::set_geometry_corrections(true): the face flux of a cell
+    field (the Rhie-Chow flux of HbyA, the refreshed and the initial flux, the ddt_correction interpolation) is the
+    exact flux of a linear field through the mesh's triangulated faces (skewness term plus a warp tensor for non-planar
+    faces, least-squares gradients donor-interpolated in fringe cells), the convected face value carries the same
+    correction, the momentum diffusion the explicit non-orthogonal correction, and phiHbyA the explicit non-orthogonal
+    flux of the pressure (shared by the pressure equation and the flux). With it the linear shear of ADR 0264 on B3d
+    with the component moving has E 9.97e-4 (default stencils) and 1.005e-3 (quadratic) against 8.72e-4 on B3: ratios
+    1.14 and 1.15 (limit 2; 15.6 without), whether B3 runs with the opt-in or the default; continuity 1.9e-14 or less
+    every step; the uniform flow of ADR 0255 within 7.5e-15 (velocity) and 1.3e-13 (pressure). The corrected operators
+    keep the exact field to round-off in continuity, diffusion and the pressure flux (from 0.075, 0.025, 0.27) and to
+    1.8e-3 in convection (second order, from 0.14). Defaults bit-identical: eight fingerprints equal before and after,
+    baseline_hashes and the 14 overset test files and the rcfd-fv lib tests pass unedited. Control held; seven mutations
+    caught by their registered checks. Refused with BDF2, a prescribed fringe flux and rhie_chow_step_consistent.
+    Limits: one linear flow (constant pressure), one warp, one resolution; planar boundary faces; the rest of the error
+    on B3d is the coupling's (warped meshes alone 3.1e-4), the open excess of ADR 0264 Q2.
 - [ ] **F-369** Overset: the coupling's share of the error of a linear field on the planar B3
   - depends on: F-359
   - acceptance: On the planar B3 with the linear shear of ADR 0264 (error 8.7e-4 against 2.1e-4 for the planar component
@@ -8696,3 +8709,11 @@ fixed by the item's registration ADR before any code.
     maintainer, not re-recorded.
   - note: From ADR 0305 question 1 (the same ordering defect was fixed in amg_elastic by its amendment 1). NEEDS THE
     USER if the fix moves any fluid result or registered hash: the hash is reported, never re-recorded.
+- [ ] **F-472** Overset: the geometry corrections with a varying pressure on B3d
+  - depends on: F-368
+  - acceptance: With OversetSolver::set_geometry_corrections on, a three-dimensional flow with a known varying pressure
+    (a decaying vortex or a manufactured solution) on B3 and B3d with the component moving as in ADR 0255: the error of
+    the calculated and fringe cells on B3d at most twice that on B3 with the default and the quadratic donor
+    interpolation, continuity within 1e-9 at every step, with a run that names the share of the uncorrected Green-Gauss
+    pressure gradient.
+  - note: From ADR 0367 question 2; low priority.
