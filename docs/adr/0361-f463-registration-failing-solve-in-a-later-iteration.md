@@ -196,3 +196,105 @@ a defect. **todo**: the test file does not build.
   forces); the fluid's checkpoint slot, `f0`, and the solid's checkpoint slot are not compared.
 - The solver's message is checked by the substring recorded in ADR 0286 addendum 1, not by a text written independently of the
   library.
+
+## Addendum 1: results (2026-11-12)
+
+Registered run: commit 913947f1 (the test file, committed before the run), `cargo test --release -p rcfd-post --test
+sb_solid_coupling_fail -- --nocapture --test-threads=1`, log `w49i-work/f463-scratch/registered_run.log`, run once: 3 passed,
+0.12 s. Deviation from "each run once": the later `cargo test --release -p rcfd-post` (all targets, for the house rule) ran
+this file a second time with the same result (3 passed); no result was picked from it. Release profile throughout.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| P1a healthy step, Aitken: converged, iterations | converged, `== 3` | converged, 3 | yes |
+| P1b test quantity of iteration 1 against 15 | `<= 1e-6` relative | 14.999999999998948 (7.0e-14) | yes |
+| P1c test quantity of iteration 2 against 0.375/1.025 | `<= 1e-6` relative | 0.3658536585365908 (1.5e-14) | yes |
+| P1d test quantity of iteration 3 | `<= 1e-10` | 5.8e-16 | yes |
+| P1e advances of the solid in the step | `== 3` | 3 | yes |
+| P2 largest `|u_x - 2u*|/2u*` | `<= 1e-8` | 1.9e-15 | yes |
+| P3 the step changes both states | both differ | both differ | yes |
+| P4 (a to e, P2, P3) as P1 with least squares | as P1 | residuals identical to P1's; 3 iterations, 3 advances | yes |
+| A2a participant `solid`, iteration 2 | exactly | `solid`, 2 | yes |
+| A2b message: solid named, `solver cg-jacobi: not converged in 1 iterations`, no `restore failed` | contains | `static solid 'solid': solver cg-jacobi: not converged in 1 iterations (residual 2.58e5 from 2.44e5, tolerance 1e-14 relative)` | yes |
+| A2c error time bit-equal to the start | 0 bits | 0 | yes |
+| A2d advances of the solid | `== 2` | 2 | yes |
+| A2e fluid and solid bits equal to the start | 0 bits | 0 | yes |
+| A2f retry reproduces the control (extension) | 0 bits | 0 | yes |
+| A3a to A3f as A2 at the 3rd advance | as A2 (`iteration == 3`, `calls == 3`) | as stated; message residual 3.18e5 from 3.00e5 | yes |
+| L2a to L2f, L3a to L3f (least squares) | as A2, A3 | as stated | yes |
+| N1 failure at the 4th advance never reached | Ok, 3 iterations, 3 advances, bit-equal to control | as stated | yes |
+
+The reachability argument of the arithmetic holds as measured: test quantities 15, 0.366, 5.8e-16, three advances. The
+least-squares and the Aitken steps coincide here (same three residuals bit for bit), as steps 5 and 6 of the arithmetic predict
+for a scalar linear iteration.
+
+### Mutations (scratch copy `w49i-work/f463-scratch/mut` of 913947f1, script `mutate.py`, log `mutations.log`, each run once)
+
+| Id | Change | Result |
+|---|---|---|
+| M1 | restore without the displacement | caught: A2e, A3e, L2e, L3e |
+| M2 | restore without the interface forces | caught: A2e, A3e, L2e, L3e |
+| M3 | restore without the time | caught by P1 (the healthy step's time check; the control's `unwrap` panics in all three tests, so A2e to L3e are not reached) |
+| M4 | `name()` returns `""` | caught: A2a, A3a, L2a, L3a |
+| M5 | solver text dropped from the error | caught: A2b, A3b, L2b, L3b |
+| M6 | iteration reported `k + 1` | caught: A2a, A3a, L2a, L3a |
+| M7 | iteration reported `k - 1` | caught: A2a, A3a, L2a, L3a |
+| M8 | fluid not restored at `k > 1` nor at the error | caught by P1 (time check, panic in all three tests) |
+| M9 | structure restore at the error skipped | survived, as registered (equivalent: finding 2) |
+| M10 | structure restore at `k > 1` skipped | caught by P1 (time check) in all three tests, as registered; A2 and L2 are not reached because of that panic, so the registered allowance of surviving there was not tested |
+| M11 | fluid restore at the error skipped | survived, as registered (equivalent) |
+| M12 | mock `restore` without the wall displacement | caught: A2e, A2f, A3e, A3f, L2e, L2f, L3e, L3f |
+| M13 | mock `restore` without the time | caught by P1 (time check) |
+| M14 | wrapper switches one advance early | caught: A2a, A2d, A3a, A3d, L2a, L2d, L3a, L3d, and N1 |
+
+All twelve mutations registered as "caught" were caught by a registered check; the two registered survivors (M9, M11)
+survived. M3, M8, M10 and M13 are caught by the control P1 before the failing-step checks run, which is what the
+registration named for M8, M10 and M13 and as an additional catcher for M3; the A-e checks for those four were therefore
+not shown to catch them on their own (unmeasured, not a miss).
+
+### Other checks run
+
+- `cargo test --release -p rcfd-post`, all targets, existing tests unedited: every suite passed (log `post_all.log`);
+  `sb_solid_coupling` 11 passed, 1 ignored (the F2 record), `sb_solid_coupling_fail` 3 passed.
+- `cargo fmt -p rcfd-post --check`: clean. `cargo clippy -p rcfd-post --all-targets --release -- -D warnings`: clean.
+- Defaults: no library, shared solver file, golden or hash table changed (tests only); `baseline_hashes` not run (rule 3).
+
+### Deviations and what was not run
+
+- The all-targets test run executed the new file a second time (above).
+- Not run: a failure of the fluid or of the time check in a later iteration (the coupler's own restore at the error; M9 and
+  M11 show that a structure failure does not exercise it), iterations beyond 3, a flow solver.
+
+### Decision by the registered rule
+
+**done.** Every check (P1 to P4, A2, A3, L2, L3, N1, extensions included) met on its registered run, the control reaches
+iteration 3 as derived, and every mutation registered as caught was caught; the two registered survivors survived.
+
+### Remaining questions
+
+1. **The coupler's restore at the error is untested by structure failures.** M9 and M11 survive because both participants are
+   already restored when the structure's solve fails. Options: (a) leave it; (b) a follow-up item with a failing fluid (a mock
+   fluid returning an error in iteration 2 and 3) so that the error arm's restore is observable. Recommendation: (b), a small
+   item, since the claim "both restored" then rests on both restore sites.
+2. **A2e to L3e for M3, M8, M10, M13.** The control panics first. Options: (a) accept; (b) a follow-up that runs these
+   mutations against the failing-step checks alone. Recommendation: (a): P1 is itself a registered check and the mutations are
+   caught.
+3. **F-385's status.** ADR 0286 is partial by Rule I (a missed registered F2); this item registers and meets the follow-up it
+   asked for. Options: (a) leave F-385 partial and note F-463 in its note; (b) mark F-385 done. Recommendation: (a), by the rule
+   as written; the lead decides.
+
+### For the lead: roadmap entries
+
+F-463: proposed status **done**. Note:
+
+> Structural solver, basic tier. ADR 0361, 2026-11-12: tests only, crates/rcfd-post/tests/sb_solid_coupling_fail.rs (ADR 0286's test file is not edited; the single run of ADR 0286's corrected F2b after its amendment 1 is disclosed). With the StaticSolid and the mock fluid of ADR 0286 (k_f 1.5 k_s, Aitken and least squares, tolerance 1e-10), a converged step then the mock's F0 doubled: worked out by hand before the run that the healthy step takes exactly 3 iterations (test quantities 15, 0.366, then rounding) from the start f = 1.4 F0, so iteration 3 exists; measured 15 to 7e-14, 0.36585 to 1.5e-14, 5.8e-16, three solid advances, u = 2 u* to 1.9e-15. A wrapper switches the solid to a failing CG (one iteration) at its n-th advance: for n = 2 and n = 3 the step stops with participant 'solid', iteration n, the solver's text (solver cg-jacobi: not converged in 1 iterations), the error's time the start time, n advances, and fluid and solid state (time, displacement, forces) bit-equal to the start of the step; the same step run again with the healthy solver reproduces the control bit for bit. A failure switched at the 4th advance is never reached. Twelve of twelve mutations registered as caught were caught (restore without displacement, forces, time on the solid and on the mock fluid, participant name dropped, solver text dropped, iteration reported k+1 and k-1, coupler restore removed, wrapper off by one); the two registered equivalent mutants (the coupler's restore at the error, redundant for a structure failure) survived. Not covered: a failing fluid or time check in a later iteration, iterations beyond 3, a flow solver (open ADR 0361 Q1).
+
+Other items: the F-385 note may add the sentence "The follow-up F-463 (ADR 0361, 2026-11-12) registers the failing solve in iterations 2 and 3 and meets it." (status unchanged; open ADR 0361 Q3).
+
+Follow-up item (id by the lead):
+
+1. Title: "Coupled step: a failing fluid in a later iteration as a registered check". Deps: F-463.
+
+> Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock fluid of ADR 0286 and the start of ADR 0361 (a converged step, then F0 doubled), a mock fluid whose advance returns an error in iteration 2, and in iteration 3, stops the step with the fluid's name, that iteration number and its message, and both participants bit-equal to the start of the step; mutations that skip the coupler's restore of the fluid or of the structure at the error, or at the start of an iteration, are each caught by at least one check (the pair of restores that ADR 0361 M9 and M11 could not observe).
