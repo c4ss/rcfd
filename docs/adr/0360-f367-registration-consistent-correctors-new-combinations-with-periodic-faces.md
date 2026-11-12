@@ -293,3 +293,31 @@ Not covered: the moving mesh with any of the extensions (F-321); rotational peri
 default and by X3 alike, read 3: not a jump the solver supports on either path); BDF2 (implicit Euler set-ups); three
 dimensions; the pressure-lag estimate with these combinations; the size of the stabilising effect with periodic faces (only the
 identity and a transient comparison); the case tree (no key for the new flags, ADR 0258's remaining step).
+
+## Amendment 1 (2026-11-12): the steady state of PD and PX, written before the corrected run
+
+**What happened.** The registered tests of `consistent_periodic_f367.rs` and `consistent_periodic_defaults_f367.rs` were run
+once, in release, on commit c99407a4 (their numbers go in the addendum; none is repeated). PN, PJ and PJh met every check. PD and
+PX did not resolve their limits: their set-up check S0 missed (branch A moved from `S0` by 1.11e-7 U0 in PD and 5.96e-8 U0 in PX
+over the 50 steps, limit 2e-11 U0), and PD's SF missed too (`dA_p` 1.13e-8 rg, limit 1e-8 rg). Their S1 numbers (PD 3.61e-12 U0
+and 7.36e-10 rg; PX 6.04e-12 U0 and 5.48e-11 rg) are therefore not counted.
+
+**Diagnosis.** PD and PX are the two set-ups with the symmetry plane at `ymax` (and the moving bottom). In a channel periodic in
+x, the x-uniform part of the flow (the Couette-like mean) decays from rest only by viscosity across the height. Between two
+walls (PC, PN, PJ) its slowest mode is `sin(pi y/H)`, rate `nu (pi/H)^2 = 9.87 /s`: after the 6 s of 3000 steps it is down by
+`e^-59`. With a wall and a symmetry plane (PD, PX) the slowest mode is `sin(pi y/(2H))`, rate `nu (pi/(2H))^2 = 2.47 /s`:
+after 6 s it is down by `e^-14.8 = 3.7e-7` only. From an initial amplitude of order `0.4 U0` (the mean of the moving-wall
+profile, `8/pi^2` of it in that mode), about 1.5e-7 U0 remain, of which 22 % (`1 - e^(-2.47 x 0.1)`) is lost in the 50 steps of
+the comparison: 3e-8 U0, the size measured (1.1e-7 and 6e-8; the graded grid's discrete rate is a little lower). ADR 0258's
+duct DD had the same symmetry plane but an inlet and an outlet, which flush the start-up in a through-flow time. So `S0` of PD
+and PX was not a steady state: a defective set-up (3000 steps derived for two walls, not for a symmetry plane), not a property of
+the option.
+
+**Corrected set-up (registered now, before its run).** **S-PD2** and **S-PX2** (tests `s1pd2_...` and `s1px2_...`): PD and PX
+exactly as registered, with `S0` from **8000** default steps (16 s) in place of 3000. At the rate 2.47 /s the remaining part is
+reduced by a further `e^-24.7` (at a discrete rate as low as 1.5 /s by `e^-15 = 3e-7`), so A's drift is predicted at the
+solvers' floor (a few 1e-12 U0, as PN and PJ). The checks of S-PD2: S0PD2, SFPD2, SPsPD2 (set-up), S1PD2; of S-PX2: S0PX2,
+SFPX2, SPsPX2, S1PX2; all with the limits of the registration. SDs, SEPD and SEPX do not depend on `S0` and were met in the
+registered run (9.61e-3, 1.02e-3, 3.60e-3 U0); they are not repeated. TPD was met and is not repeated. The registered tests stay
+as the ignored records `s1pd_..._defective_setup` and `s1px_..._defective_setup`; their bodies are unchanged. Mutations: MU6 must
+fail S1PD2 (in place of S1PD); MU1 is counted on any of S1PN, S1PD2, S1PJ.
