@@ -268,3 +268,30 @@ A mutation not caught by its registered check is a miss by Rule I, reported and 
 - ADR 0351 for the solver, the layer and the measurement.
 
 No vendor code or documentation was used.
+
+## Amendment 1 (2026-11-12, written after the registered fast runs and before the runs it registers)
+
+The registered fast runs (commit 4005c4dc, once each, release) met every limit except **SP10c**: the counter-rotating
+amplitude `|a_(-1,0)| / |a_(1,0)|` of C10c is `1.233e-5` against the limit `1e-6` (estimate "round-off"). The miss stands:
+the test becomes `c10c_spinning_mode_coarse_known_miss` (ignored, limit intact, the number recorded), and a fast test
+`c10c_spinning_mode_coarse_k_s` keeps the K10c and S10c assertions of the same run (both met: `-9.74e-3`, `1.53e-4`) so
+that the code path stays covered by a fast test. No limit changes. The heavy runs C10 and C01 were started from the same
+commit before this text and are not affected by it.
+
+**Hypothesis H1.** The estimate assumed that the problem is invariant under the rotation by 90 degrees combined with a
+quarter-period shift in time. The grid and the steady drive are, but the ramp `w(t)` is not: the real drive is
+`(w psi e^{i omega t} + w conj(psi) e^{-i omega t})/2`, and the second term, which has the shape of `(-1, 0)`, has content at
+`+omega` through the ramp's spectrum at `2 omega` (the ramp's second derivative jumps at `0` and `T_r`; `|W(2 omega)| /
+T_r ~ 2 (pi/(2 T_r))^2 / (2 omega)^3 / T_r = 4.9e-6` for `T_r = 8 T`). That transient travels and rings in the duct; in
+the DFT window it leaves a residue of this size. NC10c's `7.97e-4` (the same set-up without the layer, where the transient
+does not leave) is consistent with H1. H1 says the counter-rotating content is the start transient, not a symmetry breaking.
+
+**Diagnostic runs (registered here, each once, they do not decide the status):**
+
+| id | run | prediction under H1 | limit |
+|---|---|---|---|
+| D1 | the C10c set-up for 60 periods instead of 34 (DFT over the last 4) | the counter-rotating ratio falls | `<= 0.5 x 1.233e-5` |
+| D2 | the C10c mesh and drive for 300 steps of the C10c step, once with the standing drive `w N J_1 cos(phi) cos(omega t)` and once with `w N J_1 sin(phi) cos(omega t)`; `p_B` at the cell rotated by +90 degrees against `p_A` | equal to round-off: the discrete operator commutes with the rotation | `max |p_B(R x_c) - p_A(x_c)| / max |p_A| <= 1e-9` |
+
+If D1 holds and D2 holds, the miss is diagnosed as the start transient and SP10 measures the ramp, not the grid. If D2
+fails, the grid or the solver breaks the symmetry. The decision by Rule I is **partial** in either case (SP10c missed).
