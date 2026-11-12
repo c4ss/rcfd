@@ -6462,7 +6462,9 @@ fixed by the item's registration ADR before any code.
     Crank-Nicolson and bounded BDF2 rates; moving shapes. Found on the way: 2D-2 on M2 with the second-order forcing of
     F-309 stops in PISO at step 6 (Courant 1.1e7), not diagnosed. Open: ADR 0249 Q1 (reword the first clause to the
     solid cells), Q2 (the 2D-2 clause: M2 as written, or replaced by the closed forms), Q3 (default). Follow-ups: F-354,
-    F-355.
+    F-355. ADR 0268 (2026-11-12, F-354) located the +2.58 percent lift of T: refining only the mesh around the cylinder
+    to D/80 takes it to +0.02 percent; the -0.16 percent of M2 was a cancellation of that D/40 error by the coarse outer
+    mesh; on the D/80 meshes both forcings are within 0.43 percent.
 - [ ] **F-347** Vendor heat-flux card for the structural load deck from a cited open specification
   - depends on: F-237
   - acceptance: A specification of the card (fields, sign, required surface elements) from an open source is placed in
@@ -6644,17 +6646,29 @@ fixed by the item's registration ADR before any code.
     body crosses background cells halves (rms 0.98e-3 against 1.80e-3 of C_D); time 1.03 times. By the rule fixed before
     the run the ADR recommends against making the quadratic interpolation the default; the default stays the
     maintainer's decision (ADR 0259 Q1). Three mutations caught by the fast test.
-- [ ] **F-354** Immersed solid: DFG 2D-2 force extrema, mesh and time-step convergence
+- [~] **F-354** Immersed solid: DFG 2D-2 force extrema, mesh and time-step convergence
   - depends on: F-346
   - acceptance: DFG 2D-2 with the immersed cylinder is run on the T mesh and on T refined once (D/80, half the time
     step) and on M2 and M3; the maximum drag and lift on the finest mesh are within 1.5 percent of the FeatFlow level-6
     values and the error decreases from D/40 to D/80 on both families, or the part that does not converge (mesh of the
     wake, forcing order, outlet condition, time step) is identified by a registered measurement.
-  - note: From ADR 0249 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
-    0249 measured the 2D-2 lift maximum at +2.58 percent on T and -0.16 percent on M2 (both D/40 at the cylinder, the
-    same forcing terms), and showed that the cause is not the evaluation of the force. Low priority. ADR 0254
-    (2026-11-12) measured 2D-2 on M2 with `build_second_order_bounded`: max C_D 3.20930 (-0.33 percent), max C_L 0.97593
-    (-1.01 percent), St 0.30112 (-0.25 percent); the convergence runs should be made with both forcings.
+  - note: PARTIAL (ADR 0268, 2026-11-12), measurement only, no library code. From ADR 0249 question 5. DFG 2D-2 with the
+    immersed cylinder was run to t = 8 on T and on T refined once (T2, D/80, dt 5e-4) and on M2 and M3 (M3 also at dt
+    5e-4), with `build` and with `build_second_order_bounded`, against the FeatFlow level-6 values. On the D/80 meshes
+    max C_D and max C_L are within 0.43 percent with either forcing (T2 build +0.272/+0.325, T2 bounded +0.136/+0.175,
+    M3 build +0.143/-0.283, M3 bounded +0.007/-0.429; St within 0.13 percent). The error decreases from D/40 to D/80 on
+    the T family with build (lift 2.580 to 0.325), on the M family with the bounded form (1.011 to 0.429), and on the M
+    family with build in the drag (0.261 to 0.143) but not in the lift (0.161 to 0.283, a known miss accounted for by
+    the part measurements). Part measurements, each registered with its decision numbers: refining only the core around
+    the cylinder on T takes the lift error from +2.69 to +0.02 percent, so the mesh at the cylinder carries the T
+    anomaly; the rest of the mesh then moves it 0.31 point, halving the time step 0.11 (T) and 0.04 (M2) point, and
+    moving the outlet from x = 2.2 to 4.4 changes nothing to six digits; the T and M families differ by 2.74 points of
+    lift at D/40 and by 0.61 at D/80, so the M2 agreement of ADR 0249 was a cancellation between the D/40 core and the
+    coarse outer mesh; the forcing order moves the extrema by up to 1.17 points at D/40 (M2) and at most 0.15 at D/80.
+    Missing (why partial): T with the bounded forcing (D/40) stopped at step 2951 by the divergence guard, with pressure
+    NaN in the pressure solve at the inlet corner cell, so the decrease on the T family with the bounded form is not
+    formed; not diagnosed (library work). Open: ADR 0268 Q5 (the stop), Q6 (quote the D/80 values as the validation), Q7
+    (status).
 - [~] **F-355** Second-order immersed forcing: transient PISO at Re 100
   - depends on: F-309
   - acceptance: DFG 2D-2 on M2 with `build_second_order` runs to t = 8 in PISO with BDF2 and gives a Strouhal number
@@ -6687,7 +6701,9 @@ fixed by the item's registration ADR before any code.
     named. Open (ADR 0254 questions 1 to 3): whether `build_second_order` should build the bounded form (changes
     recorded numbers of ADR 0234 and 0239), the form of the refusal, the single corrector. Not run: M3, T, three
     dimensions, PIMPLE outer iterations, SIMPLE with under-relaxation. Follow-ups: F-363 (the single corrector), F-364
-    (the bounded form as build_second_order; needs the maintainer).
+    (the bounded form as build_second_order; needs the maintainer). ADR 0268 (2026-11-12, F-354):
+    `build_second_order_bounded` ran 2D-2 to t = 8 on T2 and M3 (D/80, within 0.43 percent of FeatFlow) but stopped on T
+    (D/40, dt 1e-3) at step 2951, with pressure NaN in the pressure solve at the inlet corner cell; not diagnosed.
 - [x] **F-356** Overset: donor search on non-convex cells with planar faces
   - depends on: F-352
   - acceptance: On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the
@@ -8540,3 +8556,12 @@ fixed by the item's registration ADR before any code.
     fluid or of the structure at the error, or at the start of an iteration, are each caught by at least one check (the
     pair of restores that ADR 0361 M9 and M11 could not observe).
   - note: From ADR 0361 addendum 1 (2026-11-12), Q1 recommendation.
+- [ ] **F-466** Bounded second-order immersed forcing: the stop of DFG 2D-2 on T.
+  - depends on: F-354, F-355
+  - acceptance: The stop of DFG 2D-2 on the T mesh with `build_second_order_bounded` (ADR 0268 R1: step 2951, pressure
+    NaN in the pressure solve, inlet corner cell) is located by a registered measurement (the step reproduced from a
+    restart, the linear solve and the source of the solid cells examined), and either the run reaches t = 8 and its max
+    C_D and max C_L decide the decrease from T to T2 of ADR 0268 (A2-T-2), or the configuration is refused with a
+    located message.
+  - note: From ADR 0268 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
+    same forcing runs 8000 steps on M2 (ADR 0254) and 16 000 steps on T2 and M3 (ADR 0268); `build` runs on T.
