@@ -383,3 +383,20 @@ Zienkiewicz and Chan, Int. J. Numer. Meth. Engng 22 (1986) 39, from memory); uni
 
 Detecting an under-constrained model from a small pivot alone is fragile (a threshold registered from the stiffness scale is
 needed); the patch-test limit of 1e-10 on Tet10 with a direct solve of a moderately conditioned matrix.
+
+## Amendment 1 (2026-11-12, written and committed before the corrected run)
+
+**Defect of the set-up.** The registered run of `sb_static` (commit e8e2a495, log `w49i-work/f374-scratch/run1.log`) met
+every limit, but mutation M10 (`Load::NodalForce` adds only its x component) survived: R1 measures the balance of the
+reactions against the load vector returned by `loads::nodal_load_vector`, the function under test, so a wrong load vector
+stays balanced with the reactions computed from it. R1 is a correct measure of clause c8/c9 for the loads the solver used;
+it does not check that those are the loads the model asked for. R1 is kept unedited (it passed and stays a registered
+check).
+
+**Added check** (new test `r3_balance_against_independent_loads` in `sb_static.rs`; no library change; one run):
+
+| Id | Clause | Check | Limit | Estimate behind it |
+| --- | --- | --- | --- | --- |
+| R3 | c8, c9 | block R1, three kinds: the applied load vector built in the test, independently of `loads.rs` (the force `(100, -200, 300)` at every node of the node set `zmax`, then the per-node forces), (a) against `nodal_load_vector`: `max |f_lib - f_test| / max |f_test|`; (b) the balance of R1 with `f_test` in place of `f_lib` | (a) `<= 1e-15`; (b) `<= 1e-10` each | (a) the same additions in the same order: 0; (b) as R1 |
+
+Mutation M10 must fail R3. The decision rule is unchanged, with R3 added to the acceptance checks of clauses c8 and c9.
