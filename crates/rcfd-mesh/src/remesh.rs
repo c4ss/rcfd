@@ -12,7 +12,8 @@
 
 use crate::mesh::{Mesh, PatchKind};
 use crate::predicates::orient3d;
-use crate::tetmesh::TetMesh;
+use crate::surface::TriSurface;
+use crate::tetmesh::{cell_volume_sum, OutputCheck, TetMesh, TetReport};
 use rcfd_core::vec3::{add, cross, dot, norm, scale, sub, unit, Vec3};
 use rcfd_core::{Error, Result};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -127,6 +128,146 @@ pub struct RemeshChange {
     pub hi: Vec3,
     /// Largest raw mismatch of the intersection volumes against the cell volumes over the operators (relative).
     pub mismatch: f64,
+    /// The numbers of the step's output check (ADR 0236); `Some` for every change returned by [`TetRemesher::event`].
+    pub check: Option<StepCheck>,
+}
+
+/// The numbers measured by the output check of a remeshing step on an accepted output (ADR 0236).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StepCheck {
+    /// [`TetMesh::check_output`] on the output with the surface of its free faces ((A) and (B)).
+    pub output: OutputCheck,
+    /// Sum of the cell volumes of the step's input.
+    pub volume_before: f64,
+    /// Sum of the cell volumes of the step's output.
+    pub volume_after: f64,
+    /// `volume_after - volume_before` ((D)).
+    pub volume_difference: f64,
+    /// Rounding bound on that difference for two meshes of the same region (ADR 0236 (D)).
+    pub volume_bound: f64,
+}
+
+/// The mesh an event would leave, before it is checked and committed.
+struct Output {
+    points: Vec<Vec3>,
+    on: Vec<u32>,
+    cells: Vec<[usize; 4]>,
+    planes: Vec<AxisPlane>,
+}
+
+/// The free faces (faces of exactly one cell) in the outward orientation of their cell, with that cell: cells in index order,
+/// then their faces in the order of `FACE`.
+fn free_faces(cells: &[[usize; 4]]) -> Vec<([usize; 3], usize)> {
+    let mut count: HashMap<[usize; 3], u32> = HashMap::with_capacity(4 * cells.len());
+    for c in cells {
+        for f in FACE {
+            *count.entry(sorted3([c[f[0]], c[f[1]], c[f[2]]])).or_insert(0) += 1;
+        }
+    }
+    let mut out = Vec::new();
+    for (ci, c) in cells.iter().enumerate() {
+        for f in FACE {
+            let lp = [c[f[0]], c[f[1]], c[f[2]]];
+            if count.get(&sorted3(lp)) == Some(&1) {
+                out.push((lp, ci));
+            }
+        }
+    }
+    out
+}
+
+fn face_centroid(points: &[Vec3], f: &[usize; 3]) -> String {
+    let x = scale(add(add(points[f[0]], points[f[1]]), points[f[2]]), 1.0 / 3.0);
+    format!("({:.6e}, {:.6e}, {:.6e})", x[0], x[1], x[2])
+}
+
+/// The tetrahedral mesh of `points` and `cells` with the surface of its free faces (ADR 0236).
+fn tet_mesh_of(points: &[Vec3], cells: &[[usize; 4]], faces: &[([usize; 3], usize)]) -> TetMesh {
+    TetMesh {
+        points: points.to_vec(),
+        cells: cells.to_vec(),
+        surface: TriSurface::new(points.to_vec(), faces.iter().map(|f| f.0).collect()),
+        report: TetReport::default(),
+    }
+}
+
+/// (A) to (C) of ADR 0236: [`TetMesh::check_output`] on the free-face surface, then every free face on its plane exactly.
+/// `what` names the step in the error.
+fn check_cells(
+    points: &[Vec3],
+    on: &[u32],
+    cells: &[[usize; 4]],
+    planes: &[AxisPlane],
+    what: &dyn Fn() -> String,
+) -> Result<OutputCheck> {
+    let faces = free_faces(cells);
+    let out = tet_mesh_of(points, cells, &faces).check_output().map_err(|e| {
+        let m = match e {
+            Error::Mesh(s) => s,
+            other => other.to_string(),
+        };
+        Error::Mesh(format!("remesh output check: {}: {m}", what()))
+    })?;
+    for (lp, ci) in &faces {
+        let m = on[lp[0]] & on[lp[1]] & on[lp[2]];
+        if m == 0 {
+            return merr(format!(
+                "remesh output check: {}: the free face {lp:?} of cell {ci} at {} lies on no plane",
+                what(),
+                face_centroid(points, lp)
+            ));
+        }
+        let k = m.trailing_zeros() as usize;
+        let Some(pl) = planes.get(k) else {
+            return merr(format!(
+                "remesh output check: {}: the free face {lp:?} of cell {ci} at {} has the mask of a plane {k} that does not exist",
+                what(),
+                face_centroid(points, lp)
+            ));
+        };
+        if lp.iter().any(|&v| points[v][pl.axis] != pl.value) {
+            return merr(format!(
+                "remesh output check: {}: the free face {lp:?} of cell {ci} at {} is not exactly on the plane {} (x[{}] = {:e})",
+                what(),
+                face_centroid(points, lp),
+                pl.name,
+                pl.axis,
+                pl.value
+            ));
+        }
+    }
+    Ok(out)
+}
+
+impl Output {
+    /// The step check of ADR 0236: (A) to (C) on the output, then (D) its volume against the input's.
+    fn check(&self, change: &RemeshChange, volume_before: f64, perm_before: f64) -> Result<StepCheck> {
+        let what = || {
+            format!(
+                "an event of {:?} touching ({:.6e}, {:.6e}, {:.6e}) to ({:.6e}, {:.6e}, {:.6e})",
+                change.ops, change.lo[0], change.lo[1], change.lo[2], change.hi[0], change.hi[1], change.hi[2]
+            )
+        };
+        let output = check_cells(&self.points, &self.on, &self.cells, &self.planes, &what)?;
+        let (volume_after, perm_after) = cell_volume_sum(&self.points, &self.cells);
+        let volume_difference = volume_after - volume_before;
+        let volume_bound = 8.0 * f64::EPSILON * (perm_before + perm_after) / 6.0;
+        if volume_difference.is_nan() || volume_difference.abs() > volume_bound {
+            return merr(format!(
+                "remesh output check: {}: the cell volumes sum to {volume_after:.15e} after the event but to \
+                 {volume_before:.15e} before it (difference {volume_difference:.3e}, rounding bound {volume_bound:.3e}): \
+                 the event changed the region",
+                what()
+            ));
+        }
+        Ok(StepCheck {
+            output,
+            volume_before,
+            volume_after,
+            volume_difference,
+            volume_bound,
+        })
+    }
 }
 
 fn signed_volume(p: &[Vec3; 4]) -> f64 {
@@ -572,13 +713,56 @@ impl TetRemesher {
 
     /// The event procedure of ADR 0215 M7, whether or not the trigger fires; `None` when no operator was applied (the mesh
     /// is then unchanged).
+    ///
+    /// An event that applied an operator ends with the output check of ADR 0236: [`TetMesh::check_output`] on the new mesh
+    /// with the surface of its free faces, every free face exactly on its plane, and the cell volumes equal to those before
+    /// the event within a rigorous rounding bound. A failure returns a located `Error::Mesh` starting `remesh output check:`
+    /// and leaves the mesh as it was before the event.
     pub fn event(&mut self) -> Result<Option<RemeshChange>> {
-        let mut w = Work::new(self);
-        w.run()?;
-        Ok(self.finish(w))
+        self.run_event(|_| ())
     }
 
+    /// The event with `hook` applied to the work mesh after the passes (tests break a step through it; `event` passes none).
+    fn run_event(&mut self, hook: impl FnOnce(&mut Work)) -> Result<Option<RemeshChange>> {
+        let (volume_before, perm_before) = cell_volume_sum(&self.points, &self.cells);
+        let mut w = Work::new(self);
+        w.run()?;
+        hook(&mut w);
+        let Some((out, mut change)) = Self::assemble(w) else {
+            return Ok(None);
+        };
+        change.check = Some(out.check(&change, volume_before, perm_before)?);
+        self.points = out.points;
+        self.on = out.on;
+        self.cells = out.cells;
+        Ok(Some(change))
+    }
+
+    /// The current mesh with the surface of its free faces (ADR 0236).
+    pub fn to_tet_mesh(&self) -> TetMesh {
+        tet_mesh_of(&self.points, &self.cells, &free_faces(&self.cells))
+    }
+
+    /// (A) to (C) of the step check of ADR 0236 on the current mesh: [`TetMesh::check_output`] with the surface of its free
+    /// faces, and every free face exactly on its plane. For callers that change the mesh by a motion.
+    pub fn check_output(&self) -> Result<OutputCheck> {
+        check_cells(&self.points, &self.on, &self.cells, &self.planes, &|| {
+            "the current mesh".to_string()
+        })
+    }
+
+    /// Commit an event without the output check (the test helper `apply_one` only).
+    #[cfg(test)]
     fn finish(&mut self, w: Work) -> Option<RemeshChange> {
+        let (out, change) = Self::assemble(w)?;
+        self.points = out.points;
+        self.on = out.on;
+        self.cells = out.cells;
+        Some(change)
+    }
+
+    /// The renumbered output of an event and its change; `None` when no operator was applied.
+    fn assemble(w: Work) -> Option<(Output, RemeshChange)> {
         if w.ops.total() == 0 {
             return None;
         }
@@ -601,10 +785,7 @@ impl TetRemesher {
         let sources = keep.iter().map(|&t| w.src[t].clone()).collect();
         let removed = (0..w.n0).filter(|&t| !w.alive[t]).count();
         let created = keep.iter().filter(|&&t| t >= w.n0).count();
-        self.points = points;
-        self.on = on;
-        self.cells = cells;
-        Some(RemeshChange {
+        let change = RemeshChange {
             sources,
             ops: w.ops,
             removed,
@@ -612,7 +793,15 @@ impl TetRemesher {
             lo: w.lo,
             hi: w.hi,
             mismatch: w.mismatch,
-        })
+            check: None,
+        };
+        let out = Output {
+            points,
+            on,
+            cells,
+            planes: w.planes,
+        };
+        Some((out, change))
     }
 }
 
@@ -1522,5 +1711,255 @@ mod tests {
             (v / 0.01 - 1.0).abs()
         );
         assert!((v / 0.01 - 1.0).abs() <= 1e-13);
+    }
+}
+
+/// The checks of ADR 0236 (F-327): the step's output check on valid and on deliberately broken steps.
+#[cfg(test)]
+mod tests_f327 {
+    use super::*;
+    use crate::surface::box_surface;
+    use crate::tetmesh::{tetrahedralize, TetOptions};
+    use std::time::Instant;
+
+    fn remesher(hi: Vec3, n: [usize; 3]) -> TetRemesher {
+        let opt = TetOptions {
+            size: Some(0.035),
+            quality_sweeps: 3,
+            ..TetOptions::default()
+        };
+        let tm = tetrahedralize(&box_surface([0.0; 3], hi, n), &opt).unwrap();
+        TetRemesher::from_tet_mesh(&tm, box_planes([0.0; 3], hi), RemeshSettings::for_size(0.035)).unwrap()
+    }
+
+    /// M_s of ADR 0215 U2.
+    fn m_s() -> TetRemesher {
+        remesher([0.3, 0.1, 0.1], [6, 2, 2])
+    }
+
+    /// M0 of ADR 0215.
+    fn m0() -> TetRemesher {
+        remesher([1.0, 0.1, 0.1], [20, 2, 2])
+    }
+
+    /// Hook R: the first valid relocation in index order (lambda 0.5), applied, so that the step applied an operator.
+    fn hook_r(w: &mut Work) {
+        let mut pick = None;
+        'cells: for t in 0..w.tets.len() {
+            if !w.alive[t] {
+                continue;
+            }
+            for &v in &w.tets[t] {
+                if let Some(c) = w.cand_relocate(v, 0.5) {
+                    if w.evaluate(&c).is_some() {
+                        pick = Some(c);
+                        break 'cells;
+                    }
+                }
+            }
+        }
+        let c = pick.expect("hook R set-up: no valid relocation");
+        w.apply(c).expect("hook R: the relocation applies");
+    }
+
+    fn last_alive(w: &Work) -> usize {
+        (0..w.tets.len()).rev().find(|&t| w.alive[t]).unwrap()
+    }
+
+    /// M_s, hook R and then `breakage`: the error text and whether the remesher's points and cells are those before the call.
+    fn broken_step(breakage: impl FnOnce(&mut Work)) -> (std::result::Result<String, String>, bool) {
+        let mut r = m_s();
+        let (p0, c0) = (r.points().to_vec(), r.cells().to_vec());
+        let res = r.run_event(|w| {
+            hook_r(w);
+            breakage(w);
+        });
+        let unchanged = r.points().len() == p0.len()
+            && r.points()
+                .iter()
+                .zip(&p0)
+                .all(|(a, b)| a.map(f64::to_bits) == b.map(f64::to_bits))
+            && r.cells() == &c0[..];
+        let out = match res {
+            Err(Error::Mesh(s)) => Ok(s),
+            Err(e) => Err(format!("an error of another kind: {e}")),
+            Ok(ch) => Err(format!("accepted: {:?}", ch.and_then(|c| c.check))),
+        };
+        (out, unchanged)
+    }
+
+    /// PC1 of ADR 0236: a valid step (hook R only) passes.
+    #[test]
+    fn pc1_a_valid_step_passes_the_output_check() {
+        let mut r = m_s();
+        let ch = r.run_event(hook_r).unwrap().expect("PC1 set-up: an operator applied");
+        let c = ch.check.expect("PC1: the change carries its check");
+        println!(
+            "PC1: ops {:?}; (B) difference {:.3e} bound {:.3e}; (D) difference {:.3e} bound {:.3e}",
+            ch.ops, c.output.difference, c.output.bound, c.volume_difference, c.volume_bound
+        );
+        assert!(c.output.difference.abs() <= c.output.bound, "PC1 (B)");
+        assert!(c.volume_difference.abs() <= c.volume_bound, "PC1 (D)");
+    }
+
+    /// NC1 of ADR 0236: a duplicated cell is a located error and the state is unchanged.
+    #[test]
+    fn nc1_duplicated_cell_is_a_located_error() {
+        let (res, unchanged) = broken_step(|w| {
+            let t = last_alive(w);
+            let (c, s) = (w.tets[t], w.src[t].clone());
+            w.tets.push(c);
+            w.alive.push(true);
+            w.src.push(s);
+        });
+        println!("NC1: {res:?}; state unchanged {unchanged}");
+        let s = res.expect("NC1: the step must be rejected");
+        assert!(s.starts_with("remesh output check:"), "NC1 prefix");
+        assert!(
+            s.contains("shared by the cells") || s.contains("on the same side"),
+            "NC1 location"
+        );
+        assert!(unchanged, "NC1: state unchanged");
+    }
+
+    /// NC2 of ADR 0236: a negative cell is named by its output index and the state is unchanged.
+    #[test]
+    fn nc2_negative_cell_is_named() {
+        let mut k = usize::MAX;
+        let (res, unchanged) = broken_step(|w| {
+            let t = last_alive(w);
+            k = (0..t).filter(|&u| w.alive[u]).count();
+            w.tets[t].swap(2, 3);
+        });
+        println!("NC2: cell {k}: {res:?}; state unchanged {unchanged}");
+        let s = res.expect("NC2: the step must be rejected");
+        assert!(s.starts_with("remesh output check:"), "NC2 prefix");
+        assert!(
+            s.contains(&format!("cell {k} [")) && s.contains("not positively oriented"),
+            "NC2 location"
+        );
+        assert!(unchanged, "NC2: state unchanged");
+    }
+
+    /// NC3 of ADR 0236: a missing cell leaves a free face on no plane, which is named; the state is unchanged.
+    #[test]
+    fn nc3_missing_cell_is_a_located_error() {
+        let mut killed = usize::MAX;
+        let (res, unchanged) = broken_step(|w| {
+            let t = (0..w.tets.len())
+                .find(|&t| {
+                    let c = w.tets[t];
+                    w.alive[t] && FACE.iter().all(|f| w.on[c[f[0]]] & w.on[c[f[1]]] & w.on[c[f[2]]] == 0)
+                })
+                .expect("NC3 set-up: a cell with no face on a plane");
+            killed = t;
+            w.alive[t] = false;
+        });
+        println!("NC3: work cell {killed} removed: {res:?}; state unchanged {unchanged}");
+        let s = res.expect("NC3: the step must be rejected");
+        assert!(s.starts_with("remesh output check:"), "NC3 prefix");
+        assert!(s.contains("lies on no plane") && s.contains("of cell"), "NC3 location");
+        assert!(unchanged, "NC3: state unchanged");
+    }
+
+    fn number_after(s: &str, key: &str) -> f64 {
+        let i = s.find(key).unwrap_or_else(|| panic!("no {key:?} in {s}")) + key.len();
+        let rest = &s[i..];
+        let end = rest.find(' ').unwrap_or(rest.len());
+        rest[..end]
+            .parse()
+            .unwrap_or_else(|_| panic!("not a number after {key:?} in {s}"))
+    }
+
+    /// NC4 of ADR 0236: a valid tiling of a longer box is rejected by (D) with the volume difference of the change.
+    #[test]
+    fn nc4_changed_region_is_a_located_error() {
+        let delta = 1e-3;
+        let (res, unchanged) = broken_step(|w| {
+            let k = w.planes.iter().position(|p| p.name == "xmax").unwrap();
+            for v in 0..w.pts.len() {
+                if w.on[v] & (1 << k) != 0 {
+                    w.pts[v][0] += delta;
+                }
+            }
+            w.planes[k].value += delta;
+        });
+        println!("NC4: {res:?}; state unchanged {unchanged}");
+        let s = res.expect("NC4: the step must be rejected");
+        assert!(s.starts_with("remesh output check:"), "NC4 prefix");
+        assert!(s.contains("the event changed the region"), "NC4 names (D)");
+        let d = number_after(&s, "sum to ") - number_after(&s, "but to ");
+        println!(
+            "NC4: difference {d:.15e} against 1e-5, relative {:.3e}",
+            (d / 1e-5 - 1.0).abs()
+        );
+        assert!((d / 1e-5 - 1.0).abs() <= 1e-9, "NC4 difference {d:e}");
+        assert!(unchanged, "NC4: state unchanged");
+    }
+
+    /// Piston G of ADR 0236: M0's `xmax` to 0.4 and back to 1.0 in steps of 1e-3 with the band 0.07, `remesh()` after
+    /// every move; `each` sees the remesher before and after the call, the result and the time of the call.
+    fn piston_g(mut each: impl FnMut(&TetRemesher, &TetRemesher, &Result<Option<RemeshChange>>, f64)) {
+        let mut r = m0();
+        let xmax = r.plane_index("xmax").unwrap();
+        let mut x = 1.0;
+        for (target, step) in [(0.4, -0.001), (1.0, 0.001)] {
+            while (target - x) * step > 1e-12 {
+                x = ((x + step) * 1000.0f64).round() / 1000.0;
+                r.move_plane_with_band(xmax, x, 0.07).unwrap();
+                let pre = r.clone();
+                let clock = Instant::now();
+                let res = r.remesh();
+                let t = clock.elapsed().as_secs_f64();
+                each(&pre, &r, &res, t);
+                if let Err(e) = &res {
+                    panic!("PC2: the step at x = {x:.3} returned an error: {e}");
+                }
+            }
+        }
+    }
+
+    /// PC2 of ADR 0236: every step of piston G passes the output check.
+    #[test]
+    fn pc2_every_step_of_a_piston_on_m0_passes() {
+        let (mut events, mut steps, mut rb, mut rd) = (0usize, 0usize, 0.0f64, 0.0f64);
+        piston_g(|_, _, res, _| {
+            steps += 1;
+            if let Ok(Some(ch)) = res {
+                let c = ch.check.expect("PC2: the change carries its check");
+                events += 1;
+                rb = rb.max(c.output.difference.abs() / c.output.bound);
+                rd = rd.max(c.volume_difference.abs() / c.volume_bound);
+            }
+        });
+        println!("PC2: {steps} steps, {events} events, largest |difference| / bound: (B) {rb:.3e}, (D) {rd:.3e}");
+        assert!(events >= 5, "PC2 set-up: {events} events");
+    }
+
+    /// C4 of ADR 0236: the cost of the step check against the event, on piston G.
+    #[test]
+    #[ignore = "ADR 0236 C4: a timing, run once by the ADR, not in the gate"]
+    fn c4_cost_of_the_step_check() {
+        let (mut t_event, mut t_check, mut events) = (0.0f64, 0.0f64, 0usize);
+        piston_g(|pre, r, res, t| {
+            if let Ok(Some(ch)) = res {
+                events += 1;
+                t_event += t;
+                let out = Output {
+                    points: r.points.clone(),
+                    on: r.on.clone(),
+                    cells: r.cells.clone(),
+                    planes: r.planes.clone(),
+                };
+                let clock = Instant::now();
+                let (vb, pb) = cell_volume_sum(&pre.points, &pre.cells);
+                let c = out.check(ch, vb, pb);
+                t_check += clock.elapsed().as_secs_f64();
+                assert!(c.is_ok(), "C4: the repeated check fails");
+            }
+        });
+        let f = t_check / t_event;
+        println!("C4: {events} events, events {t_event:.3} s, check {t_check:.3} s, fraction {f:.4} (limit 0.25)");
+        assert!(f <= 0.25, "C4 fraction {f}");
     }
 }

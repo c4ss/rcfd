@@ -1219,6 +1219,19 @@ fn neumaier(acc: &mut (f64, f64), x: f64) {
     acc.0 = t;
 }
 
+/// Sum of the cell volumes by Neumaier summation and the sum of the cells' permanents, computed exactly as the first loop of
+/// [`TetMesh::check_output`] does (ADR 0236 (D): the remesher's step compares the sums before and after an event).
+pub(crate) fn cell_volume_sum(pts: &[Vec3], cells: &[[usize; 4]]) -> (f64, f64) {
+    let mut sc = (0.0, 0.0);
+    let mut perm_sum = 0.0;
+    for c in cells {
+        let (det, perm) = det_perm(pts[c[0]], pts[c[1]], pts[c[2]], pts[c[3]]);
+        neumaier(&mut sc, det / 6.0);
+        perm_sum += perm;
+    }
+    (sc.0 + sc.1, perm_sum)
+}
+
 fn centroid(p: &[Vec3]) -> Vec3 {
     let mut c = [0.0; 3];
     for &q in p {
