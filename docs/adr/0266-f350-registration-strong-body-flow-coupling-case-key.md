@@ -261,3 +261,19 @@ One geometry (the piston column), translation only; the moment path of the coupl
 `moment_scale` (the moment is zero). No rotating body in a flow, no Newmark, no rest patches with the strong step, no
 `strong_step_with` (F-358). The Studio's and GUI's editors are not touched (they read the schema). No case file in
 `cases/`.
+
+## Amendment 1 (2026-11-12, after the first run of N, before any corrected run)
+
+**N's expected path of an unknown key was wrong.** N registered that an unknown key in the table is located at the
+table, `dynamic_mesh.six_dof.coupling`. The settings parser locates it at the unknown key's own path: the run of N gave
+`["dynamic_mesh.six_dof.coupling.factor"]` for `factor = 0.5`, and the test stopped there (its loop panicked at that
+case), so the force-scale case and the disabled-section case of N did not run. The diagnostic is located (more narrowly
+than registered); the registration should have read where `coerce` reports an unknown key; it did not.
+
+- **N (registered form)** stays in the file as `n_static_checks_are_located_registered_record`, ignored, as the record
+  of this run.
+- **Nb (replaces it)**: N with one change: the unknown key `factor` is expected at `dynamic_mesh.six_dof.coupling.factor`.
+  Every other case, limit and the disabled-section control unchanged. Nb takes N's place in the decision rule and in
+  MU6.
+
+Every other registered check was run once in the same run (results in the addendum); none is re-run.
