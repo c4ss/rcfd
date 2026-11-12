@@ -330,3 +330,165 @@ A corrected AU1 follows in amendment 2, after X1 and before any corrected run.
 the worst step, the forces with `nu = 0.01`, the three limits: default within 1 percent of `1/(4N)`, `abs(corrected) <=
 1e-4`, report within 1 percent of `1/(2N)`). Expected: ADR 0252's DP numbers on 20 cells (default `1.2506e-2`,
 corrected a few `1e-6`, report `2.50e-2`). X1 is not run again.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-api/src/dynmesh.rs`: the key `wall_pressure` (`extrapolated` default, `prescribed_gradient`) in the
+  optional table `[dynamic_mesh.six_dof.coupling]` (D1); `wall_pressure(case)`; the static check of a prescribed motion
+  in `check_coupling` (D3); in `DynMesh` the fields `wall_pressure` and `wall_dpdn`. The loose step evaluates
+  `patch_force_moment_wall_gradient` with the kept vector when the key asks for it and the vector is not empty (else the
+  existing `patch_force_moment` line), and copies the merged follow-and-rest vector into `wall_dpdn` before the flow
+  step takes it; the strong step calls `strong_step_with(.., wall_pressure, &mut wall_dpdn, ..)` in place of
+  `strong_step`; `DynMesh::wall_gradients` (D2).
+- `crates/rcfd-api/src/sim.rs`: one addition, `Simulation::dynamic_wall_gradients`.
+- `docs/case-schema.md`: the row of the key and a paragraph with a new TOML block (no existing block edited).
+- `crates/rcfd-api/tests/wall_pressure_case_f358.rs` (new): 14 tests, 11 active in release (A1 to A3 and A4 ignored in
+  debug), 3 ignored: the record L, the known miss of AU1, the exploration X1.
+- Not changed: `rcfd-fv` (no line of `fsi.rs`, `sixdof.rs`, `ale.rs`, `sliding.rs`, `pimple.rs`, `pimple/*.rs`,
+  `overset.rs`), `schema.rs`, `comp.rs`, `rcfd-post`, `rcfd-cli`, `rcfd-mcp`, `baseline_hashes.rs`, the hash tables, the
+  goldens, any existing test.
+
+### Checks
+
+Runs, each once: the new file on fc193d15 (54 s; 10 passed, AU1 failed, L not run); X1 on 466415f9; AU1b on c50192a6;
+L on c50192a6 (147 s); K0 on c50192a6; LS and the mutations on a `git archive` copy of c50192a6.
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K0 (a7) | all pass, no file edited | `rcfd-api`: `adapt_case_f342` 6 (2 ignored), `baseline_hashes` 3 (1 ignored), `case_hashes_w48u` 1, `dynamic_mesh` 5 (1 ignored), `exp_rot_pab` 6, `layering_ale_f259` 7 (1 ignored), `mesh_transform_w48u` 13, `physics_schema` 11, `registers` 7, `rules_w19c` 8 (1 ignored), `strong_coupling_case_f350` 9 (1 ignored), `tree_wiring_f259` 9, `w48v_adaptive_correctors` 5 (4 ignored); `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `project_list_f270` 1; all passed, the ignored as before | yes |
+| T0 (a1, a7) | as stated | no `wall_pressure` in either text without the table, `get` reads `extrapolated`; with the table present; settings hash `80133491493e8dde` against `3f8be0e62ec76fec` | yes |
+| Z0 (a7) | bit-identical | 0 of 100 steps differ | yes |
+| Z1 (a7) | bit-identical | 0 of 40 steps differ, iterations equal | yes |
+| E1 (a2, loose) | bit-identical, state and vector | 0 of 100 steps differ in either | yes |
+| W1 (a2) | `<= 1e-9`; layout | `1.0e-15`; one entry per boundary face, NaN off `xmin` | yes |
+| E2 (a2, strong) | bit-identical; iterations; converged | 0 of 60 differ (state and vector); iterations equal (4, then 3); all converged | yes |
+| **A1 (a3)** with the key | `abs(. - 1) <= 5e-4` | **`1.000264`** (6 crossings) | yes |
+| **A2 (a3)** without | `abs(. - 1.001307) <= 1e-5`; `. - 1 > 5e-4` | **`1.001307`** | yes |
+| A3 | `>= 6` crossings | 6 and 6 | yes |
+| A4 (strong, ratio 4, key) | `abs(. - 1) <= 1e-3`; `abs(. - 1.000042) <= 1e-5`; converged; `<= 8` | `1.000042`; all converged; largest 4, mean 3.001 | yes |
+| N (D3) | located; none valid; none disabled | `["dynamic_mesh.six_dof.coupling.wall_pressure"]` for both bad texts; `[]`; `[]` | yes |
+| SK0 (control) | `<= 1e-12`; default `-1/(4N)` within `1e-9` | `0`; `-1.250000e-2` | yes |
+| **SK1 (a6)** uniform shear, linear | `<= 1e-12`; default within `1e-9` of `-1.12705e-2` | corrected `0`; default `-1.127049e-2` (`7e-15`) | yes |
+| **SK2 (a6)** uniform shear, smooth | orders `[1.8, 2.2]`; `[0.8, 1.2]` | corrected `-3.0858e-4`, `-7.7156e-5`, `-1.9290e-5` (predicted `-3.0864e-4` on 20), orders `1.9998`, `1.9999`; default `-8.18e-3`, `-4.17e-3`, `-2.10e-3`, orders `0.973`, `0.987` | yes |
+| **SK3 (a6)** first plane shifted | within `1e-9` of `-1/(38N)`, `-9/(38N)` | corrected `-1.315789e-3` (`1.3e-13`); default `-1.184211e-2` (`8e-15`) | yes |
+| AU1 (registered) | default 1 % of `1.25e-2`; `<= 1e-4`; report 1 % of `2.5e-2` | `4.083e-2`, `2.617e-2`, `4.963e-2` (step 3) | **missed**: a defective case text (amendments 1, 2); kept as `..._known_miss` |
+| **AU1b (a5, rest walls; amendment 2)** | as AU1 | worst over steps 3 to 12: default `1.250471e-2` (`+0.04` %), corrected `4.37e-6`, report `2.500460e-2` (`+0.02` %) | yes |
+| **AU2 (a5, sliding step)** | default `[-0.6, -0.4]`; corrected `abs <= 0.1` | 144 rotor faces, mean `g = -0.99976`, `dn = 0.03156`: default `-0.408`, corrected `+0.061` | yes |
+| L (a4) | printed | below | run |
+| LS (a4) | printed | below | run |
+
+AU2 is close to its window: the default misses `0.41` of `g dn`, not the `0.5` of a flat wall. What lies between is not
+split here (the curvature of the wall and of the azimuthal neighbours, and the cell pressures against the fitted exact
+field, are both in it); the corrected `+0.061` against the predicted remainder `dn/(2 r_i) = 0.016` holds the same field
+error. Both are within their limits; the split is not claimed.
+
+### The listing for the maintainer's decision on the default (a4)
+
+**No registered hash moves.** With the default flipped in the scratch tree (the schema default of `wall_pressure` set
+to `prescribed_gradient`, so every case without the table takes it), `baseline_hashes` (3 passed) and `case_hashes_w48u`
+(1 passed) pass: neither holds a six-DOF case, and the table being optional, no case text changes. `dynamic_mesh`,
+`exp_rot_pab`, `layering_ale_f259`, `tree_wiring_f259` pass. What moves is the result of every case run through the
+driver with `motion = "six_dof"`:
+
+| Case (where it lives) | Default | Prescribed gradient | Change | Its test under the flipped default |
+| --- | --- | --- | --- | --- |
+| T4, constant-force piston, mass 0.2 (`dynamic_mesh.rs`) | 92 steps, `x = 0.506771`, `v = 2.210271`, `v^2/v_exact^2 = 0.999943` | 92 steps, `x = 0.506503`, `v = 2.209188`, `0.999498` | `x -5.3e-4`, `v -4.9e-4` relative at step 92 | passes (limit `2e-2`) |
+| ADR 0266 S1, strong, ratio 4, `T/100` (`strong_coupling_case_f350.rs`) | `omega_m/omega 1.005081`, turning `0.92452` | `1.000042`, `0.92469` | `-5.04e-3` in frequency | S1 to S4 pass; **R1 fails** (`5.04e-3` against `1e-5`), **R2 fails** (`1.7e-4` against `1e-4`) |
+| ADR 0266 E1, E2 (tree against `strong_step`) | equal | differ at step 1 | the tree no longer equals the library default | **fail** (they compare the tree with `strong_step`, which stays extrapolated) |
+| ADR 0266 L, loose, ratio 4 | `10 X` at step 28, stop at 34 | `10 X` at 28, stop at 35 | one step later | passes |
+| ADR 0266 Z, C2, ratio 0.2, 100 steps | `x = 9.527268e-3` | `9.524133e-3` | `-3.1e-4 X`; max `abs(p)` `-0.27` % | pass (both sides move together) |
+| SP of ADR 0211, ratio 0.2 (this file) | `1.001307` | `1.000264` | `-1.04e-3` | A2 and T0, Z0, Z1 of this file fail by construction |
+
+Not case-tree runs, so not listed above: the library suites of `rcfd-fv` (`strong_fsi_f251`, `sixdof_flow_f244`,
+`added_mass_f351`) call `strong_step` and `patch_force_moment` directly; a change of the driver's default leaves them
+unchanged. A change of the library default (ADR 0252 Q1 (b)) would move them by ADR 0252's numbers (`1.005081` to
+`1.000042` at ratio 4, `1.001307` to `1.000264` at 0.2).
+
+### The callers that evaluate a wall force after a step with a prescribed wall gradient (a5)
+
+| Caller | Wall | Default evaluation | Measured error (one case) | With the prescribed gradient |
+| --- | --- | --- | --- | --- |
+| body force of the driver, loose and strong (`dynmesh.rs`, `fsi.rs`) | following walls (and resting walls in the force patches) | `patch_force_moment` | `1/(4N)`: SP `+0.13` % in frequency (A2); piston force ADR 0252 K1b | this item's key; A1, A4 |
+| `ale::set_rest_conditions` walls (ADR 0183 P-B), the same evaluation | resting wall of a rigidly moving column, 20 cells | `patch_force_moment` | force low by `1.2505e-2` (AU1b) | `4.4e-6` (the key applies when the wall is a force patch) |
+| force and moment reports of the tree (`sim.rs`, `pressure_face_values`) | any moving wall | the stored face value: zero gradient, `p_c` | force low by `2.5005e-2 = 1/(2N)` (AU1b) | not available (T5; question Q3) |
+| the sliding step (`rotating_wall_conditions`, ADR 0216) | rotor wall in rigid rotation | `patch_face_forces` without the vector | the wall pressure misses `0.41 g dn` (AU2) | `0.06 g dn` |
+| `cosim::FlowWall::face_forces` (F-139, ADR 0256) | the coupled wall | `PrescribedGradient` already | not measured here | its default |
+| `rcfd-post` `turbo`, `design/adjoint.rs`, `overset.rs` | static walls; overset evaluates no force | n/a | n/a | n/a |
+
+### Mutations
+
+Each applied alone to `dynmesh.rs` of the `git archive` copy of c50192a6 by an exact replacement that had to occur
+once (`f358-scratch/mutate.py`), the named tests run once, the file restored and compared byte for byte (equal each time).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 the loose path ignores the key | E1, A1 | E1 failed (step 2); A1 failed (`1.001307`) |
+| MU2 the vector never stored | E1, W1 | E1 failed (vector at step 1, state at 2); W1's layout false |
+| MU3 the strong path passes `Extrapolated` | E2 | failed (step 1) |
+| MU4 a fresh empty vector every strong step | E2 | failed (state at step 2) |
+| MU5 the check of a prescribed motion removed | N | failed |
+| MU6 the default flipped | Z0, T0 | both failed |
+
+### Deviations and disclosures
+
+- **AU1 missed** because my case text was wrong: the displacement expression `X cos(2 pi t)` is `X` at `t = 0` and the
+  driver measures it from the case's mesh, so the box jumped by `X` in the first step. Amendment 1 recorded the miss
+  and registered the exploration X1; X1 showed the jump; amendment 2 registered AU1b (the box starting at rest, every
+  limit unchanged) before its run. AU1 stays as an ignored known miss. The set-up of AU1b was corrected with X1's numbers
+  seen; its limits are AU1's.
+- The first attempt of the LS run did not start (an error of the scratch script); nothing was run; the script was fixed
+  and LS ran once.
+- The mutation and LS runs were made on the copy of c50192a6, after the amendments.
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's); `rcfd validate` / `rcfd run` on a case with the key (no CLI test was
+registered); a rotating body or a moment in a flow; a general unstructured skewed wall in a coupled run; the debug
+profile of the heavy tests (A1 to A4 are ignored in debug; E1, E2 cover their code paths fast).
+
+### After the tests
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy --release -p rcfd-api --all-targets -- -D warnings`: clean. The
+copy's `dynmesh.rs` restored byte for byte.
+
+### Decision by the registered rule
+
+K0, T0, Z0, Z1, E1, E2, W1, A1 to A4, N, SK0 to SK3, AU1b (in AU1's place by amendment 2) and AU2 are met; L and LS ran
+and are listed; the six mutations failed their named tests. By the rule as amended: **done**, proposed as such; the
+acceptance and the default remain the maintainer's. The reading against it: AU1 as registered missed, and AU1b counts
+only through an amendment written after a run and an exploration; if the lead holds that a missed registered set-up
+cannot be "done", the status is partial with nothing left to build.
+
+### Remaining questions (each with options and a recommendation)
+
+- **Q1. The default** (ADR 0252 Q1). The prescribed gradient would move every six-DOF result of the driver (table above)
+  and no registered hash. Options: (a) keep `extrapolated`; (b) flip the default of the key (the case driver only): ADR
+  0266 R1, R2, E1, E2 and this file's T0, Z0, Z1, A2 must then become records and be replaced; (c) flip the library
+  default as well (`strong_step`, `patch_force_moment` on fixed-flux walls), which also moves the `rcfd-fv` suites.
+  Recommendation (b) after the maintainer approves the listed changes; (c) later, separately. Not taken (it changes
+  default results).
+- **Q2. The table.** Options: (a) keep the key in `[dynamic_mesh.six_dof.coupling]`; (b) a sibling table
+  `[dynamic_mesh.six_dof.force]`. Recommendation (a).
+- **Q3. The force reports** of the tree take the stored zero-gradient face value on a moving wall and are low by
+  `1/(2N)` (AU1b). Options: (a) a follow-up item: the reports on moving walls take the corrected wall pressure with the
+  kept vector (an opt-in key first, since it changes report values); (b) leave. Recommendation (a).
+- **Q4. The sliding step**: no caller evaluates a force there; its default evaluation misses `0.41 g dn` on a rotor wall.
+  Options: (a) when a torque or force on a sliding rotor wall is wired, take the corrected evaluation with the vector of
+  `rotating_wall_conditions`; (b) a separate item now. Recommendation (a).
+- **Q5. A wall cell whose neighbour does not lie along its wall face** (SK3) leaves the corrected evaluation first order
+  (`1/19` of `E` here, against `9/19` for the default). Options: (a) record the limit; (b) an item to remove the stored
+  wall value from the fit of the wall cell's tangential gradient. Recommendation (a) until a skewed moving wall matters.
+
+### For the lead: roadmap entries
+
+Proposed status of F-358: **done** (acceptance and the default the maintainer's).
+
+Note text for F-358:
+
+> From ADR 0252 questions 1 to 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE (ADR 0269, 2026-11-12; registered before the code, two amendments). The key wall_pressure ("extrapolated" default, "prescribed_gradient") in the optional table [dynamic_mesh.six_dof.coupling] (a plain key of six_dof would need an H1 hash-table entry, ADR 0266; the coupling table holds it because the strong step takes it beside the coupling settings) selects the wall pressure of the body force in both schemes: the case driver keeps the fixed-flux gradient vector of ale::set_follow_conditions (merged with set_rest_conditions) from step to step (Simulation::dynamic_wall_gradients) and hands it to sixdof::patch_force_moment_wall_gradient (loose) or fsi::strong_step_with (strong). Tree runs equal strong_step_with called directly bit for bit (loose 100 steps as one iteration, strong 60 steps); the kept vector equals (w_n - w_(n-1))/dt to 1e-15. The spring-mounted piston of ADR 0211 at mass ratio 0.2 through the driver: omega_m/omega 1.000264 with the key (limit 0.05 percent), 1.001307 without; at ratio 4 strong 1.000042 (1.005081 without). Corrected evaluation off the face normal: exact for linear fields and second order on a uniformly sheared wall cell; on a cell whose neighbour does not lie along the wall face first order with 1/19 of the error (default 9/19), as derived. Callers listed with one measurement each: rest walls of a rigid column low by 1.2505e-2 (4e-6 corrected); the tree's force reports low by 1/(2N) = 2.5e-2 on a moving wall; the rotor wall of the sliding step misses 0.41 g dn (0.06 corrected); cosim already defaults to the prescribed gradient. Listing for the default: no registered hash moves (baseline_hashes and case_hashes_w48u hold no six-DOF case); with the default flipped the six-DOF results move (T4 -5e-4, ADR 0266's piston -5.0e-3 in frequency, SP -1.0e-3) and ADR 0266's R1, R2, E1, E2 fail. Without the table nothing changes (K0 unedited; a table with "extrapolated" equals no table bit for bit). Six mutations, all caught. Disclosed: the rest-wall check missed as registered because its case text jumped by X in the first step; corrected by amendment before the corrected run, the miss kept as a record. Open, the maintainer's: the default (ADR 0269 Q1), the table (Q2), the force reports on moving walls (Q3), the sliding step (Q4), skewed walls (Q5).
+
+Follow-up item (number for the lead to assign). Title: Force and moment reports on moving walls with the prescribed wall gradient. Deps: F-358. Acceptance:
+
+> An opt-in key makes the force, moment and force-coefficient reports of a moving-mesh case take the wall pressure of the kept fixed-flux gradient (the face pressure of sixdof::patch_force_moment_wall_gradient) on the following and resting walls; on the rigid column of ADR 0269 AU1b the report's force deficit falls from 2.5e-2 to at most 1e-4; without the key every report value is bit-identical; registered before the run.
