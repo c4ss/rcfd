@@ -7787,7 +7787,9 @@ fixed by the item's registration ADR before any code.
     register on the directional lattice need small additions to rcfd_fv::adaptive; a cycle whose solve does not converge
     should be named in the stop reason (ADR 0267 amendment 2). Changes the schema golden. From ADR 0267 R5,
     recommendation taken on the maintainer's standing instruction of 2026-11-11. The agent reports that the keys change
-    the schema golden; check the optional-table route of ADR 0257 and 0266 first, else it needs the maintainer.
+    the schema golden; check the optional-table route of ADR 0257 and 0266 first, else it needs the maintainer. The
+    coarsening of F-441 (ADR 0343, 2026-11-12) would add a key coarsen_ratio (phi, default 0 = off, at most axis_ratio /
+    4).
 - [x] **F-439** Directional lattice: coarsening in three dimensions by a box merge
   - depends on: F-348
   - acceptance: On a lattice with three refined axes, repeated all-axes coarsening returns every state made by splits
@@ -7816,10 +7818,26 @@ fixed by the item's registration ADR before any code.
     most 1e-4; without the key every report value is bit-identical; registered before the run.
   - note: From ADR 0269 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     case tree's force reports are low by 1/(2N) on moving walls.
-- [ ] **F-441** Directional lattice: coarsening inside the directional adaptive loop
+- [x] **F-441** Directional lattice: coarsening inside the directional adaptive loop
   - depends on: F-439
   - acceptance: On the ADR 0267 suction layer, a directional loop that also box-coarsens cells whose per-axis variation
     is below a registered fraction of the largest reaches the error E(D) = 0.00298 of ADR 0267's run D with fewer than
     its 1547 cells and fewer leaves split along x than its 704; runs that do not ask for coarsening are bit for bit
     unchanged.
-  - note: From ADR 0341, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: DONE pending acceptance, merged 2026-11-12. DONE (ADR 0343, 2026-11-12): rcfd_fv::adaptive, opt-in:
+    directional_coarsen_axes and directional_coarsen_marks mark a cell to coarsen along axis a when its per-axis
+    variation E_a is below phi times the cell's largest and its level along a is above 0; phi <= theta / 4 (1/8 with
+    theta = 1/2) is required, derived so that a just-split axis is not coarsened back and an axis merged by one or two
+    levels is not split again (checked exactly on a 129 x 129 grid of variations). Each cycle of
+    run_adaptive_simple_directional_coarsen_target (and of run_adaptive_simple_directional_coarsening with any
+    coarsening marks) first box-merges with Coarsening::Box and then refines on the coarsened lattice towards the
+    scheduled count (directional_coarsen_refine_step; merged cells ranked by the volume-weighted mean of their
+    children's gradients, merged_gradients); a merged cell takes the volume-weighted mean of the values it replaces,
+    then the refinement transfer of the settings applies. On the ADR 0267 suction layer (16 x 16 base, levels 5, 6
+    cycles, target 1280) the coarsening run has error 0.0029776 (limit 0.00298) with 1292 cells and 413 leaves split
+    along x, against ADR 0267's run D (1547 cells, 704) and the same target without coarsening (1283 cells, 0.0029752,
+    494 leaves); 62 merges, no alternation; marking every cell to coarsen along every axis gives 0.48. With phi = 0 the
+    loop equals run_adaptive_simple_directional_target bit for bit; no existing line changed; the ADR 0267, 0341, 0247
+    and 0242 tests pass unedited (the F-348 heavy layer runs included). Six mutations caught. Not removed: x splits
+    outside the layer, where the variations are at the solver tolerance and the ratio carries no information (251 of the
+    413).
