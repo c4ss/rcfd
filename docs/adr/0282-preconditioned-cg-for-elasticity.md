@@ -323,6 +323,7 @@ missed (IC 85 iterations, block Jacobi 156, ratio 0.5449 against 0.5) and the ne
    counts (M9 must still fail A3 there, with the ratio moving to about 1).
 
 The decision rule is unchanged: with A3 missed it gives **partial**.
+
 ## Amendment 2 (2026-11-12, written and committed before the corrected run)
 
 **What happened.** The registered heavy run H1 (code e8e8b82a, log `w49i-work/f381-scratch/run-h1.log`, made once, 61 s)
@@ -363,6 +364,7 @@ same test and recorded beside them (X1 has no limit). Mutation M7 (no restart) i
 ("must fail H1b, else recorded"); it is run on the heavy test once only if time allows, else recorded as not run.
 
 The decision rule is unchanged: H1b met and A3 missed gives **partial** (A3); H1b missed as well gives partial with both.
+
 ## Amendment 3 (2026-11-12, written and committed before the mutation runs and before the run of B2)
 
 **Defect of the set-up.** Preparing the mutation runs showed that B1 cannot catch M6: on the fast cantilever every node
@@ -376,6 +378,7 @@ same partition. B1 is kept unedited (it passed).
 | B2 | c1, D2 | `node_blocks` with the `DofMap` of the fast cantilever and the free list of all equations except (node 0, component 0), (node 5, components 1 and 2), (node 9, component 1): block sizes `2, 3, 3, 3, 3, 1, 3, 3, 3, 2, 3, ...` (1617 blocks), every block one node's | as stated | finding 4 |
 
 M6 must fail B2. The decision rule is unchanged, with B2 beside B1.
+
 ## Amendment 4 (2026-11-12, written and committed before the corrected run)
 
 **What happened.** The heavy test H1b of amendment 2 (code 6406bee9, log `w49i-work/f381-scratch/run-h1b.log`, made once,
@@ -406,6 +409,128 @@ renamed `h1b_heavy_cantilever_wrong_geometry_record`, body unchanged). The fast,
 geometry registered for them and are not affected.
 
 The decision rule is unchanged (A3 missed: **partial**).
+
+## Addendum 1: results (2026-11-12)
+
+Code: registration 0ae93640; library and tests e8e8b82a (`crates/rcfd-linalg/src/precond.rs` lines 250 to 686 inserted
+before the test module, no existing line changed, no re-export; `crates/rcfd-fem/src/solve.rs`; `crates/rcfd-fem/Cargo.toml`
+rayon dev-dependency and its `Cargo.lock` line; `crates/rcfd-fem/tests/sb_pcg.rs`); amendments 796b80fb (1), f8b8b03d (2),
+cde1ac9a (3), 329c3cad (4), each committed before its run, with their code and tests at 6406bee9 (D5', N1b, the guard,
+H1b), e0d9dd45 (B2), ee25672a (H1c). Release profile throughout. Runs, each made once: run 1 (`run1.log`, fast tests), H1
+(`run-h1.log`), run 2 after amendments 1 and 2 (`run2.log`: N1b, the guard, the unchanged fast tests reproduced), H1b
+(`run-h1b.log`), B2 (`run-b2.log`), H1c (`run-h1c.log`); logs in `w49i-work/f381-scratch`.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 fast (4704 unknowns), relative residual | `<= 1e-10` | block Jacobi 9.64e-11 (156 iterations, 0 restarts); IC 9.54e-11 (85, 0 restarts, shift 0, no breakdown) | yes |
+| A2 fast, against the direct solution | `<= 1e-7` | 3.16e-13; 3.31e-13 | yes |
+| A3 fast, iterations IC / block Jacobi | `<= 0.5` | 85 / 156 = **0.5449** | **no** (known miss, amendment 1) |
+| A4 1 and 8 threads | bit-equal | both: iterations 156 / 156 and 85 / 85, every displacement bit-equal | yes |
+| A5 `K4` | as stated | (a) row 3, pivot -4.999999999999999 (1.8e-16), shift 0; (b) 9 breakdowns, shift 0.256 bit-equal to `1e-3 2^8`; (c) pivots within 5.9e-17 of the closed form; (d) all positive | yes |
+| A6 forced breakdowns (tolerance 0.9) | as stated | "cg-ic0, shift 2.048e0 after 12 breakdown(s)"; first at node 1 component 2 (pivot 2.077e10, 0.884 of 2.350e10); 240 iterations, residual 7.88e-11, 5.46e-13 from direct, all finite | yes |
+| A7 defaults | equal / pass | (a) `rcfd-fem` sb_elements 8, sb_loads 7, sb_modal 8, sb_model 11, sb_recover 9, sb_static 9 pass unedited; (b) direct `21c39eb0c554d5a4`, CG-Jacobi (162 iterations) `4035e2fb5d4197f5` on main 861e4bd5 and on this branch; (c) baseline_hashes 3 passed (1 ignored, as on main) | yes |
+| H1 heavy (registered run) | `<= 1e-10` | not converged: 1.17e-8 (block Jacobi, 6530 iterations), 7.5e-9 (IC, 2540); on a 24 m beam by a test-helper defect (amendment 4) | record |
+| H1b (amendment 2, D5') | `<= 1e-10` | not converged, 1.9e-9 both (6782 and 2358 iterations); same wrong geometry | record |
+| H1c (amendment 4), 103 968 unknowns | `<= 1e-10` | block Jacobi **7.59e-11** (477 iterations, 1 refinement step, 1.9 s); IC **7.21e-11** (255, 1 step, 4.4 s), no breakdown; tip deflection 4.608e-3 m | yes |
+| B1 node blocks | 1568 of 3 | 1568 blocks of 3, one node each | yes |
+| B2 (amendment 3) | as stated | 1617 blocks, sizes 2, 3, 3, 3, 3, 1, 3, 3, 3, 2, 3, then 3 | yes |
+| L1 full pattern exact | `<= 1e-12` | 7.4e-17 | yes |
+| L2 IC(0) against ILU(0) | `<= 1e-13` | 4.0e-16, shift 0 | yes |
+| L3 block Jacobi against cofactor inverses | `<= 1e-14` | 1.3e-16 | yes |
+| L4 refusals | as stated | missing diagonal row 1; "row 1: diagonal 0e0 is not positive"; NaN at (0, 1); indefinite block 0 at row 1 (pivot -3); invalid partition; `NoShift` after 3 attempts | yes |
+| L5 five iterations | error | "not converged in 5 iterations and 0 restart(s) (true residual ..., target 3.4375e-5 = 1e-10 relative)", both | yes |
+| N1 tolerance 1e-4 | `> 1e-7` | 2.2e-8 | **failed** (set-up defect, amendment 1) |
+| N1b tolerance 1e-1 | `> 1e-7` | 2.3e-5 (103 iterations) | yes |
+| N2 IC of `A + diag(A)` | `> 0.5` | 192 / 156 = 1.23 | yes |
+| N3 block Jacobi against IC solution | not bit-equal | not equal | yes |
+| guard (amendment 1) | run 1's numbers | 9.639e-11 / 9.538e-11, 3.160e-13 / 3.309e-13, 156 / 85, A6 and N2 identical | yes |
+
+**Record X1** (no limit). Direct solve: relative residual 6.5e-12 (fast, 0.05 s), 7.1e-11 (slender `[64, 6, 6]`, L/h =
+10.7, 9408 unknowns). Slender: block Jacobi 292 iterations, 1 restart, 9.46e-11, 3.9e-12 from direct; IC 206 iterations, 1
+restart, 7.97e-11, 1.0e-11 from direct; ratio 0.705. Heavy (H1c): ratio 0.535. The default IC had no breakdown on any
+cantilever. Scratch diagnosis of amendment 4 (`diag.log`): the componentwise floor `eps || |A| |x| || / ||b||` is 1.3e-11
+(fast), 1.4e-10 (slender), 5.0e-9 (the 24 m beam); the direct solve's residual sits at it, so ADR 0277's 6.7e-11 on a slender
+Tet10 cantilever is likely the evaluation floor of the residual rather than an inaccuracy that refinement could remove
+(relevant to F-455; Tet10 not measured here).
+
+**Diagnosis of A3.** Block Jacobi hardly improves on scalar Jacobi here (156 against 162 iterations of the existing
+`ConjugateGradient`), and IC(0) reduces the count by a factor 1.84 on the fast case and 1.87 on the heavy one (if the count
+goes as `sqrt(kappa)`, `kappa` by about 3.4; a factor 2 needs 4). The count is set by the low bending modes of the beam,
+which a one-level, local preconditioner leaves in place: with slenderness the ratio moves towards 1 (0.705 at L/h = 10.7).
+The draft factor 0.5 was the plan's least trusted number (ADR 0270 section 6); arithmetic 8 took it from experience, not
+from a derivation. Nothing was tried to reach it (no ordering, no fill level), by the rules.
+
+**Mutations** (scratch `git archive` of ee25672a, own target; `mutate.ps1`, `mutations.log`; each alone, `sb_pcg` with
+`--include-ignored` except the two wrong-geometry heavy records, files restored and compared by SHA-256; the unmutated run
+fails only the known-miss record):
+
+| Id | Caught by |
+| --- | --- |
+| M1 `l_ik` without the sum | L1 |
+| M2 shift not applied | A5 (`NoShift`), the guard (A6) |
+| M3 pivot test removed | A5, L4, the guard (A6) |
+| M4 backward sweep left out | L1, L2, A4, the guard, H1c |
+| M5 block off-diagonals dropped | L3, L4 |
+| M6 blocks of three rows regardless of node | B2 only (B1 cannot see it, amendment 3) |
+| M7 no restart | H1c (the fast tests do not restart) |
+| M8 thread-dependent `dot` | A4 |
+| M9 IC dispatched to block Jacobi | the guard (A6: no shift), A4 (N3: the solutions became equal); the first text (`_ if true` arm) did not compile, so the match was redirected to `&CgPreconditioner::BlockJacobi` instead |
+| M10 non-finite test removed, pivot test `d != 0` | A5, L4, the guard (A6) |
+
+`cargo fmt -p rcfd-fem --check` and `-p rcfd-linalg --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fem --all-targets
+-- -D warnings` (debug and release): clean. Shared code: `rcfd-linalg` tests (lib 19, amg_contrast 2, reorder 2, sb_direct
+16, sb_eigen 15), `rcfd-fv` lib (104), `amr_solve` (2), `vof_dambreak_amg` (1) and `rcfd-api` `baseline_hashes` (3) pass
+unedited in release.
+
+**Deviations.**
+
+1. Amendment 1: A3 missed; N1 was not sensitive (corrected N1b). Amendment 2: H1 missed, diagnosed then as the CG
+   rounding gap; the restart became iterative refinement (D5'). Amendment 4 found the real cause of both heavy misses: the
+   helper built a 24 m beam, whose evaluation floor 5e-9 is above the limit. D5' stays (it is the sounder restart and it is
+   what H1c ran); whether D5 alone would have met H1c was not run. Amendment 3: B2 added so that M6 is seen.
+2. Arithmetic 7 used `||A|| ||x||`; the componentwise `|| |A| |x| ||` is the right floor (about four times larger on the fast
+   case); arithmetic 8's iteration estimates (thousands) were pessimistic by a factor 10 (477 and 255 on the heavy case).
+3. H1c takes 6 s in release; it stays `#[ignore]` as registered.
+4. A scratch diagnosis (not a check) was run once between H1b and amendment 4 to find the cause; its file and log are in the
+   scratch folder.
+5. Not run: the whole workspace (the lead runs the gate); M7 against H1 or H1b (wrong geometry).
+
+**Decision by the registered rule: partial.** A3 (clause c6) is missed: IC(0) needs 0.545 of block Jacobi's iterations, not
+at most half. Every other acceptance clause is met (A1, A2, A4 to A7, H1c), B1, B2, L1 to L5 hold, N1b, N2, N3 hold, every
+mutation is caught (M6 by B2 of amendment 3).
+
+**Remaining questions.**
+
+1. Clause c6 (half the iterations). Options: (a) keep F-381 partial and add a follow-up that tries an ordering (reverse
+   Cuthill-McKee by node) and one level of fill for IC, registered with the same limit; (b) the maintainer changes the
+   clause to what a one-level method gives ("fewer iterations than block Jacobi", or "at most 0.6") and accepts the measured
+   0.545; (c) drop the clause and let ADR 0305's AMG carry the iteration target. Recommendation: (a), with (c) as the
+   fallback if the follow-up also misses; (b) would fit the limit to a result.
+2. The relative residual of 1e-10 is near the evaluation floor `eps || |A| |x| || / ||b||` on slender or fine models (1.4e-10
+   at L/h = 10.7 with 9408 unknowns). Options: (a) state the floor in the solver's error when the target is below it; (b) a
+   residual relative to `|| |A| |x| || + ||b||` (a backward error) as a second statistic. Recommendation: (b), within F-455.
+3. `StaticOptions::threads` drives the assembly only; the CG runs in the caller's rayon pool. Options: (a) as is; (b) add
+   rayon to `rcfd-fem` and install a pool of that size for the iterative solve. Recommendation: (a); the results do not depend
+   on it.
+
+## For the lead: roadmap entries
+
+F-381: proposed status **partial**. Note:
+
+> Structural solver, basic tier (plan ADR 0270). ADR 0282, 2026-11-12: rcfd_linalg::precond (appended, no re-export) BlockJacobi (Cholesky of each diagonal block of a given partition) and IncompleteCholesky (L D L^T with zero fill on the lower CSR triangle; on a pivot not above 1e-10 of its diagonal the factorisation restarts with A + alpha diag(A), alpha <- max(2 alpha, 1e-3), which terminates by diagonal dominance; every breakdown recorded with shift, row and pivot; IcOptions, PrecondError). rcfd_fem::solve: StaticSolver::PreconditionedCg { preconditioner: CgPreconditioner::{BlockJacobi, IncompleteCholesky(IcOptions)}, tolerance, max_iterations } on the true relative residual with up to three iterative-refinement steps, node_blocks, solve_static_report with SolveReport (iterations, restarts, shift, breakdowns by node and component), a shifted factor named in SolverStats ("cg-ic0, shift ... after k breakdown(s)"), non-finite iterates refused. Hex8 cantilever 32 x 6 x 6 (4704 unknowns): relative residual 9.6e-11 (block Jacobi, 156 iterations) and 9.5e-11 (IC, 85), within 3.3e-13 of the direct solution (limit 1e-7), iterations and solutions bit-identical for 1 and 8 threads; IC needs 0.545 of block Jacobi's iterations against the limit 0.5: missed (0.535 on the heavy case, 0.705 at L/h = 10.7; the low bending modes set the count). Heavy 96 x 18 x 18 (103 968 unknowns): 7.6e-11 and 7.2e-11 (limit 1e-10), 477 and 255 iterations (amendment 4; two earlier heavy runs were on a 24 m beam by a test-helper defect). A Kershaw-type matrix breaks down at row 3 with pivot -5 and is factored with shift 0.256 after 9 breakdowns, pivots within 5.9e-17 of the closed form; forced breakdowns on the cantilever are reported with shift 2.048 and solved to 7.9e-11. Default and CG-Jacobi results bit-identical to main, baseline hashes pass; ten mutations caught (M6 after amendment 3).
+
+F-455 (direct-solve residual against slenderness), sentence to append to its note:
+
+> ADR 0282 (2026-11-12): on Hex8 cantilevers the direct solve's relative residual sits at the evaluation floor eps |||A| |x||| / ||b|| (6.5e-12 against a floor of 1.3e-11 at L/h = 5.3, 7.1e-11 against 1.4e-10 at L/h = 10.7), so iterative refinement cannot lower the computed residual there; a backward-error statistic relative to |||A| |x||| + ||b|| would separate the two.
+
+F-386 (ADR 0287, solid case file), sentence to append to its note:
+
+> ADR 0282 (2026-11-12): the static solve's iterative route is StaticSolver::PreconditionedCg with CgPreconditioner::BlockJacobi or CgPreconditioner::IncompleteCholesky(IcOptions::default()); a case-file key for it maps onto these.
+
+New follow-up item. Title: "Incomplete Cholesky at half the block-Jacobi iterations on the elastic cantilever: ordering and one level of fill". Deps: F-381. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. Beside IC(0) in the natural order, an incomplete Cholesky with one level of fill and IC(0) after a node-wise reverse Cuthill-McKee ordering, both with the shift strategy of ADR 0282, selectable in StaticSolver::PreconditionedCg: on the fast Hex8 cantilever of ADR 0282 (32 x 6 x 6, 4704 unknowns) at least one of them reaches the relative residual 1e-10 in at most half the iterations of block Jacobi (156), agrees with the direct solution within 1e-7 and is bit-identical for 1 and 8 threads; the iteration counts at L/h = 5.3 and 10.7 and on the 103 968-unknown case are recorded; IC(0) in the natural order and every default are unchanged bit for bit.
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the basic-tier plan, [ADR 0270](0270-structural-solver-basic-tier-plan.md)); the
