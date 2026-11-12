@@ -179,11 +179,8 @@ impl StaticSolid {
     /// The participant `name` for `model` with the interface `surface_set`, at rest (zero displacement) at time 0.
     /// Refuses a model that does not validate and an unknown set.
     pub fn new(name: &str, model: SolidModel, surface_set: &str, options: StaticOptions) -> Result<Self, String> {
-        model
-            .validate()
-            .map_err(|e| format!("static solid '{name}': {e}"))?;
-        let interface =
-            SolidInterface::new(&model, surface_set).map_err(|e| format!("static solid '{name}': {e}"))?;
+        model.validate().map_err(|e| format!("static solid '{name}': {e}"))?;
+        let interface = SolidInterface::new(&model, surface_set).map_err(|e| format!("static solid '{name}': {e}"))?;
         let n = model.dof_map().n_equations();
         let m = interface.n_nodes();
         Ok(StaticSolid {

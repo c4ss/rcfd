@@ -8,9 +8,7 @@ use rcfd_fem::builders::{hex_box, tet_box};
 use rcfd_fem::loads::{nodal_load_vector, NodalForceAt};
 use rcfd_fem::solve::{solve_static_with, StaticOptions, StaticSolver};
 use rcfd_fem::{Constraint, Load, Material, SolidMesh, SolidModel};
-use rcfd_fv::cosim::{
-    coupled_step, CouplingSettings, Fluid, InterfaceMap, MapSettings, Participant, Structure,
-};
+use rcfd_fv::cosim::{coupled_step, CouplingSettings, Fluid, InterfaceMap, MapSettings, Participant, Structure};
 use rcfd_fv::fsi::Relaxation;
 use rcfd_post::solid_coupling::{face_forces_to_nodes, solve_face_forces, SolidInterface, StaticSolid};
 
@@ -49,14 +47,20 @@ impl Checks {
     }
     fn at_most(&mut self, id: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{id}: {value:e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{id}: {value:e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{id}: {value:e} > {limit:e}"));
         }
     }
     fn at_least(&mut self, id: &str, value: f64, limit: f64) {
         let ok = value >= limit;
-        println!("{id}: {value:e} (limit >= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{id}: {value:e} (limit >= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{id}: {value:e} < {limit:e}"));
         }
@@ -137,10 +141,7 @@ fn map_for(interface: &SolidInterface, points: &[Vec3], faces: &[Vec<usize>]) ->
 }
 
 fn uniform_pressure(points: &[Vec3], faces: &[Vec<usize>]) -> Vec<Vec3> {
-    faces
-        .iter()
-        .map(|f| [-P * face_area(points, f), 0.0, 0.0])
-        .collect()
+    faces.iter().map(|f| [-P * face_area(points, f), 0.0, 0.0]).collect()
 }
 
 /// Resultant, moment (about the origin) and work on the fluid side and the solid side, each difference relative to its
@@ -156,7 +157,9 @@ fn balance(
     let result = solve_face_forces(model, interface, map, face_forces, &StaticOptions::default()).unwrap();
     // fluid side
     let q = interface.displacements(&result);
-    let d = map.face_displacements(&map.displacement_to_points(&q).unwrap()).unwrap();
+    let d = map
+        .face_displacements(&map.displacement_to_points(&q).unwrap())
+        .unwrap();
     let (mut rf, mut mf, mut wf) = (vec3::ZERO, vec3::ZERO, 0.0);
     let (mut rs_scale, mut ms_scale, mut ws_scale) = (0.0, 0.0, 0.0);
     for ((face, &force), df) in faces.iter().zip(face_forces).zip(&d) {
@@ -210,12 +213,26 @@ fn b1_to_b4_balance() {
     let interface = SolidInterface::new(&model, "xmax").unwrap();
     let (points, faces) = wall(2, true);
     let map = map_for(&interface, &points, &faces);
-    let b = balance(&model, &interface, &map, &points, &faces, &uniform_pressure(&points, &faces));
+    let b = balance(
+        &model,
+        &interface,
+        &map,
+        &points,
+        &faces,
+        &uniform_pressure(&points, &faces),
+    );
     report_balance(&mut checks, "B1", b);
     // B2: 3:2, uniform pressure
     let (points, faces) = wall(3, false);
     let map = map_for(&interface, &points, &faces);
-    let b = balance(&model, &interface, &map, &points, &faces, &uniform_pressure(&points, &faces));
+    let b = balance(
+        &model,
+        &interface,
+        &map,
+        &points,
+        &faces,
+        &uniform_pressure(&points, &faces),
+    );
     report_balance(&mut checks, "B2", b);
     // B3: 3:2, random face forces, Hex8
     let forces: Vec<Vec3> = faces.iter().map(|_| rng.force(1e3)).collect();
@@ -347,7 +364,11 @@ fn s1_restore_bit_for_bit() {
     let q1 = s.advance(1e-3, &fb).unwrap();
     let after = solid_bits(&s);
     s.restore().unwrap();
-    checks.holds("S1 restore", solid_bits(&s) == at_checkpoint, "state bit-equal to the checkpoint");
+    checks.holds(
+        "S1 restore",
+        solid_bits(&s) == at_checkpoint,
+        "state bit-equal to the checkpoint",
+    );
     checks.holds("S1 changed", after != at_checkpoint, "the advance changed the state");
     let q2 = s.advance(1e-3, &fb).unwrap();
     let bits = |q: &[Vec3]| q.iter().flatten().map(|x| x.to_bits()).collect::<Vec<u64>>();
@@ -357,7 +378,11 @@ fn s1_restore_bit_for_bit() {
         "the advance from the checkpoint repeats bit for bit",
     );
     s.restore().unwrap();
-    checks.holds("S1 again", solid_bits(&s) == at_checkpoint, "a second restore gives the checkpoint");
+    checks.holds(
+        "S1 again",
+        solid_bits(&s) == at_checkpoint,
+        "a second restore gives the checkpoint",
+    );
     checks.finish();
 }
 
@@ -381,7 +406,11 @@ fn s2_advance_is_a_static_solve() {
         let got: Vec<u64> = q.iter().flatten().map(|x| x.to_bits()).collect();
         let full = r.displacement_values().iter().map(|x| x.to_bits()).collect::<Vec<_>>()
             == s.displacement().iter().map(|x| x.to_bits()).collect::<Vec<_>>();
-        checks.holds(&format!("S2 advance {k}"), got == expected && full, "bit-equal to solve_static_with");
+        checks.holds(
+            &format!("S2 advance {k}"),
+            got == expected && full,
+            "bit-equal to solve_static_with",
+        );
         checks.holds(
             &format!("S2 time {k}"),
             s.time().to_bits() == (t0 + 1e-3).to_bits(),
@@ -669,7 +698,11 @@ fn f2b_failing_solve_in_the_second_iteration_after_a_load_step() {
         fluid.bits() == fb && solid_bits(&wrapped.inner) == sb,
         "both states bit-equal to before the step",
     );
-    checks.holds("F2b reached", wrapped.calls >= 2, "the solid advanced twice in the step");
+    checks.holds(
+        "F2b reached",
+        wrapped.calls >= 2,
+        "the solid advanced twice in the step",
+    );
     checks.finish();
 }
 
@@ -678,7 +711,11 @@ fn f3_failed_advance_leaves_the_state() {
     let mut checks = Checks::new();
     let mut rng = SplitMix64(SEED ^ 3);
     let mut s = solid();
-    checks.holds("F3 name", s.name() == "solid", "the participant's name is the given one");
+    checks.holds(
+        "F3 name",
+        s.name() == "solid",
+        "the participant's name is the given one",
+    );
     let n = s.interface().n_nodes();
     let f: Vec<Vec3> = (0..n).map(|_| rng.force(1e4)).collect();
     s.advance(DT, &f).unwrap();
@@ -693,7 +730,11 @@ fn f3_failed_advance_leaves_the_state() {
         let r = s.advance(dt, &forces);
         let named = matches!(&r, Err(m) if m.contains("static solid 'solid'"));
         println!("  F3 {what}: {r:?}");
-        checks.holds(&format!("F3 {what}"), named && solid_bits(&s) == before, "error naming solid, state unchanged");
+        checks.holds(
+            &format!("F3 {what}"),
+            named && solid_bits(&s) == before,
+            "error naming solid, state unchanged",
+        );
     }
     checks.finish();
 }
