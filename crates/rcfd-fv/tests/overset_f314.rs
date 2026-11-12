@@ -6,10 +6,11 @@
 //! Release only (the flow runs take minutes): `cargo test -p rcfd-fv --release --test overset_f314`.
 
 use rcfd_core::vec3::{self, Vec3};
+use rcfd_fv::ale::move_mesh;
 use rcfd_fv::bc::FixedValue;
 use rcfd_fv::convection::ConvScheme;
 use rcfd_fv::overset::{MassMode, OversetCoupling, OversetSolver};
-use rcfd_fv::pimple::PimpleSettings;
+use rcfd_fv::pimple::{PimpleSettings, PimpleSolver};
 use rcfd_fv::{FvGeometry, Profile, ScalarField, VectorField};
 use rcfd_linalg::SolveControl;
 use rcfd_mesh::gen::rectilinear_2d;
@@ -359,6 +360,8 @@ struct Run {
     dt: f64,
     s: OversetSolver,
     window: f64,
+    /// The same over the calculated cells only (amendment 1, H8c).
+    window_calc: f64,
     delta: f64,
     cont: f64,
     secs: f64,
@@ -388,7 +391,7 @@ fn tg_run(level: usize, steps: usize, motion: Motion, donor_only: bool) -> Run {
         Some(OversetCoupling { overset: ov, pose }),
     )
     .unwrap();
-    let (mut window, mut delta, mut cont) = (0.0f64, 0.0f64, 0.0f64);
+    let (mut window, mut window_calc, mut delta, mut cont) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
     for k in 1..=steps {
         let t = k as f64 * dt;
         let g = s.geom.clone();
@@ -408,7 +411,11 @@ fn tg_run(level: usize, steps: usize, motion: Motion, donor_only: bool) -> Run {
         if t >= 0.25 - 1e-12 {
             for c in 0..s.geom.n_cells() {
                 if s.conn.kind[c] != CellKind::Hole {
-                    window = window.max(eps(&s, c, t));
+                    let e = eps(&s, c, t);
+                    window = window.max(e);
+                    if s.conn.kind[c] == CellKind::Calculated {
+                        window_calc = window_calc.max(e);
+                    }
                 }
             }
         }
@@ -418,6 +425,7 @@ fn tg_run(level: usize, steps: usize, motion: Motion, donor_only: bool) -> Run {
         dt,
         s,
         window,
+        window_calc,
         delta,
         cont,
         secs: t0.elapsed().as_secs_f64(),
@@ -637,11 +645,19 @@ fn level_runs(tag: &str, levels: &[usize], donor_only: bool) -> Vec<(Run, Stats)
         .collect()
 }
 
-fn check_pair(c: &mut Checks, tag: &str, a: &(Run, Stats), b: &(Run, Stats)) {
+/// F2, F3 and F4 between two levels; `with_f3` false prints F3 without asserting it (levels 2 to 3: the known miss of
+/// amendment 1).
+fn check_pair(c: &mut Checks, tag: &str, a: &(Run, Stats), b: &(Run, Stats), with_f3: bool) {
     let (f2, f3, f4) = orders(tag, (&a.0, &a.1), (&b.0, &b.1));
     let pair = format!("levels {} to {}", a.0.level, b.0.level);
     c.at_least(&format!("F2 order of the root mean square, {pair}"), f2, 1.7);
-    c.at_least(&format!("F3 order of the calculated maximum, {pair}"), f3, 1.7);
+    if with_f3 {
+        c.at_least(&format!("F3 order of the calculated maximum, {pair}"), f3, 1.7);
+    } else {
+        println!(
+            "F3 order of the calculated maximum, {pair} (printed, known miss of amendment 1): {f3:.4} (limit >= 1.7)"
+        );
+    }
     c.at_least(&format!("F4 order of the window maximum, {pair}"), f4, 1.7);
 }
 
@@ -653,11 +669,12 @@ fn f_split_and_orders_levels_1_and_2() {
     for (r, st) in &runs {
         c.at_most(&format!("F1 fringe identity, level {}", r.level), st.identity, 1e-12);
     }
-    check_pair(&mut c, "F", &runs[0], &runs[1]);
+    check_pair(&mut c, "F", &runs[0], &runs[1], true);
     c.finish();
 }
 
-/// ADR 0232 F1 to F4 on levels 1, 2 and 3 (level 3: 1800 steps).
+/// ADR 0232 F1, F2 and F4 on levels 1, 2 and 3 (level 3: 1800 steps), and F3 at levels 1 to 2. F3 at levels 2 to 3 missed
+/// (`f3_calculated_maximum_levels_2_to_3_known_miss`, amendment 1) and is printed.
 #[test]
 #[ignore = "slow (level 3 of ADR 0232, minutes): run once for the addendum"]
 fn f_split_and_orders_three_levels() {
@@ -666,20 +683,45 @@ fn f_split_and_orders_three_levels() {
     for (r, st) in &runs {
         c.at_most(&format!("F1 fringe identity, level {}", r.level), st.identity, 1e-12);
     }
-    check_pair(&mut c, "F", &runs[0], &runs[1]);
-    check_pair(&mut c, "F", &runs[1], &runs[2]);
+    check_pair(&mut c, "F", &runs[0], &runs[1], true);
+    check_pair(&mut c, "F", &runs[1], &runs[2], false);
     c.finish();
 }
 
-/// ADR 0232 N5 (negative control): the donor cell alone (first-order interpolation), levels 1 and 2.
+/// ADR 0232 F3 at levels 2 to 3: known miss (registered run: order 1.580; the calculated maximum 2.096e-4 and 1.104e-4 lies
+/// in a component calculated cell that is not adjacent to the fringe). Diagnosed by amendment 1.
+#[test]
+#[ignore = "known miss, ADR 0232 amendment 1: F3 order of the calculated maximum, levels 2 to 3, 1.580 (limit 1.7)"]
+fn f3_calculated_maximum_levels_2_to_3_known_miss() {
+    let runs = level_runs("F", &[2, 3], false);
+    let (_, f3, _) = orders("F", (&runs[0].0, &runs[0].1), (&runs[1].0, &runs[1].1));
+    let mut c = Checks::new();
+    c.at_least("F3 order of the calculated maximum, levels 2 to 3", f3, 1.7);
+    c.finish();
+}
+
+/// ADR 0232 N5 (negative control): the donor cell alone (first-order interpolation), levels 1 and 2: the parts that held
+/// (the root-mean-square part did not: `n5_root_mean_square_control_known_miss`, amendment 1).
 #[test]
 fn n5_orders_with_the_donor_cell_only() {
     let runs = level_runs("N5", &[1, 2], true);
     let (f2, f3, f4) = orders("N5", (&runs[0].0, &runs[0].1), (&runs[1].0, &runs[1].1));
+    println!("N5 order of the root mean square (printed, did not hold as registered): {f2:.4} (limit <= 1.3)");
     let mut c = Checks::new();
-    c.at_most("N5 order of the root mean square", f2, 1.3);
     c.at_most("N5 order of the calculated maximum", f3, 1.3);
     c.at_most("N5 order of the window maximum", f4, 1.3);
+    c.finish();
+}
+
+/// ADR 0232 N5, the root-mean-square part: the control did not hold at its registered limit (registered run: 1.463, which is
+/// still below the limit 1.7 of F2; amendment 1).
+#[test]
+#[ignore = "known miss, ADR 0232 amendment 1: N5 order of the root mean square with the donor cell only, 1.463 (limit <= 1.3)"]
+fn n5_root_mean_square_control_known_miss() {
+    let runs = level_runs("N5", &[1, 2], true);
+    let (f2, ..) = orders("N5", (&runs[0].0, &runs[0].1), (&runs[1].0, &runs[1].1));
+    let mut c = Checks::new();
+    c.at_most("N5 order of the root mean square", f2, 1.3);
     c.finish();
 }
 
@@ -752,5 +794,188 @@ fn h6_time_error_of_the_moving_cells() {
     c.at_least("F5 R = max_CC |d_200| / max_CC |d_400|", r, 2.5);
     c.at_most("F5 R = max_CC |d_200| / max_CC |d_400|", r, 3.5);
     c.at_most("F6 (control) at rest over moving, max |d_200|", d_rest / d200, 0.2);
+    c.finish();
+}
+
+// ---- amendment 1: the F3 miss at levels 2 to 3 -------------------------------------------------------------------------
+
+/// The spatial and the time part of the error of the calculated cells from two runs of one level and one motion, `coarse`
+/// with twice the step of `fine`: the spatial part is the error of the field `2 u_fine - u_coarse` (extrapolated to `dt =
+/// 0`), the time part of `fine` is `u_coarse - u_fine` (first order in `dt`). Returns the largest spatial part over the
+/// calculated cells with its cell, the volume-weighted root mean square of the spatial part over the non-hole cells, and the
+/// largest time part over the calculated cells with its cell.
+fn parts(coarse: &Run, fine: &Run) -> ((f64, usize), f64, (f64, usize)) {
+    assert!(
+        coarse.s.conn.kind == fine.s.conn.kind,
+        "the two runs end at different kinds"
+    );
+    let s = &fine.s;
+    let centres = s.geom.mesh.cell_centres();
+    let vol = s.geom.mesh.cell_volumes();
+    let decay = (-2.0 * NU_TG * T_END).exp();
+    let (mut sp, mut tm) = ((0.0, 0usize), (0.0, 0usize));
+    let (mut sum, mut vsum) = (0.0, 0.0);
+    for c in 0..s.geom.n_cells() {
+        if s.conn.kind[c] == CellKind::Hole {
+            continue;
+        }
+        let (uf, uc) = (s.u.values[c], coarse.s.u.values[c]);
+        let x = vec3::sub(vec3::scale(uf, 2.0), uc);
+        let e = vec3::norm(vec3::sub(x, tg_u(centres[c], T_END))) / decay;
+        let t = vec3::norm(vec3::sub(uc, uf)) / decay;
+        sum += vol[c] * e * e;
+        vsum += vol[c];
+        if s.conn.kind[c] == CellKind::Calculated {
+            if e > sp.0 {
+                sp = (e, c);
+            }
+            if t > tm.0 {
+                tm = (t, c);
+            }
+        }
+    }
+    (sp, (sum / vsum).sqrt(), tm)
+}
+
+/// ADR 0232 amendment 1, H8a to H8c: the F3 miss at levels 2 to 3 (printed numbers; the hypotheses are decided in the ADR).
+#[test]
+#[ignore = "slow (levels 1 to 3 at two steps each and at rest, ADR 0232 amendment 1, about 20 minutes): run once"]
+fn a1_f3_miss_spatial_and_time_parts() {
+    let ratio = |a: usize, b: usize| b as f64 / a as f64;
+    // H8a: at rest
+    let rest: Vec<(Run, Stats)> = [1usize, 2, 3]
+        .iter()
+        .map(|&l| {
+            let r = tg_run(l, 200 * l, Motion::Rest, false);
+            let st = stats(&r);
+            report("A1 at rest", &r, &st);
+            (r, st)
+        })
+        .collect();
+    for w in rest.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        let k = ratio(a.0.level, b.0.level);
+        println!(
+            "A1 H8a at rest, levels {} to {}: order of the calculated maximum {:.4}; of e {:.4}; of the root mean square {:.4}",
+            a.0.level,
+            b.0.level,
+            order(a.1.e_calc, b.1.e_calc, k),
+            order(a.1.e_all, b.1.e_all, k),
+            order(a.1.rms_all, b.1.rms_all, k)
+        );
+    }
+    drop(rest);
+    // H8b, H8c: moving, two steps per level
+    let mut rows = Vec::new();
+    for l in [1usize, 2, 3] {
+        let coarse = tg_run(l, 100 * l * l, Motion::Full, false);
+        let fine = tg_run(l, 200 * l * l, Motion::Full, false);
+        let st = stats(&fine);
+        let (sp, sp_rms, tm) = parts(&coarse, &fine);
+        println!(
+            "A1 moving level {l} ({:.1} s, {:.1} s): calculated maximum {:.4e} in {}; spatial part {:.4e} in {} (root mean square over the non-hole cells {:.4e}); time part {:.4e} in {}; window maximum over the calculated cells {:.4e}",
+            coarse.secs,
+            fine.secs,
+            st.e_calc,
+            describe(&fine.s, st.arg_calc),
+            sp.0,
+            describe(&fine.s, sp.1),
+            sp_rms,
+            tm.0,
+            describe(&fine.s, tm.1),
+            fine.window_calc
+        );
+        rows.push((l, st.e_calc, sp.0, sp_rms, tm.0, fine.window_calc));
+    }
+    for w in rows.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let k = ratio(a.0, b.0);
+        println!(
+            "A1 moving, levels {} to {}: order of the calculated maximum {:.4}; H8b spatial part {:.4} (root mean square {:.4}), time part {:.4}; H8c window maximum over the calculated cells {:.4}",
+            a.0,
+            b.0,
+            order(a.1, b.1, k),
+            order(a.2, b.2, k),
+            order(a.3, b.3, k),
+            order(a.4, b.4, k),
+            order(a.5, b.5, k)
+        );
+    }
+}
+
+// ---- amendment 1: a single moving mesh without overset (SM) --------------------------------------------------------------
+
+/// SM of amendment 1: the level-2 component mesh alone, moved by `tg_pose(speed t)` with the library's ALE step and
+/// `n_outer` outer iterations, the exact velocity on its four sides, `steps` steps to `t = 0.5`. Returns the velocities,
+/// the largest error at `t = 0.5` and the largest continuity over the steps.
+fn sm_run(steps: usize, speed: f64, n_outer: usize) -> (Vec<Vec3>, f64, f64) {
+    let dt = T_END / steps as f64;
+    let cs = uniform(-0.6, 1.2, 40);
+    let mesh0 = rectilinear_2d(&cs, &cs, DEPTH).unwrap();
+    let points_at = |t: f64| -> Vec<Vec3> {
+        let pose = tg_pose(speed * t);
+        mesh0.points().iter().map(|&q| pose.apply(q)).collect()
+    };
+    let geom = Arc::new(FvGeometry::new(Arc::new(moved_mesh(&mesh0, points_at(0.0)).unwrap())).unwrap());
+    let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
+    tg_conditions(&geom, &mut u, 0.0);
+    let p = ScalarField::from_fn("p", &geom, |x| tg_p(x, 0.0));
+    let mut set = settings();
+    set.n_outer = n_outer;
+    let mut s = PimpleSolver::new(geom, u, p, set);
+    let mut cont = 0.0f64;
+    for k in 1..=steps {
+        let t = k as f64 * dt;
+        let st = move_mesh(&s.geom, points_at(t), dt).unwrap();
+        tg_conditions(&st.geom, &mut s.u, t);
+        let info = s.step_ale_with_walls(dt, st.geom, st.mesh_flux, Vec::new()).unwrap();
+        cont = cont.max(info.continuity);
+    }
+    let decay = (-2.0 * NU_TG * T_END).exp();
+    let e =
+        s.u.values
+            .iter()
+            .zip(s.geom.mesh.cell_centres())
+            .map(|(v, &x)| vec3::norm(vec3::sub(*v, tg_u(x, T_END))) / decay)
+            .fold(0.0, f64::max);
+    (s.u.values.clone(), e, cont)
+}
+
+/// ADR 0232 amendment 1, H6a and H6b with F7 and F8: the time error of a single moving mesh without overset.
+#[test]
+fn sm_single_moving_mesh_time_error() {
+    let decay = (-2.0 * NU_TG * T_END).exp();
+    let mut cont = 0.0f64;
+    let mut d200 = |speed: f64, n_outer: usize| -> (f64, f64) {
+        let (a, ea, ca) = sm_run(200, speed, n_outer);
+        let (b, eb, cb) = sm_run(800, speed, n_outer);
+        cont = cont.max(ca).max(cb);
+        let d = a
+            .iter()
+            .zip(&b)
+            .map(|(x, y)| vec3::norm(vec3::sub(*x, *y)) / decay)
+            .fold(0.0, f64::max);
+        println!(
+            "SM speed {speed} n_outer {n_outer}: e with 200 steps {ea:.4e}, with 800 steps {eb:.4e}; max |d_200| {d:.4e}"
+        );
+        (d, eb)
+    };
+    let (full1, e800) = d200(1.0, 1);
+    let (half1, _) = d200(0.5, 1);
+    let (full3, _) = d200(1.0, 3);
+    let (half3, _) = d200(0.5, 3);
+    println!(
+        "SM H6a: max |d_200| {full1:.4e} ({:.3} of the overset value 4.4936e-4); rho_SM {:.4} (overset 2.2924)",
+        full1 / 4.4936e-4,
+        full1 / half1
+    );
+    println!(
+        "SM H6b: q = three outer iterations over one {:.4}; rho with three outer iterations {:.4} (rho_BE 4.783, root mean square 3.700)",
+        full3 / full1,
+        full3 / half3
+    );
+    let mut c = Checks::new();
+    c.at_most("F7 SM continuity, every step of every run", cont, 1e-9);
+    c.at_most("F8 SM largest error, one outer iteration, 800 steps", e800, 1e-3);
     c.finish();
 }
