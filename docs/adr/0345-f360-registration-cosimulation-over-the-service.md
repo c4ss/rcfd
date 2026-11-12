@@ -304,3 +304,36 @@ elements that ADR 0263's map builders take are not part of the `Structure` trait
 treated as a lost connection and is not tested. A participant process that died is not restarted or restored. The
 bit-for-bit transfer rests on a round-tripping JSON library on both sides. No real structural solver; the mock and the
 model problem of ADR 0256, with its limits.
+
+## Amendment 1 (2026-11-12, after run 1 of the registered checks and before any other run)
+
+Run 1 (commit 6e8561fb, every registered check once) is reported in the addendum. It showed something no registered check
+covers: **the transport is slow**. The out-of-process run of 650 steps took 147.3 s; it makes about 11 400 requests (per
+step one `checkpoint` and, per iteration, one `advance` and from the second on one `restore`: `650 (2 x 8.77 - 1) + 650`),
+and the in-process flow of ADR 0256's whole test file took 31 s. So a request costs several milliseconds, where two short
+lines over the loopback interface should cost well under a tenth of one. No limit was missed (none was set), and no result
+depends on it; but a test of more than two minutes would have to be an ignored record (rule 7), and for a user the cost per
+call matters.
+
+Cause, not yet measured (a hypothesis from reading the code): `Service::serve_stream` writes a reply with
+`writeln!(writer, "{r}")` and the proxy writes a request the same way; the formatter then hands the JSON text to the
+unbuffered socket in many small pieces, each its own `send`, and on the service's accepted sockets Nagle's algorithm holds
+the later pieces back until the first is acknowledged.
+
+**New check T1 (registered now).** A `SprungWall` hosted in a service of the test process, a `RemoteStructure` connected
+to it over TCP on the loopback interface: 2000 calls of `query_time()` (`cosim.time`); the mean wall-clock time per call.
+Limit `<= 1 ms`. Estimate: 0.03 to 0.1 ms (two system calls and a thread wake-up on each side). T1 is first run once on
+the code of run 1, where it is expected to miss (the control that T1 sees the defect; if it does not miss there, the
+hypothesis is wrong and the cause is looked for elsewhere before anything is changed).
+
+**The change** (after that control run): (i) the proxy formats each request into one buffer and writes it with one call;
+(ii) `Service::serve_stream` does the same for each reply; (iii) `Service::serve_tcp` sets `TCP_NODELAY` on the accepted
+connections. None of the three changes a byte on the wire, so no registered result can change; (ii) and (iii) are in the
+path of every method of the service, which is why the suites of B1 are run after the change, not before.
+
+**Runs after the change**: T1 once; the whole new test file once more (run 2), as the confirmation that the changed code
+still meets every check. Run 1 stays the registered run of S0 to V and NC1, NC2; run 2 is reported beside it, whatever it
+gives. The reference run prints its wall-clock time from now on (a print). If the out-of-process run of 650 steps still
+takes more than about two minutes, `a1r`, `a2r` and `d` become ignored heavy records and D2 (100 steps, both participants
+remote) with F1 stays as the fast test of the same path. Mutations and B1 are made on the changed code. The decision
+rule gains: T1 met, for **done**.
