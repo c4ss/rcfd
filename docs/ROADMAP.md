@@ -7400,7 +7400,10 @@ fixed by the item's registration ADR before any code.
     CgPreconditioner::IncompleteCholesky(IcOptions::default()); a case-file key for it maps onto these. ADR 0357
     (2026-11-12): the recommended iterative choice is CgPreconditioner::IncompleteCholeskyFill { options:
     IcOptions::default(), level: 1, ordering: IcOrdering::Natural } (two thirds of IC(0)'s iterations at twice its
-    memory); a case-file key for the iterative route should map onto it and onto the ordering.
+    memory); a case-file key for the iterative route should map onto it and onto the ordering. ADR 0305 (2026-11-12):
+    for large solid models the iterative choice with the fewest iterations is
+    CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()) (15 to 22 iterations on the ADR 0282
+    cantilevers against 58 to 132 for IC(1)); a case-file key for the iterative route should be able to select it.
 - [ ] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
@@ -7620,7 +7623,7 @@ fixed by the item's registration ADR before any code.
     The existing co-simulation tests (cosim_f139, cosim_f361, cosim_f362) pass unedited.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0304; the registration is
     written by the implementation agent before any code.
-- [ ] **F-402** Aggregation multigrid for elasticity: rigid-body modes as near-null space, as a preconditioner of CG
+- [~] **F-402** Aggregation multigrid for elasticity: rigid-body modes as near-null space, as a preconditioner of CG
   - depends on: F-026, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. On every level the rigid-body modes
     are in the range of the prolongator: |B - P B_c| <= 1e-12 |B|. CG preconditioned by one V-cycle reaches a relative
@@ -7630,8 +7633,22 @@ fixed by the item's registration ADR before any code.
     F-381; the same on a Tet10 mesh within twice the Hex8 count. The solution agrees with the direct solver within 1e-7
     on the smallest case; operator complexity <= 1.5; iteration counts and solution are bit-identical for 1 and 8
     threads. The scalar AMG and its tests are unchanged; the default solver's results are unchanged bit for bit.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0305; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). ADR 0305, 2026-11-12:
+    rcfd_linalg::amg_elastic (new, beside the untouched scalar AMG): smoothed aggregation on the node-block graph (theta
+    0), tentative prolongator by a local QR of the six rigid-body modes per aggregate with a registered drop rule
+    (1e-10), prolongator smoothed by damped block Jacobi (4/3 over the spectral radius), Galerkin coarse operators,
+    V(1,1) cycle with forward / backward block Gauss-Seidel and a dense LU on the coarsest level;
+    rcfd_fem::solve::CgPreconditioner::SmoothedAggregation and solve::smoothed_aggregation (the modes from the node
+    coordinates). Rigid-body modes in the range of the tentative prolongator on every level to 1.1e-15; operator
+    complexity 1.03 to 1.18. Clamped Hex8 cube: 16, 17 and 20 iterations to 1e-10 at 4752, 39 744 and 304 842 unknowns
+    (growth 1.25), 4.1e-12 from the direct solve, bit-identical for 1 and 8 threads. ADR 0282 cantilevers: 15 (BJ 156,
+    IC0 85, IC1 58), 22 (292, 206, 132) and 17 (477, 255, 171) iterations. Partial by Rule I: the dense coarsest solve
+    applied row interchanges in the wrong order (found by the symmetry check, fixed by amendment 1); on the
+    slenderness-20 cantilever (121 680 unknowns) 1e-10 is below the rounding floor of the residual (both solvers stop at
+    1.4e-9; amendment 2 compares at 1e-8): Hex8 AMG 15 against IC(0) 887 (met), Tet10 AMG 79 against the limit 2 x 15 =
+    30 (missed; the first coarse level is 5 times coarser than on Hex8; Tet10 IC(0) 1971). Defaults and the scalar AMG
+    hash-identical; baseline hashes pass; eight mutations caught. Follow-ups: Tet10 aggregation, the scalar AMG's coarse
+    LU. Partial by the registered rule; done is the maintainer's call.
 - [ ] **F-403** Solid case file: the analyses and model data of the intermediate tier
   - depends on: F-393, F-394, F-395, F-396, F-398, F-399, F-386
   - acceptance: Every limit not stated here is registered in the ADR before the run. Each new analysis run from a file
@@ -8660,3 +8677,22 @@ fixed by the item's registration ADR before any code.
     control check, not by a panic in the set-up.
   - note: From ADR 0364 question 1, recommendation (b). Low priority: test isolation only; the mutations it targets are
     already caught by a set-up panic.
+- [ ] **F-470** Elasticity multigrid on quadratic tetrahedra: aggregation that coarsens Tet10 like Hex8
+  - depends on: F-402
+  - acceptance: Every limit not stated here is registered in the ADR before the run. In rcfd_linalg::amg_elastic, an
+    opt-in aggregation rule for meshes of quadratic elements (a registered strength threshold or an aggregate size
+    bound, derived before the run) such that on the Tet10 cantilever of slenderness 20 of ADR 0305 (tet_box 120 x 6 x 6
+    upgraded, 121 680 unknowns) the first coarse level has between 1/15 and 1/6 of the fine unknowns, CG with one
+    V-cycle reaches 1e-8 in at most twice the Hex8 count of ADR 0305 H2b (15), operator complexity <= 1.5, the
+    rigid-body modes in the range of the tentative prolongator to 1e-12 on every level; every count and bit of ADR 0305
+    with the default settings unchanged.
+  - note: From ADR 0305 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-471** Scalar AMG coarsest dense LU: row interchanges applied before the forward substitution
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A test shows whether the coarsest
+    dense LU of rcfd_linalg::amg (DenseLu) interchanges rows on each fluid case of the baseline set and records where;
+    DenseLu::solve applies every interchange before the forward substitution (as rcfd_linalg::amg_elastic after ADR 0305
+    amendment 1) so that a coarsest matrix that needs interchanges is solved to a relative residual of 1e-12; the
+    rcfd-linalg, rcfd-fv and rcfd-api tests and the baseline hashes are run, and any changed hash is reported to the
+    maintainer, not re-recorded.
+  - note: From ADR 0305 question 1 (the same ordering defect was fixed in amg_elastic by its amendment 1). NEEDS THE
+    USER if the fix moves any fluid result or registered hash: the hash is reported, never re-recorded.
