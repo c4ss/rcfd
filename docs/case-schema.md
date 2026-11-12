@@ -2884,6 +2884,20 @@ variable density, VOF, `time_advance = "fractional_step"`, `non_orthogonal_corre
 lumped components (face jumps). The table absent or `enabled = false` leaves every earlier result bit for bit, and neither enters the
 case hash or the written case text. The default stays `false` until the maintainer decides it on the benchmark set of ADR 0223.
 
+## Step-consistent face flux (`[solver.rhie_chow]`, ADR 0245, ADR 0352)
+
+The optional table `[solver.rhie_chow]` has one key, `step_consistent` (default `false`). The face flux of the default transient
+`piso`/`pimple` step depends on the step size wherever the momentum diagonal differs between the two cells of a face (most of all
+next to walls): its steady solution changes with `dt` (by `3.7e-4` of the lid velocity in ADR 0245's lid-driven cavity between
+`dt = 0.04` and `0.01`). With `step_consistent = true` the pressure term of the face flux takes the harmonic face value of
+`rAU = V/a_P` and the commutator of the lagged pressure gradient (less the body force) is added on internal faces, so the converged
+face flux depends on `dt` only through the time scheme and a steady solution is the same for every step size. It acts with the
+consistent correctors, with body forces (buoyancy included) and on a dynamic mesh (ADR 0352); periodic faces are left as they are.
+Located errors at `solver.rhie_chow.step_consistent` with steady algorithms, compressible, variable density, VOF,
+`time_advance = "fractional_step"` (its face coefficient is uniform, so it would change nothing) and lumped components (face jumps).
+The table absent or `step_consistent = false` leaves every earlier result bit for bit, and neither enters the case hash or the
+written case text.
+
 ## Least-squares velocity gradient on periodic faces (`solver.periodic_gradient`)
 
 `solver.periodic_gradient` (`face_value` default, `partner_cell`) applies to the steady `simple`/`simplec` momentum

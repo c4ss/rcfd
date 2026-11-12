@@ -136,9 +136,11 @@ pub struct PimpleSettings {
     pub moving_mesh_lag: bool,
     /// The face coefficient of the pressure term that the transient Rhie-Chow carry-over is consistent with (ADR 0245 C): the
     /// harmonic face value of `rAU` and the commutator of the lagged pressure gradient on internal faces, so that the converged
-    /// face flux depends on the step size only through the time scheme. Acts in `step` on a mesh at rest and in `OversetSolver`;
-    /// no effect (the default step) with `consistent_correctors`, on the library's moving-mesh steps and in the fractional step;
-    /// coupled faces, face jumps and the immersed-solid flux are left as they are. Default `false` (bit-identical).
+    /// face flux depends on the step size only through the time scheme. Acts in `step` on a mesh at rest, with the consistent
+    /// correctors (their compensation takes `interp(rAtU) - Gamma` face by face, ADR 0352 D1), on `step_ale` and
+    /// `step_ale_with_walls` (ADR 0352 D2) and in `OversetSolver`; `step_sliding` and the fractional step keep the default step
+    /// (in the fractional step the face coefficient is uniform and the option would change nothing, ADR 0352 D5); coupled
+    /// faces, face jumps and the immersed-solid flux are left as they are. Default `false` (bit-identical).
     pub rhie_chow_step_consistent: bool,
 }
 
@@ -1667,8 +1669,9 @@ impl PimpleSolver {
                 n_corr_final = n_corr;
             }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
-            // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with
-            let rc = s.rhie_chow_step_consistent && !cf.enabled && self.ale.is_none();
+            // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with (ADR 0352: also with the consistent
+            // correctors and on a moving mesh)
+            let rc = s.rhie_chow_step_consistent;
             let gamma_p = if rc {
                 face_consistent::harmonic_face(&g, &r_au)
             } else {
@@ -1738,11 +1741,17 @@ impl PimpleSolver {
                 // ADR 0258 X1: the fixed-pressure boundary part of the non-orthogonal compensation, for the pressure equation only
                 let mut eq_only: Vec<(usize, f64)> = Vec::new();
                 if let Some(rt) = &r_t {
+                    // ADR 0352 D1 (with C): the compensation takes interp(rAtU) - Gamma face by face
+                    let dr_c: Option<Vec<f64>> = match (&gamma_t, rc) {
+                        (Some(gt), true) => Some(face_consistent::consistent_face_difference(gt, &gamma_p)),
+                        _ => None,
+                    };
                     // ADR 0214 F0: the SIMPLEC split of this corrector with the pressure that drove it
-                    consistent_split(&g, &pbc, &r_au, rt, &self.p.values, &mut phi_hby_a, &mut hby_a);
+                    let p_prev = &self.p.values;
+                    consistent_split(&g, &pbc, &r_au, rt, p_prev, dr_c.as_deref(), &mut phi_hby_a, &mut hby_a);
                     if s.non_orth_correctors > 0 {
                         // ADR 0258 X1 (reached only with `non_orthogonal`): the non-orthogonal part of the compensation
-                        eq_only = consistent_non_orth(&g, &pbc, &r_au, rt, &self.p.values, &mut phi_hby_a);
+                        eq_only = consistent_non_orth(&g, &pbc, &r_au, rt, p_prev, dr_c.as_deref(), &mut phi_hby_a);
                     }
                     if let Some(j) = &self.face_jump {
                         // ADR 0258 X3 (reached only with `face_jump`): the cell term with the gradient the predictor used, the
@@ -2061,10 +2070,10 @@ impl PimpleSolver {
                 let hb = boundary_hby_a(g, pbc_h, &zero_ub, &hby_a);
                 let mut phi_h = face_flux(g, &hby_a, &hb);
                 if let Some(rt) = &r_t {
-                    consistent_split(g, pbc_h, &r_au, rt, &p, &mut phi_h, &mut hby_a);
+                    consistent_split(g, pbc_h, &r_au, rt, &p, None, &mut phi_h, &mut hby_a);
                     if s.non_orth_correctors > 0 {
                         // ADR 0258 X1: the non-orthogonal part of the compensation, as in the step
-                        for (f, v) in consistent_non_orth(g, pbc_h, &r_au, rt, &p, &mut phi_h) {
+                        for (f, v) in consistent_non_orth(g, pbc_h, &r_au, rt, &p, None, &mut phi_h) {
                             phi_h[f] += v;
                         }
                     }
@@ -2404,21 +2413,29 @@ fn consistent_rau(vol: &[f64], a_p: &[f64], h1: &[f64]) -> Vec<f64> {
 /// compensation `(rAtU - rAU)_f snGrad(p_prev) |S|` on internal faces and `(rAtU - rAU)_owner gradient_b(p_prev) |S|` on boundary
 /// faces whose flux the pressure sets (not fixed-velocity, not periodic, not empty), and to `hby_a` the cell term
 /// `-(rAU - rAtU) grad(p_prev)` (Green-Gauss with the boundary values of `pbc`). With `p_new = p_prev` the face flux and the cell
-/// velocity of the corrector are those of the default.
+/// velocity of the corrector are those of the default. `dr_face` (ADR 0352 D1, with `rhie_chow_step_consistent`): the face
+/// values of the compensation's coefficient in place of `face_interpolate(rAtU - rAU)`; `None` = as before.
+#[allow(clippy::too_many_arguments)]
 fn consistent_split(
     g: &FvGeometry,
     pbc: &crate::pressure::PressureBc,
     r_au: &[f64],
     r_t: &[f64],
     p_prev: &[f64],
+    dr_face: Option<&[f64]>,
     phi_hby_a: &mut [f64],
     hby_a: &mut [Vec3],
 ) {
     let mesh = &g.mesh;
     let (own, nei, sf) = (mesh.owner(), mesh.neighbour(), mesh.face_area_vectors());
     let n_int = g.n_internal;
-    let dr: Vec<f64> = r_t.iter().zip(r_au).map(|(t, a)| t - a).collect();
-    let dr_f = face_interpolate(g, &dr);
+    let dr_f = match dr_face {
+        Some(d) => d.to_vec(),
+        None => {
+            let dr: Vec<f64> = r_t.iter().zip(r_au).map(|(t, a)| t - a).collect();
+            face_interpolate(g, &dr)
+        }
+    };
     for f in 0..n_int {
         phi_hby_a[f] += dr_f[f] * g.lap_coeff[f] * (p_prev[nei[f]] - p_prev[own[f]]);
     }
@@ -2462,20 +2479,27 @@ fn consistent_split(
 /// interpolated with the face weights), and returns, per fixed-pressure boundary face, `(rAtU - rAU)_f k_f . grad(p_prev)_owner`:
 /// the non-orthogonal part the pressure equation has there and the flux correction has not, to be added to the flux divergence
 /// of the pressure equation only. With `p_new = p_prev` the face flux of the corrector is that of the default and the pressure
-/// equation of a pass has the default's solution. Without pressure gradient options and periodic faces.
+/// equation of a pass has the default's solution. Without pressure gradient options and periodic faces. `dr_face` as in
+/// [`consistent_split`].
 fn consistent_non_orth(
     g: &FvGeometry,
     pbc: &crate::pressure::PressureBc,
     r_au: &[f64],
     r_t: &[f64],
     p_prev: &[f64],
+    dr_face: Option<&[f64]>,
     phi_hby_a: &mut [f64],
 ) -> Vec<(usize, f64)> {
     let mesh = &g.mesh;
     let (own, nei, sf) = (mesh.owner(), mesh.neighbour(), mesh.face_area_vectors());
     let n_int = g.n_internal;
-    let dr: Vec<f64> = r_t.iter().zip(r_au).map(|(t, a)| t - a).collect();
-    let dr_f = face_interpolate(g, &dr);
+    let dr_f = match dr_face {
+        Some(d) => d.to_vec(),
+        None => {
+            let dr: Vec<f64> = r_t.iter().zip(r_au).map(|(t, a)| t - a).collect();
+            face_interpolate(g, &dr)
+        }
+    };
     let gr = least_squares(g, p_prev, &boundary_values_pbc(g, pbc, p_prev));
     let k_of = |f: usize| {
         let d = g.delta[f];
