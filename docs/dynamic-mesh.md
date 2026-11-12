@@ -23,8 +23,8 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   with planar walls; the case tree does not use it yet (ADR 0215 Q1).
 * Overset (chimera) meshes in the library only (F-134, ADR 0219): one component mesh moving rigidly over a static
   background mesh (`rcfd_mesh::overset`, `rcfd_fv::overset::OversetSolver`), PISO with implicit Euler and upwind, central
-  or blended convection, no non-orthogonal correctors. The tree does not use it yet (ADR 0219 Q1); no second component,
-  no moving background.
+  or blended convection, no non-orthogonal correctors; outer iterations as an opt-in of the solver (F-335, ADR 0238). The
+  tree does not use it yet (ADR 0219 Q1); no second component, no moving background.
 * Layering in the case tree only for the compressible solver, on a `box_3d` stack with one piston. The library also
   stacks prisms over any planar cross-section and layers the PISO/PIMPLE path since F-257 (ADR 0213); the tree does not
   use them yet (the wiring is open under F-259, ADR 0213 Q1).
@@ -106,9 +106,16 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   uniform flow through a moving, turning component stays uniform to `1.4e-14`. In the Taylor-Green vortex the overset error
   stays within 1.82 times that of the background alone; its largest value, in an interpolated cell of the component,
   converges at order 1.62 between the two meshes tried (registered limit 1.7, missed), and the background at order 1.98.
+- **Outer iterations (F-335, ADR 0238).** `OversetSolver::set_outer_iterations(n_outer, alpha_u, alpha_p)` repeats the
+  PISO pass within a step on the kinds, donors and weights of the new pose, each pass with the convecting flux and the
+  pressure of the pass before it (the under-relaxation factors act on every pass but the last), as `PimpleSolver::step`
+  does; a solver that does not call it runs as before, bit for bit. On a moving component one pass leaves a first-order
+  time error from the lagged convecting flux; in the Taylor-Green set-up on the finer mesh at `dt = 0.0025` three passes
+  bring it from `4.49e-4` to `1.69e-4` and the overset error from 3.31 to 1.86 times that of the background alone. More
+  passes do not lower it further (`1.69e-4` with five): the rest is the truncation of the implicit Euler scheme along the
+  paths of the moving cells.
 - **Not available:** a second component, a moving background, hole cutting from the wall geometry, more than linear
-  interpolation, outer iterations, BDF2, non-orthogonal correctors, linear-upwind convection, turbulence, energy and the
-  case tree.
+  interpolation, BDF2, non-orthogonal correctors, linear-upwind convection, turbulence, energy and the case tree.
 
 ## Case tree
 
