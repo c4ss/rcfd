@@ -228,3 +228,18 @@ are split, limits unchanged:
 MU1 must: C4a passes, C4b fails (and the R2 and R3 texts as registered). MU2 must: C4a fails. The decision rule reads C4 as C4a
 and C4b. To keep the run time of one pass, C4a, C4b, C6 and the C7 print share one computation of the 13 (and 1) outcomes per test
 process (`OnceLock`); the gate's one process per test computes it once per test.
+
+## Amendment 2 (2026-11-12, after the first run of `tetmesh_check_f324`, before the corrected run)
+
+A defect of the set-up, found by the registered run: C3a and C3c read the "measured difference" from the error text's
+`difference` field, which is printed with four significant digits (`{:.3e}`), so the `1e-9` relative comparison could not hold
+for any mesh (C3a: `4.167e-2` against cell 0's `4.1666666666666664e-2`; C3c: the same with a minus sign). Both tests otherwise
+met their registered parts (an `Err`, located: "face [2, 6, 26] ... is shared by the cells [0, 43, 108]" and "the face
+[25, 41, 45] ... of cell 52 is free but is not a surface triangle"). The library is not changed.
+
+Correction: new tests `c3a2_duplicated_cell_is_a_located_error` and `c3c2_missing_cell_is_a_located_error` take the measured
+difference as the printed cell volume minus the printed enclosed volume, both printed with sixteen significant digits
+(`{:.15e}`) in the same text; limits unchanged (an `Err`, the same location requirement, the difference equal to plus or minus the
+cell's volume to `1e-9` relative). The old tests stay as ignored records (`#[ignore]` with the reason and the measured numbers).
+Each corrected test is run once. The other tests of the first run (C3b, C3d, C3e, C4a, C4b, C6, C7) are not re-run for this; their
+results stand from the first run.
