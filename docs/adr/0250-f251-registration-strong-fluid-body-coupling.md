@@ -383,3 +383,22 @@ contact are outside.
 
 Listed with options and a recommendation in the addendum (the case key that selects the coupling; the wording of the
 acceptance; the cap; the wall-pressure extrapolation of `patch_force_moment`).
+
+## Amendment 1 (2026-11-12, written while the test file was being written, before any run of any check)
+
+**C2 as registered cannot finish, by the registration's own arithmetic.** With `Fixed(1)` the error of the force after
+`k - 1` updates is `1.977^{k-1}` times the first one, `F^1 - F* = -0.8 k X = -0.0158`, and a force error `dF` displaces
+the piston by `dt^2 dF/(2M) = 0.005 dF` in the step: `7.9e-5 * 1.977^{k-1}` of `L0`. That passes `L0` at `k = 15`: the
+piston leaves through the outlet and the mesh move fails before the registered cap of 20, so the registered outcome
+(`converged = false` with 20 residuals) cannot occur, and `1.977^13 = 7e3` is below the registered `1e4` at the last
+iterate that can run. The registration should have done this multiplication; it did not. No run showed it.
+
+- **C2 (registered form)** stays in the file as `c2_unrelaxed_iteration_diverges_registered_record`, ignored, run once for
+  the record; the expectation is an error of the mesh move near iteration 15.
+- **C2b (replaces it)**: first step, `Fixed(1)`, cap **10**: `converged` false; `abs(r_10)/abs(r_1) >= 200`. Estimate:
+  `1.977^9 = 461` (`1.955^9 = 417` with `delta = 0.011`); the piston's displacement error at iterate 10 is `0.036 L0`, so
+  the mesh stays valid. C2b takes C2's place in the decision rule and as a negative control.
+
+The other checks were gone through for the same defect: C1 with `w = 1` and cap 8 displaces the piston by `0.009 L0`
+(fine); C4 applies `w = 1` once per step before Aitken's factor takes over (one multiplication by 1.977); L1, L2, L5
+expect the failure and catch it. Nothing else is changed.
