@@ -1343,6 +1343,11 @@ impl PimpleSolver {
                         phi_hby_a[f] += gamma_p[f] / dt * ddt_defect[f];
                     }
                 }
+                // ADR 0234 D1 to D3: the flux of the fluid-solid faces at the surface crossing, the source of the solid cells
+                let ib_src = self
+                    .immersed
+                    .as_ref()
+                    .and_then(|ib| ib.reconstruct_face_flux(&hby_a, &mut phi_hby_a, s.gradient_pressure.is_none()));
                 if let Some(bf) = body {
                     // balanced-force face value of the body acceleration, like the pressure gradient
                     let gbf = gamma_bf.as_deref().unwrap_or(&gamma_p);
@@ -1410,7 +1415,12 @@ impl PimpleSolver {
                 let mut p_new = p_old.clone();
                 // ADR 0204 K3: the gradient options of the pressure equation (`None`: as before)
                 let (r0, it) = match s.gradient_pressure {
-                    None => solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls),
+                    None => match &ib_src {
+                        None => solve_pressure(&g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls),
+                        Some(q) => crate::pressure::solve_pressure_src(
+                            &g, &gamma_j, &pbc, &phi_hby_a, &mut p_new, &controls, q,
+                        ),
+                    },
                     Some(o) => {
                         let (r, i, _) = crate::pressure::solve_pressure_parts_opt(
                             &g,

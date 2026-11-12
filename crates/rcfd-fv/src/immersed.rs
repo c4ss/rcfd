@@ -15,6 +15,14 @@
 //!
 //! The force of the fluid on a body is the reaction of its forcing, `F = rho sum V (coeff u - source)` over the body's terms
 //! ([`ImmersedForcing::force_moment`]). The shapes do not move; the forcing is built once for a mesh.
+//!
+//! **Second-order treatment (F-309, ADR 0234; opt-in, [`ImmersedForcing::build_second_order`]).** The forcing above closes the
+//! viscous flux of a first fluid cell with the extension of the fluid profile through the surface, but leaves the mass flux of
+//! the face to the solid cell to the continuity of that solid cell, which pins it to the rigid velocity: a face velocity error of
+//! first order. With the flux faces set, the solvers replace the interpolated `HbyA` flux of every fluid-solid face by the flux of
+//! the same extension, `(HbyA_c + (t_f/theta)(u_b(x_G) - HbyA_c)) . S_f`, make the net flux of each body equal to that of its
+//! rigid velocity, and give the solid cells the volume source that releases their continuity
+//! ([`ImmersedForcing::reconstruct_face_flux`]).
 
 use crate::geometry::FvGeometry;
 use rcfd_core::vec3::{self, Vec3};
@@ -217,6 +225,32 @@ pub struct BodyForcing {
     pub terms: Vec<ForcingTerm>,
 }
 
+/// A face between a fluid cell and a solid cell whose flux is reconstructed at the surface crossing (ADR 0234 D1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FluxFace {
+    /// The internal face.
+    pub face: usize,
+    /// Its fluid cell.
+    pub fluid: usize,
+    /// Its solid cell.
+    pub solid: usize,
+    /// The body of the solid cell.
+    pub body: usize,
+    /// `+1` when the fluid cell is the owner (the face area vector points into the solid), else `-1`.
+    pub sign: f64,
+    /// `t_f/theta_e`: the fraction of the face on the segment from the fluid centre to the solid centre over the bounded
+    /// crossing fraction.
+    pub weight: f64,
+    /// The solid velocity at the crossing.
+    pub wall: Vec3,
+    /// The flux of the rigid solid velocity at the face centre, `u_b(x_f) . S_f`.
+    pub rigid: f64,
+    /// The face area vector.
+    pub sf: Vec3,
+    /// Its norm.
+    pub area: f64,
+}
+
 /// The forcing of all immersed bodies of a mesh (ADR 0218 D1, D2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImmersedForcing {
@@ -228,6 +262,8 @@ pub struct ImmersedForcing {
     pub body_of_cell: Vec<Option<usize>>,
     /// Per body, its terms.
     pub bodies: Vec<BodyForcing>,
+    /// The fluid-solid faces whose flux is reconstructed (ADR 0234); empty for the forcing of [`ImmersedForcing::build`].
+    pub flux_faces: Vec<FluxFace>,
     /// Cell volumes of the mesh the forcing was built for.
     volumes: Vec<f64>,
 }
@@ -242,6 +278,34 @@ impl ImmersedForcing {
         bodies: &[ImmersedBody],
         settings: ImmersedSettings,
         gamma: &[f64],
+    ) -> Result<ImmersedForcing, String> {
+        Self::build_impl(geom, bodies, settings, gamma, false)
+    }
+
+    /// [`ImmersedForcing::build`] (the same coefficients and sources) with the fluid-solid faces listed in `flux_faces`, so that
+    /// the solvers reconstruct their flux at the surface crossing and release the continuity of the solid cells (F-309, ADR 0234
+    /// D1 to D5). Needs `settings.modified`: the flux of the extension without the viscous flux of the extension is inconsistent.
+    pub fn build_second_order(
+        geom: &FvGeometry,
+        bodies: &[ImmersedBody],
+        settings: ImmersedSettings,
+        gamma: &[f64],
+    ) -> Result<ImmersedForcing, String> {
+        if !settings.modified {
+            return Err(
+                "immersed solid: the second-order face flux (ADR 0234) needs the modified forcing (settings.modified = true)"
+                    .into(),
+            );
+        }
+        Self::build_impl(geom, bodies, settings, gamma, true)
+    }
+
+    fn build_impl(
+        geom: &FvGeometry,
+        bodies: &[ImmersedBody],
+        settings: ImmersedSettings,
+        gamma: &[f64],
+        second: bool,
     ) -> Result<ImmersedForcing, String> {
         if !(settings.penalty.is_finite() && settings.penalty > 0.0) {
             return Err(format!(
@@ -319,7 +383,9 @@ impl ImmersedForcing {
                 });
             }
         }
+        let mut flux_faces = Vec::new();
         if settings.modified {
+            let (sf, cf) = (mesh.face_area_vectors(), mesh.face_centres());
             for f in 0..n_int {
                 if geom.empty[f] {
                     continue;
@@ -346,6 +412,22 @@ impl ImmersedForcing {
                     face: Some(f),
                     theta,
                 });
+                if second {
+                    // ADR 0234 D1: the fraction of the face on the segment from the fluid centre to the solid centre
+                    let t_f = if c == o { 1.0 - geom.weights[f] } else { geom.weights[f] };
+                    flux_faces.push(FluxFace {
+                        face: f,
+                        fluid: c,
+                        solid: s,
+                        body: i,
+                        sign: if c == o { 1.0 } else { -1.0 },
+                        weight: t_f / te,
+                        wall: ug,
+                        rigid: vec3::dot(b.velocity_at(cf[f]), sf[f]),
+                        sf: sf[f],
+                        area: vec3::norm(sf[f]),
+                    });
+                }
             }
         }
         let mut coeff = vec![0.0; n];
@@ -361,8 +443,46 @@ impl ImmersedForcing {
             source,
             body_of_cell,
             bodies: out,
+            flux_faces,
             volumes: vol.to_vec(),
         })
+    }
+
+    /// The face flux of the fluid-solid faces at the surface crossing and the volume source of the solid cells (F-309, ADR 0234
+    /// D1 to D3). `hby_a` is the cell field the solver interpolates to the faces (`H/a_P`), `phi_hby_a` its face flux. Without
+    /// flux faces (the forcing of [`ImmersedForcing::build`]) nothing is touched and `None` is returned. Otherwise, per flux face,
+    /// `phi_hby_a = (HbyA_c + weight (u_G - HbyA_c)) . S_f` (the linear extension of the fluid profile through the no-slip value
+    /// at the crossing, at the face); per body the net of these fluxes is made equal to the net rigid flux by a uniform normal
+    /// velocity; and the returned cell field holds, for each solid cell, the net outflow `-sum sign (phi_hby_a - rigid)` to pass
+    /// to the pressure equation as its volume source (`solve_pressure_parts_src`), zero elsewhere.
+    ///
+    /// # Panics
+    /// With flux faces and `plain = false`: the caller's pressure path does not take the volume source (ADR 0234 D7).
+    pub fn reconstruct_face_flux(&self, hby_a: &[Vec3], phi_hby_a: &mut [f64], plain: bool) -> Option<Vec<f64>> {
+        if self.flux_faces.is_empty() {
+            return None;
+        }
+        assert!(
+            plain,
+            "immersed solid: the second-order face flux (ADR 0234) is defined with the plain pressure equation only (no \
+             gradient options, body-force-weighted or implicit non-orthogonal pressure)"
+        );
+        let mut net = vec![0.0; self.bodies.len()];
+        let mut area = vec![0.0; self.bodies.len()];
+        for ff in &self.flux_faces {
+            let h = hby_a[ff.fluid];
+            let uf: Vec3 = [0, 1, 2].map(|k| h[k] + ff.weight * (ff.wall[k] - h[k]));
+            phi_hby_a[ff.face] = vec3::dot(uf, ff.sf);
+            net[ff.body] += ff.sign * (phi_hby_a[ff.face] - ff.rigid);
+            area[ff.body] += ff.area;
+        }
+        let mut src = vec![0.0; self.coeff.len()];
+        for ff in &self.flux_faces {
+            // ADR 0234 D3: the body neither creates nor removes fluid
+            phi_hby_a[ff.face] -= ff.sign * ff.area * net[ff.body] / area[ff.body];
+            src[ff.solid] -= ff.sign * (phi_hby_a[ff.face] - ff.rigid);
+        }
+        Some(src)
     }
 
     /// Number of cells of the mesh the forcing was built for.
