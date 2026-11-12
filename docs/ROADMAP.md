@@ -8344,14 +8344,23 @@ fixed by the item's registration ADR before any code.
     with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in
     the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.
   - note: From ADR 0351 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-454** Fractional step: a step-consistent face flux for the projection
+- [~] **F-454** Fractional step: a step-consistent face flux for the projection
   - depends on: F-443
   - acceptance: The steady lid-driven cavity of ADR 0245 C3 with solver.time_advance = "fractional_step" (8.7e-2 between
     dt = 0.04 and 0.01, ADR 0352 F0) is traced to its face term with a number, and either made the same to 1e-9 for the
     two step sizes by an opt-in (defaults bit-identical) or the ADR names why not with a number.
-  - note: From ADR 0352 question 2, recommendation (a); proposed by the F-443 addendum, not yet taken. The fractional
-    step's face flux interp(u*).S + dt (interp(grad p^n).S - snGrad(p^n)|S|) has no carried defect, so its steady face
-    defect is dt R(p).
+  - note: From ADR 0352 question 2, recommendation (a). ADR 0356, 2026-11-12: PARTIAL by the rule (every acceptance
+    clause met; mutation MF5 equivalent by construction, not caught). The fractional step's 8.69e-2 between dt 0.04 and
+    0.01 is its face term: in a steady state the increment vanishes, the cell equations carry no step, and the face
+    defect is dte R(p) (measured to 6.5e-16 relative), a first-order pressure smoothing. The opt-in
+    PimpleSettings::fractional_step_consistent (incremental form; default false) takes on internal faces Gamma R(p^n) +
+    (Gamma/dt)(c1 d^n - c2 d^{n-1}) with Gamma the harmonic face value of V/a_P of the predictor, so the steady defect
+    is R(p)/interp(a): the steady cavity is then the same to 1.5e-13 for the two steps (1.2e-13 with the plain boundary,
+    1.1e-13 with BDF2, printed) and equal to the PISO step's with ADR 0245's C to 1.6e-13 (4.4e-2 without). Defaults bit
+    for bit (fingerprints before and after equal; the rcfd-fv suites touching the changed lines and baseline_hashes
+    unedited). The Chorin form is not changed (its cell equations carry dt; 3.7e-2 printed). No case key; outlets and
+    periodic faces keep dte R. Four of five mutations caught. Partial by the registered rule; done is the maintainer's
+    call; making the opt-in the default (Q3) is the maintainer's.
 - [ ] **F-455** Residual of the direct static solve on slender models, and iterative refinement
   - depends on: F-374, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. The relative residual of the
