@@ -357,3 +357,144 @@ relations. No vendor code or documentation was used.
 - Q-B. The reading of "2 percent in phase". Taken as fixed above (the strictest reading). No default depends on it.
 - Q-C. Wall together with a sponge, and on moving meshes: refused here (D6). Recommendation: merge the two step paths
   when a case needs both; an ALE form only with a use case.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Code at bfd1ae4f (library and tests in one commit, after the registration commit 89a29f75). Every run below was made
+once, in the **release** profile. No limit was changed, no test was re-run to pick a result, and there is no
+`*_known_miss` test because no limit was missed. No amendment was needed.
+
+### Checks on the unmutated code
+
+| id | check | limit | measured | met |
+|---|---|---|---|---|
+| W1 | piston face: normal velocity / entropy / invariant / tangential velocity, 60 cases | `1e-12` each | `1.33e-16` / `2.22e-16` / `4.44e-16` / `1.16e-16` | yes |
+| W2 | equilibrium: piston face against the impedance wall; rate `m dv/dt / p_i`, 60 cases | `1e-12` each | `1.48e-16`; `1.93e-15` | yes |
+| W3 | linear limit of the rates; `d xi/dt = v` | `1e-10`; exactly | `1.13e-12`; equal | yes |
+| W4 | `m = 0`: algebraic relation; `d xi/dt = u_n,f`; `k = 0` equals `impedance_wall` | `1e-12`; exactly; bit for bit | `2.74e-15`; equal; equal | yes |
+| W5 | step limit: formula (5 cases); largest modulus of `P` on the disc (Euler, RK2, RK3); largest `|1 + dt lambda|` over 200 walls | `1e-15`; `1 + 1e-12`; `1 + 1e-12` | equal; `1.000000000000000` each; `1.000000000000000` | yes |
+| W6 | refusals (18 invalid walls, unknown patch, sponge in both orders, state, `step_ale`, `replace_mesh`, step above the limit, clearing) | error / ok | as required | yes |
+| D1 | decomposition on synthetic data, three `R_cf` | `1e-9` | `2.2e-16`, `7.0e-16`, `4.7e-16` | yes |
+| L1 | `m = k = 0` against `CompBc::Impedance`, `z` = 0, 1/3, 3, 1400 steps: `max_dt` and state | bit-identical | identical (the wall moved: `xi` = `1.27e-5`, `9.5e-6`, `3.2e-6`); control `k = 1` differs | yes |
+| B1 | wall set and cleared against an untouched solver, 200 steps | bit-identical | identical | yes |
+| B2 | existing tests unedited: `--lib compressible` 17 passed, 1 ignored; `compressible_bc` 2 passed, 4 ignored; `compressible_ale_f258` 8; `compressible_ale_f258_records` 4 (the bit records); `impedance_f243` 7 passed, 2 ignored; `sponge_f331` 5 passed, 8 ignored | pass | pass | yes |
+| F1 | free decay, 2001 steps: largest error of `xi` / of `v` | `2e-3` each | `1.16e-6` / `7.87e-7` | yes |
+| S1 | light mass (`m = 4e-4`), 6251 steps; the wall limit sets the step; `|R - R_ref|` | true; `5e-3` | true; `R = +0.494010`, reference `+0.494002`: `8.5e-6` | yes |
+| S2 | stiff spring without mass (`k = 4e4`), 12500 steps; the same two | true; `5e-3` | true; `R = +0.988343`, rigid `+0.988300`: `4.3e-5` | yes |
+| K1 | calibration, impedance wall `z = 0.5`, lambda 0.625: magnitude; phase | `1e-2`; `1e-2` rad | `|R| = 0.333308` (`7.5e-5`); `4.9e-5` rad | yes |
+| K2 | the same, lambda 0.5 | the same | `0.333291` (`1.27e-4`); `6.2e-7` rad | yes |
+| K3 | the same, lambda 0.4 | the same | `0.333291` (`1.26e-4`); `2.8e-5` rad | yes |
+| K4 | calibration, rigid wall, lambda 0.5 | the same | `0.999876` (`1.24e-4`); `1.4e-5` rad | yes |
+| **M1** | wall M below the resonance (lambda 0.625), `R_cf` = 0.797309 at -0.965685 rad | `2e-2`; `1.93e-2` rad | `|R| = 0.797279` (`3.8e-5`); `arg R = -0.965805` (`1.2e-4` rad) | yes |
+| **M2** | wall M at the resonance (lambda 0.5), `R_cf` = 1/3 at pi | `2e-2`; `2e-2` rad | `0.333238` (`2.9e-4`); `+3.141358` (`2.3e-4` rad) | yes |
+| **M3** | wall M above the resonance (lambda 0.4), `R_cf` = 0.797309 at +0.965685 rad | `2e-2`; `1.93e-2` rad | `0.797190` (`1.5e-4`); `+0.965592` (`9.3e-5` rad) | yes |
+| E1 | wall without damper, lambda 0.625, `R_cf` = 1 at -1.014197 rad | `1e-2`; `2e-2` rad | `1.000427` (`4.3e-4`); `5.9e-4` rad | yes |
+| E2 | the same, lambda 0.5, `R_cf` = 1 at pi | the same | `0.997234` (`2.8e-3`); `8.0e-4` rad | yes |
+| E3 | the same, lambda 0.4, `R_cf` = 1 at +1.014197 rad | the same | `0.999734` (`2.7e-4`); `5.5e-4` rad | yes |
+| G | wall M at the resonance on half the resolution (reported) | none | `0.333184` (`4.5e-4`); `1.3e-3` rad | - |
+
+Negative controls: NC1 the damper alone against the closed form of wall M: magnitude off by `0.582`, phase by `2.176` rad
+at both lambda 0.625 and 0.4 (`>= 0.5`, `>= 2`: held). NC2 the CFL step and twice the wall limit are refused (in W6:
+held). L1's control and B1: held.
+
+Run times (release): the seven fast tests 11.3 s with 4 threads; the eleven heavy tone runs 428.8 s with 6 threads
+(26402 steps of 6400 cells each; G 13201 steps of 3200 cells).
+
+What the numbers say. The measurement on walls with a known real reflection is off by at most `1.3e-4` in magnitude and
+`5e-5` rad in phase, two orders below the acceptance tolerance; the pessimistic first-order case of DR7 (iv) (`6e-3` to
+`1e-2` rad) did not occur, the boundary closure is second order as worked out there. Wall M is within `2.9e-4` and
+`2.4e-4` rad at the three frequencies, a seventieth of the tolerance. The largest deviation of all is E2 (`2.8e-3`): the
+lossless wall at its resonance, where the start-up transient decays slowest and has the tone's frequency; the estimate
+was `3e-3`. E1 reads `|R| = 1.000427`, above one by less than that transient estimate; it is not evidence of a gain. G
+(half the resolution) has a phase error 5.7 times that of M2 and a magnitude error 1.6 times: 200 cells per wavelength
+are already inside the tolerance by a factor of 15. F1 came out at `1.2e-6` against an estimate of `2e-4`: the estimate
+of the disturbance of `w+` in the boundary cell was too high by two orders (the limiter acts alike on pressure, velocity
+and density of a simple wave).
+
+### Mutations (the registered commands, once each, in a scratch copy with its own target directory)
+
+| id | mutation | caught by | against the expectation |
+|---|---|---|---|
+| MU1 | sign of the spring force | W3; F1 (`2.0e4`) | as expected, W3 in addition |
+| MU2 | wall driven by the interior pressure (radiation damping lost) | W2, W3; F1 (`3.8e-3`) | as expected; F1 only by a factor 1.9 over its limit |
+| MU3 | wall advanced by forward Euler, stages see a frozen wall | F1 (`6.3e-3`) only | as expected (estimate `6e-3`); S1 and S2 pass with it (`1.6e-5`, `4.5e-5`) |
+| MU4 | displacement not advanced | W3, W4; F1 (`1.5`); S2 (`R = 0.494`: the spring is gone); L1 (the wall did not move) | as expected |
+| MU5 | wall face state not passed to the fluxes | L1; S1 (`R = 0.988`, a rigid wall) | caught, but **F1 does not catch it**, against the registration: the wall equation takes its radiation damping from the face algebra, not from what the fluid does with the face, so the wall decays alike |
+| MU6 | wall limit removed from `max_dt`, refusal removed from `step` | W6; S1 and S2 (both stop with a solver error: the wall equation is unstable at the CFL step) | as expected |
+| MU7 | `m = 0` path ignores the spring | W4; S2 (`R = 0.494`); L1's control | as expected |
+| MU8 | mass doubled in the rate | W3; F1 (`0.68`) | as expected |
+
+No mutation survived. MU3 is caught by one check. After the mutations the two source files of the scratch copy are
+byte-identical with bfd1ae4f again (`diff -q`); the worktree was never mutated.
+
+### fmt and clippy
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy --release -p rcfd-fv --all-targets -- -D warnings`: clean (run
+before the first run of the checks and again after the last). `cargo check -p rcfd-api --tests`: compiles; its tests
+were not run.
+
+### Deviations and disclosures
+
+- W6 and D1 are in `crates/rcfd-fv/tests/msd_wall_f332.rs`, not among the unit tests as the heading of table W says: W6
+  needs the solver, D1 the harness.
+- `cargo fmt -p rcfd-fv` was applied before the first run of any check. The heavy runs were started from the tree that
+  was committed as bfd1ae4f a few minutes later, without a change in between. B2 was run while the heavy runs were
+  running (same target directory, different binaries).
+- The log of the heavy runs was read twice while they were running (three and seven finished results); nothing was
+  changed or stopped on that.
+- Two attempts to edit the sources through a shell here-document failed in the shell before they wrote anything; the
+  edits were then made with the editor and a scratch script.
+- The registration's expectation for MU5 (F1) was wrong; see the table. It does not change a result.
+- The papers and books are cited from memory; none was opened. Every formula used is derived in this ADR.
+- `docs/reference-data.md` was not edited.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate); the tests of `rcfd-api` and of every other crate; the debug
+profile (the heavy checks are `#[ignore]`; the fast file takes 11 s in release); the heavy checks against mutations;
+oblique incidence; a mean flow along or through the wall; a wall on a non-Cartesian grid or with more than one face;
+RK2 and forward Euler as the solver's scheme with a wall (only their stability polynomials, W5); large displacements.
+
+### Decision by the registered rule
+
+- **Acceptance met in the library.** M1, M2 and M3 meet both limits (worst `2.9e-4` in magnitude against `2e-2`, `2.4e-4`
+  rad in phase against `1.93e-2`); K1 to K4 meet theirs, so the measurement resolves the tolerance; E1 to E3, F1, S1, S2,
+  L1, B1, B2, W1 to W6 and D1 meet theirs; NC1 holds; all eight mutations are caught.
+- **Proposed status: partial**, by the rule: the wall cannot be selected from a case file (D7; the wiring needs an
+  approved edit of a registered hash test and was not part of this job).
+
+### Remaining questions (options and recommendation)
+
+1. **Case-schema wiring.** (a) add the wall to F-330 (the wiring item of the impedance boundary and the sponge): one more
+   value of `compressible_bc` and three keys for `r`, `m`, `k`, the reference pressure from `pressure_value`, with the
+   same normalisation edit of `case_hashes_w48u.rs`; (b) an item of its own after F-330; (c) stay library-only.
+   Recommendation: (b), so that F-330 keeps its registered scope; the real impedance is the case `m = k = 0` and both can
+   share the code. Not taken: it needs approval.
+2. **Wall together with a sponge.** Refused now (D6). (a) merge the walled and the sponged step into one path; (b) leave
+   it. Recommendation: (a) inside the wiring item: a lined duct that ends in a sponge is the natural case.
+3. **Oblique incidence.** Not checked; the closed form is `(Z cos - rho c)/(Z cos + rho c)`. (a) a heavy check in a rigid
+   duct as ADR 0237 did; (b) leave it as a stated limit. Recommendation: (a) with the wiring item, at one angle.
+4. **Broadband walls.** One oscillator has one resonance; a liner's measured impedance curve needs several poles or a
+   resonator model. (a) an item for a sum of oscillators fitted to a table; (b) nothing until a case needs it.
+   Recommendation: (b); the fan milestone has no lined duct.
+5. **The reading of "2 percent in phase".** Taken as the strictest one. The results meet every reading by a factor above
+   70, so nothing depends on it.
+
+### For the lead: roadmap entries
+
+**F-332, proposed status: `partial`.** Proposed note text:
+
+> From ADR 0233, proposed follow-up, taken on the maintainer's standing instruction of 2026-11-11. The job of 2026-11-12 (ADR 0243): the acceptance text is MET IN THE LIBRARY, not from a case file. Built: `MsdWall { p, r, m, k }` (rcfd-fv compressible_bc.rs; `CompressibleSolver::set_msd_wall`, `msd_wall_state`, `set_msd_wall_state`, `msd_dt_limit`), a locally reacting mass-spring-damper wall with the impedance Z(omega) = r + i(omega m - k/omega): displacement and velocity per face, advanced with the solver's Runge-Kutta stages; the face keeps the outgoing Riemann invariant of ADR 0233 and takes the wall velocity; m = 0 is the algebraic form and m = k = 0 is `CompBc::Impedance` bit for bit; the wall's step limit 0.8 min(2m/(r + rho c), (r + rho c)/k) is part of `max_dt` and a larger step is refused. Registered checks, all met at the first run, no amendment: a tone at 0.8, 1 and 1.25 times the resonance frequency, complex reflection coefficient by a least-squares split into incident and reflected wave at 400 probes: magnitude within 2.9e-4 (limit 2e-2), phase within 2.4e-4 rad (limit 1.93e-2 rad, the strictest reading of 2 percent) of (Z - rho c)/(Z + rho c) = 0.797 at -55.3 degrees, 1/3 at 180 degrees, 0.797 at +55.3 degrees; the same measurement on walls with a known real reflection (impedance rho c/2 and rigid) within 1.3e-4 and 5e-5 rad; a wall without damper reflects with magnitude 1 within 2.8e-3; free decay of the wall with the radiation damping rho c within 1.2e-6; a light mass and a stiff spring at a third and a sixth of the CFL step stable and within 4.3e-5 of their limits; 1400 steps bit-identical with the impedance wall at m = k = 0; a cleared wall and the existing compressible tests (F-258 bit records, ADR 0233, ADR 0237) bit-identical and unedited. Eight mutations caught. Not done: case-schema wiring (a new key needs an approved edit of case_hashes_w48u.rs; this is why the status is partial). Limits: one degree of freedom per face, no coupling between faces, no multi-pole fit of a measured impedance; the mesh face does not move (transpiration velocity; mass crosses the face and returns); normal incidence only checked; not together with a sponge, not on moving meshes; gas at rest, Cartesian grids, verification against closed forms only.
+
+Proposed follow-up items (numbers for the lead to assign):
+
+- **Mass-spring-damper wall: case-schema wiring, with a sponge, oblique incidence.** Deps: F-332, F-330. Size M.
+  Acceptance: "A case file selects the wall with r, m and k on a boundary and reproduces the ADR 0243 tube reflection at
+  the three frequencies within 2 percent in magnitude and phase; located validate errors for negative values; the same
+  tube with a sponge at the other end stays within 2 percent; a plane wave at 30 degrees matches (Z cos - rho c)/(Z cos +
+  rho c) within 5 percent; every existing case file's settings hash and written text unchanged after the registered
+  normalisation of the new keys at their defaults."
+- **Broadband wall impedance (several oscillators fitted to a table)**, only if question 4 is answered with (a). Deps:
+  F-332. Size M. Acceptance: "A wall given as a sum of oscillators fitted to a tabulated impedance reproduces the
+  closed-form reflection of a two-resonance wall within 2 percent in magnitude and phase at five frequencies; a
+  non-passive table is refused."
