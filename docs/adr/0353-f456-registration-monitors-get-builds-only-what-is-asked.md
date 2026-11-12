@@ -205,3 +205,91 @@ a result) the line equals the reference line, which E3 asserts; the error lines 
 covers them. The test file `crates/rcfd-api/src/service/monitors_f456.rs` was written against the unchanged tree and passed
 its E2, E3 and E3b comparisons there; the constant `E3H` = 0xa918e7df5af7a64a was recorded from that run. The unchanged code
 is the "before". Committed before any code of the change.
+
+## Addendum 1: results (2026-11-12)
+
+Code: `crates/rcfd-post/src/monitors.rs` (`MonitorStore::to_json_filtered`, `write_json_filtered`, private `selected`),
+`crates/rcfd-api/src/service.rs` (the `monitors.get` arm uses `to_json_filtered`; `monitors_selection`; `monitors_get_line`
+and its call in `serve_stream`), tests `crates/rcfd-api/src/service/monitors_f456.rs` (E2, E3, E3h, E3b, N1, N2) and
+`crates/rcfd-post/tests/monitors_filtered_f456.rs` (E1, I2), `bench/electron/renderer/bench.js` (new check `p3i`; `p3`
+unedited). The Electron runs were made once each (`electron bench/electron --checks=p3,p3i`, the data folder and the
+Electron 45.1.0 of F-447, a server built from this tree for the new run and one built from the tree before the change for
+the control), 1920 x 1080 at 60 Hz, after a smoke run of the new code (numbers not results). Raw results are in the scratch
+folder (`out/new.json`, `out/old.json`, `out/load.txt`), not committed. Processor load (all cores, other agents' builds
+included): 54 percent before and 63 after the new run, 36 and 44 around the control.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| E1 | 0 differing of 3000 | 0 (as `Value`, as `to_string()` and as the written text; the 3000 documents have more than 1000 distinct sizes) | yes |
+| E2 | 0 differing bytes of 594 requests | 0 | yes |
+| E3 | 0 differing bytes of 594 requests on the wire (ids integer, string, null, fractional) | 0; the notification gets no line | yes |
+| E3h | FNV-1a equals the constant of the tree before | `0xa918e7df5af7a64a` on the old tree and on the new | yes |
+| E3b | 0 differing bytes, 4 series x 1e5 samples, three requests | 0 | yes |
+| E4 | existing tests pass unedited | `rcfd-api` lib `service` (14: 11 old and 3 new), `baseline_hashes` (3 passed, 1 ignored), `cosim_service_f360` (13), `data_service_f447` (6), `rcfd-post` all tests, `rcfd-mcp default_f1` (2), `rcfd-assistant` all tests, `rcfd-gui` all tests: all pass | yes |
+| P3 | median <= 100 ms | median **82.6**, p99 = max 103.1, min 65.2 (20 repeats; 4 x 1e5 samples; reply 12,044,347 characters) | **yes** (the maximum is above 100; the limit is on the median) |
+| P3c | control reproduces 105 to 150 ms and the same `reply_chars` | median **151.4** (max 193.2, min 127.3), 12,044,347 characters | `reply_chars` equal; the median is 1.4 ms above the registered band (see deviations) |
+| I1 | median <= 2 ms | median **0.30** ms, p99 0.70, max 0.90 (200 timed after 20 warm-up; 100 samples returned for each of the four series; reply 12,335 characters) | yes |
+| I1c | control reported (15 to 40 ms predicted) | median 21.1 ms, p99 26.5, max 27.5 | in the band |
+| I2 | median <= 2 ms | median **1.17** ms, max 2.27 (800 pushes onto four series of 1e5) | yes (the prediction of under 0.1 ms was wrong, see below) |
+| I2s | recorded | `run.step {count: 100}` at 1e5: 58.1 ms (new server), 53.8 ms (control): the solver's cost, not storage | recorded |
+| N1, N2 | the comparison sees a difference | N1: a reference with `x >= since` differs on at least one request; N2: one flipped byte differs | yes |
+
+### Mutations (scratch copy, not committed; the unmutated tree passes the same tests)
+
+| Mutation | Caught by |
+|---|---|
+| M1 `since` as `x >= after` in the builder | E1, E2/E3, E3b |
+| M2 the wire writer ignores `names` when `since` is given | E2/E3 (E1 does not see it: it concerns the wire writer's call, not the builder) |
+| M3 the wire writer writes the whole ordinate vector | E1, E2/E3, E3b |
+| M4 key order changed in a series | E1, E2/E3, E3b |
+| M5 an unknown session answered with a result | E2/E3 (error request, hash) |
+| M6 non-finite numbers written as 0 | E1, E2/E3, E3b |
+| M7 a reply to a notification | E2/E3 |
+| M8 the in-process path drops the unit under `since` | E1, E2/E3 |
+
+All eight are caught. `cargo fmt -p rcfd-api --check` and `-p rcfd-post --check` clean; `cargo clippy -p rcfd-api -p rcfd-post
+--all-targets -- -D warnings` clean (after two clean-ups in the new tests, and `map_or(true, ..)` in place of `is_none_or`
+in `rcfd-post`, which the workspace's MSRV of 1.80 rejects there).
+
+### Deviations and disclosures
+
+- The control P3c median lies 1.4 ms above its registered band; reported, not re-run. The control ran at a lower load (36 to
+  44 percent) than the new run (54 to 63) and was slower, so the set-up is not the cause of the gain; the ratio of the two
+  runs (151.4 to 82.6 ms; ADR 0350's own run gave 126.6) is indicative. P3's limit is met by 17.4 ms on the median.
+- I2's median is 1.17 ms against a prediction of under 0.1 ms. The test clones the store before each repeat, and a cloned
+  `Vec` has capacity equal to its length, so the first push of each of the eight vectors reallocates and copies 0.8 MB (6.4 MB
+  in all): by inspection, not measured separately. A live store grows by doubling and does not pay this each time. The limit
+  (2 ms) is met on the median; the maximum (2.27 ms) is above it.
+- E3h as defined by amendment 1 (the lines the service wrote, error lines included).
+- The wire path serves `monitors.get` only; `rcfd-mcp`, the GUI controller and the assistant call `Service::call`, which
+  returns a `Value` holding the selected samples only (they gain from `names` and `since`, not from the direct writer).
+- The p3i check measures request to parsed object including the Electron hop, as P3 does.
+
+### Not run
+
+The full workspace suite (the lead runs the gate). No golden or hash table needed an edit and none was touched. `rcfd serve`
+on stdio uses `serve_stream`, covered by E3, and was not run as a process.
+
+### Decision by the registered rule
+
+**Done.** E1 to E3b, E3h and E4 pass, P3 median 82.6 ms <= 100, I1 median 0.30 ms <= 2, I2 median 1.17 ms <= 2.
+
+### Remaining questions (options and a recommendation each)
+
+- **QF1, the shell's use of the history.** (a) a shell fetches the history once and then `since` increments (0.3 ms per
+  poll); (b) refetches the whole history (83 ms for 4 x 1e5). Recommendation: (a), in the Studio design (F-448).
+- **QF2, other large replies.** `field.slice` of 1e6 cells (62.6 MB in ADR 0350, R0) is still built as a `Value`. (a) a
+  follow-up item that applies the same direct writer to `field.slice`; (b) leave it, since `data.*` carries bulk fields.
+  Recommendation: (b): the opt-in `data.*` route already serves bulk fields.
+- **QF3, I2's cloned-store set-up.** (a) leave the record; (b) a corrected test that clones with spare capacity.
+  Recommendation: (a); the limit is met and a corrected test would not change the decision.
+
+### For the lead: roadmap entries
+
+Proposed status of F-456: done.
+
+> F-456: ADR 0353, 2026-11-12. `monitors.get {names, since}` selects the series and the samples before the document is built (`MonitorStore::to_json_filtered`), and on the line protocol the reply is written straight into the reply line without a JSON tree (`write_json_filtered`, `serve_stream`); `Service::call` still returns a `Value`. Replies are equal to the unchanged code byte for byte: 0 differing of 3000 stores (E1) and of 594 requests through the call and through the wire (E2, E3), including NaN and infinities, escapes, ties, an unsorted series, error and notification cases, four series of 1e5 samples (E3b), and the hash of the old tree's lines reproduced; the existing tests of `rcfd-api`, `rcfd-post`, `rcfd-mcp`, `rcfd-assistant` and `rcfd-gui` pass unedited, no hash or golden moved. P3 of ADR 0350 measured again as registered (Electron 45.1.0, 4 series of 1e5 samples, 12.0 MB): median 82.6 ms against 100 (the control on the unchanged server, same day: 151.4 ms, 1.4 ms above the registered band of the control). An increment of 100 samples at 1e5: fetched in a median of 0.30 ms (control 21.1 ms), stored (800 pushes) in a median of 1.17 ms, limit 2 ms. Eight mutations caught.
+
+Notes for other items: F-447 (partial, P3 missed): its note may add that P3 is met after F-456 (ADR 0353, 2026-11-12) at 82.6 ms. F-448 (Studio design): the history is fetched once, then `since` increments at 0.3 ms.
