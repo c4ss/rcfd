@@ -6122,7 +6122,15 @@ fixed by the item's registration ADR before any code.
     a number.
   - note: From ADR 0241 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     library's own BDF2 step on a mesh at rest converges in the step size at a ratio of 2.30 where second order gives 4.
-    Candidates not measured: the transient Rhie-Chow term, the boundary faces.
+    Candidates not measured: the transient Rhie-Chow term, the boundary faces. WORK ON A BRANCH, NOT MERGED
+    (2026-11-12): ADR 0245 on branch f344-bdf2-remainder (tip 455f4c5a). Cause named with numbers: the converged face
+    flux depends on dt wherever the momentum diagonal differs across a face (ADR 0073's commutator C(G p) plus
+    interp(rAU)), largest at fixed-velocity boundary cells; it follows a dt/(c0 + a dt) and falls with h at order 1.8 to
+    1.9; the default step carries it. An opt-in on the branch removes it at rest (ratio 5.02, limit 4) and leaves the
+    TG_2 ratio at 2.45 (missed; that remainder is made by the motion through the coupling, not the same term). HELD FOR
+    THE MAINTAINER: the opt-in is of the kind (F-G of ADR 0073) that the registered rule of ADR 0076 removed from the
+    code; whether it is wanted back is the maintainer's decision (ADR 0245 O2). Also unfinished on the branch: two long
+    immersed-cylinder tests of the existing suite did not complete under load, and one mutation was not run.
 - [ ] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
   - depends on: F-338, F-322
   - acceptance: PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow
