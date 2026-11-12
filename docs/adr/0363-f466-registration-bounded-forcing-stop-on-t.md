@@ -292,3 +292,168 @@ definiteness often on T. That is a finding, not a failure of H3.
 
 The decision rule above is unchanged. With H3 held, the branch "the run reaches `t = 8` ... so that A2-T-2 is decided" is
 reached.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above and in Amendment 1. No limit was changed. Every registered run was made once:
+H1 from a copy of the test executable built at 40023d06 (`f466-scratch/f466_records.exe`), H2 at b386a8ac (a clippy-only
+change to H2's analysis code, committed before H2 ran, which changed nothing it computes), and H3a and H3 at c96412f9. All
+used `RAYON_NUM_THREADS` 4, release, Windows, on a machine shared with other agents. Logs are in `f466-scratch/h1.log`,
+`h2.log`, `h3a.log` and `h3.log`. The states and the per-step CSV are in `f466-scratch/runs` (twelve states, 142 MB, written
+once by H1).
+
+Commits: registration 7ea3aa34; capture, assembly, AMG trace and tests 40023d06; clippy in H2 b386a8ac; Amendment 1 fd7b404a,
+committed after H1 and H2 and before the code of the remedy; remedy and its tests c96412f9; this addendum.
+
+### The stop, located
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| S1 | restart through a file (M2, 2 + file + 2 steps against 4) | 0 differing values | 0; time and step counter equal | yes |
+| S2 | capture neutral and complete | bit-equal; 6 labelled captures with the source | bit-equal; (1,0,0) ... (3,0,1); all `Some` | yes |
+| S3 | replay of every capture | bit-equal, same iterations | bit-equal, same iterations | yes |
+| S4 | traced CG = `cg` | bit-equal, same iterations | yes | yes |
+| S5 | `apply_traced` = `apply`, `None` | bit-equal, `None` | yes | yes |
+| S6 | classifier cases | as stated | as stated | yes |
+| M1 | H1 from `t = 0`: R1's printed coefficients, the stop | 2.98321, -0.35990; 3.13571, -0.74178; step 2951, R1's message | 2.983214, -0.359903; 3.135711, -0.741778; step 2951, the same message character for character | yes |
+| M2 | H2 from the file of step 2900: stop, Courant numbers 2901 to 2950 | step 2951, same message, all bit-equal | step 2951, same message, 0 differing | yes |
+| G | class | sudden / growth / intermediate | **sudden**: Courant(2950) 1.135993, `max |u|` 2.164784 against 2.176629 at step 2000 (ratio 0.9946) | located |
+| M3 | non-finite inputs of the stopping solve (step 2951, outer 0, corrector 1): face coefficient, flux, source, start pressure | counted | 0, 0, 0, 0 | located: the NaN is made inside the solve |
+| M4 | non-finite cells of its solution | counted | 53 136 of 53 136 | located: "cell 0 at the inlet corner" is the first index of an all-NaN vector, not a place |
+| M5 | traced CG on it | first non-finite named | `r^T z` is **negative from iteration 1** (-2.006e-9; then +1.2e-9, -1.8e-9, +4.7e-9, -2.1e-7: alternating signs, `beta` -0.36, -0.60, -1.51, -2.55, -45.2); residual stagnates at 2.5e-8 (start 2.5e-8, target 2.5e-14), grows, and **`beta` is first non-finite at iteration 801**; NaN to iteration 3000 (the cap); the preconditioner never returned a non-finite value for a finite residual | located |
+| M6 | IC-CG on the same system; matrix properties; AMG | counted | IC-CG converged, 448 iterations, residual 2.5e-14, finite; diagonal not positive 0, positive off-diagonals 0, asymmetric pairs 0 (a symmetric M-matrix); face coefficient 1.0e-7 (solid) to 5.5e-4 (fluid); AMG levels 53 136, 10 745, 1653, 206, 24; coarse LU pivots 9.4e-10 to 2.3e-5, none guarded (step 2950: 1.8e-9 to 2.2e-5) | located |
+| M7 | source of the solid cells, steps 2949 to 2951 | sum within 1e-12 of `max |src|` | `max |src|` 4.050e-6 to 4.057e-6, always at cell 20804 (0.17125, 0.16125); sum/max at most 1.9e-15 | yes |
+
+Also seen: corrector 0 of step 2951 needed 406 AMG-CG iterations (every solve of steps 2949 and 2950 needed 10) and still
+converged. Corrector 1 started from that answer, with an initial residual (2.5e-8) about 15 times smaller than the right-hand
+side's largest entry (3.6e-7).
+
+**Where the NaN is made.** In `rcfd_linalg::cg` with the AMG preconditioner (`FvMatrix::solve_amg`), in the pressure system of
+corrector 1 of step 2951. The inputs are finite and the matrix is a symmetric M-matrix that incomplete-Cholesky CG solves. On
+that right-hand side the AMG preconditioner gives `r^T M^-1 r < 0`, so CG has no positive-definite inner product and
+breaks down. `beta = rz_new/rz` overflows at iteration 801, and the NaN fills every cell. The forcing, the stencil at the body
+and the source of the solid cells are ruled out by M3 and M7: the source is finite and balanced, and it is the same size at
+steps 2949, 2950 and 2951. So is the state of the flow, by class G and M2. The stop is a breakdown of the linear solver, not of
+the bounded forcing. Why this AMG hierarchy loses definiteness here is **not** found: its coarse operators have positive
+diagonals and unguarded pivots, and in exact arithmetic a Galerkin hierarchy with symmetric Gauss-Seidel smoothing is
+positive definite. A loss of definiteness in floating point is likely, given the 5500:1 face-coefficient contrast at the
+solid and a residual near the solver's floor, but it is not measured (question Q4).
+
+### The run to t = 8 (Amendment 1)
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| S7 | option on, 3 finite steps on M2 | bit-equal, no repeat | bit-equal, none | yes |
+| H3a | from the state of step 2950, step 2951 with the option | no stop; one repeat at (2951, 0, 1); pressure finite | yes; `[(2951, 0, 1)]`; finite | yes |
+| H3 | steps 2951 to 8000 with the option | no stop; S2 of ADR 0268 | no stop; 7 crossings, period spread 5.45e-6, maximum spread 1.86e-4, amplitude 2.041; **one repeat in 5050 steps** (step 2951 only) | yes |
+| A2-T-2 drag | `abs(e(T2)) < abs(e(T))`, max `C_D`, bounded | strict | T 3.22695 (+0.216 %) -> T2 +0.136 % | **met** |
+| A2-T-2 lift | the same, max `C_L` | strict | T 1.00253 (+1.687 %) -> T2 +0.175 % | **met** |
+
+T with the bounded form at D/40: max `C_D` 3.22695 (+0.216 %), max `C_L` 1.00253 (+1.687 %), `St` 0.30144 (-0.146 %). The
+forcing-order part P4 of ADR 0268 on T is then -0.599 point (drag) and -0.893 point (lift), the same sign and size as on M2
+(-0.593, -1.172). ADR 0268's arithmetic item 3 estimated T bounded near +1.4 percent in the lift; +1.69 was measured. The run
+from the state of step 2950 is the default run up to step 2950 bit for bit: the option acts only on a non-finite pressure, H1
+had none before step 2951, and H3a/H3 start from H1's own state. Steps 2951 to 8000 took 2970 s.
+
+### Mutations
+
+Each was applied alone to a `git archive` copy (`f466-scratch/mutsrc`, separate target directory, `mutate.py`, `mutate2.py`).
+The named test was run once in release, and the file was restored and compared byte for byte (equal every time):
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| MU1 | writer drops `older` | S1 | failed: "S1: u, p, phi after the restart differ" |
+| MU2 | assembly omits the source | S3 | failed: "S3: step 1 corrector 0: replay differs" |
+| MU3 | capture stores the solution as `p0` | S3 | failed: the same |
+| MU4 | capture only for corrector 0 | S2 | failed: "S2: captures" |
+| MU5 | `beta = rz/rz_new` | S4 | failed: "S4: traced CG differs" |
+| MU6 | traced cycle skips post-smoothing | S5 | failed: "S5: traced AMG differs" |
+| MU7 | sudden limit 15 | S6 | failed (the classifier assertion) |
+| MU8 | repeat with the AMG controls | H3a | failed: "H3a: stopped: ... pressure is NaN ... step 2951" |
+| MU9 | repeat after every finite solve | S7 | failed: "S7: the option changed a finite run" |
+
+### Tools and the defaults
+
+- `cargo fmt -p rcfd-fv --check`, `cargo fmt -p rcfd-linalg --check`: clean. `cargo clippy -p rcfd-fv -p rcfd-linalg
+  --all-targets -- -D warnings`: clean at c96412f9.
+- `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored, with the final library (c96412f9 code, the
+  capture and the option in place). `cargo test --release -p rcfd-fv --lib`: 104 passed. `cargo test --release -p rcfd-linalg`:
+  all passed (the AMG unit tests included).
+- Existing tests on the lines changed, release: `divergence_guard` (3), `immersed_dfg_convergence_f354` (6),
+  `immersed_second_order_f309` (9), `immersed_force_order_f337` (5) passed at c96412f9. `immersed_piso_stop_f355` (15),
+  `immersed_solid_f219` (11) and `immersed_unsteady_force_f346` (9) passed with the library of 40023d06 (the capture without
+  the option). They were not run again after c96412f9 because they take 15 to 40 minutes each. The option adds one test of
+  a `false` flag on their path.
+- `immersed_bounded_stop_f466`: 7 passed (S1 to S7, 1.2 s) and 4 ignored (H1, H2, H3a, H3).
+- Library lines changed: `rcfd-fv/src/pimple.rs`, the `PressureBc` import, the setting `pressure_ic_fallback` and its
+  default, the solver fields `pressure_capture` and `pressure_fallbacks` with `PressureCapture`, their initialisation in
+  `new` and in the trial copy, and two blocks after the pressure solve (the capture and the repeat).
+  `rcfd-fv/src/pressure.rs`: the new function `pressure_system_src`. `rcfd-linalg/src/amg.rs`: the new methods
+  `level_sizes`, `level_min_diagonals`, `coarse_pivots`, `apply_traced` and the private `cycle_traced`. No existing
+  function body changed except the corrector loop of `step_with`. The workspace suite and the gate were not run (the lead
+  runs them).
+
+### Deviations and disclosures
+
+- The registration planned library code only for the capture, the assembly and the AMG trace (D1 to D3). The remedy is
+  library code too (`PimpleSettings::pressure_ic_fallback`, `PimpleSolver::pressure_fallbacks`), registered by Amendment 1
+  after the diagnosis and before its code, as the registered decision tree said it would be.
+- H2's analysis code was changed after H1 ran (two clippy rewrites: `!(d > 0.0)` became `d.is_nan() || d <= 0.0`, and
+  `filter().last()` became `rfind`). Both were committed before H2 ran and compute the same values.
+- H3 started from H1's state of step 2950, not from `t = 0`, as Amendment 1 allowed and justified.
+- The restart is a test helper (the file format of `immersed_bounded_stop_f466.rs`). rcfd-fv has no restart file of its own
+  (registration reading 4).
+- Not measured: why the AMG hierarchy is not positive definite on this system (Q4); whether other meshes or time steps
+  hit the same breakdown.
+
+### Decision by the registered rule
+
+- S1 to S7 held. M1 and M2 held: the stop was reproduced from `t = 0` and from a restart.
+- M3 to M7 located the stop. The NaN is made by AMG-preconditioned CG in corrector 1 of step 2951 (`r^T z < 0` from
+  iteration 1, `beta` not finite at iteration 801), with finite inputs, a symmetric M-matrix and a finite balanced source of
+  the solid cells.
+- With the opt-in remedy of Amendment 1 the run reaches `t = 8` holding S2. A2-T-2 is decided, and met in both coefficients.
+- The defaults are bit-identical (below). All nine mutations were caught by their registered tests, with no amendment after a
+  run.
+
+**Done** by the rule (pending acceptance). Read narrowly, the bounded forcing was never at fault. The default configuration
+(`pressure_ic_fallback = false`) still stops on T at step 2951. The remedy is an opt-in, not a repair of the AMG.
+
+### Remaining questions
+
+- **Q1 to Q3** (as registered) were taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation):
+  library diagnostics; the restart as a test helper; "decide" read as "evaluate".
+- **Q4. The root cause in the AMG.** Options: (a) a follow-up that measures the definiteness of the hierarchy on this
+  system (the Rayleigh quotient `r^T M^-1 r / r^T r` per level, the smoothed prolongator, the coarse operators in higher
+  precision) and repairs it; (b) leave the opt-in as the answer. Recommendation (a): the breakdown can hit any AMG pressure
+  solve with a strong coefficient contrast, not only immersed runs.
+- **Q5. Make the repeat the default.** Options: (a) keep it opt-in; (b) turn it on by default. It changes no run whose solves
+  are finite, but it changes runs that now stop with a NaN pressure, including any test that expects such a stop. That is a
+  default behaviour change, so it is not taken here. Recommendation (b), after the gate shows no test expects an AMG NaN
+  stop; it needs the maintainer.
+- **Q6. A cheaper guard inside `cg`.** Options: (a) stop CG at the first `rz <= 0` and report it (one comparison per
+  iteration, earlier and clearer than the NaN at iteration 801); (b) leave `cg` unchanged. Recommendation (a) as part of Q4.
+  It changes the iterate of any solve that now passes through a non-positive `rz` and still converges, such as corrector 0
+  of step 2951 with 406 iterations, so it needs the hash check.
+- **Q7. The F-354 note.** A2-T-2 is now met (0.216 -> 0.136, 1.687 -> 0.175). Recommendation: record this in F-354's note.
+  Whether F-354 becomes done depends on its own rule (A2-M-1 lift was accounted for by its second branch). Proposed below as
+  done pending acceptance; the maintainer decides.
+
+### For the lead: roadmap entries
+
+**F-466: proposed status `done` (pending acceptance).** Proposed note:
+
+> DONE pending acceptance (ADR 0363, 2026-11-12). From ADR 0268 question 5. The stop of DFG 2D-2 on T with build_second_order_bounded (dt 1e-3) was reproduced from t = 0 (the printed coefficients and the message of ADR 0268 R1 exactly) and from a state written to disk at step 2900 (the same stop, every Courant number bit-equal); the flow is healthy one step before (Courant 1.136, max |u| 0.995 of step 2000). Located by an opt-in capture of the pressure systems (PimpleSolver::pressure_capture, replayed bit for bit with pressure::pressure_system_src) and a read-only AMG trace: in corrector 1 of step 2951 the inputs are finite, the matrix is a symmetric M-matrix and the volume source of the solid cells is finite and balanced (sum 1e-15 of its maximum, the same size as at steps 2949 and 2950), but the AMG-preconditioned CG has r^T z < 0 from its first iteration, stagnates and overflows (beta not finite at iteration 801), so the whole pressure is NaN; cell 0 at the inlet corner is only the first index of an all-NaN vector. Incomplete-Cholesky CG solves the same system in 448 iterations. The stop is a breakdown of the linear solver, not of the forcing. Delivered (opt-in, defaults bit-identical, baseline_hashes pass): PimpleSettings::pressure_ic_fallback repeats a non-finite pressure solve with IC-CG from the same start and records it in PimpleSolver::pressure_fallbacks. With it T runs to t = 8 with one repeat in 5050 steps (S2 held, 7 crossings): max C_D 3.22695 (+0.216 percent), max C_L 1.00253 (+1.687 percent), St 0.30144 (-0.146 percent), so A2-T-2 of ADR 0268 is met (0.216 to 0.136, 1.687 to 0.175). Nine mutations caught. Open (ADR 0363 Q4 to Q6): why the AMG hierarchy loses definiteness on this system, making the repeat the default, a guard on rz <= 0 inside cg.
+
+**F-354: no change of status proposed by this ADR (its rule is its own);** proposed addition to its note:
+
+> ADR 0363 (2026-11-12, F-466): the stop of T with the bounded form was a breakdown of the AMG-preconditioned pressure CG at step 2951 (r^T z < 0, finite inputs); with the opt-in pressure_ic_fallback T runs to t = 8, max C_D +0.216 and max C_L +1.687 percent, so A2-T-2 is met (0.216 to 0.136, 1.687 to 0.175) and the forcing order on T moves the extrema by -0.60 and -0.89 point.
+
+**F-355: no change of status;** proposed addition to its note:
+
+> ADR 0363 (2026-11-12, F-466): the stop of build_second_order_bounded on T (ADR 0268) is not a stop of the forcing but of the AMG-preconditioned pressure CG (r^T z < 0 at step 2951); with the opt-in PimpleSettings::pressure_ic_fallback the run reaches t = 8.
+
+**Proposed follow-up item** (if Q4 is answered (a)): *AMG pressure preconditioner: loss of definiteness on the immersed T
+system.* Deps: F-466. Acceptance:
+
+> On the pressure system of ADR 0363 (T, bounded immersed forcing, step 2951 corrector 1, rebuilt from the state of step 2950 and the opt-in capture) the cause of r^T M^-1 r < 0 of the smoothed-aggregation AMG is located by a registered measurement (per level, the Rayleigh quotient of the cycle, the smoothed prolongator and the coarse operators against a higher-precision product), and either the AMG is repaired so that AMG-CG converges on that system with every registered hash unchanged, or the breakdown is detected inside cg (rz <= 0) and reported with a located message.
