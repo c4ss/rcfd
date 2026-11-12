@@ -826,6 +826,17 @@ fn p9_fallback_is_the_linear_stencil_and_is_listed() {
     let mut s = Stats::new();
     s.add(&ov, &moved, &pose, &conn, &q2, 9);
     s.print("FB");
+    // ADR 0251 amendment 2: the neighbourhoods of FB contain fringe cells, so P5 can fail here
+    c.holds(
+        "P5 FB",
+        s.inadmissible == 0 && s.wrong_donor == 0,
+        "calculated cells of the other part, the donor first",
+    );
+    c.at_least(
+        "P5 FB (set-up) stencils with fewer than nine cells",
+        s.reduced as f64,
+        1.0,
+    );
     let others = conn.stencils.len() - conn.fallbacks.len();
     c.at_least("P9 (iii) stencils that are not fallbacks", others as f64, 1.0);
     c.at_most("P9 (iii) q2 over the stencils that are not fallbacks", s.field, 1e-11);

@@ -438,3 +438,27 @@ Printed, no limit: the sizes of the stencils, the fallbacks, `Lambda`, the donor
 containment margin. The fallbacks of B3s are printed and not limited, as those of B3d were. The new test
 `p_three_dimensions_planar_faces` also repeats B3 (the same deterministic run) so that B3 keeps a test that is not
 ignored. The decision rule is unchanged; P4 is decided on B3 and B3s.
+
+## Amendment 2 (2026-11-12, written after the run of the corrected test of amendment 1 and before any mutation was applied)
+
+`p_three_dimensions_planar_faces` ran once (2 s) and met its checks: B3s has 1071 stencils of 27 cells, `q3` to `8.5e-16`,
+`abs(sum w - 1)` `2.2e-15`, admissible, no fallback, `Lambda = 1.630`, the cell volumes differ by a factor `3.86`.
+
+A defect of the registration, found by reading the numbers of the first run and before any mutation was applied: the
+mutation MQ3 (the cells of the point neighbourhood taken whatever their kind) is registered as "must fail P5", but on
+every set-up on which P5 is asserted (RL, TG_L, U, DC, TR, B3, B3s) every neighbourhood is whole: the run printed `0
+reduced` stencils everywhere, U included, where the arithmetic before the registration expected a few. Where no
+neighbourhood contains a fringe or hole cell, taking the cells whatever their kind changes nothing, so MQ3 cannot fail P5
+there. The check P5 was too weak on the registered set-ups, not the code.
+
+Corrected: **P5 is also asserted on FB**, whose neighbourhoods contain fringe cells by construction (the run printed 16
+stencils of seven or eight cells and 104 fallbacks there, with no inadmissible cell and no wrong donor).
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| P5 on FB | every cell of every stencil (fallbacks included) is calculated and of the other part, the first cell is the donor of the locator, no cell twice | exact |
+| P5 on FB (set-up) | the number of Q stencils with fewer than nine cells | `>= 1` |
+
+The two lines are added to the test `p9_fallback_is_the_linear_stencil_and_is_listed`; its other checks and its run are
+unchanged (the same deterministic connectivity). MQ3 must fail "P5 FB". The other mutations are unchanged. The decision
+rule is unchanged.
