@@ -24,6 +24,11 @@ Two participants and a coupler:
 * the **fluid** participant owns the flow and its moving mesh. Its interface mesh is the wall patch: wall points and wall
   faces. In the library this is `cosim::FlowWall` (a `PimpleSolver` on a moving mesh);
 * the **structure** participant owns the structure. Its interface mesh is a set of nodes. The mock is `cosim::SprungWall`;
+  a finite-element solid is `rcfd_post::solid_coupling::StaticSolid` (ADR 0286): the nodes of one surface set of a
+  `rcfd_fem` model, `advance` a static solve under the nodal forces, `checkpoint` and `restore` of its time and
+  displacement bit for bit. It has no mass, so against an incompressible flow the added-mass ratio is unbounded: it is for
+  mock fluids and quasi-static use, not for a flow solver. `SolidInterface::build_map` builds the map from the set's faces,
+  and `solve_face_forces` is the same route without a coupled step (face forces of a fluid solved once, in process);
 * the **coupler** (`cosim::coupled_step`) owns the mapping between the two interface meshes and the iteration. Neither
   participant sees the other's mesh.
 
