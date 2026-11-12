@@ -1376,6 +1376,12 @@ impl Preview {
             return;
         };
         let gen = self.gen.fetch_add(1, Ordering::SeqCst) + 1;
+        if skippable {
+            // only the debounce asked: the case editor's text changed since "Build anyway" or "Show anyway" was pressed,
+            // and that answer was given for the text of then, so the limits are asked about again
+            self.force_cells = false;
+            self.force_triangles = false;
+        }
         self.stats.requests += 1;
         if matches!(source, Source::Editor(_)) {
             self.stats.editor_requests += 1;

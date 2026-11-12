@@ -645,7 +645,7 @@ impl Studio {
         }
         for (rel, base, bytes) in sends {
             if let Some(ed) = self.case_editor_mut(&rel) {
-                ed.saving = true;
+                ed.begin_save();
             }
             if let Some(p) = &self.project {
                 p.worker.send(Command::Save {
@@ -706,7 +706,7 @@ impl Studio {
             return Err(format!("{}: nothing to save", ed.rel));
         }
         let bytes = ed.to_bytes()?;
-        ed.saving = true;
+        ed.begin_save();
         p.worker.send(Command::Save {
             rel: ed.rel.clone(),
             base: ed.base_hash.clone(),
@@ -807,6 +807,16 @@ impl Studio {
         self.send_runs(poll::Command::Start(plan))
     }
 
+    /// [`Studio::start_run`] for the Start run dialog's plan ([`RunsView::plan`]): the run is queued only if the case
+    /// file still has the bytes that plan was made from; otherwise nothing is queued and the message says the case
+    /// changed. A plan whose text is not known (not the dialog's) starts as [`Studio::start_run`] does.
+    pub fn start_planned(&mut self, plan: StartPlan) -> Result<(), String> {
+        match self.runs.plan_text.clone() {
+            Some((case, hash)) if case == plan.case => self.send_runs(poll::Command::StartIf { plan, hash }),
+            _ => self.start_run(plan),
+        }
+    }
+
     /// Queue a run without starting a runner (`Client::submit`).
     pub fn queue_run(&mut self, plan: StartPlan) -> Result<(), String> {
         self.send_runs(poll::Command::Queue(plan))
@@ -847,6 +857,7 @@ impl Studio {
     /// Ask for the start plan of a case (it arrives in [`RunsView::plan`]).
     pub fn plan_start(&mut self, rel: &str) -> Result<(), String> {
         self.runs.plan = None;
+        self.runs.plan_text = None;
         self.send_runs(poll::Command::Plan(rel.to_string()))
     }
 
@@ -940,10 +951,17 @@ impl Studio {
             }
             Update::Config(c) => self.runs.config = Some(c),
             Update::Plan(p) => self.runs.plan = Some(p),
-            Update::PlanCells { case, result } => {
-                // ADR 0140 D5: only into the plan of the same case (the dialog may have moved on)
+            Update::PlanText { case, hash } => self.runs.plan_text = Some((case, hash)),
+            Update::PlanCells { case, hash, result } => {
+                // ADR 0140 D5: only into the plan of the same case (the dialog may have moved on), and only into the plan
+                // made from the same text (a count of an earlier text of the case may end after a later one)
+                let same_text = self
+                    .runs
+                    .plan_text
+                    .as_ref()
+                    .is_some_and(|(c, h)| *c == case && *h == hash);
                 if let Some(Ok(p)) = self.runs.plan.as_mut() {
-                    if p.case == case {
+                    if p.case == case && same_text {
                         crate::store_plan::set_cells(p, result);
                     }
                 }
@@ -1109,9 +1127,8 @@ impl Studio {
                 if self.quick.switches.selection_from_editor {
                     self.pending_case = None; // the route before ADR 0148: a failure of any kind ended the wait
                 }
-                if let Some(ed) = &mut self.editor {
-                    ed.saving = false;
-                }
+                // a save answers with Saved, SaveConflict or SaveFailed, each naming its file (ADR 0149); this failure is
+                // of another operation (a creation, the watcher) and leaves a save in flight as it is
                 self.say(m);
             }
             Event::Saved { rel, hash } => {
@@ -1139,7 +1156,7 @@ impl Studio {
             }
             Event::SaveFailed { rel, message } => {
                 if let Some(ed) = self.case_editor_mut(&rel) {
-                    ed.saving = false;
+                    ed.save_failed();
                 }
                 // the status bar as before ADR 0149 (the message of the failed write); the close question names the case
                 self.say(message.clone());

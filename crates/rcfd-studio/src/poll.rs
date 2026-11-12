@@ -112,10 +112,20 @@ pub enum Update {
     Config(Result<Config, String>),
     /// A start plan for the dialog.
     Plan(Result<StartPlan, String>),
+    /// The case text the plan that follows was made from: the case (project-relative) and the hash of its bytes
+    /// (`rcfd_project::records::hash_bytes`). Sent just before [`Update::Plan`] when the case was read.
+    PlanText {
+        /// The plan's case (project-relative).
+        case: String,
+        /// Hash of the bytes read.
+        hash: String,
+    },
     /// The cell count of a plan's case whose mesh the plan could not count (ADR 0140 D5): cells and mesh bytes.
     PlanCells {
         /// The plan's case (project-relative).
         case: String,
+        /// Hash of the case bytes the count was made from ([`Update::PlanText`]).
+        hash: String,
         /// Cells and D4 mesh bytes, or why the mesh could not be built.
         result: Result<(u64, u64), String>,
     },
@@ -161,6 +171,14 @@ pub enum Command {
     Plan(String),
     /// Queue a run and make sure a runner is alive (`Client::start`).
     Start(StartPlan),
+    /// [`Command::Start`], only if the case file still has the bytes the plan was made from (`hash`,
+    /// [`Update::PlanText`]); otherwise nothing is queued and [`Update::Started`] says the case changed.
+    StartIf {
+        /// The plan.
+        plan: StartPlan,
+        /// Hash of the case bytes the plan was made from.
+        hash: String,
+    },
     /// Queue a run without starting a runner (`Client::submit`).
     Queue(StartPlan),
     /// Start the project's runner (`Client::ensure_runner`).
@@ -853,6 +871,7 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
         }
         Command::Plan(rel) => {
             let mut count = None;
+            let mut read = None;
             let r = p
                 .root
                 .join(&rel)
@@ -860,6 +879,8 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
                 .map_err(|e| format!("{rel}: {e}"))
                 .and_then(|path| {
                     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+                    let hash = rcfd_project::records::hash_bytes(text.as_bytes());
+                    read = Some(hash.clone());
                     let base = path.parent().unwrap_or(&p.root).to_path_buf();
                     // ADR 0149: JSON as `rcfd run` reads it, a benchmark descriptor's one line; ADR 0152: a store key at
                     // its schema default is not the case's own
@@ -871,19 +892,26 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
                     if plan.facts.cells.is_none() {
                         // ADR 0140 D5: the mesh is built on a control thread, never in the tick loop
                         plan.facts.extra.cells_state = crate::store_plan::CellsState::Counting;
-                        count = Some((rel.clone(), text, base));
+                        count = Some((rel.clone(), text, base, hash));
                     }
                     Ok(plan)
                 });
-            // the plan first, so that its cell count (sent later on the same channel) finds it
+            // the text's hash, then the plan, so that its cell count (sent later on the same channel) finds both
+            if let Some(hash) = read {
+                let _ = tx.send(Update::PlanText {
+                    case: rel.clone(),
+                    hash,
+                });
+            }
             if tx.send(Update::Plan(r)).is_ok() {
                 wake();
             }
-            if let Some((case, text, base)) = count {
+            if let Some((case, text, base, hash)) = count {
                 spawn_control(
                     "rcfd-studio-cells",
                     move || Update::PlanCells {
                         case,
+                        hash,
                         result: crate::store_plan::count_cells(&text, &base),
                     },
                     tx.clone(),
@@ -902,7 +930,7 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
             );
             None
         }
-        Command::Start(plan) | Command::Queue(plan) if plan.case.is_empty() => {
+        Command::Start(plan) | Command::Queue(plan) | Command::StartIf { plan, .. } if plan.case.is_empty() => {
             let _ = plan;
             Some(Update::Started(Err("no case chosen".into())))
         }
@@ -911,6 +939,28 @@ fn handle(p: &mut RunPoller, cmd: Command, tx: &Sender<Update>, wake: &Wake) -> 
             spawn_control(
                 "rcfd-studio-start",
                 move || Update::Started(client.start(&case, &settings)),
+                tx.clone(),
+                wake.clone(),
+            );
+            None
+        }
+        Command::StartIf { plan, hash } => {
+            let (client, case, settings) = (p.client.clone(), p.root.join(&plan.case), plan.settings());
+            let rel = plan.case.clone();
+            spawn_control(
+                "rcfd-studio-start",
+                move || {
+                    // the plan's entries were computed from the text of then: they are not applied to another text
+                    let same = std::fs::read(&case).is_ok_and(|b| rcfd_project::records::hash_bytes(&b) == hash);
+                    Update::Started(if same {
+                        client.start(&case, &settings)
+                    } else {
+                        Err(format!(
+                            "{rel} changed on disk after the Start run dialog read it, so its plan is of the text \
+                             before; open Options... again to see the plan of the file as it is now"
+                        ))
+                    })
+                },
                 tx.clone(),
                 wake.clone(),
             );

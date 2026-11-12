@@ -241,6 +241,14 @@ impl Feed {
         }
     }
 
+    /// Replace the items `from..to` (clamped to the feed) by `items`; the items after `to` keep their order.
+    fn replace(&mut self, from: usize, to: usize, items: Vec<Item>) {
+        let to = to.min(self.items.len());
+        let from = from.min(to);
+        self.items.splice(from..to, items);
+        self.mark(Dirty::From(from));
+    }
+
     /// Remove everything.
     pub fn clear(&mut self) {
         self.items.clear();
@@ -545,6 +553,10 @@ pub enum Update {
     Notice(String),
     /// A turn's progress.
     Turn(TurnMsg),
+    /// The progress of the turn with this number (what a turn thread sends): applied only to the turn that is the
+    /// model's current one, so that what a replaced turn still sends (its exit after the driver stopped it) does not
+    /// reach the turn that followed it.
+    TurnOf(u64, TurnMsg),
 }
 
 enum Command {
@@ -632,6 +644,11 @@ pub struct ChatModel {
     own_pids: BTreeSet<u32>,
     own_sessions: BTreeSet<String>,
     provisional_from: Option<usize>,
+    /// The start of the previous turn's stream-rendered items when the next message was sent before the transcript
+    /// replaced them: the transcript lines that arrive during or after the new turn replace the feed from there.
+    prev_provisional: Option<usize>,
+    /// Number of the current turn ([`Update::TurnOf`]).
+    turn_seq: u64,
     worker: Option<Worker>,
     turn_thread: Option<JoinHandle<()>>,
     tx: Option<Sender<Update>>,
@@ -664,6 +681,8 @@ impl Default for ChatModel {
             own_pids: BTreeSet::new(),
             own_sessions: BTreeSet::new(),
             provisional_from: None,
+            prev_provisional: None,
+            turn_seq: 0,
             worker: None,
             turn_thread: None,
             tx: None,
@@ -795,6 +814,28 @@ impl ChatModel {
                 if entries.is_empty() {
                     return None;
                 }
+                // Lines the worker read before it saw this turn's pause (the session's history, or the previous turn's
+                // lines) arrive after the turn's own items were pushed: they belong before those items.
+                let live = self
+                    .turn
+                    .as_mut()
+                    .filter(|t| t.state.is_live() && t.session_id.as_deref() == Some(session.as_str()));
+                if let Some(turn) = live {
+                    let start = turn.feed_start.min(self.feed.len());
+                    let from = if reset {
+                        0
+                    } else {
+                        self.prev_provisional.unwrap_or(start).min(start)
+                    };
+                    self.prev_provisional = None;
+                    let mut before = Feed::default();
+                    for e in entries {
+                        push_entry(&mut before, e);
+                    }
+                    turn.feed_start = from + before.items.len();
+                    self.feed.replace(from, start, before.items);
+                    return None;
+                }
                 if reset {
                     self.feed.clear();
                 } else if let Some(k) = self.provisional_from {
@@ -825,6 +866,8 @@ impl ChatModel {
             }
             Update::Notice(m) => Some(m),
             Update::Turn(t) => self.apply_turn(t),
+            Update::TurnOf(seq, t) if seq == self.turn_seq => self.apply_turn(t),
+            Update::TurnOf(..) => None,
         }
     }
 
@@ -857,6 +900,7 @@ impl ChatModel {
             }
             TurnMsg::Refused { reason, pending } => {
                 self.turn.as_mut()?.state = TurnState::Refused(reason.clone());
+                self.prev_provisional = None;
                 self.feed.push(ItemKind::Note, format!("-- not sent: {reason}"));
                 self.send_cmd(Command::PauseMirror(false));
                 if let Some(p) = pending {
@@ -961,7 +1005,14 @@ impl ChatModel {
                 if let (Some(id), Some(c)) = (&turn.session_id, turn.cost) {
                     self.costs.entry(id.clone()).or_default().push(c);
                 }
-                self.provisional_from = Some(turn.feed_start);
+                // only the feed of the turn's own session holds its items (after the driver stopped a turn another
+                // session may have been selected); the previous turn's items, when the transcript has not replaced them
+                // yet, are replaced with this turn's
+                if turn.session_id.as_deref() == self.selected.as_deref() {
+                    let start = turn.feed_start;
+                    self.provisional_from = Some(self.prev_provisional.map_or(start, |k| k.min(start)));
+                }
+                self.prev_provisional = None;
             }
             StreamEvent::Unrecognised { .. } => {}
         }
@@ -1039,6 +1090,7 @@ impl ChatModel {
         self.selected = Some(id.to_string());
         self.feed.clear();
         self.provisional_from = None;
+        self.prev_provisional = None;
         let target = self.transcript_path(id).map(|p| (id.to_string(), p));
         self.send_cmd(Command::Mirror { target, paused: false });
         Ok(())
@@ -1052,6 +1104,7 @@ impl ChatModel {
         self.selected = None;
         self.feed.clear();
         self.provisional_from = None;
+        self.prev_provisional = None;
         self.send_cmd(Command::Mirror {
             target: None,
             paused: false,
@@ -1119,16 +1172,19 @@ impl ChatModel {
         if session.is_some() {
             self.send_cmd(Command::PauseMirror(true)); // the turn's own lines are shown from the stream
         }
-        self.provisional_from = None;
+        // the previous turn's items stay marked until the transcript replaces them, also when it arrives during this turn
+        self.prev_provisional = self.provisional_from.take();
         let feed_start = self.feed.len();
         self.feed.push(ItemKind::User, format!("you> {prompt}"));
         let turn = Turn::new(prompt, session.clone(), feed_start);
         let cancel = turn.cancel.clone();
         self.turn = Some(turn);
+        self.turn_seq += 1;
+        let seq = self.turn_seq;
         let prompt = prompt.to_string();
         let h = std::thread::Builder::new()
             .name("rcfd-studio-chat-turn".into())
-            .spawn(move || run_turn(claude, project, session, prompt, cancel, tx, wake))
+            .spawn(move || run_turn(seq, claude, project, session, prompt, cancel, tx, wake))
             .map_err(|e| format!("cannot start the turn thread: {e}"))?;
         self.turn_thread = Some(h);
         Ok(())
@@ -1244,6 +1300,7 @@ fn push_entry(feed: &mut Feed, e: TranscriptEntry) {
 // ---------------------------------------------------------------- turn thread
 
 fn run_turn(
+    seq: u64,
     claude: Claude,
     project: PathBuf,
     session: Option<String>,
@@ -1253,7 +1310,7 @@ fn run_turn(
     wake: Wake,
 ) {
     let send = |m: TurnMsg| {
-        let _ = tx.send(Update::Turn(m));
+        let _ = tx.send(Update::TurnOf(seq, m));
         wake();
     };
     let file = AllowList::file_of(&project);
