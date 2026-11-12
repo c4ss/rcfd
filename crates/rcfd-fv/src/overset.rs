@@ -962,7 +962,13 @@ impl OversetSolver {
                     }
                 }
             }
-            let gamma_p = face_interpolate(&g, &r_au);
+            // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with
+            let rc = s.rhie_chow_step_consistent;
+            let gamma_p = if rc {
+                crate::pimple::face_consistent::harmonic_face(&g, &r_au)
+            } else {
+                face_interpolate(&g, &r_au)
+            };
             let mut psys: Option<PressureSystem> = None;
 
             // ---- pressure correctors (M6 to M8) ------------------------------------------------------------------
@@ -1008,6 +1014,19 @@ impl OversetSolver {
                     for f in 0..n_int {
                         phi_hby_a[f] += gamma_p[f] / dt * ale.defect[f];
                     }
+                }
+                if rc {
+                    // ADR 0245 C: the lagged pressure gradient and rAU times it; at a fringe cell the donor interpolants of
+                    // the calculated values (as HbyA, M6), zero at a hole cell
+                    let (x, q) = crate::pimple::face_consistent::overset_lagged_gradient(
+                        &g,
+                        &pbc,
+                        &self.p.values,
+                        &r_au,
+                        conn,
+                        trivial,
+                    );
+                    crate::pimple::face_consistent::add_commutator(&g, &gamma_p, &q, &x, &mut phi_hby_a);
                 }
                 ale.add_wall_flux(&g, &pbc, &gamma_p, &mut phi_hby_a);
                 if let Some((f, v)) = first_nonfinite(&phi_hby_a) {

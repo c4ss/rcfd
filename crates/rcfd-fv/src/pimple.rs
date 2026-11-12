@@ -34,6 +34,7 @@ use rcfd_core::vec3::{self, Vec3};
 use rcfd_linalg::{LinearOptions, SolveControl};
 use std::sync::Arc;
 
+pub(crate) mod face_consistent;
 pub mod fractional;
 pub mod moving;
 
@@ -133,6 +134,12 @@ pub struct PimpleSettings {
     /// moved geometry, the relative flux, the step's wall conditions made homogeneous), exactly as on a fixed mesh. Default `false`:
     /// a moving-mesh step makes neither (as before).
     pub moving_mesh_lag: bool,
+    /// The face coefficient of the pressure term that the transient Rhie-Chow carry-over is consistent with (ADR 0245 C): the
+    /// harmonic face value of `rAU` and the commutator of the lagged pressure gradient on internal faces, so that the converged
+    /// face flux depends on the step size only through the time scheme. Acts in `step` on a mesh at rest and in `OversetSolver`;
+    /// no effect (the default step) with `consistent_correctors`, on the library's moving-mesh steps and in the fractional step;
+    /// coupled faces, face jumps and the immersed-solid flux are left as they are. Default `false` (bit-identical).
+    pub rhie_chow_step_consistent: bool,
 }
 
 /// Every flag of the consistent (SIMPLEC-type) pressure correctors in one value (ADR 0258 V1). `enabled` asks for the correctors
@@ -847,6 +854,7 @@ impl PimpleSettings {
             consistent_body_force: false,
             consistent: ConsistentCorrectors::default(),
             moving_mesh_lag: false,
+            rhie_chow_step_consistent: false,
         }
     }
 
@@ -1659,7 +1667,13 @@ impl PimpleSolver {
                 n_corr_final = n_corr;
             }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
-            let gamma_p = face_interpolate(&g, &r_au);
+            // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with
+            let rc = s.rhie_chow_step_consistent && !cf.enabled && self.ale.is_none();
+            let gamma_p = if rc {
+                face_consistent::harmonic_face(&g, &r_au)
+            } else {
+                face_interpolate(&g, &r_au)
+            };
             let gamma_bf = (s.coupled_body_pair_mean && body.is_some()).then(|| coupled_gamma(&g, &pbc, &gamma_p));
             // ADR 0214 F0: rAtU of the consistent correctors and its face values (`None` = the default correctors)
             let r_t: Option<Vec<f64>> = cf.enabled.then(|| consistent_rau(&vol, &a_p, &h1));
@@ -1687,6 +1701,10 @@ impl PimpleSolver {
                     for f in 0..n_int {
                         phi_hby_a[f] += gamma_p[f] / dt * ddt_defect[f];
                     }
+                }
+                if rc {
+                    let b = body.map(|bf| bf.cell.as_slice());
+                    face_consistent::add_lagged_gradient(&g, &pbc, &gamma_p, &r_au, &self.p.values, b, &mut phi_hby_a);
                 }
                 // ADR 0234 D1 to D3: the flux of the fluid-solid faces at the surface crossing, the source of the solid cells
                 let ib_src = self
