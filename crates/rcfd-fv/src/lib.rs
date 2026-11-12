@@ -11,6 +11,7 @@ pub mod cht;
 pub mod compressible;
 pub mod compressible_bc;
 pub mod convection;
+pub mod cosim;
 pub mod coupled;
 pub mod ddt;
 pub mod diffusion;

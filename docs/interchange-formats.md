@@ -180,3 +180,5 @@ with 2 pi periodicity) and temperature through `remap` followed by a linear noda
 - [Mesh import](mesh-import.md): reading external mesh files into a case.
 - [Case schema](case-schema.md): the register and initial-patch keys of the case file.
 - [Reference data](reference-data.md): where the public grid sample read above comes from.
+- [Co-simulation protocol](cosimulation-protocol.md): the two-way exchange of wall displacement and force with a structural
+  solver, as opposed to the one-way load deck above.

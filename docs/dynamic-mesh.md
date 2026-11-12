@@ -237,3 +237,5 @@ displacement_expression_x = "-0.3 [m] * (1 - cos(pi * t / 16 [s]))"
 
 * [mesh-quality.md](mesh-quality.md): what the mesh validation checks after every move.
 * [meshing.md](meshing.md): how the meshes that move are generated.
+* [cosimulation-protocol.md](cosimulation-protocol.md): exchanging a wall's displacement and force with a structural solver
+  (library interface, F-139).
