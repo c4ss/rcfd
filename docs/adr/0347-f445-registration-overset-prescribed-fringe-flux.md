@@ -341,3 +341,207 @@ for the default coupling with the quadratic stencils on RE and no trusted predic
 `ht_quadratic_donors_on_both_fringes` (ignored, slow, run once; C1 and C3 asserted on the G runs).
 
 The decision rule is unchanged.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits and deciding numbers registered above and in amendments 1 and 2; none was changed. Release
+builds on Windows. Commits: the registration `80216482` (alone, before any code); the library code and the tests as
+registered `ce343abb`; amendment 1 `a4474329` (before the runs of every check but G0); amendment 2 with the known-miss
+tests and HT `c3e2dd62` (before the run of HT); the record of A3 between test processes, doc comments and
+`docs/dynamic-mesh.md` `c9b1eab9`; this addendum. Each registered run was made once; deterministic runs of level 1 and of
+NP were repeated where a later test shares them (the fast test of the met checks of level 1, the NP tests with the error
+history printed) and printed the same digits. Logs: `E:/projects/cfd/w49i-work/f445-scratch` (`b1-base.log`, `g0.log`,
+`g0b.log`, `f445-fast.log`, `f445-a_re_levels_1_to_3.log`, `f445-a_rl_levels_1_to_3.log`, `f445-a_rl_level_4.log`,
+`f445-np_variant_p_re_level_2.log`, `f445-ht.log`, `f445-fast2.log`, `f445-final.log`, `b2-*.log`, `f445-MU1.log` to
+`f445-MU7.log`).
+
+### What was built
+
+`crates/rcfd-fv/src/overset.rs` only: `FringeFlux { PressureEquation, Prescribed, PrescribedOwnGradient }`,
+`OversetSolver::set_fringe_flux` and `fringe_flux`; the private `FringeRing` (regions of calculated cells, their ring
+faces, the matrices of D5), `prescribed_pressure` (D1 to D3) and three hooks in `piso` (the ring of the step, the
+gradient of D5 in the predictor and in the velocity correction, the branch to `prescribed_pressure`). Without the opt-in
+`piso` takes the lines it took before (two `let` bindings became `let mut`). No other source file, no setting, no
+case-tree key, no schema, no golden.
+
+### What the runs found, in short
+
+1. **The literal switch (P) is not admissible.** With the flux prescribed and the interpolated fringe pressure left in
+   the Green-Gauss gradient of the ring cells, the Taylor-Green run on RE ends at step 5 of 200 at level 1 and at step 3 of
+   400 at level 2 with a velocity above 10 (base and Qb). The largest velocity error grows by `11.6`, `11.1`, `11.1`,
+   `10.8` per step at level 1 (`4.2e-3`, `4.9e-2`, `0.54`, `6.0`, `65`) and by `61`, `58` at level 2 (`6.2e-3`, `0.38`, `22`):
+   `3.4` and `7.7` per corrector. Item 1 of the arithmetic predicted an instability that grows with the refinement, at
+   `1.25` and `3.1` per corrector for the uniform mode alone; the direction and the ratio between the levels (`2.3`
+   measured, `2.5` predicted) hold, the rate is 2.5 to 2.7 times what I estimated. P reproduces the uniform flow U and the
+   uniformly accelerating flow UA exactly: it fails only where the two parts must exchange a changing pressure.
+2. **With the pressure gradient of the ring cells taken from their own part (G) the prescribed flux is stable,
+   conservative and exact where it should be.** Continuity `4.5e-13` at most over every run, flux through `Gamma_B`
+   `1.9e-14`, through the domain boundary `0`, no unconverged solve; U1 `3.6e-15` and `0`; UA `1.5e-15`, `1.8e-15`; a
+   wrong pressure level of the component (UA2) does not reach the velocity and is gone after one step.
+3. **The imposition is then an identity.** On RE the change of the flux of a ring face is the mean of the changes of
+   the two cell velocities to `4.2e-4` at level 1 and to `2.7e-5` at level 3 at `t = 0.025` (S1; `6e-6` and less at `t =
+   0.5`): the flux defect `D` of ADR 0340 is gone, and with it the kink relation.
+4. **The order of `R_b` is restored.** RE: `5.765e-4`, `1.479e-4`, `7.163e-5`, orders **`1.962`, `1.789`** (default
+   coupling: `0.983`, `1.015`). RL: `1.0049e-3`, `1.0333e-4`, `5.154e-5`, `2.370e-5`, within the parity families **`2.704`**
+   (levels 1 to 3) and **`2.124`** (2 to 4) (default: `1.150`, `1.288`). The response per unit of truncation on RE,
+   `R_b / rms(tau_b)`, is `1.51`, `1.54`, `1.65`: nearly the same at every level, where the default coupling has `0.168`,
+   `0.339`, `0.497`.
+5. **`a_c` at `t = 0.025` misses 0.9 on the two coarser levels.** `Gamma_B`: `0.598`, `0.856`, `0.931`; `Gamma_C`: `0.867`,
+   `1.037`, `1.053` (default coupling: `0.122`, `0.288`, `0.404` and `-0.72`, `-0.76`, `-0.62`). By `t = 0.5`: `0.906`,
+   `0.968`, `0.989` and `1.057`, `1.058`, `1.045`.
+6. **The price: the interpolation error reaches the calculated cells in full.** `R_b` under G is 9.0, 4.6 and 3.3 times
+   that of the default coupling on RE (20, 4.7, 3.7, 2.7 times on RL), and the velocity error against the exact solution
+   is `9.52e-4`, `2.29e-4`, `1.06e-4` against `5.37e-4`, `1.40e-4`, `6.57e-5`: **1.77, 1.64, 1.62 times** (S3, limit 1.5,
+   missed). Both converge at about second order on these levels (G `2.05`, `1.89`; default `1.94`, `1.86`). With the
+   quadratic donor interpolation on both fringes the error of G falls to `5.99e-4`, `1.377e-4`, `6.01e-5`, 0.63, 0.60, 0.56
+   of its value with the linear stencils and 1.145, 1.056, 1.035 times that of the default coupling with the same
+   stencils (HT, confirmed).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 G, RE, levels 1 to 3, `a_c` at `t = 0.025`, `Gamma_B` | `>= 0.9` | `0.598`, `0.856`, `0.931` | **missed** at levels 1 and 2 (known-miss test) |
+| A1 the same, `Gamma_C` | `>= 0.9` | `0.867`, `1.037`, `1.053` | **missed** at level 1 (known-miss test) |
+| A2 G, RE, orders of `R_b` at `t = 0.5`, levels 1 to 2, 2 to 3 | `>= 1.7` | `1.962`, `1.789` | met |
+| A3 G, RL, orders of `R_b` at `t = 0.5`, levels 1 to 3, 2 to 4 | `>= 1.7` | `2.704`, `2.124` (the second from two test processes, record test) | met |
+| C1 continuity, every step of every run under P or G | `<= 1e-9` | largest `4.5e-13` (RL level 4); P up to its last step `1.5e-11` | met |
+| C2 flux through `Gamma_B`; through the domain boundary; outflow of U | `<= 1e-9`; `<= 1e-9`; `<= 1e-10` | `1.9e-14`; `0`; `1.1e-16` | met |
+| C3 unconverged linear solves | `0` | `0` in every run | met |
+| U1 U under G and under P: velocity, pressure (245 kind changes) | `<= 1e-10` each | `3.6e-15`, `0` (both) | met |
+| B1 hashes without the opt-in, and after `set_fringe_flux(PressureEquation)` | exact | RE `65f3bb871ad94a6d`, U `7c424f2255adfe35`, equal to those of the unedited library | met |
+| B2 `baseline_hashes`; `overset_f134`, `f134_records`, `f314`, `f334`, `f335`, `f335_records`, `f336`, `f338`, `f349`, `f353`, `f357`, `f359`; `rcfd-fv --lib`; release, unedited | all pass | 3 passed; 12, 1, 4, 3, 5, 4, 5, 9, 3, 1, 5, 5 passed; 103 passed; none failed | met |
+| S1 G, RE, `abs(a_m - (1 + a_c) / 2)`, both fringes, `t = 0.025` and `0.5` | `<= 0.02` | largest `4.2e-4` (level 1, `Gamma_C`, `t = 0.025`) | met |
+| S2 G, RE, `a_c(0.025) / a_c(0.5)`, `Gamma_B`; `Gamma_C` | `>= 0.9` | `0.660`, `0.884`, `0.942`; `0.821`, `0.980`, `1.007` | **missed** at levels 1 and 2 (`Gamma_B`) and 1 (`Gamma_C`) (known-miss tests) |
+| S3 RE, velocity error of G over the default coupling | `<= 1.5` | `1.773`, `1.642`, `1.619` | **missed** (known-miss test) |
+| UA default, P, G: velocity; pressure | `<= 1e-10`; `<= 1e-9` | `1.5e-15`; `1.8e-15` (all three) | met |
+| UA2 G with the component pressure 0.7 too high: velocity; pressure after the first step | `<= 1e-10`; `<= 1e-9` | `1.5e-15`; `1.8e-15` (also at the end of the first step) | met |
+| G0 (unit) as registered | `<= 1e-12` | `2.02e-12` | **missed**, a defective check (amendment 1; known-miss test) |
+| G0b (amendment 1); the refusal | `<= 1e-12`; `Err` | `6.8e-14` (with the fringe values: `59`); refused | met |
+| QS in every pair | exact | no component stencil changed, every background fringe stencil nine calculated cells with the donor first, no fallback | held |
+| NP P on RE, levels 1 and 2 | classification | not admissible at both: the runs end at steps 5 and 3 (finding 1) | as predicted |
+| X G with `rhie_chow_step_consistent`, BDF2, two outer iterations: continuity; unconverged; error over G alone | `<= 1e-9`; `0`; `<= 2` | `1.8e-13`; `0`; `1.0001`, `0.9993`, `0.9994` | met |
+
+| Hypothesis | Deciding number (amendment 2) | Measured | Verdict |
+| --- | --- | --- | --- |
+| HT the excess error of G is the fringe truncation handed on in full | confirmed: `rho_Q <= 1.15` and `rho_G <= 0.7` at the three levels | `rho_Q = 1.145`, `1.056`, `1.035`; `rho_G = 0.629`, `0.600`, `0.564` (no fallback; errors: default quadratic `5.23e-4`, `1.304e-4`, `5.80e-5`) | **confirmed** (level 1 at `1.145` against `1.15`) |
+
+Printed, no limit. RL under G, `a_c` at `t = 0.025` on levels 1 to 4: `0.661`, `0.799`, `0.900`, `0.895` (`Gamma_B`), `0.979`,
+`1.051`, `1.046`, `1.039` (`Gamma_C`); at `t = 0.5`: `0.887`, `0.944`, `0.966`, `0.971`. RL, velocity error of the base run
+under G: `1.468e-3`, `2.059e-4`, `9.60e-5`, `4.82e-5`. `R_b` under G grows over the run as under the default coupling (RE
+level 1: `1.9e-5`, `1.1e-4`, `2.6e-4`, `3.9e-4`, `5.8e-4` at `t = 0.0025` to `0.5`). Pressure error of the base run on RE
+(mean of each part removed): G `1.21e-3`, `3.09e-4`, `1.50e-4`; default `6.8e-4`, `2.02e-4`, `1.03e-4`. Run times in one
+process on the loaded machine, base runs on RE: G `3.6`, `47`, `128` s; default `5.2`, `58`, `297` s (G has no second
+solve for the offset). Heavy records: RE 777 s, RL levels 1 to 3 460 s, RL level 4 952 s, HT 470 s.
+
+### Diagnosis of the misses
+
+- **A1 and S2.** The flux is imposed exactly (S1), so `a_c < 1` is not a defect of the imposition. `a_c` compares the
+  velocities of two cell centres one cell apart, and the answer of the calculated cells to a change of the ring falls
+  off away from it: at once like the potential flow of a dipole (item 4 of the arithmetic: `0.65` estimated at level 1,
+  `0.598` measured), later like the slower viscous flow, which decays less (`0.906` at `t = 0.5`). On the finer levels the
+  viscous layer after `t = 0.025`, `sqrt(nu t) = 0.64 H`, is wider than a cell and `a_c` is already `0.856` and `0.931`.
+  My registered claim that this is a ceiling "whatever the coupling" was wrong in that form: it is the early value, it
+  rises with time and with the refinement, and level 3 meets the limit. Not separated by a measurement: the shares of
+  the potential and of the viscous answer. The limit 0.9 at `t = 0.025` on levels 1 and 2 is not reachable by a coupling
+  that prescribes the face flux; S1 is the measure that says what the acceptance meant.
+- **S3.** HT, confirmed: with the truncation of both fringes made third order the error of G falls by 37 to 44 percent
+  and comes within 14, 6 and 4 percent of the default coupling. The default coupling hands on only a part of the
+  interpolated normal velocity over the run (ADR 0340), which damps the interpolation error; that is the same softness
+  that costs it the order of `R_b`.
+- **G0.** Round-off of fringe values of the size `1e3` against an absolute limit (amendment 1).
+
+### Mutations
+
+Applied alone to a `git archive` copy of `c3e2dd62` (`f445-scratch/mut`, own target directory) by `mutate.py` (an exact
+replacement that must occur once), the named test run once, the file restored and compared byte for byte (equal in all
+seven). The commits after `c3e2dd62` change doc comments in `overset.rs`, add one record test without a flow run and two
+lint fixes to the test file, and this addendum.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `q_R = 0` | C1 or C2 | failed: continuity and flux through `Gamma_B` `1.0e-2` |
+| MU2 D5 without the extrapolation term | G0b | failed: `2.69` |
+| MU3 the flux from the fringe velocity alone | S1 | failed: `0.166`, `0.041` (`Gamma_B`), `0.035` (`Gamma_C`) |
+| MU4 the level shift not applied | UA2 (pressure) | failed: `0.7` |
+| MU5 the default mode takes the branch of D1 | B1 | failed: the hash of RE differs |
+| MU6 `gamma_f` not set to zero on the ring | S1 or C1 | failed: both (continuity `7.3e-3`, S1 up to `0.39`) |
+| MU7 D5 not applied in the predictor | UA2 (velocity) | failed: `92` |
+
+`scripts/limit_audit.py` on the new test file: no hit.
+
+### Deviations and disclosures
+
+- G0 ran once before the tests were committed; amendment 1 followed before any other run. The test file of `ce343abb`
+  already held the wall gradient of UA that amendment 1 registers.
+- B1's reference hashes were measured in the worktree on the unedited library, not on an archive copy (amendment 1).
+- NP: "the growth over the last ten steps" could not be formed (the runs end after 5 and 3 steps); the error after
+  every step is printed by a deterministic repeat and quoted in finding 1. The two NP tests assert their classification
+  since amendment 2; the level-2 test is no longer ignored (it takes a second).
+- The fast level-1 test failed on S2; it is kept as registered (ignored known miss), and its met checks are asserted by
+  `c_re_level_1_conservation_and_flux_identity_under_g` on the same deterministic runs.
+- The printed diagnostics are fewer than ADR 0340's (two bands of the background, no share of the exact velocity).
+- Doc comments of `FringeFlux` were rewritten after the runs to say what they showed; no code line changed after
+  `a4474329`. `baseline_hashes` was run on `a4474329` and again on the final tree.
+- HT's first deciding number is met at level 1 by `1.145` against `1.15`.
+- My predictions: C1 to C3, U1, B1, B2, UA, UA2, QS, S1, NP, A1 missed on `Gamma_B`: right. G0, S3, S2 met: wrong. A1 met
+  on `Gamma_C`: wrong at level 1. A3 "more likely missed": wrong, it is met.
+
+### Not run
+
+- RL at level 5, RE above level 3, P on RL: not registered.
+- A moving component under G with a flow that is not uniform (accuracy): not covered; U alone moves.
+- The combination with `rhie_chow_step_consistent`, BDF2 and outer iterations beyond the 40 steps of X.
+- The ignored records of the other overset files and the workspace suite: the lead runs the gate.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean (the only crate
+touched). Final tree: `overset_f445` 9 passed, 5 ignored (5 s); `rcfd-fv --lib overset` 2 passed, 1 ignored.
+
+### Decision by the registered rule
+
+**Partial.** The opt-in G is built and C1, C2, U1, B1, B2 hold for it; A2 and A3 are met; A1 is missed on levels 1 and 2
+with the measured numbers and the diagnosed cause above. The alternative clause does not apply: P is shown not
+admissible with a number, G is admissible. Said plainly: the prescribed flux does what ADR 0340 hoped for the order of
+the response (0.98 to 1.96 on RE), but only with the pressure gradient of the ring cells taken from their own part, and
+on the meshes tried it makes the solution less accurate than the default coupling by a factor 1.6 to 1.8 with the linear
+stencils and 1.04 to 1.14 with the quadratic ones. It is not a candidate for a default.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The status of F-445.** Options: (a) partial, as the rule gives; (b) done, reading the miss of A1 as a property
+  of the measure `a_c` and not of the opt-in (S1 shows the identity). Recommendation (a): the clause is binding as
+  written. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation); not a decision the
+  maintainer made in person, and (b) is the maintainer's to choose.
+- **Q2. The variant P.** Options: (a) keep `FringeFlux::Prescribed` with its doc comment ("unstable", kept for the
+  record tests), so that the number that rules it out stays reproducible; (b) remove it and turn the NP tests into
+  records of printed numbers. Recommendation (a). Taken on the standing instruction.
+- **Q3. Should G be recommended, or become a default?** It changes results, so it is not taken: **open**. My reading:
+  no default change; recommend G only together with the quadratic donor interpolation and only where the hard
+  imposition or the absence of the pressure offset matters, until a moving-component accuracy check exists (Q4).
+- **Q4. A moving component under G.** Options: (a) a follow-up item (text below); (b) leave it. Recommendation (a), low
+  priority. Taken on the standing instruction as a proposal to the lead.
+- **Q5. `a_c` as a measure in other items (F-369).** Recommendation: use the flux identity `abs(a_m - (1 + a_c) / 2)` or
+  the defect itself where the hardness of the imposition is meant; `a_c` carries the decay of the response over one
+  cell. A note for F-369 (text below). Taken on the standing instruction.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-445**, proposed status: `partial`. Proposed note:
+
+> From ADR 0340 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0347, 2026-11-12: PARTIAL. Built as an opt-in of the overset solver, OversetSolver::set_fringe_flux, default off, every result without it bit-identical (state hashes of two runs equal to those of the library before, baseline_hashes and the twelve existing overset test files pass unedited). The flux of a face between a calculated and a fringe cell is the face interpolation of the velocity each pressure corrector starts from plus one correction per region of calculated cells that makes its net flux zero (it replaces the offset of the background fringe pressures). The switch as ADR 0340 words it (variant P, the interpolated fringe pressure left in the Green-Gauss gradient of the calculated cells next to the fringe) is not admissible: the Taylor-Green run on RE blows up at step 5 (level 1) and step 3 (level 2), the error growing 11-fold and 60-fold per step, as predicted before the run from the pressure mismatch of the two parts (growth with the refinement). With that gradient taken from the own part (variant G, FringeFlux::PrescribedOwnGradient) it is stable: continuity 4.5e-13, flux through the hole ring 1.9e-14, U1 3.6e-15, a uniformly accelerating flow exact to 2e-15, the flux of a ring face equal to the mean of the two cell velocities to 4e-4. Order of R_b at t = 0.5 on RE 1.962, 1.789 (default coupling 0.983, 1.015); on RL within the parity families 2.704 (levels 1 to 3) and 2.124 (2 to 4); the response per unit of truncation is 1.51, 1.54, 1.65 at levels 1 to 3 (default 0.168, 0.339, 0.497). Missed: a_c at t = 0.025 is 0.598, 0.856, 0.931 at the background fringe and 0.867, 1.037, 1.053 at the component fringe against 0.9 (levels 1 and 2 miss); diagnosed as the decay of the answer of the calculated cells over one cell (the dipole estimate made before the run gave 0.65 at level 1), not a softness of the imposition; it rises to 0.906, 0.968, 0.989 by t = 0.5. Found on the way, registered checks missed and kept as known misses: under G the interpolation error reaches the calculated cells in full, so the velocity error against the exact solution on RE is 1.77, 1.64, 1.62 times that of the default coupling (limit 1.5) and R_b itself is 9.0, 4.6, 3.3 times the default's; with the quadratic donor interpolation of F-336 on both fringes the error of G falls to 0.63, 0.60, 0.56 of that and is 1.145, 1.056, 1.035 times the default's (hypothesis confirmed by its registered numbers). Not a candidate for a default. One unit check missed by round-off of its own test values (2.0e-12 against 1e-12) and was corrected by an amendment before the corrected run. Seven mutations caught. Not covered: accuracy with a moving component, RL at level 5, the combination with the other overset opt-ins beyond a smoke check.
+
+**F-349**, status unchanged (`partial`). Add to its note:
+
+> ADR 0347 (F-445), 2026-11-12: with the flux of the fringe faces prescribed and the pressure gradient of the neighbouring calculated cells taken from their own part, the order of R_b is 1.962, 1.789 on RE and 2.704, 2.124 within the parity families of RL: removing the soft imposition named here restores the order. The response is then larger on the levels run (R_b 9.0 to 3.3 times), because the interpolation error is handed on in full.
+
+**F-369**, status unchanged. Add to its note:
+
+> ADR 0347 (F-445), 2026-11-12: the following coefficient a_c carries the decay of the response over one cell (0.60 at once on a coarse mesh even when the flux is imposed exactly); where the hardness of the imposition is meant, measure the flux defect or abs(a_m - (1 + a_c) / 2). The opt-in OversetSolver::set_fringe_flux(PrescribedOwnGradient) removes the defect and is available as a switch for this item's measurements; it has no accuracy check with a moving component yet.
+
+Proposed follow-up item (the number is the lead's): **Overset: the prescribed fringe flux with a moving component.** Depends on F-445 and F-336. Acceptance:
+
+> With OversetSolver::set_fringe_flux(PrescribedOwnGradient) and the quadratic donor interpolation of F-336, the Taylor-Green set-up of ADR 0219 with the moving, turning component (levels 1 and 2, the corrected time step of its amendment 2) is run against the default coupling with the same stencils: the largest velocity error over the calculated and fringe cells is at most 1.2 times that of the default coupling at both levels, continuity and the outflow balance hold to 1e-9 in every step, and no step is refused for a calculated cell between fringe cells on opposite sides; or the ADR names with a number what the moving fringe adds (the lag of the prescribed flux on the faces that change kind is the first candidate).

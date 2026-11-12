@@ -133,7 +133,7 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   that makes its net flux zero (it takes the place of the offset of the background fringe pressures); the pressure
   gradient of a calculated cell next to a fringe cell is then taken from its own part, and the pressures of the two parts
   are tied only by their levels. A solver that does not call it runs as before, bit for bit. The coupling of the normal
-  velocity is then an identity (the flux follows the face value of the two cell velocities to `1e-4`), continuity and
+  velocity is then an identity (the flux follows the face value of the two cell velocities to `4e-4`), continuity and
   the mass of the domain hold to `5e-13`, a uniform flow through a moving, turning component stays uniform to `4e-15`,
   and the response to the truncation of the background fringe converges at orders 1.96 and 1.79 (2.70 and 2.12 within
   the parity families of the second set-up) where the default coupling has 0.98 and 1.02. The price on the meshes tried:
