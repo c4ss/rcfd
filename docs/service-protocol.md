@@ -14,6 +14,10 @@ Versions:
 - 1.0: everything below except the `cosim.*` methods.
 - 1.1 (ADR 0345): the `cosim.*` methods, the error codes 1005 and 1006, and the members `protocol_version` and `cosim` of
   the `service.info` reply. No earlier method changed.
+- 1.2 (ADR 0350, a measurement spike): the bulk data methods `data.*` (`rcfd-data/1`). They are off unless the program
+  that embeds the service switches them on (`Service::enable_data`); `rcfd serve` does not. A service with them off
+  answers as version 1.1 in every respect, `service.info` included. A service with them on reports `protocol_version`
+  `"1.2"`, the member `data` (`"rcfd-data/1"`) and the `data.*` names at the end of `methods`.
 
 Transport: JSON-RPC 2.0, one JSON object per line (newline-delimited), over TCP
 (`rcfd serve --addr 127.0.0.1:7878`) or stdio (`rcfd serve --stdio`). Requests
@@ -117,6 +121,28 @@ the service (`Service::host_fluid`, `Service::host_structure`). `rcfd serve` hos
   `cosim.advance {participant, lease, dt, displacements}` (a fluid): `{forces, time}`
 
 A call with a lease that is not the current one, and `cosim.forces` to a structure, answer 1002.
+
+## Bulk data methods (version 1.2, `rcfd-data/1`, opt-in)
+
+JSON carries a field of a million cells badly. These methods read a run's time-series field store (`store.rts`,
+ADR 0124) and hand the values over a second TCP connection as raw little-endian bytes. `path` is the folder that holds
+`store.rts` (sandboxed like every path).
+
+- `data.info`: `{protocol, port, unix_ns}`: the port of the data connection and the service's clock (nanoseconds since
+  the Unix epoch)
+- `data.open {path}`: `{protocol, n_cells, n_points, mesh_hash, snapshots: [{step, time}], fields: [{name, unit,
+  location, n, precision, codec}]}` (the fields of the first snapshot)
+- `data.field {path, snapshot, field}`: one field of one snapshot as `f32` (a field stored as `f64` is rounded to the
+  nearest single): `{ticket, sections: [{name: "values", dtype: "f32", count, bytes}]}`
+- `data.surface {path}`: the boundary faces of the stored mesh cut into triangles (a fan per face):
+  `{ticket, sections}` with `points` (`f32`, three per point), `triangles` (`u32`, three corners each) and `cells`
+  (`u32`, the owner cell of each triangle)
+
+The bytes are prepared at the call and wait under the ticket; at most 8 tickets wait, the oldest is dropped. The client
+keeps one connection to `port` on the service's host, writes the ticket as 8 bytes little-endian and reads, for each
+section in order, the byte length as `u64` little-endian and then the values, little-endian. A ticket is used once. An
+unknown ticket is answered with the length 2^64 - 1 and the connection is closed. A store that cannot be read answers
+-32602, a path outside the sandbox 1004.
 
 ## Where to go next
 
