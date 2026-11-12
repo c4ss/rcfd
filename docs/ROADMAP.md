@@ -2034,7 +2034,8 @@ exist, and Phase 9 items are stretch. Phase numbers 5 and 6 may run in parallel 
     stays a known miss (3.71). Not delivered (follow-ups): a case-file key; target-node-count, edge-length, anisotropic
     and register-based criteria; merge-based polyhedral conversion; multigrid precoarsening; parallel and transient
     adaptation. On this flow adaptation gains little: a uniform 48 x 48 mesh (2304 cells) reaches 0.0030. Follow-ups
-    (ADR 0242 R1 to R3, recommendations taken on the maintainer's standing instruction of 2026-11-11): F-342, F-343.
+    (ADR 0242 R1 to R3, recommendations taken on the maintainer's standing instruction of 2026-11-11): F-342, F-343. Not
+    delivered (follow-ups): a case-file key (since ADR 0262, 2026-11-12: [mesh.adapt], F-342);
 - [~] **F-103** CGNS/EnSight export and read-only HDF5 interoperability using public specs
   - depends on: F-015
   - acceptance: Exports open in third-party viewers
@@ -6298,13 +6299,25 @@ fixed by the item's registration ADR before any code.
     bit-identical.
   - note: From ADR 0237 question 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. Only
     when a case needs it.
-- [ ] **F-342** Case-file key for the adaptive steady loop
+- [x] **F-342** Case-file key for the adaptive steady loop
   - depends on: F-102
   - acceptance: An optional adapt block on a steady incompressible box-mesh case runs rcfd_fv::adaptive and reproduces
     the ADR 0242 cavity numbers; cases without the block give identical hashes.
-  - note: From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    rcfd_fv::adaptive exists in the library only; the key needs crates/rcfd-api/src/schema.rs and sim.rs. Absent key =
-    today's path bit for bit.
+  - note: From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE pending
+    acceptance (ADR 0262, 2026-11-12): the optional table [mesh.adapt] (absent from every case that does not write it;
+    an empty table is ADR 0242's loop) runs rcfd_fv::adaptive on a steady laminar simple / simplec case of
+    mesh.generator cavity_2d, box_2d or box_3d (uniform): the lattice takes the generator's coordinates and patches, the
+    first step runs the whole loop and leaves the final mesh and solver; keys cycles, max_level, marking (fixed_fraction
+    / target_count with target_cells), refine_fraction, indicator (velocity_gradient, velocity_gradient_unscaled,
+    edge_length with edge_length_exponent), register and register_use (confine / refine; ADR 0247 R3), balance,
+    transfer, max_iterations, tolerance. Tree runs equal library runs bit for bit on the 8 x 8 cavity (316 cells), with
+    each criterion, on a box_2d channel and on a box_3d cube; the case file cases/cavity/adapt_re100.toml equals the
+    library on its lattice bit for bit and gives ADR 0242's numbers (cells 576, 1269, 2799 with ADR 0242's iteration
+    counts, centreline difference to the 96 x 96 solution 0.002311, Ghia 0.009159; within 9.9e-11 of ADR 0242's run,
+    whose slab is 0.1 thick against the generator's 1/24); models and solver options the loop would drop, non-uniform or
+    file meshes and other algorithms are located errors (also through rcfd validate); rcfd run gives the in-process
+    run's monitors; baseline hashes, case_hashes_w48u and ADR 0257's K0 tests pass unedited; six mutations each failed
+    their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5).
 - [~] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
   - depends on: F-102
   - acceptance: Each criterion has a closed-form marking check, and a target-count run lands within 10 percent of its
@@ -6322,7 +6335,9 @@ fixed by the item's registration ADR before any code.
     caught. Not delivered: anisotropic (directional) refinement, which needs per-axis levels in the lattice (follow-up);
     merge-based polyhedral conversion, multigrid precoarsening and parallel adaptation stay listed here until split.
     Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new
-    options join F-342's case key (R3).
+    options join F-342's case key (R3). Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing
+    instruction of 2026-11-11): F-348; the new options are case keys since ADR 0262 (2026-11-12, F-342): [mesh.adapt]
+    marking = "target_count", indicator = "edge_length", register and register_use.
 - [ ] **F-344** BDF2 PISO: the step-size-dependent remainder of the library's BDF2 step
   - depends on: F-338
   - acceptance: The remainder of PimpleSolver::step with BDF2 and three outer iterations on a mesh at rest (max
