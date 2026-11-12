@@ -5254,15 +5254,14 @@ Added after the static feature-gap review; wording is product-independent. Phase
       indices.
 - [~] **F-269** Test gate speed and strictness
   - depends on: F-106
-  - acceptance: The full gate runs each test in its own process from a small pool with a per-test time limit, prints the summary format the older scripts read, and a scanner lists tests that cannot fail (ADRs 0127 to 0129, docs/test-process.md).
-  - note: Size M. Open items:
-    - a vacuous pass in the schemes_wave13 T2 test (it should fail the vacuous case);
-    - an environment switch that makes the 12 data-gated tests fail rather than skip;
-    - limit headroom on one stage;
-    - a test for the R3 limit;
-    - a re-measurement at 5 jobs;
-    - scanning of inline test modules;
-    - a slot queue in place of the directory locks.
+  - acceptance: The full gate runs each test in its own process from a small pool with a per-test time limit, prints the
+    summary format the older scripts read, and a scanner lists tests that cannot fail (ADRs 0127 to 0129,
+    docs/test-process.md).
+  - note: Size M. Open items: an environment switch that makes the 12 data-gated tests fail rather than skip; limit
+    headroom on one stage; a test for the R3 limit; a re-measurement at 5 jobs; scanning of inline test modules; a slot
+    queue in place of the directory locks. The T2 vacuous pass is closed by ADR 0235 C: t2b asserts the registered
+    precondition over(BDF2) >= 0.02 (measured 2.467e-2, bounded 1.16e-9); the old T2 stays as an ignored setup_defect
+    record.
 
 ## Revision additions (F-270 to F-275)
 
@@ -5855,3 +5854,21 @@ fixed by the item's registration ADR before any code.
     within 1 percent.
   - note: From ADR 0233 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
     rest of the F-243 title, split from it.
+- [x] **F-328** SV202's fuller text: what the solvers do with a case without boundary conditions
+  - depends on: F-240
+  - acceptance: For the compressible solver SV202 states that every patch is a slip wall and an outlet is extrapolated.
+    For every other solver it states that the case is refused unless every mesh patch that is not empty or cyclic has a
+    boundaries entry, and that an entry without keys is a fixed no-slip wall. Each claim is checked through check_only
+    (ADR 0235 A).
+  - note: DONE pending acceptance, merged 2026-11-12. ADR 0235 A (ADR 0196 Q1 (b), taken on the maintainer's standing
+    instruction of 2026-11-11): a text change in setup_rules.json, a registered edit of rules_w19c.rs E5 and a new check
+    E6; all checks met, two mutations caught. No golden held the text.
+- [x] **F-329** `rcfd map --warm-start extended`: the extended warm start on the command line
+  - depends on: F-249
+  - acceptance: With --warm-start extended, a map of an energy or two-equation-turbulence case restarts each point warm,
+    and its reports agree with cold runs within REL_WARM 1e-4. Without the flag, or with flow, the map tables are
+    byte-identical to before (ADR 0235 B).
+  - note: DONE pending acceptance, merged 2026-11-12. ADR 0235 B (ADR 0209 Q7 (c), taken on the maintainer's standing
+    instruction of 2026-11-11): HE map warm against cold 5.7e-9, 61 and 60 iterations against 89 and 88; defaults
+    byte-identical; three mutations caught. Open: the extended start as the map default (Q7 (b)) and in the design tools
+    (Q7 (a), a golden edit).
