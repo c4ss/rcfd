@@ -367,3 +367,60 @@ and vanishes with `nu = 0`.
 The corrected diagnosis checks and the corrective design follow in amendment 2, after X1 and before any corrected run.
 The acceptance checks A1 to A5, K4, K5, the unit checks U1 to U3, the defaults B1 to B4, N1, N2 and the mutations stand
 as registered; K1 to K3 (on DP) are re-registered by amendment 2 with the reference corrected.
+
+## Amendment 2 (2026-11-12, after the exploration X1, before any library change and before the corrected runs)
+
+**X1, run once** (`... --test added_mass_f351 x1_exploration -- --ignored --nocapture`, on a2617baa; the full print is in
+`w49i-work/f351-scratch/run2-x1.log`, not committed). It carries no limit and decides nothing; what it showed:
+
+- `r_alg - 0.5` is `0` or `+-1.1e-16` at every printed step of every run: the factor one half is the algebra of the fit,
+  whatever the field.
+- With the flow step converged (`N = 80`, four outer iterations) the flow part against the **old** column, `d_flow_old`,
+  is `7.8e-8` to `1.7e-6` over 30 steps, and `d_ext` is `3.1251e-3` to `3.1272e-3` (`1/320 = 3.125e-3`). With `nu = 0` in
+  the flow (two correctors) `d_flow_old` is `2e-10` to `2.6e-6`. So item 1 of amendment 1 holds: the pressure of the
+  converged step is the acceleration times the column before the step.
+- With the registered settings (two correctors, one outer iteration) there is, on top, a part that is largest in the
+  first two steps and where `g` passes through zero, and grows with the cell count: `abs(d_flow_old)` at step 2 is
+  `4.8e-5` (20 cells), `2.4e-4` (40), `9.2e-4` (80); at steps 3 to 21 it is `1.2e-6` to `2.6e-5` (20), `3.4e-6` to
+  `9.4e-5` (40), `1.1e-5` to `3.5e-4` (80). Four correctors reduce it at 80 cells to `1.1e-6` to `1.5e-5`; halving `dt`
+  reduces it (`7.7e-6` against `3.9e-5` at `t = 0.06` on 80 cells). It is absent with `nu = 0`. So it is the splitting
+  error of the non-iterated step in the wall-normal viscous term (`nu dt/dx^2` is 0.04, 0.16, 0.64), not a property of
+  the force evaluation. This explains K1's numbers at 40 and 80 cells (the worst step was step 2).
+- The viscous part of the force is at most `2.4e-5` of the force on 20 cells while `abs(g) > 0.1`.
+
+**Corrected set-ups.**
+
+- **DPc**: DP with `n_outer = 4` (the flow step converged), reference the column of the old mesh: `d_flow_old = 1 -
+  p_c/(g (L_old - dx_old/2))`, `d_tot_old = 1 - F_x/(rho g L_old S_x)`; `r_alg = (grad p)_c . n dx_c/(p_0 - p_1)`, `p_1`
+  the cell behind the wall cell. Steps 2 to 12, `N = 20, 40, 80`, the worst piston face and step.
+- **DP** (the registered settings, which the coupled runs use), 20 cells, steps 3 to 12, the same quantities.
+
+**Corrected checks** (they take the place of G1 to G6, G8, K1 to K3, N1 and N3 in the decision rule; G7 held and stands).
+The limits are written after X1 was seen, which is disclosed: the numbers seen are in brackets.
+
+| Id | Check | Limit | Seen in X1 |
+| --- | --- | --- | --- |
+| G1b (H1: the factor of the fit) | DPc, `N = 20, 40, 80`: `r_alg` | `abs(. - 0.5) <= 1e-12` | `1.1e-16` |
+| G2b (H1) | DPc: `d_ext` | within 0.5 percent of `1/(4N)` | 80 cells: within 0.07 percent; 20 and 40 not seen with DPc |
+| G3b (H2) | DPc: `d_flow_old` | `abs <= 2e-5` | 80 cells: `1.7e-6` |
+| K1b (c5) | DPc: `d_tot_old` of `patch_force_moment` (with the viscosity of the case) | within 1 percent of `1/(4N)` on each of 20, 40, 80 | not seen |
+| K2b (c5) | order `log2` of the ratio of `d_tot_old` at step 12, both pairs | in `[0.98, 1.02]` | not seen |
+| G5b | the rebuilt pressure force against `patch_force_moment` with `nu = 0` | relative `<= 1e-12` | not seen |
+| G6b (H4) | viscous part of the force, DPc | `<= 1e-4` of the force | `6.4e-6` (80 cells) |
+| G2p, G3p | DP, 20 cells, steps 3 to 12: `d_ext`; `d_flow_old` | within 0.5 percent of `1/80`; `abs <= 1e-4` | `1.2501e-2` to `1.2506e-2`; `7.1e-6` |
+| N3b (control of G3b) | DP, 80 cells, step 2 (the flow step not converged): `abs(d_flow_old)` | `>= 5e-4` | `9.2e-4` |
+| K3b (c5; needs the corrected evaluation) | DPc, `N = 20, 40, 80`: `abs(d_tot_old)` of the corrected evaluation; DP, 20 cells, steps 3 to 12 | `<= 5e-5` each; `<= 1e-4` | not seen. Estimate: `dx` changes by `w dt/N` in the step, which leaves `w dt/(2 N L) = 1e-5` on 20 cells, plus the viscous part |
+| N1b (control of K3b) | DPc, 20 cells: the corrected evaluation handed a zero gradient: `d_tot_old` | within 2 percent of `1/(2N) = 0.025` | not seen |
+
+How the hypotheses are decided now: **H1** holds if G1b, G2b and K1b are met and G3b is met (the flow part carries none
+of the deficit); **H2** holds if `abs(d_flow_old) >= 0.4/(4N)` on DPc and is ruled out by G3b; **H4** is ruled out as the
+cause by G6b. The registered statement of H1, "the flow-step pressure is exact", is replaced by "the pressure of the
+converged flow step is the acceleration times the column of the old mesh"; that the reference changed after a run is
+the deviation recorded here.
+
+**Added, because X1 showed the splitting error grows with the cell count:** K4 and K5 (the coupled runs on 40 and 80
+cells with the registered two correctors) stand with their windows, run once. In addition **K4c, K5c**: the same runs on 80
+cells with `n_outer = 4`, the same windows (`[1.0012, 1.0014]` default; `abs(. - 1) <= 1e-3` corrected). If K4 or K5 miss
+on 80 cells and K4c, K5c are met, the miss is the splitting error of the flow step, recorded as a known miss.
+
+The corrective design is registered by amendment 3 after these checks are run.

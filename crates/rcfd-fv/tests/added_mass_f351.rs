@@ -511,3 +511,189 @@ fn x1_exploration_of_the_flow_step_part_prints_only() {
     inviscid.nu = 0.0;
     explore("nu = 0 in the flow", 80, 30, 0.01, inviscid, 3);
 }
+
+// =================================================================================================================
+// The corrected diagnosis (ADR 0252 amendment 2): the reference is the column of the old mesh
+// =================================================================================================================
+
+/// The settings of DPc: the registered ones with four outer iterations, so that the flow step is converged.
+fn dpc_settings() -> PimpleSettings {
+    let mut s = sp_settings();
+    s.n_outer = 4;
+    s
+}
+
+/// Relative deficit `1 - F_x/F_exact` against the force of the wall pressure `g L_old` (the column before the step).
+fn deficit_old(s: &DpState, force_x: f64) -> f64 {
+    let mesh = &s.geom.mesh;
+    let ni = s.geom.n_internal;
+    let faces: Vec<usize> = mesh.patch("xmin").unwrap().faces().collect();
+    let g = faces.iter().map(|&f| s.walls[f - ni]).sum::<f64>() / faces.len() as f64;
+    let sx: f64 = faces.iter().map(|&f| mesh.face_area_vectors()[f][0]).sum();
+    1.0 - force_x / (RHO * g * (SP_L0 - s.x_old) * sx)
+}
+
+/// The cell behind a wall cell: its neighbour along x.
+fn behind(mesh: &Mesh, n_internal: usize, c: usize) -> usize {
+    (0..n_internal)
+        .filter_map(|i| {
+            let (o, nb) = (mesh.owner()[i], mesh.neighbour()[i]);
+            let other = if o == c {
+                nb
+            } else if nb == c {
+                o
+            } else {
+                return None;
+            };
+            let d = vec3::sub(mesh.cell_centres()[other], mesh.cell_centres()[c]);
+            (d[0].abs() > 10.0 * (d[1].abs() + d[2].abs())).then_some(other)
+        })
+        .next()
+        .unwrap()
+}
+
+/// The quantities of amendment 2 on one state (the worst piston face where a face quantity is meant).
+#[derive(Debug, Clone, Copy)]
+struct SplitOld {
+    /// `(grad p)_c . n dx_c/(p_0 - p_1)`: the factor of the fit, apart from the field.
+    r_alg: f64,
+    d_ext: f64,
+    d_flow_old: f64,
+    /// Of `patch_force_moment` with the viscosity of the case.
+    d_tot_old: f64,
+    /// Rebuilt pressure force against `patch_force_moment` with `nu = 0`, relative.
+    rebuilt: f64,
+    /// Viscous part of the force, relative.
+    viscous: f64,
+}
+
+fn split_old(n: usize, s: &DpState) -> SplitOld {
+    let geom = &s.geom;
+    let mesh = &geom.mesh;
+    let ni = geom.n_internal;
+    let faces: Vec<usize> = mesh.patch("xmin").unwrap().faces().collect();
+    let pb = s.p.boundary_values(geom);
+    let grad = least_squares(geom, &s.p.values, &pb);
+    let l = SP_L0 - s.x_p;
+    let dx = l / n as f64;
+    let l_old = SP_L0 - s.x_old;
+    let (mut r_alg, mut d_ext, mut d_flow_old, mut rebuilt_fx) = (0.5f64, 0.0f64, 0.0f64, 0.0);
+    for &f in &faces {
+        let c = mesh.owner()[f];
+        let c1 = behind(mesh, ni, c);
+        let g = s.walls[f - ni];
+        let sf = mesh.face_area_vectors()[f];
+        let nrm = vec3::scale(sf, 1.0 / vec3::norm(sf));
+        let d = vec3::sub(mesh.face_centres()[f], mesh.cell_centres()[c]);
+        let (pc, p1) = (s.p.values[c], s.p.values[c1]);
+        let dxc = (mesh.cell_centres()[c1][0] - mesh.cell_centres()[c][0]).abs();
+        let pf = pc + vec3::dot(grad[c], d);
+        let ra = vec3::dot(grad[c], nrm) * dxc / (pc - p1);
+        if (ra - 0.5).abs() > (r_alg - 0.5).abs() {
+            r_alg = ra;
+        }
+        let de = (pc + g * dx / 2.0 - pf) / (g * l);
+        if (de - 0.25 / n as f64).abs() > (d_ext - 0.25 / n as f64).abs() {
+            d_ext = de;
+        }
+        let df = 1.0 - pc / (g * (l_old - l_old / n as f64 / 2.0));
+        if df.abs() > d_flow_old.abs() {
+            d_flow_old = df;
+        }
+        rebuilt_fx += RHO * pf * sf[0];
+    }
+    let force = |nu: f64| {
+        patch_force_moment(geom, &s.u, &s.p, RHO, nu, &piston(), vec3::ZERO)
+            .unwrap()
+            .0[0]
+    };
+    let (fx, fx0) = (force(SP_NU), force(0.0));
+    SplitOld {
+        r_alg,
+        d_ext,
+        d_flow_old,
+        d_tot_old: deficit_old(s, fx),
+        rebuilt: (rebuilt_fx - fx0).abs() / fx0.abs(),
+        viscous: (fx - fx0).abs() / fx0.abs(),
+    }
+}
+
+/// ADR 0252 amendment 2, G1b to G6b, K1b, K2b: with the flow step converged (DPc) and the column of the old mesh as the
+/// reference, the deficit of `patch_force_moment` is the factor one half of its least-squares gradient in the wall cell:
+/// `1/(4N)` on 20, 40 and 80 cells, first order, and the pressure of the flow step carries none of it.
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn g1b_to_g6b_k1b_k2b_the_deficit_is_the_half_gradient_of_the_wall_cell() {
+    let mut at12 = Vec::new();
+    for n in [20usize, 40, 80] {
+        let sp = Sp::new(n);
+        let states = dp_run_with(&sp, 12, 0.01, dpc_settings(), true);
+        let q: Vec<SplitOld> = states[1..].iter().map(|s| split_old(n, s)).collect();
+        let quarter = 0.25 / n as f64;
+        let col = |f: fn(&SplitOld) -> f64| q.iter().map(f).collect::<Vec<f64>>();
+        let r_alg = worst(&col(|q| q.r_alg), 0.5);
+        let d_ext = worst(&col(|q| q.d_ext), quarter);
+        let d_flow = worst(&col(|q| q.d_flow_old), 0.0);
+        let d_tot = worst(&col(|q| q.d_tot_old), quarter);
+        let rebuilt = worst(&col(|q| q.rebuilt), 0.0);
+        let viscous = worst(&col(|q| q.viscous), 0.0);
+        println!(
+            "DPc N = {n}: G1b r_alg - 0.5 = {:.3e} (1e-12); G2b d_ext {d_ext:.7e} ({:+.3} percent of 1/(4N); 0.5); G3b \
+             d_flow_old {d_flow:.3e} (2e-5); K1b d_tot_old {d_tot:.7e} ({:+.3} percent; 1); G5b {rebuilt:.3e} (1e-12); G6b \
+             viscous {viscous:.3e} (1e-4); step 12: d_tot_old {:.7e}",
+            r_alg - 0.5,
+            100.0 * (d_ext / quarter - 1.0),
+            100.0 * (d_tot / quarter - 1.0),
+            q[10].d_tot_old
+        );
+        at12.push(q[10].d_tot_old);
+        assert!((r_alg - 0.5).abs() <= 1e-12, "G1b N = {n}: {r_alg}");
+        assert!((d_ext - quarter).abs() <= 0.005 * quarter, "G2b N = {n}: {d_ext}");
+        assert!(d_flow.abs() <= 2e-5, "G3b N = {n}: {d_flow}");
+        assert!((d_tot - quarter).abs() <= 0.01 * quarter, "K1b N = {n}: {d_tot}");
+        assert!(rebuilt <= 1e-12, "G5b N = {n}: {rebuilt}");
+        assert!(viscous <= 1e-4, "G6b N = {n}: {viscous}");
+    }
+    let orders = [(at12[0] / at12[1]).log2(), (at12[1] / at12[2]).log2()];
+    println!(
+        "K2b orders of d_tot_old at step 12: {:.6} and {:.6} (limit [0.98, 1.02])",
+        orders[0], orders[1]
+    );
+    for o in orders {
+        assert!((0.98..=1.02).contains(&o), "K2b {o}");
+    }
+}
+
+/// ADR 0252 amendment 2, G2p, G3p: the same split with the registered settings of the coupled runs (two correctors, one outer
+/// iteration) on 20 cells, past the start (steps 3 to 12).
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn g2p_g3p_the_split_with_the_registered_piso_settings() {
+    let n = 20;
+    let sp = Sp::new(n);
+    let states = dp_run(&sp, 12, true);
+    let q: Vec<SplitOld> = states[2..].iter().map(|s| split_old(n, s)).collect();
+    let quarter = 0.25 / n as f64;
+    let d_ext = worst(&q.iter().map(|q| q.d_ext).collect::<Vec<_>>(), quarter);
+    let d_flow = worst(&q.iter().map(|q| q.d_flow_old).collect::<Vec<_>>(), 0.0);
+    let d_tot = worst(&q.iter().map(|q| q.d_tot_old).collect::<Vec<_>>(), quarter);
+    println!(
+        "DP N = 20, steps 3 to 12: G2p d_ext {d_ext:.7e} (within 0.5 percent of 0.0125); G3p d_flow_old {d_flow:.3e} (1e-4); \
+         d_tot_old {d_tot:.7e} (printed)"
+    );
+    assert!((d_ext - quarter).abs() <= 0.005 * quarter, "G2p {d_ext}");
+    assert!(d_flow.abs() <= 1e-4, "G3p {d_flow}");
+}
+
+/// ADR 0252 amendment 2, N3b (control of G3b): the measure of the flow part sees a flow-step pressure that is not converged
+/// (80 cells, two correctors, the second step from rest).
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn n3b_the_flow_part_sees_an_unconverged_step() {
+    let n = 80;
+    let sp = Sp::new(n);
+    let states = dp_run(&sp, 2, true);
+    let d = split_old(n, &states[1]).d_flow_old;
+    println!("N3b d_flow_old at step 2, N = 80, two correctors: {d:.4e} (limit abs >= 5e-4)");
+    assert!(d.abs() >= 5e-4, "N3b {d}");
+}
