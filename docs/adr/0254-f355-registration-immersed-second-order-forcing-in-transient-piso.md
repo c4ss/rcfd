@@ -431,3 +431,205 @@ The reflection returns the full wall-normal part of `HbyA_c`, so an error of the
 No number is predicted.
 
 The decision rule is unchanged: with D9 and one run of SB missed the item is at most **partial** by the rule, whatever A gives.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above. No limit was changed. Release builds on Windows, the machine shared with other
+jobs. Commits: the registration 7c767055; the diagnosis tests 475e79d1 (before their run); amendment 1 9ec118e1 (before any
+library code); the library and its checks 68392e71 (before their run); amendment 2 7bbaf5f3 and the split tests 1c72ecbe (before
+the runs of D10 and D11). The library was not changed after 68392e71. Every registered run was made once (D0 a second time on
+the final library, as the registered check D0'); after the mutations the whole test file except the run A was run once more on
+the restored tree, with the same verdicts.
+
+**Which branch of the acceptance was reached.** The **second**, in full: the cause of the stop is diagnosed by registered
+measurements (below), and the configuration, 2D-2 on M2 with `build_second_order` in PISO, is refused at step 1 with a located
+message. The **first** is reached in substance but not in its letter: 2D-2 on M2 runs to `t = 8` in PISO with BDF2 and gives a
+Strouhal number within 0.24 percent of the first-order forcing, with the second-order forcing in its bounded form
+`build_second_order_bounded`, a further opt-in; `build_second_order` itself is unchanged, bit for bit, and still cannot make
+that run. Whether the bounded form should become what `build_second_order` builds is Q1.
+
+**Built.** `crates/rcfd-fv/src/immersed.rs`: the field `FluxFace::image`, the constant `FLUX_WEIGHT_LIMIT`, the field
+`ImmersedForcing::flux_weight_check`, `ImmersedForcing::build_second_order_bounded`, the image branch of
+`reconstruct_face_flux`, `ImmersedForcing::flux_growth`; `build` and `build_second_order` build what they built.
+`crates/rcfd-fv/src/pimple.rs`, two hunks: lines 482 to 488 (a branch of `Divergence::message` for the quantity
+`immersed flux weight`, seven lines added after the `immersed solid` branch) and lines 1296 to 1312 (the refusal, seventeen
+lines added after the normalisation of `h1` and before `if lag_due && last`); nothing else of that file is touched.
+`simple.rs`, `sim.rs`, `schema.rs` are not touched. `crates/rcfd-fv/tests/immersed_piso_stop_f355.rs` (new).
+`docs/reference-data.md` (a section for F-355). No case-schema key, golden, hash table or existing test file was touched.
+
+### Hypotheses
+
+| Id | Hypothesis | Measurement (R = 2D-2 on M2, the run of ADR 0249; variants 200 steps; every first-order control ran) | Verdict |
+| --- | --- | --- | --- |
+| H1 (a) | the `ddt` flux correction at the flux faces | `ddt_correction = false`: stops at step 6 (Courant 1.08e7 against 1.11e7) | **ruled out** |
+| H2 (b) | the reconstruction missing in later correctors | the code calls it in every corrector; 1, 3, 4 correctors stop at steps 11, 6, 4 | **ruled out** (more correctors stop sooner) |
+| H3 (c) | the BDF2 old and old-old fluxes | implicit Euler stops at step 8 | **ruled out** |
+| H4 (d) | the solid-cell source in the continuity error or the corrector control | no corrector control in the run; fluid-cell continuity over the largest flux 7.3e-7 at the last completed step (limit 1e-4) | **ruled out**: the large flux is a real flux |
+| H5 (e) | a large extrapolation weight | `theta_min` 0.1, 0.25, 0.5 (largest weight 5, 2, 1) all run; M1 (largest weight 3.77) runs; D10: at each of the steps 1 to 5 of R the largest flux velocity is on the face of weight 38.99 (2.49, 23.1, 1426, 9.2e4, 6.9e5) | **necessary, and the place of the growth** (the registered location test at the stop did not hold: by then the largest velocity is elsewhere; D10 is the repaired measurement) |
+| H6 (f) | linear upwind reading solid-cell values | `Upwind` stops at step 7, `Central` at step 6 | **ruled out** |
+| H7 (g) | the time step | `dt` 5e-4, 2e-3, 4e-3, 8e-3 stop at steps 6, 6, 6, 5 | **ruled out**, in both directions |
+| H7 (g) | the impulsive start | "late" (300 steps with `build`, then `build_second_order`) runs 200 steps, first fluid cells 0.67 to 0.69, largest flux velocity 0.19 | **necessary**: on a developed field the forcing of ADR 0234 runs |
+| H8 (added) | weight times the share of the time term in the diagonal as a growth criterion | `dt` 4e-3 and 8e-3 stop with `G` 0.89 and 0.45; "late" and M1 run with `G` 3.32 and 2.09; CC with `dt` 2.5e-5 grows (`max abs(u)` 281), with 2.5e-3 runs | **refuted** as a criterion (my estimate; measured growth 5 to 60 per step, independent of the step) |
+
+**The cause, as far as the numbers carry it.** The stop needs two things together and nothing else of the list: a fluid-solid
+face whose crossing lies close to the fluid centre, so that the linear extension of ADR 0234 D1 has a weight above 5 (it
+multiplies the velocity of the fluid cell relative to the wall by `w - 1`, 38 on M2), and a state in which what is extended is
+not small with `theta`, here the impulsive start. The flux is the extension of `HbyA_c`, not of the cell velocity: after the
+first step the two differ at the worst face by 6.1 (0.029 on the developed field), the weight times the pressure-gradient part
+of the cell velocity. On the face of weight 38.99 the flux velocity is 2.49 after step 1 (13 times the developed value) and
+grows by 9, 62, 64 and 7.5 per step. With weights of at most 5, or on the developed field, or with the bounded form (largest
+flux velocity 0.87 after step 1, 0.19 after 200 steps) there is no growth. **Not confirmed in the registered form:** D9 asked
+for a flux velocity of at least 4.5 after the first step and measured 2.49; my statement in amendment 1 that the first step
+already puts tens of times the inflow velocity on those faces was wrong, the growth builds over steps 2 to 5. Why exactly the
+developed field is immune (the size of the pressure-gradient part, the resolved layer, or both) is not separated by a
+measurement.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| D0 the reproduction | stop at step 6, Courant guard, 1.0e7 to 1.2e7 | step 6, 1.1094e7 | yes |
+| C-R first-order forcing on R | runs | runs, `max abs(u)` 2.21 | yes |
+| D1 to D8 controls | every control runs | 18 of 18, and the CC controls | yes |
+| D8 verdict | "confirmed" or "refuted" as defined | refuted | (a verdict) |
+| D9 worst face of R after step 1: weight | `>= 5` | 38.99 | yes |
+| D9 worst face of R after step 1: flux velocity | `>= 4.5` | **2.49** | **no** (ignored known miss, limit intact) |
+| D9 "late" after 200 steps: largest flux velocity | `<= 1.5` | 0.187 | yes |
+| D10 R: weight of the worst face, steps 1 to 5; flux velocity at step 3 | `>= 5`; `>= 45` | 38.99 at each; 1426 | yes |
+| D10 bounded: largest flux velocity, steps 1 to 5 and 200 | `<= 3` | 0.87, 0.70, 0.40, 0.32, 0.30, 0.19 | yes |
+| D11 one corrector: (a) weights at most 1; (b) weights up to 2, no image; (c) bounded, `theta_min` 0.1 | a reading | (a) runs; (b) stops at step 126; (c) stops at step 46 | reading: a reflection of magnitude up to 1 at the fluid-solid faces is not survived by PISO with one corrector, whatever the stencil |
+| D0' `build_second_order` on the final library, check off | step 6, 1.1094e7 | step 6, 1.1094e7 (`m_n` to all digits as before) | yes |
+| P hashes of `build_second_order` (reconstruction, PISO, SIMPLEC) | `1d4b8502a0aeb637`, `36d0549bb0533aa0`, `6d18eb02d60d3a7a` | the same three | yes |
+| UB1 bounded reconstruction of the exact Couette field | max at N 96 `<= 3e-3`; rms(48)/rms(96) `>= 3` | 7.99e-4 (2.56e-3 at N 48); 3.858 (ADR 0234 U1: 3.24e-4; 3.889) | yes |
+| UB2 net flux per body; sum of the sources; fluid cells; other faces | `<= 1e-12 A_b`; `<= 1e-12 sum A_b`; 0; bit-identical | 4.3e-19 and 5.2e-18; -1.8e-17; 0; bit-identical | yes |
+| UB3 structure, CC N 24 and M2 | as registered; at least 10 image faces | CC: 120 flux faces, 32 with an image; M2: 160, 32; no fall-back face | yes |
+| SB bounded on R and nine variants; CC with `dt` 2.5e-5 | every one runs (`<= 10`; CC `<= 1`) | all run, `max abs(u)` 2.09 to 2.26; CC 0.496 | yes |
+| SB bounded with one corrector | runs | **stops at step 34** (Courant 2.4e7) | **no** (ignored known miss, limit intact) |
+| A (acceptance, first branch, with bounded) 2D-2 on M2 to `t = 8` | no stop; `abs(St_bounded/St_first - 1) <= 1e-2` | 8000 steps; `St` 0.30112 against 0.30041: **+0.237 percent** | **yes** |
+| S2 of A, both runs | at least 6 crossings; periods within 1 percent; maxima within 2 percent; amplitude at least 1 | bounded 7, 8.0e-6, 3.1e-4, 1.987; first 7, 8.5e-6, 3.1e-4, 2.004 | held |
+| CC-A1 bounded: `e(96)`; order 48 to 96; S1 | `<= 1e-2`; `>= 1.5`; converged | 4.232e-4; **1.947**; 102, 103, 340 iterations | yes |
+| CC-V3 bounded: steady; `e`; `eps` against SIMPLEC | `<= 1e-9`; `<= 1.2`; `<= 1.5` times | 1.3e-12; 1.62978e-3 against 1.63149e-3; 1.10522e-3 against 1.11240e-3 | yes |
+| RF R with `build_second_order`, one step | stopped at step 1, quantity, cell, value `> 1`, message | step 1, `immersed flux weight`, cell 5679 at (0.18875, 0.15125), value 2.206, message names ADR 0254 and `build_second_order_bounded` | yes |
+| RF bounded on R; ADR 0234 V3; ADR 0249's annulus; CC SIMPLEC, with `build_second_order` | none stops | none stops | yes |
+| N1 the four existing immersed test files, unedited | every test that is not ignored passes | `immersed_solid_f219` 11 passed, 2 ignored; `immersed_second_order_f309` 9 passed, 1 ignored; `immersed_force_order_f337` 5 passed, 2 ignored; `immersed_unsteady_force_f346` 9 passed, 5 ignored (the ignored ones are those files' own records and printed runs) | yes |
+| N1 `cargo test -p rcfd-api --release --test baseline_hashes` | passes | 3 passed, 1 ignored | yes |
+
+Printed, no limit. 2D-2 on M2, window from `t = 5.5`, against FeatFlow level 6: bounded `St` 0.30112 (-0.250 percent), `C_D`
+max 3.20930 (-0.332), min 3.14799 (-0.282), mean 3.17889 (-0.298), `C_L` max 0.97593 (-1.011), min -1.01116 (-0.925); first
+order `St` 0.30041 (-0.486), `C_D` max 3.22841 (+0.261), `C_L` max 0.98432 (-0.161), the numbers of ADR 0249. Circular Couette
+with bounded next to ADR 0234 (`build_second_order`): `e` 5.912e-3, 1.631e-3, 4.232e-4 against 6.121e-3, 1.611e-3, 4.243e-4
+(orders 1.857, 1.947 against 1.926, 1.925); `eps` 3.923e-3, 1.112e-3, 3.078e-4 against 1.903e-3, 4.737e-4, 1.612e-4 (the face
+flux error is about twice as large, as the larger constant of the reflection says; the velocity error is the same); inner
+torque -4.04401, -4.12191, -4.15778 against -4.04376, -4.12171, -4.15767; image faces 32 of 120, 80 of 240, 88 of 480. The
+value of the refusal on R at step 1 is 2.206 (the estimate without convection gave 2.28).
+
+### The two known misses
+
+- **D9, the size of the flux velocity after the first step** (2.49 against 4.5). Diagnosed above: the prediction was wrong,
+  not the set-up. `d9_flux_velocity_after_the_first_step_known_miss`.
+- **SB, the bounded form with one corrector** (stops at step 34; `build_second_order` at step 11; the first-order forcing
+  runs). D11: with one corrector the unbounded form with weights of at most 1 runs and with weights up to 2 (no image face)
+  stops at step 126; the bounded form with `theta_min = 0.1` stops at step 46. So the stop does not come from the image stencil
+  but from any flux face that returns the wall-normal part of `HbyA_c` at full size, with a single corrector; with two or more
+  correctors the same faces run (H5 `theta_min` 0.25, SB). Not measured: the mechanism (the hand argument of amendment 2 is a
+  hypothesis), and whether more than 200 steps with two correctors and weights between 1 and 2 stay bounded beyond what A
+  shows (8000 steps with the bounded form). `sb_bounded_with_one_corrector_known_miss`. The solver does not refuse this
+  setting; Q3.
+
+### Mutations
+
+Applied one at a time to the final tree by `w49i-work/f355-scratch/mutate.py` (an exact text replacement checked to occur
+once), the named test run once in release, the file restored and compared byte for byte with the kept copy (equal after each).
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | the refusal never fires | RF | failed: "R with build_second_order is not refused" |
+| M2 | the refusal fires for every face without an image | RF | failed: the bounded forcing on R refused at step 1 |
+| M3 | bounded builds no image | SB | failed: every run stopped at step 1 by the refusal (value 2.206) |
+| M4 | `a` from `t_f - theta_e` | UB1 | failed: max 5.90e-3, rms ratio 2.898 |
+| M5 | `2 u_G -> u_G` in the image form | UB1 | failed: max 0.487, rms ratio 1.07 |
+| M6 | `pimple.rs`: the refusal statement disabled | RF | failed: not refused |
+| M7 | the image form without the far cell | UB1 | failed: max 7.34e-3, rms ratio 2.27 |
+
+M3 was caught through the refusal, not through a stop of the unbounded faces: with the mutation the bounded constructor builds
+the forcing of `build_second_order` with the check on. That the forcing without images stops on R is D0.
+
+### Tools
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. `cargo test -p rcfd-fv
+--release --test immersed_piso_stop_f355`: 15 passed, 2 ignored (the two known misses), over the invocations named above; in
+the debug profile the heavy tests are ignored. The whole workspace suite and the gate were not run.
+
+### Deviations and disclosures
+
+- The stop was reproduced with the existing test before the registration (disclosed there).
+- H8, the hypothesis I added with a hand estimate, was refuted by its own registered rule. The refusal E2 nevertheless uses
+  the same number with the solver's diagonal, as a sufficient condition chosen so that the runs of ADR 0234 and 0249 are not
+  refused; it is not a stability criterion, it lets two measured stops through (`dt` 4e-3 and 8e-3, which stop by the Courant
+  guard as before) and it refuses "late", which runs. Amendment 1 says so before the code.
+- The text of amendment 1 on the first step ("tens of times the inflow velocity") is wrong; amendment 2 and this addendum
+  correct it, the text stays.
+- The diagnosis tests got the line that switches the refusal off (`flux_weight_check = false` in the helper that builds the
+  unbounded forcing), as amendment 1 registered. Two tests were split into their met parts and their known misses
+  (amendment 2). Clippy asked for the negated comparisons of the new tests to go through a helper (`le`) and for `map_or`
+  in place of `is_none_or` (the crate's minimum Rust version) before the commit 68392e71 and its runs.
+- `G` printed by the tests is the estimate without convection, from the forcing of `build_second_order`, also on the lines of
+  the bounded and first-order runs (there it is only the label of the variant).
+- Not run: the workspace suite and the gate; M3 and T with the bounded form; PIMPLE with outer iterations, the consistent
+  correctors, the adaptive corrector count; SIMPLE with under-relaxation; DFG 2D-1 with the bounded form (the steady numbers
+  of ADR 0234 V4 and ADR 0239 are those of `build_second_order`, which is unchanged); three dimensions; a mesh with a fall-back
+  face; `Crank-Nicolson` and the bounded BDF2.
+
+### Decision by the registered rule
+
+D0 held; H5 and H7 are confirmed by their variants and D10 locates the growth, but D9 missed one of its three limits, so the
+cause is not confirmed in the registered form; A, S2, CC-A1, CC-V3, RF, P, D0', UB1 to UB3 and N1 are met; SB missed one of
+its twelve runs; the seven mutations were caught. **F-355 is partial by the rule** (two known misses: D9's size, SB with one
+corrector). In terms of the acceptance text: its second branch is met, and its first branch is met with the bounded opt-in
+and not with `build_second_order` as named.
+
+### Remaining questions
+
+- **Q1. Should `build_second_order` build the bounded form?** Options: (a) keep both: `build_second_order` unchanged and
+  refused where E2 applies, `build_second_order_bounded` for transient runs (as built); (b) make the bounded form what
+  `build_second_order` builds: one constructor, no refusal needed, but the recorded numbers of ADR 0234 and 0239 change (CC
+  `e(96)` 4.243e-4 to 4.232e-4, `eps(96)` 1.612e-4 to 3.078e-4, the 2D-1 values asserted to nine digits by
+  `immersed_unsteady_force_f346.rs` A3a, which would have to be re-recorded by its owner). Recommendation: (b), with the
+  re-measurement registered; until then (a). Not taken: it changes recorded numbers of a merged opt-in.
+- **Q2. The refusal E2.** Options: (a) keep it as a sufficient condition (as built); (b) refuse every flux face without an
+  image whose weight exceeds 5 in the transient solver (simpler, no hole, but it refuses ADR 0234 V3 and ADR 0249's runs,
+  which are existing tests); (c) drop it with Q1 (b). Recommendation: (c) if Q1 (b) is taken, else (a).
+- **Q3. One corrector.** The second-order flux (either form, weights above 1) stops with a single PISO corrector on 2D-2.
+  Options: (a) a follow-up item that measures the mechanism and refuses the setting with a located message; (b) refuse now
+  `n_correctors = 1` with flux faces without a measurement of the mechanism; (c) document it. Recommendation: (a).
+- **Q4. The pressure-gradient part.** The flux extends `HbyA_c`, not the cell velocity; the difference is what the weight
+  multiplies at the start. Options: (a) leave it (bounded weights make it harmless in every run made); (b) a follow-up that
+  extends the corrected velocity (the pressure part of the face flux written at the crossing), which would also say why the
+  developed field is immune. Recommendation: (a) now; (b) only if a run with the bounded form shows a wall-normal error.
+- **Q5. The lift of 2D-2 with the bounded form** is -1.01 percent of FeatFlow on M2 against -0.16 percent of the first-order
+  forcing (the drag -0.33 against +0.26). One mesh; F-354 is the item that measures the convergence, and should run both
+  forcings.
+
+### For the lead: roadmap entries
+
+**F-355: proposed status `partial`.** Proposed note (replacing the present one):
+
+> PARTIAL (ADR 0254, 2026-11-12), in the library. From ADR 0249 question 6. The stop was reproduced (step 6, Courant 1.1094e7) and diagnosed by registered variant runs, each with its first-order control: it needs a fluid-solid face whose surface crossing lies close to the fluid cell centre, so that the linear extension of ADR 0234 D1 has a weight above 5 (it multiplies the velocity of the first fluid cell relative to the wall by up to 38 on M2), together with the impulsive start; runs with weights of at most 5 (theta_min 0.1, 0.25, 0.5; mesh M1) and a run started from a developed field do not stop, and at each of the five steps the largest flux velocity sits on the face of weight 38.99 (2.49, 23, 1426, 9.2e4, 6.9e5). Ruled out, each by its number: the ddt flux correction, the corrector count, BDF2, the convection scheme, the time step (5e-4 to 8e-3 all stop) and the continuity of the fluid cells (7e-7). A hand estimate of a linear growth criterion (weight times the share of the time term in the diagonal) was refuted by its registered rule. Delivered: rcfd-fv immersed.rs, `ImmersedForcing::build_second_order_bounded` (opt-in): on the faces with a weight above 2 the flux is that of the wall value reflected through the image point of the face in the fluid, interpolated between the first fluid cell and the cell behind it, weights of magnitude at most 1, second order; `build` and `build_second_order` are bit-identical (three hashes, the existing immersed tests, baseline_hashes). With it DFG 2D-2 on M2 runs to t = 8 in PISO with BDF2: Strouhal number 0.30112 against 0.30041 of the first-order forcing (+0.24 percent, limit 1), C_D max -0.33 percent and C_L max -1.01 percent of FeatFlow; circular Couette error 5.91e-3, 1.63e-3, 4.23e-4, order 1.947 (limit 1.5), PISO equal to SIMPLEC to 0.1 percent. `build_second_order` itself is refused by PimpleSolver with a located message where a flux face has a weight above 5 and can return more than the time term carries (`flux_growth`; 2D-2 on M2 at step 1, value 2.2; the runs of ADR 0234 and 0249 are not refused); the refusal is a sufficient condition, not a stability criterion (time steps of 4e-3 and 8e-3 still stop by the Courant guard). Seven mutations caught. Partial by the registered rule because of two known misses: the flux velocity after the first step was registered as at least 4.5 and is 2.49 (the growth builds over steps 2 to 5), and the bounded form with a single PISO corrector stops at step 34 (any flux face that returns the wall-normal velocity at full size does, with one corrector; with two or more it runs). Acceptance: the second branch (diagnosis and located refusal) is met; the first is met with the bounded opt-in, not with `build_second_order` as named. Open (ADR 0254 questions 1 to 3): whether `build_second_order` should build the bounded form (changes recorded numbers of ADR 0234 and 0239), the form of the refusal, the single corrector. Not run: M3, T, three dimensions, PIMPLE outer iterations, SIMPLE with under-relaxation.
+
+**F-309: status unchanged (`done`, pending acceptance).** Proposed change of its note: the last three sentences ("FOUND LATER (ADR 0249, 2026-11-12): ... Not diagnosed: F-355.") are replaced by:
+
+> FOUND LATER (ADR 0249, 2026-11-12): the second-order forcing stopped at step 6 of DFG 2D-2 on M2 in PISO with BDF2 (divergence guard, Courant 1.1e7); it had been run in PISO only on circular Couette flow. DIAGNOSED (ADR 0254, 2026-11-12, F-355): the linear extension of D1 has a weight of up to 38 where the surface crossing lies close to the fluid cell centre, and at an impulsive start, or with a time step small against h^2/nu (circular Couette with dt 2.5e-5 grows to 281), what it multiplies is not small; `build_second_order` is unchanged and is refused by PimpleSolver with a located message in that range; transient runs use `build_second_order_bounded` (ADR 0254), which keeps the order (1.947 on circular Couette). Open: whether `build_second_order` should build the bounded form (ADR 0254 question 1).
+
+**F-354:** no change of status; proposed addition to its note:
+
+> ADR 0254 (2026-11-12) measured 2D-2 on M2 with `build_second_order_bounded`: max C_D 3.20930 (-0.33 percent), max C_L 0.97593 (-1.01 percent), St 0.30112 (-0.25 percent); the convergence runs should be made with both forcings.
+
+**Proposed follow-up items:**
+
+1. *Second-order immersed forcing: the single PISO corrector.* Deps: F-355. Acceptance: "The stop of DFG 2D-2 on M2 with one PISO corrector and a second-order immersed flux face of weight above 1 (ADR 0254 D11: step 34 with the bounded form, step 126 with weights up to 2) is explained by a registered measurement, and the setting either runs 200 steps or is refused with a located message; two correctors are unaffected." Note:
+
+> From ADR 0254 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0254 measured: with one corrector the first-order forcing and the second-order forcing with weights of at most 1 run, weights up to 2 stop at step 126, the bounded form at step 34 (theta_min 0.1: step 46); with two or more correctors all of these run. The mechanism is not measured.
+
+2. *Second-order immersed forcing: one constructor with bounded weights.* Deps: F-355. Acceptance: "`build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed, and the checks of ADR 0234 (A1, V1 to V4) and ADR 0239 are measured again and reported next to the old numbers." Note:
+
+> From ADR 0254 questions 1 and 2. Needs the maintainer's decision: it changes the recorded numbers of a merged opt-in (circular Couette e(96) 4.243e-4 to 4.232e-4, face-flux error 1.612e-4 to 3.078e-4; the DFG 2D-1 values asserted to nine digits in immersed_unsteady_force_f346.rs).
