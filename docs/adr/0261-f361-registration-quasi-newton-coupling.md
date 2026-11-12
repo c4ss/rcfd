@@ -301,3 +301,92 @@ one-node piston; no strongly non-linear coupling, no large interface (the dense 
 force components and `n <= max_iterations` columns, fine for tens of thousands of components and twenty columns, not
 tested). No reuse of earlier steps, no multi-vector or multi-level variant, no relaxation of the displacement. The
 strong step of ADR 0250 does not get the update.
+
+## Addendum 1: results (2026-11-12)
+
+### What was built
+
+- `crates/rcfd-fv/src/fsi.rs`: the variant `Relaxation::LeastSquares { initial, filter }` (S1). `Relaxer::new` starts it
+  at `initial`; `StrongCoupling::validate` refuses it. The `Fixed` and `Aitken` arms are untouched.
+- `crates/rcfd-fv/src/cosim.rs` (S2): `CouplingSettings::least_squares(initial)`, validation of the variant, the private
+  `LeastSquaresUpdate` (history of one step only, D6) and `least_squares` (Householder QR with the filter of D5, back
+  substitution), the new field `CoupledStep::columns`, and a branch in `coupled_step` taken only for the new variant; the
+  fixed and Aitken lines are unchanged in order and arithmetic (one added `out.columns.push(0)`).
+- `crates/rcfd-fv/tests/cosim_f361.rs` (new): 9 tests (6 heavy, ignored in a debug build only; U1 to U3 fast).
+- `docs/cosimulation-protocol.md`: one bullet on the option; the limits line no longer says "no quasi-Newton update".
+
+### Checks
+
+Every registered check was run once, on commit de20e8cb (`cargo test --release -p rcfd-fv --test cosim_f361 --
+--test-threads=1 --nocapture`, 28 s).
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| QA1 every step converged; largest; mean; largest last test quantity | all; `<= 7`; `<= 6`; `<= 1e-8` | all 650; 7 (one step); `5.980` (5: 14, 6: 635, 7: 1); `9.70e-9` | met |
+| QA2 `abs(omega_LS/omega_A - 1)` of `Q_0`, `Q_1`; crossings | `<= 1e-6`; equal | `2.1e-10`, `3.1e-10`; 6 and 6, 12 and 12 (largest `abs(dQ_0)` `2.3e-8 X`) | met |
+| QA3 SPm1: steps with more least-squares iterations; totals; `max abs(dx)` | 0; `LS <= A`; `<= 1e-8 X` | 0 (and 0 steps with another count); 301 and 301; exactly 0 | met |
+| QA4 (diverging control) `Fixed(1)`, cap 10 | not converged; `>= 200` | not converged; `510.85` | held |
+| S1 Aitken reference histogram | ADR 0256's | `{7: 13, 8: 210, 9: 343, 10: 84}`, mean 8.7662 | held |
+| S2 first update relaxed, columns bounded | all steps | 0 violations | held |
+| U1 affine mock, `d = 4`: converged; iterations | `<= 6` | converged in 5 (`1.9e-17` at the fifth; Aitken 21) | met |
+| U2 one node, cubic: counts equal; iterates; columns | equal; `1e-12`; `[0, 1, 1, ...]` | equal in all 5 steps (6, 6, 6, 6, 5); difference exactly 0; as expected | met |
+| U3 validation | errors / accepted | six errors, the constructor's settings accepted, the strong step refuses | met |
+| B1 existing suites, release, unedited | all pass | `cosim_f139` 18 passed, 1 ignored; `strong_fsi_f251` 16 passed, 1 ignored; `added_mass_f351` 15 passed, 6 ignored; `baseline_hashes` 3 passed, 1 ignored; the diff against main touches `fsi.rs`, `cosim.rs`, the test file, this ADR and the protocol page | met |
+
+Against the predictions: the mean `5.980` is inside the predicted 5.95 to 6.15 and below the model's 5.991 (the flow run
+did not add iterations here, unlike Aitken's 0.12); the first-step residuals of the flow run equal the model's to the
+printed digit (`2.3e-2, 5.5e-3, 3.5e-5, 3.6e-7, 1.2e-8, 4.0e-11`). The filter dropped 4 columns over the run, as on the
+model with the transverse component. QA3 came out bit-identical rather than within rounding: on SPm1 the one-column
+secant and Aitken's factor round alike. U1 terminated one iteration before the bound `d + 2`.
+
+### Deviations and disclosures
+
+- The margins are small: on the mean `0.020`, and the largest count reaches the limit in one step. The result is for this
+  model problem only.
+- The printed "columns dropped" of the Aitken run (4398) is meaningless: the print counts the shortfall of the column
+  numbers, which are all 0 for Aitken. No check reads it.
+- Nothing was re-run; no limit, tolerance, filter or factor was changed after the run.
+
+### Mutations
+
+On a `git archive` copy of de20e8cb (`w49i-work/f361-scratch/mut`), each applied alone, the file restored and compared
+byte for byte (identical in all four).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MQ1 filter off | U2 | U2 failed (the zero pivot gives non-finite coefficients, the relaxed fallback changes the counts) |
+| MQ2 wrong sign of the right-hand side | U1, QA1 | U1, QA1 failed; also QA2, QA3, S2, U2 (CWs stopped at the first step) |
+| MQ3 update from the input | U1, QA1 | U1, QA1 failed; also QA2, QA3, S2, U2 |
+| MQ4 `abs(R_jj)` in the back substitution | U1 | U1 failed; also QA1 (largest 15, mean 11.2), QA2, QA3, S2, U2 |
+
+`scripts/limit_audit.py` on the new test file: 0 hits. `cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv
+--all-targets -- -D warnings` clean (one finding, a negated float comparison in the filter, fixed before the code commit
+and before any run).
+
+### Not run
+
+The whole-workspace suite and the gate (the lead's). No reuse of earlier steps (not built, D6). No case with more
+interface modes or a stronger non-linearity than CWs.
+
+### Decision by the registered rule
+
+QA1 to QA3 are met, QA4, S1 and S2 hold, U1 to U3 and B1 are met, and every mutation failed its named tests: **done** by
+the rule, proposed as such; the acceptance stays the maintainer's.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Make the least-squares update the default of `CouplingSettings`?** Nothing calls the module, so no existing
+  result changes, but the documented default would. Options: (a) keep Aitken as the default and the update opt-in; (b)
+  switch. Recommendation (a) until a second case (more modes, a real structure) confirms it.
+- **Q2. Reuse of columns from earlier steps.** Options: (a) a follow-up item, registered separately; (b) leave.
+  Recommendation (b) for now: CWs is already at 6.
+- **Q3. The strong step of ADR 0250 refuses the variant.** Options: (a) a 6-vector least-squares update there; (b) leave.
+  Recommendation (b): with one rigid body the secant method is Aitken's (QA3).
+
+### For the lead: roadmap entries
+
+Proposed status of F-361: **done** (`[x]`), acceptance still the maintainer's.
+
+Note text for F-361:
+
+> DONE pending acceptance (ADR 0261, 2026-11-12; registered before the code, no amendment). Opt-in fsi::Relaxation::LeastSquares { initial, filter } (CouplingSettings::least_squares) in cosim::coupled_step: after a first update relaxed with initial, the next nodal force is the flow's force plus the combination of the step's output differences whose residual differences best cancel the current residual (interface quasi-Newton with a least-squares inverse Jacobian), solved by Householder QR newest column first with a filter that drops a column whose part outside the newer ones is below 1e-2 of its norm (no vanishing pivot); no reuse across steps; fsi::strong_step refuses it. Derived: on a linear map it is GMRES plus one pass, exact at iteration d + 2. Measured on the model problem of ADR 0256 (6 nodes, 16 faces, tolerance 1e-8): every one of 650 steps converged, at most 7 iterations (one step), mean 5.980 (Aitken 8.766, histogram identical to ADR 0256), frequencies equal to Aitken's within 3.1e-10; one rigid node (SPm1): the same 301 iterations as Aitken, the same count in every step, positions bit-identical; the plain fixed point diverges (510.85 in 10). Mock affine and cubic fluids check the termination count and the equality with Aitken's secant. Existing suites cosim_f139, strong_fsi_f251, added_mass_f351 and the baseline hashes pass unedited; four mutations caught. Open: ADR 0261 Q1 to Q3.
