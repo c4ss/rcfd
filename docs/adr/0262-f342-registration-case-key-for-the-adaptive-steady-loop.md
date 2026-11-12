@@ -279,3 +279,16 @@ check not run: **partial** with the miss named.
 - **Q2. What `converged` means for the run.** Options: (a) the last solve's; (b) every solve's. Taken: (a), the state the
   run leaves; the stop reason names each solve's.
 - **Q3. Defaults of the table.** Taken: ADR 0242's run A, so an empty table is ADR 0242's loop.
+
+## Amendment 1 (2026-11-12, written after the registered run of S1 and before its corrected run)
+
+S1's test `s1_a_case_without_the_table_keeps_its_text_hash_and_mesh` failed at its first assertion: the text of T-S without
+the table contains the substring `adapt` because its title is "F-342 T-S: adapted Re 100 cavity on an 8 x 8 base", which
+`to_toml` and `to_json_string` write. The check searched for a substring that the set-up's own title holds: a defective
+set-up, not a property of the key. The other assertions of the test did not run.
+
+Corrected check **S1b** (a new test `s1b_a_case_without_the_table_keeps_its_text_hash_and_mesh`; the old test stays as an
+ignored record, otherwise unedited): the same as S1 with "contain no `adapt`" read as: the settings data has no
+`/mesh/adapt` (JSON pointer), `to_toml` has no line `[mesh.adapt]` and `to_json_string`'s value has no `adapt` key under
+`mesh`; and with the table: the data has `/mesh/adapt`, `to_toml` has the line `[mesh.adapt]`, and the settings hash differs.
+The limit (as stated) and every other clause are unchanged. S1b runs once.
