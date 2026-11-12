@@ -7290,7 +7290,10 @@ fixed by the item's registration ADR before any code.
     6.0e-15 (limit 1e-9). Amendment 1: slender models need ModalOptions::tolerance(1e-7) (residual floor of the
     eigensolver, c eps lambda_max/lambda_1); amendment 2: check C5 of the element mass matrices against closed forms
     added after mutation M8 (Tet10 mass with a degree-2 rule) survived the registered checks; eight of nine mutations
-    caught by the registered tests, M8 by C5. Partial by the rule until the maintainer accepts amendment 2.
+    caught by the registered tests, M8 by C5. Partial by the rule until the maintainer accepts amendment 2. ADR 0354
+    (2026-11-12): the slender-model tolerance of amendment 1 is answered by
+    ModalOptions::new(m).tolerance(1e-12).residual_test(ResidualTest::Backward), which converges for the 40 x 2 x 2
+    Tet10 cantilever in 7 iterations with the same frequencies.
 - [ ] **F-384** One-way coupling 1: loads of the F-237 deck applied to the solid surface
   - depends on: F-371, F-377, F-380, F-237
   - acceptance: Every limit not stated here is registered in the ADR before the run. A surface set of a solid mesh is
@@ -7356,7 +7359,9 @@ fixed by the item's registration ADR before any code.
     by the implementation agent before any code. ADR 0284 (2026-11-12): rcfd_fem::modal::modal_analysis gives the modes
     at rest; a slender blade needs ModalOptions::new(m).tolerance(1e-7) or so (the residual floor of lowest_eigenpairs
     is about c eps lambda_max/lambda_1, 2.7e-9 for a 40 x 2 x 2 Tet10 cantilever of L/b = 20), and modes are best
-    identified by effective mass fractions from mass::rigid_motions, as sb_modal does.
+    identified by effective mass fractions from mass::rigid_motions, as sb_modal does. ADR 0354 (2026-11-12): for a
+    slender blade use ModalOptions::new(m).tolerance(1e-12).residual_test(rcfd_linalg::eigen::ResidualTest::Backward)
+    instead of a hand-set relative tolerance; the default stays the relative test of ADR 0283.
 - [ ] **F-388** Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
   - depends on: F-370, F-372, F-374, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, element kinds,
@@ -8363,7 +8368,7 @@ fixed by the item's registration ADR before any code.
     100 (the control on the unchanged server, same day: 151.4 ms, 1.4 ms above the registered band of the control). An
     increment of 100 samples at 1e5: fetched in a median of 0.30 ms (control 21.1 ms), stored (800 pushes) in a median
     of 1.17 ms, limit 2 ms. Eight mutations caught. Done pending the maintainer's acceptance.
-- [ ] **F-457** Scale-aware convergence test of the subspace eigensolver
+- [x] **F-457** Scale-aware convergence test of the subspace eigensolver
   - depends on: F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run.
     rcfd_linalg::eigen::lowest_eigenpairs gains a residual test relative to an estimate of ||A|| ||x|| (for example from
@@ -8371,7 +8376,18 @@ fixed by the item's registration ADR before any code.
     cantilever of ADR 0284 then converges with the scale-aware tolerance 1e-12 in at most 20 iterations, its first two
     bending frequencies agree with the runs of ADR 0284 amendment 1 within 1e-10 relative, and every check of ADR 0283
     still passes with the default unchanged.
-  - note: From ADR 0284 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: Scale-aware convergence test of the subspace eigensolver (follow-up of F-383). ADR 0354, 2026-11-12:
+    rcfd_linalg::eigen::ResidualTest { Relative (default, the test of ADR 0283 D6, the same operations and bits),
+    Backward } selected by SubspaceOptions::residual_test and ModalOptions::residual_test; Backward measures each pair
+    by its normwise backward error ||A x - mu M x|| / ((||A||_inf + |mu| ||M||_inf) ||x||) (the pair is exact for a
+    pencil within that relative distance; rounding floor about c eps whatever lambda_max/lambda_1). Tet10 40 x 2 x 2
+    cantilever of ADR 0284 at the scale-aware tolerance 1e-12: converged in 7 iterations (limit 20), Sturm 6 = 6,
+    M-orthonormality 4.2e-15; its first two bending pairs equal the amendment-1 run bit for bit (limit 1e-10; both runs
+    stop at iteration 7, and runs stopping at iterations 4 to 8 deviate by at most 1.8e-15); the default test on this
+    tree reproduces the amendment-1 frequencies bit for bit; every ADR 0283 check (sb_eigen), every rcfd-fem test and
+    baseline_hashes pass unedited. Extensions: Hex8 40 x 2 x 2 converges in 7 iterations, equal to amendment 1; T^2
+    (kappa 2.7e8) converges in 7 iterations within 1.1e-9 of the closed form where the default test stops at its floor
+    2.8e-8 after 200. Seven mutations, all caught by registered tests. Done pending the maintainer's acceptance.
 - [ ] **F-458** Manufactured solution: the Tet4 traction-case L2 order on the pair 16 -> 32 as a registered check
   - depends on: F-378
   - acceptance: Every limit not stated here is registered in the ADR before the run, which discloses that ADR 0279 ran
@@ -8416,3 +8432,12 @@ fixed by the item's registration ADR before any code.
     0355, all boundary nodes prescribed, no body force: the relative L2 and energy errors are <= 1e-9, and the same test
     with the stiffness rule mutated to one point gives a relative energy error >= 1e-5.
   - note: From ADR 0355 addendum 1 (2026-11-12), Q1 recommendation.
+- [ ] **F-462** Scale-aware default of the modal analysis
+  - depends on: F-457
+  - acceptance: Every limit not stated here is registered in the ADR before the run. ModalOptions::new uses the
+    backward-error test of ADR 0354 at tolerance 1e-12 by default; every registered check of ADR 0284 is re-run with the
+    new default and meets its limit (the frequencies of the bar, free box and cantilever within 1e-10 relative of the
+    ADR 0284 runs, the free-box rigid ratio below 1e-6), the slender cantilever runs need no tolerance override, and the
+    ADR 0283 default of lowest_eigenpairs stays the relative test.
+  - note: From ADR 0354 addendum 1 (2026-11-12), Q1 recommendation; changes the default of ModalOptions, so the start is
+    the maintainer's call.
