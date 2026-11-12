@@ -4681,11 +4681,12 @@ Added after the static feature-gap review; wording is product-independent. Phase
     degrees; gas at rest, Cartesian grids, verification against closed forms only. Unchanged from wave 32B: FW-H 1A
     (fwh.rs), Gutin rotor tones (rotor.rs), metrics (acoustics.rs), surface-series reader, `rcfd fwh`, non-validated
     broadband proxies (noise_proxies.rs), docs/acoustics.md; W5a/W5b known misses (7.7e-2 and 6.7e-2 against 1e-2 and
-    1e-3). Not built: wave-equation solver with sponge layers, modal export, quadrupole volume term, comparison with a
-    measured fan, calibration of the proxy constants, on-the-fly sampling. Follow-ups (ADR 0233 questions 1, 2 and 4,
-    recommendations taken on the maintainer's standing instruction of 2026-11-11): F-330 (wiring), F-331 (sponge layer),
-    F-332 (frequency-dependent impedance), F-333 (wave solver and modal export). Open: question 3 (the reflection_value
-    default reflects 46 percent of a short pulse; changing it changes a default).
+    1e-3). Not built: quadrupole volume term, comparison with a measured fan, calibration of the proxy constants,
+    on-the-fly sampling. The wave-equation solver with sponge layers and the modal export were built under F-333 (ADR
+    0351, 2026-11-12, library only). Follow-ups (ADR 0233 questions 1, 2 and 4, recommendations taken on the
+    maintainer's standing instruction of 2026-11-11): F-330 (wiring), F-331 (sponge layer), F-332 (frequency-dependent
+    impedance), F-333 (wave solver and modal export). Open: question 3 (the reflection_value default reflects 46 percent
+    of a short pulse; changing it changes a default).
 
 ## Revision additions (F-244 to F-247)
 
@@ -6107,13 +6108,28 @@ fixed by the item's registration ADR before any code.
     incidence only checked; not together with a sponge, not on moving meshes; gas at rest, Cartesian grids, verification
     against closed forms only. The wiring (with one oblique angle and the wall together with a sponge, ADR 0243
     questions 1 to 3, recommendations taken on the maintainer's standing instruction of 2026-11-11) goes with F-330.
-- [ ] **F-333** Acoustic wave-equation solver and modal export
+- [x] **F-333** Acoustic wave-equation solver and modal export
   - depends on: F-243, F-331
   - acceptance: A duct mode propagates with the closed-form axial wavenumber within 1 percent; a sponge layer ends the
     duct with less than 1 percent reflection; the modal amplitudes of a synthetic field are exported and recovered
     within 1 percent.
-  - note: From ADR 0233 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. The
-    rest of the F-243 title, split from it.
+  - note: DONE pending acceptance, merged 2026-11-12. ADR 0351, 2026-11-12. The acceptance text is MET IN THE LIBRARY,
+    not from a case file. Built: rcfd-fv `acoustic_wave.rs` (`AcousticWaveSolver`), the linear acoustic equations about
+    a medium at rest on any FV mesh: exact linear Riemann flux, unlimited least-squares reconstruction, SSP-RK3;
+    boundaries `Wall`, `Open` (characteristic), `Driven` (a ghost state for an entering wave); sponge `WaveSponge` plain
+    or matched (the ADR 0237 layer in the linear unknowns) on `SpongeLayer`. rcfd-post `duct_modes.rs`: hard-walled
+    rectangular and circular duct modes (Bessel functions and zeros of J' computed), `axial_wavenumber`, `HarmonicDft`,
+    weighted least-squares section fit, axial split into the two directions (closed-form or fitted kz), modal power, the
+    `rcfd-duct-modes` v1 JSON export with located read errors. Registered checks, all met at the first run, no
+    amendment: a 0.12 m channel, 32 cells across, mode 1 at cos theta = 0.8 (2361 Hz): axial wavenumber 1.86e-3 below
+    the closed form sqrt(k^2 - k_mn^2) (limit 1e-2; a Fourier analysis of the scheme predicted -1.854e-3), loss 2.3e-3
+    per wavelength (limit 1e-2); a 40-cell matched layer before a rigid end reflects 9.0e-5 (limit 1e-2; 7.9e-5 on a
+    sheared mesh); a plain layer 9.8e-7 of the plane wave; the open end 0.109 against 1/9; the rigid end without a layer
+    1.003; a cut-off mode decays 1.7e-3 off the closed form; a synthetic rectangular field (five modes both ways and a
+    cut-off one) through DFT, fit, split and JSON recovered within 4e-15 and a circular section with two truncated modes
+    within 1.3e-4 (limit 1e-2). Eight mutations caught. Limits: medium at rest, linear, no impedance wall, not coupled
+    to a CFD run (the source is a driven boundary); the solver was checked in two-dimensional channels only (circular
+    modes in the export only); one planar layer; no case key or CLI (ADR 0351 question 1).
 - [x] **F-328** SV202's fuller text: what the solvers do with a case without boundary conditions
   - depends on: F-240
   - acceptance: For the compressible solver SV202 states that every patch is a slip wall and an outlet is extrapolated.
@@ -8168,3 +8184,21 @@ fixed by the item's registration ADR before any code.
     opposite sides; or the ADR names with a number what the moving fringe adds (the lag of the prescribed flux on the
     faces that change kind is the first candidate).
   - note: From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-451** rcfd duct-modes command.
+  - depends on: F-333
+  - acceptance: rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes
+    export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section
+    outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.
+  - note: From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden.
+- [ ] **F-452** Wave solver driven by a sampled CFD surface.
+  - depends on: F-333
+  - acceptance: A driven boundary built from an rcfd-surface-series file reproduces, in a duct, the modal amplitudes of
+    a closed-form duct field sampled into that file within 1 percent; a series that does not cover a whole number of
+    periods is refused.
+  - note: From ADR 0351 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-453** Circular and three-dimensional ducts through the wave solver.
+  - depends on: F-333
+  - acceptance: A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate
+    with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in
+    the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.
+  - note: From ADR 0351 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.

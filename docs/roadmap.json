@@ -1857,7 +1857,7 @@
     ],
     "status": "partial",
     "acceptance": "Impedance-tube reflection coefficient matches the closed form; a quiet boundary reflects a pulse by less than 1 percent",
-    "note": "Priority P3. Size M. Area: fv,post. WAVE 32B (ADR 0066) and the job of 2026-11-12 (ADR 0233). The acceptance text is MET IN THE LIBRARY, not from a case file. Built in ADR 0233: `CompBc::Impedance { p, z }` (rcfd-fv compressible_bc.rs `impedance_wall`), a locally reacting wall with a real specific impedance on the outgoing Riemann invariant, also on moving faces; the quiet boundaries are the matched impedance `z = rho c` (holds the ambient pressure) and the existing `NonReflecting` with `sigma = 0` (holds nothing). Registered checks, all met at the first run: impedance tube with a pulse for z/(rho c) = 0, 1/3, 1, 3, 19: R within 1.13e-3 of (z - rho c)/(z + rho c) (limit 1e-2); the quiet boundaries reflect 2.1e-5 (matched) and 5.8e-8 (Thompson) of a pulse (limit 1e-2); standing-wave ratio of a tone 3.006 and 3.004 against 3 (limit 2 percent); a uniform overpressure decays to 5.4e-5 with matched walls and stays with Thompson boundaries; oblique plane pulses at 30 and 45 degrees within 1.5e-2 of (z cos - rho c)/(z cos + rho c) and of (1 - cos)/(1 + cos) (limit 3e-2). Five mutations caught. Not done: case-schema wiring (a new key needs an approved edit of case_hashes_w48u.rs; this is why the status is partial). Limits: real, frequency-independent impedance only; both quiet boundaries reflect 7 percent at 30 degrees and 17 percent at 45 degrees; gas at rest, Cartesian grids, verification against closed forms only. Unchanged from wave 32B: FW-H 1A (fwh.rs), Gutin rotor tones (rotor.rs), metrics (acoustics.rs), surface-series reader, `rcfd fwh`, non-validated broadband proxies (noise_proxies.rs), docs/acoustics.md; W5a/W5b known misses (7.7e-2 and 6.7e-2 against 1e-2 and 1e-3). Not built: wave-equation solver with sponge layers, modal export, quadrupole volume term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling. Follow-ups (ADR 0233 questions 1, 2 and 4, recommendations taken on the maintainer's standing instruction of 2026-11-11): F-330 (wiring), F-331 (sponge layer), F-332 (frequency-dependent impedance), F-333 (wave solver and modal export). Open: question 3 (the reflection_value default reflects 46 percent of a short pulse; changing it changes a default)."
+    "note": "Priority P3. Size M. Area: fv,post. WAVE 32B (ADR 0066) and the job of 2026-11-12 (ADR 0233). The acceptance text is MET IN THE LIBRARY, not from a case file. Built in ADR 0233: `CompBc::Impedance { p, z }` (rcfd-fv compressible_bc.rs `impedance_wall`), a locally reacting wall with a real specific impedance on the outgoing Riemann invariant, also on moving faces; the quiet boundaries are the matched impedance `z = rho c` (holds the ambient pressure) and the existing `NonReflecting` with `sigma = 0` (holds nothing). Registered checks, all met at the first run: impedance tube with a pulse for z/(rho c) = 0, 1/3, 1, 3, 19: R within 1.13e-3 of (z - rho c)/(z + rho c) (limit 1e-2); the quiet boundaries reflect 2.1e-5 (matched) and 5.8e-8 (Thompson) of a pulse (limit 1e-2); standing-wave ratio of a tone 3.006 and 3.004 against 3 (limit 2 percent); a uniform overpressure decays to 5.4e-5 with matched walls and stays with Thompson boundaries; oblique plane pulses at 30 and 45 degrees within 1.5e-2 of (z cos - rho c)/(z cos + rho c) and of (1 - cos)/(1 + cos) (limit 3e-2). Five mutations caught. Not done: case-schema wiring (a new key needs an approved edit of case_hashes_w48u.rs; this is why the status is partial). Limits: real, frequency-independent impedance only; both quiet boundaries reflect 7 percent at 30 degrees and 17 percent at 45 degrees; gas at rest, Cartesian grids, verification against closed forms only. Unchanged from wave 32B: FW-H 1A (fwh.rs), Gutin rotor tones (rotor.rs), metrics (acoustics.rs), surface-series reader, `rcfd fwh`, non-validated broadband proxies (noise_proxies.rs), docs/acoustics.md; W5a/W5b known misses (7.7e-2 and 6.7e-2 against 1e-2 and 1e-3). Not built: quadrupole volume term, comparison with a measured fan, calibration of the proxy constants, on-the-fly sampling. The wave-equation solver with sponge layers and the modal export were built under F-333 (ADR 0351, 2026-11-12, library only). Follow-ups (ADR 0233 questions 1, 2 and 4, recommendations taken on the maintainer's standing instruction of 2026-11-11): F-330 (wiring), F-331 (sponge layer), F-332 (frequency-dependent impedance), F-333 (wave solver and modal export). Open: question 3 (the reflection_value default reflects 46 percent of a short pulse; changing it changes a default)."
   },
   {
     "id": "F-244",
@@ -2765,9 +2765,9 @@
       "F-243",
       "F-331"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "A duct mode propagates with the closed-form axial wavenumber within 1 percent; a sponge layer ends the duct with less than 1 percent reflection; the modal amplitudes of a synthetic field are exported and recovered within 1 percent.",
-    "note": "From ADR 0233 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. The rest of the F-243 title, split from it."
+    "note": "DONE pending acceptance, merged 2026-11-12. ADR 0351, 2026-11-12. The acceptance text is MET IN THE LIBRARY, not from a case file. Built: rcfd-fv `acoustic_wave.rs` (`AcousticWaveSolver`), the linear acoustic equations about a medium at rest on any FV mesh: exact linear Riemann flux, unlimited least-squares reconstruction, SSP-RK3; boundaries `Wall`, `Open` (characteristic), `Driven` (a ghost state for an entering wave); sponge `WaveSponge` plain or matched (the ADR 0237 layer in the linear unknowns) on `SpongeLayer`. rcfd-post `duct_modes.rs`: hard-walled rectangular and circular duct modes (Bessel functions and zeros of J' computed), `axial_wavenumber`, `HarmonicDft`, weighted least-squares section fit, axial split into the two directions (closed-form or fitted kz), modal power, the `rcfd-duct-modes` v1 JSON export with located read errors. Registered checks, all met at the first run, no amendment: a 0.12 m channel, 32 cells across, mode 1 at cos theta = 0.8 (2361 Hz): axial wavenumber 1.86e-3 below the closed form sqrt(k^2 - k_mn^2) (limit 1e-2; a Fourier analysis of the scheme predicted -1.854e-3), loss 2.3e-3 per wavelength (limit 1e-2); a 40-cell matched layer before a rigid end reflects 9.0e-5 (limit 1e-2; 7.9e-5 on a sheared mesh); a plain layer 9.8e-7 of the plane wave; the open end 0.109 against 1/9; the rigid end without a layer 1.003; a cut-off mode decays 1.7e-3 off the closed form; a synthetic rectangular field (five modes both ways and a cut-off one) through DFT, fit, split and JSON recovered within 4e-15 and a circular section with two truncated modes within 1.3e-4 (limit 1e-2). Eight mutations caught. Limits: medium at rest, linear, no impedance wall, not coupled to a CFD run (the source is a driven boundary); the solver was checked in two-dimensional channels only (circular modes in the export only); one planar layer; no case key or CLI (ADR 0351 question 1)."
   },
   {
     "id": "F-328",
@@ -4253,5 +4253,38 @@
     "status": "todo",
     "acceptance": "With OversetSolver::set_fringe_flux(PrescribedOwnGradient) and the quadratic donor interpolation of F-336, the Taylor-Green set-up of ADR 0219 with the moving, turning component (levels 1 and 2, the corrected time step of its amendment 2) is run against the default coupling with the same stencils: the largest velocity error over the calculated and fringe cells is at most 1.2 times that of the default coupling at both levels, continuity and the outflow balance hold to 1e-9 in every step, and no step is refused for a calculated cell between fringe cells on opposite sides; or the ADR names with a number what the moving fringe adds (the lag of the prescribed flux on the faces that change kind is the first candidate).",
     "note": "From ADR 0347 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+  },
+  {
+    "id": "F-451",
+    "title": "rcfd duct-modes command.",
+    "phase": 9,
+    "deps": [
+      "F-333"
+    ],
+    "status": "todo",
+    "acceptance": "rcfd duct-modes reads a saved pressure time series on a duct section and writes the rcfd-duct-modes export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.",
+    "note": "From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden."
+  },
+  {
+    "id": "F-452",
+    "title": "Wave solver driven by a sampled CFD surface.",
+    "phase": 9,
+    "deps": [
+      "F-333"
+    ],
+    "status": "todo",
+    "acceptance": "A driven boundary built from an rcfd-surface-series file reproduces, in a duct, the modal amplitudes of a closed-form duct field sampled into that file within 1 percent; a series that does not cover a whole number of periods is refused.",
+    "note": "From ADR 0351 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11."
+  },
+  {
+    "id": "F-453",
+    "title": "Circular and three-dimensional ducts through the wave solver.",
+    "phase": 9,
+    "deps": [
+      "F-333"
+    ],
+    "status": "todo",
+    "acceptance": "A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate with the closed-form axial wavenumber within 1 percent after the polygonal cut-off error of the grid, estimated in the registration, is accounted for; a matched layer ends the duct with less than 1 percent reflection.",
+    "note": "From ADR 0351 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11."
   }
 ]
