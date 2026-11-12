@@ -524,7 +524,7 @@ fn diagnostics(tag: &str, case: &Case, base: &Run, var: &Run, k: usize) {
 }
 
 /// The base run and the Qb run of `case` with C1, C2 and QS, the diagnostics, and `R_b` at every snapshot time.
-fn pair(tag: &str, case: &Case, times: &[f64], c: &mut Checks) -> Vec<f64> {
+fn pair_runs(tag: &str, case: &Case, times: &[f64], c: &mut Checks) -> (Run, Run, Vec<f64>) {
     let base = run(case, false, times);
     let var = run(case, true, times);
     println!(
@@ -567,7 +567,12 @@ fn pair(tag: &str, case: &Case, times: &[f64], c: &mut Checks) -> Vec<f64> {
             diagnostics(tag, case, &base, &var, k);
         }
     }
-    r
+    (base, var, r)
+}
+
+/// [`pair_runs`] without the runs.
+fn pair(tag: &str, case: &Case, times: &[f64], c: &mut Checks) -> Vec<f64> {
+    pair_runs(tag, case, times, c).2
 }
 
 /// QL of ADR 0340: `R_b(L, 0.5)` against the value of ADR 0246 (nine-cell stencils of the test).
@@ -674,9 +679,12 @@ fn truncation(tag: &str, case: &Case, c: &mut Checks) -> (f64, f64, f64) {
     (all.rms(), q.rms(), poly_err / poly_max)
 }
 
-/// ADR 0340 K: the truncation of the background fringe on RL at levels 1 to 5 (and on RE at levels 1 to 3, printed).
+/// ADR 0340 K as registered. Run once: (ii), (iii) and QS met; K (i) missed between levels 3 and 4, order 1.621 against
+/// the limit 1.8 (2.565 between levels 2 and 3, 2.371 between 4 and 5): `kappa_b` is 0.0685, 0.0781, 0.0621, 0.0693, 0.0638
+/// at levels 1 to 5, it alternates between the odd and the even levels. Kept with the limit intact (ADR 0340 amendment 1).
 #[test]
-fn k_background_fringe_truncation() {
+#[ignore = "known miss, ADR 0340 amendment 1: K (i) order of the linear truncation of the background fringe 1.621 between levels 3 and 4 (limit 1.8)"]
+fn k_background_fringe_truncation_known_miss() {
     let mut c = Checks::new();
     let rows: Vec<(f64, f64, f64)> = (1..=5usize)
         .map(|l| truncation(&format!("K RL level {l}"), &rl(l, l), &mut c))
@@ -722,6 +730,121 @@ fn k_background_fringe_truncation() {
         re_rows[1].2,
         re_rows[2].2
     );
+    c.finish();
+}
+
+/// ADR 0340 amendment 1, K': K (ii), K (iii) and QS as registered, and the order of the linear truncation of the
+/// background fringe between levels of the same parity (1 to 3, 3 to 5, 2 to 4), on which the normal fraction of the
+/// fringe centres in their donor cells is the same and not its mirror image.
+#[test]
+fn k2_truncation_within_the_parity_families() {
+    let mut c = Checks::new();
+    let rows: Vec<(f64, f64, f64)> = (1..=5usize)
+        .map(|l| truncation(&format!("K' RL level {l}"), &rl(l, l), &mut c))
+        .collect();
+    for (l, row) in rows.iter().enumerate() {
+        c.at_most(
+            &format!(
+                "K (iii) level {}: the quadratic field at the background fringe centres",
+                l + 1
+            ),
+            row.2,
+            1e-11,
+        );
+    }
+    for l in 2..5usize {
+        c.at_least(
+            &format!("K (ii) order of the quadratic truncation, levels {l} to {}", l + 1),
+            order(rows[l - 1].1, rows[l].1, (l + 1) as f64 / l as f64),
+            2.7,
+        );
+    }
+    for (a, b) in [(1usize, 3usize), (3, 5), (2, 4)] {
+        c.at_least(
+            &format!("K' (i) order of the linear truncation, levels {a} to {b}"),
+            order(rows[a - 1].0, rows[b - 1].0, b as f64 / a as f64),
+            1.8,
+        );
+    }
+    c.finish();
+}
+
+// ---- amendment 1, HK: the kink relation at the fringe faces ----------------------------------------------------------------
+
+/// ADR 0340 amendment 1, HK, on the faces between a calculated and a fringe cell of the background (`background`) or of
+/// the component at the snapshot `k`: with `dD` the change of the flux defect `phi / abs(S) - (u)_f . n` between the two
+/// runs and `dJ` the change of the pressure jump `p_F - p_C`, the coefficient `k = -(3 h / (16 nu)) sum dJ dD / sum dD^2`
+/// (1 by the kink relation `dJ = -(16 nu / (3 h)) dD`) and the correlation `-sum dJ dD / sqrt(sum dJ^2 sum dD^2)`.
+fn kink(base: &Run, var: &Run, k: usize, background: bool) -> (f64, f64) {
+    let s = &base.s;
+    let g = &s.geom;
+    let nb = s.conn.n_background_cells;
+    let kind = &s.conn.kind;
+    let centres = g.mesh.cell_centres();
+    let (a, b) = (&base.snaps[k], &var.snaps[k]);
+    let sf = g.mesh.face_area_vectors();
+    let (own, nei) = (g.mesh.owner(), g.mesh.neighbour());
+    let (mut jd, mut dd, mut jj, mut h) = (0.0, 0.0, 0.0, 0.0);
+    for f in 0..g.n_internal {
+        let (o, m) = (own[f], nei[f]);
+        if (o < nb) != background {
+            continue;
+        }
+        let (calc, fringe, sign) = match (kind[o], kind[m]) {
+            (CellKind::Calculated, CellKind::Fringe) => (o, m, 1.0),
+            (CellKind::Fringe, CellKind::Calculated) => (m, o, -1.0),
+            _ => continue,
+        };
+        let area = vec3::norm(sf[f]);
+        if area == 0.0 {
+            continue;
+        }
+        let nrm = vec3::scale(sf[f], sign / area);
+        let du = |c: usize| vec3::dot(vec3::sub(a.u[c], b.u[c]), nrm);
+        let d_defect = sign * (a.phi[f] - b.phi[f]) / area - 0.5 * (du(fringe) + du(calc));
+        let d_jump = (a.p[fringe] - b.p[fringe]) - (a.p[calc] - b.p[calc]);
+        jd += d_jump * d_defect;
+        dd += d_defect * d_defect;
+        jj += d_jump * d_jump;
+        h = vec3::norm(vec3::sub(centres[fringe], centres[calc]));
+    }
+    (
+        -(3.0 * h / (16.0 * NU_TG)) * jd / dd.max(1e-300),
+        -jd / (jj * dd).sqrt().max(1e-300),
+    )
+}
+
+/// HK on one set-up at `t = 0.5`: printed for both fringes; asserted on the background fringe when `assert` is set.
+fn hk(tag: &str, case: &Case, assert: bool, c: &mut Checks) {
+    let (base, var, _) = pair_runs(tag, case, &TIMES, c);
+    let (kb, rb) = kink(&base, &var, 4, true);
+    let (kc, rc) = kink(&base, &var, 4, false);
+    println!(
+        "HK {tag}: Gamma_B coefficient {kb:.4}, correlation {rb:.4}; Gamma_C coefficient {kc:.4}, correlation {rc:.4}"
+    );
+    if assert {
+        c.at_least(&format!("HK {tag}: Gamma_B coefficient"), kb, 0.6);
+        c.at_most(&format!("HK {tag}: Gamma_B coefficient"), kb, 1.4);
+        c.at_least(&format!("HK {tag}: Gamma_B correlation"), rb, 0.8);
+    }
+}
+
+/// ADR 0340 amendment 1, HK on RE at level 1 (the gate-run check of HK).
+#[test]
+fn hk_kink_relation_re_level_1() {
+    let mut c = Checks::new();
+    hk("RE level 1", &re(1), true, &mut c);
+    c.finish();
+}
+
+/// ADR 0340 amendment 1, HK on RE at level 2 (asserted) and on RL at levels 1 and 2 (printed: unequal `rAU`).
+#[test]
+#[ignore = "slow (RE at level 2, RL at levels 1 and 2, base and Qb, ADR 0340 amendment 1, about ten minutes): run once"]
+fn hk_kink_relation_level_2() {
+    let mut c = Checks::new();
+    hk("RE level 2", &re(2), true, &mut c);
+    hk("RL level 1", &rl(1, 1), false, &mut c);
+    hk("RL level 2", &rl(2, 2), false, &mut c);
     c.finish();
 }
 

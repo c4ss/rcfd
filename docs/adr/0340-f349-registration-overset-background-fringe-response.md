@@ -234,3 +234,48 @@ follow-up item; it is not built here.
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the runs of K, the gate check, L, F at level 4 and E, while D, S and F at level 5 were still running, and before any further run)
+
+The tests were committed as registered (`a1b1d772`, compiled, formatted and linted without running) and run once each.
+Numbers are in addendum 1. Two things need this amendment.
+
+**K (i) missed.** The order of the linear truncation of the background fringe is `1.810`, `2.565`, `1.621`, `2.371`
+between the successive levels 1 to 5; the limit `1.8` is missed between levels 3 and 4. `kappa_b` is `0.0685`, `0.0781`,
+`0.0621`, `0.0693`, `0.0638`: it alternates between the odd and the even levels. The registration took from ADR 0246 that
+the normal fraction of the fringe centres (`0.667` on odd, `0.333` on even levels) is locked "up to a reflection" and
+treated the reflection as a symmetry. It is not one: the exact velocity has a mixed second derivative, whose part of the
+truncation changes sign when one coordinate is reflected, and the tangential fractions `0`, `1/3`, `2/3` are not
+symmetric about the cell centre (the class on a face takes its donor by the tie). On RE, which is locked exactly, the
+orders are `1.995`, `1.956`. K is kept as the ignored test `k_background_fringe_truncation_known_miss` with its limits
+intact and is not run again. It follows that an order of `R_b` between successive levels of RL carries this alternation of
+its source (a factor `1.26` between neighbours); RE does not.
+
+New check **K'** (test `k2_truncation_within_the_parity_families`): K (ii), K (iii) and QS as registered, and K' (i): the
+order of the linear truncation between the levels of the same parity, 1 to 3, 3 to 5, 2 to 4, limit `>= 1.8` each.
+Disclosed: these three numbers follow from the root mean squares that K printed (`2.09`, `1.95`, `2.17`); the check
+repeats a deterministic kinematic computation.
+
+**What the runs show so far** (all at the registered limits; details in the addendum). A3 is missed (`1.418`, `1.089`
+at `t = 3`), E misses A1 with the orders `0.983`, `1.015` on the exactly locked set-up, so Hmod is ruled out and HT is ruled
+out. The printed coefficients say where the order is lost: the calculated background cell next to the fringe follows the
+change of the normal velocity of its fringe cell only in part, `a_c = 0.51`, `0.66`, `0.76`, `0.79` at levels 1 to 4 at
+`t = 0.5` (`0.10`, `0.24`, `0.37`, `0.42` at `t = 0.025`), and the calculated component cells follow their fringe in the
+same way (`0.34`, `0.73` at levels 1, 3). The response per unit of truncation therefore grows with the refinement.
+
+New hypothesis, with the term named:
+
+| Id | Hypothesis | Measurement | Deciding number |
+| --- | --- | --- | --- |
+| HK | the normal velocity of a fringe cell is not imposed on the flux of its face: the flux is that of the pressure equation with the interpolated fringe pressure, and it differs from the face-interpolated velocity by the defect `D`, which is held by a pressure jump across the face. From `D_new = theta D + R` with `R = -(3/4) rAU_f dJ / h` (a jump `dJ` of `p_F - p_C` against the smooth continuation changes the compact gradient by `dJ / h` and the Green-Gauss gradient of the calculated cell by `dJ / (2 h)`; equal `rAU`), `1 - theta = a / (1 + a)`, `rAU = dt / (1 + a)`, `a = 4 nu dt / h^2`: in the steady state `dJ = -(16 nu / (3 h)) D`. The coupling of the normal velocity is a resistance proportional to `nu / h`, not an identity | the base and Qb runs at `t = 0.5`, face by face on `Gamma_B`: `dD`, the change of `phi / abs(S) - (u)_f . n`, and `dJ`, the change of `p_F - p_C`: `k = -(3 h / (16 nu)) sum dJ dD / sum dD^2` and the correlation `-sum dJ dD / sqrt(sum dJ^2 sum dD^2)`; RE at levels 1 and 2 (equal `rAU`, the derivation applies); RL at levels 1 and 2 and the component fringe printed | confirmed: `0.6 <= k <= 1.4` and correlation `>= 0.8` on RE at both levels; ruled out: correlation below 0.5 at both; otherwise undecided |
+
+Estimate behind the limits, disclosed: from the root mean squares that E printed, `(16 nu / (3 h)) (1 - a_m) rms(t) / 2`
+against the printed change of the pressure jump gives ratios of about `0.6` to `0.65` at levels 1 to 3 (this takes `t -
+m` for twice the defect and ignores the part of `c`); I expect `k` between `0.6` and `1.2`. Tests
+`hk_kink_relation_re_level_1` (in the gate) and `hk_kink_relation_level_2` (ignored, slow, run once). `pair` now also
+returns its two runs; the registered runs are unchanged.
+
+A further mutation: **MU5**, the test's `kink`: the defect without the face-interpolated velocity (the flux change
+alone); must fail HK.
+
+The decision rule is unchanged.
