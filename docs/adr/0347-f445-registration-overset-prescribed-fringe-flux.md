@@ -283,3 +283,34 @@ A2 near the limit, I do not know on which side; A3 unknown, more likely missed t
 ## Open questions
 
 Listed with options and a recommendation in the addendum, after the results.
+
+## Amendment 1 (2026-11-12, written after the code was committed and after one run of the unit check G0, before any other run of a check)
+
+The library code and the tests were committed as `ce343abb` (compiled, formatted). Three things need this amendment
+before the checks run.
+
+**G0 missed, a defective check.** G0 ran once: the gradient of D5 is off by `2.02e-12` against the limit `1e-12` (76 ring
+cells; with the fringe values the Green-Gauss gradient is off by `3.1e3`, the control). The limit is absolute and the
+registered fringe values have the size `1e3`: their terms `p_f S_f / V`, of the size `500 / h = 6.4e3`, are added by the
+Green-Gauss sum and taken off again by D5, which leaves a round-off of `6.4e3` times the machine precision, `1.4e-12`, per
+face. The registration wrote "exact for a linear field" and did not count this. G0 is kept as the ignored unit test
+`g0_..._known_miss` with its limit intact and is not run again. Corrected check **G0b**: the same with fringe values of
+the size of the pressure itself (10 times the fixed sequence, at most 5 in size), limit `<= 1e-12` (round-off estimate:
+`5 / (2 h) * 2.2e-16 * 4 = 3e-14`), the control "the Green-Gauss gradient is off by more than 1" and the refusal as
+registered. MU2 must fail G0b.
+
+**UA needs the pressure gradient on the boundary.** The library gives the pressure a zero gradient on a face with a
+fixed velocity, so the Green-Gauss gradient of a cell on the domain boundary is half of `-a` in the normal direction and
+the uniformly accelerating flow is not a discrete solution for any coupling. The set-up of UA and UA2 therefore passes the
+exact gradient `dp/dn = -a . n` on the four background sides through `OversetStep::wall_dpdn` (the library's fixed-flux
+wall gradient, ADR 0219 M10; the public field of the prepared step) in every step. With it the boundary value is `p_C +
+d_n dp/dn`, exact for the linear pressure, and the argument of the set-up holds. The committed test already does this;
+no UA run was made before this amendment. Limits unchanged.
+
+**B1, where the reference hashes were measured.** Registered: on a `git archive` copy of 8165a0b3. Done instead in the
+worktree at the registration commit `80216482`, whose `crates` directory is that of 8165a0b3 (`git diff 8165a0b3 80216482
+-- crates` is empty), with a test file that held the set-ups and the hash of B1 only and before `overset.rs` was edited:
+RE `65f3bb871ad94a6d`, U `7c424f2255adfe35` (log `f445-scratch/b1-base.log`). The same library, one build less. The
+committed test compares against these two constants.
+
+The decision rule is unchanged.
