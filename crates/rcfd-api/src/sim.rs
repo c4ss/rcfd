@@ -2866,6 +2866,12 @@ impl Simulation {
         self.dynmesh.as_ref().and_then(|d| d.body())
     }
 
+    /// The fixed-flux pressure gradient of the moving walls of the last step of a `dynamic_mesh` run (ADR 0269 D2): one
+    /// entry per boundary face, `NaN` off the following and resting walls; empty without a moving mesh or before a step.
+    pub fn dynamic_wall_gradients(&self) -> &[f64] {
+        self.dynmesh.as_ref().map_or(&[], |d| d.wall_gradients())
+    }
+
     /// The records of the strongly coupled steps of a six-DOF run (`[dynamic_mesh.six_dof.coupling] scheme = "strong"`,
     /// ADR 0266); empty otherwise.
     pub fn coupling_records(&self) -> &[crate::dynmesh::CouplingRecord] {

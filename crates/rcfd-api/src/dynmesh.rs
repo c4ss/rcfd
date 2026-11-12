@@ -6,7 +6,9 @@
 //! piston. ADR 0257 (the rest of F-259): characteristic conditions on moving faces (F-258, ADR 0207), the opt-in mesh-speed
 //! step `[dynamic_mesh.compressible] time_step`, and the extruded layer stack of `[mesh.box_3d] section` (F-257, ADR 0213)
 //! for prism layers and for layering on the piso / pimple path. F-350 (ADR 0266): the optional table
-//! `[dynamic_mesh.six_dof.coupling]` selects the strong body-flow coupling of `rcfd_fv::fsi::strong_step`.
+//! `[dynamic_mesh.six_dof.coupling]` selects the strong body-flow coupling of `rcfd_fv::fsi::strong_step`. F-358 (ADR 0269):
+//! its key `wall_pressure` selects the wall pressure of the body force (`rcfd_fv::sixdof::patch_force_moment_wall_gradient`
+//! with the fixed-flux gradient vector of the last step, which the driver keeps).
 
 use crate::case::{Case, Diagnostic};
 use crate::sim::{get_b, get_f, get_i, get_s, get_v};
@@ -16,9 +18,14 @@ use rcfd_core::units::Dimension;
 use rcfd_core::vec3::{self, Vec3};
 use rcfd_fv::ale::{move_mesh, set_follow_conditions, set_rest_conditions};
 use rcfd_fv::compressible::{CompressibleSolver, Cons};
-use rcfd_fv::fsi::{relaxation_from_added_mass, strong_step, BodyCoupling, Relaxation, StrongCoupling};
+use rcfd_fv::fsi::{
+    relaxation_from_added_mass, strong_step_with, BodyCoupling, Relaxation, StrongCoupling, WallPressure,
+};
 use rcfd_fv::pimple::{PimpleSolver, StepInfo};
-use rcfd_fv::sixdof::{patch_force_moment, quat_from_axis_angle, Body, BodySpec, BodyState, Integrator, Rotation};
+use rcfd_fv::sixdof::{
+    patch_force_moment, patch_force_moment_wall_gradient, quat_from_axis_angle, Body, BodySpec, BodyState, Integrator,
+    Rotation,
+};
 use rcfd_fv::smoothing::{smooth_displacement, PatchClass, SmoothingMethod};
 use rcfd_fv::FvGeometry;
 use rcfd_linalg::SolveControl;
@@ -110,11 +117,26 @@ fn coupling_schema() -> Schema {
             Schema::enumeration("stop", &["stop", "continue"])
                 .doc("strong: a step that reaches max_iterations without converging stops the run with a located message (stop), or is kept and the run goes on with one warning (continue)"),
         )
+        // F-358, ADR 0269 D1: acts with either scheme
+        .field(
+            "wall_pressure",
+            Schema::enumeration("extrapolated", &["extrapolated", "prescribed_gradient"])
+                .doc("Wall pressure of the body force on the following (and resting) walls, loose or strong: extrapolated = the cell value plus the cell gradient (patch_force_moment; first order there, low by 1/(4N) on a piston column of N cells, ADR 0252); prescribed_gradient = the normal part of the extrapolation from the fixed-flux pressure gradient of the last step (patch_force_moment_wall_gradient, ADR 0252, 0269)"),
+        )
 }
 
 /// True when the case writes the table `[dynamic_mesh.six_dof.coupling]`.
 fn written(case: &Case) -> bool {
     case.tree.to_json().pointer("/dynamic_mesh/six_dof/coupling").is_some()
+}
+
+/// The wall pressure of the body force (ADR 0269 D1; `extrapolated` without the table).
+fn wall_pressure(case: &Case) -> WallPressure {
+    if get_s(case, &format!("{COUPLING}.wall_pressure")) == "prescribed_gradient" {
+        WallPressure::PrescribedGradient
+    } else {
+        WallPressure::Extrapolated
+    }
 }
 
 /// True when the case asks for the strong coupling (ADR 0266 D1).
@@ -147,6 +169,13 @@ fn check_coupling(case: &Case, out: &mut Vec<Diagnostic>) {
                 "the strong coupling is derived and tested for integrator = \"rk4\" only (ADR 0250 Q6); use rk4",
             ));
         }
+    }
+    // ADR 0269 D3: a prescribed motion has no body force
+    if wall_pressure(case) == WallPressure::PrescribedGradient && get_s(case, "dynamic_mesh.motion") != "six_dof" {
+        out.push(d(
+            &key("wall_pressure"),
+            "the wall pressure of the body force belongs to motion = \"six_dof\" (a prescribed motion has no body force)",
+        ));
     }
     let tol = get_f(case, &key("tolerance"));
     if !(tol.is_finite() && tol > 0.0) {
@@ -702,6 +731,10 @@ pub struct DynMesh {
     stop: Option<String>,
     /// The warning of the first step that reached the cap with `at_cap = "continue"`, until the run takes it.
     cap_warning: Option<serde_json::Value>,
+    /// F-358, ADR 0269 D2: the wall pressure of the body force.
+    wall_pressure: WallPressure,
+    /// The fixed-flux pressure gradient of the walls of the last step (follow and rest walls; empty before the first).
+    wall_dpdn: Vec<f64>,
 }
 
 /// The strong coupling of a six-DOF body (ADR 0266 D2).
@@ -1027,6 +1060,8 @@ impl DynMesh {
             _ => None,
         };
         Ok(Some(DynMesh {
+            wall_pressure: wall_pressure(case),
+            wall_dpdn: Vec::new(),
             strong,
             records: Vec::new(),
             stop: None,
@@ -1179,7 +1214,21 @@ impl DynMesh {
         }
         let t_new = s.time + dt;
         if let Drive::Body(b, patches) = &mut self.drive {
-            let fm = patch_force_moment(&s.geom, &s.u, &s.p, self.rho, self.nu, patches, b.state.x)?;
+            // ADR 0269 D2: the corrected wall pressure with the vector of the last step (none on the first)
+            let fm = if self.wall_pressure == WallPressure::PrescribedGradient && !self.wall_dpdn.is_empty() {
+                patch_force_moment_wall_gradient(
+                    &s.geom,
+                    &s.u,
+                    &s.p,
+                    self.rho,
+                    self.nu,
+                    patches,
+                    b.state.x,
+                    &self.wall_dpdn,
+                )?
+            } else {
+                patch_force_moment(&s.geom, &s.u, &s.p, self.rho, self.nu, patches, b.state.x)?
+            };
             b.advance(dt, self.integrator, fm)?;
         }
         let new_points = self.new_points(t_new)?;
@@ -1195,6 +1244,8 @@ impl DynMesh {
                 }
             }
         }
+        // ADR 0269 D2: kept for the force of the next step (a copy; the step takes the vector)
+        self.wall_dpdn.clone_from(&walls);
         s.step_ale_with_walls(dt, st.geom, st.mesh_flux, walls)
     }
 
@@ -1214,7 +1265,17 @@ impl DynMesh {
             &self.control,
         );
         let mut points = |body: &Body| body_points(mesh0, geom0, rigid, moving, classes, method, control, body);
-        let step = strong_step(s, b, dt, &sd.coupling, &sd.settings, &mut points)?;
+        // ADR 0269 D2: `strong_step` is `strong_step_with(.., Extrapolated, ..)`; the vector is carried from step to step
+        let step = strong_step_with(
+            s,
+            b,
+            dt,
+            &sd.coupling,
+            &sd.settings,
+            self.wall_pressure,
+            &mut self.wall_dpdn,
+            &mut points,
+        )?;
         let residual = step.residuals.last().copied().unwrap_or(0.0);
         self.records.push(CouplingRecord {
             iterations: step.iterations,
@@ -1252,6 +1313,12 @@ impl DynMesh {
     /// The warning of the first capped step with `at_cap = "continue"` (ADR 0266 D2), once.
     pub(crate) fn take_cap_warning(&mut self) -> Option<serde_json::Value> {
         self.cap_warning.take()
+    }
+
+    /// The fixed-flux pressure gradient of the walls of the last step (ADR 0269 D2): one entry per boundary face, `NaN` off
+    /// the following and resting walls; empty before the first step and for a layered piston.
+    pub fn wall_gradients(&self) -> &[f64] {
+        &self.wall_dpdn
     }
 
     /// The records of the strongly coupled steps (empty for the loose coupling).
