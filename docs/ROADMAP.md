@@ -7142,7 +7142,9 @@ fixed by the item's registration ADR before any code.
     every node within 8.7e-19 (limit 1e-15) for Hex8, Tet4 and Tet10; documented node orders hold on the files (Tet10
     midpoints exact, Hex8 edges within 9.3e-17 L); stresses equal D eps within 1.5e-15; wrong-length arrays refused by
     name (and a result of another mesh as displacement). Eleven mutations caught. Not checked in a viewer (the
-    maintainer's visual check).
+    maintainer's visual check). ADR 0281 (2026-11-12): with a temperature load, IntegrationPointField::from_result
+    already gives the thermal stress D (eps - eps_th) and field.strain() stays the total strain B u; the thermal strain
+    per point is field.thermal_strain() (None without temperature).
 - [ ] **F-378** Verification by a manufactured solution: observed order of displacement and stress for the three elements
   - depends on: F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. Manufactured solution: a smooth
@@ -7171,7 +7173,7 @@ fixed by the item's registration ADR before any code.
     radial displacement error with Hex8 is >= 1.8.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0280; the registration is written
     by the implementation agent before any code.
-- [ ] **F-380** Thermal strain: nodal temperature field, expansion coefficient, thermal load and stress
+- [x] **F-380** Thermal strain: nodal temperature field, expansion coefficient, thermal load and stress
   - depends on: F-375, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. With a nodal temperature field, an
     expansion coefficient and a reference temperature: a uniformly heated, statically determinately held box expands by
@@ -7180,16 +7182,25 @@ fixed by the item's registration ADR before any code.
     -E alpha dT within 1e-10 (nu = 0.3); a linear temperature through the thickness of a free beam gives the curvature
     alpha dT/h within 1 percent and stresses below 1 percent of E alpha dT (Tet10); a model without temperature is
     bit-identical to the same model before this change.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size S. Stub ADR 0281; the registration is written
-    by the implementation agent before any code. ADR 0275 (2026-11-12): Load::Temperature is refused by
-    loads::nodal_load_vector with UnsupportedLoad (package ADR 0281); the thermal load replaces that arm. ADR 0276
-    (2026-11-12): in loads.rs only the Load::Temperature arm (other => unsupported) remains for ADR 0281; body loads are
-    sums over Element::integration_points with the mass rule (private helpers add_body_load and element_body_load can
-    carry the thermal load integrand); if the lead applied ADR 0276's replacement of ADR 0275's E3, that check asserts
-    the temperature refusal and must be replaced or dropped by ADR 0281. ADR 0277 (2026-11-12): the stress at a point is
-    computed in recover::IntegrationPointField::compute by Material::stress(eps, &PointContext::default(), &[]); the
-    thermal strain enters there (sigma = D (eps - eps_th)), and the strain energy of a thermally loaded model then needs
-    its own definition.
+  - note: DONE pending acceptance, merged 2026-11-12. Structural solver, basic tier (plan ADR 0270). ADR 0281,
+    2026-11-12: rcfd_fem::thermal: the one temperature field of a model (Load::Temperature { nodal, reference }; a
+    second one refused naming the key 'temperature'), the isotropic thermal strain alpha (T - T_ref) (1, 1, 1, 0, 0, 0)
+    from the nodal differences T_b - T_ref interpolated with the element's own functions, and the element load sum w B^T
+    D eps_th on the stiffness rule (element_thermal_load); loads::nodal_load_vector adds it (the last UnsupportedLoad
+    arm removed); recover::IntegrationPointField gives sigma = D (eps - eps_th) at the same points, keeps the thermal
+    strain per point (thermal_strain()) and its strain energy is the elastic energy 1/2 sum w (eps - eps_th) . sigma. nu
+    = 0.3, alpha dT = 6e-4, boxes with moved interior nodes, Tet4, Hex8, Tet10: free expansion under a 3-2-1 support u =
+    alpha dT x within 1.1e-13 and stresses within 1.1e-13 E alpha dT (limits 1e-10); box with rollers on all faces -E
+    alpha dT/(1 - 2 nu) within 1.4e-15; bar held at both ends with free sides sigma_xx = -E alpha dT within 5.6e-14, its
+    lateral field and reactions within 2.0e-12; free Tet10 beam with a linear temperature through the thickness:
+    curvature alpha dT/h within 2.8e-12 (limit 1e-2) and stresses 1.6e-12 E alpha dT (limit 1e-2); recovered stress in
+    discrete equilibrium with the reactions for random nodal temperatures within 4.0e-15; elastic energies within
+    4.9e-15 of the closed forms. A model without temperature is bit-identical to d4bde1e0: FNV digests of load vector,
+    displacement, reactions, residual and the recovered field of nine models (nodal force, all mechanical loads, a bar;
+    three kinds) equal (test sb_thermal_bits). Nine mutations caught. ADR 0275's E3 (sb_static) and ADR 0276's X1
+    (sb_loads) assert the thermal refusal and fail by construction: the lead deletes both blocks (ADR 0281 remaining
+    question 1, checked on a scratch copy as X3, X4). On merging, the lead removed the two now-obsolete refusal checks
+    (ADR 0275 E3 in sb_static, ADR 0276 X1 in sb_loads), as ADR 0281 recommended.
 - [ ] **F-381** Iterative route for larger models: CG with block Jacobi and incomplete Cholesky on the stiffness matrix
   - depends on: F-374, F-026
   - acceptance: Every limit not stated here is registered in the ADR before the run. CG on the stiffness matrix with (a)
@@ -7274,6 +7285,9 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0285; the registration is written
     by the implementation agent before any code. ADR 0278 (2026-11-12) added the rcfd-fem dependency of rcfd-post and
     the stub module rcfd_post::solid_loads; the solid result's VTK output is rcfd_post::solid_output::write_solid_vtu.
+    ADR 0281 (2026-11-12): the TEMP values of the deck map to Load::temperature(nodal, reference) with one value per
+    solid node (a model takes one temperature field; a second is refused); the expansion coefficient comes from
+    Material::isotropic_elastic.
 - [ ] **F-385** One-way coupling 2: fluid face forces in process, and a static solid as a co-simulation participant
   - depends on: F-374, F-377, F-139
   - acceptance: Every limit not stated here is registered in the ADR before the run. Fluid face forces on a wall are

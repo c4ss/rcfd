@@ -687,19 +687,7 @@ fn c4_thin_rotating_ring_e2_and_n3() {
 #[test]
 fn x1_to_x3_refusals() {
     let mesh = hex_box([0.0; 3], [1.0, 1.0, 1.0], [2, 1, 1]).unwrap();
-    let n = mesh.nodes().len();
-    // X1: the thermal load stays refused.
-    let mut m = model_of(mesh.clone(), 0.3);
-    m.add_load(Load::temperature(vec![350.0; n], 293.15)).unwrap();
-    let e = nodal_load_vector(&m, &[]).unwrap_err();
-    println!("X1: {e}");
-    assert!(matches!(
-        e,
-        FemError::UnsupportedLoad {
-            load: "Temperature",
-            package: "ADR 0281"
-        }
-    ));
+    // X1 (the thermal load refused) removed by the lead on 2026-11-12: ADR 0281 (F-380) builds it.
     // X2: a body load needs a material.
     let mut m = SolidModel::new(mesh.clone());
     m.add_load(Load::gravity([0.0, 0.0, -9.81])).unwrap();
