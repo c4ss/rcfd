@@ -84,14 +84,19 @@ fn uniform(x0: f64, len: f64, n: usize) -> Vec<f64> {
 }
 
 fn tg_overset_mesh(level: usize) -> Overset {
+    overset_mesh(level, 0.6, 0.25)
+}
+
+/// The composite of level `level` with a component of half width `half` and the hole `max(|x_ref|, |y_ref|) < hole`.
+fn overset_mesh(level: usize, half: f64, hole: f64) -> Overset {
     let bs = uniform(0.0, PI, 40 * level);
     let bg = rectilinear_2d(&bs, &bs, DEPTH).unwrap();
-    let cs = uniform(-0.6, 1.2, 20 * level);
+    let cs = uniform(-half, 2.0 * half, 20 * level);
     let comp = rectilinear_2d(&cs, &cs, DEPTH).unwrap();
     let composite = compose(&bg, &comp, "c_").unwrap();
     let spec = OversetSpec {
         outer_patches: ["c_xmin", "c_xmax", "c_ymin", "c_ymax"].map(String::from).to_vec(),
-        hole: Arc::new(|x: Vec3| x[0].abs().max(x[1].abs()) < 0.25),
+        hole: Arc::new(move |x: Vec3| x[0].abs().max(x[1].abs()) < hole),
     };
     Overset::new(composite, spec).unwrap()
 }
@@ -374,10 +379,20 @@ fn eps(s: &OversetSolver, c: usize, t: f64) -> f64 {
 /// TG_L of ADR 0219 in `steps` steps to `t = 0.5` with the motion `motion`; `donor_only` replaces every stencil by its donor
 /// cell with weight 1 after every `prepare` (N5).
 fn tg_run(level: usize, steps: usize, motion: Motion, donor_only: bool) -> Run {
+    run_on(
+        tg_overset_mesh(level),
+        level,
+        steps,
+        &|t| pose_of(motion, t),
+        donor_only,
+    )
+}
+
+/// A Taylor-Green run on the composite `ov` of level `level` with the pose `pose_at(t)`.
+fn run_on(ov: Overset, level: usize, steps: usize, pose_at: &dyn Fn(f64) -> Pose, donor_only: bool) -> Run {
     let t0 = Instant::now();
     let dt = T_END / steps as f64;
-    let ov = tg_overset_mesh(level);
-    let pose = pose_of(motion, 0.0);
+    let pose = pose_at(0.0);
     let geom = Arc::new(FvGeometry::new(Arc::new(mesh_at(&ov, &pose))).unwrap());
     let mut u = VectorField::from_fn("U", &geom, |x| tg_u(x, 0.0));
     tg_conditions(&geom, &mut u, 0.0);
@@ -396,7 +411,7 @@ fn tg_run(level: usize, steps: usize, motion: Motion, donor_only: bool) -> Run {
         let t = k as f64 * dt;
         let g = s.geom.clone();
         tg_conditions(&g, &mut s.u, t);
-        let mut st = s.prepare(dt, pose_of(motion, t), &[]).unwrap();
+        let mut st = s.prepare(dt, pose_at(t), &[]).unwrap();
         if donor_only {
             for (_, stn) in st.conn.stencils.iter_mut() {
                 *stn = Stencil {
@@ -1032,4 +1047,77 @@ fn smc_single_moving_mesh_time_error() {
     c.at_most("F8c SMc largest error, one outer iteration, 800 steps", e800, 1e-3);
     c.at_most("F9c (set-up) SMc correction |Q| / A", corr, 1e-5);
     c.finish();
+}
+
+// ---- amendment 3: the component at rest with the fringe phase locked between the levels (RL) -----------------------------
+
+/// Background cell size of level 1.
+const H1: f64 = PI / 40.0;
+
+/// RL of amendment 3: a component of half width `7.5 H1` (its cells are 3/4 of the background cells at every level) with
+/// its corner on the background node `(9 H1, 9 H1)` and the hole half width `3.1 H1`, so that every fringe centre falls at
+/// the same place in its donor cell at every level.
+fn rl_mesh(level: usize) -> Overset {
+    overset_mesh(level, 7.5 * H1, 3.1 * H1)
+}
+
+fn rl_pose() -> Pose {
+    Pose {
+        origin: [0.0; 3],
+        axis: [0.0, 0.0, 1.0],
+        angle: 0.0,
+        translation: [16.5 * H1, 16.5 * H1, 0.0],
+    }
+}
+
+/// Root mean square over the component fringe cells of the truncation of the exact velocity at `t = 0`, over `h_B^2`
+/// (kinematic).
+fn kappa(ov: &Overset, pose: &Pose, level: usize) -> f64 {
+    let mesh = mesh_at(ov, pose);
+    let conn = ov.connectivity(&mesh, pose).unwrap();
+    let nb = conn.n_background_cells;
+    let (mut sum, mut count) = (0.0, 0usize);
+    for (c, st) in conn.stencils.iter().filter(|(c, _)| *c >= nb) {
+        let i = truncation(mesh.cell_centres(), *c, st, 0.0);
+        sum += vec3::dot(i, i);
+        count += 1;
+    }
+    let h = H1 / level as f64;
+    (sum / count as f64).sqrt() / (h * h)
+}
+
+/// ADR 0232 amendment 3, H9: the order of the solved field at rest with the phase of the fringe locked between the levels
+/// (printed numbers; the hypothesis is decided in the ADR).
+#[test]
+#[ignore = "slow (levels 1 to 3 at rest, ADR 0232 amendment 3, minutes): run once"]
+fn a3_rest_with_the_fringe_phase_locked() {
+    for l in [1usize, 2, 3] {
+        println!(
+            "A3 level {l}: kappa = rms_CF |I| / h_B^2: registered rest pose {:.5}, RL {:.5}",
+            kappa(&tg_overset_mesh(l), &tg_pose(0.0), l),
+            kappa(&rl_mesh(l), &rl_pose(), l)
+        );
+    }
+    let runs: Vec<(Run, Stats)> = [1usize, 2, 3]
+        .iter()
+        .map(|&l| {
+            let r = run_on(rl_mesh(l), l, 200 * l, &|_| rl_pose(), false);
+            let st = stats(&r);
+            report("A3 RL", &r, &st);
+            (r, st)
+        })
+        .collect();
+    for w in runs.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        let k = b.0.level as f64 / a.0.level as f64;
+        println!(
+            "A3 RL, levels {} to {}: order of the calculated maximum {:.4}; of e {:.4}; of the root mean square {:.4}; of the CC root mean square {:.4}",
+            a.0.level,
+            b.0.level,
+            order(a.1.e_calc, b.1.e_calc, k),
+            order(a.1.e_all, b.1.e_all, k),
+            order(a.1.rms_all, b.1.rms_all, k),
+            order(a.1.class_rms[1], b.1.class_rms[1], k)
+        );
+    }
 }
