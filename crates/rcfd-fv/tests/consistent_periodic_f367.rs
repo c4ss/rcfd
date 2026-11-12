@@ -216,8 +216,13 @@ fn advance(flow: &mut PimpleSolver, dt: f64, hook_jump: Option<&FaceJump>) -> f6
 
 /// The default's steady state `S0`: 3000 steps from rest.
 fn steady(case: Case) -> (PimpleSolver, PimpleState) {
+    steady_n(case, 3000)
+}
+
+/// The default's state after `steps` steps from rest (ADR 0360 amendment 1: 8000 for PD and PX).
+fn steady_n(case: Case, steps: usize) -> (PimpleSolver, PimpleState) {
     let mut a = case.solver(case.settings(), false);
-    for _ in 0..3000 {
+    for _ in 0..steps {
         a.step(DT);
         assert!(a.diverged.is_none(), "{case:?}: the S0 run stopped: {:?}", a.diverged);
     }
@@ -425,10 +430,12 @@ fn tpn_transient_with_non_orthogonal_correctors_and_periodic_faces() {
     transient(Case::NonOrth, "PN");
 }
 
-/// ADR 0360 SDs, SEPD, S0PD, SFPD, SPsPD, S1PD.
+/// ADR 0360 SDs, SEPD, S0PD, SFPD, SPsPD, S1PD as registered. Defective set-up (ADR 0360 amendment 1): with the symmetry plane
+/// the x-uniform start-up decays at `nu (pi/2H)^2 = 2.47 /s`, so 3000 steps leave branch A moving by 1.11e-7 U0 (S0PD, limit
+/// 2e-11) and 1.13e-8 of the range in pressure (SFPD, limit 1e-8). Kept as the record; corrected by `s1pd2_...`.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn s1pd_periodic_identity_with_the_component_diagonal() {
+#[ignore = "defective set-up: S0 of PD is not steady after 3000 steps (ADR 0360 amendment 1)"]
+fn s1pd_periodic_identity_with_the_component_diagonal_defective_setup() {
     let case = Case::Diagonal;
     let one = |diag: bool| {
         let mut s = case.settings();
@@ -486,15 +493,37 @@ fn tpj_transient_with_a_face_jump_and_periodic_faces() {
     transient(Case::Jump, "PJ");
 }
 
-/// ADR 0360 SEPX, S0PX, SFPX, SPsPX, S1PX.
+/// ADR 0360 SEPX, S0PX, SFPX, SPsPX, S1PX as registered. Defective set-up (ADR 0360 amendment 1): as PD, branch A moves by
+/// 5.96e-8 U0 after 3000 steps (S0PX, limit 2e-11). Kept as the record; corrected by `s1px2_...`.
 #[test]
-#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
-fn s1px_periodic_identity_with_all_three() {
+#[ignore = "defective set-up: S0 of PX is not steady after 3000 steps (ADR 0360 amendment 1)"]
+fn s1px_periodic_identity_with_all_three_defective_setup() {
     let case = Case::All;
     let se = effect(case, "PX");
     let (mut a, s0) = steady(case);
     let r = identity(case, "PX", &mut a, &s0, false);
     assert_identity("PX", &r, se);
+}
+
+/// ADR 0360 amendment 1, S-PD2: S0PD2, SFPD2, SPsPD2, S1PD2 (`S0` from 8000 default steps; SDs and SEPD were met in the
+/// registered run and are not repeated, so the SE limit is not re-asserted here).
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn s1pd2_periodic_identity_with_the_component_diagonal_from_a_steady_state() {
+    let case = Case::Diagonal;
+    let (mut a, s0) = steady_n(case, 8000);
+    let r = identity(case, "PD2", &mut a, &s0, false);
+    assert_identity("PD2", &r, f64::INFINITY);
+}
+
+/// ADR 0360 amendment 1, S-PX2: S0PX2, SFPX2, SPsPX2, S1PX2 (`S0` from 8000 default steps; SEPX was met in the registered run).
+#[test]
+#[cfg_attr(debug_assertions, ignore = "heavy: run in release")]
+fn s1px2_periodic_identity_with_all_three_from_a_steady_state() {
+    let case = Case::All;
+    let (mut a, s0) = steady_n(case, 8000);
+    let r = identity(case, "PX2", &mut a, &s0, false);
+    assert_identity("PX2", &r, f64::INFINITY);
 }
 
 /// ADR 0360 P0 (printed only): ADR 0223's E2 alone on PC under this item's limits.
