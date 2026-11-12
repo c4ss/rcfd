@@ -1121,3 +1121,103 @@ fn a3_rest_with_the_fringe_phase_locked() {
         );
     }
 }
+
+// ---- amendment 4: the first-order term of the calculated component cells at rest ----------------------------------------
+
+/// Ring of every calculated component cell: 1 with a fringe face neighbour, `n + 1` with a face neighbour in ring `n`
+/// (0 for every other cell).
+fn rings(s: &OversetSolver) -> Vec<usize> {
+    let n = s.geom.n_cells();
+    let nb = s.conn.n_background_cells;
+    let ov = &s.coupling.as_ref().unwrap().overset;
+    let calc = |c: usize| c >= nb && s.conn.kind[c] == CellKind::Calculated;
+    let mut ring = vec![0usize; n];
+    let mut front: Vec<usize> = (nb..n)
+        .filter(|&c| calc(c) && ov.neighbours(c).iter().any(|&q| s.conn.kind[q] == CellKind::Fringe))
+        .collect();
+    let mut k = 1;
+    while !front.is_empty() {
+        for &c in &front {
+            ring[c] = k;
+        }
+        let mut next = Vec::new();
+        for &c in &front {
+            for &q in ov.neighbours(c) {
+                if calc(q) && ring[q] == 0 && !next.contains(&q) {
+                    next.push(q);
+                }
+            }
+        }
+        k += 1;
+        front = next;
+    }
+    ring
+}
+
+/// Root mean square (volume-weighted) and largest error at `t = 0.5` over the calculated component cells whose ring
+/// satisfies `pick`.
+fn ring_error(r: &Run, ring: &[usize], pick: impl Fn(usize) -> bool) -> (f64, f64) {
+    let vol = r.s.geom.mesh.cell_volumes();
+    let (mut sum, mut vsum, mut worst) = (0.0, 0.0, 0.0f64);
+    for c in 0..ring.len() {
+        if ring[c] > 0 && pick(ring[c]) {
+            let e = eps(&r.s, c, T_END);
+            sum += vol[c] * e * e;
+            vsum += vol[c];
+            worst = worst.max(e);
+        }
+    }
+    ((sum / vsum).sqrt(), worst)
+}
+
+/// ADR 0232 amendment 4, H10 and H11: the first-order term of the calculated component cells in RL (printed numbers; the
+/// hypotheses are decided in the ADR).
+#[test]
+#[ignore = "slow (RL at levels 1 to 3 and level 3 with half the step, ADR 0232 amendment 4, minutes): run once"]
+fn a4_first_order_term_of_the_component_at_rest() {
+    let mut rows = Vec::new();
+    for l in [1usize, 2, 3] {
+        let r = run_on(rl_mesh(l), l, 200 * l, &|_| rl_pose(), false);
+        let ring = rings(&r.s);
+        let deepest = ring.iter().copied().max().unwrap_or(0);
+        let all = ring_error(&r, &ring, |_| true);
+        let near = ring_error(&r, &ring, |k| k <= 2);
+        let inner = ring_error(&r, &ring, |k| k >= 4);
+        let profile: Vec<String> = (1..=6)
+            .map(|k| format!("{:.3e}", ring_error(&r, &ring, |q| q == k).0))
+            .collect();
+        println!(
+            "A4 RL level {l} ({:.1} s, {deepest} rings): CC rms {:.4e} max {:.4e}; rings 1 and 2 rms {:.4e} max {:.4e}; rings from 4 on rms {:.4e} max {:.4e}; rms of rings 1 to 6: {}",
+            r.secs,
+            all.0,
+            all.1,
+            near.0,
+            near.1,
+            inner.0,
+            inner.1,
+            profile.join(", ")
+        );
+        rows.push((l, all.0, near.0, inner.0));
+    }
+    for w in rows.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let k = b.0 as f64 / a.0 as f64;
+        println!(
+            "A4 RL, levels {} to {}: order of the CC rms {:.4}; H11 rings 1 and 2 {:.4}; rings from 4 on {:.4}",
+            a.0,
+            b.0,
+            order(a.1, b.1, k),
+            order(a.2, b.2, k),
+            order(a.3, b.3, k)
+        );
+    }
+    let fine = run_on(rl_mesh(3), 3, 1200, &|_| rl_pose(), false);
+    let ring = rings(&fine.s);
+    let half = ring_error(&fine, &ring, |_| true).0;
+    println!(
+        "A4 H10 RL level 3: CC rms with 1200 steps {half:.4e} ({:.1} s), with 600 steps {:.4e}: ratio {:.4}",
+        fine.secs,
+        rows[2].1,
+        half / rows[2].1
+    );
+}
