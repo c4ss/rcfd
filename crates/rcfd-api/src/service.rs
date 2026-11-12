@@ -2357,3 +2357,6 @@ mod tests {
         assert_eq!(bad["error"]["code"], code::INVALID_REQUEST);
     }
 }
+
+#[cfg(test)]
+mod monitors_f456;

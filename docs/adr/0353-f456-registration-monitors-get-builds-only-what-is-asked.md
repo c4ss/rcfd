@@ -195,3 +195,13 @@ E1 to E3b pass at once, as the wire writer is simple; the likely surprise is a k
   matter (ADR 0350, the shell).
 - I2 measures the store, not the solver's step.
 - The renderer's `JSON.parse` of 12 MB is not touched.
+
+## Amendment 1: E3h as the test file defines it (2026-11-12, written before any run of the new code)
+
+Checks E1 to E3b are as registered. Clarification of E3h, made after writing the service test and before running it on the
+changed code: the hash of E3h is taken over the lines the service wrote (not over a reference), for the 594 requests, three
+error requests, one request with `jsonrpc` "1.0", and one two-request connection. Where a reference exists (all requests with
+a result) the line equals the reference line, which E3 asserts; the error lines have no reference in the test, and the hash
+covers them. The test file `crates/rcfd-api/src/service/monitors_f456.rs` was written against the unchanged tree and passed
+its E2, E3 and E3b comparisons there; the constant `E3H` = 0xa918e7df5af7a64a was recorded from that run. The unchanged code
+is the "before". Committed before any code of the change.
