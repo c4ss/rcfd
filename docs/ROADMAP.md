@@ -8506,7 +8506,8 @@ fixed by the item's registration ADR before any code.
     evidenced by the contrast between the one-point rule on the moved and on the regular mesh. Follow-up proposed below.
     Partial by the lead's reading of the registered rule: the registered mutation M3 (unmoved mesh) was not caught by
     its registered check V2 (caught only by a rounding artifact of V1); the agent proposed done; done is the
-    maintainer's call.
+    maintainer's call. F-461 note addition: the remaining question 1 of ADR 0358 (V2 cannot see an unmoved mesh) is
+    closed by F-464 (ADR 0362, 2026-11-12).
 - [ ] **F-462** Scale-aware default of the modal analysis
   - depends on: F-457
   - acceptance: Every limit not stated here is registered in the ADR before the run. ModalOptions::new uses the
@@ -8539,14 +8540,23 @@ fixed by the item's registration ADR before any code.
     by one); the two registered equivalent mutants (the coupler's restore at the error, redundant for a structure
     failure) survived. Not covered: a failing fluid or time check in a later iteration, iterations beyond 3, a flow
     solver (open ADR 0361 Q1). Done pending the maintainer's acceptance.
-- [ ] **F-464** Element tests: the moved-mesh check of the Hex8 patch test measures the stored mesh
+- [x] **F-464** Element tests: the moved-mesh check of the Hex8 patch test measures the stored mesh
   - depends on: F-461
   - acceptance: Every limit not stated here is registered in the ADR before the run. In a new test file, for the moved
     boxes of ADR 0358 (n = 3, 4, 6; alpha 0.15 and 0.05; three draws), the rms of the offsets read from the stored node
     coordinates of the moved mesh against the regular builder mesh (interior nodes only, relative to h) is >= 0.3 alpha
     and the boundary nodes are unchanged bit for bit; the same test on an unmoved mesh (alpha = 0 passed through the
     same code) fails these checks; the existing tests are not edited.
-  - note: From ADR 0358 addendum 1 (2026-11-12), Q1 recommendation.
+  - note: From ADR 0358 addendum 1 (2026-11-12), Q1 recommendation. F-464 (ADR 0362, 2026-11-12): done pending
+    acceptance. New test file sb_patch_moved_stored.rs reads the node coordinates stored in the 18 moved Hex8 boxes of
+    ADR 0358 against the regular builder mesh: interior rms offset 0.534 to 0.634 alpha (limit 0.3 alpha, and an
+    absolute 1e-3), every interior node moved (min node maximum 3.9e-3 h against 1e-5), largest offset at most alpha,
+    boundary nodes unchanged bit for bit (0 differing), connectivity unchanged. The same code on an unmoved mesh (alpha
+    = 0) fails the rms and node-moved checks on all 18 meshes, also with the expected amplitude set to 0 (absolute
+    floors). Nine mutations (unmoved mesh through the real test, stored nodes unmoved, boundary moved, one boundary node
+    moved by 1e-12, offsets scaled 1e-4 and 1.1, every second node unmoved, connectivity rotated, control built moved)
+    each caught by the check registered for it. Tests only, ADR 0358 tests unedited. Done pending the maintainer's
+    acceptance.
 - [ ] **F-465** Coupled step: a failing fluid in a later iteration as a registered check
   - depends on: F-463
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock
