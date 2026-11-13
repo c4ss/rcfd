@@ -42,15 +42,25 @@ struct Evaluation {
     stress: Vec<[f64; 6]>,
 }
 
-fn deformation_gradient(grad: &[[f64; 3]], u: &[f64]) -> [[f64; 3]; 3] {
-    let mut f = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+/// The displacement gradient `H = F - I`, `H_iJ = sum_a u_ai g_aJ`.
+fn displacement_gradient(grad: &[[f64; 3]], u: &[f64]) -> [[f64; 3]; 3] {
+    let mut h = [[0.0; 3]; 3];
     for (a, g) in grad.iter().enumerate() {
-        for (i, row) in f.iter_mut().enumerate() {
+        for (i, row) in h.iter_mut().enumerate() {
             let ua = u[3 * a + i];
             for (j, v) in row.iter_mut().enumerate() {
                 *v += ua * g[j];
             }
         }
+    }
+    h
+}
+
+/// `F = I + H`.
+fn deformation_gradient(h: &[[f64; 3]; 3]) -> [[f64; 3]; 3] {
+    let mut f = *h;
+    for (i, row) in f.iter_mut().enumerate() {
+        row[i] += 1.0;
     }
     f
 }
@@ -60,17 +70,11 @@ fn det3(f: &[[f64; 3]; 3]) -> f64 {
         + f[0][2] * (f[1][0] * f[2][1] - f[1][1] * f[2][0])
 }
 
-/// The Green-Lagrange strain `(F^T F - I) / 2` in Voigt order with engineering shear.
-fn green_lagrange(f: &[[f64; 3]; 3]) -> [f64; 6] {
-    let c = |i: usize, j: usize| f[0][i] * f[0][j] + f[1][i] * f[1][j] + f[2][i] * f[2][j];
-    [
-        0.5 * (c(0, 0) - 1.0),
-        0.5 * (c(1, 1) - 1.0),
-        0.5 * (c(2, 2) - 1.0),
-        c(0, 1),
-        c(1, 2),
-        c(2, 0),
-    ]
+/// The Green-Lagrange strain `(F^T F - I) / 2 = (H + H^T + H^T H) / 2` in Voigt order with engineering shear, from `H`
+/// without forming `F^T F - I` (ADR 0404 amendment 1: the rounding is relative to `H`, not to 1).
+fn green_lagrange(h: &[[f64; 3]; 3]) -> [f64; 6] {
+    let e = |i: usize, j: usize| h[i][j] + h[j][i] + h[0][i] * h[0][j] + h[1][i] * h[1][j] + h[2][i] * h[2][j];
+    [0.5 * e(0, 0), 0.5 * e(1, 1), 0.5 * e(2, 2), e(0, 1), e(1, 2), e(2, 0)]
 }
 
 /// `B_NL` (6 x 3n, row-major): `delta E = B_NL delta u` (ADR 0404 D1).
@@ -134,7 +138,8 @@ fn evaluate<E: Element + ?Sized>(
     let mut db = vec![0.0; 6 * size];
     for (q, ip) in element.integration_points(coords, rule)?.iter().enumerate() {
         let grad = &ip.geometry.grad;
-        let f = deformation_gradient(grad, displacement);
+        let h = displacement_gradient(grad, displacement);
+        let f = deformation_gradient(&h);
         let det_f = det3(&f);
         if det_f.is_nan() || det_f <= 0.0 || det_f.is_infinite() {
             return Err(FemError::InvalidValue {
@@ -145,7 +150,7 @@ fn evaluate<E: Element + ?Sized>(
                 ),
             });
         }
-        let strain = green_lagrange(&f);
+        let strain = green_lagrange(&h);
         let (s, d) = material.stress(&strain, &context, &state.values()[q * ns..(q + 1) * ns])?;
         let b = b_nonlinear(grad, &f);
         for (c, fc) in force.iter_mut().enumerate() {
