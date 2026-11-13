@@ -81,7 +81,7 @@ fn solve3(m: [[f64; 3]; 3], b: Vec3) -> Vec3 {
 }
 
 /// Solve a symmetric 3x3 system, restricting to the active directions.
-fn solve_masked(mut m: [[f64; 3]; 3], b: Vec3, active: [bool; 3]) -> Vec3 {
+pub(crate) fn solve_masked(mut m: [[f64; 3]; 3], b: Vec3, active: [bool; 3]) -> Vec3 {
     let mut b = b;
     for d in 0..3 {
         if !active[d] {
