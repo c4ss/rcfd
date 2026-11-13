@@ -471,8 +471,8 @@ fn e5_refusals() {
 // ---------------------------------------------------------------------------------------------------------------------
 
 #[test]
-#[ignore = "heavy record (ADR 0370, H1, D5, D6, N2): Tet10 cantilever of slenderness 20, 121 680 unknowns, geometric aggregation; Hex8 default count at 1e-8; default Tet10 first coarse level"]
-fn h1_slender20_tet10_quadratic() {
+#[ignore = "known miss (ADR 0370, H1, run once): Tet10 cantilever of slenderness 20, 121 680 unknowns, geometric aggregation; limit: CG with one V-cycle to 1e-8 in <= 30 iterations; measured: 31 iterations, 0 restarts, residual 9.17e-9 (floor estimate 8.64e-9); H1a first coarse level 12 000 (1/10.14, in [8112, 20280]), H1c OC 1.4762, H1d B1 2.8e-16, D5 Hex8 default 15, D6 Tet10 default 2220, N2 held"]
+fn h1_slender20_tet10_quadratic_known_miss() {
     // D5: Hex8 default at 1e-8 (ADR 0305 H2b: 15)
     let hex = slender20_hex();
     let t = Instant::now();
