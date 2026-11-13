@@ -115,7 +115,10 @@ impl ModalBasis {
                 });
             }
             if let Some(i) = phi.iter().position(|x| !x.is_finite()) {
-                return Err(invalid("modal basis", format!("mode {r} is not finite at equation {i}")));
+                return Err(invalid(
+                    "modal basis",
+                    format!("mode {r} is not finite at equation {i}"),
+                ));
             }
         }
         Ok(ModalBasis {
@@ -169,10 +172,11 @@ impl ModalBasis {
             }
             d
         };
-        let eig = generalized_eigen_dense(&dense(&kr.matrix), &dense(&mr.matrix), nf).map_err(|e| FemError::Solver {
-            solver: "generalized_eigen_dense",
-            reason: e.to_string(),
-        })?;
+        let eig =
+            generalized_eigen_dense(&dense(&kr.matrix), &dense(&mr.matrix), nf).map_err(|e| FemError::Solver {
+                solver: "generalized_eigen_dense",
+                reason: e.to_string(),
+            })?;
         let modes = eig
             .vectors
             .iter()
@@ -345,7 +349,10 @@ impl HarmonicLoad {
     /// A pattern scaled by a force harmonic: `pattern A e^{i phi}`.
     pub fn from_harmonic(pattern: &[f64], harmonic: &ForceHarmonic) -> Result<HarmonicLoad> {
         let (c, s) = harmonic.complex();
-        HarmonicLoad::new(pattern.iter().map(|p| p * c).collect(), pattern.iter().map(|p| p * s).collect())
+        HarmonicLoad::new(
+            pattern.iter().map(|p| p * c).collect(),
+            pattern.iter().map(|p| p * s).collect(),
+        )
     }
 
     /// The real part.

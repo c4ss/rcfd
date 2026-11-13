@@ -196,7 +196,11 @@ fn a1_a2_a3_resonance_of_the_first_mode() {
     let x = solver.response(&load, omega1).unwrap();
     let t = bar.tip;
     let amp = x.amplitude(t) / (xs[t].abs() / (2.0 * zeta));
-    ch.at_most("A1 amplitude at the tip / (static / 2 zeta) - 1", (amp - 1.0).abs(), 1e-8);
+    ch.at_most(
+        "A1 amplitude at the tip / (static / 2 zeta) - 1",
+        (amp - 1.0).abs(),
+        1e-8,
+    );
     // X - x_s/(2 i zeta) = X + i x_s/(2 zeta)
     let mut worst: f64 = 0.0;
     for j in 0..xs.len() {
@@ -324,7 +328,11 @@ fn a4_a5_bar_tip_with_and_without_the_static_correction() {
         diff = diff.max(er.hypot(ei));
         size = size.max(x.re[j].hypot(x.im[j]));
     }
-    ch.at_most("C8 complex load against the sum of the two real loads", diff / size, 1e-14);
+    ch.at_most(
+        "C8 complex load against the sum of the two real loads",
+        diff / size,
+        1e-14,
+    );
     ch.finish();
 }
 
@@ -447,7 +455,11 @@ fn a8_sum_over_all_modes_of_a_small_model() {
     let mut ch = Checks::new();
     let free_model = small_model(false);
     let basis = ModalBasis::all_modes(&free_model, None).unwrap();
-    println!("S-free: {} modes, lowest eigenvalues {:?}", basis.len(), &basis.eigenvalues()[..7]);
+    println!(
+        "S-free: {} modes, lowest eigenvalues {:?}",
+        basis.len(),
+        &basis.eigenvalues()[..7]
+    );
     for (name, d) in [("x", [1.0, 0.0, 0.0]), ("y", [0.0, 1.0, 0.0]), ("z", [0.0, 0.0, 1.0])] {
         let p = participation(&free_model, &basis, d, None).unwrap();
         let sum: f64 = p.effective_masses.iter().sum();
@@ -488,7 +500,11 @@ fn a8_sum_over_all_modes_of_a_small_model() {
         );
         if name == "x" {
             let big = p.effective_masses.iter().cloned().fold(0.0, f64::max);
-            ch.above("N3 the largest m_r left out", ((sum - big) / reference - 1.0).abs(), 1e-3);
+            ch.above(
+                "N3 the largest m_r left out",
+                ((sum - big) / reference - 1.0).abs(),
+                1e-3,
+            );
         }
     }
     ch.finish();
@@ -552,7 +568,11 @@ fn a9_a10_force_harmonics() {
     let (ok, d) = refused_with(force_harmonics(&s, R_T0, dt, span / (2.0 + 1e-6), 3), "force record");
     ch.holds("A10 2 + 1e-6 periods refused", ok, &d);
     let r = force_harmonics(&s, R_T0, dt, span / (2.0 * (1.0 + 1e-13)), 3);
-    ch.holds("A10 2 (1 + 1e-13) periods accepted", r.is_ok(), &format!("{:?}", r.err()));
+    ch.holds(
+        "A10 2 (1 + 1e-13) periods accepted",
+        r.is_ok(),
+        &format!("{:?}", r.err()),
+    );
     ch.finish();
 }
 
@@ -572,7 +592,11 @@ fn c2_static_limit_and_stress() {
     let x = solver.response(&HarmonicLoad::real(f.clone()).unwrap(), 0.0).unwrap();
     let xs = static_of(&bar.model, &f);
     let d: Vec<f64> = x.re.iter().zip(&xs).map(|(a, b)| a - b).collect();
-    ch.at_most("C2 |X_re - x_s| / |x_s| at omega = 0", inf_norm(&d) / inf_norm(&xs), 1e-10);
+    ch.at_most(
+        "C2 |X_re - x_s| / |x_s| at omega = 0",
+        inf_norm(&d) / inf_norm(&xs),
+        1e-10,
+    );
     ch.holds("C2 X_im exactly 0", x.im.iter().all(|&v| v == 0.0), "all zero");
     let st = x.stress(&bar.model).unwrap();
     let fs = IntegrationPointField::compute(&bar.model, &xs).unwrap();
@@ -583,7 +607,11 @@ fn c2_static_limit_and_stress() {
         size = size.max(b[0].abs());
     }
     println!("C2 static sigma_xx max {size:.6e} Pa (F/A = {:.6e})", 1.0 / (B * B));
-    ch.at_most("C2 stress sigma_xx of the real part against the static stress", diff / size, 1e-10);
+    ch.at_most(
+        "C2 stress sigma_xx of the real part against the static stress",
+        diff / size,
+        1e-10,
+    );
     ch.finish();
 }
 
@@ -718,7 +746,10 @@ fn c6_refusals() {
         );
         ch.holds(&format!("C6 damping {name}"), ok, &d);
     }
-    let (ok, d) = refused_with(s.response(&HarmonicLoad::real(vec![0.0; 5]).unwrap(), 1.0), "harmonic load");
+    let (ok, d) = refused_with(
+        s.response(&HarmonicLoad::real(vec![0.0; 5]).unwrap(), 1.0),
+        "harmonic load",
+    );
     ch.holds("C6 load of the wrong length", ok, &d);
     let b10 = bar_model(10);
     let b10_basis = ModalBasis::all_modes(&b10, None).unwrap();
