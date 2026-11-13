@@ -778,6 +778,32 @@ pub struct LagWarning {
     pub cell: usize,
 }
 
+/// Options of the pressure-lag estimate that leave out what is not a fluid mode (F-483, ADR 0388 D1), opt-in through
+/// [`PimpleSolver::lag_fluid`]. [`LagFluid::FLUID`] is the estimate offered: at an immersed body the pressure solve of the map,
+/// started from the error and stopped at a relative tolerance, keeps the part of the error in the weakly coupled solid cells,
+/// which the estimate of ADR 0073 then counts as a mode.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LagFluid {
+    /// Start every pressure solve of the map from zero instead of from the pressure error.
+    pub zero_start: bool,
+    /// Take the norm, the level (when no boundary fixes it) and the mode cell of the power iteration over the fluid cells only
+    /// (the cells whose centre is in no body of the immersed forcing; every cell without a forcing). The vector is iterated in
+    /// full.
+    pub fluid_norm: bool,
+    /// Stop the pressure solves of the map at this relative tolerance, with the absolute tolerance zero (diagnostic, ADR 0388
+    /// A3); `None` keeps the solver's pressure tolerances.
+    pub tol_rel: Option<f64>,
+}
+
+impl LagFluid {
+    /// The zero start and the fluid norm (ADR 0388 D1).
+    pub const FLUID: LagFluid = LagFluid {
+        zero_start: true,
+        fluid_norm: true,
+        tol_rel: None,
+    };
+}
+
 /// Matrices of the final outer iteration kept for the pressure-lag check.
 struct LagCtx {
     mats: Vec<Option<FvMatrix>>,
@@ -1129,6 +1155,12 @@ pub struct PimpleSolver {
     /// `lag_trial`) reconstructs the flux of those faces and solves the pressure with the source of the solid cells, as the step
     /// does. `false` (default) leaves the estimate unchanged.
     pub immersed_lag: bool,
+    /// The pressure-lag estimate without what is not a fluid mode (F-483, ADR 0388 D1): when `Some`, every estimate
+    /// (`pressure_lag_check`, `corrector_control`, `lag_preflight`, `lag_trial`) uses these options. `None` (default) leaves the
+    /// estimate unchanged.
+    pub lag_fluid: Option<LagFluid>,
+    /// When `Some`, the check of the step keeps the mode of its last estimate here (ADR 0388 D2, for `lag_trial_mode`).
+    lag_mode: Option<Vec<f64>>,
 }
 
 /// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
@@ -1207,6 +1239,8 @@ impl PimpleSolver {
             pressure_capture: None,
             pressure_fallbacks: Vec::new(),
             immersed_lag: false,
+            lag_fluid: None,
+            lag_mode: None,
         }
     }
 
@@ -1241,6 +1275,8 @@ impl PimpleSolver {
             pressure_capture: None,
             pressure_fallbacks: Vec::new(),
             immersed_lag: self.immersed_lag,
+            lag_fluid: self.lag_fluid,
+            lag_mode: None,
         }
     }
 
@@ -1259,6 +1295,12 @@ impl PimpleSolver {
             return None;
         }
         let mut s = self.scratch();
+        Self::preflight_run(&mut s, dt, iterations, nu_face)
+    }
+
+    /// The trial of [`lag_preflight_with`](Self::lag_preflight_with) on the copy `s` (ADR 0388 D2: split from it, the same
+    /// operations).
+    fn preflight_run(s: &mut PimpleSolver, dt: f64, iterations: usize, nu_face: Option<&[f64]>) -> Option<LagWarning> {
         if let Some(nu) = nu_face {
             s.nu_face = Some(nu.to_vec());
         }
@@ -1284,6 +1326,21 @@ impl PimpleSolver {
         let mut s = self.scratch();
         s.settings.n_correctors = n_correctors.max(1);
         s.lag_preflight(dt, iterations)
+    }
+
+    /// [`lag_trial`](Self::lag_trial) with the normalised mode of the power iteration (F-483, ADR 0388 D2; one value per cell).
+    /// The solver itself is not changed.
+    pub fn lag_trial_mode(&self, dt: f64, iterations: usize, n_correctors: usize) -> Option<(LagWarning, Vec<f64>)> {
+        let mut t = self.scratch();
+        t.settings.n_correctors = n_correctors.max(1);
+        if t.ale.is_some() || t.settings.fractional.is_some() || t.diverged.is_some() {
+            return None;
+        }
+        let mut s = t.scratch();
+        s.lag_mode = Some(Vec::new());
+        let w = Self::preflight_run(&mut s, dt, iterations, None)?;
+        let mode = s.lag_mode.take()?;
+        (mode.len() == s.geom.n_cells()).then_some((w, mode))
     }
 
     /// Pre-run estimate of the pressure-lag amplification of the next step taken on a moving mesh (ADR 0223 E1): a copy of the solver
@@ -2115,7 +2172,11 @@ impl PimpleSolver {
         }
         if let (Some(ctx), Some(chk)) = (&lag_ctx, s.pressure_lag_check) {
             // the count the step used (the configured one unless the adaptive control is on)
-            let (rho, cell, _) = self.lag_amplification_n(ctx, n_corr_final, chk.iterations.max(2), None);
+            let (rho, cell, mode) = self.lag_amplification_n(ctx, n_corr_final, chk.iterations.max(2), None);
+            if self.lag_mode.is_some() {
+                // ADR 0388 D2: the mode for `lag_trial_mode`
+                self.lag_mode = Some(mode);
+            }
             let w = LagWarning {
                 step: self.step_no,
                 rho,
@@ -2175,6 +2236,7 @@ impl PimpleSolver {
         e: &[f64],
         pbc_h: &crate::pressure::PressureBc,
         hom: Option<&crate::immersed::ImmersedForcing>,
+        lf: Option<&LagFluid>,
     ) -> Vec<f64> {
         let g = &self.geom;
         let s = &self.settings;
@@ -2183,13 +2245,19 @@ impl PimpleSolver {
         let vol = g.mesh.cell_volumes();
         let n_active = g.active.iter().filter(|&&a| a).count() as f64;
         let zero_ub = vec![[0.0; 3]; g.mesh.n_boundary_faces()];
-        let controls = PressureControls {
+        let mut controls = PressureControls {
             p_ref: (s.p_ref.0, 0.0),
             non_orth_correctors: s.non_orth_correctors,
             solver: s.pressure_solver,
             amg: s.amg_pressure,
             linear: s.linear,
         };
+        // ADR 0388 D1 (`lag_fluid`): the tolerance of the pressure solves of the map
+        if let Some(t) = lf.and_then(|o| o.tol_rel) {
+            controls.solver.tol_rel = t;
+            controls.solver.tol_abs = 0.0;
+        }
+        let zero_start = lf.is_some_and(|o| o.zero_start);
         let mut p = e.to_vec();
         let mut u: Vec<Vec3> = vec![[0.0; 3]; n];
         for outer in 0..s.n_outer {
@@ -2268,7 +2336,8 @@ impl PimpleSolver {
                     }
                 }
                 let p_old = p.clone();
-                let mut p_new = p_old.clone();
+                // ADR 0388 D1 (`lag_fluid`): the solve started from zero instead of from the error
+                let mut p_new = if zero_start { vec![0.0; n] } else { p_old.clone() };
                 match &ib_src {
                     None => {
                         solve_pressure(g, &gamma, pbc_h, &phi_h, &mut p_new, &controls);
@@ -2329,12 +2398,26 @@ impl PimpleSolver {
             }
             _ => None,
         };
+        let lf = self.lag_fluid.as_ref();
+        // ADR 0388 D1 (`lag_fluid.fluid_norm`): the weights of the norm, zero in the solid cells
+        let fluid_w: Option<Vec<f64>> = match (lf, &self.immersed) {
+            (Some(o), Some(ib)) if o.fluid_norm => Some(
+                (0..n)
+                    .map(|c| if ib.body_of_cell[c].is_none() { vol[c] } else { 0.0 })
+                    .collect(),
+            ),
+            _ => None,
+        };
+        let (wv, tw): (&[f64], f64) = match &fluid_w {
+            Some(w) => (w, w.iter().sum()),
+            None => (vol, tv),
+        };
         let norm = |e: &mut Vec<f64>| -> f64 {
             if !fixed_level {
-                let m = e.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
+                let m = e.iter().zip(wv).map(|(a, v)| a * v).sum::<f64>() / tw;
                 e.iter_mut().for_each(|x| *x -= m);
             }
-            e.iter().zip(vol).map(|(a, v)| a * a * v).sum::<f64>().sqrt()
+            e.iter().zip(wv).map(|(a, v)| a * a * v).sum::<f64>().sqrt()
         };
         // smooth start plus a small deterministic pseudo-random part
         let cc = g.mesh.cell_centres();
@@ -2372,7 +2455,7 @@ impl PimpleSolver {
         e.iter_mut().for_each(|x| *x /= n0);
         let mut logs = Vec::with_capacity(iterations);
         for _ in 0..iterations {
-            let mut next = self.lag_map(ctx, n_corr, &e, &pbc_h, hom.as_ref());
+            let mut next = self.lag_map(ctx, n_corr, &e, &pbc_h, hom.as_ref(), lf);
             let nn = norm(&mut next);
             if !(nn.is_finite() && nn > 0.0) {
                 logs.push(if nn == 0.0 { f64::NEG_INFINITY } else { f64::INFINITY });
@@ -2384,7 +2467,14 @@ impl PimpleSolver {
         let half = logs.len() / 2;
         let tail = &logs[half..];
         let rho = (tail.iter().sum::<f64>() / tail.len().max(1) as f64).exp();
-        let cell = (0..n).max_by(|&a, &b| e[a].abs().total_cmp(&e[b].abs())).unwrap_or(0);
+        let cell = match &fluid_w {
+            // ADR 0388 D1: the mode cell among the fluid cells
+            Some(w) => (0..n)
+                .filter(|&c| w[c] > 0.0)
+                .max_by(|&a, &b| e[a].abs().total_cmp(&e[b].abs()))
+                .unwrap_or(0),
+            None => (0..n).max_by(|&a, &b| e[a].abs().total_cmp(&e[b].abs())).unwrap_or(0),
+        };
         (rho, cell, e)
     }
 
