@@ -16,7 +16,12 @@ use rcfd_fem::{Constraint, ElementKind, FemError, LinearTerm, Load, Material, So
 const SEED: u64 = 0xF397_0404;
 const E_MOD: f64 = 2.0e11;
 const RHO: f64 = 7850.0;
-const KINDS: [ElementKind; 4] = [ElementKind::Tet4, ElementKind::Hex8, ElementKind::Tet10, ElementKind::Hex20];
+const KINDS: [ElementKind; 4] = [
+    ElementKind::Tet4,
+    ElementKind::Hex8,
+    ElementKind::Tet10,
+    ElementKind::Hex20,
+];
 
 /// SplitMix64, a deterministic source only (as in si_hex20.rs).
 struct Rng(u64);
@@ -181,7 +186,10 @@ fn a1_c1_c2_n2_tangent_against_central_differences() {
             }
         }
         let t = [rng.sym(0.2), rng.sym(0.2), rng.sym(0.2)];
-        let rho: Vec<Vec3> = coords.iter().map(|_| [rng.sym(0.02), rng.sym(0.02), rng.sym(0.02)]).collect();
+        let rho: Vec<Vec3> = coords
+            .iter()
+            .map(|_| [rng.sym(0.02), rng.sym(0.02), rng.sym(0.02)])
+            .collect();
         let n = coords.len() as f64;
         let xc = [0, 1, 2].map(|i| coords.iter().map(|p| p[i]).sum::<f64>() / n);
         let name = kind.name();
@@ -189,7 +197,11 @@ fn a1_c1_c2_n2_tangent_against_central_differences() {
         let zero = vec![0.0; 3 * coords.len()];
         let k0 = element_tangent(el, &coords, &mat, &zero, &state).unwrap();
         let k_lin = el.stiffness(&coords, &d).unwrap();
-        c.at_most(&format!("C2 {name}: max |K_T(0) - K| / max |K|"), rel_diff(&k0, &k_lin), 1e-14);
+        c.at_most(
+            &format!("C2 {name}: max |K_T(0) - K| / max |K|"),
+            rel_diff(&k0, &k_lin),
+            1e-14,
+        );
         println!("C2 {name}: bit-equal {}", k0 == k_lin);
         let mut i_plus_g = IDENTITY;
         for i in 0..3 {
@@ -217,9 +229,16 @@ fn a1_c1_c2_n2_tangent_against_central_differences() {
                 1e-6,
             );
             let nsz = kt.size();
-            let asym = max_abs((0..nsz).flat_map(|i| (0..nsz).map(move |j| (i, j))).map(|(i, j)| kt.get(i, j) - kt.get(j, i)))
-                / max_abs(kt.values().iter().copied());
-            c.at_most(&format!("C1 {name} state {state_id}: max |K_T - K_T^T| / max |K_T|"), asym, 1e-13);
+            let asym = max_abs(
+                (0..nsz)
+                    .flat_map(|i| (0..nsz).map(move |j| (i, j)))
+                    .map(|(i, j)| kt.get(i, j) - kt.get(j, i)),
+            ) / max_abs(kt.values().iter().copied());
+            c.at_most(
+                &format!("C1 {name} state {state_id}: max |K_T - K_T^T| / max |K_T|"),
+                asym,
+                1e-13,
+            );
             if state_id == 2 {
                 let s = element_second_piola_kirchhoff(el, &coords, &mat, &u, &state).unwrap();
                 let kg = element_geometric_stiffness(el, &coords, &s).unwrap();
@@ -265,7 +284,11 @@ fn a2_n1_c4_rigid_rotation_and_entry_points() {
         let u = flatten(&coords.iter().map(rigid).collect::<Vec<_>>());
         let name = kind.name();
         let f = element_internal_force(el, &coords, &mat, &u, &state).unwrap();
-        c.at_most(&format!("A2 {name}: max |f_int| / (E l^2)"), max_abs(f.iter().copied()) / E_MOD, 1e-10);
+        c.at_most(
+            &format!("A2 {name}: max |f_int| / (E l^2)"),
+            max_abs(f.iter().copied()) / E_MOD,
+            1e-10,
+        );
         let ku = el.stiffness(&coords, &d).unwrap().matvec(&u);
         c.at_least(&format!("N1 {name}: max |K u| / (E l^2)"), max_abs(ku) / E_MOD, 1e-2);
         // C4: the trait entry points are the functions of the module, bit for bit.
@@ -353,7 +376,8 @@ fn a3_a4_c7_uniform_stretch() {
         let name = kind.name();
         // Displacement control.
         let mut m = bar_model(kind);
-        m.add_constraint(Constraint::displacement("xmax", 0, 0.2 * BAR_L)).unwrap();
+        m.add_constraint(Constraint::displacement("xmax", 0, 0.2 * BAR_L))
+            .unwrap();
         let r = solve(&m, &[], &[], &NewtonOptions::new(4)).unwrap();
         let reactions = r.result.reactions().unwrap();
         let dofs = r.result.dofs();
@@ -365,7 +389,11 @@ fn a3_a4_c7_uniform_stretch() {
             .map(|&n| reactions[dofs.equation(n, 0).unwrap()])
             .sum();
         let p = sum / (BAR_A * BAR_A);
-        c.at_most(&format!("A3 {name} displacement control: |P / P_exact - 1|"), (p / pe - 1.0).abs(), 1e-9);
+        c.at_most(
+            &format!("A3 {name} displacement control: |P / P_exact - 1|"),
+            (p / pe - 1.0).abs(),
+            1e-9,
+        );
         let lateral = max_abs(
             (0..m.mesh().nodes().len()).flat_map(|n| [r.result.displacement(n)[1], r.result.displacement(n)[2]]),
         ) / BAR_L;
@@ -379,12 +407,20 @@ fn a3_a4_c7_uniform_stretch() {
         let m = bar_load_control(kind);
         let r = solve(&m, &[], &[], &NewtonOptions::new(2)).unwrap();
         let lambda = 1.0 + mean_ux(&m, &r, "xmax") / BAR_L;
-        c.at_most(&format!("A3 {name} load control: |lambda / 1.2 - 1|"), (lambda / 1.2 - 1.0).abs(), 1e-9);
+        c.at_most(
+            &format!("A3 {name} load control: |lambda / 1.2 - 1|"),
+            (lambda / 1.2 - 1.0).abs(),
+            1e-9,
+        );
         for s in &r.steps {
             println!("  {name} step {} residuals {:?}", s.step, s.residuals);
             match order(&s.residuals) {
                 Some(p) => c.at_least(&format!("A4 {name} step {}: order", s.step), p, 1.8),
-                None => c.holds(&format!("A4 {name} step {}", s.step), false, "fewer than three residuals above 1e-12"),
+                None => c.holds(
+                    &format!("A4 {name} step {}", s.step),
+                    false,
+                    "fewer than three residuals above 1e-12",
+                ),
             }
         }
     }
@@ -397,7 +433,9 @@ const CANT_L: f64 = 1.0;
 const CANT_H: f64 = 0.02;
 
 fn cantilever(alpha: f64, scale: f64) -> SolidModel {
-    let mesh = upgrade_to_hex20(&hex_box([0.0; 3], [CANT_L, CANT_H, CANT_H], [50, 1, 1]).unwrap()).unwrap().0;
+    let mesh = upgrade_to_hex20(&hex_box([0.0; 3], [CANT_L, CANT_H, CANT_H], [50, 1, 1]).unwrap())
+        .unwrap()
+        .0;
     let mut m = SolidModel::new(mesh);
     m.add_material("all", material(0.0)).unwrap();
     for comp in 0..3 {
@@ -405,7 +443,8 @@ fn cantilever(alpha: f64, scale: f64) -> SolidModel {
     }
     let i = CANT_H * CANT_H.powi(3) / 12.0;
     let p = alpha * E_MOD * i / (CANT_L * CANT_L);
-    m.add_load(Load::traction("xmax", [0.0, scale * p / (CANT_H * CANT_H), 0.0])).unwrap();
+    m.add_load(Load::traction("xmax", [0.0, scale * p / (CANT_H * CANT_H), 0.0]))
+        .unwrap();
     m
 }
 
@@ -471,13 +510,15 @@ fn a5_linear_limit_known_miss() {
     let lin = solve_static(&cantilever(1.0, 1.0), &StaticOptions::default()).unwrap();
     let nl = solve(&cantilever(1.0, s), &[], &[], &NewtonOptions::new(1)).unwrap();
     let ul = lin.displacement_values();
-    let dev = max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
+    let dev =
+        max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
     c.at_most("A5 cantilever: max |u_nl / s - u_lin| / max |u_lin|", dev, 1e-5);
     // The Tet10 block.
     let lin = solve_static(&tet10_block(1.0), &StaticOptions::default()).unwrap();
     let nl = solve(&tet10_block(s), &[], &[], &NewtonOptions::new(1)).unwrap();
     let ul = lin.displacement_values();
-    let dev = max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
+    let dev =
+        max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
     c.at_most("A5 Tet10 block: max |u_nl / s - u_lin| / max |u_lin|", dev, 1e-5);
     c.finish();
 }
@@ -491,13 +532,15 @@ fn a5_linear_limit_corrected() {
     let lin = solve_static(&cantilever(1.0, 1.0), &StaticOptions::default()).unwrap();
     let nl = solve(&cantilever(1.0, s), &[], &[], &NewtonOptions::new(1)).unwrap();
     let ul = lin.displacement_values();
-    let dev = max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
+    let dev =
+        max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
     c.at_most("A5 cantilever: max |u_nl / s - u_lin| / max |u_lin|", dev, 1e-5);
     // The Tet10 block.
     let lin = solve_static(&tet10_block(1.0), &StaticOptions::default()).unwrap();
     let nl = solve(&tet10_block(s), &[], &[], &NewtonOptions::new(1)).unwrap();
     let ul = lin.displacement_values();
-    let dev = max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
+    let dev =
+        max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
     c.at_most("A5 Tet10 block: max |u_nl / s - u_lin| / max |u_lin|", dev, 1e-5);
     c.finish();
 }
@@ -528,14 +571,26 @@ fn a6_c8_n3_elastica() {
             [u[0], u[1], u[2]]
         });
         println!("  alpha {alpha}: FE v = {v:.10}, d = {d:.10}");
-        c.at_most(&format!("A6 alpha {alpha}: |v / v_ref - 1|"), (v / v_ref - 1.0).abs(), 0.02);
-        c.at_most(&format!("A6 alpha {alpha}: |d / d_ref - 1|"), (d / d_ref - 1.0).abs(), 0.02);
+        c.at_most(
+            &format!("A6 alpha {alpha}: |v / v_ref - 1|"),
+            (v / v_ref - 1.0).abs(),
+            0.02,
+        );
+        c.at_most(
+            &format!("A6 alpha {alpha}: |d / d_ref - 1|"),
+            (d / d_ref - 1.0).abs(),
+            0.02,
+        );
         let lin = solve_static(&m, &StaticOptions::default()).unwrap();
         let (vl, _) = tip(&m, |n| {
             let u = lin.displacement(n);
             [u[0], u[1], u[2]]
         });
-        c.at_least(&format!("N3 alpha {alpha}: linear |v_lin / v_ref - 1|"), (vl / v_ref - 1.0).abs(), 0.05);
+        c.at_least(
+            &format!("N3 alpha {alpha}: linear |v_lin / v_ref - 1|"),
+            (vl / v_ref - 1.0).abs(),
+            0.05,
+        );
     }
     c.finish();
 }
@@ -552,8 +607,11 @@ fn a7_c3_inversion_halving_and_non_convergence() {
     mesh.add_element_set("lower", vec![0]).unwrap();
     mesh.add_element_set("upper", vec![1]).unwrap();
     let mut m = SolidModel::new(mesh);
-    m.add_material("lower", Material::isotropic_elastic(1000.0 * E_MOD, 0.0, RHO, 0.0).unwrap())
-        .unwrap();
+    m.add_material(
+        "lower",
+        Material::isotropic_elastic(1000.0 * E_MOD, 0.0, RHO, 0.0).unwrap(),
+    )
+    .unwrap();
     m.add_material("upper", material(0.0)).unwrap();
     m.add_constraint(Constraint::displacement("all", 0, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("all", 1, 0.0)).unwrap();
@@ -574,7 +632,11 @@ fn a7_c3_inversion_halving_and_non_convergence() {
     let r1 = solve(&bar, &[], &[], &NewtonOptions::new(1).max_iterations(4)).unwrap();
     let r2 = solve(&bar, &[], &[], &NewtonOptions::new(2)).unwrap();
     let h = r1.steps.last().unwrap().halvings;
-    c.holds("C3 halvings", h == 1, &format!("{h} halvings, {} increments", r1.steps.len()));
+    c.holds(
+        "C3 halvings",
+        h == 1,
+        &format!("{h} halvings, {} increments", r1.steps.len()),
+    );
     let (a, b) = (r1.result.displacement_values(), r2.result.displacement_values());
     let dev = max_abs(a.iter().zip(b).map(|(x, y)| x - y)) / max_abs(b.iter().copied());
     c.at_most("C3 max |u - u_2steps| / max |u_2steps|", dev, 1e-12);
@@ -590,13 +652,16 @@ fn mesh_centroid_z(mesh: &SolidMesh, e: usize) -> f64 {
 // ------------------------------------------------------------------------------------------------- C5, C6
 
 fn tet10_block(scale: f64) -> SolidModel {
-    let mesh = upgrade_to_tet10(&tet_box([0.0; 3], [1.0, 0.25, 0.25], [4, 1, 1]).unwrap()).unwrap().0;
+    let mesh = upgrade_to_tet10(&tet_box([0.0; 3], [1.0, 0.25, 0.25], [4, 1, 1]).unwrap())
+        .unwrap()
+        .0;
     let mut m = SolidModel::new(mesh);
     m.add_material("all", material(0.0)).unwrap();
     for comp in 0..3 {
         m.add_constraint(Constraint::displacement("xmin", comp, 0.0)).unwrap();
     }
-    m.add_load(Load::traction("xmax", [0.0, scale * 1e7, scale * 5e6])).unwrap();
+    m.add_load(Load::traction("xmax", [0.0, scale * 1e7, scale * 5e6]))
+        .unwrap();
     m
 }
 
@@ -604,7 +669,8 @@ fn tet10_block(scale: f64) -> SolidModel {
 fn c5_c6_refusals_and_threads() {
     let mut c = Checks::new();
     let mut m = bar_load_control(ElementKind::Hex8);
-    m.add_constraint(Constraint::linear(vec![LinearTerm::new(1, 0, 1.0)], 0.0)).unwrap();
+    m.add_constraint(Constraint::linear(vec![LinearTerm::new(1, 0, 1.0)], 0.0))
+        .unwrap();
     let r = solve(&m, &[], &[], &NewtonOptions::new(1));
     c.holds(
         "C5 linear constraint",
@@ -629,7 +695,13 @@ fn c5_c6_refusals_and_threads() {
     );
     let el = element_for(ElementKind::Hex8);
     let coords = ElementKind::Hex8.reference_nodes().to_vec();
-    let r = element_internal_force(el, &coords, &material(0.0), &[0.0; 24], &ElementState::new(vec![0.0; 3]));
+    let r = element_internal_force(
+        el,
+        &coords,
+        &material(0.0),
+        &[0.0; 24],
+        &ElementState::new(vec![0.0; 3]),
+    );
     c.holds(
         "C5 state length",
         matches!(&r, Err(FemError::FieldLength { key, .. }) if *key == "state"),
@@ -648,11 +720,12 @@ fn c5_c6_refusals_and_threads() {
     let u = r1.result.displacement_values();
     let k1 = tangent(&m, u, &states, Some(1)).unwrap();
     let k4 = tangent(&m, u, &states, Some(4)).unwrap();
-    c.holds("C6 tangent threads 1 and 4", k1.val == k4.val && k1.col == k4.col, "tangent bit-equal");
-    println!(
-        "  Tet10 block: tip mean u_y = {:e}",
-        tip_mean(&m, &r1, 1)
+    c.holds(
+        "C6 tangent threads 1 and 4",
+        k1.val == k4.val && k1.col == k4.col,
+        "tangent bit-equal",
     );
+    println!("  Tet10 block: tip mean u_y = {:e}", tip_mean(&m, &r1, 1));
     c.finish();
 }
 

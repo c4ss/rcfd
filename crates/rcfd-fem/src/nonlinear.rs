@@ -2,7 +2,8 @@
 //! 0291; filled by ADR 0404 (the registration of ADR 0300, F-397).
 //!
 //! * Kinematics (ADR 0404 D1): `F = I + sum_a u_a (x) g_a` with the reference gradients `g_a = dN_a/dX`, the Green-Lagrange
-//!   strain `E = (F^T F - I) / 2` (Voigt, engineering shear), the second Piola-Kirchhoff stress and the material tangent from
+//!   strain `E = (F^T F - I) / 2`, computed as `(H + H^T + H^T H) / 2` with `H = F - I` (amendment 1; Voigt, engineering
+//!   shear), the second Piola-Kirchhoff stress and the material tangent from
 //!   [`Material::stress`] (St. Venant-Kirchhoff for the linear elastic material, `S = D E`).
 //! * Element (D2): `f_int = sum_q w_q det J_q B_NL^T S` at the points of the element's stiffness rule, `B_NL` the variation of
 //!   `E`; the tangent `K_T = sum_q w_q det J_q B_NL^T D B_NL + K_sigma(S)`, the geometric part by
@@ -268,9 +269,10 @@ fn check_driver_model(model: &SolidModel) -> Result<()> {
     if crate::mpc::uses_transformation(model) {
         return Err(FemError::InvalidValue {
             key: "nonlinear",
-            reason: "linear constraints, rigid sets, cyclic constraints and elastic supports (the transformation path) are \
+            reason:
+                "linear constraints, rigid sets, cyclic constraints and elastic supports (the transformation path) are \
                      not offered by the nonlinear static solve (ADR 0404)"
-                .to_string(),
+                    .to_string(),
         });
     }
     if let Some(i) = model.loads().iter().position(|l| matches!(l, Load::Temperature { .. })) {
