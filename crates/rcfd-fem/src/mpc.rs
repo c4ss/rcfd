@@ -44,13 +44,16 @@ pub const DEPENDENCE_TOLERANCE: f64 = 1e-10;
 /// Unknowns of one reference point: the translation (0, 1, 2) and the small rotation (3, 4, 5).
 pub const REFERENCE_UNKNOWNS: usize = 6;
 
-/// Whether a model needs the transformation: it has a linear constraint, a rigid set or an elastic support.
+/// Whether a model needs the transformation: it has a linear constraint, a rigid set, a cyclic constraint (ADR 0386) or an
+/// elastic support.
 pub fn uses_transformation(model: &SolidModel) -> bool {
     !model.supports().is_empty()
-        || model
-            .constraints()
-            .iter()
-            .any(|c| matches!(c, Constraint::Linear { .. } | Constraint::RigidSet { .. }))
+        || model.constraints().iter().any(|c| {
+            matches!(
+                c,
+                Constraint::Linear { .. } | Constraint::RigidSet { .. } | Constraint::Cyclic { .. }
+            )
+        })
 }
 
 /// Where a constraint row comes from.
@@ -78,6 +81,15 @@ pub enum RowOrigin {
         /// Component.
         component: usize,
     },
+    /// One row of a cyclic constraint (ADR 0386): one component of one node of its high boundary.
+    Cyclic {
+        /// Index in [`SolidModel::constraints`].
+        constraint: usize,
+        /// Node of the high boundary.
+        node: usize,
+        /// Component.
+        component: usize,
+    },
 }
 
 impl RowOrigin {
@@ -85,7 +97,9 @@ impl RowOrigin {
     pub fn constraint(&self) -> Option<usize> {
         match *self {
             RowOrigin::Prescribed { .. } => None,
-            RowOrigin::Linear { constraint } | RowOrigin::RigidSet { constraint, .. } => Some(constraint),
+            RowOrigin::Linear { constraint }
+            | RowOrigin::RigidSet { constraint, .. }
+            | RowOrigin::Cyclic { constraint, .. } => Some(constraint),
         }
     }
 
@@ -107,6 +121,17 @@ impl RowOrigin {
                     _ => "?",
                 };
                 format!("constraint {constraint} (RigidSet '{set}', node {node} component {component})")
+            }
+            RowOrigin::Cyclic {
+                constraint,
+                node,
+                component,
+            } => {
+                let (low, high) = match model.constraints().get(constraint) {
+                    Some(Constraint::Cyclic { low, high, .. }) => (low.as_str(), high.as_str()),
+                    _ => ("?", "?"),
+                };
+                format!("constraint {constraint} (Cyclic '{low}'/'{high}', high node {node} component {component})")
             }
         }
     }
@@ -367,6 +392,8 @@ fn describe_list(model: &SolidModel, origins: &BTreeSet<RowOrigin>, except: RowO
 struct Elimination<'a> {
     model: &'a SolidModel,
     n_mesh: usize,
+    // The sine part of a doubled harmonic problem (ADR 0386): unknowns `n_mesh .. 2 n_mesh` are named as mesh unknowns.
+    sine: bool,
     deps: BTreeMap<usize, Expr>,
     users: BTreeMap<usize, BTreeSet<usize>>,
     dropped: Vec<DroppedRow>,
@@ -378,6 +405,13 @@ impl Elimination<'_> {
         if i < self.n_mesh {
             let (node, component) = self.model.dof_map().node_component(i).expect("mesh unknown");
             format!("node {node} component {component}")
+        } else if self.sine && i < 2 * self.n_mesh {
+            let (node, component) = self
+                .model
+                .dof_map()
+                .node_component(i - self.n_mesh)
+                .expect("mesh unknown");
+            format!("node {node} component {component} (sine part)")
         } else {
             format!("reference unknown {}", i - self.n_mesh)
         }
@@ -497,9 +531,9 @@ impl Elimination<'_> {
     }
 }
 
-/// The transformation of a model's constraints and of the per-node prescribed values `prescribed` (ADR 0296). Refuses a
-/// cyclic constraint (until ADR 0297), a contradictory row and a row that closes a chain on itself, naming the constraints;
-/// drops and lists a redundant row.
+/// The transformation of a model's constraints and of the per-node prescribed values `prescribed` (ADR 0296; the `k = 0`
+/// rows `u_H = R u_L` of a cyclic constraint, ADR 0386). Refuses a contradictory row and a row that closes a chain on
+/// itself, naming the constraints; drops and lists a redundant row.
 pub fn transformation(model: &SolidModel, prescribed: &[Prescribed]) -> Result<Transformation> {
     let fixed = prescribed_equations(model, prescribed)?;
     let dofs = model.dof_map();
@@ -595,13 +629,212 @@ pub fn transformation(model: &SolidModel, prescribed: &[Prescribed]) -> Result<T
                     }
                 }
             }
-            // Displacement constraints are in `fixed`; Cyclic is refused by `prescribed_equations` until ADR 0297.
+            // The k = 0 rows u_H - R u_L = 0 of a cyclic constraint (ADR 0386).
+            Constraint::Cyclic { .. } => {
+                let bd = crate::cyclic::boundary(model, i)?;
+                rows.extend(cyclic_rows(model, i, &bd, 1.0, 0.0, None)?);
+            }
+            // Displacement constraints are in `fixed`.
             _ => {}
         }
     }
+    eliminate(model, n, nn, n, references, rows, false)
+}
+
+/// The rows of a cyclic constraint for the phase `(c, s) = (cos theta, sin theta)`: for each matched pair and component,
+/// `a_H - R (c a_L - s b_L) = 0` and, with a sine part at offset `sine`, `b_H - R (s a_L + c b_L) = 0` (ADR 0386).
+fn cyclic_rows(
+    model: &SolidModel,
+    constraint: usize,
+    bd: &crate::cyclic::CyclicBoundary,
+    c: f64,
+    s: f64,
+    sine: Option<usize>,
+) -> Result<Vec<Row>> {
+    let dofs = model.dof_map();
+    let eq = |node: usize, comp: usize| {
+        dofs.equation(node, comp).ok_or(FemError::MissingComponent {
+            role: "cyclic constraint",
+            node,
+            component: comp,
+            available: dofs.components(node),
+        })
+    };
+    let r = bd.rotation();
+    let mut rows = Vec::new();
+    for &(low, high) in bd.pairs() {
+        for comp in 0..3 {
+            let origin = RowOrigin::Cyclic {
+                constraint,
+                node: high,
+                component: comp,
+            };
+            let h = eq(high, comp)?;
+            let mut terms = vec![(h, 1.0)];
+            for (j, &rj) in r[comp].iter().enumerate() {
+                let l = eq(low, j)?;
+                if rj != 0.0 {
+                    if c != 0.0 {
+                        terms.push((l, -c * rj));
+                    }
+                    if let (Some(off), true) = (sine, s != 0.0) {
+                        terms.push((off + l, s * rj));
+                    }
+                }
+            }
+            rows.push(Row {
+                origin,
+                terms,
+                value: 0.0,
+                designated: h,
+            });
+            if let Some(off) = sine {
+                let mut terms = vec![(off + h, 1.0)];
+                for (j, &rj) in r[comp].iter().enumerate() {
+                    let l = eq(low, j)?;
+                    if rj != 0.0 {
+                        if s != 0.0 {
+                            terms.push((l, -s * rj));
+                        }
+                        if c != 0.0 {
+                            terms.push((off + l, -c * rj));
+                        }
+                    }
+                }
+                rows.push(Row {
+                    origin,
+                    terms,
+                    value: 0.0,
+                    designated: off + h,
+                });
+            }
+        }
+    }
+    Ok(rows)
+}
+
+/// The transformation of the rows of harmonic index `harmonic` of a model's cyclic constraint (ADR 0386): the real
+/// cos/sin pair `a_H = R (cos theta a_L - sin theta b_L)`, `b_H = R (sin theta a_L + cos theta b_L)`, `theta = 2 pi k / N`,
+/// over the unknowns `x = (a, b)` (the sine part `b` at offset `n`, the number of mesh unknowns) for `0 < 2 k < N`, and
+/// `a_H = -R a_L` over `a` alone for `2 k = N`. The prescribed rows and the linear constraints act on both parts (the same
+/// constraint in every sector); every value must be zero. A rigid set is refused; `harmonic = 0` and a harmonic above `N /
+/// 2` are refused (`k = 0` is [`transformation`]). [`Transformation::n_mesh`] is the length of `x`.
+pub fn harmonic_transformation(
+    model: &SolidModel,
+    prescribed: &[Prescribed],
+    harmonic: usize,
+) -> Result<Transformation> {
+    let fixed = prescribed_equations(model, prescribed)?;
+    let dofs = model.dof_map();
+    let n = dofs.n_equations();
+    let ci = crate::cyclic::the_cyclic_constraint(model)?;
+    let bd = crate::cyclic::boundary(model, ci)?;
+    let sectors = bd.sectors();
+    if harmonic == 0 || 2 * harmonic > sectors {
+        return Err(FemError::InvalidValue {
+            key: "harmonic",
+            reason: format!(
+                "harmonic index {harmonic} of a rotor of {sectors} sectors: the harmonic transformation takes 1 to {} (0 is \
+                 the transformation of the static rows)",
+                sectors / 2
+            ),
+        });
+    }
+    let doubled = 2 * harmonic < sectors;
+    let (c, s) = if doubled {
+        let theta = 2.0 * std::f64::consts::PI * harmonic as f64 / sectors as f64;
+        (theta.cos(), theta.sin())
+    } else {
+        (-1.0, 0.0)
+    };
+    let copies: &[usize] = if doubled { &[0, n] } else { &[0] };
+    let nn = n * copies.len();
+    let mut rows: Vec<Row> = Vec::new();
+    for &off in copies {
+        for &(eq, v) in &fixed {
+            let (node, component) = dofs.node_component(eq).expect("prescribed equation");
+            if v != 0.0 {
+                return Err(zero_values_only(
+                    RowOrigin::Prescribed { node, component }.description(model),
+                    v,
+                ));
+            }
+            rows.push(Row {
+                origin: RowOrigin::Prescribed { node, component },
+                terms: vec![(off + eq, 1.0)],
+                value: 0.0,
+                designated: off + eq,
+            });
+        }
+    }
+    for (i, con) in model.constraints().iter().enumerate() {
+        match con {
+            Constraint::Linear { terms, value } => {
+                let origin = RowOrigin::Linear { constraint: i };
+                if *value != 0.0 {
+                    return Err(zero_values_only(origin.description(model), *value));
+                }
+                let mut merged: Vec<(usize, f64)> = Vec::new();
+                for t in terms {
+                    let eq = dofs.equation(t.node, t.component).ok_or(FemError::MissingComponent {
+                        role: "linear constraint",
+                        node: t.node,
+                        component: t.component,
+                        available: dofs.components(t.node),
+                    })?;
+                    match merged.iter_mut().find(|m| m.0 == eq) {
+                        Some(m) => m.1 += t.coefficient,
+                        None => merged.push((eq, t.coefficient)),
+                    }
+                }
+                let Some(&(designated, _)) = merged.iter().find(|m| m.1 != 0.0) else {
+                    return Err(constraint_error(format!(
+                        "{}: its coefficients cancel to zero",
+                        origin.description(model)
+                    )));
+                };
+                for &off in copies {
+                    rows.push(Row {
+                        origin,
+                        terms: merged.iter().map(|&(e, a)| (off + e, a)).collect(),
+                        value: 0.0,
+                        designated: off + designated,
+                    });
+                }
+            }
+            Constraint::RigidSet { set, .. } => {
+                return Err(FemError::NotYetSupported {
+                    item: "constraint",
+                    variant: con.name(),
+                    location: format!("constraint {i}, node set '{set}', with harmonic index {harmonic}"),
+                    package: "a follow-up of ADR 0386 (rigid sets in a harmonic analysis)",
+                });
+            }
+            Constraint::Cyclic { .. } => {
+                rows.extend(cyclic_rows(model, i, &bd, c, s, doubled.then_some(n))?);
+            }
+            _ => {}
+        }
+    }
+    eliminate(model, n, nn, nn, Vec::new(), rows, doubled)
+}
+
+/// Gauss-Jordan elimination of `rows` over `nn` unknowns (`n` mesh unknowns named by the model, the sine part of a doubled
+/// harmonic problem after them when `sine`), giving `x = T q + g` with `n_mesh` the length of the mesh part (ADR 0296; the
+/// tail of [`transformation`]).
+fn eliminate(
+    model: &SolidModel,
+    n: usize,
+    nn: usize,
+    n_mesh: usize,
+    references: Vec<(usize, usize)>,
+    rows: Vec<Row>,
+    sine: bool,
+) -> Result<Transformation> {
     let mut el = Elimination {
         model,
         n_mesh: n,
+        sine,
         deps: BTreeMap::new(),
         users: BTreeMap::new(),
         dropped: Vec::new(),
@@ -639,7 +872,7 @@ pub fn transformation(model: &SolidModel, prescribed: &[Prescribed]) -> Result<T
         t: CsrMatrix::rect(nn, independent.len(), row_ptr, col, val),
         g,
         independent,
-        n_mesh: n,
+        n_mesh,
         references,
         dropped: el.dropped,
         constrained: el.constrained,
@@ -1007,7 +1240,7 @@ fn unknown_name(tr: &Transformation, model: &SolidModel, i: usize) -> String {
 }
 
 /// Whether the factor of `k` at zero shift is refused or has a pivot ratio below the rule of `Shift::Auto`.
-fn zero_shift_refused(k: &CsrMatrix) -> bool {
+pub(crate) fn zero_shift_refused(k: &CsrMatrix) -> bool {
     match SkylineLdlt::factor_with(k, &SkylineOptions::default()) {
         Ok(f) => {
             let d = k.diag();

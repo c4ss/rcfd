@@ -825,6 +825,7 @@ fn n4_modal_refuses_the_new_data() {
 }
 
 #[test]
+#[ignore = "record of ADR 0296: asserts the refusal of a Cyclic constraint (ADR 0297), retired by F-394 (ADR 0386); its model is refused by the boundary match now, checked in si_cyclic R1d"]
 fn n5_cyclic_still_refused() {
     let mut mesh = hex_box([0.0; 3], [1.0, 0.1, 0.1], [10, 2, 2]).unwrap();
     let faces = |name: &str, mesh: &SolidMesh| -> Vec<FaceRef> { mesh.surface_set(name).unwrap().to_vec() };
