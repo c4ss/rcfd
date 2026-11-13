@@ -808,3 +808,30 @@ fn c2_c3_tables_and_refusals() {
     ch.holds("C3 restore with another method", ok, &msg);
     ch.finish();
 }
+
+// ------------------------------------------------------------------------------------------------ A7c (amendment 2)
+
+/// A7c of ADR 0389 amendment 2: the ramp load of A10, generalised-alpha with rho_inf = 1 against Newmark.
+#[test]
+fn a7c_ramp_load_generalised_alpha_one_is_newmark() {
+    let b = bar();
+    let zero = vec![0.0; b.phi.len()];
+    let table = LoadTable::new(vec![(0.0, 0.0), (b.period, 1.0), (10.0 * b.period, 1.0)]).unwrap();
+    let run = |method: Method| {
+        let o = TransientOptions::new(b.period / 40.0)
+            .method(method)
+            .damping(damping_of(&b));
+        let mut it = Integrator::new(&b.model, &[LoadHistory::new(pattern_m_phi(&b), table.clone())], &o).unwrap();
+        it.start(0.0, &zero, &zero).unwrap();
+        run_steps(&b, &mut it, 200)
+    };
+    let nm = run(Method::average_acceleration());
+    let ga = run(Method::GeneralisedAlpha { rho_inf: 1.0 });
+    let mut ch = Checks::new();
+    ch.at_most(
+        "A7c ramp load and damping, rho 1 vs Newmark",
+        max_rel_diff(&ga.u, &nm.u),
+        1e-12,
+    );
+    ch.finish();
+}
