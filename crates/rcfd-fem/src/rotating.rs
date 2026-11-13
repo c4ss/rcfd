@@ -715,3 +715,616 @@ impl CampbellTable {
         s
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------
+// ADR 0407 (F-500): rotating modes of a cyclic sector at a harmonic index.
+
+/// A loss of stiffness of one harmonic index of a sector (ADR 0407 D2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HarmonicLoss {
+    /// The harmonic index `k`.
+    pub harmonic: usize,
+    /// 1 for `k = 0` and `2 k = N`, 2 otherwise.
+    pub multiplicity: usize,
+    /// The speed and the negative count of the real problem of the index (for a pair every eigenvalue twice, so even).
+    pub loss: LossOfStiffness,
+}
+
+/// The result of one harmonic index of a sector at one speed (ADR 0407 D3).
+#[derive(Debug, Clone, PartialEq)]
+pub enum HarmonicSpeedModes {
+    /// The modes of the index, as [`crate::cyclic::modal_analysis_harmonic`] packs them, with `reduced_stiffness` the reduced
+    /// `K_eff`.
+    Modes(Box<crate::cyclic::HarmonicModes>),
+    /// The reduced `K_eff` of the index is not positive definite at this speed: no frequency is computed.
+    LossOfStiffness(HarmonicLoss),
+}
+
+impl HarmonicSpeedModes {
+    /// The modes, if the index has them at this speed.
+    pub fn modes(&self) -> Option<&crate::cyclic::HarmonicModes> {
+        match self {
+            HarmonicSpeedModes::Modes(r) => Some(&**r),
+            HarmonicSpeedModes::LossOfStiffness(_) => None,
+        }
+    }
+    /// The loss of stiffness, if the index has one at this speed.
+    pub fn loss(&self) -> Option<&HarmonicLoss> {
+        match self {
+            HarmonicSpeedModes::Modes(_) => None,
+            HarmonicSpeedModes::LossOfStiffness(l) => Some(l),
+        }
+    }
+}
+
+/// A sector with one cyclic constraint rotating about the constraint's axis, prepared for the modes of any harmonic index at
+/// any speed (ADR 0407): the [`RotatingPart`] of the sector (the pre-stress of the index-0 static solve at 1 rad/s and the
+/// matrices `K`, `K_sigma,1`, `M`, `M_perp`), applied at index `k` on the real cos/sin pair of ADR 0386.
+pub struct RotatingSector<'a> {
+    part: RotatingPart<'a>,
+    sectors: usize,
+    axis: Vec3,
+    origin: Vec3,
+}
+
+/// One family of a [`CyclicCampbell`]: the Campbell table of one harmonic index.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct HarmonicCampbell {
+    /// The harmonic index `k` (the nodal diameters).
+    pub harmonic: usize,
+    /// 1 for `k = 0` and `2 k = N`, 2 otherwise (each track is a pair of full modes).
+    pub multiplicity: usize,
+    /// The tracks of the family; a track's mode is the first vector `(a, b)` of its group, concatenated, its eigenvalue the
+    /// pair's mean, its MAC the subspace assurance (ADR 0407 D3).
+    pub table: CampbellTable,
+}
+
+/// A crossing of a family's track with an engine order (ADR 0407 D3).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FamilyCrossing {
+    /// The harmonic index of the family.
+    pub harmonic: usize,
+    /// The crossing (track of the family, order, speed, frequency).
+    pub crossing: Crossing,
+    /// Whether the engine order excites the index ([`engine_order_excites`]).
+    pub excited: bool,
+}
+
+/// The Campbell diagram of a cyclic sector: one family of tracks per harmonic index (ADR 0407 D3).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct CyclicCampbell {
+    /// The number of sectors `N`.
+    pub sectors: usize,
+    /// The families, in increasing index.
+    pub families: Vec<HarmonicCampbell>,
+}
+
+/// Whether engine order `order` excites harmonic index `harmonic` of a rotor of `sectors` sectors: `order mod N` is `k` or
+/// `N - k` (ADR 0407 D3; the projection of the sector phases `e^{i E j alpha}` on index `k`).
+pub fn engine_order_excites(order: u32, harmonic: usize, sectors: usize) -> bool {
+    if sectors == 0 {
+        return false;
+    }
+    let e = order as usize % sectors;
+    let k = harmonic % sectors;
+    e == k || (e + k) % sectors == 0
+}
+
+/// `x^T M_2 y` with `M_2 = blockdiag(m, m, ...)` over vectors of a multiple of `m.n` entries.
+fn block_dot(m: &CsrMatrix, x: &[f64], y: &[f64]) -> f64 {
+    let n = m.n;
+    let mut out = 0.0;
+    let mut t = vec![0.0; n];
+    for (xb, yb) in x.chunks(n).zip(y.chunks(n)) {
+        m.matvec(yb, &mut t);
+        out += xb.iter().zip(&t).map(|(p, q)| p * q).sum::<f64>();
+    }
+    out
+}
+
+/// The inverse of a small symmetric positive definite matrix by Gauss-Jordan elimination with partial pivoting.
+fn small_inverse(g: &[Vec<f64>]) -> Vec<Vec<f64>> {
+    let d = g.len();
+    if d == 1 {
+        return vec![vec![1.0 / g[0][0]]];
+    }
+    let mut a: Vec<Vec<f64>> = g.to_vec();
+    let mut inv: Vec<Vec<f64>> = (0..d)
+        .map(|i| (0..d).map(|j| if i == j { 1.0 } else { 0.0 }).collect())
+        .collect();
+    for c in 0..d {
+        let p = (c..d)
+            .max_by(|&x, &y| a[x][c].abs().total_cmp(&a[y][c].abs()))
+            .unwrap_or(c);
+        a.swap(c, p);
+        inv.swap(c, p);
+        let piv = a[c][c];
+        for j in 0..d {
+            a[c][j] /= piv;
+            inv[c][j] /= piv;
+        }
+        for r in 0..d {
+            if r != c {
+                let f = a[r][c];
+                for j in 0..d {
+                    a[r][j] -= f * a[c][j];
+                    inv[r][j] -= f * inv[c][j];
+                }
+            }
+        }
+    }
+    inv
+}
+
+/// The subspace assurance `tr(G_V^-1 C G_W^-1 C^T) / min(d_V, d_W)` of two groups of vectors, `C = V^T M_2 W`, `G_V = V^T M_2
+/// V`, `G_W = W^T M_2 W`, `M_2` the mass `m` block-diagonal over the vectors' length (ADR 0407 D3 and amendment 1): the share
+/// of the smaller space inside the larger (1 when one contains the other), independent of the basis in either group; the
+/// mass-weighted MAC for two single vectors. 0 for an empty group.
+pub fn subspace_mac(m: &CsrMatrix, v: &[Vec<f64>], w: &[Vec<f64>]) -> f64 {
+    let (dv, dw) = (v.len(), w.len());
+    if dv == 0 || dw == 0 {
+        return 0.0;
+    }
+    let gram = |a: &[Vec<f64>], b: &[Vec<f64>]| -> Vec<Vec<f64>> {
+        a.iter()
+            .map(|x| b.iter().map(|y| block_dot(m, x, y)).collect())
+            .collect()
+    };
+    let c = gram(v, w);
+    let gv = small_inverse(&gram(v, v));
+    let gw = small_inverse(&gram(w, w));
+    // tr((G_V^-1 C) (G_W^-1 C^T))
+    let mut s = 0.0;
+    for i in 0..dv {
+        for p in 0..dw {
+            let a: f64 = (0..dv).map(|j| gv[i][j] * c[j][p]).sum();
+            let b: f64 = (0..dw).map(|q| gw[p][q] * c[i][q]).sum();
+            s += a * b;
+        }
+    }
+    s / dv.min(dw) as f64
+}
+
+fn check_harmonics(harmonics: &[usize], sectors: usize) -> Result<()> {
+    if harmonics.is_empty() {
+        return Err(FemError::InvalidValue {
+            key: "harmonics",
+            reason: "the list of harmonic indices is empty".to_string(),
+        });
+    }
+    for (i, &k) in harmonics.iter().enumerate() {
+        if 2 * k > sectors {
+            return Err(FemError::InvalidValue {
+                key: "harmonics",
+                reason: format!("index {i} (harmonic {k}) is above N/2 for a rotor of {sectors} sectors"),
+            });
+        }
+        if i > 0 && k <= harmonics[i - 1] {
+            return Err(FemError::InvalidValue {
+                key: "harmonics",
+                reason: format!(
+                    "index {i} (harmonic {k}) does not exceed index {} (harmonic {}): the list must increase",
+                    i - 1,
+                    harmonics[i - 1]
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+impl<'a> RotatingSector<'a> {
+    /// Prepares a sector with one cyclic constraint, rotating about that constraint's axis through its origin: the
+    /// [`RotatingPart::new`] of the sector (one static solve of the centrifugal load at 1 rad/s under the index-0 rows).
+    /// Refuses a model without exactly one cyclic constraint and whatever [`RotatingPart::new`] refuses.
+    pub fn new(model: &'a SolidModel, options: &RotatingOptions) -> Result<RotatingSector<'a>> {
+        let (sectors, axis, origin) = Self::frame(model)?;
+        let part = RotatingPart::new(model, axis, origin, options)?;
+        Ok(RotatingSector {
+            part,
+            sectors,
+            axis,
+            origin,
+        })
+    }
+
+    /// As [`RotatingSector::new`] with a pre-stress at 1 rad/s the caller computed (of index 0; ADR 0407 D1).
+    pub fn with_unit_prestress(
+        model: &'a SolidModel,
+        prestress: Prestress,
+        options: &RotatingOptions,
+    ) -> Result<RotatingSector<'a>> {
+        let (sectors, axis, origin) = Self::frame(model)?;
+        let part = RotatingPart::with_unit_prestress(model, axis, origin, prestress, options)?;
+        Ok(RotatingSector {
+            part,
+            sectors,
+            axis,
+            origin,
+        })
+    }
+
+    fn frame(model: &SolidModel) -> Result<(usize, Vec3, Vec3)> {
+        model.validate()?;
+        let ci = crate::cyclic::the_cyclic_constraint(model)?;
+        let bd = crate::cyclic::boundary(model, ci)?;
+        Ok((bd.sectors(), bd.axis(), bd.origin()))
+    }
+
+    /// The rotating part of the sector (index-0 operator, matrices, pre-stress).
+    pub fn part(&self) -> &RotatingPart<'a> {
+        &self.part
+    }
+    /// The number of sectors `N`.
+    pub fn sectors(&self) -> usize {
+        self.sectors
+    }
+    /// The unit axis of rotation (the cyclic axis).
+    pub fn axis(&self) -> Vec3 {
+        self.axis
+    }
+    /// The origin on the axis.
+    pub fn origin(&self) -> Vec3 {
+        self.origin
+    }
+
+    /// The modes of harmonic index `harmonic` at the speed `omega`, rad/s (ADR 0407 D1 to D3). At `omega = 0` the result of
+    /// [`crate::cyclic::modal_analysis_harmonic`] with the modal options. Refuses a harmonic above `N / 2` (`"harmonic"`) and a
+    /// negative or non-finite speed (`"speed"`).
+    pub fn modes(&self, harmonic: usize, omega: f64) -> Result<HarmonicSpeedModes> {
+        use crate::cyclic::{doubled_matrix, unknown_label, HarmonicModes, SectorMode};
+        if !(omega.is_finite() && omega >= 0.0) {
+            return Err(FemError::InvalidValue {
+                key: "speed",
+                reason: format!("{omega} rad/s is not a finite speed >= 0"),
+            });
+        }
+        let sectors = self.sectors;
+        if 2 * harmonic > sectors {
+            return Err(FemError::InvalidValue {
+                key: "harmonic",
+                reason: format!(
+                    "harmonic index {harmonic} is above N/2 for a rotor of {sectors} sectors (the largest is {})",
+                    sectors / 2
+                ),
+            });
+        }
+        let model = self.part.model;
+        let options = &self.part.options.modal;
+        if omega == 0.0 {
+            return crate::cyclic::modal_analysis_harmonic(model, &[], harmonic, options)
+                .map(|h| HarmonicSpeedModes::Modes(Box::new(h)));
+        }
+        let n = model.dof_map().n_equations();
+        let tr = if harmonic == 0 {
+            crate::mpc::transformation(model, &[])?
+        } else {
+            crate::mpc::harmonic_transformation(model, &[], harmonic)?
+        };
+        let multiplicity = if harmonic == 0 || 2 * harmonic == sectors { 1 } else { 2 };
+        let keff = self.part.operator(omega);
+        let (k2, m2) = if multiplicity == 2 {
+            (doubled_matrix(&keff), doubled_matrix(&self.part.m))
+        } else {
+            (keff, self.part.m.clone())
+        };
+        let zero = vec![0.0; tr.n_unknowns()];
+        let (kr, _) = tr.reduce(&k2, &zero)?;
+        let (mr, _) = tr.reduce(&m2, &zero)?;
+        let nq = kr.n;
+        let count = options.modes * multiplicity;
+        if options.modes == 0 || count >= nq {
+            return Err(FemError::InvalidValue {
+                key: "modes",
+                reason: format!(
+                    "{} modes ({count} eigenvalues of the real problem) requested of harmonic {harmonic} with {nq} free \
+                     unknowns (at least 1 and fewer than the unknowns)",
+                    options.modes
+                ),
+            });
+        }
+        for (a, d) in mr.diag().iter().enumerate() {
+            if d.is_nan() || *d <= 0.0 {
+                let i = tr.independent()[a];
+                return Err(FemError::InvalidValue {
+                    key: "density",
+                    reason: format!("{} has no mass (diagonal {d:e})", unknown_label(&tr, model, i)),
+                });
+            }
+        }
+        // D2: the inertia of the reduced K_eff of the index.
+        let lost = |negative: Option<usize>| {
+            HarmonicSpeedModes::LossOfStiffness(HarmonicLoss {
+                harmonic,
+                multiplicity,
+                loss: LossOfStiffness { speed: omega, negative },
+            })
+        };
+        match count_below(&kr, &mr, 0.0, &SkylineOrdering::Rcm) {
+            Ok(0) => {}
+            Ok(negative) => return Ok(lost(Some(negative))),
+            Err(EigenError::CountFailed { .. }) => return Ok(lost(None)),
+            Err(e) => {
+                return Err(FemError::Solver {
+                    solver: "count_below",
+                    reason: e.to_string(),
+                })
+            }
+        }
+        let sub = SubspaceOptions {
+            shift: options.shift.unwrap_or(Shift::Value(0.0)),
+            tolerance: options.tolerance,
+            residual_test: options.residual_test,
+            max_iterations: options.max_iterations,
+            subspace_size: options.subspace_size,
+            ..SubspaceOptions::default()
+        };
+        let eig = lowest_eigenpairs(&kr, &mr, count, &sub).map_err(|e| FemError::Solver {
+            solver: "lowest_eigenpairs",
+            reason: e.to_string(),
+        })?;
+        let rigid_free = match options.shift {
+            None => false,
+            Some(_) => crate::mpc::zero_shift_refused(&kr),
+        };
+        let modes: Vec<SectorMode> = eig
+            .vectors
+            .iter()
+            .map(|q| {
+                let x = tr.expand(q);
+                SectorMode {
+                    cos: x[..n].to_vec(),
+                    sin: if multiplicity == 2 {
+                        x[n..2 * n].to_vec()
+                    } else {
+                        vec![0.0; n]
+                    },
+                }
+            })
+            .collect();
+        let (values, pair_splits): (Vec<f64>, Vec<f64>) = if multiplicity == 2 {
+            eig.values
+                .chunks(2)
+                .map(|p| {
+                    let mean = 0.5 * (p[0] + p[1]);
+                    let split = if mean == 0.0 {
+                        (p[1] - p[0]).abs()
+                    } else {
+                        (p[1] - p[0]).abs() / mean.abs()
+                    };
+                    (mean, split)
+                })
+                .unzip()
+        } else {
+            (eig.values.clone(), vec![0.0; eig.values.len()])
+        };
+        Ok(HarmonicSpeedModes::Modes(Box::new(HarmonicModes {
+            harmonic,
+            sectors,
+            multiplicity,
+            frequencies: values.iter().map(|&l| crate::modal::frequency(l)).collect(),
+            values,
+            pair_splits,
+            eigenvalues: eig.values,
+            modes,
+            residuals: eig.residuals,
+            iterations: eig.iterations,
+            shift: eig.shift,
+            sturm: eig.sturm,
+            unknowns: nq,
+            rigid_free,
+            transformation: tr,
+            reduced_stiffness: kr,
+            reduced_mass: mr,
+        })))
+    }
+
+    /// The Campbell diagram over the harmonic indices `harmonics` (non-empty, strictly increasing, each at most `N / 2`; key
+    /// `"harmonics"`) and the speeds `speeds` (as [`RotatingPart::campbell`]; key `"speeds"`): one family of tracks per index,
+    /// tracked by the subspace assurance of each sector frequency's group (ADR 0407 D3).
+    pub fn campbell(&self, harmonics: &[usize], speeds: &[f64]) -> Result<CyclicCampbell> {
+        check_harmonics(harmonics, self.sectors)?;
+        check_speeds(speeds)?;
+        let mut families = Vec::with_capacity(harmonics.len());
+        for &k in harmonics {
+            let mut results = Vec::with_capacity(speeds.len());
+            for &w in speeds {
+                results.push(self.modes(k, w)?);
+            }
+            let multiplicity = if k == 0 || 2 * k == self.sectors { 1 } else { 2 };
+            families.push(HarmonicCampbell {
+                harmonic: k,
+                multiplicity,
+                table: track_families(speeds, &results, &self.part.m, multiplicity),
+            });
+        }
+        Ok(CyclicCampbell {
+            sectors: self.sectors,
+            families,
+        })
+    }
+}
+
+/// The groups of a harmonic result: per sector frequency its vectors `(a, b)` concatenated (only `a` for a single harmonic).
+fn groups_of(res: &crate::cyclic::HarmonicModes, multiplicity: usize) -> Vec<Vec<Vec<f64>>> {
+    let vector = |m: &crate::cyclic::SectorMode| -> Vec<f64> {
+        if multiplicity == 2 {
+            m.cos.iter().chain(&m.sin).copied().collect()
+        } else {
+            m.cos.clone()
+        }
+    };
+    res.modes
+        .chunks(multiplicity)
+        .map(|g| g.iter().map(vector).collect())
+        .collect()
+}
+
+/// Relative distance of two sector frequencies' eigenvalues within which they are one cluster (ADR 0407 amendment 1).
+pub const CLUSTER_TOLERANCE: f64 = 1e-8;
+
+/// The subspace of each sector frequency: the vectors of every frequency of its cluster (consecutive values within
+/// [`CLUSTER_TOLERANCE`] relative), its own first (ADR 0407 amendment 1).
+fn cluster_spaces(values: &[f64], groups: &[Vec<Vec<f64>>]) -> Vec<Vec<Vec<f64>>> {
+    let n = values.len().min(groups.len());
+    let mut start = vec![0usize; n];
+    for i in 1..n {
+        let close = (values[i] - values[i - 1]).abs() <= CLUSTER_TOLERANCE * values[i - 1].abs().max(values[i].abs());
+        start[i] = if close { start[i - 1] } else { i };
+    }
+    (0..n)
+        .map(|i| {
+            let mut end = i + 1;
+            while end < n && start[end] == start[i] {
+                end += 1;
+            }
+            let mut space = groups[i].clone();
+            for (j, g) in groups.iter().enumerate().take(end).skip(start[i]) {
+                if j != i {
+                    space.extend(g.iter().cloned());
+                }
+            }
+            space
+        })
+        .collect()
+}
+
+/// ADR 0403 D4's greedy tracking with groups in place of vectors and the subspace assurance in place of the MAC.
+fn track_families(speeds: &[f64], results: &[HarmonicSpeedModes], m: &CsrMatrix, multiplicity: usize) -> CampbellTable {
+    let ns = speeds.len();
+    let mut tracks: Vec<ModeTrack> = Vec::new();
+    let mut last: Vec<Vec<Vec<f64>>> = Vec::new();
+    let mut losses = Vec::new();
+    for (j, r) in results.iter().enumerate() {
+        match r {
+            HarmonicSpeedModes::LossOfStiffness(l) => losses.push(l.loss),
+            HarmonicSpeedModes::Modes(res) => {
+                let groups = cluster_spaces(&res.values, &groups_of(res, multiplicity));
+                if tracks.is_empty() {
+                    for (i, g) in groups.iter().enumerate() {
+                        let mut t = ModeTrack {
+                            eigenvalues: vec![None; ns],
+                            frequencies: vec![None; ns],
+                            mac: vec![None; ns],
+                            modes: vec![None; ns],
+                        };
+                        t.eigenvalues[j] = Some(res.values[i]);
+                        t.frequencies[j] = Some(res.frequencies[i]);
+                        t.modes[j] = Some(g[0].clone());
+                        tracks.push(t);
+                        last.push(g.clone());
+                    }
+                    continue;
+                }
+                let mut pairs = Vec::with_capacity(last.len() * groups.len());
+                for (t, v) in last.iter().enumerate() {
+                    for (i, w) in groups.iter().enumerate() {
+                        pairs.push((subspace_mac(m, v, w), t, i));
+                    }
+                }
+                // Decreasing assurance; ties by the lower track, then the lower group.
+                pairs.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+                let mut track_used = vec![false; tracks.len()];
+                let mut group_used = vec![false; groups.len()];
+                for (value, t, i) in pairs {
+                    if track_used[t] || group_used[i] {
+                        continue;
+                    }
+                    track_used[t] = true;
+                    group_used[i] = true;
+                    let tr = &mut tracks[t];
+                    tr.eigenvalues[j] = Some(res.values[i]);
+                    tr.frequencies[j] = Some(res.frequencies[i]);
+                    tr.mac[j] = Some(value);
+                    tr.modes[j] = Some(groups[i][0].clone());
+                    last[t] = groups[i].clone();
+                }
+            }
+        }
+    }
+    CampbellTable {
+        speeds: speeds.to_vec(),
+        tracks,
+        losses,
+    }
+}
+
+impl CyclicCampbell {
+    /// The crossings of every family's tracks with the engine order `order`, family by family, each flagged by whether the
+    /// order excites the family.
+    pub fn crossings(&self, order: u32) -> Vec<FamilyCrossing> {
+        let mut out = Vec::new();
+        for f in &self.families {
+            let excited = engine_order_excites(order, f.harmonic, self.sectors);
+            for c in f.table.crossings(order) {
+                out.push(FamilyCrossing {
+                    harmonic: f.harmonic,
+                    crossing: c,
+                    excited,
+                });
+            }
+        }
+        out
+    }
+
+    /// The table as CSV: `harmonic,speed_rad_s,speed_rpm,track_0_hz,...,loss_negative`, one row per family and speed (the
+    /// rows of [`CampbellTable::to_csv`] with the index in front, padded to the largest number of tracks).
+    pub fn to_csv(&self) -> String {
+        let width = self.families.iter().map(|f| f.table.tracks.len()).max().unwrap_or(0);
+        let mut s = String::from("harmonic,speed_rad_s,speed_rpm");
+        for t in 0..width {
+            let _ = write!(s, ",track_{t}_hz");
+        }
+        s.push_str(",loss_negative\n");
+        for f in &self.families {
+            let pad = width - f.table.tracks.len();
+            for line in f.table.to_csv().lines().skip(1) {
+                // The last field is the loss; the padding goes before it.
+                let (head, loss) = line.rsplit_once(',').unwrap_or((line, ""));
+                let _ = write!(s, "{},{head}", f.harmonic);
+                for _ in 0..pad {
+                    s.push(',');
+                }
+                let _ = writeln!(s, ",{loss}");
+            }
+        }
+        s
+    }
+
+    /// The table as JSON: the number of sectors, each family with its index, multiplicity and table
+    /// ([`CampbellTable::to_json`] with the same orders), and the crossings with the orders, each flagged by
+    /// [`engine_order_excites`].
+    pub fn to_json(&self, orders: &[u32]) -> String {
+        let mut s = String::from("{\n");
+        let _ = writeln!(s, "  \"sectors\": {},", self.sectors);
+        s.push_str("  \"families\": [\n");
+        for (i, f) in self.families.iter().enumerate() {
+            let _ = write!(
+                s,
+                "    {{\"harmonic\": {}, \"multiplicity\": {}, \"table\": {}}}",
+                f.harmonic,
+                f.multiplicity,
+                f.table.to_json(orders).trim_end()
+            );
+            s.push_str(if i + 1 < self.families.len() { ",\n" } else { "\n" });
+        }
+        s.push_str("  ],\n");
+        let crossings: Vec<FamilyCrossing> = orders.iter().flat_map(|&k| self.crossings(k)).collect();
+        let items: Vec<String> = crossings
+            .iter()
+            .map(|c| {
+                format!(
+                    "{{\"harmonic\": {}, \"track\": {}, \"order\": {}, \"speed_rad_s\": {}, \"frequency_hz\": {}, \
+                     \"excited\": {}}}",
+                    c.harmonic, c.crossing.track, c.crossing.order, c.crossing.speed, c.crossing.frequency, c.excited
+                )
+            })
+            .collect();
+        let _ = writeln!(s, "  \"crossings\": [{}]", items.join(", "));
+        s.push('}');
+        s.push('\n');
+        s
+    }
+}

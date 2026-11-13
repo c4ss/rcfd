@@ -302,7 +302,7 @@ pub struct HarmonicModes {
 }
 
 /// `blockdiag(a, a)`.
-fn doubled_matrix(a: &CsrMatrix) -> CsrMatrix {
+pub(crate) fn doubled_matrix(a: &CsrMatrix) -> CsrMatrix {
     let n = a.n;
     let mut row_ptr = a.row_ptr.clone();
     let mut col = a.col.clone();
@@ -816,7 +816,7 @@ fn harmonic_load_error(reason: String) -> FemError {
 
 /// The name of unknown `i` of a (harmonic) transformation: "node 4 component 1", "node 4 component 1 (sine part)" or "the
 /// reference rotation y of constraint 3 (RigidSet, sine part)".
-fn unknown_label(tr: &Transformation, model: &SolidModel, i: usize) -> String {
+pub(crate) fn unknown_label(tr: &Transformation, model: &SolidModel, i: usize) -> String {
     let n = model.dof_map().n_equations();
     if i < tr.n_mesh() {
         let (node, component) = model.dof_map().node_component(i % n).expect("mesh unknown");
