@@ -159,6 +159,8 @@ struct MockWall {
     f0: f64,
     ramp: f64,
     lag: bool,
+    /// Amendment 1: one wall acceleration and displacement (area means of the faces' x components), force uniform per area.
+    piston: bool,
     state: WallState,
     saved: Option<WallState>,
 }
@@ -190,6 +192,7 @@ impl MockWall {
             f0: 0.0,
             ramp: 1.0,
             lag: false,
+            piston: false,
             state: WallState {
                 step: 0,
                 d: vec![vec3::ZERO; np],
@@ -251,6 +254,15 @@ impl Fluid for MockWall {
     fn forces(&self) -> Result<Vec<Vec3>, String> {
         let a_total = self.area();
         let s = (self.t() / self.ramp).min(1.0);
+        if self.piston {
+            let (mut d_bar, mut a_bar) = (0.0, 0.0);
+            for (f, &af) in self.faces.iter().zip(&self.areas) {
+                d_bar += af / a_total * mean(&self.state.d, f)[0];
+                a_bar += af / a_total * mean(&self.state.a, f)[0];
+            }
+            let total = s * self.f0 - self.k_f * d_bar - self.m_a * a_bar;
+            return Ok(self.areas.iter().map(|&af| [af / a_total * total, 0.0, 0.0]).collect());
+        }
         Ok(self
             .faces
             .iter()
@@ -426,6 +438,16 @@ fn predict(ratio: f64) -> Prediction {
 
 /// A solid and a mock wall at the initial state of D4 for a mass ratio, with an `n x n` wall.
 fn mass_setup(p: &Prediction, n: usize, loads: &[LoadHistory]) -> (MockWall, DynamicSolid, InterfaceMap) {
+    mass_setup_with(p, n, loads, false)
+}
+
+/// [`mass_setup`] with the piston mock of amendment 1 (`piston`).
+fn mass_setup_with(
+    p: &Prediction,
+    n: usize,
+    loads: &[LoadHistory],
+    piston: bool,
+) -> (MockWall, DynamicSolid, InterfaceMap) {
     let model = bar();
     let mut solid = DynamicSolid::new("solid", &model, "xmax", loads, &TransientOptions::new(p.dt), 1).unwrap();
     let dofs = model.dof_map();
@@ -446,6 +468,7 @@ fn mass_setup(p: &Prediction, n: usize, loads: &[LoadHistory]) -> (MockWall, Dyn
     let vp = map.displacement_to_points(&vn).unwrap();
     let mut wall = probe.with_velocity(vp);
     wall.m_a = p.m_a;
+    wall.piston = piston;
     (wall, solid, map)
 }
 
@@ -474,7 +497,11 @@ fn settings(aitken: bool, cap: usize) -> CouplingSettings {
 }
 
 fn mass_run(p: &Prediction, n: usize, settings: &CouplingSettings, lag: bool) -> Run {
-    let (mut wall, mut solid, map) = mass_setup(p, n, &[]);
+    mass_run_with(p, n, settings, lag, false)
+}
+
+fn mass_run_with(p: &Prediction, n: usize, settings: &CouplingSettings, lag: bool, piston: bool) -> Run {
+    let (mut wall, mut solid, map) = mass_setup_with(p, n, &[], piston);
     wall.lag = lag;
     let mut samples = Vec::with_capacity(STEPS);
     let (mut max_it, mut sum_it, mut conv) = (0, 0usize, 0);
@@ -594,6 +621,10 @@ fn bar_interface_nodes() -> Vec<Vec3> {
 /// P1/P2: the plain iteration from the initial state: fails at the cap (Stop), and its residual grows by |s| per
 /// iteration (Keep, cap 5).
 fn plain_control(checks: &mut Checks, id: &str, p: &Prediction, registered_failure: bool) {
+    plain_control_with(checks, id, p, registered_failure, false)
+}
+
+fn plain_control_with(checks: &mut Checks, id: &str, p: &Prediction, registered_failure: bool, piston: bool) {
     let plain = |cap: usize, at_cap: AtCap| CouplingSettings {
         relaxation: Relaxation::Fixed(1.0),
         max_iterations: cap,
@@ -601,7 +632,7 @@ fn plain_control(checks: &mut Checks, id: &str, p: &Prediction, registered_failu
         ..CouplingSettings::aitken(0.5)
     };
     if registered_failure {
-        let (mut wall, mut solid, map) = mass_setup(p, 2, &[]);
+        let (mut wall, mut solid, map) = mass_setup_with(p, 2, &[], piston);
         match coupled_step(&mut wall, &mut solid, &map, p.dt, &plain(20, AtCap::Stop)) {
             Err(e) => {
                 println!("  {id}: {e}");
@@ -610,7 +641,7 @@ fn plain_control(checks: &mut Checks, id: &str, p: &Prediction, registered_failu
             Ok(_) => checks.holds(&format!("{id} fails"), false, "the step fails at the cap (coupler)"),
         }
     }
-    let (mut wall, mut solid, map) = mass_setup(p, 2, &[]);
+    let (mut wall, mut solid, map) = mass_setup_with(p, 2, &[], piston);
     let step = coupled_step(&mut wall, &mut solid, &map, p.dt, &plain(5, AtCap::Keep)).unwrap();
     let r = &step.residual_norms;
     println!("  {id}: residual norms {r:?}, predicted slope {:.9}", p.slope);
@@ -620,6 +651,7 @@ fn plain_control(checks: &mut Checks, id: &str, p: &Prediction, registered_failu
 }
 
 #[test]
+#[ignore = "ADR 0410 amendment 1: record of the registered run (per-face added mass); corrected by the piston test"]
 fn f2_i1_i2_m2_p1_ratio_four() {
     let mut checks = Checks::new();
     let p = predict(4.0);
@@ -655,6 +687,7 @@ fn f2_i1_i2_m2_p1_ratio_four() {
 }
 
 #[test]
+#[ignore = "ADR 0410 amendment 1: record of the registered run (per-face added mass); corrected by the piston test"]
 fn f1_i3_m2_p2_ratio_half() {
     let mut checks = Checks::new();
     let p = predict(0.5);
@@ -718,6 +751,7 @@ fn m1_balance_of_the_built_maps() {
 // ---- the spring and the slow load (K1, K2) ------------------------------------------------------------------------------
 
 #[test]
+#[ignore = "ADR 0410 amendment 1: record of the registered run (per-face added mass); corrected by the piston test"]
 fn k1_k2_spring_and_slow_load() {
     let mut checks = Checks::new();
     let ks = E * W * W / L;
@@ -792,6 +826,7 @@ fn r1_restore_bit_for_bit() {
 }
 
 #[test]
+#[ignore = "ADR 0410 amendment 1: record of the registered run (per-face added mass); corrected by the piston test"]
 fn fs1_failing_step_in_the_first_iteration() {
     let mut checks = Checks::new();
     let p = predict(4.0);
@@ -1015,5 +1050,163 @@ fn z1_refusals() {
     let e = i.run_with_force(1, &f).unwrap_err().to_string();
     checks.holds("Z1 non-finite", e.contains("held force") && e.contains("not finite"), &e);
     checks.holds("Z1 unchanged", i.step_index().unwrap() == 0, "no step taken on a refusal");
+    checks.finish();
+}
+
+// ---- amendment 1: the corrected runs with the piston mock (one wall acceleration) ----------------------------------------
+
+#[test]
+fn f2_i1_i2_m2_p1_ratio_four_piston() {
+    let mut checks = Checks::new();
+    let p = predict(4.0);
+    println!(
+        "ratio 4: kL {:.12}, omega {:.9e}, dt {:.6e}, Omega_pred/omega {:.9}, slope {:.6}",
+        p.kl,
+        p.omega,
+        p.dt,
+        p.omega_pred / p.omega,
+        p.slope
+    );
+    let ma = mass_run_with(&p, 2, &settings(true, 4), false, true);
+    report_run("matching Aitken", &ma);
+    let ml = mass_run_with(&p, 2, &settings(false, 4), false, true);
+    report_run("matching least squares", &ml);
+    let ta = mass_run_with(&p, 3, &settings(true, 20), false, true);
+    report_run("3:2 Aitken", &ta);
+    let tl = mass_run_with(&p, 3, &settings(false, 8), false, true);
+    report_run("3:2 least squares", &tl);
+    checks.at_most("F2c |Omega_m/omega - 1|", (ma.omega_m / p.omega - 1.0).abs(), 1e-2);
+    checks.at_most("F2bc |Omega_m/omega - 1|", (ml.omega_m / p.omega - 1.0).abs(), 1e-2);
+    checks.at_most("F2pc |Omega_m/Omega_pred - 1|", (ma.omega_m / p.omega_pred - 1.0).abs(), 2e-5);
+    check_iterations(&mut checks, "I1c", &ma, 4);
+    check_iterations(&mut checks, "I1bc", &ml, 4);
+    check_iterations(&mut checks, "I2c", &ta, 20);
+    check_iterations(&mut checks, "I2bc", &tl, 8);
+    run_balance(&mut checks, "M1rc matching", &ma);
+    run_balance(&mut checks, "M1rc 3:2", &ta);
+    checks.below("M2c ratio 4 Aitken", (ta.omega_m / ma.omega_m - 1.0).abs(), 1e-3);
+    checks.below("M2c ratio 4 least squares", (tl.omega_m / ml.omega_m - 1.0).abs(), 1e-3);
+    plain_control_with(&mut checks, "P1c", &p, true, true);
+    checks.finish();
+}
+
+#[test]
+fn f1_i3_m2_p2_ratio_half_piston() {
+    let mut checks = Checks::new();
+    let p = predict(0.5);
+    println!(
+        "ratio 0.5: kL {:.12}, omega {:.9e}, dt {:.6e}, Omega_pred/omega {:.9}, slope {:.6}",
+        p.kl,
+        p.omega,
+        p.dt,
+        p.omega_pred / p.omega,
+        p.slope
+    );
+    let ma = mass_run_with(&p, 2, &settings(true, 4), false, true);
+    report_run("matching Aitken", &ma);
+    let ml = mass_run_with(&p, 2, &settings(false, 4), false, true);
+    report_run("matching least squares", &ml);
+    let ta = mass_run_with(&p, 3, &settings(true, 20), false, true);
+    report_run("3:2 Aitken", &ta);
+    checks.at_most("F1c |Omega_m/omega - 1|", (ma.omega_m / p.omega - 1.0).abs(), 1e-2);
+    checks.at_most("F1bc |Omega_m/omega - 1|", (ml.omega_m / p.omega - 1.0).abs(), 1e-2);
+    checks.at_most("F1pc |Omega_m/Omega_pred - 1|", (ma.omega_m / p.omega_pred - 1.0).abs(), 2e-5);
+    check_iterations(&mut checks, "I3c matching Aitken", &ma, 4);
+    check_iterations(&mut checks, "I3c matching least squares", &ml, 4);
+    check_iterations(&mut checks, "I3c 3:2 Aitken", &ta, 20);
+    checks.below("M2c ratio 0.5 Aitken", (ta.omega_m / ma.omega_m - 1.0).abs(), 1e-3);
+    plain_control_with(&mut checks, "P2c", &p, false, true);
+    checks.finish();
+}
+
+#[test]
+fn n1_lagging_mock_shows_in_the_frequency_piston() {
+    let mut checks = Checks::new();
+    let p = predict(4.0);
+    let run = mass_run_with(&p, 2, &settings(true, 20), true, true);
+    report_run("N1c lagging mock", &run);
+    let err = (run.omega_m / p.omega_pred - 1.0).abs();
+    checks.at_least("N1c |Omega_m/Omega_pred - 1| (lag)", if err.is_nan() { 0.0 } else { err }, 2e-5);
+    checks.finish();
+}
+
+#[test]
+fn k1_k2_spring_and_slow_load_piston() {
+    let mut checks = Checks::new();
+    let ks = E * W * W / L;
+    let (f0, kf) = (1e6, 1.5 * ks);
+    let u_star = f0 / (ks + kf);
+    let dt = 0.3;
+    for (id, aitken) in [("K1c", true), ("K1bc", false)] {
+        let options = TransientOptions::new(dt).method(Method::GeneralisedAlpha { rho_inf: 0.0 });
+        let mut solid = DynamicSolid::new("solid", &bar(), "xmax", &[], &options, 1).unwrap();
+        let mut wall = MockWall::new(2, true, dt);
+        wall.k_f = kf;
+        wall.f0 = f0;
+        wall.ramp = 5.0 * dt;
+        wall.piston = true;
+        let map = build_map(&solid, &wall);
+        let mut max_it = 0;
+        let mut last = None;
+        for k in 0..15 {
+            match coupled_step(&mut wall, &mut solid, &map, dt, &settings(aitken, 4)) {
+                Ok(step) => {
+                    max_it = max_it.max(step.iterations);
+                    last = Some(step);
+                }
+                Err(e) => {
+                    checks.holds(&format!("{id} step {}", k + 1), false, &format!("converged ({e})"));
+                    break;
+                }
+            }
+        }
+        if let Some(step) = last {
+            let q = &step.node_displacements;
+            let faces = map.face_displacements(&map.displacement_to_points(q).unwrap()).unwrap();
+            let ex = q.iter().chain(&faces).fold(0.0f64, |a, d| a.max((d[0] / u_star - 1.0).abs()));
+            let et = q
+                .iter()
+                .chain(&faces)
+                .fold(0.0f64, |a, d| a.max(d[1].abs().max(d[2].abs()) / u_star));
+            checks.at_most(&format!("{id} max |q_x/u* - 1|"), ex, 1e-6);
+            checks.at_most(&format!("{id} max |q_yz|/u*"), et, 1e-6);
+            checks.at_most(&format!("K2c {id} max iterations"), max_it as f64, 4.0);
+        }
+    }
+    checks.finish();
+}
+
+#[test]
+fn fs1_failing_step_in_the_first_iteration_piston() {
+    let mut checks = Checks::new();
+    let p = predict(4.0);
+    let n_eq = bar().dof_map().n_equations();
+    let loads = [LoadHistory::new(
+        vec![0.0; n_eq],
+        LoadTable::constant(1.0, 0.0, 3.5 * p.dt).unwrap(),
+    )];
+    let (mut wall, mut solid, map) = mass_setup_with(&p, 2, &loads, true);
+    let s = settings(true, 4);
+    for k in 0..3 {
+        let ok = coupled_step(&mut wall, &mut solid, &map, p.dt, &s).is_ok_and(|st| st.converged);
+        checks.holds(&format!("FS1c step {}", k + 1), ok, "converged");
+    }
+    let (wb, sb) = (wall.wall_bits(), solid_bits(&solid));
+    match coupled_step(&mut wall, &mut solid, &map, p.dt, &s) {
+        Err(e) => {
+            println!("  FS1c: {e}");
+            checks.holds(
+                "FS1c located",
+                e.participant == "solid" && e.iteration == 1 && e.message.contains("load table"),
+                "participant solid, iteration 1, the load table named",
+            );
+        }
+        Ok(_) => checks.holds("FS1c located", false, "step 4 fails"),
+    }
+    checks.holds(
+        "FS1c restored",
+        wall.wall_bits() == wb && solid_bits(&solid) == sb,
+        "both states bit-equal to before the step",
+    );
     checks.finish();
 }
