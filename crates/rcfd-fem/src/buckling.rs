@@ -136,10 +136,11 @@ pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOpti
         subspace_size: options.subspace_size,
         ..BucklingEigenOptions::default()
     };
-    let eig = lowest_buckling_factors(&kr.matrix, &gr.matrix, options.factors, &opts).map_err(|e| FemError::Solver {
-        solver: "lowest_buckling_factors",
-        reason: e.to_string(),
-    })?;
+    let eig =
+        lowest_buckling_factors(&kr.matrix, &gr.matrix, options.factors, &opts).map_err(|e| FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: e.to_string(),
+        })?;
     let modes = eig
         .vectors
         .iter()

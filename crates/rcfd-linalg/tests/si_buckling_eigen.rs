@@ -14,14 +14,20 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.4e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
     }
     fn above(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value > limit;
-        println!("{name}: {value:.4e} (expected > {limit:e}) {}", if ok { "as expected" } else { "NOT AS EXPECTED" });
+        println!(
+            "{name}: {value:.4e} (expected > {limit:e}) {}",
+            if ok { "as expected" } else { "NOT AS EXPECTED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} <= {limit:e}"));
         }
@@ -89,22 +95,40 @@ fn a4_l1_l6_tridiagonal_against_closed_form() {
     let kg = diag(&vec![-1.0; n]);
     let opts = BucklingEigenOptions::default();
     let r = lowest_buckling_factors(&k, &kg, 10, &opts).expect("A4 solves");
-    println!("A4: iterations {}, subspace {}, factors {:?}", r.iterations, r.subspace_size, r.values);
-    c.holds("A4 count", r.values.len() == 10 && r.exhausted.is_none(), &format!("{} factors, exhausted {:?}", r.values.len(), r.exhausted));
-    c.at_most("A4 max relative difference", max_rel_to_reference(&r.values, n, 1.0), 1e-10);
+    println!(
+        "A4: iterations {}, subspace {}, factors {:?}",
+        r.iterations, r.subspace_size, r.values
+    );
+    c.holds(
+        "A4 count",
+        r.values.len() == 10 && r.exhausted.is_none(),
+        &format!("{} factors, exhausted {:?}", r.values.len(), r.exhausted),
+    );
+    c.at_most(
+        "A4 max relative difference",
+        max_rel_to_reference(&r.values, n, 1.0),
+        1e-10,
+    );
     c.holds(
         "L1 Sturm",
         r.sturm.counted == 10 && r.sturm.expected == 10,
-        &format!("counted {} expected {} at s = {:e}", r.sturm.counted, r.sturm.expected, r.sturm.shift),
+        &format!(
+            "counted {} expected {} at s = {:e}",
+            r.sturm.counted, r.sturm.expected, r.sturm.shift
+        ),
     );
     let again = lowest_buckling_factors(&k, &kg, 10, &opts).expect("A4 again");
     let bits = |v: &[f64]| v.iter().map(|x| x.to_bits()).collect::<Vec<_>>();
-    let same = bits(&r.values) == bits(&again.values)
-        && r.vectors.iter().zip(&again.vectors).all(|(a, b)| bits(a) == bits(b));
+    let same =
+        bits(&r.values) == bits(&again.values) && r.vectors.iter().zip(&again.vectors).all(|(a, b)| bits(a) == bits(b));
     c.holds("L6 bit-equal on a second call", same, "values and vectors");
     // N3: K_sigma = -2 I halves the factors.
     let r2 = lowest_buckling_factors(&k, &diag(&vec![-2.0; n]), 10, &opts).expect("N3 solves");
-    c.above("N3 A4's measure with K_sigma = -2 I", max_rel_to_reference(&r2.values, n, 1.0), 1e-10);
+    c.above(
+        "N3 A4's measure with K_sigma = -2 I",
+        max_rel_to_reference(&r2.values, n, 1.0),
+        1e-10,
+    );
     c.finish();
 }
 
@@ -150,9 +174,18 @@ fn l2_mixed_signs_against_dense_reference() {
     let r = lowest_buckling_factors(&k, &kg, 5, &opts).expect("L2 solves");
     let a: Vec<f64> = dense(&kg).iter().map(|v| -v).collect();
     let full = generalized_eigen_dense(&a, &dense(&k), n).expect("dense reference");
-    let mut refs: Vec<f64> = full.values.iter().rev().filter(|&&t| t > 0.0).map(|t| 1.0 / t).collect();
+    let mut refs: Vec<f64> = full
+        .values
+        .iter()
+        .rev()
+        .filter(|&&t| t > 0.0)
+        .map(|t| 1.0 / t)
+        .collect();
     refs.truncate(5);
-    println!("L2: factors {:?}, reference {:?}, iterations {}", r.values, refs, r.iterations);
+    println!(
+        "L2: factors {:?}, reference {:?}, iterations {}",
+        r.values, refs, r.iterations
+    );
     let worst = r
         .values
         .iter()
@@ -176,7 +209,11 @@ fn l3_l4_hidden_factor_is_refused_then_found() {
         ..BucklingEigenOptions::default()
     };
     match lowest_buckling_factors(&k, &kg, 1, &small) {
-        Err(EigenError::SturmMismatch { shift, counted, expected }) => c.holds(
+        Err(EigenError::SturmMismatch {
+            shift,
+            counted,
+            expected,
+        }) => c.holds(
             "L3 refused",
             counted == 1 && expected == 0,
             &format!("SturmMismatch at s = {shift:e}: counted {counted}, expected {expected}"),
@@ -209,7 +246,11 @@ fn l5_refusals() {
         &format!("{:?}", r.as_ref().err()),
     );
     let r = lowest_buckling_factors(&k, &kg, 0, &opts);
-    c.holds("L5 count 0", matches!(r, Err(EigenError::BadCount { .. })), &format!("{:?}", r.as_ref().err()));
+    c.holds(
+        "L5 count 0",
+        matches!(r, Err(EigenError::BadCount { .. })),
+        &format!("{:?}", r.as_ref().err()),
+    );
     let r = lowest_buckling_factors(&k, &diag(&vec![-1.0; n - 1]), 3, &opts);
     c.holds(
         "L5 sizes 200 and 199",

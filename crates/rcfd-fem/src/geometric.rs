@@ -44,7 +44,10 @@ pub fn element_geometric_stiffness<E: Element + ?Sized>(
     if let Some(q) = stress.iter().position(|s| s.iter().any(|v| !v.is_finite())) {
         return Err(FemError::InvalidValue {
             key: "stress",
-            reason: format!("the stress at point {q} of a {} element is not finite", element.kind().name()),
+            reason: format!(
+                "the stress at point {q} of a {} element is not finite",
+                element.kind().name()
+            ),
         });
     }
     let nn = element.n_nodes();
@@ -96,7 +99,9 @@ impl Prestress {
 
     /// The stress of a static result of `model` (`D (eps - eps_th)` at the points of the stiffness rules).
     pub fn from_static(model: &SolidModel, result: &SolidResult) -> Result<Prestress> {
-        Ok(Prestress::from_field(&IntegrationPointField::from_result(model, result)?))
+        Ok(Prestress::from_field(&IntegrationPointField::from_result(
+            model, result,
+        )?))
     }
 
     /// The same stress at every point of every element of `model`.

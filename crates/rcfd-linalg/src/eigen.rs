@@ -1075,8 +1075,14 @@ pub fn lowest_buckling_factors(
         };
         // Ritz pairs in descending order of theta (ascending lambda for the positive ones).
         let order: Vec<usize> = (0..q).rev().collect();
-        let x: Vec<Vec<f64>> = order.iter().map(|&j| combine_columns(&xb, &red.vectors[j], n)).collect();
-        ax = order.iter().map(|&j| combine_columns(&axb, &red.vectors[j], n)).collect();
+        let x: Vec<Vec<f64>> = order
+            .iter()
+            .map(|&j| combine_columns(&xb, &red.vectors[j], n))
+            .collect();
+        ax = order
+            .iter()
+            .map(|&j| combine_columns(&axb, &red.vectors[j], n))
+            .collect();
         let theta: Vec<f64> = order.iter().map(|&j| red.values[j]).collect();
         // step 3: residuals
         let kx: Vec<Vec<f64>> = x.iter().map(|c| matvec(k, c)).collect();
@@ -1116,7 +1122,10 @@ pub fn lowest_buckling_factors(
         let exhausted = mp < count;
         let candidates: Vec<f64> = if !exhausted && mp < positive {
             let (l_last, l_next) = (1.0 / theta[mp - 1], 1.0 / theta[mp]);
-            [0.5, 0.25, 0.75].iter().map(|f| l_last + f * (l_next - l_last)).collect()
+            [0.5, 0.25, 0.75]
+                .iter()
+                .map(|f| l_last + f * (l_next - l_last))
+                .collect()
         } else {
             vec![bound]
         };
