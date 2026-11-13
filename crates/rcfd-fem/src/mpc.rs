@@ -24,10 +24,13 @@ use crate::assemble::stiffness_with;
 use crate::constraint::{prescribed_equations, Prescribed};
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::{face_rule, face_shape_functions, nodal_load_vector, NodalForceAt};
+use crate::mass::consistent_with;
+use crate::modal::{ModalOptions, ModalResult};
 use crate::model::{Constraint, ElasticSupport, SolidModel, SolidResult, SolverStats};
 use crate::solve::{SolveReport, StaticOptions, StaticSolver, PIVOT_TOLERANCE};
 use rcfd_core::vec3::{cross, norm, Vec3};
-use rcfd_linalg::skyline::{SkylineError, SkylineLdlt};
+use rcfd_linalg::eigen::{lowest_eigenpairs, Shift, SubspaceOptions};
+use rcfd_linalg::skyline::{SkylineError, SkylineLdlt, SkylineOptions};
 use rcfd_linalg::{cg, CsrMatrix, Jacobi, SolveControl};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -958,8 +961,157 @@ fn residual_norm(a: &CsrMatrix, b: &[f64], x: &[f64]) -> f64 {
     r.iter().map(|v| v * v).sum::<f64>().sqrt() / bn
 }
 
-/// Refuses, for the modal analysis, a linear constraint, a rigid set or an elastic support (ADR 0296 D7): the modal analysis
-/// on the transformation is a follow-up; nothing is silently ignored.
+/// The result of a modal analysis on the transformation (ADR 0384).
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct MpcModes {
+    /// The modal result: eigenpairs, the mesh part of each expanded mode `T q`, the shift and the Sturm check.
+    pub result: ModalResult,
+    /// The transformation (`g = 0`).
+    pub transformation: Transformation,
+    /// `K_r = T^T K_ext T` (with the supports).
+    pub reduced_stiffness: CsrMatrix,
+    /// `M_r = T^T M_ext T`.
+    pub reduced_mass: CsrMatrix,
+    /// Each mode expanded over all `N` unknowns, `x = T q` (mesh, then the reference unknowns of the rigid sets).
+    pub expanded: Vec<Vec<f64>>,
+}
+
+/// Pivot ratio `d_i / a_ii` below which the factor of `K_r` at zero shift is not accepted (the rule of `Shift::Auto`, ADR
+/// 0283 D3).
+const ZERO_SHIFT_PIVOT_RATIO: f64 = 1e-8;
+
+/// A name of unknown `i` of the transformation: "node 4 component 1" or "the reference rotation y of constraint 3
+/// (RigidSet)".
+fn unknown_name(tr: &Transformation, model: &SolidModel, i: usize) -> String {
+    if i < tr.n_mesh() {
+        let (node, component) = model.dof_map().node_component(i).expect("mesh unknown");
+        return format!("node {node} component {component}");
+    }
+    let (constraint, r0) = tr
+        .references()
+        .iter()
+        .rev()
+        .find(|&&(_, o)| o <= i)
+        .copied()
+        .expect("reference unknown");
+    let what = [
+        "translation x",
+        "translation y",
+        "translation z",
+        "rotation x",
+        "rotation y",
+        "rotation z",
+    ][i - r0];
+    format!("the reference {what} of constraint {constraint} (RigidSet)")
+}
+
+/// Whether the factor of `k` at zero shift is refused or has a pivot ratio below the rule of `Shift::Auto`.
+fn zero_shift_refused(k: &CsrMatrix) -> bool {
+    match SkylineLdlt::factor_with(k, &SkylineOptions::default()) {
+        Ok(f) => {
+            let d = k.diag();
+            f.pivots().iter().zip(f.order()).any(|(&p, &o)| {
+                let ratio = p / d[o];
+                ratio.is_nan() || ratio < ZERO_SHIFT_PIVOT_RATIO
+            })
+        }
+        Err(_) => true,
+    }
+}
+
+fn zero_values_only(what: String, v: f64) -> FemError {
+    constraint_error(format!("{what}: value {v:e}; a modal analysis takes zero values only"))
+}
+
+/// The modal analysis on the transformation `x = T q` (ADR 0384): `K_r q = lambda M_r q` with `K_r = T^T K_ext T` (the
+/// supports added) and `M_r = T^T M_ext T` (the reference unknowns carry no mass of their own), solved by
+/// [`rcfd_linalg::eigen::lowest_eigenpairs`]; each mode is expanded, `x = T q`. Every constraint value must be zero (a
+/// non-zero value is refused naming its row). The default shift is `Shift::Auto`, whose first candidate is zero: a model
+/// whose constraints and supports hold every motion is solved at zero shift, a free motion moves it.
+pub fn modal_analysis_mpc(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<MpcModes> {
+    model.validate()?;
+    model.check_supported()?;
+    let dofs = model.dof_map();
+    for &(eq, v) in &prescribed_equations(model, extra)? {
+        if v != 0.0 {
+            let (node, component) = dofs.node_component(eq).expect("prescribed equation");
+            return Err(zero_values_only(
+                RowOrigin::Prescribed { node, component }.description(model),
+                v,
+            ));
+        }
+    }
+    for (i, c) in model.constraints().iter().enumerate() {
+        if let Constraint::Linear { value, .. } = c {
+            if *value != 0.0 {
+                return Err(zero_values_only(
+                    RowOrigin::Linear { constraint: i }.description(model),
+                    *value,
+                ));
+            }
+        }
+    }
+    let tr = transformation(model, extra)?;
+    let n = tr.n_mesh();
+    let mut k = stiffness_with(model, options.threads)?;
+    add_supports(&mut k, model)?;
+    let m = consistent_with(model, options.threads)?;
+    let zero = vec![0.0; tr.n_unknowns()];
+    let (kr, _) = tr.reduce(&k, &zero)?;
+    let (mr, _) = tr.reduce(&m, &zero)?;
+    let nq = kr.n;
+    if options.modes == 0 || options.modes >= nq {
+        return Err(FemError::InvalidValue {
+            key: "modes",
+            reason: format!(
+                "{} modes requested of a model with {nq} free unknowns (at least 1 and fewer than the unknowns)",
+                options.modes
+            ),
+        });
+    }
+    for (a, d) in mr.diag().iter().enumerate() {
+        if d.is_nan() || *d <= 0.0 {
+            return Err(FemError::InvalidValue {
+                key: "density",
+                reason: format!(
+                    "{} has no mass (diagonal {d:e})",
+                    unknown_name(&tr, model, tr.independent()[a])
+                ),
+            });
+        }
+    }
+    let opts = SubspaceOptions {
+        shift: options.shift.unwrap_or(Shift::Auto),
+        tolerance: options.tolerance,
+        residual_test: options.residual_test,
+        max_iterations: options.max_iterations,
+        subspace_size: options.subspace_size,
+        ..SubspaceOptions::default()
+    };
+    let eig = lowest_eigenpairs(&kr, &mr, options.modes, &opts).map_err(|e| FemError::Solver {
+        solver: "lowest_eigenpairs",
+        reason: e.to_string(),
+    })?;
+    let rigid_free = match options.shift {
+        None => eig.shift != 0.0,
+        Some(_) => zero_shift_refused(&kr),
+    };
+    let expanded: Vec<Vec<f64>> = eig.vectors.iter().map(|q| tr.expand(q)).collect();
+    let modes = expanded.iter().map(|x| x[..n].to_vec()).collect();
+    let result = ModalResult::from_parts(eig, modes, nq, rigid_free, dofs);
+    Ok(MpcModes {
+        result,
+        transformation: tr,
+        reduced_stiffness: kr,
+        reduced_mass: mr,
+        expanded,
+    })
+}
+
+/// Refuses, for the modal analysis, a linear constraint, a rigid set or an elastic support (ADR 0296 D7). Since ADR 0384
+/// the modal analysis solves these models on the transformation ([`modal_analysis_mpc`]) and no longer calls this function;
+/// it is kept for callers that must refuse them.
 pub fn refuse_in_modal(model: &SolidModel) -> Result<()> {
     const PACKAGE: &str = "a follow-up of ADR 0296 (modal analysis on the transformation)";
     for (index, c) in model.constraints().iter().enumerate() {

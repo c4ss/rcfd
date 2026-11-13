@@ -752,6 +752,7 @@ fn r10_refused_on_every_static_path_after_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 after ADR 0292 and ADR 0296, before ADR 0384 (modal analysis on the transformation) retired the R8 modal row; superseded by the _after_modal_landed copy below (maintainer, 2026-11-13)"]
 fn r11_modal_and_stiffness_refuse_after_landed() {
     let cases = refusal_cases();
     let get = |n: &str| cases.iter().find(|c| c.0 == n).unwrap();
@@ -781,5 +782,29 @@ fn r11_modal_and_stiffness_refuse_after_landed() {
         variant,
         location,
         "a follow-up of ADR 0296 (modal analysis on the transformation)",
+    );
+}
+
+/// R11 after ADR 0384: the modal analysis solves R8 (a spring) on the transformation; R4 is still refused.
+#[test]
+fn r11_modal_and_stiffness_refuse_after_modal_landed() {
+    let cases = refusal_cases();
+    let get = |n: &str| cases.iter().find(|c| c.0 == n).unwrap();
+    let (name, model, item, variant, location, package) = get("R4");
+    expect_refusal(
+        &format!("{name} modal"),
+        modal_analysis(model, &ModalOptions::new(2)),
+        item,
+        variant,
+        location,
+        package,
+    );
+    expect_refusal(
+        &format!("{name} stiffness"),
+        stiffness(model),
+        item,
+        variant,
+        location,
+        package,
     );
 }

@@ -796,6 +796,7 @@ fn c3_closed_chains_refused() {
 }
 
 #[test]
+#[ignore = "record of ADR 0296: asserts the modal refusal of linear constraints, rigid sets and supports, retired by F-486 (ADR 0384); the modal analysis on the transformation is checked in si_modal_mpc"]
 fn n4_modal_refuses_the_new_data() {
     let base = cantilever();
     let (a, b, _) = tip_nodes(&base);

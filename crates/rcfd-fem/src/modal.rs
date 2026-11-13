@@ -6,6 +6,10 @@
 //! displacements ([`crate::constraint::reduce`]), and the lowest pairs come from the subspace iteration of
 //! [`rcfd_linalg::eigen::lowest_eigenpairs`] (ADR 0283), verified by its Sturm count. The shift is `sigma = 0` when the
 //! constraints hold every rigid motion, and `Shift::Auto` otherwise (a free or partly free body). Loads are ignored.
+//!
+//! A model with a linear constraint, a rigid set or an elastic support is reduced instead by the transformation `x = T q` of
+//! [`crate::mpc`] (`T^T K T`, `T^T M T`, the modes expanded by `T`; zero values only): [`crate::mpc::modal_analysis_mpc`]
+//! (ADR 0384).
 
 use crate::assemble::stiffness_with;
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce, Prescribed};
@@ -93,12 +97,36 @@ pub struct ModalResult {
     pub sturm: SturmCheck,
     /// Number of free unknowns.
     pub unknowns: usize,
-    /// Whether the constraints leave a rigid motion free (and the automatic shift was used).
+    /// Whether the constraints leave a rigid motion free (and the automatic shift was used). On the transformation path
+    /// ([`crate::mpc::modal_analysis_mpc`]): whether the factor of `T^T K T` at zero shift was not accepted by the rule of
+    /// `Shift::Auto` (a free rigid motion or another zero-energy motion; ADR 0384).
     pub rigid_free: bool,
     dofs: DofMap,
 }
 
 impl ModalResult {
+    /// A result from the parts of an eigensolution (the modes already expanded to the model's equations).
+    pub(crate) fn from_parts(
+        eig: rcfd_linalg::eigen::GeneralizedEigen,
+        modes: Vec<Vec<f64>>,
+        unknowns: usize,
+        rigid_free: bool,
+        dofs: DofMap,
+    ) -> ModalResult {
+        ModalResult {
+            frequencies: eig.values.iter().map(|&l| frequency(l)).collect(),
+            eigenvalues: eig.values,
+            modes,
+            residuals: eig.residuals,
+            iterations: eig.iterations,
+            shift: eig.shift,
+            sturm: eig.sturm,
+            unknowns,
+            rigid_free,
+            dofs,
+        }
+    }
+
     /// The unknown numbering of the modes.
     pub fn dofs(&self) -> &DofMap {
         &self.dofs
@@ -120,7 +148,10 @@ pub fn modal_analysis(model: &SolidModel, options: &ModalOptions) -> Result<Moda
 pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
     model.check_supported()?;
-    crate::mpc::refuse_in_modal(model)?;
+    // Linear constraints, rigid sets and supports: the reduction by the transformation of ADR 0296 (ADR 0384).
+    if crate::mpc::uses_transformation(model) {
+        return crate::mpc::modal_analysis_mpc(model, extra, options).map(|s| s.result);
+    }
     let dofs = model.dof_map();
     let fixed = prescribed_equations(model, extra)?;
     if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
