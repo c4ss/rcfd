@@ -389,3 +389,126 @@ Analysis, the chapter on constraints; from memory); derivable from the principle
 `T^T K T` fills the matrix where a rigid set couples many nodes (the direct solver's envelope grows; reported, not hidden).
 Choosing the eliminated unknown of each constraint so that chains resolve; detecting redundancy needs a rank decision with a
 registered threshold. Tied non-matching meshes are NOT included (advanced, with bonded contact).
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/mpc.rs` (filled, `PENDING = None`), `solve.rs` lines 167 to 170 (the dispatch of D6), `modal.rs`
+line 123 (D7), `constraint.rs` lines 7 and 8 (doc sentence); new test file `crates/rcfd-fem/tests/si_mpc.rs`. Nothing else
+touched (`hex20.rs`, `model.rs`, `assemble.rs`, `error.rs`, every existing test, golden and hash table unchanged). The
+registered run of `si_mpc` was made once (release, `--test-threads=1 --nocapture`, log in `w49i-work/f393-scratch`): 20 tests,
+20 passed. A rustfmt commit followed (layout only; the test binary was rebuilt, not re-run).
+
+| Id | Clause | Measured | Limit | Met |
+| --- | --- | --- | --- | --- |
+| A1 | a1 | `uses_transformation` false; P-Hex8 and P-Tet10, without and with gravity: displacement bit-equal to the elimination in the test (4 of 4) | equal | yes |
+| A2 | a1 | `si_scaffold_bits` 2 passed (26 digests equal); `baseline_hashes` (release) 3 passed, 1 ignored, file unedited | pass | yes |
+| L1 | a2 | Hex8 coefficient 1: 0; 2.5: 1.0e-16. Tet10 coefficient 1: 0; 2.5: 3.1e-16 | 1e-12 | yes |
+| Y1 | a3 | S 3.5e-17, Q 1.1e-16, R 8.2e-17, K 5.4e-17, F-Hex8 3.2e-17, F-Tet10 3.9e-17; patterns symmetric | 1e-13 | yes |
+| W1 | a4 | S 3.8e-16, Q 1.3e-16, R-F 1.5e-15, R-M 3.1e-13 | 1e-12 | yes |
+| S1 | a5 | 7.2e-16 (no row dropped; the edge nodes moved their pivot to u_y, step 5) | 1e-10 | yes |
+| Q1 | a6 | strain 4.0e-15, displacement 1.1e-15 | 1e-10 | yes |
+| Q2 | a12 | 33 rows dropped, all Linear, largest residue 3.8e-17 of its scale; none refused | 33 | yes |
+| R1 | a7 | t_x = 1.000000000000031e-5: 3.1e-14; every xmax node 1.7e-13 | 1e-10 | yes |
+| R2 | a8 | w_y = 1.199999999889e-3: 9.3e-11 (rounding, as the exactness note predicted) | 1e-2 | yes |
+| R3 | a9 | R-F: resultant 1.1e-14, moment 1.2e-15; R-M: resultant 5.2e-13, moment 4.9e-13 | 1e-10 | yes |
+| K1 | a10 | 1.5e-14 (spring forces sum to -1.0000000000000178e4 N) | 1e-10 | yes |
+| F1 | a11 | Hex8 bottom 3.3e-15, top 3.3e-15; Tet10 bottom 2.8e-14, top 2.9e-14 | 1e-10 | yes |
+| C1 | a12 | one row dropped, origin constraint 4 (residue 0); displacement difference 0 | one row; 1e-12 | yes |
+| C2 | a13 | "constraint 4 (Linear) contradicts constraint 3 (Linear): after their substitution the row reads 0 = 1e-3 on node 10 component 2 (value scale 1e-3)"; "constraint 3 (Linear) contradicts the prescribed displacement of node 11 component 0: ..." | as stated | yes |
+| C3 | a14 | "constraint 4 (Linear) closes a chain on node 54 component 2 through constraint 3 (Linear): ..."; three-chain: "constraint 5 (Linear) closes a chain on node 98 component 2 through constraint 3 (Linear), constraint 4 (Linear): ..." | as stated | yes |
+| C4 | a12 | five factors: one row dropped each (constraint 4), displacement difference 0 | one row; 1e-12 | yes |
+| T1 | D2 | threads 1 and 8: displacement, constraint forces, references bit-equal | equal | yes |
+| T2 | D3 | CG 44 iterations, 4.2e-13 against direct | 1e-7 | yes |
+| E1 | report | R: K_r 2931 unknowns, 191841 nonzeros, envelope 237696; clamped only: K_FF 3000 unknowns, 196092 nonzeros, envelope 242526 | recorded | - |
+
+E1 in words: on this bar the rigid set does not grow the matrix; it removes the 75 unknowns of the end face and adds six
+reference unknowns coupled to the face's neighbours, so nonzeros and envelope are about 2 percent smaller. A rigid set over a
+large face in the middle of a mesh would couple more widely; that was not measured.
+
+Negative controls:
+
+| Id | Result | Held |
+| --- | --- | --- |
+| N1 | refused: "singular reduced stiffness at the reference translation x of constraint 3 (RigidSet): pivot 0e0, diagonal 1.5e10" | yes; deviation in wording: the registration expected the reference rotation to be named. The free motion is a rotation about z combined with a translation in x (both reference unknowns), and the zero pivot fell on the translation under the RCM order |
+| N2 | refused: `SingularStiffness` at node 1 component 1 (pivot -3.5e-15 of its diagonal) | yes |
+| N3 | refused: `InvalidValue { key: "solver" }` | yes |
+| N4 | refused: `NotYetSupported` "Linear (constraint 3, first node 10)" and "NodalSpring (support 0, node set 'xmax')", package as D7 | yes |
+| N5 | refused: `NotYetSupported` "Cyclic (constraint 4, surface sets 'low' and 'high')", "ADR 0297" | yes |
+| N6 | normals at 31 degrees: 2.0e-2 | yes (> 1e-6) |
+
+Mutations (a `git archive` copy of the final tree in `w49i-work/f393-scratch/mut`, own target directory, `si_mpc` run once
+each, the file restored and compared):
+
+| Id | Failed tests | Registered target caught |
+| --- | --- | --- |
+| MU1 | c3, n6, q1_q2, s1, t2 | yes (Q1, S1) |
+| MU2 | r1_to_r3 (R3 moment 2.0) | yes |
+| MU3 | l1, q1_q2 | yes (L1) |
+| MU4 | c3 | yes |
+| MU5 | c2 | yes |
+| MU6 | f1 | yes |
+| MU7 | k1 | yes |
+| MU8 | a1 | yes |
+| MU9 | c4 (no row dropped at factor 3.7), q1_q2 (a periodic row refused as contradictory) | yes (C4 and Q2) |
+| MU10 | r1_to_r3 (R2 1.0) | yes |
+
+Other runs (release): every test file of rcfd-fem (`cargo test -p rcfd-fem --release --no-fail-fast`): all pass except
+`si_scaffold` (below); rcfd-post `sb_solid_coupling`, `sb_solid_coupling_fail`, `sb_solid_coupling_fail_fluid`,
+`sb_solid_output`, `si_scaffold_output`: all pass. `cargo fmt -p rcfd-fem --check`: clean after the rustfmt commit. `cargo
+clippy -p rcfd-fem --all-targets -- -D warnings`: clean. Not run: the workspace test suite (the lead's gate).
+
+**Existing tests that fail, as registered ("Expected to fail, needs the maintainer").** `crates/rcfd-fem/tests/si_scaffold.rs`
+of ADR 0291, 4 of 11 tests, not edited:
+
+- `x1_the_scaffold_exists`, line 84: `assert_eq!(rcfd_fem::mpc::PENDING, Some("ADR 0296"))` (now `None`).
+- `r1_to_r9_static_solve_refuses_each_new_variant`, line 59 (`r.expect_err(what)` in `expect_refusal`): case R5 (a Linear tie on
+  the cantilever) now solves. The loop stops there; R6 (RigidSet on xmax), R8 (NodalSpring) and R9 (Foundation) would also
+  reach line 59, since they solve too.
+- `r10_refused_on_every_static_path`, line 59: the same, from "R5 cg".
+- `r11_modal_and_stiffness_refuse`, line 68: case "R8 modal" is refused with the package "a follow-up of ADR 0296 (modal
+  analysis on the transformation)" instead of "ADR 0296".
+
+The step for the maintainer: in `si_scaffold.rs`, drop the `mpc::PENDING` assertion of X1, drop cases R5, R6, R8, R9 from
+`refusal_cases` (or make them expect success), and in R11 expect the package string of D7 (or drop R8 there). Options: (a) edit
+`si_scaffold.rs` that way; (b) keep it and mark the four tests ignored with a pointer to this ADR. Recommendation: (a).
+
+**Deviations.** N1 names the reference translation, not the rotation (above). The test file has a helper `remap` that rebuilds
+a mesh with moved nodes (no library function exists). Nothing else deviates from the registration and amendment 1.
+
+**Decision by the registered rule: done.** Every check met its limit, every negative control held, every mutation was caught by
+its registered check on the first run, and the only failing existing tests are the `si_scaffold` assertions registered as
+expected to fail, which need the maintainer's edit.
+
+### Remaining questions
+
+1. The `si_scaffold` assertions (above). Recommendation: (a), edit them.
+2. Modal analysis with linear constraints, rigid sets and supports (D7 refuses). Options: (a) a follow-up item: `T^T K T` and
+   `T^T M T` into the subspace iteration, modes expanded by `T` (zero right-hand sides only; a shift rule for a body held by
+   springs); (b) leave it to ADR 0297, whose cyclic modes need the same machinery. Recommendation: (a), small, and ADR 0297
+   then reuses it.
+3. Preconditioned CG on the transformation (refused). Options: (a) node blocks and rigid modes for `q` (reference unknowns as
+   their own 6-block); (b) wait until the AMG work needs it. Recommendation: (b).
+4. Rigid sets after ADR 0294 (six unknowns per node). Options: (a) let `RigidSet` name a reference node with rotations (a new
+   constructor, the auxiliary unknowns kept for the point form); (b) keep only the point form. Recommendation: (a), in ADR
+   0294, so that a beam can be joined to a solid face.
+
+## For the lead: roadmap entries
+
+Proposed status of F-393: **done** (pending the maintainer's acceptance; the four `si_scaffold` assertions need the maintainer's
+edit).
+
+Note for F-393:
+
+> ADR 0296, 2026-11-13: linear multi-point constraints, rigid sets and elastic supports by the transformation u = T q + g in rcfd-fem::mpc (mpc::PENDING = None). Rows are eliminated in a fixed order (prescribed, then the model's Linear and RigidSet constraints) with designated dependents (the first term of a Linear constraint) by Gauss-Jordan substitution; a row implied by earlier ones is dropped and reported (threshold 1e-10), a contradictory row and a row that closes a chain on itself are refused naming the constraints. A rigid set has six auxiliary reference unknowns (translation and small rotation; no six-unknown node needed) and takes a force and a moment through solve_static_mpc; nodal springs and a consistent foundation are added to K. solve_static_report dispatches to it for any model with a Linear or RigidSet constraint or a support; every other model runs the old code (A1 bit-equal, si_scaffold_bits and baseline hashes unchanged). Results: Linear-written prescribed values 3e-16 (limit 1e-12); K_r symmetric to 1e-16; constraint work 3e-13; skew roller 7e-16; periodic box with displaced nodes: strain 4e-15, 33 redundant rows dropped as computed beforehand; rigid end of a Tet10 bar: F L/(E A) 3e-14, M L/(E I) 9e-11 (limit 1 percent), resultant and moment 5e-13; end spring 1.5e-14; foundation p/k_f 3e-14 (Hex8, Tet10); threads 1 and 8 bit-equal. Ten mutations caught. Modal analysis and the preconditioned CG refuse these constraints; Cyclic stays refused. Four tests of ADR 0291's si_scaffold.rs (the mpc::PENDING assertion, cases R5, R6, R8, R9 and R8 modal) now fail as registered and need the maintainer's edit.
+
+Note for F-394 (cyclic symmetry, ADR 0297), to append:
+
+> ADR 0296 (2026-11-13): mpc::transformation builds T and g from rows c . x = b (Gauss-Jordan with designated dependents, mpc::DEPENDENCE_TOLERANCE 1e-10); Transformation::reduce gives T^T K T and T^T (f - K g), Transformation::expand gives x. The cyclic rows can be added as rows of the same elimination; prescribed_equations still refuses Cyclic (gated by cyclic::PENDING). Modal analysis on the transformation is refused by mpc::refuse_in_modal and is needed by the cyclic modes.
+
+Follow-up item (proposed):
+
+- title: Modal analysis on the transformation: linear constraints, rigid sets and supports in the modal analysis
+- deps: F-393
+- acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. modal_analysis of a model with linear constraints, rigid sets or elastic supports reduces K and M by the transformation of ADR 0296 (T^T K T, T^T M T; zero right-hand sides only, a non-zero value refused naming the constraint) and expands the modes by T. A model with prescribed displacements only gives the bits of today's modal analysis. A bar (nu = 0) on an end spring k has its first axial frequency from the closed-form transcendental equation within 0.5 percent at 20 elements; the modes are M-orthonormal within 1e-10 and every constraint row holds on each expanded mode within 1e-12; a model held only by springs uses the automatic shift when a rigid motion is free.
