@@ -287,3 +287,93 @@ CSV and JSON are as before).
 Disclosed beforehand: the diagnostic printed the old tracker's assurances for both tables (the minima above), and every
 non-degenerate track `>= 0.99996`; it did not run the corrected tracker. The decision rule is unchanged; P2 counts as missed in the
 registered run with its cause diagnosed, and P2b/P2c are reported beside it.
+
+## Addendum 1: results (2026-11-13)
+
+Code: appended to `crates/rcfd-fem/src/rotating.rs` (lines 718 to 1330 of the branch tip; lines 1 to 717, the F-396 code, are
+unchanged), `crates/rcfd-fem/src/cyclic.rs` lines 305 and 819 (`doubled_matrix`, `unknown_label` made `pub(crate)`, bodies
+unchanged); `mpc.rs` not edited. Tests: `crates/rcfd-fem/tests/si_rotating_cyclic.rs`. The registered run (release,
+`--test-threads=2`, 10.1 s, six tests, log `f500-scratch/run1.log`) was made once; P2 missed and its test became the ignored
+record `p1_p2_p3_p5_campbell_by_family_known_miss`; amendment 1 (committed before the corrected run) changed the tracker and
+registered P2b and P2c, run once (log `f500-scratch/run2.log`, 9.5 s). After that only layout and lint changes were made (rustfmt;
+clippy: the `Modes` variant boxed, two lint rewrites in the test), and the four related test binaries were run once more to
+confirm the same outcome (`f500-scratch/run3_verify.log`), not to pick a result.
+
+Derived set-up values (printed by the run): `omega_ref = 1599.7736` rad/s (254.61 Hz, the lowest frequency, index 1); no rest mode
+has `d_ki > 0` with both effects on (every rest mode is stiffened by more than it is softened), so the loss checks took the
+registered fallback `stress_stiffening = false`: `Omega_L = 3395.5329` rad/s `= 2.1225 omega_ref`, `k* = 0`.
+
+| # | Measured | Limit | Met |
+|---|---|---|---|
+| C1 | count 25 = 25, 25 = 25, 23 = 23 at 0, 0.5, 0.9 `omega_ref`; worst `|sqrt(l_s/l_f) - 1|` 8.8e-14, 5.3e-14, 1.4e-14 | equal, `<= 1e-8` | yes |
+| C1b | pair splits at most 9.7e-14, 1.1e-13, 3.9e-14 | `<= 1e-8` | yes |
+| C2 | worst family quotient 2.0e-13, 9.3e-14, 4.8e-14 (every index printed) | `<= 1e-8` | yes |
+| C3 | `modes(k, 0)` against `modal_analysis_harmonic`, `k = 0 .. 6`, every field by `to_bits` and `==` | identical | yes |
+| C3b | the speed-0 column of every family | identical | yes (run 1 and P2b) |
+| C3c | 1.6e-12 at `1e-6 omega_ref` | `<= 1e-8` | yes |
+| C3d | index 0 at `0.5 omega_ref`: the four eigenvalues have the bits of `RotatingPart::modes` | identical | yes |
+| L1 | `k* = 0` at `Omega_L`: `HarmonicLoss { harmonic: 0, multiplicity: 1, negative: Some(1) }` with the speed's bits | each | yes |
+| L2 | full rotor negative count 1 = sum over the indices 1 (indices 1 to 6 have modes); pair counts even | exact | yes |
+| L3 | no loss at `0.9 omega_ref` (sector, every index; full rotor) | each | yes |
+| P1 | 7 families, multiplicities 1, 2, 2, 2, 2, 2, 1, 4 tracks each, the loss of `k = 0` at `Omega_L` listed with `None` frequencies, all finite | each | yes |
+| P2 | **0.8952** (family `k = 6` only, its degenerate pairs; amendment 1) | `>= 0.9` | **no** (known miss) |
+| P2b | 0.9999999 (the record's table with the cluster tracking) | `>= 0.9` | yes |
+| P2c | both effects on, 0 .. 0.9 `omega_ref`: smallest 0.99998 (per family 0.999979 to 0.999995); 4 tracks, no loss, finite | `>= 0.9` | yes |
+| P3 | 463 crossings below `0.9 omega_ref` with orders 1 to 24, per family 80, 78, 74, 65, 59, 55, 52; worst against a direct solve 6.7e-8 (P2c table: 453 crossings, worst 2.3e-5) | `>= 1` each, `<= 1e-2` | yes |
+| P4 | `engine_order_excites` equals the projection rule for `E = 0 .. 36`, `k = 0 .. 6` | all equal | yes |
+| P5 | CSV: 78 rows, harmonic column, speeds and frequencies parse back by `to_bits`; JSON: 7 families, no NaN or inf, `null` at the loss, flagged crossings | each | yes |
+| R1 | no cyclic constraint (`cyclic`), harmonic 7 (`harmonic`), speed -1 and NaN (`speed`), decreasing speeds (`speeds`), empty, decreasing and above-`N/2` index lists (`harmonics`), 0 modes (`modes`) | each | yes |
+| R2 | `cargo test -p rcfd-fem --release`: 48 binaries, 281 passed, 0 failed, 59 ignored; `si_rotating`, `si_cyclic`, `si_cyclic_harmonic` unchanged and passing; `cargo check -p rcfd-post --tests` clean | all pass | yes |
+| N1 | 0.330 (the sector without `K_sigma,1` against the full rotor at `0.9 omega_ref`) | `> 1e-3` | as expected |
+| N2 | 0.324 (the rest spectrum against the full rotor at speed) | `> 1e-3` | as expected |
+| N3 | 5.7e-9 (the vector MAC of the pairs' first vectors, reported): the subspace assurance is needed for a pair | reported | as expected |
+
+Mutations (a `git archive` copy of the branch tip in `f500-scratch/mut_src`, `f500-scratch/mutate.py`, each run once against
+`si_rotating_cyclic`, logs `f500-scratch/M*.log`):
+
+| Mutation | Caught by |
+|---|---|
+| M1 the sine block without `M_perp` | C1 (counts and frequencies, 9.2e-3 and 2.9e-2), C1b (1.4e-2, 4.4e-2), C2 (1.8e-2, 5.6e-2) |
+| M2 `K_sigma,1` left out at `k > 0` | C1 (counts, 0.15 and 0.31), C2 (0.37, 1.23) |
+| M3 the loss count divided by the multiplicity | **not caught**: at `Omega_L` only the single family `k = 0` loses stiffness on D (one negative eigenvalue), so dividing by the multiplicity changes nothing; L1's evenness and L2 would see it only with a pair family in loss |
+| M4 the zero-speed shortcut removed | **not caught** (as ADR 0403 M7): at rest the general path's `Shift::Value(0)` meets `modal_analysis_harmonic`'s automatic shift, which chose 0 on D, and the `0 x` terms leave every bit; the shortcut stays as the guarantee |
+| M5 the vector MAC of the first vectors in the tracker | P2b (5.7e-9), P2c (1.3e-8) |
+| M6 `engine_order_excites` with `order mod N == k` only | P4 |
+| M7 the transformation of index `k + 1` | C1, C2, C3c, P2b, P2c, P3 |
+
+`cargo fmt -p rcfd-fem --check`: clean (after the layout commit). `cargo clippy -p rcfd-fem --all-targets --release -- -D
+warnings`: clean. `baseline_hashes` was not run: the brief limits the tests to `rcfd-fem` (and the check of `rcfd-post`), and no
+existing function's code changed (the two `cyclic.rs` edits are visibility only), so no default result can change.
+
+Deviations: (1) the loss speed took the registered fallback, so the Campbell test of the registration ran with the stress
+stiffening off; the table with both effects on is P2c (amendment 1). A loss of stiffness of the full operator (both effects) is
+not exercised on D: no rest mode of D is softened more than it is stiffened. (2) Amendment 1 says the other families' assurances
+were `>= 0.99996`; the diagnostic printed four decimals (`1.0000`), so the honest bound is `>= 0.99995`. (3) M3 survived: the inertia identity was not exercised with a pair family in loss. (4) Not run: the
+workspace suite (the lead's gate), `baseline_hashes` (above).
+
+**Decision by the registered rule: partial.** C1, C2, C3, L1 and L2 are met with margins of five orders and more, and every
+other check except P2 is met; P2 missed in the registered run with its cause diagnosed (degenerate pairs inside the single
+family `k = N/2` of an axisymmetric disc, which the tracker grouped by the index's multiplicity only), and the amended tracker
+meets it (P2b, P2c). Under the rule a single missed check with a diagnosed cause is partial. If the lead accepts amendment 1 as
+the correction of a registered design gap (the precedent of ADR 0404 amendment 1), the item is done in substance.
+
+Remaining questions:
+
+1. **Status.** Options: (a) partial as the rule says, with P2b/P2c recorded; (b) done, accepting amendment 1. Recommendation (a)
+   for the record, with no further code needed; the lead may close it as done at the next review.
+2. **A loss of stiffness under the full operator.** D never loses stiffness with both effects on (every mode stiffens more than
+   it softens), so L1/L2 used the softening only. Options: (a) a follow-up check on a sector with a soft in-plane mode (a blade on
+   a thin hub, or an elastic support) where `K_eff` loses definiteness with both effects; (b) accept the inertia identity as shown.
+   Recommendation (a), small: on the same disc only `k = 0` lost stiffness, so mutation M3 (pair counts halved) survived; a set-up in which a pair family loses stiffness closes that gap and comes naturally with the fan sector.
+3. **Coriolis on the pair.** The gyroscopic term couples the cos and sin parts; F-499 should treat it on the sector as well.
+   Recommendation: add that clause to F-499.
+
+### For the lead: roadmap entries
+
+F-500, proposed status **partial**, note:
+
+> From ADR 0403 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0407, 2026-11-13: rotating.rs RotatingSector gives the modes of a cyclic sector spinning about its cyclic axis at any harmonic index k, K_eff = K + Omega^2 (K_sigma,1 - M_perp) of the sector with the pre-stress of the index-0 static solve on the real cos/sin pair of ADR 0386 (blockdiag(K_eff, K_eff), M_perp reduced like M; derived: the centrifugal stress repeats in every sector and M_perp commutes with the rotation, so the one K_sigma,1 serves every k); at Omega = 0 the bits of modal_analysis_harmonic; a loss of stiffness is reported per index and speed (HarmonicLoss), the full rotor's negative count equal to the sum over the indices (Sylvester); the Campbell table holds one family of tracks per index, tracked by the subspace assurance of each frequency's eigenvalue cluster (a cos/sin pair and the degenerate pairs of k = N/2 on an axisymmetric part), with the engine-order crossings flagged by the excitation rule E = +/- k mod N, as CSV and JSON. Disc of 12 sectors (Hex20): sector frequencies equal the full rotor's within 8.8e-14 at 0, 0.5 and 0.9 omega_ref, the expanded modes' Rayleigh quotients on the full rotor within 2e-13, the inertia identity exact, 463 crossings within 6.7e-8 of direct solves. Partial: the registered tracking check missed (0.895 against 0.9, the degenerate pairs of k = N/2), met after amendment 1 (0.99998). Coriolis neglected (F-499).
+
+F-499, proposed new note sentence to append:
+
+> ADR 0407 (2026-11-13): on a cyclic sector the gyroscopic matrix couples the cos and sin parts of a harmonic pair; the item should solve it on the sector as well as on the whole part.
