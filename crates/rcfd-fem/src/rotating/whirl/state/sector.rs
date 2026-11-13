@@ -3,9 +3,7 @@
 //! of the complex Hermitian problem of the harmonic, whose spectrum is that problem's together with its conjugate, D1), with
 //! the stability flag and the growth rate per index; the rotor is stable iff every index is (D2).
 
-use super::super::{
-    check_size, dense_of, doubled, dot, inertia, mass_refused, speed_refused, whirl_number, Whirl,
-};
+use super::super::{check_size, dense_of, dot, doubled, inertia, mass_refused, speed_refused, whirl_number, Whirl};
 use super::{state_solve, Stability, StateWhirl, StateWhirlMode};
 use crate::error::{FemError, Result};
 use crate::mpc::Transformation;
@@ -268,7 +266,10 @@ mod tests {
     fn u2_combined_flags() {
         let un = |growth: f64| Stability::Unstable { growth };
         assert_eq!(Stability::combined(&[]), Stability::Stable);
-        assert_eq!(Stability::combined(&[Stability::Stable, Stability::Stable]), Stability::Stable);
+        assert_eq!(
+            Stability::combined(&[Stability::Stable, Stability::Stable]),
+            Stability::Stable
+        );
         assert_eq!(
             Stability::combined(&[Stability::Stable, un(3.0), un(5.0), Stability::Stable]),
             un(5.0)

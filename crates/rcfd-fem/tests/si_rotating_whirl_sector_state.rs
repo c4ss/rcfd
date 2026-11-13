@@ -234,7 +234,13 @@ fn x1_w2_q1_positive_definite_speed() {
         };
         ch.holds(&format!("X1 k = {k} loss"), h.state.loss.is_none(), "None");
         ch.holds(&format!("X1 k = {k} flag"), h.state.stability.is_stable(), "Stable");
-        let mut om: Vec<f64> = h.state.eigenvalues.iter().filter(|s| s[1] > 0.0).map(|s| s[1]).collect();
+        let mut om: Vec<f64> = h
+            .state
+            .eigenvalues
+            .iter()
+            .filter(|s| s[1] > 0.0)
+            .map(|s| s[1])
+            .collect();
         om.sort_by(f64::total_cmp);
         ch.holds(
             &format!("X1 k = {k} count"),
@@ -294,7 +300,9 @@ fn d_b1_l1_u1_f1_p1_q1_e1_w1_t1_n1_n2_above_the_first_loss() {
             (true, hi)
         }
         None => {
-            println!("D: both effects on: no index loses definiteness up to 16 omega_ref; fallback stress_stiffening(false)");
+            println!(
+                "D: both effects on: no index loses definiteness up to 16 omega_ref; fallback stress_stiffening(false)"
+            );
             let rs_off = RotatingSector::new(&sector, &ds_options(true, false)).unwrap();
             let hi = bracket(&rs_off).expect("defective set-up: no loss up to 16 omega_ref with the fallback");
             (false, hi)
@@ -357,14 +365,18 @@ fn d_b1_l1_u1_f1_p1_q1_e1_w1_t1_n1_n2_above_the_first_loss() {
     ch.holds(
         "B1 eigenvalues of k*",
         hk.state.eigenvalues.len() == 2 * hk.state.unknowns
-            && hk.state.eigenvalues.iter().all(|s| s[0].is_finite() && s[1].is_finite()),
-        &format!("{} finite of {} unknowns", hk.state.eigenvalues.len(), hk.state.unknowns),
+            && hk
+                .state
+                .eigenvalues
+                .iter()
+                .all(|s| s[0].is_finite() && s[1].is_finite()),
+        &format!(
+            "{} finite of {} unknowns",
+            hk.state.eigenvalues.len(),
+            hk.state.unknowns
+        ),
     );
-    ch.holds(
-        "B1 whirl_modes still a loss",
-        lost(&rs, k_star, w_t),
-        "LossOfStiffness",
-    );
+    ch.holds("B1 whirl_modes still a loss", lost(&rs, k_star, w_t), "LossOfStiffness");
 
     // The full rotor.
     let (rotor, full) = full_of(&sector);
@@ -407,7 +419,10 @@ fn d_b1_l1_u1_f1_p1_q1_e1_w1_t1_n1_n2_above_the_first_loss() {
     }
     let smin = fr.eigenvalues.iter().map(|s| cabs(*s)).fold(f64::INFINITY, f64::min);
     let smax = fr.eigenvalues.iter().map(|s| cabs(*s)).fold(0.0f64, f64::max);
-    println!("U1: {} matched pairs; full |s| from {smin:.6e} to {smax:.6e}", pairs.len());
+    println!(
+        "U1: {} matched pairs; full |s| from {smin:.6e} to {smax:.6e}",
+        pairs.len()
+    );
     ch.le("U1 union against the full rotor", u1, 1e-8);
     // F1
     let flags: Vec<Stability> = hs.iter().map(|h| h.state.stability).collect();
@@ -542,7 +557,11 @@ fn d_b1_l1_u1_f1_p1_q1_e1_w1_t1_n1_n2_above_the_first_loss() {
         let col: Vec<Stability> = table.results.iter().map(|r| r[j].state.stability).collect();
         t1 &= table.rotor(j) == Stability::combined(&col);
     }
-    ch.holds("T1 table entries and rotor flags", t1, "equal to whirl_state and combined");
+    ch.holds(
+        "T1 table entries and rotor flags",
+        t1,
+        "equal to whirl_state and combined",
+    );
     let csv = table.to_csv();
     let lines: Vec<&str> = csv.lines().collect();
     let width = table
