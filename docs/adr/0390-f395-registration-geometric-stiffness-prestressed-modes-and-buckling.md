@@ -359,3 +359,125 @@ Modal options of A6, A7, C1, C4: `ModalOptions::new(2).residual_test(ResidualTes
   the Sturm check refuses rather than miss them (L3). No shift-invert in `lambda`.
 - One mesh per set-up; no convergence study. The knife edges carry no reaction in the static solve (balanced loads), so the local
   concentration of a knife edge under a reaction is not exercised.
+
+## Addendum 1: results (2026-11-13)
+
+The registered runs: commit d368145e, once each, release, `cargo test -p rcfd-linalg --release --test si_buckling_eigen --
+--nocapture --test-threads=1` (5 passed; log `w49i-work/f395-scratch/registered_linalg.log`) and `cargo test -p rcfd-fem --release
+--test si_geometric -- --nocapture --test-threads=1` (5 passed, 1 failed on A9 only; log `registered_fem.log`). After the run
+(commit 37ad2653) the failing test is kept unchanged as the ignored record `a5b_a8_a9_c2_c3_n1_buckling_of_the_beam_known_miss`
+with the limit intact, and its met checks stay active in the companion `a5b_a8_c2_c3_n1_buckling_of_the_beam_met_clauses` (the
+same body without the A9 line); rustfmt was applied to the new files. No limit, parameter or set-up was changed.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | <= 1e-13 | elements: 6.5e-17 to 2.0e-16 (all four kinds, both stresses); assembled B: 1.6e-16 | yes |
+| A2 | <= 1e-12 | elements: 4.4e-17 to 2.5e-16; assembled B: 2.0e-16 | yes |
+| A3 | <= 1e-12 | `x^T K_sigma x`: Tet4 5.3e-15, Hex8 0, Tet10 2.2e-15, Hex20 4.0e-15; `V/V_geom`: 2.2e-16 to 5.6e-16 | yes |
+| A4 | <= 1e-10 | 4.4e-15 (17 iterations, q = 20) | yes |
+| A5a | no factor, `exhausted`, counted 0 | `+I`: none, `exhausted = 2.443e4`, counted 0; `diag(0, 1, ...)`: none, `4.885e4`, counted 0 | yes |
+| A5b | as A5a | B in tension: none, `exhausted = 4.084e8`, counted 0 | yes |
+| A6 | <= 0.01 | n = 1: 6.83e-4; n = 2: 2.39e-3 | yes |
+| A7 | <= 0.01 | n = 1: 4.99e-4; n = 2: 2.21e-3 | yes |
+| A8 | <= 0.01 | 1.99e-3 (`lambda_1 = 408.400`, `P_1 = 4.084005e6 N` against 4.092141e6) | yes |
+| A9 | <= 0.02 | **2.0135e-2** (`lambda_2 = 1600.710`, ratio 0.979865) | **no** |
+| A10 | <= 0.01 | 1.73e-3 (`lambda_1 = 102.6305`) | yes |
+| C1 | <= 1e-3 | 1.83e-4, 1.80e-4 | yes |
+| C2 | >= 0.99 | every mode 1.000000 (8 of B, 1 of C) | yes |
+| C3 | <= 0.01 | 7.68e-3 | yes |
+| C4 | bit-equal | bit-equal | yes |
+| C5 | <= 1e-6 | `sigma_xx` 6.1e-13, others 3.8e-13; eigenvalues static against uniform 1.5e-11 | yes |
+| C6 | bit-equal | `K_sigma` and buckling, threads 1 and 8: bit-equal | yes |
+| C7 | refused as stated | `FieldLength` "prestress"; `FieldLength` and `InvalidValue` "stress" (four kinds); `RigidBodyMotionFree` (`t_x`); `InvalidValue` "constraint"; `Solver` beyond the buckling stress | yes |
+| C8 | bit-equal; Beam2, Shell4 refuse | bit-equal; both `NotYetSupported` | yes |
+| C9 | <= 1e-12 | 4.4e-15 to 4.0e-14 | yes |
+| C10 | <= 1e-6 | 1.3e-10 | yes |
+| L1 | equal | counted 10, expected 10 | yes |
+| L2 | <= 1e-9 | 2.5e-14 | yes |
+| L3 | `SturmMismatch` 1/0 | `SturmMismatch` at `s = 1.11e5`, counted 1, expected 0 | yes |
+| L4 | <= 1e-12 | 0 | yes |
+| L5 | as stated | `ShiftNotPositiveDefinite`, `BadCount`, `DimensionMismatch`, `Unsymmetric` ("K_sigma") | yes |
+| L6 | bit-equal | bit-equal | yes |
+| N1 | > 0.01 | 0.124 (Hex8 locks) | as expected |
+| N2 | > 0.01 | 2.00, 2.00 | as expected |
+| N3 | > 1e-10 | 0.5 | as expected |
+| S1 | 0 failed | `cargo test -p rcfd-fem --release`: 205 passed, 0 failed, 45 ignored (the X2 record and the A9 known miss among them; the X2 copy passes) | yes |
+| S2 | 0 failed | `cargo test -p rcfd-linalg --release --lib --test sb_eigen --test sb_eigen_scale --test si_buckling_eigen`: 43 passed, 0 failed, 1 ignored | yes |
+| S3 | 0 failed | `baseline_hashes` (release): 3 passed, 1 ignored | yes |
+| S4 | builds | `cargo check -p rcfd-post --tests`: builds | yes |
+| S5 | as stated | `git diff ae92ee27 --stat -- crates`: the files listed in S5 only | yes |
+
+### Diagnosis of the A9 miss
+
+Arithmetic 2 of the registration took the reduction of the factors from the shear term alone. The geometric stiffness of the
+solid has a second term of the same order. With the section kinematics `u_x = -y psi`, `u_y = w`, the quadratic form `s int
+|du/dx|^2 dA` with `s = -P/A` is `-P (w_x^2 + r^2 psi_x^2)`, `r^2 = I/A`: the axial stress also works on the axial displacement of
+the rotating sections. Stationarity for `w = W sin kx`, `psi = Psi cos kx` gives `(r^2 k^2/Q) P^2 - (1 + a + r^2 k^2) P + P_E =
+0`, `Q = kappa G A` (derived after the run; closed forms in `w49i-work/f395-scratch/diag.py`, no rcfd call). At `L/h = 20`,
+`r^2 k^2 = 2.056e-3 n^2` beside `a = 4.935e-3 n^2`. This form gives `P_1 = 4.083826e6 N` (measured 4.084005e6, 4.4e-5 off) and
+`P_2 = 1.600433e7 N` (measured 1.600710e7, 1.7e-4 off), and `lambda_2/(4 lambda_1) = 0.97960` to first order, 2.040e-2 from 4
+(measured 2.0135e-2). The miss lies in the clause's expectation, not in the solver: at this slenderness a solid column cannot meet
+"four times within 2 percent". The same term accounts for A8 (1.99e-3 below Engesser alone), C3 (7.7e-3) and A10 (Engesser `a/4`
+0.123 percent plus `r^2 k^2` 0.051 percent, measured 0.173 percent). The modal checks are not affected (arithmetic 4: for a
+separable mode the shift is `s k^2/rho` with this term included).
+
+### Mutations (scratch copy `w49i-work/f395-scratch/copy`, script `mutate.py`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | shear stresses dropped | A3 (0.115), C9 (5.25), every kind |
+| Mu2 | `(g_a . g_b) tr(S)/3` | A3, C9, A6, A7, A8, C3, A10, C10, C2, C7 |
+| Mu3 | component 0 only | A3, C9, A6, A7 (0.998), C7; the buckling tests panic (no factor) |
+| Mu4 | Sturm comparison removed | L3 (returns no factor) |
+| Mu5 | positive cut removed (linalg tests) | A5a (not converged), L3, L4 |
+| Mu5b | the same, model tests | A5b (Sturm mismatch refused) |
+| Mu6 | `K - K_sigma` in pre-stressed modes | A6, A7 (2.00), N2, C7 |
+| Mu7 | `theta` reported for `lambda` | A4 (1.7e7), L2 |
+| Mu8 | strain instead of stress | A6, A7, A8, A10, C3, C5, C7 |
+
+Every mutation was caught.
+
+### Deviations
+
+- The A9 known miss and its companion test (above). The companion re-runs the met checks of the failing test as a guard; it is
+  not used to choose a result.
+- fmt: the new files were formatted after the registered run (layout only).
+
+### What was not run
+
+The workspace suite (the lead's gate). Nothing registered was skipped.
+
+### Decision by the registered rule
+
+**partial**: every check met except A9 (2.0135e-2 against 2e-2), which is a missed A check with a diagnosed cause, kept as an
+ignored `*_known_miss` record.
+
+### Remaining questions
+
+1. **Clause a9 at `L/h = 20`.** (a) re-word it to the derived form: "the second factor within 1 percent of the root of the
+   quadratic above" (measured 1.7e-4); (b) keep "four times within 2 percent" and ask it at `L/h = 40`, where both terms fall by 4
+   (predicted 0.51 percent); (c) widen the limit to 2.5 percent. Recommendation: (a), because it states the physics of the solid
+   and is the sharper check. Follow-up F-490 below carries it.
+2. **The text of the default refusal of `geometric_stiffness`** still names ADR 0298 for Beam2 and Shell4, which this package
+   does not cover. (a) leave it until the beam and shell packages land; (b) change the default to name the beam and shell
+   follow-up. Recommendation: (a). Changing it edits the refusal that the X2 record asserts, and the beam and shell packages
+   override it anyway.
+3. **Transformation path** (linear constraints, rigid sets, supports) for pre-stressed modes and buckling, refused today. (a) a
+   follow-up through `mpc::transformation` (`T^T K_sigma T`), as ADR 0384 did for modes; (b) leave it refused. Recommendation:
+   (a), since the fan blade on its hub needs it (F-491 below).
+
+## For the lead: roadmap entries
+
+F-395, proposed status **partial**, note:
+
+> Structural solver, intermediate tier (plan ADR 0290). ADR 0390, 2026-11-12: geometric stiffness of Tet4, Hex8, Tet10 and Hex20 (geometric::element_geometric_stiffness, Prestress from a static result, geometric_stiffness on the stiffness pattern, bit-identical for 1 and 8 threads), pre-stressed modes (geometric::prestressed_modes; a zero pre-stress has the bits of modal_analysis) and linear buckling (buckling::factors on rcfd_linalg::eigen::lowest_buckling_factors, subspace iteration on K^-1 (-K_sigma) verified by a Sturm count of K + s K_sigma; with no factor it returns the bound below which there is none). Symmetry 2.0e-16, translation 2.5e-16, uniaxial form 5.3e-15; tridiagonal factors 4.4e-15; frequency shifts 6.8e-4 and 2.4e-3 (tension), 5.0e-4 and 2.2e-3 (compression); knife-edge buckling 2.0e-3 from Engesser (shear term 0.491 percent registered); clamped-free column 1.7e-3. Known miss: the second factor is 2.0135e-2 from four times the first against 2e-2, because the solid's K_sigma also carries the axial stress on the rotating sections (r^2 k^2, the order of the shear term; the derived form matches within 1.7e-4). Transformation path (springs, linear constraints, rigid sets) refused. Follow-ups F-490, F-491.
+
+Follow-up F-490, title "Buckling factors of the knife-edge column against the solid's closed form (ADR 0390 known miss)", deps F-395, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The knife-edge Hex20 beam of ADR 0390 (L/h = 20, nu = 0): the first two buckling factors within 1 percent of the lower root of (r^2 k^2/(kappa G A)) P^2 - (1 + a + r^2 k^2) P + P_E = 0 (k = n pi/L, a = P_E/(kappa G A), r^2 = I/A), derived in the ADR; at L/h = 40 the second factor four times the first within 2 percent.
+
+Follow-up F-491, title "Pre-stressed modes and buckling on the transformation path (linear constraints, rigid sets, supports)", deps F-395, F-486, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. prestressed_modes and buckling::factors accept a model with linear constraints, rigid sets and elastic supports through T^T K T and T^T K_sigma T; the knife-edge beam of ADR 0390 with its knife edges written as linear constraints gives the factors and frequencies of the prescribed-displacement model within 1e-10; a nodal spring at the roller raises the first factor by the closed form of a spring-supported column within 1 percent.
