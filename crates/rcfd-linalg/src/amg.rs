@@ -27,6 +27,10 @@ pub struct AmgSettings {
     pub post_sweeps: usize,
     /// Coarse-grid visits per level: 1 gives a V-cycle, 2 a W-cycle (default; mesh-independent rate).
     pub cycle_index: usize,
+    /// Opt-in (ADR 0369, F-471/F-474): the dense coarsest solve applies every row interchange before the forward
+    /// substitution, as the factorisation's whole-row swaps require (`P A = L U`). `false` (the default) keeps the
+    /// interleaved order, which is exact only when the coarsest factorisation interchanges no rows.
+    pub coarse_lu_interchanges_first: bool,
 }
 
 impl Default for AmgSettings {
@@ -38,6 +42,7 @@ impl Default for AmgSettings {
             pre_sweeps: 1,
             post_sweeps: 1,
             cycle_index: 2,
+            coarse_lu_interchanges_first: false,
         }
     }
 }
@@ -62,10 +67,11 @@ struct DenseLu {
     n: usize,
     lu: Vec<f64>,
     piv: Vec<usize>,
+    interchanges_first: bool,
 }
 
 impl DenseLu {
-    fn new(a: &CsrMatrix) -> Self {
+    fn new(a: &CsrMatrix, interchanges_first: bool) -> Self {
         let n = a.n;
         let mut lu = vec![0.0; n * n];
         for i in 0..n {
@@ -102,12 +108,35 @@ impl DenseLu {
                 }
             }
         }
-        DenseLu { n, lu, piv }
+        DenseLu {
+            n,
+            lu,
+            piv,
+            interchanges_first,
+        }
     }
 
     fn solve(&self, b: &[f64], x: &mut [f64]) {
         let n = self.n;
         x.copy_from_slice(b);
+        if self.interchanges_first {
+            // ADR 0369 (opt-in): every interchange first, then the unit lower and the upper substitution
+            for k in 0..n {
+                x.swap(k, self.piv[k]);
+            }
+            for k in 0..n {
+                for i in k + 1..n {
+                    x[i] -= self.lu[i * n + k] * x[k];
+                }
+            }
+            for k in (0..n).rev() {
+                for j in k + 1..n {
+                    x[k] -= self.lu[k * n + j] * x[j];
+                }
+                x[k] /= self.lu[k * n + k];
+            }
+            return;
+        }
         for k in 0..n {
             x.swap(k, self.piv[k]);
             for i in k + 1..n {
@@ -322,7 +351,10 @@ impl Amg {
         }
         let last = &levels.last().expect("at least one level").a;
         let dummy = CsrMatrix::from_triplets(1, vec![(0, 0, 1.0)]);
-        let coarse_lu = DenseLu::new(if last.n <= 2000 { last } else { &dummy });
+        let coarse_lu = DenseLu::new(
+            if last.n <= 2000 { last } else { &dummy },
+            settings.coarse_lu_interchanges_first,
+        );
         Amg {
             levels,
             coarse_lu,
@@ -412,6 +444,37 @@ impl Amg {
         let lo = piv.iter().map(|p| p.abs()).fold(f64::INFINITY, f64::min);
         let hi = piv.iter().map(|p| p.abs()).fold(0.0, f64::max);
         Some((lo, hi, piv.iter().filter(|&&p| p == 1e-300).count()))
+    }
+
+    /// The steps `k` of the coarsest dense LU at which a row was interchanged (`piv[k] != k`); empty when none was, or when
+    /// the coarsest level is above 2000 unknowns (diagnostic, ADR 0369 D2).
+    pub fn coarse_interchanges(&self) -> Vec<usize> {
+        if self.levels.last().map_or(true, |l| l.a.n > 2000) {
+            return Vec::new();
+        }
+        let lu = &self.coarse_lu;
+        (0..lu.n).filter(|&k| lu.piv[k] != k).collect()
+    }
+
+    /// The operator of level `l` (0 is the finest; diagnostic, ADR 0369 D2).
+    pub fn level_operator(&self, l: usize) -> &CsrMatrix {
+        &self.levels[l].a
+    }
+
+    /// The prolongator from level `l + 1` to level `l`; `None` on the coarsest level (diagnostic, ADR 0369 D2).
+    pub fn level_prolongator(&self, l: usize) -> Option<&CsrMatrix> {
+        self.levels[l].p.as_ref()
+    }
+
+    /// The cycle from level `l` on `A_l x = b`, starting from the given `x` (the operations of the preconditioner's cycle
+    /// below level `l`; diagnostic, ADR 0369 D2).
+    pub fn cycle_at(&self, l: usize, b: &[f64], x: &mut [f64]) {
+        self.cycle(l, b, x);
+    }
+
+    /// The dense solve of the coarsest level, as the cycle calls it (diagnostic, ADR 0369 D2).
+    pub fn coarse_solve(&self, b: &[f64], x: &mut [f64]) {
+        self.coarse_lu.solve(b, x);
     }
 
     /// [`Preconditioner::apply`] by the same operations, returning the first level and stage after which a value of the level's
