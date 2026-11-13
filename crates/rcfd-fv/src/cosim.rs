@@ -58,6 +58,11 @@ pub trait Structure: Participant {
     /// Advance by `dt` [s] under the nodal forces of the fluid on the structure [N], held over the step. Returns the
     /// displacement of every node from the reference configuration [m] at the new time.
     fn advance(&mut self, dt: f64, forces: &[Vec3]) -> Result<Vec<Vec3>, String>;
+    /// The interface elements, 1 to 4 node indices each, for the map builders of ADR 0263 ([`InterfaceMap::build`]);
+    /// empty (the default) when the structure gives none (F-444, ADR 0380).
+    fn elements(&self) -> Vec<Vec<usize>> {
+        Vec::new()
+    }
 }
 
 /// A fluid participant: it receives the displacement of its wall points and returns the force on its wall faces.

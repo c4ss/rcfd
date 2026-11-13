@@ -2354,6 +2354,8 @@ pub fn case_schema() -> Schema {
         .field("restart", crate::restart::schema())
         .field("chain", crate::chain::schema())
         .field("study", crate::study::schema())
+        // F-444, ADR 0380 D1: an optional table, absent from every case that does not write it
+        .field("cosim", crate::cosim_case::schema())
 }
 
 /// Settings of one passive scalar or species.

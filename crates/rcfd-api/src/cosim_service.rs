@@ -173,11 +173,19 @@ fn serve(hosted: &mut Hosted, lease: &mut u64, id: &str, method: &str, p: &Value
     }
     match method {
         "cosim.describe" => match hosted {
-            Hosted::Structure(s) => Ok(json!({
-                "kind": "structure",
-                "name": s.name(),
-                "nodes": vectors_json(&s.node_coordinates(), "node coordinates")?,
-            })),
+            Hosted::Structure(s) => {
+                let mut reply = json!({
+                    "kind": "structure",
+                    "name": s.name(),
+                    "nodes": vectors_json(&s.node_coordinates(), "node coordinates")?,
+                });
+                // F-444 (ADR 0380 D3): the elements only when the structure gives some, so other replies are unchanged
+                let elements = s.elements();
+                if !elements.is_empty() {
+                    reply["elements"] = json!(elements);
+                }
+                Ok(reply)
+            }
             Hosted::Fluid(f) => Ok(json!({
                 "kind": "fluid",
                 "name": f.name(),
@@ -499,6 +507,19 @@ impl Link {
     }
 }
 
+/// A list of lists of indices (the `faces` of a fluid, the `elements` of a structure).
+fn index_lists(v: &Value, what: &str) -> Result<Vec<Vec<usize>>, String> {
+    v.as_array()
+        .ok_or_else(|| format!("cosim.describe returned no {what}"))?
+        .iter()
+        .map(|f| {
+            f.as_array()
+                .and_then(|a| a.iter().map(|i| i.as_u64().map(|i| i as usize)).collect())
+                .ok_or_else(|| format!("cosim.describe returned an entry of {what} that is not a list of indices"))
+        })
+        .collect()
+}
+
 fn vectors_value(v: &[Vec3]) -> Value {
     Value::Array(v.iter().map(|a| json!([a[0], a[1], a[2]])).collect())
 }
@@ -556,12 +577,14 @@ macro_rules! remote_common {
     };
 }
 
-/// A structural participant hosted by a service elsewhere, driven over TCP (F-360). `name`, `time` and
-/// `node_coordinates` answer from what the connection and the last reply gave.
+/// A structural participant hosted by a service elsewhere, driven over TCP (F-360). `name`, `time`,
+/// `node_coordinates` and `elements` (F-444, ADR 0380: the member of `describe`, empty when absent) answer from what the
+/// connection and the last reply gave.
 pub struct RemoteStructure {
     link: Mutex<Link>,
     name: String,
     nodes: Vec<Vec3>,
+    elements: Vec<Vec<usize>>,
 }
 
 impl std::fmt::Debug for RemoteStructure {
@@ -585,9 +608,14 @@ impl RemoteStructure {
                 d["kind"]
             ));
         }
+        let elements = match d.get("elements") {
+            None => Vec::new(),
+            Some(e) => index_lists(e, "elements")?,
+        };
         Ok(RemoteStructure {
             name: d["name"].as_str().unwrap_or(participant).to_string(),
             nodes: vectors_from(&d, "nodes")?,
+            elements,
             link: Mutex::new(link),
         })
     }
@@ -603,6 +631,10 @@ impl Structure for RemoteStructure {
     fn advance(&mut self, dt: f64, forces: &[Vec3]) -> Result<Vec<Vec3>, String> {
         let reply = lock(&self.link).call("cosim.advance", json!({"dt": dt, "forces": vectors_value(forces)}))?;
         vectors_from(&reply, "displacements")
+    }
+
+    fn elements(&self) -> Vec<Vec<usize>> {
+        self.elements.clone()
     }
 }
 
@@ -637,16 +669,7 @@ impl RemoteFluid {
                 d["kind"]
             ));
         }
-        let faces = d["faces"]
-            .as_array()
-            .ok_or("cosim.describe returned no faces")?
-            .iter()
-            .map(|f| {
-                f.as_array()
-                    .and_then(|a| a.iter().map(|i| i.as_u64().map(|i| i as usize)).collect())
-                    .ok_or_else(|| "cosim.describe returned a face that is not a list of point indices".to_string())
-            })
-            .collect::<Result<Vec<Vec<usize>>, String>>()?;
+        let faces = index_lists(&d["faces"], "faces")?;
         Ok(RemoteFluid {
             name: d["name"].as_str().unwrap_or(participant).to_string(),
             points: vectors_from(&d, "points")?,
