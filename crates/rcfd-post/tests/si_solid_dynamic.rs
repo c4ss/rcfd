@@ -1317,3 +1317,15 @@ fn m2c_frequency_change_known_miss() {
     }
     checks.finish();
 }
+
+/// A1c of ADR 0410 amendment 2: A1 with a rigid set on the interface (a transformation that is not a selection).
+#[test]
+fn a1c_advance_is_the_integrator_on_a_rigid_set() {
+    let mut checks = Checks::new();
+    let mut model = bar();
+    model
+        .add_constraint(Constraint::rigid_set("xmax", [L, 0.5 * W, 0.5 * W]))
+        .unwrap();
+    a1_on(&mut checks, "A1c", model, SEED ^ 6);
+    checks.finish();
+}
