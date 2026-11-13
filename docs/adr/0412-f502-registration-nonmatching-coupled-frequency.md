@@ -233,3 +233,118 @@ Every value is printed; a test fails at the end if any of its checks missed. `n`
    and the explanation changes no library code.
 2. The update of the coupled iteration: Aitken only (the acceptance names none; ADR 0410 showed Aitken and least squares give the
    same frequencies to the printed digits).
+
+## Addendum 1: results (2026-11-13)
+
+The registered run, made once: commit `42ed6b01` (the test file, written after the registration commit `5a368b2e`),
+`cargo test -p rcfd-post --release --test si_solid_dynamic_nonmatching -- --nocapture --test-threads=1`, `CARGO_BUILD_JOBS=4`,
+log `w49i-work/f502-scratch/run1.log`: 3 passed, 5.6 s for the three tests (no test is heavy). Commit `264a7a2a` applied rustfmt
+to the test file only (line breaks); nothing else changed after the run. In each test the static compliances and every
+prediction are computed and printed before the first coupled run of that face (C0, by the order of `face_refinement`).
+
+### Checks
+
+Ratio 4, `k L = 0.480094436957`, `dt = 1.037130e-4 s`, `Omega_pred,0 = 605.6264863951 rad/s`.
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| C-P-2 (`Dc E A/L = 1.4891e-2`; `Delta_m = -6.2792e-3`, `Delta_pred = -6.2644e-3`) | `abs(Delta_m/Delta_pred - 1) <= 0.1` | `2.36e-3` | yes |
+| C-P-4 (`4.2334e-3`; `-1.7912e-3`, `-1.7916e-3`) | `<= 0.1` | `2.33e-4` | yes |
+| C-P-8 (`1.2637e-3`; `-5.3593e-4`, `-5.3567e-4`) | `<= 0.1` | `4.76e-4` | yes |
+| C-R-2 (`4.5056e-3`; `-1.9061e-3`, `-1.9065e-3`) | `<= 0.1` | `2.19e-4` | yes |
+| C-R-4 (`5.9389e-4`; `-2.5219e-4`, `-2.5185e-4`) | `<= 0.1` | `1.36e-3` | yes |
+| C-R-8 (`6.7088e-5`; `-2.8438e-5`, `-2.8458e-5`) | `<= 0.1` | `7.03e-4` | yes |
+| C0 | predictions before the runs | holds (printed first in each test) | yes |
+| B1 | the list with `abs(Delta_m) < 1e-3` | projection at 8 x 8; radial basis at 4 x 4 and 8 x 8; `Q` at 4 x 4 and 8 x 8; none at 2 x 2 | printed |
+| B2 | measured list = predicted list | equal for every `n` | yes |
+| S1 | `<= 1e-13` | `0` (`n = 2, 4, 8`): the library's projection weights are bit-equal to the test's triangle-split weights | yes |
+| S2 (mirror `y <-> z`, mirror `(W - z, W - y)`, half turn) | `<= 1e-13` | at most `8.3e-16` | yes |
+| S3 (mirrors `y -> W - y`, `z -> W - z`, two quarter turns) | `>= 0.05` | `0.1667` (`n = 2`), `0.1111` (`n = 4, 8`), each of the four | yes |
+| S4 (`Q`, all seven) | `<= 1e-13` | at most `8.1e-16` | yes |
+| S5 (radial basis, all seven) | `<= 1e-12` | at most `7.1e-15` | yes |
+| C-Q-2, C-Q-4, C-Q-8 (`Q`: `Dc E A/L = 5.1222e-3, 1.9306e-3, 6.6553e-4`; `Delta_m = -2.1681e-3, -8.1801e-4, -2.8239e-4`) | `<= 0.1` | `6.59e-4`, `1.13e-4`, `6.13e-4` | yes |
+| FM | `<= 2e-5` | `1.462e-7` (each `n`) | yes |
+| FU | `<= 1e-9` | `4.7e-15` (`n = 4`), `2.1e-15` (`n = 8`) | yes |
+| K0 | `<= 1e-9` | `6.2e-15`, `2.2e-16`, `7.1e-15` | yes |
+| I | caps 4 and 20, all converged | every step of every run converged to `1e-8` in 3 iterations | yes |
+| MB | `<= 1e-12` | at most `2.3e-15` | yes |
+| PD | `1e-14` (projection, `Q`), `1e-12` (radial basis) | projection and `Q` below `1e-15`; radial basis `1.8e-15`, `3.1e-15`, `9.9e-15` | yes |
+| N1 | `abs(Delta_m/Delta_crude - 1) >= 0.1` for all nine | `0.151` to `0.157` | yes (the crude estimate misses, as registered) |
+| S6 `si_solid_dynamic` | passes unedited | 13 passed, 5 ignored (as on the parent) | yes |
+
+The measured changes agree with the arithmetic's simulated runs (Newmark on `M + m_a w w^T` in Python) to the printed digits,
+and the predictions with the arithmetic's predictions to all printed digits.
+
+### What the numbers say
+
+* The prediction from the static compliance (D3) holds within `2.4e-3` of the change for every face and map: the frequency
+  change between the maps is the extra static compliance of the mapped weights. The largest error is at `n = 2` with the
+  projection, where `d` is largest and the quasi-static assumption of D3 is weakest.
+* The change falls with the refinement of the solid face: by `3.5` and `3.3` per halving with the projection, by `7.6` and
+  `8.9` with the radial basis. Below `1e-3`: the projection from 8 x 8 elements, the radial basis (support `3 h`) from 4 x 4,
+  the bilinear evaluation from 4 x 4. ADR 0410's 2 x 2 face meets `1e-3` with none of the three.
+* The asymmetry of ADR 0410 Q2 is explained (D6, S1 to S4): the projection's weights are exactly those of the triangulation of
+  each face along its `(0, 2)` diagonal, parallel on every Hex8 face, so they keep only the symmetries of that triangulation.
+  It is a property of the documented split (ADR 0263), not an error of the code. It costs compliance: at the same `n` the
+  symmetric bilinear evaluation has `0.34`, `0.46`, `0.53` of the projection's extra compliance, and a frequency change
+  smaller by the same factors. Nothing in the library was changed (defaults bit-identical by construction).
+
+### Mutations (copy of commit `264a7a2a` from `git archive` in `f502-scratch/copy`, own target directory, script `mutate.py`, logs `MU1.log` to `MU5.log`)
+
+| Mutation | Caught by |
+|---|---|
+| MU1 `nearest_on_element` splits along `(1, 3)` | S1 (`n = 2, 4, 8`), as expected; S2, S3 unchanged as predicted |
+| MU2 `forces_to_nodes` times `1.01` | MB (resultant, moment, work, every 3:2 run), and also K0 and FM |
+| MU3 the series spring of the prediction to ground instead | C-P-n, C-R-n, C-Q-n (all nine), B2 at `n = 4, 8` |
+| MU4 `Dc` from `w0` (zero prediction) | C-P-n, C-R-n, C-Q-n (all nine), B2 at `n = 4, 8` |
+| MU5 the test's triangle split along `(1, 3)` | S1 (`n = 2, 4, 8`) |
+
+Every mutation was caught; each mutated copy failed all three tests.
+
+### Formatting and lints
+
+`cargo fmt -p rcfd-post --check`: clean (after rustfmt of the new file, commit `264a7a2a`). `cargo clippy -p rcfd-post
+--all-targets --release -- -D warnings`: clean.
+
+### Deviations
+
+* None of the registered checks, limits or set-ups changed. The rustfmt commit changed only line breaks of the test file.
+
+### What was not run
+
+* The whole workspace test suite (the lead's gate). The baseline hashes: no library line changed (only a new test file, this
+  ADR and the topic doc), so nothing they cover changed.
+* Other mass ratios, the least-squares update, other supports of the radial basis.
+
+### Decision by the registered rule
+
+**Done.** Every check of A met (the six changes within `2.4e-3` of their predictions against the limit `0.1`; the list below
+`1e-3` reported and equal to the predicted one; the symmetry checked and the asymmetry explained), every companion met, N1
+misses for all nine as it must, S6 passes.
+
+### Remaining questions
+
+1. **A symmetric projection on quadrilaterals** (from D6). The projection's triangle split along the corner order is not
+   symmetric and has 1.9 to 2.9 times the extra compliance of the bilinear evaluation. Options: (a) an opt-in variant of
+   `MapMethod` that evaluates the bilinear shape functions on quadrilateral elements (nearest point on the bilinear patch), the
+   default unchanged, checked with the mirrors of S4 and the frequency changes of this ADR (expected `2.2e-3`, `8.2e-4`,
+   `2.8e-4`); (b) split each quadrilateral along a diagonal chosen by a geometric rule (alternating), which changes the default
+   weights and the F-362 and F-400 records; (c) leave it, since the radial basis is already symmetric and the better of the
+   two. Recommendation: (a), as the follow-up below; (b) changes default results and is not taken.
+2. **Guidance for the dynamic solid's interface**. Options: (a) state in `docs/cosimulation-protocol.md` the measured changes
+   per face refinement and map (done, as a statement of the measurements); (b) make the radial basis the default of the case
+   path. Recommendation: (a); (b) changes defaults and is not taken.
+
+### For the lead: roadmap entries
+
+F-502, proposed status **done**, note:
+
+> DONE (ADR 0412, 2026-11-13; registered before the code, run once, no amendment). On the bar of F-400 with the piston mock at mass ratio 4 the first coupled frequency changes between the matching and the 3:2 interface by 6.28e-3, 1.79e-3, 5.36e-4 (projection) and 1.91e-3, 2.52e-4, 2.84e-5 (radial basis, support 3 h) for solid end faces of 2 x 2, 4 x 4, 8 x 8 elements. Each change equals the one predicted from the static compliance w^T K^{-1} w of the mapped weights (two static solves before the run; the added mass on a spring of the extra compliance in series with the 1D chain; the cross term with the uniform field is exactly zero) within 2.4e-3 of itself (limit 10 percent); the cruder mass-on-spring estimate misses by 15 percent (negative control). Below 1e-3: projection from 8 x 8, radial basis from 4 x 4. The projection's weights on the 3:2 wall keep only the mirrors y <-> z, (W - z, W - y) and the half turn (defects below 1e-15) and break the axis mirrors by 0.17 and 0.11: they are exactly the barycentric weights of each quadrilateral split along its (0, 2) diagonal, parallel on every Hex8 face (explained; a test-side bilinear evaluation is symmetric to 8e-16 and has 0.34 to 0.53 of the extra compliance). No library line changed; defaults bit-identical. Open: ADR 0412 Q1, Q2.
+
+F-400, the note gains the sentence:
+
+> The frequency change between the maps (M2c, 6.3e-3) is the extra static compliance of the mapped weights; its dependence on the face refinement and the map is measured by F-502 (ADR 0412, 2026-11-13): below 1e-3 from 8 x 8 elements with the projection and from 4 x 4 with the radial basis.
+
+Follow-up item (from Q1), title "Opt-in bilinear projection on quadrilateral interface elements", deps F-362, F-502, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. An opt-in variant of the projection of F-362 evaluates the bilinear shape functions on quadrilateral structural elements (the nearest point on the bilinear patch); the default projection keeps its weights bit for bit (the F-362, F-400 and F-502 tests pass unedited). On the 3:2 walls of F-502 its weights are invariant under the eight symmetries of the square within 1e-13 and equal the test-side bilinear evaluation of ADR 0412 within 1e-13; rigid translation and rotation are reproduced and resultant, moment and work conserved within 1e-12 on a planar and on a cylindrical wall; the coupled frequency change of F-502 equals its static-compliance prediction within 10 percent for faces of 2 x 2, 4 x 4 and 8 x 8 elements.

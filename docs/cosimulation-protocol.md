@@ -36,7 +36,14 @@ Two participants and a coupler:
   piston wall, a spring); with Newmark's method a converged coupled step is the implicit step of the coupled system. A
   fluid whose added mass acts per face excites interface patterns that are not uniform, with slopes of the fixed-point
   map of several hundred on that bar; components of the force below the convergence test are then loosely coupled and
-  grow from step to step (ADR 0410 amendment 1);
+  grow from step to step (ADR 0410 amendment 1). On a non-matching interface the transpose of the map loads the solid
+  face with weights `w` that differ from the consistent pattern by a self-equilibrated part; the coupled frequency then
+  falls as if the added mass hung on a spring of compliance `w^T K^{-1} w - L/(E A)` in series with the tip (the extra
+  static compliance; the cross term with the uniform field vanishes exactly). This predicts the measured change within
+  `2.4e-3` of itself for faces of 2 x 2 to 8 x 8 elements. At mass ratio 4 the change is `6.3e-3`, `1.8e-3`, `5.4e-4`
+  with the projection and `1.9e-3`, `2.5e-4`, `2.8e-5` with the radial basis of support `3 h` (ADR 0412). The
+  projection's weights are not symmetric under the square's axis mirrors: each quadrilateral is split into the triangles
+  `(0, 1, 2)` and `(0, 2, 3)` of its corner order, and on a Hex8 face all the diagonals are parallel;
 * the **coupler** (`cosim::coupled_step`) owns the mapping between the two interface meshes and the iteration. Neither
   participant sees the other's mesh.
 
