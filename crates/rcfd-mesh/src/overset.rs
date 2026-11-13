@@ -14,6 +14,13 @@
 //! quadratic ([`quadratic_weights`]). A fringe cell whose neighbourhood cannot carry a quadratic keeps the linear stencil
 //! and is listed in [`Connectivity::fallbacks`]. Without the opt-in nothing changes.
 //!
+//! A donor interpolation that is a continuous function of the pose (F-468, ADR 0396) is the opt-in
+//! [`DonorInterpolation::Continuous`]: the stencil of a fringe cell is every calculated cell of the other part within its
+//! own support radius ([`CONTINUOUS_SUPPORT`] times its largest extent) of the fringe centre, with the weights of the moving
+//! least-squares plane under a weight that vanishes with its slope at the edge of the support ([`continuous_weights`]).
+//! The donor cell does not choose the stencil, so the interpolant does not jump where the fringe centre crosses a face of
+//! the other part.
+//!
 //! Cells with non-planar faces (F-352, ADR 0253): the plane of M3 for each face leaves slivers between the cells along
 //! their edges. A cell with a face whose points leave the face's plane by more than the locator's tolerance is tested as
 //! the polyhedron of the triangles about its face centres ([`triangulated_margin`]); the cells of a face share those
@@ -648,6 +655,173 @@ pub enum DonorInterpolation {
     /// The donor cell and the calculated cells that share a point with it, exact for quadratic fields (ADR 0251 D2, D3);
     /// the linear stencil where that neighbourhood cannot carry a quadratic (D4).
     Quadratic,
+    /// Every calculated cell of the other part whose support contains the fringe centre, with the moving least-squares
+    /// weights of [`continuous_weights`] (ADR 0396 D2 to D4): exact for linear fields and a continuous function of the
+    /// pose wherever no candidate cell changes kind; the linear stencil where the candidates cannot carry a plane (D6).
+    Continuous,
+}
+
+/// The support radius of a cell for [`DonorInterpolation::Continuous`], in units of its largest extent (ADR 0396 D2).
+pub const CONTINUOUS_SUPPORT: f64 = 1.5;
+
+/// The core of the weight of [`DonorInterpolation::Continuous`], in units of the cell's largest extent (ADR 0396 D3).
+pub const CONTINUOUS_CORE: f64 = 0.5;
+
+/// The weight of a candidate at the distance `rho` (in units of its largest extent) from the point (ADR 0396 D3):
+/// `(1 - (rho / kappa)^2)^2 / (rho^2 + eps^2)` inside the support, zero outside; its value and its slope vanish at the edge.
+pub fn continuous_weight(rho: f64) -> f64 {
+    if !(rho < CONTINUOUS_SUPPORT) {
+        return 0.0;
+    }
+    let q = rho / CONTINUOUS_SUPPORT;
+    let b = 1.0 - q * q;
+    b * b / (rho * rho + CONTINUOUS_CORE * CONTINUOUS_CORE)
+}
+
+/// Moving least-squares weights of the stencil points `centres` at `x` under the positive weights `omega` (ADR 0396 D4):
+/// the minimum of `sum w_k^2 / omega_k` under `sum w_k = 1` and `sum w_k (x_k - x) = 0` in the solved directions `dims`,
+/// that is, the weights with which the weighted least-squares plane through the stencil values gives its value at `x`.
+/// The offsets are scaled by `L = (sum omega_k |x_k - x|^2 / sum omega_k)^(1/2)`. Linear fields are reproduced exactly.
+/// Fails for fewer points than solved directions plus one, for a degenerate system (a pivot at most `1e-12` of the largest
+/// entry) and for `sum |w_k|` above [`QUADRATIC_MAX_ABS_SUM`].
+pub fn continuous_weights(centres: &[Vec3], x: Vec3, dims: [bool; 3], omega: &[f64]) -> Result<Vec<f64>> {
+    let act: Vec<usize> = (0..3).filter(|&d| dims[d]).collect();
+    let m = act.len() + 1;
+    if centres.len() < m || omega.len() != centres.len() {
+        return err(format!(
+            "overset continuous weights: {} stencil points for {} solved directions",
+            centres.len(),
+            act.len()
+        ));
+    }
+    let r: Vec<Vec<f64>> = centres
+        .iter()
+        .map(|c| act.iter().map(|&d| c[d] - x[d]).collect())
+        .collect();
+    let w_sum: f64 = omega.iter().sum();
+    let l2 = r
+        .iter()
+        .zip(omega)
+        .map(|(v, w)| w * v.iter().map(|a| a * a).sum::<f64>())
+        .sum::<f64>()
+        / w_sum;
+    if !(l2 > 0.0 && l2.is_finite()) {
+        return err("overset continuous weights: the stencil points coincide with the point");
+    }
+    let l = l2.sqrt();
+    let rows: Vec<Vec<f64>> = r
+        .iter()
+        .map(|v| std::iter::once(1.0).chain(v.iter().map(|a| a / l)).collect())
+        .collect();
+    let mut mat = vec![vec![0.0; m + 1]; m];
+    for (a, w) in rows.iter().zip(omega) {
+        for i in 0..m {
+            for j in 0..m {
+                mat[i][j] += w * a[i] * a[j];
+            }
+        }
+    }
+    mat[0][m] = 1.0;
+    let scale = mat
+        .iter()
+        .flat_map(|row| row[..m].iter())
+        .fold(0.0f64, |s, v| s.max(v.abs()));
+    for col in 0..m {
+        let piv = (col..m)
+            .max_by(|&a, &b| mat[a][col].abs().total_cmp(&mat[b][col].abs()))
+            .unwrap_or(col);
+        if !(mat[piv][col].abs() > 1e-12 * scale) {
+            return err("overset continuous weights: degenerate stencil");
+        }
+        mat.swap(col, piv);
+        for row in 0..m {
+            if row != col {
+                let f = mat[row][col] / mat[col][col];
+                for k in col..=m {
+                    mat[row][k] -= f * mat[col][k];
+                }
+            }
+        }
+    }
+    let lambda: Vec<f64> = (0..m).map(|i| mat[i][m] / mat[i][i]).collect();
+    let w: Vec<f64> = rows
+        .iter()
+        .zip(omega)
+        .map(|(a, w)| w * a.iter().zip(&lambda).map(|(x, l)| x * l).sum::<f64>())
+        .collect();
+    let abs_sum: f64 = w.iter().map(|a| a.abs()).sum();
+    if !abs_sum.is_finite() || abs_sum > QUADRATIC_MAX_ABS_SUM {
+        return err(format!(
+            "overset continuous weights: sum |w| = {abs_sum:.3} above {QUADRATIC_MAX_ABS_SUM}"
+        ));
+    }
+    Ok(w)
+}
+
+/// The supports of the cells of one part (ADR 0396 D7): uniform bins over the union of the boxes `x_k +- r_k` (in the
+/// solved directions; the cell's box in the others), each cell in every bin its box overlaps. Every cell whose support
+/// contains a point is listed in the bin of that point.
+#[derive(Debug, Clone)]
+struct SupportBins {
+    lo: Vec3,
+    hi: Vec3,
+    size: Vec3,
+    n: [usize; 3],
+    bins: Vec<Vec<usize>>,
+}
+
+impl SupportBins {
+    fn new(mesh: &Mesh, cells: Range<usize>, radius: &[f64], dims: [bool; 3]) -> Self {
+        let centres = mesh.cell_centres();
+        let boxes: Vec<(Vec3, Vec3)> = cells
+            .clone()
+            .map(|c| {
+                let (mut a, mut b) = cell_box(mesh, c);
+                for d in 0..3 {
+                    if dims[d] {
+                        a[d] = centres[c][d] - radius[c];
+                        b[d] = centres[c][d] + radius[c];
+                    }
+                }
+                (a, b)
+            })
+            .collect();
+        let (mut lo, mut hi) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+        for (a, b) in &boxes {
+            for d in 0..3 {
+                lo[d] = lo[d].min(a[d]);
+                hi[d] = hi[d].max(b[d]);
+            }
+        }
+        let count = cells.len().max(1) as f64;
+        let ext = [0, 1, 2].map(|d| (hi[d] - lo[d]).max(1e-300));
+        let s = (ext[0] * ext[1] * ext[2] / count).cbrt();
+        let n = [0, 1, 2].map(|d| ((ext[d] / s).ceil() as usize).clamp(1, 1024));
+        let size = [0, 1, 2].map(|d| ext[d] / n[d] as f64);
+        let mut bins = vec![Vec::new(); n[0] * n[1] * n[2]];
+        let bin_of = |x: f64, d: usize| (((x - lo[d]) / size[d]).floor().max(0.0) as usize).min(n[d] - 1);
+        for (c, (a, b)) in cells.zip(&boxes) {
+            let i0 = [0, 1, 2].map(|d| bin_of(a[d], d));
+            let i1 = [0, 1, 2].map(|d| bin_of(b[d], d));
+            for i in i0[0]..=i1[0] {
+                for j in i0[1]..=i1[1] {
+                    for l in i0[2]..=i1[2] {
+                        bins[i + n[0] * (j + n[1] * l)].push(c);
+                    }
+                }
+            }
+        }
+        SupportBins { lo, hi, size, n, bins }
+    }
+
+    /// The cells listed in the bin of `x` (none outside the bins).
+    fn near(&self, x: Vec3) -> &[usize] {
+        if (0..3).any(|d| !(x[d] >= self.lo[d] && x[d] <= self.hi[d])) {
+            return &[];
+        }
+        let i = [0, 1, 2].map(|d| (((x[d] - self.lo[d]) / self.size[d]).floor().max(0.0) as usize).min(self.n[d] - 1));
+        &self.bins[i[0] + self.n[0] * (i[1] + self.n[1] * i[2])]
+    }
 }
 
 /// The largest `sum |w_k|` that [`quadratic_weights`] accepts (ADR 0251 D3, R3).
@@ -782,10 +956,11 @@ pub enum CellKind {
 }
 
 /// Interpolation stencil of a fringe cell: the donor cell (first) and its calculated face neighbours, with the weights
-/// (with [`DonorInterpolation::Quadratic`]: the donor cell and the calculated cells that share a point with it).
+/// (with [`DonorInterpolation::Quadratic`]: the donor cell and the calculated cells that share a point with it; with
+/// [`DonorInterpolation::Continuous`]: the calculated cells whose support contains the point, in increasing order).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stencil {
-    /// Cells of the other part (the donor first).
+    /// Cells of the other part (the donor first; in increasing order with [`DonorInterpolation::Continuous`]).
     pub cells: Vec<usize>,
     /// Weights (`sum = 1`, linear fields exact; with [`DonorInterpolation::Quadratic`] quadratic fields too).
     pub weights: Vec<f64>,
@@ -803,7 +978,8 @@ pub struct Connectivity {
     /// The interpolation the stencils were built with.
     pub interpolation: DonorInterpolation,
     /// With [`DonorInterpolation::Quadratic`]: the fringe cells that carry the linear stencil because their donor's
-    /// neighbourhood cannot carry a quadratic (ADR 0251 D4), in increasing cell order. Empty with `Linear`.
+    /// neighbourhood cannot carry a quadratic (ADR 0251 D4); with [`DonorInterpolation::Continuous`]: those whose
+    /// candidates cannot carry a plane (ADR 0396 D6). In increasing cell order. Empty with `Linear`.
     pub fallbacks: Vec<usize>,
 }
 
@@ -887,6 +1063,10 @@ pub struct Overset {
     interpolation: DonorInterpolation,
     /// The cells around every point; built when `Quadratic` is first set, empty before.
     point_cells: Vec<Vec<usize>>,
+    /// The support radius of every cell (ADR 0396 D2); built when `Continuous` is first set, empty before.
+    support_radius: Vec<f64>,
+    /// The support bins of the background and of the component (ADR 0396 D7); built with `support_radius`.
+    supports: Vec<SupportBins>,
 }
 
 impl Overset {
@@ -943,6 +1123,8 @@ impl Overset {
             dims,
             interpolation: DonorInterpolation::Linear,
             point_cells: Vec::new(),
+            support_radius: Vec::new(),
+            supports: Vec::new(),
         })
     }
 
@@ -960,7 +1142,64 @@ impl Overset {
             }
             self.point_cells = point_cells;
         }
+        if interpolation == DonorInterpolation::Continuous && self.supports.is_empty() {
+            // ADR 0396 D2: the support radius from the largest extent of the reference box; D7: the bins of each part
+            let mesh = &self.composite.mesh;
+            let dims = self.dims;
+            let radius: Vec<f64> = (0..mesh.n_cells())
+                .map(|c| {
+                    let (a, b) = cell_box(mesh, c);
+                    let ext = (0..3).filter(|&d| dims[d]).map(|d| b[d] - a[d]).fold(0.0, f64::max);
+                    CONTINUOUS_SUPPORT * ext
+                })
+                .collect();
+            self.supports = vec![
+                SupportBins::new(mesh, self.composite.background_cells(), &radius, dims),
+                SupportBins::new(mesh, self.composite.component_cells(), &radius, dims),
+            ];
+            self.support_radius = radius;
+        }
         self.interpolation = interpolation;
+    }
+
+    /// The support radius of cell `c` for [`DonorInterpolation::Continuous`] ([`CONTINUOUS_SUPPORT`] times the largest
+    /// extent of its reference box in the solved directions); `None` before `Continuous` was first set.
+    pub fn support_radius(&self, c: usize) -> Option<f64> {
+        self.support_radius.get(c).copied()
+    }
+
+    /// The [`DonorInterpolation::Continuous`] stencil at the point `x` (in the reference frame of the part it is
+    /// interpolated from: the background when `from_background`, else the component), for the kinds `kind` (ADR 0396 D2
+    /// to D4): the calculated cells of that part with `|x - x_k| < r_k` (in the solved directions), in increasing order,
+    /// with the weights of [`continuous_weights`] under [`continuous_weight`]. Fails before `Continuous` was first set and
+    /// where the candidates cannot carry a plane (D6).
+    pub fn continuous_stencil(&self, kind: &[CellKind], x: Vec3, from_background: bool) -> Result<Stencil> {
+        if self.supports.is_empty() {
+            return err("overset continuous stencil: DonorInterpolation::Continuous was not set");
+        }
+        let ref_centres = self.composite.mesh.cell_centres();
+        let bins = &self.supports[usize::from(!from_background)];
+        let mut found: Vec<(usize, f64)> = Vec::new();
+        for &k in bins.near(x) {
+            if kind[k] != CellKind::Calculated {
+                continue;
+            }
+            let d2: f64 = (0..3)
+                .filter(|&d| self.dims[d])
+                .map(|d| (ref_centres[k][d] - x[d]).powi(2))
+                .sum();
+            let rho = d2.sqrt() / (self.support_radius[k] / CONTINUOUS_SUPPORT);
+            let w = continuous_weight(rho);
+            if w > 0.0 {
+                found.push((k, w));
+            }
+        }
+        found.sort_unstable_by_key(|&(k, _)| k);
+        let cells: Vec<usize> = found.iter().map(|&(k, _)| k).collect();
+        let omega: Vec<f64> = found.iter().map(|&(_, w)| w).collect();
+        let pts: Vec<Vec3> = cells.iter().map(|&q| ref_centres[q]).collect();
+        let weights = continuous_weights(&pts, x, self.dims, &omega)?;
+        Ok(Stencil { cells, weights })
     }
 
     /// The donor interpolation in use.
@@ -1076,6 +1315,14 @@ impl Overset {
                 let pts: Vec<Vec3> = cells.iter().map(|&q| ref_centres[q]).collect();
                 if let Ok(weights) = quadratic_weights(&pts, x, self.dims) {
                     stencils.push((c, Stencil { cells, weights }));
+                    continue;
+                }
+                fallbacks.push(c);
+            }
+            if self.interpolation == DonorInterpolation::Continuous {
+                // ADR 0396 D2 to D4: the candidates whose support contains the point; D6: else the stencil below
+                if let Ok(st) = self.continuous_stencil(&kind, x, !background) {
+                    stencils.push((c, st));
                     continue;
                 }
                 fallbacks.push(c);

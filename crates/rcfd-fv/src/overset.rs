@@ -21,7 +21,8 @@
 //! `rcfd_mesh::overset::Overset`, `set_donor_interpolation(DonorInterpolation::Quadratic)`, made before the solver is
 //! built: the solver takes its stencils from there. [`OversetInfo::n_fallback`] counts the fringe cells that kept the
 //! linear stencil, and a step whose interpolated `rAU` is not positive in a fringe cell is refused (the weights can be
-//! negative and nothing is clipped).
+//! negative and nothing is clipped). The same holds for the pose-continuous moving least-squares interpolation (F-468,
+//! ADR 0396), `DonorInterpolation::Continuous`.
 //!
 //! A prescribed flux on the faces between calculated and fringe cells (F-445, ADR 0347) is an opt-in of the solver,
 //! [`OversetSolver::set_fringe_flux`]: the flux of such a face is the face interpolation of the velocity field the
@@ -1611,8 +1612,9 @@ impl OversetSolver {
                         r_au[c] = dt;
                     }
                 }
-                // ADR 0251 D5: the quadratic weights can be negative and nothing is clipped
-                if conn.interpolation == DonorInterpolation::Quadratic {
+                // ADR 0251 D5: the quadratic weights can be negative and nothing is clipped; ADR 0396 D9: nor are the
+                // moving least-squares weights guaranteed non-negative
+                if conn.interpolation != DonorInterpolation::Linear {
                     if let Some((c, _)) = conn.stencils.iter().find(|(c, _)| r_au[*c].is_nan() || r_au[*c] <= 0.0) {
                         return Err(format!(
                             "overset: the interpolated rAU of the fringe cell {c} is not positive ({:e})",
