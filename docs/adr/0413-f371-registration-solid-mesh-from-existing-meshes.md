@@ -260,3 +260,23 @@ Negative controls:
   the structured generators); other numberings are refused (N4), not repaired.
 - L5. The Gmsh route (`rcfd-io`) is ADR 0287's, since `rcfd-fem` does not depend on `rcfd-io`.
 - L6. Only the volume (and radius) are checked under refinement; stresses on curved meshes are later packages' (ADR 0280).
+
+## Amendment 1 (2026-11-13, before any run of any check; no test has been written or run)
+
+Written while writing the tests, after the library code compiled and before the first run of anything. **N3 as registered is not
+a sure negative control.** Moving every inner-wall mid-edge node by `-0.6` radially need not invert an element: at a corner of a
+Tet10 the column of `J` along an edge to node `j` is `(x_j - x_0) + 4 (m_0j - (x_0 + x_j) / 2)`, so a radial shift adds `-2.4
+r_hat` to the columns of the wall edges, and with a third column along `r_hat` (the radial edge of the Kuhn tetrahedra) these terms
+drop out of the determinant (worked for the tetrahedron corner, circumferential edge, axial edge, radial edge: `det` unchanged;
+for a diagonal third column the sign is kept as well). Whether some element inverts is therefore not known beforehand.
+
+- **N3** is still run once as registered and its outcome recorded, but it is **not** part of the decision rule.
+- **N3b** (replaces N3 in the decision rule): on the level-1 mesh of CQ (after the radial projection), the first mid-edge node of
+  the `inner` wall in the order of `upgrade_to_tet10`'s list is moved further along its edge by `0.4 (x_b - x_a)` (towards its
+  second end `b`). The column of `J` at `b` along the edge becomes `(x_a - x_b) + 4 * 0.4 (x_b - x_a) = -0.6 (x_a - x_b)` for
+  every tetrahedron containing the edge (the other mid-edge nodes at `b` are unchanged), so `det J` at `b` is `-0.6` times its
+  value with the chord: **refused as `InvertedElement`** at a local node that is the corner `b` (registered: the error variant is
+  `InvertedElement` and its `jacobian < 0`).
+- M7 (split from the largest node index) is an **equivalent mutant**: the diagonal from the largest corner to its opposite is the
+  same main diagonal as from the smallest, when the largest is opposite the smallest (true on the lexicographic boxes, where
+  every hexahedron's largest node is the corner opposite its smallest); it is run and recorded as not caught if so.
