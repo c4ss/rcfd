@@ -404,3 +404,111 @@ The registered run (`f493-scratch/registered_run1.log`): 3 tests passed, 2 faile
 
 The two test bodies were moved into functions taking the variant (`linear_knife_edges(kind)`, `zero_prestress_and_refusals(
 with_mechanism)`), each record calling it with the arguments of the first run, so that the records keep their bodies.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/geometric.rs` (the module doc of `prestressed_modes` and its dispatch, new lines 206 to 216;
+`refuse_transformation` removed, old lines 203 to 216; `NEGATIVE_EIGENVALUE_RATIO` and `prestressed_modes_on_transformation`,
+new lines 287 to 362), `buckling.rs` (import line 15; doc and dispatch, new lines 100 to 110; `eigen_options` and
+`factors_on_transformation`, new lines 173 to 226), `mpc.rs` (additive only: `unknown_name` made `pub(crate)`, line 1285;
+`refuse_nonzero_values`, new lines 1411 to 1437; no other line changed, no static function touched). New test file
+`crates/rcfd-fem/tests/si_prestress_mpc.rs`; the permitted edit of `si_geometric.rs` (D6). The registered run: commit e6b7972a,
+once, release, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_prestress_mpc -- --nocapture --test-threads=1`: 3
+passed, 2 failed (log `w49i-work/f493-scratch/registered_run1.log`; amendment 2). The corrected run: commit 79aae009, once,
+`a2_c1_c8_c10_c12_n2_n3_linear_knife_edges_corrected` and `c9_c13_zero_prestress_and_refusals_met_rows`: 2 passed (log
+`corrected.log`). The corrected run reproduced the first run's A2, C8 BL and C10 BL values exactly. After the runs: rustfmt
+(layout only) and one clippy fix (a single-element loop written out); no limit, parameter or set-up changed.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | bit-equal | BL, BS(1e6), R: buckling and pre-stressed modes bit-equal to the reduction in the test (6 of 6) | yes |
+| A2 | <= 1e-10 | factors 0, eigenvalues tension 0, compression 0 (bit-equal: `lambda = 408.40047, 1600.70961`; `omega^2 = 1.597506e5, 2.136267e6` and `9.69240e4, 1.885389e6`) | yes |
+| A3 | <= 0.01; BF refused | BS(1e6): 1.179e-4 (`lambda_1 = 199.97642` against 200); BF `RigidBodyMotionFree` | yes |
+| C1 | <= 1e-9 | BR2 against B: 1.19e-11 | yes |
+| C2 | <= 0.01; <= 1e-3 | BS(1.5e6): 1.770e-4; ratio 5.91e-5 | yes |
+| C3 | holds | 199.976415 <= 200; 299.946908 <= 300 | yes |
+| C4 | <= 1e-3; holds | BS(1e6) `lambda_2/lambda_1(B)`: 7.1e-12; against ADR 0394 `P_1`: 4.37e-5; BS(1e11): 7.3e-12, 5.3e-12; every `lambda_n(BS) <= lambda_n(B)` | yes |
+| C5 | <= 1e-12 | 0 (bit-equal) | yes |
+| C6 | <= 0.01 | R shifts 3.41e-4, 1.19e-3; factors against ADR 0394's roots 6.75e-5, 2.66e-4 | yes |
+| C7 | holds | R above B for both factors (408.4102 >= 408.4005, 1600.8586 >= 1600.7096) and for `omega_1,2^2` at `s = 0` and `+1e8` | yes |
+| C8 | >= 0.99 | every mode 1.000000 (BL 2, BS 2, R 4) | yes |
+| C9 | bit-equal | BS(1e6) and R: zero pre-stress bit-equal to `modal_analysis` | yes |
+| C10 | <= 1e-12 | BL 0; BR2 3.3e-30 | yes |
+| C11 | bit-equal | BS buckling and R modes, threads 1 and 8 | yes |
+| C12 | as stated | every buckling run 2 factors, counted = expected = 2; every modal run shift 0, `rigid_free` false | yes |
+| C13 | each as stated | non-zero Linear value refused by both ("constraint 0 (Linear): value 1e-3; a buckling analysis takes zero values only"); BL at `s = -5e8`: `Solver` ("eigenvalue -2.8798e4 at shift 9.445e6: ... beyond the buckling load"); **BM (a mechanism): `Ok([1.8176e-8])`, not refused** | **no** (the BM row) |
+| N1 | > 0.01 | 2.000 | as expected |
+| N2 | > 1e-6 | 0.1546 (amendment 1) | as expected |
+| N3 | > 1e-10 | 1.000e-8 | as expected |
+| S1 | 0 failed | `cargo test -p rcfd-fem --release --no-fail-fast`: 237 passed, 0 failed, 51 ignored (the C7 record, the two records of this file among them; the copies pass) | yes |
+| S2 | builds | `cargo check -p rcfd-post --tests`: builds | yes |
+| S3 | as stated | `git diff 6b29e2b9 --stat -- crates`: the five files of D4 only | yes |
+
+fmt: `cargo fmt -p rcfd-fem --check` clean. clippy: `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean
+(release profile, to reuse the build on a shared machine).
+
+### Diagnosis of the C13 miss
+
+BM is the knife-edge beam with its pin rows and no roller: a rigid rotation about the pin line is free, so `K_r = T^T K T` is
+singular. `PivotRule::Positive` refuses a pivot `d_i <= (w + 1) eps (|a_ii| + sum)`; the pivot of the free rotation came out of
+the elimination as a small positive rounding value above that threshold, the factorisation was accepted, and the buckling
+eigensolver found the null direction as `theta = 1/lambda` huge, returned as the factor 1.8176e-8. The prescribed path is safe
+because it calls the geometric rigid-motion test first (BF is refused); the transformation path has no such test (springs,
+linear rows and rigid sets hold motions that test does not see, ADR 0384). Mutation Mu1 shows the same thing: without its spring
+BS returns one factor of order zero (A3 measured 1.0) instead of a refusal. The physics of every other check is not affected.
+
+### Mutations (copy `w49i-work/f493-scratch/copy` from `git archive` of 405dbc16, own target directory, script `mutate.py`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | supports not added in buckling | A3 (1.0: one factor near zero, not a refusal, the C13 cause), A1 BS, C2, C12 |
+| Mu2 | modes expanded as a selection | A1 R (buckling and modes), C10 BR2 (4.1e-10), C9 R; BL is unaffected (its `T` is a selection) |
+| Mu3 | `K_ext - K_sigma` in the modes | A1, A2 (0.39, 0.65), C1, C6 (2.0), C7, C13 beyond buckling |
+| Mu4 | negative-eigenvalue guard removed | C13 (BL beyond buckling returns `omega^2 = -2.88e4`) |
+| Mu5 | zero-value check removed | C13 (both refusals lost) |
+| Mu6 | `G_r` from `2 K_sigma` | A1, A2 (0.5), A3 (0.5), C1, C2, C4, C5, C6, C7 |
+| Mu7 | `M_r` diagonal | A1, A2 (0.088), C1, C6, C9 |
+
+Every mutation was caught.
+
+### Deviations
+
+- Amendment 1 (N2 replaced before any run), amendment 2 (BR a defective set-up, corrected BR2; C13 kept as a known-miss record
+  with its met rows in a companion). The records `a2_..._defective_setup` and `c9_c13_..._known_miss` are ignored.
+- clippy run in release profile instead of debug.
+
+### What was not run
+
+The workspace suite (the lead's gate) and `rcfd-api`'s `baseline_hashes` (the brief limits tests to `rcfd-fem`; no line run by
+any other solve changed, see S3 and the code list). Nothing registered was skipped: N2 replaced and BR31 not run (amendment 1).
+
+### Decision by the registered rule
+
+**partial**: every A check met (the three clauses of the acceptance), every other C and S check met, the negative controls as
+expected, every mutation caught; but C13's mechanism row missed (BM returns a rounding factor instead of a refusal). It is kept
+as an ignored `*_known_miss` record with its cause diagnosed.
+
+### Remaining questions
+
+1. **A mechanism on the transformation path in buckling (the C13 miss).** Options: (a) a follow-up adding the pivot-ratio test
+   of the Auto rule, `mpc::zero_shift_refused(K_r)` (ratio below 1e-8), to `factors_on_transformation` as a refusal naming the
+   unknown of the bad pivot, with BM and BS-without-spring as checks and a check that a soft but real spring (ratio above 1e-8)
+   is still solved; (b) a factor-level test: refuse factors below `1e-8` times the largest Ritz factor; (c) leave it and
+   document it. Recommendation (a): the same rule as the modal path's `rigid_free`, cheap, and it gives a named refusal. Size S.
+2. **The reading of "a nodal spring at the roller".** Taken here as the roller replaced by a lateral spring (the only reading
+   that raises the factor; the spring beside the roller adds nothing, C5). Options: (a) say so in the note; (b) re-word the
+   acceptance. Recommendation (a).
+3. **The knife-edge beam is insensitive to the roller direction** (amendment 1: the knife-edge mode hardly loads the roller,
+   C4 measured BS(1e11) within 7e-12 of B). No action; recorded for whoever builds a direction-sensitive check.
+
+## For the lead: roadmap entries
+
+F-493, proposed status **partial**, note:
+
+> From ADR 0390 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0398, 2026-11-12: geometric::prestressed_modes and buckling::factors dispatch a model with linear constraints, rigid sets or elastic supports to the transformation of ADR 0296 (T^T (K_ext + K_sigma) T and T^T M T for the modes, T^T K_ext T and T^T K_sigma T for the factors, modes expanded x = T q, zero constraint values only and a non-zero value refused naming its row, the Auto shift of ADR 0384 with a refusal of any negative eigenvalue beyond the buckling load); bit-equal to the reduction done in the test for linear knife edges, a spring and a rigid end face. The knife-edge Hex20 beam with its knife edges as Linear rows gives the factors and frequencies of the prescribed model bit for bit (limit 1e-10); rotated by 30 degrees with skew rows 1.2e-11. With the roller replaced by a lateral nodal spring (the reading registered: a spring beside the roller adds nothing, checked bit-equal), the first factor rises from none (a mechanism) to k L within 1.2e-4 (1.8e-4 at 1.5 k; the sway is exact in a Timoshenko column with the solid's rotating-section term, so neither shear nor that term enters; the Rayleigh bound k L holds), and the second factor stays the knife-edge factor within 7e-12. Rigid end face: factors within 2.7e-4 of ADR 0394's roots, shifts within 1.2e-3 of (n pi/L)^2 s/rho, never below the free-end beam. Known miss: a mechanism on the transformation path (no roller, no spring) is not refused by buckling::factors but returns a rounding factor 1.8e-8, because the factorisation of K_r accepts a rounding-level positive pivot; follow-up F-494. Seven mutations caught.
+
+Follow-up F-494, title "Refuse a mechanism in buckling on the transformation path (ADR 0398 known miss)", deps F-493, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. buckling::factors of a model on the transformation path whose constraints and supports leave a motion free (ADR 0398's knife-edge beam without its roller rows, and without its roller and spring) is refused with FemError naming the unknown of the failing pivot, by the zero-shift pivot-ratio rule of ADR 0384 (ratio below 1e-8); a model held by a soft spring whose ratio is above the rule is still solved and its first factor equals k L within 1 percent; every check of ADR 0398 keeps its value bit for bit.
