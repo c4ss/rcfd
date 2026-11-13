@@ -467,9 +467,7 @@ fn linear_knife_edges(rotated: Kind) {
     let (lm, _, lb) = buckle("BL", Kind::Bl);
     let (lmt, _, lt) = modes("BL", Kind::Bl, S_MODES);
     let (_, _, lc) = modes("BL", Kind::Bl, -S_MODES);
-    for (name, r) in [("BL", &lb)] {
-        two_factors(&mut c, name, r);
-    }
+    two_factors(&mut c, "BL", &lb);
     zero_shift(&mut c, "BL +", &lt);
     zero_shift(&mut c, "BL -", &lc);
     c.at_most("A2 BL factors", max_rel(&lb.factors, &bb.factors), 1e-10);
