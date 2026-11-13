@@ -6956,7 +6956,9 @@ fixed by the item's registration ADR before any code.
     step finds the period-two mode of the bounded form with one corrector at dt 1e-3 (-1.10 +- 0.35i at step 15, -1.27
     at step 10, at the body) and every Ritz value inside the unit circle at dt 5e-4 and with two correctors; with one
     corrector at dt 1e-3 both forcings also have positive pressure modes up to 1.9, so the one-step spectrum does not
-    separate the setting that stops from the first-order forcing that runs.
+    separate the setting that stops from the first-order forcing that runs. ADR 0421 (2026-11-13, F-501): the stop at
+    step 34 of the bounded form with one corrector at dt 1e-3 comes from the start field (the inflow profile through the
+    body); from a projected start without flow through the cylinder it runs 200 steps (max abs(u) 2.208).
 - [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
   - depends on: F-355
   - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
@@ -9541,7 +9543,10 @@ fixed by the item's registration ADR before any code.
     same Courant number (dominant -0.971). Partial by the registered rule: known misses G2, G3 (the first-order forcing
     above one per step), G4 (two correctors at 0.993, not converged), X2, X3 (the Courant hypothesis refuted). Open (ADR
     0405 Q2): what in the early state makes the pressure modes, by a start without flow through the cylinder. Follow-up
-    F-501.
+    F-501. ADR 0421 (2026-11-13, F-501): from a start without flow through the cylinder (projected) the one-step
+    eigenvalues at steps 16 and 20 are 1.010 and 1.008 and the ten-step growth 1.012 (first-order) and 1.057 (bounded)
+    per step; the bounded form with one corrector runs 200 steps, so the modes and the stop belong to the ADR 0249 start
+    field.
 - [~] **F-495** Refuse a mechanism in buckling on the transformation path (ADR 0398 known miss)
   - depends on: F-493
   - acceptance: Every limit not stated here is registered in the ADR before the run. buckling::factors of a model on the
@@ -9650,7 +9655,7 @@ fixed by the item's registration ADR before any code.
     within 2e-13, the inertia identity exact, 463 crossings within 6.7e-8 of direct solves. Partial: the registered
     tracking check missed (0.895 against 0.9, the degenerate pairs of k = N/2), met after amendment 1 (0.99998).
     Coriolis neglected (F-499).
-- [ ] **F-501** Second-order immersed forcing: the early-state pressure modes of the single corrector
+- [x] **F-501** Second-order immersed forcing: the early-state pressure modes of the single corrector
   - depends on: F-494
   - acceptance: The pressure modes above the cylinder of DFG 2D-2 on M2 with one PISO corrector at dt 1e-3 (ADR 0405:
     one-step eigenvalues 1.77 to 1.91 at steps 16 to 20 for the first-order forcing and 0.97 at step 100 at the same
@@ -9658,8 +9663,18 @@ fixed by the item's registration ADR before any code.
     a registered measurement to the start state, by repeating the one-step and ten-step linearisations of ADR 0405 from
     a start field without flow through the cylinder (projected to be divergence-free), and the bounded form with one
     corrector either runs 200 steps from that start or its stop is located with the eigenvalue per step.
-  - note: From ADR 0405 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
-    priority.
+  - note: DONE (ADR 0421, 2026-11-13), test code only, no library change. From ADR 0405 question 2, recommendation taken
+    on the maintainer's standing instruction of 2026-11-11. The one-step and ten-step linearisations of ADR 0405 (DFG
+    2D-2 on M2, one PISO corrector, dt 1e-3) were repeated from the ADR 0249 start with the 1264 solid cells set to zero
+    and projected onto the fluid region with the cylinder's faces closed (a discrete Helmholtz projection by
+    Jacobi-preconditioned CG, divergence 1.8e-13 of the flux scale); the harness reproduces the old one-step eigenvalue
+    1.767 at step 16 to 2e-4. From the projected start the first-order forcing has one-step eigenvalues 1.010 and 1.008
+    at steps 16 and 20 (old 1.77, 1.91; registered limit 1.2), a negative-real pressure mode below the body, not the old
+    positive pair, and ten-step growth 1.012 per step (old 1.311; limit 1.10), so the modes are attributed to the start
+    field's flow through the cylinder by the registered rule, at a higher Courant number (1.25) than the old start's.
+    The bounded form with one corrector runs 200 steps from the projected start (max abs(u) 2.208; from the ADR 0249
+    start it stops at step 34), with ten-step growth 1.057 per step over steps 16 to 25 (old 1.881), a weak
+    pure-pressure mode at the surface. Five mutations caught.
 - [x] **F-502** Coupled frequency of the dynamic solid on non-matching interfaces: face refinement and map
   - depends on: F-400, F-362
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the bar of F-400 (ADR 0410) with
@@ -9816,3 +9831,11 @@ fixed by the item's registration ADR before any code.
     cantilever: tip deflection q L^4/(8 E I) + q L^2/(2 kappa G A) within 1e-10 with one element (consistent load of the
     interdependent shape functions); gravity on a beam gives reactions rho A L g within 1e-12; a pinned-pinned beam
     under uniform load gives 5 q L^4/(384 E I) plus the shear term within 1e-10 at any element count.
+- [ ] **F-515** Immersed start projection: an opt-in start field without flow through the body
+  - depends on: F-501
+  - acceptance: An opt-in projection of the start velocity onto the fluid region of the immersed bodies (ADR 0421 D1:
+    solid cells zero, fluid-solid faces closed, discrete divergence at most 1e-10 of the flux scale, the start face flux
+    passed to the solver) is added with the defaults bit-identical (baseline_hashes unchanged); with it DFG 2D-2 on M2
+    with build_second_order_bounded and one PISO corrector at dt 1e-3 runs 200 steps (ADR 0421: max abs(u) 2.208 at step
+    200), and the refusal of the bounded form with one corrector of ADR 0374 is revisited for a projected start.
+  - note: From ADR 0421 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
