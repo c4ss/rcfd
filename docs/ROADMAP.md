@@ -9554,14 +9554,29 @@ fixed by the item's registration ADR before any code.
     in-plane spring pair gives the closed-form whirl frequencies within 1e-8; the tracked forward and backward branches
     enter the Campbell table of F-396 with their direction.
   - note: From ADR 0403 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
-- [ ] **F-500** Rotating modes of a cyclic sector at a harmonic index
+    ADR 0407 (2026-11-13): on a cyclic sector the gyroscopic matrix couples the cos and sin parts of a harmonic pair;
+    the item should solve it on the sector as well as on the whole part.
+- [~] **F-500** Rotating modes of a cyclic sector at a harmonic index
   - depends on: F-396, F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_eff(Omega) of F-396 on the cyclic
     harmonic pair of ADR 0386/0395 with the pre-stress of the index-0 sector: at each harmonic index h and speed the
     frequencies of the sector equal those of the full rotor mesh for that nodal-diameter family within 1e-8 relative; at
     Omega = 0 the bits of the cyclic modes of F-394; a loss of stiffness is reported per index and speed; the Campbell
     table holds one family of tracks per index, with the crossings with the engine orders.
-  - note: From ADR 0403 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: From ADR 0403 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0407, 2026-11-13: rotating.rs RotatingSector gives the modes of a cyclic sector spinning about its cyclic axis at
+    any harmonic index k, K_eff = K + Omega^2 (K_sigma,1 - M_perp) of the sector with the pre-stress of the index-0
+    static solve on the real cos/sin pair of ADR 0386 (blockdiag(K_eff, K_eff), M_perp reduced like M; derived: the
+    centrifugal stress repeats in every sector and M_perp commutes with the rotation, so the one K_sigma,1 serves every
+    k); at Omega = 0 the bits of modal_analysis_harmonic; a loss of stiffness is reported per index and speed
+    (HarmonicLoss), the full rotor's negative count equal to the sum over the indices (Sylvester); the Campbell table
+    holds one family of tracks per index, tracked by the subspace assurance of each frequency's eigenvalue cluster (a
+    cos/sin pair and the degenerate pairs of k = N/2 on an axisymmetric part), with the engine-order crossings flagged
+    by the excitation rule E = +/- k mod N, as CSV and JSON. Disc of 12 sectors (Hex20): sector frequencies equal the
+    full rotor's within 8.8e-14 at 0, 0.5 and 0.9 omega_ref, the expanded modes' Rayleigh quotients on the full rotor
+    within 2e-13, the inertia identity exact, 463 crossings within 6.7e-8 of direct solves. Partial: the registered
+    tracking check missed (0.895 against 0.9, the degenerate pairs of k = N/2), met after amendment 1 (0.99998).
+    Coriolis neglected (F-499).
 - [ ] **F-501** Second-order immersed forcing: the early-state pressure modes of the single corrector
   - depends on: F-494
   - acceptance: The pressure modes above the cylinder of DFG 2D-2 on M2 with one PISO corrector at dt 1e-3 (ADR 0405:
