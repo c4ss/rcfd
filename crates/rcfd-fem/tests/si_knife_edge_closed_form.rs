@@ -191,7 +191,11 @@ fn a1_a2_c1_c2_n1_knife_edge_beam_l_over_h_20() {
     // N1: Engesser alone is seen by the sharper check.
     for n in 1..=2 {
         let pe = lower_root(length, n, false);
-        c.above(&format!("N1 B20 n = {n} against Engesser"), off(r.factors[n - 1], pe), 1e-3);
+        c.above(
+            &format!("N1 B20 n = {n} against Engesser"),
+            off(r.factors[n - 1], pe),
+            1e-3,
+        );
     }
     // N2: the clause of ADR 0390 A9 is not met at L/h = 20.
     c.above(
@@ -200,7 +204,11 @@ fn a1_a2_c1_c2_n1_knife_edge_beam_l_over_h_20() {
         0.02,
     );
     // N3: the quadratic without the mode index (k = pi/L) for n = 2.
-    c.above("N3 B20 n = 2 at k = pi/L", off(r.factors[1], lower_root(length, 1, true)), 0.01);
+    c.above(
+        "N3 B20 n = 2 at k = pi/L",
+        off(r.factors[1], lower_root(length, 1, true)),
+        0.01,
+    );
     c.finish();
 }
 
