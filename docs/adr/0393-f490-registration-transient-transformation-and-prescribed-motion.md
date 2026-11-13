@@ -309,3 +309,11 @@ without that row is added (every other row stays valid). No other existing test 
    tolerance 1e-9; `start_reduced` takes the reduced vectors.
 4. Rayleigh damping on `K_ext` (with the supports).
 5. The energies of the reduced motion, as ADR 0389 defines them.
+
+## Amendment 1 (2026-11-13, the reference digest of D1, recorded before any library line of F-490)
+
+The test `d1_models_without_the_features_keep_the_bits_of_adr_0389` of `si_transient_mpc.rs` (only this test, through the API
+of ADR 0389 only) was compiled against the unchanged library of commit 2f64cba4 (main 618b431a plus the registration) and run
+once (`CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_transient_mpc -- --nocapture`) with a placeholder
+reference of 0; it printed the digest `0xabb6faebad69662b` (decimal 12373352916380640811). This value is the reference of D1,
+written into the test as `REF_DIGEST` before any line of `transient.rs` is changed. The limit is unchanged: bit-equal.
