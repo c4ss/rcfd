@@ -271,3 +271,146 @@ per step the largest `abs(p)` over the solid cells and over the fluid cells, to 
 If P3 a to d hold, the addendum may say that the fluid part of the step carries a period-two mode for B and none for F at
 step 15 (the second branch of the acceptance, in amended form); S1 says whether the other modes are the solid pressure. The
 decision is already **partial** by the rule (E1 b to d and E4 missed), whatever record M gives.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows, the machine shared with other
+building agents. Commits: the registration af395384; the test file with the fast checks and the records K and L 8577cafd (before
+their run); amendment 1 21844e5b (before any run of record M); record M a387cf32 (before its run); the known-miss records and a
+type alias for clippy 334b0550 (not run: they repeat registered records). Every registered run was made once: the fast checks
+(`f482-scratch/fast_checks.log`, 0.2 s), record K (`rec_k.log`, 21 s), record L (`rec_l.log`, 26 s), record M (`rec_m.log`,
+28 s). After formatting and the clippy fix the fast checks were run on the final tree in release and in debug (`final_release.log`,
+`final_debug.log`; all pass), which repeats no record.
+
+**Built.** Test code only: `crates/rcfd-fv/tests/immersed_step_linearisation_f482.rs` (the state vector of D1, the map and its
+central difference of D2, Arnoldi of D3, the complex Hessenberg QR and inverse iteration of D4, the fast checks U1 to U3, the
+records K, L, M and the three known-miss records). No library file, no shared solver file, no schema key, golden, hash table or
+existing test file was touched (N1: `git diff --stat 2570d5e4` lists only this test file and this ADR), so the defaults are
+bit-identical by construction and `baseline_hashes` was not needed.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R1 B one corrector `dt = 1e-3` run on after step 15 | stop at step 34, Courant guard | step 34, Courant 2.42e7 | yes |
+| E0 `J z`, `e = 1e-4` against `1e-5` (K15) | `<= 1e-3` | 1.80e-5 | yes |
+| E1 a `lambda_L` of K15 converged | true residual `<= 0.03` | 3.67e-3 | yes |
+| E1 b `lambda_L` of K15 real, below -1 | `abs(Im) <= 1e-3 abs`, `Re < -1` | -1.102973 +- 0.345949i (`abs` 1.155954): below -1 in real part, **not real** | **no** (known miss) |
+| E1 c `lambda_L` dominant outright | `abs` above every other Ritz value | 1.156 against 1.928602 (the pair 1.867930 +- 0.479943i) | **no** (known miss) |
+| E1 d mode cell of `lambda_L` | a first fluid cell | cell 13258 at (0.21625, 0.25875), fluid, 0.0110 from the surface | **no** (known miss) |
+| E2 H30 (`dt = 5e-4`) | no converged Ritz value with `Re < 0`, `abs >= 1`; `lambda_L` converged inside | none; -0.775988 real (residual 4.2e-5); overall dominant 0.978567 | yes |
+| E3 C15 (two correctors) | as E2 | none; -0.481230 real (5.5e-3); overall dominant 0.969783 | yes |
+| E4 F15 (first-order forcing, runs) | as E2 | -1.024233 real, converged (7.7e-3) | **no** (known miss) |
+| U1 Hessenberg eigenvalues, two 6 x 6 matrices | within 1e-10 | 2.0e-15, 2.9e-15 | yes |
+| U2 Arnoldi, real outlier and complex pair | as registered | (i) -1.15 real, error 4e-15, residuals 1.7e-20 (estimated) and 3.5e-15 (true); (ii) -1.0937 + 0.3554i not real, error below 1e-15, conjugate present | yes |
+| U3 the map on M1 | (a) bit-equal; (b) `<= 1e-3`; (c) `<= 1e-9` | (a) equal; (b) 1.7e-5; (c) 2.2e-12 (`u`), 3.8e-12 (`phi`) | yes |
+| N1 no library file changed | as stated | only the test file and the ADR | yes |
+| S1 reproduction (amendment 1) | the Ritz values of K15 and F15 to six digits | equal (1.867930 +- 0.479943i, -1.102973 +- 0.345949i; 1.499585 +- 0.483319i, -1.024233) | yes |
+| S1 solid share of the overall dominant Ritz vector | `>= 0.9` for K15 and F15 | 0.1309 (B), 0.1539 (F) | **no** (known miss) |
+| P3 a `lambda_L` of `J_f` (B) converged | `<= 0.03` | 9.5e-4 | yes |
+| P3 b real, below -1 | as registered | -1.138536, real | yes |
+| P3 c its mode cell | a first fluid cell | cell 13259 at (0.21875, 0.25875), fluid, 0.0117 from the surface | **no** (known miss) |
+| P3 d `J_f` of F15 | no converged Ritz value with `Re < 0`, `abs >= 1` | none (`lambda_L` -0.993338, residual 6.8e-2) | yes |
+
+Printed, no limit. The base steps: `|S_R(0) - S(0)| / |S(0) - x_0|` 3.2e-8 to 1.2e-7 (the solves of R agree with the converged
+ones). The state dimension 165296. K5: `lambda_L` -1.030201 real (residual 2.7e-3), mode cell 5678 a first fluid cell 0.00065
+from the surface; overall dominant 1.468754 +- 0.082574i (1.471). K10: `lambda_L` -1.265273 real (2.2e-5), further real values
+-1.152876 (1.1e-2), -1.040901 (6.7e-2); mode cell 12719, 0.0025 from the surface, not a first fluid cell; overall dominant
+1.213569 +- 0.499135i (1.312). K15: also a real -1.072950 (2.2e-2). Every Ritz vector has 97 to 100 percent of its squared norm
+in the pressure block (K15 `lambda_L`: `u_n` 0.009, `u_{n-1}` 0.007, `p` 0.969, fluxes 0.015). The largest pressure entry of the
+overall dominant vector is a fluid cell 0.0114 from the surface above the cylinder ((0.204, 0.261) for B, (0.196, 0.261) for F);
+the solid share of `lambda_L` 0.221 (B) and 0.508 (F). `J_f` of B keeps the outer spectrum of `J` (overall dominant 1.867767 +-
+0.479172i) and the pair -1.105887 +- 0.346432i (5.0e-3). P2: the largest `abs(p)` of the run is about the same over the solid and
+over the fluid cells at every step (170 to 240, solid and fluid within 2 percent); for B it grows from step 16 (280) to 1.3e7 at
+step 31; for F it stays between 111 and 240 to step 34.
+
+### What the measurements say
+
+- **The linearisation is valid.** The map at zero is the step (U3 a), the central difference is linear to 2e-5 (U3 b, E0), the
+  shift of the history is exact to round-off (U3 c), the tools find known spectra to round-off (U1, U2), the computation is
+  reproducible to the bit (S1 reproduction), and the run of the record reproduces the stop at step 34 (R1).
+- **The corrector count and the step move the whole outer spectrum.** With two correctors (C15) and at `dt = 5e-4` (H30) every
+  computed Ritz value lies inside the unit circle (largest 0.970 and 0.979, the most negative -0.48 and -0.78, both real). With
+  one corrector at `dt = 1e-3` the step has, at the states of steps 5, 10 and 15, many eigenvalues of magnitude 1.3 to 1.9, of
+  positive real part, and in **both** forcings (B 1.93, F 1.58 at step 15): pressure modes of the fluid about four cells above the
+  cylinder, not of the solid (S1 refuted the reading of amendment 1). F runs 200 steps with them, so an eigenvalue above one of
+  the step at one state does not by itself make the run grow (the state changes from step to step; what the run sees is the
+  product of the Jacobians along the trajectory, not measured here).
+- **The period-two mode of B is in the linearisation, but it is not the dominant eigenvalue.** In the left half plane B has, at
+  step 15, a converged pair -1.103 +- 0.346i (1.156) and a real -1.073, and the fluid part of the step a real -1.139 (converged
+  to 1e-3); at step 10 a real -1.265, at step 5 a real -1.030 at a first fluid cell. The magnitude 1.14 to 1.27 matches the
+  growth of the alternating amplitude in the run (1.15 to 1.2 per step, ADR 0374 G1). F has at step 15 a real -1.024 (and, in
+  the fluid part, -0.993, unconverged), so the setting that runs carries a weaker one on the circle.
+- **Location.** The mode of the leftmost eigenvalue sits at a first fluid cell at step 5 (B) and in H30, and 0.0025 (step 10) to
+  0.011 (step 15) from the surface otherwise: at the body, within about four cells, not in the first fluid cells at step 15.
+
+The first branch of the acceptance is **not reached** in the registered form: the dominant eigenvalue at `dt = 1e-3` is not the
+real period-two one (E1 b, c), its mode is not at the first fluid cells at step 15 (E1 d), and the setting that runs also has a
+real eigenvalue below -1 (E4). The clauses at `dt = 5e-4` and with two correctors are met. The second branch (the part of the
+step that carries the growth) is not reached either: the fluid part of the step carries a real -1.139 for B and nothing
+converged outside the circle for F (P3 a, b, d), but its mode cell is not a first fluid cell (P3 c), and amendment 1 is a
+measurement registered after a run.
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of 334b0550 (`f482-scratch/mut`) by `f482-scratch/mutate.py` (an exact text
+replacement checked to occur once), the named test run once in release, the file restored and compared byte for byte with the
+kept copy. The unmutated copy passed the fast checks first (`mut_base.log`).
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | the perturbation of `u_n` not applied to `hist_u[k].old` | U3 (c) | failed: "U3 (c): shift errors 8.507e-3 3.833e-12" |
+| M2 | the finite difference divided by `e` instead of `2 e` | U3 (b) or (c) | failed at (c): "shift errors 8.507e-3 8.506e-3" ((b) compares two products scaled alike) |
+| M3 | Arnoldi stores `h_{j+1,j}` as the square of the norm | U2 | failed: U2 (i), the leftmost Ritz value not within 1e-8 of -1.15 |
+| M4 | the sign of the Givens update of the rows (`c * ak1 - s * ak` made `+`) | U1 | failed: the QR iteration does not converge (`hess_eigs: no convergence`) in U1 |
+| M5 | the real test inverted | U2 | failed: "U2 (i): not real" |
+
+All five caught by their named checks; the file was restored equal after each (`mut_summary.log`, `mut_M*.log`).
+
+### Tools and the defaults
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Defaults: no library code
+changed.
+
+### Deviations and disclosures
+
+- The estimated residual of a Ritz value is printed relative to `abs(theta)` (D3 writes it without that division); no check
+  reads it except U2, where `abs(theta)` is 1.15.
+- U3 (c) was coded first with the limit scaled by the largest entry of `v` and corrected to the registered absolute 1e-9 before
+  any run.
+- Amendment 1 was written after records K and L and reads their numbers; its S1 hypothesis was wrong.
+- Not run: the workspace suite and the gate; other meshes, states and time steps than those registered; the channel without the
+  cylinder; a linearisation of several steps; the known-miss records (they repeat registered records).
+
+### Decision by the registered rule
+
+U1 to U3, N1, R1 and E0 met (the linearisation delivered and valid); E2 and E3 met; E1 b, c, d and E4 missed (known misses, limits
+intact); after amendment 1, S1 and P3 c missed, P3 a, b, d met. **F-482 is partial by the rule.**
+
+### Remaining questions
+
+- **Q1. A library diagnostic** (registration Q1). Options: (a) keep the linearisation in test code; (b) a public
+  `PimpleSolver::step_jacobian_eigs`. Recommendation: (a); the test helpers are self-contained and can be copied.
+- **Q2. The positive eigenvalues above one with one corrector at `dt = 1e-3`.** They exist in both forcings and the first-order
+  run is bounded. Options: (a) a follow-up that linearises `k >= 10` steps along the trajectory (the growth the run sees) and the
+  channel without the cylinder (whether the body makes them); (b) leave the one-step description. Recommendation: (a).
+- **Q3. The refusal of ADR 0374.** It stays as built (static, one corrector, a reversed flux face). The linearisation supports the
+  remark that `dt = 5e-4` is inside the circle at one state; naming a step in the message (ADR 0374 Q1 (c)) should wait for Q2 (a).
+
+### For the lead: roadmap entries
+
+**F-482: proposed status `partial`.** Proposed note (replacing the present one):
+
+> PARTIAL (ADR 0392, 2026-11-13), test code only, no library change. From ADR 0374 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. The whole step of DFG 2D-2 on M2 (u_n, u_n-1, p, phi_n, phi_n-1; 165296 unknowns) was linearised by central finite differences about early states, with the solves converged to 1e-12, and its outer spectrum computed by Arnoldi with 40 vectors and a complex Hessenberg QR written from first principles; the linearisation is valid (the map at zero is the step to the bit, linear to 2e-5, the history shift exact, known spectra found to round-off, the stop at step 34 reproduced). With two correctors and at dt 5e-4 every Ritz value lies inside the unit circle (largest 0.970 and 0.979; most negative -0.48 and -0.78, real). With one corrector at dt 1e-3 the bounded form carries the period-two mode (at step 15 a converged pair -1.103 +- 0.346i, magnitude 1.156, and a real -1.073; the fluid part of the step a real -1.139; at step 10 a real -1.265; the magnitude matches the run's growth of about 1.15 per step), at the body (0.0025 to 0.011 from the surface, a first fluid cell at step 5), but it is not the dominant eigenvalue: pressure modes of the fluid four cells above the cylinder have eigenvalues of positive real part up to 1.93, and the first-order forcing, which runs, has them too (1.58) and a real -1.024. Partial by the registered rule: known misses E1 b to d (not real, not dominant, not at a first fluid cell at step 15), E4 (the run that runs has -1.024), and after amendment 1 S1 (those modes are not in the solid) and P3 c. Open (ADR 0392 Q2): the positive eigenvalues above one of the single corrector at dt 1e-3 in both forcings, by a linearisation of several steps along the trajectory and the channel without the cylinder.
+
+**F-363: proposed addition at the end of its note:**
+
+> ADR 0392 (2026-11-13, F-482): a finite-difference linearisation of the whole step finds the period-two mode of the bounded form with one corrector at dt 1e-3 (-1.10 +- 0.35i at step 15, -1.27 at step 10, at the body) and every Ritz value inside the unit circle at dt 5e-4 and with two correctors; with one corrector at dt 1e-3 both forcings also have positive pressure modes up to 1.9, so the one-step spectrum does not separate the setting that stops from the first-order forcing that runs.
+
+**Proposed follow-up** (number to be given by the lead). *Second-order immersed forcing: the single-corrector growth over several steps.* Deps: F-482. Acceptance:
+
+> The growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector at dt 1e-3 (ADR 0392: the one-step linearisation at step 15 has eigenvalues up to 1.93 for the bounded form and 1.58 for the first-order forcing, which runs, and a period-two pair of magnitude 1.16 for the bounded form) is measured by a registered finite-difference linearisation of k >= 10 consecutive steps along the trajectory, whose dominant eigenvalue per step is above one for the bounded form and below one for the first-order forcing; and the one-step eigenvalues above one of the first-order forcing are explained by a registered measurement (the channel without the cylinder, the state of the step).
+
+Note:
+
+> From ADR 0392 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
