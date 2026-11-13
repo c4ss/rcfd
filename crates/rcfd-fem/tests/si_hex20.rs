@@ -52,21 +52,30 @@ impl Checks {
     }
     fn at_most(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value <= limit;
-        println!("{name}: {value:.4e} (limit <= {limit:e}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.4e} (limit <= {limit:e}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value:e} > {limit:e}"));
         }
     }
     fn at_least(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value >= limit;
-        println!("{name}: {value:.6} (limit >= {limit}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6} (limit >= {limit}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value} < {limit}"));
         }
     }
     fn below(&mut self, name: &str, value: f64, limit: f64) {
         let ok = value < limit;
-        println!("{name}: {value:.6} (limit < {limit}) {}", if ok { "met" } else { "MISSED" });
+        println!(
+            "{name}: {value:.6} (limit < {limit}) {}",
+            if ok { "met" } else { "MISSED" }
+        );
         if !ok {
             self.0.push(format!("{name} = {value} >= {limit}"));
         }
@@ -102,10 +111,12 @@ fn rebuild(mesh: &SolidMesh, nodes: Vec<Vec3>) -> SolidMesh {
         out.add_node_set(name, mesh.node_set(name).unwrap().to_vec()).unwrap();
     }
     for name in mesh.element_set_names() {
-        out.add_element_set(name, mesh.element_set(name).unwrap().to_vec()).unwrap();
+        out.add_element_set(name, mesh.element_set(name).unwrap().to_vec())
+            .unwrap();
     }
     for name in mesh.surface_set_names() {
-        out.add_surface_set(name, mesh.surface_set(name).unwrap().to_vec()).unwrap();
+        out.add_surface_set(name, mesh.surface_set(name).unwrap().to_vec())
+            .unwrap();
     }
     out
 }
@@ -309,7 +320,11 @@ fn e0_node_order_and_faces() {
     let mut ch = Checks::new();
     ch.holds("E0 PENDING", hex20::PENDING.is_none(), &format!("{:?}", hex20::PENDING));
     ch.holds("E0 kind pending", ElementKind::Hex20.pending().is_none(), "None");
-    ch.holds("E0 element kind", element_for(ElementKind::Hex20).kind() == ElementKind::Hex20, "Hex20");
+    ch.holds(
+        "E0 element kind",
+        element_for(ElementKind::Hex20).kind() == ElementKind::Hex20,
+        "Hex20",
+    );
     let r = ElementKind::Hex20.reference_nodes();
     ch.holds("E0 20 reference nodes", r.len() == 20, &format!("{}", r.len()));
     let hex8 = ElementKind::Hex8.reference_nodes();
@@ -360,7 +375,11 @@ fn e0_node_order_and_faces() {
             }
         }
     }
-    ch.holds("E0 face mid-edge nodes between consecutive corners", mid_ok, "all six faces");
+    ch.holds(
+        "E0 face mid-edge nodes between consecutive corners",
+        mid_ok,
+        "all six faces",
+    );
     ch.finish();
 }
 
@@ -471,7 +490,11 @@ fn e1_to_e6_functions_derivatives_rule_stiffness() {
             }
         }
     }
-    ch.at_most("E3 gauss_3 on the 216 monomials of degree <= 5 per direction", mono, 1e-13);
+    ch.at_most(
+        "E3 gauss_3 on the 216 monomials of degree <= 5 per direction",
+        mono,
+        1e-13,
+    );
     // E4 to E6
     let d = isotropic_elasticity(E_MOD, NU);
     stiffness_checks(&mut ch, "reference", &refs, &d);
@@ -501,7 +524,11 @@ fn e7_e8_volume_and_mass() {
     let el = element_for(ElementKind::Hex20);
     let g125 = gauss_125();
     let reference = single(ElementKind::Hex20.reference_nodes().to_vec());
-    ch.at_most("E7 reference cube volume - 8", (reference.element_volume(0) - 8.0).abs(), 1e-13);
+    ch.at_most(
+        "E7 reference cube volume - 8",
+        (reference.element_volume(0) - 8.0).abs(),
+        1e-13,
+    );
     let mut worst: f64 = 0.0;
     for x in distorted_elements() {
         let exact: f64 = g125.iter().map(|&(xi, w)| w * el.point(&x, xi).unwrap().det_j).sum();
@@ -530,7 +557,11 @@ fn e7_e8_volume_and_mass() {
             }
         }
     }
-    ch.at_most("E8 affine element mass against 125-point Gauss", dm / max_abs(exact), 1e-13);
+    ch.at_most(
+        "E8 affine element mass against 125-point Gauss",
+        dm / max_abs(exact),
+        1e-13,
+    );
     ch.finish();
 }
 
@@ -626,7 +657,14 @@ fn p1_p2_n1_patch_test() {
     );
     ch.at_most("P1 interior nodal error / max |u|", err, 1e-10);
     let a = FIELD_A;
-    let eps = [a[0][0], a[1][1], a[2][2], a[0][1] + a[1][0], a[1][2] + a[2][1], a[2][0] + a[0][2]];
+    let eps = [
+        a[0][0],
+        a[1][1],
+        a[2][2],
+        a[0][1] + a[1][0],
+        a[1][2] + a[2][1],
+        a[2][0] + a[0][2],
+    ];
     let field = IntegrationPointField::compute(&model, res.displacement_values()).unwrap();
     let mut de: f64 = 0.0;
     for e in field.strain() {
@@ -694,7 +732,11 @@ fn l1_element(ch: &mut Checks, tag: &str, mesh: &SolidMesh) {
         }
     }
     ch.holds(&format!("L1 {tag} area vectors outward"), outward, "six faces");
-    ch.at_most(&format!("L1 {tag} nodal pressure loads against -1/12, 1/3 of p A"), worst, 1e-13);
+    ch.at_most(
+        &format!("L1 {tag} nodal pressure loads against -1/12, 1/3 of p A"),
+        worst,
+        1e-13,
+    );
 }
 
 #[test]
@@ -716,11 +758,17 @@ fn l1_to_l3_face_loads_and_uniaxial_tension() {
             .min_by(|&a, &b| {
                 let da = sub(mesh.nodes()[a], x);
                 let db = sub(mesh.nodes()[b], x);
-                rcfd_core::vec3::dot(da, da).partial_cmp(&rcfd_core::vec3::dot(db, db)).unwrap()
+                rcfd_core::vec3::dot(da, da)
+                    .partial_cmp(&rcfd_core::vec3::dot(db, db))
+                    .unwrap()
             })
             .unwrap()
     };
-    let (p1, p2, p3) = (near([0.0; 3]), near([0.0, 0.0, lengths[2]]), near([0.0, lengths[1], 0.0]));
+    let (p1, p2, p3) = (
+        near([0.0; 3]),
+        near([0.0, 0.0, lengths[2]]),
+        near([0.0, lengths[1], 0.0]),
+    );
     let pres = vec![
         Prescribed::new(p1, 0, 0.0),
         Prescribed::new(p1, 1, 0.0),
@@ -754,7 +802,11 @@ fn l1_to_l3_face_loads_and_uniaxial_tension() {
         Ok(_) => ch.holds("L3 model pressure on a Hex20 face refused", false, "accepted"),
         Err(e) => {
             let msg = e.to_string();
-            ch.holds("L3 model pressure on a Hex20 face refused", msg.contains("a face of 8 nodes"), &msg);
+            ch.holds(
+                "L3 model pressure on a Hex20 face refused",
+                msg.contains("a face of 8 nodes"),
+                &msg,
+            );
         }
     }
     ch.finish();
@@ -796,7 +848,11 @@ fn cantilever_ratio(kind: ElementKind) -> f64 {
         model.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
     }
     let res = solve_static_with(&model, &[], &loads, &StaticOptions::default()).unwrap();
-    let delta: f64 = -loads.iter().map(|f| f.force[2] * res.displacement(f.node)[2]).sum::<f64>() / C_P;
+    let delta: f64 = -loads
+        .iter()
+        .map(|f| f.force[2] * res.displacement(f.node)[2])
+        .sum::<f64>()
+        / C_P;
     let i = C_H.powi(4) / 12.0;
     let g = E_MOD / (2.0 * (1.0 + NU));
     let kappa = 5.0 / 6.0;
@@ -830,8 +886,7 @@ fn t1_thick_cylinder_plane_strain_known_miss() {
     let mut ch = Checks::new();
     let (a, b, p) = (1.0, 2.0, 1e8);
     let param = hex_box([a, 0.0, 0.0], [b - a, PI / 2.0, 0.2], [4, 8, 1]).unwrap();
-    let (mesh, mids) =
-        upgrade_to_hex20_mapped(&param, |q| [q[0] * q[1].cos(), q[0] * q[1].sin(), q[2]]).unwrap();
+    let (mesh, mids) = upgrade_to_hex20_mapped(&param, |q| [q[0] * q[1].cos(), q[0] * q[1].sin(), q[2]]).unwrap();
     let bore: Vec<usize> = mesh.node_set("xmin").unwrap().to_vec();
     let mut radius: f64 = 0.0;
     for m in &mids {
@@ -969,14 +1024,23 @@ fn face_traction(x: Vec3, axis: usize) -> Vec3 {
 }
 
 fn voigt(g: &Mat3) -> [f64; 6] {
-    [g[0][0], g[1][1], g[2][2], g[0][1] + g[1][0], g[1][2] + g[2][1], g[2][0] + g[0][2]]
+    [
+        g[0][0],
+        g[1][1],
+        g[2][2],
+        g[0][1] + g[1][0],
+        g[1][2] + g[2][1],
+        g[2][0] + g[0][2],
+    ]
 }
 
 /// (L2 error, energy error).
 fn mms_level(n: usize, case_t: bool, lambda_sign: f64) -> (f64, f64) {
     let mesh = hex20_box([0.0; 3], [1.0; 3], [n; 3]);
     let mut model = SolidModel::new(mesh);
-    model.add_material("all", Material::isotropic_elastic(MMS_E, NU, 0.0, 0.0).unwrap()).unwrap();
+    model
+        .add_material("all", Material::isotropic_elastic(MMS_E, NU, 0.0, 0.0).unwrap())
+        .unwrap();
     let mesh = model.mesh();
     let faces: &[&str] = if case_t { &["xmin", "ymin", "zmin"] } else { &BOX_FACES };
     let mut fixed = BTreeSet::new();
@@ -1088,7 +1152,11 @@ fn b1_b2_box_mass_properties_and_bar_frequency() {
     }
     ch.at_most("B1 total mass", (mp.mass / m - 1.0).abs(), 1e-12);
     let cn = (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt();
-    ch.at_most("B1 centre of mass", max_abs((0..3).map(|k| mp.centre[k] - c[k])) / cn, 1e-12);
+    ch.at_most(
+        "B1 centre of mass",
+        max_abs((0..3).map(|k| mp.centre[k] - c[k])) / cn,
+        1e-12,
+    );
     let imax = max_abs(ie.iter().flatten().copied());
     ch.at_most(
         "B1 inertia tensor",
@@ -1110,14 +1178,24 @@ fn b1_b2_box_mass_properties_and_bar_frequency() {
             let px: Vec<f64> = phi
                 .iter()
                 .enumerate()
-                .map(|(e, v)| if dofs.node_component(e).unwrap().1 == 0 { *v } else { 0.0 })
+                .map(|(e, v)| {
+                    if dofs.node_component(e).unwrap().1 == 0 {
+                        *v
+                    } else {
+                        0.0
+                    }
+                })
                 .collect();
             px.iter().zip(mv(&mm, &px)).map(|(a, b)| a * b).sum()
         })
         .collect();
     println!("B2: frequencies {:?}, axial fractions {fractions:?}", r.frequencies);
     let first = fractions.iter().position(|&f| f >= 0.99);
-    ch.holds("B2 mode 0 is the first axial mode", first == Some(0), &format!("{first:?}"));
+    ch.holds(
+        "B2 mode 0 is the first axial mode",
+        first == Some(0),
+        &format!("{first:?}"),
+    );
     let exact = (E_MOD / RHO).sqrt() / 4.0;
     let e = r.frequencies[first.unwrap_or(0)] / exact - 1.0;
     ch.at_most("B2 |f_1 / f_exact - 1|", e.abs(), 1e-3);
@@ -1156,7 +1234,11 @@ fn u1_upgrade_counts_positions_sets_and_refusal() {
     }
     ch.holds("U1 mid-edge nodes at the midpoints", pos, "bit for bit");
     let sizes: Vec<usize> = BOX_FACES.iter().map(|f| up.node_set(f).unwrap().len()).collect();
-    ch.holds("U1 face node sets", sizes == [21, 21, 29, 29, 29, 29], &format!("{sizes:?}"));
+    ch.holds(
+        "U1 face node sets",
+        sizes == [21, 21, 29, 29, 29, 29],
+        &format!("{sizes:?}"),
+    );
     let mut sets = up.node_set("all").unwrap().len() == 111;
     for f in BOX_FACES {
         sets &= up.surface_set(f).unwrap() == base.surface_set(f).unwrap();
@@ -1171,5 +1253,116 @@ fn u1_upgrade_counts_positions_sets_and_refusal() {
         ),
         other => ch.holds("U1 Tet4 refused", false, &format!("{:?}", other.map(|_| ()))),
     }
+    ch.finish();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Amendment 1: C1 and N2 with the corrected sign of the deflection measure; T1a and T1c covered by a fast test.
+
+/// As [`cantilever_ratio`], with `delta = sum_a f_az u_az / P` (ADR 0292 amendment 1).
+fn cantilever_ratio_amended(kind: ElementKind) -> f64 {
+    let base = hex_box([0.0; 3], [C_L, C_H, C_H], [10, 1, 1]).unwrap();
+    let t = [0.0, 0.0, -C_P / (C_H * C_H)];
+    let (mesh, loads) = match kind {
+        ElementKind::Hex20 => {
+            let mesh = upgrade_to_hex20(&base).unwrap().0;
+            let loads = traction_loads(&mesh, "xmax", t).unwrap();
+            (mesh, loads)
+        }
+        _ => {
+            let mut acc: BTreeMap<usize, Vec3> = BTreeMap::new();
+            for &f in base.surface_set("xmax").unwrap() {
+                for n in base.face_nodes(f) {
+                    let e = acc.entry(n).or_insert([0.0; 3]);
+                    for i in 0..3 {
+                        e[i] += 0.25 * C_H * C_H * t[i];
+                    }
+                }
+            }
+            let loads = acc.into_iter().map(|(n, f)| NodalForceAt::new(n, f)).collect();
+            (base, loads)
+        }
+    };
+    let mut model = model_of(mesh, NU);
+    for c in 0..3 {
+        model.add_constraint(Constraint::displacement("xmin", c, 0.0)).unwrap();
+    }
+    let res = solve_static_with(&model, &[], &loads, &StaticOptions::default()).unwrap();
+    let delta: f64 = loads
+        .iter()
+        .map(|f| f.force[2] * res.displacement(f.node)[2])
+        .sum::<f64>()
+        / C_P;
+    let i = C_H.powi(4) / 12.0;
+    let g = E_MOD / (2.0 * (1.0 + NU));
+    let kappa = 5.0 / 6.0;
+    let delta_t = C_P * C_L.powi(3) / (3.0 * E_MOD * i) * (1.0 + 3.0 * E_MOD * i / (kappa * g * C_H * C_H * C_L * C_L));
+    println!(
+        "C amended {}: unknowns {}, delta {delta:.6e} m, delta_T {delta_t:.6e} m, ratio {:.6}",
+        kind.name(),
+        res.stats().unwrap().unknowns(),
+        delta / delta_t
+    );
+    delta / delta_t
+}
+
+#[test]
+#[ignore = "KNOWN MISS (ADR 0292 amendment 1, run once): C1 Hex20 |delta / delta_T - 1| = 1.8051e-2 against 1e-2 (ratio 0.981949; the clamp with nu = 0.3, see the addendum)"]
+fn c1_amended_hex20_cantilever_known_miss() {
+    let mut ch = Checks::new();
+    let r = cantilever_ratio_amended(ElementKind::Hex20);
+    ch.at_most("C1 Hex20 |delta / delta_T - 1|", (r - 1.0).abs(), 0.01);
+    ch.finish();
+}
+
+#[test]
+fn n2_amended_hex8_cantilever_locks() {
+    let mut ch = Checks::new();
+    let r8 = cantilever_ratio_amended(ElementKind::Hex8);
+    ch.below("N2 Hex8 delta / delta_T (locking)", r8, 0.9);
+    ch.finish();
+}
+
+#[test]
+fn t1_amended_met_clauses() {
+    let mut ch = Checks::new();
+    let (a, b, p) = (1.0, 2.0, 1e8);
+    let param = hex_box([a, 0.0, 0.0], [b - a, PI / 2.0, 0.2], [4, 8, 1]).unwrap();
+    let (mesh, mids) = upgrade_to_hex20_mapped(&param, |q| [q[0] * q[1].cos(), q[0] * q[1].sin(), q[2]]).unwrap();
+    let bore: Vec<usize> = mesh.node_set("xmin").unwrap().to_vec();
+    let mut radius: f64 = 0.0;
+    for m in &mids {
+        if bore.contains(&m.node) {
+            let x = mesh.nodes()[m.node];
+            radius = radius.max(((x[0] * x[0] + x[1] * x[1]).sqrt() - a).abs());
+        }
+    }
+    ch.at_most("T1c bore mid-edge nodes on the circle", radius, 1e-15);
+    let loads = pressure_loads(&mesh, "xmin", p).unwrap();
+    let mut model = model_of(mesh, NU);
+    for (set, c) in [("zmin", 2), ("zmax", 2), ("ymin", 1), ("ymax", 0)] {
+        model.add_constraint(Constraint::displacement(set, c, 0.0)).unwrap();
+    }
+    let res = solve_static_with(&model, &[], &loads, &StaticOptions::default()).unwrap();
+    let mesh = model.mesh();
+    let big_a = p * a * a / (b * b - a * a);
+    let big_b = big_a * b * b;
+    let ur_a = (1.0 + NU) / E_MOD * ((1.0 - 2.0 * NU) * big_a * a + big_b / a);
+    let s_a = big_a + big_b / (a * a);
+    let field = IntegrationPointField::compute(&model, res.displacement_values()).unwrap();
+    let nodal = nodal_average(&model, &field, field.stress(), None).unwrap();
+    let (mut eu, mut es): (f64, f64) = (0.0, 0.0);
+    for &n in &bore {
+        let x = mesh.nodes()[n];
+        let r = (x[0] * x[0] + x[1] * x[1]).sqrt();
+        let (c, s) = (x[0] / r, x[1] / r);
+        let u = res.displacement(n);
+        eu = eu.max(((u[0] * c + u[1] * s) / ur_a - 1.0).abs());
+        let sg = nodal[n].unwrap();
+        let hoop = s * s * sg[0] + c * c * sg[1] - 2.0 * s * c * sg[3];
+        es = es.max((hoop / s_a - 1.0).abs());
+    }
+    ch.at_most("T1a bore radial displacement", eu, 0.002);
+    println!("T1b bore hoop stress: {es:.4e} (limit <= 1e-2; not asserted here, the known-miss record of ADR 0292)");
     ch.finish();
 }

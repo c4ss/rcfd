@@ -208,10 +208,7 @@ pub fn face_shape_functions(uv: [f64; 2]) -> ([f64; 8], [[f64; 2]; 8]) {
         if a < 4 {
             let s = u * r[0] + v * r[1];
             n[a] = fu * fv * (s - 1.0) / 4.0;
-            d[a] = [
-                r[0] * fv * (s + u * r[0]) / 4.0,
-                r[1] * fu * (s + v * r[1]) / 4.0,
-            ];
+            d[a] = [r[0] * fv * (s + u * r[0]) / 4.0, r[1] * fu * (s + v * r[1]) / 4.0];
         } else if r[0] == 0.0 {
             n[a] = (1.0 - u * u) * fv / 2.0;
             d[a] = [-u * fv, r[1] * (1.0 - u * u) / 2.0];
@@ -424,7 +421,11 @@ where
                 let key = (a.min(c), a.max(c));
                 let node = *edge_index.entry(key).or_insert_with(|| {
                     let (pa, pc) = (params[key.0], params[key.1]);
-                    nodes.push(map([0.5 * (pa[0] + pc[0]), 0.5 * (pa[1] + pc[1]), 0.5 * (pa[2] + pc[2])]));
+                    nodes.push(map([
+                        0.5 * (pa[0] + pc[0]),
+                        0.5 * (pa[1] + pc[1]),
+                        0.5 * (pa[2] + pc[2]),
+                    ]));
                     mids.push(MidEdgeNode {
                         node: nodes.len() - 1,
                         ends: [key.0, key.1],
