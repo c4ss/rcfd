@@ -412,13 +412,22 @@ fn level(c: &mut Checks, level: usize) -> f64 {
     c.at_most(&format!("A1 {tag} e_max(G) / e_max(default)"), egm.max / edm.max, 1.2);
     c.at_most(&format!("A2 {tag} G continuity"), gm.cont, 1e-9);
     c.at_most(&format!("A3 {tag} G flux into the hole region"), gm.hole, 1e-9);
-    c.at_most(&format!("A3 {tag} G flux through the domain boundary"), gm.boundary, 1e-9);
+    c.at_most(
+        &format!("A3 {tag} G flux through the domain boundary"),
+        gm.boundary,
+        1e-9,
+    );
     c.holds(
         &format!("A4 {tag} G: no refused step"),
         gm.failed.is_none() && gm.steps == 200 * level * level,
         &format!("{} steps, refused: {:?}", gm.steps, gm.failed),
     );
-    for (name, r) in [("G moving", &gm), ("default moving", &dm), ("G at rest", &gr), ("default at rest", &dr)] {
+    for (name, r) in [
+        ("G moving", &gm),
+        ("default moving", &dm),
+        ("G at rest", &gr),
+        ("default at rest", &dr),
+    ] {
         c.holds(
             &format!("C3 {tag} {name}: no unconverged solve, no fallback"),
             r.unconverged == 0 && r.fallbacks == 0,
@@ -444,7 +453,10 @@ fn level(c: &mut Checks, level: usize) -> f64 {
         .iter()
         .map(|r| [band_errors(&r.s, true), band_errors(&r.s, false)])
         .collect();
-    for (name, h) in ["G moving", "default moving", "G at rest", "default at rest"].iter().zip(&hr) {
+    for (name, h) in ["G moving", "default moving", "G at rest", "default at rest"]
+        .iter()
+        .zip(&hr)
+    {
         println!(
             "HR {tag} {name} (printed): background band {:.4e}, other background calculated {:.4e}, maximum in it {}; \
              component band {:.4e}, other component calculated {:.4e}, maximum in it {}",
@@ -518,3 +530,17 @@ fn b1_defaults_bit_identical() {
 /// Measured once on the registration commit 4407610a (the library of main 56a14aa5) before any other run.
 const B1_QUADRATIC: u64 = 0xe43a026a778e83b3;
 const B1_LINEAR: u64 = 0x9c5ab1e5b21d5368;
+
+// ---- S1: the order between the two test processes ----------------------------------------------------------------------------
+
+/// `e_max(G)` of TG_1 and TG_2 moving, as printed by `a_tg_level_1_met_checks_and_ring_band` and
+/// `a_tg_level_2_moving_component_under_g` (ADR 0376 addendum 1).
+const E_MAX_G: [f64; 2] = [9.7081e-4, 1.9301e-4];
+
+/// ADR 0376 S1: the order of `e_max(G)` between levels 1 and 2, from the printed numbers of the two test processes.
+#[test]
+fn s1_order_between_test_processes() {
+    let o = order(E_MAX_G[0], E_MAX_G[1], 2.0);
+    println!("S1: order of e_max(G), levels 1 to 2: {o:.4}");
+    assert!(o >= 1.7, "S1: {o} < 1.7");
+}
