@@ -153,7 +153,7 @@ fn g1_g7_shipped_cases_preview_the_solvers_mesh() {
             // gate 4, 2026-11-13 (ADR 0262 addendum): the preview builds the generator's mesh, `Simulation::new` the base lattice's (same cells,
             // another numbering and hash) and the first step adapts it
             eprintln!("G1 note: {rel}: has [mesh.adapt]; the preview shows the un-adapted generator mesh, not the adapted one; compared with build_mesh");
-            let case = Case::load(&root.join(rel)).unwrap_or_else(|d| panic!("{rel}: {d:?}"));
+            let case = Case::load(root.join(rel)).unwrap_or_else(|d| panic!("{rel}: {d:?}"));
             (rcfd_api::sim::build_mesh(&case).unwrap(), "build_mesh (base)")
         } else {
             solver_mesh(&root.join(rel))
