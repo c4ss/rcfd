@@ -20,6 +20,8 @@ pub mod render;
 pub mod rotor;
 pub mod rotordyn;
 pub mod solid_coupling;
+pub mod solid_dynamic;
+pub mod solid_fsi;
 pub mod solid_loads;
 pub mod solid_output;
 pub mod stats;

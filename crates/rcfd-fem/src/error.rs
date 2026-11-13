@@ -268,6 +268,18 @@ pub enum FemError {
         /// The work package that adds it.
         package: &'static str,
     },
+    /// An element kind, formulation, constraint, support or element entry point of the intermediate tier whose work
+    /// package has not landed (ADR 0291 D6): refused, never ignored.
+    NotYetSupported {
+        /// What it is (`element kind`, `formulation`, `constraint`, `support`, `element entry point`).
+        item: &'static str,
+        /// The variant's name.
+        variant: &'static str,
+        /// Where it is used: the block, constraint or support and the set it names.
+        location: String,
+        /// The work package that adds it.
+        package: &'static str,
+    },
 }
 
 impl fmt::Display for FemError {
@@ -391,6 +403,15 @@ impl fmt::Display for FemError {
             UnsupportedLoad { load, package } => write!(
                 f,
                 "load {load} is not supported by the static solve yet (it is added by {package})"
+            ),
+            NotYetSupported {
+                item,
+                variant,
+                location,
+                package,
+            } => write!(
+                f,
+                "{item} {variant} ({location}) is not supported yet: it is added by {package}"
             ),
         }
     }

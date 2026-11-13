@@ -179,8 +179,10 @@ pub fn stiffness(model: &SolidModel) -> Result<CsrMatrix> {
 }
 
 /// The global stiffness matrix with `threads` workers (`None`: the available parallelism); the result is bit-identical for
-/// any value. Each element gives `element_for(kind).stiffness(coords, D)` with the elasticity matrix of its material.
+/// any value. Each element gives `element_for(kind).stiffness(coords, D)` with the elasticity matrix of its material. An
+/// element kind or a formulation whose package has not landed is refused (ADR 0291 D6), never assembled as another.
 pub fn stiffness_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
+    model.check_elements_supported()?;
     assemble_with(model, threads, |ctx| {
         let d = ctx.material.elasticity_matrix()?;
         element_for(ctx.kind).stiffness(ctx.coords, &d)

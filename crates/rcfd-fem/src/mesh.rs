@@ -21,6 +21,14 @@ pub enum ElementKind {
     Hex8,
     /// Quadratic tetrahedron, 10 nodes (4 corners, 6 mid-edge nodes).
     Tet10,
+    /// Quadratic (serendipity) hexahedron, 20 nodes: the corners of Hex8, then the mid-edge nodes 8 to 19 on the edges
+    /// (0,1), (1,2), (2,3), (3,0), (4,5), (5,6), (6,7), (7,4), (0,4), (1,5), (2,6), (3,7) (the order of VTK type 25;
+    /// ADR 0291 D2, confirmed by ADR 0292). Filled by [`crate::hex20`].
+    Hex20,
+    /// Two-node beam with six unknowns per node. Filled by [`crate::beam`] (ADR 0294).
+    Beam2,
+    /// Four-node shell with six unknowns per node, nodes counter-clockwise. Filled by [`crate::shell`] (ADR 0295).
+    Shell4,
 }
 
 const HEX_REF: [[f64; 3]; 8] = [
@@ -69,6 +77,8 @@ const HEX_FACES: [&[usize]; 6] = [
     &[2, 3, 7, 6],
     &[3, 0, 4, 7],
 ];
+const QUAD_EDGES: [[usize; 2]; 4] = [[0, 1], [1, 2], [2, 3], [3, 0]];
+const LINE_EDGES: [[usize; 2]; 1] = [[0, 1]];
 const TET4_FACES: [&[usize]; 4] = [&[0, 2, 1], &[0, 1, 3], &[1, 2, 3], &[0, 3, 2]];
 const TET10_FACES: [&[usize]; 4] = [
     &[0, 2, 1, 6, 5, 4],
@@ -84,6 +94,27 @@ impl ElementKind {
             ElementKind::Tet4 => "Tet4",
             ElementKind::Hex8 => "Hex8",
             ElementKind::Tet10 => "Tet10",
+            ElementKind::Hex20 => "Hex20",
+            ElementKind::Beam2 => "Beam2",
+            ElementKind::Shell4 => "Shell4",
+        }
+    }
+
+    /// Whether the kind is a solid (a volume element with three translations per node): Tet4, Hex8, Tet10, Hex20.
+    pub fn is_solid(self) -> bool {
+        match self {
+            ElementKind::Tet4 | ElementKind::Hex8 | ElementKind::Tet10 | ElementKind::Hex20 => true,
+            ElementKind::Beam2 | ElementKind::Shell4 => false,
+        }
+    }
+
+    /// The work package that adds the kind, while it has not landed (`None` for an available kind; ADR 0291 D2).
+    pub fn pending(self) -> Option<&'static str> {
+        match self {
+            ElementKind::Tet4 | ElementKind::Hex8 | ElementKind::Tet10 => None,
+            ElementKind::Hex20 => crate::hex20::PENDING,
+            ElementKind::Beam2 => crate::beam::PENDING,
+            ElementKind::Shell4 => crate::shell::PENDING,
         }
     }
 
@@ -93,14 +124,18 @@ impl ElementKind {
             ElementKind::Tet4 => 4,
             ElementKind::Hex8 => 8,
             ElementKind::Tet10 => 10,
+            ElementKind::Hex20 => 20,
+            ElementKind::Beam2 => 2,
+            ElementKind::Shell4 => 4,
         }
     }
 
     /// Number of corner nodes (the first nodes of the element).
     pub fn corners(self) -> usize {
         match self {
-            ElementKind::Tet4 | ElementKind::Tet10 => 4,
-            ElementKind::Hex8 => 8,
+            ElementKind::Tet4 | ElementKind::Tet10 | ElementKind::Shell4 => 4,
+            ElementKind::Hex8 | ElementKind::Hex20 => 8,
+            ElementKind::Beam2 => 2,
         }
     }
 
@@ -115,14 +150,18 @@ impl ElementKind {
             ElementKind::Tet4 => &TET4_FACES,
             ElementKind::Hex8 => &HEX_FACES,
             ElementKind::Tet10 => &TET10_FACES,
+            ElementKind::Hex20 => crate::hex20::faces(),
+            ElementKind::Beam2 => crate::beam::faces(),
+            ElementKind::Shell4 => crate::shell::faces(),
         }
     }
 
-    /// Number of corner nodes of each face (3 for the tetrahedra, 4 for the hexahedron).
+    /// Number of corner nodes of each face (3 for the tetrahedra, 4 for the hexahedra, 0 for the structural kinds).
     pub fn face_corners(self) -> usize {
         match self {
             ElementKind::Tet4 | ElementKind::Tet10 => 3,
-            ElementKind::Hex8 => 4,
+            ElementKind::Hex8 | ElementKind::Hex20 => 4,
+            ElementKind::Beam2 | ElementKind::Shell4 => 0,
         }
     }
 
@@ -130,7 +169,9 @@ impl ElementKind {
     pub fn edges(self) -> &'static [[usize; 2]] {
         match self {
             ElementKind::Tet4 | ElementKind::Tet10 => &TET_EDGES,
-            ElementKind::Hex8 => &HEX_EDGES,
+            ElementKind::Hex8 | ElementKind::Hex20 => &HEX_EDGES,
+            ElementKind::Beam2 => &LINE_EDGES,
+            ElementKind::Shell4 => &QUAD_EDGES,
         }
     }
 
@@ -140,6 +181,9 @@ impl ElementKind {
             ElementKind::Tet4 => &TET_REF[..4],
             ElementKind::Hex8 => &HEX_REF,
             ElementKind::Tet10 => &TET_REF,
+            ElementKind::Hex20 => crate::hex20::reference_nodes(),
+            ElementKind::Beam2 => crate::beam::reference_nodes(),
+            ElementKind::Shell4 => crate::shell::reference_nodes(),
         }
     }
 
@@ -175,6 +219,166 @@ impl ElementKind {
                 }
                 g
             }
+            ElementKind::Hex20 => crate::hex20::shape_gradients(xi),
+            ElementKind::Beam2 => crate::beam::shape_gradients(xi),
+            ElementKind::Shell4 => crate::shell::shape_gradients(xi),
+        }
+    }
+}
+
+/// The formulation of a solid element block (ADR 0290 section 2.3). `Full` is the element of the basic tier; `BBar` and
+/// `Incompatible` are Hex8 formulations added by ADR 0293 ([`crate::hex8x`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum SolidFormulation {
+    /// Full integration with the kind's stiffness rule (the default).
+    #[default]
+    Full,
+    /// Mean-dilatation (B-bar) Hex8.
+    BBar,
+    /// Hex8 with incompatible modes.
+    Incompatible,
+}
+
+impl SolidFormulation {
+    /// Name of the formulation.
+    pub fn name(self) -> &'static str {
+        match self {
+            SolidFormulation::Full => "Full",
+            SolidFormulation::BBar => "BBar",
+            SolidFormulation::Incompatible => "Incompatible",
+        }
+    }
+
+    /// The work package that adds the formulation, while it has not landed (`None` for `Full`).
+    pub fn pending(self) -> Option<&'static str> {
+        match self {
+            SolidFormulation::Full => None,
+            SolidFormulation::BBar | SolidFormulation::Incompatible => crate::hex8x::PENDING,
+        }
+    }
+}
+
+/// The section of a beam block (ADR 0294): area, second moments about the section axes y and z, torsion constant and
+/// shear factors. Every value positive and finite.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BeamSection {
+    area: f64,
+    i_y: f64,
+    i_z: f64,
+    torsion: f64,
+    shear_y: f64,
+    shear_z: f64,
+}
+
+fn positive(key: &'static str, v: f64) -> Result<()> {
+    if v > 0.0 && v.is_finite() {
+        Ok(())
+    } else {
+        Err(FemError::InvalidValue {
+            key,
+            reason: format!("{v} must be positive and finite"),
+        })
+    }
+}
+
+impl BeamSection {
+    /// A section: area (m^2), `I_y`, `I_z` (m^4), torsion constant `J` (m^4), shear factors `kappa_y`, `kappa_z`.
+    /// Refuses (naming the key) a value that is not positive and finite.
+    pub fn new(area: f64, i_y: f64, i_z: f64, torsion: f64, shear_y: f64, shear_z: f64) -> Result<BeamSection> {
+        positive("area", area)?;
+        positive("i_y", i_y)?;
+        positive("i_z", i_z)?;
+        positive("torsion", torsion)?;
+        positive("shear_y", shear_y)?;
+        positive("shear_z", shear_z)?;
+        Ok(BeamSection {
+            area,
+            i_y,
+            i_z,
+            torsion,
+            shear_y,
+            shear_z,
+        })
+    }
+    /// Area.
+    pub fn area(&self) -> f64 {
+        self.area
+    }
+    /// Second moment about the section axis y.
+    pub fn i_y(&self) -> f64 {
+        self.i_y
+    }
+    /// Second moment about the section axis z.
+    pub fn i_z(&self) -> f64 {
+        self.i_z
+    }
+    /// Torsion constant.
+    pub fn torsion(&self) -> f64 {
+        self.torsion
+    }
+    /// Shear factor for shear along y.
+    pub fn shear_y(&self) -> f64 {
+        self.shear_y
+    }
+    /// Shear factor for shear along z.
+    pub fn shear_z(&self) -> f64 {
+        self.shear_z
+    }
+}
+
+/// The property of an element block (ADR 0290 section 2.3): plain data, set by [`SolidMesh::set_block_property`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum BlockProperty {
+    /// A solid block and its formulation.
+    #[non_exhaustive]
+    Solid {
+        /// The formulation.
+        formulation: SolidFormulation,
+    },
+    /// A beam block: its section and the orientation vector that fixes the section axis y (with the beam axis).
+    #[non_exhaustive]
+    Beam {
+        /// The section.
+        section: BeamSection,
+        /// A vector not parallel to the beam axis; the section axis y lies in their plane.
+        orientation: Vec3,
+    },
+    /// A shell block and its thickness.
+    #[non_exhaustive]
+    Shell {
+        /// Thickness, m.
+        thickness: f64,
+    },
+}
+
+impl BlockProperty {
+    /// A solid block with a formulation.
+    pub fn solid(formulation: SolidFormulation) -> BlockProperty {
+        BlockProperty::Solid { formulation }
+    }
+    /// A beam block; refuses a non-finite or zero orientation.
+    pub fn beam(section: BeamSection, orientation: Vec3) -> Result<BlockProperty> {
+        if !orientation.iter().all(|c| c.is_finite()) || orientation.iter().all(|&c| c == 0.0) {
+            return Err(FemError::InvalidValue {
+                key: "orientation",
+                reason: format!("{orientation:?} must be finite and non-zero"),
+            });
+        }
+        Ok(BlockProperty::Beam { section, orientation })
+    }
+    /// A shell block; refuses a thickness that is not positive and finite.
+    pub fn shell(thickness: f64) -> Result<BlockProperty> {
+        positive("thickness", thickness)?;
+        Ok(BlockProperty::Shell { thickness })
+    }
+    /// Name of the property.
+    pub fn name(&self) -> &'static str {
+        match self {
+            BlockProperty::Solid { .. } => "Solid",
+            BlockProperty::Beam { .. } => "Beam",
+            BlockProperty::Shell { .. } => "Shell",
         }
     }
 }
@@ -184,6 +388,7 @@ impl ElementKind {
 pub struct ElementBlock {
     kind: ElementKind,
     connectivity: Vec<usize>,
+    property: Option<BlockProperty>,
 }
 
 impl ElementBlock {
@@ -202,6 +407,17 @@ impl ElementBlock {
     /// Whether the block has no element (never true for a block of a validated mesh).
     pub fn is_empty(&self) -> bool {
         self.connectivity.is_empty()
+    }
+    /// The property set by [`SolidMesh::set_block_property`] (`None`: the default of the kind, `Full` for a solid).
+    pub fn property(&self) -> Option<&BlockProperty> {
+        self.property.as_ref()
+    }
+    /// The solid formulation of the block (`Full` unless a solid property says otherwise).
+    pub fn formulation(&self) -> SolidFormulation {
+        match &self.property {
+            Some(BlockProperty::Solid { formulation }) => *formulation,
+            _ => SolidFormulation::Full,
+        }
     }
 }
 
@@ -292,6 +508,10 @@ impl SolidMesh {
                     return Err(FemError::RepeatedNode { element, node: a });
                 }
             }
+            // A structural kind (Beam2, Shell4) has no volume map: its element checks come with its package.
+            if !kind.is_solid() {
+                continue;
+            }
             for (local_node, &jacobian) in self.jacobians_of(kind, conn).iter().enumerate() {
                 if jacobian.is_nan() || jacobian <= 0.0 {
                     return Err(FemError::InvertedElement {
@@ -304,9 +524,39 @@ impl SolidMesh {
         }
         let n = connectivity.len() / npe;
         self.block_start.push(self.n_elements);
-        self.blocks.push(ElementBlock { kind, connectivity });
+        self.blocks.push(ElementBlock {
+            kind,
+            connectivity,
+            property: None,
+        });
         self.n_elements += n;
         Ok(block)
+    }
+
+    /// Sets the property of a block (ADR 0291 D3). Refuses a block that does not exist and a property that does not fit
+    /// the kind: `Solid` on a non-solid kind, `Beam` on any kind but Beam2, `Shell` on any kind but Shell4.
+    pub fn set_block_property(&mut self, block: usize, property: BlockProperty) -> Result<()> {
+        let n_blocks = self.blocks.len();
+        let Some(b) = self.blocks.get_mut(block) else {
+            return Err(FemError::InvalidValue {
+                key: "block",
+                reason: format!("block {block} does not exist (the mesh has {n_blocks} blocks)"),
+            });
+        };
+        let (fits, operation) = match &property {
+            BlockProperty::Solid { .. } => (b.kind.is_solid(), "the property Solid"),
+            BlockProperty::Beam { .. } => (b.kind == ElementKind::Beam2, "the property Beam"),
+            BlockProperty::Shell { .. } => (b.kind == ElementKind::Shell4, "the property Shell"),
+        };
+        if !fits {
+            return Err(FemError::UnsupportedKind {
+                block,
+                kind: b.kind.name(),
+                operation,
+            });
+        }
+        b.property = Some(property);
+        Ok(())
     }
 
     fn check_name(kind: SetKind, name: &str, exists: bool) -> Result<()> {
@@ -488,7 +738,8 @@ impl SolidMesh {
         self.jacobians_of(self.element_kind(element), self.element_nodes(element))
     }
 
-    /// Volume of an element: exact for Tet4, for Hex8 (2 x 2 x 2 Gauss) and for Tet10 (a rule exact to degree 3).
+    /// Volume of an element: exact for Tet4, for Hex8 (2 x 2 x 2 Gauss) and for Tet10 (a rule exact to degree 3); NaN for
+    /// a Hex20 until ADR 0292 and for the structural kinds.
     pub fn element_volume(&self, element: usize) -> f64 {
         let kind = self.element_kind(element);
         let conn = self.element_nodes(element);
@@ -512,6 +763,9 @@ impl SolidMesh {
                 }
                 v / 6.0
             }
+            ElementKind::Hex20 => crate::hex20::volume(&|xi| self.jacobian_at(kind, conn, xi)),
+            // A structural kind has no volume without its section or thickness: undefined until its package.
+            ElementKind::Beam2 | ElementKind::Shell4 => f64::NAN,
         }
     }
 

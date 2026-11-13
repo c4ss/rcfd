@@ -13,6 +13,7 @@
 use crate::error::{FemError, Result};
 use crate::material::Matrix6;
 use crate::mesh::{ElementKind, TET_EDGES};
+use crate::model::Material;
 use crate::quadrature::{self, QuadratureRule};
 use rcfd_core::vec3::Vec3;
 
@@ -99,6 +100,37 @@ fn inverse3(j: &[[f64; 3]; 3], det: f64) -> [[f64; 3]; 3] {
         }
     }
     inv
+}
+
+/// The history of an element for the nonlinear entry points (ADR 0291 D4; ADR 0300 gives it its layout): plain values,
+/// committed or rolled back per load step by the Newton driver.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ElementState {
+    values: Vec<f64>,
+}
+
+impl ElementState {
+    /// A state with no history.
+    pub fn empty() -> ElementState {
+        ElementState { values: Vec::new() }
+    }
+    /// A state with the given history values.
+    pub fn new(values: Vec<f64>) -> ElementState {
+        ElementState { values }
+    }
+    /// The history values.
+    pub fn values(&self) -> &[f64] {
+        &self.values
+    }
+}
+
+fn entry_point_refusal(kind: ElementKind, entry: &'static str, package: &'static str) -> FemError {
+    FemError::NotYetSupported {
+        item: "element entry point",
+        variant: entry,
+        location: format!("element kind {}", kind.name()),
+        package,
+    }
 }
 
 /// The strain-displacement matrix (6 x 3n, row-major) from physical gradients (ADR 0273 D2).
@@ -262,6 +294,85 @@ pub trait Element: Sync {
         }
         Ok(eps)
     }
+
+    /// The geometric (initial-stress) stiffness for the stress at the points of the stiffness rule (ADR 0298). Refuses by
+    /// default (ADR 0291 D4).
+    fn geometric_stiffness(&self, coords: &[Vec3], stress: &[[f64; 6]]) -> Result<ElementMatrix> {
+        let _ = (coords, stress);
+        Err(entry_point_refusal(self.kind(), "geometric_stiffness", "ADR 0298"))
+    }
+
+    /// The internal force of the element for a displacement and a state (total Lagrangian, ADR 0300). Refuses by default
+    /// (ADR 0291 D4).
+    fn internal_force(
+        &self,
+        coords: &[Vec3],
+        material: &Material,
+        displacement: &[f64],
+        state: &ElementState,
+    ) -> Result<Vec<f64>> {
+        let _ = (coords, material, displacement, state);
+        Err(entry_point_refusal(self.kind(), "internal_force", "ADR 0300"))
+    }
+
+    /// The tangent stiffness of the element for a displacement and a state (ADR 0300). Refuses by default (ADR 0291 D4).
+    fn tangent(
+        &self,
+        coords: &[Vec3],
+        material: &Material,
+        displacement: &[f64],
+        state: &ElementState,
+    ) -> Result<ElementMatrix> {
+        let _ = (coords, material, displacement, state);
+        Err(entry_point_refusal(self.kind(), "tangent", "ADR 0300"))
+    }
+}
+
+/// The placeholder element of a kind whose work package has not landed (ADR 0291 D4): it has no shape functions, and its
+/// [`Element::point`], through which every fallible entry point goes, refuses naming the kind and the package.
+#[derive(Debug, Clone, Copy)]
+pub struct Pending {
+    kind: ElementKind,
+    package: &'static str,
+}
+
+impl Pending {
+    /// The placeholder of `kind`, added by `package`.
+    pub const fn new(kind: ElementKind, package: &'static str) -> Pending {
+        Pending { kind, package }
+    }
+    /// The work package that adds the kind.
+    pub fn package(&self) -> &'static str {
+        self.package
+    }
+}
+
+impl Element for Pending {
+    fn kind(&self) -> ElementKind {
+        self.kind
+    }
+    fn shape_functions(&self, _xi: [f64; 3]) -> Vec<f64> {
+        Vec::new()
+    }
+    fn shape_derivatives(&self, _xi: [f64; 3]) -> Vec<[f64; 3]> {
+        Vec::new()
+    }
+    /// Never used: every entry point that would read it refuses.
+    fn stiffness_rule(&self) -> &'static QuadratureRule {
+        quadrature::gauss_1()
+    }
+    /// Never used: every entry point that would read it refuses.
+    fn mass_rule(&self) -> &'static QuadratureRule {
+        quadrature::gauss_1()
+    }
+    fn point(&self, _coords: &[Vec3], _xi: [f64; 3]) -> Result<PointGeometry> {
+        Err(FemError::NotYetSupported {
+            item: "element kind",
+            variant: self.kind.name(),
+            location: "element routines".into(),
+            package: self.package,
+        })
+    }
 }
 
 /// The linear tetrahedron.
@@ -340,11 +451,14 @@ impl Element for Tet10 {
     }
 }
 
-/// The element of a kind.
+/// The element of a kind (a [`Pending`] placeholder for a kind whose package has not landed).
 pub fn element_for(kind: ElementKind) -> &'static dyn Element {
     match kind {
         ElementKind::Tet4 => &Tet4,
         ElementKind::Hex8 => &Hex8,
         ElementKind::Tet10 => &Tet10,
+        ElementKind::Hex20 => crate::hex20::element(),
+        ElementKind::Beam2 => crate::beam::element(),
+        ElementKind::Shell4 => crate::shell::element(),
     }
 }

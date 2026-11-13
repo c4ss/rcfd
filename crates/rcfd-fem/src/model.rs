@@ -167,6 +167,60 @@ pub enum Constraint {
         /// Prescribed value, m.
         value: f64,
     },
+    /// A linear constraint `sum_i a_i u_i = b` over (node, component) pairs (ADR 0296; refused until it lands).
+    #[non_exhaustive]
+    Linear {
+        /// The terms `a_i u_i`.
+        terms: Vec<LinearTerm>,
+        /// The right-hand side `b`, m.
+        value: f64,
+    },
+    /// The nodes of a node set follow a reference point rigidly, with small rotations (ADR 0296; refused until it lands).
+    #[non_exhaustive]
+    RigidSet {
+        /// Node set name.
+        set: String,
+        /// The reference point.
+        reference: Vec3,
+    },
+    /// Cyclic symmetry of one sector: the surface set `high` is `low` rotated by `2 pi / sectors` about the axis (ADR
+    /// 0297; refused until it lands).
+    #[non_exhaustive]
+    Cyclic {
+        /// Surface set of the low boundary.
+        low: String,
+        /// Surface set of the high boundary.
+        high: String,
+        /// Direction of the axis (non-zero).
+        axis: Vec3,
+        /// A point on the axis.
+        origin: Vec3,
+        /// Number of sectors of the full rotor, at least 2.
+        sectors: usize,
+    },
+}
+
+/// One term `a u` of a [`Constraint::Linear`]: the coefficient of one component of one node.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct LinearTerm {
+    /// The node.
+    pub node: usize,
+    /// The component.
+    pub component: usize,
+    /// The coefficient.
+    pub coefficient: f64,
+}
+
+impl LinearTerm {
+    /// A term.
+    pub fn new(node: usize, component: usize, coefficient: f64) -> LinearTerm {
+        LinearTerm {
+            node,
+            component,
+            coefficient,
+        }
+    }
 }
 
 impl Constraint {
@@ -176,6 +230,85 @@ impl Constraint {
             set: set.to_string(),
             component,
             value,
+        }
+    }
+    /// A linear constraint `sum a_i u_i = value`.
+    pub fn linear(terms: Vec<LinearTerm>, value: f64) -> Constraint {
+        Constraint::Linear { terms, value }
+    }
+    /// A rigid set of nodes following a reference point.
+    pub fn rigid_set(set: &str, reference: Vec3) -> Constraint {
+        Constraint::RigidSet {
+            set: set.to_string(),
+            reference,
+        }
+    }
+    /// The cyclic condition between two boundary surface sets of a sector.
+    pub fn cyclic(low: &str, high: &str, axis: Vec3, origin: Vec3, sectors: usize) -> Constraint {
+        Constraint::Cyclic {
+            low: low.to_string(),
+            high: high.to_string(),
+            axis,
+            origin,
+            sectors,
+        }
+    }
+    /// Name of the variant.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Constraint::Displacement { .. } => "Displacement",
+            Constraint::Linear { .. } => "Linear",
+            Constraint::RigidSet { .. } => "RigidSet",
+            Constraint::Cyclic { .. } => "Cyclic",
+        }
+    }
+}
+
+/// An elastic support to ground (ADR 0290 section 2.3; ADR 0296, refused until it lands). Non-exhaustive.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum ElasticSupport {
+    /// A spring to ground on one component at every node of a node set, N/m per node.
+    #[non_exhaustive]
+    NodalSpring {
+        /// Node set name.
+        set: String,
+        /// Component.
+        component: usize,
+        /// Stiffness, positive.
+        stiffness: f64,
+    },
+    /// A foundation on a surface set: a normal stiffness per area, Pa/m.
+    #[non_exhaustive]
+    Foundation {
+        /// Surface set name.
+        set: String,
+        /// Stiffness per area, positive.
+        stiffness: f64,
+    },
+}
+
+impl ElasticSupport {
+    /// A spring per node and component on a node set.
+    pub fn nodal_spring(set: &str, component: usize, stiffness: f64) -> ElasticSupport {
+        ElasticSupport::NodalSpring {
+            set: set.to_string(),
+            component,
+            stiffness,
+        }
+    }
+    /// A foundation with a normal stiffness per area on a surface set.
+    pub fn foundation(set: &str, stiffness: f64) -> ElasticSupport {
+        ElasticSupport::Foundation {
+            set: set.to_string(),
+            stiffness,
+        }
+    }
+    /// Name of the variant.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ElasticSupport::NodalSpring { .. } => "NodalSpring",
+            ElasticSupport::Foundation { .. } => "Foundation",
         }
     }
 }
@@ -302,13 +435,25 @@ fn finite(key: &'static str, v: f64) -> Result<()> {
     }
 }
 
-/// A solid model: mesh, materials on element sets, constraints and loads.
+fn positive_finite(key: &'static str, v: f64) -> Result<()> {
+    if v > 0.0 && v.is_finite() {
+        Ok(())
+    } else {
+        Err(FemError::InvalidValue {
+            key,
+            reason: format!("{v} must be positive and finite"),
+        })
+    }
+}
+
+/// A solid model: mesh, materials on element sets, constraints, loads and elastic supports.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SolidModel {
     mesh: SolidMesh,
     materials: Vec<(String, Material)>,
     constraints: Vec<Constraint>,
     loads: Vec<Load>,
+    supports: Vec<ElasticSupport>,
 }
 
 impl SolidModel {
@@ -319,6 +464,7 @@ impl SolidModel {
             materials: Vec::new(),
             constraints: Vec::new(),
             loads: Vec::new(),
+            supports: Vec::new(),
         }
     }
 
@@ -337,6 +483,10 @@ impl SolidModel {
     /// The loads, in the order added.
     pub fn loads(&self) -> &[Load] {
         &self.loads
+    }
+    /// The elastic supports, in the order added.
+    pub fn supports(&self) -> &[ElasticSupport] {
+        &self.supports
     }
     /// The numbering of the unknowns of this model.
     pub fn dof_map(&self) -> DofMap {
@@ -384,8 +534,149 @@ impl SolidModel {
                     }
                 }
             }
+            Constraint::Linear { terms, value } => {
+                if terms.is_empty() {
+                    return Err(FemError::InvalidValue {
+                        key: "terms",
+                        reason: "a linear constraint needs at least one term".into(),
+                    });
+                }
+                let dofs = self.dof_map();
+                for t in terms {
+                    if t.node >= dofs.n_nodes() {
+                        return Err(FemError::MissingNode {
+                            role: "linear constraint",
+                            node: t.node,
+                            n_nodes: dofs.n_nodes(),
+                        });
+                    }
+                    if dofs.equation(t.node, t.component).is_none() {
+                        return Err(FemError::MissingComponent {
+                            role: "linear constraint",
+                            node: t.node,
+                            component: t.component,
+                            available: dofs.components(t.node),
+                        });
+                    }
+                    finite("coefficient", t.coefficient)?;
+                }
+                if terms.iter().all(|t| t.coefficient == 0.0) {
+                    return Err(FemError::InvalidValue {
+                        key: "coefficient",
+                        reason: "every coefficient of the linear constraint is zero".into(),
+                    });
+                }
+                finite("value", *value)?;
+            }
+            Constraint::RigidSet { set, reference } => {
+                self.need_set(SetKind::Node, set)?;
+                finite_vec("reference", *reference)?;
+            }
+            Constraint::Cyclic {
+                low,
+                high,
+                axis,
+                origin,
+                sectors,
+            } => {
+                self.need_set(SetKind::Surface, low)?;
+                self.need_set(SetKind::Surface, high)?;
+                finite_vec("axis", *axis)?;
+                if axis.iter().all(|&c| c == 0.0) {
+                    return Err(FemError::InvalidValue {
+                        key: "axis",
+                        reason: "the axis is the zero vector".into(),
+                    });
+                }
+                finite_vec("origin", *origin)?;
+                if *sectors < 2 {
+                    return Err(FemError::InvalidValue {
+                        key: "sectors",
+                        reason: format!("{sectors} sectors: a cyclic rotor has at least 2"),
+                    });
+                }
+            }
         }
         self.constraints.push(c);
+        Ok(())
+    }
+
+    /// Adds an elastic support; its set must exist with the right kind, its component exist at every node and its
+    /// stiffness be positive and finite.
+    pub fn add_support(&mut self, s: ElasticSupport) -> Result<()> {
+        match &s {
+            ElasticSupport::NodalSpring {
+                set,
+                component,
+                stiffness,
+            } => {
+                self.need_set(SetKind::Node, set)?;
+                let dofs = self.dof_map();
+                for &node in self.mesh.node_set(set).expect("checked") {
+                    if dofs.equation(node, *component).is_none() {
+                        return Err(FemError::ComponentOutOfRange {
+                            set: set.clone(),
+                            node,
+                            component: *component,
+                            available: dofs.components(node),
+                        });
+                    }
+                }
+                positive_finite("stiffness", *stiffness)?;
+            }
+            ElasticSupport::Foundation { set, stiffness } => {
+                self.need_set(SetKind::Surface, set)?;
+                positive_finite("stiffness", *stiffness)?;
+            }
+        }
+        self.supports.push(s);
+        Ok(())
+    }
+
+    /// Refuses an element kind or a solid formulation whose work package has not landed, naming it and its block (ADR
+    /// 0291 D6). A model of the basic kinds with the default formulation passes.
+    pub fn check_elements_supported(&self) -> Result<()> {
+        for (b, block) in self.mesh.blocks().iter().enumerate() {
+            if let Some(package) = block.kind().pending() {
+                return Err(FemError::NotYetSupported {
+                    item: "element kind",
+                    variant: block.kind().name(),
+                    location: format!("block {b}"),
+                    package,
+                });
+            }
+            let formulation = block.formulation();
+            if let Some(package) = formulation.pending() {
+                return Err(FemError::NotYetSupported {
+                    item: "formulation",
+                    variant: formulation.name(),
+                    location: format!("block {b}"),
+                    package,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// [`SolidModel::check_elements_supported`], then refuses an elastic support whose work package has not landed,
+    /// naming it and its set (ADR 0291 D6). Constraints are refused where they are read
+    /// ([`crate::constraint::prescribed_equations`]).
+    pub fn check_supported(&self) -> Result<()> {
+        self.check_elements_supported()?;
+        for (i, s) in self.supports.iter().enumerate() {
+            if let Some(package) = crate::mpc::PENDING {
+                let location = match s {
+                    ElasticSupport::NodalSpring { set, .. } => format!("support {i}, node set '{set}'"),
+                    ElasticSupport::Foundation { set, .. } => format!("support {i}, surface set '{set}'"),
+                };
+                return Err(FemError::NotYetSupported {
+                    item: "support",
+                    variant: s.name(),
+                    location,
+                    package,
+                });
+            }
+        }
         Ok(())
     }
 
