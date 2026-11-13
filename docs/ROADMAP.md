@@ -7425,7 +7425,10 @@ fixed by the item's registration ADR before any code.
     memory); a case-file key for the iterative route should map onto it and onto the ordering. ADR 0305 (2026-11-12):
     for large solid models the iterative choice with the fewest iterations is
     CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::default()) (15 to 22 iterations on the ADR 0282
-    cantilevers against 58 to 132 for IC(1)); a case-file key for the iterative route should be able to select it.
+    cantilevers against 58 to 132 for IC(1)); a case-file key for the iterative route should be able to select it. ADR
+    0370 (2026-11-13): for meshes of quadratic elements an iterative key should be able to select
+    CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic()) (Tet10 slenderness 20: 31 iterations against
+    79 with the default settings).
 - [ ] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
@@ -8731,7 +8734,7 @@ fixed by the item's registration ADR before any code.
     control check, not by a panic in the set-up.
   - note: From ADR 0364 question 1, recommendation (b). Low priority: test isolation only; the mutations it targets are
     already caught by a set-up panic.
-- [ ] **F-470** Elasticity multigrid on quadratic tetrahedra: aggregation that coarsens Tet10 like Hex8
+- [~] **F-470** Elasticity multigrid on quadratic tetrahedra: aggregation that coarsens Tet10 like Hex8
   - depends on: F-402
   - acceptance: Every limit not stated here is registered in the ADR before the run. In rcfd_linalg::amg_elastic, an
     opt-in aggregation rule for meshes of quadratic elements (a registered strength threshold or an aggregate size
@@ -8740,7 +8743,20 @@ fixed by the item's registration ADR before any code.
     V-cycle reaches 1e-8 in at most twice the Hex8 count of ADR 0305 H2b (15), operator complexity <= 1.5, the
     rigid-body modes in the range of the tentative prolongator to 1e-12 on every level; every count and bit of ADR 0305
     with the default settings unchanged.
-  - note: From ADR 0305 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0305 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. From
+    ADR 0305 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0370,
+    2026-11-13: rcfd_linalg::amg_elastic::Aggregation::Geometric (opt-in through ElasticAmgSettings::quadratic() and
+    ElasticAmg::with_points; rcfd_fem::solve::smoothed_aggregation passes the node points): a coupled block is a
+    candidate when it lies within (sqrt 3 + 2)/2 of the distance to the nearest coupled block (the gap between the
+    Chebyshev-1 and Chebyshev-2 lattice neighbours), seeds visited in coordinate order, coarse points the aggregate
+    centroids. On the Tet10 cantilever of slenderness 20 (121 680 unknowns) the first coarse level is 12 000 (1/10.14,
+    the Hex8 number; default 2220), operator complexity 1.476, rigid-body modes in the range of the tentative
+    prolongator to 2.8e-16; CG with one V-cycle reaches 1e-8 in 31 iterations (default 79) against the limit 30, steady
+    at about 3 iterations per decade, so the remaining gap is the smoother, not the floor or the coarsening. On Hex8 the
+    rule reproduces the default aggregates bit for bit. Defaults unchanged bit for bit (hashes against main, ADR 0305
+    counts 15 and 2220 measured again, baseline hashes pass). Partial by Rule I: the iteration limit missed by one, and
+    one of seven mutations (pass 2 over all neighbours) equivalent on these meshes and not caught. Follow-up: the
+    smoother on quadratic elements. Partial by the registered rule; done is the maintainer's call.
 - [ ] **F-471** Scalar AMG coarsest dense LU: row interchanges applied before the forward substitution
   - acceptance: Every limit not stated here is registered in the ADR before the run. A test shows whether the coarsest
     dense LU of rcfd_linalg::amg (DenseLu) interchanges rows on each fluid case of the baseline set and records where;
@@ -8801,3 +8817,14 @@ fixed by the item's registration ADR before any code.
     added on 2026-11-13.
   - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13): today the first snapshot of the shipped adaptive case
     fails ('field ux has 2799 values, the mesh has 576').
+- [ ] **F-477** Elasticity multigrid on quadratic tetrahedra: a smoother that brings Tet10 within twice the Hex8 count
+  - depends on: F-470
+  - acceptance: Every limit not stated here is registered in the ADR before the run. With the geometric aggregation of
+    ADR 0370 (ElasticAmgSettings::quadratic()), a registered opt-in smoother setting for quadratic elements (more block
+    Gauss-Seidel sweeps or a Chebyshev smoother, derived before the run) such that on the Tet10 cantilever of
+    slenderness 20 of ADR 0305 CG with one V-cycle reaches 1e-8 in at most 30 iterations with operator complexity <= 1.5
+    and the setup and solve time recorded beside ADR 0370's (31 iterations, 3.1 s); a test on a graded or anisotropic
+    Tet10 box where pass 2's restriction to the candidates changes the aggregates (ADR 0370 mutation M5); every count
+    and bit of ADR 0305 and ADR 0370 with their settings unchanged.
+  - note: From ADR 0370 questions 1 and 2 (with a graded or anisotropic Tet10 mesh on which mutation M5 changes the
+    aggregates), recommendation taken on the maintainer's standing instruction of 2026-11-11.
