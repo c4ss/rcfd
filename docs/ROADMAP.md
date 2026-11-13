@@ -9530,7 +9530,7 @@ fixed by the item's registration ADR before any code.
     its limit at 2.8e-16; the existing checks of ADR 0404 keep their values. Limits: one material without history, Hex8,
     one halving. Recorded as partial by the lead (rule of 2026-11-13: R3 missed in the registered run through a defect
     of the test, corrected by amendment 1 after that run); done is the maintainer's call.
-- [ ] **F-498** Flap-lag identity of a rotating solid beam: the acceptance restated
+- [x] **F-498** Flap-lag identity of a rotating solid beam: the acceptance restated
   - depends on: F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the square radial beam of F-396
     (Hex20, slenderness 20, nu = 0) at Omega = 0.2 omega_0: (omega_flap^2 - omega_lag^2)/Omega^2 = 1 - 2 f_x within
@@ -9538,7 +9538,14 @@ fixed by the item's registration ADR before any code.
     with the stress stiffening off (omega_n,0^2 - omega_n^2)/Omega^2 = 1 within 1e-3, with it the slope equals Q_n,h - 1
     within 1e-3 and Q_n,h equals k_n^2 L^2/3 + 1/4 within 1 percent. No new code is needed if the checks of ADR 0403 are
     accepted as these.
-  - note: From ADR 0403 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: Flap-lag identity of the rotating solid beam restated. ADR 0408, 2026-11-13: new test file
+    si_rotating_flap_lag.rs (test code only, the numbers known beforehand from ADR 0403 A3b and A2 and disclosed in the
+    registration, with the 1 - 2 f_x relation re-derived there); on the square radial Hex20 beam (slenderness 20, nu =
+    0) at 0.2 omega_0 the flap-lag difference per Omega^2 equals 1 - 2 f_x within 1.1e-8 (limit 1e-4, f_x = 9.61e-4 the
+    axial kinetic share of the flap mode) and equals 1 within 1.92e-3 (limit 3 f_x = 2.88e-3); the radial bar with the
+    stiffening off gives ratio 1 within 1.9e-9, with it the slope equals Q_n,h - 1 within 3.1e-5 and Q_n,h equals k_n^2
+    L^2/3 + 1/4 within 1.1e-3 (limits 1e-3, 1e-3, 1e-2); four planned mutations of rotating.rs caught, four controls as
+    expected. Limits: one speed, nu = 0, one section.
 - [ ] **F-499** Coriolis coupling of a rotating part: gyroscopic matrix, whirl modes and the Campbell table
   - depends on: F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. The gyroscopic matrix G = 2 Omega
