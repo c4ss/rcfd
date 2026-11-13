@@ -2890,7 +2890,7 @@
     ],
     "status": "done",
     "acceptance": "An optional adapt block on a steady incompressible box-mesh case runs rcfd_fv::adaptive and reproduces the ADR 0242 cavity numbers; cases without the block give identical hashes.",
-    "note": "From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE pending acceptance (ADR 0262, 2026-11-12): the optional table [mesh.adapt] (absent from every case that does not write it; an empty table is ADR 0242's loop) runs rcfd_fv::adaptive on a steady laminar simple / simplec case of mesh.generator cavity_2d, box_2d or box_3d (uniform): the lattice takes the generator's coordinates and patches, the first step runs the whole loop and leaves the final mesh and solver; keys cycles, max_level, marking (fixed_fraction / target_count with target_cells), refine_fraction, indicator (velocity_gradient, velocity_gradient_unscaled, edge_length with edge_length_exponent), register and register_use (confine / refine; ADR 0247 R3), balance, transfer, max_iterations, tolerance. Tree runs equal library runs bit for bit on the 8 x 8 cavity (316 cells), with each criterion, on a box_2d channel and on a box_3d cube; the case file cases/cavity/adapt_re100.toml equals the library on its lattice bit for bit and gives ADR 0242's numbers (cells 576, 1269, 2799 with ADR 0242's iteration counts, centreline difference to the 96 x 96 solution 0.002311, Ghia 0.009159; within 9.9e-11 of ADR 0242's run, whose slab is 0.1 thick against the generator's 1/24); models and solver options the loop would drop, non-uniform or file meshes and other algorithms are located errors (also through rcfd validate); rcfd run gives the in-process run's monitors; baseline hashes, case_hashes_w48u and ADR 0257's K0 tests pass unedited; six mutations each failed their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5)."
+    "note": "From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE pending acceptance (ADR 0262, 2026-11-12): the optional table [mesh.adapt] (absent from every case that does not write it; an empty table is ADR 0242's loop) runs rcfd_fv::adaptive on a steady laminar simple / simplec case of mesh.generator cavity_2d, box_2d or box_3d (uniform): the lattice takes the generator's coordinates and patches, the first step runs the whole loop and leaves the final mesh and solver; keys cycles, max_level, marking (fixed_fraction / target_count with target_cells), refine_fraction, indicator (velocity_gradient, velocity_gradient_unscaled, edge_length with edge_length_exponent), register and register_use (confine / refine; ADR 0247 R3), balance, transfer, max_iterations, tolerance. Tree runs equal library runs bit for bit on the 8 x 8 cavity (316 cells), with each criterion, on a box_2d channel and on a box_3d cube; the case file cases/cavity/adapt_re100.toml equals the library on its lattice bit for bit and gives ADR 0242's numbers (cells 576, 1269, 2799 with ADR 0242's iteration counts, centreline difference to the 96 x 96 solution 0.002311, Ghia 0.009159; within 9.9e-11 of ADR 0242's run, whose slab is 0.1 thick against the generator's 1/24); models and solver options the loop would drop, non-uniform or file meshes and other algorithms are located errors (also through rcfd validate); rcfd run gives the in-process run's monitors; baseline hashes, case_hashes_w48u and ADR 0257's K0 tests pass unedited; six mutations each failed their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5). Gate 4 (2026-11-13): the shipped case cases/cavity/adapt_re100.toml was registered in the every-shipped-case tests of rcfd-studio and rcfd-cli (maintainer-approved test edits, ADR 0262 addendum); the Studio preview and the field store do not yet follow the adapted mesh (F-475, F-476)."
   },
   {
     "id": "F-343",
@@ -4518,5 +4518,28 @@
     "status": "todo",
     "acceptance": "On the pressure system of ADR 0363 (T, bounded immersed forcing, step 2951 corrector 1, rebuilt from the state of step 2950 and the opt-in capture) the cause of r^T M^-1 r < 0 of the smoothed-aggregation AMG is located by a registered measurement (per level, the Rayleigh quotient of the cycle, the smoothed prolongator and the coarse operators against a higher-precision product), and either the AMG is repaired so that AMG-CG converges on that system with every registered hash unchanged, or the breakdown is detected inside cg (rz <= 0) and reported with a located message.",
     "note": "From ADR 0363 question 4, recommendation (a), with Q6 (an r^T z <= 0 guard in cg) folded in. Check first whether the coarsest dense LU ordering defect of F-471 (ADR 0305 question 1) is the cause. Any change to a default path needs the hash check; a moved hash is reported, never re-recorded."
+  },
+  {
+    "id": "F-475",
+    "title": "Studio preview of a case with [mesh.adapt] shows the adapted mesh",
+    "phase": 9,
+    "deps": [
+      "F-342"
+    ],
+    "status": "todo",
+    "acceptance": "The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh of Simulation::new, with its cell count and mesh hash), and preview_g1's g1_g7_shipped_cases_preview_the_solvers_mesh compares cases/cavity/adapt_re100.toml with Simulation::new like every other case, without the base-mesh exception added on 2026-11-13.",
+    "note": "From the gate 4 fix (ADR 0262 addendum, 2026-11-13)."
+  },
+  {
+    "id": "F-476",
+    "title": "Field store of a run with [mesh.adapt] writes the adapted mesh",
+    "phase": 9,
+    "deps": [
+      "F-342",
+      "F-263"
+    ],
+    "status": "todo",
+    "acceptance": "A run of cases/cavity/adapt_re100.toml with output.store_interval set writes a readable field store whose mesh is the adapted mesh (2799 cells for the shipped case) with no warning, and sf2_every_shipped_case_writes_a_readable_store runs that case through the store like the other ten without the skip added on 2026-11-13.",
+    "note": "From the gate 4 fix (ADR 0262 addendum, 2026-11-13): today the first snapshot of the shipped adaptive case fails ('field ux has 2799 values, the mesh has 576')."
   }
 ]

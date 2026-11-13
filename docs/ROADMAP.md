@@ -6379,7 +6379,10 @@ fixed by the item's registration ADR before any code.
     whose slab is 0.1 thick against the generator's 1/24); models and solver options the loop would drop, non-uniform or
     file meshes and other algorithms are located errors (also through rcfd validate); rcfd run gives the in-process
     run's monitors; baseline hashes, case_hashes_w48u and ADR 0257's K0 tests pass unedited; six mutations each failed
-    their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5).
+    their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5). Gate 4 (2026-11-13): the
+    shipped case cases/cavity/adapt_re100.toml was registered in the every-shipped-case tests of rcfd-studio and
+    rcfd-cli (maintainer-approved test edits, ADR 0262 addendum); the Studio preview and the field store do not yet
+    follow the adapted mesh (F-475, F-476).
 - [~] **F-343** Further adaptation criteria (target cell count, edge-length weighting, anisotropic, register-based) and a case where adaptation pays
   - depends on: F-102
   - acceptance: Each criterion has a closed-form marking check, and a target-count run lands within 10 percent of its
@@ -8783,3 +8786,18 @@ fixed by the item's registration ADR before any code.
   - note: From ADR 0363 question 4, recommendation (a), with Q6 (an r^T z <= 0 guard in cg) folded in. Check first
     whether the coarsest dense LU ordering defect of F-471 (ADR 0305 question 1) is the cause. Any change to a default
     path needs the hash check; a moved hash is reported, never re-recorded.
+- [ ] **F-475** Studio preview of a case with [mesh.adapt] shows the adapted mesh
+  - depends on: F-342
+  - acceptance: The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh
+    of Simulation::new, with its cell count and mesh hash), and preview_g1's
+    g1_g7_shipped_cases_preview_the_solvers_mesh compares cases/cavity/adapt_re100.toml with Simulation::new like every
+    other case, without the base-mesh exception added on 2026-11-13.
+  - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13).
+- [ ] **F-476** Field store of a run with [mesh.adapt] writes the adapted mesh
+  - depends on: F-342, F-263
+  - acceptance: A run of cases/cavity/adapt_re100.toml with output.store_interval set writes a readable field store
+    whose mesh is the adapted mesh (2799 cells for the shipped case) with no warning, and
+    sf2_every_shipped_case_writes_a_readable_store runs that case through the store like the other ten without the skip
+    added on 2026-11-13.
+  - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13): today the first snapshot of the shipped adaptive case
+    fails ('field ux has 2799 values, the mesh has 576').
