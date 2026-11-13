@@ -350,3 +350,13 @@ unedited except for the `#[ignore]` attribute; the registered tests that passed 
 the same limits and caps, and the same estimates except: the 3:2 caps of I2 (20) and I2b (8) stand, the estimate is now 3
 iterations; M2's estimate stands (`< 1e-5`). N1 stands as registered (met); `N1c` repeats the lag control on the piston set-up
 (limit `>= 2e-5`). FS2 (met) stands; it is not repeated. Each corrected run is made once.
+
+## Amendment 2 (2026-11-13, after the mutation runs and before the run of the check it adds)
+
+Mutation MU1 (`run_with_force` maps the force by `free` on the transformation path instead of `T^T`) was not caught: on the
+model of A1b (a nodal spring support and rollers) `T` is a selection of the independent unknowns, so `T^T F = F[free]` and the
+mutant is equivalent there. Added check **A1c**: A1 on the bar clamped on `xmin` with a rigid set on `xmax`
+(`Constraint::rigid_set("xmax", [L, W/2, W/2])`, as in `si_transient_mpc.rs`), so that the interface nodes are dependent and `T^T`
+moves their forces to the reference's six unknowns: the state after each of three advances bit-equal to the integrator with a
+constant load history, the returned displacements the state's, the time `t0 + 2 n dt`. Limit: bit-equal. Expected to catch
+MU1. Run once on the unmutated code, then MU1 once more.
