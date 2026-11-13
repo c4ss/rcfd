@@ -7,7 +7,9 @@
 //! consistent nodal loads `f_a = int N_a b dV` of gravity (`b = rho g`), of the centrifugal load of a rotation at constant
 //! speed (`b = rho omega^2 r_perp`) and of a body force field given at the nodes (interpolated with the element's own
 //! functions) and the thermal load `int B^T D eps_th dV` of a nodal temperature field ([`Load::Temperature`], ADR 0281,
-//! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]).
+//! [`crate::thermal`]), then the per-node forces ([`NodalForceAt`]). On Beam2 elements a uniform line load
+//! ([`Load::LineLoad`]) and gravity (`q = rho A g`) give the consistent forces and moments of
+//! [`crate::beam::line_load_vector`] (ADR 0422).
 //!
 //! Face integrals use the face functions of Tri3, Quad4, Tri6 and the 8-node face of Hex20 ([`face_shape_functions`]) in
 //! the local face orders of ADR 0271 and ADR 0292 and the face rules of [`face_rule`] (the 8-node arms: ADR 0383); body integrals use the element's mass rule (ADR 0276 arithmetic 2: exact for
@@ -106,6 +108,15 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                     add_moment(&mut f, &dofs, node, moment)?;
                 }
             }
+            Load::LineLoad { set, force } => {
+                let elements = mesh.element_set(set).ok_or_else(|| FemError::UnknownSet {
+                    kind: crate::error::SetKind::Element,
+                    name: set.clone(),
+                })?;
+                for &e in elements {
+                    add_line_load(&mut f, &dofs, mesh, e, *force)?;
+                }
+            }
             Load::Traction { set, traction } => {
                 for &face in surface(mesh, set)? {
                     add_face_load(&mut f, &dofs, mesh, face, SurfaceLoad::Traction(*traction))?;
@@ -119,9 +130,25 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
             Load::Gravity { acceleration } => {
                 let rho = densities(model, &mut density)?;
                 let g = *acceleration;
-                add_body_load(&mut f, &dofs, mesh, |e, _, _| {
-                    Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]])
-                })?;
+                // ADR 0422 D3: a Beam2 element takes the line load rho A g; every other element as before.
+                let beam = |e: usize| -> Result<Vec3> {
+                    let (section, _) = crate::beam::beam_property(mesh, e).ok_or_else(|| FemError::InvalidValue {
+                        key: "property",
+                        reason: format!(
+                            "block {} (Beam2) has no Beam property: a beam needs its section and orientation",
+                            mesh.block_of(e)
+                        ),
+                    })?;
+                    let ra = rho[e] * section.area();
+                    Ok([ra * g[0], ra * g[1], ra * g[2]])
+                };
+                add_body_load_with(
+                    &mut f,
+                    &dofs,
+                    mesh,
+                    |e, _, _| Ok([rho[e] * g[0], rho[e] * g[1], rho[e] * g[2]]),
+                    Some(&beam),
+                )?;
             }
             Load::Centrifugal { axis, origin, omega } => {
                 let rho = densities(model, &mut density)?;
@@ -256,7 +283,47 @@ fn add_body_load<B>(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, b: B) -> Res
 where
     B: Fn(usize, &IntegrationPoint, &[usize]) -> Result<Vec3>,
 {
+    add_body_load_with(f, dofs, mesh, b, None)
+}
+
+/// The uniform line load of a beam element as its consistent nodal forces and moments (ADR 0422 D3).
+fn add_line_load(f: &mut [f64], dofs: &DofMap, mesh: &SolidMesh, e: usize, q: Vec3) -> Result<()> {
+    let nodes = mesh.element_nodes(e);
+    let coords: Vec<Vec3> = nodes.iter().map(|&n| mesh.nodes()[n]).collect();
+    let fe = crate::beam::line_load_vector(&coords, q).map_err(|source| FemError::Element {
+        element: e,
+        source: Box::new(source),
+    })?;
+    for (a, &node) in nodes.iter().enumerate() {
+        add_force(f, dofs, node, &[fe[6 * a], fe[6 * a + 1], fe[6 * a + 2]])?;
+        add_moment(f, dofs, node, &[fe[6 * a + 3], fe[6 * a + 4], fe[6 * a + 5]])?;
+    }
+    Ok(())
+}
+
+/// [`add_body_load`] with an optional rule for Beam2 elements: the uniform line load the element carries (ADR 0422 D3).
+/// Without it, or for every other element, the element's consistent body load as before.
+fn add_body_load_with<B>(
+    f: &mut [f64],
+    dofs: &DofMap,
+    mesh: &SolidMesh,
+    b: B,
+    beam: Option<&dyn Fn(usize) -> Result<Vec3>>,
+) -> Result<()>
+where
+    B: Fn(usize, &IntegrationPoint, &[usize]) -> Result<Vec3>,
+{
     for e in 0..mesh.n_elements() {
+        if let Some(rule) = beam {
+            if mesh.element_kind(e) == crate::mesh::ElementKind::Beam2 {
+                let q = rule(e).map_err(|source| FemError::Element {
+                    element: e,
+                    source: Box::new(source),
+                })?;
+                add_line_load(f, dofs, mesh, e, q)?;
+                continue;
+            }
+        }
         let nodes = mesh.element_nodes(e);
         let fe = element_body_load(mesh, e, &b).map_err(|source| FemError::Element {
             element: e,

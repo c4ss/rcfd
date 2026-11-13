@@ -12,14 +12,16 @@
 //! with rows `e_1, e_2, e_3`.
 //!
 //! The solid-element routines of the [`Element`] trait (an isoparametric volume map, a 6 x 6 elasticity matrix) do not apply:
-//! [`element`] is a placeholder that refuses naming [`SOLID_ROUTINES`], so body loads, the thermal load and stress recovery
-//! refuse a beam. The assembly calls [`element_stiffness`] and [`element_mass`] for Beam2 (ADR 0417 D6).
+//! [`element`] is a placeholder that refuses naming [`SOLID_ROUTINES`], so the solid body loads, the thermal load and stress
+//! recovery refuse a beam. The assembly calls [`element_stiffness`] and [`element_mass`] for Beam2 (ADR 0417 D6). Uniform
+//! line loads and gravity on beams have the consistent load [`line_load_vector`] (ADR 0422); the centrifugal load, a nodal
+//! body force and the thermal load still refuse.
 
 use crate::assemble::element_dofs;
 use crate::element::{Element, ElementMatrix, Pending};
 use crate::error::{FemError, Result};
 use crate::mesh::{BeamSection, BlockProperty, ElementKind, SolidMesh};
-use crate::model::{Material, SolidModel};
+use crate::model::{Load, Material, SolidModel};
 use rcfd_core::vec3::{cross, norm, Vec3};
 
 /// The work package that adds Beam2; `None` once it has landed (ADR 0417).
@@ -381,6 +383,71 @@ fn frame_of(coords: &[Vec3], orientation: Vec3) -> Result<BeamFrame> {
     frame(coords[0], coords[1], orientation)
 }
 
+/// The consistent nodal load of a uniform force per unit length `q` (global axes) on a beam element from `coords[0]` to
+/// `coords[1]`, in the element's unknown order (node 0: force, moment; node 1: force, moment). ADR 0422 arithmetic 1: in each
+/// bending plane the interdependent shape functions integrate to `q L (1/2, L/12, 1/2, -L/12)` whatever the shear parameter,
+/// so node 0 gets `q L / 2` and `(L^2 / 12) e_1 x q`, node 1 gets `q L / 2` and `-(L^2 / 12) e_1 x q`. Refuses other than two
+/// coordinates and a zero or non-finite length.
+pub fn line_load_vector(coords: &[Vec3], q: Vec3) -> Result<[f64; 12]> {
+    if coords.len() != 2 {
+        return Err(FemError::FieldLength {
+            key: "coordinates",
+            expected: 2,
+            found: coords.len(),
+        });
+    }
+    let d = [
+        coords[1][0] - coords[0][0],
+        coords[1][1] - coords[0][1],
+        coords[1][2] - coords[0][2],
+    ];
+    let l = norm(d);
+    if !(l > 0.0 && l.is_finite()) {
+        return Err(FemError::InvalidValue {
+            key: "length",
+            reason: format!("the beam from {:?} to {:?} has length {l:e}", coords[0], coords[1]),
+        });
+    }
+    let e1 = [d[0] / l, d[1] / l, d[2] / l];
+    let m = cross(e1, q);
+    let (h, c) = (0.5 * l, l * l / 12.0);
+    let mut f = [0.0; 12];
+    for k in 0..3 {
+        f[k] = h * q[k];
+        f[3 + k] = c * m[k];
+        f[6 + k] = h * q[k];
+        f[9 + k] = -c * m[k];
+    }
+    Ok(f)
+}
+
+/// The uniform force per unit length on a beam element from the model's loads (ADR 0422 D4): the sum of every line load
+/// whose set holds the element and of gravity (`rho A g`); `None` when there is none.
+fn element_line_load(model: &SolidModel, element: usize, section: &BeamSection, density: f64) -> Option<Vec3> {
+    let mut q = [0.0; 3];
+    let mut any = false;
+    for load in model.loads() {
+        match load {
+            Load::LineLoad { set, force } => {
+                if model.mesh().element_set(set).is_some_and(|s| s.contains(&element)) {
+                    any = true;
+                    for k in 0..3 {
+                        q[k] += force[k];
+                    }
+                }
+            }
+            Load::Gravity { acceleration } => {
+                any = true;
+                for k in 0..3 {
+                    q[k] += density * section.area() * acceleration[k];
+                }
+            }
+            _ => {}
+        }
+    }
+    any.then_some(q)
+}
+
 /// The section and orientation of the block of a beam element, if it is a Beam2 element of a block with a Beam property.
 pub fn beam_property(mesh: &SolidMesh, element: usize) -> Option<(BeamSection, Vec3)> {
     if mesh.element_kind(element) != ElementKind::Beam2 {
@@ -488,7 +555,8 @@ pub struct SectionForces {
 }
 
 /// The section forces of every beam element of a model for a displacement vector (one value per unknown of
-/// `model.dof_map()`), as (element, forces) in element order: `f = K_l T u_e`, `start = -f_0`, `end = f_1`.
+/// `model.dof_map()`), as (element, forces) in element order: `f = K_l T u_e - T f_e`, `start = -f_0`, `end = f_1`, with
+/// `f_e` the element's consistent load of the model's line loads and gravity (ADR 0422 D4; none for an element without them).
 pub fn section_forces(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(usize, SectionForces)>> {
     let dofs = model.dof_map();
     if displacement.len() != dofs.n_equations() {
@@ -526,8 +594,19 @@ pub fn section_forces(model: &SolidModel, displacement: &[f64]) -> Result<Vec<(u
                 ul[3 * b + r] = (0..3).map(|k| f.axes[r][k] * ue[3 * b + k]).sum();
             }
         }
-        let kl = local_stiffness(f.length, &s, &model.materials()[materials[e]].1);
-        let fl = kl.matvec(&ul);
+        let material = &model.materials()[materials[e]].1;
+        let kl = local_stiffness(f.length, &s, material);
+        let mut fl = kl.matvec(&ul);
+        // ADR 0422 D4: the end forces are K_l u_l minus the element's consistent load.
+        if let Some(q) = element_line_load(model, e, &s, material.density()) {
+            let coords = [mesh.nodes()[nodes[0]], mesh.nodes()[nodes[1]]];
+            let fg = line_load_vector(&coords, q).map_err(located)?;
+            for b in 0..4 {
+                for r in 0..3 {
+                    fl[3 * b + r] -= (0..3).map(|k| f.axes[r][k] * fg[3 * b + k]).sum::<f64>();
+                }
+            }
+        }
         let mut start = [0.0; 6];
         let mut end = [0.0; 6];
         for i in 0..6 {

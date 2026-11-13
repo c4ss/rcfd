@@ -350,6 +350,16 @@ pub enum Load {
         /// Moment on each node, about the global axes.
         moment: Vec3,
     },
+    /// A uniform force per unit length, N/m, about the global axes, on every element of an element set; every element of
+    /// the set must be a Beam2 element (ADR 0422 D1). Its nodal loads are the consistent loads of
+    /// [`crate::beam::line_load_vector`].
+    #[non_exhaustive]
+    LineLoad {
+        /// Element set name.
+        set: String,
+        /// Force per unit length on each element.
+        force: Vec3,
+    },
     /// A uniform traction on a surface set, Pa.
     #[non_exhaustive]
     Traction {
@@ -411,6 +421,13 @@ impl Load {
         Load::NodalMoment {
             set: set.to_string(),
             moment,
+        }
+    }
+    /// A uniform force per unit length on every element of an element set of Beam2 elements (ADR 0422).
+    pub fn line_load(set: &str, force: Vec3) -> Load {
+        Load::LineLoad {
+            set: set.to_string(),
+            force,
         }
     }
     /// A uniform traction on a surface set.
@@ -764,6 +781,22 @@ impl SolidModel {
                             node,
                             component: 3,
                             available: dofs.components(node),
+                        });
+                    }
+                }
+            }
+            Load::LineLoad { set, force } => {
+                self.need_set(SetKind::Element, set)?;
+                finite_vec("force per length", *force)?;
+                for &e in self.mesh.element_set(set).expect("checked") {
+                    let kind = self.mesh.element_kind(e);
+                    if kind != crate::mesh::ElementKind::Beam2 {
+                        return Err(FemError::InvalidValue {
+                            key: "line load",
+                            reason: format!(
+                                "element {e} of the set '{set}' is a {} element: a line load acts on Beam2 elements",
+                                kind.name()
+                            ),
                         });
                     }
                 }
