@@ -9229,7 +9229,10 @@ fixed by the item's registration ADR before any code.
     Continuity is 6.0e-13, the flux into the hole region 1.1e-14 and through the boundary 0 in every step, every step is
     taken, and UA, UA2 and U1 of ADR 0347 hold to 4e-15. Without the opt-in the default coupling and G are bit-identical
     (four state hashes, baseline_hashes, the 19 existing overset test files). Five mutations caught. Not covered: RE and
-    RL of ADR 0347, level 3, 3D, BDF2 or outer iterations with the opt-in. Follow-up F-503.
+    RL of ADR 0347, level 3, 3D, BDF2 or outer iterations with the opt-in. Follow-up F-503. ADR 0418 (F-503),
+    2026-11-13: on RE and RL of ADR 0347 with the quadratic stencils the opt-in brings the root mean square velocity
+    error to within 0.25 percent of the default coupling at levels 1 to 3 (G without it: 14.5, 5.6 and 3.5 percent above
+    on RE); the orders of R_b on RE are 1.964 and 1.789.
 - [ ] **F-480** Axial velocity in the surface-series format for a one-section split
   - depends on: F-478
   - acceptance: An rcfd-surface-series file carrying the axial velocity with the pressure lets a drive built from one
@@ -9668,15 +9671,22 @@ fixed by the item's registration ADR before any code.
     defaults bit-identical. Open: ADR 0412 Q1, Q2. Follow-up F-504. The projection's asymmetry is removed as an opt-in
     by F-504 (ADR 0414, 2026-11-13): the bilinear projection is symmetric to 1e-15 and gives the bilinear evaluation's
     frequency changes.
-- [ ] **F-503** Overset: the second-order ring gradient on RE and RL of ADR 0347
+- [x] **F-503** Overset: the second-order ring gradient on RE and RL of ADR 0347
   - depends on: F-479
   - acceptance: With OversetSolver::set_second_order_ring_gradient(true) under PrescribedOwnGradient and the quadratic
     donor interpolation, RE of ADR 0347 at levels 1 to 3 and RL at levels 1 to 3: the root mean square of the velocity
     error over the calculated cells at t = 0.5 is at most 1.05 times that of the default coupling with the same
     stencils, C1, C2 and U1 of ADR 0347 hold, and the orders of R_b on RE are at least 1.7; or the ADR names with a
     number why not.
-  - note: From ADR 0409 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
-    priority.
+  - note: From ADR 0409 question 2, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11.
+    ADR 0418, 2026-11-13: DONE. No library change. With OversetSolver::set_second_order_ring_gradient(true) under
+    PrescribedOwnGradient and the quadratic donor interpolation on both fringes, the root mean square velocity error of
+    the calculated cells at t = 0.5 is 1.0025, 1.0007, 1.0004 times that of the default coupling with the same stencils
+    on RE of ADR 0347 at levels 1 to 3 and 1.0013, 0.9994, 0.9994 times on RL (limit 1.05). G without the opt-in was
+    1.145, 1.056, 1.035 times on RE (reproduced to 3e-7), so its excess was the first-order ring gradient of D5.
+    Continuity is at most 3.8e-13, the flux into the hole region 1.6e-14 and through the boundary 0 in every step, U1
+    3.6e-15 and 0, and the orders of R_b on RE are 1.964 and 1.789. Three mutations caught. Not covered: level 4, R_b on
+    RL under the opt-in, a moving component beyond U.
 - [x] **F-504** Opt-in bilinear projection on quadrilateral interface elements
   - depends on: F-362, F-502
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in variant of the projection
