@@ -175,7 +175,8 @@ pub fn solve_static_report(
     options: &StaticOptions,
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
-    model.check_supported()?;
+    // ADR 0417 D4: the elimination path takes beams; the transformation path refuses them (its own check).
+    model.check_supported_with_beams()?;
     if options.refinement > 0 {
         check_refinement(model, options)?;
     }
@@ -184,6 +185,26 @@ pub fn solve_static_report(
         return crate::mpc::solve_static_mpc(model, prescribed, forces, &[], options).map(|s| (s.result, s.report));
     }
     let dofs = model.dof_map();
+    if let StaticSolver::PreconditionedCg {
+        preconditioner: CgPreconditioner::SmoothedAggregation(_),
+        ..
+    } = &options.solver
+    {
+        // ADR 0417 D4: the rigid-body modes of the multigrid are those of three-unknown nodes.
+        if let Some(b) = model
+            .mesh()
+            .blocks()
+            .iter()
+            .position(|b| b.kind() == crate::mesh::ElementKind::Beam2)
+        {
+            return Err(FemError::NotYetSupported {
+                item: "element kind",
+                variant: "Beam2",
+                location: format!("block {b}, solver cg-amg-rbm"),
+                package: crate::beam::FOLLOW_UP,
+            });
+        }
+    }
     let f = nodal_load_vector(model, forces)?;
     let fixed = prescribed_equations(model, prescribed)?;
     check_rigid_body_motions(model, &fixed)?;

@@ -64,6 +64,20 @@ pub(crate) fn add_force(f: &mut [f64], dofs: &DofMap, node: usize, force: &Vec3)
     Ok(())
 }
 
+/// Adds a moment to the rotation components 3 to 5 of a node (ADR 0417 D2).
+fn add_moment(f: &mut [f64], dofs: &DofMap, node: usize, moment: &Vec3) -> Result<()> {
+    for (k, &mk) in moment.iter().enumerate() {
+        let eq = dofs.equation(node, 3 + k).ok_or(FemError::MissingComponent {
+            role: "nodal moment",
+            node,
+            component: 3 + k,
+            available: dofs.components(node),
+        })?;
+        f[eq] += mk;
+    }
+    Ok(())
+}
+
 /// The global load vector of the model's loads and of `extra` per-node forces, one entry per unknown. Refuses a node that
 /// does not exist (naming it), a non-finite force, a body or thermal load on an element without material, and a second
 /// temperature field (ADR 0281).
@@ -81,6 +95,15 @@ pub fn nodal_load_vector(model: &SolidModel, extra: &[NodalForceAt]) -> Result<V
                 })?;
                 for &node in nodes {
                     add_force(&mut f, &dofs, node, force)?;
+                }
+            }
+            Load::NodalMoment { set, moment } => {
+                let nodes = mesh.node_set(set).ok_or_else(|| FemError::UnknownSet {
+                    kind: crate::error::SetKind::Node,
+                    name: set.clone(),
+                })?;
+                for &node in nodes {
+                    add_moment(&mut f, &dofs, node, moment)?;
                 }
             }
             Load::Traction { set, traction } => {
