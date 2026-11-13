@@ -6127,9 +6127,10 @@ fixed by the item's registration ADR before any code.
     sheared mesh); a plain layer 9.8e-7 of the plane wave; the open end 0.109 against 1/9; the rigid end without a layer
     1.003; a cut-off mode decays 1.7e-3 off the closed form; a synthetic rectangular field (five modes both ways and a
     cut-off one) through DFT, fit, split and JSON recovered within 4e-15 and a circular section with two truncated modes
-    within 1.3e-4 (limit 1e-2). Eight mutations caught. Limits: medium at rest, linear, no impedance wall, not coupled
-    to a CFD run (the source is a driven boundary); the solver was checked in two-dimensional channels here; circular
-    ducts on an O-grid under F-453 (ADR 0366, 2026-11-12); one planar layer; no case key or CLI (ADR 0351 question 1).
+    within 1.3e-4 (limit 1e-2). Eight mutations caught. Limits: medium at rest, linear, no impedance wall, not run
+    inside a CFD run (the source is a driven boundary, which can be built from a sampled rcfd-surface-series section
+    under F-452, ADR 0372, 2026-11-12); the solver was checked in two-dimensional channels here; circular ducts on an
+    O-grid under F-453 (ADR 0366, 2026-11-12); one planar layer; no case key or CLI (ADR 0351 question 1).
 - [x] **F-328** SV202's fuller text: what the solvers do with a case without boundary conditions
   - depends on: F-240
   - acceptance: For the compressible solver SV202 states that every patch is a slip wall and an outlet is extrapolated.
@@ -8428,12 +8429,28 @@ fixed by the item's registration ADR before any code.
     export; on the ADR 0351 X1 field it reproduces the library's export bit for bit; located errors for a section
     outside the duct and a non-integer number of periods; the CLI help golden updated with the maintainer's approval.
   - note: From ADR 0351 question 1. NEEDS THE USER: the command's help text changes the CLI golden.
-- [ ] **F-452** Wave solver driven by a sampled CFD surface
+- [x] **F-452** Wave solver driven by a sampled CFD surface
   - depends on: F-333
   - acceptance: A driven boundary built from an rcfd-surface-series file reproduces, in a duct, the modal amplitudes of
     a closed-form duct field sampled into that file within 1 percent; a series that does not cover a whole number of
     periods is refused.
-  - note: From ADR 0351 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: From ADR 0351 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE
+    pending acceptance, ADR 0372, 2026-11-12. Library only. Built: rcfd-post `wave_drive.rs` (`SurfaceDrive`,
+    `DuctFrame`, `DriveOptions`): an rcfd-surface-series section is read as a whole number of periods of a given
+    fundamental, each harmonic of every face taken by a DFT on the file's clock (the mean dropped and reported), fitted
+    on a hard-walled duct-mode basis, and played back periodically as the `WaveBc::Driven` ghost state of the wave
+    entering the duct, each mode with its own axial wavenumber and impedance kz p/(rho0 omega), carried from the
+    sampling plane to the driven faces. Registered checks, all met at the first run, no amendment: a 0.12 m channel, a
+    closed-form field of the plane wave at 1181 Hz and the plane wave and mode 1 at 2361 Hz plus a 3 Pa mean, sampled on
+    a wall-clustered 24-face section 0.02 m upstream of the wave mesh into the file through JSON text; on 64 cells
+    across the amplitudes measured at the inlet agree with the closed form within 8.8e-4, 3.5e-3 and 2.3e-3 (limit 1e-2;
+    1.4e-2 at worst on 32 across, second order: the error is the scheme's driven face, the file chain adds 1.1e-14
+    against a run driven by the closed form); the drive's state equals the closed form within 1.7e-13; a 128-sample
+    two-period file is accepted and 127 and 96 samples are refused as not a whole number of periods; eleven other
+    refusals located. Six mutations caught (plane-wave impedance, lost file clock, period test removed, wrong axial
+    carry, harmonics played at the fundamental, Nyquist test removed). Limits: the sampled pressure must be the entering
+    wave only; periodic signals; static section, medium at rest; only the two-dimensional channel was run; no case key
+    or CLI (F-451).
 - [~] **F-453** Circular and three-dimensional ducts through the wave solver
   - depends on: F-333
   - acceptance: A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate
@@ -8851,3 +8868,9 @@ fixed by the item's registration ADR before any code.
     and bit of ADR 0305 and ADR 0370 with their settings unchanged.
   - note: From ADR 0370 questions 1 and 2 (with a graded or anisotropic Tet10 mesh on which mutation M5 changes the
     aggregates), recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-478** Wave-solver drive with returning waves at the sampled section
+  - depends on: F-452
+  - acceptance: A drive built from two sampled sections of a duct field that holds both directions reproduces the
+    entering wave's modal amplitudes at the inlet within 1 percent and ignores the returning one to 1 percent; a single
+    section with a returning wave is reported by a measured residual.
+  - note: From ADR 0372 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size M.
