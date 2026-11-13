@@ -1461,3 +1461,34 @@ fn record_x_channel_courant_and_state() {
     println!("X: wall time {:.1} s", t0.elapsed().as_secs_f64());
     assert!(misses.is_empty(), "record X: {misses:?}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Known misses (ADR 0405 addendum 1): the registered limits kept, the measured numbers recorded; not run again (each repeats a
+// registered record)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// ADR 0405 G4 (record P1, run once): for B with two correctors over steps 16 to 25 the dominant Ritz value of `P_10`,
+/// 0.925388 +- 0.104328i (per step 0.992903), has the true residual 0.245 against `<= 0.03`: not converged. Limit unchanged.
+#[test]
+#[ignore = "known miss of ADR 0405 G4 (record P1): two correctors, dominant per step 0.9929 not converged (residual 0.245)"]
+fn g4_two_correctors_below_one_per_step_known_miss() {
+    record_p1_bounded_one_and_two_correctors();
+}
+
+/// ADR 0405 G2 and G3 (record P2, run once): for F with one corrector the dominant eigenvalue of the product is converged and
+/// above one per step: -3.856 -+ 14.519i over steps 16 to 25 (per step 1.311215, true residual 2.1e-7) and -3.596 +- 9.255i
+/// over steps 16 to 35 (per step 1.121620, 8.8e-7). Limits unchanged.
+#[test]
+#[ignore = "known miss of ADR 0405 G2, G3 (record P2): first-order forcing per step 1.3112 (k 10) and 1.1216 (k 20)"]
+fn g2_g3_first_order_forcing_below_one_per_step_known_miss() {
+    record_p2_first_order_ten_and_twenty_steps();
+}
+
+/// ADR 0405 X2 and X3 (record X, run once): the channel without the cylinder at `U_m' = 2.906` (`C_max` 1.168) has no
+/// converged Ritz value above one (the largest, -1.108 +- 0.069i, true residual 0.059, of negative real part); F after step
+/// 100 (`C_max` 1.155) has none of magnitude one or more (dominant -0.970777). Limits unchanged.
+#[test]
+#[ignore = "known miss of ADR 0405 X2, X3 (record X): no converged positive mode above one at the matched Courant number or at step 100"]
+fn x2_x3_courant_hypothesis_known_miss() {
+    record_x_channel_courant_and_state();
+}
