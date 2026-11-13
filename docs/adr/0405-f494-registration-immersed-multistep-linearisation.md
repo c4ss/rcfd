@@ -246,3 +246,137 @@ estimate's gain near one) is not identified. No solver code is changed, so the r
 
 - **Q1. Library diagnostic.** Options: (a) test code only (registered); (b) a public `PimpleSolver` method for the k-step
   linearisation. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): (a).
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; no limit was changed and no amendment was made. Release builds on Windows, the
+machine shared with other building agents. Commits: the registration 9627e4d9; the test file with the fast checks and the
+records P1, P2, X 62cabb2d (before their run); the known-miss records 0c85cfd6 (not run: they repeat registered records). Every
+registered run was made once: the fast checks (`f494-scratch/fast_checks.log`, 0.8 s), record P1 (`rec_p1.log`, 191 s), record
+P2 (`rec_p2.log`, 233 s), record X (`rec_x.log`, 73 s; the three records ran at the same time). After formatting the fast
+checks were run on the final tree in release and in debug (`final_release.log`, `final_debug.log`; all pass), which repeats no
+record.
+
+**Built.** Test code only: `crates/rcfd-fv/tests/immersed_multistep_linearisation_f494.rs` (the copied tools and helpers of ADR
+0392, the k-step map and its central difference, the eigenvalue per step, the singular-value bound, the channel without the
+cylinder, the fast checks U1 to U4, the records P1, P2, X and three known-miss records). No library file, no shared solver file,
+no schema key, golden, hash table or existing test file was touched (N1: `git diff --stat 2024b3f9` lists only this test file
+and this ADR), so the defaults are bit-identical by construction and `baseline_hashes` was not needed.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R1 B one corrector from step 15 on | stop at step 34, Courant guard | step 34, Courant 2.42e7 | yes |
+| R2 F one corrector from step 15 to 200 | runs, `max abs(u)` 2.210 within 0.01 | runs, 2.21039 | yes |
+| G0 PB, PF: `P_k z` with `e = 1e-4` against `1e-5` | `<= 1e-3` | 2.7e-7 (PB), 3.3e-6 (PF) | yes |
+| G1 a PB dominant of `P_10` converged | true residual `<= 0.03` | 4.2e-8 | yes |
+| G1 b PB per step | `> 1` | mu = -555.96 (real), **g = 1.881499** | yes |
+| G2 PF (F, steps 16 to 25) | converged and `g < 1` | mu = -3.856 -+ 14.519i, residual 2.1e-7, **g = 1.311215** | **no** (known miss) |
+| G3 PF20 (F, steps 16 to 35) | converged and `g < 1` | mu = -3.596 +- 9.255i, residual 8.8e-7, **g = 1.121620** | **no** (known miss) |
+| G4 PC (B, two correctors) | converged and `g < 1` | 0.925388 +- 0.104328i, g = 0.992903, residual 0.245 (not converged) | **no** (known miss) |
+| X1 channel, `U_m = 1.5` (`C_max` 0.608) | no converged Ritz value with `abs >= 1` | none of magnitude 1 or more; dominant 0.969 (real) | yes |
+| X2 channel, `U_m' = 2.906` (`C_max` 1.168) | a converged Ritz value `abs > 1`, `Re > 0` | none of positive real part above 0.97 in magnitude; above one only -1.108 +- 0.069i (residual 0.059) and three more pairs of negative real part, none converged | **no** (known miss) |
+| X3 F after step 100 (`C_max` 1.155) | as X2 | none of magnitude 1 or more; dominant -0.970777 (residual 0.033) | **no** (known miss) |
+| U1, U2 (copied tools) | as ADR 0392 | 2.0e-15, 2.9e-15; U2 as there | yes |
+| U3 the k-step map on M1 (`k = 3`) | (a) bits; (b) `<= 1e-3`; (c) `<= 1e-3` | (a) equal; (b) 8.0e-6; (c) 2.3e-7 | yes |
+| U4 exact products | within 1e-8 | (i) 1.1886113780, real positive; (ii) 0.8660254038 with one-step radius 1.5 | yes |
+| N1 no library file changed | as stated | only the test file and this ADR | yes |
+
+Printed, no limit. `C_max` after step 15: B 1.476, B with two correctors 1.269, F 1.178 (cell 13244, 0.012 from the surface,
+above the cylinder; the estimate "about 0.9" of the arithmetic was low). The singular-value bound per step: PB 2.25, PF 1.47,
+PF20 1.29, PC 1.014. The nonlinear propagation `|x'_n - x_n| / e` (settings of R, steps 1 to 10 of the window): PB 43, 20, 2.6,
+3.4, 4.0, 5.7, 21, 35, 36, 183; PF 45, 22, 2.3, 2.3, 1.8, 2.2, 2.4, 2.5, 2.9, 3.7, and on to 5.3 at step 20; PC 39, 14, 1.7,
+1.3, 1.2, 0.97, 0.86, 0.76, 0.69, 0.63. The dominant vectors of the products: PB 97 percent pressure, largest `abs(p)` in a
+fluid cell 0.008 from the surface above the cylinder; PF 40 percent pressure, 28 percent `u_n`, 0.016 from the surface above
+it; PF20 72 percent pressure, 0.025 from the surface. Above one per step in the products besides the dominant: PB at least 39
+further Ritz values (1.72 to 1.81 checked, converged), PF 22 (to 1.24), PF20 17 (to 1.08). The one-step dominant of F along
+the window (X4): 1.767 at step 16 (converged 2.5e-4), 1.911 at step 20 (3.9e-4), 1.358 at step 25 (1.1e-2), all of positive
+real part, mostly pressure, at a fluid cell 0.010 to 0.012 from the surface above the cylinder (steps 16, 20); at step 25 also
+a real -1.023 (8.1e-3). U3 (d): the product along the trajectory differs from the third power of `J_1` by 137 percent of its
+norm.
+
+### What the measurements say
+
+- **The k-step linearisation is valid.** The map at zero is the trajectory to the bit (U3 a), the central difference is linear
+  to 3e-6 on M2 (G0) and the product is the composition of the one-step Jacobians along the trajectory to 2e-7 (U3 c), not the
+  power of the first (U3 d); the tools find known products to round-off (U4) and the stop and the run of ADR 0374 are
+  reproduced (R1, R2).
+- **The product does not separate the forcings by one.** Over steps 16 to 25 the bounded form grows by 1.88 per step (a real
+  negative eigenvalue of `P_10`, a pressure mode above the cylinder, not the period-two pair of 1.16), and the first-order
+  forcing, which runs, by 1.31 per step, converged; over steps 16 to 35 F still grows by 1.12. So the one-step pressure modes of
+  F (1.58 to 1.91) do partly compound along its trajectory, less over the longer window. That fits the bound of the
+  registration (a growth above about 1.08 to 1.13 per step cannot be sustained by a run that runs) and the one-step spectrum
+  along the window, which falls from 1.91 at step 20 to 1.36 at step 25 and is below one at step 100 (X3). The separation that
+  remains is one of size: B 1.88 against F 1.31 over the same ten steps, and a generic perturbation grows by 183 for B and by
+  3.7 for F.
+- **The one-step eigenvalues above one of F belong to the early state, not to the Courant number.** HC is refuted: the channel
+  without the cylinder has none at `C_max` 0.61 (X1) nor at the Courant number of F, 1.17 (X2: only unconverged modes of
+  negative real part slightly above one), and F itself has none at step 100 at the same `C_max` 1.155 (X3). They are present at
+  steps 15 to 25 at the body and gone by step 100: a property of the state of the early steps near the cylinder (the start of
+  ADR 0249, whose inflow profile through the body the penalty removes in the first steps; ADR 0388 found the frozen lag map
+  raised at step 2 the same way). Which part of that state makes them is not identified.
+- **Two correctors.** The physical part of the product with two correctors is at 0.993 per step but not converged by Arnoldi
+  with 40 vectors (G4); its singular-value bound is 1.014 and the propagated perturbation decays (0.63 at step 10).
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of 0c85cfd6 (`f494-scratch/mut`) by `f494-scratch/mutate.py` (an exact text
+replacement checked to occur once), the named tests run once in release, the file restored and compared byte for byte (equal
+after each). The unmutated copy passed the fast checks first (`mut_base.log`).
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | the k-step map restores before every step | U3 (a) | failed: "the k-step map at zero is not the trajectory" |
+| M2 | the k-step difference divided by `e` | U3 (c) | failed: "U3 (c): 5.000e-1" |
+| M3 | per step with `1 / (k - 1)` | U4 | failed: 1.2116512873 against 1.1886113780 |
+| M4 | the sign of the Givens row update | U1 | failed: `hess_eigs: no convergence` |
+| M5 | `h_{j+1,j}` stored squared | U2 or U4 | both failed (U2 (i) -1.0327; U4 1.1885466) |
+
+### Tools and the defaults
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Tests run: this file in
+release (fast checks and the three records once each) and in debug (fast checks). Defaults: no library code changed.
+
+### Deviations and disclosures
+
+- The conjugate-partner test compares Ritz values bit for bit, so both members of most pairs got a true residual (twice the
+  products); the cap of six for `k > 1` therefore covers three pairs. No check depends on it (G1 to G4 read the dominant only).
+- The estimate of `C` over the cylinder in the arithmetic (about 0.9) was low (measured 1.18); it entered no limit (X2 uses the
+  measured `C_F`).
+- Not run: the workspace suite and the gate; other windows, meshes and time steps; the known-miss records.
+
+### Decision by the registered rule
+
+U1 to U4, N1, R1, R2 and G0 met (the k-step linearisation delivered and valid); G1 met; G2, G3, G4, X2 and X3 missed (known
+misses, limits intact); every mutation caught. **F-494 is partial by the rule.**
+
+### Remaining questions
+
+- **Q1. Library diagnostic** (registration Q1). Options: (a) test code only; (b) a public method. Recommendation: (a).
+- **Q2. What in the early state makes the pressure modes.** Options: (a) a follow-up that starts DFG 2D-2 from a start field
+  without flow through the cylinder (the ADR 0249 field with the solid cells set to zero and projected), and linearises one step
+  and ten steps at steps 15 to 25 again; (b) a sequence of one-step linearisations of F from step 25 to 100 to place where they
+  vanish; (c) stop here. Recommendation: (a), which also says whether the bounded form with one corrector stops from such a
+  start.
+- **Q3. The refusal of ADR 0374.** The stop of B is carried by a family of pressure modes above the cylinder that grows by 1.88
+  per step, not by the period-two pair alone; F has a weaker one (1.31, then 1.12) and runs. Recommendation: keep the refusal
+  as built until Q2 (a) is measured.
+
+### For the lead: roadmap entries
+
+**F-494: proposed status `partial`.** Proposed note:
+
+> PARTIAL (ADR 0405, 2026-11-13), test code only, no library change. From ADR 0392 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. The product of k consecutive step Jacobians of DFG 2D-2 on M2 with one PISO corrector at dt 1e-3 along the trajectory from step 15 was linearised by central finite differences of the k-step map (solves converged to 1e-12) and its outer spectrum computed by Arnoldi with 40 vectors; the linearisation is valid (the map at zero is the trajectory to the bit, linear to 3e-6, the composition of the one-step Jacobians to 2e-7 and not the power of the first, known products found to round-off, the stop at step 34 and the 200-step run reproduced). The eigenvalue per step |mu|^(1/k) of the bounded form over steps 16 to 25 is 1.881 (converged, a pressure mode above the cylinder), but the first-order forcing, which runs, also grows: 1.311 over steps 16 to 25 and 1.122 over steps 16 to 35 (converged), so the product does not separate them by one, only by size. The one-step eigenvalues above one of the first-order forcing (1.77 at step 16, 1.91 at step 20, 1.36 at step 25) are a property of the early state at the body: the channel without the cylinder has none at its Courant number 0.61 nor at the Courant number of the cylinder flow, 1.17, and the first-order forcing has none at step 100 at the same Courant number (dominant -0.971). Partial by the registered rule: known misses G2, G3 (the first-order forcing above one per step), G4 (two correctors at 0.993, not converged), X2, X3 (the Courant hypothesis refuted). Open (ADR 0405 Q2): what in the early state makes the pressure modes, by a start without flow through the cylinder.
+
+**F-482: proposed addition at the end of its note:**
+
+> ADR 0405 (2026-11-13, F-494): over ten steps along the trajectory the bounded form grows by 1.88 per step and the first-order forcing, which runs, by 1.31 (1.12 over twenty); the one-step eigenvalues above one belong to the early state at the body (none in the channel without the cylinder at the same Courant number, none at step 100).
+
+**Proposed follow-up** (number to be given by the lead). *Second-order immersed forcing: the early-state pressure modes of the single corrector.* Deps: F-494. Acceptance:
+
+> The pressure modes above the cylinder of DFG 2D-2 on M2 with one PISO corrector at dt 1e-3 (ADR 0405: one-step eigenvalues 1.77 to 1.91 at steps 16 to 20 for the first-order forcing and 0.97 at step 100 at the same Courant number; ten-step growth 1.88 per step for the bounded form, 1.31 for the first-order forcing) are traced by a registered measurement to the start state, by repeating the one-step and ten-step linearisations of ADR 0405 from a start field without flow through the cylinder (projected to be divergence-free), and the bounded form with one corrector either runs 200 steps from that start or its stop is located with the eigenvalue per step.
+
+Note:
+
+> From ADR 0405 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
