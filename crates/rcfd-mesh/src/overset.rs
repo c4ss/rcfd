@@ -670,7 +670,7 @@ pub const CONTINUOUS_CORE: f64 = 0.5;
 /// The weight of a candidate at the distance `rho` (in units of its largest extent) from the point (ADR 0396 D3):
 /// `(1 - (rho / kappa)^2)^2 / (rho^2 + eps^2)` inside the support, zero outside; its value and its slope vanish at the edge.
 pub fn continuous_weight(rho: f64) -> f64 {
-    if !(rho < CONTINUOUS_SUPPORT) {
+    if rho.is_nan() || rho >= CONTINUOUS_SUPPORT {
         return 0.0;
     }
     let q = rho / CONTINUOUS_SUPPORT;
@@ -730,7 +730,7 @@ pub fn continuous_weights(centres: &[Vec3], x: Vec3, dims: [bool; 3], omega: &[f
         let piv = (col..m)
             .max_by(|&a, &b| mat[a][col].abs().total_cmp(&mat[b][col].abs()))
             .unwrap_or(col);
-        if !(mat[piv][col].abs() > 1e-12 * scale) {
+        if mat[piv][col].is_nan() || mat[piv][col].abs() <= 1e-12 * scale {
             return err("overset continuous weights: degenerate stencil");
         }
         mat.swap(col, piv);
