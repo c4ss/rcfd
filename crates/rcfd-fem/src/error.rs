@@ -280,6 +280,16 @@ pub enum FemError {
         /// The work package that adds it.
         package: &'static str,
     },
+    /// A cell of a finite-volume mesh that the conversion to a solid mesh does not take (ADR 0413 D2): a prism, a
+    /// pyramid, a general polyhedron, or a cell of the other shape in a mesh of tetrahedra or of hexahedra.
+    UnsupportedCell {
+        /// The cell index of the source mesh.
+        cell: usize,
+        /// The shape found (`prism`, `pyramid`, `polyhedron`, or `tetrahedron in a mesh of hexahedra` and the converse).
+        shape: &'static str,
+        /// Number of faces of the cell.
+        faces: usize,
+    },
 }
 
 impl fmt::Display for FemError {
@@ -412,6 +422,11 @@ impl fmt::Display for FemError {
             } => write!(
                 f,
                 "{item} {variant} ({location}) is not supported yet: it is added by {package}"
+            ),
+            UnsupportedCell { cell, shape, faces } => write!(
+                f,
+                "cell {cell}: a {shape} ({faces} faces) is not converted to a solid element; only meshes of tetrahedra \
+                 or of hexahedra are"
             ),
         }
     }
