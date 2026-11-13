@@ -287,3 +287,140 @@ L4b. (MU1 to MU6 unchanged.)
 
 **Rule.** Unchanged. L4 is a registered check missed in its registered run, so by the rule F-474 is at most **partial**
 unless the maintainer accepts this amendment.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits above and in amendment 1. No limit was changed. Each registered run was made once, in release.
+L1 to L6 ran at f08d7df9 (`f474-scratch/run-linalg-fast.log`). L4b, F1 and H ran at fb6e43cf, the code of amendment 1
+(`run-l4b.log`, `run-f1.log`, `run-h.log`; H with `RAYON_NUM_THREADS` 4 and `F466_DIR` = `f466-scratch/runs`, 19 s). X1 to X3
+ran on a `git archive` copy of fb6e43cf (`f474-scratch/xsrc`, target `target-x`; logs `x1.log`, `x2-*.log`, `x3.log`). The
+mutations ran on a second copy (`mutsrc`, target `target-mut`, `mutate.py`, `mutations.log`).
+
+Commits: registration b50cd5cd; library and tests f08d7df9; amendment 1 002fd9f1; its code fb6e43cf (L4 renamed to an ignored
+known miss, L4b added, the F1 condition and the H1 print changed to "a step `k >= 1`", all before their runs); this addendum.
+
+### Results
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| L1 | default solve on `A3` | `(-13, 15, -5)` bit for bit; interchanges `[1]` | `(-13, 15, -5)`; `[1]` | yes |
+| L2 | opt-in on `A3` | `(1, 1, 1)` bit for bit | `(1, 1, 1)` | yes |
+| L3 | 20 x 20, opt-in residual | an interchange at `k >= 1`; `<= 1e-12` | steps 0, 2, ..., 18; opt-in 8.9e-19 (default 4.07e-3) | yes |
+| L4 | Laplacian 40 x 40: no interchange, bit-equal | interchanges empty | **`[0]`**; bit-equality not reached | **no** (`l4_..._known_miss`) |
+| L4b | the same, interchanges only at step 0, bit-equal (amendment 1) | subset of `{0}`; 0 differing | `[0]`; 0 differing | yes |
+| L5 | accessors | bit-equal, equal, as stated | yes | yes |
+| L6 | double-double dot | `== 1.0` | 1.0 | yes |
+| F1 | M2 captures, neutral without an interchange at `k >= 1` | 0 differing, same iterations | 6 of 6 systems have no interchange at all (coarsest 89 to 93 unknowns); all 6 bit-equal, same iterations | yes |
+| H0 | stop at 2951; captured `S` 3000 iterations, non-finite; default `rz` after iteration 1 `-2.006e-9` | as stated | 2951; 3000, 53 136 non-finite; `-2.006e-9` (start `+5.52e-9`; `rz <= 0` at 2616 of 3001 iterations) | yes |
+| H1 | coarsest interchanges | counted | **`S`: steps 13, 16, 17; `S0`: the same; `G` (step 2950): 14, 16, 17, 20, 21**; coarsest 24 unknowns, pivots 9.4e-10 to 2.3e-5, none guarded | located: the defect is active |
+| H2 | coarse solve relative residual | opt-in `<= 1e-12` | opt-in at most **5.3e-15** on all eleven; default **0.213** on the received vector, 0.083 to 0.86 on the ten others | yes |
+| H3 | cycle quotients and asymmetry per level | opt-in `> 0`, asymmetry `<= 1e-8` | opt-in: every quotient positive (8.8e6, 1.6e6, 2.1e5, 4.9e4, 4.0e4 on levels 0 to 4), asymmetry at most 1.2e-15; **default: negative minimum quotient on level 4 (-7.0e8, the coarse solve alone) and level 0 (-3.4e7), asymmetry 4.2e-3, 7.5e-3, 1.2e-2, 5.1e-2, 0.13 on levels 0 to 4** | yes |
+| H4 | operators and prolongators against double-double | Galerkin `<= 1e-12`, symmetry `<= 1e-12` | Galerkin at most 5.8e-16, symmetry at most 5.4e-16; every `v^T A_l v` positive (min 1.3e-5 to 3.1e-5 per unit `v^T v`); min column norms of `P` 1.09, 1.15, 1.22, 0.13; coarsest Cholesky pivots 2.6e-10 to 2.3e-5, all positive | yes |
+| H5 | opt-in AMG-CG on `S` | converged, `rz > 0`, `<= 100` | **10 iterations**, converged, every `rz > 0` | yes |
+| H6 | opt-in AMG-CG on `S0` | the same | **10** (default 406), every `rz > 0` | yes |
+| H7 | against IC-CG | `<= 1e-4` | 4.1e-9 (IC-CG 448 iterations) | yes |
+
+**The cause, located.** The hierarchy itself is sound: every operator is symmetric to rounding, positive definite (dd
+quotients, Cholesky of the coarsest), the Galerkin products agree with a double-double product to 6e-16, and no prolongator
+column is zero (H4). The only defective part is the dense coarsest solve. On the coarsest operator of the stopping system
+(24 unknowns) partial pivoting interchanges rows at steps 13, 16 and 17 (H1). The default interleaved solve then misses by a
+relative residual of 0.21 (H2). That makes the coarse correction non-symmetric (asymmetry 0.13 at level 4, falling to
+4.2e-3 at level 0) and indefinite (negative quotients at level 4 and, through the W-cycle, at level 0; H3), so
+`r^T M^-1 r < 0` (H0). With the interchanges applied first (the opt-in), the cycle is symmetric to 1e-15 and positive on every
+level, and AMG-CG converges in 10 iterations on the stopping system and on corrector 0 (406 with the default). This is the
+F-471 defect (ADR 0305 question 1), and nothing else was found.
+
+Also seen: the healthy system `G` of step 2950 has interchanges at `k >= 1` too, so its default coarse solve is also wrong,
+yet CG converged in 10 iterations. The defect is present in solves that look healthy. Breakdown happens only when the wrong
+correction happens to make `r^T z` negative.
+
+### The default switch (X1 to X3, scratch copy only)
+
+| Id | Measured |
+| --- | --- |
+| X1 (default, instrumented `baseline_hashes`) | Only two cases build an AMG: `kepsilon_channel` (60 factorisations, coarsest 56 unknowns) and `cavity-coupled` (59, the Schur complement, coarsest 71). **No interchange in any of them.** No other baseline case reaches an AMG. |
+| X2 (`Default` with the flag `true`) | `baseline_hashes` **3 passed, 1 ignored: no registered hash moves**; `case_hashes_w48u` passed; `rcfd-linalg` all test files pass except this ADR's **L1**, which pins the old default (expected); `rcfd-fv --lib` 104 passed; `immersed_bounded_stop_f466` fast S1 to S7, `consistent_defaults_f301` (6), `consistent_periodic_defaults_f367` (1), `amg_definiteness_f474` F1 passed |
+| X3 (ADR 0363 H2 under the switch) | **T no longer stops**: no non-finite pressure up to step 2960, every solve of steps 2949 to 2960 10 iterations; the Courant numbers differ from ADR 0363 H1's from step 2917 on (42 of 60 steps), so the default T bounded run of ADR 0268 R1 / ADR 0363 H1 moves; the record H2 fails ("M2: H2 did not stop") |
+
+So a default switch moves **no registered hash** (none of the baseline cases interchanges at all). It moves the fluid results of
+any AMG pressure solve whose coarsest factorisation interchanges at a step `k >= 1`. Here that is the T bounded run (the stop
+at 2951 goes away, and the results differ from step 2917 on). It would also change what ADR 0363's records H1, H2 and H3a
+assert (the stop and the single IC repeat). Not run under the switch: the other AMG-using test files of `rcfd-fv` and `rcfd-api`
+(about 24, listed by grep in the registration; several take 15 to 40 minutes). The lead's gate would run them.
+
+### Mutations
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| MU1 | opt-in branch interleaved | L2 | failed: `z = [-13, 15, -5]` |
+| MU2 | `Default` true | L1 | failed: `z = [1, 1, 1]` |
+| MU3 | `coarse_interchanges` empty | L3 | failed: "no interchange at a step k >= 1" |
+| MU4 | `cycle_at` from `l + 1` | L5 | failed: "cycle_at(0) differs from apply" |
+| MU5 | dd sum without its error term | L6 | failed |
+| MU6 | interchanges after the forward substitution | L2 | failed: `z = [-24.25, 26.25, -10]` |
+| MU7 | opt-in skips the step-0 interchange (amendment 1) | L4b | failed: "differing values" |
+
+Each file was restored and compared byte for byte (equal every time).
+
+### Tools and the defaults
+
+- `cargo fmt -p rcfd-linalg --check`, `cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-linalg -p rcfd-fv
+  --all-targets -- -D warnings`: clean.
+- On the branch, release: `baseline_hashes` 3 passed, 1 ignored; `cargo test -p rcfd-linalg` all passed (L4 ignored as the
+  known miss); `rcfd-fv --lib` 104 passed; `immersed_bounded_stop_f466` 7 passed (4 ignored); `amg_definiteness_f474` F1
+  passed.
+- Shared solver file changed: `crates/rcfd-linalg/src/amg.rs` only. New lines 30-33 (the field), 45 (its default), 70
+  (`DenseLu::interchanges_first`), 74 (`new`'s parameter), 111-116 (the struct literal), 122-139 (the opt-in branch of
+  `solve`), 354-357 (the call in `Amg::new`), 449-479 (the accessors). The default branch of `DenseLu::solve` is the old loop,
+  unchanged. No `rcfd-fv` or `rcfd-api` source changed.
+
+### Deviations and disclosures
+
+- L4 missed its registered limit (the set-up assumed that the coarsest Galerkin operator never interchanges). It is kept as
+  an ignored `*_known_miss`, and L4b was registered by amendment 1 before its run.
+- `cargo test -p rcfd-linalg` in X2 stopped after the first failing test binary (L1). It was run again with `--no-fail-fast`
+  to reach the remaining files. That completes the registered run and does not repeat a result.
+- F1 turned out to be a check without interchanges (the M2 coarsest levels interchange nothing), so on M2 it shows the
+  opt-in neutral where it must be. It does not test a case with interchanges only at step 0; L4b does.
+- The `rz <= 0` guard in `cg` was not added (Q4 (a)): the first branch was reached.
+
+### Decision by the registered rule
+
+- **F-474**: the cause was located by the registered measurements (H1 to H4: the coarsest dense LU order defect, interchanges
+  at steps 13, 16 and 17, coarse residual 0.21, a non-symmetric, indefinite cycle, everything else sound). The opt-in repair
+  holds H2, H3, H5, H6 and H7. AMG-CG converges on that system in 10 iterations, every `rz > 0`, every registered hash
+  unchanged (with the opt-in off, and also with the default switched, X2). All mutations were caught. But **L4 missed its
+  registered limit in its registered run**, so by the rule the status is **partial** unless the maintainer accepts
+  amendment 1.
+- **F-471**: **partial**, as registered. The defect is shown (L1, H1, H2), the corrected order is built and solves to 5e-15 and
+  9e-19, and the baseline set is recorded (X1: no interchange) with the hashes of a switch (X2: none moves). The default solve
+  is not changed, and the full `rcfd-fv`/`rcfd-api` suites were not run under the switch.
+
+### Remaining questions
+
+- **Q1. Switch the default** (`coarse_lu_interchanges_first: true`, or drop the flag and fix `DenseLu::solve`). Options: (a)
+  keep the opt-in; (b) switch. Recommendation **(b)**: the default solve is wrong whenever a coarsest factorisation
+  interchanges at a step `k >= 1`, which happens silently even in solves that converge (`G`). No registered hash moves (X2).
+  This is the maintainer's decision. Before switching, the gate should run the AMG-using test files. ADR 0363's records H1, H2
+  and H3a assert the stop at 2951, and this ADR's L1 asserts the old default, so they would need new ignored records or an
+  amendment. They are not edited here.
+- **Q2. ADR 0363's opt-in `pressure_ic_fallback`.** With the switch it is not needed on T. Recommendation: keep it as a safety
+  net (it costs nothing on finite solves).
+- **Q3. The `rz <= 0` guard in `cg`** (ADR 0363 Q6). Options: (a) a separate item; (b) drop it. Recommendation (a), low
+  priority: it would have stopped this solve 800 iterations earlier with a located message, but it changes solves that pass
+  through `rz <= 0` and still converge, so it needs the hash check.
+
+### For the lead: roadmap entries
+
+**F-474: proposed status `partial`** (Rule I: L4 missed in its registered run, corrected by amendment 1; `done` if the
+maintainer accepts the amendment). Proposed note:
+
+> PARTIAL (ADR 0369, 2026-11-12). From ADR 0363 Q4/Q6. Cause located on the stopping system of ADR 0363 (T, bounded forcing, step 2951 corrector 1, rebuilt from the state of step 2940): it is the coarsest dense LU order defect of F-471. The coarsest operator (24 unknowns) interchanges rows at steps 13, 16 and 17; the default interleaved DenseLu::solve misses by a relative residual of 0.21; the cycle becomes non-symmetric (0.13 at the coarsest level, 4.2e-3 at the finest) and indefinite (negative Rayleigh quotients at levels 4 and 0), hence r^T M^-1 r < 0. Everything else is sound against double-double: Galerkin products to 6e-16, every operator symmetric to 5e-16 and positive definite, no zero prolongator column. Delivered (opt-in, defaults bit-identical, baseline_hashes pass): AmgSettings::coarse_lu_interchanges_first applies every interchange before the forward substitution; with it the coarse solve is exact to 5e-15, the cycle symmetric to 1e-15 and positive on every level, and AMG-CG converges on the stopping system in 10 iterations (corrector 0: 10 against 406), agreeing with IC-CG to 4e-9; read-only accessors Amg::coarse_interchanges, level_operator, level_prolongator, cycle_at, coarse_solve. With the default switched on a scratch copy no registered hash moves (kepsilon_channel and cavity-coupled, the only baseline cases with an AMG, never interchange), T no longer stops at 2951, and its run differs from ADR 0363 H1 from step 2917 on. Seven mutations caught. Partial by Rule I: the check L4 missed (the Laplacian's coarsest LU interchanges at step 0, harmless to the order) and was corrected by amendment 1. Open: switching the default (maintainer; recommended).
+
+**F-471: proposed status `partial`.** Proposed note:
+
+> PARTIAL (ADR 0369, 2026-11-12, with F-474). The defect is shown in rcfd_linalg::amg DenseLu: whole-row swaps in the factorisation with interleaved interchanges in the solve give (-13, 15, -5) for (1, 1, 1) on a 3 x 3 SPD matrix, a relative residual of 4e-3 on a 20 x 20 SPD tridiagonal, and 0.21 on the coarsest operator of the T pressure system of ADR 0363, where it is the cause of the AMG-CG breakdown (F-474). Interchanges at step 0 alone are harmless. On the baseline set only kepsilon_channel (coarsest 56) and cavity-coupled (Schur, coarsest 71) reach an AMG, and neither interchanges (scratch instrumentation). The corrected order is built as the opt-in AmgSettings::coarse_lu_interchanges_first (5e-15 and 9e-19 relative residual). With it as the default on a scratch copy, baseline_hashes, case_hashes_w48u, rcfd-linalg (except ADR 0369 L1, which pins the old default), rcfd-fv lib and the defaults tests f301/f367 pass, so no registered hash moves; the T bounded run of ADR 0268/0363 changes (no stop, different from step 2917). Remaining (NEEDS THE USER): switch the default and run the AMG-using rcfd-fv/rcfd-api test files in the gate; ADR 0363's records H1, H2 and H3a and ADR 0369 L1 assert the old behaviour.
+
+**F-466 / F-354: no change of status;** proposed addition to F-466's note:
+
+> ADR 0369 (2026-11-12, F-474): the AMG breakdown at step 2951 is the coarsest dense LU order defect (F-471); with AmgSettings::coarse_lu_interchanges_first the stopping system converges in 10 iterations and T does not stop.
