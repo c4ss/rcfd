@@ -278,3 +278,18 @@ program's or the mock's). The participant advances the incompressible PISO/PIMPL
 scalars or other models, no moving-mesh options beyond the smoothing of D1, no restart. The initial wall is a list of
 numbers in the case. The force is `FlowWall`'s (prescribed wall-pressure gradient), with no key. No authentication (as the
 service). The model problem and the mock of ADR 0256 and ADR 0345, with their limits.
+
+## Amendment 1 (2026-11-13, while writing the tests, before any run of a check)
+
+Two set-up errors of the registered table, found by reading while writing the tests; no check had been run.
+
+- **E1's map settings.** The CWs nodes lie on the line `x = 0, z = 0.05`, and the 27 wall points of `xmin` at `z = 0,
+  0.05, 0.1`, so a third of the points lie `0.05` m from the structure. `MapSettings::projection(1e-9)` would refuse them
+  (ADR 0263's `Unmapped::Refuse`) and E1 could not run. Corrected: `MapSettings::projection(0.06)` (the largest distance
+  0.05 plus a fifth). The limits of E1 are unchanged.
+- **K1's turbulence case.** `turbulence.model = "k_omega_sst"` may be refused by the simulation builder for reasons of its
+  own (inlet and wall conditions) before the participant's refusal is reached, so the check would not see the refusal
+  "by name". Corrected: `turbulence.model = "smagorinsky"` with `solver.algorithm = "piso"` (an algebraic transient model
+  that the builder accepts on CWc); the error must name "a turbulence model" at the path `cosim`.
+
+MU6 (the refusal of a turbulence model removed) keeps K1 as its test.
