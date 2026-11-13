@@ -413,7 +413,9 @@ impl Elimination<'_> {
                 .expect("mesh unknown");
             format!("node {node} component {component} (sine part)")
         } else {
-            format!("reference unknown {}", i - self.n_mesh)
+            // The reference unknowns follow the sine part in a doubled harmonic problem (ADR 0395).
+            let base = if self.sine { 2 * self.n_mesh } else { self.n_mesh };
+            format!("reference unknown {}", i - base)
         }
     }
 
@@ -717,8 +719,11 @@ fn cyclic_rows(
 /// cos/sin pair `a_H = R (cos theta a_L - sin theta b_L)`, `b_H = R (sin theta a_L + cos theta b_L)`, `theta = 2 pi k / N`,
 /// over the unknowns `x = (a, b)` (the sine part `b` at offset `n`, the number of mesh unknowns) for `0 < 2 k < N`, and
 /// `a_H = -R a_L` over `a` alone for `2 k = N`. The prescribed rows and the linear constraints act on both parts (the same
-/// constraint in every sector); every value must be zero. A rigid set is refused; `harmonic = 0` and a harmonic above `N /
-/// 2` are refused (`k = 0` is [`transformation`]). [`Transformation::n_mesh`] is the length of `x`.
+/// constraint in every sector); every value must be zero. A rigid set acts on each part with its own six reference unknowns
+/// (ADR 0395): after the (doubled) mesh unknowns, per rigid set in constraint order six for the cosine part and, for a
+/// doubled harmonic, six for the sine part; [`Transformation::references`] lists the set once per part, the cosine part
+/// first. `harmonic = 0` and a harmonic above `N / 2` are refused (`k = 0` is [`transformation`]).
+/// [`Transformation::n_mesh`] is the length of the (doubled) mesh part of `x`.
 pub fn harmonic_transformation(
     model: &SolidModel,
     prescribed: &[Prescribed],
@@ -748,7 +753,18 @@ pub fn harmonic_transformation(
         (-1.0, 0.0)
     };
     let copies: &[usize] = if doubled { &[0, n] } else { &[0] };
-    let nn = n * copies.len();
+    let n_mesh = n * copies.len();
+    // The reference unknowns of the rigid sets, one block of six per part (ADR 0395).
+    let mut references = Vec::new();
+    let mut nn = n_mesh;
+    for (i, con) in model.constraints().iter().enumerate() {
+        if let Constraint::RigidSet { .. } = con {
+            for _ in copies {
+                references.push((i, nn));
+                nn += REFERENCE_UNKNOWNS;
+            }
+        }
+    }
     let mut rows: Vec<Row> = Vec::new();
     for &off in copies {
         for &(eq, v) in &fixed {
@@ -802,13 +818,11 @@ pub fn harmonic_transformation(
                     });
                 }
             }
-            Constraint::RigidSet { set, .. } => {
-                return Err(FemError::NotYetSupported {
-                    item: "constraint",
-                    variant: con.name(),
-                    location: format!("constraint {i}, node set '{set}', with harmonic index {harmonic}"),
-                    package: "a follow-up of ADR 0386 (rigid sets in a harmonic analysis)",
-                });
+            Constraint::RigidSet { set, reference } => {
+                let offsets: Vec<usize> = references.iter().filter(|r| r.0 == i).map(|r| r.1).collect();
+                for (&off, &r0) in copies.iter().zip(&offsets) {
+                    rows.extend(rigid_set_rows(model, i, set, *reference, off, r0)?);
+                }
             }
             Constraint::Cyclic { .. } => {
                 rows.extend(cyclic_rows(model, i, &bd, c, s, doubled.then_some(n))?);
@@ -816,7 +830,59 @@ pub fn harmonic_transformation(
             _ => {}
         }
     }
-    eliminate(model, n, nn, nn, Vec::new(), rows, doubled)
+    eliminate(model, n, nn, n_mesh, references, rows, doubled)
+}
+
+/// The rows `u_c - t_c - (w x d)_c = 0` of rigid set `constraint` (the rows of [`transformation`], ADR 0296) on the mesh
+/// unknowns at offset `mesh_offset` and the reference unknowns from `reference_offset` (one part of a harmonic problem, ADR
+/// 0395).
+fn rigid_set_rows(
+    model: &SolidModel,
+    constraint: usize,
+    set: &str,
+    reference: Vec3,
+    mesh_offset: usize,
+    reference_offset: usize,
+) -> Result<Vec<Row>> {
+    let dofs = model.dof_map();
+    let mesh = model.mesh();
+    let nodes = mesh.node_set(set).ok_or_else(|| FemError::UnknownSet {
+        kind: SetKind::Node,
+        name: set.to_string(),
+    })?;
+    let (t0, w0) = (reference_offset, reference_offset + 3);
+    let mut rows = Vec::new();
+    for &node in nodes {
+        let x = mesh.nodes()[node];
+        let dv = [x[0] - reference[0], x[1] - reference[1], x[2] - reference[2]];
+        for comp in 0..3 {
+            let eq = dofs.equation(node, comp).ok_or(FemError::MissingComponent {
+                role: "rigid set",
+                node,
+                component: comp,
+                available: dofs.components(node),
+            })?;
+            let (j, k) = ((comp + 1) % 3, (comp + 2) % 3);
+            let mut terms = vec![(mesh_offset + eq, 1.0), (t0 + comp, -1.0)];
+            if dv[k] != 0.0 {
+                terms.push((w0 + j, -dv[k]));
+            }
+            if dv[j] != 0.0 {
+                terms.push((w0 + k, dv[j]));
+            }
+            rows.push(Row {
+                origin: RowOrigin::RigidSet {
+                    constraint,
+                    node,
+                    component: comp,
+                },
+                terms,
+                value: 0.0,
+                designated: mesh_offset + eq,
+            });
+        }
+    }
+    Ok(rows)
 }
 
 /// Gauss-Jordan elimination of `rows` over `nn` unknowns (`n` mesh unknowns named by the model, the sine part of a doubled
