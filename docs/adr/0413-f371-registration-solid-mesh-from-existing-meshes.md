@@ -280,3 +280,92 @@ for a diagonal third column the sign is kept as well). Whether some element inve
 - M7 (split from the largest node index) is an **equivalent mutant**: the diagonal from the largest corner to its opposite is the
   same main diagonal as from the smallest, when the largest is opposite the smallest (true on the lexicographic boxes, where
   every hexahedron's largest node is the corner opposite its smallest); it is run and recorded as not caught if so.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/convert.rs` (new content of the one-line stub), `crates/rcfd-fem/src/error.rs` (the variant
+`UnsupportedCell` and its `Display` arm appended, nothing else changed), new test file `crates/rcfd-fem/tests/sb_convert.rs`
+(8 tests, 0.13 s together in release). The registered run was made once (`f371-scratch/run1.log`), on the code commit, release
+profile, `--test-threads=1`.
+
+| id | check | limit | measured | met |
+| --- | --- | --- | --- | --- |
+| C1 | counts and coordinates of B, BG, AQ, AF | exact | 120/60, 120/60, 300/144, 864/384 nodes/elements, coordinates bit-equal, one Hex8 block | yes |
+| C2 | B, BG volume against 6; per element against its cell | `1e-12` | `1.0e-15`, `5.9e-16`; per element `5.6e-16`, `7.1e-16` | yes |
+| C3 | AQ, AF against `pi (b^2 - a^2) h / 4` and `pi (b^2 - a^2) h` | `1e-3` | `7.1379e-4` both (estimate `7.138e-4`) | yes |
+| C3b | AQ, AF against the chord closed form; per element against its cell | `1e-12` | `1.3e-15`, `3.2e-15`; per element `2.8e-15`, `2.2e-15` | yes |
+| C4 | set names, faces per set, patch area (and closed form) | `1e-12` | max `4.4e-16` (B, BG, T all routes), `2.2e-16` (AQ), `1.9e-16` (AF) | yes |
+| C5 | area vector of every face against the source's | `1e-12` | max `1.1e-15` (B, BG), `1.8e-15` (AQ), `2.2e-15` (AF), `1.1e-16` (T, both routes, against the triangles and against `to_mesh`) | yes |
+| C6 | T: nodes and elements of the `TetMesh` (136, 382), both routes; volume against 6 | exact; `1e-12` | equal; `0` (from_tet_mesh), `<= 1e-12` (route 2, asserted, not printed) | yes |
+| C7 | prism, pyramid, hexagonal prism, mixed | exact | `UnsupportedCell` cell 0 `prism`, cell 0 `pyramid`, cell 0 `polyhedron` (8 faces), cell 1 `hexahedron in a mesh of tetrahedra`; messages name the cell | yes |
+| C8 | CQ radius of every projected node, k = 1, 2, 4, 8 | `1e-14` | `4.4e-16`, `2.2e-16`, `4.4e-16`, `4.4e-16` (34, 116, 424, 1616 nodes) | yes |
+| C9 | CQ observed order, pairs (1,2), (2,4), (4,8) | `>= 3` | `3.995`, `3.999`, `3.9997` (errors `4.93e-5`, `3.09e-6`, `1.93e-7`, `1.21e-8`; estimate 4) | yes |
+| C10 | CQ accepted at every level, `24 k^3` elements | accepted | 24, 192, 1536, 12288 Tet10, none refused | yes |
+| C11 | T: the two routes, same node sets, volumes | `1e-12` | equal sets, `1.7e-16` | yes |
+| C12 | AQ zone `half` as an element set | exact | elements `0..72` | yes |
+| N1 | CQ unprojected order | `[1.9, 2.1]` | `1.9917`, `1.9979`, `1.9995` (estimate `1.992`, `1.998`, `1.9995`) | yes |
+| N2 | CQ unprojected against the chord closed form | `1e-12` | `5.8e-16` to `1.9e-14` | yes |
+| N3 | (record only, amendment 1) radial shift `-0.6` of the inner mid-edge nodes | none | refused: element 1 inverted, `det J = -0.264` at local node 0 | record |
+| N3b | a mid-edge node moved `0.4` of its edge | refused, `jacobian < 0`, at the end `b` | element 0, `det J = -0.459` at local node 1, which is the end `b` | yes |
+| N4 | renumbered two-hexahedron box | refused naming a hexahedron | `split_hexahedra`: element 1, face through nodes 1, 4, 7 | yes |
+
+Mutations (scratch copy `f371-scratch/mut`, script `f371-scratch/mutate.py`, log `f371-scratch/mutations.log`, one at a time):
+
+| id | mutation | caught by |
+| --- | --- | --- |
+| M1 | tetrahedron order `[p, q, s, t]` | C6 route 2 (`from_mesh` of `to_mesh` refused as inverted) |
+| M2 | `n1`, `n3` exchanged | C1/C2 (B, AQ refused as inverted), C10, N3b |
+| M3 | wrong local face of a boundary face | C4/C5 (face not in the patch) in B, AQ, T; C10 |
+| M4 | prism case removed | C7 (`polyhedron` instead of `prism`) |
+| M5 | `onto_cylinder` returns `p` | C8 (`3.8e-2`); C9 would follow |
+| M6 | no orientation swap in the split | C10 (split refused as inverted), N4 (its conforming box refused) |
+| M7 | split from the largest node index | N4 (the renumbered pair becomes conforming, so the expected refusal does not come) |
+| M8 | zones not converted | C12 |
+
+All eight caught. **Deviation from amendment 1:** M7 was expected to be an equivalent mutant; it is not on N4's renumbered mesh
+(there the largest node of a hexahedron is not opposite its smallest), and N4 catches it. On the lexicographic meshes it is
+equivalent, as stated.
+
+Other checks: `cargo test -p rcfd-fem --release --lib --test sb_model --test si_scaffold --test sb_elements` (tests that match
+`FemError` values or build the meshes `error.rs` serves) pass: 1, 8, 11 and 10 passed (11 ignored records). `cargo fmt -p
+rcfd-fem --check` clean after one rustfmt pass of the test file (layout only, committed separately); `cargo clippy -p rcfd-fem
+--all-targets -- -D warnings` clean. No file of `rcfd-mesh` or of any crate `rcfd-api` depends on was changed (`rcfd-api` does
+not depend on `rcfd-fem`), so `baseline_hashes` cannot be affected and was not run; no hash table, golden file or existing test
+was edited; this package retires no refusal row of an existing test.
+
+**Not run:** the whole workspace suite (the lead's gate); the curved route through Hex20 (L1).
+
+**Decision by the registered rule: done** (pending the maintainer's acceptance). C1 to C9 (every clause of the acceptance) met,
+with margins of at least 300 on the rounding limits, 1.4 on the chord limit and about 1.0 on the order; C10 to C12, N1, N2, N3b
+and N4 as stated; every mutation caught.
+
+### Observations
+
+1. The order of the projected quadratic tetrahedra is 4 to three digits from the coarsest level (22.5 degree chords) on, as
+   arithmetic 3 predicted: the volume error is that of the P2 interpolant of the cylinder walls and of the planar faces'
+   quadratic arcs; the interior mid-edge nodes do not enter.
+2. The registered N3 (radial shift `-0.6`) was refused as well (element 1, local node 0); amendment 1 only removed it from the
+   rule because that could not be known beforehand.
+
+### Remaining questions
+
+1. **Prisms and mixed meshes** (inflation layers on a blade, L2). Options: (a) keep refusing; (b) convert a mixed tetrahedron
+   and hexahedron mesh to two blocks with a cell-to-element map; (c) add a Wedge6 element kind and convert prism layers.
+   Recommendation: (a) now; (c) as a follow-up once the blade mesh of ADR 0288 needs layers (splitting wall prisms into
+   tetrahedra gives poor elements).
+2. **Split of an arbitrarily numbered hexahedral mesh** (L4). Options: (a) refuse as now; (b) cut each face along the diagonal
+   through its smallest node and decompose each hexahedron by the configuration of its six diagonals, with an interior Steiner
+   point where no decomposition exists (a published case analysis exists; it was not read here and would have to be cited).
+   Recommendation: (a): the structured generators the fan uses pass, and Hex20 through `upgrade_to_hex20_mapped` avoids the split.
+3. **Curved Hex20** (L1). Options: (a) a short follow-up checking the projection (or the mapped upgrade) on the quarter annulus
+   with Hex20 and the same order limit; (b) leave it to ADR 0280. Recommendation: (a), size S.
+
+## For the lead: roadmap entries
+
+F-371: proposed status **done**. Note (replaces the current note):
+
+> Structural solver, basic tier (plan ADR 0270, 2026-11-12). ADR 0413, 2026-11-13 (registration of stub ADR 0272): rcfd_fem::convert (in rcfd-fem, which depends on rcfd-mesh, not the converse) builds a SolidMesh from an rcfd_mesh::Mesh of all tetrahedra or all hexahedra (element node order recovered topologically from the face loops, nodes and elements numbered as points and cells) and from a TetMesh (cells as stored, surface sets per tag named as to_mesh names its patches), with one surface set and one node set per patch, element sets from cell zones and the sets all; prisms, pyramids, other polyhedra and mixed meshes are refused naming the cell (FemError::UnsupportedCell). Also split_hexahedra (Kuhn split from the smallest node, conformity checked, a non-conforming numbering refused naming the hexahedron), project_mid_edge_nodes (rebuild through SolidMesh::new and add_block, an inverted element refused) and onto_cylinder. On box_mesh (uniform and graded), the quarter and the full annulus (24 and 96 chords) and the tetrahedral mesher's box (two routes): counts and coordinates of the source exact, volumes within 3.2e-15 of the source's cells and of the chord closed form and within 7.14e-4 of the annulus closed form (limit 1e-3, from the chord error), patch areas within 4.4e-16 and face area vectors within 2.2e-15 of the source's (limits 1e-12); prism, pyramid and hexagonal prism refused naming cell 0. Quarter annulus split into Tet10 with the wall mid-edge nodes projected: radius within 4.4e-16 (limit 1e-14), volume error order 3.995, 3.999, 4.000 over four levels (limit 3; without the projection 1.99, 2.00, 2.00). Eight mutations caught.
+
+Follow-up (number by the lead): "Curved quadratic hexahedra on the quarter annulus", deps F-371, F-389, size S. Acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The quarter annulus of ADR 0413 converted by rcfd_fem::convert::from_mesh and upgraded to Hex20 with the wall mid-edge nodes placed on the cylinders (by upgrade_to_hex20_mapped or project_mid_edge_nodes) has its projected nodes on their radius within 1e-14 and its volume error falling at an observed order of at least 3 over four levels; the areas of its inner and outer surface sets converge to pi a h / 2 and pi b h / 2 at an observed order of at least 3.
