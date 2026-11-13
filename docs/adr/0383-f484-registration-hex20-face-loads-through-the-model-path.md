@@ -174,3 +174,85 @@ retired by this item.
 - Mixed surface sets (Hex20 faces with faces of other kinds) are not checked separately; each face takes its own arm.
 - The area of a curved 8-node face is the 3 x 3 Gauss approximation (as `hex20::face_area`), not an exact area.
 - No solve is run: the acceptance is about the load vector and the areas.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/loads.rs` (the `8 =>` arms of `face_shape_functions` and `face_rule`, the refusal text "faces of 3,
+4, 6 or 8 nodes are supported", doc comments), `crates/rcfd-fem/src/mesh.rs` (the `8 =>` arm of `face_tangents`, lines 837 to
+853; the doc comment of `face_area`); tests `crates/rcfd-fem/tests/si_hex20_model_loads.rs`. `add_face_load`, the 3, 4 and 6
+arms and every other line of both files are unchanged. All runs in the release profile.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 pressure, B and C, six sets each: differing entries | 0 | 0 in all 12 | yes |
+| A2 traction, B and C, six sets each: differing entries | 0 | 0 in all 12 | yes |
+| A3 `face_area` vs `hex20::face_area`, B (48 faces), C (36 faces) | <= 1e-15 | 0 and 0 | yes |
+| A4 `face_area_vector` vs the 3 x 3 Gauss vector, B, C | <= 1e-15 | 0 and 0 | yes |
+| A5 no panic on 84 faces of 8 nodes | as stated | completed | yes |
+| A6 Quad4, Tri3, Tri6 loads vs the transcription of e05871f6 | 0 | 0 in all 36 | yes |
+| A6c control: A6 and A7 on an archive copy of e05871f6 | 0 | 0 in all 39 (A1 to A5 there refuse or panic, as before) | yes |
+| A7 Quad4 (24), Tri3 (96), Tri6 (96 faces): areas and area vectors | 0 | 0, 0, 0 | yes |
+| A8 `cargo test -p rcfd-api --release --test baseline_hashes` | passes | 3 passed, 1 ignored (pre-existing), 0 failed | yes |
+| K1 F, area vector vs diagonals / area | <= 1e-14 | 3.0e-16 / 4.0e-16 | yes |
+| K2a total force of a set, B / C (max over six sets) | <= 1e-13 | 1.9e-16 / 1.9e-16 | yes |
+| K2b closed boundary of B | <= 1e-13 | 2.0e-17 | yes |
+| N1 one ulp seen | 1 | 1 | yes |
+| N2 count 5 refused, "a face of 5 nodes" | as stated | refused by both, message as stated | yes |
+| N3 nodes of a set without force, B and C | 0 | 0 in all 12 | yes |
+| S1 other tests of rcfd-fem | 0 failed except the predicted L3 | 29 binaries, 163 passed, 33 ignored, 1 failed: `si_hex20::l1_to_l3_face_loads_and_uniaxial_tension`, only its L3 row ("L3 model pressure on a Hex20 face refused: accepted") | yes (as registered) |
+
+### Mutations (scratch copies, `w49i-work/f484-scratch`)
+
+| Mutation | Caught by |
+|---|---|
+| M1 face derivatives of nodes 4 and 5 swapped (loads.rs) | A1, A2 (all 24), K2a (all 12) |
+| M2 face rule order `i` outer (loads.rs) | A1, A2 (all 24): the bit comparison sees a change of summation order |
+| M3 2 x 2 rule in the 8-node arm (mesh.rs) | A3 C (5.1e-5), A4 C (2.1e-15); not on B (flat faces) |
+| M4 `xu`, `xv` exchanged (mesh.rs) | A4 B and C, K1, K2a (all 12) |
+| M5 `G` of the Quad4 arm times `1 + 1e-15` (mesh.rs) | A7 Quad4 (82 values) |
+
+M3 is caught by A4 only by roundoff (2.1e-15): the 2 x 2 rule is exact to degree 3 per direction, the degree of `x_u x x_v`
+(D2), so the area vector itself is still exact; A3 (the area of a curved face) carries that catch.
+
+### After the tests
+
+`cargo fmt -p rcfd-fem --check`: clean (the new test file was formatted with rustfmt before the commit). `cargo clippy -p
+rcfd-fem --all-targets -- -D warnings`: clean.
+
+### Deviations and disclosures
+
+- The new test file was run once without `--nocapture` (all four tests passed) and then once with `--nocapture` to read the
+  printed numbers; the tests are deterministic and nothing was changed between the two runs.
+- The mutation script failed twice on a Python version issue before any mutated build; no mutated run was made before the
+  script worked.
+
+### Not run
+
+The workspace gate (the lead's). rcfd-post and rcfd-io tests (not touched; the only change is in rcfd-fem and no default path
+reaches the new arms: an 8-node face exists only on Hex20 meshes, where the old code refused or panicked).
+
+### Decision by the registered rule
+
+Every check of A, K and N met and S1 as predicted: **done**, with one step left to the maintainer (below).
+
+### Remaining questions
+
+1. `si_hex20::l1_to_l3_face_loads_and_uniaxial_tension` (ADR 0292) now fails on L3, the refusal this item retires; it is not in
+   `si_scaffold.rs`, so the standing permission does not cover it and it was not edited. Options: (a) mark it `#[ignore =
+   "record of ADR 0292: model-path pressure on Hex20 refused until ADR 0383"]` and add a copy `..._after_landed` without L3
+   (L1 and L2 still checked; the pattern of `si_scaffold.rs`); (b) leave it failing. Recommendation (a): needs the maintainer.
+2. `Load` has no traction-field variant; the model path covers uniform pressure and traction only. Options: (a) leave
+   `hex20::traction_field_loads` as per-node forces; (b) a follow-up adds a field load to `Load` for every face kind.
+   Recommendation (a) until a case needs it.
+
+## For the lead: roadmap entries
+
+Proposed status of F-484: done (pending the maintainer's step for the ADR 0292 L3 record).
+
+> ADR 0383, 2026-11-13: Load::Pressure and Load::Traction on Hex20 faces go through nodal_load_vector, and SolidMesh::face_area and face_area_vector take 8-node faces (8-node arms in loads::face_shape_functions, loads::face_rule and SolidMesh::face_tangents delegating to hex20). Met: per-node forces equal hex20::pressure_loads and traction_loads bit for bit on flat and curved meshes (24 of 24 sets), face_area and face_area_vector equal hex20::face_area and the 3 x 3 Gauss vector exactly (84 faces), Tri3, Quad4 and Tri6 loads and areas bit-identical to a transcription of the previous code (checked also on the previous code), total force 2e-16, baseline hashes unchanged; five mutations caught. si_hex20 l1_to_l3 fails on its L3 row (the retired refusal): recorded as needing the maintainer (ignore as record of ADR 0292 and add a copy without L3).
+
+Note for F-389:
+
+> ADR 0383, 2026-11-13: the model-path refusal of Hex20 face loads and the panic of SolidMesh::face_area on an 8-node face are retired (F-484).
