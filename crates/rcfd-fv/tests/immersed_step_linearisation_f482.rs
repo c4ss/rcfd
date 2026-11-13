@@ -1242,3 +1242,256 @@ fn record_l_smaller_step_two_correctors_first_order() {
     println!("L: wall time {:.1} s", t0.elapsed().as_secs_f64());
     assert!(misses.is_empty(), "record L: {misses:?}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Record M (ADR 0392 amendment 1): the solid share of the modes (S1), the fluid part of the step (P3), the pressure in the run
+// (P2)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// The state entries of the solid cells (`u_n`, `u_{n-1}`, `p`); the face fluxes are not solid entries.
+fn solid_entries(lay: &Layout, fluid: &[bool]) -> Vec<bool> {
+    let nk = lay.comps.len();
+    let b = lay.blocks();
+    let mut m = vec![false; lay.len()];
+    for c in (0..lay.nc).filter(|&c| !fluid[c]) {
+        for j in 0..nk {
+            m[b[0].start + c * nk + j] = true;
+            m[b[1].start + c * nk + j] = true;
+        }
+        m[b[2].start + c] = true;
+    }
+    m
+}
+
+fn masked(v: &[f64], solid: &[bool]) -> Vec<f64> {
+    v.iter()
+        .zip(solid)
+        .map(|(x, &s)| if s { 0.0 } else { *x })
+        .collect()
+}
+
+/// Ritz vector as its real part and, for a complex value, its imaginary part.
+type RitzVector = (Vec<f64>, Option<Vec<f64>>);
+
+/// Shares of a Ritz vector: in the solid entries, of the pressure block in the solid cells, and the cell of the largest
+/// pressure entry. Returns the solid share.
+fn solid_report(label: &str, what: &str, geom: &FvGeometry, lay: &Layout, fluid: &[bool], z: &RitzVector) -> f64 {
+    let solid = solid_entries(lay, fluid);
+    let (zr, zi) = z;
+    let sq = |i: usize| zr[i] * zr[i] + zi.as_ref().map_or(0.0, |w| w[i] * w[i]);
+    let total: f64 = (0..lay.len()).map(sq).sum();
+    let s: f64 = (0..lay.len()).filter(|&i| solid[i]).map(sq).sum::<f64>() / total;
+    let bp = lay.blocks()[2].clone();
+    let p_total: f64 = bp.clone().map(sq).sum();
+    let p_solid: f64 = (0..lay.nc)
+        .filter(|&c| !fluid[c])
+        .map(|c| sq(bp.start + c))
+        .sum();
+    let pc = (0..lay.nc)
+        .max_by(|&a, &b| sq(bp.start + a).total_cmp(&sq(bp.start + b)))
+        .unwrap();
+    let x = geom.mesh.cell_centres()[pc];
+    println!(
+        "{label} {what}: solid share {s:.4}, pressure block share in the solid cells {:.4}, largest |p| in cell {pc} at ({:.5}, {:.5}), solid {}, distance to the surface {:.5}",
+        p_solid / p_total,
+        x[0],
+        x[1],
+        !fluid[pc],
+        surface_distance(x)
+    );
+    s
+}
+
+/// The result of one linearisation of record M.
+struct MOut {
+    lam_l: C,
+    lam_l_res: f64,
+    mode_first_fluid: bool,
+    big_left: Vec<(C, f64)>,
+    dominant_solid_share: f64,
+}
+
+/// One linearisation of record M: `J` (`fluid_part = false`, S1) or `J_f = P J P` (`fluid_part = true`, P3).
+fn linearise_m(label: &str, geom: &FvGeometry, s: &mut PimpleSolver, dt: f64, fluid_part: bool) -> MOut {
+    let t0 = Instant::now();
+    let base = s.snapshot();
+    let saved = s.settings.clone();
+    let lay = Layout::new(geom);
+    let (fluid, first) = fluid_cells(geom, s.immersed.as_ref().unwrap());
+    let solid = solid_entries(&lay, &fluid);
+    tighten(s);
+    let mut apply = |v: &[f64]| {
+        if fluid_part {
+            masked(&jv(s, &lay, &base, dt, &masked(v, &solid), EPS), &solid)
+        } else {
+            jv(s, &lay, &base, dt, v, EPS)
+        }
+    };
+    let start = if fluid_part {
+        let mut v = masked(&lcg_vector(lay.len(), 482), &solid);
+        let nv = norm(&v);
+        v.iter_mut().for_each(|x| *x /= nv);
+        v
+    } else {
+        lcg_vector(lay.len(), 482)
+    };
+    let (v, h) = arnoldi(&mut apply, start, M_ARNOLDI);
+    let mut rz = ritz(&h, M_ARNOLDI);
+    rz.sort_by(|a, b| b.theta.abs().total_cmp(&a.theta.abs()));
+    println!("{label}: the twelve Ritz values of largest magnitude (theta, |theta|, estimated residual):");
+    for r in rz.iter().take(12) {
+        println!(
+            "{label}:   {:+.6} {:+.6}i  |{:.6}|  est {:.3e}",
+            r.theta.re,
+            r.theta.im,
+            r.theta.abs(),
+            r.est
+        );
+    }
+    let l = leftmost(&rz).clone();
+    let zl = ritz_vector(&v, &l);
+    let (res, _) = true_residual(&mut apply, l.theta, &zl.0, zl.1.as_deref());
+    let mut big_left = Vec::new();
+    for r in rz.iter().filter(|r| r.theta.re < 0.0 && r.theta.abs() >= 1.0) {
+        if r.theta == l.theta {
+            big_left.push((r.theta, res));
+            continue;
+        }
+        if r.theta.im < 0.0 && rz.iter().any(|q| q.theta == r.theta.conj()) {
+            continue;
+        }
+        let (a, b) = ritz_vector(&v, r);
+        let (rr, _) = true_residual(&mut apply, r.theta, &a, b.as_deref());
+        big_left.push((r.theta, rr));
+    }
+    let zd = ritz_vector(&v, &rz[0]);
+    let nk = lay.comps.len();
+    let blocks = lay.blocks();
+    let sq = |i: usize| zl.0[i] * zl.0[i] + zl.1.as_ref().map_or(0.0, |w| w[i] * w[i]);
+    let cell_u = |c: usize| (0..nk).map(|j| sq(blocks[0].start + c * nk + j)).sum::<f64>();
+    let mode_cell = (0..lay.nc)
+        .max_by(|&a, &b| cell_u(a).total_cmp(&cell_u(b)))
+        .unwrap();
+    let total: f64 = (0..lay.len()).map(sq).sum();
+    let shares: Vec<f64> = blocks
+        .iter()
+        .map(|b| b.clone().map(sq).sum::<f64>() / total)
+        .collect();
+    let x = geom.mesh.cell_centres()[mode_cell];
+    println!(
+        "{label}: overall dominant {:+.6} {:+.6}i (|{:.6}|); lambda_L {:+.6} {:+.6}i (|{:.6}|), real {}, true residual {:.3e}",
+        rz[0].theta.re,
+        rz[0].theta.im,
+        rz[0].theta.abs(),
+        l.theta.re,
+        l.theta.im,
+        l.theta.abs(),
+        is_real(l.theta),
+        res
+    );
+    println!(
+        "{label}: lambda_L mode cell {mode_cell} at ({:.5}, {:.5}), fluid {}, first fluid {}, distance {:.5}; shares u_n {:.4}, u_n-1 {:.4}, p {:.4}, phi_n {:.4}, phi_n-1 {:.4}",
+        x[0],
+        x[1],
+        fluid[mode_cell],
+        first[mode_cell],
+        surface_distance(x),
+        shares[0],
+        shares[1],
+        shares[2],
+        shares[3],
+        shares[4]
+    );
+    let dominant_solid_share = solid_report(label, "overall dominant", geom, &lay, &fluid, &zd);
+    solid_report(label, "lambda_L", geom, &lay, &fluid, &zl);
+    for (t, r) in &big_left {
+        println!(
+            "{label}: Re < 0 and |theta| >= 1: {:+.6} {:+.6}i (|{:.6}|), true residual {:.3e}",
+            t.re,
+            t.im,
+            t.abs(),
+            r
+        );
+    }
+    println!("{label}: wall time {:.1} s", t0.elapsed().as_secs_f64());
+    s.settings = saved;
+    s.restore(&base).unwrap();
+    MOut {
+        lam_l: l.theta,
+        lam_l_res: res,
+        mode_first_fluid: first[mode_cell],
+        big_left,
+        dominant_solid_share,
+    }
+}
+
+/// P2: the largest `abs(p)` over the solid and over the fluid cells.
+fn p_maxima(s: &PimpleSolver) -> (f64, f64) {
+    let ib = s.immersed.as_ref().unwrap();
+    let (mut ps, mut pf) = (0.0f64, 0.0f64);
+    for (c, p) in s.p.values.iter().enumerate() {
+        if ib.body_of_cell[c].is_some() {
+            ps = ps.max(p.abs());
+        } else {
+            pf = pf.max(p.abs());
+        }
+    }
+    (ps, pf)
+}
+
+/// ADR 0392 record M (amendment 1). Heavy (about a minute in release): run once.
+#[test]
+#[ignore = "heavy record of ADR 0392 amendment 1 (S1, P3, P2): run once in release"]
+fn record_m_solid_share_and_fluid_part() {
+    let t0 = Instant::now();
+    let dt = 1e-3;
+    let mut misses = Vec::new();
+    for (f, label, last) in [(Forcing::B, "MB", 200), (Forcing::F, "MF", 34)] {
+        let (geom, mut s) = r_solver(2, f, 1);
+        for n in 1..=15 {
+            s.step(dt);
+            assert!(s.diverged.is_none(), "{label}: stopped at step {n}");
+            let (ps, pf) = p_maxima(&s);
+            println!("P2 {label}: step {n} max |p| solid {ps:.5e} fluid {pf:.5e}");
+        }
+        let full = linearise_m(&format!("{label}15 J"), &geom, &mut s, dt, false);
+        let part = linearise_m(&format!("{label}15 J_f"), &geom, &mut s, dt, true);
+        for n in 16..=last {
+            s.step(dt);
+            if let Some(d) = &s.diverged {
+                println!("P2 {label}: stop at step {} ({})", d.step, d.quantity);
+                break;
+            }
+            let (ps, pf) = p_maxima(&s);
+            println!("P2 {label}: step {n} max |p| solid {ps:.5e} fluid {pf:.5e}");
+        }
+        let s1_ok = full.dominant_solid_share >= 0.9;
+        if !s1_ok {
+            misses.push(format!(
+                "S1 {label}: solid share of the overall dominant {:.4} < 0.9 (lambda_L of J {:?})",
+                full.dominant_solid_share, full.lam_l
+            ));
+        }
+        if f == Forcing::B {
+            let a_ok = part.lam_l_res <= 0.03;
+            if !a_ok {
+                misses.push(format!("P3 a: true residual {:.3e} > 0.03", part.lam_l_res));
+            }
+            if !(is_real(part.lam_l) && part.lam_l.re < -1.0) {
+                misses.push(format!("P3 b: lambda_L of J_f {:?} not real below -1", part.lam_l));
+            }
+            if !part.mode_first_fluid {
+                misses.push("P3 c: the mode cell of J_f is not a first fluid cell".into());
+            }
+        } else {
+            let bad: Vec<_> = part.big_left.iter().filter(|(_, r)| *r <= 0.03).collect();
+            if !bad.is_empty() {
+                misses.push(format!(
+                    "P3 d: converged Ritz values of J_f with Re < 0 and |theta| >= 1: {bad:?}"
+                ));
+            }
+        }
+    }
+    println!("M: wall time {:.1} s", t0.elapsed().as_secs_f64());
+    assert!(misses.is_empty(), "record M: {misses:?}");
+}
