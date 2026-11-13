@@ -723,6 +723,7 @@ fn c5_threads_bit_identical() {
 // ----------------------------------------------------------------------------------------------------------- C6
 
 #[test]
+#[ignore = "record: ADR 0400 retired two of its refusal rows (static correction of a free body, with a nodal spring); see c6_refusals_after_landed"]
 fn c6_refusals() {
     let mut ch = Checks::new();
     let bar = b40();
@@ -776,6 +777,67 @@ fn c6_refusals() {
         "static correction",
     );
     ch.holds("C6 static correction with a nodal spring", ok, &d);
+    let mut big = SolidModel::new(hex_box([0.0; 3], [10.0, B, B], [200, 1, 1]).unwrap());
+    big.add_material("all", steel()).unwrap();
+    let (ok, d) = refused_with(ModalBasis::all_modes(&big, None), "modes");
+    ch.holds("C6 all_modes of 2412 free unknowns", ok, &d);
+    let (rs, dt) = record_r();
+    for (name, r) in [
+        ("1 sample", force_harmonics(&rs[..1], 0.0, dt, R_T, 1)),
+        ("NaN sample", {
+            let mut v = rs.clone();
+            v[3] = f64::NAN;
+            force_harmonics(&v, 0.0, dt, R_T, 1)
+        }),
+        ("dt 0", force_harmonics(&rs, 0.0, 0.0, R_T, 1)),
+        ("period -1", force_harmonics(&rs, 0.0, dt, -1.0, 1)),
+        ("orders 0", force_harmonics(&rs, 0.0, dt, R_T, 0)),
+        ("order 24 (Nyquist)", force_harmonics(&rs, 0.0, dt, R_T, 24)),
+    ] {
+        let (ok, d) = refused_with(r, "force record");
+        ch.holds(&format!("C6 force record {name}"), ok, &d);
+    }
+    ch.finish();
+}
+
+/// C6 without the two rows retired by ADR 0400 (the static correction of a free body and with a nodal spring are
+/// taken since F-491).
+#[test]
+fn c6_refusals_after_landed() {
+    let mut ch = Checks::new();
+    let bar = b40();
+    let load = HarmonicLoad::real(tip_load(&bar.model)).unwrap();
+    let s = HarmonicSolver::new(&bar.model, bar.basis.clone(), &HarmonicOptions::default()).unwrap();
+    for w in [-1.0, f64::NAN, f64::INFINITY] {
+        let (ok, d) = refused_with(s.response(&load, w), "frequency");
+        ch.holds(&format!("C6 omega {w}"), ok, &d);
+    }
+    let w3 = bar.basis.eigenvalues()[2].sqrt();
+    let (ok, d) = refused_with(s.response(&load, w3), "frequency");
+    ch.holds("C6 undamped resonance of mode 3", ok, &d);
+    for (name, damping) in [
+        ("Ratio(-0.1)", ModalDamping::Ratio(-0.1)),
+        ("Ratio(NaN)", ModalDamping::Ratio(f64::NAN)),
+        ("PerMode of 9", ModalDamping::PerMode(vec![0.01; 9])),
+    ] {
+        let (ok, d) = refused_with(
+            HarmonicSolver::new(&bar.model, bar.basis.clone(), &HarmonicOptions::new(damping)),
+            "damping",
+        );
+        ch.holds(&format!("C6 damping {name}"), ok, &d);
+    }
+    let (ok, d) = refused_with(
+        s.response(&HarmonicLoad::real(vec![0.0; 5]).unwrap(), 1.0),
+        "harmonic load",
+    );
+    ch.holds("C6 load of the wrong length", ok, &d);
+    let b10 = bar_model(10);
+    let b10_basis = ModalBasis::all_modes(&b10, None).unwrap();
+    let (ok, d) = refused_with(
+        HarmonicSolver::new(&bar.model, b10_basis, &HarmonicOptions::default()),
+        "modal basis",
+    );
+    ch.holds("C6 basis of B10 for B40", ok, &d);
     let mut big = SolidModel::new(hex_box([0.0; 3], [10.0, B, B], [200, 1, 1]).unwrap());
     big.add_material("all", steel()).unwrap();
     let (ok, d) = refused_with(ModalBasis::all_modes(&big, None), "modes");
