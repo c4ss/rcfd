@@ -6875,7 +6875,9 @@ fixed by the item's registration ADR before any code.
     ignored heavy records (minutes on the loaded machine; run twice, identical), the gate runs the 100-step both-remote
     comparison and the failure tests. Existing service, CLI and MCP suites and the case hashes pass unedited; seven
     mutations each failed their tests. Not delivered: participants built from a case or hosted by rcfd serve, structural
-    elements in describe, authentication, a test of a call outlasting the time-out. Open: ADR 0345 Q1 to Q5.
+    elements in describe, authentication, a test of a call outlasting the time-out. Open: ADR 0345 Q1 to Q5. Follow-up
+    F-444 (ADR 0380, 2026-11-12): participants from the case hosted by rcfd serve --cosim, elements in describe, one
+    write per service::Client request (ADR 0345 Q3, Q4, Q5).
 - [x] **F-361** Quasi-Newton acceleration of the coupled iteration
   - depends on: F-139
   - acceptance: A least-squares (quasi-Newton) update of the nodal force from the residual history of the step, opt-in
@@ -8373,7 +8375,7 @@ fixed by the item's registration ADR before any code.
     from every case's text and hash), located errors with steady, compressible, variable-density and VOF runs, the
     fractional step and lumped components; acts on the tree's dynamic mesh. Eight mutations caught. Follow-up proposed
     for the fractional step (ADR 0352 Q2).
-- [ ] **F-444** Co-simulation participants from the case, hosted by rcfd serve
+- [~] **F-444** Co-simulation participants from the case, hosted by rcfd serve
   - depends on: F-360
   - acceptance: A case key names a moving wall patch as a co-simulation fluid participant and rcfd serve hosts it under
     protocol rcfd-cosim/1; a structural participant in its own process (the mock of ADR 0345) and the coupler of
@@ -8381,7 +8383,26 @@ fixed by the item's registration ADR before any code.
     1e-12; describe of a structure may carry its elements so that the map builders of ADR 0263 run on the side of the
     coupler; service::Client writes a request with one call; without the key every case hash is unchanged and the
     schema, CLI help and MCP goldens change only by the approved additions.
-  - note: From ADR 0345 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: PARTIAL (ADR 0380, 2026-11-12; registered before the code, one amendment before any run). An optional case
+    table [cosim] (patch, participant, fixed_patches, smoothing_method, smoothing_exponent, smoothing_tolerance,
+    initial_displacement) names a moving wall patch of an incompressible piso/pimple case as the co-simulation fluid
+    participant (rcfd_api::cosim_case::fluid_from_case: the case's mesh is the reference, the flow starts at rest on it
+    moved by initial_displacement, every advance smooths the interior and makes one flow step; any other model the
+    simulation would advance is refused by name; rcfd run refuses the case), and rcfd serve --cosim <case> hosts it
+    under rcfd-cosim/1 (cosim_case::host). On the model problem of ADR 0256 written as a case, with the mock structure
+    of ADR 0345 in a third process and the unchanged coupled_step driving both over TCP: all 650 steps converged (7 to
+    10 iterations, mean 8.766, last test 9.995e-9), omega_m/omega 0.998618 and 1.011453, and the displacements of every
+    node at every step equal to the in-process run of the same case bit for bit (limit 1e-12 X; the case also equals the
+    hand-built CWs bit for bit over 100 steps); a structure stiffer by 1e-9 is seen (4.15e-9 X). Structure::elements (a
+    provided method, empty by default) is carried by cosim.describe only when not empty and returned by
+    RemoteStructure::elements, so InterfaceMap::build runs on the coupler's side with the bits of the in-process build.
+    service::Client writes each request with one call (unit-tested; 0.047 ms per call). Without the table every case
+    hash, written case text and baseline hash is unchanged and the MCP goldens pass unedited; the schema gains the
+    optional property cosim and the help of serve gains [--cosim <case>], both awaiting the maintainer's approval (ADR
+    0380 Q1). Seven of eight mutations caught; treating fixed_patches as sliding is not seen by this model problem (its
+    wall moves along x only, so a sliding and a fixed xmax give the same mesh; Q3). Not delivered: a structure from a
+    case, the participant's own name (always fluid, Q2), more than one participant per rcfd serve, models other than the
+    incompressible flow. Open: ADR 0380 Q1 to Q4.
 - [~] **F-445** Overset: prescribed flux on the faces between calculated and fringe cells
   - depends on: F-349, F-344
   - acceptance: An opt-in of the overset step under which the flux of a face between a calculated and a fringe cell is
@@ -9011,3 +9032,9 @@ fixed by the item's registration ADR before any code.
     section split the entering and returning waves of a duct field within 1 percent of the closed form; files without
     velocity read and drive bit-identically as before.
   - note: From ADR 0378 question 1. NEEDS THE USER: it changes the rcfd-surface-series format. Size M.
+- [ ] **F-481** A check that sees fixed against sliding patches of the co-simulation smoothing
+  - depends on: F-444
+  - acceptance: A [cosim] case whose initial wall displacement has a component along a fixed patch gives a different
+    mesh when that patch is declared sliding than when it is declared fixed (the mutation MU5 of ADR 0380 is caught),
+    and the points of the fixed patch do not move (0 bits); without the table every case hash is unchanged.
+  - note: From ADR 0380 Q3 (mutation MU5 not caught). Size S.
