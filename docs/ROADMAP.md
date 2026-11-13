@@ -9214,7 +9214,7 @@ fixed by the item's registration ADR before any code.
     (the modal refusal of ADR 0296) stays as an ignored record (the maintainer's si_scaffold decision of 2026-11-13
     applied by the lead); the si_scaffold R11 modal row was retired by the maintainer's pattern. Follow-up F-488 (the
     zero-mode measure and the explicit-shift report).
-- [ ] **F-487** Overset: a consistent cell pressure gradient in the geometry corrections
+- [x] **F-487** Overset: a consistent cell pressure gradient in the geometry corrections
   - depends on: F-472
   - acceptance: OversetSolver::set_geometry_corrections takes the cell pressure gradient of the momentum predictor and
     of the velocity correction from the least-squares gradients of the corrections (or another gradient exact for linear
@@ -9223,8 +9223,21 @@ fixed by the item's registration ADR before any code.
     twice that on B3 with the default and the quadratic donor interpolation, continuity within 1e-9 at every step, ADR
     0367's linear shear and uniform flow within their limits, and a run of the warped background alone that names the
     share of the warped background in the remainder.
-  - note: From ADR 0382 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    Size M.
+  - note: From ADR 0382 Q1 and Q2, recommendations taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0387, 2026-11-13: DONE. ADR 0382's L was a separate diagnostic flag whose gradient is exact for linear fields only
+    with exact boundary values; the remainder it left on B3d is in the wall cells of the warped background (cell 13327,
+    outflow patch), where a zero-gradient pressure row with the value p_c is exact only if the cell centre lies on the
+    face normal. New opt-in OversetSolver::set_consistent_geometry_corrections (set_geometry_corrections kept as it is,
+    because ADR 0382's fingerprints cover it): the corrections with the least-squares gradient whose prescribed-gradient
+    boundary faces contribute their normal row only (GeometryCorrections::consistent_pressure_gradients), exact for
+    linear fields under the step's pressure conditions on any mesh (5e-15 on B3d; plain least squares 6.4e-2). The
+    Taylor-Green vortex with an axial velocity on B3d with the component moving: 1.21 (default stencils) and 1.41
+    (quadratic) times its error on B3 (limit 2), continuity 2e-14 every step; ADR 0367's shear 1.13 and 1.14, uniform
+    flow 1e-13, warped background alone 1.5e-4, all within their limits. The warped background alone names its share:
+    with L it carries the whole remainder (5.44e-3, the same wall cell), with C its wall cells fall to 3.0e-3 and what
+    is left is the interior first-order least-squares error (3.09e-3). Defaults, the corrections without L and with L
+    bit-identical (ADR 0367's eight fingerprints, ADR 0382's two, two new ones); baseline_hashes and the overset tests
+    pass; four mutations caught.
 - [ ] **F-488** Zero modes on the transformation: the eigenvalue measure against the shift and the explicit-shift report
   - depends on: F-486
   - acceptance: Every limit not stated here is registered in the ADR before the run. For a body held only by springs
