@@ -211,3 +211,80 @@ The whole `rcfd-fem` suite is not run (no library line changes; the lead runs th
 - `L/h = 20` reproduces a run already made (disclosed); the new evidence is `L/h = 40` and the sharper companion C1.
 - No library change; the ADR 0390 record `a5b_a8_a9_c2_c3_n1_buckling_of_the_beam_known_miss` stays as it is (its limit is the
   roadmap's old clause and is still missed; N2 records that).
+
+## Addendum 1: results (2026-11-13)
+
+The registered run: commit 8d59ed60 (the test file as first written; the registration is commit 45fc8433), once, release,
+`CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_knife_edge_closed_form -- --nocapture --test-threads=1`: 2 passed,
+0 failed, 0.18 s (log `w49i-work/f492-scratch/registered.log`). After the run rustfmt was applied to the new file (commit
+b5b5f4f7, layout only). No limit, parameter or set-up was changed; no library file was changed.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | <= 0.01 | 4.366e-5 (B20 `lambda_1 = 408.40047`, root 408.3826) | yes |
+| A2 | <= 0.01 | 1.731e-4 (B20 `lambda_2 = 1600.70961`, root 1600.4326) | yes |
+| A3 | <= 0.02 | 5.158e-3 (B40 `lambda_1 = 102.63046`, `lambda_2 = 408.40456`) | yes |
+| C1 | each <= 1e-3 | B20 4.366e-5, 1.731e-4; B40 1.345e-5, 5.367e-5 | yes |
+| C2 | each >= 0.99 | 1.000000 for all four modes | yes |
+| C3 | <= 1e-3 | 4.000e-5 (closed-form ratio 0.994802) | yes |
+| C4 | <= 1e-3 | 1.001e-5 | yes |
+| C5 | two factors, counted = expected = 2 | B20 (twice) and B40: 2 factors, counted 2, expected 2 | yes |
+| N1 | each > 1e-3 | 1.988e-3, 7.677e-3 | as expected |
+| N2 | > 0.02 | 2.0135e-2 (the ADR 0390 A9 value, reproduced bit for bit) | as expected |
+| N3 | > 0.01 | 2.920 | as expected |
+| S1 | 0 failed | `cargo test -p rcfd-fem --release --test si_geometric`: 6 passed, 0 failed, 1 ignored (the A9 known miss) | yes |
+| S2 | the new file only | `git diff a12b7e1c --stat -- crates`: `crates/rcfd-fem/tests/si_knife_edge_closed_form.rs` only | yes |
+
+fmt: `cargo fmt -p rcfd-fem --check` clean. clippy: `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+### Mutations (scratch copy `w49i-work/f492-scratch/copy`, script `mutate.py`, runner `run_mut.sh`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | reference without `r^2 k^2` (Engesser) | C1 (B20 1.99e-3, 7.68e-3; B40 `n = 2` 1.98e-3), C3 (1.47e-3) |
+| Mu2 | upper root | A1, A2, C1, C3 (about 1) |
+| Mu3 | `k = pi/L` for every `n` | A2 (2.92), C1, C3 |
+| Mu4 | B40 at `L = 2 m` | A3 (2.018e-2), C1, C2, C3, C4 |
+| Mu5 | library: `K_sigma` block on components 1 and 2 only | C1 (B20 2.08e-3, 8.09e-3; B40 2.09e-3), C3; also N1 and N2 no longer as expected |
+
+Every mutation was caught. Mu5 is also a direct check of the diagnosis of ADR 0390: with the `u_x` block of `K_sigma` dropped
+(no work of the axial stress on the rotating sections) the solid's factors fall onto Engesser alone, 4.4e-5 and 1.75e-4 from
+`P_E,n/(1 + a)`, the same distance the intact solver has from the full quadratic.
+
+### Deviations
+
+None. The registration's estimate of the run time was generous (the whole file runs in 0.18 s).
+
+### What was not run
+
+The whole `rcfd-fem` suite and the workspace gate (no library line changed; the lead runs the gate). Nothing registered was
+skipped.
+
+### Decision by the registered rule
+
+**done**: A1 to A3 met, every C and S check met, the negative controls as expected.
+
+### Remaining questions
+
+1. **The text of the acceptance (`P_E` without the mode index).** The entry writes `P_E` and `a = P_E/(kappa G A)` in a quadratic
+   applied to "the first two" factors; the derivation (D1) needs `P_E,n = E I k^2 = n^2 pi^2 E I/L^2` (and `a` with it), and with
+   `P_E = pi^2 E I/L^2` for `n = 2` the root is off by a factor near 4 (N3: 2.92). Also the quadratic is in forces (N) and the
+   factors are multiples of `s_ref`; this ADR compares `lambda |s_ref| A` with the root. Options: (a) say so in the note (the
+   acceptance text stays as it was; the reading is registered here); (b) re-word the acceptance to `P_E = E I k^2`. Recommendation
+   (a), taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): the item is done, and the note
+   carries the reading.
+2. **The ADR 0390 record `a5b_a8_a9_c2_c3_n1_buckling_of_the_beam_known_miss`.** It keeps its old limit and is still missed (N2).
+   Options: (a) leave it as the ignored record (house rule: records are not edited); (b) delete it now that F-492 covers the
+   clause. Recommendation (a).
+
+## For the lead: roadmap entries
+
+F-492, proposed status **done**, note:
+
+> From ADR 0390 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0394, 2026-11-13: the quadratic derived from a Timoshenko column with the solid's initial-stress term on the rotating sections (P_E read as the Euler load of mode n, E I k^2, with a = P_E,n/(kappa G A); the factors compared as lambda |s_ref| A with the root in N); test code only (crates/rcfd-fem/tests/si_knife_edge_closed_form.rs). Knife-edge Hex20 beam at L/h = 20: factors 4.4e-5 and 1.7e-4 from the lower roots (Engesser alone 2.0e-3 and 7.7e-3); at L/h = 40 the second factor 5.16e-3 from four times the first (closed form 5.20e-3), each factor within 5.4e-5 of its root. Dropping the u_x block of K_sigma in a scratch mutation puts the solid onto Engesser within 1.8e-4, confirming the diagnosis of ADR 0390. Size S.
+
+F-395: no change of status (partial); its note may add at the end:
+
+> The A9 clause is settled by F-492 (ADR 0394): the solid's factors match the derived closed form within 1.7e-4, and at L/h = 40 the second factor is four times the first within 0.52 percent.
