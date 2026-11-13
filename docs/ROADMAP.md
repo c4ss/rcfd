@@ -9665,7 +9665,9 @@ fixed by the item's registration ADR before any code.
     half turn (defects below 1e-15) and break the axis mirrors by 0.17 and 0.11: they are exactly the barycentric
     weights of each quadrilateral split along its (0, 2) diagonal, parallel on every Hex8 face (explained; a test-side
     bilinear evaluation is symmetric to 8e-16 and has 0.34 to 0.53 of the extra compliance). No library line changed;
-    defaults bit-identical. Open: ADR 0412 Q1, Q2. Follow-up F-504.
+    defaults bit-identical. Open: ADR 0412 Q1, Q2. Follow-up F-504. The projection's asymmetry is removed as an opt-in
+    by F-504 (ADR 0414, 2026-11-13): the bilinear projection is symmetric to 1e-15 and gives the bilinear evaluation's
+    frequency changes.
 - [ ] **F-503** Overset: the second-order ring gradient on RE and RL of ADR 0347
   - depends on: F-479
   - acceptance: With OversetSolver::set_second_order_ring_gradient(true) under PrescribedOwnGradient and the quadratic
@@ -9675,7 +9677,7 @@ fixed by the item's registration ADR before any code.
     number why not.
   - note: From ADR 0409 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
-- [ ] **F-504** Opt-in bilinear projection on quadrilateral interface elements
+- [x] **F-504** Opt-in bilinear projection on quadrilateral interface elements
   - depends on: F-362, F-502
   - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in variant of the projection
     of F-362 evaluates the bilinear shape functions on quadrilateral structural elements (the nearest point on the
@@ -9685,7 +9687,17 @@ fixed by the item's registration ADR before any code.
     and resultant, moment and work conserved within 1e-12 on a planar and on a cylindrical wall; the coupled frequency
     change of F-502 equals its static-compliance prediction within 10 percent for faces of 2 x 2, 4 x 4 and 8 x 8
     elements.
-  - note: From ADR 0412 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: DONE (ADR 0414, 2026-11-13; registered before the code, run once, no amendment). MapMethod::BilinearProjection
+    (MapSettings::bilinear_projection) evaluates the bilinear shape functions on quadrilateral interface elements at the
+    nearest point of the bilinear patch (Newton from the centre with the exact Hessian, or the nearest edge point), with
+    the projection's nearest element, offset correction and unmapped policy; on a warped patch the closed-form feet are
+    found within 1.1e-16. The default projection and the radial basis are bit for bit unchanged (digests of rows and
+    reports equal on the parent and the branch; the F-362, F-400, F-502 tests and the baseline hashes pass unedited). On
+    the 3:2 walls of F-502 its weights keep all eight symmetries of the square within 9.9e-16 and equal the test-side
+    bilinear evaluation within 6.3e-16; rigid motion within 9.3e-16 and resultant, moment and work within 1.1e-16 on the
+    planar and cylindrical walls of F-362; the coupled frequency changes -2.17e-3, -8.18e-4, -2.82e-4 for 2 x 2, 4 x 4,
+    8 x 8 faces equal the static-compliance prediction within 6.6e-4 of themselves (limit 10 percent). Six mutations
+    caught. Open: ADR 0414 Q1 (case-file exposure, needs the schema golden), Q2.
 - [ ] **F-505** Whirl modes above the loss of stiffness: gyroscopic stabilisation
   - depends on: F-499
   - acceptance: Every limit not stated here is registered in the ADR before the run. At a speed where K_eff is not
@@ -9725,3 +9737,9 @@ fixed by the item's registration ADR before any code.
     projection orders 1.99 to 2.00. Five of six mutations caught; the 2 x 2 x 2 volume rule is an equivalent mutant on
     this geometry (det J of degree at most 3 per direction there; caught by si_hex20 E7), so partial by the registered
     rule. The curved route through upgrade_to_hex20_mapped is not checked.
+- [ ] **F-509** Bilinear projection selectable in the cosimulation case file
+  - depends on: F-504, F-444
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The cosimulation section of the
+    case file accepts the bilinear projection as a map method; a case without it gives the same bytes as before
+    (baseline and case hashes unchanged), the schema golden is updated only with the maintainer's approval, and a case
+    naming it builds the same rows as MapSettings::bilinear_projection bit for bit.
