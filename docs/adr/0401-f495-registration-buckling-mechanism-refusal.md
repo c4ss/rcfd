@@ -296,3 +296,21 @@ no existing path calls (brief: tests of `rcfd-fem` only). Recorded.
    of 2026-11-11 (take the recommendation).
 3. The pivot-ratio test, not the rigid count (D1). Taken on the maintainer's standing instruction of 2026-11-11 (take the
    recommendation).
+
+## Amendment 1 (2026-11-13, after the registered run of commit cf9be851, before the corrected run)
+
+The registered run (`f495-scratch/registered_run1.log`, once): 2 tests passed, 1 failed, on N1 only.
+
+1. **N1 a defective set-up.** On BM the failing pivot is at row 0 of the reduced matrix, node 0 component 0 (the corner `(0,
+   0, 0)`, whose `u_x` is free), and `tr.independent()[0] = 0`: the reduced row and the mesh equation coincide, so the wrong
+   mapping gives the same name and the control cannot show what it is meant to show (that the identity check sees the
+   mapping). It was set up on the wrong model, not a miss of the library. Every other check of that test was met (recorded in the
+   addendum from that run). Correction: **N1 on H**, whose held set `a0` contains node 0, so the three equations of node 0
+   are eliminated and `tr.independent()[r] >= r + 3` for every reduced row `r`: the failing row taken as a mesh equation
+   names another unknown by construction; expected: it differs from the reported name. The test is kept as the ignored record
+   `a1_a2_c2_c4_n1_mechanisms_of_the_beam_defective_setup` (its body moved into `mechanisms_of_the_beam(n1_on_bm)`, the
+   record calling it with `true`, the arguments of the first run); `a1_a2_c2_c4_mechanisms_of_the_beam_corrected` calls it
+   with `false` (the same rows without N1; it re-computes A1, A2, C2, C4, expected to reproduce the first run's values), and
+   the new test `n1_hinge_row_as_mesh_equation_corrected` makes N1 on H. Limits unchanged. Mutation Mu3 (the same wrong
+   mapping in the library) is expected to be caught by C3's identity on H (on the beam models the two mappings coincide, as
+   here).

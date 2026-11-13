@@ -1,6 +1,6 @@
 //! F-495 (ADR 0401): `buckling::factors` on the transformation path refuses a motion the constraints and supports leave free,
 //! by the zero-shift pivot-ratio rule of ADR 0384, naming the unknown of the failing pivot. Checks A1 to A3, C1 to C5, the
-//! negative controls N1, N2 and the records O1 of the registration (A4 and O2 are runs of `si_prestress_mpc.rs`), on the
+//! negative controls N1 (on H, amendment 1), N2 and the records O1 of the registration (A4 and O2 are runs of `si_prestress_mpc.rs`), on the
 //! knife-edge Hex20 beam of ADR 0398 D5 and a two-block Hex8 hinge.
 
 use rcfd_core::vec3::Vec3;
@@ -333,7 +333,17 @@ fn off(lambda: f64, p: f64) -> f64 {
 // ------------------------------------------------------------------------------------------------------- the tests
 
 #[test]
-fn a1_a2_c2_c4_n1_mechanisms_of_the_beam() {
+#[ignore = "record of a defective set-up (ADR 0401 amendment 1): N1 on BM, whose failing row 0 is also mesh equation 0, so the two mappings coincide; A1, A2, C2, C4 met in that run; superseded by the _corrected test and n1_hinge_row_as_mesh_equation_corrected"]
+fn a1_a2_c2_c4_n1_mechanisms_of_the_beam_defective_setup() {
+    mechanisms_of_the_beam(true);
+}
+
+#[test]
+fn a1_a2_c2_c4_mechanisms_of_the_beam_corrected() {
+    mechanisms_of_the_beam(false);
+}
+
+fn mechanisms_of_the_beam(n1_on_bm: bool) {
     let mut c = Checks::new();
     let bmodel = beam(Kind::B, S_REF);
     let pb = static_prestress(&bmodel);
@@ -342,7 +352,7 @@ fn a1_a2_c2_c4_n1_mechanisms_of_the_beam() {
     let r = factors(&bm, &pb, &BucklingOptions::new(2));
     let t = refused_as_registered(&mut c, "A1 BM", &bm, &r, sway);
     // N1: the failing row taken as a mesh equation.
-    if let Some((node, comp, row)) = t.first {
+    if let (true, Some((node, comp, row))) = (n1_on_bm, t.first) {
         let (n2, c2) = bm.dof_map().node_component(row).expect("equation");
         c.holds(
             "N1 BM row as a mesh equation differs",
@@ -476,5 +486,31 @@ fn c3_n2_o1_hinge() {
     let pp = Prestress::uniform(&hp, [S_REF, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
     let rp = factors(&hp, &pp, &BucklingOptions::new(2));
     println!("O1 HP (prescribed path): {:?}", rp.map(|b| b.factors));
+    c.finish();
+}
+
+#[test]
+fn n1_hinge_row_as_mesh_equation_corrected() {
+    let mut c = Checks::new();
+    let h = hinge(true, false);
+    let t = in_test(&h);
+    let p = Prestress::uniform(&h, [S_REF, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
+    let r = factors(&h, &p, &BucklingOptions::new(2));
+    let reason = match &r {
+        Err(FemError::Solver { reason, .. }) => reason.clone(),
+        other => format!("{:?}", other.as_ref().map(|b| b.factors.clone())),
+    };
+    match t.first {
+        Some((node, comp, row)) => {
+            let (n2, c2) = h.dof_map().node_component(row).expect("equation");
+            let wrong = format!("node {n2} component {c2}: ");
+            c.holds(
+                "N1 H row as a mesh equation differs",
+                (n2, c2) != (node, comp) && !reason.starts_with(&wrong),
+                &format!("row {row}: node {n2} component {c2} against node {node} component {comp}; reported {reason}"),
+            );
+        }
+        None => c.holds("N1 H failing pivot in the test", false, "none found"),
+    }
     c.finish();
 }
