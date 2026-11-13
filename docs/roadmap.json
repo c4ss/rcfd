@@ -4749,8 +4749,19 @@
     "deps": [
       "F-493"
     ],
-    "status": "todo",
+    "status": "partial",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. buckling::factors of a model on the transformation path whose constraints and supports leave a motion free (ADR 0398's knife-edge beam without its roller rows, and without its roller and spring) is refused with FemError naming the unknown of the failing pivot, by the zero-shift pivot-ratio rule of ADR 0384 (ratio below 1e-8); a model held by a soft spring whose ratio is above the rule is still solved and its first factor equals k L within 1 percent; every check of ADR 0398 keeps its value bit for bit.",
-    "note": "From ADR 0398 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S."
+    "note": "From ADR 0398 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0401, 2026-11-13: buckling::factors on the transformation path refuses, before the eigensolver, a model whose T^T K_ext T has a zero-shift pivot ratio d_i/a_ii below 1e-8 (the rule of Shift::Auto, ADR 0384; mpc::zero_shift_failing_pivot), with FemError::Solver naming the unknown of the first failing pivot. The pivot test was chosen over the count of free rigid motions of ADR 0399 because it also sees mechanisms that are not rigid: a two-block Hex8 hinge with every rigid motion held (count 0) is refused naming a node of the hinged block. ADR 0398's knife-edge beam without its roller rows is refused (ratio 2.5e-11), and so is the beam without roller and lateral spring kept on the transformation path by a spring that holds nothing (in z or axial at the roller; ratios 2.5e-11 and 1.1e-11); the name equals the one computed in the test and moves in the free rotation. A soft lateral spring k = 1e4 N/m (ratio 2.6e-3) is solved, first factor k L within 1.2e-6, second the knife-edge factor within 1.3e-12, bit-equal to the reduction in the test. The rule's resolution: a spring of 1e-4 N/m is refused as a mechanism although held. Every printed value of ADR 0398's tests is unchanged (111 lines), and its known-miss record now passes when run. Five mutations caught. Open: the margin of the rule on larger meshes, and the same guard on the prescribed path (follow-up). Recorded as partial by the lead (rule of 2026-11-13: the negative control N1 was a defective set-up corrected by amendment 1 after its run); done is the maintainer's call. Follow-up F-496."
+  },
+  {
+    "id": "F-496",
+    "title": "Refuse a mechanism that is not rigid in buckling on the prescribed path",
+    "phase": 9,
+    "deps": [
+      "F-495"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. buckling::factors on the prescribed-displacement path refuses a model whose reduced stiffness K_FF has a zero-shift pivot ratio below 1e-8 (the rule of ADR 0401) with FemError naming the unknown of the failing pivot, checked on ADR 0401's two-block Hex8 hinge with its face held by Displacement rows (which passes the rigid-motion test); the factors of ADR 0390's and ADR 0394's models keep their values bit for bit.",
+    "note": "From ADR 0401 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S."
   }
 ]
