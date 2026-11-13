@@ -9707,10 +9707,21 @@ fixed by the item's registration ADR before any code.
     carries for each mode of index k the stationary-frame frequency omega + tau k Omega (tau the wave sense); on the
     disc sector of ADR 0411 the stationary frequencies of a travelling pair agree with those of the full rotor's modes
     transformed to the stationary frame within 1e-8 relative.
-- [ ] **F-508** Curved quadratic hexahedra on the quarter annulus
+- [~] **F-508** Curved quadratic hexahedra on the quarter annulus
   - depends on: F-371, F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. The quarter annulus of ADR 0413
     converted by rcfd_fem::convert::from_mesh and upgraded to Hex20 with the wall mid-edge nodes placed on the cylinders
     (by upgrade_to_hex20_mapped or project_mid_edge_nodes) has its projected nodes on their radius within 1e-14 and its
     volume error falling at an observed order of at least 3 over four levels; the areas of its inner and outer surface
     sets converge to pi a h / 2 and pi b h / 2 at an observed order of at least 3.
+  - note: Structural solver. ADR 0415, 2026-11-13: test sb_convert_hex20 (no library change). The quarter annulus of ADR
+    0413 (a = 1, b = 2, h = 1, levels k = 1, 2, 4, 8 with 4k x k x k cells) converted by from_mesh, upgraded by
+    upgrade_to_hex20 and its wall mid-edge nodes (the node sets inner and outer, which the upgrade extends) moved by
+    project_mid_edge_nodes with onto_cylinder. Derived before the run: each element is the extrusion of a Quad8, a wall
+    edge is the quadratic interpolant of its circle, the 3 x 3 x 3 volume is exact, so the volume error is phi^4 / 30
+    and the 3 x 3 Gauss wall area error phi^4 / 60 (phi = pi / (16 k)), order 4. Met: projected nodes on their radius
+    within 4.4e-16 (limit 1e-14), volume order 3.995, 3.999, 4.000 and inner and outer area orders 3.990, 3.998, 3.999
+    (limit 3), volume and areas within 3.8e-15 of the closed forms of the piecewise-quadratic walls; without the
+    projection orders 1.99 to 2.00. Five of six mutations caught; the 2 x 2 x 2 volume rule is an equivalent mutant on
+    this geometry (det J of degree at most 3 per direction there; caught by si_hex20 E7), so partial by the registered
+    rule. The curved route through upgrade_to_hex20_mapped is not checked.
