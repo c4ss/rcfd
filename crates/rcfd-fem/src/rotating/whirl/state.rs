@@ -19,6 +19,9 @@ use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 use std::fmt::Write as _;
 
+mod sector;
+pub use sector::{CyclicWhirlStability, HarmonicStateWhirl};
+
 /// `max|Re s| / max|s|` at or below which a speed is stable (ADR 0416 D3).
 pub const STABILITY_TOLERANCE: f64 = 1e-8;
 
