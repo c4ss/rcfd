@@ -166,9 +166,17 @@ fn g1_g2_coriolis_matrix_is_skew() {
     let c = coriolis_matrix(&cb, AXIS, None).unwrap();
     ch.le("G1 cube", skew_defect(&c), 1e-14);
     let sector = ds_sector();
-    ch.le("G1 sector", skew_defect(&coriolis_matrix(&sector, AXIS, None).unwrap()), 1e-14);
+    ch.le(
+        "G1 sector",
+        skew_defect(&coriolis_matrix(&sector, AXIS, None).unwrap()),
+        1e-14,
+    );
     let (_, full) = full_of(&sector);
-    ch.le("G1 full rotor", skew_defect(&coriolis_matrix(&full, AXIS, None).unwrap()), 1e-14);
+    ch.le(
+        "G1 full rotor",
+        skew_defect(&coriolis_matrix(&full, AXIS, None).unwrap()),
+        1e-14,
+    );
     let part = RotatingPart::new(&cb, AXIS, ORIGIN, &cube_options(true)).unwrap();
     let m = part.mass();
     let (ux, uy) = (uniform(&cb, 0), uniform(&cb, 1));
@@ -206,7 +214,8 @@ fn p1_p2_point_mass_closed_form() {
         let kappa = |i: usize| {
             let (re, im) = (&r.re[i], &r.im[i]);
             let cs = [c[0] * im[0] + c[1] * im[1], c[2] * im[0] + c[3] * im[1]];
-            2.0 * (re[0] * cs[0] + re[1] * cs[1]) / (m * (re[0] * re[0] + re[1] * re[1] + im[0] * im[0] + im[1] * im[1]))
+            2.0 * (re[0] * cs[0] + re[1] * cs[1])
+                / (m * (re[0] * re[0] + re[1] * re[1] + im[0] * im[0] + im[1] * im[1]))
         };
         let (kf, kb) = (kappa(0), kappa(1));
         let ef = (r.omegas[0] - (W0 - w)).abs() / W0;
@@ -217,11 +226,18 @@ fn p1_p2_point_mass_closed_form() {
         );
         p1 = p1.max(ef).max(eb);
         q1 = r.residuals.iter().fold(q1, |a, &b| a.max(b));
-        dir_ok &= kf >= 1.0 - 1e-8 && kb <= -1.0 + 1e-8 && Whirl::of(kf) == Whirl::Forward && Whirl::of(kb) == Whirl::Backward;
+        dir_ok &= kf >= 1.0 - 1e-8
+            && kb <= -1.0 + 1e-8
+            && Whirl::of(kf) == Whirl::Forward
+            && Whirl::of(kb) == Whirl::Backward;
     }
     ch.le("P1 point mass", p1, 1e-8);
     ch.le("Q1 point mass residual", q1, 1e-9);
-    ch.holds("P2 point mass", dir_ok, "omega_0 - Omega forward (kappa = 1), omega_0 + Omega backward (kappa = -1)");
+    ch.holds(
+        "P2 point mass",
+        dir_ok,
+        "omega_0 - Omega forward (kappa = 1), omega_0 + Omega backward (kappa = -1)",
+    );
     ch.finish();
 }
 
@@ -241,7 +257,11 @@ fn p1b_p2_q_z_l_n1_r2_cube_on_springs() {
         let w = f * W0;
         let r = whirl_of(part.whirl_modes(w).unwrap(), "P1b");
         let pair = pair_of(&cb, m, &r);
-        assert_eq!(pair.len(), 2, "defective set-up: the translation pair is not among the modes at {f} omega_0");
+        assert_eq!(
+            pair.len(),
+            2,
+            "defective set-up: the translation pair is not among the modes at {f} omega_0"
+        );
         let ef = (pair[0].omega - (W0 - w)).abs() / W0;
         let eb = (pair[1].omega - (W0 + w)).abs() / W0;
         println!(
@@ -259,7 +279,11 @@ fn p1b_p2_q_z_l_n1_r2_cube_on_springs() {
         q3 &= r.frequencies_all.len() == r.unknowns && r.frequencies_all.iter().all(|x| x.is_finite());
     }
     ch.le("P1b cube translation pair", p1b, 1e-8);
-    ch.holds("P2 cube", dir_ok, "omega_0 - Omega forward, omega_0 + Omega backward, |kappa| = 1");
+    ch.holds(
+        "P2 cube",
+        dir_ok,
+        "omega_0 - Omega forward, omega_0 + Omega backward, |kappa| = 1",
+    );
     ch.le("Q1 cube residual", q1, 1e-9);
     ch.holds("Q3 cube", q3, "n positive finite frequencies");
     // Q2: Coriolis off against the subspace solution of F-396.
@@ -319,7 +343,11 @@ fn p1b_p2_q_z_l_n1_r2_cube_on_springs() {
         "LossOfStiffness with negative == Some(2) at 1.2 omega_0",
     );
     // R2: the default and the F-396 functions untouched by the option.
-    ch.holds("R2 default", !RotatingOptions::new(3).coriolis, "RotatingOptions::new(m).coriolis == false");
+    ch.holds(
+        "R2 default",
+        !RotatingOptions::new(3).coriolis,
+        "RotatingOptions::new(m).coriolis == false",
+    );
     let a = match part.modes(w).unwrap() {
         SpeedModes::Modes(r) => r,
         SpeedModes::LossOfStiffness(l) => panic!("{l:?}"),
@@ -383,11 +411,26 @@ fn p3_p4_p5_cube_whirl_campbell() {
         q1 = r.modes.iter().fold(q1, |a, x| a.max(x.residual));
     }
     ch.le("P3 branches against omega_0 -/+ Omega", dev, 1e-8);
-    ch.holds("P3 directions", dirs, "track 0 forward, track 1 backward at every speed > 0, None at rest");
-    ch.holds("P3 MAC", mac_min >= 0.9, &format!("smallest MAC of tracks 0 and 1: {mac_min:.12}"));
+    ch.holds(
+        "P3 directions",
+        dirs,
+        "track 0 forward, track 1 backward at every speed > 0, None at rest",
+    );
+    ch.holds(
+        "P3 MAC",
+        mac_min >= 0.9,
+        &format!("smallest MAC of tracks 0 and 1: {mac_min:.12}"),
+    );
     ch.le("Q1 Campbell speeds residual", q1, 1e-9);
     // P4: crossings linear in Omega.
-    let exact = [(0, 1, 0.5), (0, 2, 1.0 / 3.0), (0, 3, 0.25), (0, 4, 0.2), (1, 3, 0.5), (1, 4, 1.0 / 3.0)];
+    let exact = [
+        (0, 1, 0.5),
+        (0, 2, 1.0 / 3.0),
+        (0, 3, 0.25),
+        (0, 4, 0.2),
+        (1, 3, 0.5),
+        (1, 4, 1.0 / 3.0),
+    ];
     let mut found = Vec::new();
     for e in 1..=4u32 {
         for c in t.crossings(e) {
@@ -397,7 +440,11 @@ fn p3_p4_p5_cube_whirl_campbell() {
         }
     }
     println!("P4 crossings: {found:?}");
-    ch.holds("P4 count", found.len() == 6, &format!("{} crossings on tracks 0 and 1", found.len()));
+    ch.holds(
+        "P4 count",
+        found.len() == 6,
+        &format!("{} crossings on tracks 0 and 1", found.len()),
+    );
     let mut p4: f64 = 0.0;
     let mut n3: f64 = f64::INFINITY;
     for (tr, e, x) in exact {
@@ -427,7 +474,11 @@ fn p3_p4_p5_cube_whirl_campbell() {
     p5 &= !json.contains("NaN") && !json.contains("inf");
     p5 &= json.matches("\"direction\"").count() == 3 && json.contains("\"forward\"") && json.contains("\"backward\"");
     println!("{csv}");
-    ch.holds("P5", p5, "CSV rows, direction columns, round-trip bits; JSON finite with directions");
+    ch.holds(
+        "P5",
+        p5,
+        "CSV rows, direction columns, round-trip bits; JSON finite with directions",
+    );
     ch.finish();
 }
 
@@ -459,7 +510,8 @@ fn clamp(m: &mut SolidModel, set: &str) {
 fn ds_sector() -> SolidModel {
     let mut m = model_on(ds_mesh());
     clamp(&mut m, "xmin");
-    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, ORIGIN, N)).unwrap();
+    m.add_constraint(Constraint::cyclic("ymin", "ymax", AXIS, ORIGIN, N))
+        .unwrap();
     m
 }
 
@@ -494,10 +546,7 @@ fn omega_ref(rs: &RotatingSector) -> f64 {
 }
 
 fn worst_relative(a: &[f64], b: &[f64]) -> f64 {
-    a.iter()
-        .zip(b)
-        .map(|(s, f)| (s / f - 1.0).abs())
-        .fold(0.0f64, f64::max)
+    a.iter().zip(b).map(|(s, f)| (s / f - 1.0).abs()).fold(0.0f64, f64::max)
 }
 
 /// The union over the indices of every positive frequency of the sector, sorted.
@@ -603,8 +652,16 @@ fn s1_s2_s3_s4_sector_against_the_full_rotor() {
         for k in [1, 2] {
             let om: Vec<f64> = hs[k].modes.iter().map(|x| x.omega).collect();
             for (i, x) in hs[k].modes.iter().enumerate() {
-                let gap_lo = if i > 0 { (om[i] - om[i - 1]) / om[i] } else { f64::INFINITY };
-                let gap_hi = if i + 1 < om.len() { (om[i + 1] - om[i]) / om[i] } else { f64::INFINITY };
+                let gap_lo = if i > 0 {
+                    (om[i] - om[i - 1]) / om[i]
+                } else {
+                    f64::INFINITY
+                };
+                let gap_hi = if i + 1 < om.len() {
+                    (om[i + 1] - om[i]) / om[i]
+                } else {
+                    f64::INFINITY
+                };
                 if gap_lo.min(gap_hi) > 1e-6 {
                     counted += 1;
                     s3 = s3.max((x.wave.unwrap().abs() - 1.0).abs());
@@ -622,7 +679,11 @@ fn s1_s2_s3_s4_sector_against_the_full_rotor() {
             ch.gt("S4 the Coriolis split of index 1 at 0.8 omega_ref", split, 1e-6);
             // N2: the sector without Coriolis against the full rotor with it.
             let (off, _) = union(&rs_off, w);
-            ch.gt("N2 sector without Coriolis", worst_relative(&off, &fr.frequencies_all), 1e-6);
+            ch.gt(
+                "N2 sector without Coriolis",
+                worst_relative(&off, &fr.frequencies_all),
+                1e-6,
+            );
         }
     }
     ch.le("Q1 sector and full rotor residual", q1, 1e-9);
@@ -649,7 +710,11 @@ fn s1_s2_s3_s4_sector_against_the_full_rotor() {
         let hf: Vec<f64> = h.eigenvalues.iter().map(|&l| rcfd_fem::modal::frequency(l)).collect();
         z1 &= same_bits(&zl, &h.eigenvalues) && same_bits(&zf, &hf);
     }
-    ch.holds("Z1 sector", z1, "whirl_modes(k, 0) has the bits of modal_analysis_harmonic, k = 0 .. 3");
+    ch.holds(
+        "Z1 sector",
+        z1,
+        "whirl_modes(k, 0) has the bits of modal_analysis_harmonic, k = 0 .. 3",
+    );
     ch.finish();
 }
 
@@ -682,7 +747,11 @@ fn s5_sector_whirl_campbell() {
             fam.directions.iter().map(|d| d[4]).collect::<Vec<_>>()
         );
     }
-    ch.holds("S5", ok, "4 families, multiplicities 1 2 2 1, tracks 4 8 8 4, finite, a direction everywhere");
+    ch.holds(
+        "S5",
+        ok,
+        "4 families, multiplicities 1 2 2 1, tracks 4 8 8 4, finite, a direction everywhere",
+    );
     println!("S5 smallest stored MAC (recorded, no limit): {mac_min:.6}");
     ch.finish();
 }
@@ -701,8 +770,16 @@ fn r1_refusals() {
     let mut ch = Checks::new();
     let cb = cube();
     let part = RotatingPart::new(&cb, AXIS, ORIGIN, &cube_options(true)).unwrap();
-    ch.holds("R1 speed -1", key_of(part.whirl_modes(-1.0).unwrap_err()) == "speed", "refused with \"speed\"");
-    ch.holds("R1 speed NaN", key_of(part.whirl_modes(f64::NAN).unwrap_err()) == "speed", "refused with \"speed\"");
+    ch.holds(
+        "R1 speed -1",
+        key_of(part.whirl_modes(-1.0).unwrap_err()) == "speed",
+        "refused with \"speed\"",
+    );
+    ch.holds(
+        "R1 speed NaN",
+        key_of(part.whirl_modes(f64::NAN).unwrap_err()) == "speed",
+        "refused with \"speed\"",
+    );
     ch.holds(
         "R1 speeds decreasing",
         key_of(part.whirl_campbell(&[0.0, 2.0, 1.0]).unwrap_err()) == "speeds",
@@ -710,7 +787,11 @@ fn r1_refusals() {
     );
     let sector = ds_sector();
     let rs = RotatingSector::new(&sector, &ds_options(true)).unwrap();
-    ch.holds("R1 harmonic 4", key_of(rs.whirl_modes(4, 1.0).unwrap_err()) == "harmonic", "refused with \"harmonic\"");
+    ch.holds(
+        "R1 harmonic 4",
+        key_of(rs.whirl_modes(4, 1.0).unwrap_err()) == "harmonic",
+        "refused with \"harmonic\"",
+    );
     let one = [1.0];
     ch.holds(
         "R1 dense wrong length",

@@ -484,7 +484,10 @@ fn solve_dense(k: &[f64], m: &[f64], g: &[f64], n: usize, wanted: usize) -> Resu
     if idx.len() < wanted {
         return Err(FemError::InvalidValue {
             key: "modes",
-            reason: format!("{wanted} modes requested, the whirl problem has {} positive frequencies", idx.len()),
+            reason: format!(
+                "{wanted} modes requested, the whirl problem has {} positive frequencies",
+                idx.len()
+            ),
         });
     }
     let all: Vec<f64> = idx.iter().map(|&i| d[i]).collect();
@@ -745,7 +748,10 @@ impl<'a> RotatingPart<'a> {
             }
         }
         if let Some(negative) = inertia(&kr, &mr)? {
-            return Ok(WhirlSpeedModes::LossOfStiffness(LossOfStiffness { speed: omega, negative }));
+            return Ok(WhirlSpeedModes::LossOfStiffness(LossOfStiffness {
+                speed: omega,
+                negative,
+            }));
         }
         check_size(nf)?;
         let kd = dense_of(&kr);
@@ -1162,7 +1168,11 @@ impl WhirlCampbell {
     /// The rotating-frame frequency, rad/s, of track `t` at each speed (`sqrt` of the stored `omega^2`, which gives `omega`
     /// back exactly).
     pub fn omegas(&self, t: usize) -> Vec<Option<f64>> {
-        self.table.tracks[t].eigenvalues.iter().map(|l| l.map(f64::sqrt)).collect()
+        self.table.tracks[t]
+            .eigenvalues
+            .iter()
+            .map(|l| l.map(f64::sqrt))
+            .collect()
     }
 
     /// The crossings of every track with the engine order `order` by [`whirl_order_crossings`], track by track.
@@ -1283,7 +1293,9 @@ mod tests {
 
     /// A deterministic pseudo-random number in [-1, 1).
     fn lcg(state: &mut u64) -> f64 {
-        *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         ((*state >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
     }
 
