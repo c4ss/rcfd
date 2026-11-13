@@ -478,9 +478,37 @@ amplitudes measured at the inlet agree with the closed form within `8.8e-4`, `3.
 across; second order); the file-driven run equals the run driven by the closed form to `1.1e-14`; 127 and 96 samples of a
 128-sample, two-period file are refused.
 
-Limits: the sampled pressure must be the entering wave only (one section of pressure cannot separate a returning wave);
-periodic signals only; a static section, medium at rest; only the channel was run (any `DuctShape` is accepted); not
-reachable from a case file or the CLI.
+Limits: the sampled pressure must be the entering wave only (one section of pressure cannot separate a returning wave;
+see the next section for two or more sections); periodic signals only; a static section, medium at rest; only the channel
+was run (any `DuctShape` is accepted); not reachable from a case file or the CLI.
+
+### Returning waves at the sampled section (F-478, ADR 0378; library only)
+
+Both waves of a duct mode have the same section shape, so one section of pressure gives only their sum per mode.
+`SurfaceDrive::from_sections(&[spec_0, spec_1, ...], medium, frame, basis, options)` reads each section with
+`from_series` (its refusals located as `sections[i]/...`; each section keeps its own faces and its own clock), and splits
+every mode of every harmonic into the wave entering the domain and the returning one over the sections' planes with the
+closed-form `kz` (`split_axial`, least squares for three or more), referenced at the first section's plane. The returned
+`SplitDrive` holds `drive` (a `SurfaceDrive` playing back the entering wave only), `returning` (the returning amplitudes),
+`separation` and `min_separation` (`sigma = |sin(kz d)|` for two sections and a propagating mode, `tanh(alpha d)` for a
+cut-off one), `reflection` (per harmonic, the RMS ratio of the returning to the entering wave) and `split_residual` (zero
+for two sections; the misfit of the two-wave model for more). The split is refused when `sigma < 0.05` for any mode of the
+basis at any harmonic (an error amplification above 20: two sections on one plane, or spaced by half an axial wavelength of
+a propagating mode).
+
+`SurfaceDrive::entering_residual(&check)` measures a single-section drive against a second sampled section: per harmonic the
+relative misfit of the entering-wave prediction at the check section, zero for an entering wave only and of the order of the
+returning share otherwise (`2 |M| |sin(kz d)|` per mode).
+
+Checked (the F-452 channel field with a returning wave of each component, reflection factors 0.5, 0.4, 0.6; sections of 24
+wall-clustered faces at `x = -0.02 m` and of 20 uniform faces at `x = -0.05 m`, different clocks): on 64 cells across the
+entering amplitudes at the inlet agree with the closed form within `8.8e-4`, `3.5e-3`, `2.3e-3` (the F-452 numbers: the drive
+is the closed-form entering wave to `1.6e-13`); the returning wave found at the inlet is at most `1.7e-5` of it; the
+single-section drive of the same field is off by the reflection factor exactly and its residual against the second section
+equals the closed form (`0.526`, `0.888`) to `1.4e-15`, against `5e-14` for an entering field only.
+
+Limits: the split uses the hard-walled, medium-at-rest axial wavenumbers; one duct and two (three) sections were run; the
+single-section residual needs a second section.
 
 ## Reference: code locations, input format and command line
 
@@ -499,7 +527,7 @@ reachable from a case file or the CLI.
 | Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory`, `sponge_memories`, `set_sponge_memories`; the shifted form: `MatchedOptions`, `Sponge::planar_shifted`, `Sponge::corner` |
 | Acoustic wave solver (linear, medium at rest) | `crates/rcfd-fv/src/acoustic_wave.rs` (`AcousticWaveSolver`, `Medium`, `WaveBc`, `WaveSponge`, `WaveSpongeForm`) |
 | Duct modes, modal decomposition, axial split, `rcfd-duct-modes` export | `crates/rcfd-post/src/duct_modes.rs` (`ModeBasis`, `axial_wavenumber`, `HarmonicDft`, `decompose_section`, `split_axial`, `fit_axial`, `ModalExport`) |
-| Wave solver driven by a sampled surface series | `crates/rcfd-post/src/wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`, `HarmonicModes`) |
+| Wave solver driven by a sampled surface series | `crates/rcfd-post/src/wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`, `HarmonicModes`; returning waves: `SurfaceDrive::from_sections`, `SplitDrive`, `SurfaceDrive::entering_residual`) |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 
