@@ -9294,7 +9294,7 @@ fixed by the item's registration ADR before any code.
     sets are accepted at k > 0 (their reference unknowns doubled) and the frequencies of a sector with a rigid set equal
     the full model's within 1e-8.
   - note: From ADR 0386 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
-- [ ] **F-490** Transient integrator on the transformation path and with prescribed motion histories
+- [x] **F-490** Transient integrator on the transformation path and with prescribed motion histories
   - depends on: F-398
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar with a nodal spring at its
     free end (the support of ADR 0384) started in its first discrete mode: with Newmark the amplitude after 100 periods
@@ -9302,7 +9302,17 @@ fixed by the item's registration ADR before any code.
     rigid-set end gives the same history as the equivalent prescribed-only model within 1e-12; a base displacement given
     by a table gives the relative motion of the closed-form base-excited oscillator within 1 percent at 40 steps per
     period; models without these features give the bits of ADR 0389's integrator.
-  - note: From ADR 0389 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: ADR 0393, 2026-11-13: rcfd-fem transient::Integrator on the transformation x = T q + g(t) of ADR 0296
+    (supports, rigid sets, linear constraints; M_r = T^T M T, K_r = T^T K T with the supports, Rayleigh on both) and
+    with prescribed motion histories (MotionHistory: per-node amplitudes times a table; the free equations get -T^T(M
+    g'' + C g' + K g), g' and g'' by central differences of the table with the step, second order, the table covering
+    one step beyond each end); Integrator::with_motion, start on all unknowns with an admissibility check,
+    start_reduced. Spring bar of ADR 0384: amplitude after 100 periods 8e-15 and 6e-14, period error 0.9974 and 0.9993
+    of (omega dt)^2/12, order 1.997; rigid-set end against bar B 3.0e-14 (free) and 7.8e-15 (loaded, damped, rho 0.8);
+    base-excited one-element oscillator (participation 3/2 of the consistent mass) 4.5e-3 at 40 steps per period over
+    one period, damped 4.3e-3, order 1.994; models without these features keep the bits of ADR 0389 (digest recorded
+    from the unchanged library); eight mutations, seven caught by their checks. Model constraint values must be zero;
+    time-dependent Linear values and reference motions not covered.
 - [ ] **F-491** Static correction of the harmonic response for free bodies and on the transformation path
   - depends on: F-399, F-395
   - acceptance: Every limit not stated here is registered in the ADR before the run. A free-free bar under a harmonic
