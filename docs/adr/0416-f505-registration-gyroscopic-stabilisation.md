@@ -286,3 +286,29 @@ supercritical branches in a Campbell table (the stability table gives per-speed 
 matrix would take `-M^-1 D`; not asked); the flag at a defective double eigenvalue (the band edges themselves, a Krein collision),
 where rounding is `~sqrt(eps)` and the mode vector is approximate; large parts (the dense cap of ADR 0411, 1500 reduced unknowns,
 the QR `O((2n)^3)`); frequencies in the stationary frame; output through case files and the CLI.
+
+## Amendment 1 (2026-11-13, after the registered run 1, before any corrected run): F2 and F3 rest on a wrong torsion estimate
+
+Run 1 (`f505-scratch/run1.log`, made once) missed F2 and F3; every other check of the run was met (addendum). **Diagnosis.**
+The set-up text took the torsion of the cube on springs as `omega_t^2 ~ 3 omega_0^2 - Omega^2` (from ADR 0411's L1 remark). That
+is wrong: a rigid rotation of the part about its own spin axis leaves the centrifugal potential unchanged (the rotated body sees
+the same field), so on that motion the geometric stiffness of the centrifugal pre-stress cancels the spin softening, `phi^T
+(K_sigma,1 - M_perp) phi = 0` to first order, and the torsion stays near `sqrt(3) omega_0` at every speed. Measured in run 1: the
+torsion frequency `1731.94` rad/s at `1.2 omega_0`, `1731.89` at `1.5`, `1731.8` (275.62 Hz) at `2.0`, against `sqrt 3 x 1000 =
+1732.05` at rest. Hence at `2.0 omega_0` `K_eff` has 2 negative eigenvalues (the translation pair), not 3, and the cube is
+gyroscopically stabilised there (flagged `Stable`, CSV row `2000,2,true,0,...`): F2's premise (an odd index) does not hold for
+this set-up, and F3's expected columns (`false`, `3` in the last row) came from the same estimate. The library behaved as D3
+predicts for an even index. (The CBA statement "torsion positive at every CBA speed" stays true, with a larger margin.)
+
+Records (rule 2): the test of run 1 becomes the ignored record `b1_x1_f1_f2_f3_p3_n1_isotropic_cube_known_miss`, with its
+limits and expectations intact and the measured values in its comment. Corrected checks, written and committed before their run:
+
+| # | Clause | Check | Limit | Estimate behind it |
+|---|---|---|---|---|
+| F2b | c3 | the odd index on a fresh set-up (not yet run): the dense point mass of PMI at `1.5 omega_0` with a third, axial unknown (`M = m I_3`, `K = m diag(omega_0^2 - Omega^2, omega_0^2 - Omega^2, -omega_0^2)`, `G` the in-plane block of PMI and zeros in the axial row and column; three negative eigenvalues, odd): flagged `Unstable` with growth `omega_0` (the axial divergence `s = +/- omega_0`), `|growth - omega_0| / omega_0`; the two in-plane frequencies `Omega -/+ omega_0` relative to each value | flag; `<= 1e-8`; `<= 1e-8` | D3, D5 (the axial unknown is uncoupled) |
+| F3b | c3 | the CSV of the same `whirl_stability` table (CBI, `0.5, 1.2, 1.5, 2.0 omega_0`): `1 + 4` lines, `4 + modes` fields per row, the `stable` column equal to each result's `is_stable()`, `negative_stiffness` equal to each result's count (`0` for `None`), growth and frequencies parsing back to their bits; and each result equal to `whirl_state` of its speed | each | D6 (a self-consistency check, no physical prediction) |
+
+B1, X1, F1, N1, P3 and Q1 (cube) were met in run 1; an amended copy `b1_x1_f1_f3b_p3_n1_isotropic_cube_amended` carries them
+unchanged (deterministic, the same numbers) with F3b in place of F2 and F3, so that they run in the suite. By the decision rule
+the item is **partial** whatever F2b and F3b give: F2 and F3 were registered checks that missed, and their corrections are met
+(if they are) only after an amendment made after the run.

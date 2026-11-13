@@ -348,8 +348,15 @@ fn negative(r: &StateWhirl) -> Option<Option<usize>> {
     r.loss.map(|l: LossOfStiffness| l.negative)
 }
 
+/// The registered run 1 of B1, X1, F1, F2, F3, P3, N1 (ADR 0416), kept as an ignored record with its limits and expectations
+/// intact. Run 1: F2 missed (measured `negative == Some(2)` and `Stable` at 2.0 omega_0, not `Some(3)` and `Unstable`: the
+/// torsion stays near sqrt(3) omega_0 = 1731.8 rad/s at every speed, since the pre-stress cancels the spin softening on a
+/// rigid rotation about the axis; the registered estimate `3 omega_0^2 - Omega^2` was wrong); F3 missed for the same reason
+/// (last row `2000,2,true,0,...`, expected `false` and `3`); every other check of the test met. See amendment 1; the
+/// corrected checks are in `b1_x1_f1_f3b_p3_n1_isotropic_cube_amended` and `f2b_odd_index_point_mass`.
 #[test]
-fn b1_x1_f1_f2_f3_p3_n1_isotropic_cube() {
+#[ignore = "F-505 known miss (ADR 0416 amendment 1): F2 and F3 rest on a wrong torsion estimate; record of run 1"]
+fn b1_x1_f1_f2_f3_p3_n1_isotropic_cube_known_miss() {
     let mut ch = Checks::new();
     let cb = cube(W0, W0);
     let part = RotatingPart::new(&cb, AXIS, ORIGIN, &options(true)).unwrap();
@@ -547,6 +554,171 @@ fn an3_anisotropic_cube_band() {
     ch.le("AN3 growth and translation frequencies (/ omega_0)", an3, 1e-8);
     ch.holds("AN3 losses", losses, "None, Some(1) x 3, Some(2)");
     ch.le("Q1 cube anisotropic residual", q1, 1e-9);
+    ch.finish();
+}
+
+// ------------------------------------------------------------------------------------------------------ amendment 1
+
+/// ADR 0416 amendment 1: B1, X1, F1, N1, P3 and Q1 as registered (unchanged from the record), F3b in place of F2 and F3.
+#[test]
+fn b1_x1_f1_f3b_p3_n1_isotropic_cube_amended() {
+    let mut ch = Checks::new();
+    let cb = cube(W0, W0);
+    let part = RotatingPart::new(&cb, AXIS, ORIGIN, &options(true)).unwrap();
+    let plain = RotatingPart::new(&cb, AXIS, ORIGIN, &options(false)).unwrap();
+    let m = part.mass();
+    let mut q1: f64 = 0.0;
+    let w = 0.5 * W0;
+    let x = part.whirl_state(w).unwrap();
+    let reference = match part.whirl_modes(w).unwrap() {
+        rcfd_fem::rotating::WhirlSpeedModes::Modes(r) => r,
+        other => panic!("defective set-up: {other:?}"),
+    };
+    let freqs: Vec<f64> = x.eigenvalues.iter().filter(|s| s[1] > 0.0).map(|s| s[1]).collect();
+    let x1 = freqs
+        .iter()
+        .zip(&reference.frequencies_all)
+        .map(|(a, b)| (a / b - 1.0).abs())
+        .fold(0.0f64, f64::max);
+    ch.holds(
+        "X1 count",
+        freqs.len() == reference.frequencies_all.len() && x.unknowns == reference.unknowns,
+        "as many positive frequencies as ADR 0411's frequencies_all",
+    );
+    ch.le("X1 frequencies against whirl_modes at 0.5 omega_0", x1, 1e-9);
+    ch.holds(
+        "X1 flag",
+        x.loss.is_none() && x.stability == Stability::Stable,
+        "loss None, flagged Stable",
+    );
+    q1 = x.modes.iter().fold(q1, |a, w| a.max(w.residual));
+    let mut p3: f64 = 0.0;
+    let mut p3_ok = true;
+    for f in [1.2, 1.5] {
+        let w = f * W0;
+        let r = part.whirl_state(w).unwrap();
+        let pair = pair_of(&cb, m, &r);
+        if f == 1.2 {
+            ch.holds(
+                "B1",
+                negative(&r) == Some(Some(2))
+                    && r.eigenvalues.len() == 2 * r.unknowns
+                    && r.unknowns == 16
+                    && r.eigenvalues.iter().all(|s| s[0].is_finite() && s[1].is_finite())
+                    && r.eigenvalues.iter().filter(|s| s[1] > 0.0 || (s[1] == 0.0 && s[0] >= 0.0)).count() == 16,
+                "loss with negative Some(2), 32 finite eigenvalues, 16 reported",
+            );
+        }
+        q1 = r.modes.iter().fold(q1, |a, w| a.max(w.residual));
+        if pair.len() != 2 {
+            p3_ok = false;
+            println!("P3: the translation pair is not among the modes at {f} omega_0");
+            continue;
+        }
+        p3 = p3
+            .max((pair[0].omega / (w - W0) - 1.0).abs())
+            .max((pair[1].omega / (w + W0) - 1.0).abs());
+        p3_ok &= negative(&r) == Some(Some(2))
+            && r.stability == Stability::Stable
+            && pair
+                .iter()
+                .all(|x| x.whirl <= -1.0 + 1e-8 && x.direction == Whirl::Backward);
+    }
+    ch.le("P3 cube translation pair against Omega -/+ omega_0", p3, 1e-8);
+    ch.holds(
+        "P3",
+        p3_ok,
+        "negative Some(2), flagged Stable, both translation modes backward with kappa <= -1 + 1e-8",
+    );
+    let w = 1.2 * W0;
+    let r = plain.whirl_state(w).unwrap();
+    match r.stability {
+        Stability::Unstable { growth } => {
+            ch.le(
+                "F1 growth against sqrt(Omega^2 - omega_0^2)",
+                (growth - (w * w - W0 * W0).sqrt()).abs() / W0,
+                1e-8,
+            );
+            ch.gt("N1 growth without Coriolis", growth, 1e2);
+        }
+        Stability::Stable => ch.holds("F1", false, "flagged Unstable without Coriolis"),
+    }
+    // F3b: the CSV reproduces the results.
+    let speeds = [0.5 * W0, 1.2 * W0, 1.5 * W0, 2.0 * W0];
+    let table = part.whirl_stability(&speeds).unwrap();
+    let mut same = table.results.len() == 4;
+    for (w, r) in speeds.iter().zip(&table.results) {
+        same &= *r == part.whirl_state(*w).unwrap();
+    }
+    let csv = table.to_csv();
+    print!("F3b CSV:\n{csv}");
+    let lines: Vec<&str> = csv.lines().collect();
+    let mut csv_ok = lines.len() == 5;
+    for (j, line) in lines.iter().skip(1).enumerate() {
+        let fields: Vec<&str> = line.split(',').collect();
+        let r = &table.results[j];
+        let neg = match r.loss {
+            None => "0".to_string(),
+            Some(l) => l.negative.map_or_else(String::new, |n| n.to_string()),
+        };
+        let stable = if r.stability.is_stable() { "true" } else { "false" };
+        csv_ok &= fields.len() == 4 + r.modes.len();
+        csv_ok &= fields.get(1) == Some(&neg.as_str()) && fields.get(2) == Some(&stable);
+        let growth = match r.stability {
+            Stability::Stable => 0.0,
+            Stability::Unstable { growth } => growth,
+        };
+        csv_ok &= fields.get(3).and_then(|s| s.parse::<f64>().ok()).map(f64::to_bits) == Some(growth.to_bits());
+        for (i, mode) in r.modes.iter().enumerate() {
+            csv_ok &= fields.get(4 + i).and_then(|s| s.parse::<f64>().ok()).map(f64::to_bits)
+                == Some(mode.frequency.to_bits());
+        }
+    }
+    ch.holds("F3b results", same, "whirl_stability equals whirl_state at each speed");
+    ch.holds(
+        "F3b CSV",
+        csv_ok,
+        "5 lines, the stable and negative columns equal to the results, numbers round-trip",
+    );
+    ch.le("Q1 cube isotropic residual", q1, 1e-9);
+    ch.finish();
+}
+
+/// ADR 0416 amendment 1, F2b: an odd index (three negative eigenvalues of K) is unstable for any G (D3).
+#[test]
+fn f2b_odd_index_point_mass() {
+    let mut ch = Checks::new();
+    let w = 1.5 * W0;
+    let n = 3;
+    let mut k = vec![0.0; 9];
+    let mut m = vec![0.0; 9];
+    let mut g = vec![0.0; 9];
+    k[0] = MASS * (W0 * W0 - w * w);
+    k[4] = MASS * (W0 * W0 - w * w);
+    k[8] = -MASS * W0 * W0;
+    for i in 0..n {
+        m[i * n + i] = MASS;
+    }
+    g[1] = -2.0 * w * MASS;
+    g[3] = 2.0 * w * MASS;
+    let r = gyroscopic_state_eigen_dense(&k, &m, &g, n).unwrap();
+    println!(
+        "F2b: {:?}, eigenvalues {:?}, omegas {:?}, growth {:?}",
+        r.stability, r.eigenvalues, r.omegas, r.growth
+    );
+    match r.stability {
+        Stability::Unstable { growth } => ch.le("F2b growth against omega_0", (growth - W0).abs() / W0, 1e-8),
+        Stability::Stable => ch.holds("F2b", false, "flagged Unstable with an odd index"),
+    }
+    let inplane: Vec<f64> = r.omegas.iter().copied().filter(|x| *x > 0.0).collect();
+    let dev = if inplane.len() == 2 {
+        (inplane[0] / (w - W0) - 1.0)
+            .abs()
+            .max((inplane[1] / (w + W0) - 1.0).abs())
+    } else {
+        f64::INFINITY
+    };
+    ch.le("F2b in-plane frequencies Omega -/+ omega_0", dev, 1e-8);
     ch.finish();
 }
 
