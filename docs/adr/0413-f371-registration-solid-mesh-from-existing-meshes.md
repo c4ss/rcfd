@@ -6,8 +6,8 @@ the arithmetic below was done by hand (disclosed). Results go in the addendum at
 after a run.
 
 Parent: the stub [ADR 0272](0272-solid-mesh-from-existing-meshes.md) (SB-2 of the plan [ADR 0270](0270-structural-solver-basic-tier-plan.md)),
-the data model [ADR 0271](0271-solid-data-model-and-structured-builders.md) (its remaining question 2: a moved mesh is rebuilt
-through `SolidMesh::new` and `add_block`, option (a)), the quadratic hexahedron upgrade of ADR 0292 (`upgrade_to_hex20_mapped`).
+the data model [ADR 0271](0271-rcfd-fem-crate-and-solid-data-model.md) (its remaining question 2: a moved mesh is rebuilt
+through `SolidMesh::new` and `add_block`, option (a)), the quadratic hexahedron upgrade of [ADR 0292](0292-quadratic-hexahedron-hex20.md) (`upgrade_to_hex20_mapped`).
 Roadmap item F-371 (deps F-370, F-010, F-012, F-132). Size M. Number 0413 given by the lead. Branch
 `f371-solid-mesh-from-meshes`, worktree `w49i-work/f371`, scratch `w49i-work/f371-scratch`.
 
