@@ -223,3 +223,51 @@ the block shares; nothing in the solver is changed, so the refusal of ADR 0374 s
 - **Q1. A library diagnostic.** Options: (a) keep the linearisation in test code (registered: no library change); (b) a public
   `PimpleSolver::step_jacobian_eigs`. Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): (a),
   with (b) a follow-up only if another stop needs it.
+
+## Amendment 1 (2026-11-13): after the records K and L, where the modes of magnitude above one live
+
+Written after the single runs of the fast checks (`f482-scratch/fast_checks.log`) and of the records K and L (`rec_k.log`,
+`rec_l.log`), before the run registered here. No limit above is changed; nothing of the records K and L is edited. What bears on
+this amendment (the full results are in the addendum): the linearisation is valid (U3, E0 1.8e-5, the solves of the map agree
+with those of R to 5e-8, R1 reproduced the stop at step 34); at `dt = 5e-4` (H30) and with two correctors (C15) every Ritz value
+lies inside the unit circle (E2, E3 met; `lambda_L` -0.776 and -0.481, both real). At `dt = 1e-3` with one corrector the outer
+spectrum is not one isolated negative eigenvalue: for B at step 15 the Ritz value of smallest real part is the complex pair
+`-1.103 +- 0.346i` (`|.| = 1.156`, true residual 3.7e-3; also a real -1.073), and the largest Ritz values are pairs of positive
+real part up to `|.| = 1.93`; at steps 5 and 10 the leftmost is real (-1.030, -1.265) and the largest have positive real part
+(1.47, 1.31). For the first-order forcing F, which runs 200 steps, at step 15: a real -1.024 (converged) and positive pairs up to
+1.58. Every one of these vectors has 97 to 100 percent of its squared norm in the pressure. So E1 b, c, d and E4 missed: the
+linearisation at the state of step 15 does not separate the setting that stops (B) from the one that runs (F).
+
+The reading (disclosed, not measured): a mode of almost pure pressure with a velocity part below a tenth of it is what a
+perturbation of the pressure of the solid cells would give, where the penalty holds the velocity to about `1e-4` of its fluid
+value and the pressure is weakly coupled (ADR 0388); such modes could have a magnitude above one without moving the flow (and
+would then be invisible in the run's velocity), while the period-two growth of the run is a fluid mode next to the body.
+
+**S1 (registered now; record M).** For the states K15 (B) and F15 (F), the computation of D3 is repeated once (it is
+deterministic: the printed Ritz values must equal those of the records K and L to the printed six digits, a reproduction check;
+a difference is a defective set-up). For the overall dominant Ritz vector and for the vector of `lambda_L` of each: the solid
+share `s`, the sum of the squares of the entries of the solid cells (`u_n`, `u_{n-1}`, `p`) over `|z|^2`; the share of the
+pressure block alone in the solid cells; the cell of the largest `abs(p)` entry, whether it is solid, its distance to the
+surface. Limit (the hypothesis HS2, that the modes of positive real part and magnitude above one are modes of the solid
+pressure): `s >= 0.9` for the overall dominant Ritz vector of both states.
+
+**P3 (registered now; record M): the fluid part of the step.** Arnoldi as D3 (`m = 40`, `e = 1e-4`, the start of D3 with the
+entries of the solid cells set to zero, normalised) on `J_f v = P J P v`, `P` setting to zero the entries of the solid cells
+(`u_n`, `u_{n-1}`, `p`; the face fluxes are kept): the linearisation of the step with the solid state held at the base. For
+K15 (B) and F15 (F):
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| P3 a | K15: `lambda_L` of `J_f` converged (true residual of `J_f`) | `<= 0.03` |
+| P3 b | K15: `lambda_L` of `J_f` real and below -1 | `abs(Im) <= 1e-3 abs(lambda_L)`, `Re < -1` |
+| P3 c | K15: the mode cell of `lambda_L` of `J_f` | a first fluid cell |
+| P3 d | F15: as E4, for `J_f` | no converged Ritz value of `J_f` with `Re < 0` and `abs >= 1` |
+
+Printed: the twelve largest Ritz values of `J_f`, its overall dominant, the block shares of the modes.
+
+**P2 (printed, no limit; record M).** The runs B (to its stop) and F (34 steps), one corrector, `dt = 1e-3`, the settings of R:
+per step the largest `abs(p)` over the solid cells and over the fluid cells, to see whether the solid pressure grows in the run.
+
+If P3 a to d hold, the addendum may say that the fluid part of the step carries a period-two mode for B and none for F at
+step 15 (the second branch of the acceptance, in amended form); S1 says whether the other modes are the solid pressure. The
+decision is already **partial** by the rule (E1 b to d and E4 missed), whatever record M gives.
