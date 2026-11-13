@@ -207,7 +207,8 @@ const F_COS: (Vec3, Vec3) = ([1e4, 2e4, -3e4], [1e3, -2e3, 5e2]);
 const F_SIN: (Vec3, Vec3) = ([-2e4, 1e4, 1e4], [-5e2, 1e3, 2e3]);
 
 /// H1 to H3: every harmonic 0 .. 6 of one sector model against its full model.
-fn static_equivalence(name: &str, id: &str, rigid: Option<&str>, reference_loads: bool, ch: &mut Checks) {
+/// Returns the smallest `max |u_full|` over the harmonics (the set-up guard of H3b, ADR 0395 amendment 2).
+fn static_equivalence(name: &str, id: &str, rigid: Option<&str>, reference_loads: bool, ch: &mut Checks) -> f64 {
     let sector = d_sector(rigid);
     let (rotor, full) = full_of(&sector, rigid);
     let sdofs = sector.dof_map();
@@ -215,6 +216,7 @@ fn static_equivalence(name: &str, id: &str, rigid: Option<&str>, reference_loads
     let (fa, fb, _) = parts(sector.mesh());
     let opts = StaticOptions::default();
     let (mut eu, mut et, mut ew) = (0.0f64, 0.0f64, 0.0f64);
+    let mut smallest = f64::INFINITY;
     for k in 0..=N / 2 {
         let single = k == 0 || 2 * k == N;
         let sin = if single { vec![0.0; fb.len()] } else { fb.clone() };
@@ -244,6 +246,7 @@ fn static_equivalence(name: &str, id: &str, rigid: Option<&str>, reference_loads
         let u_full = fs_sol.result.displacement_values();
         let u_exp = rotor.expand_field(&sdofs, &fdofs, k, &hs.cos, &hs.sin);
         let scale = inf(u_full);
+        smallest = smallest.min(scale);
         let d: Vec<f64> = u_exp.iter().zip(u_full).map(|(a, b)| a - b).collect();
         let e_u = inf(&d) / scale;
         let (mut e_t, mut e_w) = (0.0f64, 0.0f64);
@@ -282,6 +285,7 @@ fn static_equivalence(name: &str, id: &str, rigid: Option<&str>, reference_loads
         ch.le(&format!("{id} {name} e_t"), et, 1e-8);
         ch.le(&format!("{id} {name} e_w"), ew, 1e-8);
     }
+    smallest
 }
 
 #[test]
@@ -299,9 +303,33 @@ fn h2_harmonic_load_disc_with_rim_rigid_set() {
 }
 
 #[test]
+#[ignore = "record of ADR 0395: a defective set-up (the exact solution is zero at k = 0 and 6, amendment 2); corrected by h3b below"]
 fn h3_harmonic_load_disc_with_shroud_rigid_set() {
     let mut ch = Checks::new();
     static_equivalence("DSH", "H3", Some("shroud"), false, &mut ch);
+    ch.finish();
+}
+
+/// H3b (ADR 0395 amendment 2): DSH with the reference loads of DR; guard `max |u_full| >= 1e-12` m at every `k`.
+#[test]
+fn h3b_harmonic_load_disc_with_shroud_rigid_set_and_reference_loads() {
+    let mesh = d_mesh();
+    let xmin = mesh.surface_set_nodes("xmin").unwrap();
+    for set in ["ymin", "ymax"] {
+        let p = mesh.surface_set_nodes(set).unwrap()[0];
+        println!(
+            "H3b: first node {p} of {set} at {:?}, on the clamped face xmin: {}",
+            mesh.nodes()[p],
+            xmin.binary_search(&p).is_ok()
+        );
+    }
+    let mut ch = Checks::new();
+    let smallest = static_equivalence("DSH", "H3b", Some("shroud"), true, &mut ch);
+    println!("H3b: smallest max |u_full| over k = {smallest:.4e} m");
+    assert!(
+        smallest >= 1e-12,
+        "defective set-up: max |u_full| = {smallest:e} m at some k"
+    );
     ch.finish();
 }
 
