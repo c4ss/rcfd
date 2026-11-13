@@ -9461,11 +9461,21 @@ fixed by the item's registration ADR before any code.
     passes when run. Five mutations caught. Open: the margin of the rule on larger meshes, and the same guard on the
     prescribed path (follow-up). Recorded as partial by the lead (rule of 2026-11-13: the negative control N1 was a
     defective set-up corrected by amendment 1 after its run); done is the maintainer's call. Follow-up F-496.
-- [ ] **F-496** Refuse a mechanism that is not rigid in buckling on the prescribed path
+- [x] **F-496** Refuse a mechanism that is not rigid in buckling on the prescribed path
   - depends on: F-495
   - acceptance: Every limit not stated here is registered in the ADR before the run. buckling::factors on the
     prescribed-displacement path refuses a model whose reduced stiffness K_FF has a zero-shift pivot ratio below 1e-8
     (the rule of ADR 0401) with FemError naming the unknown of the failing pivot, checked on ADR 0401's two-block Hex8
     hinge with its face held by Displacement rows (which passes the rigid-motion test); the factors of ADR 0390's and
     ADR 0394's models keep their values bit for bit.
-  - note: From ADR 0401 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: From ADR 0401 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0402, 2026-11-13: buckling::factors on the prescribed-displacement path applies, after every existing refusal (the
+    rigid-motion test, the pre-stress length, the factor count) and before the eigensolver, the zero-shift pivot-ratio
+    rule of ADR 0401 to K_FF (mpc::zero_shift_failing_pivot; a factorisation error other than a pivot falls through to
+    the eigensolver's own error), and refuses with FemError::Solver { lowest_buckling_factors } naming the unknown of
+    the failing pivot. ADR 0401's two-block Hex8 hinge held by Displacement rows passes the rigid-motion test (free
+    rigid motions 0) and is refused naming node 8 component 1, a node of the hinged block (ratio -2.1e-16, the name
+    equal to the one computed in the test); held by one more Displacement row it is solved. The factors and modes of ADR
+    0390's and ADR 0394's models are bit-identical to the base library (7 hashes), their printed values unchanged,
+    smallest ratios 5.8e-2 to 0.22. The error kind of a model refused today is kept; only its reason text changes (the
+    hinge, from the eigensolver's unnamed pivot text). Five mutations caught.
