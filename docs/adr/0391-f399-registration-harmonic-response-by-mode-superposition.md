@@ -308,3 +308,93 @@ All in `crates/rcfd-fem/tests/si_harmonic.rs`, release profile, run once (`CARGO
   below the Nyquist bin.
 - Stress amplitudes are per component at integration points (the real and imaginary parts); a von Mises or principal amplitude
   of a harmonic stress (not a sinusoid in general) is not offered.
+
+## Addendum 1: results (2026-11-13)
+
+Registered run: commit 07f41df6, once, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_harmonic -- --nocapture
+--test-threads=1` (10 tests, 0.12 s; log `f399-scratch/run1.log`). Before that run, after the test file was written and built but
+not run, one line of the test was corrected: the static phase in A2 was written `xs.atan2(0)` (the arguments in the wrong order);
+it became `0.atan2(xs)`, the argument of a real number, as D1 defines it. No run had been made. B40: discrete `omega_1 =
+7.9291740656e3` rad/s (arithmetic 1 to every printed digit), total mass 12.56 kg. C40: 20.377, 40.710, 127.435 Hz.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 tip amplitude / (static / 2 zeta) - 1 | <= 1e-8 | 0 (to the last bit) | yes |
+| A1v every equation | <= 1e-8 | 5.93e-15 | yes |
+| A2 phase lag - pi/2 | <= 1e-6 rad | 5.77e-15 | yes |
+| A3 half-power width / (2 zeta omega_1) - 1 | <= 0.01 | 1.0004e-4 (closed form 1.0004e-4; peak at 0.999899995 omega_1) | yes |
+| A4 tip, 10 modes and correction, s = 0.5 / 1.5 | <= 0.005 | 1.247e-5 / 9.154e-4 | yes |
+| A5 without correction, s = 0.5 | > 0.01 | 1.509e-2 | yes |
+| A6 bar mode 1 effective mass / (8/pi^2) - 1 | <= 0.005 | 2.31e-8 | yes |
+| A7 cantilever mode 1 / 0.6130761 - 1 | <= 0.01 | 8.68e-5 (fraction 0.6130229) | yes |
+| A8a free body, sum / total mass - 1, x / y / z | <= 1e-10 | 6.9e-15 / 6.4e-15 / 8.7e-15 | yes |
+| A8b clamped, sum / g^T M_ff^-1 g - 1, x / y / z | <= 1e-10 | 2.9e-15 / 1.6e-15 / 3.1e-15 | yes |
+| A9 amplitudes and mean / phases | <= 1e-12 / <= 1e-12 rad | 4.4e-16 / 1.8e-15 | yes |
+| A10 2.5 and 2 + 1e-6 periods refused, 2 (1 + 1e-13) accepted | as stated | refused, refused, accepted | yes |
+| C1 section variation of the 10 modes | <= 1e-6 | 4.19e-12 | yes |
+| C2 omega = 0 against static / im zero / sigma_xx | <= 1e-10 / bits 0 / <= 1e-10 | 2.6e-16 / all 0 / 1.6e-14 | yes |
+| C3 transient steady state against the response at omega_hat, amplitude / phase | <= 1e-8 / <= 1e-8 rad | 3.1e-15 / 3.7e-14 | yes |
+| C4 sweep against response | bit-equal | bit-equal | yes |
+| C5 threads 1 and 8 | bit-equal | bit-equal | yes |
+| C6 18 refusals | each with its key | all 18 | yes |
+| C7 sum of the 10 fractions | in [0.95, 0.99279] | 0.97973 | yes |
+| C8 complex load linearity | <= 1e-14 | 0 | yes |
+| N1 without correction, s = 1.5 | > 0.005 | 4.616e-2 | as expected |
+| N2 C3 against the unwarped omega | > 1e-6 | 4.48e-5 | as expected |
+| N3 largest m_r left out | > 1e-3 | 0.942 | as expected |
+| N4 phase reference dropped | > 1e-3 | 0.817 | as expected |
+| S1 diff scope / `cargo test -p rcfd-fem --release` / `cargo check -p rcfd-post --tests` | 2 files / 0 failed / builds | `harmonic.rs`, `si_harmonic.rs` (against the merge base ae92ee27) / 209 passed, 0 failed, 43 ignored / builds | yes |
+
+Deviations and remarks:
+
+- C7 estimate: the hand formula of the registration gave 0.973, the measured value is 0.97973 (the discrete high modes differ
+  from the continuum sum); inside the registered band.
+- C3 meets its limit by six orders: the trapezoidal steady state is the transfer function at `omega_hat` (arithmetic 7) to
+  rounding, and the run is long enough for the start transient to fall below `1e-11`.
+- The first line printed by A1 labels the mode count (10) as "free unknowns"; a slip in the message only.
+- `cargo fmt -p rcfd-fem` changed the layout of both files after the run (commit "rcfd-fem harmonic: cargo fmt"); no token
+  changed; the crate run of S1 is on the formatted code.
+- Not run: the rcfd-api baseline hashes (no file outside rcfd-fem touched); the whole workspace (the lead's gate).
+
+Mutations (archive copy `f399-scratch/copy`, `f399-scratch/mutate.py`, own target directory; log `f399-scratch/mutate.log`):
+
+| Id | Caught by |
+| --- | --- |
+| Mu1 `2 zeta_r omega omega` | C3 (amplitude 6.0e-3, phase 6.3e-2) |
+| Mu2 static correction sign | A1, A1v, A2, A4 (both), C2 |
+| Mu3 `phi^T r` without `M` | A6, A7, A8a, A8b, C7 |
+| Mu4 DFT scale `1/N` | A9, C3 |
+| Mu5 whole-period test removed | A10 (both refusals) |
+| Mu6 phase reference dropped | A9 (C3 does not see it: its record starts at a whole number of forcing periods) |
+| Mu7 sweep at the first frequency | C4 |
+| Mu8 imaginary part dropped from the correction | C8 |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+
+**Decision by the rule: done** (every A, C and S check met; the negative controls as expected; every mutation caught).
+
+Remaining questions:
+
+1. The static correction is refused for a free body and on the transformation path (linear constraints, rigid sets, elastic
+   supports, cyclic). Options: (a) a follow-up item with inertia relief for free bodies and the reduced `T^T K T` solve for the
+   transformation path; (b) leave it refused. Recommendation: (a) (below); a blade on a hub with springs (fan item E) needs the
+   transformation path.
+2. With the pre-stressed modes of F-395 the static correction uses the elastic `K` only. Options: (a) let `HarmonicSolver` take
+   the stiffness of the static correction from the caller (the same `K + K_sigma` as the modes) once F-395 lands; (b) refuse a
+   pre-stressed basis with the correction. Recommendation: (a), within the follow-up of question 1.
+3. Clause (h8) was read two ways and both are checked: the literal free body (sum = total mass) and a clamped model (sum = `g^T
+   M_ff^{-1} g`, not the total mass: the support's share is missing by construction). Recommendation: keep both; no re-wording
+   needed.
+4. Not taken (needs data the repository does not have): the modal damping ratio of a moulded plastic blade. Every response level
+   scales with it; it stays an input.
+
+## For the lead: roadmap entries
+
+F-399, proposed status **done**, note:
+
+> ADR 0391, 2026-11-13: rcfd-fem harmonic: HarmonicSolver by mode superposition (ModalBasis from any ModalResult or every mode of a small model, dense), modal damping (one ratio, per mode, or Rayleigh), static correction of the truncated modes (residual flexibility, on by default), response and sweep with amplitude and phase of displacement and integration-point stress; participation factors and effective masses with the full consistent mass; force_harmonics of a sampled record of whole periods (DFT bins h P, phase relative to t = 0) feeding HarmonicLoad::from_harmonic. Bar of 40 Hex8: resonance of M phi_1 at omega_1 equal to static/(2 zeta) to the last bit, lag 90 degrees within 6e-15 rad, half-power width 1.0001 of 2 zeta omega_1 (the closed form); tip amplitude 1.2e-5 and 9.2e-4 from F tan(kL)/(EAk) at 0.5 and 1.5 omega_1 with 10 modes and the correction, 1.5e-2 without at 0.5 (control); effective mass 8/pi^2 within 2.3e-8; Hex20 cantilever first bending 0.61302 (0.6130761 recomputed); sum over all modes equal to the mass within 9e-15 (free body) and to g^T M_ff^-1 g (clamped); three harmonics within 2e-15; the Newmark steady state equals the response at the bilinear frequency within 4e-14. Static correction refused for free bodies and on the transformation path.
+
+Follow-up item (new), title "Static correction of the harmonic response for free bodies and on the transformation path", deps
+F-399, F-395, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. A free-free bar under a harmonic end force with the static correction by inertia relief gives the tip amplitude of the closed-form free-free bar within 0.5 percent at 0.5 and 1.5 times the first elastic frequency with 10 modes, the same without the correction above 1 percent at 0.5 (control); a bar on an end spring (the support of ADR 0384) with the correction on the transformation path gives the response of the direct dense solve within 1e-3 at 10 modes; with a pre-stressed basis the correction uses the stiffness the modes were computed with; models without these features give the bits of the solver of ADR 0391.
