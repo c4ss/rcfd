@@ -7220,7 +7220,10 @@ fixed by the item's registration ADR before any code.
     equals sigma^2 V/(2E) within 2.1e-14. Eleven mutations caught. STATUS recorded PARTIAL by the lead: the registered
     R1 test stopped at its count assertion (the registration listed 54 repeated-root tensors for a list of 57) and
     passed only as the corrected test of amendment 1, written after that run; no limit changed; done is the maintainer's
-    call.
+    call. ADR 0397 (2026-11-13): the W1 values 2.6e-12 (Hex8) and 1.5e-11 (Tet10) on the cantilever of L/h = 10 are the
+    difference between the recovered energy and the energy of the rounded assembled stiffness (a representation floor of
+    order eps |K||u| on near-rigid displacements), not the residual of the direct solve; the 6.7e-11 relative residual
+    is the evaluation floor of the residual (0.40 of eps |||K||u|||/||f||).
 - [x] **F-377** VTK output of a solid result: finite-element cells with point and cell data
   - depends on: F-376, F-070
   - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd-io gains a writer of an
@@ -8676,19 +8679,31 @@ fixed by the item's registration ADR before any code.
     unedited). The Chorin form is not changed (its cell equations carry dt; 3.7e-2 printed). No case key; outlets and
     periodic faces keep dte R. Four of five mutations caught. Partial by the registered rule; done is the maintainer's
     call; making the opt-in the default (Q3) is the maintainer's.
-- [ ] **F-455** Residual of the direct static solve on slender models, and iterative refinement
+- [~] **F-455** Residual of the direct static solve on slender models, and iterative refinement
   - depends on: F-374, F-376
   - acceptance: Every limit not stated here is registered in the ADR before the run. The relative residual of the
     default direct static solve is recorded for Tet4, Hex8 and Tet10 cantilevers of slenderness 5, 10, 20 and 40 at
     registered meshes; with one step of iterative refinement (opt-in, the default bit-identical) the relative residual
     is at most 1e-14 on every one of them and the strain energy equals half the work of the loads within 1e-12; the cost
     of the refinement step is recorded.
-  - note: From ADR 0277 remaining question 1, recommendation taken on the maintainer's standing instruction of
-    2026-11-11 (the Tet10 cantilever of L/h 10 had a direct-solve relative residual of 6.7e-11). ADR 0282 (2026-11-12):
-    on Hex8 cantilevers the direct solve's relative residual sits at the evaluation floor eps |||A| |x||| / ||b||
-    (6.5e-12 against a floor of 1.3e-11 at L/h = 5.3, 7.1e-11 against 1.4e-10 at L/h = 10.7), so iterative refinement
-    cannot lower the computed residual there; a backward-error statistic relative to |||A| |x||| + ||b|| would separate
-    the two.
+  - note: ADR 0397, 2026-11-13: rcfd_fem::refine (two_sum, two_product by fma, Dot2 of Ogita-Rump-Oishi,
+    residual_compensated, refine_step, residual_statistics with rho_w, rho_x, phi_w = eps |||K||u|||/||f||, phi_rep =
+    (u/sqrt 3) ||(sum_j k_ij^2 u_j^2)^(1/2)||/||f|| and omega = ||r||/(|||K||u||| + ||f||), energy_defect) and
+    StaticOptions::refinement(steps) (direct solve and plain path only, solver name skyline-ldlt-refined; default
+    bit-identical, digest b9d9056b0c5a7aff of the twelve default solves equal on main and branch). Twelve cantilevers
+    (Tet4, Hex8, Tet10; section 0.2 m with 2 x 2 cells; L/h = 5, 10, 20, 40): default relative residual 5.9e-13 to
+    8.0e-9, at 0.29 to 0.42 of the evaluation floor phi_w; default backward error omega <= 7.4e-17 (the direct solve is
+    backward stable). One refinement step with the compensated residual: true relative residual 2.1e-13 to 1.8e-9, at
+    0.61 to 1.15 of the representability floor of any double vector; omega 1.4e-17 to 3.3e-17; energy of the stored
+    stiffness against half the work 7e-19 to 4e-17 (default up to 8e-10); a second step changes nothing; the step costs
+    0.036 to 0.055 of factor and solve. The 1e-14 relative residual is below the floor on all twelve (registered
+    expected miss, derived before the run); the recovered strain energy (ADR 0277's W1) misses 1e-12 on nine cases at
+    1.6e-12 to 7.1e-10 because the recovery, the element matrices and the assembled stiffness are three roundings of one
+    operator whose energies differ by 0.01 to 0.3 phi_w on near-rigid displacements (ADR 0277's 2.6e-12 and 1.5e-11 are
+    this floor, not the solve's residual). Open: re-word the residual clause to omega <= 1e-14 and rho_x <= 2 phi_rep,
+    and read the strain energy as that of the stored stiffness (both met). Open for the maintainer (ADR 0397 questions 1
+    and 2): the proposed re-worded acceptance in the ADR (backward error and twice the rounding floor; strain energy as
+    half u^T K u of the assembled stiffness), which the measured numbers meet.
 - [x] **F-456** monitors.get at 1e5 samples: build only what is asked for
   - depends on: F-447
   - acceptance: `monitors.get {names, since}` applies `names` and `since` before the document is built, with replies
