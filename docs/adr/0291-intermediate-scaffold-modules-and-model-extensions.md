@@ -347,3 +347,100 @@ library code) stopped at the PCG solve of C: `cg-block-jacobi` did not reach the
 set-up of the record, not a check against a limit. Corrected: the PCG of C uses `tolerance: 1e-8, max_iterations: 20000`. The
 digests printed for P and C-direct by the first run are not used; the whole record is made again once with the corrected file,
 and those digests become `MAIN`. Nothing else changes.
+
+## Addendum 1: results (2026-11-13)
+
+Runs, each once, release profile: the bit record on the archive of main ee449e26 (amendment 1, then the corrected record);
+`cargo test -p rcfd-fem --release --test si_scaffold --test si_scaffold_bits -- --nocapture --test-threads=1` and `cargo test -p
+rcfd-post --release --test si_scaffold_output -- --nocapture --test-threads=1` in the tree (commit 12ebe2c6); then S1 to S3 and
+G1; then the mutations on a `git archive` copy of 12ebe2c6 with its own target directory.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| B1 | P (Hex8, Tet10): displacement, reactions, stress digests equal main's | 6 of 6 equal | yes |
+| B2 | C direct and PCG: displacement, reactions, stress, nodal stress equal | 8 of 8 equal | yes |
+| B3 | B (Hex8, Tet10): eigenvalues, frequencies, modes equal | 6 of 6 equal | yes |
+| B4 | K of P (two kinds) and C: pattern and values equal | 6 of 6 equal | yes |
+| B5 | explicit `Solid(Full)` gives C's displacement bit for bit | bit-equal | yes |
+| H1 | `assemble_with` with the element stiffness = `stiffness` = `stiffness_with(t)`, t = 1, 8, four models | bit-equal in all 8 cases (2007 to 26901 entries) | yes |
+| S1 | every `sb_` file of rcfd-fem (17), rcfd-linalg (3), rcfd-io (1), rcfd-post (4) passes; none edited | 0 failed; `git diff ee449e26 -- 'crates/*/tests/sb_*'` empty; rcfd-api has no `sb_` file | yes (four crates) |
+| S2 | all tests of rcfd-fem, the unit tests of rcfd-io and rcfd-post | rcfd-fem 125 passed, 24 ignored (records); rcfd-io 28; rcfd-post 52, 1 ignored; rcfd-linalg `sb_` 35, 2 ignored; 0 failed | yes |
+| S3 | `cargo check --workspace --all-targets` | no error | yes |
+| X1 | every item of D1 to D5 by path; `PENDING` = ADR 0292, 0293, 0294, 0295, 0296, 0297 | compiles, all equal; post modules exist | yes |
+| X2 | 9 default entry points refuse naming entry, kind, package | 9 of 9 | yes |
+| X3 | placeholder of Hex20, Beam2, Shell4: stiffness, integration points, strain refuse naming the kind | 9 of 9 | yes |
+| R1 to R9 | static solve refuses each variant with the registered item, variant, location, package | 10 of 10 (R4b included), strings exact | yes |
+| R10 | the same error by CG, with `threads(8)` and per-node values, and by `solve_static_report` | 30 of 30 | yes |
+| R11 | modal of R4 and R8, `stiffness` of R4: the same error | 3 of 3 | yes |
+| V1 | 13 invalid data refused | 13 of 13 (`MissingNode` names node n + 7 = 196) | yes |
+| O1 | mapping (25, 0..20), (3, [0, 1]), (9, [0..4]); nodes 2, 4, 20; types 3, 9, 25 written; 42 refused | as stated | yes |
+| G1 | `baseline_hashes` passes, file unchanged | 3 passed, 1 ignored (its existing record); file unchanged | yes |
+
+Negative controls: N1 one ulp changes the digest (0xb63760e800d5386b to 0xb63ca3c50967aefa); N2 the hook with `1 + 2^-52`
+reports unequal; N3 C is accepted by `solve_static`, `modal_analysis` and `stiffness`. All hold.
+
+Mutations (each alone, first run):
+
+| Id | Caught by | Result |
+| --- | --- | --- |
+| M1 kind test skipped | R1 to R9, R10 (R1: the placeholder's refusal arrives wrapped as `Element`, not the registered error) | caught |
+| M2 formulation test skipped | R1 to R9, R10, R11 | caught |
+| M3 Linear arm ignores | R1 to R9 (R5), R10 | caught |
+| M4 support loop skipped | R1 to R9 (R8, R9), R10, R11 | caught |
+| M5 `hex20::element()` is Hex8 | X3 | caught |
+| M6 type 25 has 8 nodes | O1 | caught |
+| M7 `geometric_stiffness` returns zeros | X2 | caught |
+| M8 `stiffness_with` unchecked | R11 | caught |
+| M9 `modal_analysis_with` unchecked | R11 (R8's support; R4 is still refused by `stiffness_with`) | caught |
+| M10 batch scattered in reverse | B1 to B4 (every digest after the first Hex8 patch values differs) | caught |
+| M11 `solve_static_report` unchecked | R1 to R9 (R8, R9), R10 | caught |
+
+fmt: `cargo fmt -p rcfd-fem --check`, `-p rcfd-post`, `-p rcfd-io`: clean. clippy: `cargo clippy -p rcfd-fem -p rcfd-post -p
+rcfd-io --all-targets -- -D warnings`: clean after one test-only change (below).
+
+**Deviations.** (1) Amendment 1: the record's PCG tolerance (record step, before any library code). (2) After the runs, clippy
+refused `vec_init_then_push` in the list of refusal cases of `si_scaffold.rs`; an `#[allow]` was added (commit c960bbce), no
+change of behaviour, the checks were not re-run for it. (3) N1 also ran on the archive of main as part of the record runs, and
+the `si_scaffold` tests ran again inside S2's full rcfd-fem suite; same outcomes, nothing selected. (4) c6 names rcfd-api, which
+has no `sb_` file on main ee449e26; nothing in rcfd-api is touched and G1 passes. (5) Files beyond the stub's list, as D8
+registered: `error.rs`, `constraint.rs` (lines 38 to 46, 54, 64 to 89), `solve.rs` (line 166), `modal.rs` (line 122),
+`recover.rs` (lines 231 to 232, 292 to 296, 301 to 302), `assemble.rs` (lines 182 to 185); `rcfd-io/src/vtk.rs` (lines 364
+to 371, 378 to 380, 486).
+
+**Not run.** The whole workspace test suite (the lead's gate). No golden file, hash table or roadmap file was touched.
+
+**Decision by the registered rule: done.** Every check met its limit, every negative control holds, and all eleven mutations
+were caught on their first run.
+
+**Remaining questions** (each with options and a recommendation):
+
+1. The landing packages' file lists. ADR 0292's stub lists only `hex20.rs`; with this scaffold that holds for the element, the
+   faces, the gradients, the volume and the fit basis (all delegated), and for the static solve (it flips `hex20::PENDING`).
+   ADR 0293 must also dispatch on `ElementBlock::formulation()` in `assemble::stiffness_with` and in the recovery, which this
+   package does not delegate. Options: (a) ADR 0293 adds `assemble.rs` and `recover.rs` to its file list (no other package of its
+   wave edits them); (b) a further scaffold step delegates the stiffness per block to `hex8x`. Recommendation: (a).
+2. The Hex20 node order and VTK type 25 are declared from memory. Options: (a) ADR 0292 confirms them from the public VTK
+   documentation before its code; (b) treat them as fixed. Recommendation: (a).
+3. `SolidMesh::element_volume` is NaN for Beam2 and Shell4 (no section in a mesh-level function). Options: (a) ADR 0294 and
+   0295 compute it from the block property (one arm each in `mesh.rs`); (b) leave NaN and give the volume of structural elements
+   in their own modules. Recommendation: (a), when those packages land.
+
+## For the lead: roadmap entries
+
+Proposed status of F-388: **done** (pending the maintainer's acceptance).
+
+Note for F-388:
+
+> ADR 0291, 2026-11-13: the intermediate tier's scaffold. rcfd-fem declares hex20, hex8x, beam, shell, mpc, cyclic, geometric, buckling, rotating, nonlinear, transient, harmonic and rcfd-post solid_dynamic, solid_fsi; ElementKind gains Hex20, Beam2, Shell4 (is_solid, pending; their data and element delegated to their module, a placeholder element whose every fallible entry refuses); BlockProperty (Solid with SolidFormulation Full, BBar, Incompatible; Beam with BeamSection and orientation; Shell with thickness) set by SolidMesh::set_block_property; Constraint::Linear, RigidSet, Cyclic and ElasticSupport (NodalSpring, Foundation) with SolidModel::add_support, all validated when added; Element::geometric_stiffness, internal_force, tangent refusing by default; the generic hook is ADR 0275's assemble_with. Each new kind, formulation, constraint and support is refused by the static solve (also by the modal analysis and assemble::stiffness) with FemError::NotYetSupported naming the variant, its block or set and the package, every string exact (10 cases, 30 more paths); VTK cell types 3, 9, 25 admitted and mapped. Patch test, cantilever (direct and PCG) and bar modes give displacements, reactions, stresses, nodal stresses, eigenvalues, frequencies, modes and stiffness with the bits of main ee449e26 (26 digests equal); assemble_with with the element stiffness equals assemble::stiffness bit for bit for 1 and 8 threads on four models; every sb_ test of rcfd-fem, rcfd-linalg, rcfd-io, rcfd-post passes unedited (rcfd-api has none); baseline hashes unchanged. Eleven mutations, all caught.
+
+Note for ADR 0292's item (Hex20), to append:
+
+> ADR 0291 (2026-11-13): hex20.rs holds PENDING, element(), reference_nodes(), faces(), shape_gradients(), fit_basis() and volume(), to which mesh.rs, element.rs and recover.rs delegate; landing Hex20 is filling these and setting PENDING to None in hex20.rs. The node order (corners as Hex8, mid-edge nodes on the edges in HEX_EDGES order) is declared as VTK type 25's and mapped by identity in solid_output.rs; confirm it.
+
+Note for ADR 0293's item (Hex8 formulations), to append:
+
+> ADR 0291 (2026-11-13): the formulation is ElementBlock::formulation() (set by SolidMesh::set_block_property with BlockProperty::solid); hex8x::PENDING gates it. The stiffness and the recovery do not delegate to hex8x: the package needs assemble.rs (stiffness_with) and recover.rs in its file list.
+
+Note for ADR 0296's and ADR 0297's items, to append:
+
+> ADR 0291 (2026-11-13): Constraint::Linear { terms: Vec<LinearTerm>, value }, Constraint::RigidSet { set, reference }, Constraint::Cyclic { low, high, axis, origin, sectors } and ElasticSupport::{NodalSpring, Foundation} exist and are validated when added; constraints are refused in constraint::prescribed_equations (gated by mpc::PENDING and cyclic::PENDING), supports in SolidModel::check_supported.
