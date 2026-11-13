@@ -7789,7 +7789,7 @@ fixed by the item's registration ADR before any code.
     refused for free bodies and on the transformation path. Follow-up F-491. Static correction refused for free bodies
     and on the transformation path until F-491 (ADR 0400), which adds inertia relief, the transformation path and the
     pre-stressed stiffness.
-- [ ] **F-400** Dynamic solid as a co-simulation participant, on interface weights built from the two surfaces
+- [~] **F-400** Dynamic solid as a co-simulation participant, on interface weights built from the two surfaces
   - depends on: F-398, F-139, F-361, F-362, F-385
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar (nu = 0) whose end face is
     the interface, coupled by coupled_step to a mock fluid that returns the force -m_a times the wall acceleration: the
@@ -7801,8 +7801,28 @@ fixed by the item's registration ADR before any code.
     within 1e-12, and the coupled frequency changes by less than 1e-3 between the two. Restore returns the checkpoint
     bit for bit; a failing structural step stops the coupled step with the participant's name and both sides restored.
     No flow solver is coupled.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0303; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, intermediate tier (plan ADR 0290). PARTIAL (ADR 0410, 2026-11-13; registered before the
+    code, amendment 1 after the registered run, amendment 2 after the mutations). rcfd_post::solid_dynamic::DynamicSolid
+    implements cosim::Structure on the transient integrator of ADR 0389/0393 (Newmark or generalised-alpha, either
+    path): advance holds the interface forces over one or more sub-steps through the new opt-in
+    Integrator::run_with_force (the force added at both ends of every step, reduced like a load pattern; run and step
+    keep their bits), checkpoint and restore keep the integrator's state and the held forces bit for bit, elements gives
+    the surface set's faces to the map builders; no dependency edge added (rcfd-post already depends on rcfd-fv and
+    rcfd-fem), rcfd-fv::cosim unchanged. Bar 4 x 1 x 1 m, Hex8 20 x 2 x 2, nu = 0, clamped, end face the interface,
+    coupled by coupled_step to a test-only piston mock (one wall acceleration, Newmark-consistent, force -m_a a) at 100
+    steps per period: first coupled frequency against the root of k L tan(k L) = rho A L/m_a 2.8e-4 (ratio 0.5) and
+    3.3e-4 (ratio 4) (limit 1 %), against the discrete Newmark prediction 1.5e-7; the plain iteration diverges with the
+    derived slope -m_a e^T S^{-1} e (-59.69 at ratio 4) to 6e-16; Aitken and least squares converge to 1e-8 in 3
+    iterations per step on the matching and the 3:2 map built by F-362; spring 1.5 k_s with a slow load
+    (generalised-alpha rho_inf = 0) to F_0/(k_s + k_f) within 1.1e-10; resultant, moment and work conserved to 2.2e-16;
+    restore bit for bit; a failing structural step (load table, non-finite force) stops the step naming 'solid' in
+    iteration 1 and 2 with both sides restored. Partial: the coupled frequency changes by 6.3e-3 (ratio 4) and 2.4e-3
+    (ratio 0.5) between the matching and the 3:2 map (limit 1e-3; diagnosed: the transposed projection loads the 2 x 2
+    face with non-consistent weights, 1.5 % more static compliance; a known-miss record). The registered per-face
+    added-mass mock made the coupled run unstable (non-uniform patterns with slopes of hundreds below the convergence
+    test grow by about 700 per step); amendment 1 made the mock a piston. Eight mutations caught (one after amendment
+    2). Baseline hashes pass. No flow solver is coupled. Open: ADR 0410 Q1 to Q3. Follow-up: F-NEW (frequency change
+    against the face refinement and the map). Follow-up F-502.
 - [ ] **F-401** Two-way coupling of an elastic solid with the incompressible flow solver: the piston on an elastic bar
   - depends on: F-400, F-251, F-351, F-361, F-362
   - acceptance: Every limit not stated here is registered in the ADR before the run. Elastic bar (nu = 0) closing a
@@ -7815,7 +7835,10 @@ fixed by the item's registration ADR before any code.
     F-362 the frequency changes by less than 2e-3. A failure of either participant leaves both at the start of the step.
     The existing co-simulation tests (cosim_f139, cosim_f361, cosim_f362) pass unedited.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0304; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0410 (F-400, 2026-11-13) amendment 1: with an added mass
+    that acts per wall face, the interface force components below the convergence test are loosely coupled and grew by
+    about 700 per step on the bar of F-400; the registration of this item should check the growth of the non-uniform
+    part of the interface force over the run (ADR 0410 Q3).
 - [~] **F-402** Aggregation multigrid for elasticity: rigid-body modes as near-null space, as a preconditioner of CG
   - depends on: F-026, F-381
   - acceptance: Every limit not stated here is registered in the ADR before the run. On every level the rigid-body modes
@@ -9587,3 +9610,14 @@ fixed by the item's registration ADR before any code.
     corrector either runs 200 steps from that start or its stop is located with the eigenvalue per step.
   - note: From ADR 0405 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
+- [ ] **F-502** Coupled frequency of the dynamic solid on non-matching interfaces: face refinement and map
+  - depends on: F-400, F-362
+  - acceptance: Every limit not stated here is registered in the ADR before the run. On the bar of F-400 (ADR 0410) with
+    the piston mock at mass ratio 4, the change of the first coupled frequency between the matching and the 3:2
+    interface is measured for solid end faces of 2 x 2, 4 x 4 and 8 x 8 elements with the projection map and with the
+    radial-basis map; each change equals the one predicted from the static compliance w^T K^{-1} w of the mapped weights
+    (computed before the run) within 10 percent, and the face refinement or the map for which the change is below 1e-3
+    is reported; the projection's weights on the 3:2 wall are checked for the square's mirror symmetries (ADR 0410 Q2)
+    and an asymmetry is explained or removed with defaults bit-identical.
+  - note: From ADR 0410 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    Size S.
