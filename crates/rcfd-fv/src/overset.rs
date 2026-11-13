@@ -28,7 +28,10 @@
 //! [`OversetSolver::set_fringe_flux`]: the flux of such a face is the face interpolation of the velocity field the
 //! corrector starts from plus one correction per region of calculated cells, the pressure equation of each region is
 //! closed by these fluxes, and (with [`FringeFlux::PrescribedOwnGradient`]) the pressure gradient of a calculated cell
-//! next to a fringe cell is taken from the pressures of its own part.
+//! next to a fringe cell is taken from the pressures of its own part. Under that mode the opt-in
+//! [`OversetSolver::set_second_order_ring_gradient`] (F-479, ADR 0409) takes this gradient from a weighted least-squares fit
+//! of a quadratic polynomial to the calculated cells of the own part within two face steps: exact for a quadratic pressure,
+//! second order, no fringe value.
 //!
 //! Skewness and non-orthogonal corrections (F-368, ADR 0367) are an opt-in of the solver,
 //! [`OversetSolver::set_geometry_corrections`]: the face flux of a cell field (the Rhie-Chow flux of `HbyA`, the refreshed
@@ -198,6 +201,8 @@ pub struct OversetSolver {
     ls_pressure_gradient: bool,
     /// Set by [`OversetSolver::set_consistent_geometry_corrections`] (ADR 0387).
     consistent_pressure_gradient: bool,
+    /// Set by [`OversetSolver::set_second_order_ring_gradient`] (ADR 0409).
+    ring_second_order: bool,
     /// The three-level follow conditions of the moving walls in `prepare` while BDF2 is on (F-345, ADR 0379 D7).
     follow: FollowHistory,
 }
@@ -222,6 +227,9 @@ struct RingCell {
     inv: [[f64; 3]; 3],
     /// Its faces to fringe cells with their signs.
     faces: Vec<(usize, f64)>,
+    /// ADR 0409 D6 (with the opt-in, else empty): the cells of the quadratic fit and their coefficients `c_k`, the
+    /// gradient being `sum_k c_k (p_k - p_C)`.
+    quad: Vec<(usize, Vec3)>,
 }
 
 /// The regions of calculated cells of a step and their faces to fringe cells (ADR 0347 D1 to D5).
@@ -260,8 +268,106 @@ fn inverse3(m: [[f64; 3]; 3]) -> Option<[[f64; 3]; 3]> {
     Some(inv)
 }
 
+/// ADR 0409 D6: a Cholesky pivot of the quadratic fit below this fraction of the diagonal entry it started from refuses the
+/// fit (rank-deficient stencil).
+const FIT_RANK_TOL: f64 = 1e-8;
+
+/// ADR 0409 D6: the coefficients `c_k` of the weighted least-squares fit of a polynomial of degree two in the active
+/// directions (no constant: the value at the centre is fitted exactly) to values at the offsets `d[k]` from a cell centre,
+/// so that `sum_k c_k (p_k - p_C)` is the gradient at the centre; exact when `p` is quadratic. The offsets are scaled by
+/// the shortest one, `l`, the weights are `l^2 / abs(d_k)^2`. `None` when the normal matrix is not positive definite to
+/// [`FIT_RANK_TOL`] (no fit through the points; for example all of them on one conic through the centre).
+#[allow(clippy::needless_range_loop)]
+fn quadratic_fit(d: &[Vec3], active: [bool; 3]) -> Option<Vec<Vec3>> {
+    let dirs: Vec<usize> = (0..3).filter(|&i| active[i]).collect();
+    let m = dirs.len();
+    let l = d.iter().map(|x| vec3::norm(*x)).fold(f64::INFINITY, f64::min);
+    if m == 0 || !(l > 0.0 && l.is_finite()) {
+        return None;
+    }
+    let mut pairs = Vec::new();
+    for a in 0..m {
+        for b in a..m {
+            pairs.push((dirs[a], dirs[b]));
+        }
+    }
+    let nb = m + pairs.len();
+    let phis: Vec<Vec<f64>> = d
+        .iter()
+        .map(|x| {
+            let e = vec3::scale(*x, 1.0 / l);
+            let mut v: Vec<f64> = dirs.iter().map(|&i| e[i]).collect();
+            v.extend(pairs.iter().map(|&(i, j)| e[i] * e[j]));
+            v
+        })
+        .collect();
+    let w: Vec<f64> = d.iter().map(|x| l * l / vec3::dot(*x, *x)).collect();
+    let mut mm = vec![vec![0.0; nb]; nb];
+    for (phi, &wk) in phis.iter().zip(&w) {
+        for i in 0..nb {
+            for j in 0..nb {
+                mm[i][j] += wk * phi[i] * phi[j];
+            }
+        }
+    }
+    // Cholesky factor `M = L L^T`
+    let mut lo = vec![vec![0.0; nb]; nb];
+    for j in 0..nb {
+        let mut s = mm[j][j];
+        for k in 0..j {
+            s -= lo[j][k] * lo[j][k];
+        }
+        if !(s > FIT_RANK_TOL * mm[j][j]) {
+            return None;
+        }
+        let r = s.sqrt();
+        lo[j][j] = r;
+        for i in j + 1..nb {
+            let mut t = mm[i][j];
+            for k in 0..j {
+                t -= lo[i][k] * lo[j][k];
+            }
+            lo[i][j] = t / r;
+        }
+    }
+    // c_k = w_k (M^{-1} phi_k)_{1..m} / l
+    Some(
+        phis.iter()
+            .zip(&w)
+            .map(|(phi, &wk)| {
+                let mut y = phi.clone();
+                for i in 0..nb {
+                    for k in 0..i {
+                        y[i] -= lo[i][k] * y[k];
+                    }
+                    y[i] /= lo[i][i];
+                }
+                for i in (0..nb).rev() {
+                    for k in i + 1..nb {
+                        y[i] -= lo[k][i] * y[k];
+                    }
+                    y[i] /= lo[i][i];
+                }
+                let mut c = [0.0; 3];
+                for (a, &i) in dirs.iter().enumerate() {
+                    c[i] = wk * y[a] / l;
+                }
+                c
+            })
+            .collect(),
+    )
+}
+
 impl FringeRing {
+    /// The ring of ADR 0347 (D5 for the ring cells).
+    #[cfg(test)]
     fn new(g: &FvGeometry, conn: &Connectivity) -> Result<Self, String> {
+        Self::new_with(g, conn, false)
+    }
+
+    /// The ring of ADR 0347; with `second_order` every ring cell also gets the quadratic fit of ADR 0409 D6 over the
+    /// calculated cells of its region within two face steps (a rank-deficient fit refuses the step).
+    fn new_with(g: &FvGeometry, conn: &Connectivity, second_order: bool) -> Result<Self, String> {
         let mesh = &g.mesh;
         let n = g.n_cells();
         let (own, nei) = (mesh.owner(), mesh.neighbour());
@@ -338,7 +444,42 @@ impl FringeRing {
                     "overset: the calculated cell {cell} lies between fringe cells on opposite sides: its pressure gradient cannot be taken from its own part (ADR 0347 D5)"
                 ));
             };
-            cells.push(RingCell { cell, inv, faces: fs });
+            let mut quad = Vec::new();
+            if second_order {
+                // ADR 0409 D6: the calculated cells of the same region within two face steps
+                let mut near: Vec<usize> = Vec::new();
+                let mut frontier = vec![cell];
+                for _ in 0..2 {
+                    let mut next = Vec::new();
+                    for &a in &frontier {
+                        for &f in mesh.cell_faces(a) {
+                            if f >= g.n_internal {
+                                continue;
+                            }
+                            let b = if own[f] == a { nei[f] } else { own[f] };
+                            if b != cell && region[b] == region[cell] && !near.contains(&b) {
+                                near.push(b);
+                                next.push(b);
+                            }
+                        }
+                    }
+                    frontier = next;
+                }
+                near.sort_unstable();
+                let d: Vec<Vec3> = near.iter().map(|&k| vec3::sub(cc[k], cc[cell])).collect();
+                let Some(coef) = quadratic_fit(&d, g.active) else {
+                    return Err(format!(
+                        "overset: the calculated cells within two face steps of the calculated cell {cell} do not determine a quadratic fit of its pressure (ADR 0409 D6)"
+                    ));
+                };
+                quad = near.into_iter().zip(coef).collect();
+            }
+            cells.push(RingCell {
+                cell,
+                inv,
+                faces: fs,
+                quad,
+            });
         }
         let mut stencil_of = vec![usize::MAX; n];
         for (i, (c, _)) in conn.stencils.iter().enumerate() {
@@ -367,13 +508,22 @@ impl FringeRing {
     }
 
     /// D5: replace the Green-Gauss gradient `grad` of `p` in every calculated cell with faces to fringe cells by the
-    /// gradient that takes, on those faces, the linear extrapolation of the cell's own value.
+    /// gradient that takes, on those faces, the linear extrapolation of the cell's own value. A cell with the fit of ADR
+    /// 0409 D6 takes the gradient of the fit instead.
     fn own_gradient(&self, g: &FvGeometry, p: &[f64], grad: &mut [Vec3]) {
         let mesh = &g.mesh;
         let (own, nei) = (mesh.owner(), mesh.neighbour());
         let (sf, vol) = (mesh.face_area_vectors(), mesh.cell_volumes());
         for rc in &self.cells {
             let c = rc.cell;
+            if !rc.quad.is_empty() {
+                let mut gq = [0.0; 3];
+                for &(k, ck) in &rc.quad {
+                    vec3::axpy(&mut gq, p[k] - p[c], ck);
+                }
+                grad[c] = gq;
+                continue;
+            }
             let mut rhs = grad[c];
             for &(f, sigma) in &rc.faces {
                 let w = g.weights[f];
@@ -889,6 +1039,7 @@ impl OversetSolver {
             corrected_old_flux: None,
             ls_pressure_gradient: false,
             consistent_pressure_gradient: false,
+            ring_second_order: false,
             follow: FollowHistory::new(),
         })
     }
@@ -970,6 +1121,21 @@ impl OversetSolver {
     /// The mode set by [`set_fringe_flux`](Self::set_fringe_flux).
     pub fn fringe_flux(&self) -> FringeFlux {
         self.fringe_flux
+    }
+
+    /// Under [`FringeFlux::PrescribedOwnGradient`]: take the pressure gradient of the calculated cells next to a fringe
+    /// cell (in the momentum predictor, the velocity correction and the pressure levels of the regions) from the weighted
+    /// least-squares fit of a quadratic polynomial to the pressures of the calculated cells of the same region within two
+    /// face steps (F-479, ADR 0409 D6): exact for a quadratic pressure, second order, no fringe value; from the next step
+    /// on. A step whose fit is rank-deficient in some cell, or with this on under another fringe-flux mode, is refused.
+    /// Off (the default) is the solver that did not opt in, bit for bit.
+    pub fn set_second_order_ring_gradient(&mut self, on: bool) {
+        self.ring_second_order = on;
+    }
+
+    /// Whether [`set_second_order_ring_gradient`](Self::set_second_order_ring_gradient) is on.
+    pub fn second_order_ring_gradient(&self) -> bool {
+        self.ring_second_order
     }
 
     /// Choose the time scheme (F-338, ADR 0241 D1). `TimeScheme::Bdf2` opts in to the three-level scheme: the next step
@@ -1108,6 +1274,9 @@ impl OversetSolver {
         }
         if self.consistent_pressure_gradient && (!self.corrections || self.ls_pressure_gradient) {
             return Err("overset: the consistent pressure gradient (ADR 0387) needs the geometry corrections on and the least-squares pressure gradient of ADR 0382 off".into());
+        }
+        if self.ring_second_order && self.fringe_flux != FringeFlux::PrescribedOwnGradient {
+            return Err("overset: the second-order ring gradient (ADR 0409) needs FringeFlux::PrescribedOwnGradient".into());
         }
         let old = self.geom.clone();
         let n = old.n_cells();
@@ -1509,7 +1678,7 @@ impl OversetSolver {
         let ring = if trivial || self.fringe_flux == FringeFlux::PressureEquation {
             None
         } else {
-            Some(FringeRing::new(&g, conn)?)
+            Some(FringeRing::new_with(&g, conn, self.ring_second_order)?)
         };
         let own_gradient = self.fringe_flux == FringeFlux::PrescribedOwnGradient;
         // ADR 0238 D2: the outer iterations. Every pass re-evaluates the pressure conditions and gradient, the convecting
@@ -2153,5 +2322,98 @@ mod tests {
         }
         let err = FringeRing::new(&g, &bad).err().expect("refused");
         assert!(err.contains("opposite sides"), "{err}");
+    }
+
+    /// ADR 0409 Q0: on the composite of TG_1 (ADR 0219) at the pose of `t = 0.3` (rotated and translated), the gradient of
+    /// the quadratic fit of D6 is exact in every ring cell of both parts for a quadratic and for a linear pressure, whatever
+    /// the fringe cells hold; the control is D5's error for the quadratic pressure.
+    #[test]
+    fn q0_second_order_ring_gradient_of_a_quadratic_pressure() {
+        let pi = std::f64::consts::PI;
+        let nodes = |x0: f64, len: f64, n: usize| -> Vec<f64> { (0..=n).map(|i| x0 + len * i as f64 / n as f64).collect() };
+        let bg = rectilinear_2d(&nodes(0.0, pi, 40), &nodes(0.0, pi, 40), 0.1).unwrap();
+        let cs = nodes(-0.6, 1.2, 20);
+        let comp = rectilinear_2d(&cs, &cs, 0.1).unwrap();
+        let spec = OversetSpec {
+            outer_patches: ["c_xmin", "c_xmax", "c_ymin", "c_ymax"].map(String::from).to_vec(),
+            hole: Arc::new(|x: Vec3| x[0].abs().max(x[1].abs()) < 0.25),
+        };
+        let ov = Overset::new(compose(&bg, &comp, "c_").unwrap(), spec).unwrap();
+        let t = 0.3;
+        let pose = Pose {
+            origin: [0.0; 3],
+            axis: [0.0, 0.0, 1.0],
+            angle: t,
+            translation: [pi / 2.0 - 0.3 + 0.5 * t, pi / 2.0 - 0.2 + 0.3 * t, 0.0],
+        };
+        let mesh = moved_mesh(&ov.composite.mesh, ov.composite.points_at(&pose)).unwrap();
+        let conn = ov.connectivity(&mesh, &pose).unwrap();
+        let g = FvGeometry::new(Arc::new(mesh)).unwrap();
+        let d5 = FringeRing::new(&g, &conn).unwrap();
+        let ring = FringeRing::new_with(&g, &conn, true).unwrap();
+        let nb = conn.n_background_cells;
+        assert!(ring.cells.iter().any(|rc| rc.cell < nb) && ring.cells.iter().any(|rc| rc.cell >= nb));
+        assert!(ring.cells.iter().all(|rc| rc.quad.len() >= 5));
+        assert!(d5.cells.iter().all(|rc| rc.quad.is_empty()));
+        let cc = g.mesh.cell_centres();
+        let own = g.mesh.owner();
+        let errors = |quadratic: bool, r: &FringeRing| -> f64 {
+            let (a, b, c) = if quadratic { (0.7, -1.1, 0.4) } else { (0.0, 0.0, 0.0) };
+            let exact = |x: Vec3| [2.0 + 2.0 * a * x[0] + b * x[1], -5.0 + b * x[0] + 2.0 * c * x[1], 0.0];
+            let mut seed = 12345u64;
+            let p: Vec<f64> = (0..g.n_cells())
+                .map(|k| {
+                    let x = cc[k];
+                    match conn.kind[k] {
+                        CellKind::Calculated => {
+                            3.0 + 2.0 * x[0] - 5.0 * x[1] + a * x[0] * x[0] + b * x[0] * x[1] + c * x[1] * x[1]
+                        }
+                        CellKind::Fringe => {
+                            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                            10.0 * ((seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5)
+                        }
+                        CellKind::Hole => 0.0,
+                    }
+                })
+                .collect();
+            let bvals: Vec<f64> = (g.n_internal..g.mesh.n_faces()).map(|f| p[own[f]]).collect();
+            let mut grad = green_gauss(&g, &p, &bvals, 0);
+            r.own_gradient(&g, &p, &mut grad);
+            r.cells
+                .iter()
+                .map(|rc| vec3::norm(vec3::sub(grad[rc.cell], exact(cc[rc.cell]))))
+                .fold(0.0, f64::max)
+        };
+        let (eq, el, control) = (errors(true, &ring), errors(false, &ring), errors(true, &d5));
+        println!(
+            "Q0: {} ring cells; largest gradient error of the fit: quadratic {eq:.3e}, linear {el:.3e}; D5 (control) {control:.3e}",
+            ring.cells.len()
+        );
+        assert!(eq <= 1e-10, "Q0 quadratic: {eq:e}");
+        assert!(el <= 1e-10, "Q0 linear: {el:e}");
+        assert!(control >= 1e-2, "Q0 control: {control:e}");
+    }
+
+    /// ADR 0409 Q1: the fit on the five points of a Cartesian corner stencil is exact for a quadratic; five points on one
+    /// line through the centre are refused.
+    #[test]
+    fn q1_quadratic_fit_corner_stencil_and_refusal() {
+        let h = 0.1;
+        let pts: Vec<Vec3> = [(-1.0, 0.0), (-2.0, 0.0), (0.0, -1.0), (0.0, -2.0), (-1.0, -1.0)]
+            .iter()
+            .map(|&(x, y)| [x * h, y * h, 0.0])
+            .collect();
+        let active = [true, true, false];
+        let c = quadratic_fit(&pts, active).expect("corner stencil accepted");
+        let q = |x: Vec3| 1.5 * x[0] - 0.5 * x[1] + 2.0 * x[0] * x[0] + 3.0 * x[0] * x[1] - 1.0 * x[1] * x[1];
+        let mut gq = [0.0; 3];
+        for (d, ck) in pts.iter().zip(&c) {
+            vec3::axpy(&mut gq, q(*d), *ck);
+        }
+        let e = vec3::norm(vec3::sub(gq, [1.5, -0.5, 0.0]));
+        println!("Q1: corner stencil gradient error {e:.3e}");
+        assert!(e <= 1e-12, "Q1: {e:e}");
+        let line: Vec<Vec3> = (1..=5).map(|k| [k as f64 * h, 0.5 * k as f64 * h, 0.0]).collect();
+        assert!(quadratic_fit(&line, active).is_none(), "Q1: collinear stencil refused");
     }
 }
