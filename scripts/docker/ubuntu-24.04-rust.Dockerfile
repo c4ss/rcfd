@@ -1,5 +1,5 @@
 # Linux x86_64 build environment of example-projects-linux/ (ADR 0150): the distribution of the CI runners
-# (`ubuntu-latest` = Ubuntu 24.04, glibc 2.39) with the gate's Rust toolchain (RUST_GATE_TOOLCHAIN in gate.yml).
+# (`ubuntu-24.04`, glibc 2.39; CI pins it since ubuntu-latest moved to 26.04) with the gate's Rust toolchain (RUST_GATE_TOOLCHAIN in gate.yml).
 # Mesh generators call the C library's libm, whose last bits differ per platform (ADR 0137), so the Linux stores are
 # built where the Linux gate runs:
 #

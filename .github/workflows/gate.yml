@@ -11,7 +11,7 @@ on:
       os:
         description: Runner (the maintainer's gate runs on Windows)
         type: choice
-        options: [windows-latest, ubuntu-latest]
+        options: [windows-latest, ubuntu-24.04]
         default: windows-latest
 
 permissions:
