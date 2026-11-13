@@ -314,3 +314,98 @@ The registered run (`f495-scratch/registered_run1.log`, once): 2 tests passed, 1
    the new test `n1_hinge_row_as_mesh_equation_corrected` makes N1 on H. Limits unchanged. Mutation Mu3 (the same wrong
    mapping in the library) is expected to be caught by C3's identity on H (on the beam models the two mappings coincide, as
    here).
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/buckling.rs` (the doc of `factors`, new lines 103 to 105; the guard in `factors_on_transformation`,
+new lines 211 to 221), `crates/rcfd-fem/src/mpc.rs` (additive: `zero_shift_failing_pivot`, new lines 1322 to 1339; no other
+line changed). New test file `crates/rcfd-fem/tests/si_buckling_mechanism.rs`. No existing test edited. The registered run:
+commit cf9be851, once, release, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_buckling_mechanism --
+--nocapture --test-threads=1`: 2 passed, 1 failed on N1 only (log `f495-scratch/registered_run1.log`; amendment 1). The
+corrected run: commit c7b499de, once, `a1_a2_c2_c4_mechanisms_of_the_beam_corrected` and
+`n1_hinge_row_as_mesh_equation_corrected`: 2 passed (log `corrected.log`); it reproduced the first run's A1, A2, C2, C4 values
+exactly. A4: `si_prestress_mpc` run on 190e88fd (the registration, before any code; `a4_before.log`) and on c7b499de
+(`a4_after.log`).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | refused as registered; ratio `< 1e-8` | BM refused, `Solver { lowest_buckling_factors }` "node 0 component 0: pivot ratio 2.4653e-11 ..."; identity yes; the named `u_x` at `(0, 0, 0)` moves `0.025` of the largest sway value; smallest ratio 2.47e-11 | yes |
+| A2 | as stated | BZ refused (node 0 component 0, ratio 2.47e-11), BX refused (node 0 component 0, ratio 1.13e-11), identity and meaning yes; BF `RigidBodyMotionFree` (count 1) | yes |
+| A3 | ratio `> 1e-8`; `<= 0.01` | BS(1e4) solved, two factors, Sturm 2 = 2; smallest ratio 2.63e-3; `lambda_1 = 1.99999766` against 2: 1.17e-6 | yes |
+| A4 | 0 lines differ; 5 passed | 111 lines compared, 0 differ; 5 passed, 2 ignored both times | yes |
+| C1 | holds; `<= 1e-3` | `1.999997657 <= 2`; `lambda_2 = 408.400469201` against B's `408.400469202`: 1.3e-12 | yes |
+| C2 | refused; ratio `< 1e-8` | BS(1e-4) refused (node 0 component 0), ratio 5.27e-11 | yes |
+| C3 | count 0; refused | H: free rigid motions 0 (smallest singular value 0.736); refused naming node 8 component 1 (a node of block B off the hinge, `u_y`, moving 1.0 of the largest hinge value), ratio -2.1e-16 (the factorisation refused the pivot) | yes |
+| C4 | `== 1` | BM free rigid motions 1 | yes |
+| C5 | bit-equal | BS(1e4) factors and modes bit-equal to the reduction in the test | yes |
+| N1 (amendment 1, on H) | differs | reduced row 13 taken as a mesh equation is node 4 component 1; the reported name is node 8 component 1 | as expected |
+| N1 (first run, on BM; record) | differs | node 0 component 0 both ways (row 0 is equation 0): the defective set-up of amendment 1 | superseded |
+| N2 | Ok | HN solved, factors 19.99, 6715.4 | as expected |
+| O1 | recorded | HP (prescribed path): refused by the eigensolver's factor, "K + sigma M is not positive definite for sigma = 0e0: pivot -9.5e-7 of row 13", with no name and not by the rule (the rounding pivot came out negative) | recorded |
+| O2 | recorded | ADR 0398's record `c9_c13_..._known_miss` run once with `--ignored --exact`: passes (BM now refused, the reason above) | recorded |
+| S1 | 0 failed | `cargo test -p rcfd-fem --release --no-fail-fast`: 249 passed, 0 failed, 54 ignored | yes |
+| S2 | builds | `cargo check -p rcfd-post --tests`: builds | yes |
+| S3 | as stated | `git diff b9d6c7a1 --stat -- crates`: `buckling.rs`, `mpc.rs`, the new test file | yes |
+
+fmt: `cargo fmt -p rcfd-fem --check` clean. clippy: `cargo clippy -p rcfd-fem --release --all-targets -- -D warnings` clean
+(release profile, to reuse the build on a shared machine).
+
+On the arithmetic: BM's rounding ratio is 2.5e-11, not the order 1e-14 estimated from ADR 0398's factor (arithmetic 1): the
+effective pivot the eigensolver saw is not the factor's smallest ratio. It is still 400 times below the rule. BS(1e4)'s ratio
+2.6e-3 lies in the estimated range (1.25e-7 to 3.2e-2). BS(1e-4)'s ratio 5.3e-11 is the rounding floor, not the spring (the
+spring part is at most 3.2e-10 by arithmetic 2).
+
+### Mutations (copy `f495-scratch/copy` from `git archive` of c7b499de, own target directory, script `mutate.py`, log `mutations.log`)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | guard removed | A1, A2, C2 (factors returned), C3 (H refused by the eigensolver's factor without the name) |
+| Mu2 | ratio `1e-1` | A3 (BS(1e4) refused), A1, A2, C2 identity (another pivot named), N2, A4 (four `si_prestress_mpc` tests fail) |
+| Mu3 | the row named as a mesh equation | C3 identity, N1 (H); on the beam models the two mappings coincide (amendment 1) |
+| Mu4 | the guard on the unreduced `K_ext` | A1, A2, C2, C3 identity, A3, N2, A4 |
+| Mu5 | the guard only with an elastic support | A1 (BM has linear rows only) |
+
+Every mutation was caught.
+
+### Deviations
+
+- Amendment 1 (N1 a defective set-up, corrected on H). The record `a1_a2_c2_c4_n1_mechanisms_of_the_beam_defective_setup` is
+  ignored.
+- clippy run in release profile instead of debug.
+
+### What was not run
+
+The workspace suite (the lead's gate) and `rcfd-api`'s `baseline_hashes` (the brief limits tests to `rcfd-fem`; no `rcfd-api`
+path calls `buckling::factors`, and the new `mpc.rs` function has no other caller).
+
+### Decision by the registered rule
+
+**done**: A1 to A4 met, every C and S check met, the negative controls as expected (N1 as corrected by amendment 1 before its
+run), every mutation caught.
+
+### Remaining questions
+
+1. **The margin of the rule.** BM's rounding ratio is 2.5e-11, 400 times below `1e-8`; the margin may shrink on larger or
+   worse-conditioned meshes, where a mechanism's rounding pivot could pass. Options: (a) leave it, as for the Auto rule of the
+   modal path (the same threshold); (b) add a second test on the factors (refuse a factor below `1e-8` times the largest Ritz
+   factor); (c) a registered check on a refined mesh (Hex20 at 80 x 4 x 2). Recommendation (a) now, (c) the next time a heavier
+   mesh check is done on buckling.
+2. **A mechanism that is not rigid on the prescribed path** (O1). The prescribed path relies on the geometric rigid-motion test,
+   which a hinge passes; HP was refused only because its rounding pivot came out negative, with no name. Options: (a) a
+   follow-up applying the same pivot-ratio guard on the prescribed path of `buckling::factors` (on `K_FF` after the
+   elimination) with a named refusal, checked on the hinge and on ADR 0390's and ADR 0394's models bit for bit; (b) leave it.
+   Recommendation (a), size S.
+3. **The rule's resolution** (C2): springs softer than a mesh-dependent boundary (here between about 3e-3 and 8e2 N/m) are
+   refused as mechanisms although held. Recorded in the doc of `factors`; no action proposed.
+
+## For the lead: roadmap entries
+
+F-495, proposed status **done**, note:
+
+> From ADR 0398 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0401, 2026-11-12: buckling::factors on the transformation path refuses, before the eigensolver, a model whose T^T K_ext T has a zero-shift pivot ratio d_i/a_ii below 1e-8 (the rule of Shift::Auto, ADR 0384; mpc::zero_shift_failing_pivot), with FemError::Solver naming the unknown of the first failing pivot. The pivot test was chosen over the count of free rigid motions of ADR 0399 because it also sees mechanisms that are not rigid: a two-block Hex8 hinge with every rigid motion held (count 0) is refused naming a node of the hinged block. ADR 0398's knife-edge beam without its roller rows is refused (ratio 2.5e-11), and so is the beam without roller and lateral spring kept on the transformation path by a spring that holds nothing (in z or axial at the roller; ratios 2.5e-11 and 1.1e-11); the name equals the one computed in the test and moves in the free rotation. A soft lateral spring k = 1e4 N/m (ratio 2.6e-3) is solved, first factor k L within 1.2e-6, second the knife-edge factor within 1.3e-12, bit-equal to the reduction in the test. The rule's resolution: a spring of 1e-4 N/m is refused as a mechanism although held. Every printed value of ADR 0398's tests is unchanged (111 lines), and its known-miss record now passes when run. Five mutations caught. Open: the margin of the rule on larger meshes, and the same guard on the prescribed path (follow-up).
+
+Follow-up (number given by the lead), title "Refuse a mechanism that is not rigid in buckling on the prescribed path", deps F-495, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. buckling::factors on the prescribed-displacement path refuses a model whose reduced stiffness K_FF has a zero-shift pivot ratio below 1e-8 (the rule of ADR 0401) with FemError naming the unknown of the failing pivot, checked on ADR 0401's two-block Hex8 hinge with its face held by Displacement rows (which passes the rigid-motion test); the factors of ADR 0390's and ADR 0394's models keep their values bit for bit.
