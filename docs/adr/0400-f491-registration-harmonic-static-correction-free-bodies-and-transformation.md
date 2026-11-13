@@ -291,3 +291,90 @@ every equation" is `max_j |X_j - Y_j| / max_j |Y_j|` over the mesh equations of 
 - That the pre-stress given to the solver is the one the basis was computed with is the caller's responsibility.
 - The reading of clause f1 (the driven end at its antiresonances, measured against `F/(E A k)`) is an interpretation, recorded
   above; the far-end relative error is registered as a companion.
+
+## Addendum 1: results (2026-11-13)
+
+Registered run: commit ed496342, once, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_harmonic_correction --
+--nocapture --test-threads=1` (7 tests, 0.09 s; log `f491-scratch/run1.log`). No line of the test was changed between writing
+it and the run; the test file was built (`--no-run`) before it. FF: rigid eigenvalue `-1.0e-5` (rounding of the automatic
+shift), first elastic `omega_1 = 1.5861405174e4` rad/s (arithmetic 1 to every printed digit). KS: `omega_1 = 2.4233126530e3`
+(arithmetic 3). CP: first bending pair `omega_1^2 = 1.27032e5` (a degenerate y/z pair of the square section).
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 FF driven end, inertia relief, `/(F/(EAk))`, s = 0.5 / 1.5 | <= 0.005 | 1.318e-4 / 3.566e-3 | yes |
+| A2 the same without the correction, s = 0.5 | > 0.01 | 3.205e-2 | yes |
+| A3 KS against the direct dense solve, transformation path, s = 0.5 / 1.5 | <= 1e-3 | 6.96e-8 / 1.11e-6 | yes |
+| A4 KSP pre-stressed against the direct dense solve, s = 0 / 0.5 | <= 1e-3 | 5.0e-14 / 6.39e-8 | yes |
+| A5 CP pre-stressed against the direct dense solve, s = 0 / 0.5 | <= 1e-3 | 1.13e-11 / 4.04e-8 | yes |
+| A6 = B1 bits of ADR 0391 | identical | identical (61 lines, 514003 bytes, md5 7536e084...) | yes |
+| C1 FF far end relative, s = 0.5 / 1.5 | <= 0.005 | 6.90e-5 / 4.48e-4 | yes |
+| C2 FF against the direct dense solve, s = 0.5 / 1.5 | <= 2e-3 | 3.08e-5 / 8.41e-4 | yes |
+| C3 residual M-orthogonal to the rigid motion | <= 1e-10 | 9.2e-14 | yes |
+| C4 KS omega = 0 against `solve_static_mpc` | <= 1e-10 | 4.2e-16 | yes |
+| C5 CP omega = 0 against the dense `(K + K_sigma)^-1 F` | <= 1e-8 | 1.13e-11 | yes |
+| C6 SF complete basis, with against without the correction | <= 1e-8 | 2.6e-15 | yes |
+| C7 zero pre-stress against none | bit-equal | bit-equal | yes |
+| C8 KS sweep against response | bit-equal | bit-equal | yes |
+| C9 five refusals, key `"static correction"` | each refused | all five | yes |
+| N1 FF without the correction, s = 1.5 | > 0.005 | 9.93e-2 | as expected |
+| N2 KS without the correction, s = 0.5 | > 1e-3 | 3.09e-3 | as expected |
+| N3 KSP, correction with the elastic K, s = 0 | > 1e-3 | 9.62e-3 | as expected |
+| N4 CP, correction with the elastic K, s = 0 | > 1e-3 | 0.319 | as expected |
+| N5 FF far end without the correction, s = 0.5 | recorded | 1.90e-3 | (no limit) |
+| B1 probe, base b9d6c7a1 against tip ed496342 | identical | identical | yes |
+| B2 `cargo test -p rcfd-fem --release` / `cargo check -p rcfd-post --tests` | 0 failed / builds | 252 passed, 0 failed, 54 ignored (the ignored record `c6_refusals` among them; `c6_refusals_after_landed` passes) / builds | yes |
+
+Deviations and remarks:
+
+- Every measured value lies within a few percent of its estimate from the 1-D chain (the Hex8 bars reduce to it exactly). The
+  CP estimate of N4 (Euler-Bernoulli, up to 0.32) was met at 0.319: at `L/h = 20` with `nu = 0` the single Hex8 through the
+  depth stiffens the bending less than the registration feared.
+- `cargo fmt -p rcfd-fem` changed the layout of `harmonic.rs` and `si_harmonic_correction.rs` after the run (commit b0f92eeb,
+  layout only); the mutations below ran on the formatted code.
+- Not run: the rcfd-api baseline hashes (no file outside `rcfd-fem` changed and no other crate calls `harmonic`); the whole
+  workspace (the lead's gate).
+
+Mutations (archive copy of b0f92eeb in `f491-scratch/copy`, `f491-scratch/mutate.py`, own target directory; log
+`f491-scratch/mutate.log`):
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| Mu1 | load not projected | A1, C1, C2 (both frequencies), C6 |
+| Mu2 | rigid part not removed (`P^T` dropped) | A1, C1, C2, C3, C6 |
+| Mu3 | rigid basis modes not skipped | A1, C1, C2, C3, C6 (errors of order 1e12) |
+| Mu4 | the first rows with a non-zero residual as support (no pivoting) | C6 (SF refused: singular `K_c`) |
+| Mu5 | supports not added on the transformation path | A3, C4, C8 and A4 (refused: singular `K_r`) |
+| Mu6 | pre-stress not added to the correction | A4 (both), A5 (both), C5 |
+| Mu7 | transformation path without the subtraction of the retained modes | A3 (both), C4, A4 (both) |
+| Mu8 | rigid-weight test reversed | A1's set-up and C6 (refused) |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+
+**Decision by the rule: done** (A1 to A6, every C and B check met, N1 to N4 as expected, every mutation caught).
+
+Remaining questions:
+
+1. Inertia relief on the transformation path (a body held by springs, linear rows or rigid sets that leave a rigid motion) is
+   refused. Options: (a) a follow-up that builds `R` over the independent unknowns `q` (the extended rigid fields of ADR 0399 at
+   the independent unknowns of `T`, reference points included) and the determinate support among them; (b) leave it refused.
+   Recommendation: (a) when a fan model needs it (a rotor on a free shaft); not urgent.
+2. A free body with a pre-stress is refused (the null space of `K + K_sigma` is not the rigid motions in general). Options: (a)
+   take the null space from the zero modes of the basis instead of the counted rigid fields; (b) leave it refused.
+   Recommendation: (b) for now.
+3. The reading of clause f1 (both registered frequencies are antiresonances of the driven end, measured against `F/(EAk)`) is an
+   interpretation taken on the standing instruction. Options: (a) keep the reading and re-word the acceptance for the record;
+   (b) re-register with frequencies away from the antiresonances. Recommendation: (a), with the far end (C1) quoted alongside.
+4. That the `Prestress` given to `HarmonicOptions` is the one the basis was computed with is the caller's. Options: (a) let
+   `ModalBasis` carry an optional pre-stress from `prestressed_modes` (needs a field on `ModalResult`, outside this package);
+   (b) leave it to the caller. Recommendation: (b) until a model-level harmonic case exists.
+
+## For the lead: roadmap entries
+
+F-491, proposed status **done**, note:
+
+> ADR 0400, 2026-11-12: rcfd-fem harmonic: the static correction of the truncated modes now covers free bodies by inertia relief (residual flexibility P^T K_c^-1 P F, P = I - M R R^T, R the free rigid motions counted by free_rigid_motions and made M-orthonormal, K_c the stiffness on a statically determinate support chosen by pivoted rows of R; the rigid modes must be in the basis and are skipped in the subtraction), the transformation path (T K_r^-1 T^T F with K_r = T^T K_ext T, the supports added; cyclic constraints and a free rigid motion there refused) and a pre-stressed basis (HarmonicOptions::prestress: K + K_sigma in the correction). Free-free bar of 40 Hex8 with 10 modes (one rigid): the driven end, at its antiresonances 0.5 and 1.5 omega_1, within 1.3e-4 and 3.6e-3 of F/(EAk) from the closed form, 3.2e-2 without the correction at 0.5 (control); far end 6.9e-5 and 4.5e-4 relative. Bar on an end spring (kappa 0.25), transformation path: 7e-8 and 1.1e-6 of the direct dense solve at 0.5 and 1.5 omega_1 (3.1e-3 without). Pre-stressed spring bar and cantilever: 6.4e-8 and 4.0e-8 of the direct dense solve with K + K_sigma at 0.5 omega_1 (the elastic K in the correction gives 9.6e-3 and 0.32 at omega = 0). Models without these features give the bits of ADR 0391 (probe on base and tip identical); zero pre-stress bit-equal to none. Eight mutations caught. si_harmonic c6_refusals kept as an ignored record (two refusal rows retired), c6_refusals_after_landed added.
+
+F-399, the last sentence of its note becomes:
+
+> Static correction refused for free bodies and on the transformation path until F-491 (ADR 0400), which adds inertia relief, the transformation path and the pre-stressed stiffness.
