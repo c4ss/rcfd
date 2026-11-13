@@ -1011,13 +1011,10 @@ fn zero_shift_refused(k: &CsrMatrix) -> bool {
     match SkylineLdlt::factor_with(k, &SkylineOptions::default()) {
         Ok(f) => {
             let d = k.diag();
-            f.pivots()
-                .iter()
-                .zip(f.order())
-                .any(|(&p, &o)| {
-                    let ratio = p / d[o];
-                    ratio.is_nan() || ratio < ZERO_SHIFT_PIVOT_RATIO
-                })
+            f.pivots().iter().zip(f.order()).any(|(&p, &o)| {
+                let ratio = p / d[o];
+                ratio.is_nan() || ratio < ZERO_SHIFT_PIVOT_RATIO
+            })
         }
         Err(_) => true,
     }

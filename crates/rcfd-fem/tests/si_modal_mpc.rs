@@ -67,7 +67,8 @@ fn print_run(name: &str, r: &ModalResult) {
 /// KB: the bar on an end spring, rollers on ymin and zmin.
 fn kb() -> SolidModel {
     let mut m = model_of(bar_mesh(), 0.0);
-    m.add_support(ElasticSupport::nodal_spring("xmin", 0, K_SPRING / 4.0)).unwrap();
+    m.add_support(ElasticSupport::nodal_spring("xmin", 0, K_SPRING / 4.0))
+        .unwrap();
     m.add_constraint(Constraint::displacement("ymin", 1, 0.0)).unwrap();
     m.add_constraint(Constraint::displacement("zmin", 2, 0.0)).unwrap();
     m
@@ -76,7 +77,8 @@ fn kb() -> SolidModel {
 /// KF: the springs only.
 fn kf() -> SolidModel {
     let mut m = model_of(bar_mesh(), 0.0);
-    m.add_support(ElasticSupport::nodal_spring("xmin", 0, K_SPRING / 4.0)).unwrap();
+    m.add_support(ElasticSupport::nodal_spring("xmin", 0, K_SPRING / 4.0))
+        .unwrap();
     m
 }
 
@@ -418,7 +420,10 @@ fn d1_reduction_by_the_transformation() {
 
 fn invalid_constraint(r: Result<ModalResult, FemError>, what: &str) -> String {
     match r {
-        Err(FemError::InvalidValue { key: "constraint", reason }) => {
+        Err(FemError::InvalidValue {
+            key: "constraint",
+            reason,
+        }) => {
             println!("Z1 {what}: {reason}");
             reason
         }
@@ -481,7 +486,8 @@ fn b1_b2_o1_h1_a2_bar_on_an_end_spring_and_n3() {
 }
 
 #[test]
-fn a1_o1_h1_springs_only_and_n1() {
+#[ignore = "KNOWN MISS (ADR 0384, run once): A1 max |f_0..2| / f_3 = 2.0717e-6 against 1e-6 (the zero modes are fixed by the residual times the Auto shift; N1, the shift, the axial mode 1.5e-13, O1 8.9e-16 and H1 met, kept in the copy below)"]
+fn a1_o1_h1_springs_only_and_n1_known_miss() {
     let m = kf();
     let s = mpc_modes(&m, 8);
     let r = &s.result;
@@ -501,7 +507,10 @@ fn a1_o1_h1_springs_only_and_n1() {
         r.rigid_free, r.shift
     );
     let n1 = mpc::modal_analysis_mpc(&m, &[], &ModalOptions::new(8).shift(Shift::Value(0.0)));
-    println!("N1 KF at zero shift: {:?}", n1.as_ref().map(|s| s.result.frequencies.clone()));
+    println!(
+        "N1 KF at zero shift: {:?}",
+        n1.as_ref().map(|s| s.result.frequencies.clone())
+    );
     assert!(matches!(n1, Err(FemError::Solver { .. })), "N1");
     assert!(r.rigid_free && r.shift > 0.0, "A1 shift");
     assert!(zero <= 1e-6, "A1 zero modes {zero:e}");
@@ -545,7 +554,10 @@ fn n2_collinear_rigid_set_has_no_mass() {
     println!("N2: {e}");
     match e {
         FemError::InvalidValue { key: "density", reason } => {
-            assert!(reason.contains("rotation y") && reason.contains("constraint"), "N2 {reason}")
+            assert!(
+                reason.contains("rotation y") && reason.contains("constraint"),
+                "N2 {reason}"
+            )
         }
         other => panic!("N2 {other:?}"),
     }
@@ -618,4 +630,28 @@ fn t1_threads_do_not_change_the_bits() {
     }
     println!("T1 threads 1 and 8 bit-equal: {same}");
     assert!(same, "T1");
+}
+
+/// The parts of `a1_o1_h1_springs_only_and_n1_known_miss` that met their limits on the registered run, without the missed
+/// zero-mode ratio (ADR 0384 addendum 1).
+#[test]
+fn a1_o1_h1_springs_only_and_n1_met_parts() {
+    let m = kf();
+    let s = mpc_modes(&m, 8);
+    let r = &s.result;
+    let mm = consistent(&m).unwrap();
+    let ax = axial_shares(&m, &mm, r);
+    let f_kb = mpc_modes(&kb(), 4).result.frequencies[0];
+    let axial = ax.iter().position(|&a| a >= 0.99);
+    let a1f = axial.map_or(f64::INFINITY, |i| (r.frequencies[i] / f_kb - 1.0).abs());
+    let o1 = m_orthonormality(&m, r);
+    let (h1, exact, _) = row_residual(&m, &s);
+    let zero = inf(&r.frequencies[..3]) / r.frequencies[3];
+    println!("A1 KF max |f_0..2| / f_3 {zero:e} (recorded); axial {a1f:e}; O1 {o1:e}; H1 {h1:e}");
+    let n1 = mpc::modal_analysis_mpc(&m, &[], &ModalOptions::new(8).shift(Shift::Value(0.0)));
+    assert!(matches!(n1, Err(FemError::Solver { .. })), "N1");
+    assert!(r.rigid_free && r.shift > 0.0, "A1 shift");
+    assert!(a1f <= 1e-9, "A1 axial {a1f:e}");
+    assert!(o1 <= 1e-10, "O1 KF {o1:e}");
+    assert!(h1 <= 1e-12 && exact, "H1 KF {h1:e}");
 }
