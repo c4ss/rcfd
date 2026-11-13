@@ -649,6 +649,7 @@ fn pending_refusal_cases() -> Vec<(
 }
 
 #[test]
+#[ignore = "record of ADR 0291 after ADR 0292 and ADR 0296, before ADR 0386 (cyclic symmetry) retired the R7 row and cyclic::PENDING; superseded by the _after_cyclic_landed copy below (maintainer, 2026-11-13)"]
 fn x1_the_scaffold_exists_after_landed() {
     assert_eq!(rcfd_fem::hex20::PENDING, None);
     assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
@@ -701,6 +702,7 @@ fn x3_placeholder_elements_refuse_after_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 after ADR 0292 and ADR 0296, before ADR 0386 (cyclic symmetry) retired the R7 row and cyclic::PENDING; superseded by the _after_cyclic_landed copy below (maintainer, 2026-11-13)"]
 fn r1_to_r9_static_solve_refuses_each_new_variant_after_landed() {
     let cases = pending_refusal_cases();
     assert_eq!(cases.len(), 5);
@@ -717,6 +719,7 @@ fn r1_to_r9_static_solve_refuses_each_new_variant_after_landed() {
 }
 
 #[test]
+#[ignore = "record of ADR 0291 after ADR 0292 and ADR 0296, before ADR 0386 (cyclic symmetry) retired the R7 row and cyclic::PENDING; superseded by the _after_cyclic_landed copy below (maintainer, 2026-11-13)"]
 fn r10_refused_on_every_static_path_after_landed() {
     let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
         tolerance: 1e-10,
@@ -807,4 +810,88 @@ fn r11_modal_and_stiffness_refuse_after_modal_landed() {
         location,
         package,
     );
+}
+
+/// The packages that have landed after ADR 0386 (cyclic symmetry): R7 is retired as well.
+const LANDED_AFTER_CYCLIC: [&str; 6] = ["R1", "R5", "R6", "R7", "R8", "R9"];
+
+fn pending_refusal_cases_after_cyclic() -> Vec<(
+    &'static str,
+    SolidModel,
+    &'static str,
+    &'static str,
+    String,
+    &'static str,
+)> {
+    refusal_cases()
+        .into_iter()
+        .filter(|c| !LANDED_AFTER_CYCLIC.contains(&c.0))
+        .collect()
+}
+
+#[test]
+fn x1_the_scaffold_exists_after_cyclic_landed() {
+    assert_eq!(rcfd_fem::hex20::PENDING, None);
+    assert_eq!(rcfd_fem::hex8x::PENDING, Some("ADR 0293"));
+    assert_eq!(rcfd_fem::beam::PENDING, Some("ADR 0294"));
+    assert_eq!(rcfd_fem::shell::PENDING, Some("ADR 0295"));
+    assert_eq!(rcfd_fem::mpc::PENDING, None);
+    assert_eq!(rcfd_fem::cyclic::PENDING, None);
+    assert_eq!(ElementKind::Hex20.nodes_per_element(), 20);
+    assert_eq!(ElementKind::Hex20.pending(), None);
+    assert_eq!(ElementKind::Beam2.pending(), Some("ADR 0294"));
+    assert_eq!(ElementKind::Shell4.pending(), Some("ADR 0295"));
+    assert!(ElementKind::Hex20.is_solid() && !ElementKind::Beam2.is_solid() && !ElementKind::Shell4.is_solid());
+    assert_eq!(SolidFormulation::BBar.pending(), Some("ADR 0293"));
+}
+
+#[test]
+fn r1_to_r9_static_solve_refuses_each_new_variant_after_cyclic_landed() {
+    let cases = pending_refusal_cases_after_cyclic();
+    assert_eq!(cases.len(), 4);
+    for (name, model, item, variant, location, package) in cases {
+        expect_refusal(
+            name,
+            solve_static(&model, &StaticOptions::default()),
+            item,
+            variant,
+            &location,
+            package,
+        );
+    }
+}
+
+#[test]
+fn r10_refused_on_every_static_path_after_cyclic_landed() {
+    let cg = StaticOptions::with_solver(StaticSolver::ConjugateGradient {
+        tolerance: 1e-10,
+        max_iterations: 10_000,
+    });
+    for (name, model, item, variant, location, package) in pending_refusal_cases_after_cyclic() {
+        expect_refusal(
+            &format!("{name} cg"),
+            solve_static_with(&model, &[], &[], &cg),
+            item,
+            variant,
+            &location,
+            package,
+        );
+        let extra = [Prescribed::new(0, 0, 0.0)];
+        expect_refusal(
+            &format!("{name} threads 8"),
+            solve_static_with(&model, &extra, &[], &StaticOptions::default().threads(8)),
+            item,
+            variant,
+            &location,
+            package,
+        );
+        expect_refusal(
+            &format!("{name} report"),
+            solve_static_report(&model, &[], &[], &StaticOptions::default()),
+            item,
+            variant,
+            &location,
+            package,
+        );
+    }
 }
