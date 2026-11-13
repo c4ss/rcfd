@@ -328,3 +328,15 @@ A8 missed as arithmetic 2 predicted (`7.847168e-3`, `7.721246e-3` against `1e-3`
 Limit added to the registration's limits by this finding: the relative pivot rule refuses an effective matrix whose pivots
 fall below `1e-10` of the diagonal, so a model whose effective stiffness spans more than about ten decades (here a two-unknown
 model with `(omega_2/omega_1)^2 = 1e14`) is refused although it is non-singular.
+
+## Amendment 2 (2026-11-13, after the mutation runs and before the run of the check it adds)
+
+Mutation Mu1 (the generalised-alpha load `f_{n+1}` only) survived: A7b, registered to catch it, uses the constant table of A5,
+on which `f_n = f_{n+1}` at every step, so the mutation changes nothing there; the ramp of A10 and A11 compares the integrator
+with itself. A check is added, nothing registered is changed:
+
+| Id | Clause | Measure | Limit | Estimate |
+| --- | --- | --- | --- | --- |
+| A7c | a7 | B, the A10 set-up (ramp `[(0, 0), (T_1, 1), (10 T_1, 1)]`, damping of A6, `dt = T_1/40`, 200 steps, from rest) with `rho_inf = 1` against average-acceleration Newmark: the measure of A7a | <= 1e-12 | ~1e-15 (D1: equal in exact arithmetic with the weighted end loads) |
+
+Test `a7c_ramp_load_generalised_alpha_one_is_newmark`, run once; then Mu1 is run again against it.
