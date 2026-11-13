@@ -1319,6 +1319,24 @@ pub(crate) fn zero_shift_refused(k: &CsrMatrix) -> bool {
     }
 }
 
+/// The first pivot of the factor of `k` at zero shift (the factor of [`zero_shift_refused`]) whose ratio `d_i / a_ii` is
+/// below the rule of `Shift::Auto` (or NaN), or the pivot the factorisation refuses: its row of `k` and the ratio; `None`
+/// if every pivot passes (ADR 0401). A factorisation refused for another reason is returned as `FemError::Solver`.
+pub(crate) fn zero_shift_failing_pivot(k: &CsrMatrix) -> Result<Option<(usize, f64)>> {
+    let d = k.diag();
+    match SkylineLdlt::factor_with(k, &SkylineOptions::default()) {
+        Ok(f) => Ok(f.pivots().iter().zip(f.order()).find_map(|(&p, &o)| {
+            let ratio = p / d[o];
+            (ratio.is_nan() || ratio < ZERO_SHIFT_PIVOT_RATIO).then_some((o, ratio))
+        })),
+        Err(SkylineError::Pivot { row, pivot, .. }) => Ok(Some((row, pivot / d[row]))),
+        Err(e) => Err(FemError::Solver {
+            solver: "skyline-ldlt",
+            reason: e.to_string(),
+        }),
+    }
+}
+
 fn zero_values_only(what: String, v: f64) -> FemError {
     constraint_error(format!("{what}: value {v:e}; a modal analysis takes zero values only"))
 }
