@@ -340,3 +340,92 @@ with itself. A check is added, nothing registered is changed:
 | A7c | a7 | B, the A10 set-up (ramp `[(0, 0), (T_1, 1), (10 T_1, 1)]`, damping of A6, `dt = T_1/40`, 200 steps, from rest) with `rho_inf = 1` against average-acceleration Newmark: the measure of A7a | <= 1e-12 | ~1e-15 (D1: equal in exact arithmetic with the weighted end loads) |
 
 Test `a7c_ramp_load_generalised_alpha_one_is_newmark`, run once; then Mu1 is run again against it.
+
+## Addendum 1: results (2026-11-13)
+
+Registered run: commit 9cc83fa3, once, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_transient -- --nocapture
+--test-threads=1` (0.64 s). Corrected A8c/A8d run (amendment 1): once, on the amended test. A7c (amendment 2): once.
+Bar B: `omega_1 = 7.930702587e3` rad/s, `T_1 = 7.922608669e-4` s, 80 free unknowns.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 Omega 0.2 / 0.1 (3142 / 6284 steps) | <= 1e-9 | 9.10e-15 / 8.44e-15 | yes |
+| A2 Omega 0.2 / 0.1 | <= 1e-10 | 2.50e-14 / 2.44e-14 | yes |
+| A3 Omega 0.2 / 0.1, `abs(e/(Omega^2/12) - 1)` | <= 0.05 | 2.570e-3 / 6.639e-4 | yes |
+| A4 order | >= 1.9 | 1.99725 | yes |
+| A5 `abs(peak/(2 u_s) - 1)` | <= 0.005 | 1.035e-5 | yes |
+| A6 decrement, relative | <= 0.01 | 1.663e-3 | yes |
+| A7a free vibration, rho 1 vs Newmark | <= 1e-12 | 1.56e-14 | yes |
+| A7b step load and damping | <= 1e-12 | 2.52e-15 | yes |
+| A7c ramp load and damping (amendment 2) | <= 1e-12 | 4.96e-15 | yes |
+| A8 `abs(r - rho_inf)` at Omega 1e3, rho 0.5 / 0.8 | <= 1e-3 | **7.847e-3 / 7.721e-3** | **no** (predicted, arith. 2) |
+| A8c `abs(r - r_closed)`, rho 0.5 / 0.8 | <= 1e-6 | 2.83e-11 / 4.70e-11 | yes |
+| A8d at Omega 1e6 (amended set-up), rho 0.5 / 0.8 | <= 1e-3 | 7.80e-5 / 7.79e-5 | yes |
+| A9 order, rho 0.5 / 0.8 | >= 1.9 | 1.99344 / 1.99704 | yes |
+| A10 save/restore split at 77, steps 77 to 200 | bit-equal | bit-equal | yes |
+| A11 threads 1 and 8, steps 0 to 200 | bit-equal | bit-equal | yes |
+| A12a dt 0, -1e-4, NaN, inf | refused, "time step" | 4 refused | yes |
+| A12b run past the table / state / run(40) / table after t0 | as stated | refused / unchanged / accepted / refused | yes |
+| A12c `S = diag(1.25, 0)` | refused, "effective matrix" | refused (pivot 0) | yes |
+| C1 initial acceleration residual | <= 1e-12 | 3.80e-16 | yes |
+| C2 table at points / midpoint / outside | bits / <= 1e-15 / None | bits / 2.2e-16 / None | yes |
+| C3 16 refusals | each with its key | all 16 | yes |
+| N1 dissipative Newmark energy measure | > 1e-10 | 0.99999 | as expected |
+| N2 rho 0.8 vs Newmark | > 1e-12 | 1.12e-2 | as expected |
+| N3 rho 0.5 period ratio deviation | > 0.05 | 0.498 | as expected |
+| N4 restored with step 0 | not bit-equal | differs | as expected |
+| S1 diff scope / `cargo test -p rcfd-fem --release` | 2 files / 0 failed | `transient.rs`, `si_transient.rs` / 188 passed, 0 failed, 39 ignored | yes |
+
+Deviations and remarks:
+
+- A8 missed exactly as arithmetic 2 predicted: the measured factors (0.5078471683, 0.8077212458) are the method's own
+  closed-form spectral radius at `Omega = 1e3` to 5e-11 (A8c); the method comes within 1e-3 of `rho_inf` only above `Omega ~
+  3e4` (the `Omega^(-2/3)` approach of a triple root, D1); at `1e6` it is 7.8e-5 (A8d). Kept as the ignored
+  `a8_decay_per_step_at_omega_dt_1e3_known_miss` with the limit intact. Cause: the acceptance text, not the code.
+- Amendment 1: the first A8d set-up (`omega_1 = 1`, `omega_2 = 1e7`) was refused by the registered pivot rule (eigenvalue
+  ratio 1e14); the stopped test is an ignored record, the amended one met.
+- A5 estimate: arithmetic 5 took `2 atan(Omega/2)` as 0.156918; it is 0.156757 (an arithmetic slip), so the phase offset is
+  6.45e-3 rad and the expected deficit 1.04e-5, which the measurement reproduces. The limit is unaffected.
+- Amendment 2 added A7c after Mu1 survived (A7b's constant table cannot see the end-load weighting).
+- Not run: the rcfd-api baseline hashes (no file outside rcfd-fem touched); the whole workspace (the lead's gate).
+
+Mutations (scratch copy of `transient.rs`, `f398-scratch/mutate.sh`, not committed):
+
+| Id | Caught by |
+| --- | --- |
+| Mu1 load `f_{n+1}` only | survived the registered checks (A7b has a constant table); caught by A7c (2.38e-2) after amendment 2 |
+| Mu2 `beta_R` dropped | A6 (0.501), A7b |
+| Mu3 `(1/2 + beta)` | A1, A2, A3, A5, A6, A7, A8c, A9, N4 |
+| Mu4 step written as 0 | A10 |
+| Mu5 coverage check of `run` removed | A12b (panics on the uncovered table) |
+| Mu6 `alpha_m`, `alpha_f` exchanged | A8c, A8d, A9, N3 |
+| Mu7 pivot test removed | survived, as predicted: the factor's own positive-pivot rule refuses the zero pivot of A12c |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+
+**Decision by the rule: partial** (A8 missed with a diagnosed cause; every other A, C and S check met, the negative controls
+as expected).
+
+Remaining questions:
+
+1. Clause (a8) asks for a decay of `rho_inf` within 1e-3 at `Omega = 1e3`, which the generalised-alpha method does not have
+   (it decays by `rho_inf + 7.8e-3`). Options: (a) re-word the clause to "decays per step by the method's closed-form spectral
+   radius at that `Omega` within 1e-6, and by `rho_inf` within 1e-3 at `Omega = 1e6`" (A8c, A8d, both met) and mark F-398
+   done; (b) keep the clause and the status partial; (c) loosen the limit to 1e-2 at `1e3`. Recommendation: (a), because the
+   clause as written tests a property the method does not have.
+2. The relative pivot rule (1e-10) refuses non-singular effective matrices that span more than about ten decades. Options:
+   (a) keep it (consistent with the static solve); (b) a rule on the inertia of the factor only. Recommendation: (a); FE
+   effective matrices `M + beta dt^2 K` are far better conditioned than `K`.
+3. The transformation path (linear constraints, rigid sets, supports) and prescribed motion histories are refused.
+   Recommendation: a follow-up item (below). The dynamic participant of ADR 0303 needs it only if its interface uses them.
+
+## For the lead: roadmap entries
+
+F-398, proposed status **partial**, note:
+
+> ADR 0389, 2026-11-13: rcfd-fem transient::Integrator: Newmark (beta, gamma; average acceleration by default) and generalised-alpha (rho_inf, parameters re-derived: triple root -rho_inf at infinity), Rayleigh damping (from_ratio), piecewise linear LoadTable with exact coverage checks, LoadHistory patterns, one factor of the effective matrix, initial acceleration from M, state saved and restored as bytes (RCFDTRS1). Bar of 20 Hex8: amplitude after 100 periods 9e-15, energy 2.5e-14, period error 0.9974 and 0.9993 of (omega dt)^2/12, order 1.997; step-load peak 1.0e-5 from twice static; Rayleigh 0.02 decrement 1.7e-3; rho_inf = 1 equals Newmark to 1.6e-14; split run and 1/8 threads bit-equal; the three refusals and 16 more. Known miss A8: the method decays at omega dt = 1e3 by 0.50785 and 0.80772 (its closed form to 5e-11), not by rho_inf within 1e-3 (it does at 1e6: 7.8e-5); the acceptance text asks for a property the method does not have. Linear only; transformation path and prescribed motion histories refused.
+
+Follow-up item (new), title "Transient integrator on the transformation path and with prescribed motion histories", deps F-398,
+acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. A bar with a nodal spring at its free end (the support of ADR 0384) started in its first discrete mode: with Newmark the amplitude after 100 periods within 1e-9 and the period long by (omega dt)^2/12 within 5 percent of that amount at omega dt = 0.2 and 0.1; a rigid-set end gives the same history as the equivalent prescribed-only model within 1e-12; a base displacement given by a table gives the relative motion of the closed-form base-excited oscillator within 1 percent at 40 steps per period; models without these features give the bits of ADR 0389's integrator.
