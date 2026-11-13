@@ -34,7 +34,9 @@
 //! and the initial flux, the interpolation of the `ddt_correction` defect) is the exact flux of a linear field through the
 //! mesh's triangulated faces, the convected face value carries the same correction, the momentum diffusion carries the
 //! library's explicit non-orthogonal correction and the pressure equation and its flux the same explicit non-orthogonal
-//! flux; see [`GeometryCorrections`].
+//! flux; see [`GeometryCorrections`]. With them, the diagnostic opt-in
+//! [`OversetSolver::set_least_squares_pressure_gradient`] (F-472, ADR 0382) replaces the Green-Gauss cell pressure gradient
+//! of the momentum predictor and of the velocity correction by the least-squares gradient of the corrections.
 
 use crate::ale::{move_mesh, set_follow_conditions, set_follow_conditions_bdf2, FollowHistory, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -187,6 +189,8 @@ pub struct OversetSolver {
     /// With the corrections on: the corrected face interpolation of the velocity at the end of the last step, on its
     /// geometry (the interpolation of the next step's `ddt_correction` defect).
     corrected_old_flux: Option<Vec<f64>>,
+    /// Set by [`OversetSolver::set_least_squares_pressure_gradient`] (ADR 0382).
+    ls_pressure_gradient: bool,
     /// The three-level follow conditions of the moving walls in `prepare` while BDF2 is on (F-345, ADR 0379 D7).
     follow: FollowHistory,
 }
@@ -817,6 +821,7 @@ impl OversetSolver {
             fringe_flux: FringeFlux::PressureEquation,
             corrections: false,
             corrected_old_flux: None,
+            ls_pressure_gradient: false,
             follow: FollowHistory::new(),
         })
     }
@@ -845,6 +850,21 @@ impl OversetSolver {
     /// Whether the corrections of [`set_geometry_corrections`](Self::set_geometry_corrections) are on.
     pub fn geometry_corrections(&self) -> bool {
         self.corrections
+    }
+
+    /// Take the cell pressure gradient of the momentum predictor and of the velocity correction from the least-squares
+    /// gradients of the geometry corrections (F-472, ADR 0382) instead of the Green-Gauss gradient, from the next step on:
+    /// [`GeometryCorrections::gradients`] of the pressure with its boundary values (exact for a linear pressure on any
+    /// mesh; donor-interpolated in a fringe cell, zero in a hole cell). A diagnostic opt-in that acts only together with
+    /// [`set_geometry_corrections`](Self::set_geometry_corrections): a step with it on and the corrections off is
+    /// refused. Off (the default) is the solver that did not opt in, bit for bit.
+    pub fn set_least_squares_pressure_gradient(&mut self, on: bool) {
+        self.ls_pressure_gradient = on;
+    }
+
+    /// Whether [`set_least_squares_pressure_gradient`](Self::set_least_squares_pressure_gradient) is on.
+    pub fn least_squares_pressure_gradient(&self) -> bool {
+        self.ls_pressure_gradient
     }
 
     /// Choose how the flux of the faces between calculated and fringe cells is found (F-445, ADR 0347), from the next
@@ -995,6 +1015,11 @@ impl OversetSolver {
                 || self.settings.rhie_chow_step_consistent)
         {
             return Err("overset: the geometry corrections (ADR 0367) with BDF2, a prescribed fringe flux or rhie_chow_step_consistent are not supported".into());
+        }
+        if self.ls_pressure_gradient && !self.corrections {
+            return Err(
+                "overset: the least-squares pressure gradient (ADR 0382) needs the geometry corrections on".into(),
+            );
         }
         let old = self.geom.clone();
         let n = old.n_cells();
@@ -1364,6 +1389,8 @@ impl OversetSolver {
         let g = self.geom.clone();
         // ADR 0367: the connectivity the gradients of the corrections interpolate the fringe cells with
         let corr_conn = (!trivial).then_some(conn);
+        // ADR 0382 L: the least-squares cell pressure gradient (only with the corrections, refused otherwise in advance)
+        let ls_grad = self.ls_pressure_gradient && geo_corr.is_some();
         let beta = match s.convection {
             ConvScheme::Central => 1.0,
             ConvScheme::Blended(b) => b,
@@ -1405,7 +1432,12 @@ impl OversetSolver {
             ale.apply_wall_gradients(&mut pbc, &g.dn);
             let ub = self.u.boundary_values(&g);
             let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
-            let mut grad_p = green_gauss(&g, &self.p.values, &bvals_p, 0);
+            let mut grad_p = if ls_grad {
+                // ADR 0382 L
+                GeometryCorrections::gradients(&g, &self.p.values, &bvals_p, corr_conn)
+            } else {
+                green_gauss(&g, &self.p.values, &bvals_p, 0)
+            };
             if let (Some(r), true) = (&ring, own_gradient) {
                 r.own_gradient(&g, &self.p.values, &mut grad_p);
             }
@@ -1624,7 +1656,12 @@ impl OversetSolver {
                 }
                 self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, false);
                 let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
-                let mut grad_new = green_gauss(&g, &p_new, &bv_new, 0);
+                let mut grad_new = if ls_grad {
+                    // ADR 0382 L
+                    GeometryCorrections::gradients(&g, &p_new, &bv_new, corr_conn)
+                } else {
+                    green_gauss(&g, &p_new, &bv_new, 0)
+                };
                 if let (Some(r), true) = (&ring, own_gradient) {
                     r.own_gradient(&g, &p_new, &mut grad_new);
                 }

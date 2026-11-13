@@ -154,6 +154,13 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   1.14 and 1.15 times that on the planar B3 (without the corrections `1.36e-2`, 15.6 times); the corrected operators
   keep the exact field to round-off in continuity and diffusion and to `1.8e-3` per unit volume in convection (second
   order, from `0.14`). The rest of the error on B3d is the coupling's (the warped meshes alone carry `3.1e-4`).
+  With a varying pressure (F-472, ADR 0382: a Taylor-Green vortex with an axial velocity) the corrections are not enough
+  on B3d: the cell pressure gradient of the momentum predictor and of the velocity correction stays the Green-Gauss
+  gradient, which is inconsistent on skewed and warped cells (`0.19 abs(grad p)` for a linear pressure on B3d), and the
+  error is 3.3 (default stencils) and 6.8 (quadratic) times that on B3. The diagnostic opt-in
+  `OversetSolver::set_least_squares_pressure_gradient(true)` (only together with the corrections) takes that gradient
+  from the least-squares gradients of the corrections instead: it removes 63 % and 66 % of the error on B3d, leaving 1.22
+  and 2.33 times that on B3.
 - **BDF2 (F-338, ADR 0241).** `OversetSolver::set_time_scheme(TimeScheme::Bdf2)` switches the three-level scheme on; a
   solver that does not call it runs as before, bit for bit. The time term is the backward difference of `V u` of the
   moving cell, and the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, so that a
