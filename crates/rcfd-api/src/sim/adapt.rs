@@ -87,7 +87,8 @@ pub fn schema() -> Schema {
 }
 
 /// Whether the case writes the table (an absent optional table reads its defaults, so the data is looked at).
-pub(crate) fn present(case: &Case) -> bool {
+/// Public as `rcfd_api::sim::has_mesh_adapt` (F-475, ADR 0377).
+pub fn present(case: &Case) -> bool {
     case.tree.get("mesh").ok().is_some_and(|m| m.get("adapt").is_some())
 }
 
@@ -528,6 +529,42 @@ enum Indicator {
 
 /// The adaptive loop of the case (D3), with the library's functions.
 pub(crate) fn run(case: &Case) -> Result<AdaptiveRun> {
+    run_until(case, &|| false)
+}
+
+/// The mesh the run of a `[mesh.adapt]` case solves on after its first step (F-475, ADR 0377): the final mesh of the
+/// run's loop, with one record per solve.
+pub struct AdaptedMesh {
+    /// The mesh of the last solve (the one the first step puts in `Simulation::geom`).
+    pub mesh: Arc<rcfd_mesh::Mesh>,
+    /// One record per solve.
+    pub cycles: Vec<CycleRecord>,
+}
+
+/// The run's adaptive loop of `case` (the first step's, [`run`]) for its final mesh (F-475, ADR 0377). `cancelled` is
+/// polled once before each of the `cycles + 1` solves and nowhere else; `Ok(None)` when it returned true (the loop
+/// stopped before that solve; a solve in progress is not interrupted).
+pub fn adapted_mesh(case: &Case, cancelled: &dyn Fn() -> bool) -> Result<Option<AdaptedMesh>> {
+    let stopped = std::cell::Cell::new(false);
+    let poll = || {
+        let c = cancelled();
+        if c {
+            stopped.set(true);
+        }
+        c
+    };
+    match run_until(case, &poll) {
+        _ if stopped.get() => Ok(None),
+        Ok(r) => Ok(Some(AdaptedMesh {
+            mesh: r.solver.geom.mesh.clone(),
+            cycles: r.cycles,
+        })),
+        Err(e) => Err(e),
+    }
+}
+
+/// [`run`] with `cancelled` polled before each solve (in `setup`); a true poll stops the loop with an error.
+fn run_until(case: &Case, cancelled: &dyn Fn() -> bool) -> Result<AdaptiveRun> {
     let amr = base_lattice(case).map_err(|d| Error::Other(joined(&d)))?;
     let set = settings(case);
     let axes = amr.refined_axes();
@@ -546,7 +583,12 @@ pub(crate) fn run(case: &Case) -> Result<AdaptiveRun> {
     let target = get_s(case, "mesh.adapt.marking") == "target_count";
     let n_target = get_i(case, "mesh.adapt.target_cells").max(0) as usize;
     let reg = get_s(case, "mesh.adapt.register");
-    let cell_setup = |g: &Arc<FvGeometry>| setup(case, g);
+    let cell_setup = |g: &Arc<FvGeometry>| {
+        if cancelled() {
+            return Err(Error::Other("cancelled".into()));
+        }
+        setup(case, g)
+    };
     if reg.is_empty() {
         return match (target, indicator) {
             (true, _) => run_adaptive_simple_target(amr, cell_setup, &set, n_target, eta),

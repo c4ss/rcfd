@@ -53,6 +53,7 @@ mod adapt;
 mod restart;
 mod warm;
 
+pub use adapt::{adapted_mesh, present as has_mesh_adapt, AdaptedMesh};
 pub(crate) use adapt::{check as adapt_check, schema as adapt_schema};
 
 pub use warm::{TurbWarm, WarmState};

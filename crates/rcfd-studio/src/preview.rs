@@ -25,6 +25,10 @@
 //!   the bounds stay the same ([`crate::viewport::Viewport::replace_surface`], ADR 0147).
 //! * The Mesh side says the size of the domain and the cell counts, and offers "Refine x2" for a generator mesh
 //!   ([`resolution_text`], [`refine_offer`], [`refine`], ADR 0148).
+//! * A case with `[mesh.adapt]` (F-475, ADR 0377): the build makes the mesh `Simulation::new` sets the run up on (the base
+//!   lattice), then runs the run's adaptive loop ([`rcfd_api::sim::adapted_mesh`], polled for cancellation before each
+//!   solve) and the Studio shows its final mesh, the mesh the run solves on after its first step ([`Built::adapted`]);
+//!   the Mesh side says its cells, its mesh hash and what the loop cost ([`adapt_text`]).
 //! * Drawing reuses the run viewport ([`crate::viewport::Viewport::show_surface`]): the same `ViewGpu`, texture, camera
 //!   mapping and pick pass, every face at value 0 and one solid colour per patch (`PartStyle::Solid`). A 2D case's
 //!   boundary patches are edges in its face-on view; they are drawn as coloured segments over the image by
@@ -167,6 +171,26 @@ pub struct Built {
     pub resolution: Resolution,
     /// Wall time of the build, seconds.
     pub build_s: f64,
+    /// A case with `[mesh.adapt]` (F-475, ADR 0377): the mesh the run solves on after its first step, when the loop ran
+    /// (set on the build of the set-up mesh only; the Studio shows this one).
+    pub adapted: Option<Arc<Built>>,
+    /// A case with `[mesh.adapt]`: the set-up mesh and what the adaptive loop did (`None` without the table).
+    pub adapt: Option<AdaptReport>,
+}
+
+/// What the preview of a `[mesh.adapt]` case did (F-475, ADR 0377).
+#[derive(Debug, Clone, PartialEq)]
+pub struct AdaptReport {
+    /// Cells of the set-up mesh (the base lattice of `Simulation::new`, or `build_mesh` when it refused).
+    pub base_cells: usize,
+    /// `Mesh::content_hash` of the set-up mesh.
+    pub base_hash: u64,
+    /// The loop's solves: (cells, iterations, converged).
+    pub solves: Vec<(usize, usize, bool)>,
+    /// Wall time of the loop, seconds.
+    pub loop_s: f64,
+    /// Why the mesh was not adapted (`Simulation::new` refused the case, or the loop failed).
+    pub refused: Option<String>,
 }
 
 /// How a previewed mesh's resolution is set (ADR 0148).
@@ -743,6 +767,26 @@ fn build_text(
     // read before the build: a change of the file during it shows as a changed stamp later (ADR 0147)
     let mesh_file = mesh_file_of(&case);
     let mesh_stamp = mesh_file.as_deref().and_then(file_stamp);
+    let id = Ident {
+        rel,
+        file: &file,
+        case: &case,
+        src,
+        case_hash: &case_hash,
+        from_editor,
+    };
+    let stamp = |mut b: Built| {
+        b.mesh_file.clone_from(&mesh_file);
+        b.mesh_stamp = mesh_stamp;
+        b
+    };
+    if rcfd_api::sim::has_mesh_adapt(&case) {
+        let result = build_adaptive(&id, limits, cancelled, t0).map(|mut b| {
+            b.adapted = b.adapted.take().map(|a| Arc::new(stamp(Arc::unwrap_or_clone(a))));
+            stamp(b)
+        });
+        return out(true, result);
+    }
     let mesh = match rcfd_api::sim::build_mesh(&case) {
         Ok(m) => m,
         Err(d) => return out(true, Err(Refusal::Failed(located(rel, &d)))),
@@ -750,55 +794,158 @@ fn build_text(
     if cancelled() {
         return out(true, Err(Refusal::Cancelled));
     }
-    let (surface, two_d) = match surface_of(&mesh) {
+    out(true, assemble(&id, &mesh, limits, cancelled, t0).map(stamp))
+}
+
+/// What a built mesh is of (the case text and where it is from).
+struct Ident<'a> {
+    rel: &'a str,
+    file: &'a Path,
+    case: &'a Case,
+    src: &'a str,
+    case_hash: &'a str,
+    from_editor: bool,
+}
+
+/// The `Built` of `mesh` (surface, patches, 2D overlay); `mesh_file` and `mesh_stamp` are left `None` for the caller.
+fn assemble(
+    id: &Ident<'_>,
+    mesh: &Mesh,
+    limits: &Limits,
+    cancelled: &dyn Fn() -> bool,
+    t0: Instant,
+) -> Result<Built, Refusal> {
+    let rel = id.rel;
+    let (surface, two_d) = match surface_of(mesh) {
         Ok(s) => s,
-        Err(e) => return out(true, Err(Refusal::Failed(format!("{rel}: surface: {e}")))),
+        Err(e) => return Err(Refusal::Failed(format!("{rel}: surface: {e}"))),
     };
     if surface.n_faces() == 0 {
-        return out(
-            true,
-            Err(Refusal::Failed(format!(
-                "{rel}: the mesh has no boundary surface to draw"
-            ))),
-        );
+        return Err(Refusal::Failed(format!(
+            "{rel}: the mesh has no boundary surface to draw"
+        )));
     }
-    let (patches, part_patch) = patch_list(&mesh, &surface);
+    let (patches, part_patch) = patch_list(mesh, &surface);
     let (edges, n_edges, outlines) = if two_d {
-        match overlay_2d(&mesh, &surface, &patches, limits.overlay_edges, cancelled) {
+        match overlay_2d(mesh, &surface, &patches, limits.overlay_edges, cancelled) {
             Some(o) => o,
-            None => return out(true, Err(Refusal::Cancelled)),
+            None => return Err(Refusal::Cancelled),
         }
     } else {
         (Vec::new(), 0, Vec::new())
     };
     let triangles = surface.triangles().count();
-    out(
-        true,
-        Ok(Built {
-            rel: rel.to_string(),
-            file,
-            case_hash,
-            text: Arc::from(src),
-            from_editor,
-            mesh_hash: mesh.content_hash(),
-            cells: mesh.n_cells(),
-            faces: mesh.n_faces(),
-            points: mesh.n_points(),
-            surface: Arc::new(surface),
-            two_d,
-            patches,
-            part_patch,
-            triangles,
-            edges: Arc::new(edges),
-            n_edges,
-            outlines: Arc::new(outlines),
-            mesh_file,
-            mesh_stamp,
-            bounds: mesh_bounds(&mesh),
-            resolution: resolution_of(&case),
-            build_s: t0.elapsed().as_secs_f64(),
-        }),
-    )
+    Ok(Built {
+        rel: rel.to_string(),
+        file: id.file.to_path_buf(),
+        case_hash: id.case_hash.to_string(),
+        text: Arc::from(id.src),
+        from_editor: id.from_editor,
+        mesh_hash: mesh.content_hash(),
+        cells: mesh.n_cells(),
+        faces: mesh.n_faces(),
+        points: mesh.n_points(),
+        surface: Arc::new(surface),
+        two_d,
+        patches,
+        part_patch,
+        triangles,
+        edges: Arc::new(edges),
+        n_edges,
+        outlines: Arc::new(outlines),
+        mesh_file: None,
+        mesh_stamp: None,
+        bounds: mesh_bounds(mesh),
+        resolution: resolution_of(id.case),
+        build_s: t0.elapsed().as_secs_f64(),
+        adapted: None,
+        adapt: None,
+    })
+}
+
+/// The build of a case with `[mesh.adapt]` (F-475, ADR 0377 P2): the set-up mesh of `Simulation::new` (its base lattice;
+/// `build_mesh` when it refuses the case, with the reason in the report), then the run's adaptive loop, whose final mesh
+/// is [`Built::adapted`].
+fn build_adaptive(
+    id: &Ident<'_>,
+    limits: &Limits,
+    cancelled: &dyn Fn() -> bool,
+    t0: Instant,
+) -> Result<Built, Refusal> {
+    let (rel, case) = (id.rel, id.case);
+    let (base, refused) = match rcfd_api::sim::Simulation::new(case) {
+        Ok(sim) => ((*sim.geom.mesh).clone(), None),
+        Err(d) => {
+            let mesh = rcfd_api::sim::build_mesh(case).map_err(|e| Refusal::Failed(located(rel, &e)))?;
+            let why = d
+                .first()
+                .map(|x| format!("{}: {}", x.path, x.message))
+                .unwrap_or_default();
+            (mesh, Some(format!("the run refuses the case: {why}")))
+        }
+    };
+    if cancelled() {
+        return Err(Refusal::Cancelled);
+    }
+    let mut b = assemble(id, &base, limits, cancelled, t0)?;
+    let mut report = AdaptReport {
+        base_cells: base.n_cells(),
+        base_hash: base.content_hash(),
+        solves: Vec::new(),
+        loop_s: 0.0,
+        refused,
+    };
+    if report.refused.is_none() {
+        let tl = Instant::now();
+        match rcfd_api::sim::adapted_mesh(case, cancelled) {
+            Ok(None) => return Err(Refusal::Cancelled),
+            Err(e) => report.refused = Some(format!("the adaptive loop failed: {e}")),
+            Ok(Some(a)) => {
+                report.loop_s = tl.elapsed().as_secs_f64();
+                report.solves = a.cycles.iter().map(|c| (c.cells, c.iterations, c.converged)).collect();
+                if cancelled() {
+                    return Err(Refusal::Cancelled);
+                }
+                let mut ad = assemble(id, &a.mesh, limits, cancelled, t0)?;
+                ad.adapt = Some(report.clone());
+                b.adapted = Some(Arc::new(ad));
+            }
+        }
+    }
+    b.adapt = Some(report);
+    Ok(b)
+}
+
+/// The `[mesh.adapt]` line of the Mesh side (F-475, ADR 0377 P4): the shown mesh's cells and mesh hash and what the
+/// adaptive loop cost, or why the case was not adapted; `None` without the table.
+pub fn adapt_text(b: &Built) -> Option<String> {
+    let a = b.adapt.as_ref()?;
+    if let Some(why) = &a.refused {
+        return Some(format!("[mesh.adapt]: not adapted ({why}); shown is the base mesh"));
+    }
+    let cells: Vec<String> = a.solves.iter().map(|s| with_commas(s.0 as u64)).collect();
+    let iterations: Vec<String> = a
+        .solves
+        .iter()
+        .map(|s| {
+            if s.2 {
+                s.1.to_string()
+            } else {
+                format!("{} (not converged)", s.1)
+            }
+        })
+        .collect();
+    Some(format!(
+        "[mesh.adapt]: the mesh the run solves on after its first step, {} cells, mesh hash {:016x}; adapted from the base \
+         lattice of {} cells by {} solves ({} cells; {} iterations) in {:.2} s",
+        with_commas(b.cells as u64),
+        b.mesh_hash,
+        with_commas(a.base_cells as u64),
+        a.solves.len(),
+        cells.join(", "),
+        iterations.join(" + "),
+        a.loop_s
+    ))
 }
 
 // ---------------------------------------------------------------- resolution (ADR 0148)
@@ -847,7 +994,8 @@ pub fn refine_offer(b: &Built, limits: &Limits) -> RefineOffer {
              the case editor"
         )),
         Resolution::Counts(counts) => {
-            let cells = b.cells as u64;
+            // F-475: the counts doubled are the base lattice's, whose cells an adapted mesh is not
+            let cells = b.adapt.as_ref().map_or(b.cells, |a| a.base_cells) as u64;
             let cells_after = cells.saturating_mul(if b.two_d { 4 } else { 8 });
             RefineOffer::Refine(Refinement {
                 edits: counts
@@ -1493,6 +1641,10 @@ impl Preview {
                     }
                 }
                 Ok(mut b) => {
+                    // F-475 (ADR 0377 P3): a [mesh.adapt] case shows the mesh the run solves on after its first step
+                    if let Some(a) = b.adapted.take() {
+                        b = Arc::unwrap_or_clone(a);
+                    }
                     // the same mesh again (a rebuild, a typo undone, the saved text) keeps its surface: no new upload,
                     // the camera stays; the rest (source, hash, time) is the new build's
                     let same = [&self.built, &self.shown]

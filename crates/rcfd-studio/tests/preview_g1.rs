@@ -40,12 +40,6 @@ fn solver_mesh(file: &Path) -> (rcfd_mesh::Mesh, &'static str) {
     }
 }
 
-/// Whether the case file writes a `[mesh.adapt]` table (the solver then adapts the mesh the preview builds as a base).
-fn is_adaptive(file: &Path) -> bool {
-    let case = Case::load(file).unwrap_or_else(|d| panic!("{}: {d:?}", file.display()));
-    case.tree.get("mesh").ok().is_some_and(|m| m.get("adapt").is_some())
-}
-
 /// G1 limit: mesh hash, counts and patches, and the surface field by field, bit for bit; the start camera too.
 fn assert_same(b: &Built, mesh: &rcfd_mesh::Mesh, what: &str) {
     assert_eq!(b.mesh_hash, mesh.content_hash(), "{what}: mesh hash");
@@ -149,15 +143,7 @@ fn g1_g7_shipped_cases_preview_the_solvers_mesh() {
         let b = build_ok(&root, rel);
         let preview_s = t.elapsed().as_secs_f64();
         let t = Instant::now();
-        let (mesh, by) = if is_adaptive(&root.join(rel)) {
-            // gate 4, 2026-11-13 (ADR 0262 addendum): the preview builds the generator's mesh, `Simulation::new` the base lattice's (same cells,
-            // another numbering and hash) and the first step adapts it
-            eprintln!("G1 note: {rel}: has [mesh.adapt]; the preview shows the un-adapted generator mesh, not the adapted one; compared with build_mesh");
-            let case = Case::load(root.join(rel)).unwrap_or_else(|d| panic!("{rel}: {d:?}"));
-            (rcfd_api::sim::build_mesh(&case).unwrap(), "build_mesh (base)")
-        } else {
-            solver_mesh(&root.join(rel))
-        };
+        let (mesh, by) = solver_mesh(&root.join(rel));
         let solver_s = t.elapsed().as_secs_f64();
         assert_same(&b, &mesh, rel);
         eprintln!(
