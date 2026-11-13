@@ -31,6 +31,9 @@ use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 use std::fmt::Write as _;
 
+mod state;
+pub use state::{gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability, STABILITY_TOLERANCE};
+
 /// `|kappa|` at or below which a mode has no whirl direction (ADR 0411 D3).
 pub const WHIRL_TOLERANCE: f64 = 1e-6;
 
