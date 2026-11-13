@@ -6277,11 +6277,13 @@ fixed by the item's registration ADR before any code.
     motion of the component through the coupling). Missed (acceptance): T1c of ADR 0219 with BDF2 is 1.664 (limit 1.7):
     with BDF2 the error of both levels is free of time error (0.2 and 0.3 percent between 200 and 800 steps), so this is
     the spatial order of the pointwise maximum diagnosed by ADR 0232; the 1.80 observed in ADR 0238 was time error at
-    level 1. Two set-up checks were defective and corrected by amendments; six mutations caught. Not delivered: BDF2 for
-    the library's moving-mesh step and the follow conditions of a moving wall (they keep the two-level values), the
-    case-tree wiring. Follow-ups (ADR 0241 questions 1, 4 and 5, recommendation taken on the maintainer's standing
-    instruction of 2026-11-11): F-344, F-345. ADR 0359 names the coupled remainder: donor switches of the fringe
-    stencils (2.06e-5 -> 1.2e-6 with a pose-continuous stencil) and kind changes next to the hole (9.9e-6, ratio 1.85).
+    level 1. Two set-up checks were defective and corrected by amendments; six mutations caught. Not delivered: the
+    case-tree wiring. BDF2 for the library's moving-mesh step and the three-level follow conditions of a moving wall
+    came with F-345 (ADR 0379; prepare takes them when BDF2 is on, and the BDF2 overset step with every cell calculated
+    equals the library's bit for bit). Follow-ups (ADR 0241 questions 1, 4 and 5, recommendation taken on the
+    maintainer's standing instruction of 2026-11-11): F-344, F-345. ADR 0359 names the coupled remainder: donor switches
+    of the fringe stencils (2.06e-5 -> 1.2e-6 with a pose-continuous stencil) and kind changes next to the hole (9.9e-6,
+    ratio 1.85).
 - [ ] **F-339** MCP tools for tolerance and Sobol studies of a named evaluator
   - depends on: F-268
   - acceptance: design_uq and design_sobol tools run uq::run and sensitivity::run on a named evaluator (the
@@ -6431,7 +6433,7 @@ fixed by the item's registration ADR before any code.
     by the SECT-M runs. Follow-ups proposed (ADR 0245 questions 1 and 3). Since ADR 0352 (F-443) the opt-in also acts
     with the consistent correctors and on step_ale / step_ale_with_walls and has the case key [solver.rhie_chow]
     step_consistent; step_sliding, the fractional step and coupled faces keep the default.
-- [ ] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
+- [~] **F-345** BDF2 for the library's moving-mesh step and the follow conditions of a moving wall
   - depends on: F-338, F-322
   - acceptance: PimpleSolver::step_ale_with_walls accepts BDF2 as an opt-in (defaults bit-identical); a uniform flow
     stays uniform to 1e-10 on the deforming meshes of ADR 0033 G2; with every cell calculated OversetSolver with BDF2
@@ -6439,7 +6441,24 @@ fixed by the item's registration ADR before any code.
     with BDF2 and the time error of the cylinder case TR falls at a ratio of at least 4 between two step sizes, or the
     ADR names why not with a number.
   - note: From ADR 0241 questions 4 and 5, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    After the rework of the corrector flags in pimple.rs (F-322).
+    After the rework of the corrector flags in pimple.rs (F-322). ADR 0379, 2026-11-12: PARTIAL, every clause met but
+    the measured TR ratio, whose cause is named with a number. Built: PimpleSolver::set_moving_mesh_time_scheme(Bdf2),
+    an opt-in of the library's moving-mesh step (without it step_ale_with_walls refuses BDF2 as before): the mesh flux
+    (c0 W - c2 W_old) / dt of the swept volumes of the last two steps (the discrete geometric conservation law of BDF2),
+    the old and old-old volumes in the transient term, the three-level Rhie-Chow defect, an implicit Euler step when the
+    step before was not a moving step with the opt-in; ale::set_follow_conditions_bdf2 with a FollowHistory: the wall
+    velocity the mid-step velocities of the last two steps extrapolated to the end of the step with the normal part
+    carrying the three-level mesh flux, dp/dn from the BDF2 derivative of the wall velocity; OversetSolver::prepare
+    takes it when BDF2 is on. Defaults bit for bit (Q0 of ADR 0219 hash af2c9e6bd3e5596d, baseline_hashes, the existing
+    moving-mesh and overset suites unedited). Met: a uniform flow stays uniform to 7e-15 on the four motions of ADR 0033
+    G2 with uniform and alternating steps; with every cell calculated OversetSolver with BDF2 equals the library's BDF2
+    moving step bit for bit on BF (one and three outer iterations, with and without rhie_chow_step_consistent); the wall
+    velocity and acceleration are exact for a constant acceleration and of second order (ratio 4.000) for a cubic
+    motion; the body-fitted cylinder BF to t = 1 falls by 5.04 when the step is halved (3.04 with BDF2 and the two-level
+    walls, 2.97 with implicit Euler). Missed: the time error of TR falls by 1.09 (limit 4): it sits in the background
+    cells one ring outside the hole, which change kind as the cylinder passes (ADR 0359 event 2); the component cells
+    fall by 4.22. Nine mutations caught. Not delivered: the case-tree wiring, BDF2 for step_sliding, replace_mesh and
+    set_rest_conditions.
 - [~] **F-346** Immersed solid: force and moment in unsteady flow
   - depends on: F-337
   - acceptance: The force and moment of an immersed solid subtract the rate of change of the momentum and angular

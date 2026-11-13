@@ -75,8 +75,8 @@
   <text x="24" y="196" class="row">Moving meshes, rotors and coupling</text>
   <g clip-path="url(#c5)">
     <rect x="262" y="185" width="148.6" height="14" fill="var(--done)"/>
-    <rect x="410.6" y="185" width="108.6" height="14" fill="url(#h)"/>
-    <rect x="519.1" y="185" width="102.9" height="14" fill="var(--todo)"/>
+    <rect x="410.6" y="185" width="114.3" height="14" fill="url(#h)"/>
+    <rect x="524.9" y="185" width="97.1" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="196" class="num">26 of 63 done</text>
   <text x="24" y="226" class="row">Structural solver</text>
