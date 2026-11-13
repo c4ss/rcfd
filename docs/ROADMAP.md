@@ -7725,7 +7725,7 @@ fixed by the item's registration ADR before any code.
     histories refused. Open for the maintainer (ADR 0389 Q1): re-word clause a8 to the method's closed-form spectral
     radius within 1e-6 at omega dt = 1e3 and rho_inf within 1e-3 at 1e6 (A8c, A8d, both met), which would make the item
     done. Follow-up F-490.
-- [ ] **F-399** Harmonic response by mode superposition: modal damping, static correction, effective mass, force harmonics
+- [x] **F-399** Harmonic response by mode superposition: modal damping, static correction, effective mass, force harmonics
   - depends on: F-388, F-374, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. A load proportional to M phi_1 at
     omega_1 gives the amplitude of the static response divided by 2 zeta within 1e-8 and a phase lag of 90 degrees
@@ -7737,8 +7737,18 @@ fixed by the item's registration ADR before any code.
     within 1 percent, and the sum over all modes of a small model equals the unconstrained mass within 1e-10. Force
     harmonics of a sampled signal with three harmonics: amplitudes and phases within 1e-12; a record that is not a whole
     number of periods is refused.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0302; the registration is
-    written by the implementation agent before any code.
+  - note: ADR 0391, 2026-11-13: rcfd-fem harmonic: HarmonicSolver by mode superposition (ModalBasis from any ModalResult
+    or every mode of a small model, dense), modal damping (one ratio, per mode, or Rayleigh), static correction of the
+    truncated modes (residual flexibility, on by default), response and sweep with amplitude and phase of displacement
+    and integration-point stress; participation factors and effective masses with the full consistent mass;
+    force_harmonics of a sampled record of whole periods (DFT bins h P, phase relative to t = 0) feeding
+    HarmonicLoad::from_harmonic. Bar of 40 Hex8: resonance of M phi_1 at omega_1 equal to static/(2 zeta) to the last
+    bit, lag 90 degrees within 6e-15 rad, half-power width 1.0001 of 2 zeta omega_1 (the closed form); tip amplitude
+    1.2e-5 and 9.2e-4 from F tan(kL)/(EAk) at 0.5 and 1.5 omega_1 with 10 modes and the correction, 1.5e-2 without at
+    0.5 (control); effective mass 8/pi^2 within 2.3e-8; Hex20 cantilever first bending 0.61302 (0.6130761 recomputed);
+    sum over all modes equal to the mass within 9e-15 (free body) and to g^T M_ff^-1 g (clamped); three harmonics within
+    2e-15; the Newmark steady state equals the response at the bilinear frequency within 4e-14. Static correction
+    refused for free bodies and on the transformation path. Follow-up F-491.
 - [ ] **F-400** Dynamic solid as a co-simulation participant, on interface weights built from the two surfaces
   - depends on: F-398, F-139, F-361, F-362, F-385
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar (nu = 0) whose end face is
@@ -9263,3 +9273,14 @@ fixed by the item's registration ADR before any code.
     by a table gives the relative motion of the closed-form base-excited oscillator within 1 percent at 40 steps per
     period; models without these features give the bits of ADR 0389's integrator.
   - note: From ADR 0389 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-491** Static correction of the harmonic response for free bodies and on the transformation path
+  - depends on: F-399, F-395
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A free-free bar under a harmonic
+    end force with the static correction by inertia relief gives the tip amplitude of the closed-form free-free bar
+    within 0.5 percent at 0.5 and 1.5 times the first elastic frequency with 10 modes, the same without the correction
+    above 1 percent at 0.5 (control); a bar on an end spring (the support of ADR 0384) with the correction on the
+    transformation path gives the response of the direct dense solve within 1e-3 at 10 modes; with a pre-stressed basis
+    the correction uses the stiffness the modes were computed with; models without these features give the bits of the
+    solver of ADR 0391.
+  - note: From ADR 0391 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    Size S.
