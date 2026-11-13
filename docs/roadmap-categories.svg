@@ -40,8 +40,8 @@
   <text x="24" y="46" class="row">Numerics and solvers</text>
   <g clip-path="url(#c0)">
     <rect x="262" y="35" width="224.0" height="14" fill="var(--done)"/>
-    <rect x="486.0" y="35" width="96.0" height="14" fill="url(#h)"/>
-    <rect x="582.0" y="35" width="40.0" height="14" fill="var(--todo)"/>
+    <rect x="486.0" y="35" width="112.0" height="14" fill="url(#h)"/>
+    <rect x="598.0" y="35" width="24.0" height="14" fill="var(--todo)"/>
   </g>
   <text x="636" y="46" class="num">28 of 45 done</text>
   <text x="24" y="76" class="row">Turbulence</text>

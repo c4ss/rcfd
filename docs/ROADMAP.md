@@ -8703,7 +8703,9 @@ fixed by the item's registration ADR before any code.
     it in PimpleSolver::pressure_fallbacks. With it T runs to t = 8 with one repeat in 5050 steps (S2 held, 7
     crossings): max C_D 3.22695 (+0.216 percent), max C_L 1.00253 (+1.687 percent), St 0.30144 (-0.146 percent), so
     A2-T-2 of ADR 0268 is met (0.216 to 0.136, 1.687 to 0.175). Nine mutations caught. Open (ADR 0363 Q4 to Q6): why the
-    AMG hierarchy loses definiteness on this system, making the repeat the default, a guard on rz <= 0 inside cg.
+    AMG hierarchy loses definiteness on this system, making the repeat the default, a guard on rz <= 0 inside cg. ADR
+    0369 (2026-11-12, F-474): the AMG breakdown at step 2951 is the coarsest dense LU order defect (F-471); with
+    AmgSettings::coarse_lu_interchanges_first the stopping system converges in 10 iterations and T does not stop.
 - [ ] **F-467** Consistent correctors: fold the periodic opt-in into the flags
   - depends on: F-367
   - acceptance: ConsistentCorrectors::all() with periodic accepts non-orthogonal correctors, the component diagonal and
@@ -8757,17 +8759,26 @@ fixed by the item's registration ADR before any code.
     counts 15 and 2220 measured again, baseline hashes pass). Partial by Rule I: the iteration limit missed by one, and
     one of seven mutations (pass 2 over all neighbours) equivalent on these meshes and not caught. Follow-up: the
     smoother on quadratic elements. Partial by the registered rule; done is the maintainer's call.
-- [ ] **F-471** Scalar AMG coarsest dense LU: row interchanges applied before the forward substitution
+- [~] **F-471** Scalar AMG coarsest dense LU: row interchanges applied before the forward substitution
   - acceptance: Every limit not stated here is registered in the ADR before the run. A test shows whether the coarsest
     dense LU of rcfd_linalg::amg (DenseLu) interchanges rows on each fluid case of the baseline set and records where;
     DenseLu::solve applies every interchange before the forward substitution (as rcfd_linalg::amg_elastic after ADR 0305
     amendment 1) so that a coarsest matrix that needs interchanges is solved to a relative residual of 1e-12; the
     rcfd-linalg, rcfd-fv and rcfd-api tests and the baseline hashes are run, and any changed hash is reported to the
     maintainer, not re-recorded.
-  - note: From ADR 0305 question 1 (the same ordering defect was fixed in amg_elastic by its amendment 1). NEEDS THE
-    USER if the fix moves any fluid result or registered hash: the hash is reported, never re-recorded. Possibly
-    related: ADR 0363 (F-466) found the AMG-preconditioned pressure CG losing definiteness (r^T z < 0) on the immersed T
-    system; F-474 should check this defect first.
+  - note: PARTIAL (ADR 0369, 2026-11-12, with F-474). The defect is shown in rcfd_linalg::amg DenseLu: whole-row swaps
+    in the factorisation with interleaved interchanges in the solve give (-13, 15, -5) for (1, 1, 1) on a 3 x 3 SPD
+    matrix, a relative residual of 4e-3 on a 20 x 20 SPD tridiagonal, and 0.21 on the coarsest operator of the T
+    pressure system of ADR 0363, where it is the cause of the AMG-CG breakdown (F-474). Interchanges at step 0 alone are
+    harmless. On the baseline set only kepsilon_channel (coarsest 56) and cavity-coupled (Schur, coarsest 71) reach an
+    AMG, and neither interchanges (scratch instrumentation). The corrected order is built as the opt-in
+    AmgSettings::coarse_lu_interchanges_first (5e-15 and 9e-19 relative residual). With it as the default on a scratch
+    copy, baseline_hashes, case_hashes_w48u, rcfd-linalg (except ADR 0369 L1, which pins the old default), rcfd-fv lib
+    and the defaults tests f301/f367 pass, so no registered hash moves; the T bounded run of ADR 0268/0363 changes (no
+    stop, different from step 2917). Remaining (NEEDS THE USER): switch the default and run the AMG-using
+    rcfd-fv/rcfd-api test files in the gate; ADR 0363's records H1, H2 and H3a and ADR 0369 L1 assert the old behaviour.
+    NEEDS THE USER: switching the default (no registered hash moves; ADR 0363's stop records and ADR 0369 L1 would need
+    new records).
 - [ ] **F-472** Overset: the geometry corrections with a varying pressure on B3d
   - depends on: F-368
   - acceptance: With OversetSolver::set_geometry_corrections on, a three-dimensional flow with a known varying pressure
@@ -8791,7 +8802,7 @@ fixed by the item's registration ADR before any code.
     open face that lets no mass out is caught by all three open checks; the old U8 field is rejected by the
     boundary-mean check, and with it the MU3 mutation is again invisible to the conservation check. Limits: one mesh,
     one field, 100 steps, one patch open at a time; no driven patch. Done pending the maintainer's acceptance.
-- [ ] **F-474** AMG pressure preconditioner: loss of definiteness on the immersed T system
+- [~] **F-474** AMG pressure preconditioner: loss of definiteness on the immersed T system
   - depends on: F-466
   - acceptance: On the pressure system of ADR 0363 (T, bounded immersed forcing, step 2951 corrector 1, rebuilt from the
     state of step 2950 and the opt-in capture) the cause of r^T M^-1 r < 0 of the smoothed-aggregation AMG is located by
@@ -8799,9 +8810,21 @@ fixed by the item's registration ADR before any code.
     operators against a higher-precision product), and either the AMG is repaired so that AMG-CG converges on that
     system with every registered hash unchanged, or the breakdown is detected inside cg (rz <= 0) and reported with a
     located message.
-  - note: From ADR 0363 question 4, recommendation (a), with Q6 (an r^T z <= 0 guard in cg) folded in. Check first
-    whether the coarsest dense LU ordering defect of F-471 (ADR 0305 question 1) is the cause. Any change to a default
-    path needs the hash check; a moved hash is reported, never re-recorded.
+  - note: PARTIAL (ADR 0369, 2026-11-12). From ADR 0363 Q4/Q6. Cause located on the stopping system of ADR 0363 (T,
+    bounded forcing, step 2951 corrector 1, rebuilt from the state of step 2940): it is the coarsest dense LU order
+    defect of F-471. The coarsest operator (24 unknowns) interchanges rows at steps 13, 16 and 17; the default
+    interleaved DenseLu::solve misses by a relative residual of 0.21; the cycle becomes non-symmetric (0.13 at the
+    coarsest level, 4.2e-3 at the finest) and indefinite (negative Rayleigh quotients at levels 4 and 0), hence r^T M^-1
+    r < 0. Everything else is sound against double-double: Galerkin products to 6e-16, every operator symmetric to 5e-16
+    and positive definite, no zero prolongator column. Delivered (opt-in, defaults bit-identical, baseline_hashes pass):
+    AmgSettings::coarse_lu_interchanges_first applies every interchange before the forward substitution; with it the
+    coarse solve is exact to 5e-15, the cycle symmetric to 1e-15 and positive on every level, and AMG-CG converges on
+    the stopping system in 10 iterations (corrector 0: 10 against 406), agreeing with IC-CG to 4e-9; read-only accessors
+    Amg::coarse_interchanges, level_operator, level_prolongator, cycle_at, coarse_solve. With the default switched on a
+    scratch copy no registered hash moves (kepsilon_channel and cavity-coupled, the only baseline cases with an AMG,
+    never interchange), T no longer stops at 2951, and its run differs from ADR 0363 H1 from step 2917 on. Seven
+    mutations caught. Partial by Rule I: the check L4 missed (the Laplacian's coarsest LU interchanges at step 0,
+    harmless to the order) and was corrected by amendment 1. Open: switching the default (maintainer; recommended).
 - [ ] **F-475** Studio preview of a case with [mesh.adapt] shows the adapted mesh
   - depends on: F-342
   - acceptance: The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh
