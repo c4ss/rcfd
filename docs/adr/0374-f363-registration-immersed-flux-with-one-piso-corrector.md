@@ -222,3 +222,48 @@ faces with a weight of at most 1.
   case uses it.
 </content>
 </invoke>
+
+## Amendment 1 (2026-11-12): what the fingerprint N0 showed about L1, and a comparison registered before L1 is run
+
+Written after the measurement of the fingerprints N0 on the unchanged tree (the test committed in 73211af7, run twice there,
+the same bits both times; `f363-scratch/n0_before.log`, `n0_before2.log`) and before any library code of F-363 and any run of
+R0, L1, L1n, L2, L3. Nothing above is changed.
+
+**What N0 showed.** FP3 is the existing estimate `lag_trial(1e-3, 20, 1)` of the first-order forcing F at step 2: `rho_1 =
+1.2913`, the largest entry of the mode in cell 11855 (column 63, row 67 of M2: centre (0.22875, 0.23875), 0.0483 from the
+cylinder axis, inside the cylinder, 0.0017 below the surface: a solid cell of the first solid layer). With two correctors
+(FP3 for B) `rho_2 = 0.0641`, the same cell. F with one corrector runs 200 steps (ADR 0254 D11 control; FP1 here 20 steps). So
+the lag map as it is now already gives a number above one at the body for a setting that runs. For F the map with the
+reconstruction is the same map (no flux faces), so **L1 (b) for F is expected to miss**; and because the bounded forcing has
+the coefficients and sources of `build` (ADR 0254 UB3), the map without the reconstruction for B (L1n) is expected to be about
+the same number, so **L1n is expected to miss** too. Both stay as registered, are run once and recorded with their numbers; if
+they miss, the item is partial by the rule (the mechanism not explained in the registered form). Not known: whether the
+whole-domain estimate of the map with the reconstruction separates the five settings (L1 (a), (b) for Sa, (c)).
+
+What the number means is not measured. The hand reading (disclosed, no prediction): in a solid cell the momentum diagonal holds
+the penalty `K V` (1e7 against 1500 of the time term), so `rAU` there is about 1e-7 of that of a fluid cell and the pressure of
+the solid interior is only weakly coupled; the lag map starts each pressure solve from the error itself and stops at the
+relative tolerance 1e-6, so a solid-cell error may be returned largely unchanged by the solve and fed back through the
+gradient of the first fluid cells. That a run with this estimate runs is the remark of ADR 0073 B4 that the estimate is
+linearised with frozen matrices and no velocity error; F's run may also hold a growth that is not seen in `abs(u)`. Neither is
+separated here.
+
+**L1' (registered now; computed from the numbers of L1 and of an extended L1n, no further run).** L1n is extended to all five
+forcings (the map without the reconstruction, `immersed_lag = false`, `n = 1`, both instants; the extension is printed and
+enters only L1'). With `q = rho_1(with the reconstruction) / rho_1(without)` at the same instant and state:
+
+| Id | Check | Limit |
+| --- | --- | --- |
+| L1' (a) | the reconstruction raises the lag gain of the settings that stop: Sb, B1, B | `max(q(2), q(11)) >= 1.05` for each |
+| L1' (b) | it does not raise it with weights of at most 1: Sa | `q <= 1.01` at both instants |
+| L1' (c) | F (no flux faces) | `q = 1` exactly (the same operations), at both instants |
+
+The tolerances: 1.05 is a raise well above the scatter of a 40-iteration estimate (the tail mean over 20 iterations); 1.01
+covers that scatter for Sa. HL is **explained in the amended form** if L1' (a) to (c), L1 (c), L2 and L3 hold; that reaches
+the decision only as "caught after an amendment written after a run" (N0 is a run), so with L1 (b) or L1n missed the item is
+**partial** by Rule I whatever L1' gives, and L1' decides only whether the addendum may call the mechanism located.
+
+Printed in addition (no limit): for the plain map of F at step 2 with 40 iterations, the mode cell, whether it is solid, its
+distance to the surface, and the largest mode entry over the fluid cells against that over the solid cells.
+
+Library code: unchanged by this amendment (D1 to D3 as registered).
