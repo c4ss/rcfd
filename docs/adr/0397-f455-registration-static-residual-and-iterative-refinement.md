@@ -304,3 +304,160 @@ not yet computed). Printed: Tet4 6.506e-13, 5.745e-12, 7.978e-11, 7.940e-10; Hex
 Tet10 5.965e-12, 6.746e-11, 6.966e-10, 8.005e-9 (`s = 5, 10, 20, 40`). Tet10 `s = 10` reproduces ADR 0277's 6.7e-11 (part of
 C5). Every value is above 1e-14 by a factor 65 or more, as arithmetic 1 predicted for `rho_w` of any solution. No limit and no
 parameter is changed by this; the checks run as registered.
+
+## Addendum 1: results (2026-11-13)
+
+Code: registration a0eb02bc; amendment 1 and `si_static_refinement_defaults.rs` e621e26d; library and tests 94837e77
+(`crates/rcfd-fem/src/refine.rs` new; `crates/rcfd-fem/src/lib.rs` one line; `crates/rcfd-fem/src/solve.rs`: the field and
+builder of `StaticOptions`, the refusal call in `solve_static_report`, the refined arm of the `Direct` match, `REFINED_NAME`,
+`check_refinement`, `direct_refined`, `direct` split into `direct` and `direct_factor`; no line of rcfd-linalg, `mpc.rs` or
+`cyclic.rs`); after run 1, d240951a (the A5 known-miss record and its met-clauses companion, rustfmt, the refusal text shortened;
+no change of a limit or of a measured path). Release profile throughout. Runs, each made once: A7 (a) on main
+(`run-a7-main.log`), A7 (a) on the branch (`run-a7-branch.log`), run 1 of `si_static_refinement` (`run1.log`), the A2/A3 record
+with `--ignored` (`run-a2a3.log`), run 2 after d240951a (`run2-met.log`: the met-clauses companion; every non-timing number
+identical to run 1), `cargo test -p rcfd-fem --release` (`run-fem-all.log`), `cargo test -p rcfd-api --release --test
+baseline_hashes` (`run-baseline.log`); logs in `w49i-work/f455-scratch`.
+
+### Measured, per case (run 1; `s` = L/h; default = `StaticOptions::default()`, refined = `refinement(1)`)
+
+| Case | unknowns | default `rho_w` (A1) | `phi_w` | default `rho_x` | refined `rho_w` (A2) | refined `rho_x` (A3) | `phi_rep` | C2 `rho_x/phi_rep` | C3 `omega` | A4 `E_K` refined | default `E_K` | A5 `E_rec` refined | default `E_rec` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Tet4 5 | 135 | 6.51e-13 | 1.56e-12 | 5.21e-13 | 4.25e-13 | 2.30e-13 | 2.16e-13 | 1.07 | 3.3e-17 | 7.9e-18 | 6.2e-14 | 1.3e-14 | 7.6e-14 |
+| Tet4 10 | 270 | 5.75e-12 | 1.73e-11 | 4.55e-12 | 5.04e-12 | 1.59e-12 | 2.42e-12 | 0.66 | 2.0e-17 | 2.5e-17 | 8.3e-13 | 6.0e-13 | 2.3e-13 |
+| Tet4 20 | 540 | 7.98e-11 | 1.98e-10 | 5.79e-11 | 4.51e-11 | 2.12e-11 | 2.78e-11 | 0.76 | 2.4e-17 | 5.8e-18 | 6.3e-12 | **5.4e-11** | 4.8e-11 |
+| Tet4 40 | 1080 | 7.94e-10 | 2.26e-9 | 5.77e-10 | 5.45e-10 | 2.43e-10 | 3.18e-10 | 0.76 | 2.4e-17 | 1.4e-18 | 1.3e-10 | **5.4e-10** | 6.7e-10 |
+| Hex8 5 | 135 | 5.93e-13 | 1.72e-12 | 3.34e-13 | 5.20e-13 | 2.14e-13 | 1.86e-13 | 1.15 | 2.8e-17 | 6.3e-18 | 1.3e-14 | 2.0e-15 | 1.1e-14 |
+| Hex8 10 | 270 | 5.78e-12 | 2.01e-11 | 3.57e-12 | 7.35e-12 | 1.43e-12 | 2.16e-12 | 0.66 | 1.6e-17 | 2.7e-18 | 1.2e-13 | **2.5e-12** | 2.6e-12 |
+| Hex8 20 | 540 | 8.97e-11 | 2.34e-10 | 4.50e-11 | 7.59e-11 | 2.35e-11 | 2.51e-11 | 0.94 | 2.2e-17 | 4.0e-17 | 2.4e-12 | **4.2e-11** | 4.4e-11 |
+| Hex8 40 | 1080 | 1.05e-9 | 2.68e-9 | 5.58e-10 | 9.44e-10 | 1.75e-10 | 2.88e-10 | 0.61 | 1.4e-17 | 1.6e-17 | 3.2e-11 | **4.3e-10** | 4.6e-10 |
+| Tet10 5 | 750 | 5.97e-12 | 1.48e-11 | 4.28e-12 | 4.03e-12 | 1.19e-12 | 1.65e-12 | 0.72 | 1.8e-17 | 8.7e-18 | 3.9e-14 | **1.6e-12** | 1.5e-12 |
+| Tet10 10 | 1500 | 6.75e-11 | 1.69e-10 | 4.75e-11 | 4.68e-11 | 1.28e-11 | 1.90e-11 | 0.67 | 1.7e-17 | 3.5e-18 | 2.8e-12 | **1.2e-11** | 1.5e-11 |
+| Tet10 20 | 3000 | 6.97e-10 | 1.92e-9 | 4.86e-10 | 5.00e-10 | 1.54e-10 | 2.19e-10 | 0.70 | 1.8e-17 | 7.2e-19 | 1.1e-10 | **2.8e-10** | 3.9e-10 |
+| Tet10 40 | 6000 | 8.01e-9 | 2.19e-8 | 5.91e-9 | 6.10e-9 | 1.80e-9 | 2.50e-9 | 0.72 | 1.8e-17 | 1.2e-17 | 8.0e-10 | **7.1e-10** | 1.5e-9 |
+
+Further records (X1, `run1.log`): default `omega` 3.9e-17 to 7.4e-17; the correction `|d|/|u|` 1.3e-14 (Hex8 5) to 8.6e-10
+(Tet10 40); after a second step `rho_x` and `E_K` unchanged to three figures on every case (the floor is reached in one step,
+arithmetic 3); C1 `rho_w/phi_w` of the default 0.29 to 0.42; the fixed-precision step's `E_K` (N1) 5.0e-14 to 4.5e-10; tip
+deflections 1.86e-4 m (Tet4 5) to 0.255 m (Tet10 40).
+
+**A6, the cost (record).** Minimum of 5 repetitions: factor + solve 1.41e-4 s (Tet4 5) to 1.87e-2 s (Tet10 40); one refinement
+step 6.4e-6 s to 6.8e-4 s; **ratio step / (factor + solve) 0.036 to 0.055** on every case (the estimate 0.1 to 1.5 was high:
+the compensated residual costs about as much as the two envelope sweeps, and the factor dominates); `solve_static` end to end
+with and without the step: ratio 0.95 to 1.11 (assembly dominates; the spread is timing noise on a shared machine).
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| A1 | record | table (5.9e-13 to 8.0e-9) | recorded |
+| A2 | `<= 1e-14` each (registered expected miss) | 4.3e-13 to 6.1e-9, missed on all 12 as predicted (arithmetic 1: `>= 2.5e-13`) | no (expected) |
+| A3 | `<= 1e-14` each (registered expected miss) | 2.1e-13 to 1.8e-9, missed on all 12 as predicted; the closest Hex8 5 (2.1e-13) and Tet4 5 (2.3e-13; predicted 6e-14, range to 1.3e-13) | no (expected) |
+| A4 | `<= 1e-12` each | 7.2e-19 to 4.0e-17 | yes |
+| A5 | `<= 1e-12` each | met on Tet4 5 (1.3e-14), Tet4 10 (6.0e-13), Hex8 5 (2.0e-15); **missed on 9** (1.6e-12 to 7.1e-10) | **no** |
+| A6 | record | ratio 0.036 to 0.055 | recorded |
+| A7 | equal / pass / pass | (a) `b9d9056b0c5a7aff` on main e9f76a1e and on the branch; (b) `cargo test -p rcfd-fem --release`: 228 passed, 0 failed, 48 ignored (38 test binaries and the doc tests, the new files included); (c) `cargo check -p rcfd-post --tests` clean; also `cargo test -p rcfd-api --release --test baseline_hashes` 3 passed, 1 ignored | yes |
+| C1 | `<= 2` each | 0.29 to 0.42 | yes |
+| C2 | `<= 2` each | 0.61 to 1.15 | yes |
+| C3 | `<= 1e-14` each | 1.4e-17 to 3.3e-17 | yes |
+| C4 | as stated | true on all 12 (bits of `u_0` and `u_1`, names, `relative_residual`) | yes |
+| C5 | 6.7e-11, 2.6e-12, 1.5e-11 | 6.7e-11, 2.6e-12, 1.5e-11 | yes |
+| C6 | as stated | `cg-jacobi` and `cg-ic0` refused naming ADR 0397; the transformation model refused naming ADR 0397, and it solves by default | yes |
+| U1 | exact | both crafted cases exact; 10 000 `two_sum` and 10 000 `two_product` pairs exact in `i128` | yes |
+| U2 | each row | worst error / bound 0 (every row exact) | yes |
+| N1 | `> 1e-12` (Hex8, Tet10; `s` = 20, 40) | 8.7e-12, 2.8e-10, 1.5e-11, 4.5e-10 | as expected |
+| N2 | `> 1e-12` (Hex8, Tet10; `s` = 40) | 3.2e-11, 8.0e-10 | as expected |
+| N3 | as stated | plain dot wrong on 2 of 2 crafted cases; plain residual outside the U2 bound on 200 of 200 rows | as expected |
+
+fmt: `cargo fmt -p rcfd-fem --check` clean. clippy: `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+### Diagnosis of the A5 miss (a defect of arithmetic 5, not of the solve)
+
+`E_rec` does not move with the refinement (Hex8 10: 2.6e-12 default, 2.5e-12 refined) while `E_K` falls from 1.2e-13 to 2.7e-18,
+so the gap is not in the solve. A scratch diagnosis (not a registered check; output `w49i-work/f455-scratch/diag.log`, from a test
+in the scratch copy, since removed) evaluated, for the refined `u`, `U_K = (b.u - u.r_x)/2` by `dot2`, `U_rec`, and `U_el = sum_e
+u_e^T K_e u_e / 2` with the element matrices of `element_for(kind).stiffness` summed by `dot2`: `(U_K - W/2)/(W/2) <= 3.6e-16` on
+every case, `(U_rec - U_K)/U_K` equals `E_rec` to all printed figures, and `U_el` lies off both with gaps of the same order (Tet10
+40: `U_rec - U_el` 1.7e-9 and `U_el - U_K` -1.0e-9 relative; Hex8 10: 2.7e-12 and -2.7e-13). So three representations of one
+stiffness (the recovery's `B` and `D` at the points, the rounded element matrices, the rounded assembled `K`) give energies that
+differ by about 0.01 to 0.3 `phi_w` relative on these near-rigid displacements: each rounding of `K` of relative size `eps` acts on
+`u` with the weight `|K| |u|`, the mechanism of the evaluation floor of arithmetic 1, here in the energy. The refined solve is
+exact for the stored `K` (A4); no refinement of the solve can bring `U_rec` closer than the rounding of `K` itself. Arithmetic 5
+had taken the recovery and the stiffness to be the same operator and looked only at the cancellation in `B u`. Nothing was tried
+to meet A5 (no compensated assembly), by the rules; the record `a1_a4_to_a6_c1_to_c5_n1_n2_x1_cantilevers_known_miss` keeps the
+limit 1e-12.
+
+This also corrects ADR 0277's attribution: its W1 values 2.6e-12 (Hex8) and 1.5e-11 (Tet10) on the `s = 10` cantilever,
+reproduced here (C5), are this representation floor, not the residual of the direct solve (whose `E_K` there is 1.2e-13 and
+2.8e-12); and its 6.7e-11 relative residual is the evaluation floor (`rho_w/phi_w = 0.40`), as ADR 0282 suspected. The direct
+solve is backward stable on all twelve models (default `omega <= 7.4e-17`).
+
+### Mutations (scratch copy `w49i-work/f455-scratch/copy`, own target; `mutate.py`, `mutations.log`; each alone, files restored and compared by SHA-256; the unmutated copy passes)
+
+| Id | Mutation | Caught by |
+| --- | --- | --- |
+| M1 | `residual_compensated` in working precision | U2; A4 (9 cases: Tet4 from `s` = 20, Hex8 from 10, Tet10 all); C2 (12) |
+| M2 | `two_sum` without its error term | U1 (crafted); A4, C2 |
+| M3 | `two_product` without its error term | U1 (crafted); A4 (`s` = 20, 40, all kinds) |
+| M4 | the correction not added | C4 (12); A4 (9); C2 |
+| M5 | the correction subtracted | C4, A4, C2 |
+| M6 | the refinement applied also by default | A7 (a) (digest), C4 (12), C5 (3), N2 |
+| M7 | the transformation-path refusal removed | C6 |
+| M8 | the solver name not changed | C4 (12) |
+
+Every mutation was caught. In the first pass cargo stopped at the first failing test binary, so the digest file ran for M6 only
+in a second pass with `--no-fail-fast`, where A7 (a) failed as registered.
+
+### Deviations
+
+- After run 1 the failing test was split into the ignored record (the run-1 checks, A5 included, limit intact) and a
+  met-clauses companion with the same body without the A5 assertion (A5 still printed); the refusal text was shortened (its
+  test checks only "ADR 0397"). Run 2 reproduced every non-timing number of run 1.
+- The cost estimate of arithmetic 6 was high by a factor 3 to 30; it was a record without limit.
+- The scratch diagnosis file was not kept (the copy was refreshed for the mutations); its output is in `diag.log`.
+
+### What was not run
+
+The workspace gate (the lead runs it). Nothing registered was skipped.
+
+### Decision by the registered rule
+
+**partial**: A2 and A3 missed as registered (clause a5 lies below the floors of double precision, arithmetic 1 and 2, confirmed:
+`rho_x` of the refined solution at 0.61 to 1.15 of the representability floor); A5 missed with a diagnosed cause (the recovered
+energy's representation floor), kept as a known-miss record; every other check met, the negative controls as expected, every
+mutation caught.
+
+### Remaining questions
+
+1. **Clause a5 (1e-14 relative residual).** Unattainable in double precision for these models: no double vector has a true
+   relative residual below about `phi_rep` (1.9e-13 to 2.5e-9 here), and a working-precision residual cannot be evaluated below
+   about `0.3 phi_w`. Options: (a) re-word the clause to what one step attains and what was measured: the backward-error
+   statistic `omega <= 1e-14` and the true relative residual within twice the representability floor (C2, C3); (b) keep the
+   clause, and the item stays partial; (c) carry the solution in double-double (a change of the result type, out of
+   proportion). Recommendation (a); the re-wording is the maintainer's (proposed text below).
+2. **Clause a6, which strain energy.** With the energy of the stored stiffness (`E_K`) the clause is met with five orders of
+   margin; with the recovered energy (`E_rec`, ADR 0277's W1) it is missed on nine cases at the representation floor of the
+   stiffness. Options: (a) read "the strain energy" as `u^T K u / 2` of the assembled stiffness, evaluated compensated (A4); (b)
+   a follow-up assembling `K` and recovering the energy in compensated arithmetic (it would still leave the rounding of the
+   element matrices, `U_rec - U_el` of the same order); (c) keep `E_rec`. Recommendation (a).
+3. **Default.** The step costs 4 to 6 percent of factor and solve, lowers the true residual by a factor 1.5 to 3.5 and the
+   energy defect by up to 1e8, but the default must stay bit-identical: it stays opt-in. Exposing it in the case schema would
+   change a golden (schema, CLI help) and is not taken: open.
+4. **Place of the kernels.** `two_sum`, `two_product`, `dot2` and `residual_compensated` are in `rcfd-fem::refine` to keep
+   rcfd-linalg unchanged; moving them to rcfd-linalg (for the CG routes' true-residual checks, ADR 0282 D5') is a later choice.
+   Recommendation: move them when a second user appears.
+
+## For the lead: roadmap entries
+
+F-455, proposed status **partial**, note:
+
+> ADR 0397, 2026-11-13: rcfd_fem::refine (two_sum, two_product by fma, Dot2 of Ogita-Rump-Oishi, residual_compensated, refine_step, residual_statistics with rho_w, rho_x, phi_w = eps |||K||u|||/||f||, phi_rep = (u/sqrt 3) ||(sum_j k_ij^2 u_j^2)^(1/2)||/||f|| and omega = ||r||/(|||K||u||| + ||f||), energy_defect) and StaticOptions::refinement(steps) (direct solve and plain path only, solver name skyline-ldlt-refined; default bit-identical, digest b9d9056b0c5a7aff of the twelve default solves equal on main and branch). Twelve cantilevers (Tet4, Hex8, Tet10; section 0.2 m with 2 x 2 cells; L/h = 5, 10, 20, 40): default relative residual 5.9e-13 to 8.0e-9, at 0.29 to 0.42 of the evaluation floor phi_w; default backward error omega <= 7.4e-17 (the direct solve is backward stable). One refinement step with the compensated residual: true relative residual 2.1e-13 to 1.8e-9, at 0.61 to 1.15 of the representability floor of any double vector; omega 1.4e-17 to 3.3e-17; energy of the stored stiffness against half the work 7e-19 to 4e-17 (default up to 8e-10); a second step changes nothing; the step costs 0.036 to 0.055 of factor and solve. The 1e-14 relative residual is below the floor on all twelve (registered expected miss, derived before the run); the recovered strain energy (ADR 0277's W1) misses 1e-12 on nine cases at 1.6e-12 to 7.1e-10 because the recovery, the element matrices and the assembled stiffness are three roundings of one operator whose energies differ by 0.01 to 0.3 phi_w on near-rigid displacements (ADR 0277's 2.6e-12 and 1.5e-11 are this floor, not the solve's residual). Open: re-word the residual clause to omega <= 1e-14 and rho_x <= 2 phi_rep, and read the strain energy as that of the stored stiffness (both met).
+
+F-376 (ADR 0277), an addition to its note:
+
+> ADR 0397 (2026-11-13): the W1 values 2.6e-12 (Hex8) and 1.5e-11 (Tet10) on the cantilever of L/h = 10 are the difference between the recovered energy and the energy of the rounded assembled stiffness (a representation floor of order eps |K||u| on near-rigid displacements), not the residual of the direct solve; the 6.7e-11 relative residual is the evaluation floor of the residual (0.40 of eps |||K||u|||/||f||).
+
+Proposed acceptance for F-455 if the maintainer takes remaining questions 1 and 2 (a); the measured numbers then meet it:
+
+> Every limit not stated here is registered in the ADR before the run. The relative residual of the default direct static solve is recorded for Tet4, Hex8 and Tet10 cantilevers of slenderness 5, 10, 20 and 40 at registered meshes; with one step of iterative refinement (opt-in, the default bit-identical) the normwise backward error ||K u - f|| / (|| |K| |u| || + ||f||), the residual evaluated in compensated arithmetic, is at most 1e-14 and the true relative residual at most twice the representability floor (u/sqrt 3) ||(sum_j k_ij^2 u_j^2)^(1/2)|| / ||f|| on every one of them, and the strain energy u^T K u / 2 of the assembled stiffness equals half the work of the loads within 1e-12; the cost of the refinement step is recorded.
+
+No follow-up item is proposed.
