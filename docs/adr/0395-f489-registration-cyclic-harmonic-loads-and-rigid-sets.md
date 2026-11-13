@@ -285,3 +285,73 @@ untouched), and a copy `r6_non_zero_value_refused_at_k_2_after_landed` keeps the
 2. The two nodal forces of the cosine part sit on the first nodes of `ymin` and `ymax`; whether these lie on the clamped inner
    face is printed by H3b and reported in the addendum. If they do, they go into reactions in both models and the summation
    at shared nodes is checked by the pressure on `xmax` (its faces include low and high nodes) in H1 and H2, and by H4.
+
+## Addendum 1: results (2026-11-13)
+
+Registered run, once, release: `cargo test -p rcfd-fem --release --test si_cyclic_harmonic -- --test-threads=1 --nocapture`
+after commit 1d94b11a (9 tests, 1.4 s; H3 failed as a defective set-up, amendment 2). Corrected run of H3b, once, after commit
+432a76a3. Then the whole `rcfd-fem` suite in release (every test passes; the ignored records excepted), `cargo fmt -p
+rcfd-fem --check` clean, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean, `cargo check -p rcfd-post --tests`
+clean.
+
+| Id | Check | Limit | Measured | Met |
+| --- | --- | --- | --- | --- |
+| H1 | D, k = 0 .. 6: `e_u` | 1e-8 | 1.50e-13 (largest, k = 2) | yes |
+| H2 | DR with reference loads, k = 0 .. 6: `e_u`, `e_t`, `e_w` | 1e-8 each | 1.20e-13, 1.20e-13, 1.20e-13 | yes |
+| H3 | DSH without reference loads (registered) | 1e-8 | k = 1 .. 5: 3.04e-13 / 3.01e-13 / 2.27e-13; k = 0, 6: 0.644, 0.917 as ratios of rounding residues (`max |u_full|` 1.35e-20 and 2.64e-21 m) | defective set-up (amendment 2) |
+| H3b | DSH with reference loads (amendment 2), k = 0 .. 6: `e_u`, `e_t`, `e_w`; guard `max |u_full| >= 1e-12` m | 1e-8 each | 2.47e-13, 2.18e-13, 1.83e-13; guard 1.23e-8 m (k = 6) | yes |
+| H4 | expanded pressure against the full model's pressure | 1e-12 | 2.10e-15 | yes |
+| H5 | DR modal: count; frequencies; pair split | equal; 1e-8; 1e-8 | 23 = 23; 3.18e-14; 1.02e-13 | yes |
+| H6 | DSH modal: as H5 | as H5 | 23 = 23; 8.59e-14; 1.40e-13 | yes |
+| H7 | reference unknowns doubled at k = 2 (2n + 12, rim at 2n and 2n + 6), single at k = 6 and 0 (n + 6) | as stated | holds (n = 210: 432 unknowns, references (4, 420), (4, 426)) | yes |
+| H8 | k = 0 against `mpc::solve_static_mpc` | 1e-14 | 0 (bit-equal) | yes |
+| H9 | existing `rcfd-fem` tests | all pass | all pass (si_cyclic R6 an ignored record under D5, its copy passes) | yes |
+
+Set-up guards of H5/H6: the full model's largest computed eigenvalue above the cut-off (DR 2.31e8 against 1.57e8, DSH 4.98e8
+against 3.74e8); nearest eigenvalue to the cut-off 1.0e-3 relative (guard 1e-7). Every sector and full solve at zero shift.
+The full DSH model drops 51 redundant rigid-set rows (the shared hinge nodes), the sector none: equal results.
+
+Negative controls, all held: N1 (sine part at k = 0 and 6, sine reference load at k = 6: key `harmonic load`), N2 (own loads:
+key `loads`), N3 (`FieldLength`, cosine part 209 against 210), N4 (k = 7: key `harmonic`), N5 (1e-3 at k = 2: "zero values
+only"; at k = 0 solved, the value 1e-3 held exactly), N6 (key `reference load`), N7 (key `solver`), N8 ("singular reduced
+stiffness at the reference rotation z of constraint 4 (RigidSet, sine part): pivot 0e0").
+
+Mutations (on a `git archive` copy in `w49i-work/f489-scratch/mut`, own target, each file restored and compared byte for
+byte): MU1 (sine rigid rows on the cosine references) caught by H2, H3b, H5, H6 (singular reduced stiffness at the sine
+reference rotation); MU2 (`c f_a + s f_b`) by H1, H2, H3b; MU3 (overwrite at shared nodes) by H1, H2, H3b, H4; MU4 (sine
+reference load on the cosine part) by H2, H3b; MU5 (rigid rows on the cosine part only) by H2, H3b, H5, H6; MU6 (rotation-term
+sign) by H2, H3b, H5, H6; MU7 (no sine refusal at k = 0, N/2) by N1; MU8' (amendment 1) by N8. Eight of eight caught.
+
+Deviations: amendment 1 (MU8 replaced, before any run); amendment 2 (H3 a defective set-up, after the registered run; the
+corrected H3b run once). The two nodal forces of the cosine part sit on nodes 0 and 8, both on the clamped inner face (H3b
+printed it): they go into reactions in both models, so the summation at shared nodes is checked by the pressure on `xmax`
+(H1, H2, H3b) and by H4, as amendment 2 provided. No limit changed.
+
+Not run: `rcfd-api` `baseline_hashes` (`rcfd-api` does not depend on `rcfd-fem`); the whole workspace (the lead's gate). Not
+exercised by a check: the relative pivot test `d <= PIVOT_TOLERANCE a_ii` of the harmonic static solve (amendment 1).
+
+Shared file `crates/rcfd-fem/src/mpc.rs` (lines of the new file): 416-418 (`Elimination::name`, the sine-case base of a
+reference unknown), 722-726 (doc of `harmonic_transformation`), 756-767 (the reference unknowns per part), 821-825 (the
+rigid-set arm), 833-885 (`rigid_set_rows`, new). `transformation` is untouched.
+
+**Decision by the registered rule: done.** Every check met its limit (H3 through its corrected form H3b, the registered H3
+being a defective set-up whose exact solution is zero at k = 0 and 6, not a miss of the method: for k = 1 .. 5 it met the limit
+by five orders), every negative control held, every mutation was caught, and no existing test failed other than the record of
+D5. The lead may prefer partial because H3 was corrected after its registered run; the amendment states the cause.
+
+### Remaining questions
+
+1. A single rigid body spanning the rotor (a hub as one rigid set) is not expressible on the sector. Options: (a) leave it
+   (the user models the hub's sector part); (b) a follow-up that adds a hub reference shared by all sectors, which couples
+   only `k = 0` and `k = 1` (a rigid body has translations and rotations of harmonic 0 and 1). Recommendation: (a) until a fan
+   case needs it.
+2. Harmonic prescribed displacements (`k > 0`, non-zero values) are refused. Options: (a) leave; (b) add them to
+   `harmonic_transformation` as a `g` per part. Recommendation: (b) only together with the forced response of a bladed disc.
+
+### For the lead: roadmap entries
+
+F-489: status **done**. Note:
+
+> ADR 0395, 2026-11-12 (follow-up of ADR 0386): cyclic::solve_static_harmonic solves a static load of harmonic index k given as a cosine and a sine part per sector (vectors over the sector's DofMap, reference loads per part) on blockdiag(K, K) with the rows of mpc::harmonic_transformation (k = 0 on mpc::transformation, bit-equal to solve_static_mpc; a sine part at k = 0 or N/2 refused, the model's own load list refused, Direct solver only, zero prescribed values at k > 0); FullRotor::expand_load assembles the expanded load (shared nodes summed) and expand_field the full solution (scale 1); rigid sets are accepted at k > 0 with their six reference unknowns doubled (one block per part, Transformation::references lists the set per part), in the static solve and in modal_analysis_harmonic. N = 12, Hex20 clamped disc: every k = 0 to 6 equal to the full 360-degree model under the expanded load within 1.5e-13 (limit 1e-8), with a rim rigid set and reference loads within 1.2e-13 (displacements and reference motions), with a shroud rigid set sharing nodes with its neighbours within 2.5e-13 (after amendment 2: the registered shroud load had a zero exact solution at k = 0 and 6); frequencies of a sector with a rigid set equal to the full model's within 3.2e-14 (rim) and 8.6e-14 (shroud), equal counts below the cut-off (23), pair splits 1.4e-13. Eight mutations caught. si_cyclic R6 kept as an ignored record with its valid row in an _after_landed copy (maintainer decision 2026-11-13).
+
+No follow-up item proposed (the remaining questions above are recorded for later).
