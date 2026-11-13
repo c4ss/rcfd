@@ -317,6 +317,10 @@ enum FluxMode {
 /// up to 5 were measured to survive an impulsive start).
 pub const FLUX_WEIGHT_LIMIT: f64 = 5.0;
 
+/// The weight of a flux face above which [`ImmersedForcing::single_corrector_face`] reports it (ADR 0374 D2): beyond 1 the
+/// extension of ADR 0234 D1 returns the velocity of the fluid cell with the reversed sign.
+pub const SINGLE_CORRECTOR_WEIGHT_LIMIT: f64 = 1.0;
+
 /// The forcing of all immersed bodies of a mesh (ADR 0218 D1, D2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImmersedForcing {
@@ -638,6 +642,25 @@ impl ImmersedForcing {
             let g = (ff.weight - 1.0) * c0_by_dt * self.volumes[ff.fluid] / a_p[ff.fluid];
             if g > 1.0 && worst.map_or(true, |(_, w)| g > w) {
                 worst = Some((ff.fluid, g));
+            }
+        }
+        worst
+    }
+
+    /// The refusal of ADR 0374 D2, for the transient solver with a single pressure corrector: the flux face that returns the
+    /// velocity of its fluid cell reversed (an image face, or a weight above [`SINGLE_CORRECTOR_WEIGHT_LIMIT`] beyond round-off)
+    /// with the largest weight, as its fluid cell and its weight. In the first corrector `HbyA` holds the pressure gradient that
+    /// drove the predictor, and such a face returns it with the reversed sign and without a pressure correction of its own.
+    /// `None` without such a face, without flux faces, and with `flux_weight_check = false`.
+    pub fn single_corrector_face(&self) -> Option<(usize, f64)> {
+        if !self.flux_weight_check {
+            return None;
+        }
+        let mut worst: Option<(usize, f64)> = None;
+        for ff in &self.flux_faces {
+            let reversed = ff.image.is_some() || ff.weight > SINGLE_CORRECTOR_WEIGHT_LIMIT + 1e-9;
+            if reversed && worst.map_or(true, |(_, w)| ff.weight > w) {
+                worst = Some((ff.fluid, ff.weight));
             }
         }
         worst
