@@ -139,3 +139,57 @@ Corrected set-up: the worktree's checks A3, D1 and D2 run once more, in a fresh 
 built first in an empty target directory, and reproduced by a second run with identical hashes) is valid and unchanged. The
 mutations run in their own copy and use `target-br` only after every branch check is done (each mutation and the restore
 rewrite `runctl.rs`, so it is newer than any build). No limit changes.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-api/src/runctl.rs` (new `open_deferred_store`, lines 98 to 115; in `drive`, the deferral flag and the guarded
+open, lines 309 to 325; the open after the first step, lines 469 to 472; the open at the end, lines 588 to 591) and
+`crates/rcfd-api/src/sim/adapt.rs` line 587 (`adapt_pending` from `pub(super)` to `pub(crate)`). No solver file changed. New
+tests `crates/rcfd-api/tests/adapt_store_f476.rs` (A1, A2, D3, N1) and `crates/rcfd-studio/tests/shipped_store_hashes_f476.rs`
+(D1); `shipped_store_sf2.rs`: the skip removed and `ok` 10 -> 11 (Q1). All runs in release.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 store of the shipped case | opens; 2799 cells; mesh hash = run's; mesh loads; >= 1 snapshot; each field 2799 values; ux uy uz p | opens; `n_cells` 2799, hash 05bb8beae5da57da = the run's (2799 cells); mesh 2799; 1 snapshot at step 188 (`finish`); 4 fields x 2799 | yes |
+| A2 warnings | 0 store warnings; 0 warnings of any kind | 0; 0 | yes |
+| A3 SF2 without the skip | passes, 11 of 11 | passes, "11 of 11 shipped cases stored a readable store"; the adaptive case 1 snapshot at step 188, 2799 faces drawn (run 2, Amendment 1) | yes |
+| D1 store bytes of the ten other cases | 20 hashes equal to the base's | 20 of 20 equal (run 2); the base measurement reproduced bit for bit by a second base run | yes |
+| D2 existing tests | all pass | `fieldstore_w47c` 4/4, `fieldstore_w48d` 2/2, `adapt_case_f342` 6 passed 2 ignored (as before), `baseline_hashes` 3 passed 1 ignored (as before); lib filter `runctl fieldstore adapt` 1/1; Studio `store_plan_sf`, `saved_store_r`, `store_runs_sf4_sf5_sf8`, `viewport_store`, `stop_aa` 25 passed 2 ignored (as before) (run 2) | yes |
+| D3 stopped before the first step | opens; 576 cells; 1 snapshot at step 0; 0 warnings | 576; [0]; 0 | yes |
+| N1 unknown field | "field store disabled" warning; no store file | warning "field store disabled: output.store_fields: ... field 'nosuch' is not available"; no file | yes |
+| fmt, clippy | clean | `cargo fmt -p rcfd-api --check`, `-p rcfd-studio --check` clean (after a rustfmt commit of the two new tests); clippy `-p rcfd-api -p rcfd-studio --all-targets -D warnings` clean | yes |
+
+Mutations (copy `f476-scratch/mut`, log `f476-scratch/mutations.log`, restored and compared identical):
+
+| Id | Caught by | Result |
+|---|---|---|
+| M1 no deferral | A1 | A1 failed (the store warning, line 64); D3, N1 passed |
+| M2 no open at the end | D3 | D3 failed (no store); A1 passed |
+| M3 deferral for every run | D2 or D1 | `fieldstore_w47c` h4 failed (steps of the earlier store kept); D1 passed (fresh folders, interval stores: the bytes do not change) |
+| M4 deferred open without `store_dir` | A1 | A1 and D3 failed (no store in `store_dir`) |
+
+Deviations: run 1 of A3, D1 and D2 was a defective set-up (a build directory shared with the base copy linked a stale
+`rcfd-api`) and was repeated once under Amendment 1, written and committed before the repeat; A1, A2, D3 and N1 are from run
+1, whose `rcfd-api` was the branch's. Not run: the whole workspace suite (the lead's gate), a CLI run (`rcfd run` goes
+through the same `runctl::drive`).
+
+Decision by the registered rule: **done** (pending the maintainer's acceptance): every registered check met, every mutation
+caught by its registered check, no limit changed. Amendment 1 corrected the build set-up of three checks, not a check or a
+limit; whether that counts as "caught only after a post-run amendment" is Q2.
+
+Questions:
+
+- **Q1 (`ok` 10 -> 11 in SF2).** Options: (a) keep the edit (the count the skip held at 10 returns to every shipped case);
+  (b) leave `assert_eq!(ok, 10)`, which then fails; (c) change it to `cases.len()`. Recommendation (a), taken on the
+  maintainer's standing instruction of 2026-11-11 (take the recommendation); the lead should confirm it is within the approved
+  removal.
+- **Q2 (Amendment 1 and Rule I).** Options: (a) done: the amendment fixed a build directory, the checks and limits are as
+  registered and the corrected run was made once; (b) partial, reading Rule I strictly. Recommendation (a).
+- **Q3 (the `start` event of an adaptive run reports 576 cells).** Options: leave it (it is the mesh before the first step) or
+  report the adapted count in a later event. Recommendation: leave it; it belongs with F-475 if anywhere.
+
+## For the lead: roadmap entries
+
+**F-476**, proposed status: done (pending the maintainer's acceptance). New note:
+
+> From the gate 4 fix (ADR 0262 addendum, 2026-11-13). DONE pending acceptance (ADR 0373, 2026-11-12): runctl::drive opens the field store of a run whose [mesh.adapt] loop is pending after its first step, on the mesh the run solves on (or at the end on the base lattice when no step is taken, as before); every other run opens it where it did. cases/cavity/adapt_re100.toml with output.store_interval = 20 writes a readable store of the adapted mesh (2799 cells, the run's mesh hash, one snapshot at step 188) with no warning; sf2_every_shipped_case_writes_a_readable_store runs it without the 2026-11-13 skip (11 of 11; its count assertion 10 -> 11, ADR 0373 Q1); the store bytes of the ten other shipped cases equal main's (20 hashes), the existing store tests and baseline_hashes pass unedited; four mutations each failed their tests.
