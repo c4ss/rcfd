@@ -321,3 +321,16 @@ or a model without a Cyclic constraint changes its result.
 - The matching search is `O(n log n)` by sorting one coordinate; a boundary with very many nodes at the same value of that
   coordinate degrades to `O(n^2)`.
 - The free-ring zero modes at `k = 0, 1` (Auto shift) are not measured here (F-488 covers the zero-mode measure).
+
+## Amendment 1 (2026-11-13, before the test file was compiled or any check run)
+
+1. **DP-full (check S2) was defective as registered.** With `u_z = 0` on `mid` and `u_y = 0` at the image of the pin node in
+   sector 0 only, the full disc keeps two in-plane rigid motions free (the translations `x` and `y` combined with the rotation
+   about the axis; the `k = 0` rows exclude them from the sector, the full model has no such rows), so its static solve is
+   refused by the rigid-motion check. Corrected: DP-full holds `u_y = 0` at the images of the pin node `(a, 0, 0)` in
+   sectors 0 and 6 (`phi = 0` and 180 degrees) and `u_x = 0` at its image in sector 3 (`phi = 90` degrees). The exact
+   axisymmetric solution has `u_theta = 0`, so each held component is zero in it (`u_y = u_theta cos(phi) = 0` at 0 and 180
+   degrees, `u_x = -u_theta sin(phi) = 0` at 90 degrees); the three rows hold `t_x`, `t_y` and the rotation about `z`. The
+   limit of S2 is unchanged.
+2. **R3, 5-sector rotor at `k = 2`:** the eigen options were not fixed; they are those of the equivalence runs
+   (`ModalOptions::new(2)` with tolerance `1e-9`, cap 400).
