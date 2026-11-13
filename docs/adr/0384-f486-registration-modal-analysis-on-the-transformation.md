@@ -245,3 +245,11 @@ fails; **todo** if the reduced eigenproblem cannot be built or a prescribed-only
    2026-11-11 (take the recommendation).
 3. `refuse_in_modal` stays public with no caller in the library, rather than being removed (no public item is removed).
    Taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation).
+
+## Amendment 1 (2026-11-13, before the test file and any run): the per-node value of KE
+
+Found by reading `constraint::prescribed_equations` while writing the test, before any run: node 0 is the corner at the
+origin and lies on `ymin`, where KB's roller prescribes `u_y = 0`; a per-node value `1e-3` on node 0 component 1 is a
+`ConflictingConstraint` (two different values for one equation), refused before the zero-value check, so KE as registered
+could not test Z1. Corrected set-up: **KE** is KB with the per-node prescribed value `1e-3` on node 0 **component 0** (not
+prescribed by a roller; the springs act on it, which is not a constraint). The check Z1 and its limit are unchanged.
