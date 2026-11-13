@@ -241,3 +241,63 @@ The aliased lines `omega + (k + mN) Omega`, `m != 0`, that a stationary point se
 standing wave (single index `2k = N`, or a degenerate pair with Coriolis off) are reported by their energy-weighted mean, not
 separately; the whole-part `WhirlCampbell` (no index, no stationary column); speeds above the loss of stiffness (the state-matrix
 analysis of ADR 0416 has no sector form); output through case files and the CLI; one disc geometry.
+
+## Addendum 1: results (2026-11-13)
+
+Code (commit `e96ebcc0`): `crates/rcfd-fem/src/rotating/whirl.rs`, additive only (lines 1014 to 1018 the column built in
+`RotatingSector::whirl_campbell`, 1024 the field in its struct literal, 1029 to 1056 `stationary_frequency` and
+`stationary_column`, 1328 to 1358 the field `stationary` and `CyclicWhirlCampbell::stationary_csv`); `crates/rcfd-fem/src/rotating.rs`
+lines 46 to 49, the `pub use` list with `stationary_frequency` (re-wrapped by rustfmt). Test: `crates/rcfd-fem/tests/si_rotating_whirl_stationary.rs`
+(2 tests, 0.8 s in release). The registered run was made once (`f507-scratch/run1.log`), before `cargo fmt` re-wrapped two
+lines (layout only); nothing was re-run to pick a result.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| T0 | registration committed alone first | holds | `c457ea6b`, before any code | yes |
+| T1 | the column: shape, `Some` pattern, bits of `f + tau k Omega / (2 pi)`, `f` at rest and on `k = 0, 3` | exact | holds | yes |
+| T2 | `stationary_csv`: 21 lines, header, round-trip, empty fields | exact | holds | yes |
+| T3 | travelling tracks against the full rotor's `omega_f + q* Omega` | `<= 1e-8`; count `>= 24` | 7.2e-13; 32 | yes |
+| T4 | content fraction of `q*`; no double pairing; rotating frequencies of the pairs | `1 - f <= 1e-8`; holds; `<= 1e-8` | 0 (the fraction rounds to 1); holds; 3.0e-13 | yes |
+| T5 | `sign(q*) == sign(tau)` | 0 disagreements | 0 of 32 | yes |
+| T6 | `stationary_frequency` point values | exact | holds (5 of 5) | yes |
+| T7 | `cargo test -p rcfd-fem --release` (existing tests unchanged, incl. `si_rotating_whirl`, `si_rotating_whirl_state`); additive diff | each | 312 passed, 0 failed, 61 ignored; diff additive (hunks above) | yes |
+| N1 | opposite sense | `> 1e-2` | 0.1005 | as expected |
+| N2 | no transformation | `> 1e-2` | 0.0502 | as expected |
+| N3 | opposite exponent in the full content | all disagree | 32 of 32 | as expected |
+
+The full rotor has 342 equations, 252 free (251 modes requested). Smallest stationary frequency compared: the `k = 2` backward
+mode at `0.8 omega_ref`, as arithmetic 1 predicted; the floor `1e-3 omega_f` was never active.
+
+Mutations (on a `git archive` copy of `e96ebcc0` in `f507-scratch/mut`, separate target, each run once; logs
+`f507-scratch/mut_*.log`): all six caught.
+
+| Mutation | Caught by |
+|---|---|
+| 1 opposite sense in the column | T1, T3 (18.2) |
+| 2 index dropped | T1, T3 (4.5, from `k = 2`) |
+| 3 wave sense dropped | T1, T3 (9.1) |
+| 4 speed of the first column | T1, T3 (9.1) |
+| 5 CSV writes the rotating frequency | T2 |
+| 6 `stationary_frequency` with the opposite sense | T6 |
+
+`cargo fmt -p rcfd-fem --check`: clean (after one `cargo fmt` of the two new or edited files, layout only, before the code
+commit). `cargo clippy -p rcfd-fem --all-targets -- -D warnings`: clean. `baseline_hashes` not run: no shared solver file is
+touched (only the rotating module, used by no crate outside `rcfd-fem`, grep), and no default output changes.
+
+Deviations: none from the registered set-up, limits or checks. Not run: anything listed under Limits.
+
+**Decision by the registered rule: done.** T0 to T7 met, N1 to N3 as expected, all mutations caught, no amendment.
+
+### Remaining questions
+
+1. The aliased lines `omega + (k + mN) Omega` and the two lines of a standing wave. Options: (a) leave them out, as now; (b) a
+   per-mode list of stationary lines with their energy weights from the sector's harmonic content. Recommendation: (a) until a
+   rotor-stator excitation analysis needs them; then (b) as its own item.
+2. The whole-part `WhirlCampbell` has no stationary column (no index). Options: (a) none; (b) an index read from the
+   eigenvector by D3 when the part is cyclic-symmetric. Recommendation: (a); the sector route covers the fan.
+
+### For the lead: roadmap entries
+
+F-507, proposed status **done**. New note:
+
+> From ADR 0411 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S. ADR 0419, 2026-11-13: the cyclic whirl Campbell table carries CyclicWhirlCampbell::stationary (Hz, f + tau k Omega / 2 pi, tau the wave sense of ADR 0411 D5 shown to be the forward-minus-backward energy balance, 0 on single indices) with stationary_csv and stationary_frequency; existing outputs unchanged; on the disc sector the 32 travelling pair modes of indices 1 and 2 at 0.4 and 0.8 omega_ref agree within 7.2e-13 with the full rotor's omega_f + q Omega, q (index and sense) read from the full eigenvectors by their discrete Fourier content over the copies (pure to rounding, sense agreeing 32 of 32); aliased lines omega + (k + mN) Omega not reported.
