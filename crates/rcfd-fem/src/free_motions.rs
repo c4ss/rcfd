@@ -115,7 +115,11 @@ fn push_row(g: &mut Vec<[f64; 6]>, terms: &[(f64, [f64; 6])]) {
             s += a * x[j];
             mag += (a * x[j]).abs();
         }
-        *r = if s.abs() <= COUNT_TOLERANCE * mag { 0.0 } else { s / amax };
+        *r = if s.abs() <= COUNT_TOLERANCE * mag {
+            0.0
+        } else {
+            s / amax
+        };
     }
     g.push(row);
 }
@@ -278,9 +282,7 @@ pub fn free_rigid_motions(model: &SolidModel, extra: &[Prescribed]) -> Result<Fr
             Constraint::Cyclic { .. } => {
                 return Err(FemError::InvalidValue {
                     key: "free rigid motions",
-                    reason: format!(
-                        "constraint {i} (Cyclic): the count of ADR 0399 does not cover cyclic constraints"
-                    ),
+                    reason: format!("constraint {i} (Cyclic): the count of ADR 0399 does not cover cyclic constraints"),
                 });
             }
             _ => {}

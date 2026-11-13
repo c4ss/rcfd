@@ -233,14 +233,16 @@ fn fb2() -> SolidModel {
         0.0,
     ))
     .unwrap();
-    m.add_constraint(Constraint::rigid_set("xmin", [0.0, 0.13, 0.17])).unwrap();
+    m.add_constraint(Constraint::rigid_set("xmin", [0.0, 0.13, 0.17]))
+        .unwrap();
     m
 }
 
 /// FR: the free block with a rigid set on xmax only.
 fn fr() -> SolidModel {
     let mut m = model_of(block_mesh(), 0.3);
-    m.add_constraint(Constraint::rigid_set("xmax", [1.0, 0.13, 0.17])).unwrap();
+    m.add_constraint(Constraint::rigid_set("xmax", [1.0, 0.13, 0.17]))
+        .unwrap();
     m
 }
 
@@ -354,7 +356,11 @@ fn s1(f: &FreeRigidMotions) -> (f64, f64) {
     if smax == 0.0 {
         return (f64::INFINITY, 0.0);
     }
-    let held = if rank > 0 { f.singular_values[rank - 1] / smax } else { f64::INFINITY };
+    let held = if rank > 0 {
+        f.singular_values[rank - 1] / smax
+    } else {
+        f64::INFINITY
+    };
     let free = if rank < 6 { f.singular_values[rank] / smax } else { 0.0 };
     (held, free)
 }
@@ -427,9 +433,7 @@ fn zero_modes(c: &Case, s: &MpcModes, f: &FreeRigidMotions) -> ZeroModes {
         .collect();
     let n0 = zero.iter().filter(|&&z| z).count();
     let lowest = zero.iter().take(n0).all(|&z| z);
-    let worst = r.eigenvalues[..n0]
-        .iter()
-        .fold(0.0f64, |w, l| w.max(l.abs() / sigma));
+    let worst = r.eigenvalues[..n0].iter().fold(0.0f64, |w, l| w.max(l.abs() / sigma));
     let next = r.eigenvalues.get(n0).map_or(f64::NAN, |l| l / sigma);
     let fields = f.fields(&c.model);
     let r1 = r.modes[..n0]
