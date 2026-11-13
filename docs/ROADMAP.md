@@ -9219,7 +9219,10 @@ fixed by the item's registration ADR before any code.
     first fluid cell at step 15), E4 (the run that runs has -1.024), and after amendment 1 S1 (those modes are not in
     the solid) and P3 c. Open (ADR 0392 Q2): the positive eigenvalues above one of the single corrector at dt 1e-3 in
     both forcings, by a linearisation of several steps along the trajectory and the channel without the cylinder.
-    Follow-up F-494.
+    Follow-up F-494. ADR 0405 (2026-11-13, F-494): over ten steps along the trajectory the bounded form grows by 1.88
+    per step and the first-order forcing, which runs, by 1.31 (1.12 over twenty); the one-step eigenvalues above one
+    belong to the early state at the body (none in the channel without the cylinder at the same Courant number, none at
+    step 100).
 - [~] **F-483** Pressure-lag estimate at an immersed body
   - depends on: F-363
   - acceptance: The pressure-lag estimate of ADR 0073 for DFG 2D-2 on M2 with the first-order immersed forcing and one
@@ -9447,7 +9450,7 @@ fixed by the item's registration ADR before any code.
     within 1.2e-3 of (n pi/L)^2 s/rho, never below the free-end beam. Known miss: a mechanism on the transformation path
     (no roller, no spring) is not refused by buckling::factors but returns a rounding factor 1.8e-8, because the
     factorisation of K_r accepts a rounding-level positive pivot; follow-up F-495. Seven mutations caught.
-- [ ] **F-494** Second-order immersed forcing: the single-corrector growth over several steps
+- [~] **F-494** Second-order immersed forcing: the single-corrector growth over several steps
   - depends on: F-482
   - acceptance: The growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector at dt 1e-3 (ADR
     0392: the one-step linearisation at step 15 has eigenvalues up to 1.93 for the bounded form and 1.58 for the
@@ -9456,7 +9459,22 @@ fixed by the item's registration ADR before any code.
     eigenvalue per step is above one for the bounded form and below one for the first-order forcing; and the one-step
     eigenvalues above one of the first-order forcing are explained by a registered measurement (the channel without the
     cylinder, the state of the step).
-  - note: From ADR 0392 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+  - note: PARTIAL (ADR 0405, 2026-11-13), test code only, no library change. From ADR 0392 question 2, recommendation
+    taken on the maintainer's standing instruction of 2026-11-11. The product of k consecutive step Jacobians of DFG
+    2D-2 on M2 with one PISO corrector at dt 1e-3 along the trajectory from step 15 was linearised by central finite
+    differences of the k-step map (solves converged to 1e-12) and its outer spectrum computed by Arnoldi with 40
+    vectors; the linearisation is valid (the map at zero is the trajectory to the bit, linear to 3e-6, the composition
+    of the one-step Jacobians to 2e-7 and not the power of the first, known products found to round-off, the stop at
+    step 34 and the 200-step run reproduced). The eigenvalue per step |mu|^(1/k) of the bounded form over steps 16 to 25
+    is 1.881 (converged, a pressure mode above the cylinder), but the first-order forcing, which runs, also grows: 1.311
+    over steps 16 to 25 and 1.122 over steps 16 to 35 (converged), so the product does not separate them by one, only by
+    size. The one-step eigenvalues above one of the first-order forcing (1.77 at step 16, 1.91 at step 20, 1.36 at step
+    25) are a property of the early state at the body: the channel without the cylinder has none at its Courant number
+    0.61 nor at the Courant number of the cylinder flow, 1.17, and the first-order forcing has none at step 100 at the
+    same Courant number (dominant -0.971). Partial by the registered rule: known misses G2, G3 (the first-order forcing
+    above one per step), G4 (two correctors at 0.993, not converged), X2, X3 (the Courant hypothesis refuted). Open (ADR
+    0405 Q2): what in the early state makes the pressure modes, by a start without flow through the cylinder. Follow-up
+    F-501.
 - [~] **F-495** Refuse a mechanism in buckling on the transformation path (ADR 0398 known miss)
   - depends on: F-493
   - acceptance: Every limit not stated here is registered in the ADR before the run. buckling::factors of a model on the
@@ -9537,3 +9555,13 @@ fixed by the item's registration ADR before any code.
     Omega = 0 the bits of the cyclic modes of F-394; a loss of stiffness is reported per index and speed; the Campbell
     table holds one family of tracks per index, with the crossings with the engine orders.
   - note: From ADR 0403 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-501** Second-order immersed forcing: the early-state pressure modes of the single corrector
+  - depends on: F-494
+  - acceptance: The pressure modes above the cylinder of DFG 2D-2 on M2 with one PISO corrector at dt 1e-3 (ADR 0405:
+    one-step eigenvalues 1.77 to 1.91 at steps 16 to 20 for the first-order forcing and 0.97 at step 100 at the same
+    Courant number; ten-step growth 1.88 per step for the bounded form, 1.31 for the first-order forcing) are traced by
+    a registered measurement to the start state, by repeating the one-step and ten-step linearisations of ADR 0405 from
+    a start field without flow through the cylinder (projected to be divergence-free), and the bounded form with one
+    corrector either runs 200 steps from that start or its stop is located with the eigenvalue per step.
+  - note: From ADR 0405 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
+    priority.
