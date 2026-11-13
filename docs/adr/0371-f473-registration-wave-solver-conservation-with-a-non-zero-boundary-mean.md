@@ -118,3 +118,78 @@ MU3 and MU-L are the point of the item; MU-F shows that F0 is the guard against 
 
 - ADR 0351 (the scheme and its fluxes), ADR 0366 (U8 and MU3). The conservation argument above is the divergence theorem
   applied to the semi-discrete update; no external source is used. No vendor code or documentation was used.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Registration 515283c3; test 99fb5671 (the registered run: `cargo test --release -p rcfd-post --test wave_conservation_f473`,
+once); 44bc0f5c replaced `!(e > 1e-3)` and `!(d < 0.0)` by the equivalent `partial_cmp` forms for clippy (no limit and no
+number changed; the mutations were run on this tip). The new file is `crates/rcfd-post/tests/wave_conservation_f473.rs`; no
+library line changed. A disclosed repetition: the test was also run once with `--nocapture` for the numbers; the same
+numbers, digit for digit, come from the mutation control MU0 on the archive copy.
+
+### Checks
+
+| id | quantity | limit | measured | met |
+|---|---|---|---|---|
+| F0 | patch means of `p0` (wall, inlet, outlet); minimum `p0` | each `>= 0.5`; `> 0` | `1.2500`, `1.0417`, `1.4583`; `0.5738` | yes |
+| C1 | all walls, 100 steps: relative change of `sum p V` | `<= 1e-12` | `3.72e-15` (absolute `-5.2e-18`) | yes |
+| O1 | inlet open: relative change | `> 1e-3` | `7.61e-1` | yes |
+| O2 | outlet open | `> 1e-3` | `7.18e-1` | yes |
+| O3 | wall open | `> 1e-3` | `9.78e-1` | yes |
+| O4 | sign of the change in O1 to O3 | decrease | `-1.06e-3`, `-1.00e-3`, `-1.37e-3` Pa m3 | yes |
+
+My estimate of the open-patch change (`0.05` to `0.3`) was too low by a factor of 3 to 10: the change is `0.72` to `0.98` of
+`sum |p0| V`. The estimate took the drained layer to be one cell thick; the reconstruction's gradient and the acoustic waves
+leaving the open patch over `100 dt` involve more than the first layer, and 100 steps at `cfl 0.48` are about 0.7 transit
+times of the 0.1 m duct. The limit is met by almost three orders; the estimate is recorded as wrong, not adjusted.
+
+### Mutations
+
+Once each, on a `git archive` copy of 44bc0f5c (`f473-scratch/tree`, own target directory, logs `MU*.log`), running all four
+tests with `--include-ignored`. MU0 (no mutation): F0, C1, O1 to O4 pass; the ignored control `mu_f_u8_field_fails_f0` fails
+by design (it asserts what it records is false: the U8 field's means are `0.966` (inlet), `-0.966` (outlet) and about 0
+(wall)).
+
+| id | mutation | registered check | result |
+|---|---|---|---|
+| MU3 | `Wall` arm given the `Open` values (ADR 0366 MU3) | C1 | **caught by C1**: relative change `9.55e-1` against the limit `1e-12` (U8 measured `3.3e-16` for the same mutation). O1 to O3 pass |
+| MU-L | `Wall` normal velocity `1e-9 pl/z` instead of `0` | C1 | **caught by C1**: `7.84e-9` against `1e-12` (estimate `~1e-9`) |
+| MU-O | `Open` normal velocity `0` instead of `0.5 unl + 0.5 pl/z` | O1, O2, O3 | **caught by O1, O2 and O3** (relative change `2.0e-15`, `2.9e-15`, `2.9e-15` against `1e-3`). C1 passes |
+| MU-F | test field replaced by the U8 field, with MU3 applied | F0 | **caught by F0** (the field is not positive: the wall and outlet means fail). C1 passes (`3.4e-16`): with U8's field MU3 is again invisible to the conservation check, which reproduces the blind spot. O4 and O3 also fail |
+
+### Existing tests, fmt, clippy
+
+`cargo test --release -p rcfd-api --test baseline_hashes`: 3 passed, 1 ignored, as before (no shared file changed). The other
+tests of `rcfd-post` were not re-run: no line of any library or existing test file changed. `cargo fmt -p rcfd-post --check`
+clean. `cargo clippy --release -p rcfd-post --all-targets -- -D warnings` clean (first run on 99fb5671 failed with
+`neg_cmp_op_on_partial_ord`, fixed in 44bc0f5c).
+
+### Deviations and disclosures
+
+- The estimate of O1 to O3 was off (above). The control `mu_f_u8_field_fails_f0` is an ignored test that fails when run; this
+  is its purpose (a record), and it is not part of the decision.
+- Not run: the other tests of `rcfd-post`, the whole workspace; longer runs, other meshes, two patches open, a driven patch.
+
+### Decision by the registered rule (Rule I)
+
+**done.** Every registered check meets its limit at its first run, no post-run amendment was written, every registered
+mutation is caught by its registered check (MU3 by C1, MU-L by C1, MU-O by O1 to O3, MU-F by F0), baseline hashes pass, fmt
+and clippy are clean. The acceptance's two clauses are met.
+
+### Remaining questions (options and recommendation)
+
+1. **F-453's partial status.** ADR 0366 is partial for three reasons: SP10, SP10c (diagnosed start-up transient) and the MU3
+   miss. This item answers the MU3 reason. Options: (a) leave F-453 partial, since the SP misses remain; (b) record in the
+   F-453 note that U8's blind spot is closed by F-473. Recommendation: (b), the status unchanged.
+2. **A conservation check for a driven patch** (the sum of the flux in, against the work done by the driver). Options: (a) a
+   follow-up; (b) none. Recommendation: (b) now; open it if the wave solver gets a case key.
+
+## For the lead: roadmap entries
+
+**F-473, proposed status: `done`.** Proposed note text:
+
+> DONE, ADR 0371, 2026-11-12. Tests only: crates/rcfd-post/tests/wave_conservation_f473.rs; no library change. On the closed circular O-grid duct (circular_duct_ogrid(6, 3, 6), 648 cells) the initial pressure p = 1 + 0.4 x/R + 0.3 y/R + 0.5 z/L has a mean of 1.25 on the wall, 1.04 on the inlet and 1.46 on the outlet. With every patch a wall, 100 steps of cfl 0.48 change sum p V by 3.7e-15 relative (limit 1e-12). With one patch open the integral decreases by 0.76 (inlet), 0.72 (outlet), 0.98 (wall) of sum |p0| V (limit 1e-3; the registered estimate of 0.05 to 0.3 was too low). Mutations: the wall given the open flux (MU3 of ADR 0366, which U8 missed with its zero-mean field) changes the integral by 0.955 and is caught by the closed check; a wall leak of 1e-9 is caught (7.8e-9 against 1e-12); an open face that lets no mass out is caught by all three open checks; the old U8 field is rejected by the boundary-mean check, and with it the MU3 mutation is again invisible to the conservation check. Limits: one mesh, one field, 100 steps, one patch open at a time; no driven patch.
+
+**F-453, note addition** (status unchanged, `partial`): append to its note:
+
+> The blind spot of U8 (mutation MU3 escaping with a zero-boundary-mean field) is closed by F-473 (ADR 0371, 2026-11-12), whose closed-duct check with a non-zero boundary mean catches it.
