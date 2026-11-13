@@ -7767,7 +7767,9 @@ fixed by the item's registration ADR before any code.
     0.5 (control); effective mass 8/pi^2 within 2.3e-8; Hex20 cantilever first bending 0.61302 (0.6130761 recomputed);
     sum over all modes equal to the mass within 9e-15 (free body) and to g^T M_ff^-1 g (clamped); three harmonics within
     2e-15; the Newmark steady state equals the response at the bilinear frequency within 4e-14. Static correction
-    refused for free bodies and on the transformation path. Follow-up F-491.
+    refused for free bodies and on the transformation path. Follow-up F-491. Static correction refused for free bodies
+    and on the transformation path until F-491 (ADR 0400), which adds inertia relief, the transformation path and the
+    pre-stressed stiffness.
 - [ ] **F-400** Dynamic solid as a co-simulation participant, on interface weights built from the two surfaces
   - depends on: F-398, F-139, F-361, F-362, F-385
   - acceptance: Every limit not stated here is registered in the ADR before the run. A bar (nu = 0) whose end face is
@@ -9365,7 +9367,7 @@ fixed by the item's registration ADR before any code.
     one period, damped 4.3e-3, order 1.994; models without these features keep the bits of ADR 0389 (digest recorded
     from the unchanged library); eight mutations, seven caught by their checks. Model constraint values must be zero;
     time-dependent Linear values and reference motions not covered.
-- [ ] **F-491** Static correction of the harmonic response for free bodies and on the transformation path
+- [x] **F-491** Static correction of the harmonic response for free bodies and on the transformation path
   - depends on: F-399, F-395
   - acceptance: Every limit not stated here is registered in the ADR before the run. A free-free bar under a harmonic
     end force with the static correction by inertia relief gives the tip amplitude of the closed-form free-free bar
@@ -9374,8 +9376,22 @@ fixed by the item's registration ADR before any code.
     transformation path gives the response of the direct dense solve within 1e-3 at 10 modes; with a pre-stressed basis
     the correction uses the stiffness the modes were computed with; models without these features give the bits of the
     solver of ADR 0391.
-  - note: From ADR 0391 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    Size S.
+  - note: ADR 0400, 2026-11-13: rcfd-fem harmonic: the static correction of the truncated modes now covers free bodies
+    by inertia relief (residual flexibility P^T K_c^-1 P F, P = I - M R R^T, R the free rigid motions counted by
+    free_rigid_motions and made M-orthonormal, K_c the stiffness on a statically determinate support chosen by pivoted
+    rows of R; the rigid modes must be in the basis and are skipped in the subtraction), the transformation path (T
+    K_r^-1 T^T F with K_r = T^T K_ext T, the supports added; cyclic constraints and a free rigid motion there refused)
+    and a pre-stressed basis (HarmonicOptions::prestress: K + K_sigma in the correction). Free-free bar of 40 Hex8 with
+    10 modes (one rigid): the driven end, at its antiresonances 0.5 and 1.5 omega_1, within 1.3e-4 and 3.6e-3 of F/(EAk)
+    from the closed form, 3.2e-2 without the correction at 0.5 (control); far end 6.9e-5 and 4.5e-4 relative. Bar on an
+    end spring (kappa 0.25), transformation path: 7e-8 and 1.1e-6 of the direct dense solve at 0.5 and 1.5 omega_1
+    (3.1e-3 without). Pre-stressed spring bar and cantilever: 6.4e-8 and 4.0e-8 of the direct dense solve with K +
+    K_sigma at 0.5 omega_1 (the elastic K in the correction gives 9.6e-3 and 0.32 at omega = 0). Models without these
+    features give the bits of ADR 0391 (probe on base and tip identical); zero pre-stress bit-equal to none. Eight
+    mutations caught. si_harmonic c6_refusals kept as an ignored record (two refusal rows retired),
+    c6_refusals_after_landed added. Open for the maintainer (ADR 0400 question 3): the driven-end reading of the 0.5
+    percent clause (both frequencies are antiresonances of the driven end, error relative to F/(EAk)), registered before
+    the run.
 - [x] **F-492** Buckling factors of the knife-edge column against the solid's closed form (ADR 0390 known miss)
   - depends on: F-395
   - acceptance: Every limit not stated here is registered in the ADR before the run. The knife-edge Hex20 beam of ADR
