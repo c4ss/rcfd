@@ -104,10 +104,7 @@ fn wilkinson(a: C, b: C, c: C, d: C) -> C {
 /// Eigenvalues of the real upper Hessenberg matrix `h` (`n x n`, row-major `h[i][j]`).
 fn hess_eigs(h: &[Vec<f64>]) -> Vec<C> {
     let n = h.len();
-    let mut a: Vec<Vec<C>> = h
-        .iter()
-        .map(|r| r.iter().map(|&x| C::new(x, 0.0)).collect())
-        .collect();
+    let mut a: Vec<Vec<C>> = h.iter().map(|r| r.iter().map(|&x| C::new(x, 0.0)).collect()).collect();
     let mut eig = Vec::with_capacity(n);
     let mut hi = n;
     let mut since = 0usize;
@@ -186,9 +183,7 @@ fn hess_eigs(h: &[Vec<f64>]) -> Vec<C> {
 fn csolve(mut m: Vec<Vec<C>>, mut b: Vec<C>) -> Vec<C> {
     let n = b.len();
     for k in 0..n {
-        let p = (k..n)
-            .max_by(|&i, &j| m[i][k].abs().total_cmp(&m[j][k].abs()))
-            .unwrap();
+        let p = (k..n).max_by(|&i, &j| m[i][k].abs().total_cmp(&m[j][k].abs())).unwrap();
         m.swap(k, p);
         b.swap(k, p);
         let piv = if m[k][k].abs() == 0.0 {
@@ -347,9 +342,7 @@ fn ritz_vector(v: &[Vec<f64>], r: &Ritz) -> (Vec<f64>, Option<Vec<f64>>) {
     let mut y = r.y.clone();
     let real = is_real(r.theta);
     if real {
-        let k = (0..y.len())
-            .max_by(|&i, &j| y[i].abs().total_cmp(&y[j].abs()))
-            .unwrap();
+        let k = (0..y.len()).max_by(|&i, &j| y[i].abs().total_cmp(&y[j].abs())).unwrap();
         let ph = y[k].conj().scale(1.0 / y[k].abs());
         y.iter_mut().for_each(|c| *c = *c * ph);
     }
@@ -383,11 +376,7 @@ fn true_residual(
     let jr = apply(zr);
     let (num, den) = match zi {
         None => {
-            let r: f64 = jr
-                .iter()
-                .zip(zr)
-                .map(|(a, b)| (a - theta.re * b).powi(2))
-                .sum();
+            let r: f64 = jr.iter().zip(zr).map(|(a, b)| (a - theta.re * b).powi(2)).sum();
             (r, dot(zr, zr))
         }
         Some(zi) => {
@@ -438,12 +427,15 @@ fn match_eigs(expected: &[C], got: &[C]) -> f64 {
     worst
 }
 
+/// An entry `(row, column, value)` of a test matrix.
+type Entry = (usize, usize, f64);
+
 /// ADR 0392 U1: the Hessenberg eigenvalues of two 6 x 6 matrices `Q T Q` with known spectra.
 #[test]
 fn u1_hessenberg_eigenvalues_of_known_matrices() {
     let (a, b) = (0.5, 0.3);
     let (r, ang) = (1.15, 0.9 * std::f64::consts::PI);
-    let cases: Vec<(Vec<(usize, usize, f64)>, Vec<C>)> = vec![
+    let cases: Vec<(Vec<Entry>, Vec<C>)> = vec![
         (
             vec![
                 (0, 0, -1.15),
@@ -727,10 +719,7 @@ fn r_solver(level: usize, f: Forcing, n_correctors: usize) -> (Arc<FvGeometry>, 
 }
 
 fn max_abs_u(s: &PimpleSolver) -> f64 {
-    s.u.values
-        .iter()
-        .map(|v| v[0].hypot(v[1]))
-        .fold(0.0, f64::max)
+    s.u.values.iter().map(|v| v[0].hypot(v[1])).fold(0.0, f64::max)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -975,14 +964,9 @@ fn linearise(label: &str, geom: &FvGeometry, s: &mut PimpleSolver, dt: f64) -> O
     let blocks = lay.blocks();
     let sq = |i: usize| zr[i] * zr[i] + zi.as_ref().map_or(0.0, |z| z[i] * z[i]);
     let cell_u = |c: usize| (0..nk).map(|j| sq(blocks[0].start + c * nk + j)).sum::<f64>();
-    let mode_cell = (0..lay.nc)
-        .max_by(|&a, &b| cell_u(a).total_cmp(&cell_u(b)))
-        .unwrap();
+    let mode_cell = (0..lay.nc).max_by(|&a, &b| cell_u(a).total_cmp(&cell_u(b))).unwrap();
     let total: f64 = (0..lay.len()).map(sq).sum();
-    let shares: Vec<f64> = blocks
-        .iter()
-        .map(|b| b.clone().map(sq).sum::<f64>() / total)
-        .collect();
+    let shares: Vec<f64> = blocks.iter().map(|b| b.clone().map(sq).sum::<f64>() / total).collect();
     let u_total: f64 = (0..lay.nc).map(cell_u).sum();
     let u_first: f64 = (0..lay.nc).filter(|&c| first[c]).map(cell_u).sum();
     let x = geom.mesh.cell_centres()[mode_cell];
@@ -1143,7 +1127,10 @@ fn record_k_bounded_one_corrector_dt_1e3() {
         let d: Vec<f64> = k15.jz.iter().zip(&j5).map(|(a, b)| a - b).collect();
         norm(&d) / norm(&k15.jz)
     };
-    println!("E0: |J_1e-4 z - J_1e-5 z| / |J_1e-4 z| = {e0:.3e} (z real: {})", k15.lam_l_real);
+    println!(
+        "E0: |J_1e-4 z - J_1e-5 z| / |J_1e-4 z| = {e0:.3e} (z real: {})",
+        k15.lam_l_real
+    );
     // R1: on with the settings of R to the stop.
     let mut stop = None;
     for n in 16..=200 {
@@ -1198,7 +1185,9 @@ fn record_k_bounded_one_corrector_dt_1e3() {
 fn left_half_plane_inside(label: &str, o: &Outcome) -> Option<String> {
     let bad: Vec<_> = o.big_left.iter().filter(|(_, r)| *r <= 0.03).collect();
     if !bad.is_empty() {
-        return Some(format!("{label}: converged Ritz values with Re < 0 and |theta| >= 1: {bad:?}"));
+        return Some(format!(
+            "{label}: converged Ritz values with Re < 0 and |theta| >= 1: {bad:?}"
+        ));
     }
     let inside = o.lam_l_res <= 0.03 && o.lam_l.abs() < 1.0;
     if !inside {
@@ -1264,10 +1253,7 @@ fn solid_entries(lay: &Layout, fluid: &[bool]) -> Vec<bool> {
 }
 
 fn masked(v: &[f64], solid: &[bool]) -> Vec<f64> {
-    v.iter()
-        .zip(solid)
-        .map(|(x, &s)| if s { 0.0 } else { *x })
-        .collect()
+    v.iter().zip(solid).map(|(x, &s)| if s { 0.0 } else { *x }).collect()
 }
 
 /// Ritz vector as its real part and, for a complex value, its imaginary part.
@@ -1283,10 +1269,7 @@ fn solid_report(label: &str, what: &str, geom: &FvGeometry, lay: &Layout, fluid:
     let s: f64 = (0..lay.len()).filter(|&i| solid[i]).map(sq).sum::<f64>() / total;
     let bp = lay.blocks()[2].clone();
     let p_total: f64 = bp.clone().map(sq).sum();
-    let p_solid: f64 = (0..lay.nc)
-        .filter(|&c| !fluid[c])
-        .map(|c| sq(bp.start + c))
-        .sum();
+    let p_solid: f64 = (0..lay.nc).filter(|&c| !fluid[c]).map(|c| sq(bp.start + c)).sum();
     let pc = (0..lay.nc)
         .max_by(|&a, &b| sq(bp.start + a).total_cmp(&sq(bp.start + b)))
         .unwrap();
@@ -1369,14 +1352,9 @@ fn linearise_m(label: &str, geom: &FvGeometry, s: &mut PimpleSolver, dt: f64, fl
     let blocks = lay.blocks();
     let sq = |i: usize| zl.0[i] * zl.0[i] + zl.1.as_ref().map_or(0.0, |w| w[i] * w[i]);
     let cell_u = |c: usize| (0..nk).map(|j| sq(blocks[0].start + c * nk + j)).sum::<f64>();
-    let mode_cell = (0..lay.nc)
-        .max_by(|&a, &b| cell_u(a).total_cmp(&cell_u(b)))
-        .unwrap();
+    let mode_cell = (0..lay.nc).max_by(|&a, &b| cell_u(a).total_cmp(&cell_u(b))).unwrap();
     let total: f64 = (0..lay.len()).map(sq).sum();
-    let shares: Vec<f64> = blocks
-        .iter()
-        .map(|b| b.clone().map(sq).sum::<f64>() / total)
-        .collect();
+    let shares: Vec<f64> = blocks.iter().map(|b| b.clone().map(sq).sum::<f64>() / total).collect();
     let x = geom.mesh.cell_centres()[mode_cell];
     println!(
         "{label}: overall dominant {:+.6} {:+.6}i (|{:.6}|); lambda_L {:+.6} {:+.6}i (|{:.6}|), real {}, true residual {:.3e}",
@@ -1494,4 +1472,37 @@ fn record_m_solid_share_and_fluid_part() {
     }
     println!("M: wall time {:.1} s", t0.elapsed().as_secs_f64());
     assert!(misses.is_empty(), "record M: {misses:?}");
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Known misses (ADR 0392 addendum 1): the registered limits kept, the measured numbers recorded; not run again (each repeats a
+// registered record)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// ADR 0392 E1 b, c, d (record K, run once): at the state of step 15 of B with one corrector at `dt = 1e-3` the Ritz value of
+/// smallest real part is the complex pair -1.102973 +- 0.345949i (`|.|` 1.155954, true residual 3.7e-3), not real; the largest
+/// Ritz value is 1.867930 +- 0.479943i (`|.|` 1.928602), so `lambda_L` is not dominant; its mode cell 13258 lies 0.0110 from the
+/// surface, not a first fluid cell. Limits unchanged.
+#[test]
+#[ignore = "known miss of ADR 0392 E1 b to d (record K): measured -1.103 +- 0.346i, dominant |1.929|, mode 0.011 from the surface"]
+fn e1_period_two_eigenvalue_real_dominant_at_the_first_fluid_cells_known_miss() {
+    record_k_bounded_one_corrector_dt_1e3();
+}
+
+/// ADR 0392 E4 (record L, run once): at the state of step 15 of the first-order forcing F with one corrector at `dt = 1e-3`
+/// (a setting that runs 200 steps) the converged real Ritz value -1.024233 (true residual 7.7e-3) lies outside the unit
+/// circle. Limit unchanged.
+#[test]
+#[ignore = "known miss of ADR 0392 E4 (record L): F at step 15 has the converged Ritz value -1.0242"]
+fn e4_first_order_forcing_inside_the_unit_circle_known_miss() {
+    record_l_smaller_step_two_correctors_first_order();
+}
+
+/// ADR 0392 amendment 1 S1 and P3 c (record M, run once): the solid share of the overall dominant Ritz vector is 0.1309 (B)
+/// and 0.1539 (F) against `>= 0.9`; the mode cell of `lambda_L` of the fluid part `J_f` of B (-1.138536, real, true residual
+/// 9.5e-4) is cell 13259, 0.0117 from the surface, not a first fluid cell. Limits unchanged.
+#[test]
+#[ignore = "known miss of ADR 0392 S1 and P3 c (record M): solid shares 0.131 and 0.154, J_f mode 0.0117 from the surface"]
+fn s1_p3_solid_pressure_modes_and_fluid_part_mode_cell_known_miss() {
+    record_m_solid_share_and_fluid_part();
 }
