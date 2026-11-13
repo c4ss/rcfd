@@ -2898,6 +2898,22 @@ Located errors at `solver.rhie_chow.step_consistent` with steady algorithms, com
 The table absent or `step_consistent = false` leaves every earlier result bit for bit, and neither enters the case hash or the
 written case text.
 
+## Co-simulation fluid participant (`[cosim]`, F-444, ADR 0380)
+
+The optional table `[cosim]` makes the case the fluid participant of a co-simulation with a structural solver
+([cosimulation-protocol.md](cosimulation-protocol.md)): `rcfd serve --cosim <case>` hosts it under protocol `rcfd-cosim/1`
+and a coupler drives it; `rcfd run` refuses the case. Keys: `patch` (the moving wall patch, required), `participant` (the
+name it is hosted under, default `"fluid"`), `fixed_patches` (patches whose points the smoothing keeps in place; every other
+patch except the moving one slides), `smoothing_method` (`laplacian`, `inverse_distance` or `inverse_volume`, as
+`dynamic_mesh.smoothing.method`), `smoothing_exponent` (default 1), `smoothing_tolerance` (relative, default `1e-12`; absolute
+floor `1e-16`, at most 5000 iterations) and `initial_displacement` (three numbers per point of the patch, in ascending mesh
+point index, the order of `cosim.describe`, in m; empty = 0: the flow starts at rest on the mesh moved by it). The case must be
+an incompressible `piso` or `pimple` case with nothing else to advance: located errors at `cosim.patch`, `cosim.fixed_patches`,
+`cosim.initial_displacement`, `solver.algorithm`, `solver.corrector_control` (adaptive), `dynamic_mesh.enabled` and
+`mesh.adapt`, and an error at `cosim` naming any other model the simulation would advance (turbulence, energy, scalars, sources,
+time-step control and so on). The coupler gives the step; `solver.dt` and `solver.end_time` are not used. The table absent
+leaves every earlier result bit for bit, and it enters neither the case hash nor the written case text.
+
 ## Least-squares velocity gradient on periodic faces (`solver.periodic_gradient`)
 
 `solver.periodic_gradient` (`face_value` default, `partner_cell`) applies to the steady `simple`/`simplec` momentum

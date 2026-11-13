@@ -1958,6 +1958,14 @@ pub const METHODS: &[&str] = &[
     "cosim.advance",
 ];
 
+/// One request line handed to `w` with one call (F-444, ADR 0380 D4): `writeln!` on the socket would hand it over in
+/// pieces, each its own `send`. The bytes are those `writeln!` wrote.
+fn write_request<W: Write>(w: &mut W, id: u64, method: &str, params: Value) -> std::io::Result<()> {
+    let mut line = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}).to_string();
+    line.push('\n');
+    w.write_all(line.as_bytes())
+}
+
 /// Minimal blocking client for the line protocol (tests, CLI, scripts).
 pub struct Client {
     reader: BufReader<TcpStream>,
@@ -1981,8 +1989,8 @@ impl Client {
     pub fn call(&mut self, method: &str, params: Value) -> std::result::Result<Value, RpcError> {
         let id = self.next;
         self.next += 1;
-        let req = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
-        writeln!(self.writer, "{req}").map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
+        write_request(&mut self.writer, id, method, params)
+            .map_err(|e| RpcError::new(code::INTERNAL, e.to_string()))?;
         let mut line = String::new();
         self.reader
             .read_line(&mut line)
@@ -2393,6 +2401,41 @@ mod tests {
             .is_none());
         let bad = svc.handle_request(&json!({"id": 1, "method": "x"})).unwrap();
         assert_eq!(bad["error"]["code"], code::INVALID_REQUEST);
+    }
+
+    /// A writer that counts the calls of `write`.
+    #[derive(Default)]
+    struct Counting {
+        calls: usize,
+        bytes: Vec<u8>,
+    }
+
+    impl Write for Counting {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.calls += 1;
+            self.bytes.extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// ADR 0380 C1: `Client::call` hands a request to the socket with one call, and the bytes are the request's JSON and a
+    /// newline.
+    #[test]
+    fn c1_f444_client_writes_a_request_with_one_call() {
+        let forces: Vec<Value> = (0..200).map(|i| json!([i as f64 * 0.1, -1.5e-7, 3.0])).collect();
+        let params = json!({"participant": "structure", "lease": 1, "dt": 0.01, "forces": forces});
+        let mut w = Counting::default();
+        write_request(&mut w, 42, "cosim.advance", params.clone()).unwrap();
+        let expected = format!(
+            "{}\n",
+            json!({"jsonrpc": "2.0", "id": 42, "method": "cosim.advance", "params": params})
+        );
+        println!("C1: {} write call(s), {} bytes", w.calls, w.bytes.len());
+        assert_eq!(w.calls, 1);
+        assert_eq!(String::from_utf8(w.bytes).unwrap(), expected);
     }
 }
 

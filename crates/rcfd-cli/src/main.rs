@@ -121,8 +121,9 @@ COMMANDS:
                                (XDMF + binary heavy data); an .stl input can only be re-encoded to .stl
     post <results-dir> [--format html|csv|json] [--out <file>]
                                re-create reports from <results-dir>/monitors.json written by `run`
-    serve [--addr <host:port>] [--root <dir>] [--stdio]
-                               start the solver service (JSON-RPC 2.0, newline-delimited)
+    serve [--addr <host:port>] [--root <dir>] [--stdio] [--cosim <case>]
+                               start the solver service (JSON-RPC 2.0, newline-delimited); --cosim hosts the
+                               co-simulation fluid participant of the case's [cosim] table (protocol rcfd-cosim/1)
     call [--addr <host:port>] <method> [<json-params>]
                                call one method of a running service; prints the JSON result
                                (exit 1 and the JSON error on stderr if the call fails)
@@ -854,6 +855,22 @@ fn cmd_serve(args: &[String]) -> u8 {
         ..Default::default()
     };
     let svc = Service::new(cfg);
+    // F-444, ADR 0380 D2: the co-simulation fluid participant of a case, built before the service listens
+    if let Some(path) = opt(args, "--cosim") {
+        let hosted = rcfd_api::case::Case::load(path).and_then(|case| rcfd_api::cosim_case::host(&svc, &case));
+        match hosted {
+            Ok(name) => eprintln!(
+                "co-simulation: hosting the fluid participant '{name}' of {path} (protocol {})",
+                rcfd_api::cosim_service::COSIM_PROTOCOL
+            ),
+            Err(diags) => {
+                for e in diags {
+                    eprintln!("error: {path}: {e}");
+                }
+                return FAIL;
+            }
+        }
+    }
     if flag(args, "--stdio") {
         let r = svc.serve_stream(std::io::stdin(), std::io::stdout());
         svc.shutdown();

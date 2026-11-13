@@ -78,8 +78,9 @@ wall is a rigid segment. Any other weights can be passed to `InterfaceMap::new`.
 Opt-in, `cosim::InterfaceMap::build(nodes, elements, points, face_points, &settings)` (or `cosim::interface_rows` for the
 rows alone) builds `H` from the structure's interface mesh (its nodes and **elements**: 1 to 4 node indices each, a point,
 a segment, a triangle or a quadrilateral, which is split into two triangles) and the fluid's (wall points and faces). For a
-transport this means that `describe` of the structure also returns its elements; in the library the caller passes them
-(the `Structure` trait is unchanged). Two methods, `cosim::MapMethod`:
+transport this means that `describe` of the structure also returns its elements: `Structure::elements` (a provided method,
+empty by default; ADR 0380) is carried by `cosim.describe` and returned by `RemoteStructure::elements`, so the coupler
+builds the map from the proxies. Two methods, `cosim::MapMethod`:
 
 * **nearest-element projection** (`MapSettings::projection(max_distance)`): a wall point gets the barycentric weights of
   its nearest point on the nearest structural element. On a curved wall the two meshes are different facetted surfaces and
@@ -170,7 +171,24 @@ let server = service.serve_tcp("127.0.0.1:0")?;                            // se
 ```
 
 The closure builds the participant on a thread of its own, where every call for it is applied, one at a time in the order
-the requests arrive (so a participant need not be `Send`; `FlowWall` is not). `rcfd serve` hosts no participant.
+the requests arrive (so a participant need not be `Send`; `FlowWall` is not).
+
+**From a case** (F-444, ADR 0380). A case with the optional table `[cosim]` names a moving wall patch as the fluid
+participant, and `rcfd serve --cosim <case>` hosts it (under the name `cosim.participant`, default `fluid`) before it
+listens:
+
+    rcfd serve --addr 127.0.0.1:7878 --cosim wall.toml
+
+The case is an incompressible `piso` or `pimple` case with nothing else to advance (no turbulence, energy, scalars,
+dynamic mesh and so on: each is refused by name). Its mesh is the reference configuration; the flow starts at rest on that
+mesh moved by `cosim.initial_displacement` (three numbers per wall point, in the order of `describe`, which only the
+coupler can compute when the initial wall comes from the structure, as `H q_0`), and every `advance` moves the wall,
+smooths the interior (`cosim.patch` prescribed, `cosim.fixed_patches` fixed, every other patch sliding;
+`smoothing_method`, `smoothing_exponent`, `smoothing_tolerance` as `dynamic_mesh.smoothing`) and makes one flow step. The
+keys are listed in [case-schema.md](case-schema.md). Without the table nothing changes; `rcfd run` refuses a case with it.
+In a program the same is `rcfd_api::cosim_case::host(&service, &case)`, or `fluid_from_case(&case)` for the participant
+in-process. On the model problem of ADR 0256 the participant served this way, driven by the mock structure in a third
+process, gives the displacements of the in-process run bit for bit over 650 steps.
 
 **Driving.** `rcfd_api::cosim_service::RemoteStructure` and `RemoteFluid` implement the traits `Structure` and `Fluid` by
 sending each call as one request, so the coupler is the same `cosim::coupled_step`, with one or both participants remote:
@@ -189,14 +207,15 @@ hosted under, `lease` the number that `cosim.open` returned.
 | --- | --- | --- |
 | `cosim.list` | | `{protocol, participants: [{participant, kind, name}]}` |
 | `cosim.open` | `participant` | `{protocol, lease, kind, name, time}` |
-| `cosim.describe` | `participant`, `lease` | a structure: `{kind, name, nodes}`; a fluid: `{kind, name, points, faces}` |
+| `cosim.describe` | `participant`, `lease` | a structure: `{kind, name, nodes}` and `elements` when it gives some; a fluid: `{kind, name, points, faces}` |
 | `cosim.time` | `participant`, `lease` | `{time}` |
 | `cosim.checkpoint` | `participant`, `lease` | `{time}` |
 | `cosim.restore` | `participant`, `lease` | `{time}` |
 | `cosim.forces` | `participant`, `lease` (a fluid) | `{forces, time}` |
 | `cosim.advance` | `participant`, `lease`, `dt` and, for a structure, `forces`; for a fluid, `displacements` | a structure: `{displacements, time}`; a fluid: `{forces, time}` |
 
-`nodes`, `points`, `forces` and `displacements` are arrays of `[x, y, z]`, `faces` an array of arrays of point indices
+`nodes`, `points`, `forces` and `displacements` are arrays of `[x, y, z]`, `elements` an array of arrays of 1 to 4 node
+indices (from 0, into `nodes`), `faces` an array of arrays of point indices
 (from 0, into `points`), `time` and `dt` numbers; units and conventions as above. `kind` is `fluid` or `structure`; `name`
 is the participant's own name, the one a coupling error carries. `protocol` is `rcfd-cosim/1`. For example:
 
@@ -298,9 +317,9 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
 ## Limits and gaps
 
 * Over the service: one coupler per participant; no authentication or encryption (use the loopback interface or a trusted
-  network); participants are hosted by a program, not built from a case, and `rcfd serve` hosts none; the structure's
-  `describe` carries nodes, not elements; a call that outlasts the time-out counts as a lost connection; a participant
-  process that died is not restarted.
+  network); only a fluid participant is built from a case (one per `rcfd serve`, the flow alone, the initial wall as a
+  list of numbers); a structure is hosted by a program; a call that outlasts the time-out counts as a lost connection; a
+  participant process that died is not restarted.
 * One wall and two participants. No simultaneous update of several participants.
 * The structure in the repository is a mock: lumped nodes on springs, one direction of motion, an explicit integrator.
   No structural solver has been connected.
@@ -320,6 +339,10 @@ The test file `crates/rcfd-fv/tests/cosim_f139.rs` holds the complete set-up.
   of ADR 0256 as the methods `cosim.describe`, `cosim.time`, `cosim.checkpoint`, `cosim.restore`, `cosim.forces` and
   `cosim.advance`, with `cosim.list` and `cosim.open` (the lease). Before it the calls existed in-process only
   (`rcfd_fv::cosim`, ADR 0256), unversioned; the in-process traits are unchanged.
+* `rcfd-cosim/1`, addition of ADR 0380 (F-444): the member `elements` of the reply of `cosim.describe` for a structure
+  that gives elements (`Structure::elements`, a provided method returning none by default), so that the map builders of
+  ADR 0263 run on the coupler's side (`InterfaceMap::build` with `RemoteStructure::elements`). A reply without elements is
+  unchanged.
 
 A change that an existing participant or coupler would not understand (a renamed member, another unit or sign, a call
 with another meaning) gets a new identifier `rcfd-cosim/2`; an added method or an added member of a reply does not.

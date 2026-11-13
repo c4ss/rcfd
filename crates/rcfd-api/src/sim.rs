@@ -1268,6 +1268,13 @@ pub struct Simulation {
 impl Simulation {
     /// Build mesh, fields and solver from a validated case.
     pub fn new(case: &Case) -> std::result::Result<Self, Vec<Diagnostic>> {
+        // F-444, ADR 0380 D1: a co-simulation fluid participant is hosted by `rcfd serve --cosim`, not run
+        if crate::cosim_case::present(case) {
+            return Err(diag(
+                "cosim",
+                "a case with [cosim] is a co-simulation fluid participant: host it with rcfd serve --cosim <case>, it is not run on its own",
+            ));
+        }
         // F-342, ADR 0262 D2, D3: with [mesh.adapt] the run starts on the base lattice and adapts at its first step
         if adapt::present(case) {
             return adapt::new_adaptive(case);
@@ -5359,6 +5366,58 @@ impl Simulation {
         let path = dir.join(format!("{name}.vtu"));
         rcfd_io::vtk::write_vtu(&path, &self.geom.mesh, &fields)?;
         Ok(path)
+    }
+}
+
+impl Simulation {
+    /// F-444 (ADR 0380 D1): the transient incompressible flow solver of a simulation that has nothing else to advance, for
+    /// the co-simulation fluid participant of `[cosim]` (`crate::cosim_case`). Fails, naming the first model found, when
+    /// the simulation would advance anything outside the flow solver.
+    pub(crate) fn into_cosim_flow(self) -> std::result::Result<PimpleSolver, String> {
+        let others: [(bool, &str); 27] = [
+            (self.dynmesh.is_some(), "a dynamic mesh"),
+            (self.turb.is_some(), "a turbulence model"),
+            (self.energy.is_some(), "the energy equation"),
+            (self.scalars.is_some(), "transported scalars or species"),
+            (self.chem.is_some(), "chemistry"),
+            (self.zone_sources.is_some(), "zone sources"),
+            (self.cht.is_some(), "conjugate heat transfer"),
+            (self.electric.is_some(), "the electric potential"),
+            (self.phase.is_some(), "phase change"),
+            (self.particles.is_some(), "particles"),
+            (self.two_way.is_some(), "particle coupling"),
+            (self.mixing.is_some(), "a mixing plane"),
+            (self.rheology.is_some(), "a rheology law"),
+            (self.sources.is_some(), "sources"),
+            (self.components.is_some(), "lumped components"),
+            (self.radiation.is_some(), "radiation"),
+            (self.props.is_some(), "property laws"),
+            (self.catalogue.is_some(), "boundary-catalogue conditions"),
+            (!self.expr_bcs.is_empty(), "expression or user-function boundary values"),
+            (!self.marangoni.is_empty(), "Marangoni walls"),
+            (!self.udfs.is_empty(), "user functions"),
+            (self.base_body.is_some(), "a body force"),
+            (self.stats.is_some(), "run-time statistics"),
+            (self.adapt.is_some(), "mesh adaptation"),
+            (
+                self.timectl.is_some(),
+                "adaptive time-step control (the coupler gives the step)",
+            ),
+            (
+                self.cfl.is_some(),
+                "Courant-number time-step control (the coupler gives the step)",
+            ),
+            (self.limit_t.0 || self.limit_s.0, "solution limits"),
+        ];
+        if let Some((_, what)) = others.iter().find(|(present, _)| *present) {
+            return Err(format!(
+                "a co-simulation fluid participant advances the incompressible flow alone; this case also has {what}"
+            ));
+        }
+        match self.engine {
+            Engine::Transient(s) => Ok(*s),
+            _ => Err("a co-simulation fluid participant needs solver.algorithm = \"piso\" or \"pimple\" (incompressible, constant density)".into()),
+        }
     }
 }
 
