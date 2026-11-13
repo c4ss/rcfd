@@ -373,3 +373,146 @@ the partition and derivative tests).
 The negative corner load of a quadratic face surprises a reader and any code that assumes positive nodal weights. Node order
 against VTK type 25 (the mid-edge order; to be confirmed from the public VTK format description). Nodal stress extrapolation from
 27 points is not unique: the package registers its rule.
+
+## Addendum 1: results (2026-11-13)
+
+Runs, each once, release profile: `si_hex20` at commit d1ef9d74 (`cargo test -p rcfd-fem --release --test si_hex20 --
+--nocapture --test-threads=1`); after amendment 1 (commit abcc7d61) the three amendment tests once; then the existing tests of
+rcfd-fem, rcfd-post, rcfd-io (`--no-fail-fast`), `baseline_hashes`, fmt, clippy; then the mutations on a `git archive` copy of
+6b886605 in `w49i-work/f389-scratch/mut` with its own target directory.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| E0 | node order (VTK 25), faces as D1 | all as stated; `PENDING = None` | yes |
+| E1 | reference sums <= 1e-14 | `sum N - 1` 4.4e-16, `sum dN` 8.9e-16 | yes |
+| E1b | distorted sums <= 1e-14 | 4.4e-16, `sum grad N` 1.2e-15 | yes |
+| E1c | Kronecker <= 1e-15 | 0 | yes |
+| E2 | CD <= 1e-7 | 2.6e-11 | yes |
+| E2b | `J` against CD <= 1e-7 | 4.3e-11 | yes |
+| E3 | 216 monomials <= 1e-13 | 1.8e-15 | yes |
+| E4 | symmetry <= 1e-13 (21 elements) | 8.2e-17 reference, all 20 distorted met | yes |
+| E5 | rank 54 (21 elements) | 54 on all 21 (reference: null eigenvalues <= 9.9e-17, smallest non-zero 1.19e-2 of lambda_max) | yes |
+| E6 | rigid motions <= 1e-11 | 5.4e-16 reference, all 20 distorted met | yes |
+| E7 | volume <= 1e-13 | reference 0, distorted 6.7e-16 | yes |
+| E8 | affine mass <= 1e-13 | 7.3e-16 | yes |
+| P1 | patch <= 1e-10 | 4.4e-15 (208 nodes, 44 interior, 132 unknowns) | yes |
+| P2 | strain, nodal stress <= 1e-10 | 9.6e-14, 3.5e-14 | yes |
+| L1 | -1/12, 1/3 of p A <= 1e-13; area vectors outward | box 1.1e-16, affine 1.6e-16; outward on all 12 faces | yes |
+| L2 | uniaxial <= 1e-10 | elongation 5.0e-14, lateral 9.0e-13, 1.6e-12 | yes |
+| L3 | model pressure on a Hex20 face refused by name | "a face of 8 nodes (faces of 3, 4 or 6 nodes are supported)" | yes |
+| C1 | `abs(delta / delta_T - 1) <= 0.01` | first run: defective measure (amendment 1); amended run: **1.805e-2** (ratio 0.981949) | **no** (known miss) |
+| T1a | bore `u_r` <= 0.002 | 7.3e-5 | yes |
+| T1b | bore hoop stress <= 0.01 | **1.168e-2** | **no** (known miss) |
+| T1c | bore mid-edge nodes on the circle <= 1e-15 | 1.1e-16 | yes |
+| M1 | L2 order >= 2.7 | D 3.049, T 3.053 | yes |
+| M2 | energy order >= 1.8, monotone | D 2.024, T 2.012; monotone | yes |
+| B1 | mass, centre, inertia <= 1e-12 | 2.9e-15, 2.1e-15, 1.0e-15 | yes |
+| B2 | `abs(f_1/f - 1) <= 1e-3`, `>= -1e-12`, mode 0 axial | 1.03e-6 (1261.887 Hz), mode 0 axial | yes |
+| U1 | 111 = 36 + 75 nodes, midpoints, sets, refusal | 111 = 36 + 75, 75 mids, midpoints bit-equal, sets 21/21/29/29/29/29, Tet4 refused naming block 0 | yes |
+| S1 | other tests of rcfd-fem, rcfd-post, rcfd-io unedited, 0 failed except ADR 0291's Hex20 refusals | 77 test binaries pass (481 passed, 61 ignored), including `si_scaffold_bits` and `si_scaffold_output`; `si_scaffold` fails in 4 tests, all because Hex20 is no longer refused (below); `git diff ca2c6b17 -- crates/*/tests` lists only `si_hex20.rs` | yes (as registered) |
+| G1 | `baseline_hashes` passes | 3 passed, 1 ignored (its existing record); file unchanged | yes |
+
+Negative controls: N1 cubic field 0.2226 (> 1e-6); N2 (amended) Hex8 ratio 0.369197 (< 0.9; the first run's -0.369 was vacuous,
+amendment 1); N3 lambda reversed: orders 0.001 and -0.003 (< 0.5); N4 rank with `gauss_2` 48 (< 54). All hold.
+
+Mutations (each alone, first run; all caught):
+
+| Id | Caught by |
+| --- | --- |
+| M1 corner `s - 1.9` | E1 (0.1), E1b, E1c; also B1, B2, M1 |
+| M2 corner derivative `- 0.9` | E2, E2b; also L2, B1, B2, M1, T1a |
+| M3 stiffness `gauss_2` | E5 (rank 48 on all 21 elements); also P1, T1a |
+| M4 face 1 node 17 for 13 | E0, L1; also M1 case T |
+| M5 mid-edge node at `p_a` | U1 (the upgrade is refused by `add_block` with `InvertedElement` before the position check is reached), and every test using the upgrade |
+| M6 `volume` with `gauss_2` | E7 |
+| M7 mass `gauss_2` | E8 only (the mass properties stay exact with 8 points, as D3 says) |
+| M8 node sets not extended | U1; also P1, P2, M1, M2, B2, T1a |
+| M9 face mid-edge `/ 4` | L1; also L2, M1 case T, T1a |
+
+The mutated file was restored and compared byte for byte. fmt: `cargo fmt -p rcfd-fem --check` clean (rustfmt changed the
+layout of the two new files once, commit 6b886605, no change of tokens). clippy: `cargo clippy -p rcfd-fem --all-targets --release
+-- -D warnings` clean.
+
+### The existing tests that stop applying (remaining step for the maintainer)
+
+`crates/rcfd-fem/tests/si_scaffold.rs` (ADR 0291), not edited:
+
+- `x1_the_scaffold_exists`: `assert_eq!(rcfd_fem::hex20::PENDING, Some("ADR 0292"))` (line 80) fails with `None`; the later
+  `assert_eq!(ElementKind::Hex20.pending(), Some("ADR 0292"))` (line 92) would fail too.
+- `x3_placeholder_elements_refuse`: the Hex20 row (`(ElementKind::Hex20, "ADR 0292")`, line 170): `stiffness` is no longer
+  `NotYetSupported` (on the test's degenerate coordinates it is now `InvalidValue { key: "jacobian", .. }`); the Beam2 and Shell4
+  rows are not reached after the panic.
+- `r1_to_r9_static_solve_refuses_each_new_variant`: R1 (`hex20_model()`, lines 309 to 329, the case at line 374) now solves (zero
+  load, zero displacement) instead of refusing; R2 to R9 are not reached after the panic.
+- `r10_refused_on_every_static_path`: its first case, R1 through CG, solves; the rest is not reached.
+
+Options: (a) mark the four tests `#[ignore = "record of ADR 0291: Hex20 refused until ADR 0292"]` and add copies without the
+Hex20 rows, so that the Beam2, Shell4, formulation, constraint and support refusals stay checked; (b) drop the Hex20 rows in place.
+Recommendation (a) (house rule 2 keeps records; R2 to R9 and the Beam2 and Shell4 rows of X3 are still needed). Not taken (it
+edits existing tests): it needs the maintainer.
+
+### Diagnosis of the two misses
+
+Unregistered diagnostics, each run once after the first run and before amendment 1, in a temporary test file (deleted, not
+committed); they change no limit, mesh or parameter.
+
+C1, ratio `delta / delta_T` of the clamped cantilever by mesh (elements along x, and through thickness = width) and `nu`: 10 x 1,
+nu 0.3: 0.981949; 10 x 1, nu 0: 0.999037; 20 x 1: 0.990098; 40 x 1: 0.993462; 10 x 2: 0.986600; 20 x 2: 0.992485; 40 x 4:
+0.995265; 40 x 4, nu 0: 0.999995. With `nu = 0` the registered mesh is within 0.1 percent: the element bends correctly with one
+element through the thickness and does not lock (Hex8 on the same mesh: 0.369). The 1.8 percent is the full clamp with `nu =
+0.3`: it suppresses the Poisson contraction at the root (registration item iii), a real 3-D effect of about 0.5 percent at `L/h =
+20` (40 x 4) that the coarse mesh spreads over the first element (length 2h) and so overstates. Arithmetic 4 underestimated it on
+the coarse mesh; the closed form of the acceptance contains no clamp effect.
+
+T1b, largest relative error of the bore hoop stress by mesh (radial x circumferential): 4 x 8: 1.168e-2 (registered); 4 x 16:
+1.152e-2; 8 x 8: 3.75e-3; 8 x 16: 3.67e-3; 16 x 32: 1.03e-3; the largest error at the Gauss points themselves: 7.1e-3 (4 x 16),
+2.0e-3 (8 x 8), 5.4e-4 (16 x 32). The error is uniform around the bore (mean 1.14e-2 at 4 x 16) and set by the radial resolution,
+at about second order; the circumferential resolution does not matter. Arithmetic 5 counted only the extrapolation of exact Gauss
+values (0.14 percent) and missed the finite-element stress error at the Gauss points in the steep `B / r^2` field (0.7 percent at
+`h = 0.25`), which the extrapolation carries to the bore.
+
+### Deviations
+
+- Amendment 1 (sign of the cantilever measure; the first-run magnitudes were known before the corrected run, disclosed there).
+- B1 uses the inertia about the centre in the form `m (l_j^2 + l_k^2) / 12` (diagonal, zero off it) instead of the Gram matrix of
+  `sb_modal.rs`; the same closed form.
+- E4 to E6 print one line per element (21 each); the table gives the reference values and "all met".
+
+### Decision by the registered rule
+
+**Partial**: C1 (1.805e-2 against 1e-2) and T1b (1.168e-2 against 1e-2) miss, both diagnosed (the full clamp with `nu = 0.3` on a
+coarse mesh; the radial resolution of the bore stress); every other check met, every negative control held, every mutation caught;
+the only failing existing tests are the ADR 0291 refusals of Hex20 listed above.
+
+### Remaining questions
+
+1. The model path of Hex20 face loads (open question 1): (a) a follow-up adds `8 =>` arms to `loads::face_shape_functions` and
+   `loads::face_rule` (delegating to `hex20`) and to `SolidMesh::face_tangents` (which panics with `unreachable!` for an 8-node
+   face through `face_area` / `face_area_vector`); every other face count unchanged bit for bit; (b) leave it. Recommendation (a),
+   soon: a public function panics on a valid Hex20 mesh.
+2. C1: (a) a follow-up registers the cantilever with the support of beam theory (`u_x = 0` on the root face, `u_y`, `u_z` fixed on
+   its neutral line), the full clamp recorded beside it; (b) keep the full clamp and accept 2 percent at one element.
+   Recommendation (a): the acceptance's closed form assumes the beam-theory support.
+3. T1b: (a) a follow-up registers the bore hoop stress on a radially refined mesh, its element count derived from the
+   second-order rate of the diagnostic above (disclosed); (b) keep 4 radial elements. Recommendation (a).
+4. The ADR 0291 refusal tests: option (a) of the section above. Needs the maintainer.
+
+### For the lead: roadmap entries
+
+F-389: proposed status **partial**. Note:
+
+> ADR 0292, 2026-11-12: Hex20 serendipity element in rcfd-fem (hex20.rs; node order confirmed as VTK type 25 from the published vtkQuadraticHexahedron definition; 3 x 3 x 3 rule for stiffness and mass; triquadratic recovery; 8-node face loads as per-node forces; upgrade_to_hex20 and upgrade_to_hex20_mapped). Met: partition 4.4e-16, derivatives against central differences 2.6e-11, monomials 1.8e-15, symmetry, rank 54 and rigid motions on 21 elements, patch 4.4e-15, face loads -1/12 and 1/3 of p A to 1.6e-16, uniaxial 1.6e-12, bore displacement 7.3e-5, manufactured solution L2 orders 3.05 (cases D and T), box mass and inertia 3e-15, bar frequency 1.03e-6 at 8 elements, 111 = 36 + 75 nodes; nine mutations caught. Missed (known misses, diagnosed): cantilever 1.8 percent (ratio 0.981949; the full clamp with nu = 0.3, 0.999 with nu = 0) and bore hoop stress 1.17 percent on 4 x 8 elements (radial resolution). Model-path pressure and traction on Hex20 faces stay refused by loads.rs, and SolidMesh::face_area panics on an 8-node face (follow-up). si_scaffold X1, X3, R1, R10 of ADR 0291 fail because Hex20 is no longer refused: needs the maintainer.
+
+F-388: note addition:
+
+> ADR 0292, 2026-11-12: with Hex20 landed, si_scaffold x1_the_scaffold_exists, x3_placeholder_elements_refuse, r1_to_r9_static_solve_refuses_each_new_variant and r10_refused_on_every_static_path fail on their Hex20 rows; recommended: keep them as ignored records of ADR 0291 and add copies without the Hex20 rows (needs the maintainer).
+
+Follow-up items:
+
+- Title: Hex20 face loads through the model path. Deps: F-389.
+
+> Every limit not stated here is registered in the ADR before the run. Load::Traction and Load::Pressure on surface sets of Hex20 faces give through nodal_load_vector the per-node forces of hex20::pressure_loads and hex20::traction_loads bit for bit; SolidMesh::face_area and face_area_vector of an 8-node face equal hex20::face_area and the 3 x 3 Gauss area vector within 1e-15 relative (no panic); every load vector and area of Tri3, Quad4 and Tri6 faces is bit-identical to before; the baseline hashes are unchanged.
+
+- Title: Hex20 cantilever with the beam-theory support and the bore stress on a refined mesh. Deps: F-389.
+
+> Every limit not stated here is registered in the ADR before the run. Cantilever L/h = 20, nu = 0.3, one Hex20 through the thickness and 10 along, with the support of beam theory at the root (u_x = 0 on the root face, u_y and u_z fixed on its neutral line), registered before the run: tip deflection within 1 percent of P L^3/(3 E I) (1 + 3 E I/(kappa G A L^2)), the full clamp recorded beside it. Thick cylinder b/a = 2, plane strain, Hex20 with the radial element count derived in the registration from the second-order rate of ADR 0292's diagnostic: bore hoop stress within 1 percent and bore displacement within 0.2 percent of Lame.
