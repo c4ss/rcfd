@@ -7588,7 +7588,7 @@ fixed by the item's registration ADR before any code.
     ElementBlock::formulation() (set by SolidMesh::set_block_property with BlockProperty::solid); hex8x::PENDING gates
     it. The stiffness and the recovery do not delegate to hex8x: the package needs assemble.rs (stiffness_with) and
     recover.rs in its file list.
-- [ ] **F-391** Six unknowns per node: rotations in the DofMap, nodal moments, and a two-node shear-flexible beam element
+- [x] **F-391** Six unknowns per node: rotations in the DofMap, nodal moments, and a two-node shear-flexible beam element
   - depends on: F-388, F-374, F-375, F-376, F-377, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Nodes carry three or six unknowns;
     a model without structural elements gives the bits it gave before. Beam, ONE element, any orientation in space
@@ -7600,8 +7600,20 @@ fixed by the item's registration ADR before any code.
     beam, 20 elements, slenderness 50: f_n = (n pi/L)^2 sqrt(E I/(rho A))/(2 pi), n = 1, 2, 3, within 0.5, 1 and 2
     percent after the registered shear and rotary-inertia correction. A beam node shared with a solid element is refused
     (no rotational stiffness from the solid) with the node id.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0294; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, intermediate tier. ADR 0417, 2026-11-13: DofMap gives six unknowns (translations, then
+    small rotations about x, y, z) to the nodes of Beam2 elements and three elsewhere (a mesh without beams keeps
+    DofMap::uniform(n, 3): si_scaffold_bits and baseline_hashes unchanged); Load::NodalMoment; prescribed rotations and
+    moment reactions through the existing constraint and reaction code; Beam2 with the exact prismatic Timoshenko
+    stiffness (derived from the cantilever flexibility, equal to the energy of the interdependent shape functions within
+    4.7e-18), consistent mass with rotary inertia (rho I in bending, rho (I_y + I_z) in torsion), beam::section_forces,
+    rectangle and circle section helpers. Beams are taken by the static and modal elimination paths and refused on the
+    others (naming a follow-up of ADR 0417) and when a beam node is shared with a solid (FemError::BeamSolidNode naming
+    the node). Met: one seeded element in space, tip deflections, rotations, twist and elongation within 4.0e-14, root
+    section forces 4.0e-14, reactions 3.4e-14, whole-model rotation 2.1e-12 (limits 1e-10); quarter-circle arch (tip
+    load along the clamp tangent, derived) 4.86e-4 of pi P R^3/(4 E I) (limit 5e-3) and 1.2e-10 of the polygon closed
+    form; free beam six zeros at 1.65e-7 of f_7; pinned-pinned L/r = 50 within 1.3e-5, 1.9e-4, 9.1e-4 of the exact
+    Timoshenko frequencies (limits 0.5, 1, 2 percent; uncorrected Euler-Bernoulli off by 3.1 and 6.4 percent at n = 2,
+    3). Ten mutations, all caught. Output of rotations (rcfd-post) and beams on the other paths are follow-ups.
 - [ ] **F-392** Four-node shell element (flat facet, assumed shear strain): plates, housings and thin blades as surfaces
   - depends on: F-391
   - acceptance: Every limit not stated here is registered in the ADR before the run. Membrane patch test and
@@ -9785,3 +9797,22 @@ fixed by the item's registration ADR before any code.
     index by the state matrix of ADR 0416 at speeds where its reduced K_eff is not positive definite, with the stability
     flag and growth rate per index; on the disc sector of ADR 0411 the union of the sector's eigenvalues equals the full
     rotor's within 1e-8 relative at a speed above the first loss of stiffness, and the flags agree.
+- [ ] **F-512** Beam results in the solid output: rotations as point data and VTK line cells
+  - depends on: F-391, F-377
+  - acceptance: Every limit not stated here is registered in the ADR before the run. rcfd_post::solid_output writes a
+    model with Beam2 elements: displacement and rotation point arrays, reaction forces and moments, Beam2 as VTK line
+    cells and the section forces as cell data; a model without beams writes the bytes it wrote before; the arrays read
+    back equal the result within 1e-15.
+- [ ] **F-513** Beams on the transformation path: rigid sets joining a beam to a solid, supports and linear constraints on rotations
+  - depends on: F-391, F-393
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A cantilever beam joined to a solid
+    block by a rigid set on a face of the block gives the beam's tip deflection plus the block's compliance within the
+    registered limit; a nodal spring on a rotation gives k_theta theta = M within 1e-10; the modal analysis of a beam
+    held by a rigid set has the frequencies of the equivalent clamped beam within the registered limit; the free rigid
+    motions count takes rotational unknowns.
+- [ ] **F-514** Distributed and body loads on beams
+  - depends on: F-391
+  - acceptance: Every limit not stated here is registered in the ADR before the run. Uniform line load q on a
+    cantilever: tip deflection q L^4/(8 E I) + q L^2/(2 kappa G A) within 1e-10 with one element (consistent load of the
+    interdependent shape functions); gravity on a beam gives reactions rho A L g within 1e-12; a pinned-pinned beam
+    under uniform load gives 5 q L^4/(384 E I) plus the shear term within 1e-10 at any element count.
