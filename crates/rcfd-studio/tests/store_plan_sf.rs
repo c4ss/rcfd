@@ -47,7 +47,7 @@ const EXPECTED: [(&str, &str); 11] = [
         "cases/axial_fan_sector/axial_fan_sector.toml",
         "output.store_interval=60",
     ),
-    ("cases/cavity/adapt_re100.toml", "output.store_interval=XX"),
+    ("cases/cavity/adapt_re100.toml", "output.store_interval=20"),
     ("cases/channel/kepsilon_channel.toml", "output.store_interval=80"),
     ("cases/channel/kepsilon_inlet.toml", "output.store_interval=4"),
     ("cases/channel/profile_inlet.toml", "output.store_interval=20"),
@@ -102,11 +102,11 @@ fn sf1_every_shipped_case_plans_a_store() {
         );
     }
     // negative control: the 48D rule gives sod the step rule
-    let (rel, path) = &cases[8];
+    let (rel, path) = &cases[9];
     let old = rule_48d(&plan_of(rel, path).facts);
     eprintln!("SF1 control: 48D rule for {rel}: {old}");
     assert_eq!(old, "output.store_interval=20");
-    assert_ne!(old, EXPECTED[8].1);
+    assert_ne!(old, EXPECTED[9].1);
 }
 
 #[test]

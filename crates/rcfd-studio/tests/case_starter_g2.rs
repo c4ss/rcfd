@@ -542,6 +542,10 @@ fn cs6_the_excluded_case_files_do_not_open_in_the_editor() {
         if ext != "toml" && ext != "json" {
             continue;
         }
+        // gate 4, 2026-11-13 (ADR 0262 addendum): the adaptive cavity is excluded though it opens; it is not a descriptor
+        if *p == "cavity/adapt_re100.toml" {
+            continue;
+        }
         let bytes = std::fs::read(repo_cases().join(p)).unwrap();
         let m = CaseEditor::from_bytes(st.svc.clone(), &format!("cases/x.{ext}"), &bytes)
             .err()
