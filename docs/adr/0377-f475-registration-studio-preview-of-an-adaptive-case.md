@@ -1,0 +1,187 @@
+# ADR 0377: F-475 registration: the Studio preview of a case with [mesh.adapt] shows the adapted mesh
+
+Status: **REGISTERED 2026-11-12**, written before any code of F-475 and before any run of its checks. Not yet accepted by the
+maintainer. Results go in an addendum; nothing above the addendum is changed after a run.
+
+Parent: [ADR 0262](0262-f342-registration-case-key-for-the-adaptive-steady-loop.md) (F-342, the case key `[mesh.adapt]`; its
+"Addendum: gate 4, 2026-11-13", preview gap, from which this item comes); [ADR 0373](0373-f476-registration-field-store-of-an-adaptive-run.md)
+(F-476, the store of an adaptive run opens after its first step); ADR 0138 (the mesh preview, G1 to G9), ADR 0144, 0147, 0148.
+Roadmap item F-475 (deps F-342). Number 0377, branch `f475-adaptive-preview` from main 2b14108c, worktree `w49i-work/f475`,
+given by the lead.
+
+House rules (`w49i-work/AGENT_RULES.md`) apply: limits fixed here and not changed after a run; a miss becomes an ignored
+`*_known_miss` test with the limit intact; each registered run is made once; defaults bit-identical; no hash table or golden
+touched; no new crate, no unsafe code; unsigned commits without trailers; no push.
+
+## What F-475 asks
+
+Acceptance (`docs/roadmap.json`, binding in full):
+
+> The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh of Simulation::new,
+> with its cell count and mesh hash), and preview_g1's g1_g7_shipped_cases_preview_the_solvers_mesh compares
+> cases/cavity/adapt_re100.toml with Simulation::new like every other case, without the base-mesh exception added on
+> 2026-11-13.
+
+Clauses: (A) the Studio preview of a `[mesh.adapt]` case shows the mesh the run solves on, the adapted mesh; (A') with its cell
+count and mesh hash; (B) G1/G7 compares the shipped adaptive case with `Simulation::new` like every other case, the exception
+removed. The brief adds: (C) decide what "the mesh the run solves on" means for the preview and how the preview reports the
+cost of the adaptive loop; (D) the preview stays cancellable.
+
+## What was read and run before this text (disclosed)
+
+- **Read:** the F-475 and F-476 entries of `docs/roadmap.json`; ADR 0262's gate 4 addendum (both copies); ADR 0373 (design,
+  addendum, Q3); `crates/rcfd-studio/tests/preview_g1.rs` (`solver_mesh`, `is_adaptive`, `assert_same`, G1/G7 at lines 132 to
+  196, G5 at 427); `crates/rcfd-studio/tests/pv/mod.rs`; `crates/rcfd-studio/src/preview.rs` (module doc, `Built`,
+  `build_text`, `refine_offer`, `resolution_text`, `Preview::request`, `spawn`, `drain`, `install`) and
+  `crates/rcfd-studio/src/preview_ui.rs` (the Mesh side, `counts`); `crates/rcfd-api/src/sim/adapt.rs` (`present`,
+  `base_lattice`, `new_adaptive`, `run`, `step_adaptive`); `crates/rcfd-fv/src/adaptive.rs` (signatures of
+  `run_adaptive_simple*`: `setup` is an `FnMut` called once before each solve of the loop, no `Send` bound; read only, not
+  changed); the F-342 and F-476 tests `crates/rcfd-api/tests/adapt_case_f342.rs` (R1b: cycles 576/97, 1269/122, 2799/188, all
+  converged), `adapt_store_f476.rs` (D3: a run stopped before its first step stores the base lattice, 576 cells);
+  `cases/cavity/adapt_re100.toml`; `docs/tutorials/gallery.md` (`rcfd check` prints `ok, 576 cells`).
+- **Logs read:** `w49i-work/f342-scratch/run_r1.log` ("R1 tree run 6.4 s", measured beside a 68.7 s run in the same test
+  binary) and `w49i-work/f476-scratch/run1-api-new.log` (`adapt_store_f476`, three tests including one full adaptive run, 1.68
+  s in all). ADR 0373 A1 measured the run's mesh hash after its first step: `05bb8beae5da57da`, 2799 cells.
+- **Run:** nothing of F-475. A release build of the unchanged worktree (dependencies only, `cargo build`/`--no-run`) was
+  started to warm the target directory; no test was run.
+- **Arithmetic:** the cell-iterations of the shipped loop, from R1b: 576 x 97 = 55,872; 1269 x 122 = 154,818; 2799 x 188 =
+  526,212; sum 736,902. Shares: solve 1 7.6 %, solves 1 and 2 28.6 %, solve 3 71.4 %. A solve's cost is taken proportional
+  to its cell-iterations (SIMPLEC with linear solves whose work per iteration is about linear in the cells at this size); used
+  only for the cancellation estimates below.
+
+## The contradiction in the acceptance, and the reading taken
+
+`Simulation::new` of a `[mesh.adapt]` case holds the **base lattice** (`amr.to_mesh()`, 576 cells), not the adapted mesh: the
+loop runs in the run's first step (ADR 0262 D3). It must keep doing so: ADR 0373 D2 and its test D3 (a run stopped before its
+first step stores the base lattice, 576 cells) and `rcfd check` (`ok, 576 cells`, gallery.md) depend on it. So "the adapted
+mesh of Simulation::new" cannot be `Simulation::new`'s `geom.mesh`, and G1's comparison with `Simulation::new` (clause B) is a
+comparison with the base lattice. The two clauses are met together by a preview that has **two stages** for an adaptive case:
+
+- **the set-up mesh**: the mesh `Simulation::new` sets the run up on (the base lattice, with the solver's numbering and hash;
+  until now the preview built `build_mesh`, the generator's numbering, another hash). This is what `preview::build` returns as
+  its `Built` and what G1 compares (clause B);
+- **the mesh the run solves on**: the mesh after the run's first step, i.e. after the adaptive loop (2799 cells for the shipped
+  case): the mesh of the run's last solve, of its final fields and of its field store (ADR 0373). The preview computes it
+  with the run's own loop and the Studio **shows this one** (clause A), with its cell count and mesh hash (A').
+
+Reading (C), taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation): "the mesh the run solves
+on" is the mesh after the first step of the run, built by the same loop the step runs (`adapt::run`), so it equals that mesh
+bit for bit. The alternative (making `Simulation::new` run the loop) is not taken: it breaks ADR 0373 D3, changes `rcfd
+check`, makes every `Simulation::new` of an adaptive case (validate, check, MCP, Studio) cost seconds with no way to cancel,
+and changes ADR 0262 D3, a registered design. Listed as Q1 for the maintainer.
+
+## Design
+
+**P1. rcfd-api: a cancellable loop and a public entry.** In `crates/rcfd-api/src/sim/adapt.rs`, `run(case)` becomes
+`run_until(case, cancelled)`, whose `setup` closure (called by `rcfd_fv::adaptive` once before each solve) first polls
+`cancelled()`; when it returns true the closure records it and returns an error, so the loop stops before that solve. `run(case)`
+is `run_until(case, &|| false)`: the run path's loop, its arguments and its arithmetic are unchanged (the poll returns false and
+is the only added work), so `step_adaptive`, every run and every F-342 / F-476 result stay bit-identical. New public items,
+re-exported from `rcfd_api::sim`:
+
+- `pub fn has_mesh_adapt(case) -> bool` (the existing `present`: the case writes the table);
+- `pub struct AdaptedMesh { pub mesh: Arc<Mesh>, pub cycles: Vec<CycleRecord> }`;
+- `pub fn adapted_mesh(case, cancelled: &dyn Fn() -> bool) -> Result<Option<AdaptedMesh>>`: the run's loop (`run_until`);
+  `Ok(None)` when cancelled (polled exactly once before each of the `cycles + 1` solves, and nowhere else); the mesh is the
+  final solver's `geom.mesh`, the one `step_adaptive` puts in `sim.geom`.
+
+No `rcfd-fv` file is changed (other agents work there).
+
+**P2. rcfd-studio: the build of an adaptive case.** In `preview::build_text`, after the parse and the size limits as today:
+
+- a case without `[mesh.adapt]`: exactly today's code (`build_mesh`, one `Built`); the new fields are `None`;
+- a case with `[mesh.adapt]`: the set-up mesh is `Simulation::new(&case)`'s `geom.mesh`. If `Simulation::new` refuses, the
+  mesh is `build_mesh` as before (G1's `solver_mesh` falls back the same way) and the report says why it was not adapted
+  (the located first diagnostic). Otherwise, after the set-up `Built` is assembled (surface, patches, 2D overlay, as today),
+  `adapted_mesh(&case, cancelled)` runs with the preview's own `cancelled` (the generation check): `None` is
+  `Refusal::Cancelled`; an error leaves the set-up `Built` with the error in the report; `Some` is assembled into a second
+  `Built` (same text, hashes and source; its own mesh, surface, patches, overlay, counts and bounds) put in the first's new
+  field `adapted: Option<Arc<Built>>`.
+- New field `adapt: Option<AdaptReport>` on both: `base_cells`, `base_hash` (the set-up mesh), `solves: Vec<(cells,
+  iterations, converged)>` (the loop's records), `loop_s` (wall time of `adapted_mesh`), `refused: Option<String>`.
+
+**P3. The Studio shows the adapted mesh.** In `Preview::drain`, an `Ok` result whose `adapted` is `Some` is replaced by that
+adapted `Built` before anything else looks at it; so `built`, `shown`, the viewport surface, the 2D overlay, the hover
+readout, the counts line and the triangle limit are all of the mesh the run solves on, through the code they use today.
+
+**P4. Cost and counts on the Mesh side.** `preview::adapt_text(&Built) -> Option<String>` (none without `[mesh.adapt]`), shown
+under the counts line:
+
+- adapted: `[mesh.adapt]: the mesh the run solves on after its first step, 2,799 cells, mesh hash 05bb8beae5da57da; adapted
+  from the base lattice of 576 cells by 3 solves (576, 1,269, 2,799 cells; 97 + 122 + 188 iterations) in <loop_s> s`
+  (a solve that did not converge is marked "not converged");
+- not adapted: `[mesh.adapt]: not adapted (<reason>); shown is the base mesh`.
+
+While the loop runs the status is the existing "Building the mesh... <s> s" with its elapsed seconds (the loop is part of the
+build); the counts line's "built in <s> s" includes the loop. "Refine x2" doubles the base counts as before; for an adapted
+`Built` its cells before are the base lattice's (`base_cells`), not the adapted count, so its hover is about the counts it
+edits.
+
+**P5. Cancellation.** The preview's existing rule holds (ADR 0138: a newer request makes an older build stop at its next phase
+boundary and its result is discarded). The loop adds one boundary before each solve; a solve itself cannot be interrupted
+without touching `rcfd-fv`, so the worst latency is one solve (for the shipped case solve 3, 71 % of the loop's work).
+
+Derivation: equality to the run's mesh follows from running the same function (`run_until` is `run` plus a poll that does not
+fire), deterministic as the F-342 tests show (tree equals library bit for bit). Showing the adapted mesh by replacing the
+`Built` at the one point results enter the Studio state keeps every other preview rule (generation, skip of unchanged text,
+camera keep, limits) unchanged and in force for it.
+
+**Defaults.** No case without `[mesh.adapt]` takes a new code path in the preview (only the `has_mesh_adapt` test and two
+`None` fields); no run, store, hash, event or monitor of any case changes (`run` is `run_until` with a poll that is never true).
+
+**Test edit (approved by the brief).** In `preview_g1.rs`, the `is_adaptive` helper and the `if is_adaptive(..) { .. } else`
+branch of `g1_g7_shipped_cases_preview_the_solvers_mesh` (the gate 4 comment, note and `build_mesh (base)` comparison) are
+removed, so every TOML case goes through `solver_mesh`. Nothing else in that file changes.
+
+## Checks (limits fixed now)
+
+New tests go in a new file `crates/rcfd-studio/tests/adaptive_preview_f475.rs` (Studio, release) and
+`crates/rcfd-api/tests/adapt_preview_f475.rs` (library). All runs in release.
+
+| Id | Clause | Check | Limit |
+|---|---|---|---|
+| A1 | A, A' | `preview::build` of `cases/cavity/adapt_re100.toml` (repository root); `b.adapted` against the mesh of `Simulation::new` + one `step()` of the same case: mesh hash, cells/faces/points, patches (name, kind, size), the surface field by field bit for bit, 2D | `adapted` is `Some`; all equal; 2799 cells; mesh hash `05bb8beae5da57da` (ADR 0373 A1) |
+| A2 | A, A' | Studio: a project with the case's text as `cases/adapt.toml`; `pv::show_case` | status `Ready`; `displayed()` and `built` are the adapted mesh (2799 cells, A1's hash); the viewport's surface is `displayed().surface` (same `Arc`); `adapt_text(displayed)` contains `2,799 cells` and `05bb8beae5da57da` |
+| B1 | B | `g1_g7_shipped_cases_preview_the_solvers_mesh` with the exception removed (the approved edit), otherwise unedited | passes; the adaptive case compared "Simulation::new ... identical" |
+| C1 | C | A1's `adapt` report and text | `base_cells` 576; `base_hash` = `Simulation::new`'s mesh hash; `solves` = [(576, 97, true), (1269, 122, true), (2799, 188, true)] (R1b); `0 < loop_s <= adapted.build_s`; the text contains `3 solves`, `576, 1,269, 2,799 cells` and `97 + 122 + 188 iterations` |
+| D1 | D | Library: `adapted_mesh` of the shipped case with a counting `cancelled`: (a) never true; (b) true from poll 1; (c) true from poll 2. `T_a` = wall time of (a) | (a) `Some`, 3 polls, 2799 cells, hash = A1's; (b) `None`, 1 poll, time <= 0.10 `T_a`; (c) `None`, 2 polls, time <= 0.35 `T_a` |
+| D2 | D | Studio: `T_full` = wall time of one uncancelled `preview::build` of the case (measured first, same test); open `cases/adapt.toml`, at 0.15 `T_full` after the request open `cases/cavity.toml` | set-up: the adaptive build still running at the switch; the cavity shown `Ready`; the adaptive result never shown after the switch; `stats.discarded >= 1`; the adaptive build thread ends (running 0) <= 0.6 `T_full` after its request |
+| E1 | defaults | For every shipped TOML case without `[mesh.adapt]`: `preview::build` gives `adapted` `None` and `adapt` `None` | all 10 |
+| E2 | defaults | Every `rcfd-studio` test file, release, unedited except B1's edit (binaries `rcfd-runner`, `rcfd-cli`, `fake-claude` built first, same target directory) | all pass (ignored stay ignored) |
+| E3 | defaults | `rcfd-api` `baseline_hashes`, `adapt_case_f342`, `adapt_store_f476`, unedited, release | all pass (ignored stay ignored) |
+| F1 | negative control | The shipped case's text with `velocity_expression_x = "1.0"` under `[boundaries.lid]` (refused by `[mesh.adapt]`'s check): `preview::build` | `Ok`; `adapted` `None`; `adapt.refused` contains `velocity_expression_x`; mesh hash = `build_mesh`'s; `adapt_text` starts `[mesh.adapt]: not adapted` |
+
+fmt (`cargo fmt -p rcfd-api --check`, `-p rcfd-studio --check`) and clippy (`-p rcfd-api -p rcfd-studio --all-targets -- -D
+warnings`) clean.
+
+Estimates: A1, A2 need P1 to P3; the loop is the run's, so the cells and the hash are ADR 0373 A1's. C1's iteration counts are
+R1b's (the same loop). D1 (b): no solve before the first poll, only the base lattice (well under 10 % of a loop of three solves);
+(c): solve 1 is 7.6 % of the loop's work plus the per-solve set-up, against 0.35. D2: at 0.15 `T_full` the loop is in solve 2
+(the set-up stage and solve 1 end near 0.08 to 0.10), which ends near 0.29 to 0.31; the thread then stops at the next poll, so it
+ends near 0.3 `T_full`, against 0.6; without the poll it would run to about 1.0 `T_full`. The machine is shared with other
+builds, so wall times move; the limits are ratios within one test to absorb that.
+
+## Mutations (on a scratch copy, each caught by the named check)
+
+| Id | Mutation | Caught by |
+|---|---|---|
+| M1 | `drain` does not replace the result by its adapted `Built` (the Studio shows the set-up mesh) | A2 |
+| M2 | The set-up mesh of an adaptive case is `build_mesh` (the code before F-475) | B1 |
+| M3 | The poll in `run_until`'s `setup` removed (never cancels) | D1 |
+| M4 | The report's `solves` left empty | C1 |
+| M5 | `has_mesh_adapt` true for every case in the preview | E1 |
+
+## Decision rule
+
+Done: A1, A2, B1, C1, D1, D2, E1, E2, E3, F1 met; fmt and clippy clean; each of M1 to M5 caught by its registered check.
+Partial (Rule I): any registered check missed or not run, or a registered mutation not caught by its registered check, or caught
+only after a post-run amendment. Todo: the Studio still shows a mesh other than the run's after its first step.
+
+## Limits (not covered)
+
+- A solve in progress cannot be interrupted (P5): cancelling the shipped case during its last solve waits up to that solve
+  (about 70 % of the loop). Interrupting a solve needs a hook in `rcfd_fv::SimpleSolver::run`, not touched here.
+- Each build of an adaptive case's text (each debounced edit in the case editor) runs the whole loop again; nothing is cached.
+- The `start` event of an adaptive run still reports 576 cells (ADR 0373 Q3), and `rcfd check` the base mesh; unchanged.
+- The set-up mesh (`Built` of `preview::build`) is checked by G1; the shown mesh by A1 and A2. G1 itself does not look at the
+  adapted mesh (Q2).
