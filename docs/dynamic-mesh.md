@@ -14,7 +14,8 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
 
 ## Limits and gaps
 
-* Euler time scheme only (PISO/PIMPLE).
+* Euler time scheme only (PISO/PIMPLE) in the case tree. The library's moving-mesh step takes BDF2 as an opt-in since F-345
+  (ADR 0379; see "BDF2 on a moving mesh" below); `step_sliding` and `replace_mesh` stay Euler-only.
 * No turbulence, energy, scalars, particles, sources, rheology, statistics or restart.
 * Sliding interfaces in the library only (F-250, ADR 0216): a rotor block turning against a stator block across a
   cylinder, the interface rebuilt every step, in the PISO/PIMPLE path (`rcfd_fv::sliding`,
@@ -158,14 +159,30 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   moving cell, and the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, so that a
   uniform flow stays uniform on a deforming mesh (to `3e-15`). The first step is an implicit Euler step; a cell that was a
   hole two steps back takes the implicit Euler row once (its old-old value is not a fluid value). On a mesh at rest with
-  every cell calculated the step is `PimpleSolver::step` with BDF2, bit for bit; the library's own moving-mesh step has
-  no BDF2. In the Taylor-Green set-up on the finer mesh at `dt = 0.0025` with three passes the time error falls from
+  every cell calculated the step is `PimpleSolver::step` with BDF2, bit for bit, and on a moving mesh it is the
+  library's BDF2 moving-mesh step (F-345, ADR 0379), bit for bit on BF. In the Taylor-Green set-up on the finer mesh at `dt = 0.0025` with three passes the time error falls from
   `1.69e-4` to `2.1e-5`. What is left does not fall with the square of the step (ratio 2.46 between 200 and 400 steps,
   second order gives 5); the library's BDF2 step shows the same on a single mesh at rest (ratio 2.30), independent of
-  the start, the correctors and the passes; its source is open. The follow conditions of a moving wall are those of the
-  two-level step. The bounded BDF2 and Crank-Nicolson are refused.
+  the start, the correctors and the passes (named by ADR 0245 and ADR 0359). Since F-345 `prepare` gives the moving
+  walls the three-level follow conditions when BDF2 is on. On the cylinder TR the time error with BDF2 does not fall
+  with the step in the background cells next to the hole (`2.30e-3` and `2.11e-3` at `dt = 0.02`, `0.01`; ratio 1.09),
+  while the component cells fall at 4.22 and the body-fitted BF at 5.04: the kind changes of the coupling (ADR 0359). The bounded BDF2 and Crank-Nicolson are refused.
 - **Not available:** a second component, a moving background, hole cutting from the wall geometry, more than linear
   interpolation, non-orthogonal correctors, linear-upwind convection, turbulence, energy and the case tree.
+
+## BDF2 on a moving mesh (F-345, ADR 0379; library only)
+
+- `PimpleSolver::set_moving_mesh_time_scheme(TimeScheme::Bdf2)` opts in; without it `step_ale_with_walls` refuses BDF2 as
+  before. The three-level step takes the mesh flux `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two
+  steps (the discrete geometric conservation law of BDF2), the old and the old-old volumes in the transient term and the
+  three-level Rhie-Chow defect. A moving step without the history of the moving step just before it (the first, the first
+  after a step at rest, a `restore`) is the implicit Euler moving step. A uniform flow stays uniform to `7e-15` on the four
+  motions of ADR 0033 G2, with uniform and alternating steps.
+- `ale::set_follow_conditions_bdf2` with a `FollowHistory` gives a following wall the mid-step velocities of the last two
+  steps extrapolated to the end of the step, the normal part carrying the three-level mesh flux (no relative flux through
+  the wall), and `dp/dn` from the BDF2 derivative of the wall velocity. On the body-fitted cylinder BF (ADR 0219, to
+  `t = 1`, three outer iterations, `rhie_chow_step_consistent`) the time error falls by 5.04 when the step is halved;
+  with BDF2 but the two-level walls by 3.04, with implicit Euler by 2.97.
 
 ## Case tree
 

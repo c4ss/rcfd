@@ -36,7 +36,7 @@
 //! library's explicit non-orthogonal correction and the pressure equation and its flux the same explicit non-orthogonal
 //! flux; see [`GeometryCorrections`].
 
-use crate::ale::{move_mesh, set_follow_conditions, MeshStep};
+use crate::ale::{move_mesh, set_follow_conditions, set_follow_conditions_bdf2, FollowHistory, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
 use crate::ddt::{add_ddt, max_courant, History, TimeScheme};
 use crate::diffusion::{laplacian, laplacian_opt, uniform_gamma};
@@ -187,6 +187,8 @@ pub struct OversetSolver {
     /// With the corrections on: the corrected face interpolation of the velocity at the end of the last step, on its
     /// geometry (the interpolation of the next step's `ddt_correction` defect).
     corrected_old_flux: Option<Vec<f64>>,
+    /// The three-level follow conditions of the moving walls in `prepare` while BDF2 is on (F-345, ADR 0379 D7).
+    follow: FollowHistory,
 }
 
 /// "No region": the cell is not calculated.
@@ -815,6 +817,7 @@ impl OversetSolver {
             fringe_flux: FringeFlux::PressureEquation,
             corrections: false,
             corrected_old_flux: None,
+            follow: FollowHistory::new(),
         })
     }
 
@@ -877,6 +880,7 @@ impl OversetSolver {
                 self.bdf2_opt_in = false;
                 self.bdf2 = None;
                 self.euler_fallback = 0;
+                self.follow.clear();
             }
             _ => return Err("overset: the implicit Euler or the BDF2 time scheme only".into()),
         }
@@ -931,8 +935,15 @@ impl OversetSolver {
             .map(|&x| vec3::scale(vec3::sub(x, old_pose.apply(pose_inverse_apply(&pose, x))), 1.0 / dt))
             .collect();
         let old = self.geom.mesh.clone();
+        let bdf_on = self.bdf2_opt_in && self.settings.time_scheme == TimeScheme::Bdf2;
         let wall_dpdn = if walls.is_empty() {
             Vec::new()
+        } else if bdf_on {
+            // ADR 0379 D7: the three-level walls; the first BDF2 step (an Euler step) has the two-level ones
+            if self.bdf2.is_none() {
+                self.follow.clear();
+            }
+            set_follow_conditions_bdf2(&mut self.u, &ms, &old, walls, dt, &mut self.follow)?
         } else {
             set_follow_conditions(&mut self.u, &ms, &old, walls, dt)?
         };
@@ -1239,6 +1250,7 @@ impl OversetSolver {
             vol_old,
             defect,
             wall_dpdn,
+            vol_older: None,
         };
         let corr_ref = corr.as_ref().map(|(gc, m)| (gc, m.as_slice()));
         let (p_iters, unconverged, delta, hole_flux) = self.piso(

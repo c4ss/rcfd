@@ -1094,6 +1094,10 @@ pub struct PimpleSolver {
     pub face_jump: Option<FaceJump>,
     /// Moving-mesh data of the current step (set only by `step_ale`, ADR 0033).
     pub(crate) ale: Option<moving::AleStep>,
+    /// Set by `set_moving_mesh_time_scheme(Bdf2)`: the moving-mesh step accepts BDF2 (F-345, ADR 0379 D1).
+    pub(crate) ale_bdf2_opt_in: bool,
+    /// What the next BDF2 moving step needs of the last one (ADR 0379 D5); `None` without the opt-in.
+    pub(crate) ale_bdf2: Option<moving::AleHistory>,
     /// Pressure increment of the previous fractional step (lagged boundary treatment, ADR 0037).
     pub(crate) fs_q: Vec<f64>,
     /// Set when the divergence guard stopped the run (ADR 0067); every later `step` returns at once. Cleared by `restore`
@@ -1180,6 +1184,8 @@ impl PimpleSolver {
             immersed: None,
             face_jump: None,
             ale: None,
+            ale_bdf2_opt_in: false,
+            ale_bdf2: None,
             fs_q: Vec::new(),
             diverged: None,
             lag_estimates: Vec::new(),
@@ -1211,6 +1217,8 @@ impl PimpleSolver {
             immersed: self.immersed.clone(),
             face_jump: self.face_jump.clone(),
             ale: None,
+            ale_bdf2_opt_in: self.ale_bdf2_opt_in,
+            ale_bdf2: self.ale_bdf2.clone(),
             fs_q: self.fs_q.clone(),
             diverged: None,
             lag_estimates: Vec::new(),
@@ -1680,7 +1688,13 @@ impl PimpleSolver {
                 }
                 let mut m = add_ddt(s.time_scheme, m, &vol, dt, &self.hist_u[k]);
                 if let Some(a) = &self.ale {
-                    a.fix_ddt(&mut m, &vol, &self.hist_u[k].old, dt);
+                    match (&a.vol_older, &self.hist_u[k].older) {
+                        // ADR 0379 D2: the three-level step (only with the BDF2 opt-in of the moving step)
+                        (Some(_), Some(older)) if c2 != 0.0 => {
+                            a.fix_ddt_bdf2(&mut m, &vol, &self.hist_u[k].old, older, c1, c2, dt)
+                        }
+                        _ => a.fix_ddt(&mut m, &vol, &self.hist_u[k].old, dt),
+                    }
                 }
                 if let Some(ts) = &transposed {
                     for c in 0..n {
@@ -2734,6 +2748,7 @@ impl PimpleSolver {
         self.history.extend(st.last);
         self.diverged = None;
         self.correctors.reset_schedule();
+        self.ale_bdf2 = None;
         Ok(())
     }
 
@@ -2769,6 +2784,7 @@ impl PimpleSolver {
         self.history.clear();
         self.diverged = None;
         self.correctors.reset_schedule();
+        self.ale_bdf2 = None;
         Ok(())
     }
 }
