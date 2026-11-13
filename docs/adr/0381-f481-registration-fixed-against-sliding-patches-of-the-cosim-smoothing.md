@@ -89,3 +89,51 @@ estimate above and not searched.
 The `Laplacian` method only; one geometry; the initial mesh only (the same smoothing object serves every `advance`, and
 `advance` is exercised by ADR 0380's checks); the `y` component only as the tangential one; no `inverse_distance` or
 `inverse_volume`; no `rcfd serve` process.
+
+## Addendum 1: results (2026-11-13)
+
+Test file `crates/rcfd-api/tests/cosim_case_f481.rs` (4 tests, 0.02 s), committed before any mutation. No library line was
+changed. Each registered run was made once.
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| S1 the wall is the same in both variants | 0 bits | 0 bits | met |
+| F1 points of the fixed `xmax` against `M0` | 0 bits | 0 of 27 points (81 values) moved | met |
+| M1 sliding against fixed `xmax` | `> 0` points; `>= 1e-5` m | 168 points differ; largest `abs(dy)` on `xmax` `4.316e-4` m (closed form `4.3e-4`) | met |
+| M2 sliding `xmax` keeps its `x` | `<= 1e-12` m | 0 | met |
+| N1 `x`-only wall cannot tell them apart | `<= 1e-12` m | 0 (identical bits) | held |
+| N2 built twice | 0 bits | 0 | held |
+| N3 the wall displacement is seen | `>= 1e-3` m | `5.000e-3` m | held |
+| B1 existing suites, unedited, release | pass | `baseline_hashes` 3 passed (1 ignored), `case_hashes_w48u` 1, `cosim_case_f444` 7, `cosim_serve_f444` 4 (4 ignored heavy records, as before) | met |
+
+### Mutations (a `git archive` copy of 7b12fab1, own target directory; each run once; restored and compared byte for byte)
+
+| Id | Result |
+| --- | --- |
+| MU5 `fixed_patches` treated as sliding | caught on the first run: F1 failed (21 of 81 values of the fixed patch moved) and M1 failed (0 points differ) |
+| MU9 every other patch fixed | M1 failed (0 points differ) |
+| MU10 `initial_displacement` x component only | N3 failed (wall `dy` 0) and M1 failed |
+
+`cargo fmt -p rcfd-api --check`: clean. `cargo clippy -p rcfd-api --all-targets -- -D warnings`: clean (dev profile).
+
+### Not run
+
+The whole-workspace suite and gate (the lead's); `rcfd serve`; the inverse-distance and inverse-volume smoothing; a
+displacement of the advance (only the initial mesh, which uses the same smoothing object).
+
+### Decision by the registered rule
+
+All checks met, MU5 caught on its first run, MU9 and MU10 caught: **done**.
+
+### Open questions
+
+- **Q1.** Cover `advance` with a tangential wall motion too. Options: (a) a later check through the in-process coupler;
+  (b) accept, since `advance` calls the same `Smoothing::points`. Recommendation (b).
+
+### For the lead: roadmap entries
+
+Proposed status of F-481: **done** (`[x]`).
+
+Note text for F-481:
+
+> DONE (ADR 0381, 2026-11-13; registered before the test). A [cosim] case whose initial wall displacement is tangential to xmax (case 8x8x2 of 0.4x0.4x0.1 m, dy = 5e-3 sin(pi y/W)) gives a different mesh when xmax is declared sliding than when it is fixed (168 points differ, largest dy on xmax 4.316e-4 m, closed form 4.3e-4), the 27 points of the fixed xmax do not move (0 bits), a sliding xmax keeps its x (0), and an x-only displacement cannot tell them apart (0 bits, the old set-up). The mutation MU5 of ADR 0380 is caught on the first run, as are two more (every other patch fixed; the initial displacement reduced to x). No library line changed; baseline_hashes and case_hashes_w48u pass unedited.
