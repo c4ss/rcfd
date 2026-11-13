@@ -310,15 +310,19 @@ fn on_bilinear(nodes: &[Vec3], el: &[usize], x: Vec3) -> (Vec3, Vec<(usize, f64)
         out.into_iter().filter(|r| r.1 != 0.0).collect()
     };
     let shape = |s: f64, t: f64| [(1.0 - s) * (1.0 - t), s * (1.0 - t), s * t, (1.0 - s) * t];
-    let point = |n: [f64; 4]| {
-        (0..4).fold(vec3::ZERO, |a, k| vec3::add(a, vec3::scale(c[k], n[k])))
-    };
+    let point = |n: [f64; 4]| (0..4).fold(vec3::ZERO, |a, k| vec3::add(a, vec3::scale(c[k], n[k])));
     let xst = vec3::add(vec3::sub(c[0], c[1]), vec3::sub(c[2], c[3]));
     let (mut s, mut t) = (0.5, 0.5);
     let mut interior = None;
     for _ in 0..BILINEAR_STEPS {
-        let xs = vec3::add(vec3::scale(vec3::sub(c[1], c[0]), 1.0 - t), vec3::scale(vec3::sub(c[2], c[3]), t));
-        let xt = vec3::add(vec3::scale(vec3::sub(c[3], c[0]), 1.0 - s), vec3::scale(vec3::sub(c[2], c[1]), s));
+        let xs = vec3::add(
+            vec3::scale(vec3::sub(c[1], c[0]), 1.0 - t),
+            vec3::scale(vec3::sub(c[2], c[3]), t),
+        );
+        let xt = vec3::add(
+            vec3::scale(vec3::sub(c[3], c[0]), 1.0 - s),
+            vec3::scale(vec3::sub(c[2], c[1]), s),
+        );
         let r = vec3::sub(point(shape(s, t)), x);
         let (g0, g1) = (vec3::dot(r, xs), vec3::dot(r, xt));
         let h00 = vec3::dot(xs, xs);
