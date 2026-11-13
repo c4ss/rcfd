@@ -20,6 +20,7 @@ use rcfd_linalg::{cg, CsrMatrix, Jacobi, Preconditioner, SolveControl};
 use rcfd_linalg::precond::Permuted;
 use rcfd_linalg::reorder::block_rcm_order;
 // ADR 0305 (F-402): smoothed-aggregation multigrid with the rigid-body modes.
+use rcfd_linalg::amg_elastic::Aggregation;
 use rcfd_linalg::amg_elastic::{rigid_body_modes, ElasticAmg, ElasticAmgSettings};
 
 /// Relative pivot threshold of the direct solve: a pivot `d_i <= PIVOT_TOLERANCE a_ii` is refused (ADR 0275 arithmetic 4).
@@ -271,6 +272,12 @@ pub fn smoothed_aggregation(
         })
         .unzip();
     let modes = rigid_body_modes(&points, &components);
+    // ADR 0370 D2: the geometric aggregation takes the point of each node block.
+    if settings.aggregation != Aggregation::Greedy {
+        let bp = node_blocks(free, dofs);
+        let block_points: Vec<[f64; 3]> = bp[..bp.len().saturating_sub(1)].iter().map(|&s| points[s]).collect();
+        return ElasticAmg::with_points(a, &bp, &modes, &block_points, settings);
+    }
     ElasticAmg::new(a, &node_blocks(free, dofs), &modes, settings)
 }
 
