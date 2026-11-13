@@ -180,10 +180,15 @@ pub fn stiffness(model: &SolidModel) -> Result<CsrMatrix> {
 
 /// The global stiffness matrix with `threads` workers (`None`: the available parallelism); the result is bit-identical for
 /// any value. Each element gives `element_for(kind).stiffness(coords, D)` with the elasticity matrix of its material. An
-/// element kind or a formulation whose package has not landed is refused (ADR 0291 D6), never assembled as another.
+/// element kind or a formulation whose package has not landed is refused (ADR 0291 D6), never assembled as another. A Beam2
+/// element gives [`crate::beam::element_stiffness`] with its block's section and orientation (ADR 0417 D6), after the
+/// checks of [`SolidModel::check_elements_supported_with_beams`].
 pub fn stiffness_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
-    model.check_elements_supported()?;
+    model.check_elements_supported_with_beams()?;
     assemble_with(model, threads, |ctx| {
+        if ctx.kind == ElementKind::Beam2 {
+            return crate::beam::model_element_stiffness(model.mesh(), ctx.element, ctx.coords, ctx.material);
+        }
         let d = ctx.material.elasticity_matrix()?;
         element_for(ctx.kind).stiffness(ctx.coords, &d)
     })

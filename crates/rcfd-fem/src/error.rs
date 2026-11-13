@@ -290,6 +290,16 @@ pub enum FemError {
         /// Number of faces of the cell.
         faces: usize,
     },
+    /// A node of a beam element is also a node of a solid element (ADR 0417 D5): a solid element gives no stiffness to the
+    /// rotations of the node.
+    BeamSolidNode {
+        /// The node.
+        node: usize,
+        /// The beam element.
+        beam: usize,
+        /// The first solid element with the node.
+        solid: usize,
+    },
 }
 
 impl fmt::Display for FemError {
@@ -427,6 +437,11 @@ impl fmt::Display for FemError {
                 f,
                 "cell {cell}: a {shape} ({faces} faces) is not converted to a solid element; only meshes of tetrahedra \
                  or of hexahedra are"
+            ),
+            BeamSolidNode { node, beam, solid } => write!(
+                f,
+                "node {node}: shared by the beam element {beam} and the solid element {solid}; a solid element has no \
+                 rotational stiffness (a beam joins a solid through a rigid set, a follow-up of ADR 0417)"
             ),
         }
     }

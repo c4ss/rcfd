@@ -266,6 +266,7 @@ fn hex_box_model(nu: f64) -> SolidModel {
 }
 
 #[test]
+#[ignore = "record of ADR 0404 before ADR 0417 (F-391, Beam2) retired the C4 Beam2 row (refusal naming ADR 0294); superseded by the _after_beam_landed copy below (maintainer standing decision, 2026-11-13)"]
 fn a2_n1_c4_rigid_rotation_and_entry_points() {
     let mut c = Checks::new();
     let mat = material(0.3);
@@ -307,6 +308,59 @@ fn a2_n1_c4_rigid_rotation_and_entry_points() {
         "C4 Beam2",
         matches!(&r, Err(FemError::NotYetSupported { package, .. }) if *package == "ADR 0294"),
         &format!("still refuses naming ADR 0294: {r:?}"),
+    );
+    // The assembled Hex8 box.
+    let model = hex_box_model(0.3);
+    let u = flatten(&model.mesh().nodes().iter().map(rigid).collect::<Vec<_>>());
+    let states = initial_states(&model).unwrap();
+    let f = internal_force(&model, &u, &states).unwrap();
+    c.at_most("A2 Hex8 box: max |f_int| / (E l^2)", max_abs(f) / E_MOD, 1e-10);
+    c.finish();
+}
+
+/// A2, N1, C4 after ADR 0417 (F-391): the C4 Beam2 row refuses naming `beam::SOLID_ROUTINES`; every other row as registered.
+#[test]
+fn a2_n1_c4_rigid_rotation_and_entry_points_after_beam_landed() {
+    let mut c = Checks::new();
+    let mat = material(0.3);
+    let d = mat.elasticity_matrix().unwrap();
+    let state = ElementState::empty();
+    let q = rotation_90();
+    let t = [0.3, -0.2, 0.5];
+    let rigid = |x: &Vec3| {
+        let r = mat_vec(&q, *x);
+        [0, 1, 2].map(|i| r[i] - x[i] + t[i])
+    };
+    for (tag, kind) in KINDS.iter().enumerate() {
+        let el = element_for(*kind);
+        let mut rng = Rng::new(tag as u64);
+        let coords = distorted(*kind, &mut rng);
+        let u = flatten(&coords.iter().map(rigid).collect::<Vec<_>>());
+        let name = kind.name();
+        let f = element_internal_force(el, &coords, &mat, &u, &state).unwrap();
+        c.at_most(
+            &format!("A2 {name}: max |f_int| / (E l^2)"),
+            max_abs(f.iter().copied()) / E_MOD,
+            1e-10,
+        );
+        let ku = el.stiffness(&coords, &d).unwrap().matvec(&u);
+        c.at_least(&format!("N1 {name}: max |K u| / (E l^2)"), max_abs(ku) / E_MOD, 1e-2);
+        // C4: the trait entry points are the functions of the module, bit for bit.
+        let f_trait = el.internal_force(&coords, &mat, &u, &state).unwrap();
+        let k_trait = el.tangent(&coords, &mat, &u, &state).unwrap();
+        let k_fn = element_tangent(el, &coords, &mat, &u, &state).unwrap();
+        c.holds(
+            &format!("C4 {name}"),
+            f_trait == f && k_trait == k_fn,
+            "Element::internal_force and Element::tangent equal the nonlinear functions bit for bit",
+        );
+    }
+    let beam = element_for(ElementKind::Beam2);
+    let r = beam.internal_force(&[[0.0; 3], [1.0, 0.0, 0.0]], &mat, &[0.0; 6], &state);
+    c.holds(
+        "C4 Beam2",
+        matches!(&r, Err(FemError::NotYetSupported { package, .. }) if *package == rcfd_fem::beam::SOLID_ROUTINES),
+        &format!("refuses naming beam::SOLID_ROUTINES (ADR 0417 D7): {r:?}"),
     );
     // The assembled Hex8 box.
     let model = hex_box_model(0.3);

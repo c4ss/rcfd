@@ -61,15 +61,20 @@ pub fn consistent(model: &SolidModel) -> Result<CsrMatrix> {
     consistent_with(model, None)
 }
 
-/// The consistent mass matrix with `threads` workers (`None`: the available parallelism); bit-identical for any value.
+/// The consistent mass matrix with `threads` workers (`None`: the available parallelism); bit-identical for any value. A
+/// Beam2 element gives [`crate::beam::element_mass`] (ADR 0417 D6).
 pub fn consistent_with(model: &SolidModel, threads: Option<usize>) -> Result<CsrMatrix> {
     assemble_with(model, threads, |ctx| {
+        if ctx.kind == crate::mesh::ElementKind::Beam2 {
+            return crate::beam::model_element_mass(model.mesh(), ctx.element, ctx.coords, ctx.material);
+        }
         element_mass(element_for(ctx.kind), ctx.coords, ctx.material.density())
     })
 }
 
 /// The six rigid motions of a model as nodal vectors (one value per equation of its `DofMap`): the unit translations along
-/// x, y, z, then the unit rotations about the axes x, y, z through `about`, `e_k x (x - about)`.
+/// x, y, z, then the unit rotations about the axes x, y, z through `about`, `e_k x (x - about)`; at a node with rotations
+/// (ADR 0417) the rotation `k` also has the value 1 at its rotation component `3 + k`.
 pub fn rigid_motions(model: &SolidModel, about: Vec3) -> [Vec<f64>; 6] {
     let dofs = model.dof_map();
     let nodes = model.mesh().nodes();
@@ -88,6 +93,10 @@ pub fn rigid_motions(model: &SolidModel, about: Vec3) -> [Vec<f64>; 6] {
             for k in 0..3 {
                 r[3 + k][eq] = rot[k][c];
             }
+        }
+        for c in 3..dofs.components(a).min(6) {
+            let eq = dofs.equation(a, c).expect("component of an existing node");
+            r[c][eq] = 1.0;
         }
     }
     r

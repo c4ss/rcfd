@@ -34,9 +34,26 @@ impl DofMap {
         DofMap { offsets }
     }
 
-    /// The numbering a mesh needs: three translations per node for the solid kinds of the basic tier.
+    /// The numbering a mesh needs: three translations per node, and six unknowns (the translations, then the small
+    /// rotations about x, y, z) at each node of a Beam2 element (ADR 0417 D1). A mesh without a Beam2 block gets
+    /// `DofMap::uniform(n, 3)`.
     pub fn for_mesh(mesh: &SolidMesh) -> DofMap {
-        DofMap::uniform(mesh.nodes().len(), 3)
+        if mesh
+            .blocks()
+            .iter()
+            .all(|b| b.kind() != crate::mesh::ElementKind::Beam2)
+        {
+            return DofMap::uniform(mesh.nodes().len(), 3);
+        }
+        let mut counts = vec![3; mesh.nodes().len()];
+        for e in 0..mesh.n_elements() {
+            if mesh.element_kind(e) == crate::mesh::ElementKind::Beam2 {
+                for &n in mesh.element_nodes(e) {
+                    counts[n] = 6;
+                }
+            }
+        }
+        DofMap::from_counts(&counts)
     }
 
     /// Number of nodes.
@@ -325,6 +342,14 @@ pub enum Load {
         /// Force on each node.
         force: Vec3,
     },
+    /// The same moment on each node of a node set, N m; every node must carry rotations (ADR 0417 D2).
+    #[non_exhaustive]
+    NodalMoment {
+        /// Node set name.
+        set: String,
+        /// Moment on each node, about the global axes.
+        moment: Vec3,
+    },
     /// A uniform traction on a surface set, Pa.
     #[non_exhaustive]
     Traction {
@@ -379,6 +404,13 @@ impl Load {
         Load::NodalForce {
             set: set.to_string(),
             force,
+        }
+    }
+    /// The same moment on each node of a node set (nodes with rotations only).
+    pub fn nodal_moment(set: &str, moment: Vec3) -> Load {
+        Load::NodalMoment {
+            set: set.to_string(),
+            moment,
         }
     }
     /// A uniform traction on a surface set.
@@ -634,8 +666,21 @@ impl SolidModel {
     }
 
     /// Refuses an element kind or a solid formulation whose work package has not landed, naming it and its block (ADR
-    /// 0291 D6). A model of the basic kinds with the default formulation passes.
+    /// 0291 D6), and a Beam2 block, which only the paths of ADR 0417 D4 take, naming [`crate::beam::FOLLOW_UP`]. A model of
+    /// the basic kinds with the default formulation passes.
     pub fn check_elements_supported(&self) -> Result<()> {
+        self.check_elements(false)
+    }
+
+    /// As [`SolidModel::check_elements_supported`] for a path that takes beams (ADR 0417 D4): a Beam2 block passes, and the
+    /// model's beams are checked by [`crate::beam::check_beam_model`] (a Beam property on every Beam2 block, no node shared
+    /// with a solid element, a frame for every beam element).
+    pub fn check_elements_supported_with_beams(&self) -> Result<()> {
+        self.check_elements(true)?;
+        crate::beam::check_beam_model(self)
+    }
+
+    fn check_elements(&self, beams: bool) -> Result<()> {
         for (b, block) in self.mesh.blocks().iter().enumerate() {
             if let Some(package) = block.kind().pending() {
                 return Err(FemError::NotYetSupported {
@@ -654,6 +699,15 @@ impl SolidModel {
                     package,
                 });
             }
+            // ADR 0417 D4: a path that does not take beams refuses them.
+            if !beams && block.kind() == crate::mesh::ElementKind::Beam2 {
+                return Err(FemError::NotYetSupported {
+                    item: "element kind",
+                    variant: block.kind().name(),
+                    location: format!("block {b}"),
+                    package: crate::beam::FOLLOW_UP,
+                });
+            }
         }
         Ok(())
     }
@@ -663,6 +717,16 @@ impl SolidModel {
     /// ([`crate::constraint::prescribed_equations`]).
     pub fn check_supported(&self) -> Result<()> {
         self.check_elements_supported()?;
+        self.check_supports()
+    }
+
+    /// As [`SolidModel::check_supported`] for a path that takes beams (ADR 0417 D4).
+    pub fn check_supported_with_beams(&self) -> Result<()> {
+        self.check_elements_supported_with_beams()?;
+        self.check_supports()
+    }
+
+    fn check_supports(&self) -> Result<()> {
         for (i, s) in self.supports.iter().enumerate() {
             if let Some(package) = crate::mpc::PENDING {
                 let location = match s {
@@ -688,6 +752,21 @@ impl SolidModel {
             Load::NodalForce { set, force } => {
                 self.need_set(SetKind::Node, set)?;
                 finite_vec("force", *force)?;
+            }
+            Load::NodalMoment { set, moment } => {
+                self.need_set(SetKind::Node, set)?;
+                finite_vec("moment", *moment)?;
+                let dofs = self.dof_map();
+                for &node in self.mesh.node_set(set).expect("checked") {
+                    if dofs.components(node) < 6 {
+                        return Err(FemError::ComponentOutOfRange {
+                            set: set.clone(),
+                            node,
+                            component: 3,
+                            available: dofs.components(node),
+                        });
+                    }
+                }
             }
             Load::Traction { set, traction } => {
                 self.need_set(SetKind::Surface, set)?;
