@@ -32,6 +32,24 @@ pub struct AleStep {
     /// Outward-normal pressure gradient prescribed on moving-wall faces (index `f - n_internal`, `NaN` = none): the
     /// fixed-flux condition `dp/dn = -n . a_wall`.
     pub wall_dpdn: Vec<f64>,
+    /// Cell volumes at the old-old time of a three-level (BDF2) moving step (F-345, ADR 0379 D2); `None` on a two-level
+    /// step, which takes [`fix_ddt`](Self::fix_ddt).
+    pub vol_older: Option<Vec<f64>>,
+}
+
+/// What the next BDF2 moving step needs of the last one (F-345, ADR 0379 D5).
+#[derive(Debug, Clone)]
+pub(crate) struct AleHistory {
+    /// Cell volumes at the start of the last step.
+    vol: Vec<f64>,
+    /// Mesh flux `W_f/dt` of the last step (as `move_mesh` gave it, empty faces zero).
+    mesh_flux: Vec<f64>,
+    /// Rhie-Chow defect `phi - (u)_f . S` of the internal faces at the start of the last step, on its geometry.
+    defect: Vec<f64>,
+    /// Size of the last step.
+    dt: f64,
+    /// Step count after the last step (the history is valid only for the step right after it).
+    step_no: usize,
 }
 
 impl AleStep {
@@ -80,9 +98,54 @@ impl AleStep {
             m.b[c] += (self.vol_old[c] - vol_new[c]) / dt * u_old[c];
         }
     }
+
+    /// The three-level counterpart of [`fix_ddt`](Self::fix_ddt) (F-345, ADR 0379 D2): `add_ddt(Bdf2)` used the new volume
+    /// for both old levels; put the old and the old-old volume back,
+    /// `b += [(V0 - V1) c1 u0 - (V00 - V1) c2 u00] / dt`. Without `vol_older` it is `fix_ddt`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fix_ddt_bdf2(
+        &self,
+        m: &mut FvMatrix,
+        vol_new: &[f64],
+        u_old: &[f64],
+        u_older: &[f64],
+        c1: f64,
+        c2: f64,
+        dt: f64,
+    ) {
+        let Some(vol_older) = &self.vol_older else {
+            return self.fix_ddt(m, vol_new, u_old, dt);
+        };
+        for c in 0..u_old.len() {
+            let old_part = (self.vol_old[c] - vol_new[c]) * (c1 * u_old[c]);
+            let older_part = (vol_older[c] - vol_new[c]) * (c2 * u_older[c]);
+            m.b[c] += (old_part - older_part) / dt;
+        }
+    }
 }
 
 impl PimpleSolver {
+    /// Choose the time scheme of the moving-mesh step (F-345, ADR 0379 D1). `TimeScheme::Bdf2` sets `settings.time_scheme`
+    /// and opts in to the three-level moving step of `step_ale` / `step_ale_with_walls`: the mesh flux
+    /// `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps (the geometric conservation law of BDF2), the
+    /// old and the old-old volume in the transient term and the three-level Rhie-Chow defect. A moving step without the
+    /// history of the moving step just before it (the first one, the first after a step at rest, a `restore` or a
+    /// `reinitialise`) is the implicit Euler moving step. `TimeScheme::ImplicitEuler` sets the scheme and returns to the
+    /// solver that did not opt in (the history is dropped). Refused, leaving the solver unchanged: every other scheme.
+    /// `step_sliding` and `replace_mesh` keep refusing BDF2. Pair it with `ale::set_follow_conditions_bdf2`.
+    pub fn set_moving_mesh_time_scheme(&mut self, scheme: TimeScheme) -> Result<(), String> {
+        match scheme {
+            TimeScheme::Bdf2 => self.ale_bdf2_opt_in = true,
+            TimeScheme::ImplicitEuler => {
+                self.ale_bdf2_opt_in = false;
+                self.ale_bdf2 = None;
+            }
+            _ => return Err("a moving mesh supports the implicit Euler or the BDF2 time scheme only".into()),
+        }
+        self.settings.time_scheme = scheme;
+        Ok(())
+    }
+
     /// Advance one Euler step of size `dt` on the moved mesh described by `new_geom`, with the mesh flux `mesh_flux`
     /// (`W_f/dt`, face count of the mesh). The topology of `new_geom` must equal that of the current geometry.
     /// Fails (leaving the solver unchanged) for time schemes other than `ImplicitEuler` and for a size mismatch.
@@ -99,7 +162,9 @@ impl PimpleSolver {
         mut mesh_flux: Vec<f64>,
         wall_dpdn: Vec<f64>,
     ) -> Result<StepInfo, String> {
-        if self.settings.time_scheme != TimeScheme::ImplicitEuler {
+        // ADR 0379 D1: BDF2 only with the opt-in
+        let bdf2_on = self.ale_bdf2_opt_in && self.settings.time_scheme == TimeScheme::Bdf2;
+        if self.settings.time_scheme != TimeScheme::ImplicitEuler && !bdf2_on {
             return Err("a moving mesh supports the implicit Euler time scheme only".into());
         }
         if self.immersed.is_some() {
@@ -122,10 +187,15 @@ impl PimpleSolver {
         let vol_old = old.mesh.cell_volumes().to_vec();
         let vol_new = new_geom.mesh.cell_volumes();
         let n_int = old.n_internal;
-        let defect = if self.settings.ddt_correction {
+        // ADR 0379 D3: the raw defect of this step, kept for the next one (BDF2 only)
+        let mut raw_defect: Vec<f64> = Vec::new();
+        let mut defect = if self.settings.ddt_correction {
             let zero_b = vec![[0.0; 3]; old.mesh.n_boundary_faces()];
             let uold: Vec<Vec3> = self.u.values.clone();
             let fo = face_flux(&old, &uold, &zero_b);
+            if bdf2_on {
+                raw_defect = (0..n_int).map(|f| self.phi[f] - fo[f]).collect();
+            }
             let (own, nei) = (new_geom.mesh.owner(), new_geom.mesh.neighbour());
             (0..n_int)
                 .map(|f| {
@@ -138,15 +208,68 @@ impl PimpleSolver {
         } else {
             vec![0.0; n_int]
         };
+        if !bdf2_on {
+            self.ale_bdf2 = None;
+            self.geom = new_geom;
+            self.ale = Some(AleStep {
+                mesh_flux,
+                vol_old,
+                defect,
+                wall_dpdn,
+                vol_older: None,
+            });
+            let info = self.step(dt);
+            self.ale = None;
+            return Ok(info);
+        }
+        // ADR 0379 D2, D3, D5: the three-level data, when the step just before was a moving step with the opt-in
+        let hist = self.ale_bdf2.take().filter(|h| {
+            h.step_no == self.step_no && h.vol.len() == vol_old.len() && h.mesh_flux.len() == mesh_flux.len()
+        });
+        let step_flux = mesh_flux.clone();
+        let mut vol_older = None;
+        if let Some(h) = hist {
+            let r = dt / h.dt;
+            let (c0, c1, c2) = ((1.0 + 2.0 * r) / (1.0 + r), 1.0 + r, r * r / (1.0 + r));
+            for (m1, m0) in mesh_flux.iter_mut().zip(&h.mesh_flux) {
+                *m1 = c0 * *m1 - c2 / r * m0;
+            }
+            if self.settings.ddt_correction && h.defect.len() == n_int {
+                let (own, nei) = (new_geom.mesh.owner(), new_geom.mesh.neighbour());
+                for f in 0..n_int {
+                    let (o, nn) = (own[f], nei[f]);
+                    let w = new_geom.weights[f];
+                    let r00 = w * h.vol[o] / vol_new[o] + (1.0 - w) * h.vol[nn] / vol_new[nn];
+                    let mut d = c1 * defect[f];
+                    d -= c2 * (r00 * h.defect[f]);
+                    defect[f] = d;
+                }
+            }
+            vol_older = Some(h.vol);
+        }
+        let three_level = vol_older.is_some();
         self.geom = new_geom;
         self.ale = Some(AleStep {
             mesh_flux,
             vol_old,
             defect,
             wall_dpdn,
+            vol_older,
         });
+        // without a history the step is the implicit Euler moving step (ADR 0379 D5)
+        if !three_level {
+            self.settings.time_scheme = TimeScheme::ImplicitEuler;
+        }
         let info = self.step(dt);
-        self.ale = None;
+        self.settings.time_scheme = TimeScheme::Bdf2;
+        let a = self.ale.take().expect("the moving-mesh data of this step");
+        self.ale_bdf2 = Some(AleHistory {
+            vol: a.vol_old,
+            mesh_flux: step_flux,
+            defect: raw_defect,
+            dt,
+            step_no: self.step_no,
+        });
         Ok(info)
     }
 
@@ -237,6 +360,7 @@ impl PimpleSolver {
             vol_old,
             defect,
             wall_dpdn,
+            vol_older: None,
         });
         // ADR 0352 D2: the step-consistent face coefficient is not defined across a sliding interface; this step keeps the
         // default one
