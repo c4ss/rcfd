@@ -112,3 +112,64 @@ entries and energy histories of 4 entries in both solves. The limits are not cha
 bit for bit, the residual and energy histories equal in length and bit for bit"); only the clause on the step number is stated
 correctly: the one-step records have `step == 1` and the two-step record number `k` has `step == k`. The old test stays as an
 ignored record; the corrected test is `r1_to_r4_n1_n2_corrected`, run once. Its R1 to R4, N1, N2 are the registered ones.
+
+## Addendum 1: results (2026-11-13)
+
+Code commit: the test file `crates/rcfd-fem/tests/si_nonlinear_rollback.rs` (test code only; no library line, `si_nonlinear.rs`,
+hash table or golden file changed). Release profile, `CARGO_BUILD_JOBS=4`.
+
+### Checks
+
+First registered run (`r1_to_r4_n1_n2_rollback_of_a_failed_attempt`, now an ignored record): R1, R2, R4, N1, N2 met, R3 missed by
+the defect of the test described in amendment 1. The corrected test `r1_to_r4_n1_n2_corrected` was run once for the table.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R1 displacement entries differing in bits | `== 0` | 0 | yes |
+| R2 reaction entries differing in bits | `== 0` | 0 | yes |
+| R3 records | 2 records, `halvings == 1`, load factors and residual and energy histories bit-equal | 2 and 2 records, halvings `[1, 1]`, load factors 0.5 and 1, residual histories 5 entries, energy histories 4 entries, all bit-equal | yes (first run: no, defect of the test) |
+| R4 iterations, states | equal | 8 and 8, states equal | yes |
+| N1 no halving | `Err(Solver "newton")`, "load step 1 of 1", "0 halvings" | as stated (`r` 1.47e-9 after 4 iterations, energy ratio 7.26e-9) | as expected |
+| N2 20 iterations | 1 record against 2, `halvings == 0` | 1 against 2 | as expected |
+| S1 existing tests | `si_nonlinear`: all pass | 7 passed, 0 failed, 1 ignored (as in ADR 0404); `si_nonlinear_rollback`: 1 passed, 1 ignored | yes |
+
+Time: 0.01 s per test in release.
+
+### Mutations (copy `f497-scratch/copy` from `git archive` of the code commit, own target directory, script `mutate.py`, log `mutations.log`)
+
+| Id | Result in `r1_to_r4_n1_n2_corrected` | Result in ADR 0404 `a7_c3` |
+| --- | --- | --- |
+| M7 (iterate of a failed attempt carried into the next attempt) | caught: R1 19 displacement entries differ, R2 16 reaction entries differ, R3 (the residual histories differ in value) | not caught: C3 deviation 2.8e-16, printed bit-equal false (as in ADR 0404) |
+| M7b (iterate of a failed attempt committed in the `Err` arm, `lambda` kept) | caught: R1 19, R2 16, R3 | not caught: C3 2.8e-16, bit-equal false |
+| M4 (no halving) | caught: the solve returns the error, the test fails at the unwrap (R1 to R4 not reached) | caught: A7 non-convergence ("after 0 halvings" instead of 5) |
+
+M7 is caught by the new check: clause f2 met.
+
+### Deviations
+
+- The first run missed R3 by a defect of the test (amendment 1); no limit changed; the old test is an ignored record.
+- `cargo fmt` reformatted the test file after the mutation runs (layout only, no logic change); the check was re-run: 1 passed.
+
+### What was not run
+
+Anything beyond the registered scope (see "Limits"): materials with history, other element kinds, roll-back after inversion or
+pivot refusal. The whole-workspace tests and `baseline_hashes` were not run (no shared solver file changed).
+
+### Decision by the registered rule
+
+**done**: R1 to R4, N1, N2, S1 met, and M7, M7b, M4 each caught by at least one check. The decision is formal: the first run of R3
+missed through a defect of the test, which the rule of the house treats as an amendment, not a miss of the driver.
+
+### Remaining questions
+
+1. A material with history (plasticity) will make the roll-back observable in the result and not only in the bits. Options: (a)
+   register a roll-back check with it when the first such material exists; (b) nothing now. Recommendation: (a), with that item.
+2. Roll-back after an inversion failure and after a refused pivot (the same `Err` arm) is not compared bit for bit. Options: (a)
+   a follow-up check with a bar that inverts once and recovers after a halving; (b) none, the arm is one code path. Recommendation:
+   (b); the `Err` arm does not distinguish the cause.
+
+## For the lead: roadmap entries
+
+Proposed status for F-497: done.
+
+> Nonlinear driver roll-back as a registered check. ADR 0406, 2026-11-13: new test file si_nonlinear_rollback.rs (test code only); the one-step solve of the load-controlled Hex8 bar of ADR 0404 with four iterations allowed (one halving) equals the two-step solve bit for bit (displacements, reactions, load factors, residual and energy histories, iteration count, states: 0 differing entries); ADR 0404 mutation M7 (a failed attempt not rolled back), and a second variant, are caught (19 displacement and 16 reaction entries differ), where C3 of ADR 0404 stays below its limit at 2.8e-16; the existing checks of ADR 0404 keep their values. Limits: one material without history, Hex8, one halving.

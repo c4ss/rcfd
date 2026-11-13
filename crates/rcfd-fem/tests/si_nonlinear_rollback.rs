@@ -32,7 +32,13 @@ fn same_bits(a: &[f64], b: &[f64]) -> bool {
 }
 
 fn run(model: &SolidModel, steps: usize, max_iterations: usize) -> NonlinearResult {
-    solve(model, &[], &[], &NewtonOptions::new(steps).max_iterations(max_iterations)).unwrap()
+    solve(
+        model,
+        &[],
+        &[],
+        &NewtonOptions::new(steps).max_iterations(max_iterations),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -50,11 +56,19 @@ fn r1_to_r4_n1_n2_rollback_of_a_failed_attempt() {
     };
 
     let d = differing(one.result.displacement_values(), two.result.displacement_values());
-    check("R1 displacement entries differing in bits", d == 0, format!("{d} (limit == 0)"));
+    check(
+        "R1 displacement entries differing in bits",
+        d == 0,
+        format!("{d} (limit == 0)"),
+    );
 
     let (ra, rb) = (one.result.reactions().unwrap(), two.result.reactions().unwrap());
     let d = differing(ra, rb);
-    check("R2 reaction entries differing in bits", d == 0, format!("{d} (limit == 0)"));
+    check(
+        "R2 reaction entries differing in bits",
+        d == 0,
+        format!("{d} (limit == 0)"),
+    );
 
     let mut ok = one.steps.len() == 2 && two.steps.len() == 2;
     let mut detail = format!(
@@ -82,9 +96,16 @@ fn r1_to_r4_n1_n2_rollback_of_a_failed_attempt() {
             ok &= rec;
         }
     }
-    check("R3 records (halvings, load factors, residual and energy histories)", ok, detail);
+    check(
+        "R3 records (halvings, load factors, residual and energy histories)",
+        ok,
+        detail,
+    );
 
-    let (ia, ib) = (one.result.stats().unwrap().iterations(), two.result.stats().unwrap().iterations());
+    let (ia, ib) = (
+        one.result.stats().unwrap().iterations(),
+        two.result.stats().unwrap().iterations(),
+    );
     check(
         "R4 iterations and states",
         ia == ib && one.states == two.states,
@@ -125,11 +146,19 @@ fn r1_to_r4_n1_n2_corrected() {
     };
 
     let d = differing(one.result.displacement_values(), two.result.displacement_values());
-    check("R1 displacement entries differing in bits", d == 0, format!("{d} (limit == 0)"));
+    check(
+        "R1 displacement entries differing in bits",
+        d == 0,
+        format!("{d} (limit == 0)"),
+    );
 
     let (ra, rb) = (one.result.reactions().unwrap(), two.result.reactions().unwrap());
     let d = differing(ra, rb);
-    check("R2 reaction entries differing in bits", d == 0, format!("{d} (limit == 0)"));
+    check(
+        "R2 reaction entries differing in bits",
+        d == 0,
+        format!("{d} (limit == 0)"),
+    );
 
     let mut ok = one.steps.len() == 2 && two.steps.len() == 2;
     let mut detail = format!(
@@ -157,9 +186,16 @@ fn r1_to_r4_n1_n2_corrected() {
             ok &= rec;
         }
     }
-    check("R3 records (halvings, load factors, residual and energy histories)", ok, detail);
+    check(
+        "R3 records (halvings, load factors, residual and energy histories)",
+        ok,
+        detail,
+    );
 
-    let (ia, ib) = (one.result.stats().unwrap().iterations(), two.result.stats().unwrap().iterations());
+    let (ia, ib) = (
+        one.result.stats().unwrap().iterations(),
+        two.result.stats().unwrap().iterations(),
+    );
     check(
         "R4 iterations and states",
         ia == ib && one.states == two.states,
