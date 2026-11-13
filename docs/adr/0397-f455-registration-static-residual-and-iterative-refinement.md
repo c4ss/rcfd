@@ -291,3 +291,16 @@ the maintainer decides.
 2. The option as a step count on `StaticOptions` (`refinement`), refused outside the direct solve and the plain path.
 3. Clause a5 checked as stated (limit 1e-14 intact) and registered as an expected miss with the derived floors; the attainable
    companions C2 and C3 registered beside it.
+
+## Amendment 1 (2026-11-13, the reference digest of A7 (a), recorded before any library line of F-455)
+
+`crates/rcfd-fem/tests/si_static_refinement_defaults.rs` (old API only) was written and run once on the tree of main e9f76a1e
+plus the registration (no library line of F-455 existed): `cargo test -p rcfd-fem --release --test
+si_static_refinement_defaults -- --nocapture --test-threads=1`, log `w49i-work/f455-scratch/run-a7-main.log`. Reference digest
+**`b9d9056b0c5a7aff`**, now the constant `MAIN_DIGEST` of that file; on the branch A7 (a) asserts equality with it.
+
+Disclosed: the run prints the default `rho_w` of each case, which is record A1 (no limit) and enters C1 and C5 (with `phi_w`,
+not yet computed). Printed: Tet4 6.506e-13, 5.745e-12, 7.978e-11, 7.940e-10; Hex8 5.930e-13, 5.784e-12, 8.965e-11, 1.048e-9;
+Tet10 5.965e-12, 6.746e-11, 6.966e-10, 8.005e-9 (`s = 5, 10, 20, 40`). Tet10 `s = 10` reproduces ADR 0277's 6.7e-11 (part of
+C5). Every value is above 1e-14 by a factor 65 or more, as arithmetic 1 predicted for `rho_w` of any solution. No limit and no
+parameter is changed by this; the checks run as registered.
