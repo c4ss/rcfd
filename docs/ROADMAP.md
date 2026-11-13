@@ -7691,7 +7691,7 @@ fixed by the item's registration ADR before any code.
     (the knife-edge factors against the derived closed form), F-493 (transformation path). The A9 clause is settled by
     F-492 (ADR 0394): the solid's factors match the derived closed form within 1.7e-4, and at L/h = 40 the second factor
     is four times the first within 0.52 percent.
-- [ ] **F-396** Modes of a rotating part: stress stiffening by the centrifugal pre-stress, spin softening, Campbell diagram
+- [~] **F-396** Modes of a rotating part: stress stiffening by the centrifugal pre-stress, spin softening, Campbell diagram
   - depends on: F-395, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed the result has the
     bits of the modal analysis of F-383. Radial bar clamped on the axis, nu = 0, axial modes: (omega_n,0^2 -
@@ -7704,8 +7704,20 @@ fixed by the item's registration ADR before any code.
     equal omega_0/sqrt(k^2 - S) within 1e-8, and on the beam within 1 percent; a flap and a lag mode of a rectangular
     section that cross are tracked without exchange (modal assurance above 0.9). A speed at which K_eff is not positive
     definite is reported as a loss of stiffness with the speed, never as a non-finite frequency.
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0299; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, intermediate tier (plan ADR 0290). ADR 0403, 2026-11-13: rotating.rs gives the modes of a
+    part spinning about an axis in the rotating frame, K + Omega^2 (K_sigma,1 - M_perp) with the centrifugal pre-stress
+    of one static solve at 1 rad/s and the spin-softening mass m_ab (delta_ij - a_i a_j), on the elimination and the
+    transformation path; speed 0 gives the bits of the modal analysis; a speed at which K_eff is not positive definite
+    is reported as a loss of stiffness with the speed and the negative count (Sylvester inertia), never as a frequency;
+    modes over speeds tracked by the mass-weighted modal assurance, engine-order crossings linear in Omega^2 (exact for
+    omega^2 = omega_0^2 + S Omega^2, 2e-16), the Campbell table as CSV and JSON. Radial bar: spin softening 1 within
+    1.9e-9, the full operator 1 - Q_n,h within 3.1e-5; square beam: stiffening 1.1907 at 0.2 omega_0 (2.2e-3 from
+    1.1933), between 1 and the rest quotient up to 5 omega_0, crossings within 8.7e-6 of direct solves; flap and lag of
+    a rectangular section tracked through their crossing (MAC 0.99999). Partial: the flap-lag identity misses 1e-4 at
+    1.9e-3 (known miss, predicted in the registration): on a solid it is 1 - 2 f_x (met to 1.1e-8), f_x the axial
+    kinetic share of the bending mode. Coriolis neglected. Follow-ups: the flap-lag clause restated for a solid,
+    Coriolis coupling, rotating modes of a sector at a harmonic index. Follow-ups F-498 (flap-lag restated for a solid),
+    F-499 (Coriolis), F-500 (cyclic sector at a harmonic index).
 - [~] **F-397** Geometric nonlinearity: total Lagrangian solid elements, Newton iteration with load steps
   - depends on: F-395, F-374, F-375
   - acceptance: Every limit not stated here is registered in the ADR before the run. The tangent agrees with central
@@ -9493,3 +9505,28 @@ fixed by the item's registration ADR before any code.
     mutation of ADR 0404 M7 (a failed attempt not rolled back) is caught by that check; every check of ADR 0404 keeps
     its value.
   - note: From ADR 0404 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-498** Flap-lag identity of a rotating solid beam: the acceptance restated
+  - depends on: F-396
+  - acceptance: Every limit not stated here is registered in the ADR before the run. On the square radial beam of F-396
+    (Hex20, slenderness 20, nu = 0) at Omega = 0.2 omega_0: (omega_flap^2 - omega_lag^2)/Omega^2 = 1 - 2 f_x within
+    1e-4, f_x the axial share of the flap mode's kinetic energy, and = 1 within 3 f_x; the radial bar's clause reads:
+    with the stress stiffening off (omega_n,0^2 - omega_n^2)/Omega^2 = 1 within 1e-3, with it the slope equals Q_n,h - 1
+    within 1e-3 and Q_n,h equals k_n^2 L^2/3 + 1/4 within 1 percent. No new code is needed if the checks of ADR 0403 are
+    accepted as these.
+  - note: From ADR 0403 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-499** Coriolis coupling of a rotating part: gyroscopic matrix, whirl modes and the Campbell table
+  - depends on: F-396
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The gyroscopic matrix G = 2 Omega
+    int rho N_a N_b [a x] is skew to rounding; the quadratic eigenproblem (K_eff - omega^2 M + i omega G) phi = 0 is
+    solved by a symmetric linearisation; at Omega = 0 the frequencies are those of F-396; a point mass on an isotropic
+    in-plane spring pair gives the closed-form whirl frequencies within 1e-8; the tracked forward and backward branches
+    enter the Campbell table of F-396 with their direction.
+  - note: From ADR 0403 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-500** Rotating modes of a cyclic sector at a harmonic index
+  - depends on: F-396, F-394
+  - acceptance: Every limit not stated here is registered in the ADR before the run. K_eff(Omega) of F-396 on the cyclic
+    harmonic pair of ADR 0386/0395 with the pre-stress of the index-0 sector: at each harmonic index h and speed the
+    frequencies of the sector equal those of the full rotor mesh for that nodal-diameter family within 1e-8 relative; at
+    Omega = 0 the bits of the cyclic modes of F-394; a loss of stiffness is reported per index and speed; the Campbell
+    table holds one family of tracks per index, with the crossings with the engine orders.
+  - note: From ADR 0403 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
