@@ -292,3 +292,169 @@ between L3 (runs at 2.5e-4) and R0 (stops at 1e-3).
 
 G1 and G2 enter the addendum as a located description only: the decision is already **partial** by Rule I (L1 (b), L1n and
 L1' missed), whatever they give.
+
+## Addendum 1: results (2026-11-12)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows, the machine shared with other
+building agents. Commits: the registration 20b17b89; the fingerprint test 73211af7 (before any library code); amendment 1
+e45cf5f8 (before any library code and any run of L1); the library and the tests b4807bd4 (before their run); amendment 2 and
+the record G1/G2 14ed4211 (before its run); the known-miss records ac037824 (not run: they repeat registered runs). The library
+was not changed after b4807bd4. Every registered run was made once: the fast checks once (`f363-scratch/fast_checks.log`), the
+records once each (`rec_r0_l1_l2.log`, `rec_l3.log`, `rec_g1_g2.log`); N0 was also run twice on the unchanged tree to measure
+the fingerprints (disclosed in amendment 1).
+
+**Built.** `crates/rcfd-fv/src/immersed.rs`: the constant `SINGLE_CORRECTOR_WEIGHT_LIMIT` (lines 320 to 322) and the method
+`ImmersedForcing::single_corrector_face` (lines 650 to 668), added; nothing else of the file changed.
+`crates/rcfd-fv/src/pimple.rs`, ten hunks, each an addition or an added argument: lines 843 to 850 (the branch of
+`Divergence::message` for the quantity `immersed flux corrector`), 1123 to 1127 (the field `PimpleSolver::immersed_lag`), 1203
+and 1235 (its initialisers in `new` and `scratch`), 1792 to 1806 (the refusal, after the corrector count of the outer iteration
+and before its correctors), 2157 to 2164 (the argument `hom` of `lag_map`), 2245 to 2246 (the reconstruction in `lag_map`),
+2258 to 2265 (`solve_pressure_src` when the reconstruction returned a source, else the unchanged `solve_pressure`), 2306 to
+2317 (the homogeneous copy in `lag_amplification_n`) and 2361 (the call). `simple.rs`, `sim.rs`, the schema and the API are not
+touched. New test file `crates/rcfd-fv/tests/immersed_single_corrector_f363.rs`. No case-schema key, golden, hash table or
+existing test file was touched.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| N0 FP1 F one corrector, FP2 B two correctors, FP3 the two lag estimates, FP4 Sa one corrector | bit-equal to the unchanged tree | `dd07702a17b9a36f`, `e4d227de316e6de4`, (`3ff4a94abc88ca99`, 11855) and (`3fb06aeaae8972f1`, 11855), `279c4c4ed4cf89be`: equal | yes |
+| R0 F, Sa | run | run, `max abs(u)` 2.210, 2.209 | yes |
+| R0 Sb, B1, B | stop at 126, 46, 34 by the Courant guard | 126 (5.94e6), 46 (4.20e6), 34 (2.42e7) | yes |
+| L1 (a) `max rho_1 > 1` for Sb, B1, B | `> 1` | 1.1838, 1.1851, 1.1828 (step 2) | yes (but see (b)) |
+| L1 (b) `rho_1 < 1` for F, Sa at steps 2 and 11 | `< 1` | F 1.1986, 0.9983; Sa 1.1343, 1.0100 | **no** (known miss) |
+| L1 (c) `rho_2 < 1` for all five, both instants | `< 1` | 0.0435 to 0.0994 | yes |
+| L1n B without the reconstruction, both instants | `< 1` | 1.1908, 1.0002 | **no** (known miss) |
+| L1' (a) `max q >= 1.05` for Sb, B1, B (amendment 1) | `>= 1.05` | 0.9932, 0.9976, 1.0047 | **no** (known miss) |
+| L1' (b) `q <= 1.01` for Sa | `<= 1.01` | 0.9891, 0.9858 | yes |
+| L1' (c) `q = 1` exactly for F | bit-equal | equal at both instants | yes |
+| L2 the mode cell of `rho_1` of B at step 2 | within 0.0075 of the surface | cell 12031 at (0.22875, 0.24125), a fluid cell 0.00053 from the surface with two image faces (weights 3.65, 2.53) | yes |
+| L3 B one corrector at `dt = 2.5e-4`; control F; `rho_1` of B at step 2 | runs; runs; `< 1` | runs (`max abs(u)` 2.394); runs (2.389); 0.3446 | yes |
+| G1 one corrector: first `v_n > 3` no later than first `a_n > 3` (amendment 2) | `v` first | `v` at step 19, `a` at step 9 | **no** (known miss) |
+| G1 two correctors: `v_n <= 3`, 34 steps | `<= 3` | 0.211 to 0.866, no stop | yes |
+| RF1 B one corrector, check on | step 1, stage, quantity, value `> 1`, a reversed face's fluid cell, message | step 1, `pressure correctors`, `immersed flux corrector`, cell 9888 at (0.15125, 0.21125), value 38.987, message names ADR 0374 and `n_correctors` | yes |
+| RF1 Sb one corrector, check on | as above | step 1, cell 12543 at (0.18875, 0.24875), value 2.000 | yes |
+| RF2 B two correctors (5 steps), Sa one corrector (5), F one corrector (5), B with `pimple(nu, 2)` (1) | none stops | none stops | yes |
+| U1 `single_corrector_face` on CC N 24 | as registered | `build` and Sa `None`; bounded the largest weight and its fluid cell; check off `None` | yes |
+| U2 lag estimate on CC N 24 | `build`: bit-equal with and without; second order: different | `build` 0.784400, cell 475 both; `build_second_order` 0.851139 (with) against 0.784400 (without) | yes |
+| N1 the seven existing immersed files, `rcfd-fv --lib`, `baseline_hashes` | every test passes | f219 11 passed (2 ignored), f309 9 (1), f337 5 (2), f346 9 (5), f354 6 (12), f466 7 (4), f355 15 (2); `rcfd-fv --lib` 104 passed (6 ignored); `baseline_hashes` 3 passed (1 ignored); `f363-scratch/n1_summary.log` | yes |
+
+Printed, no limit. Growth of the largest `abs(u)` over the last three completed steps before the stop: Sb 8.59, B1 7.42, B
+11.74 per step. G2: B with one corrector at `dt = 5e-4` runs 200 steps (`max abs(u)` 2.264, `rho_1` at step 2 0.6459). The
+mode of the plain map of F at step 2 with 40 iterations: cell 11681 at (0.23375, 0.23625), a solid cell 0.00022 inside the
+surface; the largest mode entry over the fluid cells against that over the solid cells could not be printed (the public
+`LagWarning` holds only the cell; a deviation from amendment 1). `rho_2` at `dt = 2.5e-4`: 0.0115 (B), 0.0104 (F).
+
+### What the measurements say about the stop
+
+- **The pressure-lag map does not separate the settings.** With one corrector its estimate is 1.13 to 1.20 at step 2 and
+  0.998 to 1.010 at step 11 for all five forcings, with or without the reconstruction, the two that run included; with two
+  correctors it is below 0.1 for all. Its dominant mode lies at the body for every forcing, for the first-order forcing in a
+  solid cell just inside the surface (cell 11855 in N0, 0.0015 inside, not 0.0017 as amendment 1 says; cell 11681 with 40
+  iterations). The reconstruction changes the estimate by less than 1.5 percent (`q` 0.986 to 1.005). HL as registered, that
+  the stop is the instability of the lag map, is **not supported**: the map carries a mode at the body above one that the
+  settings which run also have, and the growth before the stops (7 to 12 per step) is far above any `rho_1`.
+- **The stop depends on the time step.** The bounded form with one corrector runs 200 steps at `dt = 2.5e-4` (L3) and at
+  `5e-4` (G2) and stops at `1e-3` (R0), while the large-weight stop of F-355 stops at every step from 5e-4 to 8e-3 (ADR 0254
+  H7). So it is not the mechanism of F-355, and a smaller step is a remedy. The lag estimate falls with the step (0.65 at
+  `5e-4`, 0.34 at `2.5e-4`), as an off-diagonal share does.
+- **It grows at the body, first in the cells, then on the faces.** With one corrector the largest velocity sits within 0.003
+  of the surface (the first fluid cells) at most of steps 1 to 25, grows from 2.6 at step 10 to 15 at step 25 and then by
+  3 to 18 per step; the largest flux-face velocity passes 3 ten steps later than the largest cell velocity (G1, a known miss of
+  its registered order). Read from the printed series (not a registered measurement): both alternate from step to step (from
+  step 13 on the face velocity grows by about 1.4 to 2.0 on one step and falls to about 0.7 of it on the next), a period-two
+  oscillation in time at the first fluid cells, the signature of a feedback with a negative gain of magnitude above one; with
+  two correctors the same quantities decay without alternating (0.87 to 0.21).
+
+The mechanism is therefore narrowed (the body, the corrector count, the time step, a period-two oscillation) but **not
+explained by a registered measurement in the registered form**.
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of b4807bd4 (`f363-scratch/mut`) by `f363-scratch/mutate.py` (an exact text
+replacement checked to occur once), the named test run once in release, the file restored and compared byte for byte with the
+kept copy (equal after each; `mut_summary.log`, `mut_M*.log`). The unmutated copy passed first.
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | the refusal never fires | RF1 | failed: "RF1: B with one corrector is not refused" |
+| M2 | the refusal fires with any corrector count | RF2 and FP2 | RF2 failed (B with two correctors refused at step 1, value 38.987); N0 failed (FP2 refused at step 1) |
+| M3 | the refusal limit 1 made 2 | RF1 | failed: "RF1: Sb with one corrector is not refused" |
+| M4 | the lag map without the reconstruction | U2 | failed: the estimate unchanged |
+| M5 | `single_corrector_face` ignores `flux_weight_check` | U1 | failed: `Some((461, 5.033))` with the check off |
+| M6 | the refusal reports the solid cell | RF1 | failed: cell 9889 is not the fluid cell of a reversed face |
+
+### Tools and the defaults
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean (also with `--release`).
+The defaults: without an immersed forcing, with `build`, with two or more correctors, with `flux_weight_check = false` and with
+`immersed_lag = false` every operation is the previous one (N0, U2 with `build`, N1 with `baseline_hashes`). What changes, by
+design: the bounded form, and `build_second_order` with a weight above 1, with one corrector, one outer iteration and the check
+on, are now refused at step 1. Two existing tests, not edited, are touched by that: D11 (c) of `immersed_piso_stop_f355.rs`
+(bounded, `theta_min = 0.1`, one corrector, the check on) now prints a refusal at step 1 instead of the stop at step 46 (it
+asserts nothing; the number 46 is reproduced here by R0 with the check off), and the ignored record
+`sb_bounded_with_one_corrector_known_miss` would now stop at step 1 by the refusal (still a miss of its limit). The diagnosis
+runs of ADR 0254 switch the check off and are not refused.
+
+### Deviations and disclosures
+
+- N0 showed, before the library and before L1, the lag estimate 1.2913 for the first-order forcing; amendment 1 said so and
+  registered L1' before L1 was run. L1 (b) and L1n missed as amendment 1 expected; L1' (a) missed as well.
+- G1 was registered (amendment 2) after the records R0 to L3 had been run; its order test missed. Its threshold 3 for the
+  cell velocity lies close to the start value (`a_1` = 2.89), which I did not check before registering.
+- Amendment 1 places cell 11855 "0.0017 below the surface"; the record prints 0.00149.
+- Not run: the workspace suite and the gate; the meshes M1 and M3, T, three dimensions; PIMPLE with outer iterations and one
+  corrector beyond one step (RF2); the consistent correctors and the adaptive count with flux faces; Crank-Nicolson. The
+  known-miss records added in ac037824 were not run (they repeat registered runs).
+
+### Decision by the registered rule
+
+N0, R0, L1 (a) and (c), L1' (b) and (c), L2, L3, RF1, RF2, U1, U2 and N1 are met and the six mutations were caught by their
+named checks; L1 (b), L1n, L1' (a) and G1 missed (known misses, limits intact). **F-363 is partial by the rule** (Rule I:
+missed registered checks). In terms of the acceptance: the setting is refused with a located message (met); two correctors are
+unaffected (met); the stop is narrowed but not explained by a registered measurement (not met).
+
+### Remaining questions
+
+- **Q1. The form of the refusal** (registration Q1). Options: (a) static, from the face weights (built); (b) a run-time test;
+  (c) also name a smaller step in the message. The measurement shows that `dt = 5e-4` runs, so the refusal also refuses
+  settings that run. Recommendation: (a) now, (c) once a registered measurement gives a bound for the step.
+- **Q2. PIMPLE with outer iterations and one corrector** (registration Q2): not refused, not measured. Recommendation: leave it
+  until a case uses it.
+- **Q3. The mechanism.** Options: (a) a follow-up that measures the period-two mode directly (a finite-difference
+  linearisation of the whole step, velocity and pressure, about an early state, with one and two correctors and at
+  `dt = 1e-3` and `5e-4`); (b) leave the narrowed description. Recommendation: (a), low priority (the supported path, two
+  correctors, is unaffected).
+- **Q4. The lag estimate at an immersed body.** The ADR 0073 estimate gives 1.13 to 1.30 with one corrector at the body for
+  the first-order forcing on 2D-2 at `dt = 1e-3`, a setting that runs, so `pressure_lag_check` would warn on it and with
+  `LagAction::Stop` stop it. Options: (a) a follow-up that measures that mode (the solid cells, the pressure solve started from
+  the error and stopped at a relative tolerance) and, if it is not a fluid mode, leaves the solid cells out of the estimate
+  when a forcing is set (an opt-in estimate changes; defaults do not); (b) document it. Recommendation: (a).
+
+### For the lead: roadmap entries
+
+**F-363: proposed status `partial`.** Proposed note (replacing the present one):
+
+> PARTIAL (ADR 0374, 2026-11-12), in the library. From ADR 0254 question 3. The stop of DFG 2D-2 on M2 with one PISO corrector was reproduced to the step (weights up to 2: step 126; bounded form with theta_min 0.1: 46; bounded: 34; the first-order forcing and weights of at most 1 run) and narrowed by registered measurements: it depends on the time step (the bounded form with one corrector runs 200 steps at dt 5e-4 and 2.5e-4, unlike the large-weight stop of F-355), it grows at the first fluid cells of the body, alternating from step to step, and two correctors damp it (largest flux-face velocity 0.87 to 0.21 over 34 steps). The hypothesis that it is the pressure-lag instability of the single corrector (the reversed flux face returning the lagged pressure gradient reversed) was tested with an opt-in pressure-lag map that includes the face-flux reconstruction (PimpleSolver::immersed_lag) and is not supported: with one corrector the map gives 1.13 to 1.20 at step 2 for all five forcings, the two that run included, with or without the reconstruction (a mode at the body, for the first-order forcing in a solid cell), and below 0.1 with two correctors. Delivered: the setting is refused at step 1 with a located message (ImmersedForcing::single_corrector_face; quantity immersed flux corrector; the fluid cell and the weight of the reversed face; names ADR 0374 and n_correctors >= 2) wherever a flux face has an image or a weight above 1, with one corrector and one outer iteration, unless flux_weight_check is off; two correctors, the first-order forcing, weights of at most 1 and PIMPLE are not refused, and the defaults are bit-identical (fingerprints of three runs and two estimates, the immersed tests, baseline_hashes). Six mutations caught. Partial by the registered rule: four known misses (the lag map of the settings that run below one; the map without the reconstruction below one; the raise of the map by the reconstruction; the faces leading the growth). Open (ADR 0374 Q1 to Q4): the form of the refusal (a smaller step also runs), PIMPLE with one corrector, the mechanism (a linearisation of the whole step), the lag estimate at an immersed body (above one for a setting that runs).
+
+**F-355: proposed addition at the end of its note:**
+
+> ADR 0374 (2026-11-12, F-363): with one PISO corrector a flux face with an image or a weight above 1 is refused at step 1 with a located message; the stop of the bounded form with one corrector (step 34) depends on the time step (it runs at dt 5e-4 and 2.5e-4) and is not explained by the pressure-lag map.
+
+**Proposed follow-ups** (numbers to be given by the lead).
+
+1. *Second-order immersed forcing: the single-corrector mode by a linearisation of the whole step.* Deps: F-363. Acceptance:
+
+> The period-two growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector (ADR 0374: stop at step 34 at dt 1e-3, runs at 5e-4 and 2.5e-4) is measured by a registered finite-difference linearisation of the whole step (velocity and pressure) about the state of an early step, whose dominant eigenvalue is real and below -1 at dt 1e-3 and of magnitude below 1 at dt 5e-4 and with two correctors, with its mode at the first fluid cells; or the part of the step that carries the growth is identified by a registered measurement.
+
+Note:
+
+> From ADR 0374 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0374 narrowed the stop (the time step, the body, a period-two oscillation, two correctors damp it); the frozen pressure-lag map did not separate the settings.
+
+2. *Pressure-lag estimate at an immersed body.* Deps: F-363. Acceptance:
+
+> The pressure-lag estimate of ADR 0073 for DFG 2D-2 on M2 with the first-order immersed forcing and one corrector at dt 1e-3 (ADR 0374: 1.13 to 1.30 for a run that runs, the mode in a solid cell at the surface) is explained by a registered measurement (the solid cells, the start and the tolerance of the pressure solve), and either the estimate leaves out what is not a fluid mode, opt-in or with the defaults bit-identical, so that it is below one for that run and above one for a setting that stops, or the limitation is documented with its numbers.
+
+Note:
+
+> From ADR 0374 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
