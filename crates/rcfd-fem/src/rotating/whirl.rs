@@ -1011,13 +1011,47 @@ impl<'a> RotatingSector<'a> {
             multiplicities.push(if k == 0 || 2 * k == self.sectors { 1 } else { 2 });
             families.push(track_whirl(speeds, &entries, &self.part.m));
         }
+        let stationary = harmonics
+            .iter()
+            .zip(&families)
+            .map(|(&k, fam)| stationary_column(k, fam))
+            .collect();
         Ok(CyclicWhirlCampbell {
             sectors: self.sectors,
             harmonics: harmonics.to_vec(),
             multiplicities,
             families,
+            stationary,
         })
     }
+}
+
+/// The frequency, rad/s, seen in the stationary frame of a whirl mode of harmonic index `harmonic` with the rotating-frame
+/// frequency `omega`, rad/s, and the wave sense `wave` at the speed `speed`, rad/s (ADR 0419 D2): `omega + tau harmonic
+/// speed`, `tau = wave` (`0` for `None`: a single index, `k = 0` or `2 k = N`, is a standing wave whose two lines `omega -/+ k
+/// Omega` have the mean `omega`). Signed: a negative value is a backward wave seen at `|omega_stat|` travelling forward in
+/// the stationary frame. For `|tau| < 1` (a degenerate pair) it is the energy-weighted mean of the lines `omega -/+ k Omega`.
+pub fn stationary_frequency(omega: f64, harmonic: usize, wave: Option<f64>, speed: f64) -> f64 {
+    omega + wave.unwrap_or(0.0) * harmonic as f64 * speed
+}
+
+/// The stationary-frame frequencies, Hz, of one family (ADR 0419 D4): `f + tau k Omega / (2 pi)` per track and speed from the
+/// stored frequency, wave sense and speed; `None` where the track has no mode.
+fn stationary_column(harmonic: usize, fam: &WhirlCampbell) -> Vec<Vec<Option<f64>>> {
+    let speeds = &fam.table.speeds;
+    fam.table
+        .tracks
+        .iter()
+        .zip(&fam.waves)
+        .map(|(tr, waves)| {
+            tr.frequencies
+                .iter()
+                .zip(waves)
+                .zip(speeds)
+                .map(|((f, w), &omega)| f.map(|f| f + w.unwrap_or(0.0) * harmonic as f64 * omega / (2.0 * PI)))
+                .collect()
+        })
+        .collect()
 }
 
 // ------------------------------------------------------------------------------------------------------------------------
@@ -1291,6 +1325,37 @@ pub struct CyclicWhirlCampbell {
     pub multiplicities: Vec<usize>,
     /// The families, one per index; a pair mode's vectors are `(cos, sin)` of the real and of the imaginary part.
     pub families: Vec<WhirlCampbell>,
+    /// Per family, track and speed, the stationary-frame frequency, Hz (ADR 0419 D2, D4): `f + tau k Omega / (2 pi)`, `f` the
+    /// family's frequency, `tau` its wave sense (`0` where it has none), `k` the index, `Omega` the speed; `None` where the
+    /// track has no mode. At rest and on single indices the bits of `f`.
+    pub stationary: Vec<Vec<Vec<Option<f64>>>>,
+}
+
+impl CyclicWhirlCampbell {
+    /// The stationary-frame frequencies as CSV (ADR 0419 D4): `harmonic,speed_rad_s,speed_rpm` then `track_t_stationary_hz`
+    /// up to the widest family; one row per family and speed; empty where a track has no mode and in the padding of a
+    /// narrower family.
+    pub fn stationary_csv(&self) -> String {
+        let width = self.stationary.iter().map(Vec::len).max().unwrap_or(0);
+        let mut s = String::from("harmonic,speed_rad_s,speed_rpm");
+        for t in 0..width {
+            let _ = write!(s, ",track_{t}_stationary_hz");
+        }
+        s.push('\n');
+        for ((&k, fam), col) in self.harmonics.iter().zip(&self.families).zip(&self.stationary) {
+            for (j, &w) in fam.table.speeds.iter().enumerate() {
+                let _ = write!(s, "{k},{w},{}", w * 60.0 / (2.0 * PI));
+                for t in 0..width {
+                    s.push(',');
+                    if let Some(Some(f)) = col.get(t).map(|c| c[j]) {
+                        let _ = write!(s, "{f}");
+                    }
+                }
+                s.push('\n');
+            }
+        }
+        s
+    }
 }
 
 #[cfg(test)]
