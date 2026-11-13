@@ -15,7 +15,7 @@
 //! mesh of Hex8 into Hex20 with one node per edge (D6).
 
 use crate::builders::MidEdgeNode;
-use crate::element::Element;
+use crate::element::{Element, ElementMatrix};
 use crate::error::{FemError, Result, SetKind};
 use crate::loads::NodalForceAt;
 use crate::mesh::{ElementKind, SolidMesh};
@@ -180,6 +180,9 @@ impl Element for Hex20 {
     }
     fn mass_rule(&self) -> &'static QuadratureRule {
         quadrature::gauss_3()
+    }
+    fn geometric_stiffness(&self, coords: &[Vec3], stress: &[[f64; 6]]) -> Result<ElementMatrix> {
+        crate::geometric::element_geometric_stiffness(self, coords, stress)
     }
 }
 

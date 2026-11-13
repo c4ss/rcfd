@@ -889,3 +889,281 @@ pub fn lowest_eigenpairs(
         residuals: last_res,
     })
 }
+
+// ------------------------------------------------------------------------------------------------------------ buckling
+
+/// Relative cut below which a Ritz value `theta = 1/lambda` of [`lowest_buckling_factors`] is not a factor (ADR 0390 D5).
+const POSITIVE_CUT: f64 = 1e-8;
+
+/// Options of [`lowest_buckling_factors`] (ADR 0390 D5).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BucklingEigenOptions {
+    /// Residual tolerance of each wanted pair.
+    pub tolerance: f64,
+    /// Residual measure: [`ResidualTest::Relative`] is `||A x - theta K x|| / (|theta| ||K x||)`, [`ResidualTest::Backward`]
+    /// is `||A x - theta K x|| / ((||A||_inf + |theta| ||K||_inf) ||x||)`, with `A = -K_sigma`, `theta = 1/lambda`.
+    pub residual_test: ResidualTest,
+    /// Iteration cap.
+    pub max_iterations: usize,
+    /// Subspace size `q` (`None`: `min(n, max(2 m, m + 8))`).
+    pub subspace_size: Option<usize>,
+    /// Elimination order of the factorisations.
+    pub ordering: SkylineOrdering,
+    /// Start vectors (q columns of length n) instead of the default pseudo-random ones.
+    pub start: Option<Vec<Vec<f64>>>,
+}
+
+impl Default for BucklingEigenOptions {
+    fn default() -> Self {
+        BucklingEigenOptions {
+            tolerance: 1e-10,
+            residual_test: ResidualTest::Relative,
+            max_iterations: 200,
+            subspace_size: None,
+            ordering: SkylineOrdering::Rcm,
+            start: None,
+        }
+    }
+}
+
+/// The lowest positive buckling factors of a sparse pair (ADR 0390 D5).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BucklingEigen {
+    /// Factors `lambda` of `(K + lambda K_sigma) x = 0`, positive, ascending.
+    pub values: Vec<f64>,
+    /// Vectors, `K`-normalised (`x^T K x = 1`), `vectors[j]` belongs to `values[j]`.
+    pub vectors: Vec<Vec<f64>>,
+    /// Residuals of the returned pairs in the measure of [`BucklingEigenOptions::residual_test`].
+    pub residuals: Vec<f64>,
+    /// Iterations made.
+    pub iterations: usize,
+    /// Subspace size `q`.
+    pub subspace_size: usize,
+    /// The Sturm check: `counted` is the number of negative pivots of `K + s K_sigma`, i.e. of factors in `(0, s)`.
+    pub sturm: SturmCheck,
+    /// `Some(S)` when fewer factors than asked were found: every factor below `S` is returned (none at all if `values` is
+    /// empty), confirmed by the Sturm count at `S`. `None` when the asked number was found.
+    pub exhausted: Option<f64>,
+}
+
+fn buckling_count(k: &CsrMatrix, kg: &CsrMatrix, s: f64, ordering: &SkylineOrdering) -> Result<usize, EigenError> {
+    let a = combine(k, kg, s);
+    let opts = SkylineOptions {
+        ordering: ordering.clone(),
+        pivots: PivotRule::NonZero,
+        symmetry_tolerance: SYMMETRY_TOLERANCE,
+    };
+    match SkylineLdlt::factor_with(&a, &opts) {
+        Ok(f) => Ok(f.inertia().0),
+        Err(source) => Err(EigenError::CountFailed { shift: s, source }),
+    }
+}
+
+/// `sum_i z_i cols_i`.
+fn combine_columns(cols: &[Vec<f64>], z: &[f64], n: usize) -> Vec<f64> {
+    let mut col = vec![0.0; n];
+    for (xi, &zi) in cols.iter().zip(z) {
+        for (c, v) in col.iter_mut().zip(xi) {
+            *c += zi * v;
+        }
+    }
+    col
+}
+
+/// The lowest `count` positive factors `lambda` of `(K + lambda K_sigma) x = 0` (`K` symmetric positive definite,
+/// `K_sigma` symmetric, indefinite in general) by subspace iteration on `K^{-1} (-K_sigma)` for `theta = 1/lambda` with a
+/// Rayleigh-Ritz step, verified by the Sturm count of `K + s K_sigma` (ADR 0390 D5). Fewer factors than asked (none if
+/// `K_sigma` has no negative direction) are returned with [`BucklingEigen::exhausted`] set, not refused.
+pub fn lowest_buckling_factors(
+    k: &CsrMatrix,
+    kg: &CsrMatrix,
+    count: usize,
+    opts: &BucklingEigenOptions,
+) -> Result<BucklingEigen, EigenError> {
+    validate_sparse(k, "K")?;
+    validate_sparse(kg, "K_sigma")?;
+    if k.n != kg.n {
+        return Err(EigenError::DimensionMismatch {
+            what: format!("K is {} x {}, K_sigma is {} x {}", k.n, k.n, kg.n, kg.n),
+        });
+    }
+    let n = k.n;
+    let q = opts.subspace_size.unwrap_or_else(|| n.min((2 * count).max(count + 8)));
+    if count == 0 || count >= n || q <= count || q > n {
+        return Err(EigenError::BadCount {
+            requested: count,
+            n,
+            subspace: q,
+        });
+    }
+    let x0: Vec<Vec<f64>> = match &opts.start {
+        Some(cols) => {
+            if cols.len() != q {
+                return Err(EigenError::BadStart {
+                    reason: format!("{} columns for a subspace of {q}", cols.len()),
+                });
+            }
+            if let Some(j) = cols
+                .iter()
+                .position(|c| c.len() != n || c.iter().any(|v| !v.is_finite()))
+            {
+                return Err(EigenError::BadStart {
+                    reason: format!("column {j} has a wrong length or a non-finite entry"),
+                });
+            }
+            cols.clone()
+        }
+        None => {
+            let mut s = START_SEED;
+            (0..q)
+                .map(|_| {
+                    (0..n)
+                        .map(|_| ((lcg(&mut s) >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0)
+                        .collect()
+                })
+                .collect()
+        }
+    };
+    let fopts = SkylineOptions {
+        ordering: opts.ordering.clone(),
+        pivots: PivotRule::Positive,
+        symmetry_tolerance: SYMMETRY_TOLERANCE,
+    };
+    let fac = SkylineLdlt::factor_with(k, &fopts)
+        .map_err(|source| EigenError::ShiftNotPositiveDefinite { shift: 0.0, source })?;
+    let scale = match opts.residual_test {
+        ResidualTest::Relative => None,
+        ResidualTest::Backward => Some((inf_norm(kg), inf_norm(k))),
+    };
+    // A v with A = -K_sigma.
+    let apply_a = |v: &[f64]| -> Vec<f64> { matvec(kg, v).into_iter().map(|t| -t).collect() };
+    let mut ax: Vec<Vec<f64>> = x0.iter().map(|c| apply_a(c)).collect();
+    let mut last_res = Vec::new();
+    for it in 1..=opts.max_iterations {
+        // step 1: Xbar = K^{-1} A X, columns scaled to unit K-norm (K Xbar = Y = A X)
+        let mut y = ax;
+        let mut xb: Vec<Vec<f64>> = y.iter().map(|c| fac.solve(c)).collect();
+        for j in 0..q {
+            let nk = dot4(&xb[j], &y[j]);
+            if nk.is_nan() || nk <= 0.0 || nk.is_infinite() {
+                return Err(EigenError::RankDeficient { iteration: it });
+            }
+            let inv = 1.0 / nk.sqrt();
+            for v in xb[j].iter_mut() {
+                *v *= inv;
+            }
+            for v in y[j].iter_mut() {
+                *v *= inv;
+            }
+        }
+        let axb: Vec<Vec<f64>> = xb.iter().map(|c| apply_a(c)).collect();
+        // step 2: Rayleigh-Ritz on (A_r, K_r)
+        let mut ar = vec![0.0; q * q];
+        let mut kr = vec![0.0; q * q];
+        for i in 0..q {
+            for j in 0..q {
+                ar[i * q + j] = dot4(&xb[i], &axb[j]);
+                kr[i * q + j] = dot4(&xb[i], &y[j]);
+            }
+        }
+        let red = match generalized_unchecked(&symmetrised(&ar, q), &symmetrised(&kr, q), q) {
+            Ok(r) => r,
+            Err(EigenError::MassNotPositiveDefinite { .. }) => {
+                return Err(EigenError::RankDeficient { iteration: it });
+            }
+            Err(e) => return Err(e),
+        };
+        // Ritz pairs in descending order of theta (ascending lambda for the positive ones).
+        let order: Vec<usize> = (0..q).rev().collect();
+        let x: Vec<Vec<f64>> = order.iter().map(|&j| combine_columns(&xb, &red.vectors[j], n)).collect();
+        ax = order.iter().map(|&j| combine_columns(&axb, &red.vectors[j], n)).collect();
+        let theta: Vec<f64> = order.iter().map(|&j| red.values[j]).collect();
+        // step 3: residuals
+        let kx: Vec<Vec<f64>> = x.iter().map(|c| matvec(k, c)).collect();
+        let res: Vec<f64> = (0..q)
+            .map(|j| {
+                let r: Vec<f64> = ax[j].iter().zip(&kx[j]).map(|(p, v)| p - theta[j] * v).collect();
+                match scale {
+                    None => norm(&r) / (theta[j].abs() * norm(&kx[j])),
+                    Some((na, nk)) => norm(&r) / ((na + theta[j].abs() * nk) * norm(&x[j])),
+                }
+            })
+            .collect();
+        // step 4: the positive cut, the wanted set W (with its cluster) and the settled set D
+        let tmax = theta.iter().fold(0.0f64, |m, t| m.max(t.abs()));
+        if tmax.is_nan() || tmax <= 0.0 || tmax.is_infinite() {
+            return Err(EigenError::RankDeficient { iteration: it });
+        }
+        let cut = POSITIVE_CUT * tmax;
+        let positive = theta.iter().take_while(|&&t| t > cut).count();
+        let mut mp = count.min(positive);
+        while mp > 0 && mp < positive && theta[mp - 1] - theta[mp] <= CLUSTER_GAP * theta[mp - 1] {
+            mp += 1;
+        }
+        let mut by_size: Vec<usize> = (0..q).collect();
+        by_size.sort_by(|&i, &j| theta[j].abs().total_cmp(&theta[i].abs()).then(i.cmp(&j)));
+        last_res = res[..mp].to_vec();
+        let converged = res[..mp].iter().all(|&r| r <= opts.tolerance)
+            && by_size[..count].iter().all(|&j| res[j] <= opts.tolerance);
+        if !converged {
+            continue;
+        }
+        if mp == q {
+            return Err(EigenError::ClusterExceedsSubspace { m: count, q });
+        }
+        // step 5: the Sturm count of K + s K_sigma
+        let bound = 1.0 / cut;
+        let exhausted = mp < count;
+        let candidates: Vec<f64> = if !exhausted && mp < positive {
+            let (l_last, l_next) = (1.0 / theta[mp - 1], 1.0 / theta[mp]);
+            [0.5, 0.25, 0.75].iter().map(|f| l_last + f * (l_next - l_last)).collect()
+        } else {
+            vec![bound]
+        };
+        let mut counted = None;
+        let mut fail = None;
+        for &s in &candidates {
+            match buckling_count(k, kg, s, &opts.ordering) {
+                Ok(c) => {
+                    counted = Some((s, c));
+                    break;
+                }
+                Err(e) => fail = Some(e),
+            }
+        }
+        let (s, c) = match counted {
+            Some(v) => v,
+            None => return Err(fail.expect("a refusal")),
+        };
+        if c != mp {
+            return Err(EigenError::SturmMismatch {
+                shift: s,
+                counted: c,
+                expected: mp,
+            });
+        }
+        let found = count.min(mp);
+        let mut vectors: Vec<Vec<f64>> = x.into_iter().take(found).collect();
+        for v in vectors.iter_mut() {
+            normalise_sign(v);
+        }
+        return Ok(BucklingEigen {
+            values: theta[..found].iter().map(|t| 1.0 / t).collect(),
+            vectors,
+            residuals: res[..found].to_vec(),
+            iterations: it,
+            subspace_size: q,
+            sturm: SturmCheck {
+                shift: s,
+                counted: c,
+                expected: mp,
+            },
+            exhausted: if exhausted { Some(bound) } else { None },
+        });
+    }
+    Err(EigenError::NotConverged {
+        iterations: opts.max_iterations,
+        tolerance: opts.tolerance,
+        residuals: last_res,
+    })
+}

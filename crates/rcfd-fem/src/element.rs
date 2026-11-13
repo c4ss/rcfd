@@ -401,6 +401,9 @@ impl Element for Tet4 {
     fn mass_rule(&self) -> &'static QuadratureRule {
         quadrature::tet_4()
     }
+    fn geometric_stiffness(&self, coords: &[Vec3], stress: &[[f64; 6]]) -> Result<ElementMatrix> {
+        crate::geometric::element_geometric_stiffness(self, coords, stress)
+    }
 }
 
 impl Element for Hex8 {
@@ -422,6 +425,9 @@ impl Element for Hex8 {
     }
     fn mass_rule(&self) -> &'static QuadratureRule {
         quadrature::gauss_3()
+    }
+    fn geometric_stiffness(&self, coords: &[Vec3], stress: &[[f64; 6]]) -> Result<ElementMatrix> {
+        crate::geometric::element_geometric_stiffness(self, coords, stress)
     }
 }
 
@@ -448,6 +454,9 @@ impl Element for Tet10 {
     }
     fn mass_rule(&self) -> &'static QuadratureRule {
         quadrature::tet_14()
+    }
+    fn geometric_stiffness(&self, coords: &[Vec3], stress: &[[f64; 6]]) -> Result<ElementMatrix> {
+        crate::geometric::element_geometric_stiffness(self, coords, stress)
     }
 }
 
