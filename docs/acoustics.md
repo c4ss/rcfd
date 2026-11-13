@@ -32,7 +32,9 @@ For every check with its limit and measured value read [ADR 0066](adr/0066-wave3
 An acoustic impedance boundary, quiet boundary and acoustic wave solver are not part of this wave. The impedance and
 quiet boundaries were added later as library code (section "Impedance and quiet boundaries of the compressible solver");
 a linear acoustic wave solver with sponge layers and the modal analysis of duct fields were added as library code in
-ADR 0351 (section "Acoustic wave solver and duct modes"). None of them is coupled to a CFD run.
+ADR 0351 (section "Acoustic wave solver and duct modes"). None of them runs inside a CFD run; the wave solver can be driven
+from a section sampled into an `rcfd-surface-series` file (ADR 0372, section "Driving the wave solver from a sampled
+surface").
 
 ## FW-H solver
 
@@ -450,6 +452,36 @@ rigid end):
 Limits: two modes at one frequency each; one O-grid topology; no rectangular three-dimensional duct; one planar layer;
 not reachable from a case file or the CLI.
 
+### Driving the wave solver from a sampled surface (F-452, ADR 0372; library only)
+
+`rcfd-post` `wave_drive.rs` turns an `rcfd-surface-series` document (the pressure on a duct section, the FW-H chain's
+format) into the ghost state of `WaveBc::Driven`. `SurfaceDrive::from_series(spec, medium, frame, basis, options)` takes:
+
+* a `DuctFrame` (`origin` the zero of the section coordinates, unit `axis` into the wave domain, unit section axes `e1`,
+  `e2`) and a `ModeBasis` of the duct;
+* `DriveOptions { frequency, max_harmonic, ramp_time }`: the fundamental, the highest harmonic played back, the start-up
+  ramp `sin^2(pi t/(2 T_r))`.
+
+The series must cover a whole number of periods of the fundamental (otherwise it is refused: the DFT would leak the mean
+and the harmonics); the harmonics `1..=max_harmonic` must lie below the Nyquist bin. Per harmonic the face amplitudes
+come from a DFT on the file's clock, are fitted on the mode basis with the face areas as weights, and are played back
+periodically as the wave entering the domain: each mode with its axial wavenumber and impedance `u = kz p/(rho0 omega)`
+(a plane-wave impedance `p/(rho0 c)` would inject a mode at `cos theta = 0.8` 11 percent too strong), carried from the
+sampling plane to the driven faces by `e^{-i kz (xi - xi_s)}`. The mean pressure is reported and not played back.
+`ghost_state()` returns the `GhostState`; `state(x, t)` the unramped wave. Refused with a located error: a non-whole
+number of periods, a harmonic at or above Nyquist, `rho0` or `c0` differing from the solver's, a flow or a rotating
+motion, a face off the section plane, outside the duct or with a normal off the axis, more modes than faces, a bad frame.
+
+Checked (0.12 m channel, a field of the plane wave at 1181 Hz and the plane wave and mode 1 at 2361 Hz plus a 3 Pa mean,
+sampled on a wall-clustered 24-face section 0.02 m upstream of the wave mesh, through JSON text): on 64 cells across the
+amplitudes measured at the inlet agree with the closed form within `8.8e-4`, `3.5e-3`, `2.3e-3` (`1.4e-2` at worst on 32
+across; second order); the file-driven run equals the run driven by the closed form to `1.1e-14`; 127 and 96 samples of a
+128-sample, two-period file are refused.
+
+Limits: the sampled pressure must be the entering wave only (one section of pressure cannot separate a returning wave);
+periodic signals only; a static section, medium at rest; only the channel was run (any `DuctShape` is accepted); not
+reachable from a case file or the CLI.
+
 ## Reference: code locations, input format and command line
 
 ### Modules and entry points
@@ -467,6 +499,7 @@ not reachable from a case file or the CLI.
 | Sponge layer of the compressible solver | `crates/rcfd-fv/src/sponge.rs` (`Sponge`, `SpongeForm`, `SpongeLayer`, `rate_max_for_reflection`), `CompressibleSolver::set_sponge`, `set_sponge_memory`, `sponge_memories`, `set_sponge_memories`; the shifted form: `MatchedOptions`, `Sponge::planar_shifted`, `Sponge::corner` |
 | Acoustic wave solver (linear, medium at rest) | `crates/rcfd-fv/src/acoustic_wave.rs` (`AcousticWaveSolver`, `Medium`, `WaveBc`, `WaveSponge`, `WaveSpongeForm`) |
 | Duct modes, modal decomposition, axial split, `rcfd-duct-modes` export | `crates/rcfd-post/src/duct_modes.rs` (`ModeBasis`, `axial_wavenumber`, `HarmonicDft`, `decompose_section`, `split_axial`, `fit_axial`, `ModalExport`) |
+| Wave solver driven by a sampled surface series | `crates/rcfd-post/src/wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`, `HarmonicModes`) |
 
 ### Surface-series input (`rcfd-surface-series` v1)
 

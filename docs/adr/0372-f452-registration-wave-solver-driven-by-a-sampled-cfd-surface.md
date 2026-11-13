@@ -211,3 +211,121 @@ ADR 0351 DR1 to DR9 (the solver, the modes, the DFT, the fits), re-used; the imp
 momentum equation (derived in D4). The DFT orthogonality over whole periods is elementary (geometric sums). Pierce,
 *Acoustics*, 1989, ch. 7, cited from memory for duct modes; nothing is taken from it that is not derived. No vendor code or
 documentation was used.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Registration 445ada7c; library and tests 31a183e8 (one commit after the registration). Every registered run was made once, in
+the **release** profile: `cargo test --release -p rcfd-post --test wave_drive_f452 -- --nocapture` (A2, A3, A1c, M0, R0,
+R1, R2) and the same with `--ignored` for the heavy record D1 (A1, A2m; 237 s). No limit was changed, no amendment was
+needed, no test is a `*_known_miss`.
+
+### What was built
+
+- `crates/rcfd-post/src/wave_drive.rs` (new): `SurfaceDrive` (`from_series`, `state`, `ghost_state`, `basis`; report
+  fields `section_xi`, `periods`, `mean`, `unrepresented`, `harmonics`), `DuctFrame`, `DriveOptions`, `HarmonicModes`
+  (D1 to D6).
+- `crates/rcfd-post/src/lib.rs`: one line, `pub mod wave_drive;` after `pub mod turbo;`. No other existing line of any
+  crate changed; `rcfd-fv` is not touched.
+- `crates/rcfd-post/tests/wave_drive_f452.rs` (new): D1 (`#[ignore]`, heavy), D1c, D2, A3, M0, R0/R1, R2.
+- `docs/acoustics.md`: a section "Driving the wave solver from a sampled surface", a row of the module table, and the
+  sentence of "Limits of the whole chain" that said the wave solver was not coupled to a CFD run.
+
+### Checks
+
+| id | quantity | limit | measured | met |
+|---|---|---|---|---|
+| A1 | D1 (64 across): inlet amplitude error `(1,0)`; `(2,0)`; `(2,1)` | `<= 1e-2` each | `8.85e-4`; `3.52e-3`; `2.27e-3` | yes |
+| R1 | 127 samples (`r = 1.984`); 96 samples (`r = 1.5`) | refused, naming the periods | both refused: "... cover 1.984375 periods of 1180.56 Hz, not a whole number of periods" (and 1.5) | yes |
+| R0 | the 128-sample file | accepted, `P = 2` | accepted, `P = 2` | yes |
+| A3 | drive state against the closed form, pressure; velocity (times `rho0 c`); transverse velocity | `<= 1e-9`; `<= 1e-9`; 0 | `1.68e-13`; `1.50e-13`; 0 | yes |
+| A2 | D2: file-driven run against the closed-form-driven run | `<= 1e-9` | `1.12e-14` | yes |
+| A1c | D1c (32 across): `(1,0)`; `(2,0)`; `(2,1)` | `<= 3e-2` each | `3.52e-3`; `1.39e-2`; `8.97e-3` | yes |
+| A2m | D1: `|minus/plus|` `(1,0)`; `(2,0)`; `(2,1)` | `< 1e-2` | `9.6e-7`; `9.9e-7`; `1.0e-5` | yes |
+| R2 | eleven refusals | an error each | all refused | yes |
+| M0 | mean; `P`; unrepresented fraction | `1e-12` of 3.0; 2; `<= 1e-12` | `3.000000000000000`; 2; `1.1e-16` | yes |
+
+Other numbers (not checks): the fitted axial wavenumbers in D1 are `-1.39e-4`, `-5.54e-4`, `-4.69e-4` below the closed form
+(`(2,1)` at 64 across matches S1's `-1.855e-3` at 32 divided by 4); the section-fit residuals of the drive are `5e-16`.
+
+What the numbers say: the injected amplitude error of `(2,1)` (`2.27e-3`) is the registered estimate (`2.3e-3`, from S1
+scaled by second order). The plane wave at harmonic 2 came out larger than assumed (`3.5e-3` against `<= 2.3e-3`; at 32
+across `1.39e-2`, i.e. the F-333 grid would have missed the 1 percent for this component): the halving ratios D1c/D1 are
+3.98, 3.93 and 3.95, second order. This error is the driven face of the scheme (A2 shows the file chain adds `1e-14`), not
+the drive built from the file. A3 is `1.7e-13`, ten times the round-off estimate (the sum of eight modes times two
+harmonics evaluated at `omega t ~ 2e3` rad); far inside the limit.
+
+### Mutations
+
+Once each, on a `git archive` copy of 31a183e8 (`w49i-work/f452-scratch/tree`, own target directory, script `mutate.py`, not
+committed), running the fast tests of `wave_drive_f452` with `--no-fail-fast` (the heavy D1 was not run under mutation; its
+code path is D1c's). Control MU0: all six fast tests pass with the numbers above to every printed digit (this also runs the
+committed, formatted bytes).
+
+| id | mutation | caught by | against the expectation |
+|---|---|---|---|
+| MU1 | plane-wave impedance for every mode | A3 (velocity `0.128`), A2 (`7.2e-2`), A1c `(2,1)` (`0.101`) | as expected; the plane-wave components are unchanged, as they should be |
+| MU2 | DFT phase from `n dt` (file clock lost) | A3 (`1.66`), A2 (`1.61`), A1c (all three, `1.04` to `1.77`) | as expected |
+| MU3 | whole-period test removed | R1 (the 127-sample series accepted; its mean `3.0009` leaks) | as expected |
+| MU4 | axial carry `e^{+i kz (xi - xi_s)}` | A3 (`1.26`), A2 (`1.24`), A1c (all three) | as expected |
+| MU5 | every harmonic played at `omega0` | A3, A2 (`1.09`), A1c (`(2,0)` amplitude 0, `(2,1)` fit at its bracket edge; `(1,0)` also off, `0.50`, through the harmonic-2 content now at `omega0`) | as expected |
+| MU6 | Nyquist test removed | R2 (`H = 32` accepted) | as expected |
+
+No mutation survived; each was caught by one of its registered checks (A1 itself was not run under mutation; A1c, A2 and A3,
+also registered for each, caught them).
+
+### fmt, clippy, existing tests, baseline hashes
+
+`cargo fmt -p rcfd-post --check`: clean (after `cargo fmt -p rcfd-post` before the commit). `cargo clippy --release -p
+rcfd-post --all-targets -- -D warnings`: clean after one rewrite before the commit (a `type ShapeCache` alias for the cache's
+type, `clippy::type_complexity`). `cargo test --release -p rcfd-post --no-fail-fast` (every existing test of the crate, unedited,
+with the new ones): 31 targets, 234 passed, 0 failed, 24 ignored. `cargo test -p rcfd-api --release --test baseline_hashes`:
+3 passed, 1 ignored, as before; the file was not edited.
+
+### Deviations and disclosures
+
+- The registered runs were made on the source before `cargo fmt` and the clippy alias; the committed bytes were run as MU0
+  with identical printed numbers (fast tests); D1 was not re-run on the committed bytes (the change is formatting and a type
+  alias).
+- R2 "off plane": the error names `$.faces[0].x`, not the moved face 5, because the moved face shifts the area-weighted plane
+  `xi_s` and face 0 is the first found off it. The refusal is correct; the location is imprecise (question 2).
+- Before the registration, the existing F-333 tests S1 and S1c were run once to read their printed amplitudes (disclosed in
+  the registration); that run fixed the grid of D1.
+
+### Not run
+
+The whole workspace suite (the lead runs the gate); tests of other crates apart from `baseline_hashes`; the debug profile;
+D1 under mutation; a circular or three-dimensional duct; a series in CSV form (`pressure_csv`, parsed by the existing
+reader); a field with a returning wave at the sampling section.
+
+### Decision by the registered rule
+
+A1 meets its limit for all three components; R1 refuses both truncated series and R0 accepts the whole one; A3, A2, A1c,
+A2m, M0 meet theirs; R2 refuses every case; the baseline hashes are unchanged; every registered mutation is caught by a
+registered check, with no post-run amendment. **done**, library only.
+
+### Remaining questions (options and recommendation)
+
+1. **Returning waves at the sampling section.** (a) two sampled sections (or pressure and axial velocity on one) and the
+   two-wave split of `duct_modes` before the drive; (b) keep the entering-wave assumption and document it; Recommendation:
+   (b) now, (a) as a follow-up when a fan case samples a duct with reflections. Taken (b) on the maintainer's standing
+   instruction of 2026-11-11 (take the recommendation).
+2. **Location of the off-plane error.** (a) name the face farthest from the plane; (b) keep the first found. Recommendation:
+   (a), a one-line change for the wiring item; not taken here (the registered refusal is met).
+3. **Wiring.** A case key `[acoustics.wave] driven = { series = "...", frequency = .., harmonics = .. }` or a CLI flag needs
+   the maintainer's approval of keys or help text (F-451). Not taken.
+
+### For the lead: roadmap entries
+
+**F-452, proposed status: `done`.** Proposed note text:
+
+> DONE pending acceptance, ADR 0372, 2026-11-12. Library only. Built: rcfd-post `wave_drive.rs` (`SurfaceDrive`, `DuctFrame`, `DriveOptions`): an rcfd-surface-series section is read as a whole number of periods of a given fundamental, each harmonic of every face taken by a DFT on the file's clock (the mean dropped and reported), fitted on a hard-walled duct-mode basis, and played back periodically as the `WaveBc::Driven` ghost state of the wave entering the duct, each mode with its own axial wavenumber and impedance kz p/(rho0 omega), carried from the sampling plane to the driven faces. Registered checks, all met at the first run, no amendment: a 0.12 m channel, a closed-form field of the plane wave at 1181 Hz and the plane wave and mode 1 at 2361 Hz plus a 3 Pa mean, sampled on a wall-clustered 24-face section 0.02 m upstream of the wave mesh into the file through JSON text; on 64 cells across the amplitudes measured at the inlet agree with the closed form within 8.8e-4, 3.5e-3 and 2.3e-3 (limit 1e-2; 1.4e-2 at worst on 32 across, second order: the error is the scheme's driven face, the file chain adds 1.1e-14 against a run driven by the closed form); the drive's state equals the closed form within 1.7e-13; a 128-sample two-period file is accepted and 127 and 96 samples are refused as not a whole number of periods; ten other refusals located. Six mutations caught (plane-wave impedance, lost file clock, period test removed, wrong axial carry, harmonics played at the fundamental, Nyquist test removed). Limits: the sampled pressure must be the entering wave only; periodic signals; static section, medium at rest; only the two-dimensional channel was run; no case key or CLI (F-451).
+
+**F-333, note:** in its text, replace "not coupled to a CFD run (the source is a driven boundary)" by:
+
+> not run inside a CFD run (the source is a driven boundary, which can be built from a sampled rcfd-surface-series section under F-452, ADR 0372, 2026-11-12)
+
+Proposed follow-up item (number for the lead to assign):
+
+- **Wave-solver drive with returning waves at the sampled section.** Deps: F-452. Size M. Acceptance:
+
+> A drive built from two sampled sections of a duct field that holds both directions reproduces the entering wave's modal amplitudes at the inlet within 1 percent and ignores the returning one to 1 percent; a single section with a returning wave is reported by a measured residual.
