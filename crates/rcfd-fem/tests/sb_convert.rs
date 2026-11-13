@@ -62,7 +62,9 @@ fn check_sets(what: &str, m: &SolidMesh, src: &Patches, closed: &[(&str, f64)]) 
         for &f in set {
             a += m.face_area(f);
             let key = sorted(&m.face_nodes(f));
-            let av = faces.get(&key).unwrap_or_else(|| panic!("{what} {name}: face {key:?} not in the patch"));
+            let av = faces
+                .get(&key)
+                .unwrap_or_else(|| panic!("{what} {name}: face {key:?} not in the patch"));
             assert!(seen.insert(key), "{what} {name}: face twice");
             dn = dn.max(norm(sub(m.face_area_vector(f), *av)) / norm(*av));
         }
@@ -81,7 +83,10 @@ fn check_sets(what: &str, m: &SolidMesh, src: &Patches, closed: &[(&str, f64)]) 
 fn check_counts_and_cells(what: &str, m: &SolidMesh, fv: &Mesh, kind: ElementKind) -> f64 {
     assert_eq!(m.nodes().len(), fv.n_points(), "{what}: C1 nodes");
     for (a, b) in m.nodes().iter().zip(fv.points()) {
-        assert!(a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()), "{what}: C1 coordinates");
+        assert!(
+            a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()),
+            "{what}: C1 coordinates"
+        );
     }
     assert_eq!(m.n_elements(), fv.n_cells(), "{what}: C1 elements");
     assert_eq!(m.blocks().len(), 1, "{what}: one block");
@@ -90,13 +95,24 @@ fn check_counts_and_cells(what: &str, m: &SolidMesh, fv: &Mesh, kind: ElementKin
     for (e, &vc) in fv.cell_volumes().iter().enumerate() {
         d = d.max(rel(m.element_volume(e), vc));
     }
-    println!("{what}: {} nodes, {} elements, element volume vs cell max rel {d:.3e}", m.nodes().len(), m.n_elements());
+    println!(
+        "{what}: {} nodes, {} elements, element volume vs cell max rel {d:.3e}",
+        m.nodes().len(),
+        m.n_elements()
+    );
     assert!(d <= 1e-12, "{what}: element volumes against the cells {d:e}");
     d
 }
 
 fn box_closed() -> Vec<(&'static str, f64)> {
-    vec![("xmin", 6.0), ("xmax", 6.0), ("ymin", 3.0), ("ymax", 3.0), ("zmin", 2.0), ("zmax", 2.0)]
+    vec![
+        ("xmin", 6.0),
+        ("xmax", 6.0),
+        ("ymin", 3.0),
+        ("ymax", 3.0),
+        ("zmin", 2.0),
+        ("zmax", 2.0),
+    ]
 }
 
 #[test]
@@ -110,7 +126,11 @@ fn c1_c2_c4_c5_box_mesh() {
         assert!(v <= 1e-12, "{what}: C2 {v:e}");
         check_sets(what, &m, &fv_patches(&fv), &box_closed());
         for name in NAMES {
-            assert_eq!(m.node_set(name).unwrap(), m.surface_set_nodes(name).unwrap(), "{what}: node set {name}");
+            assert_eq!(
+                m.node_set(name).unwrap(),
+                m.surface_set_nodes(name).unwrap(),
+                "{what}: node set {name}"
+            );
         }
         assert_eq!(m.element_set("all").unwrap().len(), 60);
     }
@@ -130,11 +150,17 @@ fn c1_c3_c3b_c4_c5_c12_annulus() {
     check_counts_and_cells("AQ", &m, &fv, ElementKind::Hex8);
     let v = volume(&m);
     let (e, ec) = (rel(v, 0.75 * PI), rel(v, chord_volume(24, PI / 48.0, 1.0, 2.0, 1.0)));
-    println!("AQ: C3 volume vs pi (b^2 - a^2) h / 4 rel {e:.4e} (estimate 7.138e-4), C3b vs chord closed form {ec:.3e}");
+    println!(
+        "AQ: C3 volume vs pi (b^2 - a^2) h / 4 rel {e:.4e} (estimate 7.138e-4), C3b vs chord closed form {ec:.3e}"
+    );
     assert!(e <= 1e-3, "AQ: C3 {e:e}");
     assert!(ec <= 1e-12, "AQ: C3b {ec:e}");
     check_sets("AQ", &m, &fv_patches(&fv), &[]);
-    assert_eq!(m.element_set("half").unwrap(), (0..72).collect::<Vec<_>>().as_slice(), "C12");
+    assert_eq!(
+        m.element_set("half").unwrap(),
+        (0..72).collect::<Vec<_>>().as_slice(),
+        "C12"
+    );
     // AF: full ring, 96 chords.
     let fv = annulus_3d(96, 2, 2, 1.0, 2.0, 1.0, 0.0, Grading::Uniform).unwrap();
     let m = from_mesh(&fv).unwrap();
@@ -168,7 +194,11 @@ fn c4_c5_c6_c11_tetrahedral_mesher() {
     assert_eq!(m.nodes().len(), tm.points.len(), "C6 nodes");
     assert_eq!(m.n_elements(), tm.cells.len(), "C6 elements");
     let v = rel(volume(&m), 6.0);
-    println!("T: {} nodes, {} elements, C6 volume rel {v:.3e}", m.nodes().len(), m.n_elements());
+    println!(
+        "T: {} nodes, {} elements, C6 volume rel {v:.3e}",
+        m.nodes().len(),
+        m.n_elements()
+    );
     assert!(v <= 1e-12, "C6 {v:e}");
     // The source's outward area vectors: its boundary triangles.
     let mut src: Patches = BTreeMap::new();
@@ -193,7 +223,11 @@ fn c4_c5_c6_c11_tetrahedral_mesher() {
     // C11: the two routes give the same elements.
     let mut d = 0.0f64;
     for e in 0..m.n_elements() {
-        assert_eq!(sorted(m.element_nodes(e)), sorted(m2.element_nodes(e)), "C11 element {e}");
+        assert_eq!(
+            sorted(m.element_nodes(e)),
+            sorted(m2.element_nodes(e)),
+            "C11 element {e}"
+        );
         d = d.max(rel(m2.element_volume(e), m.element_volume(e)));
     }
     println!("T: C11 element volumes of the two routes max rel {d:.3e}");
@@ -212,19 +246,47 @@ fn expect_cell(what: &str, r: rcfd_fem::Result<SolidMesh>, cell: usize, shape: &
         other => panic!("{what}: not UnsupportedCell but {other:?}"),
     }
     let msg = e.to_string();
-    assert!(msg.contains(&format!("cell {cell}")) && msg.contains(shape), "{what}: {msg}");
+    assert!(
+        msg.contains(&format!("cell {cell}")) && msg.contains(shape),
+        "{what}: {msg}"
+    );
 }
 
 #[test]
 fn c7_prism_pyramid_polyhedron_and_mixed_refused() {
     let prism = single(
-        vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0]],
-        vec![vec![vec![0, 1, 2], vec![3, 4, 5], vec![0, 1, 4, 3], vec![1, 2, 5, 4], vec![2, 0, 3, 5]]],
+        vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+        ],
+        vec![vec![
+            vec![0, 1, 2],
+            vec![3, 4, 5],
+            vec![0, 1, 4, 3],
+            vec![1, 2, 5, 4],
+            vec![2, 0, 3, 5],
+        ]],
     );
     expect_cell("prism", from_mesh(&prism), 0, "prism");
     let pyramid = single(
-        vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.5, 0.5, 1.0]],
-        vec![vec![vec![0, 1, 2, 3], vec![0, 1, 4], vec![1, 2, 4], vec![2, 3, 4], vec![3, 0, 4]]],
+        vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.5, 1.0],
+        ],
+        vec![vec![
+            vec![0, 1, 2, 3],
+            vec![0, 1, 4],
+            vec![1, 2, 4],
+            vec![2, 3, 4],
+            vec![3, 0, 4],
+        ]],
     );
     expect_cell("pyramid", from_mesh(&pyramid), 0, "pyramid");
     let mut pts = Vec::new();
@@ -385,14 +447,20 @@ fn n4_non_conforming_split_is_refused() {
         nodes[pi(o)] = *p;
     }
     let mut r = SolidMesh::new(nodes).unwrap();
-    r.add_block(ElementKind::Hex8, m.blocks()[0].connectivity().iter().map(|&v| pi(v)).collect())
-        .unwrap();
+    r.add_block(
+        ElementKind::Hex8,
+        m.blocks()[0].connectivity().iter().map(|&v| pi(v)).collect(),
+    )
+    .unwrap();
     let e = split_hexahedra(&r).expect_err("N4");
     println!("N4: {e}");
     match e {
         FemError::InvalidValue { key, reason } => {
             assert_eq!(key, "split_hexahedra");
-            assert!(reason.starts_with("element 0") || reason.starts_with("element 1"), "{reason}");
+            assert!(
+                reason.starts_with("element 0") || reason.starts_with("element 1"),
+                "{reason}"
+            );
         }
         other => panic!("N4: {other:?}"),
     }
