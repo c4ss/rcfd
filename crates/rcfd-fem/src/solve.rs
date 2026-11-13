@@ -163,6 +163,7 @@ pub fn solve_static_report(
     options: &StaticOptions,
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
+    model.check_supported()?;
     let dofs = model.dof_map();
     let f = nodal_load_vector(model, forces)?;
     let fixed = prescribed_equations(model, prescribed)?;

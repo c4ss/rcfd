@@ -12,12 +12,17 @@ use rcfd_core::{Error, Result};
 use rcfd_fem::mesh::ElementKind;
 use rcfd_fem::recover::{nodal_average, principal, von_mises, IntegrationPointField};
 use rcfd_fem::{FemError, SolidModel, SolidResult};
-use rcfd_io::vtk::{fe_vtu_string, FeArray, FeCellBlock, VTK_HEXAHEDRON, VTK_QUADRATIC_TETRA, VTK_TETRA};
+use rcfd_io::vtk::{
+    fe_vtu_string, FeArray, FeCellBlock, VTK_HEXAHEDRON, VTK_LINE, VTK_QUAD, VTK_QUADRATIC_HEXAHEDRON,
+    VTK_QUADRATIC_TETRA, VTK_TETRA,
+};
 use std::path::Path;
 
 const IDENTITY_4: [usize; 4] = [0, 1, 2, 3];
 const IDENTITY_8: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 const IDENTITY_10: [usize; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+const IDENTITY_2: [usize; 2] = [0, 1];
+const IDENTITY_20: [usize; 20] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 
 /// The VTK cell type of an element kind and its node permutation: VTK local node `a` is rcfd-fem local node `perm[a]`.
 /// Refuses a kind without a VTK mapping (named).
@@ -26,6 +31,10 @@ pub fn vtk_from_fem(kind: ElementKind) -> Result<(u8, &'static [usize])> {
         ElementKind::Tet4 => Ok((VTK_TETRA, &IDENTITY_4)),
         ElementKind::Hex8 => Ok((VTK_HEXAHEDRON, &IDENTITY_8)),
         ElementKind::Tet10 => Ok((VTK_QUADRATIC_TETRA, &IDENTITY_10)),
+        // The node orders of the intermediate tier are VTK's (ADR 0291 D2, D7).
+        ElementKind::Hex20 => Ok((VTK_QUADRATIC_HEXAHEDRON, &IDENTITY_20)),
+        ElementKind::Beam2 => Ok((VTK_LINE, &IDENTITY_2)),
+        ElementKind::Shell4 => Ok((VTK_QUAD, &IDENTITY_4)),
         other => Err(Error::InvalidValue {
             path: "element kind".into(),
             reason: format!("no VTK cell mapping for element kind {}", other.name()),

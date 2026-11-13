@@ -119,6 +119,7 @@ pub fn modal_analysis(model: &SolidModel, options: &ModalOptions) -> Result<Moda
 /// The modal analysis with, in addition to the model's constraints, per-node prescribed values (all zero).
 pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
+    model.check_supported()?;
     let dofs = model.dof_map();
     let fixed = prescribed_equations(model, extra)?;
     if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {

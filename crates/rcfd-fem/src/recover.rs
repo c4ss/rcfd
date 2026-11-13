@@ -228,6 +228,8 @@ fn fit_basis(kind: ElementKind, xi: [f64; 3]) -> Vec<f64> {
         ElementKind::Tet4 => vec![1.0],
         ElementKind::Tet10 => vec![1.0, x, y, z],
         ElementKind::Hex8 => vec![1.0, x, y, z, x * y, y * z, z * x, x * y * z],
+        ElementKind::Hex20 => crate::hex20::fit_basis(xi),
+        ElementKind::Beam2 | ElementKind::Shell4 => Vec::new(),
     }
 }
 
@@ -287,10 +289,17 @@ pub fn extrapolation_matrix(kind: ElementKind) -> &'static [Vec<f64>] {
     static TET4: OnceLock<Vec<Vec<f64>>> = OnceLock::new();
     static HEX8: OnceLock<Vec<Vec<f64>>> = OnceLock::new();
     static TET10: OnceLock<Vec<Vec<f64>>> = OnceLock::new();
+    static HEX20: OnceLock<Vec<Vec<f64>>> = OnceLock::new();
+    // A kind whose package has not landed has no rule to extrapolate from; a structural kind has no solid stress (ADR 0291).
+    if kind.pending().is_some() {
+        return &[];
+    }
     let cell = match kind {
         ElementKind::Tet4 => &TET4,
         ElementKind::Hex8 => &HEX8,
         ElementKind::Tet10 => &TET10,
+        ElementKind::Hex20 => &HEX20,
+        ElementKind::Beam2 | ElementKind::Shell4 => return &[],
     };
     cell.get_or_init(|| build_extrapolation(kind))
 }

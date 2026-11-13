@@ -35,6 +35,15 @@ impl Prescribed {
     }
 }
 
+fn pending_constraint(c: &Constraint, location: String, package: &'static str) -> FemError {
+    FemError::NotYetSupported {
+        item: "constraint",
+        variant: c.name(),
+        location,
+        package,
+    }
+}
+
 /// The prescribed equations of a model and of `extra`, as (equation, value) in ascending equation order. Refuses a
 /// missing node or component (naming it), a non-finite value, and one equation prescribed with two different values;
 /// bit-equal repeats are kept once.
@@ -42,7 +51,7 @@ pub fn prescribed_equations(model: &SolidModel, extra: &[Prescribed]) -> Result<
     let dofs = model.dof_map();
     let n_nodes = dofs.n_nodes();
     let mut list: Vec<(usize, f64)> = Vec::new();
-    for c in model.constraints() {
+    for (index, c) in model.constraints().iter().enumerate() {
         match c {
             Constraint::Displacement { set, component, value } => {
                 let nodes = model.mesh().node_set(set).ok_or_else(|| FemError::UnknownSet {
@@ -51,6 +60,32 @@ pub fn prescribed_equations(model: &SolidModel, extra: &[Prescribed]) -> Result<
                 })?;
                 for &node in nodes {
                     list.push((locate(&dofs, "constraint", node, *component)?, *value));
+                }
+            }
+            // The constraints of the intermediate tier are refused until their package lands (ADR 0291 D6).
+            Constraint::Linear { terms, .. } => {
+                if let Some(package) = crate::mpc::PENDING {
+                    let first = terms.first().map_or(0, |t| t.node);
+                    return Err(pending_constraint(
+                        c,
+                        format!("constraint {index}, first node {first}"),
+                        package,
+                    ));
+                }
+            }
+            Constraint::RigidSet { set, .. } => {
+                if let Some(package) = crate::mpc::PENDING {
+                    return Err(pending_constraint(
+                        c,
+                        format!("constraint {index}, node set '{set}'"),
+                        package,
+                    ));
+                }
+            }
+            Constraint::Cyclic { low, high, .. } => {
+                if let Some(package) = crate::cyclic::PENDING {
+                    let location = format!("constraint {index}, surface sets '{low}' and '{high}'");
+                    return Err(pending_constraint(c, location, package));
                 }
             }
         }

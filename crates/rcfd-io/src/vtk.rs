@@ -361,12 +361,23 @@ pub const VTK_HEXAHEDRON: u8 = 12;
 /// (0,3), (1,3), (2,3)`).
 pub const VTK_QUADRATIC_TETRA: u8 = 24;
 
+/// VTK cell type of the two-node line (beam elements, ADR 0291).
+pub const VTK_LINE: u8 = 3;
+/// VTK cell type of the four-node quadrilateral (shell elements, ADR 0291).
+pub const VTK_QUAD: u8 = 9;
+/// VTK cell type of the quadratic hexahedron (20 nodes; corners 0 to 7 as [`VTK_HEXAHEDRON`], mid-edge nodes 8 to 19 on
+/// `(0,1), (1,2), (2,3), (3,0), (4,5), (5,6), (6,7), (7,4), (0,4), (1,5), (2,6), (3,7)`; ADR 0291).
+pub const VTK_QUADRATIC_HEXAHEDRON: u8 = 25;
+
 /// Number of nodes of a supported finite-element cell type (`None` for any other type).
 pub fn vtk_cell_nodes(cell_type: u8) -> Option<usize> {
     match cell_type {
         VTK_TETRA => Some(4),
         VTK_HEXAHEDRON => Some(8),
         VTK_QUADRATIC_TETRA => Some(10),
+        VTK_LINE => Some(2),
+        VTK_QUAD => Some(4),
+        VTK_QUADRATIC_HEXAHEDRON => Some(20),
         _ => None,
     }
 }
@@ -472,7 +483,7 @@ pub fn fe_vtu_string(
         let npc = vtk_cell_nodes(block.cell_type).ok_or_else(|| {
             fe_invalid(
                 "cell_type",
-                format!("block {b}: cell type {} is not 10, 12 or 24", block.cell_type),
+                format!("block {b}: cell type {} is not 3, 9, 10, 12, 24 or 25", block.cell_type),
             )
         })?;
         if block.connectivity.is_empty() || block.connectivity.len() % npc != 0 {

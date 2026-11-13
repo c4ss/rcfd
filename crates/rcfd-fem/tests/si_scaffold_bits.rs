@@ -132,12 +132,21 @@ fn all_digests() -> Vec<(String, u64)> {
     };
     for (name, model, pres) in patch_models() {
         let r = solve_static_with(&model, &pres, &[], &StaticOptions::default().threads(1)).unwrap();
-        push(format!("{name} displacement"), digest(r.displacement_values().iter().copied()));
-        push(format!("{name} reactions"), digest(r.reactions().unwrap().iter().copied()));
+        push(
+            format!("{name} displacement"),
+            digest(r.displacement_values().iter().copied()),
+        );
+        push(
+            format!("{name} reactions"),
+            digest(r.reactions().unwrap().iter().copied()),
+        );
         let field = IntegrationPointField::from_result(&model, &r).unwrap();
         push(format!("{name} stress"), digest(flat6(field.stress())));
         let k = stiffness(&model).unwrap();
-        push(format!("K {name} pattern"), digest_usize(&k.row_ptr) ^ digest_usize(&k.col).rotate_left(1));
+        push(
+            format!("K {name} pattern"),
+            digest_usize(&k.row_ptr) ^ digest_usize(&k.col).rotate_left(1),
+        );
         push(format!("K {name} values"), digest(k.val.iter().copied()));
     }
     let c = cantilever();
@@ -154,8 +163,14 @@ fn all_digests() -> Vec<(String, u64)> {
     ];
     for (name, opts) in solvers {
         let r = solve_static_with(&c, &[], &[], &opts).unwrap();
-        push(format!("{name} displacement"), digest(r.displacement_values().iter().copied()));
-        push(format!("{name} reactions"), digest(r.reactions().unwrap().iter().copied()));
+        push(
+            format!("{name} displacement"),
+            digest(r.displacement_values().iter().copied()),
+        );
+        push(
+            format!("{name} reactions"),
+            digest(r.reactions().unwrap().iter().copied()),
+        );
         let field = IntegrationPointField::from_result(&c, &r).unwrap();
         push(format!("{name} stress"), digest(flat6(field.stress())));
         let nodal = nodal_average(&c, &field, field.stress(), None).unwrap();
@@ -165,7 +180,10 @@ fn all_digests() -> Vec<(String, u64)> {
         );
     }
     let k = stiffness(&c).unwrap();
-    push("K C pattern".into(), digest_usize(&k.row_ptr) ^ digest_usize(&k.col).rotate_left(1));
+    push(
+        "K C pattern".into(),
+        digest_usize(&k.row_ptr) ^ digest_usize(&k.col).rotate_left(1),
+    );
     push("K C values".into(), digest(k.val.iter().copied()));
     for (name, model) in bars() {
         let r = modal_analysis(&model, &ModalOptions::new(4)).unwrap();
@@ -217,7 +235,10 @@ fn b1_to_b4_basic_models_have_the_bits_of_main() {
     for ((name, d), (mname, md)) in now.iter().zip(MAIN) {
         assert_eq!(name, mname, "digest order");
         let ok = d == md;
-        println!("{name}: {} (main 0x{md:016x}, now 0x{d:016x})", if ok { "equal" } else { "DIFFERS" });
+        println!(
+            "{name}: {} (main 0x{md:016x}, now 0x{d:016x})",
+            if ok { "equal" } else { "DIFFERS" }
+        );
         if !ok {
             missed.push(name.clone());
         }
