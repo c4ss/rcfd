@@ -314,3 +314,155 @@ before this amendment; the deviation N1b was not, and its estimate comes from th
 `n1_weights_control` stays as an ignored record (`n1_weights_control_defective_set_up`) with its limit and the measured
 number; N1b is the new test `n1b_weights_control_deviation`, run once. The decision rule reads N1 as N1b; nothing else
 changes.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; none was changed. Release builds on Windows. Commits: the registration
+`466b8741` (alone, before any code); the D1b record test `ca36d108`, run on the unchanged library 4bcfd339 (fingerprints
+`0x6e6117e1b91851a9 0x69a719b86040e649`, run once); the library opt-in L and the tests `dd51aef2`, compiled, formatted and
+linted without running. Run 1 of the test file (`cargo test --release -p rcfd-fv --test overset_f472 -- --nocapture
+--test-threads=4`, 37 s for the nine tests) on `dd51aef2`; amendment 1 `e4fd72bc` (the control N1, before any corrected
+run); the records of the misses and the test N1b `5170de3e`; N1b run once on `5170de3e`. Logs in
+`E:/projects/cfd/w49i-work/f472-scratch` (`f472-run1.log`, `f472-N1b.log`, `existing-tests.log`, `baseline-hashes.log`,
+`f472-MU1.log` to `f472-MU3.log`).
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| A1 `E(W3o) / E(P3o)` (default interpolation) | `<= 2` | `3.311` (`E(W3o) = 1.5880e-2`, `E(P3o) = 4.7965e-3`) | **missed** |
+| A1d `E(W3o) / E(P3)` | `<= 2` | `3.311` (`E(P3) = 4.7965e-3`, equal to `E(P3o)` to the printed digits) | **missed** |
+| A2 `E(W3qo) / E(P3qo)` (quadratic) | `<= 2` | `6.801` (`E(W3qo) = 1.5882e-2`, `E(P3qo) = 2.3353e-3`) | **missed** |
+| A2d `E(W3qo) / E(P3q)` | `<= 2` | `6.801` (`E(P3q) = 2.3353e-3`; P-diff `1.9e-13`) | **missed** |
+| A3 continuity every step: P3o, P3qo, W3o, W3qo | `<= 1e-9` | `1.95e-14`, `1.41e-14`, `9.35e-15`, `1.19e-14` | met |
+| A5 the share of the uncorrected Green-Gauss pressure gradient | named | default interpolation `sigma = 0.633` (`E(W3oL) = 5.8319e-3`), excess share `chi = 0.907`; quadratic `sigma_q = 0.657` (`E(W3qoL) = 5.4434e-3`), `chi_q = 0.771` | named |
+| L0 (set-up) L acts on W3o | `>= 1e-6` | `0.633` | met |
+| L1 `E(W3oL) / E(P3oL)` | `<= 2` | `1.216` (`E(P3oL) = 4.7965e-3`) | met |
+| L2 `E(W3qoL) / E(P3qoL)` | `<= 2` | `2.331` (`E(P3qoL) = 2.3353e-3`) | **missed** |
+| L3 continuity every step: P3oL, P3qoL, W3oL, W3qoL | `<= 1e-9` | `1.95e-14`, `1.41e-14`, `9.90e-15`, `9.29e-15` | met |
+| L4 uniform flow U3oL: velocity, pressure, continuity | `<= 1e-10`, `<= 1e-10`, `<= 1e-9` | `7.47e-15`, `7.62e-14`, `6.25e-15` | met |
+| R1 L without the corrections refused, naming ADR 0382 | refused | refused: "overset: the least-squares pressure gradient (ADR 0382) needs the geometry corrections on" | met |
+| K1 LS of a linear pressure, warped background; component | `<= 1e-10` | `6.76e-15`; `5.90e-15` | met |
+| K2 GG of a linear pressure, warped background | `>= 1e-3` | `0.195` (rms `0.065`; the warped component `0.186`) | met |
+| K3 GG of a linear pressure, planar background; component | `<= 1e-10` | `1.75e-14`; `2.31e-14` | met |
+| K4 `p_ex` of V, interior cells of the warped background: LS over GG | `<= 0.5` | `0.106` (LS `2.86e-2`, rms `1.34e-2`; GG `0.271`, rms `0.076`); warped component LS `2.85e-2`, GG `0.203`; planar background and component LS = GG `1.60e-2`, `1.43e-2` (the second-order error) | met |
+| U4 (set-up) kind changes P3o, W3o | `>= 20` | `99`, `92` | met |
+| Q1 (set-up) quadratic share P3qo, W3qo, W3qoL | `>= 0.95` | `1.0`, `1.0`, `1.0` | met |
+| U5 unconverged solves | printed | `0` in every run | - |
+| N1 (control, as registered) `E(N1) - E(P3o)` | `>= 3e-4` | `-5.11e-4` | defective (amendment 1) |
+| N1b (control, amendment 1) largest deviation of the perturbed velocity | `>= 3e-4` | `1.03e-3` | held |
+| D1 ADR 0367's eight default fingerprints | pass | passes (`overset_f368` 10 passed, the eight fingerprints equal) | met |
+| D1b the opt-in without L, two fingerprints | equal | equal, both (`0x6e6117e1b91851a9`, `0x69a719b86040e649`) | met |
+| D2 `baseline_hashes` (release), unedited | passes | 3 passed, 1 ignored (as before) | met |
+| D3 the 16 existing overset test files and the `rcfd-fv` lib tests (release), unedited | pass | all pass (lib 104 passed, 6 ignored; every file ok, its ignored tests left ignored; 9 min 16 s) | met |
+
+Per class (largest over the steps; BC, BF, CC, CF), with the step and cell of the largest error and the pressure error
+(`max abs(p - p_ex - m_k) / V^2`):
+
+| Run | `E` | step, cell | BC | BF | CC | CF | pressure |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P3o (= P3, = P3oL) | `4.797e-3` | 6, 14990 (CF) | `1.52e-3` | `2.03e-3` | `3.52e-3` | `4.80e-3` | `4.27e-2` |
+| P3qo (= P3q, = P3qoL) | `2.335e-3` | 40, 14200 (CC) | `1.24e-3` | `8.9e-4` | `2.34e-3` | `1.09e-3` | `4.42e-2` |
+| W3o | `1.588e-2` | 40, 4205 (BC) | `1.59e-2` | `3.94e-3` | `1.36e-2` | `1.11e-2` | `4.29e-2` |
+| W3qo | `1.588e-2` | 40, 4205 (BC) | `1.59e-2` | `3.80e-3` | `1.40e-2` | `1.19e-2` | `4.42e-2` |
+| W3oL | `5.832e-3` | 22, 14019 (CF) | `5.44e-3` | `2.30e-3` | `3.96e-3` | `5.83e-3` | `4.29e-2` |
+| W3qoL | `5.443e-3` | 40, 13327 (BC) | `5.44e-3` | `1.85e-3` | `3.28e-3` | `1.74e-3` | `4.42e-2` |
+
+Run times 6 to 9 s each.
+
+### Reading of the missed ratios (by the rule fixed in the registration)
+
+- **A1, A1d** (default interpolation): L1 is met (`1.22`), so the cause is named as **the uncorrected Green-Gauss pressure
+  gradient**. It carries `63 %` of the error on B3d (`sigma`) and `91 %` of the excess over B3 (`chi`). The operator-level
+  evidence: the Green-Gauss gradient of a linear pressure on B3d is off by `0.195 abs(c)` (K2), the least-squares
+  gradient is exact (K1); for the pressure of V the least-squares error is a tenth of the Green-Gauss error (K4).
+- **A2, A2d** (quadratic): L2 misses too (`2.33`), so the cause is named as **the Green-Gauss gradient and a remainder**.
+  The Green-Gauss gradient carries `66 %` of the error on B3d; the remainder `E(W3qoL) - 2 E(P3qoL) = 7.7e-4` sits in a
+  background calculated cell (13327, step 40), as W3oL's background error (`BC 5.44e-3` in both). What the classes show,
+  without a further diagnosis: the quadratic stencils halve the error on B3 (the component fringe class CF falls from
+  `4.80e-3` to `1.09e-3`), and the warped background's own error (`BC`, which no donor interpolation touches) does not fall
+  with them; L2 misses because the reference fell, not because the quadratic run on B3d grew (`E(W3qoL) = 5.44e-3 <
+  E(W3oL) = 5.83e-3`).
+
+### Deviations and disclosures
+
+- The control N1 as registered was defective (a signed difference of two largest errors, which a perturbation can lower);
+  corrected by amendment 1 before the corrected run; the corrected control N1b held at `1.03e-3`. The number `-5.1e-4` was
+  seen before the amendment; N1b's limit is the registered `3e-4`.
+- The predictions held in direction and roughly in size: A1 to A2d missed (predicted ratios `3` to `10`; measured `3.3` and
+  `6.8`), `sigma` `0.63` and `0.66` (predicted `0.5` to `0.85`), L1 `1.22` and L2 `2.33` (predicted `1.2` to `2.5`), K2
+  `0.195` (predicted about `0.1`), K4 `0.11` (predicted about `0.15`). `E(P3o) = 4.8e-3` is above my estimate (`1e-3` to
+  `3e-3`), its largest error in the component fringe at step 6 (with the quadratic stencils `2.3e-3`): the interpolation
+  error of the curved vortex, which the shear of ADR 0367 (linear, reproduced by the stencils) did not have.
+- The pressure error is `4.3e-2` to `4.4e-2 V^2` in every run, on B3 as on B3d, with or without L: it does not come from the
+  warped geometry and is not diagnosed here (printed only; not part of the acceptance).
+- On B3 the corrections and L vanish as derived: `E(P3o) = E(P3) = E(P3oL)` to the printed digits (P-diff `0` and
+  `1.9e-13`); on the planar meshes the least-squares and the Green-Gauss gradient of V agree to the printed digits (K4).
+
+### Mutations
+
+Applied alone by `f472-scratch/mutate.py` (exact replacements, each found once) to a `git archive` copy of `5170de3e`
+(`f472-scratch/mut`, own target directory); the named test run once each; `overset.rs` restored and compared byte for byte
+with the worktree afterwards (equal).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 L not applied (Green-Gauss kept with the flag on) | L0 | caught: L0 `0` (W3oL equals W3o), also L1 `3.31` |
+| MU2 L on in `new` | D1b (and D1) | caught: both D1b fingerprints differ; all eight D1 fingerprints differ (every default step refused) |
+| MU3 the default predictor gradient with one skewness pass | D1 | caught: all eight D1 fingerprints differ |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean; `cargo clippy -p rcfd-fv --all-targets --release -- -D warnings` clean. Crate touched:
+`rcfd-fv` only (`src/overset.rs`: the field, the setter and getter, the refusal and the two gradients of `piso`; new
+`tests/overset_f472.rs`); `docs/dynamic-mesh.md` gained a paragraph. The gate's share of the new file: eight tests that are
+not ignored, about 40 s.
+
+### Not run
+
+The whole workspace test suite (the lead runs the gate). No second resolution, warp amplitude or flow; no diagnosis of the
+remainder of L2 beyond its class (a run of the warped background alone with V would separate it); no diagnosis of the
+pressure error common to all runs.
+
+### Decision by the registered rule
+
+**Partial.** A3, L3 and D1 to D3 are met and the share is named (`sigma = 0.63`, `sigma_q = 0.66`), but the four acceptance
+ratios are missed (`3.31`, `3.31`, `6.80`, `6.80` against `2`) and the separating ratio L2 is missed (`2.33`). Said plainly:
+with `set_geometry_corrections` on, a varying pressure on B3d is not within twice B3's error; the uncorrected Green-Gauss
+pressure gradient is the larger cause (with the least-squares gradient the default-stencil ratio falls to `1.22`), and with
+the quadratic stencils a remainder in the warped background is left.
+
+### Remaining questions (each with options and a recommendation)
+
+Recommendations are taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation) as proposals to
+the lead; none is a decision the maintainer made in person.
+
+- **Q1. A consistent cell pressure gradient in the geometry corrections.** Options: (a) keep L a diagnostic opt-in; (b) fold
+  the least-squares pressure gradient into `set_geometry_corrections` (changes the opt-in's results, not the defaults; ADR
+  0367's runs have a constant pressure and would move by round-off only); (c) a Green-Gauss gradient with the C1 face
+  correction applied to the scalar (face value `p(x_f') + g . s_f` plus the warp term `W_f^T g`, iterated), exact for
+  linear fields like the least-squares gradient but in the Green-Gauss form. Recommendation (b), as a follow-up item (text
+  below): it is the measured cause of the A1 miss, it is a few lines, and it leaves the defaults untouched; (c) only if (b)
+  leaves a ratio above 2.
+- **Q2. The remainder of L2 in the warped background.** Options: (a) record; (b) a separating run of V on the warped
+  background alone at rest with the corrections and L (as ADR 0367's SBo), naming whether the remainder is the second-order
+  remainder of C2 and of the least-squares velocity gradients on the warped cells. Recommendation (b), inside the follow-up
+  of Q1.
+- **Q3. The pressure error of `4.3e-2 V^2` common to all runs.** Options: (a) record; (b) look at it in the follow-up.
+  Recommendation (a) for now: it does not depend on the warp or the opt-ins, and the acceptance is on the velocity.
+
+## For the lead: roadmap entries
+
+No roadmap file was edited.
+
+**F-472**, proposed status: `partial`. Proposed note:
+
+> From ADR 0367 Q2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0382, 2026-11-12: PARTIAL. A Taylor-Green vortex with an axial velocity (exact, zero normal pressure gradient on the box, pressure range V^2) on B3 and B3d with the component moving as in ADR 0255, OversetSolver::set_geometry_corrections on: E on B3d 1.588e-2 (default stencils and quadratic) against 4.80e-3 and 2.34e-3 on B3, ratios 3.31 and 6.80 (limit 2; missed, kept as known misses), the same against B3 with the default solver; continuity 2e-14 or less every step. The share of the uncorrected Green-Gauss pressure gradient is named by the new diagnostic opt-in OversetSolver::set_least_squares_pressure_gradient (only with the corrections): it carries 63 % and 66 % of the error on B3d (91 % and 77 % of the excess over B3); with it the ratios are 1.22 (met) and 2.33 (missed: the warped background's own error stays while the quadratic stencils halve B3's). At operator level the Green-Gauss gradient of a linear pressure is off by 0.195 |grad p| on B3d, the least-squares one exact. Defaults and the opt-in without the new flag bit-identical (ADR 0367's eight fingerprints and two new ones equal; baseline_hashes and the overset tests pass). Control held after an amendment (N1b 1.0e-3); three mutations caught by their registered checks. Limits: one flow, one warp, one resolution; a pressure error of 4.3e-2 V^2 common to all runs is not diagnosed.
+
+Proposed follow-up item (the number is the lead's):
+
+**Overset: a consistent cell pressure gradient in the geometry corrections.** Depends on F-472. Acceptance:
+
+> OversetSolver::set_geometry_corrections takes the cell pressure gradient of the momentum predictor and of the velocity correction from the least-squares gradients of the corrections (or another gradient exact for linear fields on B3d), with the defaults bit-identical: the Taylor-Green vortex with an axial velocity of ADR 0382 on B3 and B3d with the component moving as in ADR 0255 has an error of the calculated and fringe cells on B3d at most twice that on B3 with the default and the quadratic donor interpolation, continuity within 1e-9 at every step, ADR 0367's linear shear and uniform flow within their limits, and a run of the warped background alone that names the share of the warped background in the remainder.
