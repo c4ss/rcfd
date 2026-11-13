@@ -7450,7 +7450,7 @@ fixed by the item's registration ADR before any code.
     identified by effective mass fractions from mass::rigid_motions, as sb_modal does. ADR 0354 (2026-11-12): for a
     slender blade use ModalOptions::new(m).tolerance(1e-12).residual_test(rcfd_linalg::eigen::ResidualTest::Backward)
     instead of a hand-set relative tolerance; the default stays the relative test of ADR 0283.
-- [ ] **F-388** Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
+- [x] **F-388** Scaffold of the intermediate tier: module layout, model extension data, element-trait extension points
   - depends on: F-370, F-372, F-374, F-377
   - acceptance: Every limit not stated here is registered in the ADR before the run. The modules, element kinds,
     property data, constraint and support data and the three defaulted element entry points of ADR 0290 section 2 exist
@@ -7463,7 +7463,21 @@ fixed by the item's registration ADR before any code.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size S. Stub ADR 0291; the registration is
     written by the implementation agent before any code. ADR 0275 (2026-11-12): a generic assembly hook exists as
     assemble::assemble_with; per-node prescribed values and forces are arguments of solve::solve_static_with, not model
-    fields.
+    fields. ADR 0291, 2026-11-13: the intermediate tier's scaffold. rcfd-fem declares hex20, hex8x, beam, shell, mpc,
+    cyclic, geometric, buckling, rotating, nonlinear, transient, harmonic and rcfd-post solid_dynamic, solid_fsi;
+    ElementKind gains Hex20, Beam2, Shell4 (is_solid, pending; their data and element delegated to their module, a
+    placeholder element whose every fallible entry refuses); BlockProperty (Solid with SolidFormulation Full, BBar,
+    Incompatible; Beam with BeamSection and orientation; Shell with thickness) set by SolidMesh::set_block_property;
+    Constraint::Linear, RigidSet, Cyclic and ElasticSupport (NodalSpring, Foundation) with SolidModel::add_support, all
+    validated when added; Element::geometric_stiffness, internal_force, tangent refusing by default; the generic hook is
+    ADR 0275's assemble_with. Each new kind, formulation, constraint and support is refused by the static solve (also by
+    the modal analysis and assemble::stiffness) with FemError::NotYetSupported naming the variant, its block or set and
+    the package, every string exact (10 cases, 30 more paths); VTK cell types 3, 9, 25 admitted and mapped. Patch test,
+    cantilever (direct and PCG) and bar modes give displacements, reactions, stresses, nodal stresses, eigenvalues,
+    frequencies, modes and stiffness with the bits of main ee449e26 (26 digests equal); assemble_with with the element
+    stiffness equals assemble::stiffness bit for bit for 1 and 8 threads on four models; every sb_ test of rcfd-fem,
+    rcfd-linalg, rcfd-io, rcfd-post passes unedited (rcfd-api has none); baseline hashes unchanged. Eleven mutations,
+    all caught.
 - [ ] **F-389** Quadratic hexahedron (Hex20) with its face loads, mass and the quadratic upgrade of a hexahedron box
   - depends on: F-388, F-372, F-374, F-375, F-376, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Hex20 on the reference element and
@@ -7479,7 +7493,11 @@ fixed by the item's registration ADR before any code.
     first axial frequency of a fixed-free bar (nu = 0) within 0.1 percent at 8 elements. The upgrade has (nodes + edges)
     nodes.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size S. Stub ADR 0292; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0291 (2026-11-13): hex20.rs holds PENDING, element(),
+    reference_nodes(), faces(), shape_gradients(), fit_basis() and volume(), to which mesh.rs, element.rs and recover.rs
+    delegate; landing Hex20 is filling these and setting PENDING to None in hex20.rs. The node order (corners as Hex8,
+    mid-edge nodes on the edges in HEX_EDGES order) is declared as VTK type 25's and mapped by identity in
+    solid_output.rs; confirm it.
 - [ ] **F-390** Hex8 without locking: mean-dilatation (B-bar) and incompatible-mode formulations, opt-in per element block
   - depends on: F-388, F-372, F-374, F-376, F-379
   - acceptance: Every limit not stated here is registered in the ADR before the run. Two opt-in formulations of Hex8,
@@ -7493,7 +7511,10 @@ fixed by the item's registration ADR before any code.
     (control). Recovered stress on the patch test equals D eps within 1e-10; the condensed internal modes are recovered
     for the stress.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0293; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0291 (2026-11-13): the formulation is
+    ElementBlock::formulation() (set by SolidMesh::set_block_property with BlockProperty::solid); hex8x::PENDING gates
+    it. The stiffness and the recovery do not delegate to hex8x: the package needs assemble.rs (stiffness_with) and
+    recover.rs in its file list.
 - [ ] **F-391** Six unknowns per node: rotations in the DofMap, nodal moments, and a two-node shear-flexible beam element
   - depends on: F-388, F-374, F-375, F-376, F-377, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Nodes carry three or six unknowns;
@@ -7540,6 +7561,10 @@ fixed by the item's registration ADR before any code.
     written by the implementation agent before any code. ADR 0275 (2026-11-12): constraint::reduce(k, f, prescribed)
     returns a ReducedSystem (principal submatrix K_FF, f_F - K_FP g, expand); the rigid-body check
     constraint::check_rigid_body_motions works on prescribed equations only and needs extending for linear constraints.
+    ADR 0291 (2026-11-13): Constraint::Linear { terms: Vec<LinearTerm>, value }, Constraint::RigidSet { set, reference
+    }, Constraint::Cyclic { low, high, axis, origin, sectors } and ElasticSupport::{NodalSpring, Foundation} exist and
+    are validated when added; constraints are refused in constraint::prescribed_equations (gated by mpc::PENDING and
+    cyclic::PENDING), supports in SolidModel::check_supported.
 - [ ] **F-394** Cyclic symmetry: one sector of a rotor for statics and for modal analysis by harmonic index
   - depends on: F-393, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. Equivalence: for a ring and for a
@@ -7552,7 +7577,11 @@ fixed by the item's registration ADR before any code.
     within 1 percent. Boundaries that do not match under the rotation within the registered tolerance are refused with
     the first unmatched node; N < 2 and a harmonic index above N/2 are refused.
   - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0297; the registration is
-    written by the implementation agent before any code.
+    written by the implementation agent before any code. ADR 0291 (2026-11-13): Constraint::Linear { terms:
+    Vec<LinearTerm>, value }, Constraint::RigidSet { set, reference }, Constraint::Cyclic { low, high, axis, origin,
+    sectors } and ElasticSupport::{NodalSpring, Foundation} exist and are validated when added; constraints are refused
+    in constraint::prescribed_equations (gated by mpc::PENDING and cyclic::PENDING), supports in
+    SolidModel::check_supported.
 - [ ] **F-395** Geometric (initial-stress) stiffness of solid elements: pre-stressed modal analysis and linear buckling
   - depends on: F-388, F-374, F-376, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_sigma is symmetric within 1e-13
