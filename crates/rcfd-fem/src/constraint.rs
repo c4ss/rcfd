@@ -4,6 +4,8 @@
 //! and from per-node [`Prescribed`] values. They are imposed by symmetric elimination: the prescribed unknowns are
 //! removed, `K_FF u_F = f_F - K_FP g`, and the reactions are `K u - f` at the prescribed unknowns. [`reduce`] is the one
 //! function a transformation method `u = T q + g` replaces (ADR 0296).
+//! Linear constraints and rigid sets give no prescribed equation here: [`crate::mpc`] handles them (and the elastic
+//! supports) by the transformation, and [`crate::solve::solve_static_report`] dispatches to it.
 //!
 //! Before any factorisation, [`check_rigid_body_motions`] refuses a constraint set that leaves a rigid-body motion of a
 //! connected part free: the six rigid motions `a + w x (x - c)` restricted to the prescribed components must have full

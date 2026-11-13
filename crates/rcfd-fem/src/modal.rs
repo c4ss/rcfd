@@ -120,6 +120,7 @@ pub fn modal_analysis(model: &SolidModel, options: &ModalOptions) -> Result<Moda
 pub fn modal_analysis_with(model: &SolidModel, extra: &[Prescribed], options: &ModalOptions) -> Result<ModalResult> {
     model.validate()?;
     model.check_supported()?;
+    crate::mpc::refuse_in_modal(model)?;
     let dofs = model.dof_map();
     let fixed = prescribed_equations(model, extra)?;
     if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {

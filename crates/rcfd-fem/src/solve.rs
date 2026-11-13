@@ -164,6 +164,10 @@ pub fn solve_static_report(
 ) -> Result<(SolidResult, SolveReport)> {
     model.validate()?;
     model.check_supported()?;
+    // ADR 0296 D6: a linear constraint, a rigid set or an elastic support takes the transformation u = T q + g.
+    if crate::mpc::uses_transformation(model) {
+        return crate::mpc::solve_static_mpc(model, prescribed, forces, &[], options).map(|s| (s.result, s.report));
+    }
     let dofs = model.dof_map();
     let f = nodal_load_vector(model, forces)?;
     let fixed = prescribed_equations(model, prescribed)?;
