@@ -6734,7 +6734,9 @@ fixed by the item's registration ADR before any code.
     (D/40, dt 1e-3) at step 2951, with pressure NaN in the pressure solve at the inlet corner cell; not diagnosed. ADR
     0363 (2026-11-12, F-466): the stop of build_second_order_bounded on T (ADR 0268) is not a stop of the forcing but of
     the AMG-preconditioned pressure CG (r^T z < 0 at step 2951); with the opt-in PimpleSettings::pressure_ic_fallback
-    the run reaches t = 8.
+    the run reaches t = 8. ADR 0374 (2026-11-12, F-363): with one PISO corrector a flux face with an image or a weight
+    above 1 is refused at step 1 with a located message; the stop of the bounded form with one corrector (step 34)
+    depends on the time step (it runs at dt 5e-4 and 2.5e-4) and is not explained by the pressure-lag map.
 - [x] **F-356** Overset: donor search on non-convex cells with planar faces
   - depends on: F-352
   - acceptance: On a mesh of non-convex polyhedral cells with planar faces every one of 100000 random points inside the
@@ -6922,16 +6924,32 @@ fixed by the item's registration ADR before any code.
     coincident nodes with the radial basis (an absolute pivot test); amendment 1 refuses pivots below 2 n eps a_jj, and
     E1b passes with it. Protocol option in docs/cosimulation-protocol.md. Open: ADR 0263 Q1 to Q3. ACCEPTED AS DONE by
     the maintainer in person on 2026-11-12 (the amended check).
-- [ ] **F-363** Second-order immersed forcing: the single PISO corrector
+- [~] **F-363** Second-order immersed forcing: the single PISO corrector
   - depends on: F-355
   - acceptance: The stop of DFG 2D-2 on M2 with one PISO corrector and a second-order immersed flux face of weight above
     1 (ADR 0254 D11: step 34 with the bounded form, step 126 with weights up to 2) is explained by a registered
     measurement, and the setting either runs 200 steps or is refused with a located message; two correctors are
     unaffected.
-  - note: From ADR 0254 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
-    0254 measured: with one corrector the first-order forcing and the second-order forcing with weights of at most 1
-    run, weights up to 2 stop at step 126, the bounded form at step 34 (theta_min 0.1: step 46); with two or more
-    correctors all of these run. The mechanism is not measured.
+  - note: PARTIAL (ADR 0374, 2026-11-12), in the library. From ADR 0254 question 3. The stop of DFG 2D-2 on M2 with one
+    PISO corrector was reproduced to the step (weights up to 2: step 126; bounded form with theta_min 0.1: 46; bounded:
+    34; the first-order forcing and weights of at most 1 run) and narrowed by registered measurements: it depends on the
+    time step (the bounded form with one corrector runs 200 steps at dt 5e-4 and 2.5e-4, unlike the large-weight stop of
+    F-355), it grows at the first fluid cells of the body, alternating from step to step, and two correctors damp it
+    (largest flux-face velocity 0.87 to 0.21 over 34 steps). The hypothesis that it is the pressure-lag instability of
+    the single corrector (the reversed flux face returning the lagged pressure gradient reversed) was tested with an
+    opt-in pressure-lag map that includes the face-flux reconstruction (PimpleSolver::immersed_lag) and is not
+    supported: with one corrector the map gives 1.13 to 1.20 at step 2 for all five forcings, the two that run included,
+    with or without the reconstruction (a mode at the body, for the first-order forcing in a solid cell), and below 0.1
+    with two correctors. Delivered: the setting is refused at step 1 with a located message
+    (ImmersedForcing::single_corrector_face; quantity immersed flux corrector; the fluid cell and the weight of the
+    reversed face; names ADR 0374 and n_correctors >= 2) wherever a flux face has an image or a weight above 1, with one
+    corrector and one outer iteration, unless flux_weight_check is off; two correctors, the first-order forcing, weights
+    of at most 1 and PIMPLE are not refused, and the defaults are bit-identical (fingerprints of three runs and two
+    estimates, the immersed tests, baseline_hashes). Six mutations caught. Partial by the registered rule: four known
+    misses (the lag map of the settings that run below one; the map without the reconstruction below one; the raise of
+    the map by the reconstruction; the faces leading the growth). Open (ADR 0374 Q1 to Q4): the form of the refusal (a
+    smaller step also runs), PIMPLE with one corrector, the mechanism (a linearisation of the whole step), the lag
+    estimate at an immersed body (above one for a setting that runs).
 - [ ] **F-364** Second-order immersed forcing: one constructor with bounded weights
   - depends on: F-355
   - acceptance: `build_second_order` builds the bounded form of ADR 0254, the refusal of the unbounded form is removed,
@@ -8402,7 +8420,8 @@ fixed by the item's registration ADR before any code.
     0380 Q1). Seven of eight mutations caught; treating fixed_patches as sliding is not seen by this model problem (its
     wall moves along x only, so a sliding and a fixed xmax give the same mesh; Q3). Not delivered: a structure from a
     case, the participant's own name (always fluid, Q2), more than one participant per rcfd serve, models other than the
-    incompressible flow. Open: ADR 0380 Q1 to Q4.
+    incompressible flow. Open: ADR 0380 Q1 to Q4. ADR 0381 (2026-11-13, F-481): MU5 is now caught by a tangential wall
+    displacement; F-444 stays partial for the schema and serve help approval (ADR 0380 Q1).
 - [~] **F-445** Overset: prescribed flux on the faces between calculated and fringe cells
   - depends on: F-349, F-344
   - acceptance: An opt-in of the overset step under which the flux of a face between a calculated and a fringe cell is
@@ -9032,9 +9051,33 @@ fixed by the item's registration ADR before any code.
     section split the entering and returning waves of a duct field within 1 percent of the closed form; files without
     velocity read and drive bit-identically as before.
   - note: From ADR 0378 question 1. NEEDS THE USER: it changes the rcfd-surface-series format. Size M.
-- [ ] **F-481** A check that sees fixed against sliding patches of the co-simulation smoothing
+- [x] **F-481** A check that sees fixed against sliding patches of the co-simulation smoothing
   - depends on: F-444
   - acceptance: A [cosim] case whose initial wall displacement has a component along a fixed patch gives a different
     mesh when that patch is declared sliding than when it is declared fixed (the mutation MU5 of ADR 0380 is caught),
     and the points of the fixed patch do not move (0 bits); without the table every case hash is unchanged.
-  - note: From ADR 0380 Q3 (mutation MU5 not caught). Size S.
+  - note: DONE (ADR 0381, 2026-11-13; registered before the test). A [cosim] case whose initial wall displacement is
+    tangential to xmax (case 8x8x2 of 0.4x0.4x0.1 m, dy = 5e-3 sin(pi y/W)) gives a different mesh when xmax is declared
+    sliding than when it is fixed (168 points differ, largest dy on xmax 4.316e-4 m, closed form 4.3e-4), the 27 points
+    of the fixed xmax do not move (0 bits), a sliding xmax keeps its x (0), and an x-only displacement cannot tell them
+    apart (0 bits, the old set-up). The mutation MU5 of ADR 0380 is caught on the first run, as are two more (every
+    other patch fixed; the initial displacement reduced to x). No library line changed; baseline_hashes and
+    case_hashes_w48u pass unedited.
+- [ ] **F-482** Second-order immersed forcing: the single-corrector mode by a linearisation of the whole step
+  - depends on: F-363
+  - acceptance: The period-two growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector (ADR
+    0374: stop at step 34 at dt 1e-3, runs at 5e-4 and 2.5e-4) is measured by a registered finite-difference
+    linearisation of the whole step (velocity and pressure) about the state of an early step, whose dominant eigenvalue
+    is real and below -1 at dt 1e-3 and of magnitude below 1 at dt 5e-4 and with two correctors, with its mode at the
+    first fluid cells; or the part of the step that carries the growth is identified by a registered measurement.
+  - note: From ADR 0374 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0374 narrowed the stop (the time step, the body, a period-two oscillation, two correctors damp it); the frozen
+    pressure-lag map did not separate the settings.
+- [ ] **F-483** Pressure-lag estimate at an immersed body
+  - depends on: F-363
+  - acceptance: The pressure-lag estimate of ADR 0073 for DFG 2D-2 on M2 with the first-order immersed forcing and one
+    corrector at dt 1e-3 (ADR 0374: 1.13 to 1.30 for a run that runs, the mode in a solid cell at the surface) is
+    explained by a registered measurement (the solid cells, the start and the tolerance of the pressure solve), and
+    either the estimate leaves out what is not a fluid mode, opt-in or with the defaults bit-identical, so that it is
+    below one for that run and above one for a setting that stops, or the limitation is documented with its numbers.
+  - note: From ADR 0374 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
