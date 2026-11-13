@@ -735,7 +735,7 @@ pub struct HarmonicLoss {
 pub enum HarmonicSpeedModes {
     /// The modes of the index, as [`crate::cyclic::modal_analysis_harmonic`] packs them, with `reduced_stiffness` the reduced
     /// `K_eff`.
-    Modes(crate::cyclic::HarmonicModes),
+    Modes(Box<crate::cyclic::HarmonicModes>),
     /// The reduced `K_eff` of the index is not positive definite at this speed: no frequency is computed.
     LossOfStiffness(HarmonicLoss),
 }
@@ -744,7 +744,7 @@ impl HarmonicSpeedModes {
     /// The modes, if the index has them at this speed.
     pub fn modes(&self) -> Option<&crate::cyclic::HarmonicModes> {
         match self {
-            HarmonicSpeedModes::Modes(r) => Some(r),
+            HarmonicSpeedModes::Modes(r) => Some(&**r),
             HarmonicSpeedModes::LossOfStiffness(_) => None,
         }
     }
@@ -831,9 +831,13 @@ fn small_inverse(g: &[Vec<f64>]) -> Vec<Vec<f64>> {
         return vec![vec![1.0 / g[0][0]]];
     }
     let mut a: Vec<Vec<f64>> = g.to_vec();
-    let mut inv: Vec<Vec<f64>> = (0..d).map(|i| (0..d).map(|j| if i == j { 1.0 } else { 0.0 }).collect()).collect();
+    let mut inv: Vec<Vec<f64>> = (0..d)
+        .map(|i| (0..d).map(|j| if i == j { 1.0 } else { 0.0 }).collect())
+        .collect();
     for c in 0..d {
-        let p = (c..d).max_by(|&x, &y| a[x][c].abs().total_cmp(&a[y][c].abs())).unwrap_or(c);
+        let p = (c..d)
+            .max_by(|&x, &y| a[x][c].abs().total_cmp(&a[y][c].abs()))
+            .unwrap_or(c);
         a.swap(c, p);
         inv.swap(c, p);
         let piv = a[c][c];
@@ -990,7 +994,8 @@ impl<'a> RotatingSector<'a> {
         let model = self.part.model;
         let options = &self.part.options.modal;
         if omega == 0.0 {
-            return crate::cyclic::modal_analysis_harmonic(model, &[], harmonic, options).map(HarmonicSpeedModes::Modes);
+            return crate::cyclic::modal_analysis_harmonic(model, &[], harmonic, options)
+                .map(|h| HarmonicSpeedModes::Modes(Box::new(h)));
         }
         let n = model.dof_map().n_equations();
         let tr = if harmonic == 0 {
@@ -1095,7 +1100,7 @@ impl<'a> RotatingSector<'a> {
         } else {
             (eig.values.clone(), vec![0.0; eig.values.len()])
         };
-        Ok(HarmonicSpeedModes::Modes(HarmonicModes {
+        Ok(HarmonicSpeedModes::Modes(Box::new(HarmonicModes {
             harmonic,
             sectors,
             multiplicity,
@@ -1113,7 +1118,7 @@ impl<'a> RotatingSector<'a> {
             transformation: tr,
             reduced_stiffness: kr,
             reduced_mass: mr,
-        }))
+        })))
     }
 
     /// The Campbell diagram over the harmonic indices `harmonics` (non-empty, strictly increasing, each at most `N / 2`; key

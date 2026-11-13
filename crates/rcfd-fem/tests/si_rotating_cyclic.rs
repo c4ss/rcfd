@@ -118,7 +118,7 @@ fn quad(a: &CsrMatrix, x: &[f64]) -> f64 {
 
 fn harmonic_modes(r: HarmonicSpeedModes, what: &str) -> HarmonicModes {
     match r {
-        HarmonicSpeedModes::Modes(h) => h,
+        HarmonicSpeedModes::Modes(h) => *h,
         HarmonicSpeedModes::LossOfStiffness(l) => panic!("defective set-up: {what}: loss of stiffness {l:?}"),
     }
 }
@@ -142,7 +142,8 @@ fn loss_speed(rs: &RotatingSector, hs: &[HarmonicModes]) -> (f64, usize, bool) {
         for (i, phi) in h.modes.iter().enumerate() {
             let m = quad(part.mass(), &phi.cos) + quad(part.mass(), &phi.sin);
             let p = (quad(part.spin_softening(), &phi.cos) + quad(part.spin_softening(), &phi.sin)) / m;
-            let g = (quad(part.unit_geometric_stiffness(), &phi.cos) + quad(part.unit_geometric_stiffness(), &phi.sin)) / m;
+            let g =
+                (quad(part.unit_geometric_stiffness(), &phi.cos) + quad(part.unit_geometric_stiffness(), &phi.sin)) / m;
             let l = h.eigenvalues[i];
             let d = p - g;
             if d > 0.0 && best.map_or(true, |(v, _)| l / d < v) {
@@ -234,7 +235,10 @@ fn c1_c2_sector_equals_full_rotor_by_family() {
             .chain(fr.eigenvalues.iter())
             .map(|l| (l / lambda_c - 1.0).abs())
             .fold(f64::INFINITY, f64::min);
-        assert!(near >= 1e-7, "defective set-up: an eigenvalue within 1e-7 of the cut-off");
+        assert!(
+            near >= 1e-7,
+            "defective set-up: an eigenvalue within 1e-7 of the cut-off"
+        );
         let full_below: Vec<f64> = fr.eigenvalues.iter().copied().filter(|&l| l < lambda_c).collect();
         ch.holds(
             &format!("C1 {factor} omega_ref count"),
@@ -267,7 +271,11 @@ fn c1_c2_sector_equals_full_rotor_by_family() {
         }
         ch.le(&format!("C2 {factor} omega_ref family quotients"), worst, 1e-8);
         if factor == 0.9 {
-            ch.holds("L3", true, "no index and not the full rotor loses stiffness at 0.9 omega_ref");
+            ch.holds(
+                "L3",
+                true,
+                "no index and not the full rotor loses stiffness at 0.9 omega_ref",
+            );
             at_09 = Some((full_below, lambda_c));
         }
     }
@@ -282,13 +290,21 @@ fn c1_c2_sector_equals_full_rotor_by_family() {
     off.sort_by(f64::total_cmp);
     let n1 = worst_relative(&off, &full_below);
     println!("N1: {n1:.3e} (expected > 1e-3)");
-    ch.holds("N1", n1 > 1e-3, "the sector without K_sigma differs from the full rotor by more than 1e-3");
+    ch.holds(
+        "N1",
+        n1 > 1e-3,
+        "the sector without K_sigma differs from the full rotor by more than 1e-3",
+    );
     // N2: the sector at rest against the full rotor at 0.9 omega_ref.
     let mut r0: Vec<f64> = rest_modes.iter().flat_map(|h| h.eigenvalues.iter().copied()).collect();
     r0.sort_by(f64::total_cmp);
     let n2 = worst_relative(&r0, &full_below);
     println!("N2: {n2:.3e} (expected > 1e-3)");
-    ch.holds("N2", n2 > 1e-3, "the rest spectrum differs from the full rotor at speed by more than 1e-3");
+    ch.holds(
+        "N2",
+        n2 > 1e-3,
+        "the rest spectrum differs from the full rotor at speed by more than 1e-3",
+    );
     ch.finish();
 }
 
@@ -321,7 +337,11 @@ fn c3_zero_speed_bits_and_continuity() {
             && h.unknowns == r.unknowns
             && h.multiplicity == r.multiplicity
             && *h == r;
-        ch.holds(&format!("C3 k = {k}"), ok, "modes(k, 0) has the bits of modal_analysis_harmonic");
+        ch.holds(
+            &format!("C3 k = {k}"),
+            ok,
+            "modes(k, 0) has the bits of modal_analysis_harmonic",
+        );
     }
     // C3c: a tiny speed against rest.
     let w = 1e-6 * w_ref;
@@ -392,7 +412,11 @@ fn l1_l2_loss_of_stiffness_per_index() {
             }
         }
     }
-    ch.holds("L1", star_ok, "index k* reports a loss of stiffness with its index, the speed's bits and a count");
+    ch.holds(
+        "L1",
+        star_ok,
+        "index k* reports a loss of stiffness with its index, the speed's bits and a count",
+    );
     let (_, full) = full_of(&sector);
     let fp = RotatingPart::new(&full, AXIS, [0.0; 3], &opts).unwrap();
     let full_neg = match fp.modes(w_l).unwrap() {
@@ -400,7 +424,11 @@ fn l1_l2_loss_of_stiffness_per_index() {
         SpeedModes::Modes(_) => Some(0),
     };
     println!("L2: full rotor negative count {full_neg:?}, sum over the indices {sum}");
-    ch.holds("L2 identity", full_neg == Some(sum), "full negative count = sum of the index counts");
+    ch.holds(
+        "L2 identity",
+        full_neg == Some(sum),
+        "full negative count = sum of the index counts",
+    );
     ch.holds("L2 even", even, "every pair count is even");
     ch.finish();
 }
@@ -444,8 +472,16 @@ fn p1_p2_p3_p5_campbell_by_family_known_miss() {
     let star = &table.families[k_star].table;
     let star_loss = star.losses.iter().any(|l| l.speed.to_bits() == w_l.to_bits())
         && star.tracks.iter().all(|t| t.frequencies[10].is_none());
-    ch.holds("P1 shape", shape, "7 families in index order, multiplicities, 4 tracks each, every number finite");
-    ch.holds("P1 loss", star_loss, "the loss of k* at Omega_L listed in its family, frequencies None there");
+    ch.holds(
+        "P1 shape",
+        shape,
+        "7 families in index order, multiplicities, 4 tracks each, every number finite",
+    );
+    ch.holds(
+        "P1 loss",
+        star_loss,
+        "the loss of k* at Omega_L listed in its family, frequencies None there",
+    );
     // C3b: the speed-0 column.
     let mut c3b = true;
     for (f, h) in table.families.iter().zip(&rest_modes) {
@@ -471,7 +507,11 @@ fn p1_p2_p3_p5_campbell_by_family_known_miss() {
         for t in &f.table.tracks {
             for j in 1..10 {
                 if let (Some(a), Some(b)) = (&t.modes[j - 1], &t.modes[j]) {
-                    n3 = n3.min(subspace_mac(rs.part().mass(), &[a.clone()], &[b.clone()]));
+                    n3 = n3.min(subspace_mac(
+                        rs.part().mass(),
+                        std::slice::from_ref(a),
+                        std::slice::from_ref(b),
+                    ));
                 }
             }
         }
@@ -509,7 +549,11 @@ fn p1_p2_p3_p5_campbell_by_family_known_miss() {
         }
     }
     println!("P3: {count} crossings below 0.9 omega_ref, per family {per_family:?}");
-    ch.holds("P3 every family", per_family.iter().all(|&c| c >= 1), "at least one crossing per family");
+    ch.holds(
+        "P3 every family",
+        per_family.iter().all(|&c| c >= 1),
+        "at least one crossing per family",
+    );
     ch.le("P3 crossings against direct solves", worst, 1e-2);
     // P5.
     let csv = table.to_csv();
@@ -530,14 +574,22 @@ fn p1_p2_p3_p5_campbell_by_family_known_miss() {
     }
     let orders: Vec<u32> = (1..=24).collect();
     let json = table.to_json(&orders);
-    let json_ok = json.matches("\"harmonic\": ").count() >= N / 2 + 1
+    let json_ok = json.matches("\"harmonic\": ").count() > N / 2
         && !json.contains("NaN")
         && !json.contains("inf")
         && json.contains("null")
         && json.contains("\"excited\": true");
     println!("{}", &csv[..csv.len().min(600)]);
-    ch.holds("P5 CSV", csv_ok, "rows, harmonic column, speeds and frequencies parse back by to_bits");
-    ch.holds("P5 JSON", json_ok, "families, no NaN or inf, null at the loss, flagged crossings");
+    ch.holds(
+        "P5 CSV",
+        csv_ok,
+        "rows, harmonic column, speeds and frequencies parse back by to_bits",
+    );
+    ch.holds(
+        "P5 JSON",
+        json_ok,
+        "families, no NaN or inf, null at the loss, flagged crossings",
+    );
     ch.finish();
 }
 
@@ -578,8 +630,16 @@ fn p1_p2b_p3_p5_campbell_by_family_amended() {
     let star = &table.families[k_star].table;
     let star_loss = star.losses.iter().any(|l| l.speed.to_bits() == w_l.to_bits())
         && star.tracks.iter().all(|t| t.frequencies[10].is_none());
-    ch.holds("P1 shape", shape, "7 families in index order, multiplicities, 4 tracks each, every number finite");
-    ch.holds("P1 loss", star_loss, "the loss of k* at Omega_L listed in its family, frequencies None there");
+    ch.holds(
+        "P1 shape",
+        shape,
+        "7 families in index order, multiplicities, 4 tracks each, every number finite",
+    );
+    ch.holds(
+        "P1 loss",
+        star_loss,
+        "the loss of k* at Omega_L listed in its family, frequencies None there",
+    );
     // C3b: the speed-0 column.
     let mut c3b = true;
     for (f, h) in table.families.iter().zip(&rest_modes) {
@@ -605,7 +665,11 @@ fn p1_p2b_p3_p5_campbell_by_family_amended() {
         for t in &f.table.tracks {
             for j in 1..10 {
                 if let (Some(a), Some(b)) = (&t.modes[j - 1], &t.modes[j]) {
-                    n3 = n3.min(subspace_mac(rs.part().mass(), &[a.clone()], &[b.clone()]));
+                    n3 = n3.min(subspace_mac(
+                        rs.part().mass(),
+                        std::slice::from_ref(a),
+                        std::slice::from_ref(b),
+                    ));
                 }
             }
         }
@@ -643,7 +707,11 @@ fn p1_p2b_p3_p5_campbell_by_family_amended() {
         }
     }
     println!("P3: {count} crossings below 0.9 omega_ref, per family {per_family:?}");
-    ch.holds("P3 every family", per_family.iter().all(|&c| c >= 1), "at least one crossing per family");
+    ch.holds(
+        "P3 every family",
+        per_family.iter().all(|&c| c >= 1),
+        "at least one crossing per family",
+    );
     ch.le("P3 crossings against direct solves", worst, 1e-2);
     // P5.
     let csv = table.to_csv();
@@ -664,14 +732,22 @@ fn p1_p2b_p3_p5_campbell_by_family_amended() {
     }
     let orders: Vec<u32> = (1..=24).collect();
     let json = table.to_json(&orders);
-    let json_ok = json.matches("\"harmonic\": ").count() >= N / 2 + 1
+    let json_ok = json.matches("\"harmonic\": ").count() > N / 2
         && !json.contains("NaN")
         && !json.contains("inf")
         && json.contains("null")
         && json.contains("\"excited\": true");
     println!("{}", &csv[..csv.len().min(600)]);
-    ch.holds("P5 CSV", csv_ok, "rows, harmonic column, speeds and frequencies parse back by to_bits");
-    ch.holds("P5 JSON", json_ok, "families, no NaN or inf, null at the loss, flagged crossings");
+    ch.holds(
+        "P5 CSV",
+        csv_ok,
+        "rows, harmonic column, speeds and frequencies parse back by to_bits",
+    );
+    ch.holds(
+        "P5 JSON",
+        json_ok,
+        "families, no NaN or inf, null at the loss, flagged crossings",
+    );
     ch.finish();
 }
 
@@ -700,7 +776,11 @@ fn p2c_campbell_with_both_effects() {
         println!("P2c family k = {}: smallest assurance {fam:.6e}", f.harmonic);
         min_mac = min_mac.min(fam);
     }
-    ch.holds("P2c shape", shape, "7 families, 4 tracks each, no loss, every number finite");
+    ch.holds(
+        "P2c shape",
+        shape,
+        "7 families, 4 tracks each, no loss, every number finite",
+    );
     ch.ge("P2c smallest track assurance", min_mac, 0.9);
     let mut per_family = vec![0usize; N / 2 + 1];
     let mut worst: f64 = 0.0;
@@ -719,7 +799,11 @@ fn p2c_campbell_with_both_effects() {
         }
     }
     println!("P2c: crossings per family {per_family:?}");
-    ch.holds("P2c every family", per_family.iter().all(|&c| c >= 1), "at least one crossing per family");
+    ch.holds(
+        "P2c every family",
+        per_family.iter().all(|&c| c >= 1),
+        "at least one crossing per family",
+    );
     ch.le("P2c crossings against direct solves", worst, 1e-2);
     ch.finish();
 }
@@ -744,12 +828,19 @@ fn p4_engine_order_excitation() {
             let s = proj(f64::from(e) - k as f64) + proj(f64::from(e) + k as f64);
             let expected = s > 6.0;
             if engine_order_excites(e, k, N) != expected {
-                println!("P4: order {e}, index {k}: projection {s:e}, excites {}", engine_order_excites(e, k, N));
+                println!(
+                    "P4: order {e}, index {k}: projection {s:e}, excites {}",
+                    engine_order_excites(e, k, N)
+                );
                 all = false;
             }
         }
     }
-    ch.holds("P4", all, "engine_order_excites equals the projection rule for E = 0 .. 36, k = 0 .. 6");
+    ch.holds(
+        "P4",
+        all,
+        "engine_order_excites equals the projection rule for E = 0 .. 36, k = 0 .. 6",
+    );
     ch.finish();
 }
 
@@ -770,13 +861,32 @@ fn r1_refusals() {
     let mut ch = Checks::new();
     let mut plain = model_on(d_mesh());
     clamp(&mut plain, "xmin");
-    let k = key_of(RotatingSector::new(&plain, &options(MODES)).err(), "no cyclic constraint");
-    ch.holds("R1 no cyclic", k == "cyclic", "a model without a cyclic constraint is refused");
+    let k = key_of(
+        RotatingSector::new(&plain, &options(MODES)).err(),
+        "no cyclic constraint",
+    );
+    ch.holds(
+        "R1 no cyclic",
+        k == "cyclic",
+        "a model without a cyclic constraint is refused",
+    );
     let sector = d_sector();
     let rs = RotatingSector::new(&sector, &options(MODES)).unwrap();
-    ch.holds("R1 harmonic", key_of(rs.modes(7, 100.0).err(), "harmonic 7") == "harmonic", "harmonic above N/2");
-    ch.holds("R1 speed", key_of(rs.modes(1, -1.0).err(), "speed -1") == "speed", "negative speed");
-    ch.holds("R1 speed NaN", key_of(rs.modes(1, f64::NAN).err(), "speed NaN") == "speed", "NaN speed");
+    ch.holds(
+        "R1 harmonic",
+        key_of(rs.modes(7, 100.0).err(), "harmonic 7") == "harmonic",
+        "harmonic above N/2",
+    );
+    ch.holds(
+        "R1 speed",
+        key_of(rs.modes(1, -1.0).err(), "speed -1") == "speed",
+        "negative speed",
+    );
+    ch.holds(
+        "R1 speed NaN",
+        key_of(rs.modes(1, f64::NAN).err(), "speed NaN") == "speed",
+        "NaN speed",
+    );
     ch.holds(
         "R1 speeds",
         key_of(rs.campbell(&[0, 1], &[2.0, 1.0]).err(), "decreasing speeds") == "speeds",
@@ -798,6 +908,10 @@ fn r1_refusals() {
         "index above N/2",
     );
     let rs0 = RotatingSector::new(&sector, &options(0)).unwrap();
-    ch.holds("R1 modes", key_of(rs0.modes(1, 100.0).err(), "0 modes") == "modes", "0 modes");
+    ch.holds(
+        "R1 modes",
+        key_of(rs0.modes(1, 100.0).err(), "0 modes") == "modes",
+        "0 modes",
+    );
     ch.finish();
 }
