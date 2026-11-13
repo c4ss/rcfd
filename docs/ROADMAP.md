@@ -8849,14 +8849,20 @@ fixed by the item's registration ADR before any code.
     g1_g7_shipped_cases_preview_the_solvers_mesh compares cases/cavity/adapt_re100.toml with Simulation::new like every
     other case, without the base-mesh exception added on 2026-11-13.
   - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13).
-- [ ] **F-476** Field store of a run with [mesh.adapt] writes the adapted mesh
+- [x] **F-476** Field store of a run with [mesh.adapt] writes the adapted mesh
   - depends on: F-342, F-263
   - acceptance: A run of cases/cavity/adapt_re100.toml with output.store_interval set writes a readable field store
     whose mesh is the adapted mesh (2799 cells for the shipped case) with no warning, and
     sf2_every_shipped_case_writes_a_readable_store runs that case through the store like the other ten without the skip
     added on 2026-11-13.
-  - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13): today the first snapshot of the shipped adaptive case
-    fails ('field ux has 2799 values, the mesh has 576').
+  - note: From the gate 4 fix (ADR 0262 addendum, 2026-11-13). DONE pending acceptance (ADR 0373, 2026-11-12):
+    runctl::drive opens the field store of a run whose [mesh.adapt] loop is pending after its first step, on the mesh
+    the run solves on (or at the end on the base lattice when no step is taken, as before); every other run opens it
+    where it did. cases/cavity/adapt_re100.toml with output.store_interval = 20 writes a readable store of the adapted
+    mesh (2799 cells, the run's mesh hash, one snapshot at step 188) with no warning;
+    sf2_every_shipped_case_writes_a_readable_store runs it without the 2026-11-13 skip (11 of 11; its count assertion 10
+    -> 11, ADR 0373 Q1); the store bytes of the ten other shipped cases equal main's (20 hashes), the existing store
+    tests and baseline_hashes pass unedited; four mutations each failed their tests.
 - [ ] **F-477** Elasticity multigrid on quadratic tetrahedra: a smoother that brings Tet10 within twice the Hex8 count
   - depends on: F-470
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the geometric aggregation of
