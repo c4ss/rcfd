@@ -7547,7 +7547,9 @@ fixed by the item's registration ADR before any code.
     Hex20 is no longer refused: needs the maintainer. Resolved 2026-11-13 by the maintainer's decision (records and
     copies): the retired si_scaffold rows stay as ignored records of ADR 0291 and the _after_landed copies without them
     pass. ADR 0383, 2026-11-13: the model-path refusal of Hex20 face loads and the panic of SolidMesh::face_area on an
-    8-node face are retired (F-484).
+    8-node face are retired (F-484). The two known misses are met under registered follow-up set-ups by F-485 (ADR
+    0385): the cantilever with the support of beam theory at 0.04 percent and the bore hoop stress on 8 radial elements
+    at 0.37 percent.
 - [ ] **F-390** Hex8 without locking: mean-dilatation (B-bar) and incompatible-mode formulations, opt-in per element block
   - depends on: F-388, F-372, F-374, F-376, F-379
   - acceptance: Every limit not stated here is registered in the ADR before the run. Two opt-in formulations of Hex8,
@@ -9136,7 +9138,7 @@ fixed by the item's registration ADR before any code.
     continue in l1_to_l2_face_loads_and_uniaxial_tension_after_landed (the maintainer's si_scaffold decision of
     2026-11-13 applied to si_hex20 by the lead). Uniform pressure and traction only; a position-dependent traction stays
     on hex20's per-node forces.
-- [ ] **F-485** Hex20 cantilever with the beam-theory support and the bore stress on a refined mesh
+- [x] **F-485** Hex20 cantilever with the beam-theory support and the bore stress on a refined mesh
   - depends on: F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever L/h = 20, nu = 0.3, one
     Hex20 through the thickness and 10 along, with the support of beam theory at the root (u_x = 0 on the root face, u_y
@@ -9144,8 +9146,14 @@ fixed by the item's registration ADR before any code.
     3 E I/(kappa G A L^2)), the full clamp recorded beside it. Thick cylinder b/a = 2, plane strain, Hex20 with the
     radial element count derived in the registration from the second-order rate of ADR 0292's diagnostic: bore hoop
     stress within 1 percent and bore displacement within 0.2 percent of Lame.
-  - note: From ADR 0292's two known misses (cantilever 1.8 percent with the full clamp, bore hoop stress 1.17 percent on
-    4 x 8 elements). Size S.
+  - note: ADR 0385, 2026-11-13: Hex20 cantilever (L/h = 20, nu = 0.3, 10 x 1 x 1) with the support of beam theory at the
+    root, derived and registered: u_x = 0 on the 8 root-face nodes, u_z = 0 at the two neutral-line mid-edge nodes (0,
+    0, h/2) and (0, h, h/2), u_y = 0 at the first (six rigid motions removed, statically determinate in the section
+    plane, no clamp): tip deflection ratio 0.999608 (0.04 percent, limit 1 percent); reactions P/2 and P/2, moment P L
+    to 1.3e-10; root Poisson width change the beam value to 3e-6; the full clamp beside it reproduces 0.981949. Thick
+    cylinder b/a = 2, plane strain, 8 radial x 8 circumferential Hex20 (8 from the second-order rate of ADR 0292's
+    1.168e-2 on 4 radial with margin 3): bore hoop stress 3.75e-3 (limit 1e-2), bore displacement 6.1e-6 (limit 2e-3); 4
+    x 8 still misses (1.168e-2). Five mutations caught. Test file si_hex20_support_bore.rs only, no library code.
 - [~] **F-486** Modal analysis on the transformation: linear constraints, rigid sets and supports in the modal analysis
   - depends on: F-393
   - acceptance: Every limit not stated here is registered in the ADR before the run. modal_analysis of a model with
