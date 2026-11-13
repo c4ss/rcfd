@@ -801,3 +801,58 @@ fn g1_g2_where_the_growth_starts_record() {
     }
     assert!(missed.is_empty(), "{missed:#?}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The known misses of the records (ADR 0374 addendum 1), each with its limit intact; not run again (each registered run was
+// made once, by the records above)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// ADR 0374 L1 (b): the lag map of the settings that run (F, Sa) was registered below one at steps 2 and 11.
+#[test]
+#[ignore = "known miss (ADR 0374): rho_1 F 1.1986 and 0.9983, Sa 1.1343 and 1.0100, against < 1 at both instants"]
+fn l1b_lag_map_of_the_runs_below_one_known_miss() {
+    for f in [Forcing::F, Forcing::Sa] {
+        let r = record(f, DT);
+        let at11 = r.at11.expect("L1 (b): step 11 not reached");
+        assert!(
+            r.at2[0].0 < 1.0 && at11[0].0 < 1.0,
+            "L1 (b) {f:?}: {} {}",
+            r.at2[0].0,
+            at11[0].0
+        );
+    }
+}
+
+/// ADR 0374 L1n: the lag map without the reconstruction for the bounded form was registered below one at steps 2 and 11.
+#[test]
+#[ignore = "known miss (ADR 0374): rho_1 without the reconstruction, B, 1.1908 and 1.0002 against < 1"]
+fn l1n_lag_map_without_the_reconstruction_known_miss() {
+    let r = record(Forcing::B, DT);
+    let at11 = r.at11.expect("L1n: step 11 not reached");
+    assert!(r.at2[2].0 < 1.0 && at11[2].0 < 1.0, "L1n: {} {}", r.at2[2].0, at11[2].0);
+}
+
+/// ADR 0374 amendment 1, L1' (a): the reconstruction was registered to raise the lag gain of Sb, B1 and B by at least 1.05.
+#[test]
+#[ignore = "known miss (ADR 0374 amendment 1): max q Sb 0.99317, B1 0.99758, B 1.00468 against >= 1.05"]
+fn l1prime_a_reconstruction_raises_the_lag_gain_known_miss() {
+    for f in [Forcing::Sb, Forcing::B1, Forcing::B] {
+        let r = record(f, DT);
+        let q = std::iter::once(r.at2)
+            .chain(r.at11)
+            .map(|e| e[0].0 / e[2].0)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(q >= 1.05, "L1' (a) {f:?}: {q}");
+    }
+}
+
+/// ADR 0374 amendment 2, G1: with one corrector the flux-face velocity was registered to exceed 3 no later than the largest
+/// cell velocity; measured: the cell velocity at step 9, the flux face at step 19 (two correctors held: at most 3 over 34 steps).
+#[test]
+#[ignore = "known miss (ADR 0374 amendment 2): first v > 3 at step 19, first a > 3 at step 9"]
+fn g1_growth_starts_at_the_flux_faces_known_miss() {
+    let s = g1_series(1, 200, DT);
+    let fv = s.0.iter().position(|r| r.0 > 3.0);
+    let fa = s.0.iter().position(|r| r.2 > 3.0);
+    assert!(matches!((fv, fa), (Some(v), Some(a)) if v <= a), "G1: {fv:?} {fa:?}");
+}
