@@ -10,9 +10,7 @@ use rcfd_fem::element::element_for;
 use rcfd_fem::modal::{modal_analysis, ModalOptions};
 use rcfd_fem::mpc::{self, solve_static_mpc, MpcSolution, ReferenceLoad, RowOrigin};
 use rcfd_fem::solve::{solve_static, solve_static_with, CgPreconditioner, StaticOptions, StaticSolver};
-use rcfd_fem::{
-    Constraint, ElasticSupport, FaceRef, FemError, LinearTerm, Load, Material, SolidMesh, SolidModel,
-};
+use rcfd_fem::{Constraint, ElasticSupport, FaceRef, FemError, LinearTerm, Load, Material, SolidMesh, SolidModel};
 use rcfd_linalg::skyline::SkylineLdlt;
 use rcfd_linalg::CsrMatrix;
 
@@ -198,8 +196,11 @@ fn l1_prescribed_as_linear_constraints() {
         for a in [1.0, 2.5] {
             let mut m = model_of(mesh.clone(), 0.3);
             for p in &pres {
-                m.add_constraint(Constraint::linear(vec![LinearTerm::new(p.node, p.component, a)], a * p.value))
-                    .unwrap();
+                m.add_constraint(Constraint::linear(
+                    vec![LinearTerm::new(p.node, p.component, a)],
+                    a * p.value,
+                ))
+                .unwrap();
             }
             assert!(mpc::uses_transformation(&m));
             let ul = solve_static(&m, &StaticOptions::default()).unwrap();
@@ -252,11 +253,7 @@ fn skew_exact(m: &SolidModel) -> Vec<f64> {
         let x1 = c * x[0] + s * x[1];
         let x2 = -s * x[0] + c * x[1];
         let k = SIGMA / E;
-        let u = [
-            k * (x1 * c + nu * x2 * s),
-            k * (x1 * s - nu * x2 * c),
-            -k * nu * x[2],
-        ];
+        let u = [k * (x1 * c + nu * x2 * s), k * (x1 * s - nu * x2 * c), -k * nu * x[2]];
         out.extend_from_slice(&u);
     }
     out
@@ -268,7 +265,10 @@ fn s1_skew_roller() {
     let s = mpc_solve(&m, &[]);
     let exact = skew_exact(&m);
     let d = rel_diff(s.result.displacement_values(), &exact);
-    println!("S1 skew roller: |u - u_exact|/|u_exact| = {d:e}; dropped {}", s.dropped.len());
+    println!(
+        "S1 skew roller: |u - u_exact|/|u_exact| = {d:e}; dropped {}",
+        s.dropped.len()
+    );
     // Y1 and W1 on S.
     let y = asymmetry(&s.reduced_matrix);
     let w = work_ratio(&s);
@@ -401,7 +401,14 @@ fn q1_q2_periodic_box() {
         }
     }
     let du = du / (emax * lmax);
-    let want = [eps[0][0], eps[1][1], eps[2][2], 2.0 * eps[0][1], 2.0 * eps[1][2], 2.0 * eps[2][0]];
+    let want = [
+        eps[0][0],
+        eps[1][1],
+        eps[2][2],
+        2.0 * eps[0][1],
+        2.0 * eps[1][2],
+        2.0 * eps[2][0],
+    ];
     let mut de: f64 = 0.0;
     let mesh = m.mesh();
     for e in 0..mesh.n_elements() {
@@ -418,11 +425,11 @@ fn q1_q2_periodic_box() {
     }
     let de = de / emax;
     let dropped = s.dropped.len();
-    let all_linear = s
+    let all_linear = s.dropped.iter().all(|d| matches!(d.origin, RowOrigin::Linear { .. }));
+    let worst_residual = s
         .dropped
         .iter()
-        .all(|d| matches!(d.origin, RowOrigin::Linear { .. }));
-    let worst_residual = s.dropped.iter().fold(0.0f64, |m, d| m.max(d.residual / d.scale.max(f64::MIN_POSITIVE)));
+        .fold(0.0f64, |m, d| m.max(d.residual / d.scale.max(f64::MIN_POSITIVE)));
     println!(
         "Q1 strain {de:e}, displacement {du:e}; Q2 dropped {dropped} (all Linear: {all_linear}, worst residue {worst_residual:e})"
     );
@@ -470,7 +477,9 @@ fn resultant_errors(m: &SolidModel, s: &MpcSolution, f: Vec3, mo: Vec3) -> (f64,
         let x = m.mesh().nodes()[a];
         let d = [x[0] - R_REF[0], x[1] - R_REF[1], x[2] - R_REF[2]];
         rho_max = rho_max.max((d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt());
-        let p: Vec<f64> = (0..3).map(|c| s.constraint_forces[dofs.equation(a, c).unwrap()]).collect();
+        let p: Vec<f64> = (0..3)
+            .map(|c| s.constraint_forces[dofs.equation(a, c).unwrap()])
+            .collect();
         for i in 0..3 {
             r[i] += p[i];
         }
@@ -513,10 +522,18 @@ fn r1_to_r3_rigid_end_of_a_bar() {
     );
     let y = asymmetry(&sm.reduced_matrix);
     let (wf, wm) = (work_ratio(&sf), work_ratio(&sm));
-    println!("Y1 R: asymmetry {y:e}; W1 R-F {wf:e}, R-M {wm:e}; unknowns {}", sm.reduced_matrix.n);
+    println!(
+        "Y1 R: asymmetry {y:e}; W1 R-F {wf:e}, R-M {wm:e}; unknowns {}",
+        sm.reduced_matrix.n
+    );
     assert!(r1 <= 1e-10 && r1n <= 1e-10, "R1 {r1:e} {r1n:e}");
     assert!(r2 <= 1e-2, "R2 {r2:e}");
-    for (what, v) in [("F resultant", rf_r), ("F moment", rf_m), ("M resultant", rm_r), ("M moment", rm_m)] {
+    for (what, v) in [
+        ("F resultant", rf_r),
+        ("F moment", rf_m),
+        ("M resultant", rm_r),
+        ("M moment", rm_m),
+    ] {
         assert!(v <= 1e-10, "R3 {what} {v:e}");
     }
     assert!(y <= 1e-13, "Y1 R {y:e}");
@@ -676,7 +693,10 @@ fn tie(a: usize, b: usize, ca: f64, cb: f64, value: f64) -> Constraint {
 
 fn invalid_reason(r: Result<impl std::fmt::Debug, FemError>, what: &str) -> String {
     match r.expect_err(what) {
-        FemError::InvalidValue { key: "constraint", reason } => {
+        FemError::InvalidValue {
+            key: "constraint",
+            reason,
+        } => {
             println!("{what}: {reason}");
             reason
         }
@@ -698,7 +718,11 @@ fn c1_redundant_constraint_dropped_with_a_report() {
     println!("C1 dropped {:?}; difference {d:e}", s2.dropped);
     assert!(s1.dropped.is_empty());
     assert_eq!(s2.dropped.len(), 1, "C1");
-    assert_eq!(s2.dropped[0].origin.constraint(), Some(4), "C1 names the second constraint");
+    assert_eq!(
+        s2.dropped[0].origin.constraint(),
+        Some(4),
+        "C1 names the second constraint"
+    );
     assert!(d <= 1e-12, "C1 {d:e}");
 }
 
@@ -730,13 +754,20 @@ fn c2_contradictory_constraints_refused() {
     m.add_constraint(tie(a, b, 1.0, -1.0, 0.0)).unwrap();
     m.add_constraint(tie(a, b, 1.0, -1.0, 1e-3)).unwrap();
     let r = invalid_reason(solve_static(&m, &StaticOptions::default()), "C2 ties");
-    assert!(r.contains("contradicts") && r.contains("constraint 4") && r.contains("constraint 3 (Linear)"), "C2 {r}");
+    assert!(
+        r.contains("contradicts") && r.contains("constraint 4") && r.contains("constraint 3 (Linear)"),
+        "C2 {r}"
+    );
     let mut m = base.clone();
     let n = m.mesh().node_set("xmin").unwrap()[1];
-    m.add_constraint(Constraint::linear(vec![LinearTerm::new(n, 0, 1.0)], 1e-3)).unwrap();
+    m.add_constraint(Constraint::linear(vec![LinearTerm::new(n, 0, 1.0)], 1e-3))
+        .unwrap();
     let r = invalid_reason(solve_static(&m, &StaticOptions::default()), "C2 prescribed");
     let want = format!("the prescribed displacement of node {n} component 0");
-    assert!(r.contains("contradicts") && r.contains("constraint 3") && r.contains(&want), "C2 {r}");
+    assert!(
+        r.contains("contradicts") && r.contains("constraint 3") && r.contains(&want),
+        "C2 {r}"
+    );
 }
 
 #[test]
@@ -747,14 +778,20 @@ fn c3_closed_chains_refused() {
     m.add_constraint(tie(a, b, 1.0, -1.0, 0.0)).unwrap();
     m.add_constraint(tie(b, a, 1.0, -1.0, 0.0)).unwrap();
     let r = invalid_reason(solve_static(&m, &StaticOptions::default()), "C3 two");
-    assert!(r.contains("closes a chain") && r.contains("constraint 4") && r.contains("constraint 3"), "C3 {r}");
+    assert!(
+        r.contains("closes a chain") && r.contains("constraint 4") && r.contains("constraint 3"),
+        "C3 {r}"
+    );
     let mut m = base.clone();
     m.add_constraint(tie(a, b, 1.0, -1.0, 0.0)).unwrap();
     m.add_constraint(tie(b, c, 1.0, -1.0, 0.0)).unwrap();
     m.add_constraint(tie(c, a, 1.0, -1.0, 0.0)).unwrap();
     let r = invalid_reason(solve_static(&m, &StaticOptions::default()), "C3 three");
     for i in [3, 4, 5] {
-        assert!(r.contains("closes a chain") && r.contains(&format!("constraint {i}")), "C3 three {r}");
+        assert!(
+            r.contains("closes a chain") && r.contains(&format!("constraint {i}")),
+            "C3 three {r}"
+        );
     }
 }
 
@@ -766,12 +803,24 @@ fn n4_modal_refuses_the_new_data() {
     m.add_constraint(tie(a, b, 1.0, -1.0, 0.0)).unwrap();
     let e = modal_analysis(&m, &ModalOptions::new(2)).expect_err("N4 linear");
     println!("N4: {e}");
-    assert!(matches!(e, FemError::NotYetSupported { variant: "Linear", .. }), "N4 {e:?}");
+    assert!(
+        matches!(e, FemError::NotYetSupported { variant: "Linear", .. }),
+        "N4 {e:?}"
+    );
     let mut m = base.clone();
     m.add_support(ElasticSupport::nodal_spring("xmax", 2, 1e6)).unwrap();
     let e = modal_analysis(&m, &ModalOptions::new(2)).expect_err("N4 spring");
     println!("N4: {e}");
-    assert!(matches!(e, FemError::NotYetSupported { variant: "NodalSpring", .. }), "N4 {e:?}");
+    assert!(
+        matches!(
+            e,
+            FemError::NotYetSupported {
+                variant: "NodalSpring",
+                ..
+            }
+        ),
+        "N4 {e:?}"
+    );
 }
 
 #[test]
@@ -785,11 +834,19 @@ fn n5_cyclic_still_refused() {
     clamp(&mut m, "xmin");
     let (a, b, _) = tip_nodes(&m);
     m.add_constraint(tie(a, b, 1.0, -1.0, 0.0)).unwrap();
-    m.add_constraint(Constraint::cyclic("low", "high", [1.0, 0.0, 0.0], [0.0; 3], 12)).unwrap();
+    m.add_constraint(Constraint::cyclic("low", "high", [1.0, 0.0, 0.0], [0.0; 3], 12))
+        .unwrap();
     let e = solve_static(&m, &StaticOptions::default()).expect_err("N5");
     println!("N5: {e}");
     assert!(
-        matches!(e, FemError::NotYetSupported { variant: "Cyclic", package: "ADR 0297", .. }),
+        matches!(
+            e,
+            FemError::NotYetSupported {
+                variant: "Cyclic",
+                package: "ADR 0297",
+                ..
+            }
+        ),
         "N5 {e:?}"
     );
 }

@@ -205,10 +205,7 @@ impl Transformation {
     }
     /// The first of the six unknowns of the reference point of rigid set `constraint`, if it is one.
     pub fn reference_offset(&self, constraint: usize) -> Option<usize> {
-        self.references
-            .iter()
-            .find(|&&(c, _)| c == constraint)
-            .map(|&(_, o)| o)
+        self.references.iter().find(|&&(c, _)| c == constraint).map(|&(_, o)| o)
     }
     /// The rigid sets as (constraint index, first reference unknown), in the order of the constraints.
     pub fn references(&self) -> &[(usize, usize)] {
@@ -786,10 +783,12 @@ pub fn solve_static_mpc(
     let mut f = nodal_load_vector(model, forces)?;
     f.resize(nn, 0.0);
     for l in reference_loads {
-        let r0 = tr.reference_offset(l.constraint).ok_or_else(|| FemError::InvalidValue {
-            key: "reference load",
-            reason: format!("constraint {} is not a rigid set", l.constraint),
-        })?;
+        let r0 = tr
+            .reference_offset(l.constraint)
+            .ok_or_else(|| FemError::InvalidValue {
+                key: "reference load",
+                reason: format!("constraint {} is not a rigid set", l.constraint),
+            })?;
         if l.force.iter().chain(&l.moment).any(|v| !v.is_finite()) {
             return Err(FemError::InvalidValue {
                 key: "reference load",
@@ -894,7 +893,14 @@ fn singular(tr: &Transformation, model: &SolidModel, reduced: usize, pivot: f64,
         .find(|&&(_, o)| o <= i)
         .copied()
         .expect("reference unknown");
-    let what = ["translation x", "translation y", "translation z", "rotation x", "rotation y", "rotation z"][i - r0];
+    let what = [
+        "translation x",
+        "translation y",
+        "translation z",
+        "rotation x",
+        "rotation y",
+        "rotation z",
+    ][i - r0];
     FemError::Solver {
         solver: "skyline-ldlt",
         reason: format!(
