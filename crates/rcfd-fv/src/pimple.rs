@@ -840,6 +840,14 @@ impl Divergence {
                  the run is stopped at step {}{outer}: build the forcing with ImmersedForcing::build_second_order_bounded",
                 self.value, self.step
             );
+        } else if self.quantity == "immersed flux corrector" {
+            return format!(
+                "PIMPLE second-order immersed face flux with a single pressure corrector (ADR 0374): a fluid-solid face returns \
+                 the velocity of its fluid cell reversed (weight {:.3} > 1, or an image face){at}, and with one corrector it \
+                 returns the pressure gradient of the momentum predictor reversed; the run is stopped at step {}{outer}: use \
+                 solver.n_correctors >= 2",
+                self.value, self.step
+            );
         } else if self.quantity == "consistent correctors" {
             // ADR 0258 V2: the located part (flag, other setting, reason) after the sentence of ADR 0214
             let located =
@@ -1116,6 +1124,11 @@ pub struct PimpleSolver {
     /// The pressure solves repeated with incomplete-Cholesky CG by `PimpleSettings::pressure_ic_fallback` (F-466, ADR 0363
     /// amendment 1): (step, outer iteration, corrector). Empty while the setting is off.
     pub pressure_fallbacks: Vec<(usize, usize, usize)>,
+    /// The pressure-lag map with the second-order immersed face flux (F-363, ADR 0374 D1, diagnostic): when `true` and the
+    /// forcing has flux faces, the map of the pressure-lag estimate (`pressure_lag_check`, `corrector_control`, `lag_preflight`,
+    /// `lag_trial`) reconstructs the flux of those faces and solves the pressure with the source of the solid cells, as the step
+    /// does. `false` (default) leaves the estimate unchanged.
+    pub immersed_lag: bool,
 }
 
 /// One pressure solve of a step, as captured by [`PimpleSolver::pressure_capture`] (F-466, ADR 0363 D1). With
@@ -1193,6 +1206,7 @@ impl PimpleSolver {
             correctors: CorrectorRecord::default(),
             pressure_capture: None,
             pressure_fallbacks: Vec::new(),
+            immersed_lag: false,
         }
     }
 
@@ -1226,6 +1240,7 @@ impl PimpleSolver {
             correctors: CorrectorRecord::default(),
             pressure_capture: None,
             pressure_fallbacks: Vec::new(),
+            immersed_lag: self.immersed_lag,
         }
     }
 
@@ -1788,6 +1803,21 @@ impl PimpleSolver {
             if last {
                 n_corr_final = n_corr;
             }
+            // ADR 0374 D2: a flux face that returns the fluid velocity reversed is refused with a single PISO corrector
+            if n_corr == 1 && s.n_outer == 1 {
+                if let Some((c, w)) = self.immersed.as_ref().and_then(|ib| ib.single_corrector_face()) {
+                    let res = (res_u, res_p, p_iters);
+                    return self.trip(
+                        dt,
+                        Some(outer),
+                        "pressure correctors",
+                        "immersed flux corrector",
+                        Some(c),
+                        w,
+                        res,
+                    );
+                }
+            }
             let r_au: Vec<f64> = (0..n).map(|c| vol[c] / a_p[c]).collect();
             // ADR 0245 C (opt-in): the face coefficient the carry-over is consistent with (ADR 0352: also with the consistent
             // correctors and on a moving mesh)
@@ -2138,7 +2168,14 @@ impl PimpleSolver {
     /// One application of the linearised pressure-lag map of a step (ADR 0073 B4): the pressure error `e` drives the momentum predictors
     /// and the `n_corr` correctors of every outer iteration with the frozen matrices of `ctx`; returns the pressure error at the end of
     /// the step.
-    fn lag_map(&self, ctx: &LagCtx, n_corr: usize, e: &[f64], pbc_h: &crate::pressure::PressureBc) -> Vec<f64> {
+    fn lag_map(
+        &self,
+        ctx: &LagCtx,
+        n_corr: usize,
+        e: &[f64],
+        pbc_h: &crate::pressure::PressureBc,
+        hom: Option<&crate::immersed::ImmersedForcing>,
+    ) -> Vec<f64> {
         let g = &self.geom;
         let s = &self.settings;
         let cf = s.consistent_flags();
@@ -2219,6 +2256,8 @@ impl PimpleSolver {
                 }
                 let hb = boundary_hby_a(g, pbc_h, &zero_ub, &hby_a);
                 let mut phi_h = face_flux(g, &hby_a, &hb);
+                // ADR 0374 D1 (`immersed_lag`): the homogeneous face flux of the flux faces and the source of the solid cells
+                let ib_src = hom.and_then(|ib| ib.reconstruct_face_flux(&hby_a, &mut phi_h, true));
                 if let Some(rt) = &r_t {
                     consistent_split(g, pbc_h, &r_au, rt, &p, None, &mut phi_h, &mut hby_a);
                     if s.non_orth_correctors > 0 {
@@ -2230,7 +2269,14 @@ impl PimpleSolver {
                 }
                 let p_old = p.clone();
                 let mut p_new = p_old.clone();
-                solve_pressure(g, &gamma, pbc_h, &phi_h, &mut p_new, &controls);
+                match &ib_src {
+                    None => {
+                        solve_pressure(g, &gamma, pbc_h, &phi_h, &mut p_new, &controls);
+                    }
+                    Some(q) => {
+                        crate::pressure::solve_pressure_src(g, &gamma, pbc_h, &phi_h, &mut p_new, &controls, q);
+                    }
+                }
                 let bvn = boundary_values_pbc(g, pbc_h, &p_new);
                 let gn = green_gauss(g, &p_new, &bvn, 0);
                 for c in 0..n {
@@ -2271,6 +2317,18 @@ impl PimpleSolver {
             }
         }
         let fixed_level = pbc_h.has_dirichlet();
+        // ADR 0374 D1 (`immersed_lag`): the forcing with its flux faces made homogeneous (wall and rigid flux zero)
+        let hom: Option<crate::immersed::ImmersedForcing> = match &self.immersed {
+            Some(ib) if self.immersed_lag && !ib.flux_faces.is_empty() => {
+                let mut h = ib.clone();
+                for ff in h.flux_faces.iter_mut() {
+                    ff.wall = [0.0; 3];
+                    ff.rigid = 0.0;
+                }
+                Some(h)
+            }
+            _ => None,
+        };
         let norm = |e: &mut Vec<f64>| -> f64 {
             if !fixed_level {
                 let m = e.iter().zip(vol).map(|(a, v)| a * v).sum::<f64>() / tv;
@@ -2314,7 +2372,7 @@ impl PimpleSolver {
         e.iter_mut().for_each(|x| *x /= n0);
         let mut logs = Vec::with_capacity(iterations);
         for _ in 0..iterations {
-            let mut next = self.lag_map(ctx, n_corr, &e, &pbc_h);
+            let mut next = self.lag_map(ctx, n_corr, &e, &pbc_h, hom.as_ref());
             let nn = norm(&mut next);
             if !(nn.is_finite() && nn > 0.0) {
                 logs.push(if nn == 0.0 { f64::NEG_INFINITY } else { f64::INFINITY });
