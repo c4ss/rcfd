@@ -154,7 +154,12 @@ fn linear_stencil(ov: &Overset, kind: &[CellKind], x: Vec3, from_background: boo
         return None;
     }
     let mut cells = vec![d];
-    cells.extend(ov.neighbours(d).iter().copied().filter(|&q| kind[q] == CellKind::Calculated));
+    cells.extend(
+        ov.neighbours(d)
+            .iter()
+            .copied()
+            .filter(|&q| kind[q] == CellKind::Calculated),
+    );
     let pts: Vec<Vec3> = cells.iter().map(|&q| mesh.cell_centres()[q]).collect();
     let weights = linear_weights(&pts, x, ov.dims).ok()?;
     Some(Stencil { cells, weights })
@@ -184,7 +189,12 @@ fn jump(i: impl Fn(Vec3) -> Option<f64>, x: Vec3, n: Vec3, delta: f64) -> Option
 
 /// The largest error of a linear field over the fringe cells (absolute or relative to `max |f|`), the largest
 /// `|sum w - 1|`, the number of fallbacks, the weight range and the stencil sizes.
-fn linear_errors(ov: &Overset, pose: &Pose, f: impl Fn(Vec3) -> f64, relative: bool) -> (f64, f64, usize, [f64; 2], [usize; 2]) {
+fn linear_errors(
+    ov: &Overset,
+    pose: &Pose,
+    f: impl Fn(Vec3) -> f64,
+    relative: bool,
+) -> (f64, f64, usize, [f64; 2], [usize; 2]) {
     let moved = moved_mesh(&ov.composite.mesh, ov.composite.points_at(pose)).unwrap();
     let conn = ov.connectivity(&moved, pose).unwrap();
     assert_eq!(conn.interpolation, DonorInterpolation::Continuous);
@@ -205,7 +215,11 @@ fn linear_errors(ov: &Overset, pose: &Pose, f: impl Fn(Vec3) -> f64, relative: b
         nr = [nr[0].min(st.cells.len()), nr[1].max(st.cells.len())];
         for &k in &st.cells {
             assert_eq!(conn.kind[k], CellKind::Calculated, "stencil cell {k} of {c}");
-            assert_ne!(k < conn.n_background_cells, *c < conn.n_background_cells, "stencil cell {k} of {c}");
+            assert_ne!(
+                k < conn.n_background_cells,
+                *c < conn.n_background_cells,
+                "stencil cell {k} of {c}"
+            );
         }
     }
     (e, s, conn.n_fallback(), wr, nr)
@@ -218,7 +232,10 @@ fn a2a_tg2_linear_fields_are_exact() {
     let mut c = Checks::new();
     for t in [0.0, 0.3, 0.5] {
         let (e, s, nf, wr, nr) = linear_errors(&ov, &tg_pose(t), f, false);
-        println!("A2a tg_pose({t}): weights in [{:.3e}, {:.4}], {} to {} cells", wr[0], wr[1], nr[0], nr[1]);
+        println!(
+            "A2a tg_pose({t}): weights in [{:.3e}, {:.4}], {} to {} cells",
+            wr[0], wr[1], nr[0], nr[1]
+        );
         c.at_most(&format!("A2a linear field at tg_pose({t})"), e, 1e-12);
         c.at_most(&format!("A2a |sum w - 1| at tg_pose({t})"), s, 1e-13);
         c.at_most(&format!("A2a fallbacks at tg_pose({t})"), nf as f64, 0.0);
@@ -234,7 +251,14 @@ fn a2b_tr_linear_fields_are_exact() {
     for s in [0.0, -0.37, -1.234, -3.9, -7.5] {
         let pose = Pose::translation([2.0 + s, 0.0, 0.0]);
         let (e, sw, nf, wr, nr) = linear_errors(&ov, &pose, f, true);
-        println!("A2b x = {}: weights in [{:.3e}, {:.4}], {} to {} cells", 2.0 + s, wr[0], wr[1], nr[0], nr[1]);
+        println!(
+            "A2b x = {}: weights in [{:.3e}, {:.4}], {} to {} cells",
+            2.0 + s,
+            wr[0],
+            wr[1],
+            nr[0],
+            nr[1]
+        );
         c.at_most(&format!("A2b linear field at x = {}", 2.0 + s), e, 1e-12);
         c.at_most(&format!("A2b |sum w - 1| at x = {}", 2.0 + s), sw, 1e-13);
         c.at_most(&format!("A2b fallbacks at x = {}", 2.0 + s), nf as f64, 0.0);
@@ -257,7 +281,11 @@ fn face_jumps(ov: &Overset, faces: std::ops::Range<usize>, from_background: bool
         let t = [-n[1], n[0], 0.0];
         let x = vec3::add(mesh.face_centres()[f], vec3::scale(t, 0.25 * h));
         let delta = 1e-6 * h;
-        let ic = |p: Vec3| ov.continuous_stencil(&kind, p, from_background).ok().map(|s| value(ov, &s, quad));
+        let ic = |p: Vec3| {
+            ov.continuous_stencil(&kind, p, from_background)
+                .ok()
+                .map(|s| value(ov, &s, quad))
+        };
         match jump(ic, x, n, delta) {
             Some(j) => jc = jc.max(j),
             None => missing += 1,
@@ -279,7 +307,11 @@ fn a3_uniform_mesh_faces() {
     println!("A3: {nf} faces; linear jumps in [{jmin:.4e}, {jmax:.4e}], {big} at least 1e-4");
     let mut c = Checks::new();
     c.at_most("A3 largest jump of the continuous interpolant", jc, 1e-9);
-    c.at_least("A3 fraction of the faces where the linear stencil jumps by 1e-4", big as f64 / nf as f64, 0.9);
+    c.at_least(
+        "A3 fraction of the faces where the linear stencil jumps by 1e-4",
+        big as f64 / nf as f64,
+        0.9,
+    );
     c.at_most("A3 points without a continuous stencil", missing as f64, 0.0);
     c.finish();
 }
@@ -300,8 +332,16 @@ fn a3b_graded_and_curved_mesh_faces() {
         let big = jl.iter().filter(|&&j| j >= 1e-4).count();
         let jmax = jl.iter().copied().fold(0.0, f64::max);
         println!("A3b {tag}: {n} faces; linear jumps up to {jmax:.4e}, {big} at least 1e-4");
-        c.at_most(&format!("A3b {tag} largest jump of the continuous interpolant"), jc, 1e-9);
-        c.at_most(&format!("A3b {tag} points without a continuous stencil"), missing as f64, 0.0);
+        c.at_most(
+            &format!("A3b {tag} largest jump of the continuous interpolant"),
+            jc,
+            1e-9,
+        );
+        c.at_most(
+            &format!("A3b {tag} points without a continuous stencil"),
+            missing as f64,
+            0.0,
+        );
     }
     c.finish();
 }

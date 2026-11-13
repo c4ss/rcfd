@@ -195,7 +195,12 @@ fn run(level: usize, steps: usize, dt: f64, mode: DonorInterpolation) -> Run {
     }
     let e = (0..s.geom.n_cells())
         .filter(|&c| s.conn.kind[c] != CellKind::Hole)
-        .map(|c| vec3::norm(vec3::sub(s.u.values[c], tg_u(s.geom.mesh.cell_centres()[c], steps as f64 * dt))))
+        .map(|c| {
+            vec3::norm(vec3::sub(
+                s.u.values[c],
+                tg_u(s.geom.mesh.cell_centres()[c], steps as f64 * dt),
+            ))
+        })
         .fold(0.0, f64::max)
         / (-2.0 * NU_TG * steps as f64 * dt).exp();
     println!(
@@ -242,7 +247,11 @@ fn a8_tg1_continuous_runs() {
 #[ignore = "slow (three level-2 overset runs, about 7 minutes): run once for the addendum"]
 fn a7_tg2_continuous_remainder() {
     let m = DonorInterpolation::Continuous;
-    let (a, b, r) = (run(2, 200, T_END / 200.0, m), run(2, 400, T_END / 400.0, m), run(2, 800, T_END / 800.0, m));
+    let (a, b, r) = (
+        run(2, 200, T_END / 200.0, m),
+        run(2, 400, T_END / 400.0, m),
+        run(2, 800, T_END / 800.0, m),
+    );
     let nb = a.s.conn.n_background_cells;
     let k200 = difference_where(&a.s, &r.s, |c| c >= nb);
     let k400 = difference_where(&b.s, &r.s, |c| c >= nb);
@@ -259,7 +268,15 @@ fn a7_tg2_continuous_remainder() {
     c.at_most("A7 component cells max |d_200|", k200, 2e-6);
     c.at_least("A7 component cells ratio d_200 / d_400", k200 / k400, 4.0);
     c.at_most("A7 e(TG_2) in 800 steps", r.e, 3.186e-4);
-    c.at_most("A7 continuity, every step", a.continuity.max(b.continuity).max(r.continuity), 1e-9);
-    c.at_most("A7 fallbacks, every step", a.fallbacks.max(b.fallbacks).max(r.fallbacks) as f64, 0.0);
+    c.at_most(
+        "A7 continuity, every step",
+        a.continuity.max(b.continuity).max(r.continuity),
+        1e-9,
+    );
+    c.at_most(
+        "A7 fallbacks, every step",
+        a.fallbacks.max(b.fallbacks).max(r.fallbacks) as f64,
+        0.0,
+    );
     c.finish();
 }
