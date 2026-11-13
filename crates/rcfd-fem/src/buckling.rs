@@ -100,8 +100,9 @@ impl BucklingResult {
 ///
 /// A model with linear constraints, rigid sets or elastic supports is solved on the transformation `x = T q` (ADR 0398):
 /// `(T^T K_ext T + lambda T^T K_sigma T) q = 0`, `K_ext` with the supports, zero constraint values only, each mode expanded,
-/// `x = T q`; a motion the constraints and supports leave free is refused by the factorisation of `T^T K_ext T`
-/// (`FemError::Solver`).
+/// `x = T q`; a motion the constraints and supports leave free, rigid or not, is refused by the zero-shift pivot-ratio rule
+/// of ADR 0384 on `T^T K_ext T` (a pivot `d_i < 1e-8 a_ii`; ADR 0401), `FemError::Solver` naming the unknown of the failing
+/// pivot. A spring so soft that its pivot ratio is below the rule is refused too.
 pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
     model.validate()?;
     model.check_supported()?;
@@ -204,6 +205,17 @@ fn factors_on_transformation(
             reason: format!(
                 "{} factors requested of a model with {nq} free unknowns (at least 1 and fewer than the unknowns)",
                 options.factors
+            ),
+        });
+    }
+    if let Some((row, ratio)) = crate::mpc::zero_shift_failing_pivot(&kr)? {
+        let name = crate::mpc::unknown_name(&tr, model, tr.independent()[row]);
+        return Err(FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: format!(
+                "{name}: pivot ratio {ratio:e} of T^T K_ext T at zero shift, below 1e-8 (the rule of Shift::Auto, ADR \
+                 0384): the constraints and supports leave a motion free (a mechanism); a buckling analysis needs every \
+                 motion held (ADR 0401)"
             ),
         });
     }
