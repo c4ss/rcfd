@@ -257,3 +257,133 @@ Printed: P of the channel without the cylinder with 320 iterations at step 2; th
 
 I1 and I2 enter the addendum as a located description only: the decision is already **partial** by the rule (A2, A3, B1 and A1
 at step 11 missed), whatever they give.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; no limit was changed. Release builds on Windows, the machine shared with other
+building agents. Commits: the registration 5a3f4fed; the library and the tests 78577b79 (before their run); amendment 1
+c9737ac5 (before any run of H2); the record H2 88cfbc58 (before its run); the known-miss records f603be5c (not run: they repeat
+registered runs). The library was not changed after 78577b79. Every registered run was made once: the fast checks
+(`f483-scratch/fast_checks.log`, 0.5 s), the record H (`rec_h.log`, 29 s), the record H2 (`rec_h2.log`, 94 s), N1
+(`n1_summary.log`).
+
+**Built.** `crates/rcfd-fv/src/pimple.rs` only, every hunk an addition or a branch that the default does not take: the type
+`LagFluid` with `LagFluid::FLUID` (lines 781 to 806); the fields `PimpleSolver::lag_fluid` (public) and `lag_mode` (private)
+(1158 to 1163) and their initialisers in `new` (1242 to 1243) and `scratch` (1278 to 1279); `lag_preflight_with` split into its
+guard and the private runner `preflight_run` (1298 to 1303, the same operations); `lag_trial_mode` (1331 to 1345); the mode kept
+at the check when asked (2175 to 2179); in `lag_map` the argument `lf` (2239), `controls` made mutable (2248) with the tolerance
+of the option (2255 to 2260) and the zero start (2339 to 2340); in `lag_amplification_n` the fluid weights of the norm and the
+level (2401 to 2414, 2417, 2420), the argument of the call (2458) and the mode cell among the fluid cells (2470 to 2477). New
+test file `crates/rcfd-fv/tests/immersed_lag_estimate_f483.rs`. No schema key, golden, hash table or existing test file touched.
+
+### Checks
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| R1 P of F at step 2 / step 11 (reproduction) | `abs(rho - 1.1986) <= 1e-4`, `abs(rho - 0.9983) <= 1e-4` | 1.19855, 0.99826 | yes |
+| R2 B one corrector, check off (reproduction) | stop at step 34, Courant guard | step 34 (Courant 2.42e7) | yes |
+| A1 solid share of the mode of P of F | `>= 0.5` at both instants | 0.5243 (step 2), 0.2752 (step 11); first solid layer 0.0996, 0.0498 | **no** (known miss at step 11) |
+| A2 Z (zero start) of F | `< 1` at both | 1.1985501 (P 1.1985501), 0.99826 | **no** (known miss) |
+| A3 T (`tol_rel` 1e-12, `tol_abs` 0) of F | `< 1` at both | 1.1985501, 0.99826 | **no** (known miss) |
+| B1 FL of F | `< 1` at both | 1.19921, 1.00268 (mode cells: fluid cells 0.0015 and 0.0020 from the surface) | **no** (known miss) |
+| B2 FL of B, `immersed_lag` | `max > 1` | 1.18513 (step 2), 1.00846 (step 11) | yes |
+| B3 FL with two correctors, F and B | `< 1`, four values | F 0.0644, 0.0435; B 0.0763, 0.0444 | yes |
+| C2 channel without the cylinder, step 2 | `abs(FL - P) <= 0.02`, `P < 1` | P 0.78845, FL 0.78845 | yes |
+| C1 Stokes box, `D = 1`, `D = 4` | `abs(FL/P - 1) <= 1e-3` | 6.1e-13 (0.17671), -6.7e-14 (1.20847) | yes |
+| U1 every part off against `None` (CC N 24) | bit-equal | 0.784400 cell 475 both | yes |
+| U2 Z, N, T each against P | bits differ | differ (Z and T in the last digits, N 0.784397) | yes |
+| U3 `lag_trial_mode` against `lag_trial`, P and FL | warning bit-equal; argmax; FL cell fluid; unit norm within 1e-12 | all as stated (norm error below 1e-15) | yes |
+| U4 the run-time check with FL against `lag_trial` with FL | bit-equal | 0.784397 cell 451 both | yes |
+| N1 existing tests | pass | `immersed_single_corrector_f363` 4 passed (7 ignored; N0 with FP3 included), `w34b_lag` 3 (3), `w48v_corrector_control` 5, `consistent_correctors_f301` 12 (4), `rcfd-fv --lib` 104 (6), `baseline_hashes` 3 (1) | yes |
+| I1 P of F with 320 power iterations (amendment 1) | `< 1` at both | 1.17464 (step 2), 0.97725 (step 11) | **no** (known miss) |
+| I2 FL of F with 320; max FL of B with 320 (amendment 1) | F `< 1` at both; B `> 1` | F 1.17486, 0.97712; B 1.24761, 0.98804 | **no** for F (known miss), yes for B |
+
+Printed, no limit. N (fluid norm only) of F: 1.19921, 1.00268 (the same as FL, since Z changes nothing). FL of the other
+forcings with one corrector (step 2, step 11): Sa 1.12768, 1.01200; Sb 1.18315, 1.00393; B1 1.18701, 1.00391; P of B 1.18284,
+1.00493. The series of P of F with 20, 40, 80, 160, 320 power iterations: step 2 1.29133, 1.19855, 1.18066, 1.17416, 1.17464;
+step 11 1.01682, 0.99826, 0.97891, 0.97683, 0.97725. P of the channel without the cylinder with 320 iterations: 0.78728. M2 has
+1264 solid cells, 112 in the first solid layer.
+
+### What the measurements say about the number
+
+- **It is not the pressure solve.** Started from zero or solved to 1e-12 without an absolute floor, the estimate agrees with the
+  present one to seven digits at both instants. HS (a solid part kept by the stopped solve) is refuted; my reading of the
+  coupling of the solid interior was wrong.
+- **It is an eigenvalue of the frozen map at the surface, at the first BDF2 step.** With more power iterations the estimate
+  converges (1.1742 to 1.1746 from 160 to 320 iterations at step 2; 0.9768 to 0.9773 at step 11). The 1.29 of 20 iterations
+  (ADR 0374 FP3) and the 1.20 of 40 hold a transient of the power iteration; the converged value is still above one at step 2.
+  The mode straddles the surface: half its weight in the solid cells at step 2 (a quarter at step 11), its largest entry in a
+  solid cell 0.0002 inside the surface, and measured over the fluid cells alone it gives the same eigenvalue (1.17486 against
+  1.17464), with its largest fluid entry in a first fluid cell. So it is a mode of the fluid next to the body as much as of the
+  solid, not something an estimate can leave out by excluding solid cells. Without the cylinder the same channel gives 0.787: the
+  body raises the frozen lag gain at the first BDF2 step from 0.79 to 1.17.
+- **It passes with the state.** At step 11 the converged estimate of F is 0.977: the frozen map is above one at step 2 (the
+  start field of ADR 0249 with the inflow profile through the cylinder, which the penalty removes in the first steps) and below
+  one ten steps later. That fits a run that runs: an amplification of 1.17 per step for a few steps, then below one, is bounded.
+  Why the map at the body is above one at step 2 (which coefficient of the start state) is not measured.
+- **It does not separate the settings.** The bounded form B, which stops at step 34, gives with the converged fluid estimate
+  1.248 at step 2 and 0.988 at step 11, the same pattern as F (1.175, 0.977). At step 2 every forcing is above one, at step 11
+  every converged estimate is below one. The stop of B is the period-two growth of ADR 0374 G1 (Q3 there), which the frozen
+  lag map of either instant does not show.
+
+The first branch of the acceptance (an estimate that is below one for F and above one for B) is **not reached**: no variant
+measured here does it. The second branch, **the limitation documented with its numbers**, is what this addendum gives.
+
+### Mutations
+
+Applied one at a time to a `git archive` copy of f603be5c (`f483-scratch/mut`) by `f483-scratch/mutate.py` (an exact text
+replacement checked to occur once), the named tests run once in release, the file restored and compared byte for byte (equal
+after each; `mut_summary.log`, `mut_M*.log`). The unmutated copy passed the four named tests first (`mut_base.log`).
+
+| Id | Mutation | Must fail | Result |
+| --- | --- | --- | --- |
+| M1 | `zero_start` ignored | U2 | failed: "Z gives the bits of P" |
+| M2 | `fluid_norm` ignored in the norm | U2 | failed: "N gives the bits of P" |
+| M3 | `tol_rel` ignored | U2 | failed: "T gives the bits of P" |
+| M4 | `scratch` does not copy `lag_fluid` | U2 and U4 | both failed (U2 Z; U4 check 0.784397 cell 451 against lag_trial 0.784400 cell 475) |
+| M5 | the zero start with `lag_fluid = None` | N1 (`n0_fingerprints_of_the_defaults`) | failed: FP3 F `3ff4a94aaf18eb7f` against `3ff4a94abc88ca99` |
+| M6 | the mode cell of FL over all cells | U3 | failed: the cell is not the argmax over the fluid cells (did not survive) |
+
+### Tools and the defaults
+
+`cargo fmt -p rcfd-fv --check`: clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings`: clean. Defaults: with
+`lag_fluid = None` every operation of a step and of the estimate is the previous one (N1: the fingerprints FP1 to FP4 of ADR
+0374, including the bits of two lag estimates, and `baseline_hashes`; U1; M5 shows that N0 sees a change of the default map).
+
+### Deviations and disclosures
+
+- The hypothesis HS was registered from a hand reading that turned out wrong; A2 and A3 refute it.
+- Amendment 1 (the number of power iterations) was registered after the record H, which suggested it; it is not one of the
+  three measurements the acceptance names (the solid cells, the start, the tolerance), and it carries the explanation above.
+- Not run: the workspace suite and the gate; other meshes, Crank-Nicolson, a moving body, `lag_preflight_moving` with the
+  option; the start-state dependence at step 2 (which coefficient raises the map). The known-miss records were not run.
+
+### Decision by the registered rule
+
+U1 to U4, C1, N1, R1, R2, B2, B3, C2 met; every mutation caught by its named check. A1 (at step 11), A2, A3, B1 missed (and,
+after amendment 1, I1 and I2 for F). **F-483 is partial by the rule**: the library option is delivered with the defaults
+bit-identical, the number is explained by registered measurements (not the solves: an eigenvalue of the frozen map at the
+surface at the first BDF2 step, converged at 1.175, below one by step 11, the same for the setting that stops), and the
+limitation is documented with its numbers; the first branch of the acceptance is not reached.
+
+### Remaining questions
+
+- **Q1. Keep `LagFluid`?** Options: (a) keep it as a diagnostic (with `lag_trial_mode`, which gives the mode for any later
+  measurement); (b) remove it, since it does not separate the settings. Recommendation: (a), not as a default (a default change
+  of the estimate would move `pressure_lag_check` and the adaptive corrector count of existing immersed runs).
+- **Q2. The lag check on immersed runs.** The check warns on F at step 1 or 2 (a run that runs). Options: (a) document that with
+  an immersed forcing the estimate of the first BDF2 steps is above one at the body and passes, and recommend a `LagCheck::start`
+  of about 10 for such runs; (b) a follow-up that finds which coefficient of the start state raises the map at step 2; (c)
+  nothing. Recommendation: (a), with (b) only if a case needs the early check.
+- **Q3. The stop of the bounded form with one corrector** stays ADR 0374 Q3 (the linearisation of the whole step); the lag map
+  is ruled out as a predictor of it at both instants.
+
+### For the lead: roadmap entries
+
+**F-483: proposed status `partial`.** Proposed note (replacing the present one):
+
+> PARTIAL (ADR 0388, 2026-11-13), in the library. From ADR 0374 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11. The pressure-lag estimate of DFG 2D-2 on M2 with the first-order immersed forcing and one corrector at dt 1e-3 was reproduced (1.19855 at step 2, 0.99826 at step 11 with 40 power iterations) and explained by registered measurements: it is not the pressure solve (started from zero, or solved to 1e-12 without an absolute floor, the estimate is the same to seven digits), but an eigenvalue of the frozen map at the surface at the first BDF2 step, converged at 1.1746 with 320 iterations (the 1.29 of 20 iterations is a transient of the power iteration) and 0.977 at step 11; the mode has half its weight in the solid cells at step 2 and gives the same eigenvalue over the fluid cells alone (1.1749); the channel without the cylinder gives 0.787. The bounded forcing, which stops at step 34, shows the same pattern (1.248 at step 2, 0.988 at step 11), so no variant of the estimate is below one for the run and above one for the setting that stops: the limitation is documented with its numbers. Delivered: the opt-in estimate options PimpleSolver::lag_fluid (LagFluid::FLUID: the pressure solves of the map started from zero, the norm, level and mode cell over the fluid cells; a tolerance override as a diagnostic) and PimpleSolver::lag_trial_mode (the estimate with its mode); the defaults are bit-identical (the fingerprints of ADR 0374 including two lag estimates, baseline_hashes); six mutations caught. Partial by the registered rule: known misses A1 at step 11, A2, A3, B1, and I1 and I2 of amendment 1. Open (ADR 0388 Q1, Q2): keep LagFluid as a diagnostic; document a later start of the lag check for immersed runs.
+
+**F-363: proposed addition at the end of its note:**
+
+> ADR 0388 (2026-11-13, F-483): the estimate above one at the body is an eigenvalue of the frozen map at the first BDF2 step (converged 1.175 for the first-order forcing, 1.248 for the bounded form), below one by step 11 for both (0.977, 0.988); it is not caused by the pressure solve and does not predict the stop.
