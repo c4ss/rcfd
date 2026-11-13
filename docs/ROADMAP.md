@@ -7822,7 +7822,10 @@ fixed by the item's registration ADR before any code.
     added-mass mock made the coupled run unstable (non-uniform patterns with slopes of hundreds below the convergence
     test grow by about 700 per step); amendment 1 made the mock a piston. Eight mutations caught (one after amendment
     2). Baseline hashes pass. No flow solver is coupled. Open: ADR 0410 Q1 to Q3. Follow-up: F-NEW (frequency change
-    against the face refinement and the map). Follow-up F-502.
+    against the face refinement and the map). Follow-up F-502. The frequency change between the maps (M2c, 6.3e-3) is
+    the extra static compliance of the mapped weights; its dependence on the face refinement and the map is measured by
+    F-502 (ADR 0412, 2026-11-13): below 1e-3 from 8 x 8 elements with the projection and from 4 x 4 with the radial
+    basis.
 - [ ] **F-401** Two-way coupling of an elastic solid with the incompressible flow solver: the piston on an elastic bar
   - depends on: F-400, F-251, F-351, F-361, F-362
   - acceptance: Every limit not stated here is registered in the ADR before the run. Elastic bar (nu = 0) closing a
@@ -9625,7 +9628,7 @@ fixed by the item's registration ADR before any code.
     corrector either runs 200 steps from that start or its stop is located with the eigenvalue per step.
   - note: From ADR 0405 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
-- [ ] **F-502** Coupled frequency of the dynamic solid on non-matching interfaces: face refinement and map
+- [x] **F-502** Coupled frequency of the dynamic solid on non-matching interfaces: face refinement and map
   - depends on: F-400, F-362
   - acceptance: Every limit not stated here is registered in the ADR before the run. On the bar of F-400 (ADR 0410) with
     the piston mock at mass ratio 4, the change of the first coupled frequency between the matching and the 3:2
@@ -9634,8 +9637,18 @@ fixed by the item's registration ADR before any code.
     (computed before the run) within 10 percent, and the face refinement or the map for which the change is below 1e-3
     is reported; the projection's weights on the 3:2 wall are checked for the square's mirror symmetries (ADR 0410 Q2)
     and an asymmetry is explained or removed with defaults bit-identical.
-  - note: From ADR 0410 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-    Size S.
+  - note: DONE (ADR 0412, 2026-11-13; registered before the code, run once, no amendment). On the bar of F-400 with the
+    piston mock at mass ratio 4 the first coupled frequency changes between the matching and the 3:2 interface by
+    6.28e-3, 1.79e-3, 5.36e-4 (projection) and 1.91e-3, 2.52e-4, 2.84e-5 (radial basis, support 3 h) for solid end faces
+    of 2 x 2, 4 x 4, 8 x 8 elements. Each change equals the one predicted from the static compliance w^T K^{-1} w of the
+    mapped weights (two static solves before the run; the added mass on a spring of the extra compliance in series with
+    the 1D chain; the cross term with the uniform field is exactly zero) within 2.4e-3 of itself (limit 10 percent); the
+    cruder mass-on-spring estimate misses by 15 percent (negative control). Below 1e-3: projection from 8 x 8, radial
+    basis from 4 x 4. The projection's weights on the 3:2 wall keep only the mirrors y <-> z, (W - z, W - y) and the
+    half turn (defects below 1e-15) and break the axis mirrors by 0.17 and 0.11: they are exactly the barycentric
+    weights of each quadrilateral split along its (0, 2) diagonal, parallel on every Hex8 face (explained; a test-side
+    bilinear evaluation is symmetric to 8e-16 and has 0.34 to 0.53 of the extra compliance). No library line changed;
+    defaults bit-identical. Open: ADR 0412 Q1, Q2. Follow-up F-504.
 - [ ] **F-503** Overset: the second-order ring gradient on RE and RL of ADR 0347
   - depends on: F-479
   - acceptance: With OversetSolver::set_second_order_ring_gradient(true) under PrescribedOwnGradient and the quadratic
@@ -9645,3 +9658,14 @@ fixed by the item's registration ADR before any code.
     number why not.
   - note: From ADR 0409 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. Low
     priority.
+- [ ] **F-504** Opt-in bilinear projection on quadrilateral interface elements
+  - depends on: F-362, F-502
+  - acceptance: Every limit not stated here is registered in the ADR before the run. An opt-in variant of the projection
+    of F-362 evaluates the bilinear shape functions on quadrilateral structural elements (the nearest point on the
+    bilinear patch); the default projection keeps its weights bit for bit (the F-362, F-400 and F-502 tests pass
+    unedited). On the 3:2 walls of F-502 its weights are invariant under the eight symmetries of the square within 1e-13
+    and equal the test-side bilinear evaluation of ADR 0412 within 1e-13; rigid translation and rotation are reproduced
+    and resultant, moment and work conserved within 1e-12 on a planar and on a cylindrical wall; the coupled frequency
+    change of F-502 equals its static-compliance prediction within 10 percent for faces of 2 x 2, 4 x 4 and 8 x 8
+    elements.
+  - note: From ADR 0412 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
