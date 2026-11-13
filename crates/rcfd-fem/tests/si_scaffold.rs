@@ -900,6 +900,7 @@ fn r10_refused_on_every_static_path_after_cyclic_landed() {
 /// X2 after ADR 0390 (F-395) landed: `geometric_stiffness` of the solid elements returns the matrix, the two entry points of
 /// ADR 0300 still refuse.
 #[test]
+#[ignore = "record of ADR 0390 before ADR 0404 (F-397, geometric nonlinearity) retired the internal_force and tangent rows; no row stays valid (maintainer, 2026-11-13)"]
 fn x2_entry_points_refuse_by_default_after_geometric_landed() {
     let mat = steel();
     let state = ElementState::empty();

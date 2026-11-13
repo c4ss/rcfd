@@ -302,8 +302,8 @@ pub trait Element: Sync {
         Err(entry_point_refusal(self.kind(), "geometric_stiffness", "ADR 0298"))
     }
 
-    /// The internal force of the element for a displacement and a state (total Lagrangian, ADR 0300). Refuses by default
-    /// (ADR 0291 D4).
+    /// The internal force of the element for a displacement and a state (total Lagrangian, ADR 0300; filled by ADR 0404:
+    /// [`crate::nonlinear::element_internal_force`]). A placeholder kind refuses through [`Element::point`].
     fn internal_force(
         &self,
         coords: &[Vec3],
@@ -311,11 +311,11 @@ pub trait Element: Sync {
         displacement: &[f64],
         state: &ElementState,
     ) -> Result<Vec<f64>> {
-        let _ = (coords, material, displacement, state);
-        Err(entry_point_refusal(self.kind(), "internal_force", "ADR 0300"))
+        crate::nonlinear::element_internal_force(self, coords, material, displacement, state)
     }
 
-    /// The tangent stiffness of the element for a displacement and a state (ADR 0300). Refuses by default (ADR 0291 D4).
+    /// The tangent stiffness of the element for a displacement and a state (ADR 0300; filled by ADR 0404:
+    /// [`crate::nonlinear::element_tangent`]). A placeholder kind refuses through [`Element::point`].
     fn tangent(
         &self,
         coords: &[Vec3],
@@ -323,8 +323,7 @@ pub trait Element: Sync {
         displacement: &[f64],
         state: &ElementState,
     ) -> Result<ElementMatrix> {
-        let _ = (coords, material, displacement, state);
-        Err(entry_point_refusal(self.kind(), "tangent", "ADR 0300"))
+        crate::nonlinear::element_tangent(self, coords, material, displacement, state)
     }
 }
 
