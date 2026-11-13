@@ -418,7 +418,14 @@ fn test_rows(interface: &SolidInterface, points: &[Vec3], bilinear: bool) -> Vec
 }
 
 /// The map of `kind` from the solid's interface to `wall`; its precision defect is checked (PD).
-fn build(checks: &mut Checks, id: &str, interface: &SolidInterface, wall: &PistonWall, kind: Map, n: usize) -> InterfaceMap {
+fn build(
+    checks: &mut Checks,
+    id: &str,
+    interface: &SolidInterface,
+    wall: &PistonWall,
+    kind: Map,
+    n: usize,
+) -> InterfaceMap {
     let h = W / n as f64;
     match kind {
         Map::Projection | Map::RadialBasis => {
@@ -427,7 +434,9 @@ fn build(checks: &mut Checks, id: &str, interface: &SolidInterface, wall: &Pisto
             } else {
                 MapSettings::radial_basis(3.0 * h, 1e-9)
             };
-            let (map, report) = interface.build_map(&wall.points, wall.faces.clone(), &settings).unwrap();
+            let (map, report) = interface
+                .build_map(&wall.points, wall.faces.clone(), &settings)
+                .unwrap();
             let limit = if kind == Map::Projection { 1e-14 } else { 1e-12 };
             checks.at_most(&format!("PD {id} precision defect"), report.precision_defect, limit);
             map
@@ -439,7 +448,9 @@ fn build(checks: &mut Checks, id: &str, interface: &SolidInterface, wall: &Pisto
                 .iter()
                 .zip(&wall.points)
                 .map(|(row, &x)| {
-                    let image = row.iter().fold(vec3::ZERO, |a, &(i, w)| vec3::add(a, vec3::scale(nodes[i], w)));
+                    let image = row
+                        .iter()
+                        .fold(vec3::ZERO, |a, &(i, w)| vec3::add(a, vec3::scale(nodes[i], w)));
                     vec3::norm(vec3::sub(image, x))
                 })
                 .fold(0.0, f64::max);
@@ -451,7 +462,11 @@ fn build(checks: &mut Checks, id: &str, interface: &SolidInterface, wall: &Pisto
 
 /// Axial interface weights `w = B^T (A_f/A)` of a map.
 fn weights(map: &InterfaceMap, wall: &PistonWall) -> Vec<f64> {
-    map.forces_to_nodes(&wall.unit_forces()).unwrap().iter().map(|f| f[0]).collect()
+    map.forces_to_nodes(&wall.unit_forces())
+        .unwrap()
+        .iter()
+        .map(|f| f[0])
+        .collect()
 }
 
 /// Static compliance `w^T K^{-1} w` of a map (ADR 0412 D5).
@@ -647,9 +662,20 @@ fn face_refinement(n: usize) {
 
     // C0: the static compliances and the predictions, before any coupled run.
     let matching_wall = PistonWall::new(n, true, p.dt, p.m_a);
-    let matching_map = build(&mut checks, &format!("matching n{n}"), &interface, &matching_wall, Map::Projection, n);
+    let matching_map = build(
+        &mut checks,
+        &format!("matching n{n}"),
+        &interface,
+        &matching_wall,
+        Map::Projection,
+        n,
+    );
     let c0 = compliance(&model, &interface, &matching_map, &matching_wall);
-    checks.at_most(&format!("K0 n{n} |c_w0 E A/L - 1|"), (c0 * E * W * W / L - 1.0).abs(), 1e-9);
+    checks.at_most(
+        &format!("K0 n{n} |c_w0 E A/L - 1|"),
+        (c0 * E * W * W / L - 1.0).abs(),
+        1e-9,
+    );
     let kinds = [Map::Projection, Map::RadialBasis, Map::Bilinear];
     let mut predicted = Vec::new();
     for kind in kinds {
@@ -666,14 +692,23 @@ fn face_refinement(n: usize) {
         );
         predicted.push((kind, wall, map, pred, crude));
     }
-    checks.holds(&format!("C0 n{n}"), true, "every prediction computed and printed before the first coupled run");
+    checks.holds(
+        &format!("C0 n{n}"),
+        true,
+        "every prediction computed and printed before the first coupled run",
+    );
 
     // S1 to S5: the weights on the 3:2 wall.
     for (kind, wall, map, _, _) in &predicted {
         let w = weights(map, wall);
         let id = format!("{} n{n}", kind.id());
         if *kind == Map::Projection {
-            let tri = InterfaceMap::new(test_rows(&interface, &wall.points, false), nodes.len(), wall.faces.clone()).unwrap();
+            let tri = InterfaceMap::new(
+                test_rows(&interface, &wall.points, false),
+                nodes.len(),
+                wall.faces.clone(),
+            )
+            .unwrap();
             let wt = weights(&tri, wall);
             let scale = w.iter().fold(0.0f64, |a, x| a.max(x.abs()));
             let dev = w.iter().zip(&wt).fold(0.0f64, |a, (x, y)| a.max((x - y).abs())) / scale;
