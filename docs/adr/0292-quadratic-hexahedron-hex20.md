@@ -305,6 +305,26 @@ Hex20 does not assemble and solve.
    rule 2 forbids editing them. Not taken: listed in the addendum as the remaining step for the maintainer (options: mark them
    `#[ignore]` as records of ADR 0291, or drop the Hex20 rows).
 
+## Amendment 1 (2026-11-13, written and committed before the corrected run)
+
+The registered run of `si_hex20` (commit d1ef9d74, once, release) printed for C1 the ratios `-0.981949` (Hex20) and
+`-0.369197` (Hex8): the test computes `delta = -sum_a f_az u_az / P`, but with the load `f_az = -P s_a` (shares `s_a` summing to
+1) and the deflection `u_az < 0` the registered quantity, the area mean of the downward deflection, is `+sum_a f_az u_az / P`.
+A defective set-up (the sign of the measure), not a result: C1 read `|ratio - 1| = 1.98`, and N2 was met vacuously by a
+negative number. Corrected: `delta = sum_a f_az u_az / P`, nothing else changes (mesh, load, clamp, limits 0.01 and 0.9). The
+first-run test stays as the ignored record `c1_n2_cantilever_one_element_through_the_thickness`; the corrected checks are the
+new tests `c1_amended_hex20_cantilever` and `n2_amended_hex8_cantilever_locks`, each run once.
+
+Disclosed: the magnitudes of the first run are known before the corrected run (0.981949 for Hex20, i.e. 1.8 percent below
+`delta_T`, which will miss the 1 percent limit; 0.369 for Hex8). After the first run and before this amendment, unregistered
+diagnostics were run once on the cantilever and on T1 (a temporary test file, deleted, not committed; numbers in the addendum),
+to diagnose the two misses; no limit, mesh or parameter is changed by them.
+
+T1 (run once): T1a and T1c met, T1b missed (`1.1681e-2` against `1e-2`); its test is the ignored record
+`t1_thick_cylinder_plane_strain_known_miss`, unchanged. So that T1a and T1c stay covered by a fast test, a new test
+`t1_amended_met_clauses` runs the same set-up and asserts T1a and T1c with their registered limits, printing T1b without
+asserting it (as ADR 0279 amendment 1 did for Tet4).
+
 ## The planned stub, as written
 
 Status: **PLANNED 2026-11-12** (layout by the intermediate-tier plan, [ADR
