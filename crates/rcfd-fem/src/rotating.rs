@@ -20,6 +20,10 @@
 //! whirl modes of `(K_eff - omega^2 M + i omega G) phi = 0` by a symmetric linearisation ([`RotatingPart::whirl_modes`],
 //! [`RotatingSector::whirl_modes`]), forward and backward whirl, the Campbell table with directions. Opt-in by
 //! [`RotatingOptions::coriolis`]; nothing above reads it.
+//!
+//! ADR 0416 (F-505): at any speed, also above the loss of stiffness, the whirl problem by the eigenvalues of its state
+//! matrix (Hessenberg reduction and the Francis QR algorithm), each speed flagged stable or unstable with its growth rate
+//! ([`RotatingPart::whirl_state`], [`RotatingPart::whirl_stability`]); the functions above are not changed.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -43,6 +47,10 @@ pub use whirl::{
     coriolis_matrix, gyroscopic_eigen_dense, whirl_order_crossings, CyclicWhirlCampbell, DenseWhirl,
     HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes, MAX_WHIRL_UNKNOWNS,
     WHIRL_TOLERANCE,
+};
+pub use whirl::{
+    gyroscopic_state_eigen_dense, DenseStateWhirl, Stability, StateWhirl, StateWhirlMode, WhirlStability,
+    STABILITY_TOLERANCE,
 };
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
