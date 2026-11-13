@@ -28,7 +28,15 @@ Two participants and a coupler:
   `rcfd_fem` model, `advance` a static solve under the nodal forces, `checkpoint` and `restore` of its time and
   displacement bit for bit. It has no mass, so against an incompressible flow the added-mass ratio is unbounded: it is for
   mock fluids and quasi-static use, not for a flow solver. `SolidInterface::build_map` builds the map from the set's faces,
-  and `solve_face_forces` is the same route without a coupled step (face forces of a fluid solved once, in process);
+  and `solve_face_forces` is the same route without a coupled step (face forces of a fluid solved once, in process).
+  A solid with mass is `rcfd_post::solid_dynamic::DynamicSolid` (ADR 0410): the same interface, `advance` the transient
+  integrator of `rcfd_fem::transient` (Newmark or generalised-alpha, on either path) over one or more sub-steps with the
+  nodal forces held (`Integrator::run_with_force`), `checkpoint` and `restore` of the integrator's state and the held
+  forces bit for bit, and `elements` for the map builders. It is checked against mock fluids only (an added mass on a
+  piston wall, a spring); with Newmark's method a converged coupled step is the implicit step of the coupled system. A
+  fluid whose added mass acts per face excites interface patterns that are not uniform, with slopes of the fixed-point
+  map of several hundred on that bar; components of the force below the convergence test are then loosely coupled and
+  grow from step to step (ADR 0410 amendment 1);
 * the **coupler** (`cosim::coupled_step`) owns the mapping between the two interface meshes and the iteration. Neither
   participant sees the other's mesh.
 

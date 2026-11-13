@@ -360,3 +360,150 @@ mutant is equivalent there. Added check **A1c**: A1 on the bar clamped on `xmin`
 moves their forces to the reference's six unknowns: the state after each of three advances bit-equal to the integrator with a
 constant load history, the returned displacements the state's, the time `t0 + 2 n dt`. Limit: bit-equal. Expected to catch
 MU1. Run once on the unmutated code, then MU1 once more.
+
+## Addendum 1: results (2026-11-13)
+
+Runs, each once, release profile, `CARGO_BUILD_JOBS=4`: the registered run of commit `25725152` (log `f400-scratch/run1.log`);
+the corrected run of amendment 1, commit `61369116` (`cargo test -p rcfd-post --release --test si_solid_dynamic piston`, log
+`f400-scratch/run2.log`); A1c of amendment 2, commit `20d467f0`. The whole test file takes 0.25 s; no test is heavy. Commit
+`58d9d803` moved the missed M2c into an ignored `*_known_miss` test (limit intact) and applied `cargo fmt` and one clippy fix
+(an array instead of `vec!` in the test's 1D chain); the file was then run as a whole to check that it passes: 13 passed, 5
+ignored (the four records of the registered run and the known miss).
+
+### Checks: the registered run (per-face added-mass mock, D3)
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| F1, F1b, F2, F2b, F1p, F2p | 1 %; `2e-5` | not measured: every mass run stopped at step 2 to 5 | no (set-up defect, amendment 1) |
+| I1, I1b | cap 4, all converged | stopped at step 3 to 5 at the cap (test quantity `6.9e-8` to `1.4e-3`) | no |
+| I2, I2b | caps 20, 8 | stopped in step 1 (test quantity `3.4e-2`, `1.06`) | no |
+| I3 | caps | stopped (matching at the cap 4, 3:2 in step 1) | no |
+| P1 | fails at the cap; `<= 1e-6` | fails (`coupler`, iteration 20); growth `/ abs(s) - 1 = 5.6e-16` (`s = -59.692646`) | yes |
+| P2 | `<= 1e-6` | `1.2e-15` (`s = -15.361635`) | yes |
+| K1, K1b | `<= 1e-6` | stopped in step 2 at the cap 4 | no |
+| K2 | cap 4 | 3 in the steps made | yes (steps made) |
+| M1 | `<= 1e-12` | resultant `<= 1.3e-16`, moment `<= 4.9e-17`, work `<= 9.5e-17` (matching and 3:2, three trials each) | yes |
+| M1r | `<= 1e-12` | matching `2.5e-26`, `2.6e-17`, `1.4e-16`; 3:2: no step made | matching yes; 3:2 no |
+| M2 | `< 1e-3` | not measured | no |
+| R1 | bit for bit | holds | yes |
+| FS1 | located, restored | step 3 stopped at the cap (`coupler`), so the load table's end was not reached; the restore held | no |
+| FS2 | located, restored | `solid`, iteration 2, "a non-finite interface force"; both sides bit-equal | yes |
+| A1, A1b, D1, Z1 | bit for bit; refusals | all hold | yes |
+| N1 | `>= 2e-5` | `7.28e-4` (the lagging per-face mock converged in every step, at most 11 iterations) | yes |
+
+### Checks: the corrected run (piston mock, amendment 1) and A1c (amendment 2)
+
+| Id | Limit | Measured | Met |
+|---|---|---|---|
+| F1c, F1bc (ratio 0.5, `k L = 1.076874`) | `abs(Omega_m/omega - 1) <= 1e-2` | `2.757e-4`, `2.757e-4` | yes |
+| F2c, F2bc (ratio 4, `k L = 0.480094`) | `<= 1e-2` | `3.270e-4`, `3.270e-4` | yes |
+| F1pc, F2pc | `abs(Omega_m/Omega_pred - 1) <= 2e-5` | `1.20e-7`, `1.46e-7` | yes |
+| I1c, I1bc (ratio 4, matching) | cap 4, all 320 steps converged to `1e-8` | 3 in every step (mean 3.000), Aitken and least squares | yes |
+| I2c, I2bc (ratio 4, 3:2) | caps 20 and 8 | 3 in every step, both | yes |
+| I3c (ratio 0.5) | caps 4, 4, 20 | 3 in every step | yes |
+| P1c | fails at the cap 20; `<= 1e-6` | fails (`coupler`); `5.6e-16` | yes |
+| P2c | `<= 1e-6` | `1.2e-15` | yes |
+| K1c, K1bc | `<= 1e-6` | `abs(q_x/u* - 1)` `1.07e-10`, `1.07e-10`; `q_yz/u*` `3.1e-14`, `3.6e-14` | yes |
+| K2c | cap 4 | 3, 3 | yes |
+| M1rc | `<= 1e-12` | matching `2.2e-16`, `0`, `1.5e-16`; 3:2 `0`, `2.0e-17`, `0` | yes |
+| **M2c** | `< 1e-3` | **`6.279e-3`** (ratio 4, Aitken), **`6.279e-3`** (ratio 4, least squares), **`2.377e-3`** (ratio 0.5, Aitken); the 3:2 frequency is the lower one | **no** (`m2c_frequency_change_known_miss`) |
+| FS1c | located, restored | `solid`, iteration 1, "key 'load table': table 0 covers [0e0, 3.63e-4], the run needs [3.11e-4, 4.15e-4]"; both sides bit-equal | yes |
+| N1c | `>= 2e-5` | `7.28e-4` | yes |
+| A1c | bit for bit | holds (three advances) | yes |
+| NF | no flow solver | the test file uses neither `FlowWall` nor `PimpleSolver` (inspection) | yes |
+
+The measured frequencies agree with the discrete prediction of D6 (`Omega_pred/omega = 0.999724441` and `0.999673106`, computed
+in the test) to `1.5e-7`: the matching coupled pair is Newmark's method on the bar with its tip mass, as derived. The plain
+iteration's growth is the slope `-m_a e^T S^{-1} e` to `6e-16`.
+
+### Diagnosis of M2c
+
+The transpose of the projection map gives the 2 x 2 solid face the axial weights `w = B^T (A_f/A)`: corners `0.102, 0.065,
+0.065, 0.102`, edge midpoints `0.111`, centre `0.222`, against the consistent `0.0625, 0.125, 0.25` of the matching wall. One
+diagnostic static solve (not committed): `w^T K^{-1} w = 1.01489 L/(E A)` on the 3:2 wall, `1.00000` on the matching wall. The
+added mass loads the face with `w`, and the wall's mean displacement under that load includes the local deformation of the
+face: 1.49 % more compliance in series. With the added mass dominant (ratio 4, `k L = 0.48`, nearly a mass on a spring) the
+frequency falls by about half of that, `6.3e-3` measured; at ratio 0.5 less of the mode's energy is in that compliance,
+`2.4e-3`. My estimate of D6 (`< 1e-5`, "second order in a self-equilibrated correction") was wrong: the correction is second
+order but not small (the weights differ by up to 63 % at the corners), and the compliance of a self-equilibrated load on a 2 x 2
+face is not small against `L/(E A)`. F-385 had measured the same effect statically (largest error on the loaded 3:2 face `0.131
+p L/E`). The weights are also not symmetric under the square's mirror about the diagonal through the corners `(0, 0)` and
+`(1, 1)` (corners `0.102` against `0.065`): the projection with its offset correction does not keep that symmetry on this wall
+(observation; resultant, moment and work are still conserved, M1, M1rc).
+
+### Mutations (copy of commit `58d9d803` from `git archive` in `f400-scratch/copy`, own target directory, script `mutate.py`, logs `MU1.log` to `MU7.log`)
+
+| Mutation | Caught by |
+|---|---|
+| MU1 `T^T` replaced by `F[free]` on the transformation path | **not caught** on the first run (`MU1_first.log`): equivalent on A1b's model, where `T` is a selection; amendment 2 added A1c; rerun with A1c's test file (commit `20d467f0`): caught by A1c |
+| MU2 held force added to `f_{n+1}` only | A1 |
+| MU3 `restore` leaves the held forces | R1, FS2 |
+| MU4 one integrator step per advance | A1 |
+| MU5 interface displacement from component `(c + 1) mod 3` | F1c/F2c tests, K1c, N1, N1c, A1, FS2 |
+| MU6 the `y` force of every interface node dropped | A1 |
+| MU7 `checkpoint` keeps the first checkpoint | FS1c, FS2, F1c/F2c tests, K1c, N1, N1c |
+
+### Existing tests (S)
+
+* S1: `cargo test -p rcfd-fem --release --lib --test si_transient --test si_transient_mpc`: 1, 11 (3 ignored), 6 passed.
+* S2: `cargo test -p rcfd-api --release --test baseline_hashes`: 3 passed, 1 ignored (the known `rotating_channel` record, as
+  on main).
+* S3: `cargo test -p rcfd-post --release --test sb_solid_coupling --test sb_solid_coupling_fail --test
+  sb_solid_coupling_fail_fluid`: 11 (1 ignored), 3, 5 passed.
+* `cargo fmt -p rcfd-post -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem -p rcfd-post --all-targets --release -- -D
+  warnings`: clean.
+
+### Deviations
+
+* Amendment 1 changed the mock (per-face added mass to a piston) after the registered run; the four test functions of the
+  registered run that missed are kept as ignored records, unedited but for the attribute (the helpers gained a `piston` flag,
+  false for them).
+* The checks met in the registered run (P1, P2, M1, R1, FS2, A1, A1b, D1, Z1, N1) stand from that run; P1, P2 and N1 were
+  repeated on the piston set-up as P1c, P2c and N1c by the amendment.
+* Amendment 2 added A1c after the mutation runs (MU1 was equivalent on A1b's model).
+* M2c is the only miss of the corrected run; the two test functions that contained it print its values, and the check itself
+  is the ignored `m2c_frequency_change_known_miss`.
+* `docs/cosimulation-protocol.md` gains a paragraph on `DynamicSolid` and the observation of amendment 1.
+
+### What was not run
+
+* The whole workspace test suite (the lead's gate). The radial-basis map in a coupled dynamic run. Sub-steps with a mass mock.
+* An estimate of the frequency change from the 3:2 weights before the run (D6 said "not derived further"; it was wrong).
+
+### Decision by the registered rule
+
+**Partial.** On the corrected set-up every clause of the acceptance is met except c7: the coupled frequency changes by `6.3e-3`
+(ratio 4) and `2.4e-3` (ratio 0.5) between the matching and the 3:2 map, limit `1e-3`, a diagnosed miss. The registered set-up
+also needed an amendment. Met: c1 and c2 (`2.8e-4` and `3.3e-4` against 1 %), c3 (the plain iteration diverges with the
+predicted slope to `6e-16`), c4 (3 iterations per step, caps 4, 8 and 20), c5 (`1.1e-10` against `1e-6`), c6 (`2.2e-16` against
+`1e-12`), c8 and c9 (bit for bit), c10.
+
+### Remaining questions
+
+1. **The frequency change between the maps (c7).** Options: (a) keep the clause and add a follow-up that measures the change
+   against the refinement of the solid face (2 x 2, 4 x 4, 8 x 8 elements across, the 3:2 ratio kept) and with the radial-basis
+   map, the limit registered from the static compliance `w^T K^{-1} w` computed beforehand; (b) restate the clause as "the change
+   equals the one predicted from the static compliance of the mapped weights within 10 %"; (c) accept `1e-2` for a 2 x 2 face.
+   Recommendation: (a), the follow-up below; it also tells whether the `1e-3` of the acceptance is reachable with a projection.
+2. **The projection's weights are not mirror-symmetric on the 3:2 wall** (corners 0.102 and 0.065). Options: (a) a check in the
+   F-362 builder (is the offset correction's ring order-dependent?); (b) leave it (conservation holds). Recommendation: (a),
+   folded into the follow-up of question 1.
+3. **A distributed added mass and the convergence test** (amendment 1): with a fluid whose added mass acts per face, the force
+   components below the convergence test are loosely coupled and grow by their slope per step (here about 700). ADR 0304
+   (F-401) couples the flow solver, whose added mass is distributed. Options: (a) F-401 registers a check of the growth of the
+   non-uniform part of the interface force over the run; (b) a convergence test per pattern in the coupler (changes
+   `rcfd-fv::cosim`); (c) nothing until it shows. Recommendation: (a), as a sentence in F-401's note.
+
+### For the lead: roadmap entries
+
+F-400, proposed status **partial**, note:
+
+> Structural solver, intermediate tier (plan ADR 0290). PARTIAL (ADR 0410, 2026-11-13; registered before the code, amendment 1 after the registered run, amendment 2 after the mutations). rcfd_post::solid_dynamic::DynamicSolid implements cosim::Structure on the transient integrator of ADR 0389/0393 (Newmark or generalised-alpha, either path): advance holds the interface forces over one or more sub-steps through the new opt-in Integrator::run_with_force (the force added at both ends of every step, reduced like a load pattern; run and step keep their bits), checkpoint and restore keep the integrator's state and the held forces bit for bit, elements gives the surface set's faces to the map builders; no dependency edge added (rcfd-post already depends on rcfd-fv and rcfd-fem), rcfd-fv::cosim unchanged. Bar 4 x 1 x 1 m, Hex8 20 x 2 x 2, nu = 0, clamped, end face the interface, coupled by coupled_step to a test-only piston mock (one wall acceleration, Newmark-consistent, force -m_a a) at 100 steps per period: first coupled frequency against the root of k L tan(k L) = rho A L/m_a 2.8e-4 (ratio 0.5) and 3.3e-4 (ratio 4) (limit 1 %), against the discrete Newmark prediction 1.5e-7; the plain iteration diverges with the derived slope -m_a e^T S^{-1} e (-59.69 at ratio 4) to 6e-16; Aitken and least squares converge to 1e-8 in 3 iterations per step on the matching and the 3:2 map built by F-362; spring 1.5 k_s with a slow load (generalised-alpha rho_inf = 0) to F_0/(k_s + k_f) within 1.1e-10; resultant, moment and work conserved to 2.2e-16; restore bit for bit; a failing structural step (load table, non-finite force) stops the step naming 'solid' in iteration 1 and 2 with both sides restored. Partial: the coupled frequency changes by 6.3e-3 (ratio 4) and 2.4e-3 (ratio 0.5) between the matching and the 3:2 map (limit 1e-3; diagnosed: the transposed projection loads the 2 x 2 face with non-consistent weights, 1.5 % more static compliance; a known-miss record). The registered per-face added-mass mock made the coupled run unstable (non-uniform patterns with slopes of hundreds below the convergence test grow by about 700 per step); amendment 1 made the mock a piston. Eight mutations caught (one after amendment 2). Baseline hashes pass. No flow solver is coupled. Open: ADR 0410 Q1 to Q3. Follow-up: F-NEW (frequency change against the face refinement and the map).
+
+F-401, sentence to append to its note:
+
+> ADR 0410 (F-400, 2026-11-13) amendment 1: with an added mass that acts per wall face, the interface force components below the convergence test are loosely coupled and grew by about 700 per step on the bar of F-400; the registration of this item should check the growth of the non-uniform part of the interface force over the run (ADR 0410 Q3).
+
+Follow-up item (new id to be given by the lead), title "Coupled frequency of the dynamic solid on non-matching interfaces: face refinement and map", deps F-400, F-362, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. On the bar of F-400 (ADR 0410) with the piston mock at mass ratio 4, the change of the first coupled frequency between the matching and the 3:2 interface is measured for solid end faces of 2 x 2, 4 x 4 and 8 x 8 elements with the projection map and with the radial-basis map; each change equals the one predicted from the static compliance w^T K^{-1} w of the mapped weights (computed before the run) within 10 percent, and the face refinement or the map for which the change is below 1e-3 is reported; the projection's weights on the 3:2 wall are checked for the square's mirror symmetries (ADR 0410 Q2) and an asymmetry is explained or removed with defaults bit-identical.
