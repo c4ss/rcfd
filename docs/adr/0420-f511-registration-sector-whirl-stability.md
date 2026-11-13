@@ -295,3 +295,87 @@ The stationary-frame frequency of a state mode (ADR 0419's column) is not added 
 ADR 0416); damping; the flag at a defective double eigenvalue (a Krein collision), as ADR 0416; parts above the dense cap of 1500
 reduced unknowns per index; the aliased harmonics `k + m N` (ADR 0419 D2); output through case files and the CLI. One disc
 geometry.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-fem/src/rotating/whirl/state/sector.rs` (new, 279 lines, with the unit test U2); additive lines of
+`crates/rcfd-fem/src/rotating/whirl/state.rs` (22 to 23: `mod sector;` and its `pub use`), of
+`crates/rcfd-fem/src/rotating/whirl.rs` (39: the `pub use`) and of `crates/rcfd-fem/src/rotating.rs` (27 to 29 the module
+comment, 58 the `pub use`); no line removed or changed. Tests: `crates/rcfd-fem/tests/si_rotating_whirl_sector_state.rs`, three
+tests, 0.74 s in release together. The registered run (`f511-scratch/run1.log`, commit 120a3a5d, release) was made once; then a
+rustfmt commit (layout only, afaf9c14). Nothing was re-run to pick a result; no amendment.
+
+Derived speeds (D3, printed by the run): `omega_ref = 1655.322604` rad/s. **With both effects on no index has lost
+definiteness at 2, 4 or 8 `omega_ref`; at 16 `omega_ref` index 1 has.** The fallback was not taken. Bisection: `Omega_L,1 =
+22275.00333868` rad/s `= 13.456593467 omega_ref` (indices 0, 2, 3 had not lost at `16 omega_ref`), so `Omega_L = 13.46
+omega_ref`, `k* = 1`, `Omega_T = 1.25 Omega_L = 27843.75417335` rad/s. The pre-stress nearly cancels the spin softening on this
+disc: the in-plane index-1 motion (the rim moving sideways against the hub) loses stiffness only at about 13 times the lowest
+rest frequency, which fits D3 (ii). At `Omega_T` index 1 has `K_eff` with 2 negative eigenvalues (one of its complex Hermitian
+problem) and is **gyroscopically stabilised**: flagged `Stable` (real defect 2.5e-16), its lowest mode at 509.86 rad/s whirling
+backward (`kappa = -0.992`). So the rotor is stable at `Omega_T`, and the full rotor gives the same result.
+
+| # | Check | Limit | Measured | Met |
+|---|---|---|---|---|
+| D | derived speeds printed; `Omega_L > 0.8 omega_ref` | holds | both effects on, `k* = 1`, `Omega_L = 13.457 omega_ref` | yes |
+| B1 | `k* = 1` at `Omega_T`: loss with even count, `2 x 84` finite eigenvalues, `whirl_modes` still a loss | each | `Some(2)`; 168 finite; loss | yes |
+| L1 | full count = sum of index counts, pair counts even | exact | `0 + 2 + 0 + 0 = 2 = 2` | yes |
+| U1 | union against the full rotor: count; worst matched relative | count; `<= 1e-8` | 504 = 504; **6.7e-14** (full `|s|` from 509.86 to 3.05e5) | yes |
+| F1 | (i) full flag = combined flag; (ii) per-index flag = flag of the matched full eigenvalues | equal | Stable = Stable; Stable = Stable for `k = 0 .. 3` (no growth to compare) | yes |
+| P1 | odd count forces Unstable | each | vacuous: no odd count (index counts 0, 2, 0, 0; full 2), recorded as registered | yes (vacuous) |
+| Q1 | stored residuals at `Omega_T`; at `0.8 omega_ref` | `<= 1e-9` | 2.5e-14; 2.1e-13 | yes |
+| E1 | expanded sector modes on the full quadratic problem | `<= 1e-8` | 4.7e-14 | yes |
+| W1 | `| |tau| - 1 |` of the 16 separated pair modes at `Omega_T` | `<= 1e-6` | 4.4e-16 | yes |
+| X1 | at `0.8 omega_ref`: loss None, Stable, counts 42, 84, 84, 42; frequencies against `whirl_modes` | each; `<= 1e-9` | holds; 1.8e-13 | yes |
+| W2 | at `0.8 omega_ref`, `k = 1, 2`: omega; wave sense against `whirl_modes` | `<= 1e-9`; `<= 1e-8` | 1.3e-13; 6.7e-16 | yes |
+| T1 | table entries `==` `whirl_state`, `rotor(j)` = combined; CSV 1 + 8 lines, columns, round trip | each | holds | yes |
+| U2 | `Stability::combined` unit test | each | holds | yes |
+| R1 | refusals `harmonic`, `speed` x 2, `harmonics`, `speeds` | each | holds | yes |
+| R2 | `cargo test -p rcfd-fem --release`; `cargo check -p rcfd-post --tests` | pass | 316 passed, 0 failed, 61 ignored (no new ignored test); pass | yes |
+| N1 | sector without Coriolis against the full rotor with it | `> 1e-6` | 10.4 | as expected |
+| N2 | full rotor without Coriolis at `Omega_T` | Unstable, growth `> 1` | Unstable, 5284.8 1/s | as expected |
+
+Mutations (on a `git archive` copy of afaf9c14 in `f511-scratch/mut`, each run once against `si_rotating_whirl_sector_state`
+and the unit tests of `rotating::whirl::state`; logs `f511-scratch/mut_*.log`, summary `f511-scratch/mutations.log`): **eight of
+eight caught**.
+
+| Mutation | Caught by |
+|---|---|
+| 1 `G = omega C` | X1, W2, U1, E1 |
+| 2 sign of `G` reversed | E1 (1.0), W2 (wave sense 2.0); U1 and F1 did not see it, as registered (the spectrum is symmetric) |
+| 3 `K_eff` at speed 0 | X1, W2, B1, L1, U1, E1 |
+| 4 Coriolis of a pair index zero | X1, W2, U1, F1 (index 1 then diverges, 5284.8 1/s, against a stable full rotor), E1 |
+| 5 `combined` with the minimum growth | U2 |
+| 6 `combined` stable when any index is | U2 |
+| 7 wave sense negated | W2 |
+| 8 sine half of a pair mode dropped | W2, E1, W1 |
+
+`cargo fmt -p rcfd-fem --check`: clean (after the layout commit). `cargo clippy -p rcfd-fem --all-targets -- -D warnings`:
+clean. `baseline_hashes` not run: no shared solver file changed (the three existing files gain only `mod`/`pub use` lines and a
+comment), no crate outside `rcfd-fem` uses `rotating` (`rcfd-post` checks), and the existing `rcfd-fem` tests pass.
+
+Deviations: none from the registration. P1 was vacuous (no odd count at `Omega_T`), which the registration allowed and recorded
+in advance, so this run does not exercise the odd-index theorem on the sector. Nothing registered was skipped.
+
+**Decision by the registered rule: done.** Every check was met in the single registered run with no amendment, N1 and N2 came
+out as expected, and all eight mutations were caught (mutation 2 by E1 and W2, not by U1 and F1, as registered).
+
+### Remaining questions
+
+1. The odd-index case on the sector (P1 vacuous here). Options: (a) leave it to the F-510 follow-up (odd index on the model
+   path); (b) add a sector check with a single index forced odd (for example `stress_stiffening(false)`, where the torsion of
+   index 0 is expected to lose first, arithmetic 2). Recommendation: (b), as a sector clause of F-510; it is small.
+2. The test speed is about 13.5 `omega_ref` (about 266 000 rpm for this disc), far outside a real disc's range: the linear
+   pre-stress model is used beyond its validity, which the check of the algebra does not need. Options: (a) keep; (b) add a
+   softer disc with a physical speed range. Recommendation: (a).
+3. Stationary-frame frequencies of state modes (ADR 0419's column) in the new table. Options: (a) not now; (b) a column `omega +
+   tau k Omega` in `CyclicWhirlStability::to_csv`. Recommendation: (a) until a fan case needs it.
+
+### For the lead: roadmap entries
+
+F-511, proposed status **done**. New note:
+
+> From ADR 0416 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0420, 2026-11-12: RotatingSector::whirl_state and whirl_stability solve each harmonic index at any speed by the state matrix of ADR 0416 on its real cos/sin problem (the real 2 x 2-block form of the complex Hermitian problem of the harmonic, whose spectrum is that problem's together with its conjugate), with the flag, growth rate and wave sense per index, CyclicWhirlStability::rotor (Stability::combined: stable iff every index is) and CSV. On the disc sector of ADR 0411 with both effects on, the first loss of stiffness (a half-line in Omega^2 by concavity, found by bisection) is index 1 at 13.46 omega_ref; at 1.25 times that speed index 1 has two negative eigenvalues of K_eff and is gyroscopically stabilised, and the union of the sector's 504 eigenvalues equals the full rotor's within 6.7e-14 relative, with the flags agreeing per index and for the rotor; Sylvester counts agree, expanded residuals 4.7e-14, eight mutations caught.
+
+Follow-up (proposed as an added clause of F-510, not a new item):
+
+> A cyclic sector whose single index (k = 0 or 2k = N) has an odd number of negative eigenvalues of K_eff is flagged unstable by RotatingSector::whirl_state with the full rotor's growth rate within 1e-8 relative.
