@@ -185,3 +185,20 @@ only after a post-run amendment. Todo: the Studio still shows a mesh other than 
 - The `start` event of an adaptive run still reports 576 cells (ADR 0373 Q3), and `rcfd check` the base mesh; unchanged.
 - The set-up mesh (`Built` of `preview::build`) is checked by G1; the shown mesh by A1 and A2. G1 itself does not look at the
   adapted mesh (Q2).
+
+## Amendment 1 (2026-11-13, after run 1, before the corrected run of F1): a defective set-up of F1
+
+Run 1 of F1 (log `f475-scratch/run1-studio-new.log`) failed in its set-up, not at its limit: `preview::build` of the edited text
+returned `Failed` at the parse, "boundaries.lid.velocity_expression_x: expression has dimension '1' but 'm s^-1' is required"
+and "... a velocity expression is not available with [mesh.adapt]". The `[mesh.adapt]` check (`adapt::check`) runs in case
+validation (through `dynmesh.rs`), so every refusal it lists stops the parse, before the preview's adaptive path; the text never
+reached the path F1 is about (`Simulation::new` refusing a case that parses). Only refusals that need the mesh reach it.
+
+Corrected set-up (F1b, new test `f1b_a_refused_adaptive_case_is_not_adapted` in the same file; the run-1 test stays as an
+ignored record): the shipped case's text with a boundary that is not a patch of the mesh, `[boundaries.nosuch]` with `velocity =
+"fixed"`, inserted before `[boundaries.walls]`. The parse accepts it (patch names are not known before the mesh); `Simulation::new`
+refuses it ("boundaries.nosuch: mesh has no patch 'nosuch'", seen with `rcfd check` of that text in `f475-scratch/probe`, a set-up
+probe, not a check). Limits unchanged except the reason looked for: `Ok`; `adapted` `None`; `adapt.refused` contains `nosuch`; mesh
+hash = `build_mesh`'s; `adapt_text` starts `[mesh.adapt]: not adapted`. Run once.
+
+Run 1 of A1, A2, C1, D1, D2 and E1 is counted as made (results in the addendum).
