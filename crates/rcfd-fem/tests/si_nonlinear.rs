@@ -463,7 +463,28 @@ fn elastica(alpha: f64) -> (f64, f64) {
 }
 
 #[test]
-fn a5_linear_limit() {
+#[ignore = "record of ADR 0404 A5, missed in the registered run: the cantilever at s = 1e-6 did not converge (relative residual 4.2e-5 after 20 iterations at the fifth halving; the rounding floor of E = (F^T F - I) / 2 at strains of 1e-8); corrected by ADR 0404 amendment 1, a5_linear_limit_corrected"]
+fn a5_linear_limit_known_miss() {
+    let mut c = Checks::new();
+    let s = 1e-6;
+    // The cantilever, alpha = 1.
+    let lin = solve_static(&cantilever(1.0, 1.0), &StaticOptions::default()).unwrap();
+    let nl = solve(&cantilever(1.0, s), &[], &[], &NewtonOptions::new(1)).unwrap();
+    let ul = lin.displacement_values();
+    let dev = max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
+    c.at_most("A5 cantilever: max |u_nl / s - u_lin| / max |u_lin|", dev, 1e-5);
+    // The Tet10 block.
+    let lin = solve_static(&tet10_block(1.0), &StaticOptions::default()).unwrap();
+    let nl = solve(&tet10_block(s), &[], &[], &NewtonOptions::new(1)).unwrap();
+    let ul = lin.displacement_values();
+    let dev = max_abs(nl.result.displacement_values().iter().zip(ul).map(|(a, b)| a / s - b)) / max_abs(ul.iter().copied());
+    c.at_most("A5 Tet10 block: max |u_nl / s - u_lin| / max |u_lin|", dev, 1e-5);
+    c.finish();
+}
+
+/// A5 after ADR 0404 amendment 1 (the Green-Lagrange strain from `H = F - I`): the same set-up and limits.
+#[test]
+fn a5_linear_limit_corrected() {
     let mut c = Checks::new();
     let s = 1e-6;
     // The cantilever, alpha = 1.

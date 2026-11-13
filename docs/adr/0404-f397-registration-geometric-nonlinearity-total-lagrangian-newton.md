@@ -338,3 +338,30 @@ the body of the two entry points that refused, which no path of any crate calls 
 - Tet4 locks in bending and is checked on uniform states only (ADR 0300). The elastica is checked on Hex20 only.
 - The result carries no stress field (the second Piola-Kirchhoff stress is available per element through
   `element_second_piola_kirchhoff`); output is not extended.
+
+## Amendment 1 (2026-11-13, after the registered run of `si_nonlinear.rs` and before the corrected run of A5)
+
+**What happened.** The registered run (commit 3a86b510, `cargo test -p rcfd-fem --release --test si_nonlinear -- --nocapture
+--test-threads=1`, run once) met every check it reached except **A5**: on the cantilever at the load factor `s = 1e-6` the solve
+returned `Err(FemError::Solver { solver: "newton", reason: "load step 1 of 1 (load factor 0e0 to 3.125e-2) after 5 halvings: not
+converged in 20 iterations (relative residual 4.203887132749448e-5, energy ratio 6.05848702994758e-12)" })`. The energy criterion
+was met; the residual stalled far above `1e-10`. The test panicked at that `unwrap`, so the Tet10 half of A5 was not reached.
+A5 is a miss of the registered run; the test is kept as the ignored record `a5_linear_limit_known_miss` (body unchanged).
+
+**Diagnosis** (on a scratch copy, nothing tuned): with the residual tolerance set out of reach and no halving, the residual of
+the same cantilever stalls at `1.4e-6` (`s = 1e-6`), `1.4e-8` (`s = 1e-4`) and `1.2e-10` (`s = 1e-2`): a floor of about
+`1.4e-12 / s`, inversely proportional to the strain. It is the cancellation in D1's `E = (F^T F - I) / 2`: `F^T F` is about `I`
+plus the strain, so the strain is computed with an absolute error of about `eps` instead of a relative one; at the strain of
+`1e-8` of this load the stress is wrong in its eighth digit, and the internal forces, which cancel at the interior nodes to about
+`1/50` of their size, leave a residual of order `50 eps / 1e-8`. The registered limit is not changed.
+
+**Correction (D1').** The Green-Lagrange strain is computed from the displacement gradient `H = F - I = sum_a u_a (x) g_a`
+without forming `F^T F - I`: `E = (H + H^T + H^T H) / 2` (the same quantity in exact arithmetic; its rounding is relative to `H`).
+`B_NL` still uses `F = I + H`. Nothing else changes. Expected: the residual floor becomes independent of `s` (about `1e-14` at
+every load), A5 is then limited by the nonlinearity (`3e-7`, arithmetic 5). At `u = 0` the strain is exactly zero both ways, so
+C2 keeps its bits; the other checks change only in their rounding.
+
+**Corrected run.** `a5_linear_limit_corrected`, the body of A5 unchanged, the limits of A5 (`<= 1e-5` for the cantilever and the
+Tet10 block), run once after the code of D1' by the same command as the registered run (the whole file, so the other checks run
+again on the corrected code: their registered results stay those of the first run, the values of the second run are reported
+beside them). By the decision rule A5 counts as missed in the registered run.
