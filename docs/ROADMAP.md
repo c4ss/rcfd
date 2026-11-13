@@ -7546,7 +7546,8 @@ fixed by the item's registration ADR before any code.
     SolidMesh::face_area panics on an 8-node face (follow-up). si_scaffold X1, X3, R1, R10 of ADR 0291 fail because
     Hex20 is no longer refused: needs the maintainer. Resolved 2026-11-13 by the maintainer's decision (records and
     copies): the retired si_scaffold rows stay as ignored records of ADR 0291 and the _after_landed copies without them
-    pass.
+    pass. ADR 0383, 2026-11-13: the model-path refusal of Hex20 face loads and the panic of SolidMesh::face_area on an
+    8-node face are retired (F-484).
 - [ ] **F-390** Hex8 without locking: mean-dilatation (B-bar) and incompatible-mode formulations, opt-in per element block
   - depends on: F-388, F-372, F-374, F-376, F-379
   - acceptance: Every limit not stated here is registered in the ADR before the run. Two opt-in formulations of Hex8,
@@ -9116,15 +9117,23 @@ fixed by the item's registration ADR before any code.
     either the estimate leaves out what is not a fluid mode, opt-in or with the defaults bit-identical, so that it is
     below one for that run and above one for a setting that stops, or the limitation is documented with its numbers.
   - note: From ADR 0374 question 4, recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-484** Hex20 face loads through the model path
+- [x] **F-484** Hex20 face loads through the model path
   - depends on: F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Load::Traction and Load::Pressure
     on surface sets of Hex20 faces give through nodal_load_vector the per-node forces of hex20::pressure_loads and
     hex20::traction_loads bit for bit; SolidMesh::face_area and face_area_vector of an 8-node face equal
     hex20::face_area and the 3 x 3 Gauss area vector within 1e-15 relative (no panic); every load vector and area of
     Tri3, Quad4 and Tri6 faces is bit-identical to before; the baseline hashes are unchanged.
-  - note: From ADR 0292 (Load::Pressure and Load::Traction on Hex20 faces refused by loads.rs; SolidMesh::face_area
-    panics on an 8-node face). Size S.
+  - note: ADR 0383, 2026-11-13: Load::Pressure and Load::Traction on Hex20 faces go through nodal_load_vector, and
+    SolidMesh::face_area and face_area_vector take 8-node faces (8-node arms in loads::face_shape_functions,
+    loads::face_rule and SolidMesh::face_tangents delegating to hex20). Met: per-node forces equal hex20::pressure_loads
+    and traction_loads bit for bit on flat and curved meshes (24 of 24 sets), face_area and face_area_vector equal
+    hex20::face_area and the 3 x 3 Gauss vector exactly (84 faces), Tri3, Quad4 and Tri6 loads and areas bit-identical
+    to a transcription of the previous code (checked also on the previous code), total force 2e-16, baseline hashes
+    unchanged; five mutations caught. The L3 refusal row of si_hex20 (ADR 0292) stays as an ignored record, L1 and L2
+    continue in l1_to_l2_face_loads_and_uniaxial_tension_after_landed (the maintainer's si_scaffold decision of
+    2026-11-13 applied to si_hex20 by the lead). Uniform pressure and traction only; a position-dependent traction stays
+    on hex20's per-node forces.
 - [ ] **F-485** Hex20 cantilever with the beam-theory support and the bore stress on a refined mesh
   - depends on: F-389
   - acceptance: Every limit not stated here is registered in the ADR before the run. Cantilever L/h = 20, nu = 0.3, one
