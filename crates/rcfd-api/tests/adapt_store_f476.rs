@@ -43,7 +43,10 @@ fn run(sets: &[&str], max_steps: usize, dir: &Path) -> (Simulation, Vec<String>)
             warnings.push(e["message"].as_str().unwrap_or_default().to_string());
         }
     });
-    eprintln!("  drive: {} after {} steps; warnings {warnings:?}", o.state, o.iterations);
+    eprintln!(
+        "  drive: {} after {} steps; warnings {warnings:?}",
+        o.state, o.iterations
+    );
     (m.into_inner().unwrap(), warnings)
 }
 
@@ -107,7 +110,10 @@ fn n1_an_unknown_stored_field_is_refused_after_the_first_step() {
         &dir,
     );
     eprintln!("N1: {warnings:?}");
-    assert!(warnings.iter().any(|w| w.contains("field store disabled")), "N1 {warnings:?}");
+    assert!(
+        warnings.iter().any(|w| w.contains("field store disabled")),
+        "N1 {warnings:?}"
+    );
     assert!(!dir.join("fields").join(STORE_FILE).exists(), "N1 store file");
     let _ = std::fs::remove_dir_all(&dir);
 }

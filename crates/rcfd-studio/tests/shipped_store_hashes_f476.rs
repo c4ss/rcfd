@@ -14,14 +14,42 @@ use std::sync::Mutex;
 
 /// (case, FNV-1a 64 of store.rts, of index.json), measured on main ca949c78 before any code of F-476 (ADR 0373 D1).
 const BASE: [(&str, u64, u64); 10] = [
-    ("cases/axial_fan_cgrid/axial_fan_cgrid.toml", 0xe4539468a88f2746, 0x5234e433bd8358f4),
-    ("cases/axial_fan_sector/axial_fan_sector.toml", 0x8d9e1d34c706cee0, 0x03e63f21ee68fa28),
-    ("cases/channel/kepsilon_channel.toml", 0x269c3babb3a87b12, 0x984cf3730b698718),
-    ("cases/channel/kepsilon_inlet.toml", 0x106d318127515386, 0x9026a73a5c545e72),
-    ("cases/channel/profile_inlet.toml", 0xacb39f1e9f45233c, 0x545ea65c717d922e),
+    (
+        "cases/axial_fan_cgrid/axial_fan_cgrid.toml",
+        0xe4539468a88f2746,
+        0x5234e433bd8358f4,
+    ),
+    (
+        "cases/axial_fan_sector/axial_fan_sector.toml",
+        0x8d9e1d34c706cee0,
+        0x03e63f21ee68fa28,
+    ),
+    (
+        "cases/channel/kepsilon_channel.toml",
+        0x269c3babb3a87b12,
+        0x984cf3730b698718,
+    ),
+    (
+        "cases/channel/kepsilon_inlet.toml",
+        0x106d318127515386,
+        0x9026a73a5c545e72,
+    ),
+    (
+        "cases/channel/profile_inlet.toml",
+        0xacb39f1e9f45233c,
+        0x545ea65c717d922e,
+    ),
     ("cases/channel/sst_channel.toml", 0xf5aaa2a8677a7f08, 0x2d45ac9c983ecf6b),
-    ("cases/packed_bed/packed_bed.toml", 0x4106958b724ca8d9, 0x20c63fec68d21438),
-    ("cases/rotating_channel/rotating_channel.toml", 0xd2d9ac194bca796b, 0x0eaa679efd2d13c7),
+    (
+        "cases/packed_bed/packed_bed.toml",
+        0x4106958b724ca8d9,
+        0x20c63fec68d21438,
+    ),
+    (
+        "cases/rotating_channel/rotating_channel.toml",
+        0xd2d9ac194bca796b,
+        0x0eaa679efd2d13c7,
+    ),
     ("cases/sod/sod.toml", 0x83e78cebd8f8cc65, 0xd237488983de765c),
     ("cases/wedge/wedge.toml", 0x051f5460fa632813, 0xfdbea4878f589da5),
 ];
