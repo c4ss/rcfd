@@ -317,3 +317,80 @@ of ADR 0389 only) was compiled against the unchanged library of commit 2f64cba4 
 once (`CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_transient_mpc -- --nocapture`) with a placeholder
 reference of 0; it printed the digest `0xabb6faebad69662b` (decimal 12373352916380640811). This value is the reference of D1,
 written into the test as `REF_DIGEST` before any line of `transient.rs` is changed. The limit is unchanged: bit-equal.
+
+## Addendum 1: results (2026-11-13)
+
+Registered run: commit ebf7f808, once, `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_transient_mpc --
+--nocapture --test-threads=1` (0.18 s). KB: `omega_1 = 2.423356292e3` rad/s, `f_1 = 385.689133` Hz (ADR 0384's discrete
+value). X: `omega = 8.7426038e3` rad/s, `T = 7.18685812e-4` s.
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| B1 amplitude after 100 periods, Omega 0.2 / 0.1 (3142 / 6284 steps) | <= 1e-9 | 8.10e-15 / 6.17e-14 | yes |
+| B2 `abs(e/(Omega^2/12) - 1)`, Omega 0.2 / 0.1 | <= 0.05 | 2.570e-3 / 6.639e-4 | yes |
+| B3 energy, Omega 0.2 / 0.1 | <= 1e-10 | 1.23e-13 / 1.70e-13 | yes |
+| B4 order | >= 1.9 | 1.99725 | yes |
+| R1 RB vs B, free vibration, 315 steps | <= 1e-12 | 3.01e-14 | yes |
+| R2 RB vs B, A10 set-up, 200 steps | <= 1e-12 | 7.84e-15 | yes |
+| X1 base excitation, 40 steps per period, one period | <= 0.01 | 4.541e-3 | yes |
+| X2 damped (zeta 0.05) | <= 0.01 | 4.314e-3 | yes |
+| X3 order 40/80, undamped / damped | >= 1.9 | 1.9943 / 1.9976 | yes |
+| X4 rho 1 vs Newmark, damped, 80 steps | <= 1e-12 | 1.37e-15 | yes |
+| X5 displacement at the moved equations = `Y s(t_n)` | bit-equal | bit-equal | yes |
+| X6 start residual | <= 1e-12 | 2.33e-16 | yes |
+| X7 split after 29 / threads 1 and 8 | bit-equal | bit-equal / bit-equal | yes |
+| D1 digest of the ADR 0389 runs | `0xabb6faebad69662b` | `0xabb6faebad69662b` | yes |
+| D2 `si_transient` (with the `_after_landed` copy) and `si_harmonic` | pass | 11 passed, 3 ignored / 10 passed | yes |
+| Q1 eleven refusals with their keys, state unchanged, run(40) accepted | as stated | all | yes |
+| Q2 `with_motion` without motions on B | bit-equal | bit-equal (old path) | yes |
+| N1 participation 1 | > 0.1 | 0.501 | as expected |
+| N2 warping start, RB vs B | > 1e-6 | 1.0 | as expected |
+| N3 against `Omega^2/6` | > 0.05 | 0.501 / 0.500 | as expected |
+| S1 diff scope; `cargo test -p rcfd-fem --release`; `cargo check -p rcfd-post --tests` | as stated | `transient.rs`, `si_transient_mpc.rs`, `si_transient.rs` (ignore + copy); 215 passed, 0 failed, 44 ignored; builds | yes |
+
+Deviations and remarks:
+
+- The measured X1, X2 and X3 equal the scratch estimates of arithmetic 3 to the printed digits (4.541e-3, 4.314e-3, 1.140e-3,
+  1.080e-3): the one-element model is the one-unknown equation of D5 exactly, as derived.
+- Arithmetic 4 was wrong: with the closed form scaled by 2/3 the measure is `(1 - 2/3)/(2/3) = 0.5`, not 0.33 (divided by
+  the scaled peak). The control holds either way; the limit was `> 0.1`.
+- `kinetic_energy()` and `strain_energy()` were checked on KB (no motion); with a motion they are those of `T q` (a limit).
+- Not run: the rcfd-api baseline hashes (no shared solver file changed: `transient.rs` has no caller outside rcfd-fem's tests)
+  and the whole workspace (the lead's gate).
+
+Mutations (`f490-scratch/mutate.py` on a `git archive` copy of ebf7f808 in `f490-scratch/mut`, own target directory, each
+alone, `si_transient_mpc` once, the file restored and compared byte for byte; log `f490-scratch/mutations.log`):
+
+| Id | Caught by |
+| --- | --- |
+| Mu1 `p_M` dropped | X1 (0.332), X2, X3, N1 |
+| Mu2 one-sided `s''` (the missing sample at `t0 - 2 dt` taken as `s(t0 - dt)`) | X1 (3.53e-2), X2, X3 (order 1.09) |
+| Mu3 supports not added | B1 (1.83e-4), then a panic of B2's crossing count (no crossings) |
+| Mu4 `displacement()` without the motion part | X1 (2.0), X2, X3, X5 |
+| Mu5 `p_C` dropped | X2 (2.75e-2), X3 damped |
+| Mu6 motion coverage `[t_a, t_b]` | Q1 (a panic of the motion lookup at `t0 - dt`) |
+| Mu7 every model on the transformation path | D1 **survived** (as registered possible: on prescribed-only models the transformation path gives the bits of the elimination for these three runs); caught by Q2 (its path check) |
+| Mu8 `p_K` dropped | X1 (2.67), X2, X3 |
+
+`cargo fmt -p rcfd-fem --check`: clean. `cargo clippy -p rcfd-fem --all-targets --release -- -D warnings`: clean.
+
+**Decision by the rule: done** (every A, C and S check met, the negative controls as expected, Mu1 to Mu6 and Mu8 caught;
+Mu7's survival of D1 was registered as possible and is explained).
+
+Remaining questions:
+
+1. The model's own non-zero constraint values stay refused on the transformation path (motions only through `MotionHistory`).
+   Options: (a) keep; (b) take them as a constant `g` (a static offset). Recommendation: (a) until a case needs it; a constant
+   table gives the same.
+2. Time-dependent `Linear` values and prescribed reference motions of a rigid set are not covered. Options: (a) a follow-up
+   item when a case needs them; (b) extend `MotionHistory` now. Recommendation: (a).
+3. The energies with a motion are of `T q` only. Options: (a) keep; (b) add the energies of the whole motion `x`.
+   Recommendation: (a) (they are diagnostics; the whole-motion energy is not conserved anyway under a driven base).
+
+## For the lead: roadmap entries
+
+F-490, proposed status **done**, note:
+
+> ADR 0393, 2026-11-13: rcfd-fem transient::Integrator on the transformation x = T q + g(t) of ADR 0296 (supports, rigid sets, linear constraints; M_r = T^T M T, K_r = T^T K T with the supports, Rayleigh on both) and with prescribed motion histories (MotionHistory: per-node amplitudes times a table; the free equations get -T^T(M g'' + C g' + K g), g' and g'' by central differences of the table with the step, second order, the table covering one step beyond each end); Integrator::with_motion, start on all unknowns with an admissibility check, start_reduced. Spring bar of ADR 0384: amplitude after 100 periods 8e-15 and 6e-14, period error 0.9974 and 0.9993 of (omega dt)^2/12, order 1.997; rigid-set end against bar B 3.0e-14 (free) and 7.8e-15 (loaded, damped, rho 0.8); base-excited one-element oscillator (participation 3/2 of the consistent mass) 4.5e-3 at 40 steps per period over one period, damped 4.3e-3, order 1.994; models without these features keep the bits of ADR 0389 (digest recorded from the unchanged library); eight mutations, seven caught by their checks. Model constraint values must be zero; time-dependent Linear values and reference motions not covered.
+
+F-398 note: unchanged (its remaining question 3 is answered by this item).
