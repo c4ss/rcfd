@@ -293,3 +293,134 @@ Two set-up errors of the registered table, found by reading while writing the te
   that the builder accepts on CWc); the error must name "a turbulence model" at the path `cosim`.
 
 MU6 (the refusal of a turbulence model removed) keeps K1 as its test.
+
+## Addendum 1: results (2026-11-13)
+
+### What was built
+
+- `crates/rcfd-api/src/cosim_case.rs` (new): the schema of the optional table `[cosim]` (the seven keys of D1), `present`,
+  `check`, `fluid_from_case` (reference mesh, smoothing, the mesh at the initial displacement,
+  `Simulation::from_geometry`, `FlowWall`), `host` (`Service::host_fluid` under `cosim.participant`).
+- `crates/rcfd-api/src/sim.rs`: lines 1271-1277 (`Simulation::new` refuses a case with `[cosim]`, path `cosim`) and
+  5372-5423 (a new `impl Simulation` block with the crate-private `into_cosim_flow`). Nothing else in the file changed.
+- `crates/rcfd-api/src/schema.rs` lines 2357-2358 (the field `cosim`); `lib.rs` one line.
+- `crates/rcfd-fv/src/cosim.rs` lines 61-65: the provided method `Structure::elements` (empty by default).
+- `crates/rcfd-api/src/cosim_service.rs`: `cosim.describe` adds `elements` when the structure gives some;
+  `RemoteStructure` keeps and returns them; one parser `index_lists` for `faces` and `elements`.
+- `crates/rcfd-api/src/service.rs`: `write_request` (one `write_all` per request), used by `Client::call`; unit test C1.
+- `crates/rcfd-cli/src/main.rs`: `rcfd serve --cosim <case>` and its help line.
+- Tests: `crates/rcfd-api/tests/cosim_case_f444.rs` (7 tests), `crates/rcfd-cli/tests/cosim_serve_f444.rs` (4 by default,
+  3 ignored heavy records, 1 ignored helper). Documents: `docs/cosimulation-protocol.md`, `docs/service-protocol.md`,
+  `docs/case-schema.md` (prose, no TOML block).
+- Not edited: any existing test, hash table, golden; `Cargo.toml`, `Cargo.lock`; no unsafe code.
+
+### Checks
+
+Run 1 on commit a9a2af18, release, each once: `cargo test --release -p rcfd-api --test cosim_case_f444` (7 passed, 8.7 s),
+`--lib c1_f444`, `cargo test --release -p rcfd-cli --test cosim_serve_f444` (4 passed, 7.6 s), the heavy records once with
+`--ignored a1s a2s ds` (3 passed, 41 s). The machine was lightly loaded: 650 steps took 21.5 s served, 19.6 s in process.
+
+| Check | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| K1 (c1) the key names the wall; located errors | 27 points, 16 faces, 0 bits; each error at its path | 27, 16, 0 bits, faces equal; `cosim.patch` (empty; "mesh has no patch 'nope'"), `cosim.fixed_patches` (unknown; "is the moving patch"), `cosim.initial_displacement` ("80 numbers for 27 wall points"), `solver.algorithm`, `dynamic_mesh.enabled`, `cosim` ("... also has a turbulence model"), `Simulation::new` at `cosim` | met |
+| K2 (set-up) initial state and settings against hand-built CWs | 0 bits; settings equal after tol_abs | mesh 0 of 1701, fields 0 of 2456 bits; `Debug` texts equal (case-built tol_abs `1e-14`, hand-built `1e-16`) | held |
+| K3 (set-up) 100 steps CWc against CWs | `<= 1e-6 X` | exactly 0 (0 values differ in bits, 0 counts): the momentum floor never bound | held |
+| H1 (c2) `rcfd serve --cosim` | protocol, one participant, lease 1, time 0, 0 bits | `{"participants":[{"kind":"fluid","name":"fluid","participant":"fluid"}],"protocol":"rcfd-cosim/1"}`; lease 1, time 0; 27 points, 0 bits differ, faces equal | met |
+| H2 (c2) bad case; help | non-zero, names `cosim.patch`; `--cosim` in help | exit 1 after 0.1 s, "cosim.patch: mesh has no patch 'nope' ..."; help names it | met |
+| D100 (c3, c4) served against in-process, 100 steps | `<= 1e-12 X`; 0; all converged | exactly 0; 0; yes (max 10, mean 9.000 iterations) | met |
+| A1s (c3, heavy record) | all 650; `<= 16`, `<= 12`; `<= 1e-8`; three processes | all 650; 10 and 8.766; `9.995e-9`; pids 24744 (rcfd serve), 106116 (structure), 71268 (test) | met |
+| A2s (c3, heavy record) | `<= 0.005`, `<= 0.03`; `>= 6`, `>= 11` | 0.998618 (6 crossings), 1.011453 (12 crossings) | met |
+| Ds (c4, heavy record) 650 steps | `<= 1e-12 X`; 0 | exactly 0; 0 | met |
+| E1 (c5) elements and the coupler-side map | equal; 0 bits | elements `[[0,1],...,[4,5]]`; `displacement_to_points` 0 of 81, `forces_to_nodes` 0 of 18 bits differ; maps equal; largest distance 0.05 | met |
+| E2 (c5) no elements, reply as before | no member; empty | members `kind, name, nodes`; empty | met |
+| C1 (c6) one write | 1 call; the bytes | 1 call, 4809 bytes equal to the JSON line | met |
+| C2 (c6) Client time per call | `<= 1 ms` | 0.047 ms | met |
+| B1 (c7, c8) existing suites, unedited | all pass | `case_hashes_w48u` 1, `w48v_case_hashes` 0 (its test is ignored in the tree), `baseline_hashes` 3, `mesh_transform_w48u` 13, `physics_schema` 11, `rules_w19c` 8, `w48v_adaptive_correctors` 5, `registers` 7, `dynamic_mesh` 5, `service_tcp` 2, `data_service_f447` 6, `cosim_service_f360` 13 (V re-run after the document edits: passed), lib `service::` 15; `rcfd-fv` `cosim_f139` 18, `cosim_f361` 9, `cosim_f362` 11; `rcfd-cli` `cli` 8; `rcfd-mcp` `default_f1` 2, `project_list_f270` 1, `tool_list_f275` 7; 0 failed | met |
+| G (c8) the additions | only the table and the help line | below | met; approval outstanding |
+| NC1 stiffer structure seen | `>= 1e-10 X` | `4.15e-9 X` | held |
+| NC2 another smoothing tolerance seen | `> 0` bits | 157 mesh bits differ | held |
+
+Against the predictions: D100, Ds and K2 as predicted; K3 exactly 0. No limit missed.
+
+**G, the additions for approval.** (1) The JSON schema (`rcfd schema`, `settings.schema`) gains the property `cosim` of
+the top-level object: `type object`, `x-rcfd-optional: true`, not in the top-level `required`, with the seven properties
+`patch` (string, ""), `participant` (string, "fluid"), `fixed_patches` (array of string), `smoothing_method` (enum
+laplacian, inverse_distance, inverse_volume), `smoothing_exponent` (number 1, 0 to 10), `smoothing_tolerance` (number
+`1e-12`, 0 to 1), `initial_displacement` (array of number). Nothing else in the schema changes (the only edit of
+`schema.rs` is the one field). No file of the repository pins the whole schema, so no golden file had to change. (2) `rcfd
+--help`: `serve [--addr <host:port>] [--root <dir>] [--stdio]` becomes `serve [--addr <host:port>] [--root <dir>]
+[--stdio] [--cosim <case>]`, and the description gains "; --cosim hosts the co-simulation fluid participant of the case's
+[cosim] table (protocol rcfd-cosim/1)" (one more line). No file pins the help text. (3) MCP tools list: no change (the three
+golden suites pass unedited).
+
+### Mutations
+
+On a `git archive` copy of a9a2af18 with its own target directory; each applied alone by a replacement that occurred once,
+run once, restored and compared byte for byte (identical in all eight).
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MU1 `elements` left out of `describe` | E1 | E1 failed |
+| MU2 `RemoteStructure::elements` empty | E1 | E1 failed |
+| MU3 `writeln!` again | C1 | C1 failed |
+| MU4 `initial_displacement` ignored | K2 | K2, K1, K3 failed |
+| MU5 `fixed_patches` treated as sliding | K2 | **not caught**: all 7 tests passed |
+| MU6 a turbulence model not refused | K1 | K1 failed |
+| MU7 `--cosim` ignored | H1 | H1 failed |
+| MU8 `[cosim]` not optional | `case_hashes_w48u` | its test H1 failed |
+
+**Diagnosis of MU5.** In CWc the prescribed displacement is along `x` only, and the Laplacian smoothing solves each
+component on its own. A sliding (`Slip`) `xmax` keeps the normal component, `x`, at zero, as a `Fixed` one does, and the
+tangential components are zero everywhere because nothing drives them; so the two classes give the same mesh bit for bit,
+and no check on CWc can tell them apart. The design is not shown wrong; the set-up cannot see the difference. A check that
+can: a wall displacement with a component along `xmax` (a `y` part), where a sliding `xmax` moves its points and a fixed
+one does not. Not added after the run (rule 2); question Q3.
+
+`scripts/limit_audit.py` on the two new test files: 0 hits.
+
+### After the tests
+
+`cargo fmt -p <crate> --check` for `rcfd-fv`, `rcfd-api`, `rcfd-cli`: clean. `cargo clippy --release -p rcfd-fv -p
+rcfd-api -p rcfd-cli --all-targets -- -D warnings`: clean.
+
+### Deviations and not run
+
+- The heavy records took 41 s on a lightly loaded machine; they stay ignored, as registered.
+- The library code was committed before the run (a9a2af18) and not changed afterwards; the documents were edited after the
+  run (F-360's V re-run passed on them).
+- Not run: the whole-workspace suite and the gate (the lead's); the ignored records of `cosim_service_f360`; `--stdio`
+  with `--cosim`; the inverse-distance and inverse-volume smoothing; a `pimple` case.
+
+### Decision by the registered rule
+
+Every acceptance check, set-up check and control is met, but MU5 was not caught and the additions of G still need the
+maintainer's approval: **partial** by the rule. Delivered: the participant built from the case and served by `rcfd serve
+--cosim`, reproducing A1 and A2 with the in-process displacements bit for bit over 650 steps; elements in `describe`; one
+write per `Client` request; no case hash, hash table or golden file moved.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. Approve the additions of G** (the `cosim` table in the schema, the `--cosim` help line). Options: (a) approve as
+  built; (b) rename keys or the flag first. Recommendation (a).
+- **Q2. The participant's own name** is always `fluid` (`FlowWall` sets it). Options: (a) a setter in `rcfd-fv` so that
+  `cosim.participant` also names it in coupling errors; (b) leave. Recommendation (a), in a follow-up.
+- **Q3. MU5** is not caught on CWc. Options: (a) a follow-up check with a wall motion along `xmax`; (b) accept.
+  Recommendation (a).
+- **Q4. A structure from a case** hosted by `rcfd serve`. Options: (a) a later item; (b) leave to embedding programs.
+  Recommendation (a), once a real structural participant exists.
+
+### For the lead: roadmap entries
+
+Proposed status of F-444: **partial** (`[~]`).
+
+Note text for F-444:
+
+> PARTIAL (ADR 0380, 2026-11-12; registered before the code, one amendment before any run). An optional case table [cosim] (patch, participant, fixed_patches, smoothing_method, smoothing_exponent, smoothing_tolerance, initial_displacement) names a moving wall patch of an incompressible piso/pimple case as the co-simulation fluid participant (rcfd_api::cosim_case::fluid_from_case: the case's mesh is the reference, the flow starts at rest on it moved by initial_displacement, every advance smooths the interior and makes one flow step; any other model the simulation would advance is refused by name; rcfd run refuses the case), and rcfd serve --cosim <case> hosts it under rcfd-cosim/1 (cosim_case::host). On the model problem of ADR 0256 written as a case, with the mock structure of ADR 0345 in a third process and the unchanged coupled_step driving both over TCP: all 650 steps converged (7 to 10 iterations, mean 8.766, last test 9.995e-9), omega_m/omega 0.998618 and 1.011453, and the displacements of every node at every step equal to the in-process run of the same case bit for bit (limit 1e-12 X; the case also equals the hand-built CWs bit for bit over 100 steps); a structure stiffer by 1e-9 is seen (4.15e-9 X). Structure::elements (a provided method, empty by default) is carried by cosim.describe only when not empty and returned by RemoteStructure::elements, so InterfaceMap::build runs on the coupler's side with the bits of the in-process build. service::Client writes each request with one call (unit-tested; 0.047 ms per call). Without the table every case hash, written case text and baseline hash is unchanged and the MCP goldens pass unedited; the schema gains the optional property cosim and the help of serve gains [--cosim <case>], both awaiting the maintainer's approval (ADR 0380 Q1). Seven of eight mutations caught; treating fixed_patches as sliding is not seen by this model problem (its wall moves along x only, so a sliding and a fixed xmax give the same mesh; Q3). Not delivered: a structure from a case, the participant's own name (always fluid, Q2), more than one participant per rcfd serve, models other than the incompressible flow. Open: ADR 0380 Q1 to Q4.
+
+Note text for F-360 (to append):
+
+> Follow-up F-444 (ADR 0380, 2026-11-12): participants from the case hosted by rcfd serve --cosim, elements in describe, one write per service::Client request (ADR 0345 Q3, Q4, Q5).
+
+Follow-up item (number for the lead to assign). Title: A check that sees fixed against sliding patches of the co-simulation smoothing. Deps: F-444. Acceptance:
+
+> A [cosim] case whose initial wall displacement has a component along a fixed patch gives a different mesh when that patch is declared sliding than when it is declared fixed (the mutation MU5 of ADR 0380 is caught), and the points of the fixed patch do not move (0 bits); without the table every case hash is unchanged.

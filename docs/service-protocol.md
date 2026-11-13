@@ -108,13 +108,15 @@ The design ledger (ADR 0121):
 ## Co-simulation methods (version 1.1, `rcfd-cosim/1`)
 
 The calls of the [co-simulation protocol](cosimulation-protocol.md) for a participant that the embedding program hosts in
-the service (`Service::host_fluid`, `Service::host_structure`). `rcfd serve` hosts none, so there every one of them but
-`cosim.list` answers 1006. The wire format, the lease and what a dropped connection means are specified in
+the service (`Service::host_fluid`, `Service::host_structure`), or that `rcfd serve --cosim <case>` builds from the case's
+`[cosim]` table (a fluid participant, ADR 0380). Without it `rcfd serve` hosts none, and every one of them but `cosim.list`
+answers 1006. The wire format, the lease and what a dropped connection means are specified in
 [cosimulation-protocol.md](cosimulation-protocol.md#over-the-solver-service-rcfd-cosim1).
 
 - `cosim.list`: `{protocol, participants: [{participant, kind, name}]}`
 - `cosim.open {participant}`: `{protocol, lease, kind, name, time}`; supersedes every earlier lease of the participant
-- `cosim.describe {participant, lease}`: a structure `{kind, name, nodes}`, a fluid `{kind, name, points, faces}`
+- `cosim.describe {participant, lease}`: a structure `{kind, name, nodes}` and `elements` when it gives some (ADR 0380), a
+  fluid `{kind, name, points, faces}`
 - `cosim.time {participant, lease}`, `cosim.checkpoint {participant, lease}`, `cosim.restore {participant, lease}`: `{time}`
 - `cosim.forces {participant, lease}` (a fluid): `{forces, time}`
 - `cosim.advance {participant, lease, dt, forces}` (a structure): `{displacements, time}`;
