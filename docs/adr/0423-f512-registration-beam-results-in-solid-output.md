@@ -179,3 +179,11 @@ of F-512). Recorded values, copied into `b1_no_beam_bytes_unchanged`:
 | Tet10 no reactions | `0x526bf4d74d0598c9` | 62488 |
 
 No limit, check or design text above is changed.
+
+## Amendment 1: the set-up of N3, 2026-11-13 (before any run of N3)
+
+Found on reading `DofMap` while writing the test, before N3 was compiled or run: with `DofMap::uniform(n, 6)` the result has
+`6 n` unknowns, so `solid_fields` refuses it at its first check (the length, naming `displacement`) and never reaches the
+component check that N3 is meant to cover. Corrected set-up: the result's numbering is `DofMap::from_counts([6, 0, 3, ..., 3])`
+(`3 n` unknowns, node 0 with six, node 1 with none), which passes the length check; expected: refused with the message containing
+`node 0 has 6 components; the solid output writes 3`. The limit (exact) and every other check are unchanged.
