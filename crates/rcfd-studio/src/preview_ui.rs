@@ -110,6 +110,9 @@ pub fn panel(ui: &mut egui::Ui, st: &mut Studio, dark: bool) {
     }
     time_line(ui, st, &b);
     ui.monospace(counts(&b));
+    if let Some(t) = preview::adapt_text(&b) {
+        ui.monospace(t);
+    }
     controls(ui, st, &b);
     let avail = ui.available_size();
     let img = egui::vec2((avail.x - LEGEND_W).max(16.0), (avail.y - 22.0).max(16.0));
