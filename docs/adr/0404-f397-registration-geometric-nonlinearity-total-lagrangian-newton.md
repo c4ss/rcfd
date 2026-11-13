@@ -365,3 +365,109 @@ C2 keeps its bits; the other checks change only in their rounding.
 Tet10 block), run once after the code of D1' by the same command as the registered run (the whole file, so the other checks run
 again on the corrected code: their registered results stay those of the first run, the values of the second run are reported
 beside them). By the decision rule A5 counts as missed in the registered run.
+
+## Addendum 1: results (2026-11-13)
+
+Runs: the registered run of `si_nonlinear.rs` on commit 3a86b510 (run 1, once); after amendment 1 (commit 00fcbdfa) and its code
+(the strain from `H`, commit 12e0ed0c), the corrected run of the whole file (run 2, once), `CARGO_BUILD_JOBS=4 cargo test -p
+rcfd-fem --release --test si_nonlinear -- --nocapture --test-threads=1`, 2.4 s and 1.2 s. The registered result of every check
+except A5 is that of run 1; run 2's value is given beside it where it differs in a printed digit.
+
+### Results
+
+| Id | Measure | Limit | Run 1 | Run 2 | Met |
+| --- | --- | --- | --- | --- | --- |
+| A1 | `max |K_fd - K_T| / max |K_T|`, Tet4 / Hex8 / Tet10 / Hex20, state 1 | `<= 1e-6` | 5.3e-11 / 6.9e-11 / 4.4e-11 / 2.7e-11 | 3.8e-11 / 5.1e-11 / 3.1e-11 / 2.0e-11 | yes |
+| A1 | same, state 2 (with the 90 degree rotation) | `<= 1e-6` | 6.3e-11 / 6.1e-11 / 3.4e-11 / 4.5e-11 | 7.4e-11 / 7.6e-11 / 3.3e-11 / 4.8e-11 | yes |
+| A2 | `max |f_int| / (E l^2)`, Tet4 / Hex8 / Tet10 / Hex20 / Hex8 box | `<= 1e-10` | 8.3e-17 / 7.5e-17 / 7.1e-17 / 2.1e-16 / 1.8e-16 | 6.7e-17 / 7.4e-17 / 9.4e-17 / 2.0e-16 / 1.6e-16 | yes |
+| A3 | displacement control `|P / P_exact - 1|`, Tet4 / Hex8 / Tet10 / Hex20 | `<= 1e-9` | 1.1e-16 / 6.7e-16 / 8.9e-16 / 1.1e-16 | 2.2e-16 / 1.1e-16 / 3.3e-16 / 2.2e-16 | yes |
+| A3 | load control `|lambda / 1.2 - 1|` | `<= 1e-9` | 2.2e-16 / 2.2e-16 / 2.2e-16 / 0 | 2.2e-16 (each) | yes |
+| A4 | order, step 1 / step 2 (every kind) | `>= 1.8` | 2.078 / 2.018 | 2.078 / 2.018 | yes |
+| A5 | cantilever `max |u_nl / s - u_lin| / max |u_lin|` | `<= 1e-5` | not converged (Err, residual 4.2e-5) | 2.0e-7 | **no** (run 1); yes after amendment 1 |
+| A5 | Tet10 block | `<= 1e-5` | not reached | 2.5e-9 | not run (run 1); yes after amendment 1 |
+| A6 | `alpha = 1`: `|v / v_ref - 1|`, `|d / d_ref - 1|` | `<= 0.02` | 2.4e-4, 4.8e-4 | same | yes |
+| A6 | `alpha = 2`: same | `<= 0.02` | 3.0e-4, 5.8e-4 | same | yes |
+| A7 | inversion: `Element { element: 1, InvalidValue "deformation gradient" }`, "load step 1 of 1" | as registered | as registered (`det F = -3.1e-2` at load factor 0.6875, after 5 halvings) | same | yes |
+| A7 | non-convergence: `Solver { "newton" }`, "load step 1 of 1", "5 halvings" | as registered | as registered | same | yes |
+| C1 | `max |K_T - K_T^T| / max |K_T|` | `<= 1e-13` | <= 2.9e-16 | <= 1.9e-16 | yes |
+| C2 | `max |K_T(0) - K| / max |K|` | `<= 1e-14` | 0 (bit-equal, every kind) | same | yes |
+| C3 | halvings; `max |u - u_2steps| / max |u_2steps|` | `== 1`; `<= 1e-12` | 1; 0 (bit-equal) | same | yes |
+| C4 | trait entry points = module functions; Beam2 refuses naming ADR 0294 | bit-equal; as stated | met | met | yes |
+| C5 | refusals (linear constraint, temperature, steps 0, state length) | as stated | met | met | yes |
+| C6 | threads 1 and 4: solve and tangent | bit-equal | met | met | yes |
+| C7 | `max |u_y|, |u_z| / L` | `<= 1e-12` | <= 3.6e-17 | <= 2.3e-17 | yes |
+| C8 | elastica in the test against arithmetic 1 | `<= 1e-6` | 3.8e-9, 8.3e-10 | same | yes |
+| N1 | `max |K u| / (E l^2)` | `>= 1e-2` | 0.33 / 0.56 / 0.27 / 0.73 | same | as expected |
+| N2 | material part only | `>= 1e-3` | 0.26 / 0.17 / 0.27 / 0.14 | same | as expected |
+| N3 | linear `|v_lin / v_ref - 1|` | `>= 0.05` | 0.105, 0.351 | same | as expected |
+
+Iterations recorded: the displacement-controlled bars 2 per step (the predictor with the prescribed increment is already the
+uniform solution); the load-controlled bars 4 per step, the residuals as arithmetic 2 predicted to three digits (step 1: `1, 0.121,
+3.31e-3, 1.87e-6, 5.9e-13`); the elastica 5 to 6 per step, no halving at load increments of 0.2.
+
+### Mutations (scratch copy, each alone, the whole file run once per mutation)
+
+| Id | Mutation | Expected | Caught by |
+| --- | --- | --- | --- |
+| M1 | tangent without `K_sigma` | A1, A4 | A1 (0.12 to 0.33), A4 (order 1.00), A6 and C3 (the solves fail) |
+| M2 | `B_NL` with `F = I` | A1, A2 | A1 (up to 1.3), A3 (0.17 and 3.0e-2), A4 (order 1.00), A6, A7; A2 not (the force of a rigid motion stays zero: `S = 0`) |
+| M3 | linear strain | A2, A3 | A1, A2 (0.30 to 1.33 E l^2), A3 (9.1e-2), A4 |
+| M4 | no halving | C3 | C3 (the one-step solve fails), A7 non-convergence (refused after 0 halvings) |
+| M5 | no inversion test | A7 inversion | A7 inversion (Ok, the upper element passed through `det F < 0`) |
+| M6 | `dg` dropped from the first iteration | A3 | A3 (the displacement-controlled solve fails: the energy criterion has `e_1 = 0`), A7 inversion (refused as a step) |
+| M7 | a failed attempt not rolled back | C3 | **not caught**: C3's deviation `2.8e-16` is below its limit `1e-12`; the printed bit-equality is `false` (it is not a registered limit) |
+
+Diagnosis of M7: the material is hyperelastic, so the converged state does not depend on the path; a half step that starts from
+the last iterate of the failed full step (close to the solution at load factor 1) converges to the same solution at load factor
+0.5 within the residual tolerance, and the end state differs only in rounding. The limit `1e-12` cannot see it; bit-equality,
+which a correct roll-back gives exactly (both paths start each attempt from the same committed bits), can. A path-dependent
+material would see it in its result.
+
+### Existing tests, format, lint
+
+- S1: `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --no-fail-fast`: 262 passed, 0 failed, 57 ignored (the ignored records
+  of the crate, with `si_scaffold::x2_entry_points_refuse_by_default_after_geometric_landed` and
+  `si_nonlinear::a5_linear_limit_known_miss` among them). Met.
+- S2: `cargo check -p rcfd-post --tests`: builds. Met.
+- S3: `cargo fmt -p rcfd-fem --check` clean (after a layout-only rustfmt commit, 7c298a5e); `cargo clippy -p rcfd-fem --all-targets
+  --release -- -D warnings` clean. Met.
+- Not run: `rcfd-api`'s `baseline_hashes` (as registered: the brief limits the tests to `rcfd-fem`; the shared-file change is the
+  body of two entry points that refused and that no path of any crate calls). The whole workspace suite (the lead runs the gate).
+
+### Deviations
+
+- A5 missed in the registered run (amendment 1): a defect of D1's strain evaluation, corrected by computing the same quantity from
+  `H`; the limit unchanged; the corrected run met it (`2.0e-7`, `2.5e-9`).
+- The order measure of A4 left out no residual in practice except the last ones at `6e-13` to `3e-15` (below the floor `1e-12`).
+- Shared files: `crates/rcfd-fem/src/element.rs` lines 305 to 327 (the doc lines and bodies of the default `internal_force` and
+  `tangent`; nothing else); `crates/rcfd-fem/tests/si_scaffold.rs` line 903 (one `#[ignore]` attribute, the body untouched).
+  `geometric.rs`, `solve.rs`, `buckling.rs`, `modal.rs` and `hex20.rs` are not edited.
+
+### Decision by the registered rule
+
+**partial.** A1 to A4, A6, A7 met in the registered run; **A5 missed** in the registered run (the Newton driver did not converge at
+the load factor `1e-6`, diagnosed as the cancellation in `F^T F - I`) and met after amendment 1; C1 to C8 met; N1 to N3 as expected;
+S1 to S3 met; M1 to M6 caught, **M7 not caught**. Two conditions of "done" fail (an A check missed in its registered run, a mutation
+not caught), none of "todo".
+
+### Remaining questions
+
+1. **A5 after amendment 1.** Options: (a) accept the corrected run (same limit, the formula identical in exact arithmetic) and count
+   A5 met; (b) keep A5 missed until a new registration re-runs it. Recommendation: (a); the correction is a numerical defect found by
+   the check, not a tuned parameter, and the corrected value has a margin of 50.
+2. **M7 (roll-back not observable).** Options: (a) a follow-up that registers C3's bit-equality (one halving against the two-step
+   solve) as a limit; (b) wait for a material with history (J2 plasticity, advanced tier), whose result would show a missing
+   roll-back. Recommendation: (a), size S, now: it costs one assertion and closes the gap for every later material.
+3. **Defaults of the driver** (20 iterations, `1e-10`, `1e-10`, 5 halvings): taken on the maintainer's standing instruction of
+   2026-11-11 (take the recommendation). They met every check here; a larger model may want a looser residual (the floor of the
+   residual grows with the condition of the tangent). No change proposed.
+
+## For the lead: roadmap entries
+
+F-397, proposed status **partial**, note:
+
+> Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. ADR 0404, 2026-11-13 (registration of stub ADR 0300): nonlinear::solve, total Lagrangian Tet4, Hex8, Tet10 and Hex20 with St. Venant-Kirchhoff, tangent K_mat(F) + K_sigma(S) (the geometric stiffness of ADR 0390), Newton with load steps, residual and energy criteria, step halving, inversion and non-convergence refused naming the element or the step; Element::internal_force and tangent filled. Tangent against central differences 2e-11 to 8e-11 (limit 1e-6), rigid rotation 2e-16 E l^2, uniform stretch nominal stress 1e-16, order 2.02 to 2.08, elastica within 2.4e-4 to 5.8e-4 of the ODE (limit 2e-2). Partial: the linear limit (load factor 1e-6) missed in its registered run (cancellation in F^T F - I; met after amendment 1 at 2e-7), and a missing roll-back of a failed attempt is not caught by a registered check (follow-up F-NEW).
+
+Follow-up item (number to be given by the lead), title "Nonlinear driver: roll-back of a failed attempt as a registered check", deps F-397, acceptance:
+
+> Every limit not stated here is registered in the ADR before the run. The one-step solve of ADR 0404's load-controlled Hex8 bar with four iterations allowed (one halving) equals the two-step solve bit for bit, and the mutation of ADR 0404 M7 (a failed attempt not rolled back) is caught by that check; every check of ADR 0404 keeps its value.
