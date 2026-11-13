@@ -204,7 +204,10 @@ pub fn solve_static_report(
         match &options.solver {
             StaticSolver::Direct if options.refinement > 0 => {
                 report.solver = REFINED_NAME.to_string();
-                (direct_refined(&sys.matrix, &sys.rhs, sys.free(), &dofs, options.refinement)?, 0)
+                (
+                    direct_refined(&sys.matrix, &sys.rhs, sys.free(), &dofs, options.refinement)?,
+                    0,
+                )
             }
             StaticSolver::Direct => (direct(&sys.matrix, &sys.rhs, sys.free(), &dofs)?, 0),
             StaticSolver::ConjugateGradient {
@@ -486,8 +489,7 @@ fn check_refinement(model: &SolidModel, options: &StaticOptions) -> Result<()> {
     if crate::mpc::uses_transformation(model) {
         return Err(FemError::Solver {
             solver: REFINED_NAME,
-            reason: "iterative refinement (ADR 0397) is not available on the transformation path (linear constraints,                      rigid sets, elastic supports)"
-                .to_string(),
+            reason: "iterative refinement (ADR 0397) is not available on the transformation path".to_string(),
         });
     }
     Ok(())
