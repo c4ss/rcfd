@@ -136,6 +136,7 @@ pub const EXAMPLES: &[Example] = &[
     ),
 ];
 
+const ADAPT_CASE: &str = "an adaptive-mesh case ([mesh.adapt], F-342, ADR 0262); the starter does not offer it";
 const DESCRIPTOR: &str =
     "benchmark descriptor (Reynolds numbers, meshes, reference data and tolerances of a validation case, \
      read by `rcfd cases`), not a case file: the case editor refuses its keys and `rcfd run` refuses it";
@@ -145,6 +146,7 @@ const DESCRIPTOR: &str =
 /// and is not offered by itself (ADR 0147).
 pub const EXCLUDED: &[(&str, &str)] = &[
     ("backward_step/case.json", DESCRIPTOR),
+    ("cavity/adapt_re100.toml", ADAPT_CASE),
     ("cavity/case.json", DESCRIPTOR),
     ("channel/case.json", DESCRIPTOR),
     ("flat_plate/case.json", DESCRIPTOR),

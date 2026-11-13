@@ -61,13 +61,19 @@ fn store_warnings(events: &[Value]) -> Vec<String> {
 #[test]
 fn sf2_every_shipped_case_writes_a_readable_store() {
     let cases = shipped();
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 11);
     let tmp = common::temp("sf2");
     let mut ok = 0;
     for (i, (rel, path)) in cases.iter().enumerate() {
         let text = std::fs::read_to_string(path).unwrap();
         let plan = StartPlan::new(rel, &text, path.parent().unwrap()).unwrap();
         let mut case = Case::load(path).unwrap_or_else(|d| panic!("{rel}: {d:?}"));
+        // gate 4, 2026-11-13 (ADR 0262 addendum): the store hook opens on the base lattice and the first step adapts the
+        // mesh, so the first snapshot is refused ("field 'ux' has 2799 values, the mesh has 576"): a known gap, not stored
+        if case.tree.get("mesh").ok().is_some_and(|m| m.get("adapt").is_some()) {
+            eprintln!("SF2 note: {rel}: has [mesh.adapt]; the field store of an adapting run is refused (ADR 0262 addendum); skipped");
+            continue;
+        }
         for s in plan.set() {
             apply_set(&mut case, &s).unwrap_or_else(|e| panic!("{rel}: {s}: {e:?}"));
         }

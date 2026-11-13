@@ -402,3 +402,63 @@ test. F-342 is proposed **done**, pending the maintainer's acceptance.
 **F-102**: in its note, "Not delivered (follow-ups): a case-file key;" should read:
 
 > Not delivered (follow-ups): a case-file key (since ADR 0262, 2026-11-12: [mesh.adapt], F-342);
+
+## Addendum: gate 4, 2026-11-13
+
+Gate 4 failed seven tests because F-342 (commit e6ad4616) shipped `cases/cavity/adapt_re100.toml`, a `[mesh.adapt]` case, without updating the tests and the list that cover every shipped case. The maintainer approved on 2026-11-13 editing the existing tests below for this purpose only; no other assertion, limit or hash table was touched (baseline_hashes.rs, the case and mesh hash tables and the goldens are unchanged).
+
+| Test | Edit |
+|---|---|
+| `crates/rcfd-studio/tests/store_plan_sf.rs`, `sf1_every_shipped_case_plans_a_store` (EXPECTED, near line 52) | `EXPECTED` 10 -> 11 entries; `cases/cavity/adapt_re100.toml` added with the store line its plan gives |
+| `crates/rcfd-studio/tests/shipped_store_sf2.rs`, `sf2_every_shipped_case_writes_a_readable_store` (line 64) | case count 10 -> 11 |
+| `crates/rcfd-studio/tests/saved_store_r.rs`, `dv6_unedited_plans_are_bit_identical` (line 818) | "cases added after 6867e40 (no recorded plan)" list gains `cases/cavity/adapt_re100.toml` |
+| `crates/rcfd-studio/tests/preview_g1.rs`, `g1_g7_shipped_cases_preview_the_solvers_mesh` (loop at line 133) | a case with `[mesh.adapt]` is compared with `build_mesh` (the un-adapted generator mesh the preview shows) and a note is printed; all other cases are compared with `Simulation::new` as before |
+| `crates/rcfd-studio/tests/shipped_store_sf2.rs`, `sf2_every_shipped_case_writes_a_readable_store` (loop, line 70) | the `[mesh.adapt]` case is skipped with a printed note, so `ok` stays 10 of 11 cases (see the store gap below) |
+| `crates/rcfd-studio/tests/case_starter_g2.rs`, `cs6_the_excluded_case_files_do_not_open_in_the_editor` (line 548) | the new exclusion is skipped: the adaptive case opens in the editor, and CS6 expects an excluded file not to (the count of 6 descriptors is unchanged) |
+
+Not a test edit: `cases/cavity/adapt_re100.toml` was added to the data list `EXCLUDED` in `crates/rcfd-workspace/src/examples.rs` (reason: an adaptive-mesh case the starter does not offer), which clears `cs5_the_list_is_in_step_with_cases` and `cs5_controls_each_kind_of_drift_is_one_problem`. `docs/tutorials/gallery.md` gains a section with `$ rcfd check cases/cavity/adapt_re100.toml` (output as printed: `ok, 576 cells`, the base mesh), which clears `gallery_covers_every_case` (ADR 0089 T5).
+
+Preview gap: the Studio preview of a `[mesh.adapt]` case builds the generator's mesh (`build_mesh`, 576 cells here), `Simulation::new` builds the base lattice (`amr.to_mesh`, the same 576 cells with another numbering, hence another mesh hash), and the first step of the run adapts the mesh (about 2799 cells after two adaptation steps, ADR 0242). So the preview shows an un-adapted mesh, not the one the run solves on.
+
+Store gap found while fixing SF2: a run with `output.store_*` on a `[mesh.adapt]` case opens the field store on the base lattice, the first step adapts the mesh, and the first snapshot is refused with "field store: io error: tsstore: field 'ux' has 2799 values, the mesh has 576". SF2 skips this case with a note; nothing in the solver or the store was changed.
+
+## For the lead: roadmap entries
+
+**F-342**, proposed status: done (pending the maintainer's acceptance). New note:
+
+> From ADR 0242 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE pending acceptance (ADR 0262, 2026-11-12): the optional table [mesh.adapt] (absent from every case that does not write it; an empty table is ADR 0242's loop) runs rcfd_fv::adaptive on a steady laminar simple / simplec case of mesh.generator cavity_2d, box_2d or box_3d (uniform): the lattice takes the generator's coordinates and patches, the first step runs the whole loop and leaves the final mesh and solver; keys cycles, max_level, marking (fixed_fraction / target_count with target_cells), refine_fraction, indicator (velocity_gradient, velocity_gradient_unscaled, edge_length with edge_length_exponent), register and register_use (confine / refine; ADR 0247 R3), balance, transfer, max_iterations, tolerance. Tree runs equal library runs bit for bit on the 8 x 8 cavity (316 cells), with each criterion, on a box_2d channel and on a box_3d cube; the case file cases/cavity/adapt_re100.toml equals the library on its lattice bit for bit and gives ADR 0242's numbers (cells 576, 1269, 2799 with ADR 0242's iteration counts, centreline difference to the 96 x 96 solution 0.002311, Ghia 0.009159; within 9.9e-11 of ADR 0242's run, whose slab is 0.1 thick against the generator's 1/24); models and solver options the loop would drop, non-uniform or file meshes and other algorithms are located errors (also through rcfd validate); rcfd run gives the in-process run's monitors; baseline hashes, case_hashes_w48u and ADR 0257's K0 tests pass unedited; six mutations each failed their tests. Open: graded and inflated lattices (ADR 0262 Q4), per-solve monitors (Q5).
+
+**F-343**: its note's last sentence should read:
+
+> Follow-up (ADR 0247 R1, recommendation taken on the maintainer's standing instruction of 2026-11-11): F-348; the new options are case keys since ADR 0262 (2026-11-12, F-342): [mesh.adapt] marking = "target_count", indicator = "edge_length", register and register_use.
+
+**F-102**: in its note, "Not delivered (follow-ups): a case-file key;" should read:
+
+> Not delivered (follow-ups): a case-file key (since ADR 0262, 2026-11-12: [mesh.adapt], F-342);
+
+## Addendum: gate 4, 2026-11-13
+
+Gate 4 failed seven tests because F-342 (commit e6ad4616) shipped `cases/cavity/adapt_re100.toml`, a `[mesh.adapt]` case, without updating the tests and the list that cover every shipped case. The maintainer approved on 2026-11-13 editing the existing tests below for this purpose only; no other assertion, limit or hash table was touched (baseline_hashes.rs, the case and mesh hash tables and the goldens are unchanged).
+
+| Test | Edit |
+|---|---|
+| `crates/rcfd-studio/tests/store_plan_sf.rs`, `sf1_every_shipped_case_plans_a_store` (EXPECTED, near line 52) | `EXPECTED` 10 -> 11 entries; `cases/cavity/adapt_re100.toml` added with the store line its plan gives |
+| `crates/rcfd-studio/tests/shipped_store_sf2.rs`, `sf2_every_shipped_case_writes_a_readable_store` (line 64) | case count 10 -> 11 |
+| `crates/rcfd-studio/tests/saved_store_r.rs`, `dv6_unedited_plans_are_bit_identical` (line 818) | "cases added after 6867e40 (no recorded plan)" list gains `cases/cavity/adapt_re100.toml` |
+| `crates/rcfd-studio/tests/preview_g1.rs`, `g1_g7_shipped_cases_preview_the_solvers_mesh` (loop at line 133) | a case with `[mesh.adapt]` is compared with `build_mesh` (the un-adapted generator mesh the preview shows) and a note is printed; all other cases are compared with `Simulation::new` as before |
+| `crates/rcfd-studio/tests/shipped_store_sf2.rs`, `sf2_every_shipped_case_writes_a_readable_store` (loop, line 70) | the `[mesh.adapt]` case is skipped with a printed note, so `ok` stays 10 of 11 cases (see the store gap below) |
+| `crates/rcfd-studio/tests/case_starter_g2.rs`, `cs6_the_excluded_case_files_do_not_open_in_the_editor` (line 548) | the new exclusion is skipped: the adaptive case opens in the editor, and CS6 expects an excluded file not to (the count of 6 descriptors is unchanged) |
+
+Not a test edit: `cases/cavity/adapt_re100.toml` was added to the data list `EXCLUDED` in `crates/rcfd-workspace/src/examples.rs` (reason: an adaptive-mesh case the starter does not offer), which clears `cs5_the_list_is_in_step_with_cases` and `cs5_controls_each_kind_of_drift_is_one_problem`. `docs/tutorials/gallery.md` gains a section with `$ rcfd check cases/cavity/adapt_re100.toml` (output as printed: `ok, 576 cells`, the base mesh), which clears `gallery_covers_every_case` (ADR 0089 T5).
+
+Preview gap: the Studio preview builds the base lattice of a case (24 x 24 = 576 cells here), while `Simulation::new` adapts the mesh (about 2799 cells after two steps, ADR 0242), so their mesh hashes differ. The preview therefore shows the base mesh of a `[mesh.adapt]` case, not the mesh the run solves on. This is a known limitation, recorded here and in the follow-up below.
+
+## For the lead: roadmap entries
+
+**New follow-up of F-342**: title "Studio preview of a case with [mesh.adapt] shows the adapted mesh"; deps F-342 (the Studio mesh preview has no roadmap item of its own); acceptance:
+
+> The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh of Simulation::new, with its cell count and mesh hash), and preview_g1's g1_g7_shipped_cases_preview_the_solvers_mesh compares cases/cavity/adapt_re100.toml with Simulation::new like every other case, without the base-mesh exception added on 2026-11-13.
+
+**New follow-up of F-342**: title "Field store of a run with [mesh.adapt] writes the adapted mesh"; deps F-342, F-263; acceptance:
+
+> A run of cases/cavity/adapt_re100.toml with output.store_interval set writes a readable field store whose mesh is the adapted mesh (2799 cells for the shipped case) with no warning, and sf2_every_shipped_case_writes_a_readable_store runs that case through the store like the other ten without the skip added on 2026-11-13.

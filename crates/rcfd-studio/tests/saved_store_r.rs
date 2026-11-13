@@ -817,6 +817,7 @@ fn dv6_unedited_plans_are_bit_identical() {
     assert_eq!(
         added,
         [
+            "cases/cavity/adapt_re100.toml",
             "example-projects/axial-fan/cases/fan01-passage-upwind.toml",
             "example-projects/wind-tunnel/cases/naca0012-aoa2-rotated.toml",
             "example-projects/wind-tunnel/cases/naca0012-aoa4-rotated.toml",
