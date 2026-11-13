@@ -8470,7 +8470,8 @@ fixed by the item's registration ADR before any code.
     refusals located. Six mutations caught (plane-wave impedance, lost file clock, period test removed, wrong axial
     carry, harmonics played at the fundamental, Nyquist test removed). Limits: the sampled pressure must be the entering
     wave only; periodic signals; static section, medium at rest; only the two-dimensional channel was run; no case key
-    or CLI (F-451).
+    or CLI (F-451). The returning-wave limit is lifted for two or more sampled sections by F-478 (ADR 0378, 2026-11-12);
+    since then the off-plane refusal names the farthest face.
 - [~] **F-453** Circular and three-dimensional ducts through the wave solver
   - depends on: F-333
   - acceptance: A spinning mode (1, 0) and a radial mode (0, 1) of a hard-walled circular duct on an O-grid propagate
@@ -8894,12 +8895,31 @@ fixed by the item's registration ADR before any code.
     and bit of ADR 0305 and ADR 0370 with their settings unchanged.
   - note: From ADR 0370 questions 1 and 2 (with a graded or anisotropic Tet10 mesh on which mutation M5 changes the
     aggregates), recommendation taken on the maintainer's standing instruction of 2026-11-11.
-- [ ] **F-478** Wave-solver drive with returning waves at the sampled section
+- [x] **F-478** Wave-solver drive with returning waves at the sampled section
   - depends on: F-452
   - acceptance: A drive built from two sampled sections of a duct field that holds both directions reproduces the
     entering wave's modal amplitudes at the inlet within 1 percent and ignores the returning one to 1 percent; a single
     section with a returning wave is reported by a measured residual.
-  - note: From ADR 0372 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size M.
+  - note: From ADR 0372 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE
+    pending acceptance, ADR 0378, 2026-11-12. Library only. Built: rcfd-post `wave_drive.rs`
+    `SurfaceDrive::from_sections` (two or more sampled rcfd-surface-series sections, each read by the F-452
+    `from_series` with its own faces and clock; per harmonic and mode the entering and returning waves split over the
+    planes with the closed-form kz by `split_axial`; refused when the separation, |sin(kz d)| or tanh(alpha d), is below
+    0.05 for any mode; `SplitDrive` plays back the entering wave only and reports the returning amplitudes, separations,
+    reflection ratio and split residual) and `SurfaceDrive::entering_residual` (a single-section drive measured against
+    a second sampled section); the F-452 off-plane refusal now names the farthest face (ADR 0372 question 2). Registered
+    checks, all met at the first run, no amendment: the F-452 channel field with a returning wave of each component
+    (reflection factors 0.5, 0.4, 0.6), sampled on 24 wall-clustered faces at x = -0.02 m and 20 uniform faces at x =
+    -0.05 m on different clocks; on 64 cells across the entering amplitudes at the inlet agree with the closed form
+    within 8.8e-4, 3.5e-3 and 2.3e-3 (limit 1e-2), the returning wave found at the inlet is at most 1.7e-5 of it (limit
+    1e-2) and 1.9e-14 of it is left in the drive; the split drive equals the closed-form entering wave within 1.6e-13
+    and its run equals the closed-form-driven run within 5.7e-15; the single-section drive of the same field is off by
+    the reflection factor exactly and its residual against the second section, 0.526 and 0.888, equals the closed form
+    within 1.4e-15 (5e-14 for an entering field only); three sections agree with two within 6.8e-15; four refusals
+    located. Six mutations caught (waves swapped, wrong reference plane, split skipped, separation test removed, carry
+    dropped from the residual, first off-plane face named). Limits: hard-walled duct, medium at rest; the single-section
+    residual needs a second section (one section of pressure cannot be split); only the two-dimensional channel was run;
+    no case key or CLI (F-451).
 - [ ] **F-479** Overset: a second-order own-part pressure gradient of the ring cells under the prescribed fringe flux
   - depends on: F-450
   - acceptance: An opt-in of FringeFlux::PrescribedOwnGradient whose ring cells take a pressure gradient of second order
@@ -8909,3 +8929,9 @@ fixed by the item's registration ADR before any code.
     error over the calculated and fringe cells at most 1.2 times, continuity and the outflow balance hold to 1e-9 in
     every step, the checks of ADR 0347 (UA, UA2, U1) hold, and without the opt-in every result is bit-identical.
   - note: From ADR 0376 question 2; low priority.
+- [ ] **F-480** Axial velocity in the surface-series format for a one-section split
+  - depends on: F-478
+  - acceptance: An rcfd-surface-series file carrying the axial velocity with the pressure lets a drive built from one
+    section split the entering and returning waves of a duct field within 1 percent of the closed form; files without
+    velocity read and drive bit-identically as before.
+  - note: From ADR 0378 question 1. NEEDS THE USER: it changes the rcfd-surface-series format. Size M.
