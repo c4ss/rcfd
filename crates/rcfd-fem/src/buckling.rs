@@ -1,1 +1,165 @@
-//! Linear buckling factors from the geometric stiffness. Declared by ADR 0291; filled by ADR 0298.
+//! Linear buckling factors from the geometric stiffness. Declared by ADR 0291; filled by ADR 0390 (the registration of
+//! ADR 0298, F-395).
+//!
+//! The lowest positive factors `lambda` of `(K + lambda K_sigma) x = 0` (ADR 0390 D6), `K_sigma` the geometric stiffness of
+//! the pre-stress of a reference load ([`crate::geometric::Prestress`]): the load `lambda` times the reference one buckles
+//! the model. Both matrices are reduced by the elimination of the model's zero prescribed displacements, which must hold
+//! every rigid motion (`K` positive definite), and the factors come from
+//! [`rcfd_linalg::eigen::lowest_buckling_factors`], verified by its Sturm count of `K + s K_sigma`. A pre-stress with no
+//! direction of compression gives no factor, and the result says below which value there is none
+//! ([`BucklingResult::exhausted`]).
+
+use crate::assemble::stiffness_with;
+use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
+use crate::error::{FemError, Result};
+use crate::geometric::{geometric_stiffness, refuse_transformation, Prestress};
+use crate::model::{DofMap, SolidModel};
+use rcfd_linalg::eigen::{lowest_buckling_factors, BucklingEigenOptions, ResidualTest, SturmCheck};
+
+/// Options of [`factors`].
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct BucklingOptions {
+    /// Number of factors wanted (the lowest positive ones).
+    pub factors: usize,
+    /// Residual tolerance of each pair.
+    pub tolerance: f64,
+    /// Residual measure (default [`ResidualTest::Backward`], whose floor does not grow with the slenderness; ADR 0354).
+    pub residual_test: ResidualTest,
+    /// Iteration cap of the subspace iteration.
+    pub max_iterations: usize,
+    /// Subspace size (`None`: `max(2 m, m + 8)`).
+    pub subspace_size: Option<usize>,
+    /// Worker threads of the assembly (`None`: the available parallelism); the result does not depend on it.
+    pub threads: Option<usize>,
+}
+
+impl BucklingOptions {
+    /// The lowest `factors` factors with the backward-error test at 1e-10 and a cap of 200 iterations (ADR 0390 D6).
+    pub fn new(factors: usize) -> BucklingOptions {
+        BucklingOptions {
+            factors,
+            tolerance: 1e-10,
+            residual_test: ResidualTest::Backward,
+            max_iterations: 200,
+            subspace_size: None,
+            threads: None,
+        }
+    }
+    /// The same options with a residual tolerance.
+    pub fn tolerance(mut self, tolerance: f64) -> BucklingOptions {
+        self.tolerance = tolerance;
+        self
+    }
+    /// The same options with a residual measure.
+    pub fn residual_test(mut self, test: ResidualTest) -> BucklingOptions {
+        self.residual_test = test;
+        self
+    }
+    /// The same options with a subspace size.
+    pub fn subspace_size(mut self, q: usize) -> BucklingOptions {
+        self.subspace_size = Some(q);
+        self
+    }
+    /// The same options with a thread count for the assembly.
+    pub fn threads(mut self, threads: usize) -> BucklingOptions {
+        self.threads = Some(threads);
+        self
+    }
+}
+
+/// The result of a linear buckling analysis.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub struct BucklingResult {
+    /// Load factors, positive, ascending: the reference load times `factors[j]` buckles in mode `j`.
+    pub factors: Vec<f64>,
+    /// Buckling modes, `K`-normalised, one value per equation of the model's `DofMap` (0 at prescribed equations).
+    pub modes: Vec<Vec<f64>>,
+    /// Residuals of the pairs in the measure of the options.
+    pub residuals: Vec<f64>,
+    /// Iterations of the subspace iteration.
+    pub iterations: usize,
+    /// The Sturm check (`counted`: the factors in `(0, sturm.shift)`).
+    pub sturm: SturmCheck,
+    /// Number of free unknowns.
+    pub unknowns: usize,
+    /// `Some(S)` when fewer factors than asked exist below `S` (all of them are returned; none if `factors` is empty).
+    pub exhausted: Option<f64>,
+    dofs: DofMap,
+}
+
+impl BucklingResult {
+    /// The unknown numbering of the modes.
+    pub fn dofs(&self) -> &DofMap {
+        &self.dofs
+    }
+}
+
+/// The lowest positive buckling factors of `model` for the pre-stress of its reference load (ADR 0390 D6).
+pub fn factors(model: &SolidModel, prestress: &Prestress, options: &BucklingOptions) -> Result<BucklingResult> {
+    model.validate()?;
+    model.check_supported()?;
+    refuse_transformation(model, "a buckling analysis")?;
+    let dofs = model.dof_map();
+    let fixed = prescribed_equations(model, &[])?;
+    if let Some(&(eq, v)) = fixed.iter().find(|&&(_, v)| v != 0.0) {
+        let (node, component) = dofs.node_component(eq).expect("existing equation");
+        return Err(FemError::InvalidValue {
+            key: "constraint",
+            reason: format!(
+                "prescribed value {v:e} at node {node} component {component}: a buckling analysis takes zero values only"
+            ),
+        });
+    }
+    check_rigid_body_motions(model, &fixed)?;
+    let kg = geometric_stiffness(model, prestress, options.threads)?;
+    let k = stiffness_with(model, options.threads)?;
+    let zero = vec![0.0; k.n];
+    let kr = reduce(&k, &zero, &fixed)?;
+    let gr = reduce(&kg, &zero, &fixed)?;
+    let free = kr.free().to_vec();
+    let nf = free.len();
+    if options.factors == 0 || options.factors >= nf {
+        return Err(FemError::InvalidValue {
+            key: "factors",
+            reason: format!(
+                "{} factors requested of a model with {nf} free unknowns (at least 1 and fewer than the unknowns)",
+                options.factors
+            ),
+        });
+    }
+    let opts = BucklingEigenOptions {
+        tolerance: options.tolerance,
+        residual_test: options.residual_test,
+        max_iterations: options.max_iterations,
+        subspace_size: options.subspace_size,
+        ..BucklingEigenOptions::default()
+    };
+    let eig =
+        lowest_buckling_factors(&kr.matrix, &gr.matrix, options.factors, &opts).map_err(|e| FemError::Solver {
+            solver: "lowest_buckling_factors",
+            reason: e.to_string(),
+        })?;
+    let modes = eig
+        .vectors
+        .iter()
+        .map(|v| {
+            let mut full = vec![0.0; k.n];
+            for (&eq, &x) in free.iter().zip(v) {
+                full[eq] = x;
+            }
+            full
+        })
+        .collect();
+    Ok(BucklingResult {
+        factors: eig.values,
+        modes,
+        residuals: eig.residuals,
+        iterations: eig.iterations,
+        sturm: eig.sturm,
+        unknowns: nf,
+        exhausted: eig.exhausted,
+        dofs,
+    })
+}

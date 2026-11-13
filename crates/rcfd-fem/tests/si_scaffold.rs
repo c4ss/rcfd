@@ -129,6 +129,7 @@ fn x1_the_scaffold_exists() {
 // ---------------------------------------------------------------------------------------------------------------- X2
 
 #[test]
+#[ignore = "record of ADR 0291 before ADR 0390 (F-395, geometric stiffness) retired the geometric_stiffness row; superseded by the _after_geometric_landed copy below (maintainer, 2026-11-13)"]
 fn x2_entry_points_refuse_by_default() {
     let mat = steel();
     let state = ElementState::empty();
@@ -892,6 +893,36 @@ fn r10_refused_on_every_static_path_after_cyclic_landed() {
             variant,
             &location,
             package,
+        );
+    }
+}
+
+/// X2 after ADR 0390 (F-395) landed: `geometric_stiffness` of the solid elements returns the matrix, the two entry points of
+/// ADR 0300 still refuse.
+#[test]
+fn x2_entry_points_refuse_by_default_after_geometric_landed() {
+    let mat = steel();
+    let state = ElementState::empty();
+    for kind in [ElementKind::Tet4, ElementKind::Hex8, ElementKind::Tet10] {
+        let el = element_for(kind);
+        let coords: Vec<Vec3> = kind.reference_nodes().to_vec();
+        let u = vec![0.0; 3 * kind.nodes_per_element()];
+        let loc = format!("element kind {}", kind.name());
+        expect_refusal(
+            "internal_force",
+            el.internal_force(&coords, &mat, &u, &state),
+            "element entry point",
+            "internal_force",
+            &loc,
+            "ADR 0300",
+        );
+        expect_refusal(
+            "tangent",
+            el.tangent(&coords, &mat, &u, &state),
+            "element entry point",
+            "tangent",
+            &loc,
+            "ADR 0300",
         );
     }
 }
