@@ -211,3 +211,71 @@ replaced `report.solves = a.cycles...collect();` by `report.solves = Vec::new();
 same mutation, the solves left empty): the discarded value is typed, `let _: Vec<(usize, usize, bool)> = a.cycles...collect();`.
 Run once, on the same copy, with the same check (C1, `a1_c1_the_preview_adapts_like_the_run`). M1, M2, M3, M5 of that run are
 counted.
+
+## Addendum 1: results (2026-11-13)
+
+Code: `crates/rcfd-api/src/sim/adapt.rs` (`present` public, lines 90 to 91; `run` delegates to the new `run_until`, `AdaptedMesh`,
+`adapted_mesh`, lines 532 to 567; the poll in `run_until`'s `setup`, lines 586 to 591) and `crates/rcfd-api/src/sim.rs` line 56 (the
+re-export); no `rcfd-fv` file changed. `crates/rcfd-studio/src/preview.rs` (`Built::adapted`, `Built::adapt`, `AdaptReport`;
+`build_text` split into `assemble` and `build_adaptive`; `adapt_text`; `drain` shows the adapted `Built`; `refine_offer` counts the
+base cells) and `preview_ui.rs` (the `[mesh.adapt]` line). `preview_g1.rs`: the gate 4 exception removed; the file is now byte for
+byte its text before gate 4 (92dbc164). New tests `crates/rcfd-api/tests/adapt_preview_f475.rs` (D1) and
+`crates/rcfd-studio/tests/adaptive_preview_f475.rs` (A1/C1, A2, D2, E1, F1 ignored record, F1b). All runs in release, own target
+directory `f475-scratch/target` (the binaries the Studio tests spawn built there first). Logs in `w49i-work/f475-scratch`.
+
+| Check | Limit | Measured | Met |
+|---|---|---|---|
+| A1 | adapted = run after first step, bit for bit; 2799 cells; hash 05bb8beae5da57da | equal (hash, counts, patches, surface, 2D); 2799; 05bb8beae5da57da; set-up mesh 576 cells 23b7ec6d5b8cfb1e (run 1) | yes |
+| A2 | Studio shows the adapted mesh, viewport surface the same `Arc`, text has `2,799 cells` and the hash | shown and built 2799 cells, 05bb8beae5da57da; same `Arc`; text "... 2,799 cells, mesh hash 05bb8beae5da57da; adapted from the base lattice of 576 cells by 3 solves (576, 1,269, 2,799 cells; 97 + 122 + 188 iterations) in 2.59 s" (run 1) | yes |
+| B1 | G1/G7 passes with the exception removed | passes (run 2, inside E2; run without `--nocapture`, so its per-case line was not printed) | yes |
+| C1 | base 576 and `Simulation::new`'s hash; solves of R1b; 0 < loop_s <= build_s; text pieces | 576, equal; [(576, 97, true), (1269, 122, true), (2799, 188, true)]; loop 2.469 s of a 2.481 s build; all three text pieces (run 1) | yes |
+| D1 | (a) Some, 3 polls, run's mesh; (b) None, 1 poll, <= 0.10 T_a; (c) None, 2 polls, <= 0.35 T_a | (a) 2799 cells, run's hash, 3 polls, T_a 13.229 s (a loaded machine); (b) 1 poll, 0.003 s = 0.000 T_a; (c) 2 polls, 0.694 s = 0.052 T_a (run 1) | yes |
+| D2 | set-up holds; cavity shown; adaptive never shown after the switch; discarded >= 1; thread ends <= 0.6 T_full | T_full 3.256 s; switch at 0.151 T_full with the build running; shown 0 times; discarded 1; thread ended at 0.288 T_full (run 1) | yes |
+| E1 | 10 other cases: `adapted`, `adapt`, text `None` | 10 of 10 (run 1) | yes |
+| E2 | every other `rcfd-studio` test file, lib and bins | 304 passed, 0 failed, 22 ignored, 70 test binaries (run 2) | yes |
+| E3 | `baseline_hashes`, `adapt_case_f342`, `adapt_store_f476` | 3 passed 1 ignored; 6 passed 2 ignored; 3 passed (as before) | yes |
+| F1 | (run 1) | defective set-up: refused at the parse (Amendment 1); kept as an ignored record | not counted |
+| F1b | Ok; not adapted; refused contains `nosuch`; `build_mesh` hash; text | Ok; `adapted` None; "the run refuses the case: boundaries.nosuch: mesh has no patch 'nosuch' ..."; 576 cells 7a4f4b999618bee6 = `build_mesh`; text "[mesh.adapt]: not adapted (...)" | yes |
+| fmt, clippy | clean | `cargo fmt -p rcfd-api --check`, `-p rcfd-studio --check` clean; `cargo clippy --release -p rcfd-api -p rcfd-studio --all-targets -- -D warnings` clean | yes |
+
+Run 1 of the new tests was made before `cargo fmt` reformatted the test files and two places of `preview.rs` / `sim.rs`
+(line breaks and import order only; no change of behaviour); the committed code is the formatted one, and E2, E3, F1b, clippy and
+the mutations ran on it.
+
+Mutations (copy `f475-scratch/mut`, target `f475-scratch/target-mut`, log `mutations.log`; restored and compared identical):
+
+| Id | Caught by | Result |
+|---|---|---|
+| M1 no swap to the adapted `Built` | A2 | A2 failed ("A2 shown") |
+| M2 set-up mesh from `build_mesh` | B1 | G1/G7 failed ("cases/cavity/adapt_re100.toml: mesh hash") |
+| M3 no poll in `run_until` | D1 | D1 failed ("D1 (a) polls") |
+| M4 solves left empty | C1 | first run did not compile (script defect, Amendment 2); the corrected M4, run once, failed C1 ("C1 solves") |
+| M5 every case adaptive | E1 | E1 failed at `axial_fan_cgrid.toml` |
+
+Deviations: F1's set-up was defective and corrected by Amendment 1 (F1b); the M4 script was defective and corrected by Amendment
+2. Both amendments were committed before their corrected run; no limit was changed. Not run: the whole workspace suite (the
+lead's gate); the CLI's `adapt_case_f342` (the run path is covered by the `rcfd-api` tests of E3).
+
+Decision by the registered rule: **partial** (read strictly). Every registered check is met and every mutation failed its
+registered check, but M4 was caught only after a post-run amendment (Amendment 2), which Rule I counts as partial. If the
+lead reads a set-up-only amendment as ADR 0373 Q2 (a) does, the item is done (Q3).
+
+Questions (Q1 taken on the maintainer's standing instruction of 2026-11-11, take the recommendation):
+
+- **Q1 (what "the adapted mesh of Simulation::new" means).** Options: (a) as registered: `Simulation::new` keeps the base
+  lattice, the preview builds it as the set-up mesh (G1 compares it) and shows the mesh after the run's first step; (b) make
+  `Simulation::new` run the loop, so its own mesh is the adapted one (breaks ADR 0373 D3 and `rcfd check`'s `576 cells`, makes
+  every `Simulation::new` of an adaptive case slow and uncancellable). Recommendation (a), taken.
+- **Q2 (G1 checks the set-up mesh, not the shown one, for the adaptive case).** Options: (a) leave it (A1 and A2 check the shown
+  mesh); (b) a later edit of G1 that also compares `Built::adapted` with the mesh after a step. Recommendation (a); (b) needs the
+  maintainer's approval of a test edit.
+- **Q3 (status).** Options: (a) partial, Rule I read strictly (M4 caught after Amendment 2); (b) done, the amendment fixed a
+  script that did not compile, not a check or a limit. Recommendation: (b) if ADR 0373 Q2 was accepted as (a); otherwise (a).
+- **Q4 (cancellation within a solve).** The last solve of the shipped case (about 70 % of the loop) cannot be interrupted.
+  Options: (a) leave it (D2: 0.29 T_full); (b) a cancel hook in `SimpleSolver::run` (rcfd-fv). Recommendation (a) for now.
+
+## For the lead: roadmap entries
+
+**F-475**, proposed status: partial (strict Rule I; done if the M4 script amendment is read as ADR 0373 Q2 (a)). New note:
+
+> From the gate 4 fix (ADR 0262 addendum, 2026-11-13). ADR 0377, 2026-11-12: the Studio preview of a case with [mesh.adapt] builds the mesh Simulation::new sets the run up on (the base lattice, 576 cells for cases/cavity/adapt_re100.toml, with the solver's numbering and hash), then runs the run's adaptive loop (rcfd_api::sim::adapted_mesh, the first step's loop with a cancellation poll before each solve) and shows its final mesh, the mesh the run solves on after its first step (2799 cells, mesh hash 05bb8beae5da57da, equal bit for bit to Simulation::new plus one step); the Mesh side gives its cells and mesh hash and the loop's cost (3 solves of 576, 1,269 and 2,799 cells, 97 + 122 + 188 iterations, about 2.5 s); a case the run refuses is shown unadapted with the reason. g1_g7_shipped_cases_preview_the_solvers_mesh compares the adaptive case with Simulation::new like every other case, without the 2026-11-13 exception (the file is again its text before gate 4). A newer request stops the loop at the next solve (D2: the thread ended at 0.29 of a full build); no other case's preview, run, store or hash changes (E1, all rcfd-studio tests, baseline_hashes, the F-342 and F-476 tests pass unedited). Five mutations each failed their tests, M4 only after a corrected script (ADR 0377 amendment 2), hence partial by Rule I. Open: ADR 0377 Q1 (Simulation::new keeps the base lattice), Q2, Q4 (a solve in progress is not interrupted).
