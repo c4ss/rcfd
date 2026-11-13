@@ -160,7 +160,15 @@ case section see [case-schema.md](case-schema.md); for the full decision record 
   error is 3.3 (default stencils) and 6.8 (quadratic) times that on B3. The diagnostic opt-in
   `OversetSolver::set_least_squares_pressure_gradient(true)` (only together with the corrections) takes that gradient
   from the least-squares gradients of the corrections instead: it removes 63 % and 66 % of the error on B3d, leaving 1.22
-  and 2.33 times that on B3.
+  and 2.33 times that on B3. What it leaves (F-487, ADR 0387) is in the wall cells of the warped background: with every
+  patch at a fixed velocity the pressure condition is a zero normal gradient, and the least-squares row of such a face
+  with the value `p_c` is exact only when the cell centre lies on the face normal through the face centre, which it does
+  not on B3d. `OversetSolver::set_consistent_geometry_corrections(true)` switches the corrections on with a cell pressure
+  gradient whose prescribed-gradient boundary faces contribute their normal row only
+  (`GeometryCorrections::consistent_pressure_gradients`): exact for linear fields under the step's pressure conditions on
+  any mesh, equal to L in every cell without such a face. The vortex on B3d is then 1.21 (default stencils) and 1.41
+  (quadratic) times its error on B3; the shear and the uniform flow of ADR 0367 keep their limits.
+  `set_geometry_corrections` and L are unchanged.
 - **BDF2 (F-338, ADR 0241).** `OversetSolver::set_time_scheme(TimeScheme::Bdf2)` switches the three-level scheme on; a
   solver that does not call it runs as before, bit for bit. The time term is the backward difference of `V u` of the
   moving cell, and the mesh flux is `(c0 W^{n+1} - c2 W^n) / dt` of the swept volumes of the last two steps, so that a

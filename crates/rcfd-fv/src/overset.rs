@@ -37,6 +37,10 @@
 //! flux; see [`GeometryCorrections`]. With them, the diagnostic opt-in
 //! [`OversetSolver::set_least_squares_pressure_gradient`] (F-472, ADR 0382) replaces the Green-Gauss cell pressure gradient
 //! of the momentum predictor and of the velocity correction by the least-squares gradient of the corrections.
+//! [`OversetSolver::set_consistent_geometry_corrections`] (F-487, ADR 0387) switches the corrections on with a cell
+//! pressure gradient that is exact for linear fields under the step's pressure conditions on any mesh: the least-squares
+//! gradient whose prescribed-gradient boundary faces contribute their normal row only
+//! ([`GeometryCorrections::consistent_pressure_gradients`]).
 
 use crate::ale::{move_mesh, set_follow_conditions, set_follow_conditions_bdf2, FollowHistory, MeshStep};
 use crate::convection::{convection, face_flux, ConvScheme};
@@ -45,7 +49,7 @@ use crate::diffusion::{laplacian, laplacian_opt, uniform_gamma};
 use crate::field::{ScalarField, VectorField};
 use crate::fvmatrix::FvMatrix;
 use crate::geometry::FvGeometry;
-use crate::gradient::{green_gauss, least_squares};
+use crate::gradient::{green_gauss, least_squares, solve_masked};
 use crate::pimple::moving::AleStep;
 use crate::pimple::PimpleSettings;
 use crate::pressure::{
@@ -191,6 +195,8 @@ pub struct OversetSolver {
     corrected_old_flux: Option<Vec<f64>>,
     /// Set by [`OversetSolver::set_least_squares_pressure_gradient`] (ADR 0382).
     ls_pressure_gradient: bool,
+    /// Set by [`OversetSolver::set_consistent_geometry_corrections`] (ADR 0387).
+    consistent_pressure_gradient: bool,
     /// The three-level follow conditions of the moving walls in `prepare` while BDF2 is on (F-345, ADR 0379 D7).
     follow: FollowHistory,
 }
@@ -440,7 +446,66 @@ impl GeometryCorrections {
     /// `bvals`; with a connectivity that is not trivial, the donor interpolation of those gradients in a fringe cell and
     /// zero in a hole cell (ADR 0367 G).
     pub fn gradients(g: &FvGeometry, cells: &[f64], bvals: &[f64], conn: Option<&Connectivity>) -> Vec<Vec3> {
-        let ls = least_squares(g, cells, bvals);
+        Self::fringe_and_holes(least_squares(g, cells, bvals), conn)
+    }
+
+    /// The consistent cell pressure gradient (F-487, ADR 0387 C): the weighted least-squares gradient of `cells` over the
+    /// rows of `gradient::least_squares`, except that a boundary face whose condition in `pbc` prescribes the normal
+    /// gradient `G` (not coupled, coefficients `a = 1`, `c = 0`, `G = d`) contributes the row of its normal component
+    /// only: direction `dn n` (`dn = d_b . n`, `n` the unit area vector), increment `dn G`, weight `1 / dn^2`; every other
+    /// boundary face keeps its row with the value of `boundary_values_pbc`. Exact for a linear field that satisfies the
+    /// conditions on any mesh (`least_squares` with the conditions' values is not, where the owner centre is off the face
+    /// normal through the face centre). Then, as [`gradients`](Self::gradients), the donor interpolation in a fringe cell
+    /// and zero in a hole cell. In a cell without such a boundary face it is `least_squares` bit for bit.
+    pub fn consistent_pressure_gradients(
+        g: &FvGeometry,
+        cells: &[f64],
+        pbc: &PressureBc,
+        conn: Option<&Connectivity>,
+    ) -> Vec<Vec3> {
+        let mesh = &g.mesh;
+        let (own, nei) = (mesh.owner(), mesh.neighbour());
+        let n = mesh.n_cells();
+        let bvals = boundary_values_pbc(g, pbc, cells);
+        let sf = mesh.face_area_vectors();
+        let mut mat = vec![[[0.0; 3]; 3]; n];
+        let mut rhs = vec![[0.0; 3]; n];
+        let mut add = |c: usize, dr: Vec3, dphi: f64| {
+            let w = 1.0 / vec3::dot(dr, dr);
+            for i in 0..3 {
+                for j in 0..3 {
+                    mat[c][i][j] += w * dr[i] * dr[j];
+                }
+                rhs[c][i] += w * dr[i] * dphi;
+            }
+        };
+        for f in 0..g.n_internal {
+            let (o, nb) = (own[f], nei[f]);
+            let d = g.delta[f];
+            add(o, d, cells[nb] - cells[o]);
+            add(nb, vec3::scale(d, -1.0), cells[o] - cells[nb]);
+        }
+        for f in g.n_internal..mesh.n_faces() {
+            if g.empty[f] {
+                continue;
+            }
+            let i = f - g.n_internal;
+            let co = &pbc.coeffs[i];
+            if pbc.coupled[i].is_none() && co.a == 1.0 && co.c == 0.0 {
+                let nf = vec3::unit(sf[f]);
+                let dn = vec3::dot(g.delta[f], nf);
+                add(own[f], vec3::scale(nf, dn), dn * co.d);
+            } else {
+                add(own[f], g.delta[f], bvals[i] - cells[own[f]]);
+            }
+        }
+        let grad = (0..n).map(|c| solve_masked(mat[c], rhs[c], g.active)).collect();
+        Self::fringe_and_holes(grad, conn)
+    }
+
+    /// ADR 0367 G: with a connectivity that is not trivial, the donor interpolation of the cell gradients `ls` in a fringe
+    /// cell and zero in a hole cell.
+    fn fringe_and_holes(ls: Vec<Vec3>, conn: Option<&Connectivity>) -> Vec<Vec3> {
         let Some(conn) = conn.filter(|c| !c.is_trivial()) else {
             return ls;
         };
@@ -822,6 +887,7 @@ impl OversetSolver {
             corrections: false,
             corrected_old_flux: None,
             ls_pressure_gradient: false,
+            consistent_pressure_gradient: false,
             follow: FollowHistory::new(),
         })
     }
@@ -865,6 +931,24 @@ impl OversetSolver {
     /// Whether [`set_least_squares_pressure_gradient`](Self::set_least_squares_pressure_gradient) is on.
     pub fn least_squares_pressure_gradient(&self) -> bool {
         self.ls_pressure_gradient
+    }
+
+    /// The geometry corrections of [`set_geometry_corrections`](Self::set_geometry_corrections) with a cell pressure
+    /// gradient that is exact for linear fields on any mesh under the pressure conditions of the step (F-487, ADR 0387):
+    /// `set_geometry_corrections(on)`, and from the next step on the cell pressure gradient of the momentum predictor and
+    /// of the velocity correction is [`GeometryCorrections::consistent_pressure_gradients`]. A step with the consistent
+    /// gradient on and the corrections switched off afterwards, or with it and
+    /// [`set_least_squares_pressure_gradient`](Self::set_least_squares_pressure_gradient) both on, is refused. Off (the
+    /// default) is the solver that did not opt in, bit for bit.
+    pub fn set_consistent_geometry_corrections(&mut self, on: bool) {
+        self.set_geometry_corrections(on);
+        self.consistent_pressure_gradient = on;
+    }
+
+    /// Whether the consistent cell pressure gradient of
+    /// [`set_consistent_geometry_corrections`](Self::set_consistent_geometry_corrections) is on.
+    pub fn consistent_pressure_gradient(&self) -> bool {
+        self.consistent_pressure_gradient
     }
 
     /// Choose how the flux of the faces between calculated and fringe cells is found (F-445, ADR 0347), from the next
@@ -1020,6 +1104,9 @@ impl OversetSolver {
             return Err(
                 "overset: the least-squares pressure gradient (ADR 0382) needs the geometry corrections on".into(),
             );
+        }
+        if self.consistent_pressure_gradient && (!self.corrections || self.ls_pressure_gradient) {
+            return Err("overset: the consistent pressure gradient (ADR 0387) needs the geometry corrections on and the least-squares pressure gradient of ADR 0382 off".into());
         }
         let old = self.geom.clone();
         let n = old.n_cells();
@@ -1391,6 +1478,8 @@ impl OversetSolver {
         let corr_conn = (!trivial).then_some(conn);
         // ADR 0382 L: the least-squares cell pressure gradient (only with the corrections, refused otherwise in advance)
         let ls_grad = self.ls_pressure_gradient && geo_corr.is_some();
+        // ADR 0387 C: the consistent cell pressure gradient (only with the corrections, refused otherwise in advance)
+        let consistent_grad = self.consistent_pressure_gradient && geo_corr.is_some();
         let beta = match s.convection {
             ConvScheme::Central => 1.0,
             ConvScheme::Blended(b) => b,
@@ -1432,7 +1521,10 @@ impl OversetSolver {
             ale.apply_wall_gradients(&mut pbc, &g.dn);
             let ub = self.u.boundary_values(&g);
             let bvals_p = boundary_values_pbc(&g, &pbc, &self.p.values);
-            let mut grad_p = if ls_grad {
+            let mut grad_p = if consistent_grad {
+                // ADR 0387 C
+                GeometryCorrections::consistent_pressure_gradients(&g, &self.p.values, &pbc, corr_conn)
+            } else if ls_grad {
                 // ADR 0382 L
                 GeometryCorrections::gradients(&g, &self.p.values, &bvals_p, corr_conn)
             } else {
@@ -1656,7 +1748,10 @@ impl OversetSolver {
                 }
                 self.phi = corrected_flux(&g, &gamma_j, &pbc, &phi_hby_a, &p_new, &ub, false);
                 let bv_new = boundary_values_pbc(&g, &pbc, &p_new);
-                let mut grad_new = if ls_grad {
+                let mut grad_new = if consistent_grad {
+                    // ADR 0387 C
+                    GeometryCorrections::consistent_pressure_gradients(&g, &p_new, &pbc, corr_conn)
+                } else if ls_grad {
                     // ADR 0382 L
                     GeometryCorrections::gradients(&g, &p_new, &bv_new, corr_conn)
                 } else {
