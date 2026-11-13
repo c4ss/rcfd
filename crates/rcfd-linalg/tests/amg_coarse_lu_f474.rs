@@ -140,9 +140,11 @@ fn rhs(n: usize) -> Vec<f64> {
     (0..n).map(|i| 1.0 + ((i * 31) % 17) as f64 / 17.0).collect()
 }
 
-/// ADR 0369 L4: without interchanges the opt-in is the default bit for bit.
+/// ADR 0369 L4: without interchanges the opt-in is the default bit for bit. KNOWN MISS (amendment 1): the coarsest
+/// factorisation of this hierarchy interchanges at step 0 (measured `coarse_interchanges() == [0]`); the limit is kept.
 #[test]
-fn l4_opt_in_is_bit_identical_without_interchanges() {
+#[ignore = "known miss (ADR 0369 amendment 1): the 40 x 40 Laplacian's coarsest LU interchanges at step 0, measured [0]"]
+fn l4_opt_in_is_bit_identical_without_interchanges_known_miss() {
     let a = laplace2d(40);
     let b = rhs(a.n);
     let def = Amg::new(&a, AmgSettings::default());
@@ -158,6 +160,23 @@ fn l4_opt_in_is_bit_identical_without_interchanges() {
     opt.apply(&b, &mut zo);
     let diff = zd.iter().zip(&zo).filter(|(p, q)| p.to_bits() != q.to_bits()).count();
     assert_eq!(diff, 0, "L4: differing values");
+}
+
+/// ADR 0369 amendment 1 L4b: with interchanges only at step 0 the opt-in is the default bit for bit.
+#[test]
+fn l4b_opt_in_is_bit_identical_with_interchanges_only_at_step_0() {
+    let a = laplace2d(40);
+    let b = rhs(a.n);
+    let def = Amg::new(&a, AmgSettings::default());
+    let opt = Amg::new(&a, opt_in());
+    let ks = def.coarse_interchanges();
+    println!("L4b: interchanges at steps {ks:?}");
+    assert!(ks.iter().all(|&k| k == 0), "L4b: {ks:?}");
+    let (mut zd, mut zo) = (vec![0.0; a.n], vec![0.0; a.n]);
+    def.apply(&b, &mut zd);
+    opt.apply(&b, &mut zo);
+    let diff = zd.iter().zip(&zo).filter(|(p, q)| p.to_bits() != q.to_bits()).count();
+    assert_eq!(diff, 0, "L4b: differing values");
 }
 
 /// ADR 0369 L5: the read-only accessors.

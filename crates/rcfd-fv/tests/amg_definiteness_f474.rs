@@ -361,7 +361,7 @@ fn f1_m2_captures_opt_in_neutral_without_interchanges() {
             ks
         );
         assert_eq!(ks, opt.coarse_interchanges());
-        if ks.is_empty() {
+        if ks.iter().all(|&k| k == 0) {
             let (mut x1, mut x2) = (c.p0.clone(), c.p0.clone());
             let s1 = cg(&pm.a, &pm.b, &mut x1, &def, &c.controls.solver);
             let s2 = cg(&pm.a, &pm.b, &mut x2, &opt, &c.controls.solver);
@@ -376,7 +376,7 @@ fn f1_m2_captures_opt_in_neutral_without_interchanges() {
             neutral_checked += 1;
         }
     }
-    println!("F1: {neutral_checked} of 6 systems without interchanges checked bit for bit");
+    println!("F1: {neutral_checked} of 6 systems without an interchange at a step k >= 1 checked bit for bit");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -648,11 +648,12 @@ fn h_stopping_system_definiteness() {
     for (name, c) in [("S", cs), ("S0", cs0), ("G", cg_)] {
         let a = Amg::new(&system_of(&geom, c).a.to_csr(), AmgSettings::default());
         println!(
-            "H1 {name} (step {} corrector {}): levels {:?}; coarsest interchanges {} at {:?}; pivots {:?}",
+            "H1 {name} (step {} corrector {}): levels {:?}; coarsest interchanges {} ({} at a step k >= 1) at {:?}; pivots {:?}",
             c.step,
             c.corrector,
             a.level_sizes(),
             a.coarse_interchanges().len(),
+            a.coarse_interchanges().iter().filter(|&&k| k >= 1).count(),
             a.coarse_interchanges(),
             a.coarse_pivots()
         );
