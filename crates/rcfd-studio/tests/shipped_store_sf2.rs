@@ -61,7 +61,7 @@ fn store_warnings(events: &[Value]) -> Vec<String> {
 #[test]
 fn sf2_every_shipped_case_writes_a_readable_store() {
     let cases = shipped();
-    assert_eq!(cases.len(), 10);
+    assert_eq!(cases.len(), 11);
     let tmp = common::temp("sf2");
     let mut ok = 0;
     for (i, (rel, path)) in cases.iter().enumerate() {

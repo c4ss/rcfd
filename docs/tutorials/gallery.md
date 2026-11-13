@@ -44,6 +44,20 @@ naca0012
 
 ## Runnable cases
 
+### Adaptive cavity (`cavity`)
+
+* `adapt_re100.toml`: lid-driven cavity at Re 100 on a 24 x 24 base mesh that the steady loop adapts twice (`[mesh.adapt]`, ADR 0262). `rcfd check` reports the 576 cells of the base mesh; the adapted mesh is built when the case runs.
+
+Checked: the default test checks the file.
+
+```console run
+$ rcfd check cases/cavity/adapt_re100.toml
+```
+
+```text output
+adapt_re100.toml: ok, 576 cells
+```
+
 ### Channel flows (`channel`)
 
 * `kepsilon_channel.toml`: periodic plane channel at Re_tau = 395, standard k-epsilon with wall functions, coarse on purpose.

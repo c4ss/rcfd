@@ -41,12 +41,13 @@ fn plan_of(rel: &str, path: &Path) -> StartPlan {
 }
 
 /// The registered `set()` of every shipped case (SF1), before `output.store_precision=f32`.
-const EXPECTED: [(&str, &str); 10] = [
+const EXPECTED: [(&str, &str); 11] = [
     ("cases/axial_fan_cgrid/axial_fan_cgrid.toml", "output.store_interval=60"),
     (
         "cases/axial_fan_sector/axial_fan_sector.toml",
         "output.store_interval=60",
     ),
+    ("cases/cavity/adapt_re100.toml", "output.store_interval=XX"),
     ("cases/channel/kepsilon_channel.toml", "output.store_interval=80"),
     ("cases/channel/kepsilon_inlet.toml", "output.store_interval=4"),
     ("cases/channel/profile_inlet.toml", "output.store_interval=20"),

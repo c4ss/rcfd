@@ -402,3 +402,24 @@ test. F-342 is proposed **done**, pending the maintainer's acceptance.
 **F-102**: in its note, "Not delivered (follow-ups): a case-file key;" should read:
 
 > Not delivered (follow-ups): a case-file key (since ADR 0262, 2026-11-12: [mesh.adapt], F-342);
+
+## Addendum: gate 4, 2026-11-13
+
+Gate 4 failed seven tests because F-342 (commit e6ad4616) shipped `cases/cavity/adapt_re100.toml`, a `[mesh.adapt]` case, without updating the tests and the list that cover every shipped case. The maintainer approved on 2026-11-13 editing the existing tests below for this purpose only; no other assertion, limit or hash table was touched (baseline_hashes.rs, the case and mesh hash tables and the goldens are unchanged).
+
+| Test | Edit |
+|---|---|
+| `crates/rcfd-studio/tests/store_plan_sf.rs`, `sf1_every_shipped_case_plans_a_store` (EXPECTED, near line 52) | `EXPECTED` 10 -> 11 entries; `cases/cavity/adapt_re100.toml` added with the store line its plan gives |
+| `crates/rcfd-studio/tests/shipped_store_sf2.rs`, `sf2_every_shipped_case_writes_a_readable_store` (line 64) | case count 10 -> 11 |
+| `crates/rcfd-studio/tests/saved_store_r.rs`, `dv6_unedited_plans_are_bit_identical` (line 818) | "cases added after 6867e40 (no recorded plan)" list gains `cases/cavity/adapt_re100.toml` |
+| `crates/rcfd-studio/tests/preview_g1.rs`, `g1_g7_shipped_cases_preview_the_solvers_mesh` (loop at line 133) | a case with `[mesh.adapt]` is compared with `build_mesh` (the base mesh) and a note is printed; all other cases are compared with `Simulation::new` as before |
+
+Not a test edit: `cases/cavity/adapt_re100.toml` was added to the data list `EXCLUDED` in `crates/rcfd-workspace/src/examples.rs` (reason: an adaptive-mesh case the starter does not offer), which clears `cs5_the_list_is_in_step_with_cases` and `cs5_controls_each_kind_of_drift_is_one_problem`. `docs/tutorials/gallery.md` gains a section with `$ rcfd check cases/cavity/adapt_re100.toml` (output as printed: `ok, 576 cells`, the base mesh), which clears `gallery_covers_every_case` (ADR 0089 T5).
+
+Preview gap: the Studio preview builds the base lattice of a case (24 x 24 = 576 cells here), while `Simulation::new` adapts the mesh (about 2799 cells after two steps, ADR 0242), so their mesh hashes differ. The preview therefore shows the base mesh of a `[mesh.adapt]` case, not the mesh the run solves on. This is a known limitation, recorded here and in the follow-up below.
+
+## For the lead: roadmap entries
+
+**New follow-up of F-342**: title "Studio preview of a case with [mesh.adapt] shows the adapted mesh"; deps F-342, F-138 (preview); acceptance:
+
+> The Studio mesh preview of a case with [mesh.adapt] shows the mesh the run solves on (the adapted mesh of Simulation::new, with its cell count and mesh hash), and preview_g1's g1_g7_shipped_cases_preview_the_solvers_mesh compares cases/cavity/adapt_re100.toml with Simulation::new like every other case, without the base-mesh exception added on 2026-11-13.
