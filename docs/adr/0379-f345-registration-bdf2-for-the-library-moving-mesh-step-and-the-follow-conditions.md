@@ -360,3 +360,154 @@ maintainer made in person; none changes a default.
 ## Open questions
 
 None before the runs.
+
+## Addendum 1: results (2026-11-13)
+
+Measured against the limits registered above; none was changed, no amendment was needed. Release builds on Windows, the
+worktree's target directory, other agents building on the machine. Commits: the registration `f679b180`; the library change
+and the tests, compiled, formatted and linted and not run, `8d780068`; this addendum with the rename of the missed record
+and `docs/dynamic-mesh.md`. Each registered run was made once. Logs in `w49i-work/f345-scratch` (`fast.log`, `a_bf.log`,
+`a_tr.log`, `b3.log`, `lib.log`, `baseline.log`, `clippy.log`, `mutations.log`).
+
+**Said plainly.** The library's moving-mesh step takes BDF2 as an opt-in, the overset step with every cell calculated
+equals it bit for bit on BF, a uniform flow stays uniform to `7e-15` on the G2 meshes, and the three-level walls are what
+makes the body-fitted cylinder second order in time (ratio 5.04; 3.04 with BDF2 and the old walls). **The acceptance
+number on TR is missed:** the time error of the overset cylinder does not fall with the step (ratio 1.09 against 4). It sits
+in the background cells next to the hole; the component cells fall at 4.22. H1 applies: the cause is the moving coupling
+(the kind changes named by ADR 0359), not the step or the walls of this item.
+
+### What was built
+
+- `crates/rcfd-fv/src/pimple/moving.rs`: `PimpleSolver::set_moving_mesh_time_scheme`, `AleStep::vol_older`,
+  `AleStep::fix_ddt_bdf2`, the private `AleHistory`, and in `step_ale_with_walls` the BDF2 branch (D2, D3, D5); the default
+  branch keeps its statements. `step_sliding` sets `vol_older: None`.
+- `crates/rcfd-fv/src/pimple.rs`: two private fields (`ale_bdf2_opt_in`, `ale_bdf2`) set in `new` and `scratch`, the
+  call site of the transient correction (`fix_ddt_bdf2` only when `vol_older` is set), the history dropped in `restore` and
+  `reinitialise`.
+- `crates/rcfd-fv/src/ale.rs`: `FollowHistory`, `set_follow_conditions_bdf2` (D6).
+- `crates/rcfd-fv/src/overset.rs`: `prepare` with BDF2 takes the three-level walls (D7), the history cleared by
+  `set_time_scheme(ImplicitEuler)`; `AleStep` gets `vol_older: None`.
+- Tests: `crates/rcfd-fv/tests/ale_bdf2_f345.rs` (8 run by the gate, 2 ignored heavy records). No existing test edited.
+
+### Checks
+
+| Check | Limit | Measured | Verdict |
+| --- | --- | --- | --- |
+| B1 Q0 of ADR 0219 (unedited) | `<= 1e-12` each; hash | `0`, `0`, `0`; bit for bit; `af2c9e6bd3e5596d` | met |
+| B2 `baseline_hashes` | pass | 3 passed (1 ignored) | met |
+| B3 existing tests (13 test files and `--lib`) | pass | all passed (`--lib` 104) | met |
+| E1 BDF2 without the opt-in | `Err`, message, state unchanged | as stated | met |
+| E2 bounded BDF2, Crank-Nicolson | `Err`, unchanged | both | met |
+| E3 `replace_mesh`, `step_sliding` with the opt-in | `Err` each | both | met |
+| E4 another patch list | `Err`, `u` unchanged | as stated | met |
+| E5 history dropped by a step at rest | bit for bit | equal | met |
+| E6 opt-in and back = default | bit for bit | equal | met |
+| E7 first moving step = default Euler step | bit for bit | equal | met |
+| **G2b** four motions, uniform steps, `u`, `p` | `<= 1e-10` each | at most `5.1e-15`, `5.7e-15` | met |
+| **G2v** alternating steps | `<= 1e-10` each | at most `7.2e-15`, `8.1e-15` | met |
+| G2r a step at rest first | `<= 1e-10` each | `3.9e-15`, `5.1e-15` | met |
+| G2n (negative control) flux times 1.01 | `>= 1e-6` | `9.86e-3` | held |
+| G2s (set-up) volume and flux change | `>= 1e-2` each | `0.455`, `1.0` | held |
+| **QB1** BF, one outer iteration | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| **QB3** three outer iterations | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| **QB3c** with rc | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| QBn (negative control) | `>= 1e-8` | `1.46e-2` | held |
+| QR at rest against `step` with BDF2 | `<= 1e-12` each | `0`, `0`, `0`; bit for bit | met |
+| **F1** constant acceleration: velocity; acceleration | `<= 1e-11`; `<= 1e-8` | `4.7e-14` / `8.9e-14`; `3.1e-12` / `6.7e-12` (uniform / alternating) | met |
+| **F2v** ratio | `>= 3.9` | `4.0000` | met |
+| F2e closed form `2 h^2` | `<= 1e-6` | `8.4e-12`, `3.6e-11` | met |
+| **F2a** acceleration exact | `<= 1e-8` | `5.3e-13`, `8.5e-13` | met |
+| F3 relative wall flux | `<= 1e-12` | `3.1e-16` | met |
+| F4 first call = `set_follow_conditions` | bit for bit | equal | met |
+| F5 `prepare` with BDF2 | bit for bit | equal, 4 steps | met |
+| F5d `prepare` without BDF2 | bit for bit | equal, 4 steps | met |
+| **A-BF** BF, BDF2, three-level walls | `>= 4` | `5.041` (`d = 6.21e-4`, `1.23e-4`) | met |
+| A-BFn (negative control) implicit Euler | in `[2.5, 3.5]` | `2.971` (`9.39e-3`, `3.16e-3`) | held |
+| **A-TR (acceptance)** TR, BDF2, three-level walls | `>= 4` | **`1.088`** (`2.299e-3`, `2.112e-3`) | **missed** (known-miss record) |
+| A-c continuity, every BDF2 run | `<= 1e-9` | BF `5.4e-16`, TR `5.2e-17` | met |
+
+Printed, no limit. BF with BDF2 and the **two-level walls**: `R = 3.037` (`7.67e-3`, `2.52e-3`): the old walls alone leave a
+first-order error twelve times the three-level one. BF with BDF2, three-level walls and no rc: `R = 4.897` (`6.29e-4`,
+`1.29e-4`). `F_x` of BF at `T` with BDF2: `0.120614`, `0.120500`, `0.120472`. TR: component cells `R = 4.219` (`6.44e-4`,
+`1.53e-4`), background cells `R = 1.088` (`2.30e-3`, `2.11e-3`); the largest difference in background cell 9570 at `1.108`
+from the cylinder centre (the hole radius is 1, so on the first ring of cells outside it); `F_x` of TR at `T`: `0.120285`,
+`0.120452`, `0.120457`; no cell took the Euler row (`euler_fallback_cells` 0 in every run). Run times: BF 52 to 99 s per
+variant, TR 61, 118, 200 s.
+
+### H1
+
+A-BF is met (`5.04`) and A-TR is missed (`1.09`). By the reading registered, the BDF2 moving step and the three-level walls
+are of second order on the same cylinder, motion and wall with every cell calculated, and the remainder of TR is made by
+the moving overset coupling. The split by class agrees: the component cells, which never change kind, fall at `4.22`; the
+background difference is almost independent of the step and largest one cell outside the hole, where cells change kind
+as the cylinder passes (ADR 0359 event 2). The number named is `R(TR) = 1.09` against `R(BF) = 5.04`, with the component
+cells at `4.22`. This item does not touch the coupling.
+
+### Mutations
+
+Applied alone to a `git archive` copy of `8d780068` (`f345-scratch/mut`, its own target directory) by `mut_run.py` (an exact
+replacement that occurs once), the named test run once, the file restored and compared byte for byte (equal in all nine).
+All nine caught on their first run.
+
+| Id | Must fail | Result |
+| --- | --- | --- |
+| MB1 one-step mesh flux | G2b | failed: expansion `u` `0.89`, `p` `2.08` |
+| MB2 no old-old volume | G2b | failed: `0.48`, `7.7` |
+| MB3 no old-old defect | QB1 | failed: `u` `1.9e-4`, `p` `1.3e-2`, `phi` `4.3e-3` |
+| MB4 no Euler step without a history | E7 | failed: not bit for bit |
+| MB5 history kept across a rest step | E5 | failed: not bit for bit |
+| MB6 wall velocity the step mean | F1 | failed: `2.4e-2` (and F2) |
+| MB7 one-step wall acceleration | F2a | failed: `2.5e-2`, `1.2e-2` |
+| MB8 normal part from the one-step flux | F3 | failed: `2.0e-2` (and F1, F2) |
+| MB9 `prepare` with the two-level walls | F5 | failed: not bit for bit |
+
+`scripts/limit_audit.py` on the new test file: 0 hits.
+
+### Deviations and disclosures
+
+- The record of A-TR was renamed after its run to `a_tr_time_error_ratio_known_miss`, its limit intact and the number in
+  its ignore reason; nothing else in it changed.
+- Q0 of ADR 0219 ran twice (in the B3 suite and once more with `--nocapture` to print its hash); deterministic.
+- My prediction of A-TR (between 1.8 and 3.5) was wrong: it is `1.09`. The other predictions held.
+- Clippy ran once with `--release` before the commit of the code and once in the house form after the runs; both clean.
+- The registration's status line says 2026-11-13 (the date of this work); the house rules name 2026-11-12.
+
+### Not run
+
+The whole workspace suite and the gate (the lead's); the other ignored records of the existing files; Linux; TR with
+implicit Euler (A-BFn stands for it on BF); `set_rest_conditions` and `step_sliding` with BDF2 (not built, L2, L3).
+
+### After the tests
+
+`cargo fmt -p rcfd-fv --check` clean. `cargo clippy -p rcfd-fv --all-targets -- -D warnings` clean.
+
+### Decision by the registered rule
+
+**Partial.** The opt-in and the three-level walls are built, the preconditions hold, the controls held and every mutation
+failed its check on the first run; every check of C1 to C4 is met. A-TR, the measured number of C5, is missed (`1.09`
+against 4), and H1 names why with numbers (`R(BF) = 5.04`, the component cells of TR `4.22`, the background next to the
+hole `1.09`). By the rule the acceptance's "or the ADR names why not with a number" is met, and the item is proposed
+partial because a measured clause was missed.
+
+### Open questions (each with options and a recommendation)
+
+- **Q1. The TR remainder.** (a) leave it with ADR 0359 question 2 (the kind changes next to the hole; its recommendation:
+  accept until a case needs the BDF2 order on a moving overset mesh); (b) a research item on cells entering and leaving the
+  calculated set within a BDF2 step, with TR as its case. Recommendation (a): the drag of TR changes by only `4e-6` between
+  `dt = 0.01` and `0.005`, so the remainder does not limit what TR is for.
+- **Q2. The case-tree wiring of BDF2 on a moving mesh.** It would make a refused input run and needs a schema entry; not
+  taken. Open for the maintainer.
+- **Q3. `set_rest_conditions`, `step_sliding` and `replace_mesh` with BDF2.** (a) a follow-up item; (b) not now.
+  Recommendation (b) until a case asks for it.
+
+### For the lead: roadmap entries
+
+No roadmap file was edited. **F-345**, proposed status: `partial`. Proposed note:
+
+> From ADR 0241 questions 4 and 5, recommendation taken on the maintainer's standing instruction of 2026-11-11. After the rework of the corrector flags in pimple.rs (F-322). ADR 0379, 2026-11-12: PARTIAL, every clause met but the measured TR ratio, whose cause is named with a number. Built: PimpleSolver::set_moving_mesh_time_scheme(Bdf2), an opt-in of the library's moving-mesh step (without it step_ale_with_walls refuses BDF2 as before): the mesh flux (c0 W - c2 W_old) / dt of the swept volumes of the last two steps (the discrete geometric conservation law of BDF2), the old and old-old volumes in the transient term, the three-level Rhie-Chow defect, an implicit Euler step when the step before was not a moving step with the opt-in; ale::set_follow_conditions_bdf2 with a FollowHistory: the wall velocity the mid-step velocities of the last two steps extrapolated to the end of the step with the normal part carrying the three-level mesh flux, dp/dn from the BDF2 derivative of the wall velocity; OversetSolver::prepare takes it when BDF2 is on. Defaults bit for bit (Q0 of ADR 0219 hash af2c9e6bd3e5596d, baseline_hashes, the existing moving-mesh and overset suites unedited). Met: a uniform flow stays uniform to 7e-15 on the four motions of ADR 0033 G2 with uniform and alternating steps; with every cell calculated OversetSolver with BDF2 equals the library's BDF2 moving step bit for bit on BF (one and three outer iterations, with and without rhie_chow_step_consistent); the wall velocity and acceleration are exact for a constant acceleration and of second order (ratio 4.000) for a cubic motion; the body-fitted cylinder BF to t = 1 falls by 5.04 when the step is halved (3.04 with BDF2 and the two-level walls, 2.97 with implicit Euler). Missed: the time error of TR falls by 1.09 (limit 4): it sits in the background cells one ring outside the hole, which change kind as the cylinder passes (ADR 0359 event 2); the component cells fall by 4.22. Nine mutations caught. Not delivered: the case-tree wiring, BDF2 for step_sliding, replace_mesh and set_rest_conditions.
+
+**F-338**, status unchanged. In its note replace "Not delivered: BDF2 for the library's moving-mesh step and the follow conditions of a moving wall (they keep the two-level values), the case-tree wiring." by:
+
+> Not delivered: the case-tree wiring. BDF2 for the library's moving-mesh step and the three-level follow conditions of a moving wall came with F-345 (ADR 0379; prepare takes them when BDF2 is on, and the BDF2 overset step with every cell calculated equals the library's bit for bit).
+
+No follow-up item is proposed (question 1 belongs to ADR 0359 question 2).

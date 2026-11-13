@@ -952,8 +952,8 @@ fn a_bf_time_error_ratio_with_bdf2_and_three_level_walls() {
 }
 
 #[test]
-#[ignore = "heavy record (about 6 to 15 minutes): ADR 0379 A-TR, A-c of TR"]
-fn a_tr_time_error_ratio_with_bdf2_and_three_level_walls() {
+#[ignore = "known miss, ADR 0379 addendum 1: A-TR R 1.088 (limit 4; d(0.02) 2.299e-3, d(0.01) 2.112e-3, largest in a background cell next to the hole); heavy record, about 6 minutes"]
+fn a_tr_time_error_ratio_known_miss() {
     let mut c = Checks::new();
     let w = walls("c_cylinder");
     let mut runs = Vec::new();
