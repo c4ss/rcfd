@@ -115,7 +115,9 @@ impl DynamicSolid {
 
     /// Displacement of every unknown [m] ([`Integrator::displacement`]).
     pub fn displacement(&self) -> Vec<f64> {
-        self.integrator.displacement().expect("a dynamic solid always has a state")
+        self.integrator
+            .displacement()
+            .expect("a dynamic solid always has a state")
     }
 
     /// Velocity of every unknown [m/s].
@@ -125,7 +127,9 @@ impl DynamicSolid {
 
     /// Acceleration of every unknown [m/s^2].
     pub fn acceleration(&self) -> Vec<f64> {
-        self.integrator.acceleration().expect("a dynamic solid always has a state")
+        self.integrator
+            .acceleration()
+            .expect("a dynamic solid always has a state")
     }
 
     /// The interface forces held over the last advance [N] (zero before the first).
