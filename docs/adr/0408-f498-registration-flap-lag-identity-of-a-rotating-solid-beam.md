@@ -164,3 +164,69 @@ A miss of S1 or S2 is not tuned away: it becomes an ignored `*_known_miss` test 
 1. Test code only, in a new file: the tests of ADR 0403 are not edited (house rule), and A3 stays an ignored record there.
 2. S3 and N1 to N4 are added to the clauses of the acceptance as a consistency check of the derivation and as controls; the decision
    rule does not depend on S3.
+
+## Addendum 1: results (2026-11-13)
+
+Code commit: the test file `crates/rcfd-fem/tests/si_rotating_flap_lag.rs` (test code only; no library line, `si_rotating.rs`, hash
+table or golden file changed). Release profile, `CARGO_BUILD_JOBS=4`, `--test-threads=2`. The registered run was made once (two
+tests, 0.46 s); all limits met, no amendment.
+
+### Checks
+
+| Id | Limit | Measured | Met |
+| --- | --- | --- | --- |
+| S1 `abs(d - (1 - 2 f_x,h))` | `<= 1e-4` | 1.117e-8 (`d = 0.9980779584`, `1 - 2 f_x,h = 0.9980779473`, `Omega = 51.150904` rad/s) | yes |
+| S2 `abs(d - 1)` | `<= 3 f_x,h = 2.883e-3` | 1.922e-3 (`2 f_x,h`) | yes |
+| S3 `abs(f_x,h/9.683e-4 - 1)` | `<= 5e-2` | 7.51e-3 (`f_x,h = 9.610264e-4`) | yes |
+| B1 n = 1, 2 | `<= 1e-3` | 1.92e-9, 1.80e-9 | yes |
+| B2 n = 1, 2 | `<= 1e-3` | 1.66e-6 (`Q_1,h = 1.07254057`), 3.12e-5 (`Q_2,h = 7.66047610`) | yes |
+| B3 n = 1, 2 | `<= 1e-2` | 6.86e-5, 1.081e-3 | yes |
+| N1 `abs(d - 1)` | `> 1e-3` | 1.922e-3 | as expected |
+| N2 spin softening off | `> 0.5` | 0.99904 (`d = -9.610e-4`) | as expected |
+| N3 stress stiffening off | `> 5e-4` | 9.631e-4 (`d = 0.99903690`) | as expected |
+| N4 bar, full operator, literal ratio | `< 0` | -7.2539e-2 | as expected |
+
+As disclosed, these are the numbers of ADR 0403 (A3b 1.12e-8, A3 1.922e-3, A2a to A2c) to the printed digits; the existing
+`si_rotating` was re-run after the new file and is unchanged (9 passed, 1 ignored, 7.8 s). The estimates of the registration are
+met with large margins (S1 by a factor 9e3, S2 by 1.5, B1 to B3 by at least 9).
+
+### Mutations (copy of the code commit from `git archive` in `f498-scratch/copy`, own target directory, script `mutate.py`, logs `MU1.log` to `MU4.log`)
+
+| Id | Result in the new tests |
+| --- | --- |
+| MU1 (no projection in `M_perp`) | caught by S1 (0.999) and S2 (1.001); B1 to B3 stay met, as predicted |
+| MU2 (`y` softening dropped) | caught by S1 (0.999) and S2 (1.001) |
+| MU3 (`2 c M_perp`) | caught by S1, S2, B1 (1.0), B2 (1.0), N4 |
+| MU4 (stiffening sign reversed) | caught by B2 (2.15 and 15.3), N4 and S1 (1.93e-3, not the 4 f_x = 3.8e-3 of the registration: the sign of the common `Q` term also flips, which leaves `2 f_x`; the estimate in the table was wrong, the catch is not affected); N1 reports as not expected (`abs(d - 1)` falls to 1e-9), a second signal; B3 stays met |
+
+All four planned mutations are caught by at least one of S1, S2, B1, B2.
+
+### Deviations
+
+- The registered estimate of MU4's S1 deviation (`4 f_x`) was wrong (measured `2 f_x`); the mutation is caught either way.
+- fmt and clippy: `cargo fmt -p rcfd-fem --check` clean, `cargo clippy -p rcfd-fem --all-targets -- -D warnings` clean.
+
+### What was not run
+
+Other speeds, sections and Poisson ratios (see "Limits"); the whole-workspace tests and `baseline_hashes` (no shared solver file
+changed).
+
+### Decision by the registered rule
+
+**done**: S1, S2, B1, B2, B3 met, S3 and N1 to N4 as stated, and MU1 to MU4 each caught. The decision is formal in the sense of the
+disclosure above: the numbers were known from ADR 0403, and the value of the item is the restated acceptance, the derivation and
+the control record. Done is the maintainer's call.
+
+### Remaining questions
+
+1. The identity is checked at one speed and `nu = 0`. Options: (a) add the second-order speed dependence and `nu > 0` as a follow-up;
+   (b) none. Recommendation: (b); the speed dependence of the flap slope is in ADR 0403 A4 and A5 and the identity is the
+   acceptance of this item.
+2. ADR 0403's ignored record `a3_flap_lag_identity_known_miss` stays as it is (house rule). Options: (a) keep it as the record of
+   the unrestated clause; (b) remove it later by an approved edit. Recommendation: (a).
+
+## For the lead: roadmap entries
+
+Proposed status for F-498: done.
+
+> Flap-lag identity of the rotating solid beam restated. ADR 0408, 2026-11-13: new test file si_rotating_flap_lag.rs (test code only, the numbers known beforehand from ADR 0403 A3b and A2 and disclosed in the registration, with the 1 - 2 f_x relation re-derived there); on the square radial Hex20 beam (slenderness 20, nu = 0) at 0.2 omega_0 the flap-lag difference per Omega^2 equals 1 - 2 f_x within 1.1e-8 (limit 1e-4, f_x = 9.61e-4 the axial kinetic share of the flap mode) and equals 1 within 1.92e-3 (limit 3 f_x = 2.88e-3); the radial bar with the stiffening off gives ratio 1 within 1.9e-9, with it the slope equals Q_n,h - 1 within 3.1e-5 and Q_n,h equals k_n^2 L^2/3 + 1/4 within 1.1e-3 (limits 1e-3, 1e-3, 1e-2); four planned mutations of rotating.rs caught, four controls as expected. Limits: one speed, nu = 0, one section.
