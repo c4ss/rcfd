@@ -316,7 +316,11 @@ fn a1_a2_c1_c2_c3_free_free_bar_inertia_relief() {
             xw.re[tip], xw.re[far], xn.re[tip], xn.re[far]
         );
         let a1 = (xw.re[tip] - u_tip).hypot(xw.im[tip]) / scale;
-        ch.at_most(&format!("A1 s = {s}: |X_tip - u_cf(L)| / (F/(EAk)), inertia relief"), a1, 0.005);
+        ch.at_most(
+            &format!("A1 s = {s}: |X_tip - u_cf(L)| / (F/(EAk)), inertia relief"),
+            a1,
+            0.005,
+        );
         let an = (xn.re[tip] - u_tip).hypot(xn.im[tip]) / scale;
         if s == 0.5 {
             ch.above("A2 s = 0.5: the same without the correction", an, 0.01);
@@ -331,7 +335,11 @@ fn a1_a2_c1_c2_c3_free_free_bar_inertia_relief() {
         }
         let direct = direct_plain(&ff, None, load.re(), omega);
         let c2 = rel_over_equations(&xw, &direct);
-        ch.at_most(&format!("C2 s = {s}: against the direct dense solve, every equation"), c2, 2e-3);
+        ch.at_most(
+            &format!("C2 s = {s}: against the direct dense solve, every equation"),
+            c2,
+            2e-3,
+        );
         if s == 0.5 {
             let res: Vec<f64> = xw.re.iter().zip(&xn.re).map(|(a, b)| a - b).collect();
             let mres = mv(&m, &res);
@@ -363,7 +371,11 @@ fn a3_c4_c8_spring_bar_on_the_transformation_path() {
         let omega = s * omega1;
         let direct = direct_transformation(&ks, None, &f, omega);
         let a3 = rel_over_equations(&with.response(&load, omega).unwrap(), &direct);
-        ch.at_most(&format!("A3 s = {s}: against the direct dense solve, every equation"), a3, 1e-3);
+        ch.at_most(
+            &format!("A3 s = {s}: against the direct dense solve, every equation"),
+            a3,
+            1e-3,
+        );
         if s == 0.5 {
             let n2 = rel_over_equations(&without.response(&load, omega).unwrap(), &direct);
             ch.above("N2 s = 0.5: the same without the correction", n2, 1e-3);
@@ -378,7 +390,11 @@ fn a3_c4_c8_spring_bar_on_the_transformation_path() {
         .iter()
         .zip(&sw)
         .all(|(&w, r)| bits(r) == bits(&with.response(&load, w).unwrap()));
-    ch.holds("C8 sweep against response", same, if same { "bit-equal" } else { "differs" });
+    ch.holds(
+        "C8 sweep against response",
+        same,
+        if same { "bit-equal" } else { "differs" },
+    );
     ch.finish();
 }
 
@@ -401,7 +417,11 @@ fn a4_prestressed_spring_bar_on_the_transformation_path() {
         let omega = s * omega1;
         let direct = direct_transformation(&ks, Some(&p), &f, omega);
         let a4 = rel_over_equations(&with.response(&load, omega).unwrap(), &direct);
-        ch.at_most(&format!("A4 s = {s}: pre-stressed, against the direct dense solve"), a4, 1e-3);
+        ch.at_most(
+            &format!("A4 s = {s}: pre-stressed, against the direct dense solve"),
+            a4,
+            1e-3,
+        );
         if s == 0.0 {
             let n3 = rel_over_equations(&elastic.response(&load, omega).unwrap(), &direct);
             ch.above("N3 s = 0: the correction with the elastic K", n3, 1e-3);
@@ -435,7 +455,11 @@ fn a5_c5_prestressed_cantilever_plain_path() {
         let direct = direct_plain(&cp, Some(&p), &f, omega);
         let x = with.response(&load, omega).unwrap();
         let a5 = rel_over_equations(&x, &direct);
-        ch.at_most(&format!("A5 s = {s}: pre-stressed, against the direct dense solve"), a5, 1e-3);
+        ch.at_most(
+            &format!("A5 s = {s}: pre-stressed, against the direct dense solve"),
+            a5,
+            1e-3,
+        );
         if s == 0.0 {
             ch.at_most("C5 omega = 0 against the dense (K + K_sigma)^-1 F", a5, 1e-8);
             let n4 = rel_over_equations(&elastic.response(&load, omega).unwrap(), &direct);
@@ -486,7 +510,11 @@ fn c7_zero_prestress_bit_identical() {
     let a = HarmonicSolver::new(&b40, basis.clone(), &HarmonicOptions::default()).unwrap();
     let b = HarmonicSolver::new(&b40, basis, &HarmonicOptions::default().prestress(zero)).unwrap();
     let same = bits(&a.response(&load, omega).unwrap()) == bits(&b.response(&load, omega).unwrap());
-    ch.holds("C7 zero pre-stress against none", same, if same { "bit-equal" } else { "differs" });
+    ch.holds(
+        "C7 zero pre-stress against none",
+        same,
+        if same { "bit-equal" } else { "differs" },
+    );
     ch.finish();
 }
 
@@ -505,10 +533,7 @@ fn c9_refusals() {
         ff_basis.dofs().clone(),
     )
     .unwrap();
-    let (ok, d) = refused_with(
-        HarmonicSolver::new(&ff, elastic_only, &HarmonicOptions::default()),
-        key,
-    );
+    let (ok, d) = refused_with(HarmonicSolver::new(&ff, elastic_only, &HarmonicOptions::default()), key);
     ch.holds("C9 FF without its rigid mode", ok, &d);
     let p = Prestress::uniform(&ff, [1e6, 0.0, 0.0, 0.0, 0.0, 0.0]).unwrap();
     let (ok, d) = refused_with(
@@ -519,7 +544,10 @@ fn c9_refusals() {
     let tip_nodes = ff.mesh().node_set("xmax").unwrap().to_vec();
     let mut tied = ff.clone();
     tied.add_constraint(Constraint::linear(
-        vec![LinearTerm::new(tip_nodes[0], 0, 1.0), LinearTerm::new(tip_nodes[1], 0, -1.0)],
+        vec![
+            LinearTerm::new(tip_nodes[0], 0, 1.0),
+            LinearTerm::new(tip_nodes[1], 0, -1.0),
+        ],
         0.0,
     ))
     .unwrap();
@@ -534,22 +562,19 @@ fn c9_refusals() {
     let mut eig = ks_basis.eigenvalues().to_vec();
     eig[0] = -1.0;
     let negative = ModalBasis::new(eig, ks_basis.modes().to_vec(), ks_basis.dofs().clone()).unwrap();
-    let (ok, d) = refused_with(
-        HarmonicSolver::new(&ks, negative, &HarmonicOptions::default()),
-        key,
-    );
+    let (ok, d) = refused_with(HarmonicSolver::new(&ks, negative, &HarmonicOptions::default()), key);
     ch.holds("C9 KS with an eigenvalue -1", ok, &d);
     let mut valued = ks.clone();
     valued
         .add_constraint(Constraint::linear(
-            vec![LinearTerm::new(tip_nodes[0], 0, 1.0), LinearTerm::new(tip_nodes[1], 0, -1.0)],
+            vec![
+                LinearTerm::new(tip_nodes[0], 0, 1.0),
+                LinearTerm::new(tip_nodes[1], 0, -1.0),
+            ],
             1e-3,
         ))
         .unwrap();
-    let (ok, d) = refused_with(
-        HarmonicSolver::new(&valued, ks_basis, &HarmonicOptions::default()),
-        key,
-    );
+    let (ok, d) = refused_with(HarmonicSolver::new(&valued, ks_basis, &HarmonicOptions::default()), key);
     ch.holds("C9 KS with a non-zero Linear value", ok, &d);
     ch.finish();
 }

@@ -635,7 +635,14 @@ impl HarmonicSolver {
                         (full, None)
                     }
                 };
-                for (r, ((phi, &l), &q)) in self.basis.modes.iter().zip(&self.basis.eigenvalues).zip(modal).enumerate() {
+                for (r, ((phi, &l), &q)) in self
+                    .basis
+                    .modes
+                    .iter()
+                    .zip(&self.basis.eigenvalues)
+                    .zip(modal)
+                    .enumerate()
+                {
                     if elastic.is_some_and(|el| !el[r]) {
                         continue;
                     }
@@ -900,7 +907,10 @@ fn relief_correction(
             }
         }
         if best == usize::MAX {
-            return Err(invalid(key, "no statically determinate support of the rigid motions".to_string()));
+            return Err(invalid(
+                key,
+                "no statically determinate support of the rigid motions".to_string(),
+            ));
         }
         let u: Vec<f64> = w[best].iter().map(|x| x / best_norm).collect();
         for wi in w.iter_mut() {
@@ -937,7 +947,11 @@ fn transformation_correction(
     let key = "static correction";
     model.validate()?;
     model.check_supported()?;
-    if let Some(i) = model.constraints().iter().position(|c| matches!(c, Constraint::Cyclic { .. })) {
+    if let Some(i) = model
+        .constraints()
+        .iter()
+        .position(|c| matches!(c, Constraint::Cyclic { .. }))
+    {
         return Err(invalid(
             key,
             format!("constraint {i} (Cyclic): the static correction does not take cyclic constraints (ADR 0400)"),
@@ -974,7 +988,10 @@ fn transformation_correction(
     };
     let (kr, _) = tr.reduce(&k, &vec![0.0; tr.n_unknowns()])?;
     let ldlt = factor_named(&kr, |row| {
-        format!("reduced unknown {row} ({})", crate::mpc::unknown_name(&tr, model, tr.independent()[row]))
+        format!(
+            "reduced unknown {row} ({})",
+            crate::mpc::unknown_name(&tr, model, tr.independent()[row])
+        )
     })?;
     Ok(StaticCorrection::Transformation { ldlt, tr })
 }
