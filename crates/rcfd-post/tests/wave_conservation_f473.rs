@@ -104,10 +104,10 @@ fn o1_o4_one_open_patch_changes_the_pressure_integral() {
     for (id, name) in [("O1", "inlet"), ("O2", "outlet"), ("O3", "wall")] {
         let (d, e) = run(one_open(name), field);
         println!("{id}: {name} open: change of sum p V {d:.3e}, relative {e:.3e}");
-        if !(e > 1e-3) {
+        if e.partial_cmp(&1e-3) != Some(std::cmp::Ordering::Greater) {
             bad.push(format!("{id} change"));
         }
-        if !(d < 0.0) {
+        if d.partial_cmp(&0.0) != Some(std::cmp::Ordering::Less) {
             bad.push(format!("O4 sign {name}"));
         }
     }
