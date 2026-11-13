@@ -10,8 +10,13 @@
 //!
 //! The sampled pressure is taken to be the entering wave only; one section of pressure cannot separate a returning wave.
 //! A series that does not cover a whole number of periods is refused (the DFT would leak the mean and the harmonics).
+//!
+//! Returning waves (F-478, ADR 0378): [`SurfaceDrive::from_sections`] takes two or more sampled sections of one duct, splits
+//! every mode of every harmonic into the wave entering the domain and the one returning from it (`split_axial` with the
+//! closed-form `kz`) and plays back the entering wave only; [`SurfaceDrive::entering_residual`] measures, against a second
+//! sampled section, how far a single-section drive's entering-wave assumption is from the sampled field.
 
-use crate::duct_modes::{axial_wavenumber, decompose_section, DuctShape, HarmonicDft, ModeBasis, C64};
+use crate::duct_modes::{axial_wavenumber, decompose_section, split_axial, DuctShape, HarmonicDft, ModeBasis, C64};
 use crate::surface_series::{Motion, SeriesSpec};
 use rcfd_core::{Error, Result};
 use rcfd_fv::acoustic_wave::{GhostState, Medium};
@@ -116,6 +121,8 @@ pub struct SurfaceDrive {
     basis: ModeBasis,
     medium: Medium,
     ramp_time: f64,
+    /// The options it was built with (for [`SurfaceDrive::entering_residual`]).
+    opts: DriveOptions,
     /// Axial coordinate of the sampling plane (area-weighted mean of the faces).
     pub section_xi: f64,
     /// Number of periods of the fundamental covered by the series.
@@ -213,9 +220,16 @@ impl SurfaceDrive {
             }
             let xi = frame.axial(f.x);
             if (xi - xi_s).abs() > tol {
+                // Name the face farthest from the plane (ADR 0378 D6), found once a face off it is known.
+                let (far, off) = spec
+                    .faces
+                    .iter()
+                    .map(|g| frame.axial(g.x) - xi_s)
+                    .enumerate()
+                    .fold((k, xi - xi_s), |b, (j, o)| if o.abs() > b.1.abs() { (j, o) } else { b });
                 return invalid(
-                    &format!("$.faces[{k}].x"),
-                    format!("the face lies {} m off the section plane", xi - xi_s),
+                    &format!("$.faces[{far}].x"),
+                    format!("the face lies {off} m off the section plane"),
                 );
             }
             let s = frame.section(f.x);
@@ -289,6 +303,7 @@ impl SurfaceDrive {
             basis,
             medium,
             ramp_time: opts.ramp_time,
+            opts,
             section_xi: xi_s,
             periods,
             mean,
@@ -357,5 +372,168 @@ impl SurfaceDrive {
             let (p, u) = me.synth(entry.0, &entry.1, t);
             (w * p, [w * u[0], w * u[1], w * u[2]])
         })
+    }
+}
+
+/// The smallest separation `sigma` of the two-wave split accepted by [`SurfaceDrive::from_sections`] (ADR 0378 D3).
+pub const MIN_SEPARATION: f64 = 0.05;
+
+/// A drive built from two or more sampled sections with the returning wave split off (ADR 0378 D2, D5).
+#[derive(Debug, Clone)]
+pub struct SplitDrive {
+    /// The drive of the entering wave only, referenced at the plane of the first section.
+    pub drive: SurfaceDrive,
+    /// Axial coordinate of each section's plane.
+    pub sections_xi: Vec<f64>,
+    /// Per harmonic and mode: amplitude of the returning wave at the first section's plane.
+    pub returning: Vec<Vec<C64>>,
+    /// Per harmonic and mode: separation `sigma` of the split (1: well separated, 0: singular).
+    pub separation: Vec<Vec<f64>>,
+    /// Smallest separation over the harmonics and modes.
+    pub min_separation: f64,
+    /// Per harmonic: `sqrt(sum |returning|^2 / sum |entering|^2)` at the first section's plane (0 for no entering wave).
+    pub reflection: Vec<f64>,
+    /// Per harmonic: RMS residual of the two-wave fits relative to the RMS of the sampled modal amplitudes (zero up to
+    /// round-off for two sections).
+    pub split_residual: Vec<f64>,
+}
+
+fn locate(prefix: &str, e: Error) -> Error {
+    match e {
+        Error::InvalidValue { path, reason } => Error::InvalidValue {
+            path: format!("{prefix}/{path}"),
+            reason,
+        },
+        other => other,
+    }
+}
+
+impl SurfaceDrive {
+    /// Build the drive of the entering wave from two or more sampled sections of one duct (ADR 0378 D2, D3). Each
+    /// section is read by [`SurfaceDrive::from_series`] (its refusals located as `sections[i]/...`); per harmonic and mode
+    /// the waves towards and against the axis are split over the sections' planes with the closed-form `kz`, referenced
+    /// at the first section's plane; the split is refused when its separation is below [`MIN_SEPARATION`].
+    pub fn from_sections(
+        specs: &[SeriesSpec],
+        medium: Medium,
+        frame: DuctFrame,
+        basis: ModeBasis,
+        opts: DriveOptions,
+    ) -> Result<SplitDrive> {
+        if specs.len() < 2 {
+            return invalid(
+                "sections",
+                format!("the split needs at least two sections, got {}", specs.len()),
+            );
+        }
+        let mut drives = Vec::with_capacity(specs.len());
+        for (i, spec) in specs.iter().enumerate() {
+            let d = Self::from_series(spec, medium, frame, basis.clone(), opts)
+                .map_err(|e| locate(&format!("sections[{i}]"), e))?;
+            drives.push(d);
+        }
+        let xis: Vec<f64> = drives.iter().map(|d| d.section_xi).collect();
+        let x0 = xis[0];
+        let nm = basis.len();
+        let mut drive = drives[0].clone();
+        let mut returning = Vec::new();
+        let mut separation = Vec::new();
+        let mut reflection = Vec::new();
+        let mut split_residual = Vec::new();
+        let mut min_separation = f64::INFINITY;
+        for (hi, hm) in drive.harmonics.iter_mut().enumerate() {
+            let mut plus = Vec::with_capacity(nm);
+            let mut minus = Vec::with_capacity(nm);
+            let mut seps = Vec::with_capacity(nm);
+            let (mut num, mut den) = (0.0, 0.0);
+            for q in 0..nm {
+                let kz = hm.kz[q];
+                let (mut guu, mut gvv, mut c) = (0.0, 0.0, C64::default());
+                for &xi in &xis {
+                    let u = (C64::new(0.0, -1.0) * kz).scale(xi - x0).exp();
+                    let v = (C64::new(0.0, 1.0) * kz).scale(xi - x0).exp();
+                    guu += u.norm_sqr();
+                    gvv += v.norm_sqr();
+                    c += u.conj() * v;
+                }
+                let g = c.abs() / (guu * gvv).sqrt();
+                let sigma = (1.0 - g * g).max(0.0).sqrt();
+                let md = basis.modes[q];
+                if sigma.is_nan() || sigma < MIN_SEPARATION {
+                    return invalid(
+                        "sections",
+                        format!(
+                            "harmonic {} mode ({}, {}): the sections at {xis:?} separate the two waves by {sigma:.3e}, \
+                             below {MIN_SEPARATION}",
+                            hm.harmonic, md.m, md.n
+                        ),
+                    );
+                }
+                let amps: Vec<C64> = drives.iter().map(|d| d.harmonics[hi].amplitudes[q]).collect();
+                let fit = split_axial(&xis, &amps, kz, x0)?;
+                if ![fit.plus.re, fit.plus.im, fit.minus.re, fit.minus.im]
+                    .iter()
+                    .all(|v| v.is_finite())
+                {
+                    return invalid(
+                        "sections",
+                        format!(
+                            "harmonic {} mode ({}, {}): the split is not finite (the sections are too far apart for a \
+                             cut-off mode)",
+                            hm.harmonic, md.m, md.n
+                        ),
+                    );
+                }
+                num += fit.residual * fit.residual * xis.len() as f64;
+                den += amps.iter().map(|a| a.norm_sqr()).sum::<f64>();
+                min_separation = min_separation.min(sigma);
+                plus.push(fit.plus);
+                minus.push(fit.minus);
+                seps.push(sigma);
+            }
+            let ep: f64 = plus.iter().map(|a| a.norm_sqr()).sum();
+            let em: f64 = minus.iter().map(|a| a.norm_sqr()).sum();
+            reflection.push(if ep > 0.0 { (em / ep).sqrt() } else { 0.0 });
+            split_residual.push(if den > 0.0 { (num / den).sqrt() } else { 0.0 });
+            hm.amplitudes = plus;
+            returning.push(minus);
+            separation.push(seps);
+        }
+        Ok(SplitDrive {
+            drive,
+            sections_xi: xis,
+            returning,
+            separation,
+            min_separation,
+            reflection,
+            split_residual,
+        })
+    }
+
+    /// The residual of the entering-wave assumption of this drive against a second sampled section `check` (ADR 0378
+    /// D4): per harmonic, `sqrt(sum_q |a^c_q - a_q e^{-i kz_q (xi_c - xi_s)}|^2 / sum_q |a^c_q|^2)` (0 when the check
+    /// section has no content at that harmonic). Zero up to round-off when the sampled field is the entering wave only.
+    pub fn entering_residual(&self, check: &SeriesSpec) -> Result<Vec<f64>> {
+        let c = Self::from_series(check, self.medium, self.frame, self.basis.clone(), self.opts)
+            .map_err(|e| locate("check", e))?;
+        let d = c.section_xi - self.section_xi;
+        Ok(self
+            .harmonics
+            .iter()
+            .zip(&c.harmonics)
+            .map(|(hm, hc)| {
+                let (mut num, mut den) = (0.0, 0.0);
+                for (q, (a, ac)) in hm.amplitudes.iter().zip(&hc.amplitudes).enumerate() {
+                    let e = (C64::new(0.0, -1.0) * hm.kz[q]).scale(d).exp();
+                    num += (*ac - *a * e).norm_sqr();
+                    den += ac.norm_sqr();
+                }
+                if den > 0.0 {
+                    (num / den).sqrt()
+                } else {
+                    0.0
+                }
+            })
+            .collect())
     }
 }
