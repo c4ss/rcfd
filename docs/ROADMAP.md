@@ -7429,7 +7429,9 @@ fixed by the item's registration ADR before any code.
     cantilevers against 58 to 132 for IC(1)); a case-file key for the iterative route should be able to select it. ADR
     0370 (2026-11-13): for meshes of quadratic elements an iterative key should be able to select
     CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic()) (Tet10 slenderness 20: 31 iterations against
-    79 with the default settings).
+    79 with the default settings). ADR 0375 (2026-11-13): a quadratic-mesh key could also offer
+    CgPreconditioner::SmoothedAggregation(ElasticAmgSettings::quadratic_smoothed()) (Tet10 slenderness 20: 23
+    iterations, 3.56 s, against 31 iterations, 2.84 s with quadratic()).
 - [ ] **F-387** Demonstration on a fan blade: static response to centrifugal and pressure load, and the modes at rest; user page
   - depends on: F-371, F-375, F-376, F-383, F-386, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. One blade of the parametric fan
@@ -8796,7 +8798,10 @@ fixed by the item's registration ADR before any code.
     rule reproduces the default aggregates bit for bit. Defaults unchanged bit for bit (hashes against main, ADR 0305
     counts 15 and 2220 measured again, baseline hashes pass). Partial by Rule I: the iteration limit missed by one, and
     one of seven mutations (pass 2 over all neighbours) equivalent on these meshes and not caught. Follow-up: the
-    smoother on quadratic elements. Partial by the registered rule; done is the maintainer's call.
+    smoother on quadratic elements. Partial by the registered rule; done is the maintainer's call. ADR 0375 (2026-11-13,
+    F-477): with ElasticAmgSettings::quadratic_smoothed() (two block Gauss-Seidel sweeps per side) the slenderness-20
+    Tet10 cantilever reaches 1e-8 in 23 iterations, and the mutation M5 left uncaught here is caught on graded Tet10
+    boxes.
 - [~] **F-471** Scalar AMG coarsest dense LU: row interchanges applied before the forward substitution
   - acceptance: Every limit not stated here is registered in the ADR before the run. A test shows whether the coarsest
     dense LU of rcfd_linalg::amg (DenseLu) interchanges rows on each fluid case of the baseline set and records where;
@@ -8896,7 +8901,7 @@ fixed by the item's registration ADR before any code.
     sf2_every_shipped_case_writes_a_readable_store runs it without the 2026-11-13 skip (11 of 11; its count assertion 10
     -> 11, ADR 0373 Q1); the store bytes of the ten other shipped cases equal main's (20 hashes), the existing store
     tests and baseline_hashes pass unedited; four mutations each failed their tests.
-- [ ] **F-477** Elasticity multigrid on quadratic tetrahedra: a smoother that brings Tet10 within twice the Hex8 count
+- [x] **F-477** Elasticity multigrid on quadratic tetrahedra: a smoother that brings Tet10 within twice the Hex8 count
   - depends on: F-470
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the geometric aggregation of
     ADR 0370 (ElasticAmgSettings::quadratic()), a registered opt-in smoother setting for quadratic elements (more block
@@ -8906,7 +8911,18 @@ fixed by the item's registration ADR before any code.
     Tet10 box where pass 2's restriction to the candidates changes the aggregates (ADR 0370 mutation M5); every count
     and bit of ADR 0305 and ADR 0370 with their settings unchanged.
   - note: From ADR 0370 questions 1 and 2 (with a graded or anisotropic Tet10 mesh on which mutation M5 changes the
-    aggregates), recommendation taken on the maintainer's standing instruction of 2026-11-11.
+    aggregates), recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR 0375, 2026-11-13:
+    rcfd_linalg::amg_elastic::ElasticAmgSettings::quadratic_smoothed() (opt-in; quadratic() with QUADRATIC_SWEEPS = 2
+    forward block Gauss-Seidel sweeps before and 2 backward after the coarse correction, so the cycle stays symmetric;
+    the count derived from ADR 0370's measured rate of 0.46 per iteration with a C/(C + nu) V-cycle model, estimate 22).
+    On the Tet10 cantilever of slenderness 20 (121 680 unknowns) CG with one V-cycle reaches 1e-8 in 23 iterations
+    (limit 30; quadratic() 31 in the same run), operator complexity 1.4762 (the setup is that of quadratic()), setup
+    0.86 s against 0.83 s, solve 3.56 s against 2.84 s (ADR 0370: 3.1 s): fewer iterations, more time. On two graded
+    Tet10 boxes (x-graded 1.25 per cell; graded 1.2, 1.3, 1.4 in x, y, z) restricting pass 2 to the candidates changes
+    16 and 46 aggregates, so ADR 0370's mutation M5 is now caught; on the uniform box it changes none. Library change:
+    14 lines inserted in amg_elastic.rs, nothing else; counts and bits of ADR 0305 and ADR 0370 unchanged (hashes
+    against main, ADR 0370 counts 27 and 31 measured again, baseline hashes pass). Six mutations, all caught. Done by
+    the registered rule; acceptance is the maintainer's call.
 - [x] **F-478** Wave-solver drive with returning waves at the sampled section
   - depends on: F-452
   - acceptance: A drive built from two sampled sections of a duct field that holds both directions reproduces the
