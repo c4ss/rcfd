@@ -703,3 +703,101 @@ fn l3_smaller_time_step_record() {
     }
     assert!(missed.is_empty(), "{missed:#?}");
 }
+
+/// One step series of G1 (ADR 0374 amendment 2): per completed step, the largest flux-face velocity, whether its face has an
+/// image, the largest `abs(u)` and the surface distance of its cell; and the stop.
+type Series = (Vec<(f64, bool, f64, f64)>, Option<usize>);
+
+fn g1_series(n_correctors: usize, steps: usize, dt: f64) -> Series {
+    let (geom, mut s) = r_solver(Forcing::B, n_correctors, false);
+    let cc = geom.mesh.cell_centres().to_vec();
+    let ib = s.immersed.clone().unwrap();
+    let mut out = Vec::new();
+    for n in 1..=steps {
+        s.step(dt);
+        if s.diverged.is_some() {
+            return (out, Some(n));
+        }
+        let (mut v, mut img) = (0.0f64, false);
+        for ff in &ib.flux_faces {
+            let x = (s.phi[ff.face] / ff.area).abs();
+            if x > v || x.is_nan() {
+                v = if x.is_nan() { f64::INFINITY } else { x };
+                img = ff.image.is_some();
+            }
+        }
+        let (mut a, mut cell) = (0.0f64, 0);
+        for (c, u) in s.u.values.iter().enumerate() {
+            let x = vec3::norm(*u);
+            if x > a || x.is_nan() {
+                a = if x.is_nan() { f64::INFINITY } else { x };
+                cell = c;
+            }
+        }
+        out.push((v, img, a, surface_distance(cc[cell])));
+    }
+    (out, None)
+}
+
+/// ADR 0374 amendment 2, G1 and G2: where the growth of the bounded form with one corrector starts, against two correctors,
+/// and the verdict at `dt = 5e-4`.
+#[test]
+#[ignore = "heavy record (ADR 0374 amendment 2, G1 and G2): run once in release"]
+fn g1_g2_where_the_growth_starts_record() {
+    let (mut one, mut two, mut half) = (None, None, None);
+    std::thread::scope(|sc| {
+        sc.spawn(|| one = Some(g1_series(1, 200, DT)));
+        sc.spawn(|| two = Some(g1_series(2, 34, DT)));
+        sc.spawn(|| half = Some(record(Forcing::B, 5e-4)));
+    });
+    let (one, two, half) = (one.unwrap(), two.unwrap(), half.unwrap());
+    let first = |s: &Series, i: usize| {
+        s.0.iter()
+            .position(|r| if i == 0 { r.0 > 3.0 } else { r.2 > 3.0 })
+            .map(|k| k + 1)
+    };
+    println!(
+        "G1 one corrector: stop {:?}; (v_n, image, a_n, surface distance of its cell) per step:",
+        one.1
+    );
+    for (k, r) in one.0.iter().enumerate() {
+        let g = if k > 0 { r.0 / one.0[k - 1].0 } else { f64::NAN };
+        println!(
+            "G1 1 step {}: v {:.4e} image {} a {:.4e} dist {:.5} growth of v {:.3}",
+            k + 1,
+            r.0,
+            r.1,
+            r.2,
+            r.3,
+            g
+        );
+    }
+    for (k, r) in two.0.iter().enumerate() {
+        println!(
+            "G1 2 step {}: v {:.4e} image {} a {:.4e} dist {:.5}",
+            k + 1,
+            r.0,
+            r.1,
+            r.2,
+            r.3
+        );
+    }
+    let (fv, fa) = (first(&one, 0), first(&one, 2));
+    println!(
+        "G1: one corrector: first step v > 3 {fv:?}, first step a > 3 {fa:?}; two correctors: stop {:?}",
+        two.1
+    );
+    println!(
+        "G2: B dt 5e-4 one corrector: stop {:?} ({}), max |u| {:.4e}, rho_1 with at step 2 {:.5}",
+        half.stop, half.reason, half.max_all, half.at2[0].0
+    );
+    let mut missed = Vec::new();
+    match (fv, fa) {
+        (Some(v), Some(a)) if v <= a => {}
+        _ => missed.push(format!("G1: first v > 3 at {fv:?}, first a > 3 at {fa:?}")),
+    }
+    if two.1.is_some() || two.0.len() != 34 || !two.0.iter().all(|r| r.0 <= 3.0) {
+        missed.push(format!("G1: two correctors: stop {:?}, steps {}", two.1, two.0.len()));
+    }
+    assert!(missed.is_empty(), "{missed:#?}");
+}

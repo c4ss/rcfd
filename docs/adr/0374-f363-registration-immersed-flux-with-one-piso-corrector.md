@@ -267,3 +267,28 @@ Printed in addition (no limit): for the plain map of F at step 2 with 40 iterati
 distance to the surface, and the largest mode entry over the fluid cells against that over the solid cells.
 
 Library code: unchanged by this amendment (D1 to D3 as registered).
+
+## Amendment 2 (2026-11-12): after R0, L1 to L3, a measurement of where the growth starts
+
+Written after the single runs of the records R0 to L2 and L3 (`f363-scratch/rec_r0_l1_l2.log`, `rec_l3.log`) and of the fast
+checks, before the run registered here. No limit above is changed; the library is not changed. The results of those runs are
+in the addendum; what bears on this amendment: R0 reproduced every step of ADR 0254 (126, 46, 34; F and Sa run); the lag map,
+with or without the reconstruction, gives `rho_1` between 1.13 and 1.20 at step 2 and between 0.998 and 1.010 at step 11 for
+all five forcings, including the two that run (L1 (b), L1n and L1' (a) missed), and `rho_2 < 0.1` for all five (L1 (c) held);
+the mode of B sits at a first fluid cell with two image faces (L2 held); at `dt = 2.5e-4` the bounded form with one corrector
+runs 200 steps (L3 held). The frozen lag map therefore does not separate the settings that stop from those that run, and the
+growth per step before the stops (8.6, 7.4, 11.7 for Sb, B1, B) is far above any `rho_1` measured. HL in the form of the lag
+map is not supported; the step dependence (L3) stands.
+
+**G1 (registered now).** B with one corrector, check off, the set-up R, until its stop; and B with two correctors, the same
+set-up, 34 steps. After every completed step `n`: `v_n`, the largest `abs(phi_f)/abs(S_f)` over the flux faces, and whether
+that face has an image; `a_n`, the largest `abs(u)` over all cells, and the distance of its cell centre to the surface. **The
+growth starts at the reconstructed faces** if, with one corrector, the first step with `v_n > 3` (twice the inflow maximum) is
+no later than the first step with `a_n > 3`, and both exist; and, with two correctors, `v_n <= 3` at each of the 34 steps.
+Printed: both series, the first steps, the growth of `v_n` per step.
+
+**G2 (printed, no limit).** B with one corrector at `dt = 5e-4`, check off, at most 200 steps: the verdict, to bracket the step
+between L3 (runs at 2.5e-4) and R0 (stops at 1e-3).
+
+G1 and G2 enter the addendum as a located description only: the decision is already **partial** by Rule I (L1 (b), L1n and
+L1' missed), whatever they give.
