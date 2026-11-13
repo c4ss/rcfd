@@ -269,3 +269,19 @@ untouched), and a copy `r6_non_zero_value_refused_at_k_2_after_landed` keeps the
    names "reference rotation" and "RigidSet"). The relative pivot test stays in the code (as in `mpc::solve_static_mpc`) and
    is listed under the limits as not exercised by a check of this package.
 2. `StaticOptions::default()` (the Direct solver) is the option of every static solve of the checks, sector and full.
+
+## Amendment 2 (2026-11-13, after the registered run of `si_cyclic_harmonic`, before any corrected run)
+
+1. **H3 was a defective set-up.** Its load (no reference loads) has the exact solution zero at `k = 0` and `k = 6`: the shroud
+   sets of the full model form a closed chain of rigid segments hinged on the lines of the shared nodes; at `k = 0` the chain
+   admits only the rotation about the axis and the axial translation (98 = 126 - 30 + 2 sector unknowns, as the run printed),
+   neither of which the radial pressure loads, and the interior of the disc is unloaded (the traction is in the sine part);
+   at `k = 6` likewise (97 = 126 - 30 + 1). The run measured `max |u_full| = 1.35e-20` m (k = 0) and `2.64e-21` m (k = 6):
+   rounding, with `e_u` a ratio of two rounding residues (0.644, 0.917). For `k = 1 .. 5` H3 measured `e_u <= 3.04e-13`,
+   `e_t <= 3.01e-13`, `e_w <= 2.27e-13`. The test `h3_harmonic_load_disc_with_shroud_rigid_set` stays as an ignored record.
+   **Corrected H3b**: DSH with the reference loads of DR (D4: the cosine part at every `k`, the sine part for `k = 1 .. 5`),
+   otherwise as H3; set-up guard: `max |u_full| >= 1e-12` m at every `k` (else again defective, a further amendment). Limits
+   unchanged (`e_u`, `e_t`, `e_w` each `<= 1e-8`).
+2. The two nodal forces of the cosine part sit on the first nodes of `ymin` and `ymax`; whether these lie on the clamped inner
+   face is printed by H3b and reported in the addendum. If they do, they go into reactions in both models and the summation
+   at shared nodes is checked by the pressure on `xmax` (its faces include low and high nodes) in H1 and H2, and by H4.
