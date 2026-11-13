@@ -4793,9 +4793,9 @@
     "deps": [
       "F-396"
     ],
-    "status": "todo",
+    "status": "done",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. The gyroscopic matrix G = 2 Omega int rho N_a N_b [a x] is skew to rounding; the quadratic eigenproblem (K_eff - omega^2 M + i omega G) phi = 0 is solved by a symmetric linearisation; at Omega = 0 the frequencies are those of F-396; a point mass on an isotropic in-plane spring pair gives the closed-form whirl frequencies within 1e-8; the tracked forward and backward branches enter the Campbell table of F-396 with their direction.",
-    "note": "From ADR 0403 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S. ADR 0407 (2026-11-13): on a cyclic sector the gyroscopic matrix couples the cos and sin parts of a harmonic pair; the item should solve it on the sector as well as on the whole part."
+    "note": "From ADR 0403 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S. ADR 0411, 2026-11-13: the Coriolis matrix G = 2 Omega C (C skew bit for bit), whirl modes of (K_eff - omega^2 M + i omega G) phi = 0 by Meirovitch's symmetric linearisation (state form with M* = blockdiag(M, K_eff), skew G*) solved by a dense skew Householder reduction and the QL algorithm (cap 1500 reduced unknowns), the whirl number kappa = Im(phi^H C phi)/phi^H M phi giving forward and backward whirl, the Campbell table of F-396 with directions and crossings linear in Omega; point mass and cube on springs within 3.2e-13 of omega_0 -/+ Omega with kappa = +/-1; on a cyclic sector G enters index k as T_k^T blockdiag(G_s, G_s) T_k (the cos/sin coupling comes through the rows of T_k; ADR 0407 D1's remark superseded), the sector equals the full rotor's 252 whirl frequencies within 3e-13; speeds above the loss of stiffness of K_eff stay reported as a loss."
   },
   {
     "id": "F-500",
@@ -4854,5 +4854,35 @@
     "status": "todo",
     "acceptance": "Every limit not stated here is registered in the ADR before the run. An opt-in variant of the projection of F-362 evaluates the bilinear shape functions on quadrilateral structural elements (the nearest point on the bilinear patch); the default projection keeps its weights bit for bit (the F-362, F-400 and F-502 tests pass unedited). On the 3:2 walls of F-502 its weights are invariant under the eight symmetries of the square within 1e-13 and equal the test-side bilinear evaluation of ADR 0412 within 1e-13; rigid translation and rotation are reproduced and resultant, moment and work conserved within 1e-12 on a planar and on a cylindrical wall; the coupled frequency change of F-502 equals its static-compliance prediction within 10 percent for faces of 2 x 2, 4 x 4 and 8 x 8 elements.",
     "note": "From ADR 0412 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S."
+  },
+  {
+    "id": "F-505",
+    "title": "Whirl modes above the loss of stiffness: gyroscopic stabilisation",
+    "phase": 9,
+    "deps": [
+      "F-499"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. At a speed where K_eff is not positive definite the whirl problem is solved by a non-symmetric eigensolver of the state matrix written from first principles; each speed is flagged stable (all frequencies real within a registered tolerance) or unstable with the growth rate; the point mass on isotropic springs gives Omega - omega_0 and Omega + omega_0 above omega_0 within 1e-8 and is flagged stable; an anisotropic spring pair gives the closed-form unstable band between the two spring frequencies."
+  },
+  {
+    "id": "F-506",
+    "title": "Sparse whirl solver for large rotating parts",
+    "phase": 9,
+    "deps": [
+      "F-499"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The lowest whirl modes of (K_eff - omega^2 M + i omega G) phi = 0 by a shift-invert Lanczos on the Hermitian form of ADR 0411 with sparse factors of K_eff and M, without the dense cap; on the cube and the disc sector of ADR 0411 the frequencies equal the dense solver's within 1e-9 relative and the whirl numbers within 1e-8; a part of at least 20 000 reduced unknowns is solved in under two minutes in release."
+  },
+  {
+    "id": "F-507",
+    "title": "Stationary-frame frequencies of a cyclic whirl table",
+    "phase": 9,
+    "deps": [
+      "F-499"
+    ],
+    "status": "todo",
+    "acceptance": "Every limit not stated here is registered in the ADR before the run. The cyclic whirl Campbell table carries for each mode of index k the stationary-frame frequency omega + tau k Omega (tau the wave sense); on the disc sector of ADR 0411 the stationary frequencies of a travelling pair agree with those of the full rotor's modes transformed to the stationary frame within 1e-8 relative."
   }
 ]

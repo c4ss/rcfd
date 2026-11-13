@@ -9587,7 +9587,7 @@ fixed by the item's registration ADR before any code.
     stiffening off gives ratio 1 within 1.9e-9, with it the slope equals Q_n,h - 1 within 3.1e-5 and Q_n,h equals k_n^2
     L^2/3 + 1/4 within 1.1e-3 (limits 1e-3, 1e-3, 1e-2); four planned mutations of rotating.rs caught, four controls as
     expected. Limits: one speed, nu = 0, one section.
-- [ ] **F-499** Coriolis coupling of a rotating part: gyroscopic matrix, whirl modes and the Campbell table
+- [x] **F-499** Coriolis coupling of a rotating part: gyroscopic matrix, whirl modes and the Campbell table
   - depends on: F-396
   - acceptance: Every limit not stated here is registered in the ADR before the run. The gyroscopic matrix G = 2 Omega
     int rho N_a N_b [a x] is skew to rounding; the quadratic eigenproblem (K_eff - omega^2 M + i omega G) phi = 0 is
@@ -9595,8 +9595,14 @@ fixed by the item's registration ADR before any code.
     in-plane spring pair gives the closed-form whirl frequencies within 1e-8; the tracked forward and backward branches
     enter the Campbell table of F-396 with their direction.
   - note: From ADR 0403 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
-    ADR 0407 (2026-11-13): on a cyclic sector the gyroscopic matrix couples the cos and sin parts of a harmonic pair;
-    the item should solve it on the sector as well as on the whole part.
+    ADR 0411, 2026-11-13: the Coriolis matrix G = 2 Omega C (C skew bit for bit), whirl modes of (K_eff - omega^2 M + i
+    omega G) phi = 0 by Meirovitch's symmetric linearisation (state form with M* = blockdiag(M, K_eff), skew G*) solved
+    by a dense skew Householder reduction and the QL algorithm (cap 1500 reduced unknowns), the whirl number kappa =
+    Im(phi^H C phi)/phi^H M phi giving forward and backward whirl, the Campbell table of F-396 with directions and
+    crossings linear in Omega; point mass and cube on springs within 3.2e-13 of omega_0 -/+ Omega with kappa = +/-1; on
+    a cyclic sector G enters index k as T_k^T blockdiag(G_s, G_s) T_k (the cos/sin coupling comes through the rows of
+    T_k; ADR 0407 D1's remark superseded), the sector equals the full rotor's 252 whirl frequencies within 3e-13; speeds
+    above the loss of stiffness of K_eff stay reported as a loss.
 - [~] **F-500** Rotating modes of a cyclic sector at a harmonic index
   - depends on: F-396, F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_eff(Omega) of F-396 on the cyclic
@@ -9669,3 +9675,24 @@ fixed by the item's registration ADR before any code.
     change of F-502 equals its static-compliance prediction within 10 percent for faces of 2 x 2, 4 x 4 and 8 x 8
     elements.
   - note: From ADR 0412 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-505** Whirl modes above the loss of stiffness: gyroscopic stabilisation
+  - depends on: F-499
+  - acceptance: Every limit not stated here is registered in the ADR before the run. At a speed where K_eff is not
+    positive definite the whirl problem is solved by a non-symmetric eigensolver of the state matrix written from first
+    principles; each speed is flagged stable (all frequencies real within a registered tolerance) or unstable with the
+    growth rate; the point mass on isotropic springs gives Omega - omega_0 and Omega + omega_0 above omega_0 within 1e-8
+    and is flagged stable; an anisotropic spring pair gives the closed-form unstable band between the two spring
+    frequencies.
+- [ ] **F-506** Sparse whirl solver for large rotating parts
+  - depends on: F-499
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest whirl modes of (K_eff -
+    omega^2 M + i omega G) phi = 0 by a shift-invert Lanczos on the Hermitian form of ADR 0411 with sparse factors of
+    K_eff and M, without the dense cap; on the cube and the disc sector of ADR 0411 the frequencies equal the dense
+    solver's within 1e-9 relative and the whirl numbers within 1e-8; a part of at least 20 000 reduced unknowns is
+    solved in under two minutes in release.
+- [ ] **F-507** Stationary-frame frequencies of a cyclic whirl table
+  - depends on: F-499
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The cyclic whirl Campbell table
+    carries for each mode of index k the stationary-frame frequency omega + tau k Omega (tau the wave sense); on the
+    disc sector of ADR 0411 the stationary frequencies of a travelling pair agree with those of the full rotor's modes
+    transformed to the stationary frame within 1e-8 relative.
