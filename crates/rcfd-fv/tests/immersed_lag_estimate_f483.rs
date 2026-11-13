@@ -853,3 +853,58 @@ fn h2_power_iterations_record() {
     println!("missed: {missed:#?}");
     assert!(missed.is_empty(), "{missed:#?}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The known misses (limits as registered; the numbers of the single runs of H and H2 in the ignore reasons)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/// F at the two instants of H with `f_estimates`.
+fn f_both() -> [FEst; 2] {
+    match run_f() {
+        Out::F(es) => es,
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+#[ignore = "known miss (ADR 0388 A1): solid share of the mode 0.52431 at step 2, 0.27519 at step 11, against >= 0.5 at both"]
+fn a1_solid_share_of_the_mode_known_miss() {
+    for e in f_both() {
+        assert!(ge(e.share, 0.5), "A1: solid share {}", e.share);
+    }
+}
+
+#[test]
+#[ignore = "known miss (ADR 0388 A2): rho of Z for F 1.19855 at step 2 (0.99826 at step 11), against < 1 at both"]
+fn a2_zero_start_known_miss() {
+    for e in f_both() {
+        assert!(lt(e.z.0, 1.0), "A2: Z {}", e.z.0);
+    }
+}
+
+#[test]
+#[ignore = "known miss (ADR 0388 A3): rho of T for F 1.19855 at step 2 (0.99826 at step 11), against < 1 at both"]
+fn a3_tight_tolerance_known_miss() {
+    for e in f_both() {
+        assert!(lt(e.t.0, 1.0), "A3: T {}", e.t.0);
+    }
+}
+
+#[test]
+#[ignore = "known miss (ADR 0388 B1): rho of FL for F 1.19921 at step 2, 1.00268 at step 11, against < 1 at both"]
+fn b1_fluid_estimate_of_the_run_below_one_known_miss() {
+    for e in f_both() {
+        assert!(lt(e.fl.0, 1.0), "B1: FL {}", e.fl.0);
+    }
+}
+
+#[test]
+#[ignore = "known miss (ADR 0388 amendment 1, I1 and I2): F with 320 iterations P 1.17464 and FL 1.17486 at step 2 (0.97725, \
+            0.97712 at step 11) against < 1 at both; B FL 1.24761 at step 2, 0.98804 at step 11 (max > 1 met)"]
+fn i1_i2_power_iterations_known_miss() {
+    let r = h2_run(Forcing::F);
+    for v in &r {
+        assert!(lt(find(v, "P 320"), 1.0), "I1: P 320 {}", find(v, "P 320"));
+        assert!(lt(find(v, "FL 320"), 1.0), "I2: FL 320 {}", find(v, "FL 320"));
+    }
+}
