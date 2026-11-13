@@ -377,3 +377,30 @@ buckling stress; the element rows are in another test) is added at the end of th
    tractions form a couple carried by the knife edges, about 0.15). BR31 is not run. The other checks are unchanged.
 2. **D6 wording.** The copy `c7_refusals_after_transformation_landed` keeps the **three** other rows of C7 (pre-stress of B on
    C, B without its pin, modes beyond the buckling stress); D6 said "four". No change of a check.
+
+## Amendment 2 (2026-11-13, after the registered run of commit e6b7972a, before the corrected run)
+
+The registered run (`f493-scratch/registered_run1.log`): 3 tests passed, 2 failed.
+
+1. **BR a defective set-up.** `a2_c1_c8_c10_c12_n2_n3_linear_knife_edges` stopped at the static solve of BR: "constraint 1
+   (Linear) closes a chain on node 41 component 1 through constraint 0 (Linear)". The second pin row was written `[(a, 1, c),
+   (a, 0, -s)]`; its designated dependent (the first term, `u_y`) appears in the expression of the first row's dependent `u_x`
+   (`u_x = -(s/c) u_y`), which the elimination of ADR 0296 refuses by design. The checks before it ran and are recorded (A2: 0,
+   0, 0; C8 BL 1.000000, 1.000000; C10 BL 0); C1, C10 for BR, N2 and N3 did not run. Correction: **BR2**, the same model with
+   the second pin row written `[(a, 0, -s), (a, 1, c)]` (designated `u_x`, already a dependent, so the row takes the largest
+   remaining coefficient, `u_y`, as ADR 0296 does); the roller rows are unchanged (`u_y` first, `u_x` independent, as D1 wants).
+   The test is kept as the ignored record `a2_c1_c8_c10_c12_n2_n3_linear_knife_edges_defective_setup` (it builds the old BR,
+   `Kind::Br`), and the corrected test `a2_c1_c8_c10_c12_n2_n3_linear_knife_edges_corrected` is the same body with `Kind::Br2`
+   (N2's model is built from BR2). It re-computes A2 deterministically; A2's registered values are those of the first run, and
+   the corrected run is expected to reproduce them bit for bit (reported). Limits unchanged.
+2. **C13 missed (not a set-up defect).** BM (the knife-edge beam without its roller rows, a mechanism on the transformation path)
+   returned a factor `1.8176e-8` instead of a refusal: the factorisation of `K_r` accepted a rounding-level positive pivot of the
+   free rotation (`PivotRule::Positive` refuses only `d_i <= (w + 1) eps (|a_ii| + sum)`), and the buckling eigensolver then
+   found the null direction as a factor. D2 step 3 relied on the factorisation; it does not refuse a numerically singular `K_r`
+   reliably. The library is not changed after the run. The test is kept as the ignored record
+   `c9_c13_zero_prestress_and_refusals_known_miss` (limit intact, measured value in its reason), and its met rows (C9, the two
+   non-zero-value refusals, the refusal beyond the buckling stress) stay active in `c9_c13_zero_prestress_and_refusals_met_rows`
+   (the same body without the BM row). The cause and the options are in the addendum.
+
+The two test bodies were moved into functions taking the variant (`linear_knife_edges(kind)`, `zero_prestress_and_refusals(
+with_mechanism)`), each record calling it with the arguments of the first run, so that the records keep their bodies.
