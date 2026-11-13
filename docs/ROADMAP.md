@@ -9698,7 +9698,7 @@ fixed by the item's registration ADR before any code.
     planar and cylindrical walls of F-362; the coupled frequency changes -2.17e-3, -8.18e-4, -2.82e-4 for 2 x 2, 4 x 4,
     8 x 8 faces equal the static-compliance prediction within 6.6e-4 of themselves (limit 10 percent). Six mutations
     caught. Open: ADR 0414 Q1 (case-file exposure, needs the schema golden), Q2.
-- [ ] **F-505** Whirl modes above the loss of stiffness: gyroscopic stabilisation
+- [~] **F-505** Whirl modes above the loss of stiffness: gyroscopic stabilisation
   - depends on: F-499
   - acceptance: Every limit not stated here is registered in the ADR before the run. At a speed where K_eff is not
     positive definite the whirl problem is solved by a non-symmetric eigensolver of the state matrix written from first
@@ -9706,6 +9706,19 @@ fixed by the item's registration ADR before any code.
     growth rate; the point mass on isotropic springs gives Omega - omega_0 and Omega + omega_0 above omega_0 within 1e-8
     and is flagged stable; an anisotropic spring pair gives the closed-form unstable band between the two spring
     frequencies.
+  - note: From ADR 0411 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0416, 2026-11-13: whirl modes at any speed by the state matrix A = [[0, c I], [-K^/c, -G^]] of the mass-scaled
+    gyroscopic problem, eigenvalues by Householder reduction to Hessenberg form and the Francis double-shift QR
+    algorithm, mode vectors by inverse iteration on Q(s) = s^2 M + s G + K_eff; each speed flagged stable when max|Re s|
+    <= 1e-8 max|s|, otherwise unstable with the growth rate max Re s (RotatingPart::whirl_state, whirl_stability with
+    CSV, gyroscopic_state_eigen_dense); whirl_modes still reports such speeds as a loss. Isotropic point mass above
+    omega_0: Omega - omega_0 and Omega + omega_0 within 3.3e-15 relative, both backward, flagged stable; cube on springs
+    gyroscopically stabilised (two negative eigenvalues of K_eff, pair within 1.9e-12); anisotropic pair unstable
+    exactly between the spring frequencies with the closed-form growth within 1.1e-14 of omega_0, band edges by
+    bisection within 2.2e-15, the same band on the cube within 2.4e-12. Partial by the rule: the registered odd-index
+    check on the cube rested on a wrong torsion estimate (the pre-stress cancels the spin softening on a rigid rotation
+    about the axis; amendment 1, met on a corrected set-up after the run), and one planned mutation (sign of G in the
+    state matrix) is equivalent by the symmetry of the spectrum.
 - [ ] **F-506** Sparse whirl solver for large rotating parts
   - depends on: F-499
   - acceptance: Every limit not stated here is registered in the ADR before the run. The lowest whirl modes of (K_eff -
@@ -9743,3 +9756,15 @@ fixed by the item's registration ADR before any code.
     case file accepts the bilinear projection as a map method; a case without it gives the same bytes as before
     (baseline and case hashes unchanged), the schema golden is updated only with the maintainer's approval, and a case
     naming it builds the same rows as MapSettings::bilinear_projection bit for bit.
+- [ ] **F-510** Odd-index instability of a rotating part on the model path
+  - depends on: F-505
+  - acceptance: Every limit not stated here is registered in the ADR before the run. A rotating part whose K_eff has an
+    odd number of negative eigenvalues (a cube on springs with a negative axial support, registered with its closed
+    form) is flagged unstable by RotatingPart::whirl_state with the closed-form growth rate within 1e-8 relative, and
+    the same part with an even number is flagged stable where the closed form says so.
+- [ ] **F-511** Whirl stability of a cyclic sector above the loss of stiffness
+  - depends on: F-505
+  - acceptance: Every limit not stated here is registered in the ADR before the run. RotatingSector solves each harmonic
+    index by the state matrix of ADR 0416 at speeds where its reduced K_eff is not positive definite, with the stability
+    flag and growth rate per index; on the disc sector of ADR 0411 the union of the sector's eigenvalues equals the full
+    rotor's within 1e-8 relative at a speed above the first loss of stiffness, and the flags agree.
