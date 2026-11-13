@@ -15,6 +15,11 @@
 //! frequency. [`RotatingPart::campbell`] solves a list of speeds, tracks the modes by the mass-weighted modal assurance (D4)
 //! and finds the crossings with the engine orders by interpolation linear in `Omega^2` ([`engine_order_crossings`]); the
 //! table is written as CSV and JSON.
+//!
+//! ADR 0411 (F-499): the Coriolis (gyroscopic) matrix `G = 2 Omega int rho N_a N_b [a x]` ([`coriolis_matrix`]) and the
+//! whirl modes of `(K_eff - omega^2 M + i omega G) phi = 0` by a symmetric linearisation ([`RotatingPart::whirl_modes`],
+//! [`RotatingSector::whirl_modes`]), forward and backward whirl, the Campbell table with directions. Opt-in by
+//! [`RotatingOptions::coriolis`]; nothing above reads it.
 
 use crate::assemble::{assemble_with, stiffness_with};
 use crate::constraint::{check_rigid_body_motions, prescribed_equations, reduce};
@@ -32,6 +37,13 @@ use rcfd_linalg::skyline::SkylineOrdering;
 use rcfd_linalg::CsrMatrix;
 use std::f64::consts::PI;
 use std::fmt::Write as _;
+
+mod whirl;
+pub use whirl::{
+    coriolis_matrix, gyroscopic_eigen_dense, whirl_order_crossings, CyclicWhirlCampbell, DenseWhirl,
+    HarmonicWhirlSpeedModes, Whirl, WhirlCampbell, WhirlMode, WhirlModes, WhirlSpeedModes, MAX_WHIRL_UNKNOWNS,
+    WHIRL_TOLERANCE,
+};
 
 fn unit_axis(axis: Vec3) -> Result<Vec3> {
     let len = norm(axis);
@@ -90,6 +102,9 @@ pub struct RotatingOptions {
     pub spin_softening: bool,
     /// The options of the static solve of the pre-stress at 1 rad/s.
     pub static_options: StaticOptions,
+    /// Whether the whirl analyses ([`RotatingPart::whirl_modes`] and the like) include the Coriolis matrix (default false;
+    /// ADR 0411). [`RotatingPart::modes`] and [`RotatingPart::campbell`] never include it.
+    pub coriolis: bool,
 }
 
 impl RotatingOptions {
@@ -100,6 +115,7 @@ impl RotatingOptions {
             stress_stiffening: true,
             spin_softening: true,
             static_options: StaticOptions::default(),
+            coriolis: false,
         }
     }
     /// The same options with other modal options.
@@ -115,6 +131,11 @@ impl RotatingOptions {
     /// The same options with the spin softening switched on or off.
     pub fn spin_softening(mut self, on: bool) -> RotatingOptions {
         self.spin_softening = on;
+        self
+    }
+    /// The same options with the Coriolis matrix of the whirl analyses switched on or off (ADR 0411).
+    pub fn coriolis(mut self, on: bool) -> RotatingOptions {
+        self.coriolis = on;
         self
     }
 }
@@ -171,6 +192,8 @@ pub struct RotatingPart<'a> {
     m: CsrMatrix,
     m_perp: CsrMatrix,
     path: Path,
+    /// The unit axis (ADR 0411).
+    axis: Vec3,
 }
 
 /// A copy of `model` whose only load is the centrifugal load at 1 rad/s.
@@ -240,6 +263,7 @@ impl<'a> RotatingPart<'a> {
             m,
             m_perp,
             path,
+            axis: unit_axis(axis)?,
         })
     }
 
