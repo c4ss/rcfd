@@ -192,3 +192,115 @@ ADR 0351 DR5 to DR9 and ADR 0372 D2 to D6, re-used. The two-wave split of a duct
 standard two-microphone / multi-microphone wave decomposition of duct acoustics (Seybert and Ross 1977, Chung and Blaser
 1980, cited from memory; nothing is taken from them that is not derived in D1 and D3 from the mode's axial dependence). No
 vendor code or documentation was used.
+
+## Addendum 1: results (2026-11-12; the registered text above is unchanged)
+
+Registration 9278d157; library and tests c750087a (one commit after the registration, formatted and clippy-clean before
+the runs). Every registered run was made once, in the **release** profile, on the committed bytes:
+`cargo test --release -p rcfd-post --test wave_drive_f478 -- --nocapture --test-threads=1` (B1c, B3, B3r, B4, E1, E0, N1,
+M1, M2, R3, Q2) and the same with `--ignored` for the heavy record D1 (B1, B2; 215 s). No limit was changed, no amendment
+was needed, no test is a `*_known_miss`.
+
+### What was built
+
+- `crates/rcfd-post/src/wave_drive.rs`: `SurfaceDrive::from_sections` (returns `SplitDrive`: `drive`, `sections_xi`,
+  `returning`, `separation`, `min_separation`, `reflection`, `split_residual`), `SurfaceDrive::entering_residual`,
+  `MIN_SEPARATION = 0.05` (D2 to D5); a private field `opts` of `SurfaceDrive` set from the options (D4); in `from_series`
+  the off-plane refusal names the farthest face (D6; the only changed lines of the F-452 code are the error branch of the
+  off-plane test); module documentation. `lib.rs` unchanged.
+- `crates/rcfd-post/tests/wave_drive_f478.rs` (new): D1 (`#[ignore]`, heavy), D1c, D2, B3/B3r, E1/E0, N1, M1/M2, R3, Q2.
+- `docs/acoustics.md`: a section "Returning waves at the sampled section", the F-452 limits sentence, the module table row.
+
+### Checks
+
+| id | quantity | limit | measured | met |
+|---|---|---|---|---|
+| B1 | D1 (64 across): inlet entering amplitude error `(1,0)`; `(2,0)`; `(2,1)` | `<= 1e-2` each | `8.848e-4`; `3.524e-3`; `2.269e-3` | yes |
+| B2 | D1: `|minus| / |R A|` at the inlet | `<= 1e-2` each | `1.93e-6`; `2.46e-6`; `1.69e-5` | yes |
+| B3 | split drive state against the closed-form entering wave: pressure; velocity; transverse | `<= 1e-9`; `<= 1e-9`; 0 | `1.61e-13`; `1.46e-13`; 0 | yes |
+| B3r | returning wave left in the drive's inlet amplitudes, relative to it | `<= 1e-2` each | `7.5e-15`; `1.9e-14`; `3.4e-15` | yes |
+| B4 | D2: split-driven run against the closed-form-entering-driven run | `<= 1e-9` | `5.7e-15` | yes |
+| B1c | D1c (32 across) | `<= 3e-2` each | `3.524e-3`; `1.386e-2`; `8.965e-3` | yes |
+| E1 | single-section residual against section B vs the closed form; and `>= 0.1` | `<= 1e-9` relative | `4.2e-16`; `1.4e-15` (values 0.52608, 0.88823) | yes |
+| E0 | the same, entering-only field | `<= 1e-12` | `5.1e-14`; `1.3e-14` | yes |
+| N1 | single-section drive inlet error against `|R|` | within `1e-9` | 0.500000000000, 0.400000000000, 0.600000000000 (equal to 12 digits) | yes |
+| M1 | reflection; min separation; split residual | `1e-9` rel.; `1e-9` rel.; `<= 1e-12` | `2.8e-15`, `1.9e-15`; 0.408779657526 (equal to 12 digits); `9e-17`, `2.2e-16` | yes |
+| M2 | three sections against two; split residual | `<= 1e-9`; `<= 1e-12` | `6.8e-15`; `3.1e-15`, `2.4e-15` | yes |
+| R3 | one section; one plane; `kz d = pi` (names harmonic 2 mode (0, 0)); `c0` (path `sections[1]/`) | an error each | all refused with the stated content | yes |
+| Q2 | off-plane face 5: path `$.faces[5].x` | exact | `$.faces[5].x` (offset `1.153e-4 m`) | yes |
+| S1 | existing `rcfd-post` tests; F-452 fast output against ae763e4d; baseline hashes | all pass; identical but the R2 off-plane line | 32 targets, 242 passed, 0 failed, 25 ignored; output identical except that line (`$.faces[0].x` became `$.faces[5].x`); 3 passed, 1 ignored | yes |
+
+What the numbers say: B1 and B1c reproduce the F-452 A1 and A1c numbers to every printed digit, as estimated: the split
+drive is the closed-form entering wave to `1.6e-13`, so the remaining error is the scheme's driven face (second order,
+D1c/D1 ratios 3.98, 3.93, 3.95). E0 (`5e-14`) is above its `1e-15` estimate but far inside its limit (the carry of eight
+modes, cut-off ones with `e^{alpha d}` up to `e^{5.5}`).
+
+### Mutations
+
+Once each, on a `git archive` copy of c750087a (`w49i-work/f478-scratch/mut`, own target directory, script `mutate.py`, not
+committed), the fast tests of `wave_drive_f478` with `--no-fail-fast`. Control MV0: all eight pass with the numbers above to
+every printed digit.
+
+| id | mutation | caught by |
+|---|---|---|
+| MV1 | plus and minus swapped | B3 (pressure), B4 (`0.65`), B1c (`0.52` to `1.23`) |
+| MV2 | split referenced at the last plane | B3, B4 (`0.96`), B1c (`0.64` to `1.21`); also M2 (`1.0`) |
+| MV3 | split skipped | B3, B4 (`0.49`), B1c (`0.40` to `0.59`) |
+| MV4 | separation refusal removed | R3 (`kz d = pi` now fails as "singular normal equations", naming no harmonic or mode) |
+| MV5 | carry dropped from `entering_residual` | E1 (`0.20` relative) |
+| MV6 | first off-plane face named | Q2 (`$.faces[0].x`) |
+
+Every registered mutation was caught by one of its registered checks. Under MV1 and MV3 the B3 test stopped at its pressure
+assertion, so B3r was not reached; under MV5 E1 stopped the test before E0. D1 was not run under mutation.
+
+### fmt, clippy
+
+`cargo fmt -p rcfd-post --check`: clean. `cargo clippy --release -p rcfd-post --all-targets -- -D warnings`: clean after one
+rewrite before the commit (`!(sigma >= MIN_SEPARATION)` to `sigma.is_nan() || sigma < MIN_SEPARATION`,
+`clippy::neg_cmp_op_on_partial_ord`).
+
+### Deviations and disclosures
+
+- The run of the whole `rcfd-post` suite (S1) executed the fast tests of `wave_drive_f478` a second time; they passed. The
+  registered numbers are those of the first run.
+- S1's reference: the existing `wave_drive_f452` fast tests run on a `git archive` of ae763e4d (`f478-scratch/base`).
+- `from_series` changed in one place, as registered (D6): the path and offset of the off-plane refusal.
+
+### Not run
+
+The whole workspace suite (the lead runs the gate); the debug profile; D1 under mutation; a circular or three-dimensional
+duct; sections in a flow.
+
+### Decision by the registered rule
+
+B1, B2, B3r, E1 and E0 meet their limits for every component and harmonic; B3, B4, B1c, N1, M1, M2, R3, Q2 and S1 meet
+theirs; the baseline hashes are unchanged; every registered mutation was caught by a registered check, with no post-run
+amendment. **done**, library only.
+
+### Remaining questions (options and recommendation)
+
+1. **Reading of clause C ("a single section with a returning wave is reported by a measured residual").** One section of
+   pressure carries no information on the split (D1), so the residual is measured against a second sampled section
+   (`entering_residual`). (a) accept this reading; (b) add an axial-velocity series to the `rcfd-surface-series` format so
+   that one section can be split (a format change, needs the maintainer). Recommendation: (a); taken on the maintainer's
+   standing instruction of 2026-11-11 (take the recommendation). (b) is open.
+2. **Separation threshold 0.05.** (a) keep it fixed; (b) make it an option. Recommendation: (a) until a CFD case needs
+   otherwise; taken on the maintainer's standing instruction of 2026-11-11.
+3. **Wiring** (a case key or CLI for the sections): needs the maintainer's approval (F-451). Not taken.
+
+## For the lead: roadmap entries
+
+**F-478, proposed status: `done`.** Proposed note text:
+
+> From ADR 0372 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. DONE pending acceptance, ADR 0378, 2026-11-12. Library only. Built: rcfd-post `wave_drive.rs` `SurfaceDrive::from_sections` (two or more sampled rcfd-surface-series sections, each read by the F-452 `from_series` with its own faces and clock; per harmonic and mode the entering and returning waves split over the planes with the closed-form kz by `split_axial`; refused when the separation, |sin(kz d)| or tanh(alpha d), is below 0.05 for any mode; `SplitDrive` plays back the entering wave only and reports the returning amplitudes, separations, reflection ratio and split residual) and `SurfaceDrive::entering_residual` (a single-section drive measured against a second sampled section); the F-452 off-plane refusal now names the farthest face (ADR 0372 question 2). Registered checks, all met at the first run, no amendment: the F-452 channel field with a returning wave of each component (reflection factors 0.5, 0.4, 0.6), sampled on 24 wall-clustered faces at x = -0.02 m and 20 uniform faces at x = -0.05 m on different clocks; on 64 cells across the entering amplitudes at the inlet agree with the closed form within 8.8e-4, 3.5e-3 and 2.3e-3 (limit 1e-2), the returning wave found at the inlet is at most 1.7e-5 of it (limit 1e-2) and 1.9e-14 of it is left in the drive; the split drive equals the closed-form entering wave within 1.6e-13 and its run equals the closed-form-driven run within 5.7e-15; the single-section drive of the same field is off by the reflection factor exactly and its residual against the second section, 0.526 and 0.888, equals the closed form within 1.4e-15 (5e-14 for an entering field only); three sections agree with two within 6.8e-15; four refusals located. Six mutations caught (waves swapped, wrong reference plane, split skipped, separation test removed, carry dropped from the residual, first off-plane face named). Limits: hard-walled duct, medium at rest; the single-section residual needs a second section (one section of pressure cannot be split); only the two-dimensional channel was run; no case key or CLI (F-451).
+
+**F-452, note:** append to its text:
+
+> The returning-wave limit is lifted for two or more sampled sections by F-478 (ADR 0378, 2026-11-12); since then the off-plane refusal names the farthest face.
+
+Proposed follow-up item (number for the lead to assign), only if the maintainer wants clause C on one section alone:
+
+- **Axial velocity in the surface-series format for a one-section split.** Deps: F-478. Size M. NEEDS THE USER (a format
+  change). Acceptance:
+
+> An rcfd-surface-series file carrying the axial velocity with the pressure lets a drive built from one section split the entering and returning waves of a duct field within 1 percent of the closed form; files without velocity read and drive bit-identically as before.
