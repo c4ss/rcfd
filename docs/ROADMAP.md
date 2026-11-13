@@ -7658,7 +7658,7 @@ fixed by the item's registration ADR before any code.
     after landed and si_mpc N5 kept as ignored records (maintainer decision 2026-11-13). Open, taken on the standing
     instruction: modal_analysis and solve_static on a model with a Cyclic constraint give the k = 0 result (documented).
     Follow-up F-489 (harmonic loads, rigid sets at k > 0).
-- [ ] **F-395** Geometric (initial-stress) stiffness of solid elements: pre-stressed modal analysis and linear buckling
+- [~] **F-395** Geometric (initial-stress) stiffness of solid elements: pre-stressed modal analysis and linear buckling
   - depends on: F-388, F-374, F-376, F-382, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. K_sigma is symmetric within 1e-13
     of its norm, gives no force for a rigid translation within 1e-12, and for a uniform uniaxial stress s and a linear
@@ -7670,8 +7670,18 @@ fixed by the item's registration ADR before any code.
     Buckling: the same beam in compression has the critical load pi^2 E I/L^2 reduced by the shear term (0.6 percent at
     this slenderness, registered) within 1 percent, the second factor four times the first within 2 percent; a
     clamped-free column pi^2 E I/(4 L^2) within 1 percent (Tet10 or Hex20).
-  - note: Structural solver, intermediate tier (plan ADR 0290, 2026-11-12). Size M. Stub ADR 0298; the registration is
-    written by the implementation agent before any code.
+  - note: Structural solver, intermediate tier (plan ADR 0290). ADR 0390, 2026-11-13: geometric stiffness of Tet4, Hex8,
+    Tet10 and Hex20 (geometric::element_geometric_stiffness, Prestress from a static result, geometric_stiffness on the
+    stiffness pattern, bit-identical for 1 and 8 threads), pre-stressed modes (geometric::prestressed_modes; a zero
+    pre-stress has the bits of modal_analysis) and linear buckling (buckling::factors on
+    rcfd_linalg::eigen::lowest_buckling_factors, subspace iteration on K^-1 (-K_sigma) verified by a Sturm count of K +
+    s K_sigma; with no factor it returns the bound below which there is none). Symmetry 2.0e-16, translation 2.5e-16,
+    uniaxial form 5.3e-15; tridiagonal factors 4.4e-15; frequency shifts 6.8e-4 and 2.4e-3 (tension), 5.0e-4 and 2.2e-3
+    (compression); knife-edge buckling 2.0e-3 from Engesser (shear term 0.491 percent registered); clamped-free column
+    1.7e-3. Known miss: the second factor is 2.0135e-2 from four times the first against 2e-2, because the solid's
+    K_sigma also carries the axial stress on the rotating sections (r^2 k^2, the order of the shear term; the derived
+    form matches within 1.7e-4). Transformation path (springs, linear constraints, rigid sets) refused. Follow-ups F-492
+    (the knife-edge factors against the derived closed form), F-493 (transformation path).
 - [ ] **F-396** Modes of a rotating part: stress stiffening by the centrifugal pre-stress, spin softening, Campbell diagram
   - depends on: F-395, F-375, F-383
   - acceptance: Every limit not stated here is registered in the ADR before the run. At zero speed the result has the
@@ -9284,3 +9294,18 @@ fixed by the item's registration ADR before any code.
     solver of ADR 0391.
   - note: From ADR 0391 questions 1 and 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
     Size S.
+- [ ] **F-492** Buckling factors of the knife-edge column against the solid's closed form (ADR 0390 known miss)
+  - depends on: F-395
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The knife-edge Hex20 beam of ADR
+    0390 (L/h = 20, nu = 0): the first two buckling factors within 1 percent of the lower root of (r^2 k^2/(kappa G A))
+    P^2 - (1 + a + r^2 k^2) P + P_E = 0 (k = n pi/L, a = P_E/(kappa G A), r^2 = I/A), derived in the ADR; at L/h = 40
+    the second factor four times the first within 2 percent.
+  - note: From ADR 0390 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+- [ ] **F-493** Pre-stressed modes and buckling on the transformation path (linear constraints, rigid sets, supports)
+  - depends on: F-395, F-486
+  - acceptance: Every limit not stated here is registered in the ADR before the run. prestressed_modes and
+    buckling::factors accept a model with linear constraints, rigid sets and elastic supports through T^T K T and T^T
+    K_sigma T; the knife-edge beam of ADR 0390 with its knife edges written as linear constraints gives the factors and
+    frequencies of the prescribed-displacement model within 1e-10; a nodal spring at the roller raises the first factor
+    by the closed form of a spring-supported column within 1 percent.
+  - note: From ADR 0390 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
