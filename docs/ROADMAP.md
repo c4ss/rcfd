@@ -8445,7 +8445,8 @@ fixed by the item's registration ADR before any code.
     connectivities equal to the base tree; baseline_hashes passes). Partial by the registered rule: the events were
     confirmed by hypotheses of an amendment after the first runs (the registered H1 and H2 fell between their limits).
     Both parts are below the spatial error of TG_2 (3.2e-4) by a factor 15. Follow-ups proposed (ADR 0359 questions 1
-    and 2), not taken.
+    and 2), not taken. The library opt-in that removes event 1 is F-468 (ADR 0396, DonorInterpolation::Continuous):
+    component cells 1.11e-6 at a ratio of 5.07; event 2 remains (1.14e-5, ratio 2.14).
 - [x] **F-443** Transient step: the step-consistent face coefficient on the remaining paths
   - depends on: F-344
   - acceptance: rhie_chow_step_consistent acts with the consistent correctors and on PimpleSolver::step_ale_with_walls
@@ -8930,7 +8931,7 @@ fixed by the item's registration ADR before any code.
     approved by the lead; ADR 0360's identities pass unchanged; defaults bit-identical.
   - note: From ADR 0360 question 1. NEEDS THE USER: it retires assertions of existing tests (consistent_value_f322 v2
     and r3, rows 4, 7, 11) by an amendment to ADR 0258, which is the maintainer's to approve.
-- [ ] **F-468** Overset: a pose-continuous donor stencil (opt-in)
+- [x] **F-468** Overset: a pose-continuous donor stencil (opt-in)
   - depends on: F-442
   - acceptance: A DonorInterpolation variant whose fringe values are a continuous function of the pose on any mesh where
     no candidate cell changes kind (defaults bit-identical: the four F0 fingerprints of ADR 0359 unchanged), exact for
@@ -8938,9 +8939,20 @@ fixed by the item's registration ADR before any code.
     stencil jumps by at least 1e-4; on TG_2 of ADR 0359 the component cells' max abs(d_200) at most 2e-6 with the ratio
     at least 4, and e(TG_2) in 800 steps at most that of the linear stencil (3.186e-4); or the ADR names why not with a
     number.
-  - note: From ADR 0359 question 1, recommendation (a), not yet taken. The test-side bilinear stencil of ADR 0359
-    (rectangular meshes only) gives 1.16e-6 at a ratio of 4.15 on the component cells and lowers e(TG_2) from 3.19e-4 to
-    2.84e-4. It does not lift D2 of TG_2 to 4: the kind changes next to the hole stay (ADR 0359 H5).
+  - note: From ADR 0359 question 1, recommendation (a), taken on the maintainer's standing instruction of 2026-11-11.
+    ADR 0396, 2026-11-13: DONE. DonorInterpolation::Continuous (opt-in, Overset::set_donor_interpolation): the moving
+    least-squares plane over every calculated cell of the other part whose own compact support (1.5 times its largest
+    extent) contains the fringe centre, weight (1 - (rho/1.5)^2)^2 / (rho^2 + 0.25), which vanishes with its slope at
+    the edge; the donor does not choose the stencil, so the fringe value is a continuous (C1) function of the pose
+    wherever no candidate cell changes kind; the linear stencil as a listed fallback where the candidates cannot carry a
+    plane (none on the meshes checked). Exact for linear fields to 2e-15 (TG_2, TR); across every face of the uniform
+    background of TG_2 the jump is 2.3e-13 where the linear stencil jumps by 9.1e-4 to 1.4e-3 (all 12640 faces), 2.9e-11
+    and 6.2e-15 on the graded and O-grid meshes of TR; at 12 donor switches of the moving TG_2 at most 7.1e-15 (linear
+    up to 1.6e-3); candidates equal to a full search. TG_2 with BDF2, three outer iterations and C: the component cells'
+    max abs(d_200) 1.11e-6 (limit 2e-6) at a ratio of 5.07 (limit 4; was 2.06e-5 at 2.45), e(TG_2) in 800 steps 3.145e-4
+    (limit 3.186e-4). Defaults bit-identical: the four F0 fingerprints of ADR 0359 equal, baseline_hashes passes, the
+    existing overset tests pass. The background cells next to the hole keep 1.14e-5 at a ratio of 2.14 (kind changes,
+    ADR 0359 H5; not a stencil matter). Five mutations caught.
 - [ ] **F-469** Coupled step: failing-participant checks with a start state that does not use the restores at the start of an iteration
   - depends on: F-465
   - acceptance: Every limit not stated here is registered in the ADR before the run. With the StaticSolid and the mock
@@ -9268,7 +9280,9 @@ fixed by the item's registration ADR before any code.
     reference rotation. Seven mutations caught, one (all models on the transformation) survives as predicted. si_mpc N4
     (the modal refusal of ADR 0296) stays as an ignored record (the maintainer's si_scaffold decision of 2026-11-13
     applied by the lead); the si_scaffold R11 modal row was retired by the maintainer's pattern. Follow-up F-488 (the
-    zero-mode measure and the explicit-shift report).
+    zero-mode measure and the explicit-shift report). ADR 0399 (2026-11-13): the zero modes of KF measured against the
+    shift are 2.1e-13 sigma (limit 1e-9 sigma) and their number equals the counted free rigid motions; the
+    explicit-shift report of rigid_free is checked on every model of ADR 0384. The A1 record stays as it is.
 - [x] **F-487** Overset: a consistent cell pressure gradient in the geometry corrections
   - depends on: F-472
   - acceptance: OversetSolver::set_geometry_corrections takes the cell pressure gradient of the momentum predictor and
@@ -9293,14 +9307,23 @@ fixed by the item's registration ADR before any code.
     is left is the interior first-order least-squares error (3.09e-3). Defaults, the corrections without L and with L
     bit-identical (ADR 0367's eight fingerprints, ADR 0382's two, two new ones); baseline_hashes and the overset tests
     pass; four mutations caught.
-- [ ] **F-488** Zero modes on the transformation: the eigenvalue measure against the shift and the explicit-shift report
+- [x] **F-488** Zero modes on the transformation: the eigenvalue measure against the shift and the explicit-shift report
   - depends on: F-486
   - acceptance: Every limit not stated here is registered in the ADR before the run. For a body held only by springs
     (ADR 0384's KF and a free block with one spring), the zero modes found with the automatic shift satisfy |lambda_i|
     <= 1e-9 sigma and their number equals the number of free rigid motions counted from the springs, the linear rows and
     the rigid sets; with a shift given by the caller, rigid_free is reported by the zero-shift factor test and agrees
     with the automatic case on every model of ADR 0384.
-  - note: From ADR 0384 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: ADR 0399, 2026-11-13: rcfd_fem::free_motions::free_rigid_motions counts the free rigid motions of a model as 6
+    minus the rank of the prescribed rows, the linear rows, the rigid-set rows and the support stiffness on the six
+    scaled rigid fields (one-sided Jacobi, relative threshold 1e-8; the rigid-set rows hold identically on rigid
+    motions, derived). With the automatic shift the zero modes satisfy |lambda_i| <= 1e-9 sigma: springs-only bar KF
+    2.1e-13 sigma, 3 zero modes = count 3; free block with one spring 4.2e-13 sigma, 5 = 5; with a tie and a rigid set 4
+    = 4; with a rigid set only 6 = 6; two springs on one line 5 = 5 (directions, not supports); the next mode at 3.6e-2
+    sigma or above; every zero mode in the span of the counted free fields within 3.1e-12. With a shift given by the
+    caller (Auto, a positive value, zero) rigid_free from the zero-shift factor test agrees with the automatic case on
+    all twelve solved models (ADR 0384's eight and four new) and the refusals are the same; a positive caller shift on a
+    held model reports false. Seven mutations caught. No line of mpc.rs or modal.rs changed.
 - [~] **F-489** Cyclic symmetry: harmonic loads and rigid sets at a non-zero harmonic index
   - depends on: F-394
   - acceptance: Every limit not stated here is registered in the ADR before the run. A static load given with a harmonic
@@ -9367,14 +9390,28 @@ fixed by the item's registration ADR before any code.
     7.7e-3); at L/h = 40 the second factor 5.16e-3 from four times the first (closed form 5.20e-3), each factor within
     5.4e-5 of its root. Dropping the u_x block of K_sigma in a scratch mutation puts the solid onto Engesser within
     1.8e-4, confirming the diagnosis of ADR 0390. Size S.
-- [ ] **F-493** Pre-stressed modes and buckling on the transformation path (linear constraints, rigid sets, supports)
+- [~] **F-493** Pre-stressed modes and buckling on the transformation path (linear constraints, rigid sets, supports)
   - depends on: F-395, F-486
   - acceptance: Every limit not stated here is registered in the ADR before the run. prestressed_modes and
     buckling::factors accept a model with linear constraints, rigid sets and elastic supports through T^T K T and T^T
     K_sigma T; the knife-edge beam of ADR 0390 with its knife edges written as linear constraints gives the factors and
     frequencies of the prescribed-displacement model within 1e-10; a nodal spring at the roller raises the first factor
     by the closed form of a spring-supported column within 1 percent.
-  - note: From ADR 0390 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
+  - note: From ADR 0390 question 3, recommendation taken on the maintainer's standing instruction of 2026-11-11. ADR
+    0398, 2026-11-13: geometric::prestressed_modes and buckling::factors dispatch a model with linear constraints, rigid
+    sets or elastic supports to the transformation of ADR 0296 (T^T (K_ext + K_sigma) T and T^T M T for the modes, T^T
+    K_ext T and T^T K_sigma T for the factors, modes expanded x = T q, zero constraint values only and a non-zero value
+    refused naming its row, the Auto shift of ADR 0384 with a refusal of any negative eigenvalue beyond the buckling
+    load); bit-equal to the reduction done in the test for linear knife edges, a spring and a rigid end face. The
+    knife-edge Hex20 beam with its knife edges as Linear rows gives the factors and frequencies of the prescribed model
+    bit for bit (limit 1e-10); rotated by 30 degrees with skew rows 1.2e-11. With the roller replaced by a lateral nodal
+    spring (the reading registered: a spring beside the roller adds nothing, checked bit-equal), the first factor rises
+    from none (a mechanism) to k L within 1.2e-4 (1.8e-4 at 1.5 k; the sway is exact in a Timoshenko column with the
+    solid's rotating-section term, so neither shear nor that term enters; the Rayleigh bound k L holds), and the second
+    factor stays the knife-edge factor within 7e-12. Rigid end face: factors within 2.7e-4 of ADR 0394's roots, shifts
+    within 1.2e-3 of (n pi/L)^2 s/rho, never below the free-end beam. Known miss: a mechanism on the transformation path
+    (no roller, no spring) is not refused by buckling::factors but returns a rounding factor 1.8e-8, because the
+    factorisation of K_r accepts a rounding-level positive pivot; follow-up F-495. Seven mutations caught.
 - [ ] **F-494** Second-order immersed forcing: the single-corrector growth over several steps
   - depends on: F-482
   - acceptance: The growth of DFG 2D-2 on M2 with build_second_order_bounded and one PISO corrector at dt 1e-3 (ADR
@@ -9385,3 +9422,12 @@ fixed by the item's registration ADR before any code.
     eigenvalues above one of the first-order forcing are explained by a registered measurement (the channel without the
     cylinder, the state of the step).
   - note: From ADR 0392 question 2, recommendation taken on the maintainer's standing instruction of 2026-11-11.
+- [ ] **F-495** Refuse a mechanism in buckling on the transformation path (ADR 0398 known miss)
+  - depends on: F-493
+  - acceptance: Every limit not stated here is registered in the ADR before the run. buckling::factors of a model on the
+    transformation path whose constraints and supports leave a motion free (ADR 0398's knife-edge beam without its
+    roller rows, and without its roller and spring) is refused with FemError naming the unknown of the failing pivot, by
+    the zero-shift pivot-ratio rule of ADR 0384 (ratio below 1e-8); a model held by a soft spring whose ratio is above
+    the rule is still solved and its first factor equals k L within 1 percent; every check of ADR 0398 keeps its value
+    bit for bit.
+  - note: From ADR 0398 question 1, recommendation taken on the maintainer's standing instruction of 2026-11-11. Size S.
