@@ -27,3 +27,4 @@ pub mod structural;
 pub mod surface_series;
 pub mod surfaces;
 pub mod turbo;
+pub mod wave_drive;
