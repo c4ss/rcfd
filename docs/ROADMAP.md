@@ -7071,7 +7071,7 @@ fixed by the item's registration ADR before any code.
     and closed form) with every mid-edge node at the mean of its ends exactly (limit 1e-15) and passes the same geometry
     checks; inverted elements, a repeated node, empty sets, E <= 0 and nu outside (-1, 0.5) are refused naming the
     element or the key. Baseline hashes unchanged; ten mutations caught.
-- [ ] **F-371** Solid mesh from the existing meshes: polyhedral mesh, tetrahedral mesher output, patches as surface sets, curved edges
+- [x] **F-371** Solid mesh from the existing meshes: polyhedral mesh, tetrahedral mesher output, patches as surface sets, curved edges
   - depends on: F-370, F-010, F-012, F-132
   - acceptance: Every limit not stated here is registered in the ADR before the run. A SolidMesh built from box_mesh
     (hexahedra), from the annulus generator (hexahedra with curved faces) and from the tetrahedral mesher's output of a
@@ -7081,10 +7081,21 @@ fixed by the item's registration ADR before any code.
     vectors; a prism, pyramid or general polyhedral cell is refused naming the cell. With mid-edge nodes projected onto
     the cylinder walls of a quarter annulus the projected nodes lie on their radius within 1e-14 and the volume error of
     the quadratic tetrahedra falls at an observed order of at least 3 under refinement.
-  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). Size M. Stub ADR 0272; the registration is written
-    by the implementation agent before any code. ADR 0271 (2026-11-12): upgrade_to_tet10 returns the list of mid-edge
-    nodes with their ends (for the projection); a moved mesh is rebuilt through SolidMesh::new and add_block, which
-    re-validate det J at every node; box surface and node sets are named xmin to zmax as the rcfd_mesh::gen patches.
+  - note: Structural solver, basic tier (plan ADR 0270, 2026-11-12). ADR 0413, 2026-11-13 (registration of stub ADR
+    0272): rcfd_fem::convert (in rcfd-fem, which depends on rcfd-mesh, not the converse) builds a SolidMesh from an
+    rcfd_mesh::Mesh of all tetrahedra or all hexahedra (element node order recovered topologically from the face loops,
+    nodes and elements numbered as points and cells) and from a TetMesh (cells as stored, surface sets per tag named as
+    to_mesh names its patches), with one surface set and one node set per patch, element sets from cell zones and the
+    sets all; prisms, pyramids, other polyhedra and mixed meshes are refused naming the cell
+    (FemError::UnsupportedCell). Also split_hexahedra (Kuhn split from the smallest node, conformity checked, a
+    non-conforming numbering refused naming the hexahedron), project_mid_edge_nodes (rebuild through SolidMesh::new and
+    add_block, an inverted element refused) and onto_cylinder. On box_mesh (uniform and graded), the quarter and the
+    full annulus (24 and 96 chords) and the tetrahedral mesher's box (two routes): counts and coordinates of the source
+    exact, volumes within 3.2e-15 of the source's cells and of the chord closed form and within 7.14e-4 of the annulus
+    closed form (limit 1e-3, from the chord error), patch areas within 4.4e-16 and face area vectors within 2.2e-15 of
+    the source's (limits 1e-12); prism, pyramid and hexagonal prism refused naming cell 0. Quarter annulus split into
+    Tet10 with the wall mid-edge nodes projected: radius within 4.4e-16 (limit 1e-14), volume error order 3.995, 3.999,
+    4.000 over four levels (limit 3; without the projection 1.99, 2.00, 2.00). Eight mutations caught.
 - [x] **F-372** Element library: linear tetrahedron, trilinear hexahedron, quadratic tetrahedron; isotropic elasticity matrix
   - depends on: F-370
   - acceptance: Every limit not stated here is registered in the ADR before the run. For Tet4, Hex8 (2 x 2 x 2 Gauss)
@@ -9696,3 +9707,10 @@ fixed by the item's registration ADR before any code.
     carries for each mode of index k the stationary-frame frequency omega + tau k Omega (tau the wave sense); on the
     disc sector of ADR 0411 the stationary frequencies of a travelling pair agree with those of the full rotor's modes
     transformed to the stationary frame within 1e-8 relative.
+- [ ] **F-508** Curved quadratic hexahedra on the quarter annulus
+  - depends on: F-371, F-389
+  - acceptance: Every limit not stated here is registered in the ADR before the run. The quarter annulus of ADR 0413
+    converted by rcfd_fem::convert::from_mesh and upgraded to Hex20 with the wall mid-edge nodes placed on the cylinders
+    (by upgrade_to_hex20_mapped or project_mid_edge_nodes) has its projected nodes on their radius within 1e-14 and its
+    volume error falling at an observed order of at least 3 over four levels; the areas of its inner and outer surface
+    sets converge to pi a h / 2 and pi b h / 2 at an observed order of at least 3.
