@@ -1,0 +1,103 @@
+# ADR 0406: F-497 registration: roll-back of a failed attempt of the nonlinear driver as a registered check (bit-equality of the one-halving solve with the two-step solve)
+
+Status: **REGISTERED 2026-11-13, written before any code of F-497 and before any run of its checks.** Not yet accepted by the
+maintainer. Before this text nothing of F-497 was written, compiled or run: the files listed under "What was read" were read, no
+arithmetic beyond the counting below was done. Results go in the addendum at the end; nothing above the addendum is changed after a
+run.
+
+Parent: [ADR 0404](0404-f397-registration-geometric-nonlinearity-total-lagrangian-newton.md) (F-397), mutation M7 ("a failed
+attempt not rolled back") and its remaining question 2, option (a), taken on the maintainer's standing instruction of 2026-11-11
+(take the recommendation). Roadmap item F-497 (deps F-397). Size S. Number 0406 given by the lead. Branch
+`f497-nonlinear-rollback-check`, worktree `w49i-work/f497`, scratch `w49i-work/f497-scratch`.
+
+House rules (`w49i-work/AGENT_RULES.md`): limits fixed here before the code and the runs; each registered run made once; defaults
+bit-identical (this item is test code only, no library line is changed); no edit of `baseline_hashes.rs`, of the hash tables or of
+a golden file; no new dependency, no unsafe code; clean-room.
+
+## What F-497 asks
+
+The acceptance of the roadmap entry, binding: "Every limit not stated here is registered in the ADR before the run. The one-step
+solve of ADR 0404's load-controlled Hex8 bar with four iterations allowed (one halving) equals the two-step solve bit for bit, and
+the mutation of ADR 0404 M7 (a failed attempt not rolled back) is caught by that check; every check of ADR 0404 keeps its value."
+
+Clauses: (f1) bit equality of the one-halving solve with the two-step solve; (f2) M7 caught by that check; (f3) every check of ADR
+0404 keeps its value (the existing tests are run unchanged).
+
+## What was read (no run)
+
+ADR 0404 (D5 step 5 and the state paragraph; C3; M7 and its diagnosis; the addendum, question 2);
+`crates/rcfd-fem/src/nonlinear.rs` (`Problem::attempt` starts every attempt from `u_c` and `states_c`, the committed values, and
+returns the iterate only on success; `solve` replaces `u`, `states`, `lambda` only in the `Ok` arm and halves `dl` in the `Err`
+arm; `NewtonOptions::max_halvings` is a public field, `max_iterations` has a builder); `crates/rcfd-fem/tests/si_nonlinear.rs`
+(the bar set-up `bar_load_control`, the C3 code, `Checks`).
+
+## Design
+
+### D1. Why bit equality is the observable
+
+The St. Venant-Kirchhoff material is hyperelastic: the converged state at a load factor does not depend on the path. A driver that
+starts the half step from the last iterate of the failed full step still converges to the same state within the residual
+tolerance, so a limit on the displacement deviation (C3: `1e-12`, measured `2.8e-16` under M7) cannot see the defect. What the
+roll-back guarantees exactly is that the second attempt of the one-step solve (load factor 0 to 0.5, after one halving) starts
+from the same bits as the first step of the two-step solve (0 to 0.5), and the third (0.5 to 1) from the same bits as its second
+step. Same inputs and the same code give the same bits (the assembly is deterministic, C6 of ADR 0404). Hence every recorded
+number of the two solves is bit-equal: the displacement, the reactions, the residual and energy histories of both steps, the
+iteration count. Under M7 the half step starts from a different iterate, so its residual history (`r_0`, `r_1`, ...) differs in
+value and in length, whatever the material. The residual history is therefore the path-sensitive signature, and the check
+compares it too.
+
+The load factors: the one-step solve has `dl = 1`, fails, `dl = 0.5`, `lt = 0 + 0.5 = 0.5`, then `lt = 0.5 + 0.5` snaps to the
+target 1; the two-step solve has `dl = 0.5`, targets 0.5 and 1: the same factors, the same arithmetic.
+
+### D2. Where it goes
+
+A new test file `crates/rcfd-fem/tests/si_nonlinear_rollback.rs` with its own copy of the Hex8 bar set-up of ADR 0404 (bar 1 x
+0.5 x 0.5, 2 x 1 x 1 Hex8, `E = 2e11`, `nu = 0`, fixings at the minimum faces, traction `p = E 1.2 (1.2^2 - 1) / 2` on `xmax`).
+`si_nonlinear.rs` and the library are not edited. No library code changes, so no baseline hash run is required.
+
+## Registered checks
+
+| Id | Clause | Measure | Limit | Estimate |
+| --- | --- | --- | --- | --- |
+| R1 | f1 | one step with `max_iterations = 4` against two steps with the default 20: the number of displacement entries (all dofs) whose bit pattern differs | `== 0` | 0 (ADR 0404 C3 printed bit-equality, deviation 0) |
+| R2 | f1 | the number of reaction entries whose bit pattern differs | `== 0` | 0 |
+| R3 | f1 | the records: the one-step solve has 2 records, both with `halvings == 1`, the load factors equal bit for bit to the two-step ones (`0.5`, `1.0`); the residual and the energy histories of each record equal in length and bit for bit | all as stated | as stated; ADR 0404 gives 4 iterations per step for the load-controlled bar, `r_4` of the full attempt fails with margin 15, the half steps pass with margin 170 |
+| R4 | f1 | `SolverStats` iterations of the two solves equal; the final `states` equal (`==`) | equal | equal |
+| N1 | control | the one-step solve with `max_iterations = 4` and `max_halvings = 0` is `Err(FemError::Solver { solver: "newton", .. })` naming `"load step 1 of 1"` and `"0 halvings"` (the first attempt really fails, so R1 to R3 exercise a roll-back) | as stated | as stated (ADR 0404 arithmetic: `r_4` above tolerance) |
+| N2 | control | the one-step solve with the default 20 iterations (no failed attempt) has 1 record, the two-step solve 2; the records of the first have `halvings == 0` | `1 != 2`, `0` | as stated |
+| S1 | f3 | `CARGO_BUILD_JOBS=4 cargo test -p rcfd-fem --release --test si_nonlinear` (the existing tests of ADR 0404, unchanged) and the new file | all pass as before; ignored records stay ignored | as in ADR 0404 |
+
+Time: the bar is 2 Hex8 elements; each solve takes milliseconds, the file runs in seconds in release.
+
+### M. Planned mutations (on a scratch copy of the code commit, after the registered run, each alone)
+
+| Id | Mutation | Expected to be caught by |
+| --- | --- | --- |
+| M7 | ADR 0404 M7: a failed attempt is not rolled back: the iterate of a failed attempt is kept (a side cell in `Problem`) and the next attempt starts from it instead of from `u_c` | R1 or R3 (the half step starts from another iterate: its residual history differs); ADR 0404 C3 does not see it (2.8e-16 against 1e-12) |
+| M7b | the iterate of a failed attempt is committed into `u` in the `Err` arm of `solve` while `lambda` stays | R1, R3 |
+| M4 | no halving (ADR 0404 M4): a failed attempt is an error at once | N1 stays met; R1 to R4 (the solve returns an error, the test fails at the unwrap) |
+
+M7 must be caught by the new check: that is clause f2. If the registered check does not catch M7 the result is a miss (decision
+rule).
+
+## Decision rule
+
+- **done**: R1 to R4, N1, N2 and S1 met, and each planned mutation caught by at least one of R1 to R4.
+- **partial**: R1 to R4 and S1 met but M7 or another planned mutation not caught (diagnosed in the addendum).
+- **todo**: R1 to R4 not met without a diagnosed cause.
+
+## Limits (what is not covered)
+
+- One material (St. Venant-Kirchhoff, no history) and one element kind (Hex8). The roll-back of a state with history
+  (`ElementState` updated by `Material::stress`, which no material of the crate does today) is not exercised: the trial states
+  equal the committed ones. A path-dependent material would need its own check when it exists.
+- Roll-back after an inversion failure and after a refused pivot is the same code path (the `Err` arm of `solve`) but is not run
+  with a bit comparison here.
+- Only one halving is exercised (the acceptance); several halvings are covered by A7 of ADR 0404 (5 halvings, then the error).
+
+## Open points taken on the maintainer's standing instruction of 2026-11-11 (take the recommendation)
+
+1. A new test file instead of an added assertion in `si_nonlinear.rs`: the rules forbid editing existing tests, and C3 keeps its
+   registered limit.
+2. The residual and energy histories are compared as well as the displacement: they are what makes the check sensitive for a
+   hyperelastic material (D1).
