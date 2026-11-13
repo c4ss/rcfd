@@ -359,6 +359,7 @@ fn faces_of(mesh: &SolidMesh, set: &str) -> Vec<FaceRef> {
 }
 
 /// The registered refusal cases: name, model, item, variant, location, package.
+#[allow(clippy::vec_init_then_push)] // one case per push, in the order of the registration
 fn refusal_cases() -> Vec<(
     &'static str,
     SolidModel,
