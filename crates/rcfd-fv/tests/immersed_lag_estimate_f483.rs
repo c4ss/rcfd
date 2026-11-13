@@ -759,3 +759,97 @@ fn h_lag_estimate_at_the_body_record() {
     println!("missed: {missed:#?}");
     assert!(missed.is_empty(), "{missed:#?}");
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The record H2 (amendment 1: I1, I2)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const ITS: [usize; 5] = [20, 40, 80, 160, 320];
+
+/// F: P with every count of `ITS` and FL with 320; or B: FL with 320 (both with `immersed_lag = true`).
+fn h2_estimates(s: &mut PimpleSolver, f: Forcing) -> Vec<(String, (f64, usize))> {
+    let mut v = Vec::new();
+    if f == Forcing::F {
+        for it in ITS {
+            v.push((format!("P {it}"), est(s, None, DT, it, 1)));
+        }
+    }
+    v.push(("FL 320".into(), est(s, Some(LagFluid::FLUID), DT, 320, 1)));
+    v
+}
+
+fn h2_run(f: Forcing) -> [Vec<(String, (f64, usize))>; 2] {
+    let (_, mut s) = r_solver(f, 1, false);
+    s.immersed_lag = true;
+    let a = h2_estimates(&mut s, f);
+    for k in 1..=10 {
+        s.step(DT);
+        assert!(s.diverged.is_none(), "H2: {f:?} stopped at step {k}");
+    }
+    let b = h2_estimates(&mut s, f);
+    [a, b]
+}
+
+fn find(v: &[(String, (f64, usize))], name: &str) -> f64 {
+    v.iter().find(|x| x.0 == name).map_or(f64::NAN, |x| x.1 .0)
+}
+
+/// ADR 0388 amendment 1, record H2: I1 and I2. Run once.
+#[test]
+#[ignore = "heavy record (ADR 0388 amendment 1: I1, I2): run once in release"]
+fn h2_power_iterations_record() {
+    let (fr, br, ch) = std::thread::scope(|sc| {
+        let a = sc.spawn(|| h2_run(Forcing::F));
+        let b = sc.spawn(|| h2_run(Forcing::B));
+        let c = sc.spawn(|| {
+            let (_, mut s) = r_solver(Forcing::F, 1, false);
+            s.immersed = None;
+            est(&mut s, None, DT, 320, 1)
+        });
+        (a.join().unwrap(), b.join().unwrap(), c.join().unwrap())
+    });
+    let (geom, s0) = r_solver(Forcing::B, 1, false);
+    let cc = geom.mesh.cell_centres();
+    let ib = s0.immersed.as_ref().unwrap();
+    let place = |e: (f64, usize)| {
+        let c = e.1;
+        if c < cc.len() {
+            format!(
+                "rho {:.5} cell {c} ({:.5}, {:.5}) solid {} surface distance {:.5}",
+                e.0,
+                cc[c][0],
+                cc[c][1],
+                ib.body_of_cell[c].is_some(),
+                surface_distance(cc[c])
+            )
+        } else {
+            format!("rho {:.5} no cell", e.0)
+        }
+    };
+    let names = ["step 2", "step 11"];
+    for (f, r) in [("F", &fr), ("B", &br)] {
+        for (v, name) in r.iter().zip(names) {
+            for (k, e) in v {
+                println!("H2 {f} {name}: {k}: {}", place(*e));
+            }
+        }
+    }
+    println!("H2 channel without the cylinder, step 2: P 320: {}", place(ch));
+    let mut missed = Vec::new();
+    for (v, name) in fr.iter().zip(names) {
+        let p = find(v, "P 320");
+        if !lt(p, 1.0) {
+            missed.push(format!("I1: F {name} P 320 {p}"));
+        }
+        let fl = find(v, "FL 320");
+        if !lt(fl, 1.0) {
+            missed.push(format!("I2: F {name} FL 320 {fl}"));
+        }
+    }
+    let m = find(&br[0], "FL 320").max(find(&br[1], "FL 320"));
+    if !lt(1.0, m) {
+        missed.push(format!("I2: B max FL 320 {m}"));
+    }
+    println!("missed: {missed:#?}");
+    assert!(missed.is_empty(), "{missed:#?}");
+}
