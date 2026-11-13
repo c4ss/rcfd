@@ -541,6 +541,189 @@ fn p1_p2_p3_p5_campbell_by_family_known_miss() {
     ch.finish();
 }
 
+/// ADR 0407 amendment 1, P2b: the record above repeated with the cluster tracking.
+#[test]
+fn p1_p2b_p3_p5_campbell_by_family_amended() {
+    let mut ch = Checks::new();
+    let sector = d_sector();
+    let rs0 = RotatingSector::new(&sector, &options(MODES)).unwrap();
+    let (rest_modes, w_ref) = rest(&rs0);
+    let (w_l, k_star, stiffening) = loss_speed(&rs0, &rest_modes);
+    println!("omega_ref = {w_ref:e}, Omega_L = {w_l:e}, k* = {k_star}, stiffening {stiffening}");
+    assert!(w_l > 0.9 * w_ref, "defective set-up: Omega_L <= 0.9 omega_ref");
+    let rs = RotatingSector::new(&sector, &options(MODES).stress_stiffening(stiffening)).unwrap();
+    let mut speeds: Vec<f64> = (0..10).map(|j| j as f64 * 0.1 * w_ref).collect();
+    speeds.push(w_l);
+    let harmonics: Vec<usize> = (0..=N / 2).collect();
+    let table = rs.campbell(&harmonics, &speeds).unwrap();
+    // P1.
+    let mut shape = table.families.len() == N / 2 + 1 && table.sectors == N;
+    for (i, f) in table.families.iter().enumerate() {
+        let mult = if i == 0 || 2 * i == N { 1 } else { 2 };
+        shape &= f.harmonic == i && f.multiplicity == mult && f.table.tracks.len() == MODES;
+        let finite = f.table.tracks.iter().all(|t| {
+            t.eigenvalues.iter().flatten().all(|v| v.is_finite())
+                && t.frequencies.iter().flatten().all(|v| v.is_finite())
+                && t.mac.iter().flatten().all(|v| v.is_finite())
+        });
+        shape &= finite;
+        println!(
+            "family k = {}: multiplicity {}, {} tracks, losses {:?}",
+            f.harmonic,
+            f.multiplicity,
+            f.table.tracks.len(),
+            f.table.losses
+        );
+    }
+    let star = &table.families[k_star].table;
+    let star_loss = star.losses.iter().any(|l| l.speed.to_bits() == w_l.to_bits())
+        && star.tracks.iter().all(|t| t.frequencies[10].is_none());
+    ch.holds("P1 shape", shape, "7 families in index order, multiplicities, 4 tracks each, every number finite");
+    ch.holds("P1 loss", star_loss, "the loss of k* at Omega_L listed in its family, frequencies None there");
+    // C3b: the speed-0 column.
+    let mut c3b = true;
+    for (f, h) in table.families.iter().zip(&rest_modes) {
+        for (t, tr) in f.table.tracks.iter().enumerate() {
+            c3b &= tr.eigenvalues[0].map(f64::to_bits) == Some(h.values[t].to_bits());
+        }
+    }
+    ch.holds("C3b", c3b, "the speed-0 column has the bits of modal_analysis_harmonic");
+    // P2 and N3.
+    let mut min_mac = f64::INFINITY;
+    for f in &table.families {
+        for t in &f.table.tracks {
+            for j in 1..10 {
+                if let Some(v) = t.mac[j] {
+                    min_mac = min_mac.min(v);
+                }
+            }
+        }
+    }
+    ch.ge("P2b smallest track assurance at 0.1 .. 0.9 omega_ref", min_mac, 0.9);
+    let mut n3 = f64::INFINITY;
+    for f in table.families.iter().filter(|f| f.multiplicity == 2) {
+        for t in &f.table.tracks {
+            for j in 1..10 {
+                if let (Some(a), Some(b)) = (&t.modes[j - 1], &t.modes[j]) {
+                    n3 = n3.min(subspace_mac(rs.part().mass(), &[a.clone()], &[b.clone()]));
+                }
+            }
+        }
+    }
+    println!("N3: smallest vector MAC of the pairs' first vectors over the table: {n3:.6e} (reported)");
+    // P3.
+    let mut per_family = vec![0usize; N / 2 + 1];
+    let mut worst: f64 = 0.0;
+    let mut count = 0;
+    for order in 1..=24u32 {
+        for c in table.crossings(order) {
+            if c.crossing.speed > 0.9 * w_ref {
+                println!(
+                    "crossing above 0.9 omega_ref (reported): k = {} track {} order {} at {:.6e} rad/s",
+                    c.harmonic, c.crossing.track, order, c.crossing.speed
+                );
+                continue;
+            }
+            per_family[c.harmonic] += 1;
+            count += 1;
+            let h = harmonic_modes(rs.modes(c.harmonic, c.crossing.speed).unwrap(), "P3 direct solve");
+            let target = (f64::from(order) * c.crossing.speed).powi(2);
+            let near = h
+                .values
+                .iter()
+                .copied()
+                .min_by(|a, b| (a - target).abs().total_cmp(&(b - target).abs()))
+                .unwrap();
+            let rel = (near.sqrt() / (f64::from(order) * c.crossing.speed) - 1.0).abs();
+            println!(
+                "crossing k = {} track {} order {order} at {:.6e} rad/s, {:.6e} Hz, excited {}: direct {rel:.3e}",
+                c.harmonic, c.crossing.track, c.crossing.speed, c.crossing.frequency, c.excited
+            );
+            worst = worst.max(rel);
+        }
+    }
+    println!("P3: {count} crossings below 0.9 omega_ref, per family {per_family:?}");
+    ch.holds("P3 every family", per_family.iter().all(|&c| c >= 1), "at least one crossing per family");
+    ch.le("P3 crossings against direct solves", worst, 1e-2);
+    // P5.
+    let csv = table.to_csv();
+    let lines: Vec<&str> = csv.lines().collect();
+    let mut csv_ok = lines.len() == 1 + (N / 2 + 1) * speeds.len() && lines[0].starts_with("harmonic,speed_rad_s");
+    for (fi, f) in table.families.iter().enumerate() {
+        for j in 0..speeds.len() {
+            let fields: Vec<&str> = lines[1 + fi * speeds.len() + j].split(',').collect();
+            csv_ok &= fields[0] == f.harmonic.to_string();
+            csv_ok &= fields[1].parse::<f64>().map(f64::to_bits) == Ok(speeds[j].to_bits());
+            for (t, tr) in f.table.tracks.iter().enumerate() {
+                csv_ok &= match tr.frequencies[j] {
+                    Some(v) => fields[3 + t].parse::<f64>().map(f64::to_bits) == Ok(v.to_bits()),
+                    None => fields[3 + t].is_empty(),
+                };
+            }
+        }
+    }
+    let orders: Vec<u32> = (1..=24).collect();
+    let json = table.to_json(&orders);
+    let json_ok = json.matches("\"harmonic\": ").count() >= N / 2 + 1
+        && !json.contains("NaN")
+        && !json.contains("inf")
+        && json.contains("null")
+        && json.contains("\"excited\": true");
+    println!("{}", &csv[..csv.len().min(600)]);
+    ch.holds("P5 CSV", csv_ok, "rows, harmonic column, speeds and frequencies parse back by to_bits");
+    ch.holds("P5 JSON", json_ok, "families, no NaN or inf, null at the loss, flagged crossings");
+    ch.finish();
+}
+
+/// ADR 0407 amendment 1, P2c: the Campbell table with both effects on over 0 .. 0.9 omega_ref.
+#[test]
+fn p2c_campbell_with_both_effects() {
+    let mut ch = Checks::new();
+    let sector = d_sector();
+    let rs = RotatingSector::new(&sector, &options(MODES)).unwrap();
+    let (_, w_ref) = rest(&rs);
+    let speeds: Vec<f64> = (0..10).map(|j| j as f64 * 0.1 * w_ref).collect();
+    let harmonics: Vec<usize> = (0..=N / 2).collect();
+    let table = rs.campbell(&harmonics, &speeds).unwrap();
+    let mut shape = table.families.len() == N / 2 + 1;
+    let mut min_mac = f64::INFINITY;
+    for f in &table.families {
+        shape &= f.table.tracks.len() == MODES && f.table.losses.is_empty();
+        let mut fam = f64::INFINITY;
+        for t in &f.table.tracks {
+            shape &= t.eigenvalues.iter().all(|v| v.is_some_and(f64::is_finite));
+            shape &= t.mac.iter().flatten().all(|v| v.is_finite());
+            for v in t.mac.iter().flatten() {
+                fam = fam.min(*v);
+            }
+        }
+        println!("P2c family k = {}: smallest assurance {fam:.6e}", f.harmonic);
+        min_mac = min_mac.min(fam);
+    }
+    ch.holds("P2c shape", shape, "7 families, 4 tracks each, no loss, every number finite");
+    ch.ge("P2c smallest track assurance", min_mac, 0.9);
+    let mut per_family = vec![0usize; N / 2 + 1];
+    let mut worst: f64 = 0.0;
+    for order in 1..=24u32 {
+        for c in table.crossings(order) {
+            per_family[c.harmonic] += 1;
+            let h = harmonic_modes(rs.modes(c.harmonic, c.crossing.speed).unwrap(), "P2c direct solve");
+            let target = (f64::from(order) * c.crossing.speed).powi(2);
+            let near = h
+                .values
+                .iter()
+                .copied()
+                .min_by(|a, b| (a - target).abs().total_cmp(&(b - target).abs()))
+                .unwrap();
+            worst = worst.max((near.sqrt() / (f64::from(order) * c.crossing.speed) - 1.0).abs());
+        }
+    }
+    println!("P2c: crossings per family {per_family:?}");
+    ch.holds("P2c every family", per_family.iter().all(|&c| c >= 1), "at least one crossing per family");
+    ch.le("P2c crossings against direct solves", worst, 1e-2);
+    ch.finish();
+}
+
 // ------------------------------------------------------------------------------------------------------------ P4
 
 #[test]

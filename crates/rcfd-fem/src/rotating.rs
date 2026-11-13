@@ -824,47 +824,63 @@ fn block_dot(m: &CsrMatrix, x: &[f64], y: &[f64]) -> f64 {
     out
 }
 
-/// The subspace assurance `tr(G_V^-1 C G_W^-1 C^T) / d` of two groups of one or two vectors each, `C = V^T M_2 W`, `G_V =
-/// V^T M_2 V`, `G_W = W^T M_2 W`, `M_2` the mass `m` block-diagonal over the vectors' length (ADR 0407 D3): the mean squared
-/// cosine of the principal angles, independent of the basis in either group; the mass-weighted MAC for `d = 1`. Groups of
-/// different sizes are compared on their first `min` vectors.
+/// The inverse of a small symmetric positive definite matrix by Gauss-Jordan elimination with partial pivoting.
+fn small_inverse(g: &[Vec<f64>]) -> Vec<Vec<f64>> {
+    let d = g.len();
+    if d == 1 {
+        return vec![vec![1.0 / g[0][0]]];
+    }
+    let mut a: Vec<Vec<f64>> = g.to_vec();
+    let mut inv: Vec<Vec<f64>> = (0..d).map(|i| (0..d).map(|j| if i == j { 1.0 } else { 0.0 }).collect()).collect();
+    for c in 0..d {
+        let p = (c..d).max_by(|&x, &y| a[x][c].abs().total_cmp(&a[y][c].abs())).unwrap_or(c);
+        a.swap(c, p);
+        inv.swap(c, p);
+        let piv = a[c][c];
+        for j in 0..d {
+            a[c][j] /= piv;
+            inv[c][j] /= piv;
+        }
+        for r in 0..d {
+            if r != c {
+                let f = a[r][c];
+                for j in 0..d {
+                    a[r][j] -= f * a[c][j];
+                    inv[r][j] -= f * inv[c][j];
+                }
+            }
+        }
+    }
+    inv
+}
+
+/// The subspace assurance `tr(G_V^-1 C G_W^-1 C^T) / min(d_V, d_W)` of two groups of vectors, `C = V^T M_2 W`, `G_V = V^T M_2
+/// V`, `G_W = W^T M_2 W`, `M_2` the mass `m` block-diagonal over the vectors' length (ADR 0407 D3 and amendment 1): the share
+/// of the smaller space inside the larger (1 when one contains the other), independent of the basis in either group; the
+/// mass-weighted MAC for two single vectors. 0 for an empty group.
 pub fn subspace_mac(m: &CsrMatrix, v: &[Vec<f64>], w: &[Vec<f64>]) -> f64 {
-    let d = v.len().min(w.len()).min(2);
-    if d == 0 {
+    let (dv, dw) = (v.len(), w.len());
+    if dv == 0 || dw == 0 {
         return 0.0;
     }
-    let (v, w) = (&v[..d], &w[..d]);
     let gram = |a: &[Vec<f64>], b: &[Vec<f64>]| -> Vec<Vec<f64>> {
         a.iter()
             .map(|x| b.iter().map(|y| block_dot(m, x, y)).collect())
             .collect()
     };
-    let inv = |g: &[Vec<f64>]| -> Vec<Vec<f64>> {
-        if g.len() == 1 {
-            vec![vec![1.0 / g[0][0]]]
-        } else {
-            let det = g[0][0] * g[1][1] - g[0][1] * g[1][0];
-            vec![
-                vec![g[1][1] / det, -g[0][1] / det],
-                vec![-g[1][0] / det, g[0][0] / det],
-            ]
-        }
-    };
     let c = gram(v, w);
-    let gv = inv(&gram(v, v));
-    let gw = inv(&gram(w, w));
-    // tr(Gv C Gw C^T)
+    let gv = small_inverse(&gram(v, v));
+    let gw = small_inverse(&gram(w, w));
+    // tr((G_V^-1 C) (G_W^-1 C^T))
     let mut s = 0.0;
-    for i in 0..d {
-        for j in 0..d {
-            for p in 0..d {
-                for q in 0..d {
-                    s += gv[i][j] * c[j][p] * gw[p][q] * c[i][q];
-                }
-            }
+    for i in 0..dv {
+        for p in 0..dw {
+            let a: f64 = (0..dv).map(|j| gv[i][j] * c[j][p]).sum();
+            let b: f64 = (0..dw).map(|q| gw[p][q] * c[i][q]).sum();
+            s += a * b;
         }
     }
-    s / d as f64
+    s / dv.min(dw) as f64
 }
 
 fn check_harmonics(harmonics: &[usize], sectors: usize) -> Result<()> {
@@ -1141,6 +1157,35 @@ fn groups_of(res: &crate::cyclic::HarmonicModes, multiplicity: usize) -> Vec<Vec
         .collect()
 }
 
+/// Relative distance of two sector frequencies' eigenvalues within which they are one cluster (ADR 0407 amendment 1).
+pub const CLUSTER_TOLERANCE: f64 = 1e-8;
+
+/// The subspace of each sector frequency: the vectors of every frequency of its cluster (consecutive values within
+/// [`CLUSTER_TOLERANCE`] relative), its own first (ADR 0407 amendment 1).
+fn cluster_spaces(values: &[f64], groups: &[Vec<Vec<f64>>]) -> Vec<Vec<Vec<f64>>> {
+    let n = values.len().min(groups.len());
+    let mut start = vec![0usize; n];
+    for i in 1..n {
+        let close = (values[i] - values[i - 1]).abs() <= CLUSTER_TOLERANCE * values[i - 1].abs().max(values[i].abs());
+        start[i] = if close { start[i - 1] } else { i };
+    }
+    (0..n)
+        .map(|i| {
+            let mut end = i + 1;
+            while end < n && start[end] == start[i] {
+                end += 1;
+            }
+            let mut space = groups[i].clone();
+            for (j, g) in groups.iter().enumerate().take(end).skip(start[i]) {
+                if j != i {
+                    space.extend(g.iter().cloned());
+                }
+            }
+            space
+        })
+        .collect()
+}
+
 /// ADR 0403 D4's greedy tracking with groups in place of vectors and the subspace assurance in place of the MAC.
 fn track_families(speeds: &[f64], results: &[HarmonicSpeedModes], m: &CsrMatrix, multiplicity: usize) -> CampbellTable {
     let ns = speeds.len();
@@ -1151,7 +1196,7 @@ fn track_families(speeds: &[f64], results: &[HarmonicSpeedModes], m: &CsrMatrix,
         match r {
             HarmonicSpeedModes::LossOfStiffness(l) => losses.push(l.loss),
             HarmonicSpeedModes::Modes(res) => {
-                let groups = groups_of(res, multiplicity);
+                let groups = cluster_spaces(&res.values, &groups_of(res, multiplicity));
                 if tracks.is_empty() {
                     for (i, g) in groups.iter().enumerate() {
                         let mut t = ModeTrack {
