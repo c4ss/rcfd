@@ -120,3 +120,22 @@ post-run amendment. Todo: the store of the adaptive case still refused.
   here; no case does that today.
 - Continuing an adaptive run into an existing store: adaptive runs write no checkpoint (ADR 0262 D4), so there is no such
   continuation.
+
+## Amendment 1 (2026-11-13, before the corrected runs): a defective build set-up
+
+The first runs used one `CARGO_TARGET_DIR` (`w49i-work/f476-scratch/target`) for both the archive copy of main ca949c78 (the
+D1 base measurement) and the worktree. Cargo's artifact names of workspace members do not depend on the workspace's absolute
+path, and its freshness check compares the recorded build time with the sources' modification times; the archive copy was
+built after the worktree's `runctl.rs` was last modified, so a later build in the worktree can link the base's `rcfd-api`
+without recompiling it. Run 1 of A3 (SF2) failed with exactly the base's message ("field store: io error: tsstore: field 'ux'
+has 2799 values, the mesh has 576", log `f476-scratch/run1-studio-new.log`, and once more in a diagnostic run,
+`diag-sf2.log`), while A1 in the `rcfd-api` test binary passed with the adapted mesh: the two binaries linked different
+`rcfd-api` builds. Run 1 of A3, D1 and D2 is therefore a defective set-up and is not counted. Run 1 of A1, A2, D3 and N1
+(`run1-api-new.log`) is counted: A1 passing with 2799 cells and the run's mesh hash cannot come from the base code, so that
+binary linked the branch's `rcfd-api` (recorded in the addendum; not re-run).
+
+Corrected set-up: the worktree's checks A3, D1 and D2 run once more, in a fresh target directory used for the branch only
+(`f476-scratch/target-br`), with the binaries the Studio tests spawn built there first. The D1 table (measured in the base copy,
+built first in an empty target directory, and reproduced by a second run with identical hashes) is valid and unchanged. The
+mutations run in their own copy and use `target-br` only after every branch check is done (each mutation and the restore
+rewrite `runctl.rs`, so it is newer than any build). No limit changes.
