@@ -95,6 +95,24 @@ impl RunOutcome {
     }
 }
 
+/// The field store opened late (ADR 0373 D1, D2): the hook of ADR 0124 with its warning as an event.
+fn open_deferred_store(
+    sim: &Simulation,
+    opts: &RunOptions,
+    seq: &mut u64,
+    elapsed: f64,
+    sink: &mut dyn FnMut(&Value),
+) -> Option<crate::fieldstore::Hook> {
+    match crate::fieldstore::Hook::open(sim, opts.out_dir.as_deref(), opts.store_dir.as_deref()) {
+        Some(Ok(h)) => Some(h),
+        Some(Err(m)) => {
+            sink(&event("warning", seq, elapsed, json!({ "message": m })));
+            None
+        }
+        None => None,
+    }
+}
+
 fn event(kind: &str, seq: &mut u64, elapsed: f64, body: Value) -> Value {
     *seq += 1;
     let mut v = json!({
@@ -288,8 +306,13 @@ pub fn drive(
             }),
         ));
     }
+    // ADR 0373 D1 (F-476): a run whose [mesh.adapt] loop is pending changes its mesh in the first step, so its store is
+    // opened after that step (or at the end when no step is taken, D2), on the mesh the run solves on
+    let mut store_deferred = lock_sim(sim).adapt_pending();
     // ADR 0124: opt-in field store; None (and nothing else happens) unless output.store_* is set
-    let mut store =
+    let mut store = if store_deferred {
+        None
+    } else {
         match crate::fieldstore::Hook::open(&lock_sim(sim), opts.out_dir.as_deref(), opts.store_dir.as_deref()) {
             Some(Ok(h)) => Some(h),
             Some(Err(m)) => {
@@ -297,7 +320,8 @@ pub fn drive(
                 None
             }
             None => None,
-        };
+        }
+    };
     // setup warnings found before solving (rule engine), passed in `info.warnings` as objects with
     // `message`, `rule` and `path`
     if let Some(ws) = opts.info.get("warnings").and_then(Value::as_array) {
@@ -442,6 +466,10 @@ pub fn drive(
         if let Some(w) = lag_warning {
             sink(&event("warning", &mut seq, t0.elapsed().as_secs_f64(), w));
         }
+        if store_deferred {
+            store_deferred = false;
+            store = open_deferred_store(&lock_sim(sim), opts, &mut seq, t0.elapsed().as_secs_f64(), sink);
+        }
         if let Some(h) = &mut store {
             if let Err(m) = h.after_step(&lock_sim(sim), step.index, step.time) {
                 sink(&event(
@@ -556,6 +584,10 @@ pub fn drive(
         "interrupted" | "time_limit" | "converged" | "not_converged" | "finished" | "step_limit"
     ) {
         save(&mut seq, sink, outcome.state);
+    }
+    if store_deferred {
+        // ADR 0373 D2: no step was taken; the store of the base lattice, as before F-476
+        store = open_deferred_store(&lock_sim(sim), opts, &mut seq, outcome.elapsed_s, sink);
     }
     if let Some(h) = store {
         if let Err(m) = h.finish(&lock_sim(sim)) {
