@@ -584,7 +584,7 @@ pub(crate) fn run(case: &Case) -> Result<AdaptiveRun> {
 
 impl Simulation {
     /// Whether the adaptive loop is still to run.
-    pub(super) fn adapt_pending(&self) -> bool {
+    pub(crate) fn adapt_pending(&self) -> bool {
         self.adapt.as_ref().is_some_and(|a| a.pending)
     }
 

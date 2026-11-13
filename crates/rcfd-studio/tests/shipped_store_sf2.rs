@@ -68,12 +68,6 @@ fn sf2_every_shipped_case_writes_a_readable_store() {
         let text = std::fs::read_to_string(path).unwrap();
         let plan = StartPlan::new(rel, &text, path.parent().unwrap()).unwrap();
         let mut case = Case::load(path).unwrap_or_else(|d| panic!("{rel}: {d:?}"));
-        // gate 4, 2026-11-13 (ADR 0262 addendum): the store hook opens on the base lattice and the first step adapts the
-        // mesh, so the first snapshot is refused ("field 'ux' has 2799 values, the mesh has 576"): a known gap, not stored
-        if case.tree.get("mesh").ok().is_some_and(|m| m.get("adapt").is_some()) {
-            eprintln!("SF2 note: {rel}: has [mesh.adapt]; the field store of an adapting run is refused (ADR 0262 addendum); skipped");
-            continue;
-        }
         for s in plan.set() {
             apply_set(&mut case, &s).unwrap_or_else(|e| panic!("{rel}: {s}: {e:?}"));
         }
@@ -106,7 +100,7 @@ fn sf2_every_shipped_case_writes_a_readable_store() {
         ok += 1;
     }
     eprintln!("SF2: {ok} of {} shipped cases stored a readable store", cases.len());
-    assert_eq!(ok, 10);
+    assert_eq!(ok, 11);
     // negative control: a field that does not exist
     let cav = tmp.join("control.toml");
     std::fs::write(&cav, common::RUN_CASE).unwrap();
